@@ -282,6 +282,7 @@ pub fn setup_text(m: &Model) -> String {
     kv("grid", name(m.grid));
     kv("grid_bright", m.grid_bright.to_string());
     kv("grid_frame", m.grid_frame.to_string());
+    kv("skin", name(m.skin));
     kv("windows", name(m.win_layout));
     kv("density", name(m.density));
     kv("split_pane", m.split_pane.to_string());
@@ -643,6 +644,7 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
         "grid" => m.grid = p_enum(v, &GRIDS)?,
         "grid_bright" => m.grid_bright = p_u32(v)?.clamp(10, 100),
         "grid_frame" => m.grid_frame = p_bool(v)?,
+        "skin" => m.skin = p_enum(v, &crate::ui::skin::SKINS)?,
         "windows" => m.win_layout = p_enum(v, &WinLayout::ALL)?,
         "density" => m.density = p_enum(v, &Density::ALL)?,
         "split_pane" => m.split_pane = p_idx(v, crate::ui::PANES_N)?,
