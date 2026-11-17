@@ -17,6 +17,12 @@ Part of the [SCPI reference](README.md).
 | `:WAVeform:STOP` | Set / Query | One-based inclusive end of the transfer page; default through the last available point. A stop beyond the record reads through its last point, and the query answers that point. | `3600` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:POINts` | Set / Query | Query actual points in the page; set the requested count starting at STARt. Pages clip at the available data boundary. | `3600` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:PREamble` | Query | Ten comma-separated fields listed below. | - | none (data transfer) | Rigol-compatible |
+| `:WAVeform:XINCrement` | Query | Field 5 of the preamble: seconds between two points. | - | none (data transfer) | Rigol-compatible |
+| `:WAVeform:XORigin` | Query | Field 6: the time of the first point of the page. | - | none (data transfer) | Rigol-compatible |
+| `:WAVeform:XREFerence` | Query | Field 7. | `0` | none (data transfer) | Rigol-compatible |
+| `:WAVeform:YINCrement` | Query | Field 8: volts per code. | - | none (data transfer) | Rigol-compatible |
+| `:WAVeform:YORigin` | Query | Field 9. | - | none (data transfer) | Rigol-compatible |
+| `:WAVeform:YREFerence` | Query | Field 10. | - | none (data transfer) | Rigol-compatible |
 | `:WAVeform:DATA` | Query | IEEE definite-length binary block; ASCII format also uses a block. | - | none (data transfer) | Rigol-compatible |
 
 ## Preamble and formats

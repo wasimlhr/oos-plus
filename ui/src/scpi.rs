@@ -1959,6 +1959,11 @@ impl Scpi {
             if kw(n1, "PREamble") && query {
                 return t(&self.wave_preamble(ui));
             }
+            // the scaling fields of the preamble one by one, as the stock firmware has them
+            let field = ["XINCrement", "XORigin", "XREFerence", "YINCrement", "YORigin", "YREFerence"].iter().position(|f| kw(n1, f));
+            if let Some(k) = field.filter(|_| query) {
+                return t(self.wave_preamble(ui).split(',').nth(4 + k).unwrap_or("0"));
+            }
             if kw(n1, "DATA") && query {
                 return self.wave_data(ui);
             }
@@ -6023,6 +6028,10 @@ mod tests {
         assert_eq!(&values[..4], &["1", "2", "2", "1"]);
         assert!((values[4].parse::<f64>().unwrap() - 5e-12).abs() < 1e-18);
         assert!((values[5].parse::<f64>().unwrap() - (-2e-9 + 5e-12)).abs() < 1e-15);
+        // each scaling field has its own query
+        for (k, q) in [":WAV:XINC?", ":WAV:XOR?", ":WAV:XREF?", ":WAV:YINC?", ":WAV:YOR?", ":WAVeform:YREFerence?"].into_iter().enumerate() {
+            assert_eq!(line(&mut scpi, &mut ui, &canvas, q), values[4 + k], "{}", q);
+        }
         line(&mut scpi, &mut ui, &canvas, ":WAV:MODE MAX;:STOP");
         assert_eq!(line(&mut scpi, &mut ui, &canvas, ":WAV:PRE?").split(',').nth(1), Some("1"));
         line(&mut scpi, &mut ui, &canvas, ":RUN");

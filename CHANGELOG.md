@@ -9,6 +9,8 @@ Added:
 
 - Remote control, from the same run on a DHO924S (host-tested, and each ran on that unit; of `*TRG` the unit showed
   only that it is accepted):
+  - `:WAVeform:XINCrement?`, `:XORigin?`, `:XREFerence?`, `:YINCrement?`, `:YORigin?` and `:YREFerence?` answer the
+    scaling fields of the preamble one by one, as the stock command set has them.
   - `:MMEMory:CATalog?`, `:MMEMory:DATA? "name"` and `:MMEMory:DELete "name"` list, fetch and remove the files of
     the save folder, so a waveform or screenshot saved on the scope can be pulled to the PC;
   - `:SAVE:MEMory:WAVeform` saves every sample the acquisition kept, where `:SAVE:WAVeform` writes the 3600 points

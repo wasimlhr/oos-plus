@@ -139,7 +139,7 @@ See [waveform](waveform.md) for the preamble and the formats.
 | [Channels](channel.md) | 17 | Vertical settings per channel, active channel |
 | [Timebase](timebase.md) | 13 | Main, delayed, roll and XY time base |
 | [Trigger](trigger.md) | 72 | Type, sweep, level and one subsection per trigger type |
-| [Waveform transfer](waveform.md) | 8 | Waveform transfer, preamble, formats |
+| [Waveform transfer](waveform.md) | 14 | Waveform transfer, preamble, formats |
 | [Measurements](measure.md) | 41 | Items, pairs, statistics, gate, levels, catalogue |
 | [Cursors, DVM and counter](cursor.md) | 30 | Cursors, DVM, counter |
 | [Math](math.md) | 16 | Math channels, FFT, filters, formulas |
