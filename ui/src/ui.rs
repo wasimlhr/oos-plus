@@ -69,6 +69,7 @@ mod scpi_coverage_tests;
 #[cfg(test)]
 mod sheet_tests;
 mod walk_tests;
+mod callout;
 #[cfg(test)]
 mod meas_known_tests;
 #[cfg(test)]
@@ -1572,6 +1573,8 @@ pub struct Ui {
     /// Clear pressed: the screen stays empty (also in STOP) until the next record
     cleared: bool,
     refs: [Option<RefWave>; NREF],
+    /// short texts pinned to a point of a signal (`callout.rs`)
+    callouts: Vec<callout::Callout>,
     /// counter: edges so far, frequency statistics
     cnt_total: u64,
     cnt_stat: MStat,
@@ -1941,6 +1944,7 @@ impl Ui {
             eye_big: None,
             cleared: false,
             refs: std::array::from_fn(|_| None),
+            callouts: Vec::new(),
             cnt_total: 0,
             cnt_stat: MStat::default(),
             cnt_hw: None,
@@ -3097,6 +3101,8 @@ impl Ui {
 
     pub fn step(&mut self, dt_wall: f64) {
         self.cursor_follow_view();
+        // a callout whose keyboard was closed without a text does not stay as an empty box
+        if self.wlan.osk.is_none() { self.callout_drop_empty(); }
         // Acquire > Draw path: the batch pipeline of PR #7 on the hardware only
         crate::drawpipe::set_enabled(self.m.draw_batch && self.src.is_hw());
         // System > Features: what is left out runs nothing
@@ -3885,6 +3891,9 @@ impl Ui {
                     self.draw_bus(cv);
                 }
                 self.draw_meas_labels(cv);
+                if i == 0 {
+                    self.draw_callouts(cv);
+                }
                 self.draw_cursors(cv);
                 self.draw_search(cv);
                 self.draw_bus_event(cv);
@@ -9497,7 +9506,7 @@ impl Ui {
     /// `:SYSTem:SETup?` returns.
     pub(crate) fn setup_text_full(&mut self) -> String {
         self.sync_view_state();
-        format!("{}{}", crate::store::setup_text(&self.m), self.ref_setup_text())
+        format!("{}{}{}", crate::store::setup_text(&self.m), self.ref_setup_text(), self.callout_setup_text())
     }
 
     /// Applies a setup text to the live settings, the way Recall setup does; the acquisition state stays as it is.
@@ -9506,6 +9515,7 @@ impl Ui {
         match parsed {
             Ok(mut m) => {
                 self.apply_ref_looks(&crate::store::parse_ref_looks(text, NREF));
+                self.callouts = Self::callouts_from_setup(text);
                 (m.run, m.status) = (self.m.run, self.m.status);
                 // the text size is a preference of this screen, not part of a set-up
                 m.text_size = self.m.text_size;
@@ -11388,6 +11398,7 @@ impl Ui {
             return self.toggle_menu(MenuId::ViewMore);
         }
         if self.view_fix_tap(x, y) { return; }
+        if !self.menu_open && self.callout_tap(x, y) { return; }
         if !self.menu_open && self.m.view == AView::Eye && !self.xy_over() && (self.eye_tap(x, y) || self.eye_column_tap(x, y)) {
             return;
         }

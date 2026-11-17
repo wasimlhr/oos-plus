@@ -46,6 +46,11 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Callouts in Studio (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
+  text to that time on that signal, with a line from the text to the point. It moves with the signal, is edited by a
+  tap on its text, removed by emptying it, and is part of the setup text and of a session. Remote, for scripts and
+  agents: `:CALLout:ADD <source>,<time>,<text>`, `:CALLout:REMove <n>`, `:CALLout:CLEar`, `:CALLout:COUNt?`,
+  `:CALLout:LIST?`.
 - Sessions (host-tested, not yet verified on hardware): Storage > **Save session** writes the setup, the record on
   the screen and every loaded reference slot with its samples into one file (`session-NNN.oss`); **Load session**
   stops the scope and shows it again, measured and decoded from what was loaded. Reference slots the file does not
@@ -64,12 +69,17 @@ Added:
     its menu button); Minimal greys Overlay and Stacked out while an analyser has the plot;
   - a long information line of a sheet (Network > Other access) breaks in two instead of losing its first letters; a
     lane no longer repeats the trigger level as a scale label beside the trigger tag;
+  - a SIM waveform added to a reference while the scope runs live is generated as long as the live screen, up to
+    4 million samples (it was always 65 536 samples, a few microseconds of a fast lane and a blip beside a
+    millisecond record). SIM Play keeps its own short record. At 4 million samples USB 2.0 HS covers 1 ms and
+    PCIe 1.0 0.2 ms; the fastest lanes still cover tens of microseconds, which is all their sample rate gives;
   - a SIM waveform added to a reference while the scope runs live says how long it is when it is far shorter than the
     screen, and its message carries the tick of a done action instead of the warning triangle;
   - the Histogram view of Studio uses its whole height (it copied the position of the channel's lane, a third of the
     view in stacked lanes), draws bars of at least four pixels, and has its header under the bars, not on them; its
     mean and sigma are those of the samples (they came from the brightness of picture rows and moved with the
     height of the lane: 1.09 V for 1.25 V in a third of the view);
+  - the value of cursor X1 starts right of its tag (the tag covered the minus sign of a time before the trigger);
   - a channel whose record reaches the end of the ADC range is named in red in the plot and gets a red pill border;
     `:CHANnel<n>:CLIPping?` answers 1 or 0;
   - Studio: a channel that is off has a small pill, a tap switches it on; the badge of a channel pill switches it
