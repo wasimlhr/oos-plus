@@ -22,7 +22,7 @@ Part of the [SCPI reference](README.md).
 | `:CURSor:TRACk:SOURce` | Set / Query | `<wave>` Selected `CHANn\|Rn`, without changing acquisition. SOURce1 aliases it; a different SOURce2 is unsupported (see `:CURSor:TRACk:SOURce2`). | `CHAN1` | Cursors > Source | Rigol-compatible |
 | `:CURSor:TRACk:CAX` | Set / Query | `seconds` Cursor A physical time; clips to the visible span. | `9.9E37` | Cursors > Cursor A position | Rigol-compatible |
 | `:CURSor:TRACk:CBX` | Set / Query | `seconds` Cursor B physical time; clips to the visible span. | `9.9E37` | Cursors > Cursor B position | Rigol-compatible |
-| `:CURSor:TRACk:CAY` | Set / Query | `volts` Cursor A volts in the selected source's displayed lane, including display zoom. | `9.9E37` | Cursors > Cursor A position | Rigol-compatible |
+| `:CURSor:TRACk:CAY` | Set / Query | `volts` Cursor A volts in the selected source's displayed lane, including display zoom. With track cursors on, the query answers the value of the trace under the cursor (as `:CURSor:TRACk:AYValue?`). | `9.9E37` | Cursors > Cursor A position | Rigol-compatible |
 | `:CURSor:TRACk:CBY` | Set / Query | `volts` Cursor B volts in the selected source's displayed lane, including display zoom. | `9.9E37` | Cursors > Cursor B position | Rigol-compatible |
 | `:CURSor:TRACk:SOURce1` | Set / Query | `<wave>` Track cursor A source (alias of `:CURSor:TRACk:SOURce`). | `CHAN1` | Cursors > Source A | Rigol-compatible |
 | `:CURSor:TRACk:SOURce2` | Set / Query | `<wave>` Track cursor B source `CHANn\|Rn`; unset B follows A. `YDELta` is unavailable when the units differ. | `CHAN1` | Cursors > Source B | Rigol-compatible |

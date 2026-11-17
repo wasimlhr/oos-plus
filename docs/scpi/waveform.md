@@ -10,11 +10,11 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:WAVeform:SOURce` | Set / Query | Select `CHANn\|Rn` for transfer; does not select the acquisition trigger. | `CHAN1` | none (data transfer) | Rigol-compatible |
+| `:WAVeform:SOURce` | Set / Query | Select `CHANn\|Rn\|MATHn` for transfer; does not select the acquisition trigger. A math channel is read as its whole computed record in every mode; an FFT, a channel that is off and a math channel that is off have no record (`:WAVeform:DATA?` of a channel that is off is -221). | `CHAN1` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:MODE` | Set / Query | `NORMal\|MAXimum\|RAW`. MAX uses the CH screen while running and native memory while stopped. | `NORM` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:FORMat` | Set / Query | `BYTE\|WORD\|ASCii`. Invalid formats are rejected without changing the selection. | `BYTE` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:STARt` | Set / Query | One-based inclusive start of the transfer page. Setting either bound keeps start <= stop. | `1` | none (data transfer) | Rigol-compatible |
-| `:WAVeform:STOP` | Set / Query | One-based inclusive end of the transfer page; default through the last available point. | `3600` | none (data transfer) | Rigol-compatible |
+| `:WAVeform:STOP` | Set / Query | One-based inclusive end of the transfer page; default through the last available point. A stop beyond the record reads through its last point, and the query answers that point. | `3600` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:POINts` | Set / Query | Query actual points in the page; set the requested count starting at STARt. Pages clip at the available data boundary. | `3600` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:PREamble` | Query | Ten comma-separated fields listed below. | - | none (data transfer) | Rigol-compatible |
 | `:WAVeform:DATA` | Query | IEEE definite-length binary block; ASCII format also uses a block. | - | none (data transfer) | Rigol-compatible |

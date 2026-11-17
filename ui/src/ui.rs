@@ -1717,7 +1717,7 @@ struct StripLine {
 }
 
 /// A 1-based inclusive page. `stop == 0` means the last sample. A start past the end is an empty page.
-fn copy_page(v: &[f32], dt: f64, t0: f64, start: u64, stop: u64) -> (Vec<f32>, f64, f64) {
+pub(crate) fn copy_page(v: &[f32], dt: f64, t0: f64, start: u64, stop: u64) -> (Vec<f32>, f64, f64) {
     let n = v.len() as u64;
     if n == 0 || start > n {
         return (Vec::new(), dt, t0);
@@ -3582,12 +3582,20 @@ impl Ui {
     /// STOP on the hardware: the thread acquires nothing and reads the stored record again for every view (time base,
     /// delay), as much of it as the view shows: zoomed out the whole record, zoomed in every sample of the part on
     /// screen. The trigger stays where the last record had it (software trigger included).
+    /// The screen refuses records of the hardware: a protocol trigger in Normal or Single (the hardware fires on every
+    /// edge of the line, the decoder decides) or a zone trigger. Then the newest frame in the ring at a STOP is, as a
+    /// rule, one that was refused, not the record shown: it must not be read again in its place.
+    fn records_refused(&self) -> bool {
+        (self.m.trig_type == TrigType::Bus && self.m.trig_mode != TrigMode::Auto) || self.m.zones.iter().any(|z| z.usable())
+    }
+
     fn stop_replay(&mut self) {
         let ok = self.src.is_hw()
             && board().slow_mode(&self.m) == crate::board::Slow::Off
             && !self.m.la_on()
             && self.m.segments == 0
             && self.hist_pos.is_none()
+            && !self.records_refused()
             && self.last[0].as_ref().is_some_and(|r| r.raw.is_some());
         if !ok {
             self.src.hw_stop(None);
@@ -4439,8 +4447,17 @@ impl Ui {
         let Some(r) = self.refs[self.ref_sel].as_ref().filter(|r| r.v.len() >= 2) else {
             return self.toast(&format!("R{} is empty", self.ref_sel + 1));
         };
-        self.mask_ref = Some(r.v.as_ref().clone());
-        self.m.mask_src = r.src.min(NCH - 1);
+        let src = r.src.min(NCH - 1);
+        // A mask is compared point by point with the record on screen, and a reference keeps the samples of its whole
+        // acquisition, longer and finer than the screen: the reference is read at the times of the screen's points.
+        let on_screen = self.last[0].as_ref().filter(|rec| rec.dt > 0.0 && r.dt > 0.0 && !rec.ch[src].is_empty()).map(|rec| {
+            (0..rec.ch[src].len()).map(|i| {
+                let k = ((rec.t0 + i as f64 * rec.dt - r.t0) / r.dt).round();
+                if k >= 0.0 && k < r.v.len() as f64 { r.v[k as usize] } else { f32::NAN }
+            }).collect::<Vec<f32>>()
+        });
+        self.mask_ref = Some(on_screen.filter(|v| v.iter().any(|x| x.is_finite())).unwrap_or_else(|| r.v.as_ref().clone()));
+        self.m.mask_src = src;
         self.build_mask();
         self.m.mask_on = true;
         self.mask_pass = 0;
@@ -8396,6 +8413,7 @@ impl Ui {
             Item::TrigMode => {
                 let all = [TrigMode::Auto, TrigMode::Normal, TrigMode::Single];
                 let i = all.iter().position(|&x| x == m.trig_mode).unwrap();
+                m.keep_sweep();
                 m.trig_mode = all[cyc(i, 3, d)];
                 if m.trig_mode == TrigMode::Single {
                     m.run = RunState::Run;
@@ -9175,6 +9193,25 @@ impl Ui {
             r = crate::store::write(&q, crate::store::la_csv(la, &self.m.la.lines()).as_bytes());
         }
         self.toast_saved(&p, r);
+    }
+
+    /// Save of the acquisition memory (`:SAVE:MEMory:WAVeform`): every sample the acquisition kept of the channels
+    /// that are on, where `store_wave` writes the points of the screen. Peak detect, roll and a record above 1 M
+    /// points keep no single samples; there it is the screen record again.
+    pub(crate) fn store_wave_memory(&mut self, csv: bool, path: Option<std::path::PathBuf>) -> Result<(), &'static str> {
+        const CSV_MAX: usize = 1_000_000;
+        let data = {
+            let views: Vec<(usize, &[f32], f64, f64)> = (0..NCH).filter(|&c| self.m.ch[c].on)
+                .filter_map(|c| self.channel_view(c, true).map(|(v, dt, t0)| (c, v, dt, t0))).collect();
+            let Some(&(_, _, dt, t0)) = views.first() else { return Err("no waveform to save") };
+            if csv && views.iter().any(|(_, v, _, _)| v.len() > CSV_MAX) { return Err("more than 1 M points: save as BIN") }
+            let chans: Vec<(usize, &[f32])> = views.iter().map(|&(c, v, _, _)| (c, v)).collect();
+            if csv { crate::store::wave_csv_of(t0, dt, &chans).into_bytes() } else { crate::store::wave_bin_of(t0, dt, &chans) }
+        };
+        let p = path.unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
+        let r = crate::store::write(&p, &data);
+        self.toast_saved(&p, r);
+        Ok(())
     }
 
     fn toast_saved(&mut self, p: &std::path::Path, r: std::io::Result<()>) {
@@ -10242,7 +10279,7 @@ impl Ui {
             key::RUNSTOP => {
                 m.run = if m.run == RunState::Run { RunState::Stop } else { RunState::Run };
                 if m.run == RunState::Run && m.trig_mode == TrigMode::Single {
-                    m.trig_mode = TrigMode::Auto;
+                    m.trig_mode = m.sweep_kept;
                 }
                 if m.run == RunState::Run && (m.n_on() > 0 || m.la_on()) {
                     m.floor_live_tdiv();
@@ -10251,6 +10288,7 @@ impl Ui {
             key::SINGLE => {
                 self.operation_serial = self.operation_serial.wrapping_add(1);
                 self.single_operation = self.operation_serial;
+                m.keep_sweep();
                 m.trig_mode = TrigMode::Single;
                 m.run = RunState::Run;
                 self.single_armed = false;
@@ -13416,6 +13454,29 @@ mod tests {
         assert_eq!(ui.m.math, MathOp::A2d);
         ui.select_option(Item::MathFam, "Arithmetic");
         assert!(ui.options(Item::MathOpI).contains(&"Conv".into()));
+    }
+
+    // Break it catches: a mask made from a reference failed every acquisition of the very signal the reference was
+    // saved from (seen on a unit, 2026-11-17): a reference keeps the whole acquisition, the mask is laid over the
+    // points of the screen.
+    #[test]
+    fn a_mask_from_a_reference_longer_than_the_screen_passes_its_own_signal() {
+        use super::*;
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.step(0.033);
+        ui.m.run = RunState::Stop;
+        let rec = ui.last[0].clone().unwrap();
+        // the same signal, four times finer and with half a screen more on either side
+        let n = rec.ch[0].len();
+        let fine: Vec<f32> = (0..8 * n).map(|k| {
+            let x = k as f64 / 4.0 - n as f64 / 2.0;
+            if x < 0.0 || x >= n as f64 { 0.0 } else { rec.ch[0][x as usize] }
+        }).collect();
+        ui.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: rec.t0 - n as f64 / 2.0 * rec.dt, dt: rec.dt / 4.0, v: fine.into(), vpd: 1.0, offset: 0.0, on: true });
+        (ui.m.mask_x, ui.m.mask_y) = (0.1, 0.5);
+        ui.activate(Item::MaskFromRef);
+        assert_eq!(ui.mask_ref.as_ref().unwrap().len(), n, "the reference at the points of the screen");
+        assert!(ui.mask.as_ref().unwrap().test(&rec.ch[0]).pass);
     }
 
     #[test]

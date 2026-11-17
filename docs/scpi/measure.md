@@ -23,7 +23,7 @@ Part of the [SCPI reference](README.md).
 | `:MEASure:CATalog:ITEM` | Set / Query | `<id>[,A[,B[,C[,D]]]]` Add the catalogue row `id` on the given sources (defaults: the current Source A, B, C, D); a row already there is left. The query `:MEASure:CATalog:ITEM? <id>[,A,...]` answers its value (`9.9E37` when none) | - | Measurements > Add (catalogue) | OOS extension |
 | `:MEASure:CATalog:SOURceC` | Set / Query | Source C or D of the Add page. | `CH3` | Measure > Source C | OOS extension |
 | `:MEASure:CATalog:SOURceD` | Set / Query | Source C or D of the Add page. | `CH4` | Measure > Source D | OOS extension |
-| `:MEASure:ITEM` | Set / Query | `<item>[,<A>[,<B>]]` Set: add a standard or pair readout (duplicates keep statistics and Single). Query `:MEASure:ITEM? <item>[,<source>]` answers a standard scalar, `:MEASure:ITEM? <pair>,<A>,<B>` a pair scalar with physical-time alignment; the default source is the Measure selection. Items: see [Measure](measure.md#items). | - | Measurements > Add standard measurement | Rigol-compatible. `9.9E37` when no value exists. |
+| `:MEASure:ITEM` | Set / Query | `<item>[,<A>[,<B>]]` Set: add a standard or pair readout (duplicates keep statistics and Single). Query `:MEASure:ITEM? <item>[,<source>]` answers a standard scalar (the source may be `MATH<n>`: the item over the whole record of that math channel), `:MEASure:ITEM? <pair>,<A>,<B>` a pair scalar with physical-time alignment; the default source is the Measure selection. Items: see [Measure](measure.md#items). | - | Measurements > Add standard measurement | Rigol-compatible. `9.9E37` when no value exists. |
 
 ### Gate and edge settings
 

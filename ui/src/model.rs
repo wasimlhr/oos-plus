@@ -1183,6 +1183,8 @@ pub struct Model {
     pub trig_level: f32,
     pub slope: Slope,
     pub trig_mode: TrigMode,
+    /// the sweep (Auto or Normal) before a Single, which Run goes back to; not part of a setup
+    pub sweep_kept: TrigMode,
     /// trigger holdoff, seconds (0 = the shortest there is)
     pub holdoff: f32,
     pub trig_type: TrigType,
@@ -1728,6 +1730,7 @@ impl Default for Model {
             trig_level: 0.0,
             slope: Slope::Rise,
             trig_mode: TrigMode::Auto,
+            sweep_kept: TrigMode::Auto,
             holdoff: 0.0,
             trig_type: TrigType::Edge,
             trig_level2: 0.5,
@@ -2138,6 +2141,11 @@ impl Model {
             WhenKind::In => Some(When::In(a.min(b), a.max(b))),
             WhenKind::Out => Some(When::Out(a.min(b), a.max(b))),
         }
+    }
+
+    /// Call before the sweep is changed: remembers Auto or Normal, so that Run after a Single returns to it.
+    pub fn keep_sweep(&mut self) {
+        if self.trig_mode != TrigMode::Single { self.sweep_kept = self.trig_mode; }
     }
 
     pub fn trigger_wave(&self) -> WaveId {
