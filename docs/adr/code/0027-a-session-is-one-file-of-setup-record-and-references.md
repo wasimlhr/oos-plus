@@ -16,7 +16,9 @@ only; not yet verified on hardware.
 ## Decision
 
 A session is one file, `session-NNN.oss`: the tag "OOSS" and a version, the setup as the same text a setup file has,
-the record on the screen as an OOSW blob when there is one, and every loaded reference slot with its samples. Loading
+the record as an OOSW blob when there is one (the samples the acquisition kept, or the points of the screen when
+that is all there is: min/max pairs, roll, a record no longer than a screen), and every loaded reference slot with
+its samples. Loading
 it stops the scope, applies the setup as Recall setup does, puts the record on the screen and replaces the reference
 slots by those of the file. The exact layout is in the comment of `store::session_bin`.
 
@@ -31,7 +33,11 @@ slots by those of the file. The exact layout is in the comment of `store::sessio
 
 ## Consequences
 
-- The file is as large as its samples: 4 bytes a point for every shown channel and every reference.
+- The file is as large as its samples: 4 bytes a point for every shown channel and every reference. A record with
+  its samples is read back as an acquisition: the screen is drawn from it for every view, RAW and the decoders read
+  it, and a STOP does not read the memory of the hardware in its place (verified on a DHO924S 2026-11-17: 100 k
+  points, a 9600 Bd line decoded the same before the save and after the load). The layout is the one of version 1;
+  a record of more than 7200 points is taken as samples.
 - The setup inside is the setup text, so it follows that format and its keys without a second copy of the rules. A
   session of a newer build with keys this build does not know loads as a setup file with those keys would.
 - The version is checked on load; a change of the layout raises it, and a reader says which version it met.

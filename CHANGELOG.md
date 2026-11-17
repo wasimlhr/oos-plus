@@ -152,7 +152,11 @@ Fixed:
   - after a Stop a decoder on channels reads the same whole record as `:WAVeform:MODE RAW`, not the part read again
     for the view (unit: the same 60 events at 20 ms/div and zoomed in to 1 ms/div);
   - a mask made from a reference lies where the reference is drawn when the reference has a deskew;
-  - no save command writes under `/rigol`, whatever path it is given (ADR 0009).
+  - no save command writes under `/rigol`, whatever path it is given (ADR 0009);
+  - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line
+    decoded 59 characters before the save and none after the load. A loaded session is zoomed, read out (RAW) and
+    decoded from its samples, and a Stop does not read the hardware's own memory in its place (unit: 100 k points,
+    22 of 22 and 59 of 59 characters after the load at 5 and 20 ms/div).
 - An update with another device tree starts by kexec again (unit). The update copied the loader's random
   `/chosen/kaslr-seed` into the new tree, and kexec-tools refuses a seed that is not 0, so the update stopped at its
   kexec start with nothing installed. The seed now goes in as 0, and kexec-tools puts in a new random one. A scope

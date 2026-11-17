@@ -295,6 +295,9 @@ const HISTORY: usize = 200;
 const DEC_NATIVE_RUN: usize = 262_144;
 /// The same for a stopped record, which is decoded once.
 const DEC_NATIVE_STOP: usize = 4 << 20;
+/// Most points a screen record has (3600, or twice that as min/max pairs). A record of a session with more is an
+/// acquisition with its samples (`Ui::session_memory`, `Ui::session_record`).
+const SESSION_SCREEN_MAX: usize = 7200;
 /// Seconds the trigger level line stays after the level changed.
 const LEVEL_LINE_S: f64 = 1.5;
 /// Longest wait of a STOP for the hardware's final frame (`Ui::stop_final`): a batch in progress, its read and the raw
@@ -1488,6 +1491,9 @@ pub struct Ui {
     /// stays `last[0]`, the record measured and read out (`stop_replay`, docs/fork/stop-exact.md)
     stop_raw: Option<Record>,
     stop_pic: Option<Record>,
+    /// STOP: the record shown was loaded from a session, with its samples. What the hardware has in its memory is
+    /// another acquisition, so the STOP does not read that again in its place (`stop_replay`); RUN ends it
+    loaded_record: bool,
     pub t_fast: f32,
     pub t_fast_ab: (f32, f32),
     /// of the drawing: adding the collected frames to the maps (ms), frames a call (smoothed)
@@ -1896,6 +1902,7 @@ impl Ui {
             stop_ti_off: None,
             stop_raw: None,
             stop_pic: None,
+            loaded_record: false,
             t_fast: 0.0,
             t_fast_ab: (0.0, 0.0),
             t_fast_fold: 0.0,
@@ -3228,6 +3235,7 @@ impl Ui {
             if self.m.run == RunState::Run {
                 self.stop_ti_off = None;
                 (self.stop_raw, self.stop_pic) = (None, None);
+                self.loaded_record = false;
             }
             if self.dirty_map {
                 self.ph.clear();
@@ -3652,6 +3660,7 @@ impl Ui {
             && self.m.segments == 0
             && self.hist_pos.is_none()
             && !self.records_refused()
+            && !self.loaded_record
             && self.last[0].as_ref().is_some_and(|r| r.raw.is_some());
         if !ok {
             self.src.hw_stop(None);
@@ -4566,13 +4575,47 @@ impl Ui {
 
     /// Save session: the setup, the record on the screen and every loaded reference slot with its samples, as one file
     /// (ADR 0027). Storage > Save session and `:SAVE:SESSion`.
+    /// The record of a session when the acquisition kept more than the screen shows: every sample of the channels
+    /// that are on, as an OOSW blob. None when the screen record is all there is (min/max pairs, roll, a short record),
+    /// or when the channels do not share one time axis.
+    fn session_memory(&self) -> Option<Vec<u8>> {
+        let rec = self.last[0].as_ref()?;
+        let on: Vec<usize> = (0..NCH).filter(|&c| self.m.ch[c].on && !rec.ch[c].is_empty()).collect();
+        let views: Vec<(usize, &[f32], f64, f64)> = on.iter().filter_map(|&c| self.channel_view(c, true).map(|(v, dt, t0)| (c, v, dt, t0))).collect();
+        let &(_, first, dt, t0) = views.first()?;
+        let one_axis = views.len() == on.len() && views.iter().all(|&(_, v, d, t)| v.len() == first.len() && d == dt && t == t0);
+        if !one_axis || first.len() <= SESSION_SCREEN_MAX {
+            return None;
+        }
+        let chans: Vec<(usize, &[f32])> = views.iter().map(|&(c, v, _, _)| (c, v)).collect();
+        Some(crate::store::wave_bin_of(t0, dt, &chans))
+    }
+
+    /// The record of a loaded session with more points than a screen has is an acquisition: it becomes the frame
+    /// behind the record, and the screen is drawn from it for every view, as after a capture (`refresh_capture_view`).
+    fn session_record(&mut self, rec: Record) -> Record {
+        let n = rec.ch.iter().map(Vec::len).max().unwrap_or(0);
+        if n <= SESSION_SCREEN_MAX || !(rec.dt > 0.0) || !rec.t0.is_finite() {
+            return rec;
+        }
+        let Record { t0, dt, ch, triggered, .. } = rec;
+        let basic = std::array::from_fn(|c| crate::board::BasicStats::of(&ch[c]));
+        let pre = (-t0 / dt).round().clamp(0.0, (n - 1) as f64) as usize;
+        let frame = std::sync::Arc::new(crate::board::Frame { seq: 1, dt, pre, ch, acq: (1.0 / dt, n), basic, ..Default::default() });
+        let raw = Raw { frame, i0: 0, i1: n, t0, conditioned: true };
+        let whole = Record { t0, dt, ch: Default::default(), triggered, partial: false, raw: Some(raw), la: None, pairs: false };
+        let view = (self.m.time_per_div(), self.m.delay);
+        self.captured_record_view(&whole, view).map(|r| r.as_ref().clone()).unwrap_or(whole)
+    }
+
     pub(crate) fn session_save(&mut self, path: &str) -> Result<std::path::PathBuf, String> {
         let p = self.session_file(path, true)?;
         let setup = self.setup_text_full();
         let refs: Vec<crate::store::SessionRef> = self.refs.iter().enumerate().filter_map(|(slot, r)| {
             r.as_ref().map(|r| crate::store::SessionRef { slot, src: r.src, t0: r.t0, dt: r.dt, v: r.v.to_vec() })
         }).collect();
-        let bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), &self.m, &refs);
+        let memory = self.session_memory();
+        let bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), memory.as_deref(), &self.m, &refs);
         let r = crate::store::write(&p, &bytes);
         let out = r.as_ref().map(|_| p.clone()).map_err(|e| e.to_string());
         self.toast_saved(&p, r);
@@ -4604,9 +4647,13 @@ impl Ui {
             self.history.clear();
             self.hist_pos = None;
             if let Some(rec) = session.record {
-                self.last[0] = Some(rec);
+                self.last[0] = Some(self.session_record(rec));
                 self.cleared = false;
             }
+            // whatever the hardware still holds is not this record
+            self.stop_ti_off = None;
+            (self.stop_raw, self.stop_pic) = (None, None);
+            self.loaded_record = true;
             self.invalidate_reference_eye();
             self.measure_last();
             self.measure_refs();
@@ -12496,6 +12543,70 @@ mod tests {
         steps(&mut ui, 2);
         assert!(ui.stop_raw.is_none());
         assert_eq!(ui.channel_points(0, true), ui.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.ch[0].len());
+    }
+
+    // Break it catches: a session held the 3600 points of the screen, so a loaded capture had lost its samples: a
+    // 9600 Bd line decoded 59 characters before the save and none after the load (seen on a unit, 2026-11-17).
+    #[test]
+    fn a_session_keeps_the_samples_of_the_acquisition() {
+        use super::*;
+        let dir = std::env::temp_dir().join(format!("oos-session-memory-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (n, pre) = (100_000usize, 50_000usize);
+        let mut v: Vec<f32> = (0..n).map(|i| if i < pre { -1.0 } else { 1.0 }).collect();
+        v[1000] = 0.75;
+        let steps = |ui: &mut Ui, k: usize| {
+            for _ in 0..k {
+                ui.step(0.02);
+            }
+        };
+        let bench = |tdiv: f64| {
+            let shared: crate::board::HwShared = Default::default();
+            let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+            ui.store_dir = dir.clone();
+            ui.m.run = RunState::Run;
+            for c in 1..NCH {
+                ui.m.ch[c].on = false;
+            }
+            ui.m.tscale = tscales().iter().position(|&t| (t as f64 - tdiv).abs() < tdiv * 1e-3).unwrap();
+            (ui, shared)
+        };
+        let (mut ui, shared) = bench(10e-6);
+        let frame = crate::board::Frame { seq: 1, dt: 0.8e-9, pre, ch: [v.clone(), Vec::new(), Vec::new(), Vec::new()], acq: (1.25e9, n), ..Default::default() };
+        shared.lock().unwrap().queue.push_back(frame);
+        steps(&mut ui, 3);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 2);
+        let origin = ui.channel_origin(0, true).unwrap();
+        let screen = ui.last[0].as_ref().unwrap().ch[0].clone();
+        let file = ui.session_save("").unwrap();
+        assert!(std::fs::metadata(&file).unwrap().len() > 4 * n as u64, "every sample is in the file");
+
+        // another scope, running at another time base
+        let (mut other, hw) = bench(1e-3);
+        steps(&mut other, 2);
+        other.session_load(file.to_str().unwrap()).unwrap();
+        steps(&mut other, 3);
+        assert_eq!(other.m.run, RunState::Stop);
+        assert_eq!(other.channel_points(0, true), n, "the memory of the loaded record");
+        let (dt, t0) = other.channel_origin(0, true).unwrap();
+        assert!((dt - origin.0).abs() < 1e-18 && (t0 - origin.1).abs() < 1e-12, "{dt} {t0} {origin:?}");
+        assert_eq!(other.channel_page(0, true, 1001, 1001).unwrap().0, vec![0.75]);
+        let shown = other.last[0].as_ref().unwrap();
+        assert_eq!(shown.ch[0].len(), screen.len(), "the screen has its points, not the memory's");
+        let worst = shown.ch[0].iter().zip(&screen).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
+        assert!(worst < 1e-3, "the screen of the loaded session is the one saved: {worst}");
+        // the hardware is not asked for its own memory in place of the loaded record
+        assert!(hw.lock().unwrap().stop_view.is_none(), "no STOP read of the hardware for a loaded record");
+        // zoomed in on the mark, 0.8 us from the start of the record: drawn from the loaded samples
+        other.m.tscale = tscales().iter().position(|&t| (t as f64 - 100e-9).abs() < 1e-12).unwrap();
+        other.m.delay = (origin.1 + 1000.0 * origin.0) as f32;
+        steps(&mut other, 3);
+        let zoomed = other.last[0].as_ref().unwrap();
+        assert!(zoomed.ch[0].iter().any(|x| (x - 0.75).abs() < 0.05), "the mark is on the screen after the zoom");
+        assert_eq!(other.channel_points(0, true), n);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // Break it catches: the stored record read again in STOP (`stop_replay`) counted as a new record in the statistics,
