@@ -14790,3 +14790,5 @@ mod aux_out_tests {
 
 #[cfg(test)]
 mod zoom_tests;
+#[cfg(test)]
+mod funccheck_tests;

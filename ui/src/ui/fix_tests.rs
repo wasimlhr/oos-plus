@@ -3,6 +3,9 @@
 use super::*;
 use super::workspace::Action;
 
+#[cfg(audit_shots)]
+mod audit_shots;
+
 fn fresh() -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = crate::model::Layout::Minimal; // these tests check the Minimal bars
