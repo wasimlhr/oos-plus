@@ -3623,10 +3623,12 @@ impl Ui {
     /// delay), as much of it as the view shows: zoomed out the whole record, zoomed in every sample of the part on
     /// screen. The trigger stays where the last record had it (software trigger included).
     /// The screen refuses records of the hardware: a protocol trigger in Normal or Single (the hardware fires on every
-    /// edge of the line, the decoder decides) or a zone trigger. Then the newest frame in the ring at a STOP is, as a
-    /// rule, one that was refused, not the record shown: it must not be read again in its place.
+    /// edge of the line, the decoder decides) or a zone trigger tested in software. Then the newest frame in the ring at
+    /// a STOP is, as a rule, one that was refused, not the record shown: it must not be read again in its place. With
+    /// the zone trigger of the hardware (`zone_hw_active`) every frame in the ring has passed, and the STOP reads it.
     fn records_refused(&self) -> bool {
-        (self.m.trig_type == TrigType::Bus && self.m.trig_mode != TrigMode::Auto) || self.m.zones.iter().any(|z| z.usable())
+        let zones = self.m.zones.iter().any(|z| z.usable()) && !self.zone_hw_active();
+        (self.m.trig_type == TrigType::Bus && self.m.trig_mode != TrigMode::Auto) || zones
     }
 
     fn stop_replay(&mut self) {
@@ -4491,11 +4493,13 @@ impl Ui {
             return self.toast(&format!("R{} is empty", self.ref_sel + 1));
         };
         let src = r.src.min(NCH - 1);
+        // where the reference is drawn: its own time less its deskew
+        let ref_t0 = self.source_time_origin(WaveId::Ref(self.ref_sel), r.t0);
         // A mask is compared point by point with the record on screen, and a reference keeps the samples of its whole
         // acquisition, longer and finer than the screen: the reference is read at the times of the screen's points.
         let on_screen = self.last[0].as_ref().filter(|rec| rec.dt > 0.0 && r.dt > 0.0 && !rec.ch[src].is_empty()).map(|rec| {
             (0..rec.ch[src].len()).map(|i| {
-                let k = ((rec.t0 + i as f64 * rec.dt - r.t0) / r.dt).round();
+                let k = ((rec.t0 + i as f64 * rec.dt - ref_t0) / r.dt).round();
                 if k >= 0.0 && k < r.v.len() as f64 { r.v[k as usize] } else { f32::NAN }
             }).collect::<Vec<f32>>()
         });
@@ -5057,7 +5061,10 @@ impl Ui {
     /// `None`: the screen record is the answer (min/max pairs, no kept samples, or none finer than the screen's).
     fn decode_native(&self, m: &Model, rec: &Record) -> Option<Result<std::sync::Arc<Vec<oos_dsp::decode::Packet>>, &'static str>> {
         use std::hash::{Hash, Hasher};
-        let raw = rec.raw.as_ref().filter(|r| !r.frame.envelope && r.frame.dt.is_finite() && r.frame.dt > 0.0 && r.t0.is_finite())?;
+        // of the record shown, the memory a RAW read takes: after a STOP the whole record, not the view read again
+        let shown = self.last[0].as_ref().is_some_and(|r| std::ptr::eq(r, rec));
+        let raw = if shown { self.memory_raw() } else { rec.raw.as_ref() };
+        let raw = raw.filter(|r| !r.frame.envelope && r.frame.dt.is_finite() && r.frame.dt > 0.0 && r.t0.is_finite())?;
         // the record of another source is conditioned (coupling, invert) after its frame: the frame is not what it shows
         if !self.src.is_hw() && !raw.conditioned {
             return None;
@@ -9266,20 +9273,21 @@ impl Ui {
     /// Save of the acquisition memory (`:SAVE:MEMory:WAVeform`): every sample the acquisition kept of the channels
     /// that are on, where `store_wave` writes the points of the screen. Peak detect, roll and a record above 1 M
     /// points keep no single samples; there it is the screen record again.
-    pub(crate) fn store_wave_memory(&mut self, csv: bool, path: Option<std::path::PathBuf>) -> Result<(), &'static str> {
+    pub(crate) fn store_wave_memory(&mut self, csv: bool, path: Option<std::path::PathBuf>) -> Result<(), String> {
         const CSV_MAX: usize = 1_000_000;
         let data = {
             let views: Vec<(usize, &[f32], f64, f64)> = (0..NCH).filter(|&c| self.m.ch[c].on)
                 .filter_map(|c| self.channel_view(c, true).map(|(v, dt, t0)| (c, v, dt, t0))).collect();
-            let Some(&(_, _, dt, t0)) = views.first() else { return Err("no waveform to save") };
-            if csv && views.iter().any(|(_, v, _, _)| v.len() > CSV_MAX) { return Err("more than 1 M points: save as BIN") }
+            let Some(&(_, _, dt, t0)) = views.first() else { return Err("-221,\"Settings conflict\" no waveform to save".into()) };
+            if csv && views.iter().any(|(_, v, _, _)| v.len() > CSV_MAX) { return Err("-221,\"Settings conflict\" more than 1 M points: save as BIN".into()) }
             let chans: Vec<(usize, &[f32])> = views.iter().map(|&(c, v, _, _)| (c, v)).collect();
             if csv { crate::store::wave_csv_of(t0, dt, &chans).into_bytes() } else { crate::store::wave_bin_of(t0, dt, &chans) }
         };
         let p = path.unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
         let r = crate::store::write(&p, &data);
+        let failed = r.as_ref().err().map(|e| format!("-250,\"Mass storage error\" {e}"));
         self.toast_saved(&p, r);
-        Ok(())
+        failed.map_or(Ok(()), Err)
     }
 
     fn toast_saved(&mut self, p: &std::path::Path, r: std::io::Result<()>) {

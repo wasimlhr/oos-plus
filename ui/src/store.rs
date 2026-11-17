@@ -80,6 +80,18 @@ pub fn file_name(p: &Path) -> String {
 /// could lead straight to the card. So only a regular file or a new one, and on the stick no link on the way there.
 pub fn check_target(path: &Path) -> std::io::Result<()> {
     let refuse = |what: &str| Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{}: {}", path.display(), what)));
+    // the vendor's data is never written (ADR 0009), whatever path a command was given; `..` is followed as written
+    let mut plain = std::path::PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::ParentDir => { plain.pop(); }
+            std::path::Component::CurDir => {}
+            other => plain.push(other),
+        }
+    }
+    if plain.starts_with("/rigol") {
+        return refuse("the vendor's data is not written");
+    }
     if path.starts_with("/mnt/usb") {
         for a in path.ancestors().skip(1).take_while(|a| a.starts_with("/mnt/usb") && *a != Path::new("/mnt/usb")) {
             if a.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
@@ -2822,6 +2834,15 @@ pub fn sync_disks() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Break it catches: a save command given a path into the vendor's data wrote there (ADR 0009).
+    #[test]
+    fn no_save_writes_the_vendors_data() {
+        for p in ["/rigol/data/x.bin", "/rigol/x", "/tmp/../rigol/data/x.bin", "/rigol/./data/../data/x"] {
+            assert!(check_target(Path::new(p)).is_err(), "{p}");
+        }
+        assert!(check_target(Path::new("/tmp/oos/rigol.bin")).is_ok());
+    }
     use crate::gfx::rgb;
     use crate::math::{MathOp, Window};
 

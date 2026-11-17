@@ -826,7 +826,6 @@ fn extras(t: &mut T) {
     }
 }
 #[test]
-#[cfg_attr(not(feature = "decoders"), ignore = "needs every decoder")]
 fn every_new_header_is_set_and_queried_and_changes_what_the_menu_changes() {
     let mut t = T::new();
     trigger(&mut t);
