@@ -150,10 +150,10 @@ Fixed:
   - `:REFerence:COLor RED` was refused (the word was read as a slot); `:CURSor:TRACk:CAY?` and `CBY?` answer the
     value under a track cursor, not `9.9E37`; `:WAVeform:STOP?` answers the last point when the stop is beyond the
     record; `:WAVeform:DATA?` of a channel that is off is an error, not old data (a channel switched off after a Stop is
-    still read); a setup file that is not there is
+    still read; unit); a setup file that is not there is
     error -256 (unit, all five);
   - after a Stop a decoder on channels reads the same whole record as `:WAVeform:MODE RAW`, not the part read again
-    for the view (host-tested, not yet verified on hardware);
+    for the view (unit: the same 60 events at 20 ms/div and zoomed in to 1 ms/div);
   - a mask made from a reference lies where the reference is drawn when the reference has a deskew;
   - no save command writes under `/rigol`, whatever path it is given (ADR 0009).
 - An update with another device tree starts by kexec again (unit). The update copied the loader's random
