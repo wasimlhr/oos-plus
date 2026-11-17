@@ -2741,7 +2741,7 @@ impl Scpi {
                 Some(f) => { self.push_err(format!("-224,\"Illegal parameter value\" {}", f)); return None; }
             };
             let path = name.map(|p| ui.out_path(p));
-            if let Err(why) = ui.store_wave_memory(csv, path) { self.push_err(format!("-221,\"Settings conflict\" {}", why)); }
+            if let Err(error) = ui.store_wave_memory(csv, path) { self.push_err(error); }
             return None;
         }
         // :MMEMory: the files of the save folder, so that what was saved on the scope can be fetched (SCPI-99 names)
@@ -4980,8 +4980,10 @@ impl Scpi {
             return None;
         }
         if let (None, WaveId::Ch(c)) = (self.wav_math, self.wav_src) {
-            if !ui.m.ch[c].on && !ui.record_mode() {
-                // the record of a channel that is off is whatever was last acquired on it
+            // A channel that is off is not acquired: what a running scope holds of it is whatever was acquired last.
+            // Switched off after a STOP it still has its samples of the record shown, and they are read.
+            let kept = ui.m.run == RunState::Stop && ui.channel_points(c, self.wave_memory(ui)) > 0;
+            if !ui.m.ch[c].on && !kept && !ui.record_mode() {
                 self.push_err(format!("-221,\"Settings conflict\" CHAN{} is off", c + 1));
                 return None;
             }
@@ -7482,6 +7484,12 @@ mod tests {
         assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:STOP?"), points.to_string());
         line(&mut s, &mut ui, &cv, "*CLS;:CHAN3:DISP OFF;:WAV:SOUR CHAN3");
         assert!(line(&mut s, &mut ui, &cv, ":WAV:DATA?").starts_with("-221,"));
+        // switched off after the stop, a channel still has its samples of the record shown; running, it has none
+        line(&mut s, &mut ui, &cv, "*CLS;:CHAN2:DISP OFF;:WAV:SOUR CHAN2");
+        assert!(s.exec_line(&mut ui, &cv, ":WAV:DATA?").starts_with(b"#9"), "CH2 was on when the record was taken");
+        line(&mut s, &mut ui, &cv, ":RUN");
+        ui.step(0.05);
+        assert!(line(&mut s, &mut ui, &cv, ":WAV:DATA?").starts_with("-221,"));
     }
 
     #[test]
@@ -7501,7 +7509,7 @@ mod tests {
         assert_eq!(&data[11..], std::fs::read(dir.join("a.csv")).unwrap());
         assert!(std::fs::read(dir.join("m.bin")).unwrap().starts_with(b"OOSW"));
         // only plain names of the save folder: no way up or out of it
-        for name in ["../a.csv", "/etc/passwd", "sub/a.csv", "..", ""] {
+        for name in ["../a.csv", "/etc/passwd", "sub/a.csv", "..", "", "C:a.csv", "a.csv:x"] {
             line(&mut s, &mut ui, &cv, "*CLS");
             let reply = line(&mut s, &mut ui, &cv, &format!(":MMEM:DATA? \"{name}\""));
             assert!(reply.starts_with("-224,"), "{name}: {reply}");
@@ -7513,6 +7521,9 @@ mod tests {
         assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-256,"));
         line(&mut s, &mut ui, &cv, ":LOAD:SET \"none.txt\"");
         assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-256,"), "a setup file that is not there");
+        // a save that cannot be written is an error of the command, not only a note on the screen
+        line(&mut s, &mut ui, &cv, "*CLS;:SAVE:MEM:WAV \"m.bin/under-a-file.bin\"");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-250,"), "a path under a file");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

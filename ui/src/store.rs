@@ -80,6 +80,18 @@ pub fn file_name(p: &Path) -> String {
 /// could lead straight to the card. So only a regular file or a new one, and on the stick no link on the way there.
 pub fn check_target(path: &Path) -> std::io::Result<()> {
     let refuse = |what: &str| Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{}: {}", path.display(), what)));
+    // the vendor's data is never written (ADR 0009), whatever path a command was given; `..` is followed as written
+    let mut plain = std::path::PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::ParentDir => { plain.pop(); }
+            std::path::Component::CurDir => {}
+            other => plain.push(other),
+        }
+    }
+    if plain.starts_with("/rigol") {
+        return refuse("the vendor's data is not written");
+    }
     if path.starts_with("/mnt/usb") {
         for a in path.ancestors().skip(1).take_while(|a| a.starts_with("/mnt/usb") && *a != Path::new("/mnt/usb")) {
             if a.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
@@ -2353,6 +2365,112 @@ fn f32_le(b: &[u8], at: usize) -> Option<f32> {
     b.get(at..at + 4)?.try_into().ok().map(f32::from_le_bytes)
 }
 
+/// A reference slot as a session keeps it: the samples and their time, not the look (the setup text has that).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SessionRef {
+    pub slot: usize,
+    /// the channel it was taken from (0-based)
+    pub src: usize,
+    pub t0: f64,
+    pub dt: f64,
+    pub v: Vec<f32>,
+}
+
+/// What a session file holds (ADR 0027): the setup as text, the record on the screen, the loaded reference slots.
+#[derive(Clone)]
+pub struct Session {
+    pub setup: String,
+    pub record: Option<Record>,
+    pub refs: Vec<SessionRef>,
+}
+
+/// A session as one file, little endian: "OOSS", u32 version 1, u32 length of the setup text and the text (UTF-8),
+/// u32 1 or 0 and then an OOSW blob (`wave_bin`) when 1, u32 number of reference slots, and per slot u32 slot (0-based),
+/// u32 source channel, f64 t0, f64 dt, u64 samples and the samples as f32 volts.
+pub fn session_bin(setup: &str, rec: Option<&Record>, m: &Model, refs: &[SessionRef]) -> Vec<u8> {
+    let mut b = Vec::new();
+    b.extend_from_slice(b"OOSS");
+    b.extend_from_slice(&1u32.to_le_bytes());
+    b.extend_from_slice(&(setup.len() as u32).to_le_bytes());
+    b.extend_from_slice(setup.as_bytes());
+    match rec {
+        Some(r) => {
+            b.extend_from_slice(&1u32.to_le_bytes());
+            b.extend_from_slice(&wave_bin(r, m));
+        }
+        None => b.extend_from_slice(&0u32.to_le_bytes()),
+    }
+    b.extend_from_slice(&(refs.len() as u32).to_le_bytes());
+    for r in refs {
+        b.extend_from_slice(&(r.slot as u32).to_le_bytes());
+        b.extend_from_slice(&(r.src as u32).to_le_bytes());
+        b.extend_from_slice(&r.t0.to_le_bytes());
+        b.extend_from_slice(&r.dt.to_le_bytes());
+        b.extend_from_slice(&(r.v.len() as u64).to_le_bytes());
+        for x in &r.v {
+            b.extend_from_slice(&x.to_le_bytes());
+        }
+    }
+    b
+}
+
+/// Reads a session file. Every length is checked against the bytes that are there and against the import limits before
+/// anything is allocated for it, so a cut or made-up file is an error, not a crash or a huge allocation.
+pub fn parse_session(b: &[u8], slots: usize) -> Result<Session, String> {
+    let cut = || "the session file is cut short".to_string();
+    let u32_at = |at: usize| b.get(at..at + 4).map(|x| u32::from_le_bytes(x.try_into().unwrap())).ok_or_else(cut);
+    let u64_at = |at: usize| b.get(at..at + 8).map(|x| u64::from_le_bytes(x.try_into().unwrap())).ok_or_else(cut);
+    let f64_at = |at: usize| b.get(at..at + 8).map(|x| f64::from_le_bytes(x.try_into().unwrap())).ok_or_else(cut);
+    if b.len() < 12 || &b[..4] != b"OOSS" {
+        return Err("not an OOS session file".into());
+    }
+    let version = u32_at(4)?;
+    if version != 1 {
+        return Err(format!("session version {version}, this build reads 1"));
+    }
+    let n = u32_at(8)? as usize;
+    let mut at: usize = 12;
+    let setup = b.get(at..at.checked_add(n).ok_or_else(cut)?).ok_or_else(cut)?;
+    let setup = std::str::from_utf8(setup).map_err(|_| "the setup of the session is not text".to_string())?.to_string();
+    at += n;
+    let record = match u32_at(at)? {
+        0 => {
+            at += 4;
+            None
+        }
+        1 => {
+            at += 4;
+            let (rec, used) = parse_wave_bin(&b[at..])?;
+            at += used;
+            Some(rec)
+        }
+        x => return Err(format!("session record marker {x}")),
+    };
+    let count = u32_at(at)? as usize;
+    at += 4;
+    if count > slots {
+        return Err(format!("{count} reference slots, this scope has {slots}"));
+    }
+    let mut refs = Vec::with_capacity(count);
+    for _ in 0..count {
+        let (slot, src) = (u32_at(at)? as usize, u32_at(at + 4)? as usize);
+        let (t0, dt) = (f64_at(at + 8)?, f64_at(at + 16)?);
+        let len = u64_at(at + 24)? as usize;
+        at += 32;
+        if slot >= slots || src >= NCH || !(dt > 0.0) || !dt.is_finite() || !t0.is_finite() {
+            return Err("a reference slot of the session is not valid".into());
+        }
+        if len > MAX_WAVEFORM_SAMPLES {
+            return Err("a reference of the session is larger than the import limit".into());
+        }
+        let bytes = b.get(at..at.checked_add(len.checked_mul(4).ok_or_else(cut)?).ok_or_else(cut)?).ok_or_else(cut)?;
+        let v = bytes.chunks_exact(4).map(|x| f32::from_le_bytes(x.try_into().unwrap())).collect();
+        at += len * 4;
+        refs.push(SessionRef { slot, src, t0, dt, v });
+    }
+    Ok(Session { setup, record, refs })
+}
+
 /// One OOSW blob: the record and the number of bytes consumed.
 pub fn parse_wave_bin(b: &[u8]) -> Result<(Record, usize), String> {
     if b.len() < 36 || &b[..4] != b"OOSW" {
@@ -2822,6 +2940,15 @@ pub fn sync_disks() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Break it catches: a save command given a path into the vendor's data wrote there (ADR 0009).
+    #[test]
+    fn no_save_writes_the_vendors_data() {
+        for p in ["/rigol/data/x.bin", "/rigol/x", "/tmp/../rigol/data/x.bin", "/rigol/./data/../data/x"] {
+            assert!(check_target(Path::new(p)).is_err(), "{p}");
+        }
+        assert!(check_target(Path::new("/tmp/oos/rigol.bin")).is_ok());
+    }
     use crate::gfx::rgb;
     use crate::math::{MathOp, Window};
 

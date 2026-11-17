@@ -15,13 +15,15 @@ Part of the [SCPI reference](README.md).
 | `:SAVE:SETup` | Action | `["path"]` Save the current slot, or `"path"`. | - | Storage > Save setup | Rigol-compatible |
 | `:LOAD:SETup` | Action | `["path"]` Recall the current slot, or `"path"`. | - | Storage > Recall setup | Rigol-compatible |
 | `:SAVE:WAVeform` | Action | `["path"[,CSV or BIN]]` Newest record to a file (default CSV, in the save folder) | - | Storage > Save waveform | Rigol-compatible |
-| `:SAVE:MEMory:WAVeform` | Action | `["path"[,CSV or BIN]]` Every sample the acquisition kept of the channels that are on, where `:SAVE:WAVeform` writes the 3600 points of the screen. The format follows the file name (`.csv`), else BIN; CSV is refused above 1 M points per channel (-221). In peak detect, roll and above 1 M points there are no single samples and the screen points are written. | - | - | name not verified against the DHO guide |
+| `:SAVE:MEMory:WAVeform` | Action | `["path"[,CSV or BIN]]` Every sample the acquisition kept of the channels that are on, where `:SAVE:WAVeform` writes the 3600 points of the screen. The format follows the file name (`.csv`), else BIN; CSV is refused above 1 M points per channel (-221); a file that cannot be written is -250. In peak detect, roll and above 1 M points there are no single samples and the screen points are written. | - | - | name not verified against the DHO guide |
 | `:MMEMory:CATalog` | Query | The files of the save folder: bytes used, bytes free, then `"name,,size"` for each. | `0,0` | - | SCPI-99 |
-| `:MMEMory:DATA` | Query | `"name"` The bytes of a file of the save folder as an IEEE block. A name with a directory part is refused (-224); a file that is not there is -256. | - | - | SCPI-99 |
+| `:MMEMory:DATA` | Query | `"name"` The bytes of a file of the save folder as an IEEE block. A name with a directory part or a colon is refused (-224); a file that is not there is -256. | - | - | SCPI-99 |
 | `:MMEMory:DELete` | Action | `"name"` Remove a file of the save folder. | - | - | SCPI-99 |
 | `:SAVE:IMAGe` | Action | `["path"]` Screenshot as PNG, written after the next frame | - | Storage > Save screenshot | Rigol-compatible |
 | `:SAVE:FFRame` | Action | Save the fast-frame history (`frame-NNN.bin` in the save folder). | - | Storage > Save fast-frame | OOS extension |
 | `:LOAD:FFRame` | Action | Load the fast-frame history. | - | Storage > Load fast-frame | OOS extension |
+| `:SAVE:SESSion` | Action | `["path"]` The setup, the record on the screen and the loaded reference slots as one file (`session-NNN.oss` in the save folder, or `"path"`) | - | Storage > Save session | OOS extension |
+| `:LOAD:SESSion` | Action | `["path"]` Load a session (the newest `session-NNN.oss`, or `"path"`): the scope stops and shows it; reference slots the file does not hold are emptied | - | Storage > Load session | OOS extension |
 
 ## Examples
 

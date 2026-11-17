@@ -46,6 +46,10 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Sessions (host-tested, not yet verified on hardware): Storage > **Save session** writes the setup, the record on
+  the screen and every loaded reference slot with its samples into one file (`session-NNN.oss`); **Load session**
+  stops the scope and shows it again, measured and decoded from what was loaded. Reference slots the file does not
+  hold are emptied. Remote: `:SAVE:SESSion ["path"]`, `:LOAD:SESSion ["path"]`. ADR 0027.
 - Remote commands (host-tested, not yet verified on hardware): the zone triggers (`:TRIGger:ZONE<n>:...`), the delay,
   setup/hold, duration, slope and video trigger rows that had no command, history frames (`:RECord:CURRent`,
   `:NAVigate:FRAMe:...`), `:SEARch:VALue?`, `:MATH<n>:RESet`, `:CHANnel<n>:ZERO`, `:MEASure:STRip:DOCK`,
@@ -118,16 +122,20 @@ Fixed:
   - a mask made from a reference (`:MASK:CREate:REF`) is laid over the points of the screen: it failed every
     acquisition of the very signal the reference was saved from, because a reference keeps the whole acquisition
     (unit: 792 passed, none failed);
-  - a protocol trigger in Normal or Single, or a zone trigger, then Stop: the record that matched stays on the
+  - a protocol trigger in Normal or Single, or a zone trigger tested in software, then Stop: the record that matched stays on the
     screen, where the newest frame of the hardware (as a rule one the screen had refused) was read in its place
     (unit, UART data trigger: six stops of six on the character; the zone trigger is not yet verified on hardware);
   - UART: a record that starts inside a character no longer lists false characters in front (`FF`, `ED`): the
     characters are listed from where the bits can be read in one way only (unit: twelve stops, none);
   - `:REFerence:COLor RED` was refused (the word was read as a slot); `:CURSor:TRACk:CAY?` and `CBY?` answer the
     value under a track cursor, not `9.9E37`; `:WAVeform:STOP?` answers the last point when the stop is beyond the
-    record; `:WAVeform:DATA?` of a channel that is off is an error, not old data; a setup file that is not there is
+    record; `:WAVeform:DATA?` of a channel that is off is an error, not old data (a channel switched off after a Stop is
+    still read); a setup file that is not there is
     error -256 (unit, all five);
-  - `tools/check.sh decoders` failed on a test that needs every decoder.
+  - after a Stop a decoder on channels reads the same whole record as `:WAVeform:MODE RAW`, not the part read again
+    for the view (host-tested, not yet verified on hardware);
+  - a mask made from a reference lies where the reference is drawn when the reference has a deskew;
+  - no save command writes under `/rigol`, whatever path it is given (ADR 0009).
 - An update with another device tree starts by kexec again (unit). The update copied the loader's random
   `/chosen/kaslr-seed` into the new tree, and kexec-tools refuses a seed that is not 0, so the update stopped at its
   kexec start with nothing installed. The seed now goes in as 0, and kexec-tools puts in a new random one. A scope

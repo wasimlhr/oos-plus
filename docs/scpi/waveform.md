@@ -10,7 +10,7 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:WAVeform:SOURce` | Set / Query | Select `CHANn\|Rn\|MATHn` for transfer; does not select the acquisition trigger. A math channel is read as its whole computed record in every mode; an FFT, a channel that is off and a math channel that is off have no record (`:WAVeform:DATA?` of a channel that is off is -221). | `CHAN1` | none (data transfer) | Rigol-compatible |
+| `:WAVeform:SOURce` | Set / Query | Select `CHANn\|Rn\|MATHn` for transfer; does not select the acquisition trigger. A math channel is read as its whole computed record in every mode; an FFT, a channel that is off and a math channel that is off have no record (`:WAVeform:DATA?` of a channel that is off is -221, unless it was switched off after a Stop and the record shown still has its samples). | `CHAN1` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:MODE` | Set / Query | `NORMal\|MAXimum\|RAW`. MAX uses the CH screen while running and native memory while stopped. | `NORM` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:FORMat` | Set / Query | `BYTE\|WORD\|ASCii`. Invalid formats are rejected without changing the selection. | `BYTE` | none (data transfer) | Rigol-compatible |
 | `:WAVeform:STARt` | Set / Query | One-based inclusive start of the transfer page. Setting either bound keeps start <= stop. | `1` | none (data transfer) | Rigol-compatible |

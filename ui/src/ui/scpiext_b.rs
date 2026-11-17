@@ -14,7 +14,7 @@ pub(super) const T2: &[&str] = &[
     "MASK:CREate:REF", "MASK:CLEar", "MASK:INVert", "MASK:OUTPut", "MASK:SAVE", "MASK:LOAD",
     "SIM:DEFault", "SIM:ADDRef", "SIM:LOAD", "SIM:LIVE",
     "*SAV", "*RCL", "SYSTem:SETup", "SAVE:SETup", "LOAD:SETup", "SAVE:DESTination", "SAVE:SLOT",
-    "SAVE:WAVeform", "SAVE:IMAGe", "SAVE:FFRame", "LOAD:FFRame",
+    "SAVE:WAVeform", "SAVE:IMAGe", "SAVE:FFRame", "LOAD:FFRame", "SAVE:SESSion", "LOAD:SESSion",
     "TIMebase:DELay:SOURce", "TIMebase:DELay:VZOom", "TIMebase:DELay:VZOom:RESet", "TIMebase:DELay:FIT", "TIMebase:DELay:CENTer",
     "BANDwidth:STATe", "BANDwidth:SOURce", "BANDwidth:FREQuency", "BANDwidth:BINS",
     "SYSTem:LOG", "SYSTem:LOG:INTerval", "SYSTem:LOG:FILE", "SYSTem:LOG:INFO",
@@ -140,11 +140,15 @@ impl Ui {
     }
 
     /// A file of the save folder by its plain name: all that `:MMEMory:` reads or deletes. A name with a directory
-    /// part is refused, so a remote client reaches nothing else of the file system this way.
+    /// part is refused, so a remote client reaches nothing else of the file system this way. Nor a colon: on Windows
+    /// `C:name` is a file of another directory (joining it to the folder drops the folder), `name:x` a stream.
     fn mmem_path(&self, arg: &str) -> Result<std::path::PathBuf, String> {
         let name = text_arg(arg);
-        if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0']) { return Err(bad(arg)); }
-        Ok(self.save_dir().join(name))
+        if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0', ':']) { return Err(bad(arg)); }
+        let p = self.save_dir().join(&name);
+        // whatever the platform makes of a name: the file is one of the save folder, or it is refused
+        if p.parent() != Some(self.save_dir().as_path()) { return Err(bad(arg)); }
+        Ok(p)
     }
 
     /// `:MMEMory:CATalog?` as SCPI-99 writes it: bytes used by the files, bytes free, then `"name,,size"` per file.
@@ -300,6 +304,14 @@ impl Ui {
                         Ok(()) => { self.mark_changed(); DONE }
                         Err(e) => Err(bad(&e)),
                     }
+                }
+            }
+            "SAVE:SESSion" | "LOAD:SESSion" => {
+                if q { return Some(Err(undefined(key))); }
+                let r = if key.starts_with("SAVE") { self.session_save(arg).map(|_| ()) } else { self.session_load(arg) };
+                match r {
+                    Ok(()) => { self.mark_changed(); DONE }
+                    Err(e) => Err(bad(&e)),
                 }
             }
             "SYSTem:SETup" => {
