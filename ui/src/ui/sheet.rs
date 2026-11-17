@@ -88,7 +88,9 @@ pub(super) struct SheetRowGeo {
 
 pub(super) struct SheetGeo {
     pub r: Rect,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub back: Option<Rect>,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub close: Rect,
     pub tabs: Vec<Rect>,
     pub rows: Vec<SheetRowGeo>,
@@ -99,12 +101,14 @@ pub(super) struct SheetGeo {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum PanelKind {
     Measurements,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     Decode,
     Spectrum,
     Eye,
     Histogram,
     Trend,
     Cursor,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     Sim,
 }
 
@@ -516,6 +520,15 @@ impl Ui {
         format!("Store as R{} (next free)", i + 1)
     }
 
+    /// A text in two parts at the space nearest its middle (the second is empty without a space).
+    pub(super) fn two_lines(v: &str) -> (&str, &str) {
+        let mid = v.len() / 2;
+        match v.char_indices().filter(|&(_, ch)| ch == ' ').min_by_key(|&(i, _)| i.abs_diff(mid)) {
+            Some((i, _)) => (&v[..i], &v[i + 1..]),
+            None => (v, ""),
+        }
+    }
+
     pub(super) fn sheet_label(&self, it: Item) -> String {
         match it {
             Item::SrcOn => {
@@ -738,7 +751,14 @@ impl Ui {
                 let v = self.value(it);
                 let font = if f.m.width(&v) > c.w - 8 { &f.s } else { &f.m };
                 cv.set_clip(c);
-                cv.text_in(font, Rect::new(c.x, c.y, c.w - 6, c.h), 2, &v, TEXT);
+                if font.width(&v) > c.w - 8 {
+                    // too long even then: two lines, broken at the space nearest the middle, so the start is not cut off
+                    let (a, b) = Self::two_lines(&v);
+                    cv.text_in(font, Rect::new(c.x, c.y + 2, c.w - 6, c.h / 2), 2, a, TEXT);
+                    cv.text_in(font, Rect::new(c.x, c.y + c.h / 2 - 2, c.w - 6, c.h / 2), 2, b, TEXT);
+                } else {
+                    cv.text_in(font, Rect::new(c.x, c.y, c.w - 6, c.h), 2, &v, TEXT);
+                }
                 cv.no_clip();
             }
             RowKind::Link => {
@@ -1174,6 +1194,7 @@ impl Ui {
     }
 
     /// Opens a panel docked, with the pages that already exist; the sheet closes so the panel is seen.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_add_panel(&mut self, k: PanelKind) {
         self.close_menu();
         self.studio_apply_panel(k);
@@ -1217,9 +1238,13 @@ pub(super) struct AddGeo {
     pub groups: Vec<Rect>,
     pub find: Rect,
     pub rows: Vec<(usize, Rect)>,
+    #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub page: usize,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub pages: usize,
+    #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub prev: Rect,
+    #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub next: Rect,
 }
 

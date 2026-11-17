@@ -5,6 +5,34 @@
 Fixes from a review of 0.1.13, and the forum's report on it. All of it is tested on the host. Marked "(unit)" where
 it also ran on a DHO924S (2026-11-16).
 
+Fixed:
+
+- Eye and jitter (host-tested on SIM signals and built signals of known jitter, not yet verified on hardware):
+  - Eye Width read short of what the jitter allows: about 5 % of a unit interval on a jitter-free signal in the
+    measurement's 96-column picture. The picture's own spread at the crossing is taken out; with 20 ps of random
+    jitter on a 1 ns interval it reads 873 ps for 880 ps.
+  - SSC Freq Dev took the span of every single interval's rate, so the timing error of two edges counted as
+    frequency spread (7100 ppm for 5000 ppm); it is taken of the averaged series when a modulation line is found.
+    SSC Modulation Rate was a line of the spectrum, which is a fifth off when the record holds one modulation
+    period, as a SIM record does; with fewer than four periods the rate is fitted (278 kHz for 300 kHz).
+  - T/nT Ratio took the bit before an edge as the transition bit about as often as the bit after it, so 3.5 dB of
+    de-emphasis read 0.9 dB. It takes the bit that starts at the edge and reads the transition level over the steady
+    one, as its name says: +3.5 dB.
+  - Phase Noise leaves a periodic tone out, but the bins beside a tone each took a share of it: a clean clock with a
+    20 ns tone read 8.5 ns of noise. The tone's whole line is left out of the averages (62 ps now).
+  - a value in dB is written without a prefix ("0.83 dB", not "831 mdB").
+- Double pulse (host-tested against a built double-pulse record, not yet verified on hardware): Ipeak and the diode
+  recovery took the largest current of the whole second pulse, which is the end of the inductor's ramp, so Ipeak and
+  Irrm read too high and Trr, Qrr and the diode slope had no value; they use the first peak after the turn-on. The
+  descriptions of Td(off), Tf and Toff said "voltage rise"; they are measured on the current fall, and say so.
+- A ratio and the units that are not SI are written without a prefix: a power factor of 0.498 read "498 m", a speed
+  "3.00 krpm", a frequency deviation "217 nppm".
+- Measurements (host-tested against a pulse train of known values, not yet verified on hardware): Positive and Negative
+  Duty Cycle and the six Cycle rows (amplitude, top, base, peak-to-peak, maximum, minimum) had no value when the view
+  held one cycle between two falling edges, which is the default view of the 1 kHz probe signal; a count (edges,
+  pulses, ones) is written as a whole number, not "1.00"; a skew, setup or hold row without an edge pair inside its
+  window says "none in window".
+
 Added:
 
 - Remote control, from the same run on a DHO924S (host-tested, and each ran on that unit; of `*TRG` the unit showed
@@ -18,10 +46,26 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Remote commands (host-tested, not yet verified on hardware): the zone triggers (`:TRIGger:ZONE<n>:...`), the delay,
+  setup/hold, duration, slope and video trigger rows that had no command, history frames (`:RECord:CURRent`,
+  `:NAVigate:FRAMe:...`), `:SEARch:VALue?`, `:MATH<n>:RESet`, `:CHANnel<n>:ZERO`, `:MEASure:STRip:DOCK`,
+  `:MEASure:COUNter:...` and the fixed answers of `:MEASure:AMP`, `:MEASure:THReshold`, `:MEASure:AREA`,
+  `:MEASure:SETup:MID` and `:CURSor:TRACk:MODE`. Where 0.1.13 already had a command of the same name, that one stays.
 - Minimal and Studio (host-tested, not yet verified on hardware):
   - a tap on a measurement badge draws what it measures on its lane (Area and Cycle area shaded, levels as lines,
     spans as arrows); the next tap opens its menu;
   - plot menu > **Fit all lanes** sets V/div and position of every shown channel, reference and math channel;
+  - an analyser view whose source is off shows a **Turn on CHn** button in its middle, and an empty Bode plot a
+    **Start sweep** button; the spectrum beside the waveform keeps its width for the plot (the peak list is behind
+    its menu button); Minimal greys Overlay and Stacked out while an analyser has the plot;
+  - a long information line of a sheet (Network > Other access) breaks in two instead of losing its first letters; a
+    lane no longer repeats the trigger level as a scale label beside the trigger tag;
+  - a SIM waveform added to a reference while the scope runs live says how long it is when it is far shorter than the
+    screen, and its message carries the tick of a done action instead of the warning triangle;
+  - the Histogram view of Studio uses its whole height (it copied the position of the channel's lane, a third of the
+    view in stacked lanes), draws bars of at least four pixels, and has its header under the bars, not on them; its
+    mean and sigma are those of the samples (they came from the brightness of picture rows and moved with the
+    height of the lane: 1.09 V for 1.25 V in a third of the view);
   - a channel whose record reaches the end of the ADC range is named in red in the plot and gets a red pill border;
     `:CHANnel<n>:CLIPping?` answers 1 or 0;
   - Studio: a channel that is off has a small pill, a tap switches it on; the badge of a channel pill switches it
@@ -84,6 +128,10 @@ Fixed:
     record; `:WAVeform:DATA?` of a channel that is off is an error, not old data; a setup file that is not there is
     error -256 (unit, all five);
   - `tools/check.sh decoders` failed on a test that needs every decoder.
+- An update with another device tree starts by kexec again (unit). The update copied the loader's random
+  `/chosen/kaslr-seed` into the new tree, and kexec-tools refuses a seed that is not 0, so the update stopped at its
+  kexec start with nothing installed. The seed now goes in as 0, and kexec-tools puts in a new random one. A scope
+  whose running build still has the old updater runs the fixed `oos-update` from `/tmp` once to take such an update.
 - Two fingers never open the long-press menu: a pinch that rested for half a second opened it mid-gesture.
 - Stacked lanes: the logic analyser keeps its own strip instead of drawing over the first lane.
 - The measurement band has no row of its own for page controls, and its names no longer run into the source.

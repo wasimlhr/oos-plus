@@ -59,6 +59,7 @@ mod addmenu;
 mod zoomtab;
 mod studioctx;
 mod scpiext;
+mod scpi_layout;
 mod scpiext_a;
 mod scpiext_b;
 mod scpiext_c;
@@ -68,6 +69,8 @@ mod scpi_coverage_tests;
 #[cfg(test)]
 mod sheet_tests;
 mod walk_tests;
+#[cfg(test)]
+mod meas_known_tests;
 #[cfg(test)]
 mod layout_tests;
 #[cfg(test)]
@@ -403,6 +406,7 @@ pub fn pair_short_name(k: usize) -> &'static str {
     tools::PAIRS[k.min(PAIRS_N - 1)].0
 }
 /// The unit of a two-source variant: degrees for phase, none for the setup/hold violation count, else seconds.
+#[cfg_attr(not(test), allow(dead_code))] // only the tests use it
 pub fn pair_unit(k: usize) -> &'static str {
     match tools::PAIRS[k.min(PAIRS_N - 1)].1 {
         tools::PairKind::Phase => "\u{b0}",
@@ -521,6 +525,7 @@ pub enum MenuId {
     /// Studio: the panels that can be added next to the plot (ui/sheet.rs)
     AddPanel,
     /// Full legacy measurement and pair catalog, including Selected.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     MeasLegacy,
     /// Studio: the settings of the Edge search added from the Add panel (ui/addrail.rs)
     Search,
@@ -1243,6 +1248,32 @@ impl Ui {
         self.toast(match action { PowerAction::Off => "Powering off ...", PowerAction::Restart => "Restarting ..." });
         true
     }
+
+    /// How many stored frames can be shown. Frame 1 is the oldest.
+    pub(crate) fn history_len(&self) -> usize {
+        self.history.len()
+    }
+
+    /// The frame on screen, 1-based. Live is the newest stored frame.
+    pub(crate) fn history_frame(&self) -> usize {
+        self.hist_pos.map(|i| i + 1).unwrap_or(self.history.len())
+    }
+
+    /// Shows frame `frame` (1-based) and stops. Frame 1 is the oldest.
+    pub(crate) fn history_show(&mut self, frame: usize) -> bool {
+        let n = self.history.len();
+        if frame == 0 || frame > n {
+            return false;
+        }
+        self.m.run = RunState::Stop;
+        let i = frame - 1;
+        self.hist_pos = Some(i);
+        self.last[0] = Some(self.history[i].clone());
+        self.measure_last();
+        self.toast(&format!("History {}/{}", frame, n));
+        true
+    }
+
 }
 
 /// Samples of one channel for the measurements in the background: a window of the hardware frame (shared, not
@@ -1384,7 +1415,7 @@ pub struct Ui {
     /// position in `history` while viewing it (None = live)
     hist_pos: Option<usize>,
     /// mark all trigger events in the record (search)
-    search_on: bool,
+    pub(crate) search_on: bool,
     /// measurements per channel (oos-dsp) of the last record
     ana: [std::sync::Arc<oos_dsp::measure::Analysis>; NCH],
     /// measurements of each ref slot, from the stored samples (no front-end bandwidth)
@@ -4154,6 +4185,8 @@ impl Ui {
             }
             // what a lane has at its right edge: the corner buttons with their words, and the trigger tag with its value
             let mut right_obstacles: Vec<Rect> = Vec::new();
+            // the trigger tag with its value: a scale label at its height would say the level a second time beside it
+            let mut trigger_tag: Option<Rect> = None;
             if lanes {
                 if self.m.layout == Layout::Studio {
                     for b in [self.full_btn().0, self.zoom_btn().0] { right_obstacles.push(Rect::new(b.x - 62, b.y - 2, b.w + 66, b.h + 4)); }
@@ -4163,7 +4196,7 @@ impl Ui {
                     let y = self.y_of_volts(ts, self.trig_level_shown()).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
                     let x1 = self.trigger_tag_x(a.x + a.w - MARK_W, y);
                     let left = x1 - 8 - f.sb.width(&si_short(self.trig_level_shown() as f64, self.m.unit(ts)));
-                    right_obstacles.push(Rect::new(left, y - 11, a.x + a.w - left, 22));
+                    trigger_tag = Some(Rect::new(left, y - 11, a.x + a.w - left, 22));
                 }
             }
             // labels right at the left edge of the graticule, centred on their division line
@@ -4186,6 +4219,7 @@ impl Ui {
                 let mut x = if lanes { a.x + a.w - 6 - w } else { x };
                 let mut r = Rect::new(x - 3, y + 4 - f.s.size, w + 6, f.s.size + 4);
                 if lanes {
+                    if trigger_tag.is_some_and(|t| overlaps(t, r)) { continue; }
                     for _ in 0..2 {
                         if let Some(o) = right_obstacles.iter().find(|o| overlaps(**o, r)) {
                             x = o.x - 6 - w;
@@ -4700,7 +4734,10 @@ impl Ui {
         // as a view of its own: a volts axis at the left, on the lines of the lane it reads, and a count scale
         let ax = if tile && self.m.hist == Hist::Vertical { HIST_AXIS_W } else { 0 };
         let lane = if tile { self.source_area(WaveId::Ch(c)).unwrap_or(a) } else { a };
-        let (ly, lh) = if tile && self.m.hist == Hist::Vertical { ((lane.y - a.y).max(0), lane.h.min(a.h)) } else { (0, a.h) };
+        // a view of its own has its own height: the count scale at the top, the header at the bottom, the bars between.
+        // (It used to copy the position of the channel's lane, which in stacked lanes is a third of the view or less.)
+        let _ = lane;
+        let (ly, lh) = if tile && self.m.hist == Hist::Vertical { (20, (a.h - 20 - 30).max(40)) } else { (0, a.h) };
         let depth = if tile { ((a.w - ax) * 9 / 10).max(40) as f64 } else { (a.w / 5).max(40) as f64 };
         let hdepth = if tile { a.h as f64 * 0.85 / 0.6 } else { depth };
         cv.set_clip(a);
@@ -4709,20 +4746,39 @@ impl Ui {
             Hist::Vertical => {
                 // a bin per row of the map; a larger plot (HDMI layout) gives each bin its share of rows
                 let n = bins.len().max(1) as i32;
-                for (r, &b) in bins.iter().enumerate() {
-                    let len = (b as f64 / peak * depth).round() as i32;
-                    let (y0, y1) = (ly + r as i32 * lh / n, ly + (r as i32 + 1) * lh / n);
-                    if len > 0 {
-                        cv.blend(Rect::new(a.x + ax, a.y + y0, len, (y1 - y0).max(1)), col, 150);
+                if tile {
+                    // bars a finger can see: the bins are gathered into rows of at least four pixels, with a gap between
+                    let group = ((n * 4 + lh - 1) / lh.max(1)).max(1) as usize;
+                    let rows: Vec<u64> = bins.chunks(group).map(|g| g.iter().map(|&b| b as u64).sum()).collect();
+                    let top = rows.iter().copied().max().unwrap_or(0).max(1);
+                    let m = rows.len() as i32;
+                    for (r, &b) in rows.iter().enumerate() {
+                        let len = (b as f64 / top as f64 * depth).round() as i32;
+                        let (y0, y1) = (ly + r as i32 * lh / m, ly + (r as i32 + 1) * lh / m);
+                        if b > 0 {
+                            cv.blend(Rect::new(a.x + ax, a.y + y0, len.max(2), (y1 - y0 - 1).max(1)), col, 190);
+                        }
+                    }
+                    self.draw_hist_axes(cv, a, (ax, ly, lh), c, top);
+                } else {
+                    for (r, &b) in bins.iter().enumerate() {
+                        let len = (b as f64 / peak * depth).round() as i32;
+                        let (y0, y1) = (ly + r as i32 * lh / n, ly + (r as i32 + 1) * lh / n);
+                        if len > 0 {
+                            cv.blend(Rect::new(a.x + ax, a.y + y0, len, (y1 - y0).max(1)), col, 150);
+                        }
                     }
                 }
-                if tile { self.draw_hist_axes(cv, a, (ax, ly, lh), c, peak as u64); }
                 // pixel row -> volts
                 let (factor, center) = self.zoom_vertical_transform(self.area);
                 let h = bins.len().max(1) as f64;
                 let vpp = ch.volts_per_div() as f64 * VDIV as f64 / h / factor as f64;
                 let mv = (h / 2.0 - mean) * vpp + center as f64 * ch.volts_per_div() as f64 - ch.offset as f64;
-                format!("Hist CH{}  mean {}  \u{3c3} {}", c + 1, si(mv, self.m.unit(c)), si(sd * vpp, self.m.unit(c)))
+                // the figures come from the samples where there are any: the bars are rows of the picture, bright in
+                // proportion to what was drawn there, and a lane of 150 rows moved the mean by 0.16 V of 1.25 V
+                let (sm, ss) = (self.meas_number(WaveId::Ch(c), Meas::Vavg), self.meas_number(WaveId::Ch(c), Meas::StdDev));
+                let (mv, sv) = if sm.is_finite() && ss.is_finite() { (sm, ss) } else { (mv, sd * vpp) };
+                format!("Hist CH{}  mean {}  \u{3c3} {}", c + 1, si(mv, self.m.unit(c)), si(sv, self.m.unit(c)))
             }
             _ => {
                 let n = bins.len().max(1) as i32;
@@ -4748,10 +4804,10 @@ impl Ui {
         cv.text_in(&f.s, r, 1, &txt, col);
     }
 
-    /// The header of a histogram view: right of its volts axis and inside the view.
+    /// The header of a histogram view: right of its volts axis, under the bars and inside the view.
     pub(super) fn hist_head_rect(a: Rect, ax: i32, w: i32) -> Rect {
         let x = a.x + ax + 8;
-        Rect::new(x, a.y + 24, w.min((a.right() - x - 4).max(20)), 20)
+        Rect::new(x, a.bottom() - 26, w.min((a.right() - x - 4).max(20)), 20)
     }
 
     fn math_scale_text(&self) -> String {
@@ -4800,7 +4856,7 @@ impl Ui {
         self.relayout();
     }
 
-    fn math_autoscale(&mut self) {
+    pub(crate) fn math_autoscale(&mut self) {
         self.math_fit(self.m.math_sel);
     }
 
@@ -6299,7 +6355,7 @@ impl Ui {
     }
 
     pub(super) fn toast_is_success(s: &str) -> bool {
-        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared") || s.starts_with("Copied ") || (s.starts_with("Zone ") && s.ends_with(" deleted")) || s.ends_with(" added") || s.ends_with(" removed") || s.contains(" \u{b7} ") || s.starts_with("Loaded ") || s.starts_with("Saved ") || s.contains(" loaded from ") || s.starts_with("Restored ") || s.contains(" saved to ") || s.starts_with("Returned to live") || s.starts_with("Fit ")
+        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared") || s.starts_with("Copied ") || (s.starts_with("Zone ") && s.ends_with(" deleted")) || s.ends_with(" added") || s.contains(" added to R") || s.ends_with(" removed") || s.contains(" \u{b7} ") || s.starts_with("Loaded ") || s.starts_with("Saved ") || s.contains(" loaded from ") || s.starts_with("Restored ") || s.contains(" saved to ") || s.starts_with("Returned to live") || s.starts_with("Fit ")
     }
 
     fn draw_toast(&self, cv: &mut Canvas) {
@@ -7017,17 +7073,19 @@ impl Ui {
     }
 
     /// Shows record `hist_pos + d` of the history (d = 0: the newest), stopping the acquisition.
-    fn history_step(&mut self, d: i32) {
+    pub(crate) fn history_step(&mut self, d: i32) -> bool {
         // hardware segments: any of them, played on demand
         if let Some(v) = self.seg_view.filter(|v| self.seg_hw_on() && v.phase == crate::board::SegPhase::Done && v.recorded > 0) {
             let n = v.recorded as i32;
             let cur = self.seg_pos.unwrap_or(n as usize - 1) as i32;
             let i = if d == 0 { n - 1 } else { (cur + d).clamp(0, n - 1) };
-            return self.seg_show(i as usize);
+            self.seg_show(i as usize);
+            return true;
         }
         let n = self.history.len();
         if n == 0 {
-            return self.toast("History empty");
+            self.toast("History empty");
+            return false;
         }
         self.m.run = RunState::Stop;
         let cur = self.hist_pos.unwrap_or(n - 1) as i32;
@@ -7036,6 +7094,7 @@ impl Ui {
         self.last[0] = Some(self.history[i].clone());
         self.measure_last();
         self.toast(&format!("History {}/{}", i + 1, n));
+        true
     }
 
     /// Recomputes the measurements of the record shown, and of every loaded ref, at once (a result from the
@@ -7180,7 +7239,7 @@ impl Ui {
     }
 
     /// Search: times (s, relative to the trigger) of all events of the trigger condition in the record shown.
-    fn search_events(&self) -> std::sync::Arc<Vec<f64>> {
+    pub(crate) fn search_events(&self) -> std::sync::Arc<Vec<f64>> {
         if let Some(marks) = self.studio_search_marks() { return marks; }
         if self.m.trig_type == TrigType::Bus && (Self::decoder_uses_refs(&self.m)
             || self.m.deskew_ch.iter().any(|&shift| shift != 0.0)) {
@@ -9282,12 +9341,31 @@ impl Ui {
         }
     }
 
-    /// File of the current setup slot: a setup is small and has to survive a power cycle, so the default storage directory
-    /// in RAM is not used for it when OOS's data partition is there.
-    fn setup_path(&self) -> std::path::PathBuf {
-        let keep = std::path::Path::new("/oos/setups");
-        let dir = if self.store_dir == std::path::Path::new(crate::store::DEFAULT_DIR) && keep.is_dir() { keep } else { self.store_dir.as_path() };
-        dir.join(format!("setup{}.txt", self.store_slot))
+    /// The setup file the Storage menu uses. An empty name is the current slot (`setupN.txt`). A number 1 to 9 selects
+    /// that slot. A `.stp` or `.txt` name is that file, beside the setups when the path is relative. `slot` and `suffix`
+    /// are the refusals.
+    fn setup_file(&mut self, path: &str) -> Result<std::path::PathBuf, String> {
+        let raw = path.trim().trim_matches('"');
+        if raw.is_empty() {
+            return Ok(self.setup_path());
+        }
+        if let Ok(slot) = raw.parse::<u32>() {
+            if !(1..=9).contains(&slot) {
+                return Err("slot".into());
+            }
+            self.store_slot = slot;
+            return Ok(self.setup_path());
+        }
+        let named = std::path::Path::new(raw);
+        let ext = named.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
+        if ext != "stp" && ext != "txt" {
+            return Err("suffix".into());
+        }
+        Ok(if named.is_absolute() {
+            named.to_path_buf()
+        } else {
+            self.setup_path().parent().map(|d| d.join(named)).unwrap_or_else(|| named.to_path_buf())
+        })
     }
 
     /// The `ref<N>.*` lines of a setup: how each loaded ref slot looks (on/off, scale, offset, colour, name).
@@ -9366,6 +9444,14 @@ impl Ui {
             }
             Err(e) => Err(e),
         }
+    }
+
+    /// File of the current setup slot: a setup is small and has to survive a power cycle, so the default storage directory
+    /// in RAM is not used for it when OOS's data partition is there.
+    fn setup_path(&self) -> std::path::PathBuf {
+        let keep = std::path::Path::new("/oos/setups");
+        let dir = if self.store_dir == std::path::Path::new(crate::store::DEFAULT_DIR) && keep.is_dir() { keep } else { self.store_dir.as_path() };
+        dir.join(format!("setup{}.txt", self.store_slot))
     }
 
     fn level_50(&mut self) {
@@ -10355,8 +10441,12 @@ impl Ui {
             key::REF => self.toggle_menu(MenuId::Ref),
             key::ANALYSE => self.toggle_menu(MenuId::Decode),
             // history: back / forward step through the stored records (stops the acquisition), play-stop = live
-            0x08 => self.history_step(-1),
-            0x06 => self.history_step(1),
+            0x08 => {
+                self.history_step(-1);
+            }
+            0x06 => {
+                self.history_step(1);
+            }
             0x07 | key::NAVIGATE => {
                 if self.hist_pos.is_some() {
                     self.hist_pos = None;
@@ -11207,6 +11297,7 @@ impl Ui {
         if (self.view_on() || self.view_tile_rect().is_some()) && self.view_btn().contains(x, y) {
             return self.toggle_menu(MenuId::ViewMore);
         }
+        if self.view_fix_tap(x, y) { return; }
         if !self.menu_open && self.m.view == AView::Eye && !self.xy_over() && (self.eye_tap(x, y) || self.eye_column_tap(x, y)) {
             return;
         }
@@ -11573,6 +11664,7 @@ fn nice_step_below(x: f64) -> f64 {
 
 /// The labelled times of the time axis, as (whole steps from the trigger, seconds): the window is `delay` +- 5 divisions
 /// of `tdiv`; a step is `every` divisions. Whole steps, so a window put anywhere has round labels.
+#[cfg_attr(not(test), allow(dead_code))] // only the tests use it
 fn studio_time_ticks(tdiv: f32, delay: f32, every: i32) -> Vec<(i64, f64)> {
     studio_time_ticks_at(tdiv, delay, tdiv as f64 * every as f64)
 }
@@ -14664,13 +14756,6 @@ mod tests {
         // 1 us/div at a delay of 1 s
         assert_eq!(axis_label(1.000002, 1e-6, 1.0, 1.000005, "s"), "1.000002 s");
     }
-}
-
-/// One step on the 1-2-5 time ladder from the nearest ladder value.
-fn ladder_step(x: f32, d: i32) -> f32 {
-    let l = time_ladder();
-    let i = l.iter().position(|&v| v >= x * 0.999).unwrap_or(l.len() - 1);
-    l[(i as i32 + d).clamp(0, l.len() as i32 - 1) as usize]
 }
 
 /// Menu text of a hardware segment interval.

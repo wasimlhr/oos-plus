@@ -63,6 +63,7 @@ pub(super) const PANE_BUS: usize = 5;
 pub(super) const ROW_H: i32 = 26;
 const HEAD_H: i32 = 40;
 /// Below this width a docked table puts its controls under the title.
+#[cfg_attr(not(test), allow(dead_code))] // only the tests use it
 const TABLE_NARROW_W: i32 = 340;
 
 /// One line of an event table.
@@ -190,6 +191,7 @@ impl Ui {
     }
 
     /// A docked table too narrow for the title and the controls on one row.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn table_narrow(&self, r: Rect) -> bool { self.dock_on() && r.w < TABLE_NARROW_W }
 
     /// Height of the head of the table: the title. The rows scroll by the scroll bar, so a narrow view needs no row of
@@ -267,7 +269,7 @@ impl Ui {
     }
 
     /// The view centred on a time of the record.
-    pub(super) fn go_to_time(&mut self, t: f64) {
+    pub(crate) fn go_to_time(&mut self, t: f64) {
         // Studio stops the scope and jumps; the others ask for it
         let mut stopped = false;
         if self.m.run == RunState::Run {

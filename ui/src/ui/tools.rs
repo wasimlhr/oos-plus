@@ -108,6 +108,19 @@ impl MeasRow {
             if self.reason.is_empty() { "----".into() } else { self.reason.clone() }
         } else if self.unit == "\u{b0}" {
             format!("{:.1}\u{b0}", v)
+        } else if self.unit.is_empty() && v.fract() == 0.0 && v.abs() < 1e6 {
+            // a count (edges, pulses, ones): a whole number is written as one
+            format!("{}", v as i64)
+        } else if matches!(self.unit, "" | "ppm" | "rpm" | "rpm/s" | "dB") {
+            // a ratio, and the units that are not SI: no prefix ("498 m" for a power factor of 0.498, "nppm", "krpm")
+            let a = v.abs();
+            let number = if a != 0.0 && !(1e-4..1e7).contains(&a) {
+                if a < 1e-4 { "0".to_string() } else { format!("{:.*e}", digits - 1, v) }
+            } else {
+                let decimals = (digits as i32 - 1 - if a > 0.0 { a.log10().floor() as i32 } else { 0 }).clamp(0, 6) as usize;
+                format!("{:.*}", decimals, v)
+            };
+            if self.unit.is_empty() { number } else { format!("{} {}", number, self.unit) }
         } else {
             si_digits(v, self.unit, digits)
         }
@@ -242,8 +255,12 @@ impl Ui {
                 PairKind::SetupAndHold | PairKind::SetupAndHoldBoth => "",
                 _ => "s",
             };
-            v.push(MeasRow { name: format!("{} {}-{}", name, tag(a), tag(b)), src: a, v: val, unit,
-                computing: self.measurement_computing(a) || self.measurement_computing(b) || self.pair_measurement_computing(k, a, b), reason: String::new() });
+            let computing = self.measurement_computing(a) || self.measurement_computing(b) || self.pair_measurement_computing(k, a, b);
+            // skew, setup and hold only pair edges inside their window (nanoseconds unless the row sets another): say so
+            // when no pair is, a bare "----" reads as a fault
+            let windowed = !matches!(kind, PairKind::Delay | PairKind::Phase | PairKind::SetupAndHold | PairKind::SetupAndHoldBoth);
+            let reason = if windowed && !computing && !val.is_finite() { "none in window".to_string() } else { String::new() };
+            v.push(MeasRow { name: format!("{} {}-{}", name, tag(a), tag(b)), src: a, v: val, unit, computing, reason });
         }
         for &(id, a, b, c, d) in &self.m.cat {
             if let Some(row) = self.cat_row(id, a, b, c, d) {
@@ -337,7 +354,7 @@ impl Ui {
         })
     }
 
-    pub(crate) fn meas_value(&self, it: Item) -> Option<String> {
+    pub(super) fn meas_value(&self, it: Item) -> Option<String> {
         let m = &self.m;
         Some(match it {
             Item::MeasIdle => if m.meas_idle > 0.0 { si_short(m.meas_idle, "s") } else { "period".into() },
@@ -388,7 +405,7 @@ impl Ui {
         })
     }
 
-    pub(crate) fn meas_adjust(&mut self, it: Item, d: i32) -> bool {
+    pub(super) fn meas_adjust(&mut self, it: Item, d: i32) -> bool {
         match it {
             Item::MeasPop => {
                 if d.rem_euclid(2) != 0 {
@@ -497,7 +514,7 @@ impl Ui {
     }
 
     /// A shared level in percent (0..100), or in volts when the levels are volts. Hysteresis is a level item too.
-    pub(crate) fn meas_level_get(&self, it: Item) -> f64 {
+    pub(super) fn meas_level_get(&self, it: Item) -> f64 {
         let l = &self.m.meas_lv;
         if it == Item::MeasHyst { return if l.absolute { l.vhyst } else { l.hyst * 100.0 }; }
         let (fall, i) = level_slot(it);
@@ -506,7 +523,7 @@ impl Ui {
     }
 
     /// Sets a shared level (percent 1..99 or volts). False when the value would break low < mid < high.
-    pub(crate) fn meas_level_set(&mut self, it: Item, v: f64) -> bool {
+    pub(super) fn meas_level_set(&mut self, it: Item, v: f64) -> bool {
         if !v.is_finite() { return false; }
         let absolute = self.m.meas_lv.absolute;
         if it == Item::MeasHyst {
@@ -1055,6 +1072,22 @@ impl Ui {
         (st.n, current, st.min, st.max, mean, dev)
     }
 
+    /// The trigger-type knob. Repeating the current type leaves its levels and times alone.
+    pub(crate) fn trig_type_set(&mut self, t: TrigType) {
+        if self.m.trig_type != t {
+            self.set_trig_type(t);
+        }
+    }
+
+    /// A protocol trigger, the same pair the Bus type uses: the decoder, then the type.
+    pub(crate) fn trig_bus_set(&mut self, p: Proto) {
+        if self.m.trig_type == TrigType::Bus && self.m.dec_proto == p {
+            return;
+        }
+        self.set_dec_proto(p);
+        self.set_trig_type(TrigType::Bus);
+    }
+
     pub(crate) fn zoom_set_remote(&mut self, on: bool) {
         self.set_zoom(on);
     }
@@ -1232,6 +1265,16 @@ impl Ui {
         self.m.mask_on = true;
         self.mask_counts_reset();
         self.toast(&format!("Mask loaded from {}", crate::store::file_name(&p)));
+    }
+
+    /// Fold the mean of the last record into the channel's zero correction. False when that channel has no samples.
+    pub(crate) fn zero_channel(&mut self, c: usize) -> bool {
+        let ready = self.last[0].as_ref().is_some_and(|r| c < r.ch.len() && r.ch[c].iter().any(|x| x.is_finite()));
+        if !ready {
+            return false;
+        }
+        self.zero_input(c);
+        true
     }
 
     /// The mean of the last record of channel `c` becomes part of its zero correction: for an input shorted or
@@ -1456,9 +1499,12 @@ impl Ui {
         }
         let Some(src) = self.refs.get(slot).and_then(|r| r.as_ref()).map(|r| r.src) else { return false };
         let vpd = self.m.ch[src.min(n_ch() - 1)].volts_per_div();
-        let Some(r) = self.refs.get_mut(slot).and_then(|r| r.as_mut()) else { return false };
-        r.offset = 0.0;
-        r.vpd = vpd.max(1e-9);
+        {
+            let Some(r) = self.refs.get_mut(slot).and_then(|r| r.as_mut()) else { return false };
+            r.offset = 0.0;
+            r.vpd = vpd.max(1e-9);
+        }
+        self.measure_refs();
         true
     }
 
@@ -1571,6 +1617,7 @@ impl Ui {
     pub(super) fn ch_name(&self, c: usize) -> String {
         if self.m.ch_label[c].is_empty() { format!("CH{}", c + 1) } else { self.m.ch_label[c].clone() }
     }
+
 }
 
 #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
