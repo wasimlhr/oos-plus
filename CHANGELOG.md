@@ -202,6 +202,14 @@ Fixed:
 - Stacked lanes: the logic analyser keeps its own strip instead of drawing over the first lane.
 - The measurement band has no row of its own for page controls, and its names no longer run into the source.
 - A vertical drag in the lane of a math channel moves it.
+- Colour grade drawn by the GPU: the densest pixels (a summed count from 32768 up) were left out on a driver that
+  keeps `mediump` integers in 16 bits; the shaders now compute counts in `highp` (host, Mesa 26).
+- Bode: the generator amplitude knob reaches 10 mVpp (it stopped at 1 Vpp).
+- Measure: a burst idle, setup or hold time above 5 s (set over SCPI) steps down to 5 s instead of turning off, also
+  in a measurement's own settings.
+- Waveform import: a damaged file is refused with "truncated waveform" wherever a field lies past its end.
+- `oos-fpgad` without a command, or with `help`, prints its usage again (it printed nothing).
+- Tests no longer depend on the speed of the computer in the UI either (wall-time limits replaced).
 - The expand button in the plot's corner enlarges the panel also while HDMI is on Waveform or Layout. Before, it
   only changed the density there and the panel stayed as it was (forum report). Full chosen under Density still
   keeps the panel's bars while the external display has the waveform.
