@@ -24,6 +24,14 @@ Part of the [SCPI reference](README.md).
 | `:MEASure:CATalog:SOURceC` | Set / Query | Source C or D of the Add page. | `CH3` | Measure > Source C | OOS extension |
 | `:MEASure:CATalog:SOURceD` | Set / Query | Source C or D of the Add page. | `CH4` | Measure > Source D | OOS extension |
 | `:MEASure:ITEM` | Set / Query | `<item>[,<A>[,<B>]]` Set: add a standard or pair readout (duplicates keep statistics and Single). Query `:MEASure:ITEM? <item>[,<source>]` answers a standard scalar, `:MEASure:ITEM? <pair>,<A>,<B>` a pair scalar with physical-time alignment; the default source is the Measure selection. Items: see [Measure](measure.md#items). | - | Measurements > Add standard measurement | Rigol-compatible. `9.9E37` when no value exists. |
+| `:MEASure:SETup:MID` | Set / Query | `50` only: edges are timed at half the amplitude | `50` | - | fork command; name not verified against the DHO guide |
+| `:MEASure:THReshold:TYPE` | Set / Query | `PERCent` only | `PERC` | - | fork command; name not verified against the DHO guide |
+| `:MEASure:THReshold:DEFault` | Action | Thresholds back to 10 % and 90 % | - | - | fork command; name not verified against the DHO guide |
+| `:MEASure:AREA` | Set / Query | `MAIN` only: measurements read the main record | `MAIN` | - | fork command; name not verified against the DHO guide |
+| `:MEASure:AMP:TYPE` | Set / Query | `MANual` only (top and base from the histogram) | `MAN` | - | fork command; name not verified against the DHO guide |
+| `:MEASure:AMP:MANual:TOP`, `:BASE` | Set / Query | `HISTogram` only | `HIST` | - | fork command; name not verified against the DHO guide |
+| `:MEASure:STRip:DOCK` | Set / Query | `UNDer`, `LEFT`, `RIGHt`, `ABOVe`, `HIDDen` | `UNDER` | Measure > Results strip | fork command; name not verified against the DHO guide |
+| `:MEASure:COUNter:ENABle`, `:SOURce`, `:VALue?` | Set / Query | The same counter as `:COUNter` | - | Measure > Counter | fork command; name not verified against the DHO guide |
 
 ### Gate and edge settings
 
@@ -31,8 +39,8 @@ Part of the [SCPI reference](README.md).
 | --- | --- | --- | --- | --- | --- |
 | `:MEASure:GATing` | Set / Query | `SCREEN` follows the viewport; `NONE` means Full record. This gate is an OOS extension. | `NONE` | Measure > Gate | OOS extension |
 | `:MEASure:REFS` | Set / Query | `10/90\|20/80` edge thresholds. | `10/90` | Measure levels > Preset | OOS extension |
-| `:MEASure:TSETup` | Set / Query | Seconds, nonnegative; used by the setup/hold counting results. | `0.000000E+00` | Measure > Tsetup | Rigol-compatible |
-| `:MEASure:THOLd` | Set / Query | Seconds, nonnegative; used by the setup/hold counting results. | `0.000000E+00` | Measure > Thold | Rigol-compatible |
+| `:MEASure:TSETup` | Set / Query | Seconds, nonnegative: `SETHOLD` counts the clock edges whose setup or hold is shorter. | `0.000000E+00` | Measure > Tsetup | Rigol-compatible |
+| `:MEASure:THOLd` | Set / Query | Seconds, nonnegative: `SETHOLD` counts the clock edges whose setup or hold is shorter. | `0.000000E+00` | Measure > Thold | Rigol-compatible |
 | `:MEASure:SETup:MIN` | Set / Query | Global default low threshold in percent. Per-row overrides remain a separate UI feature. | `10` | Measurements > Low level | Rigol-style (command family of the DHO guide) |
 | `:MEASure:SETup:MAX` | Set / Query | Global default high threshold in percent. | `90` | Measurements > High level | Rigol-style (command family of the DHO guide) |
 | `:MEASure:SETup:PSA` | Set / Query | Phase source A or B, `CHANn\|Rn`; stock digital/Math roles are not implied. | `CHAN1` | Measurements > Source A / B (phase) | Rigol-style (command family of the DHO guide) |
@@ -87,7 +95,7 @@ The canonical long spellings are accepted case-insensitively, as is the short fo
 
 `RRDELAY`, `FFDELAY`, `RFDELAY`, `FRDELAY`, `RRPHASE`, `FFPHASE`, `RFPHASE`, `FRPHASE`, `RRSKEW`, `FFSKEW`, `RFSKEW`, `FRSKEW`, `SETUP`, `HOLD`, `SETHOLD`, `FSETUP`, `FHOLD`, `DSETUP`, `DHOLD`, `DSETHOLD`.
 
-Setup and hold take source A as the clock and B as the data. `SETUP`/`HOLD` latch on rising clock edges, `FSETUP`/`FHOLD` on falling ones, and the `D` items on both, as a DDR strobe (DQS) does. A clock edge counts only when the data changed inside its own cycle: after the previous latching edge and within one typical edge spacing. Data that holds steady between strobe bursts adds no setup or hold. `SETHOLD`/`DSETHOLD` count the edges that break `:MEASure:TSETup`/`:MEASure:THOLd`.
+Setup and hold take source A as the data and B as the clock, as on the measurement page (the order of the stock setup/hold trigger, which names the data source `:TRIGger:SHOLd:DSRC` before the clock `CSRC`; the stock `:MEASure:ITEM` has no setup or hold item). `SETUP`/`HOLD` latch on rising clock edges, `FSETUP`/`FHOLD` on falling ones, and the `D` items on both, as a DDR strobe (DQS) does. A clock edge counts only when the data changed inside its own cycle: after the previous latching edge and within one typical edge spacing. Data that holds steady between strobe bursts adds no setup or hold. `SETHOLD`/`DSETHOLD` count the edges that break `:MEASure:TSETup`/`:MEASure:THOLd`.
 
 ### Catalogue rows
 

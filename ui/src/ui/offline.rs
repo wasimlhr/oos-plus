@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! Stored-reference session. A loaded reference stays on the live screen, with its own sample rate
@@ -21,6 +21,7 @@ pub(super) struct LiveHold {
     delay: f32,
 }
 
+#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Ui {
     pub fn set_offline(&mut self, on: bool) {
         if on == self.offline {
@@ -143,16 +144,10 @@ impl Ui {
         }
     }
 
-    /// Sample rate and depth for the top line. The bool is the live acquire mode that follows it.
-    pub(super) fn acq_caption(&self) -> (String, bool) {
-        if self.record_mode() {
-            let kind = if self.sim_mode() { "SIM" } else { "REF" };
-            if let Some(r) = self.refs.get(self.active_reference()).and_then(|r| r.as_ref()).filter(|r| r.v.len() >= 2 && r.dt > 0.0) {
-                let sr = 1.0 / r.dt;
-                return (format!("{kind} \u{b7} {} \u{b7} {}", si_digits(sr, "Sa/s", 3), si_digits(r.v.len() as f64, "pts", 3)), false);
-            }
-            return (format!("{kind} \u{b7} -"), false);
-        }
+    /// Sample rate and record length of the live acquisition: what the hardware reports, else what the record on
+    /// screen has (the demo makes short records whatever the memory depth says), else what the settings ask for.
+    /// Every top bar shows these numbers.
+    pub(super) fn live_rate_depth(&self) -> (f64, u64) {
         let captured = self.last[0].as_ref().and_then(|r| {
             if let Some(raw) = r.raw.as_ref() {
                 return Some((raw.frame.acq.0, raw.frame.acq.1 as u64));
@@ -165,6 +160,20 @@ impl Ui {
         });
         let (sr, depth) = self.src.hw_rate_depth().map(|(r, n)| (r, n as u64))
             .or(captured).unwrap_or_else(|| self.m.srate_depth());
+        (sr, depth)
+    }
+
+    /// Sample rate and depth for the top line. The bool is the live acquire mode that follows it.
+    pub(super) fn acq_caption(&self) -> (String, bool) {
+        if self.record_mode() {
+            let kind = if self.sim_mode() { "SIM" } else { "REF" };
+            if let Some(r) = self.refs.get(self.active_reference()).and_then(|r| r.as_ref()).filter(|r| r.v.len() >= 2 && r.dt > 0.0) {
+                let sr = 1.0 / r.dt;
+                return (format!("{kind} \u{b7} {} \u{b7} {}", si_digits(sr, "Sa/s", 3), si_digits(r.v.len() as f64, "pts", 3)), false);
+            }
+            return (format!("{kind} \u{b7} -"), false);
+        }
+        let (sr, depth) = self.live_rate_depth();
         (format!("{} \u{b7} {}", si_digits(sr, "Sa/s", 3), si_digits(depth as f64, "pts", 3)), true)
     }
 
@@ -184,6 +193,7 @@ impl Ui {
         }
     }
 
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     pub(super) fn draw_offline_card(&self, cv: &mut Canvas, r: Rect, sel: bool) {
         let f = &self.fonts();
         cv.round(r, 7, if sel { ACCENT } else { CARD_BORDER }, 255);
@@ -196,6 +206,7 @@ impl Ui {
     }
 
     /// Run pill while the mode is on: play the loaded record, or hold it. It does not start the demo.
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     pub(super) fn toggle_offline_run(&mut self) {
         if self.sim_play {
             self.sim_play = false;
@@ -270,6 +281,7 @@ mod tests {
 
     fn ui() -> Ui {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = crate::model::Layout::Minimal; // the Minimal cards
         u.m.meas_full_record = false; // screen gating: these tests check the visible-window gate (the default is the whole record)
         u
     }
@@ -319,6 +331,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut live = ui();
+        live.m.layout = Layout::Default; // direct slot import of the stock dialog
         live.store_dir = dir.clone();
         let scale = live.m.tscale;
         let dt = 5e-9;
@@ -326,6 +339,7 @@ mod tests {
         let sine: Vec<f32> = (0..n).map(|k| (0.5 + (2.0 * std::f64::consts::PI * 40e6 * k as f64 * dt).sin()) as f32).collect();
         write_csv(&dir, 1, 0.0, dt, &sine);
         live.activate(Item::RefImport);
+        live.m.layout = Layout::Minimal;
         assert!(live.m.ch[0].on && !live.offline, "a live import adds an overlay without taking over acquisition");
         assert_eq!(live.m.tscale, scale, "import cannot silently change the ADC timebase");
         assert!(live.cards().0.iter().any(|card| card.w > 0));
@@ -363,7 +377,9 @@ mod tests {
         assert!(u.dvm_value().is_finite());
 
         u.ref_sel = 0;
+        u.m.layout = Layout::Default; // direct slot import of the stock dialog
         u.activate(Item::RefImport);
+        u.m.layout = Layout::Minimal;
         assert!(u.m.ch.iter().all(|c| !c.on));
         assert!(!u.sim_play);
         assert_eq!(u.run_caption().0, "STOP");

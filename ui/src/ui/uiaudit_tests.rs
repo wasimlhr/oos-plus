@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! UI audit: repro of the Add measurements overlap and the big walk (ignored; run `uiaudit -- --ignored`).
 use super::*;
 
@@ -28,17 +29,16 @@ fn shot_to(u: &mut Ui, path: &std::path::Path) {
 
 #[test]
 fn repro_add_measurements() {
-    use super::meascatalog::{cat_from, Cat};
+    use super::meascatalog::{cat as Cat, cat_from};
     let out = std::env::var("OOS_SHOTS").unwrap_or("/tmp".into());
     for (n, ts) in [TextSize::Normal, TextSize::Large, TextSize::Larger].into_iter().enumerate() {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.text_size = ts;
         for _ in 0..10 { u.step(0.05); }
-        let r = u.measure_btn().unwrap();
-        tap_at(&mut u, r.x + r.w / 2, r.y + r.h / 2);
+        u.key(key::MEASURE);
         note(&format!("ts={n} menu={:?} count={}", u.menu, u.measurement_count()));
         shot_to(&mut u, &std::path::Path::new(&out).join(format!("audit-repro-ts{n}.png")));
-        u.cat_sel = Cat::Area as u16;
+        u.cat_sel = Cat::Area;
         for k in 1..8 { if let Some(c) = cat_from(k) { u.catalog_add(c); } }
         note(&format!("count={}", u.measurement_count()));
         shot_to(&mut u, &std::path::Path::new(&out).join(format!("audit-repro-ts{n}-b.png")));
@@ -50,8 +50,7 @@ fn repro_add_measurements_scroll() {
     let out = std::env::var("OOS_SHOTS").unwrap_or("/tmp".into());
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     for _ in 0..10 { u.step(0.05); }
-    let r = u.measure_btn().unwrap();
-    tap_at(&mut u, r.x + r.w / 2, r.y + r.h / 2);
+    u.key(key::MEASURE);
     let up = Rect::new(965, 288, 40, 42);
     tap_at(&mut u, up.x + 5, up.y + 5);
     note(&format!("scroll after Up at top = {}", u.cat_scroll));
@@ -74,9 +73,8 @@ fn repro_add_measurements_open_groups() {
     let out = std::env::var("OOS_SHOTS").unwrap_or("/tmp".into());
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     for _ in 0..10 { u.step(0.05); }
-    let r = u.measure_btn().unwrap();
-    tap_at(&mut u, r.x + r.w / 2, r.y + r.h / 2);
-    u.cat_open = [u16::MAX; 6];
+    u.key(key::MEASURE);
+    u.cat_open = [u16::MAX; crate::measures::CATEGORIES.len()];
     shot_to(&mut u, &std::path::Path::new(&out).join("audit-repro-open.png"));
     for _ in 0..2 { tap_at(&mut u, 985, 530); }
     note(&format!("open groups scroll={}", u.cat_scroll));
@@ -485,6 +483,7 @@ struct Walk {
     ui_n: usize,
     rows: Vec<String>,
     count: BTreeMap<(String, char), usize>,
+    #[allow(dead_code)] // kept in the walk state for a debugger; the walk does not read it back
     queue: Vec<Vec<Act>>,
 }
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 3A: the Studio top bar, SIM follows Run / Stop / Single, sources shown, compact view, saved desktop settings, zoom.
 use super::studio::StudioView;
 use super::*;
@@ -218,8 +219,9 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
 fn bottom_bar_shows_the_sources_that_are_on_and_one_plus_ch_chip_for_the_rest() {
     let mut u = studio();
     let b = u.studio_bottom();
-    // CH1 and CH2 are on: two channel chips, one "+ CH" for CH3 and CH4, no "Off" chips
-    assert!(b.ch[0].w > 0 && b.ch[1].w > 0 && b.ch[2].w == 0 && b.ch[3].w == 0);
+    // CH1 and CH2 are on: two channel pills; CH3 and CH4 have a small dim pill each, a tap switches them on
+    assert!(b.ch[0].w >= 96 && b.ch[1].w >= 96 && b.ch[2].w == 44 && b.ch[3].w == 44, "{:?}", b.ch);
+    assert!(b.ch[1].right() < b.ch[2].x && b.ch[3].right() < b.add.x, "in channel order, before the add chip");
     assert!(b.add.w > 0);
     shot(&mut u, "bottom-sources");
     // a ref and a math channel that are shown get chips
@@ -295,7 +297,7 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     assert!(dir.join(crate::store::SetupFile::NAME).is_file());
     // a restart: a new interface reads it
     let mut again = Ui::new(Source::Demo { t: 0.0 });
-    assert_eq!(again.m.layout, Layout::Minimal);
+    assert_eq!(again.m.layout, Layout::Default);
     let mut file2 = crate::store::SetupFile::new(&dir);
     assert_eq!(file2.restore(&mut again), Ok(true));
     assert_eq!(again.m.layout, Layout::Studio);
@@ -315,7 +317,7 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     std::fs::write(dir.join(crate::store::SetupFile::NAME), "layout = wide\n").unwrap();
     let mut third = Ui::new(Source::Demo { t: 0.0 });
     assert!(crate::store::SetupFile::new(&dir).restore(&mut third).is_err());
-    assert_eq!(third.m.layout, Layout::Minimal);
+    assert_eq!(third.m.layout, Layout::Default);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

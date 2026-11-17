@@ -181,7 +181,7 @@ fn trigger(t: &mut T) {
     t.rn(":TRIG:LEV2 -0.7", ":TRIG:LEV2?", -0.7);
     t.go(":TRIG:EDGE:SOUR CHAN1;:TRIG:EDGE:LEV 5");
     t.ui.stats[0].valid = true;
-    (t.ui.stats[0].vmax, t.ui.stats[0].vmin) = (2.0, 0.0);
+    (t.ui.stats[0].vmax, t.ui.stats[0].vmin, t.ui.stats[0].top, t.ui.stats[0].base) = (2.0, 0.0, 2.0, 0.0);
     t.go(":TRIG:LEV:AUTO");
     assert_eq!(t.ui.m.trig_level, 1.0, "level 50 % is the middle of the signal, as the Trig50 action");
     // the typed commands do not change the trigger type
@@ -381,7 +381,7 @@ fn storage_zoom(t: &mut T) {
     t.shows(Item::StoreSlot, "3  (setup3.txt)");
     t.no(":SAVE:SLOT 10", "-224");
     t.rt(":SAVE:DEST DESK", ":SAVE:DEST?", "DESK");
-    assert_eq!(t.ui.store_dest, crate::store::StoreDest::Desk);
+    assert_eq!(t.ui.store_dest, crate::store::StoreDest::Local);
     t.rt(":SAVE:DEST AUTO", ":SAVE:DEST?", "AUTO");
     t.shows(Item::StoreDest, "Auto");
     // *SAV / *RCL are Save setup / Recall setup of the chosen slot
@@ -440,6 +440,30 @@ fn storage_zoom(t: &mut T) {
     assert_eq!(t.ui.shot_request.as_deref(), Some(ip.to_string_lossy().as_ref()));
     t.go(":SAVE:IMAG");
     t.go(":SAVE:FFR");
+    // callouts: placed by source and time, listed, removed
+    t.go(":CALL:CLE");
+    assert_eq!(t.raw(":CALL:COUN?"), "0");
+    t.go(":CALL:ADD CHAN1,-2.5e-4,\"runt here\"");
+    t.go(":CALL:ADD CHAN1,1e-4,second");
+    assert_eq!(t.raw(":CALL:COUN?"), "2");
+    assert_eq!(t.raw(":CALL:LIST?"), "CHAN1,-2.5e-4,runt here\nCHAN1,1e-4,second");
+    t.no(":CALL:ADD CHAN9,0,x", "-224");
+    t.no(":CALL:ADD CHAN1,0,\"\"", "-224");
+    t.go(":CALL:REM 1");
+    assert_eq!(t.raw(":CALL:LIST?"), "CHAN1,1e-4,second");
+    t.no(":CALL:REM 5", "-224");
+    t.go(":CALL:CLE");
+    assert_eq!(t.raw(":CALL:COUN?"), "0");
+    // a session: saved, the bench changed, loaded back
+    let sess = t.ui.store_dir.join("bench.oss");
+    t.go(&format!(":SAVE:SESS \"{}\"", sess.display()));
+    assert!(sess.is_file());
+    let before = t.raw(":TIM:SCAL?");
+    t.go(":TIM:SCAL 5e-3");
+    t.go(&format!(":LOAD:SESS \"{}\"", sess.display()));
+    assert_eq!(t.raw(":TIM:SCAL?"), before, "the session brings its time base back");
+    t.no(":LOAD:SESS \"no-such-file.oss\"", "-224");
+    t.no(":SAVE:SESS?", "-113");
     t.go(":LOAD:FFR");
     // Studio zoom
     t.go(":TIM:DEL:ENAB OFF");
@@ -717,14 +741,31 @@ fn extras(t: &mut T) {
     assert_eq!(t.ui.m.dec_sel, 0, "the selected decoder is the same afterwards");
     t.rt(":BUS2:CAN:SIGN CAN_H", ":BUS2:CAN:SIGN?", "CAN_H");
     assert!(t.ui.m.dec_view(1).dec_canh);
-    let fd = opt(t, Item::DecFdRate, 2);
-    t.rt(&format!(":BUS3:CAN:FD:BAUD \"{fd}\""), ":BUS3:CAN:FD:BAUD?", &norm(&fd));
-    let ar = opt(t, Item::DecArate, 1);
-    t.rt(&format!(":BUS3:CAN:FD:ABAU \"{ar}\""), ":BUS3:CAN:FD:ABAU?", &norm(&ar));
-    let tick = opt(t, Item::DecTick, 1);
-    t.rt(&format!(":BUS4:SENT:TICK \"{tick}\""), ":BUS4:SENT:TICK?", &norm(&tick));
-    t.rt(":BUS4:SENT:NIBB 3", ":BUS4:SENT:NIBB?", "3");
-    assert_eq!(t.ui.m.dec_view(3).dec_nibbles, 3);
+    // CAN FD and SENT are protocol modules: their parameters are the options of the module of that decoder
+    let module_opt = |t: &mut T, k: usize, key: &str, i: usize, j: usize| {
+        let prev = t.ui.m.dec_sel;
+        t.ui.m.dec_select(k);
+        t.ui.m.dec_proto = crate::model::Proto::from_key(key).unwrap();
+        let o = t.ui.options(Item::DecOpt(i))[j].clone();
+        t.ui.m.dec_select(prev);
+        o
+    };
+    // only in a build with these modules (the decoders layer builds the core alone)
+    if crate::model::Proto::from_key("CanFd").is_some() && crate::model::Proto::from_key("Sent").is_some() {
+        let fd = module_opt(t, 2, "CanFd", 1, 2);
+        t.rt(&format!(":BUS3:CAN:FD:BAUD \"{fd}\""), ":BUS3:CAN:FD:BAUD?", &norm(&fd));
+        let ar = module_opt(t, 2, "CanFd", 0, 1);
+        t.rt(&format!(":BUS3:CAN:FD:ABAU \"{ar}\""), ":BUS3:CAN:FD:ABAU?", &norm(&ar));
+        let tick = module_opt(t, 3, "Sent", 0, 1);
+        t.rt(&format!(":BUS4:SENT:TICK \"{tick}\""), ":BUS4:SENT:TICK?", &norm(&tick));
+        t.rt(":BUS4:SENT:NIBB 3", ":BUS4:SENT:NIBB?", "3");
+        assert_eq!(t.ui.m.dec_view(3).dec_opt[1], 2);
+    } else {
+        // without the modules the headers still answer: asked, not set
+        for h in [":BUS3:CAN:FD:BAUD?", ":BUS3:CAN:FD:ABAU?", ":BUS4:SENT:TICK?", ":BUS4:SENT:NIBB?"] {
+            let _ = t.raw(h);
+        }
+    }
     let sp = opt(t, Item::DecUsbSpeed, 1);
     t.rt(&format!(":BUS1:USB:SPE \"{sp}\""), ":BUS1:USB:SPE?", &norm(&sp));
     t.no(":BUS9:SPI:MODE 1", "-113");

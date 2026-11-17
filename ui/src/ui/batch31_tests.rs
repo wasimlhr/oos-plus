@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 31: the findings of the function check that were left. Eye PLL bandwidth (an allocation that never ended), the
 //! last steppers without a limit, a limit that does not give the value back, fixed limits, defaults off the ladder,
 //! the direction of the amplitude cursors, a spectrum from Auto, labels that did not follow, a cursor source that moved
@@ -360,7 +361,7 @@ fn rbw_and_span_step_from_the_value_auto_shows_not_from_one_hertz() {
 
 #[test]
 fn bode_start_and_amplitude_show_what_they_hold_after_every_tap() {
-    for layout in [Layout::Minimal, Layout::Default] {
+    for layout in [Layout::Default] {
         let mut u = fresh(layout);
         u.open_menu(MenuId::Bode);
         frame(&mut u);
@@ -428,7 +429,7 @@ fn the_eye_placement_under_is_kept_in_studio_and_shown() {
 
 #[test]
 fn the_bus_read_write_bit_included_is_shown_after_a_tap() {
-    for layout in [Layout::Minimal, Layout::Default] {
+    for layout in [Layout::Default] {
         let mut u = fresh(layout);
         u.open_menu(MenuId::Bus);
         frame(&mut u);

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 21: the grouped Menu, the LA and GEN pills, SIM and Live in the top bar, the measurement views and the classic
 //! badge strip. One test per item that can be tested. OOS_SHOTS=<dir> writes pictures (b21-*).
 use super::studio::StudioView;
@@ -216,7 +217,7 @@ fn la_and_gen_pills_sit_after_plus_ch_and_open_their_sheets() {
         assert!(r.h >= 28 && Ui::hit40(r).h >= 40);
         assert!(r.right() < b.time.x - 5, "inside the room before the time base");
     }
-    for c in 0..n_ch() { if b.ch[c].w > 0 { assert!(b.ch[c].right() < b.add.x); assert!(b.ch[c].w >= 60); } }
+    for c in 0..n_ch() { if b.ch[c].w > 0 { assert!(b.ch[c].right() < b.add.x); assert!(b.ch[c].w >= if u.m.ch[c].on { 60 } else { 40 }); } }
     if let Some(r) = b.gen {
         let off_w = r.w;
         u.m.afg_on = true;
@@ -231,7 +232,8 @@ fn la_and_gen_pills_sit_after_plus_ch_and_open_their_sheets() {
         assert!(u.sheet_active());
         u.close_menu();
     }
-    if let Some(r) = b.la {
+    // the bar as it is now: the generator pill grew, the pills before it moved
+    if let Some(r) = u.studio_bottom().la {
         tap(&mut u, r);
         assert_eq!(u.menu, MenuId::La);
         assert!(u.sheet_active());
@@ -271,9 +273,9 @@ fn sim_is_in_the_top_bar_when_live_and_live_when_viewing_a_record() {
 fn a_short_top_bar_shortens_labels_instead_of_dropping_buttons() {
     let u = studio();
     let t = u.studio_top();
-    assert!(t.cursors.w > 0 && t.view.w > 0 && t.add.w > 0, "Add is the one button for Add and Meas");
+    assert!(t.cursors.w == 0 && t.view.w > 0 && t.add.w > 0, "Add is the one button for Add, Meas and Cursors (Cursor is a key)");
     assert!(t.acq.w >= 120 || t.add.w < u.fonts().mb.width("Add") + 20);
-    assert!(t.add.right() < t.cursors.x);
+    assert!(t.add.right() < t.display.x);
 }
 
 fn tap_cell(u: &mut Ui, it: Item) {
@@ -379,6 +381,9 @@ fn the_list_has_the_header_with_source_gate_search_count_and_pinned_only() {
     tap_xy(&mut u, g.p.x + 20, g.list.y + 20);
     assert!(u.studio.panel.drop.is_none() && u.m.meas.len() == n);
     // pinned only
+    // everything is pinned until one is taken off
+    let last = *u.studio_keys().last().unwrap();
+    u.studio_set_pin(last, false);
     u.studio_set_pin(super::studio::MeasKey::One(Meas::Vpp, WaveId::Ch(0)), true);
     let pinned = u.studio_pinned().len();
     assert!(pinned >= 1 && pinned < total);
@@ -482,6 +487,8 @@ fn the_classic_badge_strip_has_a_row_per_source_with_even_columns() {
     shot(&mut u, "classic-badges");
     let (key, r) = u.studio_badges()[0];
     tap(&mut u, r);
+    // a measurement that can be drawn is shown on the waveform first; the next tap opens the popup
+    if u.studio.popup.is_none() { assert_eq!(u.studio.mark, Some(key)); tap(&mut u, r); }
     assert_eq!(u.studio.popup, Some(key), "a tap on a pair opens the badge popup");
     u.studio.popup = None;
     // no internal names: the amplitude shows its display name

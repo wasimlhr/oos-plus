@@ -13,10 +13,13 @@ enum Panel { Plot, Eye, Measurements }
 #[derive(Clone, Copy)]
 struct Gesture { panel: Panel, origin: Rect, x: i32, y: i32, at: f64, moved: bool, held: bool }
 #[derive(Clone)]
+#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 pub(super) enum Action {
     Overlay, Stacked, Sources, Source(WaveId), Trigger(WaveId), Menu(MenuId),
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     ZoomReset, ZoomClose, FitRecord, Live, Single, Run, Panel,
-    EyeRight, EyeLeft, EyeBelow, EyeFloat, EyeClose,
+    EyeRight, EyeLeft, EyeBelow, EyeFloat, EyeClose, RestoreLayout,
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     MeasureFloat, MeasureDock(StripDock), Close,
     /// the quick actions of a channel (its hold popup)
     ChCoupling(usize), ChInvert(usize), ChZero(usize), Autoset,
@@ -244,6 +247,7 @@ mod tests {
     fn native_pointer_menu_back_and_close_win_over_overlapping_statistics_and_eye_headers() {
         for panel in [Panel::Measurements, Panel::Eye] {
             let mut ui = mixed();
+            ui.m.layout = Layout::Default; // the stock dialogs: Minimal and Studio open sheets
             ui.stats_on = true;
             ui.results_min = false;
             if panel == Panel::Eye { ui.m.view = AView::Eye; }
@@ -264,7 +268,10 @@ mod tests {
                     }
                     _ => unreachable!(),
                 };
-                assert!(header.contains(x, y), "the test must overlap the actual background header");
+                // a floating measurement card keeps clear of the full-screen and zoom buttons (PR #8), and the
+                // settings' Close sits beside them: there the card cannot lie under it any more
+                let unreachable = panel == Panel::Measurements && !back;
+                assert!(unreachable || header.contains(x, y), "the test must overlap the actual background header");
                 let position = (ui.workspace.measure_float, ui.workspace.eye_float);
                 pointer_tap(&mut ui, target);
                 assert!(!ui.results_min, "Back/Close must not fold the statistics panel behind the menu");
@@ -342,6 +349,7 @@ mod tests {
     #[test]
     fn pair_header_has_real_source_status_and_picker_routes_without_extra_rows() {
         let mut ui = mixed();
+        ui.m.layout = Layout::Default; // the header of the stock dialog; the sheet pins the sources under its tabs
         ui.select_workspace_source(WaveId::Ref(1));
         ui.meas_src = WaveId::Ref(1);
         ui.meas_src_b = WaveId::Ch(1);
@@ -509,8 +517,8 @@ mod tests {
         ui.relayout();
         let mut cv = Canvas::new(W, H);
         assert!(ui.draw_paged_measurement_strip(&mut cv));
-        // The cursor row follows the three readout rows and two navigation rows.
-        let y = ui.strip_band_y() + 5 * STRIP_ROW;
+        // The cursor row follows the three readout rows: the page controls are in the band's last column.
+        let y = ui.strip_band_y() + 3 * STRIP_ROW;
         assert_eq!(cv.px[((y + 5) * W + 10) as usize], color, "paged readouts retain the same source badge");
         ui.select_workspace_source(WaveId::Ch(0));
         assert_eq!(ui.cursor_badge(), Some(("CH1".into(), CH_COLORS[0])));
@@ -566,6 +574,7 @@ pub(super) struct Workspace {
     pub(super) cursor_sel: Option<usize>,
 }
 
+#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Ui {
     /// Display/knob focus is independent of acquisition and measurement A/B.
     pub(super) fn selected_workspace_source(&self) -> Option<WaveId> {
@@ -639,7 +648,11 @@ impl Ui {
         cv.text_in(&self.fonts().mb, Rect::new(a.x + a.w, a.y, 26, a.h), 1, "to", TEXT);
     }
     pub(super) fn stacked(&self) -> bool {
-        (self.workspace.stacked || self.m.layout == Layout::Studio) && !self.xy_over() && matches!(self.m.view, AView::Scope | AView::Eye)
+        self.trace_stacked() && !self.xy_over() && matches!(self.m.view, AView::Scope | AView::Eye)
+    }
+    /// The trace mode that is chosen: Stacked, which Studio has until Overlay is picked from its plot menu.
+    pub(super) fn trace_stacked(&self) -> bool {
+        self.workspace.stacked || (self.m.layout == Layout::Studio && !self.studio.overlay)
     }
     pub(super) fn trace_sources(&self) -> Vec<Trace> {
         // a record session (SIM, offline) has no live data: its inputs keep their state but get no lane
@@ -670,6 +683,7 @@ impl Ui {
     }
     pub(super) fn trace_mode(&mut self, stacked: bool) {
         self.workspace.popup = None;
+        if self.m.layout == Layout::Studio { self.studio.overlay = !stacked; self.m.studio_overlay = !stacked; }
         // a split already gives every source its own window: Overlay keeps it, Stacked replaces it
         if !stacked && self.m.win_layout != WinLayout::One { self.workspace.stacked = false; return; }
         self.workspace.stacked = stacked;
@@ -754,8 +768,16 @@ impl Ui {
         }
         if let Some((n, rect)) = self.source_overflow() { draw(cv, rect, &format!("+{n}"), false); }
         let (overlay, stacked, time, trigger, live, panel, _) = self.footer_rects();
-        draw(cv, overlay, "Overlay", !self.workspace.stacked);
-        draw(cv, stacked, "Stacked", self.workspace.stacked);
+        if self.view_on() || self.m.view == AView::Eye {
+            // an analyser has the plot: the two trace modes have nothing to arrange, so they are shown as unavailable
+            for (r, label) in [(overlay, "Overlay"), (stacked, "Stacked")] {
+                btn(cv, r, BAR, LINE);
+                cv.text_in(&self.fonts().s, r, 1, label, DIM);
+            }
+        } else {
+            draw(cv, overlay, "Overlay", !self.workspace.stacked);
+            draw(cv, stacked, "Stacked", self.workspace.stacked);
+        }
         let (scale, _) = self.view();
         draw(cv, time, &format!("Time {}/div", si_short(scale as f64, "s")), false);
         self.draw_compact_trigger(cv, trigger);
@@ -780,7 +802,10 @@ impl Ui {
         }
         if let Some((_, rect)) = self.source_overflow() { if rect.contains(x, y) { self.open_sources(rect.x, BOTTOM.y); return true; } }
         let (overlay, stacked, time, trigger, live, panel, _) = self.footer_rects();
-        if overlay.contains(x, y) { self.trace_mode(false); }
+        if (overlay.contains(x, y) || stacked.contains(x, y)) && (self.view_on() || self.m.view == AView::Eye) {
+            self.toast("Overlay and Stacked arrange the waveform view");
+        }
+        else if overlay.contains(x, y) { self.trace_mode(false); }
         else if stacked.contains(x, y) { self.trace_mode(true); }
         else if time.contains(x, y) { self.toggle_menu(MenuId::Horizontal); }
         else if live.is_some_and(|r| r.contains(x, y)) { self.return_to_live(); }
@@ -940,6 +965,9 @@ impl Ui {
             rows.push(("Sources".into(), Action::Sources));
             rows
         };
+        let mut rows = rows;
+        // a view that fills the area has a way back in every menu of it
+        if self.dock_full_state() { rows.insert(0, ("Restore layout".into(), Action::RestoreLayout)); }
         self.popup(if eye { "Eye" } else if measurements { "Measurements" } else { "Plot" }, x, y, rows);
     }
     pub(super) fn workspace_popup_tap(&mut self, x: i32, y: i32) -> bool {
@@ -956,7 +984,14 @@ impl Ui {
             Action::Source(WaveId::Ch(c)) => {
                 if self.m.ch[c].on && self.trace_sources().len() <= 1 { self.toast("Keep one source on"); return; }
                 if self.m.ch[c].on { self.m.ch[c].on = false; self.settings_changed(); }
-                else { self.activate_live_channel(c); }
+                else if self.record_mode() { self.activate_live_channel(c); }
+                else {
+                    // in Live as the channel key: the channel goes on, the trigger and Run/Stop stay
+                    self.m.ch[c].on = true;
+                    self.select_workspace_source(WaveId::Ch(c));
+                    if self.m.run == RunState::Run { self.m.floor_live_tdiv(); }
+                    self.settings_changed();
+                }
                 self.relayout();
             }
             Action::Source(WaveId::Ref(i)) => {
@@ -982,6 +1017,7 @@ impl Ui {
             Action::RefClear(i) => self.ref_clear_slot(i),
             Action::RefHorizontal(i) => { self.select_workspace_source(WaveId::Ref(i)); self.studio.sz.pop = false; self.studio.sz.ref_pop = Some(i); }
             Action::RefSettings(i) => { self.select_workspace_source(WaveId::Ref(i)); self.open_menu(MenuId::Ref); }
+            Action::RestoreLayout => { self.dock_exit_full(); }
             Action::EyeClose => { self.m.view = AView::Scope; self.workspace.eye_float = None; self.relayout(); }
             Action::MeasureFloat => {
                 self.workspace.measure_float = Some((W - RESULTS_W - 28, TOP.h + 32));
@@ -1015,7 +1051,7 @@ impl Ui {
             for (index, (label, action)) in popup.rows.iter().enumerate() {
                 let r = popup.row_rect(index);
                 cv.set_clip(r); cv.text_in(&self.fonts().s, Rect::new(r.x + 7, r.y, r.w - 34, r.h), 0, label, TEXT); cv.no_clip();
-                let current = match action { Action::Overlay => !self.workspace.stacked, Action::Stacked => self.workspace.stacked, _ => false };
+                let current = match action { Action::Overlay => !self.trace_stacked(), Action::Stacked => self.trace_stacked(), _ => false };
                 if current {
                     // a check at the right end marks the mode in force
                     let (cx, cy) = (r.x + r.w - 40, r.y + r.h / 2);
@@ -1042,6 +1078,68 @@ impl Ui {
     }
     /// Another hold took the finger: the plot gesture under it must not open its own menu too.
     pub(super) fn workspace_drop_gesture(&mut self) { self.workspace.gesture = None; }
+    #[cfg(test)]
+    pub(super) fn workspace_popup_open(&self) -> bool { self.workspace.popup.is_some() }
+    /// Fit all lanes: the vertical scale and position of every source that is shown, so that each fills about
+    /// three quarters of its lane (or of the graticule, in Overlay). Channels step to the V/div that holds their
+    /// signal, references and math channels likewise. The time base, the trigger and what is on stay as they are.
+    pub(super) fn fit_all_lanes(&mut self) {
+        self.workspace.popup = None;
+        let range = |v: &[f32]| {
+            let (lo, hi) = v.iter().filter(|x| x.is_finite()).fold((f32::MAX, f32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+            (hi >= lo).then_some((lo, hi))
+        };
+        let mut fitted = 0;
+        // channels: from the record on screen
+        let spans: Vec<Option<(f32, f32)>> = (0..n_ch()).map(|c| {
+            if !self.m.ch[c].on || self.record_mode() { return None; }
+            self.last[0].as_ref().and_then(|r| r.ch.get(c)).and_then(|v| range(v))
+        }).collect();
+        for (c, span) in spans.into_iter().enumerate() {
+            let Some((lo, hi)) = span else { continue };
+            let ch = &mut self.m.ch[c];
+            let want = ((hi - lo) / 6.0).max(1e-6);
+            ch.vfine = 1.0;
+            ch.vscale = (0..VSCALES.len()).find(|&i| VSCALES[i] * ch.probe >= want).unwrap_or(VSCALES.len() - 1);
+            // the position on half a division, so the lane's labels are round values
+            let half = ch.volts_per_div() / 2.0;
+            ch.offset = -(((hi + lo) / 2.0) / half).round() * half;
+            fitted += 1;
+        }
+        self.m.clamp_offsets();
+        // references that are shown
+        for i in 0..NREF {
+            let Some(r) = self.refs[i].as_mut().filter(|r| r.on) else { continue };
+            let Some((lo, hi)) = range(&r.v) else { continue };
+            let want = ((hi - lo) / 6.0).max(1e-6);
+            r.vpd = VSCALES.iter().copied().find(|&x| x >= want).unwrap_or(VSCALES[VSCALES.len() - 1]);
+            let half = r.vpd / 2.0;
+            r.offset = -(((hi + lo) / 2.0) / half).round() * half;
+            fitted += 1;
+        }
+        // math channels that are shown
+        for k in 0..NMATH {
+            if self.m.math_shown(k) { self.math_fit(k); fitted += 1; }
+        }
+        if fitted == 0 { return self.toast("Fit all lanes: nothing is shown"); }
+        self.settings_changed();
+        self.clear_measurement_statistics();
+        self.dirty_map = true;
+        self.relayout();
+        self.toast(&format!("Fitted {fitted} {}", if fitted == 1 { "source" } else { "sources" }));
+    }
+
+    /// Turns a source on or off, as its row of the Sources menu does.
+    pub(super) fn source_toggle(&mut self, id: WaveId) { self.workspace_action(Action::Source(id)); }
+    #[cfg(test)]
+    pub(super) fn workspace_stacked_flag(&self) -> bool { self.workspace.stacked }
+    /// Stops the hold of the plot gesture. True when it had already opened its menu, which is closed with it.
+    pub(super) fn workspace_cancel_hold(&mut self) -> bool {
+        let opened = self.workspace.gesture.is_some_and(|gesture| gesture.held);
+        if opened { self.workspace.popup = None; }
+        self.workspace.gesture = None;
+        opened
+    }
     pub(super) fn workspace_hold_tick(&mut self) {
         let Some(mut gesture) = self.workspace.gesture else { return };
         if gesture.moved || gesture.held || self.now - gesture.at < HOLD { return; }
@@ -1127,6 +1225,7 @@ impl Ui {
         }
     }
     /// Escape closes transient surfaces and leaves box/zoom modes immediately.
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     pub fn dismiss_context(&mut self) {
         if self.load_slot_ask { self.cancel_load_slot(); return; }
         let was_drawing = self.zoom_arm;
@@ -1134,6 +1233,8 @@ impl Ui {
         self.zoom_arm = false; self.zoom_path.clear(); self.zoom_map = None;
         self.touch.down = false; self.touch.drag = Drag::None;
         if self.menu_open { self.close_menu(); }
+        // a view that fills the area: Escape is the way back
+        else if self.dock_exit_full() {}
         else if self.m.zoom && !was_drawing { self.set_zoom(false); }
     }
     pub fn cancel_pointer(&mut self) {

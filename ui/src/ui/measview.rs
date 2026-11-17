@@ -7,11 +7,13 @@ use super::studio::{chip, icon_pin, MeasKey, StudioView};
 
 /// The columns of the detailed table: name and width. Sigma and Count go first when the room is short.
 /// Widths when the panel is narrow: the source is a colour bar, so Name, Value and Mean fit.
-pub(super) const DETAIL_NARROW_W: [i32; 8] = [44, 54, 70, 66, 64, 64, 56, 52];
+pub(super) const DETAIL_NARROW_W: [i32; 8] = [44, 54, 76, 74, 74, 74, 62, 52];
 /// Below this width the source is a colour bar only (no name).
 pub(super) const DETAIL_BAR_ONLY_BELOW: i32 = 240;
 /// The room the pin keeps at the right end of the Name cell.
 pub(super) const DETAIL_PIN_W: i32 = 18;
+/// The widest the Name column grows: a long name ("Positive Duty Cycle") and its pin.
+pub(super) const DETAIL_NAME_MAX: i32 = 170;
 /// Below this width the table uses them.
 pub(super) const DETAIL_NARROW_BELOW: i32 = 330;
 pub(super) const DETAIL_COLS: [(&str, i32); 8] = [("Source", 44), ("Name", 104), ("Value", 90), ("Mean", 84), ("Min", 84), ("Max", 84), ("\u{3c3}", 76), ("Count", 64)];
@@ -74,7 +76,7 @@ impl Ui {
     pub(super) fn detail_cols(w: i32) -> (Vec<(usize, i32, i32)>, i32) {
         let narrow = w < DETAIL_NARROW_BELOW;
         let mut ws: Vec<i32> = (0..DETAIL_COLS.len()).map(|i| if narrow { DETAIL_NARROW_W[i] } else { DETAIL_COLS[i].1 }).collect();
-        if w < DETAIL_BAR_ONLY_BELOW { ws[0] = 12; ws[1] = 54; ws[2] = 70; ws[3] = 70; }
+        if w < DETAIL_BAR_ONLY_BELOW { ws[0] = 12; ws[1] = 54; ws[2] = 74; ws[3] = 74; }
         // the columns that fit, whole: source, name and value always; then by priority mean, min, max, sigma, count
         // (no half-drawn column, and nothing to scroll to)
         let mut keep: Vec<usize> = Vec::new();
@@ -85,8 +87,21 @@ impl Ui {
             keep.push(c);
         }
         keep.sort_unstable();
-        // the name takes what the table has over
-        if sum < w { ws[1] += w - sum; sum = w; }
+        // what the table has over: the name takes it only as far as a name needs, the rest is shared by the value
+        // columns, so a wide table has no name column half its width with the numbers crowded at the right
+        if sum < w {
+            let extra = w - sum;
+            let to_name = extra.min((DETAIL_NAME_MAX - ws[1]).max(0));
+            ws[1] += to_name;
+            let values: Vec<usize> = keep.iter().copied().filter(|c| *c >= 2).collect();
+            let rest = extra - to_name;
+            if values.is_empty() { ws[1] += rest; } else {
+                let each = rest / values.len() as i32;
+                for c in &values { ws[*c] += each; }
+                ws[*values.last().unwrap()] += rest - each * values.len() as i32;
+            }
+            sum = w;
+        }
         let mut x = 0;
         let cols = keep.iter().map(|&i| { let c = (i, x, ws[i]); x += ws[i]; c }).collect();
         (cols, sum.max(x))

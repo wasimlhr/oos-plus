@@ -36,6 +36,8 @@ pub(super) enum RowKind {
     Toggle,
     /// opens another page or runs an action; links go last
     Link,
+    /// a line of status: its name and what it says, nothing to press
+    Info,
 }
 
 /// One tab: its name, its rows (at most seven) and its pinned actions (at most two, destructive last).
@@ -86,7 +88,9 @@ pub(super) struct SheetRowGeo {
 
 pub(super) struct SheetGeo {
     pub r: Rect,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub back: Option<Rect>,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub close: Rect,
     pub tabs: Vec<Rect>,
     pub rows: Vec<SheetRowGeo>,
@@ -97,12 +101,14 @@ pub(super) struct SheetGeo {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum PanelKind {
     Measurements,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     Decode,
     Spectrum,
     Eye,
     Histogram,
     Trend,
     Cursor,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     Sim,
 }
 
@@ -160,11 +166,11 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Horizontal => (&["Time base", "Zoom"], |it| match it {
-                Zoom | ZScale | ZDelay => Slot::Tab(1),
+                Zoom | ZScale | ZDelay | ZoomBar => Slot::Tab(1),
                 AutoDeskew | ClearDeskew => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
-            M::Cursor => (&["Cursors", "Position"], |it| match it { CurType | CurSrc | CurSrcB | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
+            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurType | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
             M::Search => (&["Edge search"], |it| match it { SrchRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
             M::Ref => (&["Reference", "Scale and files"], |it| match it {
                 RefSel | RefSrc | RefLabel | RefColor | RefSaveNext | RefImport => Slot::Tab(0),
@@ -187,7 +193,7 @@ impl Ui {
             }),
             M::Utility => (&["Connectivity", "Device", "Service", "Advanced"], |it| match it {
                 Open(M::Network) | Open(M::Time) => Slot::Tab(0),
-                Offline | QuickAct | TouchLock | Graphics | Shot => Slot::Tab(1),
+                Offline | QuickAct | Graphics | Shot => Slot::Tab(1),
                 Open(M::SelfCal) | SysInfo | About | Update => Slot::Tab(2),
                 UpdateRollback => Slot::Foot(2),
                 Stock => Slot::Foot(3),
@@ -212,7 +218,8 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Storage => (&["Save", "Export"], |it| match it {
-                StoreDest | StoreSlot | StoreSaveSetup | StoreRecall => Slot::Tab(0),
+                // a session is saved and recalled like a setup, with the samples: it sits beside the setup rows
+                StoreDest | StoreSlot | StoreSaveSetup | StoreRecall | StoreSessSave | StoreSessLoad => Slot::Tab(0),
                 _ => Slot::Tab(1),
             }),
             M::Mask => (&["Test", "Build"], |it| match it {
@@ -251,8 +258,66 @@ impl Ui {
                 LaPat(i) => Slot::Tab(i / 4),
                 _ => Slot::Tab(0),
             }),
+            M::Logger => (&["Data logger"], |_| Slot::Tab(0)),
+            M::Dvm => (&["DVM", "Counter"], |it| match it {
+                DvmOn | DvmSrc | DvmMode => Slot::Tab(0),
+                CntClear => Slot::Foot(1),
+                _ => Slot::Tab(1),
+            }),
+            M::Dpt => (&["Signals", "View"], |it| match it {
+                DptPct | DptZoom => Slot::Tab(1),
+                SrcOn => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
+            M::Inverter => (&["Phases", "Signal"], |it| match it {
+                InvOn | InvA | InvB | InvC => Slot::Tab(0),
+                SrcOn => Slot::Foot(0),
+                _ => Slot::Tab(1),
+            }),
+            M::Magnetic => (&["Signals", "Core"], |it| match it {
+                MagN | MagAe | MagLe | MagRcu => Slot::Tab(1),
+                SrcOn => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
+            M::BwTest => (&["Bandwidth test"], |_| Slot::Tab(0)),
+            M::Bode => (&["Sweep", "Connections"], |it| match it {
+                BodeIn | BodeOut | BodeGen => Slot::Tab(1),
+                BodeRun => Slot::Foot(0),
+                SrcOn => Slot::Foot(1),
+                _ => Slot::Tab(0),
+            }),
+            M::Zone => (&["Zone"], |it| match it { ZoneClear => Slot::Foot(0), _ => Slot::Tab(0) }),
+            // the two sources are pinned under every tab: "A: CH1" to "B: CH2"
+            M::MeasPair => (&["Delay", "Phase", "Skew", "Setup / hold"], |it| match it {
+                MeasSrc => Slot::Foot(0),
+                MeasSrcB => Slot::Foot(1),
+                Item::MeasPair(i) => { let i = i as usize; Slot::Tab(if i < 12 { i / 4 } else { 3 }) }
+                _ => Slot::Skip,
+            }),
+            M::MeasLevels => (&["Levels"], |it| match it { Open(M::MeasFall) => Slot::Foot(0), _ => Slot::Tab(0) }),
+            M::SelfCal => (&["Self-calibration"], |it| match it { CalStart => Slot::Foot(0), _ => Slot::Tab(0) }),
+            M::Time => (&["Date and time"], |it| match it { NtpSync | TimeSet => Slot::Foot(0), _ => Slot::Tab(0) }),
+            M::Network => (&["Ethernet", "WLAN"], |it| match it {
+                NetWlan | WlanScan | WlanForget | WlanInfo => Slot::Tab(1),
+                _ => Slot::Tab(0),
+            }),
+            M::Windows => (&["Windows"], |_| Slot::Tab(0)),
+            M::Remote => (&["Services", "Addresses"], |it| match it {
+                NetWeb | RemScpiInfo | RemVxiInfo | RemTelnetInfo => Slot::Tab(1),
+                _ => Slot::Tab(0),
+            }),
             _ => return None,
         })
+    }
+
+    /// The menus whose lines of status stay on the sheet as Info rows.
+    fn sheet_keeps_text(menu: MenuId) -> bool {
+        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote)
+    }
+
+    /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
+    fn sheet_max_rows(menu: MenuId) -> usize {
+        if menu == MenuId::MeasPair { SHEET_MAX_ROWS + 1 } else { SHEET_MAX_ROWS }
     }
 
     /// The items a sheet of `menu` draws from: the menus it merges.
@@ -260,6 +325,7 @@ impl Ui {
         match menu {
             MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c))).collect(),
             MenuId::Decode | MenuId::Bus => self.items(MenuId::Decode).into_iter().chain(self.items(MenuId::Bus)).collect(),
+            MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
             m => self.items(m),
         }
     }
@@ -272,7 +338,11 @@ impl Ui {
 
     /// The sheet of a menu, or None when the menu has none yet or does not fit the pattern.
     pub(super) fn sheet_spec(&self, menu: MenuId) -> Option<SheetSpec> {
-        if self.m.layout != Layout::Studio {
+        if !self.sheets_on() {
+            return None;
+        }
+        // the Menu page and the measurement row page scroll and drag with Studio's touch handling: Studio only
+        if matches!(menu, MenuId::Main | MenuId::MeasRow) && self.m.layout != Layout::Studio {
             return None;
         }
         let spec = if menu == MenuId::Main {
@@ -287,12 +357,21 @@ impl Ui {
             let mut tabs: Vec<SheetTab> = names.iter().map(|n| SheetTab { name: n, rows: Vec::new(), foot: Vec::new() }).collect();
             let mut items = self.sheet_source_items(menu);
             // the add-source button belongs to the page it fixes
-            items.retain(|it| !matches!(self.ctl(*it, 200), Ctl::Text));
+            if !Self::sheet_keeps_text(menu) { items.retain(|it| !matches!(self.ctl(*it, 200), Ctl::Text)); }
             for it in items {
                 match place(it) {
                     Slot::Tab(i) => tabs[i].rows.push(it),
                     Slot::Foot(i) => tabs[i].foot.push(it),
                     Slot::Skip => {}
+                }
+            }
+            // Minimal keeps the stock strip and cursors: where the strip docks stays on the Measure page, and the
+            // three cursor rows are one tab
+            if self.m.layout != Layout::Studio {
+                if menu == MenuId::Measure && self.items(menu).contains(&Item::StripDock) { tabs[0].rows.push(Item::StripDock); }
+                if menu == MenuId::Cursor && tabs.len() > 1 {
+                    let rest: Vec<Item> = tabs.drain(1..).flat_map(|t| t.rows).collect();
+                    tabs[0].rows.extend(rest);
                 }
             }
             // the next-free action is offered only when the selected slot is taken
@@ -316,7 +395,7 @@ impl Ui {
             return None;
         }
         // a third action does not fit the footer, an eighth row does not fit the body
-        if spec.tabs.iter().any(|t| t.foot.len() > 2 || t.rows.len() > SHEET_MAX_ROWS) {
+        if spec.tabs.iter().any(|t| t.foot.len() > 2 || t.rows.len() > Self::sheet_max_rows(menu)) {
             return None;
         }
         Some(SheetSpec {
@@ -328,12 +407,17 @@ impl Ui {
     // ------------------------------------------------------------------------------------------------ state
 
     /// The sheet is the menu on screen: Studio, a menu open, a plan for it.
+    /// The layouts whose menus are sheets: Minimal and Studio. The stock layout keeps the stock dialogs.
+    pub(super) fn sheets_on(&self) -> bool {
+        self.m.compact()
+    }
+
     pub(super) fn sheet_active(&self) -> bool {
-        if self.m.layout != Layout::Studio || !self.menu_open || self.full_on() {
+        if !self.sheets_on() || !self.menu_open || self.full_on() {
             return false;
         }
         match self.menu {
-            MenuId::MeasAdd | MenuId::AddPanel => true,
+            MenuId::MeasAdd | MenuId::AddPanel => self.m.layout == Layout::Studio,
             MenuId::Pick => self.pick.is_some_and(|p| !keypad_pick(p.it) && !self.options(p.it).is_empty() && self.sheet_spec(p.menu).is_some()),
             m => self.sheet_spec(m).is_some(),
         }
@@ -391,7 +475,8 @@ impl Ui {
             Ctl::Seg(o, _) if o.len() <= 4 => RowKind::Choice,
             Ctl::Seg(..) | Ctl::Pick => RowKind::Pick,
             Ctl::Value => RowKind::Number,
-            Ctl::Button | Ctl::Text => RowKind::Link,
+            Ctl::Button => RowKind::Link,
+            Ctl::Text => RowKind::Info,
         }
     }
 
@@ -434,6 +519,15 @@ impl Ui {
     pub(super) fn ref_store_next_label(&self) -> String {
         let i = self.refs.iter().position(|r| r.is_none()).unwrap_or(NREF - 1);
         format!("Store as R{} (next free)", i + 1)
+    }
+
+    /// A text in two parts at the space nearest its middle (the second is empty without a space).
+    pub(super) fn two_lines(v: &str) -> (&str, &str) {
+        let mid = v.len() / 2;
+        match v.char_indices().filter(|&(_, ch)| ch == ' ').min_by_key(|&(i, _)| i.abs_diff(mid)) {
+            Some((i, _)) => (&v[..i], &v[i + 1..]),
+            None => (v, ""),
+        }
     }
 
     pub(super) fn sheet_label(&self, it: Item) -> String {
@@ -550,6 +644,8 @@ impl Ui {
             btn(cv, b, if armed { mix(DLG_BG, RED, 90) } else if red { mix(DLG_BG, RED, 30) } else if primary { mix(DLG_BG, ACCENT, 40) } else { BTN }, if red { RED } else if primary { ACCENT } else { BTN_BORDER });
             let label = if armed { "Tap again to confirm".to_string() } else if it == Item::RefSave {
                 self.ref_store_label()
+            } else if it == Item::MeasSrc || it == Item::MeasSrcB {
+                format!("{}: {}", if it == Item::MeasSrc { "A" } else { "B" }, self.pair_source_caption(if it == Item::MeasSrc { self.meas_src } else { self.meas_src_b }))
             } else { self.sheet_label(it) };
             let font = if f.mb.width(&label) > b.w - 12 { &f.sb } else { &f.mb };
             cv.text_in(font, b, 1, &label, if red { RED } else { TEXT });
@@ -651,9 +747,30 @@ impl Ui {
                 cv.round(c, c.h / 2, if on { ACCENT } else { BTN_BORDER }, 255);
                 cv.circle(if on { c.right() - c.h / 2 } else { c.x + c.h / 2 }, c.y + c.h / 2, c.h / 2 - 3, if on { DARK_TEXT } else { DIM });
             }
+            RowKind::Info => {
+                // what the line says, at the right; the small font when the normal one does not fit
+                let v = self.value(it);
+                let font = if f.m.width(&v) > c.w - 8 { &f.s } else { &f.m };
+                cv.set_clip(c);
+                if font.width(&v) > c.w - 8 {
+                    // too long even then: two lines, broken at the space nearest the middle, so the start is not cut off
+                    let (a, b) = Self::two_lines(&v);
+                    cv.text_in(font, Rect::new(c.x, c.y + 2, c.w - 6, c.h / 2), 2, a, TEXT);
+                    cv.text_in(font, Rect::new(c.x, c.y + c.h / 2 - 2, c.w - 6, c.h / 2), 2, b, TEXT);
+                } else {
+                    cv.text_in(font, Rect::new(c.x, c.y, c.w - 6, c.h), 2, &v, TEXT);
+                }
+                cv.no_clip();
+            }
             RowKind::Link => {
                 let open = matches!(it, Item::Open(_));
-                btn(cv, c, BTN, BTN_BORDER);
+                // a pair that is measured between the two sources shown is marked: a tap takes it away again
+                let added = matches!(it, Item::MeasPair(k) if self.m.meas2.contains(&(k, self.meas_src, self.meas_src_b)));
+                btn(cv, c, if added { mix(BTN, ACCENT, 50) } else { BTN }, if added { ACCENT } else { BTN_BORDER });
+                if added {
+                    let (kx, ky) = (c.right() - 30, c.y + c.h / 2);
+                    for d in 0..2 { cv.line(kx, ky + d, kx + 5, ky + 5 + d, ACCENT); cv.line(kx + 5, ky + 5 + d, kx + 14, ky - 5 + d, ACCENT); }
+                }
                 let tail = if it == Item::MathExprEdit { self.value(Item::MathExprI) } else { String::new() };
                 let room = c.w - 40 - if tail.is_empty() { 0 } else { (f.s.width(&tail) + 12).min(c.w / 2) };
                 cv.set_clip(Rect::new(c.x + 8, c.y, room, c.h));
@@ -731,7 +848,8 @@ impl Ui {
                     return true;
                 }
                 self.studio.md.armed = None;
-                self.activate(it);
+                // the pinned sources of the pair page open their list
+                if matches!(it, Item::MeasSrc | Item::MeasSrcB) { self.open_picker(it); } else { self.activate(it); }
                 return true;
             }
         }
@@ -785,6 +903,7 @@ impl Ui {
                 }
             }
             RowKind::Link => self.activate(it),
+            RowKind::Info => {}
         }
     }
 
@@ -1076,6 +1195,7 @@ impl Ui {
     }
 
     /// Opens a panel docked, with the pages that already exist; the sheet closes so the panel is seen.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_add_panel(&mut self, k: PanelKind) {
         self.close_menu();
         self.studio_apply_panel(k);
@@ -1119,9 +1239,13 @@ pub(super) struct AddGeo {
     pub groups: Vec<Rect>,
     pub find: Rect,
     pub rows: Vec<(usize, Rect)>,
+    #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub page: usize,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub pages: usize,
+    #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub prev: Rect,
+    #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub next: Rect,
 }
 

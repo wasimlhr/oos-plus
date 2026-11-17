@@ -51,7 +51,7 @@ fn default_layout_cards_open_their_menus() {
 #[test]
 fn layout_is_a_display_setting_kept_in_the_setup() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
-    assert_eq!(u.m.layout, Layout::Minimal, "OOS-plus starts with its own bars");
+    assert_eq!(u.m.layout, Layout::Default, "a new setup starts with the stock bars");
     assert!(!u.m.dots, "samples are joined by default");
     assert!(u.items(MenuId::Display).contains(&Item::Layout));
     for layout in LAYOUTS {
@@ -70,7 +70,7 @@ fn layout_is_a_display_setting_kept_in_the_setup() {
 fn the_display_menu_steps_through_the_three_layouts() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     let seen: Vec<_> = (0..3).map(|_| { u.adjust(Item::Layout, 1); u.m.layout }).collect();
-    assert_eq!(seen, [Layout::Studio, Layout::Default, Layout::Minimal]);
+    assert_eq!(seen, [Layout::Minimal, Layout::Studio, Layout::Default]);
     assert_eq!(u.options(Item::Layout), ["Default", "Minimal", "Studio"]);
     u.select_option(Item::Layout, "Studio");
     assert_eq!(u.m.layout, Layout::Studio);
@@ -115,7 +115,7 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     let mut u = studio();
     shot(&mut u, "01-top");
     let t = u.studio_top();
-    let all = [t.run, t.single, t.acq, t.add, t.cursors, t.view, t.gear];
+    let all = [t.run, t.single, t.acq, t.add, t.view, t.gear];
     for (i, a) in all.iter().enumerate() {
         assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
         for b in &all[i + 1..] { assert!(!overlaps(*a, *b), "chips do not overlap"); }
@@ -136,10 +136,10 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     assert_eq!(u.menu, MenuId::Main);
     u.close_menu();
     // Cursors: the first tap puts the cursors on (no menu), the next opens their settings (batch 8)
-    tap_in(&mut u, t.cursors);
+    u.studio_cursors_tap();
     assert_eq!(u.m.cursor, CursorMode::Track);
     assert!(!u.menu_open);
-    tap_in(&mut u, t.cursors);
+    u.studio_cursors_tap();
     assert_eq!(u.menu, MenuId::Cursor);
     u.close_menu();
     // Add opens the grouped Add menu (Measurement first); Measure is its first row
@@ -160,15 +160,16 @@ fn studio_bottom_bar_has_a_chip_per_channel_the_time_base_and_the_trigger() {
     shot(&mut u, "02-bottom");
     let b = u.studio_bottom();
     assert_eq!(u.studio_cards().time, b.time);
-    // the channels that are on have a chip; the ones that are off share "+ CH"
+    // every channel has a chip: wide while it is on, small while it is off
     let mut all: Vec<Rect> = b.ch.iter().copied().filter(|r| r.w > 0).collect();
-    assert_eq!(all.len(), 2);
+    assert_eq!(all.len(), 4);
+    assert_eq!(all.iter().filter(|r| r.w >= 96).count(), 2);
     all.extend([b.add, b.time, b.trig]);
     for (i, a) in all.iter().enumerate() {
         assert!(a.w > 0 && a.x >= 0 && a.right() <= W && a.y >= u.frame().bottom.y && a.bottom() <= H, "chip {i} inside the bar");
         for o in &all[i + 1..] { assert!(!overlaps(*a, *o), "chips do not overlap"); }
     }
-    assert!(b.ch[2].w == 0 && b.ch[3].w == 0, "no chips for channels that are off");
+    assert!(b.ch[2].w == 44 && b.ch[3].w == 44, "small chips for the channels that are off");
     // an on channel opens its page
     let b = u.studio_bottom();
     tap_in(&mut u, b.ch[0]);
@@ -257,7 +258,9 @@ fn studio_badge_popup_configures_unpins_floats_and_removes() {
     let vpp = MeasKey::One(Meas::Vpp, WaveId::Ch(0));
     let open = |u: &mut Ui, key: MeasKey| {
         let r = u.studio_badges().into_iter().find(|(k, _)| *k == key).unwrap().1;
+        // the first tap shows the measurement on the waveform, the next one on the same badge opens its menu
         tap_in(u, r);
+        if u.studio.popup.is_none() { assert_eq!(u.studio.mark, Some(key)); tap_in(u, r); }
         assert_eq!(u.studio.popup, Some(key));
         u.studio_popup_rect().unwrap()
     };
@@ -302,12 +305,16 @@ fn studio_pins_survive_other_measurements_coming_and_going() {
     u.remove_measurement(0);
     assert_eq!(u.studio_pinned().len(), 3, "the pin of the removed one is gone, the others stay");
     assert!(u.studio_is_pinned(freq));
-    // until a pin is chosen the first three measurements are the badges
+    // every measurement is pinned from the start, and one that is added is pinned too
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.m.studio_detail = false;
     u.m.studio_zoom_tab = false;
-    assert_eq!(u.studio_pinned().len(), 3);
+    assert_eq!(u.studio_pinned().len(), u.studio_keys().len());
+    u.studio_set_pin(MeasKey::One(Meas::Vpp, WaveId::Ch(0)), false);
+    u.m.meas.push((Meas::Vmax, WaveId::Ch(0)));
+    assert!(u.studio_is_pinned(MeasKey::One(Meas::Vmax, WaveId::Ch(0))), "the new one is pinned");
+    assert!(!u.studio_is_pinned(MeasKey::One(Meas::Vpp, WaveId::Ch(0))), "the one taken off stays off");
 }
 
 #[test]
@@ -389,12 +396,13 @@ fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
     assert_eq!(u.panel_scroll_px(), 0);
     u.studio.panel.first = 0;
     // the pin left of the row menu pins and unpins it
-    assert_eq!(u.studio_pinned().len(), 3);
+    let all = u.studio_pinned().len();
+    assert_eq!(all, u.studio_keys().len(), "every measurement is pinned until it is taken off");
     let row = Rect::new(g.list.right() - 76, g.list.y + 3 * u.studio_panel_row() + 5, 20, 30);
     tap_in(&mut u, row);
-    assert_eq!(u.studio_pinned().len(), 4);
+    assert_eq!(u.studio_pinned().len(), all - 1);
     tap_in(&mut u, row);
-    assert_eq!(u.studio_pinned().len(), 3);
+    assert_eq!(u.studio_pinned().len(), all);
     // a tap on the name opens the settings of the measurement
     tap_in(&mut u, Rect::new(g.list.x + 80, g.list.y + 5, 40, 30));
     assert_eq!(u.meas_cfg, Some(0));
@@ -414,8 +422,6 @@ fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
     strip(&mut u, Rect::new(leaf.right() - 96, leaf.y, 48, 40));
     assert_eq!(u.studio.view, StudioView::Only);
 }
-
-const PANEL_ROW_TEST: i32 = 46;
 
 #[test]
 fn studio_list_scrolls_with_the_finger() {

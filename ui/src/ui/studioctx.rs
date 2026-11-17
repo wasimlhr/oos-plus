@@ -16,6 +16,7 @@ const CTX_HEAD: i32 = 26;
 pub(super) enum CtxRow {
     Overlay,
     Stacked,
+    FitLanes,
     Fit,
     ZoomHere,
     ZoomBox,
@@ -29,7 +30,11 @@ pub(super) enum CtxRow {
     TrigSettings,
     MeasOn(WaveId),
     CursorHere,
+    /// a callout on the lane, at the time under the press
+    NoteHere(WaveId),
     Sources,
+    /// every view in tabs of one group, or back from it
+    Layout,
 }
 
 /// Where the menu was opened and the lane under that point.
@@ -63,7 +68,7 @@ impl Ui {
     /// The groups of rows, the group of a lane naming it.
     fn ctx_groups(&self, lane: Option<WaveId>) -> Vec<Vec<(CtxRow, String)>> {
         let name = |id: WaveId| self.wave_name(id);
-        let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()), (CtxRow::Fit, "Fit record".to_string()), (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
+        let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()), (CtxRow::FitLanes, "Fit all lanes".to_string()), (CtxRow::Fit, "Fit record".to_string()), (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
         if self.m.zoom {
             view.push((CtxRow::ZoomReset, "Reset zoom".to_string()));
             view.push((CtxRow::ZoomClose, "Close zoom".to_string()));
@@ -79,7 +84,9 @@ impl Ui {
         let mut add = Vec::new();
         if let Some(id) = lane { add.push((CtxRow::MeasOn(id), format!("Measurement on {}", name(id)))); }
         add.push((CtxRow::CursorHere, "Cursor here".to_string()));
-        vec![view, acquire, trig, add, vec![(CtxRow::Sources, "Sources".to_string())]]
+        if let Some(id) = lane { add.push((CtxRow::NoteHere(id), "Add note here".to_string())); }
+        let layout = if self.dock_full_state() { "Restore layout" } else { "Maximise view" };
+        vec![view, acquire, trig, add, vec![(CtxRow::Sources, "Sources".to_string()), (CtxRow::Layout, layout.to_string())]]
     }
 
     /// The popover: anchored at the press, flipped and clamped to stay on the screen.
@@ -119,6 +126,7 @@ impl Ui {
             CtxRow::Overlay => { cv.line(cx - 7, cy + 3, cx, cy - 4, c); cv.line(cx, cy - 4, cx + 7, cy + 3, c); cv.line(cx - 7, cy - 1, cx, cy + 5, c); }
             CtxRow::Stacked => { cv.hline(cx - 7, cx + 7, cy - 4, c); cv.hline(cx - 7, cx + 7, cy, c); cv.hline(cx - 7, cx + 7, cy + 4, c); }
             CtxRow::Fit => icon_expand(cv, cx, cy, c),
+            CtxRow::FitLanes => { cv.vline(cx, cy - 7, cy + 7, c); for d in [-1, 1] { cv.line(cx, cy + 7 * d, cx - 4, cy + 3 * d, c); cv.line(cx, cy + 7 * d, cx + 4, cy + 3 * d, c); } }
             CtxRow::ZoomHere | CtxRow::ZoomReset => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, BAR); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); }
             CtxRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
             CtxRow::ZoomClose => { cv.line(cx - 5, cy - 5, cx + 5, cy + 5, c); cv.line(cx - 5, cy + 5, cx + 5, cy - 5, c); }
@@ -132,6 +140,8 @@ impl Ui {
             CtxRow::LevelHere(_) => { cv.hline(cx - 8, cx + 8, cy, c); cv.triangle([(cx - 4, cy - 5), (cx + 4, cy - 5), (cx, cy - 1)], c); }
             CtxRow::MeasOn(_) => { for (i, h) in [6, 11, 8].into_iter().enumerate() { cv.fill(Rect::new(cx - 7 + i as i32 * 5, cy + 6 - h, 3, h), c); } }
             CtxRow::CursorHere => icon_cursors(cv, cx - 5, cy, c),
+            CtxRow::NoteHere(_) => { cv.round_outline(Rect::new(cx - 11, cy - 6, 14, 10), 2, c); cv.line(cx - 4, cy + 4, cx - 8, cy + 8, c); }
+            CtxRow::Layout => { cv.rect(Rect::new(cx - 6, cy - 6, 12, 12), c); cv.hline(cx - 6, cx + 5, cy - 3, c); }
             CtxRow::Sources => { for dy in [-5, 0, 5] { cv.circle(cx - 5, cy + dy, 1, c); cv.hline(cx - 1, cx + 7, cy + dy, c); } }
         }
     }
@@ -149,7 +159,7 @@ impl Ui {
         for (i, (row, label, r)) in rows.iter().enumerate() {
             // a line between the groups
             if i > 0 && r.y - rows[i - 1].2.bottom() >= CTX_SEP { cv.hline(p.x + 10, p.right() - 11, r.y - CTX_SEP / 2, LINE); }
-            let on = match row { CtxRow::Overlay => !self.workspace.stacked, CtxRow::Stacked => self.workspace.stacked, CtxRow::ZoomHere => self.m.zoom, _ => false };
+            let on = match row { CtxRow::Overlay => !self.trace_stacked(), CtxRow::Stacked => self.trace_stacked(), CtxRow::ZoomHere => self.m.zoom, _ => false };
             self.ctx_icon(cv, *row, r.x + 16, r.y + r.h / 2, if on { ACCENT } else { TEXT });
             cv.set_clip(Rect::new(r.x + 32, r.y, r.w - 62, r.h));
             cv.text_in(&f.m, Rect::new(r.x + 34, r.y, r.w - 62, r.h), 0, label, TEXT);
@@ -181,6 +191,7 @@ impl Ui {
             CtxRow::Overlay => self.workspace_action(Action::Overlay),
             CtxRow::Stacked => self.workspace_action(Action::Stacked),
             CtxRow::Fit => self.workspace_action(Action::FitRecord),
+            CtxRow::FitLanes => self.fit_all_lanes(),
             CtxRow::ZoomHere => {
                 // the zoom window goes to the time under the finger
                 let a = self.area;
@@ -210,7 +221,9 @@ impl Ui {
             CtxRow::TrigSettings => self.workspace_action(Action::Menu(MenuId::Trigger)),
             CtxRow::MeasOn(id) => { self.meas_src = id; self.open_meas_list(); }
             CtxRow::CursorHere => self.studio_cursors_add(None),
+            CtxRow::NoteHere(id) => self.callout_add(id, at.x),
             CtxRow::Sources => self.workspace_action(Action::Sources),
+            CtxRow::Layout => { if !self.dock_exit_full() { self.dock_maximise(super::dock::VKind::Wave); } }
         }
     }
 

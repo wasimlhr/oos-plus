@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 12: gestures of the Studio measurements list. A row swiped left is removed with an Undo bar; a held row is
 //! dragged to reorder or onto the badge strip to pin; a held badge dragged off the strip unpins; a tile of the Add
 //! measurement panel dragged onto a channel adds the measurement for it. Every gesture has a tap equivalent.
@@ -199,7 +200,10 @@ fn a_held_row_is_dragged_to_reorder_with_a_drop_line() {
 fn a_held_row_dropped_on_the_badge_strip_is_pinned() {
     let mut u = studio();
     let key = keys(&u)[4];
-    assert!(!u.studio_is_pinned(key), "not pinned yet");
+    // a measurement is pinned from the moment it is added: this one is taken off first
+    assert!(u.studio_is_pinned(key), "pinned by default");
+    u.studio_set_pin(key, false);
+    assert!(!u.studio_is_pinned(key), "not pinned now");
     // batch 22: with the panel open there is no strip under the lanes (the panel lists them), so a row is pinned by its pin
     assert_eq!(u.studio_row_h(), 0, "no row while the panel is open");
     u.studio_set_pin(key, true);

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 10: Studio docking. Every view has a title strip with its name and a close X; dragging a strip (a drag or a
 //! long press) docks the view to an edge of another (50/50), swaps it with the centre of another, or floats it; the
 //! dividers move; the arrangement is kept in the setup and Reset layout brings the default back.
@@ -217,7 +218,8 @@ fn a_long_press_picks_a_strip_up_without_moving_far_and_a_short_tap_does_not() {
     touch(&mut u, Phase::Down, g.0, g.1);
     touch(&mut u, Phase::Up, g.0, g.1);
     assert_eq!(before, (leaf(&u, VKind::Measure), leaf(&u, VKind::Wave)));
-    // a small wobble is not a drag either
+    // a small wobble is not a drag either (a second tap right after the first would be a double tap: batch 35)
+    u.step(0.6);
     touch(&mut u, Phase::Down, g.0, g.1);
     touch(&mut u, Phase::Move, g.0 + 5, g.1 + 3);
     touch(&mut u, Phase::Up, g.0 + 5, g.1 + 3);

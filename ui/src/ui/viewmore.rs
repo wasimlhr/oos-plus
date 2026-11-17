@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! The overflow menu of the views that replace the waveform (analysers, XY): a button in the plot leads to what they
 //! need most, and above all out of them. The eye keeps its own bar: Full is the page, and Side and Under are extra.
@@ -26,17 +26,7 @@ impl Ui {
         if self.xy {
             return "XY";
         }
-        match self.m.view {
-            AView::Spectrum => "Spectrum",
-            AView::Eye => "Eye / jitter",
-            AView::Power => "Power analysis",
-            AView::Bode => "Bode plot",
-            AView::Step => "Bandwidth test",
-            AView::Magnetic => "Magnetic",
-            AView::Inverter => "Inverter",
-            AView::Dpt => "Double pulse",
-            AView::Scope => "Scope",
-        }
+        super::analysers::of(self.m.view).map_or("Scope", |a| a.name())
     }
 
     /// The tile that holds the XY picture or the analyser (Studio): its content rectangle.
@@ -58,30 +48,63 @@ impl Ui {
         for k in -1..=1 {
             cv.circle(r.x + r.w / 2, r.y + r.h / 2 + 8 * k, 2, TEXT);
         }
+        self.draw_view_fix(cv);
+    }
+
+    /// What stands between the view and a result, as a button in its middle: a source that is off (the same fix as the
+    /// footer of its menu), or a Bode plot without a sweep. (button, label)
+    pub(super) fn view_fix_btn(&self) -> Option<(Rect, String)> {
+        let menu = self.view_menu()?;
+        if !self.view_tile() || self.menu_open { return None; }
+        let off = self.off_sources(menu);
+        let label = if !off.is_empty() {
+            format!("Turn on {}", off.iter().map(|c| format!("CH{}", c + 1)).collect::<Vec<_>>().join(", "))
+        } else if self.m.view == AView::Bode && !self.bode.running && self.bode.points.is_empty() {
+            "Start sweep".to_string()
+        } else {
+            return None;
+        };
+        let t = self.view_tile_rect().unwrap_or(self.area);
+        let w = 200.min(t.w - 16);
+        Some((Rect::new(t.x + (t.w - w) / 2, t.y + t.h / 2 - 20, w, 40), label))
+    }
+
+    fn draw_view_fix(&self, cv: &mut Canvas) {
+        let Some((r, label)) = self.view_fix_btn() else { return };
+        cv.round(r, 8, PANEL_BG, 245);
+        cv.round_outline(r, 8, TEXT);
+        cv.text_in(&self.fonts().sb, r, 1, &label, TEXT);
+    }
+
+    /// A tap on the fix button of the view. True when it took the tap.
+    pub(super) fn view_fix_tap(&mut self, x: i32, y: i32) -> bool {
+        let Some((r, _)) = self.view_fix_btn() else { return false };
+        if !r.contains(x, y) { return false; }
+        let Some(menu) = self.view_menu() else { return false };
+        let off = self.off_sources(menu);
+        if off.is_empty() {
+            self.activate(Item::BodeRun);
+        } else {
+            for &c in &off { self.m.ch[c].on = true; }
+            self.settings_changed();
+            self.relayout();
+            self.toast(&format!("{} on", off.iter().map(|c| format!("CH{}", c + 1)).collect::<Vec<_>>().join(", ")));
+        }
+        true
     }
 
     fn view_menu(&self) -> Option<MenuId> {
-        match self.m.view {
-            _ if self.xy => None,
-            AView::Spectrum => Some(MenuId::Spectrum),
-            AView::Eye => Some(MenuId::Eye),
-            AView::Power => Some(MenuId::Power),
-            AView::Bode => Some(MenuId::Bode),
-            AView::Step => Some(MenuId::BwTest),
-            AView::Magnetic => Some(MenuId::Magnetic),
-            AView::Inverter => Some(MenuId::Inverter),
-            AView::Dpt => Some(MenuId::Dpt),
-            AView::Scope => None,
+        if self.xy {
+            return None;
         }
+        super::analysers::of(self.m.view).map(|a| a.menu())
     }
 
     pub(super) fn view_more_items(&self) -> Vec<Item> {
         let mut v = Vec::new();
         if !self.xy_over() {
-            match self.m.view {
-                AView::Eye => v.push(Item::EyeClear),
-                AView::Spectrum => v.push(Item::SpecPeak),
-                _ => {}
+            if let Some(a) = super::analysers::of(self.m.view) {
+                v.extend(a.more(self));
             }
         }
         if self.view_menu().is_some() {
@@ -120,6 +143,32 @@ mod tests {
         ui.step(1.0 / 30.0);
         ui.render(&mut Canvas::new(super::super::PANEL_W, super::super::PANEL_H));
         ui
+    }
+
+    #[test]
+    fn a_view_with_a_source_off_offers_to_switch_it_on() {
+        for layout in [crate::model::Layout::Minimal, crate::model::Layout::Studio] {
+            let mut ui = Ui::new(Source::Demo { t: 0.0 });
+            ui.m.layout = layout;
+            ui.relayout();
+            ui.m.view = AView::Power;
+            for _ in 0..3 { ui.step(1.0 / 30.0); }
+            ui.render(&mut Canvas::new(super::super::PANEL_W, super::super::PANEL_H));
+            assert!(!ui.m.ch[1].on);
+            let (r, label) = ui.view_fix_btn().expect("power needs CH2");
+            assert_eq!(label, "Turn on CH2", "{layout:?}");
+            ui.tap(r.x + r.w / 2, r.y + r.h / 2);
+            assert!(ui.m.ch[1].on, "{layout:?}");
+            ui.step(1.0 / 30.0);
+            assert!(ui.view_fix_btn().is_none(), "{layout:?}");
+        }
+        let mut ui = at(AView::Bode);
+        ui.m.ch[1].on = true;
+        ui.step(1.0 / 30.0);
+        let (r, label) = ui.view_fix_btn().expect("no sweep yet");
+        assert_eq!(label, "Start sweep");
+        ui.tap(r.x + r.w / 2, r.y + r.h / 2);
+        assert!(ui.bode.running);
     }
 
     #[test]

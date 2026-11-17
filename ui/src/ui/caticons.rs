@@ -75,6 +75,7 @@ impl Ic<'_> {
         let c = self.acc;
         self.cv.circle(p.0, p.1, 2, c);
     }
+    #[allow(dead_code)] // part of the icon pen; no icon draws dots yet
     fn dots(&mut self, pts: &[P]) { for &(x, y) in pts { self.dot(x, y); } }
     fn tick(&mut self, x: f32, y0: f32, y1: f32) { self.dash_v(x, y0, y1); }
     fn mark(&mut self, a: P, b: P) { let c = self.acc; self.seg(a, b, c); }
@@ -87,11 +88,13 @@ impl Ic<'_> {
     }
     fn tag(&mut self, s: &str) {
         let w = self.f.s.width(s);
-        if w > self.r.w - 2 { return; } // a tag that does not fit is left out rather than cut
+        // a tag that does not fit is left out rather than cut, and so is one that would cover most of a small figure
+        if w > self.r.w - 2 || w > self.r.w * 3 / 5 { return; }
         let (x, y) = (self.r.right() - w - 1, self.r.y + self.f.s.size * 3 / 4);
         let c = self.acc;
         self.cv.text(&self.f.s, x, y, s, c);
     }
+    #[allow(dead_code)] // part of the icon pen; no icon has a left tag yet
     fn tag_l(&mut self, s: &str) {
         if self.f.s.width(s) > self.r.w - 2 { return; }
         let y = self.r.y + self.f.s.size * 3 / 4;
@@ -158,12 +161,22 @@ impl Ic<'_> {
 }
 
 /// Draws the figure of `c` in `r`: the waveform in `col`, what is measured in `acc`. Nothing leaves `r`.
+#[allow(non_upper_case_globals)] // the catalogue ids keep the names of the fork's former `Cat` enum
 pub(super) fn draw_cat_icon(cv: &mut Canvas, f: &Fonts, r: Rect, c: Cat, col: Rgb, acc: Rgb) {
     let outer = cv.save_clip();
     cv.clip_within(r);
     let mut g = Ic { cv, f, r, col, acc };
-    use Cat::*;
-    match c {
+    use super::meascatalog::cat::*;
+    // the pair variants upstream added (Delay fall-fall ...) take the figure of their family
+    let id = match c.kind {
+        crate::measures::Kind::Pair(_) if c.id >= 200 => ["Delay", "Phase", "Skew", "Setup", "Hold"]
+            .iter()
+            .zip([Delay, Phase, Skew, Setup, Hold])
+            .find(|(p, _)| c.name.starts_with(**p))
+            .map_or(c.id, |(_, id)| id),
+        _ => c.id,
+    };
+    match id {
         // levels
         Amplitude => { g.sq(); g.dash(H, 0.1, 0.9); g.dash(L, 0.1, 0.9); g.va(0.34, L, H); }
         Maximum => { g.sine(0.28, 0.5); g.dash(0.78, 0.06, 0.94); g.dot(0.2, 0.78); g.tag("max"); }
@@ -293,6 +306,8 @@ pub(super) fn draw_cat_icon(cv: &mut Canvas, f: &Fonts, r: Rect, c: Cat, col: Rg
         Irrm => { g.stroke(&[(0.04, 0.6), (0.3, 0.6), (0.4, 0.16), (0.55, 0.3), (0.7, 0.5), (0.94, 0.5)]); g.dot(0.4, 0.16); g.tag("Irm"); }
         DiodeDdt => { g.stroke(&[(0.04, 0.6), (0.3, 0.6), (0.4, 0.16), (0.55, 0.3), (0.7, 0.5), (0.94, 0.5)]); g.mark((0.3, 0.6), (0.4, 0.6)); g.mark((0.4, 0.6), (0.4, 0.16)); g.tag("dI/dt"); }
         Qoss => { g.stroke(&[(0.04, 0.15), (0.5, 0.8), (0.94, 0.8)]); g.shade(0.06, 0.5, 0.15, 0.5); g.tag("Qoss"); }
+        // a module added since: a plain square wave
+        _ => g.sq(),
     }
     g.cv.restore_clip(outer);
 }

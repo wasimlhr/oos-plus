@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 30: feedback and sources. A new view starts as a copy of the shown one, a chosen count closes the dialog and
 //! says which view is shown, Studio has a view switcher in its top bar; a source row given a channel that is off turns
 //! it on; the controls of an empty reference slot are greyed and say "Store a reference first"; clearing with nothing
@@ -295,7 +296,7 @@ fn tapping_a_greyed_reference_row_in_the_dialog_or_the_sheet_shows_the_toast() {
         tap_rect(&mut u, mid);
         assert_eq!(toast(&u), "Store a reference first", "{l:?}: the value");
         assert!(u.numpad.is_none(), "{l:?}");
-        if l != Layout::Studio {
+        if l == Layout::Default {
             // the slot rows R1..R10 of the classic dialog
             clear_toast(&mut u);
             let r = u.dlg_layout().unwrap().rows.into_iter().find(|r| r.it == Item::RefShow(2)).expect("R3 row").ctrl;

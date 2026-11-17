@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! SIM generates fresh serial captures through one bounded worker. Immutable
@@ -17,6 +17,9 @@ mod sim_bus_tests;
 
 const PRBS: [u8; 6] = [7, 9, 13, 15, 23, 31];
 
+/// Most samples of a SIM record made for a reference beside live channels: 16 MB of samples.
+const SIM_REF_SAMPLES: usize = 4_000_000;
+
 struct Request {
     id: u64,
     lane: Lane,
@@ -29,6 +32,8 @@ struct Request {
     bus_trigger: Option<Result<sim_bus_candidate::Plan, &'static str>>,
     /// Add to ref: the result is only written to the slot, no SIM session starts
     add_only: bool,
+    /// a record of this many samples instead of the usual one (a reference beside live channels, as long as their screen)
+    samples: Option<usize>,
 }
 
 struct Generated {
@@ -71,7 +76,8 @@ impl Generation {
         std::thread::Builder::new().name("oos-sim".into()).spawn(move || {
             while let Ok(mut request) = input.recv() {
                 while let Ok(newer) = input.try_recv() { request = newer; }
-                let generated = serial::try_generate(&request.lane).map(|samples| Generated::evaluate(&request, samples));
+                let made = match request.samples { Some(n) => serial::try_generate_len(&request.lane, n), None => serial::try_generate(&request.lane) };
+                let generated = made.map(|samples| Generated::evaluate(&request, samples));
                 if output.send((request, generated)).is_err() { break; }
             }
         }).map_err(|error| format!("Could not start SIM generator: {error}"))?;
@@ -119,6 +125,7 @@ const SIM_MEAS: [Meas; 12] = [
     Meas::PEdges,
 ];
 
+#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Ui {
     fn sim_meas(slot: usize) -> Vec<(Meas, WaveId)> {
         SIM_MEAS.into_iter().map(|k| (k, WaveId::Ref(slot))).collect()
@@ -282,6 +289,9 @@ impl Ui {
             Item::SimShow => {
                 if let Some(r) = &mut self.refs[self.m.sim_slot] {
                     r.on = !r.on;
+                } else {
+                    let slot = self.m.sim_slot + 1;
+                    self.toast(&format!("R{slot} is empty: Play or Add to ref first"));
                 }
             }
             _ => return false,
@@ -407,6 +417,7 @@ impl Ui {
     }
 
     /// Sample rate and length of the loaded SIM slot, when it is shown.
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     pub(super) fn sim_rate_depth(&self) -> Option<(f64, u64)> {
         let r = self.refs[self.m.sim_slot].as_ref()?;
         if !r.on || r.dt <= 0.0 {
@@ -455,7 +466,7 @@ impl Ui {
     fn sim_capture_request(&self, lane: Lane, slot: usize, continuing: bool, fresh: bool, run: bool) -> Request {
         let model = self.sim_trigger_model(&lane, slot, continuing);
         let vpd = self.sim_candidate_vpd(&lane, slot, continuing, run);
-        Request { id: 0, lane, slot, continuing, fresh, run, add_only: false,
+        Request { id: 0, lane, slot, continuing, fresh, run, add_only: false, samples: None,
             guard: self.sim_trigger_guard(&lane, slot, continuing, run), trigger: self.prepare_sim_trigger(&model, slot, vpd),
             bus_trigger: if self.m.trig_on_la(){Some(Err("SIM qualification on logic-analyzer inputs is unavailable"))}else if matches!(model.trig_type,TrigType::Pattern|TrigType::Duration){Some(Err("SIM Pattern/Duration qualification is unavailable"))}else if model.trig_type==TrigType::Bus{Some(self.prepare_sim_bus(&model,slot,vpd))}else{None} }
     }
@@ -509,13 +520,40 @@ impl Ui {
 
     /// Add to ref: the signal of the SIM sheet is written to the chosen slot, named after the signal, and nothing else
     /// changes: no SIM mode, no other slot, no channel switched off.
-    pub(super) fn sim_add_to_ref(&mut self) {
-        let slot = self.m.sim_slot;
+    /// Adds the signal the knobs describe as one more ref, in the first free slot: the way to several simulated
+    /// signals. While the simulation mode plays, it goes back to Live first (the knobs stay as they are set now),
+    /// and the next Play runs every shown ref together.
+    pub(super) fn sim_add_next(&mut self) {
+        if self.sim_generating() { return self.toast("SIM is busy generating"); }
+        let Some(free) = (0..NREF).find(|&i| self.refs[i].is_none()) else {
+            return self.toast("All ten refs are in use: clear one to add a signal");
+        };
         if self.sim_mode() {
-            return self.toast("Leave the simulation mode (Live) to add a signal to a ref");
+            // Live restores the settings from before Play: the SIM knobs of now come along
+            let now = self.m.clone();
+            self.return_to_live();
+            let m = &mut self.m;
+            (m.sim_preset, m.sim_rate, m.sim_prbs, m.sim_vhigh, m.sim_vlow, m.sim_rise, m.sim_noise, m.sim_bw, m.sim_deemph) =
+                (now.sim_preset, now.sim_rate, now.sim_prbs, now.sim_vhigh, now.sim_vlow, now.sim_rise, now.sim_noise, now.sim_bw, now.sim_deemph);
+            (m.sim_ssc, m.sim_ssc_center, m.sim_ssc_deviation, m.sim_ssc_hz, m.sim_rj, m.sim_pj, m.sim_pjhz, m.sim_dcd_pp, m.sim_corr_rj, m.sim_corr_hz) =
+                (now.sim_ssc, now.sim_ssc_center, now.sim_ssc_deviation, now.sim_ssc_hz, now.sim_rj, now.sim_pj, now.sim_pjhz, now.sim_dcd_pp, now.sim_corr_rj, now.sim_corr_hz);
         }
+        self.m.sim_slot = free;
+        self.sim_add_to_ref();
+    }
+
+    pub(super) fn sim_add_to_ref(&mut self) {
+        if self.sim_mode() {
+            return self.sim_add_next();
+        }
+        let slot = self.m.sim_slot;
         let lane = self.sim_lane();
-        let count = match serial::sample_count(&lane) { Ok(c) => c, Err(e) => return self.toast(&format!("SIM: {e}")) };
+        // beside live channels the reference is as long as their screen, as far as the sample rate of the lane allows
+        // within SIM_REF_SAMPLES; the usual record of a fast lane is a few microseconds, a blip on a millisecond screen
+        let screen = self.m.time_per_div() as f64 * HDIV as f64;
+        let counted = if self.record_mode() { serial::sample_count(&lane) } else { serial::sample_count_for(&lane, screen, SIM_REF_SAMPLES) };
+        let count = match counted { Ok(c) => c, Err(e) => return self.toast(&format!("SIM: {e}")) };
+        let longer = serial::sample_count(&lane).is_ok_and(|usual| count > usual);
         if count <= 65_536 {
             match serial::try_generate(&lane) {
                 Ok(v) => self.sim_store_ref(slot, &lane, v),
@@ -528,7 +566,7 @@ impl Ui {
             match Generation::new() { Ok(w) => self.sim_generation = Some(w), Err(e) => return self.toast(&format!("SIM: {e}")) }
         }
         let name = lane.name;
-        let request = Request { id: 0, lane, slot, continuing: false, fresh: false, run: false, guard: String::new(), trigger: None, bus_trigger: None, add_only: true };
+        let request = Request { id: 0, lane, slot, continuing: false, fresh: false, run: false, guard: String::new(), trigger: None, bus_trigger: None, add_only: true, samples: longer.then_some(count) };
         match self.sim_generation.as_mut().unwrap().submit(request) {
             Ok(()) => self.toast(&format!("Generating {name} ({:.1} M samples)", count as f64 / 1e6)),
             Err(e) => self.toast(&format!("SIM: {e}")),
@@ -539,6 +577,7 @@ impl Ui {
         let dt = serial::dt_of(lane);
         let span = (lane.v_high - lane.v_low).abs().max(0.2);
         let replaced = self.refs[slot].as_ref().filter(|r| r.label != lane.name).map(|r| r.label.clone());
+        let len = v.len();
         self.refs[slot] = Some(RefWave {
             src: 0,
             color: slot,
@@ -554,7 +593,17 @@ impl Ui {
         self.measure_refs();
         match replaced {
             Some(old) => self.toast(&format!("{} added to R{}, replacing {}", lane.name, slot + 1, old)),
-            None => self.toast(&format!("{} added to R{}", lane.name, slot + 1)),
+            None => {
+                // beside live channels the reference keeps its own time: one that is far shorter than the screen is a
+                // sliver at the trigger point, so the message says how long it is
+                let long = len as f64 * dt;
+                let screen = self.m.time_per_div() as f64 * HDIV as f64;
+                if !self.record_mode() && long < screen / 20.0 {
+                    self.toast(&format!("{} added to R{} \u{b7} {} long, shorten the time base to see it", lane.name, slot + 1, si_short(long, "s")));
+                } else {
+                    self.toast(&format!("{} added to R{}", lane.name, slot + 1));
+                }
+            }
         }
     }
 
@@ -893,6 +942,7 @@ mod tests {
     #[test]
     fn advanced_sim_controls_are_reachable_and_use_explicit_units() {
         let mut u = ui();
+        u.m.layout = Layout::Default; // the stock dialogs: Minimal and Studio open sheets
         u.open_menu(MenuId::Sim);
         assert!(u.items(MenuId::Sim).contains(&Item::Open(MenuId::SimAdvanced)));
         u.activate(Item::Open(MenuId::SimAdvanced));
@@ -1177,7 +1227,7 @@ mod tests {
         assert_eq!(n, 65_536);
         let rows = u.meas_rows();
         assert_eq!(rows.len(), 12);
-        for want in ["Vpp", "Freq", "Period", "Rise time", "Fall time", "+Duty", "Vamp", "Overshoot", "+Width", "-Width", "+Rate", "+Edges"] {
+        for want in ["Pk-pk", "Freq", "Period", "Rise", "Fall", "+Duty", "Amp", "Overshoot", "+Width", "-Width", "+Slew", "+Edges"] {
             let shown = super::meascatalog::display_of_key(want).unwrap_or(want);
             let row = rows.iter().find(|r| r.name == shown).unwrap_or_else(|| panic!("missing {want}"));
             assert!(!row.v.is_infinite(), "{want} {}", row.v);
@@ -1463,7 +1513,7 @@ mod tests {
                 u.m.set_trigger_wave(WaveId::Ref(1), true);
             } else if change == 6 {
                 u.m.trig_type = TrigType::Bus;
-                u.m.dec_proto = Proto::Uart;
+                u.m.dec_proto = Proto::UART;
                 u.m.trig_bus = BusWhat::Data;
                 u.m.trig_bus_val = 0x55;
             }
@@ -1550,28 +1600,5 @@ mod tests {
         let mut cv = crate::gfx::Canvas::new(W, H);
         u.render(&mut cv);
         cv
-    }
-
-    /// Left edge of the level that starts furthest right: the step in the record.
-    fn high_edge(cv: &crate::gfx::Canvas) -> i32 {
-        let col = super::super::REF_COLORS[0].1;
-        let mut best = -1;
-        for y in 0..cv.h {
-            let mut n = 0i32;
-            let mut minx = cv.w;
-            for x in 0..cv.w {
-                if cv.px[(y * cv.w + x) as usize] == col {
-                    n += 1;
-                    if x < minx {
-                        minx = x;
-                    }
-                }
-            }
-            if n > 80 && minx > best {
-                best = minx;
-            }
-        }
-        assert!(best >= 0, "no reference trace");
-        best
     }
 }

@@ -106,12 +106,20 @@ pub(super) struct Studio {
     pub enter: bool,
     /// the measurements shown as badges; None until one is pinned or unpinned: the first three
     pub pinned: Option<Vec<MeasKey>>,
+    /// The measurements the user took off the badge row. Every other one is pinned, a new one too: a measurement
+    /// is pinned from the moment it is added. (`pinned` is the explicit list of an older set-up; a pin tap ends it.)
+    pub unpinned: Vec<MeasKey>,
     /// measurements moved to the floating panel from a badge popup: listed there beside the pinned ones
     pub floated: Vec<MeasKey>,
     /// the badge row is hidden (eye button, View > Show pinned badges)
     pub hide_badges: bool,
     /// the badge whose action popup is open
     pub popup: Option<MeasKey>,
+    /// the measurement a tap on its badge shows on the waveform (its level, span or shaded area); the next tap on
+    /// the same badge opens its menu, and closing that menu takes the mark away
+    pub mark: Option<MeasKey>,
+    /// the menu of the marked badge was opened: the mark goes when it closes
+    pub mark_menu: bool,
     pub view: StudioView,
     /// the View menu is open
     pub view_menu: bool,
@@ -152,6 +160,8 @@ pub(super) struct Studio {
     pub cur_badge: bool,
     /// moving one cursor moves the other with it
     pub cur_linked: bool,
+    /// the traces share one graticule instead of a lane each (the plot's menu: Overlay traces)
+    pub overlay: bool,
     /// the first pinned measurement shown as a badge (the Meas tab pages through them)
     pub badge_first: usize,
     /// the docking tree and the floating views (`dock.rs`)
@@ -249,6 +259,8 @@ pub(super) struct StudioBottom {
 /// A source pill is at most as wide as a channel pill was and shrinks to this; the pills are 5 px apart.
 const PILL_MAX_W: i32 = 170;
 const PILL_MIN_W: i32 = 18;
+/// Width of the pill of a channel that is off.
+const OFF_PILL_W: i32 = 44;
 /// The "+N" chip of the badge row.
 pub(super) const OVERFLOW_W: i32 = 46;
 /// Height a list row gets for the header of its source.
@@ -257,8 +269,6 @@ pub(super) const GROUP_BAND: i32 = 14;
 const CHIP_H: i32 = 30;
 /// The two text lines of a pill need both fonts to fit the 30 px: at the Larger text size a pill keeps one line.
 const TWO_LINE_MAX: i32 = 30;
-/// A chip is drawn this high; its touch target is at least 40 px (`hit40`).
-pub(super) const TARGET: i32 = 40;
 const CHIP_Y: i32 = 5;
 
 /// A play triangle, 12 px high, left edge at `x`.
@@ -281,13 +291,6 @@ fn icon_bars(cv: &mut Canvas, x: i32, cy: i32, c: Rgb) {
 pub(super) fn icon_cursors(cv: &mut Canvas, x: i32, cy: i32, c: Rgb) {
     cv.fill(Rect::new(x, cy - 6, 2, 13), c);
     cv.fill(Rect::new(x + 7, cy - 6, 2, 13), c);
-}
-
-/// A screen on a foot.
-fn icon_view(cv: &mut Canvas, x: i32, cy: i32, c: Rgb) {
-    cv.round_outline(Rect::new(x, cy - 6, 15, 10), 1, c);
-    cv.hline(x + 4, x + 10, cy + 6, c);
-    cv.vline(x + 7, cy + 4, cy + 6, c);
 }
 
 /// A ring with teeth.
@@ -313,6 +316,8 @@ impl Ui {
         let text = self.m.studio_dock.clone();
         self.dock_restore(&text);
         self.view_state_restore("");
+        // Overlay or lanes come back as they were left
+        self.studio.overlay = self.m.studio_overlay;
         self.studio.enter = self.m.layout == Layout::Studio;
     }
 
@@ -324,6 +329,9 @@ impl Ui {
         let is = self.m.layout == Layout::Studio;
         if is && !self.studio.was { self.studio.enter = true; }
         self.studio.was = is;
+        // Default has no Overlay / Stacked control: it always draws upstream's one graticule, also when Studio or a
+        // recalled setup left the lanes stacked
+        if self.m.layout == Layout::Default && self.workspace.stacked { self.trace_mode(false); }
         // the view is kept with the setup like the layout; a record view is not (it needs its session)
         let token = self.studio.view.token();
         if self.m.studio_view != token { self.m.studio_view = token.to_string(); }
@@ -337,7 +345,9 @@ impl Ui {
         self.studio_sync_views();
         if !std::mem::take(&mut self.studio.enter) { return; }
         if self.m.layout == Layout::Studio {
-            self.trace_mode(true);
+            // lanes, unless Overlay traces was chosen (it is kept with the setup)
+            let overlay = self.studio.overlay;
+            self.trace_mode(!overlay);
             // Studio is entered with its bars: a full-screen state left from another layout would hide them
             if self.m.density == Density::Full {
                 self.m.density = Density::Scope;
@@ -348,6 +358,7 @@ impl Ui {
     }
 
     /// What the badge at the left of the top bar says about the source of the waveforms.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_source(&self) -> (&'static str, Rgb) {
         if self.record_mode() { return (if self.sim_mode() { "SIM" } else { "REF" }, ACCENT); }
         match self.src {
@@ -362,6 +373,7 @@ impl Ui {
         self.m.layout == Layout::Studio && self.studio.view == StudioView::Offline && self.record_mode()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_badge_label(&self) -> &'static str {
         if self.studio_back_badge() { "Live" } else { self.studio_source().0 }
     }
@@ -443,11 +455,11 @@ impl Ui {
             Rect::new(x, CHIP_Y, (f.mb.width(self.sim_preset_name()) + 56).min(if tier == 0 { 220 } else { 170 }), CHIP_H)
         } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
         if sim.w > 0 { x = sim.right() + gap; }
-        // Autoset, Clear, Force: the acquisition actions of the front panel
-        let autoset = Rect::new(x, CHIP_Y, btn_w(labels[0]), CHIP_H);
-        let clear = Rect::new(autoset.right() + gap, CHIP_Y, btn_w(labels[1]), CHIP_H);
-        let force = Rect::new(clear.right() + gap, CHIP_Y, btn_w(labels[2]), CHIP_H);
-        x = force.right() + 8;
+        // Autoset, Clear, Force are keys of the front panel (and entries of the Menu): the bar does not repeat them,
+        // its room goes to the acquisition read-out
+        let autoset = Rect::new(x, CHIP_Y, 0, CHIP_H);
+        let (clear, force) = (autoset, autoset);
+        x += 4;
         // the right group is laid out from the edge: gear, View, Storage, Display, Cursors, Measure, + Add
         let mut r = top.right() - 8;
         let gear = Rect::new(r - 40, CHIP_Y, 40, CHIP_H);
@@ -456,7 +468,8 @@ impl Ui {
         let view = place(labels[8]);
         let storage = place(labels[7]);
         let display = place(labels[6]);
-        let cursors = place(labels[5]);
+        // Cursor is a key of the front panel, and Add has Cursors: no button of its own
+        let cursors = Rect::new(display.x, CHIP_Y, 0, CHIP_H);
         // Add replaces the old "+ Add" and Meas buttons: one button, the menu has both
         let measure = Rect::new(-20, CHIP_Y, 0, CHIP_H);
         let add = place(labels[3]);
@@ -470,8 +483,7 @@ impl Ui {
     /// Measure and Cursors as the top-bar buttons (`top_buttons`); the others are Studio's own.
     pub(super) fn studio_top_buttons(&self) -> Vec<(TopBtn, &'static str, Rect)> {
         let t = self.studio_top();
-        vec![(TopBtn::Menu(MenuId::Cursor), "Cursors", t.cursors),
-             (TopBtn::Menu(MenuId::Display), "Display", t.display), (TopBtn::Menu(MenuId::Storage), "Storage", t.storage)]
+        vec![(TopBtn::Menu(MenuId::Display), "Display", t.display), (TopBtn::Menu(MenuId::Storage), "Storage", t.storage)]
     }
 
     pub(super) fn draw_studio_top(&self, cv: &mut Canvas) {
@@ -526,14 +538,14 @@ impl Ui {
         let displaying = open(MenuId::Display);
         let storing = open(MenuId::Storage);
         let labels = &TOP_LABELS[t.tier];
-        for (r, label, on) in [(t.add, labels[3], adding), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing), (t.view, labels[8], self.studio.view_menu)] {
+        for (r, label, on) in [(t.add, labels[3], adding || cursors), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing), (t.view, labels[8], self.studio.view_menu)].into_iter().filter(|(r, ..)| r.w > 0) {
             btn(cv, r, BTN, if on { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.mb, r, 1, label, if on { ACCENT } else { TEXT });
         }
         self.draw_view_box(cv);
         // Autoset, Clear, Force: Force is dimmed while no trigger is waiting, and still works
         let waiting = !self.record_mode() && self.m.run == RunState::Run && self.m.status == TrigStatus::Wait;
-        for (r, label, lit) in [(t.autoset, labels[0], true), (t.clear, labels[1], true), (t.force, labels[2], waiting)] {
+        for (r, label, lit) in [(t.autoset, labels[0], true), (t.clear, labels[1], true), (t.force, labels[2], waiting)].into_iter().filter(|(r, ..)| r.w > 0) {
             let pressed = self.touch.down && self.top_hit(r).contains(self.touch.x0, self.touch.y0);
             btn(cv, r, if pressed { mix(BTN, ACCENT, 60) } else { BTN }, if pressed { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.mb, r, 1, label, if lit { TEXT } else { DIM });
@@ -549,7 +561,7 @@ impl Ui {
         let (y, h) = (bottom.y + 3, CHIP_H);
         let ph = h;
         let n = n_ch();
-        let mut right = bottom.right() - 4;
+        let right = bottom.right() - 4;
         // the hardware Panel button is gone from this bar: F6 (and the desktop window) still toggle the panel
         let panel: Option<Rect> = None;
         // the room the Panel button had goes to the time base and the trigger
@@ -573,12 +585,23 @@ impl Ui {
         // the source pills (channels, refs, math) share what the fixed chips leave, by count
         let count = (chans.len() + shown.len() + maths.len()) as i32;
         let room = time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux_w);
+        // a channel that is off has a small dim pill in its place: a tap switches it on. They give way when the
+        // sources that are on need the room (and in SIM, which has no channel pills at all)
+        let offs: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| !self.m.ch[c].on).collect() };
+        let off_room = offs.len() as i32 * (OFF_PILL_W + 5);
+        let show_off = !offs.is_empty() && room - off_room >= count * 96 + (count - 1).max(0) * 5;
+        let room = if show_off { room - off_room } else { room };
         let pw = Self::studio_pill_width(room, count);
         let mut ch = [Rect::new(0, y, 0, ph); NCH];
         let mut x = bottom.x + 4;
-        for &c in &chans {
-            ch[c] = Rect::new(x, y, pw, ph);
-            x += pw + 5;
+        for c in 0..n {
+            if chans.contains(&c) {
+                ch[c] = Rect::new(x, y, pw, ph);
+                x += pw + 5;
+            } else if show_off && offs.contains(&c) {
+                ch[c] = Rect::new(x, y, OFF_PILL_W, ph);
+                x += OFF_PILL_W + 5;
+            }
         }
         let mut refs = [Rect::new(0, y, 0, ph); NREF];
         for &i in &shown {
@@ -628,7 +651,8 @@ impl Ui {
             if r.w == 0 { continue; }
             let (col, ch) = (CH_COLORS[c], &self.m.ch[c]);
             let sel = root == Some(MenuId::Channel(c));
-            let border = if sel { ACCENT } else if ch.on { col } else { BTN_BORDER };
+            let clip = self.channel_clipping(c);
+            let border = if clip { RED } else if sel { ACCENT } else if ch.on { col } else { BTN_BORDER };
             chip(cv, r, if ch.on { BTN } else { BAR }, border);
             // the channel badge: filled while the channel is on; on / off: a dot in the corner
             cv.circle(r.x + 5, r.y + 5, 3, if ch.on { GREEN } else { DIM });
@@ -637,7 +661,7 @@ impl Ui {
             let label = format!("CH{}", c + 1);
             let bw = if r.w >= 70 { 42 } else { (f.sb.width(&label) + 8).min(r.w - 4).max(8) };
             let (label, bw) = if f.sb.width(&label) + 4 <= bw { (label, bw) } else { ((c + 1).to_string(), bw) };
-            let chev = r.w >= 110;
+            let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
             let badge = if r.w >= 70 { Rect::new(r.x + 8, r.y + 5, bw, 20) } else { Rect::new(r.x + (r.w - bw) / 2, r.y + 8, bw, 18) };
             cv.round(badge, 4, if ch.on { col } else { mix(BAR, col, 70) }, 255);
             cv.text_in(&f.sb, badge, 1, &label, if ch.on { DARK_TEXT } else { mix(BAR, col, 200) });
@@ -650,7 +674,9 @@ impl Ui {
                 // the probe, then the line itself, and the scale loses its "/div" before it is dropped
                 let two_lines = f.mb.size + f.s.size <= TWO_LINE_MAX;
                 let text = if f.mb.width(&full) <= tw { full } else { short };
-                if f.mb.width(&text) <= tw {
+                if f.mb.width(&text) > tw && f.s.width(&text) <= tw {
+                    cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM });
+                } else if f.mb.width(&text) <= tw {
                     match Some(self.studio_ch_detail(c, tw)).filter(|d| ch.on && two_lines && f.s.width(d) <= tw) {
                         Some(d) => {
                             cv.text(&f.mb, tx, r.y + 13, &text, TEXT);
@@ -669,7 +695,8 @@ impl Ui {
             let active = self.selected_workspace_source() == Some(WaveId::Ref(i));
             chip(cv, r, BTN, if active { ACCENT } else { col });
             cv.circle(r.x + 5, r.y + 5, 3, GREEN);
-            self.studio_pill_text(cv, r, &format!("R{}", i + 1), &self.studio_ref_detail(i), col);
+            let scale = self.refs[i].as_ref().map_or(String::new(), |w| format!("{}/div", si_short(w.vpd as f64, "V")));
+            self.studio_source_pill(cv, r, &format!("R{}", i + 1), &scale, &self.studio_ref_detail(i), col);
         }
         for k in 0..NMATH {
             let r = b.math[k];
@@ -681,7 +708,7 @@ impl Ui {
         }
         if b.add.w > 0 {
             chip(cv, b.add, BTN, if self.studio.ch_picker { ACCENT } else { BTN_BORDER });
-            let label = if (0..n_ch()).all(|c| self.m.ch[c].on) { "Add source" } else { "+ CH" };
+            let label = if (0..n_ch()).all(|c| self.m.ch[c].on) { "Add source" } else if (0..n_ch()).any(|c| !self.m.ch[c].on && b.ch[c].w > 0) { "+ Add" } else { "+ CH" };
             cv.text_in(&f.sb, b.add, 1, label, if self.studio.ch_picker { ACCENT } else { TEXT });
         }
         // LA and GEN: a pill each, a dot for on / off and, for the generator, what it makes
@@ -781,16 +808,47 @@ impl Ui {
     /// The text of a ref or math pill: its name, and under it a small line (the signal, the operation) when it fits.
     /// A narrow pill drops that line, and a narrower one the letter of its name ("R10" becomes "10").
     fn studio_pill_text(&self, cv: &mut Canvas, r: Rect, name: &str, detail: &str, col: Rgb) {
+        self.studio_source_pill(cv, r, name, detail, "", col);
+    }
+
+    /// A ref or math pill drawn as a channel pill is: the filled badge with its name, beside it what it shows (the
+    /// scale, the operation) and under that a small line (the signal), then the chevron. A narrow pill keeps the
+    /// badge alone, and a narrower one drops the letter of its name ("R10" becomes "10").
+    fn studio_source_pill(&self, cv: &mut Canvas, r: Rect, name: &str, main: &str, detail: &str, col: Rgb) {
         let f = self.fonts();
-        let name = if f.sb.width(name) + 4 <= r.w { name } else { &name[1..] };
         cv.set_clip(r.inset(1));
-        if detail.is_empty() || f.sb.size + f.s.size > TWO_LINE_MAX || f.s.width(detail) > r.w - 6 {
-            cv.text_in(&f.sb, r, 1, name, col);
+        if r.w < 70 {
+            let name = if f.sb.width(name) + 12 <= r.w { name } else { &name[1..] };
+            let bw = (f.sb.width(name) + 8).min(r.w - 4).max(8);
+            let badge = Rect::new(r.x + (r.w - bw) / 2, r.y + 8, bw, 18);
+            cv.round(badge, 4, col, 255);
+            cv.text_in(&f.sb, badge, 1, name, DARK_TEXT);
+            cv.no_clip();
+            return;
+        }
+        let badge = Rect::new(r.x + 8, r.y + 5, 42, 20);
+        cv.round(badge, 4, col, 255);
+        cv.text_in(&f.sb, badge, 1, name, DARK_TEXT);
+        let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
+        let (tx, tw) = (badge.right() + 8, (r.right() - if chev { 20 } else { 4 } - badge.right() - 8).max(1));
+        cv.set_clip(Rect::new(badge.right() + 2, r.y, (tw + 6).min(r.right() - badge.right() - 2).max(1), r.h));
+        let two_lines = !detail.is_empty() && f.mb.size + f.s.size <= TWO_LINE_MAX && f.s.width(detail) <= tw;
+        // a main line too long for the pill gives way to the small line, which is the signal's name
+        // a scale loses its "/div" before it is cut
+        let main = if f.mb.width(main) > tw { main.trim_end_matches("/div") } else { main };
+        let main_fits = f.mb.width(main) <= tw;
+        if two_lines && main_fits {
+            cv.text(&f.mb, tx, r.y + 13, main, TEXT);
+            cv.text(&f.s, tx, r.y + 25, detail, mix(BAR, col, 170));
+        } else if main_fits && !main.is_empty() {
+            cv.text_in(&f.mb, Rect::new(tx, r.y, tw, r.h), 0, main, TEXT);
+        } else if !detail.is_empty() {
+            cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, detail, mix(BAR, col, 200));
         } else {
-            cv.text(&f.sb, r.x + (r.w - f.sb.width(name)) / 2, r.y + 13, name, col);
-            cv.text(&f.s, r.x + (r.w - f.s.width(detail)) / 2, r.y + 25, detail, mix(BAR, col, 170));
+            cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, main, TEXT);
         }
         cv.no_clip();
+        if chev { chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM); }
     }
 
     /// The badges are hidden and there are some to show: the bottom bar keeps a button for them.
@@ -824,10 +882,22 @@ impl Ui {
         }
         for c in 0..n_ch() {
             if !b.ch[c].contains(x, y) { continue; }
+            // the coloured badge of a pill is the channel's switch, like its key; the rest of the pill opens its sheet
+            // (a pill too narrow to have both keeps the sheet: its Display row and a hold turn the channel off)
+            if self.m.ch[c].on && b.ch[c].w >= 110 && x < b.ch[c].x + 54 {
+                if self.menu_open { self.close_menu(); }
+                self.source_toggle(WaveId::Ch(c));
+                if !self.m.ch[c].on { self.toast(&format!("CH{} off", c + 1)); }
+                return;
+            }
             if !self.m.ch[c].on {
+                // the pill of a channel that is off: on and selected, no sheet
+                if self.menu_open { self.close_menu(); }
                 self.m.ch[c].on = true;
                 self.settings_changed();
                 self.relayout();
+                self.select_workspace_source(WaveId::Ch(c));
+                return;
             }
             self.select_workspace_source(WaveId::Ch(c));
             return self.toggle_menu(MenuId::Channel(c));
@@ -846,6 +916,7 @@ impl Ui {
     }
 
     /// The picker over the "+ CH" chip: one row per channel that is off.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_ch_picker(&self) -> Option<Vec<(usize, Rect)>> {
         let (chans, _) = self.studio_picker_rows()?;
         (!chans.is_empty()).then_some(chans)
@@ -1014,11 +1085,11 @@ impl Ui {
             self.studio_run_stop();
         } else if hit(t.single) {
             self.studio_single();
-        } else if hit(t.autoset) {
+        } else if t.autoset.w > 0 && hit(t.autoset) {
             self.key(key::AUTO);
-        } else if hit(t.clear) {
+        } else if t.clear.w > 0 && hit(t.clear) {
             self.key(key::CLEAR);
-        } else if hit(t.force) {
+        } else if t.force.w > 0 && hit(t.force) {
             self.key(key::FORCE);
         } else if t.sim.w > 0 && hit(t.sim) {
             if self.menu_open { self.close_menu(); }
@@ -1029,7 +1100,7 @@ impl Ui {
             if self.studio.add_menu { self.studio.add_menu = false; } else { self.studio_add_open(); }
         } else if hit(t.measure) {
             self.open_meas_list();
-        } else if hit(t.cursors) {
+        } else if t.cursors.w > 0 && hit(t.cursors) {
             self.studio_cursors_tap();
         } else if hit(t.display) {
             self.toggle_menu(MenuId::Display);
@@ -1198,13 +1269,18 @@ impl Ui {
         match key { MeasKey::One(_, id) | MeasKey::Pair(_, id, _) | MeasKey::Cat(_, id, _, _, _) => id }
     }
 
-    /// The measurements shown as badges: those pinned, or the first three until the user pins one. Only those of a
-    /// source that is live: no "CH1 ----" while CH1 is off and a ref is the signal.
+    /// The measurements of the badge row: the pinned ones (the row shows as many as fit, a "+N" chip counts the rest).
+    pub(super) fn studio_badge_keys(&self) -> Vec<MeasKey> {
+        self.studio_pinned()
+    }
+
+    /// The measurements that are pinned: every one the user has not unpinned, so a measurement is pinned from the
+    /// moment it is added. Only those of a source that is live: no "CH1 ----" while CH1 is off and a ref is the signal.
     pub(super) fn studio_pinned(&self) -> Vec<MeasKey> {
         let keys: Vec<MeasKey> = self.studio_keys().into_iter().filter(|k| self.studio_source_live(Self::studio_key_source(*k))).collect();
         match &self.studio.pinned {
             Some(pinned) => keys.into_iter().filter(|k| pinned.contains(k)).collect(),
-            None => keys.into_iter().take(3).collect(),
+            None => keys.into_iter().filter(|k| !self.studio.unpinned.contains(k)).collect(),
         }
     }
 
@@ -1217,6 +1293,7 @@ impl Ui {
         self.m.meas2 = meas2.into_iter().filter(|&(_, a, b)| !gone(self, a) && !gone(self, b)).collect();
         let keys = self.studio_keys();
         if let Some(p) = &mut self.studio.pinned { p.retain(|k| keys.contains(k)); }
+        self.studio.unpinned.retain(|k| keys.contains(k));
         self.studio.floated.retain(|k| keys.contains(k));
         self.studio.popup = None;
         self.studio.panel.scroll_top();
@@ -1234,10 +1311,12 @@ impl Ui {
     }
 
     pub(super) fn studio_set_pin(&mut self, key: MeasKey, on: bool) {
-        let mut pinned = self.studio_pinned();
-        pinned.retain(|k| *k != key);
-        if on { pinned.push(key); }
-        self.studio.pinned = Some(pinned);
+        // an explicit list (an older set-up) becomes what it leaves out, so what is added from now on is pinned
+        if let Some(pinned) = self.studio.pinned.take() {
+            self.studio.unpinned = self.studio_keys().into_iter().filter(|k| !pinned.contains(k)).collect();
+        }
+        self.studio.unpinned.retain(|k| *k != key);
+        if !on { self.studio.unpinned.push(key); }
         self.relayout();
     }
 
@@ -1347,10 +1426,10 @@ impl Ui {
         let limit = self.studio_row_limit();
         let mut x = row.x + 4 + self.studio_search_w();
         let mut out = Vec::new();
-        let first = self.studio.badge_first.min(self.studio_pinned().len().saturating_sub(1));
+        let first = self.studio.badge_first.min(self.studio_badge_keys().len().saturating_sub(1));
         // when they do not all fit, the last place is for the "+N" chip
         let limit = if self.studio_badges_overflow_n(first) > 0 { limit - OVERFLOW_W - 5 } else { limit };
-        for key in self.studio_pinned().into_iter().skip(first) {
+        for key in self.studio_badge_keys().into_iter().skip(first) {
             let Some(r) = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r)) else { continue };
             let w = 16 + f.s.width(&self.studio_badge_name(key, &r.name)) + 8 + f.sb.width(&r.text()).max(f.sb.width("0.000 MHz")) + 10;
             if x + w > limit { break; }
@@ -1366,7 +1445,7 @@ impl Ui {
         let f = self.fonts();
         let rows = self.meas_rows();
         let limit = self.studio_row_limit();
-        let keys: Vec<MeasKey> = self.studio_pinned().into_iter().skip(first).collect();
+        let keys: Vec<MeasKey> = self.studio_badge_keys().into_iter().skip(first).collect();
         // how many fit before `limit`; when not all do, the "+N" chip takes the last place, which leaves one badge fewer
         let fits = |limit: i32| {
             let mut x = self.studio_row().x + 4 + self.studio_search_w();
@@ -1389,7 +1468,7 @@ impl Ui {
     pub(super) fn studio_badges_more(&self) -> Option<(Rect, usize)> {
         if !self.studio_badges_visible() { return None; }
         if self.studio_classic() { return self.classic_more(); }
-        let first = self.studio.badge_first.min(self.studio_pinned().len().saturating_sub(1));
+        let first = self.studio.badge_first.min(self.studio_badge_keys().len().saturating_sub(1));
         let n = self.studio_badges_overflow_n(first);
         let last = self.studio_badges().last().map(|(_, r)| r.right() + 5)?;
         let row = self.studio_row();
@@ -1397,12 +1476,14 @@ impl Ui {
     }
 
     /// What the cursors read, as one chip after the badges: the differences only.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_cursor_chip(&self, after: i32) -> Option<(Rect, String)> {
         let row = self.studio_row();
         self.studio_cursor_chip_at(after, row.y + (row.h - self.studio_chip_h()) / 2, self.studio_chip_h())
     }
 
     /// The same at a place: its top and its height.
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_cursor_chip_at(&self, after: i32, y: i32, h: i32) -> Option<(Rect, String)> {
         if self.m.cursor == CursorMode::Off { return None; }
         let badge = self.studio.cur_badge;
@@ -1435,7 +1516,8 @@ impl Ui {
         for (key, r) in self.studio_badges().into_iter().filter(|_| !self.studio_classic()) {
             let Some(m) = self.studio_index(key).and_then(|i| rows.get(i)) else { continue };
             let col = self.wave_color(m.src);
-            chip(cv, r, BTN, if self.studio.popup == Some(key) { ACCENT } else { BTN_BORDER });
+            let marked = self.studio.mark == Some(key);
+            chip(cv, r, if marked { mix(BTN, ACCENT, 40) } else { BTN }, if self.studio.popup == Some(key) || marked { ACCENT } else { BTN_BORDER });
             let cy = r.y + r.h / 2;
             // the source is a bar of its colour at the edge of the badge; a badge in the bar is pinned by being there
             cv.round(Rect::new(r.x + 3, r.y + 4, 4, r.h - 8), 2, col, 255);
@@ -1587,7 +1669,16 @@ impl Ui {
             return true;
         }
         if let Some((key, _)) = self.studio_badges().into_iter().find(|(_, r)| r.contains(x, y)) {
-            self.studio.popup = Some(key);
+            // the first tap shows what the measurement measures on the waveform; a tap on the badge that is shown
+            // opens its menu (a measurement with nothing to draw goes straight to the menu)
+            let drawable = matches!(key, MeasKey::One(k, id) if self.meas_mark_exists(k, id));
+            if self.studio.mark == Some(key) || !drawable {
+                self.studio.popup = Some(key);
+                self.studio.mark_menu = self.studio.mark == Some(key);
+            } else {
+                self.studio.mark = Some(key);
+                self.studio.mark_menu = false;
+            }
         }
         true
     }
@@ -1700,6 +1791,7 @@ impl Ui {
         self.dock_reset();
         self.studio.hide_badges = false;
         self.studio.pinned = None;
+        self.studio.unpinned.clear();
         self.studio.popup = None;
         self.studio.panel = Default::default();
         self.studio.compact = false;
@@ -1833,6 +1925,7 @@ impl Ui {
 }
 
 /// Below this width the footer of the panel stacks its two buttons narrower, with shorter labels.
+#[cfg_attr(not(test), allow(dead_code))] // only the tests use it
 pub(super) const NARROW_PANEL_W: i32 = 250;
 /// Width of the measurement panel, docked or floating, and the height of a row in it.
 const MEAS_PANEL_W_FULL: i32 = 270;
@@ -1870,12 +1963,16 @@ pub(super) struct PanelGeo {
     pub collapse: Rect,
     pub list: Rect,
     pub page: usize,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub up: Rect,
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub down: Rect,
     pub add: Rect,
     /// the statistics button
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub stats: Rect,
     /// a short panel: a header and a footer of one row each
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub short: bool,
 }
 
@@ -1941,7 +2038,7 @@ impl Ui {
     /// Plot width less the docked panel: `plot_span` calls this.
     pub(super) fn studio_dock_w(&self) -> i32 {
         if self.dock_on() { return 0; }
-        if self.m.layout == Layout::Studio && self.sheet_active() { return self.sheet_dock_w(); }
+        if self.sheet_active() { return self.sheet_dock_w(); }
         if self.m.layout == Layout::Studio && self.studio.view.is_docked() { self.studio_panel_w() + 4 } else { 0 }
     }
 
@@ -1957,8 +2054,8 @@ impl Ui {
         let list_y = p.y + Self::panel_tool_h(p) + if detailed { super::measview::COL_HEAD } else { 0 };
         let unit = self.studio_panel_row();
         let rows_h = (p.bottom() - 2 - list_y).max(unit);
-        let page = if self.panel_is_cards() { Self::panel_cards_page(rows_h) } else { (rows_h / unit).max(1) as usize };
-        let shown_h = if self.panel_is_cards() { (page as i32 / 2) * (super::measpanel::CARD_H + 4) } else { rows_h };
+        let page = if self.panel_is_cards() { Self::panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
+        let shown_h = if self.panel_is_cards() { (page as i32 / Self::panel_card_cols(p.w - 8)) * (super::measpanel::CARD_H + 4) } else { rows_h };
         let list = Rect::new(p.x + 4, list_y, p.w - 8, shown_h);
         let bar = self.panel_bar(p);
         let at = |it: super::measpanel::BarItem| bar.slots.iter().find(|s| s.item == it).map_or(Rect::new(0, 0, 0, 0), |s| s.r);
@@ -2134,11 +2231,37 @@ impl Ui {
         Some([back, filter, stats, add])
     }
 
+    /// The table as blocks side by side. Without the statistics a row is short (pin, source, name, value): a wide
+    /// table shows two blocks of rows instead of one with an empty right half. With them it is one block.
+    pub(super) fn studio_table_blocks(&self, list_w: i32) -> i32 {
+        if !self.studio.panel.stats && list_w >= 760 { 2 } else { 1 }
+    }
+
+    /// The columns of a block `w` wide, sized to what they hold: (x, width, head). The source and the name are as
+    /// wide as their widest entry, and the value columns share the rest evenly, so nothing is left empty at the
+    /// right and no name column is wider than its names.
+    fn studio_table_cols(&self, rows: &[tools::MeasRow], listed: &[usize], w: i32) -> Vec<(i32, i32, &'static str)> {
+        let f = self.fonts();
+        let src_w = listed.iter().map(|&i| f.sb.width(&self.wave_name(rows[i].src))).max().unwrap_or(0).max(f.sb.width("CH4")).max(f.mb.width("Source") - 12) + 12 + 22;
+        let name_w = (listed.iter().map(|&i| f.m.width(&rows[i].name)).max().unwrap_or(0).max(f.mb.width("Measurement")) + 28).min(w * 2 / 5);
+        let mut heads = vec!["Current"];
+        if self.studio.panel.stats {
+            heads.push("Mean");
+            for (name, i) in [("Min", 1usize), ("Max", 2), ("\u{3c3}", 0)] { if self.m.meas_show[i] { heads.push(name); } }
+        }
+        let x0 = 52;
+        let rest = (w - x0 - src_w - name_w - 12).max(heads.len() as i32 * 60);
+        let vw = rest / heads.len() as i32;
+        let mut v = vec![(x0, src_w, "Source"), (x0 + src_w, name_w, "Measurement")];
+        for (k, h) in heads.into_iter().enumerate() { v.push((x0 + src_w + name_w + k as i32 * vw, vw, h)); }
+        v
+    }
+
     /// Rows of the table, the page, and the footer buttons (Reset statistics, up, down).
     pub(super) fn studio_table_geo(&self) -> Option<(Rect, usize, [Rect; 3])> {
         let t = self.studio_table_rect()?;
         let list = Rect::new(t.x + 6, t.y + 48 + 28, t.w - 12, t.h - 48 - 28 - 44);
-        let page = (list.h / TABLE_ROW).max(1) as usize;
+        let page = (list.h / TABLE_ROW).max(1) as usize * self.studio_table_blocks(list.w) as usize;
         let y = t.bottom() - 38;
         let reset = Rect::new(t.right() - 168, y, 160, 32);
         Some((list, page, [reset, Rect::new(reset.x - 44 - 44, y, 38, 32), Rect::new(reset.x - 44, y, 38, 32)]))
@@ -2177,32 +2300,34 @@ impl Ui {
         cv.text_in(&f.m, Rect::new(stats.x + 30, stats.y, stats.w - 32, stats.h), 0, "Statistics", TEXT);
         chip(cv, add, BTN, BTN_BORDER);
         cv.text_in(&f.m, add, 1, "+ Add", TEXT);
-        // columns: pin, source, measurement, current, then mean and the minimum, maximum and deviation the settings show
+        // columns sized to their content; two blocks of rows side by side while the statistics are off
         let show = self.m.meas_show;
-        let cols: Vec<(i32, &str)> = if on {
-            let mut v = vec![(52, "Source"), (136, "Measurement"), (380, "Current"), (540, "Mean")];
-            let mut x = 540;
-            for (name, i) in [("Min", 1usize), ("Max", 2), ("\u{3c3}", 0)] {
-                if show[i] { x += 120; v.push((x, name)); }
-            }
-            v
-        } else { vec![(52, "Source"), (136, "Measurement"), (420, "Current")] };
+        let blocks = self.studio_table_blocks(list.w);
+        let bw = list.w / blocks;
+        let per = (page / blocks as usize).max(1);
+        let cols = self.studio_table_cols(&rows, &listed, bw - if blocks > 1 { 8 } else { 0 });
         let head = Rect::new(t.x + 6, t.y + 48, t.w - 12, 28);
         cv.fill(head, BAR);
-        for (x, name) in &cols { cv.text_in(&f.mb, Rect::new(head.x + x, head.y, 160, head.h), 0, name, LABEL); }
+        for b in 0..blocks {
+            for (x, w, name) in &cols { cv.text_in(&f.mb, Rect::new(head.x + b * bw + x, head.y, w - 6, head.h), 0, name, LABEL); }
+        }
         let first = self.studio_first(listed.len(), page);
         cv.set_clip(list);
         for (k, &i) in listed.iter().skip(first).take(page).enumerate() {
-            let r = Rect::new(list.x, list.y + k as i32 * TABLE_ROW, list.w, TABLE_ROW);
+            let (b, line) = ((k / per) as i32, (k % per) as i32);
+            let r = Rect::new(list.x + b * bw, list.y + line * TABLE_ROW, bw - if blocks > 1 && b + 1 < blocks { 8 } else { 0 }, TABLE_ROW);
             let row = &rows[i];
             let cy = r.y + r.h / 2;
             let pinned = keys.get(i).is_some_and(|key| self.studio_is_pinned(*key));
             icon_pin(cv, r.x + 14, cy + 1, pinned, if pinned { AMBER } else { DIM });
-            let tag = Rect::new(r.x + cols[0].0, r.y + 10, f.sb.width("CH4") + 12, 24);
+            let tag = Rect::new(r.x + cols[0].0, r.y + 10, (f.sb.width(&self.wave_name(row.src)) + 12).max(f.sb.width("CH4") + 12), 24);
             cv.round(tag, 5, self.wave_color(row.src), 255);
             cv.text_in(&f.sb, tag, 1, &self.wave_name(row.src), DARK_TEXT);
-            cv.text_in(&f.m, Rect::new(r.x + cols[1].0, r.y, 240, r.h), 0, &row.name, TEXT);
-            cv.text_in(&f.mb, Rect::new(r.x + cols[2].0, r.y, 170, r.h), 0, &row.text(), TEXT);
+            let outer = cv.save_clip();
+            cv.clip_within(Rect::new(r.x + cols[1].0, r.y, cols[1].1 - 8, r.h));
+            cv.text_in(&f.m, Rect::new(r.x + cols[1].0, r.y, cols[1].1 - 8, r.h), 0, &row.name, TEXT);
+            cv.restore_clip(outer);
+            cv.text_in(&f.mb, Rect::new(r.x + cols[2].0, r.y, cols[2].1 - 6, r.h), 0, &row.text(), TEXT);
             if on {
                 let st = self.mstat.get(i).copied().unwrap_or_default();
                 let cell = |v: f64| if st.n == 0 { "----".to_string() } else { row.fmt4(v) };
@@ -2214,11 +2339,13 @@ impl Ui {
                 }
                 for (k, v) in values.into_iter().enumerate() {
                     let Some(col) = cols.get(3 + k) else { break };
-                    cv.text_in(&f.m, Rect::new(r.x + col.0, r.y, 118, r.h), 0, &cell(v), TEXT);
+                    cv.text_in(&f.m, Rect::new(r.x + col.0, r.y, col.1 - 6, r.h), 0, &cell(v), TEXT);
                 }
             }
             cv.hline(r.x, r.right() - 1, r.bottom() - 1, LINE);
         }
+        // the line between the two blocks
+        for b in 1..blocks { cv.vline(list.x + b * bw - 4, list.y, list.bottom() - 1, LINE); }
         cv.no_clip();
         Self::draw_scrollbar(cv, list, first, page, listed.len());
         let end = (first + page).min(listed.len());
@@ -2318,9 +2445,14 @@ impl Ui {
             else if up.contains(x, y) || down.contains(x, y) { self.studio_page(listed.len(), page, down.contains(x, y)); }
             else if list.contains(x, y) {
                 let first = self.studio_first(listed.len(), page);
-                let k = ((y - list.y) / TABLE_ROW) as usize;
+                // the block the tap is in, then the row in it
+                let blocks = self.studio_table_blocks(list.w);
+                let (bw, per) = (list.w / blocks, (page / blocks as usize).max(1));
+                let b = ((x - list.x) / bw).clamp(0, blocks - 1);
+                let line = ((y - list.y) / TABLE_ROW) as usize;
+                let k = if line < per { b as usize * per + line } else { usize::MAX / 2 };
                 if let Some(&i) = listed.get(first + k) {
-                    if x < list.x + 52 {
+                    if x < list.x + b * bw + 52 {
                         if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
                     } else { self.studio_configure(i); }
                 }

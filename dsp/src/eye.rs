@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! Eye diagram and jitter: clock recovery from data or from a strobe (DQS), constant-rate least-squares fit or a 1st/2nd-order PLL,
@@ -183,7 +183,7 @@ pub fn clock_from_edges(e: Vec<f64>, nominal_rate: Option<f64>) -> Option<Clock>
 /// Samples more than `uis` unit intervals from every clock edge become NaN, so idle time between strobe
 /// bursts is not folded into the eye.
 pub fn gate_around_clock(v: &[f32], dt: f64, c: &Clock, uis: f64) -> Vec<f32> {
-    if !(dt > 0.0) || !(c.period > 0.0) || c.edges.is_empty() {
+    if v.is_empty() || !(dt > 0.0) || !(c.period > 0.0) || c.edges.is_empty() {
         return v.to_vec();
     }
     let n = v.len();
@@ -964,9 +964,29 @@ impl Eye {
         let m = o.iter().map(|x| x.0 * x.1).sum::<f64>() / n;
         (m, (o.iter().map(|x| (x.0 - m).powi(2) * x.1).sum::<f64>() / n).sqrt())
     }
-    /// Eye width (s): 1 UI - 6 σ of the crossing time.
+    /// Eye width (s): 1 UI - 6 σ of the crossing time. The crossing is read from three rows of the picture, and an
+    /// edge takes time to pass through them: that spread (uniform over the rows' voltage divided by the edge slope) and
+    /// the width of the columns belong to the picture, not to the jitter, and are taken out of σ. Without this a
+    /// jitter-free signal read 5 % short of a unit interval in a picture of 96 columns.
     pub fn eye_width(&self, period: f64) -> f64 {
-        (1.0 - 6.0 * self.crossing_time().1) * period
+        let sigma = self.crossing_time().1;
+        let (one, zero, _, _) = self.levels();
+        let amplitude = one - zero;
+        let (rise, fall) = self.rise_fall(period);
+        let edges: Vec<f64> = [rise, fall].into_iter().filter(|t| t.is_finite() && *t > 0.0).collect();
+        // a line through the crossing rows lights the column it is in and part of its neighbour: measured on a
+        // jitter-free signal at 96, 480 and 960 columns, that is a σ of half a column
+        let column = self.span() / self.w as f64;
+        let mut picture = column * column / 4.0;
+        if !edges.is_empty() && amplitude > 0.0 && period > 0.0 {
+            // 20-80 % edge time in UI, as a slope over 0.6 of the amplitude
+            let edge = edges.iter().sum::<f64>() / edges.len() as f64 / period;
+            let rows = 3.0 * (self.v_max - self.v_min) as f64 / self.h as f64;
+            let through = rows / (0.6 * amplitude) * edge;
+            picture += through * through / 12.0;
+        }
+        let jitter = (sigma * sigma - picture).max(0.0).sqrt();
+        (1.0 - 6.0 * jitter) * period
     }
     /// 20-80 % rise and fall times on the eye (s): at the 20 % and 80 % rows the hits left of the crossing belong to
     /// the rising (at 20 %) / falling (at 80 %) edges, those right of it to the other one.
@@ -1097,25 +1117,52 @@ pub fn phase_noise(trend: &[f32], period: f64, f_lo: f64, f_hi: f64) -> f64 {
     if !(df > 0.0) || spec.len() < 8 {
         return f64::NAN;
     }
-    let marked: Vec<usize> = pj_lines(df, &spec, spec.len()).into_iter().map(|(f, _)| (f / df).round() as usize).collect();
+    let mut marked = vec![false; spec.len()];
+    // a line is as wide as the window of the spectrum makes it: two bins to either side belong to it
+    for (f, _) in pj_lines(df, &spec, spec.len()) {
+        let k = (f / df).round() as usize;
+        for j in k.saturating_sub(2)..=(k + 2).min(spec.len() - 1) {
+            marked[j] = true;
+        }
+    }
     let (lo, hi) = (f_lo.min(f_hi), f_lo.max(f_hi));
+    // the window of bin k is the run of bins j within ±0.05 decade of it: a sliding range over prefix sums, whose
+    // ends only move up with k (a window summed afresh per bin took 1.7 s for 131k unit intervals)
+    // a marked line is left out of the averages of its neighbours too: with it in, the bins beside a tone each took a
+    // share of it, and a clean clock with one tone read more than half the tone as noise
+    let mut prefix = Vec::with_capacity(spec.len() + 1);
+    let mut kept = Vec::with_capacity(spec.len() + 1);
+    prefix.push(0.0);
+    kept.push(0usize);
+    for (k, &x) in spec.iter().enumerate() {
+        prefix.push(prefix[prefix.len() - 1] + if marked[k] { 0.0 } else { x });
+        kept.push(kept[kept.len() - 1] + usize::from(!marked[k]));
+    }
+    let last = spec.len() - 1;
+    let step = 10f64.powf(0.05);
+    let (mut a, mut b) = (1usize, 1usize);
     let mut acc = 0.0;
     let mut any = false;
     for k in 1..spec.len() {
         let f = k as f64 * df;
-        if f < lo || f > hi || marked.contains(&k) {
+        if f < lo || f > hi || marked[k] {
             continue;
         }
         let lf = f.log10();
-        let (mut s, mut c) = (0.0, 0usize);
-        let (k0, k1) = (((k as f64) / 10f64.powf(0.05)).floor() as usize, ((k as f64) * 10f64.powf(0.05)).ceil() as usize);
-        for j in k0.max(1)..=k1.min(spec.len() - 1) {
-            if ((j as f64 * df).log10() - lf).abs() <= 0.05 {
-                s += spec[j];
-                c += 1;
-            }
+        let inside = |j: usize| ((j as f64 * df).log10() - lf).abs() <= 0.05;
+        // as the direct sum: bins from k / 10^0.05 (rounded down) to k x 10^0.05 (rounded up) that are inside
+        let k0 = ((k as f64 / step).floor() as usize).max(1);
+        let k1 = ((k as f64 * step).ceil() as usize).min(last);
+        a = a.max(k0);
+        while a < k && !inside(a) {
+            a += 1;
         }
-        let v = if c == 0 { spec[k] } else { s / c as f64 };
+        b = b.max(k).max(a).min(k1);
+        while b < k1 && inside(b + 1) {
+            b += 1;
+        }
+        // bin k itself is always inside, so the window is never empty
+        let v = (prefix[b + 1] - prefix[a]) / (kept[b + 1] - kept[a]).max(1) as f64;
         acc += v * v;
         any = true;
     }
@@ -1335,7 +1382,11 @@ pub fn diff_crossover(a: &[f32], b: &[f32]) -> f64 {
     if s.is_empty() { f64::NAN } else { s.iter().sum::<f64>() / s.len() as f64 }
 }
 
-/// Mean 20 log10 of |midpoint of a non-transition bit| / |midpoint of the nearest preceding transition bit|.
+/// Mean 20 log10 of |midpoint of the nearest preceding transition bit| / |midpoint of a non-transition bit|: the
+/// transition level over the steady level, as the name says, so de-emphasis of 3.5 dB reads +3.5 dB.
+/// A transition bit is the one that starts at an edge. An edge lies on the boundary of two unit intervals, so its
+/// interval is the nearest boundary, not the floor: the floor took the bit before the edge about as often as the
+/// bit after it, and the ratio came out near zero.
 pub fn tnt_ratio(v: &[f32], dt: f64, c: &Clock) -> f64 {
     if !(c.period > 0.0) || !(dt > 0.0) || v.len() < 2 || c.edges.is_empty() {
         return f64::NAN;
@@ -1360,7 +1411,7 @@ pub fn tnt_ratio(v: &[f32], dt: f64, c: &Clock) -> f64 {
     };
     let mut occupied = Vec::new();
     for &e in &c.edges {
-        occupied.push(c.ui_at(e).floor() as i64);
+        occupied.push(c.ui_at(e).round() as i64);
     }
     occupied.sort_unstable();
     occupied.dedup();
@@ -1374,8 +1425,8 @@ pub fn tnt_ratio(v: &[f32], dt: f64, c: &Clock) -> f64 {
             if volt.is_finite() {
                 last = volt;
             }
-        } else if last.is_finite() && last != 0.0 && volt.is_finite() {
-            ratios.push(20.0 * (volt.abs() / last.abs()).log10());
+        } else if last.is_finite() && last != 0.0 && volt.is_finite() && volt != 0.0 {
+            ratios.push(20.0 * (last.abs() / volt.abs()).log10());
         }
     }
     if ratios.is_empty() { f64::NAN } else { ratios.iter().sum::<f64>() / ratios.len() as f64 }
@@ -1418,7 +1469,24 @@ pub fn ssc_deviation(c: &Clock) -> (f64, Vec<f64>) {
         return (f64::NAN, Vec::new());
     }
     let ppm: Vec<f64> = series.iter().map(|(_, f)| (f - mean) / mean * 1e6).collect();
-    let (lo, hi) = ppm.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &x| (a.min(x), b.max(x)));
+    // one interval's rate carries the timing error of its two edges, which is far more than a slow spread: with a
+    // modulation line found, the span is taken of the series averaged over a thirty-second of that modulation period (a triangle loses
+    // 6 % of its span to that)
+    let rate = ssc_rate(c);
+    let span = series[series.len() - 1].0 - series[0].0;
+    let window = if rate.is_finite() && rate > 0.0 && span > 0.0 { (series.len() as f64 / (span * rate) / 32.0) as usize } else { 0 };
+    let smooth: Vec<f64> = if window >= 3 && ppm.len() > 2 * window {
+        let mut sum: f64 = ppm[..window].iter().sum();
+        let mut out = vec![sum / window as f64];
+        for k in window..ppm.len() {
+            sum += ppm[k] - ppm[k - window];
+            out.push(sum / window as f64);
+        }
+        out
+    } else {
+        ppm.clone()
+    };
+    let (lo, hi) = smooth.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &x| (a.min(x), b.max(x)));
     (hi - lo, ppm)
 }
 
@@ -1463,7 +1531,69 @@ pub fn ssc_rate(c: &Clock) -> f64 {
         *f = (*f as f64 - dc) as f32;
     }
     let (df, spectrum) = crate::math::spectrum(&v, dt, crate::math::Window::Hann);
-    spectrum.iter().enumerate().skip(1).filter(|(_, magnitude)| **magnitude > 0.0)
-        .max_by(|a, b| a.1.total_cmp(b.1))
-        .map(|(bin, _)| bin as f64 * df).filter(|f| *f > 0.0).unwrap_or(f64::NAN)
+    let Some((bin, _)) = spectrum.iter().enumerate().skip(1).filter(|(_, magnitude)| **magnitude > 0.0).max_by(|a, b| a.1.total_cmp(b.1)) else {
+        return f64::NAN;
+    };
+    // a record holds few modulation periods, often one, so the lines are far apart: the peak is placed between them by
+    // a parabola through the line and its two neighbours
+    let mut at = bin as f64;
+    if bin >= 1 && bin + 1 < spectrum.len() {
+        let (l, m, r) = (spectrum[bin - 1] as f64, spectrum[bin] as f64, spectrum[bin + 1] as f64);
+        let curve = l - 2.0 * m + r;
+        if curve < 0.0 {
+            at += (0.5 * (l - r) / curve).clamp(-0.5, 0.5);
+        }
+    }
+    let mut rate = at * df;
+    // fewer than four periods in the record (a SIM record holds one): the lines are too far apart to place the rate,
+    // and the first line has the removed DC as a neighbour. There the rate is the one whose sine fits the series best,
+    // searched around the line.
+    if rate > 0.0 && rate * (last - first) < 4.0 {
+        let coarse = bin as f64 * df;
+        let mut best = (f64::INFINITY, rate);
+        for k in 0..=240 {
+            let f = coarse * (0.5 + k as f64 / 240.0 * 1.5);
+            // least squares of a*sin + b*cos + c on the series as it was measured (its times are not uniform)
+            let w = 2.0 * std::f64::consts::PI * f;
+            let mut m = [[0.0f64; 4]; 3];
+            for &(t, y) in &series {
+                let row = [(w * (t - first)).sin(), (w * (t - first)).cos(), 1.0, y - mean];
+                for i in 0..3 {
+                    for j in 0..4 {
+                        m[i][j] += row[i] * row[j];
+                    }
+                }
+            }
+            let mut ok = true;
+            for i in 0..3 {
+                let p = (i..3).max_by(|&a, &b| m[a][i].abs().total_cmp(&m[b][i].abs())).unwrap();
+                m.swap(i, p);
+                if m[i][i].abs() < 1e-300 {
+                    ok = false;
+                    break;
+                }
+                for r in 0..3 {
+                    if r != i {
+                        let q = m[r][i] / m[i][i];
+                        for j in i..4 {
+                            m[r][j] -= q * m[i][j];
+                        }
+                    }
+                }
+            }
+            if !ok {
+                continue;
+            }
+            let (a, b, c0) = (m[0][3] / m[0][0], m[1][3] / m[1][1], m[2][3] / m[2][2]);
+            let residual: f64 = series.iter().map(|&(t, y)| {
+                let e = y - mean - a * (w * (t - first)).sin() - b * (w * (t - first)).cos() - c0;
+                e * e
+            }).sum();
+            if residual < best.0 {
+                best = (residual, f);
+            }
+        }
+        rate = best.1;
+    }
+    Some(rate).filter(|f| *f > 0.0).unwrap_or(f64::NAN)
 }

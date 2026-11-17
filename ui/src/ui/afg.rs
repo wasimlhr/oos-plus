@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! Built-in generator page (S models): output on/off, wave shape (sine, square, ramp, pulse, noise, DC), frequency,
@@ -270,6 +270,7 @@ mod arb_tests {
     #[test]
     fn the_frequency_value_opens_the_keypad() {
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.m.layout = Layout::Default;
         ui.open_menu(MenuId::Afg);
         assert!(!ui.items(MenuId::Afg).contains(&Item::AfgFreqEntry));
         let d = ui.dlg_layout().unwrap();

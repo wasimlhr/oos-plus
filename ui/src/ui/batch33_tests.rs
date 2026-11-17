@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 33: independent views. A view is a workspace of its own for everything that is presentation and analysis (the
 //! measurement list and its pins, the panels, the cursors, the zoom, the lanes shown, the analysis set-ups); the scope
 //! (channels, time base, trigger, acquisition) is one for all. OOS_SHOTS=<dir> writes pictures (b33-*).
@@ -298,7 +299,7 @@ fn a_setup_with_three_views_round_trips_through_save_recall_and_the_scpi_block()
         v.view_go(0);
         assert_eq!(v.m.meas, vec![one(Meas::Freq, 0)], "{l:?}");
         assert_eq!(v.studio.view, StudioView::Docked, "{l:?}");
-        assert_eq!(v.studio.pinned, Some(vec![MeasKey::One(Meas::Freq, WaveId::Ch(0))]), "{l:?}");
+        assert_eq!(v.studio_pinned(), vec![MeasKey::One(Meas::Freq, WaveId::Ch(0))], "{l:?}");
         assert_eq!(v.m.pane, 0, "{l:?}");
         v.view_go(1);
         assert_eq!(v.m.meas, vec![one(Meas::Vpp, 1), one(Meas::Vrms, 1)], "{l:?}");

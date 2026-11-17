@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 13: the Studio measurements panel in two modes (list with an optional line of statistics, and a detailed
 //! table that collapses when narrow), and rows that have no value say why. OOS_SHOTS=<dir> writes pictures (b13-*).
 use super::dock::{Dir, VKind};
-use super::meascatalog::Cat;
+use super::meascatalog::cat as Cat;
 use super::measview::{DETAIL_COLS, STATS_LINE};
 use super::studio::StudioView;
 use super::*;
@@ -287,8 +288,9 @@ fn a_hold_or_a_right_click_on_a_math_chip_opens_turn_off_and_settings() {
     assert_eq!(u.menu_items(MenuId::Math).first(), Some(&Item::MathOff));
     u.activate(Item::MathOff);
     assert_eq!(u.m.math, crate::math::MathOp::Off);
-    // not in the other layouts
+    // not in the stock layout, whose menus are the stock dialogs
     let mut v = Ui::new(Source::Demo { t: 0.0 });
+    v.m.layout = Layout::Default;
     v.m.math = crate::math::MathOp::Add;
     assert!(!v.menu_items(MenuId::Math).contains(&Item::MathOff));
 }

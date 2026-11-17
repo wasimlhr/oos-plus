@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! Two ways to look at a loaded reference. Take over fills the screen with one reference and hides
@@ -71,9 +71,14 @@ impl Ui {
 
     pub(super) fn apply_look(&mut self, look: RefLook) {
         match look {
-            RefLook::Live => self.set_offline(false),
+            // the live set-up from before the session comes back, as with the top bar's Live
+            RefLook::Live => {
+                self.leave_session();
+                self.relayout();
+            }
             RefLook::TakeOver => {
                 if !self.offline {
+                    self.remember_live();
                     self.set_offline(true);
                 }
                 self.look = RefLook::TakeOver;
@@ -83,6 +88,7 @@ impl Ui {
             }
             RefLook::Waves => {
                 if !self.offline {
+                    self.remember_live();
                     self.set_offline(true);
                 }
                 self.look = RefLook::Waves;
@@ -417,6 +423,7 @@ impl Ui {
         else {format!("{used} / {total} qualified")}
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(crate) fn set_meas_refs(&mut self, index: usize, low: f64, high: f64) {
         if index >= self.m.meas.len() {
             return;
@@ -473,6 +480,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut u = ui();
+        u.m.layout = Layout::Default; // the direct slot import of the stock dialog
         u.store_dir = dir.clone();
         put(&mut u, 1, square(1.0), true);
         assert!(u.m.ch[0].on && u.look == RefLook::Live);
@@ -484,6 +492,7 @@ mod tests {
         std::fs::write(dir.join("ref1.csv"), csv).unwrap();
         u.ref_sel = 0;
         u.activate(Item::RefImport);
+        u.m.layout = Layout::Minimal;
         assert_eq!(u.look, RefLook::Live, "import adds a reference without changing the live acquisition");
         assert!(!u.offline && u.m.ch[0].on, "import keeps the live channels");
         assert!(u.refs[0].as_ref().unwrap().on && u.refs[1].as_ref().unwrap().on);
@@ -557,7 +566,8 @@ mod tests {
         for _ in 0..12 {
             let view = u.catalog_view();
             if !opened {
-                if let Some(time) = u.catalog_group_rect(1) {
+                // TIMING is the third group of Basic
+                if let Some(time) = u.catalog_group_rect(2) {
                     if time.y < view.y + view.h - 4 && time.y + time.h > view.y + 4 {
                         let y = (time.y + 4).clamp(view.y + 2, view.y + view.h - 2);
                         u.tap(time.x + 12, y);
@@ -572,8 +582,8 @@ mod tests {
                     break;
                 }
             }
-            let down = u.catalog_scroll_down().expect("scroll");
-            u.tap(down.x + 4, down.y + 4);
+            let next = u.cat_scroll + 80;
+            u.scroll_to(super::scroll::List::Catalog, next);
         }
         assert_eq!(u.menu, MenuId::MeasRow, "Burst has a settings card");
         let plan: Vec<Item> = u.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();

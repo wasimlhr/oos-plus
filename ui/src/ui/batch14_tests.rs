@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 14: fixes from the hands-on walkthrough of Batch 13 (audit/walkthrough-b13.md). One test per item.
 //! OOS_SHOTS=<dir> writes pictures (b14-*).
 use super::dock::VKind;
@@ -45,10 +46,6 @@ fn tap(u: &mut Ui, r: Rect) {
     touch(u, Phase::Down, x, y);
     touch(u, Phase::Up, x, y);
     frame(u);
-}
-
-fn ref_wave(label: &str) -> RefWave {
-    RefWave { src: 0, color: 0, label: label.into(), t0: 0.0, dt: 1e-6, v: (0..1000).map(|i| (i as f32 * 0.05).sin()).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true }
 }
 
 // 1 ------------------------------------------------------------------------------------------------ time-axis drag

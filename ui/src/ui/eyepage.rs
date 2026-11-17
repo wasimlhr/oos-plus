@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! The eye and jitter page. `eye_update` runs per record: the eye and the cheap sums there, everything else (fits,
@@ -66,8 +66,10 @@ const BOXES_MIN_H: i32 = 300;
 /// How long the right column takes to slide in or out.
 const SLIDE: f64 = 0.22;
 /// The tab that slides the column: wide enough for a finger, tall enough to see.
-const TAB_W: i32 = 40;
-const TAB_H: i32 = 52;
+const TAB_W: i32 = 14;
+const TAB_H: i32 = 44;
+/// The handle is drawn slim; a finger gets this much extra on each side.
+const TAB_REACH: i32 = 13;
 
 /// The rectangles of the page. They tile the area down to its bottom edge: the plots take what the text leaves.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -610,6 +612,7 @@ impl Page {
     }
 }
 
+#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Ui {
     /// Generated and imported references are immutable records. Eye analysis reads
     /// the whole record even when ordinary measurements follow the zoom window.
@@ -921,6 +924,12 @@ impl Ui {
         eye_tab_at(self.eye_page_rect(), &placed(self.eye_page_rect(), self.eye_column_open()))
     }
 
+    /// Where a finger can take the slim handle: 40 px wide, centred on it.
+    pub(super) fn eye_tab_hit(&self) -> Rect {
+        let t = self.eye_tab();
+        Rect::new(t.x - TAB_REACH, t.y, t.w + 2 * TAB_REACH, t.h)
+    }
+
     /// Slide the column the other way. A tap in the middle of a move reverses it.
     fn eye_slide(&mut self) {
         self.eye_from = self.eye_column_open();
@@ -934,7 +943,7 @@ impl Ui {
         if self.full_on() || !area.contains(x, y) || layout(area, false).charts[0].w == 0 {
             return false;
         }
-        if self.eye_tab().contains(x, y) {
+        if self.eye_tab_hit().contains(x, y) {
             self.eye_slide();
             return true;
         }
@@ -1161,6 +1170,7 @@ impl Ui {
 
     /// Left edge of the heat scale on plot `r`. On the usual split it is the top right of the plot; with the column
     /// away that corner belongs to the full-screen button, so the scale stops short of it.
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     fn heat_x(&self, r: Rect) -> i32 {
         let src = match self.src.name() {
             "DEMO" => "Demo signals",
@@ -1184,11 +1194,12 @@ impl Ui {
             return;
         }
         let r = self.eye_tab();
-        cv.round(r, 6, PANEL_BG, 235);
-        cv.round_outline(r, 6, BTN_BORDER);
-        chevron(cv, r.x + r.w / 2, r.y + r.h / 2, if self.eye_to > 0.5 { 1 } else { -1 }, TEXT);
+        // a slim handle: three dots on a faint pill, no arrow box
+        cv.round(r, 7, PANEL_BG, 160);
+        for k in -1..=1 { cv.circle(r.x + r.w / 2, r.y + r.h / 2 + 7 * k, 2, DIM); }
     }
 
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     fn eye_head(&self, cv: &mut Canvas, l: &Layout) {
         if l.head.w < 40 || l.head.h < 16 {
             return;
@@ -1521,6 +1532,48 @@ fn blit_hits(cv: &mut Canvas, r: Rect, img: &[u32], iw: usize) {
     cv.image(r, &px, true);
 }
 
+/// The eye page (eye diagram, jitter, the charts).
+pub(super) struct EyePage;
+
+impl super::analysers::Analyser for EyePage {
+    fn view(&self) -> AView {
+        AView::Eye
+    }
+
+    fn feature(&self) -> (&'static str, &'static str) {
+        ("eye", "Eye")
+    }
+
+    fn name(&self) -> &'static str {
+        "Eye / jitter"
+    }
+
+    fn menu(&self) -> MenuId {
+        MenuId::Eye
+    }
+
+    fn scpi(&self) -> Option<&'static str> {
+        Some("EYE")
+    }
+
+    fn more(&self, _ui: &Ui) -> Vec<Item> {
+        vec![Item::EyeClear]
+    }
+
+    fn without_record(&self, ui: &Ui) -> bool {
+        let is_ref = |id: WaveId| matches!(id, WaveId::Ref(_));
+        is_ref(ui.m.eye_src) || ui.m.eye_b.is_some_and(is_ref) || ui.m.eye_rail.is_some_and(is_ref)
+    }
+
+    fn update(&self, ui: &mut Ui, rec: &Record, _pane: bool) {
+        ui.eye_update(rec);
+    }
+
+    fn draw(&self, ui: &Ui, cv: &mut Canvas) {
+        ui.draw_eye(cv);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1588,7 +1641,7 @@ mod tests {
         }
         let mut ch: [Vec<f32>; NCH] = Default::default();
         ch[0] = v;
-        Record { t0: 0.0, dt, ch, triggered: true, partial: false, raw: None, la: None }
+        Record { t0: 0.0, dt, ch, triggered: true, partial: false, raw: None, la: None, pairs: false }
     }
 
     fn page(s: Sig, records: usize) -> Ui {
@@ -1992,6 +2045,7 @@ mod tests {
     #[test]
     fn one_press_reads_the_rate_and_keeps_the_trace() {
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.m.layout = crate::model::Layout::Default; // the stock dialogs: Minimal and Studio open sheets
         ui.m.eye_place = EyePlace::Side;
         ui.m.run = RunState::Stop;
         ui.m.eye_rate = 123.0;
@@ -2093,9 +2147,11 @@ mod tests {
             ui.eye_from = open;
             ui.eye_to = open;
             ui.eye_t = ui.now;
-            let tab = ui.eye_tab();
+            let tab = ui.eye_tab_hit();
             assert!(!overlaps(tab, ui.view_btn()), "open {} tab {:?} btn {:?}", open, tab, ui.view_btn());
             assert!(tab.w >= 40 && tab.h >= 40, "{:?}", tab);
+            let tab = ui.eye_tab();
+            assert!(tab.w <= 16, "the handle stays slim: {:?}", tab);
             assert!(ui.eye_page_rect().contains(tab.x + 1, tab.y + 1) && ui.eye_page_rect().contains(tab.x + tab.w - 2, tab.y + tab.h - 2), "{:?}", tab);
         }
     }

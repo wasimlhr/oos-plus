@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 9: the rest of the Studio menus on the Settings Sheet (Spectrum, Eye, Power, Storage, Mask, SIM, LA), source
 //! pickers and a Measure page in the Add panel, vertical zoom on the zoom bar, and the minus of Number rows.
 //! OOS_SHOTS=<dir> writes pictures (b9-*).
@@ -85,7 +86,8 @@ fn the_remaining_studio_menus_are_sheets_and_every_setting_stays_reachable() {
 
 #[test]
 fn default_and_minimal_keep_their_menus() {
-    for l in [Layout::Default, Layout::Minimal] {
+    // Minimal has the sheets of Studio since the UI audit: only the stock layout keeps the stock dialogs
+    for l in [Layout::Default] {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = l;
         for _ in 0..4 { u.step(0.05); }

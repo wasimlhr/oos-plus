@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! The native Open dialog. Canceling never changes the session.
@@ -104,7 +104,7 @@ pub fn waveform(owner: *mut std::ffi::c_void, slot: usize) -> Result<Option<Path
         nMaxFile: name.len() as u32,
         lpstrTitle: title.as_ptr(),
         Flags: OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR,
-        ..Default::default()
+        ..unsafe { std::mem::zeroed() }
     };
     if unsafe { GetOpenFileNameW(&mut options) } == 0 {
         let error = unsafe { CommDlgExtendedError() };

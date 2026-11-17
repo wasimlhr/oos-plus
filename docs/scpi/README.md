@@ -22,7 +22,7 @@ Every command has exactly one row, in exactly one of the group pages below (568 
 | Interface | Default | Implementation |
 | --- | --- | --- |
 | Raw TCP SCPI | TCP 5555 | Recommended for scripts. Newline-terminated program messages; newline-terminated replies. |
-| HiSLIP | TCP 4880 | Same interpreter, with HiSLIP framing. Basic sessions; full locking/overlap semantics are not implemented. |
+| HiSLIP | TCP 4880 | Same interpreter, with HiSLIP framing. Basic sessions; full locking/overlap semantics are not implemented. A reply is split into messages of the client's maximum message size, but of at least 4 KiB of data. |
 | VXI-11 | Linux scope service | Same interpreter, partial RPC transport. Pending operation reads have the limitation described under operation completion. Not advertised by the Windows app. |
 | HTTP/MCP adapter | HTTP web port | `POST /mcp`, JSON-RPC `tools/call` with tool name `scpi`. This is not a VISA interface. `/cmd` uses a separate front-panel command language. |
 
@@ -155,6 +155,7 @@ See [waveform](waveform.md) for the preamble and the formats.
 | [Built-in generator](generator.md) | 18 | Built-in generator, modulation, arbitrary wave |
 | [Signal simulator (SIM)](sim.md) | 26 | Signal simulator |
 | [Display, views and Studio zoom](display.md) | 23 | Display, views, Studio zoom, screenshot |
+| [Screen layout and controls](layout.md) | 25 | Docking, sizing and floating the Studio views; the right-click menu; screen controls by name and place |
 | [Save and load](storage.md) | 8 | Save and load setups, waveforms, images, fast frames |
 | [Data logger](logger.md) | 4 | Data logger |
 | [Calibration and deskew](calibration.md) | 6 | Self-calibration and analysis deskew |

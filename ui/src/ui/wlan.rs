@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! The network page (network box in the top bar, or System > Network): overview of the interfaces, and finding, joining
@@ -351,7 +351,7 @@ impl Ui {
             Item::NetWeb if !self.sys.remote_web => "off".into(),
             Item::NetWeb if self.net.is_empty() => "not connected".into(),
             Item::NetWeb => format!("http://{}:8080", self.net),
-            Item::NetPorts => "SCPI 5555, VXI-11, SSH 22 (key)".into(),
+            Item::NetPorts => "SCPI 5555, VXI-11, SSH 22 (password or key)".into(),
             _ => {
                 let l = &self.wlan.link;
                 if !l.stick {
@@ -426,12 +426,15 @@ pub(super) enum OskFor {
     Search,
     /// the formula of a math channel
     MathExpr(usize),
+    /// the text of a callout (`callout.rs`)
+    Callout(usize),
     /// System > Date and time (time.rs): another NTP server, a POSIX time zone, the clock by hand
     NtpServer,
     Tz,
     DateTime,
-    /// System > Network > Remote services > Name (remote.rs)
+    /// System > Network > Remote services > Name and Allowed (remote.rs)
     NetName,
+    NetAllow,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -563,10 +566,12 @@ impl Osk {
             OskFor::Pass(_) => wlan::PASS_LEN.1,
             OskFor::Label(_) | OskFor::RefLabel(_) | OskFor::BusLabel | OskFor::Search => LABEL_MAX,
             OskFor::MathExpr(_) => oos_dsp::expr::EXPR_MAX,
+            OskFor::Callout(_) => super::callout::CALLOUT_LEN,
             OskFor::NtpServer => crate::sysconf::SERVER_MAX,
             OskFor::Tz => crate::clock::TZ_MAX,
             OskFor::DateTime => 19,
             OskFor::NetName => crate::mdns::NAME_MAX,
+            OskFor::NetAllow => crate::netacl::ALLOW_MAX,
         }
     }
 
@@ -692,6 +697,12 @@ impl Ui {
                     self.wlan.osk = None;
                 }
             }
+            OskFor::NetAllow => {
+                let t = o.text.clone();
+                if self.allow_osk_done(&t) {
+                    self.wlan.osk = None;
+                }
+            }
             OskFor::Label(c) => {
                 self.m.ch_label[c] = o.text.trim().to_string();
                 self.wlan.osk = None;
@@ -711,6 +722,11 @@ impl Ui {
                     r.label = t;
                 }
                 self.wlan.osk = None;
+            }
+            OskFor::Callout(i) => {
+                let t = o.text.clone();
+                self.wlan.osk = None;
+                self.callout_text_done(i, &t);
             }
             OskFor::Search => {
                 let t = o.text.trim().to_string();
@@ -816,6 +832,7 @@ impl Ui {
             OskFor::Name => "Name of the network".to_string(),
             OskFor::Label(c) => format!("Name of CH{} (empty: CH{})", c + 1, c + 1),
             OskFor::RefLabel(i) => format!("Name of R{} (empty: R{})", i + 1, i + 1),
+            OskFor::Callout(_) => "Note on the signal (empty: remove it)".to_string(),
             OskFor::BusLabel => "Name of the bus (empty: I2C)".to_string(),
             OskFor::Search => "Find a measurement".to_string(),
             OskFor::MathExpr(k) => format!("Formula of M{}: CH1-4, t, pi, sin cos tan sqrt abs ln log exp min max", k + 1),
@@ -823,13 +840,13 @@ impl Ui {
             OskFor::Tz => "Time zone, POSIX: CET-1CEST,M3.5.0,M10.5.0/3 or <+04>-4 (4 hours east)".to_string(),
             OskFor::DateTime => "Local date and time: 2026-11-11 14:30".to_string(),
             OskFor::NetName => "Name on the network: letters, digits and - (name.local, host name)".to_string(),
+            OskFor::NetAllow => "Allowed prefixes: 192.168.1.0/24 fd00::/8 onlink6 (empty: no list)".to_string(),
             OskFor::Pass(s) if self.wlan.nets.iter().any(|n| n.ssid == *s) => format!("Password for {}", wlan::name(s)),
             OskFor::Pass(s) => format!("Password for {} (empty: open network)", wlan::name(s)),
         };
         cv.text_in(&f.lb, on(Rect::new(12, 18, OSK_W - 24, 34), blk), 1, &title, ACCENT);
         let r = on(FIELD, blk);
-        cv.round(r, 6, BTN_BORDER, 255);
-        cv.round(r.inset(1), 5, BG, 255);
+        cv.framed(r, 6, 1, BTN_BORDER, 5, BG);
         let (a, b) = o.window(&f.lb);
         let s: Vec<char> = o.shown().chars().collect();
         let t: String = s[a..b].iter().collect();
@@ -1115,10 +1132,11 @@ mod tests {
     }
 
     #[test]
-    fn hardware_network_fallback_names_key_only_ssh_instead_of_telnet() {
+    fn hardware_network_fallback_names_ssh_instead_of_telnet() {
         let ui = Ui::new(Source::Demo { t: 0.0 });
         let ports = ui.net_value(Item::NetPorts);
-        assert!(ports.contains("SSH 22 (key)"));
+        // oos-ssh takes the password and trusted keys (docs/network.md 7), not only a key
+        assert!(ports.contains("SSH 22 (password or key)"));
         assert!(!ports.contains("telnet"));
     }
 

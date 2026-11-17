@@ -235,8 +235,8 @@ fn one_tap_on_cursors_puts_two_waveform_cursors_on_the_selected_trace() {
     u.m.run = RunState::Stop;
     assert_eq!(u.m.cursor, CursorMode::Off);
     let src = u.cursor_source();
-    let r = u.studio_top().cursors;
-    tap_in(&mut u, r);
+    // the Cursor key and Add > Cursors (the bar has no Cursors button)
+    u.studio_cursors_tap();
     assert_eq!(u.m.cursor, CursorMode::Track, "waveform cursors");
     assert!(!u.menu_open, "no mode picker first");
     assert_eq!(u.cursor_source(), src);
@@ -244,7 +244,7 @@ fn one_tap_on_cursors_puts_two_waveform_cursors_on_the_selected_trace() {
     assert!(tb > ta);
     shot(&mut u, "cursors-one-tap");
     // a second tap opens the settings
-    tap_in(&mut u, r);
+    u.studio_cursors_tap();
     assert!(u.menu_open && u.menu == MenuId::Cursor && u.sheet_active());
     shot(&mut u, "cursors-settings");
 }
@@ -327,9 +327,9 @@ fn cursor_settings_type_source_readout_linked_and_positions() {
     // source: a channel; second source: split
     u.select_option(Item::CurSrc, "CH2");
     assert_eq!(u.cursor_source(), WaveId::Ch(1));
-    u.select_option(Item::CurSrcB, "CH1");
+    u.select_option(Item::CurSecond, "CH1");
     assert_eq!(u.cursor_b_source(), WaveId::Ch(0));
-    u.select_option(Item::CurSrcB, "Same");
+    u.select_option(Item::CurSecond, "Same");
     assert_eq!(u.m.cur_b_source, None);
     // readout place, linked
     u.select_option(Item::CurReadout, "Badge");

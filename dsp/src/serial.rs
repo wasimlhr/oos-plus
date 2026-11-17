@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Julian Decker
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! Nominal high-speed serial records for the SIM menu. A preset is a public rate, a PRBS, rails, a tanh edge,
@@ -112,6 +112,24 @@ pub fn try_generate(lane: &Lane) -> Result<Vec<f32>, String> {
     let settings = settings(lane);
     let (dt, n) = hss::try_sample_grid(&settings)?;
     hss::generate(&settings, dt, n)
+}
+
+/// The record length that covers `seconds` of the signal: at least the usual record (`sample_count`), at most `cap`
+/// samples. A reference that stands beside live channels is as long as their screen where the sample rate allows it;
+/// the usual record of a fast lane is a few microseconds.
+pub fn sample_count_for(lane: &Lane, seconds: f64, cap: usize) -> Result<usize, String> {
+    let usual = sample_count(lane)?;
+    let wanted = if seconds.is_finite() && seconds > 0.0 { (seconds / dt_of(lane)).ceil() } else { 0.0 };
+    let cap = cap.min(hss::MAX_SAMPLES).max(usual);
+    Ok((wanted.min(cap as f64) as usize).max(usual))
+}
+
+/// `try_generate` with a record of `n` samples (from `sample_count_for`).
+pub fn try_generate_len(lane: &Lane, n: usize) -> Result<Vec<f32>, String> {
+    validate_lane(lane)?;
+    let settings = settings(lane);
+    let (dt, usual) = hss::try_sample_grid(&settings)?;
+    hss::generate(&settings, dt, n.max(usual))
 }
 
 fn validate_lane(lane: &Lane) -> Result<(), String> {
