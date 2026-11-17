@@ -48,6 +48,11 @@ Changed:
 
 Fixed:
 
+- A decoder on channels reads the samples the acquisition kept, not the 3600 points of the screen: a 9600 baud
+  line decoded with errors at 5 ms/div, as garbage at 10 ms/div and not at all at 20 ms/div (seen on a DHO924S
+  2026-11-17). Up to 262144 points per line while running and 4 M when stopped, every n-th sample beyond that
+  (unit, 2026-11-17: whole messages without an error from 5 to 50 ms/div at 100 k points and at 20 ms/div with 1 M,
+  running and stopped). Peak detect, roll and records above 1 M points still decode the screen record.
 - Two fingers never open the long-press menu: a pinch that rested for half a second opened it mid-gesture.
 - Stacked lanes: the logic analyser keeps its own strip instead of drawing over the first lane.
 - The measurement band has no row of its own for page controls, and its names no longer run into the source.

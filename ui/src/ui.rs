@@ -286,6 +286,11 @@ const DLG_ROW: i32 = 44;
 const DLG_CTRL: i32 = 40;
 /// records kept for history playback
 const HISTORY: usize = 200;
+/// Points per line a decoder reads from the kept samples of a record while running (`Ui::decode_native`): 73 times
+/// the screen record, and still decoded once per record in the frame that shows it.
+const DEC_NATIVE_RUN: usize = 262_144;
+/// The same for a stopped record, which is decoded once.
+const DEC_NATIVE_STOP: usize = 4 << 20;
 /// Seconds the trigger level line stays after the level changed.
 const LEVEL_LINE_S: f64 = 1.5;
 /// Longest wait of a STOP for the hardware's final frame (`Ui::stop_final`): a batch in progress, its read and the raw
@@ -4940,6 +4945,9 @@ impl Ui {
         if m.dec_on_la() {
             return self.la_packets(m, rec).map(std::sync::Arc::new);
         }
+        if let Some(p) = self.decode_native(m, rec) {
+            return p;
+        }
         let mut h = std::collections::hash_map::DefaultHasher::new();
         (self.wfm_total, self.hist_pos, rec.t0.to_bits(), rec.dt.to_bits()).hash(&mut h);
         for c in 0..NCH {
@@ -4957,6 +4965,53 @@ impl Ui {
         }
         self.dec_cache_put(key, &p);
         Ok(std::sync::Arc::new(p))
+    }
+
+    /// The packets from the samples the acquisition kept, when those are finer than the screen record: the screen
+    /// record has 3600 points whatever the time base, which at 10 ms/div is under four points per bit of a 9600 baud
+    /// line (unit 2026-11-17: garbage at 10 ms/div, nothing at 20 ms/div, on a line the kept samples decode without
+    /// an error). At most `DEC_NATIVE_RUN` points per line while running and `DEC_NATIVE_STOP` when stopped, every
+    /// n-th sample beyond that; the result is kept per frame, so moving a stopped record decodes nothing again.
+    /// `None`: the screen record is the answer (min/max pairs, no kept samples, or none finer than the screen's).
+    fn decode_native(&self, m: &Model, rec: &Record) -> Option<Result<std::sync::Arc<Vec<oos_dsp::decode::Packet>>, &'static str>> {
+        use std::hash::{Hash, Hasher};
+        let raw = rec.raw.as_ref().filter(|r| !r.frame.envelope && r.frame.dt.is_finite() && r.frame.dt > 0.0 && r.t0.is_finite())?;
+        // the record of another source is conditioned (coupling, invert) after its frame: the frame is not what it shows
+        if !self.src.is_hw() && !raw.conditioned {
+            return None;
+        }
+        let f = &raw.frame;
+        let n = f.ch.iter().map(Vec::len).max().unwrap_or(0);
+        let budget = if self.m.run == RunState::Stop { DEC_NATIVE_STOP } else { DEC_NATIVE_RUN };
+        let stride = n.div_ceil(budget).max(1);
+        let dt = f.dt * stride as f64;
+        // every line of the record must be in the frame, at one length
+        if n < 2 || dt >= rec.dt * 0.999 || (0..NCH).any(|c| !rec.ch[c].is_empty() && f.ch[c].len() != n) {
+            return None;
+        }
+        let origin = raw.t0 - raw.i0 as f64 * f.dt;
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (std::sync::Arc::as_ptr(f) as usize, f.seq, n, origin.to_bits(), stride, self.hist_pos).hash(&mut h);
+        for c in 0..NCH {
+            m.ch[c].volts_per_div().to_bits().hash(&mut h);
+        }
+        format!("{:?}", m.dec_cfg()).hash(&mut h);
+        let key = h.finish();
+        if let Some(e) = self.dec_cache.borrow().iter().find(|e| e.0 == key) {
+            return Some(Ok(std::sync::Arc::new(e.1.clone())));
+        }
+        let thin: [Vec<f32>; NCH] = std::array::from_fn(|c| if stride > 1 { f.ch[c].iter().step_by(stride).copied().collect() } else { Vec::new() });
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if stride > 1 { &thin[c][..] } else { &f.ch[c][..] });
+        let mut p = match crate::trig::decode(m, ch, dt) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(e)),
+        };
+        for x in p.iter_mut() {
+            x.t0 = origin + x.t0 * dt;
+            x.t1 = origin + x.t1 * dt;
+        }
+        self.dec_cache_put(key, &p);
+        Some(Ok(std::sync::Arc::new(p)))
     }
 
     /// Keeps what the decoders of one record need.
@@ -12994,6 +13049,51 @@ mod tests {
         let kinds: Vec<String> = ui.azr.findings.iter().map(|f| format!("{:?} {:?} {:.2}", f.channels, f.kind, f.confidence)).collect();
         assert!(named.contains("CH3"), "toast: {:?}, seen {:?}, findings {:?}", named, ui.azr.watch_seen, kinds);
         assert!(ui.identify_items().len() > 1);
+    }
+
+    #[test]
+    fn a_decoder_reads_the_kept_samples_at_a_slow_time_base() {
+        use super::*;
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.set_dec_proto(Proto::UART);
+        ui.m.run = RunState::Stop;
+        ui.m.ch[0].on = true;
+        ui.m.ch[0].bw = BW_FULL;
+        ui.m.ch[0].coupling = Coupling::Dc;
+        // no software trigger: the record stays where the frame says
+        ui.m.trig_level = 10.0;
+        ui.m.dec_src = 0;
+        ui.m.dec_thr = 1.65;
+        ui.m.dec_baud = crate::decode::BAUDS.iter().position(|&b| b == 9600.0).unwrap();
+        ui.m.tscale = tscales().iter().position(|&t| (t - 20e-3).abs() < 1e-9).unwrap();
+        // 9600 Bd, idle high, a character every 3.3 ms: 200 ms at 500 kSa/s, the screen record has 1.9 points per bit
+        let (dt, n, text) = (2e-6, 100_000, "Tektronix Enabling Innovation ");
+        let mut v = vec![3.3f32; n];
+        for (k, b) in text.bytes().cycle().take(58).enumerate() {
+            let start = 2e-3 + k as f64 * 3.3e-3;
+            for bit in 0..9 {
+                // the start bit and the zeros of the eight data bits, least significant first
+                if bit == 0 || b >> (bit - 1) & 1 == 0 {
+                    let at = |i: usize| ((start + i as f64 / 9600.0) / dt).round() as usize;
+                    v[at(bit)..at(bit + 1)].fill(0.0);
+                }
+            }
+        }
+        let frame = std::sync::Arc::new(crate::board::Frame { seq: 7, dt, pre: n / 2, ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            roll: false, scan: false, partial: false, envelope: false, acq: (0.0, 0), stamp: 0, basic: Default::default(), la: None, fixed_ti: None, hw_avg: false });
+        ui.last[0] = Some(crate::board::to_record(&frame, &ui.m, 3600, 0.2, -0.1));
+        let read = |ui: &Ui| -> (String, f64) {
+            let p = ui.decode_packets().unwrap();
+            let data: Vec<_> = p.iter().filter(|p| p.kind == oos_dsp::decode::Kind::Data && p.ok).collect();
+            (data.iter().map(|p| p.value as u8 as char).collect(), data.first().map_or(f64::NAN, |p| p.t0))
+        };
+        let (native, first) = read(&ui);
+        assert_eq!(native, text.bytes().cycle().take(58).map(|b| b as char).collect::<String>());
+        // times stay those of the record: the first start bit is 2 ms into a frame that begins 100 ms before the trigger
+        assert!((first - (2e-3 - 0.1)).abs() < 2.0 / 9600.0, "first character at {first}");
+        // the screen record alone cannot hold it
+        ui.last[0].as_mut().unwrap().raw = None;
+        assert!(!read(&ui).0.contains("Tektronix"));
     }
 
     #[test]
