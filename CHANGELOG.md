@@ -35,6 +35,17 @@ Fixed:
 
 Added:
 
+- Remote control, from the same run on a DHO924S (host-tested, and each ran on that unit; of `*TRG` the unit showed
+  only that it is accepted):
+  - `:WAVeform:XINCrement?`, `:XORigin?`, `:XREFerence?`, `:YINCrement?`, `:YORigin?` and `:YREFerence?` answer the
+    scaling fields of the preamble one by one, as the stock command set has them.
+  - `:MMEMory:CATalog?`, `:MMEMory:DATA? "name"` and `:MMEMory:DELete "name"` list, fetch and remove the files of
+    the save folder, so a waveform or screenshot saved on the scope can be pulled to the PC;
+  - `:SAVE:MEMory:WAVeform` saves every sample the acquisition kept, where `:SAVE:WAVeform` writes the 3600 points
+    of the screen;
+  - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
+  - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
+    `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
 - Remote commands (host-tested, not yet verified on hardware): the zone triggers (`:TRIGger:ZONE<n>:...`), the delay,
   setup/hold, duration, slope and video trigger rows that had no command, history frames (`:RECord:CURRent`,
   `:NAVigate:FRAMe:...`), `:SEARch:VALue?`, `:MATH<n>:RESet`, `:CHANnel<n>:ZERO`, `:MEASure:STRip:DOCK`,
@@ -92,6 +103,31 @@ Changed:
 
 Fixed:
 
+- After a Stop, `:WAVeform:MODE RAW` and `:SAVE:MEMory:WAVeform` give the whole record of the stop. They gave the
+  part the scope reads again for the view, the screen and a quarter screen each side: 93760 of 100000 points at
+  5 us/div, and another part after every pan or zoom (unit).
+- A decoder on channels reads the samples the acquisition kept, not the 3600 points of the screen: a 9600 baud
+  line decoded with errors at 5 ms/div, as garbage at 10 ms/div and not at all at 20 ms/div (seen on a DHO924S
+  2026-11-17). Up to 262144 points per line while running and 4 M when stopped, every n-th sample beyond that
+  (unit, 2026-11-17: whole messages without an error from 5 to 50 ms/div at 100 k points and at 20 ms/div with 1 M,
+  running and stopped). Peak detect, roll and records above 1 M points still decode the screen record.
+- From running real signals through the remote commands on a DHO924S (2026-11-17); host-tested, and marked "(unit)"
+  where the fix also ran on that unit:
+  - `:RUN` after `:SINGle` (and Run/Stop after Single on the panel) returns to the sweep that was set before, where it
+    went to Auto and a Normal sweep was lost (unit, by `:RUN`);
+  - a mask made from a reference (`:MASK:CREate:REF`) is laid over the points of the screen: it failed every
+    acquisition of the very signal the reference was saved from, because a reference keeps the whole acquisition
+    (unit: 792 passed, none failed);
+  - a protocol trigger in Normal or Single, or a zone trigger, then Stop: the record that matched stays on the
+    screen, where the newest frame of the hardware (as a rule one the screen had refused) was read in its place
+    (unit, UART data trigger: six stops of six on the character; the zone trigger is not yet verified on hardware);
+  - UART: a record that starts inside a character no longer lists false characters in front (`FF`, `ED`): the
+    characters are listed from where the bits can be read in one way only (unit: twelve stops, none);
+  - `:REFerence:COLor RED` was refused (the word was read as a slot); `:CURSor:TRACk:CAY?` and `CBY?` answer the
+    value under a track cursor, not `9.9E37`; `:WAVeform:STOP?` answers the last point when the stop is beyond the
+    record; `:WAVeform:DATA?` of a channel that is off is an error, not old data; a setup file that is not there is
+    error -256 (unit, all five);
+  - `tools/check.sh decoders` failed on a test that needs every decoder.
 - An update with another device tree starts by kexec again (unit). The update copied the loader's random
   `/chosen/kaslr-seed` into the new tree, and kexec-tools refuses a seed that is not 0, so the update stopped at its
   kexec start with nothing installed. The seed now goes in as 0, and kexec-tools puts in a new random one. A scope

@@ -1254,19 +1254,24 @@ pub fn parse_ref_looks(text: &str, n: usize) -> Vec<Option<RefLook>> {
 /// CSV of the enabled channels of a record: `Time (s),CH1 (V),...`, one row per sample, time relative to the
 /// trigger; samples without data (NaN) are empty fields.
 pub fn wave_csv(rec: &Record, m: &Model) -> String {
-    let chans: Vec<usize> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).collect();
-    let n = chans.iter().map(|&c| rec.ch[c].len()).max().unwrap_or(0);
+    let chans: Vec<(usize, &[f32])> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).map(|c| (c, rec.ch[c].as_slice())).collect();
+    wave_csv_of(rec.t0, rec.dt, &chans)
+}
+
+/// The CSV of `wave_csv` for any set of channels (number from 0, samples) on one time axis: the acquisition memory.
+pub fn wave_csv_of(t0: f64, dt: f64, chans: &[(usize, &[f32])]) -> String {
+    let n = chans.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
     let mut s = String::with_capacity(n * (16 + 12 * chans.len()) + 64);
     s.push_str("Time (s)");
-    for &c in &chans {
+    for (c, _) in chans {
         s.push_str(&format!(",CH{} (V)", c + 1));
     }
     s.push('\n');
     for k in 0..n {
-        s.push_str(&format!("{:.9e}", rec.t0 + k as f64 * rec.dt));
-        for &c in &chans {
+        s.push_str(&format!("{:.9e}", t0 + k as f64 * dt));
+        for (_, samples) in chans {
             s.push(',');
-            if let Some(v) = rec.ch[c].get(k).filter(|v| v.is_finite()) {
+            if let Some(v) = samples.get(k).filter(|v| v.is_finite()) {
                 s.push_str(&v.to_string());
             }
         }
@@ -1309,19 +1314,24 @@ pub fn la_csv(la: &crate::ui::la::LaRec, lines: &[usize]) -> String {
 /// "OOSW", u32 version 1, u32 number of channels, u64 samples per channel, f64 dt, f64 t0, then per channel its number
 /// (u32, 1..4) and the samples as f32 volts.
 pub fn wave_bin(rec: &Record, m: &Model) -> Vec<u8> {
-    let chans: Vec<usize> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).collect();
-    let n = chans.iter().map(|&c| rec.ch[c].len()).max().unwrap_or(0);
+    let chans: Vec<(usize, &[f32])> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).map(|c| (c, rec.ch[c].as_slice())).collect();
+    wave_bin_of(rec.t0, rec.dt, &chans)
+}
+
+/// The binary form of `wave_bin` for any set of channels (number from 0, samples) on one time axis.
+pub fn wave_bin_of(t0: f64, dt: f64, chans: &[(usize, &[f32])]) -> Vec<u8> {
+    let n = chans.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
     let mut b = Vec::with_capacity(36 + chans.len() * (4 + 4 * n));
     b.extend_from_slice(b"OOSW");
     b.extend_from_slice(&1u32.to_le_bytes());
     b.extend_from_slice(&(chans.len() as u32).to_le_bytes());
     b.extend_from_slice(&(n as u64).to_le_bytes());
-    b.extend_from_slice(&rec.dt.to_le_bytes());
-    b.extend_from_slice(&rec.t0.to_le_bytes());
-    for &c in &chans {
-        b.extend_from_slice(&(c as u32 + 1).to_le_bytes());
+    b.extend_from_slice(&dt.to_le_bytes());
+    b.extend_from_slice(&t0.to_le_bytes());
+    for (c, samples) in chans {
+        b.extend_from_slice(&(*c as u32 + 1).to_le_bytes());
         for i in 0..n {
-            b.extend_from_slice(&rec.ch[c].get(i).copied().unwrap_or(f32::NAN).to_le_bytes());
+            b.extend_from_slice(&samples.get(i).copied().unwrap_or(f32::NAN).to_le_bytes());
         }
     }
     b

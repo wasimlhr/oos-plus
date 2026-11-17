@@ -29,7 +29,7 @@ Part of the [SCPI reference](README.md).
 | `:REFerence:VSCale` | Set / Query | `[<slot>,]<V/div>` Display scale of a loaded reference; stored samples are unchanged. | - | Reference > Slot scale | OOS extension |
 | `:REFerence:VOFFset` | Set / Query | `[<slot>,]<V>` Display offset of a loaded reference. | - | Reference > Slot offset | OOS extension |
 | `:REFerence:LABel:CONTent` | Set / Query | `[<slot>,]<text>` Reference display label. | - | Reference > Name | OOS extension |
-| `:REFerence:COLor` | Set / Query | Color of the selected or explicit slot: `GRAY`, `WHITe`, `RED`, `GREen`, `BLUE`, `ORANge`, `VIOLet`. | - | Reference > Slot color | OOS extension |
+| `:REFerence:COLor` | Set / Query | Color of the selected or explicit slot (`RED` or `1,RED`): `GRAY`, `RED`, `GREen`, `BLUE`, `ORANge`. `WHITe` is taken as `GRAY` and `VIOLet` as `ORANge`, and the query answers `GRAY` and `ORAN` for them. | - | Reference > Slot color | OOS extension |
 | `:REFerence:RESet` | Action | Reset the reference display scale; recorded samples and native timing are retained. | - | Reference > Scale / offset | OOS extension |
 
 ### Look and horizontal scale (Studio)

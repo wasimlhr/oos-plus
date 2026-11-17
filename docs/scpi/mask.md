@@ -12,7 +12,7 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:MASK:CREate:REF` | Action | `<Rn>` Mask from a reference | - | Mask, zones, histogram > Create from ref | OOS extension |
+| `:MASK:CREate:REF` | Action | `<Rn>` Mask from a reference, read at the times of the points on screen | - | Mask, zones, histogram > Create from ref | OOS extension |
 | `:MASK:CLEar` | Action | Clear the mask | - | Mask, zones, histogram > Clear mask | OOS extension |
 | `:MASK:INVert` | Set / Query | Boolean. | `0` | Mask > Invert | OOS extension |
 | `:MASK:OUTPut` | Set / Query | `STOP`, `CONTinue` (on fail). | `CONT` | Mask > On fail | name not verified against the DHO guide |

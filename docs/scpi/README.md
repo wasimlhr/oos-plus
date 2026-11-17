@@ -133,13 +133,13 @@ See [waveform](waveform.md) for the preamble and the formats.
 
 | Page | Commands | Covers |
 | --- | --- | --- |
-| [Common commands](common.md) | 7 | IEEE 488.2: `*IDN?`, `*RST`, `*CLS`, `*OPC`, `*ESR?`, `*SAV`, `*RCL` |
-| [System](system.md) | 41 | Identification, setup block, date, time, NTP, network, remote services, power, update, boot |
+| [Common commands](common.md) | 15 | IEEE 488.2: `*IDN?`, `*RST`, `*CLS`, `*OPC`, `*ESR?`, `*ESE`, `*SRE`, `*STB?`, `*PSC`, `*TST?`, `*OPT?`, `*WAI`, `*TRG`, `*SAV`, `*RCL` |
+| [System](system.md) | 42 | Identification, setup block, date, time, NTP, network, remote services, power, update, boot |
 | [Run control and acquisition](acquire.md) | 16 | Run, stop, single, autoset, clear; acquisition type, depth, history |
 | [Channels](channel.md) | 17 | Vertical settings per channel, active channel |
 | [Timebase](timebase.md) | 13 | Main, delayed, roll and XY time base |
 | [Trigger](trigger.md) | 72 | Type, sweep, level and one subsection per trigger type |
-| [Waveform transfer](waveform.md) | 8 | Waveform transfer, preamble, formats |
+| [Waveform transfer](waveform.md) | 14 | Waveform transfer, preamble, formats |
 | [Measurements](measure.md) | 41 | Items, pairs, statistics, gate, levels, catalogue |
 | [Cursors, DVM and counter](cursor.md) | 30 | Cursors, DVM, counter |
 | [Math](math.md) | 16 | Math channels, FFT, filters, formulas |
@@ -156,7 +156,7 @@ See [waveform](waveform.md) for the preamble and the formats.
 | [Signal simulator (SIM)](sim.md) | 26 | Signal simulator |
 | [Display, views and Studio zoom](display.md) | 23 | Display, views, Studio zoom, screenshot |
 | [Screen layout and controls](layout.md) | 25 | Docking, sizing and floating the Studio views; the right-click menu; screen controls by name and place |
-| [Save and load](storage.md) | 8 | Save and load setups, waveforms, images, fast frames |
+| [Save and load](storage.md) | 12 | Save and load setups, waveforms, the acquisition memory, images, fast frames; list, fetch and delete saved files |
 | [Data logger](logger.md) | 4 | Data logger |
 | [Calibration and deskew](calibration.md) | 6 | Self-calibration and analysis deskew |
 | [Setup keys](setup-keys.md) | - | The `:SYSTem:SET` key list and the packed-key formats |
