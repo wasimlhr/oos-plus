@@ -207,7 +207,7 @@ pub use crate::layout::{Frame, Screen, METRICS, PANEL_H, PANEL_W};
 /// Width of the marker strips at the left and right edge of the plot (the labels keep clear of them).
 const MARK_W: i32 = 26;
 /// Width of the volts axis of the histogram view.
-const HIST_AXIS_W: i32 = 46;
+const HIST_AXIS_W: i32 = 58;
 /// Height of the badge of a reference trace (name row, scale and rate row).
 const REF_BADGE_H: i32 = 40;
 /// Width of the measurement strip when it is docked on the left or the right.
@@ -1206,6 +1206,8 @@ enum Drag {
     Bus,
     /// a list: by its content or its scroll bar (ui/scroll.rs)
     Scroll(scroll::List, scroll::Grip),
+    /// a divider between two columns of the event table (ui/tables.rs)
+    TableCol(usize),
 }
 
 struct Pinch {
@@ -1745,6 +1747,8 @@ pub struct Ui {
     /// table window over the plot, first row shown
     table: Option<tables::TableKind>,
     table_top: usize,
+    /// where the second and the third column of the event table start, from its left edge, once a divider was dragged
+    table_cols: Option<[i32; 2]>,
 }
 
 /// One line of the measurement strip when it is docked on the left or the right.
@@ -1880,6 +1884,7 @@ impl Ui {
             dec_cache: Default::default(),
             table: None,
             table_top: 0,
+            table_cols: None,
             zone_sel: 0,
             zone_arm: None,
             zone_path: Vec::new(),
@@ -4810,7 +4815,8 @@ impl Ui {
             let ty = (y + 4).clamp(a.y + 12, a.bottom() - 2);
             if ty < free + f.s.size { continue; }
             free = ty;
-            cv.text(&f.s, a.x + 2, ty, &s, AXIS_TEXT);
+            // beside the axis line, not at the edge of the view: the handle of the divider sits on that edge
+            cv.text(&f.s, (a.x + ax - 7 - f.s.width(&s)).max(a.x + 2), ty, &s, AXIS_TEXT);
         }
         // the count scale: nought at the axis, the largest bin at the end of the longest bar
         let top = a.y + (ly - 14).max(2);
@@ -5728,7 +5734,9 @@ impl Ui {
             }
         };
         if !src.is_empty() {
-            backed_text(cv, &f.s, self.full_home().0.x - 16 - f.s.width(src), y, src, DIM);
+            // Studio writes "Full" or "Exit" left of the corner button: the caption ends before that word
+            let word = if self.m.layout == Layout::Studio { f.s.width("Full") + 10 } else { 0 };
+            backed_text(cv, &f.s, self.full_home().0.x - 16 - word - f.s.width(src), y, src, DIM);
         }
         let mut x = g.x + 8;
         // a channel at the end of the ADC range: said in red, first on the line
@@ -6451,7 +6459,7 @@ impl Ui {
     /// A message that reports something done: it gets a tick, not the warning triangle.
     /// A message that only informs (nothing to clear, which view, a channel turned on): a neutral pill with an "i".
     pub(super) fn toast_is_info(s: &str) -> bool {
-        s == NOTHING_TO_CLEAR || s == "Views off" || s.ends_with(" turned on") || (s.starts_with("View ") && s.contains(" of "))
+        s == NOTHING_TO_CLEAR || s == "Views off" || s.ends_with(" turned on") || s.starts_with("Generating ") || (s.starts_with("View ") && s.contains(" of "))
     }
 
     pub(super) fn toast_is_success(s: &str) -> bool {
@@ -10849,13 +10857,19 @@ impl Ui {
             None
         };
         // a finger on a list that scrolls (the measurement page, the Results pane, a table) moves it
-        let grip = if ph == Phase::Down && !self.m.touch_lock && self.dialog.is_none() && !self.power_dlg && self.wlan.osk.is_none() { self.scroll_grip(x, y) } else { None };
+        let free = ph == Phase::Down && !self.m.touch_lock && self.dialog.is_none() && !self.power_dlg && self.wlan.osk.is_none();
+        let column = if free { self.table_col_grip(x, y) } else { None };
+        let grip = if free && column.is_none() { self.scroll_grip(x, y) } else { None };
         let t = &mut self.touch;
         match ph {
             Phase::Down => {
                 let sd = if self.m.zoom { self.m.zdelay } else { self.m.delay };
                 *t = TouchState { down: true, x0: x, y0: y, x, y, t0: self.now, held: false, drag: Drag::None, start_offset: 0.0, start_delay: sd, start_level: self.m.trig_level, start_cur: 0.0, win: self.cur_win };
                 if self.m.touch_lock || self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() {
+                    return;
+                }
+                if let Some(k) = column {
+                    t.drag = Drag::TableCol(k);
                     return;
                 }
                 if let Some((l, g)) = grip {
@@ -10890,6 +10904,10 @@ impl Ui {
                 }
                 t.x = x;
                 t.y = y;
+                if let Drag::TableCol(k) = t.drag {
+                    self.table_col_set(k, x);
+                    return;
+                }
                 if let Drag::Scroll(l, g) = t.drag {
                     let y0 = t.y0;
                     self.scroll_move(l, g, y0, y);
