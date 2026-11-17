@@ -287,6 +287,18 @@ fn phase_is_measured_within_each_cycle() {
 }
 
 #[test]
+fn phase_takes_one_b_edge_per_cycle() {
+    // B at twice the rate of A, its first rise 90 degrees into each cycle of A: one B edge a cycle, so 90 degrees,
+    // not the mean of 90 and 270
+    let dt = 1e-6;
+    let fa = PulseTrain::square(1e3, 0.0, 1.0, 1e-6);
+    let fb = PulseTrain { offset: 250e-6, ..PulseTrain::square(2e3, 0.0, 1.0, 1e-6) };
+    let a = analyze(&sample(|t| fa.v(t), 0.0, dt, 5000), dt);
+    let b = analyze(&sample(|t| fb.v(t), 0.0, dt, 5000), dt);
+    assert!(close(phase(&a, &b, Pair(true, true)), 90.0, 1e-3), "{}", phase(&a, &b, Pair(true, true)));
+}
+
+#[test]
 fn burst_needs_an_idle_gap_before_and_after() {
     // three 1 MHz pulses, 100 us of silence, three more: two bursts of 2.5 us (first rise to last fall)
     let dt = 1e-8;

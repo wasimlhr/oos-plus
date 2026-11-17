@@ -95,6 +95,9 @@ Added:
 
 Changed:
 
+- Phase (A to B) takes one edge of B in each cycle of A, and each edge of B once (host-tested, not yet verified on
+  hardware). Before, every edge of B inside a cycle counted, so a B at twice the rate of A read the mean of its two
+  edges (180 degrees for a B whose first edge is at 90).
 - Minimal opens the settings sheets of Studio for every menu; the stock layout keeps the stock dialogs. Every
   remaining dialog of Studio is a sheet too (host-tested).
 - The top bars of Minimal and Studio no longer repeat front-panel keys: Measure, Cursor, Autoset, Clear and Force
