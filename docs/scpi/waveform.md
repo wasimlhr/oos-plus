@@ -1,6 +1,6 @@
 # Waveform transfer
 
-Read waveform points and their scaling over SCPI. `:WAVeform:SOURce` selects the source for transfer and does not select the acquisition trigger. For a channel, NORMal reads the interpolated display record and RAW the retained native memory (when stopped); a reference uses its native arrays in all three modes. Do not assume `:ACQuire:SRATe?` describes a reference: read its preamble.
+Read waveform points and their scaling over SCPI. `:WAVeform:SOURce` selects the source for transfer and does not select the acquisition trigger. For a channel, NORMal reads the interpolated display record and RAW the retained native memory (when stopped: the whole record of the stop, whatever part of it the view shows, as long as it holds single samples, which is up to 1 M points); a reference uses its native arrays in all three modes. Do not assume `:ACQuire:SRATe?` describes a reference: read its preamble.
 
 Menu location: none (data transfer); Display and layout > Screenshot for `:DISPlay:DATA?` (see [display](display.md)).
 

@@ -59,6 +59,9 @@ Changed:
 
 Fixed:
 
+- After a Stop, `:WAVeform:MODE RAW` and `:SAVE:MEMory:WAVeform` give the whole record of the stop. They gave the
+  part the scope reads again for the view, the screen and a quarter screen each side: 93760 of 100000 points at
+  5 us/div, and another part after every pan or zoom (unit).
 - A decoder on channels reads the samples the acquisition kept, not the 3600 points of the screen: a 9600 baud
   line decoded with errors at 5 ms/div, as garbage at 10 ms/div and not at all at 20 ms/div (seen on a DHO924S
   2026-11-17). Up to 262144 points per line while running and 4 M when stopped, every n-th sample beyond that

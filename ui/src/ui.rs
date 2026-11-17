@@ -2934,12 +2934,21 @@ impl Ui {
         self.last[0].as_ref().map(|r| r.ch[c].iter().map(|x| if x.is_finite() { *x } else { 0.0 }).collect()).unwrap_or_default()
     }
 
+    /// The frame a read of the memory takes (RAW, the memory save). In STOP the record shown is read again for every
+    /// view (`stop_replay`), far zoomed in as the samples of the view and a margin only: then the record of the stop
+    /// itself, when it holds every sample of the acquisition, stays the memory, whatever the view shows of it.
+    fn memory_raw(&self) -> Option<&Raw> {
+        let whole = |r: &&Raw| !r.frame.envelope && r.frame.acq.1 > 0 && r.frame.ch.iter().any(|v| v.len() >= r.frame.acq.1);
+        let stop = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(whole);
+        stop.or_else(|| self.last[0].as_ref()?.raw.as_ref())
+    }
+
     /// The samples a `:WAVeform` read uses. `memory` is RAW, or MAXimum while stopped: the deep record when the
     /// acquisition kept one, otherwise the screen record.
     fn channel_view(&self, c: usize, memory: bool) -> Option<(&[f32], f64, f64)> {
         let rec = self.last[0].as_ref()?;
         if memory {
-            if let Some(raw) = rec.raw.as_ref().filter(|r| !r.frame.envelope) {
+            if let Some(raw) = self.memory_raw().filter(|r| !r.frame.envelope) {
                 if let Some(v) = raw.frame.ch.get(c) {
                     if !v.is_empty() && raw.frame.dt.is_finite() && raw.frame.dt > 0.0 {
                         return Some((v.as_slice(), raw.frame.dt, raw.t0 - raw.i0 as f64 * raw.frame.dt));
@@ -12223,6 +12232,59 @@ mod tests {
         steps(&mut ui, 2);
         assert!(ui.stop_raw.is_none() && ui.stop_picture().is_none());
         crate::deepmeas::force(None);
+    }
+
+    // Break it catches: after a STOP the memory read out (RAW, the memory save) was the part of the record read again
+    // for the view, 93760 of 100000 points at 5 us/div (seen on a unit, 2026-11-17).
+    #[test]
+    fn stop_keeps_the_whole_record_as_the_memory_while_the_view_is_read_again() {
+        use super::*;
+        let shared: crate::board::HwShared = Default::default();
+        let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+        ui.m.run = RunState::Run;
+        for c in 1..NCH {
+            ui.m.ch[c].on = false;
+        }
+        ui.m.tscale = tscales().iter().position(|&t| (t as f64 - 5e-6).abs() < 1e-11).unwrap();
+        let (n, pre) = (100_000usize, 50_000usize);
+        let frame = |seq: u64, v: Vec<f32>| crate::board::Frame {
+            seq,
+            dt: 0.8e-9,
+            pre,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            acq: (1.25e9, n),
+            ..Default::default()
+        };
+        // an edge at the trigger point and a mark near the start of the record, outside what a view is read with
+        let mut v: Vec<f32> = (0..n).map(|i| if i < pre { -1.0 } else { 1.0 }).collect();
+        v[1000] = 0.75;
+        let steps = |ui: &mut Ui, k: usize| {
+            for _ in 0..k {
+                ui.step(0.02);
+            }
+        };
+        shared.lock().unwrap().queue.push_back(frame(1, v.clone()));
+        steps(&mut ui, 3);
+        assert_eq!(ui.channel_points(0, true), n);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        assert!(shared.lock().unwrap().stop_view.is_some(), "the UI asks for the view read again");
+        let origin = ui.channel_origin(0, true).unwrap();
+        // the thread's answer (`stop_plan`): the screen and a quarter screen each side, 93760 points from point 3120
+        let (lo, len) = (3120usize, 93_760usize);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(2, v[lo..lo + len].to_vec()) });
+        steps(&mut ui, 2);
+        let shown = ui.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| (r.frame.seq, r.frame.ch[0].len()));
+        assert_eq!(shown, Some((2, len)), "the view read again is the record shown");
+        assert_eq!(ui.channel_points(0, true), n, "the memory is the whole record");
+        assert_eq!(ui.channel_origin(0, true), Some(origin));
+        assert_eq!(ui.channel_page(0, true, 1001, 1001).unwrap().0, vec![0.75]);
+        // RUN: the record of the STOP is let go, the memory is that of the record shown again
+        ui.m.run = RunState::Run;
+        shared.lock().unwrap().queue.push_back(frame(3, v));
+        steps(&mut ui, 2);
+        assert!(ui.stop_raw.is_none());
+        assert_eq!(ui.channel_points(0, true), ui.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.ch[0].len());
     }
 
     // Break it catches: the stored record read again in STOP (`stop_replay`) counted as a new record in the statistics,
