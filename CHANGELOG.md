@@ -46,6 +46,10 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Sessions (host-tested, not yet verified on hardware): Storage > **Save session** writes the setup, the record on
+  the screen and every loaded reference slot with its samples into one file (`session-NNN.oss`); **Load session**
+  stops the scope and shows it again, measured and decoded from what was loaded. Reference slots the file does not
+  hold are emptied. Remote: `:SAVE:SESSion ["path"]`, `:LOAD:SESSion ["path"]`. ADR 0027.
 - Remote commands (host-tested, not yet verified on hardware): the zone triggers (`:TRIGger:ZONE<n>:...`), the delay,
   setup/hold, duration, slope and video trigger rows that had no command, history frames (`:RECord:CURRent`,
   `:NAVigate:FRAMe:...`), `:SEARch:VALue?`, `:MATH<n>:RESet`, `:CHANnel<n>:ZERO`, `:MEASure:STRip:DOCK`,
