@@ -1378,7 +1378,7 @@ pub fn read_waveform_file(p: &Path) -> Result<Vec<u8>, String> {
 pub const WAVE_EXTS: &[&str] = &["wfm", "bin", "csv", "trc", "isf", "tr0", "wfmx", "pwwf", "tkwf"];
 
 /// A stored waveform, recognized by its header:
-/// `OOSW`; `PWWF0001` or `TKWF0001`; `:WFM#001`, `:WFM#002` or `:WFM#003`; `:WFMPRE:`; `WAVEDESC`; cookie `AG`;
+/// `OOSW`; `PWWF0001` or `TKWF0001`; `:WFM#001`, `:WFM#002` or `:WFM#003`; `:WFMPRE:`; `WAVEDESC`; cookie `AG` or `RG`;
 /// a `$&%#` block (`9601`, `9007`, or `2001`) or a `Title:` / `Plotname:` transient (`Binary:` or `Values:`);
 /// XML `WaveformInternal` or `WaveformPatternInternal`; or a CSV time column.
 /// Anything else is refused.
@@ -1949,22 +1949,53 @@ fn parse_wavedesc(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
     Ok(vec![WaveTrace { t0, dt, v, label }])
 }
 
+/// The two makers of the binary waveform file: the same waveform header, and sizes of two widths.
+/// `AG`: a 12-byte file header (cookie, version, u32 file size, u32 waveforms) and a 12-byte buffer header.
+/// `RG`: a 16-byte file header (u64 file size) and a 16-byte buffer header (u64 buffer size).
+#[derive(Clone, Copy, PartialEq)]
+enum BinMaker { Ag, Rg }
+
+impl BinMaker {
+    fn of(b: &[u8]) -> Option<Self> {
+        match b.get(..2)? {
+            b"AG" => Some(Self::Ag),
+            b"RG" => Some(Self::Rg),
+            _ => None,
+        }
+    }
+
+    /// Length of the file header; the waveform count is its last four bytes.
+    fn file_header(self) -> usize {
+        if self == Self::Rg { 16 } else { 12 }
+    }
+}
+
 fn looks_ag(b: &[u8]) -> bool {
-    if b.len() < 12 + 140 || &b[..2] != b"AG" || !b[2].is_ascii_graphic() || !b[3].is_ascii_graphic() {
+    let Some(maker) = BinMaker::of(b) else { return false };
+    let first = maker.file_header();
+    if b.len() < first + 140 || !b[2].is_ascii_graphic() || !b[3].is_ascii_graphic() {
         return false;
     }
-    let nwave = u32::from_le_bytes(b[8..12].try_into().unwrap());
-    let hsize = u32::from_le_bytes(b[12..16].try_into().unwrap());
+    let nwave = u32::from_le_bytes(b[first - 4..first].try_into().unwrap());
+    let hsize = u32::from_le_bytes(b[first..first + 4].try_into().unwrap());
     (1..=64).contains(&nwave) && (140..8192).contains(&hsize)
 }
 
-/// Cookie `AG`, then one header per waveform and a buffer of float32 samples. Little endian.
+/// Cookie `AG` or `RG`, then one header per waveform and a buffer of float32 samples. Little endian.
+/// A logic waveform (type 6, or a buffer of 8-bit digital samples) is not a trace and is left out.
+///
+/// The start of an `RG` record: its manual calls X Origin the x value of the first point, as in an `AG` file,
+/// but files saved by the instruments hold the distance before the trigger there, a positive number (the
+/// RigolWFM project found this on DHO800 captures). So the first point of an `RG` record is at `-X Origin`.
 fn parse_ag(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
     if !looks_ag(b) {
         return Err("that file is not a waveform".into());
     }
-    let nwave = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
-    let mut p = 12usize;
+    let maker = BinMaker::of(b).unwrap();
+    let wide = maker == BinMaker::Rg;
+    let mut p = maker.file_header();
+    let nwave = u32::from_le_bytes(b[p - 4..p].try_into().unwrap()) as usize;
+    let mut logic = 0usize;
     let mut out = Vec::with_capacity(nwave);
     for wi in 0..nwave {
         if p + 140 > b.len() {
@@ -1974,10 +2005,12 @@ fn parse_ag(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
         if !(140..8192).contains(&hsize) || p + hsize > b.len() {
             return Err("truncated waveform".into());
         }
+        let wave_type = u32::from_le_bytes(b[p + 4..p + 8].try_into().unwrap());
         let nbuf = u32::from_le_bytes(b[p + 8..p + 12].try_into().unwrap()) as usize;
         let npts = u32::from_le_bytes(b[p + 12..p + 16].try_into().unwrap()) as usize;
         let dt = f64::from_le_bytes(b[p + 32..p + 40].try_into().unwrap());
-        let t0 = f64::from_le_bytes(b[p + 40..p + 48].try_into().unwrap());
+        let origin = f64::from_le_bytes(b[p + 40..p + 48].try_into().unwrap());
+        let t0 = if wide { -origin } else { origin };
         let label = cstr(&b[p + 112..p + 128]);
         if !(1..=32).contains(&nbuf) || !(dt.is_finite() && dt > 0.0 && t0.is_finite()) {
             return Err("that file holds no waveform".into());
@@ -1985,17 +2018,24 @@ fn parse_ag(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
         p += hsize;
         let mut normal: Option<Vec<f32>> = None;
         let mut other: Option<Vec<f32>> = None;
+        let mut digital = wave_type == 6;
+        let buffer_header = if wide { 16 } else { 12 };
         for _ in 0..nbuf {
-            if p + 12 > b.len() {
+            if p + buffer_header > b.len() {
                 return Err("truncated waveform".into());
             }
             let dsize = u32::from_le_bytes(b[p..p + 4].try_into().unwrap()) as usize;
             let kind = u16::from_le_bytes(b[p + 4..p + 6].try_into().unwrap());
             let bpp = u16::from_le_bytes(b[p + 6..p + 8].try_into().unwrap()) as usize;
-            let bsize = u32::from_le_bytes(b[p + 8..p + 12].try_into().unwrap()) as usize;
-            if dsize < 12 || p + dsize + bsize > b.len() {
+            let bsize = if wide {
+                usize::try_from(u64::from_le_bytes(b[p + 8..p + 16].try_into().unwrap())).unwrap_or(usize::MAX)
+            } else {
+                u32::from_le_bytes(b[p + 8..p + 12].try_into().unwrap()) as usize
+            };
+            if dsize < buffer_header || p.checked_add(dsize).and_then(|data| data.checked_add(bsize)).is_none_or(|end| end > b.len()) {
                 return Err("truncated waveform".into());
             }
+            digital |= kind == 5;
             let data = p + dsize;
             if matches!(kind, 1 | 2 | 3) && bpp == 4 && bsize >= 8 && bsize % 4 == 0 {
                 let n = (bsize / 4).min(if npts >= 2 { npts } else { bsize / 4 });
@@ -2010,12 +2050,18 @@ fn parse_ag(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
             }
             p = data + bsize;
         }
-        let v = normal.or(other).ok_or("that file holds no waveform")?;
+        let Some(v) = normal.or(other) else {
+            if digital {
+                logic += 1;
+                continue;
+            }
+            return Err("that file holds no waveform".into());
+        };
         let label = if label.is_empty() { format!("CH{}", wi + 1) } else { label };
         out.push(WaveTrace { t0, dt, v, label });
     }
     if out.is_empty() {
-        return Err("that file holds no waveform".into());
+        return Err(if logic > 0 { "that file holds logic channels only, and they are not read" } else { "that file holds no waveform" }.into());
     }
     Ok(out)
 }
@@ -4354,5 +4400,102 @@ mod waveform_record_tests {
         for bad in ["", "[]", "{", r#"{"a"}"#, r#"{"a":}"#, r#"{,"a":1}"#, r#"{"a":1} x"#, r#"{"a":"unterminated}"#, r#"{"a":1]}"#] {
             assert!(json_members(bad).is_none(), "{bad}");
         }
+    }
+}
+
+#[cfg(test)]
+mod rigol_bin_tests {
+    use super::*;
+
+    /// One waveform of an `RG` file: the 140-byte waveform header, the 16-byte buffer header and the buffer.
+    fn waveform(wave_type: u32, buffer_type: u16, bytes_per_point: u16, dt: f64, origin: f64, label: &str, data: &[u8]) -> Vec<u8> {
+        let mut h = vec![0u8; 140];
+        h[..4].copy_from_slice(&140u32.to_le_bytes());
+        h[4..8].copy_from_slice(&wave_type.to_le_bytes());
+        h[8..12].copy_from_slice(&1u32.to_le_bytes());
+        h[12..16].copy_from_slice(&((data.len() / bytes_per_point as usize) as u32).to_le_bytes());
+        h[32..40].copy_from_slice(&dt.to_le_bytes());
+        h[40..48].copy_from_slice(&origin.to_le_bytes());
+        h[48..52].copy_from_slice(&2u32.to_le_bytes());
+        h[52..56].copy_from_slice(&1u32.to_le_bytes());
+        h[88..88 + 12].copy_from_slice(b"DHO924S:DHO9");
+        h[112..112 + label.len()].copy_from_slice(label.as_bytes());
+        h.extend_from_slice(&16u32.to_le_bytes());
+        h.extend_from_slice(&buffer_type.to_le_bytes());
+        h.extend_from_slice(&bytes_per_point.to_le_bytes());
+        h.extend_from_slice(&(data.len() as u64).to_le_bytes());
+        h.extend_from_slice(data);
+        h
+    }
+
+    fn file(waveforms: &[Vec<u8>]) -> Vec<u8> {
+        let mut b = b"RG01".to_vec();
+        let size = 16 + waveforms.iter().map(Vec::len).sum::<usize>();
+        b.extend_from_slice(&(size as u64).to_le_bytes());
+        b.extend_from_slice(&(waveforms.len() as u32).to_le_bytes());
+        for w in waveforms {
+            b.extend_from_slice(w);
+        }
+        b
+    }
+
+    fn floats(v: &[f32]) -> Vec<u8> {
+        v.iter().flat_map(|x| x.to_le_bytes()).collect()
+    }
+
+    #[test]
+    fn every_analog_channel_is_a_trace_and_the_record_starts_before_the_trigger() {
+        let a = [0.0_f32, 0.5, 1.0, -0.25];
+        let b = [3.3_f32, 3.2, 3.1, 3.0];
+        let bytes = file(&[
+            waveform(1, 1, 4, 4e-7, 2e-3, "CH1", &floats(&a)),
+            waveform(6, 5, 1, 4e-7, 2e-3, "D0", &[0, 1, 1, 0]),
+            waveform(1, 1, 4, 4e-7, 2e-3, "CH3", &floats(&b)),
+        ]);
+        let traces = parse_wave(&bytes, "capture.bin").unwrap();
+        assert_eq!(traces.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(), ["CH1", "CH3"]);
+        assert_eq!((traces[0].v.as_slice(), traces[1].v.as_slice()), (&a[..], &b[..]));
+        for t in &traces {
+            assert!((t.dt - 4e-7).abs() < 1e-18);
+            // X Origin holds the distance before the trigger: the first point is at its negative
+            assert!((t.t0 + 2e-3).abs() < 1e-15, "{}", t.t0);
+        }
+    }
+
+    #[test]
+    fn a_file_of_logic_channels_or_a_cut_file_is_refused_with_its_reason() {
+        let logic = file(&[waveform(6, 5, 1, 1e-6, 0.0, "D0", &[0, 1, 1, 0])]);
+        assert_eq!(parse_wave(&logic, "la.bin").map(|_| ()).unwrap_err(), "that file holds logic channels only, and they are not read");
+        let mut cut = file(&[waveform(1, 1, 4, 1e-6, 0.0, "CH1", &floats(&[1.0, 2.0, 3.0]))]);
+        cut.truncate(cut.len() - 5);
+        assert_eq!(parse_wave(&cut, "cut.bin").map(|_| ()).unwrap_err(), "truncated waveform");
+        // a buffer size past the end of the file, in the upper half of its eight bytes too
+        let mut huge = file(&[waveform(1, 1, 4, 1e-6, 0.0, "CH1", &floats(&[1.0, 2.0]))]);
+        let at = 16 + 140 + 8;
+        huge[at..at + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+        assert_eq!(parse_wave(&huge, "huge.bin").map(|_| ()).unwrap_err(), "truncated waveform");
+        huge[at..at + 8].copy_from_slice(&(1u64 << 40).to_le_bytes());
+        assert_eq!(parse_wave(&huge, "huge.bin").map(|_| ()).unwrap_err(), "truncated waveform");
+    }
+
+    #[test]
+    fn the_other_maker_of_the_format_still_starts_at_its_x_origin() {
+        // cookie AG: a 12-byte file header and a 12-byte buffer header, and X Origin is the first point
+        let v = [1.0_f32, 2.0, 3.0];
+        let mut b = b"AG10".to_vec();
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&1u32.to_le_bytes());
+        let mut h = waveform(1, 1, 4, 1e-9, -5e-6, "lane", &[]);
+        h.truncate(140);
+        h[12..16].copy_from_slice(&3u32.to_le_bytes());
+        b.extend(h);
+        b.extend_from_slice(&12u32.to_le_bytes());
+        b.extend_from_slice(&1u16.to_le_bytes());
+        b.extend_from_slice(&4u16.to_le_bytes());
+        b.extend_from_slice(&12u32.to_le_bytes());
+        b.extend(floats(&v));
+        let t = &parse_wave(&b, "k.bin").unwrap()[0];
+        assert_eq!((t.v.as_slice(), t.label.as_str()), (&v[..], "lane"));
+        assert!((t.t0 + 5e-6).abs() < 1e-18);
     }
 }
