@@ -78,6 +78,6 @@ next one opens the Cursor menu, whose first row is the Mode row of the Default m
 
 ## References
 
-`ui/src/ui/studio_parity_tests.rs`, `ui/src/ui/studio.rs` (`studio_acq_chip`, `studio_trig_detail`,
+`ui/src/ui/studio_parity_tests.rs`, `ui/src/ui/studio.rs` (`studio_acq_need`, `studio_trig_detail`,
 `studio_time_detail`), `ui/src/ui/sheet.rs` (`sheet_plan`, `sheet_add_expand`), `ui/src/ui/meascatalog.rs`
 (`catalog_lay`), ADR 0005, ADR 0007.

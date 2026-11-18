@@ -2092,7 +2092,7 @@ fn the_badge_row_wraps_onto_a_second_line() {
         u.m.ch[1].on = false;
         u.studio_set_classic(classic);
         for _ in 0..2 { frame(&mut u); }
-        let (one, eye) = (u.studio_row(), u.studio_eye());
+        let (one, chip) = (u.studio_row(), u.studio_list_chip());
         assert!(u.studio_badges_more().is_none() && !u.studio_badges().is_empty(), "{what}: the measurements of the start fit one line");
         let lines = |u: &Ui| { let mut ys: Vec<i32> = u.studio_badges().iter().map(|b| b.1.y).collect(); ys.sort(); ys.dedup(); ys.len() };
         assert_eq!(lines(&u), 1, "{what}");
@@ -2107,7 +2107,7 @@ fn the_badge_row_wraps_onto_a_second_line() {
             assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= limit, "{what}: badge {i} at {r:?} in {row:?}");
             for (_, o) in &badges[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{what}: {r:?} over {o:?}"); }
         }
-        if !classic { assert_eq!(u.studio_eye(), eye, "{what}: the buttons at the right stay on the line above the bar"); }
+        if !classic { assert_eq!(u.studio_list_chip(), chip, "{what}: the button at the right stays on the line above the bar"); }
         // the upper line is live
         let (key, r) = *badges.iter().min_by_key(|b| b.1.y).unwrap();
         let (x, y) = mid(r);
@@ -2326,11 +2326,11 @@ fn thin_sheets_are_one_page_and_the_add_controls_are_a_finger_high() {
     let rows = u.studio_add_rows();
     assert!(rows.len() >= 10 && rows.iter().all(|r| r.1.h >= 40 && r.1.bottom() <= u.scr.h), "{:?}", rows.iter().map(|r| r.1).collect::<Vec<_>>());
     u.studio.add_menu = false;
-    // the eye: a touch 4 px over its 34 px still hides the badges
-    let eye = u.studio_eye();
-    assert!(eye.h < 40 && !u.studio.hide_badges);
-    tap(&mut u, eye.x + eye.w / 2, eye.y - 2);
-    assert!(u.studio.hide_badges, "the eye takes a touch of 40 px");
+    // the Meas button of the badge row: a touch 4 px over its 34 px still opens the table
+    let chip = u.studio_list_chip();
+    assert!(chip.h < 40 && u.studio.view != super::studio::StudioView::Docked);
+    tap(&mut u, chip.x + chip.w / 2, chip.y - 2);
+    assert_eq!(u.studio.view, super::studio::StudioView::Docked, "the button takes a touch of 40 px");
 }
 
 /// The measurement panel of Studio is made for a finger: its toolbar buttons are 36 px high with a touch of 40, the
@@ -2368,9 +2368,7 @@ fn the_measurement_panel_and_the_badge_buttons_are_a_finger_high() {
     // the badges hidden: the bottom bar says what its chip brings back
     u.studio_set_view(StudioView::Waveform);
     for _ in 0..2 { frame(&mut u); }
-    let eye = u.studio_eye();
-    let (x, y) = mid(eye);
-    tap(&mut u, x, y);
+    u.studio_hide_badges();
     for _ in 0..2 { frame(&mut u); }
     assert!(u.studio.hide_badges && u.studio_badges_hidden());
     let chip = u.studio_bottom().show.expect("the chip of the bottom bar");
