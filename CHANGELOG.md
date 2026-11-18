@@ -248,6 +248,10 @@ Fixed:
     generator back to 1 kHz. Whether the output is on is not saved, and a recall leaves it off, also when it was on
     (unit: square 12.345 kHz, 0.5 Vpp, 0.1 V offset, 30 % duty back after `*RCL` and after `:LOAD:SESSion`, output off
     both times). An arbitrary wave is not saved;
+  - Spectrum: the fundamental, THD, SNR and the other distortion figures of a signal with harmonics and few periods
+    on the screen. With five periods the window's lobe of the fundamental held the third harmonic: a 10 kHz square
+    read 16.2 kHz, a ramp 12.3 kHz. The window follows the number of periods in the record (unit: square, ramp and
+    sine at 10 kHz read 10.00 kHz from 50 us/div to 1 ms/div);
   - VXI-11 `device_readstb` answers the status byte of `*STB?`, with bit 4 while an answer of the link waits; it
     answered 0 whatever the state (unit). `device_trigger` is `*TRG`. HiSLIP's AsyncStatusQuery answers the status
     byte too (desktop app; HiSLIP is not opened on a scope, and the table of the interfaces says so now);
