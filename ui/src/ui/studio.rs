@@ -1388,11 +1388,6 @@ pub(super) const SEARCH_ARROW_W: i32 = 46;
 const POPUP_W: i32 = 300;
 const POPUP_ROW: i32 = 40;
 
-/// Two short stacked bars that move together: the compact view.
-fn icon_compact(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
-    for dy in [-5, 0, 5] { cv.hline(cx - 7, cx + 7, cy + dy, c); }
-}
-
 /// A thumbtack: a flat cap, a barrel, a rim and a needle. Filled when pinned, outline when not. `x` is the left edge of the
 /// 12 px wide glyph and `cy` its middle (it is 17 px high).
 pub(super) fn icon_pin(cv: &mut Canvas, x: i32, cy: i32, filled: bool, c: Rgb) {
@@ -1407,19 +1402,6 @@ pub(super) fn icon_pin(cv: &mut Canvas, x: i32, cy: i32, filled: bool, c: Rgb) {
         cv.round_outline(barrel, 1, c);
         cv.fill(rim, c);
         cv.vline(x + 5, cy + 3, cy + 8, c);
-    }
-}
-
-/// The badge style switch: Studio shows two small chips, Classic (lit) rows of a dot and a line.
-fn icon_badge_style(cv: &mut Canvas, cx: i32, cy: i32, classic: bool, c: Rgb) {
-    for dy in [-6, 2] {
-        if classic {
-            cv.circle(cx - 6, cy + dy + 2, 2, c);
-            cv.hline(cx - 2, cx + 7, cy + dy + 2, c);
-            cv.hline(cx - 2, cx + 7, cy + dy + 3, c);
-        } else {
-            cv.round_outline(Rect::new(cx - 8, cy + dy, 17, 6), 3, c);
-        }
     }
 }
 
@@ -1620,6 +1602,7 @@ impl Ui {
     }
 
     /// Studio or Classic badges (Measure > Badge style).
+    #[cfg(test)]
     pub(super) fn studio_set_classic(&mut self, on: bool) {
         self.m.studio_classic = on;
         self.studio.popup = None;
