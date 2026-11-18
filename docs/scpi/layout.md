@@ -66,7 +66,7 @@ The other rows of that menu have their commands already: Stop / Run `:STOP`, `:R
 | `:UI:TAP` | Set | `x,y`: a tap, as a finger. | - | - | OOS extension |
 | `:UI:DRAG` | Set | `x0,y0,x1,y1`: a finger down, moved in steps, up. Drags a divider, a view by its strip, a floating panel by its corner, a cursor. | - | - | OOS extension |
 | `:UI:CONText` | Set | `x,y`: what a right click or a held finger opens at that point: the plot's menu, the menu of a channel chip or a view, or on the Zoom button its popover (`"Zoom source"`: `All lanes`, a lane, `X zoom in`, `X zoom out`, `Y zoom in`, `Y zoom out`, `Reset zoom`). | - | Right click; long press | OOS extension |
-| `:UI:MENU` | Query | The menu or popup that is open (the View menu of the Studio bar, and the popup of Add source in the bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `"<label> = <value>"`. `""` when none is open. | - | - | OOS extension |
+| `:UI:MENU` | Query | The menu or popup that is open (the View menu of the Studio bar, and the popup of Add source in the bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `"<label> = <value>"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. `""` when none is open. | - | - | OOS extension |
 | `:UI:MENU:SELect` | Set | `"<label>"`: presses the row of the open menu with that label (case does not matter; a unique beginning is enough). | - | Tap a menu row | OOS extension |
 | `:UI:MENU:CLOSe` | Set | Closes whatever menu or popup is open. | - | Tap outside | OOS extension |
 

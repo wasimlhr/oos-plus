@@ -168,8 +168,12 @@ fn eye_power_and_storage_pages() {
     shot(&mut u, "storage-1");
     tab(&mut u, 1);
     shot(&mut u, "storage-2");
+    // Save, Export, and SCPI: the set-up as commands, the recorder and the file that is run
+    tab(&mut u, 2);
+    shot(&mut u, "storage-3");
     let spec = u.sheet_spec(MenuId::Storage).unwrap();
-    assert_eq!(spec.tabs.len(), 2);
+    assert_eq!(spec.tabs.len(), 3);
+    assert_eq!(spec.tabs[2].rows, [Item::StoreSaveScpi, Item::StoreRecScpi, Item::StoreRunScpi]);
 }
 
 #[test]

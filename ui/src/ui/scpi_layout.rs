@@ -474,9 +474,9 @@ impl Ui {
         if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
         // the View menu of the Studio bar, and the popup of Add source in the bottom bar
         if self.studio.view_menu {
-            use super::studio::{STUDIO_VIEWS, VIEW_ADD, VIEW_BADGES, VIEW_COMPACT, VIEW_RESET};
+            use super::studio::{STUDIO_VIEWS, VIEW_BADGES, VIEW_COMPACT, VIEW_RESET};
             let mut rows: Vec<(String, Rect)> = STUDIO_VIEWS.iter().enumerate().map(|(i, (_, label))| (label.to_string(), self.studio_view_row(i))).collect();
-            for (i, label) in [(VIEW_BADGES, "Show pinned badges"), (VIEW_COMPACT, "Compact view"), (VIEW_RESET, "Reset layout"), (VIEW_ADD, "Add panel")] {
+            for (i, label) in [(VIEW_BADGES, "Show pinned badges"), (VIEW_COMPACT, "Compact view"), (VIEW_RESET, "Reset layout")] {
                 rows.push((label.to_string(), self.studio_view_row(i)));
             }
             return rows;
@@ -505,9 +505,9 @@ impl Ui {
         if !rows.is_empty() {
             out.extend(rows.into_iter().map(|(l, _)| q_str(&l)));
         } else if self.menu_open {
-            for it in self.items(self.menu) {
+            for (it, label) in self.script_labels() {
                 let v = self.value(it);
-                out.push(q_str(&if v.is_empty() { self.item_label(it).to_string() } else { format!("{} = {}", self.item_label(it), v) }));
+                out.push(q_str(&if v.is_empty() { label } else { format!("{label} = {v}") }));
             }
         }
         out.join(",")
