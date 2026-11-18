@@ -424,7 +424,8 @@ impl Ui {
                 if d.rem_euclid(2) != 0 { self.set_measurement_full_record(!self.m.meas_full_record); }
             }
             Item::BadgeStyle => {
-                if d.rem_euclid(2) != 0 { self.m.studio_classic = !self.m.studio_classic; self.relayout(); }
+                // through the one setter: it also closes the popup of a badge and puts the row back to its start
+                if d.rem_euclid(2) != 0 { self.studio_set_classic(!self.m.studio_classic); }
             }
             Item::MeasIdle => {
                 let cur = if self.m.meas_idle > 0.0 { self.m.meas_idle } else { 0.0 };

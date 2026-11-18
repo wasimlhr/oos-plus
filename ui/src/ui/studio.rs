@@ -1602,7 +1602,6 @@ impl Ui {
     }
 
     /// Studio or Classic badges (Measure > Badge style).
-    #[cfg(test)]
     pub(super) fn studio_set_classic(&mut self, on: bool) {
         self.m.studio_classic = on;
         self.studio.popup = None;
@@ -1961,6 +1960,8 @@ impl Ui {
         self.studio_set_view(StudioView::Waveform);
         self.dock_reset();
         self.studio.hide_badges = false;
+        // the row is back: no Undo bar for hiding it
+        self.studio.md.hide_undo = None;
         self.studio.pinned = None;
         self.studio.unpinned.clear();
         self.studio.popup = None;
