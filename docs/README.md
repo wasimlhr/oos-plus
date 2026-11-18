@@ -23,6 +23,8 @@ How the Rigol DHO800/DHO900 hardware works and how OOS drives it. "Verified on t
 - [porting.md](porting.md): other models (MHO900, DHO1000/4000): what carries over, and how to describe one.
 - [bandwidth-test.md](bandwidth-test.md): procedure to measure the analog bandwidth.
 - [extgen.md](extgen.md): a generator on the USB-A port or the LAN: its page, the models and how each is known, trying one on a unit.
+- [scpi-programming.md](scpi-programming.md): driving OOS Plus from a script: connect, set up, capture, read waveforms,
+  measure, handle errors. The full command list is [scpi.md](scpi.md).
 
 ## Hardware
 
