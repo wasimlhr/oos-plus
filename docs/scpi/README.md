@@ -182,6 +182,7 @@ Read `:SYSTem:ERRor?` until `0,"No error"`. Each read removes one queued error. 
 | Code | Meaning |
 | --- | --- |
 | -113 | Undefined header (also a sub-header the tables do not list). |
+| -203 | Command protected: a command a file may not send ([Run SCPI file](storage.md)). Said on the screen with the file's result, never queued for a client. |
 | -221 | Settings conflict: nothing to do it with, a missing `CONFIRM`, an operator that is not a filter, or a synchronous adapter that cannot hold `*OPC?`. |
 | -223 | Waveform page too large (worst-case encoded size over 64 MiB). |
 | -224 | Illegal parameter value (out of range, unknown option, unavailable source). |

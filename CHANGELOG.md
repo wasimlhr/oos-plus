@@ -13,6 +13,21 @@ Fixed:
   memory (seen on a unit, 2026-11-18). The stored record is read once more as a whole at the stop, for records up
   to 1 M points; at 1 M points it is asked for at every sample (asked for as a view it came as min/max pairs and
   the record stayed the earlier one). After a mask that stops on a failure the record that failed stays.
+- SCPI recorder (host-tested): Storage > Save setup is recorded as `*SAV <n>`, with the slot it went to; recorded
+  as `:SAVE:SETup`, a replay wrote the slot the other scope's menu stood at. A recording ends by itself at 20000
+  lines also when key presses fill it; only settings counted. A text size or Quick key action changed just before
+  Default is written, before the `*RST`: Default leaves these two alone, and the change was in no line.
+- Waveform files, found by a review of the readers above (host-tested):
+  - a RIGOL DHO `.wfm` file whose sample count is a multiple of 256 (four channels of 1 M points) is read
+    whole; it was refused or read with a wrong count;
+  - one with channel settings that do not decompress, or with a sample interval of 0, is refused with its
+    reason; it was shown with a wrong vertical scale, or an interval of one tick;
+  - opening a file that only starts like such a file no longer decompresses up to 4 GiB of settings while the
+    kind of the file is found out; a file with more than 4 MiB of channel settings is refused;
+  - a RIGOL CSV file with another column between the channels and `Start` takes its time from `Start` and
+    `Increment`; it was read as one second a sample. A file that counts samples without both values is refused;
+  - a large text file of a single line no longer takes gigabytes of memory when it is opened as a waveform;
+  - a CSV file that holds several sweeps (the time starts again) takes its sample interval from one sweep.
 - Studio: hiding the badges in the View menu shows its Undo bar when the menu has closed. The bar came up under the
   open menu, where the first tap on Undo only closed the menu; while the menu is open its switch is the undo. And
   Back from the Measure page makes the next Measure (the key, Add > Measurement) the quick Add panel again
@@ -139,17 +154,24 @@ Fixed:
 
 Added:
 
+- Waveform files of other scopes open as references (Reference > Load file, the web remote; host-tested on files
+  built for the tests and on public captures, not on a file saved by a unit here): a RIGOL `.wfm` file of a DHO800,
+  DHO900 or DHO1000, with the channels labelled CH1 onwards; the math traces of a Siglent binary file, as F1 to
+  F4 after its channels, also when no channel is on; a RIGOL CSV file whose first column counts samples, with
+  its time from the `Start` and `Increment` of the header; and a CSV file whose times are rounded, with the
+  sample interval from the whole span, not from the first step.
 - Storage > Run SCPI file runs a file of SCPI commands on the scope: a recording of the SCPI recorder, a set-up
   saved as commands, or lines written by hand (host-tested, not yet run on a unit; the Open dialog of the desktop
   app was not opened by hand). The scope lists the `.scpi` files where Storage saves, the newest first, and the
   desktop app asks with its Open dialog. One command a frame, so the screen follows; a line that waits for an
   operation (`*OPC?` after a Single or an auto set-up) is waited for, 30 s at most; while a file runs the row stops
   it. At the end the screen says how many commands were run and the first that was refused; a client's error queue
-  and status are as they were. A file sets the scope up, runs it and saves into the save folder, and no more (ADR 0033): a command with
-  `CONFIRM`, a press on the screen (`:UI:TAP`, `:UI:MENU:SELect`), a `:SYSTem:` command that is not a setting of
-  the set-up (the services, the WLAN, the clock, the recorder), `:CALibrate:STARt`, `:MMEMory:DELete` and a file
-  name outside the save folder are refused from a file and said. A link is not read as a file. A script has the
-  lines `replay <file>` and, on the host, `scpi <message>`.
+  and status are as they were. A file sets the scope up, runs it and saves into the save folder, and no more
+  (ADR 0033): a command with `CONFIRM`, a press on the screen (`:UI:TAP`, `:UI:MENU:SELect`), a `:SYSTem:`
+  command that is not a setting of the set-up (the services, the WLAN, the clock, the recorder),
+  `:CALibrate:STARt`, `:MMEMory:DELete` and a file name outside the save folder are refused from a file and
+  said. A link is not read as a file. A script has the lines `replay <file>` and, on the host,
+  `scpi <message>`.
 - `:UI:MENU?` lists the options of an open picker (the grid of an item's options, a list of files) and
   `:UI:MENU:SELect` takes one by its text; until now the rows of a picker came out empty.
 
@@ -163,8 +185,8 @@ Added:
   A key or a row that is an action is written as its command, with what was set before it first: Run / Stop,
   Single, Force, Clear, Default (`*RST`), Autoset, and the Storage rows Save setup, Save waveform and Save
   screenshot. `*OPC?` stands after `:SINGle` and `:AUToscale`. The settings an action changes are its own:
-  Default is one line whatever was set before, and an auto set-up is the command alone, so a replay finds what
-  the signal then has. What a client sets or does by SCPI is not recorded (a comment says where it set
+  Default is one line whatever was set before (but for the text size and the Quick key action, which Default
+  leaves alone), and an auto set-up is the command alone, so a replay finds what the signal then has. What a client sets or does by SCPI is not recorded (a comment says where it set
   something); what the web remote's keys and touches do is.
 - A line that starts with `#` is a comment to the SCPI interpreter and is not run, to the end of the line, so a
   file of commands with comment lines can be sent as it is.

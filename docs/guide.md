@@ -297,8 +297,14 @@ For development, run the checkout and automatically restart after saving source 
 ```
 
 Rust compiles changed code automatically. The window includes front-panel buttons and knob controls.
-Use **Reference > Load file** or **Ctrl+O** to open CSV, OOS BIN, WFM, waveform record (`.pwwf`), or RIGOL and Keysight binary (`.bin`) files; the web remote at `http://localhost:18080`
+Use **Reference > Load file** or **Ctrl+O** to open CSV, OOS BIN, WFM, waveform record (`.pwwf`), or RIGOL, Keysight and Siglent binary (`.bin`) files; the web remote at `http://localhost:18080`
 also accepts file selection and drag-and-drop. Loaded sources appear as **R1–R10** cards.
+Of the files of other scopes (read from built files and public captures on the host, not saved by a unit here):
+a RIGOL `.wfm` file of a DHO800, DHO900, DHO1000 or DS1000E is read, its channels labelled CH1 onwards (the file is
+not known to say which channels it holds, so a file of CH2 alone is shown as CH1); a Siglent binary file comes with
+its math traces as F1 to F4; a RIGOL CSV file that counts samples takes its time from the `Start` and `Increment`
+columns of its header, found by name; and a CSV file with a time column takes its sample interval from the longest
+run of lines whose time does not go back, so a file of several sweeps keeps the interval of one.
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Run simulation mode** plays the signal the SIM knobs describe; **Play references** plays the references that are shown
 (loaded files, signals added to a slot) as the acquisition instead.
