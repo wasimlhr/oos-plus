@@ -58,14 +58,16 @@ impl Ui {
     }
 
     /// The pairs of each source that is shown, with the width of the name and of the value. A value counts at least
-    /// as wide as "-00.0 mV" and in steps of 8 px, so a value that changes moves no column.
+    /// as wide as "-00.0 mV" and in steps of 8 px, so a value that changes moves no column, and at most as wide as
+    /// "0.000 MHz", the room every column had before: a text in the place of a value ("needs more edges") is cut at
+    /// the end of its cell and costs the line no column (seen on a unit, 2026-11-18: five columns where seven fit).
     fn classic_cells(&self) -> Vec<(WaveId, Vec<(MeasKey, i32, i32)>)> {
         let f = self.fonts();
         let rows = self.meas_rows();
-        let floor = f.sb.width("-00.0 mV");
+        let (floor, most) = (f.sb.width("-00.0 mV"), f.sb.width("0.000 MHz"));
         self.classic_groups().into_iter().take(MAX_GROUPS).map(|(src, keys)| (src, keys.into_iter().filter_map(|key| {
             let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
-            Some((key, f.s.width(&self.studio_badge_name(key, &r.name)), (f.sb.width(&r.text()).max(floor) + 7) / 8 * 8))
+            Some((key, f.s.width(&self.studio_badge_name(key, &r.name)), (f.sb.width(&r.text()).clamp(floor, most) + 7) / 8 * 8))
         }).collect())).collect()
     }
 

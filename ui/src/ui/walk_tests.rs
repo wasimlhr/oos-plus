@@ -2612,6 +2612,11 @@ fn the_classic_strip_has_a_line_for_each_of_four_channels() {
     assert_eq!(l.pairs.len() + l.overflow, u.m.meas.len(), "every measurement has a place or is counted");
     assert!(l.overflow >= 4 && u.studio_badges_more().map(|m| m.1) == Some(l.overflow), "the reference's four and what did not fit: {}", l.overflow);
     assert!(l.pairs.iter().all(|(_, r)| r.y >= row.y && r.bottom() <= row.bottom() && r.right() <= chip.x), "in the row, before the chip");
+    // a text in the place of a value does not widen its column beyond the room of a value: no pair is wider than a
+    // name and "0.000 MHz" need
+    let f = u.fonts();
+    let widest = l.pairs.iter().map(|(_, r)| r.w).max().unwrap();
+    assert!(widest <= 4 + f.s.width("Ovshoot+") + 6 + f.sb.width("0.000 MHz") + 8 + 10, "a column of {widest} px");
     assert!(u.plot_rect().bottom() <= row.y && u.plot_rect().h >= 250, "the plot keeps most of the screen: {:?}", u.plot_rect());
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let mut cv = Canvas::new(W, H);
