@@ -56,6 +56,12 @@ impl Recorder {
     fn text(&self) -> String {
         self.lines.join("\n") + "\n"
     }
+
+    /// The recording has its `LINES_MAX` lines: whatever wrote the last one, a setting or an action, switches the
+    /// recorder off, and `rec_tick` saves the file as when the user does it.
+    fn full(&self) -> bool {
+        self.lines.len() >= LINES_MAX
+    }
 }
 
 /// A comment line of the file: one line, and no `;` for a reader that splits there.
@@ -132,6 +138,8 @@ impl Scpi {
         rec.hold = rec.hold || auto;
         // no message: the action has said what it did, or why not ("Save failed")
         let _ = crate::store::write(&rec.path, rec.text().as_bytes());
+        // a key that is held or pressed again and again fills a recording as a knob does
+        if rec.full() { ui.scpi_rec_want = false; }
     }
 
     fn rec_start(&mut self, ui: &mut Ui, cv: &Canvas) {
@@ -177,7 +185,7 @@ impl Scpi {
         if let Some(keys) = named(&rest) { rec.lines.push(comment(&format!("not recorded: {keys}"))); }
         (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false);
         if wrote { let _ = crate::store::write(&rec.path, rec.text().as_bytes()); }
-        if rec.lines.len() >= LINES_MAX { ui.scpi_rec_want = false; }
+        if rec.full() { ui.scpi_rec_want = false; }
         self.rec = Some(rec);
     }
 
@@ -575,6 +583,37 @@ mod tests {
         assert!(s.rec.is_none());
         assert_eq!(recorded(s.rec_lines()).last().map(String::as_str), Some("*OPC?"), "{:?}", s.rec_lines());
         assert!(recorded(s.rec_lines()).contains(&":SINGle".to_string()));
+    }
+
+    /// A recording ends by itself at `LINES_MAX` lines, whether the line that fills it is a setting or an action:
+    /// the recorder goes off, and the file is saved as when it is switched off.
+    #[test]
+    fn a_recording_ends_by_itself_when_it_is_full() {
+        use crate::ui::key;
+        for action in [false, true] {
+            let (mut s, mut ui, cv, dir) = session_in(if action { "full-action" } else { "full-setting" });
+            start(&mut s, &mut ui, &cv);
+            // a long recording: all the lines but the two of one more step (its time and its command) are there
+            let rec = s.rec.as_mut().unwrap();
+            let fill = LINES_MAX - 2 - rec.lines.len();
+            rec.lines.extend(vec![comment("a line of a long recording"); fill]);
+            match action {
+                true => ui.key(key::CLEAR),
+                false => user(&mut ui, "tdiv", "0.001"),
+            }
+            settle(&mut s, &mut ui, &cv);
+            assert!(!ui.scpi_rec_want, "full: the switch of the menu is off (action: {action})");
+            s.poll(&mut ui, &cv);
+            assert!(s.rec.is_none(), "action: {action}");
+            assert_eq!(s.rec_lines().len(), LINES_MAX, "action: {action}");
+            let want = if action { ":CLEar" } else { ":TIMebase:SCALe 1.000000E-03" };
+            assert_eq!(s.rec_lines().last().map(String::as_str), Some(want));
+            let files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
+            assert_eq!(files.len(), 1, "{files:?}");
+            assert_eq!(std::fs::read_to_string(&files[0]).unwrap().lines().count(), LINES_MAX);
+            let message = ui.toast_text();
+            assert!(message.starts_with("Saved recording") && message.ends_with("1 command"), "{message}");
+        }
     }
 
     #[test]
