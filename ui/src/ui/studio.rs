@@ -1537,12 +1537,6 @@ impl Ui {
         (some, left)
     }
 
-    /// How many pinned measurements do not fit in the row.
-    fn studio_badges_overflow_n(&self) -> usize {
-        if self.studio_classic() { return self.classic_layout().overflow; }
-        self.studio_badge_fit().1
-    }
-
     /// The "+N" chip after the badges: it opens the list of all measurements.
     pub(super) fn studio_badges_more(&self) -> Option<(Rect, usize)> {
         if !self.studio_badges_visible() { return None; }
