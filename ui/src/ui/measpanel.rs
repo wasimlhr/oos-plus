@@ -7,8 +7,8 @@ use super::dock::{VKind, STRIP_H};
 use super::studio::{chip, icon_pin, PanelGeo, StudioView};
 use super::*;
 
-/// Height of the slim toolbar of a narrow panel.
-pub(super) const TOOL_H: i32 = 32;
+/// Height of the toolbar of a narrow panel: its buttons are a finger high (it was 32 px).
+pub(super) const TOOL_H: i32 = 40;
 /// A panel at least this wide has its controls in the title strip.
 pub(super) const WIDE_BAR_FROM: i32 = 760;
 /// A card of the cards view and the space between cards.
@@ -124,7 +124,7 @@ impl Ui {
         }
         let width = |full: bool, it: BarItem| match (it, full) {
             (BarItem::Source, true) => 104, (BarItem::Source, false) => 56,
-            (BarItem::Gate, true) => 84, (BarItem::Gate, false) => 48,
+            (BarItem::Gate, true) => 84, (BarItem::Gate, false) => 56,
             (BarItem::Stats, true) => 74,
             _ => 34,
         };
@@ -374,7 +374,7 @@ impl Ui {
                 BarItem::Source | BarItem::Gate => {
                     let label = if s.item == BarItem::Source {
                         if bar.full { self.panel_source_label() } else { self.studio.filter.map_or("All".to_string(), |id| self.wave_name(id)) }
-                    } else if bar.full { self.panel_gate_label().to_string() } else if self.m.meas_full_record { "Full".to_string() } else { "Screen".to_string() };
+                    } else if bar.full { self.panel_gate_label().to_string() } else if self.m.meas_full_record { "Record".to_string() } else { "Screen".to_string() };
                     let room = r.w - if bar.full { 26 } else { 8 };
                     let font = if f.m.width(&label) <= room { &f.m } else { &f.s };
                     cv.set_clip(Rect::new(r.x + 3, r.y, r.w - if bar.full { 20 } else { 6 }, r.h));

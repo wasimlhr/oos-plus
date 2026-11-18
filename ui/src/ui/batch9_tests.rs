@@ -191,12 +191,11 @@ fn mask_sim_and_la_pages() {
     assert_eq!(spec.tabs[3].rows, [Item::SimSsc, Item::SimSscCenter, Item::SimSscDeviation, Item::SimSscHz], "spread spectrum is a tab");
     assert_eq!(u.menu, MenuId::Sim);
     // LA: lines are four to a tab, and the channel list never scrolls
+    // (the thresholds are on the page of the lines: one page, no tabs)
     open(&mut u, MenuId::La);
     shot(&mut u, "la-1");
-    tab(&mut u, 1);
-    shot(&mut u, "la-2");
-    tab(&mut u, 0);
     let g = u.sheet_geo().unwrap();
+    assert!(g.tabs.len() <= 1 && g.rows.iter().any(|r| r.it == Item::LaThr(0)) , "one page with the thresholds");
     let lines = g.rows.iter().find(|r| r.it == Item::Open(MenuId::LaLines)).expect("lines link");
     tap_in(&mut u, lines.ctrl);
     assert_eq!(u.menu, MenuId::LaLines);

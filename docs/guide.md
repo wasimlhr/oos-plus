@@ -700,9 +700,9 @@ key set to Next view, or SCPI `:DISPlay:VIEW <n>` (`:DISPlay:VIEW:COUNt <1..4>`)
 **Layouts.** Display > Layout arranges the screen (`:DISPlay:LAYout`). Default is the screen this guide describes.
 Minimal has quieter bars and opens every menu as a sheet at the right of the plot. Studio has views that dock, tab and
 float, and pills in its bottom bar. Studio offers every menu that Default offers, in these places: the gear at the top
-right is the Menu; the button with the sample rate, the memory depth and the mode opens Acquire, and Horizontal is
+right is the Menu; the read-out of the sample rate, the memory depth and the mode opens Acquire, and Horizontal is
 under it; the pill of the time base opens Horizontal and names the delay or the zoom scale; the trigger pill names the
-type and the sweep and opens Trigger; Cursor in the top bar opens the Cursor menu. Add > Measurement and the Measure
+type and the sweep and opens Trigger; Cursors in the top bar puts the cursors on, and the next tap opens the Cursor menu. Add > Measurement and the Measure
 key open a quick panel that adds measurements on one source with the plot in view; the button beside its close button
 opens the Measure page with the categories, the sources, Selected and Settings, and Menu > Measure opens that page at
 once. System, SIM and the network pages are entries of the Menu.

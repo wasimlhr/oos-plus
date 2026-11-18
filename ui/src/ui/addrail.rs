@@ -685,6 +685,16 @@ impl Ui {
         self.relayout();
     }
 
+    /// The Cursors button: the first tap puts the cursors on, the next ones open their settings.
+    pub(super) fn studio_cursors_tap(&mut self) {
+        if self.m.cursor == CursorMode::Off {
+            if self.menu_open { self.close_menu(); }
+            self.studio_cursors_add(None);
+        } else {
+            self.toggle_menu(MenuId::Cursor);
+        }
+    }
+
     fn set_cursor_type(&mut self, mode: CursorMode) {
         let was = self.m.cursor;
         self.m.cursor = mode;

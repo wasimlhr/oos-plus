@@ -722,7 +722,8 @@ fn system(t: &mut T) {
     assert_eq!(t.go(":SESS?"), "LIVE");
     t.go(":SESS LIVE");
     t.no(":SESS SIM", "-224");
-    assert!(t.go(":SYST:INFO?").contains("Model,"));
+    let info = t.go(":SYST:INFO?");
+    assert!(info.contains("\"Model,") && !info.contains('\n') && info.starts_with('"'), "one line of quoted strings: {info}");
     // the commands that need CONFIRM
     t.no(":SYST:POW:OFF", "-221");
     t.no(":SYST:POW:REST", "-221");
@@ -733,7 +734,8 @@ fn system(t: &mut T) {
     t.go(":SYST:POW:REST CONFIRM");
     assert_eq!(t.ui.power_action, Some(PowerAction::Restart));
     t.ui.power_action = None;
-    assert!(!t.go(":SYST:UPD:STAT?").is_empty());
+    let update = t.go(":SYST:UPD:STAT?");
+    assert!(update.starts_with('"') && !update.contains('\n'), "one line of quoted strings: {update}");
     t.no(":SYST:UPD:ROLL", "-221");
     t.no(":SYST:UPD:INST \"/tmp/none.oosupd\"", "-221");
     t.no(":SYST:UPD:INST \"/no/such/package\",CONFIRM", "-224");

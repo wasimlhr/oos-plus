@@ -239,19 +239,20 @@ fn shot(u: &mut Ui, name: &str) {
     }
 }
 
-/// What the Default header opens, the Studio header opens: the read-out is a button that opens Acquire, and Acquire
-/// leads on to Horizontal.
+/// What the Default header opens, the Studio header opens: the read-out names the sample rate, the memory and the
+/// mode, a tap on it opens Acquire, and Acquire leads on to Horizontal.
 #[test]
-fn the_read_out_of_the_studio_bar_is_a_button_that_opens_acquire() {
+fn the_read_out_of_the_studio_bar_opens_acquire() {
     let mut u = studio_ui();
     let t = u.studio_top();
-    let (chip, caption) = u.studio_acq_chip(&t);
-    assert!(chip.w >= 120 && chip.h >= 30 && chip.x >= t.single.right() && chip.right() <= t.acq.right(), "{chip:?} in {:?}", t.acq);
-    assert!(u.fonts().mb.width(&caption) + 30 <= chip.w, "the text and its chevron fit the button: {caption:?} in {chip:?}");
-    // the mode follows the rate and the depth, as in the Default bar
-    assert!(caption.ends_with("\u{b7} Normal"), "{caption}");
+    assert!(t.acq.w >= 120 && t.acq.h >= 30 && t.acq.x >= t.single.right(), "{:?}", t.acq);
+    // the mode follows the rate and the depth, as in the Default bar; each has its name over it
+    let cols = u.studio_acq_cols().expect("a live acquisition");
+    assert_eq!(cols.iter().map(|c| c.0).collect::<Vec<_>>(), ["Sample rate", "Memory", "Mode"]);
+    assert_eq!(cols[2].1, "Normal");
+    assert!(cols.iter().map(|c| c.2).sum::<i32>() <= t.acq.w, "the three columns fit the bar at its full width: {cols:?} in {:?}", t.acq);
     shot(&mut u, "top-live");
-    tap_in(&mut u, chip);
+    tap_in(&mut u, t.acq);
     assert!(u.menu_open && u.menu == MenuId::Acquire && u.sheet_active());
     let spec = u.sheet_spec(MenuId::Acquire).unwrap();
     assert!(spec.tabs[0].rows.contains(&Item::AcqDepth) && spec.tabs[0].rows.contains(&Item::AcqMode), "Memory and Mode: {:?}", spec.tabs[0].rows);
@@ -488,11 +489,14 @@ fn the_studio_bar_has_the_cursor_button_and_the_default_mode_row() {
     let mut u = studio_ui();
     let t = u.studio_top();
     assert!(t.cursors.w >= 40, "{:?}", t.cursors);
+    // the first tap puts the cursors on, the next one opens the menu
+    tap_in(&mut u, t.cursors);
+    assert!(u.m.cursor != CursorMode::Off && !u.menu_open);
     tap_in(&mut u, t.cursors);
     assert!(u.menu_open && u.menu == MenuId::Cursor && u.sheet_active());
     assert_eq!(u.sheet_row_kind(Item::CurMode), RowKind::Choice);
     assert_eq!(u.sheet_choice(Item::CurMode).0, ["Off", "Time", "Volt", "Track", "XY"]);
-    shot(&mut u, "cursor-off");
+    shot(&mut u, "cursor-on");
     for (name, mode) in [("Time", CursorMode::Time), ("Volt", CursorMode::Volt), ("Track", CursorMode::Track), ("XY", CursorMode::Xy), ("Off", CursorMode::Off)] {
         u.select_option(Item::CurMode, name);
         assert_eq!(u.m.cursor, mode);

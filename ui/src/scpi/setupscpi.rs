@@ -174,11 +174,11 @@ pub(crate) fn named(rest: &[String]) -> Option<String> {
     Some(format!("{}{}", rest[..rest.len().min(SHOWN)].join(" "), if more > 0 { format!(" and {more} more") } else { String::new() }))
 }
 
-/// The second scope: an interpreter no client reaches and a model with no hardware behind it, sent `lines`. What
-/// Default leaves alone (`prefs`: the Quick key action and the text size) is as on the first.
-fn second_scope(lines: &[String], prefs: (Quick, TextSize), cv: &Canvas) -> (Scpi, Ui) {
+/// The second scope: an interpreter no client reaches and a model with no hardware behind it, with the set-up
+/// `base`, sent `lines`.
+fn second_scope(base: &Model, lines: &[String], cv: &Canvas) -> (Scpi, Ui) {
     let (mut scpi, mut scope) = (Scpi::detached(), Ui::new(crate::wave::Source::Demo { t: 0.0 }));
-    (scope.m.quick, scope.m.text_size) = prefs;
+    scope.m = base.clone();
     for l in lines { scpi.exec_line(&mut scope, cv, l); }
     (scpi, scope)
 }
@@ -204,17 +204,28 @@ impl Scpi {
     pub(crate) fn setup_scpi_proven(&mut self, ui: &mut Ui, cv: &Canvas) -> (String, Vec<String>) {
         ui.sync_view_state();
         let want = crate::store::setup_text(&ui.m);
-        let prefs = (ui.m.quick, ui.m.text_size);
-        let mut lines = vec!["*RST".to_string()];
-        let (mut scpi, mut scope) = second_scope(&lines, prefs, cv);
+        // the second scope starts as this one and is reset by the first line: what Default leaves alone (the Quick
+        // key action, the text size) is the same on both
+        let base = ui.m.clone();
+        let (lines, rest) = self.mend(ui, cv, &base, vec!["*RST".to_string()], &want);
+        (lines.join("\n") + "\n", rest)
+    }
+
+    /// The proof: the commands that take a scope with the set-up `base`, after the lines `first`, to the set-up text
+    /// `want`, which is the one `ui` has now. First: `first` and the commands, in the order to send them. Second:
+    /// what they do not bring, the keys and a line the proof refused. The SCPI recorder (scpi/recorder.rs) takes
+    /// every step of a recording through here, from the set-up of the step before.
+    pub(crate) fn mend(&mut self, ui: &mut Ui, cv: &Canvas, base: &Model, first: Vec<String>, want: &str) -> (Vec<String>, Vec<String>) {
+        let mut lines = first;
+        let (mut scpi, mut scope) = second_scope(base, &lines, cv);
         let mut refused = std::collections::BTreeSet::new();
         // a line that was not written may still have left something on the second scope: it is made again from the
         // lines, once before the next pass, so the work of a query stays bounded (PASSES + 2 scopes at most)
         let mut stale = false;
         for pass in 0..PASSES {
-            if std::mem::take(&mut stale) { (scpi, scope) = second_scope(&lines, prefs, cv); }
+            if std::mem::take(&mut stale) { (scpi, scope) = second_scope(base, &lines, cv); }
             let have = crate::store::setup_text(&scope.m);
-            let commands = self.setup_commands(ui, cv, &have, &want, &refused, pass + 1 == PASSES);
+            let commands = self.setup_commands(ui, cv, &have, want, &refused, pass + 1 == PASSES);
             if commands.is_empty() { break; }
             for c in commands {
                 let before = crate::store::setup_text(&scope.m);
@@ -231,10 +242,10 @@ impl Scpi {
                 stale = true;
             }
         }
-        let (scpi, scope) = second_scope(&lines, prefs, cv);
-        let mut rest: Vec<String> = changed(&crate::store::setup_text(&scope.m), &want).into_iter().map(|x| x.0).collect();
+        let (scpi, scope) = second_scope(base, &lines, cv);
+        let mut rest: Vec<String> = changed(&crate::store::setup_text(&scope.m), want).into_iter().map(|x| x.0).collect();
         if !scpi.err.is_empty() { rest.push(format!("(refused: {})", scpi.err.join(" "))); }
-        (lines.join("\n") + "\n", rest)
+        (lines, rest)
     }
 
     /// The commands that take a scope from the set-up text `before` to `after`, the set-up `ui` has now: the lines

@@ -14,30 +14,26 @@ Fixed:
     The Add measurements panel stays as the quick way: the button beside its close button opens the page, the button
     in the same place on the page leads back, and Menu > Measure opens the page. Before, nothing in Studio led to
     the measurement settings (levels, parameters, pairs, statistics, Clear all) or to the sources B, C and D.
-  - the acquisition read-out of the top bar is a button with a chevron and names the mode, as in Default
-    ("500 kSa/s · 1.00 Mpts · Normal"). A tap on it opened Acquire before too, but it was plain text.
   - the trigger pill names the type and the sweep on a second line ("Edge · Auto"), and the time pill the delay
     or the zoom scale, as the cards of the Default layout do. At the Larger text size a pill has one line: the type
-    stands in front of the source, and the time pill keeps the scale alone.
+    stands in front of the source and the sweep at the right where there is room, and the time pill keeps the scale
+    alone.
   - Acquire, in Minimal and Studio: the sheet has the line that says where aliasing starts. Its first tab is the
     top of the Default dialog (mode, averaging, memory, segments, aliasing), More has the segment interval and times,
     the ADC cores and the draw path, and Horizontal is pinned under both, so it stays a sheet when averaging or
     segments add rows.
   - SIM is not a button of the Studio top bar any more: it is Menu > Analysis > SIM, as in Default.
     `:UI:ELEMents? TOP` no longer lists it.
-  - Cursor has its button in the Studio top bar again, as in Default. It opens the Cursor menu, whose first row is
-    the Mode row of the Default menu (Off, Time, Volt, Track, XY) in place of Studio's Type row; the rows after it
-    (Source, Second source, Readout, Move) stay. In XY the button of the mode is marked now, in every layout.
+  - the Cursor menu of Studio has the Mode row of the Default menu as its first row (Off, Time, Volt, Track, XY)
+    in place of Studio's Type row; the rows after it (Source, Second source, Readout, Move) stay. In XY the button
+    of the mode is marked now, in every layout.
   - the sheets of Minimal and Studio keep the controls of the Default dialogs: a choice of up to five options is
     shown as buttons where the row has the room once its label takes only what it needs (the acquisition mode, the
     cursor mode), and a list has the minus and plus of the dialog again, with the list behind its value (the memory
     depth, the segments).
-- Studio: the badge row has one button at its right end in place of three (badge style, list, eye). It carries the
-  number of measurements, and its menu has Measurement table, Compact view, Classic badges and Hide badges; the two
-  switches leave the menu open. The room of the two buttons that went goes to the badges (76 px, host-tested).
 - Studio: a channel pill of the bottom bar always shows its scale. With four channels and the generator on, a pill
-  was too narrow for anything longer than "1 V" and drew no scale at all for "500 mV". The Add chip and the
-  generator's pill take their short form ("+ Add", "GEN") before a pill gets that narrow, and a scale that still
+  was too narrow for anything longer than "1 V" and drew no scale at all for "500 mV". The generator's pill
+  takes its short form ("GEN") before a pill gets that narrow, and a scale that still
   does not fit takes the small font, then loses its space, and is cut at its end (host-tested).
 - Decode, in Minimal and Studio: the four decoders are shown as four. The row of D1 to D4 is named Decoders and
   marks the ones that are on while another is edited, and the switch under it says whose it is ("Decoder D2"). Four
@@ -49,6 +45,43 @@ Fixed:
   empty room behind the scale; it is as wide as the widest scale needs (159 px at the normal text size), the same
   for every channel. The pill of a channel that is off, the button that switches it on, was 44 px wide: it is at
   least 60, and takes the room that is left up to 96, where it says "Off" beside its name.
+- Sheets of Minimal and Studio, from a review of every tab:
+  - Display: Clear is under the Waveform tab, beside Persistence, whose picture it wipes, and acts at the first tap.
+    It was a red two-tap button under Screen.
+  - Trigger: Sweep (Auto, Normal, Single) is on the first tab with the type and the source, for every type whose
+    first tab has the room. Studio's trigger pill says the sweep; the slope, which it showed twice, is there once.
+  - Measure: the footer has Add measurement beside Clear all. Nothing on the sheet led to a new measurement.
+  - Reference: Clear R1 (the slot that is shown) is beside Store. Clear all, which empties all ten slots, is under
+    Scale and files. One slot could only be cleared from the hold menu of its pill.
+  - Zone trigger: Delete asks for a second tap, like the other buttons that destroy something.
+  - Display > Grid and views has a row Traces (Overlay or Stacked). Studio had the choice in the hold menu of the
+    plot alone.
+- Studio: the hold menu of the plot has rows of 40 px in two columns, the view at the left and what acts on the lane
+  under the finger at the right. It was one column of seventeen rows of 28 px, 542 px tall. Run, Single, Trigger
+  settings and Sources are not in it any more: the bars have them one tap away.
+- Studio: the classic strip is the badge style of a new set-up: a line per source, with the names and values of its
+  measurements in columns. Measure > Badge style still has both. A set-up file says `studio_badges = studio` for the
+  other style; a file without the key, which meant the Studio badges before, shows the classic strip now.
+- Studio: the badge row has one button that says what it opens, "Meas" and the number of measurements, beside the
+  eye. It had two more of an icon each, for the badge style and for the compact view, and the second opened the
+  list in one view and switched the compact view in another. The style is Measure > Badge style, the compact view
+  is in the View menu. With the badges hidden, the chip of the bottom bar that brings them back says "Badges"; it
+  said "Meas", like the chip on the plot that opens the list.
+- Studio: the measurement panel is made for a finger. The buttons of its toolbar are 36 px high (28 before) with a
+  touch of 40, the rows of its table 36 px (28) where the panel is tall, the segments of its view switch 32 px wide
+  (25) where the panel is 250 px or wider. A low panel under the plot keeps rows of 28 px, so it still shows five. The short name of
+  its gate button is "Record" or "Screen"; "Full" did not say of what.
+- SSH > Import keys from USB says that there is no key store when there is none (the desktop app); it said nothing.
+- DVM and counter, Logic analyser and Double pulse are one page each: they had two tabs of two to five rows. A
+  sheet draws the line over its footer only where it has a footer.
+- Studio: the Add list of the top bar has rows of 40 px (34 before). The chip of the bottom bar that adds a source
+  is named "+ Source" whatever is off; it said "+ CH", "+ Add" or "Add source". The eye and the list button of the
+  badge row take a touch of 40 px, like the buttons beside them.
+- The cursors have a button in the top bar of Minimal (Cursor: the cursors come on with their sheet) and of Studio
+  (Cursors: a tap puts them on, the next opens their sheet). They were four taps away in Minimal and three in
+  Studio. Studio's Add button no longer lights up while the cursors are on.
+- Studio: the coloured badge of a channel pill switches the channel off wherever the pill has a body beside it (from
+  70 px). It did so from 110 px only, so with four channels on the same spot opened the sheet.
 - Studio: the search controls (previous, the count of events, next) are in the top bar, beside the acquisition
   read-out, as tall as the buttons there and with arrows of 46 px. They were at the left of the badge row, where they
   took the place of two measurements and were as low as a badge (20 px in the compact view).
@@ -89,6 +122,22 @@ Fixed:
 
 Added:
 
+- SCPI recorder: Storage > SCPI recorder, `:SYSTem:RECorder:STATe ON|OFF` (host-tested, not yet run on a unit).
+  While it is on, what is set at the scope by touch, keys, knobs and menus is written as SCPI commands, and the
+  message on the screen shows the last command of each step. A setting is written when it has stood still for
+  0.6 s: a knob turned through twenty steps is one line with the value it was left at. The lines go into
+  `recording-NNN.scpi` where Storage saves, written again after every step, so the end of the program does not
+  lose a recording; `:SYSTem:RECorder:DATA?` gives them to a client. The file starts with the set-up at the start
+  as commands, so it can be sent to a scope in any state, and every step is proven like `:SYSTem:SETup:SCPI?`.
+  A key or a row that is an action is written as its command, with what was set before it first: Run / Stop,
+  Single, Force, Clear, Default (`*RST`), Autoset, and the Storage rows Save setup, Save waveform and Save
+  screenshot. `*OPC?` stands after `:SINGle` and `:AUToscale`. The settings an action changes are its own:
+  Default is one line whatever was set before, and an auto set-up is the command alone, so a replay finds what
+  the signal then has. What a client sets or does by SCPI is not recorded (a comment says where it set
+  something); what the web remote's keys and touches do is.
+- A line that starts with `#` is a comment to the SCPI interpreter and is not run, to the end of the line, so a
+  file of commands with comment lines can be sent as it is.
+
 - The set-up as SCPI commands, `:SYSTem:SETup:SCPI?` (the first part of the SCPI recorder; host-tested, not yet run
   on a unit). The answer is a block of lines: `*RST`, then one command for every setting that differs from the
   Default set-up, each with the answer of its own query as the value (`:CHANnel2:DISPlay 1`,
@@ -121,6 +170,16 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Studio, zoom and the top bar, from using them on the scope with a finger (unit):
+  - the overview over the zoom view has a time axis of its own: a line at every division and the time under it. It
+    had the trace and the window, and no time to read the window against;
+  - the zoom toolbar of the pull-down tab is a finger high (44 px, its chips 42), and it stays open until its label
+    "Zoom" is tapped or pushed up. It was 30 px with chips of 20, and it shut after four seconds and with any touch
+    beside it, so it had to be pulled down again for every step. The tab itself is larger too;
+  - a long touch on the zoom overview or on the zoom toolbar opens no menu: a finger rests there while it moves the
+    window, and the menu of the plot opened under it. The zoom view and the lanes keep that menu;
+  - the top bar says the sample rate, the memory depth and the acquisition mode, each a small label over its
+    value, where it had the rate and the depth in one line.
 - Studio, the zoom source popover (hold the Zoom button): **X zoom** minus and plus beside the Y zoom ones. One
   step of the zoom time base around the centre of the zoom window; minus ends at the main time base (unit: 100×
   after three steps). Remote: `:UI:CONText` on the Zoom button opens that popover, where it opened the menu of the plot
@@ -161,6 +220,11 @@ Added:
     4 million samples (it was always 65 536 samples, a few microseconds of a fast lane and a blip beside a
     millisecond record). SIM Play keeps its own short record. At 4 million samples USB 2.0 HS covers 1 ms and
     PCIe 1.0 0.2 ms; the fastest lanes still cover tens of microseconds, which is all their sample rate gives;
+  - the length of that SIM record is no longer a fixed 4 million samples: it is what the machine generates in
+    three seconds and holds in an eighth of its free memory, up to the generator's 16 M samples, so it follows the
+    scope or the computer it runs on, and the message says what ended it short of the screen. On a DHO924S that is
+    7.5 to 8.4 M samples (unit): 0.2 ms of PCIe 2.0 where it was 0.1 ms. The time a record covers still follows
+    the lane (8 samples a bit): the same budget is 9 ms at 100 Mbit/s and 15 us at 64 Gbit/s;
   - a SIM waveform added to a reference while the scope runs live says how long it is when it is far shorter than the
     screen, and its message carries the tick of a done action instead of the warning triangle;
   - the Histogram view of Studio uses its whole height (it copied the position of the channel's lane, a third of the
@@ -321,6 +385,18 @@ Fixed:
     generator back to 1 kHz. Whether the output is on is not saved, and a recall leaves it off, also when it was on
     (unit: square 12.345 kHz, 0.5 Vpp, 0.1 V offset, 30 % duty back after `*RCL` and after `:LOAD:SESSion`, output off
     both times). An arbitrary wave is not saved;
+  - Spectrum: the fundamental, THD, SNR and the other distortion figures of a signal with harmonics and few periods
+    on the screen. With five periods the window's lobe of the fundamental held the third harmonic: a 10 kHz square
+    read 16.2 kHz, a ramp 12.3 kHz. The window follows the number of periods in the record (unit: square, ramp and
+    sine at 10 kHz read 10.00 kHz from 50 us/div to 1 ms/div);
+  - a Single with segments on the hardware records all of them. The acquisition stopped after the first record of
+    a Single, and the screen waited for the others for good (unit: 10 and 100 segments in 1.6 s);
+  - `:REFerence:LOAD "name"` also finds a file of the save folder, where `:REFerence:EXPort "name"` and
+    `:SAVE:WAVeform "name"` write it; it looked beside the setups only and did not find its own export (unit);
+  - `:SYSTem:INFO?`, `:SYSTem:UPDate:STATus?`, `:SYSTem:WLAN:NETWorks?` and `:SYSTem:WLAN:SAVed?` answer in one
+    line, each line of the text a quoted string, separated by commas. They answered several lines, and a client
+    that reads an answer as a line took each for the answer to its next query (unit: after `:SYSTem:INFO?` fifty
+    answers were out of step);
   - VXI-11 `device_readstb` answers the status byte of `*STB?`, with bit 4 while an answer of the link waits; it
     answered 0 whatever the state (unit). `device_trigger` is `*TRG`. HiSLIP's AsyncStatusQuery answers the status
     byte too (desktop app; HiSLIP is not opened on a scope, and the table of the interfaces says so now);

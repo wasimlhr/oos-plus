@@ -231,31 +231,33 @@ fn the_results_table_adds_measurements_search_events_and_decode_needs_a_decoder(
 // ------------------------------------------------------------------------------------------------ item 2
 
 #[test]
-fn the_cursor_button_opens_the_menu_and_its_mode_row_puts_two_cursors_on_the_selected_trace() {
+fn one_tap_on_cursors_puts_two_waveform_cursors_on_the_selected_trace_and_the_next_opens_the_mode_row() {
     let mut u = studio();
     u.m.run = RunState::Stop;
     assert_eq!(u.m.cursor, CursorMode::Off);
     let src = u.cursor_source();
-    // the Cursor button of the bar, as in the Default layout: the menu with its Mode row
+    // the Cursors button of the bar: the first tap puts the cursors on
     let t = u.studio_top();
     assert!(t.cursors.w >= 40 && t.cursors.right() <= t.display.x && t.cursors.x >= t.add.right(), "{:?}", t.cursors);
     tap_in(&mut u, t.cursors);
-    assert!(u.menu_open && u.menu == MenuId::Cursor && u.sheet_active());
-    assert_eq!(u.m.cursor, CursorMode::Off, "the button only opens the menu");
-    assert_eq!(u.options(Item::CurMode), ["Off", "Time", "Volt", "Track", "XY"]);
-    assert_eq!(u.sheet_row_kind(Item::CurMode), RowKind::Choice, "five buttons, as in the Default dialog");
-    shot(&mut u, "cursors-menu");
-    u.select_option(Item::CurMode, "Track");
     assert_eq!(u.m.cursor, CursorMode::Track, "waveform cursors");
+    assert!(!u.menu_open, "no mode picker first");
     assert_eq!(u.cursor_source(), src);
     let (ta, tb) = u.cursor_times();
     assert!(tb > ta);
+    shot(&mut u, "cursors-one-tap");
+    // a second tap opens the menu, whose first row is the Mode row of the Default menu
+    tap_in(&mut u, t.cursors);
+    assert!(u.menu_open && u.menu == MenuId::Cursor && u.sheet_active());
+    assert_eq!(u.options(Item::CurMode), ["Off", "Time", "Volt", "Track", "XY"]);
+    assert_eq!(u.sheet_row_kind(Item::CurMode), RowKind::Choice, "five buttons, as in the Default dialog");
     shot(&mut u, "cursors-settings");
     // Off takes them away and the menu stays, as in the Default layout
     u.select_option(Item::CurMode, "Off");
     assert_eq!(u.m.cursor, CursorMode::Off);
     assert!(u.menu_open && u.menu == MenuId::Cursor);
-    // a second tap on the button closes the menu
+    // with the cursors on, a tap on the button closes the menu again
+    u.select_option(Item::CurMode, "Track");
     tap_in(&mut u, t.cursors);
     assert!(!u.menu_open);
 }

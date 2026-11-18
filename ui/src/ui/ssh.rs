@@ -186,7 +186,8 @@ impl Ui {
     }
 
     fn ssh_import(&mut self) {
-        let Some(dir) = self.ssh.dir.clone() else { return };
+        // (no key store: the desktop app. The button said nothing there)
+        let Some(dir) = self.ssh.dir.clone() else { return self.toast("SSH keys are kept on a scope: none on this system") };
         if !self.usb {
             return self.toast("No USB stick in the front port");
         }

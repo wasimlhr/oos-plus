@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Studio: the context menu of the plot. A long press (or a right click) on the lanes opens a small popover at the press
-//! point: grouped rows with an icon and a label, the state of Overlay / Stacked shown, the actions that need a place
-//! (zoom here, trigger level here, cursor here) taking the place of the finger, and the ones that need a lane naming the
-//! lane under it. It is kept on the screen and closes on a tap outside.
+//! Studio: the context menu of the plot. A long press (or a right click) on the lanes opens a popover at the press
+//! point: two columns of rows with an icon and a label, the view at the left and what acts on the lane under the
+//! finger at the right. The state of Overlay / Stacked is shown; the actions that need a place (zoom here, trigger
+//! level here, cursor here) take the place of the finger, and the ones that need a lane name it. A row is 40 px, a
+//! finger's height. What the bars have one tap away (Run, Single, the trigger sheet, the sources) is not repeated
+//! here. The menu is kept on the screen and closes on a tap outside.
 use super::studio::{icon_cursors, icon_expand};
 use super::workspace::Action;
 use super::*;
 
-const CTX_W: i32 = 276;
-const CTX_ROW: i32 = 28;
-const CTX_SEP: i32 = 8;
-const CTX_HEAD: i32 = 26;
+/// Width of a column, height of a row and of the title.
+const CTX_COL: i32 = 232;
+const CTX_ROW: i32 = 40;
+const CTX_HEAD: i32 = 30;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum CtxRow {
@@ -22,17 +24,13 @@ pub(super) enum CtxRow {
     ZoomBox,
     ZoomReset,
     ZoomClose,
-    RunStop,
-    Single,
     Autoset,
     TrigOn(WaveId),
     LevelHere(WaveId),
-    TrigSettings,
     MeasOn(WaveId),
     CursorHere,
     /// a callout on the lane, at the time under the press
     NoteHere(WaveId),
-    Sources,
     /// every view in tabs of one group, or back from it
     Layout,
 }
@@ -65,56 +63,52 @@ impl Ui {
         self.studio.ctx = Some(Ctx { x, y, lane });
     }
 
-    /// The groups of rows, the group of a lane naming it.
-    fn ctx_groups(&self, lane: Option<WaveId>) -> Vec<Vec<(CtxRow, String)>> {
+    /// The two columns of rows: the view, and what acts on the lane under the press (which the rows name).
+    fn ctx_columns(&self, lane: Option<WaveId>) -> [Vec<(CtxRow, String)>; 2] {
         let name = |id: WaveId| self.wave_name(id);
-        let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()), (CtxRow::FitLanes, "Fit all lanes".to_string()), (CtxRow::Fit, "Fit record".to_string()), (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
+        let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()),
+            (CtxRow::FitLanes, "Fit all lanes".to_string()), (CtxRow::Fit, "Fit record".to_string()),
+            (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
         if self.m.zoom {
             view.push((CtxRow::ZoomReset, "Reset zoom".to_string()));
             view.push((CtxRow::ZoomClose, "Close zoom".to_string()));
         }
-        let acquire = vec![(CtxRow::RunStop, if self.m.run == RunState::Run && !self.record_mode() { "Stop" } else { "Run" }.to_string()),
-            (CtxRow::Single, "Single".to_string()), (CtxRow::Autoset, "Autoset".to_string())];
-        let mut trig = Vec::new();
+        let mut here = Vec::new();
         if let Some(id) = lane {
-            trig.push((CtxRow::TrigOn(id), format!("Trigger on {}", name(id))));
-            trig.push((CtxRow::LevelHere(id), "Set level here".to_string()));
+            here.push((CtxRow::TrigOn(id), format!("Trigger on {}", name(id))));
+            here.push((CtxRow::LevelHere(id), "Set level here".to_string()));
+            here.push((CtxRow::MeasOn(id), format!("Measurement on {}", name(id))));
         }
-        trig.push((CtxRow::TrigSettings, "Trigger settings".to_string()));
-        let mut add = Vec::new();
-        if let Some(id) = lane { add.push((CtxRow::MeasOn(id), format!("Measurement on {}", name(id)))); }
-        add.push((CtxRow::CursorHere, "Cursor here".to_string()));
-        if let Some(id) = lane { add.push((CtxRow::NoteHere(id), "Add note here".to_string())); }
-        let layout = if self.dock_full_state() { "Restore layout" } else { "Maximise view" };
-        vec![view, acquire, trig, add, vec![(CtxRow::Sources, "Sources".to_string()), (CtxRow::Layout, layout.to_string())]]
+        here.push((CtxRow::CursorHere, "Cursor here".to_string()));
+        if let Some(id) = lane { here.push((CtxRow::NoteHere(id), "Add note here".to_string())); }
+        here.push((CtxRow::Autoset, "Autoset".to_string()));
+        here.push((CtxRow::Layout, if self.dock_full_state() { "Restore layout" } else { "Maximise view" }.to_string()));
+        [view, here]
     }
 
     /// The popover: anchored at the press, flipped and clamped to stay on the screen.
     pub(super) fn studio_ctx_rect(&self) -> Option<Rect> {
         let c = self.studio.ctx?;
-        let g = self.ctx_groups(c.lane);
-        let rows: i32 = g.iter().map(|x| x.len() as i32).sum();
-        let h = CTX_HEAD + rows * CTX_ROW + (g.len() as i32 - 1) * CTX_SEP + 8;
-        let h = h.min(self.scr.h - 8);
-        let x = if c.x + 8 + CTX_W <= self.scr.w - 4 { c.x + 8 } else { (c.x - 8 - CTX_W).max(4) };
+        let cols = self.ctx_columns(c.lane);
+        let rows = cols.iter().map(|x| x.len() as i32).max().unwrap_or(0);
+        let w = 2 * CTX_COL + 12;
+        let h = (CTX_HEAD + rows * CTX_ROW + 8).min(self.scr.h - 8);
+        let x = if c.x + 8 + w <= self.scr.w - 4 { c.x + 8 } else { (c.x - 8 - w).clamp(4, (self.scr.w - w - 4).max(4)) };
         let y = c.y.min(self.scr.h - h - 4).max(4);
-        Some(Rect::new(x, y, CTX_W, h))
+        Some(Rect::new(x, y, w, h))
     }
 
     pub(super) fn studio_ctx_rows(&self) -> Vec<(CtxRow, String, Rect)> {
         let (Some(p), Some(c)) = (self.studio_ctx_rect(), self.studio.ctx) else { return Vec::new() };
-        let mut y = p.y + CTX_HEAD + 2;
-        let mut out = Vec::new();
-        let groups = self.ctx_groups(c.lane);
+        let cols = self.ctx_columns(c.lane);
         // a tall list on a short screen shrinks its rows
-        let rows: i32 = groups.iter().map(|g| g.len() as i32).sum();
-        let room = p.h - CTX_HEAD - 8 - (groups.len() as i32 - 1) * CTX_SEP;
-        let row_h = (room / rows.max(1)).min(CTX_ROW).max(24);
-        for (gi, g) in groups.into_iter().enumerate() {
-            if gi > 0 { y += CTX_SEP; }
-            for (row, label) in g {
-                out.push((row, label, Rect::new(p.x + 4, y, p.w - 8, row_h)));
-                y += row_h;
+        let rows = cols.iter().map(|x| x.len() as i32).max().unwrap_or(1).max(1);
+        let row_h = ((p.h - CTX_HEAD - 8) / rows).min(CTX_ROW).max(24);
+        let mut out = Vec::new();
+        for (k, col) in cols.into_iter().enumerate() {
+            let x = p.x + 4 + k as i32 * (CTX_COL + 4);
+            for (i, (row, label)) in col.into_iter().enumerate() {
+                out.push((row, label, Rect::new(x, p.y + CTX_HEAD + 2 + i as i32 * row_h, CTX_COL, row_h)));
             }
         }
         out
@@ -130,19 +124,13 @@ impl Ui {
             CtxRow::ZoomHere | CtxRow::ZoomReset => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, BAR); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); }
             CtxRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
             CtxRow::ZoomClose => { cv.line(cx - 5, cy - 5, cx + 5, cy + 5, c); cv.line(cx - 5, cy + 5, cx + 5, cy - 5, c); }
-            CtxRow::RunStop => {
-                if self.m.run == RunState::Run && !self.record_mode() { cv.fill(Rect::new(cx - 5, cy - 5, 3, 10), c); cv.fill(Rect::new(cx + 2, cy - 5, 3, 10), c); }
-                else { cv.triangle([(cx - 4, cy - 6), (cx - 4, cy + 6), (cx + 6, cy)], c); }
-            }
-            CtxRow::Single => cv.text_in(&f.sb, Rect::new(cx - 10, cy - 9, 20, 18), 1, "1", c),
             CtxRow::Autoset => cv.text_in(&f.sb, Rect::new(cx - 10, cy - 9, 20, 18), 1, "A", c),
-            CtxRow::TrigOn(_) | CtxRow::TrigSettings => { cv.hline(cx - 7, cx - 2, cy + 4, c); cv.vline(cx - 2, cy - 4, cy + 4, c); cv.hline(cx - 2, cx + 7, cy - 4, c); }
+            CtxRow::TrigOn(_) => { cv.hline(cx - 7, cx - 2, cy + 4, c); cv.vline(cx - 2, cy - 4, cy + 4, c); cv.hline(cx - 2, cx + 7, cy - 4, c); }
             CtxRow::LevelHere(_) => { cv.hline(cx - 8, cx + 8, cy, c); cv.triangle([(cx - 4, cy - 5), (cx + 4, cy - 5), (cx, cy - 1)], c); }
             CtxRow::MeasOn(_) => { for (i, h) in [6, 11, 8].into_iter().enumerate() { cv.fill(Rect::new(cx - 7 + i as i32 * 5, cy + 6 - h, 3, h), c); } }
             CtxRow::CursorHere => icon_cursors(cv, cx - 5, cy, c),
             CtxRow::NoteHere(_) => { cv.round_outline(Rect::new(cx - 11, cy - 6, 14, 10), 2, c); cv.line(cx - 4, cy + 4, cx - 8, cy + 8, c); }
             CtxRow::Layout => { cv.rect(Rect::new(cx - 6, cy - 6, 12, 12), c); cv.hline(cx - 6, cx + 5, cy - 3, c); }
-            CtxRow::Sources => { for dy in [-5, 0, 5] { cv.circle(cx - 5, cy + dy, 1, c); cv.hline(cx - 1, cx + 7, cy + dy, c); } }
         }
     }
 
@@ -153,12 +141,12 @@ impl Ui {
         cv.round(p.inset(1), 7, PANEL_BG, 255);
         let title = c.lane.map_or("Plot".to_string(), |id| self.wave_name(id));
         let tcol = c.lane.map_or(TEXT, |id| self.wave_color(id));
-        cv.text(&f.sb, p.x + 12, p.y + 18, &title, tcol);
+        cv.text(&f.sb, p.x + 12, p.y + 20, &title, tcol);
         cv.hline(p.x + 8, p.right() - 9, p.y + CTX_HEAD - 2, LINE);
+        // a line between the two columns
+        cv.vline(p.x + 4 + CTX_COL + 1, p.y + CTX_HEAD + 4, p.bottom() - 8, LINE);
         let rows = self.studio_ctx_rows();
-        for (i, (row, label, r)) in rows.iter().enumerate() {
-            // a line between the groups
-            if i > 0 && r.y - rows[i - 1].2.bottom() >= CTX_SEP { cv.hline(p.x + 10, p.right() - 11, r.y - CTX_SEP / 2, LINE); }
+        for (row, label, r) in rows.iter() {
             let on = match row { CtxRow::Overlay => !self.trace_stacked(), CtxRow::Stacked => self.trace_stacked(), CtxRow::ZoomHere => self.m.zoom, _ => false };
             self.ctx_icon(cv, *row, r.x + 16, r.y + r.h / 2, if on { ACCENT } else { TEXT });
             cv.set_clip(Rect::new(r.x + 32, r.y, r.w - 62, r.h));
@@ -205,8 +193,6 @@ impl Ui {
             CtxRow::ZoomBox => self.arm_zoom_area(),
             CtxRow::ZoomReset => self.workspace_action(Action::ZoomReset),
             CtxRow::ZoomClose => self.workspace_action(Action::ZoomClose),
-            CtxRow::RunStop => self.workspace_action(Action::Run),
-            CtxRow::Single => self.workspace_action(Action::Single),
             CtxRow::Autoset => self.workspace_action(Action::Autoset),
             CtxRow::TrigOn(id) => self.workspace_action(Action::Trigger(id)),
             CtxRow::LevelHere(id) => {
@@ -218,11 +204,9 @@ impl Ui {
                     self.relayout();
                 }
             }
-            CtxRow::TrigSettings => self.workspace_action(Action::Menu(MenuId::Trigger)),
             CtxRow::MeasOn(id) => { self.meas_src = id; self.open_meas_list(); }
             CtxRow::CursorHere => self.studio_cursors_add(None),
             CtxRow::NoteHere(id) => self.callout_add(id, at.x),
-            CtxRow::Sources => self.workspace_action(Action::Sources),
             CtxRow::Layout => { if !self.dock_exit_full() { self.dock_maximise(super::dock::VKind::Wave); } }
         }
     }

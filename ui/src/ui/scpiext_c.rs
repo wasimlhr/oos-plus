@@ -39,6 +39,13 @@ fn confirm(arg: &str) -> (String, bool) {
 
 fn needs_confirm(what: &str) -> String { conflict(&format!("{} needs the argument CONFIRM", what)) }
 
+/// The lines of a text as one answer: each a quoted string (a `"` in it doubled), separated by commas, as
+/// `:UI:MENU?` writes its rows. An answer of several lines has no end a client that reads a line could see: after
+/// `:SYSTem:INFO?` every later answer was one of its lines (seen on a unit, 2026-11-18).
+fn one_line<'a>(lines: impl Iterator<Item = &'a str>) -> String {
+    lines.map(|l| format!("\"{}\"", l.replace('"', "\"\""))).collect::<Vec<_>>().join(",")
+}
+
 impl Ui {
     pub(super) fn ext_c(&mut self, key: &str, _idx: Option<usize>, q: bool, arg: &str) -> Option<Reply> {
         let action = |q: bool| if q { Err(undefined(key)) } else { DONE };
@@ -76,8 +83,8 @@ impl Ui {
             "SYSTem:COMMunicate:LAN:RETRy10" => return Some(self.sel(Item::NetRetry10, q, arg)),
             "SYSTem:WLAN:STATus" => if q { t(self.net_value(Item::NetWlan)) } else { Err(undefined(key)) },
             "SYSTem:WLAN:SCAN" => { self.wlan_scan(); action(q) }
-            "SYSTem:WLAN:NETWorks" => if q { t(self.wlan_net_options().join("\n")) } else { Err(undefined(key)) },
-            "SYSTem:WLAN:SAVed" => if q { t(self.wlan.link.saved.iter().map(|n| oos_hal::wlan::name(&n.ssid)).collect::<Vec<_>>().join("\n")) } else { Err(undefined(key)) },
+            "SYSTem:WLAN:NETWorks" => if q { t(one_line(self.wlan_net_options().iter().map(String::as_str))) } else { Err(undefined(key)) },
+            "SYSTem:WLAN:SAVed" => if q { t(one_line(self.wlan.link.saved.iter().map(|n| oos_hal::wlan::name(&n.ssid)).collect::<Vec<_>>().iter().map(String::as_str))) } else { Err(undefined(key)) },
             "SYSTem:WLAN:FORGet" => {
                 if q { return Some(Err(undefined(key))); }
                 let Some(n) = arg.trim().parse::<usize>().ok().filter(|n| *n >= 1 && *n <= self.wlan.link.saved.len()) else { return Some(Err(bad(arg))) };
@@ -111,7 +118,7 @@ impl Ui {
                 if q { return Some(t(if self.session_is_sim { "SIM" } else if self.offline { "REF" } else { "LIVE" })); }
                 if kw(arg.trim(), "LIVE") { self.return_to_live(); DONE } else { Err(bad(arg)) }
             }
-            "SYSTem:INFO" => if q { t(self.sysinfo_text()) } else { Err(undefined(key)) },
+            "SYSTem:INFO" => if q { t(one_line(self.sysinfo_text().lines())) } else { Err(undefined(key)) },
             // ---- the ones that need CONFIRM
             "SYSTem:POWer:OFF" | "SYSTem:POWer:RESTart" => {
                 if q { return Some(Err(undefined(key))); }
@@ -120,7 +127,7 @@ impl Ui {
                 let ok = self.power_request(if key.ends_with("OFF") { PowerAction::Off } else { PowerAction::Restart });
                 if ok { DONE } else { Err(conflict("an update job is running")) }
             }
-            "SYSTem:UPDate:STATus" => if q { t(self.update_lines().join("\n")) } else { Err(undefined(key)) },
+            "SYSTem:UPDate:STATus" => if q { t(one_line(self.update_lines().iter().map(String::as_str))) } else { Err(undefined(key)) },
             "SYSTem:UPDate:ROLLback" => {
                 if q { return Some(Err(undefined(key))); }
                 if !confirm(arg).1 { return Some(Err(needs_confirm("Roll back"))); }

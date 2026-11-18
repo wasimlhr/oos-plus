@@ -135,8 +135,11 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     tap_in(&mut u, t.gear);
     assert_eq!(u.menu, MenuId::Main);
     u.close_menu();
-    // Cursor: the button of the Default bar, it opens the Cursor menu
+    // Cursors: the first tap puts the cursors on (no menu), the next opens their settings (batch 8)
     let t = u.studio_top();
+    tap_in(&mut u, t.cursors);
+    assert_eq!(u.m.cursor, CursorMode::Track);
+    assert!(!u.menu_open);
     tap_in(&mut u, t.cursors);
     assert_eq!(u.menu, MenuId::Cursor);
     u.close_menu();
@@ -237,10 +240,11 @@ fn studio_pinned_badges_sit_under_the_lanes_and_the_eye_hides_them() {
     assert!(u.grid.bottom() <= row.y, "the lanes end above the badges");
     let list = u.studio_badges();
     assert_eq!(list.len(), 3);
-    for (_, r) in &list { assert!(row.contains(r.x, r.y) && r.right() <= u.studio_row_btn().x, "badge inside the row"); }
+    for (_, r) in &list { assert!(row.contains(r.x, r.y) && r.right() <= u.studio_eye().x, "badge inside the row"); }
     // the row is paid for by the lanes: hiding the badges gives the height back (mock 02)
     let with = u.grid.h;
-    u.studio_row_pick(super::studio::RowAct::Hide);
+    let eye = u.studio_eye();
+    tap_in(&mut u, eye);
     assert!(u.studio.hide_badges);
     assert_eq!(u.studio_row_h(), 0);
     assert!(u.grid.h > with);
@@ -525,7 +529,8 @@ fn studio_measurements_only_is_a_table_with_statistics_and_a_source_filter() {
     assert_eq!(u.studio.view, StudioView::Waveform);
     // the list button of the badge row (it carries the count; the Meas tab is gone) brings the panel back
     assert!(u.studio_tab().is_none());
-    u.studio_row_pick(super::studio::RowAct::Table);
+    let tab = u.studio_list_chip();
+    tap_in(&mut u, tab);
     assert_eq!(u.studio.view, StudioView::Docked);
 }
 
