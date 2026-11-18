@@ -46,7 +46,8 @@ Added:
   that moves another setting too (a source that switches its channel on) gets a line after it that puts it right,
   and a value finer than its query writes it gets a key = value line. Reference waveforms and notes are not part of
   it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and
-  error -221 names its key.
+  error -221 names its key. Storage > Export > Save setup as SCPI writes the same lines to a new file
+  (`setup-NNN.scpi`, with date and time once the clock is set) where Storage saves; its message names a key that is left out.
 
 - External generator page, Menu > Instruments > Ext generator (ADR 0028, docs/extgen.md; host-tested against a
   simulated generator, not yet verified on hardware). A generator on the USB-A port or the LAN has its model,

@@ -184,6 +184,15 @@ impl Scpi {
     /// has seen nothing else: if its set-up text is not the one of `ui`, the answer is given and an error says which
     /// keys differ (a value with a `;` in it, which no line can carry).
     pub(crate) fn setup_scpi(&mut self, ui: &mut Ui, cv: &Canvas) -> String {
+        let (text, rest) = self.setup_scpi_proven(ui, cv);
+        if !rest.is_empty() { self.push_err(format!("-221,\"Settings conflict\" the commands do not bring back: {}", rest.join(" "))); }
+        text
+    }
+
+    /// The lines of `setup_scpi`, and what they do not bring back: the keys, and a line the proof refused. The
+    /// Storage row (`poll`) writes the lines to a file and names the rest on the screen; the error queue is the
+    /// client's.
+    pub(crate) fn setup_scpi_proven(&mut self, ui: &mut Ui, cv: &Canvas) -> (String, Vec<String>) {
         ui.sync_view_state();
         let want = crate::store::setup_text(&ui.m);
         let prefs = (ui.m.quick, ui.m.text_size);
@@ -213,8 +222,7 @@ impl Scpi {
         let (scpi, scope) = second_scope(&lines, prefs, cv);
         let mut rest: Vec<String> = changed(&crate::store::setup_text(&scope.m), &want).into_iter().map(|x| x.0).collect();
         if !scpi.err.is_empty() { rest.push(format!("(refused: {})", scpi.err.join(" "))); }
-        if !rest.is_empty() { self.push_err(format!("-221,\"Settings conflict\" the commands do not bring back: {}", rest.join(" "))); }
-        lines.join("\n") + "\n"
+        (lines.join("\n") + "\n", rest)
     }
 
     /// The commands that take a scope from the set-up text `before` to `after`, the set-up `ui` has now: the lines
@@ -487,6 +495,32 @@ mod tests {
         assert!(errors.is_empty(), "{errors:?}\n{lines}");
         assert_eq!(changed(&want, &got), Vec::new(), "{lines}");
         assert_eq!(got, want);
+    }
+
+    /// Storage > Save setup as SCPI writes the lines of the query into a new file where Storage saves, at the next
+    /// poll of the interpreter, and leaves the client's error queue alone.
+    #[test]
+    fn the_storage_row_writes_the_lines_of_the_query_to_a_file() {
+        let (mut s, mut ui, cv) = session();
+        let dir = std::env::temp_dir().join(format!("oos-setupscpi-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        ui.store_dir = dir.clone();
+        s.exec_line(&mut ui, &cv, ":CHANnel2:DISPlay ON");
+        crate::store::set(&mut ui.m, "studio_dock", "tree;f@1:2:300:200").unwrap();
+        ui.script_menu("Storage").unwrap();
+        ui.script_do("Save setup as SCPI").unwrap();
+        assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "the file is written by the interpreter's poll");
+        s.poll(&mut ui, &cv);
+        let files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
+        assert!(files.len() == 1 && files[0].extension().is_some_and(|x| x == "scpi"), "{files:?}");
+        assert_eq!(std::fs::read_to_string(&files[0]).unwrap(), "*RST\n:CHANnel2:DISPlay 1\n");
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        // a second press is a second file
+        ui.script_do("Save setup as SCPI").unwrap();
+        s.poll(&mut ui, &cv);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The "Equivalent header" column of `docs/scpi/setup-keys.md` names the headers of the rows.

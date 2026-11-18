@@ -278,7 +278,8 @@
      "query": ":SYSTem:SETup:SCPI?",
      "desc": "The setup as SCPI commands, as an IEEE block of lines: `*RST`, then one command for every setting that differs from the Default setup, each with the answer of its own query as the value. A setting without a header of its own is a `:SYSTem:SET` line; the headers are in the Equivalent header column of setup keys. Sent line by line to a scope, it brings that scope to this setup. Reference waveforms and notes are not part of it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and error -221 names its key. `SETup` is spelled out, as for `:SYSTem:SETup`.",
      "remarks": [
-      "- Origin: OOS extension. The first part of the SCPI recorder."
+      "- Menu equivalent: Storage > Save setup as SCPI.",
+      "- Origin: OOS extension. The first part of the SCPI recorder. The menu row writes the same lines to a new file where Storage saves, `setup-NNN.scpi` (`setup-<date>-<time>.scpi` once the clock is set)."
      ],
      "ext": true
     },
@@ -13342,7 +13343,7 @@
      "p": "Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
     },
     {
-     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load)."
+     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file."
     },
     {
      "p": "Part of the SCPI reference."

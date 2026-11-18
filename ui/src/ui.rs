@@ -1053,6 +1053,8 @@ enum Item {
     StoreSlot,
     StoreDest,
     StoreSaveSetup,
+    /// the set-up as SCPI commands, into a file (scpi/setupscpi.rs)
+    StoreSaveScpi,
     StoreRecall,
     StoreCsv,
     StorePng,
@@ -1743,6 +1745,9 @@ pub struct Ui {
     /// why (hwmask.rs); the software test and filter take over
     unit_blocked: Option<String>,
     pub shot_request: Option<String>,
+    /// Storage > Save setup as SCPI: the file to write. The interpreter writes it at its next poll, since the lines
+    /// are the answers of its own queries (`Scpi::poll`, scpi/setupscpi.rs).
+    pub setup_scpi_request: Option<std::path::PathBuf>,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
@@ -2070,6 +2075,7 @@ impl Ui {
             mask_hw_clear: 0,
             unit_blocked: None,
             shot_request: None,
+            setup_scpi_request: None,
             quit: false,
         };
         ui.ensure_meas_own();
@@ -7084,7 +7090,7 @@ impl Ui {
                 }
                 v
             }
-            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng],
+            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi],
             MenuId::Spectrum => vec![Item::SpecOn, Item::SpecSrc, Item::SpecCenter, Item::SpecSpan, Item::SpecHarm, Item::SpecRbw, Item::SpecWin, Item::SpecTrace, Item::SpecRef, Item::SpecWf, Item::SpecDist, Item::SpecAcprW, Item::SpecAcprS, Item::SpecPeak, Item::SpecMargin, Item::SpecLimitSet, Item::SpecLimitClear],
             MenuId::Eye => vec![Item::EyeAct, Item::EyeOn, Item::EyePlace, Item::EyeSrc, Item::EyeRate, Item::EyeBer, Item::EyeB, Item::EyeHp, Item::EyePnLo, Item::EyePnHi, Item::EyeNpj, Item::EyeRail, Item::EyeNotch, Item::EyePll, Item::EyeClear],
             MenuId::Power => {
@@ -7973,7 +7979,7 @@ impl Ui {
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
             Item::RefSave | Item::RefSaveNext | Item::RefClear => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
-            Item::StoreSaveSetup | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
+            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
@@ -8016,6 +8022,7 @@ impl Ui {
             Item::StoreSlot => "Setup slot",
             Item::StoreDest => "Save to",
             Item::StoreSaveSetup => "Save setup",
+            Item::StoreSaveScpi => "Save setup as SCPI",
             Item::StoreRecall => "Recall setup",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
@@ -9379,6 +9386,7 @@ impl Ui {
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
                 }
+                Item::StoreSaveScpi => self.setup_scpi_request = Some(self.new_file(&self.save_dir(), "setup", "scpi")),
                 Item::StoreRecall => self.recall_setup(),
                 Item::StoreCsv => self.store_wave(true, None),
                 Item::StorePng => {
@@ -9655,6 +9663,18 @@ impl Ui {
                 Ok(())
             }
             Err(e) => Err(e),
+        }
+    }
+
+    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request. `rest`: the keys no
+    /// line could carry.
+    pub(crate) fn setup_scpi_save(&mut self, path: &std::path::Path, text: &str, rest: &[String]) {
+        let r = crate::store::write(path, text.as_bytes());
+        if r.is_ok() && !rest.is_empty() {
+            self.flush_stick();
+            self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(path), self.saved_where(), rest.join(" ")));
+        } else {
+            self.toast_saved(path, r);
         }
     }
 
