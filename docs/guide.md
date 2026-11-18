@@ -707,6 +707,14 @@ on one source with the plot in view; the button beside its close button opens th
 the sources, Selected and Settings, and Menu > Measure opens that page at once. System, SIM and the network pages are
 entries of the Menu.
 
+A sheet has the rows of the Default menu with the same controls: buttons for a choice where they fit the row, minus,
+value and plus where they do not (the value opens the list of all options), a switch for Off and On. In Studio the
+plot's right-click (long press) menu has Stacked traces, a lane for every source with its own scale at the right,
+and Overlay traces, every source on one graticule of the full height, each with its own position and scale
+(`:VIEW:TRACes`). In both, every channel, reference and math channel has a handle with its name at the left edge, on
+its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
+side. A tap on a handle opens the sheet of its source.
+
 **Text size.** Display > Text size makes the text larger: Normal is the original look, Large and Larger use fonts 2 and 4
 pixels bigger in the top bar, the cards, the measurement and cursor rows, the menus, the keyboard and the dialogs. The rows
 under the plot grow with them, so the plot gets a little shorter. Where a long text would not fit (a narrow channel card

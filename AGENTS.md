@@ -51,6 +51,8 @@ there. These instructions are the same for every agent and every person; the rea
   of the screen needs a decision record first.
 - A row added to a menu gets its place on the Studio sheet of that menu (`sheet_plan`), so Studio offers what Default
   offers (ADR 0030).
+- A sheet row takes its control from `Ui::ctl`, as the Default dialog does, and a source drawn in the Studio plot
+  takes its handle from `studio_handle_rects`: no row kind and no badge of a layout's own (ADR 0031).
 
 ## Layout of the tree
 

@@ -7,6 +7,23 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio, walked control by control (ADR 0031; host-tested: 87 controls and functions over SCPI and 460 sheet rows
+  by touch. On a DHO924S only read, on an older build: not yet verified on hardware):
+  - Overlay traces and Stacked traces: every source has one handle with its name at the left edge, on its own zero
+    level, in both modes. A reference had a badge in the middle of its lane in Stacked and a box over its trace in
+    Overlay, and a math channel had no handle, so with every source on one graticule nothing said where their zero
+    was. A handle at the bottom edge no longer lies under the time labels, handles on the same level stand side by
+    side, the volt labels keep clear of all of them, and a tap on the handle of a reference or of a math channel
+    opens its sheet. `:UI:ELEMents?` lists the lanes (`LANE`) and the handles (`HANDLE`).
+  - Set level here (the plot's right-click menu) puts the trigger level under the finger. It went to an end of the
+    range (-18.5 V or 21.5 V at 1 V/div) wherever the finger was: the search for the level went the wrong way.
+  - the View menu of the Studio bar and the popup of Add source are read with `:UI:MENU?` and pressed with
+    `:UI:MENU:SELect`, and `:UI:MENU:CLOSe` closes them. They opened, but a program could not see them.
+- Minimal and Studio: a sheet row has the control of the Default menu (ADR 0031). A setting with a list of options
+  (record length, bandwidth limit, averages, ...) has minus and plus again and the value opens the list; it was a
+  list alone. A choice is buttons wherever they fit the row, so Acquire > Mode and Horizontal > Expand around are four
+  buttons as in Default, and 17 more rows like them. A test compares every row of the 47 menus with the dialog: its
+  name, its order and its control. The cursor rows of Minimal are in the order of the menu.
 - Studio offers what Default offers (ADR 0030; host-tested, not yet verified on hardware). The 47 menus and 508 rows
   of the Default layout were compared with the Studio sheets; the rows were there but for one, the gaps were at the
   entrances, and a test now keeps a row from going missing:
