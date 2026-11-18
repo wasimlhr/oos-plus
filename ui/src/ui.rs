@@ -4264,6 +4264,10 @@ impl Ui {
                     taken.push(Rect::new(a.x, y - 9, MARK_W + 2, 18));
                 }
             }
+            // Studio: every source has a handle there, the references and the math channels too
+            if self.m.layout == Layout::Studio {
+                for (_, r) in self.studio_handle_rects() { taken.push(Rect::new(a.x, r.y, r.right() - a.x + 2, r.h)); }
+            }
             // what a lane has at its right edge: the corner buttons with their words, and the trigger tag with its value
             let mut right_obstacles: Vec<Rect> = Vec::new();
             // the trigger tag with its value: a scale label at its height would say the level a second time beside it
@@ -5093,6 +5097,10 @@ impl Ui {
         let on: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.cur_win).collect();
         let labels: Vec<Option<String>> = on.iter().enumerate().map(|(row, &k)| self.draw_math_ch(cv, k, row as i32)).collect();
         let f = self.fonts();
+        if self.m.layout == Layout::Studio {
+            // a math channel has the handle of every source, on its zero level (a spectrum has none)
+            for &k in &on { self.studio_source_handle(cv, workspace::Trace::Math(k)); }
+        }
         for (row, (label, &k)) in labels.iter().zip(&on).enumerate() {
             if let Some(label) = label {
                 // top right, under the status line, one row per math channel (the results panel goes below them)
@@ -5449,19 +5457,9 @@ impl Ui {
     /// Name, volts per division, and the record's sample rate, beside the trace.
     fn draw_ref_badge(&self, cv: &mut Canvas, area: Rect, y: i32, col: Rgb, slot: usize, r: &RefWave) {
         let f = self.fonts();
-        // Studio lanes: the same small outlined badge a channel has at the left of its lane. The name, the scale and
-        // the signal are on the reference's pill in the bottom bar, so nothing covers the trace
-        if self.m.layout == Layout::Studio && self.stacked() {
-            // at the middle of the lane, where a channel's badge sits when its ground line is centred: clear of the
-            // volt labels at the top and the time labels at the bottom
-            let _ = y;
-            // right of the volt labels, which a reference has down its whole lane
-            let b = Rect::new(area.x + 52, (area.y + area.h / 2 - 12).max(area.y + 2), 44, 24);
-            cv.round(b, 4, col, 255);
-            cv.round(b.inset(1), 3, BG, 255);
-            cv.text_in(&f.sb, b, 1, &format!("R{}", slot + 1), col);
-            return;
-        }
+        // Studio: a reference has the handle of every source, on its zero level (`studio_source_handle`). The name,
+        // the scale and the signal are on the reference's pill in the bottom bar, so nothing covers the trace
+        if self.m.layout == Layout::Studio { return; }
         let maximum = (area.w - 16).clamp(36, 300);
         let (name, readout) = self.ref_badge_lines(slot, r, maximum);
         let text_w = f.sb.width(&name).max(f.s.width(&readout));
@@ -5515,6 +5513,11 @@ impl Ui {
                 continue;
             }
             let col = REF_COLORS[r.color.min(REF_COLORS.len() - 1)].1;
+            if self.m.layout == Layout::Studio && !all_sources {
+                cv.no_clip();
+                self.studio_source_handle(cv, workspace::Trace::Reference(i));
+                cv.set_clip(area);
+            }
             // samples inside this window, not a stride of the whole record (that aliases a long record)
             let n = r.v.len() as isize;
             let at = |t: f64| -> isize {
@@ -5611,7 +5614,7 @@ impl Ui {
             }
             let y = self.y_of_volts(c, 0.0).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
             let col = CH_COLORS[c];
-            if self.m.layout == Layout::Studio { self.studio_lane_badge(cv, c, y); continue; }
+            if self.m.layout == Layout::Studio { self.studio_source_handle(cv, workspace::Trace::Channel(c)); continue; }
             let r = Rect::new(a.x + 2, y - 8, 16, 16);
             cv.round(r, 3, col, 255);
             cv.triangle([(a.x + 17, y - 6), (a.x + 24, y), (a.x + 17, y + 6)], col);

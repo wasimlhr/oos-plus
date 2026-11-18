@@ -430,6 +430,18 @@ impl Ui {
             }
             for (key, r) in self.studio_badges() { push("BADGE", format!("{key:?}"), r); }
             if !self.view_on() {
+                // the plot: its lanes (one graticule in Overlay) and the handle of each source on its zero level
+                use super::workspace::Trace;
+                let name = |s: &Trace| match s { Trace::Channel(c) => format!("CH{}", c + 1), Trace::Reference(i) => format!("R{}", i + 1), Trace::Math(k) => format!("M{}", k + 1) };
+                let sources = self.trace_sources();
+                for (i, w) in self.wins.iter().enumerate() {
+                    let label = if self.stacked() { sources.get(i).map(name).unwrap_or_else(|| "Lane".into()) } else { "All sources".into() };
+                    push("LANE", label, *w);
+                }
+                for (c, r) in self.studio.lane_badges.borrow().iter() { push("HANDLE", format!("CH{}", c + 1), *r); }
+                for (s, r) in self.studio.handles.borrow().iter() { push("HANDLE", name(s), *r); }
+            }
+            if !self.view_on() {
                 push("PLOT", "Full screen".into(), self.full_btn().1);
                 push("PLOT", "Zoom".into(), self.zoom_btn().1);
             }

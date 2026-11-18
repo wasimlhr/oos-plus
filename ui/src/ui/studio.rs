@@ -151,6 +151,8 @@ pub(super) struct Studio {
     pub yzoom: Option<usize>,
     /// where the lanes drew their channel badges last frame
     pub lane_badges: std::cell::RefCell<Vec<(usize, Rect)>>,
+    /// where the handles of the references and the math channels were drawn last frame (`studio_source_handle`)
+    pub handles: std::cell::RefCell<Vec<(super::workspace::Trace, Rect)>>,
     /// Studio was the layout at the last frame: coming into it applies the entry rules (`studio_sync`)
     pub was: bool,
     /// Search 1 (Add > Search): its own source, level and slope
@@ -339,6 +341,7 @@ impl Ui {
     /// Start of a frame: the lanes draw their badges again, and a layout change made in the Display menu is applied.
     pub(super) fn studio_frame_start(&mut self) {
         self.studio.lane_badges.get_mut().clear();
+        self.studio.handles.get_mut().clear();
         self.sync_view_state();
         // coming into Studio by any road (menu, recalled setup, restart) applies its entry rules: its bars show
         let is = self.m.layout == Layout::Studio;
@@ -1242,15 +1245,65 @@ impl Ui {
         g.x + ((0.5 + (t - delay as f64) / (HDIV as f64 * tpd as f64)) * g.w as f64).round() as i32
     }
 
-    /// The channel badge at the left edge of a lane, on the channel's ground line (`draw_markers`).
-    pub(super) fn studio_lane_badge(&self, cv: &mut Canvas, c: usize, y: i32) {
+    /// The zero level of a source in the window that is being drawn, as a screen line: the ground of a channel, the
+    /// zero of a reference or of a math channel. None for a source this window does not draw, and for a spectrum.
+    pub(super) fn studio_zero_y(&self, source: super::workspace::Trace) -> Option<i32> {
+        use super::workspace::Trace;
+        let y = match source {
+            Trace::Channel(c) => { if !self.m.ch[c].on || !self.shows(c) { return None; } self.y_of_volts(c, 0.0) }
+            Trace::Reference(i) => {
+                let r = self.refs.get(i)?.as_ref().filter(|r| r.on && r.vpd > 0.0)?;
+                if self.ref_win_of(i) != self.cur_win { return None; }
+                self.zoom_y_of_divs(self.area, r.offset / r.vpd).clamp(-1e4, 1e4).round() as i32
+            }
+            Trace::Math(k) => {
+                if !self.m.math_shown(k) || self.math_win_of(k) != self.cur_win { return None; }
+                let c = self.m.math_ch(k);
+                if c.op == MathOp::Fft { return None; }
+                self.zoom_y_of_divs(self.area, c.offset).clamp(-1e4, 1e4).round() as i32
+            }
+        };
+        Some(y)
+    }
+
+    /// Where the handles of the window that is being drawn sit, in the order of the sources (channels, references,
+    /// math). A handle is on its source's zero level at the left edge. A zero level outside the plot pins it to that
+    /// edge, clear of the time labels; handles that would cover each other (sources with the same zero level in one
+    /// graticule) stand side by side, so each stays on its own level.
+    pub(super) fn studio_handle_rects(&self) -> Vec<(super::workspace::Trace, Rect)> {
         let a = self.area;
-        let col = CH_COLORS[c];
-        let r = Rect::new(a.x + 3, y - 12, 44, 24);
-        self.studio.lane_badges.borrow_mut().push((c, r));
+        let half = 12.min(a.h / 2);
+        // the lane that carries the time labels keeps them readable, and the last one the Fit row above them
+        let last = self.cur_win + 1 >= self.wins.len();
+        let times = if last { self.ref_badge_pad(a).max(self.fonts().s.size + 8) } else if self.stacked() && !self.studio_lane_has_own_time() { 0 } else { self.fonts().s.size + 8 };
+        let low = (a.y + a.h - times - half).max(a.y + half);
+        let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
+        for source in self.trace_sources() {
+            let Some(zero) = self.studio_zero_y(source) else { continue };
+            let mut r = Rect::new(a.x + 3, zero.clamp(a.y + half, low) - 12, 44, 24);
+            while r.right() + 2 < a.x + a.w && out.iter().any(|(_, b)| overlaps(*b, r)) { r.x += r.w + 2; }
+            out.push((source, r));
+        }
+        out
+    }
+
+    /// The handle of a source: an outlined badge with its name on the source's zero level (`studio_handle_rects`).
+    /// Channels, references and math channels have the same one, in Stacked and in Overlay.
+    pub(super) fn studio_source_handle(&self, cv: &mut Canvas, source: super::workspace::Trace) {
+        use super::workspace::Trace;
+        let Some(r) = self.studio_handle_rects().into_iter().find(|(s, _)| *s == source).map(|(_, r)| r) else { return };
+        let (name, col) = match source {
+            Trace::Channel(c) => (format!("CH{}", c + 1), CH_COLORS[c]),
+            Trace::Reference(i) => (format!("R{}", i + 1), self.wave_color(WaveId::Ref(i))),
+            Trace::Math(k) => (format!("M{}", k + 1), MATH_COLORS[k % MATH_COLORS.len()]),
+        };
+        match source {
+            Trace::Channel(c) => self.studio.lane_badges.borrow_mut().push((c, r)),
+            _ => self.studio.handles.borrow_mut().push((source, r)),
+        }
         cv.round(r, 4, col, 255);
         cv.round(r.inset(1), 3, BG, 255);
-        cv.text_in(&self.fonts().sb, r, 1, &format!("CH{}", c + 1), col);
+        cv.text_in(&self.fonts().sb, r, 1, &name, col);
     }
 
     /// The T marker over the lanes, the cursor tags and the shaded band between the cursors.
@@ -3146,6 +3199,21 @@ impl Ui {
             self.select_workspace_source(WaveId::Ch(c));
             if self.studio_zoom_active() { self.studio.yzoom = Some(c); } else { self.toggle_menu(MenuId::Channel(c)); }
             return true;
+        }
+        // the handle of a reference or a math channel: its sheet
+        let hit = self.studio.handles.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(s, _)| s);
+        match hit {
+            Some(super::workspace::Trace::Reference(i)) => {
+                self.select_workspace_source(WaveId::Ref(i));
+                self.toggle_menu(MenuId::Ref);
+                return true;
+            }
+            Some(super::workspace::Trace::Math(k)) => {
+                self.m.math_select(k);
+                self.toggle_menu(MenuId::Math);
+                return true;
+            }
+            _ => {}
         }
         false
     }

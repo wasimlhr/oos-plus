@@ -62,7 +62,7 @@ The other rows of that menu have their commands already: Stop / Run `:STOP`, `:R
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:UI:SCReen` | Query | Answers `w,h`, the screen size in pixels. | - | - | OOS extension |
-| `:UI:ELEMents` | Query | `[<kind>]`: every control on the screen now, one record each, separated by `;`: `<kind>,"<label>",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those. | - | - | OOS extension |
+| `:UI:ELEMents` | Query | `[<kind>]`: every control on the screen now, one record each, separated by `;`: `<kind>,"<label>",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `LANE` (a lane of the plot, labelled with its source; one record labelled `All sources` in Overlay), `HANDLE` (the handle of a channel, reference or math channel, on its zero level), `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those. | - | - | OOS extension |
 | `:UI:TAP` | Set | `x,y`: a tap, as a finger. | - | - | OOS extension |
 | `:UI:DRAG` | Set | `x0,y0,x1,y1`: a finger down, moved in steps, up. Drags a divider, a view by its strip, a floating panel by its corner, a cursor. | - | - | OOS extension |
 | `:UI:CONText` | Set | `x,y`: what a right click or a held finger opens at that point: the plot's menu, the menu of a channel chip or a view, or on the Zoom button its popover (`"Zoom source"`: `All lanes`, a lane, `X zoom in`, `X zoom out`, `Y zoom in`, `Y zoom out`, `Reset zoom`). | - | Right click; long press | OOS extension |
@@ -115,6 +115,19 @@ Right-click the plot and pick a row by its label, as a person would:
 "Context","Overlay traces","Stacked traces","Fit record","Zoom here","Zoom box","Stop","Single","Autoset","Trigger on CH2","Set level here","Trigger settings","Measurement on CH2","Cursor here","Sources","Maximise view"
 :UI:MENU:SELect "Stacked traces"
 ```
+
+Check that every source sits on its own zero level in Overlay. CH1 at 1 V/div with an offset of 1 V is one division
+(55 px here) above the middle of the graticule, CH2 with -1 V one below, and R1 with -2 V two below:
+
+```
+:VIEW:TRACes OVERlay
+:UI:ELEMents? LANE
+LANE,"All sources",0,66,1024,440
+:UI:ELEMents? HANDLE
+HANDLE,"CH1",3,219,44,24;HANDLE,"CH2",3,329,44,24;HANDLE,"R1",3,384,44,24
+```
+
+(Replies of the host build, screen 1024 x 600; not yet read from a unit.)
 
 Find a button on the screen and press it:
 
