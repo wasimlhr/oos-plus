@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Generates docs/manual/commands.json (the command reference of the SCPI Programming Manual) from the SCPI reference.
 
     python docs/manual/gen_commands.py [--date YYYY-MM-DD]
