@@ -58,7 +58,8 @@ What only Studio has stays beside the row, because the row has no place for it:
 - The view column of the plot's menu has nine rows while zoom is on, Center trigger among them
   (`the_plot_menu_centres_the_trigger_in_the_zoom_window` checks that the menu fits the screen).
 - The toolbar of the pull-down tab had been made a finger high (44 px) the day before. The buttons of the zoom row
-  are 28 px high, as in the Default layout. If they are to be a finger high, they grow in every layout.
+  are 28 px high, as in the Default layout. The owner saw both heights side by side on 2026-11-18 and chose to
+  keep the row as in Default; a finger-high row would have grown in every layout.
 
 ## References
 
