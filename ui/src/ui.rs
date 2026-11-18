@@ -13,6 +13,7 @@ use crate::board::{board, Board};
 mod analysers;
 mod analysis;
 mod scroll;
+mod files;
 mod measure_pairs;
 mod bus;
 mod busview;
@@ -191,6 +192,7 @@ mod interplay_tests;
 #[cfg(test)]
 mod session_tests;
 pub use views::VIEWS_MAX;
+pub use files::{FileAsk, FileKind};
 mod script;
 #[cfg(test)]
 mod lint;
@@ -1056,6 +1058,9 @@ enum Item {
     /// the set-up as SCPI commands, into a file (scpi/setupscpi.rs)
     StoreSaveScpi,
     StoreRecall,
+    /// a setup as a file with a name of its own, beside the slots (ui/files.rs, ADR 0029)
+    StoreSetupSave,
+    StoreSetupLoad,
     StoreCsv,
     StorePng,
     StoreFfSave,
@@ -1628,6 +1633,8 @@ pub struct Ui {
     ref_src: usize,
     /// files the Import slot picker is showing
     ref_files: Vec<std::path::PathBuf>,
+    /// Storage, a file by its name (ui/files.rs): the question for the dialog of the desktop build
+    file_request: Option<FileAsk>,
     xy: bool,
     /// the XY plot's X and Y channels (the Add panel sets them; the default is CH1 against CH2)
     xy_src: [usize; 2],
@@ -2002,6 +2009,7 @@ impl Ui {
             ref_sel: 0,
             ref_src: 0,
             ref_files: Vec::new(),
+            file_request: None,
             xy: false,
             xy_src: [0, 1],
             hist_ch: None,
@@ -3131,9 +3139,9 @@ impl Ui {
     fn quick(&mut self) {
         match self.m.quick {
             Quick::Screenshot => self.shot_request = Some(String::new()),
-            Quick::SavePng => self.activate(Item::StorePng),
+            Quick::SavePng => self.file_save_auto(FileKind::Shot),
             Quick::SaveSetup => self.activate(Item::StoreSaveSetup),
-            Quick::SaveCsv => self.activate(Item::StoreCsv),
+            Quick::SaveCsv => self.file_save_auto(FileKind::WaveCsv),
             Quick::Autoset => self.key(key::AUTO),
             Quick::Single => self.key(key::SINGLE),
             Quick::RunStop => self.key(key::RUNSTOP),
@@ -4596,7 +4604,8 @@ impl Ui {
         v
     }
 
-    fn ff_save(&mut self) {
+    /// Save fast-frame: the history to `path`, or to the next `frame-NNN.bin` of the save folder.
+    fn ff_save_to(&mut self, path: Option<std::path::PathBuf>) {
         let recs: Vec<Record> = if !self.history.is_empty() {
             self.history.iter().cloned().collect()
         } else if let Some(rec) = self.last[0].as_ref() {
@@ -4604,7 +4613,7 @@ impl Ui {
         } else {
             return self.toast("No frames to save");
         };
-        let p = crate::store::next_name(&self.save_dir(), "frame", "bin");
+        let p = path.unwrap_or_else(|| crate::store::next_name(&self.save_dir(), "frame", "bin"));
         let r = crate::store::write(&p, &crate::store::ff_bin(&recs, &self.m));
         self.toast_saved(&p, r);
     }
@@ -4661,6 +4670,11 @@ impl Ui {
 
     pub(crate) fn session_save(&mut self, path: &str) -> Result<std::path::PathBuf, String> {
         let p = self.session_file(path, true)?;
+        self.session_write(p)
+    }
+
+    /// Save session to the file `p`.
+    fn session_write(&mut self, p: std::path::PathBuf) -> Result<std::path::PathBuf, String> {
         let setup = self.setup_text_full();
         let refs: Vec<crate::store::SessionRef> = self.refs.iter().enumerate().filter_map(|(slot, r)| {
             r.as_ref().map(|r| crate::store::SessionRef { slot, src: r.src, t0: r.t0, dt: r.dt, v: r.v.to_vec() })
@@ -4681,8 +4695,18 @@ impl Ui {
     /// record becomes the one on the screen, and the reference slots are replaced by those of the file (a slot the file
     /// does not have is emptied: the session is the whole bench, not an addition to it).
     pub(crate) fn session_load(&mut self, path: &str) -> Result<(), String> {
+        match self.session_file(path, false) {
+            Ok(p) => self.session_read(p),
+            Err(e) => {
+                self.toast(&format!("Load failed: {e}"));
+                Err(e)
+            }
+        }
+    }
+
+    /// Load session from the file `p`.
+    fn session_read(&mut self, p: std::path::PathBuf) -> Result<(), String> {
         let done = (|| {
-            let p = self.session_file(path, false)?;
             let data = crate::store::read_waveform_file(&p)?;
             let session = crate::store::parse_session(&data, NREF)?;
             // checked before anything is changed: a file with a setup this build cannot read leaves the bench as it is
@@ -4730,12 +4754,9 @@ impl Ui {
         }
     }
 
-    fn ff_load(&mut self) {
-        let p = match crate::store::latest_name(&self.save_dir(), "frame", "bin") {
-            Some(p) => p,
-            None => return self.toast("No frame-NNN.bin in the save folder"),
-        };
-        let data = match std::fs::read(&p) {
+    /// Load fast-frame from the file `p`.
+    fn ff_load_from(&mut self, p: &std::path::Path) {
+        let data = match std::fs::read(p) {
             Ok(b) => b,
             Err(e) => return self.toast(&format!("Load failed: {}", e)),
         };
@@ -4747,7 +4768,7 @@ impl Ui {
                 self.last[0] = Some(self.history[n - 1].clone());
                 self.m.run = RunState::Stop;
                 self.measure_last();
-                self.toast(&format!("Loaded {} frames from {}", n, crate::store::file_name(&p)));
+                self.toast(&format!("Loaded {} frames from {}", n, crate::store::file_name(p)));
             }
             Ok(_) => self.toast("That file holds no frames"),
             Err(e) => self.toast(&format!("Load failed: {}", e)),
@@ -7100,7 +7121,7 @@ impl Ui {
                 }
                 v
             }
-            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi],
+            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreSetupSave, Item::StoreSetupLoad, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi],
             MenuId::Spectrum => vec![Item::SpecOn, Item::SpecSrc, Item::SpecCenter, Item::SpecSpan, Item::SpecHarm, Item::SpecRbw, Item::SpecWin, Item::SpecTrace, Item::SpecRef, Item::SpecWf, Item::SpecDist, Item::SpecAcprW, Item::SpecAcprS, Item::SpecPeak, Item::SpecMargin, Item::SpecLimitSet, Item::SpecLimitClear],
             MenuId::Eye => vec![Item::EyeAct, Item::EyeOn, Item::EyePlace, Item::EyeSrc, Item::EyeRate, Item::EyeBer, Item::EyeB, Item::EyeHp, Item::EyePnLo, Item::EyePnHi, Item::EyeNpj, Item::EyeRail, Item::EyeNotch, Item::EyePll, Item::EyeClear],
             MenuId::Power => {
@@ -7989,7 +8010,7 @@ impl Ui {
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
             Item::RefSave | Item::RefSaveNext | Item::RefClear => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
-            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
+            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreSetupSave | Item::StoreSetupLoad | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
@@ -8034,6 +8055,8 @@ impl Ui {
             Item::StoreSaveSetup => "Save setup",
             Item::StoreSaveScpi => "Save setup as SCPI",
             Item::StoreRecall => "Recall setup",
+            Item::StoreSetupSave => "Save setup to file",
+            Item::StoreSetupLoad => "Load setup from file",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
             Item::StoreFfSave => "Save fast-frame",
@@ -9282,7 +9305,7 @@ impl Ui {
                 Item::DecExport => self.events_export(tables::TableKind::Decode),
                 Item::SearchTable => self.table_toggle(tables::TableKind::Search),
                 Item::SearchSave => self.events_export(tables::TableKind::Search),
-                Item::StoreBin => self.store_wave(false, None),
+                Item::StoreBin => self.file_save_ask(FileKind::WaveBin),
                 Item::RefExport => self.ref_export(),
                 Item::RefImport if self.sheets_on() => self.studio_load_file(self.ref_sel),
                 Item::RefImport => self.ref_import(),
@@ -9396,15 +9419,13 @@ impl Ui {
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
                 }
-                Item::StoreSaveScpi => self.setup_scpi_request = Some(self.new_file(&self.save_dir(), "setup", "scpi")),
+                // the rows below ask for the name of their file, or which file to load (ui/files.rs); the slots do not
+                Item::StoreSaveScpi => self.file_save_ask(FileKind::SetupScpi),
                 Item::StoreRecall => self.recall_setup(),
-                Item::StoreCsv => self.store_wave(true, None),
-                Item::StorePng => {
-                    // without the dialog: the screen is saved after the next frame (main loop / script runner)
-                    let p = self.new_file(&self.save_dir(), "shot", "png");
-                    self.close_menu();
-                    self.shot_request = Some(p.to_string_lossy().into_owned());
-                }
+                Item::StoreSetupSave => self.file_save_ask(FileKind::Setup),
+                Item::StoreSetupLoad => self.file_load_ask(FileKind::Setup),
+                Item::StoreCsv => self.file_save_ask(FileKind::WaveCsv),
+                Item::StorePng => self.file_save_ask(FileKind::Shot),
                 Item::MaskCreate => self.create_mask(),
                 Item::MaskFromRef => self.create_mask_from_ref(),
                 Item::MaskClear => {
@@ -9426,10 +9447,10 @@ impl Ui {
                         self.toast("Counts reset");
                     }
                 }
-                Item::StoreFfSave => self.ff_save(),
-                Item::StoreFfLoad => self.ff_load(),
-                Item::StoreSessSave => { let _ = self.session_save(""); }
-                Item::StoreSessLoad => { let _ = self.session_load(""); }
+                Item::StoreFfSave => self.file_save_ask(FileKind::FastFrame),
+                Item::StoreFfLoad => self.file_load_ask(FileKind::FastFrame),
+                Item::StoreSessSave => self.file_save_ask(FileKind::Session),
+                Item::StoreSessLoad => self.file_load_ask(FileKind::Session),
                 Item::Stock => self.stock_tap(),
                 Item::Update => self.dialog = Some(self.update_lines()),
                 Item::AcqSegTable => self.table_toggle(tables::TableKind::Segments),
@@ -9476,13 +9497,20 @@ impl Ui {
     /// Storage > Save waveform (CSV or binary): the newest record to the save folder, or to a file of the caller
     /// (SCPI `:SAVE:WAVeform "path"`).
     pub(crate) fn store_wave(&mut self, csv: bool, path: Option<std::path::PathBuf>) {
+        if self.last[0].is_none() { return self.toast("No waveform to save") }
+        // the LA lines of a file OOS names go to the next la-NNN.csv; a file of the caller is that one file
+        let la = (csv && path.is_none()).then(|| self.new_file(&self.save_dir(), "la", "csv"));
+        let p = path.unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
+        self.store_wave_to(csv, p, la);
+    }
+
+    /// The newest record to `p`; the LA lines of a CSV to `la`, when there is one and the analyser is on.
+    fn store_wave_to(&mut self, csv: bool, p: std::path::PathBuf, la: Option<std::path::PathBuf>) {
         let Some(rec) = &self.last[0] else { return self.toast("No waveform to save") };
-        let p = path.clone().unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
         let mut r = if csv { crate::store::write(&p, crate::store::wave_csv(rec, &self.m).as_bytes()) } else { crate::store::write(&p, &crate::store::wave_bin(rec, &self.m)) };
         // the LA lines go to their own file: another sample rate, and only the changes
-        if let (true, Ok(()), Some(la), true, None) = (csv, &r, &rec.la, self.m.la_on(), &path) {
-            let q = self.new_file(&self.save_dir(), "la", "csv");
-            r = crate::store::write(&q, crate::store::la_csv(la, &self.m.la.lines()).as_bytes());
+        if let (true, Ok(()), Some(lines), true, Some(q)) = (csv, &r, &rec.la, self.m.la_on(), &la) {
+            r = crate::store::write(q, crate::store::la_csv(lines, &self.m.la.lines()).as_bytes());
         }
         self.toast_saved(&p, r);
     }
@@ -9616,14 +9644,19 @@ impl Ui {
     /// Loads setup<slot>.txt of the storage directory; the acquisition state (run / stop) stays as it is.
     fn recall_setup(&mut self) {
         let p = self.setup_path();
-        let text = std::fs::read_to_string(&p).map_err(|e| e.to_string());
+        self.recall_setup_from(&p);
+    }
+
+    /// Recall setup from the file `p`: the slot's, or one the user chose (Storage > Load setup from file).
+    fn recall_setup_from(&mut self, p: &std::path::Path) {
+        let text = std::fs::read_to_string(p).map_err(|e| e.to_string());
         // a set-up is a live one, as with the Default key: a reference or SIM session ends first, so a Live afterwards
         // does not bring back the set-up from before it over the recalled one
         if text.as_deref().is_ok_and(|t| crate::store::parse_setup(t).is_ok()) && self.record_mode() {
             self.leave_session();
         }
         match text.and_then(|t| self.apply_setup_text(&t)) {
-            Ok(()) => self.toast(&format!("Recalled {}", crate::store::file_name(&p))),
+            Ok(()) => self.toast(&format!("Recalled {}", crate::store::file_name(p))),
             Err(e) => self.toast(&format!("Recall failed: {}", e)),
         }
     }

@@ -89,6 +89,14 @@ fn open_waveform(ui: &mut Ui, win: &Window, loader: &mut picker::Loader) {
     }
 }
 
+/// A Storage row asked for a file (`ui/files.rs`): Save As or Open, and the answer goes back to the row.
+fn choose_file(ui: &mut Ui, win: &Window, ask: &ui::FileAsk) {
+    match picker::storage(win.get_window_handle(), ask) {
+        Ok(path) => ui.file_chosen(ask, path),
+        Err(error) => ui.toast(&error),
+    }
+}
+
 /// Files dropped on the window are opened as the command line opens them (`--open`): a session as a session, a
 /// waveform into the next empty reference slots, in the order they were dropped. A file that cannot be read says
 /// why in a toast and the others are still opened.
@@ -267,8 +275,10 @@ pub fn run(mut ui: Ui, args: &[String]) {
             // reading a large capture takes a moment: that time is not acquisition time
             last = Instant::now();
         }
-        if std::mem::take(&mut ui.open_wave_request) {
-            open_waveform(&mut ui, &win, &mut loader);
+        let (open_wave, file_ask) = (std::mem::take(&mut ui.open_wave_request), ui.take_file_request());
+        if open_wave { open_waveform(&mut ui, &win, &mut loader); }
+        if let Some(ask) = &file_ask { choose_file(&mut ui, &win, ask); }
+        if open_wave || file_ask.is_some() {
             // The dialog pumps Windows messages independently; discard elapsed acquisition time and mouse state.
             last = Instant::now();
             pointer.apply(&mut ui, input::Pointer::Cancel, None, false, &controls);

@@ -1,7 +1,7 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! The native Open dialog. Canceling never changes the session.
+//! The native Open and Save As dialogs. Canceling never changes the session and writes nothing.
 
 use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
@@ -91,10 +91,48 @@ fn read_waveform(path: &std::path::Path) -> Parsed {
     Ok((traces, name))
 }
 
-pub fn waveform(owner: *mut std::ffi::c_void, slot: usize) -> Result<Option<PathBuf>, String> {
-    let filter: Vec<u16> = "Waveforms (*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf)\0*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf\0All files (*.*)\0*.*\0\0".encode_utf16().collect();
-    let title: Vec<u16> = format!("Open waveform into R{}\0", slot + 1).encode_utf16().collect();
-    let mut name = vec![0u16; 32_768];
+/// One question of a file dialog: Open, or Save As.
+struct Ask<'a> {
+    title: String,
+    /// pairs of a description and its patterns, each ended by NUL (`"Sessions (*.oss)\0*.oss\0"`)
+    filter: String,
+    /// the folder the dialog opens in; None: where the system last was
+    dir: Option<&'a std::path::Path>,
+    /// the name a save proposes
+    name: &'a str,
+    /// the suffix a save adds to a name typed without one
+    ext: &'a str,
+    save: bool,
+}
+
+/// NUL-ended UTF-16, as the dialog takes its texts.
+fn wide(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// The buffer the dialog writes the chosen path into, with the proposed name in it.
+fn name_buffer(name: &str) -> Vec<u16> {
+    let mut buffer = vec![0u16; 32_768];
+    for (slot, unit) in buffer.iter_mut().zip(name.encode_utf16().take(32_000)) {
+        *slot = unit;
+    }
+    buffer
+}
+
+/// The filter of a dialog: `kinds` as pairs of description and patterns, then All files.
+fn filter(kinds: &[(&str, &str)]) -> String {
+    let mut text: String = kinds.iter().map(|(what, patterns)| format!("{what} ({patterns})\0{patterns}\0")).collect();
+    text.push_str("All files (*.*)\0*.*\0");
+    text
+}
+
+/// Opens the dialog and waits for it. None: closed without a file.
+fn dialog(owner: *mut std::ffi::c_void, ask: &Ask) -> Result<Option<PathBuf>, String> {
+    let (filter, title, ext) = (wide(&ask.filter), wide(&ask.title), wide(ask.ext));
+    // a folder that is not there yet (nothing was saved so far) would make the dialog fail: it opens where it last was
+    let dir = ask.dir.filter(|d| d.is_dir()).map(|d| wide(&d.to_string_lossy()));
+    let mut name = name_buffer(ask.name);
+    let flags = if ask.save { OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY } else { OFN_FILEMUSTEXIST };
     let mut options = OPENFILENAMEW {
         lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,
         hwndOwner: owner,
@@ -102,16 +140,45 @@ pub fn waveform(owner: *mut std::ffi::c_void, slot: usize) -> Result<Option<Path
         nFilterIndex: 1,
         lpstrFile: name.as_mut_ptr(),
         nMaxFile: name.len() as u32,
+        lpstrInitialDir: dir.as_ref().map_or(std::ptr::null(), |d| d.as_ptr()),
         lpstrTitle: title.as_ptr(),
-        Flags: OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR,
+        lpstrDefExt: if ask.ext.is_empty() { std::ptr::null() } else { ext.as_ptr() },
+        Flags: OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | flags,
         ..unsafe { std::mem::zeroed() }
     };
-    if unsafe { GetOpenFileNameW(&mut options) } == 0 {
+    let chosen = unsafe { if ask.save { GetSaveFileNameW(&mut options) } else { GetOpenFileNameW(&mut options) } };
+    if chosen == 0 {
         let error = unsafe { CommDlgExtendedError() };
         return if error == 0 { Ok(None) } else { Err(format!("The file dialog could not open (error {error:#x}).")) };
     }
     let end = name.iter().position(|&c| c == 0).unwrap_or(name.len());
     Ok(Some(std::ffi::OsString::from_wide(&name[..end]).into()))
+}
+
+pub fn waveform(owner: *mut std::ffi::c_void, slot: usize) -> Result<Option<PathBuf>, String> {
+    let patterns = "*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf";
+    dialog(owner, &Ask { title: format!("Open waveform into R{}", slot + 1), filter: filter(&[("Waveforms", patterns)]), dir: None, name: "", ext: "", save: false })
+}
+
+/// The title and the filter of the dialog for a Storage row.
+fn storage_texts(kind: crate::ui::FileKind, save: bool) -> (String, String) {
+    use crate::ui::FileKind::*;
+    let (what, kinds): (&str, &[(&str, &str)]) = match kind {
+        Setup => ("setup", &[("Setups", "*.txt;*.stp")]),
+        SetupScpi => ("setup as SCPI", &[("SCPI commands", "*.scpi;*.txt")]),
+        Session => ("session", &[("Sessions", "*.oss")]),
+        WaveCsv => ("waveform (CSV)", &[("CSV", "*.csv")]),
+        WaveBin => ("waveform (binary)", &[("OOS waveforms", "*.bin")]),
+        Shot => ("screenshot", &[("PNG", "*.png")]),
+        FastFrame => ("fast-frame", &[("Fast-frame files", "*.bin")]),
+    };
+    (format!("{} {what}", if save { "Save" } else { "Load" }), filter(kinds))
+}
+
+/// Save As or Open for a Storage row (`ui/files.rs`): the file the user chose, None when the dialog was closed.
+pub fn storage(owner: *mut std::ffi::c_void, ask: &crate::ui::FileAsk) -> Result<Option<PathBuf>, String> {
+    let (title, filter) = storage_texts(ask.kind, ask.save);
+    dialog(owner, &Ask { title, filter, dir: Some(&ask.dir), name: &ask.name, ext: ask.kind.ext(), save: ask.save })
 }
 
 #[cfg(test)]
@@ -153,6 +220,27 @@ mod tests {
         assert!(!loader.busy());
         assert!(loader.poll(3).is_none());
         let _ = std::fs::remove_file(path);
+    }
+
+    /// What the dialog is given: texts that end with NUL, the proposed name at the start of its buffer, a filter
+    /// that names the kind first and ends with All files.
+    #[test]
+    fn the_texts_of_a_storage_dialog() {
+        assert_eq!(wide("a\u{e9}"), [0x61, 0xe9, 0]);
+        let buffer = name_buffer("session-001.oss");
+        assert_eq!(String::from_utf16_lossy(&buffer[..15]), "session-001.oss");
+        assert!(buffer.len() == 32_768 && buffer[15..].iter().all(|&unit| unit == 0));
+        for save in [true, false] {
+            for kind in [crate::ui::FileKind::Setup, crate::ui::FileKind::SetupScpi, crate::ui::FileKind::Session, crate::ui::FileKind::WaveCsv,
+                crate::ui::FileKind::WaveBin, crate::ui::FileKind::Shot, crate::ui::FileKind::FastFrame] {
+                let (title, filter) = storage_texts(kind, save);
+                assert!(title.starts_with(if save { "Save " } else { "Load " }), "{title}");
+                let parts: Vec<&str> = filter.split('\0').collect();
+                assert!(parts.len() == 5 && parts[4].is_empty(), "{filter:?}");
+                assert!(parts[1].split(';').any(|pattern| pattern == format!("*.{}", kind.ext())), "{kind:?}: {filter:?}");
+                assert_eq!((parts[2], parts[3]), ("All files (*.*)", "*.*"));
+            }
+        }
     }
 
     /// Explicit local audit, never part of ordinary CI. The original captures
