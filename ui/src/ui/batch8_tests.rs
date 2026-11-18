@@ -45,7 +45,7 @@ fn drag(u: &mut Ui, (x0, y0): (i32, i32), (x1, y1): (i32, i32)) {
 fn open_add(u: &mut Ui) {
     let r = u.studio_top().add;
     assert!(r.w >= 40 && r.h >= 30, "the Add button is a target: {r:?}");
-    // the top-bar Add button opens a menu now (addmenu.rs); the hub of the Add panel is reached from it, or from the View menu
+    // the top-bar Add button opens a menu now (addmenu.rs); the pages of the Add panel are reached from it
     if !(u.menu_open && u.menu == MenuId::AddPanel) { u.studio.add_menu = false; u.open_menu(MenuId::AddPanel); u.sheet.add.kind = None; }
     assert!(u.menu_open && u.menu == MenuId::AddPanel);
 }

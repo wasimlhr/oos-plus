@@ -59,6 +59,9 @@ Fixed:
 - Studio: the hold menu of the plot has rows of 40 px in two columns, the view at the left and what acts on the lane
   under the finger at the right. It was one column of seventeen rows of 28 px, 542 px tall. Run, Single, Trigger
   settings and Sources are not in it any more: the bars have them one tap away.
+- Studio: the View menu ends with Reset layout. Its "Add panel" row is gone: it opened a page of five entries
+  (Cursors, Measure, Search, Results table, Plot), and the Add button of the top bar opens the same five and Math,
+  Reference, Bus, Zoom and Zoom box, in one tap less.
 - Studio: the classic strip is the badge style of a new set-up: a line per source, with the names and values of its
   measurements in columns. Measure > Badge style still has both. A set-up file says `studio_badges = studio` for the
   other style; a file without the key, which meant the Studio badges before, shows the classic strip now.
@@ -123,6 +126,18 @@ Fixed:
   window says "none in window".
 
 Added:
+
+- Storage > Run SCPI file runs a file of SCPI commands on the scope: a recording of the SCPI recorder, a set-up
+  saved as commands, or lines written by hand (host-tested, not yet run on a unit; the Open dialog of the desktop
+  app was not opened by hand). The scope lists the `.scpi` files where Storage saves, the newest first, and the
+  desktop app asks with its Open dialog. One command a frame, so the screen follows; a line that waits for an
+  operation (`*OPC?` after a Single or an auto set-up) is waited for, 30 s at most; while a file runs the row stops
+  it. At the end the screen says how many commands were run and the first that was refused; a client's error queue
+  and status are as they were. A file has the authority of a client on the network, except that a line with
+  `CONFIRM` (switching off, installing an update, closing a service) is not run from a file. A script has the
+  lines `replay <file>` and, on the host, `scpi <message>`.
+- `:UI:MENU?` lists the options of an open picker (the grid of an item's options, a list of files) and
+  `:UI:MENU:SELect` takes one by its text; until now the rows of a picker came out empty.
 
 - SCPI recorder: Storage > SCPI recorder, `:SYSTem:RECorder:STATe ON|OFF` (host-tested, not yet run on a unit).
   While it is on, what is set at the scope by touch, keys, knobs and menus is written as SCPI commands, and the

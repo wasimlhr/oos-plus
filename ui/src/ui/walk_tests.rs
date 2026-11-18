@@ -2406,3 +2406,38 @@ fn the_classic_strip_is_the_badge_style_of_a_new_setup() {
     u.select_option(Item::BadgeStyle, "Classic");
     assert!(u.studio_classic());
 }
+
+/// The View menu arranges the screen and ends with Reset layout. It had an "Add panel" row under it: a longer way to
+/// five of the ten rows that the Add button of the top bar opens. Each of the five is a row of the Add menu, two taps
+/// from the plot.
+#[test]
+fn the_view_menu_ends_with_reset_layout_and_adding_is_the_button_of_the_top_bar() {
+    use super::addmenu::{AddRow, ADD_MENU};
+    use super::studio::VIEW_RESET;
+    let mut u = fresh(Layout::Studio);
+    let (x, y) = mid(u.studio_top().view);
+    tap(&mut u, x, y);
+    assert!(u.studio.view_menu);
+    let (p, last) = (u.studio_view_rect(), u.studio_view_row(VIEW_RESET));
+    assert!(p.bottom() >= last.bottom() && p.bottom() - last.bottom() <= 12, "no empty row under Reset layout: {p:?} {last:?}");
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    cv.au_start();
+    u.render(&mut cv);
+    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+    assert!(texts.iter().any(|s| s == "Reset layout") && !texts.iter().any(|s| s == "Add panel"), "{texts:?}");
+    // a tap under the menu closes it and opens nothing
+    tap(&mut u, p.x + p.w / 2, p.bottom() + 20);
+    assert!(!u.studio.view_menu && !u.menu_open);
+    // what the row led to: one tap on Add, one on a row
+    for want in [AddRow::Cursors, AddRow::Measurement, AddRow::Search, AddRow::ResultsTable, AddRow::Plot] {
+        assert!(ADD_MENU.contains(&Some(want)), "{want:?}");
+    }
+    let (x, y) = mid(u.studio_top().add);
+    tap(&mut u, x, y);
+    assert!(u.studio.add_menu);
+    let (_, row) = u.studio_add_rows().into_iter().find(|(r, _)| *r == AddRow::Plot).expect("Plot");
+    let (x, y) = mid(row);
+    tap(&mut u, x, y);
+    assert!(u.menu_open && u.menu == MenuId::AddPanel);
+    assert_eq!(u.sheet.add.kind, Some(super::addrail::AddKind::Plot));
+}

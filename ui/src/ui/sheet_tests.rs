@@ -420,14 +420,12 @@ fn an_unavailable_item_says_why_and_offers_the_fix_in_place() {
 // ------------------------------------------------------------------------------------------------ add panel
 
 #[test]
-fn add_panel_is_in_the_view_menu_and_lists_every_kind() {
+fn the_hub_of_the_add_panel_lists_every_kind() {
     let mut u = studio();
-    let t = u.studio_top().view;
-    tap_in(&mut u, t);
-    let row = u.studio_view_row(super::studio::VIEW_ADD);
-    let p = u.studio_view_rect();
-    assert!(p.contains(row.x + 2, row.y + 2) && p.contains(row.right() - 2, row.bottom() - 2) && p.bottom() < u.frame().bottom.y, "fits");
-    tap_in(&mut u, row);
+    // the hub is the page Back leads to; the View menu had a row that opened it
+    u.open_menu(MenuId::AddPanel);
+    u.sheet.add.kind = None;
+    u.step(0.05);
     assert_eq!(u.menu, MenuId::AddPanel);
     assert!(u.sheet_active() && !u.studio.view_menu);
     let g = u.rail_geo();
