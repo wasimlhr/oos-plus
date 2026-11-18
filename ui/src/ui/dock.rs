@@ -833,6 +833,10 @@ impl Ui {
         if tree.activate(k) {
             self.studio.dock.tree = Some(tree);
             self.dock_changed();
+            // an analyser that waited behind a tab (`analyser_tabbed_out`) catches up with the record shown
+            if matches!(k, VKind::Eye | VKind::View) {
+                self.analyzer_update();
+            }
         }
     }
 

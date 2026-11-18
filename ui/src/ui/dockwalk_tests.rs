@@ -590,9 +590,16 @@ fn maximising_the_eye_puts_the_waveform_in_a_tab_not_in_a_float() {
     check(&u).unwrap();
     shot(&mut u, "tabs-eye-maximised");
     // a tap on the Waveform tab brings the waveform to the front
+    assert!(!u.analyser_tabbed_out(), "the eye in front is analysed");
     tab_tap(&mut u, VKind::Eye, VKind::Wave);
     assert!(u.dock_leaf(VKind::Wave).is_some() && u.dock_leaf(VKind::Eye).is_none());
     assert!(u.dock_tabbed_out(VKind::Eye) && !u.dock_tabbed_out(VKind::Wave));
+    // behind the waveform's tab the eye is not analysed with every record (6 s a frame on a unit, 2026-11-17): what it
+    // holds stays as it is until its tab is in front again
+    assert!(u.analyser_tabbed_out());
+    u.azr.page.status = ["kept".into(), "behind the tab".into()];
+    for _ in 0..5 { u.step(0.04); }
+    assert_eq!(u.azr.page.status[0], "kept", "the eye behind a tab was analysed");
     check(&u).unwrap();
     shot(&mut u, "tab-switched-to-waveform");
     // the restore button puts the views back where they were

@@ -3500,7 +3500,11 @@ impl Ui {
                     self.meas_new = true;
                 }
                 let p1 = std::time::Instant::now();
-                self.analyzer_update();
+                // an analyser behind another tab is not on the screen: its analysis waits until its tab is in front
+                // (`dock_activate`). On a unit, 2026-11-17, the eye behind the waveform's tab took 6 s of every frame
+                if !self.analyser_tabbed_out() {
+                    self.analyzer_update();
+                }
                 self.monitor_analyzer_update();
                 self.protocol_watch();
                 self.bode_update();

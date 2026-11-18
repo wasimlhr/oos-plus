@@ -158,6 +158,14 @@ Fixed:
     for the view (unit: the same 60 events at 20 ms/div and zoomed in to 1 ms/div);
   - a mask made from a reference lies where the reference is drawn when the reference has a deskew;
   - no save command writes under `/rigol`, whatever path it is given (ADR 0009);
+  - Studio: an analyser view (the eye, a spectrum or power page) that is a tab behind another view is not analysed
+    with every record; it catches up when its tab comes to the front. With the eye behind the waveform's tab the
+    screen thread spent 6 s of every frame in it (CH4 at 2 ms/div: 0.2 frames a second, every remote query answered
+    after 6 s); behind the tab it now runs at 30 frames a second (unit). What made that eye analysis take 6 s was not
+    found: with the eye in front it took about 25 ms a frame on the same signal;
+  - Auto set-up on a signal without a steady period takes the fastest time base that shows it busy, unless a slower
+    one shows clearly more height: bursts of 100 ns pulses every 1.6 us ended at 2 ms/div, a band of aliases, and
+    are at 2 us/div now (unit);
   - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line
     decoded 59 characters before the save and none after the load. A loaded session is zoomed, read out (RAW) and
     decoded from its samples, and a Stop does not read the hardware's own memory in its place (unit: 100 k points,
