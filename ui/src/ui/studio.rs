@@ -272,6 +272,9 @@ pub(super) const OVERFLOW_W: i32 = 46;
 /// Height a list row gets for the header of its source.
 pub(super) const GROUP_BAND: i32 = 14;
 
+/// The short forms of the Add chip ("+ Add") and of the generator's pill (its name alone).
+const ADD_W: i32 = 62;
+const GEN_W: i32 = 56;
 const CHIP_H: i32 = 30;
 /// The read-out button of the top bar: the room left of its text, and right of it for the chevron.
 const ACQ_PAD_L: i32 = 10;
@@ -614,16 +617,21 @@ impl Ui {
         let maths: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k)).collect();
         let off = (0..n).filter(|&c| !self.m.ch[c].on).count();
         // with every channel on the chip stays, as "Add source": math, ref and bus are behind it
-        let add_w = if off > 0 { 62 } else { 100 };
+        let add_w = if off > 0 { ADD_W } else { 100 };
         // SIM plays refs, not the live channels: their pills are not on the bar then (Live brings them back)
         let chans: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
         let show_w = if self.studio_badges_hidden() { 64 } else { 0 };
         let caps = &oos_hal::model::platform().caps;
         let la_w = if caps.la { 52 } else { 0 };
-        let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { 56 } } else { 0 };
-        let aux_w = [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
+        let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { GEN_W } } else { 0 };
         // the source pills (channels, refs, math) share what the fixed chips leave, by count
         let count = (chans.len() + shown.len() + maths.len()) as i32;
+        // the fixed chips take their short form ("+ Add", "GEN") before a source pill is too narrow for its scale: with
+        // four channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
+        let aux = |gen_w: i32| [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
+        let tight = count > 0 && Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w)), count) < self.studio_ch_pill_need();
+        let (add_w, gen_w) = if tight { (add_w.min(ADD_W), gen_w.min(GEN_W)) } else { (add_w, gen_w) };
+        let aux_w = aux(gen_w);
         let room = time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux_w);
         // a channel that is off has a small dim pill in its place: a tap switches it on. They give way when the
         // sources that are on need the room (and in SIM, which has no channel pills at all)
@@ -730,9 +738,12 @@ impl Ui {
                 // the probe, then the line itself, and the scale loses its "/div" before it is dropped
                 let two_lines = f.mb.size + f.s.size <= TWO_LINE_MAX;
                 let text = if f.mb.width(&full) <= tw { full } else { short };
-                if f.mb.width(&text) > tw && f.s.width(&text) <= tw {
+                if f.mb.width(&text) > tw {
+                    // the small font, then without the space ("500mV"); what still does not fit is cut at its end, so
+                    // the digits stay. A scale is never left out: "1 V" fitted where "500 mV" drew nothing
+                    let text = if f.s.width(&text) <= tw { text } else { text.replace(' ', "") };
                     cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM });
-                } else if f.mb.width(&text) <= tw {
+                } else {
                     match Some(self.studio_ch_detail(c, tw)).filter(|d| ch.on && two_lines && f.s.width(d) <= tw) {
                         Some(d) => {
                             cv.text(&f.mb, tx, r.y + 13 + BAR_DY, &text, TEXT);
@@ -764,7 +775,8 @@ impl Ui {
         }
         if b.add.w > 0 {
             chip(cv, b.add, BTN, if self.studio.ch_picker { ACCENT } else { BTN_BORDER });
-            let label = if (0..n_ch()).all(|c| self.m.ch[c].on) { "Add source" } else if (0..n_ch()).any(|c| !self.m.ch[c].on && b.ch[c].w > 0) { "+ Add" } else { "+ CH" };
+            let all_on = (0..n_ch()).all(|c| self.m.ch[c].on);
+            let label = if all_on && b.add.w > ADD_W { "Add source" } else if all_on || (0..n_ch()).any(|c| !self.m.ch[c].on && b.ch[c].w > 0) { "+ Add" } else { "+ CH" };
             cv.text_in(&f.sb, b.add, 1, label, if self.studio.ch_picker { ACCENT } else { TEXT });
         }
         // LA and GEN: a pill each, a dot for on / off and, for the generator, what it makes
@@ -780,14 +792,14 @@ impl Ui {
             let (on, sel) = (self.m.afg_on, aux_on(&[MenuId::Afg]));
             chip(cv, r, if on { BTN } else { BAR }, if sel { ACCENT } else if on { GEN_COLOR } else { BTN_BORDER });
             cv.circle(r.x + 5, r.y + 5, 3, if on { GREEN } else { DIM });
-            if on {
+            if on && r.w > GEN_W {
                 let text = format!("{} {}", self.value(Item::AfgWave), self.value(Item::AfgFreq));
                 cv.set_clip(r.inset(3));
                 cv.text_in(&f.sb, Rect::new(r.x + 10, r.y, r.w - 12, r.h), 0, &format!("GEN"), GEN_COLOR);
                 cv.text_in(&f.s, Rect::new(r.x + 40, r.y, r.w - 42, r.h), 0, &text, TEXT);
                 cv.no_clip();
             } else {
-                cv.text_in(&f.sb, r, 1, "GEN", DIM);
+                cv.text_in(&f.sb, r, 1, "GEN", if on { GEN_COLOR } else { DIM });
             }
         }
         if let Some(r) = b.show {
