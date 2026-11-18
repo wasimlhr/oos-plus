@@ -1,8 +1,15 @@
 <h1 align="center">OOS Plus</h1>
 
 <p align="center">
-<b>A free operating system for the Rigol DHO800/DHO900 oscilloscopes, with a lab's worth of analysis on top.</b><br>
+<b>OOS, plus a lab's worth of analysis, a Windows desktop app and full remote control,<br>
+for the Rigol DHO800/DHO900 oscilloscopes.</b><br>
 It runs on the scope from its SD card, and as a native Windows app with no scope at all.
+</p>
+
+<p align="center">
+<b>202</b> commits of its own &nbsp;·&nbsp; <b>+45,800</b> lines of Rust &nbsp;·&nbsp;
+<b>2,194</b> tests (OOS had 1,618) &nbsp;·&nbsp; <b>568</b> SCPI commands &nbsp;·&nbsp;
+<b>21</b> fixes checked on a real DHO924S
 </p>
 
 <p align="center">
@@ -25,6 +32,22 @@ Every picture on this page is the demo build, no scope attached.</sub></p>
 > Much of what it adds is tested on a computer and not yet verified on hardware; [CHANGELOG.md](CHANGELOG.md) says
 > which for every entry. Read the [disclaimer](docs/guide.md#disclaimer) before you install it. OOS Plus is not
 > affiliated with RIGOL and contains no vendor code.
+
+## Why OOS Plus
+
+[OOS](https://github.com/dekajoule/oos) gives the DHO800/DHO900 a free, open operating system. OOS Plus builds on it
+for people who use the scope as a lab instrument, not only as a screen:
+
+- **Measure more, and trust it.** 60 standard, 20 two-source and more than 80 analysis measurements, each checked
+  against a signal of known values. Eye and jitter, DDR timing, power, motor drives and magnetics are built in.
+- **Work without the scope.** The same screen runs as a native Windows app, on demo signals, the simulator or your
+  saved waveforms, including RIGOL `.bin` and `.pwwf` files.
+- **Script everything.** 568 SCPI commands on one interpreter, over raw sockets, HiSLIP, VXI-11 and MCP for AI
+  assistants, with a programming manual.
+- **Arrange the screen for the job.** Default, Minimal and Studio layouts, with docked, tabbed and floating views.
+- **Validated, not only written.** Since the version it shares with OOS, the tests went from 1,618 to 2,194. Each
+  [CHANGELOG.md](CHANGELOG.md) entry says whether it ran on a real unit; 21 of them did, on a DHO924S. OOS Plus also
+  takes OOS's fixes as they come.
 
 ## What it is
 
