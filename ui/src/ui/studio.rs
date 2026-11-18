@@ -431,11 +431,31 @@ impl Ui {
         }
     }
 
+    /// The acquisition of a live source as three small columns in the top bar: the sample rate, the memory depth and
+    /// the acquisition mode, each a label over its value. (A column of waveforms a second was taken out again: it
+    /// counted the records the screen took, not what the hardware acquires, and read wrong on a unit.) None while a
+    /// file or the SIM is analysed (the caption names the record then). Column widths hold the longest value of each,
+    /// so the bar does not move while the numbers change.
+    pub(super) fn studio_acq_cols(&self) -> Option<Vec<(&'static str, String, i32)>> {
+        if self.record_mode() || self.studio_back_badge() { return None; }
+        let f = self.fonts();
+        let (sr, depth) = self.live_rate_depth();
+        let mode = match self.m.acq { AcqMode::Normal => "Normal".to_string(), AcqMode::Peak => "Peak".into(), AcqMode::Average => format!("Avg {}", self.m.avg_count), AcqMode::HiRes => "High res".into() };
+        let w = |label: &str, widest: &str| f.s.width(label).max(f.mb.width(widest)) + 14;
+        Some(vec![
+            ("Sample rate", si_digits(sr, "Sa/s", 3), w("Sample rate", "888 MSa/s")),
+            ("Memory", si_digits(depth as f64, "pts", 3), w("Memory", "8.88 Mpts")),
+            ("Mode", mode, w("Mode", "Avg 1024")),
+        ])
+    }
+
     /// The top bar at the first tier (full labels) that leaves the acquisition caption room, else the shortest: labels
     /// shorten before anything is dropped, and every button stays reachable.
     pub(super) fn studio_top(&self) -> StudioTop {
         // the status caption gets the room it needs (up to 260 px) before the buttons give up width; when no tier
         // has that much, the one with the most room is used and the caption is shortened to it
+        // (the three columns of a live acquisition are drawn where the tier chosen for the caption has their room: they
+        // do not ask for a shorter tier, which would take the buttons below a finger's width)
         let need = (self.fonts().mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260);
         let mut t = self.studio_top_tier(0);
         let mut best = t.acq.w;
@@ -553,7 +573,18 @@ impl Ui {
         // sample rate and depth as plain text (the source in front of them): a tap opens the page that sets them
         let caption = self.studio_acq_caption();
         let acq_open = self.menu_open && root == if self.record_mode() { MenuId::Ref } else { MenuId::Acquire };
-        cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT });
+        match self.studio_acq_cols().filter(|c| c.iter().map(|x| x.2).sum::<i32>() <= t.acq.w) {
+            // sample rate, memory and mode: a small label over each value
+            Some(cols) => {
+                let mut x = t.acq.x;
+                for (label, value, w) in cols {
+                    cv.text_in(&f.s, Rect::new(x, 4, w - 6, 14), 0, label, DIM);
+                    cv.text_fit(&f.mb, Rect::new(x, 18, w - 6, 18), 0, &value, if acq_open { ACCENT } else { TEXT });
+                    x += w;
+                }
+            }
+            None => cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT }),
+        }
         // Measure, Cursors, View, settings: the Default button style
         let cursors = open(MenuId::Cursor) || self.m.cursor != CursorMode::Off;
         let adding = self.studio_add_chip_on();
@@ -1533,12 +1564,6 @@ impl Ui {
         let some = place(OVERFLOW_W + 5);
         let left = keys.len() - some.len();
         (some, left)
-    }
-
-    /// How many pinned measurements do not fit in the row.
-    fn studio_badges_overflow_n(&self) -> usize {
-        if self.studio_classic() { return self.classic_layout().overflow; }
-        self.studio_badge_fit().1
     }
 
     /// The "+N" chip after the badges: it opens the list of all measurements.
