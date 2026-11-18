@@ -207,6 +207,15 @@ Fixed:
     generator back to 1 kHz. Whether the output is on is not saved, and a recall leaves it off, also when it was on
     (unit: square 12.345 kHz, 0.5 Vpp, 0.1 V offset, 30 % duty back after `*RCL` and after `:LOAD:SESSion`, output off
     both times). An arbitrary wave is not saved;
+  - VXI-11 `device_readstb` answers the status byte of `*STB?`, with bit 4 while an answer of the link waits; it
+    answered 0 whatever the state (unit). `device_trigger` is `*TRG`. HiSLIP's AsyncStatusQuery answers the status
+    byte too (desktop app; HiSLIP is not opened on a scope, and the table of the interfaces says so now);
+  - the web page's MCP tool `scpi` answered "ok" for a command that failed; a message that queued an error is
+    answered as an error of the tool call with what the scope said (unit). The LXI identification and the MCP
+    greeting name the model of the scope, not always DHO924S;
+  - logic analyser: `:LA:POD<n>:PRESet` takes the beginning of a preset's name when only one begins so (`TTL`,
+    `ECL`, `CMOS_3.3`), where it wanted the whole name; `:LA:POD<n>:THReshold?` and `:LA:PREamble?` write their
+    numbers as every other answer does (`1.400000E+00`, not `1.4e0`) (unit);
   - `:CALLout:LIST?` answers in one line, `source,time,"text"` a note, separated by `;`; it answered one line a
     note, which a client that reads line by line takes for as many answers (unit);
   - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line

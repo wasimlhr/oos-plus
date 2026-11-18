@@ -1036,6 +1036,11 @@ impl Scpi {
         self.exec_message_checked(ui, cv, line).map(|(response, _)| response)
     }
 
+    /// The errors that are queued, oldest first; they stay queued (`:SYSTem:ERRor?` takes them).
+    pub fn queued_errors(&self) -> &[String] {
+        &self.err
+    }
+
     pub fn exec_message_checked(&mut self, ui: &mut Ui, cv: &Canvas, line: &str) -> Result<(Vec<u8>, bool), &'static str> {
         let mut program = Program::new(line);
         match self.poll_program(ui, cv, &mut program) {
@@ -4564,7 +4569,7 @@ impl Scpi {
         if n.len() == 2 && kw(k, "POD") && kw(n[1], "THReshold") {
             let Some(pod) = idx.filter(|&i| i == 1 || i == 2).map(|i| i - 1) else { return bad(self) };
             if query {
-                return t(format!("{:e}", ui.m.la.thr(pod)));
+                return t(e(ui.m.la.thr(pod) as f64));
             }
             match arg.trim().parse::<f32>() {
                 Ok(v) if v.abs() <= la::THR_MAX => {
@@ -4584,7 +4589,7 @@ impl Scpi {
                 return t(r.words.len().to_string());
             }
             if kw(n[0], "PREamble") {
-                return t(format!("{},{:e},{:e}", r.words.len(), r.dt, r.t0));
+                return t(format!("{},{},{}", r.words.len(), e(r.dt), e(r.t0)));
             }
             return Some(block(&r.words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>()));
         }
@@ -7433,6 +7438,20 @@ mod tests {
         assert!(ui.dialog.is_some(), "the notice stays");
         ui.dialog = None;
         assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    }
+
+    // Break it catches (seen on a unit, 2026-11-18): a threshold preset was only taken by its whole name, where the
+    // table of the commands names `TTL` and `CMOS`; the threshold and the preamble of the logic record were written
+    // as `1.4e0` and `8e-6`, not as every other number.
+    #[test]
+    fn a_logic_threshold_preset_by_the_beginning_of_its_name() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, "*CLS;:LA:STAT ON;:LA:POD1:PRES ECL;:LA:POD2:PRES lvcmos_1.8");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?;:SYST:ERR?"), "ECL_-1.3_V;LVCMOS_1.8_V:_0.9_V;0,\"No error\"");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:THR?;:LA:POD2:THR?"), "-1.300000E+00;9.000000E-01");
+        line(&mut s, &mut ui, &cv, ":LA:POD1:PRES CMOS_5_V:_2.5_V;:LA:POD2:PRES CMOS");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?"), "CMOS_5_V:_2.5_V;LVCMOS_1.8_V:_0.9_V", "two names begin with CMOS");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
     }
 
     // Break it catches: a set-up (and so a session) did not hold the generator, a recall put it back to 1 kHz (seen on

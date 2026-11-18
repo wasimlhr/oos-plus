@@ -186,13 +186,22 @@ pub fn core_async(c: &Call, links: &mut Vec<Option<Link>>, exec: &mut dyn FnMut(
                 }
             }
         }
-        // device_readstb -> error, stb
+        // device_readstb -> error, stb: the status byte of `*STB?`, and bit 4 (message available) while this link
+        // has an answer that was not read. It answered 0 whatever the state.
         13 => {
+            let lid = x.u32().unwrap_or(u32::MAX) as usize;
+            let waiting = links.get(lid).and_then(|l| l.as_ref()).is_some_and(|l| !l.out.is_empty());
+            let stb = exec(&mut crate::scpi::Program::new("*STB?")).and_then(|r| String::from_utf8_lossy(&r).trim().parse::<u32>().ok()).unwrap_or(0);
             put(&mut o, 0);
+            put(&mut o, (stb & 0xff) | if waiting { 16 } else { 0 });
+        }
+        // device_trigger -> error: the group execute trigger, as `*TRG`
+        14 => {
+            let _ = exec(&mut crate::scpi::Program::new("*TRG"));
             put(&mut o, 0);
         }
-        // device_trigger, device_clear, device_remote, device_local, device_lock, device_unlock -> error
-        14..=19 => {
+        // device_clear, device_remote, device_local, device_lock, device_unlock -> error
+        15..=19 => {
             if c.proc_ == 15 {
                 let lid = x.u32().unwrap_or(u32::MAX) as usize;
                 if let Some(Some(l)) = links.get_mut(lid) {
@@ -447,6 +456,29 @@ mod tests {
         assert!(link.out.is_empty());
         assert!(link.programs.is_empty());
         assert_eq!(ui.m.run, crate::model::RunState::Stop);
+    }
+
+    // Break it catches: device_readstb answered 0 with an error queued and with an answer waiting (seen on a unit,
+    // 2026-11-18), so a VISA client that polls the status byte never saw either.
+    #[test]
+    fn the_status_byte_of_a_link_is_the_one_of_the_interpreter() {
+        let mut ui = crate::ui::Ui::new(crate::wave::Source::Demo { t: 0.0 });
+        let cv = crate::gfx::Canvas::new(crate::ui::W, crate::ui::H);
+        let mut scpi = crate::scpi::Scpi::open(0);
+        let mut links = vec![Some(Link::default())];
+        let mut stb = |links: &mut Vec<Option<Link>>, scpi: &mut crate::scpi::Scpi, ui: &mut crate::ui::Ui| {
+            let mut args = Vec::new();
+            for value in [0, 0, 1000, 1000] { put(&mut args, value); }
+            let reply = core_async(&parse_call(&call(5, CORE_PROG, 13, &args)).unwrap(), links, &mut |p| scpi.poll_program(ui, &cv, p));
+            u32::from_be_bytes(reply[reply.len() - 4..].try_into().unwrap())
+        };
+        assert_eq!(stb(&mut links, &mut scpi, &mut ui), 0);
+        let link = links[0].as_mut().unwrap();
+        link.programs.push_back(crate::scpi::Program::new(":NOSUCH:HEADER 1;*IDN?"));
+        pump_link(link, &mut |p| scpi.poll_program(&mut ui, &cv, p));
+        assert_eq!(stb(&mut links, &mut scpi, &mut ui), 4 | 16, "an error is queued and an answer waits");
+        links[0].as_mut().unwrap().out.clear();
+        assert_eq!(stb(&mut links, &mut scpi, &mut ui), 4);
     }
 
     #[test]

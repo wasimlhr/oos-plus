@@ -1060,7 +1060,7 @@ fn lxi_identification(o: &Offer) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <LXIDevice xmlns="http://www.lxistandard.org/InstrumentIdentification/1.0">
-<Manufacturer>OOS</Manufacturer><Model>DHO924S</Model><SerialNumber>0</SerialNumber>
+<Manufacturer>OOS</Manufacturer><Model>{model}</Model><SerialNumber>0</SerialNumber>
 <FirmwareRevision>oos-ui {}</FirmwareRevision><ManufacturerDescription>OOS oscilloscope</ManufacturerDescription>
 <HomepageURL>/</HomepageURL><DriverURLs/>
 <UserDescription>OOS</UserDescription>
@@ -1070,7 +1070,8 @@ fn lxi_identification(o: &Offer) -> String {
 <LXIVersion>1.5</LXIVersion>
 </LXIDevice>
 "#,
-        env!("CARGO_PKG_VERSION")
+        env!("CARGO_PKG_VERSION"),
+        model = oos_hal::model::platform().caps.name
     )
 }
 
@@ -1127,7 +1128,16 @@ pub fn mcp(body: &str, ui: &mut Ui, cv: &Canvas, scpi: &mut crate::scpi::Scpi) -
         "tools/call" => match params.get("name").and_then(J::str) {
             Some("scpi") => {
                 let c = params.get("arguments").and_then(|a| a.get("command")).and_then(J::str).unwrap_or("");
+                let queued = scpi.queued_errors().len();
                 match scpi.exec_message_checked(ui, cv, c) {
+                    // a command that failed answered "ok" like one that worked, and the caller of a tool does not read
+                    // the error queue after every call: the errors this message queued are part of its result (they
+                    // stay queued for :SYSTem:ERRor?)
+                    Ok((r, has_reply)) if scpi.queued_errors().len() > queued => {
+                        let errors = scpi.queued_errors()[queued..].join("; ");
+                        let reply = if r.is_empty() && !has_reply { String::new() } else { format!("{}\n", String::from_utf8_lossy(&r)) };
+                        J::obj(&[("isError", J::Bool(true)), ("content", J::Arr(vec![J::obj(&[("type", J::s("text")), ("text", J::Str(format!("{reply}error: {errors}")))])]))])
+                    }
                     Ok((r, has_reply)) => text(if r.is_empty() && !has_reply { "ok" } else { std::str::from_utf8(&r).unwrap_or("(binary response)") }),
                     Err(error) => J::obj(&[("isError", J::Bool(true)), ("content", J::Arr(vec![J::obj(&[("type", J::s("text")), ("text", J::s(error))])]))]),
                 }
@@ -1992,6 +2002,13 @@ setTimeout(() => {
         assert!(r.to_string().contains("\"screenshot\""));
         let r = call(r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":TIM:SCAL 0.001;*IDN?"}}}"#).unwrap();
         assert!(r.to_string().contains("OOS,DHO924S"), "{}", r.to_string());
+        // a command that fails is an error of the tool call, with what the scope said, and the error stays queued
+        let r = call(r#"{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":NOSUCH:HEADER 1;:TIM:SCAL?"}}}"#).unwrap();
+        let (s, result) = (r.to_string(), r.get("result").cloned().unwrap());
+        assert_eq!(result.get("isError"), Some(&J::Bool(true)), "{s}");
+        assert!(s.contains("1.000000E-03") && s.contains("-113") && s.contains("Undefined header"), "{s}");
+        let r = call(r#"{"jsonrpc":"2.0","id":32,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":SYST:ERR?"}}}"#).unwrap();
+        assert!(r.to_string().contains("-113") && r.get("result").and_then(|x| x.get("isError")).is_none(), "{}", r.to_string());
         let r = call(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"screenshot","arguments":{}}}"#).unwrap();
         assert!(r.to_string().contains("iVBORw0KGgo")); // PNG signature in base64
         assert!(call(r#"{"jsonrpc":"2.0","id":5,"method":"nope"}"#).unwrap().get("error").is_some());

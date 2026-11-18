@@ -22,9 +22,9 @@ Every command has exactly one row, in exactly one of the group pages below (568 
 | Interface | Default | Implementation |
 | --- | --- | --- |
 | Raw TCP SCPI | TCP 5555 | Recommended for scripts. Newline-terminated program messages; newline-terminated replies. |
-| HiSLIP | TCP 4880 | Same interpreter, with HiSLIP framing. Basic sessions; full locking/overlap semantics are not implemented. A reply is split into messages of the client's maximum message size, but of at least 4 KiB of data. |
-| VXI-11 | Linux scope service | Same interpreter, partial RPC transport. Pending operation reads have the limitation described under operation completion. Not advertised by the Windows app. |
-| HTTP/MCP adapter | HTTP web port | `POST /mcp`, JSON-RPC `tools/call` with tool name `scpi`. This is not a VISA interface. `/cmd` uses a separate front-panel command language. |
+| HiSLIP | TCP 4880, the desktop app only | Not opened on a scope (a connection is refused there): a scope has raw TCP and VXI-11. Same interpreter, with HiSLIP framing. An AsyncStatusQuery answers the status byte of `*STB?`. Basic sessions; full locking/overlap semantics are not implemented. A reply is split into messages of the client's maximum message size, but of at least 4 KiB of data. |
+| VXI-11 | Linux scope service | Same interpreter, partial RPC transport (portmapper on 111 over TCP and UDP, the core channel on 9009). `device_readstb` answers the status byte of `*STB?` with bit 4 while an answer of the link waits to be read; `device_trigger` is `*TRG`. No abort or interrupt channel. Pending operation reads have the limitation described under operation completion. Not advertised by the Windows app. |
+| HTTP/MCP adapter | HTTP web port | `POST /mcp`, JSON-RPC `tools/call` with tool name `scpi`. A message that queued an error is answered with `isError` and the errors after its replies (they stay queued for `:SYSTem:ERRor?`). This is not a VISA interface. `/cmd` uses a separate front-panel command language. |
 
 The source launcher can use different ports. For example:
 

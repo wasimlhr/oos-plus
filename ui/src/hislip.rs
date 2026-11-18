@@ -236,7 +236,12 @@ fn on_program_message(peer: &mut Peer, live: &mut Vec<Live>, next: &mut u16, msg
             answer(encode(ASYNC_LOCK_RESPONSE, 1, 0, b""))
         }
         ASYNC_LOCK_INFO if peer.role != Role::New => answer(encode(ASYNC_LOCK_INFO_RESPONSE, 0, 0, b"")),
-        ASYNC_STATUS_QUERY if peer.role != Role::New => answer(encode(ASYNC_STATUS_RESPONSE, 0, 0, b"")),
+        // the status byte of `*STB?` in the control code; it was 0 whatever the state. No message-available bit: an
+        // answer is sent as soon as it is there
+        ASYNC_STATUS_QUERY if peer.role != Role::New => {
+            let stb = exec(&mut crate::scpi::Program::new("*STB?")).and_then(|r| String::from_utf8_lossy(&r).trim().parse::<u8>().ok()).unwrap_or(0);
+            answer(encode(ASYNC_STATUS_RESPONSE, stb, 0, b""))
+        }
         ASYNC_REMOTE_LOCAL_CONTROL if peer.role != Role::New => answer(encode(ASYNC_REMOTE_LOCAL_RESPONSE, 0, 0, b"")),
         DEVICE_CLEAR_COMPLETE if peer.role == Role::Sync => {
             peer.pending.clear(); peer.program = None;
