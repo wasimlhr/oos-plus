@@ -560,10 +560,11 @@ impl Source {
 
     /// Hardware source in STOP: the view shown (time per div, delay; None: none to read for), and the frame the
     /// thread has read again from the stored record for it, if a new one came (`board::Shared::stop_view`).
-    pub fn hw_stop(&mut self, view: Option<(f64, f64)>) -> Option<crate::board::Frame> {
+    /// `whole`: the view is the stored record as a whole, wanted at every sample (`board::Shared::stop_whole`).
+    pub fn hw_stop(&mut self, view: Option<(f64, f64)>, whole: bool) -> Option<crate::board::Frame> {
         if let Source::Hw { shared, .. } = self {
             let mut g = shared.lock().unwrap();
-            g.stop_view = view;
+            (g.stop_view, g.stop_whole) = (view, whole && view.is_some());
             return g.replay.take().filter(|_| view.is_some());
         }
         None
@@ -626,7 +627,7 @@ impl Source {
             g.deep_raw = crate::deepmeas::want(m);
             g.slow = board().slow_mode(m);
             // running: no STOP view any more, the thread acquires again
-            (g.stop_view, g.replay) = (None, None);
+            (g.stop_view, g.stop_whole, g.replay) = (None, false, None);
             g.stamp = m.hw_stamp;
             g.cores = m.cores;
             g.avg_clear = m.hw_avg_clear;

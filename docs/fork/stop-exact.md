@@ -33,6 +33,15 @@ Single scan only).
 - No replay when the newest frame was already raw (rate-limited deep read, live compression), when the next batch was
   armed ahead anyway, or when anything else ran on the FPGA since the read (the read is only remembered for one
   pass). Then the record shown is the newest one already queued, measured as it is.
+- The record of the STOP (`Ui::stop_whole`, since 2026-11-18; host-tested, not yet verified on hardware). The record
+  on the screen at the stop is the last one the screen took; the hardware goes on to the end of its batch, so its
+  memory, which every view below is read from, may hold a later acquisition (seen on a unit, 2026-11-18: a 2.16 V
+  peak on the screen that was not in the memory read out). When the record shown holds every sample of its
+  acquisition (up to 1 M points), the stored record is so read once more as a whole at every sample
+  (`hw::whole_plan`, the read of the live batch with one frame) before any view, and what comes is the record of the
+  STOP: shown, measured and read out. Asked for as a view, a 1 M record came through the compression as pairs and
+  the record stayed the earlier one. No answer within `STOP_WHOLE_WAIT` (1 s, assumed to be enough, not measured):
+  the record shown stays. Not after a mask that stops on a failure: the record that failed stays.
 - Views after the STOP (`Ui::stop_replay`): the thread reads the stored record again for every view (`stop_plan`),
   the first time right after the STOP. Zoomed out on a record above `LIVE_READ` (625 k points: 10 M at 1 ms/div) that
   read is the whole record through the compression, min/max pairs. Those pairs are drawn (`stop_pic`), but the raw
@@ -42,7 +51,8 @@ Single scan only).
   window becomes the record shown and measured, as before, and the raw record of the STOP comes back with the next
   view read as pairs. A read of the memory (`:WAV:MODE RAW`, `:SAVE:MEMory:WAVeform`) is not of that window: it
   takes the record of the STOP when that holds every sample of the acquisition (`Ui::memory_raw`; verified on the
-  unit 2026-11-17, 100 k and 1 M points), else the record shown. The measurement gate is unchanged: Screen measures the part of the measured record within the
+  unit 2026-11-17, 100 k and 1 M points, before the record of the STOP was read again as described above), else the
+  record shown. The measurement gate is unchanged: Screen measures the part of the measured record within the
   view (zoomed out beyond a raw window that is only a part of the record: only that part), Full record all of it. A
   view adds nothing to the statistics (`stop_reads_the_record_again_without_counting_it`); a time base or delay change
   clears them, as every setting does. RUN, Clear and the history let the raw record go.

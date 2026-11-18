@@ -371,6 +371,9 @@ pub struct Shared {
     /// STOP: the view the UI shows (time per div, delay); the thread acquires nothing and reads the last record again
     /// for it when it changes, into `replay` (`hw::stop_window`)
     pub stop_view: Option<(f64, f64)>,
+    /// STOP: the view asked for is the stored record as a whole, wanted at every sample (`hw::whole_plan`), not as
+    /// the view of the screen that happens to hold all of it
+    pub stop_whole: bool,
     pub replay: Option<Frame>,
     /// frames decoded, and those dropped from the queue unseen because the screen fell behind (`:SYSTem:STATe?`)
     pub decoded: u64,

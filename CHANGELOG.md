@@ -7,6 +7,12 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- After a Stop the screen, the measurements and the memory read out (`:WAVeform:MODE RAW`,
+  `:SAVE:MEMory:WAVeform`) are one acquisition (host-tested, not yet verified on hardware). The screen kept the
+  last record it had taken while the hardware stored a later one: a 2.16 V peak was on the screen and not in the
+  memory (seen on a unit, 2026-11-18). The stored record is read once more as a whole at the stop, for records up
+  to 1 M points; at 1 M points it is asked for at every sample (asked for as a view it came as min/max pairs and
+  the record stayed the earlier one). After a mask that stops on a failure the record that failed stays.
 - Studio: Reset layout and a stored view bring a hidden badge row back; the Undo bar of the hiding stayed on the
   screen for its few seconds with nothing to undo. It goes with the row now (host-tested).
 - Studio offers what Default offers (ADR 0030; host-tested, not yet verified on hardware). The 47 menus and 508 rows

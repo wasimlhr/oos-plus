@@ -1264,6 +1264,20 @@ pub fn stop_plan(b: &Settings, p: &hz::Params, tdiv: f64, delay: f64) -> (Settin
     (r, pre / k)
 }
 
+/// STOP: the stored record read whole at every sample, for the record the memory holds when the scope stopped
+/// (`Ui::stop_whole`). For a record the live read takes that way: up to 1 M points (`batch_plan`), the same read
+/// with one frame. `stop_plan` reads a record above `LIVE_READ` through the compression when the view holds all of
+/// it: at 1 M points the answer was min/max pairs, which are not the record. None for a deeper record: its live
+/// frames are pairs or a window, and the STOP has its own read for those (`final_replay`).
+pub fn whole_plan(b: &Settings, p: &hz::Params) -> Option<(Settings, f64)> {
+    if p.memsel > 1_000_000 {
+        return None;
+    }
+    let mut r = b.clone();
+    (r.frames, r.window, r.compress) = (1, None, 1);
+    Some((r, p.pre as f64))
+}
+
 /// Whether arming ahead (`acq.prearm`) leaves the replay at STOP possible: not for a batch of the live compression or
 /// one whose newest frame the deep measurements may read raw (`deep_raw_settings`), since the next batch would write
 /// the ring under it. Prearm gains at
@@ -1430,7 +1444,7 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
         let mut la_fails = 0u32;
         // STOP: the last batch (its read settings, parameters, newest frame in the ring) and the view last read for
         let mut last_batch: Option<(Settings, hz::Params, u32)> = None;
-        let mut replayed: Option<(f64, f64)> = None;
+        let mut replayed: Option<((f64, f64), bool)> = None;
         // the learnt offsets of the ADC cores (`cores`)
         let mut cores = super::cores::Cores::default();
         // the read buffer of the batches, kept (bus::DmaBuf)
@@ -1626,7 +1640,10 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
             }
             // STOP (normal acquisitions only): nothing is armed, the record in the ring stays; for every new view
             // the newest frame of the last batch is read again (`stop_plan`), settings changed meanwhile wait for RUN
-            let stop_view = out.lock().unwrap().stop_view;
+            let (stop_view, stop_whole) = {
+                let g = out.lock().unwrap();
+                (g.stop_view, g.stop_whole)
+            };
             match stop_view {
                 Some(v) if mode == Slow::Off && want_mode == Slow::Off => {
                     // a final-frame request of the UI while the views are read again: answered as the hold does
@@ -1635,9 +1652,10 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                         g.final_ack = g.final_req;
                     }
                     match &last_batch {
-                        Some((lb, lp, idx)) if replayed != Some(v) => {
-                            replayed = Some(v);
-                            let (rb, ti) = stop_plan(lb, lp, v.0, v.1);
+                        Some((lb, lp, idx)) if replayed != Some((v, stop_whole)) => {
+                            replayed = Some((v, stop_whole));
+                            // the record as a whole at every sample where it is asked for and can be read so
+                            let (rb, ti) = stop_whole.then(|| whole_plan(lb, lp)).flatten().unwrap_or_else(|| stop_plan(lb, lp, v.0, v.1));
                             let steps = state.reread_steps(&rb, lp, *idx);
                             match seq::execute(&steps, &mut bar, None, &mut c2h, |_| {}) {
                                 Ok(bytes) => {
@@ -3005,6 +3023,34 @@ mod tests {
         // roll and scan stream with the stock Auto depth
         m.acq = AcqMode::Normal;
         assert_eq!(settings(&m, false).depth, 0);
+    }
+
+    /// The stored record asked for as a whole is read at every sample up to 1 M points, the depth the live read takes
+    /// that way. The view of the screen that holds all of a 1 M record is read through the compression, as pairs:
+    /// asked that way (before `whole_plan`) the record of a STOP at 1 M points stayed the one the screen had.
+    #[test]
+    fn the_stored_record_as_a_whole_is_read_at_every_sample() {
+        for (points, whole) in [(100_000, true), (1_000_000, true), (10_000_000, false)] {
+            let mut m = Model::default();
+            m.tscale = tscales().iter().position(|&t| (t as f64 - 1e-4).abs() < 1e-9).unwrap();
+            m.mdepth = mdepths().iter().position(|d| d.1 == points).unwrap();
+            let s = settings(&m, false);
+            let p = hz::prep(s.mask, oos_hal::dho::seq::tdiv_fs(s.tdiv), s.depth, oos_hal::dho::seq::tdiv_fs(s.delay));
+            let b = batch_plan(&s, &p);
+            match whole_plan(&b, &p) {
+                Some((r, ti)) => {
+                    assert!(whole, "{points}");
+                    assert_eq!((r.frames, r.window, r.compress, ti), (1, None, 1, p.pre as f64), "{points}");
+                    // every sample of the record: the frame is as long as the record
+                    assert_eq!(oos_hal::dho::seq::window(&r, &p).0, p.memsel, "{points}");
+                }
+                None => assert!(!whole, "{points}"),
+            }
+            // the view that holds the whole record, as the UI asks for it: pairs above `LIVE_READ`
+            let (n, dt) = (p.memsel as f64, 1.0 / p.rate as f64);
+            let (r, _) = stop_plan(&b, &p, n * dt / 10.0, (n / 2.0 - p.pre as f64) * dt);
+            assert_eq!(r.compress > 1, p.memsel > LIVE_READ, "{points}: {}", p.memsel);
+        }
     }
 
     /// STOP reads the stored record again for each view: zoomed in every sample of the part on screen (also far from

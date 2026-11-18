@@ -309,7 +309,8 @@ const LEVEL_LINE_S: f64 = 1.5;
 /// read of the newest frame.
 const STOP_FINAL_WAIT: f64 = 3.0;
 /// Longest wait of a STOP for the stored record read whole (`Ui::stop_whole`): one read of a record the live read
-/// takes whole, a fraction of a second. After it the view shown is asked for, the record of the stop as it was.
+/// takes whole. Assumed to be enough: the live read of such a record is one of several a second; the time of this
+/// read was not measured on a unit. After it the view shown is asked for, the record of the stop as it was.
 const STOP_WHOLE_WAIT: f64 = 1.0;
 /// LA words a history entry keeps: above this only the newest record has its LA (200 x 1 M words = 400 MB at most).
 const HISTORY_LA_WORDS: usize = 1_000_000;
@@ -3759,7 +3760,7 @@ impl Ui {
             && !self.loaded_record
             && self.last[0].as_ref().is_some_and(|r| r.raw.is_some());
         if !ok {
-            self.src.hw_stop(None);
+            self.src.hw_stop(None, false);
             self.stop_ti_off = None;
             self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
@@ -3779,8 +3780,11 @@ impl Ui {
             // memory holds, and every view below is read from, may be a later acquisition: the screen and the
             // measurements showed one acquisition and the memory read out (RAW) another (seen on a unit, 2026-11-18:
             // a 2.16 V peak on the screen that was not in the memory). A whole record is so read whole once more
-            // first, with a view that holds all of it, and what comes is the record of the stop
-            self.stop_whole = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame)).map(|r| {
+            // first, with a view that holds all of it, and what comes is the record of the stop. Not after a mask
+            // that stops on a failure: the record on the screen is the one that failed, and it is the one to keep
+            // (as `stop_wants_final`)
+            let keep = self.m.mask_on && self.m.mask_stop;
+            self.stop_whole = self.stop_raw.as_ref().filter(|_| !keep).and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame)).map(|r| {
                 let (n, f) = (r.frame.acq.1 as f64, &r.frame);
                 ((n * f.dt / HDIV as f64, (n / 2.0 - f.pre as f64) * f.dt), self.now + STOP_WHOLE_WAIT)
             });
@@ -3790,7 +3794,7 @@ impl Ui {
             self.stop_whole = None;
         }
         let view = (self.m.time_per_div() as f64, self.m.delay as f64);
-        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.map_or(view, |w| w.0))) else { return };
+        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.map_or(view, |w| w.0)), self.stop_whole.is_some()) else { return };
         if let (Some(t), Some(off)) = (f.fixed_ti, self.stop_ti_off) {
             f.fixed_ti = Some(t + off / f.dt);
         }
@@ -3798,8 +3802,8 @@ impl Ui {
         let window = view.0 * HDIV as f64;
         let rec = crate::board::to_record(&std::sync::Arc::new(f), &self.m, 3600, window, view.1 - window / 2.0);
         if self.stop_whole.take().is_some() {
-            // not whole (a record the hardware reads as pairs at that view): the record of the stop stays. Either
-            // way the view shown is asked for next
+            // not whole (the answer to a view asked before the stop, or a read that failed): the record of the
+            // stop stays. Either way the view shown is asked for next
             if whole {
                 self.stop_raw = Some(rec.clone());
                 (self.last[0], self.stop_pic) = (Some(rec), None);
@@ -12874,8 +12878,10 @@ mod tests {
         ui.m.run = RunState::Stop;
         steps(&mut ui, 3);
         assert_eq!(memory_top(&ui), 1.5);
+        assert!(shared.lock().unwrap().stop_whole, "asked for as the record, at every sample");
         shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some(pre as f64), ..frame(2, wave(2.25)) });
         steps(&mut ui, 2);
+        assert!(!shared.lock().unwrap().stop_whole, "the view shown is a view");
         let shown = |ui: &Ui| ui.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| r.frame.seq);
         assert_eq!(shown(&ui), Some(2), "the stored record is the record shown");
         assert!((ui.meas(0, Meas::Vmax) - 2.25).abs() < 1e-3, "Vmax {}", ui.meas(0, Meas::Vmax));
@@ -12912,6 +12918,18 @@ mod tests {
         let asked = shared.lock().unwrap().stop_view.unwrap();
         assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "the view shown after the wait: {asked:?}");
         assert_eq!((shown(&ui), ui.channel_points(0, true)), (Some(1), n));
+        // a mask that stops on a failure: the record that failed stays the record of the stop, the stored one is not
+        // asked for in its place
+        let (mut ui, shared) = scope();
+        shared.lock().unwrap().queue.push_back(frame(1, wave(1.5)));
+        steps(&mut ui, 3);
+        (ui.m.mask_on, ui.m.mask_stop) = (true, true);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        let g = shared.lock().unwrap();
+        assert!(!g.stop_whole && g.stop_view.is_some_and(|v| (v.0 / 5e-6 - 1.0).abs() < 1e-6), "{:?}", g.stop_view);
+        drop(g);
+        assert_eq!((shown(&ui), memory_top(&ui)), (Some(1), 1.5));
     }
 
     // Break it catches: a session held the 3600 points of the screen, so a loaded capture had lost its samples: a
