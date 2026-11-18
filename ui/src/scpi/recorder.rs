@@ -8,7 +8,10 @@
 //! scpi/setupscpi.rs). So a knob turned through twenty steps is one line with the value it was left at, and a
 //! setting changed by a drag is seen like one changed in a menu. The file starts with the set-up at the start as
 //! commands, so it can be sent to a scope in any state. It is written again after every step: a recording is not
-//! lost when the program ends or the power goes while it is on.
+//! lost when the program ends while it is on. The power going is another matter. The file is not synced while the
+//! recorder is on, and the local folder is in memory: a recording outlasts the power only on a stick, and for
+//! certain only once the recorder was switched off, when the file is synced like every saved one
+//! (`Ui::scpi_write`).
 //!
 //! What a client sets by SCPI while the recorder is on is not the user's (`poll_program`): the set-up after the
 //! client's message is the one the next step starts from, and a comment in the file says that a client set something
