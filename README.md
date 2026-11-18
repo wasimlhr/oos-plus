@@ -288,7 +288,9 @@ On Windows, with Rust installed, build and open the desktop window from PowerShe
 The app is `ui\target\release\oos-ui.exe`. Mouse clicks and drags act as touch; Space toggles Run/Stop.
 Plain mouse wheel pans horizontally, and Ctrl+wheel zooms the time scale around the pointer.
 F12 saves a PNG in `Documents\OOS`. Use `--offline` to start
-with the analog channels off for stored waveforms. Keyboard controls are listed in [ui/src/desktop.rs](ui/src/desktop.rs).
+with the analog channels off for stored waveforms. `--open FILE` starts that way with the file already loaded:
+repeat it to load several, each into the next empty reference slot, or drop one file on `oos-ui.exe`. A file
+that cannot be read ends the program with the reason. Keyboard controls are listed in [ui/src/desktop.rs](ui/src/desktop.rs).
 
 For development, run the checkout and automatically restart after saving source changes:
 
@@ -297,7 +299,7 @@ For development, run the checkout and automatically restart after saving source 
 ```
 
 Rust compiles changed code automatically. The window includes front-panel buttons and knob controls.
-Use **Reference > Load file** or **Ctrl+O** to open CSV, OOS BIN, or WFM files; the web remote at `http://localhost:18080`
+Use **Reference > Load file** or **Ctrl+O** to open CSV, OOS BIN, WFM, waveform record (`.pwwf`), or RIGOL and Keysight binary (`.bin`) files; the web remote at `http://localhost:18080`
 also accepts file selection and drag-and-drop. Loaded sources appear as **R1–R10** cards.
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Live** restores the live session. Measurements follow each captured window and recompute when a stopped
@@ -305,7 +307,8 @@ reference is panned. **Measure** opens categorized choices with Source, Settings
 lists have page controls. The Windows app announces its actual SCPI and HiSLIP listeners over mDNS.
 
 **SIM > Advanced** adds SSC profile, deviation and modulation frequency, duty-cycle distortion, and
-correlated random jitter with its corner frequency. PRBS-13 is available alongside the other patterns.
+correlated random jitter with its corner frequency (in Minimal and Studio these are rows of the Jitter and
+Spread tabs of the SIM sheet). PRBS-13 is available alongside the other patterns.
 With SSC enabled, the stored record covers a complete modulation cycle at eight samples per bit.
 Long records generate in the background; cancel or return to Live to keep the previous session.
 Configurations exceeding the generation budget report an error without replacing the current waveform.

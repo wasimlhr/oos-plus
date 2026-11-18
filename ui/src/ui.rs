@@ -28,6 +28,8 @@ mod sim;
 mod offline;
 mod reflook;
 mod measrow;
+/// Skins: another look for the same screen (Display > Skin)
+pub mod skin;
 mod workflow;
 mod deskew;
 pub mod startup;
@@ -908,6 +910,8 @@ enum Item {
     AfgArbFile,
     GridBright,
     GridFrame,
+    /// Display > Skin (ui/skin.rs)
+    Skin,
     /// noise reject of the trigger comparators
     TrigNoise,
     /// the auto set-up turns noise reject on for a noisy trigger signal (opt-in)
@@ -1757,6 +1761,8 @@ pub struct Ui {
 struct StripLine {
     pill: Option<(String, Rgb)>,
     name: String,
+    /// the name where the long one does not fit (Positive Duty Cycle, +Duty); the same where there is no short one
+    short: String,
     value: String,
     col: Rgb,
     /// the name lines up with the names under a channel pill
@@ -3987,6 +3993,8 @@ impl Ui {
         self.draw_studio_view_menu(cv);
         self.draw_studio_add_menu(cv);
         self.draw_studio_ctx(cv);
+        // the skin recolours the finished frame (ui/skin.rs); the OOS skin leaves it as drawn
+        self.skin_pass(cv);
         self.frames += 1;
     }
 
@@ -5949,19 +5957,20 @@ impl Ui {
         let mut lines = Vec::new();
         let in_pane = self.results_pane_on() || self.studio_owns_measurements();
         if !self.results_panel() && !in_pane {
-            let rows = self.meas_rows();
+            let (rows, keys) = (self.meas_rows(), self.studio_keys());
             for id in self.meas_groups() {
                 let col = self.wave_color(id);
                 let label = self.wave_name(id);
-                let mine: Vec<&tools::MeasRow> = rows.iter().filter(|r| r.src == id).collect();
-                for (i, row) in mine.iter().enumerate() {
-                    lines.push(StripLine { pill: (i == 0).then(|| (label.clone(), col)), name: row.name.clone(), value: row.text(), col, align: i > 0 });
+                let mine: Vec<(usize, &tools::MeasRow)> = rows.iter().enumerate().filter(|(_, r)| r.src == id).collect();
+                for (i, &(k, row)) in mine.iter().enumerate() {
+                    let short = keys.get(k).map_or_else(|| row.name.clone(), |&key| self.studio_badge_name(key, &row.name));
+                    lines.push(StripLine { pill: (i == 0).then(|| (label.clone(), col)), name: row.name.clone(), short, value: row.text(), col, align: i > 0 });
                 }
             }
         }
         if self.m.dvm_on || self.m.cnt_on {
             for (name, value) in self.dvm_row() {
-                lines.push(StripLine { pill: None, name, value, col: TEXT, align: false });
+                lines.push(StripLine { pill: None, short: name.clone(), name, value, col: TEXT, align: false });
             }
         }
         if self.m.cursor != CursorMode::Off && !in_pane {
@@ -5976,13 +5985,14 @@ impl Ui {
                 lines.push(StripLine {
                     pill: self.cursor_badge(),
                     name: format!("{mode} {label}"),
+                    short: format!("{mode} {label}"),
                     value: value.clone(),
                     col: TEXT,
                     align: false,
                 });
             }
             for (name, value) in vals.iter().skip(1) {
-                lines.push(StripLine { pill: None, name: name.clone(), value: value.clone(), col: TEXT, align: true });
+                lines.push(StripLine { pill: None, name: name.clone(), short: name.clone(), value: value.clone(), col: TEXT, align: true });
             }
         }
         lines
@@ -6017,9 +6027,9 @@ impl Ui {
         };
         let in_pane = self.results_pane_on() || self.studio_owns_measurements();
         if !self.results_panel() && !in_pane {
-            let rows = self.meas_rows();
+            let (rows, keys) = (self.meas_rows(), self.studio_keys());
             for id in self.meas_groups() {
-                let mine: Vec<&tools::MeasRow> = rows.iter().filter(|r| r.src == id).collect();
+                let mine: Vec<(usize, &tools::MeasRow)> = rows.iter().enumerate().filter(|(_, r)| r.src == id).collect();
                 let col = self.wave_color(id);
                 let label = self.wave_name(id);
                 for part in mine.chunks(tools::STRIP_PER_ROW) {
@@ -6027,16 +6037,18 @@ impl Ui {
                     pill(cv, y, &label, col);
                     // the row's width shared out, whatever the number of values
                     let pitch = (row(y).right() - 2 - vx) / part.len() as i32;
-                    for (i, r) in part.iter().enumerate() {
+                    for (i, &(k, r)) in part.iter().enumerate() {
                         let x = vx + i as i32 * pitch;
-                        // name and value share the cell; at the larger text sizes the name is shortened, then dropped, and
-                        // the value is cut last, so nothing runs over the edge of the screen
+                        // name and value share the cell; where the long name does not fit (the larger text sizes) the
+                        // short one is taken, then it is cut, then dropped, and the value is cut last, so nothing runs
+                        // over the edge of the screen
                         let (txt, cell) = (r.text(), (pitch - 6).min(row(y).right() - 2 - x));
                         let nroom = cell - f.sb.width(&txt) - 8;
                         let mut x2 = x;
                         if nroom >= 24 {
-                            let shown = f.s.width(&r.name).min(nroom);
-                            cv.text_fit(&f.s, Rect::new(x, y, nroom, bh), 0, &r.name, DIM);
+                            let name = self.strip_name(keys.get(k).copied(), &r.name, nroom);
+                            let shown = f.s.width(&name).min(nroom);
+                            cv.text_fit(&f.s, Rect::new(x, y, nroom, bh), 0, &name, DIM);
                             x2 = x + shown + 8;
                         }
                         cv.text_fit(&f.sb, Rect::new(x2, y, (x + cell - x2).max(8), bh), 0, &txt, col);
@@ -6120,7 +6132,7 @@ impl Ui {
             let name_w = vx - 6 - text_x;
             if name_w > 8 && !line.name.is_empty() {
                 cv.set_clip(Rect::new(text_x, bar.y, name_w, bar.h));
-                cv.text(&f.s, text_x, base, &line.name, DIM);
+                cv.text(&f.s, text_x, base, if f.s.width(&line.name) <= name_w { &line.name } else { &line.short }, DIM);
                 cv.set_clip(col);
             }
             y += pitch;
@@ -7035,7 +7047,7 @@ impl Ui {
             MenuId::Cursor if self.m.cursor == CursorMode::Track => vec![Item::CurMode, Item::CurA, Item::CurB, Item::CurSrcB],
             MenuId::Cursor => vec![Item::CurMode, Item::CurA, Item::CurB],
             MenuId::Display => {
-                let mut v = vec![Item::Open(MenuId::Windows), Item::Layout, Item::Views, Item::Persist, Item::ColorGrade, Item::Intensity, Item::GridStyle, Item::GridBright, Item::GridFrame, Item::Dots, Item::BottomBar, Item::ZInput, Item::Histogram, Item::XyMode, Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize, Item::ClearDisp];
+                let mut v = vec![Item::Skin, Item::Open(MenuId::Windows), Item::Layout, Item::Views, Item::Persist, Item::ColorGrade, Item::Intensity, Item::GridStyle, Item::GridBright, Item::GridFrame, Item::Dots, Item::BottomBar, Item::ZInput, Item::Histogram, Item::XyMode, Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize, Item::ClearDisp];
                 if self.m.pane == tables::PANE_TREND {
                     v.splice(1..1, [Item::TrendSel(0), Item::TrendSel(1)]);
                 }
@@ -7915,7 +7927,7 @@ impl Ui {
 
     fn kind(it: Item) -> Kind {
         if matches!(it, Item::AutoDeskew | Item::ClearDeskew) { return Kind::Action; }
-        if let Some(k) = Self::addrail_kind(it).or_else(|| Self::meas_kind(it)).or_else(|| Self::measrow_kind(it)).or_else(|| Self::ana_kind(it)).or_else(|| Self::magnetic_kind(it)).or_else(|| Self::inverter_kind(it)).or_else(|| Self::dpt_kind(it)).or_else(|| Self::cal_kind(it)).or_else(|| Self::bode_kind(it)).or_else(|| Self::sim_kind(it)).or_else(|| Self::offline_kind(it)).or_else(|| Self::afg_kind(it)).or_else(|| Self::bw_kind(it)).or_else(|| Self::la_kind(it)).or_else(|| Self::win_kind(it)).or_else(|| Self::bus_kind(it)).or_else(|| Self::time_kind(it)).or_else(|| Self::remote_kind(it)).or_else(|| Self::graphics_kind(it)).or_else(|| Self::views_kind(it)).or_else(|| Self::features_kind(it)).or_else(|| Self::backlight_kind(it)) {
+        if let Some(k) = Self::addrail_kind(it).or_else(|| Self::meas_kind(it)).or_else(|| Self::measrow_kind(it)).or_else(|| Self::ana_kind(it)).or_else(|| Self::magnetic_kind(it)).or_else(|| Self::inverter_kind(it)).or_else(|| Self::dpt_kind(it)).or_else(|| Self::cal_kind(it)).or_else(|| Self::bode_kind(it)).or_else(|| Self::sim_kind(it)).or_else(|| Self::offline_kind(it)).or_else(|| Self::afg_kind(it)).or_else(|| Self::bw_kind(it)).or_else(|| Self::la_kind(it)).or_else(|| Self::win_kind(it)).or_else(|| Self::bus_kind(it)).or_else(|| Self::time_kind(it)).or_else(|| Self::remote_kind(it)).or_else(|| Self::graphics_kind(it)).or_else(|| Self::views_kind(it)).or_else(|| Self::features_kind(it)).or_else(|| Self::backlight_kind(it)).or_else(|| Self::skin_kind(it)) {
             return k;
         }
         match it {
@@ -7937,7 +7949,7 @@ impl Ui {
     }
 
     fn label(it: Item) -> &'static str {
-        if let Some(l) = Self::addrail_label(it).or_else(|| Self::meas_cfg_label(it)).or_else(|| Self::measrow_label(it)).or_else(|| Self::ana_label(it)).or_else(|| Self::magnetic_label(it)).or_else(|| Self::inverter_label(it)).or_else(|| Self::dpt_label(it)).or_else(|| Self::cal_label(it)).or_else(|| Self::bode_label(it)).or_else(|| Self::sim_label(it)).or_else(|| Self::offline_label(it)).or_else(|| Self::afg_label(it)).or_else(|| Self::bw_label(it)).or_else(|| Self::la_label(it)).or_else(|| Self::win_label(it)).or_else(|| Self::bus_label(it)).or_else(|| Self::time_label(it)).or_else(|| Self::remote_label(it)).or_else(|| Self::graphics_label(it)).or_else(|| Self::views_label(it)).or_else(|| Self::monitor_label(it)).or_else(|| Self::features_label(it)).or_else(|| Self::backlight_label(it)) {
+        if let Some(l) = Self::addrail_label(it).or_else(|| Self::meas_cfg_label(it)).or_else(|| Self::measrow_label(it)).or_else(|| Self::ana_label(it)).or_else(|| Self::magnetic_label(it)).or_else(|| Self::inverter_label(it)).or_else(|| Self::dpt_label(it)).or_else(|| Self::cal_label(it)).or_else(|| Self::bode_label(it)).or_else(|| Self::sim_label(it)).or_else(|| Self::offline_label(it)).or_else(|| Self::afg_label(it)).or_else(|| Self::bw_label(it)).or_else(|| Self::la_label(it)).or_else(|| Self::win_label(it)).or_else(|| Self::bus_label(it)).or_else(|| Self::time_label(it)).or_else(|| Self::remote_label(it)).or_else(|| Self::graphics_label(it)).or_else(|| Self::views_label(it)).or_else(|| Self::monitor_label(it)).or_else(|| Self::features_label(it)).or_else(|| Self::backlight_label(it)).or_else(|| Self::skin_label(it)) {
             return l;
         }
         match it {
@@ -8225,7 +8237,7 @@ impl Ui {
         // the desktop build reports its own web port and listeners (wlan.rs `net_value`)
         if it == Item::NetWeb && cfg!(windows) && !self.lan_status.is_empty() { return self.net_value(it); }
         if it == Item::CatSourceD { return self.wave_name(self.cat_d); }
-        if let Some(v) = self.addrail_value(it).or_else(|| self.meas_value(it)).or_else(|| self.measrow_value(it)).or_else(|| self.ana_value(it)).or_else(|| self.magnetic_value(it)).or_else(|| self.inverter_value(it)).or_else(|| self.dpt_value(it)).or_else(|| self.cal_value(it)).or_else(|| self.bode_value(it)).or_else(|| self.sim_value(it)).or_else(|| self.offline_value(it)).or_else(|| self.afg_value(it)).or_else(|| self.bw_value(it)).or_else(|| self.la_value(it)).or_else(|| self.win_value(it)).or_else(|| self.bus_value(it)).or_else(|| self.time_value(it)).or_else(|| self.remote_value(it)).or_else(|| self.graphics_value(it)).or_else(|| self.views_value(it)).or_else(|| self.monitor_value(it)).or_else(|| self.features_value(it)).or_else(|| self.backlight_value(it)) {
+        if let Some(v) = self.addrail_value(it).or_else(|| self.meas_value(it)).or_else(|| self.measrow_value(it)).or_else(|| self.ana_value(it)).or_else(|| self.magnetic_value(it)).or_else(|| self.inverter_value(it)).or_else(|| self.dpt_value(it)).or_else(|| self.cal_value(it)).or_else(|| self.bode_value(it)).or_else(|| self.sim_value(it)).or_else(|| self.offline_value(it)).or_else(|| self.afg_value(it)).or_else(|| self.bw_value(it)).or_else(|| self.la_value(it)).or_else(|| self.win_value(it)).or_else(|| self.bus_value(it)).or_else(|| self.time_value(it)).or_else(|| self.remote_value(it)).or_else(|| self.graphics_value(it)).or_else(|| self.views_value(it)).or_else(|| self.monitor_value(it)).or_else(|| self.features_value(it)).or_else(|| self.backlight_value(it)).or_else(|| self.skin_value(it)) {
             return v;
         }
         let m = &self.m;
@@ -8495,7 +8507,7 @@ impl Ui {
             }
             return;
         }
-        if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) {
+        if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) || self.skin_adjust(it, d) {
             return;
         }
         if matches!(it, Item::TrigSrc | Item::TrigSrc2) {
@@ -9719,7 +9731,7 @@ impl Ui {
 
     /// The options of a choice item for segmented buttons (empty: shown as - value +).
     fn options(&self, it: Item) -> Vec<String> {
-        if let Some(o) = self.addrail_options(it).or_else(|| self.meas_options(it)).or_else(|| self.measrow_options(it)).or_else(|| self.ana_options(it)).or_else(|| self.magnetic_options(it)).or_else(|| self.inverter_options(it)).or_else(|| self.dpt_options(it)).or_else(|| self.cal_options(it)).or_else(|| self.bode_options(it)).or_else(|| self.sim_options(it)).or_else(|| self.offline_options(it)).or_else(|| self.afg_options(it)).or_else(|| self.bw_options(it)).or_else(|| self.la_options(it)).or_else(|| self.win_options(it)).or_else(|| self.bus_options(it)).or_else(|| self.time_options(it)).or_else(|| self.remote_options(it)).or_else(|| self.graphics_options(it)).or_else(|| self.views_options(it)).or_else(|| self.monitor_options(it)).or_else(|| self.features_options(it)) {
+        if let Some(o) = self.addrail_options(it).or_else(|| self.meas_options(it)).or_else(|| self.measrow_options(it)).or_else(|| self.ana_options(it)).or_else(|| self.magnetic_options(it)).or_else(|| self.inverter_options(it)).or_else(|| self.dpt_options(it)).or_else(|| self.cal_options(it)).or_else(|| self.bode_options(it)).or_else(|| self.sim_options(it)).or_else(|| self.offline_options(it)).or_else(|| self.afg_options(it)).or_else(|| self.bw_options(it)).or_else(|| self.la_options(it)).or_else(|| self.win_options(it)).or_else(|| self.bus_options(it)).or_else(|| self.time_options(it)).or_else(|| self.remote_options(it)).or_else(|| self.graphics_options(it)).or_else(|| self.views_options(it)).or_else(|| self.monitor_options(it)).or_else(|| self.features_options(it)).or_else(|| self.skin_options(it)) {
             return o;
         }
         let v: &[&str] = match it {
@@ -15024,3 +15036,5 @@ mod aux_out_tests {
 
 #[cfg(test)]
 mod zoom_tests;
+#[cfg(test)]
+mod funccheck_tests;

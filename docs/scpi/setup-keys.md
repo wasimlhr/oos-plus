@@ -141,6 +141,7 @@ Commands: [display.md](display.md).
 | `grid` | display settings | `Full` | - |
 | `grid_bright` | display settings | `100` | `:DISPlay:GBRightness` |
 | `grid_frame` | display settings | `true` | - |
+| `skin` | display settings: Display > Skin, `OOS` or `OOS Plus` | `OOS` | - |
 | `color_grade` | display settings | `false` | `:DISPlay:COLor` |
 | `dots` | display settings | `false` | `:DISPlay:TYPE` |
 | `windows` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `One` | - |
@@ -165,7 +166,7 @@ Commands: [display.md](display.md).
 | `view<n>` | `view<n>` is what view n keeps while another is shown: `key=value; ...` of the measurement list, panels, cursors, zoom, lanes shown and analysis set-ups, values escaped with `%3B` for `;` (optional) | - | - |
 | `math_hidden` | math channels (1-based) not shown in the view shown (optional) | - | `:MATH<n>:DISPlay` |
 | `gen_hidden` | `true`: the GEN chip is not shown in the view shown (optional) | `false` | `:DISPlay:GENerator` |
-| `studio_state` | what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source (optional; written each time) | empty | - |
+| `studio_state` | what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source, the columns of the event tables where a divider was dragged (optional; written each time) | empty | - |
 
 ## Measurements
 

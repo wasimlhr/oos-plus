@@ -47,7 +47,7 @@ pub(super) struct Ctx {
 
 impl Ui {
     /// The lane under a point: in stacked lanes the one whose area it is, otherwise the selected source.
-    fn ctx_lane(&self, x: i32, y: i32) -> Option<WaveId> {
+    pub(super) fn ctx_lane(&self, x: i32, y: i32) -> Option<WaveId> {
         let n = n_ch();
         if self.wins.len() > 1 {
             if let Some(c) = (0..n).find(|&c| self.m.ch[c].on && self.ch_area(c).contains(x, y)) { return Some(WaveId::Ch(c)); }

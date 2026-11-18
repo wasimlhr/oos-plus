@@ -179,6 +179,8 @@ impl Ui {
         if let Some((x, y)) = w.measure_float { p.push(format!("mfloat={}/{}", x, y)); }
         if let Some(r) = w.eye_float { p.push(format!("efloat={}/{}/{}/{}", r.x, r.y, r.w, r.h)); }
         if w.eye_left { p.push("eleft=1".into()); }
+        // the columns of the event tables, where a divider was dragged
+        if let Some([b, c]) = self.table_cols { p.push(format!("tcols={}/{}", b, c)); }
         p.join(" ")
     }
 
@@ -212,6 +214,7 @@ impl Ui {
         self.workspace.measure_float = None;
         self.workspace.eye_float = None;
         self.workspace.eye_left = false;
+        self.table_cols = None;
         for w in text.split_whitespace() {
             let Some((k, v)) = w.split_once('=') else { continue };
             match k {
@@ -244,6 +247,8 @@ impl Ui {
                         }
                     }
                 }
+                // the table clamps them to its width when it draws (`table_col_x`)
+                "tcols" => if let [b, c] = num(v)[..] { self.table_cols = Some([b.clamp(0, 4096), c.clamp(0, 4096)]); },
                 "zlane" => self.studio.sz.lane = trace_parse(v),
                 "refh" => {
                     for e in v.split(',') {

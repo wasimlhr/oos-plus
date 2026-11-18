@@ -1276,20 +1276,209 @@ fn a_note_is_added_from_the_hold_menu_and_stays_on_its_signal() {
     }
 }
 
-/// Picture of the Studio SIM panel (`OOS_WALK=dir`).
+/// A note is added by touch outside Studio too: a finger held on the plot of Minimal or of the stock layout opens the
+/// plot menu, and "Add note here" puts the note at the time that was held and opens the keyboard for its text.
+#[test]
+fn a_note_is_added_from_the_plot_menu_of_minimal_and_the_stock_layout() {
+    for layout in [Layout::Minimal, Layout::Default] {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = layout;
+        u.relayout();
+        for _ in 0..12 { frame(&mut u); }
+        u.m.run = RunState::Stop;
+        for _ in 0..4 { frame(&mut u); }
+        let lane = u.source_area(WaveId::Ch(0)).unwrap();
+        let (x, y) = (lane.x + lane.w / 3, lane.y + lane.h / 2);
+        finger_hold(&mut u, x, y, 2, 24);
+        let popup = u.workspace.popup.as_ref().unwrap_or_else(|| panic!("{layout:?}: a held finger opens the plot menu"));
+        assert_eq!(popup.title, "Plot", "{layout:?}");
+        let i = (0..popup.rows.len()).find(|&i| matches!(popup.rows[i].1, super::workspace::Action::Note(WaveId::Ch(0), _))).unwrap_or_else(|| panic!("{layout:?}: the menu has the note row"));
+        assert_eq!(popup.rows[i].0, "Add note here");
+        let r = popup.row_rect(i);
+        finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, 2);
+        assert!(u.wlan.osk.is_some() && u.callouts.len() == 1, "{layout:?}: a note and the keyboard for it");
+        for c in "glitch".chars() { u.osk_type(c); }
+        u.osk_ok();
+        frame(&mut u);
+        assert_eq!(u.callouts[0].text, "glitch", "{layout:?}");
+        assert_eq!(u.callouts[0].src, WaveId::Ch(0), "{layout:?}");
+        let (tdiv, delay) = u.view();
+        let want = delay as f64 + ((x - lane.x) as f64 / lane.w as f64 - 0.5) * HDIV as f64 * tdiv as f64;
+        assert!((u.callouts[0].t - want).abs() < tdiv as f64 * 0.02, "{layout:?}: at the time that was held: {} for {}", u.callouts[0].t, want);
+        let ((px, _), _) = u.callout_place(0).unwrap_or_else(|| panic!("{layout:?}: the note is on the screen"));
+        assert!((px - x).abs() <= 2, "{layout:?}: at the held column: {px} for {x}");
+        // a tap on its text edits it, as in Studio
+        let (_, r) = u.callout_place(0).unwrap();
+        finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, 0);
+        assert!(u.wlan.osk.as_ref().is_some_and(|o| o.text == "glitch"), "{layout:?}: the keyboard on the note's text");
+        if let Ok(dir) = std::env::var("OOS_WALK") {
+            u.wlan.osk = None;
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            for _ in 0..3 { u.step(0.04); }
+            u.render(&mut cv);
+            let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("note-{layout:?}.png")), &crate::store::png_of(&cv));
+        }
+    }
+}
+
+/// Pictures of the SIM sheet in Studio and in Minimal (`OOS_WALK=dir`).
 #[test]
 #[ignore]
-fn walk_sim_panel_picture() {
+fn walk_sim_sheet_pictures() {
     let Ok(dir) = std::env::var("OOS_WALK") else { return };
-    let mut u = fresh_live(Layout::Studio);
-    let b = u.studio_top();
-    tap(&mut u, b.simbtn.x + b.simbtn.w / 2, b.simbtn.y + b.simbtn.h / 2);
-    let end = std::time::Instant::now() + std::time::Duration::from_secs(60);
-    while !u.sim_mode() && std::time::Instant::now() < end { u.step(0.04); u.wait_sim_generation(); }
-    for _ in 0..80 { u.step(0.04); u.wait_sim_generation(); }
-    let mut cv = Canvas::new(u.scr.w, u.scr.h);
-    u.render(&mut cv);
-    let _ = crate::store::write(&std::path::Path::new(&dir).join("sim-panel.png"), &crate::store::png_of(&cv));
+    let shot = |u: &mut Ui, name: String| {
+        for _ in 0..3 { u.step(0.04); }
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        u.render(&mut cv);
+        let _ = crate::store::write(&std::path::Path::new(&dir).join(name), &crate::store::png_of(&cv));
+    };
+    for (layout, tag) in [(Layout::Studio, "s"), (Layout::Minimal, "m")] {
+        let mut u = fresh_live(layout);
+        u.open_menu(MenuId::Sim);
+        shot(&mut u, format!("simsheet-{tag}.png"));
+        // every tab: live with an empty slot, with the preset added to the slot, and in SIM mode
+        for state in ["live", "ref", "sim"] {
+            let mut u = fresh_live(layout);
+            u.open_menu(MenuId::Sim);
+            u.step(0.04);
+            if state != "live" {
+                let g = u.sheet_geo().unwrap();
+                let (x, y) = mid(g.foot[if state == "ref" { 0 } else { 1 }].1);
+                tap(&mut u, x, y);
+                for _ in 0..8 { u.step(0.04); u.wait_sim_generation(); }
+            }
+            for t in 0..u.sheet_geo().map_or(0, |g| g.tabs.len()) {
+                let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]);
+                tap(&mut u, x, y);
+                shot(&mut u, format!("simsheet-{tag}-{state}{t}.png"));
+            }
+        }
+    }
+}
+
+/// The SIM sheet by touch, in Minimal and in Studio: Run is under every tab, the knobs of the Advanced page are rows
+/// of its tabs, the switch of the slot shows and hides the reference with one tap, and no row moves under the finger
+/// when SIM mode starts.
+#[test]
+fn the_sim_sheet_has_run_under_every_tab_and_a_show_switch_that_works() {
+    fn settle(u: &mut Ui, done: impl Fn(&Ui) -> bool) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        while !done(u) && std::time::Instant::now() < end { u.step(0.04); u.wait_sim_generation(); }
+        assert!(done(u), "the SIM generation came to its end: {:?}", u.toast.as_ref().map(|t| t.0.clone()));
+    }
+    fn row(u: &Ui, it: Item) -> (RowKind, (i32, i32)) {
+        let g = u.sheet_geo().unwrap();
+        let r = g.rows.iter().find(|r| r.it == it).unwrap_or_else(|| panic!("{it:?} is a row of this tab"));
+        (r.kind, mid(r.ctrl))
+    }
+    fn foot(u: &Ui, it: Item) -> (i32, i32) {
+        mid(u.sheet_geo().unwrap().foot.iter().find(|f| f.0 == it).unwrap_or_else(|| panic!("{it:?} is under this tab")).1)
+    }
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh_live(layout);
+        u.open_menu(MenuId::Sim);
+        u.step(0.04);
+        assert!(u.sheet_active(), "{layout:?}: SIM is a sheet");
+        let spec = u.sheet_spec(MenuId::Sim).unwrap();
+        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Signal", "Levels", "Jitter", "Spread"]);
+        for (i, t) in spec.tabs.iter().enumerate() {
+            assert!(t.rows.len() >= 4, "{layout:?} {}: {} rows", t.name, t.rows.len());
+            assert!(t.foot.contains(&Item::SimPlay), "{layout:?} {}: Run is under every tab", t.name);
+            assert_eq!(t.foot.contains(&Item::SimAddRef), i == 0, "{layout:?} {}: Add is beside the slot", t.name);
+            assert_eq!(t.foot.contains(&Item::SimDefaults), i != 0, "{layout:?} {}: Defaults is under the knobs", t.name);
+        }
+        let rows: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
+        assert!(!rows.contains(&Item::Open(MenuId::SimAdvanced)), "{layout:?}: no second page");
+        for it in u.items(MenuId::SimAdvanced) {
+            assert!(it == Item::SimDefaults || rows.contains(&it), "{layout:?}: {it:?} of the Advanced page is a row");
+        }
+        // an empty slot: the switch is off, and a tap says why
+        let (kind, (sx, sy)) = row(&u, Item::SimShow);
+        assert_eq!(kind, RowKind::Toggle);
+        assert!(!u.sheet_on(Item::SimShow));
+        tap(&mut u, sx, sy);
+        assert!(u.refs[0].is_none() && u.toast.as_ref().is_some_and(|t| t.0.contains("empty")), "{layout:?}: {:?}", u.toast.as_ref().map(|t| t.0.clone()));
+        // Add to R1: the reference is there and shown, and so is the switch
+        let (x, y) = foot(&u, Item::SimAddRef);
+        tap(&mut u, x, y);
+        settle(&mut u, |u| u.refs[0].is_some());
+        assert!(u.refs[0].as_ref().unwrap().on && u.sheet_on(Item::SimShow), "{layout:?}: shown, and the switch says so");
+        // one tap hides it, one more shows it
+        tap(&mut u, sx, sy);
+        assert!(!u.refs[0].as_ref().unwrap().on && !u.sheet_on(Item::SimShow), "{layout:?}: hidden by one tap");
+        tap(&mut u, sx, sy);
+        assert!(u.refs[0].as_ref().unwrap().on && u.sheet_on(Item::SimShow), "{layout:?}: shown by the next");
+        // Run from under the Jitter tab, with no reference shown (a shown one would be played instead, and that closes
+        // the sheet): SIM mode starts, the sheet stays, and the rows of Signal are where they were
+        tap(&mut u, sx, sy);
+        assert!(u.sim_shown_refs().is_empty());
+        let before: Vec<(Item, Rect)> = u.sheet_geo().unwrap().rows.iter().map(|r| (r.it, r.row)).collect();
+        let (x, y) = mid(u.sheet_geo().unwrap().tabs[2]);
+        tap(&mut u, x, y);
+        assert_eq!(row(&u, Item::SimDcd).0, RowKind::Number, "{layout:?}: duty-cycle distortion is a row of Jitter");
+        let (x, y) = foot(&u, Item::SimPlay);
+        tap(&mut u, x, y);
+        settle(&mut u, |u| u.sim_mode() && !u.sim_generating());
+        assert!(u.menu_open && u.menu == MenuId::Sim && u.sheet_active(), "{layout:?}: the sheet stays");
+        let (x, y) = mid(u.sheet_geo().unwrap().tabs[0]);
+        tap(&mut u, x, y);
+        let after: Vec<(Item, Rect)> = u.sheet_geo().unwrap().rows.iter().map(|r| (r.it, r.row)).collect();
+        assert_eq!(after[..before.len()], before[..], "{layout:?}: no row moved");
+        assert_eq!(after.len(), before.len() + 1, "{layout:?}: one row more");
+        assert_eq!(after.last().unwrap().0, Item::SimLive, "{layout:?}: the way back is the last row");
+        let (_, (x, y)) = row(&u, Item::SimLive);
+        tap(&mut u, x, y);
+        for _ in 0..4 { u.step(0.04); }
+        assert!(!u.sim_mode() && !u.record_mode(), "{layout:?}: live again");
+    }
+}
+
+/// The measurement strip of Minimal names every measurement whole at every text size: where the long name has no room
+/// (several sources, the larger sizes) it takes the short one, in the band, the paged band and the column.
+#[test]
+fn the_measurement_strip_takes_the_short_name_where_the_long_one_is_cut() {
+    use crate::gfx::Au;
+    for ts in [TextSize::Normal, TextSize::Large, TextSize::Larger] {
+        for (dock, channels) in [(StripDock::Below, 1), (StripDock::Below, 4), (StripDock::Right, 4)] {
+            let mut u = Ui::new(Source::Demo { t: 0.0 });
+            u.m.layout = Layout::Minimal;
+            u.m.text_size = ts;
+            u.m.strip_dock = dock;
+            if channels == 4 {
+                for c in 0..4 { u.m.ch[c].on = true; }
+                u.m.meas.extend([(Meas::Vpp, WaveId::Ch(1)), (Meas::Freq, WaveId::Ch(1)), (Meas::Vrms, WaveId::Ch(1)), (Meas::Vpp, WaveId::Ch(2)), (Meas::Period, WaveId::Ch(2)), (Meas::Vmax, WaveId::Ch(3)), (Meas::Vmin, WaveId::Ch(3))]);
+            }
+            u.relayout();
+            for _ in 0..12 { u.step(0.04); }
+            u.toast = None;
+            let what = format!("{ts:?} {dock:?} {channels} ch");
+            let strip = u.strip_rect().unwrap_or_else(|| panic!("{what}: a strip"));
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            cv.au_start();
+            u.render(&mut cv);
+            let au = cv.au.take().unwrap();
+            // every text of the strip that is the long or the short name of a measurement, and whether its ink is whole
+            let (rows, keys) = (u.meas_rows(), u.studio_keys());
+            let names: Vec<(String, String)> = rows.iter().zip(&keys).map(|(r, &k)| (r.name.clone(), u.studio_badge_name(k, &r.name))).collect();
+            let (mut seen, mut cut) = (0, Vec::new());
+            for e in &au {
+                let Au::Text { s, ink: Some(ink), clip, .. } = e else { continue };
+                if !strip.contains((ink.0 + ink.2) / 2, (ink.1 + ink.3) / 2) { continue; }
+                // the column names its lines "CH2 Frequency" on a page of many
+                let name = s.rsplit_once("CH").map_or(s.as_str(), |(_, rest)| rest.split_once(' ').map_or(s.as_str(), |(_, n)| n));
+                if !names.iter().any(|(long, short)| name == long || name == short) { continue; }
+                seen += 1;
+                if ink.0 < clip.0 - 1 || ink.2 > clip.2 + 1 { cut.push(format!("'{s}' ink {}..{} clip {}..{}", ink.0, ink.2, clip.0, clip.2)); }
+            }
+            assert!(seen >= rows.len().min(6), "{what}: {seen} names of {} measurements are drawn", rows.len());
+            assert!(cut.is_empty(), "{what}: names cut by their cell: {cut:#?}");
+        }
+    }
+    // the long name stays where it has room
+    let u = fresh(Layout::Minimal);
+    let key = super::studio::MeasKey::One(Meas::PDuty, WaveId::Ch(0));
+    assert_eq!(u.strip_name(Some(key), "Positive Duty Cycle", 400), "Positive Duty Cycle");
+    assert_eq!(u.strip_name(Some(key), "Positive Duty Cycle", 40), "+Duty");
 }
 
 /// The docked event table: its title and count are the title of the view, its columns fit their content, and a
@@ -1326,5 +1515,184 @@ fn the_docked_event_table_has_its_count_in_the_title_and_columns_that_can_be_dra
     if let Ok(dir) = std::env::var("OOS_WALK") {
         u.render(&mut cv);
         let _ = crate::store::write(&std::path::Path::new(&dir).join("table.png"), &crate::store::png_of(&cv));
+    }
+    // the dragged columns are part of the setup (and so of a session): recalled, they are where they were put
+    let [b, c] = u.table_cols.expect("dragged");
+    let setup = u.setup_text_full();
+    assert!(setup.contains(&format!("tcols={b}/{c}")), "{}", setup.lines().find(|l| l.starts_with("studio_state")).unwrap_or("no studio_state"));
+    let mut v = fresh_live(Layout::Studio);
+    assert_eq!(v.table_cols, None, "a fresh table fits its columns to the content");
+    v.apply_setup_text(&setup).unwrap();
+    assert_eq!(v.table_cols, Some([b, c]));
+    // a setup from before a divider was dragged brings the fitted columns back
+    u.table_cols = None;
+    let plain = u.setup_text_full();
+    assert!(!plain.contains("tcols="));
+    v.apply_setup_text(&plain).unwrap();
+    assert_eq!(v.table_cols, None);
+}
+
+/// Remote services and SSH settings are sheets in Minimal and Studio, System > Connectivity says where the scope is
+/// reached and leads to its three pages, and a link to another page stands after the rows of its own page.
+#[test]
+fn remote_services_are_sheets_and_connectivity_leads_to_them() {
+    fn row(u: &Ui, it: Item) -> (RowKind, (i32, i32)) {
+        let g = u.sheet_geo().unwrap();
+        let r = g.rows.iter().find(|r| r.it == it).unwrap_or_else(|| panic!("{it:?} is a row of this tab"));
+        (r.kind, mid(r.ctrl))
+    }
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        u.open_menu(MenuId::Utility);
+        u.step(0.04);
+        let spec = u.sheet_spec(MenuId::Utility).unwrap();
+        assert_eq!(spec.tabs[0].name, "Connectivity");
+        assert_eq!(spec.tabs[0].rows, [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow, Item::Open(MenuId::Network), Item::Open(MenuId::Remote), Item::Open(MenuId::Time)], "{layout:?}");
+        let g = u.sheet_geo().unwrap();
+        assert!(g.rows[..4].iter().all(|r| r.kind == RowKind::Info) && g.rows[4..].iter().all(|r| r.kind == RowKind::Link), "{layout:?}: four lines of state, three pages");
+        // Remote services opens from here, as a sheet with Back
+        let (_, (x, y)) = row(&u, Item::Open(MenuId::Remote));
+        tap(&mut u, x, y);
+        assert!(u.menu == MenuId::Remote && u.sheet_active() && u.sheet_chrome().1.is_some(), "{layout:?}: Remote services is a sheet with Back");
+        let spec = u.sheet_spec(MenuId::Remote).unwrap();
+        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Services", "Access"]);
+        let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
+        for it in u.items(MenuId::Remote) { assert!(on_sheet.contains(&it), "{layout:?}: {it:?} is on the sheet"); }
+        // a switch acts on one tap
+        let (kind, (x, y)) = row(&u, Item::RemTelnet);
+        assert!(kind == RowKind::Toggle && u.sys.remote_telnet);
+        tap(&mut u, x, y);
+        assert!(!u.sys.remote_telnet, "{layout:?}: telnet off");
+        tap(&mut u, x, y);
+        assert!(u.sys.remote_telnet, "{layout:?}: and on again");
+        // the addresses say whose they are
+        assert_eq!(u.sheet_label(Item::RemScpiInfo), "SCPI port");
+        assert_eq!(u.sheet_label(Item::NetWeb), "Web address");
+        // SSH settings: a sheet too, its two key actions pinned
+        let (kind, (x, y)) = row(&u, Item::Open(MenuId::Ssh));
+        assert_eq!(kind, RowKind::Link);
+        tap(&mut u, x, y);
+        assert!(u.menu == MenuId::Ssh && u.sheet_active(), "{layout:?}: SSH settings is a sheet");
+        let spec = u.sheet_spec(MenuId::Ssh).unwrap();
+        assert_eq!(spec.tabs[0].foot, [Item::SshImport, Item::SshRemove]);
+        assert_eq!(row(&u, Item::SshState).0, RowKind::Info);
+        assert_eq!(row(&u, Item::SshPassword).0, RowKind::Toggle);
+        // Back, and Back again
+        let b = u.sheet_chrome().1.expect("Back");
+        tap(&mut u, b.x + b.w / 2, b.y + b.h / 2);
+        assert_eq!(u.menu, MenuId::Remote, "{layout:?}");
+        let b = u.sheet_chrome().1.expect("Back");
+        tap(&mut u, b.x + b.w / 2, b.y + b.h / 2);
+        assert_eq!(u.menu, MenuId::Utility, "{layout:?}");
+        // every sheet: the links to other pages come last (the lines of the logic analyser keep theirs in place)
+        let mut list = menus(&u);
+        list.extend([MenuId::Network, MenuId::Remote, MenuId::Ssh, MenuId::Time, MenuId::SelfCal, MenuId::Dvm, MenuId::Zone, MenuId::Sim]);
+        for menu in list {
+            let mut u = fresh(layout);
+            u.open_menu(menu);
+            let Some(spec) = u.sheet_spec(menu) else { continue };
+            if matches!(menu, MenuId::La | MenuId::Main) { continue; }
+            for t in &spec.tabs {
+                let first_link = t.rows.iter().position(|it| matches!(it, Item::Open(_))).unwrap_or(t.rows.len());
+                assert!(t.rows[first_link..].iter().all(|it| matches!(it, Item::Open(_))), "{layout:?} {menu:?} {}: {:?}", t.name, t.rows);
+            }
+        }
+    }
+}
+
+/// Pictures of the sheets a second look went over (`OOS_WALK=dir`): Remote services, SSH settings, and the tabs where
+/// the links to other pages moved to the end.
+#[test]
+#[ignore]
+fn walk_second_look_pictures() {
+    let Ok(dir) = std::env::var("OOS_WALK") else { return };
+    for (layout, tag) in [(Layout::Studio, "s"), (Layout::Minimal, "m")] {
+        for (menu, name) in [(MenuId::Remote, "remote"), (MenuId::Ssh, "ssh"), (MenuId::Measure, "measure"), (MenuId::Display, "display"), (MenuId::Network, "network"), (MenuId::Utility, "system")] {
+            let mut u = fresh_live(layout);
+            u.open_menu(menu);
+            u.step(0.04);
+            let tabs = u.sheet_geo().map_or(0, |g| g.tabs.len());
+            for t in 0..tabs.max(1) {
+                if tabs > 0 { let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]); tap(&mut u, x, y); }
+                for _ in 0..3 { u.step(0.04); }
+                let mut cv = Canvas::new(u.scr.w, u.scr.h);
+                u.render(&mut cv);
+                let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("look-{tag}-{name}{t}.png")), &crate::store::png_of(&cv));
+            }
+        }
+    }
+}
+
+/// The page of a channel pair has its two sources under every tab, and no sheet offers a tab that holds nothing:
+/// Position while the cursors are off, Scale while math has no function.
+#[test]
+fn the_pair_sources_are_under_every_tab_and_no_tab_is_empty() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        u.m.ch[1].on = true;
+        u.open_menu(MenuId::MeasPair);
+        u.step(0.04);
+        let n = u.sheet_spec(MenuId::MeasPair).expect("a sheet").tabs.len();
+        assert_eq!(n, 4, "{layout:?}");
+        for t in 0..n {
+            let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]);
+            tap(&mut u, x, y);
+            let g = u.sheet_geo().unwrap();
+            assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [Item::MeasSrc, Item::MeasSrcB], "{layout:?} tab {t}: A and B");
+        }
+        // B opens its list from under the last tab, and the source chosen there is the one of the pair
+        let (x, y) = mid(u.sheet_geo().unwrap().foot[1].1);
+        tap(&mut u, x, y);
+        assert!(u.menu == MenuId::Pick && u.pick.is_some_and(|p| p.it == Item::MeasSrcB), "{layout:?}: the list of source B");
+        u.close_menu();
+        // no tab without rows and actions, in any sheet, as the scope starts
+        let mut list = menus(&u);
+        list.extend([MenuId::Network, MenuId::Remote, MenuId::Ssh, MenuId::Time, MenuId::SelfCal, MenuId::Dvm, MenuId::Zone, MenuId::Sim, MenuId::MeasPair, MenuId::MeasStat]);
+        for menu in list {
+            let mut u = fresh(layout);
+            u.open_menu(menu);
+            let Some(spec) = u.sheet_spec(menu) else { continue };
+            for t in &spec.tabs { assert!(!t.rows.is_empty() || !t.foot.is_empty(), "{layout:?} {menu:?}: the tab {} is empty", t.name); }
+        }
+    }
+    // Studio: the cursors off have one page, a cursor type brings Position
+    let mut u = fresh(Layout::Studio);
+    u.open_menu(MenuId::Cursor);
+    assert_eq!(u.m.cursor, CursorMode::Off);
+    assert_eq!(u.sheet_spec(MenuId::Cursor).unwrap().tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Cursors"]);
+    assert!(u.sheet_geo().unwrap().tabs.is_empty(), "one page: no tab strip");
+    u.m.cursor = CursorMode::Time;
+    assert_eq!(u.sheet_spec(MenuId::Cursor).unwrap().tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Cursors", "Position"]);
+    // math without a function has no Scale tab; the bus page still opens on its own tab
+    let mut u = fresh(Layout::Studio);
+    u.open_menu(MenuId::Math);
+    assert_eq!(u.m.math, MathOp::Off);
+    assert_eq!(u.sheet_spec(MenuId::Math).unwrap().tabs.len(), 1);
+    let spec = u.sheet_spec(MenuId::Bus).unwrap();
+    assert_eq!(spec.tabs[spec.first].name, "Bus");
+    let spec = u.sheet_spec(MenuId::ChMore(0)).unwrap();
+    assert_eq!(spec.tabs[spec.first].name, "More");
+}
+
+/// Pictures of every tab of the channel, trigger and measure sheets (`OOS_WALK=dir`), with the signals of the demo.
+#[test]
+#[ignore]
+fn walk_channel_trigger_measure_pictures() {
+    let Ok(dir) = std::env::var("OOS_WALK") else { return };
+    for (layout, tag) in [(Layout::Studio, "s"), (Layout::Minimal, "m")] {
+        for (menu, name) in [(MenuId::Channel(0), "ch"), (MenuId::Trigger, "trig"), (MenuId::Measure, "meas"), (MenuId::MeasPair, "pair"), (MenuId::MeasStat, "stat"), (MenuId::Dvm, "dvm"), (MenuId::Horizontal, "hor"), (MenuId::Cursor, "cursor")] {
+            let mut u = fresh_live(layout);
+            u.m.ch[1].on = true;
+            u.open_menu(menu);
+            u.step(0.04);
+            let tabs = u.sheet_geo().map_or(0, |g| g.tabs.len());
+            for t in 0..tabs.max(1) {
+                if tabs > 0 { let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]); tap(&mut u, x, y); }
+                for _ in 0..3 { u.step(0.04); }
+                let mut cv = Canvas::new(u.scr.w, u.scr.h);
+                u.render(&mut cv);
+                let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("ctm-{tag}-{name}{t}.png")), &crate::store::png_of(&cv));
+            }
+        }
     }
 }

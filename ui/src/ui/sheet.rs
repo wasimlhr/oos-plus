@@ -191,8 +191,9 @@ impl Ui {
                 MathAuto => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
+            // Connectivity says where the scope is reached and what time it has, above the pages that set it
             M::Utility => (&["Connectivity", "Device", "Service", "Advanced"], |it| match it {
-                Open(M::Network) | Open(M::Time) => Slot::Tab(0),
+                NetEth | NetWlan | NetWeb | TimeNow | Open(M::Network) | Open(M::Remote) | Open(M::Time) => Slot::Tab(0),
                 Offline | QuickAct | Graphics | Shot => Slot::Tab(1),
                 Open(M::SelfCal) | SysInfo | About | Update => Slot::Tab(2),
                 UpdateRollback => Slot::Foot(2),
@@ -228,13 +229,14 @@ impl Ui {
                 MaskClear => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
-            M::Sim => (&["Signal", "Channel", "Jitter", "Show"], |it| match it {
-                SimPreset | SimSlot | SimRate | SimPat | SimHigh | SimLow | SimLoad => Slot::Tab(0),
-                SimAddRef | SimPlay => Slot::Foot(0),
-                SimRise | SimBw | SimDeemph | SimNoise => Slot::Tab(1),
-                SimRj | SimPj | SimPjHz | SimSsc | Open(M::SimAdvanced) => Slot::Tab(2),
-                SimLive | SimDefaults => Slot::Foot(3),
-                _ => Slot::Tab(3),
+            // what is played and where it goes, then the knobs: levels and channel, jitter, spread spectrum. The rows
+            // of the Advanced page are rows of these tabs; the actions are pinned by `sheet_spec`
+            M::Sim => (&["Signal", "Levels", "Jitter", "Spread"], |it| match it {
+                SimPreset | SimRate | SimPat | SimSlot | SimShow | SimLoad | SimLive => Slot::Tab(0),
+                SimHigh | SimLow | SimRise | SimBw | SimDeemph | SimNoise => Slot::Tab(1),
+                SimRj | SimPj | SimPjHz | SimDcd | SimCorrRj | SimCorrHz => Slot::Tab(2),
+                SimSsc | SimSscCenter | SimSscDeviation | SimSscHz => Slot::Tab(3),
+                _ => Slot::Skip,
             }),
             M::SimAdvanced => (&["Spread spectrum", "Other jitter"], |it| match it {
                 SimSsc | SimSscCenter | SimSscDeviation | SimSscHz => Slot::Tab(0),
@@ -302,17 +304,19 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Windows => (&["Windows"], |_| Slot::Tab(0)),
-            M::Remote => (&["Services", "Addresses"], |it| match it {
-                NetWeb | RemScpiInfo | RemVxiInfo | RemTelnetInfo => Slot::Tab(1),
-                _ => Slot::Tab(0),
+            // the switches of the services, then who may reach them and where they are
+            M::Remote => (&["Services", "Access"], |it| match it {
+                RemWeb | RemScpi | RemVxi | RemTelnet | RemSsh | RemMdns | Open(M::Ssh) => Slot::Tab(0),
+                _ => Slot::Tab(1),
             }),
+            M::Ssh => (&["SSH"], |it| match it { SshImport | SshRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
             _ => return None,
         })
     }
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote)
+        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility)
     }
 
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
@@ -326,6 +330,16 @@ impl Ui {
             MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c))).collect(),
             MenuId::Decode | MenuId::Bus => self.items(MenuId::Decode).into_iter().chain(self.items(MenuId::Bus)).collect(),
             MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
+            // SIM: the knobs of its Advanced page are rows of the sheet's own tabs, so the link to that page is left out
+            MenuId::Sim => {
+                let mut v: Vec<Item> = self.items(MenuId::Sim).into_iter().filter(|it| *it != Item::Open(MenuId::SimAdvanced)).collect();
+                for it in self.items(MenuId::SimAdvanced) { if !v.contains(&it) { v.push(it); } }
+                v
+            }
+            // System: the state lines of the network and the clock, and the page of the remote services, which the
+            // menu has one level down
+            MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow].into_iter()
+                .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
             m => self.items(m),
         }
     }
@@ -374,6 +388,30 @@ impl Ui {
                     tabs[0].rows.extend(rest);
                 }
             }
+            // SIM: the slot's rows follow the slot, and Live comes last, so no row moves when SIM mode starts under
+            // the finger. Run is under every tab: beside Add on the tab of the slot, beside Defaults on the knob tabs
+            if menu == MenuId::Sim {
+                let order = [Item::SimPreset, Item::SimRate, Item::SimPat, Item::SimSlot, Item::SimShow, Item::SimLoad, Item::SimLive];
+                tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+                for (i, t) in tabs.iter_mut().enumerate() {
+                    t.foot = if i == 0 { vec![Item::SimAddRef, Item::SimPlay] } else { vec![Item::SimPlay, Item::SimDefaults] };
+                }
+            }
+            // System > Connectivity: the pages in the order of the lines above them
+            if menu == MenuId::Utility {
+                let order = [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow, Item::Open(MenuId::Network), Item::Open(MenuId::Remote), Item::Open(MenuId::Time)];
+                tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+            }
+            // Remote services: the name and who is allowed first, then the addresses
+            if menu == MenuId::Remote {
+                let order = [Item::RemName, Item::RemAllow, Item::RemFirewall, Item::NetWeb, Item::RemScpiInfo, Item::RemVxiInfo, Item::RemTelnetInfo];
+                tabs[1].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+            }
+            // a link to another page comes after the rows of this one. The lines of the logic analyser keep their
+            // link under the row it continues
+            if menu != MenuId::La {
+                for t in &mut tabs { t.rows.sort_by_key(|it| matches!(it, Item::Open(_))); }
+            }
             // the next-free action is offered only when the selected slot is taken
             if matches!(menu, MenuId::Ref) && self.refs[self.ref_sel].is_none() {
                 for t in &mut tabs { t.rows.retain(|it| *it != Item::RefSaveNext); }
@@ -384,11 +422,21 @@ impl Ui {
                 let at = 2.min(tabs[0].rows.len());
                 tabs[0].rows.insert(at, Item::RefShow(sel));
             }
+            // the two sources of a pair are under every tab ("A: CH1", "B: CH2"): a slot of the plan is the foot of one tab
+            if menu == MenuId::MeasPair {
+                for t in &mut tabs { t.foot = vec![Item::MeasSrc, Item::MeasSrcB]; }
+            }
             let first = match menu {
                 MenuId::ChMore(_) => 1,
                 MenuId::Bus => 2,
                 _ => 0,
             };
+            // a tab that holds nothing in this state is not offered: Position while the cursors are off, Scale while
+            // math has no function. The tab the sheet opens on is found again by its name
+            let opens_on = tabs.get(first).map(|t| t.name);
+            let holds = |t: &SheetTab| !t.rows.is_empty() || !t.foot.is_empty();
+            if tabs.iter().any(holds) { tabs.retain(holds); }
+            let first = opens_on.and_then(|n| tabs.iter().position(|t| t.name == n)).unwrap_or(0);
             SheetSpec { tabs, first }
         };
         if spec.tabs.len() > SHEET_MAX_TABS {
@@ -502,9 +550,12 @@ impl Ui {
         }
     }
 
-    fn sheet_on(&self, it: Item) -> bool {
+    /// Whether the switch of a Toggle row is on.
+    pub(super) fn sheet_on(&self, it: Item) -> bool {
         match it {
             Item::RefShow(i) => self.refs.get(i).and_then(|r| r.as_ref()).is_some_and(|r| r.on),
+            // its value names the slot ("R1 on", "empty"), so the switch reads the slot itself
+            Item::SimShow => self.sim_shown() == Some(true),
             _ => self.value(it) == "On",
         }
     }
@@ -538,6 +589,19 @@ impl Ui {
             }
             Item::SimAddRef => format!("Add to R{}", self.m.sim_slot + 1),
             Item::SimLoad => format!("Load file into R{}…", self.m.sim_slot + 1),
+            // on the Access tab of Remote services the addresses stand apart from their switches: they say whose they are
+            Item::NetWeb if matches!(self.menu_root(), MenuId::Remote | MenuId::Utility) => "Web address".into(),
+            Item::TimeNow if self.menu_root() == MenuId::Utility => "Clock".into(),
+            Item::RemScpiInfo => "SCPI port".into(),
+            Item::RemVxiInfo => "VXI-11 ports".into(),
+            Item::RemTelnetInfo => "telnet port".into(),
+            Item::SimShow => format!("Show R{}", self.m.sim_slot + 1),
+            Item::SimLive => "Back to live".into(),
+            // the tab is named Spread: its rows do not repeat it
+            Item::SimSsc => "Spread spectrum".into(),
+            Item::SimSscCenter => "Profile".into(),
+            Item::SimSscDeviation => "Deviation".into(),
+            Item::SimSscHz => "Frequency".into(),
             Item::RefImport => format!("Load file into R{}…", self.ref_sel + 1),
             Item::RefShow(_) => "Shown".into(),
             Item::RefSaveNext => self.ref_store_next_label(),
@@ -897,6 +961,10 @@ impl Ui {
             RowKind::Toggle => {
                 if let Item::RefShow(_) = it {
                     self.activate(it);
+                } else if it == Item::SimShow {
+                    // one step is the switch: its value is the slot's name, never "On" or "Off", and selecting an
+                    // option stepped it eight times, back to where it was
+                    self.adjust(it, 1);
                 } else {
                     let on = self.sheet_on(it);
                     self.select_option(it, if on { "Off" } else { "On" });

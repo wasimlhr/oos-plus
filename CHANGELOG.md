@@ -53,6 +53,11 @@ Added:
   and Full screen buttons as `PLOT` (unit).
 - Callouts in Studio (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
   text to that time on that signal, with a line from the text to the point. It moves with the signal, is edited by a
+  step of the zoom time base around the centre of the zoom window; minus ends at the main time base (host-tested,
+  not yet verified on hardware).
+- Callouts (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
+  text to that time on that signal, with a line from the text to the point. The row is in the plot menu of every
+  layout: Studio, Minimal and the stock one. It moves with the signal, is edited by a
   tap on its text, removed by emptying it, and is part of the setup text and of a session. Remote, for scripts and
   agents: `:CALLout:ADD <source>,<time>,<text>`, `:CALLout:REMove <n>`, `:CALLout:CLEar`, `:CALLout:COUNt?`,
   `:CALLout:LIST?`.
@@ -90,8 +95,30 @@ Added:
     message, not a warning;
   - the **SIM** button of Studio opens the SIM sheet (Play and Add to ref are at its foot); it used to start playing
     the last preset before a setting could be seen;
+  - the SIM sheet of Minimal and Studio has the tabs Signal, Levels, Jitter and Spread. The knobs of the Advanced
+    page (duty-cycle distortion, correlated jitter, the spread-spectrum profile, deviation and frequency) are rows
+    of Jitter and Spread, so there is no second page. Run is under every tab, beside Add on Signal and beside
+    Defaults on the knob tabs; the Show tab, which held one switch, is gone. Back to live is the last row of
+    Signal, so no row moves when SIM mode starts (host-tested);
+  - the switch that shows the reference of the SIM slot works and shows its state. In the sheet it did nothing: a
+    tap stepped it eight times, back to where it was, and it was always drawn off (host-tested);
+  - Remote services and SSH settings are sheets in Minimal and Studio (they were the stock dialogs: with ten rows
+    the page did not fit one tab). Remote services has the switches on Services and the name, the allowed
+    addresses, the firewall and the ports on Access; SSH settings has its two key actions at the foot (host-tested);
+  - System > Connectivity shows the Ethernet and WLAN state, the web address and the clock, and opens Network,
+    Remote services and Date and time. It held two links (host-tested);
+  - on a sheet the links to other pages come after the rows of the page: Measure > Settings, Display > Grid and
+    views, Network > Ethernet and System > Service had them first or in the middle;
+  - the page of a channel pair has its two sources ("A: CH1", "B: CH2") under every tab. A was under Delay only,
+    B under Phase only, and Skew and Setup / hold had none (host-tested);
+  - a sheet offers no tab that holds nothing: Cursor > Position while the cursors are off and Math > Scale while
+    math has no function were empty pages (host-tested);
+  - the measurement strip (stock layout and Minimal) takes the short name of a measurement (Pk-pk, Freq, +Duty)
+    where the long one has no room: with several sources, in the column at a side, and at the larger text sizes.
+    The long name was cut there ("Positive Duty Cy", "Peak-to-Pe", "Frequen") (host-tested);
   - a docked event table (decoder events, search, segments) has its title and count in the title strip of the view,
-    which gives one more row; its columns fit their content, and a divider between two columns can be dragged;
+    which gives one more row; its columns fit their content, and a divider between two columns can be dragged.
+    The dragged columns are kept in a setup and in a session;
   - a channel whose record reaches the end of the ADC range is named in red in the plot and gets a red pill border;
     `:CHANnel<n>:CLIPping?` answers 1 or 0;
   - Studio: a channel that is off has a small pill, a tap switches it on; the badge of a channel pill switches it
@@ -107,6 +134,9 @@ Added:
 
 Changed:
 
+- Phase (A to B) takes one edge of B in each cycle of A, and each edge of B once (host-tested, not yet verified on
+  hardware). Before, every edge of B inside a cycle counted, so a B at twice the rate of A read the mean of its two
+  edges (180 degrees for a B whose first edge is at 90).
 - Minimal opens the settings sheets of Studio for every menu; the stock layout keeps the stock dialogs. Every
   remaining dialog of Studio is a sheet too (host-tested).
 - The top bars of Minimal and Studio no longer repeat front-panel keys: Measure, Cursor, Autoset, Clear and Force

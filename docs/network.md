@@ -147,7 +147,10 @@ rules, the schedule, the settings file, the page.
 
 ## 4. Remote services
 
-System > Network > Remote services has a switch for each service, next to where it is reached:
+System > Network > Remote services has a switch for each service, next to where it is reached. In Minimal and
+Studio it is a sheet: the switches are on its Services tab, the name, the allowed addresses and the ports on its
+Access tab, and it also opens from System > Connectivity, which shows the Ethernet and WLAN state, the web
+address and the clock above the pages that set them.
 
 | service | port | what goes with it |
 |---|---|---|
