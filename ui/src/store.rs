@@ -1550,11 +1550,12 @@ struct RigolCsv {
 /// `,Start,Increment,`; its second line has the two values under those names, and the first column of its rows
 /// counts samples, not seconds:
 /// `X,CH1,CH4,Start,Increment,` / `Sequence,Volt,Volt,-1.200000e-03,4.000000e-08` / `0,2.86e+00,3.08e+00,`.
-/// Such a file without its two values is refused: read as it stands it would be a second a sample.
+/// The two values are found by their names, wherever the columns are: a column of another trace can stand between
+/// the channels and `Start`. A file that names one of the two, or whose second line begins with `Sequence`, and
+/// does not give both values is refused: read as it stands it would be a second a sample.
 fn rigol_csv_header(text: &str) -> Result<Option<RigolCsv>, String> {
-    let mut lines = without_mark(text).lines();
-    let cells = |line: &str| line.split(',').map(|c| c.trim().to_string()).collect::<Vec<String>>();
-    let first = cells(lines.next().unwrap_or(""));
+    let Some((first, rest)) = rigol_csv_line(without_mark(text)) else { return Ok(None) };
+    let Some(first) = rigol_csv_cells(first) else { return Ok(None) };
     if !(first[0].is_empty() || first[0] == "X") {
         return Ok(None);
     }
@@ -1564,20 +1565,44 @@ fn rigol_csv_header(text: &str) -> Result<Option<RigolCsv>, String> {
         let Some(number) = plain.strip_prefix("CH").and_then(|rest| rest.chars().next()).filter(|c| c.is_ascii_digit()) else { break };
         channels.push(format!("CH{number}"));
     }
-    let named = |k: usize, name: &str| first.get(k).is_some_and(|cell| cell == name);
-    let at = 1 + channels.len();
     if channels.is_empty() {
         return Ok(None);
     }
-    if !(named(at, "Start") && named(at + 1, "Increment")) {
+    let column = |name: &str| first.iter().position(|cell| *cell == name);
+    let (start, step) = (column("Start"), column("Increment"));
+    let second = rigol_csv_line(rest).and_then(|(line, _)| rigol_csv_cells(line)).unwrap_or_default();
+    let counted = second.first().is_some_and(|cell| *cell == "Sequence");
+    if start.is_none() && step.is_none() && !counted {
         return Ok(Some(RigolCsv { channels, clock: None }));
     }
-    let second = cells(lines.next().unwrap_or(""));
-    let value = |k: usize| second.get(k).and_then(|cell| cell.parse::<f64>().ok()).filter(|x| x.is_finite());
-    match (value(at), value(at + 1)) {
+    let value = |k: Option<usize>| second.get(k?).and_then(|cell| cell.parse::<f64>().ok()).filter(|x| x.is_finite());
+    match (value(start), value(step)) {
         (Some(start), Some(step)) if step > 0.0 => Ok(Some(RigolCsv { channels, clock: Some((start, step)) })),
         _ => Err("the RIGOL CSV file has no usable Start and Increment".into()),
     }
+}
+
+/// The longest line a RIGOL CSV header is looked for in, and the most cells of one: the header of four channels
+/// with `Start` and `Increment` has 34 bytes and eight cells. A longer or wider line is no such header, and is
+/// not taken apart: this runs for every text file, and one line can be the whole of a large file.
+const RIGOL_CSV_LINE: usize = 4096;
+const RIGOL_CSV_CELLS: usize = 64;
+
+/// The first line of `text` and the text after it; None when the line is longer than `RIGOL_CSV_LINE`. No more
+/// of the text than that is looked at.
+fn rigol_csv_line(text: &str) -> Option<(&str, &str)> {
+    let seen = &text.as_bytes()[..text.len().min(RIGOL_CSV_LINE + 1)];
+    match seen.iter().position(|byte| *byte == b'\n') {
+        Some(end) => Some((&text[..end], &text[end + 1..])),
+        None if text.len() <= RIGOL_CSV_LINE => Some((text, "")),
+        None => None,
+    }
+}
+
+/// The cells of a header line, without the spaces around them; None for more than `RIGOL_CSV_CELLS`.
+fn rigol_csv_cells(line: &str) -> Option<Vec<&str>> {
+    let cells: Vec<&str> = line.split(',').map(str::trim).take(RIGOL_CSV_CELLS + 1).collect();
+    (cells.len() <= RIGOL_CSV_CELLS).then_some(cells)
 }
 
 /// A text file without the byte-order mark some programs put first.
@@ -1797,8 +1822,11 @@ fn parse_oosw(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
 /// than the reference slots ends the parse: a single line of many columns no longer makes as many traces.
 fn parse_wave_csv(text: &str, name: &str) -> Result<Vec<WaveTrace>, String> {
     let mut columns: Vec<Vec<f32>> = Vec::new();
-    // the first time and the last: the time between samples is their distance over the steps between them
-    let mut times: [f64; 2] = [f64::NAN; 2];
+    // a stretch of lines whose time does not go back, as (first time, last time, lines): the one being read, and
+    // the longest of those before it that advance. A file of one sweep is one stretch
+    let mut stretch: (f64, f64, usize) = (f64::NAN, f64::NAN, 0);
+    let mut longest = stretch;
+    let mut first = f64::NAN;
     let mut rows = 0usize;
     for line in text.lines() {
         // a line that ends with its separator ("x, y,") has no column after it
@@ -1824,19 +1852,35 @@ fn parse_wave_csv(text: &str, name: &str) -> Result<Vec<WaveTrace>, String> {
         for c in &mut columns[k..] {
             c.push(f32::NAN);
         }
-        times[(rows > 0) as usize] = t;
+        if rows == 0 {
+            first = t;
+        }
+        if stretch.2 > 0 && t < stretch.1 {
+            // the time goes back: the next sweep or segment of the file begins
+            if stretch.1 > stretch.0 && stretch.2 > longest.2 {
+                longest = stretch;
+            }
+            stretch = (t, t, 1);
+        } else {
+            stretch = (if stretch.2 == 0 { t } else { stretch.0 }, t, stretch.2 + 1);
+        }
         rows += 1;
     }
-    // not the first step alone: a file that rounds its times to a few digits has a first step that is off by
-    // a percent, or no step at all between its first two lines
-    let dt = match times {
-        [a, b] if rows >= 2 && b > a => (b - a) / (rows - 1) as f64,
+    if stretch.1 > stretch.0 && stretch.2 > longest.2 {
+        longest = stretch;
+    }
+    // the first time of a stretch and its last, over the steps between them. Not the first step alone: a file
+    // that rounds its times to a few digits has a first step that is off by a percent, or no step at all
+    // between its first two lines. Not the first time of the file and its last either: in a file of several
+    // sweeps the time starts again, and their distance is not that of the lines between them
+    let dt = match longest {
+        (a, b, lines) if lines >= 2 && b > a => (b - a) / (lines - 1) as f64,
         _ => return Err("that file holds no waveform".into()),
     };
     let ntrace = columns.len();
     Ok(columns.into_iter().enumerate().map(|(k, v)| {
         let label = if ntrace == 1 { name.into() } else { format!("CH{}", k + 1) };
-        WaveTrace { t0: times[0], dt, v, label }
+        WaveTrace { t0: first, dt, v, label }
     }).collect())
 }
 
@@ -6379,6 +6423,41 @@ mod rigol_csv_file_tests {
     }
 
     #[test]
+    fn start_and_increment_are_found_under_their_names() {
+        // made for this test, not the text of a scope's file: a column of another trace between the channels and
+        // Start. The time of a sample is the header's, not a second a sample
+        let header = ["X,CH1,MATH,Start,Increment,", "Sequence,Volt,Volt,-1.200000e-03,4.000000e-08"];
+        let rows = ["0,2.86e+00,1.00e+00,", "1,2.86e+00,1.00e+00,", "2,2.84e+00,1.00e+00,"];
+        let traces = read(&[&header[..], &rows[..]].concat(), "\n").unwrap();
+        assert_eq!((traces.len(), traces[1].v.as_slice()), (2, &[1.0f32, 1.0, 1.0][..]));
+        assert!(traces.iter().all(|t| close(t.t0, -1.2e-3) && close(t.dt, 4e-8)), "{:?}", (traces[0].t0, traces[0].dt));
+        // one of the two names, or a first column that says it counts samples, without both values: refused
+        let half = ["X,CH1,Start,", "Sequence,Volt,-3.5e-03,", "0,1,", "1,2,"];
+        let counted = ["X,CH1,", "Sequence,Volt,", "0,1,", "1,2,"];
+        for lines in [half, counted] {
+            let refused = read(&lines, "\n").unwrap_err();
+            assert!(refused.contains("Start and Increment"), "{refused}");
+        }
+    }
+
+    #[test]
+    fn a_first_line_that_is_too_long_or_too_wide_is_no_rigol_header() {
+        // one line of a million cells is not taken apart
+        assert!(rigol_csv_header(&format!("X{}", ",CH1".repeat(1_000_000))).unwrap().is_none());
+        // 4096 bytes are a line, one more is not
+        let padded = |spaces: usize| format!("X,CH1,{}\n0,1\n1,2\n", " ".repeat(spaces));
+        let channels = rigol_csv_header(&padded(RIGOL_CSV_LINE - 6)).unwrap().map(|header| header.channels);
+        assert_eq!(channels, Some(vec!["CH1".to_string()]));
+        assert!(rigol_csv_header(&padded(RIGOL_CSV_LINE - 5)).unwrap().is_none());
+        // 64 cells are a header, one more is not
+        let wide = |cells: usize| format!("X,CH1{}\n0,1\n1,2\n", ",".repeat(cells - 2));
+        assert!(rigol_csv_header(&wide(RIGOL_CSV_CELLS)).unwrap().is_some());
+        assert!(rigol_csv_header(&wide(RIGOL_CSV_CELLS + 1)).unwrap().is_none());
+        // such a file is read as any other text file
+        assert_eq!(parse_wave(wide(RIGOL_CSV_CELLS + 1).as_bytes(), "wide.csv").unwrap()[0].label, "wide.csv");
+    }
+
+    #[test]
     fn a_ds1000z_waveform_file_is_refused_with_the_way_round_it() {
         let refused = parse_wave(&[&[1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5][..], &[0u8; 64][..]].concat(), "z.wfm").unwrap_err();
         assert!(refused.contains("DS1000Z") && refused.contains("vertical offset") && refused.contains("save the waveform as CSV"), "{refused}");
@@ -6415,5 +6494,31 @@ mod csv_time_step_tests {
         assert!(parse_wave(b"0,1\n", "one.csv").is_err());
         assert!(parse_wave(b"1,1\n1,2\n1,3\n", "flat.csv").is_err());
         assert!(parse_wave(b"3,1\n2,2\n1,3\n", "back.csv").is_err());
+    }
+
+    #[test]
+    fn a_file_of_two_sweeps_takes_its_step_from_one_of_them() {
+        // two sweeps of 100 lines a microsecond apart, each from -50 us: the last time of the file less its first
+        // is the length of one sweep, over the lines of two
+        let mut text = String::from("time_s,voltage_v\n");
+        for i in 0..200 {
+            text += &format!("{:.6e},{}\n", -5e-5 + (i % 100) as f64 * 1e-6, i % 7);
+        }
+        let t = &parse_wave(text.as_bytes(), "sweeps.csv").unwrap()[0];
+        assert_eq!((t.v.len(), t.t0), (200, -5e-5));
+        assert!((t.dt / 1e-6 - 1.0).abs() < 1e-9, "{}", t.dt);
+        // a sweep of 11 lines before one of 3600, the times written with five digits: the longer one says the
+        // step, the short one alone is off by eight parts in ten thousand
+        let step = 5e-4 / 3600.0;
+        let mut text = String::new();
+        for i in (0..11).chain(0..3600) {
+            text += &format!("{:.4e},{}\n", -2.5e-4 + i as f64 * step, i % 7);
+        }
+        let t = &parse_wave(text.as_bytes(), "sweeps.csv").unwrap()[0];
+        assert_eq!((t.v.len(), t.t0), (3611, -2.5e-4));
+        assert!((t.dt / step - 1.0).abs() < 2e-5, "{} against {step}", t.dt);
+        // a first sweep whose lines all have one time, then one that advances
+        let t = &parse_wave(b"5,1\n5,2\n5,3\n0,1\n2,2\n", "flat.csv").unwrap()[0];
+        assert_eq!((t.v.len(), t.t0, t.dt), (5, 5.0, 2.0));
     }
 }
