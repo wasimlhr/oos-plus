@@ -284,6 +284,39 @@
      "ext": true
     },
     {
+     "header": ":SYSTem:RECorder:STATe",
+     "set": ":SYSTem:RECorder:STATe <value>",
+     "query": ":SYSTem:RECorder:STATe?",
+     "desc": "Sets or queries SCPI recorder for Diagnostics, schema and setup block (menu: Storage > SCPI recorder).",
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- The SCPI recorder on or off, taken at the next frame.",
+      "- While it is on, what is set at the scope (touch, keys, knobs, menus) is written as commands: a setting is written when it has stood still for 0.6 s, so a knob that was turned is one line with the value it was left at.",
+      "- What a client sets by SCPI is not recorded.",
+      "- Switched off, the lines are saved as a new file `recording-NNN.scpi` where Storage saves.",
+      "- Actions that leave no setting (Run, Single, Clear, a saved file) are not recorded yet.",
+      "- Origin: OOS extension. The proof of every step is the one of `:SYSTem:SETup:SCPI?`."
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":SYSTem:RECorder:DATA",
+     "query": ":SYSTem:RECorder:DATA?",
+     "desc": "The lines of the recording that runs, else of the last one, as an IEEE block: comment lines (`#`), the setup at the start as commands (`*RST` and what differs from the Default setup), then the recorded commands, each step under a comment with its time (`# +12.4 s`). A setting that has not stood still yet is not in it. Empty before the first recording.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
      "header": ":SYSTem:LOCK",
      "set": ":SYSTem:LOCK <value>",
      "query": ":SYSTem:LOCK?",
@@ -13343,7 +13376,7 @@
      "p": "Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
     },
     {
-     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file."
+     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI, SCPI recorder). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file. SCPI recorder writes what is set at the scope as commands while it is on and saves them as a file when it is switched off (`:SYSTem:RECorder:STATe`)."
     },
     {
      "p": "Part of the SCPI reference."

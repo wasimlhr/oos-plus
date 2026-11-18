@@ -487,8 +487,9 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
     ui.info = "host test run".into();
     let mut shot_n = 0;
     // one frame: on the CPU, or in layers through the GPU and read back
-    fn frame(ui: &mut Ui, cv: &mut Canvas, gpu: &mut Option<gpu::Gpu>, gl: &mut GpuLayers, shot_n: &mut u32) {
+    fn frame(ui: &mut Ui, cv: &mut Canvas, gpu: &mut Option<gpu::Gpu>, gl: &mut GpuLayers, shot_n: &mut u32, scpi: &mut scpi::Scpi) {
         ui.step(1.0 / 30.0);
+        scpi.poll(ui, cv);
         ui.hdmi_snap_want = std::env::var_os("OOS_GPU_HDMI").is_some();
         match gpu.as_mut() {
             Some(g) => {
@@ -503,21 +504,23 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
             save_shot(ui, cv, p, shot_n);
         }
     }
-    frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n);
+    // an interpreter of the script's own, which no client reaches: it serves the Storage rows and the SCPI recorder
+    let mut scpi = scpi::Scpi::detached();
+    frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n, &mut scpi);
     for line in text.lines() {
         let out = cmd::run(ui, line);
-        // Storage > Save setup as SCPI is written by the interpreter's poll: a script has no interpreter of its own
+        // Storage > Save setup as SCPI is written by the interpreter's poll: also when no frame follows the line
         if ui.setup_scpi_request {
-            scpi::Scpi::detached().poll(ui, &cv);
+            scpi.poll(ui, &cv);
         }
         match out {
             cmd::Out::Frames(n) => {
                 for _ in 0..n {
-                    frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n);
+                    frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n, &mut scpi);
                 }
             }
             cmd::Out::Shot(p) => {
-                frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n);
+                frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n, &mut scpi);
                 cmd::write_ppm(&cv, &p).expect("write shot");
                 println!("shot {}", p);
                 if let (Some(g), Some(hc)) = (gpu.as_mut(), hdmi_cv.as_mut()) {

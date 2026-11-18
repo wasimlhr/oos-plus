@@ -1055,6 +1055,8 @@ enum Item {
     StoreSaveSetup,
     /// the set-up as SCPI commands, into a file (scpi/setupscpi.rs)
     StoreSaveScpi,
+    /// the SCPI recorder, on and off (scpi/recorder.rs)
+    StoreRecScpi,
     StoreRecall,
     StoreCsv,
     StorePng,
@@ -1748,6 +1750,8 @@ pub struct Ui {
     /// Storage > Save setup as SCPI was pressed. The interpreter writes the file at its next poll, since the lines
     /// are the answers of its own queries (`Scpi::poll`, scpi/setupscpi.rs).
     pub setup_scpi_request: bool,
+    /// Storage > SCPI recorder, `:SYSTem:RECorder:STATe`: on or off. The interpreter follows at its next poll.
+    pub scpi_rec_want: bool,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
@@ -2076,6 +2080,7 @@ impl Ui {
             unit_blocked: None,
             shot_request: None,
             setup_scpi_request: false,
+            scpi_rec_want: false,
             quit: false,
         };
         ui.ensure_meas_own();
@@ -6564,6 +6569,8 @@ impl Ui {
     /// A message that only informs (nothing to clear, which view, a channel turned on): a neutral pill with an "i".
     pub(super) fn toast_is_info(s: &str) -> bool {
         s == NOTHING_TO_CLEAR || s == "Views off" || s.ends_with(" turned on") || s.starts_with("Generating ") || (s.starts_with("View ") && s.contains(" of "))
+            // the SCPI recorder says what it wrote: nothing went wrong
+            || s == "SCPI recorder on" || s.starts_with("Recorded ")
     }
 
     pub(super) fn toast_is_success(s: &str) -> bool {
@@ -7100,7 +7107,7 @@ impl Ui {
                 }
                 v
             }
-            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi],
+            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi, Item::StoreRecScpi],
             MenuId::Spectrum => vec![Item::SpecOn, Item::SpecSrc, Item::SpecCenter, Item::SpecSpan, Item::SpecHarm, Item::SpecRbw, Item::SpecWin, Item::SpecTrace, Item::SpecRef, Item::SpecWf, Item::SpecDist, Item::SpecAcprW, Item::SpecAcprS, Item::SpecPeak, Item::SpecMargin, Item::SpecLimitSet, Item::SpecLimitClear],
             MenuId::Eye => vec![Item::EyeAct, Item::EyeOn, Item::EyePlace, Item::EyeSrc, Item::EyeRate, Item::EyeBer, Item::EyeB, Item::EyeHp, Item::EyePnLo, Item::EyePnHi, Item::EyeNpj, Item::EyeRail, Item::EyeNotch, Item::EyePll, Item::EyeClear],
             MenuId::Power => {
@@ -8033,6 +8040,7 @@ impl Ui {
             Item::StoreDest => "Save to",
             Item::StoreSaveSetup => "Save setup",
             Item::StoreSaveScpi => "Save setup as SCPI",
+            Item::StoreRecScpi => "SCPI recorder",
             Item::StoreRecall => "Recall setup",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
@@ -8390,6 +8398,7 @@ impl Ui {
             Item::ChFine => onoff(m.fine_v),
             Item::MathExprI => if m.math_expr[m.math_sel].is_empty() { "none".to_string() } else { m.math_expr[m.math_sel].clone() },
             Item::LogOn => onoff(self.log.file.is_some()),
+            Item::StoreRecScpi => onoff(self.scpi_rec_want),
             Item::LogIvl => si_short(logger::LOG_STEPS[m.log_ivl.min(logger::LOG_STEPS.len() - 1)], "s"),
             Item::LogInfo => self.log_info(),
             Item::CurC => self.cursor_values().get(2).map_or(format!("{:.0} %", m.cur_c * 100.0), |v| v.1.clone()),
@@ -8653,6 +8662,7 @@ impl Ui {
                 m.h_expand = all[cyc(i, all.len(), d)];
             }
             Item::ChFine => m.fine_v = !m.fine_v,
+            Item::StoreRecScpi => self.scpi_rec_want = !self.scpi_rec_want,
             Item::LogOn => {
                 if self.log.file.is_some() {
                     self.log_stop("Log ended");
@@ -9676,15 +9686,16 @@ impl Ui {
         }
     }
 
-    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request into a new file where
-    /// Storage saves (the name is taken now, when it is written). `without`: what no line could carry, in words.
-    pub(crate) fn setup_scpi_save(&mut self, text: &str, without: Option<&str>) {
-        let path = self.new_file(&self.save_dir(), "setup", "scpi");
+    /// Storage > Save setup as SCPI and the SCPI recorder: writes the commands the interpreter made into a new file
+    /// `<prefix>-NNN.scpi` where Storage saves (the name is taken now, when it is written). `note` is said after the
+    /// name: what no line could carry, or how many commands were recorded.
+    pub(crate) fn scpi_save(&mut self, prefix: &str, text: &str, note: Option<&str>) {
+        let path = self.new_file(&self.save_dir(), prefix, "scpi");
         let r = crate::store::write(&path, text.as_bytes());
-        match (r.is_ok(), without) {
-            (true, Some(keys)) => {
+        match (r.is_ok(), note) {
+            (true, Some(note)) => {
                 self.flush_stick();
-                self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(&path), self.saved_where(), keys));
+                self.toast(&format!("Saved {}{}, {}", crate::store::file_name(&path), self.saved_where(), note));
             }
             _ => self.toast_saved(&path, r),
         }
@@ -9884,7 +9895,7 @@ impl Ui {
             Item::PaneSel => &tables::PANES,
             Item::TrendSel(_) => return self.trend_options(),
             Item::DvmSrc | Item::CntSrc => return (0..n_ch()).map(|c| format!("CH{}", c + 1)).collect(),
-            Item::DvmOn | Item::CntOn | Item::ChFine | Item::HFine | Item::LogOn | Item::AcqSegHw | Item::AcqAvgHw => &["Off", "On"],
+            Item::DvmOn | Item::CntOn | Item::ChFine | Item::HFine | Item::LogOn | Item::StoreRecScpi | Item::AcqSegHw | Item::AcqAvgHw => &["Off", "On"],
             Item::ChUnit(_) => &["V", "A", "W", "U"],
             Item::ChExpand => &["Center", "Ground"],
             Item::HExpandI => &["Center", "Left", "Right", "Trigger"],
