@@ -1913,6 +1913,8 @@ impl Ui {
         self.studio_set_view(StudioView::Waveform);
         self.dock_reset();
         self.studio.hide_badges = false;
+        // the row is back: no Undo bar for hiding it
+        self.studio.md.hide_undo = None;
         self.studio.pinned = None;
         self.studio.unpinned.clear();
         self.studio.popup = None;

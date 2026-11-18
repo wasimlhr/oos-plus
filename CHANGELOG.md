@@ -7,6 +7,8 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio: Reset layout and a stored view bring a hidden badge row back; the Undo bar of the hiding stayed on the
+  screen for its few seconds with nothing to undo. It goes with the row now (host-tested).
 - Studio offers what Default offers (ADR 0030; host-tested, not yet verified on hardware). The 47 menus and 508 rows
   of the Default layout were compared with the Studio sheets; the rows were there but for one, the gaps were at the
   entrances, and a test now keeps a row from going missing:
@@ -27,10 +29,10 @@ Fixed:
   - the Cursor menu of Studio has the Mode row of the Default menu as its first row (Off, Time, Volt, Track, XY)
     in place of Studio's Type row; the rows after it (Source, Second source, Readout, Move) stay. In XY the button
     of the mode is marked now, in every layout.
-  - the sheets of Minimal and Studio keep the controls of the Default dialogs: a choice of up to five options is
-    shown as buttons where the row has the room once its label takes only what it needs (the acquisition mode, the
-    cursor mode), and a list has the minus and plus of the dialog again, with the list behind its value (the memory
-    depth, the segments).
+  - the sheets (Minimal, Studio, and Default with Display > Bottom bar on Compact) keep the controls of the Default
+    dialogs: a choice of up to five options is shown as buttons where the row has the room once its label takes
+    only what it needs (the acquisition mode, the cursor mode), and a list has the minus and plus of the dialog
+    again, with the list behind its value (the memory depth, the segments).
 - Studio: a channel pill of the bottom bar always shows its scale. With four channels and the generator on, a pill
   was too narrow for anything longer than "1 V" and drew no scale at all for "500 mV". The generator's pill
   takes its short form ("GEN") before a pill gets that narrow, and a scale that still

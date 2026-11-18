@@ -540,6 +540,14 @@ fn hiding_the_badges_leaves_a_button_and_an_undo_and_showing_them_needs_no_menu(
     tap(&mut u, show);
     assert!(u.studio_badges_visible(), "shown again without the View menu");
     assert!(u.studio_bottom().show.is_none());
+    // Reset layout and a stored view bring the row back too, and the Undo bar of the hiding goes with it
+    u.studio_hide_badges();
+    assert!(u.md_hide_bar().is_some());
+    u.studio_reset_layout();
+    assert!(u.studio_badges_visible() && u.md_hide_bar().is_none(), "no Undo bar for a row that is back");
+    u.studio_hide_badges();
+    u.view_ui_apply("");
+    assert!(!u.studio.hide_badges && u.md_hide_bar().is_none(), "nor after a view was applied");
 }
 
 // Batch 15: the horizontal position --------------------------------------------------------------- drift
