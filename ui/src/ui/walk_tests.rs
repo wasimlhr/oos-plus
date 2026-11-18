@@ -1754,3 +1754,71 @@ fn walk_channel_trigger_measure_pictures() {
         }
     }
 }
+
+/// Four decoders run side by side. Each of D1 to D4 is chosen and switched on by touch, with its own protocol and its
+/// own channel; the sheet marks the decoders that are on while another one is edited, the switch says whose it is, and
+/// the plot names a bus for each of the four.
+#[test]
+fn four_decoders_of_four_protocols_run_side_by_side() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        for c in 0..4 { u.m.ch[c].on = true; }
+        u.open_menu(MenuId::Decode);
+        u.step(0.04);
+        let ctrl = |u: &Ui, it: Item| u.sheet_geo().unwrap().rows.iter().find(|r| r.it == it).map(|r| r.ctrl).unwrap_or_else(|| panic!("{layout:?}: {it:?}"));
+        // the place of decoder k in the row of the four, and the colour of its upper edge
+        let chip = |u: &Ui, k: usize| { let c = ctrl(u, Item::DecSel); let w = (c.w - 12) / 4; Rect::new(c.x + k as i32 * (w + 4), c.y, w, c.h) };
+        let edge = |u: &mut Ui, k: usize| {
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            u.render(&mut cv);
+            let r = chip(u, k);
+            cv.px[(r.y * cv.w + r.x + r.w / 2) as usize]
+        };
+        assert_eq!(u.sheet_label(Item::DecSel), "Decoders", "{layout:?}");
+        assert_eq!(edge(&mut u, 2), edge(&mut u, 3), "{layout:?}: none is on, none is marked");
+        let protos = [Proto::UART, Proto::I2C, Proto::SPI, Proto::CAN];
+        for k in 0..4 {
+            let (x, y) = mid(chip(&u, k));
+            tap(&mut u, x, y);
+            assert_eq!(u.m.dec_sel, k, "{layout:?}: a tap on D{}", k + 1);
+            assert_eq!(u.sheet_label(Item::DecOn), format!("Decoder D{}", k + 1), "{layout:?}");
+            assert!(!u.m.dec_on, "{layout:?}: D{} starts off", k + 1);
+            let (x, y) = mid(ctrl(&u, Item::DecOn));
+            tap(&mut u, x, y);
+            assert!(u.m.dec_on, "{layout:?}: the switch of D{}", k + 1);
+            u.m.dec_proto = protos[k];
+            u.m.dec_src = k;
+            u.step(0.04);
+        }
+        assert!((0..4).all(|k| u.m.dec_is_on(k)), "{layout:?}: all four are on");
+        assert_eq!((0..4).map(|k| (u.m.dec_slot(k).proto, u.m.dec_slot(k).src)).collect::<Vec<_>>(),
+            protos.iter().copied().zip(0..4).collect::<Vec<_>>(), "{layout:?}: each kept its protocol and its channel");
+        // D4 is the one edited: D1 to D3 are marked as on. D2 switched off loses its mark, the others keep theirs
+        assert_eq!(edge(&mut u, 0), edge(&mut u, 2), "{layout:?}");
+        let marked = edge(&mut u, 1);
+        let (x, y) = mid(chip(&u, 1));
+        tap(&mut u, x, y);
+        let (x, y) = mid(ctrl(&u, Item::DecOn));
+        tap(&mut u, x, y);
+        let (x, y) = mid(chip(&u, 3));
+        tap(&mut u, x, y);
+        assert!(!u.m.dec_is_on(1) && u.m.dec_is_on(0) && u.m.dec_is_on(2) && u.m.dec_is_on(3), "{layout:?}");
+        assert_ne!(edge(&mut u, 1), marked, "{layout:?}: D2 is off and not marked");
+        assert_eq!(edge(&mut u, 0), marked, "{layout:?}: D1 is still marked");
+        // the plot names a bus for each decoder that is on
+        let (x, y) = mid(chip(&u, 1));
+        tap(&mut u, x, y);
+        let (x, y) = mid(ctrl(&u, Item::DecOn));
+        tap(&mut u, x, y);
+        u.close_menu();
+        for _ in 0..30 { u.step(0.04); }
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        cv.au_start();
+        u.render(&mut cv);
+        let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+        for (k, name) in ["UART", "I2C", "SPI", "CAN"].iter().enumerate() {
+            let want = format!("{} {} CH{}", k + 1, name, k + 1);
+            assert!(texts.iter().any(|t| t.starts_with(&want)), "{layout:?}: no bus named {want:?} on the plot");
+        }
+    }
+}

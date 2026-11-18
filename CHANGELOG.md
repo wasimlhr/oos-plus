@@ -7,6 +7,9 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Decode, in Minimal and Studio: the four decoders are shown as four. The row of D1 to D4 is named Decoders and
+  marks the ones that are on while another is edited, and the switch under it says whose it is ("Decoder D2"). Four
+  decoders of four protocols on four channels ran before too; the sheet read as if there were one (host-tested).
 - Display > Layout > Default shows the stock OOS bars again. A Bottom bar = Compact left on from before kept the
   compact top and bottom bars in Default; picking Default now turns them off.
 - Eye and jitter (host-tested on SIM signals and built signals of known jitter, not yet verified on hardware):
