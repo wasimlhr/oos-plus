@@ -9,7 +9,7 @@
 use super::dock::{Dir, Drop, Node, Side, VKind, KINDS};
 use super::scpiext::{bad, conflict, t, text_arg, Reply, DONE};
 use super::sharedzoom::{trace_name, ZPart};
-use super::studio::{StudioView, ZoomRow, TOP_LABELS};
+use super::studio::{StudioView, TOP_LABELS};
 use super::workspace::Action;
 use super::*;
 use crate::scpi::{e as en, kw, num};
@@ -475,12 +475,6 @@ impl Ui {
         if let Some((channels, extras)) = self.studio_picker_rows() {
             return channels.into_iter().map(|(c, r)| (format!("CH{}", c + 1), r)).chain(extras.into_iter().map(|(k, r)| (k.label().to_string(), r))).collect();
         }
-        if self.studio.zoom_menu {
-            return self.studio_zoom_rows().into_iter().map(|(row, r)| (match row {
-                ZoomRow::Minus => "Zoom out", ZoomRow::Plus => "Zoom in", ZoomRow::VPlus => "Vertical zoom in", ZoomRow::VMinus => "Vertical zoom out",
-                ZoomRow::Tdiv => "Time/div", ZoomRow::Fit => "Fit", ZoomRow::Center => "Center", ZoomRow::ResetY => "Reset vertical", ZoomRow::Close => "Close zoom",
-            }.to_string(), r)).collect();
-        }
         if self.menu_open && self.menu_is_wide() {
             return self.menu_geo().groups.iter().flat_map(|g| g.items.iter()).map(|(it, r)| (self.item_label(*it).to_string(), *r)).collect();
         }
@@ -496,7 +490,6 @@ impl Ui {
             else if self.studio.add_menu { "Add".to_string() }
             else if self.studio.view_menu { "View".to_string() }
             else if self.studio.ch_picker { "Add source".to_string() }
-            else if self.studio.zoom_menu { "Zoom".to_string() }
             else if self.menu_open { self.menu_title(self.menu).to_string() }
             else { return "\"\"".to_string(); };
         let mut out = vec![q_str(&title)];
@@ -535,7 +528,6 @@ impl Ui {
         self.studio.ctx = None;
         self.workspace.popup = None;
         self.studio.add_menu = false;
-        self.studio.zoom_menu = false;
         self.studio.view_menu = false;
         self.studio.ch_picker = false;
         if self.menu_open { self.close_menu(); }

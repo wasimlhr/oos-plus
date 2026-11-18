@@ -232,3 +232,76 @@ fn the_view_menu_and_add_source_are_read_and_pressed_by_name() {
     assert!(u.m.ch[2].on, "CH3 is on");
     assert_eq!(cmd(&mut u, ":UI:MENU?", ""), "\"\"");
 }
+
+// ------------------------------------------------------------------------------------------------ the zoom row
+
+fn zoomed(layout: Layout) -> Ui {
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    u.m.layout = layout;
+    u.studio.enter = layout == Layout::Studio;
+    u.relayout();
+    for _ in 0..12 { u.step(0.04); }
+    u.m.run = RunState::Stop;
+    u.set_zoom(true);
+    for _ in 0..6 { u.step(0.04); }
+    u.toast = None;
+    u
+}
+
+/// Studio has the zoom row of the Default layout, between the overview and the zoomed lanes: the same text and the
+/// same buttons, pixel for pixel, and each button does what it does there. The window in the overview is the same
+/// slim frame. Studio's own pull-down tab, toolbar and zoom menu are gone.
+#[test]
+fn studio_has_the_zoom_row_and_the_window_of_the_default_layout() {
+    let (mut d, mut s) = (zoomed(Layout::Default), zoomed(Layout::Studio));
+    let (cd, cs) = (picture(&mut d, "zoom-default"), picture(&mut s, "zoom-studio"));
+    let (rd, rs) = (d.zoom_readout(), s.zoom_readout());
+    assert_eq!((rd.w, rd.h), (rs.w, rs.h), "the row has the size of the Default row: {rd:?} {rs:?}");
+    let (od, os) = (d.split_zoom(d.grid).0, s.split_zoom(s.grid).0);
+    assert_eq!(rs.y, os.bottom(), "under the overview");
+    assert_eq!(rs.bottom(), s.wins[0].y, "over the zoomed lanes");
+    // the row: the same pixels (the text, H-, H+, V-, V+, Box, Reset, Close)
+    let px = |cv: &Canvas, x: i32, y: i32| cv.px[(y * cv.w + x) as usize];
+    // (but for the frame of the Waveform view, a pixel column at each end)
+    let differ: Vec<(i32, i32)> = (0..rd.h).flat_map(|y| (2..rd.w - 2).map(move |x| (x, y))).filter(|&(x, y)| px(&cd, rd.x + x, rd.y + y) != px(&cs, rs.x + x, rs.y + y)).collect();
+    assert!(differ.is_empty(), "the zoom row of Studio differs from the Default row in {} pixels, from {:?} to {:?}", differ.len(), differ.first(), differ.last());
+    // the window in the overview: a frame one pixel wide in the accent colour at the same place, not a shaded box
+    let (wd, ws) = (d.zoom_window_x(od), s.zoom_window_x(os));
+    assert_eq!((wd.0 - od.x, wd.1 - od.x), (ws.0 - os.x, ws.1 - os.x), "the same window");
+    let inside = px(&cs, (ws.0 + ws.1) / 2, os.y + 3);
+    let outside_frame = px(&cs, ws.0 + 1, os.y);
+    assert_ne!(inside, outside_frame, "the window is a frame: its top line stands out from its inside");
+    assert_eq!(px(&cs, ws.0, os.y + 2), px(&cd, wd.0, od.y + 2), "the frame has the colour of the Default one");
+    // every button, by the names Studio gives them
+    let bar = s.studio_zoom_bar().expect("the row");
+    let c = d.zoom_controls();
+    assert_eq!([bar.minus.w, bar.plus.w, bar.vminus.w, bar.vplus.w, bar.boxr.w], [c[0].0.w, c[1].0.w, c[2].0.w, c[3].0.w, c[4].0.w]);
+    let mid = |r: Rect| (r.x + r.w / 2, r.y + r.h / 2);
+    let z0 = s.m.zscale;
+    let (x, y) = mid(bar.plus);
+    s.tap(x, y);
+    assert!(s.m.zscale < z0, "H+ zooms in");
+    let (x, y) = mid(bar.minus);
+    s.tap(x, y);
+    assert_eq!(s.m.zscale, z0, "H- zooms out again");
+    let (x, y) = mid(bar.vplus);
+    s.tap(x, y);
+    assert_eq!(s.zoom_vfactor, 2.0, "V+ doubles the display scale");
+    let (x, y) = mid(bar.vminus);
+    s.tap(x, y);
+    assert_eq!(s.zoom_vfactor, 1.0, "V- halves it");
+    let (x, y) = mid(bar.boxr);
+    s.tap(x, y);
+    assert!(s.zoom_arm, "Box arms the zoom box");
+    let (x, y) = mid(bar.plus);
+    s.tap(x, y);
+    let (x, y) = mid(bar.fit);
+    s.tap(x, y);
+    assert_eq!(s.m.zscale, s.m.tscale, "Reset: the window is the whole screen");
+    let (x, y) = mid(bar.close);
+    s.tap(x, y);
+    assert!(!s.m.zoom && s.studio_zoom_bar().is_none(), "Close: zoom off, no row");
+    // the Horizontal menu of Studio has no row of its own for the place of the zoom controls
+    s.set_zoom(true);
+    assert_eq!(s.items(MenuId::Horizontal), d.items(MenuId::Horizontal), "the Horizontal rows are those of Default");
+}

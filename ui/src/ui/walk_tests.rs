@@ -384,10 +384,6 @@ fn studio_overlay_and_stacked_switch_the_lanes() {
     u.trace_mode(true);
     for _ in 0..4 { u.step(0.04); }
     assert_eq!(u.wins.len(), 2, "Stacked: the lanes are back");
-    assert!(u.items(MenuId::Horizontal).contains(&Item::ZoomBar));
-    let tab = u.m.studio_zoom_tab;
-    u.select_option(Item::ZoomBar, if tab { "Title bar" } else { "Pull-down tab" });
-    assert_ne!(u.m.studio_zoom_tab, tab);
     // every measurement has a badge while none is pinned by hand and there is room
     assert!(u.studio.pinned.is_none());
     assert!(u.studio_badges().len() > 3, "{} badges", u.studio_badges().len());
@@ -756,47 +752,6 @@ fn fit_all_lanes_scales_every_source_to_its_lane() {
     assert!(text.contains("studio_traces = overlay"), "the setup has the trace mode");
 }
 
-/// The pull-down zoom tab by touch: a tap opens the toolbar, a pull down opens it, and zoom stays on either way.
-#[test]
-fn the_zoom_tab_opens_on_a_tap_and_on_a_pull() {
-    let studio = || {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
-        u.m.layout = Layout::Studio;
-        u.relayout();
-        for _ in 0..12 { u.step(0.04); u.render(&mut Canvas::new(1024, 600)); }
-        u.set_zoom(true);
-        for _ in 0..6 { u.step(0.04); u.render(&mut Canvas::new(1024, 600)); }
-        u
-    };
-    // a tap, at several places on the tab
-    for (dx, dy) in [(0, 10), (-50, 10), (50, 10), (0, 4), (0, 17), (0, 30)] {
-        let mut u = studio();
-        assert!(u.m.zoom && u.zoom_tab_mode(), "zoom with the pull-down tab");
-        let r = u.zoom_tab_rect();
-        let (x, y) = (r.x + r.w / 2 + dx, r.y + dy);
-        u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
-        u.step(0.04);
-        u.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
-        for _ in 0..3 { u.step(0.04); }
-        assert!(u.m.zoom, "tap at ({dx},{dy}): zoom stays on");
-        assert!(u.zoom_tab_open(), "tap at ({dx},{dy}): the toolbar opens");
-    }
-    // a pull down from the tab
-    for pull in [14, 30, 60] {
-        let mut u = studio();
-        let r = u.zoom_tab_rect();
-        let (x, y) = (r.x + r.w / 2, r.y + 10);
-        let zscale = u.m.zscale;
-        u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
-        for s in 1..=6 { u.handle(Ev::Touch { id: 0, phase: Phase::Move, x: x + 2, y: y + pull * s / 6 }); u.step(0.02); }
-        u.handle(Ev::Touch { id: 0, phase: Phase::Up, x: x + 2, y: y + pull });
-        for _ in 0..3 { u.step(0.04); }
-        assert!(u.m.zoom, "pull {pull}: zoom stays on");
-        assert!(u.zoom_tab_open(), "pull {pull}: the toolbar opens");
-        assert_eq!(u.m.zscale, zscale, "pull {pull}: the pull does not change the zoom");
-    }
-}
-
 /// One frame as the device runs it: the picture is drawn after every step.
 fn frame(u: &mut Ui) { u.step(0.033); u.render(&mut Canvas::new(1024, 600)); }
 
@@ -841,13 +796,12 @@ fn a_wandering_finger_still_taps_and_holds() {
         let r = rows.iter().find(|(k, _, _)| *k == super::studioctx::CtxRow::Overlay).unwrap().2;
         finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, wander.min(3));
         assert_eq!(u.wins.len(), 1, "wander {wander}: a tap on Overlay traces overlays");
-        // the zoom tab
+        // a button of the zoom row
         u.set_zoom(true);
         for _ in 0..6 { frame(&mut u); }
-        let t = u.zoom_tab_rect();
-        finger_tap(&mut u, t.x + t.w / 2, t.y + 10, wander);
-        assert!(u.m.zoom, "wander {wander}: a tap on the zoom tab keeps zoom on");
-        assert!(u.zoom_tab_open(), "wander {wander}: a tap on the zoom tab opens the toolbar");
+        let t = u.studio_zoom_bar().expect("the zoom row").boxr;
+        finger_tap(&mut u, t.x + t.w / 2, t.y + t.h / 2, wander);
+        assert!(u.m.zoom && u.zoom_arm, "wander {wander}: a tap on Box arms the zoom box");
     }
 }
 

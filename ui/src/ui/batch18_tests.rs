@@ -364,19 +364,6 @@ fn cursors_read_at_the_top_left_of_the_lane_and_hide_when_both_are_off_screen() 
 }
 
 #[test]
-fn the_zoom_bar_buttons_get_short_labels_when_the_width_allows() {
-    let mut u = studio();
-    u.set_zoom(true);
-    // the pull-down toolbar has the whole width of the zoom view
-    u.m.studio_zoom_tab = true;
-    u.zoom_tab_set(true);
-    for _ in 0..4 { frame(&mut u); }
-    let bar = u.studio_zoom_bar().unwrap();
-    assert!(bar.fit.w >= 60 && bar.fit.w < 100, "room for Fit and Centre: {}", bar.fit.w);
-    assert!(bar.center.w >= 60 && bar.center.w < 100);
-}
-
-#[test]
 fn the_spectrum_facts_page_when_they_do_not_fit() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Spectrum);

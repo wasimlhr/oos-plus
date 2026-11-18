@@ -59,7 +59,6 @@ mod studio_views;
 mod sheet;
 mod addrail;
 mod addmenu;
-mod zoomtab;
 mod studioctx;
 mod scpiext;
 mod scpi_layout;
@@ -816,7 +815,6 @@ enum Item {
     /// Studio: the badge row under the lanes as Studio chips or as the classic strip
     BadgeStyle,
     /// Studio: the zoom controls as a pull-down tab over the zoom view, or in the title bar of the waveform
-    ZoomBar,
     MeasTsetup,
     MeasThold,
     CurMode,
@@ -2677,8 +2675,8 @@ impl Ui {
 
     /// Zoom: overview on top, a readout row (with Close), zoomed view below.
     pub(super) fn split_zoom(&self, g: Rect) -> (Rect, Rect) {
-        // Studio: no row of its own, the zoom controls are in the title strip of the waveform; the others keep their 32 px row
-        let gap = if self.m.layout == Layout::Studio { 6 } else { 32 };
+        // the zoom row is the same 32 px in every layout
+        let gap = 32;
         // Studio: the overview has the height the user gave it
         let top = if self.m.layout == Layout::Studio { self.studio_ov_h(g) } else { 96 };
         // short: the overview goes first, the lanes and the zoom bar keep their room
@@ -2688,15 +2686,6 @@ impl Ui {
 
     /// The strip between the overview and the zoomed view.
     fn zoom_readout(&self) -> Rect {
-        // Studio: the zoom controls sit in the pull-down tab over the zoom view, or in the title strip of the waveform
-        if self.zoom_tab_mode() { return self.zoom_tab_region(); }
-        if self.m.layout == Layout::Studio {
-            let r = self.dock_wave_rect();
-            let s = Self::dock_strip(r);
-            let left = s.x + 150;
-            let right = self.dock_extra_rect(dock::VKind::Wave, r).map_or(Self::dock_close_rect(r).x, |e| e.x);
-            return Rect::new(left, s.y, (right - left).max(1), s.h);
-        }
         let (o, z) = self.split_zoom(self.grid);
         Rect::new(o.x, o.y + o.h, o.w, (z.y - o.y - o.h).max(1))
     }
@@ -3182,7 +3171,6 @@ impl Ui {
         self.dock_poll();
         self.md_tick();
         self.panel_fling_step(dt_wall);
-        self.zoom_tab_tick();
         if self.m.layout == Layout::Studio && self.azr.spec.is_none() && self.last[0].is_some() && (self.m.pane == tables::PANE_SPECTRUM || self.m.view == AView::Spectrum) { self.analyzer_update(); }
         self.studio_delay_clamp();
         self.counter_poll();
@@ -3902,15 +3890,12 @@ impl Ui {
             cv.set_clip(o);
             cv.blend(Rect::new(o.x, o.y, (xa - o.x).max(0), o.h), BG, 170);
             cv.blend(Rect::new(xb, o.y, (o.x + o.w - xb).max(0), o.h), BG, 170);
-            if self.m.layout == Layout::Studio {
-                self.draw_studio_window(cv, o, xa, xb);
-                self.draw_studio_overview_cursors(cv, o);
-            } else {
-                cv.rect(Rect::new(xa, o.y, (xb - xa).max(2), o.h), ACCENT);
-                for edge in [xa, xb] {
-                    cv.round(Rect::new(edge - 3, o.y + o.h / 2 - 12, 7, 24), 3, ACCENT, 255);
-                }
+            // the window is the same slim frame with a handle at each end in every layout
+            cv.rect(Rect::new(xa, o.y, (xb - xa).max(2), o.h), ACCENT);
+            for edge in [xa, xb] {
+                cv.round(Rect::new(edge - 3, o.y + o.h / 2 - 12, 7, 24), 3, ACCENT, 255);
             }
+            if self.m.layout == Layout::Studio { self.draw_studio_overview_cursors(cv, o); }
             cv.no_clip();
             for &lane in &self.wins { self.draw_grid(l.under, lane); }
             self.draw_lane_chrome(l.under);
@@ -3976,7 +3961,7 @@ impl Ui {
         let cv = l.over();
         if self.m.zoom && !self.xy_over() && !self.view_on() {
             let (tz, dz) = self.view();
-            if self.m.layout != Layout::Studio { self.draw_zoom_readout(cv, tz, dz); } else { self.draw_zoom_tab(cv); }
+            self.draw_zoom_readout(cv, tz, dz);
         }
         if self.eye_open() {
             // eye_pane_rect maps Full to the plot while retaining floating panes.
@@ -7025,13 +7010,11 @@ impl Ui {
             MenuId::Channel(c) => vec![Item::ChOn(c), Item::ChScale(c), Item::ChOffset(c), Item::ChCoupling(c), Item::ChBw(c), Item::ChProbe(c), Item::ChInvert(c), Item::ChFine, Item::ChLabel(c), Item::Open(MenuId::ChMore(c))],
             MenuId::ChMore(c) => vec![Item::ChUnit(c), Item::ChBias(c), Item::ChBiasZero(c), Item::ChSkew(c), Item::AutoDeskew, Item::ChExpand],
             MenuId::Horizontal => {
-                let mut v = if self.m.zoom {
+                let v = if self.m.zoom {
                     vec![Item::HScale, Item::HFine, Item::HExpandI, Item::HDelay, Item::HZero, Item::AutoDeskew, Item::ClearDeskew, Item::Zoom, Item::ZScale, Item::ZDelay, Item::AutoRoll]
                 } else {
                     vec![Item::HScale, Item::HFine, Item::HExpandI, Item::HDelay, Item::HZero, Item::AutoDeskew, Item::ClearDeskew, Item::Zoom, Item::AutoRoll]
                 };
-                // Studio: where the zoom controls are is a setting of the zoom, on its tab
-                if self.m.layout == Layout::Studio { let at = v.iter().position(|i| *i == Item::AutoRoll).unwrap_or(v.len()); v.insert(at, Item::ZoomBar); }
                 v
             }
             MenuId::Trigger => self.trigger_items(),
