@@ -269,6 +269,12 @@ pub(super) const OVERFLOW_W: i32 = 46;
 pub(super) const GROUP_BAND: i32 = 14;
 
 const CHIP_H: i32 = 30;
+/// The pills of the bottom bar are the buttons pressed most: taller than a measurement badge of the row above them
+/// (`ROW_H` - 6 = 34), and the bar is 3 px more on either side.
+const BAR_CHIP_H: i32 = 40;
+pub(super) const BOTTOM_H: i32 = BAR_CHIP_H + 6;
+/// What was drawn into a pill of 30 px sits this much lower in one of the bar.
+const BAR_DY: i32 = (BAR_CHIP_H - 30) / 2;
 /// The two text lines of a pill need both fonts to fit the 30 px: at the Larger text size a pill keeps one line.
 const TWO_LINE_MAX: i32 = 30;
 const CHIP_Y: i32 = 5;
@@ -560,7 +566,7 @@ impl Ui {
     /// The rectangles of the Studio bottom bar: a chip per channel, the time base and the trigger.
     pub(super) fn studio_bottom(&self) -> StudioBottom {
         let bottom = self.frame().bottom;
-        let (y, h) = (bottom.y + 3, CHIP_H);
+        let (y, h) = (bottom.y + 3, BAR_CHIP_H);
         let ph = h;
         let n = n_ch();
         let right = bottom.right() - 4;
@@ -679,7 +685,8 @@ impl Ui {
             let bw = if r.w >= 70 { 42 } else { (f.sb.width(&label) + 8).min(r.w - 4).max(8) };
             let (label, bw) = if f.sb.width(&label) + 4 <= bw { (label, bw) } else { ((c + 1).to_string(), bw) };
             let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
-            let badge = if r.w >= 70 { Rect::new(r.x + 8, r.y + 5, bw, 20) } else { Rect::new(r.x + (r.w - bw) / 2, r.y + 8, bw, 18) };
+            let by = r.y + BAR_DY;
+            let badge = if r.w >= 70 { Rect::new(r.x + 8, by + 5, bw, 20) } else { Rect::new(r.x + (r.w - bw) / 2, by + 8, bw, 18) };
             cv.round(badge, 4, if ch.on { col } else { mix(BAR, col, 70) }, 255);
             cv.text_in(&f.sb, badge, 1, &label, if ch.on { DARK_TEXT } else { mix(BAR, col, 200) });
             if r.w >= 70 {
@@ -696,8 +703,8 @@ impl Ui {
                 } else if f.mb.width(&text) <= tw {
                     match Some(self.studio_ch_detail(c, tw)).filter(|d| ch.on && two_lines && f.s.width(d) <= tw) {
                         Some(d) => {
-                            cv.text(&f.mb, tx, r.y + 13, &text, TEXT);
-                            cv.text(&f.s, tx, r.y + 25, &d, mix(BAR, col, 170));
+                            cv.text(&f.mb, tx, r.y + 13 + BAR_DY, &text, TEXT);
+                            cv.text(&f.s, tx, r.y + 25 + BAR_DY, &d, mix(BAR, col, 170));
                         }
                         None => cv.text_in(&f.mb, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM }),
                     }
@@ -752,7 +759,7 @@ impl Ui {
             }
         }
         if let Some(r) = b.show {
-            chip(cv, Rect::new(r.x, r.y + 3, r.w, CHIP_H), BTN, BTN_BORDER);
+            chip(cv, Rect::new(r.x, r.y + 3, r.w, BAR_CHIP_H), BTN, BTN_BORDER);
             icon_eye(cv, r.x + 15, r.y + r.h / 2, TEXT);
             cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Meas", TEXT);
         }
@@ -782,25 +789,25 @@ impl Ui {
         let mut x = r.x + 9;
         cv.set_clip(r.inset(2));
         if edge {
-            draw_slope(cv, x, r.y + 7, self.m.slope, col);
+            draw_slope(cv, x, r.y + 7 + BAR_DY, self.m.slope, col);
             x += 20;
         } else {
-            x = cv.text(&f.sb, x, r.y + 20, &self.m.trig_type.name().to_uppercase(), LABEL) + 6;
+            x = cv.text(&f.sb, x, r.y + 20 + BAR_DY, &self.m.trig_type.name().to_uppercase(), LABEL) + 6;
         }
-        x = cv.text(&f.mb, x, r.y + 20, &self.trigger_source_label(), col) + 6;
+        x = cv.text(&f.mb, x, r.y + 20 + BAR_DY, &self.trigger_source_label(), col) + 6;
         let levels = if matches!(self.m.trig_type, TrigType::Runt | TrigType::Slope | TrigType::Window) {
             format!("{} / {}", si_short(self.m.trig_level2 as f64, "V"), si_short(self.m.trig_level as f64, "V"))
         } else { si_short(self.trig_level_shown() as f64, "V") };
         if edge && self.m.slope != Slope::Either {
             // the arrow of the edge: up for rising, down for falling
-            let (top, bot) = (r.y + 9, r.y + 21);
+            let (top, bot) = (r.y + 9 + BAR_DY, r.y + 21 + BAR_DY);
             cv.vline(x + 3, top, bot, TEXT);
             let (tip, base) = if self.m.slope == Slope::Rise { (top, top + 4) } else { (bot, bot - 4) };
             cv.line(x + 3, tip, x, base, TEXT);
             cv.line(x + 3, tip, x + 6, base, TEXT);
             x += 12;
         }
-        cv.text(&f.mb, x, r.y + 20, &levels, TEXT);
+        cv.text(&f.mb, x, r.y + 20 + BAR_DY, &levels, TEXT);
         cv.no_clip();
         chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
         self.draw_studio_ch_picker(cv);
@@ -837,13 +844,13 @@ impl Ui {
         if r.w < 70 {
             let name = if f.sb.width(name) + 12 <= r.w { name } else { &name[1..] };
             let bw = (f.sb.width(name) + 8).min(r.w - 4).max(8);
-            let badge = Rect::new(r.x + (r.w - bw) / 2, r.y + 8, bw, 18);
+            let badge = Rect::new(r.x + (r.w - bw) / 2, r.y + 8 + BAR_DY, bw, 18);
             cv.round(badge, 4, col, 255);
             cv.text_in(&f.sb, badge, 1, name, DARK_TEXT);
             cv.no_clip();
             return;
         }
-        let badge = Rect::new(r.x + 8, r.y + 5, 42, 20);
+        let badge = Rect::new(r.x + 8, r.y + 5 + BAR_DY, 42, 20);
         cv.round(badge, 4, col, 255);
         cv.text_in(&f.sb, badge, 1, name, DARK_TEXT);
         let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
@@ -855,8 +862,8 @@ impl Ui {
         let main = if f.mb.width(main) > tw { main.trim_end_matches("/div") } else { main };
         let main_fits = f.mb.width(main) <= tw;
         if two_lines && main_fits {
-            cv.text(&f.mb, tx, r.y + 13, main, TEXT);
-            cv.text(&f.s, tx, r.y + 25, detail, mix(BAR, col, 170));
+            cv.text(&f.mb, tx, r.y + 13 + BAR_DY, main, TEXT);
+            cv.text(&f.s, tx, r.y + 25 + BAR_DY, detail, mix(BAR, col, 170));
         } else if main_fits && !main.is_empty() {
             cv.text_in(&f.mb, Rect::new(tx, r.y, tw, r.h), 0, main, TEXT);
         } else if !detail.is_empty() {

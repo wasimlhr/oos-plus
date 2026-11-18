@@ -302,7 +302,7 @@ fn the_channel_pills_have_a_detail_line_with_coupling_probe_and_offset() {
     let bottom = u.frame().bottom;
     for c in 0..2 {
         let r = b.ch[c];
-        assert!(r.h <= 30 && r.bottom() <= bottom.bottom() && r.y >= bottom.y, "the pill stays in the bar: {r:?} in {bottom:?}");
+        assert!(r.h == bottom.h - 6 && r.bottom() <= bottom.bottom() && r.y >= bottom.y, "the pill stays in the bar: {r:?} in {bottom:?}");
         let text = u.studio_ch_detail(c, r.w - 14);
         assert!(f.s.width(&text) <= r.w - 14, "{text:?} fits the pill {r:?}");
     }

@@ -16,8 +16,10 @@ Fixed:
 - Studio: a channel pill of the bottom bar ends after its chevron. With few sources on it was 170 px wide, with
   empty room behind the scale; it is as wide as the widest scale needs (159 px at the normal text size), the same
   for every channel. The pill of a channel that is off, the button that switches it on, was 44 px wide: it is at
-  least 60, and takes the room that is left up to 96, where it says "Off" beside its name. The height of the pills
-  is as it was.
+  least 60, and takes the room that is left up to 96, where it says "Off" beside its name.
+- Studio: the pills of the bottom bar (channels, references, math, Add, LA, GEN, the time base and the trigger) are
+  40 px tall instead of 30, taller than the measurement badges above them (34). The bar is 46 px, and the plot gives
+  the 10 px.
 - Display > Layout > Default shows the stock OOS bars again. A Bottom bar = Compact left on from before kept the
   compact top and bottom bars in Default; picking Default now turns them off.
 - Eye and jitter (host-tested on SIM signals and built signals of known jitter, not yet verified on hardware):

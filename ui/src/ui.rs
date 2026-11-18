@@ -2146,10 +2146,12 @@ impl Ui {
         if !self.m.compact() {
             return f;
         }
-        // the compact bottom bar: the body takes what the cards would have had
-        let grow = f.bottom.h - BOTTOM_H;
+        // the compact bottom bar: the body takes what the cards would have had. Studio's bar is higher: its pills are
+        // taller than a measurement badge
+        let bar = if self.m.layout == Layout::Studio { studio::BOTTOM_H } else { BOTTOM_H };
+        let grow = f.bottom.h - bar;
         f.body.h += grow;
-        f.bottom = Rect::new(f.bottom.x, f.bottom.y + grow, f.bottom.w, BOTTOM_H);
+        f.bottom = Rect::new(f.bottom.x, f.bottom.y + grow, f.bottom.w, bar);
         f.menu_btn = Rect::new(f.bottom.x + 4, f.bottom.y + 3, 46, 30);
         let x = f.menu_btn.right() + 6;
         f.cards = Rect::new(x, f.bottom.y + 3, (f.bottom.right() - METRICS.edge - x).max(0), 30);

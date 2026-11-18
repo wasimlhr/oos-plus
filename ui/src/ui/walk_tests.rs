@@ -1871,6 +1871,12 @@ fn a_channel_pill_is_as_wide_as_its_scale_needs() {
             let scales: Vec<String> = (0..2).map(|c| format!("{}/div", si_short(u.m.ch[c].volts_per_div() as f64, u.m.ch[c].unit.name()))).collect();
             assert_ne!(scales[0], scales[1], "{what}: two scales");
             assert_eq!(b.ch[0].w, b.ch[1].w, "{what}: the pills are equally wide");
+            // every pill of the bar is taller than a measurement badge of the row above it, and the bar ends at the screen
+            let badge = u.studio_badges().first().map(|b| b.1.h).expect("a badge");
+            let bar = u.frame().bottom;
+            let chips: Vec<Rect> = b.ch.iter().copied().filter(|r| r.w > 0).chain([b.add, b.time, b.trig]).chain(b.la).chain(b.gen).collect();
+            assert!(chips.iter().all(|r| r.h == 40 && r.h > badge && r.y >= bar.y + 3 && r.bottom() <= bar.bottom() - 3), "{what}: a badge of {badge} px, {chips:?}");
+            assert_eq!(bar.bottom(), u.scr.h, "{what}");
             // the text begins 58 px in; what is left after the widest scale is the chevron's room and no more. The
             // largest text needs all of the 170 px a pill ever had
             let widest = f.mb.width("500 mV/div");
