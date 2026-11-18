@@ -1240,8 +1240,9 @@ impl Scpi {
             _ => {}
         }
         let nodes: Vec<&str> = head.trim_start_matches(':').split(':').collect();
-        // the set-up as commands (scpi/setupscpi.rs): it asks this interpreter for the value of every line
-        if nodes.len() == 3 && kw(nodes[0], "SYSTem") && kw(nodes[1], "SETup") && kw(nodes[2], "SCPI") {
+        // the set-up as commands (scpi/setupscpi.rs): it asks this interpreter for the value of every line. SETup is
+        // spelled out, as for :SYSTem:SETup: the short form SET is the key = value command
+        if nodes.len() == 3 && kw(nodes[0], "SYSTem") && nodes[1].eq_ignore_ascii_case("SETup") && kw(nodes[2], "SCPI") {
             if query { return Some(block(self.setup_scpi(ui, cv).as_bytes())); }
             self.push_err(format!("-113,\"Undefined header\" {}", cmd));
             return None;

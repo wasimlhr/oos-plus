@@ -165,56 +165,75 @@ pub(crate) fn row_of(key: &str) -> Option<(usize, Vec<String>)> {
 /// How often the commands are mended against the second scope; the last time with key = value lines only.
 const PASSES: usize = 4;
 
+/// The second scope: an interpreter no client reaches and a model with no hardware behind it, sent `lines`. What
+/// Default leaves alone (`prefs`: the Quick key action and the text size) is as on the first.
+fn second_scope(lines: &[String], prefs: (Quick, TextSize), cv: &Canvas) -> (Scpi, Ui) {
+    let (mut scpi, mut scope) = (Scpi::detached(), Ui::new(crate::wave::Source::Demo { t: 0.0 }));
+    (scope.m.quick, scope.m.text_size) = prefs;
+    for l in lines { scpi.exec_line(&mut scope, cv, l); }
+    (scpi, scope)
+}
+
 impl Scpi {
     /// `:SYSTem:SETup:SCPI?`: `*RST`, then the commands for everything that differs from the Default set-up.
     ///
     /// A command can move more than its own setting (a source switches its channel on, a trigger type brings its
-    /// level), so the lines are proven before they are given out: a second scope, a model of its own with no
-    /// hardware behind it, is sent every line, and what it still differs in gets a command after the others, until
-    /// its set-up text is the one of `ui`. A line the second scope refuses is left out and its key written as
-    /// key = value. If a difference stays, the answer is given and an error says which keys.
+    /// level), so the lines are proven before they are given out. A second scope is sent every line, and what it
+    /// still differs in gets a command after the others. A line it refuses, or that moves nothing on it, is not
+    /// written, and its key goes as key = value. At the end the lines as they are given out are sent to a scope that
+    /// has seen nothing else: if its set-up text is not the one of `ui`, the answer is given and an error says which
+    /// keys differ (a value with a `;` in it, which no line can carry).
     pub(crate) fn setup_scpi(&mut self, ui: &mut Ui, cv: &Canvas) -> String {
         ui.sync_view_state();
         let want = crate::store::setup_text(&ui.m);
-        let (mut scpi, mut scope) = (Scpi::detached(), Ui::new(crate::wave::Source::Demo { t: 0.0 }));
-        // what Default leaves alone is the same on both
-        (scope.m.quick, scope.m.text_size) = (ui.m.quick, ui.m.text_size);
+        let prefs = (ui.m.quick, ui.m.text_size);
         let mut lines = vec!["*RST".to_string()];
-        scpi.exec_line(&mut scope, cv, "*RST");
+        let (mut scpi, mut scope) = second_scope(&lines, prefs, cv);
         let mut refused = std::collections::BTreeSet::new();
         for pass in 0..PASSES {
             let have = crate::store::setup_text(&scope.m);
-            let commands = self.setup_commands(ui, cv, &have, &want, &refused, pass + 1 == PASSES).0;
+            let commands = self.setup_commands(ui, cv, &have, &want, &refused, pass + 1 == PASSES);
             if commands.is_empty() { break; }
             for c in commands {
+                let before = crate::store::setup_text(&scope.m);
                 // not every handler counts its errors (`error_serial`): the queue itself says whether the line was taken
                 scpi.err.clear();
                 scpi.exec_line(&mut scope, cv, &c);
-                if scpi.err.is_empty() { lines.push(c); }
-                else { refused.insert(c.split_whitespace().next().unwrap_or("").to_string()); }
+                let taken = scpi.err.is_empty();
+                if taken && crate::store::setup_text(&scope.m) != before {
+                    lines.push(c);
+                    continue;
+                }
+                // the header does not carry this value (the value is not one of its own, or is as exact as it goes)
+                refused.insert(c.split_whitespace().next().unwrap_or("").to_string());
+                // a refused line may have done a part: the second scope is again what the lines alone make of it
+                if !taken { (scpi, scope) = second_scope(&lines, prefs, cv); }
             }
         }
-        let rest: Vec<String> = changed(&crate::store::setup_text(&scope.m), &want).into_iter().map(|x| x.0).collect();
+        let (scpi, scope) = second_scope(&lines, prefs, cv);
+        let mut rest: Vec<String> = changed(&crate::store::setup_text(&scope.m), &want).into_iter().map(|x| x.0).collect();
+        if !scpi.err.is_empty() { rest.push(format!("(refused: {})", scpi.err.join(" "))); }
         if !rest.is_empty() { self.push_err(format!("-221,\"Settings conflict\" the commands do not bring back: {}", rest.join(" "))); }
         lines.join("\n") + "\n"
     }
 
     /// The commands that take a scope from the set-up text `before` to `after`, the set-up `ui` has now: the lines
     /// with a header in the order of `ROWS`, then the keys without one, as key = value. A row with a header in
-    /// `refused` is not used, and none is with `plain`. Second: the keys no command was found for (a key without a
-    /// usable header that is back at a default the text does not write).
-    pub(crate) fn setup_commands(&mut self, ui: &mut Ui, cv: &Canvas, before: &str, after: &str, refused: &std::collections::BTreeSet<String>, plain: bool) -> (Vec<String>, Vec<String>) {
+    /// `refused` is not used, and none is with `plain`. A key no line can carry has none: a value with a `;` (the
+    /// interpreter splits a message there), or a key without a usable header that is back at a default the text
+    /// does not write.
+    pub(crate) fn setup_commands(&mut self, ui: &mut Ui, cv: &Canvas, before: &str, after: &str, refused: &std::collections::BTreeSet<String>, plain: bool) -> Vec<String> {
         // a query that fails here is a row to mend, not an error of the client: the queue stays as it was
         let kept = (self.err.clone(), self.event_status, self.error_serial, self.last_error.clone());
         let mut by_header: Vec<(usize, String)> = Vec::new();
-        let (mut by_key, mut lost) = (Vec::new(), Vec::new());
+        let mut by_key = Vec::new();
         for (key, value) in changed(before, after) {
             let row = row_of(&key).filter(|(_, headers)| !plain && !headers.iter().any(|h| refused.contains(h)));
             let echoed = row.and_then(|(i, headers)| headers.iter().map(|h| self.echo(ui, cv, h)).collect::<Option<Vec<String>>>().map(|lines| (i, lines)));
             match (echoed, value) {
                 (Some((i, lines)), _) => by_header.extend(lines.into_iter().map(|l| (i, l))),
-                (None, Some(v)) => by_key.push(format!(":SYSTem:SET {key} = {v}")),
-                (None, None) => lost.push(key),
+                (None, Some(v)) if !v.contains(';') => by_key.push(format!(":SYSTem:SET {key} = {v}")),
+                (None, _) => {}
             }
         }
         (self.err, self.event_status, self.error_serial, self.last_error) = kept;
@@ -225,7 +244,7 @@ impl Scpi {
             if !lines.contains(&l) { lines.push(l); }
         }
         lines.extend(by_key);
-        (lines, lost)
+        lines
     }
 
     /// `header` with the answer of its own query as the value: the command that sets what is set now.
@@ -344,8 +363,13 @@ mod tests {
         let reply = String::from_utf8(s.exec_line(&mut ui, &cv, ":SYSTem:SETup:SCPI?")).unwrap();
         let body = "*RST\n:CHANnel2:DISPlay 1\n";
         assert_eq!(reply, format!("#9{:09}{body}", body.len()));
-        assert_eq!(String::from_utf8(s.exec_line(&mut ui, &cv, ":SYST:SET:SCPI?")).unwrap(), reply, "the short form");
+        assert_eq!(String::from_utf8(s.exec_line(&mut ui, &cv, ":SYST:SETup:SCPI?")).unwrap(), reply, "the short form of the first keyword");
         assert_eq!(s.queued_errors(), queued);
+        // :SYST:SET is the key = value command: SETup is spelled out here too
+        s.exec_line(&mut ui, &cv, ":SYST:SET:SCPI?");
+        assert_eq!(s.queued_errors().len(), 2);
+        s.exec_line(&mut ui, &cv, "*CLS");
+        s.exec_line(&mut ui, &cv, ":NO:SUCH:HEADer 1");
         // there is nothing to set
         s.exec_line(&mut ui, &cv, ":SYSTem:SETup:SCPI 1");
         assert_eq!(s.queued_errors().len(), 2);
@@ -360,7 +384,8 @@ mod tests {
     const BY_COMMAND: &[&str] = &["dec_sel"];
 
     /// Every row, from the Default set-up: a key is given another value, the commands go to a second scope, and that
-    /// scope has the same set-up and no error. For every row at least one value travels by the row's own headers.
+    /// scope has the same set-up and no error. For every row at least one value travels by the row's own headers (by
+    /// one of them where a key holds several settings: a line that moves nothing is not written).
     #[test]
     fn every_row_brings_a_second_scope_to_the_same_setup() {
         let default = text(&mut session().1);
@@ -407,9 +432,42 @@ mod tests {
         let want = text(&mut ui);
         let lines = s.setup_scpi(&mut ui, &cv);
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        assert!(lines.contains(":DECode:SELect ") && lines.contains(":BUS:LANE:CLOCk:SOURce "), "{lines}");
         let (got, errors) = replay(&lines);
         assert!(errors.is_empty(), "{errors:?}\n{lines}");
         assert_eq!(changed(&want, &got), Vec::new(), "{lines}");
+    }
+
+    /// A value its query does not write to the last digit travels once by its header and then as key = value: the
+    /// header line is not sent again and again.
+    #[test]
+    fn a_value_finer_than_its_query_is_one_line_and_its_key() {
+        let (mut s, mut ui, cv) = session();
+        crate::store::set(&mut ui.m, "ch1.offset", "0.123456789").unwrap();
+        ui.mark_changed();
+        let want = text(&mut ui);
+        let lines = s.setup_scpi(&mut ui, &cv);
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        assert_eq!(lines.matches(":CHANnel1:OFFSet ").count(), 1, "{lines}");
+        assert_eq!(lines.matches(":SYSTem:SET ch1.offset = ").count(), 1, "{lines}");
+        let (got, errors) = replay(&lines);
+        assert!(errors.is_empty(), "{errors:?}\n{lines}");
+        assert_eq!(changed(&want, &got), Vec::new(), "{lines}");
+    }
+
+    /// A value with a `;` cannot travel in a line (the interpreter splits a message there): it is not written, and
+    /// the error names its key. The other settings still travel.
+    #[test]
+    fn a_value_with_a_semicolon_is_named_not_written() {
+        let (mut s, mut ui, cv) = session();
+        crate::store::set(&mut ui.m, "studio_dock", "tree;f@1:2:300:200").unwrap();
+        s.exec_line(&mut ui, &cv, ":CHANnel2:DISPlay ON");
+        let want = text(&mut ui);
+        assert!(want.contains("studio_dock = tree;f@1:2:300:200"), "the key is in the set-up text");
+        let lines = s.setup_scpi(&mut ui, &cv);
+        assert_eq!(lines, "*RST\n:CHANnel2:DISPlay 1\n");
+        let errors = s.queued_errors().to_vec();
+        assert!(errors.len() == 1 && errors[0].starts_with("-221") && errors[0].contains("studio_dock"), "{errors:?}");
     }
 
     /// A set-up made by commands, as a user would make it, with settings that lean on each other.

@@ -43,8 +43,10 @@ Added:
   `:TIMebase:SCALe 1.000000E-03`). Sent line by line to a scope, it brings that scope to this set-up. A setting
   without a header of its own is a `:SYSTem:SET` line. Before the lines are given out they are sent to a second
   scope inside the program (a model with no hardware behind it) and mended until its set-up is the same: a command
-  that moves another setting too (a source that switches its channel on) gets a line after it that puts it right.
-  Reference waveforms and notes are not part of it; a value is as exact as its query writes it.
+  that moves another setting too (a source that switches its channel on) gets a line after it that puts it right,
+  and a value finer than its query writes it gets a key = value line. Reference waveforms and notes are not part of
+  it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and
+  error -221 names its key.
 
 - External generator page, Menu > Instruments > Ext generator (ADR 0028, docs/extgen.md; host-tested against a
   simulated generator, not yet verified on hardware). A generator on the USB-A port or the LAN has its model,

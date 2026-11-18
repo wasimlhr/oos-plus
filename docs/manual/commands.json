@@ -276,7 +276,7 @@
     {
      "header": ":SYSTem:SETup:SCPI",
      "query": ":SYSTem:SETup:SCPI?",
-     "desc": "The setup as SCPI commands, as an IEEE block of lines: `*RST`, then one command for every setting that differs from the Default setup, each with the answer of its own query as the value. A setting without a header of its own is a `:SYSTem:SET` line; the headers are in the Equivalent header column of setup keys. Sent line by line to a scope, it brings that scope to this setup. Reference waveforms and notes are not part of it.",
+     "desc": "The setup as SCPI commands, as an IEEE block of lines: `*RST`, then one command for every setting that differs from the Default setup, each with the answer of its own query as the value. A setting without a header of its own is a `:SYSTem:SET` line; the headers are in the Equivalent header column of setup keys. Sent line by line to a scope, it brings that scope to this setup. Reference waveforms and notes are not part of it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and error -221 names its key. `SETup` is spelled out, as for `:SYSTem:SETup`.",
      "remarks": [
       "- Origin: OOS extension. The first part of the SCPI recorder."
      ],
