@@ -1550,6 +1550,15 @@ pub struct Model {
     pub dpt_zoom: DptZoom,
     /// the external generator is on the USB-A port (USBTMC, the first one found) instead of `bode_addr`
     pub bode_usb: bool,
+    /// the external generator (the Ext generator page, `crate::extgen`): its model (an index of
+    /// `extgen::GENERATORS`; while the Bode sweep uses an external generator, `bode_gen` is the same), the channel
+    /// of the generator (0 = the first), whether it drives a high impedance (else 50 ohms), and the frequency (Hz)
+    /// and amplitude (Vpp) of the page's own output
+    pub ext_model: usize,
+    pub ext_ch: usize,
+    pub ext_hiz: bool,
+    pub ext_freq: f64,
+    pub ext_ampl: f64,
     /// Bode with a generator that sweeps on its own (`ui::bode::FREE`, same start/stop): sweep time (s), logarithmic
     /// (else linear), sync channel, its edge and level (V), input channel (0 = none, k = CHk: then the gain is against
     /// `bode_ref` dBV)
@@ -1971,6 +1980,11 @@ impl Default for Model {
             dpt_pct: 10.0,
             dpt_zoom: DptZoom::Both,
             bode_usb: false,
+            ext_model: crate::extgen::FIRST_EXTERNAL,
+            ext_ch: 0,
+            ext_hiz: true,
+            ext_freq: 1e3,
+            ext_ampl: 1.0,
             bode_sw_time: 1.0,
             bode_sw_log: true,
             bode_sync: NCH - 1,

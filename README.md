@@ -68,7 +68,7 @@ back to OOS as pull requests.
 | **DDR DQ and DQS timing** | The eye folds on a strobe that runs in bursts, and Setup DDR, Hold DDR and their violation count take both clock edges. |
 | **High-speed serial** | Lane presets from PCIe 1.0 to 5.0, USB 2.0 HS and 3.2, SATA and 10GBASE-KR, for simulated or loaded records: NRZ rate, de-emphasis, eye width at a BER. Not a compliance test. |
 | **Power, motor, magnetics** | Power quality, harmonics, switching loss, ripple and rail sequencing; DQ0 transform, shaft speed and angle for motor drives; a magnetics page; a double-pulse page with switching times and diode recovery. |
-| **Spectrum, Bode, more** | Spectrum with a peak list beside the waveform, Bode plot, bandwidth test, histogram, XY, mask and zone tests. |
+| **Spectrum, Bode, more** | Spectrum with a peak list beside the waveform, Bode plot with the built-in or an external generator (LAN or USB), bandwidth test, histogram, XY, mask and zone tests. |
 | **Decoders** | 29 protocols, from UART, I2C, SPI and CAN to USB PD, FlexRay, MIL-STD-1553 and DCC. Each is a module of one file; a decoder reads the samples the acquisition kept, not the points of the screen. |
 | **Three layouts** | **Default**, the screen of OOS. **Minimal**, a quiet screen with settings in sheets. **Studio**, views you dock, tab, float and resize: waveform lanes, measurements, eye, spectrum, tables, histogram. |
 | **Skin** | Display > Skin gives the same screen another look: OOS or OOS Plus. |

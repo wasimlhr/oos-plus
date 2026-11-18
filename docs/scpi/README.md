@@ -153,6 +153,7 @@ See [waveform](waveform.md) for the preamble and the formats.
 | [Power, magnetic, inverter and double pulse](power.md) | 51 | Power, magnetic, inverter, double pulse |
 | [Bode and bandwidth test](bode.md) | 21 | Bode sweep and bandwidth test |
 | [Built-in generator](generator.md) | 18 | Built-in generator, modulation, arbitrary wave |
+| [External generator](extgen.md) | 11 | A generator on the USB-A port or the LAN: model, connection, output |
 | [Signal simulator (SIM)](sim.md) | 26 | Signal simulator |
 | [Display, views and Studio zoom](display.md) | 23 | Display, views, Studio zoom, screenshot |
 | [Screen layout and controls](layout.md) | 25 | Docking, sizing and floating the Studio views; the right-click menu; screen controls by name and place |

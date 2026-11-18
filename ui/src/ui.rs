@@ -34,6 +34,7 @@ mod workflow;
 mod deskew;
 pub mod startup;
 mod afg;
+mod extgen;
 mod sysinfo;
 mod tables;
 mod logger;
@@ -517,6 +518,8 @@ pub enum MenuId {
     Sim,
     SimAdvanced,
     Afg,
+    /// a generator beside the scope, on the USB-A port or the LAN (ui/extgen.rs)
+    ExtGen,
     BwTest,
     /// the overflow menu of an analyser view or XY (viewmore.rs)
     ViewMore,
@@ -951,8 +954,17 @@ enum Item {
     BodeIn,
     BodeOut,
     BodeGen,
-    BodeAddr,
-    BodeLink,
+    ExtModel,
+    ExtLink,
+    ExtAddr,
+    ExtState,
+    ExtIdn,
+    ExtCh,
+    ExtLoad,
+    ExtFreq,
+    ExtAmpl,
+    ExtOut,
+    ExtConnect,
     BodeCur,
     BodeMode,
     BodeSwTime,
@@ -1526,6 +1538,8 @@ pub struct Ui {
     cal: selfcal::State,
     /// Bode sweep (bode.rs)
     bode: bode::State,
+    /// the external generator and its connection (extgen.rs)
+    ext: extgen::ExtUi,
     /// SIM: Play is moving the timebase window through the selected record
     workspace: workspace::Workspace,
     studio: studio::Studio,
@@ -1936,6 +1950,7 @@ impl Ui {
             start_up: None,
             start_up_last: None,
             bode: Default::default(),
+            ext: Default::default(),
             workspace: workspace::Workspace::default(),
             studio: studio::Studio::default(),
             sheet: sheet::SheetState::default(),
@@ -3146,6 +3161,7 @@ impl Ui {
         self.wlan_poll();
         self.ntp_poll();
         self.ssh_poll();
+        self.ext_poll();
         self.allow_poll();
         self.usb_poll();
         self.ch_hold_poll();
@@ -7081,6 +7097,7 @@ impl Ui {
             MenuId::Inverter => self.inverter_items(),
             MenuId::Dpt => self.dpt_items(),
             MenuId::Afg => self.afg_items(),
+            MenuId::ExtGen => self.ext_items(),
             MenuId::BwTest => self.bw_items(),
             MenuId::ViewMore => self.view_more_items(),
             MenuId::La => self.la_items(),
@@ -7145,6 +7162,8 @@ impl Ui {
         if la::available() {
             ins.push(Open(MenuId::La));
         }
+        // a generator beside the scope: every model can have one
+        ins.push(Open(MenuId::ExtGen));
         ins.push(Open(MenuId::Dvm));
         ins.push(Open(MenuId::Logger));
         let mut g = vec![
@@ -7879,6 +7898,7 @@ impl Ui {
             MenuId::Inverter => "Inverter".into(),
             MenuId::Dpt => "Double pulse".into(),
             MenuId::Afg => "Generator (GI/GO)".into(),
+            MenuId::ExtGen => "External generator".into(),
             MenuId::BwTest => "Bandwidth test (step response)".into(),
             MenuId::ViewMore => self.view_name().into(),
             MenuId::La => self.la_title(),
@@ -7929,7 +7949,7 @@ impl Ui {
 
     fn kind(it: Item) -> Kind {
         if matches!(it, Item::AutoDeskew | Item::ClearDeskew) { return Kind::Action; }
-        if let Some(k) = Self::addrail_kind(it).or_else(|| Self::meas_kind(it)).or_else(|| Self::measrow_kind(it)).or_else(|| Self::ana_kind(it)).or_else(|| Self::magnetic_kind(it)).or_else(|| Self::inverter_kind(it)).or_else(|| Self::dpt_kind(it)).or_else(|| Self::cal_kind(it)).or_else(|| Self::bode_kind(it)).or_else(|| Self::sim_kind(it)).or_else(|| Self::offline_kind(it)).or_else(|| Self::afg_kind(it)).or_else(|| Self::bw_kind(it)).or_else(|| Self::la_kind(it)).or_else(|| Self::win_kind(it)).or_else(|| Self::bus_kind(it)).or_else(|| Self::time_kind(it)).or_else(|| Self::remote_kind(it)).or_else(|| Self::graphics_kind(it)).or_else(|| Self::views_kind(it)).or_else(|| Self::features_kind(it)).or_else(|| Self::backlight_kind(it)).or_else(|| Self::skin_kind(it)) {
+        if let Some(k) = Self::addrail_kind(it).or_else(|| Self::meas_kind(it)).or_else(|| Self::measrow_kind(it)).or_else(|| Self::ana_kind(it)).or_else(|| Self::magnetic_kind(it)).or_else(|| Self::inverter_kind(it)).or_else(|| Self::dpt_kind(it)).or_else(|| Self::cal_kind(it)).or_else(|| Self::bode_kind(it)).or_else(|| Self::sim_kind(it)).or_else(|| Self::offline_kind(it)).or_else(|| Self::afg_kind(it)).or_else(|| Self::ext_kind(it)).or_else(|| Self::bw_kind(it)).or_else(|| Self::la_kind(it)).or_else(|| Self::win_kind(it)).or_else(|| Self::bus_kind(it)).or_else(|| Self::time_kind(it)).or_else(|| Self::remote_kind(it)).or_else(|| Self::graphics_kind(it)).or_else(|| Self::views_kind(it)).or_else(|| Self::features_kind(it)).or_else(|| Self::backlight_kind(it)).or_else(|| Self::skin_kind(it)) {
             return k;
         }
         match it {
@@ -7951,7 +7971,7 @@ impl Ui {
     }
 
     fn label(it: Item) -> &'static str {
-        if let Some(l) = Self::addrail_label(it).or_else(|| Self::meas_cfg_label(it)).or_else(|| Self::measrow_label(it)).or_else(|| Self::ana_label(it)).or_else(|| Self::magnetic_label(it)).or_else(|| Self::inverter_label(it)).or_else(|| Self::dpt_label(it)).or_else(|| Self::cal_label(it)).or_else(|| Self::bode_label(it)).or_else(|| Self::sim_label(it)).or_else(|| Self::offline_label(it)).or_else(|| Self::afg_label(it)).or_else(|| Self::bw_label(it)).or_else(|| Self::la_label(it)).or_else(|| Self::win_label(it)).or_else(|| Self::bus_label(it)).or_else(|| Self::time_label(it)).or_else(|| Self::remote_label(it)).or_else(|| Self::graphics_label(it)).or_else(|| Self::views_label(it)).or_else(|| Self::monitor_label(it)).or_else(|| Self::features_label(it)).or_else(|| Self::backlight_label(it)).or_else(|| Self::skin_label(it)) {
+        if let Some(l) = Self::addrail_label(it).or_else(|| Self::meas_cfg_label(it)).or_else(|| Self::measrow_label(it)).or_else(|| Self::ana_label(it)).or_else(|| Self::magnetic_label(it)).or_else(|| Self::inverter_label(it)).or_else(|| Self::dpt_label(it)).or_else(|| Self::cal_label(it)).or_else(|| Self::bode_label(it)).or_else(|| Self::sim_label(it)).or_else(|| Self::offline_label(it)).or_else(|| Self::afg_label(it)).or_else(|| Self::ext_label(it)).or_else(|| Self::bw_label(it)).or_else(|| Self::la_label(it)).or_else(|| Self::win_label(it)).or_else(|| Self::bus_label(it)).or_else(|| Self::time_label(it)).or_else(|| Self::remote_label(it)).or_else(|| Self::graphics_label(it)).or_else(|| Self::views_label(it)).or_else(|| Self::monitor_label(it)).or_else(|| Self::features_label(it)).or_else(|| Self::backlight_label(it)).or_else(|| Self::skin_label(it)) {
             return l;
         }
         match it {
@@ -8239,7 +8259,7 @@ impl Ui {
         // the desktop build reports its own web port and listeners (wlan.rs `net_value`)
         if it == Item::NetWeb && cfg!(windows) && !self.lan_status.is_empty() { return self.net_value(it); }
         if it == Item::CatSourceD { return self.wave_name(self.cat_d); }
-        if let Some(v) = self.addrail_value(it).or_else(|| self.meas_value(it)).or_else(|| self.measrow_value(it)).or_else(|| self.ana_value(it)).or_else(|| self.magnetic_value(it)).or_else(|| self.inverter_value(it)).or_else(|| self.dpt_value(it)).or_else(|| self.cal_value(it)).or_else(|| self.bode_value(it)).or_else(|| self.sim_value(it)).or_else(|| self.offline_value(it)).or_else(|| self.afg_value(it)).or_else(|| self.bw_value(it)).or_else(|| self.la_value(it)).or_else(|| self.win_value(it)).or_else(|| self.bus_value(it)).or_else(|| self.time_value(it)).or_else(|| self.remote_value(it)).or_else(|| self.graphics_value(it)).or_else(|| self.views_value(it)).or_else(|| self.monitor_value(it)).or_else(|| self.features_value(it)).or_else(|| self.backlight_value(it)).or_else(|| self.skin_value(it)) {
+        if let Some(v) = self.addrail_value(it).or_else(|| self.meas_value(it)).or_else(|| self.measrow_value(it)).or_else(|| self.ana_value(it)).or_else(|| self.magnetic_value(it)).or_else(|| self.inverter_value(it)).or_else(|| self.dpt_value(it)).or_else(|| self.cal_value(it)).or_else(|| self.bode_value(it)).or_else(|| self.sim_value(it)).or_else(|| self.offline_value(it)).or_else(|| self.afg_value(it)).or_else(|| self.ext_value(it)).or_else(|| self.bw_value(it)).or_else(|| self.la_value(it)).or_else(|| self.win_value(it)).or_else(|| self.bus_value(it)).or_else(|| self.time_value(it)).or_else(|| self.remote_value(it)).or_else(|| self.graphics_value(it)).or_else(|| self.views_value(it)).or_else(|| self.monitor_value(it)).or_else(|| self.features_value(it)).or_else(|| self.backlight_value(it)).or_else(|| self.skin_value(it)) {
             return v;
         }
         let m = &self.m;
@@ -8509,7 +8529,7 @@ impl Ui {
             }
             return;
         }
-        if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) || self.skin_adjust(it, d) {
+        if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.ext_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) || self.skin_adjust(it, d) {
             return;
         }
         if matches!(it, Item::TrigSrc | Item::TrigSrc2) {
@@ -9072,7 +9092,7 @@ impl Ui {
         if self.item_blocked_toast(it) { return; }
         if self.addrail_activate(it) { return; }
         if self.measrow_activate(it) { return; }
-        if Self::kind(it) == Kind::Action && (self.ana_activate(it) || self.cal_activate(it) || self.bode_activate(it) || self.sim_activate(it) || self.afg_activate(it) || self.time_activate(it) || self.ssh_activate(it)) {
+        if Self::kind(it) == Kind::Action && (self.ana_activate(it) || self.cal_activate(it) || self.bode_activate(it) || self.sim_activate(it) || self.afg_activate(it) || self.ext_activate(it) || self.time_activate(it) || self.ssh_activate(it)) {
             return;
         }
         match Self::kind(it) {
@@ -9733,7 +9753,7 @@ impl Ui {
 
     /// The options of a choice item for segmented buttons (empty: shown as - value +).
     fn options(&self, it: Item) -> Vec<String> {
-        if let Some(o) = self.addrail_options(it).or_else(|| self.meas_options(it)).or_else(|| self.measrow_options(it)).or_else(|| self.ana_options(it)).or_else(|| self.magnetic_options(it)).or_else(|| self.inverter_options(it)).or_else(|| self.dpt_options(it)).or_else(|| self.cal_options(it)).or_else(|| self.bode_options(it)).or_else(|| self.sim_options(it)).or_else(|| self.offline_options(it)).or_else(|| self.afg_options(it)).or_else(|| self.bw_options(it)).or_else(|| self.la_options(it)).or_else(|| self.win_options(it)).or_else(|| self.bus_options(it)).or_else(|| self.time_options(it)).or_else(|| self.remote_options(it)).or_else(|| self.graphics_options(it)).or_else(|| self.views_options(it)).or_else(|| self.monitor_options(it)).or_else(|| self.features_options(it)).or_else(|| self.skin_options(it)) {
+        if let Some(o) = self.addrail_options(it).or_else(|| self.meas_options(it)).or_else(|| self.measrow_options(it)).or_else(|| self.ana_options(it)).or_else(|| self.magnetic_options(it)).or_else(|| self.inverter_options(it)).or_else(|| self.dpt_options(it)).or_else(|| self.cal_options(it)).or_else(|| self.bode_options(it)).or_else(|| self.sim_options(it)).or_else(|| self.offline_options(it)).or_else(|| self.afg_options(it)).or_else(|| self.ext_options(it)).or_else(|| self.bw_options(it)).or_else(|| self.la_options(it)).or_else(|| self.win_options(it)).or_else(|| self.bus_options(it)).or_else(|| self.time_options(it)).or_else(|| self.remote_options(it)).or_else(|| self.graphics_options(it)).or_else(|| self.views_options(it)).or_else(|| self.monitor_options(it)).or_else(|| self.features_options(it)).or_else(|| self.skin_options(it)) {
             return o;
         }
         let v: &[&str] = match it {
@@ -9861,7 +9881,7 @@ impl Ui {
             let cur = self.value(it);
             return Ctl::Seg(vec![cur.clone()], Some(0));
         }
-        if matches!(it, Item::MathExprI | Item::LogInfo | Item::CalStatus | Item::NetEth | Item::NetMac | Item::NetPorts | Item::NetWlan | Item::AcqAlias) || Self::time_text(it) || Self::remote_text(it) {
+        if matches!(it, Item::MathExprI | Item::LogInfo | Item::CalStatus | Item::NetEth | Item::NetMac | Item::NetPorts | Item::NetWlan | Item::AcqAlias) || Self::time_text(it) || Self::remote_text(it) || Self::ext_text(it) {
             return Ctl::Text;
         }
         match Self::kind(it) {

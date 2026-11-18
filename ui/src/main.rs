@@ -47,6 +47,7 @@ mod placement;
 mod perfguard;
 mod sparse;
 mod drawpipe;
+mod extgen;
 mod framestats;
 mod ui;
 mod usbtmc;

@@ -2429,10 +2429,12 @@ impl Scpi {
                 let a = arg.trim().trim_matches('"');
                 if a.contains(char::is_whitespace) {
                     self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                } else if a.eq_ignore_ascii_case("usb") {
-                    ui.m.bode_usb = true;
                 } else {
-                    (ui.m.bode_addr, ui.m.bode_usb) = (a.to_string(), false);
+                    // the generator of the Ext generator page: another place is another connection
+                    let usb = a.eq_ignore_ascii_case("usb");
+                    if !ui.ext_place(usb, if usb { None } else { Some(a) }) {
+                        self.push_err("-221,\"Settings conflict\" The Bode sweep is using the generator".into());
+                    }
                 }
                 return None;
             }

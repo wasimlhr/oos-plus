@@ -387,9 +387,14 @@ pub fn setup_text(m: &Model) -> String {
     for (i, v) in m.view_slots.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
         kv(&format!("view{}", i + 1), v.clone());
     }
-    kv("bode", format!("{} {} {} {} {} {} {} {}", m.bode_start, m.bode_stop, m.bode_points, m.bode_amp, m.bode_in.token(), m.bode_out.token(), m.bode_gen, m.bode_addr));
+    // the generator index of an external generator is the model of the Ext generator page
+    let ext = if crate::extgen::external(m.ext_model) { m.ext_model } else { crate::extgen::FIRST_EXTERNAL };
+    let bode_gen = if crate::extgen::external(m.bode_gen) { ext } else { m.bode_gen };
+    kv("bode", format!("{} {} {} {} {} {} {} {}", m.bode_start, m.bode_stop, m.bode_points, m.bode_amp, m.bode_in.token(), m.bode_out.token(), bode_gen, m.bode_addr));
     // the generator's connection: lan (the address above) or usb; a line of its own, so older versions skip it
     kv("bode_link", if m.bode_usb { "usb" } else { "lan" }.to_string());
+    // the external generator: model index, channel (1-based), load (hiz or 50), frequency Hz and amplitude Vpp of the page's output
+    kv("extgen", format!("{} {} {} {} {}", ext, m.ext_ch.min(1) + 1, if m.ext_hiz { "hiz" } else { "50" }, m.ext_freq, m.ext_ampl));
     // free sweep: time, log, sync channel, edge, level, input (0 = none), reference dBV
     kv("bode_sweep", format!("{} {} {} {} {} {} {}", m.bode_sw_time, m.bode_sw_log, m.bode_sync + 1, name(m.bode_sync_slope), m.bode_sync_level, m.bode_sw_in, m.bode_ref));
     kv("spec", format!("{} {} {} {} {} {} {} {} {}", m.spec_src.token(), m.spec_center, m.spec_span, m.spec_rbw, name(m.spec_win), m.spec_trace, m.spec_ref, m.spec_wf, m.spec_dist));
@@ -872,7 +877,33 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
             m.bode_in = WaveId::parse(w[4])?;
             m.bode_out = WaveId::parse(w[5])?;
             m.bode_gen = p_idx(w[6], crate::ui::bode::GENERATORS.len())?;
+            // a file from before the Ext generator page names the external generator here only
+            if crate::extgen::external(m.bode_gen) {
+                m.ext_model = m.bode_gen;
+            }
             m.bode_addr = w.get(7).map_or("", |a| a.trim()).to_string();
+        }
+        "extgen" => {
+            let w: Vec<&str> = v.split_whitespace().collect();
+            if w.len() != 5 {
+                return Err("extgen: want 5 values".into());
+            }
+            let model = p_idx(w[0], crate::extgen::GENERATORS.len())?;
+            if !crate::extgen::external(model) {
+                return Err(format!("extgen: {} is not an external generator", model));
+            }
+            m.ext_model = model;
+            if crate::extgen::external(m.bode_gen) {
+                m.bode_gen = model;
+            }
+            m.ext_ch = p_idx(w[1], 3)?.max(1) - 1;
+            m.ext_hiz = match w[2] {
+                "hiz" => true,
+                "50" => false,
+                _ => return Err(format!("extgen: load is hiz or 50, not {}", w[2])),
+            };
+            let f = |s: &str| s.parse::<f64>().ok().filter(|x| x.is_finite() && *x > 0.0).ok_or_else(|| format!("extgen: not a positive number: {}", s));
+            (m.ext_freq, m.ext_ampl) = (f(w[3])?, f(w[4])?);
         }
         "bode_link" => {
             m.bode_usb = match v.trim() {

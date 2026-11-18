@@ -1,63 +1,21 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! Bode plot with the built-in generator (S models, `Board::gen`) or an external generator on the LAN or the USB-A port
-//! (USBTMC, `crate::usbtmc`): OOS sends SCPI to the generator (presets for APPL, BSWV, CHANnel and plain SCPI),
-//! steps a logarithmic sweep, sets the time base to about 5 periods per screen,
+//! Bode plot with the built-in generator (S models, `Board::gen`) or the external generator of the Ext generator page
+//! (ui/extgen.rs: its model, and whether it is on the LAN or the USB-A port): OOS sends the commands of the model
+//! (`crate::extgen`), steps a logarithmic sweep, sets the time base to about 5 periods per screen,
 //! measures gain and phase of the output channel against the input channel by a sine fit on every captured sample
-//! (`oos_dsp::bode`) and draws both curves. The generator connection runs in its own thread. With the built-in
-//! generator and input = output channel the gain is against the set amplitude and there is no phase.
+//! (`oos_dsp::bode`) and draws both curves. The generator connection runs in its own thread; a step is measured
+//! once the generator has its frequency. With the built-in generator and input = output channel the gain is against
+//! the set amplitude and there is no phase.
 //!
 //! Free sweep (`FREE`): an external generator sweeps on its own and marks the start of each sweep on a sync channel.
 //! OOS sets the time base and memory for one sweep, triggers once on the sync edge and reads gain (and phase, with
 //! an input channel and plain samples) over the whole sweep from that one record (`oos_dsp::bode::sweep_response`).
 
 use super::*;
+pub use crate::extgen::{BUILTIN, FREE, GENERATORS};
 use oos_dsp::bode;
-use std::sync::mpsc;
-
-/// A generator preset. The commands may hold several lines (`\n`), each sent as a command of its own; `{f}` is the
-/// frequency in Hz, `{a}` the amplitude in Vpp.
-pub struct Gen {
-    pub name: &'static str,
-    /// sent once at the start, before the first frequency
-    pub setup: &'static str,
-    /// sent for every frequency
-    pub step: &'static str,
-    /// sent once after the first frequency
-    pub on: &'static str,
-}
-
-const fn gen(name: &'static str, setup: &'static str, step: &'static str, on: &'static str) -> Gen {
-    Gen { name, setup, step, on }
-}
-
-/// Generator presets. Entry `BUILTIN` is the scope's own, entry `FREE` a generator that sweeps on its own (no
-/// commands). The setup file keeps the index: new presets go at the end.
-///
-/// CHANnel (UTG900 series generators, UTG932, UTG962): commands from the "UTG900 Series Programmable Signal Source
-/// Programming Manual" REV 00, 2022-07-15 (Chinese, instrument software V3.06.004), the same in the English "UTG900E
-/// Series Programming Manual" of 2022-07-15: `:CHANnel<n>:MODe CONTINUE`, `:CHANnel<n>:BASE:WAVe SINe`, `:CHANnel<n>:AMPLitude:UNIT VPP`,
-/// `:CHANnel<n>:BASE:AMPLitude`, `:CHANnel<n>:BASE:OFFSet`, `:CHANnel<n>:BASE:FREQuency` (Hz), `:CHANnel<n>:OUTPut ON`;
-/// every command ends with a newline. Not yet tried with a real UTG900.
-pub const GENERATORS: [Gen; 6] = [
-    gen("Built-in", "", "", ""),
-    gen("APPL", "", ":SOUR1:APPL:SIN {f},{a},0", ":OUTP1 ON"),
-    gen("BSWV", "", "C1:BSWV WVTP,SINE,FRQ,{f},AMP,{a},OFST,0", "C1:OUTP ON"),
-    gen("SCPI", "", "FREQ {f};VOLT {a}", "OUTP ON"),
-    gen("Free-running sweep", "", "", ""),
-    gen(
-        "CHANnel",
-        ":CHANnel1:MODe CONTINUE\n:CHANnel1:BASE:WAVe SINe\n:CHANnel1:AMPLitude:UNIT VPP\n:CHANnel1:BASE:AMPLitude {a}\n:CHANnel1:BASE:OFFSet 0",
-        ":CHANnel1:BASE:FREQuency {f}",
-        ":CHANnel1:OUTPut ON",
-    ),
-];
-
-/// The command lines of a preset template for `f` Hz and `a` Vpp.
-pub fn gen_lines(tpl: &str, f: f64, a: f64) -> Vec<String> {
-    tpl.split('\n').filter(|l| !l.trim().is_empty()).map(|l| l.replace("{f}", &bode::fmt_hz(f)).replace("{a}", &bode::fmt_hz(a))).collect()
-}
 
 #[derive(Default)]
 pub struct State {
@@ -73,10 +31,9 @@ pub struct State {
     pub wait: u32,
     /// `Model::hw_stamp` of the current step: hardware records with an older stamp are from before it
     pub stamp: u64,
-    pub tx: Option<mpsc::Sender<String>>,
-    pub err: std::sync::Arc<std::sync::Mutex<Option<String>>>,
-    /// what the generator thread has to say without stopping the sweep (the `*IDN?` answer of a USB generator)
-    pub note: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    /// an external generator has not yet done the commands of this step (`Ui::ext`): what is recorded until then
+    /// is the frequency before
+    pub pending: bool,
     /// the user's time base, trigger source and level, restored at the end
     pub saved: Option<(usize, usize, f32)>,
     /// the built-in generator's settings before the sweep (on, Hz, Vpp, V), restored at the end
@@ -117,9 +74,6 @@ pub struct FreePlan {
     pub scan: bool,
 }
 
-pub const BUILTIN: usize = 0;
-pub const FREE: usize = 4;
-
 /// Time base, delay and memory depth for one free sweep of `sw` on the channels shown in `m`. Normal records put the
 /// trigger one division from the left edge, the sweep and 2 % in the 9 divisions after it, and the smallest depth
 /// with 20 samples per period at the stop frequency (at least 4). From the scan time bases on the trigger sits at the
@@ -156,75 +110,8 @@ pub fn free_plan(m: &Model, sw: &bode::Sweep) -> Result<FreePlan, String> {
     Ok(FreePlan { tscale: i, delay: 0.0, mdepth: 0, scan: board().slow_mode(&c) != crate::board::Slow::Off })
 }
 
-/// Where the generator thread finds USB devices (none in the tests: they must never talk to a real instrument).
-fn usb_root() -> &'static std::path::Path {
-    std::path::Path::new(if cfg!(test) { "/nonexistent/oos-test" } else { crate::usbtmc::SYSFS })
-}
-
-/// The connection to an external generator.
-enum Link {
-    Tcp(std::net::TcpStream),
-    Usb(crate::usbtmc::Usbtmc<crate::usbtmc::UsbFs>),
-}
-
-impl Link {
-    /// Opens the connection: the first USBTMC device (`usb`), else `addr` (port 5555 if none). Returns it with its
-    /// name for messages and, on USB, the `*IDN?` answer for the user.
-    fn open(usb: bool, addr: &str) -> Result<(Link, String, Option<String>), String> {
-        if usb {
-            let (mut t, d) = crate::usbtmc::connect(usb_root()).map_err(|e| format!("generator USB: {}", e))?;
-            let what = format!("generator USB {}", d.id);
-            let note = match t.query("*IDN?") {
-                Ok(idn) if !idn.is_empty() => format!("Generator on USB: {}", idn),
-                Ok(_) => format!("Generator on USB {}: empty answer to *IDN?", d.id),
-                Err(e) => format!("Generator on USB {}: *IDN? failed ({}), sending anyway", d.id, e),
-            };
-            return Ok((Link::Usb(t), what, Some(note)));
-        }
-        let target = if addr.contains(':') { addr.to_string() } else { format!("{}:5555", addr) };
-        let what = format!("generator {}", target);
-        let sock = target.parse::<std::net::SocketAddr>().map_err(|e| e.to_string()).and_then(|a| std::net::TcpStream::connect_timeout(&a, std::time::Duration::from_secs(2)).map_err(|e| e.to_string()));
-        match sock {
-            Ok(s) => Ok((Link::Tcp(s), what, None)),
-            Err(e) => Err(format!("{}: {}", what, e)),
-        }
-    }
-
-    /// Sends one command line.
-    fn send(&mut self, line: &str) -> Result<(), String> {
-        use std::io::Write;
-        match self {
-            Link::Tcp(s) => s.write_all(format!("{}\n", line).as_bytes()).map_err(|e| e.to_string()),
-            Link::Usb(t) => t.command(line),
-        }
-    }
-}
-
-/// The generator thread: connects, sends every line it receives (a message with `\n` as several commands).
-fn gen_thread(usb: bool, addr: String, err: std::sync::Arc<std::sync::Mutex<Option<String>>>, note: std::sync::Arc<std::sync::Mutex<Option<String>>>) -> mpsc::Sender<String> {
-    let (tx, rx) = mpsc::channel::<String>();
-    std::thread::spawn(move || {
-        let (mut link, what) = match Link::open(usb, &addr) {
-            Ok((l, w, n)) => {
-                *note.lock().unwrap() = n;
-                (l, w)
-            }
-            Err(e) => {
-                *err.lock().unwrap() = Some(e);
-                return;
-            }
-        };
-        for msg in rx {
-            for line in msg.split('\n').filter(|l| !l.is_empty()) {
-                if let Err(e) = link.send(line) {
-                    *err.lock().unwrap() = Some(format!("{}: {}", what, e));
-                    return;
-                }
-            }
-        }
-    });
-    tx
-}
+/// What the Generator row offers: the scope's own, the one of the Ext generator page, or one that sweeps on its own.
+const SOURCES: [&str; 3] = ["Built-in", "External", "Free-running sweep"];
 
 const BODE_MODES: [oos_dsp::bode::Mode; 3] = [oos_dsp::bode::Mode::Loop, oos_dsp::bode::Mode::Psrr, oos_dsp::bode::Mode::Z];
 
@@ -256,21 +143,18 @@ impl Ui {
         if !self.bode.points.is_empty() {
             v.push(Item::BodeCur);
         }
-        // the connection only for an external generator, the address only on the network
+        // the generator itself (model, connection, address) has a page of its own
         if self.bode_gen() != BUILTIN {
-            v.push(Item::BodeLink);
-            if !self.m.bode_usb {
-                v.push(Item::BodeAddr);
-            }
+            v.push(Item::Open(MenuId::ExtGen));
         }
         v
     }
 
     pub(super) fn bode_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::BodeStart | Item::BodeStop | Item::BodePoints | Item::BodeAmp | Item::BodeAddr | Item::BodeCur | Item::BodeSwTime | Item::BodeSyncLvl | Item::BodeRef => Kind::Value,
+            Item::BodeStart | Item::BodeStop | Item::BodePoints | Item::BodeAmp | Item::BodeCur | Item::BodeSwTime | Item::BodeSyncLvl | Item::BodeRef => Kind::Value,
             Item::BodeRun => Kind::Action,
-            Item::BodeOn | Item::BodeIn | Item::BodeOut | Item::BodeGen | Item::BodeMode | Item::BodeLink | Item::BodeSwLog | Item::BodeSync | Item::BodeSyncEdge => Kind::Choice,
+            Item::BodeOn | Item::BodeIn | Item::BodeOut | Item::BodeGen | Item::BodeMode | Item::BodeSwLog | Item::BodeSync | Item::BodeSyncEdge => Kind::Choice,
             _ => return None,
         })
     }
@@ -289,8 +173,6 @@ impl Ui {
             Item::BodeOut => "Output",
             Item::BodeGen => "Generator",
             Item::BodeCur => "Cursor",
-            Item::BodeAddr => "Gen address",
-            Item::BodeLink => "Connection",
             Item::BodeSwTime => "Sweep time",
             Item::BodeSwLog => "Sweep",
             Item::BodeSync => "Sync",
@@ -317,9 +199,7 @@ impl Ui {
             },
             Item::BodeIn => self.wave_name(m.bode_in),
             Item::BodeOut => self.wave_name(m.bode_out),
-            Item::BodeGen => GENERATORS[m.bode_gen.min(GENERATORS.len() - 1)].name.into(),
-            Item::BodeAddr => m.bode_addr.clone(),
-            Item::BodeLink => if m.bode_usb { "USB".into() } else { "LAN".into() },
+            Item::BodeGen => SOURCES[self.bode_source()].into(),
             Item::BodeCur => self.bode_cursor_text(),
             Item::BodeSwTime => si_short(m.bode_sw_time, "s"),
             Item::BodeSwLog => if m.bode_sw_log { "Log".into() } else { "Lin".into() },
@@ -339,8 +219,7 @@ impl Ui {
             Item::BodeIn if self.bode_gen() == FREE => opt_ch_names("Off"),
             Item::BodeIn | Item::BodeOut => self.wave_names(),
             Item::BodeSync => ch_names(),
-            Item::BodeGen => GENERATORS.iter().map(|g| g.name.to_string()).collect(),
-            Item::BodeLink => v(&["LAN", "USB"]),
+            Item::BodeGen => v(&SOURCES),
             Item::BodeSwLog => v(&["Lin", "Log"]),
             Item::BodeSyncEdge => v(&["Rising", "Falling"]),
             _ => return None,
@@ -362,6 +241,8 @@ impl Ui {
             let now = self.m.bode_amp;
             self.ladder_move(it, now, d, &l)
         });
+        // the external generator is the model of its page
+        let next_gen = [BUILTIN, self.ext_model(), FREE][(self.bode_source() as i32 + d).rem_euclid(SOURCES.len() as i32) as usize];
         let m = &mut self.m;
         let ladder = |x: f64, d: i32| {
             let l: Vec<f64> = (0..10).flat_map(|e| [1.0, 2.0, 5.0].map(|k| k * 10f64.powi(e))).collect();
@@ -392,26 +273,15 @@ impl Ui {
             }
             // two choices: an odd step switches
             Item::BodeSwLog => m.bode_sw_log ^= d % 2 != 0,
-            Item::BodeLink => m.bode_usb ^= d % 2 != 0,
             Item::BodeSyncEdge if d % 2 != 0 => m.bode_sync_slope = if m.bode_sync_slope == Slope::Fall { Slope::Rise } else { Slope::Fall },
             Item::BodeSyncEdge => {}
             Item::BodeSync => m.bode_sync = src_step(m.bode_sync, NCH, d),
             Item::BodeSyncLvl => m.bode_sync_level = (((m.bode_sync_level * 10.0).round() as i64 + d as i64).clamp(-200, 200) as f32) / 10.0,
             Item::BodeRef => m.bode_ref = (m.bode_ref.round() + d as f64).clamp(-80.0, 40.0),
-            Item::BodeGen => m.bode_gen = (m.bode_gen as i32 + d).rem_euclid(GENERATORS.len() as i32) as usize,
+            Item::BodeGen => m.bode_gen = next_gen,
             Item::BodeCur => {
                 let n = self.bode.points.len() as i32;
                 self.bode.cursor = (self.bode.cursor as i32 + d).clamp(0, (n - 1).max(0)) as usize;
-            }
-            Item::BodeAddr => {
-                // the knob moves the last octet of an IPv4 address
-                let (head, tail) = m.bode_addr.rsplit_once('.').unwrap_or(("192.168.1", "100"));
-                let (oct, port) = tail.split_once(':').map_or((tail, None), |(o, p)| (o, Some(p)));
-                let o = (oct.parse::<i32>().unwrap_or(100) + d).clamp(1, 254);
-                m.bode_addr = match port {
-                    Some(p) => format!("{}.{}:{}", head, o, p),
-                    None => format!("{}.{}", head, o),
-                };
             }
             _ => return false,
         }
@@ -434,6 +304,15 @@ impl Ui {
         self.m.bode_gen.min(GENERATORS.len() - 1)
     }
 
+    /// The generator as the Generator row names it (an index of `SOURCES`).
+    fn bode_source(&self) -> usize {
+        match self.bode_gen() {
+            BUILTIN => 0,
+            FREE => 2,
+            _ => 1,
+        }
+    }
+
     /// The mode the points are in: a free sweep always measures gain in dB.
     fn bode_mode(&self) -> oos_dsp::bode::Mode {
         if self.bode_gen() == FREE { oos_dsp::bode::Mode::Loop } else { self.m.bode_mode }
@@ -444,10 +323,9 @@ impl Ui {
         if self.bode_gen() == BUILTIN {
             self.afg_set(Some(true), Some(f), Some(self.m.bode_amp), Some(0.0));
         } else {
-            let cmd = gen_lines(GENERATORS[self.bode_gen()].step, f, self.m.bode_amp).join("\n");
-            if let Some(tx) = &self.bode.tx {
-                let _ = tx.send(cmd);
-            }
+            let l = crate::extgen::lines(GENERATORS[self.ext_model()].step, &self.ext_vars(f, self.m.bode_amp));
+            self.ext_send(l);
+            self.bode.pending = true;
         }
         // about 5 periods on the screen
         let want = bode::tdiv_for(f, 5.0) as f32;
@@ -472,7 +350,6 @@ impl Ui {
         self.bode.freqs = bode::log_sweep(self.m.bode_start, self.m.bode_stop, self.m.bode_points);
         self.bode.points.clear();
         self.bode.idx = 0;
-        *self.bode.err.lock().unwrap() = None;
         // two stored records: the sweep is the sine fit of those samples, with no generator and no front end
         if self.bode_sources_are_refs() {
             let rec = Self::blank_record();
@@ -508,24 +385,28 @@ impl Ui {
             (self.m.afg_wave, self.m.afg_mod) = (0, 0);
             self.bode_send_freq();
         } else {
-            *self.bode.note.lock().unwrap() = None;
-            let tx = gen_thread(self.m.bode_usb, self.m.bode_addr.clone(), self.bode.err.clone(), self.bode.note.clone());
-            let g = &GENERATORS[self.bode_gen()];
-            let (f0, a) = (self.bode.freqs[0], self.m.bode_amp);
-            let _ = tx.send(gen_lines(g.setup, f0, a).join("\n"));
-            let on = gen_lines(g.on, f0, a).join("\n");
-            self.bode.tx = Some(tx);
-            self.bode_send_freq();
-            if let Some(tx) = &self.bode.tx {
-                let _ = tx.send(on);
+            // the connection of the Ext generator page if it is open, else one for this sweep
+            self.ext.shared.lock().unwrap().err = None;
+            if !self.ext_linked() {
+                self.ext_connect(false);
+                self.ext.by_bode = true;
             }
+            let g = &GENERATORS[self.ext_model()];
+            let v = self.ext_vars(self.bode.freqs[0], self.m.bode_amp);
+            self.ext_send(crate::extgen::lines(g.setup, &v));
+            self.bode_send_freq();
+            self.ext_send(crate::extgen::lines(g.on, &v));
+            self.ext.out = true;
         }
         self.toast("Bode sweep started");
     }
 
     pub(super) fn bode_finish(&mut self, msg: &str) {
         self.bode.running = false;
-        self.bode.tx = None;
+        self.bode.pending = false;
+        if self.ext.by_bode {
+            self.ext_disconnect();
+        }
         (self.bode.free, self.bode.capturing) = (false, false);
         if let Some(s) = self.bode.free_saved.take() {
             let m = &mut self.m;
@@ -586,18 +467,30 @@ impl Ui {
         if self.bode.free {
             return self.free_update();
         }
-        let e = self.bode.err.lock().unwrap().take();
+        // what the generator thread says is for this sweep only while it steps the external generator
+        let (e, n, done) = if self.ext_in_sweep() {
+            let mut s = self.ext.shared.lock().unwrap();
+            (s.err.take(), s.note.take(), s.done)
+        } else {
+            (None, None, 0)
+        };
         if let Some(e) = e {
             self.bode_finish(&e);
             return;
         }
-        let n = self.bode.note.lock().unwrap().take();
         if let Some(n) = n {
             self.toast(&n);
         }
         let Some(rec) = self.last[0].clone() else { return };
         if rec.raw.as_ref().is_some_and(|r| r.frame.stamp < self.bode.stamp) {
             return;
+        }
+        if self.bode.pending {
+            if done < self.ext.sent {
+                return;
+            }
+            // the generator has the frequency from here on: the settling records are counted from now
+            (self.bode.pending, self.bode.wait) = (false, 2);
         }
         if self.bode.wait > 0 {
             self.bode.wait -= 1;
@@ -876,7 +769,7 @@ impl Ui {
                 "built-in generator (Bode > Start)".to_string()
             } else {
                 let at = if self.m.bode_usb { "USB" } else { self.m.bode_addr.as_str() };
-                format!("generator {} at {} (Bode > Start)", GENERATORS[self.bode_gen()].name, at)
+                format!("generator {} at {} (Bode > Start)", GENERATORS[self.ext_model()].name, at)
             }
         };
         let status = if self.bode.running && self.bode.free {
@@ -1075,39 +968,26 @@ mod tests {
     }
 
     #[test]
-    fn utg900_preset_commands() {
-        let g = GENERATORS.iter().position(|g| g.name == "CHANnel").unwrap();
-        // the setup file keeps the index: the older presets keep theirs
-        assert_eq!((g, GENERATORS[BUILTIN].name, GENERATORS[FREE].name), (5, "Built-in", "Free-running sweep"));
-        let g = &GENERATORS[g];
-        assert_eq!(
-            gen_lines(g.setup, 100.0, 2.0),
-            vec![":CHANnel1:MODe CONTINUE", ":CHANnel1:BASE:WAVe SINe", ":CHANnel1:AMPLitude:UNIT VPP", ":CHANnel1:BASE:AMPLitude 2", ":CHANnel1:BASE:OFFSet 0"]
-        );
-        assert_eq!(gen_lines(g.step, 12500.0, 2.0), vec![":CHANnel1:BASE:FREQuency 12500"]);
-        assert_eq!(gen_lines(g.on, 1.0, 2.0), vec![":CHANnel1:OUTPut ON"]);
-        // the older presets: one line per step, nothing before
-        assert_eq!(gen_lines(GENERATORS[1].step, 1e3, 1.0), vec![":SOUR1:APPL:SIN 1000,1,0"]);
-        assert!(gen_lines(GENERATORS[1].setup, 1e3, 1.0).is_empty());
-    }
-
-    #[test]
-    fn usb_connection_in_the_menu() {
+    fn the_external_generator_is_the_one_of_its_page() {
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
-        assert!(!ui.items(MenuId::Bode).contains(&Item::BodeLink), "not for the built-in generator");
+        assert_eq!(ui.value(Item::BodeGen), "Built-in");
+        assert!(!ui.items(MenuId::Bode).contains(&Item::Open(MenuId::ExtGen)), "not for the built-in generator");
+        ui.adjust(Item::BodeGen, 1);
+        assert_eq!((ui.value(Item::BodeGen), ui.m.bode_gen), ("External".into(), ui.m.ext_model));
+        assert!(ui.items(MenuId::Bode).contains(&Item::Open(MenuId::ExtGen)), "the way to the generator's page");
+        ui.adjust(Item::BodeGen, 1);
+        assert_eq!((ui.value(Item::BodeGen), ui.m.bode_gen), ("Free-running sweep".into(), FREE));
+        ui.adjust(Item::BodeGen, 1);
+        assert_eq!(ui.m.bode_gen, BUILTIN);
+        ui.adjust(Item::BodeGen, 1);
+        // an older setup names the model in the Bode line: it is the external generator
         ui.m.bode_gen = 5;
-        assert_eq!(ui.value(Item::BodeGen), "CHANnel");
-        let items = ui.items(MenuId::Bode);
-        assert!(items.contains(&Item::BodeLink) && items.contains(&Item::BodeAddr));
-        assert_eq!(ui.value(Item::BodeLink), "LAN");
-        ui.adjust(Item::BodeLink, 1);
-        assert!(ui.m.bode_usb && ui.value(Item::BodeLink) == "USB");
-        assert!(!ui.items(MenuId::Bode).contains(&Item::BodeAddr), "no address on USB");
-        assert_eq!(ui.m.bode_addr, "192.168.1.100:5555", "the LAN address stays");
+        assert_eq!(ui.value(Item::BodeGen), "External");
         let mut cv = Canvas::new(PANEL_W, PANEL_H);
         ui.m.view = AView::Bode;
         ui.render(&mut cv);
-        // no USB device here: the sweep stops with a message that says so, the settings come back
+        // on USB with no device: the sweep stops with a message that says so, the settings come back
+        ui.m.bode_usb = true;
         let ts0 = ui.m.tscale;
         ui.activate(Item::BodeRun);
         assert!(ui.bode.running);
@@ -1120,15 +1000,52 @@ mod tests {
         assert!(!ui.bode.running && ui.m.tscale == ts0);
         let t = ui.toast.as_ref().unwrap().0.clone();
         assert!(t.starts_with("generator USB: no USB device found"), "{}", t);
-        ui.adjust(Item::BodeLink, -1);
-        assert!(!ui.m.bode_usb);
+        assert!(!ui.ext_linked(), "the sweep closes the connection it opened");
         // the setup file: the connection on a line of its own; an older file without it is on the LAN
-        ui.m.bode_usb = true;
         let text = crate::store::setup_text(&ui.m);
         assert!(text.contains("bode_link = usb\n"), "{}", text);
         let m = crate::store::parse_setup(&text).unwrap();
-        assert!(m.bode_usb && m.bode_gen == 5 && m.bode_addr == "192.168.1.100:5555");
+        assert!(m.bode_usb && m.bode_addr == "192.168.1.100:5555");
         let old: String = text.lines().filter(|l| !l.starts_with("bode_link")).map(|l| format!("{}\n", l)).collect();
         assert!(!crate::store::parse_setup(&old).unwrap().bode_usb);
+    }
+
+    /// A generator with an error queue is asked after every step: the sweep waits for the answer, and ends with
+    /// what the generator said when it refuses a frequency.
+    #[test]
+    fn a_frequency_the_generator_refuses_ends_the_sweep() {
+        let (addr, got) = crate::extgen::tests::fake_generator("OWON,DGE2070,1,x", "100000Hz");
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        (ui.m.bode_addr, ui.m.bode_start, ui.m.bode_stop, ui.m.bode_points) = (addr, 1e3, 1e5, 3);
+        (ui.m.ext_model, ui.m.bode_gen) = (6, 6);
+        ui.activate(Item::BodeRun);
+        assert!(ui.bode.running && ui.bode.pending);
+        for _ in 0..400 {
+            ui.step(0.05);
+            if !ui.bode.running {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(!ui.bode.running, "sweep did not end ({} of {})", ui.bode.idx, ui.bode.freqs.len());
+        let t = ui.toast.as_ref().unwrap().0.clone();
+        assert_eq!(t, "The generator refused SOURce1:FREQuency:FIXed 100000Hz: -222,\"Data out of range\"");
+        // the two frequencies before it were measured, each after the generator had it
+        assert_eq!(ui.bode.points.len(), 2, "{:?}", ui.bode.points);
+        // without the error queries, and the mark of the connection the sweep closed at its end
+        let l: Vec<String> = got.lock().unwrap().iter().filter(|l| *l != "SYSTem:ERRor?" && *l != crate::extgen::tests::CLOSED).cloned().collect();
+        assert_eq!(
+            l,
+            [
+                "OUTPut1:IMPedance INFinity",
+                "SOURce1:FUNCtion:SHAPe SIN",
+                "SOURce1:VOLTage:LEVel:IMMediate:OFFSet 0mV",
+                "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude 1Vpp",
+                "SOURce1:FREQuency:FIXed 1000Hz",
+                "OUTPut1:STATe ON",
+                "SOURce1:FREQuency:FIXed 10000Hz",
+                "SOURce1:FREQuency:FIXed 100000Hz",
+            ]
+        );
     }
 }

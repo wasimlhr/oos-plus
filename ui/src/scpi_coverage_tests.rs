@@ -630,6 +630,30 @@ fn bandwidth_logger_analysers(t: &mut T) {
     assert_eq!(t.ui.m.bode_points, 50);
     t.no(":BODE:POIN 1000", "-224");
     t.go(":BODE:RUN OFF");
+    // external generator: the settings of its page; nothing is connected here
+    t.rt(":EXTG:MOD OWON_DGE", ":EXTG:MOD?", "OWON_DGE");
+    t.shows(Item::ExtModel, "OWON DGE");
+    t.rt(":EXTG:LINK USB", ":EXTG:LINK?", "USB");
+    t.rt(":EXTG:LINK LAN", ":EXTG:LINK?", "LAN");
+    t.rt(":EXTG:ADDR \"10.0.0.9:5025\"", ":EXTG:ADDR?", "10.0.0.9:5025");
+    assert_eq!(t.go(":BODE:GEN?"), "10.0.0.9:5025");
+    t.rt(":EXTG:CHAN 2", ":EXTG:CHAN?", "2");
+    t.rt(":EXTG:LOAD 50", ":EXTG:LOAD?", "50");
+    t.shows(Item::ExtLoad, "50 \u{3a9}");
+    t.rt(":EXTG:LOAD HIZ", ":EXTG:LOAD?", "HIZ");
+    t.rn(":EXTG:FREQ 12500", ":EXTG:FREQ?", 12500.0);
+    t.rn(":EXTG:AMPL 0.25", ":EXTG:AMPL?", 0.25);
+    assert_eq!((t.ui.m.ext_model, t.ui.m.ext_ch, t.ui.m.ext_hiz, t.ui.m.ext_freq, t.ui.m.ext_ampl), (6, 1, true, 12500.0, 0.25));
+    assert_eq!((t.go(":EXTG:CONN?"), t.go(":EXTG:STAT?"), t.go(":EXTG:IDN?"), t.go(":EXTG:OUTP?")), ("0".into(), "OFF".into(), String::new(), "0".into()));
+    // no output without a connection, and nothing outside the ranges
+    t.no(":EXTG:OUTP ON", "-221");
+    t.go(":EXTG:OUTP OFF");
+    t.no(":EXTG:FREQ 1e12", "-224");
+    t.no(":EXTG:AMPL 0", "-224");
+    t.no(":EXTG:LOAD 75", "-224");
+    t.no(":EXTG:ADDR \"a b\"", "-224");
+    t.no(":EXTG:STAT ON", "-113");
+    t.go(":EXTG:CONN OFF");
 }
 
 fn system(t: &mut T) {

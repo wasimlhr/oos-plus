@@ -183,8 +183,9 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Eye diagram with voltage and UI axes, density colours, TIE trend, histogram and spectrum, bathtub curve. Jitter split into TJ, RJ and DJ (dual-Dirac model) and measured DCD, DDJ and PJ, pooled over records
 - Power analysis: quality, harmonics, switching, ripple
 - Bode plot with the built-in generator or an external one on the LAN or the USB-A port (APPL or BSWV command sets, a
-  UTG900 preset, generic SCPI), or from one record of a generator that sweeps on its own and marks the sweep start on a
-  sync output
+  UTG900 and an OWON DGE model, generic SCPI), or from one record of a generator that sweeps on its own and marks the
+  sweep start on a sync output
+- External generator page: model, connection, what the generator says it is, and a sine switched on from the scope
 - Identify: names a signal and sets up a trigger and decoder for it
 - Bandwidth test: rise time, overshoot and magnitude response from a fast edge
 
@@ -255,6 +256,7 @@ networks, see [docs/wlan.md](wlan.md)).
 | Generator noise, system info, bandwidth test | tests on the host only |
 | Bode with a free-running sweep | tests on the host only (synthetic sweeps); the scan path for sweeps above about 0.9 s is not yet tried on a unit |
 | Bode with a generator on USB (USBTMC), UNI-T UTG900 preset | tests on the host only (a simulated USBTMC device); no generator on USB tried yet |
+| External generator page, OWON DGE model | tests on the host only (a simulated generator on a socket); the commands are known from a DGE2070 driven from a computer, not yet from the USB-A port of a scope |
 | USB storage stick, 10:1 probe | run on a DHO924S |
 | WLAN | driver, firmware and scan run on a DHO924S with an RTL8188EU stick; joining a network tested on simulated radios only |
 | Overclocking (System > Overclock) | run on a DHO924S: every step boots, but above 1.25 GHz records at the full rate lose samples; the default stays 1.25 GHz |
@@ -716,14 +718,20 @@ move the insertion point, a tap into the entry puts it there; typing and Delete 
 opens as a full analysis page with optional side or lower panes and has source/rate settings and Close in its pane header. Other analyser views
 use the button with three dots at the top right for Exit and Settings.
 
-**Bode with an external generator.** In Analysers > Bode pick the Generator preset (Rigol DG, Siglent SDG, UNI-T
-UTG900 for the UTG932 and UTG962, or SCPI for one that takes `FREQ` and `VOLT`), then Connection: LAN with Gen address
-(IP, port 5555 if none is given; the knob moves the last number) or USB for a generator in the USB-A port of the scope.
-On USB the scope takes the first USBTMC instrument it finds (no PC, no driver), asks it for `*IDN?` and shows the
-answer; without one the sweep stops with the reason (no USB device, a device that is not USBTMC, no permission). Rigol
-DG and Siglent SDG generators are USBTMC instruments as well. The scope sets channel 1 of the generator to a sine of
-Amplitude (Vpp) without offset, switches its output on and steps through the frequencies. Over SCPI,
-`:BODE:GENerator "usb"` selects USB and `:BODE:GENerator "192.168.1.20:5025"` the LAN again.
+**External generator.** Menu > Instruments > Ext generator is the page of a generator beside the scope
+([docs/extgen.md](docs/extgen.md)). Pick the Model (APPL for a Rigol DG, BSWV for a Siglent SDG, CHANnel for a UNI-T
+UTG900 such as the UTG932 and UTG962, OWON DGE, or SCPI for one that takes `FREQ` and `VOLT`), then Connection: LAN
+with Address (IP, port 5555 if none is given; the knob moves the last number) or USB for a generator in the USB-A port
+of the scope. On USB the scope takes the first USBTMC instrument it finds (no PC, no driver). Connect asks it for
+`*IDN?`, shows maker and model and sets Model for a model it knows; without a generator State says why (no USB
+device, a device that is not USBTMC, no permission). Output switches a sine of Frequency and Amplitude on, to see
+that the generator follows.
+
+**Bode with an external generator.** In Analysers > Bode set Generator to External: the sweep uses the generator of
+that page, through its connection if it is open, else one of its own. The scope sets the channel of the generator to
+a sine of Amplitude (Vpp) without offset, switches its output on and steps through the frequencies. A model with an
+error queue (OWON DGE) is asked after every command: a frequency it refuses ends the sweep with what it answered.
+Over SCPI, `:BODE:GENerator "usb"` selects USB and `:BODE:GENerator "192.168.1.20:5025"` the LAN again.
 - UNI-T UTG900 commands: `:CHANnel1:MODe CONTINUE`, `:CHANnel1:BASE:WAVe SINe`, `:CHANnel1:AMPLitude:UNIT VPP`,
   `:CHANnel1:BASE:AMPLitude`, `:CHANnel1:BASE:OFFSet 0`, `:CHANnel1:BASE:FREQuency`, `:CHANnel1:OUTPut ON`, from the
   UNI-T UTG900 series programming manual (REV 00, 2022-07-15; the English UTG900E manual has the same commands). Not
