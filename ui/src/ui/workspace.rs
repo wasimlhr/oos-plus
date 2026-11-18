@@ -683,6 +683,21 @@ impl Ui {
             _ => None,
         }
     }
+    /// The user chooses how the traces share the plot (the buttons of the waveform view, its menu, Display > Traces).
+    /// In Studio every signal is then fitted to the height it gets (`fit_vertical`): in Stacked a lane each, where
+    /// the signal fills its lane; in Overlay the whole plot, where the signals lie on one another. The scale and
+    /// offset a channel had were those of the other way to show it: offsets that kept four channels apart in one
+    /// plot put each at the edge of its own lane, and Overlay with them looked like lanes (seen on a unit,
+    /// 2026-11-18). A mode that is set by a set-up, a view or the layout changes no channel (`trace_mode`).
+    pub(super) fn choose_trace_mode(&mut self, stacked: bool) {
+        let was = self.trace_stacked();
+        self.trace_mode(stacked);
+        if self.m.layout != Layout::Studio || self.trace_stacked() == was { return; }
+        let fitted = self.fit_vertical();
+        let how = if stacked { "Stacked: every signal fitted to its lane" } else { "Overlay: the signals fitted to the plot" };
+        if fitted > 0 { self.toast(how); }
+    }
+
     pub(super) fn trace_mode(&mut self, stacked: bool) {
         self.workspace.popup = None;
         if self.m.layout == Layout::Studio { self.studio.overlay = !stacked; self.m.studio_overlay = !stacked; }
@@ -807,8 +822,8 @@ impl Ui {
         if (overlay.contains(x, y) || stacked.contains(x, y)) && (self.view_on() || self.m.view == AView::Eye) {
             self.toast("Overlay and Stacked arrange the waveform view");
         }
-        else if overlay.contains(x, y) { self.trace_mode(false); }
-        else if stacked.contains(x, y) { self.trace_mode(true); }
+        else if overlay.contains(x, y) { self.choose_trace_mode(false); }
+        else if stacked.contains(x, y) { self.choose_trace_mode(true); }
         else if time.contains(x, y) { self.toggle_menu(MenuId::Horizontal); }
         else if live.is_some_and(|r| r.contains(x, y)) { self.return_to_live(); }
         else if panel.is_some_and(|r| r.contains(x, y)) { self.desktop_panel = self.desktop_panel.map(|open| !open); }
@@ -994,7 +1009,7 @@ impl Ui {
     }
     pub(super) fn workspace_action(&mut self, action: Action) {
         match action {
-            Action::Overlay => self.trace_mode(false), Action::Stacked => self.trace_mode(true),
+            Action::Overlay => self.choose_trace_mode(false), Action::Stacked => self.choose_trace_mode(true),
             Action::Sources => self.open_sources(56, BOTTOM.y),
             Action::Source(WaveId::Ch(c)) => {
                 if self.m.ch[c].on && self.trace_sources().len() <= 1 { self.toast("Keep one source on"); return; }

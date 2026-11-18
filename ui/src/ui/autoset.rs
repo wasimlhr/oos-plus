@@ -231,10 +231,46 @@ impl Ui {
     }
 
     /// Lowest and highest volts of the last record.
-    fn auto_levels(&self, c: usize) -> (f32, f32) {
+    pub(super) fn auto_levels(&self, c: usize) -> (f32, f32) {
         let Some(record) = &self.last[0] else { return (f32::NAN, f32::NAN) };
         let s = crate::wave::autoset_summary(&record.ch[c], record.dt);
         (s.vmin, s.vmax)
+    }
+
+    /// Every channel that is on takes the height it has, from the record on the screen: the scale at which its signal
+    /// spans at most six of the eight divisions, and the offset that puts it in the middle. A channel without a
+    /// swing worth a scale (a level, noise) keeps its scale and is put in the middle. No time base, no trigger
+    /// source: this is the vertical half of an auto set-up, for a change of how the traces share the screen
+    /// (`choose_trace_mode`). A signal that leaves its window is seen only as far as the window goes: its scale
+    /// goes two steps up, and a second fit finds the rest. How many channels were changed.
+    pub(super) fn fit_vertical(&mut self) -> usize {
+        let mut fitted = 0;
+        let on: Vec<usize> = (0..n_ch()).filter(|&c| self.m.ch[c].on).collect();
+        for c in on {
+            let (lo, hi) = self.auto_levels(c);
+            if !(lo.is_finite() && hi.is_finite()) { continue; }
+            let clipped = self.channel_clipping(c);
+            let ch = &mut self.m.ch[c];
+            let before = (ch.vscale, ch.offset);
+            let vpp = hi - lo;
+            if clipped {
+                ch.vscale = (ch.vscale + 2).min(VSCALES.len() - 1);
+            } else if vpp >= MIN_VPP * ch.probe && vpp >= 0.3 * ch.volts_per_div() {
+                ch.vscale = scale_for(ch, vpp / 6.0);
+            }
+            ch.offset = -(hi + lo) / 2.0;
+            if before != (ch.vscale, ch.offset) { fitted += 1; }
+        }
+        if fitted > 0 {
+            // the trigger level follows its source, as after an auto set-up: it was a level of the old offset
+            let (lo, hi) = self.auto_levels(self.m.trig_src);
+            if lo.is_finite() && hi.is_finite() && hi - lo >= MIN_VPP * self.m.ch[self.m.trig_src.min(n_ch() - 1)].probe {
+                self.m.trig_level = self.m.trig_level.clamp(lo, hi);
+            }
+            self.settings_changed();
+            self.mark_changed();
+        }
+        fitted
     }
 
     pub(super) fn auto_step(&mut self) {

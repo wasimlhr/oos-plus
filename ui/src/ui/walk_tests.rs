@@ -2625,3 +2625,45 @@ fn the_classic_strip_has_a_line_for_each_of_four_channels() {
         std::fs::write(std::path::Path::new(&dir).join("walk-many-sources.png"), crate::store::png_of(&cv)).unwrap();
     }
 }
+
+/// Choosing Stacked or Overlay in Studio fits every signal to the height it gets: a channel that was kept apart from
+/// the others by its offset (three divisions up, at a scale too coarse for it) is in the middle of its lane and
+/// fills it, and in Overlay the signals lie on one another in the whole plot. A mode that a set-up brings changes no
+/// channel.
+#[test]
+fn choosing_stacked_or_overlay_fits_every_signal_to_its_height() {
+    let mut u = fresh(Layout::Studio);
+    u.trace_mode(false);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    // the signal of the demo on CH1, parked high and small as in a plot shared with three others
+    let (lo, hi) = u.auto_levels(0);
+    assert!(hi - lo > 0.5, "the demo has a signal on CH1: {lo} {hi}");
+    (u.m.ch[0].vscale, u.m.ch[0].offset) = (VSCALES.iter().position(|v| *v == 5.0).unwrap(), 12.0);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let parked = (u.m.ch[0].vscale, u.m.ch[0].offset);
+    // a set-up or a view sets the mode: nothing is fitted
+    u.trace_mode(true);
+    assert_eq!((u.m.ch[0].vscale, u.m.ch[0].offset), parked);
+    u.trace_mode(false);
+    for stacked in [true, false] {
+        (u.m.ch[0].vscale, u.m.ch[0].offset) = parked;
+        for _ in 0..6 { u.step(0.03); frame(&mut u); }
+        u.choose_trace_mode(stacked);
+        let ch = &u.m.ch[0];
+        let (vdiv, span) = (ch.volts_per_div(), hi - lo);
+        assert!(span <= 6.0 * vdiv && span >= 2.0 * vdiv, "stacked {stacked}: {span} V at {vdiv} V/div fills its height");
+        assert!((ch.offset + (hi + lo) / 2.0).abs() < 0.2 * vdiv, "stacked {stacked}: in the middle, offset {}", ch.offset);
+        assert!(u.toast_text().contains(if stacked { "Stacked" } else { "Overlay" }), "{}", u.toast_text());
+        if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+            for _ in 0..6 { u.step(0.03); frame(&mut u); }
+            let mut cv = Canvas::new(W, H);
+            u.render(&mut cv);
+            let _ = std::fs::create_dir_all(&dir);
+            std::fs::write(std::path::Path::new(&dir).join(format!("walk-fit-{}.png", if stacked { "stacked" } else { "overlay" })), crate::store::png_of(&cv)).unwrap();
+        }
+    }
+    // the same mode again: nothing to fit, nothing said
+    let now = (u.m.ch[0].vscale, u.m.ch[0].offset);
+    u.choose_trace_mode(false);
+    assert_eq!((u.m.ch[0].vscale, u.m.ch[0].offset), now);
+}
