@@ -1,4 +1,3 @@
-# SPDX-License-Identifier: GPL-2.0-or-later
 """Builds the OOS Plus SCPI Programming Manual (PDF).
 
     python docs/manual/build.py [out.pdf]
@@ -29,10 +28,27 @@ def inline(s):
 
 def para(s):
     """One or more paragraphs; a list item starts with '- '."""
+    if isinstance(s, list) and s and isinstance(s[0], dict):
+        return blocks(s)
     if isinstance(s, list):
         items = ''.join(f'<li>{inline(x[2:] if x.startswith("- ") else x)}</li>' for x in s)
         return f'<ul>{items}</ul>'
     return ''.join(f'<p>{inline(p)}</p>' for p in s.split('\n\n'))
+
+
+def blocks(bs):
+    """Blocks from gen_commands.py: {'p': text} {'ul': [items]} {'pre': code} {'h': heading}."""
+    out = []
+    for b in bs:
+        if 'p' in b:
+            out.append(f'<p>{inline(b["p"])}</p>')
+        elif 'ul' in b:
+            out.append('<ul>' + ''.join(f'<li>{inline(x)}</li>' for x in b['ul']) + '</ul>')
+        elif 'pre' in b:
+            out.append(f'<pre>{html.escape(b["pre"])}</pre>')
+        else:
+            out.append(f'<h4>{html.escape(b["h"])}</h4>')
+    return ''.join(out)
 
 
 def slug(s):
@@ -42,8 +58,9 @@ def slug(s):
 def command(c, sid):
     cid = 'cmd-' + slug(c['header'])
     ext = '<span class="ext">OOS</span>' if c.get('ext') else ''
+    ext += '<span class="ext confirm">CONFIRM</span>' if c.get('confirm') else ''
     rows = []
-    syn = [c[k] for k in ('set', 'query') if c.get(k)]
+    syn = [x for k in ('set', 'query') if c.get(k) for x in c[k].split('\n')]
     rows.append(('Syntax', ''.join(f'<span class="syntax">{html.escape(x)}</span>' for x in syn)))
     if c.get('aliases'):
         rows.append(('Aliases', ', '.join(f'<code>{html.escape(a)}</code>' for a in c['aliases'])))
@@ -77,6 +94,8 @@ def reference(data, chapter):
         if s.get('intro'):
             out.append(para(s['intro']))
         out.extend(command(c, sid) for c in s['commands'])
+        if s.get('after'):
+            out.append(para(s['after']))
     return '\n'.join(out)
 
 
@@ -116,7 +135,7 @@ def document(pages):
     body = before + reference(data, meta['commands_chapter']) + after + appendices(data, 'A')
     cover = f'''<section class="cover"><div class="bar"></div><div class="kicker">Programming Manual</div>
 <h1>OOS Plus<br>SCPI Programming Manual</h1><div class="sub">Remote control of OOS Plus oscilloscopes and the OOS desktop app</div>
-<div class="meta">Software: {html.escape(meta["software"])}<br>Edition: {html.escape(meta["edition"])}<br>Instrument dialect: {html.escape(meta["dialect"])}</div></section>'''
+<div class="meta">Firmware version: {html.escape(meta["software"])}<br>Date: {html.escape(meta["date"])}<br>Instrument dialect: {html.escape(meta["dialect"])}</div></section>'''
     css = open(os.path.join(HERE, 'style.css'), encoding='utf-8').read()
     return (f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>OOS Plus SCPI Programming Manual</title>'
             f'<style>{css}</style></head><body>{cover}{contents(body, pages)}{body}</body></html>'), body

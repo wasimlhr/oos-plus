@@ -1,0 +1,897 @@
+{
+ "intro": "This chapter describes every command OOS Plus implements, grouped by subsystem. Commands marked **OOS** are extensions that the Rigol DHO800/DHO900 command set does not have. Commands not listed here are not supported and report error -113.",
+ "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
+ "commands_chapter": 3,
+ "appendices": [
+  {
+   "title": "Standard Measurement Items",
+   "intro": "Items for `:MEASure:ITEM?`, `:MEASure:ITEM` and `:MEASure:STATistic:ITEM` with one source. The long form or the short form (upper-case letters) is accepted; `:MEASure:STRip?` returns the upper-case long form. A missing result is `9.9E37`.",
+   "tables": [
+    {
+     "columns": [
+      "Item",
+      "Measurement",
+      "Unit"
+     ],
+     "rows": [
+      [
+       "`VPP`",
+       "Peak-to-peak voltage (VMAX − VMIN)",
+       "V"
+      ],
+      [
+       "`VMAX`",
+       "Maximum voltage",
+       "V"
+      ],
+      [
+       "`VMIN`",
+       "Minimum voltage",
+       "V"
+      ],
+      [
+       "`VAVG`",
+       "Mean voltage",
+       "V"
+      ],
+      [
+       "`VRMS`",
+       "RMS voltage (DC included)",
+       "V"
+      ],
+      [
+       "`VAMP`",
+       "Amplitude (VTOP − VBASE)",
+       "V"
+      ],
+      [
+       "`FREQuency`",
+       "Frequency",
+       "Hz"
+      ],
+      [
+       "`PERiod`",
+       "Period",
+       "s"
+      ],
+      [
+       "`RTIMe`",
+       "Rise time between the lower and upper thresholds",
+       "s"
+      ],
+      [
+       "`FTIMe`",
+       "Fall time between the upper and lower thresholds",
+       "s"
+      ],
+      [
+       "`PWIDth`",
+       "Positive pulse width",
+       "s"
+      ],
+      [
+       "`PDUTy`",
+       "Positive duty cycle",
+       "%"
+      ],
+      [
+       "`NDUTy`",
+       "Negative duty cycle",
+       "%"
+      ],
+      [
+       "`NWIDth`",
+       "Negative pulse width",
+       "s"
+      ],
+      [
+       "`VTOP`",
+       "Top level",
+       "V"
+      ],
+      [
+       "`VBASe`",
+       "Base level",
+       "V"
+      ],
+      [
+       "`OVERshoot`",
+       "Overshoot after a rising edge, relative to the amplitude",
+       "%"
+      ],
+      [
+       "`PREShoot`",
+       "Preshoot before a rising edge, relative to the amplitude",
+       "%"
+      ],
+      [
+       "`HTIMe`",
+       "Time the signal is high",
+       "s"
+      ],
+      [
+       "`LTIMe`",
+       "Time the signal is low",
+       "s"
+      ],
+      [
+       "`BWIDth`",
+       "Burst width",
+       "s"
+      ],
+      [
+       "`TOUTside`",
+       "Time spent outside the measurement levels (`:MEASure:OUTSide`)",
+       "s"
+      ],
+      [
+       "`NPERiods`",
+       "Duration of N periods (`:MEASure:NPERiods`)",
+       "s"
+      ],
+      [
+       "`CAMP` (`CYCAmp`)",
+       "Amplitude over whole cycles",
+       "V"
+      ],
+      [
+       "`CTOP`",
+       "Top level over whole cycles",
+       "V"
+      ],
+      [
+       "`CBASe`",
+       "Base level over whole cycles",
+       "V"
+      ],
+      [
+       "`CPP` (`CYCPP`)",
+       "Peak-to-peak over whole cycles",
+       "V"
+      ],
+      [
+       "`CMAX`",
+       "Maximum over whole cycles",
+       "V"
+      ],
+      [
+       "`CMIN`",
+       "Minimum over whole cycles",
+       "V"
+      ],
+      [
+       "`VUPPer`",
+       "Upper threshold voltage",
+       "V"
+      ],
+      [
+       "`VMID`",
+       "Middle threshold voltage",
+       "V"
+      ],
+      [
+       "`VLOWer`",
+       "Lower threshold voltage",
+       "V"
+      ],
+      [
+       "`CAVG`",
+       "Mean over whole cycles",
+       "V"
+      ],
+      [
+       "`CRMS`",
+       "RMS over whole cycles",
+       "V"
+      ],
+      [
+       "`ACRms`",
+       "AC RMS (DC removed)",
+       "V"
+      ],
+      [
+       "`SDEViation`",
+       "Standard deviation",
+       "V"
+      ],
+      [
+       "`AREA`",
+       "Area under the waveform",
+       "V*s"
+      ],
+      [
+       "`CARea`",
+       "Area over whole cycles",
+       "V*s"
+      ],
+      [
+       "`PPULses`",
+       "Number of positive pulses",
+       "—"
+      ],
+      [
+       "`NPULses`",
+       "Number of negative pulses",
+       "—"
+      ],
+      [
+       "`PEDGes`",
+       "Number of rising edges",
+       "—"
+      ],
+      [
+       "`NEDGes`",
+       "Number of falling edges",
+       "—"
+      ],
+      [
+       "`TVMAX`",
+       "Time of the maximum",
+       "s"
+      ],
+      [
+       "`TVMIN`",
+       "Time of the minimum",
+       "s"
+      ],
+      [
+       "`PSLew`",
+       "Slew rate of rising edges",
+       "V/s"
+      ],
+      [
+       "`NSLew`",
+       "Slew rate of falling edges",
+       "V/s"
+      ],
+      [
+       "`ESTUI` (`UI`)",
+       "Estimated unit interval of a data signal",
+       "s"
+      ],
+      [
+       "`MEDian`",
+       "Median voltage",
+       "V"
+      ],
+      [
+       "`MODE`",
+       "Most frequent voltage",
+       "V"
+      ],
+      [
+       "`LSLO` (`LINSLOPE`)",
+       "Slope of a straight-line fit",
+       "V/s"
+      ],
+      [
+       "`LINT` (`LININT`)",
+       "Intercept of a straight-line fit",
+       "V"
+      ],
+      [
+       "`PAM0` (`L0`)",
+       "PAM4 level 0",
+       "V"
+      ],
+      [
+       "`PAM1` (`L1`)",
+       "PAM4 level 1",
+       "V"
+      ],
+      [
+       "`PAM2` (`L2`)",
+       "PAM4 level 2",
+       "V"
+      ],
+      [
+       "`PAM3` (`L3`)",
+       "PAM4 level 3",
+       "V"
+      ],
+      [
+       "`PSEP`",
+       "Separation of PAM4 levels",
+       "V"
+      ],
+      [
+       "`BITS` (`ONES`)",
+       "Number of one bits",
+       "—"
+      ],
+      [
+       "`PLLUI`",
+       "Unit interval from a PLL clock recovery",
+       "s"
+      ],
+      [
+       "`UIWTD`",
+       "Weighted unit interval",
+       "s"
+      ],
+      [
+       "`FOLD`",
+       "RMS deviation of the waveform folded on its unit interval",
+       "V"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Pair Measurement Items",
+   "intro": "Items with two sources, `<A>,<B>`. For delay, phase and skew, A is the reference edge and B the second edge. For setup and hold, A is the clock or strobe and B the data. A clock edge counts only when the data changed within that edge’s own cycle, so data that is steady between strobe bursts adds no result.",
+   "tables": [
+    {
+     "columns": [
+      "Item",
+      "Measurement",
+      "Unit"
+     ],
+     "rows": [
+      [
+       "`RRDelay`",
+       "Delay from a rising edge of A to the next rising edge of B",
+       "s"
+      ],
+      [
+       "`FFDelay`",
+       "Delay from a falling edge of A to the next falling edge of B",
+       "s"
+      ],
+      [
+       "`RFDelay`",
+       "Delay from a rising edge of A to the next falling edge of B",
+       "s"
+      ],
+      [
+       "`FRDelay`",
+       "Delay from a falling edge of A to the next rising edge of B",
+       "s"
+      ],
+      [
+       "`RRPHase`",
+       "Phase between rising edges of A and B",
+       "°"
+      ],
+      [
+       "`FFPHase`",
+       "Phase between falling edges of A and B",
+       "°"
+      ],
+      [
+       "`RFPHase`",
+       "Phase from rising edges of A to falling edges of B",
+       "°"
+      ],
+      [
+       "`FRPHase`",
+       "Phase from falling edges of A to rising edges of B",
+       "°"
+      ],
+      [
+       "`RRSkew`",
+       "Skew between rising edges of A and B",
+       "s"
+      ],
+      [
+       "`FFSkew`",
+       "Skew between falling edges of A and B",
+       "s"
+      ],
+      [
+       "`RFSkew`",
+       "Skew from rising edges of A to falling edges of B",
+       "s"
+      ],
+      [
+       "`FRSkew`",
+       "Skew from falling edges of A to rising edges of B",
+       "s"
+      ],
+      [
+       "`SETup`",
+       "Setup time of data B before rising clock edges of A",
+       "s"
+      ],
+      [
+       "`HOLD`",
+       "Hold time of data B after rising clock edges of A",
+       "s"
+      ],
+      [
+       "`SETHold`",
+       "Number of rising clock edges that violate `:MEASure:TSETup` or `:MEASure:THOLd`",
+       "—"
+      ],
+      [
+       "`FSETup`",
+       "Setup time of data B before falling clock edges of A",
+       "s"
+      ],
+      [
+       "`FHOLd`",
+       "Hold time of data B after falling clock edges of A",
+       "s"
+      ],
+      [
+       "`DSETup`",
+       "Setup time of data B before both edges of strobe A (DDR: A = DQS, B = DQ)",
+       "s"
+      ],
+      [
+       "`DHOLd`",
+       "Hold time of data B after both edges of strobe A",
+       "s"
+      ],
+      [
+       "`DSEThold`",
+       "Number of strobe edges (both) that violate `:MEASure:TSETup` or `:MEASure:THOLd`",
+       "—"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Eye Figures",
+   "intro": "Figures for `:EYE:ITEM?`. They come from the Eye analysis page as configured; a figure that is not available is `9.9E37`.",
+   "tables": [
+    {
+     "columns": [
+      "Figure",
+      "Meaning",
+      "Unit"
+     ],
+     "rows": [
+      [
+       "`ONE`",
+       "Mean level of a logic one",
+       "V"
+      ],
+      [
+       "`ZERO`",
+       "Mean level of a logic zero",
+       "V"
+      ],
+      [
+       "`AMPLITUDE`",
+       "ONE − ZERO",
+       "V"
+      ],
+      [
+       "`CROSSING`",
+       "Crossing level relative to ZERO…ONE",
+       "%"
+      ],
+      [
+       "`RISE`",
+       "Rise time of the eye",
+       "s"
+      ],
+      [
+       "`FALL`",
+       "Fall time of the eye",
+       "s"
+      ],
+      [
+       "`HEIGHT`",
+       "Eye height",
+       "V"
+      ],
+      [
+       "`WIDTH`",
+       "Eye width: 1 UI − 6σ of the crossing time",
+       "s"
+      ],
+      [
+       "`Q`",
+       "Q factor: (ONE − ZERO) / (σ1 + σ0)",
+       "—"
+      ],
+      [
+       "`HBER`",
+       "Eye height at the configured BER",
+       "V"
+      ],
+      [
+       "`RECORDS`",
+       "Records accumulated",
+       "—"
+      ],
+      [
+       "`EDGES`",
+       "Edges used for jitter",
+       "—"
+      ],
+      [
+       "`UI`",
+       "Mean unit interval",
+       "s"
+      ],
+      [
+       "`SAMPLING`",
+       "Sample interval of the source",
+       "s"
+      ],
+      [
+       "`TPP`",
+       "Time interval error (TIE), peak-to-peak",
+       "s"
+      ],
+      [
+       "`TRMS`",
+       "TIE, RMS",
+       "s"
+      ],
+      [
+       "`DCD`",
+       "Duty-cycle distortion",
+       "s"
+      ],
+      [
+       "`DDJ`",
+       "Data-dependent jitter",
+       "s"
+      ],
+      [
+       "`PJRMS`",
+       "Periodic jitter, RMS",
+       "s"
+      ],
+      [
+       "`PRMS`",
+       "Period jitter, RMS",
+       "s"
+      ],
+      [
+       "`C2C`",
+       "Cycle-to-cycle jitter, RMS",
+       "s"
+      ],
+      [
+       "`F2`",
+       "Sub-rate jitter at rate/2, peak-to-peak",
+       "s"
+      ],
+      [
+       "`F4`",
+       "Sub-rate jitter at rate/4, peak-to-peak",
+       "s"
+      ],
+      [
+       "`F8`",
+       "Sub-rate jitter at rate/8, peak-to-peak",
+       "s"
+      ],
+      [
+       "`SRJ`",
+       "Sum of the F2, F4 and F8 tones, peak-to-peak",
+       "s"
+      ],
+      [
+       "`PN`",
+       "Phase noise: RMS jitter between the configured offsets",
+       "s"
+      ],
+      [
+       "`TPRE`",
+       "TIE peak-to-peak before supply-induced jitter is removed",
+       "s"
+      ],
+      [
+       "`TPOST`",
+       "TIE peak-to-peak after supply-induced jitter is removed",
+       "s"
+      ],
+      [
+       "`PPRE`",
+       "Periodic jitter before supply-induced jitter is removed",
+       "s"
+      ],
+      [
+       "`PPOST`",
+       "Periodic jitter after supply-induced jitter is removed",
+       "s"
+      ],
+      [
+       "`DCCM`",
+       "DC common-mode voltage (differential pair)",
+       "V"
+      ],
+      [
+       "`ACCM`",
+       "AC common-mode voltage, peak-to-peak",
+       "V"
+      ],
+      [
+       "`XOVER`",
+       "Mean voltage where the two legs of a differential pair cross",
+       "V"
+      ],
+      [
+       "`TNT`",
+       "Transition to non-transition bit ratio",
+       "dB"
+      ],
+      [
+       "`SSCPPM`",
+       "Spread-spectrum clocking deviation",
+       "ppm"
+      ],
+      [
+       "`SSCRATE`",
+       "Spread-spectrum modulation rate",
+       "Hz"
+      ],
+      [
+       "`TJ`",
+       "Total jitter at BER 1e-12 (dual-Dirac)",
+       "s"
+      ],
+      [
+       "`RJ`",
+       "Random jitter, RMS",
+       "s"
+      ],
+      [
+       "`DJ`",
+       "Deterministic jitter (dual-Dirac)",
+       "s"
+      ],
+      [
+       "`OPENING`",
+       "Eye opening at BER 1e-12: 1 − TJ/UI",
+       "UI"
+      ],
+      [
+       "`SEEN`",
+       "Opening no edge entered: 1 − TIE pk-pk/UI",
+       "UI"
+      ],
+      [
+       "`TJBER`",
+       "Total jitter at the configured BER",
+       "s"
+      ],
+      [
+       "`EWBER`",
+       "Eye width at the configured BER",
+       "UI"
+      ],
+      [
+       "`J2`",
+       "Total jitter at BER 2.5e-3 (J2)",
+       "s"
+      ],
+      [
+       "`J9`",
+       "Total jitter at BER 2.5e-10 (J9)",
+       "s"
+      ],
+      [
+       "`NPJ`",
+       "Non-periodic deterministic jitter",
+       "s"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Analysis Page Items",
+   "intro": "Items accepted by the analysis-page queries. Units in parentheses.",
+   "tables": [
+    {
+     "columns": [
+      "Query",
+      "Page",
+      "Items"
+     ],
+     "rows": [
+      [
+       "`:POWer:ITEM?`",
+       "Power analysis",
+       "`VRMS` (V), `IRMS` (A), `REAL` (W), `APP` (VA), `REAC` (var), `PF` (ratio), `PHAS` (deg), `FREQ` (Hz), `CREST` (ratio (voltage crest factor)), `CRESTI` (ratio (current crest factor)), `EON` (J), `EOFF` (J), `ECOND` (J), `PAVG` (W), `DVDTR` (V/s), `DVDTF` (V/s), `DIDTR` (A/s), `DIDTF` (A/s), `RDSON` (ohm), `RIPPLE` (V pk-pk), `ACRMS` (V rms), `LINE` (V pk-pk at line freq), `LINER` (V rms at line freq), `SWITCH` (V pk-pk at switching freq), `SWRMS` (V rms at switching freq), `INRUSH` (A peak), `I2T` (A²s), `TON` (s), `TOFF` (s), `CIN` (F), `ROVER` (V (rail overshoot)), `RUNDER` (V), `RDC` (V), `RMAX` (s (rail turn-on))"
+      ],
+      [
+       "`:SPECtrum:ITEM?`",
+       "Spectrum and distortion",
+       "`F1` (Hz), `THD` (dB), `THDPCT` (%), `THDN` (dB), `SNR` (dB), `SINAD` (dB), `SFDR` (dBc), `ENOB` (bits), `ACPR` (ratio), `ACPRLO` (dB), `ACPRHI` (dB), `FLOOR` (dBV)"
+      ],
+      [
+       "`:MAGnetic:ITEM?`",
+       "Magnetics (needs core geometry)",
+       "`L` (H), `B` (T (peak)), `H` (A/m (peak)), `MUR` (relative permeability), `LOSS` (W)"
+      ],
+      [
+       "`:INVerter:ITEM?`",
+       "Inverter and motor drive",
+       "`D` (d-axis), `Q` (q-axis), `ZERO` (zero-sequence), `FREQ` (Hz), `SPEED` (rpm), `ACCEL` (rpm/s), `DIR` (text: FORWARD, REVERSE or STOPPED), `ANGLE` (deg), `TRAVEL` (deg), `TORQUE` (N·m), `PMECH` (W), `PELEC` (W), `EFF` (ratio)"
+      ],
+      [
+       "`:DPT:ITEM?`",
+       "Double-pulse test",
+       "`VPEAK` (V), `IPEAK` (A), `EON` (J), `EOFF` (J), `TDON` (s), `TR` (s), `TON` (s), `TDOFF` (s), `TF` (s), `TOFF` (s), `DVDT` (V/s), `DIDT` (A/s), `TDT` (s), `TRR` (s), `QRR` (C), `ERR` (J), `IRRM` (A), `DDIDT` (A/s), `QOSS` (C)"
+      ],
+      [
+       "`:BANDwidth:ITEM?`",
+       "Bandwidth from a step (at least 1000 samples)",
+       "`RISE` (s), `BW` (Hz (from rise time)), `OVER` (%)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "title": "Error Codes",
+   "intro": "Messages placed in the error queue (`:SYSTem:ERRor?`). A failing query also returns the message as its reply.",
+   "tables": [
+    {
+     "columns": [
+      "Code",
+      "Message",
+      "Cause"
+     ],
+     "rows": [
+      [
+       "0",
+       "`0,\"No error\"`",
+       ":SYSTem:ERRor? with an empty queue."
+      ],
+      [
+       "-113",
+       "`-113,\"Undefined header\" <full command>`",
+       "Header not recognised; also any query that produced no reply without queuing its own error; also invalid values for the setters (CHANnel DISPlay/SCALe/OFFSet/POSition/COUPling/BWLimit/PROBe/INVert, TRIGger NREJect/HOLDoff/SWEep/EDGE:LEVel/EDGE:SLOPe/EDGE:SOURce D-token, ACQuire:MDEPth set). Action queries like :RUN? :STOP? *CLS? *RST? also land here."
+      ],
+      [
+       "-113",
+       "`-113,\"Undefined header\" :<SUBSYSTEM>:<nodes>`",
+       "Unknown keyword inside a known subsystem (TIMebase, CURSor, DISPlay, MEASure:STATistic, MEASure gate, BUS<n>, BUS<n>:RS232, MATH<n>, HISTogram, MASK, DVM, COUNter, LA, REF, SIM, DECode:<node> (without leading colon), :SOURce:ARB). Note: invalid TIMebase SCALe/OFFSet values also end here as :TIMebase:<path>."
+      ],
+      [
+       "-221",
+       "`-221,\"Settings conflict\"`",
+       ":MATH<n>:FILTer:W1/W2 set on an operator without that corner, or W1 >= W2."
+      ],
+      [
+       "-221",
+       "`-221,\"Operation pending; use raw TCP or HiSLIP for *OPC?\"`",
+       "`*OPC?` sent through the HTTP/MCP interface, which cannot wait."
+      ],
+      [
+       "-223",
+       "`-223,\"<reason>\"`",
+       ":MEASure:ITEM / :MEASure:STATistic:ITEM set for a standard item failed (reason \"Measurement selection is full\")."
+      ],
+      [
+       "-223",
+       "`-223,\"Too much data; select a shorter waveform page\"`",
+       ":WAVeform:DATA? page larger than 64 MiB worst case."
+      ],
+      [
+       "-224",
+       "`-224,\"Illegal parameter value\"[ <arg|detail>]`",
+       "Invalid or out-of-range parameter. The message may add a detail: <arg>, \"timebase\", \"below the lower threshold\", \"above the upper threshold\", \"mask is off\", \"no file\", \"unknown key <k>\", \"SSC mode\", \"SIM setting\", \"PRBS order\", \"<n> samples\", loader/store error text."
+      ],
+      [
+       "-224",
+       "`-224,\"Invalid trigger source\"`",
+       "TRIGger ...:SOURce[2] argument is not CHAN/R/REF (and not a logic line D0–D15)."
+      ],
+      [
+       "-224",
+       "`-224,\"Trigger source is unavailable\"`",
+       "Trigger source refers to an empty reference or a channel beyond the model."
+      ],
+      [
+       "-224",
+       "`-224,\"Invalid trigger type\"`",
+       ":TRIGger:MODE/TYPe with an unknown type."
+      ],
+      [
+       "-224",
+       "`-224,\"Invalid runt threshold\"`",
+       ":TRIGger:RUNT:UPPer/LOWer non-numeric."
+      ],
+      [
+       "-224",
+       "`-224,\"Too many measurement sources\"`",
+       ":MEASure:ITEM set with more sources than the item takes."
+      ],
+      [
+       "-224",
+       "`-224,\"Source A and B are the same source\" / \"Measurement selection is full\"`",
+       "Adding a pair measurement fails (pair failures use -224, standard-item failures use -223)."
+      ],
+      [
+       "-224",
+       "`-224,\"Cursor source is unavailable or unsupported\"`",
+       "Cursor source not on the model / reference not loaded / manual SOURce2 different from A."
+      ],
+      [
+       "-224",
+       "`-224,\"Decoder source is unavailable\"[ <arg>]`",
+       ":BUS<n> RS232/IIC/SPI source not a model channel or loaded reference."
+      ],
+      [
+       "-224",
+       "`-224,\"Illegal decoder parameter\" <arg>`",
+       "Any invalid :DECode:<node> parameter."
+      ],
+      [
+       "-224",
+       "`-224,\"Invalid C-PHY symbol rate\" <arg>`",
+       ":DECode:CPHY:RATE not AUTO or 0..1e12."
+      ],
+      [
+       "-224",
+       "`-224,\"SIM generation failed\" <error>`",
+       "Queued at the start of the next command after a background SIM generation failed."
+      ],
+      [
+       "-230",
+       "`-230,\"Data corrupt or stale\" <detail>`",
+       "Details: \"reference is empty\" (REF VSCale/VOFFset/LABel/COLor/RESet), \"source has no waveform\" (:MASK:CREate), \"no LA record\" (:LA:POINts?/PREamble?/DATA?)."
+      ],
+      [
+       "-230",
+       "`-230,\"Math reference source is empty\"`",
+       ":MATH<n>:SOURce1/2 or FFT:SOURce names an empty reference."
+      ],
+      [
+       "-230",
+       "`-230,\"<decoder error>\"`",
+       ":DECode:EVENts? / :BUS<n>:DATA? when decoding cannot run (while decoding is still running the reply is `BUSY` instead)."
+      ],
+      [
+       "-241",
+       "`-241,\"Hardware missing\" no generator on the <model>`",
+       "Any :SOURce command on a model without a generator."
+      ],
+      [
+       "-241",
+       "`-241,\"Hardware missing\" no logic analyser port on the <model>`",
+       "Any :LA command on a model without logic-analyzer inputs."
+      ],
+      [
+       "-256",
+       "`-256,\"File name not found\" <name>`",
+       ":REFerence:LOAD/IMPort file missing."
+      ],
+      [
+       "-350",
+       "`-350,\"Queue overflow\"`",
+       "More than 20 queued errors: the last slot is replaced (ESR bit 3)."
+      ],
+      [
+       "-350",
+       "`-350,\"Too many pending OPC events\"`",
+       "More than 64 *OPC registrations pending."
+      ],
+      [
+       "-363",
+       "`-363,\"Output buffer overrun; remaining commands dropped\"`",
+       "Accumulated reply of one program message would exceed 64 MiB."
+      ],
+      [
+       "-363",
+       "`-363,\"Program message too large or too many commands\"`",
+       "Program message longer than 4 MiB or more than 1024 commands."
+      ],
+      [
+       "-363",
+       "`-363,\"Input buffer overrun\" rest of the line dropped`",
+       "Reply buffer already at 64 MiB before the next command."
+      ],
+      [
+       "-410",
+       "`-410,\"OPC query interrupted by cancelled operation\"`",
+       "A pending *OPC? whose operation was cancelled/re-armed; no '1' is sent and the remaining commands are discarded."
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}
