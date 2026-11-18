@@ -29,9 +29,10 @@ Part of the [SCPI reference](README.md).
 | `:MEASure:THReshold:DEFault` | Action | Thresholds back to 10 % and 90 % | - | - | fork command; name not verified against the DHO guide |
 | `:MEASure:AREA` | Set / Query | `MAIN` only: measurements read the main record | `MAIN` | - | fork command; name not verified against the DHO guide |
 | `:MEASure:AMP:TYPE` | Set / Query | `MANual` only (top and base from the histogram) | `MAN` | - | fork command; name not verified against the DHO guide |
-| `:MEASure:AMP:MANual:TOP`, `:BASE` | Set / Query | `HISTogram` only | `HIST` | - | fork command; name not verified against the DHO guide |
+| `:MEASure:AMP:MANual:{TOP\|BASE}` | Set / Query | `HISTogram` only | `HIST` | - | fork command; name not verified against the DHO guide |
 | `:MEASure:STRip:DOCK` | Set / Query | `UNDer`, `LEFT`, `RIGHt`, `ABOVe`, `HIDDen` | `UNDER` | Measure > Results strip | fork command; name not verified against the DHO guide |
-| `:MEASure:COUNter:ENABle`, `:SOURce`, `:VALue?` | Set / Query | The same counter as `:COUNter` | - | Measure > Counter | fork command; name not verified against the DHO guide |
+| `:MEASure:COUNter:{ENABle\|SOURce}` | Set / Query | The same counter as `:COUNter` | - | Measure > Counter | fork command; name not verified against the DHO guide |
+| `:MEASure:COUNter:VALue` | Query | The reading of the same counter as `:COUNter` | - | Measure > Counter | fork command; name not verified against the DHO guide |
 
 ### Gate and edge settings
 

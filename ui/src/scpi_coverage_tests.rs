@@ -913,6 +913,24 @@ fn every_header_is_in_exactly_one_group_table() {
     }
 }
 
+/// The command cell of a row is one code span: one header, or one brace form that names several
+/// (`:TRIGger:DELay:{ASLop|BSLop}`). The generator of the SCPI manual (docs/manual/gen_commands.py) reads a header from
+/// it; a cell of several spans ("`:A:B:TOP`, `:BASE`") came out as one header made of the whole cell.
+#[test]
+fn the_command_cell_of_a_row_is_one_header_or_one_brace_form() {
+    let mut wrong = Vec::new();
+    for (name, text) in scpi_docs() {
+        // the tables of commands are those of the group pages; the index and the item lists have other first cells
+        for cell in first_cells(&text).into_iter().filter(|c| c.starts_with("`:") || c.starts_with("`*")) {
+            let one_span = cell.len() > 2 && cell.ends_with('`') && !cell[1..cell.len() - 1].contains('`');
+            let header = cell.trim_matches('`');
+            let well_formed = header.chars().all(|c| c.is_ascii_alphanumeric() || ":*<>[]{}|?".contains(c));
+            if !one_span || !well_formed { wrong.push(format!("{name}: {cell}")); }
+        }
+    }
+    assert!(wrong.is_empty(), "command cells that are not one header or brace form: {wrong:#?}");
+}
+
 #[test]
 fn the_setup_keys_are_documented() {
     let docs = scpi_docs();
