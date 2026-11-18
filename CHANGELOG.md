@@ -14,9 +14,11 @@ Fixed:
   navigation and the Zoom bar row of Horizontal are gone. The grip for the overview's height, the Zoom button's menu
   (zoom source, one lane) and the Y zoom on a lane's handle stay. Center trigger is a row of the plot's menu while
   zoom is on (right click or a held finger), between Reset zoom and Close zoom; `:TIMebase:DELay:CENTer` does the
-  same. `:UI:MENU?` no longer has a menu named Zoom.
-- Studio, walked control by control (ADR 0031; host-tested: 87 controls and functions over SCPI and 460 sheet rows
-  by touch. On a DHO924S only read, on an older build: not yet verified on hardware):
+  same. `:UI:MENU?` no longer has a menu named Zoom. `:UI:ELEMents?` lists the buttons of the row (`ZOOM`) and, with
+  the badges, the one button of the badge row (`BADGE`, `Meas`); a hidden row has no badges on the list.
+- Studio, walked control by control (ADR 0031; 98 controls and functions over SCPI and 460 sheet rows by touch on the
+  host. On a DHO924S 95 of 96 rows over SCPI, on an earlier commit of this change: the Meas button of the badge row
+  and Center trigger ran on the host only):
   - Overlay traces and Stacked traces: every source has one handle with its name at the left edge, on its own zero
     level, in both modes. A reference had a badge in the middle of its lane in Stacked and a box over its trace in
     Overlay, and a math channel had no handle, so with every source on one graticule nothing said where their zero
@@ -201,8 +203,9 @@ Added:
     had the trace and the window, and no time to read the window against;
   - the zoom toolbar of the pull-down tab is a finger high (44 px, its chips 42), and it stays open until its label
     "Zoom" is tapped or pushed up. It was 30 px with chips of 20, and it shut after four seconds and with any touch
-    beside it, so it had to be pulled down again for every step. The tab itself is larger too;
-  - a long touch on the zoom overview or on the zoom toolbar opens no menu: a finger rests there while it moves the
+    beside it, so it had to be pulled down again for every step. The tab itself is larger too (the tab and this
+    toolbar are replaced by the zoom row of the Default layout, see above; its buttons are 28 px high, as in Default);
+  - a long touch on the zoom overview or on the zoom row opens no menu: a finger rests there while it moves the
     window, and the menu of the plot opened under it. The zoom view and the lanes keep that menu;
   - the top bar says the sample rate, the memory depth and the acquisition mode, each a small label over its
     value, where it had the rate and the depth in one line.
