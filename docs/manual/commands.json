@@ -274,6 +274,16 @@
      "example": ":SYSTem:SET tdiv = 5"
     },
     {
+     "header": ":SYSTem:SETup:SCPI",
+     "query": ":SYSTem:SETup:SCPI?",
+     "desc": "The setup as SCPI commands, as an IEEE block of lines: `*RST`, then one command for every setting that differs from the Default setup, each with the answer of its own query as the value. A setting without a header of its own is a `:SYSTem:SET` line; the headers are in the Equivalent header column of setup keys. Sent line by line to a scope, it brings that scope to this setup. Reference waveforms and notes are not part of it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and error -221 names its key. `SETup` is spelled out, as for `:SYSTem:SETup`.",
+     "remarks": [
+      "- Menu equivalent: Storage > Save setup as SCPI.",
+      "- Origin: OOS extension. The first part of the SCPI recorder. The menu row writes the same lines to a new file where Storage saves, `setup-NNN.scpi` (`setup-<date>-<time>.scpi` once the clock is set)."
+     ],
+     "ext": true
+    },
+    {
      "header": ":SYSTem:LOCK",
      "set": ":SYSTem:LOCK <value>",
      "query": ":SYSTem:LOCK?",
@@ -13333,7 +13343,7 @@
      "p": "Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
     },
     {
-     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load)."
+     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file."
     },
     {
      "p": "Part of the SCPI reference."
@@ -14684,7 +14694,7 @@
    "title": "Setup Keys",
    "intro": [
     {
-     "p": "`:SYSTem:SET <key> = <value>` writes a key of the setup file on the live settings; `:SYSTem:GET? <key>` reads it. It is the setup schema: an escape hatch for tests and for the few settings that have no header. Where a header exists (the \"Equivalent header\" column), use that; the headers are in the group pages. The file written by Save setup and returned by `:SYSTem:SETup?` is the same list as `key = value` lines (`#` starts a comment), and `*SAV` / `*RCL` use the same files."
+     "p": "`:SYSTem:SET <key> = <value>` writes a key of the setup file on the live settings; `:SYSTem:GET? <key>` reads it. It is the setup schema: an escape hatch for tests and for the few settings that have no header. Where a header exists (the \"Equivalent header\" column), use that; the headers are in the group pages. The file written by Save setup and returned by `:SYSTem:SETup?` is the same list as `key = value` lines (`#` starts a comment), and `*SAV` / `*RCL` use the same files. `:SYSTem:SETup:SCPI?` writes the same setup as commands: for a key it uses the headers of the Equivalent header column where the table of `ui/src/scpi/setupscpi.rs` has them (a test keeps this column and that table the same), and a `:SYSTem:SET` line for the others."
     },
     {
      "ul": [
@@ -14753,7 +14763,7 @@
        "`ch<n>.vfine`",
        "optional: fine scale",
        "-",
-       "`:CHANnel<n>:VERNier`"
+       "`:CHANnel<n>:SCALe`"
       ],
       [
        "`ch<n>.unit`",
@@ -14830,7 +14840,7 @@
        "`tfine`",
        "as above",
        "-",
-       "-"
+       "`:TIMebase:SCALe`"
       ],
       [
        "`h_expand`",
@@ -15263,7 +15273,7 @@
        "`grid`",
        "as above",
        "`Full`",
-       "-"
+       "`:DISPlay:GRID`"
       ],
       [
        "`grid_bright`",
@@ -15275,7 +15285,7 @@
        "`grid_frame`",
        "as above",
        "`true`",
-       "-"
+       "`:DISPlay:RULers`"
       ],
       [
        "`skin`",
@@ -15555,13 +15565,13 @@
        "`dvm`",
        "`<on> <source> <mode>`",
        "`false 0 0`",
-       "`:DVM:ENABle ...`"
+       "`:DVM:ENABle`, `:DVM:SOURce`, `:DVM:MODE`"
       ],
       [
        "`counter`",
        "`<on> <source> <mode> <digits>`",
        "`false 0 0 5`",
-       "`:COUNter:ENABle ...`"
+       "`:COUNter:ENABle`, `:COUNter:SOURce`, `:COUNter:MODE`, `:COUNter:NDIGits`"
       ]
      ]
     },
@@ -15732,7 +15742,7 @@
        "`spec`",
        "source token, centre Hz, span Hz (0 = full), RBW Hz, window name, trace mode index, ref level dBV, waterfall 0/1, THD/SNR 0/1 (the last two as `true`/`false`)",
        "`1 0 0 0 Blackman 0 10 false false`",
-       "`:SPECtrum:SOURce ...`"
+       "`:SPECtrum:SOURce`, `:SPECtrum:CENTer`, `:SPECtrum:SPAN`, `:SPECtrum:RBW`, `:SPECtrum:WINDow`, `:SPECtrum:TRACe`, `:SPECtrum:RLEVel`, `:SPECtrum:WATerfall`, `:SPECtrum:DISTortion`"
       ],
       [
        "`spec_peaks`",
@@ -15744,7 +15754,7 @@
        "`spec_acpr`",
        "channel width Hz, channel spacing Hz",
        "`1000000 2000000`",
-       "`:SPECtrum:ACPR:WIDTh ...`"
+       "`:SPECtrum:ACPR:WIDTh`, `:SPECtrum:ACPR:SPACing`"
       ]
      ]
     },
@@ -16022,13 +16032,13 @@
        "`power`",
        "voltage source index, current source index, page name",
        "`1 2 Quality`",
-       "`:POWer:VOLTage:SOURce ...`"
+       "`:POWer:VOLTage:SOURce`, `:POWer:CURRent:SOURce`, `:POWer:PAGE`"
       ],
       [
        "`power_more`",
        "line f Hz, switch f Hz, input source or `-`, reference volts or `-`, clock source or `-`",
        "`0 0 - - -`",
-       "`:POWer:FLINe ...`"
+       "`:POWer:FLINe`, `:POWer:FSWitch`, `:POWer:VIN:SOURce`, `:POWer:REFerence`, `:POWer:CLOCk:SOURce`"
       ],
       [
        "`magnetic`",
@@ -16046,7 +16056,7 @@
        "`dpt`",
        "Vds, Id, Vgs source tokens, fourth channel mode (`Off`/`Gate`/`DiodeV`/`DiodeI`), fourth source, gate percent, zoom (`Both`/`TurnOn`/`TurnOff`)",
        "`1 2 3 Off 4 10 Both`",
-       "`:DPT:VDS:SOURce ...`"
+       "`:DPT:VDS:SOURce`, `:DPT:ID:SOURce`, `:DPT:VGS:SOURce`, `:DPT:FOURth`, `:DPT:FOURth:SOURce`, `:DPT:GATE`, `:DPT:ZOOM`"
       ]
      ]
     },

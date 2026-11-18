@@ -57,6 +57,18 @@ Fixed:
 
 Added:
 
+- The set-up as SCPI commands, `:SYSTem:SETup:SCPI?` (the first part of the SCPI recorder; host-tested, not yet run
+  on a unit). The answer is a block of lines: `*RST`, then one command for every setting that differs from the
+  Default set-up, each with the answer of its own query as the value (`:CHANnel2:DISPlay 1`,
+  `:TIMebase:SCALe 1.000000E-03`). Sent line by line to a scope, it brings that scope to this set-up. A setting
+  without a header of its own is a `:SYSTem:SET` line. Before the lines are given out they are sent to a second
+  scope inside the program (a model with no hardware behind it) and mended until its set-up is the same: a command
+  that moves another setting too (a source that switches its channel on) gets a line after it that puts it right,
+  and a value finer than its query writes it gets a key = value line. Reference waveforms and notes are not part of
+  it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and
+  error -221 names its key. Storage > Save setup as SCPI writes the same lines to a new file
+  (`setup-NNN.scpi`, with date and time once the clock is set) where Storage saves; its message names a key that is left out.
+
 - External generator page, Menu > Instruments > Ext generator (ADR 0028, docs/extgen.md; host-tested against a
   simulated generator, not yet verified on hardware). A generator on the USB-A port or the LAN has its model,
   connection and address in one place. Connect asks `*IDN?`, shows maker and model and sets the model for one it
