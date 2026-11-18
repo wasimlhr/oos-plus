@@ -16,13 +16,14 @@
 //!
 //! A key or a row that is an action is written as its command, not as settings (`Ui::rec_action`): Run / Stop,
 //! Single, Force, Clear, Default, Autoset, and the saves of the Storage menu. What the user set before it is written
-//! first. The settings the action changes are its own: for Run, Stop, Single, Force, Clear and Default the command is
-//! proven like a step, so a setting it leaves different on a second scope gets a line after it; an auto set-up is
-//! written as the command alone, since what it finds is the signal's, and a save is never run a second time. A saved
-//! set-up is `*SAV <n>` with the slot it went to: the slot of the Storage menu is not part of the set-up, so no line
-//! before it would bring it. `*OPC?` stands after Single and Autoset, the operations it waits for. While an auto
-//! set-up runs the look at the set-up waits: what the user sets in that time is taken for the auto set-up's and is
-//! not written.
+//! first, also when it has not stood still yet; before Default that is only what Default leaves alone (the Quick key
+//! action, the text size), since the reset takes the rest. The settings the action changes are its own: for Run,
+//! Stop, Single, Force, Clear and Default the command is proven like a step, so a setting it leaves different on a
+//! second scope gets a line after it; an auto set-up is written as the command alone, since what it finds is the
+//! signal's, and a save is never run a second time. A saved set-up is `*SAV <n>` with the slot it went to: the slot
+//! of the Storage menu is not part of the set-up, so no line before it would bring it. `*OPC?` stands after Single
+//! and Autoset, the operations it waits for. While an auto set-up runs the look at the set-up waits: what the user
+//! sets in that time is taken for the auto set-up's and is not written.
 
 use super::setupscpi::named;
 use super::*;
@@ -110,12 +111,24 @@ impl Scpi {
     /// One action: `line`, done on the set-up `before`; `ui` has the set-up after it.
     fn rec_action_written(&mut self, ui: &mut Ui, cv: &Canvas, line: &str, before: &mut Model) {
         let Some(rec) = self.rec.as_ref() else { return };
-        // what was set before the action and is not written yet is written first, as the set-up was then; a
-        // reset takes it with everything else
-        if line != "*RST" && !rec.hold && (rec.pending || crate::store::setup_text(before) != rec.seen) {
-            std::mem::swap(&mut ui.m, before);
-            self.rec_step(ui, cv);
-            std::mem::swap(&mut ui.m, before);
+        // what was set before the action and is not written yet is written first, as the set-up was then
+        if !rec.hold && (rec.pending || crate::store::setup_text(before) != rec.seen) {
+            if line == "*RST" {
+                // a reset takes it with everything else, but for what Default leaves alone (the Quick key action,
+                // the text size): only that is written, as a step from the set-up of the last step. The view of
+                // the screen is the one after the reset by now and is not looked at
+                let mut kept = rec.base.clone();
+                Ui::default_keeps(before, &mut kept);
+                if crate::store::setup_text(&kept) != crate::store::setup_text(&rec.base) {
+                    std::mem::swap(&mut ui.m, &mut kept);
+                    self.rec_step_to_model(ui, cv);
+                    std::mem::swap(&mut ui.m, &mut kept);
+                }
+            } else {
+                std::mem::swap(&mut ui.m, before);
+                self.rec_step(ui, cv);
+                std::mem::swap(&mut ui.m, before);
+            }
         }
         let want = crate::store::setup_text(&ui.m);
         // a command that only sets the state of the scope is proven like a step, from the model before it: what
@@ -171,8 +184,14 @@ impl Scpi {
 
     /// The commands from the set-up of the last step to the one the scope has now, proven, and written.
     fn rec_step(&mut self, ui: &mut Ui, cv: &Canvas) {
-        let Some(mut rec) = self.rec.take() else { return };
         ui.sync_view_state();
+        self.rec_step_to_model(ui, cv);
+    }
+
+    /// The step to the model `ui` holds, as it is: what the screen keeps of the view is not written into it first
+    /// (`Ui::sync_view_state`), so the model may be another than the scope's own (`rec_action_written`).
+    fn rec_step_to_model(&mut self, ui: &mut Ui, cv: &Canvas) {
+        let Some(mut rec) = self.rec.take() else { return };
         let want = crate::store::setup_text(&ui.m);
         let (step, rest) = self.mend(ui, cv, &rec.base, Vec::new(), &want);
         let wrote = !step.is_empty() || !rest.is_empty();
@@ -614,6 +633,41 @@ mod tests {
             let message = ui.toast_text();
             assert!(message.starts_with("Saved recording") && message.ends_with("1 command"), "{message}");
         }
+    }
+
+    /// Default leaves the text size and the Quick key action alone, so the reset does not take them with it as it
+    /// takes the other settings: one that was set just before the key, whether the recorder has seen it or not, is
+    /// written before the reset.
+    #[test]
+    fn what_default_leaves_alone_is_written_before_the_reset() {
+        use crate::ui::key;
+        let (mut s, mut ui, cv, _dir) = session_in("kept");
+        start(&mut s, &mut ui, &cv);
+        // seen by the recorder but not still for long enough, and with it a setting the reset takes
+        user(&mut ui, "text_size", "Larger");
+        user(&mut ui, "tdiv", "0.001");
+        tick(&mut s, &mut ui, &cv, 0.1);
+        ui.key(key::DEFAULT);
+        settle(&mut s, &mut ui, &cv);
+        assert_eq!(recorded(s.rec_lines()), [":SYSTem:SET text_size = Larger", "*RST"], "{:?}", s.rec_lines());
+        // set in the frame of the key: the recorder has not seen it
+        user(&mut ui, "quick", "Clear");
+        ui.key(key::DEFAULT);
+        settle(&mut s, &mut ui, &cv);
+        let lines = s.rec_lines().to_vec();
+        assert_eq!(recorded(&lines)[2..], [":SYSTem:SET quick = Clear", "*RST"], "{lines:?}");
+        assert!(ui.m.text_size == TextSize::Larger && ui.m.quick == Quick::Clear, "Default has left them");
+        // nothing was set: Default is the reset alone, as before
+        ui.key(key::DEFAULT);
+        settle(&mut s, &mut ui, &cv);
+        let lines = s.rec_lines().to_vec();
+        assert_eq!(recorded(&lines)[4..], ["*RST"], "{lines:?}");
+        // the whole file brings a second scope to this set-up, the text size and the Quick key with it
+        let want = text(&mut ui);
+        let (got, errors) = replay(&lines);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(changed(&want, &got), Vec::new(), "{lines:?}");
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
     }
 
     #[test]

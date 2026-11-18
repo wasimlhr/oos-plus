@@ -10735,17 +10735,21 @@ impl Ui {
         self.settings_changed();
     }
 
+    /// What Default leaves alone, taken from the set-up `from` into `to`: the Quick key action and the text size are
+    /// preferences, not part of the set-up that Default resets. The SCPI recorder asks too (scpi/recorder.rs): a
+    /// reset takes what was set before it with everything else, but not these.
+    pub(crate) fn default_keeps(from: &Model, to: &mut Model) {
+        (to.quick, to.text_size) = (from.quick, from.text_size);
+    }
+
     /// The Default key and `*RST`: a new set-up. `*RST` calls this itself, so that a notice or a menu on the screen,
     /// which takes a key press for its own, does not swallow a reset from a script.
     pub(crate) fn default_setup(&mut self) {
         self.rec_action("*RST");
-        let meas = Self::default_meas();
-        // the Quick key action is a preference, not part of the set-up that Default resets. The layout is part
-        // of it: a new set-up starts in the Default layout with the stock bars (5533112)
-        let (quick, text_size) = (self.m.quick, self.m.text_size);
-        self.m = Model::default();
-        self.m.meas = meas;
-        (self.m.quick, self.m.text_size) = (quick, text_size);
+        // the layout is part of the set-up: a new one starts in the Default layout with the stock bars (5533112)
+        let mut m = Model { meas: Self::default_meas(), ..Model::default() };
+        Self::default_keeps(&self.m, &mut m);
+        self.m = m;
         // what hangs on the signals of the set-up that is gone: the notes, and the vertical zoom a closed zoom
         // window kept for its next opening
         self.callouts.clear();
