@@ -71,6 +71,8 @@ mod scpiext_c;
 mod scpi_coverage_tests;
 #[cfg(test)]
 mod sheet_tests;
+#[cfg(test)]
+mod studio_parity_tests;
 mod walk_tests;
 mod callout;
 #[cfg(test)]
@@ -826,8 +828,7 @@ enum Item {
     CurSrcB,
     CurA,
     CurB,
-    /// Studio cursor settings (ui/addrail.rs): type, source, second source, readout place, linked, remove
-    CurType,
+    /// Studio cursor settings (ui/addrail.rs): source, second source, readout place, linked, remove
     CurSrc,
     CurSecond,
     CurReadout,
@@ -8489,6 +8490,8 @@ impl Ui {
             Item::TrigHoldoff => if m.holdoff <= 0.0 { "Off".into() } else { si_short(m.holdoff as f64, "s") },
             Item::MathLinA => format!("{:.3}", m.math_lin.0),
             Item::MathLinB => format!("{:.3}", m.math_lin.1),
+            // as the option is written: "XY" was "Xy", so the button of the mode in use was not marked for it
+            Item::CurMode if m.cursor == CursorMode::Xy => "XY".into(),
             Item::CurMode => format!("{:?}", m.cursor),
             // where the cursor is, as the read-out under the plot says it; the percentage only without a record
             Item::CurA => self.cursor_values().first().map_or(format!("{:.0} %", m.cur_a * 100.0), |v| v.1.clone()),
@@ -9225,6 +9228,8 @@ impl Ui {
                 Item::Open(MenuId::Measure) if self.menu == MenuId::Main => {
                     self.ensure_meas_own();
                     self.open_submenu(MenuId::MeasAdd);
+                    // Studio: the Menu opens the page itself; Add > Measurement and the key open the quick Add panel
+                    self.studio.meas_page = self.m.layout == Layout::Studio;
                 }
                 // the footer of the Measure sheet: the same list, with a source that is on the screen
                 Item::Open(MenuId::MeasAdd) => {
@@ -10553,6 +10558,8 @@ impl Ui {
 
     fn close_menu(&mut self) {
         if self.menu == MenuId::MeasRow { self.meas_cfg = None; }
+        // the next Measure opens as the quick Add panel again
+        self.studio.meas_page = false;
         self.menu_open = false;
         self.menu = MenuId::Main;
         self.sheet.scroll = 0;

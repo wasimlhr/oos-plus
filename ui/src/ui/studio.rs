@@ -125,6 +125,8 @@ pub(super) struct Studio {
     pub view_menu: bool,
     /// the Add menu under the top bar is open
     pub add_menu: bool,
+    /// Measure is open as the page of every layout (categories, Selected, Settings), not as the quick Add panel
+    pub meas_page: bool,
     /// the pull-down zoom toolbar is open: the time it was last used
     pub zoom_open: Option<f64>,
     /// a finger on the zoom tab or its label: where it went down, and whether it pulls the toolbar open (else shut)
@@ -208,8 +210,6 @@ pub(super) struct StudioTop {
     pub add: Rect,
     /// Live (the way back from a record session), zero wide in live mode
     pub badge: Rect,
-    /// SIM (opens the SIM sheet), zero wide in record mode (the preset chip and Live are there then)
-    pub simbtn: Rect,
     /// the run / trigger status pill
     pub run: Rect,
     pub single: Rect,
@@ -272,6 +272,9 @@ pub(super) const OVERFLOW_W: i32 = 46;
 /// Height a list row gets for the header of its source.
 pub(super) const GROUP_BAND: i32 = 14;
 
+/// The chip that adds a source, and the short form of the generator's pill (its name alone).
+const ADD_W: i32 = 62;
+const GEN_W: i32 = 56;
 const CHIP_H: i32 = 30;
 /// The pills of the bottom bar are the buttons pressed most: taller than a measurement badge of the row above them
 /// (`ROW_H` - 6 = 34), and the bar is 3 px more on either side.
@@ -411,6 +414,12 @@ impl Ui {
         }
     }
 
+    /// The room the read-out asks of the bar before the other buttons shorten their labels: what its caption needs,
+    /// never more than 260 px.
+    pub(super) fn studio_acq_need(&self) -> i32 {
+        (self.fonts().mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260)
+    }
+
     /// Keeps the record views consistent with the session: Offline ends with the record session, and shows
     /// the navigator (the zoom overview) for a loaded file until the user closes it.
     pub(super) fn studio_sync_views(&mut self) {
@@ -452,11 +461,11 @@ impl Ui {
     /// The top bar at the first tier (full labels) that leaves the acquisition caption room, else the shortest: labels
     /// shorten before anything is dropped, and every button stays reachable.
     pub(super) fn studio_top(&self) -> StudioTop {
-        // the status caption gets the room it needs (up to 260 px) before the buttons give up width; when no tier
-        // has that much, the one with the most room is used and the caption is shortened to it
+        // the status caption gets the room it needs (`studio_acq_need`, up to 260 px) before the buttons give up
+        // width; when no tier has that much, the one with the most room is used and the caption is shortened to it
         // (the three columns of a live acquisition are drawn where the tier chosen for the caption has their room: they
         // do not ask for a shorter tier, which would take the buttons below a finger's width)
-        let need = (self.fonts().mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260);
+        let need = self.studio_acq_need();
         let mut t = self.studio_top_tier(0);
         let mut best = t.acq.w;
         for tier in 1..TOP_TIERS {
@@ -480,9 +489,7 @@ impl Ui {
         // Live: the way back from a loaded file or a SIM, as in the Default bar
         let badge = if self.record_mode() { Rect::new(x, CHIP_Y, btn_w("Live"), CHIP_H) } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
         if badge.w > 0 { x = badge.right() + gap; }
-        // SIM: enters the simulation mode (gone while in it: Live is there then)
-        let simbtn = if self.record_mode() { Rect::new(x, CHIP_Y, 0, CHIP_H) } else { Rect::new(x, CHIP_Y, btn_w("SIM"), CHIP_H) };
-        if simbtn.w > 0 { x = simbtn.right() + gap; }
+        // SIM has no button here: it is an entry of the Menu (Analysis), as in the Default layout (ADR 0007)
         // while the SIM is the source: the preset, a tap opens the SIM panel
         let sim = if self.session_is_sim && self.record_mode() {
             Rect::new(x, CHIP_Y, (f.mb.width(self.sim_preset_name()) + 56).min(if tier == 0 { 220 } else { 170 }), CHIP_H)
@@ -492,7 +499,6 @@ impl Ui {
         // its room goes to the acquisition read-out
         let autoset = Rect::new(x, CHIP_Y, 0, CHIP_H);
         let (clear, force) = (autoset, autoset);
-        x += 4;
         // the right group is laid out from the edge: gear, View, Storage, Display, Cursors, Measure, + Add
         let mut r = top.right() - 8;
         let gear = Rect::new(r - 40, CHIP_Y, 40, CHIP_H);
@@ -513,13 +519,13 @@ impl Ui {
         // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
         let room = vbox.x - 10 - x;
         let search_w = if self.studio.search.is_some() {
-            let caption = (f.mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260);
+            let caption = self.studio_acq_need();
             let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
         } else { 0 };
         let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);
         let search = Rect::new(vbox.x - 10 - search_w, CHIP_Y, search_w, CHIP_H);
-        StudioTop { vbox, add, badge, simbtn, run: pill, single, sim, acq, search, measure, cursors, display, storage, view, gear, autoset, clear, force, tier }
+        StudioTop { vbox, add, badge, run: pill, single, sim, acq, search, measure, cursors, display, storage, view, gear, autoset, clear, force, tier }
     }
 
     /// Measure and Cursors as the top-bar buttons (`top_buttons`); the others are Studio's own.
@@ -557,11 +563,6 @@ impl Ui {
             btn(cv, t.badge, mix(BAR, ACCENT, 50), ACCENT);
             cv.text_in(&f.mb, t.badge, 1, "Live", ACCENT);
         }
-        if t.simbtn.w > 0 {
-            let on = self.menu_open && root == MenuId::Sim;
-            btn(cv, t.simbtn, BTN, if on { ACCENT } else { BTN_BORDER });
-            cv.text_in(&f.mb, t.simbtn, 1, "SIM", if on { ACCENT } else { TEXT });
-        }
         if t.sim.w > 0 {
             let on = self.studio.view == StudioView::Sim;
             btn(cv, t.sim, BTN, if on { ACCENT } else { BTN_BORDER });
@@ -570,7 +571,7 @@ impl Ui {
             cv.text_in(&f.mb, Rect::new(t.sim.x + 40, t.sim.y, (t.sim.w - 44).max(1), t.sim.h), 0, self.sim_preset_name(), if on { ACCENT } else { TEXT });
             cv.no_clip();
         }
-        // sample rate and depth as plain text (the source in front of them): a tap opens the page that sets them
+        // sample rate, depth and mode (or the source and its record): a tap opens the page that sets them
         let caption = self.studio_acq_caption();
         let acq_open = self.menu_open && root == if self.record_mode() { MenuId::Ref } else { MenuId::Acquire };
         match self.studio_acq_cols().filter(|c| c.iter().map(|x| x.2).sum::<i32>() <= t.acq.w) {
@@ -627,16 +628,21 @@ impl Ui {
         let shown = self.shown_refs();
         let maths: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k)).collect();
         // the chip that adds a source: a channel that is off, math, a reference or a bus. One name, whatever is off
-        let add_w = 62;
+        let add_w = ADD_W;
         // SIM plays refs, not the live channels: their pills are not on the bar then (Live brings them back)
         let chans: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
         let show_w = if self.studio_badges_hidden() { 88 } else { 0 };
         let caps = &oos_hal::model::platform().caps;
         let la_w = if caps.la { 52 } else { 0 };
-        let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { 56 } } else { 0 };
-        let aux_w = [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
+        let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { GEN_W } } else { 0 };
         // the source pills (channels, refs, math) share what the fixed chips leave, by count
         let count = (chans.len() + shown.len() + maths.len()) as i32;
+        // the generator's pill takes its short form ("GEN") before a source pill is too narrow for its scale: with four
+        // channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
+        let aux = |gen_w: i32| [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
+        let tight = count > 0 && Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w)), count) < self.studio_ch_pill_need();
+        let gen_w = if tight { gen_w.min(GEN_W) } else { gen_w };
+        let aux_w = aux(gen_w);
         let room = time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux_w);
         // a channel that is off has a small dim pill in its place: a tap switches it on. They give way when the
         // sources that are on need the room (and in SIM, which has no channel pills at all)
@@ -743,9 +749,12 @@ impl Ui {
                 // the probe, then the line itself, and the scale loses its "/div" before it is dropped
                 let two_lines = f.mb.size + f.s.size <= TWO_LINE_MAX;
                 let text = if f.mb.width(&full) <= tw { full } else { short };
-                if f.mb.width(&text) > tw && f.s.width(&text) <= tw {
+                if f.mb.width(&text) > tw {
+                    // the small font, then without the space ("500mV"); what still does not fit is cut at its end, so
+                    // the digits stay. A scale is never left out: "1 V" fitted where "500 mV" drew nothing
+                    let text = if f.s.width(&text) <= tw { text } else { text.replace(' ', "") };
                     cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM });
-                } else if f.mb.width(&text) <= tw {
+                } else {
                     match Some(self.studio_ch_detail(c, tw)).filter(|d| ch.on && two_lines && f.s.width(d) <= tw) {
                         Some(d) => {
                             cv.text(&f.mb, tx, r.y + 13 + BAR_DY, &text, TEXT);
@@ -794,14 +803,14 @@ impl Ui {
             let (on, sel) = (self.m.afg_on, aux_on(&[MenuId::Afg]));
             chip(cv, r, if on { BTN } else { BAR }, if sel { ACCENT } else if on { GEN_COLOR } else { BTN_BORDER });
             cv.circle(r.x + 5, r.y + 5, 3, if on { GREEN } else { DIM });
-            if on {
+            if on && r.w > GEN_W {
                 let text = format!("{} {}", self.value(Item::AfgWave), self.value(Item::AfgFreq));
                 cv.set_clip(r.inset(3));
                 cv.text_in(&f.sb, Rect::new(r.x + 10, r.y, r.w - 12, r.h), 0, &format!("GEN"), GEN_COLOR);
                 cv.text_in(&f.s, Rect::new(r.x + 40, r.y, r.w - 42, r.h), 0, &text, TEXT);
                 cv.no_clip();
             } else {
-                cv.text_in(&f.sb, r, 1, "GEN", DIM);
+                cv.text_in(&f.sb, r, 1, "GEN", if on { GEN_COLOR } else { DIM });
             }
         }
         if let Some(r) = b.show {
@@ -814,7 +823,8 @@ impl Ui {
         for x in [b.time.x - 5, b.trig.x - 5] {
             cv.vline(x, bottom.y + 6, bottom.bottom() - 6, LINE);
         }
-        // time base
+        // time base: the scale, and under it what the TIME card of the Default layout says (the delay, or the zoom scale)
+        let two = self.studio_pill_two_lines();
         let r = b.time;
         chip(cv, r, BTN, if root == Some(MenuId::Horizontal) { ACCENT } else { BTN_BORDER });
         let cy = r.y + r.h / 2;
@@ -825,36 +835,90 @@ impl Ui {
         cv.line(r.x + 24, cy, r.x + 20, cy + 3, TEXT);
         let scale = format!("{}/div", si_short(self.m.time_per_div() as f64, "s"));
         let label = if self.m.zoom && f.mb.width(&format!("Main {scale}")) <= r.w - 52 { format!("Main {scale}") } else { scale };
-        cv.text_fit(&f.mb, Rect::new(r.x + 32, r.y, r.w - 52, r.h), 0, &label, TEXT);
+        let detail = self.studio_time_detail();
+        if two && f.mb.width(&label) <= r.w - 52 && f.s.width(&detail) <= r.w - 52 {
+            cv.text(&f.mb, r.x + 32, r.y + 13 + BAR_DY, &label, TEXT);
+            cv.text(&f.s, r.x + 32, r.y + 25 + BAR_DY, &detail, if self.m.zoom { ACCENT } else { DIM });
+        } else {
+            cv.text_fit(&f.mb, Rect::new(r.x + 32, r.y, r.w - 52, r.h), 0, &label, TEXT);
+        }
         chevron_down(cv, r.right() - 16, cy - 2, DIM);
-        // trigger: the slope, the source and the level
+        // trigger: the slope, the source and the level; under them the type and the sweep, which the trigger card of
+        // the Default layout names too. A pill of one line (larger text) has the type in front instead
         let r = b.trig;
         chip(cv, r, BTN, if root == Some(MenuId::Trigger) { ACCENT } else { BTN_BORDER });
         let source = self.m.trigger_wave();
         let col = self.wave_color(source);
         let edge = matches!(self.m.trig_type, TrigType::Edge | TrigType::Slope | TrigType::Timeout | TrigType::NthEdge | TrigType::Delay);
-        let mut x = r.x + 9;
-        cv.set_clip(r.inset(2));
-        if edge {
-            draw_slope(cv, x, r.y + 7 + BAR_DY, self.m.slope, col);
-            x += 20;
-        } else {
-            x = cv.text(&f.sb, x, r.y + 20 + BAR_DY, &self.m.trig_type.name().to_uppercase(), LABEL) + 6;
-        }
-        x = cv.text(&f.mb, x, r.y + 20 + BAR_DY, &self.trigger_source_label(), col) + 6;
         let levels = if matches!(self.m.trig_type, TrigType::Runt | TrigType::Slope | TrigType::Window) {
             format!("{} / {}", si_short(self.m.trig_level2 as f64, "V"), si_short(self.m.trig_level as f64, "V"))
         } else { si_short(self.trig_level_shown() as f64, "V") };
+        let src = self.trigger_source_label();
+        // the base line of the main text: higher when the type and the sweep stand under it
+        let base = r.y + BAR_DY + if two { 13 } else { 20 };
+        // the text ends before the chevron
+        let room = r.w - 9 - 20;
+        let rest = if edge { 20 } else { 0 } + f.mb.width(&src) + 6 + f.mb.width(&levels);
+        // one line: the type stands in front, and is cut short before the level is
+        let kind = if two { String::new() } else { Self::studio_cut(&f.sb, &self.m.trig_type.name().to_uppercase(), room - rest - 6) };
+        let mut x = r.x + 9;
+        cv.set_clip(Rect::new(r.x + 2, r.y + 2, r.w - 2 - 20, r.h - 4));
+        if !kind.is_empty() { x = cv.text(&f.sb, x, base, &kind, LABEL) + 6; }
+        if edge {
+            draw_slope(cv, x, base - 13, self.m.slope, col);
+            x += 20;
+        }
+        x = cv.text(&f.mb, x, base, &src, col) + 6;
         // (the slope is the picture at the left; an arrow here said it a second time)
-        let x = cv.text(&f.mb, x, r.y + 20 + BAR_DY, &levels, TEXT) + 8;
-        // the sweep, where it has the room: Auto, Normal or Single decide whether the picture moves at all
-        let sweep = match self.m.trig_mode { TrigMode::Auto => "Auto", TrigMode::Normal => "Normal", TrigMode::Single => "Single" };
-        if x + f.s.width(sweep) <= r.right() - 24 {
-            cv.text(&f.s, r.right() - 24 - f.s.width(sweep), r.y + 20 + BAR_DY, sweep, DIM);
+        let x = cv.text(&f.mb, x, base, &levels, TEXT) + 8;
+        if two {
+            // the type and the sweep, each a text of its own
+            let (mut x, y) = (r.x + 9, r.y + 25 + BAR_DY);
+            for (i, part) in self.studio_trig_detail().split(" \u{b7} ").enumerate() {
+                if i > 0 { x = cv.text(&f.s, x, y, " \u{b7} ", LABEL); }
+                x = cv.text(&f.s, x, y, part, LABEL);
+            }
+        } else {
+            // one line: the sweep at the right, where it has the room. Auto, Normal or Single decide whether the
+            // picture moves at all
+            let sweep = match self.m.trig_mode { TrigMode::Auto => "Auto", TrigMode::Normal => "Normal", TrigMode::Single => "Single" };
+            if x + f.s.width(sweep) <= r.right() - 24 {
+                cv.text(&f.s, r.right() - 24 - f.s.width(sweep), base, sweep, DIM);
+            }
         }
         cv.no_clip();
         chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
         self.draw_studio_ch_picker(cv);
+    }
+
+    /// The pills of the bottom bar have a small second line while both fonts fit the pill.
+    pub(super) fn studio_pill_two_lines(&self) -> bool {
+        let f = self.fonts();
+        f.mb.size + f.s.size <= TWO_LINE_MAX
+    }
+
+    /// `s` as it fits `room` in the font `f`: whole, or cut with three dots, or nothing when not even two letters fit.
+    pub(super) fn studio_cut(f: &Font, s: &str, room: i32) -> String {
+        if f.width(s) <= room { return s.to_string(); }
+        let mut t: String = s.to_string();
+        while t.chars().count() > 2 && f.width(&format!("{t}...")) > room { t.pop(); }
+        if f.width(&format!("{t}...")) <= room { format!("{}...", t.trim_end()) } else { String::new() }
+    }
+
+    /// The second line of the time pill, as the TIME card of the Default layout has it: the zoom scale while the zoom
+    /// is on, else the delay.
+    pub(super) fn studio_time_detail(&self) -> String {
+        if self.m.zoom {
+            format!("zoom {}/div", si_short(tscales()[self.m.zscale] as f64, "s"))
+        } else {
+            format!("delay {}", si_short(self.m.delay as f64, "s"))
+        }
+    }
+
+    /// The second line of the trigger pill: the type and the sweep ("Edge {b7} Auto"), which the trigger card of the
+    /// Default layout names.
+    pub(super) fn studio_trig_detail(&self) -> String {
+        format!("{} \u{b7} {}", self.m.trig_type.name(), self.value(Item::TrigMode))
     }
 
     /// The second line of a channel pill: "DC {b7} 1{d7} {b7} 4.75 V". Short of room the offset goes first, then the probe.
@@ -1145,11 +1209,6 @@ impl Ui {
         let hit = |r: Rect| self.top_hit(r).contains(x, y);
         if t.badge.w > 0 && hit(t.badge) {
             self.return_to_live();
-        } else if t.simbtn.w > 0 && hit(t.simbtn) {
-            // SIM: the sheet with the signal's settings first. Play starts the simulation with them and Add to ref puts
-            // the signal beside the live channels; both are at the foot of the sheet. (It used to start playing whatever
-            // preset was chosen last, before any setting could be seen.)
-            self.toggle_menu(MenuId::Sim);
         } else if t.vbox.w > 0 && hit(t.vbox) {
             self.view_box_tap(x, y);
         } else if hit(t.run) {
@@ -2055,6 +2114,15 @@ pub(super) struct PanelGeo {
     /// a short panel: a header and a footer of one row each
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub short: bool,
+}
+
+/// The opposite of `icon_expand`: the two arrow heads meet in the middle.
+pub(super) fn icon_collapse(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
+    cv.line(cx - 6, cy + 6, cx + 6, cy - 6, c);
+    cv.hline(cx + 1, cx + 6, cy - 1, c);
+    cv.vline(cx + 1, cy - 6, cy - 1, c);
+    cv.hline(cx - 6, cx - 1, cy + 1, c);
+    cv.vline(cx - 1, cy + 1, cy + 6, c);
 }
 
 pub(super) fn icon_expand(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {

@@ -16,6 +16,8 @@ pub(super) const SHEET_W: i32 = 380;
 pub(super) const SHEET_ROW: i32 = 44;
 pub(super) const SHEET_MAX_ROWS: usize = 7;
 pub(super) const SHEET_MAX_TABS: usize = 4;
+/// The most options a choice shows as buttons; a longer one is a list.
+pub(super) const SHEET_MAX_SEGS: usize = 5;
 pub(super) const SHEET_HEAD: i32 = 52;
 pub(super) const SHEET_TABS: i32 = 40;
 pub(super) const SHEET_FOOT: i32 = 56;
@@ -26,9 +28,9 @@ const LABEL_W: i32 = 132;
 /// The five kinds of row a sheet has.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum RowKind {
-    /// two to four segments
+    /// two to five segments
     Choice,
-    /// a value that opens the list of its options
+    /// - value +, as in the dialog of the Default layout; the value opens the list of its options
     Pick,
     /// - value +
     Number,
@@ -172,8 +174,12 @@ impl Ui {
                 ClearDisp => Slot::Foot(0),
                 _ => Slot::Tab(2),
             }),
-            M::Acquire => (&["Acquire"], |it| match it {
-                Open(M::Horizontal) => Slot::Tab(0),
+            // the first tab is the top of the Default dialog in its order: mode, averaging, memory, segments, aliasing.
+            // The rarer rows have the second tab: with averaging or segments on, one tab held more rows than a sheet
+            // has, and the page fell back to the dialog. The way on to Horizontal is under both tabs
+            M::Acquire => (&["Acquire", "More"], |it| match it {
+                AcqSegIvl | AcqSegTable | AcqCores | AcqDrawPath => Slot::Tab(1),
+                Open(M::Horizontal) => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
             M::Horizontal => (&["Time base", "Zoom"], |it| match it {
@@ -181,7 +187,7 @@ impl Ui {
                 AutoDeskew | ClearDeskew => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
-            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurType | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
+            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
             M::Search => (&["Edge search"], |it| match it { SrchRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
             M::Ref => (&["Reference", "Scale and files"], |it| match it {
                 RefSel | RefSrc | RefLabel | RefColor | RefSaveNext | RefImport => Slot::Tab(0),
@@ -340,7 +346,7 @@ impl Ui {
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
+        matches!(menu, MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
     }
 
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
@@ -477,6 +483,10 @@ impl Ui {
                 let at = 2.min(tabs[0].rows.len());
                 tabs[0].rows.insert(at, Item::RefShow(sel));
             }
+            // Acquire: the way on to Horizontal is under both tabs
+            if menu == MenuId::Acquire {
+                for t in &mut tabs { t.foot = vec![Item::Open(MenuId::Horizontal)]; }
+            }
             // the two sources of a pair are under every tab ("A: CH1", "B: CH2"): a slot of the plan is the foot of one tab
             if menu == MenuId::MeasPair {
                 for t in &mut tabs { t.foot = vec![Item::MeasSrc, Item::MeasSrcB]; }
@@ -514,7 +524,9 @@ impl Ui {
             return false;
         }
         match self.menu {
-            MenuId::MeasAdd | MenuId::AddPanel => self.m.layout == Layout::Studio,
+            // Studio's quick Add panel; the Measure page of every layout once it is expanded (`studio.meas_page`)
+            MenuId::MeasAdd => self.m.layout == Layout::Studio && !self.studio.meas_page,
+            MenuId::AddPanel => self.m.layout == Layout::Studio,
             MenuId::Pick => self.pick.is_some_and(|p| !keypad_pick(p.it) && !self.options(p.it).is_empty() && self.sheet_spec(p.menu).is_some()),
             m => self.sheet_spec(m).is_some(),
         }
@@ -560,9 +572,24 @@ impl Ui {
 
     // ------------------------------------------------------------------------------------------------ rows
 
+    /// Width of the label column of a row: the fixed one, or only what the label needs when that makes the room for the
+    /// buttons of its choice. The dialog of the Default layout shows such a choice as buttons (the acquisition mode,
+    /// the cursor mode); in the fixed column it became a list, one tap more for every change.
+    pub(super) fn sheet_label_w(&self, it: Item) -> i32 {
+        let row = SHEET_W - 2 * PAD;
+        if it == Item::TrigType || it == Item::RefColor || Self::kind(it) != Kind::Choice || !matches!(self.ctl(it, row - LABEL_W), Ctl::Pick) {
+            return LABEL_W;
+        }
+        let need = self.fonts().m.width(&self.sheet_label(it)) + 14;
+        match self.ctl(it, row - need) {
+            Ctl::Seg(o, _) if need < LABEL_W && o.len() <= SHEET_MAX_SEGS => need,
+            _ => LABEL_W,
+        }
+    }
+
     /// The row type of an item, from the control the classic dialog would give it.
     pub(super) fn sheet_row_kind(&self, it: Item) -> RowKind {
-        let w = SHEET_W - 2 * PAD - LABEL_W;
+        let w = SHEET_W - 2 * PAD - self.sheet_label_w(it);
         if it == Item::TrigType || it == Item::RefColor {
             return RowKind::Choice;
         }
@@ -571,7 +598,7 @@ impl Ui {
         }
         match self.ctl(it, w) {
             Ctl::Seg(o, _) if o.len() == 2 && o[0] == "Off" && o[1] == "On" => RowKind::Toggle,
-            Ctl::Seg(o, _) if o.len() <= 4 => RowKind::Choice,
+            Ctl::Seg(o, _) if o.len() <= SHEET_MAX_SEGS => RowKind::Choice,
             Ctl::Seg(..) | Ctl::Pick => RowKind::Pick,
             Ctl::Value => RowKind::Number,
             Ctl::Button => RowKind::Link,
@@ -595,7 +622,7 @@ impl Ui {
             let sel = self.refs.get(self.ref_sel).and_then(Option::as_ref).map(|r| r.color.min(REF_COLORS.len() - 1));
             return (REF_COLORS.iter().map(|c| c.0.to_string()).collect(), sel);
         }
-        match self.ctl(it, SHEET_W - 2 * PAD - LABEL_W) {
+        match self.ctl(it, SHEET_W - 2 * PAD - self.sheet_label_w(it)) {
             Ctl::Seg(o, s) => (o, s),
             _ => (Vec::new(), None),
         }
@@ -700,11 +727,12 @@ impl Ui {
         for (i, &it) in t.rows.iter().enumerate() {
             let row = Rect::new(r.x + PAD, body_y + i as i32 * SHEET_ROW, r.w - 2 * PAD, SHEET_ROW);
             let kind = self.sheet_row_kind(it);
-            let label = Rect::new(row.x, row.y, LABEL_W, row.h);
+            let lw = self.sheet_label_w(it);
+            let label = Rect::new(row.x, row.y, lw, row.h);
             let ctrl = match kind {
                 RowKind::Link => Rect::new(row.x, row.y + 2, row.w, 40),
                 RowKind::Toggle => Rect::new(row.right() - 56, row.y + 9, 52, 26),
-                _ => Rect::new(row.x + LABEL_W, row.y + 2, row.w - LABEL_W, 40),
+                _ => Rect::new(row.x + lw, row.y + 2, row.w - lw, 40),
             };
             rows.push(SheetRowGeo { it, kind, row, label, ctrl });
         }
@@ -855,12 +883,19 @@ impl Ui {
                 }
             }
             RowKind::Pick => {
-                btn(cv, c, BTN, BTN_BORDER);
+                // - value +: the steps of the dialog of the Default layout, and the value opens the list
+                let (mi, mid, pl) = Self::value_parts(c);
+                btn(cv, mi, BTN, BTN_BORDER);
+                Self::draw_sign(cv, mi, false);
+                btn(cv, mid, BTN, BTN_BORDER);
                 let v = self.value(it);
-                cv.set_clip(Rect::new(c.x + 6, c.y, c.w - 30, c.h));
-                cv.text_in(&f.m, Rect::new(c.x + 10, c.y, c.w - 34, c.h), 0, &v, TEXT);
+                let font = if f.m.width(&v) > mid.w - 34 { &f.s } else { &f.m };
+                cv.set_clip(Rect::new(mid.x + 6, mid.y, mid.w - 30, mid.h));
+                cv.text_in(font, Rect::new(mid.x + 10, mid.y, mid.w - 34, mid.h), 0, &v, TEXT);
                 cv.no_clip();
-                chevron_down(cv, c.x + c.w - 18, c.y + c.h / 2 - 3, DIM);
+                chevron_down(cv, mid.x + mid.w - 18, mid.y + mid.h / 2 - 3, DIM);
+                btn(cv, pl, BTN, BTN_BORDER);
+                Self::draw_sign(cv, pl, true);
             }
             RowKind::Number => {
                 let (mi, mid, pl) = Self::value_parts(c);
@@ -1011,7 +1046,12 @@ impl Ui {
                 self.select_option(it, &opts[k]);
             }
             RowKind::Pick => {
-                if row.ctrl.contains(x, y) || row.label.contains(x, y) {
+                let (mi, _, pl) = Self::value_parts(row.ctrl);
+                if mi.contains(x, y) {
+                    self.adjust(it, -1);
+                } else if pl.contains(x, y) {
+                    self.adjust(it, 1);
+                } else if row.ctrl.contains(x, y) || row.label.contains(x, y) {
                     self.open_picker(it);
                 }
             }
@@ -1186,9 +1226,26 @@ impl Ui {
         AddGeo { chips, groups, find, rows, page: 0, pages: 1, prev: none, next: none, list }
     }
 
+    /// The button beside the close button of the quick Add panel: it opens the Measure page of every layout, with
+    /// the categories, the sources a measurement reads, Selected and Settings.
+    pub(super) fn sheet_add_expand(&self) -> Rect {
+        let (_, _, close) = self.sheet_chrome();
+        Rect::new(close.x - 48, close.y, 44, 44)
+    }
+
+    /// From the quick Add panel to the Measure page and back; the menu stays the same one, so Back and close act as before.
+    pub(super) fn studio_meas_page(&mut self, page: bool) {
+        self.studio.meas_page = page;
+        self.studio.md.info = None;
+        if !page { self.sheet_add_open(); }
+    }
+
     pub(super) fn draw_sheet_add(&self, cv: &mut Canvas) {
         let f = self.fonts();
         self.sheet_draw_chrome(cv, "Add measurements");
+        let expand = self.sheet_add_expand();
+        btn(cv, expand, BTN, BTN_BORDER);
+        super::studio::icon_expand(cv, expand.x + expand.w / 2, expand.y + expand.h / 2, TEXT);
         let g = self.sheet_add_geo();
         if g.chips.is_empty() {
             let (r, _, _) = self.sheet_chrome();
@@ -1239,6 +1296,10 @@ impl Ui {
     }
 
     pub(super) fn sheet_add_tap(&mut self, x: i32, y: i32) -> bool {
+        if self.sheet_add_expand().contains(x, y) {
+            self.studio_meas_page(true);
+            return true;
+        }
         let g = self.sheet_add_geo();
         for &(id, c) in &g.chips {
             if c.contains(x, y) {

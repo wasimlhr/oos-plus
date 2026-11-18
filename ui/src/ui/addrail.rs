@@ -695,9 +695,6 @@ impl Ui {
         }
     }
 
-    fn cursor_type_names() -> [&'static str; 4] { ["Waveform", "V bars", "H bars", "V and H"] }
-    const CURSOR_MODES: [CursorMode; 4] = [CursorMode::Track, CursorMode::Time, CursorMode::Volt, CursorMode::Xy];
-
     fn set_cursor_type(&mut self, mode: CursorMode) {
         let was = self.m.cursor;
         self.m.cursor = mode;
@@ -711,8 +708,9 @@ impl Ui {
     }
 
     pub(super) fn addrail_cursor_items(&self) -> Vec<Item> {
-        if self.m.cursor == CursorMode::Off { return vec![Item::CurType, Item::CurSrc]; }
-        let mut v = vec![Item::CurType, Item::CurSrc, Item::CurSecond, Item::CurReadout, Item::CurLink, Item::CurA, Item::CurB];
+        // the Mode row is the one of the Default menu (Off, Time, Volt, Track, XY); the rows after it are Studio's
+        if self.m.cursor == CursorMode::Off { return vec![Item::CurMode, Item::CurSrc]; }
+        let mut v = vec![Item::CurMode, Item::CurSrc, Item::CurSecond, Item::CurReadout, Item::CurLink, Item::CurA, Item::CurB];
         if self.m.cursor == CursorMode::Xy { v.extend([Item::CurC, Item::CurD]); }
         v.push(Item::CurRemove);
         v
@@ -979,7 +977,7 @@ impl Ui {
 
     pub(super) fn addrail_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::CurType | Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::SrchSrc | Item::SrchSlope => Kind::Choice,
+            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::SrchSrc | Item::SrchSlope => Kind::Choice,
             Item::SrchLevel | Item::SrchEvent => Kind::Value,
             Item::CurRemove | Item::Srch50 | Item::SrchFromTrig | Item::SrchToTrig | Item::SrchRemove => Kind::Action,
             _ => return None,
@@ -988,7 +986,6 @@ impl Ui {
 
     pub(super) fn addrail_label(it: Item) -> Option<&'static str> {
         Some(match it {
-            Item::CurType => "Type",
             Item::CurSrc => "Source",
             Item::CurSecond => "Second source",
             Item::CurReadout => "Readout",
@@ -1008,10 +1005,6 @@ impl Ui {
 
     pub(super) fn addrail_value(&self, it: Item) -> Option<String> {
         Some(match it {
-            Item::CurType => match self.m.cursor {
-                CursorMode::Off => "Off".into(),
-                m => Self::cursor_type_names()[Self::CURSOR_MODES.iter().position(|&x| x == m).unwrap_or(0)].into(),
-            },
             Item::CurSrc => self.wave_name(self.cursor_source()),
             Item::CurSecond => self.m.cur_b_source.map_or("Same".into(), |s| self.wave_name(s)),
             Item::CurReadout => if self.studio.cur_badge { "Badge" } else { "Graticule" }.into(),
@@ -1030,7 +1023,6 @@ impl Ui {
     pub(super) fn addrail_options(&self, it: Item) -> Option<Vec<String>> {
         let names = || self.sheet_shown_sources().into_iter().map(|s| self.wave_name(s)).collect::<Vec<_>>();
         Some(match it {
-            Item::CurType => Self::cursor_type_names().iter().map(|s| s.to_string()).collect(),
             Item::CurSrc | Item::SrchSrc => names(),
             Item::CurSecond => std::iter::once("Same".to_string()).chain(names()).collect(),
             Item::CurReadout => vec!["Graticule".into(), "Badge".into()],
@@ -1043,11 +1035,14 @@ impl Ui {
 
     pub(super) fn addrail_adjust(&mut self, it: Item, d: i32) -> bool {
         match it {
-            Item::CurType => {
-                let all = Self::CURSOR_MODES;
-                let now = all.iter().position(|&m| m == self.m.cursor);
-                let next = match now { Some(i) => (i as i32 + d).rem_euclid(all.len() as i32) as usize, None => if d < 0 { all.len() - 1 } else { 0 } };
-                self.set_cursor_type(all[next]);
+            // Studio: the Mode row of the Default menu, with Studio's placing of the cursors when they come on or change
+            // between time and voltage
+            Item::CurMode if self.m.layout == Layout::Studio => {
+                let all = [CursorMode::Off, CursorMode::Time, CursorMode::Volt, CursorMode::Track, CursorMode::Xy];
+                let now = all.iter().position(|&m| m == self.m.cursor).unwrap_or(0);
+                let next = all[(now as i32 + d).rem_euclid(all.len() as i32) as usize];
+                if next == CursorMode::Off { self.m.cur_b_source = None; }
+                self.set_cursor_type(next);
             }
             Item::CurSrc | Item::SrchSrc => {
                 let shown = self.sheet_shown_sources();

@@ -49,6 +49,8 @@ there. These instructions are the same for every agent and every person; the rea
 - Keep the look: neutral colours, white accent, round shapes, no empty areas; colours come from the named constants,
   not literals in drawing code; the top bar keeps its four entries (ADR 0007, ADR 0008). A second UI or a new layout
   of the screen needs a decision record first.
+- A row added to a menu gets its place on the Studio sheet of that menu (`sheet_plan`), so Studio offers what Default
+  offers (ADR 0030).
 
 ## Layout of the tree
 

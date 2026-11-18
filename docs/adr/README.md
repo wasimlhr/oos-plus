@@ -51,6 +51,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0026](process/0026-contributions-are-signed-off-and-hold-no-vendor-material.md) | process | A contribution is signed off, holds no vendor material and enters main as reviewed commits | accepted |
 | [0027](code/0027-a-session-is-one-file-of-setup-record-and-references.md) | code | A session is one file of the setup, the record on the screen and the reference slots | accepted, to be reviewed |
 | [0028](code/0028-an-external-generator-is-a-table-row-one-connection-and-a-page.md) | code | An external generator is a row of a table, one connection and a page of its own | accepted, to be reviewed |
+| [0030](ui-ux/0030-studio-offers-what-default-offers.md) | ui-ux | Studio offers what Default offers; the Add panel is the short way into the Measure page | accepted |
 
 ## Reading order for agents
 

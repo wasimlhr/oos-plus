@@ -120,6 +120,6 @@ Find a button on the screen and press it:
 
 ```
 :UI:ELEMents? TOP
-TOP,"Views",601,5,80,30;TOP,"Add",687,5,53,30;TOP,"SIM",164,5,52,30;TOP,"Stop",8,6,92,28;TOP,"Single",104,5,54,30;...
+TOP,"Views",601,5,80,30;TOP,"Add",687,5,53,30;TOP,"Stop",8,6,92,28;TOP,"Single",104,5,54,30;...
 :UI:TAP 131,20
 ```
