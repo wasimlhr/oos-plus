@@ -172,10 +172,11 @@ impl Ui {
                 ClearDisp => Slot::Foot(2),
                 _ => Slot::Tab(2),
             }),
-            // the segments have a tab of their own: with averaging or segments on, one tab held more rows than a
-            // sheet has, and the page fell back to the dialog. The way on to Horizontal is under both tabs
-            M::Acquire => (&["Acquire", "Segments"], |it| match it {
-                AcqSeg | AcqSegHw | AcqSegIvl | AcqSegTable => Slot::Tab(1),
+            // the first tab is the top of the Default dialog in its order: mode, averaging, memory, segments, aliasing.
+            // The rarer rows have the second tab: with averaging or segments on, one tab held more rows than a sheet
+            // has, and the page fell back to the dialog. The way on to Horizontal is under both tabs
+            M::Acquire => (&["Acquire", "More"], |it| match it {
+                AcqSegIvl | AcqSegTable | AcqCores | AcqDrawPath => Slot::Tab(1),
                 Open(M::Horizontal) => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
