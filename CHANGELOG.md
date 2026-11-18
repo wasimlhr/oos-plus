@@ -62,11 +62,13 @@ Fixed:
 - Studio: the classic strip is the badge style of a new set-up: a line per source, with the names and values of its
   measurements in columns. Measure > Badge style still has both. A set-up file says `studio_badges = studio` for the
   other style; a file without the key, which meant the Studio badges before, shows the classic strip now.
-- Studio: the badge row has one button that says what it opens, "Meas" and the number of measurements, beside the
-  eye. It had two more of an icon each, for the badge style and for the compact view, and the second opened the
-  list in one view and switched the compact view in another. The style is Measure > Badge style, the compact view
-  is in the View menu. With the badges hidden, the chip of the bottom bar that brings them back says "Badges"; it
-  said "Meas", like the chip on the plot that opens the list.
+- Studio: the badge row has one button at its right end, which says what it opens: "Meas" and the number of
+  measurements. A tap opens the table of the measurements. It had three of an icon each, for the badge style, for
+  the compact view and the eye, and the second opened the list in one view and switched the compact view in
+  another. The style is Measure > Badge style; the compact view and Show pinned badges, which hides the row, are in
+  the View menu, and hiding the row there shows the Undo bar the eye had. The 40 px of the eye go to the badges.
+  With the badges hidden, the chip of the bottom bar that brings them back says "Badges"; it said "Meas", like the
+  chip on the plot that opens the list.
 - Studio: the measurement panel is made for a finger. The buttons of its toolbar are 36 px high (28 before) with a
   touch of 40, the rows of its table 36 px (28) where the panel is tall, the segments of its view switch 32 px wide
   (25) where the panel is 250 px or wider. A low panel under the plot keeps rows of 28 px, so it still shows five. The short name of
@@ -75,8 +77,8 @@ Fixed:
 - DVM and counter, Logic analyser and Double pulse are one page each: they had two tabs of two to five rows. A
   sheet draws the line over its footer only where it has a footer.
 - Studio: the Add list of the top bar has rows of 40 px (34 before). The chip of the bottom bar that adds a source
-  is named "+ Source" whatever is off; it said "+ CH", "+ Add" or "Add source". The eye and the list button of the
-  badge row take a touch of 40 px, like the buttons beside them.
+  is named "+ Source" whatever is off; it said "+ CH", "+ Add" or "Add source". The button of the badge row takes a
+  touch of 40 px, like the buttons beside it.
 - The cursors have a button in the top bar of Minimal (Cursor: the cursors come on with their sheet) and of Studio
   (Cursors: a tap puts them on, the next opens their sheet). They were four taps away in Minimal and three in
   Studio. Studio's Add button no longer lights up while the cursors are on.

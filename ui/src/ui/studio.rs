@@ -111,7 +111,7 @@ pub(super) struct Studio {
     pub unpinned: Vec<MeasKey>,
     /// measurements moved to the floating panel from a badge popup: listed there beside the pinned ones
     pub floated: Vec<MeasKey>,
-    /// the badge row is hidden (eye button, View > Show pinned badges)
+    /// the badge row is hidden (View > Show pinned badges)
     pub hide_badges: bool,
     /// the badge whose action popup is open
     pub popup: Option<MeasKey>,
@@ -1552,23 +1552,23 @@ impl Ui {
         // a row with statistics has a small line more
         if self.studio_stats_any() && self.studio.view != StudioView::Sim { base + super::measview::STATS_LINE } else { base }
     }
-    /// The button that opens the list of all measurements, left of the eye: "Meas" and how many there are. The row had
-    /// two buttons of an icon each here, for the badge style and for the compact view, and the second opened the list
-    /// in one view and switched the compact view in another. The style is Measure > Badge style, the compact view is
-    /// in the View menu.
+    /// The one button at the right end of the row, on its last line (the row grows upwards: the button stays): "Meas"
+    /// and how many there are. It opens the table of the measurements. The row had three buttons of an icon each here
+    /// (badge style, compact view or list, eye), then this one and the eye. The style is Measure > Badge style; the
+    /// compact view and Show pinned badges, which hides the row, are in the View menu.
     pub(super) fn studio_list_chip(&self) -> Rect {
-        let eye = self.studio_eye();
-        let w = self.studio_list_chip_w();
-        Rect::new(eye.x - 6 - w, eye.y, w, eye.h)
+        let r = self.studio_row();
+        let (w, h) = (self.studio_list_chip_w(), self.studio_chip_h());
+        Rect::new(r.right() - 4 - w, r.bottom() - 3 - h, w, h)
     }
 
     fn studio_list_chip_w(&self) -> i32 {
         self.fonts().sb.width("Meas \u{b7} 00") + 30
     }
 
-    /// What the two buttons at the right end of the row take from it (`studio_row_limit`, without the row's rectangle).
+    /// What the button at the right end of the row takes from it (`studio_row_limit`, without the row's rectangle).
     fn studio_row_tail(&self) -> i32 {
-        38 + 6 + self.studio_list_chip_w() + 6
+        4 + self.studio_list_chip_w() + 6
     }
 
     /// Studio or Classic badges (Measure > Badge style).
@@ -1579,14 +1579,14 @@ impl Ui {
         self.relayout();
     }
 
-    /// The eye button at the right end of the row, on its last line (the row grows upwards: the buttons stay).
-    pub(super) fn studio_eye(&self) -> Rect {
-        let r = self.studio_row();
-        let h = self.studio_chip_h();
-        Rect::new(r.right() - 38, r.bottom() - 3 - h, 34, h)
+    /// Hides the row of badges (View > Show pinned badges). The Undo bar and the chip of the bottom bar bring it back.
+    pub(super) fn studio_hide_badges(&mut self) {
+        self.studio.hide_badges = true;
+        self.studio.md.hide_undo = Some(self.now);
+        self.relayout();
     }
 
-    /// Where the badges end: before the Meas button and the eye.
+    /// Where the badges end: before the Meas button.
     pub(super) fn studio_row_limit(&self) -> i32 {
         self.studio_list_chip().x - 6
     }
@@ -1703,9 +1703,6 @@ impl Ui {
         cv.text_in(&f.sb, Rect::new(c.x + 8, c.y, c.w - 22, c.h), 0, &format!("Meas \u{b7} {}", self.measurement_count()), TEXT);
         cv.no_clip();
         chevron(cv, c.right() - 12, c.y + c.h / 2, 1, TEXT);
-        let eye = self.studio_eye();
-        cv.vline(eye.x - 3, row.y + 6, row.bottom() - 6, LINE);
-        icon_eye(cv, eye.x + eye.w / 2, eye.y + eye.h / 2, TEXT);
     }
 
     /// The popup of a badge: where it is.
@@ -1798,12 +1795,6 @@ impl Ui {
         if !self.studio_badges_visible() || !self.studio_row().contains(x, y) { return false; }
         if self.studio_badges_more().is_some_and(|(r, _)| Self::hit40(r).contains(x, y)) {
             self.studio_set_view(StudioView::Docked);
-            return true;
-        }
-        if Self::hit40(self.studio_eye()).contains(x, y) {
-            self.studio.hide_badges = true;
-            self.studio.md.hide_undo = Some(self.now);
-            self.relayout();
             return true;
         }
         if Self::hit40(self.studio_list_chip()).contains(x, y) {
@@ -2038,8 +2029,14 @@ impl Ui {
             }
         }
         if self.studio_view_row(VIEW_BADGES).contains(x, y) {
-            self.studio.hide_badges = !self.studio.hide_badges;
-            self.relayout();
+            if self.studio.hide_badges {
+                self.studio.hide_badges = false;
+                self.studio.md.hide_undo = None;
+                self.relayout();
+            } else {
+                // with the Undo bar the eye of the row had
+                self.studio_hide_badges();
+            }
         } else if self.studio_view_row(VIEW_COMPACT).contains(x, y) {
             self.studio_set_compact(!self.studio.compact);
         } else if self.studio_view_row(VIEW_RESET).contains(x, y) {

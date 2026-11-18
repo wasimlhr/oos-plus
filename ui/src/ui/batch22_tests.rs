@@ -130,11 +130,11 @@ fn the_detailed_columns_at_every_width_follow_each_other_and_name_value_and_mean
     }
 }
 
-/// The badge style is a row of the Measure sheet, and the badge row follows it. The row itself has two buttons at its
-/// right end: the one that opens the list of measurements, which says "Meas" and how many, and the eye. (It had two
-/// more of an icon each, for the style and for the compact view.)
+/// The badge style is a row of the Measure sheet, and the badge row follows it. The row itself has one button at its
+/// right end: it says "Meas" and how many, and it opens the table of the measurements. (It had three of an icon each,
+/// for the style, for the compact view and the eye, then this one and the eye.)
 #[test]
-fn the_badge_row_has_one_named_button_and_the_eye_and_the_style_is_on_the_sheet() {
+fn the_badge_row_has_one_named_button_that_opens_the_table_and_the_style_is_on_the_sheet() {
     let mut u = studio();
     u.studio_set_view(StudioView::Waveform);
     for k in u.studio_keys() { u.studio_set_pin(k, true); }
@@ -146,8 +146,8 @@ fn the_badge_row_has_one_named_button_and_the_eye_and_the_style_is_on_the_sheet(
     for _ in 0..2 { frame(&mut u); }
     assert!(!u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
-    let (list, eye) = (u.studio_list_chip(), u.studio_eye());
-    assert!(list.right() < eye.x && list.w >= 60, "{list:?} {eye:?}");
+    let (list, row) = (u.studio_list_chip(), u.studio_row());
+    assert!(list.right() == row.right() - 4 && list.w >= 60 && Ui::hit40(list).h >= 40, "{list:?} in {row:?}");
     for (_, r) in u.studio_badges() { assert!(r.right() <= list.x, "badges end before the button"); }
     // it says what it opens
     let mut cv = Canvas::new(W, H);
@@ -168,15 +168,17 @@ fn the_badge_row_has_one_named_button_and_the_eye_and_the_style_is_on_the_sheet(
     u.select_option(Item::BadgeStyle, "Studio");
     frame(&mut u);
     assert!(!u.studio_classic());
-    // the button opens the list in every view, and the eye hides the row
+    // the button opens the table of the measurements, and nothing else is in the row: a tap where the eye was is the
+    // button's too
     let c = u.studio_list_chip();
     tap(&mut u, c);
-    assert_eq!(u.studio.view, StudioView::Docked, "the list of measurements");
+    assert_eq!(u.studio.view, StudioView::Docked, "the table of the measurements");
     u.studio_set_view(StudioView::Waveform);
     u.step(0.05);
-    let e = u.studio_eye();
-    tap(&mut u, e);
-    assert!(u.studio.hide_badges);
+    let row = u.studio_row();
+    tap(&mut u, Rect::new(row.right() - 22, c.y + c.h / 2, 1, 1));
+    assert!(!u.studio.hide_badges, "no eye");
+    assert_eq!(u.studio.view, StudioView::Docked);
 }
 
 // ------------------------------------------------------------------------------------------------ sparse zoom
@@ -460,9 +462,8 @@ fn the_badge_row_is_there_only_for_pinned_badges_with_the_panel_closed_and_never
     assert!(u.studio_badges_visible() && u.studio_row_h() > 0);
     assert!(u.studio_meas_chip().is_none());
     shot(&mut u, "badge-row-pinned");
-    // the restore path: the eye hides the row, the bottom bar and the Undo bar bring it back
-    let e = u.studio_eye();
-    tap(&mut u, e);
+    // the restore path: View > Show pinned badges hides the row, the bottom bar and the Undo bar bring it back
+    u.studio_hide_badges();
     assert!(u.studio.hide_badges && u.studio_row_h() == 0);
     assert!(u.studio_badges_hidden());
     let (_, undo) = u.md_hide_bar().expect("the Undo bar");

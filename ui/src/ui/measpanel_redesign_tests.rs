@@ -431,12 +431,11 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
     for _ in 0..4 { frame(&mut u); }
     assert!(u.studio_tab().is_none());
     shotb(&mut u, "strip");
-    // the eye hides the strip; the bottom bar then has a Meas chip that brings it back
+    // with the strip hidden (View > Show pinned badges) the bottom bar has a chip that brings it back
     u.studio_set_pin_all_for_test();
     for _ in 0..4 { frame(&mut u); }
     if u.studio_badges_visible() {
-        let eye = u.studio_eye();
-        tap(&mut u, eye);
+        u.studio_hide_badges();
         assert!(u.studio.hide_badges);
         let show = u.studio_bottom().show.expect("a restore chip in the bottom bar");
         shotb(&mut u, "strip-hidden");
