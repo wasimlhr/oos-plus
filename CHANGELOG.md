@@ -36,10 +36,23 @@ Fixed:
   - the trigger pill names the type and the sweep on a second line ("Edge · Auto"), and the time pill the delay
     or the zoom scale, as the cards of the Default layout do. At the Larger text size a pill has one line: the type
     stands in front of the source, and the time pill keeps the scale alone.
-  - Acquire, in Minimal and Studio: the sheet has the line that says where aliasing starts. It has two tabs,
-    Acquire and Segments, with Horizontal pinned under both, so it stays a sheet when averaging or segments add rows.
+  - Acquire, in Minimal and Studio: the sheet has the line that says where aliasing starts. Its first tab is the
+    top of the Default dialog (mode, averaging, memory, segments, aliasing), More has the segment interval and times,
+    the ADC cores and the draw path, and Horizontal is pinned under both, so it stays a sheet when averaging or
+    segments add rows.
   - SIM is not a button of the Studio top bar any more: it is Menu > Analysis > SIM, as in Default.
     `:UI:ELEMents? TOP` no longer lists it.
+  - Cursor has its button in the Studio top bar again, as in Default. It opens the Cursor menu, whose first row is
+    the Mode row of the Default menu (Off, Time, Volt, Track, XY) in place of Studio's Type row; the rows after it
+    (Source, Second source, Readout, Move) stay. In XY the button of the mode is marked now, in every layout.
+  - the sheets of Minimal and Studio keep the controls of the Default dialogs: a choice of up to five options is
+    shown as buttons where the row has the room once its label takes only what it needs (the acquisition mode, the
+    cursor mode), and a list has the minus and plus of the dialog again, with the list behind its value (the memory
+    depth, the segments).
+- Studio: a channel pill of the bottom bar always shows its scale. With four channels and the generator on, a pill
+  was too narrow for anything longer than "1 V" and drew no scale at all for "500 mV". The Add chip and the
+  generator's pill take their short form ("+ Add", "GEN") before a pill gets that narrow, and a scale that still
+  does not fit takes the small font, then loses its space, and is cut at its end (host-tested).
 - Decode, in Minimal and Studio: the four decoders are shown as four. The row of D1 to D4 is named Decoders and
   marks the ones that are on while another is edited, and the switch under it says whose it is ("Decoder D2"). Four
   decoders of four protocols on four channels ran before too; the sheet read as if there were one (host-tested).

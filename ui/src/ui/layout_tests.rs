@@ -135,11 +135,9 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     tap_in(&mut u, t.gear);
     assert_eq!(u.menu, MenuId::Main);
     u.close_menu();
-    // Cursors: the first tap puts the cursors on (no menu), the next opens their settings (batch 8)
-    u.studio_cursors_tap();
-    assert_eq!(u.m.cursor, CursorMode::Track);
-    assert!(!u.menu_open);
-    u.studio_cursors_tap();
+    // Cursor: the button of the Default bar, it opens the Cursor menu
+    let t = u.studio_top();
+    tap_in(&mut u, t.cursors);
     assert_eq!(u.menu, MenuId::Cursor);
     u.close_menu();
     // Add opens the grouped Add menu (Measurement first); Measure is its first row

@@ -23,13 +23,21 @@ row was missing, the line that says where aliasing starts). The gaps were at the
   control.
 - The Acquire sheet holds seven rows. Averaging on the hardware and hardware segments add more, and the page then
   opens as the dialog instead (read from the code, not seen on a unit).
-- The Studio bar had a SIM button, which ADR 0007 took out of the Default bar.
+- The Studio bar had a SIM button, which ADR 0007 took out of the Default bar, and no Cursor button, which the
+  Default bar has. The Cursor sheet had its own first row (Type: Waveform, V bars, H bars, V and H) in place of the
+  Mode row of the Default menu, and no Off.
+- A sheet is 380 px wide with a label column of 132 px. A choice that the dialog shows as buttons did not fit the rest
+  and became a list (the acquisition mode), and a list had lost the minus and plus of the dialog (the memory depth).
 
 ## Decision
 
 Every menu of the Default layout and every row of it can be reached in Studio: as a row of the sheet of that menu, in
 the same dialog, or in a place that is named. A test holds this (`ui/src/ui/studio_parity_tests.rs`): a row that a
 plan leaves out fails it until the row is placed or its other place is written down there.
+
+A row has the same kind of control on the sheet as in the dialog. A choice of up to five options stays buttons: the
+label column gives it the room the label does not need. A list keeps its minus and plus, and its value opens the
+list. Where the options do not fit the width of the sheet even then, the row is a list, and the test names it.
 
 What a bar of the Default layout says, the Studio bar says too: the read-out has the rate, the depth and the mode and
 is a button; the time pill has the delay or the zoom scale; the trigger pill has the type and the sweep.
@@ -39,12 +47,15 @@ measurement on one source with the plot in view: Add > Measurement and the Measu
 close button opens the page, and a button in the same place on the page leads back. Menu > Measure opens the page.
 
 ADR 0007 holds for the Studio bar: what belongs to one menu is an entry of the Menu, so SIM has no button there.
+Cursor is used all the time while measuring and has its button, as in the Default bar; it opens the Cursor menu,
+whose first row is the Mode row of the Default menu (Off, Time, Volt, Track, XY).
 
 ## Alternatives
 
-- Measure, Cursor and System buttons in the Studio bar, as in Default. The bar is the scarcest place, and it already
-  shortens its labels to keep the read-out; Add and the gear lead to the three, and SIM leaves the bar for this
-  reason.
+- Measure and System buttons in the Studio bar, as in Default. The bar is the scarcest place, and it already
+  shortens its labels to keep the read-out; Add and the gear lead to the two, and SIM leaves the bar for this reason.
+- The dialogs of the Default layout in Studio, in place of the sheets. A dialog covers the plot; the sheet leaves it
+  in view. The sheet keeps the rows and the controls of the dialog instead.
 - The Measure page in place of the Add panel. The page covers the plot (ADR 0005), and the panel is what Studio is
   for: the waveform stays in view while a measurement is added and shows at once as a badge.
 - The LAN, WLAN and USB boxes in the Studio bar. Not built: they would take the room of the view buttons and the
@@ -53,10 +64,16 @@ ADR 0007 holds for the Studio bar: what belongs to one menu is an entry of the M
 ## Consequences
 
 - A new row of a menu needs a place in the sheet's plan, or the test fails. That is the point.
+- The control column of a sheet no longer starts at one x for every row: a row with a short label and a wide choice
+  starts earlier.
+- A channel pill of the bottom bar always shows its scale: the Add chip and the generator's pill take their short
+  form before a pill gets too narrow, and a scale that still does not fit takes the small font and is cut at its
+  end, never left out.
 - The pills have a second line only while both fonts fit a pill (the Normal text size). At the larger sizes the
   trigger pill has the type in front of the source instead, and the time pill keeps the scale alone.
-- The Acquire sheet has two tabs, Acquire and Segments, and the way on to Horizontal is pinned under both: it is one
-  tap further for the segments, and the sheet no longer changes into a dialog.
+- The Acquire sheet has two tabs. The first is the top of the Default dialog in its order (mode, averaging, memory,
+  segments, aliasing); More has the segment interval and times, the ADC cores and the draw path. The way on to
+  Horizontal is pinned under both. The sheet no longer changes into a dialog.
 - A layout that is added later starts from the same rule, and the test is the place to add it.
 
 ## References
