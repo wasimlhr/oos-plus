@@ -152,8 +152,9 @@ Changed:
   clock second, as the tiles say (A = data, B = clock). Before, they took the clock first: a script that sends the
   clock first gets swapped results now. These are OOS items; the stock programming guide has none.
 - The pair measurements Setup DDR, Hold DDR and Setup+Hold DDR are named **Setup both edges**, **Hold both edges**
-  and **Setup+Hold both edges**. They measure the data against both edges of the clock, at any rate and on
-  reference waveforms too; "DDR" read as the memory. Their numbers and the remote names `DSETUP`, `DHOLD` and
+  and **Setup + Hold both edges** in the list of measurements, and Setup both, Hold both and Setup+Hold both on
+  the pair page and in the readouts, beside Setup fall and Hold fall. They measure the data against both edges of
+  the clock, at any rate and on reference waveforms too; "DDR" read as the memory. Their numbers and the remote names `DSETUP`, `DHOLD` and
   `DSETHOLD` stay. The SCPI Programming Manual named the clock as source A of every setup and hold item, and its
   example of write timing on stored captures sent the strobe first: the data is A and the clock B, as on the
   measurement page (host-tested).

@@ -408,7 +408,7 @@ fn setup_and_hold_on_both_clock_edges_read_on_references() {
     // the names: no row of the pair page or of the catalog is called DDR, which reads as the memory
     assert!(tools::PAIRS.iter().all(|p| !p.0.contains("DDR")), "the pair page");
     assert!(crate::measures::all().all(|(_, d)| !d.name.contains("DDR")), "the catalog");
-    assert_eq!(tools::PAIRS[17].0, "Setup both edges");
+    assert_eq!((tools::PAIRS[17].0, tools::PAIRS[18].0, tools::PAIRS[19].0), ("Setup both", "Hold both", "Setup+Hold both"));
     // the remote names stay, and take the data first and the clock second, as the page does (A = data, B = clock)
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.run = RunState::Stop;
