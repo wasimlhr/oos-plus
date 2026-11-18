@@ -233,6 +233,42 @@ mod tests {
         (Scpi::open(0), Ui::new(Source::Demo { t: 0.0 }), Canvas::new(crate::ui::W, crate::ui::H))
     }
 
+    /// A folder of the test's own under the temporary directory. The file of a recording is written when the
+    /// recorder is switched on, so every test that starts one saves into such a folder. It is removed when the test
+    /// ends, also a test that fails. The name of the test and the process are in the name: two tests never share
+    /// one, nor two runs at once.
+    struct Folder(std::path::PathBuf);
+
+    impl Folder {
+        fn new(name: &str) -> Folder {
+            let dir = std::env::temp_dir().join(format!("oos-recorder-{name}-{}", std::process::id()));
+            // what a run with the same number left when it was killed
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            Folder(dir)
+        }
+    }
+
+    impl Drop for Folder {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    impl AsRef<std::path::Path> for Folder {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    /// A scope that saves into a folder of the test's own; the folder is there as long as the last value is kept.
+    fn session_in(name: &str) -> (Scpi, Ui, Canvas, Folder) {
+        let (s, mut ui, cv) = session();
+        let dir = Folder::new(name);
+        ui.store_dir = dir.0.clone();
+        (s, ui, cv, dir)
+    }
+
     fn text(ui: &mut Ui) -> String {
         ui.sync_view_state();
         crate::store::setup_text(&ui.m)
@@ -270,6 +306,8 @@ mod tests {
     }
 
     fn start(s: &mut Scpi, ui: &mut Ui, cv: &Canvas) {
+        // no test leaves a file where Storage saves by default
+        assert!(ui.save_dir().starts_with(std::env::temp_dir()), "the test has its own folder (`session_in`)");
         ui.scpi_rec_want = true;
         s.poll(ui, cv);
         assert!(s.rec.is_some());
@@ -277,7 +315,7 @@ mod tests {
 
     #[test]
     fn what_is_set_at_the_scope_is_recorded_and_a_turned_knob_is_one_line() {
-        let (mut s, mut ui, cv) = session();
+        let (mut s, mut ui, cv, _dir) = session_in("knob");
         // before the recorder is on: part of the set-up at the start
         s.exec_line(&mut ui, &cv, ":CHANnel2:DISPlay ON");
         start(&mut s, &mut ui, &cv);
@@ -310,7 +348,7 @@ mod tests {
 
     #[test]
     fn what_a_client_sets_is_not_recorded() {
-        let (mut s, mut ui, cv) = session();
+        let (mut s, mut ui, cv, _dir) = session_in("client");
         start(&mut s, &mut ui, &cv);
         // a client alone
         s.exec_line(&mut ui, &cv, ":CHANnel3:DISPlay ON");
@@ -338,7 +376,7 @@ mod tests {
     /// written, with the user's value, and the client's setting is not.
     #[test]
     fn a_client_in_the_middle_of_a_turn_does_not_take_the_users_setting() {
-        let (mut s, mut ui, cv) = session();
+        let (mut s, mut ui, cv, _dir) = session_in("turn");
         s.exec_line(&mut ui, &cv, ":CHANnel1:COUPling AC");
         start(&mut s, &mut ui, &cv);
         user(&mut ui, "tdiv", "0.001");
@@ -357,11 +395,7 @@ mod tests {
 
     #[test]
     fn the_commands_switch_it_and_give_the_lines() {
-        let (mut s, mut ui, cv) = session();
-        let dir = std::env::temp_dir().join(format!("oos-recorder-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        ui.store_dir = dir.clone();
+        let (mut s, mut ui, cv, dir) = session_in("commands");
         let ask = |s: &mut Scpi, ui: &mut Ui, c: &str| String::from_utf8(s.exec_line(ui, &cv, c)).unwrap();
         assert_eq!(ask(&mut s, &mut ui, ":SYSTem:RECorder:STATe?"), "0");
         assert_eq!(ask(&mut s, &mut ui, ":SYSTem:RECorder:DATA?"), "#9000000000");
@@ -394,16 +428,11 @@ mod tests {
         assert_eq!(data, format!("#9{:09}{file}", file.len()));
         ask(&mut s, &mut ui, ":SYSTem:RECorder:STATe MAYBE");
         assert!(s.queued_errors().len() == 1 && s.queued_errors()[0].starts_with("-224"), "{:?}", s.queued_errors());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn the_storage_row_switches_it() {
-        let (mut s, mut ui, cv) = session();
-        let dir = std::env::temp_dir().join(format!("oos-recorder-row-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        ui.store_dir = dir.clone();
+        let (mut s, mut ui, cv, dir) = session_in("row");
         ui.script_menu("Storage").unwrap();
         ui.script_do("SCPI recorder").unwrap();
         s.poll(&mut ui, &cv);
@@ -413,7 +442,6 @@ mod tests {
         assert!(s.rec.is_none());
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         assert!(ui.toast_text().ends_with("0 commands"), "{}", ui.toast_text());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The keys that are actions are their commands, in the order they were pressed, with what was set before them
@@ -421,7 +449,7 @@ mod tests {
     #[test]
     fn a_key_that_is_an_action_is_its_command() {
         use crate::ui::key;
-        let (mut s, mut ui, cv) = session();
+        let (mut s, mut ui, cv, _dir) = session_in("key");
         start(&mut s, &mut ui, &cv);
         user(&mut ui, "tdiv", "0.001");
         tick(&mut s, &mut ui, &cv, 0.1);
@@ -449,7 +477,7 @@ mod tests {
     #[test]
     fn default_and_autoset_are_one_command_each() {
         use crate::ui::key;
-        let (mut s, mut ui, cv) = session();
+        let (mut s, mut ui, cv, _dir) = session_in("default");
         // the demo signal has been seen: an auto set-up has something to find
         for _ in 0..20 { ui.step(0.05); }
         start(&mut s, &mut ui, &cv);
@@ -477,11 +505,7 @@ mod tests {
     /// commands is not the user's action.
     #[test]
     fn a_save_is_its_command_and_a_clients_action_is_not_recorded() {
-        let (mut s, mut ui, cv) = session();
-        let dir = std::env::temp_dir().join(format!("oos-recorder-save-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        ui.store_dir = dir.clone();
+        let (mut s, mut ui, cv, dir) = session_in("save");
         start(&mut s, &mut ui, &cv);
         for c in [":SINGle", ":STOP", ":RUN", ":CLEar", ":TFORce", ":AUToscale", ":SAVE:SETup", "*RST"] {
             s.exec_line(&mut ui, &cv, c);
@@ -490,24 +514,23 @@ mod tests {
         assert!(recorded(s.rec_lines()).is_empty(), "a client's: {:?}", s.rec_lines());
         s.exec_line(&mut ui, &cv, "*CLS");
         let saved = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("setup")).count();
-        let before = saved(&dir);
+        let before = saved(dir.as_ref());
         ui.script_menu("Storage").unwrap();
         // no waveform yet (the scope has not run a frame): the row says so and nothing is recorded
         ui.script_do("Save waveform (CSV)").unwrap();
         settle(&mut s, &mut ui, &cv);
         assert!(recorded(s.rec_lines()).is_empty() && ui.toast_text() == "No waveform to save", "{:?}", s.rec_lines());
         ui.script_do("Save setup").unwrap();
-        assert_eq!(saved(&dir), before.max(1), "the file of the slot");
+        assert_eq!(saved(dir.as_ref()), before.max(1), "the file of the slot");
         // the row has written it; the recorder, a frame later, must not run the save again
         for e in std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("setup")) {
             std::fs::remove_file(e.path()).unwrap();
         }
         settle(&mut s, &mut ui, &cv);
         assert_eq!(recorded(s.rec_lines()), [":SAVE:SETup"], "{:?}", s.rec_lines());
-        assert_eq!(saved(&dir), 0, "written once, by the row");
+        assert_eq!(saved(dir.as_ref()), 0, "written once, by the row");
         assert!(ui.toast_text().starts_with("Saved setup"), "the row's message stays: {}", ui.toast_text());
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The action is recorded where it is done: the Quick key set to Clear is a Clear. Two actions in one frame are
@@ -516,11 +539,7 @@ mod tests {
     #[test]
     fn an_action_is_recorded_where_it_is_done() {
         use crate::ui::key;
-        let (mut s, mut ui, cv) = session();
-        let dir = std::env::temp_dir().join(format!("oos-recorder-done-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        ui.store_dir = dir.clone();
+        let (mut s, mut ui, cv, _dir) = session_in("done");
         for _ in 0..20 { ui.step(0.05); }
         // what the Quick key does is a setting: set before the recorder is on, it is no line
         ui.m.quick = Quick::Clear;
@@ -540,7 +559,6 @@ mod tests {
         assert!(s.rec.is_none());
         assert_eq!(recorded(s.rec_lines()).last().map(String::as_str), Some("*OPC?"), "{:?}", s.rec_lines());
         assert!(recorded(s.rec_lines()).contains(&":SINGle".to_string()));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
