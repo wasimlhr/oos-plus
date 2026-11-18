@@ -2,6 +2,7 @@
 //! Studio offers what Default offers: every row of a menu of the Default layout is a row of the Studio sheet of that
 //! menu (or the menu opens as the same dialog), and what the Default bars open, the Studio bars open too.
 //! `cargo test parity_table -- --ignored --nocapture` prints the table of the audit.
+use super::sheet::RowKind;
 use super::*;
 
 fn default_ui() -> Ui {
@@ -393,4 +394,152 @@ fn the_quick_add_panel_expands_to_the_measure_page_and_back() {
     let mut d = default_ui();
     d.key(key::MEASURE);
     assert!(d.catalog_quick_rect().is_none());
+}
+
+/// The kind of control a row has in the dialog of the Default layout, as the sheet names its kinds.
+fn default_kind(d: &Ui, menu: MenuId, it: Item) -> Option<RowKind> {
+    let dlg = d.dlg_layout()?;
+    let row = dlg.rows.iter().find(|r| r.it == it)?;
+    let _ = menu;
+    Some(match &row.ctl {
+        Ctl::Seg(o, _) if o.len() == 2 && o[0] == "Off" && o[1] == "On" => RowKind::Toggle,
+        Ctl::Seg(..) => RowKind::Choice,
+        Ctl::Pick => RowKind::Pick,
+        Ctl::Value => RowKind::Number,
+        Ctl::Button => RowKind::Link,
+        Ctl::Text => RowKind::Info,
+    })
+}
+
+/// Rows whose control differs between the dialog and the sheet: (menu, row, kind in Default, kind on the sheet).
+fn control_drift() -> Vec<String> {
+    let mut out = Vec::new();
+    for (menu, states) in menus() {
+        for (state, set) in states {
+            let (mut d, mut s) = (default_ui(), studio_ui());
+            set(&mut d);
+            set(&mut s);
+            d.open_menu(menu);
+            s.open_menu(menu);
+            let Some(spec) = s.sheet_spec(menu) else { continue };
+            for it in d.items(menu) {
+                if !spec.tabs.iter().any(|t| t.rows.contains(&it)) { continue; }
+                // the same row offers the same options in both layouts
+                let (od, os) = (d.options(it), s.options(it));
+                if od != os { out.push(format!("{} {state}: {} options {od:?} / {os:?}", menu_name(&d, menu), d.item_label(it))); }
+                let Some(kd) = default_kind(&d, menu, it) else { continue };
+                let ks = s.sheet_row_kind(it);
+                if kd != ks { out.push(format!("{} {state}: {} is {kd:?} in Default, {ks:?} on the sheet", menu_name(&d, menu), d.item_label(it))); }
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+#[test]
+#[ignore]
+fn control_drift_table() {
+    for l in control_drift() { println!("{l}"); }
+}
+
+/// A row has the control of the Default dialog on the sheet: a choice of buttons stays buttons, a list keeps its
+/// minus and plus, and the options are the same. The owner found the acquisition mode as a list and the memory depth
+/// without its steps by hand; this finds them, in every menu.
+#[test]
+fn the_sheets_have_the_controls_of_the_default_dialogs() {
+    let drift: Vec<String> = control_drift().into_iter().filter(|l| !KNOWN_DRIFT.iter().any(|(k, _)| l.contains(k))).collect();
+    assert!(drift.is_empty(), "controls that differ from the Default dialog:\n{}", drift.join("\n"));
+    // the two the owner named
+    let mut u = studio_ui();
+    u.open_menu(MenuId::Acquire);
+    assert_eq!(u.sheet_row_kind(Item::AcqMode), RowKind::Choice, "Mode: four buttons");
+    assert_eq!(u.sheet_row_kind(Item::AcqDepth), RowKind::Pick, "Memory: minus, value, plus");
+    let g = u.sheet_geo().unwrap();
+    let row = g.rows.iter().find(|r| r.it == Item::AcqDepth).unwrap();
+    let was = u.value(Item::AcqDepth);
+    u.tap(row.ctrl.right() - 20, row.ctrl.y + row.ctrl.h / 2);
+    assert_ne!(u.value(Item::AcqDepth), was, "plus steps the memory depth");
+    u.tap(row.ctrl.x + 20, row.ctrl.y + row.ctrl.h / 2);
+    assert_eq!(u.value(Item::AcqDepth), was, "minus steps it back");
+    u.tap(row.ctrl.x + row.ctrl.w / 2, row.ctrl.y + row.ctrl.h / 2);
+    assert!(u.menu == MenuId::Pick, "the value opens the list");
+    u.close_menu();
+    u.open_menu(MenuId::Acquire);
+    shot(&mut u, "acquire-controls");
+}
+
+/// Controls that differ on purpose, each with its reason. A line of `control_drift` that contains the text is let pass.
+const KNOWN_DRIFT: [(&str, &str); 8] = [
+    ("Type is Pick in Default, Choice on the sheet", "Trigger: the three common types are buttons, the other ten are behind More"),
+    ("Coupling is Choice in Default, Pick on the sheet", "Trigger: the four names do not fit the width of the sheet"),
+    ("Channel is Choice in Default, Pick on the sheet", "Math: M1 to M4 beside the label do not fit the width of the sheet"),
+    ("Operation is Choice in Default, Pick on the sheet", "Math: the names of a family do not fit the width of the sheet"),
+    ("Angle is Pick in Default, Choice on the sheet", "Inverter: the sheet has the room for the buttons, the dialog's column has not"),
+    ("R1 is Link in Default, Toggle on the sheet", "Reference: the ten Show buttons are the one switch of the selected slot"),
+    ("Slot color is Number in Default, Choice on the sheet", "Reference: the five colours are swatches"),
+    (": Slot ", "Reference: the ten slots are one list, the dialog steps through them"),
+];
+
+/// What the header of the Default layout opens, the Studio header opens: Cursor has its button again.
+#[test]
+fn the_studio_bar_has_the_cursor_button_and_the_default_mode_row() {
+    let mut u = studio_ui();
+    let t = u.studio_top();
+    assert!(t.cursors.w >= 40, "{:?}", t.cursors);
+    tap_in(&mut u, t.cursors);
+    assert!(u.menu_open && u.menu == MenuId::Cursor && u.sheet_active());
+    assert_eq!(u.sheet_row_kind(Item::CurMode), RowKind::Choice);
+    assert_eq!(u.sheet_choice(Item::CurMode).0, ["Off", "Time", "Volt", "Track", "XY"]);
+    shot(&mut u, "cursor-off");
+    for (name, mode) in [("Time", CursorMode::Time), ("Volt", CursorMode::Volt), ("Track", CursorMode::Track), ("XY", CursorMode::Xy), ("Off", CursorMode::Off)] {
+        u.select_option(Item::CurMode, name);
+        assert_eq!(u.m.cursor, mode);
+        assert_eq!(u.value(Item::CurMode), name, "the button of the mode in use is marked");
+        if name == "Volt" { shot(&mut u, "cursor-volt"); }
+    }
+    // every button of the Default header has its control in the Studio bar or its named place
+    let d = default_ui();
+    for (b, label, _) in d.top_buttons() {
+        let ok = match b {
+            TopBtn::Menu(MenuId::Measure) => u.studio_top().add.w > 0, // Add > Measurement, and its button to the page
+            TopBtn::Menu(MenuId::Cursor) => u.studio_top().cursors.w > 0,
+            TopBtn::Menu(MenuId::Display) => u.studio_top().display.w > 0,
+            TopBtn::Menu(MenuId::Storage) => u.studio_top().storage.w > 0,
+            TopBtn::System => u.studio_top().gear.w > 0 && u.items(MenuId::Main).contains(&Item::Open(MenuId::Utility)),
+            _ => false,
+        };
+        assert!(ok, "{label} of the Default header has no control in Studio");
+    }
+}
+
+/// A channel pill always shows its scale: with four channels and the generator on, a pill kept its badge and drew
+/// nothing for a scale longer than "1 V".
+#[test]
+fn a_channel_pill_always_shows_its_scale() {
+    for ts in [TextSize::Normal, TextSize::Large, TextSize::Larger] {
+        let mut u = studio_ui();
+        u.m.text_size = ts;
+        for c in 0..n_ch() { u.m.ch[c].on = true; }
+        u.m.afg_on = true;
+        u.relayout();
+        for _ in 0..3 { u.step(0.05); }
+        let b = u.studio_bottom();
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        u.render(&mut cv);
+        for c in 0..n_ch() {
+            let r = b.ch[c];
+            assert!(r.w >= 70, "{ts:?}: CH{} keeps the room for a scale: {r:?}", c + 1);
+            // right of the badge something is written: pixels that are neither the pill's body nor its border
+            let (x0, x1) = (r.x + 54, r.right() - 4);
+            let body = cv.px[((r.y + 4) * cv.w + r.x + 53) as usize];
+            let inked = (r.y + 6..r.bottom() - 6).flat_map(|y| (x0..x1).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * cv.w + x) as usize] != body).count();
+            assert!(inked > 20, "{ts:?}: CH{} shows its scale ({inked} pixels) in {r:?}", c + 1);
+        }
+        if ts == TextSize::Normal { shot(&mut u, "pills-four-channels"); }
+    }
+    // the fixed chips are short only while the pills need the room
+    let u = studio_ui();
+    assert!(u.studio_bottom().add.w > 0);
 }
