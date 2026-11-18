@@ -240,12 +240,12 @@ open('screen.png', 'wb').write(png)</pre>
 <h2 id="ex-ddr"><span class="num">4.6</span>DDR Write Timing on Stored Captures</h2>
 <p>DQS captured into R1 and DQ into R2 (loaded from files). Setup and hold are measured for every strobe edge of the whole record, latching on both strobe edges, and the eye diagram is folded on the strobe.</p>
 <pre>scope.write(':MEAS:GAT NONE')                      # whole record
-print('setup', scope.query(':MEAS:ITEM? DSETUP,R1,R2'))   # A = strobe, B = data
-print('hold ', scope.query(':MEAS:ITEM? DHOLD,R1,R2'))
+print('setup', scope.query(':MEAS:ITEM? DSETUP,R2,R1'))   # A = data, B = strobe
+print('hold ', scope.query(':MEAS:ITEM? DHOLD,R2,R1'))
 # count edges that break 150 ps setup / 150 ps hold
 scope.write(':MEAS:TSET 150e-12')
 scope.write(':MEAS:THOL 150e-12')
-print('violations', scope.query(':MEAS:ITEM? DSETHOLD,R1,R2'))
+print('violations', scope.query(':MEAS:ITEM? DSETHOLD,R2,R1'))
 # eye of R2 folded on the R1 strobe, whole record
 scope.write(':SYST:SET eye = R2 0 1')
 scope.write(':SYST:SET eye_more = 0.000000000001 1000 1000000 0 - 0 R1 1')

@@ -154,7 +154,9 @@ Changed:
 - The pair measurements Setup DDR, Hold DDR and Setup+Hold DDR are named **Setup both edges**, **Hold both edges**
   and **Setup+Hold both edges**. They measure the data against both edges of the clock, at any rate and on
   reference waveforms too; "DDR" read as the memory. Their numbers and the remote names `DSETUP`, `DHOLD` and
-  `DSETHOLD` stay (host-tested).
+  `DSETHOLD` stay. The SCPI Programming Manual named the clock as source A of every setup and hold item, and its
+  example of write timing on stored captures sent the strobe first: the data is A and the clock B, as on the
+  measurement page (host-tested).
 - A change of trigger type keeps the user's pulse width, pattern, levels and limits on the hardware, Live and Replay.
   The demo's starting values are set on the demo only. Slope, Runt and Window keep the lower level at or below the
   upper one; `:TRIGger:RUNT:UPPer/LOWer` refuses a threshold past the other with -224.

@@ -12390,7 +12390,7 @@
   },
   {
    "title": "Pair Measurement Items",
-   "intro": "Items with two sources, `<A>,<B>`. For delay, phase and skew, A is the reference edge and B the second edge. For setup and hold, A is the clock or strobe and B the data. A clock edge counts only when the data changed within that edge’s own cycle, so data that is steady between strobe bursts adds no result.",
+   "intro": "Items with two sources, `<A>,<B>`. For delay, phase and skew, A is the reference edge and B the second edge. For setup and hold, A is the data and B the clock or strobe, as on the measurement page. A clock edge counts only when the data changed within that edge’s own cycle, so data that is steady between strobe bursts adds no result.",
    "tables": [
     {
      "columns": [
@@ -12461,12 +12461,12 @@
       ],
       [
        "`SETup`",
-       "Setup time of data B before rising clock edges of A",
+       "Setup time of data A before rising clock edges of B",
        "s"
       ],
       [
        "`HOLD`",
-       "Hold time of data B after rising clock edges of A",
+       "Hold time of data A after rising clock edges of B",
        "s"
       ],
       [
@@ -12476,22 +12476,22 @@
       ],
       [
        "`FSETup`",
-       "Setup time of data B before falling clock edges of A",
+       "Setup time of data A before falling clock edges of B",
        "s"
       ],
       [
        "`FHOLd`",
-       "Hold time of data B after falling clock edges of A",
+       "Hold time of data A after falling clock edges of B",
        "s"
       ],
       [
        "`DSETup`",
-       "Setup time of data B before both edges of strobe A (DDR: A = DQS, B = DQ)",
+       "Setup time of data A before both edges of strobe B (DDR: A = DQ, B = DQS)",
        "s"
       ],
       [
        "`DHOLd`",
-       "Hold time of data B after both edges of strobe A",
+       "Hold time of data A after both edges of strobe B",
        "s"
       ],
       [
