@@ -229,7 +229,13 @@ fn the_jitter_and_eye_measurements_read_what_sim_put_in() {
         (64, 1e-9 - 14.07 * 20e-12)]));
     bad.extend(run("rj split", Lane { rj_rms: 20e-12, ..clean_lane() }, 0.25, &[(44, 20e-12)]));
     bad.extend(run("noise 10 mV", Lane { noise_rms: 10e-3, ..clean_lane() }, 0.06, &[(15, 1e-9)]));
+    // duty-cycle distortion of 50 ps: every rising edge 25 ps late, every falling one 25 ps early. A SIM record has
+    // eight samples a bit, 125 ps here, and the 100 ps edge of the clean lane lies between two of them: the straight
+    // line between the two samples puts the late edge at about 31 ps, not 25, and the early one as far the other way,
+    // so the row reads 61 ps. With an edge that spans samples (400 ps) the same 50 ps read 50 ps. The generator is
+    // right (its own test finds the edges to a picosecond); the reading is as fine as the samples allow
     bad.extend(run("dcd 50 ps", Lane { dcd_pp: 50e-12, ..clean_lane() }, 0.06, &[]));
+    bad.extend(run("dcd 50 ps, an edge of 400 ps", Lane { dcd_pp: 50e-12, rise: 400e-12, ..clean_lane() }, 0.06, &[(49, 50e-12)]));
     // a tone of 30 ps peak: 21.2 ps RMS
     bad.extend(run("pj 30 ps 2 MHz", Lane { pj_peak: 30e-12, pj_hz: 2e6, ..clean_lane() }, 0.15, &[(46, 30e-12 / 2f64.sqrt()), (47, 30e-12 / 2f64.sqrt())]));
     // down-spread: the rate swings over the whole deviation, at the modulation rate; a SIM record holds one period of it
