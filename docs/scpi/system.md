@@ -16,7 +16,7 @@ Part of the [SCPI reference](README.md).
 | `:SYSTem:SETup:SCPI` | Query | The setup as SCPI commands, as an IEEE block of lines: `*RST`, then one command for every setting that differs from the Default setup, each with the answer of its own query as the value. A setting without a header of its own is a `:SYSTem:SET` line; the headers are in the Equivalent header column of [setup keys](setup-keys.md). Sent line by line to a scope, it brings that scope to this setup. Reference waveforms and notes are not part of it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and error -221 names its key. `SETup` is spelled out, as for `:SYSTem:SETup`. | - | Storage > Save setup as SCPI | OOS extension. The first part of the SCPI recorder. The menu row writes the same lines to a new file where Storage saves, `setup-NNN.scpi` (`setup-<date>-<time>.scpi` once the clock is set). |
 | `:SYSTem:LOCK` | Set / Query | Touch lock on/off | `0` | - | name not verified against the DHO guide |
 | `:SESSion` | Set / Query | `LIVE`, `SIM` or `REF`; setting `LIVE` leaves SIM and offline sessions. | `LIVE` | System > Live | OOS extension |
-| `:SYSTem:INFO` | Query | The System info page as text: `label,value` lines, `# heading` lines | - | System > System info | OOS extension |
+| `:SYSTem:INFO` | Query | The System info page in one line: each line of the page a quoted string, `"label,value"` or `"# heading"`, separated by commas | - | System > System info | OOS extension |
 | `:SYSTem:GRAPhics` | Set / Query | `CPU` or `GPU` drawing; the query answers what is in use (whether the GPU really draws is the `gpu` part of `:SYSTem:STATe?`). | `GPU` | System > Graphics | OOS extension |
 | `:SYSTem:QUICk` | Set / Query | The quick key action, by its option text | `SCREENSHOT` | System > Quick key | OOS extension |
 | `:IDENtify` | Query | The app's signal identification text. | - | Run control > Identify signal | OOS extension |
@@ -51,8 +51,8 @@ Joining a WLAN network needs a password and stays on the screen.
 | `:SYSTem:COMMunicate:LAN:RETRy10` | Set / Query | 10 Mbit retry on/off | `1` | Network > 10 Mbit retry | Rigol-compatible |
 | `:SYSTem:WLAN:STATus` | Query | WLAN state text. | `no stick` | System > Network > WLAN | OOS extension |
 | `:SYSTem:WLAN:SCAN` | Action | Start a scan. | - | System > Network > WLAN | OOS extension |
-| `:SYSTem:WLAN:NETWorks` | Query | The scanned networks, one per line. | `Other network ...` | System > Network > WLAN | OOS extension |
-| `:SYSTem:WLAN:SAVed` | Query | The saved networks, one per line. | empty | System > Network > WLAN | OOS extension |
+| `:SYSTem:WLAN:NETWorks` | Query | The scanned networks, each a quoted string, separated by commas in one line. | `Other network ...` | System > Network > WLAN | OOS extension |
+| `:SYSTem:WLAN:SAVed` | Query | The saved networks, each a quoted string, separated by commas in one line; empty without any. | empty | System > Network > WLAN | OOS extension |
 | `:SYSTem:WLAN:FORGet` | Action | `<n>` Forget saved network `<n>`. Joining a network needs a password and stays on the screen. | - | System > Network > WLAN | OOS extension |
 
 ### Remote services
@@ -75,7 +75,7 @@ These take an explicit `CONFIRM` argument and are refused with -221 without it. 
 | --- | --- | --- | --- | --- | --- |
 | `:SYSTem:POWer:OFF` | Action | `CONFIRM` `CONFIRM` required. Power off; refused while an update runs. | - | System > Update and power > Power dialog | OOS extension |
 | `:SYSTem:POWer:RESTart` | Action | `CONFIRM` `CONFIRM` required. Restart; refused while an update runs. | - | System > Update and power > Power dialog | OOS extension |
-| `:SYSTem:UPDate:STATus` | Query | The Update page as text | `Update` | System > Update and power > Update | OOS extension |
+| `:SYSTem:UPDate:STATus` | Query | The Update page in one line: each of its lines a quoted string, separated by commas | `Update` | System > Update and power > Update | OOS extension |
 | `:SYSTem:UPDate:ROLLback` | Action | `CONFIRM` Roll back to the kept image | - | System > Update and power > Roll back update | OOS extension |
 | `:SYSTem:UPDate:INSTall` | Action | `"path",CONFIRM` Install a signed package file (same checks as the web page) | - | System > Update and power > Update | OOS extension |
 | `:SYSTem:BOOT` | Set / Query | `ONEShot`, `PERSist`; a change needs `,CONFIRM` | `ONES` | System > Update and power > Boot mode | OOS extension |

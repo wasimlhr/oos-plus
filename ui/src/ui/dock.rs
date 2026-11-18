@@ -634,7 +634,7 @@ impl Ui {
     pub(super) fn dock_fit_float(&self, k: VKind, r: Rect, reg: Rect) -> Rect {
         let (mw, mh) = k.float_min();
         let w = r.w.clamp(mw, reg.w.max(mw));
-        let h = r.h.clamp(mh, reg.h.max(mh));
+        let mut h = r.h.clamp(mh, reg.h.max(mh));
         let x = r.x.clamp(reg.x, (reg.right() - w).max(reg.x));
         let mut y = r.y.clamp(reg.y, (reg.bottom() - h).max(reg.y));
         // never over the corner buttons of the plot: beside them
@@ -650,7 +650,10 @@ impl Ui {
         if k != VKind::Wave && self.studio_zoom_active() && !self.view_on() {
             let bar = self.zoom_readout();
             if x < bar.right() && x + w > bar.x && y < bar.bottom() + 2 && y + h > bar.y {
-                y = (bar.bottom() + 2).min((reg.bottom() - h).max(reg.y));
+                // under it, and no higher than what is left there (the open toolbar is a finger high)
+                y = bar.bottom() + 2;
+                h = h.min((reg.bottom() - y).max(mh));
+                y = y.min((reg.bottom() - h).max(reg.y));
             }
         }
         Rect::new(x, y, w, h)
