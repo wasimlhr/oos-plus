@@ -340,3 +340,44 @@ fn the_zoom_row_and_the_badge_row_menu_are_listed_and_pressed_by_name() {
     u.relayout();
     assert!(!u.ui_elements().iter().any(|e| e.kind == "BADGE"), "hidden badges are not controls on the screen");
 }
+
+/// The plot's menu has Center trigger while zoom is on, between Reset zoom and Close zoom: it puts the trigger in the
+/// middle of the zoom window. It is read and pressed by name, and the menu still fits the screen.
+#[test]
+fn the_plot_menu_centres_the_trigger_in_the_zoom_window() {
+    let mut u = zoomed(Layout::Studio);
+    let cmd = |u: &mut Ui, h: &str, arg: &str| -> String {
+        let q = h.ends_with('?');
+        let nodes: Vec<&str> = h.trim_end_matches('?').trim_start_matches(':').split(':').collect();
+        let reply = u.scpi_ext_command(&nodes, q, arg).expect("a header of the layout commands").expect("no error");
+        reply.map(|b| String::from_utf8(b).unwrap()).unwrap_or_default()
+    };
+    u.m.zdelay = u.view().0 * 2.0;
+    u.clamp_zoom();
+    u.relayout();
+    assert!(u.m.zdelay != 0.0, "the zoom window starts off the trigger");
+    let lane = u.wins[0];
+    let at = format!("{},{}", lane.x + lane.w / 3, lane.y + lane.h / 2);
+    cmd(&mut u, ":UI:CONText", &at);
+    u.step(0.04);
+    picture(&mut u, "plot-menu-center-trigger");
+    let menu = cmd(&mut u, ":UI:MENU?", "");
+    assert!(menu.contains("\"Reset zoom\",\"Center trigger\",\"Close zoom\""), "{menu}");
+    let (p, rows) = (u.studio_ctx_rect().expect("the menu"), u.studio_ctx_rows());
+    assert!(p.y >= 0 && p.bottom() <= u.scr.h, "the menu is on the screen: {p:?}");
+    assert!(rows.iter().all(|(_, _, r)| r.h >= 24 && r.bottom() <= p.bottom()), "every row is inside it and can be pressed");
+    cmd(&mut u, ":UI:MENU:SELect", "\"Center trigger\"");
+    for _ in 0..3 { u.step(0.04); }
+    assert_eq!(u.m.zdelay, 0.0, "the zoom window is on the trigger");
+    let lane = u.wins[0];
+    assert!((u.studio_x_of_time(0.0) - (lane.x + lane.w / 2)).abs() <= 1, "T at {} of a lane from {} to {}", u.studio_x_of_time(0.0), lane.x, lane.right());
+    assert!(u.studio.ctx.is_none(), "the menu closes");
+    // without zoom there is nothing to centre: no row
+    u.set_zoom(false);
+    for _ in 0..3 { u.step(0.04); }
+    let lane = u.wins[0];
+    let at = format!("{},{}", lane.x + lane.w / 3, lane.y + lane.h / 2);
+    cmd(&mut u, ":UI:CONText", &at);
+    u.step(0.04);
+    assert!(!cmd(&mut u, ":UI:MENU?", "").contains("Center trigger"));
+}

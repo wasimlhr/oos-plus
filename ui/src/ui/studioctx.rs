@@ -21,6 +21,8 @@ pub(super) enum CtxRow {
     ZoomHere,
     ZoomBox,
     ZoomReset,
+    /// the trigger in the middle of the zoom window
+    ZoomCenter,
     ZoomClose,
     RunStop,
     Single,
@@ -71,6 +73,7 @@ impl Ui {
         let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()), (CtxRow::FitLanes, "Fit all lanes".to_string()), (CtxRow::Fit, "Fit record".to_string()), (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
         if self.m.zoom {
             view.push((CtxRow::ZoomReset, "Reset zoom".to_string()));
+            view.push((CtxRow::ZoomCenter, "Center trigger".to_string()));
             view.push((CtxRow::ZoomClose, "Close zoom".to_string()));
         }
         let acquire = vec![(CtxRow::RunStop, if self.m.run == RunState::Run && !self.record_mode() { "Stop" } else { "Run" }.to_string()),
@@ -129,6 +132,8 @@ impl Ui {
             CtxRow::FitLanes => { cv.vline(cx, cy - 7, cy + 7, c); for d in [-1, 1] { cv.line(cx, cy + 7 * d, cx - 4, cy + 3 * d, c); cv.line(cx, cy + 7 * d, cx + 4, cy + 3 * d, c); } }
             CtxRow::ZoomHere | CtxRow::ZoomReset => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, BAR); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); }
             CtxRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
+            // the trigger mark between the two edges of the window
+            CtxRow::ZoomCenter => { cv.vline(cx - 7, cy - 5, cy + 5, c); cv.vline(cx + 7, cy - 5, cy + 5, c); cv.vline(cx, cy - 1, cy + 6, c); cv.triangle([(cx - 4, cy - 6), (cx + 4, cy - 6), (cx, cy - 1)], c); }
             CtxRow::ZoomClose => { cv.line(cx - 5, cy - 5, cx + 5, cy + 5, c); cv.line(cx - 5, cy + 5, cx + 5, cy - 5, c); }
             CtxRow::RunStop => {
                 if self.m.run == RunState::Run && !self.record_mode() { cv.fill(Rect::new(cx - 5, cy - 5, 3, 10), c); cv.fill(Rect::new(cx + 2, cy - 5, 3, 10), c); }
@@ -205,6 +210,7 @@ impl Ui {
             }
             CtxRow::ZoomBox => self.arm_zoom_area(),
             CtxRow::ZoomReset => self.workspace_action(Action::ZoomReset),
+            CtxRow::ZoomCenter => { self.studio_center_trigger(); self.relayout(); }
             CtxRow::ZoomClose => self.workspace_action(Action::ZoomClose),
             CtxRow::RunStop => self.workspace_action(Action::Run),
             CtxRow::Single => self.workspace_action(Action::Single),
