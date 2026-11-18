@@ -2158,3 +2158,35 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
     tap(&mut u, pill.right() - 12, pill.y + pill.h / 2);
     assert!(u.m.ch[1].on && u.menu_open && u.menu == MenuId::Channel(1), "the body opens the sheet");
 }
+
+/// Studio's hold menu of the plot: rows of 40 px in two columns, on the screen wherever it is opened, without the rows
+/// the bars have one tap away (Run, Single, the trigger sheet, the sources). A row acts at a tap.
+#[test]
+fn the_hold_menu_of_the_plot_has_rows_a_finger_high() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = true;
+    u.set_zoom(true);
+    for _ in 0..3 { u.step(0.04); }
+    let g = u.wins[0];
+    for at in [(g.x + g.w / 3, g.y + g.h / 2), (4, 60), (u.scr.w - 4, 60), (4, u.scr.h - 60), (u.scr.w - 4, u.scr.h - 60)] {
+        u.studio_ctx_open(at.0, at.1);
+        let p = u.studio_ctx_rect().expect("the menu");
+        assert!(p.x >= 0 && p.y >= 0 && p.right() <= u.scr.w && p.bottom() <= u.scr.h, "opened at {at:?}: {p:?}");
+        let rows = u.studio_ctx_rows();
+        for (i, (_, label, r)) in rows.iter().enumerate() {
+            assert!(r.h >= 40 && r.w >= 200, "{label}: {r:?}");
+            assert!(r.x >= p.x && r.right() <= p.right() && r.y >= p.y && r.bottom() <= p.bottom(), "{label}: {r:?} in {p:?}");
+            for (_, other, o) in &rows[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{label} over {other}"); }
+        }
+        let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
+        for gone in ["Run", "Stop", "Single", "Trigger settings", "Sources"] { assert!(!labels.contains(&gone), "{gone} is on the bars: {labels:?}"); }
+        for kept in ["Overlay traces", "Stacked traces", "Fit all lanes", "Fit record", "Zoom here", "Zoom box", "Reset zoom", "Close zoom", "Cursor here", "Autoset"] {
+            assert!(labels.contains(&kept), "{kept}: {labels:?}");
+        }
+        u.studio.ctx = None;
+    }
+    // by touch: a hold opens it, and Cursor here puts the cursors on
+    assert_eq!(u.m.cursor, CursorMode::Off);
+    pick_ctx(&mut u, super::studioctx::CtxRow::CursorHere);
+    assert!(u.m.cursor != CursorMode::Off && u.studio.ctx.is_none(), "Cursor here");
+}

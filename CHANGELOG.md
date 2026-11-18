@@ -28,6 +28,9 @@ Fixed:
   - Zone trigger: Delete asks for a second tap, like the other buttons that destroy something.
   - Display > Grid and views has a row Traces (Overlay or Stacked). Studio had the choice in the hold menu of the
     plot alone.
+- Studio: the hold menu of the plot has rows of 40 px in two columns, the view at the left and what acts on the lane
+  under the finger at the right. It was one column of seventeen rows of 28 px, 542 px tall. Run, Single, Trigger
+  settings and Sources are not in it any more: the bars have them one tap away.
 - The cursors have a button in the top bar of Minimal (Cursor: the cursors come on with their sheet) and of Studio
   (Cursors: a tap puts them on, the next opens their sheet). They were four taps away in Minimal and three in
   Studio. Studio's Add button no longer lights up while the cursors are on.
