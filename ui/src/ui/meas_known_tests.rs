@@ -389,3 +389,20 @@ fn the_rows_left_open_read_worked_values() {
     bad.extend(show_within("dual dirac", 0.15, 1e-12, &[(45, "DJ-dd", 40e-9), (44, "RJ-dd", 4e-9), (41, "TIE", Q), (43, "TJ@BER", 40e-9 + 14.07 * 4e-9)], &[dd], &|_| {}));
     assert!(bad.is_empty(), "{bad:#?}");
 }
+
+/// Setup and hold against both edges of the clock (the rows named DDR: data latched on the rising and on the falling
+/// edge), on two reference waveforms. Nothing here needs a live channel: a record made by an instrument with the
+/// bandwidth for such a bus is measured the same way once it is loaded.
+#[test]
+fn setup_and_hold_on_both_clock_edges_read_on_references() {
+    // a 10 MHz clock with an edge every 50 ns, and data that changes 4 ns before each of them and again 6 ns after
+    let ns = 0.1e-9;
+    let pulse = move |period: f64, start: f64, len: f64| wave(20_000, ns, move |t| {
+        let p = (t - start).rem_euclid(period);
+        if p < 0.5e-9 { p / 0.5e-9 } else if p < len { 1.0 } else if p < len + 0.5e-9 { 1.0 - (p - len) / 0.5e-9 } else { 0.0 }
+    });
+    let (clk, data) = (pulse(100e-9, 20e-9, 50e-9), pulse(50e-9, 16e-9, 10e-9));
+    // source A is the data, source B the clock; the third row counts the edges that miss a limit, and none is set
+    let bad = show("both edges", 1e-12, &[(242, "Setup DDR", 4e-9), (243, "Hold DDR", 6e-9), (244, "Setup + Hold DDR", 0.0)], &[data, clk], &|_| {});
+    assert!(bad.is_empty(), "{bad:#?}");
+}
