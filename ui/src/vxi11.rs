@@ -466,7 +466,7 @@ mod tests {
         let cv = crate::gfx::Canvas::new(crate::ui::W, crate::ui::H);
         let mut scpi = crate::scpi::Scpi::open(0);
         let mut links = vec![Some(Link::default())];
-        let mut stb = |links: &mut Vec<Option<Link>>, scpi: &mut crate::scpi::Scpi, ui: &mut crate::ui::Ui| {
+        let stb = |links: &mut Vec<Option<Link>>, scpi: &mut crate::scpi::Scpi, ui: &mut crate::ui::Ui| {
             let mut args = Vec::new();
             for value in [0, 0, 1000, 1000] { put(&mut args, value); }
             let reply = core_async(&parse_call(&call(5, CORE_PROG, 13, &args)).unwrap(), links, &mut |p| scpi.poll_program(ui, &cv, p));
