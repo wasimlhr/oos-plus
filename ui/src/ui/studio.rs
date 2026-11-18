@@ -626,9 +626,8 @@ impl Ui {
         // the sources that are on get a pill; the channels that are off share one "+ CH" chip
         let shown = self.shown_refs();
         let maths: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k)).collect();
-        let off = (0..n).filter(|&c| !self.m.ch[c].on).count();
-        // with every channel on the chip stays, as "Add source": math, ref and bus are behind it
-        let add_w = if off > 0 { 62 } else { 100 };
+        // the chip that adds a source: a channel that is off, math, a reference or a bus. One name, whatever is off
+        let add_w = 62;
         // SIM plays refs, not the live channels: their pills are not on the bar then (Live brings them back)
         let chans: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
         let show_w = if self.studio_badges_hidden() { 64 } else { 0 };
@@ -778,7 +777,8 @@ impl Ui {
         }
         if b.add.w > 0 {
             chip(cv, b.add, BTN, if self.studio.ch_picker { ACCENT } else { BTN_BORDER });
-            let label = if (0..n_ch()).all(|c| self.m.ch[c].on) { "Add source" } else if (0..n_ch()).any(|c| !self.m.ch[c].on && b.ch[c].w > 0) { "+ Add" } else { "+ CH" };
+            // (it said "+ CH", "+ Add" or "Add source" by what was off, beside the Add of the top bar)
+            let label = "+ Source";
             cv.text_in(&f.sb, b.add, 1, label, if self.studio.ch_picker { ACCENT } else { TEXT });
         }
         // LA and GEN: a pill each, a dot for on / off and, for the generator, what it makes
@@ -1741,7 +1741,7 @@ impl Ui {
             self.studio_set_view(StudioView::Docked);
             return true;
         }
-        if self.studio_eye().contains(x, y) {
+        if Self::hit40(self.studio_eye()).contains(x, y) {
             self.studio.hide_badges = true;
             self.studio.md.hide_undo = Some(self.now);
             self.relayout();
@@ -1751,7 +1751,7 @@ impl Ui {
             self.studio_set_classic(!self.m.studio_classic);
             return true;
         }
-        if self.studio_compact_chip().contains(x, y) {
+        if Self::hit40(self.studio_compact_chip()).contains(x, y) {
             // with no panel to make compact, the list button opens the measurements
             if self.studio.view == StudioView::Waveform { self.studio_set_view(StudioView::Docked); } else { self.studio_set_compact(!self.studio.compact); }
             return true;

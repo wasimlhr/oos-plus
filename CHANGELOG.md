@@ -31,6 +31,11 @@ Fixed:
 - Studio: the hold menu of the plot has rows of 40 px in two columns, the view at the left and what acts on the lane
   under the finger at the right. It was one column of seventeen rows of 28 px, 542 px tall. Run, Single, Trigger
   settings and Sources are not in it any more: the bars have them one tap away.
+- DVM and counter, Logic analyser and Double pulse are one page each: they had two tabs of two to five rows. A
+  sheet draws the line over its footer only where it has a footer.
+- Studio: the Add list of the top bar has rows of 40 px (34 before). The chip of the bottom bar that adds a source
+  is named "+ Source" whatever is off; it said "+ CH", "+ Add" or "Add source". The eye and the list button of the
+  badge row take a touch of 40 px, like the buttons beside them.
 - The cursors have a button in the top bar of Minimal (Cursor: the cursors come on with their sheet) and of Studio
   (Cursors: a tap puts them on, the next opens their sheet). They were four taps away in Minimal and three in
   Studio. Studio's Add button no longer lights up while the cursors are on.

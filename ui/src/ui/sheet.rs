@@ -439,6 +439,18 @@ impl Ui {
                 let order = [Item::RemName, Item::RemAllow, Item::RemFirewall, Item::NetWeb, Item::RemScpiInfo, Item::RemVxiInfo, Item::RemTelnetInfo];
                 tabs[1].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
             }
+            // DVM and counter, the logic analyser and the double pulse had two tabs of two to five rows each: they are
+            // one page while all of it fits one (seven rows, two actions in the footer)
+            if matches!(menu, MenuId::Dvm | MenuId::La | MenuId::Dpt) && tabs.len() > 1 {
+                let (rows, feet) = (tabs.iter().map(|t| t.rows.len()).sum::<usize>(), tabs.iter().map(|t| t.foot.len()).sum::<usize>());
+                if rows <= SHEET_MAX_ROWS && feet <= 2 {
+                    let rest: Vec<SheetTab> = tabs.drain(1..).collect();
+                    for t in rest {
+                        tabs[0].rows.extend(t.rows);
+                        tabs[0].foot.extend(t.foot);
+                    }
+                }
+            }
             // Trigger: Sweep (Auto, Normal, Single) goes with the type and the source while that tab has the room. A
             // type with many rows of its own keeps it on Settings: an eighth row would take the sheet away
             if menu == MenuId::Trigger && tabs.len() > 1 && tabs[0].rows.len() < SHEET_MAX_ROWS {
@@ -745,7 +757,7 @@ impl Ui {
 
     fn sheet_draw_footer(&self, cv: &mut Canvas, r: Rect, foot: &[(Item, Rect)]) {
         let f = self.fonts();
-        cv.hline(r.x + 6, r.right() - 7, r.bottom() - SHEET_FOOT, LINE);
+        if !foot.is_empty() { cv.hline(r.x + 6, r.right() - 7, r.bottom() - SHEET_FOOT, LINE); }
         for &(it, b) in foot {
             let red = destructive(it);
             let armed = self.studio.md.armed.is_some_and(|(a, t)| a == it && self.now - t < 3.0);

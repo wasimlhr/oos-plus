@@ -2190,3 +2190,46 @@ fn the_hold_menu_of_the_plot_has_rows_a_finger_high() {
     pick_ctx(&mut u, super::studioctx::CtxRow::CursorHere);
     assert!(u.m.cursor != CursorMode::Off && u.studio.ctx.is_none(), "Cursor here");
 }
+
+/// Thin sheets are one page (DVM and counter, the logic analyser, the double pulse), the Add list has rows a finger
+/// high, the chip that adds a source has one name, and the eye and the list button of the badge row take a touch of
+/// 40 px.
+#[test]
+fn thin_sheets_are_one_page_and_the_add_controls_are_a_finger_high() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let u = fresh(layout);
+        for menu in [MenuId::Dvm, MenuId::La, MenuId::Dpt] {
+            let spec = u.sheet_spec(menu).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has a sheet"));
+            assert_eq!(spec.tabs.len(), 1, "{layout:?} {menu:?}: {:?}", spec.tabs.iter().map(|t| (t.name, t.rows.len())).collect::<Vec<_>>());
+            assert!(spec.tabs[0].rows.len() <= 7 && spec.tabs[0].foot.len() <= 2, "{layout:?} {menu:?}");
+        }
+        // the counter's rows are on the page of the DVM, with its Clear
+        let dvm = &u.sheet_spec(MenuId::Dvm).unwrap().tabs[0];
+        assert!(dvm.rows.len() == 7 && dvm.foot.len() == 1, "{layout:?}: {:?} {:?}", dvm.rows, dvm.foot);
+    }
+    let mut u = fresh(Layout::Studio);
+    // the chip of the bottom bar: one name and one width, whatever is off
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    for on in [1, 4] {
+        for c in 0..4 { u.m.ch[c].on = c < on; }
+        u.step(0.04);
+        let chip = u.studio_bottom().add;
+        assert_eq!(chip.w, 62, "{on} channels on");
+        cv.au_start();
+        u.render(&mut cv);
+        let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == "+ Source" && chip.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= chip.right()));
+        assert!(said, "{on} channels on: the chip says + Source");
+    }
+    // the Add list of the top bar
+    let (x, y) = mid(u.studio_top().add);
+    tap(&mut u, x, y);
+    assert!(u.studio.add_menu);
+    let rows = u.studio_add_rows();
+    assert!(rows.len() >= 10 && rows.iter().all(|r| r.1.h >= 40 && r.1.bottom() <= u.scr.h), "{:?}", rows.iter().map(|r| r.1).collect::<Vec<_>>());
+    u.studio.add_menu = false;
+    // the eye: a touch 4 px over its 34 px still hides the badges
+    let eye = u.studio_eye();
+    assert!(eye.h < 40 && !u.studio.hide_badges);
+    tap(&mut u, eye.x + eye.w / 2, eye.y - 2);
+    assert!(u.studio.hide_badges, "the eye takes a touch of 40 px");
+}
