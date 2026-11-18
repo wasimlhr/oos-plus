@@ -2104,7 +2104,11 @@ fn the_badge_row_wraps_onto_a_second_line() {
         assert!(row.h > one.h && row.bottom() == one.bottom() && u.plot_rect().bottom() <= row.y, "{what}: {one:?} became {row:?}");
         let limit = u.studio_row_limit();
         for (i, (_, r)) in badges.iter().enumerate() {
-            assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= limit, "{what}: badge {i} at {r:?} in {row:?}");
+            // the chip at the end of the row is on one line: the badges of that line end before it, the others
+            // run to the end of the row
+            let (at, end) = (u.studio_list_chip(), row.right() - 4);
+            let beside = r.y < at.bottom() && at.y < r.bottom();
+            assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= if beside { limit } else { end }, "{what}: badge {i} at {r:?} in {row:?}");
             for (_, o) in &badges[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{what}: {r:?} over {o:?}"); }
         }
         if !classic { assert_eq!(u.studio_list_chip(), chip, "{what}: the button at the right stays on the line above the bar"); }
@@ -2120,7 +2124,8 @@ fn the_badge_row_wraps_onto_a_second_line() {
         assert_eq!(n + more.1, u.m.meas.len(), "{what}: every measurement is shown or counted");
         assert!(n >= 10, "{what}: {n} badges on the two lines");
         assert!(u.studio_row().h <= row.h + 24 && u.studio_row().bottom() == one.bottom(), "{what}: {:?}", u.studio_row());
-        assert!(more.0.y >= u.studio_row().y && more.0.right() <= limit + 60, "{what}: +N at {:?}", more.0);
+        // "+N" is said by the chip at the end of the row
+        assert!(more.0 == u.studio_list_chip() && more.0.y >= u.studio_row().y && more.0.right() <= u.studio_row().right(), "{what}: +N at {:?}", more.0);
         // back to a few: one line again
         u.m.meas.truncate(4);
         for _ in 0..2 { frame(&mut u); }
@@ -2500,7 +2505,8 @@ fn the_eye_page_takes_a_slow_time_base_after_a_fast_one() {
             assert!(u.m.eye_rate < 2e9, "found again from this record: {}", u.m.eye_rate);
         } else {
             assert_eq!(u.m.eye_rate, 2e9, "a set rate is the user's");
-            assert!(u.azr.eye_res.is_none(), "no eye of a clock the record cannot hold");
+            assert!(u.azr.eye_res.is_none() && u.azr.eye.is_none(), "no eye of a clock the record cannot hold");
+            assert!(u.azr.page.status[0].contains("needs a faster time base") && u.azr.page.img.is_empty(), "said in the plot: {:?}", u.azr.page.status);
         }
     }
 }
@@ -2541,4 +2547,76 @@ fn the_badges_button_does_not_cost_a_channel_pill_its_scale() {
     frame(&mut u);
     let b = u.studio_bottom();
     assert!(b.show.is_some_and(|r| r.w >= 80) && b.add.w >= 62, "{:?} {:?}", b.show, b.add);
+}
+
+/// The classic strip reads as a table and ends with one small chip. A column is as wide as its own widest name and
+/// value, and its values begin at one place; the chip at the end is as small as a pair, says how many measurements
+/// there are (or "+N" for those without a place) and opens the table. Before, every column was as wide as the
+/// widest pair of all, and a button "Meas . N" over the whole height of the strip stood beside a "+N" chip: six
+/// pairs a line where seven fit (seen on a unit, 2026-11-18, with these eighteen measurements).
+#[test]
+fn the_classic_strip_is_a_table_and_ends_with_one_small_chip() {
+    use oos_dsp::measure::Meas::*;
+    let mut u = fresh(Layout::Studio);
+    u.studio_set_classic(true);
+    u.m.ch[1].on = true;
+    u.m.meas = [Vamp, Vmax, Vmin, Vpp, Vtop, Vbase, Vupper, Vmid, Vlower, Overshoot, Vavg, Area, StdDev].into_iter().map(|m| (m, WaveId::Ch(0)))
+        .chain([Median, Mode, StdDev, VrmsAc].into_iter().map(|m| (m, WaveId::Ch(1)))).collect();
+    u.studio.pinned = None;
+    for _ in 0..3 { frame(&mut u); }
+    let (row, chip, l) = (u.studio_row(), u.studio_list_chip(), u.classic_layout());
+    eprintln!("row {row:?} chip {chip:?} pairs {} overflow {} lines {:?}", l.pairs.len(), l.overflow, l.chips.iter().map(|c| c.1.y).collect::<Vec<_>>());
+    assert!(chip.w <= 60 && chip.h <= 24 && chip.right() <= row.right() && chip.y >= row.y && chip.bottom() <= row.bottom(), "{chip:?} in {row:?}");
+    // the pairs: in the row, before the chip, none over another
+    for (i, (_, r)) in l.pairs.iter().enumerate() {
+        assert!(r.x >= row.x && r.right() <= chip.x && r.y >= row.y && r.bottom() <= row.bottom(), "pair {i} at {r:?}");
+        for (_, o) in &l.pairs[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{r:?} over {o:?}"); }
+    }
+    // a table: the pairs of a column begin at one place, and so do their values
+    let mut columns: std::collections::BTreeMap<i32, Vec<i32>> = Default::default();
+    for ((_, r), value) in l.pairs.iter().zip(&l.values) { columns.entry(r.x).or_default().push(*value); }
+    assert!(columns.values().all(|values| values.iter().all(|v| *v == values[0])), "{columns:?}");
+    assert!(columns.len() >= 7, "{} columns on a line", columns.len());
+    assert_eq!(l.pairs.len() + l.overflow, 17, "every measurement has a place or is counted");
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-classic-strip.png"), crate::store::png_of(&cv)).unwrap();
+    }
+    // the chip opens the table
+    let (x, y) = mid(chip);
+    tap(&mut u, x, y);
+    assert_eq!(u.studio.view, super::studio::StudioView::Docked);
+}
+
+/// Four channels with measurements have a line of the strip each; a fifth source (a reference) is behind "+N" with
+/// what has no place on the lines, and the chip counts them all. (The strip had three lines: the fourth channel's
+/// measurements were nowhere on it.)
+#[test]
+fn the_classic_strip_has_a_line_for_each_of_four_channels() {
+    use oos_dsp::measure::Meas::*;
+    let mut u = fresh(Layout::Studio);
+    u.studio_set_classic(true);
+    for c in 0..n_ch() { u.m.ch[c].on = true; }
+    for r in 0..3 {
+        u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0: -5e-3, dt: 1e-6, v: known_pulses(0.0).into(), vpd: 0.2, offset: 0.0, on: true });
+    }
+    let on = |ms: &[oos_dsp::measure::Meas], id: WaveId| ms.iter().map(|m| (*m, id)).collect::<Vec<_>>();
+    u.m.meas = [on(&[Vamp, Vpp, Vbase, Vlower, Preshoot, Overshoot, Vmax, Vmin, Vtop, Vmid, Vavg, Area], WaveId::Ch(0)), on(&[Median, Mode, StdDev, VrmsAc], WaveId::Ch(1)),
+        on(&[Overshoot, Median, Mode, Area, StdDev, Vrms, Freq, Period], WaveId::Ch(2)), on(&[Vpp, Freq, Rise, Fall], WaveId::Ch(3)), on(&[Vpp, Freq, Vavg, Vrms], WaveId::Ref(0))].concat();
+    u.studio.pinned = None;
+    for _ in 0..4 { u.step(0.03); frame(&mut u); }
+    let (l, row, chip) = (u.classic_layout(), u.studio_row(), u.studio_list_chip());
+    assert_eq!(l.chips.iter().map(|c| c.0).collect::<Vec<_>>(), (0..4).map(WaveId::Ch).collect::<Vec<_>>());
+    assert_eq!(l.pairs.len() + l.overflow, u.m.meas.len(), "every measurement has a place or is counted");
+    assert!(l.overflow >= 4 && u.studio_badges_more().map(|m| m.1) == Some(l.overflow), "the reference's four and what did not fit: {}", l.overflow);
+    assert!(l.pairs.iter().all(|(_, r)| r.y >= row.y && r.bottom() <= row.bottom() && r.right() <= chip.x), "in the row, before the chip");
+    assert!(u.plot_rect().bottom() <= row.y && u.plot_rect().h >= 250, "the plot keeps most of the screen: {:?}", u.plot_rect());
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-many-sources.png"), crate::store::png_of(&cv)).unwrap();
+    }
 }

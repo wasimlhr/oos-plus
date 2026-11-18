@@ -267,8 +267,8 @@ const PILL_MIN_W: i32 = 18;
 /// "Off". It is a button to switch the channel on, so it is not a sliver beside the measurement badges.
 const OFF_PILL_W: i32 = 60;
 const OFF_PILL_MAX_W: i32 = 96;
-/// The "+N" chip of the badge row.
-pub(super) const OVERFLOW_W: i32 = 46;
+/// Width of the chip at the end of the badge row: a number and the arrow that says it opens something.
+pub(super) const LIST_W: i32 = 58;
 /// Height a list row gets for the header of its source.
 pub(super) const GROUP_BAND: i32 = 14;
 
@@ -321,6 +321,13 @@ pub(super) fn icon_gear(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb, bg: Rgb) {
     cv.circle(cx, cy, 6, c);
     cv.circle(cx, cy, 4, bg);
     cv.circle(cx, cy, 2, c);
+}
+
+/// Three lines, one above the other: the Menu (the gear read as a sun at this size, and is the icon of Utility).
+pub(super) fn icon_menu(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
+    for dy in [-6, 0, 6] {
+        cv.round(Rect::new(cx - 9, cy + dy - 1, 18, 3), 1, c, 255);
+    }
 }
 
 /// A chip: the rounded body with a 1 px border.
@@ -612,7 +619,7 @@ impl Ui {
         }
         let gear_on = open(MenuId::Main) || open(MenuId::Utility) || self.m.touch_lock;
         btn(cv, t.gear, BTN, if gear_on { ACCENT } else { BTN_BORDER });
-        icon_gear(cv, t.gear.x + t.gear.w / 2, t.gear.y + t.gear.h / 2, if gear_on { ACCENT } else { TEXT }, BTN);
+        icon_menu(cv, t.gear.x + t.gear.w / 2, t.gear.y + t.gear.h / 2, if gear_on { ACCENT } else { TEXT });
     }
 
     /// The rectangles of the Studio bottom bar: a chip per channel, the time base and the trigger.
@@ -1532,7 +1539,7 @@ impl Ui {
         // the row ends before the buttons at its right (`studio_row_limit`, without the row's own rectangle)
         let (x0, limit) = (span_x + 4, span_x + span_w - self.studio_row_tail());
         let value = f.sb.width("0.000 MHz");
-        if self.studio_classic() { return self.classic_wrap_now(&names, value, limit - x0); }
+        if self.studio_classic() { return self.classic_wrap_now(limit - x0); }
         let mut x = x0;
         for (_, name) in &names {
             let w = 16 + name + 8 + value + 10;
@@ -1558,23 +1565,23 @@ impl Ui {
         // a row with statistics has a small line more
         if self.studio_stats_any() && self.studio.view != StudioView::Sim { base + super::measview::STATS_LINE } else { base }
     }
-    /// The one button at the right end of the row, on its last line (the row grows upwards: the button stays): "Meas"
-    /// and how many there are. It opens the table of the measurements. The row had three buttons of an icon each here
-    /// (badge style, compact view or list, eye), then this one and the eye. The style is Measure > Badge style; the
-    /// compact view and Show pinned badges, which hides the row, are in the View menu.
+    /// The one chip at the right end of the row: how many measurements there are, or "+N" when N pinned ones have no
+    /// place on the row, and an arrow. It opens the table of the measurements. It is as small as a badge: the row had
+    /// a button "Meas . N" here over its whole height and a "+N" chip beside it, which did the same, and the two took
+    /// the room of two measurements. Studio badges: on the last line (the row grows upwards: the chip stays); the
+    /// classic strip: at the end of its first line.
     pub(super) fn studio_list_chip(&self) -> Rect {
         let r = self.studio_row();
-        let (w, h) = (self.studio_list_chip_w(), self.studio_chip_h());
-        Rect::new(r.right() - 4 - w, r.bottom() - 3 - h, w, h)
-    }
-
-    fn studio_list_chip_w(&self) -> i32 {
-        self.fonts().sb.width("Meas \u{b7} 00") + 30
+        if self.studio_classic() && !self.studio_pinned().is_empty() {
+            return Rect::new(r.right() - 4 - LIST_W, r.y + 3, LIST_W, super::classicbadges::CLASSIC_ROW - 3);
+        }
+        let h = self.studio_chip_h();
+        Rect::new(r.right() - 4 - LIST_W, r.bottom() - 3 - h, LIST_W, h)
     }
 
     /// What the button at the right end of the row takes from it (`studio_row_limit`, without the row's rectangle).
     fn studio_row_tail(&self) -> i32 {
-        4 + self.studio_list_chip_w() + 6
+        4 + LIST_W + 6
     }
 
     /// Studio or Classic badges (Measure > Badge style).
@@ -1592,7 +1599,7 @@ impl Ui {
         self.relayout();
     }
 
-    /// Where the badges end: before the Meas button.
+    /// Where the badges end: before the chip at the end of the row.
     pub(super) fn studio_row_limit(&self) -> i32 {
         self.studio_list_chip().x - 6
     }
@@ -1603,8 +1610,8 @@ impl Ui {
         self.studio_badge_fit().0
     }
 
-    /// The badges that have a place in the lines of the row, and how many have none. The last line keeps room for the
-    /// "+N" chip when not all fit.
+    /// The badges that have a place in the lines of the row, and how many have none (the chip at the end of the row
+    /// says how many).
     fn studio_badge_fit(&self) -> (Vec<(MeasKey, Rect)>, usize) {
         let f = self.fonts();
         let row = self.studio_row();
@@ -1616,10 +1623,11 @@ impl Ui {
             let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
             Some((key, 16 + f.s.width(&self.studio_badge_name(key, &r.name)) + 8 + f.sb.width(&r.text()).max(f.sb.width("0.000 MHz")) + 10))
         }).collect();
-        let place = |reserve: i32| {
+        let place = || {
             let (mut x, mut line, mut out) = (row.x + 4, 0, Vec::new());
             for &(key, w) in &keys {
-                let end = |line: i32| if line == lines - 1 { limit - reserve } else { limit };
+                // the chip is on the last line: the lines above it run to the end of the row
+                let end = |line: i32| if line == lines - 1 { limit } else { row.right() - 4 };
                 if x + w > end(line) {
                     line += 1;
                     x = row.x + 4;
@@ -1631,20 +1639,17 @@ impl Ui {
             }
             out
         };
-        let all = place(0);
-        if all.len() == keys.len() { return (all, 0); }
-        let some = place(OVERFLOW_W + 5);
-        let left = keys.len() - some.len();
-        (some, left)
+        let placed = place();
+        let left = keys.len() - placed.len();
+        (placed, left)
     }
 
-    /// The "+N" chip after the badges: it opens the list of all measurements.
+    /// The pinned measurements that have no place on the row, with the chip that says so (`studio_list_chip`, which
+    /// then reads "+N"): it opens the list of all measurements.
     pub(super) fn studio_badges_more(&self) -> Option<(Rect, usize)> {
         if !self.studio_badges_visible() { return None; }
-        if self.studio_classic() { return self.classic_more(); }
-        let (list, n) = self.studio_badge_fit();
-        let last = list.last()?.1;
-        (n > 0).then(|| (Rect::new(last.right() + 5, last.y, OVERFLOW_W, last.h), n))
+        let n = if self.studio_classic() { self.classic_layout().overflow } else { self.studio_badge_fit().1 };
+        (n > 0).then(|| (self.studio_list_chip(), n))
     }
 
     /// What the cursors read, as one chip after the badges: the differences only.
@@ -1697,18 +1702,16 @@ impl Ui {
             cv.text(&f.sb, x, cy + 4, &m.text(), TEXT);
             cv.no_clip();
         }
-        if let Some((r, n)) = self.studio_badges_more().filter(|_| !self.studio_classic()) {
-            chip(cv, r, BTN, ACCENT);
-            cv.text_in(&f.sb, r, 1, &format!("+{n}"), ACCENT);
-        }
         self.draw_studio_tab(cv);
-        // the list of all measurements: a button that says so, with their number
+        // the list of all measurements: their number, or "+N" for those that have no place here, and an arrow
         let c = self.studio_list_chip();
-        chip(cv, c, BTN, BTN_BORDER);
+        let more = self.studio_badges_more().map(|(_, n)| n);
+        let (label, col) = match more { Some(n) => (format!("+{n}"), ACCENT), None => (self.measurement_count().to_string(), TEXT) };
+        chip(cv, c, BTN, if more.is_some() { ACCENT } else { BTN_BORDER });
         cv.set_clip(c.inset(1));
-        cv.text_in(&f.sb, Rect::new(c.x + 8, c.y, c.w - 22, c.h), 0, &format!("Meas \u{b7} {}", self.measurement_count()), TEXT);
+        cv.text_in(&f.sb, Rect::new(c.x + 4, c.y, c.w - 20, c.h), 1, &label, col);
         cv.no_clip();
-        chevron(cv, c.right() - 12, c.y + c.h / 2, 1, TEXT);
+        chevron(cv, c.right() - 11, c.y + c.h / 2, 1, col);
     }
 
     /// The popup of a badge: where it is.

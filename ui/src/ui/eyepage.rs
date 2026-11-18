@@ -800,7 +800,11 @@ impl Ui {
                 self.m.eye_rate = 0.0;
                 rate = None;
             } else {
-                self.azr.page.status[1] = format!("{} is under 2 samples a bit here: use a faster time base", si_short(self.m.eye_rate, "b/s"));
+                // the eye of the faster time base goes: on the scope the page has no head for the status, and the
+                // plot says its first line when it has no picture (the old eye stayed, with nothing said)
+                self.azr.eye = None; self.azr.eye_res = None;
+                self.azr.page = Page::default();
+                self.azr.page.status = [format!("{} needs a faster time base", si_short(self.m.eye_rate, "b/s")), "Under 2 samples a bit in this record".into()];
                 return;
             }
         }

@@ -13277,7 +13277,7 @@
     {
      "header": ":UI:MENU",
      "query": ":UI:MENU?",
-     "desc": "The menu or popup that is open: its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. `\"\"` when none is open.",
+     "desc": "The menu or popup that is open: its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. Studio's View menu lists its views, its two switches as `\"Show pinned badges = On\"` and `\"Compact view = Off\"`, and `\"Reset layout\"`. `\"\"` when none is open.",
      "remarks": [
       "- Origin: OOS extension"
      ],

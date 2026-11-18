@@ -451,6 +451,16 @@ impl Ui {
         if self.studio.ctx.is_some() { return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect(); }
         if let Some(p) = &self.workspace.popup { return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect(); }
         if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
+        // Studio's View menu: its views, its two switches with what they stand at, Reset layout
+        if self.studio.view_menu {
+            use super::studio::{STUDIO_VIEWS, VIEW_BADGES, VIEW_COMPACT, VIEW_RESET};
+            let on = |v: bool| if v { "On" } else { "Off" };
+            let mut rows: Vec<(String, Rect)> = STUDIO_VIEWS.iter().enumerate().map(|(i, (_, label))| (label.to_string(), self.studio_view_row(i))).collect();
+            rows.push((format!("Show pinned badges = {}", on(!self.studio.hide_badges)), self.studio_view_row(VIEW_BADGES)));
+            rows.push((format!("Compact view = {}", on(self.studio.compact)), self.studio_view_row(VIEW_COMPACT)));
+            rows.push(("Reset layout".to_string(), self.studio_view_row(VIEW_RESET)));
+            return rows;
+        }
         if self.studio.zoom_menu {
             return self.studio_zoom_rows().into_iter().map(|(row, r)| (match row {
                 ZoomRow::Minus => "Zoom out", ZoomRow::Plus => "Zoom in", ZoomRow::VPlus => "Vertical zoom in", ZoomRow::VMinus => "Vertical zoom out",
@@ -470,6 +480,7 @@ impl Ui {
             else if self.studio.ctx.is_some() { "Context".to_string() }
             else if let Some(p) = &self.workspace.popup { p.title.clone() }
             else if self.studio.add_menu { "Add".to_string() }
+            else if self.studio.view_menu { "View".to_string() }
             else if self.studio.zoom_menu { "Zoom".to_string() }
             else if self.menu_open { self.menu_title(self.menu).to_string() }
             else { return "\"\"".to_string(); };
@@ -509,6 +520,7 @@ impl Ui {
         self.studio.ctx = None;
         self.workspace.popup = None;
         self.studio.add_menu = false;
+        self.studio.view_menu = false;
         self.studio.zoom_menu = false;
         if self.menu_open { self.close_menu(); }
         self.relayout();
@@ -662,6 +674,26 @@ mod tests {
         cmd(&mut u, ":UI:MENU:SELect", "\"X zoom out\"").unwrap();
         assert_eq!(u.m.zscale, wide);
         cmd(&mut u, ":UI:MENU:CLOSe", "").unwrap();
+        assert_eq!(text(cmd(&mut u, ":UI:MENU?", "")), "\"\"");
+    }
+
+    /// Studio's View menu is a menu for `:UI:MENU?` too: its views, its switches with what they stand at, Reset
+    /// layout; a row is taken by its name, and the menu is closed like any other. It answered `""` while the menu
+    /// was open on the screen (seen on a unit, 2026-11-18).
+    #[test]
+    fn the_view_menu_of_studio_is_listed_and_taken_by_name() {
+        let mut u = studio();
+        u.studio.view_menu = true;
+        let m = text(cmd(&mut u, ":UI:MENU?", ""));
+        assert!(m.starts_with("\"View\",\"Waveform focus\",\"Docked measurements\"") && m.contains("\"Show pinned badges = On\"") && m.ends_with("\"Reset layout\""), "{m}");
+        cmd(&mut u, ":UI:MENU:SELect", "\"Show pinned badges\"").unwrap();
+        assert!(u.studio.hide_badges && u.studio.view_menu);
+        assert!(text(cmd(&mut u, ":UI:MENU?", "")).contains("\"Show pinned badges = Off\""));
+        cmd(&mut u, ":UI:MENU:SELect", "\"Docked measurements\"").unwrap();
+        assert!(u.studio.view == StudioView::Docked && !u.studio.view_menu);
+        u.studio.view_menu = true;
+        cmd(&mut u, ":UI:MENU:CLOSe", "").unwrap();
+        assert!(!u.studio.view_menu);
         assert_eq!(text(cmd(&mut u, ":UI:MENU?", "")), "\"\"");
     }
 

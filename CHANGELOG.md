@@ -7,6 +7,20 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio, the row of measurements (host-tested):
+  - The row ends with one small chip: the number of the measurements, or "+N" for the pinned ones without a place,
+    and an arrow; it opens the table. The button "Meas . N" over the whole height of the row and the "+N" chip
+    beside it, which did the same, took the room of two measurements.
+  - The classic strip reads as a table: a column is as wide as its own widest name and value, and the values of a
+    column begin at one place. Seven pairs fit a line of the 1024 px screen where six did.
+  - Four channels with measurements have a line of the strip each (it had three lines: the measurements of the
+    fourth channel were all behind "+N").
+  - The Menu button of the top bar is three lines; the gear read as a sun at that size.
+- Eye: a bit rate that was set and does not fit the record (under 2 samples a bit) is said in the plot, "2 Gb/s
+  needs a faster time base", and the eye of the faster time base is no longer left standing (host-tested).
+- `:UI:MENU?` lists Studio's View menu (its views, its two switches with what they stand at, Reset layout),
+  `:UI:MENU:SELect` takes a row of it by name and `:UI:MENU:CLOSe` closes it. It answered `""` while the menu was
+  open (seen on a unit, 2026-11-18).
 - Studio: with the badges hidden, the button that brings them back no longer costs a channel pill its scale. With
   four channels, the LA and the generator in the bottom bar each pill had 29 px left and "500 mV" was cut to
   "500m" (seen on a unit, 2026-11-18). Where the bar is that full the button is its eye alone and "+ Source" its
