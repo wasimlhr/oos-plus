@@ -213,7 +213,7 @@ fn acquisition_text_in_the_top_bar_opens_the_acquire_page() {
     u.tap(160, 20);
     assert!(!u.menu_open);
     // File loading and simulation are direct actions beside the usual tools; Load file is also a row of the Reference menu.
-    assert_eq!(u.top_buttons().iter().map(|b| b.1).collect::<Vec<_>>(), ["Load file", "SIM", "Display", "Storage", "System"]);
+    assert_eq!(u.top_buttons().iter().map(|b| b.1).collect::<Vec<_>>(), ["Load file", "SIM", "Cursor", "Display", "Storage", "System"]);
     assert!(u.items(MenuId::Ref).contains(&Item::RefLoad));
     let (_, _, load) = u.top_buttons().into_iter().find(|b| b.0 == TopBtn::Load).unwrap();
     u.tap(load.x + 5, load.y + 5);

@@ -670,6 +670,10 @@ enum Item {
     RefSave,
     /// Studio: the same, into the next free slot (offered when the selected slot is full)
     RefSaveNext,
+    /// Display sheet of Minimal and Studio: the traces on one graticule or a lane each (the plot's hold menu has both)
+    Traces,
+    /// Reference sheet: clears the slot that is selected (the menu's Clear all clears every slot)
+    RefClearOne,
     RefShow(usize),
     RefClear,
     MathOpI,
@@ -6383,8 +6387,9 @@ impl Ui {
             all.retain(|(b, _)| !matches!(b, TopBtn::Load | TopBtn::Menu(MenuId::Sim)));
         }
         if self.m.compact() {
-            // Measure and Cursor are keys of the front panel (Measure opens Add measurements), and entries of the Menu
-            all.retain(|(b, _)| !matches!(b, TopBtn::Menu(MenuId::Measure | MenuId::Cursor)));
+            // Measure is a key of the front panel (it opens Add measurements) and an entry of the Menu. Cursor has its
+            // button: without it the cursors were four taps away, through the Menu
+            all.retain(|(b, _)| !matches!(b, TopBtn::Menu(MenuId::Measure)));
         }
         all.retain(|(b, _)| match b {
             TopBtn::Menu(m) => !self.menu_left_out(*m),
@@ -6405,7 +6410,7 @@ impl Ui {
         }
         if !fits(&all, padding) { padding = 20; }
         for (button, short) in [(TopBtn::Menu(MenuId::Storage), "Store"), (TopBtn::Menu(MenuId::Display), "Disp"),
-            (TopBtn::Menu(MenuId::Measure), "Meas"), (TopBtn::System, "Sys")] {
+            (TopBtn::Menu(MenuId::Measure), "Meas"), (TopBtn::System, "Sys"), (TopBtn::Menu(MenuId::Cursor), "Cur")] {
             if fits(&all, padding) { break; }
             if let Some((_, label)) = all.iter_mut().find(|(b, _)| *b == button) { *label = short; }
         }
@@ -8001,7 +8006,7 @@ impl Ui {
             Item::DecBits => Kind::Value,
             Item::TrigLevel2 | Item::TrigT1 | Item::TrigT2 | Item::VidLine | Item::PatLevel | Item::NthIdle | Item::NthN | Item::Setup | Item::Hold => Kind::Value,
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
-            Item::RefSave | Item::RefSaveNext | Item::RefClear => Kind::Action,
+            Item::RefSave | Item::RefSaveNext | Item::RefClear | Item::RefClearOne => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
             Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
@@ -8117,6 +8122,8 @@ impl Ui {
             Item::RefSrc => "Save from",
             Item::RefSave => "Save to next R",
             Item::RefSaveNext => "Store in the next free R",
+            Item::RefClearOne => "Clear slot",
+            Item::Traces => "Traces",
             Item::RefShow(i) => ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"][i.min(NREF - 1)],
             Item::RefClear => "Clear all",
             Item::MathOpI => "Operation",
@@ -8437,6 +8444,7 @@ impl Ui {
             Item::TrigCoup => m.trig_coup.name().into(),
             Item::Dots => onoff(m.dots),
             Item::Layout => m.layout.name().into(),
+            Item::Traces => if self.trace_stacked() { "Stacked" } else { "Overlay" }.into(),
             Item::BottomBar => if m.bar_compact { "Compact" } else { "Cards" }.into(),
             Item::Hdmi => format!("{:?}", m.hdmi),
             Item::TextSize => m.text_size.name().into(),
@@ -8573,6 +8581,11 @@ impl Ui {
                 if it == Item::MathA { self.m.math_a = source; } else { self.m.math_b = source; }
                 self.settings_changed();
             }
+            return;
+        }
+        if it == Item::Traces {
+            let stacked = !self.trace_stacked();
+            self.trace_mode(stacked);
             return;
         }
         if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.ext_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) || self.skin_adjust(it, d) {
@@ -9154,6 +9167,12 @@ impl Ui {
                     self.ensure_meas_own();
                     self.open_submenu(MenuId::MeasAdd);
                 }
+                // the footer of the Measure sheet: the same list, with a source that is on the screen
+                Item::Open(MenuId::MeasAdd) => {
+                    self.ensure_meas_own();
+                    self.open_submenu(MenuId::MeasAdd);
+                    if self.m.layout == Layout::Studio { self.sheet_add_open(); }
+                }
                 Item::Open(id) => {
                     if id == MenuId::Cursor && self.m.cursor == CursorMode::Off {
                         // like the CURSOR key
@@ -9345,6 +9364,7 @@ impl Ui {
                         None => self.toast("Source channel has no data"),
                     }
                 }
+                Item::RefClearOne => self.ref_clear_slot(self.ref_sel),
                 Item::RefClear => {
                     self.refs = std::array::from_fn(|_| None);
                     self.measure_refs();
@@ -9912,6 +9932,7 @@ impl Ui {
             Item::GridFrame | Item::TrigNoise | Item::TrigAutoNoise => &["Off", "On"],
             Item::Dots | Item::ZoneOn => &["Off", "On"],
             Item::Layout => &["Default", "Minimal", "Studio"],
+            Item::Traces => &["Overlay", "Stacked"],
             Item::BottomBar => &["Cards", "Compact"],
             Item::AcqCores => &["Raw", "Matched"],
             Item::AcqDrawPath => &["Standard", "Batch"],
@@ -11676,6 +11697,8 @@ impl Ui {
                 return match b {
                     // a tap opens the measurement list; a press-and-hold opens the short menu (meas_hold_tick)
                     TopBtn::Menu(MenuId::Measure) => self.open_meas_list(),
+                    // as the CURSOR key: the cursors come on with their sheet
+                    TopBtn::Menu(MenuId::Cursor) if self.m.compact() => self.key(key::CURSOR),
                     TopBtn::Menu(id) => self.toggle_menu(id),
                     TopBtn::Live => self.return_to_live(),
                     TopBtn::System => self.toggle_menu(MenuId::Utility),

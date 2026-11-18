@@ -7,7 +7,8 @@ use super::studio::{icon_cursors, StudioView};
 use super::*;
 
 const MENU_W: i32 = 252;
-const ROW: i32 = 34;
+/// A row is a finger high (it was 34 px).
+const ROW: i32 = 40;
 const SEP: i32 = 9;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
