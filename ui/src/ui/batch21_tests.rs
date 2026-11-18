@@ -243,33 +243,32 @@ fn la_and_gen_pills_sit_after_plus_ch_and_open_their_sheets() {
 }
 
 #[test]
-fn sim_is_in_the_top_bar_when_live_and_live_when_viewing_a_record() {
+fn sim_is_in_the_menu_and_live_is_in_the_top_bar_when_viewing_a_record() {
     let mut u = studio();
     u.store_dir = std::env::temp_dir().join("oos-batch21-sim");
     let t = u.studio_top();
     assert!(!u.record_mode());
-    assert!(t.simbtn.w > 0 && t.badge.w == 0, "SIM when live, no Live");
-    assert!(t.simbtn.right() < t.acq.x + 1 && t.simbtn.h >= 28);
+    assert!(t.badge.w == 0, "no Live while live");
+    // the bar has no SIM button: the read-out follows Single
+    assert!(t.acq.x <= t.single.right() + 12, "{:?} after {:?}", t.acq, t.single);
     shot(&mut u, "topbar-sim");
-    // Batch 23: the SIM button enters the simulation mode (the SIM sheet, with Add to ref, is in the Menu)
-    u.open_menu(MenuId::Sim);
-    assert!(u.sheet_active());
-    u.close_menu();
-    // the SIM button: Live shows and SIM goes; a tap on Live returns
-    tap(&mut u, t.simbtn);
-    // the button opens the SIM sheet; Play at its foot starts the simulation
+    // SIM is an entry of the Menu (Analysis), as in the Default layout
+    tap(&mut u, t.gear);
+    assert!(u.menu_open && u.menu == MenuId::Main);
+    tap_cell(&mut u, Item::Open(MenuId::Sim));
+    // it opens the SIM sheet; Play at its foot starts the simulation
     assert!(u.menu_open && u.menu == MenuId::Sim, "the SIM sheet");
     u.activate(Item::SimPlay);
     u.wait_sim_generation();
     for _ in 0..8 { u.step(0.05); }
     assert!(u.record_mode());
     let t = u.studio_top();
-    assert!(t.badge.w > 0 && t.simbtn.w == 0);
+    assert!(t.badge.w > 0);
     shot(&mut u, "topbar-live");
     tap(&mut u, t.badge);
     assert!(!u.record_mode());
     let t = u.studio_top();
-    assert!(t.badge.w == 0 && t.simbtn.w > 0);
+    assert!(t.badge.w == 0);
 }
 
 #[test]

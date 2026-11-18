@@ -208,8 +208,6 @@ pub(super) struct StudioTop {
     pub add: Rect,
     /// Live (the way back from a record session), zero wide in live mode
     pub badge: Rect,
-    /// SIM (opens the SIM sheet), zero wide in record mode (the preset chip and Live are there then)
-    pub simbtn: Rect,
     /// the run / trigger status pill
     pub run: Rect,
     pub single: Rect,
@@ -460,9 +458,7 @@ impl Ui {
         // Live: the way back from a loaded file or a SIM, as in the Default bar
         let badge = if self.record_mode() { Rect::new(x, CHIP_Y, btn_w("Live"), CHIP_H) } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
         if badge.w > 0 { x = badge.right() + gap; }
-        // SIM: enters the simulation mode (gone while in it: Live is there then)
-        let simbtn = if self.record_mode() { Rect::new(x, CHIP_Y, 0, CHIP_H) } else { Rect::new(x, CHIP_Y, btn_w("SIM"), CHIP_H) };
-        if simbtn.w > 0 { x = simbtn.right() + gap; }
+        // SIM has no button here: it is an entry of the Menu (Analysis), as in the Default layout (ADR 0007)
         // while the SIM is the source: the preset, a tap opens the SIM panel
         let sim = if self.session_is_sim && self.record_mode() {
             Rect::new(x, CHIP_Y, (f.mb.width(self.sim_preset_name()) + 56).min(if tier == 0 { 220 } else { 170 }), CHIP_H)
@@ -499,7 +495,7 @@ impl Ui {
         } else { 0 };
         let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);
         let search = Rect::new(vbox.x - 10 - search_w, CHIP_Y, search_w, CHIP_H);
-        StudioTop { vbox, add, badge, simbtn, run: pill, single, sim, acq, search, measure, cursors, display, storage, view, gear, autoset, clear, force, tier }
+        StudioTop { vbox, add, badge, run: pill, single, sim, acq, search, measure, cursors, display, storage, view, gear, autoset, clear, force, tier }
     }
 
     /// Measure and Cursors as the top-bar buttons (`top_buttons`); the others are Studio's own.
@@ -536,11 +532,6 @@ impl Ui {
         if t.badge.w > 0 {
             btn(cv, t.badge, mix(BAR, ACCENT, 50), ACCENT);
             cv.text_in(&f.mb, t.badge, 1, "Live", ACCENT);
-        }
-        if t.simbtn.w > 0 {
-            let on = self.menu_open && root == MenuId::Sim;
-            btn(cv, t.simbtn, BTN, if on { ACCENT } else { BTN_BORDER });
-            cv.text_in(&f.mb, t.simbtn, 1, "SIM", if on { ACCENT } else { TEXT });
         }
         if t.sim.w > 0 {
             let on = self.studio.view == StudioView::Sim;
@@ -1115,11 +1106,6 @@ impl Ui {
         let hit = |r: Rect| self.top_hit(r).contains(x, y);
         if t.badge.w > 0 && hit(t.badge) {
             self.return_to_live();
-        } else if t.simbtn.w > 0 && hit(t.simbtn) {
-            // SIM: the sheet with the signal's settings first. Play starts the simulation with them and Add to ref puts
-            // the signal beside the live channels; both are at the foot of the sheet. (It used to start playing whatever
-            // preset was chosen last, before any setting could be seen.)
-            self.toggle_menu(MenuId::Sim);
         } else if t.vbox.w > 0 && hit(t.vbox) {
             self.view_box_tap(x, y);
         } else if hit(t.run) {

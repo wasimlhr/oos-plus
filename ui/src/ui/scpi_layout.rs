@@ -397,7 +397,7 @@ impl Ui {
             let l = &TOP_LABELS[top.tier];
             let run = if self.m.run == RunState::Run { "Stop" } else { "Run" };
             for (label, r) in [
-                ("Views".to_string(), top.vbox), (l[3].to_string(), top.add), ("Live".to_string(), top.badge), ("SIM".to_string(), top.simbtn),
+                ("Views".to_string(), top.vbox), (l[3].to_string(), top.add), ("Live".to_string(), top.badge),
                 (run.to_string(), top.run), ("Single".to_string(), top.single), ("SIM control".to_string(), top.sim), ("Acquire".to_string(), top.acq),
                 ("Measure".to_string(), top.measure), (l[5].to_string(), top.cursors), (l[6].to_string(), top.display), (l[7].to_string(), top.storage),
                 (l[8].to_string(), top.view), ("Settings".to_string(), top.gear), (l[0].to_string(), top.autoset), (l[1].to_string(), top.clear), (l[2].to_string(), top.force),

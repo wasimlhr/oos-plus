@@ -63,7 +63,7 @@ fn toast_text(u: &Ui) -> String { u.toast.as_ref().map(|t| t.0.clone()).unwrap_o
 /// Every button of the top bar, left to right as they are drawn.
 fn top_rects(u: &Ui) -> Vec<(&'static str, Rect)> {
     let t = u.studio_top();
-    let mut v = vec![("run", t.run), ("single", t.single), ("live", t.badge), ("sim", t.simbtn), ("preset", t.sim), ("autoset", t.autoset), ("clear", t.clear), ("force", t.force),
+    let mut v = vec![("run", t.run), ("single", t.single), ("live", t.badge), ("preset", t.sim), ("autoset", t.autoset), ("clear", t.clear), ("force", t.force),
         ("add", t.add), ("measure", t.measure), ("cursors", t.cursors), ("display", t.display), ("storage", t.storage), ("view", t.view), ("gear", t.gear)];
     v.retain(|(_, r)| r.w > 0);
     v
@@ -162,9 +162,8 @@ fn a_narrow_top_bar_shortens_labels_and_drops_nothing() {
     assert_eq!(u.menu, MenuId::Display);
     u.close_menu();
     // in the SIM mode (Live, the preset chip) the bar still fits
-    let t = u.studio_top();
-    tap(&mut u, t.simbtn);
-    // the button opens the SIM sheet; Play at its foot starts the simulation
+    u.toggle_menu(MenuId::Sim);
+    // the SIM sheet; Play at its foot starts the simulation
     assert!(u.menu_open && u.menu == MenuId::Sim, "the SIM sheet");
     u.activate(Item::SimPlay);
     u.wait_sim_generation();
@@ -231,28 +230,28 @@ fn the_sim_sheet_adds_a_signal_to_a_ref_without_entering_the_sim_mode() {
 }
 
 #[test]
-fn the_sim_button_opens_the_sheet_whose_play_runs_the_simulation_and_live_returns() {
+fn the_sim_sheet_s_play_runs_the_simulation_and_live_returns() {
     let mut u = studio();
     assert!(!u.record_mode());
     let t = u.studio_top();
-    assert!(t.simbtn.w > 0 && t.badge.w == 0);
+    assert!(t.badge.w == 0);
     // no ref is shown, so the SIM sheet's signal plays (a shown ref plays instead: batch 24)
     u.sim_preset_set("SATA I");
-    tap(&mut u, t.simbtn);
-    // the button opens the SIM sheet; Play at its foot starts the simulation
+    u.toggle_menu(MenuId::Sim);
+    // the SIM sheet (Menu > Analysis > SIM); Play at its foot starts the simulation
     assert!(u.menu_open && u.menu == MenuId::Sim, "the SIM sheet");
     u.activate(Item::SimPlay);
     u.wait_sim_generation();
     for _ in 0..8 { frame(&mut u); }
-    assert!(u.record_mode() && u.session_is_sim, "the SIM button enters the simulation mode");
+    assert!(u.record_mode() && u.session_is_sim, "Play enters the simulation mode");
     let t = u.studio_top();
-    assert!(t.badge.w > 0 && t.simbtn.w == 0, "Live is highlighted in the bar");
+    assert!(t.badge.w > 0, "Live is highlighted in the bar");
     check_top(&u);
     shot(&mut u, "sim-mode");
     tap(&mut u, t.badge);
     assert!(!u.record_mode() && !u.session_is_sim);
     let t = u.studio_top();
-    assert!(t.badge.w == 0 && t.simbtn.w > 0);
+    assert!(t.badge.w == 0);
 }
 
 #[test]
