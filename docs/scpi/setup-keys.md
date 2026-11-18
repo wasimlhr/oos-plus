@@ -155,12 +155,12 @@ Commands: [display.md](display.md).
 | `trend_sel` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `0 0` | - |
 | `strip` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `Below` | - |
 | `meas_labels` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `false` | `:MEASure:INDicator` |
-| `layout` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional) | `minimal` | `:DISPlay:LAYout` |
-| `studio_view` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional) | `waveform` | - |
-| `studio_dock` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional) | - | - |
-| `studio_ov` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional) | - | - |
-| `studio_meas_view` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional) | - | - |
-| `studio_badges` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional) | - | - |
+| `layout` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | `minimal` | `:DISPlay:LAYout` |
+| `studio_view` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | `waveform` | - |
+| `studio_dock` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | - | - |
+| `studio_ov` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | - | - |
+| `studio_meas_view` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | - | - |
+| `studio_badges` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | - | - |
 | `view` | the analyser view (`Scope`, `Spectrum`, `Eye`, ...) | `Scope` | `:VIEW` |
 | `views` | `views` is `<count> <current, 1-based>` | `1 1` | `:DISPlay:VIEW:COUNt` |
 | `view<n>` | `view<n>` is what view n keeps while another is shown: `key=value; ...` of the measurement list, panels, cursors, zoom, lanes shown and analysis set-ups, values escaped with `%3B` for `;` (optional) | - | - |

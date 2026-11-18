@@ -2384,3 +2384,27 @@ fn the_measurement_panel_and_the_badge_buttons_are_a_finger_high() {
     for _ in 0..2 { frame(&mut u); }
     assert!(!u.studio.hide_badges, "a tap brings the badges back");
 }
+
+/// A new set-up shows its measurements in the classic strip, a line per source with names and values in columns. The
+/// other style is what a set-up file says; a file that says nothing has the classic strip, and one that says
+/// `classic`, as files of before do, has it too.
+#[test]
+fn the_classic_strip_is_the_badge_style_of_a_new_setup() {
+    assert!(Model::default().studio_classic);
+    let mut u = fresh(Layout::Studio);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(u.studio_classic() && u.value(Item::BadgeStyle) == "Classic");
+    let text = crate::store::setup_text(&u.m);
+    assert!(!text.contains("studio_badges"), "the default is not written");
+    assert!(crate::store::parse_setup(&text).unwrap().studio_classic);
+    assert!(crate::store::parse_setup("studio_badges = classic").unwrap().studio_classic);
+    // the other style is written and read back
+    u.select_option(Item::BadgeStyle, "Studio");
+    assert!(!u.studio_classic());
+    let text = crate::store::setup_text(&u.m);
+    assert!(text.lines().any(|l| l.trim() == "studio_badges = studio"), "the Studio badges are written");
+    assert!(!crate::store::parse_setup(&text).unwrap().studio_classic);
+    // a reset is a new set-up
+    u.select_option(Item::BadgeStyle, "Classic");
+    assert!(u.studio_classic());
+}

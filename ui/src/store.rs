@@ -373,7 +373,9 @@ pub fn setup_text(m: &Model) -> String {
     if !m.studio_detail { kv("studio_meas_view", "list".to_string()); }
     if m.studio_overlay { kv("studio_traces", "overlay".to_string()); }
     if !m.studio_zoom_tab { kv("studio_zoom_controls", "titlebar".to_string()); }
-    if m.studio_classic { kv("studio_badges", "classic".to_string()); }
+    // the classic strip is the default: the key is written for the other style (a file without it meant that style
+    // before, and is read as the classic strip now)
+    if !m.studio_classic { kv("studio_badges", "studio".to_string()); }
     kv("bar", if m.bar_compact { "compact" } else { "cards" }.to_string());
     kv("draw_path", if m.draw_batch { "batch" } else { "standard" }.to_string());
     kv("hdmi", name(m.hdmi));
