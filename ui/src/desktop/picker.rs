@@ -91,9 +91,19 @@ fn read_waveform(path: &std::path::Path) -> Parsed {
     Ok((traces, name))
 }
 
+/// The file of SCPI commands to run (Storage > Run SCPI file).
+pub fn commands(owner: *mut std::ffi::c_void) -> Result<Option<PathBuf>, String> {
+    open(owner, "SCPI commands (*.scpi;*.txt)\0*.scpi;*.txt\0All files (*.*)\0*.*\0\0", "Run SCPI file")
+}
+
 pub fn waveform(owner: *mut std::ffi::c_void, slot: usize) -> Result<Option<PathBuf>, String> {
-    let filter: Vec<u16> = "Waveforms (*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf)\0*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf\0All files (*.*)\0*.*\0\0".encode_utf16().collect();
-    let title: Vec<u16> = format!("Open waveform into R{}\0", slot + 1).encode_utf16().collect();
+    open(owner, "Waveforms (*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf)\0*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf\0All files (*.*)\0*.*\0\0", &format!("Open waveform into R{}", slot + 1))
+}
+
+/// The native Open dialog. `filter`: pairs of a text and a pattern, each ended by a NUL, the list by one more.
+fn open(owner: *mut std::ffi::c_void, filter: &str, title: &str) -> Result<Option<PathBuf>, String> {
+    let filter: Vec<u16> = filter.encode_utf16().collect();
+    let title: Vec<u16> = format!("{title}\0").encode_utf16().collect();
     let mut name = vec![0u16; 32_768];
     let mut options = OPENFILENAMEW {
         lStructSize: std::mem::size_of::<OPENFILENAMEW>() as u32,

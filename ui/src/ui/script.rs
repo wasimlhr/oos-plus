@@ -40,7 +40,18 @@ impl Ui {
             return Err("no menu open".into());
         }
         let label = label.trim();
-        self.items(self.menu).into_iter().find(|&it| self.item_label(it).eq_ignore_ascii_case(label)).ok_or_else(|| format!("no item {:?} in {}", label, self.menu_title(self.menu)))
+        self.script_labels().into_iter().find(|(_, text)| text.eq_ignore_ascii_case(label)).map(|x| x.0).ok_or_else(|| format!("no item {:?} in {}", label, self.menu_title(self.menu)))
+    }
+
+    /// The rows of the open menu with their labels as a script names them: an option of the open picker (the grid of
+    /// the options of an item) by its text, which is what the row shows; any other item by its label.
+    pub(super) fn script_labels(&self) -> Vec<(Item, String)> {
+        // the options of the picker are made once, not for every row
+        let options = self.pick.map(|p| self.options(p.it)).unwrap_or_default();
+        self.items(self.menu).into_iter().map(|it| match it {
+            Item::PickOpt(k) if k < options.len() => (it, options[k].clone()),
+            _ => (it, self.item_label(it).to_string()),
+        }).collect()
     }
 
     /// Sets the item `label` of the open menu to the option `value` (as shown on its button).

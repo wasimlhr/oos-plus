@@ -1064,6 +1064,8 @@ enum Item {
     StoreSaveScpi,
     /// the SCPI recorder, on and off (scpi/recorder.rs)
     StoreRecScpi,
+    /// runs a file of SCPI commands (scpi/replay.rs); while one runs, stops it
+    StoreRunScpi,
     StoreRecall,
     StoreCsv,
     StorePng,
@@ -1647,6 +1649,15 @@ pub struct Ui {
     ref_src: usize,
     /// files the Import slot picker is showing
     ref_files: Vec<std::path::PathBuf>,
+    /// the files of commands Storage > Run SCPI file offers on the scope, the newest first
+    scpi_files: Vec<std::path::PathBuf>,
+    /// Storage > Run SCPI file: the file to run, and the stop of the one that runs. The interpreter takes them at
+    /// its next poll (`Scpi::replay_tick`) and says here whether a file runs.
+    pub scpi_replay_file: Option<std::path::PathBuf>,
+    pub scpi_replay_cancel: bool,
+    pub scpi_replaying: bool,
+    /// the desktop build asks for the file with its Open dialog (desktop.rs)
+    pub open_scpi_request: bool,
     xy: bool,
     /// the XY plot's X and Y channels (the Add panel sets them; the default is CH1 against CH2)
     xy_src: [usize; 2],
@@ -2028,6 +2039,11 @@ impl Ui {
             ref_sel: 0,
             ref_src: 0,
             ref_files: Vec::new(),
+            scpi_files: Vec::new(),
+            scpi_replay_file: None,
+            scpi_replay_cancel: false,
+            scpi_replaying: false,
+            open_scpi_request: false,
             xy: false,
             xy_src: [0, 1],
             hist_ch: None,
@@ -6623,11 +6639,11 @@ impl Ui {
     pub(super) fn toast_is_info(s: &str) -> bool {
         s == NOTHING_TO_CLEAR || s == "Views off" || s.ends_with(" turned on") || s.starts_with("Generating ") || (s.starts_with("View ") && s.contains(" of "))
             // the SCPI recorder says what it wrote: nothing went wrong
-            || s == "SCPI recorder on" || s.starts_with("Recorded ")
+            || s == "SCPI recorder on" || s.starts_with("Recorded ") || s.starts_with("Running ")
     }
 
     pub(super) fn toast_is_success(s: &str) -> bool {
-        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared") || s.starts_with("Copied ") || (s.starts_with("Zone ") && s.ends_with(" deleted")) || s.ends_with(" added") || s.contains(" added to R") || s.ends_with(" removed") || s.contains(" \u{b7} ") || s.starts_with("Loaded ") || s.starts_with("Saved ") || s.contains(" loaded from ") || s.starts_with("Restored ") || s.contains(" saved to ") || s.starts_with("Returned to live") || s.starts_with("Fit ")
+        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared") || s.starts_with("Copied ") || (s.starts_with("Zone ") && s.ends_with(" deleted")) || s.ends_with(" added") || s.contains(" added to R") || s.ends_with(" removed") || s.contains(" \u{b7} ") || s.starts_with("Loaded ") || s.starts_with("Saved ") || s.starts_with("Ran ") || s.contains(" loaded from ") || s.starts_with("Restored ") || s.contains(" saved to ") || s.starts_with("Returned to live") || s.starts_with("Fit ")
     }
 
     fn draw_toast(&self, cv: &mut Canvas) {
@@ -7160,7 +7176,7 @@ impl Ui {
                 }
                 v
             }
-            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi, Item::StoreRecScpi],
+            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi, Item::StoreRecScpi, Item::StoreRunScpi],
             MenuId::Spectrum => vec![Item::SpecOn, Item::SpecSrc, Item::SpecCenter, Item::SpecSpan, Item::SpecHarm, Item::SpecRbw, Item::SpecWin, Item::SpecTrace, Item::SpecRef, Item::SpecWf, Item::SpecDist, Item::SpecAcprW, Item::SpecAcprS, Item::SpecPeak, Item::SpecMargin, Item::SpecLimitSet, Item::SpecLimitClear],
             MenuId::Eye => vec![Item::EyeAct, Item::EyeOn, Item::EyePlace, Item::EyeSrc, Item::EyeRate, Item::EyeBer, Item::EyeB, Item::EyeHp, Item::EyePnLo, Item::EyePnHi, Item::EyeNpj, Item::EyeRail, Item::EyeNotch, Item::EyePll, Item::EyeClear],
             MenuId::Power => {
@@ -7814,6 +7830,7 @@ impl Ui {
 
     /// Row label, with the trigger rows named after their role in the selected trigger type.
     fn item_label(&self, it: Item) -> &'static str {
+        if it == Item::StoreRunScpi && self.scpi_replaying { return "Stop SCPI file"; }
         if it == Item::SimPlay {
             if self.sim_generating() { return "Cancel generation"; }
             return if !self.sim_mode() { "Run simulation mode" } else if self.m.run == RunState::Run { "Stop simulation" } else { "Run simulation" };
@@ -8049,7 +8066,7 @@ impl Ui {
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
             Item::RefSave | Item::RefSaveNext | Item::RefClear | Item::RefClearOne => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
-            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
+            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRunScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
@@ -8094,6 +8111,7 @@ impl Ui {
             Item::StoreSaveSetup => "Save setup",
             Item::StoreSaveScpi => "Save setup as SCPI",
             Item::StoreRecScpi => "SCPI recorder",
+            Item::StoreRunScpi => "Run SCPI file",
             Item::StoreRecall => "Recall setup",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
@@ -9295,6 +9313,11 @@ impl Ui {
                     self.close_picker();
                     self.ssh_remove_pick(k);
                 }
+                Item::PickOpt(k) if self.pick.map_or(false, |p| p.it == Item::StoreRunScpi) => {
+                    let p = self.scpi_files.get(k).cloned();
+                    self.close_picker();
+                    self.scpi_replay_file = p;
+                }
                 Item::PickOpt(k) if self.pick.map_or(false, |p| p.it == Item::RefImport) => {
                     let p = self.ref_files.get(k).cloned();
                     self.close_picker();
@@ -9477,6 +9500,7 @@ impl Ui {
                     self.toast_saved(&p, r);
                 }
                 Item::StoreSaveScpi => self.setup_scpi_request = true,
+                Item::StoreRunScpi => self.scpi_run_ask(),
                 Item::StoreRecall => self.recall_setup(),
                 Item::StoreCsv => self.store_wave(true, None),
                 Item::StorePng => {
@@ -9770,6 +9794,32 @@ impl Ui {
         if self.scpi_rec_want { self.scpi_rec_actions.push((line.to_string(), Box::new(self.m.clone()))); }
     }
 
+    /// Storage > Run SCPI file. While a file runs the row stops it. Else it asks which file: the desktop build with
+    /// its Open dialog, the scope with the list of the `.scpi` files where Storage saves, the newest first, as Import
+    /// slot lists the waveform files. The file is not run before one is chosen, also when there is only one.
+    fn scpi_run_ask(&mut self) {
+        if self.scpi_replaying {
+            self.scpi_replay_cancel = true;
+            return;
+        }
+        if self.desktop_panel.is_some() {
+            self.close_menu();
+            self.open_scpi_request = true;
+            return;
+        }
+        let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> = std::fs::read_dir(self.save_dir()).into_iter().flatten()
+            .filter_map(|e| e.ok()).map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("scpi")))
+            .map(|p| (p.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH), p)).collect();
+        files.sort_by(|a, b| b.cmp(a));
+        self.scpi_files = files.into_iter().map(|x| x.1).collect();
+        if self.scpi_files.is_empty() {
+            self.toast("No SCPI file in storage");
+        } else {
+            self.open_picker(Item::StoreRunScpi);
+        }
+    }
+
     /// Storage > Save setup as SCPI and the SCPI recorder: writes the commands the interpreter made into a new file
     /// `<prefix>-NNN.scpi` where Storage saves (the name is taken now, when it is written). `note` is said after the
     /// name: what no line could carry, or how many commands were recorded.
@@ -10020,6 +10070,7 @@ impl Ui {
             Item::WlanNet => return self.wlan_net_options(),
             Item::WlanForgetNet => return self.wlan_forget_options(),
             Item::RefImport => return self.ref_files.iter().map(|p| crate::store::file_name(p)).collect(),
+            Item::StoreRunScpi => return self.scpi_files.iter().map(|p| crate::store::file_name(p)).collect(),
             Item::QuickAct => return QUICKS.iter().map(|q| q.name().to_string()).collect(),
             // Studio: the ten slots are one list (ui/sheet.rs)
             Item::RefSel if self.sheets_on() => return (1..=NREF).map(|i| format!("R{i}")).collect(),
