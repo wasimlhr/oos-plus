@@ -191,6 +191,7 @@ impl Ui {
         self.studio.unpinned.clear();
         self.studio.floated.clear();
         self.studio.hide_badges = false;
+        self.studio.md.hide_undo = None;
         self.studio.compact = false;
         self.studio.cur_badge = false;
         self.studio.cur_linked = false;
