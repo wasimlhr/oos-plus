@@ -1281,13 +1281,110 @@ fn a_note_is_added_from_the_hold_menu_and_stays_on_its_signal() {
 #[ignore]
 fn walk_sim_sheet_pictures() {
     let Ok(dir) = std::env::var("OOS_WALK") else { return };
-    for (layout, tag) in [(Layout::Studio, "s"), (Layout::Minimal, "m")] {
-        let mut u = fresh_live(layout);
-        u.open_menu(MenuId::Sim);
+    let shot = |u: &mut Ui, name: String| {
         for _ in 0..3 { u.step(0.04); }
         let mut cv = Canvas::new(u.scr.w, u.scr.h);
         u.render(&mut cv);
-        let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("simsheet-{tag}.png")), &crate::store::png_of(&cv));
+        let _ = crate::store::write(&std::path::Path::new(&dir).join(name), &crate::store::png_of(&cv));
+    };
+    for (layout, tag) in [(Layout::Studio, "s"), (Layout::Minimal, "m")] {
+        let mut u = fresh_live(layout);
+        u.open_menu(MenuId::Sim);
+        shot(&mut u, format!("simsheet-{tag}.png"));
+        // every tab: live with an empty slot, with the preset added to the slot, and in SIM mode
+        for state in ["live", "ref", "sim"] {
+            let mut u = fresh_live(layout);
+            u.open_menu(MenuId::Sim);
+            u.step(0.04);
+            if state != "live" {
+                let g = u.sheet_geo().unwrap();
+                let (x, y) = mid(g.foot[if state == "ref" { 0 } else { 1 }].1);
+                tap(&mut u, x, y);
+                for _ in 0..8 { u.step(0.04); u.wait_sim_generation(); }
+            }
+            for t in 0..u.sheet_geo().map_or(0, |g| g.tabs.len()) {
+                let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]);
+                tap(&mut u, x, y);
+                shot(&mut u, format!("simsheet-{tag}-{state}{t}.png"));
+            }
+        }
+    }
+}
+
+/// The SIM sheet by touch, in Minimal and in Studio: Run is under every tab, the knobs of the Advanced page are rows
+/// of its tabs, the switch of the slot shows and hides the reference with one tap, and no row moves under the finger
+/// when SIM mode starts.
+#[test]
+fn the_sim_sheet_has_run_under_every_tab_and_a_show_switch_that_works() {
+    fn settle(u: &mut Ui, done: impl Fn(&Ui) -> bool) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        while !done(u) && std::time::Instant::now() < end { u.step(0.04); u.wait_sim_generation(); }
+        assert!(done(u), "the SIM generation came to its end: {:?}", u.toast.as_ref().map(|t| t.0.clone()));
+    }
+    fn row(u: &Ui, it: Item) -> (RowKind, (i32, i32)) {
+        let g = u.sheet_geo().unwrap();
+        let r = g.rows.iter().find(|r| r.it == it).unwrap_or_else(|| panic!("{it:?} is a row of this tab"));
+        (r.kind, mid(r.ctrl))
+    }
+    fn foot(u: &Ui, it: Item) -> (i32, i32) {
+        mid(u.sheet_geo().unwrap().foot.iter().find(|f| f.0 == it).unwrap_or_else(|| panic!("{it:?} is under this tab")).1)
+    }
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh_live(layout);
+        u.open_menu(MenuId::Sim);
+        u.step(0.04);
+        assert!(u.sheet_active(), "{layout:?}: SIM is a sheet");
+        let spec = u.sheet_spec(MenuId::Sim).unwrap();
+        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Signal", "Levels", "Jitter", "Spread"]);
+        for (i, t) in spec.tabs.iter().enumerate() {
+            assert!(t.rows.len() >= 4, "{layout:?} {}: {} rows", t.name, t.rows.len());
+            assert!(t.foot.contains(&Item::SimPlay), "{layout:?} {}: Run is under every tab", t.name);
+            assert_eq!(t.foot.contains(&Item::SimAddRef), i == 0, "{layout:?} {}: Add is beside the slot", t.name);
+            assert_eq!(t.foot.contains(&Item::SimDefaults), i != 0, "{layout:?} {}: Defaults is under the knobs", t.name);
+        }
+        let rows: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
+        assert!(!rows.contains(&Item::Open(MenuId::SimAdvanced)), "{layout:?}: no second page");
+        for it in u.items(MenuId::SimAdvanced) {
+            assert!(it == Item::SimDefaults || rows.contains(&it), "{layout:?}: {it:?} of the Advanced page is a row");
+        }
+        // an empty slot: the switch is off, and a tap says why
+        let (kind, (sx, sy)) = row(&u, Item::SimShow);
+        assert_eq!(kind, RowKind::Toggle);
+        assert!(!u.sheet_on(Item::SimShow));
+        tap(&mut u, sx, sy);
+        assert!(u.refs[0].is_none() && u.toast.as_ref().is_some_and(|t| t.0.contains("empty")), "{layout:?}: {:?}", u.toast.as_ref().map(|t| t.0.clone()));
+        // Add to R1: the reference is there and shown, and so is the switch
+        let (x, y) = foot(&u, Item::SimAddRef);
+        tap(&mut u, x, y);
+        settle(&mut u, |u| u.refs[0].is_some());
+        assert!(u.refs[0].as_ref().unwrap().on && u.sheet_on(Item::SimShow), "{layout:?}: shown, and the switch says so");
+        // one tap hides it, one more shows it
+        tap(&mut u, sx, sy);
+        assert!(!u.refs[0].as_ref().unwrap().on && !u.sheet_on(Item::SimShow), "{layout:?}: hidden by one tap");
+        tap(&mut u, sx, sy);
+        assert!(u.refs[0].as_ref().unwrap().on && u.sheet_on(Item::SimShow), "{layout:?}: shown by the next");
+        // Run from under the Jitter tab, with no reference shown (a shown one would be played instead, and that closes
+        // the sheet): SIM mode starts, the sheet stays, and the rows of Signal are where they were
+        tap(&mut u, sx, sy);
+        assert!(u.sim_shown_refs().is_empty());
+        let before: Vec<(Item, Rect)> = u.sheet_geo().unwrap().rows.iter().map(|r| (r.it, r.row)).collect();
+        let (x, y) = mid(u.sheet_geo().unwrap().tabs[2]);
+        tap(&mut u, x, y);
+        assert_eq!(row(&u, Item::SimDcd).0, RowKind::Number, "{layout:?}: duty-cycle distortion is a row of Jitter");
+        let (x, y) = foot(&u, Item::SimPlay);
+        tap(&mut u, x, y);
+        settle(&mut u, |u| u.sim_mode() && !u.sim_generating());
+        assert!(u.menu_open && u.menu == MenuId::Sim && u.sheet_active(), "{layout:?}: the sheet stays");
+        let (x, y) = mid(u.sheet_geo().unwrap().tabs[0]);
+        tap(&mut u, x, y);
+        let after: Vec<(Item, Rect)> = u.sheet_geo().unwrap().rows.iter().map(|r| (r.it, r.row)).collect();
+        assert_eq!(after[..before.len()], before[..], "{layout:?}: no row moved");
+        assert_eq!(after.len(), before.len() + 1, "{layout:?}: one row more");
+        assert_eq!(after.last().unwrap().0, Item::SimLive, "{layout:?}: the way back is the last row");
+        let (_, (x, y)) = row(&u, Item::SimLive);
+        tap(&mut u, x, y);
+        for _ in 0..4 { u.step(0.04); }
+        assert!(!u.sim_mode() && !u.record_mode(), "{layout:?}: live again");
     }
 }
 

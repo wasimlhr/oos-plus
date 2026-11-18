@@ -307,7 +307,8 @@ reference is panned. **Measure** opens categorized choices with Source, Settings
 lists have page controls. The Windows app announces its actual SCPI and HiSLIP listeners over mDNS.
 
 **SIM > Advanced** adds SSC profile, deviation and modulation frequency, duty-cycle distortion, and
-correlated random jitter with its corner frequency. PRBS-13 is available alongside the other patterns.
+correlated random jitter with its corner frequency (in Minimal and Studio these are rows of the Jitter and
+Spread tabs of the SIM sheet). PRBS-13 is available alongside the other patterns.
 With SSC enabled, the stored record covers a complete modulation cycle at eight samples per bit.
 Long records generate in the background; cancel or return to Live to keep the previous session.
 Configurations exceeding the generation budget report an error without replacing the current waveform.

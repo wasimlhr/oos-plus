@@ -3,6 +3,8 @@
 SIM generates a synthetic high-speed signal into a reference slot. The knob settings apply on the next `:SIM:PLAY ON`. A candidate replaces accepted data only when its trigger qualifies, Auto permits fallback, or Force is requested. Supported PRBS orders: 7, 9, 13, 15, 23, 31.
 
 Menu location: Simulator (Preset, Slot, Pattern, Rate, Levels, Rise, Bandwidth, De-emphasis, Noise, Spread spectrum, Jitter, Play, Show, Defaults, Add to R, Load file, Live).
+In Minimal and Studio the menu is a sheet with the tabs Signal, Levels, Jitter and Spread; the rows named
+"Simulator advanced" below are on its Jitter and Spread tabs.
 
 Part of the [SCPI reference](README.md).
 
