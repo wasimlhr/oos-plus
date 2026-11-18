@@ -115,7 +115,8 @@ You need a Windows [Rust](https://rustup.rs) toolchain. From PowerShell, in the 
 The app is `ui\target\release\oos-ui.exe`. The mouse is the finger, the wheel pans, Ctrl+wheel zooms the time base,
 Space is Run/Stop and F12 saves a screenshot; all keys are listed at the top of
 [ui/src/desktop.rs](ui/src/desktop.rs). Ctrl+O opens a waveform file, and so does dropping one on the program or
-`--open FILE`. `--offline` starts with the analog channels off, for work on stored waveforms.
+`--open FILE`. A session file (`session-NNN.oss`) given that way is loaded as a session. `--offline` starts with
+the analog channels off, for work on stored waveforms.
 
 **The network services stay on your PC.** The web remote (8080), SCPI (5555) and HiSLIP (4880) listen on
 `127.0.0.1` only, so Windows asks no firewall question and nobody else on the network can reach them. Start the app

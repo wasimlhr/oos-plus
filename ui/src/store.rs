@@ -2648,6 +2648,11 @@ pub fn session_bin(setup: &str, rec: Option<&Record>, memory: Option<&[u8]>, m: 
     b
 }
 
+/// Whether these bytes are a session file (`session_bin`), by its mark: the command line opens one as a session.
+pub fn looks_session(b: &[u8]) -> bool {
+    b.starts_with(b"OOSS")
+}
+
 /// Reads a session file. Every length is checked against the bytes that are there and against the import limits before
 /// anything is allocated for it, so a cut or made-up file is an error, not a crash or a huge allocation.
 pub fn parse_session(b: &[u8], slots: usize) -> Result<Session, String> {
