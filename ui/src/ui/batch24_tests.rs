@@ -5,11 +5,16 @@ use super::studio::StudioView;
 use super::*;
 
 fn studio() -> Ui {
+    // a folder of its own for every instance: the tests run side by side and each writes a "ref1.csv" (one read the
+    // file of another while it was being written, and failed with "that file holds no waveform")
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    let dir = std::env::temp_dir().join(format!("oos-batch24-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("oos-batch24-{}-{n}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     u.store_dir = dir;
     for _ in 0..10 { u.step(0.05); }
