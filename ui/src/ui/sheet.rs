@@ -170,8 +170,11 @@ impl Ui {
                 ClearDisp => Slot::Foot(2),
                 _ => Slot::Tab(2),
             }),
-            M::Acquire => (&["Acquire"], |it| match it {
-                Open(M::Horizontal) => Slot::Tab(0),
+            // the segments have a tab of their own: with averaging or segments on, one tab held more rows than a
+            // sheet has, and the page fell back to the dialog. The way on to Horizontal is under both tabs
+            M::Acquire => (&["Acquire", "Segments"], |it| match it {
+                AcqSeg | AcqSegHw | AcqSegIvl | AcqSegTable => Slot::Tab(1),
+                Open(M::Horizontal) => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
             M::Horizontal => (&["Time base", "Zoom"], |it| match it {
@@ -333,7 +336,7 @@ impl Ui {
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
+        matches!(menu, MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
     }
 
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
@@ -444,6 +447,10 @@ impl Ui {
                 let sel = self.ref_sel;
                 let at = 2.min(tabs[0].rows.len());
                 tabs[0].rows.insert(at, Item::RefShow(sel));
+            }
+            // Acquire: the way on to Horizontal is under both tabs
+            if menu == MenuId::Acquire {
+                for t in &mut tabs { t.foot = vec![Item::Open(MenuId::Horizontal)]; }
             }
             // the two sources of a pair are under every tab ("A: CH1", "B: CH2"): a slot of the plan is the foot of one tab
             if menu == MenuId::MeasPair {
