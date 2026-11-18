@@ -139,6 +139,11 @@ fn the_badge_row_has_one_named_button_and_the_eye_and_the_style_is_on_the_sheet(
     u.studio_set_view(StudioView::Waveform);
     for k in u.studio_keys() { u.studio_set_pin(k, true); }
     for _ in 0..4 { frame(&mut u); }
+    // (a new set-up has the classic strip; the test starts from the Studio badges)
+    assert!(u.studio_classic());
+    assert_eq!(u.value(Item::BadgeStyle), "Classic");
+    u.select_option(Item::BadgeStyle, "Studio");
+    for _ in 0..2 { frame(&mut u); }
     assert!(!u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
     let (list, eye) = (u.studio_list_chip(), u.studio_eye());

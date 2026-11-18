@@ -124,6 +124,8 @@ fn the_detailed_table_names_the_source_in_every_row_beside_its_colour_bar() {
 #[test]
 fn a_badge_has_no_chip_a_colour_bar_and_the_short_name() {
     let mut u = studio();
+    // the badges of the Studio style (the classic strip is the default of a new set-up)
+    u.studio_set_classic(false);
     two_sources(&mut u);
     u.studio_set_view(StudioView::Waveform);
     for _ in 0..3 { frame(&mut u); }

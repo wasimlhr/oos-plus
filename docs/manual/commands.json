@@ -15410,7 +15410,7 @@
       ],
       [
        "`layout`",
-       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional)",
+       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
        "`minimal`",
        "`:DISPlay:LAYout`"
       ],

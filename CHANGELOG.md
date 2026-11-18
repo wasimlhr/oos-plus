@@ -31,6 +31,9 @@ Fixed:
 - Studio: the hold menu of the plot has rows of 40 px in two columns, the view at the left and what acts on the lane
   under the finger at the right. It was one column of seventeen rows of 28 px, 542 px tall. Run, Single, Trigger
   settings and Sources are not in it any more: the bars have them one tap away.
+- Studio: the classic strip is the badge style of a new set-up: a line per source, with the names and values of its
+  measurements in columns. Measure > Badge style still has both. A set-up file says `studio_badges = studio` for the
+  other style; a file without the key, which meant the Studio badges before, shows the classic strip now.
 - Studio: the badge row has one button that says what it opens, "Meas" and the number of measurements, beside the
   eye. It had two more of an icon each, for the badge style and for the compact view, and the second opened the
   list in one view and switched the compact view in another. The style is Measure > Badge style, the compact view

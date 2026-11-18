@@ -459,7 +459,10 @@ fn the_classic_badge_strip_has_a_row_per_source_with_even_columns() {
     two_sources(&mut u);
     for k in u.studio_keys() { u.studio_set_pin(k, true); }
     for _ in 0..4 { frame(&mut u); }
-    assert!(!u.m.studio_classic, "Studio is the default");
+    // the classic strip is the style of a new set-up; the test starts from the other one
+    assert!(u.m.studio_classic && Model::default().studio_classic, "Classic is the default");
+    u.studio_set_classic(false);
+    for _ in 0..2 { frame(&mut u); }
     let studio_h = u.studio_row().h;
     assert!(u.studio_badges().len() >= 3);
     // the setting: Measure > Badge style
