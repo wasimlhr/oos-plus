@@ -2,12 +2,15 @@
 """Generates docs/manual/commands.json (the command reference of the SCPI Programming Manual) from the SCPI reference.
 
     python docs/manual/gen_commands.py [--date YYYY-MM-DD]
+    python docs/manual/gen_commands.py --check
 
 Inputs: docs/scpi/*.md (one Markdown table row per header: Command, Set/Query, Parameters and range, Default, Menu
 equivalent, Notes), docs/scpi/setup-keys.md, ui/Cargo.toml (the firmware version) and static.json beside this script
 (the hand-written front matter: chapter intro, dialect, the item/error appendices).
 
 Nothing is edited by hand in commands.json: rerun this script after the reference changes, then build.py.
+`--check` writes nothing and fails when the file is not what would be written now (the date of the edition aside);
+tools/tests/test_manual_commands.py runs it with the host checks, so the file cannot fall behind the reference.
 
 Brace forms in a Command cell are expanded into the concrete headers (`:CURSor:{MANual|TRACk|XY}:{AXValue|...}` is
 21 headers). `<n>` stays a numeric suffix (`:CHANnel<n>:SCALe` is `:CHANnel1:SCALe` ... `:CHANnel4:SCALe`), as in every
@@ -23,11 +26,14 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 DOCS = ROOT / 'docs' / 'scpi'
+OUT = HERE / 'commands.json'
 
 # Group pages in reference order (the README's table).
 PAGES = ['common', 'system', 'acquire', 'channel', 'timebase', 'trigger', 'waveform', 'measure', 'cursor', 'math',
-         'reference', 'search', 'decode', 'logic', 'mask', 'spectrum', 'eye', 'power', 'bode', 'generator', 'sim',
-         'display', 'storage', 'logger', 'calibration']
+         'reference', 'search', 'decode', 'logic', 'mask', 'spectrum', 'eye', 'power', 'bode', 'generator', 'extgen',
+         'sim', 'display', 'layout', 'storage', 'logger', 'calibration']
+# The pages of docs/scpi that are not a command group: the index, and the setup keys (an appendix).
+OTHER = {'README', 'setup-keys'}
 
 SPLIT = re.compile(r'(?<!\\)\|')
 CODE = re.compile(r'`([^`]+)`')
@@ -455,12 +461,17 @@ def setup_keys():
     return {'title': 'Setup Keys', 'intro': intro, 'tables': tables}, count
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('--date', default=datetime.date.today().isoformat())
-    a = ap.parse_args()
+def unlisted_pages():
+    """Pages of docs/scpi that PAGES does not name: the commands of such a page would not be in the manual."""
+    return sorted(f.stem for f in DOCS.glob('*.md') if f.stem not in PAGES and f.stem not in OTHER)
+
+
+def build(date):
+    """The content of commands.json for an edition of this date, and the line that says how much it holds."""
+    missing = unlisted_pages()
+    if missing:
+        raise SystemExit(f'docs/scpi/{missing[0]}.md is in neither PAGES nor OTHER of docs/manual/gen_commands.py')
     version = firmware_version()
-    date = datetime.date.fromisoformat(a.date)
     static = json.loads((HERE / 'static.json').read_text(encoding='utf-8'))
     subs = jsonable(build_subsystems(version), version)
     keys, nkeys = setup_keys()
@@ -471,9 +482,60 @@ def main():
                  'commands_chapter': static['commands_chapter']},
         'intro': static['intro'], 'subsystems': subs, 'appendices': appendices,
     }
-    (HERE / 'commands.json').write_text(json.dumps(data, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
     n = sum(len(s['commands']) for s in subs)
-    print(f'commands.json: oos-ui {version}, {len(subs)} subsystems, {n} headers, {nkeys} setup keys')
+    return data, f'oos-ui {version}, {len(subs)} subsystems, {n} headers, {nkeys} setup keys'
+
+
+def difference(have, want):
+    """In a few words, what the content `have` of a commands.json lacks of `want`. None: nothing."""
+    if have == want:
+        return None
+    ours, theirs = have.get('meta', {}).get('version'), want['meta']['version']
+    if ours != theirs:
+        return f'it is of oos-ui {ours}, the tree is {theirs}'
+    old = {c['header']: c for s in have.get('subsystems', []) for c in s['commands']}
+    new = {c['header']: c for s in want['subsystems'] for c in s['commands']}
+    kinds = (('not in it', [h for h in new if h not in old]),
+             ('no longer in the reference', [h for h in old if h not in new]),
+             ('changed', [h for h in new if h in old and new[h] != old[h]]))
+    parts = []
+    for what, headers in kinds:
+        if headers:
+            parts.append(f'{len(headers)} {what} ({", ".join(headers[:4])}{", ..." if len(headers) > 4 else ""})')
+    return '; '.join(parts) or 'a text beside the commands changed (a page introduction, an appendix or the setup keys)'
+
+
+def stale():
+    """Why commands.json is not what this script would write now, or None. The edition keeps the date the file has:
+    a check on a later day finds no difference."""
+    try:
+        have = json.loads(OUT.read_text(encoding='utf-8'))
+        want, _ = build(datetime.date.today())
+    except (OSError, ValueError) as e:
+        return f'{OUT.name} cannot be read: {e}'
+    except SystemExit as e:
+        return str(e)
+    for k in ('edition', 'date'):
+        want['meta'][k] = have.get('meta', {}).get(k)
+    return difference(have, want)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--date', default=datetime.date.today().isoformat())
+    ap.add_argument('--check', action='store_true', help='write nothing; fail when commands.json would change')
+    a = ap.parse_args()
+    if a.check:
+        why = stale()
+        if why:
+            raise SystemExit(f'commands.json is behind the reference: {why}\nrun: python docs/manual/gen_commands.py')
+        print('commands.json: up to date')
+        return
+    data, summary = build(datetime.date.fromisoformat(a.date))
+    # LF on every system, as the tree has it
+    with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(json.dumps(data, indent=1, ensure_ascii=False) + '\n')
+    print(f'commands.json: {summary}')
 
 
 if __name__ == '__main__':

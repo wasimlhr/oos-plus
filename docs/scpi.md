@@ -3,6 +3,8 @@
 The SCPI reference is a folder of pages, one per command group: **[docs/scpi/README.md](scpi/README.md)** is the index (connection, syntax, conventions, how to read the tables, quick start, error codes).
 
 The [SCPI Programming Manual](OOS-Plus-SCPI-Programming-Manual.pdf) (PDF) gives every command with its syntax, parameters, reply format and an example; its source is in [manual/](manual/).
+Its command chapter is made from the pages below: after a change of a page, `python docs/manual/gen_commands.py`
+writes `manual/commands.json` again, and the host checks (`tools/check.sh test`) fail until it has.
 
 | Looking for | Page |
 | --- | --- |
