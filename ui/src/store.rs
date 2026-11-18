@@ -1510,7 +1510,21 @@ pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
         if keysight_text_kind(text) == Some("WaveformYValues") {
             return parse_keysight_y(text, name).map(|t| vec![t]);
         }
+        let rigol = rigol_csv_header(text)?;
         let mut traces = parse_wave_csv(text, name)?;
+        if let Some(header) = rigol {
+            // the first column counted samples: the header has the time of sample 0 and of one step
+            if let Some((start, step)) = header.clock {
+                for t in &mut traces {
+                    (t.t0, t.dt) = (start + t.t0 * step, t.dt * step);
+                }
+            }
+            if header.channels.len() == traces.len() {
+                for (t, channel) in traces.iter_mut().zip(header.channels) {
+                    t.label = channel;
+                }
+            }
+        }
         // an XY-values file names its source in its header; with one trace, that name is the trace's
         if let ([only], Some("WaveformXYValues")) = (traces.as_mut_slice(), keysight_text_kind(text)) {
             if let Some(source) = keysight_header(text, "Source Name") {
@@ -1520,6 +1534,48 @@ pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
         return Ok(traces);
     }
     Err("that file is not a waveform".into())
+}
+
+/// What the first lines of a RIGOL CSV file say: the channel of each column and, in a file whose first column
+/// counts samples, the time of sample 0 and the time between samples.
+struct RigolCsv {
+    channels: Vec<String>,
+    clock: Option<(f64, f64)>,
+}
+
+/// The header of a RIGOL CSV file, None for another file. The first line names the columns: `X,CH1,CH2,`, on a
+/// DS1000B `,CH2,CH4`, on a DS1000D `X,CH 1 (V),CH 2 (V)`. A DS1000Z, DS2000 or DS4000 goes on
+/// `,Start,Increment,`; its second line has the two values under those names, and the first column of its rows
+/// counts samples, not seconds:
+/// `X,CH1,CH4,Start,Increment,` / `Sequence,Volt,Volt,-1.200000e-03,4.000000e-08` / `0,2.86e+00,3.08e+00,`.
+/// Such a file without its two values is refused: read as it stands it would be a second a sample.
+fn rigol_csv_header(text: &str) -> Result<Option<RigolCsv>, String> {
+    let mut lines = without_mark(text).lines();
+    let cells = |line: &str| line.split(',').map(|c| c.trim().to_string()).collect::<Vec<String>>();
+    let first = cells(lines.next().unwrap_or(""));
+    if !(first[0].is_empty() || first[0] == "X") {
+        return Ok(None);
+    }
+    let mut channels = Vec::new();
+    while let Some(cell) = first.get(1 + channels.len()) {
+        let plain: String = cell.chars().filter(|c| !c.is_whitespace()).collect();
+        let Some(number) = plain.strip_prefix("CH").and_then(|rest| rest.chars().next()).filter(|c| c.is_ascii_digit()) else { break };
+        channels.push(format!("CH{number}"));
+    }
+    let named = |k: usize, name: &str| first.get(k).is_some_and(|cell| cell == name);
+    let at = 1 + channels.len();
+    if channels.is_empty() {
+        return Ok(None);
+    }
+    if !(named(at, "Start") && named(at + 1, "Increment")) {
+        return Ok(Some(RigolCsv { channels, clock: None }));
+    }
+    let second = cells(lines.next().unwrap_or(""));
+    let value = |k: usize| second.get(k).and_then(|cell| cell.parse::<f64>().ok()).filter(|x| x.is_finite());
+    match (value(at), value(at + 1)) {
+        (Some(start), Some(step)) if step > 0.0 => Ok(Some(RigolCsv { channels, clock: Some((start, step)) })),
+        _ => Err("the RIGOL CSV file has no usable Start and Increment".into()),
+    }
 }
 
 /// A text file without the byte-order mark some programs put first.
@@ -5799,7 +5855,12 @@ fn parse_rigol_wfm(b: &[u8], kind: RigolWfm) -> Result<Vec<WaveTrace>, String> {
     match kind {
         RigolWfm::Dho => parse_rigol_dho(b),
         RigolWfm::E => parse_rigol_e(b),
-        RigolWfm::Unread(family) => Err(format!("RIGOL {family} waveform files (.wfm) are not read")),
+        // a DS1000Z file is left unread on purpose: no known reading of it gives the vertical offset the scope
+        // showed, and the project this layout comes from says to check its result against a measurement
+        RigolWfm::Unread(family) if family.starts_with("DS1000Z") => {
+            Err(format!("RIGOL {family} waveform files (.wfm) are not read: the vertical offset cannot be told from the file; save the waveform as CSV"))
+        }
+        RigolWfm::Unread(family) => Err(format!("RIGOL {family} waveform files (.wfm) are not read; save the waveform as CSV")),
     }
 }
 
@@ -6131,5 +6192,77 @@ mod rigol_wfm_file_tests {
             let refused = parse_wave(&[&first[..], &[0u8; 64][..]].concat(), "r.wfm").unwrap_err();
             assert!(refused.contains(family) && refused.contains("not read"), "{refused}");
         }
+    }
+}
+
+#[cfg(test)]
+mod rigol_csv_file_tests {
+    use super::*;
+
+    fn close(seen: f64, wanted: f64) -> bool {
+        (seen - wanted).abs() <= wanted.abs() * 1e-9
+    }
+
+    /// The lines of each test are the text of files saved by real scopes, from the RigolWFM project's captures.
+    fn read(lines: &[&str], end: &str) -> Result<Vec<WaveTrace>, String> {
+        let text: String = lines.iter().map(|line| format!("{line}{end}")).collect();
+        parse_wave(text.as_bytes(), "rigol.csv")
+    }
+
+    #[test]
+    fn a_ds1000z_file_counts_samples_and_gives_their_time_in_its_header() {
+        // CH1 and CH4 of a DS1104Z, lines ended by a line feed
+        let traces = read(&["X,CH1,CH4,Start,Increment,", "Sequence,Volt,Volt,-1.200000e-03,4.000000e-08", "0,2.86e+00,3.08e+00,", "1,2.86e+00,3.08e+00,", "2,2.84e+00,3.10e+00,"], "\n").unwrap();
+        let seen: Vec<(&str, &[f32])> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice())).collect();
+        assert_eq!(seen, [("CH1", &[2.86f32, 2.86, 2.84][..]), ("CH4", &[3.08f32, 3.08, 3.10][..])]);
+        assert!(traces.iter().all(|t| close(t.t0, -1.2e-3) && close(t.dt, 4e-8)), "{:?}", (traces[0].t0, traces[0].dt));
+        // four channels of a DS1054Z, lines ended by a carriage return and a line feed
+        let four = read(&["X,CH1,CH2,CH3,CH4,Start,Increment,", "Sequence,Volt,Volt,Volt,Volt,-3.000000e-07,5.000000e-10", "0,3.28e+00,9.60e-01,-1.60e-01,0.00e+00,", "1,3.28e+00,9.60e-01,-1.60e-01,0.00e+00,", "2,3.20e+00,9.60e-01,-8.00e-02,0.00e+00,"], "\r\n").unwrap();
+        assert_eq!(four.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(), ["CH1", "CH2", "CH3", "CH4"]);
+        assert_eq!(four[2].v, [-0.16, -0.16, -0.08]);
+        assert!(four.iter().all(|t| close(t.t0, -3e-7) && close(t.dt, 5e-10)));
+    }
+
+    #[test]
+    fn a_ds2000_and_a_ds4000_file_are_read_the_same_way() {
+        // one channel of a DS2072A: its second line ends with a comma
+        let one = read(&["X,CH1,Start,Increment,", "Sequence,Volt,-3.500000e-03,5.000000e-06,", "0,2.400000e-02,", "1,8.000000e-03,", "2,2.400000e-02,"], "\r\n").unwrap();
+        assert_eq!((one.len(), one[0].label.as_str(), one[0].v.as_slice()), (1, "CH1", &[0.024f32, 0.008, 0.024][..]));
+        assert!(close(one[0].t0, -3.5e-3) && close(one[0].dt, 5e-6));
+        // a DS4024 starts its count at 22: the first sample is 22 steps after the start
+        let late = read(&["X,CH1,CH2,Start,Increment,", "Sequence,Volt,Volt,-1.400000e-03,2.000000e-06,", "22,3.125000e-02,6.250000e-03,", "23,-6.250000e-02,-6.250000e-03,", "24,3.125000e-02,6.250000e-03,"], "\r\n").unwrap();
+        assert!(close(late[0].t0, -1.4e-3 + 22.0 * 2e-6) && close(late[0].dt, 2e-6), "{:?}", (late[0].t0, late[0].dt));
+        assert_eq!(late[1].v, [0.00625, -0.00625, 0.00625]);
+    }
+
+    #[test]
+    fn a_file_with_a_time_column_keeps_its_times_and_takes_the_channels_of_its_header() {
+        // DS1102E: seconds in the first column
+        let e = read(&["X,CH1,", "Second,Volt,", "-5.9999998e-06,4.40000e+00,", "-5.9800000e-06,4.32000e+00,", "-5.9600002e-06,4.24000e+00,"], "\r\n").unwrap();
+        assert_eq!((e.len(), e[0].label.as_str(), e[0].v.as_slice()), (1, "CH1", &[4.4f32, 4.32, 4.24][..]));
+        assert!(close(e[0].t0, -5.9999998e-06) && (e[0].dt - 2e-8).abs() < 1e-12);
+        // DS1204B: no name over the first column, CH2 and CH4 on, a comma and a space at the end of a row
+        let b = read(&[",CH2,CH4", "Second,Volt,Volt", "1.63720e-02,1.48e+01,1.36e+01, ", "1.63760e-02,1.48e+01,1.36e+01, ", "1.63800e-02,2.08e+01,1.36e+01, "], "\r\n").unwrap();
+        assert_eq!(b.iter().map(|t| (t.label.as_str(), t.v.len())).collect::<Vec<_>>(), [("CH2", 3), ("CH4", 3)]);
+        // DS1102D: the unit in the name of a column, no second header line
+        let d = read(&["X,CH 1 (V),CH 2 (V)", "-0.00468800,8.08,8.40", "-0.00467799,4.88,8.40", "-0.00466798,4.88,8.40"], "\n").unwrap();
+        assert_eq!(d.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(), ["CH1", "CH2"]);
+        assert_eq!(d[0].v, [8.08, 4.88, 4.88]);
+    }
+
+    #[test]
+    fn a_file_that_counts_samples_without_saying_their_time_is_refused() {
+        let refused = read(&["X,CH1,Start,Increment,", "Sequence,Volt,", "0,2.400000e-02,", "1,8.000000e-03,"], "\n").unwrap_err();
+        assert!(refused.contains("Start and Increment"), "{refused}");
+        assert!(read(&["X,CH1,Start,Increment,", "Sequence,Volt,-3.5e-03,0", "0,1,", "1,2,"], "\n").is_err());
+        // another program's file with the same first cell is read as before
+        let other = read(&["X,Y", "0,1", "1,2", "2,3"], "\n").unwrap();
+        assert_eq!((other.len(), other[0].label.as_str(), other[0].dt), (1, "rigol.csv", 1.0));
+    }
+
+    #[test]
+    fn a_ds1000z_waveform_file_is_refused_with_the_way_round_it() {
+        let refused = parse_wave(&[&[1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5][..], &[0u8; 64][..]].concat(), "z.wfm").unwrap_err();
+        assert!(refused.contains("DS1000Z") && refused.contains("vertical offset") && refused.contains("save the waveform as CSV"), "{refused}");
     }
 }
