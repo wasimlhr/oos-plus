@@ -640,3 +640,21 @@ fn studio_zoom_overview_window_drags_and_a_lane_badge_scales_vertically() {
     tap_in(&mut u, badge);
     assert_eq!(u.menu, MenuId::Channel(0));
 }
+
+// Break it catches (seen on a unit, 2026-11-17): Display > Bottom bar = Compact was left on, so Layout = Default kept the
+// compact top and bottom bars and the screen did not look like OOS. Picking Default gives the stock bars, also when
+// Default is already the layout; Bottom bar can still turn the compact one on afterwards.
+#[test]
+fn picking_default_brings_back_the_stock_bars() {
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    u.m.bar_compact = true;
+    assert!(u.m.compact());
+    u.select_option(Item::Layout, "Default");
+    assert!(!u.m.compact(), "Default picked again: the stock bars");
+    u.select_option(Item::Layout, "Studio");
+    u.m.bar_compact = true;
+    u.select_option(Item::Layout, "Default");
+    assert!(u.m.layout == Layout::Default && !u.m.compact(), "from Studio: the stock bars");
+    u.select_option(Item::BottomBar, "Compact");
+    assert!(u.m.compact(), "Bottom bar still chooses the compact one");
+}

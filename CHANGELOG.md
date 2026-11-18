@@ -7,6 +7,8 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Display > Layout > Default shows the stock OOS bars again. A Bottom bar = Compact left on from before kept the
+  compact top and bottom bars in Default; picking Default now turns them off.
 - Eye and jitter (host-tested on SIM signals and built signals of known jitter, not yet verified on hardware):
   - Eye Width read short of what the jitter allows: about 5 % of a unit interval on a jitter-free signal in the
     measurement's 96-column picture. The picture's own spread at the crossing is taken out; with 20 ps of random

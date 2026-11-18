@@ -8813,6 +8813,8 @@ impl Ui {
                 let i = LAYOUTS.iter().position(|&l| l == m.layout).unwrap_or(0);
                 m.layout = LAYOUTS[cyc(i, LAYOUTS.len(), d)];
                 if m.layout == Layout::Studio { self.studio.enter = true; }
+                // Default is the stock OOS screen: its cards and top bar, not the compact bars a Bottom bar choice left
+                if m.layout == Layout::Default { m.bar_compact = false; }
                 self.dirty_map = true;
             }
             Item::BottomBar => {
@@ -9988,6 +9990,13 @@ impl Ui {
                 self.workspace.measure_docked = true; self.workspace.measure_float = None;
                 self.relayout();
             }
+            return;
+        }
+        if it == Item::Layout && want == "Default" && self.m.layout == Layout::Default && self.m.bar_compact {
+            // Default picked again while the compact bars are on: back to the stock cards and top bar
+            self.m.bar_compact = false;
+            self.dirty_map = true;
+            self.settings_changed();
             return;
         }
         if self.pick_source_direct(it, want) { return; }
