@@ -151,16 +151,19 @@ fn pinned_badges_that_do_not_fit_leave_a_plus_n_chip_that_opens_the_list() {
     assert!(matches!(u.studio.view, StudioView::Docked | StudioView::Floating), "the list is open");
 }
 
+/// A row of the Add menu opens its own page, whichever page was open last. (The View menu had an "Add panel" row that
+/// opened the hub; it is gone, the Add button of the top bar is the one way in.)
 #[test]
-fn view_add_panel_always_opens_the_hub() {
+fn a_row_of_the_add_menu_opens_its_page_not_the_last_one() {
     let mut u = studio();
     u.sheet.add.kind = Some(super::addrail::AddKind::Cursors);
-    let t = u.studio_top().view;
+    let t = u.studio_top().add;
     tap(&mut u, t);
-    let row = u.studio_view_row(super::studio::VIEW_ADD);
+    assert!(u.studio.add_menu);
+    let (_, row) = u.studio_add_rows().into_iter().find(|(r, _)| *r == super::addmenu::AddRow::Search).expect("Search");
     tap(&mut u, row);
     assert!(u.menu_open && u.menu == MenuId::AddPanel);
-    assert!(u.sheet.add.kind.is_none(), "the hub, not the last page");
+    assert_eq!(u.sheet.add.kind, Some(super::addrail::AddKind::Search), "the page of the row");
 }
 
 #[test]

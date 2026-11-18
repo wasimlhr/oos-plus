@@ -1795,8 +1795,6 @@ pub(super) const STUDIO_VIEWS: [(StudioView, &str); 6] = [
 pub(super) const VIEW_BADGES: usize = STUDIO_VIEWS.len();
 pub(super) const VIEW_RESET: usize = STUDIO_VIEWS.len() + 1;
 pub(super) const VIEW_COMPACT: usize = STUDIO_VIEWS.len() + 2;
-/// The row that opens the add-panel page.
-pub(super) const VIEW_ADD: usize = STUDIO_VIEWS.len() + 3;
 
 /// A small square wave, the lanes in the pictures of the View menu.
 fn icon_wave(cv: &mut Canvas, r: Rect, c: Rgb) {
@@ -1847,12 +1845,13 @@ impl Ui {
     /// The View menu, under the View chip.
     pub(super) fn studio_view_rect(&self) -> Rect {
         let anchor = self.studio_top().view;
-        let h = 40 + 10 * VIEW_ROW + 48;
+        let h = 40 + 9 * VIEW_ROW + 40;
         Rect::new((anchor.right() - VIEW_W).max(4), self.frame().top.bottom() + 4, VIEW_W, h)
     }
 
     /// Row `i` of the View menu: 0 to 3 the measurement arrangements, 4 and 5 the record views (a line above them),
-    /// `VIEW_BADGES` the badges switch, `VIEW_RESET` Reset layout.
+    /// `VIEW_BADGES` the badges switch, `VIEW_COMPACT` the compact view, `VIEW_RESET` Reset layout, the last row. (An
+    /// "Add panel" row followed it: the Add button of the top bar opens the same pages and more, in one tap less.)
     pub(super) fn studio_view_row(&self, i: usize) -> Rect {
         let p = self.studio_view_rect();
         let y = match i {
@@ -1860,8 +1859,7 @@ impl Ui {
             4..=5 => p.y + 40 + i as i32 * VIEW_ROW + 8,
             VIEW_BADGES => p.y + 40 + 6 * VIEW_ROW + 16,
             VIEW_COMPACT => p.y + 40 + 7 * VIEW_ROW + 24,
-            VIEW_RESET => p.y + 40 + 8 * VIEW_ROW + 32,
-            _ => p.y + 40 + 9 * VIEW_ROW + 40,
+            _ => p.y + 40 + 8 * VIEW_ROW + 32,
         };
         Rect::new(p.x + 6, y, p.w - 12, VIEW_ROW)
     }
@@ -1946,11 +1944,6 @@ impl Ui {
         cv.fill(Rect::new(ix - 2, iy - 10, 6, 4), PANEL_BG);
         cv.triangle([(ix - 1, iy - 12), (ix - 1, iy - 5), (ix + 5, iy - 9)], TEXT);
         cv.text_in(&f.m, Rect::new(r.x + 48, r.y, r.w - 50, r.h), 0, "Reset layout", TEXT);
-        cv.hline(p.x + 8, p.right() - 9, self.studio_view_row(VIEW_ADD).y - 4, LINE);
-        let r = self.studio_view_row(VIEW_ADD);
-        cv.hline(r.x + 18, r.x + 30, r.y + r.h / 2, TEXT);
-        cv.vline(r.x + 24, r.y + r.h / 2 - 6, r.y + r.h / 2 + 6, TEXT);
-        cv.text_in(&f.m, Rect::new(r.x + 48, r.y, r.w - 50, r.h), 0, "Add panel", TEXT);
     }
 
     /// A tap while the View menu is open: a row does its action, a tap outside closes it. Always taken.
@@ -1986,11 +1979,6 @@ impl Ui {
         } else if self.studio_view_row(VIEW_RESET).contains(x, y) {
             self.studio_reset_layout();
             self.studio.view_menu = false;
-        } else if self.studio_view_row(VIEW_ADD).contains(x, y) {
-            self.studio.view_menu = false;
-            // always the hub, never the sub-page that was open last
-            self.sheet.add.kind = None;
-            self.open_menu(MenuId::AddPanel);
         }
         true
     }
