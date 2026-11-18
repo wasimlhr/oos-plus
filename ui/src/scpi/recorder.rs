@@ -18,9 +18,11 @@
 //! Single, Force, Clear, Default, Autoset, and the saves of the Storage menu. What the user set before it is written
 //! first. The settings the action changes are its own: for Run, Stop, Single, Force, Clear and Default the command is
 //! proven like a step, so a setting it leaves different on a second scope gets a line after it; an auto set-up is
-//! written as the command alone, since what it finds is the signal's, and a save is never run a second time.
-//! `*OPC?` stands after Single and Autoset, the operations it waits for. While an auto set-up runs the look at the
-//! set-up waits: what the user sets in that time is taken for the auto set-up's and is not written.
+//! written as the command alone, since what it finds is the signal's, and a save is never run a second time. A saved
+//! set-up is `*SAV <n>` with the slot it went to: the slot of the Storage menu is not part of the set-up, so no line
+//! before it would bring it. `*OPC?` stands after Single and Autoset, the operations it waits for. While an auto
+//! set-up runs the look at the set-up waits: what the user sets in that time is taken for the auto set-up's and is
+//! not written.
 
 use super::setupscpi::named;
 use super::*;
@@ -502,7 +504,8 @@ mod tests {
     }
 
     /// A save of the Storage menu is its command and is not run a second time; what a client does with the same
-    /// commands is not the user's action.
+    /// commands is not the user's action. A set-up is saved with its slot (`*SAV <n>`): the slot is not part of the
+    /// set-up, so a scope whose menu stands at another one would write that one.
     #[test]
     fn a_save_is_its_command_and_a_clients_action_is_not_recorded() {
         let (mut s, mut ui, cv, dir) = session_in("save");
@@ -513,24 +516,37 @@ mod tests {
         }
         assert!(recorded(s.rec_lines()).is_empty(), "a client's: {:?}", s.rec_lines());
         s.exec_line(&mut ui, &cv, "*CLS");
-        let saved = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("setup")).count();
-        let before = saved(dir.as_ref());
+        // the set-up files of a folder, by name
+        let saved = |dir: &std::path::Path| {
+            let names = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).map(|e| e.file_name());
+            let names = names.map(|n| n.to_string_lossy().into_owned()).filter(|n| n.starts_with("setup"));
+            let mut names: Vec<String> = names.collect();
+            names.sort();
+            names
+        };
+        assert_eq!(saved(dir.as_ref()), ["setup1.txt"], "the client's save, to the slot the menu starts with");
+        // the slot of the Storage menu (`:SAVE:SLOT` is its row) is no setting of the set-up: no line for it
+        s.exec_line(&mut ui, &cv, ":SAVE:SLOT 3");
         ui.script_menu("Storage").unwrap();
         // no waveform yet (the scope has not run a frame): the row says so and nothing is recorded
         ui.script_do("Save waveform (CSV)").unwrap();
         settle(&mut s, &mut ui, &cv);
         assert!(recorded(s.rec_lines()).is_empty() && ui.toast_text() == "No waveform to save", "{:?}", s.rec_lines());
         ui.script_do("Save setup").unwrap();
-        assert_eq!(saved(dir.as_ref()), before.max(1), "the file of the slot");
+        assert_eq!(saved(dir.as_ref()), ["setup1.txt", "setup3.txt"], "the file of the slot");
         // the row has written it; the recorder, a frame later, must not run the save again
-        for e in std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("setup")) {
-            std::fs::remove_file(e.path()).unwrap();
-        }
+        for name in saved(dir.as_ref()) { std::fs::remove_file(dir.0.join(name)).unwrap(); }
         settle(&mut s, &mut ui, &cv);
-        assert_eq!(recorded(s.rec_lines()), [":SAVE:SETup"], "{:?}", s.rec_lines());
-        assert_eq!(saved(dir.as_ref()), 0, "written once, by the row");
+        assert_eq!(recorded(s.rec_lines()), ["*SAV 3"], "{:?}", s.rec_lines());
+        assert!(saved(dir.as_ref()).is_empty(), "written once, by the row");
         assert!(ui.toast_text().starts_with("Saved setup"), "the row's message stays: {}", ui.toast_text());
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        // run on a scope whose menu stands at another slot, the recording writes the slot it was made with
+        let lines = s.rec_lines().to_vec();
+        let (mut s, mut ui, cv, dir) = session_in("save-replay");
+        for l in &lines { s.exec_line(&mut ui, &cv, l); }
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        assert_eq!(saved(dir.as_ref()), ["setup3.txt"], "{lines:?}");
     }
 
     /// The action is recorded where it is done: the Quick key set to Clear is a Clear. Two actions in one frame are

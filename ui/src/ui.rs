@@ -9503,7 +9503,9 @@ impl Ui {
                     }
                 }
                 Item::StoreSaveSetup => {
-                    self.rec_action(":SAVE:SETup");
+                    // for the SCPI recorder: the slot is the menu's and no part of the set-up, so the command names
+                    // it. `:SAVE:SETup` would write the slot the scope that runs the recording happens to stand at
+                    self.rec_action(&format!("*SAV {}", self.store_slot));
                     let p = self.setup_path();
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
