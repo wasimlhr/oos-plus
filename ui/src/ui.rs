@@ -821,8 +821,7 @@ enum Item {
     CurSrcB,
     CurA,
     CurB,
-    /// Studio cursor settings (ui/addrail.rs): type, source, second source, readout place, linked, remove
-    CurType,
+    /// Studio cursor settings (ui/addrail.rs): source, second source, readout place, linked, remove
     CurSrc,
     CurSecond,
     CurReadout,
@@ -8409,6 +8408,8 @@ impl Ui {
             Item::TrigHoldoff => if m.holdoff <= 0.0 { "Off".into() } else { si_short(m.holdoff as f64, "s") },
             Item::MathLinA => format!("{:.3}", m.math_lin.0),
             Item::MathLinB => format!("{:.3}", m.math_lin.1),
+            // as the option is written: "XY" was "Xy", so the button of the mode in use was not marked for it
+            Item::CurMode if m.cursor == CursorMode::Xy => "XY".into(),
             Item::CurMode => format!("{:?}", m.cursor),
             // where the cursor is, as the read-out under the plot says it; the percentage only without a record
             Item::CurA => self.cursor_values().first().map_or(format!("{:.0} %", m.cur_a * 100.0), |v| v.1.clone()),

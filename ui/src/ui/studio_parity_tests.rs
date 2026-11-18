@@ -155,8 +155,6 @@ fn elsewhere(s: &Ui, menu: MenuId, it: Item) -> Place {
         (M::Ref, RefShow(_)) => Place::Elsewhere("Shown: the switch of the selected slot"),
         // Zones are opened from the Menu (Trigger group) in Studio
         (M::Trigger, Open(M::Zone)) => Place::Elsewhere("Menu > Trigger > Zones"),
-        // Studio names the cursor mode Type (Waveform, V bars, H bars, V and H) and has Remove cursors for Off
-        (M::Cursor, CurMode) if s.sheet_source_has(M::Cursor, CurType) => Place::Elsewhere("Type, and Remove cursors for Off"),
         // the second source of the tracking cursors is Second source
         (M::Cursor, CurSrcB) if s.sheet_source_has(M::Cursor, CurSecond) => Place::Elsewhere("Second source"),
         // the formula is shown on the row that edits it

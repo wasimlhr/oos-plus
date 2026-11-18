@@ -2,6 +2,7 @@
 //! Batch 8: the Add panel, the one-tap cursors with readouts, Search in Studio, Studio's entry rules.
 //! OOS_SHOTS=<dir> writes pictures (b8-*).
 use super::addrail::AddKind;
+use super::sheet::RowKind;
 use super::*;
 
 fn studio() -> Ui {
@@ -230,23 +231,33 @@ fn the_results_table_adds_measurements_search_events_and_decode_needs_a_decoder(
 // ------------------------------------------------------------------------------------------------ item 2
 
 #[test]
-fn one_tap_on_cursors_puts_two_waveform_cursors_on_the_selected_trace() {
+fn the_cursor_button_opens_the_menu_and_its_mode_row_puts_two_cursors_on_the_selected_trace() {
     let mut u = studio();
     u.m.run = RunState::Stop;
     assert_eq!(u.m.cursor, CursorMode::Off);
     let src = u.cursor_source();
-    // the Cursor key and Add > Cursors (the bar has no Cursors button)
-    u.studio_cursors_tap();
+    // the Cursor button of the bar, as in the Default layout: the menu with its Mode row
+    let t = u.studio_top();
+    assert!(t.cursors.w >= 40 && t.cursors.right() <= t.display.x && t.cursors.x >= t.add.right(), "{:?}", t.cursors);
+    tap_in(&mut u, t.cursors);
+    assert!(u.menu_open && u.menu == MenuId::Cursor && u.sheet_active());
+    assert_eq!(u.m.cursor, CursorMode::Off, "the button only opens the menu");
+    assert_eq!(u.options(Item::CurMode), ["Off", "Time", "Volt", "Track", "XY"]);
+    assert_eq!(u.sheet_row_kind(Item::CurMode), RowKind::Choice, "five buttons, as in the Default dialog");
+    shot(&mut u, "cursors-menu");
+    u.select_option(Item::CurMode, "Track");
     assert_eq!(u.m.cursor, CursorMode::Track, "waveform cursors");
-    assert!(!u.menu_open, "no mode picker first");
     assert_eq!(u.cursor_source(), src);
     let (ta, tb) = u.cursor_times();
     assert!(tb > ta);
-    shot(&mut u, "cursors-one-tap");
-    // a second tap opens the settings
-    u.studio_cursors_tap();
-    assert!(u.menu_open && u.menu == MenuId::Cursor && u.sheet_active());
     shot(&mut u, "cursors-settings");
+    // Off takes them away and the menu stays, as in the Default layout
+    u.select_option(Item::CurMode, "Off");
+    assert_eq!(u.m.cursor, CursorMode::Off);
+    assert!(u.menu_open && u.menu == MenuId::Cursor);
+    // a second tap on the button closes the menu
+    tap_in(&mut u, t.cursors);
+    assert!(!u.menu_open);
 }
 
 #[test]
@@ -314,13 +325,13 @@ fn cursor_settings_type_source_readout_linked_and_positions() {
     u.open_menu(MenuId::Cursor);
     assert!(u.sheet_active());
     let spec = u.sheet_spec(MenuId::Cursor).unwrap();
-    assert!(spec.tabs[0].rows.contains(&Item::CurType) && spec.tabs[0].rows.contains(&Item::CurSrc) && spec.tabs[0].rows.contains(&Item::CurReadout) && spec.tabs[0].rows.contains(&Item::CurLink));
+    assert!(spec.tabs[0].rows.contains(&Item::CurMode) && spec.tabs[0].rows.contains(&Item::CurSrc) && spec.tabs[0].rows.contains(&Item::CurReadout) && spec.tabs[0].rows.contains(&Item::CurLink));
     assert!(spec.tabs[1].rows.contains(&Item::CurA) && spec.tabs[1].rows.contains(&Item::CurB));
-    assert_eq!(u.value(Item::CurType), "Waveform");
-    for (name, mode) in [("V bars", CursorMode::Time), ("H bars", CursorMode::Volt), ("V and H", CursorMode::Xy), ("Waveform", CursorMode::Track)] {
-        u.select_option(Item::CurType, name);
+    assert_eq!(u.value(Item::CurMode), "Track");
+    for (name, mode) in [("Time", CursorMode::Time), ("Volt", CursorMode::Volt), ("XY", CursorMode::Xy), ("Track", CursorMode::Track)] {
+        u.select_option(Item::CurMode, name);
         assert_eq!(u.m.cursor, mode, "{name}");
-        assert_eq!(u.value(Item::CurType), name);
+        assert_eq!(u.value(Item::CurMode), name);
         let spec = u.sheet_spec(MenuId::Cursor).unwrap();
         assert!(spec.tabs.iter().all(|t| t.rows.len() <= 7), "{name} fits the sheet");
     }

@@ -185,7 +185,7 @@ impl Ui {
                 AutoDeskew | ClearDeskew => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
-            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurType | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
+            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
             M::Search => (&["Edge search"], |it| match it { SrchRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
             M::Ref => (&["Reference", "Scale and files"], |it| match it {
                 RefSel | RefSrc | RefLabel | RefColor | RefSaveNext | RefImport => Slot::Tab(0),

@@ -235,7 +235,7 @@ pub(super) struct StudioTop {
 const TOP_TIERS: usize = 3;
 /// The labels of the top bar per tier: Autoset, Clear, Force, + Add, Measure, Cursors, Display, Storage, View.
 pub(super) const TOP_LABELS: [[&str; 9]; TOP_TIERS] = [
-    ["Autoset", "Clear", "Force", "Add", "", "Cursors", "Display", "Storage", "View"],
+    ["Autoset", "Clear", "Force", "Add", "", "Cursor", "Display", "Storage", "View"],
     ["Auto", "Clear", "Force", "Add", "", "Cur", "Disp", "Store", "View"],
     ["Auto", "Clr", "Force", "Add", "", "Cur", "Disp", "Store", "View"],
 ];
@@ -503,8 +503,9 @@ impl Ui {
         let view = place(labels[8]);
         let storage = place(labels[7]);
         let display = place(labels[6]);
-        // Cursor is a key of the front panel, and Add has Cursors: no button of its own
-        let cursors = Rect::new(display.x, CHIP_Y, 0, CHIP_H);
+        // Cursor: the button of the Default bar. The desktop has no front panel with its key, and Add > Cursors only
+        // puts the cursors on
+        let cursors = place(labels[5]);
         // Add replaces the old "+ Add" and Meas buttons: one button, the menu has both
         let measure = Rect::new(-20, CHIP_Y, 0, CHIP_H);
         let add = place(labels[3]);
@@ -580,7 +581,7 @@ impl Ui {
         let displaying = open(MenuId::Display);
         let storing = open(MenuId::Storage);
         let labels = &TOP_LABELS[t.tier];
-        for (r, label, on) in [(t.add, labels[3], adding || cursors), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing), (t.view, labels[8], self.studio.view_menu)].into_iter().filter(|(r, ..)| r.w > 0) {
+        for (r, label, on) in [(t.add, labels[3], adding), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing), (t.view, labels[8], self.studio.view_menu)].into_iter().filter(|(r, ..)| r.w > 0) {
             btn(cv, r, BTN, if on { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.mb, r, 1, label, if on { ACCENT } else { TEXT });
         }
@@ -1215,7 +1216,8 @@ impl Ui {
         } else if hit(t.measure) {
             self.open_meas_list();
         } else if t.cursors.w > 0 && hit(t.cursors) {
-            self.studio_cursors_tap();
+            // as the Cursor button of the Default bar: the menu, whose Mode row puts the cursors on and off
+            self.toggle_menu(MenuId::Cursor);
         } else if hit(t.display) {
             self.toggle_menu(MenuId::Display);
         } else if hit(t.storage) {
