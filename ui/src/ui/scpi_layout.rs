@@ -451,6 +451,18 @@ impl Ui {
         if self.studio.ctx.is_some() { return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect(); }
         if let Some(p) = &self.workspace.popup { return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect(); }
         if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
+        // the View menu of the Studio bar, and the popup of Add source in the bottom bar
+        if self.studio.view_menu {
+            use super::studio::{STUDIO_VIEWS, VIEW_ADD, VIEW_BADGES, VIEW_COMPACT, VIEW_RESET};
+            let mut rows: Vec<(String, Rect)> = STUDIO_VIEWS.iter().enumerate().map(|(i, (_, label))| (label.to_string(), self.studio_view_row(i))).collect();
+            for (i, label) in [(VIEW_BADGES, "Show pinned badges"), (VIEW_COMPACT, "Compact view"), (VIEW_RESET, "Reset layout"), (VIEW_ADD, "Add panel")] {
+                rows.push((label.to_string(), self.studio_view_row(i)));
+            }
+            return rows;
+        }
+        if let Some((channels, extras)) = self.studio_picker_rows() {
+            return channels.into_iter().map(|(c, r)| (format!("CH{}", c + 1), r)).chain(extras.into_iter().map(|(k, r)| (k.label().to_string(), r))).collect();
+        }
         if self.studio.zoom_menu {
             return self.studio_zoom_rows().into_iter().map(|(row, r)| (match row {
                 ZoomRow::Minus => "Zoom out", ZoomRow::Plus => "Zoom in", ZoomRow::VPlus => "Vertical zoom in", ZoomRow::VMinus => "Vertical zoom out",
@@ -470,6 +482,8 @@ impl Ui {
             else if self.studio.ctx.is_some() { "Context".to_string() }
             else if let Some(p) = &self.workspace.popup { p.title.clone() }
             else if self.studio.add_menu { "Add".to_string() }
+            else if self.studio.view_menu { "View".to_string() }
+            else if self.studio.ch_picker { "Add source".to_string() }
             else if self.studio.zoom_menu { "Zoom".to_string() }
             else if self.menu_open { self.menu_title(self.menu).to_string() }
             else { return "\"\"".to_string(); };
@@ -510,6 +524,8 @@ impl Ui {
         self.workspace.popup = None;
         self.studio.add_menu = false;
         self.studio.zoom_menu = false;
+        self.studio.view_menu = false;
+        self.studio.ch_picker = false;
         if self.menu_open { self.close_menu(); }
         self.relayout();
     }
