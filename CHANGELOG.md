@@ -57,16 +57,17 @@ Fixed:
 
 Added:
 
-- Storage: a file gets the name you give it, and a load shows the files to choose from (ADR 0029; host-tested, not
-  yet run on a unit). Save session, Save waveform (CSV and binary), Save fast-frame, Save screenshot and Save setup
-  as SCPI open the keyboard with the next free name in it: OK takes it, or type another, which takes its place. A name that is taken is
-  said to be taken, and OK once more replaces the file. Load session and Load fast-frame list the files of the
-  folder, the newest first, where they took the newest one only; the list scrolls by its bar and by the finger.
-  Two new rows, Save setup to file and Load setup from file, do the same for a setup: it lies beside the slots,
-  or on the stick when Save to sends files there. Setup slot, Save setup and Recall setup are as they were and do
-  not ask, and neither do SCPI and the Quick key. The desktop build asks with the Save As and Open dialogs of
+- Storage: a file gets the name you give it, and a load shows the files to choose from (ADR 0029; host-tested, not yet
+  run on a unit). Save session, Save waveform (CSV and binary), Save fast-frame, Save screenshot and Save setup as
+  SCPI open the keyboard with the next free name in it: OK takes it, or type another, which takes its place. A name
+  that is taken is said to be taken, and OK once more replaces the file. Load session and Load fast-frame list the
+  files of the folder, the newest first, where they took the newest one only; the list scrolls by its bar and by the
+  finger. Two new rows, Save setup to file and Load setup from file, do the same for a setup: it lies beside the
+  slots, or on the stick when Save to sends files there. Setup slot, Save setup and Recall setup are as they were and
+  do not ask, and neither do SCPI and the Quick key. The desktop build asks with the Save As and Open dialogs of
   Windows, which choose the folder too. A waveform CSV saved under a name has its logic analyser lines in
-  `<name>-la.csv` beside it.
+  `<name>-la.csv` beside it. In Minimal and Studio the Storage sheet has the pages Setup and Files (were Save and
+  Export), seven rows each.
 
 - The set-up as SCPI commands, `:SYSTem:SETup:SCPI?` (the first part of the SCPI recorder; host-tested, not yet run
   on a unit). The answer is a block of lines: `*RST`, then one command for every setting that differs from the
