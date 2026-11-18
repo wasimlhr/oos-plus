@@ -271,6 +271,9 @@ pub(super) const OVERFLOW_W: i32 = 46;
 pub(super) const GROUP_BAND: i32 = 14;
 
 const CHIP_H: i32 = 30;
+/// The read-out button of the top bar: the room left of its text, and right of it for the chevron.
+const ACQ_PAD_L: i32 = 10;
+const ACQ_PAD_R: i32 = 24;
 /// The pills of the bottom bar are the buttons pressed most: taller than a measurement badge of the row above them
 /// (`ROW_H` - 6 = 34), and the bar is 3 px more on either side.
 const BAR_CHIP_H: i32 = 40;
@@ -409,6 +412,25 @@ impl Ui {
         }
     }
 
+    /// The room the read-out's button asks of the bar before the other buttons shorten their labels: what the rate and
+    /// the depth need (the mode is added only where there is room left), never more than 290 px.
+    pub(super) fn studio_acq_need(&self) -> i32 {
+        (self.fonts().mb.width(&self.studio_acq_caption()) + ACQ_PAD_L + ACQ_PAD_R).clamp(120, 290)
+    }
+
+    /// The button of the acquisition read-out and its text. It is as wide as its text, inside the room `t.acq`. While
+    /// the acquisition is live the mode follows the rate and the depth when the room holds it, as in the Default bar.
+    pub(super) fn studio_acq_chip(&self, t: &StudioTop) -> (Rect, String) {
+        let f = self.fonts();
+        let mut caption = self.studio_acq_caption();
+        if self.acq_caption().1 {
+            let with = format!("{caption} \u{b7} {}", self.acq_name());
+            if f.mb.width(&with) + ACQ_PAD_L + ACQ_PAD_R <= t.acq.w { caption = with; }
+        }
+        let w = (f.mb.width(&caption) + ACQ_PAD_L + ACQ_PAD_R).min(t.acq.w);
+        (Rect::new(t.acq.x, CHIP_Y, w, CHIP_H), caption)
+    }
+
     /// Keeps the record views consistent with the session: Offline ends with the record session, and shows
     /// the navigator (the zoom overview) for a loaded file until the user closes it.
     pub(super) fn studio_sync_views(&mut self) {
@@ -432,9 +454,9 @@ impl Ui {
     /// The top bar at the first tier (full labels) that leaves the acquisition caption room, else the shortest: labels
     /// shorten before anything is dropped, and every button stays reachable.
     pub(super) fn studio_top(&self) -> StudioTop {
-        // the status caption gets the room it needs (up to 260 px) before the buttons give up width; when no tier
-        // has that much, the one with the most room is used and the caption is shortened to it
-        let need = (self.fonts().mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260);
+        // the read-out's button gets the room it needs (`studio_acq_need`) before the buttons give up width; when no
+        // tier has that much, the one with the most room is used and the caption is shortened to it
+        let need = self.studio_acq_need();
         let mut t = self.studio_top_tier(0);
         let mut best = t.acq.w;
         for tier in 1..TOP_TIERS {
@@ -468,7 +490,6 @@ impl Ui {
         // its room goes to the acquisition read-out
         let autoset = Rect::new(x, CHIP_Y, 0, CHIP_H);
         let (clear, force) = (autoset, autoset);
-        x += 4;
         // the right group is laid out from the edge: gear, View, Storage, Display, Cursors, Measure, + Add
         let mut r = top.right() - 8;
         let gear = Rect::new(r - 40, CHIP_Y, 40, CHIP_H);
@@ -489,7 +510,7 @@ impl Ui {
         // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
         let room = vbox.x - 10 - x;
         let search_w = if self.studio.search.is_some() {
-            let caption = (f.mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260);
+            let caption = self.studio_acq_need();
             let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
         } else { 0 };
@@ -541,10 +562,13 @@ impl Ui {
             cv.text_in(&f.mb, Rect::new(t.sim.x + 40, t.sim.y, (t.sim.w - 44).max(1), t.sim.h), 0, self.sim_preset_name(), if on { ACCENT } else { TEXT });
             cv.no_clip();
         }
-        // sample rate and depth as plain text (the source in front of them): a tap opens the page that sets them
-        let caption = self.studio_acq_caption();
+        // sample rate, depth and mode (the source in front of them) on a button like the others of the bar, with the
+        // chevron of the pills: a tap opens the page that sets them. As plain text it did not look like a control
+        let (acq, caption) = self.studio_acq_chip(&t);
         let acq_open = self.menu_open && root == if self.record_mode() { MenuId::Ref } else { MenuId::Acquire };
-        cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT });
+        btn(cv, acq, BTN, if acq_open { ACCENT } else { BTN_BORDER });
+        cv.text_fit(&f.mb, Rect::new(acq.x + ACQ_PAD_L, acq.y, (acq.w - ACQ_PAD_L - ACQ_PAD_R).max(1), acq.h), 0, &caption, if acq_open { ACCENT } else { TEXT });
+        chevron_down(cv, acq.right() - 16, acq.y + acq.h / 2 - 2, DIM);
         // Measure, Cursors, View, settings: the Default button style
         let cursors = open(MenuId::Cursor) || self.m.cursor != CursorMode::Off;
         let adding = self.studio_add_chip_on();
