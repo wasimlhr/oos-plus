@@ -233,9 +233,12 @@ impl Ui {
                 SrcOn => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
-            M::Storage => (&["Save", "Export"], |it| match it {
+            M::Storage => (&["Save", "Export", "SCPI"], |it| match it {
                 // a session is saved and recalled like a setup, with the samples: it sits beside the setup rows
                 StoreDest | StoreSlot | StoreSaveSetup | StoreRecall | StoreSessSave | StoreSessLoad => Slot::Tab(0),
+                // the set-up as commands, the recorder and the file that is run: with them Export had more rows
+                // than a tab holds
+                StoreSaveScpi | StoreRecScpi | StoreRunScpi => Slot::Tab(2),
                 _ => Slot::Tab(1),
             }),
             M::Mask => (&["Test", "Build"], |it| match it {

@@ -61,6 +61,7 @@ use crate::model::*;
 use crate::ui::Ui;
 
 mod recorder;
+mod replay;
 mod ser;
 mod setupscpi;
 use std::io::{ErrorKind, Write};
@@ -237,6 +238,8 @@ pub struct Scpi {
     /// The SCPI recorder while it is on (scpi/recorder.rs), and the lines of the recording before.
     rec: Option<Box<recorder::Recorder>>,
     rec_last: Vec<String>,
+    /// The file of commands that runs (scpi/replay.rs).
+    replay: Option<Box<replay::Replay>>,
 }
 
 /// SCPI keyword match: the long form or its short form (the upper-case part), case-insensitive.
@@ -906,7 +909,7 @@ impl Scpi {
 
     /// An interpreter no client reaches: the second scope the set-up as commands is proven on (scpi/setupscpi.rs).
     pub(crate) fn detached() -> Scpi {
-        Scpi { l: None, clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0, rec: None, rec_last: Vec::new() }
+        Scpi { l: None, clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0, rec: None, rec_last: Vec::new(), replay: None }
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
@@ -971,6 +974,8 @@ impl Scpi {
         }
         // the SCPI recorder looks at the set-up here, before a client's message is run: what it sees is the user's
         self.rec_tick(ui, cv);
+        // Storage > Run SCPI file: the next command of the file, as a client's
+        self.replay_tick(ui, cv);
         if let Some(l) = &self.l {
             while let Ok((s, peer)) = l.accept() {
                 if !self.acl.permits_peer(Ok(peer)) {

@@ -306,6 +306,9 @@ const LEVEL_LINE_S: f64 = 1.5;
 /// Longest wait of a STOP for the hardware's final frame (`Ui::stop_final`): a batch in progress, its read and the raw
 /// read of the newest frame.
 const STOP_FINAL_WAIT: f64 = 3.0;
+/// Longest wait of a STOP for the stored record read whole (`Ui::stop_whole`): one read of a record the live read
+/// takes whole, a fraction of a second. After it the view shown is asked for, the record of the stop as it was.
+const STOP_WHOLE_WAIT: f64 = 1.0;
 /// LA words a history entry keeps: above this only the newest record has its LA (200 x 1 M words = 400 MB at most).
 const HISTORY_LA_WORDS: usize = 1_000_000;
 /// Segment counts of the segmented recording (0 = off); the menu offers those within the limit of the set-up
@@ -1061,6 +1064,8 @@ enum Item {
     StoreSaveScpi,
     /// the SCPI recorder, on and off (scpi/recorder.rs)
     StoreRecScpi,
+    /// runs a file of SCPI commands (scpi/replay.rs); while one runs, stops it
+    StoreRunScpi,
     StoreRecall,
     StoreCsv,
     StorePng,
@@ -1332,6 +1337,11 @@ type MeasJob = (u64, Vec<(usize, MeasSrc, f64, f64, bool)>);
 type MeasWork<'a> = (usize, &'a [f32], f64, f64, bool);
 type MeasDone = (u64, Vec<(usize, Stats, oos_dsp::measure::Analysis)>);
 
+/// The frame holds every sample of its acquisition: not min/max pairs, not a part read for a view.
+fn whole_frame(f: &crate::board::Frame) -> bool {
+    !f.envelope && f.acq.1 > 0 && f.ch.iter().any(|v| v.len() >= f.acq.1)
+}
+
 /// The measurements of a record, each channel on its own thread (the four channels of 100 kpts took 27 ms in a row
 /// on the unit); min/max pairs in time on the mean of neighbours (#118).
 fn measure_channels(work: &[MeasWork]) -> Vec<(usize, Stats, oos_dsp::measure::Analysis)> {
@@ -1523,6 +1533,11 @@ pub struct Ui {
     /// stays `last[0]`, the record measured and read out (`stop_replay`, docs/fork/stop-exact.md)
     stop_raw: Option<Record>,
     stop_pic: Option<Record>,
+    /// STOP: the view that holds the whole stored record, still to be asked of the hardware. The record shown at the
+    /// stop is the last one the screen took, and the memory of the hardware, which every view is read from, may hold
+    /// a later acquisition: that one is read whole first and is the record of the stop from then on (`stop_replay`).
+    /// With the time (`now`) after which it is no longer waited for
+    stop_whole: Option<((f64, f64), f64)>,
     /// STOP: the record shown was loaded from a session, with its samples. What the hardware has in its memory is
     /// another acquisition, so the STOP does not read that again in its place (`stop_replay`); RUN ends it
     loaded_record: bool,
@@ -1634,6 +1649,15 @@ pub struct Ui {
     ref_src: usize,
     /// files the Import slot picker is showing
     ref_files: Vec<std::path::PathBuf>,
+    /// the files of commands Storage > Run SCPI file offers on the scope, the newest first
+    scpi_files: Vec<std::path::PathBuf>,
+    /// Storage > Run SCPI file: the file to run, and the stop of the one that runs. The interpreter takes them at
+    /// its next poll (`Scpi::replay_tick`) and says here whether a file runs.
+    pub scpi_replay_file: Option<std::path::PathBuf>,
+    pub scpi_replay_cancel: bool,
+    pub scpi_replaying: bool,
+    /// the desktop build asks for the file with its Open dialog (desktop.rs)
+    pub open_scpi_request: bool,
     xy: bool,
     /// the XY plot's X and Y channels (the Add panel sets them; the default is CH1 against CH2)
     xy_src: [usize; 2],
@@ -1948,6 +1972,7 @@ impl Ui {
             stop_ti_off: None,
             stop_raw: None,
             stop_pic: None,
+            stop_whole: None,
             loaded_record: false,
             t_fast: 0.0,
             t_fast_ab: (0.0, 0.0),
@@ -2014,6 +2039,11 @@ impl Ui {
             ref_sel: 0,
             ref_src: 0,
             ref_files: Vec::new(),
+            scpi_files: Vec::new(),
+            scpi_replay_file: None,
+            scpi_replay_cancel: false,
+            scpi_replaying: false,
+            open_scpi_request: false,
             xy: false,
             xy_src: [0, 1],
             hist_ch: None,
@@ -3038,10 +3068,10 @@ impl Ui {
 
     /// The frame a read of the memory takes (RAW, the memory save). In STOP the record shown is read again for every
     /// view (`stop_replay`), far zoomed in as the samples of the view and a margin only: then the record of the stop
-    /// itself, when it holds every sample of the acquisition, stays the memory, whatever the view shows of it.
+    /// itself, when it holds every sample of the acquisition, stays the memory, whatever the view shows of it. That
+    /// record is the acquisition the views are read from: `stop_replay` reads it whole from the hardware first.
     fn memory_raw(&self) -> Option<&Raw> {
-        let whole = |r: &&Raw| !r.frame.envelope && r.frame.acq.1 > 0 && r.frame.ch.iter().any(|v| v.len() >= r.frame.acq.1);
-        let stop = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(whole);
+        let stop = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame));
         stop.or_else(|| self.last[0].as_ref()?.raw.as_ref())
     }
 
@@ -3288,6 +3318,7 @@ impl Ui {
         if !self.record_mode() && live && (self.m.run == RunState::Run || self.stop_final.is_some() || (self.last[0].is_none() && !self.cleared)) {
             if self.m.run == RunState::Run {
                 self.stop_ti_off = None;
+                self.stop_whole = None;
                 (self.stop_raw, self.stop_pic) = (None, None);
                 self.loaded_record = false;
             }
@@ -3729,6 +3760,7 @@ impl Ui {
         if !ok {
             self.src.hw_stop(None);
             self.stop_ti_off = None;
+            self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
             return;
         }
@@ -3742,14 +3774,38 @@ impl Ui {
                 let ti = raw.i0 as f64 - raw.t0 / f.dt;
                 (ti - f.fixed_ti.unwrap_or(f.pre as f64)) * f.dt
             });
+            // that record is the last one the screen took. The hardware goes on to the end of its batch, so what its
+            // memory holds, and every view below is read from, may be a later acquisition: the screen and the
+            // measurements showed one acquisition and the memory read out (RAW) another (seen on a unit, 2026-11-18:
+            // a 2.16 V peak on the screen that was not in the memory). A whole record is so read whole once more
+            // first, with a view that holds all of it, and what comes is the record of the stop
+            self.stop_whole = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame)).map(|r| {
+                let (n, f) = (r.frame.acq.1 as f64, &r.frame);
+                ((n * f.dt / HDIV as f64, (n / 2.0 - f.pre as f64) * f.dt), self.now + STOP_WHOLE_WAIT)
+            });
+        }
+        // no answer (the read failed, or the hardware holds no record to read again): the views are not kept waiting
+        if self.stop_whole.is_some_and(|w| self.now > w.1) {
+            self.stop_whole = None;
         }
         let view = (self.m.time_per_div() as f64, self.m.delay as f64);
-        let Some(mut f) = self.src.hw_stop(Some(view)) else { return };
+        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.map_or(view, |w| w.0))) else { return };
         if let (Some(t), Some(off)) = (f.fixed_ti, self.stop_ti_off) {
             f.fixed_ti = Some(t + off / f.dt);
         }
+        let whole = whole_frame(&f);
         let window = view.0 * HDIV as f64;
         let rec = crate::board::to_record(&std::sync::Arc::new(f), &self.m, 3600, window, view.1 - window / 2.0);
+        if self.stop_whole.take().is_some() {
+            // not whole (a record the hardware reads as pairs at that view): the record of the stop stays. Either
+            // way the view shown is asked for next
+            if whole {
+                self.stop_raw = Some(rec.clone());
+                (self.last[0], self.stop_pic) = (Some(rec), None);
+                self.measure_last();
+            }
+            return;
+        }
         // a view read as min/max pairs (zoomed out on a record above `LIVE_READ`: the whole record compressed) after a
         // STOP on a raw record (the final frame of a deep record): the pairs are drawn, the raw record stays the one
         // measured and read out; pairs hold no Mean, RMS or Std dev (A3 of the 2026-11-16 review). A view read raw (far
@@ -4724,6 +4780,7 @@ impl Ui {
             }
             // whatever the hardware still holds is not this record
             self.stop_ti_off = None;
+            self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
@@ -6582,11 +6639,11 @@ impl Ui {
     pub(super) fn toast_is_info(s: &str) -> bool {
         s == NOTHING_TO_CLEAR || s == "Views off" || s.ends_with(" turned on") || s.starts_with("Generating ") || (s.starts_with("View ") && s.contains(" of "))
             // the SCPI recorder says what it wrote: nothing went wrong
-            || s == "SCPI recorder on" || s.starts_with("Recorded ")
+            || s == "SCPI recorder on" || s.starts_with("Recorded ") || s.starts_with("Running ")
     }
 
     pub(super) fn toast_is_success(s: &str) -> bool {
-        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared") || s.starts_with("Copied ") || (s.starts_with("Zone ") && s.ends_with(" deleted")) || s.ends_with(" added") || s.contains(" added to R") || s.ends_with(" removed") || s.contains(" \u{b7} ") || s.starts_with("Loaded ") || s.starts_with("Saved ") || s.contains(" loaded from ") || s.starts_with("Restored ") || s.contains(" saved to ") || s.starts_with("Returned to live") || s.starts_with("Fit ")
+        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared") || s.starts_with("Copied ") || (s.starts_with("Zone ") && s.ends_with(" deleted")) || s.ends_with(" added") || s.contains(" added to R") || s.ends_with(" removed") || s.contains(" \u{b7} ") || s.starts_with("Loaded ") || s.starts_with("Saved ") || s.starts_with("Ran ") || s.contains(" loaded from ") || s.starts_with("Restored ") || s.contains(" saved to ") || s.starts_with("Returned to live") || s.starts_with("Fit ")
     }
 
     fn draw_toast(&self, cv: &mut Canvas) {
@@ -7119,7 +7176,7 @@ impl Ui {
                 }
                 v
             }
-            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi, Item::StoreRecScpi],
+            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi, Item::StoreRecScpi, Item::StoreRunScpi],
             MenuId::Spectrum => vec![Item::SpecOn, Item::SpecSrc, Item::SpecCenter, Item::SpecSpan, Item::SpecHarm, Item::SpecRbw, Item::SpecWin, Item::SpecTrace, Item::SpecRef, Item::SpecWf, Item::SpecDist, Item::SpecAcprW, Item::SpecAcprS, Item::SpecPeak, Item::SpecMargin, Item::SpecLimitSet, Item::SpecLimitClear],
             MenuId::Eye => vec![Item::EyeAct, Item::EyeOn, Item::EyePlace, Item::EyeSrc, Item::EyeRate, Item::EyeBer, Item::EyeB, Item::EyeHp, Item::EyePnLo, Item::EyePnHi, Item::EyeNpj, Item::EyeRail, Item::EyeNotch, Item::EyePll, Item::EyeClear],
             MenuId::Power => {
@@ -7773,6 +7830,7 @@ impl Ui {
 
     /// Row label, with the trigger rows named after their role in the selected trigger type.
     fn item_label(&self, it: Item) -> &'static str {
+        if it == Item::StoreRunScpi && self.scpi_replaying { return "Stop SCPI file"; }
         if it == Item::SimPlay {
             if self.sim_generating() { return "Cancel generation"; }
             return if !self.sim_mode() { "Run simulation mode" } else if self.m.run == RunState::Run { "Stop simulation" } else { "Run simulation" };
@@ -8008,7 +8066,7 @@ impl Ui {
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
             Item::RefSave | Item::RefSaveNext | Item::RefClear | Item::RefClearOne => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
-            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
+            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRunScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
@@ -8053,6 +8111,7 @@ impl Ui {
             Item::StoreSaveSetup => "Save setup",
             Item::StoreSaveScpi => "Save setup as SCPI",
             Item::StoreRecScpi => "SCPI recorder",
+            Item::StoreRunScpi => "Run SCPI file",
             Item::StoreRecall => "Recall setup",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
@@ -9254,6 +9313,11 @@ impl Ui {
                     self.close_picker();
                     self.ssh_remove_pick(k);
                 }
+                Item::PickOpt(k) if self.pick.map_or(false, |p| p.it == Item::StoreRunScpi) => {
+                    let p = self.scpi_files.get(k).cloned();
+                    self.close_picker();
+                    self.scpi_replay_file = p;
+                }
                 Item::PickOpt(k) if self.pick.map_or(false, |p| p.it == Item::RefImport) => {
                     let p = self.ref_files.get(k).cloned();
                     self.close_picker();
@@ -9436,6 +9500,7 @@ impl Ui {
                     self.toast_saved(&p, r);
                 }
                 Item::StoreSaveScpi => self.setup_scpi_request = true,
+                Item::StoreRunScpi => self.scpi_run_ask(),
                 Item::StoreRecall => self.recall_setup(),
                 Item::StoreCsv => self.store_wave(true, None),
                 Item::StorePng => {
@@ -9729,6 +9794,32 @@ impl Ui {
         if self.scpi_rec_want { self.scpi_rec_actions.push((line.to_string(), Box::new(self.m.clone()))); }
     }
 
+    /// Storage > Run SCPI file. While a file runs the row stops it. Else it asks which file: the desktop build with
+    /// its Open dialog, the scope with the list of the `.scpi` files where Storage saves, the newest first, as Import
+    /// slot lists the waveform files. The file is not run before one is chosen, also when there is only one.
+    fn scpi_run_ask(&mut self) {
+        if self.scpi_replaying {
+            self.scpi_replay_cancel = true;
+            return;
+        }
+        if self.desktop_panel.is_some() {
+            self.close_menu();
+            self.open_scpi_request = true;
+            return;
+        }
+        let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> = std::fs::read_dir(self.save_dir()).into_iter().flatten()
+            .filter_map(|e| e.ok()).map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("scpi")))
+            .map(|p| (p.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH), p)).collect();
+        files.sort_by(|a, b| b.cmp(a));
+        self.scpi_files = files.into_iter().map(|x| x.1).collect();
+        if self.scpi_files.is_empty() {
+            self.toast("No SCPI file in storage");
+        } else {
+            self.open_picker(Item::StoreRunScpi);
+        }
+    }
+
     /// Storage > Save setup as SCPI and the SCPI recorder: writes the commands the interpreter made into a new file
     /// `<prefix>-NNN.scpi` where Storage saves (the name is taken now, when it is written). `note` is said after the
     /// name: what no line could carry, or how many commands were recorded.
@@ -9979,6 +10070,7 @@ impl Ui {
             Item::WlanNet => return self.wlan_net_options(),
             Item::WlanForgetNet => return self.wlan_forget_options(),
             Item::RefImport => return self.ref_files.iter().map(|p| crate::store::file_name(p)).collect(),
+            Item::StoreRunScpi => return self.scpi_files.iter().map(|p| crate::store::file_name(p)).collect(),
             Item::QuickAct => return QUICKS.iter().map(|q| q.name().to_string()).collect(),
             // Studio: the ten slots are one list (ui/sheet.rs)
             Item::RefSel if self.sheets_on() => return (1..=NREF).map(|i| format!("R{i}")).collect(),
@@ -12713,23 +12805,106 @@ mod tests {
         assert_eq!(ui.channel_points(0, true), n);
         ui.m.run = RunState::Stop;
         steps(&mut ui, 3);
-        assert!(shared.lock().unwrap().stop_view.is_some(), "the UI asks for the view read again");
+        // first the stored record whole: a view of the 80 us of the record, centred on it
+        let asked = shared.lock().unwrap().stop_view.expect("the UI asks for the stored record");
+        assert!((asked.0 / 8e-6 - 1.0).abs() < 1e-9 && asked.1.abs() < 1e-12, "{asked:?}");
         let origin = ui.channel_origin(0, true).unwrap();
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some(pre as f64), ..frame(2, v.clone()) });
+        steps(&mut ui, 2);
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "then the view shown: {asked:?}");
         // the thread's answer (`stop_plan`): the screen and a quarter screen each side, 93760 points from point 3120
         let (lo, len) = (3120usize, 93_760usize);
-        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(2, v[lo..lo + len].to_vec()) });
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(3, v[lo..lo + len].to_vec()) });
         steps(&mut ui, 2);
         let shown = ui.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| (r.frame.seq, r.frame.ch[0].len()));
-        assert_eq!(shown, Some((2, len)), "the view read again is the record shown");
+        assert_eq!(shown, Some((3, len)), "the view read again is the record shown");
         assert_eq!(ui.channel_points(0, true), n, "the memory is the whole record");
         assert_eq!(ui.channel_origin(0, true), Some(origin));
         assert_eq!(ui.channel_page(0, true, 1001, 1001).unwrap().0, vec![0.75]);
         // RUN: the record of the STOP is let go, the memory is that of the record shown again
         ui.m.run = RunState::Run;
-        shared.lock().unwrap().queue.push_back(frame(3, v));
+        shared.lock().unwrap().queue.push_back(frame(4, v));
         steps(&mut ui, 2);
         assert!(ui.stop_raw.is_none());
         assert_eq!(ui.channel_points(0, true), ui.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.ch[0].len());
+    }
+
+    // Break it catches: the memory read out after a STOP (RAW, the memory save) was the last record the screen had
+    // taken, while the screen and the measurements showed the record the hardware went on to store: two acquisitions.
+    // Seen on a unit, 2026-11-18: a 2.16 V peak on the screen and in Vmax that was not in the memory.
+    #[test]
+    fn the_memory_read_after_a_stop_is_the_acquisition_on_the_screen() {
+        use super::*;
+        let scope = || {
+            let shared: crate::board::HwShared = Default::default();
+            let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+            ui.m.run = RunState::Run;
+            ui.m.trig_level = 0.0;
+            ui.m.ch[0].offset = 0.0;
+            for c in 1..NCH {
+                ui.m.ch[c].on = false;
+            }
+            ui.m.meas = vec![(Meas::Vmax, WaveId::Ch(0))];
+            ui.m.meas2.clear();
+            ui.m.tscale = tscales().iter().position(|&t| (t as f64 - 5e-6).abs() < 1e-11).unwrap();
+            (ui, shared)
+        };
+        let (mut ui, shared) = scope();
+        let (n, pre) = (100_000usize, 50_000usize);
+        // an edge at the trigger point, and a pulse of its own height in each acquisition
+        let wave = |top: f32| -> Vec<f32> { (0..n).map(|i| if (60_000..60_100).contains(&i) { top } else if i < pre { -1.0 } else { 1.0 }).collect() };
+        let frame = |seq: u64, v: Vec<f32>| crate::board::Frame { seq, dt: 0.8e-9, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], acq: (1.25e9, n), ..Default::default() };
+        let steps = |ui: &mut Ui, k: usize| {
+            for _ in 0..k {
+                ui.step(0.02);
+            }
+        };
+        let memory_top = |ui: &Ui| ui.channel_page(0, true, 60_051, 60_051).unwrap().0[0];
+        // the screen takes one acquisition, the hardware stores another before it stops
+        shared.lock().unwrap().queue.push_back(frame(1, wave(1.5)));
+        steps(&mut ui, 3);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        assert_eq!(memory_top(&ui), 1.5);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some(pre as f64), ..frame(2, wave(2.25)) });
+        steps(&mut ui, 2);
+        let shown = |ui: &Ui| ui.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| r.frame.seq);
+        assert_eq!(shown(&ui), Some(2), "the stored record is the record shown");
+        assert!((ui.meas(0, Meas::Vmax) - 2.25).abs() < 1e-3, "Vmax {}", ui.meas(0, Meas::Vmax));
+        assert_eq!(memory_top(&ui), 2.25, "and the memory read out");
+        assert_eq!(ui.channel_points(0, true), n);
+        // a view of a part of it, read again: shown and measured, the memory stays that whole record
+        let (lo, len) = (3120usize, 93_760usize);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(3, wave(2.25)[lo..lo + len].to_vec()) });
+        steps(&mut ui, 2);
+        assert_eq!(shown(&ui), Some(3));
+        assert_eq!((ui.channel_points(0, true), memory_top(&ui)), (n, 2.25));
+        // an answer that is not the whole record (pairs) leaves the record of the stop as it is
+        let (mut ui, shared) = scope();
+        shared.lock().unwrap().queue.push_back(frame(1, wave(1.5)));
+        steps(&mut ui, 3);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some(pre as f64 / 2.0), envelope: true, dt: 1.6e-9, ..frame(2, wave(2.25)[..n / 2].to_vec()) });
+        steps(&mut ui, 2);
+        assert_eq!((shown(&ui), memory_top(&ui)), (Some(1), 1.5));
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "the view shown is asked for next: {asked:?}");
+        // the trigger a fifth into the record: the view asked for is centred on the record, 24 us after the trigger.
+        // No answer at all: after a second the view shown is asked for, the record of the stop as it was
+        let (mut ui, shared) = scope();
+        let early: Vec<f32> = (0..n).map(|i| if i < 20_000 { -1.0 } else { 1.0 }).collect();
+        shared.lock().unwrap().queue.push_back(crate::board::Frame { pre: 20_000, ..frame(1, early) });
+        steps(&mut ui, 3);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 8e-6 - 1.0).abs() < 1e-9 && (asked.1 / 24e-6 - 1.0).abs() < 1e-9, "{asked:?}");
+        steps(&mut ui, 60);
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "the view shown after the wait: {asked:?}");
+        assert_eq!((shown(&ui), ui.channel_points(0, true)), (Some(1), n));
     }
 
     // Break it catches: a session held the 3600 points of the screen, so a loaded capture had lost its samples: a

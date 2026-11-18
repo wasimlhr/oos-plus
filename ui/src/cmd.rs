@@ -16,6 +16,8 @@
 //!   do <label>               presses an item of the open menu (an action or a sub-menu)
 //!   pick <label>             opens the grid of all options of an item of the open menu (as a tap on its value)
 //!   stat [path]              write fps / frame count / state to /tmp/oos-ui.stat
+//!   replay <file>            runs a file of SCPI commands (scpi/replay.rs); a script goes on when it has ended
+//!   scpi <message>           host scripts only: one SCPI message, its answer printed
 //!   quit
 
 use crate::gfx::Canvas;
@@ -26,6 +28,10 @@ pub enum Out {
     None,
     Frames(u32),
     Shot(String),
+    /// a file of SCPI commands was given to run: the script runner waits for its end
+    Replay,
+    /// a SCPI message for the script runner's interpreter
+    Scpi(String),
 }
 
 /// Commands the web remote may run: its own buttons and touch gestures. The others name files or end the program;
@@ -116,6 +122,11 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
         "frames" if w.len() > 1 => return Out::Frames(num(w[1]).max(0) as u32),
         "shot" if w.len() > 1 => return Out::Shot(w[1].to_string()),
         "quit" => ui.quit = true,
+        "replay" if w.len() > 1 => {
+            ui.scpi_replay_file = Some(line.trim_start()[w[0].len()..].trim().into());
+            return Out::Replay;
+        }
+        "scpi" if w.len() > 1 => return Out::Scpi(line.trim_start()[w[0].len()..].trim().to_string()),
         "close" => ui.script_close(),
         "selfcal" if w.len() > 1 => ui.selfcal_remote_full(w[1], w[2..].contains(&"zero"), w[2..].contains(&"adc")),
         "storedir" if w.len() > 1 => ui.store_dir = w[1].into(),
