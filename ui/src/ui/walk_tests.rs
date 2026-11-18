@@ -1916,3 +1916,66 @@ fn a_channel_pill_is_as_wide_as_its_scale_needs() {
         }
     }
 }
+
+#[test]
+fn a_session_saved_in_the_offline_view_comes_back_in_it() {
+    let dir = std::env::temp_dir().join(format!("oos-walk-offline-session-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut u = fresh_live(Layout::Minimal);
+    u.store_dir = dir.clone();
+    u.set_offline(true);
+    // a capture long enough for the zoom window to open, loaded as a file is
+    let n = 20_000usize;
+    let header = format!(r#"{{"sampleType":"float32","nPoints":{n},"xincr":1e-6,"xzero":-0.01,"channel":"CH1"}}"#);
+    let mut file = b"PWWF0001".to_vec();
+    file.extend_from_slice(&(header.len() as u32).to_le_bytes());
+    file.extend_from_slice(header.as_bytes());
+    for i in 0..n {
+        file.extend_from_slice(&(if (i / 500) % 2 == 0 { 0.0f32 } else { 1.0 }).to_le_bytes());
+    }
+    u.load_waveform_auto(&file, "cap.pwwf").unwrap();
+    for _ in 0..4 { u.step(0.04); }
+    assert!(u.offline && u.offline_ref == 0 && u.m.zoom, "the capture fills the screen, zoom window open");
+    // the user moves the zoom window: that view is what the session keeps
+    u.m.zdelay += 0.002;
+    for _ in 0..2 { u.step(0.04); }
+    let view = (u.m.tscale, u.m.zoom, u.m.zscale);
+    let (tfine, delay, zdelay) = (u.m.tfine, u.m.delay, u.m.zdelay);
+    let named = dir.join("offline.oss");
+    u.session_save(named.to_str().unwrap()).unwrap();
+    let bytes = std::fs::read(&named).unwrap();
+    assert_eq!(crate::store::parse_session(&bytes, NREF).unwrap().offline_ref, Some(0));
+    // the same file without its end is a session too: that is what a build from before the view was kept reads
+    assert_eq!(crate::store::parse_session(&bytes[..bytes.len() - 12], NREF).unwrap().offline_ref, None);
+
+    // another start, live, with its own channels on
+    let mut v = fresh_live(Layout::Minimal);
+    v.store_dir = dir.clone();
+    assert!(!v.offline);
+    v.session_load(named.to_str().unwrap()).unwrap();
+    for _ in 0..4 { v.step(0.04); }
+    assert!(v.offline && v.offline_ref == 0 && v.record_mode(), "the offline view, on the slot that was shown");
+    assert!(v.m.ch.iter().all(|c| !c.on), "the analog channels stay off");
+    assert_eq!((v.m.tscale, v.m.zoom, v.m.zscale), view, "the time base and the zoom as saved");
+    assert!((v.m.tfine - tfine).abs() < 1e-6 && (v.m.delay - delay).abs() < 1e-9 && (v.m.zdelay - zdelay).abs() < 1e-7, "{} {} {}", v.m.tfine, v.m.delay, v.m.zdelay);
+    assert_eq!(v.refs[0].as_ref().unwrap().v.len(), n);
+
+    // a session saved with the live channels says nothing of a view and loads as before
+    let mut live = fresh_live(Layout::Minimal);
+    live.store_dir = dir.clone();
+    live.refs[1] = Some(RefWave { src: 0, color: 1, label: "kept".into(), t0: 0.0, dt: 1e-6, v: vec![0.25; 200].into(), vpd: 1.0, offset: 0.0, on: true });
+    let plain = dir.join("live.oss");
+    live.session_save(plain.to_str().unwrap()).unwrap();
+    let plain_bytes = std::fs::read(&plain).unwrap();
+    assert_eq!(crate::store::parse_session(&plain_bytes, NREF).unwrap().offline_ref, None);
+    v.session_load(plain.to_str().unwrap()).unwrap();
+    assert!(!v.offline, "a live session leaves the offline view");
+    // a view that names a slot the file does not hold is not a view
+    let mut odd = plain_bytes.clone();
+    odd.extend_from_slice(&crate::store::session_view(7));
+    assert_eq!(crate::store::parse_session(&odd, NREF).unwrap().offline_ref, None);
+    let mut held = plain_bytes;
+    held.extend_from_slice(&crate::store::session_view(1));
+    assert_eq!(crate::store::parse_session(&held, NREF).unwrap().offline_ref, Some(1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
