@@ -17,8 +17,12 @@ pub(super) const DETAIL_NAME_MAX: i32 = 170;
 /// Below this width the table uses them.
 pub(super) const DETAIL_NARROW_BELOW: i32 = 330;
 pub(super) const DETAIL_COLS: [(&str, i32); 8] = [("Source", 44), ("Name", 104), ("Value", 90), ("Mean", 84), ("Min", 84), ("Max", 84), ("\u{3c3}", 76), ("Count", 64)];
-/// Row height of the detailed table.
+/// Row height of the detailed table in a low panel (docked under the plot): five rows show in 230 px.
 pub(super) const DETAIL_ROW: i32 = 28;
+/// The same in a tall panel (docked at the side, or floating tall): a finger's height.
+pub(super) const DETAIL_ROW_TALL: i32 = 36;
+/// A panel at least this high has the tall rows.
+const DETAIL_TALL_FROM: i32 = 380;
 /// Height of the column heads of the table.
 pub(super) const COL_HEAD: i32 = 24;
 /// Extra height of a list row for the line of statistics.
@@ -47,7 +51,7 @@ impl Ui {
         let mut out = Vec::new();
         for pos in first..listed.len() {
             let group_first = multi && (pos == first || rows[listed[pos - 1]].src != rows[listed[pos]].src);
-            let h = if self.studio_detailed() { DETAIL_ROW } else { body + if group_first { super::studio::GROUP_BAND } else { 0 } };
+            let h = if self.studio_detailed() { self.detail_row_h() } else { body + if group_first { super::studio::GROUP_BAND } else { 0 } };
             if y + h > list.bottom() { break; }
             out.push((pos, Rect::new(list.x, y, list.w, h)));
             y += h;
@@ -158,9 +162,14 @@ impl Ui {
 
     /// The rows of the table that are on the page, partly visible ones too: (index in `listed`, rectangle). The rows move by
     /// pixels: `sub` is how far the first one is scrolled up.
+    pub(super) fn detail_row_h(&self) -> i32 {
+        match self.studio_panel_rect() { Some(p) if p.h >= DETAIL_TALL_FROM => DETAIL_ROW_TALL, _ => DETAIL_ROW }
+    }
+
     pub(super) fn detail_layout(&self, g: &studio::PanelGeo, total: usize, first: usize) -> Vec<(usize, Rect)> {
-        let sub = self.studio.panel.sub.clamp(0, DETAIL_ROW - 1);
-        (first..total).map(|pos| (pos, Rect::new(g.list.x, g.list.y + (pos - first) as i32 * DETAIL_ROW - sub, g.list.w, DETAIL_ROW)))
+        let row = self.detail_row_h();
+        let sub = self.studio.panel.sub.clamp(0, row - 1);
+        (first..total).map(|pos| (pos, Rect::new(g.list.x, g.list.y + (pos - first) as i32 * row - sub, g.list.w, row)))
             .take_while(|(_, r)| r.y < g.list.bottom()).collect()
     }
 

@@ -2,7 +2,7 @@
 
 Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see [common](common.md)) and the setup block `:SYSTem:SETup` (see [system](system.md)) are the same setup files.
 
-Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI). Save setup as SCPI writes the lines of [`:SYSTem:SETup:SCPI?`](system.md) to a new file.
+Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI, SCPI recorder). Save setup as SCPI writes the lines of [`:SYSTem:SETup:SCPI?`](system.md) to a new file. SCPI recorder writes what is set at the scope as commands while it is on and saves them as a file when it is switched off ([`:SYSTem:RECorder:STATe`](system.md)).
 
 Part of the [SCPI reference](README.md).
 

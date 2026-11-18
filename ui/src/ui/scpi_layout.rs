@@ -431,7 +431,8 @@ impl Ui {
             // (a row that is hidden has no badges on the screen)
             if self.studio_badges_visible() {
                 for (key, r) in self.studio_badges() { push("BADGE", format!("{key:?}"), r); }
-                push("BADGE", "Badge row menu".into(), self.studio_row_btn());
+                // the one button at the end of the row ("Meas", a dot and the count): it opens the table
+                push("BADGE", "Meas".into(), self.studio_list_chip());
             }
             // the zoom row: the buttons of the Default layout's row, by their names
             if let Some(bar) = self.studio_zoom_bar() {
@@ -471,8 +472,6 @@ impl Ui {
         if self.studio.ctx.is_some() { return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect(); }
         if let Some(p) = &self.workspace.popup { return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect(); }
         if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
-        // the menu of the badge row's button
-        if let Some(rows) = self.studio_row_menu() { return rows.into_iter().map(|(act, r)| (self.studio_row_act(act).0.to_string(), r)).collect(); }
         // the View menu of the Studio bar, and the popup of Add source in the bottom bar
         if self.studio.view_menu {
             use super::studio::{STUDIO_VIEWS, VIEW_ADD, VIEW_BADGES, VIEW_COMPACT, VIEW_RESET};
@@ -498,7 +497,6 @@ impl Ui {
             else if self.studio.ctx.is_some() { "Context".to_string() }
             else if let Some(p) = &self.workspace.popup { p.title.clone() }
             else if self.studio.add_menu { "Add".to_string() }
-            else if self.studio.row_menu { "Badge row".to_string() }
             else if self.studio.view_menu { "View".to_string() }
             else if self.studio.ch_picker { "Add source".to_string() }
             else if self.menu_open { self.menu_title(self.menu).to_string() }
@@ -541,7 +539,6 @@ impl Ui {
         self.studio.add_menu = false;
         self.studio.view_menu = false;
         self.studio.ch_picker = false;
-        self.studio.row_menu = false;
         if self.menu_open { self.close_menu(); }
         self.relayout();
     }

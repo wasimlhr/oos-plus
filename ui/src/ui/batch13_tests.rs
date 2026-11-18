@@ -80,7 +80,8 @@ fn the_switch_in_the_header_toggles_list_and_detailed_and_is_saved() {
     assert!(!u.studio_detailed());
     tap(&mut u, seg(s, 2));
     assert!(u.studio_detailed() && u.m.studio_detail);
-    assert_eq!(u.studio_panel_row(), super::measview::DETAIL_ROW);
+    // (the panel at the side is tall: its rows are a finger high; a low panel has `DETAIL_ROW`)
+    assert_eq!(u.studio_panel_row(), super::measview::DETAIL_ROW_TALL);
     // saved with the Studio setup, and read back
     let text = crate::store::setup_text(&u.m);
     assert!(!text.contains("studio_meas_view"), "the table is the default: nothing is written");

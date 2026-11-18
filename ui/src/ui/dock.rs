@@ -634,7 +634,7 @@ impl Ui {
     pub(super) fn dock_fit_float(&self, k: VKind, r: Rect, reg: Rect) -> Rect {
         let (mw, mh) = k.float_min();
         let w = r.w.clamp(mw, reg.w.max(mw));
-        let h = r.h.clamp(mh, reg.h.max(mh));
+        let mut h = r.h.clamp(mh, reg.h.max(mh));
         let x = r.x.clamp(reg.x, (reg.right() - w).max(reg.x));
         let mut y = r.y.clamp(reg.y, (reg.bottom() - h).max(reg.y));
         // never over the corner buttons of the plot: beside them
@@ -650,7 +650,10 @@ impl Ui {
         if k != VKind::Wave && self.studio_zoom_active() && !self.view_on() {
             let bar = self.zoom_readout();
             if x < bar.right() && x + w > bar.x && y < bar.bottom() + 2 && y + h > bar.y {
-                y = (bar.bottom() + 2).min((reg.bottom() - h).max(reg.y));
+                // under it, and no higher than what is left there (the open toolbar is a finger high)
+                y = bar.bottom() + 2;
+                h = h.min((reg.bottom() - y).max(mh));
+                y = y.min((reg.bottom() - h).max(reg.y));
             }
         }
         Rect::new(x, y, w, h)
@@ -903,7 +906,10 @@ impl Ui {
     pub(super) fn dock_view_rect(&self, k: VKind, r: Rect) -> Option<Rect> {
         if k != VKind::Measure || !matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline) { return None; }
         let base = self.dock_extra_rect(k, r).map_or(Self::dock_close_rect(r).x, |e| e.x);
-        Some(Rect::new(base - 76, r.y, 76, STRIP_HIT.min(r.h)))
+        // three segments of 32 px (they were 25) where the strip has the room; a panel under 250 px keeps the narrow
+        // ones, or the switch would take the strip it is dragged by
+        let w = if r.w >= 250 { 96 } else { 76 };
+        Some(Rect::new(base - w, r.y, w, STRIP_HIT.min(r.h)))
     }
     /// The strip of the measurements panel has its controls in it (wide panels): the content under the strip.
     fn dock_bar_content(&self, k: VKind, r: Rect) -> Option<Rect> {

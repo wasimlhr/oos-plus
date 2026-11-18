@@ -19,8 +19,8 @@ row was missing, the line that says where aliasing starts). The gaps were at the
   the list of what is selected.
 - The trigger pill named the type only for the types without an edge, and never the sweep. The time pill had no delay
   and no zoom scale. The cards of the Default layout say all of it.
-- The acquisition read-out opened the Acquire page, as in Default, but it was plain text, and nobody took it for a
-  control.
+- The acquisition read-out opened the Acquire page, as in Default, but it did not say the mode, and nothing said
+  that it opens a page. (It has three named columns since: sample rate, memory and mode.)
 - The Acquire sheet holds seven rows. Averaging on the hardware and hardware segments add more, and the page then
   opens as the dialog instead (read from the code, not seen on a unit).
 - The Studio bar had a SIM button, which ADR 0007 took out of the Default bar, and no Cursor button, which the
@@ -39,16 +39,16 @@ A row has the same kind of control on the sheet as in the dialog. A choice of up
 label column gives it the room the label does not need. A list keeps its minus and plus, and its value opens the
 list. Where the options do not fit the width of the sheet even then, the row is a list, and the test names it.
 
-What a bar of the Default layout says, the Studio bar says too: the read-out has the rate, the depth and the mode and
-is a button; the time pill has the delay or the zoom scale; the trigger pill has the type and the sweep.
+What a bar of the Default layout says, the Studio bar says too: the read-out has the rate, the depth and the mode, and
+a tap on it opens Acquire; the time pill has the delay or the zoom scale; the trigger pill has the type and the sweep.
 
 There is one Measure page for every layout, Studio included. Studio's Add panel stays as the short way to add a
 measurement on one source with the plot in view: Add > Measurement and the Measure key open it, a button beside its
 close button opens the page, and a button in the same place on the page leads back. Menu > Measure opens the page.
 
 ADR 0007 holds for the Studio bar: what belongs to one menu is an entry of the Menu, so SIM has no button there.
-Cursor is used all the time while measuring and has its button, as in the Default bar; it opens the Cursor menu,
-whose first row is the Mode row of the Default menu (Off, Time, Volt, Track, XY).
+Cursors are used all the time while measuring and have their button, as in the Default bar: a tap puts them on, the
+next one opens the Cursor menu, whose first row is the Mode row of the Default menu (Off, Time, Volt, Track, XY).
 
 ## Alternatives
 
@@ -66,8 +66,8 @@ whose first row is the Mode row of the Default menu (Off, Time, Volt, Track, XY)
 - A new row of a menu needs a place in the sheet's plan, or the test fails. That is the point.
 - The control column of a sheet no longer starts at one x for every row: a row with a short label and a wide choice
   starts earlier.
-- A channel pill of the bottom bar always shows its scale: the Add chip and the generator's pill take their short
-  form before a pill gets too narrow, and a scale that still does not fit takes the small font and is cut at its
+- A channel pill of the bottom bar always shows its scale: the generator's pill takes its short form
+  before a pill gets too narrow, and a scale that still does not fit takes the small font and is cut at its
   end, never left out.
 - The pills have a second line only while both fonts fit a pill (the Normal text size). At the larger sizes the
   trigger pill has the type in front of the source instead, and the time pill keeps the scale alone.

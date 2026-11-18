@@ -159,6 +159,7 @@ impl Ui {
             self.toast("Autoset needs a live channel; use Fit record");
             return;
         }
+        self.rec_action(":AUToscale");
         if self.src.is_hw() { self.auto_start(); }
         else {
             autoset(&mut self.m, &self.src);

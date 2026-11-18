@@ -111,7 +111,7 @@ pub(super) struct Studio {
     pub unpinned: Vec<MeasKey>,
     /// measurements moved to the floating panel from a badge popup: listed there beside the pinned ones
     pub floated: Vec<MeasKey>,
-    /// the badge row is hidden (eye button, View > Show pinned badges)
+    /// the badge row is hidden (View > Show pinned badges)
     pub hide_badges: bool,
     /// the badge whose action popup is open
     pub popup: Option<MeasKey>,
@@ -125,8 +125,6 @@ pub(super) struct Studio {
     pub view_menu: bool,
     /// the Add menu under the top bar is open
     pub add_menu: bool,
-    /// the menu of the button at the right of the badge row is open
-    pub row_menu: bool,
     /// Measure is open as the page of every layout (categories, Selected, Settings), not as the quick Add panel
     pub meas_page: bool,
     /// the context menu of the plot (a long press on the lanes)
@@ -233,7 +231,7 @@ pub(super) struct StudioTop {
 const TOP_TIERS: usize = 3;
 /// The labels of the top bar per tier: Autoset, Clear, Force, + Add, Measure, Cursors, Display, Storage, View.
 pub(super) const TOP_LABELS: [[&str; 9]; TOP_TIERS] = [
-    ["Autoset", "Clear", "Force", "Add", "", "Cursor", "Display", "Storage", "View"],
+    ["Autoset", "Clear", "Force", "Add", "", "Cursors", "Display", "Storage", "View"],
     ["Auto", "Clear", "Force", "Add", "", "Cur", "Disp", "Store", "View"],
     ["Auto", "Clr", "Force", "Add", "", "Cur", "Disp", "Store", "View"],
 ];
@@ -270,13 +268,10 @@ pub(super) const OVERFLOW_W: i32 = 46;
 /// Height a list row gets for the header of its source.
 pub(super) const GROUP_BAND: i32 = 14;
 
-/// The short forms of the Add chip ("+ Add") and of the generator's pill (its name alone).
+/// The chip that adds a source, and the short form of the generator's pill (its name alone).
 const ADD_W: i32 = 62;
 const GEN_W: i32 = 56;
 const CHIP_H: i32 = 30;
-/// The read-out button of the top bar: the room left of its text, and right of it for the chevron.
-const ACQ_PAD_L: i32 = 10;
-const ACQ_PAD_R: i32 = 24;
 /// The pills of the bottom bar are the buttons pressed most: taller than a measurement badge of the row above them
 /// (`ROW_H` - 6 = 34), and the bar is 3 px more on either side.
 const BAR_CHIP_H: i32 = 40;
@@ -353,8 +348,6 @@ impl Ui {
         let token = self.studio.view.token();
         if self.m.studio_view != token { self.m.studio_view = token.to_string(); }
         if self.m.layout == Layout::Studio { self.studio_prune_ref_rows(); }
-        // a menu or a sheet that opens takes the place of the row's menu
-        if self.menu_open || self.studio.view_menu || self.studio.add_menu { self.studio.row_menu = false; }
         self.studio.badge_wrap = self.studio_badge_wrap_now();
         self.dock_sync_setup();
         self.studio_sync();
@@ -418,23 +411,10 @@ impl Ui {
         }
     }
 
-    /// The room the read-out's button asks of the bar before the other buttons shorten their labels: what the rate and
-    /// the depth need (the mode is added only where there is room left), never more than 290 px.
+    /// The room the read-out asks of the bar before the other buttons shorten their labels: what its caption needs,
+    /// never more than 260 px.
     pub(super) fn studio_acq_need(&self) -> i32 {
-        (self.fonts().mb.width(&self.studio_acq_caption()) + ACQ_PAD_L + ACQ_PAD_R).clamp(120, 290)
-    }
-
-    /// The button of the acquisition read-out and its text. It is as wide as its text, inside the room `t.acq`. While
-    /// the acquisition is live the mode follows the rate and the depth when the room holds it, as in the Default bar.
-    pub(super) fn studio_acq_chip(&self, t: &StudioTop) -> (Rect, String) {
-        let f = self.fonts();
-        let mut caption = self.studio_acq_caption();
-        if self.acq_caption().1 {
-            let with = format!("{caption} \u{b7} {}", self.acq_name());
-            if f.mb.width(&with) + ACQ_PAD_L + ACQ_PAD_R <= t.acq.w { caption = with; }
-        }
-        let w = (f.mb.width(&caption) + ACQ_PAD_L + ACQ_PAD_R).min(t.acq.w);
-        (Rect::new(t.acq.x, CHIP_Y, w, CHIP_H), caption)
+        (self.fonts().mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260)
     }
 
     /// Keeps the record views consistent with the session: Offline ends with the record session, and shows
@@ -457,11 +437,31 @@ impl Ui {
         }
     }
 
+    /// The acquisition of a live source as three small columns in the top bar: the sample rate, the memory depth and
+    /// the acquisition mode, each a label over its value. (A column of waveforms a second was taken out again: it
+    /// counted the records the screen took, not what the hardware acquires, and read wrong on a unit.) None while a
+    /// file or the SIM is analysed (the caption names the record then). Column widths hold the longest value of each,
+    /// so the bar does not move while the numbers change.
+    pub(super) fn studio_acq_cols(&self) -> Option<Vec<(&'static str, String, i32)>> {
+        if self.record_mode() || self.studio_back_badge() { return None; }
+        let f = self.fonts();
+        let (sr, depth) = self.live_rate_depth();
+        let mode = match self.m.acq { AcqMode::Normal => "Normal".to_string(), AcqMode::Peak => "Peak".into(), AcqMode::Average => format!("Avg {}", self.m.avg_count), AcqMode::HiRes => "High res".into() };
+        let w = |label: &str, widest: &str| f.s.width(label).max(f.mb.width(widest)) + 14;
+        Some(vec![
+            ("Sample rate", si_digits(sr, "Sa/s", 3), w("Sample rate", "888 MSa/s")),
+            ("Memory", si_digits(depth as f64, "pts", 3), w("Memory", "8.88 Mpts")),
+            ("Mode", mode, w("Mode", "Avg 1024")),
+        ])
+    }
+
     /// The top bar at the first tier (full labels) that leaves the acquisition caption room, else the shortest: labels
     /// shorten before anything is dropped, and every button stays reachable.
     pub(super) fn studio_top(&self) -> StudioTop {
-        // the read-out's button gets the room it needs (`studio_acq_need`) before the buttons give up width; when no
-        // tier has that much, the one with the most room is used and the caption is shortened to it
+        // the status caption gets the room it needs (`studio_acq_need`, up to 260 px) before the buttons give up
+        // width; when no tier has that much, the one with the most room is used and the caption is shortened to it
+        // (the three columns of a live acquisition are drawn where the tier chosen for the caption has their room: they
+        // do not ask for a shorter tier, which would take the buttons below a finger's width)
         let need = self.studio_acq_need();
         let mut t = self.studio_top_tier(0);
         let mut best = t.acq.w;
@@ -504,8 +504,7 @@ impl Ui {
         let view = place(labels[8]);
         let storage = place(labels[7]);
         let display = place(labels[6]);
-        // Cursor: the button of the Default bar. The desktop has no front panel with its key, and Add > Cursors only
-        // puts the cursors on
+        // Cursors: a tap puts them on, the next one opens their sheet (Add has them too, three taps deep)
         let cursors = place(labels[5]);
         // Add replaces the old "+ Add" and Meas buttons: one button, the menu has both
         let measure = Rect::new(-20, CHIP_Y, 0, CHIP_H);
@@ -569,13 +568,21 @@ impl Ui {
             cv.text_in(&f.mb, Rect::new(t.sim.x + 40, t.sim.y, (t.sim.w - 44).max(1), t.sim.h), 0, self.sim_preset_name(), if on { ACCENT } else { TEXT });
             cv.no_clip();
         }
-        // sample rate, depth and mode (the source in front of them) on a button like the others of the bar, with the
-        // chevron of the pills: a tap opens the page that sets them. As plain text it did not look like a control
-        let (acq, caption) = self.studio_acq_chip(&t);
+        // sample rate, depth and mode (or the source and its record): a tap opens the page that sets them
+        let caption = self.studio_acq_caption();
         let acq_open = self.menu_open && root == if self.record_mode() { MenuId::Ref } else { MenuId::Acquire };
-        btn(cv, acq, BTN, if acq_open { ACCENT } else { BTN_BORDER });
-        cv.text_fit(&f.mb, Rect::new(acq.x + ACQ_PAD_L, acq.y, (acq.w - ACQ_PAD_L - ACQ_PAD_R).max(1), acq.h), 0, &caption, if acq_open { ACCENT } else { TEXT });
-        chevron_down(cv, acq.right() - 16, acq.y + acq.h / 2 - 2, DIM);
+        match self.studio_acq_cols().filter(|c| c.iter().map(|x| x.2).sum::<i32>() <= t.acq.w) {
+            // sample rate, memory and mode: a small label over each value
+            Some(cols) => {
+                let mut x = t.acq.x;
+                for (label, value, w) in cols {
+                    cv.text_in(&f.s, Rect::new(x, 4, w - 6, 14), 0, label, DIM);
+                    cv.text_fit(&f.mb, Rect::new(x, 18, w - 6, 18), 0, &value, if acq_open { ACCENT } else { TEXT });
+                    x += w;
+                }
+            }
+            None => cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT }),
+        }
         // Measure, Cursors, View, settings: the Default button style
         let cursors = open(MenuId::Cursor) || self.m.cursor != CursorMode::Off;
         let adding = self.studio_add_chip_on();
@@ -617,22 +624,21 @@ impl Ui {
         // the sources that are on get a pill; the channels that are off share one "+ CH" chip
         let shown = self.shown_refs();
         let maths: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k)).collect();
-        let off = (0..n).filter(|&c| !self.m.ch[c].on).count();
-        // with every channel on the chip stays, as "Add source": math, ref and bus are behind it
-        let add_w = if off > 0 { ADD_W } else { 100 };
+        // the chip that adds a source: a channel that is off, math, a reference or a bus. One name, whatever is off
+        let add_w = ADD_W;
         // SIM plays refs, not the live channels: their pills are not on the bar then (Live brings them back)
         let chans: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
-        let show_w = if self.studio_badges_hidden() { 64 } else { 0 };
+        let show_w = if self.studio_badges_hidden() { 88 } else { 0 };
         let caps = &oos_hal::model::platform().caps;
         let la_w = if caps.la { 52 } else { 0 };
         let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { GEN_W } } else { 0 };
         // the source pills (channels, refs, math) share what the fixed chips leave, by count
         let count = (chans.len() + shown.len() + maths.len()) as i32;
-        // the fixed chips take their short form ("+ Add", "GEN") before a source pill is too narrow for its scale: with
-        // four channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
+        // the generator's pill takes its short form ("GEN") before a source pill is too narrow for its scale: with four
+        // channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
         let aux = |gen_w: i32| [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
         let tight = count > 0 && Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w)), count) < self.studio_ch_pill_need();
-        let (add_w, gen_w) = if tight { (add_w.min(ADD_W), gen_w.min(GEN_W)) } else { (add_w, gen_w) };
+        let gen_w = if tight { gen_w.min(GEN_W) } else { gen_w };
         let aux_w = aux(gen_w);
         let room = time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux_w);
         // a channel that is off has a small dim pill in its place: a tap switches it on. They give way when the
@@ -672,7 +678,7 @@ impl Ui {
         let mut ax = add.right() + 5;
         let la = (la_w > 0).then(|| { let r = Rect::new(ax, y, la_w, h); ax += la_w + 5; r });
         let gen = (gen_w > 0).then(|| { let r = Rect::new(ax, y, gen_w, h); ax += gen_w + 5; r });
-        let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, 58, bottom.h));
+        let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, 82, bottom.h));
         StudioBottom { ch, refs, math, add, show, la, gen, time, trig, panel }
     }
 
@@ -777,8 +783,8 @@ impl Ui {
         }
         if b.add.w > 0 {
             chip(cv, b.add, BTN, if self.studio.ch_picker { ACCENT } else { BTN_BORDER });
-            let all_on = (0..n_ch()).all(|c| self.m.ch[c].on);
-            let label = if all_on && b.add.w > ADD_W { "Add source" } else if all_on || (0..n_ch()).any(|c| !self.m.ch[c].on && b.ch[c].w > 0) { "+ Add" } else { "+ CH" };
+            // (it said "+ CH", "+ Add" or "Add source" by what was off, beside the Add of the top bar)
+            let label = "+ Source";
             cv.text_in(&f.sb, b.add, 1, label, if self.studio.ch_picker { ACCENT } else { TEXT });
         }
         // LA and GEN: a pill each, a dot for on / off and, for the generator, what it makes
@@ -807,7 +813,8 @@ impl Ui {
         if let Some(r) = b.show {
             chip(cv, Rect::new(r.x, r.y + 3, r.w, BAR_CHIP_H), BTN, BTN_BORDER);
             icon_eye(cv, r.x + 15, r.y + r.h / 2, TEXT);
-            cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Meas", TEXT);
+            // (it said "Meas", as the chip on the plot that opens the list does)
+            cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Badges", TEXT);
         }
         // the sections of the row are told apart by a line
         for x in [b.time.x - 5, b.trig.x - 5] {
@@ -851,9 +858,6 @@ impl Ui {
         let rest = if edge { 20 } else { 0 } + f.mb.width(&src) + 6 + f.mb.width(&levels);
         // one line: the type stands in front, and is cut short before the level is
         let kind = if two { String::new() } else { Self::studio_cut(&f.sb, &self.m.trig_type.name().to_uppercase(), room - rest - 6) };
-        let lead = if kind.is_empty() { 0 } else { f.sb.width(&kind) + 6 };
-        // the arrow says again what the edge sign says: it goes first when the line is short of room
-        let arrow = edge && self.m.slope != Slope::Either && lead + rest + 12 <= room;
         let mut x = r.x + 9;
         cv.set_clip(Rect::new(r.x + 2, r.y + 2, r.w - 2 - 20, r.h - 4));
         if !kind.is_empty() { x = cv.text(&f.sb, x, base, &kind, LABEL) + 6; }
@@ -862,21 +866,26 @@ impl Ui {
             x += 20;
         }
         x = cv.text(&f.mb, x, base, &src, col) + 6;
-        if arrow {
-            // the arrow of the edge: up for rising, down for falling
-            let (top, bot) = (base - 11, base + 1);
-            cv.vline(x + 3, top, bot, TEXT);
-            let (tip, foot) = if self.m.slope == Slope::Rise { (top, top + 4) } else { (bot, bot - 4) };
-            cv.line(x + 3, tip, x, foot, TEXT);
-            cv.line(x + 3, tip, x + 6, foot, TEXT);
-            x += 12;
+        // (the slope is the picture at the left; an arrow here said it a second time)
+        let x = cv.text(&f.mb, x, base, &levels, TEXT) + 8;
+        if two {
+            // the type and the sweep, each a text of its own
+            let (mut x, y) = (r.x + 9, r.y + 25 + BAR_DY);
+            for (i, part) in self.studio_trig_detail().split(" \u{b7} ").enumerate() {
+                if i > 0 { x = cv.text(&f.s, x, y, " \u{b7} ", LABEL); }
+                x = cv.text(&f.s, x, y, part, LABEL);
+            }
+        } else {
+            // one line: the sweep at the right, where it has the room. Auto, Normal or Single decide whether the
+            // picture moves at all
+            let sweep = match self.m.trig_mode { TrigMode::Auto => "Auto", TrigMode::Normal => "Normal", TrigMode::Single => "Single" };
+            if x + f.s.width(sweep) <= r.right() - 24 {
+                cv.text(&f.s, r.right() - 24 - f.s.width(sweep), base, sweep, DIM);
+            }
         }
-        cv.text(&f.mb, x, base, &levels, TEXT);
-        if two { cv.text(&f.s, r.x + 9, r.y + 25 + BAR_DY, &self.studio_trig_detail(), LABEL); }
         cv.no_clip();
         chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
         self.draw_studio_ch_picker(cv);
-        self.draw_studio_row_menu(cv);
     }
 
     /// The pills of the bottom bar have a small second line while both fonts fit the pill.
@@ -1003,8 +1012,9 @@ impl Ui {
         for c in 0..n_ch() {
             if !b.ch[c].contains(x, y) { continue; }
             // the coloured badge of a pill is the channel's switch, like its key; the rest of the pill opens its sheet
-            // (a pill too narrow to have both keeps the sheet: its Display row and a hold turn the channel off)
-            if self.m.ch[c].on && b.ch[c].w >= 110 && x < b.ch[c].x + 54 {
+            // (a pill that is its badge alone, under 70 px, keeps the sheet: its Display row and a hold turn the
+            // channel off). It was the switch from 110 px on only, so the same spot did two things as pills shrank
+            if self.m.ch[c].on && b.ch[c].w >= 70 && x < b.ch[c].x + 54 {
                 if self.menu_open { self.close_menu(); }
                 self.source_toggle(WaveId::Ch(c));
                 if !self.m.ch[c].on { self.toast(&format!("CH{} off", c + 1)); }
@@ -1125,7 +1135,6 @@ impl Ui {
         if self.studio_sz_taps(x, y) { return true; }
         if self.studio_view_tap(x, y) { return true; }
         if self.studio_add_tap(x, y) { return true; }
-        if self.studio.row_menu && self.studio_row_menu_tap(x, y) { return true; }
         if self.studio_ctx_tap(x, y) { return true; }
         if self.studio.ch_picker {
             let (rows, extras) = self.studio_picker_rows().unzip();
@@ -1218,8 +1227,7 @@ impl Ui {
         } else if hit(t.measure) {
             self.open_meas_list();
         } else if t.cursors.w > 0 && hit(t.cursors) {
-            // as the Cursor button of the Default bar: the menu, whose Mode row puts the cursors on and off
-            self.toggle_menu(MenuId::Cursor);
+            self.studio_cursors_tap();
         } else if hit(t.display) {
             self.toggle_menu(MenuId::Display);
         } else if hit(t.storage) {
@@ -1379,20 +1387,6 @@ pub(super) const SEARCH_ARROW_W: i32 = 46;
 /// Width of the action popup of a badge, and the height of its rows.
 const POPUP_W: i32 = 300;
 const POPUP_ROW: i32 = 40;
-/// Width of the menu of the badge row's button.
-const ROW_MENU_W: i32 = 250;
-
-/// What the one button at the right of the badge row offers. It stands for the three buttons the row had: the list
-/// (the table of the measurements, or the compact view), the badge style and the eye.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum RowAct {
-    /// the table of the measurements beside the lanes, or the lanes alone again
-    Table,
-    Compact,
-    Classic,
-    Hide,
-}
-pub(super) const ROW_ACTS: [RowAct; 4] = [RowAct::Table, RowAct::Compact, RowAct::Classic, RowAct::Hide];
 
 /// Two short stacked bars that move together: the compact view.
 fn icon_compact(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
@@ -1577,8 +1571,8 @@ impl Ui {
             Some((key, f.s.width(&self.studio_badge_name(key, &r.name))))
         }).collect();
         let (span_x, span_w) = self.plot_span();
-        // the row ends before the button at its right (`studio_row_limit`, without the row's own rectangle)
-        let (x0, limit) = (span_x + 4, span_x + span_w - 44);
+        // the row ends before the buttons at its right (`studio_row_limit`, without the row's own rectangle)
+        let (x0, limit) = (span_x + 4, span_x + span_w - self.studio_row_tail());
         let value = f.sb.width("0.000 MHz");
         if self.studio_classic() { return self.classic_wrap_now(&names, value, limit - x0); }
         let mut x = x0;
@@ -1594,7 +1588,7 @@ impl Ui {
         if self.studio.compact && self.studio.view != StudioView::Sim { 210 } else { MEAS_PANEL_W_FULL }
     }
     pub(super) fn studio_panel_row(&self) -> i32 {
-        if self.studio_detailed() { return super::measview::DETAIL_ROW; }
+        if self.studio_detailed() { return self.detail_row_h(); }
         if self.panel_is_cards() { return super::measpanel::CARD_H + 4; }
         // the tallest a row gets: its body and the band of a header (the paging is by this)
         self.studio_row_body() + if self.studio_multi_source() && self.studio.view != StudioView::Sim { GROUP_BAND } else { 0 }
@@ -1606,7 +1600,26 @@ impl Ui {
         // a row with statistics has a small line more
         if self.studio_stats_any() && self.studio.view != StudioView::Sim { base + super::measview::STATS_LINE } else { base }
     }
-    /// Studio or Classic badges: the button in the row and Measure > Badge style set the same flag.
+    /// The one button at the right end of the row, on its last line (the row grows upwards: the button stays): "Meas"
+    /// and how many there are. It opens the table of the measurements. The row had three buttons of an icon each here
+    /// (badge style, compact view or list, eye), then this one and the eye. The style is Measure > Badge style; the
+    /// compact view and Show pinned badges, which hides the row, are in the View menu.
+    pub(super) fn studio_list_chip(&self) -> Rect {
+        let r = self.studio_row();
+        let (w, h) = (self.studio_list_chip_w(), self.studio_chip_h());
+        Rect::new(r.right() - 4 - w, r.bottom() - 3 - h, w, h)
+    }
+
+    fn studio_list_chip_w(&self) -> i32 {
+        self.fonts().sb.width("Meas \u{b7} 00") + 30
+    }
+
+    /// What the button at the right end of the row takes from it (`studio_row_limit`, without the row's rectangle).
+    fn studio_row_tail(&self) -> i32 {
+        4 + self.studio_list_chip_w() + 6
+    }
+
+    /// Studio or Classic badges (Measure > Badge style).
     pub(super) fn studio_set_classic(&mut self, on: bool) {
         self.m.studio_classic = on;
         self.studio.popup = None;
@@ -1614,111 +1627,16 @@ impl Ui {
         self.relayout();
     }
 
-    /// The one button at the right end of the row, on its last line (the row grows upwards: the button stays). It
-    /// carries the number of measurements and opens the menu of the row (`studio_row_menu`). The row had three buttons
-    /// here (badge style, list, eye); one leaves their room to two more badges.
-    pub(super) fn studio_row_btn(&self) -> Rect {
-        let r = self.studio_row();
-        let h = self.studio_chip_h();
-        Rect::new(r.right() - 38, r.bottom() - 3 - h, 34, h)
+    /// Hides the row of badges (View > Show pinned badges). The Undo bar and the chip of the bottom bar bring it back.
+    pub(super) fn studio_hide_badges(&mut self) {
+        self.studio.hide_badges = true;
+        self.studio.md.hide_undo = Some(self.now);
+        self.relayout();
     }
 
-    /// Where the badges end: before the button.
+    /// Where the badges end: before the Meas button.
     pub(super) fn studio_row_limit(&self) -> i32 {
-        self.studio_row_btn().x - 6
-    }
-
-    /// The menu of the row's button while it is open: its rows, over the button.
-    pub(super) fn studio_row_menu(&self) -> Option<Vec<(RowAct, Rect)>> {
-        if !self.studio.row_menu || !self.studio_badges_visible() { return None; }
-        let b = self.studio_row_btn();
-        let h = ROW_ACTS.len() as i32 * POPUP_ROW;
-        let x = (b.right() - ROW_MENU_W).max(4);
-        let y = (b.y - 14 - h).max(self.frame().top.bottom() + 4);
-        Some(ROW_ACTS.iter().enumerate().map(|(i, &a)| (a, Rect::new(x + 4, y + 4 + i as i32 * POPUP_ROW, ROW_MENU_W - 8, POPUP_ROW))).collect())
-    }
-
-    /// What a row of the menu says, and whether it is on (None: an action, not a switch).
-    pub(super) fn studio_row_act(&self, a: RowAct) -> (&'static str, Option<bool>) {
-        match a {
-            RowAct::Table => ("Measurement table", Some(self.studio_panel_shown())),
-            RowAct::Compact => ("Compact view", Some(self.studio.compact)),
-            RowAct::Classic => ("Classic badges", Some(self.m.studio_classic)),
-            RowAct::Hide => ("Hide badges", None),
-        }
-    }
-
-    /// A row of the menu. The two switches leave the menu open, so both can be set in one go.
-    pub(super) fn studio_row_do(&mut self, a: RowAct) {
-        match a {
-            RowAct::Table => {
-                self.studio.row_menu = false;
-                let view = if self.studio_panel_shown() { StudioView::Waveform } else { StudioView::Docked };
-                self.studio_set_view(view);
-            }
-            RowAct::Compact => self.studio_set_compact(!self.studio.compact),
-            RowAct::Classic => self.studio_set_classic(!self.m.studio_classic),
-            RowAct::Hide => {
-                self.studio.row_menu = false;
-                self.studio.hide_badges = true;
-                self.studio.md.hide_undo = Some(self.now);
-                self.relayout();
-            }
-        }
-    }
-
-    fn draw_studio_row_menu(&self, cv: &mut Canvas) {
-        let Some(rows) = self.studio_row_menu() else { return };
-        let f = self.fonts();
-        let (first, last) = (rows[0].1, rows[rows.len() - 1].1);
-        let p = Rect::new(first.x - 4, first.y - 4, first.w + 8, last.bottom() - first.y + 8);
-        cv.round(p, 8, BTN_BORDER, 255);
-        cv.round(p.inset(1), 7, PANEL_BG, 255);
-        cv.hline(last.x + 6, last.right() - 6, last.y, LINE);
-        for (a, r) in rows {
-            let (label, on) = self.studio_row_act(a);
-            let (cx, cy) = (r.x + 20, r.y + r.h / 2);
-            match a {
-                RowAct::Table => { cv.rect(Rect::new(cx - 7, cy - 6, 14, 12), TEXT); cv.hline(cx - 7, cx + 6, cy, TEXT); cv.vline(cx, cy - 6, cy + 5, TEXT); }
-                RowAct::Compact => icon_compact(cv, cx, cy, TEXT),
-                RowAct::Classic => icon_badge_style(cv, cx, cy - 1, true, TEXT),
-                RowAct::Hide => icon_eye(cv, cx, cy, TEXT),
-            }
-            cv.text_in(&f.m, Rect::new(r.x + 40, r.y, r.w - 100, r.h), 0, label, TEXT);
-            match on {
-                // the count of the measurements stands on the row that lists them
-                Some(_) if a == RowAct::Table => {
-                    let n = if self.studio_panel_shown() { "On".to_string() } else { self.measurement_count().to_string() };
-                    cv.text_in(&f.sb, Rect::new(r.right() - 52, r.y, 44, r.h), 2, &n, if self.studio_panel_shown() { ACCENT } else { DIM });
-                }
-                Some(on) => {
-                    let sw = Rect::new(r.right() - 52, r.y + 9, 44, 22);
-                    cv.round(sw, 11, if on { ACCENT } else { BTN_BORDER }, 255);
-                    cv.circle(if on { sw.right() - 11 } else { sw.x + 11 }, sw.y + 11, 8, if on { DARK_TEXT } else { DIM });
-                }
-                None => {}
-            }
-        }
-    }
-
-    /// The button, then the row `a` of its menu, by two taps (tests).
-    #[cfg(test)]
-    pub(super) fn studio_row_pick(&mut self, a: RowAct) {
-        let b = self.studio_row_btn();
-        self.tap(b.x + b.w / 2, b.y + b.h / 2);
-        let r = self.studio_row_menu().expect("the menu of the row's button").into_iter().find(|(x, _)| *x == a).expect("its row").1;
-        self.tap(r.x + r.w / 2, r.y + r.h / 2);
-        self.studio.row_menu = false;
-    }
-
-    /// A tap while the menu of the row's button is open: a row does its action, a tap elsewhere closes it. Always taken.
-    fn studio_row_menu_tap(&mut self, x: i32, y: i32) -> bool {
-        let Some(rows) = self.studio_row_menu() else { self.studio.row_menu = false; return false };
-        match rows.into_iter().find(|(_, r)| r.contains(x, y)) {
-            Some((a, _)) => self.studio_row_do(a),
-            None => self.studio.row_menu = false,
-        }
-        true
+        self.studio_list_chip().x - 6
     }
 
     /// The row of badges as (measurement, rectangle), as many as fit.
@@ -1826,19 +1744,13 @@ impl Ui {
             cv.text_in(&f.sb, r, 1, &format!("+{n}"), ACCENT);
         }
         self.draw_studio_tab(cv);
-        // the one button of the row: the list sign and the number of measurements; its menu has the table, the compact
-        // view, the badge style and Hide
-        let c = self.studio_row_btn();
-        let open = self.studio.row_menu;
-        chip(cv, c, if open { mix(BAR, ACCENT, 60) } else { BTN }, if open { ACCENT } else { BTN_BORDER });
-        icon_compact(cv, c.x + c.w / 2, c.y + c.h / 2, if open { ACCENT } else { TEXT });
-        if self.measurement_count() > 0 {
-            let n = self.measurement_count().to_string();
-            let w = f.s.width(&n) + 6;
-            let b = Rect::new(c.right() - w, c.y - 2, w, 14);
-            cv.round(b, 6, ACCENT, 255);
-            cv.text_in(&f.s, b, 1, &n, DARK_TEXT);
-        }
+        // the list of all measurements: a button that says so, with their number
+        let c = self.studio_list_chip();
+        chip(cv, c, BTN, BTN_BORDER);
+        cv.set_clip(c.inset(1));
+        cv.text_in(&f.sb, Rect::new(c.x + 8, c.y, c.w - 22, c.h), 0, &format!("Meas \u{b7} {}", self.measurement_count()), TEXT);
+        cv.no_clip();
+        chevron(cv, c.right() - 12, c.y + c.h / 2, 1, TEXT);
     }
 
     /// The popup of a badge: where it is.
@@ -1932,10 +1844,8 @@ impl Ui {
             self.studio_set_view(StudioView::Docked);
             return true;
         }
-        if Self::hit40(self.studio_row_btn()).contains(x, y) {
-            if self.menu_open { self.close_menu(); }
-            self.studio.popup = None;
-            self.studio.row_menu = true;
+        if Self::hit40(self.studio_list_chip()).contains(x, y) {
+            self.studio_set_view(StudioView::Docked);
             return true;
         }
         if self.studio_tab().is_some_and(|tab| tab.contains(x, y)) {
@@ -2166,8 +2076,14 @@ impl Ui {
             }
         }
         if self.studio_view_row(VIEW_BADGES).contains(x, y) {
-            self.studio.hide_badges = !self.studio.hide_badges;
-            self.relayout();
+            if self.studio.hide_badges {
+                self.studio.hide_badges = false;
+                self.studio.md.hide_undo = None;
+                self.relayout();
+            } else {
+                // with the Undo bar the eye of the row had
+                self.studio_hide_badges();
+            }
         } else if self.studio_view_row(VIEW_COMPACT).contains(x, y) {
             self.studio_set_compact(!self.studio.compact);
         } else if self.studio_view_row(VIEW_RESET).contains(x, y) {
@@ -2773,7 +2689,7 @@ impl Ui {
                 // full screen: its few buttons
                 if self.m.layout == Layout::Studio && self.full_on() && self.full_chrome_rects().is_some_and(|(a, b)| Self::hit40(a).contains(x, y) || Self::hit40(b).contains(x, y)) { return self.studio_eat(x, y); }
                 if self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() || self.m.touch_lock
-                    || self.studio.view_menu || self.studio.add_menu || self.studio.row_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.studio.md.menu.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
+                    || self.studio.view_menu || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.studio.md.menu.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
                 // the Add measurement panel is open: only its tiles can be dragged
                 if self.menu_open { return self.md_down(x, y); }
                 // the bars with an Undo are above the strips of the views

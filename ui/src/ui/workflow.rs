@@ -877,6 +877,13 @@ stat.push(value, current);
             self.toast("Load a waveform or start a simulation first");
             return true;
         }
+        // for the SCPI recorder: on a record the three keys act here, past the check above
+        match key_code {
+            key::RUNSTOP => self.rec_action(if self.m.run == RunState::Run { ":STOP" } else { ":RUN" }),
+            key::SINGLE => self.rec_action(":SINGle"),
+            key::FORCE => self.rec_action(":TFORce"),
+            _ => {}
+        }
         match key_code {
             key::RUNSTOP => {
                 if self.m.run == RunState::Run {

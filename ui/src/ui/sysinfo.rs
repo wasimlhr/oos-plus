@@ -46,7 +46,7 @@ fn uptime() -> Option<String> {
 }
 
 /// (available, total) bytes of RAM from /proc/meminfo.
-fn memory() -> Option<(u64, u64)> {
+pub(super) fn memory() -> Option<(u64, u64)> {
     let t = read("/proc/meminfo")?;
     let get = |k: &str| t.lines().find(|l| l.starts_with(k)).and_then(|l| l.split_whitespace().nth(1)).and_then(|v| v.parse::<u64>().ok()).map(|kb| kb * 1024);
     Some((get("MemAvailable:")?, get("MemTotal:")?))

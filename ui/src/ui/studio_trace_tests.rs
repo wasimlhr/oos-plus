@@ -306,10 +306,10 @@ fn studio_has_the_zoom_row_and_the_window_of_the_default_layout() {
     assert_eq!(s.items(MenuId::Horizontal), d.items(MenuId::Horizontal), "the Horizontal rows are those of Default");
 }
 
-/// The buttons of the zoom row and the button of the badge row are on the list of the screen's controls, and the
-/// menu of the badge row is read and pressed by name.
+/// The buttons of the zoom row and the one button of the badge row ("Meas" and the count) are on the list of the
+/// screen's controls. The Meas button opens the table of the measurements; it has no menu.
 #[test]
-fn the_zoom_row_and_the_badge_row_menu_are_listed_and_pressed_by_name() {
+fn the_zoom_row_and_the_meas_button_are_listed_and_pressed_by_name() {
     let mut u = zoomed(Layout::Studio);
     picture(&mut u, "zoom-elements");
     let els = u.ui_elements();
@@ -324,20 +324,17 @@ fn the_zoom_row_and_the_badge_row_menu_are_listed_and_pressed_by_name() {
         let reply = u.scpi_ext_command(&nodes, q, arg).expect("a header of the layout commands").expect("no error");
         reply.map(|b| String::from_utf8(b).unwrap()).unwrap_or_default()
     };
-    let btn = u.ui_elements().into_iter().find(|e| e.label == "Badge row menu").expect("the button of the badge row").rect;
+    let btn = u.ui_elements().into_iter().find(|e| e.kind == "BADGE" && e.label == "Meas").expect("the button of the badge row").rect;
+    assert_eq!(btn, u.studio_list_chip());
+    assert_ne!(u.studio.view, super::studio::StudioView::Docked);
     u.tap(btn.x + btn.w / 2, btn.y + btn.h / 2);
-    u.step(0.04);
-    assert_eq!(cmd(&mut u, ":UI:MENU?", ""), "\"Badge row\",\"Measurement table\",\"Compact view\",\"Classic badges\",\"Hide badges\"");
-    let compact = u.studio.compact;
-    cmd(&mut u, ":UI:MENU:SELect", "\"Compact view\"");
     for _ in 0..3 { u.step(0.04); }
-    assert_ne!(u.studio.compact, compact, "Compact view is switched");
-    cmd(&mut u, ":UI:MENU:CLOSe", "");
-    assert_eq!(cmd(&mut u, ":UI:MENU?", ""), "\"\"");
-    // a hidden row has no badges on the list
+    assert_eq!(u.studio.view, super::studio::StudioView::Docked, "the Meas button opens the table of the measurements");
+    assert_eq!(cmd(&mut u, ":UI:MENU?", ""), "\"\"", "and no menu");
+    // a hidden row has no badges and no button on the list
+    let mut u = zoomed(Layout::Studio);
     assert!(u.ui_elements().iter().any(|e| e.kind == "BADGE"));
-    u.studio.hide_badges = true;
-    u.relayout();
+    u.studio_hide_badges();
     assert!(!u.ui_elements().iter().any(|e| e.kind == "BADGE"), "hidden badges are not controls on the screen");
 }
 
