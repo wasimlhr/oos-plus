@@ -713,6 +713,11 @@ the right, and Overlay traces, every source on one graticule of the full height,
 its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
 side. A tap on a handle opens the sheet of its source.
 
+Zoom has the same row in every layout, between the overview and the zoomed part: the time per division, the position
+and the vertical factor at the left, then H-, H+, V-, V+, Box, Reset and Close; the window in the overview is a slim
+frame with a handle at each end. Studio adds what the row has no place for: the grip at the lower edge of the overview
+sets its height, and the Zoom button, held or right-clicked, has the zoom source and the zoom of one lane.
+
 **Text size.** Display > Text size makes the text larger: Normal is the original look, Large and Larger use fonts 2 and 4
 pixels bigger in the top bar, the cards, the measurement and cursor rows, the menus, the keyboard and the dialogs. The rows
 under the plot grow with them, so the plot gets a little shorter. Where a long text would not fit (a narrow channel card

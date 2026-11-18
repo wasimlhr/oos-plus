@@ -7,6 +7,13 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio has the zoom row and the zoom window of the Default layout (ADR 0032; host-tested, not yet verified on
+  hardware): between the overview and the zoomed lanes, the text with the time per division, the position and the
+  vertical factor, then H-, H+, V-, V+, Box, Reset and Close, and in the overview a slim frame with a handle at each
+  end. Studio's own pull-down tab ("Zoom 10x"), its toolbar, the menu Zoom & navigation and the Zoom bar row of
+  Horizontal are gone. The grip for the overview's height, the Zoom button's menu (zoom source, one lane) and the
+  Y zoom on a lane's handle stay. Center trigger has no button any more, as in Default; `:TIMebase:DELay:CENTer`
+  does it. `:UI:MENU?` no longer has a menu named Zoom.
 - Studio, walked control by control (ADR 0031; host-tested: 87 controls and functions over SCPI and 460 sheet rows
   by touch. On a DHO924S only read, on an older build: not yet verified on hardware):
   - Overlay traces and Stacked traces: every source has one handle with its name at the left edge, on its own zero

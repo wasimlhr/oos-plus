@@ -53,6 +53,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0028](code/0028-an-external-generator-is-a-table-row-one-connection-and-a-page.md) | code | An external generator is a row of a table, one connection and a page of its own | accepted, to be reviewed |
 | [0030](ui-ux/0030-studio-offers-what-default-offers.md) | ui-ux | Studio offers what Default offers; the Add panel is the short way into the Measure page | accepted |
 | [0031](ui-ux/0031-every-source-has-one-handle-on-its-zero-level.md) | ui-ux | Every source has one handle on its zero level; a sheet keeps the names and the order of the menu | accepted |
+| [0032](ui-ux/0032-studio-has-the-zoom-row-of-the-default-layout.md) | ui-ux | Studio has the zoom row and the zoom window of the Default layout | accepted |
 
 ## Reading order for agents
 

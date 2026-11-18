@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.13",
   "version": "0.1.13",
   "edition": "November 2026",
-  "date": "17 November 2026",
+  "date": "18 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -12731,7 +12731,7 @@
      "header": ":TIMebase:DELay:SOURce",
      "set": ":TIMebase:DELay:SOURce <value>",
      "query": ":TIMebase:DELay:SOURce?",
-     "desc": "Sets or queries Zoom source for Studio zoom (menu: Horizontal (Studio zoom) > Zoom source).",
+     "desc": "Sets or queries Zoom source for Studio zoom (menu: Zoom button, held or right-clicked (Studio) > Zoom source).",
      "params": [
       [
        "<value>",
@@ -12751,7 +12751,7 @@
      "header": ":TIMebase:DELay:VZOom",
      "set": ":TIMebase:DELay:VZOom <value>",
      "query": ":TIMebase:DELay:VZOom?",
-     "desc": "Sets or queries Y zoom +/- for Studio zoom (menu: Horizontal (Studio zoom) > Y zoom +/-).",
+     "desc": "Sets or queries V-, V+ for Studio zoom (menu: Zoom row > V-, V+).",
      "params": [
       [
        "<value>",
@@ -12772,7 +12772,7 @@
      "set": ":TIMebase:DELay:VZOom:RESet",
      "desc": "Vertical zoom back to 1",
      "remarks": [
-      "- Menu equivalent: Horizontal (Studio zoom) > Reset Y.",
+      "- Menu equivalent: A lane's handle while zoomed (Studio) > Reset Y.",
       "- Origin: OOS extension"
      ],
      "ext": true,
@@ -12783,7 +12783,7 @@
      "set": ":TIMebase:DELay:FIT",
      "desc": "The zoom window back to the whole screen",
      "remarks": [
-      "- Menu equivalent: Horizontal (Studio zoom) > Fit record.",
+      "- Menu equivalent: Zoom row > Reset.",
       "- Origin: OOS extension"
      ],
      "ext": true,
@@ -12794,7 +12794,6 @@
      "set": ":TIMebase:DELay:CENTer",
      "desc": "The trigger in the middle of the zoom window",
      "remarks": [
-      "- Menu equivalent: Horizontal (Studio zoom) > Center trigger.",
       "- Origin: OOS extension"
      ],
      "ext": true
@@ -13056,7 +13055,8 @@
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `OVER`.",
-     "ext": true
+     "ext": true,
+     "example": ":VIEW:TRACes OVERlay"
     },
     {
      "header": ":VIEW:FIT",
@@ -13173,7 +13173,7 @@
       [
        "[<kind>]",
        "Text",
-       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
+       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `LANE` (a lane of the plot, labelled with its source; one record labelled `All sources` in Overlay), `HANDLE` (the handle of a channel, reference or math channel, on its zero level), `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
        "—"
       ]
      ],
@@ -13181,7 +13181,7 @@
       "- Origin: OOS extension"
      ],
      "ext": true,
-     "example": ":UI:ELEMents? TOP"
+     "example": ":UI:ELEMents? LANE\n:UI:ELEMents? HANDLE\n:UI:ELEMents? TOP"
     },
     {
      "header": ":UI:TAP",
@@ -13239,7 +13239,7 @@
     {
      "header": ":UI:MENU",
      "query": ":UI:MENU?",
-     "desc": "The menu or popup that is open: its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`. `\"\"` when none is open.",
+     "desc": "The menu or popup that is open (the View menu of the Studio bar and the popup of Add source in the bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`. `\"\"` when none is open.",
      "remarks": [
       "- Origin: OOS extension"
      ],
@@ -13327,6 +13327,15 @@
     },
     {
      "pre": ":UI:CONText 600,300\n:UI:MENU?\n\"Context\",\"Overlay traces\",\"Stacked traces\",\"Fit record\",\"Zoom here\",\"Zoom box\",\"Stop\",\"Single\",\"Autoset\",\"Trigger on CH2\",\"Set level here\",\"Trigger settings\",\"Measurement on CH2\",\"Cursor here\",\"Sources\",\"Maximise view\"\n:UI:MENU:SELect \"Stacked traces\""
+    },
+    {
+     "p": "Check that every source sits on its own zero level in Overlay. CH1 at 1 V/div with an offset of 1 V is one division (55 px here) above the middle of the graticule, CH2 with -1 V one below, and R1 with -2 V two below:"
+    },
+    {
+     "pre": ":VIEW:TRACes OVERlay\n:UI:ELEMents? LANE\nLANE,\"All sources\",0,66,1024,440\n:UI:ELEMents? HANDLE\nHANDLE,\"CH1\",3,219,44,24;HANDLE,\"CH2\",3,329,44,24;HANDLE,\"R1\",3,384,44,24"
+    },
+    {
+     "p": "(Replies of the host build, screen 1024 x 600; not yet read from a unit.)"
     },
     {
      "p": "Find a button on the screen and press it:"
