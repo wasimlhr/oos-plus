@@ -56,6 +56,12 @@ Added:
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
 - Studio, the zoom source popover (hold the Zoom button): **X zoom** minus and plus beside the Y zoom ones. One
+  step of the zoom time base around the centre of the zoom window; minus ends at the main time base (unit: 100×
+  after three steps). Remote: `:UI:CONText` on the Zoom button opens that popover, where it opened the menu of the plot
+  behind it; its rows are listed by `:UI:MENU?` and pressed by `:UI:MENU:SELect`; `:UI:ELEMents?` lists the Zoom
+  and Full screen buttons as `PLOT` (unit).
+- Callouts in Studio (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
+  text to that time on that signal, with a line from the text to the point. It moves with the signal, is edited by a
   step of the zoom time base around the centre of the zoom window; minus ends at the main time base (host-tested,
   not yet verified on hardware).
 - Callouts (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
@@ -221,10 +227,41 @@ Fixed:
     for the view (unit: the same 60 events at 20 ms/div and zoomed in to 1 ms/div);
   - a mask made from a reference lies where the reference is drawn when the reference has a deskew;
   - no save command writes under `/rigol`, whatever path it is given (ADR 0009);
+  - Studio: an analyser view (the eye, a spectrum or power page) that is a tab behind another view is not analysed
+    with every record; it catches up when its tab comes to the front. With the eye behind the waveform's tab the
+    screen thread spent 6 s of every frame in it (CH4 at 2 ms/div: 0.2 frames a second, every remote query answered
+    after 6 s); behind the tab it now runs at 30 frames a second (unit). What made that eye analysis take 6 s was not
+    found: with the eye in front it took about 25 ms a frame on the same signal;
+  - Auto set-up on a signal without a steady period takes the fastest time base that shows it busy, unless a slower
+    one shows clearly more height: bursts of 100 ns pulses every 1.6 us ended at 2 ms/div, a band of aliases, and
+    are at 2 us/div now (unit);
+  - `:TRIGger:ZONE<n>:SOURce` sets and answers the source of the zone. It set and answered the source of the trigger,
+    so a zone stayed on the channel it had: with the zone on a channel that was off, "must intersect" let no record
+    through whatever the box (unit). `:SYSTem:DEBug:ZONE?` says what the filter saw of the record it refused last;
+  - `*RST` and the Default key clear the notes on the signals and the vertical zoom of a closed zoom window, and
+    `*RST` puts the waveform read-out back to `CHAN1`, `NORMal`, `BYTE` (unit). As before, a new set-up is in the
+    Default layout with the stock bars. `*RST` is no longer a key press: with a notice on the screen the notice
+    took the key, was closed, and nothing was reset (unit);
+  - a set-up, and so a session, holds the generator's wave and modulation (`gen`, `gen_mod`): a recall put the
+    generator back to 1 kHz. Whether the output is on is not saved, and a recall leaves it off, also when it was on
+    (unit: square 12.345 kHz, 0.5 Vpp, 0.1 V offset, 30 % duty back after `*RCL` and after `:LOAD:SESSion`, output off
+    both times). An arbitrary wave is not saved;
+  - VXI-11 `device_readstb` answers the status byte of `*STB?`, with bit 4 while an answer of the link waits; it
+    answered 0 whatever the state (unit). `device_trigger` is `*TRG`. HiSLIP's AsyncStatusQuery answers the status
+    byte too (desktop app; HiSLIP is not opened on a scope, and the table of the interfaces says so now);
+  - the web page's MCP tool `scpi` answered "ok" for a command that failed; a message that queued an error is
+    answered as an error of the tool call with what the scope said (unit). The LXI identification and the MCP
+    greeting name the model of the scope, not always DHO924S;
+  - logic analyser: `:LA:POD<n>:PRESet` takes the beginning of a preset's name when only one begins so (`TTL`,
+    `ECL`, `CMOS_3.3`), where it wanted the whole name; `:LA:POD<n>:THReshold?` and `:LA:PREamble?` write their
+    numbers as every other answer does (`1.400000E+00`, not `1.4e0`) (unit);
+  - `:CALLout:LIST?` answers in one line, `source,time,"text"` a note, separated by `;`; it answered one line a
+    note, which a client that reads line by line takes for as many answers (unit);
   - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line
     decoded 59 characters before the save and none after the load. A loaded session is zoomed, read out (RAW) and
     decoded from its samples, and a Stop does not read the hardware's own memory in its place (unit: 100 k points,
-    22 of 22 and 59 of 59 characters after the load at 5 and 20 ms/div).
+    22 of 22 and 59 of 59 characters after the load at 5 and 20 ms/div; four channels of 100 k points and one of
+    1 M points come back with the same samples, and the notes with them).
 - An update with another device tree starts by kexec again (unit). The update copied the loader's random
   `/chosen/kaslr-seed` into the new tree, and kexec-tools refuses a seed that is not 0, so the update stopped at its
   kexec start with nothing installed. The seed now goes in as 0, and kexec-tools puts in a new random one. A scope

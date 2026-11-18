@@ -384,6 +384,13 @@ pub fn setup_text(m: &Model) -> String {
     kv("studio_state", m.studio_state.clone());
     if m.math_hidden.iter().any(|&h| h) { kv("math_hidden", m.math_hidden.iter().enumerate().filter(|(_, &h)| h).map(|(k, _)| (k + 1).to_string()).collect::<Vec<_>>().join(" ")); }
     if m.gen_hidden { kv("gen_hidden", "true".to_string()); }
+    // The generator's wave and modulation. Not whether its output is on: a recalled set-up or session never switches
+    // an output on (it is off after a recall). An arbitrary wave has its samples elsewhere and is not written.
+    if m.afg_wave < AFG_WAVES.len() - 1 {
+        kv("gen", format!("{} {} {} {} {} {}", AFG_WAVES[m.afg_wave], m.afg_freq, m.afg_ampl, m.afg_offset, m.afg_duty, m.afg_symmetry));
+        kv("gen_mod", format!("{} {} {} {} {} {}", AFG_MODS[m.afg_mod.min(AFG_MODS.len() - 1)], m.afg_mod_rate, m.afg_mod_depth, m.afg_fm_dev, m.afg_pm_dev,
+            AFG_MOD_SHAPES[m.afg_mod_shape.min(AFG_MOD_SHAPES.len() - 1)].replace(' ', "_")));
+    }
     for (i, v) in m.view_slots.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
         kv(&format!("view{}", i + 1), v.clone());
     }
@@ -825,6 +832,22 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
             m.math_hidden = h;
         }
         "gen_hidden" => m.gen_hidden = p_bool(v)?,
+        "gen" | "gen_mod" => {
+            let w: Vec<&str> = v.split_whitespace().collect();
+            if w.len() != 6 {
+                return Err(format!("{k}: want 6 values"));
+            }
+            let f = |s: &str| s.parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(|| format!("{k}: bad number {s}"));
+            let named = |all: &[&str], s: &str| all.iter().position(|n| n.replace(' ', "_").eq_ignore_ascii_case(s)).ok_or_else(|| format!("{k}: unknown {s}"));
+            if k == "gen" {
+                // every wave but the arbitrary one, whose samples a set-up does not hold
+                let wave = named(&AFG_WAVES[..AFG_WAVES.len() - 1], w[0])?;
+                (m.afg_wave, m.afg_freq, m.afg_ampl, m.afg_offset, m.afg_duty, m.afg_symmetry) = (wave, f(w[1])?, f(w[2])?, f(w[3])?, f(w[4])?.clamp(0.0, 100.0), f(w[5])?.clamp(0.0, 100.0));
+            } else {
+                let (kind, shape) = (named(&AFG_MODS, w[0])?, named(&AFG_MOD_SHAPES, w[5])?);
+                (m.afg_mod, m.afg_mod_rate, m.afg_mod_depth, m.afg_fm_dev, m.afg_pm_dev, m.afg_mod_shape) = (kind, f(w[1])?, f(w[2])?, f(w[3])?, f(w[4])?, shape);
+            }
+        }
         "studio_traces" => m.studio_overlay = match v { "overlay" => true, "stacked" => false, _ => return Err(format!("bad studio_traces {v}")) },
         "studio_meas_view" => m.studio_detail = match v { "detailed" => true, "list" => false, _ => return Err(format!("bad studio_meas_view {v}")) },
         "studio_badges" => m.studio_classic = match v { "classic" => true, "studio" => false, _ => return Err(format!("bad studio_badges {v}")) },

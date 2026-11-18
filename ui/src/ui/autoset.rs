@@ -111,7 +111,7 @@ pub struct AutoRun {
     full: [f32; NCH],
     swing: [f32; NCH],
     /// per channel: the height and time base (index) of the search window that showed most of it
-    best: [Option<(f32, usize)>; NCH],
+    best: [Option<(f32, usize, bool)>; NCH],
     /// `Model::hw_stamp` of the current stage: hardware records with an older one are from before it
     stamp: u64,
     /// the time bases of the search and their memory depths (points, 0 = Auto); `deep` = the hardware plan
@@ -312,8 +312,14 @@ impl Ui {
                     // stand higher than a weak fast signal
                     let (lo, hi) = self.auto_levels(c);
                     let swing = hi - lo;
-                    if a.best[c].is_none_or(|b| swing > b.0) {
-                        a.best[c] = Some((swing, self.m.tscale));
+                    // The window for a signal without a steady period: the fastest one that shows it busy (three rises
+                    // or more) stands unless a slower one shows clearly more height. A train of fast pulses has its full
+                    // height at every time base, and a slower record only folds it (on a unit, 2026-11-17: bursts of
+                    // 100 ns pulses every 1.6 us ended at 2 ms/div, a band of aliases). A window with one edge of a slow
+                    // signal is not busy, and gives way to the first that is.
+                    let busy = swing > 0.0 && oos_dsp::edges::edges(&v, (lo + hi) / 2.0, 0.4 * swing).iter().filter(|e| e.rising).count() >= 3;
+                    if a.best[c].is_none_or(|b| swing > 1.1 * b.0 || (busy && !b.2 && swing >= 0.9 * b.0)) {
+                        a.best[c] = Some((swing, self.m.tscale, busy));
                     }
                     let found = swing >= 0.4 * a.full[c] && swing >= 1.5 * a.swing[c] && {
                         match periodic(&v, vdt) {
@@ -1028,6 +1034,16 @@ mod tests {
         assert_eq!(ui.m.trig_src, 0);
         assert!(ui.toast.as_ref().is_some_and(|t| t.0.contains("no steady period")));
         assert!(!ui.auto_bar_on());
+        assert!(ui.m.time_per_div() >= 100e-6, "pulses of 0.2 to 1.9 ms are not shown at {} s/div", ui.m.time_per_div());
+        // bursts of fast pulses (three of 100 and 200 ns every 1.6 us, as on a unit 2026-11-17): the fast time base that
+        // shows them, not a slow one that folds them
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let burst = |t: f64| {
+            let x = t.rem_euclid(1.6e-6) * 1e6;
+            if (0.0..0.1).contains(&x) || (0.2..0.4).contains(&x) || (0.5..0.6).contains(&x) { 0.33 } else { 0.0 }
+        };
+        run_hw_of(&mut ui, &burst);
+        assert!(ui.m.time_per_div() <= 5e-6, "bursts every 1.6 us at {} s/div", ui.m.time_per_div());
         // a flat input is still no signal: the set-up stays
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
         let back = ui.m.clone();

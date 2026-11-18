@@ -38,7 +38,7 @@ These apply whatever the type.
 | `:TRIGger:SHOLd:CSRC` | Set / Query | Clock source, `CHAN1`..`CHAN4` | - | Trigger > Setup/hold > sources | fork command; name not verified against the DHO guide; also as `:TRIGger:SETup:CSRC` |
 | `:TRIGger:SHOLd:TYPE` | Query | `SETHold`: setup and hold are both active | `SETH` | - | fork command; name not verified against the DHO guide |
 | `:TRIGger:ZONE<n>:STATe` | Set / Query | Zone 1 or 2 on or off | `0` | Trigger > Zone | fork command; name not verified against the DHO guide |
-| `:TRIGger:ZONE<n>:SOURce` | Set / Query | `CHAN1`..`CHAN4` | - | Trigger > Zone > source | fork command; name not verified against the DHO guide |
+| `:TRIGger:ZONE<n>:SOURce` | Set / Query | `CHAN1`..`CHAN4`: the channel the zone is drawn on, not the trigger's source. A "must intersect" zone on a channel that is off lets no record through. | - | Trigger > Zone > source | fork command; name not verified against the DHO guide |
 | `:TRIGger:ZONE<n>:MODE` | Set / Query | `INTersect`, `NOTintersect` | `INT` | Trigger > Zone > must / must not | fork command; name not verified against the DHO guide |
 | `:TRIGger:ZONE<n>:PLACement` | Set / Query | A box: `t1,v1,t2,v2` in seconds and volts | - | drawn on the screen | fork command; name not verified against the DHO guide |
 | `:TRIGger:ZONE<n>:POINts` | Set / Query | An outline: `t,v` pairs, at least three | - | drawn on the screen | fork command; name not verified against the DHO guide |

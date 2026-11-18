@@ -8,6 +8,7 @@
 //! the context menu, and touches through `Ui::handle`. Nothing here keeps state of its own.
 use super::dock::{Dir, Drop, Node, Side, VKind, KINDS};
 use super::scpiext::{bad, conflict, t, text_arg, Reply, DONE};
+use super::sharedzoom::{trace_name, ZPart};
 use super::studio::{StudioView, ZoomRow, TOP_LABELS};
 use super::workspace::Action;
 use super::*;
@@ -360,6 +361,8 @@ impl Ui {
                 _ => Err(bad(arg)),
             },
             1 if is(0, "CONText") && !q => match ints(&a).as_deref() {
+                // a finger held on the Zoom button opens its popover, not the menu of the plot behind it
+                Some([x, y]) if self.studio_sz_hold(*x, *y) => DONE,
                 Some([x, y]) => { self.context_menu(*x, *y); DONE }
                 _ => Err(bad(arg)),
             },
@@ -426,6 +429,10 @@ impl Ui {
                 push("DIVIDER", format!("{} {}", if d.dir == Dir::H { "Vertical divider" } else { "Horizontal divider" }, i + 1), d.hit);
             }
             for (key, r) in self.studio_badges() { push("BADGE", format!("{key:?}"), r); }
+            if !self.view_on() {
+                push("PLOT", "Full screen".into(), self.full_btn().1);
+                push("PLOT", "Zoom".into(), self.zoom_btn().1);
+            }
             for (c, r) in self.cursor_tags() { push("CURSOR", ["A", "B", "C", "D"].get(c).copied().unwrap_or("?").to_string(), r); }
         }
         for (label, r) in self.ui_menu_rows() { push("MENU", label, r); }
@@ -434,6 +441,13 @@ impl Ui {
 
     /// The rows of the menu or popup that is open (the one on top), with their rectangles.
     fn ui_menu_rows(&self) -> Vec<(String, Rect)> {
+        if let Some((_, parts)) = self.studio_sz_parts() {
+            return parts.into_iter().map(|(part, r)| (match part {
+                ZPart::All => "All lanes".to_string(), ZPart::Lane(t) => trace_name(t),
+                ZPart::XMinus => "X zoom out".to_string(), ZPart::XPlus => "X zoom in".to_string(),
+                ZPart::YMinus => "Y zoom out".to_string(), ZPart::YPlus => "Y zoom in".to_string(), ZPart::Reset => "Reset zoom".to_string(),
+            }, r)).collect();
+        }
         if self.studio.ctx.is_some() { return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect(); }
         if let Some(p) = &self.workspace.popup { return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect(); }
         if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
@@ -452,7 +466,8 @@ impl Ui {
     /// The open menu: its title, then each row as "label" (with its value for a setting of a side menu).
     fn ui_menu_list(&self) -> String {
         let rows = self.ui_menu_rows();
-        let title = if self.studio.ctx.is_some() { "Context".to_string() }
+        let title = if self.studio.sz.pop { "Zoom source".to_string() }
+            else if self.studio.ctx.is_some() { "Context".to_string() }
             else if let Some(p) = &self.workspace.popup { p.title.clone() }
             else if self.studio.add_menu { "Add".to_string() }
             else if self.studio.zoom_menu { "Zoom".to_string() }
@@ -490,6 +505,7 @@ impl Ui {
     }
 
     fn ui_menu_close(&mut self) {
+        self.studio.sz.pop = false;
         self.studio.ctx = None;
         self.workspace.popup = None;
         self.studio.add_menu = false;
@@ -631,6 +647,22 @@ mod tests {
         assert!(u.workspace.stacked);
         assert!(u.studio.ctx.is_none());
         assert!(cmd(&mut u, ":UI:MENU:SELect", "\"Stacked traces\"").is_err(), "no menu open");
+        // a hold on the Zoom button opens its popover, whose rows are pressed by name (seen on a unit: the hold opened
+        // the menu of the plot behind the button, and the button was not among the elements)
+        let plot = text(cmd(&mut u, ":UI:ELEMents?", "PLOT"));
+        let zoom: Vec<i32> = plot.split(';').find(|r| r.starts_with("PLOT,\"Zoom\",")).expect("the Zoom button").split(',').skip(2).map(|v| v.parse().unwrap()).collect();
+        cmd(&mut u, ":UI:CONText", &format!("{},{}", zoom[0] + zoom[2] / 2, zoom[1] + zoom[3] / 2)).unwrap();
+        let m = text(cmd(&mut u, ":UI:MENU?", ""));
+        assert!(m.starts_with("\"Zoom source\",\"All lanes\"") && m.contains("\"X zoom in\"") && m.contains("\"Reset zoom\""), "{m}");
+        cmd(&mut u, ":UI:MENU:SELect", "\"X zoom in\"").unwrap();
+        let wide = u.m.zscale;
+        assert!(u.m.zoom && wide < u.m.tscale);
+        cmd(&mut u, ":UI:MENU:SELect", "\"X zoom in\"").unwrap();
+        assert_eq!(u.m.zscale, wide - 1);
+        cmd(&mut u, ":UI:MENU:SELect", "\"X zoom out\"").unwrap();
+        assert_eq!(u.m.zscale, wide);
+        cmd(&mut u, ":UI:MENU:CLOSe", "").unwrap();
+        assert_eq!(text(cmd(&mut u, ":UI:MENU?", "")), "\"\"");
     }
 
     #[test]

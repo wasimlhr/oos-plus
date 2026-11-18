@@ -211,7 +211,17 @@ impl Ui {
             }
             "LA:POD<n>:PRESet" => {
                 let p = idx.filter(|n| (1..=2).contains(n))? - 1;
-                return Some(self.sel(Item::LaThr(p), q, arg));
+                // the names are long ("CMOS 3.3 V: 1.65 V"): the one name that begins with the word is enough (TTL, ECL,
+                // USER, CMOS_3.3), as the table of the commands says
+                let word = text_arg(arg).trim().replace(' ', "_").to_ascii_uppercase();
+                let names: Vec<String> = super::la::PRESETS.iter().map(|p| p.0.replace(' ', "_")).collect();
+                let begins: Vec<&String> = names.iter().filter(|n| n.to_ascii_uppercase().starts_with(&word)).collect();
+                let full = match (names.iter().find(|n| n.to_ascii_uppercase() == word), begins.as_slice()) {
+                    (Some(name), _) => name.clone(),
+                    (None, [one]) if !q && !word.is_empty() => (*one).clone(),
+                    _ => arg.to_string(),
+                };
+                return Some(self.sel(Item::LaThr(p), q, &full));
             }
             "LA:SIZE" => return Some(self.sel(Item::LaHeight, q, arg)),
             // ---- zones

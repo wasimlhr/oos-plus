@@ -1150,6 +1150,16 @@ impl Ui {
     }
 
     /// Recomputes the active analyser from the last record (every captured sample of the window).
+    /// The analyser view of `Model::view` is a tab behind another one in Studio's dock: nothing of it is drawn.
+    pub(super) fn analyser_tabbed_out(&self) -> bool {
+        use super::dock::VKind;
+        self.dock_on() && match self.m.view {
+            AView::Scope => false,
+            AView::Eye => self.dock_tabbed_out(VKind::Eye),
+            _ => self.dock_tabbed_out(VKind::View),
+        }
+    }
+
     pub(super) fn analyzer_update(&mut self) {
         // a source that is off shows nothing: the first channel that is on takes over
         if let Some(on) = (0..NCH).find(|&c| self.m.ch[c].on) {

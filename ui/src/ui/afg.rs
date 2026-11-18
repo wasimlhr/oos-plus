@@ -188,7 +188,7 @@ impl Ui {
     }
 
     /// The stock limits: amplitude by frequency, offset within (Vmax - A) / 2.
-    fn afg_clamp(&mut self) {
+    pub(super) fn afg_clamp(&mut self) {
         let m = &mut self.m;
         let max = m.gen_max_hz();
         m.afg_freq = m.afg_freq.clamp(0.01, max);

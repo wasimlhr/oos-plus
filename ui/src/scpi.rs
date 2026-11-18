@@ -1036,6 +1036,11 @@ impl Scpi {
         self.exec_message_checked(ui, cv, line).map(|(response, _)| response)
     }
 
+    /// The errors that are queued, oldest first; they stay queued (`:SYSTem:ERRor?` takes them).
+    pub fn queued_errors(&self) -> &[String] {
+        &self.err
+    }
+
     pub fn exec_message_checked(&mut self, ui: &mut Ui, cv: &Canvas, line: &str) -> Result<(Vec<u8>, bool), &'static str> {
         let mut program = Program::new(line);
         match self.poll_program(ui, cv, &mut program) {
@@ -1219,7 +1224,11 @@ impl Scpi {
             }
             "*RST" if !query => {
                 self.event_status = 0; self.opc_events.clear();
-                ui.key(crate::ui::key::DEFAULT);
+                // not as a key press: a notice on the screen takes a key for its own, and the reset was lost
+                ui.sim_cancel_generation();
+                ui.default_setup();
+                // the read-out of this interpreter is part of what a reset puts back: CH1, NORMal, BYTE, the whole record
+                (self.wav_src, self.wav_math, self.wav_fmt, self.wav_mode, self.wav_start, self.wav_stop) = (WaveId::Ch(0), None, 0, 0, 1, 0);
                 return None;
             }
             _ => {}
@@ -1315,7 +1324,9 @@ impl Scpi {
         if nodes.first().is_some_and(|node| kw(node, "TRIGger")) {
             let last = nodes.last().copied().unwrap_or("");
             let (leaf, source_number) = suffix(last);
-            if (nodes.len() == 2 || nodes.len() == 3) && kw(leaf, "SOURce") {
+            // a zone has a source of its own (`trigger_zone`): `:TRIGger:ZONE<n>:SOURce` is not the trigger's
+            let zone = nodes.len() == 3 && kw(suffix(nodes[1]).0, "ZONE");
+            if (nodes.len() == 2 || nodes.len() == 3) && kw(leaf, "SOURce") && !zone {
                 let secondary = source_number == Some(2);
                 if query {
                     if !secondary && ui.m.trig_ref.is_none() {
@@ -4560,7 +4571,7 @@ impl Scpi {
         if n.len() == 2 && kw(k, "POD") && kw(n[1], "THReshold") {
             let Some(pod) = idx.filter(|&i| i == 1 || i == 2).map(|i| i - 1) else { return bad(self) };
             if query {
-                return t(format!("{:e}", ui.m.la.thr(pod)));
+                return t(e(ui.m.la.thr(pod) as f64));
             }
             match arg.trim().parse::<f32>() {
                 Ok(v) if v.abs() <= la::THR_MAX => {
@@ -4580,7 +4591,7 @@ impl Scpi {
                 return t(r.words.len().to_string());
             }
             if kw(n[0], "PREamble") {
-                return t(format!("{},{:e},{:e}", r.words.len(), r.dt, r.t0));
+                return t(format!("{},{},{}", r.words.len(), e(r.dt), e(r.t0)));
             }
             return Some(block(&r.words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>()));
         }
@@ -7407,6 +7418,80 @@ mod tests {
         ui.step(0.2);
         assert_eq!(captures(&ui), 1.0, "TFORce must release a waiting Single");
         assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:STAT?"), "STOP");
+    }
+
+    // Break it catches (seen on a unit, 2026-11-17): after *RST the read-out was still on the channel, RAW and WORD
+    // of before, a note of the old set-up still hung on the screen and a closed zoom kept its vertical factor. A new
+    // set-up is in the Default layout with the stock bars, whatever the screen was before.
+    #[test]
+    fn a_reset_puts_the_read_out_back_and_starts_in_the_default_layout() {
+        let (mut s, mut ui, cv) = session();
+        (ui.m.layout, ui.m.bar_compact) = (Layout::Studio, true);
+        line(&mut s, &mut ui, &cv, "*CLS;:CHAN2:DISP ON;:WAV:SOUR CHAN2;:WAV:MODE RAW;:WAV:FORM WORD;:WAV:STAR 10;:WAV:STOP 20;:CALL:ADD CHAN2,0,\"old\";:TIM:DEL:VZO 4;*ESE 32");
+        line(&mut s, &mut ui, &cv, "*RST");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:SOUR?;:WAV:MODE?;:WAV:FORM?;:WAV:STAR?"), "CHAN1;NORM;BYTE;1");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":CALL:COUN?;:TIM:DEL:VZO?;*ESE?"), "0;1.000000E+00;32", "notes and zoom go, the enable register stays (IEEE 488.2)");
+        assert!(ui.m.layout == Layout::Default && !ui.m.compact(), "the stock bars");
+        // a notice on the screen does not swallow the reset, and stays for the person it is for (on a unit a *RST
+        // closed the notice of an update and reset nothing)
+        ui.dialog = Some(vec!["Update".into(), "Tap to close".into()]);
+        line(&mut s, &mut ui, &cv, ":TIM:SCAL 1e-6;*RST");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TIM:SCAL?"), "2.000000E-04");
+        assert!(ui.dialog.is_some(), "the notice stays");
+        ui.dialog = None;
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    }
+
+    // Break it catches (seen on a unit, 2026-11-18): a threshold preset was only taken by its whole name, where the
+    // table of the commands names `TTL` and `CMOS`; the threshold and the preamble of the logic record were written
+    // as `1.4e0` and `8e-6`, not as every other number.
+    #[test]
+    fn a_logic_threshold_preset_by_the_beginning_of_its_name() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, "*CLS;:LA:STAT ON;:LA:POD1:PRES ECL;:LA:POD2:PRES lvcmos_1.8");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?;:SYST:ERR?"), "ECL_-1.3_V;LVCMOS_1.8_V:_0.9_V;0,\"No error\"");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:THR?;:LA:POD2:THR?"), "-1.300000E+00;9.000000E-01");
+        line(&mut s, &mut ui, &cv, ":LA:POD1:PRES CMOS_5_V:_2.5_V;:LA:POD2:PRES CMOS");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?"), "CMOS_5_V:_2.5_V;LVCMOS_1.8_V:_0.9_V", "two names begin with CMOS");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
+    }
+
+    // Break it catches: a set-up (and so a session) did not hold the generator, a recall put it back to 1 kHz (seen on
+    // a unit, 2026-11-18); and a recall that switches an output on, which it must never do.
+    #[test]
+    fn a_setup_holds_the_generator_but_never_switches_its_output_on() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, "*CLS;:SOUR:FUNC SQU;:SOUR:FREQ 12345;:SOUR:VOLT 0.5;:SOUR:VOLT:OFFS 0.1;:SOUR:FUNC:SQU:DUTY 30;:SOUR:OUTP ON");
+        let before = line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?");
+        let text = ui.setup_text_full();
+        assert!(text.lines().any(|l| l.starts_with("gen = Square 12345 ")), "{:?}", text.lines().filter(|l| l.starts_with("gen")).collect::<Vec<_>>());
+        assert!(!text.contains("afg_on") && !text.to_ascii_lowercase().contains("output"), "the output state is not in a set-up");
+        line(&mut s, &mut ui, &cv, "*RST");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FREQ?;:SOUR:OUTP?"), "1.000000E+03;0");
+        line(&mut s, &mut ui, &cv, ":SOUR:OUTP ON");
+        ui.apply_setup_text(&text).unwrap();
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?"), before);
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:OUTP?"), "0", "a recall leaves the output off, also one that was on");
+        // a set-up of before the keys leaves the generator at its defaults, and a bad line is an error, not a guess
+        let old: String = text.lines().filter(|l| !l.starts_with("gen")).map(|l| format!("{l}
+")).collect();
+        ui.apply_setup_text(&old).unwrap();
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FREQ?"), "1.000000E+03");
+        assert!(crate::store::set(&mut ui.m, "gen", "Arb 1000 1 0 50 50").is_err() && crate::store::set(&mut ui.m, "gen", "Sine 1e3").is_err());
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    }
+
+    // Break it catches: :TRIGger:ZONE<n>:SOURce set and answered the source of the trigger, so a zone stayed on the
+    // channel it had and a "must intersect" zone on a channel that is off refused every record (seen on a unit,
+    // 2026-11-17: zone on CH3, the signal on CH2, no record in any box).
+    #[test]
+    fn the_source_of_a_zone_is_not_the_source_of_the_trigger() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, "*CLS;:TRIG:EDGE:SOUR CHAN1;:TRIG:ZONE1:SOUR CHAN3;:TRIG:ZONE2:SOUR CHAN2");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:EDGE:SOUR?;:TRIG:ZONE1:SOUR?;:TRIG:ZONE2:SOUR?"), "CHAN1;CHAN3;CHAN2");
+        assert_eq!((ui.m.trig_src, ui.m.zones[0].src, ui.m.zones[1].src), (0, 2, 1));
+        line(&mut s, &mut ui, &cv, ":TRIG:EDGE:SOUR CHAN4");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:ZONE1:SOUR?;:SYST:ERR?"), "CHAN3;0,\"No error\"");
     }
 
     // Break it catches (all seen on a unit, 2026-11-17): :RUN after :SINGle left Normal sweep for Auto; the status

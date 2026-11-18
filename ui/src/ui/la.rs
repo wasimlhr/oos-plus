@@ -888,7 +888,7 @@ mod remote_tests {
         assert_eq!((ui.m.la.show >> 3 & 1, s(q(&mut ui, ":LA:DIGital3:DISPlay?"))), (0, "0".to_string()));
         q(&mut ui, ":LA:POD2:THR 0.8");
         assert_eq!((ui.m.la.thr(1), ui.m.la.preset[1]), (0.8, USER));
-        assert_eq!(s(q(&mut ui, ":LA:POD2:THR?")), "8e-1");
+        assert_eq!(s(q(&mut ui, ":LA:POD2:THR?")), "8.000000E-01");
         // out of range and bad nodes: errors, nothing changes
         q(&mut ui, ":LA:POD1:THR 99");
         q(&mut ui, ":LA:DIG16:DISP ON");
