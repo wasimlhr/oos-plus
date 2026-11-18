@@ -259,6 +259,12 @@ impl Ui {
                 AfgArbGrab | AfgArbFile => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
+            // where the generator is and what it says it is, then the sine the page switches on by itself
+            M::ExtGen => (&["Connection", "Output"], |it| match it {
+                ExtCh | ExtLoad | ExtFreq | ExtAmpl | ExtOut => Slot::Tab(1),
+                ExtConnect => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
             M::La => (&["Logic", "Thresholds"], |it| match it {
                 LaThr(_) | LaUser(_) => Slot::Tab(1),
                 _ => Slot::Tab(0),
@@ -294,7 +300,7 @@ impl Ui {
             }),
             M::BwTest => (&["Bandwidth test"], |_| Slot::Tab(0)),
             M::Bode => (&["Sweep", "Connections"], |it| match it {
-                BodeIn | BodeOut | BodeGen => Slot::Tab(1),
+                BodeIn | BodeOut | BodeGen | Open(M::ExtGen) => Slot::Tab(1),
                 BodeRun => Slot::Foot(0),
                 SrcOn => Slot::Foot(1),
                 _ => Slot::Tab(0),
@@ -327,7 +333,7 @@ impl Ui {
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility)
+        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
     }
 
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.

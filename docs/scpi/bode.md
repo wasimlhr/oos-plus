@@ -1,8 +1,8 @@
 # Bode and bandwidth test
 
-The frequency-response sweep (loop gain, PSRR, impedance) driven by the built-in generator (S models) or through an external generator, and the step-response bandwidth estimate. With the built-in generator and the same channel as input and output, the gain is against the set amplitude and there is no phase: the phase of every point reads `NaN`. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures.
+The frequency-response sweep (loop gain, PSRR, impedance) driven by the built-in generator (S models) or by the external generator of the Ext generator page ([extgen.md](extgen.md)), and the step-response bandwidth estimate. With the built-in generator and the same channel as input and output, the gain is against the set amplitude and there is no phase: the phase of every point reads `NaN`. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures.
 
-Menu location: Bode (view, Mode, Start / stop frequency, Points, Amplitude, Input, Output, Free sweep, Start / stop) and Bandwidth test (View, Source, Signal frequency, Bins per period).
+Menu location: Bode (view, Mode, Start / stop frequency, Points, Amplitude, Input, Output, Generator, Free sweep, Start / stop) and Bandwidth test (View, Source, Signal frequency, Bins per period).
 
 Part of the [SCPI reference](README.md).
 
@@ -27,7 +27,7 @@ Part of the [SCPI reference](README.md).
 | `:BODE:RUN` | Set / Query | Start / stop the sweep; the query answers whether it runs | `0` | Bode > Start / Stop | OOS extension |
 | `:BODE:MODE` | Set / Query | `LOOP\|PSRR\|IMPedance`; the query answers `LOOP`, `PSRR` or `IMP`. | `LOOP` | Bode > Mode (loop / PSRR / impedance) | OOS extension |
 | `:BODE:DATA` | Query | The sweep result as text. | - | Bode > Read sweep data | OOS extension |
-| `:BODE:GENerator` | Set / Query | `"ip:port"` Generator address, one word without blanks, or `usb`. | `192.168.1.100:5555` | Bode > Generator address and connection (LAN / USB) | OOS extension |
+| `:BODE:GENerator` | Set / Query | `"ip:port"` Generator address, one word without blanks, or `usb`. | `192.168.1.100:5555` | Ext generator > Connection and Address | OOS extension. The same settings as `:EXTGen:LINK` and `:EXTGen:ADDRess`. |
 
 ### Bandwidth test
 

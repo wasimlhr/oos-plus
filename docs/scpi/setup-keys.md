@@ -323,8 +323,9 @@ Commands: [bode.md](bode.md).
 
 | Key | Value | Default | Equivalent header |
 | --- | --- | --- | --- |
-| `bode` | start Hz, stop Hz, points, amplitude V, input source, output source, generator index, generator address `ip:port` | `100 1000000 40 1 1 2 0 192.168.1.100:5555` | `:BODE:STARt ...` |
+| `bode` | start Hz, stop Hz, points, amplitude V, input source, output source, generator index (0 built-in, 4 free-running sweep, else the model of the external generator), generator address `ip:port` | `100 1000000 40 1 1 2 0 192.168.1.100:5555` | `:BODE:STARt ...` |
 | `bode_link` | `lan`/`usb` | `lan` | `:BODE:GENerator` |
+| `extgen` | external generator ([extgen.md](extgen.md)): model index (1 APPL, 2 BSWV, 3 SCPI, 5 CHANnel, 6 OWON DGE), channel (1-based), load (`hiz`/`50`), frequency Hz and amplitude Vpp of the page's output | `1 1 hiz 1000 1` | `:EXTGen:MODel ...` |
 | `bode_mode` | `Loop`/`Psrr`/`Impedance` | `Loop` | `:BODE:MODE` |
 | `bode_sweep` | free sweep: time s, log true/false, sync channel (1-based), sync edge (`Rise`/`Fall`), sync level V, input channel (0 = none), reference dBV | `1 true 4 Rise 1 1 0` | `:BODE:SWEep:TIME ...` |
 

@@ -21,6 +21,7 @@ pub(super) const T2: &[&str] = &[
     "BANDwidth:STATe", "BANDwidth:SOURce", "BANDwidth:FREQuency", "BANDwidth:BINS",
     "SYSTem:LOG", "SYSTem:LOG:INTerval", "SYSTem:LOG:FILE", "SYSTem:LOG:INFO",
     "BODE:RUN",
+    "EXTGen:ADDRess", "EXTGen:LOAD", "EXTGen:FREQuency", "EXTGen:AMPLitude", "EXTGen:OUTPut", "EXTGen:CONNect", "EXTGen:STATe", "EXTGen:IDN",
     "EYE:RATE", "POWer:REFerence", "INVerter:ENCoder:INDex",
 ];
 
@@ -76,6 +77,7 @@ pub(super) const SETUP: &[(&str, K)] = &[
     ("BODE:SWEep:TIME", K::F64(|m| &mut m.bode_sw_time, 1e-3, 500.0)), ("BODE:SWEep:LOG", K::Sel(Item::BodeSwLog)),
     ("BODE:SYNC:SOURce", K::Sel(Item::BodeSync)), ("BODE:SYNC:EDGE", K::Sel(Item::BodeSyncEdge)),
     ("BODE:SYNC:LEVel", K::F32(|m| &mut m.bode_sync_level, -1e3, 1e3)), ("BODE:REFLevel", K::F64(|m| &mut m.bode_ref, -300.0, 300.0)),
+    ("EXTGen:MODel", K::Sel(Item::ExtModel)), ("EXTGen:LINK", K::Sel(Item::ExtLink)), ("EXTGen:CHANnel", K::Sel(Item::ExtCh)),
     ("SIM:RATE", K::F64(|m| &mut m.sim_rate, 1e8, 64e9)), ("SIM:LEVel:HIGH", K::F64(|m| &mut m.sim_vhigh, -2.0, 2.0)),
     ("SIM:LEVel:LOW", K::F64(|m| &mut m.sim_vlow, -2.0, 2.0)), ("SIM:RISE", K::F64(|m| &mut m.sim_rise, 5e-12, 2e-9)),
     ("SIM:BWLimit", K::F64(|m| &mut m.sim_bw, 10e6, 50e9)), ("SIM:DEEMphasis", K::F64(|m| &mut m.sim_deemph, 0.0, 12.0)),
@@ -436,6 +438,37 @@ impl Ui {
                 if q { return Some(t(b01(self.bode.running))); }
                 match parse_bool(arg).or_else(|| arg.trim().is_empty().then_some(true)) { Some(on) => { self.bode_run(on); DONE } None => Err(bad(arg)) }
             }
+            // ---- external generator
+            "EXTGen:ADDRess" => {
+                if q { return Some(t(self.m.bode_addr.as_str())); }
+                // one word, like the setup file keeps it
+                let a = text_arg(arg);
+                if a.is_empty() || a.contains(char::is_whitespace) { return Some(Err(bad(arg))); }
+                match self.ext_free() { Ok(()) => { self.ext_set_addr(&a); DONE } Err(why) => Err(conflict(why)) }
+            }
+            "EXTGen:LOAD" => {
+                if q { return Some(t(if self.m.ext_hiz { "HIZ" } else { "50" })); }
+                let hiz = match norm(arg).as_str() { "HIZ" | "HIGHZ" | "INF" | "INFINITY" => true, "50" => false, _ => return Some(Err(bad(arg))) };
+                match self.ext_free() { Ok(()) => { self.ext_set_load(hiz); DONE } Err(why) => Err(conflict(why)) }
+            }
+            "EXTGen:FREQuency" | "EXTGen:AMPLitude" => {
+                let f = key == "EXTGen:FREQuency";
+                if q { return Some(t(en(if f { self.m.ext_freq } else { self.m.ext_ampl }))); }
+                let (lo, hi) = if f { extgen::FREQ } else { extgen::AMPL };
+                let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| (lo..=hi).contains(v)) else { return Some(Err(bad(arg))) };
+                if f { self.ext_set(Some(v), None) } else { self.ext_set(None, Some(v)) }
+                DONE
+            }
+            "EXTGen:OUTPut" => {
+                if q { return Some(t(b01(self.ext.out))); }
+                match parse_bool(arg) { Some(on) => self.ext_output(on).map(|_| None).map_err(conflict), None => Err(bad(arg)) }
+            }
+            "EXTGen:CONNect" => {
+                if q { return Some(t(b01(self.ext_linked()))); }
+                match parse_bool(arg).or_else(|| arg.trim().is_empty().then_some(true)) { Some(on) => self.ext_link(on).map(|_| None).map_err(conflict), None => Err(bad(arg)) }
+            }
+            "EXTGen:STATe" => if q { t(self.ext_state_word()) } else { Err(undefined(key)) },
+            "EXTGen:IDN" => if q { t(self.ext_idn()) } else { Err(undefined(key)) },
             "EYE:RATE" => {
                 if q { return Some(t(en(self.m.eye_rate))); }
                 let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0 && *v <= 1e12) else { return Some(Err(bad(arg))) };

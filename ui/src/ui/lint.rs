@@ -137,7 +137,7 @@ fn menus_fit_at(scr: Screen, ts: TextSize, all: &mut BTreeSet<String>) {
         u
     };
     use MenuId::*;
-    for m in [Main, Channel(0), Channel(3), Horizontal, Acquire, Measure, MeasAdd, MeasHold, MeasPair, Dvm, Cursor, Display, Windows, Utility, Math, Ref, Storage, Mask, Zone, Spectrum, Eye, Power, Identify, SelfCal, Bode, Afg, BwTest, La, LaLines, LaPat, Network, Remote, Time, Magnetic, Inverter, Dpt] {
+    for m in [Main, Channel(0), Channel(3), Horizontal, Acquire, Measure, MeasAdd, MeasHold, MeasPair, Dvm, Cursor, Display, Windows, Utility, Math, Ref, Storage, Mask, Zone, Spectrum, Eye, Power, Identify, SelfCal, Bode, Afg, ExtGen, BwTest, La, LaLines, LaPat, Network, Remote, Time, Magnetic, Inverter, Dpt] {
         walk(&|| open(m, &|_| {}), &format!("{:?}", m), &mut out);
         walk(&|| open(m, &|u| u.m.la.on = true), &format!("{:?} LA", m), &mut out);
     }
@@ -158,8 +158,10 @@ fn menus_fit_at(scr: Screen, ts: TextSize, all: &mut BTreeSet<String>) {
     walk(&|| open(Windows, &|u| u.select_option(Item::WinLayout, "Four")), "Windows four", &mut out);
     walk(&|| open(Bode, &|u| u.m.bode_gen = bode::FREE), "Bode free sweep", &mut out);
     walk(&|| open(Bode, &|u| { u.m.bode_gen = bode::FREE; u.m.bode_sw_in = 0 }), "Bode free sweep no input", &mut out);
-    walk(&|| open(Bode, &|u| u.m.bode_gen = 5), "Bode UNI-T LAN", &mut out);
-    walk(&|| open(Bode, &|u| { u.m.bode_gen = 5; u.m.bode_usb = true }), "Bode UNI-T USB", &mut out);
+    walk(&|| open(Bode, &|u| u.m.bode_gen = 5), "Bode external", &mut out);
+    walk(&|| open(ExtGen, &|u| u.m.bode_usb = true), "Ext generator USB", &mut out);
+    walk(&|| open(ExtGen, &|u| { u.m.ext_model = 6; u.m.bode_usb = true }), "Ext generator OWON USB", &mut out);
+    walk(&|| open(ExtGen, &|u| u.m.ext_model = 6), "Ext generator OWON LAN", &mut out);
     // the clock page in its longest states: a failure after a sync, a zone of its own, a long server name
     let ntp_failed = |u: &mut Ui| {
         u.sys.ntp = true;
@@ -425,7 +427,7 @@ fn screen_in_order_on(scr: Screen) {
         }
         // menus under the top bar, on the screen, as high as at the normal size (the rows keep their 44 px)
         use MenuId::*;
-        for m in [Main, Channel(0), Horizontal, Trigger, Acquire, Measure, MeasAdd, MeasPair, Dvm, Cursor, Display, Utility, Math, Ref, Decode, Storage, Mask, Zone, Spectrum, Eye, Power, Identify, SelfCal, Bode, Afg, BwTest, La, LaLines, LaPat, Network, Remote] {
+        for m in [Main, Channel(0), Horizontal, Trigger, Acquire, Measure, MeasAdd, MeasPair, Dvm, Cursor, Display, Utility, Math, Ref, Decode, Storage, Mask, Zone, Spectrum, Eye, Power, Identify, SelfCal, Bode, Afg, ExtGen, BwTest, La, LaLines, LaPat, Network, Remote] {
             u.open_menu(m);
             let d = u.dlg_layout().unwrap();
             assert!(d.r.y >= u.frame().top.bottom() && d.r.bottom() <= u.scr.h && d.r.x >= 0 && d.r.right() <= u.scr.w, "{:?}: {:?} {:?}", ts, m, d.r);
@@ -2102,7 +2104,7 @@ fn gallery_at(dir: &std::path::Path, ts: TextSize) {
         crate::cmd::run(u, &format!("key {}", s));
     };
     type S = (&'static str, fn(&mut Ui));
-    let menus: Vec<(&str, M)> = vec![("menu-main", M::Main), ("menu-ch", M::Channel(0)), ("menu-hor", M::Horizontal), ("menu-trig", M::Trigger), ("menu-acq", M::Acquire), ("menu-measure", M::Measure), ("menu-measadd", M::MeasAdd), ("menu-cursor", M::Cursor), ("menu-display", M::Display), ("menu-system", M::Utility), ("menu-math", M::Math), ("menu-ref", M::Ref), ("menu-decode", M::Decode), ("menu-storage", M::Storage), ("menu-mask", M::Mask), ("menu-zone", M::Zone), ("menu-spectrum", M::Spectrum), ("menu-eye", M::Eye), ("menu-power", M::Power), ("menu-identify", M::Identify), ("menu-selfcal", M::SelfCal), ("menu-bode", M::Bode), ("menu-afg", M::Afg), ("menu-bw", M::BwTest), ("menu-la", M::La), ("menu-lalines", M::LaLines), ("menu-lapat", M::LaPat), ("menu-network", M::Network), ("menu-remote", M::Remote), ("menu-time", M::Time)];
+    let menus: Vec<(&str, M)> = vec![("menu-main", M::Main), ("menu-ch", M::Channel(0)), ("menu-hor", M::Horizontal), ("menu-trig", M::Trigger), ("menu-acq", M::Acquire), ("menu-measure", M::Measure), ("menu-measadd", M::MeasAdd), ("menu-cursor", M::Cursor), ("menu-display", M::Display), ("menu-system", M::Utility), ("menu-math", M::Math), ("menu-ref", M::Ref), ("menu-decode", M::Decode), ("menu-storage", M::Storage), ("menu-mask", M::Mask), ("menu-zone", M::Zone), ("menu-spectrum", M::Spectrum), ("menu-eye", M::Eye), ("menu-power", M::Power), ("menu-identify", M::Identify), ("menu-selfcal", M::SelfCal), ("menu-bode", M::Bode), ("menu-afg", M::Afg), ("menu-extgen", M::ExtGen), ("menu-bw", M::BwTest), ("menu-la", M::La), ("menu-lalines", M::LaLines), ("menu-lapat", M::LaPat), ("menu-network", M::Network), ("menu-remote", M::Remote), ("menu-time", M::Time)];
     let shot = |u: &mut Ui, n: &str| {
         for _ in 0..24 {
             u.step(0.04);

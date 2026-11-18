@@ -79,6 +79,7 @@ impl Ui {
             Open(M::Inverter) => "Inverter",
             Open(M::Dpt) => "Double pulse",
             Open(M::Afg) => "Generator",
+            Open(M::ExtGen) => "Ext generator",
             Open(M::La) => "Logic analyser",
             Open(M::Dvm) => "DVM/counter",
             Open(M::Logger) => "Data logger",
@@ -283,6 +284,8 @@ pub(super) fn draw_menu_icon(cv: &mut Canvas, it: Item, x: i32, y: i32, c: Rgb, 
         Open(M::Inverter) => { i.wave(); i.l((0.0, 0.5), (1.0, 0.5)); }
         Open(M::Dpt) => { i.pl(&[(0.0, 0.9), (0.15, 0.9), (0.15, 0.1), (0.4, 0.1), (0.4, 0.9), (0.6, 0.9), (0.6, 0.1), (0.75, 0.1), (0.75, 0.9), (1.0, 0.9)]); }
         Open(M::Afg) => { i.frame(); i.wave(); }
+        // a wave leaving a box: the generator is another instrument
+        Open(M::ExtGen) => { i.pl(&[(0.0, 0.25), (0.45, 0.25), (0.45, 0.75), (0.0, 0.75), (0.0, 0.25)]); i.pl(&[(0.45, 0.5), (0.6, 0.5), (0.7, 0.25), (0.85, 0.75), (1.0, 0.5)]); }
         Open(M::La) => { for (k, v) in [0.1, 0.5, 0.9].into_iter().enumerate() { let _ = k; i.pl(&[(0.0, v), (0.3, v), (0.3, v - 0.1), (0.6, v - 0.1), (0.6, v), (1.0, v)]); } }
         Open(M::Dvm) => { i.frame(); i.pl(&[(0.25, 0.3), (0.25, 0.7), (0.5, 0.7), (0.5, 0.3), (0.25, 0.3)]); i.l((0.72, 0.3), (0.72, 0.7)); }
         Open(M::Logger) => { i.l((0.0, 0.0), (0.0, 1.0)); i.l((0.0, 1.0), (1.0, 1.0)); i.pl(&[(0.1, 0.7), (0.35, 0.3), (0.6, 0.6), (1.0, 0.1)]); }

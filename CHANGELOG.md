@@ -35,6 +35,15 @@ Fixed:
 
 Added:
 
+- External generator page, Menu > Instruments > Ext generator (ADR 0028, docs/extgen.md; host-tested against a
+  simulated generator, not yet verified on hardware). A generator on the USB-A port or the LAN has its model,
+  connection and address in one place. Connect asks `*IDN?`, shows maker and model and sets the model for one it
+  knows; Output switches a sine of Frequency and Amplitude on from the scope. SCPI: `:EXTGen:MODel`, `:LINK`,
+  `:ADDRess`, `:CHANnel`, `:LOAD`, `:FREQuency`, `:AMPLitude`, `:OUTPut`, `:CONNect`, `:STATe?`, `:IDN?`.
+- Generator model OWON DGE (DGE2000 and DGE3000 series), with the channel and the load the generator drives. Its
+  error queue is read after every command (`SYSTem:ERRor?`, never `*ESR?`): a value it refuses is shown with its
+  answer. The commands are known from a DGE2070 driven from a computer over USBTMC; the generator on the USB-A port
+  of the scope is not yet verified on hardware.
 - Remote control, from the same run on a DHO924S (host-tested, and each ran on that unit; of `*TRG` the unit showed
   only that it is accepted):
   - `:WAVeform:XINCrement?`, `:XORigin?`, `:XREFerence?`, `:YINCrement?`, `:YORigin?` and `:YREFerence?` answer the
@@ -136,6 +145,11 @@ Added:
 
 Changed:
 
+- Bode with an external generator (host-tested, not yet verified on hardware): Generator is Built-in, External or
+  Free-running sweep; the model, the connection and the address moved to the Ext generator page, and a setup from
+  before reads as it did. The sweep uses the open connection of that page, or opens one for itself. It measures a
+  step once the generator is through with its commands, and a frequency the generator refuses ends the sweep with
+  the generator's answer instead of a point of the old frequency. APPL, BSWV and CHANnel can use channel 2.
 - Phase (A to B) takes one edge of B in each cycle of A, and each edge of B once (host-tested, not yet verified on
   hardware). Before, every edge of B inside a cycle counted, so a B at twice the rate of A read the mean of its two
   edges (180 degrees for a B whose first edge is at 90).
