@@ -5867,17 +5867,42 @@ fn parse_rigol_wfm(b: &[u8], kind: RigolWfm) -> Result<Vec<WaveTrace>, String> {
     }
 }
 
-/// A settings block of a DHO waveform file: its number, its kind and what it holds, decompressed.
-struct DhoBlock {
+/// A settings block of a DHO waveform file: its number, its kind, the size its header names for the settings and
+/// the bytes the file holds for them. The list of a file borrows the file: nothing is decompressed for it.
+struct DhoBlock<'a> {
     id: u16,
     kind: u16,
-    payload: Vec<u8>,
+    size: usize,
+    content: &'a [u8],
+}
+
+/// The most one settings block may decompress to, and the most the blocks read of one file may hold together.
+/// The header of a block names the size of its settings in 16 bits, so a block of a scope is taken to stay under
+/// 64 KiB (assumed: no file of a scope was at hand); 4 MiB is 64 blocks of that size, where a file has four
+/// channels. A file beyond it is refused: a list of 4096 blocks of 1 MiB each is 4 GiB to decompress.
+const DHO_BLOCK_MAX: usize = 1 << 20;
+const DHO_SETTINGS_MAX: usize = 4 << 20;
+
+impl DhoBlock<'_> {
+    /// The settings of the block, decompressed. A block whose header names two different sizes is a zlib stream:
+    /// one that does not decompress is an error, not settings. A block whose two sizes are the same and which is
+    /// no stream is read as it stands (assumed: the source of the layout reads such a block so, and does not say
+    /// whether a scope writes one).
+    fn settings(&self) -> Result<Vec<u8>, String> {
+        match zlib_inflate(self.content, DHO_BLOCK_MAX) {
+            Some(settings) => Ok(settings),
+            None if self.size == self.content.len() => Ok(self.content.to_vec()),
+            None => Err("the RIGOL file has settings that do not decompress".into()),
+        }
+    }
 }
 
 /// The settings blocks of a DHO waveform file, and where they end. They start at byte 24, each with a header of
 /// six u16: number, kind, size decompressed, size compressed, bytes taken in the file, zero. The first
-/// `compressed` bytes are a zlib stream, or the settings themselves; a block that takes no bytes ends the list.
-fn rigol_dho_blocks(b: &[u8]) -> Option<(Vec<DhoBlock>, usize)> {
+/// `compressed` bytes are a zlib stream, or the settings themselves (`DhoBlock::settings`); a block that takes no
+/// bytes ends the list. Only the headers are read here: this runs for every file that starts like a DHO file,
+/// while what the file is is still being found out.
+fn rigol_dho_blocks(b: &[u8]) -> Option<(Vec<DhoBlock<'_>>, usize)> {
     let mut blocks = Vec::new();
     let mut at = 24usize;
     loop {
@@ -5891,41 +5916,15 @@ fn rigol_dho_blocks(b: &[u8]) -> Option<(Vec<DhoBlock>, usize)> {
             return None;
         }
         let content = b.get(at + 12..at + 12 + taken)?;
-        let payload = zlib_inflate(&content[..compressed], 1 << 20).unwrap_or_else(|| content[..compressed].to_vec());
-        blocks.push(DhoBlock { id: word(0), kind: word(1), payload });
+        blocks.push(DhoBlock { id: word(0), kind: word(1), size: word(2) as usize, content: &content[..compressed] });
         at += 12 + taken;
     }
 }
 
-/// A waveform file of a RIGOL DHO800, DHO900 or DHO1000. RIGOL does not publish this layout; it is the one the
-/// RigolWFM project worked out and checked against the scope's own BIN export of the same captures.
-/// The settings blocks (`rigol_dho_blocks`) hold the vertical scale: in the block numbered as its channel, of kind
-/// 5 (DHO800) or 9 (DHO1000), an i64 at byte 1 and the centre at byte 38 (i32 or i64):
-/// DHO800: volts of one code = i64 / 7.5e12, centre = -i32 / 1e9, volts = code * volts of one code + centre - 32768 codes;
-/// DHO1000: volts of one code = i64 / 7.5e11, centre = i64 / 1e8, volts = code * volts of one code - centre - 32768 codes.
-/// After the blocks and the zeros that follow them: u64 samples of all channels; at +16 the time between samples
-/// as a u32 count of 0.8 ns (DHO800) or 10 ns (DHO1000); at +24 the samples of one channel; at +40 the samples,
-/// u16, the channels taking turns. The channels are taken to be CH1 onwards, and the middle sample to be the
-/// trigger: the file says neither where the sources looked.
-fn parse_rigol_dho(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
+/// The frame header of a DHO waveform file, if it starts at `at`: the samples of one channel, the channels and
+/// the ticks between samples. The samples it counts have to be in the file; the error says what is missing.
+fn rigol_dho_frame(b: &[u8], at: usize) -> Result<(usize, usize, u32), String> {
     let short = || "truncated RIGOL waveform file".to_string();
-    let (blocks, mut at) = rigol_dho_blocks(b).ok_or_else(short)?;
-    let dho800 = blocks.iter().any(|block| block.kind == 5 && (1..=4).contains(&block.id));
-    let scales: Vec<(u16, f64, f64)> = blocks.iter().filter(|block| block.kind == if dho800 { 5 } else { 9 } && (1..=4).contains(&block.id)).filter_map(|block| {
-        let number = sg_f64(&block.payload, 1)?.to_bits() as i64 as f64;
-        let (step, centre) = if dho800 {
-            (number / 7.5e12, -(sg_u32(&block.payload, 38)? as i32 as f64) / 1e9)
-        } else {
-            (number / 7.5e11, -(sg_f64(&block.payload, 38)?.to_bits() as i64 as f64) / 1e8)
-        };
-        (step != 0.0).then_some((block.id, step, centre - step * 32768.0))
-    }).collect();
-    let Some(&(_, first_step, first_zero)) = scales.first() else {
-        return Err("the RIGOL file has no usable vertical scale".into());
-    };
-    while b.get(at) == Some(&0) {
-        at += 1;
-    }
     let total = sg_f64(b, at).ok_or_else(short)?.to_bits();
     let (ticks, hint) = (sg_u32(b, at + 16).ok_or_else(short)?, sg_u32(b, at + 24).ok_or_else(short)? as u64);
     if total == 0 || total > 4 * MAX_WAVEFORM_SAMPLES as u64 {
@@ -5939,11 +5938,75 @@ fn parse_rigol_dho(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
     if points > MAX_WAVEFORM_SAMPLES as u64 {
         return Err("waveform exceeds the 32-million-sample import limit".into());
     }
+    // no interval is put in the place of one the file does not give: the times of the trace would be made up
+    if ticks == 0 || ticks > 1_000_000_000 {
+        return Err("the RIGOL file has no usable sample interval".into());
+    }
     let (points, channels) = (points as usize, channels as usize);
-    let ticks = if ticks == 0 || ticks > 1_000_000_000 { 1 } else { ticks };
+    if b.len().saturating_sub(at + 40) < points * channels * 2 {
+        return Err(short());
+    }
+    Ok((points, channels, ticks))
+}
+
+/// A waveform file of a RIGOL DHO800, DHO900 or DHO1000. RIGOL does not publish this layout; it is the one the
+/// RigolWFM project worked out and checked against the scope's own BIN export of the same captures.
+/// The settings blocks (`rigol_dho_blocks`) hold the vertical scale: in the block numbered as its channel, of kind
+/// 5 (DHO800) or 9 (DHO1000), an i64 at byte 1 and the centre at byte 38 (i32 or i64):
+/// DHO800: volts of one code = i64 / 7.5e12, centre = -i32 / 1e9, volts = code * volts of one code + centre - 32768 codes;
+/// DHO1000: volts of one code = i64 / 7.5e11, centre = i64 / 1e8, volts = code * volts of one code - centre - 32768 codes.
+/// After the blocks and the zeros that follow them comes the frame header: u64 samples of all channels; at +16
+/// the time between samples as a u32 count of 0.8 ns (DHO800) or 10 ns (DHO1000), 0 or more than 1e9 being no
+/// interval; at +24 the samples of one channel; at +40 the samples, u16, the channels taking turns.
+/// How many zeros there are is not known (the source of the layout skips them up to the first byte that is not
+/// zero), and a count that is a multiple of 256, as 4 000 000 is, begins with zeros of its own: the first byte
+/// that is not zero is then one to seven bytes into the count. So the count is looked for at each of the eight
+/// places it can begin at, the earliest first, and it is where the samples it counts are all in the file: one
+/// byte too early it reads 256 times as many. Assumed, not checked on a file of a scope: that nothing as long
+/// as 255 times the samples follows them.
+/// The channels are taken to be CH1 onwards, and the middle sample to be the trigger: the file says neither
+/// where the sources looked.
+fn parse_rigol_dho(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
+    let short = || "truncated RIGOL waveform file".to_string();
+    let (blocks, at) = rigol_dho_blocks(b).ok_or_else(short)?;
+    let dho800 = blocks.iter().any(|block| block.kind == 5 && (1..=4).contains(&block.id));
+    let mut scales: Vec<(u16, f64, f64)> = Vec::new();
+    let mut held = 0usize;
+    for block in blocks.iter().filter(|block| block.kind == if dho800 { 5 } else { 9 } && (1..=4).contains(&block.id)) {
+        let settings = block.settings()?;
+        held += settings.len();
+        if held > DHO_SETTINGS_MAX {
+            return Err("the RIGOL file has more than 4 MiB of channel settings".into());
+        }
+        let Some(number) = sg_f64(&settings, 1).map(|x| x.to_bits() as i64 as f64) else { continue };
+        let scale = if dho800 {
+            sg_u32(&settings, 38).map(|centre| (number / 7.5e12, -(centre as i32 as f64) / 1e9))
+        } else {
+            sg_f64(&settings, 38).map(|centre| (number / 7.5e11, -(centre.to_bits() as i64 as f64) / 1e8))
+        };
+        if let Some((step, centre)) = scale.filter(|(step, _)| *step != 0.0) {
+            scales.push((block.id, step, centre - step * 32768.0));
+        }
+    }
+    let Some(&(_, first_step, first_zero)) = scales.first() else {
+        return Err("the RIGOL file has no usable vertical scale".into());
+    };
+    let mut filled = at;
+    while b.get(filled) == Some(&0) {
+        filled += 1;
+    }
+    // the place the count begins at: the last one tried is the first byte that is not zero, and says why not
+    let mut frame = Err(short());
+    for start in filled.saturating_sub(7).max(at)..=filled {
+        frame = rigol_dho_frame(b, start).map(|found| (start, found));
+        if frame.is_ok() {
+            break;
+        }
+    }
+    let (at, (points, channels, ticks)) = frame?;
     let dt = ticks as f64 * if dho800 { 8e-10 } else { 1e-8 };
     let t0 = -(points as f64 / 2.0) * dt;
-    let samples = b.get(at + 40..).filter(|s| s.len() >= points * channels * 2).ok_or_else(short)?;
+    let samples = &b[at + 40..];
     Ok((0..channels).map(|k| {
         let (step, zero) = scales.iter().find(|(id, _, _)| *id as usize == k + 1).map_or((first_step, first_zero), |&(_, step, zero)| (step, zero));
         let v = samples.chunks_exact(2 * channels).take(points).map(|row| (u16::from_le_bytes([row[2 * k], row[2 * k + 1]]) as f64 * step + zero) as f32).collect();
@@ -6138,6 +6201,58 @@ mod rigol_wfm_file_tests {
         let t = &parse_wave(&b, "dho.wfm").unwrap()[0];
         assert!(close(&t.v, &[0.5, 1.5, -0.5, 0.5]), "{:?}", t.v);
         assert!((t.dt - 3e-8).abs() < 1e-20 && (t.t0 + 6e-8).abs() < 1e-20);
+    }
+
+    #[test]
+    fn a_dho_file_whose_count_is_a_multiple_of_256_is_read_whole() {
+        // 256 samples of one channel: the count begins with a zero byte, like the zeros before it
+        let ramp: Vec<u16> = (0..256).map(|i| 32768 + 100 * i).collect();
+        let b = dho(&[(1, 5, channel_settings(true, 0.0), true)], 1, 500, &ramp);
+        let one = parse_wave(&b, "dho.wfm").unwrap();
+        assert_eq!((one.len(), one[0].v.len()), (1, 256));
+        assert!((one[0].v[255] - 2.55).abs() < 1e-5, "{}", one[0].v[255]);
+        assert!((one[0].dt - 4e-7).abs() < 1e-18 && (one[0].t0 + 128.0 * 4e-7).abs() < 1e-15);
+        // cut short it is refused, not read as the 256th part of itself
+        assert!(parse_wave(&b[..b.len() - 1], "dho.wfm").is_err());
+        // 65536 samples of two channels: two zero bytes, and the count of one channel begins with one as well
+        let turns: Vec<u16> = (0..65536).map(|i| if i % 2 == 0 { 42768 } else { 22768 }).collect();
+        let blocks = [(1, 5, channel_settings(true, 0.0), true), (2, 5, channel_settings(true, 0.0), true)];
+        let two = parse_wave(&dho(&blocks, 2, 500, &turns), "dho.wfm").unwrap();
+        assert_eq!(two.iter().map(|t| t.v.len()).collect::<Vec<_>>(), [32768, 32768]);
+        assert!(two[0].v.iter().all(|v| (v - 1.0).abs() < 1e-5) && two[1].v.iter().all(|v| (v + 1.0).abs() < 1e-5));
+    }
+
+    #[test]
+    fn a_dho_file_with_settings_that_are_too_large_or_do_not_decompress_is_refused() {
+        let codes = [32768, 42768, 22768, 32768];
+        // 70 channel blocks of 65 000 bytes that hold no scale: more than 4 MiB before a scale is found
+        let mut many = vec![(1u16, 5u16, vec![0u8; 65_000], true); 70];
+        let refused = parse_wave(&dho(&many, 1, 500, &codes), "dho.wfm").unwrap_err();
+        assert!(refused.contains("4 MiB"), "{refused}");
+        // 64 of them stay under it, and the scale after them is read
+        many.truncate(64);
+        many.push((1, 5, channel_settings(true, 0.5), true));
+        assert!(close(&parse_wave(&dho(&many, 1, 500, &codes), "dho.wfm").unwrap()[0].v, &[0.5, 1.5, -0.5, 0.5]));
+        // one bit of a compressed block changed: its bytes are not read as the settings
+        let mut damaged = dho(&[(1, 5, channel_settings(true, 0.5), true)], 1, 500, &codes);
+        assert!(parse_wave(&damaged, "dho.wfm").is_ok());
+        damaged[24 + 12 + 10] ^= 1;
+        let refused = parse_wave(&damaged, "dho.wfm").unwrap_err();
+        assert!(refused.contains("do not decompress"), "{refused}");
+        // a block that is used by nothing is not decompressed: a damaged one does not take the file with it
+        let mut other = dho(&[(300, 6, vec![7; 40], true), (1, 5, channel_settings(true, 0.5), true)], 1, 500, &codes);
+        other[24 + 12 + 10] ^= 1;
+        assert!(parse_wave(&other, "dho.wfm").is_ok());
+    }
+
+    #[test]
+    fn a_dho_file_without_a_sample_interval_is_refused() {
+        // no ticks between samples, or more than the layout knows as an interval: no interval is made up
+        for ticks in [0, 1_000_000_001] {
+            let b = dho(&[(1, 5, channel_settings(true, 0.5), true)], 1, ticks, &[32768, 42768, 22768, 32768]);
+            let refused = parse_wave(&b, "dho.wfm").unwrap_err();
+            assert!(refused.contains("sample interval"), "{refused}");
+        }
     }
 
     #[test]
