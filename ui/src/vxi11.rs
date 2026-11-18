@@ -481,6 +481,45 @@ mod tests {
         assert_eq!(stb(&mut links, &mut scpi, &mut ui), 4);
     }
 
+    // `*ESR?` over VXI-11, as a VISA client sends it: device_write with the END flag and with or without a line end,
+    // then device_read. The register is read and cleared like on the socket.
+    #[test]
+    fn the_event_status_is_read_over_device_write_and_device_read() {
+        let mut ui = crate::ui::Ui::new(crate::wave::Source::Demo { t: 0.0 });
+        let cv = crate::gfx::Canvas::new(crate::ui::W, crate::ui::H);
+        let mut scpi = crate::scpi::Scpi::open(0);
+        let mut links = Vec::new();
+        let mut a = Vec::new();
+        for v in [1, 0, 0] { put(&mut a, v); }
+        put_opaque(&mut a, b"inst0");
+        let mut rpc = |links: &mut Vec<Option<Link>>, proc_: u32, args: &[u8]| {
+            let message = call(1, CORE_PROG, proc_, args);
+            core_async(&parse_call(&message).unwrap(), links, &mut |p| scpi.poll_program(&mut ui, &cv, p))
+        };
+        rpc(&mut links, 10, &a);
+        let mut ask = |text: &[u8]| {
+            let mut a = Vec::new();
+            for v in [0, 1000, 0, 8] { put(&mut a, v); }
+            put_opaque(&mut a, text);
+            let r = rpc(&mut links, 11, &a);
+            let mut x = Xdr::new(&r[24..]);
+            assert_eq!((x.u32(), x.u32()), (Some(0), Some(text.len() as u32)), "{:?}", String::from_utf8_lossy(text));
+            let mut a = Vec::new();
+            for v in [0, 1024, 1000, 0, 0, 0] { put(&mut a, v); }
+            let r = rpc(&mut links, 12, &a);
+            let mut x = Xdr::new(&r[24..]);
+            let (error, reason) = (x.u32(), x.u32());
+            (error, reason, String::from_utf8_lossy(x.opaque().unwrap_or(&[])).into_owned())
+        };
+        for text in [&b"*ESR?"[..], b"*ESR?\n", b"*ESR?\r\n", b"*esr?\n", b"*ESR? \n"] {
+            assert_eq!(ask(text), (Some(0), Some(4), "0\n".to_string()), "{:?}", String::from_utf8_lossy(text));
+        }
+        assert_eq!(ask(b":NOSUCH:HEADER?\n").2, "-113,\"Undefined header\" :NOSUCH:HEADER?\n");
+        assert_eq!(ask(b"*ESR?\n").2, "32\n", "the command error bit");
+        assert_eq!(ask(b"*ESR?\n").2, "0\n", "read and cleared");
+        assert_eq!(ask(b"*IDN?;*ESR?\n").2.split(';').nth(1), Some("0\n"));
+    }
+
     #[test]
     fn getport_and_a_query_round_trip() {
         // portmapper GETPORT(core, v1, TCP)

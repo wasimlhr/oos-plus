@@ -140,7 +140,8 @@ fn chips_in_the_compact_bars_take_a_touch_over_a_40_px_height() {
     for l in [Layout::Minimal, Layout::Studio] {
         let mut u = layout(l);
         let r = chip(&u, 0);
-        assert!(h_of(r) < 40, "{l:?}: the drawn chip is small ({r:?})");
+        // Minimal draws a chip of 30 px; Studio's pills are 40 px themselves. Either way the touch is 40 px or more
+        assert!(if l == Layout::Studio { h_of(r) == 40 } else { h_of(r) < 40 }, "{l:?}: the drawn chip ({r:?})");
         let bar = u.frame().bottom;
         // the 2 px over the chip row and the 5 px under it still open the channel's menu
         for dy in [-5, -2, 0, r.h - 1 + 3] {

@@ -78,6 +78,19 @@ impl Ui {
         self.m.status = TrigStatus::Stop;
     }
 
+    /// A session saved in the offline view comes back in it, with `slot` filling the screen. The time base and the
+    /// zoom are the ones the setup of the session just set, not worked out from the record again as an import does.
+    pub(super) fn restore_offline_view(&mut self, slot: usize) {
+        if !self.refs.get(slot).is_some_and(Option::is_some) {
+            return;
+        }
+        let view = (self.m.tscale, self.m.tfine, self.m.delay, self.m.zoom, self.m.zscale, self.m.zdelay);
+        self.set_offline(true);
+        self.present_record(slot);
+        (self.m.tscale, self.m.tfine, self.m.delay, self.m.zoom, self.m.zscale, self.m.zdelay) = view;
+        self.refresh_stopped_reference();
+    }
+
     /// Import and Play, while the mode is on: show `slot`, analog off, TIME from that record.
     pub(super) fn present_record(&mut self, slot: usize) {
         let slot = slot.min(NREF - 1);

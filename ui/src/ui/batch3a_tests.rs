@@ -219,8 +219,8 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
 fn bottom_bar_shows_the_sources_that_are_on_and_one_plus_ch_chip_for_the_rest() {
     let mut u = studio();
     let b = u.studio_bottom();
-    // CH1 and CH2 are on: two channel pills; CH3 and CH4 have a small dim pill each, a tap switches them on
-    assert!(b.ch[0].w >= 96 && b.ch[1].w >= 96 && b.ch[2].w == 44 && b.ch[3].w == 44, "{:?}", b.ch);
+    // CH1 and CH2 are on: two channel pills; CH3 and CH4 have a dim pill each, a tap switches them on
+    assert!(b.ch[0].w > 96 && b.ch[1].w > 96 && (60..=96).contains(&b.ch[2].w) && b.ch[3].w == b.ch[2].w, "{:?}", b.ch);
     assert!(b.ch[1].right() < b.ch[2].x && b.ch[3].right() < b.add.x, "in channel order, before the add chip");
     assert!(b.add.w > 0);
     shot(&mut u, "bottom-sources");

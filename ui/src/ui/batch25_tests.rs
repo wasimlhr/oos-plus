@@ -109,7 +109,8 @@ fn pills_share_the_bar_by_count_and_never_reach_the_right_controls() {
     u.refs[0].as_mut().unwrap().on = true;
     let two = pills(&u);
     assert_eq!(two.len(), 2);
-    assert!(two[0].w >= 150, "few pills stay roomy beside the small pills of the channels that are off: {}", two[0].w);
+    // three channels are off: their pills are buttons of 60 px, and the two sources keep their scale and their chevron
+    assert!(two[0].w >= 130, "few pills stay roomy beside the pills of the channels that are off: {}", two[0].w);
     assert_clear(&u);
     shot(&mut u, "bar-2-pills");
     let mut last = two[0].w;

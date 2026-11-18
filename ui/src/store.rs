@@ -2611,6 +2611,19 @@ pub struct Session {
     pub setup: String,
     pub record: Option<Record>,
     pub refs: Vec<SessionRef>,
+    /// the reference slot that filled the screen when the session was saved in the offline view (`session_view`)
+    pub offline_ref: Option<usize>,
+}
+
+/// The end of a session saved in the offline view, after the reference slots: "VIEW", u32 1 (the offline view) and
+/// u32 the slot shown (0-based). A session saved with the live channels has no such end, and a build from before it
+/// reads the file without it.
+pub fn session_view(offline_ref: usize) -> [u8; 12] {
+    let mut b = [0u8; 12];
+    b[..4].copy_from_slice(b"VIEW");
+    b[4..8].copy_from_slice(&1u32.to_le_bytes());
+    b[8..].copy_from_slice(&(offline_ref as u32).to_le_bytes());
+    b
 }
 
 /// A session as one file, little endian: "OOSS", u32 version 1, u32 length of the setup text and the text (UTF-8),
@@ -2628,11 +2641,13 @@ pub fn session_bin(setup: &str, rec: Option<&Record>, memory: Option<&[u8]>, m: 
             b.extend_from_slice(&1u32.to_le_bytes());
             b.extend_from_slice(blob);
         }
-        (None, Some(r)) => {
+        // a record with no channel on (the offline view, every input off) is no record: a blob of no channels
+        // is one the reader refuses, and the file would not load
+        (None, Some(r)) if (0..NCH).any(|c| m.ch[c].on && !r.ch[c].is_empty()) => {
             b.extend_from_slice(&1u32.to_le_bytes());
             b.extend_from_slice(&wave_bin(r, m));
         }
-        (None, None) => b.extend_from_slice(&0u32.to_le_bytes()),
+        (None, _) => b.extend_from_slice(&0u32.to_le_bytes()),
     }
     b.extend_from_slice(&(refs.len() as u32).to_le_bytes());
     for r in refs {
@@ -2646,6 +2661,11 @@ pub fn session_bin(setup: &str, rec: Option<&Record>, memory: Option<&[u8]>, m: 
         }
     }
     b
+}
+
+/// Whether these bytes are a session file (`session_bin`), by its mark: the command line opens one as a session.
+pub fn looks_session(b: &[u8]) -> bool {
+    b.starts_with(b"OOSS")
 }
 
 /// Reads a session file. Every length is checked against the bytes that are there and against the import limits before
@@ -2702,7 +2722,11 @@ pub fn parse_session(b: &[u8], slots: usize) -> Result<Session, String> {
         at += len * 4;
         refs.push(SessionRef { slot, src, t0, dt, v });
     }
-    Ok(Session { setup, record, refs })
+    // the view the session was saved in, when the file says so and names a slot it holds
+    let offline_ref = b.get(at..at + 12).filter(|end| &end[..4] == b"VIEW" && end[4..8] == 1u32.to_le_bytes())
+        .map(|end| u32::from_le_bytes(end[8..12].try_into().unwrap()) as usize)
+        .filter(|slot| refs.iter().any(|r| r.slot == *slot));
+    Ok(Session { setup, record, refs, offline_ref })
 }
 
 /// One OOSW blob: the record and the number of bytes consumed.

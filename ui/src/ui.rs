@@ -2152,10 +2152,12 @@ impl Ui {
         if !self.m.compact() {
             return f;
         }
-        // the compact bottom bar: the body takes what the cards would have had
-        let grow = f.bottom.h - BOTTOM_H;
+        // the compact bottom bar: the body takes what the cards would have had. Studio's bar is higher: its pills are
+        // taller than a measurement badge
+        let bar = if self.m.layout == Layout::Studio { studio::BOTTOM_H } else { BOTTOM_H };
+        let grow = f.bottom.h - bar;
         f.body.h += grow;
-        f.bottom = Rect::new(f.bottom.x, f.bottom.y + grow, f.bottom.w, BOTTOM_H);
+        f.bottom = Rect::new(f.bottom.x, f.bottom.y + grow, f.bottom.w, bar);
         f.menu_btn = Rect::new(f.bottom.x + 4, f.bottom.y + 3, 46, 30);
         let x = f.menu_btn.right() + 6;
         f.cards = Rect::new(x, f.bottom.y + 3, (f.bottom.right() - METRICS.edge - x).max(0), 30);
@@ -4664,7 +4666,11 @@ impl Ui {
             r.as_ref().map(|r| crate::store::SessionRef { slot, src: r.src, t0: r.t0, dt: r.dt, v: r.v.to_vec() })
         }).collect();
         let memory = self.session_memory();
-        let bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), memory.as_deref(), &self.m, &refs);
+        let mut bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), memory.as_deref(), &self.m, &refs);
+        // saved in the offline view, a loaded capture fills the screen: the session comes back that way
+        if self.offline && !self.session_is_sim && self.sim_refs.is_empty() && self.refs.get(self.offline_ref).is_some_and(Option::is_some) {
+            bytes.extend_from_slice(&crate::store::session_view(self.offline_ref));
+        }
         let r = crate::store::write(&p, &bytes);
         let out = r.as_ref().map(|_| p.clone()).map_err(|e| e.to_string());
         self.toast_saved(&p, r);
@@ -4681,6 +4687,7 @@ impl Ui {
             let session = crate::store::parse_session(&data, NREF)?;
             // checked before anything is changed: a file with a setup this build cannot read leaves the bench as it is
             crate::store::parse_setup(&session.setup)?;
+            let offline_ref = session.offline_ref;
             if self.record_mode() {
                 self.leave_session();
             }
@@ -4704,6 +4711,9 @@ impl Ui {
             (self.stop_raw, self.stop_pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
+            if let Some(slot) = offline_ref {
+                self.restore_offline_view(slot);
+            }
             self.measure_last();
             self.measure_refs();
             Ok(p)

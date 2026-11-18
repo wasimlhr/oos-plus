@@ -7,6 +7,8 @@
 use minifb::{InputCallback, Key, Window};
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::os::windows::ffi::OsStringExt;
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 
@@ -28,6 +30,13 @@ extern "system" {
     fn ScreenToClient(hwnd: HWND, point: *mut POINT) -> i32;
     fn GetKeyState(key: i32) -> i16;
 }
+// Files dropped on the window: the handle of a drop arrives as the WPARAM of WM_DROPFILES.
+#[link(name = "shell32")]
+extern "system" {
+    fn DragAcceptFiles(hwnd: HWND, accept: i32);
+    fn DragQueryFileW(drop: usize, file: u32, name: *mut u16, length: u32) -> u32;
+    fn DragFinish(drop: usize);
+}
 
 const WM_KILLFOCUS: u32 = 0x0008;
 const WM_CANCELMODE: u32 = 0x001f;
@@ -38,6 +47,7 @@ const WM_LBUTTONUP: u32 = 0x0202;
 const WM_RBUTTONDOWN: u32 = 0x0204;
 const WM_MOUSEWHEEL: u32 = 0x020a;
 const WM_CAPTURECHANGED: u32 = 0x0215;
+const WM_DROPFILES: u32 = 0x0233;
 
 const SUBCLASS_ID: usize = 0x4f4f_5349;
 
@@ -101,10 +111,31 @@ impl InputCallback for Keyboard {
 struct Capture {
     send: Sender<Event>,
     keys: Rc<RefCell<Keys>>,
+    dropped: Sender<PathBuf>,
+}
+
+/// The files of one drop, in the order the shell gives them. `query(index, buffer)` is `DragQueryFileW`: with index
+/// `u32::MAX` it returns the number of files; with an empty buffer the length of a name in UTF-16 units, without its
+/// end mark; with a buffer it writes the name and returns the units written. A name that comes back empty is left out.
+fn dropped_names(mut query: impl FnMut(u32, &mut [u16]) -> u32) -> Vec<PathBuf> {
+    let count = query(u32::MAX, &mut []);
+    (0..count).filter_map(|file| {
+        let mut name = vec![0u16; query(file, &mut []) as usize + 1];
+        let written = (query(file, &mut name) as usize).min(name.len());
+        (written > 0).then(|| std::ffi::OsString::from_wide(&name[..written]).into())
+    }).collect()
 }
 
 unsafe extern "system" fn procedure(hwnd: HWND, message: u32, w: WPARAM, l: LPARAM, _: usize, data: usize) -> LRESULT {
     let capture = &*(data as *const Capture);
+    if message == WM_DROPFILES {
+        let drop = w;
+        for path in dropped_names(|file, name| DragQueryFileW(drop, file, if name.is_empty() { std::ptr::null_mut() } else { name.as_mut_ptr() }, name.len() as u32)) {
+            let _ = capture.dropped.send(path);
+        }
+        DragFinish(drop);
+        return 0;
+    }
     if message == WM_MOUSEWHEEL {
         // WM_MOUSEWHEEL positions are screen coordinates; preserve the event's
         // client point and modifiers rather than sampling them after key release.
@@ -148,6 +179,7 @@ pub struct Input {
     hwnd: HWND,
     capture: Box<Capture>,
     received: Receiver<Event>,
+    dropped: Receiver<PathBuf>,
     mouse_captured: bool,
 }
 
@@ -156,13 +188,19 @@ impl Input {
         let (send, received) = mpsc::channel();
         let keys = Rc::new(RefCell::new(Keys::default()));
         window.set_input_callback(Box::new(Keyboard { keys: keys.clone(), send: send.clone() }));
-        let mut capture = Box::new(Capture { send, keys });
+        let (drop_send, dropped) = mpsc::channel();
+        let mut capture = Box::new(Capture { send, keys, dropped: drop_send });
         let hwnd = window.get_window_handle();
         // Same window thread for installation, callbacks, and removal. The Box
         // remains stable until Drop unregisters the callback before freeing it.
         let mouse_captured = unsafe { SetWindowSubclass(hwnd, Some(procedure), SUBCLASS_ID, (&mut *capture as *mut Capture) as usize) != 0 };
-        Self { hwnd, capture, received, mouse_captured }
+        // The same procedure takes the drop: without it the window does not say it accepts files.
+        if mouse_captured { unsafe { DragAcceptFiles(hwnd, 1); } }
+        Self { hwnd, capture, received, dropped, mouse_captured }
     }
+
+    /// The files dropped on the window since the last call.
+    pub fn dropped(&self) -> Vec<PathBuf> { self.dropped.try_iter().collect() }
 
     pub fn mouse_captured(&self) -> bool { self.mouse_captured }
     pub fn events(&self) -> Vec<Event> { self.received.try_iter().collect() }
@@ -181,6 +219,31 @@ impl Drop for Input {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `DragQueryFileW` over these names, as the shell answers it.
+    fn shell<'a>(names: &'a [&'a str]) -> impl FnMut(u32, &mut [u16]) -> u32 + 'a {
+        move |file, buffer| {
+            if file == u32::MAX { return names.len() as u32; }
+            let name: Vec<u16> = names[file as usize].encode_utf16().collect();
+            if buffer.is_empty() { return name.len() as u32; }
+            // the shell writes what fits and ends it with a zero
+            let fits = name.len().min(buffer.len() - 1);
+            buffer[..fits].copy_from_slice(&name[..fits]);
+            buffer[fits] = 0;
+            fits as u32
+        }
+    }
+
+    #[test]
+    fn the_names_of_a_drop_come_whole_and_in_order() {
+        let names = ["C:/captures/ch1 rail.pwwf".to_string(), "D:/long/".repeat(60) + "bench.oss", "C:/captures/ripple 50 µs.bin".to_string()];
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let got = dropped_names(shell(&names));
+        assert_eq!(got, names.iter().map(PathBuf::from).collect::<Vec<_>>());
+        assert!(dropped_names(shell(&[])).is_empty());
+        // a name the shell gives back empty is left out, the others are kept
+        assert_eq!(dropped_names(shell(&["", "a.csv"])), [PathBuf::from("a.csv")]);
+    }
 
     #[test]
     fn wheel_retains_its_ctrl_point_and_signed_delta_after_the_chord_is_released() {
