@@ -166,10 +166,13 @@ Fixed:
   - Auto set-up on a signal without a steady period takes the fastest time base that shows it busy, unless a slower
     one shows clearly more height: bursts of 100 ns pulses every 1.6 us ended at 2 ms/div, a band of aliases, and
     are at 2 us/div now (unit);
+  - `:CALLout:LIST?` answers in one line, `source,time,"text"` a note, separated by `;`; it answered one line a
+    note, which a client that reads line by line takes for as many answers (unit);
   - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line
     decoded 59 characters before the save and none after the load. A loaded session is zoomed, read out (RAW) and
     decoded from its samples, and a Stop does not read the hardware's own memory in its place (unit: 100 k points,
-    22 of 22 and 59 of 59 characters after the load at 5 and 20 ms/div).
+    22 of 22 and 59 of 59 characters after the load at 5 and 20 ms/div; four channels of 100 k points and one of
+    1 M points come back with the same samples, and the notes with them).
 - An update with another device tree starts by kexec again (unit). The update copied the loader's random
   `/chosen/kaslr-seed` into the new tree, and kexec-tools refuses a seed that is not 0, so the update stopped at its
   kexec start with nothing installed. The seed now goes in as 0, and kexec-tools puts in a new random one. A scope

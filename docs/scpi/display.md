@@ -31,7 +31,7 @@ Part of the [SCPI reference](README.md).
 | `:CALLout:REMove` | Action | `<n>` Remove note `n` of the list (1-based) | - | tap the note, empty its text | OOS extension |
 | `:CALLout:CLEar` | Action | Remove every note | - | - | OOS extension |
 | `:CALLout:COUNt` | Query | Number of notes | `0` | - | OOS extension |
-| `:CALLout:LIST` | Query | Rows `source,time,text`, one per line | - | - | OOS extension |
+| `:CALLout:LIST` | Query | One record a note, `source,time,"text"`, separated by `;` in one line (a `"` in a text is doubled); empty without notes | - | - | OOS extension |
 
 ### Views
 

@@ -342,8 +342,9 @@ impl Ui {
                 if !q { return Some(Err(undefined(key))); }
                 t(self.callouts.iter().map(|c| {
                     let src = match c.src { WaveId::Ch(k) => format!("CHAN{}", k + 1), WaveId::Ref(k) => format!("R{}", k + 1) };
-                    format!("{},{:e},{}", src, c.t, c.text)
-                }).collect::<Vec<_>>().join("\n"))
+                    // one record a note, all in one line: an answer of several lines has no end a client could see
+                    format!("{},{},\"{}\"", src, crate::scpi::e(c.t), c.text.replace('"', "\"\""))
+                }).collect::<Vec<_>>().join(";"))
             }
             "SYSTem:SETup" => {
                 if q { return Some(Ok(Some(crate::scpi::block(self.setup_text_full().as_bytes())))); }

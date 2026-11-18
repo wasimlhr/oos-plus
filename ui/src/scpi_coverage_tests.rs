@@ -446,11 +446,11 @@ fn storage_zoom(t: &mut T) {
     t.go(":CALL:ADD CHAN1,-2.5e-4,\"runt here\"");
     t.go(":CALL:ADD CHAN1,1e-4,second");
     assert_eq!(t.raw(":CALL:COUN?"), "2");
-    assert_eq!(t.raw(":CALL:LIST?"), "CHAN1,-2.5e-4,runt here\nCHAN1,1e-4,second");
+    assert_eq!(t.raw(":CALL:LIST?"), "CHAN1,-2.500000E-04,\"runt here\";CHAN1,1.000000E-04,\"second\"");
     t.no(":CALL:ADD CHAN9,0,x", "-224");
     t.no(":CALL:ADD CHAN1,0,\"\"", "-224");
     t.go(":CALL:REM 1");
-    assert_eq!(t.raw(":CALL:LIST?"), "CHAN1,1e-4,second");
+    assert_eq!(t.raw(":CALL:LIST?"), "CHAN1,1.000000E-04,\"second\"");
     t.no(":CALL:REM 5", "-224");
     t.go(":CALL:CLE");
     assert_eq!(t.raw(":CALL:COUN?"), "0");
