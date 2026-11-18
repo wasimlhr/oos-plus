@@ -80,6 +80,28 @@ fn show_within(group: &str, rel: f64, floor: f64, rows: &[(u16, &str, f64)], ref
 
 const Q: f64 = f64::NAN;
 
+/// The double pulse of the tests: (Vds, Id, the gate), 50 ns a sample. The bus is 100 V; the gate is on from 100 to
+/// 300 us and from 400 to 500 us.
+fn double_pulse() -> [(Vec<f32>, f64); 3] {
+    let dp = 50e-9;
+    let gate = wave(12_000, dp, |t| if (100e-6..300e-6).contains(&t) || (400e-6..500e-6).contains(&t) { 10.0 } else { 0.0 });
+    let id = wave(12_000, dp, |t| {
+        let fall = |t0: f64, from: f64| from * (1.0 - ((t - t0 - 3e-6) / 1e-6).clamp(0.0, 1.0));
+        if t < 100e-6 { 0.0 }
+        else if t < 300e-6 { (t - 100e-6) * 50e3 }
+        else if t < 402e-6 { fall(300e-6, 10.0) }
+        else if t < 403e-6 { (t - 402e-6) / 1e-6 * 10.0 }
+        else if t < 404e-6 { 10.0 + 2.0 * (1.0 - ((t - 403.5e-6) / 0.5e-6).abs()) }
+        else if t < 500e-6 { 10.0 + (t - 404e-6) * 50e3 }
+        else { fall(500e-6, 14.8) }
+    });
+    let vds = wave(12_000, dp, |t| {
+        let off = |t0: f64| if t < t0 + 3e-6 { 0.0 } else if t < t0 + 5e-6 { (t - t0 - 3e-6) / 2e-6 * 100.0 } else if t < t0 + 7e-6 { 100.0 + 20.0 * (1.0 - ((t - t0 - 6e-6) / 1e-6).abs()) } else { 100.0 };
+        if t < 100e-6 { 100.0 } else if t < 300e-6 { 0.0 } else if t < 403e-6 { if t < 402e-6 { off(300e-6) } else { 100.0 * (1.0 - (t - 402e-6) / 1e-6) } } else if t < 500e-6 { 0.0 } else { off(500e-6) }
+    });
+    [vds, id, gate]
+}
+
 #[test]
 fn the_module_measurements_read_known_signals() {
     let mut bad = Vec::new();
@@ -166,22 +188,7 @@ fn the_module_measurements_read_known_signals() {
     // first pulse and falls in 1 us, 3 us after the gate; the voltage rises in 2 us from there and peaks at 120 V. The
     // second turn-on starts 2 us after the gate, rises in 1 us, overshoots to 12 A (the diode's recovery, 1 us wide) and
     // then the inductor ramps on to 14.8 A.
-    let dp = 50e-9;
-    let gate = wave(12_000, dp, |t| if (100e-6..300e-6).contains(&t) || (400e-6..500e-6).contains(&t) { 10.0 } else { 0.0 });
-    let id = wave(12_000, dp, |t| {
-        let fall = |t0: f64, from: f64| from * (1.0 - ((t - t0 - 3e-6) / 1e-6).clamp(0.0, 1.0));
-        if t < 100e-6 { 0.0 }
-        else if t < 300e-6 { (t - 100e-6) * 50e3 }
-        else if t < 402e-6 { fall(300e-6, 10.0) }
-        else if t < 403e-6 { (t - 402e-6) / 1e-6 * 10.0 }
-        else if t < 404e-6 { 10.0 + 2.0 * (1.0 - ((t - 403.5e-6) / 0.5e-6).abs()) }
-        else if t < 500e-6 { 10.0 + (t - 404e-6) * 50e3 }
-        else { fall(500e-6, 14.8) }
-    });
-    let vds = wave(12_000, dp, |t| {
-        let off = |t0: f64| if t < t0 + 3e-6 { 0.0 } else if t < t0 + 5e-6 { (t - t0 - 3e-6) / 2e-6 * 100.0 } else if t < t0 + 7e-6 { 100.0 + 20.0 * (1.0 - ((t - t0 - 6e-6) / 1e-6).abs()) } else { 100.0 };
-        if t < 100e-6 { 100.0 } else if t < 300e-6 { 0.0 } else if t < 403e-6 { if t < 402e-6 { off(300e-6) } else { 100.0 * (1.0 - (t - 402e-6) / 1e-6) } } else if t < 500e-6 { 0.0 } else { off(500e-6) }
-    });
+    let [vds, id, gate] = double_pulse();
     bad.extend(show("dpt", 1e-12, &[(170, "Vpeak", 120.0), (171, "Ipeak", 12.0), (172, "Td(on)", 2.1e-6), (173, "Tr", 0.8e-6), (174, "Ton", 2.9e-6), (175, "Td(off)", 3.1e-6),
         (176, "Tf", 0.8e-6), (177, "Toff", 3.9e-6), (178, "dv/dt", 50e6), (179, "di/dt", 10e6), (184, "Irrm", 2.0), (181, "Trr", 0.95e-6), (182, "Qrr", 0.995e-6),
         (185, "Diode d/dt", 4e6), (183, "Err", 100.0 * 0.995e-6), (186, "Qoss", 12.8e-6), (180, "Tdt", Q)], &[vds, id, gate], &|_| {}));
@@ -331,5 +338,54 @@ fn the_remaining_rows_read_built_signals() {
         if k > 0 && into < 100e-9 { level[k - 1] + (level[k] - level[k - 1]) * into / 100e-9 } else { level[k] }
     });
     bad.extend(show_within("deemph", 0.1, 1e-12, &[(76, "T/nT Ratio", 3.5)], &[emph], &|_| {}));
+    assert!(bad.is_empty(), "{bad:#?}");
+}
+
+/// The rows that had no worked value: the folded RMS, the magnetic property, the system efficiency, the dead time and
+/// the deterministic side of the dual-Dirac split.
+#[test]
+fn the_rows_left_open_read_worked_values() {
+    let mut bad = Vec::new();
+    // Folded RMS is the RMS of every sample about the mean of its place in the bit. PRBS7 at 100 samples a bit: at 90
+    // places a sample is the bit, so it spreads as a coin of the share p of ones, p (1 - p). The ten places on the
+    // edge hold (1 - f) of the bit before and f of the bit after, f = 0, 0.1 ... 0.9
+    let bits = prbs7(2000);
+    let d = nrz(&bits, 1e-6, 100e-9, 10e-9, |_| 0.0);
+    let n = bits.len() as f64;
+    let ones = bits.iter().filter(|b| **b).count() as f64 / n;
+    let both = bits.windows(2).filter(|w| w[0] && w[1]).count() as f64 / (n - 1.0);
+    let (var, cov) = (ones * (1.0 - ones), both - ones * ones);
+    let edge: f64 = (0..10).map(|k| { let f = k as f64 / 10.0; ((1.0 - f).powi(2) + f * f) * var + 2.0 * f * (1.0 - f) * cov }).sum();
+    bad.extend(show_within("folded", 0.02, 1e-12, &[(220, "Folded RMS", ((90.0 * var + edge) / 100.0).sqrt())], &[d], &|_| {}));
+    // the magnetic property is the relative permeability: the inductor of 1 mH, wound with 10 turns on a core of 1 cm2
+    // with a path of 10 cm, has L le / (u0 N^2 Ae) = 7958
+    let mv = wave(20_000, 1e-6, |t| if (t * 1e3).rem_euclid(1.0) < 0.5 { 1.0 } else { -1.0 });
+    let mi = wave(20_000, 1e-6, |t| { let p = (t * 1e3).rem_euclid(1.0); if p < 0.5 { -0.25 + p * 1.0 } else { 0.25 - (p - 0.5) * 1.0 } });
+    bad.extend(show("core geometry", 1e-9, &[(111, "Magnetic Property", 1e-3 * 0.1 / (4.0 * PI * 1e-7 * 100.0 * 1e-4))], &[mv, mi],
+        &|u| { u.m.mag_n = 10.0; u.m.mag_ae = 1e-4; u.m.mag_le = 0.1; }));
+    // system efficiency: 2 N m at 3000 rpm are 2 * 100 pi W on the shaft; 100 V and 8 A go in, 800 W: pi / 4
+    let w = 2.0 * PI * 50.0;
+    let ph = |k: f64| wave(20_000, 10e-6, move |t| (w * t - k * 2.0 * PI / 3.0).sin());
+    let dc = |v: f64| wave(20_000, 10e-6, move |_| v);
+    bad.extend(show("efficiency", 1e-3, &[(137, "System Efficiency", PI / 4.0)], &[ph(0.0), ph(1.0), ph(2.0), dc(2.0), dc(100.0), dc(8.0)],
+        &|u| { u.m.inv_ev = Some(WaveId::Ref(4)); u.m.inv_ei = Some(WaveId::Ref(5)); }));
+    // dead time: the gate of the double pulse falls at 300 us and rises again at 400 us. The other gate is on from 302
+    // to 396 us: 2 us after the first one falls, 4 us before it rises. The row is the smaller one
+    let [vds, id, gate] = double_pulse();
+    let other = wave(12_000, 50e-9, |t| if (302e-6..396e-6).contains(&t) { 10.0 } else { 0.0 });
+    bad.extend(show("dead time", 1e-12, &[(180, "Tdt", 2e-6)], &[vds, id, gate, other],
+        &|u| { u.m.dpt_4th = crate::model::DptFourth::Gate; u.m.dpt_4ch = WaveId::Ref(3); }));
+    // the deterministic side of the dual-Dirac split: every edge of a clock comes 20 ns early or 20 ns late, by a coin,
+    // with 4 ns of random jitter on top. The two Diracs are 40 ns apart, and the Gaussian beside each is the 4 ns
+    let clock: Vec<bool> = (0..4000).map(|k| k % 2 == 0).collect();
+    let mut seed = 88172645463325252u64;
+    let mut u = move || { seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17; (seed >> 11) as f64 / (1u64 << 53) as f64 };
+    let jit: Vec<f64> = (0..=clock.len()).map(|_| {
+        let side = if u() < 0.5 { -20e-9 } else { 20e-9 };
+        let (a, b) = (u().max(1e-12), u());
+        side + 4e-9 * (-2.0 * a.ln()).sqrt() * (2.0 * PI * b).cos()
+    }).collect();
+    let dd = nrz(&clock, 1e-6, 100e-9, 10e-9, move |t| jit[(t / 1e-6).round() as usize]);
+    bad.extend(show_within("dual dirac", 0.15, 1e-12, &[(45, "DJ-dd", 40e-9), (44, "RJ-dd", 4e-9), (41, "TIE", Q), (43, "TJ@BER", 40e-9 + 14.07 * 4e-9)], &[dd], &|_| {}));
     assert!(bad.is_empty(), "{bad:#?}");
 }

@@ -1024,6 +1024,8 @@ fn the_measurements_read_a_known_pulse_train() {
         ("Positive Pulses", 10.0), ("Negative Pulses", 9.0), ("Cycle Mean", 0.3), ("Cycle RMS", rms), ("Cycle Area", 300e-6),
         ("Cycle Amplitude", 1.0), ("Cycle Top", 1.0), ("Cycle Base", 0.0), ("Cycle Peak-to-Peak", 1.0), ("Cycle Maximum", 1.0),
         ("Cycle Minimum", 0.0), ("High Time", 292e-6), ("Low Time", 692e-6),
+        // at or above the upper level of 0.9 V: from 9 us into the rise to 1 us into the fall, as the high time
+        ("Time Outside Level", 292e-6),
         ("Delay rise-rise", 100e-6), ("Delay fall-fall", 100e-6), ("Phase rise-rise", 36.0), ("Phase fall-fall", 36.0),
         ("Delay rise-fall", 400e-6), ("Delay fall-rise", -200e-6), ("Phase rise-fall", 144.0), ("Phase fall-rise", 288.0),
         ("Median", 0.0), ("Mode", 0.0), ("Duration N-Periods", 6e-3), ("Time of Maximum", -4.79e-3), ("Time of Minimum", -5e-3),
