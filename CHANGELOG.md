@@ -19,11 +19,10 @@ Fixed:
     range (-18.5 V or 21.5 V at 1 V/div) wherever the finger was: the search for the level went the wrong way.
   - the View menu of the Studio bar and the popup of Add source are read with `:UI:MENU?` and pressed with
     `:UI:MENU:SELect`, and `:UI:MENU:CLOSe` closes them. They opened, but a program could not see them.
-- Minimal and Studio: a sheet row has the control of the Default menu (ADR 0031). A setting with a list of options
-  (record length, bandwidth limit, averages, ...) has minus and plus again and the value opens the list; it was a
-  list alone. A choice is buttons wherever they fit the row, so Acquire > Mode and Horizontal > Expand around are four
-  buttons as in Default, and 17 more rows like them. A test compares every row of the 47 menus with the dialog: its
-  name, its order and its control. The cursor rows of Minimal are in the order of the menu.
+- Minimal and Studio: a sheet row has the name and, inside its tab, the place of its row in the Default menu
+  (ADR 0031). The cursor rows of Minimal, one tab there, were out of the menu's order. A test compares every row of
+  the 47 menus in both layouts; the 20 names that say whose row it is ("Turn on CH2", "Decoder D1") are listed in it
+  with their reason.
 - Studio offers what Default offers (ADR 0030; host-tested, not yet verified on hardware). The 47 menus and 508 rows
   of the Default layout were compared with the Studio sheets; the rows were there but for one, the gaps were at the
   entrances, and a test now keeps a row from going missing:

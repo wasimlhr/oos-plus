@@ -707,10 +707,8 @@ key open a quick panel that adds measurements on one source with the plot in vie
 opens the Measure page with the categories, the sources, Selected and Settings, and Menu > Measure opens that page at
 once. System, SIM and the network pages are entries of the Menu.
 
-A sheet has the rows of the Default menu with the same controls: buttons for a choice where they fit the row, minus,
-value and plus where they do not (the value opens the list of all options), a switch for Off and On. In Studio the
-plot's right-click (long press) menu has Stacked traces, a lane for every source with its own scale at the right,
-and Overlay traces, every source on one graticule of the full height, each with its own position and scale
+In Studio the plot's right-click (long press) menu has Stacked traces, a lane for every source with its own scale at
+the right, and Overlay traces, every source on one graticule of the full height, each with its own position and scale
 (`:VIEW:TRACes`). In both, every channel, reference and math channel has a handle with its name at the left edge, on
 its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
 side. A tap on a handle opens the sheet of its source.

@@ -52,7 +52,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0027](code/0027-a-session-is-one-file-of-setup-record-and-references.md) | code | A session is one file of the setup, the record on the screen and the reference slots | accepted, to be reviewed |
 | [0028](code/0028-an-external-generator-is-a-table-row-one-connection-and-a-page.md) | code | An external generator is a row of a table, one connection and a page of its own | accepted, to be reviewed |
 | [0030](ui-ux/0030-studio-offers-what-default-offers.md) | ui-ux | Studio offers what Default offers; the Add panel is the short way into the Measure page | accepted |
-| [0031](ui-ux/0031-a-sheet-row-is-the-row-of-the-default-dialog.md) | ui-ux | A sheet row is the row of the Default dialog; every source has one handle on its zero level | accepted |
+| [0031](ui-ux/0031-every-source-has-one-handle-on-its-zero-level.md) | ui-ux | Every source has one handle on its zero level; a sheet keeps the names and the order of the menu | accepted |
 
 ## Reading order for agents
 
