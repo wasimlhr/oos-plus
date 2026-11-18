@@ -95,8 +95,10 @@ Added:
   - the zoom toolbar of the pull-down tab is a finger high (44 px, its chips 42), and it stays open until its label
     "Zoom" is tapped or pushed up. It was 30 px with chips of 20, and it shut after four seconds and with any touch
     beside it, so it had to be pulled down again for every step. The tab itself is larger too;
-  - the top bar says how many waveforms a second reach the screen, the sample rate, the memory depth and the
-    acquisition mode, each a small label over its value, where it had the rate and the depth in one line.
+  - a long touch on the zoom overview or on the zoom toolbar opens no menu: a finger rests there while it moves the
+    window, and the menu of the plot opened under it. The zoom view and the lanes keep that menu;
+  - the top bar says the sample rate, the memory depth and the acquisition mode, each a small label over its
+    value, where it had the rate and the depth in one line.
 - Studio, the zoom source popover (hold the Zoom button): **X zoom** minus and plus beside the Y zoom ones. One
   step of the zoom time base around the centre of the zoom window; minus ends at the main time base (unit: 100×
   after three steps). Remote: `:UI:CONText` on the Zoom button opens that popover, where it opened the menu of the plot

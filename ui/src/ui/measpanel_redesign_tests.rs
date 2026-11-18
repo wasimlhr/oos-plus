@@ -531,6 +531,16 @@ fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
     assert!(u.zoom_tab_open(), "a tap on the trace is not for the toolbar");
     for _ in 0..30 { u.step(0.2); }
     assert!(u.zoom_tab_open(), "it does not go away by itself");
+    // a long touch on the overview or on the toolbar opens no menu: a finger rests there while it works the zoom
+    let (overview, zoomed_view) = u.split_zoom(u.grid);
+    let bar_rect = u.zoom_tab_bar_rect();
+    for (x, y) in [(overview.x + overview.w / 3, overview.y + overview.h / 2), (bar_rect.x + bar_rect.w / 2, bar_rect.y + bar_rect.h / 2)] {
+        u.context_menu(x, y);
+        assert!(u.studio.ctx.is_none() && u.workspace.popup.is_none(), "a menu at ({x}, {y})");
+    }
+    u.context_menu(zoomed_view.x + zoomed_view.w / 3, zoomed_view.y + zoomed_view.h / 2 + 30);
+    assert!(u.studio.ctx.is_some(), "the zoom view keeps the menu of the plot");
+    u.studio.ctx = None;
     // a tap on its label folds it to the tab again
     let label = u.studio_zoom_bar().unwrap().label;
     tap(&mut u, label);
