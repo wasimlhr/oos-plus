@@ -260,7 +260,7 @@ fn the_footer_holds_the_actions_with_the_destructive_one_on_the_right() {
     let mut u = studio();
     u.open_menu(MenuId::Ref);
     let g = u.sheet_geo().unwrap();
-    assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [Item::RefSave, Item::RefClear]);
+    assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [Item::RefSave, Item::RefClearOne]);
     assert!(g.foot[1].1.x > g.foot[0].1.x);
     // a channel that is off: the fix is the footer action of the page that needs it
     u.m.ch[2].on = false;

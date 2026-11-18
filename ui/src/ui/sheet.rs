@@ -128,7 +128,7 @@ fn keypad_pick(it: Item) -> bool {
 }
 
 fn destructive(it: Item) -> bool {
-    matches!(it, Item::SpecLimitClear | Item::EyeClear | Item::MaskClear | Item::SimDefaults | Item::CurRemove | Item::SrchRemove | Item::RefClear | Item::MeasClear | Item::UpdateRollback | Item::Stock | Item::PowerAct | Item::ClearDisp | Item::DefaultAct)
+    matches!(it, Item::SpecLimitClear | Item::EyeClear | Item::MaskClear | Item::SimDefaults | Item::CurRemove | Item::SrchRemove | Item::RefClear | Item::RefClearOne | Item::MeasClear | Item::UpdateRollback | Item::Stock | Item::PowerAct | Item::DefaultAct | Item::ZoneClear)
 }
 
 impl Ui {
@@ -158,7 +158,8 @@ impl Ui {
                 MeasSrc | MeasSrcB | MeasCopyTo => Slot::Tab(1),
                 MeasLvType | MeasRefs | MeasLow | MeasMid | MeasHigh | MeasHyst | MeasBaseTop => Slot::Tab(3),
                 Open(M::MeasFall) => Slot::Foot(3),
-                MeasClear => Slot::Foot(0),
+                // the way to a new measurement beside the way to none
+                Open(M::MeasAdd) | MeasClear => Slot::Foot(0),
                 StripDock => Slot::Skip,
                 _ => Slot::Tab(2),
             }),
@@ -166,8 +167,9 @@ impl Ui {
             M::MeasStat => (&["Statistics"], |it| match it { MeasStatReset => Slot::Foot(0), _ => Slot::Tab(0) }),
             M::Display => (&["Waveform", "Grid and views", "Screen"], |it| match it {
                 Persist | ColorGrade | Intensity | Dots | Histogram | XyMode | ZInput | TrendSel(_) => Slot::Tab(0),
-                Open(M::Windows) | Views | GridStyle | GridBright | GridFrame | Layout => Slot::Tab(1),
-                ClearDisp => Slot::Foot(2),
+                Open(M::Windows) | Views | GridStyle | GridBright | GridFrame | Layout | Traces => Slot::Tab(1),
+                // Clear wipes what persistence has drawn: under the tab that holds Persistence
+                ClearDisp => Slot::Foot(0),
                 _ => Slot::Tab(2),
             }),
             M::Acquire => (&["Acquire"], |it| match it {
@@ -184,7 +186,9 @@ impl Ui {
             M::Ref => (&["Reference", "Scale and files"], |it| match it {
                 RefSel | RefSrc | RefLabel | RefColor | RefSaveNext | RefImport => Slot::Tab(0),
                 RefShow(_) => Slot::Skip,
-                RefSave | RefClear => Slot::Foot(0),
+                // Store, and Clear for the slot that is shown; Clear all is with the files
+                RefSave | RefClearOne => Slot::Foot(0),
+                RefClear => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
             M::Decode | M::Bus => (&["Decode", "Settings", "Bus"], |it| match it {
@@ -347,6 +351,10 @@ impl Ui {
             MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c))).collect(),
             MenuId::Decode | MenuId::Bus => self.items(MenuId::Decode).into_iter().chain(self.items(MenuId::Bus)).collect(),
             MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
+            // Measure: its footer leads to the list of measurements to add
+            MenuId::Measure => [Item::Open(MenuId::MeasAdd)].into_iter().chain(self.items(MenuId::Measure)).collect(),
+            // Reference: Clear for the one slot, which the menu has not
+            MenuId::Ref => self.items(MenuId::Ref).into_iter().chain([Item::RefClearOne]).collect(),
             // SIM: the knobs of its Advanced page are rows of the sheet's own tabs, so the link to that page is left out
             MenuId::Sim => {
                 let mut v: Vec<Item> = self.items(MenuId::Sim).into_iter().filter(|it| *it != Item::Open(MenuId::SimAdvanced)).collect();
@@ -360,7 +368,8 @@ impl Ui {
             // Display: the skin and the choice of the bottom bar are rows of the Default layout's menu. A sheet is up
             // only in Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
             MenuId::Display => {
-                self.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::Skin | Item::BottomBar)).collect()
+                // and Overlay or Stacked, which Studio had in the hold menu of the plot alone
+                self.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::Skin | Item::BottomBar)).chain([Item::Traces]).collect()
             }
             m => self.items(m),
         }
@@ -429,6 +438,14 @@ impl Ui {
             if menu == MenuId::Remote {
                 let order = [Item::RemName, Item::RemAllow, Item::RemFirewall, Item::NetWeb, Item::RemScpiInfo, Item::RemVxiInfo, Item::RemTelnetInfo];
                 tabs[1].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+            }
+            // Trigger: Sweep (Auto, Normal, Single) goes with the type and the source while that tab has the room. A
+            // type with many rows of its own keeps it on Settings: an eighth row would take the sheet away
+            if menu == MenuId::Trigger && tabs.len() > 1 && tabs[0].rows.len() < SHEET_MAX_ROWS {
+                if let Some(i) = tabs[1].rows.iter().position(|it| *it == Item::TrigMode) {
+                    let sweep = tabs[1].rows.remove(i);
+                    tabs[0].rows.push(sweep);
+                }
             }
             // a link to another page comes after the rows of this one. The lines of the logic analyser keep their
             // link under the row it continues
@@ -628,6 +645,8 @@ impl Ui {
             Item::SimSscHz => "Frequency".into(),
             Item::RefImport => format!("Load file into R{}…", self.ref_sel + 1),
             Item::RefShow(_) => "Shown".into(),
+            Item::Open(MenuId::MeasAdd) => "Add measurement".into(),
+            Item::RefClearOne => format!("Clear R{}", self.ref_sel + 1),
             // the rows below are those of one decoder of four: the switch says whose it is
             Item::DecSel => "Decoders".into(),
             Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),

@@ -481,8 +481,8 @@ impl Ui {
         let view = place(labels[8]);
         let storage = place(labels[7]);
         let display = place(labels[6]);
-        // Cursor is a key of the front panel, and Add has Cursors: no button of its own
-        let cursors = Rect::new(display.x, CHIP_Y, 0, CHIP_H);
+        // Cursors: a tap puts them on, the next one opens their sheet (Add has them too, three taps deep)
+        let cursors = place(labels[5]);
         // Add replaces the old "+ Add" and Meas buttons: one button, the menu has both
         let measure = Rect::new(-20, CHIP_Y, 0, CHIP_H);
         let add = place(labels[3]);
@@ -560,7 +560,7 @@ impl Ui {
         let displaying = open(MenuId::Display);
         let storing = open(MenuId::Storage);
         let labels = &TOP_LABELS[t.tier];
-        for (r, label, on) in [(t.add, labels[3], adding || cursors), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing), (t.view, labels[8], self.studio.view_menu)].into_iter().filter(|(r, ..)| r.w > 0) {
+        for (r, label, on) in [(t.add, labels[3], adding), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing), (t.view, labels[8], self.studio.view_menu)].into_iter().filter(|(r, ..)| r.w > 0) {
             btn(cv, r, BTN, if on { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.mb, r, 1, label, if on { ACCENT } else { TEXT });
         }
@@ -813,16 +813,13 @@ impl Ui {
         let levels = if matches!(self.m.trig_type, TrigType::Runt | TrigType::Slope | TrigType::Window) {
             format!("{} / {}", si_short(self.m.trig_level2 as f64, "V"), si_short(self.m.trig_level as f64, "V"))
         } else { si_short(self.trig_level_shown() as f64, "V") };
-        if edge && self.m.slope != Slope::Either {
-            // the arrow of the edge: up for rising, down for falling
-            let (top, bot) = (r.y + 9 + BAR_DY, r.y + 21 + BAR_DY);
-            cv.vline(x + 3, top, bot, TEXT);
-            let (tip, base) = if self.m.slope == Slope::Rise { (top, top + 4) } else { (bot, bot - 4) };
-            cv.line(x + 3, tip, x, base, TEXT);
-            cv.line(x + 3, tip, x + 6, base, TEXT);
-            x += 12;
+        // (the slope is the picture at the left; an arrow here said it a second time)
+        let x = cv.text(&f.mb, x, r.y + 20 + BAR_DY, &levels, TEXT) + 8;
+        // the sweep, where it has the room: Auto, Normal or Single decide whether the picture moves at all
+        let sweep = match self.m.trig_mode { TrigMode::Auto => "Auto", TrigMode::Normal => "Normal", TrigMode::Single => "Single" };
+        if x + f.s.width(sweep) <= r.right() - 24 {
+            cv.text(&f.s, r.right() - 24 - f.s.width(sweep), r.y + 20 + BAR_DY, sweep, DIM);
         }
-        cv.text(&f.mb, x, r.y + 20 + BAR_DY, &levels, TEXT);
         cv.no_clip();
         chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
         self.draw_studio_ch_picker(cv);
@@ -922,8 +919,9 @@ impl Ui {
         for c in 0..n_ch() {
             if !b.ch[c].contains(x, y) { continue; }
             // the coloured badge of a pill is the channel's switch, like its key; the rest of the pill opens its sheet
-            // (a pill too narrow to have both keeps the sheet: its Display row and a hold turn the channel off)
-            if self.m.ch[c].on && b.ch[c].w >= 110 && x < b.ch[c].x + 54 {
+            // (a pill that is its badge alone, under 70 px, keeps the sheet: its Display row and a hold turn the
+            // channel off). It was the switch from 110 px on only, so the same spot did two things as pills shrank
+            if self.m.ch[c].on && b.ch[c].w >= 70 && x < b.ch[c].x + 54 {
                 if self.menu_open { self.close_menu(); }
                 self.source_toggle(WaveId::Ch(c));
                 if !self.m.ch[c].on { self.toast(&format!("CH{} off", c + 1)); }

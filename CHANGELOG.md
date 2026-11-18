@@ -17,6 +17,22 @@ Fixed:
   empty room behind the scale; it is as wide as the widest scale needs (159 px at the normal text size), the same
   for every channel. The pill of a channel that is off, the button that switches it on, was 44 px wide: it is at
   least 60, and takes the room that is left up to 96, where it says "Off" beside its name.
+- Sheets of Minimal and Studio, from a review of every tab:
+  - Display: Clear is under the Waveform tab, beside Persistence, whose picture it wipes, and acts at the first tap.
+    It was a red two-tap button under Screen.
+  - Trigger: Sweep (Auto, Normal, Single) is on the first tab with the type and the source, for every type whose
+    first tab has the room. Studio's trigger pill says the sweep; the slope, which it showed twice, is there once.
+  - Measure: the footer has Add measurement beside Clear all. Nothing on the sheet led to a new measurement.
+  - Reference: Clear R1 (the slot that is shown) is beside Store. Clear all, which empties all ten slots, is under
+    Scale and files. One slot could only be cleared from the hold menu of its pill.
+  - Zone trigger: Delete asks for a second tap, like the other buttons that destroy something.
+  - Display > Grid and views has a row Traces (Overlay or Stacked). Studio had the choice in the hold menu of the
+    plot alone.
+- The cursors have a button in the top bar of Minimal (Cursor: the cursors come on with their sheet) and of Studio
+  (Cursors: a tap puts them on, the next opens their sheet). They were four taps away in Minimal and three in
+  Studio. Studio's Add button no longer lights up while the cursors are on.
+- Studio: the coloured badge of a channel pill switches the channel off wherever the pill has a body beside it (from
+  70 px). It did so from 110 px only, so with four channels on the same spot opened the sheet.
 - Studio: the search controls (previous, the count of events, next) are in the top bar, beside the acquisition
   read-out, as tall as the buttons there and with arrows of 46 px. They were at the left of the badge row, where they
   took the place of two measurements and were as low as a badge (20 px in the compact view).

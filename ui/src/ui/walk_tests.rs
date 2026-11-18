@@ -2032,3 +2032,129 @@ fn the_badge_row_wraps_onto_a_second_line() {
         assert_eq!((lines(&u), u.studio_row()), (1, one), "{what}: four measurements");
     }
 }
+
+/// Rows and footers where they are used, in Minimal and Studio: Clear beside Persistence and without a second tap,
+/// Sweep with the trigger's type wherever the tab has the room (and a sheet for every trigger type), a way to a new
+/// measurement at the foot of the Measure sheet, Clear for the one reference slot beside Store, and Clear all with
+/// the files.
+#[test]
+fn clear_sweep_and_the_footers_are_where_they_are_used() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let u = fresh(layout);
+        let tab = |menu: MenuId, name: &str| {
+            let spec = u.sheet_spec(menu).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has a sheet"));
+            spec.tabs.into_iter().find(|t| t.name == name).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has the tab {name}"))
+        };
+        let t = tab(MenuId::Display, "Waveform");
+        assert!(t.rows.contains(&Item::Persist) && t.foot == [Item::ClearDisp], "{layout:?}: {:?}", t.foot);
+        assert!(tab(MenuId::Display, "Screen").foot.is_empty(), "{layout:?}");
+        assert_eq!(tab(MenuId::Measure, "Settings").foot, [Item::Open(MenuId::MeasAdd), Item::MeasClear], "{layout:?}");
+        assert_eq!(tab(MenuId::Ref, "Reference").foot, [Item::RefSave, Item::RefClearOne], "{layout:?}");
+        assert_eq!(tab(MenuId::Ref, "Scale and files").foot, [Item::RefClear], "{layout:?}");
+        // every trigger type keeps its sheet; Sweep is on the first tab unless that tab is full without it
+        for t in crate::model::TRIG_TYPES {
+            let mut u = fresh(layout);
+            u.m.trig_type = t;
+            u.step(0.04);
+            let spec = u.sheet_spec(MenuId::Trigger).unwrap_or_else(|| panic!("{layout:?}: no sheet for the {t:?} trigger"));
+            let (first, second) = (&spec.tabs[0].rows, &spec.tabs[1].rows);
+            assert!(first.contains(&Item::TrigMode) || (first.len() == 7 && second.contains(&Item::TrigMode)), "{layout:?} {t:?}: {first:?}");
+        }
+        assert!(tab(MenuId::Trigger, "Type and source").rows.contains(&Item::TrigMode), "{layout:?}: the edge trigger");
+        // by touch. Clear acts at the first tap; Delete of a zone and Clear of a slot wait for a second one
+        let foot = |u: &Ui, it: Item| u.sheet_geo().unwrap().foot.iter().find(|f| f.0 == it).map(|f| f.1).unwrap_or_else(|| panic!("{layout:?}: {it:?}"));
+        let mut u = fresh(layout);
+        u.open_menu(MenuId::Display);
+        u.step(0.04);
+        let (x, y) = mid(foot(&u, Item::ClearDisp));
+        tap(&mut u, x, y);
+        assert!(u.studio.md.armed.is_none(), "{layout:?}: Clear does not ask twice");
+        u.close_menu();
+        // two references: Clear R1 leaves R2
+        let wave = |label: &str| RefWave { src: 0, color: 0, label: label.into(), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true };
+        (u.refs[0], u.refs[1]) = (Some(wave("one")), Some(wave("two")));
+        u.ref_sel = 0;
+        assert!(u.refs[0].is_some() && u.refs[1].is_some(), "{layout:?}: two references stored");
+        u.ref_sel = 0;
+        u.open_menu(MenuId::Ref);
+        u.step(0.04);
+        assert_eq!(u.sheet_label(Item::RefClearOne), "Clear R1");
+        let (x, y) = mid(foot(&u, Item::RefClearOne));
+        tap(&mut u, x, y);
+        assert!(u.refs[0].is_some(), "{layout:?}: the first tap arms it");
+        tap(&mut u, x, y);
+        assert!(u.refs[0].is_none() && u.refs[1].is_some(), "{layout:?}: R1 is cleared, R2 is kept");
+        u.close_menu();
+        // the foot of the Measure sheet leads to the list of measurements
+        u.open_menu(MenuId::Measure);
+        u.step(0.04);
+        assert_eq!(u.sheet_label(Item::Open(MenuId::MeasAdd)), "Add measurement");
+        let (x, y) = mid(foot(&u, Item::Open(MenuId::MeasAdd)));
+        tap(&mut u, x, y);
+        assert!(u.menu_open && u.menu == MenuId::MeasAdd, "{layout:?}: {:?}", u.menu);
+    }
+    // Studio's trigger pill says the sweep, and the slope once
+    let mut u = fresh(Layout::Studio);
+    for (mode, word) in [(TrigMode::Auto, "Auto"), (TrigMode::Normal, "Normal"), (TrigMode::Single, "Single")] {
+        u.m.trig_mode = mode;
+        u.step(0.04);
+        let r = u.studio_bottom().trig;
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        cv.au_start();
+        u.render(&mut cv);
+        let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == word && r.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= r.right() - 16));
+        assert!(said, "the trigger pill says {word}");
+    }
+}
+
+/// What was behind a long press or several taps has a place of its own: Overlay / Stacked is a row of the Display
+/// sheet, the cursors have a button in the top bar of Minimal and of Studio, and the badge of a channel pill is its
+/// switch at every width at which the pill has a body beside it.
+#[test]
+fn traces_cursors_and_the_pill_switch_are_in_reach() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        u.m.ch[1].on = true;
+        u.open_menu(MenuId::Display);
+        u.step(0.04);
+        let (x, y) = mid(u.sheet_geo().unwrap().tabs[1]);
+        tap(&mut u, x, y);
+        let row = u.sheet_geo().unwrap().rows.iter().find(|r| r.it == Item::Traces).map(|r| r.ctrl).unwrap_or_else(|| panic!("{layout:?}: no Traces row"));
+        let was = u.trace_stacked();
+        assert_eq!(u.value(Item::Traces), if was { "Stacked" } else { "Overlay" }, "{layout:?}");
+        // the other half of the row
+        let (x, y) = (if was { row.x + row.w / 4 } else { row.x + row.w * 3 / 4 }, row.y + row.h / 2);
+        tap(&mut u, x, y);
+        assert_eq!(u.trace_stacked(), !was, "{layout:?}: a tap on the other choice");
+        assert_eq!(u.value(Item::Traces), if was { "Overlay" } else { "Stacked" }, "{layout:?}");
+        u.close_menu();
+        // the cursors: off at the start, on after the button
+        assert_eq!(u.m.cursor, CursorMode::Off, "{layout:?}");
+        let button = if layout == Layout::Studio { u.studio_top().cursors }
+            else { u.top_buttons().into_iter().find(|b| b.0 == TopBtn::Menu(MenuId::Cursor)).map(|b| b.2).unwrap_or_else(|| panic!("{layout:?}: no Cursor button")) };
+        let top = u.frame().top;
+        assert!(button.w >= 40 && button.y >= top.y && button.bottom() <= top.bottom(), "{layout:?}: {button:?}");
+        let (x, y) = mid(button);
+        tap(&mut u, x, y);
+        assert!(u.m.cursor != CursorMode::Off, "{layout:?}: one tap puts the cursors on");
+        if layout == Layout::Studio {
+            assert!(!u.menu_open, "Studio: the cursors alone at the first tap");
+            tap(&mut u, x, y);
+        }
+        assert!(u.menu_open && u.menu == MenuId::Cursor, "{layout:?}: their sheet");
+        // and off again from that sheet
+        u.select_option(Item::CurMode, "Off");
+        assert_eq!(u.m.cursor, CursorMode::Off, "{layout:?}");
+    }
+    // four channels on: the pills are under 110 px and still have a body, so the badge is the switch
+    let mut u = fresh(Layout::Studio);
+    for c in 0..4 { u.m.ch[c].on = true; }
+    u.step(0.04);
+    let pill = u.studio_bottom().ch[2];
+    assert!((70..110).contains(&pill.w), "{pill:?}");
+    tap(&mut u, pill.x + 24, pill.y + pill.h / 2);
+    assert!(!u.m.ch[2].on && !u.menu_open, "the badge of a pill of {} px switches CH3 off", pill.w);
+    let pill = u.studio_bottom().ch[1];
+    tap(&mut u, pill.right() - 12, pill.y + pill.h / 2);
+    assert!(u.m.ch[1].on && u.menu_open && u.menu == MenuId::Channel(1), "the body opens the sheet");
+}

@@ -290,14 +290,23 @@ fn a_danger_button_in_a_footer_asks_before_it_acts_and_stands_apart() {
     for _ in 0..3 { frame(&mut u); }
     let g = u.sheet_geo().unwrap();
     let save = g.foot.iter().find(|(it, _)| *it == Item::RefSave).expect("Store").1;
-    let clear = g.foot.iter().find(|(it, _)| *it == Item::RefClear).expect("Clear all").1;
+    // (Clear of the slot that is shown is beside Store; Clear all is under the second tab)
+    let clear = g.foot.iter().find(|(it, _)| *it == Item::RefClearOne).expect("Clear R1").1;
     assert!(clear.x - save.right() >= 16, "set apart: {save:?} {clear:?}");
     assert!(matches!(u.sheet_row_kind(Item::RefColor), super::sheet::RowKind::Choice), "swatches");
     shot(&mut u, "reference-sheet");
+    u.refs[1] = u.refs[0].clone();
     tap(&mut u, clear);
     assert!(u.refs[0].is_some(), "asked first");
     tap(&mut u, clear);
-    assert!(u.refs.iter().all(Option::is_none), "cleared on the second tap");
+    assert!(u.refs[0].is_none() && u.refs[1].is_some(), "the slot is cleared on the second tap, the other one stays");
+    let tab = u.sheet_geo().unwrap().tabs[1];
+    tap(&mut u, tab);
+    let all = u.sheet_geo().unwrap().foot.iter().find(|(it, _)| *it == Item::RefClear).expect("Clear all").1;
+    tap(&mut u, all);
+    assert!(u.refs[1].is_some(), "asked first");
+    tap(&mut u, all);
+    assert!(u.refs.iter().all(Option::is_none), "all cleared on the second tap");
 }
 
 #[test]
