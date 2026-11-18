@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Studio: the pull-down zoom tab. With "Zoom controls: Pull-down tab" (the default) the zoom view has no toolbar row: a small
-//! tab at its top edge ("Zoom 10x") opens the whole toolbar over the zoom view when it is tapped or pulled down, and it shuts on
-//! a tap outside, on a push up of its label, or after a few seconds of no use. The other setting puts the same controls in
-//! the title strip of the waveform (dock.rs).
+//! Studio: the pull-down zoom tab. With "Zoom controls: Pull-down tab" (the default) the zoom view has no toolbar row: a
+//! tab at its top edge ("Zoom 10x") opens the whole toolbar over the zoom view when it is tapped or pulled down. The
+//! toolbar is used with a finger on the scope: its chips are a finger high, and it stays until a tap or a push up on its
+//! label "Zoom" folds it again. It used to shut after four seconds and with any touch outside it, so it had to be
+//! opened again for every step. The other setting puts the same controls in the title strip of the waveform (dock.rs).
 use super::studio::chip;
 use super::*;
 
-const TAB_W: i32 = 132;
-const TAB_H: i32 = 20;
-const BAR_H: i32 = 30;
-/// The toolbar shuts itself after this long without a touch on it.
-const IDLE: f64 = 4.0;
+const TAB_W: i32 = 150;
+const TAB_H: i32 = 26;
+/// The open toolbar: its chips are the 40 px a finger needs.
+const BAR_H: i32 = 44;
 
 impl Ui {
     /// The controls are in the pull-down tab (else in the title strip).
@@ -107,16 +107,13 @@ impl Ui {
             // the label is the grip: a tap on it folds the toolbar away
             if self.studio_zoom_bar().is_some_and(|b| b.label.contains(x, y)) { self.zoom_tab_set(false); return true; }
             self.studio.zoom_open = Some(self.now);
-            return false;
         }
-        self.zoom_tab_set(false);
+        // a tap elsewhere is for what is there: the toolbar stays
         false
     }
 
-    /// Every frame: the toolbar shuts after a few seconds of no use, and when zoom goes off.
+    /// Every frame: the toolbar goes when the zoom goes off. While the zoom is on it stays as it was left, open or folded.
     pub(super) fn zoom_tab_tick(&mut self) {
-        let Some(t) = self.studio.zoom_open else { return };
-        if !self.zoom_tab_on() || (!self.studio.zoom_menu && self.studio.zoom_pull.is_none() && self.now - t > IDLE) { self.zoom_tab_set(false); }
-        else if self.studio.zoom_menu { self.studio.zoom_open = Some(self.now); }
+        if self.studio.zoom_open.is_some() && !self.zoom_tab_on() { self.zoom_tab_set(false); }
     }
 }

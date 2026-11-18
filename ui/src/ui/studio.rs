@@ -418,12 +418,33 @@ impl Ui {
         }
     }
 
+    /// The acquisition of a live source as four small columns in the top bar: how many waveforms a second reach the
+    /// screen, the sample rate, the memory depth and the acquisition mode, each a label over its value. None while a
+    /// file or the SIM is analysed (the caption names the record then). Column widths hold the longest value of each,
+    /// so the bar does not move while the numbers change.
+    pub(super) fn studio_acq_cols(&self) -> Option<Vec<(&'static str, String, i32)>> {
+        if self.record_mode() || self.studio_back_badge() { return None; }
+        let f = self.fonts();
+        let (sr, depth) = self.live_rate_depth();
+        let mode = match self.m.acq { AcqMode::Normal => "Normal".to_string(), AcqMode::Peak => "Peak".into(), AcqMode::Average => format!("Avg {}", self.m.avg_count), AcqMode::HiRes => "High res".into() };
+        let rate = if self.m.run == RunState::Run { si_digits(self.wfm_rate as f64, "wfm/s", 3) } else { "-".to_string() };
+        let w = |label: &str, widest: &str| f.s.width(label).max(f.mb.width(widest)) + 14;
+        Some(vec![
+            ("Waveforms", rate, w("Waveforms", "8.88 kwfm/s")),
+            ("Sample rate", si_digits(sr, "Sa/s", 3), w("Sample rate", "888 MSa/s")),
+            ("Memory", si_digits(depth as f64, "pts", 3), w("Memory", "8.88 Mpts")),
+            ("Mode", mode, w("Mode", "Avg 1024")),
+        ])
+    }
+
     /// The top bar at the first tier (full labels) that leaves the acquisition caption room, else the shortest: labels
     /// shorten before anything is dropped, and every button stays reachable.
     pub(super) fn studio_top(&self) -> StudioTop {
         // the status caption gets the room it needs (up to 260 px) before the buttons give up width; when no tier
         // has that much, the one with the most room is used and the caption is shortened to it
-        let need = (self.fonts().mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260);
+        // the four columns of a live acquisition where a tier has their room, else the one-line caption
+        let cols = self.studio_acq_cols().map(|c| c.iter().map(|x| x.2).sum::<i32>());
+        let need = cols.unwrap_or_else(|| (self.fonts().mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260));
         let mut t = self.studio_top_tier(0);
         let mut best = t.acq.w;
         for tier in 1..TOP_TIERS {
@@ -531,7 +552,18 @@ impl Ui {
         // sample rate and depth as plain text (the source in front of them): a tap opens the page that sets them
         let caption = self.studio_acq_caption();
         let acq_open = self.menu_open && root == if self.record_mode() { MenuId::Ref } else { MenuId::Acquire };
-        cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT });
+        match self.studio_acq_cols().filter(|c| c.iter().map(|x| x.2).sum::<i32>() <= t.acq.w) {
+            // waveforms a second, sample rate, memory and mode: a small label over each value
+            Some(cols) => {
+                let mut x = t.acq.x;
+                for (label, value, w) in cols {
+                    cv.text_in(&f.s, Rect::new(x, 4, w - 6, 14), 0, label, DIM);
+                    cv.text_fit(&f.mb, Rect::new(x, 18, w - 6, 18), 0, &value, if acq_open { ACCENT } else { TEXT });
+                    x += w;
+                }
+            }
+            None => cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT }),
+        }
         // Measure, Cursors, View, settings: the Default button style
         let cursors = open(MenuId::Cursor) || self.m.cursor != CursorMode::Off;
         let adding = self.studio_add_chip_on();
