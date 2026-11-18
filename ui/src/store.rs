@@ -1795,6 +1795,7 @@ fn parse_oosw(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
 /// than the reference slots ends the parse: a single line of many columns no longer makes as many traces.
 fn parse_wave_csv(text: &str, name: &str) -> Result<Vec<WaveTrace>, String> {
     let mut columns: Vec<Vec<f32>> = Vec::new();
+    // the first time and the last: the time between samples is their distance over the steps between them
     let mut times: [f64; 2] = [f64::NAN; 2];
     let mut rows = 0usize;
     for line in text.lines() {
@@ -1821,13 +1822,13 @@ fn parse_wave_csv(text: &str, name: &str) -> Result<Vec<WaveTrace>, String> {
         for c in &mut columns[k..] {
             c.push(f32::NAN);
         }
-        if rows < 2 {
-            times[rows] = t;
-        }
+        times[(rows > 0) as usize] = t;
         rows += 1;
     }
+    // not the first step alone: a file that rounds its times to a few digits has a first step that is off by
+    // a percent, or no step at all between its first two lines
     let dt = match times {
-        [a, b] if rows >= 2 && b > a => b - a,
+        [a, b] if rows >= 2 && b > a => (b - a) / (rows - 1) as f64,
         _ => return Err("that file holds no waveform".into()),
     };
     let ntrace = columns.len();
@@ -6264,5 +6265,38 @@ mod rigol_csv_file_tests {
     fn a_ds1000z_waveform_file_is_refused_with_the_way_round_it() {
         let refused = parse_wave(&[&[1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5][..], &[0u8; 64][..]].concat(), "z.wfm").unwrap_err();
         assert!(refused.contains("DS1000Z") && refused.contains("vertical offset") && refused.contains("save the waveform as CSV"), "{refused}");
+    }
+}
+
+#[cfg(test)]
+mod csv_time_step_tests {
+    use super::*;
+
+    #[test]
+    fn the_time_between_samples_is_taken_over_the_whole_column() {
+        // 3600 samples over 500 us, the times written with five digits, as a capture saved by Probewright has them:
+        // the first step alone reads 140 ns, the true one is 138.9 ns
+        let mut text = String::from("time_s,voltage_v\n");
+        let step = 5e-4 / 3600.0;
+        for i in 0..3600 {
+            text += &format!("{:.4e},{}\n", -2.5e-4 + i as f64 * step, i % 7);
+        }
+        let t = &parse_wave(text.as_bytes(), "capture.csv").unwrap()[0];
+        assert_eq!(t.v.len(), 3600);
+        assert!((t.dt / step - 1.0).abs() < 2e-5, "{} against {step}", t.dt);
+        assert_eq!(t.t0, -2.5e-4);
+    }
+
+    #[test]
+    fn two_first_lines_at_the_same_rounded_time_are_still_a_waveform() {
+        // a RIGOL DS1042C writes three digits: its first lines repeat a time
+        let text = "X,CH1\nSecond,Volt,\n-5.11e-03,2.00e-02\n-5.11e-03,2.00e-02\n-5.10e-03,4.00e-02\n-5.10e-03,4.00e-02\n-5.09e-03,2.00e-02\n";
+        let t = &parse_wave(text.as_bytes(), "c.csv").unwrap()[0];
+        assert_eq!(t.v.len(), 5);
+        assert!((t.dt - 5e-6).abs() < 1e-12, "{}", t.dt);
+        // one line, or times that do not advance, are not a waveform
+        assert!(parse_wave(b"0,1\n", "one.csv").is_err());
+        assert!(parse_wave(b"1,1\n1,2\n1,3\n", "flat.csv").is_err());
+        assert!(parse_wave(b"3,1\n2,2\n1,3\n", "back.csv").is_err());
     }
 }
