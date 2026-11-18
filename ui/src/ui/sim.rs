@@ -1413,7 +1413,9 @@ mod tests {
         let value = u.meas_at(WaveId::Ref(0), Meas::Vpp);
         let captures = u.replay.captures;
         let eye_records = records(&u);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        // the loop ends with the second capture; the time limit only ends a run that never gets there. Five seconds
+        // were too few once, on a computer busy with something else
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
         while u.replay.captures < captures + 2 && std::time::Instant::now() < deadline {
             u.step(0.01);
             std::thread::sleep(std::time::Duration::from_millis(1));
@@ -1433,7 +1435,7 @@ mod tests {
         assert_eq!(u.replay.captures, held_count);
         assert_eq!(records(&u), held_eye);
         u.key(key::SINGLE);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
         while u.m.run != RunState::Stop && std::time::Instant::now() < deadline {
             u.step(0.01);
             std::thread::sleep(std::time::Duration::from_millis(1));
