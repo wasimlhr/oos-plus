@@ -43,6 +43,9 @@ pub(super) struct RefMeasureKey {
     data: bool,
     conditioning: (u8, bool, usize),
     capture: u64,
+    /// the samples are min/max pairs (`Ui::measurement_on_pairs`): part of the key, so a cached analysis is not taken
+    /// across a change of it (high res switched while stopped)
+    pairs: bool,
 }
 
 struct RefMeasureCache {
@@ -58,8 +61,16 @@ struct RefMeasureJob {
     dt: f64,
     min_amp: f64,
     lv: oos_dsp::measure::Levels,
+    /// the samples are min/max pairs (`Ui::measurement_on_pairs`), as in the key
+    pairs: bool,
     own: bool,
     analysis: Option<Arc<oos_dsp::measure::Analysis>>,
+}
+
+/// The analysis of a channel's or a ref's samples; min/max pairs measured in time on the mean of neighbours (#118).
+fn analyze_samples(v: &[f32], dt: f64, min: f64, lv: &oos_dsp::measure::Levels, pairs: bool)
+    -> oos_dsp::measure::Analysis {
+    if pairs { oos_dsp::measure::analyze_pairs_levels(v, dt, min, lv) } else { oos_dsp::measure::analyze_levels(v, dt, min, lv) }
 }
 
 enum MeasureSamples {
@@ -109,7 +120,7 @@ impl RefMeasureWorker {
         std::thread::Builder::new().name("reference-measurements".into()).spawn(move || {
             while let Ok(job) = requests.recv() {
                 let analysis = job.analysis.unwrap_or_else(|| Arc::new(if job.key.basic { basic_analysis(crate::board::BasicStats::of(job.samples.slice())) }
-                    else { oos_dsp::measure::analyze_levels(job.samples.slice(), job.dt, job.min_amp, &job.lv) }));
+                    else { analyze_samples(job.samples.slice(), job.dt, job.min_amp, &job.lv, job.pairs) }));
                 let readings = scalar_readings(&analysis, job.key);
                 if results.send(RefMeasureResult { source: job.source, key: job.key, analysis, readings, own: job.own }).is_err() { break; }
             }
@@ -268,6 +279,16 @@ impl Ui {
         (lo, hi)
     }
 
+    /// Whether `measurement_channel_samples` gives min/max pairs: the screen record of peak detect, or one resampled from
+    /// a frame of pairs (roll, scan, the live compression). High res averages them.
+    pub(super) fn measurement_on_pairs(&self, rec: &Record, c: usize) -> bool {
+        if self.m.acq == AcqMode::HiRes { return false; }
+        match rec.raw.as_ref() {
+            Some(raw) if !raw.frame.envelope && raw.frame.ch.get(c).is_some_and(|v| v.len() >= 2) => false,
+            raw => rec.pairs || raw.is_some_and(|r| r.frame.envelope),
+        }
+    }
+
     /// The measurement gate is independent of replay routing, so live CH and R
     /// overlays use the same physical screen times at their own sample intervals.
     pub(super) fn measurement_channel_samples<'a>(&self, rec: &'a Record, c: usize) -> Option<(&'a [f32], f64, f64)> {
@@ -293,7 +314,7 @@ impl Ui {
             low: self.m.meas_lpct.to_bits(), high: self.m.meas_hpct.to_bits(), lv: self.m.shared_levels(), epoch: self.workflow_epoch,
             revision: if self.session_is_sim && self.m.sim_slot == slot { self.replay.sim_revision } else { 0 }, full: self.gate_full(), basic: false,
             idle: self.m.meas_idle.to_bits(), outside: self.m.meas_out as u8, periods: self.m.meas_n, data: self.m.meas_data,
-            conditioning: (0, false, 0), capture: 0 };
+            conditioning: (0, false, 0), capture: 0, pairs: false };
         Some((key, t0 + lo as f64 * r.dt))
     }
 
@@ -309,15 +330,15 @@ impl Ui {
             let worker = worker.get_or_insert_with(RefMeasureWorker::open);
             if !worker.busy {
                 let job = RefMeasureJob { source: WaveId::Ref(slot), key, samples: MeasureSamples::Owned(r.v[key.lo..key.hi].to_vec()), dt: r.dt,
-                    min_amp: 0.4 * r.vpd as f64, lv: self.m.shared_levels(), own: false, analysis: None };
+                    min_amp: 0.4 * r.vpd as f64, lv: self.m.shared_levels(), pairs: key.pairs, own: false, analysis: None };
                 if worker.input.try_send(job).is_ok() { worker.busy = true; worker.submitted += 1; }
             }
             return None;
         }
         let mut cache = self.azr.ref_measure[slot].borrow_mut();
         if cache.as_ref().is_none_or(|cached| cached.key != key) {
-            let analysis = oos_dsp::measure::analyze_levels(&r.v[key.lo..key.hi], r.dt,
-                0.4 * r.vpd as f64, &self.m.shared_levels());
+            let analysis = analyze_samples(&r.v[key.lo..key.hi], r.dt,
+                0.4 * r.vpd as f64, &self.m.shared_levels(), key.pairs);
             let readings = scalar_readings(&analysis, key);
             *cache = Some(RefMeasureCache { key, analysis: Arc::new(analysis), readings });
         }
@@ -347,7 +368,7 @@ impl Ui {
             revision: record.raw.as_ref().map_or(self.wfm_total, |raw| raw.frame.seq), full: self.gate_full(), basic,
             idle: self.m.meas_idle.to_bits(), outside: self.m.meas_out as u8, periods: self.m.meas_n, data: self.m.meas_data,
             conditioning: (self.m.ch[channel].coupling as u8, self.m.ch[channel].invert, self.m.ch[channel].bw),
-            capture: self.wfm_total }, t0))
+            capture: self.wfm_total, pairs: self.measurement_on_pairs(record, channel) }, t0))
     }
 
     fn native_channel_basic(&self, channel: usize) -> Option<crate::board::BasicStats> {
@@ -407,13 +428,14 @@ impl Ui {
                     MeasureSamples::Native { frame: Arc::clone(&raw.frame), channel, lo, hi: lo + samples.len() }
                 } else { MeasureSamples::Owned(samples.to_vec()) };
                 let job = RefMeasureJob { source: WaveId::Ch(channel), key, samples: input, dt,
-                    min_amp: 0.4 * self.m.ch[channel].volts_per_div() as f64, lv: self.m.shared_levels(), own: false, analysis: None };
+                    min_amp: 0.4 * self.m.ch[channel].volts_per_div() as f64, lv: self.m.shared_levels(), pairs: key.pairs, own: false,
+                    analysis: None };
                 if worker.input.try_send(job).is_ok() { worker.busy = true; worker.submitted += 1; }
             }
             return None;
         }
-        let analysis = Arc::new(oos_dsp::measure::analyze_levels(samples, dt, 0.4 * self.m.ch[channel].volts_per_div() as f64,
-            &self.m.shared_levels()));
+        let analysis = Arc::new(analyze_samples(samples, dt, 0.4 * self.m.ch[channel].volts_per_div() as f64,
+            &self.m.shared_levels(), key.pairs));
         let readings = scalar_readings(&analysis, key);
         *self.azr.ch_measure[channel].borrow_mut() = Some(RefMeasureCache { key, analysis: Arc::clone(&analysis), readings });
         Some((analysis, t0))

@@ -172,7 +172,7 @@ impl Ui {
             }
         };
         Some(RefMeasureJob { source: key.source, key: k, samples, dt: f64::from_bits(k.dt),
-            min_amp: 0.4 * f32::from_bits(k.vpd) as f64, lv: k.lv,
+            min_amp: 0.4 * f32::from_bits(k.vpd) as f64, lv: k.lv, pairs: k.pairs,
             own: true, analysis })
     }
 
@@ -213,8 +213,8 @@ impl Ui {
         }
         if key.analysis.hi - key.analysis.lo <= BACKGROUND_MEASUREMENT_POINTS {
             let Some(job) = self.own_job(key) else { return f64::NAN };
-            let analysis = job.analysis.unwrap_or_else(|| Arc::new(oos_dsp::measure::analyze_levels(
-                job.samples.slice(), job.dt, job.min_amp, &job.lv)));
+            let analysis = job.analysis.unwrap_or_else(|| Arc::new(analyze_samples(
+                job.samples.slice(), job.dt, job.min_amp, &job.lv, job.pairs)));
             let readings = scalar_readings(&analysis, key.analysis);
             let value = readings[index];
             self.cache_own_result(key, analysis, readings);

@@ -1307,14 +1307,18 @@ impl MeasSrc {
     }
 }
 
-/// One record's measurements: (channel, samples, dt, the smallest swing that counts as a signal).
-type MeasJob = (u64, Vec<(usize, MeasSrc, f64, f64)>);
+/// One record's measurements: (channel, samples, dt, the smallest swing that counts as a signal, min/max pairs).
+type MeasJob = (u64, Vec<(usize, MeasSrc, f64, f64, bool)>);
+type MeasWork<'a> = (usize, &'a [f32], f64, f64, bool);
 type MeasDone = (u64, Vec<(usize, Stats, oos_dsp::measure::Analysis)>);
 
 /// The measurements of a record, each channel on its own thread (the four channels of 100 kpts took 27 ms in a row
-/// on the unit).
-fn measure_channels(work: &[(usize, &[f32], f64, f64)]) -> Vec<(usize, Stats, oos_dsp::measure::Analysis)> {
-    let one = |&(c, v, dt, min): &(usize, &[f32], f64, f64)| (c, stats(v, dt), oos_dsp::measure::analyze_min(v, dt, min));
+/// on the unit); min/max pairs in time on the mean of neighbours (#118).
+fn measure_channels(work: &[MeasWork]) -> Vec<(usize, Stats, oos_dsp::measure::Analysis)> {
+    let one = |&(c, v, dt, min, p): &MeasWork| {
+        let a = if p { oos_dsp::measure::analyze_pairs(v, dt, min, 0.1, 0.9) } else { oos_dsp::measure::analyze_min(v, dt, min) };
+        (c, stats(v, dt), a)
+    };
     if work.len() < 2 {
         return work.iter().map(one).collect();
     }
@@ -1344,7 +1348,7 @@ impl MeasWorker {
             .spawn(move || {
                 crate::http::to_little_cores();
                 while let Ok((n, work)) = jobs.recv() {
-                    let w: Vec<(usize, &[f32], f64, f64)> = work.iter().map(|(c, v, dt, min)| (*c, v.samples(), *dt, *min)).collect();
+                    let w: Vec<MeasWork> = work.iter().map(|(c, v, dt, min, p)| (*c, v.samples(), *dt, *min, *p)).collect();
                     if done.send((n, measure_channels(&w))).is_err() {
                         break;
                     }
@@ -7269,11 +7273,11 @@ impl Ui {
 
     /// The measurements of `rec` now, on this thread.
     fn measure_rec(&mut self, rec: &Record) {
-        let work: Vec<(usize, &[f32], f64, f64)> = (0..NCH)
+        let work: Vec<MeasWork> = (0..NCH)
             .filter(|&c| self.m.ch[c].on)
             .map(|c| {
                 let (v, dt) = self.meas_slice(rec, c);
-                (c, v, dt, 0.4 * self.m.ch[c].volts_per_div() as f64)
+                (c, v, dt, 0.4 * self.m.ch[c].volts_per_div() as f64, self.meas_on_pairs(rec, c))
             })
             .collect();
         let done = measure_channels(&work);
@@ -7352,16 +7356,16 @@ impl Ui {
             return;
         }
         let env: [bool; NCH] = std::array::from_fn(|c| self.meas_on_pairs(rec, c));
-        let job: Vec<(usize, MeasSrc, f64, f64)> = (0..NCH)
+        let job: Vec<(usize, MeasSrc, f64, f64, bool)> = (0..NCH)
             .filter(|&c| self.m.ch[c].on)
             .map(|c| {
                 let min = 0.4 * self.m.ch[c].volts_per_div() as f64;
                 match self.meas_frame(rec, c) {
                     Some((f, i0, i1)) => {
                         let dt = f.dt;
-                        (c, MeasSrc::Frame(f, c, i0, i1), dt, min)
+                        (c, MeasSrc::Frame(f, c, i0, i1), dt, min, env[c])
                     }
-                    None => (c, MeasSrc::Own(rec.ch[c].clone()), rec.dt, min),
+                    None => (c, MeasSrc::Own(rec.ch[c].clone()), rec.dt, min, env[c]),
                 }
             })
             .collect();
