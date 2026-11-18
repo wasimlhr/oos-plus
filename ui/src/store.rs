@@ -2515,19 +2515,24 @@ pub struct Session {
 
 /// A session as one file, little endian: "OOSS", u32 version 1, u32 length of the setup text and the text (UTF-8),
 /// u32 1 or 0 and then an OOSW blob (`wave_bin`) when 1, u32 number of reference slots, and per slot u32 slot (0-based),
-/// u32 source channel, f64 t0, f64 dt, u64 samples and the samples as f32 volts.
-pub fn session_bin(setup: &str, rec: Option<&Record>, m: &Model, refs: &[SessionRef]) -> Vec<u8> {
+/// u32 source channel, f64 t0, f64 dt, u64 samples and the samples as f32 volts. The blob is `memory` when given: the
+/// samples the acquisition kept (`wave_bin_of`), where `rec` has the points of the screen.
+pub fn session_bin(setup: &str, rec: Option<&Record>, memory: Option<&[u8]>, m: &Model, refs: &[SessionRef]) -> Vec<u8> {
     let mut b = Vec::new();
     b.extend_from_slice(b"OOSS");
     b.extend_from_slice(&1u32.to_le_bytes());
     b.extend_from_slice(&(setup.len() as u32).to_le_bytes());
     b.extend_from_slice(setup.as_bytes());
-    match rec {
-        Some(r) => {
+    match (memory, rec) {
+        (Some(blob), _) => {
+            b.extend_from_slice(&1u32.to_le_bytes());
+            b.extend_from_slice(blob);
+        }
+        (None, Some(r)) => {
             b.extend_from_slice(&1u32.to_le_bytes());
             b.extend_from_slice(&wave_bin(r, m));
         }
-        None => b.extend_from_slice(&0u32.to_le_bytes()),
+        (None, None) => b.extend_from_slice(&0u32.to_le_bytes()),
     }
     b.extend_from_slice(&(refs.len() as u32).to_le_bytes());
     for r in refs {

@@ -46,6 +46,9 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Studio, the zoom source popover (hold the Zoom button): **X zoom** minus and plus beside the Y zoom ones. One
+  step of the zoom time base around the centre of the zoom window; minus ends at the main time base (host-tested,
+  not yet verified on hardware).
 - Callouts in Studio (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
   text to that time on that signal, with a line from the text to the point. It moves with the signal, is edited by a
   tap on its text, removed by emptying it, and is part of the setup text and of a session. Remote, for scripts and
@@ -155,7 +158,11 @@ Fixed:
   - after a Stop a decoder on channels reads the same whole record as `:WAVeform:MODE RAW`, not the part read again
     for the view (unit: the same 60 events at 20 ms/div and zoomed in to 1 ms/div);
   - a mask made from a reference lies where the reference is drawn when the reference has a deskew;
-  - no save command writes under `/rigol`, whatever path it is given (ADR 0009).
+  - no save command writes under `/rigol`, whatever path it is given (ADR 0009);
+  - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line
+    decoded 59 characters before the save and none after the load. A loaded session is zoomed, read out (RAW) and
+    decoded from its samples, and a Stop does not read the hardware's own memory in its place (unit: 100 k points,
+    22 of 22 and 59 of 59 characters after the load at 5 and 20 ms/div).
 - An update with another device tree starts by kexec again (unit). The update copied the loader's random
   `/chosen/kaslr-seed` into the new tree, and kexec-tools refuses a seed that is not 0, so the update stopped at its
   kexec start with nothing installed. The seed now goes in as 0, and kexec-tools puts in a new random one. A scope
