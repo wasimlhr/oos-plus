@@ -1951,7 +1951,7 @@ fn the_badge_row_wraps_onto_a_second_line() {
         u.m.ch[1].on = false;
         u.studio_set_classic(classic);
         for _ in 0..2 { frame(&mut u); }
-        let (one, eye) = (u.studio_row(), u.studio_eye());
+        let (one, eye) = (u.studio_row(), u.studio_row_btn());
         assert!(u.studio_badges_more().is_none() && !u.studio_badges().is_empty(), "{what}: the measurements of the start fit one line");
         let lines = |u: &Ui| { let mut ys: Vec<i32> = u.studio_badges().iter().map(|b| b.1.y).collect(); ys.sort(); ys.dedup(); ys.len() };
         assert_eq!(lines(&u), 1, "{what}");
@@ -1966,7 +1966,7 @@ fn the_badge_row_wraps_onto_a_second_line() {
             assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= limit, "{what}: badge {i} at {r:?} in {row:?}");
             for (_, o) in &badges[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{what}: {r:?} over {o:?}"); }
         }
-        if !classic { assert_eq!(u.studio_eye(), eye, "{what}: the buttons at the right stay on the line above the bar"); }
+        if !classic { assert_eq!(u.studio_row_btn(), eye, "{what}: the button at the right stays on the line above the bar"); }
         // the upper line is live
         let (key, r) = *badges.iter().min_by_key(|b| b.1.y).unwrap();
         let (x, y) = mid(r);

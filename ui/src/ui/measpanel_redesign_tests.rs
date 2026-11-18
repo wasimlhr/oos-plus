@@ -435,8 +435,7 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
     u.studio_set_pin_all_for_test();
     for _ in 0..4 { frame(&mut u); }
     if u.studio_badges_visible() {
-        let eye = u.studio_eye();
-        tap(&mut u, eye);
+        u.studio_row_pick(super::studio::RowAct::Hide);
         assert!(u.studio.hide_badges);
         let show = u.studio_bottom().show.expect("a restore chip in the bottom bar");
         shotb(&mut u, "strip-hidden");

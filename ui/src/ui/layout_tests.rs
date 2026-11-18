@@ -237,11 +237,10 @@ fn studio_pinned_badges_sit_under_the_lanes_and_the_eye_hides_them() {
     assert!(u.grid.bottom() <= row.y, "the lanes end above the badges");
     let list = u.studio_badges();
     assert_eq!(list.len(), 3);
-    for (_, r) in &list { assert!(row.contains(r.x, r.y) && r.right() <= u.studio_eye().x, "badge inside the row"); }
+    for (_, r) in &list { assert!(row.contains(r.x, r.y) && r.right() <= u.studio_row_btn().x, "badge inside the row"); }
     // the row is paid for by the lanes: hiding the badges gives the height back (mock 02)
     let with = u.grid.h;
-    let eye = u.studio_eye();
-    tap_in(&mut u, eye);
+    u.studio_row_pick(super::studio::RowAct::Hide);
     assert!(u.studio.hide_badges);
     assert_eq!(u.studio_row_h(), 0);
     assert!(u.grid.h > with);
@@ -526,8 +525,7 @@ fn studio_measurements_only_is_a_table_with_statistics_and_a_source_filter() {
     assert_eq!(u.studio.view, StudioView::Waveform);
     // the list button of the badge row (it carries the count; the Meas tab is gone) brings the panel back
     assert!(u.studio_tab().is_none());
-    let tab = u.studio_compact_chip();
-    tap_in(&mut u, tab);
+    u.studio_row_pick(super::studio::RowAct::Table);
     assert_eq!(u.studio.view, StudioView::Docked);
 }
 

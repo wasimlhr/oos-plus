@@ -138,37 +138,44 @@ fn the_badge_row_has_a_button_that_switches_studio_and_classic_and_the_sheet_fol
     for _ in 0..4 { frame(&mut u); }
     assert!(!u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
-    let (style, compact, eye) = (u.studio_style_chip(), u.studio_compact_chip(), u.studio_eye());
-    assert!(style.right() < compact.x && compact.right() < eye.x, "{style:?} {compact:?} {eye:?}");
-    let hit = Ui::hit40(style);
-    assert!(hit.w >= 40 && hit.right() < compact.x, "the hit area stays off the neighbour");
-    for (_, r) in u.studio_badges() { assert!(r.right() <= style.x, "badges end before the button"); }
+    // one button at the right of the row; its menu has the table, the compact view, the badge style and Hide
+    let btn = u.studio_row_btn();
+    assert!(Ui::hit40(btn).w >= 40 && btn.right() <= u.studio_row().right());
+    for (_, r) in u.studio_badges() { assert!(r.right() <= btn.x, "badges end before the button"); }
     shot(&mut u, "badges-studio");
-    tap(&mut u, style);
+    tap(&mut u, btn);
+    let rows = u.studio_row_menu().expect("the menu");
+    assert_eq!(rows.iter().map(|r| r.0).collect::<Vec<_>>(), super::studio::ROW_ACTS);
+    for (_, r) in &rows { assert!(r.h >= 40 && r.x >= 0 && r.right() <= u.scr.w && r.bottom() <= btn.y, "{r:?}"); }
+    shot(&mut u, "badges-menu");
+    // a tap elsewhere closes it and does nothing else
+    tap(&mut u, Rect::new(200, 200, 2, 2));
+    assert!(u.studio_row_menu().is_none() && !u.studio.hide_badges && !u.studio_classic());
+    u.studio_row_pick(super::studio::RowAct::Classic);
     assert!(u.studio_classic() && u.m.studio_classic);
     assert_eq!(u.value(Item::BadgeStyle), "Classic", "the Measure sheet shows it");
-    assert!(!u.studio.compact && !u.studio.hide_badges, "the other buttons were not touched");
-    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= u.studio_style_chip().x));
+    assert!(!u.studio.compact && !u.studio.hide_badges, "the other rows were not touched");
+    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= u.studio_row_btn().x));
     shot(&mut u, "badges-classic");
-    let s = u.studio_style_chip();
-    tap(&mut u, s);
+    u.studio_row_pick(super::studio::RowAct::Classic);
     assert!(!u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
     // the sheet sets it too, and the button follows
     u.select_option(Item::BadgeStyle, "Classic");
     frame(&mut u);
     assert!(u.studio_classic());
-    let s = u.studio_style_chip();
-    tap(&mut u, s);
+    u.studio_row_pick(super::studio::RowAct::Classic);
     assert!(!u.studio_classic());
-    // compact and the eye still do their own work
-    let c = u.studio_compact_chip();
-    tap(&mut u, c);
-    assert_eq!(u.studio.view, StudioView::Docked, "with the panel closed the list button opens it");
+    // the other rows do their own work
+    u.studio_row_pick(super::studio::RowAct::Compact);
+    assert!(u.studio.compact);
+    u.studio_row_pick(super::studio::RowAct::Compact);
+    assert!(!u.studio.compact);
+    u.studio_row_pick(super::studio::RowAct::Table);
+    assert_eq!(u.studio.view, StudioView::Docked, "the table of the measurements");
     u.studio_set_view(StudioView::Waveform);
     u.step(0.05);
-    let e = u.studio_eye();
-    tap(&mut u, e);
+    u.studio_row_pick(super::studio::RowAct::Hide);
     assert!(u.studio.hide_badges);
 }
 
@@ -454,8 +461,8 @@ fn the_badge_row_is_there_only_for_pinned_badges_with_the_panel_closed_and_never
     assert!(u.studio_meas_chip().is_none());
     shot(&mut u, "badge-row-pinned");
     // the restore path: the eye hides the row, the bottom bar and the Undo bar bring it back
-    let e = u.studio_eye();
-    tap(&mut u, e);
+    u.studio_row_pick(super::studio::RowAct::Hide);
+    frame(&mut u);
     assert!(u.studio.hide_badges && u.studio_row_h() == 0);
     assert!(u.studio_badges_hidden());
     let (_, undo) = u.md_hide_bar().expect("the Undo bar");
