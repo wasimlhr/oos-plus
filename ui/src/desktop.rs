@@ -276,6 +276,19 @@ pub fn run(mut ui: Ui, args: &[String]) {
             was_down = false;
             was_right = false;
         }
+        // Storage > Run SCPI file: the file is asked for here and run by the interpreter (scpi/replay.rs)
+        if std::mem::take(&mut ui.open_scpi_request) {
+            match picker::commands(win.get_window_handle()) {
+                Ok(Some(path)) => ui.scpi_replay_file = Some(path),
+                Ok(None) => ui.toast("Open canceled; nothing was run"),
+                Err(error) => ui.toast(&error),
+            }
+            last = Instant::now();
+            pointer.apply(&mut ui, input::Pointer::Cancel, None, false, &controls);
+            input.discard();
+            was_down = false;
+            was_right = false;
+        }
         if ui.desktop_panel == Some(true) && front_window.is_none() {
             match front_window::FrontWindow::open(&win) {
                 Ok(panel) => front_window = Some(panel),

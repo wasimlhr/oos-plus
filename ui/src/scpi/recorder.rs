@@ -22,7 +22,7 @@
 //! `*OPC?` stands after Single and Autoset, the operations it waits for. While an auto set-up runs the look at the
 //! set-up waits: what the user sets in that time is taken for the auto set-up's and is not written.
 
-use super::setupscpi::{changed, named};
+use super::setupscpi::named;
 use super::*;
 
 /// A setting is written when it has stood still this long, in seconds: a knob that is being turned is one line.
@@ -225,6 +225,7 @@ impl Scpi {
 
 #[cfg(test)]
 mod tests {
+    use super::super::setupscpi::changed;
     use super::*;
     use crate::wave::Source;
 
