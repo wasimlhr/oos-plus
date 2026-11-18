@@ -305,3 +305,38 @@ fn studio_has_the_zoom_row_and_the_window_of_the_default_layout() {
     s.set_zoom(true);
     assert_eq!(s.items(MenuId::Horizontal), d.items(MenuId::Horizontal), "the Horizontal rows are those of Default");
 }
+
+/// The buttons of the zoom row and the button of the badge row are on the list of the screen's controls, and the
+/// menu of the badge row is read and pressed by name.
+#[test]
+fn the_zoom_row_and_the_badge_row_menu_are_listed_and_pressed_by_name() {
+    let mut u = zoomed(Layout::Studio);
+    picture(&mut u, "zoom-elements");
+    let els = u.ui_elements();
+    let zoom: Vec<&str> = els.iter().filter(|e| e.kind == "ZOOM").map(|e| e.label.as_str()).collect();
+    assert_eq!(zoom, ["H-", "H+", "V-", "V+", "Box", "Reset", "Close"]);
+    let close = els.iter().find(|e| e.kind == "ZOOM" && e.label == "Close").unwrap().rect;
+    u.tap(close.x + close.w / 2, close.y + close.h / 2);
+    assert!(!u.m.zoom && !u.ui_elements().iter().any(|e| e.kind == "ZOOM"), "no zoom, no row");
+    let cmd = |u: &mut Ui, h: &str, arg: &str| -> String {
+        let q = h.ends_with('?');
+        let nodes: Vec<&str> = h.trim_end_matches('?').trim_start_matches(':').split(':').collect();
+        let reply = u.scpi_ext_command(&nodes, q, arg).expect("a header of the layout commands").expect("no error");
+        reply.map(|b| String::from_utf8(b).unwrap()).unwrap_or_default()
+    };
+    let btn = u.ui_elements().into_iter().find(|e| e.label == "Badge row menu").expect("the button of the badge row").rect;
+    u.tap(btn.x + btn.w / 2, btn.y + btn.h / 2);
+    u.step(0.04);
+    assert_eq!(cmd(&mut u, ":UI:MENU?", ""), "\"Badge row\",\"Measurement table\",\"Compact view\",\"Classic badges\",\"Hide badges\"");
+    let compact = u.studio.compact;
+    cmd(&mut u, ":UI:MENU:SELect", "\"Compact view\"");
+    for _ in 0..3 { u.step(0.04); }
+    assert_ne!(u.studio.compact, compact, "Compact view is switched");
+    cmd(&mut u, ":UI:MENU:CLOSe", "");
+    assert_eq!(cmd(&mut u, ":UI:MENU?", ""), "\"\"");
+    // a hidden row has no badges on the list
+    assert!(u.ui_elements().iter().any(|e| e.kind == "BADGE"));
+    u.studio.hide_badges = true;
+    u.relayout();
+    assert!(!u.ui_elements().iter().any(|e| e.kind == "BADGE"), "hidden badges are not controls on the screen");
+}

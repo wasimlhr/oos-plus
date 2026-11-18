@@ -13173,7 +13173,7 @@
       [
        "[<kind>]",
        "Text",
-       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `LANE` (a lane of the plot, labelled with its source; one record labelled `All sources` in Overlay), `HANDLE` (the handle of a channel, reference or math channel, on its zero level), `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
+       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE` (a measurement badge, and `Badge row menu`, the button at the end of the badge row), `ZOOM` (the buttons of the zoom row: `H-`, `H+`, `V-`, `V+`, `Box`, `Reset`, `Close`), `LANE` (a lane of the plot, labelled with its source; one record labelled `All sources` in Overlay), `HANDLE` (the handle of a channel, reference or math channel, on its zero level), `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
        "—"
       ]
      ],
@@ -13239,7 +13239,7 @@
     {
      "header": ":UI:MENU",
      "query": ":UI:MENU?",
-     "desc": "The menu or popup that is open (the View menu of the Studio bar and the popup of Add source in the bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`. `\"\"` when none is open.",
+     "desc": "The menu or popup that is open (the View menu of the Studio bar, the popup of Add source in the bottom bar and the menu of the badge row's button included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`. `\"\"` when none is open.",
      "remarks": [
       "- Origin: OOS extension"
      ],
