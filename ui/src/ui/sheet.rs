@@ -422,11 +422,21 @@ impl Ui {
                 let at = 2.min(tabs[0].rows.len());
                 tabs[0].rows.insert(at, Item::RefShow(sel));
             }
+            // the two sources of a pair are under every tab ("A: CH1", "B: CH2"): a slot of the plan is the foot of one tab
+            if menu == MenuId::MeasPair {
+                for t in &mut tabs { t.foot = vec![Item::MeasSrc, Item::MeasSrcB]; }
+            }
             let first = match menu {
                 MenuId::ChMore(_) => 1,
                 MenuId::Bus => 2,
                 _ => 0,
             };
+            // a tab that holds nothing in this state is not offered: Position while the cursors are off, Scale while
+            // math has no function. The tab the sheet opens on is found again by its name
+            let opens_on = tabs.get(first).map(|t| t.name);
+            let holds = |t: &SheetTab| !t.rows.is_empty() || !t.foot.is_empty();
+            if tabs.iter().any(holds) { tabs.retain(holds); }
+            let first = opens_on.and_then(|n| tabs.iter().position(|t| t.name == n)).unwrap_or(0);
             SheetSpec { tabs, first }
         };
         if spec.tabs.len() > SHEET_MAX_TABS {

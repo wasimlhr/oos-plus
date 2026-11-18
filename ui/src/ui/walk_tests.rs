@@ -1622,3 +1622,77 @@ fn walk_second_look_pictures() {
         }
     }
 }
+
+/// The page of a channel pair has its two sources under every tab, and no sheet offers a tab that holds nothing:
+/// Position while the cursors are off, Scale while math has no function.
+#[test]
+fn the_pair_sources_are_under_every_tab_and_no_tab_is_empty() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        u.m.ch[1].on = true;
+        u.open_menu(MenuId::MeasPair);
+        u.step(0.04);
+        let n = u.sheet_spec(MenuId::MeasPair).expect("a sheet").tabs.len();
+        assert_eq!(n, 4, "{layout:?}");
+        for t in 0..n {
+            let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]);
+            tap(&mut u, x, y);
+            let g = u.sheet_geo().unwrap();
+            assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [Item::MeasSrc, Item::MeasSrcB], "{layout:?} tab {t}: A and B");
+        }
+        // B opens its list from under the last tab, and the source chosen there is the one of the pair
+        let (x, y) = mid(u.sheet_geo().unwrap().foot[1].1);
+        tap(&mut u, x, y);
+        assert!(u.menu == MenuId::Pick && u.pick.is_some_and(|p| p.it == Item::MeasSrcB), "{layout:?}: the list of source B");
+        u.close_menu();
+        // no tab without rows and actions, in any sheet, as the scope starts
+        let mut list = menus(&u);
+        list.extend([MenuId::Network, MenuId::Remote, MenuId::Ssh, MenuId::Time, MenuId::SelfCal, MenuId::Dvm, MenuId::Zone, MenuId::Sim, MenuId::MeasPair, MenuId::MeasStat]);
+        for menu in list {
+            let mut u = fresh(layout);
+            u.open_menu(menu);
+            let Some(spec) = u.sheet_spec(menu) else { continue };
+            for t in &spec.tabs { assert!(!t.rows.is_empty() || !t.foot.is_empty(), "{layout:?} {menu:?}: the tab {} is empty", t.name); }
+        }
+    }
+    // Studio: the cursors off have one page, a cursor type brings Position
+    let mut u = fresh(Layout::Studio);
+    u.open_menu(MenuId::Cursor);
+    assert_eq!(u.m.cursor, CursorMode::Off);
+    assert_eq!(u.sheet_spec(MenuId::Cursor).unwrap().tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Cursors"]);
+    assert!(u.sheet_geo().unwrap().tabs.is_empty(), "one page: no tab strip");
+    u.m.cursor = CursorMode::Time;
+    assert_eq!(u.sheet_spec(MenuId::Cursor).unwrap().tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Cursors", "Position"]);
+    // math without a function has no Scale tab; the bus page still opens on its own tab
+    let mut u = fresh(Layout::Studio);
+    u.open_menu(MenuId::Math);
+    assert_eq!(u.m.math, MathOp::Off);
+    assert_eq!(u.sheet_spec(MenuId::Math).unwrap().tabs.len(), 1);
+    let spec = u.sheet_spec(MenuId::Bus).unwrap();
+    assert_eq!(spec.tabs[spec.first].name, "Bus");
+    let spec = u.sheet_spec(MenuId::ChMore(0)).unwrap();
+    assert_eq!(spec.tabs[spec.first].name, "More");
+}
+
+/// Pictures of every tab of the channel, trigger and measure sheets (`OOS_WALK=dir`), with the signals of the demo.
+#[test]
+#[ignore]
+fn walk_channel_trigger_measure_pictures() {
+    let Ok(dir) = std::env::var("OOS_WALK") else { return };
+    for (layout, tag) in [(Layout::Studio, "s"), (Layout::Minimal, "m")] {
+        for (menu, name) in [(MenuId::Channel(0), "ch"), (MenuId::Trigger, "trig"), (MenuId::Measure, "meas"), (MenuId::MeasPair, "pair"), (MenuId::MeasStat, "stat"), (MenuId::Dvm, "dvm"), (MenuId::Horizontal, "hor"), (MenuId::Cursor, "cursor")] {
+            let mut u = fresh_live(layout);
+            u.m.ch[1].on = true;
+            u.open_menu(menu);
+            u.step(0.04);
+            let tabs = u.sheet_geo().map_or(0, |g| g.tabs.len());
+            for t in 0..tabs.max(1) {
+                if tabs > 0 { let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]); tap(&mut u, x, y); }
+                for _ in 0..3 { u.step(0.04); }
+                let mut cv = Canvas::new(u.scr.w, u.scr.h);
+                u.render(&mut cv);
+                let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("ctm-{tag}-{name}{t}.png")), &crate::store::png_of(&cv));
+            }
+        }
+    }
+}
