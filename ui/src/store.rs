@@ -1460,7 +1460,8 @@ pub const WAVE_EXTS: &[&str] = &["wfm", "bin", "csv", "trc", "isf", "tr0", "wfmx
 /// A stored waveform, recognized by its header:
 /// `OOSW`; `PWWF0001` or `TKWF0001`; `:WFM#001`, `:WFM#002` or `:WFM#003`; `:WFMPRE:`; `WAVEDESC`; cookie `AG` or `RG`;
 /// a `$&%#` block (`9601`, `9007`, or `2001`) or a `Title:` / `Plotname:` transient (`Binary:` or `Values:`);
-/// XML `WaveformInternal` or `WaveformPatternInternal`; a Siglent header of version 2, 3, 4 or 6; or a CSV time column.
+/// XML `WaveformInternal` or `WaveformPatternInternal`; a Siglent header of version 2, 3, 4 or 6; the first bytes of a RIGOL
+/// DHO800, DHO900, DHO1000 or DS1000E waveform file; or a CSV time column.
 /// Anything else is refused.
 pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
     if bytes.len() > MAX_WAVEFORM_BYTES { return Err("waveform exceeds the 128 MiB import limit".into()); }
@@ -1484,6 +1485,9 @@ pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
     }
     if looks_tr0(bytes) {
         return parse_tr0(bytes);
+    }
+    if let Some(kind) = rigol_wfm_kind(bytes) {
+        return parse_rigol_wfm(bytes, kind);
     }
     if let Some(version) = siglent_version(bytes) {
         return parse_siglent(bytes, version);
@@ -5581,5 +5585,551 @@ mod siglent_file_tests {
         let t = &parse_wave(text.as_bytes(), "siglent.csv").unwrap()[0];
         assert_eq!(t.v, [-0.194, -0.192, -0.19]);
         assert!((t.t0 + 7e-5).abs() < 1e-18 && (t.dt - 1e-8).abs() < 1e-14);
+    }
+}
+
+// ── Inflate (RFC 1951): the compressed blocks of a Rigol DHO waveform file ───────────────────────────────────
+
+/// Bit reader of a deflate stream: values LSB first.
+struct BitIn<'a> {
+    data: &'a [u8],
+    at: usize,
+    hold: u32,
+    held: u32,
+}
+
+impl BitIn<'_> {
+    /// The next `n` bits, at most 16.
+    fn bits(&mut self, n: u32) -> Option<u32> {
+        while self.held < n {
+            self.hold |= (*self.data.get(self.at)? as u32) << self.held;
+            self.at += 1;
+            self.held += 8;
+        }
+        let value = self.hold & ((1u32 << n) - 1);
+        self.hold >>= n;
+        self.held -= n;
+        Some(value)
+    }
+}
+
+/// A canonical Huffman code: how many codes each length has, and the symbols in the order of their codes.
+struct Huffman {
+    count: [u16; 16],
+    symbol: Vec<u16>,
+}
+
+impl Huffman {
+    /// From the code length of each symbol, 0 for a symbol without a code. None when the lengths ask for more
+    /// codes than there are.
+    fn new(lengths: &[u8]) -> Option<Self> {
+        let mut count = [0u16; 16];
+        for &length in lengths {
+            count[(length & 15) as usize] += 1;
+        }
+        count[0] = 0;
+        let mut left = 1i32;
+        for &n in &count[1..] {
+            left = (left << 1) - n as i32;
+            if left < 0 {
+                return None;
+            }
+        }
+        let mut next = [0u16; 16];
+        for length in 1..15 {
+            next[length + 1] = next[length] + count[length];
+        }
+        let mut symbol = vec![0u16; lengths.len()];
+        for (s, &length) in lengths.iter().enumerate() {
+            if length != 0 {
+                let at = &mut next[(length & 15) as usize];
+                symbol[*at as usize] = s as u16;
+                *at += 1;
+            }
+        }
+        Some(Self { count, symbol })
+    }
+
+    /// The symbol of the code that comes next, read a bit at a time, the first bit the highest.
+    fn decode(&self, bits: &mut BitIn) -> Option<usize> {
+        let (mut code, mut first, mut index) = (0i32, 0i32, 0i32);
+        for &n in &self.count[1..] {
+            code |= bits.bits(1)? as i32;
+            let n = n as i32;
+            if code - n < first {
+                return self.symbol.get((index + code - first) as usize).map(|s| *s as usize);
+            }
+            index += n;
+            first = (first + n) << 1;
+            code <<= 1;
+        }
+        None
+    }
+}
+
+/// The two codes of a block with dynamic Huffman codes (RFC 1951 3.2.7): for literals and lengths, and for distances.
+fn inflate_codes(bits: &mut BitIn) -> Option<(Huffman, Huffman)> {
+    const ORDER: [usize; 19] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+    let (literals, distances, coded) = (bits.bits(5)? as usize + 257, bits.bits(5)? as usize + 1, bits.bits(4)? as usize + 4);
+    if literals > 286 || distances > 30 {
+        return None;
+    }
+    let mut of_lengths = [0u8; 19];
+    for &at in &ORDER[..coded] {
+        of_lengths[at] = bits.bits(3)? as u8;
+    }
+    let of_lengths = Huffman::new(&of_lengths)?;
+    let mut lengths = [0u8; 286 + 30];
+    let mut n = 0;
+    while n < literals + distances {
+        let (length, times) = match of_lengths.decode(bits)? {
+            symbol @ 0..=15 => (symbol as u8, 1),
+            16 => (*lengths.get(n.checked_sub(1)?)?, 3 + bits.bits(2)? as usize),
+            17 => (0, 3 + bits.bits(3)? as usize),
+            _ => (0, 11 + bits.bits(7)? as usize),
+        };
+        if n + times > literals + distances {
+            return None;
+        }
+        lengths[n..n + times].fill(length);
+        n += times;
+    }
+    if lengths[256] == 0 {
+        return None; // no code for the end of the block
+    }
+    Some((Huffman::new(&lengths[..literals])?, Huffman::new(&lengths[literals..literals + distances])?))
+}
+
+/// The bytes a deflate stream stands for, at most `limit` of them, and how many bytes of `data` the stream took.
+/// None for a stream that is damaged, cut short or longer than the limit.
+fn inflate(data: &[u8], limit: usize) -> Option<(Vec<u8>, usize)> {
+    let mut bits = BitIn { data, at: 0, hold: 0, held: 0 };
+    let mut out: Vec<u8> = Vec::new();
+    loop {
+        let last = bits.bits(1)? == 1;
+        match bits.bits(2)? {
+            0 => {
+                // stored: from the next whole byte, a length, its complement and the bytes
+                (bits.hold, bits.held) = (0, 0);
+                let head = data.get(bits.at..bits.at.checked_add(4)?)?;
+                let (length, check) = (u16::from_le_bytes([head[0], head[1]]), u16::from_le_bytes([head[2], head[3]]));
+                let block = data.get(bits.at + 4..bits.at + 4 + length as usize)?;
+                if length != !check || out.len() + block.len() > limit {
+                    return None;
+                }
+                out.extend_from_slice(block);
+                bits.at += 4 + length as usize;
+            }
+            kind @ (1 | 2) => {
+                let (literals, distances) = if kind == 2 {
+                    inflate_codes(&mut bits)?
+                } else {
+                    let mut fixed = [8u8; 288];
+                    fixed[144..256].fill(9);
+                    fixed[256..280].fill(7);
+                    (Huffman::new(&fixed)?, Huffman::new(&[5u8; 30])?)
+                };
+                loop {
+                    let symbol = literals.decode(&mut bits)?;
+                    if symbol == 256 {
+                        break;
+                    }
+                    if symbol < 256 {
+                        if out.len() >= limit {
+                            return None;
+                        }
+                        out.push(symbol as u8);
+                        continue;
+                    }
+                    let (base, extra) = *LEN_BASE.get(symbol - 257)?;
+                    let length = base as usize + bits.bits(extra as u32)? as usize;
+                    let (base, extra) = *DIST_BASE.get(distances.decode(&mut bits)?)?;
+                    let distance = base as usize + bits.bits(extra as u32)? as usize;
+                    if distance > out.len() || out.len() + length > limit {
+                        return None;
+                    }
+                    for _ in 0..length {
+                        out.push(out[out.len() - distance]);
+                    }
+                }
+            }
+            _ => return None,
+        }
+        if last {
+            return Some((out, bits.at));
+        }
+    }
+}
+
+/// The bytes of a zlib stream (RFC 1950): two header bytes, a deflate stream and the Adler-32 of what it holds.
+fn zlib_inflate(data: &[u8], limit: usize) -> Option<Vec<u8>> {
+    if data.len() < 6 || data[0] & 0x0F != 8 || u16::from_be_bytes([data[0], data[1]]) % 31 != 0 || data[1] & 0x20 != 0 {
+        return None;
+    }
+    let (out, taken) = inflate(&data[2..], limit)?;
+    let sum = data.get(2 + taken..2 + taken + 4)?;
+    (u32::from_be_bytes([sum[0], sum[1], sum[2], sum[3]]) == adler32(&out)).then_some(out)
+}
+
+// ── Rigol: waveform files of the scope's own format (.wfm) ───────────────────────────────────────────────────
+
+/// What a Rigol `.wfm` file is, by its first four bytes.
+enum RigolWfm {
+    /// DHO800, DHO900 and DHO1000: settings in compressed blocks, 16-bit samples.
+    Dho,
+    /// DS1000E: one fixed header, 8-bit samples.
+    E,
+    /// A family whose file is known by its first bytes and not read.
+    Unread(&'static str),
+}
+
+fn rigol_wfm_kind(b: &[u8]) -> Option<RigolWfm> {
+    match b.get(..4)? {
+        [2, 0, 0, 0] if rigol_dho_blocks(b).is_some_and(|(blocks, _)| blocks.iter().any(|block| matches!(block.kind, 5 | 9))) => Some(RigolWfm::Dho),
+        [0xA5, 0xA5, 0, 0] if b.len() >= 276 => Some(RigolWfm::E),
+        [1, 0xFF, 0xFF, 0xFF] if b.get(4) == Some(&0xA5) => Some(RigolWfm::Unread("DS1000Z and MSO1000Z")),
+        [0xA5, 0xA5, 0x38, 0] => Some(RigolWfm::Unread("DS2000, DS4000 and DS6000")),
+        [0xA5, 0xA5, 0xA4, 1] => Some(RigolWfm::Unread("DS1000B")),
+        [0xA1, 0xA5, 0, 0] => Some(RigolWfm::Unread("DS1000C")),
+        _ => None,
+    }
+}
+
+fn parse_rigol_wfm(b: &[u8], kind: RigolWfm) -> Result<Vec<WaveTrace>, String> {
+    match kind {
+        RigolWfm::Dho => parse_rigol_dho(b),
+        RigolWfm::E => parse_rigol_e(b),
+        RigolWfm::Unread(family) => Err(format!("RIGOL {family} waveform files (.wfm) are not read")),
+    }
+}
+
+/// A settings block of a DHO waveform file: its number, its kind and what it holds, decompressed.
+struct DhoBlock {
+    id: u16,
+    kind: u16,
+    payload: Vec<u8>,
+}
+
+/// The settings blocks of a DHO waveform file, and where they end. They start at byte 24, each with a header of
+/// six u16: number, kind, size decompressed, size compressed, bytes taken in the file, zero. The first
+/// `compressed` bytes are a zlib stream, or the settings themselves; a block that takes no bytes ends the list.
+fn rigol_dho_blocks(b: &[u8]) -> Option<(Vec<DhoBlock>, usize)> {
+    let mut blocks = Vec::new();
+    let mut at = 24usize;
+    loop {
+        let head = b.get(at..at + 12)?;
+        let word = |k: usize| u16::from_le_bytes([head[2 * k], head[2 * k + 1]]);
+        let (compressed, taken) = (word(3) as usize, word(4) as usize);
+        if compressed == 0 && taken == 0 {
+            return Some((blocks, at));
+        }
+        if compressed > taken || blocks.len() >= 4096 {
+            return None;
+        }
+        let content = b.get(at + 12..at + 12 + taken)?;
+        let payload = zlib_inflate(&content[..compressed], 1 << 20).unwrap_or_else(|| content[..compressed].to_vec());
+        blocks.push(DhoBlock { id: word(0), kind: word(1), payload });
+        at += 12 + taken;
+    }
+}
+
+/// A waveform file of a RIGOL DHO800, DHO900 or DHO1000. RIGOL does not publish this layout; it is the one the
+/// RigolWFM project worked out and checked against the scope's own BIN export of the same captures.
+/// The settings blocks (`rigol_dho_blocks`) hold the vertical scale: in the block numbered as its channel, of kind
+/// 5 (DHO800) or 9 (DHO1000), an i64 at byte 1 and the centre at byte 38 (i32 or i64):
+/// DHO800: volts of one code = i64 / 7.5e12, centre = -i32 / 1e9, volts = code * volts of one code + centre - 32768 codes;
+/// DHO1000: volts of one code = i64 / 7.5e11, centre = i64 / 1e8, volts = code * volts of one code - centre - 32768 codes.
+/// After the blocks and the zeros that follow them: u64 samples of all channels; at +16 the time between samples
+/// as a u32 count of 0.8 ns (DHO800) or 10 ns (DHO1000); at +24 the samples of one channel; at +40 the samples,
+/// u16, the channels taking turns. The channels are taken to be CH1 onwards, and the middle sample to be the
+/// trigger: the file says neither where the sources looked.
+fn parse_rigol_dho(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
+    let short = || "truncated RIGOL waveform file".to_string();
+    let (blocks, mut at) = rigol_dho_blocks(b).ok_or_else(short)?;
+    let dho800 = blocks.iter().any(|block| block.kind == 5 && (1..=4).contains(&block.id));
+    let scales: Vec<(u16, f64, f64)> = blocks.iter().filter(|block| block.kind == if dho800 { 5 } else { 9 } && (1..=4).contains(&block.id)).filter_map(|block| {
+        let number = sg_f64(&block.payload, 1)?.to_bits() as i64 as f64;
+        let (step, centre) = if dho800 {
+            (number / 7.5e12, -(sg_u32(&block.payload, 38)? as i32 as f64) / 1e9)
+        } else {
+            (number / 7.5e11, -(sg_f64(&block.payload, 38)?.to_bits() as i64 as f64) / 1e8)
+        };
+        (step != 0.0).then_some((block.id, step, centre - step * 32768.0))
+    }).collect();
+    let Some(&(_, first_step, first_zero)) = scales.first() else {
+        return Err("the RIGOL file has no usable vertical scale".into());
+    };
+    while b.get(at) == Some(&0) {
+        at += 1;
+    }
+    let total = sg_f64(b, at).ok_or_else(short)?.to_bits();
+    let (ticks, hint) = (sg_u32(b, at + 16).ok_or_else(short)?, sg_u32(b, at + 24).ok_or_else(short)? as u64);
+    if total == 0 || total > 4 * MAX_WAVEFORM_SAMPLES as u64 {
+        return Err("that file holds no waveform".into());
+    }
+    // the count of all channels can run a few samples over: the channels are the nearest whole number
+    let (points, channels) = if hint > 0 { (hint, (total + hint / 2) / hint) } else { (total, 1) };
+    if points < 2 || !(1..=4).contains(&channels) {
+        return Err("that file holds no waveform".into());
+    }
+    if points > MAX_WAVEFORM_SAMPLES as u64 {
+        return Err("waveform exceeds the 32-million-sample import limit".into());
+    }
+    let (points, channels) = (points as usize, channels as usize);
+    let ticks = if ticks == 0 || ticks > 1_000_000_000 { 1 } else { ticks };
+    let dt = ticks as f64 * if dho800 { 8e-10 } else { 1e-8 };
+    let t0 = -(points as f64 / 2.0) * dt;
+    let samples = b.get(at + 40..).filter(|s| s.len() >= points * channels * 2).ok_or_else(short)?;
+    Ok((0..channels).map(|k| {
+        let (step, zero) = scales.iter().find(|(id, _, _)| *id as usize == k + 1).map_or((first_step, first_zero), |&(_, step, zero)| (step, zero));
+        let v = samples.chunks_exact(2 * channels).take(points).map(|row| (u16::from_le_bytes([row[2 * k], row[2 * k + 1]]) as f64 * step + zero) as f32).collect();
+        WaveTrace { t0, dt, v, label: format!("CH{}", k + 1) }
+    }).collect())
+}
+
+/// A waveform file of a RIGOL DS1000E. One header of 276 bytes, little endian: 20 roll stop (u32); 28 the samples
+/// of CH1 (u32); a channel header at 34 (CH1) and 58 (CH2), in it +10 probe factor (f32), +15 on (u8), +18
+/// microvolts per division at the input (i32) and +22 position in codes (i16); 100 sample rate (f32, Hz);
+/// 112 time of the middle of the record (i64, ps); 232 the samples of CH2 (u32), 0 for as many as CH1.
+/// The samples follow, CH1 then CH2, 8-bit, 25 codes a division, a higher code a lower voltage:
+/// volts = (125 - code - position) * volts per division * probe / 25. In roll mode the last `roll stop + 2`
+/// bytes of a channel are not samples. Layout from the RigolWFM project. A DS1000D file has the same bytes and
+/// its scale already holds the probe factor; it is read as a DS1000E file. The logic channels, and the second
+/// time base of an alternate trigger, are not read.
+fn parse_rigol_e(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
+    let short = || "truncated RIGOL waveform file".to_string();
+    let word = |at: usize| sg_u32(b, at).ok_or_else(short);
+    let float = |at: usize| word(at).map(|bits| f32::from_bits(bits) as f64);
+    let depth = [word(28)? as usize, match word(232)? { 0 => word(28)?, n => n } as usize];
+    let on = [b[34 + 15] != 0, b[58 + 15] != 0];
+    let held: usize = (0..2).filter(|k| on[*k]).map(|k| depth[k]).sum();
+    // a DS1000C file has the same first bytes and a shorter header
+    if b.len() == 256 + held || b.len() == 272 + held {
+        return Err("RIGOL DS1000C waveform files (.wfm) are not read".into());
+    }
+    let rate = float(100)?;
+    if !(rate > 0.0) || !rate.is_finite() {
+        return Err("the RIGOL file has no usable sample rate".into());
+    }
+    let middle = sg_f64(b, 112).ok_or_else(short)?.to_bits() as i64 as f64 * 1e-12;
+    let skip = match word(20)? as usize {
+        0 => 0,
+        stop => stop + 2,
+    };
+    let mut out = Vec::new();
+    let mut at = 276usize;
+    for k in 0..2 {
+        if !on[k] {
+            continue;
+        }
+        if depth[k] > MAX_WAVEFORM_SAMPLES {
+            return Err("waveform exceeds the 32-million-sample import limit".into());
+        }
+        let head = 34 + 24 * k;
+        let block = at.checked_add(depth[k]).and_then(|end| b.get(at..end)).ok_or_else(short)?;
+        at += depth[k];
+        let points = depth[k].saturating_sub(skip);
+        if points < 2 {
+            continue;
+        }
+        let step = 1e-6 * (word(head + 18)? as i32 as f64) * float(head + 10)? / 25.0;
+        let position = i16::from_le_bytes([b[head + 22], b[head + 23]]) as f64;
+        let v: Vec<f32> = block[..points].iter().map(|code| ((125.0 - *code as f64 - position) * step) as f32).collect();
+        if step == 0.0 || v.iter().any(|x| !x.is_finite()) {
+            return Err("the RIGOL file has no usable vertical scale".into());
+        }
+        out.push(WaveTrace { t0: middle - depth[k] as f64 / rate / 2.0, dt: 1.0 / rate, v, label: format!("CH{}", k + 1) });
+    }
+    if out.is_empty() {
+        return Err("that file holds no waveform".into());
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod rigol_wfm_file_tests {
+    use super::*;
+
+    /// "scale 0 and offset 0; scale 7 and offset 5; ..." forty times over: 893 bytes that compress well.
+    fn text() -> Vec<u8> {
+        (0..40).map(|i| format!("scale {} and offset {}; ", i * 7 % 13, i * 5 % 11)).collect::<String>().into_bytes()
+    }
+
+    /// A zlib stream of one stored block.
+    fn stored(data: &[u8]) -> Vec<u8> {
+        let mut z = vec![0x78, 0x01, 0x01];
+        z.extend_from_slice(&(data.len() as u16).to_le_bytes());
+        z.extend_from_slice(&(!(data.len() as u16)).to_le_bytes());
+        z.extend_from_slice(data);
+        z.extend_from_slice(&adler32(data).to_be_bytes());
+        z
+    }
+
+    #[test]
+    fn the_three_kinds_of_deflate_block_are_inflated() {
+        // fixed codes, with a match that runs over itself: "abc" four times, as zlib level 9 writes it
+        let fixed = [120, 218, 75, 76, 74, 78, 132, 33, 0, 29, 224, 4, 153];
+        assert_eq!(zlib_inflate(&fixed, 64).unwrap(), b"abcabcabcabc");
+        // dynamic codes, as zlib level 9 writes the text
+        let dynamic = [
+            120, 218, 117, 210, 77, 10, 2, 49, 12, 64, 225, 171, 244, 8, 105, 250, 143, 167, 25, 116, 102, 53, 232, 162, 222, 31, 65, 72, 201, 200,
+            115, 251, 8, 52, 31, 205, 188, 111, 231, 30, 36, 108, 207, 71, 120, 29, 199, 220, 223, 65, 110, 97, 126, 107, 243, 181, 88, 141, 190, 198,
+            53, 220, 125, 206, 86, 213, 215, 97, 117, 248, 154, 172, 38, 95, 251, 122, 238, 178, 155, 90, 206, 190, 182, 53, 124, 93, 206, 114, 241,
+            181, 174, 97, 69, 117, 69, 181, 176, 186, 161, 58, 162, 186, 163, 90, 81, 61, 16, 157, 24, 45, 136, 206, 140, 142, 136, 46, 252, 213, 202,
+            234, 138, 106, 65, 117, 67, 117, 68, 117, 71, 181, 162, 122, 32, 58, 49, 154, 239, 59, 51, 250, 207, 129, 23, 254, 106, 190, 240, 138, 106,
+            249, 81, 127, 0, 152, 61, 27, 73,
+        ];
+        assert_eq!(zlib_inflate(&dynamic, 4096).unwrap(), text());
+        // stored
+        assert_eq!(zlib_inflate(&stored(&text()), 4096).unwrap(), text());
+        // what this file's own deflate writes
+        let rows: Vec<u8> = (0..600).map(|i| (i / 7 % 5) as u8).collect();
+        assert_eq!(inflate(&deflate_rows(&rows, 30), 4096).unwrap().0, rows);
+    }
+
+    #[test]
+    fn a_stream_that_is_damaged_cut_short_or_too_long_is_none() {
+        let good = stored(&text());
+        assert!(zlib_inflate(&good, 892).is_none(), "longer than the limit");
+        assert!(zlib_inflate(&good[..good.len() - 5], 4096).is_none(), "cut short");
+        let mut sum = good.clone();
+        *sum.last_mut().unwrap() ^= 1;
+        assert!(zlib_inflate(&sum, 4096).is_none(), "wrong check sum");
+        let mut length = good.clone();
+        length[5] ^= 1;
+        assert!(zlib_inflate(&length, 4096).is_none(), "length and its complement disagree");
+        // a match that reaches back before the start, a block of the kind that does not exist, no stream at all
+        assert!(inflate(&[0x03, 0x02, 0x00], 64).is_none());
+        assert!(inflate(&[0x07], 64).is_none());
+        assert!(zlib_inflate(&[], 64).is_none());
+        assert!(zlib_inflate(b"plain settings, not a stream", 64).is_none());
+    }
+
+    fn put(b: &mut [u8], at: usize, bytes: &[u8]) {
+        b[at..at + bytes.len()].copy_from_slice(bytes);
+    }
+
+    /// The settings of one channel: 0.1 mV a code, and the volts the middle code stands for.
+    fn channel_settings(dho800: bool, centre: f64) -> Vec<u8> {
+        let mut p = vec![0u8; 64];
+        if dho800 {
+            put(&mut p, 1, &750_000_000i64.to_le_bytes());
+            put(&mut p, 38, &((-centre * 1e9) as i32).to_le_bytes());
+        } else {
+            put(&mut p, 1, &75_000_000i64.to_le_bytes());
+            put(&mut p, 38, &((-centre * 1e8) as i64).to_le_bytes());
+        }
+        p
+    }
+
+    /// A DHO file: its blocks, some zeros, the frame header and the samples of `channels` channels taking turns.
+    fn dho(blocks: &[(u16, u16, Vec<u8>, bool)], channels: u64, ticks: u32, codes: &[u16]) -> Vec<u8> {
+        let mut b = vec![0u8; 24];
+        b[0] = 2;
+        for (id, kind, payload, compress) in blocks {
+            let content = if *compress { stored(payload) } else { payload.clone() };
+            let taken = content.len() + 3; // the file pads a block
+            for word in [*id, *kind, payload.len() as u16, content.len() as u16, taken as u16, 0] {
+                b.extend_from_slice(&word.to_le_bytes());
+            }
+            b.extend_from_slice(&content);
+            b.extend_from_slice(&[0; 3]);
+        }
+        b.extend_from_slice(&[0; 12 + 24]); // the block that ends the list, and the zeros before the frame
+        let points = codes.len() as u64 / channels;
+        let mut frame = vec![0u8; 40];
+        put(&mut frame, 0, &(points * channels).to_le_bytes());
+        put(&mut frame, 16, &ticks.to_le_bytes());
+        put(&mut frame, 20, &0x4Du32.to_le_bytes());
+        put(&mut frame, 24, &(points as u32).to_le_bytes());
+        put(&mut frame, 28, &(points as u32).to_le_bytes());
+        frame[32] = 1;
+        b.extend_from_slice(&frame);
+        b.extend(codes.iter().flat_map(|c| c.to_le_bytes()));
+        b
+    }
+
+    fn close(seen: &[f32], wanted: &[f32]) -> bool {
+        seen.len() == wanted.len() && seen.iter().zip(wanted).all(|(a, b)| (a - b).abs() < 1e-5)
+    }
+
+    #[test]
+    fn a_dho800_file_gives_its_channels_from_samples_that_take_turns() {
+        // CH1 around 0.5 V and CH2 around -1 V, 500 ticks of 0.8 ns between samples, compressed settings
+        let blocks = [(1, 5, channel_settings(true, 0.5), true), (300, 6, vec![7; 40], true), (2, 5, channel_settings(true, -1.0), false)];
+        let b = dho(&blocks, 2, 500, &[32768, 32768, 42768, 22768, 22768, 42768, 32768, 32768]);
+        let traces = parse_wave(&b, "dho.wfm").unwrap();
+        assert_eq!(traces.len(), 2);
+        assert!(close(&traces[0].v, &[0.5, 1.5, -0.5, 0.5]) && close(&traces[1].v, &[-1.0, -2.0, 0.0, -1.0]), "{:?}", (&traces[0].v, &traces[1].v));
+        assert_eq!((traces[0].label.as_str(), traces[1].label.as_str()), ("CH1", "CH2"));
+        assert!(traces.iter().all(|t| (t.dt - 4e-7).abs() < 1e-18 && (t.t0 + 8e-7).abs() < 1e-18));
+    }
+
+    #[test]
+    fn a_dho1000_file_counts_ten_nanoseconds_and_a_few_samples_too_many() {
+        let mut b = dho(&[(1, 9, channel_settings(false, 0.5), true)], 1, 3, &[32768, 42768, 22768, 32768]);
+        // the count of all channels runs over the samples of the one channel
+        let frame = b.len() - 8 - 40;
+        put(&mut b, frame, &5u64.to_le_bytes());
+        let t = &parse_wave(&b, "dho.wfm").unwrap()[0];
+        assert!(close(&t.v, &[0.5, 1.5, -0.5, 0.5]), "{:?}", t.v);
+        assert!((t.dt - 3e-8).abs() < 1e-20 && (t.t0 + 6e-8).abs() < 1e-20);
+    }
+
+    #[test]
+    fn a_dho_file_without_its_scale_or_its_samples_is_refused() {
+        let good = dho(&[(1, 5, channel_settings(true, 0.5), true)], 1, 500, &[32768, 42768, 22768, 32768]);
+        assert!(parse_wave(&good, "dho.wfm").is_ok());
+        assert!(parse_wave(&good[..good.len() - 1], "dho.wfm").unwrap_err().contains("truncated"));
+        // a channel block that holds no scale
+        let empty = dho(&[(1, 5, vec![0; 64], true)], 1, 500, &[32768, 42768, 22768, 32768]);
+        assert!(parse_wave(&empty, "dho.wfm").unwrap_err().contains("vertical scale"));
+        // no channel block at all: not taken for this kind of file
+        assert!(rigol_wfm_kind(&dho(&[(300, 6, vec![7; 40], true)], 1, 500, &[1, 2])).is_none());
+    }
+
+    /// A DS1000E file: 1 V per division at the input of a 10x probe, 25 codes of position, 1 kSa/s, the middle
+    /// of the record at 2 ms.
+    fn e(on: [bool; 2], depth: u32, roll_stop: u32, data: &[u8]) -> Vec<u8> {
+        let mut b = vec![0u8; 276];
+        put(&mut b, 0, &[0xA5, 0xA5, 0, 0]);
+        put(&mut b, 20, &roll_stop.to_le_bytes());
+        put(&mut b, 28, &depth.to_le_bytes());
+        for k in 0..2 {
+            let head = 34 + 24 * k;
+            put(&mut b, head + 10, &10.0f32.to_le_bytes());
+            b[head + 15] = on[k] as u8;
+            put(&mut b, head + 18, &100_000i32.to_le_bytes());
+            put(&mut b, head + 22, &(25i16 * (1 - 2 * k as i16)).to_le_bytes());
+        }
+        put(&mut b, 100, &1000.0f32.to_le_bytes());
+        put(&mut b, 112, &2_000_000_000i64.to_le_bytes());
+        b.extend_from_slice(data);
+        b
+    }
+
+    #[test]
+    fn a_ds1000e_file_gives_its_channels_one_after_the_other() {
+        // a higher code is a lower voltage; CH1 sits a division up, CH2 a division down
+        let traces = parse_wave(&e([true, true], 4, 0, &[100, 75, 125, 150, 150, 125, 175, 200]), "e.wfm").unwrap();
+        assert_eq!(traces.len(), 2);
+        assert!(close(&traces[0].v, &[0.0, 1.0, -1.0, -2.0]) && close(&traces[1].v, &[0.0, 1.0, -1.0, -2.0]), "{:?}", (&traces[0].v, &traces[1].v));
+        assert!(traces.iter().all(|t| t.dt == 1e-3 && (t.t0 - 0.0).abs() < 1e-12));
+        // CH2 alone, and the bytes after a roll stop left out
+        let alone = parse_wave(&e([false, true], 6, 1, &[150, 125, 175, 0, 0, 0]), "e.wfm").unwrap();
+        assert_eq!((alone.len(), alone[0].label.as_str()), (1, "CH2"));
+        assert!(close(&alone[0].v, &[0.0, 1.0, -1.0]) && (alone[0].t0 + 1e-3).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rigol_files_that_are_not_read_are_refused_by_family() {
+        assert!(parse_wave(&e([true, false], 4, 0, &[1, 2, 3]), "e.wfm").unwrap_err().contains("truncated"));
+        assert!(parse_wave(&e([false, false], 4, 0, &[]), "e.wfm").unwrap_err().contains("no waveform"));
+        // the shorter header of a DS1000C: 256 bytes, then the 20 samples
+        assert!(parse_wave(&[&e([true, false], 20, 0, &[])[..256], &[0u8; 20][..]].concat(), "c.wfm").unwrap_err().contains("DS1000C"));
+        for (first, family) in [([1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5], "DS1000Z"), ([0xA5, 0xA5, 0x38, 0, 0, 0], "DS2000"), ([0xA5, 0xA5, 0xA4, 1, 0, 0], "DS1000B"), ([0xA1, 0xA5, 0, 0, 0, 0], "DS1000C")] {
+            let refused = parse_wave(&[&first[..], &[0u8; 64][..]].concat(), "r.wfm").unwrap_err();
+            assert!(refused.contains(family) && refused.contains("not read"), "{refused}");
+        }
     }
 }
