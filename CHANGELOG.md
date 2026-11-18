@@ -199,9 +199,14 @@ Fixed:
   - `:TRIGger:ZONE<n>:SOURce` sets and answers the source of the zone. It set and answered the source of the trigger,
     so a zone stayed on the channel it had: with the zone on a channel that was off, "must intersect" let no record
     through whatever the box (unit). `:SYSTem:DEBug:ZONE?` says what the filter saw of the record it refused last;
-  - `*RST` and the Default key: the layout of the screen stays (a Studio screen was put into the stock layout), the
-    notes on the signals and the vertical zoom of a closed zoom window are cleared, and `*RST` puts the waveform
-    read-out back to `CHAN1`, `NORMal`, `BYTE` (unit);
+  - `*RST` and the Default key clear the notes on the signals and the vertical zoom of a closed zoom window, and
+    `*RST` puts the waveform read-out back to `CHAN1`, `NORMal`, `BYTE` (unit). As before, a new set-up is in the
+    Default layout with the stock bars. `*RST` is no longer a key press: with a notice on the screen the notice
+    took the key, was closed, and nothing was reset (unit);
+  - a set-up, and so a session, holds the generator's wave and modulation (`gen`, `gen_mod`): a recall put the
+    generator back to 1 kHz. Whether the output is on is not saved, and a recall leaves it off, also when it was on
+    (unit: square 12.345 kHz, 0.5 Vpp, 0.1 V offset, 30 % duty back after `*RCL` and after `:LOAD:SESSion`, output off
+    both times). An arbitrary wave is not saved;
   - `:CALLout:LIST?` answers in one line, `source,time,"text"` a note, separated by `;`; it answered one line a
     note, which a client that reads line by line takes for as many answers (unit);
   - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line

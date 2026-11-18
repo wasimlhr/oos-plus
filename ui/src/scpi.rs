@@ -1219,7 +1219,9 @@ impl Scpi {
             }
             "*RST" if !query => {
                 self.event_status = 0; self.opc_events.clear();
-                ui.key(crate::ui::key::DEFAULT);
+                // not as a key press: a notice on the screen takes a key for its own, and the reset was lost
+                ui.sim_cancel_generation();
+                ui.default_setup();
                 // the read-out of this interpreter is part of what a reset puts back: CH1, NORMal, BYTE, the whole record
                 (self.wav_src, self.wav_math, self.wav_fmt, self.wav_mode, self.wav_start, self.wav_stop) = (WaveId::Ch(0), None, 0, 0, 1, 0);
                 return None;
@@ -7412,17 +7414,49 @@ mod tests {
     }
 
     // Break it catches (seen on a unit, 2026-11-17): after *RST the read-out was still on the channel, RAW and WORD
-    // of before, a note of the old set-up still hung on the screen, a closed zoom kept its vertical factor, and a
-    // Studio screen was in the stock layout.
+    // of before, a note of the old set-up still hung on the screen and a closed zoom kept its vertical factor. A new
+    // set-up is in the Default layout with the stock bars, whatever the screen was before.
     #[test]
-    fn a_reset_puts_the_read_out_back_and_keeps_the_layout() {
+    fn a_reset_puts_the_read_out_back_and_starts_in_the_default_layout() {
         let (mut s, mut ui, cv) = session();
-        ui.m.layout = Layout::Studio;
+        (ui.m.layout, ui.m.bar_compact) = (Layout::Studio, true);
         line(&mut s, &mut ui, &cv, "*CLS;:CHAN2:DISP ON;:WAV:SOUR CHAN2;:WAV:MODE RAW;:WAV:FORM WORD;:WAV:STAR 10;:WAV:STOP 20;:CALL:ADD CHAN2,0,\"old\";:TIM:DEL:VZO 4;*ESE 32");
         line(&mut s, &mut ui, &cv, "*RST");
         assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:SOUR?;:WAV:MODE?;:WAV:FORM?;:WAV:STAR?"), "CHAN1;NORM;BYTE;1");
         assert_eq!(line(&mut s, &mut ui, &cv, ":CALL:COUN?;:TIM:DEL:VZO?;*ESE?"), "0;1.000000E+00;32", "notes and zoom go, the enable register stays (IEEE 488.2)");
-        assert_eq!(ui.m.layout, Layout::Studio);
+        assert!(ui.m.layout == Layout::Default && !ui.m.compact(), "the stock bars");
+        // a notice on the screen does not swallow the reset, and stays for the person it is for (on a unit a *RST
+        // closed the notice of an update and reset nothing)
+        ui.dialog = Some(vec!["Update".into(), "Tap to close".into()]);
+        line(&mut s, &mut ui, &cv, ":TIM:SCAL 1e-6;*RST");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TIM:SCAL?"), "2.000000E-04");
+        assert!(ui.dialog.is_some(), "the notice stays");
+        ui.dialog = None;
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    }
+
+    // Break it catches: a set-up (and so a session) did not hold the generator, a recall put it back to 1 kHz (seen on
+    // a unit, 2026-11-18); and a recall that switches an output on, which it must never do.
+    #[test]
+    fn a_setup_holds_the_generator_but_never_switches_its_output_on() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, "*CLS;:SOUR:FUNC SQU;:SOUR:FREQ 12345;:SOUR:VOLT 0.5;:SOUR:VOLT:OFFS 0.1;:SOUR:FUNC:SQU:DUTY 30;:SOUR:OUTP ON");
+        let before = line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?");
+        let text = ui.setup_text_full();
+        assert!(text.lines().any(|l| l.starts_with("gen = Square 12345 ")), "{:?}", text.lines().filter(|l| l.starts_with("gen")).collect::<Vec<_>>());
+        assert!(!text.contains("afg_on") && !text.to_ascii_lowercase().contains("output"), "the output state is not in a set-up");
+        line(&mut s, &mut ui, &cv, "*RST");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FREQ?;:SOUR:OUTP?"), "1.000000E+03;0");
+        line(&mut s, &mut ui, &cv, ":SOUR:OUTP ON");
+        ui.apply_setup_text(&text).unwrap();
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?"), before);
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:OUTP?"), "0", "a recall leaves the output off, also one that was on");
+        // a set-up of before the keys leaves the generator at its defaults, and a bad line is an error, not a guess
+        let old: String = text.lines().filter(|l| !l.starts_with("gen")).map(|l| format!("{l}
+")).collect();
+        ui.apply_setup_text(&old).unwrap();
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FREQ?"), "1.000000E+03");
+        assert!(crate::store::set(&mut ui.m, "gen", "Arb 1000 1 0 50 50").is_err() && crate::store::set(&mut ui.m, "gen", "Sine 1e3").is_err());
         assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
     }
 

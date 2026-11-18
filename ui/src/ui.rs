@@ -1457,7 +1457,7 @@ pub struct Ui {
     final_req: u64,
     stop_final: Option<f64>,
     toast: Option<(String, f64)>,
-    dialog: Option<Vec<String>>,
+    pub(crate) dialog: Option<Vec<String>>,
     /// System info page (sysinfo.rs): its rows while open (shown instead of the dialog lines), last refresh
     sysinfo: Option<[Vec<sysinfo::Row>; 3]>,
     sysinfo_t: f64,
@@ -9604,6 +9604,10 @@ impl Ui {
                     self.mask_ref = None;
                 }
                 self.m = m;
+                // the generator of a recalled set-up: its wave within what the generator can do, its output off. A
+                // recall never switches an output on, and one that was on does not jump to another wave on a circuit
+                self.m.afg_on = false;
+                self.afg_clamp();
                 self.restore_view_state();
                 self.view_state_restore(text);
                 if self.m.layout == Layout::Studio { self.studio.enter = true; }
@@ -10483,6 +10487,35 @@ impl Ui {
         self.settings_changed();
     }
 
+    /// The Default key and `*RST`: a new set-up. `*RST` calls this itself, so that a notice or a menu on the screen,
+    /// which takes a key press for its own, does not swallow a reset from a script.
+    pub(crate) fn default_setup(&mut self) {
+        let meas = Self::default_meas();
+        // the Quick key action is a preference, not part of the set-up that Default resets. The layout is part
+        // of it: a new set-up starts in the Default layout with the stock bars (5533112)
+        let (quick, text_size) = (self.m.quick, self.m.text_size);
+        self.m = Model::default();
+        self.m.meas = meas;
+        (self.m.quick, self.m.text_size) = (quick, text_size);
+        // what hangs on the signals of the set-up that is gone: the notes, and the vertical zoom a closed zoom
+        // window kept for its next opening
+        self.callouts.clear();
+        (self.zoom_vfactor, self.zoom_vcenter) = (1.0, 0.0);
+        self.bus_auto = None;
+        self.clear_measurement_statistics();
+        self.select_workspace_source(WaveId::Ch(self.m.active));
+        self.meas_own.clear();
+        self.meas_cfg = None;
+        self.ensure_meas_own();
+        self.stats_on = false;
+        self.xy = false;
+        self.mask = None;
+        self.mask_ref = None;
+        self.close_menu();
+        self.dirty_map = true;
+        self.toast("Default set-up");
+    }
+
     pub fn key(&mut self, k: u8) {
         if k == 0 {
             return; // release
@@ -10576,32 +10609,7 @@ impl Ui {
                 self.autoset_live_only();
             }
             key::CLEAR => self.clear_display(),
-            key::DEFAULT => {
-                let meas = Self::default_meas();
-                // the Quick key action, the text size and the layout of the screen are preferences, not part of the
-                // set-up that Default resets (a `*RST` from a script threw a Studio screen back to the stock layout)
-                let (quick, text_size, layout) = (m.quick, m.text_size, m.layout);
-                self.m = Model::default();
-                self.m.meas = meas;
-                (self.m.quick, self.m.text_size, self.m.layout) = (quick, text_size, layout);
-                // what hangs on the signals of the set-up that is gone: the notes, and the vertical zoom a closed zoom
-                // window kept for its next opening
-                self.callouts.clear();
-                (self.zoom_vfactor, self.zoom_vcenter) = (1.0, 0.0);
-                self.bus_auto = None;
-                self.clear_measurement_statistics();
-                self.select_workspace_source(WaveId::Ch(self.m.active));
-                self.meas_own.clear();
-                self.meas_cfg = None;
-                self.ensure_meas_own();
-                self.stats_on = false;
-                self.xy = false;
-                self.mask = None;
-                self.mask_ref = None;
-                self.close_menu();
-                self.dirty_map = true;
-                self.toast("Default set-up");
-            }
+            key::DEFAULT => self.default_setup(),
             key::SLOPE => self.adjust(Item::TrigSlope, 1),
             key::FORCE => {
                 self.force_trigger();
