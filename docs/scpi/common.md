@@ -13,7 +13,7 @@ Part of the [SCPI reference](README.md).
 | `*SAV` | Set | `<n>` Save setup slot `n` (the file `setup<n>.txt`). | - | Run control > Save setup | Rigol-compatible |
 | `*RCL` | Set | `<n>` Recall setup slot `n` (the file `setup<n>.txt`). | - | Run control > Recall setup | Rigol-compatible |
 | `*IDN` | Query | `OOS,<model>,<serial>,oos-ui <version>`; the desktop serial can be `0`. | `OOS,DHO924S,0,oos-ui 0.1.12` | System > About | Rigol-compatible. Not a Rigol identity string. |
-| `*RST` | Action | Restore the default configuration (the Default key). Changes the acquisition workspace. | - | Run control > Default setup | Rigol-compatible |
+| `*RST` | Action | Restore the default configuration (the Default key): the set-up, the notes on the signals, the vertical zoom and the waveform read-out (`CHAN1`, `NORMal`, `BYTE`, the whole record). The layout of the screen, the text size and the Quick key stay, as do `*ESE` and `*SRE`. | - | Run control > Default setup | Rigol-compatible |
 | `*CLS` | Action | Clear the error queue, the event status and the pending `*OPC` registrations. Waveform memory is kept. | - | - | Rigol-compatible |
 | `*OPC` | Set / Query | Set: register completion of the finite operations (Autoset, a submitted SIM generation, an armed Single) in standard-event bit 0. Query: wait for them, then reply `1`. | `1` | - | Rigol-compatible. See the operation completion section in the [overview](README.md). |
 | `*ESR` | Query | Read and clear the event bits: OPC 0, query error 2, device error 3, execution error 4, command error 5. | `16` | - | Rigol-compatible. Starts clear; there is no power-on bit and no SRQ. |

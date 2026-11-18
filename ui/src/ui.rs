@@ -1475,6 +1475,8 @@ pub struct Ui {
     zoom_map: Option<(Rect, f32, f32)>,
     /// records dropped by the zone condition
     zone_drops: u64,
+    /// the record the software zone filter refused last, as text for `:SYSTem:DEBug:ZONE?`
+    pub(crate) zone_last: String,
     /// the zone unit (hwzone.rs): latest reading, and a number raised to clear its counter
     zone_hw: Option<crate::board::ZoneRead>,
     zone_hw_clear: u64,
@@ -1900,6 +1902,7 @@ impl Ui {
             zoom_path: Vec::new(),
             zoom_map: None,
             zone_drops: 0,
+            zone_last: String::new(),
             zone_hw: None,
             zone_hw_clear: 0,
             fast_edges: [0; 4],
@@ -3331,6 +3334,12 @@ impl Ui {
                         // zone trigger: not a qualifying record
                         let _ = &mut rec;
                         self.zone_drops += 1;
+                        // what the filter saw of the record it refused last (`:SYSTem:DEBug:ZONE?`)
+                        self.zone_last = self.m.zones.iter().filter(|z| z.usable()).map(|z| {
+                            let v = &rec.ch[z.src.min(NCH - 1)];
+                            let (lo, hi) = v.iter().filter(|x| x.is_finite()).fold((f32::MAX, f32::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
+                            format!("src={} n={} t0={:e} dt={:e} v={:.3}..{:.3} hit={} want={} pts={:?}", z.src + 1, v.len(), rec.t0, rec.dt, lo, hi, crate::zone::hits(z, v, rec.t0, rec.dt) as u8, z.inside as u8, z.pts)
+                        }).collect::<Vec<_>>().join(" | ");
                     }
                     // protocol trigger, Normal and Single: the hardware fires on every edge of the line, only the decoder
                     // decides; Single waits on for the record that holds the event
@@ -10569,11 +10578,16 @@ impl Ui {
             key::CLEAR => self.clear_display(),
             key::DEFAULT => {
                 let meas = Self::default_meas();
-                // the Quick key action is a preference, not part of the set-up that Default resets
-                let (quick, text_size) = (m.quick, m.text_size);
+                // the Quick key action, the text size and the layout of the screen are preferences, not part of the
+                // set-up that Default resets (a `*RST` from a script threw a Studio screen back to the stock layout)
+                let (quick, text_size, layout) = (m.quick, m.text_size, m.layout);
                 self.m = Model::default();
                 self.m.meas = meas;
-                (self.m.quick, self.m.text_size) = (quick, text_size);
+                (self.m.quick, self.m.text_size, self.m.layout) = (quick, text_size, layout);
+                // what hangs on the signals of the set-up that is gone: the notes, and the vertical zoom a closed zoom
+                // window kept for its next opening
+                self.callouts.clear();
+                (self.zoom_vfactor, self.zoom_vcenter) = (1.0, 0.0);
                 self.bus_auto = None;
                 self.clear_measurement_statistics();
                 self.select_workspace_source(WaveId::Ch(self.m.active));

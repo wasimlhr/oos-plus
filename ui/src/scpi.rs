@@ -1220,6 +1220,8 @@ impl Scpi {
             "*RST" if !query => {
                 self.event_status = 0; self.opc_events.clear();
                 ui.key(crate::ui::key::DEFAULT);
+                // the read-out of this interpreter is part of what a reset puts back: CH1, NORMal, BYTE, the whole record
+                (self.wav_src, self.wav_math, self.wav_fmt, self.wav_mode, self.wav_start, self.wav_stop) = (WaveId::Ch(0), None, 0, 0, 1, 0);
                 return None;
             }
             _ => {}
@@ -1315,7 +1317,9 @@ impl Scpi {
         if nodes.first().is_some_and(|node| kw(node, "TRIGger")) {
             let last = nodes.last().copied().unwrap_or("");
             let (leaf, source_number) = suffix(last);
-            if (nodes.len() == 2 || nodes.len() == 3) && kw(leaf, "SOURce") {
+            // a zone has a source of its own (`trigger_zone`): `:TRIGger:ZONE<n>:SOURce` is not the trigger's
+            let zone = nodes.len() == 3 && kw(suffix(nodes[1]).0, "ZONE");
+            if (nodes.len() == 2 || nodes.len() == 3) && kw(leaf, "SOURce") && !zone {
                 let secondary = source_number == Some(2);
                 if query {
                     if !secondary && ui.m.trig_ref.is_none() {
@@ -7405,6 +7409,34 @@ mod tests {
         ui.step(0.2);
         assert_eq!(captures(&ui), 1.0, "TFORce must release a waiting Single");
         assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:STAT?"), "STOP");
+    }
+
+    // Break it catches (seen on a unit, 2026-11-17): after *RST the read-out was still on the channel, RAW and WORD
+    // of before, a note of the old set-up still hung on the screen, a closed zoom kept its vertical factor, and a
+    // Studio screen was in the stock layout.
+    #[test]
+    fn a_reset_puts_the_read_out_back_and_keeps_the_layout() {
+        let (mut s, mut ui, cv) = session();
+        ui.m.layout = Layout::Studio;
+        line(&mut s, &mut ui, &cv, "*CLS;:CHAN2:DISP ON;:WAV:SOUR CHAN2;:WAV:MODE RAW;:WAV:FORM WORD;:WAV:STAR 10;:WAV:STOP 20;:CALL:ADD CHAN2,0,\"old\";:TIM:DEL:VZO 4;*ESE 32");
+        line(&mut s, &mut ui, &cv, "*RST");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:SOUR?;:WAV:MODE?;:WAV:FORM?;:WAV:STAR?"), "CHAN1;NORM;BYTE;1");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":CALL:COUN?;:TIM:DEL:VZO?;*ESE?"), "0;1.000000E+00;32", "notes and zoom go, the enable register stays (IEEE 488.2)");
+        assert_eq!(ui.m.layout, Layout::Studio);
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    }
+
+    // Break it catches: :TRIGger:ZONE<n>:SOURce set and answered the source of the trigger, so a zone stayed on the
+    // channel it had and a "must intersect" zone on a channel that is off refused every record (seen on a unit,
+    // 2026-11-17: zone on CH3, the signal on CH2, no record in any box).
+    #[test]
+    fn the_source_of_a_zone_is_not_the_source_of_the_trigger() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, "*CLS;:TRIG:EDGE:SOUR CHAN1;:TRIG:ZONE1:SOUR CHAN3;:TRIG:ZONE2:SOUR CHAN2");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:EDGE:SOUR?;:TRIG:ZONE1:SOUR?;:TRIG:ZONE2:SOUR?"), "CHAN1;CHAN3;CHAN2");
+        assert_eq!((ui.m.trig_src, ui.m.zones[0].src, ui.m.zones[1].src), (0, 2, 1));
+        line(&mut s, &mut ui, &cv, ":TRIG:EDGE:SOUR CHAN4");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:ZONE1:SOUR?;:SYST:ERR?"), "CHAN3;0,\"No error\"");
     }
 
     // Break it catches (all seen on a unit, 2026-11-17): :RUN after :SINGle left Normal sweep for Auto; the status

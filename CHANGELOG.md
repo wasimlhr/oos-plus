@@ -196,6 +196,12 @@ Fixed:
   - Auto set-up on a signal without a steady period takes the fastest time base that shows it busy, unless a slower
     one shows clearly more height: bursts of 100 ns pulses every 1.6 us ended at 2 ms/div, a band of aliases, and
     are at 2 us/div now (unit);
+  - `:TRIGger:ZONE<n>:SOURce` sets and answers the source of the zone. It set and answered the source of the trigger,
+    so a zone stayed on the channel it had: with the zone on a channel that was off, "must intersect" let no record
+    through whatever the box (unit). `:SYSTem:DEBug:ZONE?` says what the filter saw of the record it refused last;
+  - `*RST` and the Default key: the layout of the screen stays (a Studio screen was put into the stock layout), the
+    notes on the signals and the vertical zoom of a closed zoom window are cleared, and `*RST` puts the waveform
+    read-out back to `CHAN1`, `NORMal`, `BYTE` (unit);
   - `:CALLout:LIST?` answers in one line, `source,time,"text"` a note, separated by `;`; it answered one line a
     note, which a client that reads line by line takes for as many answers (unit);
   - a session keeps the samples of the acquisition, where it kept the 3600 points of the screen: a 9600 baud line
