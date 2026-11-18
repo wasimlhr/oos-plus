@@ -7,6 +7,13 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Eye: the scope's program is no longer killed for lack of memory when an eye is on at a slow time base (seen on a
+  unit, 2026-11-18: 3.7 GB, twice; the fix is host-tested, the signal of that moment was not there to try it on
+  the unit). A bit far shorter than a sample came out of the clock recovery, from a signal that only just passes
+  the comparator or from a bit rate kept from a faster time base, and the page held a value for each of the
+  hundreds of millions of bits of the record. Such a clock is refused: a bit is at least half a sample long. A rate
+  found from the record is found again at the new time base; a rate that was set stays, and the page says it
+  needs a faster time base.
 - After a Stop the screen, the measurements and the memory read out (`:WAVeform:MODE RAW`,
   `:SAVE:MEMory:WAVeform`) are one acquisition (host-tested, not yet verified on hardware). The screen kept the
   last record it had taken while the hardware stored a later one: a 2.16 V peak was on the screen and not in the

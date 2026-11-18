@@ -146,7 +146,12 @@ pub fn recover_clock(v: &[f32], dt: f64, thr: f32, hyst: f32, nominal_rate: Opti
     let found = edges(v, thr, hyst);
     let first_rising = found.first().is_some_and(|x| x.rising);
     let e: Vec<f64> = found.iter().map(|x| x.t * dt).collect();
-    clock_from_edges(e, nominal_rate).map(|c| Clock { first_rising, ..c })
+    // a unit interval shorter than half a sample is no clock of this record (a signal that changes at every sample
+    // has one of a sample): a nominal rate from a fast time base, kept
+    // at a slow one, gave a clock with hundreds of millions of unit intervals between two edges, and what holds a
+    // value per unit interval (`recover_clock_pll`, `tie_trend`, the eye itself) took all the memory there is
+    // (seen on a unit, 2026-11-18: 3.7 GB, and the program was killed)
+    clock_from_edges(e, nominal_rate).filter(|c| c.period >= 0.5 * dt).map(|c| Clock { first_rising, ..c })
 }
 
 /// Constant-rate clock from edge times (s), see `recover_clock`.
@@ -328,10 +333,18 @@ pub fn tie(edges: &[f64], c: &Clock) -> Vec<f64> {
     edges.iter().map(|&t| t - c.nearest_tick(t)).collect()
 }
 
+/// The most unit intervals a TIE trend holds: more than the deepest record has samples.
+const TREND_MAX: i64 = 1 << 26;
+
 /// TIE trend: the TIE linearly interpolated onto every UI between the first and the last edge (one value per UI, s);
 /// the input of `tie_spectrum`.
 pub fn tie_trend(edges: &[f64], tie: &[f64], c: &Clock) -> Vec<f32> {
     let pts: Vec<(i64, f64)> = edges.iter().zip(tie).map(|(&t, &e)| (c.ui_at(t - e).round() as i64, e)).collect();
+    // one value per unit interval: a clock from edge times alone (`clock_from_edges`) can have more unit intervals
+    // between its edges than any record has samples. Such a clock has no trend, not one of gigabytes
+    if pts.first().zip(pts.last()).is_some_and(|(a, b)| b.0.saturating_sub(a.0) > TREND_MAX) {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     for w in pts.windows(2) {
         let ((n0, e0), (n1, e1)) = (w[0], w[1]);
