@@ -399,9 +399,7 @@ impl Ui {
             }
             RF::Idle => {
                 let cur = c.idle.unwrap_or(self.m.meas_idle);
-                let l: Vec<f64> = std::iter::once(0.0).chain((0..10).flat_map(|e| [1.0, 2.0, 5.0].map(|k| k * 10f64.powi(e - 9)))).collect();
-                let i = l.iter().position(|&v| v >= cur * 0.999).unwrap_or(0);
-                let v = l[(i as i32 + d).clamp(0, l.len() as i32 - 1) as usize];
+                let v = tools::time_step(cur, d);
                 let shared = self.m.meas_idle;
                 self.rowf_edit(|c| c.idle = ((v - shared).abs() > 1e-15).then_some(v));
             }

@@ -1623,7 +1623,7 @@ fn nearest_ref_vdiv(want: f32) -> f32 {
 
 /// One knob step of a measurement time (burst idle, setup, hold): off, then 1-2-5 from 1 ns to 5 s. A longer time
 /// (set over SCPI) steps down to 5 s and stays as it is going up; it does not fall back to off.
-fn time_step(cur: f64, d: i32) -> f64 {
+pub(super) fn time_step(cur: f64, d: i32) -> f64 {
     let l: Vec<f64> = std::iter::once(0.0).chain((0..10).flat_map(|e| [1.0, 2.0, 5.0].map(|k| k * 10f64.powi(e - 9)))).collect();
     match l.iter().position(|&v| v >= cur * 0.999) {
         Some(i) => l[(i as i32 + d).clamp(0, l.len() as i32 - 1) as usize],
