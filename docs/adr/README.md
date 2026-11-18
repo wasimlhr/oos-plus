@@ -52,13 +52,14 @@ A decision that touches two categories goes where its consequences are largest a
 | [0027](code/0027-a-session-is-one-file-of-setup-record-and-references.md) | code | A session is one file of the setup, the record on the screen and the reference slots | accepted, to be reviewed |
 | [0028](code/0028-an-external-generator-is-a-table-row-one-connection-and-a-page.md) | code | An external generator is a row of a table, one connection and a page of its own | accepted, to be reviewed |
 | [0030](ui-ux/0030-studio-offers-what-default-offers.md) | ui-ux | Studio offers what Default offers; the Add panel is the short way into the Measure page | accepted |
+| [0033](system/0033-a-file-of-commands-sets-the-scope-up-and-no-more.md) | system | A file of SCPI commands sets the scope up and runs it, and no more: no press on the screen, no system command, no path outside the save folder | accepted |
 
 ## Reading order for agents
 
 An agent (or a new contributor) reads [AGENTS.md](../../AGENTS.md) first, then this index, then the records that
 touch the change: ADR 0009, 0010, 0013, 0015 and 0021 for anything near the hardware or the dependencies, ADR 0014 and
-0020 for how to show that a change is safe, ADR 0016 to 0019 for how code and text look, ADR 0022 to 0025 for SCPI,
-VXI-11, HiSLIP and the other network services. The records are short on purpose; reading the ones that apply costs
+0020 for how to show that a change is safe, ADR 0016 to 0019 for how code and text look, ADR 0022 to 0025 and 0033 for
+SCPI, VXI-11, HiSLIP, the other network services and files of commands. The records are short on purpose; reading the ones that apply costs
 minutes and saves a review round.
 
 ## Writing one

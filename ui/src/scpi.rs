@@ -240,6 +240,8 @@ pub struct Scpi {
     rec_last: Vec<String>,
     /// The file of commands that runs (scpi/replay.rs).
     replay: Option<Box<replay::Replay>>,
+    /// The command that runs is one of that file, not a client's: `replay::file_refuses` says what it may not send.
+    from_file: bool,
 }
 
 /// SCPI keyword match: the long form or its short form (the upper-case part), case-insensitive.
@@ -909,7 +911,7 @@ impl Scpi {
 
     /// An interpreter no client reaches: the second scope the set-up as commands is proven on (scpi/setupscpi.rs).
     pub(crate) fn detached() -> Scpi {
-        Scpi { l: None, clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0, rec: None, rec_last: Vec::new(), replay: None }
+        Scpi { l: None, clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0, rec: None, rec_last: Vec::new(), replay: None, from_file: false }
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
@@ -1195,6 +1197,13 @@ impl Scpi {
         let head = head.trim_end_matches('?');
         let up = head.to_ascii_uppercase();
         let t = |s: &str| Some(s.as_bytes().to_vec());
+        // a command of a file (scpi/replay.rs) is not a client's: what it may not send is refused before any handler
+        if self.from_file && !query {
+            if let Some(why) = replay::file_refuses(head, arg) {
+                self.push_err(format!("-203,\"Command protected\" {why}: {cmd}"));
+                return None;
+            }
+        }
         // common commands
         match up.as_str() {
             "*IDN" => {

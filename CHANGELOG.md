@@ -135,8 +135,10 @@ Added:
   desktop app asks with its Open dialog. One command a frame, so the screen follows; a line that waits for an
   operation (`*OPC?` after a Single or an auto set-up) is waited for, 30 s at most; while a file runs the row stops
   it. At the end the screen says how many commands were run and the first that was refused; a client's error queue
-  and status are as they were. A file has the authority of a client on the network, except that a line with
-  `CONFIRM` (switching off, installing an update, closing a service) is not run from a file. A script has the
+  and status are as they were. A file sets the scope up, runs it and saves into the save folder, and no more (ADR 0033): a command with
+  `CONFIRM`, a press on the screen (`:UI:TAP`, `:UI:MENU:SELect`), a `:SYSTem:` command that is not a setting of
+  the set-up (the services, the WLAN, the clock, the recorder), `:CALibrate:STARt`, `:MMEMory:DELete` and a file
+  name outside the save folder are refused from a file and said. A link is not read as a file. A script has the
   lines `replay <file>` and, on the host, `scpi <message>`.
 - `:UI:MENU?` lists the options of an open picker (the grid of an item's options, a list of files) and
   `:UI:MENU:SELect` takes one by its text; until now the rows of a picker came out empty.

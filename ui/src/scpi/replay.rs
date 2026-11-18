@@ -11,10 +11,12 @@
 //! and the screen says at the end what was refused. Being a client's, what the file sets is not written by the SCPI
 //! recorder.
 //!
-//! A file has the authority of a client on the network, with one exception. The commands that switch the scope off,
-//! install an update or close a service take the word `CONFIRM`, so that they are not sent by accident. In a file
-//! the word is the author's, not the person's who tapped the file: a line with `CONFIRM` is not run, and is said
-//! with what was refused. A client sends such a command itself.
+//! A file is not a client on the network (ADR 0033). It is run by a tap on its name, by a person who has not read it,
+//! and it may come from a stick: it sets the scope up and runs it, and no more. What it may not send is refused by
+//! the interpreter before any handler (`file_refuses`): a command that takes the word `CONFIRM` (the word is the
+//! author's, not the person's who tapped the file), a press on the screen (`:UI:`), a command of `:SYSTem:` that
+//! is not a setting of the set-up, the start of a self-calibration, `:MMEMory:`, and a file named outside the save
+//! folder. Each is said with what was refused. A client sends such a command itself.
 
 use super::*;
 
@@ -51,10 +53,6 @@ impl Scpi {
                 match replay.lines.pop_front() {
                     None => return Self::replay_end(ui, replay),
                     Some(line) if line.trim().is_empty() || line.trim_start().starts_with('#') => {}
-                    Some(line) if confirms(&line) => {
-                        replay.commands += 1;
-                        replay.refused.push(format!("-203,\"Command protected\" CONFIRM is not taken from a file: {}", line.trim()));
-                    }
                     Some(line) => {
                         (replay.commands, replay.waiting_since) = (replay.commands + 1, ui.now);
                         break Program::new(&line);
@@ -64,10 +62,16 @@ impl Scpi {
         };
         // the command has an error queue and status of its own: what it is refused is the file's, and a client's
         // queue, event status and last error are afterwards as they were, at their bound too
+        // so are its enable registers, and the operations a client waits for with `*OPC`: polled with the file's
+        // status they would be taken off the list and their bit lost with it
         let kept = (std::mem::take(&mut self.err), self.event_status, self.error_serial, self.last_error.take());
+        let client = (std::mem::take(&mut self.opc_events), self.event_enable, self.service_enable, self.power_on_clear);
+        self.from_file = true;
         let done = self.poll_program(ui, cv, &mut program).is_some();
+        self.from_file = false;
         replay.refused.append(&mut self.err);
         (self.err, self.event_status, self.error_serial, self.last_error) = kept;
+        (self.opc_events, self.event_enable, self.service_enable, self.power_on_clear) = client;
         if !done {
             if ui.now - replay.waiting_since >= WAIT_MAX {
                 ui.scpi_replaying = false;
@@ -81,15 +85,22 @@ impl Scpi {
     fn replay_start(&mut self, ui: &mut Ui, path: &std::path::Path) {
         let name = crate::store::file_name(path);
         if self.replay.is_some() { return ui.toast("A SCPI file is running; stop it first"); }
-        let text = match std::fs::metadata(path) {
+        // the file is foreign data: a link or a device node under its name is not followed (a read of one may never
+        // end), and no more than the bound is read whatever the size says
+        let text = match std::fs::symlink_metadata(path) {
+            Ok(file) if !file.is_file() => Err("not a regular file".to_string()),
             Ok(file) if file.len() > FILE_MAX => Err("larger than 1 MiB".to_string()),
-            // a file an editor saved: a byte order mark before the first line, a letter that is not UTF-8 in a comment
-            Ok(_) => std::fs::read(path).map(|bytes| String::from_utf8_lossy(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes)).into_owned()).map_err(|e| e.to_string()),
+            Ok(_) => read_bounded(path).and_then(|bytes| match bytes.len() as u64 > FILE_MAX {
+                true => Err("larger than 1 MiB".to_string()),
+                // a file an editor saved: a byte order mark before the first line, a letter that is not UTF-8 in a comment
+                false => Ok(String::from_utf8_lossy(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes)).into_owned()),
+            }),
             Err(e) => Err(e.to_string()),
         };
         match text {
             Ok(text) => {
-                let lines = text.lines().map(str::to_string).collect();
+                // a line ends with LF, CR LF or CR alone: an empty line is no command
+                let lines = text.split(['\n', '\r']).map(str::to_string).collect();
                 self.replay = Some(Box::new(Replay { name: name.clone(), lines, program: None, waiting_since: ui.now, commands: 0, refused: Vec::new() }));
                 ui.scpi_replaying = true;
                 ui.toast(&format!("Running {name}"));
@@ -108,9 +119,44 @@ impl Scpi {
     }
 }
 
-/// A line that carries the word `CONFIRM` as one of its arguments.
-fn confirms(line: &str) -> bool {
-    line.split(|c: char| c == ',' || c == ';' || c.is_whitespace()).any(|word| word.trim_matches('"').eq_ignore_ascii_case("CONFIRM"))
+/// At most `FILE_MAX` + 1 bytes of a file.
+fn read_bounded(path: &std::path::Path) -> Result<Vec<u8>, String> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    std::fs::File::open(path).and_then(|file| file.take(FILE_MAX + 1).read_to_end(&mut bytes)).map_err(|e| e.to_string())?;
+    Ok(bytes)
+}
+
+/// What a file may not send, and why; `None` for a command that is run (ADR 0033). `head` is the header of a
+/// command that is no query, `arg` its arguments.
+pub(super) fn file_refuses(head: &str, arg: &str) -> Option<&'static str> {
+    let nodes: Vec<&str> = head.trim_start_matches(':').split(':').collect();
+    let (first, last) = (nodes[0], nodes[nodes.len() - 1]);
+    // as the commands that need the word read it (`ui/scpiext_c.rs`): one argument, not in quotes
+    if arg.split(',').any(|part| part.trim().eq_ignore_ascii_case("CONFIRM")) { return Some("CONFIRM is not taken from a file"); }
+    if kw(first, "UI") { return Some("a file does not press the screen"); }
+    if kw(first, "MMEMory") { return Some("a file does not delete a file"); }
+    if kw(first, "CALibrate") && kw(last, "STARt") { return Some("a self-calibration is started at the scope"); }
+    if kw(first, "SYSTem") && !system_setting(&nodes) { return Some("a file sets the scope up, not its system"); }
+    let names_file = kw(first, "SAVE") || kw(first, "LOAD") || ["SAVE", "LOAD", "EXPort", "IMPort"].iter().any(|k| kw(last, k));
+    if names_file && leaves_folder(arg) { return Some("a file names files of the save folder only"); }
+    None
+}
+
+/// A command of `:SYSTem:` that sets a part of the set-up: the key = value command, the set-up as a whole, and the
+/// headers the set-up is written with (`setupscpi::ROWS`).
+fn system_setting(nodes: &[&str]) -> bool {
+    if nodes.len() == 2 && kw(nodes[1], "SETup") { return true; }
+    setupscpi::ROWS.iter().flat_map(|(_, headers)| headers.iter()).any(|header| {
+        let parts: Vec<&str> = header.trim_start_matches(':').split(':').collect();
+        parts.len() == nodes.len() && parts.iter().zip(nodes).all(|(part, node)| kw(suffix(node).0, part.trim_end_matches("<n>")))
+    })
+}
+
+/// A file name that is not one of the save folder: an absolute path, a drive, or a step up.
+fn leaves_folder(arg: &str) -> bool {
+    let name = arg.split(',').next().unwrap_or("").trim().trim_matches(['"', '\'']);
+    name.starts_with(['/', '\\']) || name.contains(':') || arg.split(['/', '\\', ',', '"', '\'']).any(|part| part.trim() == "..")
 }
 
 fn plural(n: usize) -> &'static str {
@@ -251,8 +297,7 @@ mod tests {
     fn a_file_does_not_confirm_and_one_file_runs_at_a_time() {
         let dir = folder("confirm");
         let file = dir.join("guarded.scpi");
-        std::fs::write(&file, ":CHANnel2:DISPlay ON\n:CHANnel3:DISPlay ON,CONFIRM\n:CHANnel4:DISPlay on , \"confirm\"\n").unwrap();
-        assert!(confirms(":SYSTem:X 1,CONFIRM") && confirms(":A:B confirm") && !confirms(":A:B CONFIRMED") && !confirms("# CONFIRMs nothing"));
+        std::fs::write(&file, ":CHANnel2:DISPlay ON\n:CHANnel3:DISPlay ON,CONFIRM\n:CHANnel4:DISPlay on , confirm\n").unwrap();
         let (mut s, mut ui, cv) = session();
         ui.scpi_replay_file = Some(file.clone());
         run(&mut s, &mut ui, &cv, 20);
@@ -277,6 +322,126 @@ mod tests {
         ui.scpi_replay_cancel = true;
         s.poll(&mut ui, &cv);
         assert!(ui.toast_text().starts_with("Stopped wait.scpi"), "{}", ui.toast_text());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// What a file may not send (ADR 0033), by the command: what switches the scope off, presses its screen, changes
+    /// its system, starts a self-calibration, deletes a file or names one outside the save folder. What sets the
+    /// scope up is sent, also where it looks alike: a label that begins with a slash or is the word in quotes.
+    #[test]
+    fn what_a_file_may_not_send() {
+        let refused = |line: &str| {
+            let (head, arg) = line.split_once(' ').unwrap_or((line, ""));
+            file_refuses(head, arg.trim())
+        };
+        for (line, why) in [
+            (":SYSTem:POWer:OFF CONFIRM", "CONFIRM"),
+            (":SYST:POW:REST confirm", "CONFIRM"),
+            (":SYSTem:UPDate:ROLLback 1, Confirm", "CONFIRM"),
+            (":UI:TAP 100,100", "press the screen"),
+            (":UI:MENU:SELect \"Power off\"", "press the screen"),
+            (":UI:DRAG 1,2,3,4", "press the screen"),
+            (":SYSTem:REMote:SERVice:TELNet ON", "not its system"),
+            (":SYST:REM:SERV:SCPI OFF", "not its system"),
+            (":SYSTem:WLAN:FORGet \"bench\"", "not its system"),
+            (":SYSTem:RECorder:STATe ON", "not its system"),
+            (":SYSTem:DATE 2020,1,1", "not its system"),
+            (":SYSTem:NAME \"other\"", "not its system"),
+            (":CALibrate:STARt 0", "self-calibration"),
+            (":CAL:STAR", "self-calibration"),
+            (":MMEMory:DELete \"shot-001.png\"", "delete"),
+            (":SAVE:SETup \"/oos/system.conf\"", "save folder"),
+            (":SAVE:IMAGe \"../../oos/x.png\"", "save folder"),
+            (":SAVE:WAVeform \"a/../../x.csv\",CSV", "save folder"),
+            (":SAVE:SESSion \"C:\\x.oss\"", "save folder"),
+            (":SAVE:MEMory:WAVeform /mnt/usb/x.csv", "save folder"),
+            (":LOAD:SETup '/proc/kmsg'", "save folder"),
+            (":MASK:SAVE \"/etc/x\"", "save folder"),
+            (":REFerence:LOAD \"\\x\"", "save folder"),
+            (":SOURce1:ARB:LOAD \"/dev/zero\"", "save folder"),
+        ] {
+            assert!(refused(line).is_some_and(|said| said.contains(why)), "{line}: {:?}", refused(line));
+        }
+        for line in [
+            ":SYSTem:SET tdiv = 1e-3", ":SYST:SET tdiv = 1e-3", ":SYSTem:SETup #15hello", ":SYSTem:LOCK ON", ":SYST:LOG:INT 2",
+            ":SYSTem:AOUTput 1", ":SYSTem:PIPeline AUTO", ":CHANnel1:LABel \"/CS\"", ":CHANnel1:LABel \"Confirm\"",
+            ":BUS1:LABel \"a..b\"", ":SAVE:IMAGe \"shots/a.png\"", ":SAVE:SETup", ":SAVE:SLOT 3", ":REFerence:SAVE 2",
+            ":LOAD:SESSion \"bench.oss\"", ":CALibrate:DESKew 1,0", ":AUToscale", ":SINGle", ":TIMebase:SCALe 1e-3",
+        ] {
+            assert_eq!(refused(line), None, "{line}");
+        }
+    }
+
+    /// Run from a file, such a command is refused and said, nothing of it is done, and the rest of the file runs: the
+    /// file outside the save folder is not written, the one in it is. A file whose lines end with CR alone runs.
+    #[test]
+    fn a_refused_command_does_nothing_and_the_file_goes_on() {
+        let dir = folder("authority");
+        let (outside, file) = (dir.join("outside.txt"), dir.join("stick.scpi"));
+        let saves = dir.join("saves");
+        std::fs::create_dir_all(&saves).unwrap();
+        let lines = [
+            "# a file from a stick".to_string(), ":CHANnel2:DISPlay ON".to_string(), ":UI:MENU:SELect \"Power off\"".to_string(),
+            ":SYSTem:RECorder:STATe ON".to_string(), ":CALibrate:STARt 0".to_string(),
+            format!(":SAVE:SETup \"{}\"", outside.display()), ":SAVE:SETup \"kept.txt\"".to_string(), ":CHANnel3:DISPlay ON".to_string(),
+        ];
+        std::fs::write(&file, lines.join("\r")).unwrap();
+        let (mut s, mut ui, cv) = session();
+        ui.store_dir = saves.clone();
+        s.exec_line(&mut ui, &cv, ":SAVE:DESTination DESKtop");
+        ui.scpi_replay_file = Some(file);
+        run(&mut s, &mut ui, &cv, 30);
+        assert!(ui.m.ch[1].on && ui.m.ch[2].on, "the lines before and after are run");
+        assert!(!ui.scpi_rec_want && !outside.exists(), "nothing of a refused command is done");
+        assert!(saves.join("kept.txt").exists(), "a file of the save folder is written");
+        let message = ui.toast_text();
+        assert!(message.starts_with("stick.scpi: 4 of 7 commands refused, first -203,\"Command protected\" a file does not press the screen"), "{message}");
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A client that waits for its operation with `*OPC` has its bit also when the operation ends while a file runs,
+    /// and keeps its enable registers whatever the file sends.
+    #[test]
+    fn a_clients_opc_and_enables_outlive_a_file() {
+        let dir = folder("opc");
+        let file = dir.join("long.scpi");
+        std::fs::write(&file, "*ESE 0\n*SRE 0\n*OPC\n".to_string() + &":CHANnel2:DISPlay ON\n".repeat(40)).unwrap();
+        let (mut s, mut ui, cv) = session();
+        let ask = |s: &mut Scpi, ui: &mut Ui, c: &str| String::from_utf8(s.exec_line(ui, &cv, c)).unwrap();
+        ask(&mut s, &mut ui, "*ESE 1");
+        ask(&mut s, &mut ui, "*SRE 32");
+        ask(&mut s, &mut ui, ":SINGle");
+        ask(&mut s, &mut ui, "*OPC");
+        ui.scpi_replay_file = Some(file);
+        // the file starts before the scope goes on: the sweep ends while it runs
+        s.poll(&mut ui, &cv);
+        assert!(ui.scpi_replaying);
+        run(&mut s, &mut ui, &cv, 60);
+        assert!(!ui.scpi_replaying && ui.m.ch[1].on, "{}", ui.toast_text());
+        assert_eq!((ask(&mut s, &mut ui, "*ESE?"), ask(&mut s, &mut ui, "*SRE?")), ("1".to_string(), "32".to_string()));
+        assert_eq!(ask(&mut s, &mut ui, "*ESR?"), "1", "the operation of the client is complete, and said once");
+        assert_eq!(ask(&mut s, &mut ui, "*ESR?"), "0");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// What is not a regular file is not read: a folder, and a link (to a device a read of which never ends).
+    #[test]
+    fn a_folder_or_a_link_is_not_run() {
+        let dir = folder("link");
+        let (mut s, mut ui, cv) = session();
+        ui.scpi_replay_file = Some(dir.clone());
+        run(&mut s, &mut ui, &cv, 3);
+        assert!(!ui.scpi_replaying && ui.toast_text().ends_with("not a regular file"), "{}", ui.toast_text());
+        #[cfg(unix)]
+        {
+            let (real, link) = (dir.join("real.scpi"), dir.join("link.scpi"));
+            std::fs::write(&real, ":CHANnel2:DISPlay ON\n").unwrap();
+            std::os::unix::fs::symlink(&real, &link).unwrap();
+            ui.scpi_replay_file = Some(link);
+            run(&mut s, &mut ui, &cv, 3);
+            assert!(!ui.m.ch[1].on && ui.toast_text().ends_with("not a regular file"), "{}", ui.toast_text());
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
