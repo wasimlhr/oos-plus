@@ -773,7 +773,8 @@ impl Ui {
         for x in [b.time.x - 5, b.trig.x - 5] {
             cv.vline(x, bottom.y + 6, bottom.bottom() - 6, LINE);
         }
-        // time base
+        // time base: the scale, and under it what the TIME card of the Default layout says (the delay, or the zoom scale)
+        let two = self.studio_pill_two_lines();
         let r = b.time;
         chip(cv, r, BTN, if root == Some(MenuId::Horizontal) { ACCENT } else { BTN_BORDER });
         let cy = r.y + r.h / 2;
@@ -784,39 +785,87 @@ impl Ui {
         cv.line(r.x + 24, cy, r.x + 20, cy + 3, TEXT);
         let scale = format!("{}/div", si_short(self.m.time_per_div() as f64, "s"));
         let label = if self.m.zoom && f.mb.width(&format!("Main {scale}")) <= r.w - 52 { format!("Main {scale}") } else { scale };
-        cv.text_fit(&f.mb, Rect::new(r.x + 32, r.y, r.w - 52, r.h), 0, &label, TEXT);
+        let detail = self.studio_time_detail();
+        if two && f.mb.width(&label) <= r.w - 52 && f.s.width(&detail) <= r.w - 52 {
+            cv.text(&f.mb, r.x + 32, r.y + 13 + BAR_DY, &label, TEXT);
+            cv.text(&f.s, r.x + 32, r.y + 25 + BAR_DY, &detail, if self.m.zoom { ACCENT } else { DIM });
+        } else {
+            cv.text_fit(&f.mb, Rect::new(r.x + 32, r.y, r.w - 52, r.h), 0, &label, TEXT);
+        }
         chevron_down(cv, r.right() - 16, cy - 2, DIM);
-        // trigger: the slope, the source and the level
+        // trigger: the slope, the source and the level; under them the type and the sweep, which the trigger card of
+        // the Default layout names too. A pill of one line (larger text) has the type in front instead
         let r = b.trig;
         chip(cv, r, BTN, if root == Some(MenuId::Trigger) { ACCENT } else { BTN_BORDER });
         let source = self.m.trigger_wave();
         let col = self.wave_color(source);
         let edge = matches!(self.m.trig_type, TrigType::Edge | TrigType::Slope | TrigType::Timeout | TrigType::NthEdge | TrigType::Delay);
-        let mut x = r.x + 9;
-        cv.set_clip(r.inset(2));
-        if edge {
-            draw_slope(cv, x, r.y + 7 + BAR_DY, self.m.slope, col);
-            x += 20;
-        } else {
-            x = cv.text(&f.sb, x, r.y + 20 + BAR_DY, &self.m.trig_type.name().to_uppercase(), LABEL) + 6;
-        }
-        x = cv.text(&f.mb, x, r.y + 20 + BAR_DY, &self.trigger_source_label(), col) + 6;
         let levels = if matches!(self.m.trig_type, TrigType::Runt | TrigType::Slope | TrigType::Window) {
             format!("{} / {}", si_short(self.m.trig_level2 as f64, "V"), si_short(self.m.trig_level as f64, "V"))
         } else { si_short(self.trig_level_shown() as f64, "V") };
-        if edge && self.m.slope != Slope::Either {
+        let src = self.trigger_source_label();
+        // the base line of the main text: higher when the type and the sweep stand under it
+        let base = r.y + BAR_DY + if two { 13 } else { 20 };
+        // the text ends before the chevron
+        let room = r.w - 9 - 20;
+        let rest = if edge { 20 } else { 0 } + f.mb.width(&src) + 6 + f.mb.width(&levels);
+        // one line: the type stands in front, and is cut short before the level is
+        let kind = if two { String::new() } else { Self::studio_cut(&f.sb, &self.m.trig_type.name().to_uppercase(), room - rest - 6) };
+        let lead = if kind.is_empty() { 0 } else { f.sb.width(&kind) + 6 };
+        // the arrow says again what the edge sign says: it goes first when the line is short of room
+        let arrow = edge && self.m.slope != Slope::Either && lead + rest + 12 <= room;
+        let mut x = r.x + 9;
+        cv.set_clip(Rect::new(r.x + 2, r.y + 2, r.w - 2 - 20, r.h - 4));
+        if !kind.is_empty() { x = cv.text(&f.sb, x, base, &kind, LABEL) + 6; }
+        if edge {
+            draw_slope(cv, x, base - 13, self.m.slope, col);
+            x += 20;
+        }
+        x = cv.text(&f.mb, x, base, &src, col) + 6;
+        if arrow {
             // the arrow of the edge: up for rising, down for falling
-            let (top, bot) = (r.y + 9 + BAR_DY, r.y + 21 + BAR_DY);
+            let (top, bot) = (base - 11, base + 1);
             cv.vline(x + 3, top, bot, TEXT);
-            let (tip, base) = if self.m.slope == Slope::Rise { (top, top + 4) } else { (bot, bot - 4) };
-            cv.line(x + 3, tip, x, base, TEXT);
-            cv.line(x + 3, tip, x + 6, base, TEXT);
+            let (tip, foot) = if self.m.slope == Slope::Rise { (top, top + 4) } else { (bot, bot - 4) };
+            cv.line(x + 3, tip, x, foot, TEXT);
+            cv.line(x + 3, tip, x + 6, foot, TEXT);
             x += 12;
         }
-        cv.text(&f.mb, x, r.y + 20 + BAR_DY, &levels, TEXT);
+        cv.text(&f.mb, x, base, &levels, TEXT);
+        if two { cv.text(&f.s, r.x + 9, r.y + 25 + BAR_DY, &self.studio_trig_detail(), LABEL); }
         cv.no_clip();
         chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
         self.draw_studio_ch_picker(cv);
+    }
+
+    /// The pills of the bottom bar have a small second line while both fonts fit the pill.
+    pub(super) fn studio_pill_two_lines(&self) -> bool {
+        let f = self.fonts();
+        f.mb.size + f.s.size <= TWO_LINE_MAX
+    }
+
+    /// `s` as it fits `room` in the font `f`: whole, or cut with three dots, or nothing when not even two letters fit.
+    pub(super) fn studio_cut(f: &Font, s: &str, room: i32) -> String {
+        if f.width(s) <= room { return s.to_string(); }
+        let mut t: String = s.to_string();
+        while t.chars().count() > 2 && f.width(&format!("{t}...")) > room { t.pop(); }
+        if f.width(&format!("{t}...")) <= room { format!("{}...", t.trim_end()) } else { String::new() }
+    }
+
+    /// The second line of the time pill, as the TIME card of the Default layout has it: the zoom scale while the zoom
+    /// is on, else the delay.
+    pub(super) fn studio_time_detail(&self) -> String {
+        if self.m.zoom {
+            format!("zoom {}/div", si_short(tscales()[self.m.zscale] as f64, "s"))
+        } else {
+            format!("delay {}", si_short(self.m.delay as f64, "s"))
+        }
+    }
+
+    /// The second line of the trigger pill: the type and the sweep ("Edge {b7} Auto"), which the trigger card of the
+    /// Default layout names.
+    pub(super) fn studio_trig_detail(&self) -> String {
+        format!("{} \u{b7} {}", self.m.trig_type.name(), self.value(Item::TrigMode))
     }
 
     /// The second line of a channel pill: "DC {b7} 1{d7} {b7} 4.75 V". Short of room the offset goes first, then the probe.
