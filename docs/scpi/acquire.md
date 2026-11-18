@@ -12,7 +12,7 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:RUN` | Action | Start continuous acquisition. Idempotent assignment; also starts stored replay and SIM. | - | Run control > Run / Stop | Rigol-compatible |
+| `:RUN` | Action | Start continuous acquisition. Idempotent assignment; also starts stored replay and SIM. After a Single the sweep returns to what it was before it (Auto or Normal). | - | Run control > Run / Stop | Rigol-compatible |
 | `:STOP` | Action | Stop acquisition. Idempotent assignment; also stops stored replay and a SIM generation. | - | Run control > Run / Stop | Rigol-compatible |
 | `:SINGle` | Action | Arm once: wait for a qualified capture, then stop. | - | Run control > Single | Rigol-compatible |
 | `:TFORce` | Action | Accept a capture without a trigger match (software force on stored/SIM acquisition, one hardware pulse live). | - | Run control > Force trigger | Rigol-compatible. Alias of `:TRIGger:FORCe`. |
@@ -27,7 +27,7 @@ Part of the [SCPI reference](README.md).
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:ACQuire:SRATe` | Query | ADC/model sample rate, not a loaded reference's native rate. | `2.500000E+08` | Acquisition > Memory depth (read-out) | Rigol-compatible |
-| `:ACQuire:MDEPth` | Set / Query | Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M`. Query returns the numeric configured/effective acquisition depth. | `5.000000E+05` | Acquire > Memory | Rigol-compatible |
+| `:ACQuire:MDEPth` | Set / Query | Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M`. Query returns the numeric configured/effective acquisition depth: the depth of the record the scope works with, so a depth set while stopped, or in roll (which has its own depth), reads back only once an acquisition with it has run. | `5.000000E+05` | Acquire > Memory | Rigol-compatible |
 | `:ACQuire:TYPE` | Set / Query | `NORMal\|PEAK\|AVERages\|HRESolution`. | `NORM` | Acquire > Mode | Rigol-style (command family of the DHO guide) |
 | `:ACQuire:AVERages` | Set / Query | Requested average count, mapped to supported powers of two. Read back the selected count. | `16` | Acquire > Averages | Rigol-style (command family of the DHO guide) |
 | `:ACQuire:ULTRa:MAXFrame` | Set / Query | Supported segmented frame count. This does not claim the stock UltraAcquire capture rate. | `0` | Acquire > Segments | Rigol-style (command family of the DHO guide) |

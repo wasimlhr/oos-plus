@@ -400,7 +400,7 @@ fn storage_zoom(t: &mut T) {
     t.go(":TIM:SCAL 1e-2");
     t.go(&format!(":LOAD:SET \"{}\"", sp.display()));
     assert_eq!(t.go(":TIM:SCAL?").parse::<f64>().unwrap(), 1e-4);
-    t.no(":LOAD:SET \"/no/such/setup.txt\"", "-224");
+    t.no(":LOAD:SET \"/no/such/setup.txt\"", "-256");
     // the whole setup as a block, and back
     let block = t.raw(":SYST:SETup?");
     assert!(block.starts_with("#9"), "{}", &block[..block.len().min(20)]);

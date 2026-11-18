@@ -40,7 +40,9 @@ Single scan only).
   and read out (`:WAV:MODE RAW`). Before, the pairs replaced it one step after the STOP and Mean, RMS, Std dev and AC
   RMS turned to "----" (A3 of the 2026-11-16 review). Far zoomed in the thread reads every sample of the view; that
   window becomes the record shown and measured, as before, and the raw record of the STOP comes back with the next
-  view read as pairs. The measurement gate is unchanged: Screen measures the part of the measured record within the
+  view read as pairs. A read of the memory (`:WAV:MODE RAW`, `:SAVE:MEMory:WAVeform`) is not of that window: it
+  takes the record of the STOP when that holds every sample of the acquisition (`Ui::memory_raw`; verified on the
+  unit 2026-11-17, 100 k and 1 M points), else the record shown. The measurement gate is unchanged: Screen measures the part of the measured record within the
   view (zoomed out beyond a raw window that is only a part of the record: only that part), Full record all of it. A
   view adds nothing to the statistics (`stop_reads_the_record_again_without_counting_it`); a time base or delay change
   clears them, as every setting does. RUN, Clear and the history let the raw record go.

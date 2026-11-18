@@ -136,9 +136,55 @@ impl Ui {
         r
     }
 
-    fn out_path(&self, arg: &str) -> std::path::PathBuf {
+    pub(crate) fn out_path(&self, arg: &str) -> std::path::PathBuf {
         let p = std::path::PathBuf::from(text_arg(arg));
         if p.is_absolute() { p } else { self.save_dir().join(p) }
+    }
+
+    /// A file of the save folder by its plain name: all that `:MMEMory:` reads or deletes. A name with a directory
+    /// part is refused, so a remote client reaches nothing else of the file system this way. Nor a colon: on Windows
+    /// `C:name` is a file of another directory (joining it to the folder drops the folder), `name:x` a stream.
+    fn mmem_path(&self, arg: &str) -> Result<std::path::PathBuf, String> {
+        let name = text_arg(arg);
+        if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', '\0', ':']) { return Err(bad(arg)); }
+        let p = self.save_dir().join(&name);
+        // whatever the platform makes of a name: the file is one of the save folder, or it is refused
+        if p.parent() != Some(self.save_dir().as_path()) { return Err(bad(arg)); }
+        Ok(p)
+    }
+
+    /// `:MMEMory:CATalog?` as SCPI-99 writes it: bytes used by the files, bytes free, then `"name,,size"` per file.
+    pub(crate) fn mmem_catalog(&self) -> String {
+        let dir = self.save_dir();
+        let mut files: Vec<(String, u64)> = std::fs::read_dir(&dir).into_iter().flatten().flatten()
+            .filter_map(|e| { let m = e.metadata().ok()?; m.is_file().then(|| (e.file_name().to_string_lossy().into_owned(), m.len())) })
+            .filter(|(name, _)| !name.contains(['"', ',']))
+            .collect();
+        files.sort();
+        let used: u64 = files.iter().map(|(_, n)| n).sum();
+        let free = super::sysinfo::disk(&dir.to_string_lossy()).map_or(0, |(free, _)| free);
+        let mut s = format!("{used},{free}");
+        for (name, size) in files { s.push_str(&format!(",\"{name},,{size}\"")); }
+        s
+    }
+
+    /// `:MMEMory:DATA? "name"`: the bytes of a file of the save folder.
+    pub(crate) fn mmem_data(&self, arg: &str) -> Result<Vec<u8>, String> {
+        let p = self.mmem_path(arg)?;
+        let missing = || format!("-256,\"File name not found\" {}", text_arg(arg));
+        let m = p.symlink_metadata().map_err(|_| missing())?;
+        if !m.is_file() { return Err(missing()); }
+        if m.len() > (crate::scpi::RESP_MAX - 16) as u64 { return Err("-223,\"Too much data\" the file is larger than a reply".into()); }
+        std::fs::read(&p).map_err(|e| format!("-250,\"Mass storage error\" {e}"))
+    }
+
+    /// `:MMEMory:DELete "name"`: removes a file of the save folder.
+    pub(crate) fn mmem_delete(&mut self, arg: &str) -> Result<(), String> {
+        let p = self.mmem_path(arg)?;
+        if !p.symlink_metadata().is_ok_and(|m| m.is_file()) { return Err(format!("-256,\"File name not found\" {}", text_arg(arg))); }
+        std::fs::remove_file(&p).map_err(|e| format!("-250,\"Mass storage error\" {e}"))?;
+        self.flush_stick();
+        Ok(())
     }
 
     pub(super) fn ext_b(&mut self, key: &str, idx: Option<usize>, q: bool, arg: &str) -> Option<Reply> {
@@ -251,7 +297,12 @@ impl Ui {
                     self.toast_saved(&p, r);
                     DONE
                 } else {
-                    match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|t| self.apply_setup_text(&t)) {
+                    let text = match std::fs::read_to_string(&p) {
+                        Ok(text) => text,
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Err(format!("-256,\"File name not found\" {}", text_arg(arg)))),
+                        Err(e) => return Some(Err(format!("-250,\"Mass storage error\" {e}"))),
+                    };
+                    match self.apply_setup_text(&text) {
                         Ok(()) => { self.mark_changed(); DONE }
                         Err(e) => Err(bad(&e)),
                     }

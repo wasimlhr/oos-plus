@@ -1184,6 +1184,8 @@ pub struct Model {
     pub trig_level: f32,
     pub slope: Slope,
     pub trig_mode: TrigMode,
+    /// the sweep (Auto or Normal) before a Single, which Run goes back to; not part of a setup
+    pub sweep_kept: TrigMode,
     /// trigger holdoff, seconds (0 = the shortest there is)
     pub holdoff: f32,
     pub trig_type: TrigType,
@@ -1237,6 +1239,8 @@ pub struct Model {
     /// graticule brightness in % (10..100), and whether the frame with its ticks is drawn
     pub grid_bright: u32,
     pub grid_frame: bool,
+    /// Display > Skin: the look of the screen (ui/skin.rs)
+    pub skin: crate::ui::skin::Skin,
     /// waveform windows, and the window (0-based) of each channel and math channel
     pub win_layout: WinLayout,
     /// Scope, Full, Split, Four. This is what the Windows row sets; `win_layout` is the split it asked for.
@@ -1729,6 +1733,7 @@ impl Default for Model {
             trig_level: 0.0,
             slope: Slope::Rise,
             trig_mode: TrigMode::Auto,
+            sweep_kept: TrigMode::Auto,
             holdoff: 0.0,
             trig_type: TrigType::Edge,
             trig_level2: 0.5,
@@ -1982,6 +1987,7 @@ impl Default for Model {
             afg_arb: 0,
             grid_bright: 100,
             grid_frame: true,
+            skin: Default::default(),
             win_layout: WinLayout::One,
             density: Density::Scope,
             ch_win: [0; NCH],
@@ -2139,6 +2145,11 @@ impl Model {
             WhenKind::In => Some(When::In(a.min(b), a.max(b))),
             WhenKind::Out => Some(When::Out(a.min(b), a.max(b))),
         }
+    }
+
+    /// Call before the sweep is changed: remembers Auto or Normal, so that Run after a Single returns to it.
+    pub fn keep_sweep(&mut self) {
+        if self.trig_mode != TrigMode::Single { self.sweep_kept = self.trig_mode; }
     }
 
     pub fn trigger_wave(&self) -> WaveId {

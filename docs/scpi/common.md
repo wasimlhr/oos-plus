@@ -1,6 +1,6 @@
 # Common commands
 
-The IEEE 488.2 common commands: identification, reset, status and the operation-complete fence, plus `*SAV` and `*RCL`, which save and recall a numbered setup slot. `*OPC?` waits only for finite operations (Autoset, a submitted SIM generation, an armed Single); continuous Run and background analysis are not drained. `*SAV` and `*RCL` use the same files as Storage > Setup slot, so they are cross-linked from [storage](storage.md).
+The IEEE 488.2 common commands: identification, reset, the status registers (`*STB?`, `*ESE`, `*SRE`, `*ESR?`) and the operation-complete fence, plus `*SAV` and `*RCL`, which save and recall a numbered setup slot. `*OPC?` waits only for finite operations (Autoset, a submitted SIM generation, an armed Single); continuous Run and background analysis are not drained. `*SAV` and `*RCL` use the same files as Storage > Setup slot, so they are cross-linked from [storage](storage.md).
 
 Menu location: Run control > Default setup; Storage > Save setup, Recall setup.
 
@@ -17,6 +17,14 @@ Part of the [SCPI reference](README.md).
 | `*CLS` | Action | Clear the error queue, the event status and the pending `*OPC` registrations. Waveform memory is kept. | - | - | Rigol-compatible |
 | `*OPC` | Set / Query | Set: register completion of the finite operations (Autoset, a submitted SIM generation, an armed Single) in standard-event bit 0. Query: wait for them, then reply `1`. | `1` | - | Rigol-compatible. See the operation completion section in the [overview](README.md). |
 | `*ESR` | Query | Read and clear the event bits: OPC 0, query error 2, device error 3, execution error 4, command error 5. | `16` | - | Rigol-compatible. Starts clear; there is no power-on bit and no SRQ. |
+| `*ESE` | Set / Query | `0` to `255`: which bits of `*ESR` set the event summary bit (5) of `*STB?`. | `0` | - | IEEE 488.2 |
+| `*SRE` | Set / Query | `0` to `255`: which bits of `*STB?` set its master summary bit (6); bit 6 itself reads 0. A socket has no service request line, so nothing else follows from it. | `0` | - | IEEE 488.2 |
+| `*STB` | Query | Status byte: bit 2 an error is queued, bit 5 an enabled `*ESR` bit is set, bit 6 an enabled bit of this byte is set. Not cleared by reading. There is no message-available bit. | `0` | - | IEEE 488.2 |
+| `*PSC` | Set / Query | Power-on status clear flag, `0` or `1`. The enable registers start at 0 either way; the flag is kept for drivers that set it. | `1` | - | IEEE 488.2 |
+| `*TST` | Query | `0`: there is no self test to fail. | `0` | - | IEEE 488.2 |
+| `*OPT` | Query | `0`: no options are reported. | `0` | - | IEEE 488.2 |
+| `*WAI` | Action | Accepted and does nothing: a command is finished when the next one is read. Wait for an armed Single with `*OPC?`. | - | - | IEEE 488.2 |
+| `*TRG` | Action | Force a trigger, as `:TFORce`. | - | Run control > Force | IEEE 488.2 |
 
 ## Examples
 

@@ -41,6 +41,8 @@ pub(super) fn trace_name(t: Trace) -> String {
 pub(super) enum ZPart {
     All,
     Lane(Trace),
+    XMinus,
+    XPlus,
     YMinus,
     YPlus,
     Reset,
@@ -247,7 +249,7 @@ impl Ui {
         let cols = 3;
         let cw = (POP_W - 16 - 2 * 6) / cols;
         let lane_rows = (lanes.len() as i32 + cols - 1) / cols;
-        let h = 36 + (ROW + 2) + lane_rows * (ROW + 2) + 8 + ROW + 8 + ROW + 8;
+        let h = 36 + (ROW + 2) + lane_rows * (ROW + 2) + 8 + ROW + 8 + ROW + 8 + ROW + 8;
         let x = (btn.right() + 5 - POP_W).max(4);
         let y = (btn.bottom() + 10).min(self.scr.h - h - 4);
         let p = Rect::new(x, y, POP_W, h);
@@ -260,6 +262,9 @@ impl Ui {
             parts.push((ZPart::Lane(*t), Rect::new(p.x + 8 + col * (cw + 6), cy + row * (ROW + 2), cw, ROW - 2)));
         }
         cy += lane_rows * (ROW + 2) + 8;
+        parts.push((ZPart::XMinus, Rect::new(p.x + 8, cy, 56, ROW)));
+        parts.push((ZPart::XPlus, Rect::new(p.right() - 8 - 56, cy, 56, ROW)));
+        cy += ROW + 8;
         parts.push((ZPart::YMinus, Rect::new(p.x + 8, cy, 56, ROW)));
         parts.push((ZPart::YPlus, Rect::new(p.right() - 8 - 56, cy, 56, ROW)));
         cy += ROW + 8;
@@ -282,14 +287,19 @@ impl Ui {
                     let text = match part { ZPart::Lane(t) => trace_name(t), _ => "Zoom: All lanes".to_string() };
                     cv.text_in(&f.m, r, 1, &text, if on { AMBER } else { TEXT });
                 }
-                ZPart::YMinus | ZPart::YPlus => {
+                ZPart::XMinus | ZPart::XPlus | ZPart::YMinus | ZPart::YPlus => {
                     chip(cv, r, BTN, BTN_BORDER);
                     let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
                     cv.hline(cx - 6, cx + 6, cy, TEXT);
-                    if part == ZPart::YPlus { cv.vline(cx, cy - 6, cy + 6, TEXT); }
-                    if part == ZPart::YMinus {
+                    if matches!(part, ZPart::XPlus | ZPart::YPlus) { cv.vline(cx, cy - 6, cy + 6, TEXT); }
+                    let label = match part {
+                        ZPart::XMinus => Some(format!("X zoom {}", zoom_text_of(self.studio_sz_xfactor()))),
+                        ZPart::YMinus => Some(format!("Y zoom {}", zoom_text_of(self.zoom_vfactor))),
+                        _ => None,
+                    };
+                    if let Some(label) = label {
                         let mid = Rect::new(r.right(), r.y, p.right() - 8 - 56 - r.right(), r.h);
-                        cv.text_in(&f.mb, mid, 1, &format!("Y zoom {}", zoom_text_of(self.zoom_vfactor)), TEXT);
+                        cv.text_in(&f.mb, mid, 1, &label, TEXT);
                     }
                 }
                 ZPart::Reset => {
@@ -312,6 +322,9 @@ impl Ui {
         match part {
             ZPart::All => { self.studio.sz.lane = None; self.studio_sz_zoom_on(); }
             ZPart::Lane(t) => { self.studio.sz.lane = Some(t); self.studio_sz_zoom_on(); }
+            // one step of the zoom time base around the centre of the zoom window; minus stops at the main time base
+            ZPart::XMinus => { self.studio_sz_zoom_on(); self.zoom_horizontal_step(1, area, 0.5); }
+            ZPart::XPlus => { self.studio_sz_zoom_on(); self.zoom_horizontal_step(-1, area, 0.5); }
             ZPart::YMinus => { self.studio_sz_zoom_on(); self.zoom_vertical_step(-1, area, 0.5); }
             ZPart::YPlus => { self.studio_sz_zoom_on(); self.zoom_vertical_step(1, area, 0.5); }
             ZPart::Reset => {
@@ -322,6 +335,12 @@ impl Ui {
         }
         self.dirty_map = true;
         true
+    }
+
+    /// How far the zoom window magnifies time: the main time base over the zoom's (1 with the zoom off).
+    pub(super) fn studio_sz_xfactor(&self) -> f32 {
+        if !self.m.zoom { return 1.0; }
+        self.m.time_per_div() / tscales()[self.m.zscale.min(tscales().len() - 1)]
     }
 
     fn studio_sz_zoom_on(&mut self) {

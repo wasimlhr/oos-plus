@@ -143,6 +143,19 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     let plus = parts.iter().find(|(p, _)| *p == ZPart::YPlus).unwrap().1;
     tap_rect(&mut u, plus);
     assert!(u.zoom_vfactor > 1.0);
+    // and the horizontal one: plus is a shorter zoom time base around the same centre, minus the way back
+    let (before, centre, x) = (u.m.zscale, u.m.zdelay, u.studio_sz_xfactor());
+    let (_, parts) = u.studio_sz_parts().unwrap();
+    let part = |p: ZPart| parts.iter().find(|(q, _)| *q == p).unwrap().1;
+    tap_rect(&mut u, part(ZPart::XPlus));
+    assert!(u.m.zscale < before && u.studio_sz_xfactor() > x, "X plus zooms in: {} {}", u.m.zscale, before);
+    assert!((u.m.zdelay - centre).abs() < tscales()[u.m.zscale], "the centre of the window stays");
+    tap_rect(&mut u, part(ZPart::XMinus));
+    assert_eq!(u.m.zscale, before, "X minus is the step back");
+    for _ in 0..40 { tap_rect(&mut u, part(ZPart::XMinus)); }
+    assert_eq!(u.m.zscale, u.m.tscale, "X minus ends at the main time base");
+    for _ in 0..(u.m.tscale - before) { tap_rect(&mut u, part(ZPart::XPlus)); }
+    assert_eq!(u.m.zscale, before);
     shot(&mut u, "zoom-single-lane");
     // all lanes again, and Reset zoom
     let (_, parts) = u.studio_sz_parts().unwrap();

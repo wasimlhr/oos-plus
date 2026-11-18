@@ -60,14 +60,11 @@ if [ ! -x "$hw" ] || [ "$(od -An -tx1 -j18 -N1 "$hw" | tr -d ' ')" != b7 ]; then
 	docker run --rm -e OUT_OWNER="$owner" -v "$root/tools/hw:/src" "$kimage" sh -euc 'cd /src && aarch64-linux-gnu-gcc -static -O2 -Wall -o oos-hw oos-hw.c && chown "$OUT_OWNER" oos-hw'
 fi
 mkdir -p "$out"
-# arm64 whatever the host is: its busybox goes into the image. An image of another architecture under this name (left
-# by an older script on an x86-64 host) is built again.
+# arm64 whatever the host is and whatever Docker's builder: its busybox goes into the image. An image of another
+# architecture under this name (left by an older script on an x86-64 host) is built again (tools/arm64-image.sh).
 image=oos-initramfs:ubuntu
-[ "$(docker image inspect -f '{{.Architecture}}' "$image" 2>/dev/null)" = arm64 ] || docker build --platform linux/arm64 -t "$image" - <<'EOF'
-FROM ubuntu:26.04
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      busybox-static cpio gzip device-tree-compiler && rm -rf /var/lib/apt/lists/*
-EOF
+"$root/tools/arm64-image.sh" "$image" ubuntu:26.04 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      busybox-static cpio gzip device-tree-compiler && rm -rf /var/lib/apt/lists/*'
 
 # WLAN: wpa_supplicant and wpa_cli (docs/wlan.md)
 [ -x "$root/rootfs/out/wpa_supplicant" ] && [ -x "$root/rootfs/out/wpa_cli" ] || "$root/rootfs/build-wlan-tools.sh"

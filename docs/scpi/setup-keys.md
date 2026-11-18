@@ -141,6 +141,7 @@ Commands: [display.md](display.md).
 | `grid` | display settings | `Full` | - |
 | `grid_bright` | display settings | `100` | `:DISPlay:GBRightness` |
 | `grid_frame` | display settings | `true` | - |
+| `skin` | display settings: Display > Skin, `OOS` or `OOS Plus` | `OOS` | - |
 | `color_grade` | display settings | `false` | `:DISPlay:COLor` |
 | `dots` | display settings | `false` | `:DISPlay:TYPE` |
 | `windows` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `One` | - |

@@ -299,7 +299,7 @@ For development, run the checkout and automatically restart after saving source 
 ```
 
 Rust compiles changed code automatically. The window includes front-panel buttons and knob controls.
-Use **Reference > Load file** or **Ctrl+O** to open CSV, OOS BIN, WFM, or waveform record (`.pwwf`) files; the web remote at `http://localhost:18080`
+Use **Reference > Load file** or **Ctrl+O** to open CSV, OOS BIN, WFM, waveform record (`.pwwf`), or RIGOL and Keysight binary (`.bin`) files; the web remote at `http://localhost:18080`
 also accepts file selection and drag-and-drop. Loaded sources appear as **R1–R10** cards.
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Live** restores the live session. Measurements follow each captured window and recompute when a stopped
