@@ -46,6 +46,9 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Studio, the zoom source popover (hold the Zoom button): **X zoom** minus and plus beside the Y zoom ones. One
+  step of the zoom time base around the centre of the zoom window; minus ends at the main time base (host-tested,
+  not yet verified on hardware).
 - Callouts in Studio (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
   text to that time on that signal, with a line from the text to the point. It moves with the signal, is edited by a
   tap on its text, removed by emptying it, and is part of the setup text and of a session. Remote, for scripts and
