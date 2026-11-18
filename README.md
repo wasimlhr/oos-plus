@@ -71,9 +71,9 @@ back to OOS as pull requests.
 | **Spectrum, Bode, more** | Spectrum with a peak list beside the waveform, Bode plot with the built-in or an external generator (LAN or USB), bandwidth test, histogram, XY, mask and zone tests. |
 | **Decoders** | 29 protocols, from UART, I2C, SPI and CAN to USB PD, FlexRay, MIL-STD-1553 and DCC. Each is a module of one file; a decoder reads the samples the acquisition kept, not the points of the screen. |
 | **Three layouts** | **Default**, the screen of OOS. **Minimal**, a quiet screen with settings in sheets. **Studio**, views you dock, tab, float and resize: waveform lanes, measurements, eye, spectrum, tables, histogram. |
-| **Skin** | Display > Skin gives the same screen another look: OOS or OOS Plus. |
+| **Skin** | Display > Skin, in the menu of the Default layout, gives the same screen another look: OOS or OOS Plus. |
 | **References and sessions** | Ten reference slots (R1 to R10) that are measured, decoded, zoomed and triggered on like a channel. A session keeps the setup, the record and every reference in one `.oss` file. |
-| **Waveform files** | Open CSV, OOS BIN, WFM, waveform records (`.pwwf`) and RIGOL or Keysight `.bin` files, beside the live channels or offline with no acquisition. |
+| **Waveform files** | Open CSV, OOS BIN, WFM, waveform records (`.pwwf`), RIGOL or Keysight `.bin` files, Keysight XY (`.csv`) or Y-values (`.txt`) files, and Rohde & Schwarz RTO/RTE/RTP waveforms (`name.bin` with `name.Wfm.bin` beside it), beside the live channels or offline with no acquisition. |
 | **Callouts** | Hold on a trace and pin a note to that time on that signal. It moves with the signal and is kept in the setup and the session. |
 | **SIM** | A signal simulator with tabs for Signal, Levels, Jitter and Spread: PRBS patterns, rise time, bandwidth, de-emphasis, noise, random and periodic jitter, SSC. Play it as the acquisition or add it to a reference. |
 | **Remote control** | 568 SCPI headers on one interpreter: the DHO800/DHO900 subset scripts use, plus commands for every analyser, the Studio dock (`:DOCK`), the controls on the screen (`:UI`), callouts and sessions. |
@@ -114,8 +114,9 @@ You need a Windows [Rust](https://rustup.rs) toolchain. From PowerShell, in the 
 
 The app is `ui\target\release\oos-ui.exe`. The mouse is the finger, the wheel pans, Ctrl+wheel zooms the time base,
 Space is Run/Stop and F12 saves a screenshot; all keys are listed at the top of
-[ui/src/desktop.rs](ui/src/desktop.rs). Ctrl+O opens a waveform file, and so does dropping one on the program or
-`--open FILE`. `--offline` starts with the analog channels off, for work on stored waveforms.
+[ui/src/desktop.rs](ui/src/desktop.rs). Ctrl+O opens a waveform file, and so does dropping one on the window or on the program, or
+`--open FILE`. A session file (`session-NNN.oss`) given that way is loaded as a session. `--offline` starts with
+the analog channels off, for work on stored waveforms.
 
 **The network services stay on your PC.** The web remote (8080), SCPI (5555) and HiSLIP (4880) listen on
 `127.0.0.1` only, so Windows asks no firewall question and nobody else on the network can reach them. Start the app

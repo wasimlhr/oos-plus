@@ -7,6 +7,26 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Decode, in Minimal and Studio: the four decoders are shown as four. The row of D1 to D4 is named Decoders and
+  marks the ones that are on while another is edited, and the switch under it says whose it is ("Decoder D2"). Four
+  decoders of four protocols on four channels ran before too; the sheet read as if there were one (host-tested).
+- Display > Screen in Minimal and Studio no longer has Skin and Bottom bar. Bottom bar changes nothing there (the
+  bars of these layouts are always the compact ones), and both rows stay in the Display menu of the Default layout.
+  A skin that a set-up holds is still applied in every layout.
+- Studio: a channel pill of the bottom bar ends after its chevron. With few sources on it was 170 px wide, with
+  empty room behind the scale; it is as wide as the widest scale needs (159 px at the normal text size), the same
+  for every channel. The pill of a channel that is off, the button that switches it on, was 44 px wide: it is at
+  least 60, and takes the room that is left up to 96, where it says "Off" beside its name.
+- Studio: the search controls (previous, the count of events, next) are in the top bar, beside the acquisition
+  read-out, as tall as the buttons there and with arrows of 46 px. They were at the left of the badge row, where they
+  took the place of two measurements and were as low as a badge (20 px in the compact view).
+- Studio: the badge row takes a second line before a measurement goes behind "+N", in both badge styles: fourteen
+  measurements of one channel are all shown, where five or six were. The row grows upwards, the plot gives the room,
+  and the buttons at its right stay where they were. The classic strip gives a source a second line while it has
+  fewer than three sources.
+- Studio: the pills of the bottom bar (channels, references, math, Add, LA, GEN, the time base and the trigger) are
+  40 px tall instead of 30, taller than the measurement badges above them (34). The bar is 46 px, and the plot gives
+  the 10 px.
 - Display > Layout > Default shows the stock OOS bars again. A Bottom bar = Compact left on from before kept the
   compact top and bottom bars in Default; picking Default now turns them off.
 - Eye and jitter (host-tested on SIM signals and built signals of known jitter, not yet verified on hardware):
@@ -36,6 +56,18 @@ Fixed:
   window says "none in window".
 
 Added:
+
+- The set-up as SCPI commands, `:SYSTem:SETup:SCPI?` (the first part of the SCPI recorder; host-tested, not yet run
+  on a unit). The answer is a block of lines: `*RST`, then one command for every setting that differs from the
+  Default set-up, each with the answer of its own query as the value (`:CHANnel2:DISPlay 1`,
+  `:TIMebase:SCALe 1.000000E-03`). Sent line by line to a scope, it brings that scope to this set-up. A setting
+  without a header of its own is a `:SYSTem:SET` line. Before the lines are given out they are sent to a second
+  scope inside the program (a model with no hardware behind it) and mended until its set-up is the same: a command
+  that moves another setting too (a source that switches its channel on) gets a line after it that puts it right,
+  and a value finer than its query writes it gets a key = value line. Reference waveforms and notes are not part of
+  it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and
+  error -221 names its key. Storage > Save setup as SCPI writes the same lines to a new file
+  (`setup-NNN.scpi`, with date and time once the clock is set) where Storage saves; its message names a key that is left out.
 
 - External generator page, Menu > Instruments > Ext generator (ADR 0028, docs/extgen.md; host-tested against a
   simulated generator, not yet verified on hardware). A generator on the USB-A port or the LAN has its model,
@@ -84,6 +116,9 @@ Added:
   the screen and every loaded reference slot with its samples into one file (`session-NNN.oss`); **Load session**
   stops the scope and shows it again, measured and decoded from what was loaded. Reference slots the file does not
   hold are emptied. Remote: `:SAVE:SESSion ["path"]`, `:LOAD:SESSion ["path"]`. ADR 0027.
+  A session saved in the offline view, a loaded capture filling the screen, comes back in that view with its time
+  base and zoom. A session saved with every channel off loads: it was written with a record the loader refused.
+  `oos-ui --open` takes a session file.
 - Remote commands (host-tested, not yet verified on hardware): the zone triggers (`:TRIGger:ZONE<n>:...`), the delay,
   setup/hold, duration, slope and video trigger rows that had no command, history frames (`:RECord:CURRent`,
   `:NAVigate:FRAMe:...`), `:SEARch:VALue?`, `:MATH<n>:RESet`, `:CHANnel<n>:ZERO`, `:MEASure:STRip:DOCK`,

@@ -9,6 +9,8 @@ use super::*;
 pub(super) const CLASSIC_ROW: i32 = 24;
 /// Rows of sources the strip shows at most.
 const MAX_GROUPS: usize = 3;
+/// Lines of the strip at most: a line per source, and with fewer sources the lines a source wraps onto.
+const MAX_LINES: i32 = 3;
 /// Width of the source chip.
 const CHIP_W: i32 = 46;
 
@@ -38,10 +40,28 @@ impl Ui {
         out
     }
 
-    /// Height of the strip: a row per source, and one for the cursor readout.
+    /// Height of the strip: a line per source, and the lines the sources wrap onto.
     pub(super) fn classic_row_px(&self) -> i32 {
-        let n = self.classic_groups().len().min(MAX_GROUPS);
-        n as i32 * CLASSIC_ROW + 6
+        let n = self.classic_groups().len().min(MAX_GROUPS) as i32;
+        (n + self.classic_spare(n)) * CLASSIC_ROW + 6
+    }
+
+    /// The lines of the strip beyond one per source (`Ui::studio_badge_wrap_now` counts them at the start of a frame).
+    fn classic_spare(&self, groups: i32) -> i32 {
+        self.studio.badge_wrap.clamp(0, (MAX_LINES - groups).max(0))
+    }
+
+    /// How many sources need a second line: their pairs do not fit one, with every value as wide as `value`. `names`:
+    /// the badges that are shown and the widths of their names; `room`: from the first chip to the buttons at the
+    /// right.
+    pub(super) fn classic_wrap_now(&self, names: &[(MeasKey, i32)], value: i32, room: i32) -> i32 {
+        let groups = self.classic_groups();
+        let n = groups.len().min(MAX_GROUPS) as i32;
+        let col_w = names.iter().map(|(_, w)| w + 8 + value + 14).max().unwrap_or(1).max(1);
+        let cols = ((room - CHIP_W - 8) / col_w).max(1) as usize;
+        let shown = |keys: &Vec<MeasKey>| keys.iter().filter(|k| names.iter().any(|(n, _)| n == *k)).count();
+        let long = groups.iter().take(MAX_GROUPS).filter(|(_, keys)| shown(keys) > cols).count() as i32;
+        long.min((MAX_LINES - n).max(0))
     }
 
     pub(super) fn classic_layout(&self) -> ClassicLayout {
@@ -49,7 +69,7 @@ impl Ui {
         let row = self.studio_row();
         let rows = self.meas_rows();
         let groups = self.classic_groups();
-        let x0 = row.x + 4 + self.studio_search_w();
+        let x0 = row.x + 4;
         let limit = self.studio_row_limit();
         let cell = |key: MeasKey| -> Option<(String, String)> {
             let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
@@ -65,17 +85,24 @@ impl Ui {
         let place = |avail: i32| -> ClassicLayout {
             let cols = (avail / col_w.max(1)).max(1) as usize;
             let mut l = ClassicLayout { chips: Vec::new(), pairs: Vec::new(), overflow: 0 };
+            // the lines beyond one per source go to the sources whose pairs do not fit their line, in order
+            let mut spare = self.classic_spare(groups.len().min(MAX_GROUPS) as i32);
+            let mut line = 0;
             for (g, (src, keys)) in groups.iter().enumerate() {
                 if g >= MAX_GROUPS { l.overflow += keys.len(); continue; }
-                let y = row.y + 3 + g as i32 * CLASSIC_ROW;
+                let shown = keys.iter().filter(|k| cell(**k).is_some()).count();
+                let lines = if shown > cols && spare > 0 { spare -= 1; 2 } else { 1 };
+                let y = row.y + 3 + line * CLASSIC_ROW;
                 l.chips.push((*src, Rect::new(x0, y, CHIP_W, CLASSIC_ROW - 3)));
                 let mut c = 0;
                 for &key in keys {
                     if cell(key).is_none() { continue; }
-                    if c >= cols { l.overflow += 1; continue; }
-                    l.pairs.push((key, Rect::new(x0 + CHIP_W + 8 + c as i32 * col_w, y, col_w - 4, CLASSIC_ROW - 3)));
+                    if c >= cols * lines { l.overflow += 1; continue; }
+                    let (cx, cy) = ((c % cols) as i32 * col_w, (c / cols) as i32 * CLASSIC_ROW);
+                    l.pairs.push((key, Rect::new(x0 + CHIP_W + 8 + cx, y + cy, col_w - 4, CLASSIC_ROW - 3)));
                     c += 1;
                 }
+                line += lines as i32;
             }
             l
         };

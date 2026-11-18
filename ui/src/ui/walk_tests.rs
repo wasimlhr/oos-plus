@@ -326,9 +326,9 @@ fn the_badge_of_a_channel_pill_is_its_switch() {
     tap(&mut u, pill.x + 24, pill.y + pill.h / 2);
     assert!(!u.m.ch[1].on && !u.menu_open, "the badge switches CH2 off");
     assert!(u.m.ch[0].on, "CH1 is not touched");
-    // its pill stays as a small one, and a tap on that switches the channel on again without a sheet
+    // its pill stays as a smaller one, and a tap on that switches the channel on again without a sheet
     let small = u.studio_bottom().ch[1];
-    assert_eq!(small.w, 44, "a small pill while it is off");
+    assert!((60..=96).contains(&small.w), "a smaller pill while it is off: {}", small.w);
     tap(&mut u, small.x + small.w / 2, small.y + small.h / 2);
     assert!(u.m.ch[1].on && !u.menu_open, "the small pill switches CH2 on");
     assert!(u.studio_bottom().ch[1].w >= 110);
@@ -1752,5 +1752,283 @@ fn walk_channel_trigger_measure_pictures() {
                 let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("ctm-{tag}-{name}{t}.png")), &crate::store::png_of(&cv));
             }
         }
+    }
+}
+
+/// Four decoders run side by side. Each of D1 to D4 is chosen and switched on by touch, with its own protocol and its
+/// own channel; the sheet marks the decoders that are on while another one is edited, the switch says whose it is, and
+/// the plot names a bus for each of the four.
+#[test]
+fn four_decoders_of_four_protocols_run_side_by_side() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        for c in 0..4 { u.m.ch[c].on = true; }
+        u.open_menu(MenuId::Decode);
+        u.step(0.04);
+        let ctrl = |u: &Ui, it: Item| u.sheet_geo().unwrap().rows.iter().find(|r| r.it == it).map(|r| r.ctrl).unwrap_or_else(|| panic!("{layout:?}: {it:?}"));
+        // the place of decoder k in the row of the four, and the colour of its upper edge
+        let chip = |u: &Ui, k: usize| { let c = ctrl(u, Item::DecSel); let w = (c.w - 12) / 4; Rect::new(c.x + k as i32 * (w + 4), c.y, w, c.h) };
+        let edge = |u: &mut Ui, k: usize| {
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            u.render(&mut cv);
+            let r = chip(u, k);
+            cv.px[(r.y * cv.w + r.x + r.w / 2) as usize]
+        };
+        assert_eq!(u.sheet_label(Item::DecSel), "Decoders", "{layout:?}");
+        assert_eq!(edge(&mut u, 2), edge(&mut u, 3), "{layout:?}: none is on, none is marked");
+        let protos = [Proto::UART, Proto::I2C, Proto::SPI, Proto::CAN];
+        for k in 0..4 {
+            let (x, y) = mid(chip(&u, k));
+            tap(&mut u, x, y);
+            assert_eq!(u.m.dec_sel, k, "{layout:?}: a tap on D{}", k + 1);
+            assert_eq!(u.sheet_label(Item::DecOn), format!("Decoder D{}", k + 1), "{layout:?}");
+            assert!(!u.m.dec_on, "{layout:?}: D{} starts off", k + 1);
+            let (x, y) = mid(ctrl(&u, Item::DecOn));
+            tap(&mut u, x, y);
+            assert!(u.m.dec_on, "{layout:?}: the switch of D{}", k + 1);
+            u.m.dec_proto = protos[k];
+            u.m.dec_src = k;
+            u.step(0.04);
+        }
+        assert!((0..4).all(|k| u.m.dec_is_on(k)), "{layout:?}: all four are on");
+        assert_eq!((0..4).map(|k| (u.m.dec_slot(k).proto, u.m.dec_slot(k).src)).collect::<Vec<_>>(),
+            protos.iter().copied().zip(0..4).collect::<Vec<_>>(), "{layout:?}: each kept its protocol and its channel");
+        // D4 is the one edited: D1 to D3 are marked as on. D2 switched off loses its mark, the others keep theirs
+        assert_eq!(edge(&mut u, 0), edge(&mut u, 2), "{layout:?}");
+        let marked = edge(&mut u, 1);
+        let (x, y) = mid(chip(&u, 1));
+        tap(&mut u, x, y);
+        let (x, y) = mid(ctrl(&u, Item::DecOn));
+        tap(&mut u, x, y);
+        let (x, y) = mid(chip(&u, 3));
+        tap(&mut u, x, y);
+        assert!(!u.m.dec_is_on(1) && u.m.dec_is_on(0) && u.m.dec_is_on(2) && u.m.dec_is_on(3), "{layout:?}");
+        assert_ne!(edge(&mut u, 1), marked, "{layout:?}: D2 is off and not marked");
+        assert_eq!(edge(&mut u, 0), marked, "{layout:?}: D1 is still marked");
+        // the plot names a bus for each decoder that is on
+        let (x, y) = mid(chip(&u, 1));
+        tap(&mut u, x, y);
+        let (x, y) = mid(ctrl(&u, Item::DecOn));
+        tap(&mut u, x, y);
+        u.close_menu();
+        for _ in 0..30 { u.step(0.04); }
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        cv.au_start();
+        u.render(&mut cv);
+        let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+        for (k, name) in ["UART", "I2C", "SPI", "CAN"].iter().enumerate() {
+            let want = format!("{} {} CH{}", k + 1, name, k + 1);
+            assert!(texts.iter().any(|t| t.starts_with(&want)), "{layout:?}: no bus named {want:?} on the plot");
+        }
+    }
+}
+
+/// Display > Screen in Minimal and Studio has no row that does nothing there: Bottom bar chooses between the bars of
+/// the Default layout, and Skin is offered with it. Both stay in the menu of the Default layout.
+#[test]
+fn the_display_sheet_has_no_skin_and_no_bottom_bar() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        u.open_menu(MenuId::Display);
+        u.step(0.04);
+        let spec = u.sheet_spec(MenuId::Display).expect("a sheet");
+        let rows: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().chain(&t.foot).copied()).collect();
+        assert!(!rows.contains(&Item::Skin) && !rows.contains(&Item::BottomBar), "{layout:?}: {rows:?}");
+        let screen = spec.tabs.iter().find(|t| t.name == "Screen").expect("the Screen tab");
+        assert_eq!(screen.rows, [Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize], "{layout:?}");
+        // what Bottom bar chooses is the same either way: the bars are the compact ones, and nothing moves
+        u.close_menu();
+        let places = |u: &Ui| (u.m.compact(), u.plot_rect(), u.frame().bottom, u.studio_bottom().ch, u.source_pills());
+        let cards = places(&u);
+        u.adjust(Item::BottomBar, 1);
+        for _ in 0..4 { u.step(0.04); }
+        assert!(u.m.bar_compact && cards.0, "{layout:?}");
+        assert_eq!(places(&u), cards, "{layout:?}: Bottom bar moves something");
+    }
+    let u = fresh(Layout::Default);
+    let items = u.items(MenuId::Display);
+    assert!(items.contains(&Item::Skin) && items.contains(&Item::BottomBar), "the Default layout keeps both");
+}
+
+/// A channel pill of Studio's bottom bar is as wide as its badge, the widest scale and its chevron need: with one or
+/// two channels on it was 170 px, with empty room before the chevron. The scale is drawn whole, the pills of all
+/// channels are equally wide whatever their scales, and many sources still share the bar. The pill of a channel that
+/// is off is a button to switch it on: never under 60 px (it was 44), and with room to spare it says "Off".
+#[test]
+fn a_channel_pill_is_as_wide_as_its_scale_needs() {
+    // Studio's bar; Minimal has the small pills of its own footer
+    for layout in [Layout::Studio] {
+        for ts in [TextSize::Normal, TextSize::Large, TextSize::Larger] {
+            let mut u = fresh(layout);
+            u.m.text_size = ts;
+            u.relayout();
+            for c in 0..4 { u.m.ch[c].on = c < 2; }
+            u.m.ch[0].vscale = 0;
+            u.step(0.04);
+            let what = format!("{layout:?} {ts:?}");
+            let b = u.studio_bottom();
+            let f = u.fonts();
+            let scales: Vec<String> = (0..2).map(|c| format!("{}/div", si_short(u.m.ch[c].volts_per_div() as f64, u.m.ch[c].unit.name()))).collect();
+            assert_ne!(scales[0], scales[1], "{what}: two scales");
+            assert_eq!(b.ch[0].w, b.ch[1].w, "{what}: the pills are equally wide");
+            // every pill of the bar is taller than a measurement badge of the row above it, and the bar ends at the screen
+            let badge = u.studio_badges().first().map(|b| b.1.h).expect("a badge");
+            let bar = u.frame().bottom;
+            let chips: Vec<Rect> = b.ch.iter().copied().filter(|r| r.w > 0).chain([b.add, b.time, b.trig]).chain(b.la).chain(b.gen).collect();
+            assert!(chips.iter().all(|r| r.h == 40 && r.h > badge && r.y >= bar.y + 3 && r.bottom() <= bar.bottom() - 3), "{what}: a badge of {badge} px, {chips:?}");
+            assert_eq!(bar.bottom(), u.scr.h, "{what}");
+            // the text begins 58 px in; what is left after the widest scale is the chevron's room and no more. The
+            // largest text needs all of the 170 px a pill ever had
+            let widest = f.mb.width("500 mV/div");
+            let need = (58 + widest + 28).min(170);
+            assert!(b.ch[0].w <= need && b.ch[0].w >= need - 8, "{what}: {} px for a scale of {widest} px", b.ch[0].w);
+            if ts == TextSize::Normal { assert!(b.ch[0].w == need && need <= 160, "{what}: {} px", b.ch[0].w); }
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            cv.au_start();
+            u.render(&mut cv);
+            let au = cv.au.take().unwrap();
+            for (c, scale) in scales.iter().enumerate() {
+                let r = b.ch[c];
+                let whole = au.iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), clip, .. }
+                    if s == scale && r.contains(ink.0, (ink.1 + ink.3) / 2) && ink.0 >= clip.0 && ink.2 <= clip.2 && ink.2 <= r.right() - 16));
+                assert!(whole, "{what}: the scale {scale} of CH{} is cut or missing", c + 1);
+            }
+            // the two channels that are off: a pill each, equally wide and inside the bar
+            let off: Vec<Rect> = (2..4).map(|c| b.ch[c]).collect();
+            assert!(off.iter().all(|r| r.w >= 60 && r.w == off[0].w) && b.add.right() <= b.time.x, "{what}: {off:?}");
+            // one channel on: the three others have the room for their badge and "Off", and a tap switches one on
+            u.m.ch[1].on = false;
+            u.step(0.04);
+            let b = u.studio_bottom();
+            if ts == TextSize::Normal {
+                assert!((1..4).all(|c| b.ch[c].w == 96), "{what}: {:?}", &b.ch[1..4]);
+                let mut cv = Canvas::new(u.scr.w, u.scr.h);
+                cv.au_start();
+                u.render(&mut cv);
+                let au = cv.au.take().unwrap();
+                for c in 1..4 {
+                    let says = au.iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == "Off" && b.ch[c].contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= b.ch[c].right()));
+                    assert!(says, "{what}: the pill of CH{} does not say Off", c + 1);
+                }
+            }
+            let (x, y) = mid(b.ch[2]);
+            tap(&mut u, x, y);
+            assert!(u.m.ch[2].on, "{what}: a tap on the pill of CH3 switches it on");
+            // every channel on: the pills share the bar as before and stay inside it
+            for c in 0..4 { u.m.ch[c].on = true; }
+            u.step(0.04);
+            let b = u.studio_bottom();
+            assert!((0..4).all(|c| b.ch[c].w > 0 && b.ch[c].w <= b.ch[0].w) && b.add.right() <= b.time.x, "{what}: four channels");
+        }
+    }
+}
+
+#[test]
+fn a_session_saved_in_the_offline_view_comes_back_in_it() {
+    let dir = std::env::temp_dir().join(format!("oos-walk-offline-session-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut u = fresh_live(Layout::Minimal);
+    u.store_dir = dir.clone();
+    u.set_offline(true);
+    // a capture long enough for the zoom window to open, loaded as a file is
+    let n = 20_000usize;
+    let header = format!(r#"{{"sampleType":"float32","nPoints":{n},"xincr":1e-6,"xzero":-0.01,"channel":"CH1"}}"#);
+    let mut file = b"PWWF0001".to_vec();
+    file.extend_from_slice(&(header.len() as u32).to_le_bytes());
+    file.extend_from_slice(header.as_bytes());
+    for i in 0..n {
+        file.extend_from_slice(&(if (i / 500) % 2 == 0 { 0.0f32 } else { 1.0 }).to_le_bytes());
+    }
+    u.load_waveform_auto(&file, "cap.pwwf").unwrap();
+    for _ in 0..4 { u.step(0.04); }
+    assert!(u.offline && u.offline_ref == 0 && u.m.zoom, "the capture fills the screen, zoom window open");
+    // the user moves the zoom window: that view is what the session keeps
+    u.m.zdelay += 0.002;
+    for _ in 0..2 { u.step(0.04); }
+    let view = (u.m.tscale, u.m.zoom, u.m.zscale);
+    let (tfine, delay, zdelay) = (u.m.tfine, u.m.delay, u.m.zdelay);
+    let named = dir.join("offline.oss");
+    u.session_save(named.to_str().unwrap()).unwrap();
+    let bytes = std::fs::read(&named).unwrap();
+    assert_eq!(crate::store::parse_session(&bytes, NREF).unwrap().offline_ref, Some(0));
+    // the same file without its end is a session too: that is what a build from before the view was kept reads
+    assert_eq!(crate::store::parse_session(&bytes[..bytes.len() - 12], NREF).unwrap().offline_ref, None);
+
+    // another start, live, with its own channels on
+    let mut v = fresh_live(Layout::Minimal);
+    v.store_dir = dir.clone();
+    assert!(!v.offline);
+    v.session_load(named.to_str().unwrap()).unwrap();
+    for _ in 0..4 { v.step(0.04); }
+    assert!(v.offline && v.offline_ref == 0 && v.record_mode(), "the offline view, on the slot that was shown");
+    assert!(v.m.ch.iter().all(|c| !c.on), "the analog channels stay off");
+    assert_eq!((v.m.tscale, v.m.zoom, v.m.zscale), view, "the time base and the zoom as saved");
+    assert!((v.m.tfine - tfine).abs() < 1e-6 && (v.m.delay - delay).abs() < 1e-9 && (v.m.zdelay - zdelay).abs() < 1e-7, "{} {} {}", v.m.tfine, v.m.delay, v.m.zdelay);
+    assert_eq!(v.refs[0].as_ref().unwrap().v.len(), n);
+
+    // a session saved with the live channels says nothing of a view and loads as before
+    let mut live = fresh_live(Layout::Minimal);
+    live.store_dir = dir.clone();
+    live.refs[1] = Some(RefWave { src: 0, color: 1, label: "kept".into(), t0: 0.0, dt: 1e-6, v: vec![0.25; 200].into(), vpd: 1.0, offset: 0.0, on: true });
+    let plain = dir.join("live.oss");
+    live.session_save(plain.to_str().unwrap()).unwrap();
+    let plain_bytes = std::fs::read(&plain).unwrap();
+    assert_eq!(crate::store::parse_session(&plain_bytes, NREF).unwrap().offline_ref, None);
+    v.session_load(plain.to_str().unwrap()).unwrap();
+    assert!(!v.offline, "a live session leaves the offline view");
+    // a view that names a slot the file does not hold is not a view
+    let mut odd = plain_bytes.clone();
+    odd.extend_from_slice(&crate::store::session_view(7));
+    assert_eq!(crate::store::parse_session(&odd, NREF).unwrap().offline_ref, None);
+    let mut held = plain_bytes;
+    held.extend_from_slice(&crate::store::session_view(1));
+    assert_eq!(crate::store::parse_session(&held, NREF).unwrap().offline_ref, Some(1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Studio's badge row takes a second line before a measurement goes behind "+N", in both badge styles. The row grows
+/// upwards and the plot gives the room; the buttons at its right stay where they are; a badge of the upper line takes a
+/// tap. With more than two lines hold, "+N" is back.
+#[test]
+fn the_badge_row_wraps_onto_a_second_line() {
+    for classic in [false, true] {
+        let what = if classic { "classic" } else { "badges" };
+        let mut u = fresh(Layout::Studio);
+        u.m.ch[1].on = false;
+        u.studio_set_classic(classic);
+        for _ in 0..2 { frame(&mut u); }
+        let (one, eye) = (u.studio_row(), u.studio_eye());
+        assert!(u.studio_badges_more().is_none() && !u.studio_badges().is_empty(), "{what}: the measurements of the start fit one line");
+        let lines = |u: &Ui| { let mut ys: Vec<i32> = u.studio_badges().iter().map(|b| b.1.y).collect(); ys.sort(); ys.dedup(); ys.len() };
+        assert_eq!(lines(&u), 1, "{what}");
+        for k in oos_dsp::measure::ALL { if u.m.meas.len() >= 14 { break; } if !u.m.meas.iter().any(|m| m.0 == k) { u.m.meas.push((k, WaveId::Ch(0))); } }
+        for _ in 0..2 { frame(&mut u); }
+        let (row, badges) = (u.studio_row(), u.studio_badges());
+        assert_eq!((badges.len(), u.studio_badges_more().map(|m| m.1)), (14, None), "{what}: fourteen measurements, none behind +N");
+        assert_eq!(lines(&u), 2, "{what}");
+        assert!(row.h > one.h && row.bottom() == one.bottom() && u.plot_rect().bottom() <= row.y, "{what}: {one:?} became {row:?}");
+        let limit = u.studio_row_limit();
+        for (i, (_, r)) in badges.iter().enumerate() {
+            assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= limit, "{what}: badge {i} at {r:?} in {row:?}");
+            for (_, o) in &badges[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{what}: {r:?} over {o:?}"); }
+        }
+        if !classic { assert_eq!(u.studio_eye(), eye, "{what}: the buttons at the right stay on the line above the bar"); }
+        // the upper line is live
+        let (key, r) = *badges.iter().min_by_key(|b| b.1.y).unwrap();
+        let (x, y) = mid(r);
+        tap(&mut u, x, y);
+        assert!(u.studio.mark == Some(key) || u.studio.popup == Some(key), "{what}: a tap on a badge of the upper line");
+        // more than the lines hold: the rest is behind +N, and the row is no higher
+        for k in oos_dsp::measure::ALL { if !u.m.meas.iter().any(|m| m.0 == k) { u.m.meas.push((k, WaveId::Ch(0))); } }
+        for _ in 0..2 { frame(&mut u); }
+        let (n, more) = (u.studio_badges().len(), u.studio_badges_more().expect("+N"));
+        assert_eq!(n + more.1, u.m.meas.len(), "{what}: every measurement is shown or counted");
+        assert!(n >= 10, "{what}: {n} badges on the two lines");
+        assert!(u.studio_row().h <= row.h + 24 && u.studio_row().bottom() == one.bottom(), "{what}: {:?}", u.studio_row());
+        assert!(more.0.y >= u.studio_row().y && more.0.right() <= limit + 60, "{what}: +N at {:?}", more.0);
+        // back to a few: one line again
+        u.m.meas.truncate(4);
+        for _ in 0..2 { frame(&mut u); }
+        assert_eq!((lines(&u), u.studio_row()), (1, one), "{what}: four measurements");
     }
 }

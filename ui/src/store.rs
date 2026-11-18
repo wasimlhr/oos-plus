@@ -1453,6 +1453,8 @@ pub fn read_waveform_file(p: &Path) -> Result<Vec<u8>, String> {
 }
 
 /// Extensions shown by native and browser waveform import. The header chooses the parser.
+/// `.txt` is not one of them though a Keysight Y-values file has it: the setups are `.txt` too, and a list of
+/// waveforms would show them. Such a file is opened by name, from All files, or by dropping it.
 pub const WAVE_EXTS: &[&str] = &["wfm", "bin", "csv", "trc", "isf", "tr0", "wfmx", "pwwf", "tkwf"];
 
 /// A stored waveform, recognized by its header:
@@ -1483,13 +1485,84 @@ pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
     if looks_tr0(bytes) {
         return parse_tr0(bytes);
     }
+    // one half of a waveform kept in two files: without where it lies, the other half cannot be found
+    if looks_rs_description(bytes) {
+        return Err("this describes a Rohde & Schwarz waveform; open it from its folder, where its .Wfm.bin file is".into());
+    }
     if looks_wfmx(bytes) {
         return parse_wfmx(bytes);
     }
+    // containers this build does not open: said by name, with the way round them
+    if bytes.starts_with(&[0x89, b'H', b'D', b'F', 0x0d, 0x0a, 0x1a, 0x0a]) {
+        return Err("HDF5 (.h5) waveform files are not read; save the waveform as BIN (.bin) or CSV".into());
+    }
+    if bytes.starts_with(b"MATLAB ") {
+        return Err("MATLAB (.mat) waveform files are not read; save the waveform as BIN (.bin) or CSV".into());
+    }
     if let Ok(text) = std::str::from_utf8(bytes) {
-        return parse_wave_csv(text, name);
+        if keysight_text_kind(text) == Some("WaveformYValues") {
+            return parse_keysight_y(text, name).map(|t| vec![t]);
+        }
+        let mut traces = parse_wave_csv(text, name)?;
+        // an XY-values file names its source in its header; with one trace, that name is the trace's
+        if let ([only], Some("WaveformXYValues")) = (traces.as_mut_slice(), keysight_text_kind(text)) {
+            if let Some(source) = keysight_header(text, "Source Name") {
+                only.label = source.chars().take(10).collect();
+            }
+        }
+        return Ok(traces);
     }
     Err("that file is not a waveform".into())
+}
+
+/// A text file without the byte-order mark some programs put first.
+fn without_mark(text: &str) -> &str {
+    text.trim_start_matches(|c: char| c as u32 == 0xfeff)
+}
+
+/// The header of a Keysight text waveform file, up to its `Data,` line: lines of `Key, value`.
+fn keysight_header_lines(text: &str) -> impl Iterator<Item = (&str, &str)> {
+    without_mark(text).lines().take(64)
+        .take_while(|line| !line.trim_start().starts_with("Data"))
+        .filter_map(|line| line.split_once(',')).map(|(key, value)| (key.trim(), value.trim()))
+}
+
+/// The value of one header line of a Keysight text waveform file.
+fn keysight_header<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    keysight_header_lines(text).find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, v)| v).filter(|v| !v.is_empty())
+}
+
+/// What a Keysight text waveform file says it is in its first line (`File Format, WaveformYValues`).
+fn keysight_text_kind(text: &str) -> Option<&str> {
+    let (key, value) = without_mark(text).lines().next()?.split_once(',')?;
+    key.trim().eq_ignore_ascii_case("File Format").then(|| value.trim())
+}
+
+/// A Keysight Y-values file (`.txt`): a header of `Key, value` lines, a `Data,` line, in format version 2 a line
+/// naming the number type, then one amplitude per line. The time of the first point and the interval are the
+/// header's `XOrg` and `XInc`. A file saved without its header has no time scale and is not a waveform here.
+fn parse_keysight_y(text: &str, name: &str) -> Result<WaveTrace, String> {
+    let number = |key: &str| keysight_header(text, key).and_then(|v| v.parse::<f64>().ok()).filter(|x| x.is_finite());
+    let (Some(t0), Some(dt)) = (number("XOrg"), number("XInc")) else {
+        return Err("the Y-values file has no XOrg and XInc in its header".into());
+    };
+    if dt <= 0.0 {
+        return Err("that file holds no waveform".into());
+    }
+    let mut v = Vec::new();
+    let data = text.lines().skip_while(|line| !line.trim_start().starts_with("Data")).skip(1);
+    for line in data {
+        // the number-type line of version 2, a blank line, or an ellipsis: not a sample
+        let Ok(x) = line.trim().trim_end_matches(',').parse::<f32>() else { continue };
+        if !x.is_finite() { continue; }
+        if v.len() >= MAX_WAVEFORM_SAMPLES { return Err("waveform exceeds the 32-million-sample import limit".into()); }
+        v.push(x);
+    }
+    if v.len() < 2 {
+        return Err("that file holds no waveform".into());
+    }
+    let label = keysight_header(text, "Source Name").unwrap_or(name).chars().take(10).collect();
+    Ok(WaveTrace { t0, dt, v, label })
 }
 
 /// A waveform record (`.pwwf`, and the same layout under its older `.tkwf` name): one channel of a capture.
@@ -1662,7 +1735,8 @@ fn parse_wave_csv(text: &str, name: &str) -> Result<Vec<WaveTrace>, String> {
     let mut times: [f64; 2] = [f64::NAN; 2];
     let mut rows = 0usize;
     for line in text.lines() {
-        let mut cols = line.split(',').map(|s| s.trim().parse::<f64>().ok());
+        // a line that ends with its separator ("x, y,") has no column after it
+        let mut cols = line.trim_end().trim_end_matches(',').split(',').map(|s| s.trim().parse::<f64>().ok());
         let Some(Some(t)) = cols.next() else { continue };
         let mut rest = cols.map(|x| x.unwrap_or(f64::NAN)).peekable();
         if rest.peek().is_none() {
@@ -2113,7 +2187,8 @@ fn parse_ag(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
             if dsize < buffer_header || p.checked_add(dsize).and_then(|data| data.checked_add(bsize)).is_none_or(|end| end > b.len()) {
                 return Err("truncated waveform".into());
             }
-            digital |= kind == 5;
+            // 8-bit digital samples: buffer type 6 in an AG file, 5 in an RG file (an AG file has counts there)
+            digital |= kind == if wide { 5 } else { 6 };
             let data = p + dsize;
             if matches!(kind, 1 | 2 | 3) && bpp == 4 && bsize >= 8 && bsize % 4 == 0 {
                 let n = (bsize / 4).min(if npts >= 2 { npts } else { bsize / 4 });
@@ -2611,6 +2686,19 @@ pub struct Session {
     pub setup: String,
     pub record: Option<Record>,
     pub refs: Vec<SessionRef>,
+    /// the reference slot that filled the screen when the session was saved in the offline view (`session_view`)
+    pub offline_ref: Option<usize>,
+}
+
+/// The end of a session saved in the offline view, after the reference slots: "VIEW", u32 1 (the offline view) and
+/// u32 the slot shown (0-based). A session saved with the live channels has no such end, and a build from before it
+/// reads the file without it.
+pub fn session_view(offline_ref: usize) -> [u8; 12] {
+    let mut b = [0u8; 12];
+    b[..4].copy_from_slice(b"VIEW");
+    b[4..8].copy_from_slice(&1u32.to_le_bytes());
+    b[8..].copy_from_slice(&(offline_ref as u32).to_le_bytes());
+    b
 }
 
 /// A session as one file, little endian: "OOSS", u32 version 1, u32 length of the setup text and the text (UTF-8),
@@ -2628,11 +2716,13 @@ pub fn session_bin(setup: &str, rec: Option<&Record>, memory: Option<&[u8]>, m: 
             b.extend_from_slice(&1u32.to_le_bytes());
             b.extend_from_slice(blob);
         }
-        (None, Some(r)) => {
+        // a record with no channel on (the offline view, every input off) is no record: a blob of no channels
+        // is one the reader refuses, and the file would not load
+        (None, Some(r)) if (0..NCH).any(|c| m.ch[c].on && !r.ch[c].is_empty()) => {
             b.extend_from_slice(&1u32.to_le_bytes());
             b.extend_from_slice(&wave_bin(r, m));
         }
-        (None, None) => b.extend_from_slice(&0u32.to_le_bytes()),
+        (None, _) => b.extend_from_slice(&0u32.to_le_bytes()),
     }
     b.extend_from_slice(&(refs.len() as u32).to_le_bytes());
     for r in refs {
@@ -2646,6 +2736,11 @@ pub fn session_bin(setup: &str, rec: Option<&Record>, memory: Option<&[u8]>, m: 
         }
     }
     b
+}
+
+/// Whether these bytes are a session file (`session_bin`), by its mark: the command line opens one as a session.
+pub fn looks_session(b: &[u8]) -> bool {
+    b.starts_with(b"OOSS")
 }
 
 /// Reads a session file. Every length is checked against the bytes that are there and against the import limits before
@@ -2702,7 +2797,11 @@ pub fn parse_session(b: &[u8], slots: usize) -> Result<Session, String> {
         at += len * 4;
         refs.push(SessionRef { slot, src, t0, dt, v });
     }
-    Ok(Session { setup, record, refs })
+    // the view the session was saved in, when the file says so and names a slot it holds
+    let offline_ref = b.get(at..at + 12).filter(|end| &end[..4] == b"VIEW" && end[4..8] == 1u32.to_le_bytes())
+        .map(|end| u32::from_le_bytes(end[8..12].try_into().unwrap()) as usize)
+        .filter(|slot| refs.iter().any(|r| r.slot == *slot));
+    Ok(Session { setup, record, refs, offline_ref })
 }
 
 /// One OOSW blob: the record and the number of bytes consumed.
@@ -4589,5 +4688,497 @@ mod rigol_bin_tests {
         let t = &parse_wave(&b, "k.bin").unwrap()[0];
         assert_eq!((t.v.as_slice(), t.label.as_str()), (&v[..], "lane"));
         assert!((t.t0 + 5e-6).abs() < 1e-18);
+    }
+}
+
+#[cfg(test)]
+mod keysight_file_tests {
+    use super::*;
+
+    /// The header of the example in Keysight's description of the Y-values file, with these amplitudes.
+    fn y_values(extra: &str, values: &str) -> String {
+        format!("File Format, WaveformYValues\r\nFormat Version, 2\r\nInstrument, D9300A\r\nSwVersion, P.26.01.214\r\nSerialNumber, MXL3441NC2\r\nDate, 3/30/2026 13:33:17 GMT-06:00\r\n\r\nPoints, 4\r\nSignal Type, Unspecified\r\nSource Name, Channel 1\r\nChannel Noise, 0.002\r\nIntrinsic Jitter, 1E-14\r\nInterpolation Factor, 4\r\n{extra}Bandwidth, 128000000000\r\nX Units, Second\r\nY Units, Volt\r\nData,\r\nfloat\r\n{values}")
+    }
+
+    #[test]
+    fn a_y_values_file_takes_its_time_scale_from_the_header() {
+        let text = y_values("XOrg, -5.0000000000000004E-08\r\nXInc, 9.765625E-13\r\n", "0.248322\r\n0.25\r\n-0.125\r\n1.5E-01\r\n");
+        let traces = parse_wave(text.as_bytes(), "ch1.txt").unwrap();
+        assert_eq!(traces.len(), 1);
+        let t = &traces[0];
+        assert_eq!(t.v, [0.248322, 0.25, -0.125, 0.15]);
+        assert_eq!((t.t0, t.dt, t.label.as_str()), (-5.0000000000000004E-08, 9.765625E-13, "Channel 1"));
+        // version 1 has no number-type line; a byte-order mark before the first line is not part of it
+        let v1 = format!("{}{}", char::from_u32(0xfeff).unwrap(), text.replace("float\r\n", "").replace("Format Version, 2", "Format Version, 1"));
+        assert_eq!(parse_wave(v1.as_bytes(), "ch1.txt").unwrap()[0].v, [0.248322, 0.25, -0.125, 0.15]);
+    }
+
+    #[test]
+    fn a_y_values_file_without_a_time_scale_is_refused_with_its_reason() {
+        let refused = |text: String| parse_wave(text.as_bytes(), "y.txt").map(|_| ()).unwrap_err();
+        assert_eq!(refused(y_values("", "1\r\n2\r\n")), "the Y-values file has no XOrg and XInc in its header");
+        assert_eq!(refused(y_values("XOrg, 0\r\nXInc, 0\r\n", "1\r\n2\r\n")), "that file holds no waveform");
+        assert_eq!(refused(y_values("XOrg, 0\r\nXInc, 1E-9\r\n", "1\r\n")), "that file holds no waveform");
+        // amplitudes alone, the file saved without its header: one column, no time
+        assert_eq!(parse_wave(b"0.1\r\n0.2\r\n0.3\r\n", "y.txt").map(|_| ()).unwrap_err(), "that file holds no waveform");
+    }
+
+    #[test]
+    fn an_xy_values_file_is_read_with_the_name_of_its_source() {
+        let text = "File Format, WaveformXYValues\r\nFormat Version, 2\r\nInstrument, D9300A\r\nDate, 3/30/2026 13:33:48 GMT-06:00\r\n\r\nPoints, 3\r\nSource Name, Channel 2\r\nInterpolation Factor, 0\r\nBandwidth, 128000000000\r\nX Units, Second\r\nY Units, Volt\r\nData,\r\ndouble, float\r\n-5.0E-08, 0.248322,\r\n-4.9E-08, 0.25,\r\n-4.8E-08, -0.125,\r\n";
+        let traces = parse_wave(text.as_bytes(), "wave.csv").unwrap();
+        assert_eq!(traces.len(), 1, "a line that ends with its separator has no column after it");
+        let t = &traces[0];
+        assert_eq!((t.v.as_slice(), t.label.as_str()), (&[0.248322f32, 0.25, -0.125][..], "Channel 2"));
+        assert!((t.t0 + 5.0e-8).abs() < 1e-20 && (t.dt - 1.0e-9).abs() < 1e-18, "{} {}", t.t0, t.dt);
+        // a plain time,volts table keeps the name of its file
+        assert_eq!(parse_wave(b"0,1\n1,2\n2,3\n", "plain.csv").unwrap()[0].label, "plain.csv");
+    }
+
+    #[test]
+    fn containers_that_are_not_read_say_so_and_how_to_get_round_it() {
+        let hdf5 = [0x89, b'H', b'D', b'F', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
+        assert_eq!(parse_wave(&hdf5, "w.h5").map(|_| ()).unwrap_err(), "HDF5 (.h5) waveform files are not read; save the waveform as BIN (.bin) or CSV");
+        let mat = b"MATLAB 5.0 MAT-file, Platform: PCWIN64";
+        assert_eq!(parse_wave(mat, "w.mat").map(|_| ()).unwrap_err(), "MATLAB (.mat) waveform files are not read; save the waveform as BIN (.bin) or CSV");
+    }
+
+    /// An `AG` file of one waveform with one buffer of this type.
+    fn ag(wave_type: u32, buffer_type: u16, bytes_per_point: u16, data: &[u8]) -> Vec<u8> {
+        let mut b = b"AG10".to_vec();
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&1u32.to_le_bytes());
+        let mut h = vec![0u8; 140];
+        h[..4].copy_from_slice(&140u32.to_le_bytes());
+        h[4..8].copy_from_slice(&wave_type.to_le_bytes());
+        h[8..12].copy_from_slice(&1u32.to_le_bytes());
+        h[12..16].copy_from_slice(&((data.len() / bytes_per_point as usize) as u32).to_le_bytes());
+        h[32..40].copy_from_slice(&1e-9f64.to_le_bytes());
+        h[40..48].copy_from_slice(&(-2e-9f64).to_le_bytes());
+        b.extend(h);
+        b.extend_from_slice(&12u32.to_le_bytes());
+        b.extend_from_slice(&buffer_type.to_le_bytes());
+        b.extend_from_slice(&bytes_per_point.to_le_bytes());
+        b.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        b.extend_from_slice(data);
+        b
+    }
+
+    #[test]
+    fn the_digital_buffer_of_an_ag_file_is_type_six_and_its_counts_are_not_logic() {
+        let refused = |bytes: Vec<u8>| parse_wave(&bytes, "k.bin").map(|_| ()).unwrap_err();
+        assert_eq!(refused(ag(6, 6, 1, &[0, 1, 1, 0])), "that file holds logic channels only, and they are not read");
+        // type 5 in an AG file is the counts of a histogram: no trace, and not called a logic channel
+        let counts: Vec<u8> = [3.0f32, 9.0, 4.0].iter().flat_map(|x| x.to_le_bytes()).collect();
+        assert_eq!(refused(ag(5, 5, 4, &counts)), "that file holds no waveform");
+        let volts: Vec<u8> = [0.5f32, -0.5, 0.25].iter().flat_map(|x| x.to_le_bytes()).collect();
+        let t = &parse_wave(&ag(1, 1, 4, &volts), "k.bin").unwrap()[0];
+        assert_eq!((t.v.as_slice(), t.t0, t.dt), (&[0.5f32, -0.5, 0.25][..], -2e-9, 1e-9));
+    }
+}
+
+// ── Rohde & Schwarz RTO / RTE / RTP: a description file and a data file ──────────────────────────────────────
+
+/// The elements of a description file that carry a `Name`, each with its attributes; the first of a name is kept.
+struct RsTags(Vec<(String, Vec<(String, String)>)>);
+
+impl RsTags {
+    fn read(xml: &str) -> Self {
+        let mut tags: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        let mut rest = xml;
+        while let Some(open) = rest.find('<') {
+            rest = &rest[open + 1..];
+            let Some(close) = rest.find('>') else { break };
+            let tag = &rest[..close];
+            rest = &rest[close + 1..];
+            if tag.starts_with('?') || tag.starts_with('!') || tag.starts_with('/') {
+                continue;
+            }
+            let attributes = rs_attributes(tag);
+            let Some(name) = attributes.iter().find(|(key, _)| key == "Name").map(|(_, value)| value.clone()) else { continue };
+            if !tags.iter().any(|(known, _)| *known == name) {
+                tags.push((name, attributes));
+            }
+        }
+        Self(tags)
+    }
+
+    fn attribute(&self, name: &str, key: &str) -> Option<&str> {
+        let (_, attributes) = self.0.iter().find(|(known, _)| known == name)?;
+        attributes.iter().find(|(k, _)| k == key).map(|(_, value)| value.as_str())
+    }
+
+    fn value(&self, name: &str) -> Option<&str> {
+        self.attribute(name, "Value")
+    }
+
+    fn number(&self, name: &str, key: &str) -> Result<f64, String> {
+        self.attribute(name, key).and_then(|v| v.trim().parse::<f64>().ok()).filter(|x| x.is_finite())
+            .ok_or_else(|| format!("the Rohde & Schwarz description has no usable {name}"))
+    }
+
+    fn count(&self, name: &str) -> Result<usize, String> {
+        let x = self.number(name, "Value")?;
+        if x < 0.0 || x.fract() != 0.0 || x > u32::MAX as f64 {
+            return Err(format!("the Rohde & Schwarz description has no usable {name}"));
+        }
+        Ok(x as usize)
+    }
+}
+
+/// The `key="value"` pairs of one tag.
+fn rs_attributes(tag: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut rest = tag;
+    while let Some(equals) = rest.find('=') {
+        let key = rest[..equals].split_whitespace().last().unwrap_or("").to_string();
+        let after = rest[equals + 1..].trim_start();
+        let Some(quote) = after.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+            rest = &rest[equals + 1..];
+            continue;
+        };
+        let body = &after[1..];
+        let Some(end) = body.find(quote) else { break };
+        if !key.is_empty() {
+            out.push((key, body[..end].to_string()));
+        }
+        rest = &body[end + 1..];
+    }
+    out
+}
+
+fn bytes_hold(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|window| window == needle)
+}
+
+/// The description file of a Rohde & Schwarz RTO/RTE/RTP waveform: XML that names a signal format and a record
+/// length. It has the extension `.bin`, and the samples are in `<name>.Wfm.bin` beside it.
+fn looks_rs_description(b: &[u8]) -> bool {
+    let head = &b[..b.len().min(1 << 20)];
+    let start = head.iter().position(|c| !c.is_ascii_whitespace() && ![0xEFu8, 0xBB, 0xBF].contains(c));
+    start.is_some_and(|at| head[at] == b'<') && bytes_hold(head, b"eRS_SIGNAL_FORMAT_") && bytes_hold(head, b"RecordLength")
+}
+
+/// The data file of such a waveform, by its name and its first word: the format code.
+fn looks_rs_data(b: &[u8], name: &str) -> bool {
+    name.to_ascii_lowercase().ends_with(".wfm.bin") && b.len() >= 8 && [0u32, 1, 4, 6].contains(&u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+}
+
+/// The name a source of such a file is shown by: `eRS_SIGNAL_SOURCE_CH1_TR1` and `C1W1` are CH1; another source
+/// keeps its own name.
+fn rs_source_label(source: &str) -> String {
+    let plain = source.trim().trim_start_matches("eRS_SIGNAL_SOURCE_");
+    let digit_after = |mark: &str| plain.find(mark).and_then(|at| plain[at + mark.len()..].chars().next()).filter(|c| ('1'..='8').contains(c));
+    match digit_after("CH").or_else(|| if plain.starts_with('C') { digit_after("C") } else { None }) {
+        Some(n) => format!("CH{n}"),
+        None if plain.is_empty() || plain == "NONE" => "CH1".into(),
+        None => plain.chars().take(10).collect(),
+    }
+}
+
+/// A Rohde & Schwarz RTO/RTE/RTP waveform from its two files. The description gives, by `Name`: `SignalFormat`
+/// (INT8BIT, INT16BIT, FLOAT or XYDOUBLEFLOAT), `RecordLength`, the `SignalHardwareRecordLength` rows the data
+/// file holds and the `LeadingSettlingSamples` before the record in them, `XStart` and `XStop`, and for integer
+/// samples the scaling: volts = raw * StepFactor * VerticalScale / NofQuantisationLevels + VerticalOffset -
+/// VerticalPosition * VerticalScale. With `MultiChannelExport` on, the channels switched on in
+/// `MultiChannelExportState` (`I_0` to `I_3`) are interleaved row by row, each with its own scale, position and
+/// offset. The data file starts with a u32 format code (0, 1, 4 or 6) and a u32 row count, little endian; a row
+/// of XYDOUBLEFLOAT starts with its time as an f64.
+/// Layout after the RigolWFM project's reader of these files; one acquisition, a normal or averaged trace.
+fn parse_rs(xml: &str, data: &[u8]) -> Result<Vec<WaveTrace>, String> {
+    let tags = RsTags::read(xml);
+    let Some(format) = tags.value("SignalFormat").map(|f| f.trim_start_matches("eRS_SIGNAL_FORMAT_")) else {
+        return Err("the Rohde & Schwarz description has no SignalFormat".into());
+    };
+    let (code, sample, xy): (u32, usize, bool) = match format {
+        "INT8BIT" => (0, 1, false),
+        "INT16BIT" => (1, 2, false),
+        "FLOAT" => (4, 4, false),
+        "XYDOUBLEFLOAT" => (6, 4, true),
+        other => return Err(format!("Rohde & Schwarz signal format {other} is not read")),
+    };
+    if let Some(trace) = tags.value("TraceType").map(|t| t.trim_start_matches("eRS_TRACE_TYPE_")) {
+        if trace != "NORMAL" && trace != "AVERAGE" {
+            return Err(format!("a Rohde & Schwarz {} trace is not read; save a normal trace", trace.to_ascii_lowercase()));
+        }
+    }
+    if tags.value("NumberOfAcquisitions").is_some() && tags.count("NumberOfAcquisitions")? != 1 {
+        return Err("the Rohde & Schwarz file holds several acquisitions; save one acquisition".into());
+    }
+    let record = tags.count("RecordLength")?;
+    let leading = if tags.value("LeadingSettlingSamples").is_some() { tags.count("LeadingSettlingSamples")? } else { 0 };
+    let rows = if tags.value("SignalHardwareRecordLength").is_some() { tags.count("SignalHardwareRecordLength")? } else { leading + record };
+    if record > MAX_WAVEFORM_SAMPLES {
+        return Err("waveform exceeds the 32-million-sample import limit".into());
+    }
+    if record < 2 || leading.checked_add(record).is_none_or(|end| end > rows) {
+        return Err("that file holds no waveform".into());
+    }
+    let (start, stop) = (tags.number("XStart", "Value")?, tags.number("XStop", "Value")?);
+
+    // the columns of a row: one, or the channels of a multi-channel export that are on
+    let multi = tags.value("MultiChannelExport").is_some_and(|v| v.ends_with("_ON"));
+    let columns: Vec<(Option<&str>, String)> = if multi {
+        ["I_0", "I_1", "I_2", "I_3"].iter().copied()
+            .filter(|key| tags.attribute("MultiChannelExportState", key).is_some_and(|v| v.ends_with("_ON")))
+            .map(|key| (Some(key), rs_source_label(tags.attribute("MultiChannelSource", key).unwrap_or("")))).collect()
+    } else {
+        vec![(None, rs_source_label(tags.value("Source").unwrap_or("")))]
+    };
+    if columns.is_empty() {
+        return Err("the Rohde & Schwarz description switches no channel on".into());
+    }
+    let scale = |column: Option<&str>| -> Result<(f32, f32), String> {
+        if sample == 4 {
+            return Ok((1.0, 0.0)); // float samples are volts
+        }
+        let levels = tags.number("NofQuantisationLevels", "Value")?;
+        let (scale, position, offset, step) = match column {
+            Some(key) => (tags.number("MultiChannelVerticalScale", key)?, tags.number("MultiChannelVerticalPosition", key)?,
+                tags.number("MultiChannelVerticalOffset", key)?, tags.number("MultiChannelVerticalScale", "StepFactor")?),
+            None => (tags.number("VerticalScale", "Value")?, tags.number("VerticalPosition", "Value")?,
+                tags.number("VerticalOffset", "Value")?, tags.number("VerticalScale", "StepFactor")?),
+        };
+        if levels <= 0.0 {
+            return Err("the Rohde & Schwarz description has no usable NofQuantisationLevels".into());
+        }
+        Ok(((step * scale / levels) as f32, (offset - position * scale) as f32))
+    };
+    let mut scales = Vec::with_capacity(columns.len());
+    for (key, _) in &columns {
+        scales.push(scale(*key)?);
+    }
+
+    if data.len() < 8 {
+        return Err("truncated Rohde & Schwarz waveform data".into());
+    }
+    let found = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+    let held = u32::from_le_bytes([data[4], data[5], data[6], data[7]]) as usize;
+    if found != code || held != rows {
+        return Err("the Rohde & Schwarz data file does not belong to this description".into());
+    }
+    let lead = if xy { 8 } else { 0 };
+    let row = lead + columns.len() * sample;
+    let body = &data[8..];
+    if rows.checked_mul(row).is_none_or(|bytes| bytes > body.len()) {
+        return Err("truncated Rohde & Schwarz waveform data".into());
+    }
+    let window = &body[leading * row..(leading + record) * row];
+    let value = |cell: &[u8]| match sample {
+        1 => cell[0] as i8 as f32,
+        2 => i16::from_le_bytes([cell[0], cell[1]]) as f32,
+        _ => f32::from_le_bytes([cell[0], cell[1], cell[2], cell[3]]),
+    };
+    let (t0, dt) = if xy {
+        // each row carries its own time
+        let time = |r: usize| {
+            let mut at = [0u8; 8];
+            at.copy_from_slice(&window[r * row..r * row + 8]);
+            f64::from_le_bytes(at)
+        };
+        (time(0), time(1) - time(0))
+    } else {
+        (start, (stop - start) / record as f64)
+    };
+    if !(dt > 0.0) || !dt.is_finite() || !t0.is_finite() {
+        return Err("that file holds no waveform".into());
+    }
+    let mut out = Vec::with_capacity(columns.len());
+    for (k, ((_, label), (factor, offset))) in columns.into_iter().zip(scales).enumerate() {
+        let at = lead + k * sample;
+        let v: Vec<f32> = window.chunks_exact(row).map(|r| value(&r[at..at + sample]) * factor + offset).collect();
+        if v.iter().any(|x| !x.is_finite()) {
+            return Err("the Rohde & Schwarz data file holds samples that are not numbers".into());
+        }
+        out.push(WaveTrace { t0, dt, v, label });
+    }
+    Ok(out)
+}
+
+/// A waveform file read where it lies, so that a format of two files finds its other file beside it. A
+/// Rohde & Schwarz description (`name.bin`) is read with `name.Wfm.bin`; that data file opened by itself is read
+/// with its description. Every other file is `parse_wave` of its bytes.
+pub fn parse_wave_at(bytes: &[u8], path: &Path) -> Result<Vec<WaveTrace>, String> {
+    let name = file_name(path);
+    if looks_rs_description(bytes) {
+        let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let data = ["Wfm.bin", "wfm.bin", "WFM.BIN", "Wfm.BIN"].iter().map(|end| path.with_file_name(format!("{stem}.{end}"))).find(|p| p.is_file())
+            .ok_or_else(|| format!("{name} describes a Rohde & Schwarz waveform; its data file {stem}.Wfm.bin is not beside it"))?;
+        return parse_rs(&String::from_utf8_lossy(bytes), &read_waveform_file(&data)?);
+    }
+    if looks_rs_data(bytes, &name) {
+        // the name ends with the eight ASCII characters of .wfm.bin, whatever their case
+        let stem = &name[..name.len() - 8];
+        let description = path.with_file_name(format!("{stem}.bin"));
+        return match read_waveform_file(&description) {
+            Ok(xml) if looks_rs_description(&xml) => parse_rs(&String::from_utf8_lossy(&xml), bytes),
+            _ => Err(format!("{name} is the data of a Rohde & Schwarz waveform; its description {stem}.bin is not beside it")),
+        };
+    }
+    parse_wave(bytes, &name)
+}
+
+#[cfg(test)]
+mod rohde_schwarz_file_tests {
+    use super::*;
+
+    fn prop(name: &str, value: &str) -> String {
+        format!("  <Prop Name=\"{name}\" Value=\"{value}\"/>\n")
+    }
+
+    /// A description as the scope writes it: a database of named properties.
+    fn description(format: &str, record: usize, leading: usize, rows: usize, more: &str) -> String {
+        let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Database FWVersion=\"4.60.1.6\">\n <Group Name=\"WaveformData\">\n");
+        xml += &prop("SignalFormat", &format!("eRS_SIGNAL_FORMAT_{format}"));
+        xml += &prop("RecordLength", &record.to_string());
+        xml += &prop("LeadingSettlingSamples", &leading.to_string());
+        xml += &prop("SignalHardwareRecordLength", &rows.to_string());
+        xml += &prop("XStart", "-2e-3");
+        xml += &prop("XStop", "2e-3");
+        xml += &prop("NofQuantisationLevels", "128");
+        xml += more;
+        xml + " </Group>\n</Database>\n"
+    }
+
+    /// One channel: 0.5 V/div with a step factor of 8 over 128 levels is 31.25 mV a step; position 1 div and
+    /// offset 0.25 V put a raw 0 at -0.25 V.
+    fn one_channel(source: &str) -> String {
+        format!("  <Prop Name=\"VerticalScale\" Value=\"0.5\" StepFactor=\"8\"/>\n{}{}{}", prop("VerticalPosition", "1"), prop("VerticalOffset", "0.25"),
+            prop("Source", source))
+    }
+
+    fn data(code: u32, rows: usize, body: &[u8]) -> Vec<u8> {
+        let mut out = code.to_le_bytes().to_vec();
+        out.extend_from_slice(&(rows as u32).to_le_bytes());
+        out.extend_from_slice(body);
+        out
+    }
+
+    fn words(raw: &[i16]) -> Vec<u8> {
+        raw.iter().flat_map(|x| x.to_le_bytes()).collect()
+    }
+
+    #[test]
+    fn a_sixteen_bit_record_is_scaled_and_keeps_only_the_rows_of_the_record() {
+        // two settling rows before the record and two after it
+        let xml = description("INT16BIT", 4, 2, 8, &one_channel("eRS_SIGNAL_SOURCE_CH2_TR1"));
+        let traces = parse_rs(&xml, &data(1, 8, &words(&[999, 999, 32, -32, 0, 64, 999, 999]))).unwrap();
+        assert_eq!(traces.len(), 1);
+        let t = &traces[0];
+        assert_eq!((t.v.as_slice(), t.t0, t.dt, t.label.as_str()), (&[0.75f32, -1.25, -0.25, 1.75][..], -2e-3, 1e-3, "CH2"));
+    }
+
+    #[test]
+    fn an_eight_bit_record_is_scaled_the_same_way() {
+        let xml = description("INT8BIT", 3, 0, 3, &one_channel("C1W1"));
+        let t = &parse_rs(&xml, &data(0, 3, &[32, 0xE0, 0])).unwrap()[0];
+        assert_eq!((t.v.as_slice(), t.label.as_str()), (&[0.75f32, -1.25, -0.25][..], "CH1"));
+    }
+
+    #[test]
+    fn float_samples_are_volts_as_they_stand() {
+        let xml = description("FLOAT", 3, 1, 4, &prop("Source", "eRS_SIGNAL_SOURCE_CH4_TR1"));
+        let body: Vec<u8> = [9.0f32, 0.5, -0.5, 0.25].iter().flat_map(|x| x.to_le_bytes()).collect();
+        let t = &parse_rs(&xml, &data(4, 4, &body)).unwrap()[0];
+        assert_eq!((t.v.as_slice(), t.label.as_str()), (&[0.5f32, -0.5, 0.25][..], "CH4"));
+    }
+
+    #[test]
+    fn a_file_of_time_and_value_rows_takes_its_time_from_the_rows() {
+        let xml = description("XYDOUBLEFLOAT", 3, 0, 3, &prop("Source", "eRS_SIGNAL_SOURCE_CH1_TR1"));
+        let mut body = Vec::new();
+        for (time, volts) in [(0.5f64, 1.0f32), (0.75, 2.0), (1.0, 3.0)] {
+            body.extend_from_slice(&time.to_le_bytes());
+            body.extend_from_slice(&volts.to_le_bytes());
+        }
+        let t = &parse_rs(&xml, &data(6, 3, &body)).unwrap()[0];
+        assert_eq!((t.v.as_slice(), t.t0, t.dt), (&[1.0f32, 2.0, 3.0][..], 0.5, 0.25));
+    }
+
+    /// Channels 1 and 3 of a multi-channel export, channel 2 off: two columns, each with its own scaling.
+    fn two_of_three() -> String {
+        let per = |name: &str, a: &str, b: &str, c: &str, more: &str| format!("  <Prop Name=\"{name}\" I_0=\"{a}\" I_1=\"{b}\" I_2=\"{c}\"{more}/>\n");
+        description("INT16BIT", 2, 0, 2, &[
+            prop("MultiChannelExport", "eRS_ONOFF_ON"),
+            per("MultiChannelExportState", "eRS_ONOFF_ON", "eRS_ONOFF_OFF", "eRS_ONOFF_ON", ""),
+            per("MultiChannelSource", "eRS_SIGNAL_SOURCE_CH1_TR1", "eRS_SIGNAL_SOURCE_CH2_TR1", "eRS_SIGNAL_SOURCE_CH3_TR1", ""),
+            per("MultiChannelVerticalScale", "0.5", "1", "1", " StepFactor=\"8\""),
+            per("MultiChannelVerticalPosition", "0", "0", "0", ""),
+            per("MultiChannelVerticalOffset", "0", "0", "1", ""),
+        ].concat())
+    }
+
+    #[test]
+    fn the_channels_of_a_multi_channel_export_are_taken_apart_row_by_row() {
+        // rows: (CH1, CH3), (CH1, CH3)
+        let traces = parse_rs(&two_of_three(), &data(1, 2, &words(&[32, 16, -32, -16]))).unwrap();
+        let seen: Vec<(&str, &[f32])> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice())).collect();
+        assert_eq!(seen, [("CH1", &[1.0f32, -1.0][..]), ("CH3", &[2.0f32, 0.0][..])]);
+        assert!(traces.iter().all(|t| t.t0 == -2e-3 && t.dt == 2e-3));
+    }
+
+    #[test]
+    fn what_is_not_one_plain_record_is_refused_by_name() {
+        let plain = one_channel("eRS_SIGNAL_SOURCE_CH1_TR1");
+        let body = data(1, 3, &words(&[1, 2, 3]));
+        let refused = |more: &str| parse_rs(&description("INT16BIT", 3, 0, 3, &format!("{plain}{more}")), &body).unwrap_err();
+        assert!(refused(&prop("TraceType", "eRS_TRACE_TYPE_ENVELOPE")).contains("envelope trace is not read"));
+        assert!(refused(&prop("NumberOfAcquisitions", "5")).contains("several acquisitions"));
+        assert!(parse_rs(&description("INT16BIT", 3, 0, 3, ""), &body).unwrap_err().contains("no usable VerticalScale"));
+        assert!(parse_rs(&description("CUSTOM", 3, 0, 3, &plain), &body).unwrap_err().contains("CUSTOM is not read"));
+        // a data file of another format, of another length, or cut short
+        let good = description("INT16BIT", 3, 0, 3, &plain);
+        assert!(parse_rs(&good, &data(0, 3, &words(&[1, 2, 3]))).unwrap_err().contains("does not belong"));
+        assert!(parse_rs(&good, &data(1, 4, &words(&[1, 2, 3, 4]))).unwrap_err().contains("does not belong"));
+        assert!(parse_rs(&good, &data(1, 3, &words(&[1, 2]))).unwrap_err().contains("truncated"));
+        assert!(parse_rs(&good, &[1, 0, 0]).unwrap_err().contains("truncated"));
+        // more settling rows than the file has
+        assert!(parse_rs(&description("INT16BIT", 3, 2, 3, &plain), &body).unwrap_err().contains("no waveform"));
+        assert!(parse_rs(&good, &body).is_ok());
+    }
+
+    #[test]
+    fn the_first_property_of_a_name_wins_and_either_quote_is_read() {
+        let tags = RsTags::read("<a Name='X' Value='1'/><b Name=\"X\" Value=\"2\"/><c Value=\"3\"/><!-- Name=\"Y\" --><d Name = \"Z\" Value = \"a=b\">");
+        assert_eq!((tags.value("X"), tags.value("Y"), tags.value("Z"), tags.0.len()), (Some("1"), None, Some("a=b"), 2));
+    }
+
+    #[test]
+    fn a_source_is_shown_by_its_channel() {
+        let shown: Vec<String> = ["eRS_SIGNAL_SOURCE_CH3_TR2", "C2W1", "", "eRS_SIGNAL_SOURCE_NONE", "eRS_SIGNAL_SOURCE_MATH1"].iter().map(|s| rs_source_label(s)).collect();
+        assert_eq!(shown, ["CH3", "CH2", "CH1", "CH1", "MATH1"]);
+    }
+
+    #[test]
+    fn either_file_of_the_pair_opens_the_waveform_and_a_lone_one_says_what_is_missing() {
+        let dir = std::env::temp_dir().join(format!("oos-rs-pair-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let xml = description("INT16BIT", 4, 2, 8, &one_channel("eRS_SIGNAL_SOURCE_CH2_TR1"));
+        let body = data(1, 8, &words(&[999, 999, 32, -32, 0, 64, 999, 999]));
+        let (first, second) = (dir.join("capture.bin"), dir.join("capture.Wfm.bin"));
+        std::fs::write(&first, &xml).unwrap();
+
+        // the description by itself: named as one half, with the name of the other
+        let alone = parse_wave_at(xml.as_bytes(), &first).unwrap_err();
+        assert!(alone.contains("capture.Wfm.bin is not beside it"), "{alone}");
+        assert!(parse_wave(xml.as_bytes(), "capture.bin").unwrap_err().contains("open it from its folder"));
+
+        std::fs::write(&second, &body).unwrap();
+        for (bytes, path) in [(xml.as_bytes(), &first), (body.as_slice(), &second)] {
+            let traces = parse_wave_at(bytes, path).unwrap();
+            assert_eq!((traces.len(), traces[0].v.as_slice(), traces[0].label.as_str()), (1, &[0.75f32, -1.25, -0.25, 1.75][..], "CH2"));
+        }
+
+        // the data by itself
+        std::fs::remove_file(&first).unwrap();
+        let alone = parse_wave_at(&body, &second).unwrap_err();
+        assert!(alone.contains("its description capture.bin is not beside it"), "{alone}");
+
+        // every other file is read as before
+        let csv = dir.join("plain.csv");
+        std::fs::write(&csv, "t,v\n0,1\n1e-3,2\n2e-3,3\n").unwrap();
+        assert_eq!(parse_wave_at(&std::fs::read(&csv).unwrap(), &csv).unwrap()[0].v, [1.0, 2.0, 3.0]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

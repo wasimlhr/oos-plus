@@ -1,6 +1,6 @@
 # Setup keys (`:SYSTem:SET` and `:SYSTem:GET?`)
 
-`:SYSTem:SET <key> = <value>` writes a key of the setup file on the live settings; `:SYSTem:GET? <key>` reads it. It is the setup schema: an escape hatch for tests and for the few settings that have no header. Where a header exists (the "Equivalent header" column), use that; the headers are in the [group pages](README.md#command-groups). The file written by Save setup and returned by `:SYSTem:SETup?` is the same list as `key = value` lines (`#` starts a comment), and `*SAV` / `*RCL` use the same files.
+`:SYSTem:SET <key> = <value>` writes a key of the setup file on the live settings; `:SYSTem:GET? <key>` reads it. It is the setup schema: an escape hatch for tests and for the few settings that have no header. Where a header exists (the "Equivalent header" column), use that; the headers are in the [group pages](README.md#command-groups). The file written by Save setup and returned by `:SYSTem:SETup?` is the same list as `key = value` lines (`#` starts a comment), and `*SAV` / `*RCL` use the same files. `:SYSTem:SETup:SCPI?` writes the same setup as commands: for a key it uses the headers of the Equivalent header column where the table of `ui/src/scpi/setupscpi.rs` has them (a test keeps this column and that table the same), and a `:SYSTem:SET` line for the others.
 
 - Values: booleans `true`/`false`, numbers in base units, enumerations as the Rust variant name (`Dc`, `Rise`, `Auto`), lists separated by blanks.
 - A key that is not in the list is rejected with -224 after the fact. Some keys are only written when they differ from their default and are marked optional.
@@ -22,7 +22,7 @@ Commands: [channel.md](channel.md).
 | `ch<n>.bw` | on, V/div step, offset (volts), `Dc`/`Ac`/`Gnd`/`Dc50`, bandwidth limit (`Auto`, `Full`, `20 MHz`, ...), probe ratio, invert | `Auto` | `:CHANnel<n>:BWLimit` |
 | `ch<n>.probe` | on, V/div step, offset (volts), `Dc`/`Ac`/`Gnd`/`Dc50`, bandwidth limit (`Auto`, `Full`, `20 MHz`, ...), probe ratio, invert | `1` | `:CHANnel<n>:PROBe` |
 | `ch<n>.invert` | on, V/div step, offset (volts), `Dc`/`Ac`/`Gnd`/`Dc50`, bandwidth limit (`Auto`, `Full`, `20 MHz`, ...), probe ratio, invert | `false` | `:CHANnel<n>:INVert` |
-| `ch<n>.vfine` | optional: fine scale | - | `:CHANnel<n>:VERNier` |
+| `ch<n>.vfine` | optional: fine scale | - | `:CHANnel<n>:SCALe` |
 | `ch<n>.unit` | unit | - | `:CHANnel<n>:UNITs` |
 | `ch<n>.bias` | zero bias | - | `:CHANnel<n>:BIAS` |
 | `ch<n>.skew` | probe deskew | - | `:CHANnel<n>:TCALibrate` |
@@ -40,7 +40,7 @@ Commands: [timebase.md](timebase.md).
 | `tdiv` | time/div step, delay, fine switches (`tfine` optional), vertical expand about ground, horizontal expand (`Center`, `Left`, `Right`, `Trigger`), auto roll | `0.0002` | `:TIMebase:SCALe` |
 | `delay` | time/div step, delay, fine switches (`tfine` optional), vertical expand about ground, horizontal expand (`Center`, `Left`, `Right`, `Trigger`), auto roll | `0` | `:TIMebase:OFFSet` |
 | `fine_t` | time/div step, delay, fine switches (`tfine` optional), vertical expand about ground, horizontal expand (`Center`, `Left`, `Right`, `Trigger`), auto roll | `false` | `:TIMebase:VERNier` |
-| `tfine` | time/div step, delay, fine switches (`tfine` optional), vertical expand about ground, horizontal expand (`Center`, `Left`, `Right`, `Trigger`), auto roll | - | - |
+| `tfine` | time/div step, delay, fine switches (`tfine` optional), vertical expand about ground, horizontal expand (`Center`, `Left`, `Right`, `Trigger`), auto roll | - | `:TIMebase:SCALe` |
 | `h_expand` | time/div step, delay, fine switches (`tfine` optional), vertical expand about ground, horizontal expand (`Center`, `Left`, `Right`, `Trigger`), auto roll | `Center` | `:TIMebase:HREFerence:MODE` |
 | `auto_roll` | time/div step, delay, fine switches (`tfine` optional), vertical expand about ground, horizontal expand (`Center`, `Left`, `Right`, `Trigger`), auto roll | `true` | `:TIMebase:ROLL` |
 | `zoom` | zoom on/off | `false` | `:TIMebase:DELay:ENABle` |
@@ -138,9 +138,9 @@ Commands: [display.md](display.md).
 | `bar` | Display > Bottom bar: `cards` or `compact` | `cards` | - |
 | `persist` | display settings | `0` | `:DISPlay:GRADing:TIME` |
 | `intensity` | display settings | `60` | `:DISPlay:WBRightness` |
-| `grid` | display settings | `Full` | - |
+| `grid` | display settings | `Full` | `:DISPlay:GRID` |
 | `grid_bright` | display settings | `100` | `:DISPlay:GBRightness` |
-| `grid_frame` | display settings | `true` | - |
+| `grid_frame` | display settings | `true` | `:DISPlay:RULers` |
 | `skin` | display settings: Display > Skin, `OOS` or `OOS Plus` | `OOS` | - |
 | `color_grade` | display settings | `false` | `:DISPlay:COLor` |
 | `dots` | display settings | `false` | `:DISPlay:TYPE` |
@@ -197,8 +197,8 @@ Commands: [cursor.md](cursor.md).
 | `cur_c` | cursor mode, positions (fractions of the screen), second cursor source (optional) | `0.3` | - |
 | `cur_d` | cursor mode, positions (fractions of the screen), second cursor source (optional) | `0.7` | - |
 | `cur_b_source` | cursor mode, positions (fractions of the screen), second cursor source (optional) | - | - |
-| `dvm` | `<on> <source> <mode>` | `false 0 0` | `:DVM:ENABle ...` |
-| `counter` | `<on> <source> <mode> <digits>` | `false 0 0 5` | `:COUNter:ENABle ...` |
+| `dvm` | `<on> <source> <mode>` | `false 0 0` | `:DVM:ENABle`, `:DVM:SOURce`, `:DVM:MODE` |
+| `counter` | `<on> <source> <mode> <digits>` | `false 0 0 5` | `:COUNter:ENABle`, `:COUNter:SOURce`, `:COUNter:MODE`, `:COUNter:NDIGits` |
 
 ## Data logger
 
@@ -242,9 +242,9 @@ Commands: [spectrum.md](spectrum.md).
 | Key | Value | Default | Equivalent header |
 | --- | --- | --- | --- |
 | `spec_margin` | spectrum limit margin, dB | `10` | `:SPECtrum:LIMit:MARGin` |
-| `spec` | source token, centre Hz, span Hz (0 = full), RBW Hz, window name, trace mode index, ref level dBV, waterfall 0/1, THD/SNR 0/1 (the last two as `true`/`false`) | `1 0 0 0 Blackman 0 10 false false` | `:SPECtrum:SOURce ...` |
+| `spec` | source token, centre Hz, span Hz (0 = full), RBW Hz, window name, trace mode index, ref level dBV, waterfall 0/1, THD/SNR 0/1 (the last two as `true`/`false`) | `1 0 0 0 Blackman 0 10 false false` | `:SPECtrum:SOURce`, `:SPECtrum:CENTer`, `:SPECtrum:SPAN`, `:SPECtrum:RBW`, `:SPECtrum:WINDow`, `:SPECtrum:TRACe`, `:SPECtrum:RLEVel`, `:SPECtrum:WATerfall`, `:SPECtrum:DISTortion` |
 | `spec_peaks` | peak sort index, harmonics index | `0 2` | `:SPECtrum:PEAK:HARMonics` |
-| `spec_acpr` | channel width Hz, channel spacing Hz | `1000000 2000000` | `:SPECtrum:ACPR:WIDTh ...` |
+| `spec_acpr` | channel width Hz, channel spacing Hz | `1000000 2000000` | `:SPECtrum:ACPR:WIDTh`, `:SPECtrum:ACPR:SPACing` |
 
 ## Decoders and bus
 
@@ -313,11 +313,11 @@ Commands: [power.md](power.md).
 
 | Key | Value | Default | Equivalent header |
 | --- | --- | --- | --- |
-| `power` | voltage source index, current source index, page name | `1 2 Quality` | `:POWer:VOLTage:SOURce ...` |
-| `power_more` | line f Hz, switch f Hz, input source or `-`, reference volts or `-`, clock source or `-` | `0 0 - - -` | `:POWer:FLINe ...` |
+| `power` | voltage source index, current source index, page name | `1 2 Quality` | `:POWer:VOLTage:SOURce`, `:POWer:CURRent:SOURce`, `:POWer:PAGE` |
+| `power_more` | line f Hz, switch f Hz, input source or `-`, reference volts or `-`, clock source or `-` | `0 0 - - -` | `:POWer:FLINe`, `:POWer:FSWitch`, `:POWer:VIN:SOURce`, `:POWer:REFerence`, `:POWer:CLOCk:SOURce` |
 | `magnetic` | voltage source, current source, turns, Ae, Le, Rcu, plot (`IPsi`/`BH`), loop cursor | `1 2 1 0 0 0 IPsi 0` | `:MAGnetic:VOLTage:SOURce ...` |
 | `inverter` | page (`Dq0`/`Mech`), phase A, B, C source, angle source name, poles, analog source, volts-mode 0/1, torque source or `off`, bus voltage source or `off`, bus current source or `off`, analog scale, degrees per volt, offset, electrical 0/1, encoder line A, encoder line B, index line or `off`, counts per revolution, swap 0/1, Hall line A, B, C | `Dq0 1 2 3 Off 1 4 true off off off 1 1 0 false 0 1 off 1024 false 0 1 2` | `:INVerter:PAGE ...` |
-| `dpt` | Vds, Id, Vgs source tokens, fourth channel mode (`Off`/`Gate`/`DiodeV`/`DiodeI`), fourth source, gate percent, zoom (`Both`/`TurnOn`/`TurnOff`) | `1 2 3 Off 4 10 Both` | `:DPT:VDS:SOURce ...` |
+| `dpt` | Vds, Id, Vgs source tokens, fourth channel mode (`Off`/`Gate`/`DiodeV`/`DiodeI`), fourth source, gate percent, zoom (`Both`/`TurnOn`/`TurnOff`) | `1 2 3 Off 4 10 Both` | `:DPT:VDS:SOURce`, `:DPT:ID:SOURce`, `:DPT:VGS:SOURce`, `:DPT:FOURth`, `:DPT:FOURth:SOURce`, `:DPT:GATE`, `:DPT:ZOOM` |
 
 ## Bode
 

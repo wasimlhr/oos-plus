@@ -1053,6 +1053,8 @@ enum Item {
     StoreSlot,
     StoreDest,
     StoreSaveSetup,
+    /// the set-up as SCPI commands, into a file (scpi/setupscpi.rs)
+    StoreSaveScpi,
     StoreRecall,
     StoreCsv,
     StorePng,
@@ -1743,6 +1745,9 @@ pub struct Ui {
     /// why (hwmask.rs); the software test and filter take over
     unit_blocked: Option<String>,
     pub shot_request: Option<String>,
+    /// Storage > Save setup as SCPI was pressed. The interpreter writes the file at its next poll, since the lines
+    /// are the answers of its own queries (`Scpi::poll`, scpi/setupscpi.rs).
+    pub setup_scpi_request: bool,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
@@ -2070,6 +2075,7 @@ impl Ui {
             mask_hw_clear: 0,
             unit_blocked: None,
             shot_request: None,
+            setup_scpi_request: false,
             quit: false,
         };
         ui.ensure_meas_own();
@@ -2146,10 +2152,12 @@ impl Ui {
         if !self.m.compact() {
             return f;
         }
-        // the compact bottom bar: the body takes what the cards would have had
-        let grow = f.bottom.h - BOTTOM_H;
+        // the compact bottom bar: the body takes what the cards would have had. Studio's bar is higher: its pills are
+        // taller than a measurement badge
+        let bar = if self.m.layout == Layout::Studio { studio::BOTTOM_H } else { BOTTOM_H };
+        let grow = f.bottom.h - bar;
         f.body.h += grow;
-        f.bottom = Rect::new(f.bottom.x, f.bottom.y + grow, f.bottom.w, BOTTOM_H);
+        f.bottom = Rect::new(f.bottom.x, f.bottom.y + grow, f.bottom.w, bar);
         f.menu_btn = Rect::new(f.bottom.x + 4, f.bottom.y + 3, 46, 30);
         let x = f.menu_btn.right() + 6;
         f.cards = Rect::new(x, f.bottom.y + 3, (f.bottom.right() - METRICS.edge - x).max(0), 30);
@@ -4659,7 +4667,11 @@ impl Ui {
             r.as_ref().map(|r| crate::store::SessionRef { slot, src: r.src, t0: r.t0, dt: r.dt, v: r.v.to_vec() })
         }).collect();
         let memory = self.session_memory();
-        let bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), memory.as_deref(), &self.m, &refs);
+        let mut bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), memory.as_deref(), &self.m, &refs);
+        // saved in the offline view, a loaded capture fills the screen: the session comes back that way
+        if self.offline && !self.session_is_sim && self.sim_refs.is_empty() && self.refs.get(self.offline_ref).is_some_and(Option::is_some) {
+            bytes.extend_from_slice(&crate::store::session_view(self.offline_ref));
+        }
         let r = crate::store::write(&p, &bytes);
         let out = r.as_ref().map(|_| p.clone()).map_err(|e| e.to_string());
         self.toast_saved(&p, r);
@@ -4676,6 +4688,7 @@ impl Ui {
             let session = crate::store::parse_session(&data, NREF)?;
             // checked before anything is changed: a file with a setup this build cannot read leaves the bench as it is
             crate::store::parse_setup(&session.setup)?;
+            let offline_ref = session.offline_ref;
             if self.record_mode() {
                 self.leave_session();
             }
@@ -4699,6 +4712,9 @@ impl Ui {
             (self.stop_raw, self.stop_pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
+            if let Some(slot) = offline_ref {
+                self.restore_offline_view(slot);
+            }
             self.measure_last();
             self.measure_refs();
             Ok(p)
@@ -7085,7 +7101,7 @@ impl Ui {
                 }
                 v
             }
-            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng],
+            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi],
             MenuId::Spectrum => vec![Item::SpecOn, Item::SpecSrc, Item::SpecCenter, Item::SpecSpan, Item::SpecHarm, Item::SpecRbw, Item::SpecWin, Item::SpecTrace, Item::SpecRef, Item::SpecWf, Item::SpecDist, Item::SpecAcprW, Item::SpecAcprS, Item::SpecPeak, Item::SpecMargin, Item::SpecLimitSet, Item::SpecLimitClear],
             MenuId::Eye => vec![Item::EyeAct, Item::EyeOn, Item::EyePlace, Item::EyeSrc, Item::EyeRate, Item::EyeBer, Item::EyeB, Item::EyeHp, Item::EyePnLo, Item::EyePnHi, Item::EyeNpj, Item::EyeRail, Item::EyeNotch, Item::EyePll, Item::EyeClear],
             MenuId::Power => {
@@ -7974,7 +7990,7 @@ impl Ui {
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
             Item::RefSave | Item::RefSaveNext | Item::RefClear => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
-            Item::StoreSaveSetup | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
+            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
@@ -8017,6 +8033,7 @@ impl Ui {
             Item::StoreSlot => "Setup slot",
             Item::StoreDest => "Save to",
             Item::StoreSaveSetup => "Save setup",
+            Item::StoreSaveScpi => "Save setup as SCPI",
             Item::StoreRecall => "Recall setup",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
@@ -9380,6 +9397,7 @@ impl Ui {
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
                 }
+                Item::StoreSaveScpi => self.setup_scpi_request = true,
                 Item::StoreRecall => self.recall_setup(),
                 Item::StoreCsv => self.store_wave(true, None),
                 Item::StorePng => {
@@ -9657,6 +9675,26 @@ impl Ui {
             }
             Err(e) => Err(e),
         }
+    }
+
+    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request into a new file where
+    /// Storage saves (the name is taken now, when it is written). `without`: what no line could carry, in words.
+    pub(crate) fn setup_scpi_save(&mut self, text: &str, without: Option<&str>) {
+        let path = self.new_file(&self.save_dir(), "setup", "scpi");
+        let r = crate::store::write(&path, text.as_bytes());
+        match (r.is_ok(), without) {
+            (true, Some(keys)) => {
+                self.flush_stick();
+                self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(&path), self.saved_where(), keys));
+            }
+            _ => self.toast_saved(&path, r),
+        }
+    }
+
+    /// The text of the message on the screen, for the tests of other modules.
+    #[cfg(test)]
+    pub(crate) fn toast_text(&self) -> String {
+        self.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default()
     }
 
     /// File of the current setup slot: a setup is small and has to survive a power cycle, so the default storage directory

@@ -357,6 +357,11 @@ impl Ui {
             // menu has one level down
             MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow].into_iter()
                 .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
+            // Display: the skin and the choice of the bottom bar are rows of the Default layout's menu. A sheet is up
+            // only in Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
+            MenuId::Display => {
+                self.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::Skin | Item::BottomBar)).collect()
+            }
             m => self.items(m),
         }
     }
@@ -623,6 +628,9 @@ impl Ui {
             Item::SimSscHz => "Frequency".into(),
             Item::RefImport => format!("Load file into R{}…", self.ref_sel + 1),
             Item::RefShow(_) => "Shown".into(),
+            // the rows below are those of one decoder of four: the switch says whose it is
+            Item::DecSel => "Decoders".into(),
+            Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),
             Item::RefSaveNext => self.ref_store_next_label(),
             Item::RowF(measrow::RF::Used | measrow::RF::StMean | measrow::RF::StRange | measrow::RF::StN) => self.measrow_text(it).unwrap_or_default(),
             _ => self.item_label(it).to_string(),
@@ -801,6 +809,11 @@ impl Ui {
                     if sel == Some(k) {
                         cv.round(r, 5, ACCENT, 255);
                         cv.text_in(&f.sb, r, 1, o, DARK_TEXT);
+                    } else if it == Item::DecSel && self.m.dec_is_on(k) {
+                        // four decoders run side by side: one that is on shows it while another is edited, marked
+                        // like a pair that is measured
+                        btn(cv, r, mix(BTN, ACCENT, 50), ACCENT);
+                        cv.text_in(&f.sb, r, 1, o, TEXT);
                     } else {
                         btn(cv, r, BTN, BTN_BORDER);
                         cv.text_in(&f.s, r, 1, o, TEXT);

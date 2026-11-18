@@ -61,6 +61,7 @@ use crate::model::*;
 use crate::ui::Ui;
 
 mod ser;
+mod setupscpi;
 use std::io::{ErrorKind, Write};
 #[cfg(test)]
 use std::io::Read;
@@ -889,7 +890,12 @@ pub(crate) fn e(v: f64) -> String {
 #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Scpi {
     pub fn open(port: u16) -> Scpi {
-        Scpi { l: Self::bind(port), clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0 }
+        Scpi { l: Self::bind(port), ..Self::detached() }
+    }
+
+    /// An interpreter no client reaches: the second scope the set-up as commands is proven on (scpi/setupscpi.rs).
+    pub(crate) fn detached() -> Scpi {
+        Scpi { l: None, clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0 }
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
@@ -947,6 +953,11 @@ impl Scpi {
     }
 
     pub fn poll(&mut self, ui: &mut Ui, cv: &Canvas) {
+        // Storage > Save setup as SCPI: the row asks, this interpreter has the queries the lines are made of
+        if std::mem::take(&mut ui.setup_scpi_request) {
+            let (text, rest) = self.setup_scpi_proven(ui, cv);
+            ui.setup_scpi_save(&text, setupscpi::named(&rest).as_deref());
+        }
         if let Some(l) = &self.l {
             while let Ok((s, peer)) = l.accept() {
                 if !self.acl.permits_peer(Ok(peer)) {
@@ -1234,6 +1245,13 @@ impl Scpi {
             _ => {}
         }
         let nodes: Vec<&str> = head.trim_start_matches(':').split(':').collect();
+        // the set-up as commands (scpi/setupscpi.rs): it asks this interpreter for the value of every line. SETup is
+        // spelled out, as for :SYSTem:SETup: the short form SET is the key = value command
+        if nodes.len() == 3 && kw(nodes[0], "SYSTem") && nodes[1].eq_ignore_ascii_case("SETup") && kw(nodes[2], "SCPI") {
+            if query { return Some(block(self.setup_scpi(ui, cv).as_bytes())); }
+            self.push_err(format!("-113,\"Undefined header\" {}", cmd));
+            return None;
+        }
         // the coverage extensions (ui/scpiext*.rs): same model and menu code paths as the screen
         if let Some(r) = ui.scpi_ext_command(&nodes, query, arg) {
             return match r {

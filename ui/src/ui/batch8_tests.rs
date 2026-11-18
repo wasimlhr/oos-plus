@@ -478,11 +478,19 @@ fn search_copies_to_and_from_the_trigger_and_has_its_settings_page() {
 fn the_search_badge_does_not_push_the_measurement_badges_out_of_the_row() {
     let mut u = studio();
     u.m.run = RunState::Stop;
-    let n = u.studio_badges().len();
+    let before = u.studio_badges();
     u.studio_search_add(Some(WaveId::Ch(0)));
-    let (_, _, next, _) = u.studio_search_chip().unwrap();
-    for (_, r) in u.studio_badges() { assert!(r.x >= next.right(), "badges start after the search badge"); }
-    assert!(u.studio_badges().len() <= n);
+    for _ in 0..2 { u.step(0.05); }
+    // the search controls are in the top bar: the badges are where they were, every one of them
+    let (prev, label, next, _) = u.studio_search_chip().unwrap();
+    let top = u.frame().top;
+    for r in [prev, label, next] { assert!(r.y >= top.y && r.bottom() <= top.bottom() && r.h >= 40, "{r:?} in the top bar {top:?}"); }
+    assert!(prev.w >= 44 && next.w >= 44 && prev.right() <= label.x && label.right() <= next.x);
+    assert_eq!(u.studio_badges(), before, "the badge row is as it was");
+    // between the read-out and the buttons at the right, over none of them
+    let t = u.studio_top();
+    assert!(t.acq.right() <= prev.x && next.right() <= t.add.x && (t.vbox.w == 0 || next.right() <= t.vbox.x), "{:?} {:?}", t.acq, t.add);
+    assert!(t.acq.w >= 120, "the read-out keeps its room: {}", t.acq.w);
 }
 
 // ------------------------------------------------------------------------------------------------ item 5

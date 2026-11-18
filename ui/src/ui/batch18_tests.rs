@@ -136,9 +136,16 @@ fn pinned_badges_that_do_not_fit_leave_a_plus_n_chip_that_opens_the_list() {
     u.ensure_meas_own();
     for k in u.studio_keys() { u.studio_set_pin(k, true); }
     for _ in 0..4 { frame(&mut u); }
+    // nine have a place: the row takes a second line before anything goes behind +N
+    assert!(u.studio_badges_more().is_none() && u.studio_badges().len() == 9, "{} badges", u.studio_badges().len());
+    // more than two lines hold
+    u.m.meas = oos_dsp::measure::ALL.into_iter().take(30).map(|k| (k, WaveId::Ch(0))).collect();
+    u.ensure_meas_own();
+    for k in u.studio_keys() { u.studio_set_pin(k, true); }
+    for _ in 0..4 { frame(&mut u); }
     let (chip, n) = u.studio_badges_more().expect("a +N chip");
     assert!(n >= 1 && Ui::hit40(chip).w >= 40);
-    assert_eq!(u.studio_badges().len() + n, 9);
+    assert_eq!(u.studio_badges().len() + n, 30);
     shot(&mut u, "badge-overflow");
     tap(&mut u, chip);
     assert!(matches!(u.studio.view, StudioView::Docked | StudioView::Floating), "the list is open");
