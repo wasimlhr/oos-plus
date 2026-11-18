@@ -1061,6 +1061,8 @@ enum Item {
     /// a setup as a file with a name of its own, beside the slots (ui/files.rs, ADR 0029)
     StoreSetupSave,
     StoreSetupLoad,
+    /// the list of files a Storage row loads from: its options are the files of the folder
+    StoreFile,
     StoreCsv,
     StorePng,
     StoreFfSave,
@@ -1635,6 +1637,12 @@ pub struct Ui {
     ref_files: Vec<std::path::PathBuf>,
     /// Storage, a file by its name (ui/files.rs): the question for the dialog of the desktop build
     file_request: Option<FileAsk>,
+    /// the files the list of a Storage row is showing, what they are, and the first one in its window
+    file_list: Vec<std::path::PathBuf>,
+    file_kind: FileKind,
+    file_top: usize,
+    /// the file the keyboard said is there already: OK once more replaces it
+    file_replace: Option<std::path::PathBuf>,
     xy: bool,
     /// the XY plot's X and Y channels (the Add panel sets them; the default is CH1 against CH2)
     xy_src: [usize; 2],
@@ -2010,6 +2018,10 @@ impl Ui {
             ref_src: 0,
             ref_files: Vec::new(),
             file_request: None,
+            file_list: Vec::new(),
+            file_kind: FileKind::Session,
+            file_top: 0,
+            file_replace: None,
             xy: false,
             xy_src: [0, 1],
             hist_ch: None,
@@ -7990,6 +8002,7 @@ impl Ui {
             MenuId::Pick => match self.pick {
                 Some(p) if Self::hex_item(p.it) => format!("{} \u{b7} 0x{}_", self.item_label(p.it), self.keypad),
                 Some(p) if p.it == Item::AfgFreqEntry => format!("Frequency \u{b7} {}_ (max {})", self.keypad, si_short(self.m.gen_max_hz(), "Hz")),
+                Some(p) if p.it == Item::StoreFile => self.file_list_title(),
                 Some(p) if p.it == Item::RefImport && self.sheets_on() => format!("Load file into R{}", self.ref_sel + 1),
                 Some(p) => format!("{} \u{b7} {}", self.menu_title(p.menu), self.item_label(p.it)),
                 None => String::new(),
@@ -8010,7 +8023,7 @@ impl Ui {
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
             Item::RefSave | Item::RefSaveNext | Item::RefClear => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
-            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreSetupSave | Item::StoreSetupLoad | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
+            Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreSetupSave | Item::StoreSetupLoad | Item::StoreFile | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
@@ -8057,6 +8070,7 @@ impl Ui {
             Item::StoreRecall => "Recall setup",
             Item::StoreSetupSave => "Save setup to file",
             Item::StoreSetupLoad => "Load setup from file",
+            Item::StoreFile => "Load file",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
             Item::StoreFfSave => "Save fast-frame",
@@ -9241,6 +9255,7 @@ impl Ui {
                     self.close_picker();
                     self.ssh_remove_pick(k);
                 }
+                Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::StoreFile) => self.file_pick(k),
                 Item::PickOpt(k) if self.pick.map_or(false, |p| p.it == Item::RefImport) => {
                     let p = self.ref_files.get(k).cloned();
                     self.close_picker();
@@ -9938,6 +9953,7 @@ impl Ui {
             Item::WlanNet => return self.wlan_net_options(),
             Item::WlanForgetNet => return self.wlan_forget_options(),
             Item::RefImport => return self.ref_files.iter().map(|p| crate::store::file_name(p)).collect(),
+            Item::StoreFile => return self.file_list.iter().map(|p| crate::store::file_name(p)).collect(),
             Item::QuickAct => return QUICKS.iter().map(|q| q.name().to_string()).collect(),
             // Studio: the ten slots are one list (ui/sheet.rs)
             Item::RefSel if self.sheets_on() => return (1..=NREF).map(|i| format!("R{i}")).collect(),
@@ -10103,6 +10119,7 @@ impl Ui {
             return None;
         }
         if self.menu == MenuId::MeasAdd { return Some(self.catalog_dialog()); }
+        if self.file_list_open() { return Some(self.file_list_dialog()); }
         if matches!(self.menu, MenuId::MeasSelected | MenuId::MeasLegacy) { return Some(self.measurement_chooser_layout()); }
         if self.menu == MenuId::Main {
             return Some(self.main_layout());
@@ -10250,8 +10267,11 @@ impl Ui {
         for (r, name) in &d.heads {
             cv.text_fit(&f.sb, Rect::new(r.x, r.y, r.w - 6, r.h), 0, name, DIM);
         }
+        // a list that scrolls shows a window of its rows: the choice counts from the first one
+        let first = self.file_first();
+        if let Some((bar, _)) = self.files_bar() { bar.draw(cv); }
         for (i, row) in d.rows.iter().enumerate() {
-            let focus = i == self.focus;
+            let focus = i + first == self.focus;
             let kind = Self::kind(row.it);
             if row.label.w > 0 && kind != Kind::Action {
                 cv.text_fit(&f.s, row.label, 0, self.item_label(row.it), if focus { ACCENT } else { LABEL });
@@ -10386,7 +10406,7 @@ impl Ui {
             if !row.ctrl.contains(x, y) && !on_label {
                 continue;
             }
-            self.focus = i;
+            self.focus = i + self.file_first();
             if on_label {
                 self.open_picker(row.it);
                 break;
@@ -10867,6 +10887,7 @@ impl Ui {
                 } else if base == 0xb0 {
                     // multi 1 selects the item
                     self.focus = (self.focus as i32 + dir).rem_euclid(items.len() as i32) as usize;
+                    self.file_follow_focus();
                 } else {
                     // multi 2 changes the value
                     if Self::kind(it) != Kind::Action {
@@ -14037,13 +14058,17 @@ mod tests {
             ui.step(0.033);
         }
         assert!(ui.history.len() >= 3);
+        // the row asks for the name, with the next free one in the keyboard (ui/files.rs)
         ui.activate(Item::StoreFfSave);
+        ui.osk_ok();
         let p = dir.join("frame-001.bin");
         assert!(p.is_file());
         let n = ui.history.len();
         ui.history.clear();
         ui.last[0] = None;
+        // and the load lists the files: the one there is
         ui.activate(Item::StoreFfLoad);
+        ui.activate(Item::PickOpt(0));
         assert_eq!(ui.history.len(), n);
         assert!(ui.hist_pos.is_some());
         assert_eq!(ui.m.run, RunState::Stop);
@@ -14063,7 +14088,9 @@ mod tests {
         ui.step(0.033);
         let saved = ui.m.clone();
         ui.activate(Item::StoreSaveSetup);
+        assert!(ui.wlan.osk.is_none(), "a slot is saved without a question");
         ui.activate(Item::StoreCsv);
+        ui.osk_ok();
         let csv = std::fs::read_to_string(dir.join("sub/wave-001.csv")).unwrap();
         assert!(csv.starts_with("Time (s),CH1 (V),CH3 (V)\n"));
         assert_eq!(csv.lines().count(), 1 + ui.last[0].as_ref().unwrap().ch[0].len());

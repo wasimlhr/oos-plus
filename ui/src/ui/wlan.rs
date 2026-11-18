@@ -435,6 +435,8 @@ pub(super) enum OskFor {
     /// System > Network > Remote services > Name and Allowed (remote.rs)
     NetName,
     NetAllow,
+    /// the name of the file a Storage row saves (files.rs)
+    File(super::FileKind),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -469,6 +471,9 @@ pub(super) struct Osk {
     focus: usize,
     /// insertion point, in characters from the start (clamped where it is used: tests set `text` directly)
     cursor: usize,
+    /// the text is a proposal (a file name): the first character typed takes its place, Delete removes it whole;
+    /// moving the insertion point keeps it, to be changed
+    proposed: bool,
 }
 
 /// Longest channel name: it has to fit a narrow card.
@@ -555,9 +560,16 @@ impl Osk {
         o
     }
 
+    /// The keyboard for `what` with a text it proposes: typing replaces it, the arrows and a tap into it keep it.
+    pub(super) fn proposing(what: OskFor, text: &str) -> Osk {
+        let mut o = Osk::with_text(what, text);
+        o.proposed = !o.text.is_empty();
+        o
+    }
+
     pub(super) fn new(what: OskFor) -> Osk {
         let show = !matches!(what, OskFor::Pass(_));
-        Osk { what, text: String::new(), layer: Layer::Lower, show, focus: 0, cursor: 0 }
+        Osk { what, text: String::new(), layer: Layer::Lower, show, focus: 0, cursor: 0, proposed: false }
     }
 
     fn max_len(&self) -> usize {
@@ -572,6 +584,7 @@ impl Osk {
             OskFor::DateTime => 19,
             OskFor::NetName => crate::mdns::NAME_MAX,
             OskFor::NetAllow => crate::netacl::ALLOW_MAX,
+            OskFor::File(_) => super::files::NAME_MAX,
         }
     }
 
@@ -651,6 +664,10 @@ impl Ui {
         let Some(o) = self.wlan.osk.as_mut() else { return };
         match k {
             Key::Ch(c) => {
+                if std::mem::take(&mut o.proposed) {
+                    o.text.clear();
+                    o.cursor = 0;
+                }
                 if o.text.chars().count() < o.max_len() {
                     let (i, b) = (o.cur(), o.byte_at(o.cur()));
                     o.text.insert(b, c);
@@ -662,6 +679,10 @@ impl Ui {
             }
             Key::Shift => o.layer = if o.layer == Layer::Lower { Layer::Upper } else { Layer::Lower },
             Key::Symbols => o.layer = if o.layer == Layer::Symbols { Layer::Lower } else { Layer::Symbols },
+            Key::Del if std::mem::take(&mut o.proposed) => {
+                o.text.clear();
+                o.cursor = 0;
+            }
             Key::Del => {
                 let i = o.cur();
                 if i > 0 {
@@ -670,8 +691,8 @@ impl Ui {
                     o.cursor = i - 1;
                 }
             }
-            Key::Left => o.cursor = o.cur().saturating_sub(1),
-            Key::Right => o.cursor = (o.cur() + 1).min(o.text.chars().count()),
+            Key::Left => (o.cursor, o.proposed) = (o.cur().saturating_sub(1), false),
+            Key::Right => (o.cursor, o.proposed) = ((o.cur() + 1).min(o.text.chars().count()), false),
             Key::Show => o.show = !o.show,
             Key::Cancel => self.wlan.osk = None,
             Key::Ok => self.osk_done(),
@@ -700,6 +721,13 @@ impl Ui {
             OskFor::NetAllow => {
                 let t = o.text.clone();
                 if self.allow_osk_done(&t) {
+                    self.wlan.osk = None;
+                }
+            }
+            OskFor::File(kind) => {
+                // a name that is no file name, or is taken, stays on the keyboard to be corrected
+                let t = o.text.clone();
+                if self.file_name_done(kind, &t) {
                     self.wlan.osk = None;
                 }
             }
@@ -760,13 +788,26 @@ impl Ui {
     }
 
     #[cfg(test)]
+    pub(super) fn osk_right(&mut self) {
+        self.osk_press(Key::Right);
+    }
+
+    #[cfg(test)]
     pub(super) fn osk_type(&mut self, c: char) {
         self.osk_press(Key::Ch(c));
     }
 
-    #[cfg(test)]
+    /// OK of the keyboard (the tests, and `ok` of a script).
     pub(super) fn osk_ok(&mut self) {
         self.osk_press(Key::Ok);
+    }
+
+    /// Puts `text` into the open keyboard, as if typed (`type` of a script); false without a keyboard.
+    pub(super) fn osk_set(&mut self, text: &str) -> bool {
+        let Some(o) = self.wlan.osk.as_mut() else { return false };
+        o.text = text.chars().take(o.max_len()).collect();
+        (o.cursor, o.proposed) = (o.text.chars().count(), false);
+        true
     }
 
     /// Where the keyboard block stands on the screen.
@@ -795,7 +836,7 @@ impl Ui {
                 at = a + i + 1;
             }
             if let Some(o) = self.wlan.osk.as_mut() {
-                o.cursor = at;
+                (o.cursor, o.proposed) = (at, false);
             }
             return;
         }
@@ -841,6 +882,7 @@ impl Ui {
             OskFor::DateTime => "Local date and time: 2026-11-11 14:30".to_string(),
             OskFor::NetName => "Name on the network: letters, digits and - (name.local, host name)".to_string(),
             OskFor::NetAllow => "Allowed prefixes: 192.168.1.0/24 fd00::/8 onlink6 (empty: no list)".to_string(),
+            OskFor::File(kind) => self.file_name_title(*kind),
             OskFor::Pass(s) if self.wlan.nets.iter().any(|n| n.ssid == *s) => format!("Password for {}", wlan::name(s)),
             OskFor::Pass(s) => format!("Password for {} (empty: open network)", wlan::name(s)),
         };
@@ -851,6 +893,11 @@ impl Ui {
         let s: Vec<char> = o.shown().chars().collect();
         let t: String = s[a..b].iter().collect();
         let tr = r.inset(FIELD_PAD);
+        if o.proposed {
+            // a proposal stands marked, as a text that the next character replaces
+            let hh = f.lb.size * 70 / 100;
+            cv.round(Rect::new(tr.x - 4, tr.y + tr.h / 2 - hh, f.lb.width(&t) + 8, 2 * hh), 4, BTN_BORDER, 255);
+        }
         cv.text_in(&f.lb, tr, 0, &t, TEXT);
         // the insertion point: a bar between two characters
         let cx = tr.x + f.lb.width(&s[a..o.cur().clamp(a, b)].iter().collect::<String>());
@@ -908,7 +955,7 @@ mod tests {
 
     #[test]
     fn every_password_character_has_a_key() {
-        let o = |l| Osk { what: OskFor::Name, text: String::new(), layer: l, show: true, focus: 0, cursor: 0 };
+        let o = |l| Osk { what: OskFor::Name, text: String::new(), layer: l, show: true, focus: 0, cursor: 0, proposed: false };
         let mut seen = std::collections::BTreeSet::new();
         for l in [Layer::Lower, Layer::Upper, Layer::Symbols] {
             for (r, k) in o(l).keys() {

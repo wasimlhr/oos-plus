@@ -1,13 +1,21 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! Storage: a file by its name. A row that saves asks for the name of its file, a row that loads asks which file. The
-//! desktop build asks with the dialogs of its system (`desktop/picker.rs`): the question is left in `file_request`
-//! and the window loop answers it. The scope has no such dialog and takes the next free name and the newest file. A
-//! path given by SCPI, a command without one and the Quick key never ask.
+//! Storage: a file by its name (ADR 0029). A row that saves asks for the name of its file, a row that loads asks which
+//! file. On the scope the name comes from the on-screen keyboard, with the next free name already in it, and the file
+//! is picked from a list of the folder that scrolls (ADR 0006). The desktop build asks with the dialogs of its system
+//! (`desktop/picker.rs`): the question is left in `file_request` and the window loop answers it. A path given by SCPI,
+//! a command without one and the Quick key never ask.
 
 use super::*;
 use std::path::{Path, PathBuf};
+
+/// Longest name the keyboard takes (without the suffix).
+pub(super) const NAME_MAX: usize = 48;
+/// Longest list of a folder: the newest files.
+const LIST_MAX: usize = 500;
+/// Height of a row of the list with the gap under it.
+pub(super) const LIST_PITCH: i32 = DLG_ROW + 2;
 
 /// What a Storage row saves or loads.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -44,6 +52,28 @@ impl FileKind {
             FileKind::Shot => "png",
         }
     }
+
+    /// The word for it in a title or a message.
+    pub fn what(self) -> &'static str {
+        match self {
+            FileKind::Setup => "setup",
+            FileKind::SetupScpi => "SCPI setup",
+            FileKind::Session => "session",
+            FileKind::WaveCsv | FileKind::WaveBin => "waveform",
+            FileKind::Shot => "screenshot",
+            FileKind::FastFrame => "fast-frame",
+        }
+    }
+
+    /// How a file of this kind starts, where the suffix does not say it: a mask is a `.txt` too, a waveform a `.bin`.
+    fn magic(self) -> &'static [u8] {
+        match self {
+            FileKind::Setup => b"# OOS setup",
+            FileKind::Session => b"OOSS",
+            FileKind::FastFrame => b"OOSF",
+            _ => b"",
+        }
+    }
 }
 
 /// A question for the file dialog of the desktop build: save under which name, or open which file.
@@ -55,6 +85,35 @@ pub struct FileAsk {
     pub dir: PathBuf,
     /// the name it proposes for a save
     pub name: String,
+}
+
+/// The file name of what was typed: the suffix is added unless it was typed too. A name is one file of the folder, so
+/// nothing that names another place, and nothing a FAT stick refuses.
+pub(super) fn typed_name(text: &str, ext: &str) -> Result<String, String> {
+    let t = text.trim();
+    let cut = t.len().saturating_sub(ext.len() + 1);
+    let stem = if t.is_char_boundary(cut) && t[cut..].eq_ignore_ascii_case(&format!(".{ext}")) { t[..cut].trim_end() } else { t };
+    if stem.is_empty() {
+        return Err("Enter a name for the file".into());
+    }
+    if stem.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) || stem.chars().any(char::is_control) {
+        return Err("A file name has none of / \\ : * ? \" < > |".into());
+    }
+    if stem.starts_with('.') || stem.ends_with('.') {
+        return Err("A file name does not start or end with a dot".into());
+    }
+    Ok(format!("{stem}.{ext}"))
+}
+
+/// Does the file start with `magic`? An empty one is not asked for.
+fn starts_with(path: &Path, magic: &[u8]) -> bool {
+    use std::io::Read;
+    if magic.is_empty() {
+        return true;
+    }
+    let mut head = [0u8; 16];
+    let n = magic.len().min(head.len());
+    std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut head[..n])).is_ok() && head[..n] == magic[..n]
 }
 
 impl Ui {
@@ -74,8 +133,8 @@ impl Ui {
         self.setup_path().parent().map(Path::to_path_buf).unwrap_or(save)
     }
 
-    /// The next free name of `kind` in its folder: what a save without a name takes, and what the dialog proposes. A
-    /// session and a fast-frame file keep their running number, which the load without a name finds.
+    /// The next free name of `kind` in its folder: what a save without a name takes, and what the keyboard and the
+    /// dialog propose. A session and a fast-frame file keep their running number, which the load without a name finds.
     fn file_next(&self, kind: FileKind) -> PathBuf {
         let dir = self.file_dir(kind);
         match kind {
@@ -98,14 +157,38 @@ impl Ui {
         if let Some(why) = self.nothing_to_save(kind) {
             return self.toast(why);
         }
-        if !self.native_files() {
-            return self.file_save_auto(kind);
-        }
         let next = self.file_next(kind);
-        self.file_request = Some(FileAsk { kind, save: true, dir: self.file_dir(kind), name: crate::store::file_name(&next) });
+        self.file_replace = None;
+        if self.native_files() {
+            self.file_request = Some(FileAsk { kind, save: true, dir: self.file_dir(kind), name: crate::store::file_name(&next) });
+        } else {
+            let stem = next.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            self.wlan.osk = Some(wlan::Osk::proposing(wlan::OskFor::File(kind), &stem));
+        }
     }
 
-    /// Saves `kind` to the file the user named in the dialog.
+    /// OK of the keyboard for a file name; false keeps the keyboard, with the reason in a toast. A name that is taken
+    /// is replaced by a second OK, not by the first.
+    pub(super) fn file_name_done(&mut self, kind: FileKind, text: &str) -> bool {
+        let name = match typed_name(text, kind.ext()) {
+            Ok(n) => n,
+            Err(e) => {
+                self.toast(&e);
+                return false;
+            }
+        };
+        let path = self.file_dir(kind).join(&name);
+        if path.symlink_metadata().is_ok() && self.file_replace.as_deref() != Some(path.as_path()) {
+            self.toast(&format!("{name} is there: OK once more replaces it"));
+            self.file_replace = Some(path);
+            return false;
+        }
+        self.file_replace = None;
+        self.file_save(kind, path);
+        true
+    }
+
+    /// Saves `kind` to the file the user named, on the keyboard or in the dialog.
     pub fn file_save(&mut self, kind: FileKind, path: PathBuf) {
         match kind {
             FileKind::Setup => {
@@ -146,15 +229,48 @@ impl Ui {
         }
     }
 
-    /// A Storage row that loads: asks which file, then loads it (`file_load`).
-    pub(super) fn file_load_ask(&mut self, kind: FileKind) {
-        if !self.native_files() {
-            return self.file_load_latest(kind);
-        }
-        self.file_request = Some(FileAsk { kind, save: false, dir: self.file_dir(kind), name: String::new() });
+    /// The files of `kind` in its folder, the newest first.
+    fn files_of(&self, kind: FileKind) -> Vec<PathBuf> {
+        let Ok(rd) = std::fs::read_dir(self.file_dir(kind)) else { return Vec::new() };
+        let mut v: Vec<(std::time::SystemTime, PathBuf)> = rd.flatten().filter_map(|e| {
+            let p = e.path();
+            let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
+            // a setup of the stock naming (`:SAVE:SETup "name.stp"`) is a setup too
+            let fits = ext == kind.ext() || (kind == FileKind::Setup && ext == "stp");
+            let meta = e.metadata().ok().filter(|m| m.is_file())?;
+            (fits && starts_with(&p, kind.magic())).then(|| (meta.modified().unwrap_or(std::time::UNIX_EPOCH), p))
+        }).collect();
+        // files of the same second (a stick keeps two seconds): the later name first
+        v.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+        v.truncate(LIST_MAX);
+        v.into_iter().map(|x| x.1).collect()
     }
 
-    /// Loads the file the user chose in the dialog.
+    /// A Storage row that loads: asks which file, then loads it (`file_load`).
+    pub(super) fn file_load_ask(&mut self, kind: FileKind) {
+        let dir = self.file_dir(kind);
+        if self.native_files() {
+            self.file_request = Some(FileAsk { kind, save: false, dir, name: String::new() });
+            return;
+        }
+        self.file_list = self.files_of(kind);
+        (self.file_kind, self.file_top) = (kind, 0);
+        if self.file_list.is_empty() {
+            return self.toast(&format!("No {} file (.{}) in {}", kind.what(), kind.ext(), dir.display()));
+        }
+        self.open_picker(Item::StoreFile);
+    }
+
+    /// The file tapped in the list.
+    pub(super) fn file_pick(&mut self, k: usize) {
+        let p = self.file_list.get(k).cloned();
+        self.close_picker();
+        if let Some(p) = p {
+            self.file_load(self.file_kind, &p);
+        }
+    }
+
+    /// Loads the file the user chose, in the list or in the dialog.
     pub fn file_load(&mut self, kind: FileKind, path: &Path) {
         match kind {
             FileKind::Setup => self.recall_setup_from(path),
@@ -190,6 +306,92 @@ impl Ui {
             (None, false) => self.toast("Open canceled; nothing was loaded"),
         }
     }
+
+    // ------------------------------------------------------------------------------------------- the list
+
+    /// The folder of `kind` for a title: the stick by its name, a long path by its end.
+    fn file_place(&self, kind: FileKind) -> String {
+        let dir = self.file_dir(kind);
+        if dir == Path::new(crate::store::USB_DIR) {
+            return "USB stick".into();
+        }
+        let (text, room) = (dir.display().to_string(), 30);
+        let n = text.chars().count();
+        if n <= room { text } else { format!("\u{2026}{}", text.chars().skip(n + 1 - room).collect::<String>()) }
+    }
+
+    /// Title of the keyboard that asks for a file name.
+    pub(super) fn file_name_title(&self, kind: FileKind) -> String {
+        format!("Name of the {} file (.{}) \u{b7} {}", kind.what(), kind.ext(), self.file_place(kind))
+    }
+
+    /// Title of the list.
+    pub(super) fn file_list_title(&self) -> String {
+        format!("Load {} \u{b7} {}", self.file_kind.what(), self.file_place(self.file_kind))
+    }
+
+    /// The list of files is open as a dialog (the sheets of Minimal and Studio show it as their own list).
+    pub(super) fn file_list_open(&self) -> bool {
+        self.menu_open && self.menu == MenuId::Pick && self.pick.is_some_and(|p| p.it == Item::StoreFile) && !self.sheet_active()
+    }
+
+    /// The dialog, the width of a row, and how many rows show.
+    fn file_list_lay(&self) -> (Rect, i32, usize) {
+        let n = self.file_list.len();
+        let fr = self.frame();
+        let avail = fr.bottom.y - 4 - (fr.top.bottom() + 4);
+        let fit = (((avail - DLG_HEAD - 6) / LIST_PITCH).max(1) as usize).min(n.max(1));
+        let bar = if n > fit { scroll::BAR_W + 4 } else { 0 };
+        let cw = (2 * self.lay().dlg_col + 16).min(self.scr.w - 2 * METRICS.edge - 24 - bar);
+        let (w, h) = (24 + cw + bar, DLG_HEAD + fit as i32 * LIST_PITCH + 6);
+        let (ax, top) = self.menu_anchor();
+        let x = (ax - w / 2).clamp(METRICS.edge, self.scr.w - METRICS.edge - w);
+        let y = if top { fr.top.bottom() + 4 } else { (fr.bottom.y - 4 - h).max(fr.top.bottom() + 4) };
+        (Rect::new(x, y, w, h), cw, fit)
+    }
+
+    /// The first file that shows, kept in range.
+    pub(super) fn file_first(&self) -> usize {
+        if !self.file_list_open() {
+            return 0;
+        }
+        let (_, _, fit) = self.file_list_lay();
+        self.file_top.min(self.file_list.len().saturating_sub(fit))
+    }
+
+    /// The list as a dialog: one file a row, the rows that show.
+    pub(super) fn file_list_dialog(&self) -> Dlg {
+        let (r, cw, fit) = self.file_list_lay();
+        let close = Rect::new(r.x + r.w - 52, r.y + 6, 44, DLG_CTRL);
+        let back = self.parent.map(|_| Rect::new(close.x - 88, close.y, 82, DLG_CTRL));
+        let first = self.file_first();
+        let rows = (0..fit.min(self.file_list.len())).map(|i| {
+            let ctrl = Rect::new(r.x + 12, r.y + DLG_HEAD + i as i32 * LIST_PITCH, cw, DLG_CTRL);
+            Row { it: Item::PickOpt(first + i), label: Rect::new(ctrl.x, ctrl.y, 0, 0), ctrl, ctl: Ctl::Button }
+        }).collect();
+        Dlg { r, close, back, rows, heads: Vec::new() }
+    }
+
+    /// The scroll bar of the list and its rows, while it is open and longer than its window.
+    pub(super) fn files_bar(&self) -> Option<(scroll::Bar, Rect)> {
+        if !self.file_list_open() {
+            return None;
+        }
+        let (r, cw, fit) = self.file_list_lay();
+        let rows = Rect::new(r.x + 12, r.y + DLG_HEAD, cw, fit as i32 * LIST_PITCH - (LIST_PITCH - DLG_CTRL));
+        let track = Rect::new(rows.x + cw + 4, rows.y, scroll::BAR_W, rows.h);
+        Some((scroll::Bar { track, total: self.file_list.len() as i32, shown: fit as i32, pos: self.file_top as i32 }, rows))
+    }
+
+    /// The file a knob chose stays in the window.
+    pub(super) fn file_follow_focus(&mut self) {
+        if !self.file_list_open() {
+            return;
+        }
+        let (_, _, fit) = self.file_list_lay();
+        let first = self.file_first();
+        self.file_top = if self.focus < first { self.focus } else if self.focus >= first + fit { self.focus + 1 - fit } else { first };
+    }
 }
 
 #[cfg(test)]
@@ -207,6 +409,166 @@ mod tests {
         (u, dir)
     }
 
+    fn keyboard(u: &Ui) -> String {
+        u.wlan.osk.as_ref().map(|o| o.text.clone()).expect("the keyboard is open")
+    }
+
+    #[test]
+    fn a_typed_name_is_one_file_of_the_folder() {
+        assert_eq!(typed_name(" ripple 5V ", "csv").unwrap(), "ripple 5V.csv");
+        assert_eq!(typed_name("ripple.CSV", "csv").unwrap(), "ripple.csv");
+        assert_eq!(typed_name("v1.2", "oss").unwrap(), "v1.2.oss");
+        for bad in ["", "  ", ".csv", "../up", "a/b", "a\\b", "C:x", "what?", ".hidden", "dot.", "tab\tname"] {
+            assert!(typed_name(bad, "csv").is_err(), "{bad:?}");
+        }
+    }
+
+    /// Every row that saves asks for the name first, with the next free name in the keyboard; OK writes that file.
+    #[test]
+    fn a_save_asks_for_the_name_on_the_scope() {
+        let (mut u, dir) = bench("ask");
+        for (it, kind) in [(Item::StoreSetupSave, FileKind::Setup), (Item::StoreSessSave, FileKind::Session), (Item::StoreCsv, FileKind::WaveCsv),
+            (Item::StoreBin, FileKind::WaveBin), (Item::StoreFfSave, FileKind::FastFrame)] {
+            u.open_menu(MenuId::Storage);
+            u.activate(it);
+            assert!(u.take_file_request().is_none(), "no dialog of a system on the scope");
+            let proposed = keyboard(&u);
+            assert!(proposed.starts_with(kind.prefix()), "{it:?} proposes {proposed}");
+            assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "{it:?}: nothing is written before OK");
+            u.wlan.osk.as_mut().unwrap().text = format!("bench {}", kind.prefix());
+            u.osk_ok();
+            assert!(u.wlan.osk.is_none(), "{it:?}: {:?}", u.toast);
+            let file = dir.join(format!("bench {}.{}", kind.prefix(), kind.ext()));
+            assert!(file.is_file(), "{it:?} wrote {}", file.display());
+            std::fs::remove_file(file).unwrap();
+        }
+        // the two files that are written later, by the main loop and by the interpreter: the request holds the name
+        u.open_menu(MenuId::Storage);
+        u.activate(Item::StorePng);
+        u.wlan.osk.as_mut().unwrap().text = "front".into();
+        u.osk_ok();
+        assert_eq!(u.shot_request.take(), Some(dir.join("front.png").to_string_lossy().into_owned()));
+        assert!(!u.menu_open, "the screenshot is taken without the menu on it");
+        u.open_menu(MenuId::Storage);
+        u.activate(Item::StoreSaveScpi);
+        u.wlan.osk.as_mut().unwrap().text = "bench.scpi".into();
+        u.osk_ok();
+        assert_eq!(u.setup_scpi_request.take(), Some(dir.join("bench.scpi")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The name in the keyboard is a proposal: the first character typed takes its place, so a name of one's own
+    /// needs no twenty taps on Delete; an arrow keeps it, to add to it.
+    #[test]
+    fn typing_replaces_the_proposed_name() {
+        let (mut u, dir) = bench("propose");
+        u.activate(Item::StoreSessSave);
+        assert_eq!(keyboard(&u), "session-001");
+        for c in "amp".chars() {
+            u.osk_type(c);
+        }
+        assert_eq!(keyboard(&u), "amp");
+        u.wlan.osk = None;
+        u.activate(Item::StoreSessSave);
+        u.osk_right();
+        for c in "-b".chars() {
+            u.osk_type(c);
+        }
+        assert_eq!(keyboard(&u), "session-001-b");
+        u.osk_ok();
+        assert!(dir.join("session-001-b.oss").is_file());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A name that is no file name keeps the keyboard, and so does one that is taken, until OK is given once more.
+    #[test]
+    fn a_bad_name_and_a_taken_name_keep_the_keyboard() {
+        let (mut u, dir) = bench("taken");
+        u.activate(Item::StoreSessSave);
+        u.wlan.osk.as_mut().unwrap().text = "a/b".into();
+        u.osk_ok();
+        assert!(u.wlan.osk.is_some(), "a path is not a name");
+        u.wlan.osk.as_mut().unwrap().text = "first".into();
+        u.osk_ok();
+        assert!(u.wlan.osk.is_none());
+        let file = dir.join("first.oss");
+        let before = std::fs::read(&file).unwrap();
+        u.m.ch[1].on = !u.m.ch[1].on;
+        u.activate(Item::StoreSessSave);
+        u.wlan.osk.as_mut().unwrap().text = "first".into();
+        u.osk_ok();
+        assert!(u.wlan.osk.is_some(), "the first OK only says that the name is taken");
+        assert_eq!(std::fs::read(&file).unwrap(), before);
+        u.osk_ok();
+        assert!(u.wlan.osk.is_none());
+        assert_ne!(std::fs::read(&file).unwrap(), before, "the second OK replaced it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Load session lists the sessions of the folder, the newest first, and loads the one that is tapped: not only the
+    /// last one.
+    #[test]
+    fn a_load_lists_the_files_and_loads_the_one_chosen() {
+        let (mut u, dir) = bench("list");
+        std::fs::write(dir.join("notes.oss"), b"not a session").unwrap();
+        std::fs::write(dir.join("wave-001.bin"), crate::store::wave_bin(u.last[0].as_ref().unwrap(), &u.m)).unwrap();
+        u.m.tscale = 3;
+        u.file_save(FileKind::Session, dir.join("slow.oss"));
+        u.m.tscale = 9;
+        u.file_save(FileKind::Session, dir.join("fast.oss"));
+        u.m.tscale = 5;
+        u.open_menu(MenuId::Storage);
+        u.activate(Item::StoreSessLoad);
+        assert_eq!(u.menu, MenuId::Pick);
+        let mut names = u.options(Item::StoreFile);
+        names.sort();
+        assert_eq!(names, ["fast.oss", "slow.oss"], "sessions only, by what they hold");
+        let k = u.options(Item::StoreFile).iter().position(|n| n == "slow.oss").unwrap();
+        u.activate(Item::PickOpt(k));
+        assert_eq!(u.m.tscale, 3, "{:?}", u.toast);
+        assert_eq!(u.menu, MenuId::Storage, "back in the menu the list was opened from");
+        // nothing to list: a message, no empty list
+        for f in ["slow.oss", "fast.oss"] {
+            std::fs::remove_file(dir.join(f)).unwrap();
+        }
+        u.activate(Item::StoreSessLoad);
+        assert_eq!(u.menu, MenuId::Storage);
+        assert!(u.toast.as_ref().is_some_and(|t| t.0.starts_with("No session file")), "{:?}", u.toast);
+        // fast-frame files are told from waveforms, which are .bin too
+        u.file_save(FileKind::FastFrame, dir.join("burst.bin"));
+        u.activate(Item::StoreFfLoad);
+        assert_eq!(u.options(Item::StoreFile), ["burst.bin"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The slots stay the quick way: Save setup and Recall setup never ask. A setup by name is a file beside them.
+    #[test]
+    fn slots_stay_and_a_setup_by_name_is_a_file_beside_them() {
+        let (mut u, dir) = bench("setup");
+        u.store_slot = 4;
+        u.activate(Item::StoreSaveSetup);
+        assert!(u.wlan.osk.is_none() && dir.join("setup4.txt").is_file());
+        u.m.tscale = 2;
+        u.activate(Item::StoreSetupSave);
+        assert!(keyboard(&u).starts_with("setup-"), "not a slot's name: {}", keyboard(&u));
+        u.wlan.osk.as_mut().unwrap().text = "ripple".into();
+        u.osk_ok();
+        assert!(dir.join("ripple.txt").is_file());
+        std::fs::write(dir.join("mask-001.txt"), "# OOS mask v1\n").unwrap();
+        u.m.tscale = 8;
+        u.activate(Item::StoreSetupLoad);
+        let names = u.options(Item::StoreFile);
+        assert!(names.contains(&"ripple.txt".to_string()) && names.contains(&"setup4.txt".to_string()), "{names:?}");
+        assert!(!names.contains(&"mask-001.txt".to_string()), "a mask is no setup");
+        u.activate(Item::PickOpt(names.iter().position(|n| n == "ripple.txt").unwrap()));
+        assert_eq!(u.m.tscale, 2);
+        u.m.tscale = 8;
+        u.activate(Item::StoreRecall);
+        assert_ne!(u.m.tscale, 8, "the slot is recalled without a question");
+        assert_eq!(u.menu_open && u.menu == MenuId::Pick, false);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Save to names the place of a setup by name too: the stick when files go there, else the folder of the slots.
     #[test]
     fn save_to_holds_for_a_setup_by_name() {
@@ -219,16 +581,14 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// The desktop build: the row leaves a question for the dialog; the answer saves or loads, and a dialog closed
-    /// without a file changes nothing. The slots do not ask.
+    /// The desktop build: the row leaves a question for the dialog and opens no keyboard and no list; the answer saves
+    /// or loads, and a dialog closed without a file changes nothing.
     #[test]
     fn the_desktop_build_asks_with_its_dialog() {
         let (mut u, dir) = bench("desktop");
         u.desktop_panel = Some(false);
-        u.activate(Item::StoreSaveSetup);
-        assert!(u.take_file_request().is_none() && dir.join("setup1.txt").is_file(), "a slot is saved without a question");
-        std::fs::remove_file(dir.join("setup1.txt")).unwrap();
         u.activate(Item::StoreSessSave);
+        assert!(u.wlan.osk.is_none());
         let ask = u.take_file_request().expect("a question for the dialog");
         assert_eq!((ask.kind, ask.save, ask.dir.as_path(), ask.name.as_str()), (FileKind::Session, true, dir.as_path(), "session-001.oss"));
         u.file_chosen(&ask, None);
@@ -240,6 +600,7 @@ mod tests {
         assert!(elsewhere.join("bench.oss").is_file(), "the folder of the dialog, not the save folder");
         u.m.tscale = 7;
         u.activate(Item::StoreSessLoad);
+        assert!(!(u.menu_open && u.menu == MenuId::Pick), "no list where the system has a dialog");
         let ask = u.take_file_request().expect("a question for the dialog");
         assert_eq!((ask.kind, ask.save), (FileKind::Session, false));
         u.file_chosen(&ask, None);
@@ -259,7 +620,7 @@ mod tests {
             u.quick();
             u.file_save_auto(FileKind::FastFrame);
             u.file_save_auto(FileKind::Shot);
-            assert!(u.take_file_request().is_none());
+            assert!(u.wlan.osk.is_none() && u.take_file_request().is_none());
             assert!(u.shot_request.take().is_some_and(|p| p.ends_with(".png")));
         }
         let names: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
@@ -268,6 +629,81 @@ mod tests {
         u.history.clear();
         u.file_load_latest(FileKind::FastFrame);
         assert!(!u.history.is_empty(), "{:?}", u.toast);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Studio and Minimal show a menu as a sheet: the keyboard is the same one, and the list is the sheet's own list
+    /// (in pages), not the dialog of the Default layout.
+    #[test]
+    fn the_sheets_ask_with_the_keyboard_and_their_own_list() {
+        let (mut u, dir) = bench("sheet");
+        u.m.layout = Layout::Studio;
+        u.studio.enter = true;
+        for _ in 0..8 {
+            u.step(0.05);
+        }
+        u.open_menu(MenuId::Storage);
+        assert!(u.sheet_active());
+        u.m.tscale = 6;
+        u.activate(Item::StoreSessSave);
+        u.wlan.osk.as_mut().unwrap().text = "studio".into();
+        u.osk_ok();
+        assert!(dir.join("studio.oss").is_file(), "{:?}", u.toast);
+        u.m.tscale = 9;
+        u.activate(Item::StoreSessLoad);
+        assert!(u.sheet_active() && !u.file_list_open() && u.files_bar().is_none());
+        let (cells, _, _) = u.sheet_pick_cells();
+        assert_eq!(cells.len(), 1);
+        u.tap(cells[0].1.x + 10, cells[0].1.y + 10);
+        assert_eq!(u.m.tscale, 6, "{:?}", u.toast);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A folder with more files than the screen has rows: the list scrolls by its bar and by the finger (ADR 0006),
+    /// and a knob that walks past the last row takes the window along.
+    #[test]
+    fn a_long_list_scrolls() {
+        let (mut u, dir) = bench("scroll");
+        let session = {
+            u.file_save(FileKind::Session, dir.join("s00.oss"));
+            std::fs::read(dir.join("s00.oss")).unwrap()
+        };
+        for i in 1..40 {
+            std::fs::write(dir.join(format!("s{i:02}.oss")), &session).unwrap();
+        }
+        u.open_menu(MenuId::Storage);
+        u.activate(Item::StoreSessLoad);
+        let d = u.dlg_layout().unwrap();
+        let (bar, rows) = u.files_bar().unwrap();
+        assert!(bar.needed() && d.rows.len() < 40 && d.r.bottom() <= u.frame().bottom.y, "{} rows in {:?}", d.rows.len(), d.r);
+        assert!(d.rows.iter().all(|r| rows.contains(r.ctrl.x, r.ctrl.y) && r.ctrl.right() <= bar.track.x));
+        let fit = d.rows.len();
+        // the finger on the rows
+        let (x, y) = (rows.x + 40, rows.y + rows.h - 10);
+        u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
+        u.handle(Ev::Touch { id: 0, phase: Phase::Move, x, y: y - 3 * LIST_PITCH });
+        u.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y: y - 3 * LIST_PITCH });
+        assert_eq!(u.file_first(), 3);
+        assert_eq!(u.menu, MenuId::Pick, "a finger that moved the list picked nothing");
+        // the thumb to the end
+        let th = u.files_bar().unwrap().0.thumb();
+        u.handle(Ev::Touch { id: 0, phase: Phase::Down, x: th.x + 5, y: th.y + 5 });
+        u.handle(Ev::Touch { id: 0, phase: Phase::Move, x: th.x + 5, y: bar.track.bottom() + 40 });
+        u.handle(Ev::Touch { id: 0, phase: Phase::Up, x: th.x + 5, y: bar.track.bottom() + 40 });
+        assert_eq!(u.file_first(), 40 - fit);
+        assert_eq!(u.dlg_layout().unwrap().rows.last().map(|r| r.it), Some(Item::PickOpt(39)));
+        // multi 1 from the first file past the window
+        u.file_top = 0;
+        u.focus = 0;
+        for _ in 0..fit {
+            u.key(0xba);
+        }
+        assert_eq!((u.focus, u.file_first()), (fit, 1));
+        // a press that does not move is a tap on the file under it
+        let last = u.dlg_layout().unwrap().rows.last().map(|r| (r.it, r.ctrl)).unwrap();
+        u.tap(last.1.x + 20, last.1.y + 20);
+        assert_eq!(u.menu, MenuId::Storage);
+        assert!(u.toast.as_ref().is_some_and(|t| t.0.starts_with("Loaded ")), "{:?} for {:?}", u.toast, last.0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

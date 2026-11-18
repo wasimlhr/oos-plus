@@ -25,6 +25,8 @@ pub(super) enum List {
     Results,
     /// the event / search / segment table over the plot (rows)
     Table,
+    /// the files a Storage row loads from (rows; files.rs)
+    Files,
 }
 
 /// A scroll bar: where it is, how much there is, how much shows, and where the list stands. Units are the list's own.
@@ -96,6 +98,7 @@ impl Ui {
             List::Catalog => self.catalog_bar(),
             List::Results => self.results_bar(),
             List::Table => self.table_bar(),
+            List::Files => self.files_bar(),
         }
     }
 
@@ -107,13 +110,14 @@ impl Ui {
             List::Catalog => self.cat_scroll = p,
             List::Results => self.pn.top = p as usize,
             List::Table => self.table_top = p as usize,
+            List::Files => self.file_top = p as usize,
         }
     }
 
     /// The list a finger went down on, and how it holds it. A press on the track outside the thumb jumps there.
     pub(super) fn scroll_grip(&mut self, x: i32, y: i32) -> Option<(List, Grip)> {
         // the topmost first: the measurement page covers the table, the table covers the pane
-        let order: &[List] = if self.menu_open { &[List::Catalog] } else { &[List::Table, List::Results] };
+        let order: &[List] = if self.menu_open { &[List::Catalog, List::Files] } else { &[List::Table, List::Results] };
         for &l in order {
             let Some((bar, area)) = self.scroll_bar(l) else { continue };
             if !bar.needed() {
@@ -154,6 +158,7 @@ impl Ui {
                     List::Catalog => dy,
                     List::Results => dy / self.results_row_pitch().max(1),
                     List::Table => dy / tables::ROW_H,
+                    List::Files => dy / files::LIST_PITCH,
                 };
                 self.scroll_to(l, pos - units);
                 true
