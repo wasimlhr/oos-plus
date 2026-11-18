@@ -158,6 +158,11 @@ Changed:
   `DSETHOLD` stay. The SCPI Programming Manual named the clock as source A of every setup and hold item, and its
   example of write timing on stored captures sent the strobe first: the data is A and the clock B, as on the
   measurement page (host-tested).
+- The command reference of the SCPI Programming Manual is made again from the SCPI reference: 660 commands, 66
+  more than it had (the IEEE 488.2 status commands, callouts, sessions, the zone triggers, `:MMEMory`, the
+  waveform scaling queries and others that joined since). Seven rows of the reference named several commands in
+  one cell and would have come out as one command with the text of the cell as its name; each command has its
+  own row or a brace form now.
 - A change of trigger type keeps the user's pulse width, pattern, levels and limits on the hardware, Live and Replay.
   The demo's starting values are set on the demo only. Slope, Runt and Window keep the lower level at or below the
   upper one; `:TRIGger:RUNT:UPPer/LOWer` refuses a threshold past the other with -224.

@@ -13,7 +13,7 @@
    "title": "Common commands",
    "intro": [
     {
-     "p": "The IEEE 488.2 common commands: identification, reset, status and the operation-complete fence, plus `*SAV` and `*RCL`, which save and recall a numbered setup slot. `*OPC?` waits only for finite operations (Autoset, a submitted SIM generation, an armed Single); continuous Run and background analysis are not drained. `*SAV` and `*RCL` use the same files as Storage > Setup slot, so they are cross-linked from storage."
+     "p": "The IEEE 488.2 common commands: identification, reset, the status registers (`*STB?`, `*ESE`, `*SRE`, `*ESR?`) and the operation-complete fence, plus `*SAV` and `*RCL`, which save and recall a numbered setup slot. `*OPC?` waits only for finite operations (Autoset, a submitted SIM generation, an armed Single); continuous Run and background analysis are not drained. `*SAV` and `*RCL` use the same files as Storage > Setup slot, so they are cross-linked from storage."
     },
     {
      "p": "Menu location: Run control > Default setup; Storage > Save setup, Recall setup."
@@ -115,6 +115,104 @@
      ],
      "returns": "On a freshly started default model the query returns `16`.",
      "example": "*ESR?    /*The query returns 32.*/"
+    },
+    {
+     "header": "*ESE",
+     "set": "*ESE <value>",
+     "query": "*ESE?",
+     "desc": "`0` to `255`: which bits of `*ESR` set the event summary bit (5) of `*STB?`.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`0` to `255`: which bits of `*ESR` set the event summary bit (5) of `*STB?`.",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Origin: IEEE 488.2"
+     ],
+     "returns": "On a freshly started default model the query returns `0`."
+    },
+    {
+     "header": "*SRE",
+     "set": "*SRE <value>",
+     "query": "*SRE?",
+     "desc": "`0` to `255`: which bits of `*STB?` set its master summary bit (6); bit 6 itself reads 0.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`0` to `255`: which bits of `*STB?` set its master summary bit (6); bit 6 itself reads 0. A socket has no service request line, so nothing else follows from it.",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Origin: IEEE 488.2"
+     ],
+     "returns": "On a freshly started default model the query returns `0`."
+    },
+    {
+     "header": "*STB",
+     "query": "*STB?",
+     "desc": "Status byte: bit 2 an error is queued, bit 5 an enabled `*ESR` bit is set, bit 6 an enabled bit of this byte is set. Not cleared by reading. There is no message-available bit.",
+     "remarks": [
+      "- Origin: IEEE 488.2"
+     ],
+     "returns": "On a freshly started default model the query returns `0`."
+    },
+    {
+     "header": "*PSC",
+     "set": "*PSC <value>",
+     "query": "*PSC?",
+     "desc": "Power-on status clear flag, `0` or `1`.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Power-on status clear flag, `0` or `1`. The enable registers start at 0 either way; the flag is kept for drivers that set it.",
+       "1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: IEEE 488.2"
+     ],
+     "returns": "On a freshly started default model the query returns `1`."
+    },
+    {
+     "header": "*TST",
+     "query": "*TST?",
+     "desc": "`0`: there is no self test to fail.",
+     "remarks": [
+      "- Origin: IEEE 488.2"
+     ],
+     "returns": "On a freshly started default model the query returns `0`."
+    },
+    {
+     "header": "*OPT",
+     "query": "*OPT?",
+     "desc": "`0`: no options are reported.",
+     "remarks": [
+      "- Origin: IEEE 488.2"
+     ],
+     "returns": "On a freshly started default model the query returns `0`."
+    },
+    {
+     "header": "*WAI",
+     "set": "*WAI",
+     "desc": "Accepted and does nothing: a command is finished when the next one is read. Wait for an armed Single with `*OPC?`.",
+     "remarks": [
+      "- Origin: IEEE 488.2"
+     ]
+    },
+    {
+     "header": "*TRG",
+     "set": "*TRG",
+     "desc": "Force a trigger, as `:TFORce`.",
+     "remarks": [
+      "- Menu equivalent: Run control > Force.",
+      "- Origin: IEEE 488.2"
+     ]
     }
    ],
    "after": [
@@ -318,11 +416,20 @@
     {
      "header": ":SYSTem:ERRor",
      "query": ":SYSTem:ERRor?",
-     "desc": "Remove and return the oldest error as `code,\"message\"`; `0,\"No error\"` when empty.",
+     "desc": "Remove and return the oldest error as `code,\"message\"`; `0,\"No error\"` when empty. `:SYSTem:ERRor:NEXT?` is the same query.",
      "remarks": [
       "- Origin: Rigol-compatible"
      ],
      "example": ":SYSTem:ERRor?    /*The query returns -221,\"Settings conflict\" Switching SCPI off needs the argument CONFIRM.*/\n:SYSTem:ERRor?    /*The query returns -221,\"Settings conflict\" Power off needs the argument CONFIRM.*/"
+    },
+    {
+     "header": ":SYSTem:VERSion",
+     "query": ":SYSTem:VERSion?",
+     "desc": "The SCPI version the syntax follows.",
+     "remarks": [
+      "- Origin: SCPI-99"
+     ],
+     "returns": "On a freshly started default model the query returns `1999.0`."
     }
    ],
    "after": []
@@ -901,7 +1008,7 @@
     {
      "header": ":RUN",
      "set": ":RUN",
-     "desc": "Start continuous acquisition. Idempotent assignment; also starts stored replay and SIM.",
+     "desc": "Start continuous acquisition. Idempotent assignment; also starts stored replay and SIM. After a Single the sweep returns to what it was before it (Auto or Normal).",
      "remarks": [
       "- Menu equivalent: Run control > Run / Stop.",
       "- Origin: Rigol-compatible"
@@ -961,6 +1068,86 @@
       "- Menu equivalent: Run control > Clear display / stats.",
       "- Origin: Rigol-compatible"
      ]
+    },
+    {
+     "header": ":RECord:CURRent",
+     "set": ":RECord:CURRent <value>",
+     "query": ":RECord:CURRent?",
+     "desc": "Sets or queries History for Run control (menu: Acquire > History).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "History frame on screen, `1` (oldest) to the count; a set stops the acquisition",
+       "newest"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `newest`."
+    },
+    {
+     "header": ":RECord:WREPlay:FCURrent",
+     "set": ":RECord:WREPlay:FCURrent <value>",
+     "query": ":RECord:WREPlay:FCURrent?",
+     "desc": "Sets or queries History for Run control (menu: Acquire > History).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The same frame as `:RECord:CURRent`",
+       "newest"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `newest`."
+    },
+    {
+     "header": ":RECord:WREPlay:FMAX",
+     "query": ":RECord:WREPlay:FMAX?",
+     "desc": "Number of stored frames",
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":NAVigate:FRAMe:NEXT",
+     "set": ":NAVigate:FRAMe:NEXT",
+     "desc": "Step through the stored frames",
+     "remarks": [
+      "- Menu equivalent: Acquire > History.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":NAVigate:FRAMe:BACK",
+     "set": ":NAVigate:FRAMe:BACK",
+     "desc": "Step through the stored frames",
+     "remarks": [
+      "- Menu equivalent: Acquire > History.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":NAVigate:FRAMe:STARt",
+     "set": ":NAVigate:FRAMe:STARt",
+     "desc": "Step through the stored frames",
+     "remarks": [
+      "- Menu equivalent: Acquire > History.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":NAVigate:FRAMe:END",
+     "set": ":NAVigate:FRAMe:END",
+     "desc": "Step through the stored frames",
+     "remarks": [
+      "- Menu equivalent: Acquire > History.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
     }
    ],
    "after": []
@@ -996,7 +1183,7 @@
      "remarks": [
       "- Origin: Rigol-compatible"
      ],
-     "returns": "Query returns the numeric configured/effective acquisition depth. On a freshly started default model the query returns `5.000000E+05`.",
+     "returns": "Query returns the numeric configured/effective acquisition depth: the depth of the record the scope works with, so a depth set while stopped, or in roll (which has its own depth), reads back only once an acquisition with it has run. On a freshly started default model the query returns `5.000000E+05`.",
      "example": ":ACQuire:MDEPth?    /*The query returns 5.000000E+05.*/\n:ACQuire:MDEPth 1M\n:ACQuire:MDEPth?    /*The query returns 1.000000E+06.*/"
     },
     {
@@ -1598,6 +1785,23 @@
      "returns": "On a freshly started default model the query returns `1`.",
      "ext": true,
      "example": ":CHANnel:ACTive 2\n:CHANnel:ACTive?    /*The query returns 2.*/"
+    },
+    {
+     "header": ":CHANnel<n>:ZERO",
+     "set": ":CHANnel<n>:ZERO",
+     "desc": "The mean of the record shown becomes the zero correction of the channel; refused without a waveform",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:CHANnel1:ZERO` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Channel > Zero.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
     }
    ],
    "after": [
@@ -2111,6 +2315,326 @@
       "- Origin: Rigol-compatible. Same handler as `:TRIGger:MODE`, which answers short tokens."
      ],
      "returns": "The query answers the UI's descriptive type name. On a freshly started default model the query returns `Edge`."
+    },
+    {
+     "header": ":TRIGger:DELay:SA",
+     "set": ":TRIGger:DELay:SA <value>",
+     "query": ":TRIGger:DELay:SA?",
+     "desc": "Sets or queries sources for Type, sweep and levels (menu: Trigger > Delay > sources).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "First source, `CHAN1`..`CHAN4`",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`."
+    },
+    {
+     "header": ":TRIGger:DELay:SB",
+     "set": ":TRIGger:DELay:SB <value>",
+     "query": ":TRIGger:DELay:SB?",
+     "desc": "Sets or queries sources for Type, sweep and levels (menu: Trigger > Delay > sources).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Second source, `CHAN1`..`CHAN4`",
+       "CHAN4"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN4`."
+    },
+    {
+     "header": ":TRIGger:DELay:ASLop",
+     "set": ":TRIGger:DELay:ASLop <value>",
+     "query": ":TRIGger:DELay:ASLop?",
+     "desc": "Sets or queries slopes for Type, sweep and levels (menu: Trigger > Delay > slopes).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{POSitive|NEGative}",
+       "POS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":TRIGger:DELay:BSLop",
+     "set": ":TRIGger:DELay:BSLop <value>",
+     "query": ":TRIGger:DELay:BSLop?",
+     "desc": "Sets or queries slopes for Type, sweep and levels (menu: Trigger > Delay > slopes).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{POSitive|NEGative}",
+       "POS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":TRIGger:DELay:TYPE",
+     "set": ":TRIGger:DELay:TYPE <value>",
+     "query": ":TRIGger:DELay:TYPE?",
+     "desc": "Sets or queries when for Type, sweep and levels (menu: Trigger > Delay > when).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{GREater|LESS|GLESs|GOUT}",
+       "LESS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `LESS`."
+    },
+    {
+     "header": ":TRIGger:DURation:TYPE",
+     "set": ":TRIGger:DURation:TYPE <value>",
+     "query": ":TRIGger:DURation:TYPE?",
+     "desc": "Sets or queries pattern for Type, sweep and levels (menu: Trigger > Duration > pattern).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "One of `H`, `L`, `X` per channel, comma separated",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":TRIGger:SLOPe:POLarity",
+     "set": ":TRIGger:SLOPe:POLarity <value>",
+     "query": ":TRIGger:SLOPe:POLarity?",
+     "desc": "Sets or queries slope for Type, sweep and levels (menu: Trigger > Slope > slope).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{POSitive|NEGative|RFALl}",
+       "POS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":TRIGger:SLOPe:WINDow",
+     "query": ":TRIGger:SLOPe:WINDow?",
+     "desc": "`TAB`: both levels are used",
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `TAB`."
+    },
+    {
+     "header": ":TRIGger:VIDeo:POLarity",
+     "query": ":TRIGger:VIDeo:POLarity?",
+     "desc": "`POSitive`; a set of another value is refused",
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":TRIGger:SHOLd:DSRC",
+     "set": ":TRIGger:SHOLd:DSRC <value>",
+     "query": ":TRIGger:SHOLd:DSRC?",
+     "desc": "Sets or queries sources for Type, sweep and levels (menu: Trigger > Setup/hold > sources).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Data source, `CHAN1`..`CHAN4`",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide; also as `:TRIGger:SETup:DSRC`"
+     ]
+    },
+    {
+     "header": ":TRIGger:SHOLd:CSRC",
+     "set": ":TRIGger:SHOLd:CSRC <value>",
+     "query": ":TRIGger:SHOLd:CSRC?",
+     "desc": "Sets or queries sources for Type, sweep and levels (menu: Trigger > Setup/hold > sources).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Clock source, `CHAN1`..`CHAN4`",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide; also as `:TRIGger:SETup:CSRC`"
+     ]
+    },
+    {
+     "header": ":TRIGger:SHOLd:TYPE",
+     "query": ":TRIGger:SHOLd:TYPE?",
+     "desc": "`SETHold`: setup and hold are both active",
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `SETH`."
+    },
+    {
+     "header": ":TRIGger:ZONE<n>:STATe",
+     "set": ":TRIGger:ZONE<n>:STATe <value>",
+     "query": ":TRIGger:ZONE<n>:STATe?",
+     "desc": "Sets or queries Zone for Type, sweep and levels (menu: Trigger > Zone).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:TRIGger:ZONE1:STATe` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "Zone 1 or 2 on or off",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `0`."
+    },
+    {
+     "header": ":TRIGger:ZONE<n>:SOURce",
+     "set": ":TRIGger:ZONE<n>:SOURce <value>",
+     "query": ":TRIGger:ZONE<n>:SOURce?",
+     "desc": "Sets or queries source for Type, sweep and levels (menu: Trigger > Zone > source).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:TRIGger:ZONE1:SOURce` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "`CHAN1`..`CHAN4`",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":TRIGger:ZONE<n>:MODE",
+     "set": ":TRIGger:ZONE<n>:MODE <value>",
+     "query": ":TRIGger:ZONE<n>:MODE?",
+     "desc": "Sets or queries must / must not for Type, sweep and levels (menu: Trigger > Zone > must / must not).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:TRIGger:ZONE1:MODE` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Discrete",
+       "{INTersect|NOTintersect}",
+       "INT"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `INT`."
+    },
+    {
+     "header": ":TRIGger:ZONE<n>:PLACement",
+     "set": ":TRIGger:ZONE<n>:PLACement <value>",
+     "query": ":TRIGger:ZONE<n>:PLACement?",
+     "desc": "Sets or queries drawn on the screen for Type, sweep and levels.",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:TRIGger:ZONE1:PLACement` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "A box: `t1,v1,t2,v2` in seconds and volts",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":TRIGger:ZONE<n>:POINts",
+     "set": ":TRIGger:ZONE<n>:POINts <value>",
+     "query": ":TRIGger:ZONE<n>:POINts?",
+     "desc": "Sets or queries drawn on the screen for Type, sweep and levels.",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:TRIGger:ZONE1:POINts` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "An outline: `t,v` pairs, at least three",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":TRIGger:ZONE<n>:CLEar",
+     "set": ":TRIGger:ZONE<n>:CLEar",
+     "desc": "Remove the zone",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:TRIGger:ZONE1:CLEar` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Trigger > Zone > clear.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
     }
    ],
    "after": []
@@ -3329,7 +3853,7 @@
    "title": "Waveform transfer",
    "intro": [
     {
-     "p": "Read waveform points and their scaling over SCPI. `:WAVeform:SOURce` selects the source for transfer and does not select the acquisition trigger. For a channel, NORMal reads the interpolated display record and RAW the retained native memory (when stopped); a reference uses its native arrays in all three modes. Do not assume `:ACQuire:SRATe?` describes a reference: read its preamble."
+     "p": "Read waveform points and their scaling over SCPI. `:WAVeform:SOURce` selects the source for transfer and does not select the acquisition trigger. For a channel, NORMal reads the interpolated display record and RAW the retained native memory (when stopped: the whole record of the stop, whatever part of it the view shows, as long as it holds single samples, which is up to 1 M points); a reference uses its native arrays in all three modes. Do not assume `:ACQuire:SRATe?` describes a reference: read its preamble."
     },
     {
      "p": "Menu location: none (data transfer); Display and layout > Screenshot for `:DISPlay:DATA?` (see display)."
@@ -3348,7 +3872,7 @@
       [
        "<value>",
        "Text",
-       "Select `CHANn|Rn` for transfer; does not select the acquisition trigger.",
+       "Select `CHANn|Rn|MATHn` for transfer; does not select the acquisition trigger. A math channel is read as its whole computed record in every mode; an FFT, a channel that is off and a math channel that is off have no record (`:WAVeform:DATA?` of a channel that is off is -221, unless it was switched off after a Stop and the record shown still has its samples).",
        "CHAN1"
       ]
      ],
@@ -3428,7 +3952,7 @@
       [
        "<value>",
        "Text",
-       "One-based inclusive end of the transfer page; default through the last available point.",
+       "One-based inclusive end of the transfer page; default through the last available point. A stop beyond the record reads through its last point, and the query answers that point.",
        "3600"
       ]
      ],
@@ -3466,6 +3990,61 @@
       "- Origin: Rigol-compatible"
      ],
      "example": ":WAVeform:PREamble?    /*The query returns 0,0,100,1,5.555555E-07,-1.000000E-03,0,3.200000E-02,-47,128.*/"
+    },
+    {
+     "header": ":WAVeform:XINCrement",
+     "query": ":WAVeform:XINCrement?",
+     "desc": "Field 5 of the preamble: seconds between two points.",
+     "remarks": [
+      "- Menu equivalent: none (data transfer).",
+      "- Origin: Rigol-compatible"
+     ]
+    },
+    {
+     "header": ":WAVeform:XORigin",
+     "query": ":WAVeform:XORigin?",
+     "desc": "Field 6: the time of the first point of the page.",
+     "remarks": [
+      "- Menu equivalent: none (data transfer).",
+      "- Origin: Rigol-compatible"
+     ]
+    },
+    {
+     "header": ":WAVeform:XREFerence",
+     "query": ":WAVeform:XREFerence?",
+     "desc": "Field 7.",
+     "remarks": [
+      "- Menu equivalent: none (data transfer).",
+      "- Origin: Rigol-compatible"
+     ],
+     "returns": "On a freshly started default model the query returns `0`."
+    },
+    {
+     "header": ":WAVeform:YINCrement",
+     "query": ":WAVeform:YINCrement?",
+     "desc": "Field 8: volts per code.",
+     "remarks": [
+      "- Menu equivalent: none (data transfer).",
+      "- Origin: Rigol-compatible"
+     ]
+    },
+    {
+     "header": ":WAVeform:YORigin",
+     "query": ":WAVeform:YORigin?",
+     "desc": "Field 9.",
+     "remarks": [
+      "- Menu equivalent: none (data transfer).",
+      "- Origin: Rigol-compatible"
+     ]
+    },
+    {
+     "header": ":WAVeform:YREFerence",
+     "query": ":WAVeform:YREFerence?",
+     "desc": "Field 10.",
+     "remarks": [
+      "- Menu equivalent: none (data transfer).",
+      "- Origin: Rigol-compatible"
+     ]
     },
     {
      "header": ":WAVeform:DATA",
@@ -3691,8 +4270,185 @@
       "- The items are listed in Appendices A and B.",
       "- Origin: Rigol-compatible. `9.9E37` when no value exists."
      ],
-     "returns": "Query `:MEASure:ITEM? <item>[,<source>]` answers a standard scalar, `:MEASure:ITEM? <pair>,<A>,<B>` a pair scalar with physical-time alignment; the default source is the Measure selection.",
+     "returns": "Query `:MEASure:ITEM? <item>[,<source>]` answers a standard scalar (the source may be `MATH<n>`: the item over the whole record of that math channel), `:MEASure:ITEM? <pair>,<A>,<B>` a pair scalar with physical-time alignment; the default source is the Measure selection.",
      "example": ":MEASure:ITEM? VPP,CHAN1    /*The query returns 2.564586E+00.*/\n:MEASure:ITEM? FREQuency,CHAN1    /*The query returns 9.999857E+02.*/\n:MEASure:ITEM? VRMS,CHAN1    /*The query returns 1.765733E+00.*/\n:MEASure:ITEM VPP\n:MEASure:ITEM PERiod"
+    },
+    {
+     "header": ":MEASure:SETup:MID",
+     "set": ":MEASure:SETup:MID <value>",
+     "query": ":MEASure:SETup:MID?",
+     "desc": "`50` only: edges are timed at half the amplitude.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`50` only: edges are timed at half the amplitude",
+       "50"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `50`."
+    },
+    {
+     "header": ":MEASure:THReshold:TYPE",
+     "set": ":MEASure:THReshold:TYPE <value>",
+     "query": ":MEASure:THReshold:TYPE?",
+     "desc": "`PERCent` only.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`PERCent` only",
+       "PERC"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `PERC`."
+    },
+    {
+     "header": ":MEASure:THReshold:DEFault",
+     "set": ":MEASure:THReshold:DEFault",
+     "desc": "Thresholds back to 10 % and 90 %",
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":MEASure:AREA",
+     "set": ":MEASure:AREA <value>",
+     "query": ":MEASure:AREA?",
+     "desc": "`MAIN` only: measurements read the main record.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`MAIN` only: measurements read the main record",
+       "MAIN"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `MAIN`."
+    },
+    {
+     "header": ":MEASure:AMP:TYPE",
+     "set": ":MEASure:AMP:TYPE <value>",
+     "query": ":MEASure:AMP:TYPE?",
+     "desc": "`MANual` only (top and base from the histogram).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`MANual` only (top and base from the histogram)",
+       "MAN"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `MAN`."
+    },
+    {
+     "header": ":MEASure:AMP:MANual:TOP",
+     "set": ":MEASure:AMP:MANual:TOP <value>",
+     "query": ":MEASure:AMP:MANual:TOP?",
+     "desc": "`HISTogram` only.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`HISTogram` only",
+       "HIST"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `HIST`."
+    },
+    {
+     "header": ":MEASure:AMP:MANual:BASE",
+     "set": ":MEASure:AMP:MANual:BASE <value>",
+     "query": ":MEASure:AMP:MANual:BASE?",
+     "desc": "`HISTogram` only.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`HISTogram` only",
+       "HIST"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `HIST`."
+    },
+    {
+     "header": ":MEASure:STRip:DOCK",
+     "set": ":MEASure:STRip:DOCK <value>",
+     "query": ":MEASure:STRip:DOCK?",
+     "desc": "Sets or queries Results strip for Readouts and rows (menu: Measure > Results strip).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{UNDer|LEFT|RIGHt|ABOVe|HIDDen}",
+       "UNDER"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `UNDER`."
+    },
+    {
+     "header": ":MEASure:COUNter:ENABle",
+     "set": ":MEASure:COUNter:ENABle <value>",
+     "query": ":MEASure:COUNter:ENABle?",
+     "desc": "Sets or queries Counter for Readouts and rows (menu: Measure > Counter).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The same counter as `:COUNter`",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":MEASure:COUNter:SOURce",
+     "set": ":MEASure:COUNter:SOURce <value>",
+     "query": ":MEASure:COUNter:SOURce?",
+     "desc": "Sets or queries Counter for Readouts and rows (menu: Measure > Counter).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The same counter as `:COUNter`",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
+    },
+    {
+     "header": ":MEASure:COUNter:VALue",
+     "query": ":MEASure:COUNter:VALue?",
+     "desc": "The reading of the same counter as `:COUNter`",
+     "remarks": [
+      "- Menu equivalent: Measure > Counter.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
     }
    ],
    "after": []
@@ -4562,7 +5318,7 @@
       [
        "<volts>",
        "Real",
-       "In volts. Cursor A volts in the selected source's displayed lane, including display zoom.",
+       "In volts. Cursor A volts in the selected source's displayed lane, including display zoom. With track cursors on, the query answers the value of the trace under the cursor (as `:CURSor:TRACk:AYValue?`).",
        "9.9E37"
       ]
      ],
@@ -4927,6 +5683,24 @@
      ],
      "returns": "On a freshly started default model the query returns `0`.",
      "ext": true
+    },
+    {
+     "header": ":CURSor:TRACk:MODE",
+     "set": ":CURSor:TRACk:MODE <value>",
+     "query": ":CURSor:TRACk:MODE?",
+     "desc": "`X` only: track cursors follow a time.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`X` only: track cursors follow a time",
+       "X"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `X`."
     }
    ],
    "after": []
@@ -5525,6 +6299,23 @@
      ],
      "returns": "On a freshly started default model the query returns `0.000000E+00`.",
      "ext": true
+    },
+    {
+     "header": ":MATH<n>:RESet",
+     "set": ":MATH<n>:RESet",
+     "desc": "Auto scale of the math trace; refused while the math is off",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:RESet` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Math > Auto scale.",
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
     }
    ],
    "after": [
@@ -5788,7 +6579,7 @@
       [
        "<value>",
        "Text",
-       "Color of the selected or explicit slot: `GRAY`, `WHITe`, `RED`, `GREen`, `BLUE`, `ORANge`, `VIOLet`.",
+       "Color of the selected or explicit slot (`RED` or `1,RED`): `GRAY`, `RED`, `GREen`, `BLUE`, `ORANge`. `WHITe` is taken as `GRAY` and `VIOLet` as `ORANge`, and the query answers `GRAY` and `ORAN` for them.",
        "—"
       ]
      ],
@@ -6126,6 +6917,14 @@
       "- Origin: name not verified against the DHO guide"
      ],
      "example": ":SEARch:REMove"
+    },
+    {
+     "header": ":SEARch:VALue",
+     "query": ":SEARch:VALue?",
+     "desc": "Time of event `n` in seconds (`n` empty: the event last gone to)",
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ]
     }
    ],
    "after": [
@@ -6150,7 +6949,7 @@
    "title": "Decoders and bus: Decoder slot",
    "intro": [
     {
-     "p": "Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference."
+     "p": "Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. A decoder on channels reads the samples the acquisition kept when those are finer than the screen record (up to 262144 points per line while running, 4 M when stopped), so `:DECode:EVENts?` and `:BUS<n>:DATA?` can list events of the whole record, also outside the screen. A UART character the record starts inside is not listed, nor the ones behind it until its bits can be read in one way only; in peak detect, roll and above 1 M points it reads the 3600 points of the screen. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference."
     },
     {
      "p": "Menu location: Decode and bus (Protocol, Source / clock / CS, Threshold, Format, Event table, protocol parameters, Plot bus, Save events)."
@@ -6391,7 +7190,7 @@
     {
      "header": ":DECode:EVENts",
      "query": ":DECode:EVENts?",
-     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable.",
+     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
      "remarks": [
       "- Menu equivalent: Decode and bus > Read decoded events.",
       "- Origin: OOS extension"
@@ -7540,7 +8339,7 @@
       [
        "<Rn>",
        "Discrete",
-       "Mask from a reference",
+       "Mask from a reference, read at the times of the points on screen",
        "—"
       ]
      ],
@@ -9710,7 +10509,7 @@
    "title": "Bode and bandwidth test: Bode",
    "intro": [
     {
-     "p": "The frequency-response sweep (loop gain, PSRR, impedance) driven through an external generator, and the step-response bandwidth estimate. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures."
+     "p": "The frequency-response sweep (loop gain, PSRR, impedance) driven by the built-in generator (S models) or through an external generator, and the step-response bandwidth estimate. With the built-in generator and the same channel as input and output, the gain is against the set amplitude and there is no phase: the phase of every point reads `NaN`. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures."
     },
     {
      "p": "Menu location: Bode (view, Mode, Start / stop frequency, Points, Amplitude, Input, Output, Free sweep, Start / stop) and Bandwidth test (View, Source, Signal frequency, Bins per period)."
@@ -10734,7 +11533,7 @@
      "p": "SIM generates a synthetic high-speed signal into a reference slot. The knob settings apply on the next `:SIM:PLAY ON`. A candidate replaces accepted data only when its trigger qualifies, Auto permits fallback, or Force is requested. Supported PRBS orders: 7, 9, 13, 15, 23, 31."
     },
     {
-     "p": "Menu location: Simulator (Preset, Slot, Pattern, Rate, Levels, Rise, Bandwidth, De-emphasis, Noise, Spread spectrum, Jitter, Play, Show, Defaults, Add to R, Load file, Live)."
+     "p": "Menu location: Simulator (Preset, Slot, Pattern, Rate, Levels, Rise, Bandwidth, De-emphasis, Noise, Spread spectrum, Jitter, Play, Show, Defaults, Add to R, Load file, Live). In Minimal and Studio the menu is a sheet with the tabs Signal, Levels, Jitter and Spread; the rows named \"Simulator advanced\" below are on its Jitter and Spread tabs. Run simulation mode on the screen is `:SIM:PLAY ON`: it plays the signal the knobs describe. The references that are shown (a loaded file, a signal added to a slot) are played from the screen with Play references, which has no command."
     },
     {
      "p": "Part of the SCPI reference."
@@ -11520,6 +12319,68 @@
      ],
      "returns": "On a freshly started default model the query returns `AUTO`.",
      "ext": true
+    },
+    {
+     "header": ":CALLout:ADD",
+     "set": ":CALLout:ADD <source>,<time>,<text>",
+     "desc": "Runs Add note here for Display and layout (menu: hold on a trace > Add note here).",
+     "params": [
+      [
+       "<source>,<time>,<text>",
+       "Text",
+       "A note on `CHAN1`..`CHAN4` or `R1`..`R10` at a time in seconds (0 is the trigger); the text has up to 32 characters, with or without quotes; 8 notes at most",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":CALLout:REMove",
+     "set": ":CALLout:REMove <n>",
+     "desc": "Runs tap the note, empty its text for Display and layout.",
+     "params": [
+      [
+       "<n>",
+       "Text",
+       "Remove note `n` of the list (1-based)",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":CALLout:CLEar",
+     "set": ":CALLout:CLEar",
+     "desc": "Remove every note",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":CALLout:COUNt",
+     "query": ":CALLout:COUNt?",
+     "desc": "Number of notes",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":CALLout:LIST",
+     "query": ":CALLout:LIST?",
+     "desc": "Rows `source,time,text`, one per line",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
     }
    ],
    "after": []
@@ -11717,7 +12578,7 @@
    "title": "Save and load",
    "intro": [
     {
-     "p": "Save and load setups, waveforms, screenshots and the fast-frame history. A relative path of a save is taken in the save folder. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
+     "p": "Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
     },
     {
      "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load)."
@@ -11819,6 +12680,67 @@
      "example": ":SAVE:WAVeform"
     },
     {
+     "header": ":SAVE:MEMory:WAVeform",
+     "set": ":SAVE:MEMory:WAVeform [\"path\"[,CSV or BIN]]",
+     "desc": "Every sample the acquisition kept of the channels that are on, where `:SAVE:WAVeform` writes the 3600 points of the screen.",
+     "params": [
+      [
+       "[\"path\"[,CSV or BIN]]",
+       "Text",
+       "Every sample the acquisition kept of the channels that are on, where `:SAVE:WAVeform` writes the 3600 points of the screen. The format follows the file name (`.csv`), else BIN; CSV is refused above 1 M points per channel (-221); a file that cannot be written is -250. In peak detect, roll and above 1 M points there are no single samples and the screen points are written.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "example": ":SAVE:MEMory:WAVeform \"capture.bin\""
+    },
+    {
+     "header": ":MMEMory:CATalog",
+     "query": ":MMEMory:CATalog?",
+     "desc": "The files of the save folder: bytes used, bytes free, then `\"name,,size\"` for each.",
+     "remarks": [
+      "- Origin: SCPI-99"
+     ],
+     "returns": "On a freshly started default model the query returns `0,0`.",
+     "example": ":MMEMory:CATalog?    /*The query returns 400036,1990000000,\"capture.bin,,400036\".*/"
+    },
+    {
+     "header": ":MMEMory:DATA",
+     "query": ":MMEMory:DATA? \"name\"",
+     "desc": "The bytes of a file of the save folder as an IEEE block.",
+     "params": [
+      [
+       "\"name\"",
+       "Text",
+       "The bytes of a file of the save folder as an IEEE block. A name with a directory part or a colon is refused (-224); a session saved under a relative name lies beside the setups, not in this folder, so save it without a name to fetch it; a file that is not there is -256.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: SCPI-99"
+     ],
+     "example": ":MMEMory:DATA? \"capture.bin\"    /*The query returns #9000400036OOSW....*/"
+    },
+    {
+     "header": ":MMEMory:DELete",
+     "set": ":MMEMory:DELete \"name\"",
+     "desc": "Remove a file of the save folder.",
+     "params": [
+      [
+       "\"name\"",
+       "Text",
+       "Remove a file of the save folder.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: SCPI-99"
+     ],
+     "example": ":MMEMory:DELete \"capture.bin\""
+    },
+    {
      "header": ":SAVE:IMAGe",
      "set": ":SAVE:IMAGe [\"path\"]",
      "desc": "Runs Save screenshot (menu: Storage > Save screenshot).",
@@ -11854,6 +12776,40 @@
       "- Origin: OOS extension"
      ],
      "ext": true
+    },
+    {
+     "header": ":SAVE:SESSion",
+     "set": ":SAVE:SESSion [\"path\"]",
+     "desc": "Runs Save session (menu: Storage > Save session).",
+     "params": [
+      [
+       "[\"path\"]",
+       "Text",
+       "The setup, the record (every sample the acquisition kept, up to 1 M points; else the points of the screen) and the loaded reference slots as one file (`session-NNN.oss` in the save folder, or `\"path\"`)",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":LOAD:SESSion",
+     "set": ":LOAD:SESSion [\"path\"]",
+     "desc": "Runs Load session (menu: Storage > Load session).",
+     "params": [
+      [
+       "[\"path\"]",
+       "Text",
+       "Load a session (the newest `session-NNN.oss`, or `\"path\"`): the scope stops and shows it; reference slots the file does not hold are emptied",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
     }
    ],
    "after": [
@@ -11865,6 +12821,15 @@
     },
     {
      "pre": ":SAVE:DESTination AUTO\n:SAVE:SLOT 3\n:SAVE:SETup\n:LOAD:SETup\n:SAVE:SLOT?                            -> 3"
+    },
+    {
+     "p": "Save the acquisition memory on the scope and fetch the file."
+    },
+    {
+     "pre": ":STOP\n:SAVE:MEMory:WAVeform \"capture.bin\"\n:MMEMory:CATalog?                      -> 400036,1990000000,\"capture.bin,,400036\"\n:MMEMory:DATA? \"capture.bin\"           -> #9000400036OOSW...\n:MMEMory:DELete \"capture.bin\""
+    },
+    {
+     "p": "A missing file of `:LOAD:SETup` or `:MMEMory:DATA?` is error -256."
     },
     {
      "p": "Save the newest waveform as CSV."
@@ -13561,8 +14526,14 @@
        "-"
       ],
       [
+       "`skin`",
+       "display settings: Display > Skin, `OOS` or `OOS Plus`",
+       "`OOS`",
+       "-"
+      ],
+      [
        "`color_grade`",
-       "as above",
+       "display settings",
        "`false`",
        "`:DISPlay:COLor`"
       ],
@@ -13706,7 +14677,7 @@
       ],
       [
        "`studio_state`",
-       "what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source (optional; written each time)",
+       "what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source, the columns of the event tables where a divider was dragged (optional; written each time)",
        "empty",
        "-"
       ]
