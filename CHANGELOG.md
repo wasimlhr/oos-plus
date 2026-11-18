@@ -161,6 +161,11 @@ Changed:
 
 Fixed:
 
+- Measure in roll and scan, and on compressed deep records: the frequency, the period and the other time values of
+  a slow signal read up to twice the true value now and then (25 Hz read as 50 Hz at 0.2 s/div). Their points are
+  min/max pairs, and on an edge each pair spans more than the hysteresis of the edge search; the time values are now
+  measured on the mean of neighbouring points. Max, Min, Pk-pk, Top and Base still come from the pairs (unit,
+  upstream dekajoule/oos#118).
 - After a Stop, `:WAVeform:MODE RAW` and `:SAVE:MEMory:WAVeform` give the whole record of the stop. They gave the
   part the scope reads again for the view, the screen and a quarter screen each side: 93760 of 100000 points at
   5 us/div, and another part after every pan or zoom (unit).
