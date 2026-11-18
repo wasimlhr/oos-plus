@@ -4,7 +4,7 @@ OOS Plus implements a **subset of Rigol DHO800/DHO900 SCPI**, including commands
 
 This reference describes the repository implementation. Primary Rigol syntax was checked against the [DHO800/DHO900 Programming Guide](https://download.rigol.com/en/Manual/Digital%20Oscilloscope/DHO800/DHO800900_ProgrammingGuide_EN.pdf), including trigger MODE and waveform preamble definitions. Local backend tests establish the implemented behavior; they do not establish physical instrument or VISA-driver certification. See [local validation](../local-validation.md). The canonical implementation is [scpi.rs](../../ui/src/scpi.rs) with the tables in [scpiext*.rs](../../ui/src/ui/scpiext.rs); transport details are in [hislip.rs](../../ui/src/hislip.rs) and [vxi11.rs](../../ui/src/vxi11.rs).
 
-Every command has exactly one row, in exactly one of the group pages below (568 headers in the tables). Menu equivalents use the UI labels, as Area > Option.
+Every command has exactly one row, in exactly one of the group pages below (569 headers in the tables). Menu equivalents use the UI labels, as Area > Option.
 
 ## Contents
 

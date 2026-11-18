@@ -956,7 +956,7 @@ impl Scpi {
         // Storage > Save setup as SCPI: the row asks, this interpreter has the queries the lines are made of
         if let Some(path) = ui.setup_scpi_request.take() {
             let (text, rest) = self.setup_scpi_proven(ui, cv);
-            ui.setup_scpi_save(&path, &text, &rest);
+            ui.setup_scpi_save(&path, &text, setupscpi::named(&rest).as_deref());
         }
         if let Some(l) = &self.l {
             while let Ok((s, peer)) = l.accept() {

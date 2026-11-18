@@ -503,7 +503,12 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
     }
     frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n);
     for line in text.lines() {
-        match cmd::run(ui, line) {
+        let out = cmd::run(ui, line);
+        // Storage > Save setup as SCPI is written by the interpreter's poll: a script has no interpreter of its own
+        if ui.setup_scpi_request.is_some() {
+            scpi::Scpi::detached().poll(ui, &cv);
+        }
+        match out {
             cmd::Out::Frames(n) => {
                 for _ in 0..n {
                     frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n);

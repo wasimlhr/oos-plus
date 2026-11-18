@@ -1453,6 +1453,8 @@ pub fn read_waveform_file(p: &Path) -> Result<Vec<u8>, String> {
 }
 
 /// Extensions shown by native and browser waveform import. The header chooses the parser.
+/// `.txt` is not one of them though a Keysight Y-values file has it: the setups are `.txt` too, and a list of
+/// waveforms would show them. Such a file is opened by name, from All files, or by dropping it.
 pub const WAVE_EXTS: &[&str] = &["wfm", "bin", "csv", "trc", "isf", "tr0", "wfmx", "pwwf", "tkwf"];
 
 /// A stored waveform, recognized by its header:
@@ -1486,10 +1488,77 @@ pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
     if looks_wfmx(bytes) {
         return parse_wfmx(bytes);
     }
+    // containers this build does not open: said by name, with the way round them
+    if bytes.starts_with(&[0x89, b'H', b'D', b'F', 0x0d, 0x0a, 0x1a, 0x0a]) {
+        return Err("HDF5 (.h5) waveform files are not read; save the waveform as BIN (.bin) or CSV".into());
+    }
+    if bytes.starts_with(b"MATLAB ") {
+        return Err("MATLAB (.mat) waveform files are not read; save the waveform as BIN (.bin) or CSV".into());
+    }
     if let Ok(text) = std::str::from_utf8(bytes) {
-        return parse_wave_csv(text, name);
+        if keysight_text_kind(text) == Some("WaveformYValues") {
+            return parse_keysight_y(text, name).map(|t| vec![t]);
+        }
+        let mut traces = parse_wave_csv(text, name)?;
+        // an XY-values file names its source in its header; with one trace, that name is the trace's
+        if let ([only], Some("WaveformXYValues")) = (traces.as_mut_slice(), keysight_text_kind(text)) {
+            if let Some(source) = keysight_header(text, "Source Name") {
+                only.label = source.chars().take(10).collect();
+            }
+        }
+        return Ok(traces);
     }
     Err("that file is not a waveform".into())
+}
+
+/// A text file without the byte-order mark some programs put first.
+fn without_mark(text: &str) -> &str {
+    text.trim_start_matches(|c: char| c as u32 == 0xfeff)
+}
+
+/// The header of a Keysight text waveform file, up to its `Data,` line: lines of `Key, value`.
+fn keysight_header_lines(text: &str) -> impl Iterator<Item = (&str, &str)> {
+    without_mark(text).lines().take(64)
+        .take_while(|line| !line.trim_start().starts_with("Data"))
+        .filter_map(|line| line.split_once(',')).map(|(key, value)| (key.trim(), value.trim()))
+}
+
+/// The value of one header line of a Keysight text waveform file.
+fn keysight_header<'a>(text: &'a str, key: &str) -> Option<&'a str> {
+    keysight_header_lines(text).find(|(k, _)| k.eq_ignore_ascii_case(key)).map(|(_, v)| v).filter(|v| !v.is_empty())
+}
+
+/// What a Keysight text waveform file says it is in its first line (`File Format, WaveformYValues`).
+fn keysight_text_kind(text: &str) -> Option<&str> {
+    let (key, value) = without_mark(text).lines().next()?.split_once(',')?;
+    key.trim().eq_ignore_ascii_case("File Format").then(|| value.trim())
+}
+
+/// A Keysight Y-values file (`.txt`): a header of `Key, value` lines, a `Data,` line, in format version 2 a line
+/// naming the number type, then one amplitude per line. The time of the first point and the interval are the
+/// header's `XOrg` and `XInc`. A file saved without its header has no time scale and is not a waveform here.
+fn parse_keysight_y(text: &str, name: &str) -> Result<WaveTrace, String> {
+    let number = |key: &str| keysight_header(text, key).and_then(|v| v.parse::<f64>().ok()).filter(|x| x.is_finite());
+    let (Some(t0), Some(dt)) = (number("XOrg"), number("XInc")) else {
+        return Err("the Y-values file has no XOrg and XInc in its header".into());
+    };
+    if dt <= 0.0 {
+        return Err("that file holds no waveform".into());
+    }
+    let mut v = Vec::new();
+    let data = text.lines().skip_while(|line| !line.trim_start().starts_with("Data")).skip(1);
+    for line in data {
+        // the number-type line of version 2, a blank line, or an ellipsis: not a sample
+        let Ok(x) = line.trim().trim_end_matches(',').parse::<f32>() else { continue };
+        if !x.is_finite() { continue; }
+        if v.len() >= MAX_WAVEFORM_SAMPLES { return Err("waveform exceeds the 32-million-sample import limit".into()); }
+        v.push(x);
+    }
+    if v.len() < 2 {
+        return Err("that file holds no waveform".into());
+    }
+    let label = keysight_header(text, "Source Name").unwrap_or(name).chars().take(10).collect();
+    Ok(WaveTrace { t0, dt, v, label })
 }
 
 /// A waveform record (`.pwwf`, and the same layout under its older `.tkwf` name): one channel of a capture.
@@ -1662,7 +1731,8 @@ fn parse_wave_csv(text: &str, name: &str) -> Result<Vec<WaveTrace>, String> {
     let mut times: [f64; 2] = [f64::NAN; 2];
     let mut rows = 0usize;
     for line in text.lines() {
-        let mut cols = line.split(',').map(|s| s.trim().parse::<f64>().ok());
+        // a line that ends with its separator ("x, y,") has no column after it
+        let mut cols = line.trim_end().trim_end_matches(',').split(',').map(|s| s.trim().parse::<f64>().ok());
         let Some(Some(t)) = cols.next() else { continue };
         let mut rest = cols.map(|x| x.unwrap_or(f64::NAN)).peekable();
         if rest.peek().is_none() {
@@ -2113,7 +2183,8 @@ fn parse_ag(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
             if dsize < buffer_header || p.checked_add(dsize).and_then(|data| data.checked_add(bsize)).is_none_or(|end| end > b.len()) {
                 return Err("truncated waveform".into());
             }
-            digital |= kind == 5;
+            // 8-bit digital samples: buffer type 6 in an AG file, 5 in an RG file (an AG file has counts there)
+            digital |= kind == if wide { 5 } else { 6 };
             let data = p + dsize;
             if matches!(kind, 1 | 2 | 3) && bpp == 4 && bsize >= 8 && bsize % 4 == 0 {
                 let n = (bsize / 4).min(if npts >= 2 { npts } else { bsize / 4 });
@@ -4613,5 +4684,91 @@ mod rigol_bin_tests {
         let t = &parse_wave(&b, "k.bin").unwrap()[0];
         assert_eq!((t.v.as_slice(), t.label.as_str()), (&v[..], "lane"));
         assert!((t.t0 + 5e-6).abs() < 1e-18);
+    }
+}
+
+#[cfg(test)]
+mod keysight_file_tests {
+    use super::*;
+
+    /// The header of the example in Keysight's description of the Y-values file, with these amplitudes.
+    fn y_values(extra: &str, values: &str) -> String {
+        format!("File Format, WaveformYValues\r\nFormat Version, 2\r\nInstrument, D9300A\r\nSwVersion, P.26.01.214\r\nSerialNumber, MXL3441NC2\r\nDate, 3/30/2026 13:33:17 GMT-06:00\r\n\r\nPoints, 4\r\nSignal Type, Unspecified\r\nSource Name, Channel 1\r\nChannel Noise, 0.002\r\nIntrinsic Jitter, 1E-14\r\nInterpolation Factor, 4\r\n{extra}Bandwidth, 128000000000\r\nX Units, Second\r\nY Units, Volt\r\nData,\r\nfloat\r\n{values}")
+    }
+
+    #[test]
+    fn a_y_values_file_takes_its_time_scale_from_the_header() {
+        let text = y_values("XOrg, -5.0000000000000004E-08\r\nXInc, 9.765625E-13\r\n", "0.248322\r\n0.25\r\n-0.125\r\n1.5E-01\r\n");
+        let traces = parse_wave(text.as_bytes(), "ch1.txt").unwrap();
+        assert_eq!(traces.len(), 1);
+        let t = &traces[0];
+        assert_eq!(t.v, [0.248322, 0.25, -0.125, 0.15]);
+        assert_eq!((t.t0, t.dt, t.label.as_str()), (-5.0000000000000004E-08, 9.765625E-13, "Channel 1"));
+        // version 1 has no number-type line; a byte-order mark before the first line is not part of it
+        let v1 = format!("{}{}", char::from_u32(0xfeff).unwrap(), text.replace("float\r\n", "").replace("Format Version, 2", "Format Version, 1"));
+        assert_eq!(parse_wave(v1.as_bytes(), "ch1.txt").unwrap()[0].v, [0.248322, 0.25, -0.125, 0.15]);
+    }
+
+    #[test]
+    fn a_y_values_file_without_a_time_scale_is_refused_with_its_reason() {
+        let refused = |text: String| parse_wave(text.as_bytes(), "y.txt").map(|_| ()).unwrap_err();
+        assert_eq!(refused(y_values("", "1\r\n2\r\n")), "the Y-values file has no XOrg and XInc in its header");
+        assert_eq!(refused(y_values("XOrg, 0\r\nXInc, 0\r\n", "1\r\n2\r\n")), "that file holds no waveform");
+        assert_eq!(refused(y_values("XOrg, 0\r\nXInc, 1E-9\r\n", "1\r\n")), "that file holds no waveform");
+        // amplitudes alone, the file saved without its header: one column, no time
+        assert_eq!(parse_wave(b"0.1\r\n0.2\r\n0.3\r\n", "y.txt").map(|_| ()).unwrap_err(), "that file holds no waveform");
+    }
+
+    #[test]
+    fn an_xy_values_file_is_read_with_the_name_of_its_source() {
+        let text = "File Format, WaveformXYValues\r\nFormat Version, 2\r\nInstrument, D9300A\r\nDate, 3/30/2026 13:33:48 GMT-06:00\r\n\r\nPoints, 3\r\nSource Name, Channel 2\r\nInterpolation Factor, 0\r\nBandwidth, 128000000000\r\nX Units, Second\r\nY Units, Volt\r\nData,\r\ndouble, float\r\n-5.0E-08, 0.248322,\r\n-4.9E-08, 0.25,\r\n-4.8E-08, -0.125,\r\n";
+        let traces = parse_wave(text.as_bytes(), "wave.csv").unwrap();
+        assert_eq!(traces.len(), 1, "a line that ends with its separator has no column after it");
+        let t = &traces[0];
+        assert_eq!((t.v.as_slice(), t.label.as_str()), (&[0.248322f32, 0.25, -0.125][..], "Channel 2"));
+        assert!((t.t0 + 5.0e-8).abs() < 1e-20 && (t.dt - 1.0e-9).abs() < 1e-18, "{} {}", t.t0, t.dt);
+        // a plain time,volts table keeps the name of its file
+        assert_eq!(parse_wave(b"0,1\n1,2\n2,3\n", "plain.csv").unwrap()[0].label, "plain.csv");
+    }
+
+    #[test]
+    fn containers_that_are_not_read_say_so_and_how_to_get_round_it() {
+        let hdf5 = [0x89, b'H', b'D', b'F', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
+        assert_eq!(parse_wave(&hdf5, "w.h5").map(|_| ()).unwrap_err(), "HDF5 (.h5) waveform files are not read; save the waveform as BIN (.bin) or CSV");
+        let mat = b"MATLAB 5.0 MAT-file, Platform: PCWIN64";
+        assert_eq!(parse_wave(mat, "w.mat").map(|_| ()).unwrap_err(), "MATLAB (.mat) waveform files are not read; save the waveform as BIN (.bin) or CSV");
+    }
+
+    /// An `AG` file of one waveform with one buffer of this type.
+    fn ag(wave_type: u32, buffer_type: u16, bytes_per_point: u16, data: &[u8]) -> Vec<u8> {
+        let mut b = b"AG10".to_vec();
+        b.extend_from_slice(&0u32.to_le_bytes());
+        b.extend_from_slice(&1u32.to_le_bytes());
+        let mut h = vec![0u8; 140];
+        h[..4].copy_from_slice(&140u32.to_le_bytes());
+        h[4..8].copy_from_slice(&wave_type.to_le_bytes());
+        h[8..12].copy_from_slice(&1u32.to_le_bytes());
+        h[12..16].copy_from_slice(&((data.len() / bytes_per_point as usize) as u32).to_le_bytes());
+        h[32..40].copy_from_slice(&1e-9f64.to_le_bytes());
+        h[40..48].copy_from_slice(&(-2e-9f64).to_le_bytes());
+        b.extend(h);
+        b.extend_from_slice(&12u32.to_le_bytes());
+        b.extend_from_slice(&buffer_type.to_le_bytes());
+        b.extend_from_slice(&bytes_per_point.to_le_bytes());
+        b.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        b.extend_from_slice(data);
+        b
+    }
+
+    #[test]
+    fn the_digital_buffer_of_an_ag_file_is_type_six_and_its_counts_are_not_logic() {
+        let refused = |bytes: Vec<u8>| parse_wave(&bytes, "k.bin").map(|_| ()).unwrap_err();
+        assert_eq!(refused(ag(6, 6, 1, &[0, 1, 1, 0])), "that file holds logic channels only, and they are not read");
+        // type 5 in an AG file is the counts of a histogram: no trace, and not called a logic channel
+        let counts: Vec<u8> = [3.0f32, 9.0, 4.0].iter().flat_map(|x| x.to_le_bytes()).collect();
+        assert_eq!(refused(ag(5, 5, 4, &counts)), "that file holds no waveform");
+        let volts: Vec<u8> = [0.5f32, -0.5, 0.25].iter().flat_map(|x| x.to_le_bytes()).collect();
+        let t = &parse_wave(&ag(1, 1, 4, &volts), "k.bin").unwrap()[0];
+        assert_eq!((t.v.as_slice(), t.t0, t.dt), (&[0.5f32, -0.5, 0.25][..], -2e-9, 1e-9));
     }
 }

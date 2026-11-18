@@ -1760,8 +1760,9 @@ pub struct Ui {
     /// why (hwmask.rs); the software test and filter take over
     unit_blocked: Option<String>,
     pub shot_request: Option<String>,
-    /// Storage > Save setup as SCPI: the file to write. The interpreter writes it at its next poll, since the lines
-    /// are the answers of its own queries (`Scpi::poll`, scpi/setupscpi.rs).
+    /// Storage > Save setup as SCPI: the file to write, under the name the user gave it (ui/files.rs). The interpreter
+    /// writes it at its next poll, since the lines are the answers of its own queries (`Scpi::poll`,
+    /// scpi/setupscpi.rs).
     pub setup_scpi_request: Option<std::path::PathBuf>,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
@@ -9724,16 +9725,23 @@ impl Ui {
         }
     }
 
-    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request. `rest`: the keys no
-    /// line could carry.
-    pub(crate) fn setup_scpi_save(&mut self, path: &std::path::Path, text: &str, rest: &[String]) {
+    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request into `path`, the file
+    /// the request named. `without`: what no line could carry, in words.
+    pub(crate) fn setup_scpi_save(&mut self, path: &std::path::Path, text: &str, without: Option<&str>) {
         let r = crate::store::write(path, text.as_bytes());
-        if r.is_ok() && !rest.is_empty() {
-            self.flush_stick();
-            self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(path), self.saved_where(), rest.join(" ")));
-        } else {
-            self.toast_saved(path, r);
+        match (r.is_ok(), without) {
+            (true, Some(keys)) => {
+                self.flush_stick();
+                self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(path), self.saved_where(), keys));
+            }
+            _ => self.toast_saved(path, r),
         }
+    }
+
+    /// The text of the message on the screen, for the tests of other modules.
+    #[cfg(test)]
+    pub(crate) fn toast_text(&self) -> String {
+        self.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default()
     }
 
     /// File of the current setup slot: a setup is small and has to survive a power cycle, so the default storage directory

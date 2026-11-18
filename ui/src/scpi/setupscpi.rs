@@ -165,6 +165,15 @@ pub(crate) fn row_of(key: &str) -> Option<(usize, Vec<String>)> {
 /// How often the commands are mended against the second scope; the last time with key = value lines only.
 const PASSES: usize = 4;
 
+/// What the commands do not bring back, for an error or a message: the first keys by name and how many more. None:
+/// nothing. An error holds 256 characters, a message a line of the screen.
+pub(crate) fn named(rest: &[String]) -> Option<String> {
+    const SHOWN: usize = 4;
+    if rest.is_empty() { return None; }
+    let more = rest.len().saturating_sub(SHOWN);
+    Some(format!("{}{}", rest[..rest.len().min(SHOWN)].join(" "), if more > 0 { format!(" and {more} more") } else { String::new() }))
+}
+
 /// The second scope: an interpreter no client reaches and a model with no hardware behind it, sent `lines`. What
 /// Default leaves alone (`prefs`: the Quick key action and the text size) is as on the first.
 fn second_scope(lines: &[String], prefs: (Quick, TextSize), cv: &Canvas) -> (Scpi, Ui) {
@@ -185,7 +194,7 @@ impl Scpi {
     /// keys differ (a value with a `;` in it, which no line can carry).
     pub(crate) fn setup_scpi(&mut self, ui: &mut Ui, cv: &Canvas) -> String {
         let (text, rest) = self.setup_scpi_proven(ui, cv);
-        if !rest.is_empty() { self.push_err(format!("-221,\"Settings conflict\" the commands do not bring back: {}", rest.join(" "))); }
+        if let Some(keys) = named(&rest) { self.push_err(format!("-221,\"Settings conflict\" the commands do not bring back: {keys}")); }
         text
     }
 
@@ -199,7 +208,11 @@ impl Scpi {
         let mut lines = vec!["*RST".to_string()];
         let (mut scpi, mut scope) = second_scope(&lines, prefs, cv);
         let mut refused = std::collections::BTreeSet::new();
+        // a line that was not written may still have left something on the second scope: it is made again from the
+        // lines, once before the next pass, so the work of a query stays bounded (PASSES + 2 scopes at most)
+        let mut stale = false;
         for pass in 0..PASSES {
+            if std::mem::take(&mut stale) { (scpi, scope) = second_scope(&lines, prefs, cv); }
             let have = crate::store::setup_text(&scope.m);
             let commands = self.setup_commands(ui, cv, &have, &want, &refused, pass + 1 == PASSES);
             if commands.is_empty() { break; }
@@ -215,8 +228,7 @@ impl Scpi {
                 }
                 // the header does not carry this value (the value is not one of its own, or is as exact as it goes)
                 refused.insert(c.split_whitespace().next().unwrap_or("").to_string());
-                // a refused line may have done a part: the second scope is again what the lines alone make of it
-                if !taken { (scpi, scope) = second_scope(&lines, prefs, cv); }
+                stale = true;
             }
         }
         let (scpi, scope) = second_scope(&lines, prefs, cv);
@@ -261,7 +273,9 @@ impl Scpi {
         let reply = self.exec_cmd(ui, cv, &format!("{header}?"));
         let value = String::from_utf8(reply?).ok()?;
         let value = value.trim();
-        (self.error_serial == serial && self.err.len() == queued && !value.is_empty()).then(|| format!("{header} {value}"))
+        // an answer of several lines or with a `;` is not one command: a file of lines and a message are split there
+        let one = !value.is_empty() && !value.contains([';', '\n', '\r']);
+        (self.error_serial == serial && self.err.len() == queued && one).then(|| format!("{header} {value}"))
     }
 }
 
@@ -507,6 +521,9 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         ui.store_dir = dir.clone();
         s.exec_line(&mut ui, &cv, ":CHANnel2:DISPlay ON");
+        s.exec_line(&mut ui, &cv, ":NO:SUCH:HEADer 1");
+        let queued = s.queued_errors().to_vec();
+        assert_eq!(queued.len(), 1);
         crate::store::set(&mut ui.m, "studio_dock", "tree;f@1:2:300:200").unwrap();
         ui.script_menu("Storage").unwrap();
         ui.script_do("Save setup as SCPI").unwrap();
@@ -518,13 +535,23 @@ mod tests {
         let files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
         assert!(files.len() == 1 && files[0].extension().is_some_and(|x| x == "scpi"), "{files:?}");
         assert_eq!(std::fs::read_to_string(&files[0]).unwrap(), "*RST\n:CHANnel2:DISPlay 1\n");
-        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        assert_eq!(s.queued_errors(), queued, "the queue is the client's: the row adds nothing and takes nothing");
+        let message = ui.toast_text();
+        assert!(message.starts_with("Saved setup") && message.ends_with("without studio_dock"), "{message}");
         // a second press proposes the next name: a second file
         ui.script_do("Save setup as SCPI").unwrap();
         ui.script_ok().unwrap();
         s.poll(&mut ui, &cv);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn what_is_not_brought_back_is_named_in_few_words() {
+        assert_eq!(named(&[]), None);
+        let keys: Vec<String> = ["a", "b", "c", "d", "e", "f"].map(String::from).to_vec();
+        assert_eq!(named(&keys[..2]).unwrap(), "a b");
+        assert_eq!(named(&keys).unwrap(), "a b c d and 2 more");
     }
 
     /// The "Equivalent header" column of `docs/scpi/setup-keys.md` names the headers of the rows.
