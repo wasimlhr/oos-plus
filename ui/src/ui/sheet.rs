@@ -228,13 +228,14 @@ impl Ui {
                 MaskClear => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
-            M::Sim => (&["Signal", "Channel", "Jitter", "Show"], |it| match it {
-                SimPreset | SimSlot | SimRate | SimPat | SimHigh | SimLow | SimLoad => Slot::Tab(0),
-                SimAddRef | SimPlay => Slot::Foot(0),
-                SimRise | SimBw | SimDeemph | SimNoise => Slot::Tab(1),
-                SimRj | SimPj | SimPjHz | SimSsc | Open(M::SimAdvanced) => Slot::Tab(2),
-                SimLive | SimDefaults => Slot::Foot(3),
-                _ => Slot::Tab(3),
+            // what is played and where it goes, then the knobs: levels and channel, jitter, spread spectrum. The rows
+            // of the Advanced page are rows of these tabs; the actions are pinned by `sheet_spec`
+            M::Sim => (&["Signal", "Levels", "Jitter", "Spread"], |it| match it {
+                SimPreset | SimRate | SimPat | SimSlot | SimShow | SimLoad | SimLive => Slot::Tab(0),
+                SimHigh | SimLow | SimRise | SimBw | SimDeemph | SimNoise => Slot::Tab(1),
+                SimRj | SimPj | SimPjHz | SimDcd | SimCorrRj | SimCorrHz => Slot::Tab(2),
+                SimSsc | SimSscCenter | SimSscDeviation | SimSscHz => Slot::Tab(3),
+                _ => Slot::Skip,
             }),
             M::SimAdvanced => (&["Spread spectrum", "Other jitter"], |it| match it {
                 SimSsc | SimSscCenter | SimSscDeviation | SimSscHz => Slot::Tab(0),
@@ -326,6 +327,12 @@ impl Ui {
             MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c))).collect(),
             MenuId::Decode | MenuId::Bus => self.items(MenuId::Decode).into_iter().chain(self.items(MenuId::Bus)).collect(),
             MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
+            // SIM: the knobs of its Advanced page are rows of the sheet's own tabs, so the link to that page is left out
+            MenuId::Sim => {
+                let mut v: Vec<Item> = self.items(MenuId::Sim).into_iter().filter(|it| *it != Item::Open(MenuId::SimAdvanced)).collect();
+                for it in self.items(MenuId::SimAdvanced) { if !v.contains(&it) { v.push(it); } }
+                v
+            }
             m => self.items(m),
         }
     }
@@ -372,6 +379,15 @@ impl Ui {
                 if menu == MenuId::Cursor && tabs.len() > 1 {
                     let rest: Vec<Item> = tabs.drain(1..).flat_map(|t| t.rows).collect();
                     tabs[0].rows.extend(rest);
+                }
+            }
+            // SIM: the slot's rows follow the slot, and Live comes last, so no row moves when SIM mode starts under
+            // the finger. Run is under every tab: beside Add on the tab of the slot, beside Defaults on the knob tabs
+            if menu == MenuId::Sim {
+                let order = [Item::SimPreset, Item::SimRate, Item::SimPat, Item::SimSlot, Item::SimShow, Item::SimLoad, Item::SimLive];
+                tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+                for (i, t) in tabs.iter_mut().enumerate() {
+                    t.foot = if i == 0 { vec![Item::SimAddRef, Item::SimPlay] } else { vec![Item::SimPlay, Item::SimDefaults] };
                 }
             }
             // the next-free action is offered only when the selected slot is taken
@@ -502,9 +518,12 @@ impl Ui {
         }
     }
 
-    fn sheet_on(&self, it: Item) -> bool {
+    /// Whether the switch of a Toggle row is on.
+    pub(super) fn sheet_on(&self, it: Item) -> bool {
         match it {
             Item::RefShow(i) => self.refs.get(i).and_then(|r| r.as_ref()).is_some_and(|r| r.on),
+            // its value names the slot ("R1 on", "empty"), so the switch reads the slot itself
+            Item::SimShow => self.sim_shown() == Some(true),
             _ => self.value(it) == "On",
         }
     }
@@ -538,6 +557,13 @@ impl Ui {
             }
             Item::SimAddRef => format!("Add to R{}", self.m.sim_slot + 1),
             Item::SimLoad => format!("Load file into R{}…", self.m.sim_slot + 1),
+            Item::SimShow => format!("Show R{}", self.m.sim_slot + 1),
+            Item::SimLive => "Back to live".into(),
+            // the tab is named Spread: its rows do not repeat it
+            Item::SimSsc => "Spread spectrum".into(),
+            Item::SimSscCenter => "Profile".into(),
+            Item::SimSscDeviation => "Deviation".into(),
+            Item::SimSscHz => "Frequency".into(),
             Item::RefImport => format!("Load file into R{}…", self.ref_sel + 1),
             Item::RefShow(_) => "Shown".into(),
             Item::RefSaveNext => self.ref_store_next_label(),
@@ -897,6 +923,10 @@ impl Ui {
             RowKind::Toggle => {
                 if let Item::RefShow(_) = it {
                     self.activate(it);
+                } else if it == Item::SimShow {
+                    // one step is the switch: its value is the slot's name, never "On" or "Off", and selecting an
+                    // option stepped it eight times, back to where it was
+                    self.adjust(it, 1);
                 } else {
                     let on = self.sheet_on(it);
                     self.select_option(it, if on { "Off" } else { "On" });

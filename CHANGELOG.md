@@ -88,6 +88,13 @@ Added:
     message, not a warning;
   - the **SIM** button of Studio opens the SIM sheet (Play and Add to ref are at its foot); it used to start playing
     the last preset before a setting could be seen;
+  - the SIM sheet of Minimal and Studio has the tabs Signal, Levels, Jitter and Spread. The knobs of the Advanced
+    page (duty-cycle distortion, correlated jitter, the spread-spectrum profile, deviation and frequency) are rows
+    of Jitter and Spread, so there is no second page. Run is under every tab, beside Add on Signal and beside
+    Defaults on the knob tabs; the Show tab, which held one switch, is gone. Back to live is the last row of
+    Signal, so no row moves when SIM mode starts (host-tested);
+  - the switch that shows the reference of the SIM slot works and shows its state. In the sheet it did nothing: a
+    tap stepped it eight times, back to where it was, and it was always drawn off (host-tested);
   - a docked event table (decoder events, search, segments) has its title and count in the title strip of the view,
     which gives one more row; its columns fit their content, and a divider between two columns can be dragged;
   - a channel whose record reaches the end of the ADC range is named in red in the plot and gets a red pill border;

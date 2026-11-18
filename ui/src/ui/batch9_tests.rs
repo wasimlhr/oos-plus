@@ -46,6 +46,8 @@ fn all_reachable(u: &Ui, m: MenuId) {
     let spec = u.sheet_spec(m).unwrap_or_else(|| panic!("{m:?} has a sheet"));
     let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().chain(t.foot.iter()).copied()).collect();
     for it in u.items(m) {
+        // a page whose rows are all rows of this sheet needs no link to it (SIM and its Advanced page)
+        if let Item::Open(sub) = it { if u.items(sub).iter().all(|s| on_sheet.contains(s)) { continue; } }
         assert!(on_sheet.contains(&it), "{m:?}: {it:?} is reachable on the sheet");
     }
     for t in &spec.tabs {
@@ -182,17 +184,11 @@ fn mask_sim_and_la_pages() {
     open(&mut u, MenuId::Sim);
     shot(&mut u, "sim-1");
     for i in 1..4 { tab(&mut u, i); shot(&mut u, &format!("sim-{}", i + 1)); }
-    // Advanced is a link on the Jitter tab, and it opens as a sheet with Back
-    tab(&mut u, 2);
-    let g = u.sheet_geo().unwrap();
-    let adv = g.rows.iter().find(|r| r.it == Item::Open(MenuId::SimAdvanced)).expect("Advanced link");
-    assert_eq!(adv.kind, RowKind::Link);
-    tap_in(&mut u, adv.ctrl);
-    assert_eq!(u.menu, MenuId::SimAdvanced);
-    assert!(u.sheet_active() && u.sheet_chrome().1.is_some());
-    shot(&mut u, "sim-advanced");
-    let b = u.sheet_chrome().1.unwrap();
-    tap_in(&mut u, b);
+    // the knobs of the Advanced page are rows of the Jitter and Spread tabs: no link, no second page
+    let spec = u.sheet_spec(MenuId::Sim).unwrap();
+    assert!(spec.tabs.iter().all(|t| !t.rows.contains(&Item::Open(MenuId::SimAdvanced))), "no link to Advanced");
+    assert!(spec.tabs[2].rows.contains(&Item::SimDcd) && spec.tabs[2].rows.contains(&Item::SimCorrRj) && spec.tabs[2].rows.contains(&Item::SimCorrHz), "the other jitter is on Jitter");
+    assert_eq!(spec.tabs[3].rows, [Item::SimSsc, Item::SimSscCenter, Item::SimSscDeviation, Item::SimSscHz], "spread spectrum is a tab");
     assert_eq!(u.menu, MenuId::Sim);
     // LA: lines are four to a tab, and the channel list never scrolls
     open(&mut u, MenuId::La);
