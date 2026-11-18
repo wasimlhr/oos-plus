@@ -1062,7 +1062,7 @@ fn every_sim_preset_sits_in_a_ref_beside_the_live_channels() {
         let r = u.refs[0].as_ref().unwrap_or_else(|| panic!("{name}: R1 is filled: {:?}", u.toast));
         let (len, dt) = (r.v.len(), r.dt);
         assert!(r.on && len > 100 && r.v.iter().all(|x| x.is_finite()), "{name}: shown, {len} points");
-        // as long as the live screen (2 ms here), or as long as the sample limit of a reference allows
+        // as long as the live screen (2 ms here), or as long as the budget of a reference allows (4 M samples in a test)
         assert!(len as f64 * dt >= 2e-3 * 0.99 || len >= 4_000_000, "{name}: {len} points of {dt:e} s are {:e} s", len as f64 * dt);
         let (lo, hi) = r.v.iter().fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
         assert!(hi - lo > 1e-3, "{name}: the waveform has a swing, {lo}..{hi}");

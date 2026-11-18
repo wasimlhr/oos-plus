@@ -94,6 +94,11 @@ Added:
     4 million samples (it was always 65 536 samples, a few microseconds of a fast lane and a blip beside a
     millisecond record). SIM Play keeps its own short record. At 4 million samples USB 2.0 HS covers 1 ms and
     PCIe 1.0 0.2 ms; the fastest lanes still cover tens of microseconds, which is all their sample rate gives;
+  - the length of that SIM record is no longer a fixed 4 million samples: it is what the machine generates in
+    three seconds and holds in an eighth of its free memory, up to the generator's 16 M samples, so it follows the
+    scope or the computer it runs on, and the message says what ended it short of the screen. On a DHO924S that is
+    7.5 to 8.4 M samples (unit): 0.2 ms of PCIe 2.0 where it was 0.1 ms. The time a record covers still follows
+    the lane (8 samples a bit): the same budget is 9 ms at 100 Mbit/s and 15 us at 64 Gbit/s;
   - a SIM waveform added to a reference while the scope runs live says how long it is when it is far shorter than the
     screen, and its message carries the tick of a done action instead of the warning triangle;
   - the Histogram view of Studio uses its whole height (it copied the position of the channel's lane, a third of the
