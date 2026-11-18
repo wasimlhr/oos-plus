@@ -36,9 +36,10 @@ pub fn slow_mode(m: &Model) -> Slow {
 
 /// SINGLE ends with the first frame after the press (`Settings::single`): one frame per batch and no batch after it
 /// until the next press. Not when the UI may refuse that frame and wait for another: a protocol trigger (the decoder
-/// decides) or a zone trigger.
+/// decides) or a zone trigger. Nor with segments: the UI counts the records of a segmented run itself and stops
+/// after the last, so a SINGLE of 10 segments needs ten frames (with one it waited for good, on a unit 2026-11-18).
 fn single_takes_first(m: &Model) -> bool {
-    m.trig_mode == TrigMode::Single && m.trig_type != TrigType::Bus && !m.zones.iter().any(|z| z.usable())
+    m.trig_mode == TrigMode::Single && m.trig_type != TrigType::Bus && !m.zones.iter().any(|z| z.usable()) && m.segments == 0
 }
 
 /// Whether the thread acquires another batch for SINGLE: not once a batch brought frames under this press's `stamp`
@@ -2510,6 +2511,11 @@ mod tests {
         m.trig_type = TrigType::Edge;
         m.zones[0] = crate::zone::Zone { on: true, src: 0, inside: true, pts: vec![(0.0, 0.0), (1e-6, 1.0)] };
         assert!(m.zones[0].usable() && !settings(&m, false).single);
+        // segments: the UI takes as many records as the run has segments
+        m.zones[0].on = false;
+        assert!(settings(&m, false).single);
+        m.segments = 10;
+        assert!(!settings(&m, false).single);
     }
 
     // Break it catches: Auto depth that ignores the trigger delay, so the record (centred on the delay, the trigger

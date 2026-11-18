@@ -3905,6 +3905,7 @@ impl Ui {
             cv.blend(Rect::new(o.x, o.y, (xa - o.x).max(0), o.h), BG, 170);
             cv.blend(Rect::new(xb, o.y, (o.x + o.w - xb).max(0), o.h), BG, 170);
             if self.m.layout == Layout::Studio {
+                self.draw_studio_overview_axis(cv, o);
                 self.draw_studio_window(cv, o, xa, xb);
                 self.draw_studio_overview_cursors(cv, o);
             } else {

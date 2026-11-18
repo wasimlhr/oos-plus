@@ -357,7 +357,7 @@
     {
      "header": ":SYSTem:INFO",
      "query": ":SYSTem:INFO?",
-     "desc": "The System info page as text: `label,value` lines, `# heading` lines",
+     "desc": "The System info page in one line: each line of the page a quoted string, `\"label,value\"` or `\"# heading\"`, separated by commas",
      "remarks": [
       "- Menu equivalent: System > System info.",
       "- Origin: OOS extension"
@@ -698,7 +698,7 @@
     {
      "header": ":SYSTem:WLAN:NETWorks",
      "query": ":SYSTem:WLAN:NETWorks?",
-     "desc": "The scanned networks, one per line.",
+     "desc": "The scanned networks, each a quoted string, separated by commas in one line.",
      "remarks": [
       "- Menu equivalent: System > Network > WLAN.",
       "- Origin: OOS extension"
@@ -709,7 +709,7 @@
     {
      "header": ":SYSTem:WLAN:SAVed",
      "query": ":SYSTem:WLAN:SAVed?",
-     "desc": "The saved networks, one per line.",
+     "desc": "The saved networks, each a quoted string, separated by commas in one line; empty without any.",
      "remarks": [
       "- Menu equivalent: System > Network > WLAN.",
       "- Origin: OOS extension"
@@ -902,7 +902,7 @@
     {
      "header": ":SYSTem:UPDate:STATus",
      "query": ":SYSTem:UPDate:STATus?",
-     "desc": "The Update page as text",
+     "desc": "The Update page in one line: each of its lines a quoted string, separated by commas",
      "remarks": [
       "- Menu equivalent: System > Update and power > Update.",
       "- Origin: OOS extension"
@@ -1610,7 +1610,7 @@
       [
        "<value>",
        "Text",
-       "Vertical position in divisions, converted through that channel's current scale.",
+       "The same value as `:CHANnel<n>:OFFSet`, in volts (not in divisions).",
        "-1.500000E+00"
       ]
      ],
@@ -2083,7 +2083,7 @@
       [
        "<value>",
        "Text",
-       "Channel role of the XY axis.",
+       "The X axis of the XY picture is `CHAN1`; it is not selectable, and another channel is -224.",
        "CHAN1"
       ]
      ],
@@ -2101,7 +2101,7 @@
       [
        "<value>",
        "Text",
-       "Channel role of the XY axis.",
+       "The Y axis of the XY picture is `CHAN2`; it is not selectable, and another channel is -224.",
        "CHAN2"
       ]
      ],
@@ -6428,7 +6428,7 @@
       [
        "\"path\"",
        "Text",
-       "Load into that slot. Absolute paths refer to the server PC/scope; relative paths are beside setups. A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read.",
+       "Load into that slot. Absolute paths refer to the server PC/scope; relative paths are beside setups, else in the save folder (where `:REFerence:EXPort \"name\"` and `:SAVE:WAVeform \"name\"` write). A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read.",
        "—"
       ]
      ],

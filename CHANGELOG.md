@@ -101,6 +101,16 @@ Added:
   - `:WAVeform:SOURce MATH<n>` and `:MEASure:ITEM? <item>,MATH<n>` read and measure a math channel;
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
+- Studio, zoom and the top bar, from using them on the scope with a finger (unit):
+  - the overview over the zoom view has a time axis of its own: a line at every division and the time under it. It
+    had the trace and the window, and no time to read the window against;
+  - the zoom toolbar of the pull-down tab is a finger high (44 px, its chips 42), and it stays open until its label
+    "Zoom" is tapped or pushed up. It was 30 px with chips of 20, and it shut after four seconds and with any touch
+    beside it, so it had to be pulled down again for every step. The tab itself is larger too;
+  - a long touch on the zoom overview or on the zoom toolbar opens no menu: a finger rests there while it moves the
+    window, and the menu of the plot opened under it. The zoom view and the lanes keep that menu;
+  - the top bar says the sample rate, the memory depth and the acquisition mode, each a small label over its
+    value, where it had the rate and the depth in one line.
 - Studio, the zoom source popover (hold the Zoom button): **X zoom** minus and plus beside the Y zoom ones. One
   step of the zoom time base around the centre of the zoom window; minus ends at the main time base (unit: 100×
   after three steps). Remote: `:UI:CONText` on the Zoom button opens that popover, where it opened the menu of the plot
@@ -141,6 +151,11 @@ Added:
     4 million samples (it was always 65 536 samples, a few microseconds of a fast lane and a blip beside a
     millisecond record). SIM Play keeps its own short record. At 4 million samples USB 2.0 HS covers 1 ms and
     PCIe 1.0 0.2 ms; the fastest lanes still cover tens of microseconds, which is all their sample rate gives;
+  - the length of that SIM record is no longer a fixed 4 million samples: it is what the machine generates in
+    three seconds and holds in an eighth of its free memory, up to the generator's 16 M samples, so it follows the
+    scope or the computer it runs on, and the message says what ended it short of the screen. On a DHO924S that is
+    7.5 to 8.4 M samples (unit): 0.2 ms of PCIe 2.0 where it was 0.1 ms. The time a record covers still follows
+    the lane (8 samples a bit): the same budget is 9 ms at 100 Mbit/s and 15 us at 64 Gbit/s;
   - a SIM waveform added to a reference while the scope runs live says how long it is when it is far shorter than the
     screen, and its message carries the tick of a done action instead of the warning triangle;
   - the Histogram view of Studio uses its whole height (it copied the position of the channel's lane, a third of the
@@ -301,6 +316,18 @@ Fixed:
     generator back to 1 kHz. Whether the output is on is not saved, and a recall leaves it off, also when it was on
     (unit: square 12.345 kHz, 0.5 Vpp, 0.1 V offset, 30 % duty back after `*RCL` and after `:LOAD:SESSion`, output off
     both times). An arbitrary wave is not saved;
+  - Spectrum: the fundamental, THD, SNR and the other distortion figures of a signal with harmonics and few periods
+    on the screen. With five periods the window's lobe of the fundamental held the third harmonic: a 10 kHz square
+    read 16.2 kHz, a ramp 12.3 kHz. The window follows the number of periods in the record (unit: square, ramp and
+    sine at 10 kHz read 10.00 kHz from 50 us/div to 1 ms/div);
+  - a Single with segments on the hardware records all of them. The acquisition stopped after the first record of
+    a Single, and the screen waited for the others for good (unit: 10 and 100 segments in 1.6 s);
+  - `:REFerence:LOAD "name"` also finds a file of the save folder, where `:REFerence:EXPort "name"` and
+    `:SAVE:WAVeform "name"` write it; it looked beside the setups only and did not find its own export (unit);
+  - `:SYSTem:INFO?`, `:SYSTem:UPDate:STATus?`, `:SYSTem:WLAN:NETWorks?` and `:SYSTem:WLAN:SAVed?` answer in one
+    line, each line of the text a quoted string, separated by commas. They answered several lines, and a client
+    that reads an answer as a line took each for the answer to its next query (unit: after `:SYSTem:INFO?` fifty
+    answers were out of step);
   - VXI-11 `device_readstb` answers the status byte of `*STB?`, with bit 4 while an answer of the link waits; it
     answered 0 whatever the state (unit). `device_trigger` is `*TRG`. HiSLIP's AsyncStatusQuery answers the status
     byte too (desktop app; HiSLIP is not opened on a scope, and the table of the interfaces says so now);

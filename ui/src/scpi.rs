@@ -7635,6 +7635,13 @@ mod tests {
         ui.step(0.05);
         line(&mut s, &mut ui, &cv, ":STOP;*CLS;:SAVE:DEST DESK;:SAVE:WAV \"a.csv\";:SAVE:MEM:WAV \"m.bin\";:SAVE:MEM:WAV \"m.csv\"");
         assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+        // a reference exported under a name is loaded by that name (it lies in the save folder, and the load looked
+        // beside the setups only: -256 on a unit, 2026-11-18)
+        line(&mut s, &mut ui, &cv, ":REF:CURR 1;:REF:SOUR 1,CHAN1;:REF:SAVE;:REF:EXP \"r-export.csv\";:REF:CURR 2;:REF:LOAD \"r-export.csv\"");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+        line(&mut s, &mut ui, &cv, ":WAV:SOUR R2");
+        assert!(line(&mut s, &mut ui, &cv, ":WAV:POIN?").parse::<usize>().unwrap() > 100);
+        line(&mut s, &mut ui, &cv, ":WAV:SOUR CHAN1;:REF:CLE;:MMEM:DEL \"r-export.csv\"");
         let catalog = line(&mut s, &mut ui, &cv, ":MMEM:CAT?");
         let size = std::fs::metadata(dir.join("a.csv")).unwrap().len();
         assert!(catalog.contains(&format!("\"a.csv,,{size}\"")) && catalog.contains("\"m.bin,,") && catalog.contains("\"m.csv,,"), "{catalog}");

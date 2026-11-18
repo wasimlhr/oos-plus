@@ -512,7 +512,7 @@ fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
     assert!(u.m.studio_zoom_tab && u.studio_zoom_bar().is_none() && !u.zoom_tab_open());
     let tab = u.zoom_tab_rect();
     let (_, z) = u.split_zoom(u.grid);
-    assert!(tab.y == z.y && tab.w < 200 && tab.h <= 22);
+    assert!(tab.y == z.y && tab.w < 200 && tab.h <= 28);
     shotb(&mut u, "zoom-tab-closed");
     tap(&mut u, tab);
     assert!(u.zoom_tab_open() && u.studio_zoom_bar().is_some());
@@ -525,14 +525,25 @@ fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
     let z0 = u.m.zscale;
     tap(&mut u, bar.plus);
     assert!(u.m.zscale < z0 && u.zoom_tab_open());
-    // a tap outside shuts it
+    // it is used with a finger: the chips are a finger high, and it stays through a tap elsewhere and through time
+    assert!(bar.plus.h >= 40 && bar.minus.h >= 40 && bar.close.h >= 40, "{:?}", bar.plus);
     tap_at(&mut u, 200, z.y + 80);
-    assert!(!u.zoom_tab_open());
-    // idle shuts it too
-    let tab = u.zoom_tab_rect();
-    tap(&mut u, tab);
-    assert!(u.zoom_tab_open());
+    assert!(u.zoom_tab_open(), "a tap on the trace is not for the toolbar");
     for _ in 0..30 { u.step(0.2); }
+    assert!(u.zoom_tab_open(), "it does not go away by itself");
+    // a long touch on the overview or on the toolbar opens no menu: a finger rests there while it works the zoom
+    let (overview, zoomed_view) = u.split_zoom(u.grid);
+    let bar_rect = u.zoom_tab_bar_rect();
+    for (x, y) in [(overview.x + overview.w / 3, overview.y + overview.h / 2), (bar_rect.x + bar_rect.w / 2, bar_rect.y + bar_rect.h / 2)] {
+        u.context_menu(x, y);
+        assert!(u.studio.ctx.is_none() && u.workspace.popup.is_none(), "a menu at ({x}, {y})");
+    }
+    u.context_menu(zoomed_view.x + zoomed_view.w / 3, zoomed_view.y + zoomed_view.h / 2 + 30);
+    assert!(u.studio.ctx.is_some(), "the zoom view keeps the menu of the plot");
+    u.studio.ctx = None;
+    // a tap on its label folds it to the tab again
+    let label = u.studio_zoom_bar().unwrap().label;
+    tap(&mut u, label);
     assert!(!u.zoom_tab_open());
     // pulled down it opens
     let tab = u.zoom_tab_rect();
