@@ -89,6 +89,18 @@ fn open_waveform(ui: &mut Ui, win: &Window, loader: &mut picker::Loader) {
     }
 }
 
+/// Files dropped on the window are opened as the command line opens them (`--open`): a session as a session, a
+/// waveform into the next empty reference slots, in the order they were dropped. A file that cannot be read says
+/// why in a toast and the others are still opened.
+fn open_dropped(ui: &mut Ui, files: &[std::path::PathBuf]) {
+    for file in files {
+        if let Err(reason) = crate::open_file(ui, &file.to_string_lossy()) {
+            let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "file".into());
+            ui.toast(&format!("{name}: {reason}"));
+        }
+    }
+}
+
 #[derive(Default)]
 struct PointerState {
     touch: Option<(i32, i32)>,
@@ -248,6 +260,13 @@ pub fn run(mut ui: Ui, args: &[String]) {
                 Err(error) => ui.toast(&error),
             }
         }
+        let dropped = input.dropped();
+        if !dropped.is_empty() {
+            loader.cancel();
+            open_dropped(&mut ui, &dropped);
+            // reading a large capture takes a moment: that time is not acquisition time
+            last = Instant::now();
+        }
         if std::mem::take(&mut ui.open_wave_request) {
             open_waveform(&mut ui, &win, &mut loader);
             // The dialog pumps Windows messages independently; discard elapsed acquisition time and mouse state.
@@ -291,6 +310,45 @@ pub fn run(mut ui: Ui, args: &[String]) {
 mod tests {
     use super::*;
     use crate::model::{RunState, TrigMode};
+
+    /// A float32 waveform record (`.pwwf`) of these volts, one microsecond apart.
+    fn record(volts: &[f32]) -> Vec<u8> {
+        let header = format!(r#"{{"sampleType":"float32","nPoints":{},"xincr":1e-6,"channel":"CH1"}}"#, volts.len());
+        let mut b = b"PWWF0001".to_vec();
+        b.extend_from_slice(&(header.len() as u32).to_le_bytes());
+        b.extend_from_slice(header.as_bytes());
+        for v in volts {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        b
+    }
+
+    #[test]
+    fn dropped_files_open_in_order_and_one_that_cannot_be_read_does_not_stop_the_others() {
+        let dir = std::env::temp_dir().join(format!("oos-drop-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (a, b, bad) = (dir.join("a.pwwf"), dir.join("b.pwwf"), dir.join("notes.txt"));
+        std::fs::write(&a, record(&[0.0, 1.0, 0.5])).unwrap();
+        std::fs::write(&b, record(&[2.0, 3.0])).unwrap();
+        std::fs::write(&bad, [0xffu8, 0xfe, 0x00, 0x01]).unwrap();
+        let mut ui = Ui::new(crate::wave::Source::Demo { t: 0.0 });
+        ui.store_dir = dir.clone();
+        // two captures with a file between them that is no waveform, and one that is not there
+        open_dropped(&mut ui, &[a.clone(), bad, dir.join("gone.pwwf"), b]);
+        assert_eq!(ui.ref_volts(0), [0.0, 1.0, 0.5]);
+        assert_eq!(ui.ref_volts(1), [2.0, 3.0], "the capture after the unreadable files is still opened");
+        assert!(ui.ref_volts(2).is_empty());
+
+        // a session dropped on the window is the whole bench again
+        let session = dir.join("bench.oss");
+        ui.session_save(session.to_str().unwrap()).unwrap();
+        let mut other = Ui::new(crate::wave::Source::Demo { t: 0.0 });
+        other.store_dir = dir.clone();
+        open_dropped(&mut other, &[session, a]);
+        assert_eq!((other.ref_volts(0), other.ref_volts(1)), (vec![0.0, 1.0, 0.5], vec![2.0, 3.0]));
+        assert_eq!(other.ref_volts(2), [0.0, 1.0, 0.5], "a capture dropped with a session is added to it");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn queued_short_panel_click_dispatches_once_and_canceled_or_crossed_gestures_do_not() {
