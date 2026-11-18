@@ -7,8 +7,14 @@
 //! command leaves for the next frame (a screenshot) is done before the next command. A line that waits for an
 //! operation (`*OPC?` after a Single or an auto set-up) is asked again every frame until it has ended, for at most
 //! `WAIT_MAX`. A comment line (`#`) and an empty line are no commands. What a line is refused is the file's and not
-//! a client's: it is taken out of the error queue and said on the screen at the end. Being a client's, what the file
-//! sets is not written by the SCPI recorder.
+//! a client's: the command is run with an error queue and status of its own, a client's are put back as they were,
+//! and the screen says at the end what was refused. Being a client's, what the file sets is not written by the SCPI
+//! recorder.
+//!
+//! A file has the authority of a client on the network, with one exception. The commands that switch the scope off,
+//! install an update or close a service take the word `CONFIRM`, so that they are not sent by accident. In a file
+//! the word is the author's, not the person's who tapped the file: a line with `CONFIRM` is not run, and is said
+//! with what was refused. A client sends such a command itself.
 
 use super::*;
 
@@ -45,6 +51,10 @@ impl Scpi {
                 match replay.lines.pop_front() {
                     None => return Self::replay_end(ui, replay),
                     Some(line) if line.trim().is_empty() || line.trim_start().starts_with('#') => {}
+                    Some(line) if confirms(&line) => {
+                        replay.commands += 1;
+                        replay.refused.push(format!("-203,\"Command protected\" CONFIRM is not taken from a file: {}", line.trim()));
+                    }
                     Some(line) => {
                         (replay.commands, replay.waiting_since) = (replay.commands + 1, ui.now);
                         break Program::new(&line);
@@ -52,10 +62,12 @@ impl Scpi {
                 }
             },
         };
-        let queued = self.err.len();
+        // the command has an error queue and status of its own: what it is refused is the file's, and a client's
+        // queue, event status and last error are afterwards as they were, at their bound too
+        let kept = (std::mem::take(&mut self.err), self.event_status, self.error_serial, self.last_error.take());
         let done = self.poll_program(ui, cv, &mut program).is_some();
-        // what the file's command was refused is the file's: a client that reads the queue does not find it there
-        if self.err.len() > queued { replay.refused.extend(self.err.drain(queued..)); }
+        replay.refused.append(&mut self.err);
+        (self.err, self.event_status, self.error_serial, self.last_error) = kept;
         if !done {
             if ui.now - replay.waiting_since >= WAIT_MAX {
                 ui.scpi_replaying = false;
@@ -71,7 +83,8 @@ impl Scpi {
         if self.replay.is_some() { return ui.toast("A SCPI file is running; stop it first"); }
         let text = match std::fs::metadata(path) {
             Ok(file) if file.len() > FILE_MAX => Err("larger than 1 MiB".to_string()),
-            Ok(_) => std::fs::read_to_string(path).map_err(|e| e.to_string()),
+            // a file an editor saved: a byte order mark before the first line, a letter that is not UTF-8 in a comment
+            Ok(_) => std::fs::read(path).map(|bytes| String::from_utf8_lossy(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes)).into_owned()).map_err(|e| e.to_string()),
             Err(e) => Err(e.to_string()),
         };
         match text {
@@ -93,6 +106,11 @@ impl Scpi {
             Some(first) => ui.toast(&format!("{}: {refused} of {n} command{} refused, first {first}", replay.name, plural(n))),
         }
     }
+}
+
+/// A line that carries the word `CONFIRM` as one of its arguments.
+fn confirms(line: &str) -> bool {
+    line.split(|c: char| c == ',' || c == ';' || c.is_whitespace()).any(|word| word.trim_matches('"').eq_ignore_ascii_case("CONFIRM"))
 }
 
 fn plural(n: usize) -> &'static str {
@@ -199,6 +217,66 @@ mod tests {
         ui.scpi_replay_file = Some(dir.join("none.scpi"));
         s.poll(&mut ui, &cv);
         assert!(!ui.scpi_replaying && ui.toast_text().starts_with("Run failed: none.scpi"), "{}", ui.toast_text());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// What a file is refused does not reach a client: not its queue, also when that is full, not its event status,
+    /// not its last error. A file an editor saved (a byte order mark, CR LF, a letter that is not UTF-8) runs.
+    #[test]
+    fn a_files_errors_leave_a_clients_status_as_it_was() {
+        let dir = folder("status");
+        let file = dir.join("notepad.scpi");
+        std::fs::write(&file, b"\xef\xbb\xbf:CHANnel2:DISPlay ON\r\n# caf\xe9\r\n:NO:SUCH:HEADer 1\r\n:CHANnel3:DISPlay ON\r\n").unwrap();
+        let (mut s, mut ui, cv) = session();
+        let ask = |s: &mut Scpi, ui: &mut Ui, c: &str| String::from_utf8(s.exec_line(ui, &cv, c)).unwrap();
+        ui.scpi_replay_file = Some(file.clone());
+        run(&mut s, &mut ui, &cv, 20);
+        assert!(ui.m.ch[1].on && ui.m.ch[2].on, "the first line, after the mark, and the last");
+        assert!(ui.toast_text().starts_with("notepad.scpi: 1 of 3 commands refused, first -113"), "{}", ui.toast_text());
+        assert_eq!(ask(&mut s, &mut ui, "*ESR?"), "0", "no event of a client");
+        assert_eq!(ask(&mut s, &mut ui, ":SYSTem:ERRor?"), "0,\"No error\"");
+        // a client that never read its errors: its queue is full, and stays what it was
+        for i in 0..40 { ask(&mut s, &mut ui, &format!(":NO:CLIent:HEADer{i} 1")); }
+        let queued = s.queued_errors().to_vec();
+        ui.scpi_replay_file = Some(file);
+        run(&mut s, &mut ui, &cv, 20);
+        assert!(ui.toast_text().starts_with("notepad.scpi: 1 of 3 commands refused, first -113"), "{}", ui.toast_text());
+        assert_eq!(s.queued_errors(), queued);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A line with CONFIRM is not run from a file and is said; a file of comments runs no command; a second file
+    /// while one runs is not started.
+    #[test]
+    fn a_file_does_not_confirm_and_one_file_runs_at_a_time() {
+        let dir = folder("confirm");
+        let file = dir.join("guarded.scpi");
+        std::fs::write(&file, ":CHANnel2:DISPlay ON\n:CHANnel3:DISPlay ON,CONFIRM\n:CHANnel4:DISPlay on , \"confirm\"\n").unwrap();
+        assert!(confirms(":SYSTem:X 1,CONFIRM") && confirms(":A:B confirm") && !confirms(":A:B CONFIRMED") && !confirms("# CONFIRMs nothing"));
+        let (mut s, mut ui, cv) = session();
+        ui.scpi_replay_file = Some(file.clone());
+        run(&mut s, &mut ui, &cv, 20);
+        assert!(ui.m.ch[1].on && !ui.m.ch[2].on && !ui.m.ch[3].on);
+        let message = ui.toast_text();
+        assert!(message.starts_with("guarded.scpi: 2 of 3 commands refused, first -203") && message.contains("not taken from a file"), "{message}");
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        let empty = dir.join("empty.scpi");
+        std::fs::write(&empty, "# nothing\n\n").unwrap();
+        ui.scpi_replay_file = Some(empty);
+        run(&mut s, &mut ui, &cv, 5);
+        assert_eq!(ui.toast_text(), "Ran empty.scpi: 0 commands");
+        // one at a time
+        let wait = dir.join("wait.scpi");
+        std::fs::write(&wait, ":SINGle\n*OPC?\n").unwrap();
+        ui.scpi_replay_file = Some(wait);
+        for _ in 0..4 { s.poll(&mut ui, &cv); }
+        assert!(ui.scpi_replaying);
+        ui.scpi_replay_file = Some(file);
+        s.poll(&mut ui, &cv);
+        assert!(ui.scpi_replaying && ui.toast_text() == "A SCPI file is running; stop it first", "{}", ui.toast_text());
+        ui.scpi_replay_cancel = true;
+        s.poll(&mut ui, &cv);
+        assert!(ui.toast_text().starts_with("Stopped wait.scpi"), "{}", ui.toast_text());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

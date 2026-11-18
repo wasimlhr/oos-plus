@@ -477,9 +477,9 @@ impl Ui {
         if !rows.is_empty() {
             out.extend(rows.into_iter().map(|(l, _)| q_str(&l)));
         } else if self.menu_open {
-            for it in self.items(self.menu) {
+            for (it, label) in self.script_labels() {
                 let v = self.value(it);
-                out.push(q_str(&if v.is_empty() { self.script_label(it) } else { format!("{} = {}", self.item_label(it), v) }));
+                out.push(q_str(&if v.is_empty() { label } else { format!("{label} = {v}") }));
             }
         }
         out.join(",")

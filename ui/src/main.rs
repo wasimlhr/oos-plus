@@ -541,10 +541,12 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
             }
             cmd::Out::Replay => {
                 // the frames of the file: one command each, and the waits of its `*OPC?`; two minutes at most
-                for _ in 0..3600 {
+                let mut frames = 0;
+                while frames < 3600 && (frames == 0 || ui.scpi_replaying || ui.scpi_replay_file.is_some()) {
                     frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n, &mut scpi);
-                    if !ui.scpi_replaying && ui.scpi_replay_file.is_none() { break; }
+                    frames += 1;
                 }
+                if ui.scpi_replaying { eprintln!("oos-ui: {}: the file still runs after {frames} frames; the script goes on", line.trim()); }
             }
             cmd::Out::Scpi(message) => {
                 let answer = scpi.exec_line(ui, &cv, &message);
