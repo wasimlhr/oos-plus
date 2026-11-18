@@ -313,7 +313,7 @@
     {
      "header": ":SYSTem:INFO",
      "query": ":SYSTem:INFO?",
-     "desc": "The System info page as text: `label,value` lines, `# heading` lines",
+     "desc": "The System info page in one line: each line of the page a quoted string, `\"label,value\"` or `\"# heading\"`, separated by commas",
      "remarks": [
       "- Menu equivalent: System > System info.",
       "- Origin: OOS extension"
@@ -654,7 +654,7 @@
     {
      "header": ":SYSTem:WLAN:NETWorks",
      "query": ":SYSTem:WLAN:NETWorks?",
-     "desc": "The scanned networks, one per line.",
+     "desc": "The scanned networks, each a quoted string, separated by commas in one line.",
      "remarks": [
       "- Menu equivalent: System > Network > WLAN.",
       "- Origin: OOS extension"
@@ -665,7 +665,7 @@
     {
      "header": ":SYSTem:WLAN:SAVed",
      "query": ":SYSTem:WLAN:SAVed?",
-     "desc": "The saved networks, one per line.",
+     "desc": "The saved networks, each a quoted string, separated by commas in one line; empty without any.",
      "remarks": [
       "- Menu equivalent: System > Network > WLAN.",
       "- Origin: OOS extension"
@@ -858,7 +858,7 @@
     {
      "header": ":SYSTem:UPDate:STATus",
      "query": ":SYSTem:UPDate:STATus?",
-     "desc": "The Update page as text",
+     "desc": "The Update page in one line: each of its lines a quoted string, separated by commas",
      "remarks": [
       "- Menu equivalent: System > Update and power > Update.",
       "- Origin: OOS extension"

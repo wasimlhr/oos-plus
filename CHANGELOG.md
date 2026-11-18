@@ -258,6 +258,10 @@ Fixed:
     on the screen. With five periods the window's lobe of the fundamental held the third harmonic: a 10 kHz square
     read 16.2 kHz, a ramp 12.3 kHz. The window follows the number of periods in the record (unit: square, ramp and
     sine at 10 kHz read 10.00 kHz from 50 us/div to 1 ms/div);
+  - `:SYSTem:INFO?`, `:SYSTem:UPDate:STATus?`, `:SYSTem:WLAN:NETWorks?` and `:SYSTem:WLAN:SAVed?` answer in one
+    line, each line of the text a quoted string, separated by commas. They answered several lines, and a client
+    that reads an answer as a line took each for the answer to its next query (unit: after `:SYSTem:INFO?` fifty
+    answers were out of step);
   - VXI-11 `device_readstb` answers the status byte of `*STB?`, with bit 4 while an answer of the link waits; it
     answered 0 whatever the state (unit). `device_trigger` is `*TRG`. HiSLIP's AsyncStatusQuery answers the status
     byte too (desktop app; HiSLIP is not opened on a scope, and the table of the interfaces says so now);
