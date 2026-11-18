@@ -1460,7 +1460,7 @@ pub const WAVE_EXTS: &[&str] = &["wfm", "bin", "csv", "trc", "isf", "tr0", "wfmx
 /// A stored waveform, recognized by its header:
 /// `OOSW`; `PWWF0001` or `TKWF0001`; `:WFM#001`, `:WFM#002` or `:WFM#003`; `:WFMPRE:`; `WAVEDESC`; cookie `AG` or `RG`;
 /// a `$&%#` block (`9601`, `9007`, or `2001`) or a `Title:` / `Plotname:` transient (`Binary:` or `Values:`);
-/// XML `WaveformInternal` or `WaveformPatternInternal`; or a CSV time column.
+/// XML `WaveformInternal` or `WaveformPatternInternal`; a Siglent header of version 2, 3, 4 or 6; or a CSV time column.
 /// Anything else is refused.
 pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
     if bytes.len() > MAX_WAVEFORM_BYTES { return Err("waveform exceeds the 128 MiB import limit".into()); }
@@ -1484,6 +1484,9 @@ pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
     }
     if looks_tr0(bytes) {
         return parse_tr0(bytes);
+    }
+    if let Some(version) = siglent_version(bytes) {
+        return parse_siglent(bytes, version);
     }
     // one half of a waveform kept in two files: without where it lies, the other half cannot be found
     if looks_rs_description(bytes) {
@@ -5180,5 +5183,403 @@ mod rohde_schwarz_file_tests {
         std::fs::write(&csv, "t,v\n0,1\n1e-3,2\n2e-3,3\n").unwrap();
         assert_eq!(parse_wave_at(&std::fs::read(&csv).unwrap(), &csv).unwrap()[0].v, [1.0, 2.0, 3.0]);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+// ── Siglent: binary waveform files ───────────────────────────────────────────────────────────────────────────
+
+fn sg_u32(b: &[u8], at: usize) -> Option<u32> {
+    b.get(at..at.checked_add(4)?).map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+}
+
+fn sg_f64(b: &[u8], at: usize) -> Option<f64> {
+    b.get(at..at.checked_add(8)?).map(|s| {
+        let mut raw = [0u8; 8];
+        raw.copy_from_slice(s);
+        f64::from_le_bytes(raw)
+    })
+}
+
+/// A value with its unit, 40 bytes: an f64, the index of its prefix (8 is none, 7 milli, 9 kilo, in steps of a
+/// thousand from yocto at 0 to yotta at 16) and seven words that describe the unit. Returned without the prefix.
+fn sg_value(b: &[u8], at: usize) -> Option<f64> {
+    let (value, prefix, unit) = (sg_f64(b, at)?, sg_u32(b, at + 8)?, sg_u32(b, at + 12)?);
+    if !value.is_finite() || prefix > 16 || unit > 12 {
+        return None;
+    }
+    let thousands = prefix as i32 - 8;
+    // a division by a whole power of ten is exact to the last bit; a product with its inverse is not
+    Some(if thousands >= 0 { value * 10f64.powi(3 * thousands) } else { value / 10f64.powi(-3 * thousands) })
+}
+
+/// The version of a Siglent binary waveform file: its first word, and a header that holds what that version
+/// puts there. Versions 2, 3 and 4 are one fixed header and the channels after it; version 6 is a list of
+/// records. The files of older firmware, which start without a version, are not recognized.
+fn siglent_version(b: &[u8]) -> Option<u32> {
+    let version = sg_u32(b, 0)?;
+    let flags = |at: usize| (0..4).all(|k| sg_u32(b, at + 4 * k).is_some_and(|f| f <= 1));
+    let flag_byte = |at: usize| b.get(at).is_some_and(|x| *x <= 1);
+    let known = match version {
+        2 | 3 => b.len() >= 0x800 && flags(0x04) && sg_value(b, 0x198).is_some() && sg_value(b, 0x1EC).is_some() && flag_byte(0x260),
+        4 => sg_u32(b, 4).is_some_and(|data| (0x1000..=b.len()).contains(&(data as usize))) && flags(0x08)
+            && sg_value(b, 0x19C).is_some() && sg_value(b, 0x1F0).is_some() && flag_byte(0x264) && flag_byte(0x265),
+        6 => b.len() >= 108 && u16::from_le_bytes([b[4], b[5]]) >= 108 && sg_u32(b, 0x68).is_some_and(|n| n > 0) && b[8].is_ascii_graphic(),
+        _ => false,
+    };
+    known.then_some(version)
+}
+
+/// The unsigned samples of a block, `width` bytes each.
+fn sg_codes(block: &[u8], width: usize, big: bool) -> impl Iterator<Item = f64> + '_ {
+    block.chunks_exact(width).map(move |c| match (width, big) {
+        (1, _) => c[0] as f64,
+        (2, false) => u16::from_le_bytes([c[0], c[1]]) as f64,
+        (2, true) => u16::from_be_bytes([c[0], c[1]]) as f64,
+        _ => u32::from_le_bytes([c[0], c[1], c[2], c[3]]) as f64,
+    })
+}
+
+/// A Siglent binary waveform file (SDS800X HD to SDS7000A, SDS2000X Plus, SDS5000X, SDS6000). Addresses are
+/// those of versions 2 and 3; version 4 has the address of its data at 0x04 and every later field 4 bytes on.
+/// 0x04 four channels on; 0x14 volts per division and 0xB4 vertical offset, a 40-byte value each; 0x198 time per
+/// division; 0x1C0 delay; 0x1E8 the samples of a channel; 0x1EC sample rate; 0x240 probe factors (f64);
+/// 0x260 one byte, 1 for 16-bit samples; 0x261 one byte, 1 for the high byte first; 0x268 horizontal divisions;
+/// 0x26C codes per division. The channels that are on follow from 0x800, one after the other, unsigned:
+/// volts = ((code - centre) * volts per division / codes per division - offset) * probe, the centre 128 or 32768,
+/// and the first sample is at -(time per division * divisions / 2) - delay.
+/// Layout from Siglent's "How to Extract Data from the Binary File"; the sign of the offset and the place of the
+/// probe factor from the RigolWFM project, which found the document's own formula wrong on SDS800X HD files.
+/// Checked on that project's SDS814X HD files: channels with a 1x and a 10x probe, a math trace and a zoom save.
+/// Digital data, which follows the math traces, and channels 5 to 8 are not read.
+fn parse_siglent(b: &[u8], version: u32) -> Result<Vec<WaveTrace>, String> {
+    if version == 6 {
+        return parse_siglent_records(b);
+    }
+    let short = || "truncated Siglent waveform file".to_string();
+    let shift = if version == 4 { 4 } else { 0 };
+    let word = |at: usize| sg_u32(b, at + shift).ok_or_else(short);
+    let value = |at: usize, what: &str| sg_value(b, at + shift).ok_or_else(|| format!("the Siglent file has no usable {what}"));
+    let data = if version == 4 { sg_u32(b, 4).ok_or_else(short)? as usize } else { 0x800 };
+
+    let points = word(0x1E8)? as usize;
+    if points > MAX_WAVEFORM_SAMPLES {
+        return Err("waveform exceeds the 32-million-sample import limit".into());
+    }
+    let rate = value(0x1EC, "sample rate")?;
+    // a save of a math trace alone has no channel on, and need not say how long a channel is
+    let channels = (0..4).any(|k| sg_u32(b, 0x04 + shift + 4 * k) == Some(1));
+    if channels && (points < 2 || !(rate > 0.0)) {
+        return Err("that file holds no waveform".into());
+    }
+    let flag_byte = |at: usize| b.get(at + shift).copied().ok_or_else(short);
+    let (width, big) = (if flag_byte(0x260)? == 1 { 2 } else { 1 }, flag_byte(0x261)? == 1);
+    let centre = if width == 2 { 32768.0 } else { 128.0 };
+    // a header of version 2 that leaves these two empty is of a scope with 14 divisions and 25 codes in each
+    let divisions = match word(0x268)? {
+        n @ 1..=20 => n as f64,
+        _ if version == 2 => 14.0,
+        _ => 10.0,
+    };
+    let mut t0 = -(value(0x198, "time per division")? * divisions / 2.0) - value(0x1C0, "delay")?;
+    if version == 4 && data >= 0xB48 && sg_u32(b, 0xAF4) == Some(1) {
+        // a zoom window saved by itself has its own time base, its delay counted the other way
+        if let (Some(per), Some(delay)) = (sg_value(b, 0xAF8), sg_value(b, 0xB20)) {
+            t0 = delay - per * divisions / 2.0;
+        }
+    }
+    if !t0.is_finite() {
+        return Err("the Siglent file has no usable time per division".into());
+    }
+
+    let mut out = Vec::new();
+    let mut at = data;
+    for k in 0..4 {
+        if word(0x04 + 4 * k)? != 1 {
+            continue;
+        }
+        let per = value(0x14 + 0x28 * k, "vertical scale")?;
+        let offset = value(0xB4 + 0x28 * k, "vertical offset")?;
+        let probe = sg_f64(b, 0x240 + shift + 8 * k).filter(|p| p.is_finite() && *p > 0.0).unwrap_or(1.0);
+        let codes = match word(0x26C + 4 * k)? as i32 {
+            n if n > 0 => n as f64,
+            _ if version == 2 => 25.0,
+            _ => return Err("the Siglent file has no usable codes per division".into()),
+        };
+        let block = at.checked_add(points * width).and_then(|end| b.get(at..end)).ok_or_else(short)?;
+        at += points * width;
+        let step = per / codes;
+        let v: Vec<f32> = sg_codes(block, width, big).map(|code| (((code - centre) * step - offset) * probe) as f32).collect();
+        if v.iter().any(|x| !x.is_finite()) {
+            return Err("the Siglent file has no usable vertical scale".into());
+        }
+        out.push(WaveTrace { t0, dt: 1.0 / rate, v, label: format!("CH{}", k + 1) });
+    }
+    // the math traces that are on follow the channels: 0x27C four on; 0x28C volts per division and 0x32C
+    // position, a 40-byte value each; 0x3CC their samples; 0x3DC the time between samples (f64); 0x3FC the codes
+    // per division of them all. Scaled as a channel is, without a probe factor. A math trace whose header or
+    // samples are not all there is left out; the channels before it stand.
+    for k in 0..4 {
+        if version < 3 || sg_u32(b, 0x27C + shift + 4 * k) != Some(1) {
+            continue;
+        }
+        let (Some(per), Some(position)) = (sg_value(b, 0x28C + shift + 0x28 * k), sg_value(b, 0x32C + shift + 0x28 * k)) else { break };
+        let (Some(points), Some(dt), Some(codes)) = (sg_u32(b, 0x3CC + shift + 4 * k), sg_f64(b, 0x3DC + shift + 8 * k), sg_u32(b, 0x3FC + shift)) else { break };
+        let (points, codes) = (points as usize, codes as i32);
+        if points > MAX_WAVEFORM_SAMPLES || codes <= 0 || !(dt > 0.0) || !dt.is_finite() {
+            break;
+        }
+        let Some(block) = at.checked_add(points * width).and_then(|end| b.get(at..end)) else { break };
+        at += points * width;
+        if points < 2 {
+            continue;
+        }
+        let step = per / codes as f64;
+        let v: Vec<f32> = sg_codes(block, width, big).map(|code| ((code - centre) * step - position) as f32).collect();
+        if v.iter().all(|x| x.is_finite()) {
+            out.push(WaveTrace { t0, dt, v, label: format!("F{}", k + 1) });
+        }
+    }
+    if out.is_empty() {
+        return Err("the Siglent file holds no channel and no math trace".into());
+    }
+    Ok(out)
+}
+
+/// A Siglent binary waveform file of version 6: a header of `header_bytes` (u16 at 0x04) with the number of
+/// records (u32 at 0x68), then each record: a header whose size is its u32 at 0x04, the extra bytes counted by
+/// its u32 at 0xF0, and the samples. In a record header: 0x0E channel index (u16); 0x10 label; 0x60 the sample
+/// at time zero and 0x68 the time between samples; 0xB0 the code of zero volts and 0xB8 the volts of one code
+/// (f64 each); 0xF8 the number of samples and 0x100 their bytes (u64 each). The samples are unsigned.
+/// Layout from Siglent's document, the reading of the samples from the RigolWFM project.
+fn parse_siglent_records(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
+    let short = || "truncated Siglent waveform file".to_string();
+    let wide = |at: usize| sg_f64(b, at).map(f64::to_bits).ok_or_else(short);
+    let records = sg_u32(b, 0x68).ok_or_else(short)?;
+    let mut at = u16::from_le_bytes([b[4], b[5]]) as usize;
+    let mut out = Vec::new();
+    for _ in 0..records {
+        let head = sg_u32(b, at + 4).ok_or_else(short)? as usize;
+        if head < 264 {
+            return Err("that Siglent waveform record is not read".into());
+        }
+        let extra = sg_u32(b, at + 0xF0).ok_or_else(short)? as usize;
+        let (number, bytes) = (wide(at + 0xF8)?, wide(at + 0x100)?);
+        if number > MAX_WAVEFORM_SAMPLES as u64 {
+            return Err("waveform exceeds the 32-million-sample import limit".into());
+        }
+        let (number, bytes) = (number as usize, usize::try_from(bytes).map_err(|_| short())?);
+        let start = at + head + extra;
+        let block = start.checked_add(bytes).and_then(|end| b.get(start..end)).ok_or_else(short)?;
+        let record = at;
+        at = start + bytes;
+        if number < 2 {
+            continue;
+        }
+        let width = bytes / number;
+        if bytes % number != 0 || ![1, 2, 4].contains(&width) {
+            return Err("that Siglent sample size is not read".into());
+        }
+        let field = |offset: usize| sg_f64(b, record + offset).filter(|x| x.is_finite()).ok_or_else(|| "the Siglent file has no usable scale".to_string());
+        let (zero_at, dt, zero_code, step) = (field(0x60)?, field(0x68)?, field(0xB0)?, field(0xB8)?);
+        if !(dt > 0.0) || step == 0.0 {
+            return Err("the Siglent file has no usable scale".into());
+        }
+        let named: String = b[record + 0x10..record + 0x20].iter().take_while(|c| **c != 0).filter(|c| c.is_ascii_graphic()).map(|c| *c as char).take(10).collect();
+        let label = if named.is_empty() { format!("CH{}", u16::from_le_bytes([b[record + 0x0E], b[record + 0x0F]]).max(1)) } else { named };
+        let v: Vec<f32> = sg_codes(block, width, false).map(|code| ((code - zero_code) * step) as f32).collect();
+        out.push(WaveTrace { t0: -zero_at * dt, dt, v, label });
+    }
+    if out.is_empty() {
+        return Err("that file holds no waveform".into());
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod siglent_file_tests {
+    use super::*;
+
+    fn put(b: &mut [u8], at: usize, bytes: &[u8]) {
+        b[at..at + bytes.len()].copy_from_slice(bytes);
+    }
+
+    /// A value in volts with a prefix: the unit words say "V to the power 1".
+    fn put_value(b: &mut [u8], at: usize, value: f64, prefix: u32) {
+        put(b, at, &value.to_le_bytes());
+        for (k, word) in [prefix, 0, 1, 1, 0, 1, 0, 1].iter().enumerate() {
+            put(b, at + 8 + 4 * k, &word.to_le_bytes());
+        }
+    }
+
+    /// A header of version 2, 3 or 4: 500 mV per division, 0.25 V offset, 32 codes per division, 2 s per division
+    /// over 10 divisions, 0.5 s delay and 1 kSa/s. Then the data.
+    fn file(version: u32, on: [u32; 4], points: u32, body: &[u8]) -> Vec<u8> {
+        let (shift, data) = if version == 4 { (4, 0x1000) } else { (0, 0x800) };
+        let mut b = vec![0u8; data];
+        put(&mut b, 0, &version.to_le_bytes());
+        if version == 4 {
+            put(&mut b, 4, &(data as u32).to_le_bytes());
+        }
+        for k in 0..4 {
+            put(&mut b, shift + 0x04 + 4 * k, &on[k].to_le_bytes());
+            put_value(&mut b, shift + 0x14 + 0x28 * k, 500.0, 7);
+            put_value(&mut b, shift + 0xB4 + 0x28 * k, 0.25, 8);
+            put(&mut b, shift + 0x240 + 8 * k, &1.0f64.to_le_bytes());
+            put(&mut b, shift + 0x26C + 4 * k, &32u32.to_le_bytes());
+        }
+        put_value(&mut b, shift + 0x198, 2.0, 8);
+        put_value(&mut b, shift + 0x1C0, 500.0, 7);
+        put(&mut b, shift + 0x1E8, &points.to_le_bytes());
+        put_value(&mut b, shift + 0x1EC, 1.0, 9);
+        put(&mut b, shift + 0x268, &10u32.to_le_bytes());
+        b.extend_from_slice(body);
+        b
+    }
+
+    #[test]
+    fn the_channels_that_are_on_follow_one_another_and_are_scaled() {
+        // CH2 and CH4 on: three samples of the one, then three of the other
+        for version in [2, 3, 4] {
+            let traces = parse_wave(&file(version, [0, 1, 0, 1], 3, &[160, 128, 96, 128, 192, 64]), "s.bin").unwrap();
+            let seen: Vec<(&str, &[f32])> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice())).collect();
+            assert_eq!(seen, [("CH2", &[0.25f32, -0.25, -0.75][..]), ("CH4", &[-0.25f32, 0.75, -1.25][..])], "version {version}");
+            assert!(traces.iter().all(|t| t.t0 == -10.5 && t.dt == 1e-3), "version {version}");
+        }
+    }
+
+    #[test]
+    fn sixteen_bit_samples_are_read_in_the_byte_order_the_header_names() {
+        for (big, shift, version) in [(false, 4, 4), (true, 4, 4), (true, 0, 3)] {
+            let codes = [32800u16, 32768, 32736];
+            let body: Vec<u8> = codes.iter().flat_map(|c| if big { c.to_be_bytes() } else { c.to_le_bytes() }).collect();
+            let mut b = file(version, [1, 0, 0, 0], 3, &body);
+            b[shift + 0x260] = 1;
+            b[shift + 0x261] = big as u8;
+            assert_eq!(parse_wave(&b, "s.bin").unwrap()[0].v, [0.25, -0.25, -0.75], "version {version}, high byte first {big}");
+        }
+    }
+
+    #[test]
+    fn the_probe_factor_multiplies_what_the_header_scales_at_the_input() {
+        let mut b = file(4, [1, 0, 0, 0], 3, &[160, 128, 96]);
+        put(&mut b, 4 + 0x240, &10.0f64.to_le_bytes());
+        assert_eq!(parse_wave(&b, "s.bin").unwrap()[0].v, [2.5, -2.5, -7.5]);
+    }
+
+    #[test]
+    fn an_old_header_without_its_counts_is_of_a_scope_with_25_codes_and_14_divisions() {
+        let mut b = file(2, [1, 0, 0, 0], 3, &[153, 128, 103]);
+        put(&mut b, 0x268, &[0; 4]);
+        put(&mut b, 0x26C, &[0; 4]);
+        let t = &parse_wave(&b, "s.bin").unwrap()[0];
+        assert_eq!((t.v.as_slice(), t.t0), (&[0.25f32, -0.25, -0.75][..], -14.5));
+        // a later version has to say them
+        put(&mut b, 0, &3u32.to_le_bytes());
+        assert!(parse_wave(&b, "s.bin").unwrap_err().contains("codes per division"));
+    }
+
+    #[test]
+    fn a_zoom_window_saved_by_itself_is_placed_by_its_own_time_base() {
+        let mut b = file(4, [1, 0, 0, 0], 3, &[160, 128, 96]);
+        put(&mut b, 0xAF4, &1u32.to_le_bytes());
+        put_value(&mut b, 0xAF8, 1.0, 8);
+        put_value(&mut b, 0xB20, 3.0, 8);
+        assert_eq!(parse_wave(&b, "s.bin").unwrap()[0].t0, -2.0);
+    }
+
+    #[test]
+    fn a_file_without_its_samples_or_without_a_channel_is_refused() {
+        assert!(parse_wave(&file(4, [1, 1, 0, 0], 3, &[160, 128, 96, 1, 2]), "s.bin").unwrap_err().contains("truncated"));
+        assert!(parse_wave(&file(4, [0, 0, 0, 0], 3, &[160, 128, 96]), "s.bin").unwrap_err().contains("no channel and no math trace"));
+        assert!(parse_wave(&file(3, [1, 0, 0, 0], 1, &[160]), "s.bin").unwrap_err().contains("no waveform"));
+        // a first word that is a version, over a header that is not one of that version
+        let mut b = file(4, [1, 0, 0, 0], 3, &[160, 128, 96]);
+        put(&mut b, 0x08, &7u32.to_le_bytes());
+        assert_eq!(siglent_version(&b), None);
+        assert_eq!(siglent_version(&file(3, [1, 0, 0, 0], 3, &[1, 2, 3])), Some(3));
+        assert_eq!(siglent_version(&5u32.to_le_bytes()), None);
+    }
+
+    /// Switches math trace F2 on: 2 V per division, position -1 V, four samples 0.5 s apart, 32 codes per division.
+    fn with_math(mut b: Vec<u8>, shift: usize, samples: &[u8]) -> Vec<u8> {
+        put(&mut b, shift + 0x27C + 4, &1u32.to_le_bytes());
+        put_value(&mut b, shift + 0x28C + 0x28, 2.0, 8);
+        put_value(&mut b, shift + 0x32C + 0x28, -1.0, 8);
+        put(&mut b, shift + 0x3CC + 4, &4u32.to_le_bytes());
+        put(&mut b, shift + 0x3DC + 8, &0.5f64.to_le_bytes());
+        put(&mut b, shift + 0x3FC, &32u32.to_le_bytes());
+        b.extend_from_slice(samples);
+        b
+    }
+
+    #[test]
+    fn a_math_trace_follows_the_channels_and_is_read_alone_too() {
+        // after one channel
+        for (version, shift) in [(3, 0), (4, 4)] {
+            let traces = parse_wave(&with_math(file(version, [1, 0, 0, 0], 3, &[160, 128, 96]), shift, &[144, 128, 112, 96]), "s.bin").unwrap();
+            let seen: Vec<(&str, &[f32], f64)> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice(), t.dt)).collect();
+            assert_eq!(seen, [("CH1", &[0.25f32, -0.25, -0.75][..], 1e-3), ("F2", &[2.0f32, 1.0, 0.0, -1.0][..], 0.5)], "version {version}");
+            assert!(traces.iter().all(|t| t.t0 == -10.5));
+        }
+        // saved by itself: no channel is on
+        let alone = parse_wave(&with_math(file(4, [0, 0, 0, 0], 0, &[]), 4, &[144, 128, 112, 96]), "s.bin").unwrap();
+        assert_eq!((alone.len(), alone[0].label.as_str(), alone[0].v.as_slice()), (1, "F2", &[2.0f32, 1.0, 0.0, -1.0][..]));
+        // cut short, the math trace is left out and the channel stands; a version 2 file has none
+        let cut = parse_wave(&with_math(file(4, [1, 0, 0, 0], 3, &[160, 128, 96]), 4, &[144, 128]), "s.bin").unwrap();
+        assert_eq!((cut.len(), cut[0].label.as_str()), (1, "CH1"));
+        assert_eq!(parse_wave(&with_math(file(2, [1, 0, 0, 0], 3, &[160, 128, 96]), 0, &[144, 128, 112, 96]), "s.bin").unwrap().len(), 1);
+    }
+
+    /// One record of a version 6 file: 264 header bytes, four extra, then the samples.
+    fn record(label: &str, index: u16, width: usize, codes: &[u32]) -> Vec<u8> {
+        let mut r = vec![0u8; 264 + 4];
+        put(&mut r, 0x04, &264u32.to_le_bytes());
+        put(&mut r, 0x0E, &index.to_le_bytes());
+        put(&mut r, 0x10, label.as_bytes());
+        put(&mut r, 0x60, &2.0f64.to_le_bytes());
+        put(&mut r, 0x68, &0.5f64.to_le_bytes());
+        put(&mut r, 0xB0, &128.0f64.to_le_bytes());
+        put(&mut r, 0xB8, &0.25f64.to_le_bytes());
+        put(&mut r, 0xF0, &4u32.to_le_bytes());
+        put(&mut r, 0xF8, &(codes.len() as u64).to_le_bytes());
+        put(&mut r, 0x100, &((codes.len() * width) as u64).to_le_bytes());
+        for code in codes {
+            r.extend_from_slice(&code.to_le_bytes()[..width]);
+        }
+        r
+    }
+
+    fn records(list: &[Vec<u8>]) -> Vec<u8> {
+        let mut b = vec![0u8; 108];
+        put(&mut b, 0, &6u32.to_le_bytes());
+        put(&mut b, 4, &108u16.to_le_bytes());
+        put(&mut b, 8, b"SDS1202X-E");
+        put(&mut b, 0x68, &(list.len() as u32).to_le_bytes());
+        for r in list {
+            b.extend_from_slice(r);
+        }
+        b
+    }
+
+    #[test]
+    fn a_file_of_records_gives_a_trace_for_each_record() {
+        let b = records(&[record("C1", 1, 1, &[130, 128, 126]), record("", 2, 2, &[132, 128, 124])]);
+        let traces = parse_wave(&b, "s.bin").unwrap();
+        let seen: Vec<(&str, &[f32])> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice())).collect();
+        assert_eq!(seen, [("C1", &[0.5f32, 0.0, -0.5][..]), ("CH2", &[1.0f32, 0.0, -1.0][..])]);
+        assert!(traces.iter().all(|t| t.t0 == -1.0 && t.dt == 0.5));
+        // cut short inside the second record, and a sample size that is none
+        assert!(parse_wave(&b[..b.len() - 1], "s.bin").unwrap_err().contains("truncated"));
+        let mut odd = record("C1", 1, 1, &[130, 128, 126]);
+        put(&mut odd, 0xF8, &2u64.to_le_bytes());
+        assert!(parse_wave(&records(&[odd]), "s.bin").unwrap_err().contains("sample size"));
+    }
+
+    #[test]
+    fn the_csv_file_of_a_siglent_scope_is_read_past_its_settings() {
+        let text = "Record Length,Analog:14000\nSample Rate,100000000.0\nVertical Scale,CH1: 0.05\nVertical Offset,CH1:0.00000\nHorizontal Scale, 0.000010000\nSecond,Volt\n-0.00007000000,-0.19400\n-0.00006999000,-0.19200,\n-0.00006998000,-0.19000,\n";
+        let t = &parse_wave(text.as_bytes(), "siglent.csv").unwrap()[0];
+        assert_eq!(t.v, [-0.194, -0.192, -0.19]);
+        assert!((t.t0 + 7e-5).abs() < 1e-18 && (t.dt - 1e-8).abs() < 1e-14);
     }
 }
