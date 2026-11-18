@@ -180,8 +180,9 @@ impl Ui {
         let up = self.y_of_volts(c, hi) < self.y_of_volts(c, lo);
         for _ in 0..30 {
             let mid = (lo + hi) / 2.0;
+            // the line of `mid` is under the point: with volts growing upwards the point is at more volts
             let below = self.y_of_volts(c, mid) > y;
-            if below == up { hi = mid; } else { lo = mid; }
+            if below == up { lo = mid; } else { hi = mid; }
         }
         (lo + hi) / 2.0
     }
