@@ -31,6 +31,7 @@ Fixed:
 - Studio: the hold menu of the plot has rows of 40 px in two columns, the view at the left and what acts on the lane
   under the finger at the right. It was one column of seventeen rows of 28 px, 542 px tall. Run, Single, Trigger
   settings and Sources are not in it any more: the bars have them one tap away.
+- SSH > Import keys from USB says that there is no key store when there is none (the desktop app); it said nothing.
 - DVM and counter, Logic analyser and Double pulse are one page each: they had two tabs of two to five rows. A
   sheet draws the line over its footer only where it has a footer.
 - Studio: the Add list of the top bar has rows of 40 px (34 before). The chip of the bottom bar that adds a source

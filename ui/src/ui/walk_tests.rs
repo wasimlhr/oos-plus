@@ -108,6 +108,101 @@ fn walk_every_sheet_row() {
     }
 }
 
+/// Every switch of every sheet, there and back: on, the sheet closed and opened again (the switch still says on), a
+/// view the switch put on the screen closed by its X (the switch then says off) and brought back by the switch, and
+/// off again (the set-up is what it was). What does not hold is listed. `OOS_WALK=1 cargo test walk_on_off -- --ignored
+/// --nocapture`.
+#[test]
+#[ignore]
+fn walk_on_off_and_back() {
+    use super::dock::VKind;
+    if std::env::var("OOS_WALK").is_err() { return; }
+    const KINDS: [VKind; 8] = [VKind::Measure, VKind::Eye, VKind::Pane, VKind::Table, VKind::Sim, VKind::Hist, VKind::Xy, VKind::View];
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let (mut switches, mut views_back, mut found) = (0, 0, Vec::new());
+        let mut queue = menus(&fresh(layout));
+        queue.extend([MenuId::Network, MenuId::Remote, MenuId::Ssh, MenuId::Time, MenuId::SelfCal, MenuId::Dvm, MenuId::Zone, MenuId::Sim, MenuId::MeasStat]);
+        let mut seen: Vec<MenuId> = Vec::new();
+        while let Some(menu) = queue.pop() {
+            if seen.contains(&menu) { continue; }
+            seen.push(menu);
+            let probe = fresh(layout);
+            let Some(spec) = probe.sheet_spec(menu) else { continue };
+            for (t, tab) in spec.tabs.iter().enumerate() {
+                for &it in &tab.rows {
+                    if let Item::Open(id) = it { if !seen.contains(&id) { queue.push(id); } }
+                    if probe.sheet_row_kind(it) != RowKind::Toggle { continue; }
+                    let what = format!("{menu:?} / {} / {}", tab.name, probe.sheet_label(it));
+                    let mut u = fresh(layout);
+                    let open = |u: &mut Ui| -> Option<Rect> {
+                        if u.menu_open { u.close_menu(); }
+                        u.open_menu(menu);
+                        u.step(0.04);
+                        if let Some(r) = u.sheet_geo().and_then(|g| g.tabs.get(t).copied()) { let (x, y) = mid(r); tap(u, x, y); }
+                        u.sheet_geo().and_then(|g| g.rows.iter().find(|r| r.it == it).map(|r| r.ctrl))
+                    };
+                    let Some(ctrl) = open(&mut u) else { found.push(format!("{what}: the row is not on its tab")); continue };
+                    if u.item_blocked(it).is_some() { continue; }
+                    // (a frame: Studio writes its state into the set-up when it draws)
+                    for _ in 0..2 { frame(&mut u); }
+                    switches += 1;
+                    let (start, setup) = (u.sheet_on(it), crate::store::setup_text(&u.m));
+                    let views = |u: &Ui| KINDS.iter().copied().filter(|k| u.dock_shown(*k)).collect::<Vec<_>>();
+                    let before = views(&u);
+                    let (x, y) = mid(ctrl);
+                    tap(&mut u, x, y);
+                    for _ in 0..3 { frame(&mut u); }
+                    if u.sheet_on(it) == start { found.push(format!("{what}: a tap does not switch it")); continue; }
+                    let state = u.sheet_on(it);
+                    let shown: Vec<VKind> = views(&u).into_iter().filter(|k| !before.contains(k)).collect();
+                    // closed and opened again
+                    match open(&mut u) {
+                        None => found.push(format!("{what}: gone from its tab once it is switched")),
+                        Some(_) if u.sheet_on(it) != state => found.push(format!("{what}: reads differently when the sheet is opened again")),
+                        _ => {}
+                    }
+                    // a view it put on the screen: closed by its X, and brought back by the switch
+                    if layout == Layout::Studio && state {
+                        for k in shown {
+                            u.close_menu();
+                            for _ in 0..3 { frame(&mut u); }
+                            let Some(leaf) = u.dock_leaf(k) else { found.push(format!("{what}: its view {k:?} is not on the screen with the sheet closed")); continue };
+                            let (x, y) = mid(Ui::dock_close_rect(leaf));
+                            tap(&mut u, x, y);
+                            for _ in 0..3 { frame(&mut u); }
+                            if u.dock_shown(k) { found.push(format!("{what}: the X of its view {k:?} does not close it")); continue; }
+                            let Some(ctrl) = open(&mut u) else { found.push(format!("{what}: gone from its tab after the view was closed")); continue };
+                            if u.sheet_on(it) { found.push(format!("{what}: still says on after the X of its view {k:?}")); }
+                            else {
+                                let (x, y) = mid(ctrl);
+                                tap(&mut u, x, y);
+                                for _ in 0..3 { frame(&mut u); }
+                                if u.dock_shown(k) { views_back += 1; } else { found.push(format!("{what}: the switch does not bring the view {k:?} back")); }
+                            }
+                        }
+                    }
+                    // and back to the start
+                    if let Some(ctrl) = open(&mut u) {
+                        if u.sheet_on(it) != start {
+                            let (x, y) = mid(ctrl);
+                            tap(&mut u, x, y);
+                            for _ in 0..3 { frame(&mut u); }
+                        }
+                        if u.sheet_on(it) != start { found.push(format!("{what}: does not switch back")); }
+                        else if crate::store::setup_text(&u.m) != setup {
+                            let (a, b) = (setup.clone(), crate::store::setup_text(&u.m));
+                            let diff: Vec<String> = a.lines().zip(b.lines()).filter(|(x, y)| x != y).map(|(x, y)| format!("{x} -> {y}")).take(3).collect();
+                            found.push(format!("{what}: on and off again leaves the set-up changed: {diff:?}"));
+                        }
+                    }
+                }
+            }
+        }
+        println!("== {layout:?}: {switches} switches there and back over {} sheets, {views_back} views closed by their X and brought back; {} findings", seen.len(), found.len());
+        for f in &found { println!("   FOUND {f}"); }
+    }
+}
+
 #[test]
 #[ignore]
 fn walk_the_bars() {
