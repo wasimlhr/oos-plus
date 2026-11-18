@@ -260,7 +260,7 @@ impl Ui {
         } else if g.add.contains(x, y) {
             self.sim_add_next();
         } else if g.play.contains(x, y) {
-            self.activate(Item::SimPlay);
+            self.sim_panel_play();
         } else if g.list.contains(x, y) {
             let i = self.studio_first(total, g.page) + ((y - g.list.y) / SIM_ROW) as usize;
             if i < total {

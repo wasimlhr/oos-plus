@@ -5,6 +5,9 @@ SIM generates a synthetic high-speed signal into a reference slot. The knob sett
 Menu location: Simulator (Preset, Slot, Pattern, Rate, Levels, Rise, Bandwidth, De-emphasis, Noise, Spread spectrum, Jitter, Play, Show, Defaults, Add to R, Load file, Live).
 In Minimal and Studio the menu is a sheet with the tabs Signal, Levels, Jitter and Spread; the rows named
 "Simulator advanced" below are on its Jitter and Spread tabs.
+Run simulation mode on the screen is `:SIM:PLAY ON`: it plays the signal the knobs describe. The references that
+are shown (a loaded file, a signal added to a slot) are played from the screen with Play references, which has
+no command.
 
 Part of the [SCPI reference](README.md).
 

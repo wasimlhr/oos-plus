@@ -657,7 +657,7 @@ fn walk_overlay_pictures() {
     shot(&mut u, "O2-live-two-refs-stacked");
     u.trace_mode(false);
     shot(&mut u, "O3-live-two-refs-overlay");
-    u.activate(Item::SimPlay);
+    u.activate(Item::SimPlayRefs);
     shot(&mut u, "O4-sim-overlay");
 }
 
@@ -1410,28 +1410,56 @@ fn the_sim_sheet_has_run_under_every_tab_and_a_show_switch_that_works() {
         assert!(!u.refs[0].as_ref().unwrap().on && !u.sheet_on(Item::SimShow), "{layout:?}: hidden by one tap");
         tap(&mut u, sx, sy);
         assert!(u.refs[0].as_ref().unwrap().on && u.sheet_on(Item::SimShow), "{layout:?}: shown by the next");
-        // Run from under the Jitter tab, with no reference shown (a shown one would be played instead, and that closes
-        // the sheet): SIM mode starts, the sheet stays, and the rows of Signal are where they were
-        tap(&mut u, sx, sy);
-        assert!(u.sim_shown_refs().is_empty());
+        // live with a reference shown: the last row of Signal plays the shown references
         let before: Vec<(Item, Rect)> = u.sheet_geo().unwrap().rows.iter().map(|r| (r.it, r.row)).collect();
+        assert_eq!(before.last().unwrap().0, Item::SimPlayRefs, "{layout:?}: {before:?}");
+        assert_eq!(u.sheet_label(Item::SimPlayRefs), "Play reference R1");
+        // Run from under the Jitter tab, with that reference shown: SIM mode starts on the signal of the knobs, not on
+        // the reference, and the sheet stays
         let (x, y) = mid(u.sheet_geo().unwrap().tabs[2]);
         tap(&mut u, x, y);
         assert_eq!(row(&u, Item::SimDcd).0, RowKind::Number, "{layout:?}: duty-cycle distortion is a row of Jitter");
         let (x, y) = foot(&u, Item::SimPlay);
         tap(&mut u, x, y);
         settle(&mut u, |u| u.sim_mode() && !u.sim_generating());
+        assert!(u.session_is_sim && u.sim_refs.is_empty(), "{layout:?}: the signal of the knobs plays");
         assert!(u.menu_open && u.menu == MenuId::Sim && u.sheet_active(), "{layout:?}: the sheet stays");
+        // a knob changes the signal that plays: High one step up, and the record reaches higher
+        let slot = u.sim_slot();
+        let top = |u: &Ui| u.refs[slot].as_ref().map_or(f32::MIN, |r| r.v.iter().fold(f32::MIN, |a, &x| a.max(x)));
+        let was = top(&u);
+        let (x, y) = mid(u.sheet_geo().unwrap().tabs[1]);
+        tap(&mut u, x, y);
+        let g = u.sheet_geo().unwrap();
+        let plus = Ui::value_parts(g.rows.iter().find(|r| r.it == Item::SimHigh).expect("High is a row of Levels").ctrl).2;
+        let (x, y) = mid(plus);
+        tap(&mut u, x, y);
+        settle(&mut u, |u| !u.sim_generating() && top(u) > was + 0.03);
+        assert!(u.sim_mode() && u.sheet_active(), "{layout:?}: still playing, the sheet still open");
+        // the rows of Signal are where they were; Back to live took the place of Play references
         let (x, y) = mid(u.sheet_geo().unwrap().tabs[0]);
         tap(&mut u, x, y);
         let after: Vec<(Item, Rect)> = u.sheet_geo().unwrap().rows.iter().map(|r| (r.it, r.row)).collect();
-        assert_eq!(after[..before.len()], before[..], "{layout:?}: no row moved");
-        assert_eq!(after.len(), before.len() + 1, "{layout:?}: one row more");
-        assert_eq!(after.last().unwrap().0, Item::SimLive, "{layout:?}: the way back is the last row");
+        let n = before.len();
+        assert_eq!(after.len(), n, "{layout:?}: {after:?}");
+        assert_eq!(after[..n - 1], before[..n - 1], "{layout:?}: no row moved");
+        assert_eq!(*after.last().unwrap(), (Item::SimLive, before[n - 1].1), "{layout:?}: the way back is the last row");
         let (_, (x, y)) = row(&u, Item::SimLive);
         tap(&mut u, x, y);
         for _ in 0..4 { u.step(0.04); }
         assert!(!u.sim_mode() && !u.record_mode(), "{layout:?}: live again");
+        // the shown reference has its own play: the record in R1 as the acquisition, nothing generated
+        assert!(u.refs[slot].as_ref().is_some_and(|r| r.on), "{layout:?}: the reference is still shown");
+        if !u.menu_open { u.open_menu(MenuId::Sim); u.step(0.04); }
+        let (kind, (x, y)) = row(&u, Item::SimPlayRefs);
+        assert_eq!(kind, RowKind::Link);
+        let held = u.refs[slot].as_ref().unwrap().v.clone();
+        tap(&mut u, x, y);
+        for _ in 0..4 { u.step(0.04); }
+        assert!(u.sim_mode() && !u.session_is_sim && u.sim_refs == vec![slot], "{layout:?}: the reference plays: {:?}", u.sim_refs);
+        assert!(std::sync::Arc::ptr_eq(&u.refs[slot].as_ref().unwrap().v, &held), "{layout:?}: and is not overwritten");
+        u.return_to_live();
+        assert!(!u.sim_mode() && !u.record_mode());
     }
 }
 

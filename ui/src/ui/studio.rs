@@ -1067,7 +1067,7 @@ impl Ui {
     }
 
     fn sim_activate_play(&mut self) {
-        self.sim_activate(Item::SimPlay);
+        self.sim_panel_play();
     }
 
     fn studio_top_tap(&mut self, x: i32, y: i32) {

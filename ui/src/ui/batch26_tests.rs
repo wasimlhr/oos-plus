@@ -158,7 +158,7 @@ fn a_loaded_ref_keeps_its_pill_and_trace_when_sim_gives_way_to_live() {
     let mut u = studio();
     load_csv(&mut u, 0, "ref1.csv");
     assert!(u.refs[0].as_ref().unwrap().on);
-    u.activate(Item::SimPlay);
+    u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0]);
     assert_eq!(u.m.trig_ref, Some(0), "SIM triggers on the ref");
     for _ in 0..6 { frame(&mut u); }
@@ -210,7 +210,7 @@ fn the_trigger_source_returns_to_the_live_channel_it_had() {
     let mut u = studio();
     u.m.set_trigger_wave(WaveId::Ch(1), false);
     load_csv(&mut u, 0, "ref1.csv");
-    u.activate(Item::SimPlay);
+    u.activate(Item::SimPlayRefs);
     assert_eq!(u.m.trig_ref, Some(0));
     u.return_to_live();
     assert_eq!((u.m.trig_ref, u.m.trig_src), (None, 1), "CH2 again, not R1");

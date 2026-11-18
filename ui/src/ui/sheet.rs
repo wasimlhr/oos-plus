@@ -243,7 +243,7 @@ impl Ui {
             // what is played and where it goes, then the knobs: levels and channel, jitter, spread spectrum. The rows
             // of the Advanced page are rows of these tabs; the actions are pinned by `sheet_spec`
             M::Sim => (&["Signal", "Levels", "Jitter", "Spread"], |it| match it {
-                SimPreset | SimRate | SimPat | SimSlot | SimShow | SimLoad | SimLive => Slot::Tab(0),
+                SimPreset | SimRate | SimPat | SimSlot | SimShow | SimLoad | SimPlayRefs | SimLive => Slot::Tab(0),
                 SimHigh | SimLow | SimRise | SimBw | SimDeemph | SimNoise => Slot::Tab(1),
                 SimRj | SimPj | SimPjHz | SimDcd | SimCorrRj | SimCorrHz => Slot::Tab(2),
                 SimSsc | SimSscCenter | SimSscDeviation | SimSscHz => Slot::Tab(3),
@@ -402,7 +402,8 @@ impl Ui {
             // SIM: the slot's rows follow the slot, and Live comes last, so no row moves when SIM mode starts under
             // the finger. Run is under every tab: beside Add on the tab of the slot, beside Defaults on the knob tabs
             if menu == MenuId::Sim {
-                let order = [Item::SimPreset, Item::SimRate, Item::SimPat, Item::SimSlot, Item::SimShow, Item::SimLoad, Item::SimLive];
+                // (Play references is offered while live, Back to live while a record plays: one or the other, in the same place)
+                let order = [Item::SimPreset, Item::SimRate, Item::SimPat, Item::SimSlot, Item::SimShow, Item::SimLoad, Item::SimPlayRefs, Item::SimLive];
                 tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
                 for (i, t) in tabs.iter_mut().enumerate() {
                     t.foot = if i == 0 { vec![Item::SimAddRef, Item::SimPlay] } else { vec![Item::SimPlay, Item::SimDefaults] };
@@ -604,6 +605,11 @@ impl Ui {
             Item::RemTelnetInfo => "telnet port".into(),
             Item::SimShow => format!("Show R{}", self.m.sim_slot + 1),
             Item::SimLive => "Back to live".into(),
+            Item::SimPlayRefs => {
+                let shown = self.sim_shown_refs();
+                let names: Vec<String> = shown.iter().map(|i| format!("R{}", i + 1)).collect();
+                format!("Play {} {}", if shown.len() == 1 { "reference" } else { "references" }, names.join(", "))
+            }
             // the tab is named Spread: its rows do not repeat it
             Item::SimSsc => "Spread spectrum".into(),
             Item::SimSscCenter => "Profile".into(),

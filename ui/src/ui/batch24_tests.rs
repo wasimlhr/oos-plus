@@ -65,7 +65,7 @@ fn sim_mode_plays_a_file_ref_through_the_acquisition_path() {
     u.m.meas = vec![(Meas::Vpp, WaveId::Ref(0)), (Meas::Freq, WaveId::Ref(0))];
     let before = u.refs[0].as_ref().unwrap().v.clone();
     let chans = (u.m.ch[0].on, u.m.ch[1].on);
-    u.activate(Item::SimPlay);
+    u.activate(Item::SimPlayRefs);
     assert!(u.record_mode() && u.sim_mode() && !u.session_is_sim, "the ref plays, nothing is generated");
     assert!(!u.sim_generating());
     play(&mut u, 40);
@@ -101,7 +101,7 @@ fn sim_mode_plays_a_file_ref_and_an_added_ref_together() {
     u.m.meas = vec![(Meas::Vpp, WaveId::Ref(0)), (Meas::Vpp, WaveId::Ref(1))];
     let names = (u.refs[0].as_ref().unwrap().label.clone(), u.refs[1].as_ref().unwrap().label.clone());
     let colours = (u.refs[0].as_ref().unwrap().color, u.refs[1].as_ref().unwrap().color);
-    u.activate(Item::SimPlay);
+    u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0, 1]);
     play(&mut u, 40);
     // the added reference is as long as the live screen now (millions of samples) and is measured in the background:

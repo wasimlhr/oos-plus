@@ -273,8 +273,9 @@ fn adding_while_the_simulation_runs_goes_to_live_and_adds_one_more_ref() {
     assert_eq!(u.refs.iter().filter(|r| r.is_some()).count(), before + 1, "{}", toast_text(&u));
     assert!(u.refs[1].as_ref().is_some_and(|r| r.label == "USB 2.0 HS" && r.on), "the first free slot has the new signal");
     assert!(u.refs[0].as_ref().is_some_and(|r| r.on), "the first signal stays shown");
-    // Play now runs both
-    u.activate(Item::SimPlay);
+    // Play references runs both
+    assert!(u.items(MenuId::Sim).contains(&Item::SimPlayRefs), "the two shown signals can be played");
+    u.activate(Item::SimPlayRefs);
     assert!(u.sim_mode() && u.sim_refs == vec![0, 1], "{:?}", u.sim_refs);
 }
 

@@ -302,6 +302,8 @@ Rust compiles changed code automatically. The window includes front-panel button
 Use **Reference > Load file** or **Ctrl+O** to open CSV, OOS BIN, WFM, waveform record (`.pwwf`), or RIGOL and Keysight binary (`.bin`) files; the web remote at `http://localhost:18080`
 also accepts file selection and drag-and-drop. Loaded sources appear as **R1–R10** cards.
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
+**Run simulation mode** plays the signal the SIM knobs describe; **Play references** plays the references that are shown
+(loaded files, signals added to a slot) as the acquisition instead.
 **Live** restores the live session. Measurements follow each captured window and recompute when a stopped
 reference is panned. **Measure** opens categorized choices with Source, Settings, and Selected; large readout
 lists have page controls. The Windows app announces its actual SCPI and HiSLIP listeners over mDNS.

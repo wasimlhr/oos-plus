@@ -85,7 +85,7 @@ fn sim_hides_the_live_channel_pills_and_live_restores_them() {
     let before = u.studio_bottom();
     assert!(before.ch[0].w > 0 && before.ch[1].w > 0, "the live pills are on the bar in Live");
     let live_rects = (before.ch[0], before.ch[1]);
-    u.activate(Item::SimPlay);
+    u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0, 1]);
     for _ in 0..6 { frame(&mut u); }
     let b = u.studio_bottom();
@@ -203,7 +203,7 @@ fn a_file_loaded_while_sim_plays_refs_joins_the_playback() {
     load_csv(&mut u, 0, "ref1.csv");
     u.return_to_live();
     u.refs[0].as_mut().unwrap().on = true;
-    u.activate(Item::SimPlay);
+    u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0]);
     for _ in 0..10 { frame(&mut u); }
     std::fs::write(u.store_dir.join("second.csv"), csv_bytes()).unwrap();

@@ -1119,6 +1119,8 @@ enum Item {
     SimPreset,
     SimSlot,
     SimPlay,
+    /// SIM mode over the shown references: files and added signals played together as the acquisition
+    SimPlayRefs,
     SimLive,
     SimShow,
     SimRate,

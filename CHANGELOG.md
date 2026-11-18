@@ -96,6 +96,11 @@ Added:
     Signal, so no row moves when SIM mode starts (host-tested);
   - the switch that shows the reference of the SIM slot works and shows its state. In the sheet it did nothing: a
     tap stepped it eight times, back to where it was, and it was always drawn off (host-tested);
+  - SIM: **Run simulation mode** always plays the signal of the knobs, as `:SIM:PLAY ON` does, and leaves the sheet
+    open, so a knob changes the signal that plays. With a reference shown it used to play the references instead
+    and close the sheet, and then no knob did anything. The references that are shown (loaded files, signals put
+    there with Add) are played with their own row, **Play references**, on the Signal tab and in the stock SIM
+    menu; Play of the Studio SIM panel still runs the shown signals together (host-tested);
   - Remote services and SSH settings are sheets in Minimal and Studio (they were the stock dialogs: with ten rows
     the page did not fit one tab). Remote services has the switches on Services and the name, the allowed
     addresses, the firewall and the ports on Access; SSH settings has its two key actions at the foot (host-tested);

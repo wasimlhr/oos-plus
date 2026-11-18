@@ -155,6 +155,8 @@ impl Ui {
         ];
         // Studio only: the sheet offers a file for the SIM slot
         if self.m.layout == Layout::Studio { items.insert(items.iter().position(|it| *it == Item::SimAddRef).map_or(0, |i| i + 1), Item::SimLoad); }
+        // Run plays the signal of the knobs; the references that are shown (files, added signals) have a play of their own
+        if self.sim_can_play_refs() { items.insert(items.iter().position(|it| *it == Item::SimPlay).map_or(0, |i| i + 1), Item::SimPlayRefs); }
         if self.record_mode() { items.insert(0, Item::SimLive); }
         items
     }
@@ -166,7 +168,7 @@ impl Ui {
 
     pub(super) fn sim_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::SimPlay | Item::SimAddRef | Item::SimLoad | Item::SimLive | Item::SimDefaults => Kind::Action,
+            Item::SimPlay | Item::SimPlayRefs | Item::SimAddRef | Item::SimLoad | Item::SimLive | Item::SimDefaults => Kind::Action,
             Item::SimPreset | Item::SimPat | Item::SimSsc | Item::SimSscCenter | Item::SimSlot | Item::SimShow => Kind::Choice,
             Item::SimRate | Item::SimHigh | Item::SimLow | Item::SimRise | Item::SimBw | Item::SimDeemph | Item::SimNoise | Item::SimRj | Item::SimPj | Item::SimPjHz
             | Item::SimSscDeviation | Item::SimSscHz | Item::SimDcd | Item::SimCorrRj | Item::SimCorrHz => Kind::Value,
@@ -199,6 +201,7 @@ impl Ui {
             Item::SimPjHz => "PJ freq",
             Item::SimSlot => "Slot",
             Item::SimPlay => "Run simulation mode",
+            Item::SimPlayRefs => "Play references",
             Item::SimAddRef => "Add to ref",
             Item::SimLoad => "Load file...",
             Item::SimLive => "Live",
@@ -231,7 +234,7 @@ impl Ui {
             Item::SimPj => si_short(m.sim_pj, "s"),
             Item::SimPjHz => if m.sim_pj > 0.0 { si_short(m.sim_pjhz, "Hz") } else { "off".into() },
             Item::SimSlot => format!("R{}", m.sim_slot + 1),
-            Item::SimPlay | Item::SimAddRef | Item::SimLoad => String::new(),
+            Item::SimPlay | Item::SimPlayRefs | Item::SimAddRef | Item::SimLoad => String::new(),
             Item::SimDefaults => String::new(),
             Item::SimShow => match &self.refs[m.sim_slot] {
                 None => "empty".into(),
@@ -313,8 +316,13 @@ impl Ui {
                 self.toast("SIM generation cancelled");
             }
             Item::SimPlay if self.sim_mode() => { self.record_key(key::RUNSTOP); },
-            Item::SimPlay if !self.sim_shown_refs().is_empty() => self.sim_start_refs(),
+            // Run is the signal of the knobs, whatever else is on the screen: a reference that is shown stays shown
+            // beside it, and the knobs go on changing the signal. (It used to play the shown references instead, and
+            // then no knob did anything.) `:SIM:PLAY ON` has always done this
             Item::SimPlay => self.sim_request_ui(true),
+            Item::SimPlayRefs => {
+                if self.sim_can_play_refs() { self.sim_start_refs(); } else { self.toast("No reference is shown: Add to ref or load a file first"); }
+            }
             Item::SimDefaults => {
                 let regenerate = self.session_is_sim || self.sim_generating();
                 let running = self.sim_requested_running();
@@ -325,6 +333,18 @@ impl Ui {
             _ => return false,
         }
         true
+    }
+
+    /// The shown references can be played as the acquisition: there is one, and nothing is played or generated yet.
+    pub(super) fn sim_can_play_refs(&self) -> bool {
+        !self.record_mode() && !self.sim_generating() && !self.sim_shown_refs().is_empty()
+    }
+
+    /// Play of the Studio SIM panel, where Add puts several signals side by side: the shown references together when
+    /// there are any, else the signal of the knobs.
+    pub(super) fn sim_panel_play(&mut self) {
+        let it = if self.sim_can_play_refs() { Item::SimPlayRefs } else { Item::SimPlay };
+        self.sim_activate(it);
     }
 
     /// SIM mode is on: the sheet's generated signal or the offline refs are playing as a live acquisition.
@@ -522,7 +542,7 @@ impl Ui {
     /// changes: no SIM mode, no other slot, no channel switched off.
     /// Adds the signal the knobs describe as one more ref, in the first free slot: the way to several simulated
     /// signals. While the simulation mode plays, it goes back to Live first (the knobs stay as they are set now),
-    /// and the next Play runs every shown ref together.
+    /// and Play references (or Play of the Studio SIM panel) then runs every shown ref together.
     pub(super) fn sim_add_next(&mut self) {
         if self.sim_generating() { return self.toast("SIM is busy generating"); }
         let Some(free) = (0..NREF).find(|&i| self.refs[i].is_none()) else {
