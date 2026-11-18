@@ -1756,6 +1756,10 @@ pub struct Ui {
     pub setup_scpi_request: bool,
     /// Storage > SCPI recorder, `:SYSTem:RECorder:STATe`: on or off. The interpreter follows at its next poll.
     pub scpi_rec_want: bool,
+    /// What the SCPI recorder writes as a command and not as settings (scpi/recorder.rs): a key or a row that leaves
+    /// no setting or owns the settings it changes, each with the model from before it acted. The interpreter takes
+    /// them at its next poll. Filled only while the recorder is on.
+    pub scpi_rec_actions: Vec<(String, Box<Model>)>,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
@@ -2085,6 +2089,7 @@ impl Ui {
             shot_request: None,
             setup_scpi_request: false,
             scpi_rec_want: false,
+            scpi_rec_actions: Vec::new(),
             quit: false,
         };
         ui.ensure_meas_own();
@@ -3109,6 +3114,7 @@ impl Ui {
     /// waveforms, persistence / colour-grade maps, averaging, measurements and their statistics, mask counts and
     /// search marks start over; in STOP the screen stays empty until the next acquisition (RUN draws again at once).
     fn clear_display(&mut self) {
+        self.rec_action(":CLEar");
         self.wfm_total = 0;
         self.bus_views_clear();
         self.ph.clear();
@@ -3139,7 +3145,7 @@ impl Ui {
     /// QUICK key and the Quick button of the top bar: the action chosen in System > Quick key.
     fn quick(&mut self) {
         match self.m.quick {
-            Quick::Screenshot => self.shot_request = Some(String::new()),
+            Quick::Screenshot => { self.rec_action(":SAVE:IMAGe"); self.shot_request = Some(String::new()) }
             Quick::SavePng => self.activate(Item::StorePng),
             Quick::SaveSetup => self.activate(Item::StoreSaveSetup),
             Quick::SaveCsv => self.activate(Item::StoreCsv),
@@ -9402,6 +9408,7 @@ impl Ui {
                     self.dialog = Some(d)
                 }
                 Item::Shot => {
+                    self.rec_action(":SAVE:IMAGe");
                     // without the dialog on it
                     self.close_menu();
                     self.shot_request = Some(String::new());
@@ -9423,6 +9430,7 @@ impl Ui {
                     }
                 }
                 Item::StoreSaveSetup => {
+                    self.rec_action(":SAVE:SETup");
                     let p = self.setup_path();
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
@@ -9431,6 +9439,7 @@ impl Ui {
                 Item::StoreRecall => self.recall_setup(),
                 Item::StoreCsv => self.store_wave(true, None),
                 Item::StorePng => {
+                    self.rec_action(":SAVE:IMAGe");
                     // without the dialog: the screen is saved after the next frame (main loop / script runner)
                     let p = self.new_file(&self.save_dir(), "shot", "png");
                     self.close_menu();
@@ -9507,6 +9516,8 @@ impl Ui {
     /// Storage > Save waveform (CSV or binary): the newest record to the save folder, or to a file of the caller
     /// (SCPI `:SAVE:WAVeform "path"`).
     pub(crate) fn store_wave(&mut self, csv: bool, path: Option<std::path::PathBuf>) {
+        // for the SCPI recorder: the row of the Storage menu, when there is a waveform to save
+        if path.is_none() && self.last[0].is_some() { self.rec_action(if csv { ":SAVE:WAVeform" } else { ":SAVE:WAVeform ,BIN" }); }
         let Some(rec) = &self.last[0] else { return self.toast("No waveform to save") };
         let p = path.clone().unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
         let mut r = if csv { crate::store::write(&p, crate::store::wave_csv(rec, &self.m).as_bytes()) } else { crate::store::write(&p, &crate::store::wave_bin(rec, &self.m)) };
@@ -9705,6 +9716,17 @@ impl Ui {
             }
             Err(e) => Err(e),
         }
+    }
+
+    /// For the SCPI recorder: `line` is the command of what is about to be done, to be written as it is. With it goes
+    /// the model as it is now, before the action: what the user set until then is written first, and what the action
+    /// changes is its own. A client's command that comes here is taken out again (`Scpi::poll_program`).
+    ///
+    /// It is called where the action is done, past every check that can refuse it, and not where a key comes in: the
+    /// Quick key, a row of the start menu and the key of the panel end in the same function, and a key that a dialog
+    /// takes or a record refuses does nothing.
+    pub(crate) fn rec_action(&mut self, line: &str) {
+        if self.scpi_rec_want { self.scpi_rec_actions.push((line.to_string(), Box::new(self.m.clone()))); }
     }
 
     /// Storage > Save setup as SCPI and the SCPI recorder: writes the commands the interpreter made into a new file
@@ -10535,6 +10557,7 @@ impl Ui {
             self.single_armed = false;
         }
         if self.record_mode() { self.record_key(key::FORCE); return; }
+        self.rec_action(":TFORce");
         self.bus_candidate_key(key::FORCE);
         self.m.run = RunState::Run;
         self.src.force_hw();
@@ -10607,6 +10630,7 @@ impl Ui {
     /// The Default key and `*RST`: a new set-up. `*RST` calls this itself, so that a notice or a menu on the screen,
     /// which takes a key press for its own, does not swallow a reset from a script.
     pub(crate) fn default_setup(&mut self) {
+        self.rec_action("*RST");
         let meas = Self::default_meas();
         // the Quick key action is a preference, not part of the set-up that Default resets. The layout is part
         // of it: a new set-up starts in the Default layout with the stock bars (5533112)
@@ -10666,6 +10690,12 @@ impl Ui {
         }
         if self.record_key(k) { return; }
         self.bus_candidate_key(k);
+        // for the SCPI recorder: Run / Stop and Single act below (on a record `record_key` has done them)
+        match k {
+            key::RUNSTOP => self.rec_action(if self.m.run == RunState::Run { ":STOP" } else { ":RUN" }),
+            key::SINGLE => self.rec_action(":SINGle"),
+            _ => {}
+        }
         let m = &mut self.m;
         match k {
             0x15..=0x18 if (k - 0x15) as usize >= n_ch() => {
