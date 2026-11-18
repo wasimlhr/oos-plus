@@ -114,7 +114,7 @@ You need a Windows [Rust](https://rustup.rs) toolchain. From PowerShell, in the 
 
 The app is `ui\target\release\oos-ui.exe`. The mouse is the finger, the wheel pans, Ctrl+wheel zooms the time base,
 Space is Run/Stop and F12 saves a screenshot; all keys are listed at the top of
-[ui/src/desktop.rs](ui/src/desktop.rs). Ctrl+O opens a waveform file, and so does dropping one on the program or
+[ui/src/desktop.rs](ui/src/desktop.rs). Ctrl+O opens a waveform file, and so does dropping one on the window or on the program, or
 `--open FILE`. A session file (`session-NNN.oss`) given that way is loaded as a session. `--offline` starts with
 the analog channels off, for work on stored waveforms.
 

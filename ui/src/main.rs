@@ -108,7 +108,7 @@ fn files_to_open(args: &[String]) -> Vec<String> {
 /// Opens one file named on the command line. A session (`session-NNN.oss`) is loaded as Storage > Load session
 /// does, replacing the setup, the record and every reference slot; a waveform goes into the first empty reference
 /// slots. The path is taken from where the program was started, not from the folder of the setups.
-fn open_file(ui: &mut Ui, file: &str) -> Result<(), String> {
+pub(crate) fn open_file(ui: &mut Ui, file: &str) -> Result<(), String> {
     let named = std::path::Path::new(file);
     let path = if named.is_absolute() { named.to_path_buf() } else { std::env::current_dir().map(|d| d.join(named)).unwrap_or_else(|_| named.to_path_buf()) };
     let bytes = store::read_waveform_file(&path)?;
