@@ -1625,10 +1625,11 @@ fn walk_second_look_pictures() {
     }
 }
 
-/// The page of a channel pair has its two sources under every tab, and no sheet offers a tab that holds nothing:
-/// Position while the cursors are off, Scale while math has no function.
+/// The page of a channel pair has its two sources under every tab, and no sheet opens a tab that holds nothing
+/// (Position while the cursors are off, Scale while math has no function); the rows of Math stay where they are when a
+/// function is chosen.
 #[test]
-fn the_pair_sources_are_under_every_tab_and_no_tab_is_empty() {
+fn the_pair_sources_are_under_every_tab_and_no_empty_tab_opens() {
     for layout in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(layout);
         u.m.ch[1].on = true;
@@ -1647,33 +1648,60 @@ fn the_pair_sources_are_under_every_tab_and_no_tab_is_empty() {
         tap(&mut u, x, y);
         assert!(u.menu == MenuId::Pick && u.pick.is_some_and(|p| p.it == Item::MeasSrcB), "{layout:?}: the list of source B");
         u.close_menu();
-        // no tab without rows and actions, in any sheet, as the scope starts
+        // a tab that holds nothing is never the one shown, in any sheet, as the scope starts
         let mut list = menus(&u);
         list.extend([MenuId::Network, MenuId::Remote, MenuId::Ssh, MenuId::Time, MenuId::SelfCal, MenuId::Dvm, MenuId::Zone, MenuId::Sim, MenuId::MeasPair, MenuId::MeasStat]);
         for menu in list {
             let mut u = fresh(layout);
             u.open_menu(menu);
             let Some(spec) = u.sheet_spec(menu) else { continue };
-            for t in &spec.tabs { assert!(!t.rows.is_empty() || !t.foot.is_empty(), "{layout:?} {menu:?}: the tab {} is empty", t.name); }
+            if menu == MenuId::Main { continue; }
+            for t in 0..spec.tabs.len() {
+                if let Some(r) = u.sheet_geo().unwrap().tabs.get(t) { let (x, y) = mid(*r); tap(&mut u, x, y); }
+                let g = u.sheet_geo().unwrap();
+                assert!(!g.rows.is_empty() || !g.foot.is_empty(), "{layout:?} {menu:?}: a tap on the tab {} shows an empty page", spec.tabs[t].name);
+            }
         }
     }
-    // Studio: the cursors off have one page, a cursor type brings Position
+    // Studio, the cursors off: Position holds nothing. It keeps its place in the strip, and a tap on it does not open it
     let mut u = fresh(Layout::Studio);
     u.open_menu(MenuId::Cursor);
+    u.step(0.04);
     assert_eq!(u.m.cursor, CursorMode::Off);
-    assert_eq!(u.sheet_spec(MenuId::Cursor).unwrap().tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Cursors"]);
-    assert!(u.sheet_geo().unwrap().tabs.is_empty(), "one page: no tab strip");
+    let spec = u.sheet_spec(MenuId::Cursor).unwrap();
+    assert_eq!(spec.tabs.iter().map(|t| (t.name, t.holds())).collect::<Vec<_>>(), [("Cursors", true), ("Position", false)]);
+    let g = u.sheet_geo().unwrap();
+    let shown: Vec<Item> = g.rows.iter().map(|r| r.it).collect();
+    let (x, y) = mid(g.tabs[1]);
+    tap(&mut u, x, y);
+    assert_eq!(u.sheet_geo().unwrap().rows.iter().map(|r| r.it).collect::<Vec<_>>(), shown, "the page of Cursors stays");
+    // with a cursor type it opens
     u.m.cursor = CursorMode::Time;
-    assert_eq!(u.sheet_spec(MenuId::Cursor).unwrap().tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Cursors", "Position"]);
-    // math without a function has no Scale tab; the bus page still opens on its own tab
+    assert!(u.sheet_spec(MenuId::Cursor).unwrap().tabs[1].holds());
+    tap(&mut u, x, y);
+    assert_ne!(u.sheet_geo().unwrap().rows.iter().map(|r| r.it).collect::<Vec<_>>(), shown, "Position is open");
+    // and when the cursors go off while it is open, the sheet shows the page that holds something
+    u.m.cursor = CursorMode::Off;
+    assert_eq!(u.sheet_geo().unwrap().rows.iter().map(|r| r.it).collect::<Vec<_>>(), shown, "back on Cursors");
+    // math without a function: Scale holds nothing
     let mut u = fresh(Layout::Studio);
     u.open_menu(MenuId::Math);
     assert_eq!(u.m.math, MathOp::Off);
-    assert_eq!(u.sheet_spec(MenuId::Math).unwrap().tabs.len(), 1);
-    let spec = u.sheet_spec(MenuId::Bus).unwrap();
-    assert_eq!(spec.tabs[spec.first].name, "Bus");
-    let spec = u.sheet_spec(MenuId::ChMore(0)).unwrap();
-    assert_eq!(spec.tabs[spec.first].name, "More");
+    assert_eq!(u.sheet_spec(MenuId::Math).unwrap().tabs.iter().map(|t| (t.name, t.holds())).collect::<Vec<_>>(), [("Function", true), ("Scale", false)]);
+    // a function chosen: the three rows stay where they were, and Turn off is pinned under them
+    u.step(0.04);
+    let before: Vec<(Item, Rect)> = u.sheet_geo().unwrap().rows.iter().map(|r| (r.it, r.row)).collect();
+    assert_eq!(before.iter().map(|r| r.0).collect::<Vec<_>>(), [Item::MathSel, Item::MathFam, Item::MathOpI]);
+    u.select_option(Item::MathOpI, "A+B");
+    u.step(0.04);
+    assert!(u.m.math != MathOp::Off, "a function is on");
+    let g = u.sheet_geo().unwrap();
+    let after: Vec<(Item, Rect)> = g.rows.iter().map(|r| (r.it, r.row)).collect();
+    assert_eq!(after[..3], before[..], "no row moved");
+    assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [Item::MathOff], "Turn off is at the foot");
+    let (x, y) = mid(g.foot[0].1);
+    tap(&mut u, x, y);
+    assert_eq!(u.m.math, MathOp::Off, "and a tap on it turns math off");
 }
 
 /// Pictures of every tab of the channel, trigger and measure sheets (`OOS_WALK=dir`), with the signals of the demo.

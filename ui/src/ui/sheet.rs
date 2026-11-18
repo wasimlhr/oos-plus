@@ -48,6 +48,15 @@ pub(super) struct SheetTab {
     pub foot: Vec<Item>,
 }
 
+impl SheetTab {
+    /// The tab has something to show. One that has not (Position while the cursors are off, Scale while math has
+    /// no function) keeps its place in the strip, dimmed, and cannot be opened: an empty page helps nobody, and a
+    /// strip that came and went would move the rows under the finger.
+    pub(super) fn holds(&self) -> bool {
+        !self.rows.is_empty() || !self.foot.is_empty()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) struct SheetSpec {
     pub tabs: Vec<SheetTab>,
@@ -186,7 +195,9 @@ impl Ui {
                 _ => Slot::Tab(1),
             }),
             M::Math => (&["Function", "Scale"], |it| match it {
-                MathOff | MathSel | MathFam | MathOpI | MathA | MathB | MathExprEdit | FftWin => Slot::Tab(0),
+                MathSel | MathFam | MathOpI | MathA | MathB | MathExprEdit | FftWin => Slot::Tab(0),
+                // Turn off is pinned under the rows: as their first one it moved every row when a function was chosen
+                MathOff => Slot::Foot(0),
                 MathExprI => Slot::Skip,
                 MathAuto => Slot::Foot(1),
                 _ => Slot::Tab(1),
@@ -431,12 +442,6 @@ impl Ui {
                 MenuId::Bus => 2,
                 _ => 0,
             };
-            // a tab that holds nothing in this state is not offered: Position while the cursors are off, Scale while
-            // math has no function. The tab the sheet opens on is found again by its name
-            let opens_on = tabs.get(first).map(|t| t.name);
-            let holds = |t: &SheetTab| !t.rows.is_empty() || !t.foot.is_empty();
-            if tabs.iter().any(holds) { tabs.retain(holds); }
-            let first = opens_on.and_then(|n| tabs.iter().position(|t| t.name == n)).unwrap_or(0);
             SheetSpec { tabs, first }
         };
         if spec.tabs.len() > SHEET_MAX_TABS {
@@ -490,7 +495,9 @@ impl Ui {
 
     fn sheet_tab(&self, spec: &SheetSpec) -> usize {
         let n = spec.tabs.len().max(1);
-        if self.sheet.menu == Some(self.menu) { self.sheet.tab.min(n - 1) } else { spec.first.min(n - 1) }
+        let want = if self.sheet.menu == Some(self.menu) { self.sheet.tab.min(n - 1) } else { spec.first.min(n - 1) };
+        // the tab that was open may hold nothing by now: the first that does is shown
+        if spec.tabs.get(want).is_some_and(SheetTab::holds) { want } else { spec.tabs.iter().position(SheetTab::holds).unwrap_or(want) }
     }
 
     fn sheet_page(&self, key: Option<Item>) -> usize {
@@ -738,7 +745,8 @@ impl Ui {
                 cv.round(*r, 5, rgb(0x2e, 0x2e, 0x32), 255);
                 cv.round_outline(*r, 5, ACCENT);
             }
-            cv.text_in(&f.sb, *r, 1, spec.tabs[i].name, if on { TEXT } else { DIM });
+            let dimmed = mix(DLG_BG, DIM, 60);
+            cv.text_in(&f.sb, *r, 1, spec.tabs[i].name, if on { TEXT } else if spec.tabs[i].holds() { DIM } else { dimmed });
         }
         for row in &g.rows {
             self.sheet_draw_row(cv, row);
@@ -900,7 +908,8 @@ impl Ui {
         let Some(g) = self.sheet_geo() else { return true };
         for (i, t) in g.tabs.iter().enumerate() {
             if t.contains(x, y) {
-                self.sheet_set_tab(i);
+                // a tab that holds nothing now is not opened
+                if self.sheet_spec(self.menu).is_some_and(|s| s.tabs.get(i).is_some_and(SheetTab::holds)) { self.sheet_set_tab(i); }
                 return true;
             }
         }

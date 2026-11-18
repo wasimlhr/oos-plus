@@ -105,8 +105,11 @@ Added:
     views, Network > Ethernet and System > Service had them first or in the middle;
   - the page of a channel pair has its two sources ("A: CH1", "B: CH2") under every tab. A was under Delay only,
     B under Phase only, and Skew and Setup / hold had none (host-tested);
-  - a sheet offers no tab that holds nothing: Cursor > Position while the cursors are off and Math > Scale while
-    math has no function were empty pages (host-tested);
+  - a tab that holds nothing is dimmed and does not open: Cursor > Position while the cursors are off and Math >
+    Scale while math has no function were empty pages. It keeps its place, so the rows do not move when it gets
+    its content (host-tested);
+  - Math: Turn off is pinned at the foot of the sheet. It was put in as the first row once a function was chosen,
+    which moved every row down under the finger (host-tested);
   - the measurement strip (stock layout and Minimal) takes the short name of a measurement (Pk-pk, Freq, +Duty)
     where the long one has no room: with several sources, in the column at a side, and at the larger text sizes.
     The long name was cut there ("Positive Duty Cy", "Peak-to-Pe", "Frequen") (host-tested);
