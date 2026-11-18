@@ -165,7 +165,7 @@ Commands: [display.md](display.md).
 | `view<n>` | `view<n>` is what view n keeps while another is shown: `key=value; ...` of the measurement list, panels, cursors, zoom, lanes shown and analysis set-ups, values escaped with `%3B` for `;` (optional) | - | - |
 | `math_hidden` | math channels (1-based) not shown in the view shown (optional) | - | `:MATH<n>:DISPlay` |
 | `gen_hidden` | `true`: the GEN chip is not shown in the view shown (optional) | `false` | `:DISPlay:GENerator` |
-| `studio_state` | what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source (optional; written each time) | empty | - |
+| `studio_state` | what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source, the columns of the event tables where a divider was dragged (optional; written each time) | empty | - |
 
 ## Measurements
 

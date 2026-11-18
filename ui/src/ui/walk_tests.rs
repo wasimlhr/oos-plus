@@ -1516,6 +1516,20 @@ fn the_docked_event_table_has_its_count_in_the_title_and_columns_that_can_be_dra
         u.render(&mut cv);
         let _ = crate::store::write(&std::path::Path::new(&dir).join("table.png"), &crate::store::png_of(&cv));
     }
+    // the dragged columns are part of the setup (and so of a session): recalled, they are where they were put
+    let [b, c] = u.table_cols.expect("dragged");
+    let setup = u.setup_text_full();
+    assert!(setup.contains(&format!("tcols={b}/{c}")), "{}", setup.lines().find(|l| l.starts_with("studio_state")).unwrap_or("no studio_state"));
+    let mut v = fresh_live(Layout::Studio);
+    assert_eq!(v.table_cols, None, "a fresh table fits its columns to the content");
+    v.apply_setup_text(&setup).unwrap();
+    assert_eq!(v.table_cols, Some([b, c]));
+    // a setup from before a divider was dragged brings the fitted columns back
+    u.table_cols = None;
+    let plain = u.setup_text_full();
+    assert!(!plain.contains("tcols="));
+    v.apply_setup_text(&plain).unwrap();
+    assert_eq!(v.table_cols, None);
 }
 
 /// Remote services and SSH settings are sheets in Minimal and Studio, System > Connectivity says where the scope is
