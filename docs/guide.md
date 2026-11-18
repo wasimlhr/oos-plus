@@ -697,6 +697,16 @@ view not used yet starts with the plot alone. To switch: the numbers left of the
 left or right edge of the plot inwards (a vertical drag there still moves a channel or the trigger level), the Quick
 key set to Next view, or SCPI `:DISPlay:VIEW <n>` (`:DISPlay:VIEW:COUNt <1..4>`). The views are saved with a setup.
 
+**Layouts.** Display > Layout arranges the screen (`:DISPlay:LAYout`). Default is the screen this guide describes.
+Minimal has quieter bars and opens every menu as a sheet at the right of the plot. Studio has views that dock, tab and
+float, and pills in its bottom bar. Studio offers every menu that Default offers, in these places: the gear at the top
+right is the Menu; the button with the sample rate, the memory depth and the mode opens Acquire, and Horizontal is
+under it; the pill of the time base opens Horizontal and names the delay or the zoom scale; the trigger pill names the
+type and the sweep and opens Trigger. Add > Measurement and the Measure key open a quick panel that adds measurements
+on one source with the plot in view; the button beside its close button opens the Measure page with the categories,
+the sources, Selected and Settings, and Menu > Measure opens that page at once. System, SIM and the network pages are
+entries of the Menu.
+
 **Text size.** Display > Text size makes the text larger: Normal is the original look, Large and Larger use fonts 2 and 4
 pixels bigger in the top bar, the cards, the measurement and cursor rows, the menus, the keyboard and the dialogs. The rows
 under the plot grow with them, so the plot gets a little shorter. Where a long text would not fit (a narrow channel card

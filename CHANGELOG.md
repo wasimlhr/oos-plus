@@ -7,6 +7,22 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio offers what Default offers (ADR 0030; host-tested, not yet verified on hardware). The 47 menus and 508 rows
+  of the Default layout were compared with the Studio sheets; the rows were there but for one, the gaps were at the
+  entrances, and a test now keeps a row from going missing:
+  - Measure: the Measure page (the categories, the sources a measurement reads, Selected, Settings) opens in Studio.
+    The Add measurements panel stays as the quick way: the button beside its close button opens the page, the button
+    in the same place on the page leads back, and Menu > Measure opens the page. Before, nothing in Studio led to
+    the measurement settings (levels, parameters, pairs, statistics, Clear all) or to the sources B, C and D.
+  - the acquisition read-out of the top bar is a button with a chevron and names the mode, as in Default
+    ("500 kSa/s · 1.00 Mpts · Normal"). A tap on it opened Acquire before too, but it was plain text.
+  - the trigger pill names the type and the sweep on a second line ("Edge · Auto"), and the time pill the delay
+    or the zoom scale, as the cards of the Default layout do. At the Larger text size a pill has one line: the type
+    stands in front of the source, and the time pill keeps the scale alone.
+  - Acquire, in Minimal and Studio: the sheet has the line that says where aliasing starts. It has two tabs,
+    Acquire and Segments, with Horizontal pinned under both, so it stays a sheet when averaging or segments add rows.
+  - SIM is not a button of the Studio top bar any more: it is Menu > Analysis > SIM, as in Default.
+    `:UI:ELEMents? TOP` no longer lists it.
 - Decode, in Minimal and Studio: the four decoders are shown as four. The row of D1 to D4 is named Decoders and
   marks the ones that are on while another is edited, and the switch under it says whose it is ("Decoder D2"). Four
   decoders of four protocols on four channels ran before too; the sheet read as if there were one (host-tested).
