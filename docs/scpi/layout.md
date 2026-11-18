@@ -42,7 +42,7 @@ Rectangles are `x,y,w,h` in screen pixels from the top-left corner. `:UI:SCReen?
 | `:DOCK:MAXimise` | Set / Query | `<view>`: every view in tabs of one group that fills the area, `<view>` in front. The query answers `1` while a view fills the area. | - | Expand button; right-click > Maximise view | OOS extension |
 | `:DOCK:RESTore` | Set | Back from a maximised view to the arrangement before. | - | Restore button; right-click > Restore layout | OOS extension |
 | `:DOCK:RESet` | Set | The default arrangement: nothing floating, no saved splits. | - | - | OOS extension |
-| `:DOCK:LAYout` | Set / Query | The whole arrangement as a quoted text: the setup's text (`Model::studio_dock`) with `|` between its parts, since `;` would end the command. Read it, and set it back later to restore an arrangement. | - | - | OOS extension |
+| `:DOCK:LAYout` | Set / Query | The whole arrangement as a quoted text: the setup's text (`Model::studio_dock`) with `\|` between its parts, since `;` would end the command. Read it, and set it back later to restore an arrangement. | - | - | OOS extension |
 
 ### Right-click menu of the plot
 

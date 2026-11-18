@@ -71,7 +71,7 @@
     {
      "header": "*RST",
      "set": "*RST",
-     "desc": "Restore the default configuration (the Default key). Changes the acquisition workspace.",
+     "desc": "Restore the default configuration (the Default key): the set-up, the notes on the signals, the vertical zoom and the waveform read-out (`CHAN1`, `NORMal`, `BYTE`, the whole record). A new set-up is in the Default layout with the stock bars. The text size and the Quick key stay, as do `*ESE` and `*SRE`.",
      "remarks": [
       "- Menu equivalent: Run control > Default setup.",
       "- Origin: Rigol-compatible"
@@ -113,7 +113,7 @@
      "remarks": [
       "- Origin: Rigol-compatible. Starts clear; there is no power-on bit and no SRQ."
      ],
-     "returns": "On a freshly started default model the query returns `16`.",
+     "returns": "On a freshly started default model the query returns `0`.",
      "example": "*ESR?    /*The query returns 32.*/"
     },
     {
@@ -2541,7 +2541,7 @@
       [
        "<value>",
        "Text",
-       "`CHAN1`..`CHAN4`",
+       "`CHAN1`..`CHAN4`: the channel the zone is drawn on, not the trigger's source. A \"must intersect\" zone on a channel that is off lets no record through.",
        "—"
       ]
      ],
@@ -8173,7 +8173,7 @@
       [
        "<value>",
        "Text",
-       "Threshold preset of pod 1 or 2 by its name (`TTL`, `CMOS`, ..., `USER`)",
+       "Threshold preset of pod 1 or 2 by its name: `TTL_1.4_V`, `CMOS_5_V:_2.5_V`, `CMOS_3.3_V:_1.65_V`, `LVCMOS_2.5_V:_1.25_V`, `LVCMOS_1.8_V:_0.9_V`, `LVCMOS_1.2_V:_0.6_V`, `ECL_-1.3_V`, `USER`. The beginning of a name is enough when only one name begins so (`TTL`, `ECL`, `CMOS_3.3`, `LVCMOS_1.8`)",
        "TTL_1.4_V"
       ]
      ],
@@ -10509,10 +10509,10 @@
    "title": "Bode and bandwidth test: Bode",
    "intro": [
     {
-     "p": "The frequency-response sweep (loop gain, PSRR, impedance) driven by the built-in generator (S models) or through an external generator, and the step-response bandwidth estimate. With the built-in generator and the same channel as input and output, the gain is against the set amplitude and there is no phase: the phase of every point reads `NaN`. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures."
+     "p": "The frequency-response sweep (loop gain, PSRR, impedance) driven by the built-in generator (S models) or by the external generator of the Ext generator page (extgen.md), and the step-response bandwidth estimate. With the built-in generator and the same channel as input and output, the gain is against the set amplitude and there is no phase: the phase of every point reads `NaN`. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures."
     },
     {
-     "p": "Menu location: Bode (view, Mode, Start / stop frequency, Points, Amplitude, Input, Output, Free sweep, Start / stop) and Bandwidth test (View, Source, Signal frequency, Bins per period)."
+     "p": "Menu location: Bode (view, Mode, Start / stop frequency, Points, Amplitude, Input, Output, Generator, Free sweep, Start / stop) and Bandwidth test (View, Source, Signal frequency, Bins per period)."
     },
     {
      "p": "Part of the SCPI reference."
@@ -10805,7 +10805,7 @@
      "header": ":BODE:GENerator",
      "set": ":BODE:GENerator \"ip:port\"",
      "query": ":BODE:GENerator?",
-     "desc": "Sets or queries Generator address and connection (LAN / USB) for Bode (menu: Bode > Generator address and connection (LAN / USB)).",
+     "desc": "Sets or queries Connection and Address for Bode (menu: Ext generator > Connection and Address).",
      "params": [
       [
        "\"ip:port\"",
@@ -10815,7 +10815,7 @@
       ]
      ],
      "remarks": [
-      "- Origin: OOS extension"
+      "- Origin: OOS extension. The same settings as `:EXTGen:LINK` and `:EXTGen:ADDRess`."
      ],
      "returns": "On a freshly started default model the query returns `192.168.1.100:5555`.",
      "ext": true
@@ -11523,6 +11523,246 @@
     },
     {
      "pre": ":SOURce1:MOD:TYPe AM\n:SOURce1:MOD:AM:DEPTh 50\n:SOURce1:MOD:AM:INTernal:FREQuency 10\n:SOURce1:MOD:STATe ON\n:SOURce1:MOD:TYPe?                     -> AM"
+    }
+   ]
+  },
+  {
+   "title": "External generator",
+   "intro": [
+    {
+     "p": "A generator beside the scope, on the USB-A port (USBTMC, no computer) or on the LAN. These commands name its model and where it is, connect to it, and switch a sine on. The Bode sweep with Generator = External sends through the same connection (bode.md); a sweep that finds none opens one for itself and closes it at its end."
+    },
+    {
+     "p": "A model with an error query (the OWON DGE) is asked after every command: what it refuses is shown on the screen, and a Bode sweep ends with it. While a Bode sweep steps the generator, the commands that would change the generator or its connection answer -221."
+    },
+    {
+     "p": "How the models are known: docs/extgen.md. The OWON DGE on the USB-A port of the scope is not yet verified on hardware."
+    },
+    {
+     "p": "Menu location: Ext generator (Model, Connection, Address, State, Identity, Gen channel, Load, Frequency, Amplitude, Output, Connect / disconnect)."
+    },
+    {
+     "p": "Part of the SCPI reference."
+    }
+   ],
+   "commands": [
+    {
+     "header": ":EXTGen:MODel",
+     "set": ":EXTGen:MODel <value>",
+     "query": ":EXTGen:MODel?",
+     "desc": "Sets or queries Model (menu: Ext generator > Model).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{APPL|BSWV|SCPI|CHANNEL|OWON_DGE}",
+       "APPL"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension. Connect on the screen or `:EXTGen:CONNect ON` sets it from the `*IDN?` answer of a model it knows."
+     ],
+     "returns": "On a freshly started default model the query returns `APPL`.",
+     "ext": true,
+     "example": ":EXTGen:MODel?    /*The query returns OWON_DGE.*/"
+    },
+    {
+     "header": ":EXTGen:LINK",
+     "set": ":EXTGen:LINK <value>",
+     "query": ":EXTGen:LINK?",
+     "desc": "Sets or queries Connection (menu: Ext generator > Connection).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{LAN|USB}",
+       "LAN"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension. `USB` is the first USBTMC instrument on the USB-A port. A change closes the connection."
+     ],
+     "returns": "On a freshly started default model the query returns `LAN`.",
+     "ext": true,
+     "example": ":EXTGen:LINK USB"
+    },
+    {
+     "header": ":EXTGen:ADDRess",
+     "set": ":EXTGen:ADDRess \"ip\"",
+     "query": ":EXTGen:ADDRess?",
+     "desc": "Sets or queries Address (menu: Ext generator > Address).",
+     "params": [
+      [
+       "\"ip\"",
+       "Text",
+       "or `\"ip:port\"`, one word without blanks; port 5555 if none.",
+       "192.168.1.100:5555"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension. The address `:BODE:GENerator` sets."
+     ],
+     "returns": "On a freshly started default model the query returns `192.168.1.100:5555`.",
+     "ext": true
+    },
+    {
+     "header": ":EXTGen:CHANnel",
+     "set": ":EXTGen:CHANnel <value>",
+     "query": ":EXTGen:CHANnel?",
+     "desc": "Sets or queries Gen channel (menu: Ext generator > Gen channel).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{1|2}",
+       "1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension. Used by the models whose commands name a channel."
+     ],
+     "returns": "On a freshly started default model the query returns `1`.",
+     "ext": true
+    },
+    {
+     "header": ":EXTGen:LOAD",
+     "set": ":EXTGen:LOAD <value>",
+     "query": ":EXTGen:LOAD?",
+     "desc": "Sets or queries Load (menu: Ext generator > Load).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`HIZ` (also `INFinity`), `50`.",
+       "HIZ"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension. The load the generator is told it drives (OWON DGE): the amplitude is the one at that load."
+     ],
+     "returns": "On a freshly started default model the query returns `HIZ`.",
+     "ext": true,
+     "example": ":EXTGen:LOAD HIZ"
+    },
+    {
+     "header": ":EXTGen:FREQuency",
+     "set": ":EXTGen:FREQuency <value>",
+     "query": ":EXTGen:FREQuency?",
+     "desc": "Sets or queries Frequency (menu: Ext generator > Frequency).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Hz. Range 1e-3 to 2e8.",
+       "1.000000E+03"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension. Sent at once while the output is on."
+     ],
+     "returns": "On a freshly started default model the query returns `1.000000E+03`.",
+     "ext": true,
+     "example": ":EXTGen:FREQuency 1000"
+    },
+    {
+     "header": ":EXTGen:AMPLitude",
+     "set": ":EXTGen:AMPLitude <value>",
+     "query": ":EXTGen:AMPLitude?",
+     "desc": "Sets or queries Amplitude (menu: Ext generator > Amplitude).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts peak to peak. Range 0.002 to 20.0.",
+       "1.000000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension. Sent at once while the output is on."
+     ],
+     "returns": "On a freshly started default model the query returns `1.000000E+00`.",
+     "ext": true,
+     "example": ":EXTGen:AMPLitude 1"
+    },
+    {
+     "header": ":EXTGen:OUTPut",
+     "set": ":EXTGen:OUTPut <value>",
+     "query": ":EXTGen:OUTPut?",
+     "desc": "Sets or queries Output (menu: Ext generator > Output).",
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- `ON` sends load, sine, amplitude and frequency, then switches the output on.",
+      "- Origin: OOS extension. Error -221 without a connection."
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true,
+     "example": ":EXTGen:OUTPut ON\n:EXTGen:OUTPut?    /*The query returns 1.*/\n:EXTGen:OUTPut OFF"
+    },
+    {
+     "header": ":EXTGen:CONNect",
+     "set": ":EXTGen:CONNect <value>",
+     "query": ":EXTGen:CONNect?",
+     "desc": "Sets or queries Connect / disconnect (menu: Ext generator > Connect / disconnect).",
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Boolean; the query answers whether the connection is open or opening.",
+      "- Origin: OOS extension. Asks `*IDN?` and takes the model from the answer."
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true,
+     "example": ":EXTGen:CONNect ON"
+    },
+    {
+     "header": ":EXTGen:STATe",
+     "query": ":EXTGen:STATe?",
+     "desc": "`OFF`, `CONNECTING`, `ON`, `FAILED`.",
+     "remarks": [
+      "- Menu equivalent: Ext generator > State.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":EXTGen:STATe?    /*The query returns ON.*/"
+    },
+    {
+     "header": ":EXTGen:IDN",
+     "query": ":EXTGen:IDN?",
+     "desc": "The `*IDN?` answer of the connected generator, empty without one.",
+     "remarks": [
+      "- Menu equivalent: Ext generator > Identity.",
+      "- Origin: OOS extension. The screen shows maker and model only."
+     ],
+     "ext": true
+    }
+   ],
+   "after": [
+    {
+     "h": "Examples"
+    },
+    {
+     "p": "An OWON DGE on the USB-A port, 1 kHz, 1 Vpp into the scope input."
+    },
+    {
+     "pre": ":EXTGen:LINK USB\n:EXTGen:CONNect ON\n:EXTGen:STATe?                         -> ON\n:EXTGen:MODel?                         -> OWON_DGE\n:EXTGen:LOAD HIZ\n:EXTGen:FREQuency 1000\n:EXTGen:AMPLitude 1\n:EXTGen:OUTPut ON\n:EXTGen:OUTPut?                        -> 1"
+    },
+    {
+     "p": "A Bode sweep with that generator."
+    },
+    {
+     "pre": ":EXTGen:OUTPut OFF\n:BODE:STARt 100\n:BODE:STOP 1e6\n:BODE:RUN ON\n:BODE:RUN?                             -> 1"
     }
    ]
   },
@@ -12376,7 +12616,7 @@
     {
      "header": ":CALLout:LIST",
      "query": ":CALLout:LIST?",
-     "desc": "Rows `source,time,text`, one per line",
+     "desc": "One record a note, `source,time,\"text\"`, separated by `;` in one line (a `\"` in a text is doubled); empty without notes",
      "remarks": [
       "- Origin: OOS extension"
      ],
@@ -12571,6 +12811,518 @@
     },
     {
      "pre": ":TIMebase:DELay:SOURce ALL\n:TIMebase:DELay:VZOom 4\n:TIMebase:DELay:VZOom?                 -> 4.000000E+00\n:TIMebase:DELay:VZOom:RESet\n:TIMebase:DELay:FIT"
+    }
+   ]
+  },
+  {
+   "title": "Screen layout and controls: Docking",
+   "intro": [
+    {
+     "p": "Where the Studio views sit and how big they are (`:DOCK`), the actions of the plot's right-click menu (`:VIEW`, `:ZOOM`), and the controls on the screen by name and place (`:UI`). With these a program can work the scope the way a person does: put the measurement table beside the waveform, drag a divider, float the spectrum, open the right-click menu and pick a row, or press any button it read off the screen."
+    },
+    {
+     "p": "Every command runs the same code as the finger: `:DOCK:MOVE` makes the drop the drag preview offers, `:UI:TAP` and `:UI:DRAG` are touches. All are OOS extensions. The `:DOCK` commands need the Studio layout (`:DISPlay:LAYout STUDio`); in another layout they fail with -221."
+    },
+    {
+     "p": "Menu location: the title strip of each view (drag, X, expand), the dividers between views, and the right-click (long press) menu of the plot."
+    },
+    {
+     "p": "Part of the SCPI reference."
+    }
+   ],
+   "commands": [
+    {
+     "header": ":DOCK:LIST",
+     "query": ":DOCK:LIST?",
+     "desc": "Answers one record per view, separated by `;`: `<name>,<state>,x,y,w,h`. The state is `DOCK` (on the screen in the dock), `TAB` (docked behind another tab of its group; the rectangle is the group's), `FLOAT` (a floating panel) or `OFF`.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":DOCK:LIST?"
+    },
+    {
+     "header": ":DOCK:MOVE",
+     "set": ":DOCK:MOVE <view>,<target>,{LEFT|RIGHt|TOP|BOTTom|CENTer|TABS}",
+     "desc": "Sets Drag a view by its title strip for Docking.",
+     "params": [
+      [
+       "<view>,<target>,{LEFT|RIGHt|TOP|BOTTom|CENTer|TABS}",
+       "Text",
+       ": docks `<view>` against the docked view `<target>`, splitting the target's place 50/50 at that side. `CENTer` swaps the two, `TABS` joins the target's tab group. `<view>,EDGE,<side>` docks it along a whole edge of the area, a third of the room.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":DOCK:MOVE MEAS,WAVE,RIGHT\n:DOCK:MOVE PANE,WAVE,BOTTOM"
+    },
+    {
+     "header": ":DOCK:SIZE",
+     "set": ":DOCK:SIZE <view>,<fraction>",
+     "query": ":DOCK:SIZE? <view>",
+     "desc": "Sets or queries Drag a divider for Docking.",
+     "params": [
+      [
+       "<view>,<fraction>",
+       "Text",
+       ", 0.02 to 0.98: moves the divider beside the view so that it has that share of its split. The least sizes of the views still apply (the waveform stays at least 300 x 210). `:DOCK:SIZE? <view>` answers the share, `1` when the view fills the area and `0` when it is floating or off.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":DOCK:SIZE MEAS,0.25"
+    },
+    {
+     "header": ":DOCK:FLOAT",
+     "set": ":DOCK:FLOAT <view>[,x,y,w,h]",
+     "query": ":DOCK:FLOAT? <view>",
+     "desc": "Sets or queries Drag a view off the dock; drag a floating panel's corner for Docking.",
+     "params": [
+      [
+       "<view>[,x,y,w,h]",
+       "Text",
+       ": floats the view at that rectangle (kept on the screen, at least its least size), or where it floated last. `:DOCK:FLOAT? <view>` answers `x,y,w,h`, `0` when it is docked. The last docked view cannot float.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":DOCK:FLOAT PANE,820,90,440,280"
+    },
+    {
+     "header": ":DOCK:SHOW",
+     "set": ":DOCK:SHOW <view>",
+     "query": ":DOCK:SHOW? <view>",
+     "desc": "Sets or queries View menu for Docking.",
+     "params": [
+      [
+       "<view>",
+       "Text",
+       ": shows `MEAS` or `SIM`. The other views open with their own commands (`:EYE...`, `:VIEW`, the decoder and histogram commands); for them the set only checks that they are on. `:DOCK:SHOW? <view>` answers `1` or `0`.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":DOCK:CLOSe",
+     "set": ":DOCK:CLOSe <view>",
+     "desc": "Sets X of the title strip for Docking.",
+     "params": [
+      [
+       "<view>",
+       "Text",
+       ": closes the view, as its X.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":DOCK:ACTivate",
+     "set": ":DOCK:ACTivate <view>",
+     "desc": "Sets Tap a tab for Docking.",
+     "params": [
+      [
+       "<view>",
+       "Text",
+       ": brings its tab to the front of its group.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":DOCK:MAXimise",
+     "set": ":DOCK:MAXimise <view>",
+     "query": ":DOCK:MAXimise?",
+     "desc": "Sets or queries Maximise view for Docking (menu: Expand button; right-click > Maximise view).",
+     "params": [
+      [
+       "<view>",
+       "Text",
+       ": every view in tabs of one group that fills the area, `<view>` in front.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "The query answers `1` while a view fills the area.",
+     "ext": true
+    },
+    {
+     "header": ":DOCK:RESTore",
+     "set": ":DOCK:RESTore <value>",
+     "desc": "Sets Restore layout for Docking (menu: Restore button; right-click > Restore layout).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Back from a maximised view to the arrangement before.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":DOCK:RESet",
+     "set": ":DOCK:RESet <value>",
+     "desc": "The default arrangement: nothing floating, no saved splits.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The default arrangement: nothing floating, no saved splits.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":DOCK:LAYout",
+     "set": ":DOCK:LAYout <value>",
+     "query": ":DOCK:LAYout?",
+     "desc": "The whole arrangement as a quoted text: the setup's text (`Model::studio_dock`) with `|` between its parts, since `;` would end the command.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The whole arrangement as a quoted text: the setup's text (`Model::studio_dock`) with `|` between its parts, since `;` would end the command. Read it, and set it back later to restore an arrangement.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":DOCK:LAYout?\n:DOCK:LAYout \"V0.246(M,W)|M@311:77:337:280\""
+    }
+   ],
+   "after": []
+  },
+  {
+   "title": "Screen layout and controls: Right-click menu of the plot",
+   "intro": [],
+   "commands": [
+    {
+     "header": ":VIEW:TRACes",
+     "set": ":VIEW:TRACes <value>",
+     "query": ":VIEW:TRACes?",
+     "desc": "Sets or queries Overlay traces, Stacked traces for Right-click menu of the plot (menu: Right-click > Overlay traces, Stacked traces).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{OVERlay|STACked}",
+       "OVER"
+      ]
+     ],
+     "remarks": [
+      "- : all traces in one plot, or one lane each.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `OVER`.",
+     "ext": true
+    },
+    {
+     "header": ":VIEW:FIT",
+     "set": ":VIEW:FIT <value>",
+     "desc": "Sets Fit record for Right-click menu of the plot (menu: Right-click > Fit record).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Fits the whole record into the screen.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":ZOOM:HERE",
+     "set": ":ZOOM:HERE <value>",
+     "query": ":ZOOM:HERE?",
+     "desc": "Sets or queries Zoom here for Right-click menu of the plot (menu: Right-click > Zoom here).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Time in seconds: opens the zoom window there (or moves it).",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "The query answers the zoom window's centre.",
+     "ext": true
+    },
+    {
+     "header": ":ZOOM:BOX",
+     "set": ":ZOOM:BOX <t0>,<t1>",
+     "query": ":ZOOM:BOX?",
+     "desc": "Sets or queries Zoom box for Right-click menu of the plot (menu: Right-click > Zoom box).",
+     "params": [
+      [
+       "<t0>,<t1>",
+       "Text",
+       "seconds: the finest zoom step that holds the span, centred on it.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "The query answers the zoom window as `<t0>,<t1>`, `0,0` when zoom is off.",
+     "ext": true,
+     "example": ":ZOOM:BOX -5e-3,5e-3\n:ZOOM:BOX?"
+    },
+    {
+     "header": ":ZOOM:RESet",
+     "set": ":ZOOM:RESet <value>",
+     "desc": "Sets Reset zoom for Right-click menu of the plot (menu: Right-click > Reset zoom).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The zoom window back to its default size and place.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":ZOOM:CLOSe",
+     "set": ":ZOOM:CLOSe <value>",
+     "desc": "Sets Close zoom for Right-click menu of the plot (menu: Right-click > Close zoom).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Closes the zoom window.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":ZOOM:CLOSe"
+    }
+   ],
+   "after": []
+  },
+  {
+   "title": "Screen layout and controls: Screen controls",
+   "intro": [],
+   "commands": [
+    {
+     "header": ":UI:SCReen",
+     "query": ":UI:SCReen?",
+     "desc": "Answers `w,h`, the screen size in pixels.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":UI:ELEMents",
+     "query": ":UI:ELEMents? [<kind>]",
+     "desc": ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`.",
+     "params": [
+      [
+       "[<kind>]",
+       "Text",
+       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":UI:ELEMents? TOP"
+    },
+    {
+     "header": ":UI:TAP",
+     "set": ":UI:TAP <value>",
+     "desc": "`x,y`: a tap, as a finger.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`x,y`: a tap, as a finger.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":UI:TAP 131,20"
+    },
+    {
+     "header": ":UI:DRAG",
+     "set": ":UI:DRAG <value>",
+     "desc": "`x0,y0,x1,y1`: a finger down, moved in steps, up.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`x0,y0,x1,y1`: a finger down, moved in steps, up. Drags a divider, a view by its strip, a floating panel by its corner, a cursor.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":UI:CONText",
+     "set": ":UI:CONText <value>",
+     "desc": "Sets Right click; long press for Screen controls.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`x,y`: what a right click or a held finger opens at that point: the plot's menu, the menu of a channel chip or a view, or on the Zoom button its popover (`\"Zoom source\"`: `All lanes`, a lane, `X zoom in`, `X zoom out`, `Y zoom in`, `Y zoom out`, `Reset zoom`).",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":UI:CONText 600,300"
+    },
+    {
+     "header": ":UI:MENU",
+     "query": ":UI:MENU?",
+     "desc": "The menu or popup that is open: its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`. `\"\"` when none is open.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":UI:MENU?"
+    },
+    {
+     "header": ":UI:MENU:SELect",
+     "set": ":UI:MENU:SELect \"<label>\"",
+     "desc": "Sets Tap a menu row for Screen controls.",
+     "params": [
+      [
+       "\"<label>\"",
+       "Text",
+       ": presses the row of the open menu with that label (case does not matter; a unique beginning is enough).",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":UI:MENU:SELect \"Stacked traces\""
+    },
+    {
+     "header": ":UI:MENU:CLOSe",
+     "set": ":UI:MENU:CLOSe <value>",
+     "desc": "Sets Tap outside for Screen controls.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Closes whatever menu or popup is open.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    }
+   ],
+   "after": [
+    {
+     "h": "Views"
+    },
+    {
+     "p": "A view is named by one of these keywords. Replies use the short form in the first column."
+    },
+    {
+     "p": "Rectangles are `x,y,w,h` in screen pixels from the top-left corner. `:UI:SCReen?` gives the size of the screen."
+    },
+    {
+     "h": "Examples"
+    },
+    {
+     "p": "The measurement table to the right of the waveform, a third of the width:"
+    },
+    {
+     "pre": ":DOCK:MOVE MEAS,WAVE,RIGHT\n:DOCK:SIZE MEAS,0.25\n:DOCK:LIST?\nWAVE,DOCK,0,40,765,524;MEAS,DOCK,769,40,255,524;EYE,OFF,0,0,0,0;PANE,OFF,0,0,0,0;..."
+    },
+    {
+     "p": "(Replies of a DHO924S, screen 1024 x 600.)"
+    },
+    {
+     "p": "The spectrum pane floating in the top-right corner, then back under the waveform:"
+    },
+    {
+     "pre": ":DOCK:FLOAT PANE,820,90,440,280\n:DOCK:MOVE PANE,WAVE,BOTTOM"
+    },
+    {
+     "p": "Save an arrangement and come back to it:"
+    },
+    {
+     "pre": ":DOCK:LAYout?\n\"V0.246(M,W)|M@311:77:337:280\"\n:DOCK:LAYout \"V0.246(M,W)|M@311:77:337:280\""
+    },
+    {
+     "p": "Zoom on 10 ms around the trigger, read the window, then close the zoom:"
+    },
+    {
+     "pre": ":ZOOM:BOX -5e-3,5e-3\n:ZOOM:BOX?\n-5.000000E-03,5.000000E-03\n:ZOOM:CLOSe"
+    },
+    {
+     "p": "Right-click the plot and pick a row by its label, as a person would:"
+    },
+    {
+     "pre": ":UI:CONText 600,300\n:UI:MENU?\n\"Context\",\"Overlay traces\",\"Stacked traces\",\"Fit record\",\"Zoom here\",\"Zoom box\",\"Stop\",\"Single\",\"Autoset\",\"Trigger on CH2\",\"Set level here\",\"Trigger settings\",\"Measurement on CH2\",\"Cursor here\",\"Sources\",\"Maximise view\"\n:UI:MENU:SELect \"Stacked traces\""
+    },
+    {
+     "p": "Find a button on the screen and press it:"
+    },
+    {
+     "pre": ":UI:ELEMents? TOP\nTOP,\"Views\",601,5,80,30;TOP,\"Add\",687,5,53,30;TOP,\"SIM\",164,5,52,30;TOP,\"Stop\",8,6,92,28;TOP,\"Single\",104,5,54,30;...\n:UI:TAP 131,20"
     }
    ]
   },
@@ -14676,6 +15428,18 @@
        "`:DISPlay:GENerator`"
       ],
       [
+       "`gen`",
+       "The generator's wave: name (`Sine`, `Square`, `Ramp`, `Pulse`, `Noise`, `DC`), frequency Hz, amplitude Vpp, offset V, duty %, symmetry %. Not written for an arbitrary wave. Whether the output is on is not part of a set-up: after a recall it is off",
+       "`Sine 1000 1 0 50 50`",
+       "`:SOURce:FUNCtion`, `:SOURce:FREQuency`, `:SOURce:VOLTage`, `:SOURce:VOLTage:OFFSet`"
+      ],
+      [
+       "`gen_mod`",
+       "The generator's modulation: `Off`, `AM`, `FM` or `PM`, rate Hz, AM depth %, FM deviation Hz, PM deviation degrees, shape (`Sine`, `Square`, `Triangle`, `Up_ramp`, `Down_ramp`, `Noise`)",
+       "`Off 100 100 100 90 Sine`",
+       "`:SOURce:MOD:...`"
+      ],
+      [
        "`studio_state`",
        "what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source, the columns of the event tables where a divider was dragged (optional; written each time)",
        "empty",
@@ -15297,7 +16061,7 @@
      "rows": [
       [
        "`bode`",
-       "start Hz, stop Hz, points, amplitude V, input source, output source, generator index, generator address `ip:port`",
+       "start Hz, stop Hz, points, amplitude V, input source, output source, generator index (0 built-in, 4 free-running sweep, else the model of the external generator), generator address `ip:port`",
        "`100 1000000 40 1 1 2 0 192.168.1.100:5555`",
        "`:BODE:STARt ...`"
       ],
@@ -15306,6 +16070,12 @@
        "`lan`/`usb`",
        "`lan`",
        "`:BODE:GENerator`"
+      ],
+      [
+       "`extgen`",
+       "external generator (extgen.md): model index (1 APPL, 2 BSWV, 3 SCPI, 5 CHANnel, 6 OWON DGE), channel (1-based), load (`hiz`/`50`), frequency Hz and amplitude Vpp of the page's output",
+       "`1 1 hiz 1000 1`",
+       "`:EXTGen:MODel ...`"
       ],
       [
        "`bode_mode`",

@@ -185,6 +185,12 @@ Changed:
   waveform scaling queries and others that joined since). Seven rows of the reference named several commands in
   one cell and would have come out as one command with the text of the cell as its name; each command has its
   own row or a brace form now.
+- The command reference of the SCPI Programming Manual cannot fall behind the SCPI reference unnoticed: the host
+  checks (`tools/check.sh test`) fail when `docs/manual/commands.json` is not what `docs/manual/gen_commands.py`
+  writes now, and name the commands it lacks; `gen_commands.py --check` says the same by hand. It was 36 commands
+  behind again: the pages of the screen layout and controls (`:DOCK`, `:VIEW`, `:ZOOM`, `:UI`) and of the external
+  generator (`:EXTGen`) were not read at all. It has 696 commands now. The reference gave 16 as the answer of
+  `*ESR?` after a start; it is 0.
 - A change of trigger type keeps the user's pulse width, pattern, levels and limits on the hardware, Live and Replay.
   The demo's starting values are set on the demo only. Slope, Runt and Window keep the lower level at or below the
   upper one; `:TRIGger:RUNT:UPPer/LOWer` refuses a threshold past the other with -224.
