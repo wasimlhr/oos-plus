@@ -20,8 +20,8 @@ Part of the [SCPI reference](README.md).
 | `:TIMebase:MODE` | Set / Query | Main/zoom/XY mode supported by the model. | `MAIN` | Horizontal > Timebase mode | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:ROLL` | Set / Query | Model roll setting; acquisition source restrictions still apply. | `1` | Horizontal > Auto Roll | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:XY:ENABle` | Set / Query | Boolean XY display. | `0` | Horizontal > Timebase mode (XY) | Rigol-style (command family of the DHO guide) |
-| `:TIMebase:XY:X` | Set / Query | Channel role of the XY axis. | `CHAN1` | Horizontal > XY X / Y source | Rigol-style (command family of the DHO guide) |
-| `:TIMebase:XY:Y` | Set / Query | Channel role of the XY axis. | `CHAN2` | Horizontal > XY X / Y source | Rigol-style (command family of the DHO guide) |
+| `:TIMebase:XY:X` | Set / Query | The X axis of the XY picture is `CHAN1`; it is not selectable, and another channel is -224. | `CHAN1` | Horizontal > XY X / Y source | Rigol-style (command family of the DHO guide) |
+| `:TIMebase:XY:Y` | Set / Query | The Y axis of the XY picture is `CHAN2`; it is not selectable, and another channel is -224. | `CHAN2` | Horizontal > XY X / Y source | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:XY:Z` | Set / Query | Channel role of the Z input; `NONE` disables it. | `NONE` | Horizontal > Z input | Rigol-style (command family of the DHO guide) |
 
 ## Examples

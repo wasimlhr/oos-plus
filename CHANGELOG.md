@@ -258,6 +258,10 @@ Fixed:
     on the screen. With five periods the window's lobe of the fundamental held the third harmonic: a 10 kHz square
     read 16.2 kHz, a ramp 12.3 kHz. The window follows the number of periods in the record (unit: square, ramp and
     sine at 10 kHz read 10.00 kHz from 50 us/div to 1 ms/div);
+  - a Single with segments on the hardware records all of them. The acquisition stopped after the first record of
+    a Single, and the screen waited for the others for good (unit: 10 and 100 segments in 1.6 s);
+  - `:REFerence:LOAD "name"` also finds a file of the save folder, where `:REFerence:EXPort "name"` and
+    `:SAVE:WAVeform "name"` write it; it looked beside the setups only and did not find its own export (unit);
   - `:SYSTem:INFO?`, `:SYSTem:UPDate:STATus?`, `:SYSTem:WLAN:NETWorks?` and `:SYSTem:WLAN:SAVed?` answer in one
     line, each line of the text a quoted string, separated by commas. They answered several lines, and a client
     that reads an answer as a line took each for the answer to its next query (unit: after `:SYSTem:INFO?` fifty
