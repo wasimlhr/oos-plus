@@ -10480,6 +10480,9 @@ impl Ui {
 
     /// Back in a sub menu: the menu it was opened from, with the focus it had.
     fn menu_back(&mut self) {
+        // Back from the Measure page: the next Measure (the key, Add > Measurement) is the quick Add panel again, as
+        // after a close. The flag stayed, and the page opened where the panel is promised
+        if self.menu == MenuId::MeasAdd { self.studio.meas_page = false; }
         if let Some((menu, focus)) = self.menu_history.pop() {
             self.menu = menu;
             self.focus = focus;

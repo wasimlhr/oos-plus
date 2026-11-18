@@ -2441,3 +2441,17 @@ fn the_view_menu_ends_with_reset_layout_and_adding_is_the_button_of_the_top_bar(
     assert!(u.menu_open && u.menu == MenuId::AddPanel);
     assert_eq!(u.sheet.add.kind, Some(super::addrail::AddKind::Plot));
 }
+
+/// Menu > Measure opens the Measure page in Studio; Back leaves it, and the next Measure is the quick Add panel again
+/// (the page stayed chosen after Back, and the key opened the page where the panel is promised).
+#[test]
+fn back_from_the_measure_page_makes_the_next_measure_the_quick_panel() {
+    let mut u = fresh(Layout::Studio);
+    u.open_menu(MenuId::Main);
+    u.activate(Item::Open(MenuId::Measure));
+    assert!(u.menu == MenuId::MeasAdd && u.studio.meas_page, "the Menu opens the page itself");
+    u.menu_back();
+    assert!(u.menu == MenuId::Main && !u.studio.meas_page);
+    u.open_submenu(MenuId::MeasAdd);
+    assert!(u.sheet_active(), "the quick Add panel");
+}

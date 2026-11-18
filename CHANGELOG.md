@@ -13,6 +13,10 @@ Fixed:
   memory (seen on a unit, 2026-11-18). The stored record is read once more as a whole at the stop, for records up
   to 1 M points; at 1 M points it is asked for at every sample (asked for as a view it came as min/max pairs and
   the record stayed the earlier one). After a mask that stops on a failure the record that failed stays.
+- Studio: hiding the badges in the View menu shows its Undo bar when the menu has closed. The bar came up under the
+  open menu, where the first tap on Undo only closed the menu; while the menu is open its switch is the undo. And
+  Back from the Measure page makes the next Measure (the key, Add > Measurement) the quick Add panel again
+  (host-tested).
 - Studio: Reset layout and a stored view bring a hidden badge row back; the Undo bar of the hiding stayed on the
   screen for its few seconds with nothing to undo. It goes with the row now (host-tested).
 - Studio offers what Default offers (ADR 0030; host-tested, not yet verified on hardware). The 47 menus and 508 rows

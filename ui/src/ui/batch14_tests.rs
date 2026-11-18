@@ -524,7 +524,11 @@ fn hiding_the_badges_leaves_a_button_and_an_undo_and_showing_them_needs_no_menu(
     u.studio.view_menu = true;
     let row = u.studio_view_row(super::studio::VIEW_BADGES);
     tap(&mut u, row);
-    u.studio.view_menu = false;
+    // the menu stays open, and its switch is the undo: no bar under the menu, where a tap on it closed the menu
+    assert!(u.studio.view_menu && u.md_hide_bar().is_none());
+    let outside = u.studio_view_rect();
+    tap(&mut u, Rect::new(outside.x - 60, outside.bottom() + 40, 2, 2));
+    assert!(!u.studio.view_menu, "a tap beside the menu closes it");
     assert!(!u.studio_badges_visible(), "hidden");
     let show = u.studio_bottom().show.expect("a button in the bottom bar");
     assert!(show.w >= 40 && show.h >= 36, "{show:?}");
