@@ -1566,7 +1566,7 @@
       [
        "<value>",
        "Text",
-       "Vertical position in divisions, converted through that channel's current scale.",
+       "The same value as `:CHANnel<n>:OFFSet`, in volts (not in divisions).",
        "-1.500000E+00"
       ]
      ],
