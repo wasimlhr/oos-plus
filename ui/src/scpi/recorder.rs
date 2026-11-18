@@ -13,8 +13,13 @@
 //! What a client sets by SCPI while the recorder is on is not the user's (`poll_program`): the set-up after the
 //! client's message is the one the next step starts from, and a comment in the file says that a client set something
 //! there. What the web remote's keys and touches and a script do is the user's: it comes in as the front panel does.
-//! Actions that leave no setting (Run, Single, Clear, a saved file) are not recorded yet, and what a command of a
-//! client changes later, frames after its message (an auto set-up it started), is taken for the user's.
+//!
+//! A key or a row that is an action is written as its command, not as settings (`Ui::rec_action`): Run / Stop,
+//! Single, Force, Clear, Default, Autoset, and the saves of the Storage menu. What the user set before it is written
+//! first. The settings the action changes are its own: for Run, Stop, Single, Force, Clear and Default the command is
+//! proven like a step, so a setting it leaves different on a second scope gets a line after it; an auto set-up is
+//! written as the command alone, since what it finds is the signal's, and a save is never run a second time.
+//! `*OPC?` stands after Single and Autoset, the operations it waits for.
 
 use super::setupscpi::{changed, named};
 use super::*;
@@ -34,6 +39,8 @@ pub(crate) struct Recorder {
     /// when it last changed (`Ui::now`), and whether that change waits to stand still
     changed_at: f64,
     pending: bool,
+    /// an auto set-up runs: the settings it changes are its own, the look waits for its end
+    hold: bool,
     started: f64,
     /// the file, and what it holds: comments (`#`) and commands
     path: std::path::PathBuf,
@@ -61,13 +68,54 @@ impl Scpi {
             (false, true) => self.rec_stop(ui, cv),
             _ => {}
         }
+        self.rec_actions(ui, cv);
         let Some(rec) = self.rec.as_mut() else { return };
         ui.sync_view_state();
         let now = crate::store::setup_text(&ui.m);
+        if rec.hold {
+            if ui.auto_running() { return; }
+            // the auto set-up is done: the set-up it left is where the next step starts
+            (rec.base, rec.seen, rec.pending, rec.hold) = (ui.m.clone(), now, false, false);
+            return;
+        }
         if now != rec.seen {
             (rec.seen, rec.changed_at, rec.pending) = (now, ui.now, true);
         }
         if rec.pending && ui.now - rec.changed_at >= SETTLE { self.rec_step(ui, cv); }
+    }
+
+    /// The actions since the last frame (`Ui::rec_action`), each written as its command.
+    fn rec_actions(&mut self, ui: &mut Ui, cv: &Canvas) {
+        let actions = std::mem::take(&mut ui.scpi_rec_actions);
+        for (line, mut before) in actions {
+            let Some(rec) = self.rec.as_ref() else { return };
+            // what was set before the action and is not written yet is written first, as the set-up was then; a
+            // reset takes it with everything else
+            if line != "*RST" && !rec.hold && (rec.pending || crate::store::setup_text(&before) != rec.seen) {
+                std::mem::swap(&mut ui.m, &mut *before);
+                self.rec_step(ui, cv);
+                std::mem::swap(&mut ui.m, &mut *before);
+            }
+            ui.sync_view_state();
+            let want = crate::store::setup_text(&ui.m);
+            // a command that only sets the state of the scope is proven like a step, from the model before it: what
+            // it leaves different on a second scope gets a line after it. A save would write its file a second time
+            // there, and an auto set-up finds what the signal of that scope has: these are written as they are.
+            let state = matches!(line.as_str(), ":RUN" | ":STOP" | ":SINGle" | ":TFORce" | ":CLEar" | "*RST");
+            let (mut lines, rest) = if state { self.mend(ui, cv, &before, vec![line.clone()], &want) } else { (vec![line.clone()], Vec::new()) };
+            if matches!(line.as_str(), ":SINGle" | ":AUToscale") { lines.insert(1, "*OPC?".to_string()); }
+            let Some(rec) = self.rec.as_mut() else { return };
+            rec.lines.push(comment(&format!("+{:.1} s", (ui.now - rec.started).max(0.0))));
+            rec.commands += lines.len();
+            rec.lines.extend(lines);
+            if let Some(keys) = named(&rest) { rec.lines.push(comment(&format!("not recorded: {keys}"))); }
+            // the settings the action changed are its own: the next step starts from the set-up it left
+            let auto = line == ":AUToscale";
+            if state || auto { (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false); }
+            rec.hold = rec.hold || auto;
+            let _ = crate::store::write(&rec.path, rec.text().as_bytes());
+            ui.toast(&format!("Recorded {line}"));
+        }
     }
 
     fn rec_start(&mut self, ui: &mut Ui, cv: &Canvas) {
@@ -83,11 +131,14 @@ impl Scpi {
             seen: crate::store::setup_text(&ui.m),
             changed_at: ui.now,
             pending: false,
+            hold: false,
             started: ui.now,
             path: ui.scpi_new_file("recording"),
             lines,
             commands: 0,
         };
+        // an action from before the recorder was on is not one of the recording
+        ui.scpi_rec_actions.clear();
         // the file is there from the start; a folder that cannot be written is said when the recorder is switched off
         let _ = crate::store::write(&rec.path, rec.text().as_bytes());
         self.rec = Some(Box::new(rec));
@@ -143,6 +194,8 @@ impl Scpi {
         let Some(rec) = self.rec.as_mut() else { return };
         ui.sync_view_state();
         (rec.base, rec.seen, rec.pending) = (ui.m.clone(), crate::store::setup_text(&ui.m), false);
+        // an auto set-up the client started goes on for frames: what it changes is the client's too
+        rec.hold = rec.hold || ui.auto_running();
         // one comment for a run of messages of a client: the file does not bring what it set
         if !rec.lines.last().is_some_and(|l| *l == comment(BY_CLIENT)) {
             rec.lines.push(comment(BY_CLIENT));
@@ -345,6 +398,91 @@ mod tests {
         assert!(s.rec.is_none());
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         assert!(ui.toast_text().ends_with("0 commands"), "{}", ui.toast_text());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The keys that are actions are their commands, in the order they were pressed, with what was set before them
+    /// first; the mode a single sweep sets is its own and no line. The whole file brings the set-up.
+    #[test]
+    fn a_key_that_is_an_action_is_its_command() {
+        use crate::ui::key;
+        let (mut s, mut ui, cv) = session();
+        start(&mut s, &mut ui, &cv);
+        user(&mut ui, "tdiv", "0.001");
+        tick(&mut s, &mut ui, &cv, 0.1);
+        // before the turn of the knob has stood still
+        ui.key(key::SINGLE);
+        tick(&mut s, &mut ui, &cv, 0.1);
+        assert_eq!(recorded(s.rec_lines()), [":TIMebase:SCALe 1.000000E-03", ":SINGle", "*OPC?"], "{:?}", s.rec_lines());
+        for k in [key::RUNSTOP, key::RUNSTOP, key::CLEAR, key::FORCE] {
+            ui.key(k);
+            settle(&mut s, &mut ui, &cv);
+        }
+        let got = recorded(s.rec_lines());
+        let actions: Vec<&String> = got.iter().filter(|l| !l.starts_with(":TRIG") && !l.starts_with(":SYST")).collect();
+        assert_eq!(actions, [":TIMebase:SCALe 1.000000E-03", ":SINGle", "*OPC?", ":STOP", ":RUN", ":CLEar", ":TFORce"], "{got:?}");
+        assert!(!got.iter().any(|l| l.starts_with(":TRIGger:SWEep SING")), "the mode of the single sweep is its own: {got:?}");
+        let want = text(&mut ui);
+        let lines: Vec<String> = s.rec_lines().iter().filter(|l| *l != "*OPC?").cloned().collect();
+        let (replayed, errors) = replay(&lines);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(changed(&want, &replayed), Vec::new(), "{lines:?}");
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+    }
+
+    /// Default is the reset alone, whatever was set before; an auto set-up is its command, and what it found is not
+    /// written as settings.
+    #[test]
+    fn default_and_autoset_are_one_command_each() {
+        use crate::ui::key;
+        let (mut s, mut ui, cv) = session();
+        // the demo signal has been seen: an auto set-up has something to find
+        for _ in 0..20 { ui.step(0.05); }
+        start(&mut s, &mut ui, &cv);
+        user(&mut ui, "tdiv", "0.001");
+        user(&mut ui, "ch1.vdiv", "0.5");
+        tick(&mut s, &mut ui, &cv, 0.1);
+        ui.key(key::DEFAULT);
+        settle(&mut s, &mut ui, &cv);
+        assert_eq!(recorded(s.rec_lines()), ["*RST"], "{:?}", s.rec_lines());
+        // far from what the signal needs, and written; then the auto set-up changes it back
+        user(&mut ui, "tdiv", "0.5");
+        settle(&mut s, &mut ui, &cv);
+        let before = text(&mut ui);
+        ui.key(key::AUTO);
+        settle(&mut s, &mut ui, &cv);
+        assert!(!changed(&before, &text(&mut ui)).is_empty(), "the auto set-up of the demo signal changes settings");
+        assert_eq!(recorded(s.rec_lines()), ["*RST", ":TIMebase:SCALe 5.000000E-01", ":AUToscale", "*OPC?"], "{:?}", s.rec_lines());
+        // what the user sets after it is a step from the set-up it left
+        user(&mut ui, "ch1.coupling", "Ac");
+        settle(&mut s, &mut ui, &cv);
+        assert_eq!(recorded(s.rec_lines()).len(), 5, "{:?}", s.rec_lines());
+    }
+
+    /// A save of the Storage menu is its command and is not run a second time; what a client does with the same
+    /// commands is not the user's action.
+    #[test]
+    fn a_save_is_its_command_and_a_clients_action_is_not_recorded() {
+        let (mut s, mut ui, cv) = session();
+        let dir = std::env::temp_dir().join(format!("oos-recorder-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        ui.store_dir = dir.clone();
+        start(&mut s, &mut ui, &cv);
+        for c in [":SINGle", ":STOP", ":RUN", ":CLEar", ":TFORce", ":AUToscale", ":SAVE:SETup", "*RST"] {
+            s.exec_line(&mut ui, &cv, c);
+            settle(&mut s, &mut ui, &cv);
+        }
+        assert!(recorded(s.rec_lines()).is_empty(), "a client's: {:?}", s.rec_lines());
+        s.exec_line(&mut ui, &cv, "*CLS");
+        let saved = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("setup")).count();
+        let before = saved(&dir);
+        ui.script_menu("Storage").unwrap();
+        ui.script_do("Save setup").unwrap();
+        settle(&mut s, &mut ui, &cv);
+        assert_eq!(recorded(s.rec_lines()), [":SAVE:SETup"], "{:?}", s.rec_lines());
+        assert_eq!(saved(&dir), before.max(1), "the file of the slot, written once");
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

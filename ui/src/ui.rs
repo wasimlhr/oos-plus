@@ -1752,6 +1752,10 @@ pub struct Ui {
     pub setup_scpi_request: bool,
     /// Storage > SCPI recorder, `:SYSTem:RECorder:STATe`: on or off. The interpreter follows at its next poll.
     pub scpi_rec_want: bool,
+    /// What the SCPI recorder writes as a command and not as settings (scpi/recorder.rs): a key or a row that leaves
+    /// no setting or owns the settings it changes, each with the model from before it acted. The interpreter takes
+    /// them at its next poll. Filled only while the recorder is on.
+    pub scpi_rec_actions: Vec<(String, Box<Model>)>,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
@@ -2081,6 +2085,7 @@ impl Ui {
             shot_request: None,
             setup_scpi_request: false,
             scpi_rec_want: false,
+            scpi_rec_actions: Vec::new(),
             quit: false,
         };
         ui.ensure_meas_own();
@@ -9293,7 +9298,7 @@ impl Ui {
                 Item::DecExport => self.events_export(tables::TableKind::Decode),
                 Item::SearchTable => self.table_toggle(tables::TableKind::Search),
                 Item::SearchSave => self.events_export(tables::TableKind::Search),
-                Item::StoreBin => self.store_wave(false, None),
+                Item::StoreBin => { self.rec_action(":SAVE:WAVeform ,BIN"); self.store_wave(false, None) }
                 Item::RefExport => self.ref_export(),
                 Item::RefImport if self.sheets_on() => self.studio_load_file(self.ref_sel),
                 Item::RefImport => self.ref_import(),
@@ -9403,14 +9408,16 @@ impl Ui {
                     }
                 }
                 Item::StoreSaveSetup => {
+                    self.rec_action(":SAVE:SETup");
                     let p = self.setup_path();
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
                 }
                 Item::StoreSaveScpi => self.setup_scpi_request = true,
                 Item::StoreRecall => self.recall_setup(),
-                Item::StoreCsv => self.store_wave(true, None),
+                Item::StoreCsv => { self.rec_action(":SAVE:WAVeform"); self.store_wave(true, None) }
                 Item::StorePng => {
+                    self.rec_action(":SAVE:IMAGe");
                     // without the dialog: the screen is saved after the next frame (main loop / script runner)
                     let p = self.new_file(&self.save_dir(), "shot", "png");
                     self.close_menu();
@@ -9685,6 +9692,30 @@ impl Ui {
             }
             Err(e) => Err(e),
         }
+    }
+
+    /// For the SCPI recorder: `line` is the command of what is about to be done, to be written as it is. With it goes
+    /// the model as it is now, before the action: what the user set until then is written first, and what the action
+    /// changes is its own. A client's command that comes here is taken out again (`Scpi::poll_program`).
+    pub(crate) fn rec_action(&mut self, line: &str) {
+        if self.scpi_rec_want { self.scpi_rec_actions.push((line.to_string(), Box::new(self.m.clone()))); }
+    }
+
+    /// The command of a front-panel key that is an action, for the SCPI recorder; called before the key acts.
+    fn rec_key(&mut self, k: u8) {
+        if !self.scpi_rec_want { return; }
+        let line = match k {
+            key::RUNSTOP => if self.m.run == RunState::Run { ":STOP" } else { ":RUN" },
+            key::SINGLE => ":SINGle",
+            key::FORCE => ":TFORce",
+            key::CLEAR => ":CLEar",
+            // as `autoset_live_only` takes it; on a record the key says what to use instead
+            key::AUTO if !self.record_mode() && (0..n_ch()).any(|c| self.m.ch[c].on) => ":AUToscale",
+            // on a record the key first goes back to live and comes here again
+            key::DEFAULT if !self.record_mode() => "*RST",
+            _ => return,
+        };
+        self.rec_action(line);
     }
 
     /// Storage > Save setup as SCPI and the SCPI recorder: writes the commands the interpreter made into a new file
@@ -10616,7 +10647,7 @@ impl Ui {
         if k == 0 {
             return; // release
         }
-        if k == key::FORCE { self.force_trigger(); return; }
+        if k == key::FORCE { self.rec_key(k); self.force_trigger(); return; }
         if self.load_slot_ask { self.cancel_load_slot(); return; }
         if (k == key::RUNSTOP && self.m.run == RunState::Run) || k == key::SINGLE || k == key::DEFAULT || (0x15..=0x18).contains(&k) {
             self.sim_cancel_generation();
@@ -10643,6 +10674,7 @@ impl Ui {
             self.dialog = None;
             return;
         }
+        self.rec_key(k);
         if self.record_key(k) { return; }
         self.bus_candidate_key(k);
         let m = &mut self.m;

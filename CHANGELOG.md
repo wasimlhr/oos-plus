@@ -59,13 +59,17 @@ Added:
 
 - SCPI recorder: Storage > SCPI recorder, `:SYSTem:RECorder:STATe ON|OFF` (host-tested, not yet run on a unit).
   While it is on, what is set at the scope by touch, keys, knobs and menus is written as SCPI commands, and the
-  message on the screen shows the last command of each step. A setting is written when it has stood still for 0.6 s: a knob turned
-  through twenty steps is one line with the value it was left at. The lines go into `recording-NNN.scpi` where
-  Storage saves, written again after every step, so the end of the program does not lose a recording; `:SYSTem:RECorder:DATA?` gives them to a client. The file starts with
-  the set-up at the start as commands, so it can be sent to a scope in any state, and every step is proven like
-  `:SYSTem:SETup:SCPI?`. What a client sets by SCPI is not recorded (a comment says where it set something); what
-  the web remote's keys and touches do is. Not recorded yet: actions that leave no
-  setting (Run, Single, Clear, a saved file); an auto set-up is recorded as the settings it found.
+  message on the screen shows the last command of each step. A setting is written when it has stood still for
+  0.6 s: a knob turned through twenty steps is one line with the value it was left at. The lines go into
+  `recording-NNN.scpi` where Storage saves, written again after every step, so the end of the program does not
+  lose a recording; `:SYSTem:RECorder:DATA?` gives them to a client. The file starts with the set-up at the start
+  as commands, so it can be sent to a scope in any state, and every step is proven like `:SYSTem:SETup:SCPI?`.
+  A key or a row that is an action is written as its command, with what was set before it first: Run / Stop,
+  Single, Force, Clear, Default (`*RST`), Autoset, and the Storage rows Save setup, Save waveform and Save
+  screenshot. `*OPC?` stands after `:SINGle` and `:AUToscale`. The settings an action changes are its own:
+  Default is one line whatever was set before, and an auto set-up is the command alone, so a replay finds what
+  the signal then has. What a client sets or does by SCPI is not recorded (a comment says where it set
+  something); what the web remote's keys and touches do is.
 - A line that starts with `#` is a comment to the SCPI interpreter and is not run, to the end of the line, so a
   file of commands with comment lines can be sent as it is.
 

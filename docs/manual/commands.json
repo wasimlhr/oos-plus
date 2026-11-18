@@ -302,7 +302,10 @@
       "- What a client sets by SCPI is not recorded: a comment in the file says where a client set something, and the file does not bring that.",
       "- What the web remote's keys and touches do is recorded, as the front panel's.",
       "- The lines go into a new file `recording-NNN.scpi` where Storage saves, written again after every step, so a recording is not lost when the program ends while it is on; it ends by itself at 20000 lines.",
-      "- Actions that leave no setting (Run, Single, Clear, a saved file) are not recorded yet.",
+      "- A key or a row that is an action is written as its command, with what was set before it first: Run / Stop (`:RUN`, `:STOP`), Single (`:SINGle`), Force (`:TFORce`), Clear (`:CLEar`), Default (`*RST`), Autoset (`:AUToscale`), and the Storage rows Save setup, Save waveform and Save screenshot (`:SAVE:SETup`, `:SAVE:WAVeform`, `:SAVE:IMAGe`).",
+      "- `*OPC?` stands after `:SINGle` and `:AUToscale`.",
+      "- The settings an action changes are its own and are not written as settings; an auto set-up is the command alone, so a replay finds what the signal then has.",
+      "- Recall setup and a loaded session are written as the settings they bring.",
       "- Origin: OOS extension. The proof of every step is the one of `:SYSTem:SETup:SCPI?`."
      ],
      "returns": "On a freshly started default model the query returns `0`.",
