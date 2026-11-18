@@ -2504,3 +2504,41 @@ fn the_eye_page_takes_a_slow_time_base_after_a_fast_one() {
         }
     }
 }
+
+/// The button that brings the hidden badges back does not cost a channel pill its scale: with four channels, the LA
+/// and the generator in the bar each pill had 29 px for it and "500 mV" was cut to "500m" (seen on a unit,
+/// 2026-11-18). The button is then its eye alone and the chip that adds a source its plus alone, both still a
+/// touch wide; with fewer sources they keep their names.
+#[test]
+fn the_badges_button_does_not_cost_a_channel_pill_its_scale() {
+    let mut u = fresh(Layout::Studio);
+    for c in 0..n_ch() { (u.m.ch[c].on, u.m.ch[c].vscale) = (true, crate::model::VSCALES.iter().position(|v| (v - 0.5).abs() < 1e-6).unwrap()); }
+    frame(&mut u);
+    let before = u.studio_bottom();
+    assert!(before.la.is_some() && before.gen.is_some() && before.show.is_none(), "the full bar of a unit with LA and generator");
+    u.studio_hide_badges();
+    frame(&mut u);
+    let b = u.studio_bottom();
+    let room = |r: Rect| r.w - 62;
+    let scale = u.fonts().s.width("500 mV");
+    for c in 0..n_ch() {
+        assert!(room(b.ch[c]) >= scale, "CH{}: {} px for a scale of {scale}", c + 1, room(b.ch[c]));
+    }
+    let show = b.show.expect("the button that brings the badges back");
+    assert!(show.w >= 40 && show.h >= 36 && b.add.w >= 40, "still a touch wide: {show:?} {:?}", b.add);
+    assert!(show.right() <= b.time.x && b.add.right() <= show.x, "in the bar, in their order");
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-badges-hidden-full-bar.png"), crate::store::png_of(&cv)).unwrap();
+    }
+    tap(&mut u, show.x + show.w / 2, show.y + show.h / 2);
+    assert!(u.studio_badges_visible(), "the eye alone brings the row back");
+    // two channels: the room is there, and both keep their names
+    for c in 2..n_ch() { u.m.ch[c].on = false; }
+    u.studio_hide_badges();
+    frame(&mut u);
+    let b = u.studio_bottom();
+    assert!(b.show.is_some_and(|r| r.w >= 80) && b.add.w >= 62, "{:?} {:?}", b.show, b.add);
+}

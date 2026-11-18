@@ -7,6 +7,10 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio: with the badges hidden, the button that brings them back no longer costs a channel pill its scale. With
+  four channels, the LA and the generator in the bottom bar each pill had 29 px left and "500 mV" was cut to
+  "500m" (seen on a unit, 2026-11-18). Where the bar is that full the button is its eye alone and "+ Source" its
+  plus alone; with fewer sources both keep their names (host-tested).
 - Eye: the scope's program is no longer killed for lack of memory when an eye is on at a slow time base (seen on a
   unit, 2026-11-18: 3.7 GB, twice; the fix is host-tested, the signal of that moment was not there to try it on
   the unit). A bit far shorter than a sample came out of the clock recovery, from a signal that only just passes

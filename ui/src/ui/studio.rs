@@ -275,6 +275,11 @@ pub(super) const GROUP_BAND: i32 = 14;
 /// The chip that adds a source, and the short form of the generator's pill (its name alone).
 const ADD_W: i32 = 62;
 const GEN_W: i32 = 56;
+/// The button that brings the hidden badges back: with its name, and as its eye alone where the bar is full.
+const SHOW_W: i32 = 88;
+const SHOW_ICON_W: i32 = 50;
+/// The chip that adds a source as its plus alone, where the bar is full.
+const ADD_SHORT_W: i32 = 40;
 const CHIP_H: i32 = 30;
 /// The pills of the bottom bar are the buttons pressed most: taller than a measurement badge of the row above them
 /// (`ROW_H` - 6 = 34), and the bar is 3 px more on either side.
@@ -628,10 +633,10 @@ impl Ui {
         let shown = self.shown_refs();
         let maths: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k)).collect();
         // the chip that adds a source: a channel that is off, math, a reference or a bus. One name, whatever is off
-        let add_w = ADD_W;
+        let mut add_w = ADD_W;
         // SIM plays refs, not the live channels: their pills are not on the bar then (Live brings them back)
         let chans: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
-        let show_w = if self.studio_badges_hidden() { 88 } else { 0 };
+        let mut show_w = if self.studio_badges_hidden() { SHOW_W } else { 0 };
         let caps = &oos_hal::model::platform().caps;
         let la_w = if caps.la { 52 } else { 0 };
         let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { GEN_W } } else { 0 };
@@ -640,6 +645,16 @@ impl Ui {
         // the generator's pill takes its short form ("GEN") before a source pill is too narrow for its scale: with four
         // channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
         let aux = |gen_w: i32| [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
+        // the button that brings the hidden badges back takes its room from the pills: with four channels, the LA
+        // and the generator each pill had 29 px left for its scale, and "500 mV" was cut to "500m" (seen on a unit,
+        // 2026-11-18). Before a pill loses its scale the button is its eye alone, then the chip that adds a source
+        // its plus alone
+        if show_w > 0 && count > 0 {
+            let need = self.studio_ch_pill_scale_min();
+            let pill = |add_w: i32, show_w: i32| Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w.min(GEN_W))), count);
+            if pill(add_w, show_w) < need { show_w = SHOW_ICON_W; }
+            if pill(add_w, show_w) < need { add_w = ADD_SHORT_W; }
+        }
         let tight = count > 0 && Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w)), count) < self.studio_ch_pill_need();
         let gen_w = if tight { gen_w.min(GEN_W) } else { gen_w };
         let aux_w = aux(gen_w);
@@ -681,7 +696,7 @@ impl Ui {
         let mut ax = add.right() + 5;
         let la = (la_w > 0).then(|| { let r = Rect::new(ax, y, la_w, h); ax += la_w + 5; r });
         let gen = (gen_w > 0).then(|| { let r = Rect::new(ax, y, gen_w, h); ax += gen_w + 5; r });
-        let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, 82, bottom.h));
+        let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, show_w - 6, bottom.h));
         StudioBottom { ch, refs, math, add, show, la, gen, time, trig, panel }
     }
 
@@ -693,6 +708,13 @@ impl Ui {
         let text = (0..n_ch()).map(|c| f.mb.width(&scale(c))).max().unwrap_or(0);
         // 8 to the badge of 42, 8 to the text, 8 to the chevron and its 20
         (86 + text).min(PILL_MAX_W)
+    }
+
+    /// The narrowest channel pill that still shows a scale whole: the badge and its margins (62 px, as the pill is
+    /// drawn) and the widest scale of the channels' units in the small font.
+    pub(super) fn studio_ch_pill_scale_min(&self) -> i32 {
+        let f = self.fonts();
+        62 + (0..n_ch()).map(|c| f.s.width(&format!("500 m{}", self.m.ch[c].unit.name()))).max().unwrap_or(0)
     }
 
     /// The live channels are not what SIM plays (it plays refs), so Studio shows no channel pills while it runs.
@@ -787,7 +809,7 @@ impl Ui {
         if b.add.w > 0 {
             chip(cv, b.add, BTN, if self.studio.ch_picker { ACCENT } else { BTN_BORDER });
             // (it said "+ CH", "+ Add" or "Add source" by what was off, beside the Add of the top bar)
-            let label = "+ Source";
+            let label = if b.add.w >= ADD_W { "+ Source" } else { "+" };
             cv.text_in(&f.sb, b.add, 1, label, if self.studio.ch_picker { ACCENT } else { TEXT });
         }
         // LA and GEN: a pill each, a dot for on / off and, for the generator, what it makes
@@ -815,9 +837,11 @@ impl Ui {
         }
         if let Some(r) = b.show {
             chip(cv, Rect::new(r.x, r.y + 3, r.w, BAR_CHIP_H), BTN, BTN_BORDER);
-            icon_eye(cv, r.x + 15, r.y + r.h / 2, TEXT);
+            // the eye alone where the bar is full (`studio_bottom`)
+            let named = r.w >= SHOW_W - 6;
+            icon_eye(cv, if named { r.x + 15 } else { r.x + r.w / 2 }, r.y + r.h / 2, TEXT);
             // (it said "Meas", as the chip on the plot that opens the list does)
-            cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Badges", TEXT);
+            if named { cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Badges", TEXT); }
         }
         // the sections of the row are told apart by a line
         for x in [b.time.x - 5, b.trig.x - 5] {
