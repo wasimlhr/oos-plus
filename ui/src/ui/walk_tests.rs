@@ -1276,6 +1276,51 @@ fn a_note_is_added_from_the_hold_menu_and_stays_on_its_signal() {
     }
 }
 
+/// A note is added by touch outside Studio too: a finger held on the plot of Minimal or of the stock layout opens the
+/// plot menu, and "Add note here" puts the note at the time that was held and opens the keyboard for its text.
+#[test]
+fn a_note_is_added_from_the_plot_menu_of_minimal_and_the_stock_layout() {
+    for layout in [Layout::Minimal, Layout::Default] {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = layout;
+        u.relayout();
+        for _ in 0..12 { frame(&mut u); }
+        u.m.run = RunState::Stop;
+        for _ in 0..4 { frame(&mut u); }
+        let lane = u.source_area(WaveId::Ch(0)).unwrap();
+        let (x, y) = (lane.x + lane.w / 3, lane.y + lane.h / 2);
+        finger_hold(&mut u, x, y, 2, 24);
+        let popup = u.workspace.popup.as_ref().unwrap_or_else(|| panic!("{layout:?}: a held finger opens the plot menu"));
+        assert_eq!(popup.title, "Plot", "{layout:?}");
+        let i = (0..popup.rows.len()).find(|&i| matches!(popup.rows[i].1, super::workspace::Action::Note(WaveId::Ch(0), _))).unwrap_or_else(|| panic!("{layout:?}: the menu has the note row"));
+        assert_eq!(popup.rows[i].0, "Add note here");
+        let r = popup.row_rect(i);
+        finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, 2);
+        assert!(u.wlan.osk.is_some() && u.callouts.len() == 1, "{layout:?}: a note and the keyboard for it");
+        for c in "glitch".chars() { u.osk_type(c); }
+        u.osk_ok();
+        frame(&mut u);
+        assert_eq!(u.callouts[0].text, "glitch", "{layout:?}");
+        assert_eq!(u.callouts[0].src, WaveId::Ch(0), "{layout:?}");
+        let (tdiv, delay) = u.view();
+        let want = delay as f64 + ((x - lane.x) as f64 / lane.w as f64 - 0.5) * HDIV as f64 * tdiv as f64;
+        assert!((u.callouts[0].t - want).abs() < tdiv as f64 * 0.02, "{layout:?}: at the time that was held: {} for {}", u.callouts[0].t, want);
+        let ((px, _), _) = u.callout_place(0).unwrap_or_else(|| panic!("{layout:?}: the note is on the screen"));
+        assert!((px - x).abs() <= 2, "{layout:?}: at the held column: {px} for {x}");
+        // a tap on its text edits it, as in Studio
+        let (_, r) = u.callout_place(0).unwrap();
+        finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, 0);
+        assert!(u.wlan.osk.as_ref().is_some_and(|o| o.text == "glitch"), "{layout:?}: the keyboard on the note's text");
+        if let Ok(dir) = std::env::var("OOS_WALK") {
+            u.wlan.osk = None;
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            for _ in 0..3 { u.step(0.04); }
+            u.render(&mut cv);
+            let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("note-{layout:?}.png")), &crate::store::png_of(&cv));
+        }
+    }
+}
+
 /// Pictures of the SIM sheet in Studio and in Minimal (`OOS_WALK=dir`).
 #[test]
 #[ignore]

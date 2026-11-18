@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! Callouts: a short text pinned to a point of a signal. A callout belongs to a source and a time; it is drawn at
 //! the value the source has there, with a line to its text, and moves with the signal when the view is scrolled or
-//! scaled. Added from the hold menu of the plot ("Add note here"), edited by a tap on its text, removed by emptying
-//! it. They are part of the setup text (and so of a session).
+//! scaled. Added from the hold menu of the plot ("Add note here", in every layout), edited by a tap on its text,
+//! removed by emptying it. They are part of the setup text (and so of a session).
 
 use super::wlan::{Osk, OskFor};
 use super::*;

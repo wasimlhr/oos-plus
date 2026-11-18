@@ -35,8 +35,9 @@ Fixed:
 
 Added:
 
-- Callouts in Studio (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
-  text to that time on that signal, with a line from the text to the point. It moves with the signal, is edited by a
+- Callouts (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
+  text to that time on that signal, with a line from the text to the point. The row is in the plot menu of every
+  layout: Studio, Minimal and the stock one. It moves with the signal, is edited by a
   tap on its text, removed by emptying it, and is part of the setup text and of a session. Remote, for scripts and
   agents: `:CALLout:ADD <source>,<time>,<text>`, `:CALLout:REMove <n>`, `:CALLout:CLEar`, `:CALLout:COUNt?`,
   `:CALLout:LIST?`.

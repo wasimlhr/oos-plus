@@ -27,6 +27,8 @@ pub(super) enum Action {
     MathOff(usize), MathSettings(usize), RefClear(usize), RefSettings(usize),
     /// Studio: the horizontal scale of a reference (Follow main, or its own; `sharedzoom.rs`)
     RefHorizontal(usize),
+    /// a note on a source at the time under a screen column (`callout.rs`)
+    Note(WaveId, i32),
 }
 
 #[cfg(test)]
@@ -962,6 +964,8 @@ impl Ui {
                 rows.push((format!("Trigger on {}", match id { WaveId::Ch(c) => format!("CH{}", c + 1), WaveId::Ref(i) => format!("R{}", i + 1) }), Action::Trigger(id)));
             }
             rows.push(("Trigger settings".into(), Action::Menu(MenuId::Trigger)));
+            // a note at the time under the finger: on the lane under it, or on the selected source
+            if let Some(id) = self.ctx_lane(x, y) { rows.push(("Add note here".into(), Action::Note(id, x))); }
             rows.push(("Sources".into(), Action::Sources));
             rows
         };
@@ -1035,6 +1039,7 @@ impl Ui {
             Action::ChInvert(c) => { self.m.ch[c].invert = !self.m.ch[c].invert; self.toast(&format!("CH{}: invert {}", c + 1, if self.m.ch[c].invert { "on" } else { "off" })); self.settings_changed(); }
             Action::ChZero(c) => { self.m.ch[c].offset = 0.0; self.toast(&format!("CH{}: offset 0", c + 1)); self.settings_changed(); }
             Action::Autoset => self.key(key::AUTO),
+            Action::Note(id, x) => self.callout_add(id, x),
             Action::Close => {},
         }
     }
