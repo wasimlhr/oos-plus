@@ -306,6 +306,9 @@ const LEVEL_LINE_S: f64 = 1.5;
 /// Longest wait of a STOP for the hardware's final frame (`Ui::stop_final`): a batch in progress, its read and the raw
 /// read of the newest frame.
 const STOP_FINAL_WAIT: f64 = 3.0;
+/// Longest wait of a STOP for the stored record read whole (`Ui::stop_whole`): one read of a record the live read
+/// takes whole, a fraction of a second. After it the view shown is asked for, the record of the stop as it was.
+const STOP_WHOLE_WAIT: f64 = 1.0;
 /// LA words a history entry keeps: above this only the newest record has its LA (200 x 1 M words = 400 MB at most).
 const HISTORY_LA_WORDS: usize = 1_000_000;
 /// Segment counts of the segmented recording (0 = off); the menu offers those within the limit of the set-up
@@ -1530,8 +1533,9 @@ pub struct Ui {
     stop_pic: Option<Record>,
     /// STOP: the view that holds the whole stored record, still to be asked of the hardware. The record shown at the
     /// stop is the last one the screen took, and the memory of the hardware, which every view is read from, may hold
-    /// a later acquisition: that one is read whole first and is the record of the stop from then on (`stop_replay`)
-    stop_whole: Option<(f64, f64)>,
+    /// a later acquisition: that one is read whole first and is the record of the stop from then on (`stop_replay`).
+    /// With the time (`now`) after which it is no longer waited for
+    stop_whole: Option<((f64, f64), f64)>,
     /// STOP: the record shown was loaded from a session, with its samples. What the hardware has in its memory is
     /// another acquisition, so the STOP does not read that again in its place (`stop_replay`); RUN ends it
     loaded_record: bool,
@@ -3298,6 +3302,7 @@ impl Ui {
         if !self.record_mode() && live && (self.m.run == RunState::Run || self.stop_final.is_some() || (self.last[0].is_none() && !self.cleared)) {
             if self.m.run == RunState::Run {
                 self.stop_ti_off = None;
+                self.stop_whole = None;
                 (self.stop_raw, self.stop_pic) = (None, None);
                 self.loaded_record = false;
             }
@@ -3739,6 +3744,7 @@ impl Ui {
         if !ok {
             self.src.hw_stop(None);
             self.stop_ti_off = None;
+            self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
             return;
         }
@@ -3759,11 +3765,15 @@ impl Ui {
             // first, with a view that holds all of it, and what comes is the record of the stop
             self.stop_whole = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame)).map(|r| {
                 let (n, f) = (r.frame.acq.1 as f64, &r.frame);
-                (n * f.dt / HDIV as f64, (n / 2.0 - f.pre as f64) * f.dt)
+                ((n * f.dt / HDIV as f64, (n / 2.0 - f.pre as f64) * f.dt), self.now + STOP_WHOLE_WAIT)
             });
         }
+        // no answer (the read failed, or the hardware holds no record to read again): the views are not kept waiting
+        if self.stop_whole.is_some_and(|w| self.now > w.1) {
+            self.stop_whole = None;
+        }
         let view = (self.m.time_per_div() as f64, self.m.delay as f64);
-        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.unwrap_or(view))) else { return };
+        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.map_or(view, |w| w.0))) else { return };
         if let (Some(t), Some(off)) = (f.fixed_ti, self.stop_ti_off) {
             f.fixed_ti = Some(t + off / f.dt);
         }
@@ -4754,6 +4764,7 @@ impl Ui {
             }
             // whatever the hardware still holds is not this record
             self.stop_ti_off = None;
+            self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
@@ -12829,6 +12840,20 @@ mod tests {
         assert_eq!((shown(&ui), memory_top(&ui)), (Some(1), 1.5));
         let asked = shared.lock().unwrap().stop_view.unwrap();
         assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "the view shown is asked for next: {asked:?}");
+        // the trigger a fifth into the record: the view asked for is centred on the record, 24 us after the trigger.
+        // No answer at all: after a second the view shown is asked for, the record of the stop as it was
+        let (mut ui, shared) = scope();
+        let early: Vec<f32> = (0..n).map(|i| if i < 20_000 { -1.0 } else { 1.0 }).collect();
+        shared.lock().unwrap().queue.push_back(crate::board::Frame { pre: 20_000, ..frame(1, early) });
+        steps(&mut ui, 3);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 8e-6 - 1.0).abs() < 1e-9 && (asked.1 / 24e-6 - 1.0).abs() < 1e-9, "{asked:?}");
+        steps(&mut ui, 60);
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "the view shown after the wait: {asked:?}");
+        assert_eq!((shown(&ui), ui.channel_points(0, true)), (Some(1), n));
     }
 
     // Break it catches: a session held the 3600 points of the screen, so a loaded capture had lost its samples: a
