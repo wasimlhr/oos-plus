@@ -115,7 +115,9 @@ pub(crate) fn open_file(ui: &mut Ui, file: &str) -> Result<(), String> {
     if store::looks_session(&bytes) {
         return ui.session_load(&path.to_string_lossy());
     }
-    ui.load_waveform_auto(&bytes, &store::file_name(&path))
+    // read where it lies: a waveform kept in two files finds its other file beside it
+    let traces = store::parse_wave_at(&bytes, &path)?;
+    ui.commit_waveform_traces(traces, &store::file_name(&path), true)
 }
 
 /// Opens the files of `files_to_open`, in order, and turns the analog inputs off unless the hardware was asked

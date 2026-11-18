@@ -1609,7 +1609,9 @@ impl Ui {
 
     fn ref_load_file(&mut self, p: &std::path::Path) -> Result<(), String> {
         let bytes = crate::store::read_waveform_file(p)?;
-        self.load_waveform_bytes(&bytes, &crate::store::file_name(p))
+        // read where it lies: a waveform kept in two files finds its other file beside it
+        let traces = crate::store::parse_wave_at(&bytes, p)?;
+        self.commit_waveform_traces(traces, &crate::store::file_name(p), false)
     }
     /// Name of a channel on its card: its label, or CHn.
     pub(super) fn ch_name(&self, c: usize) -> String {
