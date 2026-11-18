@@ -87,7 +87,7 @@ fn read_waveform(path: &std::path::Path) -> Parsed {
     let mut bytes = Vec::with_capacity(size as usize);
     file.take(maximum as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("Cannot read {name}: {e}"))?;
     if bytes.len() > maximum { return Err(format!("{name} exceeds the {} MiB waveform limit", maximum >> 20)); }
-    let traces = crate::store::parse_wave(&bytes, &name)?;
+    let traces = crate::store::parse_wave_at(&bytes, path)?;
     Ok((traces, name))
 }
 
