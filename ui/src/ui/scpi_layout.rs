@@ -479,7 +479,7 @@ impl Ui {
         } else if self.menu_open {
             for it in self.items(self.menu) {
                 let v = self.value(it);
-                out.push(q_str(&if v.is_empty() { self.item_label(it).to_string() } else { format!("{} = {}", self.item_label(it), v) }));
+                out.push(q_str(&if v.is_empty() { self.script_label(it) } else { format!("{} = {}", self.item_label(it), v) }));
             }
         }
         out.join(",")

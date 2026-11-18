@@ -539,6 +539,17 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
                     }
                 }
             }
+            cmd::Out::Replay => {
+                // the frames of the file: one command each, and the waits of its `*OPC?`; two minutes at most
+                for _ in 0..3600 {
+                    frame(ui, &mut cv, &mut gpu, &mut gl, &mut shot_n, &mut scpi);
+                    if !ui.scpi_replaying && ui.scpi_replay_file.is_none() { break; }
+                }
+            }
+            cmd::Out::Scpi(message) => {
+                let answer = scpi.exec_line(ui, &cv, &message);
+                if !answer.is_empty() { println!("scpi {}", String::from_utf8_lossy(&answer)); }
+            }
             cmd::Out::None => {}
         }
         if ui.quit {
