@@ -1472,3 +1472,94 @@ fn the_docked_event_table_has_its_count_in_the_title_and_columns_that_can_be_dra
         let _ = crate::store::write(&std::path::Path::new(&dir).join("table.png"), &crate::store::png_of(&cv));
     }
 }
+
+/// Remote services and SSH settings are sheets in Minimal and Studio, System > Connectivity says where the scope is
+/// reached and leads to its three pages, and a link to another page stands after the rows of its own page.
+#[test]
+fn remote_services_are_sheets_and_connectivity_leads_to_them() {
+    fn row(u: &Ui, it: Item) -> (RowKind, (i32, i32)) {
+        let g = u.sheet_geo().unwrap();
+        let r = g.rows.iter().find(|r| r.it == it).unwrap_or_else(|| panic!("{it:?} is a row of this tab"));
+        (r.kind, mid(r.ctrl))
+    }
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        u.open_menu(MenuId::Utility);
+        u.step(0.04);
+        let spec = u.sheet_spec(MenuId::Utility).unwrap();
+        assert_eq!(spec.tabs[0].name, "Connectivity");
+        assert_eq!(spec.tabs[0].rows, [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow, Item::Open(MenuId::Network), Item::Open(MenuId::Remote), Item::Open(MenuId::Time)], "{layout:?}");
+        let g = u.sheet_geo().unwrap();
+        assert!(g.rows[..4].iter().all(|r| r.kind == RowKind::Info) && g.rows[4..].iter().all(|r| r.kind == RowKind::Link), "{layout:?}: four lines of state, three pages");
+        // Remote services opens from here, as a sheet with Back
+        let (_, (x, y)) = row(&u, Item::Open(MenuId::Remote));
+        tap(&mut u, x, y);
+        assert!(u.menu == MenuId::Remote && u.sheet_active() && u.sheet_chrome().1.is_some(), "{layout:?}: Remote services is a sheet with Back");
+        let spec = u.sheet_spec(MenuId::Remote).unwrap();
+        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Services", "Access"]);
+        let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
+        for it in u.items(MenuId::Remote) { assert!(on_sheet.contains(&it), "{layout:?}: {it:?} is on the sheet"); }
+        // a switch acts on one tap
+        let (kind, (x, y)) = row(&u, Item::RemTelnet);
+        assert!(kind == RowKind::Toggle && u.sys.remote_telnet);
+        tap(&mut u, x, y);
+        assert!(!u.sys.remote_telnet, "{layout:?}: telnet off");
+        tap(&mut u, x, y);
+        assert!(u.sys.remote_telnet, "{layout:?}: and on again");
+        // the addresses say whose they are
+        assert_eq!(u.sheet_label(Item::RemScpiInfo), "SCPI port");
+        assert_eq!(u.sheet_label(Item::NetWeb), "Web address");
+        // SSH settings: a sheet too, its two key actions pinned
+        let (kind, (x, y)) = row(&u, Item::Open(MenuId::Ssh));
+        assert_eq!(kind, RowKind::Link);
+        tap(&mut u, x, y);
+        assert!(u.menu == MenuId::Ssh && u.sheet_active(), "{layout:?}: SSH settings is a sheet");
+        let spec = u.sheet_spec(MenuId::Ssh).unwrap();
+        assert_eq!(spec.tabs[0].foot, [Item::SshImport, Item::SshRemove]);
+        assert_eq!(row(&u, Item::SshState).0, RowKind::Info);
+        assert_eq!(row(&u, Item::SshPassword).0, RowKind::Toggle);
+        // Back, and Back again
+        let b = u.sheet_chrome().1.expect("Back");
+        tap(&mut u, b.x + b.w / 2, b.y + b.h / 2);
+        assert_eq!(u.menu, MenuId::Remote, "{layout:?}");
+        let b = u.sheet_chrome().1.expect("Back");
+        tap(&mut u, b.x + b.w / 2, b.y + b.h / 2);
+        assert_eq!(u.menu, MenuId::Utility, "{layout:?}");
+        // every sheet: the links to other pages come last (the lines of the logic analyser keep theirs in place)
+        let mut list = menus(&u);
+        list.extend([MenuId::Network, MenuId::Remote, MenuId::Ssh, MenuId::Time, MenuId::SelfCal, MenuId::Dvm, MenuId::Zone, MenuId::Sim]);
+        for menu in list {
+            let mut u = fresh(layout);
+            u.open_menu(menu);
+            let Some(spec) = u.sheet_spec(menu) else { continue };
+            if matches!(menu, MenuId::La | MenuId::Main) { continue; }
+            for t in &spec.tabs {
+                let first_link = t.rows.iter().position(|it| matches!(it, Item::Open(_))).unwrap_or(t.rows.len());
+                assert!(t.rows[first_link..].iter().all(|it| matches!(it, Item::Open(_))), "{layout:?} {menu:?} {}: {:?}", t.name, t.rows);
+            }
+        }
+    }
+}
+
+/// Pictures of the sheets a second look went over (`OOS_WALK=dir`): Remote services, SSH settings, and the tabs where
+/// the links to other pages moved to the end.
+#[test]
+#[ignore]
+fn walk_second_look_pictures() {
+    let Ok(dir) = std::env::var("OOS_WALK") else { return };
+    for (layout, tag) in [(Layout::Studio, "s"), (Layout::Minimal, "m")] {
+        for (menu, name) in [(MenuId::Remote, "remote"), (MenuId::Ssh, "ssh"), (MenuId::Measure, "measure"), (MenuId::Display, "display"), (MenuId::Network, "network"), (MenuId::Utility, "system")] {
+            let mut u = fresh_live(layout);
+            u.open_menu(menu);
+            u.step(0.04);
+            let tabs = u.sheet_geo().map_or(0, |g| g.tabs.len());
+            for t in 0..tabs.max(1) {
+                if tabs > 0 { let (x, y) = mid(u.sheet_geo().unwrap().tabs[t]); tap(&mut u, x, y); }
+                for _ in 0..3 { u.step(0.04); }
+                let mut cv = Canvas::new(u.scr.w, u.scr.h);
+                u.render(&mut cv);
+                let _ = crate::store::write(&std::path::Path::new(&dir).join(format!("look-{tag}-{name}{t}.png")), &crate::store::png_of(&cv));
+            }
+        }
+    }
+}

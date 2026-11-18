@@ -191,8 +191,9 @@ impl Ui {
                 MathAuto => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
+            // Connectivity says where the scope is reached and what time it has, above the pages that set it
             M::Utility => (&["Connectivity", "Device", "Service", "Advanced"], |it| match it {
-                Open(M::Network) | Open(M::Time) => Slot::Tab(0),
+                NetEth | NetWlan | NetWeb | TimeNow | Open(M::Network) | Open(M::Remote) | Open(M::Time) => Slot::Tab(0),
                 Offline | QuickAct | Graphics | Shot => Slot::Tab(1),
                 Open(M::SelfCal) | SysInfo | About | Update => Slot::Tab(2),
                 UpdateRollback => Slot::Foot(2),
@@ -303,17 +304,19 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Windows => (&["Windows"], |_| Slot::Tab(0)),
-            M::Remote => (&["Services", "Addresses"], |it| match it {
-                NetWeb | RemScpiInfo | RemVxiInfo | RemTelnetInfo => Slot::Tab(1),
-                _ => Slot::Tab(0),
+            // the switches of the services, then who may reach them and where they are
+            M::Remote => (&["Services", "Access"], |it| match it {
+                RemWeb | RemScpi | RemVxi | RemTelnet | RemSsh | RemMdns | Open(M::Ssh) => Slot::Tab(0),
+                _ => Slot::Tab(1),
             }),
+            M::Ssh => (&["SSH"], |it| match it { SshImport | SshRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
             _ => return None,
         })
     }
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote)
+        matches!(menu, MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility)
     }
 
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
@@ -333,6 +336,10 @@ impl Ui {
                 for it in self.items(MenuId::SimAdvanced) { if !v.contains(&it) { v.push(it); } }
                 v
             }
+            // System: the state lines of the network and the clock, and the page of the remote services, which the
+            // menu has one level down
+            MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow].into_iter()
+                .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
             m => self.items(m),
         }
     }
@@ -389,6 +396,21 @@ impl Ui {
                 for (i, t) in tabs.iter_mut().enumerate() {
                     t.foot = if i == 0 { vec![Item::SimAddRef, Item::SimPlay] } else { vec![Item::SimPlay, Item::SimDefaults] };
                 }
+            }
+            // System > Connectivity: the pages in the order of the lines above them
+            if menu == MenuId::Utility {
+                let order = [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow, Item::Open(MenuId::Network), Item::Open(MenuId::Remote), Item::Open(MenuId::Time)];
+                tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+            }
+            // Remote services: the name and who is allowed first, then the addresses
+            if menu == MenuId::Remote {
+                let order = [Item::RemName, Item::RemAllow, Item::RemFirewall, Item::NetWeb, Item::RemScpiInfo, Item::RemVxiInfo, Item::RemTelnetInfo];
+                tabs[1].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+            }
+            // a link to another page comes after the rows of this one. The lines of the logic analyser keep their
+            // link under the row it continues
+            if menu != MenuId::La {
+                for t in &mut tabs { t.rows.sort_by_key(|it| matches!(it, Item::Open(_))); }
             }
             // the next-free action is offered only when the selected slot is taken
             if matches!(menu, MenuId::Ref) && self.refs[self.ref_sel].is_none() {
@@ -557,6 +579,12 @@ impl Ui {
             }
             Item::SimAddRef => format!("Add to R{}", self.m.sim_slot + 1),
             Item::SimLoad => format!("Load file into R{}…", self.m.sim_slot + 1),
+            // on the Access tab of Remote services the addresses stand apart from their switches: they say whose they are
+            Item::NetWeb if matches!(self.menu_root(), MenuId::Remote | MenuId::Utility) => "Web address".into(),
+            Item::TimeNow if self.menu_root() == MenuId::Utility => "Clock".into(),
+            Item::RemScpiInfo => "SCPI port".into(),
+            Item::RemVxiInfo => "VXI-11 ports".into(),
+            Item::RemTelnetInfo => "telnet port".into(),
             Item::SimShow => format!("Show R{}", self.m.sim_slot + 1),
             Item::SimLive => "Back to live".into(),
             // the tab is named Spread: its rows do not repeat it

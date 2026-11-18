@@ -81,6 +81,13 @@ Added:
     Signal, so no row moves when SIM mode starts (host-tested);
   - the switch that shows the reference of the SIM slot works and shows its state. In the sheet it did nothing: a
     tap stepped it eight times, back to where it was, and it was always drawn off (host-tested);
+  - Remote services and SSH settings are sheets in Minimal and Studio (they were the stock dialogs: with ten rows
+    the page did not fit one tab). Remote services has the switches on Services and the name, the allowed
+    addresses, the firewall and the ports on Access; SSH settings has its two key actions at the foot (host-tested);
+  - System > Connectivity shows the Ethernet and WLAN state, the web address and the clock, and opens Network,
+    Remote services and Date and time. It held two links (host-tested);
+  - on a sheet the links to other pages come after the rows of the page: Measure > Settings, Display > Grid and
+    views, Network > Ethernet and System > Service had them first or in the middle;
   - the measurement strip (stock layout and Minimal) takes the short name of a measurement (Pk-pk, Freq, +Duty)
     where the long one has no room: with several sources, in the column at a side, and at the larger text sizes.
     The long name was cut there ("Positive Duty Cy", "Peak-to-Pe", "Frequen") (host-tested);

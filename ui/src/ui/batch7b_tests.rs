@@ -431,7 +431,8 @@ fn statistics_settings_are_a_page_with_a_reset_and_follow_the_toggles() {
     let mut u = fresh(Layout::Studio);
     u.open_menu(MenuId::Measure);
     let spec = u.sheet_spec(MenuId::Measure).unwrap();
-    assert_eq!(spec.tabs[0].rows, [Item::MeasGate, Item::BadgeStyle, Item::Open(MenuId::MeasPair), Item::Open(MenuId::Dvm), Item::Open(MenuId::MeasStat), Item::MeasLabels]);
+    // the settings of the page, then the links to its other pages
+    assert_eq!(spec.tabs[0].rows, [Item::MeasGate, Item::BadgeStyle, Item::MeasLabels, Item::Open(MenuId::MeasPair), Item::Open(MenuId::Dvm), Item::Open(MenuId::MeasStat)]);
     u.open_menu(MenuId::MeasStat);
     let spec = u.sheet_spec(MenuId::MeasStat).unwrap();
     assert_eq!(spec.tabs[0].rows, [Item::MeasStats, Item::MeasPop, Item::MeasShowSd, Item::MeasShowMin, Item::MeasShowMax]);
