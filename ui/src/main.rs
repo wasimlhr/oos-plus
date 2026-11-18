@@ -105,8 +105,22 @@ fn files_to_open(args: &[String]) -> Vec<String> {
     files
 }
 
-/// Loads the files of `files_to_open` into the first empty reference slots, in order, and turns the analog
-/// inputs off unless the hardware was asked for: a capture is opened to be analysed, not shown over a demo signal.
+/// Opens one file named on the command line. A session (`session-NNN.oss`) is loaded as Storage > Load session
+/// does, replacing the setup, the record and every reference slot; a waveform goes into the first empty reference
+/// slots. The path is taken from where the program was started, not from the folder of the setups.
+fn open_file(ui: &mut Ui, file: &str) -> Result<(), String> {
+    let named = std::path::Path::new(file);
+    let path = if named.is_absolute() { named.to_path_buf() } else { std::env::current_dir().map(|d| d.join(named)).unwrap_or_else(|_| named.to_path_buf()) };
+    let bytes = store::read_waveform_file(&path)?;
+    if store::looks_session(&bytes) {
+        return ui.session_load(&path.to_string_lossy());
+    }
+    ui.load_waveform_auto(&bytes, &store::file_name(&path))
+}
+
+/// Opens the files of `files_to_open`, in order, and turns the analog inputs off unless the hardware was asked
+/// for: a capture is opened to be analysed, not shown over a demo signal. A session replaces what was loaded
+/// before it, so it comes first when waveforms are to be added to it.
 /// A file that cannot be read ends the program with its reason, before any window opens.
 fn open_files(ui: &mut Ui, args: &[String]) {
     let files = files_to_open(args);
@@ -117,9 +131,7 @@ fn open_files(ui: &mut Ui, args: &[String]) {
         ui.set_offline(true);
     }
     for file in &files {
-        let path = std::path::Path::new(file);
-        let loaded = store::read_waveform_file(path).and_then(|bytes| ui.load_waveform_auto(&bytes, &store::file_name(path)));
-        if let Err(reason) = loaded {
+        if let Err(reason) = open_file(ui, file) {
             eprintln!("oos-ui: --open {file}: {reason}");
             std::process::exit(2);
         }
@@ -1151,5 +1163,51 @@ mod open_argument_tests {
         assert_eq!(files_to_open(&args(&["captures/ch1.pwwf"])), ["captures/ch1.pwwf"]);
         assert!(files_to_open(&args(&["--serve"])).is_empty());
         assert!(files_to_open(&args(&["1672x941", "--offline"])).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod open_file_tests {
+    use super::*;
+
+    /// A float32 waveform record (`.pwwf`) of these volts, one microsecond apart.
+    fn record(volts: &[f32]) -> Vec<u8> {
+        let header = format!(r#"{{"sampleType":"float32","nPoints":{},"xincr":1e-6,"channel":"CH1"}}"#, volts.len());
+        let mut b = b"PWWF0001".to_vec();
+        b.extend_from_slice(&(header.len() as u32).to_le_bytes());
+        b.extend_from_slice(header.as_bytes());
+        for v in volts {
+            b.extend_from_slice(&v.to_le_bytes());
+        }
+        b
+    }
+
+    #[test]
+    fn a_session_named_on_the_command_line_is_loaded_and_a_waveform_is_added_to_it() {
+        let dir = std::env::temp_dir().join(format!("oos-open-file-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let volts = [0.0_f32, 1.0, 0.5, -0.5];
+        let wave = dir.join("a.pwwf");
+        std::fs::write(&wave, record(&volts)).unwrap();
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.store_dir = dir.clone();
+        open_file(&mut ui, wave.to_str().unwrap()).unwrap();
+        assert_eq!(ui.ref_volts(0), volts);
+        let session = dir.join("bench.oss");
+        ui.session_save(session.to_str().unwrap()).unwrap();
+
+        // another start of the program: the session, then one more waveform
+        let mut other = Ui::new(Source::Demo { t: 0.0 });
+        other.store_dir = dir.clone();
+        open_file(&mut other, session.to_str().unwrap()).unwrap();
+        assert_eq!(other.ref_volts(0), volts);
+        open_file(&mut other, wave.to_str().unwrap()).unwrap();
+        assert_eq!(other.ref_volts(1), volts, "a waveform after a session goes into the next empty slot");
+        // a session is the whole bench: opened again, the slot that was added is empty
+        open_file(&mut other, session.to_str().unwrap()).unwrap();
+        assert_eq!(other.ref_volts(0), volts);
+        assert!(other.ref_volts(1).is_empty());
+        assert_eq!(open_file(&mut other, dir.join("none.oss").to_str().unwrap()).unwrap_err(), "missing none.oss");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
