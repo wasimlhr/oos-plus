@@ -2146,9 +2146,13 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
         u.select_option(Item::CurMode, "Off");
         assert_eq!(u.m.cursor, CursorMode::Off, "{layout:?}");
     }
-    // four channels on: the pills are under 110 px and still have a body, so the badge is the switch
+    // four channels and two references on: the pills are under 110 px and still have a body, so the badge is the switch
     let mut u = fresh(Layout::Studio);
     for c in 0..4 { u.m.ch[c].on = true; }
+    for i in 0..2 {
+        u.refs[i] = Some(RefWave { src: 0, color: 0, label: format!("r{i}"), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true });
+    }
+    u.relayout();
     u.step(0.04);
     let pill = u.studio_bottom().ch[2];
     assert!((70..110).contains(&pill.w), "{pill:?}");
