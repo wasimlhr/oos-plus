@@ -429,6 +429,12 @@ impl Ui {
         self.catalog_lay().view
     }
 
+    /// Studio: the button back to the quick Add panel (tests).
+    #[cfg(test)]
+    pub(super) fn catalog_quick_rect(&self) -> Option<Rect> {
+        self.catalog_lay().quick
+    }
+
     /// The tile `id` on the screen (tests).
     #[cfg(test)]
     pub(super) fn catalog_tile_rect(&self, id: u16) -> Option<Rect> {

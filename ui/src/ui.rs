@@ -71,6 +71,8 @@ mod scpiext_c;
 mod scpi_coverage_tests;
 #[cfg(test)]
 mod sheet_tests;
+#[cfg(test)]
+mod studio_parity_tests;
 mod walk_tests;
 mod callout;
 #[cfg(test)]
