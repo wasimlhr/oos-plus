@@ -164,6 +164,8 @@ pub(super) struct Studio {
     pub overlay: bool,
     /// the first pinned measurement shown as a badge (the Meas tab pages through them)
     pub badge_first: usize,
+    /// lines the badge row has beyond its first (`studio_badge_wrap_now`, set at the start of a frame)
+    pub badge_wrap: i32,
     /// the docking tree and the floating views (`dock.rs`)
     pub dock: super::dock::Dock,
     /// the divider under the overview strip is held: (finger y, strip height) at the press
@@ -214,6 +216,8 @@ pub(super) struct StudioTop {
     /// the mini SIM control, zero wide unless the SIM is the source
     pub sim: Rect,
     pub acq: Rect,
+    /// the search controls, at the end of the read-out's room (no width without a search)
+    pub search: Rect,
     pub measure: Rect,
     pub cursors: Rect,
     pub display: Rect,
@@ -344,6 +348,7 @@ impl Ui {
         let token = self.studio.view.token();
         if self.m.studio_view != token { self.m.studio_view = token.to_string(); }
         if self.m.layout == Layout::Studio { self.studio_prune_ref_rows(); }
+        self.studio.badge_wrap = self.studio_badge_wrap_now();
         self.dock_sync_setup();
         self.studio_sync();
     }
@@ -484,8 +489,17 @@ impl Ui {
         // the numbered view switcher (Display > Views), left of + Add, only while there is more than one view
         let vw = super::views::studio_box_w(self.m.views);
         let vbox = Rect::new(add.x - if vw > 0 { gap + vw } else { 0 }, CHIP_Y, vw, CHIP_H);
-        let acq = Rect::new(x, CHIP_Y, (vbox.x - 10 - x).max(40), CHIP_H);
-        StudioTop { vbox, add, badge, simbtn, run: pill, single, sim, acq, measure, cursors, display, storage, view, gear, autoset, clear, force, tier }
+        // the search (Add > Search): previous, how many events, next. It has the end of the read-out's room. Its label
+        // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
+        let room = vbox.x - 10 - x;
+        let search_w = if self.studio.search.is_some() {
+            let caption = (f.mb.width(&self.studio_acq_caption()) + 6).clamp(120, 260);
+            let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
+            2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
+        } else { 0 };
+        let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);
+        let search = Rect::new(vbox.x - 10 - search_w, CHIP_Y, search_w, CHIP_H);
+        StudioTop { vbox, add, badge, simbtn, run: pill, single, sim, acq, search, measure, cursors, display, storage, view, gear, autoset, clear, force, tier }
     }
 
     /// Measure and Cursors as the top-bar buttons (`top_buttons`); the others are Studio's own.
@@ -551,6 +565,7 @@ impl Ui {
             cv.text_in(&f.mb, r, 1, label, if on { ACCENT } else { TEXT });
         }
         self.draw_view_box(cv);
+        self.draw_studio_search_chip(cv);
         // Autoset, Clear, Force: Force is dimmed while no trigger is waiting, and still works
         let waiting = !self.record_mode() && self.m.run == RunState::Run && self.m.status == TrigStatus::Wait;
         for (r, label, lit) in [(t.autoset, labels[0], true), (t.clear, labels[1], true), (t.force, labels[2], waiting)].into_iter().filter(|(r, ..)| r.w > 0) {
@@ -1095,6 +1110,7 @@ impl Ui {
     }
 
     fn studio_top_tap(&mut self, x: i32, y: i32) {
+        if self.studio_search_chip_tap(x, y) { return; }
         let t = self.studio_top();
         let hit = |r: Rect| self.top_hit(r).contains(x, y);
         if t.badge.w > 0 && hit(t.badge) {
@@ -1227,6 +1243,10 @@ impl Ui {
 /// Height of the row of pinned badges under the lanes.
 const ROW_H: i32 = 40;
 const ROW_H_COMPACT: i32 = 26;
+/// Lines of badges the row has at most.
+const BADGE_LINES: i32 = 2;
+/// Width of the previous and next buttons of the search in the top bar.
+pub(super) const SEARCH_ARROW_W: i32 = 46;
 /// Width of the action popup of a badge, and the height of its rows.
 const POPUP_W: i32 = 300;
 const POPUP_ROW: i32 = 40;
@@ -1363,7 +1383,7 @@ impl Ui {
     /// read-out is never in it (the plot has its own).
     pub(super) fn studio_badges_visible(&self) -> bool {
         self.m.layout == Layout::Studio && !self.studio.hide_badges && self.studio.view != StudioView::Only
-            && ((!self.studio_pinned().is_empty() && !self.studio_panel_shown()) || self.studio.search.is_some())
+            && !self.studio_pinned().is_empty() && !self.studio_panel_shown()
     }
 
     /// With no row, the way to the panel: a slim chip at the bottom right of the plot (Waveform view, some measurements).
@@ -1386,12 +1406,46 @@ impl Ui {
         Rect::new(x, self.dock_wave_rect().bottom() - h, w, h)
     }
 
-    /// Height of the badge row, and of the chips in it.
+    /// Height of the badge row, and of the chips in it. Badges that do not fit one line get a second one before any of
+    /// them goes behind "+N".
     pub(super) fn studio_row_px(&self) -> i32 {
         let base = if self.studio.compact { ROW_H_COMPACT } else { ROW_H };
-        if self.studio_classic() && !self.studio_pinned().is_empty() { base.max(self.classic_row_px()) } else { base }
+        if self.studio_classic() && !self.studio_pinned().is_empty() { base.max(self.classic_row_px()) } else { base + (self.studio_badge_lines() - 1) * (base - 2) }
     }
-    pub(super) fn studio_chip_h(&self) -> i32 { self.studio_row_px() - 6 }
+    pub(super) fn studio_chip_h(&self) -> i32 {
+        if self.studio_classic() && !self.studio_pinned().is_empty() { return self.studio_row_px() - 6; }
+        (if self.studio.compact { ROW_H_COMPACT } else { ROW_H }) - 6
+    }
+
+    /// Lines of badges in the row: one, or two when they do not fit one.
+    pub(super) fn studio_badge_lines(&self) -> i32 {
+        1 + self.studio.badge_wrap.clamp(0, BADGE_LINES - 1)
+    }
+
+    /// The lines the row needs beyond its first, from the names of the badges and the room alone: every value counts
+    /// as wide as "0.000 MHz", so a value that grows by a digit moves no badge to the next line and the plot keeps its
+    /// height. The classic strip: the lines its sources wrap onto (classicbadges.rs).
+    fn studio_badge_wrap_now(&self) -> i32 {
+        if self.m.layout != Layout::Studio || !self.studio_badges_visible() { return 0; }
+        let f = self.fonts();
+        let rows = self.meas_rows();
+        let names: Vec<(MeasKey, i32)> = self.studio_badge_keys().into_iter().filter_map(|key| {
+            let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
+            Some((key, f.s.width(&self.studio_badge_name(key, &r.name))))
+        }).collect();
+        let (span_x, span_w) = self.plot_span();
+        // the row ends before the three buttons at its right (`studio_row_limit`, without the row's own rectangle)
+        let (x0, limit) = (span_x + 4, span_x + span_w - 122);
+        let value = f.sb.width("0.000 MHz");
+        if self.studio_classic() { return self.classic_wrap_now(&names, value, limit - x0); }
+        let mut x = x0;
+        for (_, name) in &names {
+            let w = 16 + name + 8 + value + 10;
+            if x + w > limit { return BADGE_LINES - 1; }
+            x += w + 5;
+        }
+        0
+    }
     /// Width of the measurement panel and height of its rows: smaller in the compact view (not the SIM panel).
     pub(super) fn studio_panel_w(&self) -> i32 {
         if self.studio.compact && self.studio.view != StudioView::Sim { 210 } else { MEAS_PANEL_W_FULL }
@@ -1430,11 +1484,11 @@ impl Ui {
         Rect::new(c.x - 4 - 34, c.y, 34, c.h)
     }
 
-    /// The eye button at the right end of the row.
+    /// The eye button at the right end of the row, on its last line (the row grows upwards: the buttons stay).
     pub(super) fn studio_eye(&self) -> Rect {
         let r = self.studio_row();
         let h = self.studio_chip_h();
-        Rect::new(r.right() - 38, r.y + (r.h - h) / 2, 34, h)
+        Rect::new(r.right() - 38, r.bottom() - 3 - h, 34, h)
     }
 
     /// Where the badges end: before the Meas tab and the eye.
@@ -1445,66 +1499,64 @@ impl Ui {
     /// The row of badges as (measurement, rectangle), as many as fit.
     pub(super) fn studio_badges(&self) -> Vec<(MeasKey, Rect)> {
         if self.studio_classic() { return self.classic_layout().pairs; }
+        self.studio_badge_fit().0
+    }
+
+    /// The badges that have a place in the lines of the row, and how many have none. The last line keeps room for the
+    /// "+N" chip when not all fit.
+    fn studio_badge_fit(&self) -> (Vec<(MeasKey, Rect)>, usize) {
         let f = self.fonts();
         let row = self.studio_row();
         let rows = self.meas_rows();
         let limit = self.studio_row_limit();
-        let mut x = row.x + 4 + self.studio_search_w();
-        let mut out = Vec::new();
+        let (ch, lines) = (self.studio_chip_h(), self.studio_badge_lines());
         let first = self.studio.badge_first.min(self.studio_badge_keys().len().saturating_sub(1));
-        // when they do not all fit, the last place is for the "+N" chip
-        let limit = if self.studio_badges_overflow_n(first) > 0 { limit - OVERFLOW_W - 5 } else { limit };
-        for key in self.studio_badge_keys().into_iter().skip(first) {
-            let Some(r) = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r)) else { continue };
-            let w = 16 + f.s.width(&self.studio_badge_name(key, &r.name)) + 8 + f.sb.width(&r.text()).max(f.sb.width("0.000 MHz")) + 10;
-            if x + w > limit { break; }
-            out.push((key, Rect::new(x, row.y + (row.h - self.studio_chip_h()) / 2, w, self.studio_chip_h())));
-            x += w + 5;
-        }
-        out
+        let keys: Vec<(MeasKey, i32)> = self.studio_badge_keys().into_iter().skip(first).filter_map(|key| {
+            let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
+            Some((key, 16 + f.s.width(&self.studio_badge_name(key, &r.name)) + 8 + f.sb.width(&r.text()).max(f.sb.width("0.000 MHz")) + 10))
+        }).collect();
+        let place = |reserve: i32| {
+            let (mut x, mut line, mut out) = (row.x + 4, 0, Vec::new());
+            for &(key, w) in &keys {
+                let end = |line: i32| if line == lines - 1 { limit - reserve } else { limit };
+                if x + w > end(line) {
+                    line += 1;
+                    x = row.x + 4;
+                    if line >= lines || x + w > end(line) { break; }
+                }
+                // the last line is the one above the bottom bar: the row grows upwards
+                out.push((key, Rect::new(x, row.bottom() - 3 - ch - (lines - 1 - line) * (ch + 4), w, ch)));
+                x += w + 5;
+            }
+            out
+        };
+        let all = place(0);
+        if all.len() == keys.len() { return (all, 0); }
+        let some = place(OVERFLOW_W + 5);
+        let left = keys.len() - some.len();
+        (some, left)
     }
 
-    /// How many pinned measurements do not fit in the row from `first` on.
-    fn studio_badges_overflow_n(&self, first: usize) -> usize {
+    /// How many pinned measurements do not fit in the row.
+    fn studio_badges_overflow_n(&self) -> usize {
         if self.studio_classic() { return self.classic_layout().overflow; }
-        let f = self.fonts();
-        let rows = self.meas_rows();
-        let limit = self.studio_row_limit();
-        let keys: Vec<MeasKey> = self.studio_badge_keys().into_iter().skip(first).collect();
-        // how many fit before `limit`; when not all do, the "+N" chip takes the last place, which leaves one badge fewer
-        let fits = |limit: i32| {
-            let mut x = self.studio_row().x + 4 + self.studio_search_w();
-            let mut fit = 0;
-            for key in &keys {
-                let Some(r) = self.studio_index(*key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r)) else { continue };
-                let w = 16 + f.s.width(&self.studio_badge_name(*key, &r.name)) + 8 + f.sb.width(&r.text()).max(f.sb.width("0.000 MHz")) + 10;
-                if x + w > limit { break; }
-                x += w + 5;
-                fit += 1;
-            }
-            fit
-        };
-        let mut fit = fits(limit);
-        if fit < keys.len() { fit = fits(limit - OVERFLOW_W - 5); }
-        keys.len().saturating_sub(fit)
+        self.studio_badge_fit().1
     }
 
     /// The "+N" chip after the badges: it opens the list of all measurements.
     pub(super) fn studio_badges_more(&self) -> Option<(Rect, usize)> {
         if !self.studio_badges_visible() { return None; }
         if self.studio_classic() { return self.classic_more(); }
-        let first = self.studio.badge_first.min(self.studio_badge_keys().len().saturating_sub(1));
-        let n = self.studio_badges_overflow_n(first);
-        let last = self.studio_badges().last().map(|(_, r)| r.right() + 5)?;
-        let row = self.studio_row();
-        (n > 0).then(|| (Rect::new(last, row.y + (row.h - self.studio_chip_h()) / 2, OVERFLOW_W, self.studio_chip_h()), n))
+        let (list, n) = self.studio_badge_fit();
+        let last = list.last()?.1;
+        (n > 0).then(|| (Rect::new(last.right() + 5, last.y, OVERFLOW_W, last.h), n))
     }
 
     /// What the cursors read, as one chip after the badges: the differences only.
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_cursor_chip(&self, after: i32) -> Option<(Rect, String)> {
         let row = self.studio_row();
-        self.studio_cursor_chip_at(after, row.y + (row.h - self.studio_chip_h()) / 2, self.studio_chip_h())
+        self.studio_cursor_chip_at(after, row.bottom() - 3 - self.studio_chip_h(), self.studio_chip_h())
     }
 
     /// The same at a place: its top and its height.
@@ -1536,7 +1588,6 @@ impl Ui {
         let row = self.studio_row();
         cv.fill(row, BG);
         let rows = self.meas_rows();
-        self.draw_studio_search_chip(cv);
         if self.studio_classic() { self.draw_classic_badges(cv); }
         for (key, r) in self.studio_badges().into_iter().filter(|_| !self.studio_classic()) {
             let Some(m) = self.studio_index(key).and_then(|i| rows.get(i)) else { continue };
@@ -1663,7 +1714,6 @@ impl Ui {
             return true;
         }
         if !self.studio_badges_visible() || !self.studio_row().contains(x, y) { return false; }
-        if self.studio_search_chip_tap(x, y) { return true; }
         if self.studio_badges_more().is_some_and(|(r, _)| Self::hit40(r).contains(x, y)) {
             self.studio_set_view(StudioView::Docked);
             return true;

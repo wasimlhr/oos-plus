@@ -1985,3 +1985,50 @@ fn a_session_saved_in_the_offline_view_comes_back_in_it() {
     assert_eq!(crate::store::parse_session(&held, NREF).unwrap().offline_ref, Some(1));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Studio's badge row takes a second line before a measurement goes behind "+N", in both badge styles. The row grows
+/// upwards and the plot gives the room; the buttons at its right stay where they are; a badge of the upper line takes a
+/// tap. With more than two lines hold, "+N" is back.
+#[test]
+fn the_badge_row_wraps_onto_a_second_line() {
+    for classic in [false, true] {
+        let what = if classic { "classic" } else { "badges" };
+        let mut u = fresh(Layout::Studio);
+        u.m.ch[1].on = false;
+        u.studio_set_classic(classic);
+        for _ in 0..2 { frame(&mut u); }
+        let (one, eye) = (u.studio_row(), u.studio_eye());
+        assert!(u.studio_badges_more().is_none() && !u.studio_badges().is_empty(), "{what}: the measurements of the start fit one line");
+        let lines = |u: &Ui| { let mut ys: Vec<i32> = u.studio_badges().iter().map(|b| b.1.y).collect(); ys.sort(); ys.dedup(); ys.len() };
+        assert_eq!(lines(&u), 1, "{what}");
+        for k in oos_dsp::measure::ALL { if u.m.meas.len() >= 14 { break; } if !u.m.meas.iter().any(|m| m.0 == k) { u.m.meas.push((k, WaveId::Ch(0))); } }
+        for _ in 0..2 { frame(&mut u); }
+        let (row, badges) = (u.studio_row(), u.studio_badges());
+        assert_eq!((badges.len(), u.studio_badges_more().map(|m| m.1)), (14, None), "{what}: fourteen measurements, none behind +N");
+        assert_eq!(lines(&u), 2, "{what}");
+        assert!(row.h > one.h && row.bottom() == one.bottom() && u.plot_rect().bottom() <= row.y, "{what}: {one:?} became {row:?}");
+        let limit = u.studio_row_limit();
+        for (i, (_, r)) in badges.iter().enumerate() {
+            assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= limit, "{what}: badge {i} at {r:?} in {row:?}");
+            for (_, o) in &badges[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{what}: {r:?} over {o:?}"); }
+        }
+        if !classic { assert_eq!(u.studio_eye(), eye, "{what}: the buttons at the right stay on the line above the bar"); }
+        // the upper line is live
+        let (key, r) = *badges.iter().min_by_key(|b| b.1.y).unwrap();
+        let (x, y) = mid(r);
+        tap(&mut u, x, y);
+        assert!(u.studio.mark == Some(key) || u.studio.popup == Some(key), "{what}: a tap on a badge of the upper line");
+        // more than the lines hold: the rest is behind +N, and the row is no higher
+        for k in oos_dsp::measure::ALL { if !u.m.meas.iter().any(|m| m.0 == k) { u.m.meas.push((k, WaveId::Ch(0))); } }
+        for _ in 0..2 { frame(&mut u); }
+        let (n, more) = (u.studio_badges().len(), u.studio_badges_more().expect("+N"));
+        assert_eq!(n + more.1, u.m.meas.len(), "{what}: every measurement is shown or counted");
+        assert!(n >= 10, "{what}: {n} badges on the two lines");
+        assert!(u.studio_row().h <= row.h + 24 && u.studio_row().bottom() == one.bottom(), "{what}: {:?}", u.studio_row());
+        assert!(more.0.y >= u.studio_row().y && more.0.right() <= limit + 60, "{what}: +N at {:?}", more.0);
+        // back to a few: one line again
+        u.m.meas.truncate(4);
+        for _ in 0..2 { frame(&mut u); }
+        assert_eq!((lines(&u), u.studio_row()), (1, one), "{what}: four measurements");
+    }
+}

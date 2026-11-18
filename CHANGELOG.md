@@ -17,6 +17,13 @@ Fixed:
   empty room behind the scale; it is as wide as the widest scale needs (159 px at the normal text size), the same
   for every channel. The pill of a channel that is off, the button that switches it on, was 44 px wide: it is at
   least 60, and takes the room that is left up to 96, where it says "Off" beside its name.
+- Studio: the search controls (previous, the count of events, next) are in the top bar, beside the acquisition
+  read-out, as tall as the buttons there and with arrows of 46 px. They were at the left of the badge row, where they
+  took the place of two measurements and were as low as a badge (20 px in the compact view).
+- Studio: the badge row takes a second line before a measurement goes behind "+N", in both badge styles: fourteen
+  measurements of one channel are all shown, where five or six were. The row grows upwards, the plot gives the room,
+  and the buttons at its right stay where they were. The classic strip gives a source a second line while it has
+  fewer than three sources.
 - Studio: the pills of the bottom bar (channels, references, math, Add, LA, GEN, the time base and the trigger) are
   40 px tall instead of 30, taller than the measurement badges above them (34). The bar is 46 px, and the plot gives
   the 10 px.

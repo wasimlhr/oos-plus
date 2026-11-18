@@ -925,41 +925,47 @@ impl Ui {
         self.settings_changed();
     }
 
-    /// The search chip of the badge row: previous, the label, next.
+    /// The search controls of Studio's top bar: previous, the label and next as their touch areas (the height of the
+    /// bar), and what the label says. They were at the left of the badge row, where they took the place of two
+    /// measurements and were as low as a badge.
     pub(super) fn studio_search_chip(&self) -> Option<(Rect, Rect, Rect, String)> {
         self.studio.search?;
         let f = self.fonts();
-        let row = self.studio_row();
+        let top = self.frame().top;
+        let room = self.studio_top().search;
         let n = self.studio_search_events().len();
-        let text = format!("Search 1 \u{b7} {} event{}", n, if n == 1 { "" } else { "s" });
-        let w = f.sb.width(&text) + 24;
-        // a target of 40 px, a little taller than the row
-        let h = 40;
-        let y = row.y + (row.h - h) / 2;
-        let prev = Rect::new(row.x + 4, y, 40, h);
-        let label = Rect::new(prev.right() + 2, y, w, h);
-        let next = Rect::new(label.right() + 2, y, 40, h);
+        let events = format!("{} event{}", n, if n == 1 { "" } else { "s" });
+        let full = format!("Search 1 \u{b7} {events}");
+        let arrow = super::studio::SEARCH_ARROW_W;
+        let label_w = room.w - 2 * arrow - 4;
+        // a narrow bar keeps the count alone
+        let text = if f.mb.width(&full) + 16 <= label_w { full } else { events };
+        let prev = Rect::new(room.x, top.y, arrow, top.h);
+        let label = Rect::new(prev.right() + 2, top.y, label_w, top.h);
+        let next = Rect::new(label.right() + 2, top.y, arrow, top.h);
         Some((prev, label, next, text))
     }
 
     pub(super) fn draw_studio_search_chip(&self, cv: &mut Canvas) {
         let Some((prev, label, next, text)) = self.studio_search_chip() else { return };
         let f = self.fonts();
-        let h = self.studio_chip_h();
-        let shrink = |r: Rect| Rect::new(r.x, r.y + (r.h - h) / 2, r.w, h);
-        let (prev_hit, next_hit, label_hit) = (prev, next, label);
-        let (prev, next, label) = (shrink(prev_hit), shrink(next_hit), shrink(label_hit));
+        // drawn as the buttons of the bar are: the touch area is the whole height of the bar
+        let bar = self.studio_top().search;
+        let shrink = |r: Rect| Rect::new(r.x, bar.y, r.w, bar.h);
+        let (prev, next, label) = (shrink(prev), shrink(next), shrink(label));
         chip(cv, prev, BTN, BTN_BORDER);
         chip(cv, next, BTN, BTN_BORDER);
         chip(cv, label, BAR, AMBER);
         let (cx, cy) = (prev.x + prev.w / 2, prev.y + prev.h / 2);
-        cv.triangle([(cx + 4, cy - 6), (cx + 4, cy + 6), (cx - 4, cy)], TEXT);
+        cv.triangle([(cx + 5, cy - 7), (cx + 5, cy + 7), (cx - 5, cy)], TEXT);
         let (cx, cy) = (next.x + next.w / 2, next.y + next.h / 2);
-        cv.triangle([(cx - 4, cy - 6), (cx - 4, cy + 6), (cx + 4, cy)], TEXT);
-        cv.text_in(&f.sb, label, 1, &text, AMBER);
+        cv.triangle([(cx - 5, cy - 7), (cx - 5, cy + 7), (cx + 5, cy)], TEXT);
+        cv.set_clip(label.inset(2));
+        cv.text_in(&f.mb, label, 1, &text, AMBER);
+        cv.no_clip();
     }
 
-    /// A tap in the badge row on the search chip. True when it was taken.
+    /// A tap in the top bar on the search controls. True when it was taken.
     pub(super) fn studio_search_chip_tap(&mut self, x: i32, y: i32) -> bool {
         let Some((prev, label, next, _)) = self.studio_search_chip() else { return false };
         if prev.contains(x, y) { self.studio_search_go(-1); }
@@ -967,11 +973,6 @@ impl Ui {
         else if label.contains(x, y) { self.toggle_menu(MenuId::Search); }
         else { return false; }
         true
-    }
-
-    /// The width the search chip takes at the left of the badge row.
-    pub(super) fn studio_search_w(&self) -> i32 {
-        self.studio_search_chip().map_or(0, |(p, _, n, _)| n.right() - p.x + 6)
     }
 
     // ------------------------------------------------------------------------------------------------ items
