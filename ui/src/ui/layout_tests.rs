@@ -528,7 +528,7 @@ fn studio_measurements_only_is_a_table_with_statistics_and_a_source_filter() {
     assert_eq!(u.studio.view, StudioView::Waveform);
     // the list button of the badge row (it carries the count; the Meas tab is gone) brings the panel back
     assert!(u.studio_tab().is_none());
-    let tab = u.studio_compact_chip();
+    let tab = u.studio_list_chip();
     tap_in(&mut u, tab);
     assert_eq!(u.studio.view, StudioView::Docked);
 }

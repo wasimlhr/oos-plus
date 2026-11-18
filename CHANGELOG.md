@@ -31,6 +31,15 @@ Fixed:
 - Studio: the hold menu of the plot has rows of 40 px in two columns, the view at the left and what acts on the lane
   under the finger at the right. It was one column of seventeen rows of 28 px, 542 px tall. Run, Single, Trigger
   settings and Sources are not in it any more: the bars have them one tap away.
+- Studio: the badge row has one button that says what it opens, "Meas" and the number of measurements, beside the
+  eye. It had two more of an icon each, for the badge style and for the compact view, and the second opened the
+  list in one view and switched the compact view in another. The style is Measure > Badge style, the compact view
+  is in the View menu. With the badges hidden, the chip of the bottom bar that brings them back says "Badges"; it
+  said "Meas", like the chip on the plot that opens the list.
+- Studio: the measurement panel is made for a finger. The buttons of its toolbar are 36 px high (28 before) with a
+  touch of 40, the rows of its table 36 px (28) where the panel is tall, the segments of its view switch 32 px wide
+  (25) where the panel is 250 px or wider. A low panel under the plot keeps rows of 28 px, so it still shows five. The short name of
+  its gate button is "Record" or "Screen"; "Full" did not say of what.
 - SSH > Import keys from USB says that there is no key store when there is none (the desktop app); it said nothing.
 - DVM and counter, Logic analyser and Double pulse are one page each: they had two tabs of two to five rows. A
   sheet draws the line over its footer only where it has a footer.

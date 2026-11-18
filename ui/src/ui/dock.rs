@@ -908,7 +908,10 @@ impl Ui {
     pub(super) fn dock_view_rect(&self, k: VKind, r: Rect) -> Option<Rect> {
         if k != VKind::Measure || !matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline) { return None; }
         let base = self.dock_extra_rect(k, r).map_or(Self::dock_close_rect(r).x, |e| e.x);
-        Some(Rect::new(base - 76, r.y, 76, STRIP_HIT.min(r.h)))
+        // three segments of 32 px (they were 25) where the strip has the room; a panel under 250 px keeps the narrow
+        // ones, or the switch would take the strip it is dragged by
+        let w = if r.w >= 250 { 96 } else { 76 };
+        Some(Rect::new(base - w, r.y, w, STRIP_HIT.min(r.h)))
     }
     /// The strip of the measurements panel has its controls in it (wide panels): the content under the strip.
     fn dock_bar_content(&self, k: VKind, r: Rect) -> Option<Rect> {

@@ -2332,3 +2332,55 @@ fn thin_sheets_are_one_page_and_the_add_controls_are_a_finger_high() {
     tap(&mut u, eye.x + eye.w / 2, eye.y - 2);
     assert!(u.studio.hide_badges, "the eye takes a touch of 40 px");
 }
+
+/// The measurement panel of Studio is made for a finger: its toolbar buttons are 36 px high with a touch of 40, the
+/// rows of its table are 36 px in a tall panel, and the three segments of its view switch are 32 px wide. With the badges hidden, the
+/// chip of the bottom bar that brings them back says "Badges", and a tap on it does.
+#[test]
+fn the_measurement_panel_and_the_badge_buttons_are_a_finger_high() {
+    use super::dock::VKind;
+    use super::measpanel::PanelView;
+    use super::studio::StudioView;
+    let mut u = fresh(Layout::Studio);
+    u.studio_set_view(StudioView::Docked);
+    for _ in 0..3 { frame(&mut u); }
+    let panel = u.studio_panel_rect().expect("the docked panel");
+    assert!(!Ui::panel_bar_wide(panel), "a narrow panel has its toolbar under the title: {panel:?}");
+    let bar = u.panel_bar(panel);
+    assert!(bar.slots.len() >= 4, "{} buttons", bar.slots.len());
+    for slot in bar.slots.iter().chain(bar.more.iter()) {
+        assert!(slot.r.h >= 36 && slot.hit.h >= 40 && slot.r.w >= 34, "{:?}: {:?} touch {:?}", slot.item, slot.r, slot.hit);
+        assert!(slot.r.x >= panel.x && slot.r.right() <= panel.right(), "{:?} inside the panel", slot.item);
+    }
+    // the switch between table, list and cards: three segments of 32 px, each of which picks its view
+    let strip = u.dock_rect(VKind::Measure).expect("the panel's place");
+    let sw = u.dock_view_rect(VKind::Measure, strip).expect("the view switch");
+    assert!(sw.w / 3 >= 32 && sw.h >= 26, "{sw:?}");
+    for (k, view) in [PanelView::Detailed, PanelView::List, PanelView::Cards].into_iter().enumerate() {
+        tap(&mut u, sw.x + (2 * k as i32 + 1) * sw.w / 6, sw.y + sw.h / 2);
+        for _ in 0..2 { frame(&mut u); }
+        assert_eq!(u.panel_view(), view, "segment {k}");
+    }
+    // the table in this tall panel has rows of 36 px (a low panel under the plot keeps 28, to show five of them)
+    u.panel_set_view(PanelView::Detailed);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(u.studio_panel_rect().is_some_and(|p| p.h >= 380) && u.detail_row_h() == 36 && u.studio_panel_row() == 36, "{:?}", u.studio_panel_rect());
+    // the badges hidden: the bottom bar says what its chip brings back
+    u.studio_set_view(StudioView::Waveform);
+    for _ in 0..2 { frame(&mut u); }
+    let eye = u.studio_eye();
+    let (x, y) = mid(eye);
+    tap(&mut u, x, y);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(u.studio.hide_badges && u.studio_badges_hidden());
+    let chip = u.studio_bottom().show.expect("the chip of the bottom bar");
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    cv.au_start();
+    u.render(&mut cv);
+    let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == "Badges" && chip.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= chip.right()));
+    assert!(said, "the chip says Badges: {chip:?}");
+    let (x, y) = mid(chip);
+    tap(&mut u, x, y);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(!u.studio.hide_badges, "a tap brings the badges back");
+}

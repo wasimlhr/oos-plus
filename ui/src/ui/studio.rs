@@ -630,7 +630,7 @@ impl Ui {
         let add_w = 62;
         // SIM plays refs, not the live channels: their pills are not on the bar then (Live brings them back)
         let chans: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
-        let show_w = if self.studio_badges_hidden() { 64 } else { 0 };
+        let show_w = if self.studio_badges_hidden() { 88 } else { 0 };
         let caps = &oos_hal::model::platform().caps;
         let la_w = if caps.la { 52 } else { 0 };
         let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { 56 } } else { 0 };
@@ -675,7 +675,7 @@ impl Ui {
         let mut ax = add.right() + 5;
         let la = (la_w > 0).then(|| { let r = Rect::new(ax, y, la_w, h); ax += la_w + 5; r });
         let gen = (gen_w > 0).then(|| { let r = Rect::new(ax, y, gen_w, h); ax += gen_w + 5; r });
-        let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, 58, bottom.h));
+        let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, 82, bottom.h));
         StudioBottom { ch, refs, math, add, show, la, gen, time, trig, panel }
     }
 
@@ -807,7 +807,8 @@ impl Ui {
         if let Some(r) = b.show {
             chip(cv, Rect::new(r.x, r.y + 3, r.w, BAR_CHIP_H), BTN, BTN_BORDER);
             icon_eye(cv, r.x + 15, r.y + r.h / 2, TEXT);
-            cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Meas", TEXT);
+            // (it said "Meas", as the chip on the plot that opens the list does)
+            cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Badges", TEXT);
         }
         // the sections of the row are told apart by a line
         for x in [b.time.x - 5, b.trig.x - 5] {
@@ -1463,8 +1464,8 @@ impl Ui {
             Some((key, f.s.width(&self.studio_badge_name(key, &r.name))))
         }).collect();
         let (span_x, span_w) = self.plot_span();
-        // the row ends before the three buttons at its right (`studio_row_limit`, without the row's own rectangle)
-        let (x0, limit) = (span_x + 4, span_x + span_w - 122);
+        // the row ends before the buttons at its right (`studio_row_limit`, without the row's own rectangle)
+        let (x0, limit) = (span_x + 4, span_x + span_w - self.studio_row_tail());
         let value = f.sb.width("0.000 MHz");
         if self.studio_classic() { return self.classic_wrap_now(&names, value, limit - x0); }
         let mut x = x0;
@@ -1480,7 +1481,7 @@ impl Ui {
         if self.studio.compact && self.studio.view != StudioView::Sim { 210 } else { MEAS_PANEL_W_FULL }
     }
     pub(super) fn studio_panel_row(&self) -> i32 {
-        if self.studio_detailed() { return super::measview::DETAIL_ROW; }
+        if self.studio_detailed() { return self.detail_row_h(); }
         if self.panel_is_cards() { return super::measpanel::CARD_H + 4; }
         // the tallest a row gets: its body and the band of a header (the paging is by this)
         self.studio_row_body() + if self.studio_multi_source() && self.studio.view != StudioView::Sim { GROUP_BAND } else { 0 }
@@ -1492,25 +1493,31 @@ impl Ui {
         // a row with statistics has a small line more
         if self.studio_stats_any() && self.studio.view != StudioView::Sim { base + super::measview::STATS_LINE } else { base }
     }
-    /// The small switch for the compact view, left of the Meas tab in the badge row.
-    pub(super) fn studio_compact_chip(&self) -> Rect {
+    /// The button that opens the list of all measurements, left of the eye: "Meas" and how many there are. The row had
+    /// two buttons of an icon each here, for the badge style and for the compact view, and the second opened the list
+    /// in one view and switched the compact view in another. The style is Measure > Badge style, the compact view is
+    /// in the View menu.
+    pub(super) fn studio_list_chip(&self) -> Rect {
         let eye = self.studio_eye();
-        let tab_w = if self.studio_tab().is_some() { 108 } else { 0 };
-        Rect::new(eye.x - 6 - tab_w - 34, eye.y, 34, eye.h)
+        let w = self.studio_list_chip_w();
+        Rect::new(eye.x - 6 - w, eye.y, w, eye.h)
     }
 
-    /// Studio or Classic badges: the button in the row and Measure > Badge style set the same flag.
+    fn studio_list_chip_w(&self) -> i32 {
+        self.fonts().sb.width("Meas \u{b7} 00") + 30
+    }
+
+    /// What the two buttons at the right end of the row take from it (`studio_row_limit`, without the row's rectangle).
+    fn studio_row_tail(&self) -> i32 {
+        38 + 6 + self.studio_list_chip_w() + 6
+    }
+
+    /// Studio or Classic badges (Measure > Badge style).
     pub(super) fn studio_set_classic(&mut self, on: bool) {
         self.m.studio_classic = on;
         self.studio.popup = None;
         self.studio.badge_first = 0;
         self.relayout();
-    }
-
-    /// The button left of the compact switch that flips the badges between Studio and Classic.
-    pub(super) fn studio_style_chip(&self) -> Rect {
-        let c = self.studio_compact_chip();
-        Rect::new(c.x - 4 - 34, c.y, 34, c.h)
     }
 
     /// The eye button at the right end of the row, on its last line (the row grows upwards: the buttons stay).
@@ -1520,9 +1527,9 @@ impl Ui {
         Rect::new(r.right() - 38, r.bottom() - 3 - h, 34, h)
     }
 
-    /// Where the badges end: before the Meas tab and the eye.
+    /// Where the badges end: before the Meas button and the eye.
     pub(super) fn studio_row_limit(&self) -> i32 {
-        self.studio_style_chip().x - 6
+        self.studio_list_chip().x - 6
     }
 
     /// The row of badges as (measurement, rectangle), as many as fit.
@@ -1630,20 +1637,13 @@ impl Ui {
             cv.text_in(&f.sb, r, 1, &format!("+{n}"), ACCENT);
         }
         self.draw_studio_tab(cv);
-        let c = self.studio_compact_chip();
-        chip(cv, c, if self.studio.compact { mix(BAR, ACCENT, 60) } else { BTN }, if self.studio.compact { ACCENT } else { BTN_BORDER });
-        icon_compact(cv, c.x + c.w / 2, c.y + c.h / 2, if self.studio.compact { ACCENT } else { TEXT });
-        // with the lanes alone the list button opens the table: it carries the number of measurements
-        if self.studio.view == StudioView::Waveform && self.measurement_count() > 0 {
-            let n = self.measurement_count().to_string();
-            let w = f.s.width(&n) + 6;
-            let b = Rect::new(c.right() - w, c.y - 2, w, 14);
-            cv.round(b, 6, ACCENT, 255);
-            cv.text_in(&f.s, b, 1, &n, DARK_TEXT);
-        }
-        let sc = self.studio_style_chip();
-        chip(cv, sc, if self.m.studio_classic { mix(BAR, ACCENT, 60) } else { BTN }, if self.m.studio_classic { ACCENT } else { BTN_BORDER });
-        icon_badge_style(cv, sc.x + sc.w / 2, sc.y + sc.h / 2, self.m.studio_classic, if self.m.studio_classic { ACCENT } else { TEXT });
+        // the list of all measurements: a button that says so, with their number
+        let c = self.studio_list_chip();
+        chip(cv, c, BTN, BTN_BORDER);
+        cv.set_clip(c.inset(1));
+        cv.text_in(&f.sb, Rect::new(c.x + 8, c.y, c.w - 22, c.h), 0, &format!("Meas \u{b7} {}", self.measurement_count()), TEXT);
+        cv.no_clip();
+        chevron(cv, c.right() - 12, c.y + c.h / 2, 1, TEXT);
         let eye = self.studio_eye();
         cv.vline(eye.x - 3, row.y + 6, row.bottom() - 6, LINE);
         icon_eye(cv, eye.x + eye.w / 2, eye.y + eye.h / 2, TEXT);
@@ -1747,13 +1747,8 @@ impl Ui {
             self.relayout();
             return true;
         }
-        if Self::hit40(self.studio_style_chip()).contains(x, y) {
-            self.studio_set_classic(!self.m.studio_classic);
-            return true;
-        }
-        if Self::hit40(self.studio_compact_chip()).contains(x, y) {
-            // with no panel to make compact, the list button opens the measurements
-            if self.studio.view == StudioView::Waveform { self.studio_set_view(StudioView::Docked); } else { self.studio_set_compact(!self.studio.compact); }
+        if Self::hit40(self.studio_list_chip()).contains(x, y) {
+            self.studio_set_view(StudioView::Docked);
             return true;
         }
         if self.studio_tab().is_some_and(|tab| tab.contains(x, y)) {
