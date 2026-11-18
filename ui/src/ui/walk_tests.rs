@@ -326,9 +326,9 @@ fn the_badge_of_a_channel_pill_is_its_switch() {
     tap(&mut u, pill.x + 24, pill.y + pill.h / 2);
     assert!(!u.m.ch[1].on && !u.menu_open, "the badge switches CH2 off");
     assert!(u.m.ch[0].on, "CH1 is not touched");
-    // its pill stays as a small one, and a tap on that switches the channel on again without a sheet
+    // its pill stays as a smaller one, and a tap on that switches the channel on again without a sheet
     let small = u.studio_bottom().ch[1];
-    assert_eq!(small.w, 44, "a small pill while it is off");
+    assert!((60..=96).contains(&small.w), "a smaller pill while it is off: {}", small.w);
     tap(&mut u, small.x + small.w / 2, small.y + small.h / 2);
     assert!(u.m.ch[1].on && !u.menu_open, "the small pill switches CH2 on");
     assert!(u.studio_bottom().ch[1].w >= 110);
@@ -1848,4 +1848,71 @@ fn the_display_sheet_has_no_skin_and_no_bottom_bar() {
     let u = fresh(Layout::Default);
     let items = u.items(MenuId::Display);
     assert!(items.contains(&Item::Skin) && items.contains(&Item::BottomBar), "the Default layout keeps both");
+}
+
+/// A channel pill of Studio's bottom bar is as wide as its badge, the widest scale and its chevron need: with one or
+/// two channels on it was 170 px, with empty room before the chevron. The scale is drawn whole, the pills of all
+/// channels are equally wide whatever their scales, and many sources still share the bar. The pill of a channel that
+/// is off is a button to switch it on: never under 60 px (it was 44), and with room to spare it says "Off".
+#[test]
+fn a_channel_pill_is_as_wide_as_its_scale_needs() {
+    // Studio's bar; Minimal has the small pills of its own footer
+    for layout in [Layout::Studio] {
+        for ts in [TextSize::Normal, TextSize::Large, TextSize::Larger] {
+            let mut u = fresh(layout);
+            u.m.text_size = ts;
+            u.relayout();
+            for c in 0..4 { u.m.ch[c].on = c < 2; }
+            u.m.ch[0].vscale = 0;
+            u.step(0.04);
+            let what = format!("{layout:?} {ts:?}");
+            let b = u.studio_bottom();
+            let f = u.fonts();
+            let scales: Vec<String> = (0..2).map(|c| format!("{}/div", si_short(u.m.ch[c].volts_per_div() as f64, u.m.ch[c].unit.name()))).collect();
+            assert_ne!(scales[0], scales[1], "{what}: two scales");
+            assert_eq!(b.ch[0].w, b.ch[1].w, "{what}: the pills are equally wide");
+            // the text begins 58 px in; what is left after the widest scale is the chevron's room and no more. The
+            // largest text needs all of the 170 px a pill ever had
+            let widest = f.mb.width("500 mV/div");
+            let need = (58 + widest + 28).min(170);
+            assert!(b.ch[0].w <= need && b.ch[0].w >= need - 8, "{what}: {} px for a scale of {widest} px", b.ch[0].w);
+            if ts == TextSize::Normal { assert!(b.ch[0].w == need && need <= 160, "{what}: {} px", b.ch[0].w); }
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            cv.au_start();
+            u.render(&mut cv);
+            let au = cv.au.take().unwrap();
+            for (c, scale) in scales.iter().enumerate() {
+                let r = b.ch[c];
+                let whole = au.iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), clip, .. }
+                    if s == scale && r.contains(ink.0, (ink.1 + ink.3) / 2) && ink.0 >= clip.0 && ink.2 <= clip.2 && ink.2 <= r.right() - 16));
+                assert!(whole, "{what}: the scale {scale} of CH{} is cut or missing", c + 1);
+            }
+            // the two channels that are off: a pill each, equally wide and inside the bar
+            let off: Vec<Rect> = (2..4).map(|c| b.ch[c]).collect();
+            assert!(off.iter().all(|r| r.w >= 60 && r.w == off[0].w) && b.add.right() <= b.time.x, "{what}: {off:?}");
+            // one channel on: the three others have the room for their badge and "Off", and a tap switches one on
+            u.m.ch[1].on = false;
+            u.step(0.04);
+            let b = u.studio_bottom();
+            if ts == TextSize::Normal {
+                assert!((1..4).all(|c| b.ch[c].w == 96), "{what}: {:?}", &b.ch[1..4]);
+                let mut cv = Canvas::new(u.scr.w, u.scr.h);
+                cv.au_start();
+                u.render(&mut cv);
+                let au = cv.au.take().unwrap();
+                for c in 1..4 {
+                    let says = au.iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == "Off" && b.ch[c].contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= b.ch[c].right()));
+                    assert!(says, "{what}: the pill of CH{} does not say Off", c + 1);
+                }
+            }
+            let (x, y) = mid(b.ch[2]);
+            tap(&mut u, x, y);
+            assert!(u.m.ch[2].on, "{what}: a tap on the pill of CH3 switches it on");
+            // every channel on: the pills share the bar as before and stay inside it
+            for c in 0..4 { u.m.ch[c].on = true; }
+            u.step(0.04);
+            let b = u.studio_bottom();
+            assert!((0..4).all(|c| b.ch[c].w > 0 && b.ch[c].w <= b.ch[0].w) && b.add.right() <= b.time.x, "{what}: four channels");
+        }
+    }
 }

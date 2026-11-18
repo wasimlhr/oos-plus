@@ -259,8 +259,10 @@ pub(super) struct StudioBottom {
 /// A source pill is at most as wide as a channel pill was and shrinks to this; the pills are 5 px apart.
 const PILL_MAX_W: i32 = 170;
 const PILL_MIN_W: i32 = 18;
-/// Width of the pill of a channel that is off.
-const OFF_PILL_W: i32 = 44;
+/// Width of the pill of a channel that is off: at least this, and with room to spare as much as holds its badge and
+/// "Off". It is a button to switch the channel on, so it is not a sliver beside the measurement badges.
+const OFF_PILL_W: i32 = 60;
+const OFF_PILL_MAX_W: i32 = 96;
 /// The "+N" chip of the badge row.
 pub(super) const OVERFLOW_W: i32 = 46;
 /// Height a list row gets for the header of its source.
@@ -592,15 +594,20 @@ impl Ui {
         let show_off = !offs.is_empty() && room - off_room >= count * 96 + (count - 1).max(0) * 5;
         let room = if show_off { room - off_room } else { room };
         let pw = Self::studio_pill_width(room, count);
+        // a channel pill ends after its chevron: it holds a scale and no name, so it is not as wide as a ref's may be
+        let cw = pw.min(self.studio_ch_pill_need());
+        // what the sources leave of their room goes to the pills of the channels that are off, in equal parts
+        let spare = room - chans.len() as i32 * (cw + 5) - (count - chans.len() as i32) * (pw + 5);
+        let ow = if show_off { (OFF_PILL_W + spare.max(0) / offs.len() as i32).min(OFF_PILL_MAX_W) } else { OFF_PILL_W };
         let mut ch = [Rect::new(0, y, 0, ph); NCH];
         let mut x = bottom.x + 4;
         for c in 0..n {
             if chans.contains(&c) {
-                ch[c] = Rect::new(x, y, pw, ph);
-                x += pw + 5;
+                ch[c] = Rect::new(x, y, cw, ph);
+                x += cw + 5;
             } else if show_off && offs.contains(&c) {
-                ch[c] = Rect::new(x, y, OFF_PILL_W, ph);
-                x += OFF_PILL_W + 5;
+                ch[c] = Rect::new(x, y, ow, ph);
+                x += ow + 5;
             }
         }
         let mut refs = [Rect::new(0, y, 0, ph); NREF];
@@ -619,6 +626,16 @@ impl Ui {
         let gen = (gen_w > 0).then(|| { let r = Rect::new(ax, y, gen_w, h); ax += gen_w + 5; r });
         let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, 58, bottom.h));
         StudioBottom { ch, refs, math, add, show, la, gen, time, trig, panel }
+    }
+
+    /// The width a channel pill needs: the badge, the widest scale of the channels' units in the pill's font, and the
+    /// chevron. The same for every channel, so a pill does not change its width with its scale.
+    pub(super) fn studio_ch_pill_need(&self) -> i32 {
+        let f = self.fonts();
+        let scale = |c: usize| format!("500 m{}/div", self.m.ch[c].unit.name());
+        let text = (0..n_ch()).map(|c| f.mb.width(&scale(c))).max().unwrap_or(0);
+        // 8 to the badge of 42, 8 to the text, 8 to the chevron and its 20
+        (86 + text).min(PILL_MAX_W)
     }
 
     /// The live channels are not what SIM plays (it plays refs), so Studio shows no channel pills while it runs.
