@@ -202,6 +202,8 @@ pub struct Scpi {
     clients: Vec<Client>,
     /// :WAVeform:SOURce, a channel or a reference slot
     wav_src: WaveId,
+    /// `:WAVeform:SOURce MATH<n>`: the math channel read instead of `wav_src`
+    wav_math: Option<usize>,
     wav_fmt: u8, // 0 BYTE, 1 WORD, 2 ASCII
     /// :WAVeform:MODE: 0 NORMal (screen), 1 MAXimum (memory while stopped), 2 RAW (memory)
     wav_mode: u8,
@@ -214,6 +216,10 @@ pub struct Scpi {
     /// the changes of `acl` looked at (`netacl::Shared::changed`)
     acl_seen: u64,
     event_status: u8,
+    /// `*ESE`, `*SRE` and `*PSC`: the enable registers of IEEE 488.2 and the power-on status clear flag
+    event_enable: u8,
+    service_enable: u8,
+    power_on_clear: bool,
     error_serial: u64,
     last_error: Option<String>,
     opc_events: Vec<crate::ui::Operations>,
@@ -776,6 +782,12 @@ fn ref_color_index(s: &str) -> Option<usize> {
     }
 }
 
+/// A word that is written like a reference slot (`R12`, `REF0`) but names none: a value such as `RED` is not one.
+fn slot_like(s: &str) -> bool {
+    let up = s.trim().to_ascii_uppercase();
+    up.strip_prefix("REF").or_else(|| up.strip_prefix('R')).is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+}
+
 fn parse_slot(s: &str) -> Option<usize> {
     let s = s.trim().trim_matches('"');
     if let Some(WaveId::Ref(i)) = parse_wave(s) {
@@ -877,7 +889,7 @@ pub(crate) fn e(v: f64) -> String {
 #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Scpi {
     pub fn open(port: u16) -> Scpi {
-        Scpi { l: Self::bind(port), clients: Vec::new(), wav_src: WaveId::Ch(0), wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0 }
+        Scpi { l: Self::bind(port), clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0 }
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
@@ -1167,6 +1179,44 @@ impl Scpi {
                 self.opc_events.clear();
                 return None;
             }
+            // IEEE 488.2 status. A socket has no service request line, so *SRE only shapes the MSS bit of *STB?.
+            "*STB" if query => {
+                self.poll_events(ui);
+                let mut status = 0u8;
+                if !self.err.is_empty() { status |= 4; }
+                if self.event_status & self.event_enable != 0 { status |= 32; }
+                if status & self.service_enable != 0 { status |= 64; }
+                return t(&status.to_string());
+            }
+            "*ESE" | "*SRE" => {
+                let service = up == "*SRE";
+                if query { return t(&(if service { self.service_enable } else { self.event_enable }).to_string()); }
+                match arg.trim().parse::<u16>().ok().filter(|v| *v <= 255) {
+                    // bit 6 of the service request enable register does not exist
+                    Some(v) if service => self.service_enable = v as u8 & !64,
+                    Some(v) => self.event_enable = v as u8,
+                    None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+                }
+                return None;
+            }
+            "*PSC" => {
+                if query { return t(if self.power_on_clear { "1" } else { "0" }); }
+                match arg.trim().parse::<f64>().ok().filter(|v| v.is_finite()) {
+                    Some(v) => self.power_on_clear = v != 0.0,
+                    None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+                }
+                return None;
+            }
+            // no self test and no options to report: the answers IEEE 488.2 gives for "passed" and "none"
+            "*TST" if query => return t("0"),
+            "*OPT" if query => return t("0"),
+            // every command is finished when the next one is read; an armed Single is waited for with *OPC?
+            "*WAI" if !query => return None,
+            "*TRG" if !query => {
+                ui.force_trigger();
+                ui.mark_changed();
+                return None;
+            }
             "*RST" if !query => {
                 self.event_status = 0; self.opc_events.clear();
                 ui.key(crate::ui::key::DEFAULT);
@@ -1347,7 +1397,7 @@ impl Scpi {
                 if kw(n0, "RUN") {
                     m.run = RunState::Run;
                     if m.trig_mode == TrigMode::Single {
-                        m.trig_mode = TrigMode::Auto;
+                        m.trig_mode = m.sweep_kept;
                     }
                     return Some(None);
                 }
@@ -1356,6 +1406,7 @@ impl Scpi {
                     return Some(None);
                 }
                 if kw(n0, "SINGle") {
+                    m.keep_sweep();
                     m.trig_mode = TrigMode::Single;
                     m.run = RunState::Run;
                     return Some(None);
@@ -1642,6 +1693,7 @@ impl Scpi {
                         }));
                     }
                     let a = arg.to_ascii_uppercase();
+                    m.keep_sweep();
                     m.trig_mode = if a.starts_with("AUTO") { TrigMode::Auto } else if a.starts_with("NORM") { TrigMode::Normal } else if a.starts_with("SING") { TrigMode::Single } else { return None };
                     return Some(None);
                 }
@@ -2162,6 +2214,9 @@ impl Scpi {
                 }
                 if let Some(id) = parse_wave(arg) {
                     self.wav_src = id;
+                    self.wav_math = None;
+                } else if let Some(k) = math_index(arg.trim()) {
+                    self.wav_math = Some(k);
                 } else if !arg.is_empty() {
                     self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
                 }
@@ -2198,7 +2253,8 @@ impl Scpi {
                 let stop = kw(n1, "STOP");
                 if query {
                     let n = self.wave_len(ui);
-                    let v = if stop { if self.wav_stop == 0 { n } else { self.wav_stop } } else { self.wav_start };
+                    // a stop beyond the record reads through its last point, and the query says so
+                    let v = if stop { if self.wav_stop == 0 || (n > 0 && self.wav_stop > n) { n } else { self.wav_stop } } else { self.wav_start };
                     return t(&v.to_string());
                 }
                 let Some(p) = arg.trim().parse::<u64>().ok().filter(|&p| p >= 1) else {
@@ -2232,6 +2288,11 @@ impl Scpi {
             }
             if kw(n1, "PREamble") && query {
                 return t(&self.wave_preamble(ui));
+            }
+            // the scaling fields of the preamble one by one, as the stock firmware has them
+            let field = ["XINCrement", "XORigin", "XREFerence", "YINCrement", "YORigin", "YREFerence"].iter().position(|f| kw(n1, f));
+            if let Some(k) = field.filter(|_| query) {
+                return t(self.wave_preamble(ui).split(',').nth(4 + k).unwrap_or("0"));
             }
             if kw(n1, "DATA") && query {
                 return self.wave_data(ui);
@@ -2669,7 +2730,36 @@ impl Scpi {
             }
             return None;
         }
-        if kw(n0, "SYSTem") && nodes.len() == 2 && kw(nodes[1], "ERRor") && query {
+        // :SAVE:MEMory:WAVeform ["path"[,CSV|BIN]]: the acquisition memory, where :SAVE:WAVeform writes the screen
+        if !query && nodes.len() == 3 && kw(n0, "SAVE") && kw(nodes[1], "MEMory") && kw(nodes[2], "WAVeform") {
+            let mut parts = arg.split(',');
+            let name = parts.next().map(str::trim).filter(|p| !p.is_empty());
+            let csv = match parts.next().map(str::trim) {
+                None | Some("") => name.is_some_and(|p| unquote(p).to_ascii_lowercase().ends_with(".csv")),
+                Some(f) if kw(f, "CSV") => true,
+                Some(f) if kw(f, "BIN") => false,
+                Some(f) => { self.push_err(format!("-224,\"Illegal parameter value\" {}", f)); return None; }
+            };
+            let path = name.map(|p| ui.out_path(p));
+            if let Err(error) = ui.store_wave_memory(csv, path) { self.push_err(error); }
+            return None;
+        }
+        // :MMEMory: the files of the save folder, so that what was saved on the scope can be fetched (SCPI-99 names)
+        if kw(n0, "MMEMory") && nodes.len() == 2 {
+            if kw(nodes[1], "CATalog") && query { return t(&ui.mmem_catalog()); }
+            if kw(nodes[1], "DATA") && query {
+                return match ui.mmem_data(arg) { Ok(data) => Some(block(&data)), Err(error) => { self.push_err(error); None } };
+            }
+            if kw(nodes[1], "DELete") && !query {
+                if let Err(error) = ui.mmem_delete(arg) { self.push_err(error); }
+                return None;
+            }
+        }
+        if kw(n0, "SYSTem") && nodes.len() == 2 && kw(nodes[1], "VERSion") && query {
+            // the SCPI version the syntax follows
+            return t("1999.0");
+        }
+        if kw(n0, "SYSTem") && query && (nodes.len() == 2 || (nodes.len() == 3 && kw(nodes[2], "NEXT"))) && kw(nodes[1], "ERRor") {
             return t(&if self.err.is_empty() { "0,\"No error\"".to_string() } else { self.err.remove(0) });
         }
         if kw(n0, "CURSor") {
@@ -3165,6 +3255,12 @@ impl Scpi {
         let yb = kw(which, "CBY") || (xy && kw(which, "BY"));
         if x || xb {
             return self.cursor_axis(ui, query, arg, true, x);
+        }
+        if (y || yb) && query && kw(n0, "TRACk") && ui.m.cursor == CursorMode::Track {
+            // a track cursor has no Y of its own: its Y is the trace under it, the value AYValue and BYValue answer
+            let source = if yb { ui.cursor_b_source() } else { ui.cursor_source() };
+            let at = ui.cursor_time_at(if y { ui.m.cur_a } else { ui.m.cur_b });
+            return t(&shown(ui.wave_at_source(source, at).map(|v| v as f64).unwrap_or(f64::NAN)));
         }
         if y || yb {
             return self.cursor_axis(ui, query, arg, false, y);
@@ -4049,7 +4145,7 @@ impl Scpi {
             if kw(a, "RUN") {
                 ui.m.run = RunState::Run;
                 if ui.m.trig_mode == TrigMode::Single {
-                    ui.m.trig_mode = TrigMode::Auto;
+                    ui.m.trig_mode = ui.m.sweep_kept;
                 }
                 ui.mark_changed();
                 None
@@ -4321,6 +4417,7 @@ impl Scpi {
     }
 
     fn wav_source_text(&self) -> String {
+        if let Some(k) = self.wav_math { return format!("MATH{}", k + 1); }
         match self.wav_src {
             WaveId::Ch(c) => format!("CHAN{}", c + 1),
             WaveId::Ref(i) => format!("R{}", i + 1),
@@ -4333,6 +4430,7 @@ impl Scpi {
     }
 
     fn wave_len(&self, ui: &Ui) -> u64 {
+        if let Some(k) = self.wav_math { return ui.math_view(k).map_or(0, |(v, _, _)| v.len() as u64); }
         match self.wav_src {
             WaveId::Ch(c) => ui.channel_points(c, self.wave_memory(ui)) as u64,
             WaveId::Ref(i) => ui.ref_info(i).map(|(n, _, _, _, _)| n as u64).unwrap_or(0),
@@ -4351,6 +4449,12 @@ impl Scpi {
     }
 
     fn wave_scale(&self, ui: &Ui) -> (f64, f64) {
+        if let Some(k) = self.wav_math {
+            // the offset of a math channel is kept in divisions
+            let c = ui.m.math_ch(k);
+            let vpd = math_scales()[c.scale.min(math_scales().len() - 1)];
+            return (vpd, c.offset as f64 * vpd);
+        }
         match self.wav_src {
             WaveId::Ch(c) => {
                 let ch = &ui.m.ch[c];
@@ -4379,6 +4483,7 @@ impl Scpi {
     /// Sample interval and the time of the first point of the current page. Does not copy the samples.
     fn wave_origin(&self, ui: &Ui) -> (f64, f64) {
         let (dt, t0) = match self.wav_src {
+            _ if self.wav_math.is_some() => self.wav_math.and_then(|k| ui.math_view(k)).map_or((0.0, 0.0), |(_, dt, t0)| (dt, t0)),
             WaveId::Ch(c) => ui.channel_origin(c, self.wave_memory(ui)).unwrap_or((0.0, 0.0)),
             WaveId::Ref(i) => ui.ref_info(i).map(|(_, dt, t0, _, _)| (dt, t0)).unwrap_or((0.0, 0.0)),
         };
@@ -4394,6 +4499,11 @@ impl Scpi {
     /// The page `:WAVeform:DATA?` returns, and the scale of the source.
     fn wave_page(&self, ui: &Ui) -> (Vec<f32>, f64, f64, f64, f64) {
         let (start, stop) = (self.wav_start.max(1), self.wav_stop);
+        if let Some(k) = self.wav_math {
+            let (vpd, offset) = self.wave_scale(ui);
+            let (v, dt, t0) = ui.math_view(k).map_or((Vec::new(), 0.0, 0.0), |(v, dt, t0)| crate::ui::copy_page(&v, dt, t0, start, stop));
+            return (v, dt, t0, vpd, offset);
+        }
         match self.wav_src {
             WaveId::Ch(c) => {
                 let ch = &ui.m.ch[c];
@@ -4527,7 +4637,7 @@ impl Scpi {
             (Some(ui.ref_slot()), String::new())
         } else if let Some(i) = parse_slot(arg) {
             (Some(i), String::new())
-        } else if arg.starts_with(|c: char| c.is_ascii_digit()) || arg.to_ascii_uppercase().starts_with('R') {
+        } else if arg.starts_with(|c: char| c.is_ascii_digit()) || slot_like(arg) {
             (None, String::new())
         } else {
             (Some(ui.ref_slot()), arg.trim_matches('"').to_string())
@@ -4869,6 +4979,15 @@ impl Scpi {
             self.push_err("-223,\"Too much data; select a shorter waveform page\"".into());
             return None;
         }
+        if let (None, WaveId::Ch(c)) = (self.wav_math, self.wav_src) {
+            // A channel that is off is not acquired: what a running scope holds of it is whatever was acquired last.
+            // Switched off after a STOP it still has its samples of the record shown, and they are read.
+            let kept = ui.m.run == RunState::Stop && ui.channel_points(c, self.wave_memory(ui)) > 0;
+            if !ui.m.ch[c].on && !kept && !ui.record_mode() {
+                self.push_err(format!("-221,\"Settings conflict\" CHAN{} is off", c + 1));
+                return None;
+            }
+        }
         let (vpd, offset) = self.wave_scale(ui);
         let (yinc, yorg, yref) = self.y_codes(vpd, offset);
         let (v, _, _, _, _) = self.wave_page(ui);
@@ -4928,7 +5047,15 @@ impl Scpi {
             return t(&shown(ui.fact_setup_hold(data, clock)));
         }
         // no source: CH1, as before. A word that is not CHANn or R1–R10 is an error.
-        let src = match parts.next().map(str::trim).filter(|s| !s.is_empty()) {
+        let word = parts.next().map(str::trim).filter(|s| !s.is_empty());
+        if let Some(k) = word.and_then(math_index) {
+            // a math channel is not a measurement source of the screen: the item is taken over its whole record
+            return match meas_kind(item) {
+                Some(kind) => t(&shown(ui.fact_meas_math(kind, k))),
+                None => { self.push_err("-224,\"Illegal parameter value\"".into()); t("9.9E37") }
+            };
+        }
+        let src = match word {
             None => ui.meas_source(),
             Some(s) => match self.named_source(s) {
                 Some(id) => id,
@@ -7280,6 +7407,126 @@ mod tests {
         assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:STAT?"), "STOP");
     }
 
+    // Break it catches (all seen on a unit, 2026-11-17): :RUN after :SINGle left Normal sweep for Auto; the status
+    // commands a VISA or IVI driver sends at open were undefined headers; :REFerence:COLor RED was read as a slot.
+    #[test]
+    fn run_after_single_keeps_the_sweep_and_the_ieee_status_commands_answer() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, ":TRIG:SWE NORM;:SING");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:SWE?"), "SING");
+        line(&mut s, &mut ui, &cv, ":RUN");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:SWE?"), "NORM");
+        line(&mut s, &mut ui, &cv, ":TRIG:SWE AUTO;:TRIG:SWE SING;:RUN");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:SWE?"), "AUTO");
+        // the front panel: Single, then Run/Stop twice (stop, run)
+        ui.m.trig_mode = TrigMode::Normal;
+        ui.key(crate::ui::key::SINGLE);
+        ui.m.run = RunState::Stop;
+        ui.key(crate::ui::key::RUNSTOP);
+        assert_eq!((ui.m.run, ui.m.trig_mode), (RunState::Run, TrigMode::Normal));
+
+        line(&mut s, &mut ui, &cv, "*CLS");
+        assert_eq!(line(&mut s, &mut ui, &cv, "*STB?;*ESE?;*SRE?;*PSC?;*TST?;*OPT?"), "0;0;0;1;0;0");
+        line(&mut s, &mut ui, &cv, "*ESE 32;*SRE 36;*PSC 0;*WAI");
+        assert_eq!(line(&mut s, &mut ui, &cv, "*ESE?;*SRE?;*PSC?"), "32;36;0");
+        line(&mut s, &mut ui, &cv, ":NOSUCH:HEADER 1");
+        assert_eq!(line(&mut s, &mut ui, &cv, "*STB?"), "100", "error queue, event summary and master summary");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR:NEXT?").starts_with("-113,"));
+        assert_eq!(line(&mut s, &mut ui, &cv, "*STB?"), "96", "the queue is empty, the event bit stays until *ESR?");
+        assert_eq!(line(&mut s, &mut ui, &cv, "*ESR?;*STB?"), "32;0");
+        line(&mut s, &mut ui, &cv, "*ESE 256");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:VERS?"), "1999.0");
+        line(&mut s, &mut ui, &cv, "*CLS;*TRG");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    }
+
+    #[test]
+    fn a_reference_colour_by_name_and_a_track_cursor_y() {
+        let (mut s, mut ui, cv) = reference_session();
+        line(&mut s, &mut ui, &cv, "*CLS;:REF:CURR 1;:REF:COL RED");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":REF:COL?;:SYST:ERR?"), "RED;0,\"No error\"");
+        line(&mut s, &mut ui, &cv, ":REF:COL 1,BLUE;:REF:COL R99,RED");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":REF:COL? 1"), "BLUE");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"), "a slot that does not exist is still refused");
+        line(&mut s, &mut ui, &cv, "*CLS;:CURS:MODE TRAC;:CURS:TRAC:SOUR1 R1;:CURS:TRAC:CAX 0");
+        let (y, value) = (line(&mut s, &mut ui, &cv, ":CURS:TRAC:CAY?"), line(&mut s, &mut ui, &cv, ":CURS:TRAC:AYV?"));
+        assert_eq!(y, value);
+        assert_ne!(y, "9.9E37");
+    }
+
+    #[test]
+    fn a_math_channel_is_read_and_measured() {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, ":CHAN1:DISP ON;:CHAN2:DISP ON");
+        ui.step(0.05);
+        line(&mut s, &mut ui, &cv, ":STOP;*CLS;:MATH1:DISP ON;:MATH1:OPER ADD;:MATH1:SOUR1 CHAN1;:MATH1:SOUR2 CHAN1");
+        line(&mut s, &mut ui, &cv, ":WAV:SOUR MATH1;:WAV:MODE NORM;:WAV:FORM ASC");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:SOUR?"), "MATH1");
+        let points: usize = line(&mut s, &mut ui, &cv, ":WAV:POIN?").parse().unwrap();
+        assert!(points > 100, "{points}");
+        let data = s.exec_line(&mut ui, &cv, ":WAV:DATA?");
+        let sum: Vec<f64> = std::str::from_utf8(&data[11..]).unwrap().split(',').map(|v| v.parse().unwrap()).collect();
+        assert_eq!(sum.len(), points);
+        line(&mut s, &mut ui, &cv, ":WAV:SOUR CHAN1");
+        let data = s.exec_line(&mut ui, &cv, ":WAV:DATA?");
+        let one: Vec<f64> = std::str::from_utf8(&data[11..]).unwrap().split(',').map(|v| v.parse().unwrap()).collect();
+        assert_eq!(one.len(), sum.len());
+        assert!(one.iter().zip(&sum).all(|(a, b)| (2.0 * a - b).abs() < 1e-4), "CH1 + CH1 is twice CH1");
+        let (math, chan): (f64, f64) = (line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,MATH1").parse().unwrap(), line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,CHAN1").parse().unwrap());
+        assert!(chan > 0.0 && (math / chan - 2.0).abs() < 0.05, "{math} {chan}");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+        // an FFT is a spectrum, not a record in time: no points, and no stale ones of the channel
+        line(&mut s, &mut ui, &cv, ":MATH1:OPER FFT;:WAV:SOUR MATH1");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:POIN?"), "0");
+        // a stop beyond the record reads back as its last point; a channel that is off has no record to read
+        line(&mut s, &mut ui, &cv, ":WAV:SOUR CHAN1;:WAV:STAR 1;:WAV:STOP 99999999");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:STOP?"), points.to_string());
+        line(&mut s, &mut ui, &cv, "*CLS;:CHAN3:DISP OFF;:WAV:SOUR CHAN3");
+        assert!(line(&mut s, &mut ui, &cv, ":WAV:DATA?").starts_with("-221,"));
+        // switched off after the stop, a channel still has its samples of the record shown; running, it has none
+        line(&mut s, &mut ui, &cv, "*CLS;:CHAN2:DISP OFF;:WAV:SOUR CHAN2");
+        assert!(s.exec_line(&mut ui, &cv, ":WAV:DATA?").starts_with(b"#9"), "CH2 was on when the record was taken");
+        line(&mut s, &mut ui, &cv, ":RUN");
+        ui.step(0.05);
+        assert!(line(&mut s, &mut ui, &cv, ":WAV:DATA?").starts_with("-221,"));
+    }
+
+    #[test]
+    fn saved_files_are_listed_fetched_and_deleted_and_the_memory_is_saved() {
+        let dir = std::env::temp_dir().join(format!("oos-mmem-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let (mut s, mut ui, cv) = session();
+        ui.store_dir = dir.clone();
+        ui.step(0.05);
+        line(&mut s, &mut ui, &cv, ":STOP;*CLS;:SAVE:DEST DESK;:SAVE:WAV \"a.csv\";:SAVE:MEM:WAV \"m.bin\";:SAVE:MEM:WAV \"m.csv\"");
+        assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+        let catalog = line(&mut s, &mut ui, &cv, ":MMEM:CAT?");
+        let size = std::fs::metadata(dir.join("a.csv")).unwrap().len();
+        assert!(catalog.contains(&format!("\"a.csv,,{size}\"")) && catalog.contains("\"m.bin,,") && catalog.contains("\"m.csv,,"), "{catalog}");
+        let data = s.exec_line(&mut ui, &cv, ":MMEM:DATA? \"a.csv\"");
+        assert_eq!(&data[..11], format!("#9{size:09}").as_bytes());
+        assert_eq!(&data[11..], std::fs::read(dir.join("a.csv")).unwrap());
+        assert!(std::fs::read(dir.join("m.bin")).unwrap().starts_with(b"OOSW"));
+        // only plain names of the save folder: no way up or out of it
+        for name in ["../a.csv", "/etc/passwd", "sub/a.csv", "..", "", "C:a.csv", "a.csv:x"] {
+            line(&mut s, &mut ui, &cv, "*CLS");
+            let reply = line(&mut s, &mut ui, &cv, &format!(":MMEM:DATA? \"{name}\""));
+            assert!(reply.starts_with("-224,"), "{name}: {reply}");
+        }
+        assert!(line(&mut s, &mut ui, &cv, ":MMEM:DATA? \"none.csv\"").starts_with("-256,"));
+        line(&mut s, &mut ui, &cv, "*CLS;:MMEM:DEL \"a.csv\"");
+        assert!(!dir.join("a.csv").exists() && dir.join("m.bin").exists());
+        line(&mut s, &mut ui, &cv, ":MMEM:DEL \"a.csv\"");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-256,"));
+        line(&mut s, &mut ui, &cv, ":LOAD:SET \"none.txt\"");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-256,"), "a setup file that is not there");
+        // a save that cannot be written is an error of the command, not only a note on the screen
+        line(&mut s, &mut ui, &cv, "*CLS;:SAVE:MEM:WAV \"m.bin/under-a-file.bin\"");
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-250,"), "a path under a file");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn cursors_and_a_readout_round_trip() {
         let (mut s, mut ui, cv) = reference_session();
@@ -7382,6 +7629,10 @@ mod tests {
         assert_eq!(&values[..4], &["1", "2", "2", "1"]);
         assert!((values[4].parse::<f64>().unwrap() - 5e-12).abs() < 1e-18);
         assert!((values[5].parse::<f64>().unwrap() - (-2e-9 + 5e-12)).abs() < 1e-15);
+        // each scaling field has its own query
+        for (k, q) in [":WAV:XINC?", ":WAV:XOR?", ":WAV:XREF?", ":WAV:YINC?", ":WAV:YOR?", ":WAVeform:YREFerence?"].into_iter().enumerate() {
+            assert_eq!(line(&mut scpi, &mut ui, &canvas, q), values[4 + k], "{}", q);
+        }
         line(&mut scpi, &mut ui, &canvas, ":WAV:MODE MAX;:STOP");
         assert_eq!(line(&mut scpi, &mut ui, &canvas, ":WAV:PRE?").split(',').nth(1), Some("1"));
         line(&mut scpi, &mut ui, &canvas, ":RUN");

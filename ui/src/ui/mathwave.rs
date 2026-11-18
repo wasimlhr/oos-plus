@@ -193,6 +193,20 @@ impl Ui {
         Some(Arc::new(Signal { t0: self.source_time_origin(WaveId::Ref(id - MATH_REF_BASE), r.t0), dt: r.dt, v: Arc::clone(&r.v) }))
     }
 
+    /// Math channel `k` for the remote read-out: samples, interval, time of the first sample. None when it is off,
+    /// an FFT (a spectrum, not a record in time), has no source data, or is still being computed.
+    pub(crate) fn math_view(&self, k: usize) -> Option<(Arc<Vec<f32>>, f64, f64)> {
+        if k >= NMATH || matches!(self.m.math_ch(k).op, MathOp::Off | MathOp::Fft) { return None; }
+        let w = self.math_record(k).ok().flatten()?;
+        Some((Arc::clone(&w.v), w.dt, w.t0))
+    }
+
+    /// A measurement over the whole record of math channel `k`; NaN when there is none.
+    pub(crate) fn fact_meas_math(&self, kind: Meas, k: usize) -> f64 {
+        let Some((v, dt, t0)) = self.math_view(k) else { return f64::NAN };
+        self.meas_of_at(&oos_dsp::measure::analyze(&v, dt), kind, t0)
+    }
+
     pub(super) fn math_record(&self, k: usize) -> Result<Option<Arc<Signal>>, &'static str> {
         let key = self.math_key(k)?;
         {

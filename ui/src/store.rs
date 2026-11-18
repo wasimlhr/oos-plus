@@ -80,6 +80,18 @@ pub fn file_name(p: &Path) -> String {
 /// could lead straight to the card. So only a regular file or a new one, and on the stick no link on the way there.
 pub fn check_target(path: &Path) -> std::io::Result<()> {
     let refuse = |what: &str| Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("{}: {}", path.display(), what)));
+    // the vendor's data is never written (ADR 0009), whatever path a command was given; `..` is followed as written
+    let mut plain = std::path::PathBuf::new();
+    for part in path.components() {
+        match part {
+            std::path::Component::ParentDir => { plain.pop(); }
+            std::path::Component::CurDir => {}
+            other => plain.push(other),
+        }
+    }
+    if plain.starts_with("/rigol") {
+        return refuse("the vendor's data is not written");
+    }
     if path.starts_with("/mnt/usb") {
         for a in path.ancestors().skip(1).take_while(|a| a.starts_with("/mnt/usb") && *a != Path::new("/mnt/usb")) {
             if a.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
@@ -270,6 +282,7 @@ pub fn setup_text(m: &Model) -> String {
     kv("grid", name(m.grid));
     kv("grid_bright", m.grid_bright.to_string());
     kv("grid_frame", m.grid_frame.to_string());
+    kv("skin", name(m.skin));
     kv("windows", name(m.win_layout));
     kv("density", name(m.density));
     kv("split_pane", m.split_pane.to_string());
@@ -631,6 +644,7 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
         "grid" => m.grid = p_enum(v, &GRIDS)?,
         "grid_bright" => m.grid_bright = p_u32(v)?.clamp(10, 100),
         "grid_frame" => m.grid_frame = p_bool(v)?,
+        "skin" => m.skin = p_enum(v, &crate::ui::skin::SKINS)?,
         "windows" => m.win_layout = p_enum(v, &WinLayout::ALL)?,
         "density" => m.density = p_enum(v, &Density::ALL)?,
         "split_pane" => m.split_pane = p_idx(v, crate::ui::PANES_N)?,
@@ -1254,19 +1268,24 @@ pub fn parse_ref_looks(text: &str, n: usize) -> Vec<Option<RefLook>> {
 /// CSV of the enabled channels of a record: `Time (s),CH1 (V),...`, one row per sample, time relative to the
 /// trigger; samples without data (NaN) are empty fields.
 pub fn wave_csv(rec: &Record, m: &Model) -> String {
-    let chans: Vec<usize> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).collect();
-    let n = chans.iter().map(|&c| rec.ch[c].len()).max().unwrap_or(0);
+    let chans: Vec<(usize, &[f32])> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).map(|c| (c, rec.ch[c].as_slice())).collect();
+    wave_csv_of(rec.t0, rec.dt, &chans)
+}
+
+/// The CSV of `wave_csv` for any set of channels (number from 0, samples) on one time axis: the acquisition memory.
+pub fn wave_csv_of(t0: f64, dt: f64, chans: &[(usize, &[f32])]) -> String {
+    let n = chans.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
     let mut s = String::with_capacity(n * (16 + 12 * chans.len()) + 64);
     s.push_str("Time (s)");
-    for &c in &chans {
+    for (c, _) in chans {
         s.push_str(&format!(",CH{} (V)", c + 1));
     }
     s.push('\n');
     for k in 0..n {
-        s.push_str(&format!("{:.9e}", rec.t0 + k as f64 * rec.dt));
-        for &c in &chans {
+        s.push_str(&format!("{:.9e}", t0 + k as f64 * dt));
+        for (_, samples) in chans {
             s.push(',');
-            if let Some(v) = rec.ch[c].get(k).filter(|v| v.is_finite()) {
+            if let Some(v) = samples.get(k).filter(|v| v.is_finite()) {
                 s.push_str(&v.to_string());
             }
         }
@@ -1309,19 +1328,24 @@ pub fn la_csv(la: &crate::ui::la::LaRec, lines: &[usize]) -> String {
 /// "OOSW", u32 version 1, u32 number of channels, u64 samples per channel, f64 dt, f64 t0, then per channel its number
 /// (u32, 1..4) and the samples as f32 volts.
 pub fn wave_bin(rec: &Record, m: &Model) -> Vec<u8> {
-    let chans: Vec<usize> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).collect();
-    let n = chans.iter().map(|&c| rec.ch[c].len()).max().unwrap_or(0);
+    let chans: Vec<(usize, &[f32])> = (0..NCH).filter(|&c| m.ch[c].on && !rec.ch[c].is_empty()).map(|c| (c, rec.ch[c].as_slice())).collect();
+    wave_bin_of(rec.t0, rec.dt, &chans)
+}
+
+/// The binary form of `wave_bin` for any set of channels (number from 0, samples) on one time axis.
+pub fn wave_bin_of(t0: f64, dt: f64, chans: &[(usize, &[f32])]) -> Vec<u8> {
+    let n = chans.iter().map(|(_, v)| v.len()).max().unwrap_or(0);
     let mut b = Vec::with_capacity(36 + chans.len() * (4 + 4 * n));
     b.extend_from_slice(b"OOSW");
     b.extend_from_slice(&1u32.to_le_bytes());
     b.extend_from_slice(&(chans.len() as u32).to_le_bytes());
     b.extend_from_slice(&(n as u64).to_le_bytes());
-    b.extend_from_slice(&rec.dt.to_le_bytes());
-    b.extend_from_slice(&rec.t0.to_le_bytes());
-    for &c in &chans {
-        b.extend_from_slice(&(c as u32 + 1).to_le_bytes());
+    b.extend_from_slice(&dt.to_le_bytes());
+    b.extend_from_slice(&t0.to_le_bytes());
+    for (c, samples) in chans {
+        b.extend_from_slice(&(*c as u32 + 1).to_le_bytes());
         for i in 0..n {
-            b.extend_from_slice(&rec.ch[c].get(i).copied().unwrap_or(f32::NAN).to_le_bytes());
+            b.extend_from_slice(&samples.get(i).copied().unwrap_or(f32::NAN).to_le_bytes());
         }
     }
     b
@@ -3045,6 +3069,15 @@ pub fn sync_disks() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Break it catches: a save command given a path into the vendor's data wrote there (ADR 0009).
+    #[test]
+    fn no_save_writes_the_vendors_data() {
+        for p in ["/rigol/data/x.bin", "/rigol/x", "/tmp/../rigol/data/x.bin", "/rigol/./data/../data/x"] {
+            assert!(check_target(Path::new(p)).is_err(), "{p}");
+        }
+        assert!(check_target(Path::new("/tmp/oos/rigol.bin")).is_ok());
+    }
     use crate::gfx::rgb;
     use crate::math::{MathOp, Window};
 

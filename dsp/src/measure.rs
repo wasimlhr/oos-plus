@@ -1071,21 +1071,25 @@ pub fn delay(a: &Analysis, b: &Analysis, p: Pair) -> f64 {
     }
 }
 
-/// Phase of B relative to A in degrees, 0..360: for every selected edge of B inside a cycle of A (from one selected
-/// edge of A to the next), (B - cycle start) / cycle length x 360. The mean over all such edges.
+/// Phase of B relative to A in degrees, 0..360: cycles of A (one selected edge of A to the next) and selected edges
+/// of B are walked together; a B edge inside the cycle gives (B - cycle start) / cycle length x 360 and moves both
+/// on, so each cycle takes at most one B edge and each B edge is used once. The mean over all such pairs.
 pub fn phase(a: &Analysis, b: &Analysis, p: Pair) -> f64 {
     mean(&phase_values(edge_list(a, p.0), edge_list(b, p.1)))
 }
 
-/// The phase of every B edge of `eb` inside a cycle of `ea` (one selected edge of A to the next), degrees.
+/// The phase of B edges of `eb` in cycles of `ea` (one selected edge of A to the next), degrees: at most one B edge
+/// per cycle, each B edge used once.
 pub(crate) fn phase_values(ea: &[f64], eb: &[f64]) -> Vec<f64> {
-    let (mut d, mut j) = (Vec::new(), 0usize);
-    for w in ea.windows(2) {
-        while j < eb.len() && eb[j] < w[0] {
+    let (mut d, mut i, mut j) = (Vec::new(), 0usize, 0usize);
+    while i + 1 < ea.len() && j < eb.len() {
+        if eb[j] < ea[i] {
             j += 1;
-        }
-        while j < eb.len() && eb[j] < w[1] {
-            d.push((eb[j] - w[0]) / (w[1] - w[0]) * 360.0);
+        } else if eb[j] > ea[i + 1] {
+            i += 1;
+        } else {
+            d.push((eb[j] - ea[i]) / (ea[i + 1] - ea[i]) * 360.0);
+            i += 1;
             j += 1;
         }
     }

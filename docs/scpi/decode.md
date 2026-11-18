@@ -1,6 +1,6 @@
 # Decoders and bus
 
-Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference.
+Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. A decoder on channels reads the samples the acquisition kept when those are finer than the screen record (up to 262144 points per line while running, 4 M when stopped), so `:DECode:EVENts?` and `:BUS<n>:DATA?` can list events of the whole record, also outside the screen. A UART character the record starts inside is not listed, nor the ones behind it until its bits can be read in one way only; in peak detect, roll and above 1 M points it reads the 3600 points of the screen. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference.
 
 Menu location: Decode and bus (Protocol, Source / clock / CS, Threshold, Format, Event table, protocol parameters, Plot bus, Save events).
 
@@ -24,7 +24,7 @@ Part of the [SCPI reference](README.md).
 | `:DECode:THReshold` | Set / Query | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. | `1.650000E+00` | Decode > Threshold | OOS extension |
 | `:DECode:CPHY:RATE` | Set / Query | `AUTO` or known symbols/second; aliases CPHY:SRATe and DECode:SRATe. | `AUTO` | Decode and bus > C-PHY symbol rate | OOS extension |
 | `:DECode:BUSY` | Query | Worker readiness, without changing acquisition. | `0` | Decode and bus > Read decoded events | OOS extension |
-| `:DECode:EVENts` | Query | Physical-time event rows, `BUSY` while pending, or an error if unavailable. | empty | Decode and bus > Read decoded events | OOS extension |
+| `:DECode:EVENts` | Query | Physical-time event rows, `BUSY` while pending, or an error if unavailable. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block. | empty | Decode and bus > Read decoded events | OOS extension |
 | `:DECode:SAVE` | Action | Save the decoded events as CSV. | - | Decode and bus > Export events | OOS extension |
 
 ### Bus and common parameters

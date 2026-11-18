@@ -1,6 +1,6 @@
 # Bode and bandwidth test
 
-The frequency-response sweep (loop gain, PSRR, impedance) driven through an external generator, and the step-response bandwidth estimate. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures.
+The frequency-response sweep (loop gain, PSRR, impedance) driven by the built-in generator (S models) or through an external generator, and the step-response bandwidth estimate. With the built-in generator and the same channel as input and output, the gain is against the set amplitude and there is no phase: the phase of every point reads `NaN`. `:BODE:RUN` can control the configured generator and the acquisition. Estimator limits apply to the bandwidth figures.
 
 Menu location: Bode (view, Mode, Start / stop frequency, Points, Amplitude, Input, Output, Free sweep, Start / stop) and Bandwidth test (View, Source, Signal frequency, Bins per period).
 

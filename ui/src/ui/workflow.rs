@@ -894,6 +894,7 @@ stat.push(value, current);
             key::SINGLE => {
                 self.operation_serial = self.operation_serial.wrapping_add(1);
                 self.single_operation = self.operation_serial;
+                self.m.keep_sweep();
                 self.m.trig_mode = TrigMode::Single;
                 self.m.run = RunState::Run;
                 self.sim_play = true;

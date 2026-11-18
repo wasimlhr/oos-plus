@@ -54,13 +54,13 @@ fn memory() -> Option<(u64, u64)> {
 
 /// (free, total) bytes of the file system holding `path` (none without `statvfs`, on Windows).
 #[cfg(not(unix))]
-fn disk(_path: &str) -> Option<(u64, u64)> {
+pub(super) fn disk(_path: &str) -> Option<(u64, u64)> {
     None
 }
 
 /// (free, total) bytes of the file system holding `path`.
 #[cfg(unix)]
-fn disk(path: &str) -> Option<(u64, u64)> {
+pub(super) fn disk(path: &str) -> Option<(u64, u64)> {
     let c = std::ffi::CString::new(path).ok()?;
     let mut s: libc::statvfs = unsafe { std::mem::zeroed() };
     if unsafe { libc::statvfs(c.as_ptr(), &mut s) } != 0 {

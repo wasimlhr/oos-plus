@@ -28,6 +28,8 @@ mod sim;
 mod offline;
 mod reflook;
 mod measrow;
+/// Skins: another look for the same screen (Display > Skin)
+pub mod skin;
 mod workflow;
 mod deskew;
 pub mod startup;
@@ -290,6 +292,11 @@ const DLG_ROW: i32 = 44;
 const DLG_CTRL: i32 = 40;
 /// records kept for history playback
 const HISTORY: usize = 200;
+/// Points per line a decoder reads from the kept samples of a record while running (`Ui::decode_native`): 73 times
+/// the screen record, and still decoded once per record in the frame that shows it.
+const DEC_NATIVE_RUN: usize = 262_144;
+/// The same for a stopped record, which is decoded once.
+const DEC_NATIVE_STOP: usize = 4 << 20;
 /// Seconds the trigger level line stays after the level changed.
 const LEVEL_LINE_S: f64 = 1.5;
 /// Longest wait of a STOP for the hardware's final frame (`Ui::stop_final`): a batch in progress, its read and the raw
@@ -900,6 +907,8 @@ enum Item {
     AfgArbFile,
     GridBright,
     GridFrame,
+    /// Display > Skin (ui/skin.rs)
+    Skin,
     /// noise reject of the trigger comparators
     TrigNoise,
     /// the auto set-up turns noise reject on for a noisy trigger signal (opt-in)
@@ -1753,7 +1762,7 @@ struct StripLine {
 }
 
 /// A 1-based inclusive page. `stop == 0` means the last sample. A start past the end is an empty page.
-fn copy_page(v: &[f32], dt: f64, t0: f64, start: u64, stop: u64) -> (Vec<f32>, f64, f64) {
+pub(crate) fn copy_page(v: &[f32], dt: f64, t0: f64, start: u64, stop: u64) -> (Vec<f32>, f64, f64) {
     let n = v.len() as u64;
     if n == 0 || start > n {
         return (Vec::new(), dt, t0);
@@ -2972,12 +2981,21 @@ impl Ui {
         self.last[0].as_ref().map(|r| r.ch[c].iter().map(|x| if x.is_finite() { *x } else { 0.0 }).collect()).unwrap_or_default()
     }
 
+    /// The frame a read of the memory takes (RAW, the memory save). In STOP the record shown is read again for every
+    /// view (`stop_replay`), far zoomed in as the samples of the view and a margin only: then the record of the stop
+    /// itself, when it holds every sample of the acquisition, stays the memory, whatever the view shows of it.
+    fn memory_raw(&self) -> Option<&Raw> {
+        let whole = |r: &&Raw| !r.frame.envelope && r.frame.acq.1 > 0 && r.frame.ch.iter().any(|v| v.len() >= r.frame.acq.1);
+        let stop = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(whole);
+        stop.or_else(|| self.last[0].as_ref()?.raw.as_ref())
+    }
+
     /// The samples a `:WAVeform` read uses. `memory` is RAW, or MAXimum while stopped: the deep record when the
     /// acquisition kept one, otherwise the screen record.
     fn channel_view(&self, c: usize, memory: bool) -> Option<(&[f32], f64, f64)> {
         let rec = self.last[0].as_ref()?;
         if memory {
-            if let Some(raw) = rec.raw.as_ref().filter(|r| !r.frame.envelope) {
+            if let Some(raw) = self.memory_raw().filter(|r| !r.frame.envelope) {
                 if let Some(v) = raw.frame.ch.get(c) {
                     if !v.is_empty() && raw.frame.dt.is_finite() && raw.frame.dt > 0.0 {
                         return Some((v.as_slice(), raw.frame.dt, raw.t0 - raw.i0 as f64 * raw.frame.dt));
@@ -3622,12 +3640,22 @@ impl Ui {
     /// STOP on the hardware: the thread acquires nothing and reads the stored record again for every view (time base,
     /// delay), as much of it as the view shows: zoomed out the whole record, zoomed in every sample of the part on
     /// screen. The trigger stays where the last record had it (software trigger included).
+    /// The screen refuses records of the hardware: a protocol trigger in Normal or Single (the hardware fires on every
+    /// edge of the line, the decoder decides) or a zone trigger tested in software. Then the newest frame in the ring at
+    /// a STOP is, as a rule, one that was refused, not the record shown: it must not be read again in its place. With
+    /// the zone trigger of the hardware (`zone_hw_active`) every frame in the ring has passed, and the STOP reads it.
+    fn records_refused(&self) -> bool {
+        let zones = self.m.zones.iter().any(|z| z.usable()) && !self.zone_hw_active();
+        (self.m.trig_type == TrigType::Bus && self.m.trig_mode != TrigMode::Auto) || zones
+    }
+
     fn stop_replay(&mut self) {
         let ok = self.src.is_hw()
             && board().slow_mode(&self.m) == crate::board::Slow::Off
             && !self.m.la_on()
             && self.m.segments == 0
             && self.hist_pos.is_none()
+            && !self.records_refused()
             && self.last[0].as_ref().is_some_and(|r| r.raw.is_some());
         if !ok {
             self.src.hw_stop(None);
@@ -3950,6 +3978,8 @@ impl Ui {
         self.draw_studio_view_menu(cv);
         self.draw_studio_add_menu(cv);
         self.draw_studio_ctx(cv);
+        // the skin recolours the finished frame (ui/skin.rs); the OOS skin leaves it as drawn
+        self.skin_pass(cv);
         self.frames += 1;
     }
 
@@ -4485,8 +4515,19 @@ impl Ui {
         let Some(r) = self.refs[self.ref_sel].as_ref().filter(|r| r.v.len() >= 2) else {
             return self.toast(&format!("R{} is empty", self.ref_sel + 1));
         };
-        self.mask_ref = Some(r.v.as_ref().clone());
-        self.m.mask_src = r.src.min(NCH - 1);
+        let src = r.src.min(NCH - 1);
+        // where the reference is drawn: its own time less its deskew
+        let ref_t0 = self.source_time_origin(WaveId::Ref(self.ref_sel), r.t0);
+        // A mask is compared point by point with the record on screen, and a reference keeps the samples of its whole
+        // acquisition, longer and finer than the screen: the reference is read at the times of the screen's points.
+        let on_screen = self.last[0].as_ref().filter(|rec| rec.dt > 0.0 && r.dt > 0.0 && !rec.ch[src].is_empty()).map(|rec| {
+            (0..rec.ch[src].len()).map(|i| {
+                let k = ((rec.t0 + i as f64 * rec.dt - ref_t0) / r.dt).round();
+                if k >= 0.0 && k < r.v.len() as f64 { r.v[k as usize] } else { f32::NAN }
+            }).collect::<Vec<f32>>()
+        });
+        self.mask_ref = Some(on_screen.filter(|v| v.iter().any(|x| x.is_finite())).unwrap_or_else(|| r.v.as_ref().clone()));
+        self.m.mask_src = src;
         self.build_mask();
         self.m.mask_on = true;
         self.mask_pass = 0;
@@ -5089,6 +5130,9 @@ impl Ui {
         if m.dec_on_la() {
             return self.la_packets(m, rec).map(std::sync::Arc::new);
         }
+        if let Some(p) = self.decode_native(m, rec) {
+            return p;
+        }
         let mut h = std::collections::hash_map::DefaultHasher::new();
         (self.wfm_total, self.hist_pos, rec.t0.to_bits(), rec.dt.to_bits()).hash(&mut h);
         for c in 0..NCH {
@@ -5106,6 +5150,56 @@ impl Ui {
         }
         self.dec_cache_put(key, &p);
         Ok(std::sync::Arc::new(p))
+    }
+
+    /// The packets from the samples the acquisition kept, when those are finer than the screen record: the screen
+    /// record has 3600 points whatever the time base, which at 10 ms/div is under four points per bit of a 9600 baud
+    /// line (unit 2026-11-17: garbage at 10 ms/div, nothing at 20 ms/div, on a line the kept samples decode without
+    /// an error). At most `DEC_NATIVE_RUN` points per line while running and `DEC_NATIVE_STOP` when stopped, every
+    /// n-th sample beyond that; the result is kept per frame, so moving a stopped record decodes nothing again.
+    /// `None`: the screen record is the answer (min/max pairs, no kept samples, or none finer than the screen's).
+    fn decode_native(&self, m: &Model, rec: &Record) -> Option<Result<std::sync::Arc<Vec<oos_dsp::decode::Packet>>, &'static str>> {
+        use std::hash::{Hash, Hasher};
+        // of the record shown, the memory a RAW read takes: after a STOP the whole record, not the view read again
+        let shown = self.last[0].as_ref().is_some_and(|r| std::ptr::eq(r, rec));
+        let raw = if shown { self.memory_raw() } else { rec.raw.as_ref() };
+        let raw = raw.filter(|r| !r.frame.envelope && r.frame.dt.is_finite() && r.frame.dt > 0.0 && r.t0.is_finite())?;
+        // the record of another source is conditioned (coupling, invert) after its frame: the frame is not what it shows
+        if !self.src.is_hw() && !raw.conditioned {
+            return None;
+        }
+        let f = &raw.frame;
+        let n = f.ch.iter().map(Vec::len).max().unwrap_or(0);
+        let budget = if self.m.run == RunState::Stop { DEC_NATIVE_STOP } else { DEC_NATIVE_RUN };
+        let stride = n.div_ceil(budget).max(1);
+        let dt = f.dt * stride as f64;
+        // every line of the record must be in the frame, at one length
+        if n < 2 || dt >= rec.dt * 0.999 || (0..NCH).any(|c| !rec.ch[c].is_empty() && f.ch[c].len() != n) {
+            return None;
+        }
+        let origin = raw.t0 - raw.i0 as f64 * f.dt;
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (std::sync::Arc::as_ptr(f) as usize, f.seq, n, origin.to_bits(), stride, self.hist_pos).hash(&mut h);
+        for c in 0..NCH {
+            m.ch[c].volts_per_div().to_bits().hash(&mut h);
+        }
+        format!("{:?}", m.dec_cfg()).hash(&mut h);
+        let key = h.finish();
+        if let Some(e) = self.dec_cache.borrow().iter().find(|e| e.0 == key) {
+            return Some(Ok(std::sync::Arc::new(e.1.clone())));
+        }
+        let thin: [Vec<f32>; NCH] = std::array::from_fn(|c| if stride > 1 { f.ch[c].iter().step_by(stride).copied().collect() } else { Vec::new() });
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if stride > 1 { &thin[c][..] } else { &f.ch[c][..] });
+        let mut p = match crate::trig::decode(m, ch, dt) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(e)),
+        };
+        for x in p.iter_mut() {
+            x.t0 = origin + x.t0 * dt;
+            x.t1 = origin + x.t1 * dt;
+        }
+        self.dec_cache_put(key, &p);
+        Some(Ok(std::sync::Arc::new(p)))
     }
 
     /// Keeps what the decoders of one record need.
@@ -6896,7 +6990,7 @@ impl Ui {
             MenuId::Cursor if self.m.cursor == CursorMode::Track => vec![Item::CurMode, Item::CurA, Item::CurB, Item::CurSrcB],
             MenuId::Cursor => vec![Item::CurMode, Item::CurA, Item::CurB],
             MenuId::Display => {
-                let mut v = vec![Item::Open(MenuId::Windows), Item::Layout, Item::Views, Item::Persist, Item::ColorGrade, Item::Intensity, Item::GridStyle, Item::GridBright, Item::GridFrame, Item::Dots, Item::BottomBar, Item::ZInput, Item::Histogram, Item::XyMode, Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize, Item::ClearDisp];
+                let mut v = vec![Item::Skin, Item::Open(MenuId::Windows), Item::Layout, Item::Views, Item::Persist, Item::ColorGrade, Item::Intensity, Item::GridStyle, Item::GridBright, Item::GridFrame, Item::Dots, Item::BottomBar, Item::ZInput, Item::Histogram, Item::XyMode, Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize, Item::ClearDisp];
                 if self.m.pane == tables::PANE_TREND {
                     v.splice(1..1, [Item::TrendSel(0), Item::TrendSel(1)]);
                 }
@@ -7776,7 +7870,7 @@ impl Ui {
 
     fn kind(it: Item) -> Kind {
         if matches!(it, Item::AutoDeskew | Item::ClearDeskew) { return Kind::Action; }
-        if let Some(k) = Self::addrail_kind(it).or_else(|| Self::meas_kind(it)).or_else(|| Self::measrow_kind(it)).or_else(|| Self::ana_kind(it)).or_else(|| Self::magnetic_kind(it)).or_else(|| Self::inverter_kind(it)).or_else(|| Self::dpt_kind(it)).or_else(|| Self::cal_kind(it)).or_else(|| Self::bode_kind(it)).or_else(|| Self::sim_kind(it)).or_else(|| Self::offline_kind(it)).or_else(|| Self::afg_kind(it)).or_else(|| Self::bw_kind(it)).or_else(|| Self::la_kind(it)).or_else(|| Self::win_kind(it)).or_else(|| Self::bus_kind(it)).or_else(|| Self::time_kind(it)).or_else(|| Self::remote_kind(it)).or_else(|| Self::graphics_kind(it)).or_else(|| Self::views_kind(it)).or_else(|| Self::features_kind(it)).or_else(|| Self::backlight_kind(it)) {
+        if let Some(k) = Self::addrail_kind(it).or_else(|| Self::meas_kind(it)).or_else(|| Self::measrow_kind(it)).or_else(|| Self::ana_kind(it)).or_else(|| Self::magnetic_kind(it)).or_else(|| Self::inverter_kind(it)).or_else(|| Self::dpt_kind(it)).or_else(|| Self::cal_kind(it)).or_else(|| Self::bode_kind(it)).or_else(|| Self::sim_kind(it)).or_else(|| Self::offline_kind(it)).or_else(|| Self::afg_kind(it)).or_else(|| Self::bw_kind(it)).or_else(|| Self::la_kind(it)).or_else(|| Self::win_kind(it)).or_else(|| Self::bus_kind(it)).or_else(|| Self::time_kind(it)).or_else(|| Self::remote_kind(it)).or_else(|| Self::graphics_kind(it)).or_else(|| Self::views_kind(it)).or_else(|| Self::features_kind(it)).or_else(|| Self::backlight_kind(it)).or_else(|| Self::skin_kind(it)) {
             return k;
         }
         match it {
@@ -7798,7 +7892,7 @@ impl Ui {
     }
 
     fn label(it: Item) -> &'static str {
-        if let Some(l) = Self::addrail_label(it).or_else(|| Self::meas_cfg_label(it)).or_else(|| Self::measrow_label(it)).or_else(|| Self::ana_label(it)).or_else(|| Self::magnetic_label(it)).or_else(|| Self::inverter_label(it)).or_else(|| Self::dpt_label(it)).or_else(|| Self::cal_label(it)).or_else(|| Self::bode_label(it)).or_else(|| Self::sim_label(it)).or_else(|| Self::offline_label(it)).or_else(|| Self::afg_label(it)).or_else(|| Self::bw_label(it)).or_else(|| Self::la_label(it)).or_else(|| Self::win_label(it)).or_else(|| Self::bus_label(it)).or_else(|| Self::time_label(it)).or_else(|| Self::remote_label(it)).or_else(|| Self::graphics_label(it)).or_else(|| Self::views_label(it)).or_else(|| Self::monitor_label(it)).or_else(|| Self::features_label(it)).or_else(|| Self::backlight_label(it)) {
+        if let Some(l) = Self::addrail_label(it).or_else(|| Self::meas_cfg_label(it)).or_else(|| Self::measrow_label(it)).or_else(|| Self::ana_label(it)).or_else(|| Self::magnetic_label(it)).or_else(|| Self::inverter_label(it)).or_else(|| Self::dpt_label(it)).or_else(|| Self::cal_label(it)).or_else(|| Self::bode_label(it)).or_else(|| Self::sim_label(it)).or_else(|| Self::offline_label(it)).or_else(|| Self::afg_label(it)).or_else(|| Self::bw_label(it)).or_else(|| Self::la_label(it)).or_else(|| Self::win_label(it)).or_else(|| Self::bus_label(it)).or_else(|| Self::time_label(it)).or_else(|| Self::remote_label(it)).or_else(|| Self::graphics_label(it)).or_else(|| Self::views_label(it)).or_else(|| Self::monitor_label(it)).or_else(|| Self::features_label(it)).or_else(|| Self::backlight_label(it)).or_else(|| Self::skin_label(it)) {
             return l;
         }
         match it {
@@ -8086,7 +8180,7 @@ impl Ui {
         // the desktop build reports its own web port and listeners (wlan.rs `net_value`)
         if it == Item::NetWeb && cfg!(windows) && !self.lan_status.is_empty() { return self.net_value(it); }
         if it == Item::CatSourceD { return self.wave_name(self.cat_d); }
-        if let Some(v) = self.addrail_value(it).or_else(|| self.meas_value(it)).or_else(|| self.measrow_value(it)).or_else(|| self.ana_value(it)).or_else(|| self.magnetic_value(it)).or_else(|| self.inverter_value(it)).or_else(|| self.dpt_value(it)).or_else(|| self.cal_value(it)).or_else(|| self.bode_value(it)).or_else(|| self.sim_value(it)).or_else(|| self.offline_value(it)).or_else(|| self.afg_value(it)).or_else(|| self.bw_value(it)).or_else(|| self.la_value(it)).or_else(|| self.win_value(it)).or_else(|| self.bus_value(it)).or_else(|| self.time_value(it)).or_else(|| self.remote_value(it)).or_else(|| self.graphics_value(it)).or_else(|| self.views_value(it)).or_else(|| self.monitor_value(it)).or_else(|| self.features_value(it)).or_else(|| self.backlight_value(it)) {
+        if let Some(v) = self.addrail_value(it).or_else(|| self.meas_value(it)).or_else(|| self.measrow_value(it)).or_else(|| self.ana_value(it)).or_else(|| self.magnetic_value(it)).or_else(|| self.inverter_value(it)).or_else(|| self.dpt_value(it)).or_else(|| self.cal_value(it)).or_else(|| self.bode_value(it)).or_else(|| self.sim_value(it)).or_else(|| self.offline_value(it)).or_else(|| self.afg_value(it)).or_else(|| self.bw_value(it)).or_else(|| self.la_value(it)).or_else(|| self.win_value(it)).or_else(|| self.bus_value(it)).or_else(|| self.time_value(it)).or_else(|| self.remote_value(it)).or_else(|| self.graphics_value(it)).or_else(|| self.views_value(it)).or_else(|| self.monitor_value(it)).or_else(|| self.features_value(it)).or_else(|| self.backlight_value(it)).or_else(|| self.skin_value(it)) {
             return v;
         }
         let m = &self.m;
@@ -8356,7 +8450,7 @@ impl Ui {
             }
             return;
         }
-        if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) {
+        if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) || self.skin_adjust(it, d) {
             return;
         }
         if matches!(it, Item::TrigSrc | Item::TrigSrc2) {
@@ -8497,6 +8591,7 @@ impl Ui {
             Item::TrigMode => {
                 let all = [TrigMode::Auto, TrigMode::Normal, TrigMode::Single];
                 let i = all.iter().position(|&x| x == m.trig_mode).unwrap();
+                m.keep_sweep();
                 m.trig_mode = all[cyc(i, 3, d)];
                 if m.trig_mode == TrigMode::Single {
                     m.run = RunState::Run;
@@ -9280,6 +9375,26 @@ impl Ui {
         self.toast_saved(&p, r);
     }
 
+    /// Save of the acquisition memory (`:SAVE:MEMory:WAVeform`): every sample the acquisition kept of the channels
+    /// that are on, where `store_wave` writes the points of the screen. Peak detect, roll and a record above 1 M
+    /// points keep no single samples; there it is the screen record again.
+    pub(crate) fn store_wave_memory(&mut self, csv: bool, path: Option<std::path::PathBuf>) -> Result<(), String> {
+        const CSV_MAX: usize = 1_000_000;
+        let data = {
+            let views: Vec<(usize, &[f32], f64, f64)> = (0..NCH).filter(|&c| self.m.ch[c].on)
+                .filter_map(|c| self.channel_view(c, true).map(|(v, dt, t0)| (c, v, dt, t0))).collect();
+            let Some(&(_, _, dt, t0)) = views.first() else { return Err("-221,\"Settings conflict\" no waveform to save".into()) };
+            if csv && views.iter().any(|(_, v, _, _)| v.len() > CSV_MAX) { return Err("-221,\"Settings conflict\" more than 1 M points: save as BIN".into()) }
+            let chans: Vec<(usize, &[f32])> = views.iter().map(|&(c, v, _, _)| (c, v)).collect();
+            if csv { crate::store::wave_csv_of(t0, dt, &chans).into_bytes() } else { crate::store::wave_bin_of(t0, dt, &chans) }
+        };
+        let p = path.unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
+        let r = crate::store::write(&p, &data);
+        let failed = r.as_ref().err().map(|e| format!("-250,\"Mass storage error\" {e}"));
+        self.toast_saved(&p, r);
+        failed.map_or(Ok(()), Err)
+    }
+
     fn toast_saved(&mut self, p: &std::path::Path, r: std::io::Result<()>) {
         match r {
             Ok(()) => {
@@ -9559,7 +9674,7 @@ impl Ui {
 
     /// The options of a choice item for segmented buttons (empty: shown as - value +).
     fn options(&self, it: Item) -> Vec<String> {
-        if let Some(o) = self.addrail_options(it).or_else(|| self.meas_options(it)).or_else(|| self.measrow_options(it)).or_else(|| self.ana_options(it)).or_else(|| self.magnetic_options(it)).or_else(|| self.inverter_options(it)).or_else(|| self.dpt_options(it)).or_else(|| self.cal_options(it)).or_else(|| self.bode_options(it)).or_else(|| self.sim_options(it)).or_else(|| self.offline_options(it)).or_else(|| self.afg_options(it)).or_else(|| self.bw_options(it)).or_else(|| self.la_options(it)).or_else(|| self.win_options(it)).or_else(|| self.bus_options(it)).or_else(|| self.time_options(it)).or_else(|| self.remote_options(it)).or_else(|| self.graphics_options(it)).or_else(|| self.views_options(it)).or_else(|| self.monitor_options(it)).or_else(|| self.features_options(it)) {
+        if let Some(o) = self.addrail_options(it).or_else(|| self.meas_options(it)).or_else(|| self.measrow_options(it)).or_else(|| self.ana_options(it)).or_else(|| self.magnetic_options(it)).or_else(|| self.inverter_options(it)).or_else(|| self.dpt_options(it)).or_else(|| self.cal_options(it)).or_else(|| self.bode_options(it)).or_else(|| self.sim_options(it)).or_else(|| self.offline_options(it)).or_else(|| self.afg_options(it)).or_else(|| self.bw_options(it)).or_else(|| self.la_options(it)).or_else(|| self.win_options(it)).or_else(|| self.bus_options(it)).or_else(|| self.time_options(it)).or_else(|| self.remote_options(it)).or_else(|| self.graphics_options(it)).or_else(|| self.views_options(it)).or_else(|| self.monitor_options(it)).or_else(|| self.features_options(it)).or_else(|| self.skin_options(it)) {
             return o;
         }
         let v: &[&str] = match it {
@@ -10373,7 +10488,7 @@ impl Ui {
             key::RUNSTOP => {
                 m.run = if m.run == RunState::Run { RunState::Stop } else { RunState::Run };
                 if m.run == RunState::Run && m.trig_mode == TrigMode::Single {
-                    m.trig_mode = TrigMode::Auto;
+                    m.trig_mode = m.sweep_kept;
                 }
                 if m.run == RunState::Run && (m.n_on() > 0 || m.la_on()) {
                     m.floor_live_tdiv();
@@ -10382,6 +10497,7 @@ impl Ui {
             key::SINGLE => {
                 self.operation_serial = self.operation_serial.wrapping_add(1);
                 self.single_operation = self.operation_serial;
+                m.keep_sweep();
                 m.trig_mode = TrigMode::Single;
                 m.run = RunState::Run;
                 self.single_armed = false;
@@ -12335,6 +12451,59 @@ mod tests {
         crate::deepmeas::force(None);
     }
 
+    // Break it catches: after a STOP the memory read out (RAW, the memory save) was the part of the record read again
+    // for the view, 93760 of 100000 points at 5 us/div (seen on a unit, 2026-11-17).
+    #[test]
+    fn stop_keeps_the_whole_record_as_the_memory_while_the_view_is_read_again() {
+        use super::*;
+        let shared: crate::board::HwShared = Default::default();
+        let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+        ui.m.run = RunState::Run;
+        for c in 1..NCH {
+            ui.m.ch[c].on = false;
+        }
+        ui.m.tscale = tscales().iter().position(|&t| (t as f64 - 5e-6).abs() < 1e-11).unwrap();
+        let (n, pre) = (100_000usize, 50_000usize);
+        let frame = |seq: u64, v: Vec<f32>| crate::board::Frame {
+            seq,
+            dt: 0.8e-9,
+            pre,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            acq: (1.25e9, n),
+            ..Default::default()
+        };
+        // an edge at the trigger point and a mark near the start of the record, outside what a view is read with
+        let mut v: Vec<f32> = (0..n).map(|i| if i < pre { -1.0 } else { 1.0 }).collect();
+        v[1000] = 0.75;
+        let steps = |ui: &mut Ui, k: usize| {
+            for _ in 0..k {
+                ui.step(0.02);
+            }
+        };
+        shared.lock().unwrap().queue.push_back(frame(1, v.clone()));
+        steps(&mut ui, 3);
+        assert_eq!(ui.channel_points(0, true), n);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        assert!(shared.lock().unwrap().stop_view.is_some(), "the UI asks for the view read again");
+        let origin = ui.channel_origin(0, true).unwrap();
+        // the thread's answer (`stop_plan`): the screen and a quarter screen each side, 93760 points from point 3120
+        let (lo, len) = (3120usize, 93_760usize);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(2, v[lo..lo + len].to_vec()) });
+        steps(&mut ui, 2);
+        let shown = ui.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| (r.frame.seq, r.frame.ch[0].len()));
+        assert_eq!(shown, Some((2, len)), "the view read again is the record shown");
+        assert_eq!(ui.channel_points(0, true), n, "the memory is the whole record");
+        assert_eq!(ui.channel_origin(0, true), Some(origin));
+        assert_eq!(ui.channel_page(0, true, 1001, 1001).unwrap().0, vec![0.75]);
+        // RUN: the record of the STOP is let go, the memory is that of the record shown again
+        ui.m.run = RunState::Run;
+        shared.lock().unwrap().queue.push_back(frame(3, v));
+        steps(&mut ui, 2);
+        assert!(ui.stop_raw.is_none());
+        assert_eq!(ui.channel_points(0, true), ui.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.ch[0].len());
+    }
+
     // Break it catches: the stored record read again in STOP (`stop_replay`) counted as a new record in the statistics,
     // the trend and the catalog, once at the STOP and once for every view after it
     #[test]
@@ -13200,6 +13369,51 @@ mod tests {
     }
 
     #[test]
+    fn a_decoder_reads_the_kept_samples_at_a_slow_time_base() {
+        use super::*;
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.set_dec_proto(Proto::UART);
+        ui.m.run = RunState::Stop;
+        ui.m.ch[0].on = true;
+        ui.m.ch[0].bw = BW_FULL;
+        ui.m.ch[0].coupling = Coupling::Dc;
+        // no software trigger: the record stays where the frame says
+        ui.m.trig_level = 10.0;
+        ui.m.dec_src = 0;
+        ui.m.dec_thr = 1.65;
+        ui.m.dec_baud = crate::decode::BAUDS.iter().position(|&b| b == 9600.0).unwrap();
+        ui.m.tscale = tscales().iter().position(|&t| (t - 20e-3).abs() < 1e-9).unwrap();
+        // 9600 Bd, idle high, a character every 3.3 ms: 200 ms at 500 kSa/s, the screen record has 1.9 points per bit
+        let (dt, n, text) = (2e-6, 100_000, "Tektronix Enabling Innovation ");
+        let mut v = vec![3.3f32; n];
+        for (k, b) in text.bytes().cycle().take(58).enumerate() {
+            let start = 2e-3 + k as f64 * 3.3e-3;
+            for bit in 0..9 {
+                // the start bit and the zeros of the eight data bits, least significant first
+                if bit == 0 || b >> (bit - 1) & 1 == 0 {
+                    let at = |i: usize| ((start + i as f64 / 9600.0) / dt).round() as usize;
+                    v[at(bit)..at(bit + 1)].fill(0.0);
+                }
+            }
+        }
+        let frame = std::sync::Arc::new(crate::board::Frame { seq: 7, dt, pre: n / 2, ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            roll: false, scan: false, partial: false, envelope: false, acq: (0.0, 0), stamp: 0, basic: Default::default(), la: None, fixed_ti: None, hw_avg: false });
+        ui.last[0] = Some(crate::board::to_record(&frame, &ui.m, 3600, 0.2, -0.1));
+        let read = |ui: &Ui| -> (String, f64) {
+            let p = ui.decode_packets().unwrap();
+            let data: Vec<_> = p.iter().filter(|p| p.kind == oos_dsp::decode::Kind::Data && p.ok).collect();
+            (data.iter().map(|p| p.value as u8 as char).collect(), data.first().map_or(f64::NAN, |p| p.t0))
+        };
+        let (native, first) = read(&ui);
+        assert_eq!(native, text.bytes().cycle().take(58).map(|b| b as char).collect::<String>());
+        // times stay those of the record: the first start bit is 2 ms into a frame that begins 100 ms before the trigger
+        assert!((first - (2e-3 - 0.1)).abs() < 2.0 / 9600.0, "first character at {first}");
+        // the screen record alone cannot hold it
+        ui.last[0].as_mut().unwrap().raw = None;
+        assert!(!read(&ui).0.contains("Tektronix"));
+    }
+
+    #[test]
     fn bode_sweep_drives_the_generator() {
         use super::*;
         use std::io::Read;
@@ -13519,6 +13733,29 @@ mod tests {
         assert_eq!(ui.m.math, MathOp::A2d);
         ui.select_option(Item::MathFam, "Arithmetic");
         assert!(ui.options(Item::MathOpI).contains(&"Conv".into()));
+    }
+
+    // Break it catches: a mask made from a reference failed every acquisition of the very signal the reference was
+    // saved from (seen on a unit, 2026-11-17): a reference keeps the whole acquisition, the mask is laid over the
+    // points of the screen.
+    #[test]
+    fn a_mask_from_a_reference_longer_than_the_screen_passes_its_own_signal() {
+        use super::*;
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.step(0.033);
+        ui.m.run = RunState::Stop;
+        let rec = ui.last[0].clone().unwrap();
+        // the same signal, four times finer and with half a screen more on either side
+        let n = rec.ch[0].len();
+        let fine: Vec<f32> = (0..8 * n).map(|k| {
+            let x = k as f64 / 4.0 - n as f64 / 2.0;
+            if x < 0.0 || x >= n as f64 { 0.0 } else { rec.ch[0][x as usize] }
+        }).collect();
+        ui.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: rec.t0 - n as f64 / 2.0 * rec.dt, dt: rec.dt / 4.0, v: fine.into(), vpd: 1.0, offset: 0.0, on: true });
+        (ui.m.mask_x, ui.m.mask_y) = (0.1, 0.5);
+        ui.activate(Item::MaskFromRef);
+        assert_eq!(ui.mask_ref.as_ref().unwrap().len(), n, "the reference at the points of the screen");
+        assert!(ui.mask.as_ref().unwrap().test(&rec.ch[0]).pass);
     }
 
     #[test]
@@ -14678,3 +14915,5 @@ mod aux_out_tests {
 
 #[cfg(test)]
 mod zoom_tests;
+#[cfg(test)]
+mod funccheck_tests;
