@@ -189,8 +189,7 @@ fn in_waveform_focus_the_badge_row_buttons_work() {
     u.studio_set_view(StudioView::Waveform);
     frame(&mut u);
     // the list button: opens the measurement list
-    let c = u.studio_compact_chip();
-    tap(&mut u, c);
+    u.studio_row_pick(super::studio::RowAct::Table);
     assert!(u.studio.view != StudioView::Waveform || u.menu_open, "the list button does something");
 }
 
@@ -520,8 +519,8 @@ fn hiding_the_badges_leaves_a_button_and_an_undo_and_showing_them_needs_no_menu(
     u.studio_set_view(StudioView::Waveform);
     frame(&mut u);
     assert!(u.studio_badges_visible() && !u.studio_badges().is_empty());
-    let eye = u.studio_eye();
-    tap(&mut u, eye);
+    u.studio_row_pick(super::studio::RowAct::Hide);
+    frame(&mut u);
     assert!(!u.studio_badges_visible(), "hidden");
     let show = u.studio_bottom().show.expect("a button in the bottom bar");
     assert!(show.w >= 40 && show.h >= 36, "{show:?}");
@@ -531,8 +530,8 @@ fn hiding_the_badges_leaves_a_button_and_an_undo_and_showing_them_needs_no_menu(
     tap(&mut u, undo);
     assert!(u.studio_badges_visible(), "undone");
     // hide again and use the button
-    let eye = u.studio_eye();
-    tap(&mut u, eye);
+    u.studio_row_pick(super::studio::RowAct::Hide);
+    frame(&mut u);
     assert!(!u.studio_badges_visible());
     let show = u.studio_bottom().show.unwrap();
     tap(&mut u, show);

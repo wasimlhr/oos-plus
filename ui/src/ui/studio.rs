@@ -125,6 +125,8 @@ pub(super) struct Studio {
     pub view_menu: bool,
     /// the Add menu under the top bar is open
     pub add_menu: bool,
+    /// the menu of the button at the right of the badge row is open
+    pub row_menu: bool,
     /// Measure is open as the page of every layout (categories, Selected, Settings), not as the quick Add panel
     pub meas_page: bool,
     /// the pull-down zoom toolbar is open: the time it was last used
@@ -354,6 +356,8 @@ impl Ui {
         let token = self.studio.view.token();
         if self.m.studio_view != token { self.m.studio_view = token.to_string(); }
         if self.m.layout == Layout::Studio { self.studio_prune_ref_rows(); }
+        // a menu or a sheet that opens takes the place of the row's menu
+        if self.menu_open || self.studio.view_menu || self.studio.add_menu { self.studio.row_menu = false; }
         self.studio.badge_wrap = self.studio_badge_wrap_now();
         self.dock_sync_setup();
         self.studio_sync();
@@ -875,6 +879,7 @@ impl Ui {
         cv.no_clip();
         chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
         self.draw_studio_ch_picker(cv);
+        self.draw_studio_row_menu(cv);
     }
 
     /// The pills of the bottom bar have a small second line while both fonts fit the pill.
@@ -1124,6 +1129,7 @@ impl Ui {
         if self.studio_sz_taps(x, y) { return true; }
         if self.studio_view_tap(x, y) { return true; }
         if self.studio_add_tap(x, y) { return true; }
+        if self.studio.row_menu && self.studio_row_menu_tap(x, y) { return true; }
         if self.studio_ctx_tap(x, y) { return true; }
         if self.studio.ch_picker {
             let (rows, extras) = self.studio_picker_rows().unzip();
@@ -1325,6 +1331,20 @@ pub(super) const SEARCH_ARROW_W: i32 = 46;
 /// Width of the action popup of a badge, and the height of its rows.
 const POPUP_W: i32 = 300;
 const POPUP_ROW: i32 = 40;
+/// Width of the menu of the badge row's button.
+const ROW_MENU_W: i32 = 250;
+
+/// What the one button at the right of the badge row offers. It stands for the three buttons the row had: the list
+/// (the table of the measurements, or the compact view), the badge style and the eye.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum RowAct {
+    /// the table of the measurements beside the lanes, or the lanes alone again
+    Table,
+    Compact,
+    Classic,
+    Hide,
+}
+pub(super) const ROW_ACTS: [RowAct; 4] = [RowAct::Table, RowAct::Compact, RowAct::Classic, RowAct::Hide];
 
 /// Two short stacked bars that move together: the compact view.
 fn icon_compact(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
@@ -1509,8 +1529,8 @@ impl Ui {
             Some((key, f.s.width(&self.studio_badge_name(key, &r.name))))
         }).collect();
         let (span_x, span_w) = self.plot_span();
-        // the row ends before the three buttons at its right (`studio_row_limit`, without the row's own rectangle)
-        let (x0, limit) = (span_x + 4, span_x + span_w - 122);
+        // the row ends before the button at its right (`studio_row_limit`, without the row's own rectangle)
+        let (x0, limit) = (span_x + 4, span_x + span_w - 44);
         let value = f.sb.width("0.000 MHz");
         if self.studio_classic() { return self.classic_wrap_now(&names, value, limit - x0); }
         let mut x = x0;
@@ -1538,13 +1558,6 @@ impl Ui {
         // a row with statistics has a small line more
         if self.studio_stats_any() && self.studio.view != StudioView::Sim { base + super::measview::STATS_LINE } else { base }
     }
-    /// The small switch for the compact view, left of the Meas tab in the badge row.
-    pub(super) fn studio_compact_chip(&self) -> Rect {
-        let eye = self.studio_eye();
-        let tab_w = if self.studio_tab().is_some() { 108 } else { 0 };
-        Rect::new(eye.x - 6 - tab_w - 34, eye.y, 34, eye.h)
-    }
-
     /// Studio or Classic badges: the button in the row and Measure > Badge style set the same flag.
     pub(super) fn studio_set_classic(&mut self, on: bool) {
         self.m.studio_classic = on;
@@ -1553,22 +1566,111 @@ impl Ui {
         self.relayout();
     }
 
-    /// The button left of the compact switch that flips the badges between Studio and Classic.
-    pub(super) fn studio_style_chip(&self) -> Rect {
-        let c = self.studio_compact_chip();
-        Rect::new(c.x - 4 - 34, c.y, 34, c.h)
-    }
-
-    /// The eye button at the right end of the row, on its last line (the row grows upwards: the buttons stay).
-    pub(super) fn studio_eye(&self) -> Rect {
+    /// The one button at the right end of the row, on its last line (the row grows upwards: the button stays). It
+    /// carries the number of measurements and opens the menu of the row (`studio_row_menu`). The row had three buttons
+    /// here (badge style, list, eye); one leaves their room to two more badges.
+    pub(super) fn studio_row_btn(&self) -> Rect {
         let r = self.studio_row();
         let h = self.studio_chip_h();
         Rect::new(r.right() - 38, r.bottom() - 3 - h, 34, h)
     }
 
-    /// Where the badges end: before the Meas tab and the eye.
+    /// Where the badges end: before the button.
     pub(super) fn studio_row_limit(&self) -> i32 {
-        self.studio_style_chip().x - 6
+        self.studio_row_btn().x - 6
+    }
+
+    /// The menu of the row's button while it is open: its rows, over the button.
+    pub(super) fn studio_row_menu(&self) -> Option<Vec<(RowAct, Rect)>> {
+        if !self.studio.row_menu || !self.studio_badges_visible() { return None; }
+        let b = self.studio_row_btn();
+        let h = ROW_ACTS.len() as i32 * POPUP_ROW;
+        let x = (b.right() - ROW_MENU_W).max(4);
+        let y = (b.y - 14 - h).max(self.frame().top.bottom() + 4);
+        Some(ROW_ACTS.iter().enumerate().map(|(i, &a)| (a, Rect::new(x + 4, y + 4 + i as i32 * POPUP_ROW, ROW_MENU_W - 8, POPUP_ROW))).collect())
+    }
+
+    /// What a row of the menu says, and whether it is on (None: an action, not a switch).
+    pub(super) fn studio_row_act(&self, a: RowAct) -> (&'static str, Option<bool>) {
+        match a {
+            RowAct::Table => ("Measurement table", Some(self.studio_panel_shown())),
+            RowAct::Compact => ("Compact view", Some(self.studio.compact)),
+            RowAct::Classic => ("Classic badges", Some(self.m.studio_classic)),
+            RowAct::Hide => ("Hide badges", None),
+        }
+    }
+
+    /// A row of the menu. The two switches leave the menu open, so both can be set in one go.
+    pub(super) fn studio_row_do(&mut self, a: RowAct) {
+        match a {
+            RowAct::Table => {
+                self.studio.row_menu = false;
+                let view = if self.studio_panel_shown() { StudioView::Waveform } else { StudioView::Docked };
+                self.studio_set_view(view);
+            }
+            RowAct::Compact => self.studio_set_compact(!self.studio.compact),
+            RowAct::Classic => self.studio_set_classic(!self.m.studio_classic),
+            RowAct::Hide => {
+                self.studio.row_menu = false;
+                self.studio.hide_badges = true;
+                self.studio.md.hide_undo = Some(self.now);
+                self.relayout();
+            }
+        }
+    }
+
+    fn draw_studio_row_menu(&self, cv: &mut Canvas) {
+        let Some(rows) = self.studio_row_menu() else { return };
+        let f = self.fonts();
+        let (first, last) = (rows[0].1, rows[rows.len() - 1].1);
+        let p = Rect::new(first.x - 4, first.y - 4, first.w + 8, last.bottom() - first.y + 8);
+        cv.round(p, 8, BTN_BORDER, 255);
+        cv.round(p.inset(1), 7, PANEL_BG, 255);
+        cv.hline(last.x + 6, last.right() - 6, last.y, LINE);
+        for (a, r) in rows {
+            let (label, on) = self.studio_row_act(a);
+            let (cx, cy) = (r.x + 20, r.y + r.h / 2);
+            match a {
+                RowAct::Table => { cv.rect(Rect::new(cx - 7, cy - 6, 14, 12), TEXT); cv.hline(cx - 7, cx + 6, cy, TEXT); cv.vline(cx, cy - 6, cy + 5, TEXT); }
+                RowAct::Compact => icon_compact(cv, cx, cy, TEXT),
+                RowAct::Classic => icon_badge_style(cv, cx, cy - 1, true, TEXT),
+                RowAct::Hide => icon_eye(cv, cx, cy, TEXT),
+            }
+            cv.text_in(&f.m, Rect::new(r.x + 40, r.y, r.w - 100, r.h), 0, label, TEXT);
+            match on {
+                // the count of the measurements stands on the row that lists them
+                Some(_) if a == RowAct::Table => {
+                    let n = if self.studio_panel_shown() { "On".to_string() } else { self.measurement_count().to_string() };
+                    cv.text_in(&f.sb, Rect::new(r.right() - 52, r.y, 44, r.h), 2, &n, if self.studio_panel_shown() { ACCENT } else { DIM });
+                }
+                Some(on) => {
+                    let sw = Rect::new(r.right() - 52, r.y + 9, 44, 22);
+                    cv.round(sw, 11, if on { ACCENT } else { BTN_BORDER }, 255);
+                    cv.circle(if on { sw.right() - 11 } else { sw.x + 11 }, sw.y + 11, 8, if on { DARK_TEXT } else { DIM });
+                }
+                None => {}
+            }
+        }
+    }
+
+    /// The button, then the row `a` of its menu, by two taps (tests).
+    #[cfg(test)]
+    pub(super) fn studio_row_pick(&mut self, a: RowAct) {
+        let b = self.studio_row_btn();
+        self.tap(b.x + b.w / 2, b.y + b.h / 2);
+        let r = self.studio_row_menu().expect("the menu of the row's button").into_iter().find(|(x, _)| *x == a).expect("its row").1;
+        self.tap(r.x + r.w / 2, r.y + r.h / 2);
+        self.studio.row_menu = false;
+    }
+
+    /// A tap while the menu of the row's button is open: a row does its action, a tap elsewhere closes it. Always taken.
+    fn studio_row_menu_tap(&mut self, x: i32, y: i32) -> bool {
+        let Some(rows) = self.studio_row_menu() else { self.studio.row_menu = false; return false };
+        match rows.into_iter().find(|(_, r)| r.contains(x, y)) {
+            Some((a, _)) => self.studio_row_do(a),
+            None => self.studio.row_menu = false,
+        }
+        true
     }
 
     /// The row of badges as (measurement, rectangle), as many as fit.
@@ -1676,23 +1778,19 @@ impl Ui {
             cv.text_in(&f.sb, r, 1, &format!("+{n}"), ACCENT);
         }
         self.draw_studio_tab(cv);
-        let c = self.studio_compact_chip();
-        chip(cv, c, if self.studio.compact { mix(BAR, ACCENT, 60) } else { BTN }, if self.studio.compact { ACCENT } else { BTN_BORDER });
-        icon_compact(cv, c.x + c.w / 2, c.y + c.h / 2, if self.studio.compact { ACCENT } else { TEXT });
-        // with the lanes alone the list button opens the table: it carries the number of measurements
-        if self.studio.view == StudioView::Waveform && self.measurement_count() > 0 {
+        // the one button of the row: the list sign and the number of measurements; its menu has the table, the compact
+        // view, the badge style and Hide
+        let c = self.studio_row_btn();
+        let open = self.studio.row_menu;
+        chip(cv, c, if open { mix(BAR, ACCENT, 60) } else { BTN }, if open { ACCENT } else { BTN_BORDER });
+        icon_compact(cv, c.x + c.w / 2, c.y + c.h / 2, if open { ACCENT } else { TEXT });
+        if self.measurement_count() > 0 {
             let n = self.measurement_count().to_string();
             let w = f.s.width(&n) + 6;
             let b = Rect::new(c.right() - w, c.y - 2, w, 14);
             cv.round(b, 6, ACCENT, 255);
             cv.text_in(&f.s, b, 1, &n, DARK_TEXT);
         }
-        let sc = self.studio_style_chip();
-        chip(cv, sc, if self.m.studio_classic { mix(BAR, ACCENT, 60) } else { BTN }, if self.m.studio_classic { ACCENT } else { BTN_BORDER });
-        icon_badge_style(cv, sc.x + sc.w / 2, sc.y + sc.h / 2, self.m.studio_classic, if self.m.studio_classic { ACCENT } else { TEXT });
-        let eye = self.studio_eye();
-        cv.vline(eye.x - 3, row.y + 6, row.bottom() - 6, LINE);
-        icon_eye(cv, eye.x + eye.w / 2, eye.y + eye.h / 2, TEXT);
     }
 
     /// The popup of a badge: where it is.
@@ -1787,19 +1885,10 @@ impl Ui {
             self.studio_set_view(StudioView::Docked);
             return true;
         }
-        if self.studio_eye().contains(x, y) {
-            self.studio.hide_badges = true;
-            self.studio.md.hide_undo = Some(self.now);
-            self.relayout();
-            return true;
-        }
-        if Self::hit40(self.studio_style_chip()).contains(x, y) {
-            self.studio_set_classic(!self.m.studio_classic);
-            return true;
-        }
-        if self.studio_compact_chip().contains(x, y) {
-            // with no panel to make compact, the list button opens the measurements
-            if self.studio.view == StudioView::Waveform { self.studio_set_view(StudioView::Docked); } else { self.studio_set_compact(!self.studio.compact); }
+        if Self::hit40(self.studio_row_btn()).contains(x, y) {
+            if self.menu_open { self.close_menu(); }
+            self.studio.popup = None;
+            self.studio.row_menu = true;
             return true;
         }
         if self.studio_tab().is_some_and(|tab| tab.contains(x, y)) {
@@ -2637,7 +2726,7 @@ impl Ui {
                 // full screen: its few buttons
                 if self.m.layout == Layout::Studio && self.full_on() && self.full_chrome_rects().is_some_and(|(a, b)| Self::hit40(a).contains(x, y) || Self::hit40(b).contains(x, y)) { return self.studio_eat(x, y); }
                 if self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() || self.m.touch_lock
-                    || self.studio.view_menu || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.studio.md.menu.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
+                    || self.studio.view_menu || self.studio.add_menu || self.studio.row_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.studio.md.menu.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
                 // the Add measurement panel is open: only its tiles can be dragged
                 if self.menu_open { return self.md_down(x, y); }
                 // the bars with an Undo are above the strips of the views

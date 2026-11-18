@@ -32,6 +32,9 @@ Fixed:
     shown as buttons where the row has the room once its label takes only what it needs (the acquisition mode, the
     cursor mode), and a list has the minus and plus of the dialog again, with the list behind its value (the memory
     depth, the segments).
+- Studio: the badge row has one button at its right end in place of three (badge style, list, eye). It carries the
+  number of measurements, and its menu has Measurement table, Compact view, Classic badges and Hide badges; the two
+  switches leave the menu open. The room of the two buttons that went goes to the badges (76 px, host-tested).
 - Studio: a channel pill of the bottom bar always shows its scale. With four channels and the generator on, a pill
   was too narrow for anything longer than "1 V" and drew no scale at all for "500 mV". The Add chip and the
   generator's pill take their short form ("+ Add", "GEN") before a pill gets that narrow, and a scale that still
