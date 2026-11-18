@@ -954,9 +954,9 @@ impl Scpi {
 
     pub fn poll(&mut self, ui: &mut Ui, cv: &Canvas) {
         // Storage > Save setup as SCPI: the row asks, this interpreter has the queries the lines are made of
-        if let Some(path) = ui.setup_scpi_request.take() {
+        if std::mem::take(&mut ui.setup_scpi_request) {
             let (text, rest) = self.setup_scpi_proven(ui, cv);
-            ui.setup_scpi_save(&path, &text, &rest);
+            ui.setup_scpi_save(&text, setupscpi::named(&rest).as_deref());
         }
         if let Some(l) = &self.l {
             while let Ok((s, peer)) = l.accept() {

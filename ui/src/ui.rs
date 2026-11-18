@@ -1745,9 +1745,9 @@ pub struct Ui {
     /// why (hwmask.rs); the software test and filter take over
     unit_blocked: Option<String>,
     pub shot_request: Option<String>,
-    /// Storage > Save setup as SCPI: the file to write. The interpreter writes it at its next poll, since the lines
+    /// Storage > Save setup as SCPI was pressed. The interpreter writes the file at its next poll, since the lines
     /// are the answers of its own queries (`Scpi::poll`, scpi/setupscpi.rs).
-    pub setup_scpi_request: Option<std::path::PathBuf>,
+    pub setup_scpi_request: bool,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
@@ -2075,7 +2075,7 @@ impl Ui {
             mask_hw_clear: 0,
             unit_blocked: None,
             shot_request: None,
-            setup_scpi_request: None,
+            setup_scpi_request: false,
             quit: false,
         };
         ui.ensure_meas_own();
@@ -9386,7 +9386,7 @@ impl Ui {
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
                 }
-                Item::StoreSaveScpi => self.setup_scpi_request = Some(self.new_file(&self.save_dir(), "setup", "scpi")),
+                Item::StoreSaveScpi => self.setup_scpi_request = true,
                 Item::StoreRecall => self.recall_setup(),
                 Item::StoreCsv => self.store_wave(true, None),
                 Item::StorePng => {
@@ -9666,16 +9666,24 @@ impl Ui {
         }
     }
 
-    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request. `rest`: the keys no
-    /// line could carry.
-    pub(crate) fn setup_scpi_save(&mut self, path: &std::path::Path, text: &str, rest: &[String]) {
-        let r = crate::store::write(path, text.as_bytes());
-        if r.is_ok() && !rest.is_empty() {
-            self.flush_stick();
-            self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(path), self.saved_where(), rest.join(" ")));
-        } else {
-            self.toast_saved(path, r);
+    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request into a new file where
+    /// Storage saves (the name is taken now, when it is written). `without`: what no line could carry, in words.
+    pub(crate) fn setup_scpi_save(&mut self, text: &str, without: Option<&str>) {
+        let path = self.new_file(&self.save_dir(), "setup", "scpi");
+        let r = crate::store::write(&path, text.as_bytes());
+        match (r.is_ok(), without) {
+            (true, Some(keys)) => {
+                self.flush_stick();
+                self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(&path), self.saved_where(), keys));
+            }
+            _ => self.toast_saved(&path, r),
         }
+    }
+
+    /// The text of the message on the screen, for the tests of other modules.
+    #[cfg(test)]
+    pub(crate) fn toast_text(&self) -> String {
+        self.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default()
     }
 
     /// File of the current setup slot: a setup is small and has to survive a power cycle, so the default storage directory
