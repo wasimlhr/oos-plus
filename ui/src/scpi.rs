@@ -60,6 +60,7 @@ use crate::math::{math_scales, MathCh, MathOp, Window, NMATH, MATH_REF_BASE};
 use crate::model::*;
 use crate::ui::Ui;
 
+mod recorder;
 mod ser;
 mod setupscpi;
 use std::io::{ErrorKind, Write};
@@ -158,6 +159,13 @@ fn split_message(text: &str) -> Vec<(String, bool)> {
         match b[i] {
             b';' => { flush(start, i, &mut first); start = i + 1; }
             b'\n' | b'\r' => { flush(start, i, &mut first); start = i + 1; first = true; }
+            // a comment line of a file of commands (a recording, scpi/recorder.rs), sent as it is: it is no command,
+            // to the end of its line and with a `;` in it. A block is an argument and never starts a command.
+            b'#' if text[start..i].trim().is_empty() => {
+                while i < b.len() && b[i] != b'\n' && b[i] != b'\r' { i += 1; }
+                start = i;
+                continue;
+            }
             b'#' => if let Some((end, true)) = block_span(b, i) {
                 if text.is_char_boundary(end) { i = end; continue; }
             },
@@ -226,6 +234,9 @@ pub struct Scpi {
     opc_events: Vec<crate::ui::Operations>,
     /// The search event last jumped to, 1-based. 0 means none.
     search_at: u32,
+    /// The SCPI recorder while it is on (scpi/recorder.rs), and the lines of the recording before.
+    rec: Option<Box<recorder::Recorder>>,
+    rec_last: Vec<String>,
 }
 
 /// SCPI keyword match: the long form or its short form (the upper-case part), case-insensitive.
@@ -895,7 +906,7 @@ impl Scpi {
 
     /// An interpreter no client reaches: the second scope the set-up as commands is proven on (scpi/setupscpi.rs).
     pub(crate) fn detached() -> Scpi {
-        Scpi { l: None, clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0 }
+        Scpi { l: None, clients: Vec::new(), wav_src: WaveId::Ch(0), wav_math: None, wav_fmt: 0, wav_mode: 0, wav_start: 1, wav_stop: 0, err: Vec::new(), search_at: 0, event_status: 0, event_enable: 0, service_enable: 0, power_on_clear: true, error_serial: 0, last_error: None, opc_events: Vec::new(), acl: crate::netacl::Shared::default(), acl_seen: 0, rec: None, rec_last: Vec::new() }
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
@@ -956,8 +967,10 @@ impl Scpi {
         // Storage > Save setup as SCPI: the row asks, this interpreter has the queries the lines are made of
         if std::mem::take(&mut ui.setup_scpi_request) {
             let (text, rest) = self.setup_scpi_proven(ui, cv);
-            ui.setup_scpi_save(&text, setupscpi::named(&rest).as_deref());
+            ui.scpi_save("setup", &text, setupscpi::named(&rest).map(|keys| format!("without {keys}")).as_deref());
         }
+        // the SCPI recorder looks at the set-up here, before a client's message is run: what it sees is the user's
+        self.rec_tick(ui, cv);
         if let Some(l) = &self.l {
             while let Ok((s, peer)) = l.accept() {
                 if !self.acl.permits_peer(Ok(peer)) {
@@ -1076,7 +1089,9 @@ impl Scpi {
     /// Advance a bounded per-client message without waiting on the UI thread.
     /// The continuation owns its earlier replies and remaining commands: no write is replayed.
     pub fn poll_program(&mut self, ui: &mut Ui, cv: &Canvas, program: &mut Program) -> Option<Vec<u8>> {
+        let before = self.rec_before_remote(ui);
         let response = self.advance_program(ui, cv, program);
+        if let Some(before) = before { self.rec_after_remote(ui, cv, before); }
         self.normalize_errors();
         response
     }
@@ -1251,6 +1266,20 @@ impl Scpi {
             if query { return Some(block(self.setup_scpi(ui, cv).as_bytes())); }
             self.push_err(format!("-113,\"Undefined header\" {}", cmd));
             return None;
+        }
+        // the SCPI recorder (scpi/recorder.rs): the switch is the one of Storage > SCPI recorder, taken at the next frame
+        if nodes.len() == 3 && kw(nodes[0], "SYSTem") && kw(nodes[1], "RECorder") && kw(nodes[2], "STATe") {
+            if query { return t(if ui.scpi_rec_want { "1" } else { "0" }); }
+            match parse_bool(arg) {
+                Some(on) => ui.scpi_rec_want = on,
+                None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+            }
+            return None;
+        }
+        if query && nodes.len() == 3 && kw(nodes[0], "SYSTem") && kw(nodes[1], "RECorder") && kw(nodes[2], "DATA") {
+            let lines = self.rec_lines();
+            let text = if lines.is_empty() { String::new() } else { lines.join("\n") + "\n" };
+            return Some(block(text.as_bytes()));
         }
         // the coverage extensions (ui/scpiext*.rs): same model and menu code paths as the screen
         if let Some(r) = ui.scpi_ext_command(&nodes, query, arg) {

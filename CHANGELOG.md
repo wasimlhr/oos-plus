@@ -76,6 +76,18 @@ Fixed:
 
 Added:
 
+- SCPI recorder: Storage > SCPI recorder, `:SYSTem:RECorder:STATe ON|OFF` (host-tested, not yet run on a unit).
+  While it is on, what is set at the scope by touch, keys, knobs and menus is written as SCPI commands, and the
+  message on the screen shows the last command of each step. A setting is written when it has stood still for 0.6 s: a knob turned
+  through twenty steps is one line with the value it was left at. The lines go into `recording-NNN.scpi` where
+  Storage saves, written again after every step, so the end of the program does not lose a recording; `:SYSTem:RECorder:DATA?` gives them to a client. The file starts with
+  the set-up at the start as commands, so it can be sent to a scope in any state, and every step is proven like
+  `:SYSTem:SETup:SCPI?`. What a client sets by SCPI is not recorded (a comment says where it set something); what
+  the web remote's keys and touches do is. Not recorded yet: actions that leave no
+  setting (Run, Single, Clear, a saved file); an auto set-up is recorded as the settings it found.
+- A line that starts with `#` is a comment to the SCPI interpreter and is not run, to the end of the line, so a
+  file of commands with comment lines can be sent as it is.
+
 - The set-up as SCPI commands, `:SYSTem:SETup:SCPI?` (the first part of the SCPI recorder; host-tested, not yet run
   on a unit). The answer is a block of lines: `*RST`, then one command for every setting that differs from the
   Default set-up, each with the answer of its own query as the value (`:CHANnel2:DISPlay 1`,
