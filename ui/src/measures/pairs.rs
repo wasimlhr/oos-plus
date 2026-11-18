@@ -26,9 +26,9 @@ static DEFS: [Def; 20] = [
     pair(240, "Setup fall", "s", Edge, 15, &[(TWO, "SETUP & HOLD")], "Setup time of the data (A) against the falling clock edge (B)."),
     pair(241, "Hold fall", "s", Edge, 16, &[(TWO, "SETUP & HOLD")], "Hold time of the data (A) after the falling clock edge (B)."),
     // the double-data-rate variants of the fork: both clock edges latch
-    pair(242, "Setup DDR", "s", Edge, 17, &[(TWO, "SETUP & HOLD")], "Setup time of the data (A) against both clock edges (B), as double data rate latches."),
-    pair(243, "Hold DDR", "s", Edge, 18, &[(TWO, "SETUP & HOLD")], "Hold time of the data (A) after both clock edges (B), as double data rate latches."),
-    pair(244, "Setup + Hold DDR", "", Edge, 19, &[(TWO, "SETUP & HOLD")], "Clock edges of either direction (B) where the data (A) misses the Tsetup or Thold limit."),
+    pair(242, "Setup both edges", "s", Edge, 17, &[(TWO, "SETUP & HOLD")], "Setup time of the data (A) against both clock edges (B), as a double data rate (DDR) bus latches."),
+    pair(243, "Hold both edges", "s", Edge, 18, &[(TWO, "SETUP & HOLD")], "Hold time of the data (A) after both clock edges (B), as a double data rate (DDR) bus latches."),
+    pair(244, "Setup + Hold both edges", "", Edge, 19, &[(TWO, "SETUP & HOLD")], "Clock edges of either direction (B) where the data (A) misses the Tsetup or Thold limit."),
 ];
 
 pub struct Pairs;

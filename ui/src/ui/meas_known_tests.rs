@@ -279,7 +279,7 @@ fn the_remaining_rows_read_built_signals() {
         if p < 0.5e-9 { p / 0.5e-9 } else if p < len { 1.0 } else if p < len + 0.5e-9 { 1.0 - (p - len) / 0.5e-9 } else { 0.0 }
     });
     let (clk, data) = (pulse(20e-9, 50e-9, 100e-9), pulse(16e-9, 10e-9, 50e-9));
-    bad.extend(show("ddr", 1e-12, &[(240, "Setup fall", 4e-9), (241, "Hold fall", 6e-9), (242, "Setup DDR", 4e-9), (243, "Hold DDR", 6e-9), (244, "Setup + Hold DDR", 0.0)],
+    bad.extend(show("ddr", 1e-12, &[(240, "Setup fall", 4e-9), (241, "Hold fall", 6e-9), (242, "Setup both edges", 4e-9), (243, "Hold both edges", 6e-9), (244, "Setup + Hold both edges", 0.0)],
         &[data, clk], &|_| {}));
     // a rail with 50 mV of 50 Hz and 10 mV of 100 kHz on it, with the two frequencies set
     let rail = wave(200_000, 1e-6, |t| 5.0 + 0.05 * (2.0 * PI * 50.0 * t).sin() + 0.01 * (2.0 * PI * 100e3 * t).sin());
@@ -390,8 +390,8 @@ fn the_rows_left_open_read_worked_values() {
     assert!(bad.is_empty(), "{bad:#?}");
 }
 
-/// Setup and hold against both edges of the clock (the rows named DDR: data latched on the rising and on the falling
-/// edge), on two reference waveforms. Nothing here needs a live channel: a record made by an instrument with the
+/// Setup and hold against both edges of the clock (data latched on the rising and on the falling edge, as a double
+/// data rate bus does), on two reference waveforms. Nothing here needs a live channel: a record made by an instrument with the
 /// bandwidth for such a bus is measured the same way once it is loaded.
 #[test]
 fn setup_and_hold_on_both_clock_edges_read_on_references() {
@@ -403,6 +403,31 @@ fn setup_and_hold_on_both_clock_edges_read_on_references() {
     });
     let (clk, data) = (pulse(100e-9, 20e-9, 50e-9), pulse(50e-9, 16e-9, 10e-9));
     // source A is the data, source B the clock; the third row counts the edges that miss a limit, and none is set
-    let bad = show("both edges", 1e-12, &[(242, "Setup DDR", 4e-9), (243, "Hold DDR", 6e-9), (244, "Setup + Hold DDR", 0.0)], &[data, clk], &|_| {});
+    let bad = show("both edges", 1e-12, &[(242, "Setup both edges", 4e-9), (243, "Hold both edges", 6e-9), (244, "Setup + Hold both edges", 0.0)], &[data.clone(), clk.clone()], &|_| {});
     assert!(bad.is_empty(), "{bad:#?}");
+    // the names: no row of the pair page or of the catalog is called DDR, which reads as the memory
+    assert!(tools::PAIRS.iter().all(|p| !p.0.contains("DDR")), "the pair page");
+    assert!(crate::measures::all().all(|(_, d)| !d.name.contains("DDR")), "the catalog");
+    assert_eq!(tools::PAIRS[17].0, "Setup both edges");
+    // the remote names stay, and take the data first and the clock second, as the page does (A = data, B = clock)
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    u.m.run = RunState::Stop;
+    for (r, (v, dt)) in [data, clk].into_iter().enumerate() {
+        u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0: -0.5 * v.len() as f64 * dt, dt, v: v.into(), vpd: 1.0, offset: 0.0, on: true });
+    }
+    u.m.meas_full_record = true;
+    u.measure_refs();
+    let cv = crate::gfx::Canvas::new(u.scr.w, u.scr.h);
+    let mut scpi = crate::scpi::Scpi::open(0);
+    let mut ask = |u: &mut Ui, c: &str| -> f64 {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            u.step(0.04);
+            let v: f64 = String::from_utf8(scpi.exec_line(u, &cv, c)).unwrap().trim().parse().unwrap_or(f64::NAN);
+            if (v.is_finite() && v < 9e37) || std::time::Instant::now() > end { return v; }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    };
+    let (setup, hold) = (ask(&mut u, ":MEAS:ITEM? DSETUP,R1,R2"), ask(&mut u, ":MEAS:ITEM? DHOLD,R1,R2"));
+    assert!((setup - 4e-9).abs() < 0.1e-9 && (hold - 6e-9).abs() < 0.1e-9, "data first, clock second: setup {setup:e}, hold {hold:e}");
 }

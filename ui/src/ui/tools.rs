@@ -66,9 +66,10 @@ pub const PAIRS: [(&str, PairKind, bool, bool); 20] = [
     ("Setup+Hold", PairKind::SetupAndHold, true, true),
     ("Setup fall", PairKind::Setup, false, true),
     ("Hold fall", PairKind::Hold, false, true),
-    ("Setup DDR", PairKind::SetupBoth, true, true),
-    ("Hold DDR", PairKind::HoldBoth, true, true),
-    ("Setup+Hold DDR", PairKind::SetupAndHoldBoth, true, true),
+    // against both clock edges, as a double data rate bus latches. They were named "DDR", which reads as the memory
+    ("Setup both edges", PairKind::SetupBoth, true, true),
+    ("Hold both edges", PairKind::HoldBoth, true, true),
+    ("Setup+Hold both edges", PairKind::SetupAndHoldBoth, true, true),
 ];
 
 /// DVM modes and counter modes.
