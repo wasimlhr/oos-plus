@@ -95,7 +95,7 @@ fn the_overview_goes_first_when_the_waveform_is_short_and_the_zoom_bar_stays() {
     assert!(tall.0.h >= 40);
     let short = u.split_zoom(Rect::new(0, 0, 700, 130));
     assert_eq!(short.0.h, 0, "no room for the overview");
-    assert_eq!(short.1.y - short.0.bottom(), 6, "Studio keeps only a gap: the zoom controls are in the waveform title bar or the pull-down tab");
+    assert_eq!(short.1.y - short.0.bottom(), 32, "the zoom row of the Default layout keeps its 32 px");
     assert!(short.1.h >= 88, "the lanes keep their height: {}", short.1.h);
     assert!(u.studio_zoom_bar().is_some());
 }

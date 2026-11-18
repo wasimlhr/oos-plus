@@ -318,13 +318,13 @@ fn default_and_minimal_layouts_do_not_see_the_new_panel() {
 }
 
 #[test]
-fn zoom_on_with_the_panel_at_the_bottom_shows_six_rows_and_the_zoom_bar_is_a_thin_strip() {
+fn zoom_on_with_the_panel_at_the_bottom_shows_six_rows_and_the_zoom_row() {
     let mut u = studio_bottom(12);
     u.m.studio_zoom_tab = false;
     u.m.zoom = true;
     for _ in 0..8 { frame(&mut u); }
     let row = u.zoom_readout();
-    assert!(row.h <= 26, "the zoom strip is {} px", row.h);
+    assert_eq!(row.h, 32, "the zoom row has the height of the Default row");
     let bar = u.studio_zoom_bar().expect("the zoom bar");
     for r in [bar.label, bar.plus, bar.minus, bar.fit, bar.close] { assert!(r.y >= row.y && r.bottom() <= row.bottom(), "{r:?} in {row:?}"); }
     assert!(full_rows(&u) >= 6, "{} rows", full_rows(&u));
