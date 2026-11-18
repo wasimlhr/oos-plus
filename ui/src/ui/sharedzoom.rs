@@ -239,6 +239,17 @@ impl Ui {
         }
     }
 
+    /// What a finger held at (x, y) does when it is on the Zoom button: the zoom source popover opens. False when the
+    /// point is not the button's (`:UI:CONText`; the touch path is `studio_hold_tick`).
+    pub(super) fn studio_sz_hold(&mut self, x: i32, y: i32) -> bool {
+        if self.m.layout != Layout::Studio || self.view_on() || self.full_on() || !self.zoom_btn().1.contains(x, y) { return false; }
+        self.close_menu();
+        self.studio.ch_picker = false;
+        self.studio.sz.ref_pop = None;
+        self.studio.sz.pop = true;
+        true
+    }
+
     // ------------------------------------------------------------------------------------------ zoom popover
 
     /// The zoom source popover: its rectangle and what each part is.

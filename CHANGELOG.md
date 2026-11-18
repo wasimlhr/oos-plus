@@ -47,8 +47,10 @@ Added:
   - the IEEE 488.2 commands a VISA or IVI driver sends when it opens: `*STB?`, `*ESE`, `*SRE`, `*PSC`, `*TST?`,
     `*OPT?`, `*WAI`, `*TRG`, and `:SYSTem:VERSion?`, `:SYSTem:ERRor:NEXT?`.
 - Studio, the zoom source popover (hold the Zoom button): **X zoom** minus and plus beside the Y zoom ones. One
-  step of the zoom time base around the centre of the zoom window; minus ends at the main time base (host-tested,
-  not yet verified on hardware).
+  step of the zoom time base around the centre of the zoom window; minus ends at the main time base (unit: 100×
+  after three steps). Remote: `:UI:CONText` on the Zoom button opens that popover, where it opened the menu of the plot
+  behind it; its rows are listed by `:UI:MENU?` and pressed by `:UI:MENU:SELect`; `:UI:ELEMents?` lists the Zoom
+  and Full screen buttons as `PLOT` (unit).
 - Callouts in Studio (host-tested, not yet verified on hardware): hold on a trace > **Add note here** pins a short
   text to that time on that signal, with a line from the text to the point. It moves with the signal, is edited by a
   tap on its text, removed by emptying it, and is part of the setup text and of a session. Remote, for scripts and
