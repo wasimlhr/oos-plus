@@ -1092,7 +1092,8 @@ impl Scpi {
         let before = self.rec_before_remote(ui);
         let actions = ui.scpi_rec_actions.len();
         let response = self.advance_program(ui, cv, program);
-        // a client's :SINGle or :SAVE:IMAGe runs the code of the key and the row: it is not the user's action
+        // a client's :AUToscale, :CLEar, :TFORce or :SAVE:IMAGe runs the code of the key and the row: it is not the
+        // user's action
         ui.scpi_rec_actions.truncate(actions);
         if let Some(before) = before { self.rec_after_remote(ui, cv, before); }
         self.normalize_errors();

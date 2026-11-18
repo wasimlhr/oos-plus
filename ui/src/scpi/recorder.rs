@@ -19,7 +19,8 @@
 //! first. The settings the action changes are its own: for Run, Stop, Single, Force, Clear and Default the command is
 //! proven like a step, so a setting it leaves different on a second scope gets a line after it; an auto set-up is
 //! written as the command alone, since what it finds is the signal's, and a save is never run a second time.
-//! `*OPC?` stands after Single and Autoset, the operations it waits for.
+//! `*OPC?` stands after Single and Autoset, the operations it waits for. While an auto set-up runs the look at the
+//! set-up waits: what the user sets in that time is taken for the auto set-up's and is not written.
 
 use super::setupscpi::{changed, named};
 use super::*;
@@ -63,12 +64,13 @@ fn comment(text: &str) -> String {
 impl Scpi {
     /// Once a frame, before the clients are read (`poll`): the switch, the look at the set-up, the step that is due.
     pub(crate) fn rec_tick(&mut self, ui: &mut Ui, cv: &Canvas) {
+        // the actions first: one done in the frame the recorder is switched off is still one of the recording
+        self.rec_actions(ui, cv);
         match (ui.scpi_rec_want, self.rec.is_some()) {
             (true, false) => self.rec_start(ui, cv),
             (false, true) => self.rec_stop(ui, cv),
             _ => {}
         }
-        self.rec_actions(ui, cv);
         let Some(rec) = self.rec.as_mut() else { return };
         ui.sync_view_state();
         let now = crate::store::setup_text(&ui.m);
@@ -86,36 +88,48 @@ impl Scpi {
 
     /// The actions since the last frame (`Ui::rec_action`), each written as its command.
     fn rec_actions(&mut self, ui: &mut Ui, cv: &Canvas) {
-        let actions = std::mem::take(&mut ui.scpi_rec_actions);
-        for (line, mut before) in actions {
-            let Some(rec) = self.rec.as_ref() else { return };
-            // what was set before the action and is not written yet is written first, as the set-up was then; a
-            // reset takes it with everything else
-            if line != "*RST" && !rec.hold && (rec.pending || crate::store::setup_text(&before) != rec.seen) {
-                std::mem::swap(&mut ui.m, &mut *before);
-                self.rec_step(ui, cv);
-                std::mem::swap(&mut ui.m, &mut *before);
-            }
-            ui.sync_view_state();
-            let want = crate::store::setup_text(&ui.m);
-            // a command that only sets the state of the scope is proven like a step, from the model before it: what
-            // it leaves different on a second scope gets a line after it. A save would write its file a second time
-            // there, and an auto set-up finds what the signal of that scope has: these are written as they are.
-            let state = matches!(line.as_str(), ":RUN" | ":STOP" | ":SINGle" | ":TFORce" | ":CLEar" | "*RST");
-            let (mut lines, rest) = if state { self.mend(ui, cv, &before, vec![line.clone()], &want) } else { (vec![line.clone()], Vec::new()) };
-            if matches!(line.as_str(), ":SINGle" | ":AUToscale") { lines.insert(1, "*OPC?".to_string()); }
-            let Some(rec) = self.rec.as_mut() else { return };
-            rec.lines.push(comment(&format!("+{:.1} s", (ui.now - rec.started).max(0.0))));
-            rec.commands += lines.len();
-            rec.lines.extend(lines);
-            if let Some(keys) = named(&rest) { rec.lines.push(comment(&format!("not recorded: {keys}"))); }
-            // the settings the action changed are its own: the next step starts from the set-up it left
-            let auto = line == ":AUToscale";
-            if state || auto { (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false); }
-            rec.hold = rec.hold || auto;
-            let _ = crate::store::write(&rec.path, rec.text().as_bytes());
-            ui.toast(&format!("Recorded {line}"));
+        let mut actions = std::mem::take(&mut ui.scpi_rec_actions);
+        for i in 0..actions.len() {
+            // the set-up after this action is the one before the next of the same frame, else the one the scope has
+            let mut after = actions.get(i + 1).map(|next| next.1.clone());
+            let (line, mut before) = (actions[i].0.clone(), std::mem::take(&mut actions[i].1));
+            if let Some(model) = after.as_mut() { std::mem::swap(&mut ui.m, &mut **model); }
+            self.rec_action_written(ui, cv, &line, &mut before);
+            if let Some(model) = after.as_mut() { std::mem::swap(&mut ui.m, &mut **model); }
         }
+    }
+
+    /// One action: `line`, done on the set-up `before`; `ui` has the set-up after it.
+    fn rec_action_written(&mut self, ui: &mut Ui, cv: &Canvas, line: &str, before: &mut Model) {
+        let Some(rec) = self.rec.as_ref() else { return };
+        // what was set before the action and is not written yet is written first, as the set-up was then; a
+        // reset takes it with everything else
+        if line != "*RST" && !rec.hold && (rec.pending || crate::store::setup_text(before) != rec.seen) {
+            std::mem::swap(&mut ui.m, before);
+            self.rec_step(ui, cv);
+            std::mem::swap(&mut ui.m, before);
+        }
+        let want = crate::store::setup_text(&ui.m);
+        // a command that only sets the state of the scope is proven like a step, from the model before it: what
+        // it leaves different on a second scope gets a line after it. A save would write its file a second time
+        // there, and an auto set-up finds what the signal of that scope has: these are written as they are.
+        let state = matches!(line, ":RUN" | ":STOP" | ":SINGle" | ":TFORce" | ":CLEar" | "*RST");
+        let (mut lines, rest) = match state {
+            true => self.mend(ui, cv, before, vec![line.to_string()], &want),
+            false => (vec![line.to_string()], Vec::new()),
+        };
+        if matches!(line, ":SINGle" | ":AUToscale") { lines.insert(1, "*OPC?".to_string()); }
+        let Some(rec) = self.rec.as_mut() else { return };
+        rec.lines.push(comment(&format!("+{:.1} s", (ui.now - rec.started).max(0.0))));
+        rec.commands += lines.len();
+        rec.lines.extend(lines);
+        if let Some(keys) = named(&rest) { rec.lines.push(comment(&format!("not recorded: {keys}"))); }
+        // the settings the action changed are its own: the next step starts from the set-up it left
+        let auto = line == ":AUToscale";
+        if state || auto { (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false); }
+        rec.hold = rec.hold || auto;
+        // no message: the action has said what it did, or why not ("Save failed")
+        let _ = crate::store::write(&rec.path, rec.text().as_bytes());
     }
 
     fn rec_start(&mut self, ui: &mut Ui, cv: &Canvas) {
@@ -166,8 +180,8 @@ impl Scpi {
     }
 
     fn rec_stop(&mut self, ui: &mut Ui, cv: &Canvas) {
-        // what was set last is written without the wait
-        self.rec_step(ui, cv);
+        // what was set last is written without the wait; what an auto set-up that still runs has set is its own
+        if !self.rec.as_ref().is_some_and(|r| r.hold) { self.rec_step(ui, cv); }
         let Some(rec) = self.rec.take() else { return };
         let n = rec.commands;
         ui.scpi_write(&rec.path, &rec.text(), Some(&format!("{n} command{}", if n == 1 { "" } else { "s" })));
@@ -418,10 +432,9 @@ mod tests {
             ui.key(k);
             settle(&mut s, &mut ui, &cv);
         }
+        // the mode a single sweep sets and Run takes back are the commands' own: no line of a setting
         let got = recorded(s.rec_lines());
-        let actions: Vec<&String> = got.iter().filter(|l| !l.starts_with(":TRIG") && !l.starts_with(":SYST")).collect();
-        assert_eq!(actions, [":TIMebase:SCALe 1.000000E-03", ":SINGle", "*OPC?", ":STOP", ":RUN", ":CLEar", ":TFORce"], "{got:?}");
-        assert!(!got.iter().any(|l| l.starts_with(":TRIGger:SWEep SING")), "the mode of the single sweep is its own: {got:?}");
+        assert_eq!(got, [":TIMebase:SCALe 1.000000E-03", ":SINGle", "*OPC?", ":STOP", ":RUN", ":CLEar", ":TFORce"]);
         let want = text(&mut ui);
         let lines: Vec<String> = s.rec_lines().iter().filter(|l| *l != "*OPC?").cloned().collect();
         let (replayed, errors) = replay(&lines);
@@ -478,11 +491,54 @@ mod tests {
         let saved = |dir: &std::path::Path| std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("setup")).count();
         let before = saved(&dir);
         ui.script_menu("Storage").unwrap();
+        // no waveform yet (the scope has not run a frame): the row says so and nothing is recorded
+        ui.script_do("Save waveform (CSV)").unwrap();
+        settle(&mut s, &mut ui, &cv);
+        assert!(recorded(s.rec_lines()).is_empty() && ui.toast_text() == "No waveform to save", "{:?}", s.rec_lines());
         ui.script_do("Save setup").unwrap();
+        assert_eq!(saved(&dir), before.max(1), "the file of the slot");
+        // the row has written it; the recorder, a frame later, must not run the save again
+        for e in std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("setup")) {
+            std::fs::remove_file(e.path()).unwrap();
+        }
         settle(&mut s, &mut ui, &cv);
         assert_eq!(recorded(s.rec_lines()), [":SAVE:SETup"], "{:?}", s.rec_lines());
-        assert_eq!(saved(&dir), before.max(1), "the file of the slot, written once");
+        assert_eq!(saved(&dir), 0, "written once, by the row");
+        assert!(ui.toast_text().starts_with("Saved setup"), "the row's message stays: {}", ui.toast_text());
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The action is recorded where it is done: the Quick key set to Clear is a Clear. Two actions in one frame are
+    /// two commands, each with its own settings: the auto set-up's are not written after the reset. An action in the
+    /// frame the recorder is switched off is in the file.
+    #[test]
+    fn an_action_is_recorded_where_it_is_done() {
+        use crate::ui::key;
+        let (mut s, mut ui, cv) = session();
+        let dir = std::env::temp_dir().join(format!("oos-recorder-done-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        ui.store_dir = dir.clone();
+        for _ in 0..20 { ui.step(0.05); }
+        // what the Quick key does is a setting: set before the recorder is on, it is no line
+        ui.m.quick = Quick::Clear;
+        start(&mut s, &mut ui, &cv);
+        ui.key(key::QUICK);
+        settle(&mut s, &mut ui, &cv);
+        assert_eq!(recorded(s.rec_lines()), [":CLEar"], "{:?}", s.rec_lines());
+        user(&mut ui, "tdiv", "0.5");
+        settle(&mut s, &mut ui, &cv);
+        ui.key(key::DEFAULT);
+        ui.key(key::AUTO);
+        settle(&mut s, &mut ui, &cv);
+        assert_eq!(recorded(s.rec_lines()), [":CLEar", ":TIMebase:SCALe 5.000000E-01", "*RST", ":AUToscale", "*OPC?"], "{:?}", s.rec_lines());
+        ui.key(key::SINGLE);
+        ui.scpi_rec_want = false;
+        s.poll(&mut ui, &cv);
+        assert!(s.rec.is_none());
+        assert_eq!(recorded(s.rec_lines()).last().map(String::as_str), Some("*OPC?"), "{:?}", s.rec_lines());
+        assert!(recorded(s.rec_lines()).contains(&":SINGle".to_string()));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
