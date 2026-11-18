@@ -1332,6 +1332,11 @@ type MeasJob = (u64, Vec<(usize, MeasSrc, f64, f64, bool)>);
 type MeasWork<'a> = (usize, &'a [f32], f64, f64, bool);
 type MeasDone = (u64, Vec<(usize, Stats, oos_dsp::measure::Analysis)>);
 
+/// The frame holds every sample of its acquisition: not min/max pairs, not a part read for a view.
+fn whole_frame(f: &crate::board::Frame) -> bool {
+    !f.envelope && f.acq.1 > 0 && f.ch.iter().any(|v| v.len() >= f.acq.1)
+}
+
 /// The measurements of a record, each channel on its own thread (the four channels of 100 kpts took 27 ms in a row
 /// on the unit); min/max pairs in time on the mean of neighbours (#118).
 fn measure_channels(work: &[MeasWork]) -> Vec<(usize, Stats, oos_dsp::measure::Analysis)> {
@@ -1523,6 +1528,10 @@ pub struct Ui {
     /// stays `last[0]`, the record measured and read out (`stop_replay`, docs/fork/stop-exact.md)
     stop_raw: Option<Record>,
     stop_pic: Option<Record>,
+    /// STOP: the view that holds the whole stored record, still to be asked of the hardware. The record shown at the
+    /// stop is the last one the screen took, and the memory of the hardware, which every view is read from, may hold
+    /// a later acquisition: that one is read whole first and is the record of the stop from then on (`stop_replay`)
+    stop_whole: Option<(f64, f64)>,
     /// STOP: the record shown was loaded from a session, with its samples. What the hardware has in its memory is
     /// another acquisition, so the STOP does not read that again in its place (`stop_replay`); RUN ends it
     loaded_record: bool,
@@ -1948,6 +1957,7 @@ impl Ui {
             stop_ti_off: None,
             stop_raw: None,
             stop_pic: None,
+            stop_whole: None,
             loaded_record: false,
             t_fast: 0.0,
             t_fast_ab: (0.0, 0.0),
@@ -3038,10 +3048,10 @@ impl Ui {
 
     /// The frame a read of the memory takes (RAW, the memory save). In STOP the record shown is read again for every
     /// view (`stop_replay`), far zoomed in as the samples of the view and a margin only: then the record of the stop
-    /// itself, when it holds every sample of the acquisition, stays the memory, whatever the view shows of it.
+    /// itself, when it holds every sample of the acquisition, stays the memory, whatever the view shows of it. That
+    /// record is the acquisition the views are read from: `stop_replay` reads it whole from the hardware first.
     fn memory_raw(&self) -> Option<&Raw> {
-        let whole = |r: &&Raw| !r.frame.envelope && r.frame.acq.1 > 0 && r.frame.ch.iter().any(|v| v.len() >= r.frame.acq.1);
-        let stop = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(whole);
+        let stop = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame));
         stop.or_else(|| self.last[0].as_ref()?.raw.as_ref())
     }
 
@@ -3742,14 +3752,34 @@ impl Ui {
                 let ti = raw.i0 as f64 - raw.t0 / f.dt;
                 (ti - f.fixed_ti.unwrap_or(f.pre as f64)) * f.dt
             });
+            // that record is the last one the screen took. The hardware goes on to the end of its batch, so what its
+            // memory holds, and every view below is read from, may be a later acquisition: the screen and the
+            // measurements showed one acquisition and the memory read out (RAW) another (seen on a unit, 2026-11-18:
+            // a 2.16 V peak on the screen that was not in the memory). A whole record is so read whole once more
+            // first, with a view that holds all of it, and what comes is the record of the stop
+            self.stop_whole = self.stop_raw.as_ref().and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame)).map(|r| {
+                let (n, f) = (r.frame.acq.1 as f64, &r.frame);
+                (n * f.dt / HDIV as f64, (n / 2.0 - f.pre as f64) * f.dt)
+            });
         }
         let view = (self.m.time_per_div() as f64, self.m.delay as f64);
-        let Some(mut f) = self.src.hw_stop(Some(view)) else { return };
+        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.unwrap_or(view))) else { return };
         if let (Some(t), Some(off)) = (f.fixed_ti, self.stop_ti_off) {
             f.fixed_ti = Some(t + off / f.dt);
         }
+        let whole = whole_frame(&f);
         let window = view.0 * HDIV as f64;
         let rec = crate::board::to_record(&std::sync::Arc::new(f), &self.m, 3600, window, view.1 - window / 2.0);
+        if self.stop_whole.take().is_some() {
+            // not whole (a record the hardware reads as pairs at that view): the record of the stop stays. Either
+            // way the view shown is asked for next
+            if whole {
+                self.stop_raw = Some(rec.clone());
+                (self.last[0], self.stop_pic) = (Some(rec), None);
+                self.measure_last();
+            }
+            return;
+        }
         // a view read as min/max pairs (zoomed out on a record above `LIVE_READ`: the whole record compressed) after a
         // STOP on a raw record (the final frame of a deep record): the pairs are drawn, the raw record stays the one
         // measured and read out; pairs hold no Mean, RMS or Std dev (A3 of the 2026-11-16 review). A view read raw (far
@@ -12713,23 +12743,92 @@ mod tests {
         assert_eq!(ui.channel_points(0, true), n);
         ui.m.run = RunState::Stop;
         steps(&mut ui, 3);
-        assert!(shared.lock().unwrap().stop_view.is_some(), "the UI asks for the view read again");
+        // first the stored record whole: a view of the 80 us of the record, centred on it
+        let asked = shared.lock().unwrap().stop_view.expect("the UI asks for the stored record");
+        assert!((asked.0 / 8e-6 - 1.0).abs() < 1e-9 && asked.1.abs() < 1e-12, "{asked:?}");
         let origin = ui.channel_origin(0, true).unwrap();
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some(pre as f64), ..frame(2, v.clone()) });
+        steps(&mut ui, 2);
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "then the view shown: {asked:?}");
         // the thread's answer (`stop_plan`): the screen and a quarter screen each side, 93760 points from point 3120
         let (lo, len) = (3120usize, 93_760usize);
-        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(2, v[lo..lo + len].to_vec()) });
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(3, v[lo..lo + len].to_vec()) });
         steps(&mut ui, 2);
         let shown = ui.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| (r.frame.seq, r.frame.ch[0].len()));
-        assert_eq!(shown, Some((2, len)), "the view read again is the record shown");
+        assert_eq!(shown, Some((3, len)), "the view read again is the record shown");
         assert_eq!(ui.channel_points(0, true), n, "the memory is the whole record");
         assert_eq!(ui.channel_origin(0, true), Some(origin));
         assert_eq!(ui.channel_page(0, true, 1001, 1001).unwrap().0, vec![0.75]);
         // RUN: the record of the STOP is let go, the memory is that of the record shown again
         ui.m.run = RunState::Run;
-        shared.lock().unwrap().queue.push_back(frame(3, v));
+        shared.lock().unwrap().queue.push_back(frame(4, v));
         steps(&mut ui, 2);
         assert!(ui.stop_raw.is_none());
         assert_eq!(ui.channel_points(0, true), ui.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.ch[0].len());
+    }
+
+    // Break it catches: the memory read out after a STOP (RAW, the memory save) was the last record the screen had
+    // taken, while the screen and the measurements showed the record the hardware went on to store: two acquisitions.
+    // Seen on a unit, 2026-11-18: a 2.16 V peak on the screen and in Vmax that was not in the memory.
+    #[test]
+    fn the_memory_read_after_a_stop_is_the_acquisition_on_the_screen() {
+        use super::*;
+        let scope = || {
+            let shared: crate::board::HwShared = Default::default();
+            let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+            ui.m.run = RunState::Run;
+            ui.m.trig_level = 0.0;
+            ui.m.ch[0].offset = 0.0;
+            for c in 1..NCH {
+                ui.m.ch[c].on = false;
+            }
+            ui.m.meas = vec![(Meas::Vmax, WaveId::Ch(0))];
+            ui.m.meas2.clear();
+            ui.m.tscale = tscales().iter().position(|&t| (t as f64 - 5e-6).abs() < 1e-11).unwrap();
+            (ui, shared)
+        };
+        let (mut ui, shared) = scope();
+        let (n, pre) = (100_000usize, 50_000usize);
+        // an edge at the trigger point, and a pulse of its own height in each acquisition
+        let wave = |top: f32| -> Vec<f32> { (0..n).map(|i| if (60_000..60_100).contains(&i) { top } else if i < pre { -1.0 } else { 1.0 }).collect() };
+        let frame = |seq: u64, v: Vec<f32>| crate::board::Frame { seq, dt: 0.8e-9, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], acq: (1.25e9, n), ..Default::default() };
+        let steps = |ui: &mut Ui, k: usize| {
+            for _ in 0..k {
+                ui.step(0.02);
+            }
+        };
+        let memory_top = |ui: &Ui| ui.channel_page(0, true, 60_051, 60_051).unwrap().0[0];
+        // the screen takes one acquisition, the hardware stores another before it stops
+        shared.lock().unwrap().queue.push_back(frame(1, wave(1.5)));
+        steps(&mut ui, 3);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        assert_eq!(memory_top(&ui), 1.5);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some(pre as f64), ..frame(2, wave(2.25)) });
+        steps(&mut ui, 2);
+        let shown = |ui: &Ui| ui.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| r.frame.seq);
+        assert_eq!(shown(&ui), Some(2), "the stored record is the record shown");
+        assert!((ui.meas(0, Meas::Vmax) - 2.25).abs() < 1e-3, "Vmax {}", ui.meas(0, Meas::Vmax));
+        assert_eq!(memory_top(&ui), 2.25, "and the memory read out");
+        assert_eq!(ui.channel_points(0, true), n);
+        // a view of a part of it, read again: shown and measured, the memory stays that whole record
+        let (lo, len) = (3120usize, 93_760usize);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some((pre - lo) as f64), ..frame(3, wave(2.25)[lo..lo + len].to_vec()) });
+        steps(&mut ui, 2);
+        assert_eq!(shown(&ui), Some(3));
+        assert_eq!((ui.channel_points(0, true), memory_top(&ui)), (n, 2.25));
+        // an answer that is not the whole record (pairs) leaves the record of the stop as it is
+        let (mut ui, shared) = scope();
+        shared.lock().unwrap().queue.push_back(frame(1, wave(1.5)));
+        steps(&mut ui, 3);
+        ui.m.run = RunState::Stop;
+        steps(&mut ui, 3);
+        shared.lock().unwrap().replay = Some(crate::board::Frame { fixed_ti: Some(pre as f64 / 2.0), envelope: true, dt: 1.6e-9, ..frame(2, wave(2.25)[..n / 2].to_vec()) });
+        steps(&mut ui, 2);
+        assert_eq!((shown(&ui), memory_top(&ui)), (Some(1), 1.5));
+        let asked = shared.lock().unwrap().stop_view.unwrap();
+        assert!((asked.0 / 5e-6 - 1.0).abs() < 1e-6, "the view shown is asked for next: {asked:?}");
     }
 
     // Break it catches: a session held the 3600 points of the screen, so a loaded capture had lost its samples: a
