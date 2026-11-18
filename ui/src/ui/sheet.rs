@@ -357,6 +357,11 @@ impl Ui {
             // menu has one level down
             MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow].into_iter()
                 .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
+            // Display: the skin and the choice of the bottom bar are rows of the Default layout's menu. A sheet is up
+            // only in Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
+            MenuId::Display => {
+                self.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::Skin | Item::BottomBar)).collect()
+            }
             m => self.items(m),
         }
     }
