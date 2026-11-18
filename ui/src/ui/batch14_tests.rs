@@ -189,7 +189,7 @@ fn in_waveform_focus_the_badge_row_buttons_work() {
     u.studio_set_view(StudioView::Waveform);
     frame(&mut u);
     // the list button: opens the measurement list
-    let c = u.studio_compact_chip();
+    let c = u.studio_list_chip();
     tap(&mut u, c);
     assert!(u.studio.view != StudioView::Waveform || u.menu_open, "the list button does something");
 }

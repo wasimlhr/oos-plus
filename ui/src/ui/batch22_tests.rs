@@ -130,41 +130,48 @@ fn the_detailed_columns_at_every_width_follow_each_other_and_name_value_and_mean
     }
 }
 
+/// The badge style is a row of the Measure sheet, and the badge row follows it. The row itself has two buttons at its
+/// right end: the one that opens the list of measurements, which says "Meas" and how many, and the eye. (It had two
+/// more of an icon each, for the style and for the compact view.)
 #[test]
-fn the_badge_row_has_a_button_that_switches_studio_and_classic_and_the_sheet_follows() {
+fn the_badge_row_has_one_named_button_and_the_eye_and_the_style_is_on_the_sheet() {
     let mut u = studio();
     u.studio_set_view(StudioView::Waveform);
     for k in u.studio_keys() { u.studio_set_pin(k, true); }
     for _ in 0..4 { frame(&mut u); }
+    // (a new set-up has the classic strip; the test starts from the Studio badges)
+    assert!(u.studio_classic());
+    assert_eq!(u.value(Item::BadgeStyle), "Classic");
+    u.select_option(Item::BadgeStyle, "Studio");
+    for _ in 0..2 { frame(&mut u); }
     assert!(!u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
-    let (style, compact, eye) = (u.studio_style_chip(), u.studio_compact_chip(), u.studio_eye());
-    assert!(style.right() < compact.x && compact.right() < eye.x, "{style:?} {compact:?} {eye:?}");
-    let hit = Ui::hit40(style);
-    assert!(hit.w >= 40 && hit.right() < compact.x, "the hit area stays off the neighbour");
-    for (_, r) in u.studio_badges() { assert!(r.right() <= style.x, "badges end before the button"); }
+    let (list, eye) = (u.studio_list_chip(), u.studio_eye());
+    assert!(list.right() < eye.x && list.w >= 60, "{list:?} {eye:?}");
+    for (_, r) in u.studio_badges() { assert!(r.right() <= list.x, "badges end before the button"); }
+    // it says what it opens
+    let mut cv = Canvas::new(W, H);
+    cv.au_start();
+    u.render(&mut cv);
+    let want = format!("Meas \u{b7} {}", u.measurement_count());
+    let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), clip, .. }
+        if s == want && list.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= clip.2 && ink.2 <= list.right()));
+    assert!(said, "the button says {want}");
     shot(&mut u, "badges-studio");
-    tap(&mut u, style);
-    assert!(u.studio_classic() && u.m.studio_classic);
-    assert_eq!(u.value(Item::BadgeStyle), "Classic", "the Measure sheet shows it");
-    assert!(!u.studio.compact && !u.studio.hide_badges, "the other buttons were not touched");
-    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= u.studio_style_chip().x));
-    shot(&mut u, "badges-classic");
-    let s = u.studio_style_chip();
-    tap(&mut u, s);
-    assert!(!u.studio_classic());
-    assert_eq!(u.value(Item::BadgeStyle), "Studio");
-    // the sheet sets it too, and the button follows
+    // the sheet sets the style, and the row follows
     u.select_option(Item::BadgeStyle, "Classic");
     frame(&mut u);
-    assert!(u.studio_classic());
-    let s = u.studio_style_chip();
-    tap(&mut u, s);
+    assert!(u.studio_classic() && u.m.studio_classic);
+    assert!(!u.studio.compact && !u.studio.hide_badges);
+    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= u.studio_list_chip().x));
+    shot(&mut u, "badges-classic");
+    u.select_option(Item::BadgeStyle, "Studio");
+    frame(&mut u);
     assert!(!u.studio_classic());
-    // compact and the eye still do their own work
-    let c = u.studio_compact_chip();
+    // the button opens the list in every view, and the eye hides the row
+    let c = u.studio_list_chip();
     tap(&mut u, c);
-    assert_eq!(u.studio.view, StudioView::Docked, "with the panel closed the list button opens it");
+    assert_eq!(u.studio.view, StudioView::Docked, "the list of measurements");
     u.studio_set_view(StudioView::Waveform);
     u.step(0.05);
     let e = u.studio_eye();

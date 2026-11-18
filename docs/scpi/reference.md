@@ -13,7 +13,7 @@ Part of the [SCPI reference](README.md).
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:REFerence:SLOT` | Set / Query | `R1..R10` Choose the destination/working slot. | `R1` | Reference > Slot | OOS extension |
-| `:REFerence:LOAD` | Action | `"path"` Load into that slot. Absolute paths refer to the server PC/scope; relative paths are beside setups. A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read. | - | Reference > Import (load file) | OOS extension |
+| `:REFerence:LOAD` | Action | `"path"` Load into that slot. Absolute paths refer to the server PC/scope; relative paths are beside setups, else in the save folder (where `:REFerence:EXPort "name"` and `:SAVE:WAVeform "name"` write). A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read. | - | Reference > Import (load file) | OOS extension |
 | `:REFerence:IMPort` | Action | `["path"]` Load named file (as LOAD), or the selected `refN` file beside setups. | - | Reference > Import (load file) | OOS extension |
 | `:REFerence:SAVE` | Action | Copy the selected acquired channel record into the selected reference slot. Does not write a waveform file. | - | Reference > Save to slot | OOS extension |
 | `:REFerence:CURRent` | Set / Query | `1..10` Working slot, returned as a number; SLOT returns `Rn`. | `1` | Reference > Slot select | OOS extension |

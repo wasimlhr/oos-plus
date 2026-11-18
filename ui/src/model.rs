@@ -1866,7 +1866,8 @@ impl Default for Model {
             studio_detail: true,
             studio_overlay: false,
             studio_zoom_tab: true,
-            studio_classic: false,
+            // the classic strip is the badge style of a new set-up (Measure > Badge style)
+            studio_classic: true,
             hdmi: HdmiMode::Waveform,
             bar_compact: false,
             draw_batch: false,

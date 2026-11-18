@@ -936,8 +936,19 @@ impl Ui {
         self.popup(&format!("CH{}", c + 1), x, y, rows);
     }
     /// Mouse right-click and a stationary touch hold take the exact same path.
+    /// The zoom overview and the zoom toolbar: where a resting finger is at work, not asking for a menu.
+    pub(super) fn zoom_rest_area(&self, x: i32, y: i32) -> bool {
+        if !self.m.zoom || self.xy_over() || self.view_on() { return false; }
+        let (overview, _) = self.split_zoom(self.grid);
+        overview.contains(x, y) || (self.m.layout == Layout::Studio && self.zoom_readout().contains(x, y))
+    }
+
     pub fn context_menu(&mut self, x: i32, y: i32) {
         if self.m.touch_lock { return; }
+        // The zoom overview and its toolbar are worked with a finger that rests: the window is held and dragged, a
+        // chip is held while the eye is on the trace. A long touch there opens no menu (it opened the plot's, in the
+        // middle of moving the window, on a unit 2026-11-18). The menu of the plot is in the zoom view and the lanes.
+        if self.zoom_rest_area(x, y) { return; }
         if let Some(chip) = self.md_chip_at(x, y) { return self.studio_chip_popup(chip, x, y); }
         let eye = self.eye_open() && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER).contains(x, y);
         let measurements = self.results_rects().is_some_and(|(head, _)| head.contains(x, y));
@@ -1149,6 +1160,8 @@ impl Ui {
         let Some(mut gesture) = self.workspace.gesture else { return };
         if gesture.moved || gesture.held || self.now - gesture.at < HOLD { return; }
         if self.menu_open || self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() || self.m.touch_lock { return; }
+        // no hold there at all: the finger goes on to drag the window or to lift as a tap
+        if self.zoom_rest_area(gesture.x, gesture.y) { return; }
         gesture.held = true;
         self.workspace.gesture = Some(gesture);
         self.context_menu(gesture.x, gesture.y);

@@ -275,9 +275,10 @@ fn sim_is_in_the_menu_and_live_is_in_the_top_bar_when_viewing_a_record() {
 fn a_short_top_bar_shortens_labels_instead_of_dropping_buttons() {
     let u = studio();
     let t = u.studio_top();
-    assert!(t.cursors.w > 0 && t.view.w > 0 && t.add.w > 0, "Add is the one button for Add and Meas; Cursor has its own, as in Default");
+    // Cursors has a button of its own again, between Add and Display (through Add the cursors were three taps away)
+    assert!(t.cursors.w >= 40 && t.view.w > 0 && t.add.w > 0, "Add, Cursors, Display, Storage, View");
     assert!(t.acq.w >= 120 || t.add.w < u.fonts().mb.width("Add") + 20);
-    assert!(t.add.right() < t.display.x);
+    assert!(t.add.right() < t.cursors.x && t.cursors.right() < t.display.x);
 }
 
 fn tap_cell(u: &mut Ui, it: Item) {
@@ -457,7 +458,10 @@ fn the_classic_badge_strip_has_a_row_per_source_with_even_columns() {
     two_sources(&mut u);
     for k in u.studio_keys() { u.studio_set_pin(k, true); }
     for _ in 0..4 { frame(&mut u); }
-    assert!(!u.m.studio_classic, "Studio is the default");
+    // the classic strip is the style of a new set-up; the test starts from the other one
+    assert!(u.m.studio_classic && Model::default().studio_classic, "Classic is the default");
+    u.studio_set_classic(false);
+    for _ in 0..2 { frame(&mut u); }
     let studio_h = u.studio_row().h;
     assert!(u.studio_badges().len() >= 3);
     // the setting: Measure > Badge style

@@ -1602,7 +1602,11 @@ impl Ui {
         let p = if p.is_absolute() {
             p.to_path_buf()
         } else {
-            self.setup_path().parent().map(|d| d.join(p)).unwrap_or_else(|| p.to_path_buf())
+            // beside the setups, as ever; else in the save folder, where a waveform or a reference saved under a name
+            // lies (`:REFerence:EXPort "a.csv"` then `:REFerence:LOAD "a.csv"` did not find its own file)
+            let beside = self.setup_path().parent().map(|d| d.join(p)).unwrap_or_else(|| p.to_path_buf());
+            let saved = self.save_dir().join(p);
+            if !beside.exists() && saved.exists() { saved } else { beside }
         };
         self.ref_load_file(&p)
     }

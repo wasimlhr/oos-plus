@@ -17,8 +17,52 @@ mod sim_bus_tests;
 
 const PRBS: [u8; 6] = [7, 9, 13, 15, 23, 31];
 
-/// Most samples of a SIM record made for a reference beside live channels: 16 MB of samples.
-const SIM_REF_SAMPLES: usize = 4_000_000;
+/// A SIM record made for a reference beside live channels is as long as their screen, within what this machine makes
+/// in `SIM_REF_SECONDS` and holds in `1 / SIM_REF_MEMORY` of its free memory, and within the generator's own limit.
+/// Not a number of samples: a lane of 64 Gbit/s has sixteen times the samples of one of 4 Gbit/s for the same time,
+/// and a scope generates a few million a second where a desktop makes many more. The time: the generation runs
+/// beside the screen, and a few seconds is what a tap on "Add to ref" may take before it looks stuck.
+const SIM_REF_SECONDS: f64 = 3.0;
+const SIM_REF_MEMORY: u64 = 8;
+/// Samples a second of the generator, measured on every long generation (f64 bits; 0 = not measured yet), and what
+/// is assumed until then: the rate of a DHO924S (4 M samples in 1.6 s, unit 2026-11-18), the slow end.
+static SIM_RATE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+const SIM_RATE_ASSUMED: f64 = 2.5e6;
+
+/// What ended a SIM record made for a reference before the screen was full.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum SimLimit {
+    Time,
+    Memory,
+    Generator,
+}
+
+impl SimLimit {
+    fn text(self) -> &'static str {
+        match self {
+            SimLimit::Time => "generation time",
+            SimLimit::Memory => "free memory",
+            SimLimit::Generator => "the generator's 16 M samples",
+        }
+    }
+}
+
+/// Most samples of such a record now, and what sets that: `rate` samples a second, `free` bytes of memory (None where
+/// the system does not say).
+pub(super) fn sim_ref_budget(rate: f64, free: Option<u64>) -> (usize, SimLimit) {
+    let by_time = (rate.max(1.0) * SIM_REF_SECONDS) as usize;
+    let by_memory = free.map_or(usize::MAX, |b| (b / SIM_REF_MEMORY / 4) as usize);
+    [(by_time, SimLimit::Time), (by_memory, SimLimit::Memory), (oos_dsp::hss::MAX_SAMPLES, SimLimit::Generator)].into_iter().min_by_key(|x| x.0).unwrap()
+}
+
+fn sim_rate() -> f64 {
+    // the tests generate every preset: the same record on every computer, 4 M samples
+    if cfg!(test) {
+        return 4e6 / SIM_REF_SECONDS;
+    }
+    let bits = SIM_RATE.load(std::sync::atomic::Ordering::Relaxed);
+    if bits == 0 { SIM_RATE_ASSUMED } else { f64::from_bits(bits) }
+}
 
 struct Request {
     id: u64,
@@ -76,7 +120,14 @@ impl Generation {
         std::thread::Builder::new().name("oos-sim".into()).spawn(move || {
             while let Ok(mut request) = input.recv() {
                 while let Ok(newer) = input.try_recv() { request = newer; }
+                let started = std::time::Instant::now();
                 let made = match request.samples { Some(n) => serial::try_generate_len(&request.lane, n), None => serial::try_generate(&request.lane) };
+                // the rate of this machine, from records long enough to time (`sim_ref_budget`)
+                if let (Ok(v), secs) = (&made, started.elapsed().as_secs_f64()) {
+                    if v.len() >= 500_000 && secs > 0.02 {
+                        SIM_RATE.store((v.len() as f64 / secs).to_bits(), std::sync::atomic::Ordering::Relaxed);
+                    }
+                }
                 let generated = made.map(|samples| Generated::evaluate(&request, samples));
                 if output.send((request, generated)).is_err() { break; }
             }
@@ -568,10 +619,11 @@ impl Ui {
         }
         let slot = self.m.sim_slot;
         let lane = self.sim_lane();
-        // beside live channels the reference is as long as their screen, as far as the sample rate of the lane allows
-        // within SIM_REF_SAMPLES; the usual record of a fast lane is a few microseconds, a blip on a millisecond screen
+        // beside live channels the reference is as long as their screen, as far as this machine makes and holds it
+        // (`sim_ref_budget`); the usual record of a fast lane is a few microseconds, a blip on a millisecond screen
         let screen = self.m.time_per_div() as f64 * HDIV as f64;
-        let counted = if self.record_mode() { serial::sample_count(&lane) } else { serial::sample_count_for(&lane, screen, SIM_REF_SAMPLES) };
+        let (budget, limit) = sim_ref_budget(sim_rate(), super::sysinfo::memory().map(|m| m.0));
+        let counted = if self.record_mode() { serial::sample_count(&lane) } else { serial::sample_count_for(&lane, screen, budget) };
         let count = match counted { Ok(c) => c, Err(e) => return self.toast(&format!("SIM: {e}")) };
         let longer = serial::sample_count(&lane).is_ok_and(|usual| count > usual);
         if count <= 65_536 {
@@ -585,10 +637,15 @@ impl Ui {
         if self.sim_generation.is_none() {
             match Generation::new() { Ok(w) => self.sim_generation = Some(w), Err(e) => return self.toast(&format!("SIM: {e}")) }
         }
-        let name = lane.name;
+        let (name, dt) = (lane.name, serial::dt_of(&lane));
         let request = Request { id: 0, lane, slot, continuing: false, fresh: false, run: false, guard: String::new(), trigger: None, bus_trigger: None, add_only: true, samples: longer.then_some(count) };
         match self.sim_generation.as_mut().unwrap().submit(request) {
-            Ok(()) => self.toast(&format!("Generating {name} ({:.1} M samples)", count as f64 / 1e6)),
+            Ok(()) => {
+                // how much of the screen the record covers, and what ended it where it is less
+                let seconds = count as f64 * dt;
+                let short = if seconds < 0.99 * screen { format!(" of {}, limited by {}", si(screen, "s"), limit.text()) } else { String::new() };
+                self.toast(&format!("Generating {name}: {:.1} M samples, {}{short}", count as f64 / 1e6, si(seconds, "s")))
+            }
             Err(e) => self.toast(&format!("SIM: {e}")),
         }
     }
@@ -957,6 +1014,25 @@ mod tests {
 
     fn ui() -> Ui {
         Ui::new(Source::Demo { t: 0.0 })
+    }
+
+    // Break it catches: a SIM record for a reference limited to one number of samples whatever the machine and the lane
+    // (4 M: 100 us of PCIe 2.0, seen on a unit, 2026-11-18, beside a 500 ms screen).
+    #[test]
+    fn a_reference_record_is_as_long_as_the_machine_makes_in_its_time() {
+        // a scope: 2.5 M samples a second, 3.5 GB free: the time ends the record
+        assert_eq!(sim_ref_budget(2.5e6, Some(3_500 << 20)), (7_500_000, SimLimit::Time));
+        // a desktop is faster than the generator's own limit asks for
+        assert_eq!(sim_ref_budget(50e6, Some(16_000 << 20)), (oos_dsp::hss::MAX_SAMPLES, SimLimit::Generator));
+        // little memory left: an eighth of it, at 4 bytes a sample
+        assert_eq!(sim_ref_budget(50e6, Some(64 << 20)), (2 << 20, SimLimit::Memory));
+        assert_eq!(sim_ref_budget(50e6, None).1, SimLimit::Generator);
+        // the same budget is a time that follows the lane: 8 samples a unit interval
+        let (n, _) = sim_ref_budget(2.5e6, None);
+        for (rate, seconds) in [(100e6, 9.375e-3), (5e9, 187.5e-6), (64e9, 14.65e-6)] {
+            let got = n as f64 / (8.0 * rate);
+            assert!((got - seconds).abs() < 0.01 * seconds, "{rate} bit/s: {got} s");
+        }
     }
 
     #[test]

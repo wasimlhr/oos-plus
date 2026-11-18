@@ -460,16 +460,17 @@ fn the_plot_context_menu_is_a_clamped_grouped_popover_with_the_lane_and_the_mode
     let mut u = studio_with(4);
     u.m.ch[1].on = true;
     for _ in 0..4 { frame(&mut u); }
-    // near the bottom right corner: kept on the screen, and at most 300 wide
+    // near the bottom right corner: kept on the screen. Two columns of rows a finger high (it was one of 28 px rows)
     u.context_menu(W - 10, H - 80);
     assert!(u.studio.ctx.is_some() && u.workspace.popup.is_none(), "the old list popup is not used");
     let p = u.studio_ctx_rect().unwrap();
-    assert!(p.w <= 300 && p.x >= 0 && p.right() <= W && p.y >= 0 && p.bottom() <= H, "{p:?}");
+    assert!(p.w <= 500 && p.x >= 0 && p.right() <= W && p.y >= 0 && p.bottom() <= H, "{p:?}");
     let rows = u.studio_ctx_rows();
-    assert!(rows.iter().all(|(_, _, r)| r.h >= 24 && r.x >= p.x && r.right() <= p.right() && r.bottom() <= p.bottom()));
+    assert!(rows.iter().all(|(_, _, r)| r.h >= 40 && r.x >= p.x && r.right() <= p.right() && r.bottom() <= p.bottom()));
     let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
-    for want in ["Overlay traces", "Stacked traces", "Fit record", "Zoom here", "Zoom box", "Run", "Single", "Autoset", "Trigger settings", "Cursor here", "Sources"] {
-        assert!(labels.iter().any(|l| l == &want || (want == "Run" && *l == "Stop")), "{want} in {labels:?}");
+    // (Run, Single, Trigger settings and Sources are on the bars and not repeated here)
+    for want in ["Overlay traces", "Stacked traces", "Fit record", "Zoom here", "Zoom box", "Autoset", "Cursor here"] {
+        assert!(labels.iter().any(|l| l == &want), "{want} in {labels:?}");
     }
     assert!(labels.iter().any(|l| l.starts_with("Trigger on ")) && labels.iter().any(|l| l.starts_with("Measurement on ")), "{labels:?}");
     shotb(&mut u, "context-menu-corner");
@@ -512,7 +513,7 @@ fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
     assert!(u.m.studio_zoom_tab && u.studio_zoom_bar().is_none() && !u.zoom_tab_open());
     let tab = u.zoom_tab_rect();
     let (_, z) = u.split_zoom(u.grid);
-    assert!(tab.y == z.y && tab.w < 200 && tab.h <= 22);
+    assert!(tab.y == z.y && tab.w < 200 && tab.h <= 28);
     shotb(&mut u, "zoom-tab-closed");
     tap(&mut u, tab);
     assert!(u.zoom_tab_open() && u.studio_zoom_bar().is_some());
@@ -525,14 +526,25 @@ fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
     let z0 = u.m.zscale;
     tap(&mut u, bar.plus);
     assert!(u.m.zscale < z0 && u.zoom_tab_open());
-    // a tap outside shuts it
+    // it is used with a finger: the chips are a finger high, and it stays through a tap elsewhere and through time
+    assert!(bar.plus.h >= 40 && bar.minus.h >= 40 && bar.close.h >= 40, "{:?}", bar.plus);
     tap_at(&mut u, 200, z.y + 80);
-    assert!(!u.zoom_tab_open());
-    // idle shuts it too
-    let tab = u.zoom_tab_rect();
-    tap(&mut u, tab);
-    assert!(u.zoom_tab_open());
+    assert!(u.zoom_tab_open(), "a tap on the trace is not for the toolbar");
     for _ in 0..30 { u.step(0.2); }
+    assert!(u.zoom_tab_open(), "it does not go away by itself");
+    // a long touch on the overview or on the toolbar opens no menu: a finger rests there while it works the zoom
+    let (overview, zoomed_view) = u.split_zoom(u.grid);
+    let bar_rect = u.zoom_tab_bar_rect();
+    for (x, y) in [(overview.x + overview.w / 3, overview.y + overview.h / 2), (bar_rect.x + bar_rect.w / 2, bar_rect.y + bar_rect.h / 2)] {
+        u.context_menu(x, y);
+        assert!(u.studio.ctx.is_none() && u.workspace.popup.is_none(), "a menu at ({x}, {y})");
+    }
+    u.context_menu(zoomed_view.x + zoomed_view.w / 3, zoomed_view.y + zoomed_view.h / 2 + 30);
+    assert!(u.studio.ctx.is_some(), "the zoom view keeps the menu of the plot");
+    u.studio.ctx = None;
+    // a tap on its label folds it to the tab again
+    let label = u.studio_zoom_bar().unwrap().label;
+    tap(&mut u, label);
     assert!(!u.zoom_tab_open());
     // pulled down it opens
     let tab = u.zoom_tab_rect();

@@ -108,6 +108,101 @@ fn walk_every_sheet_row() {
     }
 }
 
+/// Every switch of every sheet, there and back: on, the sheet closed and opened again (the switch still says on), a
+/// view the switch put on the screen closed by its X (the switch then says off) and brought back by the switch, and
+/// off again (the set-up is what it was). What does not hold is listed. `OOS_WALK=1 cargo test walk_on_off -- --ignored
+/// --nocapture`.
+#[test]
+#[ignore]
+fn walk_on_off_and_back() {
+    use super::dock::VKind;
+    if std::env::var("OOS_WALK").is_err() { return; }
+    const KINDS: [VKind; 8] = [VKind::Measure, VKind::Eye, VKind::Pane, VKind::Table, VKind::Sim, VKind::Hist, VKind::Xy, VKind::View];
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let (mut switches, mut views_back, mut found) = (0, 0, Vec::new());
+        let mut queue = menus(&fresh(layout));
+        queue.extend([MenuId::Network, MenuId::Remote, MenuId::Ssh, MenuId::Time, MenuId::SelfCal, MenuId::Dvm, MenuId::Zone, MenuId::Sim, MenuId::MeasStat]);
+        let mut seen: Vec<MenuId> = Vec::new();
+        while let Some(menu) = queue.pop() {
+            if seen.contains(&menu) { continue; }
+            seen.push(menu);
+            let probe = fresh(layout);
+            let Some(spec) = probe.sheet_spec(menu) else { continue };
+            for (t, tab) in spec.tabs.iter().enumerate() {
+                for &it in &tab.rows {
+                    if let Item::Open(id) = it { if !seen.contains(&id) { queue.push(id); } }
+                    if probe.sheet_row_kind(it) != RowKind::Toggle { continue; }
+                    let what = format!("{menu:?} / {} / {}", tab.name, probe.sheet_label(it));
+                    let mut u = fresh(layout);
+                    let open = |u: &mut Ui| -> Option<Rect> {
+                        if u.menu_open { u.close_menu(); }
+                        u.open_menu(menu);
+                        u.step(0.04);
+                        if let Some(r) = u.sheet_geo().and_then(|g| g.tabs.get(t).copied()) { let (x, y) = mid(r); tap(u, x, y); }
+                        u.sheet_geo().and_then(|g| g.rows.iter().find(|r| r.it == it).map(|r| r.ctrl))
+                    };
+                    let Some(ctrl) = open(&mut u) else { found.push(format!("{what}: the row is not on its tab")); continue };
+                    if u.item_blocked(it).is_some() { continue; }
+                    // (a frame: Studio writes its state into the set-up when it draws)
+                    for _ in 0..2 { frame(&mut u); }
+                    switches += 1;
+                    let (start, setup) = (u.sheet_on(it), crate::store::setup_text(&u.m));
+                    let views = |u: &Ui| KINDS.iter().copied().filter(|k| u.dock_shown(*k)).collect::<Vec<_>>();
+                    let before = views(&u);
+                    let (x, y) = mid(ctrl);
+                    tap(&mut u, x, y);
+                    for _ in 0..3 { frame(&mut u); }
+                    if u.sheet_on(it) == start { found.push(format!("{what}: a tap does not switch it")); continue; }
+                    let state = u.sheet_on(it);
+                    let shown: Vec<VKind> = views(&u).into_iter().filter(|k| !before.contains(k)).collect();
+                    // closed and opened again
+                    match open(&mut u) {
+                        None => found.push(format!("{what}: gone from its tab once it is switched")),
+                        Some(_) if u.sheet_on(it) != state => found.push(format!("{what}: reads differently when the sheet is opened again")),
+                        _ => {}
+                    }
+                    // a view it put on the screen: closed by its X, and brought back by the switch
+                    if layout == Layout::Studio && state {
+                        for k in shown {
+                            u.close_menu();
+                            for _ in 0..3 { frame(&mut u); }
+                            let Some(leaf) = u.dock_leaf(k) else { found.push(format!("{what}: its view {k:?} is not on the screen with the sheet closed")); continue };
+                            let (x, y) = mid(Ui::dock_close_rect(leaf));
+                            tap(&mut u, x, y);
+                            for _ in 0..3 { frame(&mut u); }
+                            if u.dock_shown(k) { found.push(format!("{what}: the X of its view {k:?} does not close it")); continue; }
+                            let Some(ctrl) = open(&mut u) else { found.push(format!("{what}: gone from its tab after the view was closed")); continue };
+                            if u.sheet_on(it) { found.push(format!("{what}: still says on after the X of its view {k:?}")); }
+                            else {
+                                let (x, y) = mid(ctrl);
+                                tap(&mut u, x, y);
+                                for _ in 0..3 { frame(&mut u); }
+                                if u.dock_shown(k) { views_back += 1; } else { found.push(format!("{what}: the switch does not bring the view {k:?} back")); }
+                            }
+                        }
+                    }
+                    // and back to the start
+                    if let Some(ctrl) = open(&mut u) {
+                        if u.sheet_on(it) != start {
+                            let (x, y) = mid(ctrl);
+                            tap(&mut u, x, y);
+                            for _ in 0..3 { frame(&mut u); }
+                        }
+                        if u.sheet_on(it) != start { found.push(format!("{what}: does not switch back")); }
+                        else if crate::store::setup_text(&u.m) != setup {
+                            let (a, b) = (setup.clone(), crate::store::setup_text(&u.m));
+                            let diff: Vec<String> = a.lines().zip(b.lines()).filter(|(x, y)| x != y).map(|(x, y)| format!("{x} -> {y}")).take(3).collect();
+                            found.push(format!("{what}: on and off again leaves the set-up changed: {diff:?}"));
+                        }
+                    }
+                }
+            }
+        }
+        println!("== {layout:?}: {switches} switches there and back over {} sheets, {views_back} views closed by their X and brought back; {} findings", seen.len(), found.len());
+        for f in &found { println!("   FOUND {f}"); }
+    }
+}
+
 #[test]
 #[ignore]
 fn walk_the_bars() {
@@ -1062,7 +1157,7 @@ fn every_sim_preset_sits_in_a_ref_beside_the_live_channels() {
         let r = u.refs[0].as_ref().unwrap_or_else(|| panic!("{name}: R1 is filled: {:?}", u.toast));
         let (len, dt) = (r.v.len(), r.dt);
         assert!(r.on && len > 100 && r.v.iter().all(|x| x.is_finite()), "{name}: shown, {len} points");
-        // as long as the live screen (2 ms here), or as long as the sample limit of a reference allows
+        // as long as the live screen (2 ms here), or as long as the budget of a reference allows (4 M samples in a test)
         assert!(len as f64 * dt >= 2e-3 * 0.99 || len >= 4_000_000, "{name}: {len} points of {dt:e} s are {:e} s", len as f64 * dt);
         let (lo, hi) = r.v.iter().fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
         assert!(hi - lo > 1e-3, "{name}: the waveform has a swing, {lo}..{hi}");
@@ -2031,4 +2126,285 @@ fn the_badge_row_wraps_onto_a_second_line() {
         for _ in 0..2 { frame(&mut u); }
         assert_eq!((lines(&u), u.studio_row()), (1, one), "{what}: four measurements");
     }
+}
+
+/// Rows and footers where they are used, in Minimal and Studio: Clear beside Persistence and without a second tap,
+/// Sweep with the trigger's type wherever the tab has the room (and a sheet for every trigger type), a way to a new
+/// measurement at the foot of the Measure sheet, Clear for the one reference slot beside Store, and Clear all with
+/// the files.
+#[test]
+fn clear_sweep_and_the_footers_are_where_they_are_used() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let u = fresh(layout);
+        let tab = |menu: MenuId, name: &str| {
+            let spec = u.sheet_spec(menu).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has a sheet"));
+            spec.tabs.into_iter().find(|t| t.name == name).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has the tab {name}"))
+        };
+        let t = tab(MenuId::Display, "Waveform");
+        assert!(t.rows.contains(&Item::Persist) && t.foot == [Item::ClearDisp], "{layout:?}: {:?}", t.foot);
+        assert!(tab(MenuId::Display, "Screen").foot.is_empty(), "{layout:?}");
+        assert_eq!(tab(MenuId::Measure, "Settings").foot, [Item::Open(MenuId::MeasAdd), Item::MeasClear], "{layout:?}");
+        assert_eq!(tab(MenuId::Ref, "Reference").foot, [Item::RefSave, Item::RefClearOne], "{layout:?}");
+        assert_eq!(tab(MenuId::Ref, "Scale and files").foot, [Item::RefClear], "{layout:?}");
+        // every trigger type keeps its sheet; Sweep is on the first tab unless that tab is full without it
+        for t in crate::model::TRIG_TYPES {
+            let mut u = fresh(layout);
+            u.m.trig_type = t;
+            u.step(0.04);
+            let spec = u.sheet_spec(MenuId::Trigger).unwrap_or_else(|| panic!("{layout:?}: no sheet for the {t:?} trigger"));
+            let (first, second) = (&spec.tabs[0].rows, &spec.tabs[1].rows);
+            assert!(first.contains(&Item::TrigMode) || (first.len() == 7 && second.contains(&Item::TrigMode)), "{layout:?} {t:?}: {first:?}");
+        }
+        assert!(tab(MenuId::Trigger, "Type and source").rows.contains(&Item::TrigMode), "{layout:?}: the edge trigger");
+        // by touch. Clear acts at the first tap; Delete of a zone and Clear of a slot wait for a second one
+        let foot = |u: &Ui, it: Item| u.sheet_geo().unwrap().foot.iter().find(|f| f.0 == it).map(|f| f.1).unwrap_or_else(|| panic!("{layout:?}: {it:?}"));
+        let mut u = fresh(layout);
+        u.open_menu(MenuId::Display);
+        u.step(0.04);
+        let (x, y) = mid(foot(&u, Item::ClearDisp));
+        tap(&mut u, x, y);
+        assert!(u.studio.md.armed.is_none(), "{layout:?}: Clear does not ask twice");
+        u.close_menu();
+        // two references: Clear R1 leaves R2
+        let wave = |label: &str| RefWave { src: 0, color: 0, label: label.into(), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true };
+        (u.refs[0], u.refs[1]) = (Some(wave("one")), Some(wave("two")));
+        u.ref_sel = 0;
+        assert!(u.refs[0].is_some() && u.refs[1].is_some(), "{layout:?}: two references stored");
+        u.ref_sel = 0;
+        u.open_menu(MenuId::Ref);
+        u.step(0.04);
+        assert_eq!(u.sheet_label(Item::RefClearOne), "Clear R1");
+        let (x, y) = mid(foot(&u, Item::RefClearOne));
+        tap(&mut u, x, y);
+        assert!(u.refs[0].is_some(), "{layout:?}: the first tap arms it");
+        tap(&mut u, x, y);
+        assert!(u.refs[0].is_none() && u.refs[1].is_some(), "{layout:?}: R1 is cleared, R2 is kept");
+        u.close_menu();
+        // the foot of the Measure sheet leads to the list of measurements
+        u.open_menu(MenuId::Measure);
+        u.step(0.04);
+        assert_eq!(u.sheet_label(Item::Open(MenuId::MeasAdd)), "Add measurement");
+        let (x, y) = mid(foot(&u, Item::Open(MenuId::MeasAdd)));
+        tap(&mut u, x, y);
+        assert!(u.menu_open && u.menu == MenuId::MeasAdd, "{layout:?}: {:?}", u.menu);
+    }
+    // Studio's trigger pill says the sweep, and the slope once
+    let mut u = fresh(Layout::Studio);
+    for (mode, word) in [(TrigMode::Auto, "Auto"), (TrigMode::Normal, "Normal"), (TrigMode::Single, "Single")] {
+        u.m.trig_mode = mode;
+        u.step(0.04);
+        let r = u.studio_bottom().trig;
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        cv.au_start();
+        u.render(&mut cv);
+        let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == word && r.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= r.right() - 16));
+        assert!(said, "the trigger pill says {word}");
+    }
+}
+
+/// What was behind a long press or several taps has a place of its own: Overlay / Stacked is a row of the Display
+/// sheet, the cursors have a button in the top bar of Minimal and of Studio, and the badge of a channel pill is its
+/// switch at every width at which the pill has a body beside it.
+#[test]
+fn traces_cursors_and_the_pill_switch_are_in_reach() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        u.m.ch[1].on = true;
+        u.open_menu(MenuId::Display);
+        u.step(0.04);
+        let (x, y) = mid(u.sheet_geo().unwrap().tabs[1]);
+        tap(&mut u, x, y);
+        let row = u.sheet_geo().unwrap().rows.iter().find(|r| r.it == Item::Traces).map(|r| r.ctrl).unwrap_or_else(|| panic!("{layout:?}: no Traces row"));
+        let was = u.trace_stacked();
+        assert_eq!(u.value(Item::Traces), if was { "Stacked" } else { "Overlay" }, "{layout:?}");
+        // the other half of the row
+        let (x, y) = (if was { row.x + row.w / 4 } else { row.x + row.w * 3 / 4 }, row.y + row.h / 2);
+        tap(&mut u, x, y);
+        assert_eq!(u.trace_stacked(), !was, "{layout:?}: a tap on the other choice");
+        assert_eq!(u.value(Item::Traces), if was { "Overlay" } else { "Stacked" }, "{layout:?}");
+        u.close_menu();
+        // the cursors: off at the start, on after the button
+        assert_eq!(u.m.cursor, CursorMode::Off, "{layout:?}");
+        let button = if layout == Layout::Studio { u.studio_top().cursors }
+            else { u.top_buttons().into_iter().find(|b| b.0 == TopBtn::Menu(MenuId::Cursor)).map(|b| b.2).unwrap_or_else(|| panic!("{layout:?}: no Cursor button")) };
+        let top = u.frame().top;
+        assert!(button.w >= 40 && button.y >= top.y && button.bottom() <= top.bottom(), "{layout:?}: {button:?}");
+        let (x, y) = mid(button);
+        tap(&mut u, x, y);
+        assert!(u.m.cursor != CursorMode::Off, "{layout:?}: one tap puts the cursors on");
+        if layout == Layout::Studio {
+            assert!(!u.menu_open, "Studio: the cursors alone at the first tap");
+            tap(&mut u, x, y);
+        }
+        assert!(u.menu_open && u.menu == MenuId::Cursor, "{layout:?}: their sheet");
+        // and off again from that sheet
+        u.select_option(Item::CurMode, "Off");
+        assert_eq!(u.m.cursor, CursorMode::Off, "{layout:?}");
+    }
+    // four channels and two references on: the pills are under 110 px and still have a body, so the badge is the switch
+    let mut u = fresh(Layout::Studio);
+    for c in 0..4 { u.m.ch[c].on = true; }
+    for i in 0..2 {
+        u.refs[i] = Some(RefWave { src: 0, color: 0, label: format!("r{i}"), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true });
+    }
+    u.relayout();
+    u.step(0.04);
+    let pill = u.studio_bottom().ch[2];
+    assert!((70..110).contains(&pill.w), "{pill:?}");
+    tap(&mut u, pill.x + 24, pill.y + pill.h / 2);
+    assert!(!u.m.ch[2].on && !u.menu_open, "the badge of a pill of {} px switches CH3 off", pill.w);
+    let pill = u.studio_bottom().ch[1];
+    tap(&mut u, pill.right() - 12, pill.y + pill.h / 2);
+    assert!(u.m.ch[1].on && u.menu_open && u.menu == MenuId::Channel(1), "the body opens the sheet");
+}
+
+/// Studio's hold menu of the plot: rows of 40 px in two columns, on the screen wherever it is opened, without the rows
+/// the bars have one tap away (Run, Single, the trigger sheet, the sources). A row acts at a tap.
+#[test]
+fn the_hold_menu_of_the_plot_has_rows_a_finger_high() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = true;
+    u.set_zoom(true);
+    for _ in 0..3 { u.step(0.04); }
+    let g = u.wins[0];
+    for at in [(g.x + g.w / 3, g.y + g.h / 2), (4, 60), (u.scr.w - 4, 60), (4, u.scr.h - 60), (u.scr.w - 4, u.scr.h - 60)] {
+        u.studio_ctx_open(at.0, at.1);
+        let p = u.studio_ctx_rect().expect("the menu");
+        assert!(p.x >= 0 && p.y >= 0 && p.right() <= u.scr.w && p.bottom() <= u.scr.h, "opened at {at:?}: {p:?}");
+        let rows = u.studio_ctx_rows();
+        for (i, (_, label, r)) in rows.iter().enumerate() {
+            assert!(r.h >= 40 && r.w >= 200, "{label}: {r:?}");
+            assert!(r.x >= p.x && r.right() <= p.right() && r.y >= p.y && r.bottom() <= p.bottom(), "{label}: {r:?} in {p:?}");
+            for (_, other, o) in &rows[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{label} over {other}"); }
+        }
+        let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
+        for gone in ["Run", "Stop", "Single", "Trigger settings", "Sources"] { assert!(!labels.contains(&gone), "{gone} is on the bars: {labels:?}"); }
+        for kept in ["Overlay traces", "Stacked traces", "Fit all lanes", "Fit record", "Zoom here", "Zoom box", "Reset zoom", "Close zoom", "Cursor here", "Autoset"] {
+            assert!(labels.contains(&kept), "{kept}: {labels:?}");
+        }
+        u.studio.ctx = None;
+    }
+    // by touch: a hold opens it, and Cursor here puts the cursors on
+    assert_eq!(u.m.cursor, CursorMode::Off);
+    pick_ctx(&mut u, super::studioctx::CtxRow::CursorHere);
+    assert!(u.m.cursor != CursorMode::Off && u.studio.ctx.is_none(), "Cursor here");
+}
+
+/// Thin sheets are one page (DVM and counter, the logic analyser, the double pulse), the Add list has rows a finger
+/// high, the chip that adds a source has one name, and the eye and the list button of the badge row take a touch of
+/// 40 px.
+#[test]
+fn thin_sheets_are_one_page_and_the_add_controls_are_a_finger_high() {
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let u = fresh(layout);
+        for menu in [MenuId::Dvm, MenuId::La, MenuId::Dpt] {
+            let spec = u.sheet_spec(menu).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has a sheet"));
+            assert_eq!(spec.tabs.len(), 1, "{layout:?} {menu:?}: {:?}", spec.tabs.iter().map(|t| (t.name, t.rows.len())).collect::<Vec<_>>());
+            assert!(spec.tabs[0].rows.len() <= 7 && spec.tabs[0].foot.len() <= 2, "{layout:?} {menu:?}");
+        }
+        // the counter's rows are on the page of the DVM, with its Clear
+        let dvm = &u.sheet_spec(MenuId::Dvm).unwrap().tabs[0];
+        assert!(dvm.rows.len() == 7 && dvm.foot.len() == 1, "{layout:?}: {:?} {:?}", dvm.rows, dvm.foot);
+    }
+    let mut u = fresh(Layout::Studio);
+    // the chip of the bottom bar: one name and one width, whatever is off
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    for on in [1, 4] {
+        for c in 0..4 { u.m.ch[c].on = c < on; }
+        u.step(0.04);
+        let chip = u.studio_bottom().add;
+        assert_eq!(chip.w, 62, "{on} channels on");
+        cv.au_start();
+        u.render(&mut cv);
+        let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == "+ Source" && chip.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= chip.right()));
+        assert!(said, "{on} channels on: the chip says + Source");
+    }
+    // the Add list of the top bar
+    let (x, y) = mid(u.studio_top().add);
+    tap(&mut u, x, y);
+    assert!(u.studio.add_menu);
+    let rows = u.studio_add_rows();
+    assert!(rows.len() >= 10 && rows.iter().all(|r| r.1.h >= 40 && r.1.bottom() <= u.scr.h), "{:?}", rows.iter().map(|r| r.1).collect::<Vec<_>>());
+    u.studio.add_menu = false;
+    // the eye: a touch 4 px over its 34 px still hides the badges
+    let eye = u.studio_eye();
+    assert!(eye.h < 40 && !u.studio.hide_badges);
+    tap(&mut u, eye.x + eye.w / 2, eye.y - 2);
+    assert!(u.studio.hide_badges, "the eye takes a touch of 40 px");
+}
+
+/// The measurement panel of Studio is made for a finger: its toolbar buttons are 36 px high with a touch of 40, the
+/// rows of its table are 36 px in a tall panel, and the three segments of its view switch are 32 px wide. With the badges hidden, the
+/// chip of the bottom bar that brings them back says "Badges", and a tap on it does.
+#[test]
+fn the_measurement_panel_and_the_badge_buttons_are_a_finger_high() {
+    use super::dock::VKind;
+    use super::measpanel::PanelView;
+    use super::studio::StudioView;
+    let mut u = fresh(Layout::Studio);
+    u.studio_set_view(StudioView::Docked);
+    for _ in 0..3 { frame(&mut u); }
+    let panel = u.studio_panel_rect().expect("the docked panel");
+    assert!(!Ui::panel_bar_wide(panel), "a narrow panel has its toolbar under the title: {panel:?}");
+    let bar = u.panel_bar(panel);
+    assert!(bar.slots.len() >= 4, "{} buttons", bar.slots.len());
+    for slot in bar.slots.iter().chain(bar.more.iter()) {
+        assert!(slot.r.h >= 36 && slot.hit.h >= 40 && slot.r.w >= 34, "{:?}: {:?} touch {:?}", slot.item, slot.r, slot.hit);
+        assert!(slot.r.x >= panel.x && slot.r.right() <= panel.right(), "{:?} inside the panel", slot.item);
+    }
+    // the switch between table, list and cards: three segments of 32 px, each of which picks its view
+    let strip = u.dock_rect(VKind::Measure).expect("the panel's place");
+    let sw = u.dock_view_rect(VKind::Measure, strip).expect("the view switch");
+    assert!(sw.w / 3 >= 32 && sw.h >= 26, "{sw:?}");
+    for (k, view) in [PanelView::Detailed, PanelView::List, PanelView::Cards].into_iter().enumerate() {
+        tap(&mut u, sw.x + (2 * k as i32 + 1) * sw.w / 6, sw.y + sw.h / 2);
+        for _ in 0..2 { frame(&mut u); }
+        assert_eq!(u.panel_view(), view, "segment {k}");
+    }
+    // the table in this tall panel has rows of 36 px (a low panel under the plot keeps 28, to show five of them)
+    u.panel_set_view(PanelView::Detailed);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(u.studio_panel_rect().is_some_and(|p| p.h >= 380) && u.detail_row_h() == 36 && u.studio_panel_row() == 36, "{:?}", u.studio_panel_rect());
+    // the badges hidden: the bottom bar says what its chip brings back
+    u.studio_set_view(StudioView::Waveform);
+    for _ in 0..2 { frame(&mut u); }
+    let eye = u.studio_eye();
+    let (x, y) = mid(eye);
+    tap(&mut u, x, y);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(u.studio.hide_badges && u.studio_badges_hidden());
+    let chip = u.studio_bottom().show.expect("the chip of the bottom bar");
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    cv.au_start();
+    u.render(&mut cv);
+    let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), .. } if s == "Badges" && chip.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= chip.right()));
+    assert!(said, "the chip says Badges: {chip:?}");
+    let (x, y) = mid(chip);
+    tap(&mut u, x, y);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(!u.studio.hide_badges, "a tap brings the badges back");
+}
+
+/// A new set-up shows its measurements in the classic strip, a line per source with names and values in columns. The
+/// other style is what a set-up file says; a file that says nothing has the classic strip, and one that says
+/// `classic`, as files of before do, has it too.
+#[test]
+fn the_classic_strip_is_the_badge_style_of_a_new_setup() {
+    assert!(Model::default().studio_classic);
+    let mut u = fresh(Layout::Studio);
+    for _ in 0..2 { frame(&mut u); }
+    assert!(u.studio_classic() && u.value(Item::BadgeStyle) == "Classic");
+    let text = crate::store::setup_text(&u.m);
+    assert!(!text.contains("studio_badges"), "the default is not written");
+    assert!(crate::store::parse_setup(&text).unwrap().studio_classic);
+    assert!(crate::store::parse_setup("studio_badges = classic").unwrap().studio_classic);
+    // the other style is written and read back
+    u.select_option(Item::BadgeStyle, "Studio");
+    assert!(!u.studio_classic());
+    let text = crate::store::setup_text(&u.m);
+    assert!(text.lines().any(|l| l.trim() == "studio_badges = studio"), "the Studio badges are written");
+    assert!(!crate::store::parse_setup(&text).unwrap().studio_classic);
+    // a reset is a new set-up
+    u.select_option(Item::BadgeStyle, "Classic");
+    assert!(u.studio_classic());
 }

@@ -185,6 +185,36 @@ impl Ui {
     // ------------------------------------------------------------------------------------------ overview
 
     /// The math channels in the overview, thin and decimated like the other sources.
+    /// The overview's own time axis: a line at every division and the time under it, at the main time base. The
+    /// overview is the whole record with the zoom window on it; without an axis the window had no time to read, and
+    /// the dimmed parts beside it no graticule.
+    pub(super) fn draw_studio_overview_axis(&self, cv: &mut Canvas, o: Rect) {
+        if o.h < 36 || o.w < 200 { return; }
+        let f = self.fonts();
+        let (tdiv, delay) = (self.m.time_per_div(), self.m.delay);
+        let span = tdiv * HDIV;
+        // a label at every division where they have the room, else at every second one
+        let widest = f.s.width(&axis_label64(-4.0 * tdiv as f64 + delay as f64, tdiv, delay, span, "s"));
+        let every = if o.w / HDIV as i32 >= widest + 14 { 1 } else { 2 };
+        let mut free = i32::MIN;
+        let corner = self.zoom_btn().1;
+        let keep = if corner.y < o.bottom() && corner.bottom() > o.bottom() - 16 { corner.x - 30 } else { i32::MAX };
+        for i in 0..=HDIV as i32 {
+            let x = o.x + (i as f32 * o.w as f32 / HDIV).round() as i32;
+            if i > 0 && i < HDIV as i32 { cv.blend(Rect::new(x, o.y, 1, o.h), AXIS_TEXT, 46); }
+            if (i - HDIV as i32 / 2).rem_euclid(every) != 0 { continue; }
+            let t = delay as f64 + (i as f64 - HDIV as f64 / 2.0) * tdiv as f64;
+            let zero = t.abs() < tdiv as f64 * 1e-3;
+            let s = if zero { "0 s".to_string() } else { axis_label64(t, tdiv, delay, span, "s") };
+            let w = f.s.width(&s);
+            let tx = (x - w / 2).clamp(o.x + 4, o.x + o.w - 4 - w);
+            // not under the Full screen and Zoom buttons in the corner
+            if tx < free + 8 || tx + w > keep { continue; }
+            free = tx + w;
+            backed_text(cv, &f.s, tx, o.y + o.h - 4, &s, if zero { ACCENT } else { AXIS_TEXT });
+        }
+    }
+
     pub(super) fn draw_studio_overview_math(&self, cv: &mut Canvas, o: Rect) {
         if self.m.layout != Layout::Studio { return; }
         let (tdiv, delay) = (self.m.time_per_div() as f64, self.m.delay as f64);

@@ -135,8 +135,11 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     tap_in(&mut u, t.gear);
     assert_eq!(u.menu, MenuId::Main);
     u.close_menu();
-    // Cursor: the button of the Default bar, it opens the Cursor menu
+    // Cursors: the first tap puts the cursors on (no menu), the next opens their settings (batch 8)
     let t = u.studio_top();
+    tap_in(&mut u, t.cursors);
+    assert_eq!(u.m.cursor, CursorMode::Track);
+    assert!(!u.menu_open);
     tap_in(&mut u, t.cursors);
     assert_eq!(u.menu, MenuId::Cursor);
     u.close_menu();
@@ -526,7 +529,7 @@ fn studio_measurements_only_is_a_table_with_statistics_and_a_source_filter() {
     assert_eq!(u.studio.view, StudioView::Waveform);
     // the list button of the badge row (it carries the count; the Meas tab is gone) brings the panel back
     assert!(u.studio_tab().is_none());
-    let tab = u.studio_compact_chip();
+    let tab = u.studio_list_chip();
     tap_in(&mut u, tab);
     assert_eq!(u.studio.view, StudioView::Docked);
 }

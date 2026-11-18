@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.13",
   "version": "0.1.13",
   "edition": "November 2026",
-  "date": "17 November 2026",
+  "date": "18 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -284,6 +284,43 @@
      "ext": true
     },
     {
+     "header": ":SYSTem:RECorder:STATe",
+     "set": ":SYSTem:RECorder:STATe <value>",
+     "query": ":SYSTem:RECorder:STATe?",
+     "desc": "Sets or queries SCPI recorder for Diagnostics, schema and setup block (menu: Storage > SCPI recorder).",
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- The SCPI recorder on or off, taken at the next frame.",
+      "- While it is on, what is set at the scope (touch, keys, knobs, menus) is written as commands: a setting is written when it has stood still for 0.6 s, so a knob that was turned is one line with the value it was left at.",
+      "- What a client sets by SCPI is not recorded: a comment in the file says where a client set something, and the file does not bring that.",
+      "- What the web remote's keys and touches do is recorded, as the front panel's.",
+      "- The lines go into a new file `recording-NNN.scpi` where Storage saves, written again after every step, so a recording is not lost when the program ends while it is on; it ends by itself at 20000 lines.",
+      "- A key or a row that is an action is written as its command, with what was set before it first: Run / Stop (`:RUN`, `:STOP`), Single (`:SINGle`), Force (`:TFORce`), Clear (`:CLEar`), Default (`*RST`), Autoset (`:AUToscale`), and the Storage rows Save setup, Save waveform and Save screenshot (`:SAVE:SETup`, `:SAVE:WAVeform`, `:SAVE:IMAGe`).",
+      "- `*OPC?` stands after `:SINGle` and `:AUToscale`.",
+      "- The settings an action changes are its own and are not written as settings; an auto set-up is the command alone, so a replay finds what the signal then has.",
+      "- Recall setup and a loaded session are written as the settings they bring.",
+      "- Origin: OOS extension. The proof of every step is the one of `:SYSTem:SETup:SCPI?`."
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":SYSTem:RECorder:DATA",
+     "query": ":SYSTem:RECorder:DATA?",
+     "desc": "The lines of the recording that runs, else of the last one, as an IEEE block: comment lines (`#`), the setup at the start as commands (`*RST` and what differs from the Default setup), then the recorded commands, each step under a comment with its time (`# +12.4 s`). A setting that has not stood still yet is not in it. Empty before the first recording.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
      "header": ":SYSTem:LOCK",
      "set": ":SYSTem:LOCK <value>",
      "query": ":SYSTem:LOCK?",
@@ -323,7 +360,7 @@
     {
      "header": ":SYSTem:INFO",
      "query": ":SYSTem:INFO?",
-     "desc": "The System info page as text: `label,value` lines, `# heading` lines",
+     "desc": "The System info page in one line: each line of the page a quoted string, `\"label,value\"` or `\"# heading\"`, separated by commas",
      "remarks": [
       "- Menu equivalent: System > System info.",
       "- Origin: OOS extension"
@@ -664,7 +701,7 @@
     {
      "header": ":SYSTem:WLAN:NETWorks",
      "query": ":SYSTem:WLAN:NETWorks?",
-     "desc": "The scanned networks, one per line.",
+     "desc": "The scanned networks, each a quoted string, separated by commas in one line.",
      "remarks": [
       "- Menu equivalent: System > Network > WLAN.",
       "- Origin: OOS extension"
@@ -675,7 +712,7 @@
     {
      "header": ":SYSTem:WLAN:SAVed",
      "query": ":SYSTem:WLAN:SAVed?",
-     "desc": "The saved networks, one per line.",
+     "desc": "The saved networks, each a quoted string, separated by commas in one line; empty without any.",
      "remarks": [
       "- Menu equivalent: System > Network > WLAN.",
       "- Origin: OOS extension"
@@ -868,7 +905,7 @@
     {
      "header": ":SYSTem:UPDate:STATus",
      "query": ":SYSTem:UPDate:STATus?",
-     "desc": "The Update page as text",
+     "desc": "The Update page in one line: each of its lines a quoted string, separated by commas",
      "remarks": [
       "- Menu equivalent: System > Update and power > Update.",
       "- Origin: OOS extension"
@@ -1576,7 +1613,7 @@
       [
        "<value>",
        "Text",
-       "Vertical position in divisions, converted through that channel's current scale.",
+       "The same value as `:CHANnel<n>:OFFSet`, in volts (not in divisions).",
        "-1.500000E+00"
       ]
      ],
@@ -2049,7 +2086,7 @@
       [
        "<value>",
        "Text",
-       "Channel role of the XY axis.",
+       "The X axis of the XY picture is `CHAN1`; it is not selectable, and another channel is -224.",
        "CHAN1"
       ]
      ],
@@ -2067,7 +2104,7 @@
       [
        "<value>",
        "Text",
-       "Channel role of the XY axis.",
+       "The Y axis of the XY picture is `CHAN2`; it is not selectable, and another channel is -224.",
        "CHAN2"
       ]
      ],
@@ -6394,7 +6431,7 @@
       [
        "\"path\"",
        "Text",
-       "Load into that slot. Absolute paths refer to the server PC/scope; relative paths are beside setups. A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read.",
+       "Load into that slot. Absolute paths refer to the server PC/scope; relative paths are beside setups, else in the save folder (where `:REFerence:EXPort \"name\"` and `:SAVE:WAVeform \"name\"` write). A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read.",
        "—"
       ]
      ],
@@ -13343,7 +13380,7 @@
      "p": "Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
     },
     {
-     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file."
+     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI, SCPI recorder). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file. SCPI recorder writes what is set at the scope as commands while it is on and saves them as a file when it is switched off (`:SYSTem:RECorder:STATe`)."
     },
     {
      "p": "Part of the SCPI reference."
@@ -15373,7 +15410,7 @@
       ],
       [
        "`layout`",
-       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `classic` are optional)",
+       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
        "`minimal`",
        "`:DISPlay:LAYout`"
       ],

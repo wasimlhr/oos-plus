@@ -672,6 +672,10 @@ enum Item {
     RefSave,
     /// Studio: the same, into the next free slot (offered when the selected slot is full)
     RefSaveNext,
+    /// Display sheet of Minimal and Studio: the traces on one graticule or a lane each (the plot's hold menu has both)
+    Traces,
+    /// Reference sheet: clears the slot that is selected (the menu's Clear all clears every slot)
+    RefClearOne,
     RefShow(usize),
     RefClear,
     MathOpI,
@@ -1056,6 +1060,8 @@ enum Item {
     StoreSaveSetup,
     /// the set-up as SCPI commands, into a file (scpi/setupscpi.rs)
     StoreSaveScpi,
+    /// the SCPI recorder, on and off (scpi/recorder.rs)
+    StoreRecScpi,
     StoreRecall,
     StoreCsv,
     StorePng,
@@ -1749,6 +1755,12 @@ pub struct Ui {
     /// Storage > Save setup as SCPI was pressed. The interpreter writes the file at its next poll, since the lines
     /// are the answers of its own queries (`Scpi::poll`, scpi/setupscpi.rs).
     pub setup_scpi_request: bool,
+    /// Storage > SCPI recorder, `:SYSTem:RECorder:STATe`: on or off. The interpreter follows at its next poll.
+    pub scpi_rec_want: bool,
+    /// What the SCPI recorder writes as a command and not as settings (scpi/recorder.rs): a key or a row that leaves
+    /// no setting or owns the settings it changes, each with the model from before it acted. The interpreter takes
+    /// them at its next poll. Filled only while the recorder is on.
+    pub scpi_rec_actions: Vec<(String, Box<Model>)>,
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
@@ -2077,6 +2089,8 @@ impl Ui {
             unit_blocked: None,
             shot_request: None,
             setup_scpi_request: false,
+            scpi_rec_want: false,
+            scpi_rec_actions: Vec::new(),
             quit: false,
         };
         ui.ensure_meas_own();
@@ -3101,6 +3115,7 @@ impl Ui {
     /// waveforms, persistence / colour-grade maps, averaging, measurements and their statistics, mask counts and
     /// search marks start over; in STOP the screen stays empty until the next acquisition (RUN draws again at once).
     fn clear_display(&mut self) {
+        self.rec_action(":CLEar");
         self.wfm_total = 0;
         self.bus_views_clear();
         self.ph.clear();
@@ -3131,7 +3146,7 @@ impl Ui {
     /// QUICK key and the Quick button of the top bar: the action chosen in System > Quick key.
     fn quick(&mut self) {
         match self.m.quick {
-            Quick::Screenshot => self.shot_request = Some(String::new()),
+            Quick::Screenshot => { self.rec_action(":SAVE:IMAGe"); self.shot_request = Some(String::new()) }
             Quick::SavePng => self.activate(Item::StorePng),
             Quick::SaveSetup => self.activate(Item::StoreSaveSetup),
             Quick::SaveCsv => self.activate(Item::StoreCsv),
@@ -3901,6 +3916,7 @@ impl Ui {
             cv.blend(Rect::new(o.x, o.y, (xa - o.x).max(0), o.h), BG, 170);
             cv.blend(Rect::new(xb, o.y, (o.x + o.w - xb).max(0), o.h), BG, 170);
             if self.m.layout == Layout::Studio {
+                self.draw_studio_overview_axis(cv, o);
                 self.draw_studio_window(cv, o, xa, xb);
                 self.draw_studio_overview_cursors(cv, o);
             } else {
@@ -6372,8 +6388,9 @@ impl Ui {
             all.retain(|(b, _)| !matches!(b, TopBtn::Load | TopBtn::Menu(MenuId::Sim)));
         }
         if self.m.compact() {
-            // Measure and Cursor are keys of the front panel (Measure opens Add measurements), and entries of the Menu
-            all.retain(|(b, _)| !matches!(b, TopBtn::Menu(MenuId::Measure | MenuId::Cursor)));
+            // Measure is a key of the front panel (it opens Add measurements) and an entry of the Menu. Cursor has its
+            // button: without it the cursors were four taps away, through the Menu
+            all.retain(|(b, _)| !matches!(b, TopBtn::Menu(MenuId::Measure)));
         }
         all.retain(|(b, _)| match b {
             TopBtn::Menu(m) => !self.menu_left_out(*m),
@@ -6394,7 +6411,7 @@ impl Ui {
         }
         if !fits(&all, padding) { padding = 20; }
         for (button, short) in [(TopBtn::Menu(MenuId::Storage), "Store"), (TopBtn::Menu(MenuId::Display), "Disp"),
-            (TopBtn::Menu(MenuId::Measure), "Meas"), (TopBtn::System, "Sys")] {
+            (TopBtn::Menu(MenuId::Measure), "Meas"), (TopBtn::System, "Sys"), (TopBtn::Menu(MenuId::Cursor), "Cur")] {
             if fits(&all, padding) { break; }
             if let Some((_, label)) = all.iter_mut().find(|(b, _)| *b == button) { *label = short; }
         }
@@ -6565,6 +6582,8 @@ impl Ui {
     /// A message that only informs (nothing to clear, which view, a channel turned on): a neutral pill with an "i".
     pub(super) fn toast_is_info(s: &str) -> bool {
         s == NOTHING_TO_CLEAR || s == "Views off" || s.ends_with(" turned on") || s.starts_with("Generating ") || (s.starts_with("View ") && s.contains(" of "))
+            // the SCPI recorder says what it wrote: nothing went wrong
+            || s == "SCPI recorder on" || s.starts_with("Recorded ")
     }
 
     pub(super) fn toast_is_success(s: &str) -> bool {
@@ -7101,7 +7120,7 @@ impl Ui {
                 }
                 v
             }
-            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi],
+            MenuId::Storage => vec![Item::StoreDest, Item::StoreSlot, Item::StoreSaveSetup, Item::StoreRecall, Item::StoreCsv, Item::StoreBin, Item::StoreFfSave, Item::StoreFfLoad, Item::StoreSessSave, Item::StoreSessLoad, Item::StorePng, Item::StoreSaveScpi, Item::StoreRecScpi],
             MenuId::Spectrum => vec![Item::SpecOn, Item::SpecSrc, Item::SpecCenter, Item::SpecSpan, Item::SpecHarm, Item::SpecRbw, Item::SpecWin, Item::SpecTrace, Item::SpecRef, Item::SpecWf, Item::SpecDist, Item::SpecAcprW, Item::SpecAcprS, Item::SpecPeak, Item::SpecMargin, Item::SpecLimitSet, Item::SpecLimitClear],
             MenuId::Eye => vec![Item::EyeAct, Item::EyeOn, Item::EyePlace, Item::EyeSrc, Item::EyeRate, Item::EyeBer, Item::EyeB, Item::EyeHp, Item::EyePnLo, Item::EyePnHi, Item::EyeNpj, Item::EyeRail, Item::EyeNotch, Item::EyePll, Item::EyeClear],
             MenuId::Power => {
@@ -7988,7 +8007,7 @@ impl Ui {
             Item::DecBits => Kind::Value,
             Item::TrigLevel2 | Item::TrigT1 | Item::TrigT2 | Item::VidLine | Item::PatLevel | Item::NthIdle | Item::NthN | Item::Setup | Item::Hold => Kind::Value,
             Item::ChScale(_) | Item::ChOffset(_) | Item::HScale | Item::HDelay | Item::TrigLevel | Item::AcqAvg | Item::CurA | Item::CurB | Item::Intensity | Item::GridBright => Kind::Value,
-            Item::RefSave | Item::RefSaveNext | Item::RefClear => Kind::Action,
+            Item::RefSave | Item::RefSaveNext | Item::RefClear | Item::RefClearOne => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
             Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
             Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
@@ -8034,6 +8053,7 @@ impl Ui {
             Item::StoreDest => "Save to",
             Item::StoreSaveSetup => "Save setup",
             Item::StoreSaveScpi => "Save setup as SCPI",
+            Item::StoreRecScpi => "SCPI recorder",
             Item::StoreRecall => "Recall setup",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
@@ -8103,6 +8123,8 @@ impl Ui {
             Item::RefSrc => "Save from",
             Item::RefSave => "Save to next R",
             Item::RefSaveNext => "Store in the next free R",
+            Item::RefClearOne => "Clear slot",
+            Item::Traces => "Traces",
             Item::RefShow(i) => ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"][i.min(NREF - 1)],
             Item::RefClear => "Clear all",
             Item::MathOpI => "Operation",
@@ -8391,6 +8413,7 @@ impl Ui {
             Item::ChFine => onoff(m.fine_v),
             Item::MathExprI => if m.math_expr[m.math_sel].is_empty() { "none".to_string() } else { m.math_expr[m.math_sel].clone() },
             Item::LogOn => onoff(self.log.file.is_some()),
+            Item::StoreRecScpi => onoff(self.scpi_rec_want),
             Item::LogIvl => si_short(logger::LOG_STEPS[m.log_ivl.min(logger::LOG_STEPS.len() - 1)], "s"),
             Item::LogInfo => self.log_info(),
             Item::CurC => self.cursor_values().get(2).map_or(format!("{:.0} %", m.cur_c * 100.0), |v| v.1.clone()),
@@ -8424,6 +8447,7 @@ impl Ui {
             Item::TrigCoup => m.trig_coup.name().into(),
             Item::Dots => onoff(m.dots),
             Item::Layout => m.layout.name().into(),
+            Item::Traces => if self.trace_stacked() { "Stacked" } else { "Overlay" }.into(),
             Item::BottomBar => if m.bar_compact { "Compact" } else { "Cards" }.into(),
             Item::Hdmi => format!("{:?}", m.hdmi),
             Item::TextSize => m.text_size.name().into(),
@@ -8562,6 +8586,11 @@ impl Ui {
             }
             return;
         }
+        if it == Item::Traces {
+            let stacked = !self.trace_stacked();
+            self.trace_mode(stacked);
+            return;
+        }
         if self.addrail_adjust(it, d) || self.bus_adjust(it, d) || self.meas_adjust(it, d) || self.measrow_adjust(it, d) || self.ana_adjust(it, d) || self.magnetic_adjust(it, d) || self.inverter_adjust(it, d) || self.dpt_adjust(it, d) || self.cal_adjust(it, d) || self.bode_adjust(it, d) || self.sim_adjust(it, d) || self.offline_adjust(it, d) || self.afg_adjust(it, d) || self.ext_adjust(it, d) || self.bw_adjust(it, d) || self.la_adjust(it, d) || self.win_adjust(it, d) || self.time_adjust(it, d) || self.remote_adjust(it, d) || self.graphics_adjust(it, d) || self.views_adjust(it, d) || self.monitor_adjust(it, d) || self.features_adjust(it, d) || self.backlight_adjust(it, d) || self.skin_adjust(it, d) {
             return;
         }
@@ -8656,6 +8685,7 @@ impl Ui {
                 m.h_expand = all[cyc(i, all.len(), d)];
             }
             Item::ChFine => m.fine_v = !m.fine_v,
+            Item::StoreRecScpi => self.scpi_rec_want = !self.scpi_rec_want,
             Item::LogOn => {
                 if self.log.file.is_some() {
                     self.log_stop("Log ended");
@@ -9142,6 +9172,12 @@ impl Ui {
                     // Studio: the Menu opens the page itself; Add > Measurement and the key open the quick Add panel
                     self.studio.meas_page = self.m.layout == Layout::Studio;
                 }
+                // the footer of the Measure sheet: the same list, with a source that is on the screen
+                Item::Open(MenuId::MeasAdd) => {
+                    self.ensure_meas_own();
+                    self.open_submenu(MenuId::MeasAdd);
+                    if self.m.layout == Layout::Studio { self.sheet_add_open(); }
+                }
                 Item::Open(id) => {
                     if id == MenuId::Cursor && self.m.cursor == CursorMode::Off {
                         // like the CURSOR key
@@ -9333,6 +9369,7 @@ impl Ui {
                         None => self.toast("Source channel has no data"),
                     }
                 }
+                Item::RefClearOne => self.ref_clear_slot(self.ref_sel),
                 Item::RefClear => {
                     self.refs = std::array::from_fn(|_| None);
                     self.measure_refs();
@@ -9376,6 +9413,7 @@ impl Ui {
                     self.dialog = Some(d)
                 }
                 Item::Shot => {
+                    self.rec_action(":SAVE:IMAGe");
                     // without the dialog on it
                     self.close_menu();
                     self.shot_request = Some(String::new());
@@ -9397,6 +9435,7 @@ impl Ui {
                     }
                 }
                 Item::StoreSaveSetup => {
+                    self.rec_action(":SAVE:SETup");
                     let p = self.setup_path();
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
@@ -9405,6 +9444,7 @@ impl Ui {
                 Item::StoreRecall => self.recall_setup(),
                 Item::StoreCsv => self.store_wave(true, None),
                 Item::StorePng => {
+                    self.rec_action(":SAVE:IMAGe");
                     // without the dialog: the screen is saved after the next frame (main loop / script runner)
                     let p = self.new_file(&self.save_dir(), "shot", "png");
                     self.close_menu();
@@ -9481,6 +9521,8 @@ impl Ui {
     /// Storage > Save waveform (CSV or binary): the newest record to the save folder, or to a file of the caller
     /// (SCPI `:SAVE:WAVeform "path"`).
     pub(crate) fn store_wave(&mut self, csv: bool, path: Option<std::path::PathBuf>) {
+        // for the SCPI recorder: the row of the Storage menu, when there is a waveform to save
+        if path.is_none() && self.last[0].is_some() { self.rec_action(if csv { ":SAVE:WAVeform" } else { ":SAVE:WAVeform ,BIN" }); }
         let Some(rec) = &self.last[0] else { return self.toast("No waveform to save") };
         let p = path.clone().unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
         let mut r = if csv { crate::store::write(&p, crate::store::wave_csv(rec, &self.m).as_bytes()) } else { crate::store::write(&p, &crate::store::wave_bin(rec, &self.m)) };
@@ -9681,17 +9723,40 @@ impl Ui {
         }
     }
 
-    /// Storage > Save setup as SCPI: writes the commands the interpreter made for the request into a new file where
-    /// Storage saves (the name is taken now, when it is written). `without`: what no line could carry, in words.
-    pub(crate) fn setup_scpi_save(&mut self, text: &str, without: Option<&str>) {
-        let path = self.new_file(&self.save_dir(), "setup", "scpi");
-        let r = crate::store::write(&path, text.as_bytes());
-        match (r.is_ok(), without) {
-            (true, Some(keys)) => {
+    /// For the SCPI recorder: `line` is the command of what is about to be done, to be written as it is. With it goes
+    /// the model as it is now, before the action: what the user set until then is written first, and what the action
+    /// changes is its own. A client's command that comes here is taken out again (`Scpi::poll_program`).
+    ///
+    /// It is called where the action is done, past every check that can refuse it, and not where a key comes in: the
+    /// Quick key, a row of the start menu and the key of the panel end in the same function, and a key that a dialog
+    /// takes or a record refuses does nothing.
+    pub(crate) fn rec_action(&mut self, line: &str) {
+        if self.scpi_rec_want { self.scpi_rec_actions.push((line.to_string(), Box::new(self.m.clone()))); }
+    }
+
+    /// Storage > Save setup as SCPI and the SCPI recorder: writes the commands the interpreter made into a new file
+    /// `<prefix>-NNN.scpi` where Storage saves (the name is taken now, when it is written). `note` is said after the
+    /// name: what no line could carry, or how many commands were recorded.
+    pub(crate) fn scpi_save(&mut self, prefix: &str, text: &str, note: Option<&str>) {
+        let path = self.scpi_new_file(prefix);
+        self.scpi_write(&path, text, note);
+    }
+
+    /// A new file `<prefix>-NNN.scpi` where Storage saves. The SCPI recorder takes its file at the start and writes
+    /// it again after every step.
+    pub(crate) fn scpi_new_file(&self, prefix: &str) -> std::path::PathBuf {
+        self.new_file(&self.save_dir(), prefix, "scpi")
+    }
+
+    /// Writes a file of commands and says so, with `note` after the name.
+    pub(crate) fn scpi_write(&mut self, path: &std::path::Path, text: &str, note: Option<&str>) {
+        let r = crate::store::write(path, text.as_bytes());
+        match (r.is_ok(), note) {
+            (true, Some(note)) => {
                 self.flush_stick();
-                self.toast(&format!("Saved {}{}, without {}", crate::store::file_name(&path), self.saved_where(), keys));
+                self.toast(&format!("Saved {}{}, {}", crate::store::file_name(path), self.saved_where(), note));
             }
-            _ => self.toast_saved(&path, r),
+            _ => self.toast_saved(path, r),
         }
     }
 
@@ -9872,6 +9937,7 @@ impl Ui {
             Item::GridFrame | Item::TrigNoise | Item::TrigAutoNoise => &["Off", "On"],
             Item::Dots | Item::ZoneOn => &["Off", "On"],
             Item::Layout => &["Default", "Minimal", "Studio"],
+            Item::Traces => &["Overlay", "Stacked"],
             Item::BottomBar => &["Cards", "Compact"],
             Item::AcqCores => &["Raw", "Matched"],
             Item::AcqDrawPath => &["Standard", "Batch"],
@@ -9889,7 +9955,7 @@ impl Ui {
             Item::PaneSel => &tables::PANES,
             Item::TrendSel(_) => return self.trend_options(),
             Item::DvmSrc | Item::CntSrc => return (0..n_ch()).map(|c| format!("CH{}", c + 1)).collect(),
-            Item::DvmOn | Item::CntOn | Item::ChFine | Item::HFine | Item::LogOn | Item::AcqSegHw | Item::AcqAvgHw => &["Off", "On"],
+            Item::DvmOn | Item::CntOn | Item::ChFine | Item::HFine | Item::LogOn | Item::StoreRecScpi | Item::AcqSegHw | Item::AcqAvgHw => &["Off", "On"],
             Item::ChUnit(_) => &["V", "A", "W", "U"],
             Item::ChExpand => &["Center", "Ground"],
             Item::HExpandI => &["Center", "Left", "Right", "Trigger"],
@@ -10498,6 +10564,7 @@ impl Ui {
             self.single_armed = false;
         }
         if self.record_mode() { self.record_key(key::FORCE); return; }
+        self.rec_action(":TFORce");
         self.bus_candidate_key(key::FORCE);
         self.m.run = RunState::Run;
         self.src.force_hw();
@@ -10570,6 +10637,7 @@ impl Ui {
     /// The Default key and `*RST`: a new set-up. `*RST` calls this itself, so that a notice or a menu on the screen,
     /// which takes a key press for its own, does not swallow a reset from a script.
     pub(crate) fn default_setup(&mut self) {
+        self.rec_action("*RST");
         let meas = Self::default_meas();
         // the Quick key action is a preference, not part of the set-up that Default resets. The layout is part
         // of it: a new set-up starts in the Default layout with the stock bars (5533112)
@@ -10629,6 +10697,12 @@ impl Ui {
         }
         if self.record_key(k) { return; }
         self.bus_candidate_key(k);
+        // for the SCPI recorder: Run / Stop and Single act below (on a record `record_key` has done them)
+        match k {
+            key::RUNSTOP => self.rec_action(if self.m.run == RunState::Run { ":STOP" } else { ":RUN" }),
+            key::SINGLE => self.rec_action(":SINGle"),
+            _ => {}
+        }
         let m = &mut self.m;
         match k {
             0x15..=0x18 if (k - 0x15) as usize >= n_ch() => {
@@ -11630,6 +11704,8 @@ impl Ui {
                 return match b {
                     // a tap opens the measurement list; a press-and-hold opens the short menu (meas_hold_tick)
                     TopBtn::Menu(MenuId::Measure) => self.open_meas_list(),
+                    // as the CURSOR key: the cursors come on with their sheet
+                    TopBtn::Menu(MenuId::Cursor) if self.m.compact() => self.key(key::CURSOR),
                     TopBtn::Menu(id) => self.toggle_menu(id),
                     TopBtn::Live => self.return_to_live(),
                     TopBtn::System => self.toggle_menu(MenuId::Utility),
