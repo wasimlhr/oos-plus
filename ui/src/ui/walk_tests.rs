@@ -1388,6 +1388,54 @@ fn the_sim_sheet_has_run_under_every_tab_and_a_show_switch_that_works() {
     }
 }
 
+/// The measurement strip of Minimal names every measurement whole at every text size: where the long name has no room
+/// (several sources, the larger sizes) it takes the short one, in the band, the paged band and the column.
+#[test]
+fn the_measurement_strip_takes_the_short_name_where_the_long_one_is_cut() {
+    use crate::gfx::Au;
+    for ts in [TextSize::Normal, TextSize::Large, TextSize::Larger] {
+        for (dock, channels) in [(StripDock::Below, 1), (StripDock::Below, 4), (StripDock::Right, 4)] {
+            let mut u = Ui::new(Source::Demo { t: 0.0 });
+            u.m.layout = Layout::Minimal;
+            u.m.text_size = ts;
+            u.m.strip_dock = dock;
+            if channels == 4 {
+                for c in 0..4 { u.m.ch[c].on = true; }
+                u.m.meas.extend([(Meas::Vpp, WaveId::Ch(1)), (Meas::Freq, WaveId::Ch(1)), (Meas::Vrms, WaveId::Ch(1)), (Meas::Vpp, WaveId::Ch(2)), (Meas::Period, WaveId::Ch(2)), (Meas::Vmax, WaveId::Ch(3)), (Meas::Vmin, WaveId::Ch(3))]);
+            }
+            u.relayout();
+            for _ in 0..12 { u.step(0.04); }
+            u.toast = None;
+            let what = format!("{ts:?} {dock:?} {channels} ch");
+            let strip = u.strip_rect().unwrap_or_else(|| panic!("{what}: a strip"));
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            cv.au_start();
+            u.render(&mut cv);
+            let au = cv.au.take().unwrap();
+            // every text of the strip that is the long or the short name of a measurement, and whether its ink is whole
+            let (rows, keys) = (u.meas_rows(), u.studio_keys());
+            let names: Vec<(String, String)> = rows.iter().zip(&keys).map(|(r, &k)| (r.name.clone(), u.studio_badge_name(k, &r.name))).collect();
+            let (mut seen, mut cut) = (0, Vec::new());
+            for e in &au {
+                let Au::Text { s, ink: Some(ink), clip, .. } = e else { continue };
+                if !strip.contains((ink.0 + ink.2) / 2, (ink.1 + ink.3) / 2) { continue; }
+                // the column names its lines "CH2 Frequency" on a page of many
+                let name = s.rsplit_once("CH").map_or(s.as_str(), |(_, rest)| rest.split_once(' ').map_or(s.as_str(), |(_, n)| n));
+                if !names.iter().any(|(long, short)| name == long || name == short) { continue; }
+                seen += 1;
+                if ink.0 < clip.0 - 1 || ink.2 > clip.2 + 1 { cut.push(format!("'{s}' ink {}..{} clip {}..{}", ink.0, ink.2, clip.0, clip.2)); }
+            }
+            assert!(seen >= rows.len().min(6), "{what}: {seen} names of {} measurements are drawn", rows.len());
+            assert!(cut.is_empty(), "{what}: names cut by their cell: {cut:#?}");
+        }
+    }
+    // the long name stays where it has room
+    let u = fresh(Layout::Minimal);
+    let key = super::studio::MeasKey::One(Meas::PDuty, WaveId::Ch(0));
+    assert_eq!(u.strip_name(Some(key), "Positive Duty Cycle", 400), "Positive Duty Cycle");
+    assert_eq!(u.strip_name(Some(key), "Positive Duty Cycle", 40), "+Duty");
+}
+
 /// The docked event table: its title and count are the title of the view, its columns fit their content, and a
 /// divider between two columns follows a finger.
 #[test]

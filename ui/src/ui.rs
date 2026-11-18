@@ -1746,6 +1746,8 @@ pub struct Ui {
 struct StripLine {
     pill: Option<(String, Rgb)>,
     name: String,
+    /// the name where the long one does not fit (Positive Duty Cycle, +Duty); the same where there is no short one
+    short: String,
     value: String,
     col: Rgb,
     /// the name lines up with the names under a channel pill
@@ -5810,19 +5812,20 @@ impl Ui {
         let mut lines = Vec::new();
         let in_pane = self.results_pane_on() || self.studio_owns_measurements();
         if !self.results_panel() && !in_pane {
-            let rows = self.meas_rows();
+            let (rows, keys) = (self.meas_rows(), self.studio_keys());
             for id in self.meas_groups() {
                 let col = self.wave_color(id);
                 let label = self.wave_name(id);
-                let mine: Vec<&tools::MeasRow> = rows.iter().filter(|r| r.src == id).collect();
-                for (i, row) in mine.iter().enumerate() {
-                    lines.push(StripLine { pill: (i == 0).then(|| (label.clone(), col)), name: row.name.clone(), value: row.text(), col, align: i > 0 });
+                let mine: Vec<(usize, &tools::MeasRow)> = rows.iter().enumerate().filter(|(_, r)| r.src == id).collect();
+                for (i, &(k, row)) in mine.iter().enumerate() {
+                    let short = keys.get(k).map_or_else(|| row.name.clone(), |&key| self.studio_badge_name(key, &row.name));
+                    lines.push(StripLine { pill: (i == 0).then(|| (label.clone(), col)), name: row.name.clone(), short, value: row.text(), col, align: i > 0 });
                 }
             }
         }
         if self.m.dvm_on || self.m.cnt_on {
             for (name, value) in self.dvm_row() {
-                lines.push(StripLine { pill: None, name, value, col: TEXT, align: false });
+                lines.push(StripLine { pill: None, short: name.clone(), name, value, col: TEXT, align: false });
             }
         }
         if self.m.cursor != CursorMode::Off && !in_pane {
@@ -5837,13 +5840,14 @@ impl Ui {
                 lines.push(StripLine {
                     pill: self.cursor_badge(),
                     name: format!("{mode} {label}"),
+                    short: format!("{mode} {label}"),
                     value: value.clone(),
                     col: TEXT,
                     align: false,
                 });
             }
             for (name, value) in vals.iter().skip(1) {
-                lines.push(StripLine { pill: None, name: name.clone(), value: value.clone(), col: TEXT, align: true });
+                lines.push(StripLine { pill: None, name: name.clone(), short: name.clone(), value: value.clone(), col: TEXT, align: true });
             }
         }
         lines
@@ -5878,9 +5882,9 @@ impl Ui {
         };
         let in_pane = self.results_pane_on() || self.studio_owns_measurements();
         if !self.results_panel() && !in_pane {
-            let rows = self.meas_rows();
+            let (rows, keys) = (self.meas_rows(), self.studio_keys());
             for id in self.meas_groups() {
-                let mine: Vec<&tools::MeasRow> = rows.iter().filter(|r| r.src == id).collect();
+                let mine: Vec<(usize, &tools::MeasRow)> = rows.iter().enumerate().filter(|(_, r)| r.src == id).collect();
                 let col = self.wave_color(id);
                 let label = self.wave_name(id);
                 for part in mine.chunks(tools::STRIP_PER_ROW) {
@@ -5888,16 +5892,18 @@ impl Ui {
                     pill(cv, y, &label, col);
                     // the row's width shared out, whatever the number of values
                     let pitch = (row(y).right() - 2 - vx) / part.len() as i32;
-                    for (i, r) in part.iter().enumerate() {
+                    for (i, &(k, r)) in part.iter().enumerate() {
                         let x = vx + i as i32 * pitch;
-                        // name and value share the cell; at the larger text sizes the name is shortened, then dropped, and
-                        // the value is cut last, so nothing runs over the edge of the screen
+                        // name and value share the cell; where the long name does not fit (the larger text sizes) the
+                        // short one is taken, then it is cut, then dropped, and the value is cut last, so nothing runs
+                        // over the edge of the screen
                         let (txt, cell) = (r.text(), (pitch - 6).min(row(y).right() - 2 - x));
                         let nroom = cell - f.sb.width(&txt) - 8;
                         let mut x2 = x;
                         if nroom >= 24 {
-                            let shown = f.s.width(&r.name).min(nroom);
-                            cv.text_fit(&f.s, Rect::new(x, y, nroom, bh), 0, &r.name, DIM);
+                            let name = self.strip_name(keys.get(k).copied(), &r.name, nroom);
+                            let shown = f.s.width(&name).min(nroom);
+                            cv.text_fit(&f.s, Rect::new(x, y, nroom, bh), 0, &name, DIM);
                             x2 = x + shown + 8;
                         }
                         cv.text_fit(&f.sb, Rect::new(x2, y, (x + cell - x2).max(8), bh), 0, &txt, col);
@@ -5981,7 +5987,7 @@ impl Ui {
             let name_w = vx - 6 - text_x;
             if name_w > 8 && !line.name.is_empty() {
                 cv.set_clip(Rect::new(text_x, bar.y, name_w, bar.h));
-                cv.text(&f.s, text_x, base, &line.name, DIM);
+                cv.text(&f.s, text_x, base, if f.s.width(&line.name) <= name_w { &line.name } else { &line.short }, DIM);
                 cv.set_clip(col);
             }
             y += pitch;

@@ -81,6 +81,9 @@ Added:
     Signal, so no row moves when SIM mode starts (host-tested);
   - the switch that shows the reference of the SIM slot works and shows its state. In the sheet it did nothing: a
     tap stepped it eight times, back to where it was, and it was always drawn off (host-tested);
+  - the measurement strip (stock layout and Minimal) takes the short name of a measurement (Pk-pk, Freq, +Duty)
+    where the long one has no room: with several sources, in the column at a side, and at the larger text sizes.
+    The long name was cut there ("Positive Duty Cy", "Peak-to-Pe", "Frequen") (host-tested);
   - a docked event table (decoder events, search, segments) has its title and count in the title strip of the view,
     which gives one more row; its columns fit their content, and a divider between two columns can be dragged;
   - a channel whose record reaches the end of the ADC range is named in red in the plot and gets a red pill border;

@@ -3,6 +3,7 @@
 
 //! The measurements that are on, in pages (Measure > Selected), and bounded pages of the readouts on the screen.
 
+use super::studio::MeasKey;
 use super::*;
 
 const BAND_PAGE: usize = 18;
@@ -179,6 +180,13 @@ impl Ui {
         false
     }
 
+    /// The name of a measurement in `room` pixels of the strip's small font: the long one where it fits, else the short
+    /// one (Positive Duty Cycle, +Duty). A pair or a catalog row has one name only.
+    pub(super) fn strip_name(&self, key: Option<MeasKey>, long: &str, room: i32) -> String {
+        if self.fonts().s.width(long) <= room { return long.to_string(); }
+        key.map_or_else(|| long.to_string(), |k| self.studio_badge_name(k, long))
+    }
+
     pub(super) fn draw_paged_measurement_strip(&self, cv: &mut Canvas) -> bool {
         if !self.paged_strip() { return false; }
         let size = self.measurement_page_size();
@@ -196,21 +204,25 @@ impl Ui {
                     cv.fill(Rect::new(r.x + 4, y, r.w - 8, 18), BAR);
                     if let Some((source, _)) = &line.pill { current_source = source.clone(); }
                     if !line.align && line.pill.is_none() { current_source.clear(); }
-                    let name = if current_source.is_empty() { line.name.clone() } else { format!("{current_source} {}", line.name) };
+                    let named = |n: &str| if current_source.is_empty() { n.to_string() } else { format!("{current_source} {n}") };
                     let right = r.x + r.w - 8;
                     let value_x = right - self.fonts().sb.width(&line.value);
-                    cv.set_clip(Rect::new(r.x + 8, y, (value_x - r.x - 16).max(0), 19));
+                    let room = (value_x - r.x - 16).max(0);
+                    // the long name where it fits, else the short one
+                    let name = if self.fonts().s.width(&named(&line.name)) <= room { named(&line.name) } else { named(&line.short) };
+                    cv.set_clip(Rect::new(r.x + 8, y, room, 19));
                     cv.text(&self.fonts().s, r.x + 8, y + 14, &name, LABEL);
                     cv.no_clip();
                     cv.text(&self.fonts().sb, value_x, y + 14, &line.value, line.col);
                 }
             }
             _ => {
-                let rows: Vec<tools::MeasRow> = self.meas_rows().into_iter().filter(|r| !self.meas_row_hidden(r)).collect();
+                let keys = self.studio_keys();
+                let rows: Vec<(Option<MeasKey>, tools::MeasRow)> = self.meas_rows().into_iter().enumerate().map(|(i, r)| (keys.get(i).copied(), r)).filter(|(_, r)| !self.meas_row_hidden(r)).collect();
                 let (first, end, _) = self.page_bounds(rows.len(), size);
                 let y0 = self.strip_band_y();
                 {
-                    for (index, item) in rows[first..end].iter().enumerate() {
+                    for (index, (key, item)) in rows[first..end].iter().enumerate() {
                         let (row, column) = self.band_cell(index);
                         let y = y0 + row * STRIP_ROW;
                         let pitch = (W - 12) / tools::STRIP_PER_ROW as i32;
@@ -222,8 +234,9 @@ impl Ui {
                         let nx = cv.text(&self.fonts().sb, r.x + 3, y + 12, &source, color) + 6;
                         let value = item.text();
                         let vx = r.x + r.w - 3 - self.fonts().sb.width(&value);
-                        cv.set_clip(Rect::new(nx, y, (vx - nx - 5).max(0), 16));
-                        cv.text(&self.fonts().s, nx, y + 12, &item.name, LABEL);
+                        let room = (vx - nx - 5).max(0);
+                        cv.set_clip(Rect::new(nx, y, room, 16));
+                        cv.text(&self.fonts().s, nx, y + 12, &self.strip_name(*key, &item.name, room), LABEL);
                         cv.no_clip();
                         cv.text(&self.fonts().sb, vx, y + 12, &value, color);
                     }
