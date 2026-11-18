@@ -9690,14 +9690,25 @@ impl Ui {
     /// `<prefix>-NNN.scpi` where Storage saves (the name is taken now, when it is written). `note` is said after the
     /// name: what no line could carry, or how many commands were recorded.
     pub(crate) fn scpi_save(&mut self, prefix: &str, text: &str, note: Option<&str>) {
-        let path = self.new_file(&self.save_dir(), prefix, "scpi");
-        let r = crate::store::write(&path, text.as_bytes());
+        let path = self.scpi_new_file(prefix);
+        self.scpi_write(&path, text, note);
+    }
+
+    /// A new file `<prefix>-NNN.scpi` where Storage saves. The SCPI recorder takes its file at the start and writes
+    /// it again after every step.
+    pub(crate) fn scpi_new_file(&self, prefix: &str) -> std::path::PathBuf {
+        self.new_file(&self.save_dir(), prefix, "scpi")
+    }
+
+    /// Writes a file of commands and says so, with `note` after the name.
+    pub(crate) fn scpi_write(&mut self, path: &std::path::Path, text: &str, note: Option<&str>) {
+        let r = crate::store::write(path, text.as_bytes());
         match (r.is_ok(), note) {
             (true, Some(note)) => {
                 self.flush_stick();
-                self.toast(&format!("Saved {}{}, {}", crate::store::file_name(&path), self.saved_where(), note));
+                self.toast(&format!("Saved {}{}, {}", crate::store::file_name(path), self.saved_where(), note));
             }
-            _ => self.toast_saved(&path, r),
+            _ => self.toast_saved(path, r),
         }
     }
 

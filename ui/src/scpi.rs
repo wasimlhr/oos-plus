@@ -159,6 +159,13 @@ fn split_message(text: &str) -> Vec<(String, bool)> {
         match b[i] {
             b';' => { flush(start, i, &mut first); start = i + 1; }
             b'\n' | b'\r' => { flush(start, i, &mut first); start = i + 1; first = true; }
+            // a comment line of a file of commands (a recording, scpi/recorder.rs), sent as it is: it is no command,
+            // to the end of its line and with a `;` in it. A block is an argument and never starts a command.
+            b'#' if text[start..i].trim().is_empty() => {
+                while i < b.len() && b[i] != b'\n' && b[i] != b'\r' { i += 1; }
+                start = i;
+                continue;
+            }
             b'#' => if let Some((end, true)) = block_span(b, i) {
                 if text.is_char_boundary(end) { i = end; continue; }
             },
@@ -1084,7 +1091,7 @@ impl Scpi {
     pub fn poll_program(&mut self, ui: &mut Ui, cv: &Canvas, program: &mut Program) -> Option<Vec<u8>> {
         let before = self.rec_before_remote(ui);
         let response = self.advance_program(ui, cv, program);
-        if let Some(before) = before { self.rec_after_remote(ui, &before); }
+        if let Some(before) = before { self.rec_after_remote(ui, cv, before); }
         self.normalize_errors();
         response
     }
@@ -1118,8 +1125,6 @@ impl Scpi {
             }
         }
         while let Some((command, new_line)) = program.commands.pop_front() {
-            // a comment line of a file of commands (a recording, scpi/recorder.rs), sent as it is
-            if command.starts_with('#') { continue; }
             if new_line && program.has_reply { program.separator = b'\n'; }
             if program.out.len() >= RESP_MAX {
                 self.push_err("-363,\"Input buffer overrun\" rest of the line dropped".into());

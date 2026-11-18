@@ -1,23 +1,30 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! The SCPI recorder: while it is on, what is set at the scope (touch, keys, knobs, menus) is written as SCPI
-//! commands, and the lines are saved as a file when it is switched off (Storage > SCPI recorder,
-//! `:SYSTem:RECorder:STATe`).
+//! commands into a file (Storage > SCPI recorder, `:SYSTem:RECorder:STATe`).
 //!
 //! It does not follow the menu or the knobs. Once a frame the text of the set-up (`store::setup_text`) is looked at:
 //! when it has changed and then stood still for `SETTLE`, the commands that take a scope from the set-up of the last
 //! step to this one are made and proven on a second scope, as for `:SYSTem:SETup:SCPI?` (`Scpi::mend`,
 //! scpi/setupscpi.rs). So a knob turned through twenty steps is one line with the value it was left at, and a
 //! setting changed by a drag is seen like one changed in a menu. The file starts with the set-up at the start as
-//! commands, so it can be sent to a scope in any state.
+//! commands, so it can be sent to a scope in any state. It is written again after every step: a recording is not
+//! lost when the program ends or the power goes while it is on.
 //!
-//! What a client sets by SCPI while the recorder is on is not the user's: it goes into the set-up of the last step
-//! and is not written. Actions that leave no setting (Run, Single, Clear, a saved file) are not recorded yet.
+//! What a client sets by SCPI while the recorder is on is not the user's (`poll_program`): the set-up after the
+//! client's message is the one the next step starts from, and a comment in the file says that a client set something
+//! there. What the web remote's keys and touches and a script do is the user's: it comes in as the front panel does.
+//! Actions that leave no setting (Run, Single, Clear, a saved file) are not recorded yet, and what a command of a
+//! client changes later, frames after its message (an auto set-up it started), is taken for the user's.
 
 use super::setupscpi::{changed, named};
 use super::*;
 
 /// A setting is written when it has stood still this long, in seconds: a knob that is being turned is one line.
 const SETTLE: f64 = 0.6;
+/// A recording ends by itself at this many lines: one left on for a week must not fill the memory or the stick.
+const LINES_MAX: usize = 20_000;
+/// The comment that stands where a client set something.
+const BY_CLIENT: &str = "set by a client, not recorded";
 
 pub(crate) struct Recorder {
     /// the set-up the lines written so far stand for: the model at the last step
@@ -28,13 +35,20 @@ pub(crate) struct Recorder {
     changed_at: f64,
     pending: bool,
     started: f64,
-    /// the file so far: comments (`#`) and commands
+    /// the file, and what it holds: comments (`#`) and commands
+    path: std::path::PathBuf,
     pub(crate) lines: Vec<String>,
     /// the commands recorded after the start
     pub(crate) commands: usize,
 }
 
-/// A comment line of the file. The interpreter splits a message at `;` before it sees that a line is a comment.
+impl Recorder {
+    fn text(&self) -> String {
+        self.lines.join("\n") + "\n"
+    }
+}
+
+/// A comment line of the file: one line, and no `;` for a reader that splits there.
 fn comment(text: &str) -> String {
     format!("# {}", text.replace([';', '\n', '\r'], ","))
 }
@@ -58,12 +72,25 @@ impl Scpi {
 
     fn rec_start(&mut self, ui: &mut Ui, cv: &Canvas) {
         let (setup, rest) = self.setup_scpi_proven(ui, cv);
-        let mut lines = vec![comment(&format!("OOS SCPI recording v1 (oos-ui {})", env!("CARGO_PKG_VERSION"))), comment("the set-up at the start")];
+        let version = env!("CARGO_PKG_VERSION");
+        let mut lines = vec![comment(&format!("OOS SCPI recording v1 (oos-ui {version})"))];
+        lines.push(comment("the set-up at the start"));
         lines.extend(setup.lines().map(str::to_string));
         if let Some(keys) = named(&rest) { lines.push(comment(&format!("not carried: {keys}"))); }
         lines.push(comment("what was set at the scope from then on"));
-        let seen = crate::store::setup_text(&ui.m);
-        self.rec = Some(Box::new(Recorder { base: ui.m.clone(), seen, changed_at: ui.now, pending: false, started: ui.now, lines, commands: 0 }));
+        let rec = Recorder {
+            base: ui.m.clone(),
+            seen: crate::store::setup_text(&ui.m),
+            changed_at: ui.now,
+            pending: false,
+            started: ui.now,
+            path: ui.scpi_new_file("recording"),
+            lines,
+            commands: 0,
+        };
+        // the file is there from the start; a folder that cannot be written is said when the recorder is switched off
+        let _ = crate::store::write(&rec.path, rec.text().as_bytes());
+        self.rec = Some(Box::new(rec));
         ui.toast("SCPI recorder on");
     }
 
@@ -73,6 +100,7 @@ impl Scpi {
         ui.sync_view_state();
         let want = crate::store::setup_text(&ui.m);
         let (step, rest) = self.mend(ui, cv, &rec.base, Vec::new(), &want);
+        let wrote = !step.is_empty() || !rest.is_empty();
         if !step.is_empty() {
             rec.lines.push(comment(&format!("+{:.1} s", (rec.changed_at - rec.started).max(0.0))));
             ui.toast(&format!("Recorded {}", step[step.len() - 1]));
@@ -81,6 +109,8 @@ impl Scpi {
         }
         if let Some(keys) = named(&rest) { rec.lines.push(comment(&format!("not recorded: {keys}"))); }
         (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false);
+        if wrote { let _ = crate::store::write(&rec.path, rec.text().as_bytes()); }
+        if rec.lines.len() >= LINES_MAX { ui.scpi_rec_want = false; }
         self.rec = Some(rec);
     }
 
@@ -89,32 +119,35 @@ impl Scpi {
         self.rec_step(ui, cv);
         let Some(rec) = self.rec.take() else { return };
         let n = rec.commands;
-        ui.scpi_save("recording", &(rec.lines.join("\n") + "\n"), Some(&format!("{n} command{}", if n == 1 { "" } else { "s" })));
+        ui.scpi_write(&rec.path, &rec.text(), Some(&format!("{n} command{}", if n == 1 { "" } else { "s" })));
         self.rec_last = rec.lines;
     }
 
-    /// The set-up text before a client's message is run, while the recorder is on (`poll_program`).
-    pub(crate) fn rec_before_remote(&self, ui: &Ui) -> Option<String> {
-        self.rec.as_ref().map(|_| crate::store::setup_text(&ui.m))
+    /// The model before a client's message is run, while the recorder is on (`poll_program`).
+    pub(crate) fn rec_before_remote(&self, ui: &Ui) -> Option<Model> {
+        self.rec.as_ref().map(|_| ui.m.clone())
     }
 
-    /// What a client's message set is not the user's: it goes into the set-up of the last step and is not written.
-    pub(crate) fn rec_after_remote(&mut self, ui: &Ui, before: &str) {
-        let Some(rec) = self.rec.as_mut() else { return };
-        let after = crate::store::setup_text(&ui.m);
-        if after == before { return; }
-        // a change the user made in this frame that the look has not seen yet still waits to be written
-        if before != rec.seen { (rec.changed_at, rec.pending) = (ui.now, true); }
-        for (key, value) in changed(before, &after) {
-            let set = value.is_some_and(|v| crate::store::set(&mut rec.base, &key, &v).is_ok());
-            if !set {
-                // a key that is gone is back at a default the text does not write (a reset, a recalled set-up): the
-                // last step is the whole set-up as it is now, and what waited to be written is given up
-                (rec.base, rec.pending) = (ui.m.clone(), false);
-                break;
-            }
+    /// What a client's message set is not the user's. What the user had set and was not written yet is written
+    /// first, as the set-up was before the message; then the set-up after the message is the one the next step starts
+    /// from.
+    pub(crate) fn rec_after_remote(&mut self, ui: &mut Ui, cv: &Canvas, mut before: Model) {
+        if ui.m == before { return; }
+        let Some(rec) = self.rec.as_ref() else { return };
+        if rec.pending || crate::store::setup_text(&before) != rec.seen {
+            // the queries of the step read the model: for the step it is the one from before the message
+            std::mem::swap(&mut ui.m, &mut before);
+            self.rec_step(ui, cv);
+            std::mem::swap(&mut ui.m, &mut before);
         }
-        rec.seen = after;
+        let Some(rec) = self.rec.as_mut() else { return };
+        ui.sync_view_state();
+        (rec.base, rec.seen, rec.pending) = (ui.m.clone(), crate::store::setup_text(&ui.m), false);
+        // one comment for a run of messages of a client: the file does not bring what it set
+        if !rec.lines.last().is_some_and(|l| *l == comment(BY_CLIENT)) {
+            rec.lines.push(comment(BY_CLIENT));
+            let _ = crate::store::write(&rec.path, rec.text().as_bytes());
+        }
     }
 
     /// `:SYSTem:RECorder:DATA?`: the lines of the recording that runs, else of the last one.
@@ -229,6 +262,29 @@ mod tests {
         settle(&mut s, &mut ui, &cv);
         assert_eq!(recorded(s.rec_lines()).len(), 2, "{:?}", s.rec_lines());
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        // the file says where a client set something, once for a run of its messages
+        assert_eq!(s.rec_lines().iter().filter(|l| **l == comment(BY_CLIENT)).count(), 2, "{:?}", s.rec_lines());
+    }
+
+    /// A client's message while the user is in the middle of a turn of a knob: what the user has set by then is
+    /// written, with the user's value, and the client's setting is not.
+    #[test]
+    fn a_client_in_the_middle_of_a_turn_does_not_take_the_users_setting() {
+        let (mut s, mut ui, cv) = session();
+        s.exec_line(&mut ui, &cv, ":CHANnel1:COUPling AC");
+        start(&mut s, &mut ui, &cv);
+        user(&mut ui, "tdiv", "0.001");
+        tick(&mut s, &mut ui, &cv, 0.1);
+        assert!(recorded(s.rec_lines()).is_empty(), "still turning");
+        // back to a default, a reset, a query: whatever the client sends
+        s.exec_line(&mut ui, &cv, ":CHANnel1:COUPling DC");
+        assert_eq!(recorded(s.rec_lines()), [":TIMebase:SCALe 1.000000E-03"], "{:?}", s.rec_lines());
+        user(&mut ui, "tdiv", "0.002");
+        tick(&mut s, &mut ui, &cv, 0.1);
+        s.exec_line(&mut ui, &cv, "*RST");
+        settle(&mut s, &mut ui, &cv);
+        assert_eq!(recorded(s.rec_lines()), [":TIMebase:SCALe 1.000000E-03", ":TIMebase:SCALe 2.000000E-03"], "{:?}", s.rec_lines());
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
     }
 
     #[test]
@@ -245,6 +301,14 @@ mod tests {
         assert_eq!(ask(&mut s, &mut ui, ":SYST:REC:STAT?"), "1");
         tick(&mut s, &mut ui, &cv, 0.1);
         assert!(s.rec.is_some());
+        // the file is there while the recorder is on, with what was written so far: the end of the program loses nothing
+        let so_far: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
+        assert_eq!(so_far.len(), 1);
+        assert!(std::fs::read_to_string(&so_far[0]).unwrap().ends_with("# what was set at the scope from then on\n"));
+        user(&mut ui, "ch1.coupling", "Ac");
+        tick(&mut s, &mut ui, &cv, 0.05);
+        tick(&mut s, &mut ui, &cv, 1.0);
+        assert!(std::fs::read_to_string(&so_far[0]).unwrap().ends_with(":CHANnel1:COUPling AC\n"), "written after the step");
         user(&mut ui, "tdiv", "0.001");
         tick(&mut s, &mut ui, &cv, 0.1);
         // switched off before the setting has stood still: it is written all the same
@@ -256,7 +320,7 @@ mod tests {
         let file = std::fs::read_to_string(&files[0]).unwrap();
         assert!(file.starts_with("# OOS SCPI recording v1") && file.ends_with(":TIMebase:SCALe 1.000000E-03\n"), "{file}");
         let message = ui.toast_text();
-        assert!(message.starts_with("Saved recording") && message.ends_with("1 command"), "{message}");
+        assert!(message.starts_with("Saved recording") && message.ends_with("2 commands"), "{message}");
         // the lines of the last recording stay to be read
         let data = ask(&mut s, &mut ui, ":SYSTem:RECorder:DATA?");
         assert_eq!(data, format!("#9{:09}{file}", file.len()));
@@ -290,6 +354,10 @@ mod tests {
         assert!(s.exec_line(&mut ui, &cv, "# a comment").is_empty());
         assert!(s.exec_line(&mut ui, &cv, "# +1.5 s").is_empty());
         assert_eq!(String::from_utf8(s.exec_line(&mut ui, &cv, "# one\n:CHANnel2:DISPlay ON\n# two\n:CHANnel2:DISPlay?")).unwrap(), "1");
+        assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
+        // a comment someone wrote by hand may hold a `;`: nothing after it is run
+        assert!(s.exec_line(&mut ui, &cv, "# off again; :CHANnel2:DISPlay OFF").is_empty());
+        assert_eq!(String::from_utf8(s.exec_line(&mut ui, &cv, "  # indented\n:CHANnel2:DISPlay?")).unwrap(), "1");
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
         assert_eq!(comment("a;b\nc"), "# a,b,c");
     }

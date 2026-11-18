@@ -37,7 +37,7 @@ For that launcher, use `TCPIP0::127.0.0.1::5555::SOCKET`, or HiSLIP resource `TC
 ## Syntax and conventions
 
 - Keywords are case-insensitive. The capitalised part of a mixed-case spelling is the short form: `:TRIG:EDGE:SOUR?` and `:TRIGger:EDGE:SOURce?` are equivalent. Use either the complete long form or its documented short form; intermediate abbreviations are not generally accepted.
-- A line that starts with `#` is a comment and is not run: a file of commands with comment lines (a recording of the SCPI recorder) can be sent as it is, line by line. A comment holds no `;`.
+- A line that starts with `#` is a comment and is not run: a file of commands with comment lines (a recording of the SCPI recorder) can be sent as it is. A comment ends with its line; a `;` in it starts no command.
 - Use an absolute header for every semicolon-separated command. The parser splits literal semicolons; relative-header inheritance and quoted strings containing semicolons are unsupported. Prefer one query per message when replies themselves contain semicolon-separated rows. A definite-length block `#<n><length><data>` after a blank is not split.
 - `<n>` in a header is a numeric suffix (`CHANnel<n>` is `CHAN1`).
 - Numeric setters accept finite decimal or scientific notation in base units: volts, seconds, hertz. Use `2e-1`, not `200mV`. Memory depth also accepts K/M suffixes. Replies are scientific notation with six decimals (`1.000000E+00`).

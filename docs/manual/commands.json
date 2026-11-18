@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.13",
   "version": "0.1.13",
   "edition": "November 2026",
-  "date": "17 November 2026",
+  "date": "18 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -299,8 +299,9 @@
      "remarks": [
       "- The SCPI recorder on or off, taken at the next frame.",
       "- While it is on, what is set at the scope (touch, keys, knobs, menus) is written as commands: a setting is written when it has stood still for 0.6 s, so a knob that was turned is one line with the value it was left at.",
-      "- What a client sets by SCPI is not recorded.",
-      "- Switched off, the lines are saved as a new file `recording-NNN.scpi` where Storage saves.",
+      "- What a client sets by SCPI is not recorded: a comment in the file says where a client set something, and the file does not bring that.",
+      "- What the web remote's keys and touches do is recorded, as the front panel's.",
+      "- The lines go into a new file `recording-NNN.scpi` where Storage saves, written again after every step, so a recording is not lost when the program ends while it is on; it ends by itself at 20000 lines.",
       "- Actions that leave no setting (Run, Single, Clear, a saved file) are not recorded yet.",
       "- Origin: OOS extension. The proof of every step is the one of `:SYSTem:SETup:SCPI?`."
      ],
