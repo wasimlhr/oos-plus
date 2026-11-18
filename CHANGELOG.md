@@ -9,18 +9,17 @@ Fixed:
 
 - Studio: Reset layout and a stored view bring a hidden badge row back; the Undo bar of the hiding stayed on the
   screen for its few seconds with nothing to undo. It goes with the row now (host-tested).
-- Studio has the zoom row and the zoom window of the Default layout (ADR 0032; walked on a DHO924S over SCPI, but the
-  Center trigger row on the host only): between the overview and the zoomed lanes, the text with the time per
-  division, the position and the vertical factor, then H-, H+, V-, V+, Box, Reset and Close, and in the overview a
-  slim frame with a handle at each end. Studio's own pull-down tab ("Zoom 10x"), its toolbar, the menu Zoom &
-  navigation and the Zoom bar row of Horizontal are gone. The grip for the overview's height, the Zoom button's menu
-  (zoom source, one lane) and the Y zoom on a lane's handle stay. Center trigger is a row of the plot's menu while
-  zoom is on (right click or a held finger), between Reset zoom and Close zoom; `:TIMebase:DELay:CENTer` does the
-  same. `:UI:MENU?` no longer has a menu named Zoom. `:UI:ELEMents?` lists the buttons of the row (`ZOOM`) and, with
-  the badges, the one button of the badge row (`BADGE`, `Meas`); a hidden row has no badges on the list.
-- Studio, walked control by control (ADR 0031; 98 controls and functions over SCPI and 460 sheet rows by touch on the
-  host. On a DHO924S 95 of 96 rows over SCPI, on an earlier commit of this change: the Meas button of the badge row
-  and Center trigger ran on the host only):
+- Studio has the zoom row and the zoom window of the Default layout (ADR 0032; walked on a DHO924S over SCPI): between
+  the overview and the zoomed lanes, the text with the time per division, the position and the vertical factor, then
+  H-, H+, V-, V+, Box, Reset and Close, and in the overview a slim frame with a handle at each end. Studio's own
+  pull-down tab ("Zoom 10x"), its toolbar, the menu Zoom & navigation and the Zoom bar row of Horizontal are gone. The
+  grip for the overview's height, the Zoom button's menu (zoom source, one lane) and the Y zoom on a lane's handle
+  stay. Center trigger is a row of the plot's menu while zoom is on (right click or a held finger), between Reset zoom
+  and Close zoom; `:TIMebase:DELay:CENTer` does the same. `:UI:MENU?` no longer has a menu named Zoom. `:UI:ELEMents?`
+  lists the buttons of the row (`ZOOM`) and, with the badges, the one button of the badge row (`BADGE`, `Meas`); a
+  hidden row has no badges on the list.
+- Studio, walked control by control (ADR 0031; 90 controls and functions over SCPI on the host and on a DHO924S, all
+  right on both, and 460 sheet rows by touch on the host):
   - Overlay traces and Stacked traces: every source has one handle with its name at the left edge, on its own zero
     level, in both modes. A reference had a badge in the middle of its lane in Stacked and a box over its trace in
     Overlay, and a math channel had no handle, so with every source on one graticule nothing said where their zero

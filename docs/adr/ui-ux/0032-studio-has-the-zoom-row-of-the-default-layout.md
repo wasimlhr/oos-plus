@@ -19,8 +19,8 @@ shaded window with wide grips.
 The owner compared the two on 2026-11-18 and prefers the Default one: "its cleaner and the box is slimmer". It is
 also the case ADR 0030 is about: the same function was set in two ways.
 
-The row and the window were walked on a DHO924S over SCPI (every button pressed, the answer read back). The Center
-trigger row of the plot's menu ran on the host only.
+The row, the window and the Center trigger row of the plot's menu were walked on a DHO924S over SCPI (every button
+pressed, the answer read back).
 
 ## Decision
 
