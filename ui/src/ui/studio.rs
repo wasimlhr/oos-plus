@@ -151,7 +151,7 @@ pub(super) struct Studio {
     pub yzoom: Option<usize>,
     /// where the lanes drew their channel badges last frame
     pub lane_badges: std::cell::RefCell<Vec<(usize, Rect)>>,
-    /// where the handles of the references and the math channels were drawn last frame (`studio_source_handle`)
+    /// where the handles of the references and the math channels were drawn last frame (`studio_draw_handles`)
     pub handles: std::cell::RefCell<Vec<(super::workspace::Trace, Rect)>>,
     /// Studio was the layout at the last frame: coming into it applies the entry rules (`studio_sync`)
     pub was: bool,
@@ -1287,23 +1287,25 @@ impl Ui {
         out
     }
 
-    /// The handle of a source: an outlined badge with its name on the source's zero level (`studio_handle_rects`).
-    /// Channels, references and math channels have the same one, in Stacked and in Overlay.
-    pub(super) fn studio_source_handle(&self, cv: &mut Canvas, source: super::workspace::Trace) {
+    /// Draws the handles of the window that is being drawn: an outlined badge with the name of each source on its
+    /// zero level (`studio_handle_rects`). Channels, references and math channels have the same one, in Stacked and
+    /// in Overlay; they are drawn after every trace, so none runs through a name.
+    pub(super) fn studio_draw_handles(&self, cv: &mut Canvas) {
         use super::workspace::Trace;
-        let Some(r) = self.studio_handle_rects().into_iter().find(|(s, _)| *s == source).map(|(_, r)| r) else { return };
-        let (name, col) = match source {
-            Trace::Channel(c) => (format!("CH{}", c + 1), CH_COLORS[c]),
-            Trace::Reference(i) => (format!("R{}", i + 1), self.wave_color(WaveId::Ref(i))),
-            Trace::Math(k) => (format!("M{}", k + 1), MATH_COLORS[k % MATH_COLORS.len()]),
-        };
-        match source {
-            Trace::Channel(c) => self.studio.lane_badges.borrow_mut().push((c, r)),
-            _ => self.studio.handles.borrow_mut().push((source, r)),
+        for (source, r) in self.studio_handle_rects() {
+            let (name, col) = match source {
+                Trace::Channel(c) => (format!("CH{}", c + 1), CH_COLORS[c]),
+                Trace::Reference(i) => (format!("R{}", i + 1), self.wave_color(WaveId::Ref(i))),
+                Trace::Math(k) => (format!("M{}", k + 1), MATH_COLORS[k % MATH_COLORS.len()]),
+            };
+            match source {
+                Trace::Channel(c) => self.studio.lane_badges.borrow_mut().push((c, r)),
+                _ => self.studio.handles.borrow_mut().push((source, r)),
+            }
+            cv.round(r, 4, col, 255);
+            cv.round(r.inset(1), 3, BG, 255);
+            cv.text_in(&self.fonts().sb, r, 1, &name, col);
         }
-        cv.round(r, 4, col, 255);
-        cv.round(r.inset(1), 3, BG, 255);
-        cv.text_in(&self.fonts().sb, r, 1, &name, col);
     }
 
     /// The T marker over the lanes, the cursor tags and the shaded band between the cursors.
