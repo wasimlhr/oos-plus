@@ -5,6 +5,8 @@ How the Rigol DHO800/DHO900 hardware works and how OOS drives it. "Verified on t
 
 ## System
 
+- [guide.md](guide.md): the long guide: disclaimer, models, features, status, the three ways to install, daily use,
+  recovery and going back to stock.
 - [architecture.md](architecture.md): how the SD card, kernel, Rust crates and GUI fit together.
 - [adr/](adr/README.md): architecture decision records: why things are the way they are, by category (code, ui-ux,
   hardware, system, process).
