@@ -12794,6 +12794,7 @@
      "set": ":TIMebase:DELay:CENTer",
      "desc": "The trigger in the middle of the zoom window",
      "remarks": [
+      "- Menu equivalent: Right-click (Studio) > Center trigger.",
       "- Origin: OOS extension"
      ],
      "ext": true

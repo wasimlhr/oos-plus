@@ -19,7 +19,8 @@ shaded window with wide grips.
 The owner compared the two on 2026-11-18 and prefers the Default one: "its cleaner and the box is slimmer". It is
 also the case ADR 0030 is about: the same function was set in two ways.
 
-Host only; not run on a unit.
+The row and the window were walked on a DHO924S over SCPI (every button pressed, the answer read back). The Center
+trigger row of the plot's menu ran on the host only.
 
 ## Decision
 
@@ -35,7 +36,7 @@ What only Studio has stays beside the row, because the row has no place for it:
 | The zoom source and the zoom of one lane | the menu of the Zoom button (hold or right click) |
 | The Y zoom of one lane | a tap on the lane's handle while zoomed |
 | Fit record, Reset zoom, Close zoom | also in the plot's menu |
-| Center trigger | no button, as in the Default layout; `:TIMebase:DELay:CENTer` |
+| Center trigger | a row of the plot's menu while zoom is on (the owner, 2026-11-18); `:TIMebase:DELay:CENTer` |
 
 ## Alternatives
 
@@ -43,8 +44,8 @@ What only Studio has stays beside the row, because the row has no place for it:
   other two.
 - Studio's toolbar with the labels of the Default row. It kept the tab that hides the controls until it is pulled,
   which is what made the Default row the cleaner one.
-- Center trigger as an eighth button of the row. The row would differ from the Default one again; it can become a
-  row of the plot's menu in every layout if it is missed.
+- Center trigger as an eighth button of the row. The row would differ from the Default one again; it is a row of
+  the plot's menu, beside Reset zoom and Close zoom.
 
 ## Consequences
 
@@ -54,8 +55,10 @@ What only Studio has stays beside the row, because the row has no place for it:
 - The setup key `studio_zoom_tab` is still read and written, so a set-up of an older build loads; it changes nothing.
 - A test compares the row of Studio with the row of Default pixel for pixel
   (`studio_has_the_zoom_row_and_the_window_of_the_default_layout`).
+- The plot's menu has 21 rows while zoom is on; on a screen 600 px high its rows are 25 px, one more than the least
+  a row may be (`the_plot_menu_centres_the_trigger_in_the_zoom_window` checks that it fits).
 
 ## References
 
 `ui/src/ui.rs` (`zoom_controls`, `zoom_readout`, `draw_zoom_readout`, `split_zoom`), `ui/src/ui/studio.rs`
-(`studio_zoom_bar`), `ui/src/ui/studio_trace_tests.rs`, ADR 0030.
+(`studio_zoom_bar`), `ui/src/ui/studioctx.rs` (Center trigger), `ui/src/ui/studio_trace_tests.rs`, ADR 0030.

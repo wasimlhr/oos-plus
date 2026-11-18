@@ -54,7 +54,7 @@ Studio only: the zoom lane, its vertical zoom and the fit and centre actions.
 | `:TIMebase:DELay:VZOom` | Set / Query | Vertical zoom factor 1 to 1024, the nearest power of two | `1.000000E+00` | Zoom row > V-, V+ | OOS extension |
 | `:TIMebase:DELay:VZOom:RESet` | Action | Vertical zoom back to 1 | - | A lane's handle while zoomed (Studio) > Reset Y | OOS extension |
 | `:TIMebase:DELay:FIT` | Action | The zoom window back to the whole screen | - | Zoom row > Reset | OOS extension |
-| `:TIMebase:DELay:CENTer` | Action | The trigger in the middle of the zoom window | - | - | OOS extension |
+| `:TIMebase:DELay:CENTer` | Action | The trigger in the middle of the zoom window | - | Right-click (Studio) > Center trigger | OOS extension |
 
 ## Examples
 
