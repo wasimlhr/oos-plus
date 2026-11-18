@@ -13343,7 +13343,10 @@
      "p": "Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
     },
     {
-     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file."
+     "p": "Menu location: Storage (Save to, Setup slot, Save setup, Recall setup, Save setup to file, Load setup from file, Save waveform, Fast-frame save / load, Save session, Load session, Save screenshot, Save setup as SCPI). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a file."
+    },
+    {
+     "p": "In the menu, a row that writes a file asks for its name first and a row that reads one asks which file (ADR 0029): the on-screen keyboard and a list of the folder on the scope, the Save As and Open dialogs on the desktop build. The setup slots do not ask; Save setup to file and Load setup from file are `:SAVE:SETup` and `:LOAD:SETup` with a path. A command never asks: a path it is given is used as given, and without one it takes the next free name (a save) or the newest numbered file (a load), as the table says. A setup saved by name from the menu goes to the stick when files go there, else beside the slots (on the scope `/oos/setups`); `:LOAD:SETup` loads it by its full path."
     },
     {
      "p": "Part of the SCPI reference."
@@ -13522,7 +13525,7 @@
     {
      "header": ":SAVE:FFRame",
      "set": ":SAVE:FFRame",
-     "desc": "Save the fast-frame history (`frame-NNN.bin` in the save folder).",
+     "desc": "Save the fast-frame history (the next `frame-NNN.bin` in the save folder; the menu row asks for the name).",
      "remarks": [
       "- Menu equivalent: Storage > Save fast-frame.",
       "- Origin: OOS extension"
@@ -13532,7 +13535,7 @@
     {
      "header": ":LOAD:FFRame",
      "set": ":LOAD:FFRame",
-     "desc": "Load the fast-frame history.",
+     "desc": "Load the fast-frame history (the newest `frame-NNN.bin` of the save folder; the menu row lists the files).",
      "remarks": [
       "- Menu equivalent: Storage > Load fast-frame.",
       "- Origin: OOS extension"

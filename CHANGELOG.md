@@ -57,6 +57,17 @@ Fixed:
 
 Added:
 
+- Storage: a file gets the name you give it, and a load shows the files to choose from (ADR 0029; host-tested, not
+  yet run on a unit). Save session, Save waveform (CSV and binary), Save fast-frame, Save screenshot and Save setup
+  as SCPI open the keyboard with the next free name in it: OK takes it, or type another, which takes its place. A name that is taken is
+  said to be taken, and OK once more replaces the file. Load session and Load fast-frame list the files of the
+  folder, the newest first, where they took the newest one only; the list scrolls by its bar and by the finger.
+  Two new rows, Save setup to file and Load setup from file, do the same for a setup: it lies beside the slots,
+  or on the stick when Save to sends files there. Setup slot, Save setup and Recall setup are as they were and do
+  not ask, and neither do SCPI and the Quick key. The desktop build asks with the Save As and Open dialogs of
+  Windows, which choose the folder too. A waveform CSV saved under a name has its logic analyser lines in
+  `<name>-la.csv` beside it.
+
 - The set-up as SCPI commands, `:SYSTem:SETup:SCPI?` (the first part of the SCPI recorder; host-tested, not yet run
   on a unit). The answer is a block of lines: `*RST`, then one command for every setting that differs from the
   Default set-up, each with the answer of its own query as the value (`:CHANnel2:DISPlay 1`,
@@ -66,8 +77,8 @@ Added:
   that moves another setting too (a source that switches its channel on) gets a line after it that puts it right,
   and a value finer than its query writes it gets a key = value line. Reference waveforms and notes are not part of
   it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and
-  error -221 names its key. Storage > Save setup as SCPI writes the same lines to a new file
-  (`setup-NNN.scpi`, with date and time once the clock is set) where Storage saves; its message names a key that is left out.
+  error -221 names its key. Storage > Save setup as SCPI writes the same lines to a file where Storage saves
+  (`setup-NNN.scpi` is proposed, with date and time once the clock is set); its message names a key that is left out.
 
 - External generator page, Menu > Instruments > Ext generator (ADR 0028, docs/extgen.md; host-tested against a
   simulated generator, not yet verified on hardware). A generator on the USB-A port or the LAN has its model,
