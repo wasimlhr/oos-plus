@@ -9136,6 +9136,8 @@ impl Ui {
                 Item::Open(MenuId::Measure) if self.menu == MenuId::Main => {
                     self.ensure_meas_own();
                     self.open_submenu(MenuId::MeasAdd);
+                    // Studio: the Menu opens the page itself; Add > Measurement and the key open the quick Add panel
+                    self.studio.meas_page = self.m.layout == Layout::Studio;
                 }
                 Item::Open(id) => {
                     if id == MenuId::Cursor && self.m.cursor == CursorMode::Off {
@@ -10395,6 +10397,8 @@ impl Ui {
 
     fn close_menu(&mut self) {
         if self.menu == MenuId::MeasRow { self.meas_cfg = None; }
+        // the next Measure opens as the quick Add panel again
+        self.studio.meas_page = false;
         self.menu_open = false;
         self.menu = MenuId::Main;
         self.sheet.scroll = 0;

@@ -125,6 +125,8 @@ pub(super) struct Studio {
     pub view_menu: bool,
     /// the Add menu under the top bar is open
     pub add_menu: bool,
+    /// Measure is open as the page of every layout (categories, Selected, Settings), not as the quick Add panel
+    pub meas_page: bool,
     /// the pull-down zoom toolbar is open: the time it was last used
     pub zoom_open: Option<f64>,
     /// a finger on the zoom tab or its label: where it went down, and whether it pulls the toolbar open (else shut)
@@ -2102,6 +2104,15 @@ pub(super) struct PanelGeo {
     /// a short panel: a header and a footer of one row each
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub short: bool,
+}
+
+/// The opposite of `icon_expand`: the two arrow heads meet in the middle.
+pub(super) fn icon_collapse(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
+    cv.line(cx - 6, cy + 6, cx + 6, cy - 6, c);
+    cv.hline(cx + 1, cx + 6, cy - 1, c);
+    cv.vline(cx + 1, cy - 6, cy - 1, c);
+    cv.hline(cx - 6, cx - 1, cy + 1, c);
+    cv.vline(cx - 1, cy + 1, cy + 6, c);
 }
 
 pub(super) fn icon_expand(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {

@@ -294,6 +294,8 @@ struct Hit {
 struct Lay {
     r: Rect,
     close: Rect,
+    /// Studio: back to the quick Add panel, beside the close button
+    quick: Option<Rect>,
     back: Option<Rect>,
     settings: Rect,
     selected: Rect,
@@ -344,8 +346,9 @@ impl Ui {
     fn catalog_lay(&self) -> Lay {
         let r = Rect::new(8, TOP.h + 4, W - 16, self.frame().bottom.y - TOP.h - 8);
         let close = Rect::new(r.x + r.w - 56, r.y + 6, 44, DLG_CTRL);
-        let back = self.parent.map(|_| Rect::new(close.x - 86, close.y, 78, DLG_CTRL));
-        let settings = Rect::new(back.unwrap_or(close).x - 108, r.y + 6, 100, 40);
+        let quick = (self.m.layout == Layout::Studio).then(|| Rect::new(close.x - 52, close.y, 44, DLG_CTRL));
+        let back = self.parent.map(|_| Rect::new(quick.unwrap_or(close).x - 86, close.y, 78, DLG_CTRL));
+        let settings = Rect::new(back.or(quick).unwrap_or(close).x - 108, r.y + 6, 100, 40);
         let gate = Rect::new(settings.x - 16 - 220, r.y + 6, 220, 40);
         let side_w = 168;
         let top = r.y + 54;
@@ -395,7 +398,7 @@ impl Ui {
             y += nrows * (bh + gap) + 4;
         }
         let bar = Rect::new(view.x + view.w + 6, view.y, scroll::BAR_W, view.h);
-        Lay { r, close, back, settings, selected, gate, tabs, preview, mark, sources, view, groups, items, bar, content: y }
+        Lay { r, close, quick, back, settings, selected, gate, tabs, preview, mark, sources, view, groups, items, bar, content: y }
     }
 
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
@@ -484,6 +487,10 @@ impl Ui {
         if let Some(back) = lay.back {
             btn(cv, back, BTN, BTN_BORDER);
             cv.text_in(&f.sb, back, 1, "Back", TEXT);
+        }
+        if let Some(quick) = lay.quick {
+            btn(cv, quick, BTN, BTN_BORDER);
+            super::studio::icon_collapse(cv, quick.x + quick.w / 2, quick.y + quick.h / 2, TEXT);
         }
         btn(cv, lay.settings, BTN, BTN_BORDER);
         cv.text_in(&f.s, lay.settings, 1, "Settings", TEXT);
@@ -640,6 +647,10 @@ impl Ui {
         }
         if lay.back.is_some_and(|b| b.contains(x, y)) {
             self.menu_back();
+            return true;
+        }
+        if lay.quick.is_some_and(|b| b.contains(x, y)) {
+            self.studio_meas_page(false);
             return true;
         }
         if lay.settings.contains(x, y) {

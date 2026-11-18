@@ -489,7 +489,9 @@ impl Ui {
             return false;
         }
         match self.menu {
-            MenuId::MeasAdd | MenuId::AddPanel => self.m.layout == Layout::Studio,
+            // Studio's quick Add panel; the Measure page of every layout once it is expanded (`studio.meas_page`)
+            MenuId::MeasAdd => self.m.layout == Layout::Studio && !self.studio.meas_page,
+            MenuId::AddPanel => self.m.layout == Layout::Studio,
             MenuId::Pick => self.pick.is_some_and(|p| !keypad_pick(p.it) && !self.options(p.it).is_empty() && self.sheet_spec(p.menu).is_some()),
             m => self.sheet_spec(m).is_some(),
         }
@@ -1159,9 +1161,26 @@ impl Ui {
         AddGeo { chips, groups, find, rows, page: 0, pages: 1, prev: none, next: none, list }
     }
 
+    /// The button beside the close button of the quick Add panel: it opens the Measure page of every layout, with
+    /// the categories, the sources a measurement reads, Selected and Settings.
+    pub(super) fn sheet_add_expand(&self) -> Rect {
+        let (_, _, close) = self.sheet_chrome();
+        Rect::new(close.x - 48, close.y, 44, 44)
+    }
+
+    /// From the quick Add panel to the Measure page and back; the menu stays the same one, so Back and close act as before.
+    pub(super) fn studio_meas_page(&mut self, page: bool) {
+        self.studio.meas_page = page;
+        self.studio.md.info = None;
+        if !page { self.sheet_add_open(); }
+    }
+
     pub(super) fn draw_sheet_add(&self, cv: &mut Canvas) {
         let f = self.fonts();
         self.sheet_draw_chrome(cv, "Add measurements");
+        let expand = self.sheet_add_expand();
+        btn(cv, expand, BTN, BTN_BORDER);
+        super::studio::icon_expand(cv, expand.x + expand.w / 2, expand.y + expand.h / 2, TEXT);
         let g = self.sheet_add_geo();
         if g.chips.is_empty() {
             let (r, _, _) = self.sheet_chrome();
@@ -1212,6 +1231,10 @@ impl Ui {
     }
 
     pub(super) fn sheet_add_tap(&mut self, x: i32, y: i32) -> bool {
+        if self.sheet_add_expand().contains(x, y) {
+            self.studio_meas_page(true);
+            return true;
+        }
         let g = self.sheet_add_geo();
         for &(id, c) in &g.chips {
             if c.contains(x, y) {
