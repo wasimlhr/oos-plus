@@ -2,6 +2,7 @@
 //! Studio offers what Default offers: every row of a menu of the Default layout is a row of the Studio sheet of that
 //! menu (or the menu opens as the same dialog), and what the Default bars open, the Studio bars open too.
 //! `cargo test parity_table -- --ignored --nocapture` prints the table of the audit.
+use super::sheet::RowKind;
 use super::*;
 
 fn default_ui() -> Ui {
@@ -395,4 +396,208 @@ fn the_quick_add_panel_expands_to_the_measure_page_and_back() {
     let mut d = default_ui();
     d.key(key::MEASURE);
     assert!(d.catalog_quick_rect().is_none());
+}
+
+// ------------------------------------------------------------------------------------------------ no drift
+// The rows of a sheet are the rows of the Default dialog: the same names, in the same order, with the same kind of
+// control. `cargo test drift_table -- --ignored --nocapture` prints the comparison, all rows.
+
+fn layout_ui(layout: Layout) -> Ui {
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    u.m.layout = layout;
+    u.studio.enter = layout == Layout::Studio;
+    for _ in 0..8 { u.step(0.05); }
+    u
+}
+
+/// The control a row has in the Default dialog, in the words of the table.
+fn default_control(c: &Ctl) -> String {
+    match c {
+        Ctl::Seg(o, _) if o.len() == 2 && o[0] == "Off" && o[1] == "On" => "Off / On".into(),
+        Ctl::Seg(o, _) => format!("{} buttons", o.len()),
+        Ctl::Value => "- value +".into(),
+        Ctl::Pick => "- value +, list".into(),
+        Ctl::Button => "button".into(),
+        Ctl::Text => "text".into(),
+    }
+}
+
+/// The control a row has on a sheet.
+fn sheet_control(u: &Ui, it: Item) -> String {
+    match u.sheet_row_kind(it) {
+        RowKind::Choice => format!("{} buttons", u.sheet_choice(it).0.len()),
+        RowKind::Toggle => "switch".into(),
+        RowKind::Pick => "- value +, list".into(),
+        RowKind::Number => "- value +".into(),
+        RowKind::Link => "button".into(),
+        RowKind::Info => "text".into(),
+    }
+}
+
+/// One row of the comparison: the item, its Default label and control, and on the sheet of `layout` its tab, its
+/// place in it, its label and its control (None: not on the sheet).
+struct DriftRow {
+    it: Item,
+    label: String,
+    control: String,
+    sheet: Option<(String, usize, String, String)>,
+}
+
+fn drift(menu: MenuId, set: fn(&mut Ui), layout: Layout) -> Option<Vec<DriftRow>> {
+    let (mut d, mut s) = (default_ui(), layout_ui(layout));
+    set(&mut d);
+    set(&mut s);
+    d.open_menu(menu);
+    s.open_menu(menu);
+    let spec = s.sheet_spec(menu)?;
+    let dlg = d.dlg_layout()?;
+    Some(dlg.rows.iter().map(|row| {
+        let sheet = spec.tabs.iter().find_map(|t| {
+            if let Some(i) = t.rows.iter().position(|x| *x == row.it) { return Some((t.name.to_string(), i, s.sheet_label(row.it), sheet_control(&s, row.it))); }
+            t.foot.iter().position(|x| *x == row.it).map(|i| (format!("under {}", t.name), i, s.sheet_label(row.it), "button".to_string()))
+        });
+        DriftRow { it: row.it, label: d.item_label(row.it).to_string(), control: default_control(&row.ctl), sheet }
+    }).collect())
+}
+
+#[test]
+#[ignore]
+fn drift_table() {
+    let d = default_ui();
+    for layout in [Layout::Studio, Layout::Minimal] {
+        println!("\n## {layout:?}\n");
+        println!("| Menu | Default row | Default control | Sheet tab | Sheet row | Sheet control | Differs |");
+        println!("|---|---|---|---|---|---|---|");
+        for (menu, states) in menus() {
+            let mut seen: Vec<Item> = Vec::new();
+            for (state, set) in states {
+                let Some(rows) = drift(menu, set, layout) else { continue };
+                let mut last: std::collections::HashMap<String, usize> = Default::default();
+                for r in rows {
+                    let mut differs: Vec<&str> = Vec::new();
+                    let (tab, name, control) = match &r.sheet {
+                        Some((tab, i, name, control)) => {
+                            if last.get(tab).is_some_and(|l| *l > *i) { differs.push("order"); }
+                            last.insert(tab.clone(), *i);
+                            if *name != r.label { differs.push("name"); }
+                            if !same_control(&r.control, control) { differs.push("control"); }
+                            (tab.clone(), name.clone(), control.clone())
+                        }
+                        None => ("-".into(), "-".into(), "-".into()),
+                    };
+                    if seen.contains(&r.it) { continue; }
+                    seen.push(r.it);
+                    let name_of = if state.is_empty() { menu_name(&d, menu) } else { format!("{} ({state})", menu_name(&d, menu)) };
+                    println!("| {name_of} | {} | {} | {tab} | {name} | {control} | {} |", r.label, r.control, differs.join(", "));
+                }
+            }
+        }
+    }
+}
+
+/// The sheet's control is the Default one: a switch is its form of Off / On, a pinned action is a button.
+fn same_control(default: &str, sheet: &str) -> bool {
+    default == sheet || (default == "Off / On" && sheet == "switch")
+}
+
+/// A difference between a sheet row and its row of the Default dialog that is meant, with the reason. Everything
+/// else that differs fails `a_sheet_row_is_the_row_of_the_default_dialog`.
+fn meant(menu: MenuId, it: Item, what: &str) -> Option<&'static str> {
+    use Item::*;
+    use MenuId as M;
+    Some(match (menu, it, what) {
+        // ---- controls
+        (M::Trigger, TrigType, "control") => "the three common types are buttons, More opens the list of all",
+        (M::Ref, RefSel, "control") => "the ten slots are one list on the sheet",
+        (M::Ref, RefColor, "control") => "the five colours are swatches",
+        (M::Ref, RefShow(_), _) => "one switch for the selected slot instead of ten buttons",
+        // ---- names: the sheet says whose row it is where the dialog says it in its title or needs a second look
+        (_, SrcOn, "name") => "names the channels it turns on",
+        (M::Ref, RefImport, "name") => "names the slot the file goes to",
+        (M::Decode | M::Bus, DecSel | DecOn, "name") => "four decoders: the switch says whose it is",
+        (M::Sim | M::SimAdvanced, SimSsc | SimSscCenter | SimSscDeviation | SimSscHz | SimAddRef | SimShow, "name") => "the tab is named Spread, the slot is named on its rows",
+        (M::Remote, NetWeb | RemScpiInfo | RemVxiInfo | RemTelnetInfo, "name") => "the addresses stand apart from their switches: each says whose it is",
+        // ---- order: pages the sheet sorts by hand
+        (M::Remote, _, "order") => "Access: the name and who is allowed first, then the addresses",
+        (M::Utility, _, "order") => "Connectivity: the pages in the order of the state lines above them",
+        (M::Sim, _, "order") => "the slot's rows follow the slot, Live last",
+        (M::Network, _, "order") => "the WLAN rows are a tab of their own",
+        _ => return None,
+    })
+}
+
+/// The rows of a sheet are the rows of the Default dialog: the same name, the same order inside a tab (a link to
+/// another page goes last), and the same kind of control. A choice is buttons wherever the buttons fit beside the
+/// label; where they do not, it is the picker the dialog itself falls back to (- value +, the value opens the list),
+/// never a list alone. What differs on purpose is named in `meant`.
+#[test]
+fn a_sheet_row_is_the_row_of_the_default_dialog() {
+    let d = default_ui();
+    let mut wrong: Vec<String> = Vec::new();
+    for layout in [Layout::Studio, Layout::Minimal] {
+        for (menu, states) in menus() {
+            for (state, set) in states {
+                let Some(rows) = drift(menu, set, layout) else { continue };
+                let mut s = layout_ui(layout);
+                set(&mut s);
+                s.open_menu(menu);
+                let mut last: std::collections::HashMap<String, usize> = Default::default();
+                for r in &rows {
+                    let Some((tab, i, name, control)) = &r.sheet else { continue };
+                    let at = format!("{layout:?} {} {state}: {} ({:?})", menu_name(&d, menu), r.label, r.it);
+                    if *name != r.label && meant(menu, r.it, "name").is_none() { wrong.push(format!("{at}: named {name:?}")); }
+                    // links go last on a sheet, and a pinned action is under the rows: neither counts for the order
+                    if !matches!(r.it, Item::Open(_)) && !tab.starts_with("under ") {
+                        if last.get(tab).is_some_and(|l| *l > *i) && meant(menu, r.it, "order").is_none() { wrong.push(format!("{at}: before a row the dialog has above it")); }
+                        last.insert(tab.clone(), *i);
+                    }
+                    if same_control(&r.control, control) || meant(menu, r.it, "control").is_some() { continue; }
+                    // buttons in the dialog, the picker here: only where the buttons do not fit beside the label
+                    let buttons = |c: &str| c.ends_with(" buttons");
+                    let picker = |c: &str| c == "- value +, list";
+                    if buttons(&r.control) && picker(control) {
+                        let room = super::sheet::SHEET_W - 24 - s.fonts().m.width(name) - 10;
+                        if matches!(s.ctl(r.it, room), Ctl::Seg(..)) { wrong.push(format!("{at}: {} in the dialog fit the sheet's row ({room} px), and it is a picker", r.control)); }
+                    } else if !(picker(&r.control) && buttons(control)) {
+                        // (a picker of a narrow dialog column whose options fit the sheet's row is buttons here: the same rule)
+                        wrong.push(format!("{at}: {} in the dialog, {control} on the sheet", r.control));
+                    }
+                }
+            }
+        }
+    }
+    wrong.dedup();
+    assert!(wrong.is_empty(), "sheet rows that differ from the Default dialog:\n{}", wrong.join("\n"));
+}
+
+/// The picker of a sheet is the picker of the dialog: minus and plus step the value, the value opens the list.
+#[test]
+fn a_picker_row_steps_with_minus_and_plus_and_opens_its_list() {
+    for layout in [Layout::Studio, Layout::Minimal] {
+        let mut u = layout_ui(layout);
+        u.open_menu(MenuId::Acquire);
+        let g = u.sheet_geo().unwrap();
+        let row = g.rows.iter().find(|r| r.it == Item::AcqDepth).expect("Memory");
+        assert_eq!(row.kind, RowKind::Pick);
+        let (minus, value, plus) = Ui::value_parts(row.ctrl);
+        let before = u.value(Item::AcqDepth);
+        tap_in(&mut u, plus);
+        let stepped = u.value(Item::AcqDepth);
+        assert_ne!(stepped, before, "{layout:?}: plus steps the record length");
+        tap_in(&mut u, minus);
+        assert_eq!(u.value(Item::AcqDepth), before, "{layout:?}: minus steps back");
+        tap_in(&mut u, value);
+        assert!(u.menu == MenuId::Pick && u.pick.is_some_and(|p| p.it == Item::AcqDepth), "{layout:?}: the value opens the list");
+        shot(&mut u, &format!("picker-list-{layout:?}").to_lowercase());
+        // the rows the owner named: the same controls as the dialog
+        for (menu, it, kind) in [
+            (MenuId::Acquire, Item::AcqMode, RowKind::Choice), (MenuId::Channel(0), Item::ChBw(0), RowKind::Pick), (MenuId::Channel(0), Item::ChCoupling(0), RowKind::Choice),
+            (MenuId::Channel(0), Item::ChScale(0), RowKind::Number), (MenuId::Horizontal, Item::HScale, RowKind::Number), (MenuId::Horizontal, Item::HExpandI, RowKind::Choice),
+        ] {
+            let mut u = layout_ui(layout);
+            u.open_menu(menu);
+            assert_eq!(u.sheet_row_kind(it), kind, "{layout:?} {menu:?} {it:?}");
+            shot(&mut u, &format!("sheet-{layout:?}-{menu:?}").to_lowercase().replace(['(', ')'], ""));
+        }
+    }
 }

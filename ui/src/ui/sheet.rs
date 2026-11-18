@@ -23,12 +23,13 @@ const PAD: i32 = 12;
 /// Width of the label column of a row.
 const LABEL_W: i32 = 132;
 
-/// The five kinds of row a sheet has.
+/// The kinds of row a sheet has. A row has the control the Default dialog gives its item (`Ui::ctl`): the two
+/// layouts differ in where a row is, not in how it is set.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum RowKind {
-    /// two to four segments
+    /// segments, as many as fit the row
     Choice,
-    /// a value that opens the list of its options
+    /// - value +, and the value opens the list of its options
     Pick,
     /// - value +
     Number,
@@ -411,6 +412,9 @@ impl Ui {
                 if menu == MenuId::Cursor && tabs.len() > 1 {
                     let rest: Vec<Item> = tabs.drain(1..).flat_map(|t| t.rows).collect();
                     tabs[0].rows.extend(rest);
+                    // one tab again: the rows in the order of the menu, as the dialog has them
+                    let order = self.sheet_source_items(menu);
+                    tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
                 }
             }
             // SIM: the slot's rows follow the slot, and Live comes last, so no row moves when SIM mode starts under
@@ -537,9 +541,11 @@ impl Ui {
 
     // ------------------------------------------------------------------------------------------------ rows
 
-    /// The row type of an item, from the control the classic dialog would give it.
+    /// The row type of an item: the control the Default dialog gives it in a row this wide. Segments that fit are
+    /// segments here too, however many; a choice that does not fit is the picker of the dialog (- value +, the value
+    /// opens the list); Off and On are a switch.
     pub(super) fn sheet_row_kind(&self, it: Item) -> RowKind {
-        let w = SHEET_W - 2 * PAD - LABEL_W;
+        let w = self.sheet_ctrl_w(it);
         if it == Item::TrigType || it == Item::RefColor {
             return RowKind::Choice;
         }
@@ -548,8 +554,8 @@ impl Ui {
         }
         match self.ctl(it, w) {
             Ctl::Seg(o, _) if o.len() == 2 && o[0] == "Off" && o[1] == "On" => RowKind::Toggle,
-            Ctl::Seg(o, _) if o.len() <= 4 => RowKind::Choice,
-            Ctl::Seg(..) | Ctl::Pick => RowKind::Pick,
+            Ctl::Seg(..) => RowKind::Choice,
+            Ctl::Pick => RowKind::Pick,
             Ctl::Value => RowKind::Number,
             Ctl::Button => RowKind::Link,
             Ctl::Text => RowKind::Info,
@@ -572,10 +578,21 @@ impl Ui {
             let sel = self.refs.get(self.ref_sel).and_then(Option::as_ref).map(|r| r.color.min(REF_COLORS.len() - 1));
             return (REF_COLORS.iter().map(|c| c.0.to_string()).collect(), sel);
         }
-        match self.ctl(it, SHEET_W - 2 * PAD - LABEL_W) {
+        match self.ctl(it, self.sheet_ctrl_w(it)) {
             Ctl::Seg(o, s) => (o, s),
             _ => (Vec::new(), None),
         }
+    }
+
+    /// Width of the control of a row: the column beside the labels. A choice whose segments do not fit that column
+    /// takes the room its own label leaves in the row, so what is a row of buttons in the Default dialog stays one
+    /// where the sheet is wide enough; only when that does not hold them either is it the picker.
+    pub(super) fn sheet_ctrl_w(&self, it: Item) -> i32 {
+        let column = SHEET_W - 2 * PAD - LABEL_W;
+        if !matches!(self.ctl(it, column), Ctl::Pick) { return column; }
+        let label = self.fonts().m.width(&self.sheet_label(it)) + 10;
+        let wide = SHEET_W - 2 * PAD - label;
+        if wide > column && matches!(self.ctl(it, wide), Ctl::Seg(..)) { wide } else { column }
     }
 
     /// Whether the switch of a Toggle row is on.
@@ -675,11 +692,13 @@ impl Ui {
         for (i, &it) in t.rows.iter().enumerate() {
             let row = Rect::new(r.x + PAD, body_y + i as i32 * SHEET_ROW, r.w - 2 * PAD, SHEET_ROW);
             let kind = self.sheet_row_kind(it);
-            let label = Rect::new(row.x, row.y, LABEL_W, row.h);
+            // the control column, or for a wide choice the room beside its label (`sheet_ctrl_w`)
+            let cw = if kind == RowKind::Choice { self.sheet_ctrl_w(it).max(row.w - LABEL_W) } else { row.w - LABEL_W };
+            let label = Rect::new(row.x, row.y, row.w - cw, row.h);
             let ctrl = match kind {
                 RowKind::Link => Rect::new(row.x, row.y + 2, row.w, 40),
                 RowKind::Toggle => Rect::new(row.right() - 56, row.y + 9, 52, 26),
-                _ => Rect::new(row.x + LABEL_W, row.y + 2, row.w - LABEL_W, 40),
+                _ => Rect::new(row.right() - cw, row.y + 2, cw, 40),
             };
             rows.push(SheetRowGeo { it, kind, row, label, ctrl });
         }
@@ -830,12 +849,20 @@ impl Ui {
                 }
             }
             RowKind::Pick => {
-                btn(cv, c, BTN, BTN_BORDER);
+                // the picker of the Default dialog: minus and plus step, the value opens the list
+                let (mi, mid, pl) = Self::value_parts(c);
+                btn(cv, mi, BTN, BTN_BORDER);
+                Self::draw_sign(cv, mi, false);
+                btn(cv, mid, BTN, BTN_BORDER);
                 let v = self.value(it);
-                cv.set_clip(Rect::new(c.x + 6, c.y, c.w - 30, c.h));
-                cv.text_in(&f.m, Rect::new(c.x + 10, c.y, c.w - 34, c.h), 0, &v, TEXT);
+                let room = Rect::new(mid.x + 6, mid.y, mid.w - 28, mid.h);
+                let font = if f.m.width(&v) > room.w { &f.s } else { &f.m };
+                cv.set_clip(room);
+                cv.text_in(font, room, if font.width(&v) > room.w { 0 } else { 1 }, &v, TEXT);
                 cv.no_clip();
-                chevron_down(cv, c.x + c.w - 18, c.y + c.h / 2 - 3, DIM);
+                chevron_down(cv, mid.x + mid.w - 18, mid.y + mid.h / 2 - 3, DIM);
+                btn(cv, pl, BTN, BTN_BORDER);
+                Self::draw_sign(cv, pl, true);
             }
             RowKind::Number => {
                 let (mi, mid, pl) = Self::value_parts(c);
@@ -986,7 +1013,13 @@ impl Ui {
                 self.select_option(it, &opts[k]);
             }
             RowKind::Pick => {
-                if row.ctrl.contains(x, y) || row.label.contains(x, y) {
+                let (mi, _, pl) = Self::value_parts(row.ctrl);
+                if mi.contains(x, y) {
+                    self.adjust(it, -1);
+                } else if pl.contains(x, y) {
+                    self.adjust(it, 1);
+                } else if row.ctrl.contains(x, y) || row.label.contains(x, y) {
+                    // the value and the label open the list, as in the dialog
                     self.open_picker(it);
                 }
             }

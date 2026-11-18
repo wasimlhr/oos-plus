@@ -159,7 +159,8 @@ fn items_map_to_the_five_row_types() {
     assert_eq!(u.sheet_row_kind(Item::Open(MenuId::Horizontal)), RowKind::Link);
     assert_eq!(u.sheet_row_kind(Item::RefLabel), RowKind::Link);
     assert_eq!(u.sheet_row_kind(Item::RefShow(0)), RowKind::Toggle);
-    // every row of every converted page has one of the five, links last, and a choice has two to four segments
+    // every row of every converted page has one of the kinds, links last, and a choice has the segments that fit
+    // its row: as many as the dialog shows, each wide enough for its text
     let mut u = studio();
     for (menu, name) in converted() {
         u.open_menu(menu);
@@ -173,7 +174,11 @@ fn items_map_to_the_five_row_types() {
             for it in &t.rows {
                 if u.sheet_row_kind(*it) == RowKind::Choice {
                     let (opts, _) = u.sheet_choice(*it);
-                    assert!((2..=5).contains(&opts.len()), "{name}: {it:?} segments {opts:?}");
+                    assert!(opts.len() >= 2 || matches!(it, Item::IdFind(_)), "{name}: {it:?} segments {opts:?}");
+                    let room = (u.sheet_ctrl_w(*it) - (opts.len() as i32 - 1) * 4) / opts.len() as i32;
+                    if !matches!(it, Item::RefColor | Item::IdFind(_)) {
+                        for o in &opts { assert!(u.fonts().sb.width(o) + 6 <= room, "{name}: {it:?} segment {o:?} in {room} px"); }
+                    }
                 }
             }
         }
