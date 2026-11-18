@@ -4,7 +4,7 @@ OOS Plus implements a **subset of Rigol DHO800/DHO900 SCPI**, including commands
 
 This reference describes the repository implementation. Primary Rigol syntax was checked against the [DHO800/DHO900 Programming Guide](https://download.rigol.com/en/Manual/Digital%20Oscilloscope/DHO800/DHO800900_ProgrammingGuide_EN.pdf), including trigger MODE and waveform preamble definitions. Local backend tests establish the implemented behavior; they do not establish physical instrument or VISA-driver certification. See [local validation](../local-validation.md). The canonical implementation is [scpi.rs](../../ui/src/scpi.rs) with the tables in [scpiext*.rs](../../ui/src/ui/scpiext.rs); transport details are in [hislip.rs](../../ui/src/hislip.rs) and [vxi11.rs](../../ui/src/vxi11.rs).
 
-Every command has exactly one row, in exactly one of the group pages below (569 headers in the tables). Menu equivalents use the UI labels, as Area > Option.
+Every command has exactly one row, in exactly one of the group pages below (571 headers in the tables). Menu equivalents use the UI labels, as Area > Option.
 
 ## Contents
 
@@ -37,6 +37,7 @@ For that launcher, use `TCPIP0::127.0.0.1::5555::SOCKET`, or HiSLIP resource `TC
 ## Syntax and conventions
 
 - Keywords are case-insensitive. The capitalised part of a mixed-case spelling is the short form: `:TRIG:EDGE:SOUR?` and `:TRIGger:EDGE:SOURce?` are equivalent. Use either the complete long form or its documented short form; intermediate abbreviations are not generally accepted.
+- A line that starts with `#` is a comment and is not run: a file of commands with comment lines (a recording of the SCPI recorder) can be sent as it is. A comment ends with its line; a `;` in it starts no command.
 - Use an absolute header for every semicolon-separated command. The parser splits literal semicolons; relative-header inheritance and quoted strings containing semicolons are unsupported. Prefer one query per message when replies themselves contain semicolon-separated rows. A definite-length block `#<n><length><data>` after a blank is not split.
 - `<n>` in a header is a numeric suffix (`CHANnel<n>` is `CHAN1`).
 - Numeric setters accept finite decimal or scientific notation in base units: volts, seconds, hertz. Use `2e-1`, not `200mV`. Memory depth also accepts K/M suffixes. Replies are scientific notation with six decimals (`1.000000E+00`).
@@ -134,7 +135,7 @@ See [waveform](waveform.md) for the preamble and the formats.
 | Page | Commands | Covers |
 | --- | --- | --- |
 | [Common commands](common.md) | 15 | IEEE 488.2: `*IDN?`, `*RST`, `*CLS`, `*OPC`, `*ESR?`, `*ESE`, `*SRE`, `*STB?`, `*PSC`, `*TST?`, `*OPT?`, `*WAI`, `*TRG`, `*SAV`, `*RCL` |
-| [System](system.md) | 43 | Identification, setup block, date, time, NTP, network, remote services, power, update, boot |
+| [System](system.md) | 45 | Identification, setup block, date, time, NTP, network, remote services, power, update, boot |
 | [Run control and acquisition](acquire.md) | 16 | Run, stop, single, autoset, clear; acquisition type, depth, history |
 | [Channels](channel.md) | 17 | Vertical settings per channel, active channel |
 | [Timebase](timebase.md) | 13 | Main, delayed, roll and XY time base |
