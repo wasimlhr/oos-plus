@@ -182,3 +182,8 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
 - Manchester packets (taken without waiting, since it adds settings and changes nothing while they are 0): the
   widths of sync and header are two rows of the Decode menu, the word is Data bits, the trailer what is left. If
   a few fixed structures to choose from would serve better than numbers, the rows can become that.
+- A frame cut off by the end of the record: the CAN and CAN-FD decoders give nothing of it (by the code; the
+  protocol trigger showed it on the unit). At a time base whose record is shorter than a frame, the band then has
+  no field of that frame and its identifier cannot be triggered on. The decoders could give the fields that are
+  whole (start, identifier, the data bytes so far); every record's last frame would then show as a frame without
+  its CRC, in the band and in the Events pane.
