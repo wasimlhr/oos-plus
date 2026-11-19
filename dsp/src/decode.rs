@@ -791,7 +791,10 @@ pub fn can_crc15(bits: &[bool]) -> u16 {
 
 /// CAN 2.0A/B data and remote frames at `bitrate`. `invert` = false: logic level as on the RX/TX pin (dominant low,
 /// idle high); true for CAN_H probed against ground (dominant high). Hard sync on the start of frame after at least 7
-/// recessive bit times, resynchronisation on every edge, sampling at 70 % of the bit, bit de-stuffing, CRC check.
+/// recessive bit times, resynchronisation on every edge from recessive to dominant, sampling at 70 % of the bit, bit
+/// de-stuffing, CRC check. The edge to dominant is the one a transceiver drives and a node synchronises on; the way
+/// back is the bus letting go, and on a line that is slow there it crosses the threshold late (seen on a unit:
+/// 1.1 us late on a bus at 500 kbit/s, and with a resynchronisation on it the next bit was sampled in its neighbour).
 ///
 /// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
 /// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
@@ -806,9 +809,11 @@ pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) 
     // recessive = true
     let rec = |x: f64| -> Option<bool> { st.get(x as usize).copied().flatten().map(|b| b != invert) };
     let e = edges(v, thr, hyst);
+    // the edges to dominant: the bit timing follows these alone
+    let dominant: Vec<f64> = e.iter().filter(|x| x.rising == invert).map(|x| x.t).collect();
     let edge_near = |from: f64, to: f64| -> Option<f64> {
-        let i = e.partition_point(|x| x.t < from);
-        e.get(i).filter(|x| x.t < to).map(|x| x.t)
+        let i = dominant.partition_point(|&t| t < from);
+        dominant.get(i).copied().filter(|&t| t < to)
     };
     let mut busy_until = 0.0;
     let mut last_rec_start: Option<f64> = None;
@@ -822,7 +827,10 @@ pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) 
         if x.t < busy_until {
             continue;
         }
-        if let Some(end) = e.get(k + 1).map(|n| n.t).filter(|&end| can_error_flag((end - x.t) / spb)) {
+        // (dominant where a sixth bit is sampled too: five bits behind which the line is slow back to recessive
+        // last longer than five and a half bit times, and are no flag)
+        let sixth = rec(x.t + 5.7 * spb) == Some(false);
+        if let Some(end) = e.get(k + 1).map(|n| n.t).filter(|&end| sixth && can_error_flag((end - x.t) / spb)) {
             out.push(Packet { t0: x.t, t1: end, kind: Kind::Field("!ERROR FRAME"), value: 0, value2: None, ok: false });
             busy_until = end;
             continue;

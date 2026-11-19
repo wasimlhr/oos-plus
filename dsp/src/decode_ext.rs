@@ -801,7 +801,8 @@ pub fn can_fd_crc(bits: &[bool], len: u32) -> u32 {
     crc_msb(bits.iter().copied(), len, poly, 1 << (len - 1))
 }
 
-/// Bit timing reader: one bit at a time from the current position, resynchronised on edges near the bit end.
+/// Bit timing reader: one bit at a time from the current position, resynchronised on the edges it is given (for
+/// CAN: those from recessive to dominant, `decode::can`) near the bit end.
 struct BitClock<'a> {
     t: f64,
     rec: &'a dyn Fn(f64) -> Option<bool>,
@@ -855,6 +856,8 @@ pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: 
     let st = states(v, thr, hyst);
     let rec = |x: f64| -> Option<bool> { st.get(x as usize).copied().flatten().map(|b| b != invert) };
     let e = edges(v, thr, hyst);
+    // the edges to dominant: the bit timing follows these alone (`decode::can`)
+    let dominant: Vec<Edge> = e.iter().filter(|x| x.rising == invert).cloned().collect();
     let mut busy_until = 0.0;
     let mut last_rec_start: Option<f64> = None;
     for (k, x) in e.iter().enumerate() {
@@ -865,7 +868,10 @@ pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: 
         if x.t < busy_until {
             continue;
         }
-        if let Some(end) = e.get(k + 1).map(|n| n.t).filter(|&end| crate::decode::can_error_flag((end - x.t) / tn)) {
+        // (dominant where a sixth bit is sampled too, `decode::can`)
+        let sixth = rec(x.t + 5.7 * tn) == Some(false);
+        let flag = |end: &f64| sixth && crate::decode::can_error_flag((end - x.t) / tn);
+        if let Some(end) = e.get(k + 1).map(|n| n.t).filter(flag) {
             out.push(tag("!ERROR FRAME", x.t, end, false));
             busy_until = end;
             continue;
@@ -874,7 +880,7 @@ pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: 
         if x.t - idle_from < 7.0 * tn {
             continue;
         }
-        let mut clk = BitClock { t: x.t, rec: &rec, e: &e };
+        let mut clk = BitClock { t: x.t, rec: &rec, e: &dominant };
         if let Some((pk, end)) = can_fd_frame(&mut clk, tn, td) {
             busy_until = end;
             out.extend(pk);
