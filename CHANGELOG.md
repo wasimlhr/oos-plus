@@ -431,6 +431,9 @@ Changed:
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
   row not yet verified on hardware). A signal that does not reach the 1.65 V of a new set-up
   decoded nothing (seen on a unit, 2026-11-19: a 0.43 V swing through a probe set to 1x).
+- Decoders: a decoder whose source channel is off has no band on the plot (host-tested, not yet verified on
+  hardware). The band stayed and said "source channel off", in the plot of the other channels (seen on a unit,
+  2026-11-19). The decoder stays on and as it is set; its band is back when the channel is.
 - I2C decoder: Decode > R/W bit writes an address as its seven bits ("50 W", as before) or, Included, as the
   first byte of the transfer with the read/write bit in it ("A0 W", "A1 R"), on the band, in the Events pane and
   in the event table; `:BUS<n>:OPTion1 LEFT_OUT|INCLUDED` (host-tested, not yet verified on hardware). Triggers

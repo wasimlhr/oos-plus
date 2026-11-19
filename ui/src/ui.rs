@@ -4340,7 +4340,7 @@ impl Ui {
             }
             // the height of the bands of this window, their bit rows with them
             let bands: i32 = (0..DECODERS)
-                .filter(|&k| self.m.dec_is_on(k) && self.dec_band_win(k) == Some(self.cur_win))
+                .filter(|&k| self.dec_shown(k) && self.dec_band_win(k) == Some(self.cur_win))
                 .map(|k| self.dec_band_h(&self.m.dec_view(k)))
                 .sum();
             if bands > 0 {
@@ -5411,6 +5411,18 @@ impl Ui {
         c.push((key, p.to_vec()));
     }
 
+    /// Whether decoder `k` has its band on the plot (or its row under the LA lanes): it is on, and so is the channel
+    /// of its main line. With that channel off the decoder stays as it is set and its band comes back with the
+    /// channel; a band that only said "source channel off" stood in the plot of the other channels (seen on a unit,
+    /// 2026-11-19).
+    fn dec_shown(&self, k: usize) -> bool {
+        if !self.m.dec_is_on(k) {
+            return false;
+        }
+        let m = self.m.dec_view(k);
+        m.dec_on_la() || !matches!(decode_wave(m.dec_src), Some(WaveId::Ch(c)) if !self.m.ch[c].on)
+    }
+
     /// Room under the lowest decoder band of the window being drawn: the time labels along the lower edge of the
     /// plot. A lane that has none (every Stacked lane but the last) has the band at its foot, clear of its trace.
     fn dec_foot(&self) -> i32 {
@@ -5432,7 +5444,7 @@ impl Ui {
         let (mut stack, mut lane) = (0, 0);
         let bottom = self.area.y + self.area.h - self.dec_foot() - DEC_BOX;
         for k in 0..DECODERS {
-            if !self.m.dec_is_on(k) {
+            if !self.dec_shown(k) {
                 continue;
             }
             let m = self.m.dec_view(k);

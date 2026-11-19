@@ -2742,6 +2742,9 @@ fn a_hidden_channel_stays_on_for_math_and_measurements() {
 fn a_tap_on_the_name_of_a_decoder_opens_its_decode_menu() {
     let mut u = fresh(Layout::Studio);
     u.m.dec_on = true;
+    // the band is there while the channel of the decoder's line is on
+    let line = u.m.dec_src;
+    u.m.ch[line].on = true;
     for _ in 0..6 { u.step(0.03); frame(&mut u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);

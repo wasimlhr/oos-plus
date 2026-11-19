@@ -562,6 +562,31 @@ mod tests {
         assert_eq!(cells(&spans, |_| 20, 50), [burst, Cell::Tag { i: 4, x: 300 }]);
     }
 
+    /// A decoder whose source channel is off has no band; it stays on and its band is back with the channel.
+    #[test]
+    fn the_band_goes_with_its_source_channel_and_comes_back() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.ch[2].on = true;
+        u.m.dec_on = true;
+        u.m.dec_src = 2;
+        let named = |u: &mut Ui| {
+            for _ in 0..4 {
+                u.step(0.1);
+            }
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            cv.au_start();
+            u.render(&mut cv);
+            let texts = cv.au.take().unwrap();
+            texts.into_iter().any(|e| matches!(e, Au::Text { s, .. } if s == "D1 UART" || s == "source channel off"))
+        };
+        assert!(named(&mut u), "the band of a decoder on a channel that is on");
+        u.m.ch[2].on = false;
+        assert!(!named(&mut u), "no band, and no note of one, for a source that is off");
+        assert!(u.m.dec_on && u.m.dec_src == 2, "the decoder is as it was set");
+        u.m.ch[2].on = true;
+        assert!(named(&mut u));
+    }
+
     /// A character line reads as text with its control characters spelled out; a hex line has spaces; what does not
     /// fit is said by dots, and a box too small for its first field stays empty.
     #[test]
