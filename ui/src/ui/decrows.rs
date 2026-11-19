@@ -313,7 +313,7 @@ impl Ui {
         let failed = self.pn.rows.iter().filter(|e| e.errors > 0).count();
         let limit = r.right() - if self.dock_on() { 8 } else { 54 };
         let x = head.right + 14;
-        let rows_txt = format!("{} rows", total);
+        let rows_txt = if total == 1 { "1 row".to_string() } else { format!("{} rows", total) };
         let failed_txt = if failed == 1 { "1 with an error".to_string() } else { format!("{} with errors", failed) };
         if x + f.s.width(&rows_txt) <= limit {
             cv.text_in(&f.s, Rect::new(x, r.y, f.s.width(&rows_txt), HEAD), 0, &rows_txt, DIM);
