@@ -277,6 +277,28 @@ impl Default for Setup {
     }
 }
 
+/// What a column of the Events pane holds of a frame ([`Protocol::columns`]). The texts are those of the band.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(feature = "decoders"), allow(dead_code))] // some are for the optional modules alone
+pub enum Col {
+    /// the fields whose text begins with this label, without the label ("ID ", "CRC ")
+    Label(&'static str),
+    /// the field at this place of the frame (the packet identifier after the sync of a USB packet)
+    At(usize),
+    /// the first address of the frame
+    Addr,
+    /// the data fields after the first field another column takes by its label, place or kind
+    Data,
+    /// how many data fields those are
+    Count,
+    /// everything after that first field, as the band writes it
+    Rest,
+    /// the first values of the data words (SPI: MOSI)
+    First,
+    /// their second values (SPI: MISO)
+    Second,
+}
+
 /// The trigger of [`Setup::trig`]: an edge of `slope` on the channel of role `role` at `level` (V). With an `idle` time
 /// (s) only the first edge after the line was quiet that long (Nth edge, n = 1), else every edge (Edge).
 #[derive(Clone, Copy, Debug)]
@@ -380,6 +402,13 @@ pub trait Protocol: Sync {
     /// clearly longer than the usual one (a UART line, SPI without a chip select, Modbus).
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
         None
+    }
+
+    /// The columns the Events pane has for a frame of the protocol in place of one text: a title and what the
+    /// column holds of the frame ([`Col`]). Empty: the frame is one text, as the band writes it. The pane uses them
+    /// when it lists messages, is wide enough, and every decoder that is on has the same columns.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[]
     }
 
     /// Whether `p` is a mark the module adds for the screen and not a field of the bus (the start of an SPI frame,

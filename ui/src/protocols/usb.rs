@@ -12,6 +12,16 @@ use oos_dsp::decode_ext3::{self as x3, UsbSpeed, USB_FULL, USB_LOW};
 pub struct Usb;
 
 impl Protocol for Usb {
+    /// A packet in the Events pane: what it is (the field after the sync), address, endpoint, data, CRC.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[
+            ("Packet", Col::At(1)),
+            ("Address", Col::Label("ADDR ")),
+            ("Endpoint", Col::Label("ENDP ")),
+            ("Data", Col::Data),
+            ("CRC", Col::Label("CRC ")),
+        ]
+    }
     /// A frame begins with its sync field: a packet is a message.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
         Some(|p| p.kind == oos_dsp::decode::Kind::Field("SYNC"))

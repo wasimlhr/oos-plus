@@ -10,6 +10,7 @@
 //! band and its time span on the plot are marked, and a tap on a box of the band chooses its row.
 
 use super::*;
+use crate::protocols::Col;
 use oos_dsp::decode::{Kind as DecKind, Packet};
 
 /// Height of the pane's head and of its column titles. The buttons of the head are a finger tall (`TOUCH_MIN`).
@@ -39,6 +40,10 @@ pub struct MsgRow {
     pub hex: String,
     /// fields that failed their check
     pub errors: usize,
+    /// the columns of the protocol for this row and their cells ([`crate::protocols::Protocol::columns`]); empty for
+    /// a protocol without them and for a row that is no frame (a field, a line of text)
+    pub cols: &'static [(&'static str, Col)],
+    pub cells: Vec<String>,
 }
 
 /// The row chosen by a tap: its decoder and its time span, in the record it was chosen in.
@@ -95,10 +100,12 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
                 let character = ascii && tag.is_none() && x.kind == DecKind::Data && text != hex(x);
                 let hex = if character { hex(x) } else { String::new() };
                 let (len, errors) = (usize::from(tag.is_none()), usize::from(!x.ok));
-                MsgRow { dec, t: x.t0, t1: x.t1, who: who.to_string(), len, text, hex, errors }
+                let (who, cells) = (who.to_string(), Vec::new());
+                MsgRow { dec, t: x.t0, t1: x.t1, who, len, text, hex, errors, cols: &[], cells }
             })
             .collect();
     }
+    let cols = if view == EvView::Messages { m.dec_proto.module().map_or(&[][..], |x| x.columns()) } else { &[] };
     let groups = if view == EvView::Lines && ascii { lines(p) } else { decband::messages(m, p) };
     groups
         .into_iter()
@@ -114,7 +121,51 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
                 text: decband::message_text(m, pk),
                 hex: if ascii { values().map(hex).collect::<Vec<_>>().join(" ") } else { String::new() },
                 errors: pk.iter().filter(|x| !x.ok).count(),
+                cols,
+                cells: cells_of(m, cols, pk),
             }
+        })
+        .collect()
+}
+
+/// The cells of the frame `pk` for the columns `cols` of its protocol, with the texts the band writes.
+fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<String> {
+    if cols.is_empty() {
+        return Vec::new();
+    }
+    let text = |x: &Packet| packet_tag(m, x).map_or_else(|| packet_text(m, x), str::to_string);
+    let texts: Vec<String> = pk.iter().map(text).collect();
+    // the first field a column takes by its label, its place or its kind: the data of the frame follow it (the
+    // sync byte of a LIN frame, which is data to the decoder, stands before its identifier)
+    let takes = |k: usize| {
+        cols.iter().any(|(_, c)| match *c {
+            Col::Label(l) => texts[k].starts_with(l),
+            Col::At(n) => k == n,
+            Col::Addr => matches!(pk[k].kind, DecKind::Addr { .. }),
+            _ => false,
+        })
+    };
+    let head = (0..pk.len()).find(|&k| takes(k));
+    let after = |k: usize| head.is_none_or(|h| k > h);
+    let is_data = |k: usize| pk[k].kind == DecKind::Data && after(k) && packet_tag(m, &pk[k]).is_none();
+    let data: Vec<Packet> = (0..pk.len()).filter(|&k| is_data(k)).map(|k| pk[k].clone()).collect();
+    // a word of two data lines is written "9F/FF"
+    let half = |second: bool| {
+        let part = |t: &String| t.split('/').nth(usize::from(second)).unwrap_or("").to_string();
+        let parts = (0..pk.len()).filter(|&k| is_data(k)).map(|k| part(&texts[k])).filter(|t| !t.is_empty());
+        parts.collect::<Vec<_>>().join(" ")
+    };
+    let address = || (0..pk.len()).find(|&k| matches!(pk[k].kind, DecKind::Addr { .. }));
+    cols.iter()
+        .map(|(_, c)| match *c {
+            Col::Label(l) => texts.iter().filter_map(|t| t.strip_prefix(l)).collect::<Vec<_>>().join(" "),
+            Col::At(n) => texts.get(n).cloned().unwrap_or_default(),
+            Col::Addr => address().map_or_else(String::new, |k| texts[k].clone()),
+            Col::Data => decband::message_text(m, &data),
+            Col::Count => data.len().to_string(),
+            Col::Rest => decband::message_text(m, head.map_or(pk, |h| &pk[h + 1..])),
+            Col::First => half(false),
+            Col::Second => half(true),
         })
         .collect()
 }
@@ -166,7 +217,8 @@ impl Ui {
             match m.dec_proto.module().and_then(|x| x.events(&p, &m.dec_opts())) {
                 Some(rows) => v.extend(rows.into_iter().map(|(t, text, ok)| {
                     let (hex, errors) = (String::new(), usize::from(!ok));
-                    MsgRow { dec: k, t, t1: t, who: who.clone(), len: 1, text, hex, errors }
+                    let (who, cells) = (who.clone(), Vec::new());
+                    MsgRow { dec: k, t, t1: t, who, len: 1, text, hex, errors, cols: &[], cells }
                 })),
                 None => v.extend(rows_of(&m, k, &who, &p, self.m.ev_view)),
             }
@@ -317,6 +369,28 @@ impl Ui {
         self.events_relist();
     }
 
+    /// The columns of the protocol the pane lists, when its rows are the frames of one: every row has the same ones.
+    /// Rows of two protocols, of fields or of lines of text are one text each.
+    pub(super) fn events_columns(&self) -> Option<&'static [(&'static str, Col)]> {
+        let own = self.pn.rows.first()?.cols;
+        (!own.is_empty() && self.pn.rows.iter().all(|e| std::ptr::eq(e.cols, own))).then_some(own)
+    }
+
+    /// The widths of the protocol's columns in `free` pixels: each as wide as its title and its cells need, and the
+    /// column of the data (the last one where there is none) takes what is left. The cells measured are those of the
+    /// first rows of the record, not of the screen, so the columns stand still while the list scrolls.
+    fn events_own_widths(&self, own: &[(&'static str, Col)], f: &Font, free: i32, pad: i32) -> Vec<i32> {
+        let wide = own.iter().position(|c| matches!(c.1, Col::Data | Col::Rest | Col::Second)).unwrap_or(own.len() - 1);
+        let need = |k: usize| -> i32 {
+            let cells = self.pn.rows.iter().take(64).filter_map(|e| e.cells.get(k)).map(|c| f.width(c));
+            cells.fold(f.width(own[k].0), i32::max) + pad
+        };
+        // a column that is not the data's has a third of the room at most
+        let mut w: Vec<i32> = (0..own.len()).map(|k| if k == wide { 0 } else { need(k).min(free / 3) }).collect();
+        w[wide] = (free - w.iter().sum::<i32>()).max(0);
+        w
+    }
+
     /// The widths of the columns that depend on what is listed: the decoder names of the whole record (0 without a
     /// row) and whether a row has hex bytes. Of the record, not of the rows on the screen: the columns stand still
     /// while the list scrolls.
@@ -421,19 +495,23 @@ impl Ui {
         let left = r.x + if small { 8 } else { 12 };
         // the bar is drawn narrow in the middle of its touch area: a small pane lets the text come close to it
         let end = area.right() - if !bar.needed() { 8 } else if small { 28 } else { scroll::BAR_W + 4 };
+        // the columns of the protocol (a wide pane that lists the frames of one protocol) take the place of the
+        // length, the text and the hex bytes
+        let own = self.events_columns().filter(|_| wide);
+        let w_len = if own.is_some() { 0 } else { w_len };
         let free = (end - w_status - left - w_number - w_time - w_who - w_len).max(0);
         let w_text = if hex_on { free * 2 / 5 } else { free };
-        let cols = [
-            ("#", w_number),
-            ("Time", w_time),
-            ("Source", w_who),
-            ("Len", w_len),
-            ("Text", w_text),
-            ("Hex", free - w_text),
-            ("Errors", w_status),
-        ];
+        let mut cols: Vec<(&str, i32)> = vec![("#", w_number), ("Time", w_time), ("Source", w_who), ("Len", w_len)];
+        // (the place of the first column that is drawn bold: the text, or the cells of the protocol)
+        let bold = cols.len();
+        match own {
+            Some(own) => cols.extend(own.iter().map(|c| c.0).zip(self.events_own_widths(own, &f.sb, free, pad))),
+            None => cols.extend([("Text", w_text), ("Hex", free - w_text)]),
+        }
+        let bold = bold..if own.is_some() { cols.len() } else { bold + 1 };
+        cols.push(("Errors", w_status));
         let mut x = left;
-        for (title, w) in cols {
+        for &(title, w) in &cols {
             if w > 0 {
                 cell(cv, &f.s, (x, r.y + HEAD - 3), w, title, DIM);
             }
@@ -453,15 +531,19 @@ impl Ui {
             let status = errors_text(e.errors);
             let len = if e.len > 0 { e.len.to_string() } else { String::new() };
             let number = (top + i + 1).to_string();
-            let texts = [number, si(e.t, "s"), e.who.clone(), len, e.text.clone(), e.hex.clone(), status];
             let ink = if e.errors > 0 { RED } else { TEXT };
-            let inks = [DIM, LABEL, DIM, LABEL, ink, LABEL, RED];
+            let mut texts = vec![(number, DIM), (si(e.t, "s"), LABEL), (e.who.clone(), DIM), (len, LABEL)];
+            match own {
+                Some(_) => texts.extend(e.cells.iter().map(|c| (c.clone(), ink))),
+                None => texts.extend([(e.text.clone(), ink), (e.hex.clone(), LABEL)]),
+            }
+            texts.push((status, RED));
             let mut x = left;
-            for (k, (_, w)) in cols.iter().enumerate() {
-                if *w > 0 {
-                    cell(cv, if k == 4 { &f.sb } else { &f.s }, (x, y), *w, &texts[k], inks[k]);
+            for (k, (&(_, w), (text, ink))) in cols.iter().zip(&texts).enumerate() {
+                if w > 0 {
+                    cell(cv, if bold.contains(&k) { &f.sb } else { &f.s }, (x, y), w, text, *ink);
                 }
-                x += *w;
+                x += w;
             }
         }
         bar.draw(cv);
@@ -717,6 +799,62 @@ mod tests {
         let fields = rows_of(&m, 0, "D1 SPI", &p, EvView::Fields);
         assert_eq!(fields.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["9F", "01"]);
         assert_eq!(rows_of(&m, 0, "D1 SPI", &p, EvView::Messages).len(), 2);
+    }
+
+    /// A protocol with columns has them in the Events pane in place of one text: a CAN frame its identifier, the
+    /// number of its data bytes, the bytes and the CRC; a LIN frame its identifier, the data of the response without
+    /// the sync byte, and the checksum; an SPI frame the words of each data line. Rows that are fields have none.
+    #[test]
+    fn a_frame_has_the_cells_of_its_protocols_columns() {
+        let mut m = Model::default();
+        m.dec_opt = [0; crate::protocols::OPTS];
+        m.dec_bits = 8;
+        let at = |t: f64, kind: DecKind, value: u32| Packet { kind, value, ..byte(t, 0) };
+        let id = |rtr: bool| DecKind::Id { ext: false, rtr };
+        let titles = |rows: &[MsgRow]| rows[0].cols.iter().map(|c| c.0).collect::<Vec<_>>();
+        m.dec_proto = Proto::CAN;
+        let p = [
+            at(0.0, DecKind::Start, 0),
+            at(1.0, id(false), 0x101),
+            at(2.0, DecKind::Data, 0x01),
+            at(3.0, DecKind::Data, 0x03),
+            at(4.0, DecKind::Crc, 0x562d),
+            at(5.0, DecKind::Ack, 0),
+            at(9.0, DecKind::Start, 0),
+            at(10.0, id(true), 0x757),
+            at(11.0, DecKind::Crc, 0x20bb),
+        ];
+        let rows = rows_of(&m, 0, "D1 CAN", &p, EvView::Messages);
+        assert_eq!(titles(&rows), ["ID", "DLC", "Data", "CRC"]);
+        assert_eq!(rows[0].cells, ["101", "2", "01 03", "562D"]);
+        assert_eq!(rows[1].cells, ["757 RTR", "0", "", "20BB"]);
+        assert!(rows_of(&m, 0, "D1 CAN", &p, EvView::Fields).iter().all(|r| r.cols.is_empty() && r.cells.is_empty()));
+        m.dec_proto = Proto::LIN;
+        let p = [
+            at(0.0, DecKind::Break, 0),
+            at(1.0, DecKind::Data, 0x55),
+            at(2.0, id(false), 0x08),
+            at(3.0, DecKind::Data, 0x67),
+            at(4.0, DecKind::Data, 0x80),
+            at(5.0, DecKind::Crc, 0x10),
+        ];
+        let rows = rows_of(&m, 0, "D1 LIN", &p, EvView::Messages);
+        assert_eq!(titles(&rows), ["ID", "Data", "Checksum"]);
+        assert_eq!(rows[0].cells, ["08", "67 80", "10"]);
+        m.dec_proto = Proto::SPI;
+        let word = |t: f64, mosi: u32, miso: u32| Packet { value2: Some(miso), ..at(t, DecKind::Data, mosi) };
+        let p = [at(0.0, DecKind::Start, 0), word(0.1, 0x9f, 0xff), word(0.2, 0x00, 0xef)];
+        let rows = rows_of(&m, 0, "D1 SPI", &p, EvView::Messages);
+        assert_eq!(titles(&rows), ["MOSI", "MISO"]);
+        assert_eq!(rows[0].cells, ["9F 00", "FF EF"]);
+        m.dec_proto = Proto::I2C;
+        let write = DecKind::Addr { read: false };
+        let (start, stop) = (at(0.0, DecKind::Start, 0), at(3.0, DecKind::Stop, 0));
+        let p = [start, at(1.0, write, 0x50), at(2.0, DecKind::Data, 0x42), stop];
+        assert_eq!(rows_of(&m, 0, "D1 I2C", &p, EvView::Messages)[0].cells, ["50 W", "42 P"]);
+        // a UART has no columns: a row is its text
+        m.dec_proto = Proto::UART;
+        assert!(rows_of(&m, 0, "D1 UART", &[byte(0.0, b'H')], EvView::Messages)[0].cols.is_empty());
     }
 
     /// An I2C read is no error: the byte the controller ends it with is not acknowledged, by the rule of the bus, and

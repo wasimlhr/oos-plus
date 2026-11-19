@@ -1,8 +1,9 @@
 # Decoder plan (2026-11-19)
 
 **State, 2026-11-19:** step 0 and step 1 are done and merged (pull requests 75 and 76 of the fork, with the SIM bus
-presets). Of step 2 the first hook, where a frame starts, is done; the columns of the Events pane are next. Then
-step 3: what is missing in a decode, and each bus on the unit as the owner connects it.
+presets). Step 2 is done on the host: a message is a frame of the protocol, and the Events pane has the columns
+of the protocol. Next is step 3: what is missing in a decode (the SENT slow channel, CAN-FD error frames, a free
+bit rate for Manchester, C-PHY at low rates), and each bus on the unit as the owner connects it.
 
 Goal: every protocol decoder is usable on the 1024x600 screen the way a bench scope shows a bus: a box per field on
 the plot, a list of messages beside it, settings that are found, and a decode that is right on real signals. The
@@ -86,8 +87,12 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
      Modbus and 1553 are split by idle time as before (a 1553 command and a status word have the same sync). The
      SENT capture, one message before, lists its 118 frames. The mark an SPI frame begins with is no row of the
      Fields view any more;
-   - columns for the Events pane (CAN: ID, DLC, data, CRC; LIN: ID, data, checksum; I2C: address, data), in place
-     of one text.
+   - columns for the Events pane, in place of one text. **Done** (host; CAN and LIN on their captures): a module
+     gives a table of titles and what each column holds of a frame (`columns`). CAN and CAN-FD: ID, DLC, Data,
+     CRC; LIN: ID, Data, Checksum; I2C: Address, Data; SPI: MOSI, MISO; SENT: Status, Data, CRC; FlexRay: ID,
+     Cycle, Data, CRC; ARINC 429: Label, SDI, Data, SSM; USB: Packet, Address, Endpoint, Data, CRC; I2S: Left,
+     Right. The pane uses them when it lists messages, is at least 560 px wide and every decoder that is on has
+     the same columns; else a row is its text as before.
 3. **Families, in the order they can be checked:** the bench buses on the unit (UART, SPI, I2C); the vehicle buses
    on their captures (CAN, CAN-FD, LIN, FlexRay, SENT); the avionics buses (1553, ARINC 429); USB, 1-Wire, I2S,
    I3C; then what is missing in a decode (SENT slow channel, CAN-FD error frames, a free bit rate for LIN and

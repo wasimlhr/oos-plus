@@ -549,6 +549,14 @@ Changed:
     longest time a frame may take, eight data bytes and the checksum at most;
   - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
     frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
+- Decoders: the Events pane has the columns of the protocol (host-tested, and on captures of real CAN and LIN
+  buses on the host; not yet verified on hardware). A frame was one text ("SOF ID 101 01 03 CRC 562D ACK"). Where
+  the pane lists messages, is at least 560 px wide and every decoder that is on has the same columns, a frame has
+  a cell in each: CAN and CAN-FD ID, DLC, Data, CRC; LIN ID, Data, Checksum; I2C Address, Data; SPI MOSI, MISO;
+  SENT Status, Data, CRC; FlexRay ID, Cycle, Data, CRC; ARINC 429 Label, SDI, Data, SSM; USB Packet, Address,
+  Endpoint, Data, CRC; I2S Left, Right. The column of the data takes the room the others leave, and the widths
+  are those of the record, so they stand still while the list scrolls. A narrow pane, the Fields and the Lines
+  view, a UART and two decoders of different protocols have a text for each row as before.
 - Decoders: a message is a frame of the protocol (host-tested, and on captures of real SENT and USB buses on the
   host; not yet verified on hardware). The band and the Events pane made a message of what was sent without a
   pause clearly longer than the usual one, which fits a UART. A bus without pauses was one message from end to
