@@ -532,11 +532,13 @@ Changed:
   - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
     frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
 - Studio: while SIM plays references the badge strip has no measurements of the channels (host-tested; (unit),
-  2026-11-19: with an I2C bus playing the four rows of the channels were gone, and back after Live). The channels stay on and are not acquired then, and each had its row of "----" under
-  the simulated signal (seen on a unit, 2026-11-19). They come back with Live.
-- Decode: the row of a line names its source also when that is a reference that is empty now (host-tested; (unit),
-  2026-11-19: a UART decoder on the cleared R1 has CH1 to CH4 and R1 in its row, R1 chosen). The rows list the channels and the references that hold a waveform; a decoder left on
-  "R1" after the reference was cleared, or after a restart, had a row of channels with none of them chosen.
+  2026-11-19: with an I2C bus playing the four rows of the channels were gone, and back after Live). The
+  channels stay on and are not acquired then, and each had its row of "----" under the simulated signal (seen on
+  a unit, 2026-11-19).
+- Decode: the row of a line names its source also when that is a reference that is empty now (host-tested;
+  (unit), 2026-11-19: a UART decoder on the cleared R1 has CH1 to CH4 and R1 in its row, R1 chosen). The rows
+  list the channels and the references that hold a waveform; a decoder left on "R1" after the reference was
+  cleared, or after a restart, had a row of channels with none of them chosen.
 - I2C decoder: a read is no error, and a 10-bit address is one address (host-tested, and on two captures of real
   buses on the host; not yet verified on hardware). The byte a controller ends a read with is not acknowledged:
   that is the rule of the bus, and it was red on the band, counted as an error in the Events pane and marked
