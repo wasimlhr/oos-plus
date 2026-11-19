@@ -44,7 +44,7 @@ Per decoder:
 | USB | capture: full speed packets agree | band | - |
 | 1-Wire | capture: transactions agree | band, columns, ROM command names | - |
 | I3C | capture: commands and bytes as on the lines; one read differs from the reference | band, command names | - |
-| C-PHY | capture: **nothing decoded** at 50 Msym/s with low-power states | band | low rates, LP states |
+| C-PHY | capture: low-power states, 64 bursts, 659 words, every header checksum right | band, messages | packets in the words, low-power data |
 | Manchester | capture: the bits agree at the rate of the signal; no packet structure | band | structure |
 | the 13 others | host only: no capture | band | captures |
 
@@ -129,8 +129,10 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    3. The buses of his demo board, as he connects them: CAN, CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC 429,
       USB (in this order: the three first are the ones whose decoders were changed on their captures).
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
-   their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Open here: C-PHY at low
-   symbol rates, the packet structure of a Manchester line.
+   their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
+   its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
+   1-Wire and I3C write the names of their commands. Open here: the packets inside the C-PHY words and its
+   low-power data, the packet structure of a Manchester line.
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 

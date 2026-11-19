@@ -552,6 +552,23 @@ Changed:
   of a real bus with two devices on the host; not yet verified on hardware). "ROM 55" reads "ROM 55 Match"
   (Read, Match, Skip, Search, Alarm search and the two overdrive commands; the commands after them are those of a
   device family and stay numbers). The Events pane has ROM, Family, Serial, CRC and Data.
+- C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
+  yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
+  - the levels were fixed voltages: a low-power level was one above 0.8 V, and the capture's lines swing 1.16 V
+    around 0 V, so no low-power state was found, and the noise between two lines at the same low-power level
+    counted as wire states one or two samples long, which made the symbol time come out under 2.5 samples. The
+    levels are taken from the record: a high-speed state has its three lines at three levels evenly apart, a
+    low-power state has two lines at the least at one level;
+  - the seven symbols of a word were read most significant first. On the wire the first one is the least
+    significant: the checksum of the packet header is right in 64 of the capture's 64 bursts this way, and in
+    none the other way;
+  - the sync word that stands a second time inside a burst, between the two copies of a packet header, was a code
+    error.
+  The capture reads: the low-power states around each burst ("LP-111 LP-001 LP-000"), the preamble as one field
+  ("PRE 28"), "SYNC", the words ("4000 EDCA 0E66"), and the post as one field; 64 bursts, 659 words, no error,
+  and the times of the instrument that took it to under a nanosecond. A message on the band is what the lane
+  does from one stop state to the next, and the Frame trigger takes the first sync word of a burst. Not decoded:
+  the packets inside the words (header fields, payload) and low-power data, of which the states are listed.
 - I3C decoder: a common command code has its name, "CCC 90 GETSTATUS" (host-tested; not yet verified on
   hardware). The decoder had the table of the names and the band wrote the number alone. A code the table does
   not have keeps its number.

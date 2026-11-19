@@ -430,6 +430,29 @@ impl Protocol for Cphy {
         let c = l.lines[2].ok_or("C-PHY C source missing")?;
         Ok(oos_dsp::cphy::decode(l.main(), l.need(1, "source channel off")?, c, l.dt, (l.sh.cphy_rate > 0.0).then_some(l.sh.cphy_rate), l.thr.abs().max(1e-6)))
     }
+    /// A low-power state, the preamble and the post last for a time and are boxes with their name, not the marks
+    /// of an event: "LP-001" (the lines A, B, C), "PRE 28" (its symbols), "SYNC", "POST". A word is its 16 bits.
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        use oos_dsp::decode::Kind;
+        match p.kind {
+            Kind::Field(label) if label.starts_with("!LP") => Some(format!("LP-{}", &label[3..])),
+            Kind::Field("PRE") => Some(format!("PRE {}", p.value)),
+            Kind::Field("SYNC") => Some("SYNC".into()),
+            Kind::Word { .. } => Some(format!("{:04X}", p.value)),
+            Kind::Stop => Some("POST".into()),
+            _ => None,
+        }
+    }
+    /// A message is what a lane does from one stop state (all three lines high) to the next: a burst with the
+    /// low-power states that ask for it, or low-power data.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("!LP111"))
+    }
+    /// A frame is a burst, found at its first sync word: the decoder counts the sync words of a burst from 0, and
+    /// the later ones stand between the two copies of a packet header.
+    fn trigger_match(&self, what: BusWhat, _: u32, p: &Packet) -> Option<bool> {
+        (what == BusWhat::Frame).then(|| p.kind == oos_dsp::decode::Kind::Field("SYNC") && p.value == 0)
+    }
     /// A, B, C on CH1..CH3, the receiver's 20 mV threshold, 16-bit words; the analog channels, not the LA.
     fn setup(&self) -> Setup {
         Setup { src: [Some(0), Some(1), Some(2), None], thr: 0.02, rows: &[(Row::Bits, 16)], la_off: true, ..Setup::default() }
@@ -489,5 +512,27 @@ mod tests {
         assert_eq!(I2c.text(&Packet { ok: false, ..addr(false) }, &with).as_deref(), Some("A0 W N"));
         assert!(I2c.text(&Packet { kind: Kind::Data, ..addr(false) }, &with).is_none());
         assert_eq!(I2c.options()[0].choices[I2c.options()[0].default], "Left out");
+    }
+
+    /// The C-PHY fields that last for a time have their name as text, a burst is found at its first sync word only,
+    /// and a message begins at the stop state.
+    #[test]
+    fn cphy_names_its_fields_and_a_burst_is_a_frame_once() {
+        let pk = |kind: Kind, value: u32| Packet { t0: 0.0, t1: 1.0, kind, value, value2: None, ok: true };
+        let text = |kind: Kind, value: u32| Cphy.text(&pk(kind, value), &[0; OPTS]);
+        assert_eq!(text(Kind::Field("!LP001"), 0).as_deref(), Some("LP-001"));
+        assert_eq!(text(Kind::Field("PRE"), 28).as_deref(), Some("PRE 28"));
+        assert_eq!(text(Kind::Field("SYNC"), 1).as_deref(), Some("SYNC"));
+        assert_eq!(text(Kind::Word { cmd: false }, 0x7290).as_deref(), Some("7290"));
+        assert_eq!(text(Kind::Stop, 0).as_deref(), Some("POST"));
+        // a symbol outside a word and the errors keep the text of their kind
+        assert!(text(Kind::Field("SYM"), 3).is_none() && text(Kind::Field("!CODE"), 0).is_none());
+        let frame = |kind: Kind, value: u32| Cphy.trigger_match(BusWhat::Frame, 0, &pk(kind, value));
+        assert_eq!((frame(Kind::Field("SYNC"), 0), frame(Kind::Field("SYNC"), 1)), (Some(true), Some(false)));
+        assert_eq!(frame(Kind::Field("PRE"), 28), Some(false));
+        assert!(Cphy.trigger_match(BusWhat::Data, 0x7290, &pk(Kind::Word { cmd: false }, 0x7290)).is_none());
+        let begins = Cphy.frame_start().unwrap();
+        assert!(begins(&pk(Kind::Field("!LP111"), 0)));
+        assert!(!begins(&pk(Kind::Field("!LP000"), 0)) && !begins(&pk(Kind::Field("SYNC"), 0)));
     }
 }
