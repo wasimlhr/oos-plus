@@ -166,9 +166,12 @@ impl Protocol for Mil1553 {
     fn setup(&self) -> Setup {
         Setup { thr: 0.0, trig: Some(DemoTrig { role: 0, slope: Slope::Rise, idle: 3e-6, level: 2.0 }), ..Setup::default() }
     }
-    /// A command word and three data words, +-7 V, every 120 us.
+    /// A message every 120 us, +-7 V: terminal 1 is asked for three words of its subaddress 1, and answers after
+    /// 7 us with its status word and the three words.
     fn demo(&self) -> Option<Demo> {
-        let l = oos_dsp::sim::mil1553_wave(&[(true, 0x0c23), (false, 0xbeef), (false, 0x1234), (false, 0x00ff)], 7.0, 4.0);
+        let data = [(false, 0xbeef, 0.0), (false, 0x1234, 0.0), (false, 0x00ff, 4.0)];
+        let words = [&[(true, 0x0c23, 7.0), (true, 0x0800, 0.0)][..], &data[..]].concat();
+        let l = oos_dsp::sim::mil1553_message(&words, 7.0);
         Some(Demo { period: 120e-6, lines: [Some(Box::new(move |t| l.v(t))), None, None, None] })
     }
 }
