@@ -177,7 +177,9 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   acknowledge) and marks where each was sampled. An I2C byte that was not acknowledged is an error, except the one
   a controller ends a read with; an address of ten bits is one field ("2A5 W")
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
-- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553
+- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes its bit rate
+  from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses what a frame is
+  checked against
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
 - Other: USB low/full speed, USB PD, parallel
 - Model railways: NMRA DCC (contributed by Arjen Halma), with a view of the layout in Display > Second pane > Bus view:

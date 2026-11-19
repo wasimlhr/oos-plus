@@ -28,7 +28,7 @@ Per decoder:
 | I2C | capture: bytes, errors and 10-bit addresses agree (one address differs, below) | band, bit row, Format | unit |
 | CAN | capture: 97 of 97 frames agree | band | DLC, frame type as columns |
 | CAN-FD | capture: frames agree; error frame not listed; DLC as its code | band | error frames, DLC in bytes |
-| LIN | capture: **rate only from the list, bad sync dropped, stray byte as checksum** | band | fix; checksum version |
+| LIN | capture: frames, errors and the rate from the sync agree | band | unit |
 | FlexRay | capture: frames agree; 9 CRC errors not checked | band | bit rate, channel A/B |
 | I2S | capture: samples agree with the word length set | band | left and right as one row |
 | SENT | capture: fast channel agrees | band | slow channel, two channels, status |
@@ -60,7 +60,10 @@ outside the tree (`local/captures`, ignored), with the scripts that run a decode
       written before it ("152 R") where the reference shows its one byte (79), and a general call (00 W) that
       nobody acknowledged is an error here and unmarked there. The SMBus capture has no error (96 before).
    2. LIN: the bit rate from the sync field; a frame with a bad sync is shown with its error; a byte after the
-      frame's longest time is not its checksum; the checksum version as an option.
+      frame's longest time is not its checksum; the checksum version as an option. **Done** (host and capture):
+      the 37 frames of the capture read the same at every Baud setting, the frame with the bad sync is listed, and
+      with Checksum = Enhanced the frames with a classic checksum are marked as the reference marks them (it also
+      marks the diagnostic frame 3C, which keeps the classic checksum by the standard and passes here).
    3. MIL-STD-1553: the bit clock follows the mid-bit edges.
    4. I3C: the read that loses its end.
 2. **Two hooks for every module**, so the rest is not built protocol by protocol:

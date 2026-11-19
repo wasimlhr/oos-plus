@@ -499,6 +499,17 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
+  capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
+  rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud
+  is now only for a record in which no sync can be read. Three more faults of the same capture:
+  - a frame whose sync is not 55 was a break alone, without a word of what was wrong. It is listed, read at the
+    rate of the frames beside it, with its sync as the error;
+  - the last byte before the next break was the checksum, however late it came: a byte 80 ms after a frame took
+    the place of that frame's checksum and made it an error. A frame is what follows its break within the
+    longest time a frame may take, eight data bytes and the checksum at most;
+  - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
+    frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
 - I2C decoder: a read is no error, and a 10-bit address is one address (host-tested, and on two captures of real
   buses on the host; not yet verified on hardware). The byte a controller ends a read with is not acknowledged:
   that is the rule of the bus, and it was red on the band, counted as an error in the Events pane and marked
