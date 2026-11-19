@@ -13,10 +13,11 @@ Fixed:
   coupling, which the signal without its DC part never reached: the trigger stopped unless the signal was large
   (a forum report on 0.1.13; on a unit a line of 0 to 0.55 V stopped at 0.255 V and triggered from 0.1 V down).
   `:TRIGger:COUPling` changes the coupling alone, as before.
-- The channel traces no longer drop out of single pictures while the scope runs (host-tested; the fault seen on a
-  unit, the fix not yet verified on one). The answer of a measurement that is worked out in the background (the rows
-  of the measurement catalogue, pair measurements, measurements on large records and references) marked the picture
-  of the traces for clearing; without a new record in the same moment the plot showed no channel traces until the
+- The channel traces no longer drop out of single pictures while the scope runs (host-tested; on a unit,
+  2026-11-18: 0 of 30 pictures without them where 11 of 30 were, and none right after steps of the trigger level
+  or the horizontal position). The answer of a measurement that is worked out in the background (the rows of the
+  measurement catalogue, pair measurements, measurements on large records and references) marked the picture of
+  the traces for clearing; without a new record in the same moment the plot showed no channel traces until the
   next record, and with persistence the collected picture started over. On a unit with six jitter rows, 8 records
   and 18 pictures a second, a third of the pictures had no channel traces; with System > Graphics = CPU the slower
   frames hid it (docs/fork/trace-blanks.md).

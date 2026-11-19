@@ -45,10 +45,23 @@ Host test `a_measurement_that_finishes_leaves_the_live_picture`: a hardware sour
 answer comes in a later step without a record; the map must be the same after every step, at minimum and at infinite
 persistence. Without the fix it fails at the step that takes the answer.
 
-A change of settings still clears the picture until the next record (`settings_changed`): a step of the trigger
-level or of the horizontal position shows an empty plot for the time one record takes. That is meant (the old
-picture no longer fits the settings) and is not changed here.
-
 ## Verification on the unit
 
-Not yet verified on a unit: the fix ran on the host only.
+Verified on the unit (DHO924S, 2026-11-18), the same settings, Graphics = GPU, pictures from `GET /screen.png`. The
+build with the fix is 20261119-054400: this change on the tree of another branch that was on the unit, not this
+branch's own tree. "Before" is build 20261119-053102, one commit earlier on that branch, without the fix.
+`:SYSTem:SETup?` was saved before each run and read the same after it.
+
+| pictures without channel traces | before | with the fix |
+|---|---|---|
+| 30 in a row at steady state | 11 | 0 |
+| right after each of 20 steps of `:TRIGger:EDGE:LEVel` | 10 | 0 |
+| 0.4 s after each of those steps | 3 | 0 |
+| right after each of 20 steps of `:TIMebase:OFFSet` | 6 | 0 |
+| 0.4 s after each of those steps | 5 | 0 |
+
+Pictures a second (`:SYSTem:STATe?`) at the start of each run: 18.6 before, 17.8 with the fix (18.4 on the first
+build of the day; the value moves by about one from reading to reading).
+
+Not looked at: the knobs of the front panel (the steps were sent over SCPI), persistence other than minimum on the
+unit (the host test covers infinite persistence), and a monitor on HDMI.
