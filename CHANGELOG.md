@@ -254,6 +254,17 @@ Fixed:
 
 Added:
 
+- SIM: a bus as a preset (host-tested, not yet verified on hardware). The presets were lanes for an eye (PCIe,
+  USB 3, SATA); a decoder had nothing to read on a scope with nothing connected. After the lanes the list of
+  SIM > Preset has a bus for every protocol whose traffic the scope can make: UART, I2C, SPI, CAN, CAN-FD, LIN,
+  FlexRay, SENT, MIL-STD-1553, ARINC 429, USB, USB PD, I2S, S/PDIF, 1-Wire, SWD, DMX512, DCC, UART 9-bit, Modbus
+  RTU. Play generates the lines of the bus into reference slots from the SIM slot on ("I2C SDA" in R1, "I2C SCL"
+  in R2), each in a band of its own, sets the selected decoder to the protocol on those references with the
+  settings the traffic is made for, and plays the references as the acquisition, a little more than one round
+  of the traffic on the screen. Add to ref does the same without playing; Live goes back. The knobs of a lane
+  (rate, pattern, levels, jitter) are not rows of the menu while a bus is the preset. `:SIM:PRESet "I2C bus"`,
+  `:SIM:PLAY ON`; the preset is part of the set-up (`sim_bus`). The traffic is the one the host build has on its
+  demo channels and the tests decode.
 - Channel > Hide trace, `:CHANnel<n>:HIDE` (host-tested, not yet verified on hardware). The channel stays on
   without its picture: it is acquired, measured and decoded and is the input of a math trace as before, and has
   no trace, no lane and no ground mark. Switching a channel off was the only way to take its trace away, and

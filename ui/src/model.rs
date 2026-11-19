@@ -1670,6 +1670,8 @@ pub struct Model {
     pub la: crate::ui::la::LaSet,
     /// SIM menu: which serial preset and which R slot Play writes, plus the knobs that override the preset.
     pub sim_preset: usize,
+    /// the SIM preset is the traffic of this protocol instead of the lane `sim_preset` (`ui/sim_protocol.rs`)
+    pub sim_bus: Option<Proto>,
     pub sim_slot: usize,
     pub sim_rate: f64,
     pub sim_prbs: u8,
@@ -2088,6 +2090,7 @@ impl Default for Model {
             text_size: TextSize::Normal,
             la: Default::default(),
             sim_preset: 3,
+            sim_bus: None,
             sim_slot: 0,
             sim_rate: 0.0,
             sim_prbs: 31,

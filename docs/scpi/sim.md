@@ -15,10 +15,10 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:SIM:PRESet` | Set / Query | `<name>` Select a supported preset by its UI name. | `PCIe 4.0` | Simulator > Preset | OOS extension |
+| `:SIM:PRESet` | Set / Query | `<name>` Select a supported preset by its UI name: a lane (`"PCIe 4.0"`) or the bus of a protocol (`"I2C bus"`, `"LIN bus"`, the name of the protocol and `bus`). | `PCIe 4.0` | Simulator > Preset | OOS extension |
 | `:SIM:SLOT` | Set / Query | `R1..R10` Generated waveform destination. | `R1` | SIM > Slot | OOS extension |
 | `:SIM:PATTern` | Set / Query | `PRBS7` Supported orders: 7, 9, 13, 15, 23, 31. | `PRBS31` | Simulator > Pattern | OOS extension |
-| `:SIM:PLAY` | Set / Query | `ON\|OFF` Start/apply the configured simulation or stop/cancel it. | `0` | SIM > Play | OOS extension |
+| `:SIM:PLAY` | Set / Query | `ON\|OFF` Start/apply the configured simulation or stop/cancel it. With a bus preset ON generates the lines of the bus into the references from the SIM slot on, sets the selected decoder on them and plays them. | `0` | SIM > Play | OOS extension |
 | `:SIM:BUSY` | Query | Whether generation is pending. | `0` | SIM > Play | OOS extension |
 | `:SIM:SHOW` | Set / Query | `ON\|OFF` Visibility of the generated reference slot. | `0` | SIM > Show | OOS extension |
 | `:SIM:SSC:MODE` | Set / Query | `OFF\|DOWN\|CENTER`. | `DOWN` | Simulator advanced > Spread | OOS extension |
@@ -43,6 +43,17 @@ Part of the [SCPI reference](README.md).
 | `:SIM:JITTer:PERiodic:FREQuency` | Set / Query | Hz. Range 1e5 to 50e6. | `8.000000E+06` | Simulator > PJ freq | OOS extension |
 
 ## Examples
+
+A bus for a decoder to read, with nothing connected.
+
+```text
+:SIM:PRESet "I2C bus"
+:SIM:PLAY ON
+:DECode:PROTocol?                      -> I2C
+:DECode:SOURce?                        -> R1
+:DECode:EVENts?                        -> ...,D1 I2C R1,50 W,ok ...
+:SIM:LIVE
+```
 
 Generate a PRBS signal into R1.
 

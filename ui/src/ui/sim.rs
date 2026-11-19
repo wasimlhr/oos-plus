@@ -11,6 +11,8 @@ use std::sync::{Arc, mpsc::{self, Receiver, Sender}};
 
 #[path = "sim_bus_candidate.rs"]
 mod sim_bus_candidate;
+#[path = "sim_protocol.rs"]
+mod sim_protocol;
 #[cfg(test)]
 #[path = "sim_bus_tests.rs"]
 mod sim_bus_tests;
@@ -204,6 +206,10 @@ impl Ui {
             Item::SimShow,
             Item::SimDefaults,
         ];
+        // a bus preset is the traffic of a protocol: the knobs of a lane (rate, pattern, levels, jitter) are not its
+        if self.sim_bus().is_some() {
+            items = vec![Item::SimPreset, Item::SimSlot, Item::SimAddRef, Item::SimPlay, Item::SimShow];
+        }
         // Studio only: the sheet offers a file for the SIM slot
         if self.m.layout == Layout::Studio { items.insert(items.iter().position(|it| *it == Item::SimAddRef).map_or(0, |i| i + 1), Item::SimLoad); }
         // Run plays the signal of the knobs; the references that are shown (files, added signals) have a play of their own
@@ -265,7 +271,7 @@ impl Ui {
     pub(super) fn sim_value(&self, it: Item) -> Option<String> {
         let m = &self.m;
         Some(match it {
-            Item::SimPreset => self.sim_lane().name.into(),
+            Item::SimPreset => self.sim_preset_name().into(),
             Item::SimRate => si_short(m.sim_rate, "b/s"),
             Item::SimPat => format!("PRBS-{}", m.sim_prbs),
             Item::SimHigh => si_short(m.sim_vhigh, "V"),
@@ -300,7 +306,11 @@ impl Ui {
 
     pub(super) fn sim_options(&self, it: Item) -> Option<Vec<String>> {
         Some(match it {
-            Item::SimPreset => serial::names().into_iter().map(|s| s.to_string()).collect(),
+            // the lanes, then the buses
+            Item::SimPreset => {
+                let buses = sim_protocol::buses().iter().map(|b| b.1);
+                serial::names().into_iter().chain(buses).map(|s| s.to_string()).collect()
+            }
             Item::SimPat => PRBS.iter().map(|n| format!("PRBS-{n}")).collect(),
             Item::SimSsc => vec!["Off".into(), "On".into()],
             Item::SimSscCenter => vec!["Down, DC removed".into(), "Center".into()],
@@ -314,9 +324,19 @@ impl Ui {
         let running = self.sim_requested_running();
         match it {
             Item::SimPreset => {
-                let n = LANES.len() as i32;
-                self.m.sim_preset = (self.m.sim_preset as i32 + d).rem_euclid(n) as usize;
-                self.m.apply_sim_preset();
+                // one list: the lanes, then the buses
+                let buses = sim_protocol::buses();
+                let at = match self.sim_bus() {
+                    Some((p, _)) => LANES.len() + buses.iter().position(|b| b.0 == p).unwrap_or(0),
+                    None => self.m.sim_preset,
+                };
+                let next = (at as i32 + d).rem_euclid((LANES.len() + buses.len()) as i32) as usize;
+                if next < LANES.len() {
+                    (self.m.sim_preset, self.m.sim_bus) = (next, None);
+                    self.m.apply_sim_preset();
+                } else {
+                    self.m.sim_bus = Some(buses[next - LANES.len()].0);
+                }
             }
             Item::SimRate => { let v = self.ladder_eng(it, self.m.sim_rate.max(ranges::SIM_RATE.0), d, ranges::SIM_RATE); self.m.sim_rate = v; }
             Item::SimPat => {
@@ -367,6 +387,10 @@ impl Ui {
                 self.toast("SIM generation cancelled");
             }
             Item::SimPlay if self.sim_mode() => { self.record_key(key::RUNSTOP); },
+            // a bus preset: its lines into references, a decoder on them, and those played
+            Item::SimPlay if self.sim_bus().is_some() => {
+                if let Err(e) = self.sim_bus_play() { self.toast(&format!("SIM: {e}")); }
+            }
             // Run is the signal of the knobs, whatever else is on the screen: a reference that is shown stays shown
             // beside it, and the knobs go on changing the signal. (It used to play the shown references instead, and
             // then no knob did anything.) `:SIM:PLAY ON` has always done this
@@ -599,6 +623,11 @@ impl Ui {
         let Some(free) = (0..NREF).find(|&i| self.refs[i].is_none()) else {
             return self.toast("All ten refs are in use: clear one to add a signal");
         };
+        // a bus: its lines from the first free slot on
+        if self.sim_bus().is_some() {
+            self.m.sim_slot = free;
+            return self.sim_bus_add();
+        }
         if self.sim_mode() {
             // Live restores the settings from before Play: the SIM knobs of now come along
             let now = self.m.clone();
@@ -614,6 +643,9 @@ impl Ui {
     }
 
     pub(super) fn sim_add_to_ref(&mut self) {
+        if self.sim_bus().is_some() {
+            return self.sim_bus_add();
+        }
         if self.sim_mode() {
             return self.sim_add_next();
         }
@@ -863,16 +895,21 @@ impl Ui {
     }
 
     pub(crate) fn sim_preset_name(&self) -> &'static str {
-        self.sim_lane().name
+        self.sim_bus().map_or(self.sim_lane().name, |b| b.1)
     }
 
     /// Selects a preset by the name on the SIM menu.
     pub(crate) fn sim_preset_set(&mut self, name: &str) -> bool {
         let name = name.trim().trim_matches('"');
+        if let Some(bus) = sim_protocol::buses().iter().find(|b| b.1.eq_ignore_ascii_case(name)) {
+            self.sim_cancel_generation();
+            self.m.sim_bus = Some(bus.0);
+            return true;
+        }
         match serial::LANES.iter().position(|l| l.name.eq_ignore_ascii_case(name)) {
             Some(i) => {
                 self.sim_cancel_generation();
-                self.m.sim_preset = i;
+                (self.m.sim_preset, self.m.sim_bus) = (i, None);
                 self.m.apply_sim_preset();
                 true
             }
@@ -899,7 +936,9 @@ impl Ui {
 
     /// On starts fresh captures of the selected preset. Off holds the accepted record.
     pub(crate) fn sim_play_set(&mut self, on: bool) -> Result<(), String> {
-        if on {
+        if on && self.sim_bus().is_some() {
+            self.sim_bus_play()?;
+        } else if on {
             self.sim_load(true)?;
         } else {
             self.sim_cancel_generation();

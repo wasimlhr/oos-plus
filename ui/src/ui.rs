@@ -7617,6 +7617,24 @@ impl Ui {
     /// change another (the forum, eTobey): the channels and the trigger stay as they are, the sources the protocols
     /// share stay, and a role the old protocol did not have takes a channel that is on and no other role uses, or none.
     /// The protocol's own parameters (threshold, baud, bits ...) are set on both.
+    /// The shared rows a protocol's set-up gives (its baud rate, bits, parity ...) into the decoder of `m`.
+    fn dec_apply_rows(m: &mut Model, rows: &[(crate::protocols::Row, u32)]) {
+        use crate::protocols::Row;
+        use oos_dsp::decode::Parity;
+        for &(r, v) in rows {
+            match r {
+                Row::Baud => m.dec_baud = v as usize,
+                Row::Bits => m.dec_bits = v,
+                Row::Parity => m.dec_parity = [Parity::None, Parity::Even, Parity::Odd][(v as usize).min(2)],
+                Row::SpiMode => m.dec_mode = v as u8,
+                Row::CanRate => m.dec_canrate = v as usize,
+                Row::CanH => m.dec_canh = v != 0,
+                Row::UsbSpeed => m.dec_uspeed = v as usize,
+                Row::CphyRate | Row::Fmt | Row::Pol | Row::SpiCs => {}
+            }
+        }
+    }
+
     fn set_dec_proto(&mut self, p: Proto) {
         let Proto::Module(i) = p;
         let s = crate::protocols::get(i).setup();
@@ -7681,19 +7699,7 @@ impl Ui {
         if s.la_off {
             m.dec_la_in = false;
         }
-        use crate::protocols::Row;
-        for &(r, v) in s.rows {
-            match r {
-                Row::Baud => m.dec_baud = v as usize,
-                Row::Bits => m.dec_bits = v,
-                Row::Parity => m.dec_parity = [oos_dsp::decode::Parity::None, oos_dsp::decode::Parity::Even, oos_dsp::decode::Parity::Odd][(v as usize).min(2)],
-                Row::SpiMode => m.dec_mode = v as u8,
-                Row::CanRate => m.dec_canrate = v as usize,
-                Row::CanH => m.dec_canh = v != 0,
-                Row::UsbSpeed => m.dec_uspeed = v as usize,
-                Row::CphyRate | Row::Fmt | Row::Pol | Row::SpiCs => {}
-            }
-        }
+        Self::dec_apply_rows(m, s.rows);
         if changed {
             m.dec_opt = crate::protocols::opt_default(i);
             // a module with a view of its own: open it, when no other pane is open
