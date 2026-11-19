@@ -494,29 +494,36 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
-- Decoders: a tap on a row of the Events pane leaves a running scope running (host-tested, not yet verified on
-  hardware). In Studio it stopped the acquisition and moved the horizontal position, on rows 26 px tall that a
-  finger misses. The tap marks the row and its box in the band; a stopped scope also goes to it, as before, and a
-  running one says "Stop the scope to go to an event".
-- Decoders: the Events pane holds its columns still (host-tested, not yet verified on hardware). The time and the
+- Decoders: a tap on a row of the Events pane leaves a running scope running (host-tested; (unit), 2026-11-19, in
+  Studio on an SPI bus: the tap left the scope triggered with its horizontal position and said how to get there;
+  stopped, the tap went to the row and marked it and its box). In Studio it stopped the acquisition and moved the
+  horizontal position, on rows 26 px tall that a finger misses. The tap marks the row and its box in the band; a
+  stopped scope also goes to it, as before, and a running one says "Stop the scope to go to an event".
+- Decoders: the Events pane holds its columns still (host-tested; the list of a narrow pane (unit), 2026-11-19,
+  floating at 230 px: the button listed Messages, Fields and Lines, and Fields was chosen from it; the columns
+  while a list scrolls not yet verified on hardware, the record had one row). The time and the
   decoder column were as wide as the rows on the screen needed and the hex column came and went with them, so the
   text moved while the list scrolled. The widths are those of the record now. The buttons of its head are 40 px
   tall (36), and the one button of a narrow pane opens the list of the views where it stepped to the next one.
   A box of the band is at least 20 px wide to a finger (12).
-- Decoders: one list of events, the Events pane (host-tested, not yet verified on hardware). There were two for
+- Decoders: one list of events, the Events pane (host-tested; `:BUS<n>:EVENt` (unit), 2026-11-19: it docked the
+  pane in Studio, and Decode lists the row "Events pane"; Add > Results table not yet verified on hardware). There
+  were two for
   the same rows: the pane, and an older table over the plot with three columns, no titles and no views. The table
   is gone, and what opened it opens the pane: Decode > Events pane (it was "Event table"), `:BUS<n>:EVENt`, and
   Add > Results table > Decoder events in Studio. Decode > Export events writes the rows as the pane lists them.
   The table of the search marks and of the segments is as before.
-- Decode sheet: among the channels a line can have, the ones it does not have are dimmed (host-tested, not yet
-  verified on hardware). Every channel had a frame and a name in its full colour, and the chosen one, filled, did
-  not stand out among them.
+- Decode sheet: among the channels a line can have, the ones it does not have are dimmed (host-tested; (unit),
+  2026-11-19, the sheet of an SPI decoder). Every channel had a frame and a name in its full colour, and the chosen
+  one, filled, did not stand out among them.
 - SPI decoder: on the Decode sheet the four lines stand together on the first page (MISO was alone on Settings),
   the Mode heads Settings and Input ends it; the polarity of the select is the row "CS polarity" (it was "CS", as
-  its line is), and the polarity of the data is "Data polarity" (host-tested, not yet verified on hardware).
-- Decoders: the Events pane says nothing of a row that passed its checks (host-tested, not yet verified on
-  hardware). Its last column had a green OK on every such row, which took the room of the text and said no more
-  than a row that is not red. The column is named Errors, has the number of failed checks of a row in red, and is
+  its line is), and the polarity of the data is "Data polarity" (host-tested; (unit), 2026-11-19: MOSI, Clock, CS
+  and MISO on the first page of the sheet, and the two polarity rows by their names).
+- Decoders: the Events pane says nothing of a row that passed its checks (host-tested; (unit), 2026-11-19: an SPI
+  record without a failed check has no such column; a record with one not yet verified on hardware). Its last
+  column had a green OK on every such row, which took the room of the text and said no more than a row that is
+  not red. The column is named Errors, has the number of failed checks of a row in red, and is
   there only when a row of the record failed one.
 - SPI decoder: a MISO line, and a message for each frame (host-tested; the frames (unit), 2026-11-19: a bus of
   one word a frame every 500 us gave a row a frame in the Events pane and a box a frame at 200 us/div; the MISO
