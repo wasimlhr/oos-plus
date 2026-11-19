@@ -113,14 +113,19 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       sine of 64 steps, and a frame of 16 words now and then. Done on the unit (2026-11-19): the decode is right
       (441 words in 200 ms, none wrong, down to 2.5 samples a bit), the band at 10 us, 100 us, 1 ms and 5 ms/div,
       the Events pane (a row a frame, Fields, a tap on a row), the thresholds from the signals. Three flaws it
-      showed are fixed: the MOSI column cut a frame of several words; the bus trigger never fired where the chip
-      select has a threshold of its own; a record with too few samples for the clock listed words that were none.
+      showed are fixed, each seen right on the unit afterwards: the MOSI column cut a frame of several words; the
+      bus trigger never fired where the chip select has a threshold of its own; a record with too few samples for
+      the clock listed words that were none. The bus trigger finds its word in the records the edge on the chip
+      select gives it: every frame holds still at once, a word that comes every 150 ms after some seconds.
       Open: MISO (the bench bus has one data line), and the SPI trigger in the receiver, which is off by default
-      and not verified on hardware.
+      and not verified on hardware. Noticed, not changed: `:BUS<n>:DATA?` answers from the newest record while
+      the screen holds the last one the trigger took; after a change of the time base in Normal the band and the
+      math trace of the old record stay while its channels are gone.
    2. UART: on CH1 of his bench (9600 baud, " Tektronix \n Enabling Innovation \n", a pause of one character
       before the second line feed). Done on the unit (2026-11-19): 236 characters in 800 ms, none wrong; the band
-      beside the SPI band, the Events pane with both decoders, and the Lines view, which has the two lines of the
-      text. Nothing to fix. Open: a failed character, which the bench signal has none of.
+      beside the SPI band, the Events pane with both decoders, the Lines view, which has the two lines of the
+      text, and the bus trigger holding a character still. Nothing to fix. Open: a failed character, which the
+      bench signal has none of.
    3. The buses of his demo board, as he connects them: CAN, CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC 429,
       USB (in this order: the three first are the ones whose decoders were changed on their captures).
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
