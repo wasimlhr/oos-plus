@@ -579,13 +579,13 @@ Changed:
   decoder has them, a packet is not cut. Set to 2, 3 and 6 data bits, the capture reads "SYNC 0 HDR 7 3C TRL 2",
   "SYNC 0 HDR 6 3C TRL 2", ... as its instrument lists it. A packet is a message on the band and a row of the
   Events pane.
-- Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3,
-  Modbus ASCII, the DS2482 bridge, JTAG, C-PHY, Quad-SPI and Parallel (a counter of three bits with its clock)
-  have a SIM bus preset now, 28 in all: every decoder has one. Six bytes at the rate of the list's usual entry for the two line codes; the read
-  request of the Modbus RTU preset as its characters; a 1-Wire reset, Skip ROM and a command through the bridge's
-  I2C commands; a TAP reset, an instruction and the 32 bits of an identification; a C-PHY lane with its low-power
-  states and a burst that carries a short packet; a flash asked for its identification and for two bytes at an
-  address. A JTAG scan with a TDO line says what came out as well as what went in, "DR 0 > 4BA00477": the preset
+- Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3, Modbus
+  ASCII, the DS2482 bridge, JTAG, C-PHY, Quad-SPI and Parallel (a counter of three bits with its clock) have a SIM bus
+  preset now, 28 in all: every decoder has one. Six bytes at the rate of the list's usual entry for the two line
+  codes; the read request of the Modbus RTU preset as its characters; a 1-Wire reset, Skip ROM and a command through
+  the bridge's I2C commands; a TAP reset, an instruction and the 32 bits of an identification; a C-PHY lane with its
+  low-power states and a burst that carries a short packet; a flash asked for its identification and for two bytes at
+  an address. A JTAG scan with a TDO line says what came out as well as what went in, "DR 0 > 4BA00477": the preset
   read "DR 0", the zeros shifted in, for the identification (unit, before and after).
 - C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
   yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
