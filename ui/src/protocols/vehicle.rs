@@ -108,9 +108,12 @@ impl Protocol for FlexRay {
 /// The SENT clock ticks (`decode::SENT_TICKS`; the last one: any tick, from the sync pulses).
 const TICK_NAMES: [&str; 8] = ["3 \u{b5}s", "5 \u{b5}s", "10 \u{b5}s", "20 \u{b5}s", "30 \u{b5}s", "50 \u{b5}s", "90 \u{b5}s", "Auto"];
 
-const SENT_OPTIONS: [Opt; 2] = [
+const SENT_OPTIONS: [Opt; 3] = [
     Opt { name: "Clock tick", choices: &TICK_NAMES, default: 0 },
     Opt { name: "Data nibbles", choices: &["1", "2", "3", "4", "5", "6"], default: 5 },
+    // what the six data nibbles are: one number as they are sent, or the two 12-bit values of a sensor with two
+    // channels (the second one is sent with its low nibble first)
+    Opt { name: "Channels", choices: &["One value", "12 + 12 bit"], default: 0 },
 ];
 
 /// The clock tick of the options; `None` = from the sync pulses.
@@ -122,9 +125,16 @@ fn tick(opt: &[usize; OPTS]) -> Option<f64> {
 pub struct Sent;
 
 impl Protocol for Sent {
-    /// A frame in the Events pane: its status nibble, the data nibbles, the CRC.
+    /// A frame in the Events pane: its status nibble, the data nibbles, the CRC, and in the frame that completes a
+    /// message of the slow channel that message.
     fn columns(&self) -> &'static [(&'static str, Col)] {
-        &[("Status", Col::Label("STAT ")), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+        &[
+            ("Status", Col::Label("STAT ")),
+            ("Data", Col::Data),
+            ("CRC", Col::Label("CRC ")),
+            ("Slow ID", Col::Label("SID ")),
+            ("Slow data", Col::Label("SDATA ")),
+        ]
     }
     /// A frame begins with its calibration pulse.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
@@ -146,11 +156,25 @@ impl Protocol for Sent {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(x3::sent(l.main(), l.dt, tick(&l.opt), l.opt[1] + 1, l.thr, l.hy))
     }
-    /// The tick the sync pulse gave; the data as its nibbles.
-    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+    /// The tick the sync pulse gave; the data as its nibbles, or as the two values of a sensor with two channels
+    /// (the second one comes with its low nibble first: "3C1CB3" is 3C1 and 3BC); a message of the slow channel
+    /// with the digits its identifier and its data have.
+    fn text(&self, p: &Packet, opt: &[usize; OPTS]) -> Option<String> {
+        let bad = if p.ok { "" } else { " !" };
         match p.kind {
-            Kind::Field("SYNC") => Some(format!("SYNC {}{}", crate::model::si(p.value as f64 * 1e-9, "s"), if p.ok { "" } else { " !" })),
+            Kind::Field("SYNC") => Some(format!("SYNC {}{}", crate::model::si(p.value as f64 * 1e-9, "s"), bad)),
+            Kind::Data if opt[2] == 1 && p.value2 == Some(6) => {
+                let second = p.value & 0xfff;
+                let turned = (second & 0xf) << 8 | (second & 0xf0) | second >> 8;
+                Some(format!("{:03X} {:03X}", p.value >> 12, turned))
+            }
             Kind::Data => Some(format!("{:0w$X}", p.value, w = p.value2.unwrap_or(1) as usize)),
+            Kind::Field("SID") => Some(format!("SID {:02X}", p.value)),
+            Kind::Field("SDATA") => {
+                let digits = p.value2.unwrap_or(12).div_ceil(4) as usize;
+                Some(format!("SDATA {:0w$X}", p.value, w = digits))
+            }
+            Kind::Field("SCRC") => Some(format!("SCRC {:02X}{}", p.value, bad)),
             _ => None,
         }
     }
