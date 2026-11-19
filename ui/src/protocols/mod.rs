@@ -521,10 +521,9 @@ mod tests {
             let l = Lines { lines: std::array::from_fn(|k| waves[k].as_deref()), dt, thr: s.thr, hy: 0.1, opt: opt_fit(i as u8, opt_default(i as u8)), sh: Shared::default(), chans: [None; 4], src: [None; 4] };
             let p = m.decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e));
             assert!(!p.is_empty(), "{}: nothing decoded from its demo", m.name());
-            // I2C: the master NACKs the last byte it reads before the stop, which the decoder flags like any NACK.
-            use oos_dsp::decode::Kind;
-            let read_end = |k: usize| m.key() == "I2c" && p[k].kind == Kind::Data && p.get(k + 1).is_none_or(|n| n.kind == Kind::Stop);
-            let bad = p.iter().enumerate().find(|&(k, x)| !x.ok && !read_end(k));
+            // (I2C had an exception here: the byte that ends a read is not acknowledged, and the decoder called it an
+            // error. It does not any more.)
+            let bad = p.iter().find(|x| !x.ok);
             assert!(bad.is_none(), "{}: errors in its own demo: {:?}", m.name(), bad);
         }
     }
