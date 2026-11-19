@@ -155,6 +155,19 @@ pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
     pk.iter().map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
 }
 
+/// The lines of the decoder `m` is the view of, in the order of its roles ("CH4 CH3 CH2"; on the LA "D8 D10").
+pub(super) fn dec_lines_text(m: &Model) -> String {
+    let roles = m.dec_proto.roles();
+    let named = |r: usize| -> Option<String> {
+        roles[r]?;
+        if m.dec_on_la() {
+            return m.dec_la[r].map(|n| format!("D{}", n));
+        }
+        [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4][r].map(decode_source_name)
+    };
+    (0..4).filter_map(named).collect::<Vec<_>>().join(" ")
+}
+
 /// The hex value beside a character, for a box with room for both.
 fn second_text(m: &Model, p: &Packet) -> Option<String> {
     (ascii(m) && p.kind == DecKind::Data && (0x20..0x7f).contains(&p.value)).then(|| format!("{:02X}", p.value))
@@ -315,11 +328,16 @@ impl Ui {
         }
     }
 
+    /// The colour of the decoder `m` is the view of: that of its main line.
+    pub(super) fn dec_color(&self, m: &Model) -> Rgb {
+        if m.dec_on_la() { la::line_color(m.dec_la[0].unwrap_or(0)) }
+            else { decode_wave(m.dec_src).map_or(DIM, |source| self.wave_color(source)) }
+    }
+
     /// One decoder's band at height y; row = its place under the lanes.
     pub(super) fn draw_decoder(&self, cv: &mut Canvas, m: &Model, k: usize, y: i32, row: Option<Rect>) {
         let f = self.fonts();
-        let col = if m.dec_on_la() { la::line_color(m.dec_la[0].unwrap_or(0)) }
-            else { decode_wave(m.dec_src).map_or(DIM, |source| self.wave_color(source)) };
+        let col = self.dec_color(m);
         // rows under the lanes span all windows, like the lanes
         let a = if row.is_some() { self.lane_area() } else { self.area };
         let h = if row.is_some() { DEC_ROW_BOX } else { DEC_BOX };

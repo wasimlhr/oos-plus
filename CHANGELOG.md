@@ -445,6 +445,12 @@ Changed:
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
   row not yet verified on hardware). A signal that does not reach the 1.65 V of a new set-up
   decoded nothing (seen on a unit, 2026-11-19: a 0.43 V swing through a probe set to 1x).
+- Studio: a decoder that is on has a pill in the bottom bar, after the channels, references and math: its number in
+  the colour of its line, its protocol, and on a wide pill its lines in the order of their roles ("CH4 CH3 CH2").
+  A tap opens the Decode sheet of that decoder, where each line has its row (MOSI, Clock, CS); a second tap closes
+  it. A decoder added by + Source had nothing in the bar to find it by. The pill stays while the channel of its
+  line is off (its dot is dim then), so the decoder whose band is gone can still be reached. `:UI:ELEMents?`
+  lists it as `D<n>` (host-tested, not yet verified on hardware).
 - Decoders: a decoder whose source channel is off has no band on the plot (host-tested, not yet verified on
   hardware). The band stayed and said "source channel off", in the plot of the other channels (seen on a unit,
   2026-11-19). The decoder stays on and as it is set; its band is back when the channel is.

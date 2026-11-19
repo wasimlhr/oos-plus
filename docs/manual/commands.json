@@ -13280,7 +13280,7 @@
       [
        "[<kind>]",
        "Text",
-       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference and math chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
+       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference, math and decoder chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
        "—"
       ]
      ],

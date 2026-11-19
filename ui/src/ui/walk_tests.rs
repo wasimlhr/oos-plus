@@ -2762,6 +2762,43 @@ fn a_tap_on_the_name_of_a_decoder_opens_its_decode_menu() {
     }
 }
 
+/// A decoder that is on has a pill in the bottom bar with its protocol and its lines; a tap on it opens the Decode
+/// sheet of that decoder, a second tap closes it, and a decoder that is off has none.
+#[test]
+fn a_decoder_has_a_pill_in_the_bottom_bar_that_opens_its_sheet() {
+    let mut u = fresh(Layout::Studio);
+    for _ in 0..3 { u.step(0.03); frame(&mut u); }
+    assert!(u.studio_bottom().dec.iter().all(|r| r.w == 0), "no decoder is on");
+    // decoder 2: SPI
+    u.select_option(Item::DecSel, "D2");
+    u.m.dec_on = true;
+    u.select_option(Item::DecProto, "SPI");
+    u.select_option(Item::DecSel, "D1");
+    for _ in 0..3 { u.step(0.03); frame(&mut u); }
+    let b = u.studio_bottom();
+    assert!(b.dec[0].w == 0 && b.dec[1].w >= 40 && b.dec[1].h >= 36, "{:?}", b.dec);
+    assert!(b.dec[1].right() <= b.add.x && b.add.right() <= b.time.x, "the pill is among the sources: {:?}", b.dec[1]);
+    let m = u.m.dec_view(1);
+    assert_eq!(super::decband::dec_lines_text(&m).split(' ').count(), 3, "SPI has three lines");
+    let mut cv = Canvas::new(W, H);
+    cv.au_start();
+    u.render(&mut cv);
+    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+    assert!(texts.iter().any(|t| t == "D2") && texts.iter().any(|t| t == "SPI"), "the pill says which decoder and what it reads");
+    let (x, y) = mid(b.dec[1]);
+    tap(&mut u, x, y);
+    assert!(u.menu_open && u.menu == MenuId::Decode && u.m.dec_sel == 1, "the Decode sheet of decoder 2");
+    tap(&mut u, x, y);
+    assert!(!u.menu_open, "a second tap closes it");
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        tap(&mut u, x, y);
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-decoder-pill.png"), crate::store::png_of(&cv)).unwrap();
+    }
+}
+
 /// The Decode sheet: what the protocol needs is on the first page with its lines (the baud rate of a UART, the mode
 /// of SPI), the B line of a differential pair is a setting, the lines are named by their role, and the protocol is
 /// chosen from its list, without steps.
