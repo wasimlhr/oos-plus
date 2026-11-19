@@ -59,18 +59,17 @@ impl Ui {
         self.studio.badge_wrap.clamp(0, (MAX_LINES - groups).max(0))
     }
 
-    /// The pairs of each source that is shown, with the width of the name and of the value. A value counts at least
-    /// as wide as "00.0 mV" and in steps of 8 px, so a value that changes by a digit moves no column, and at most as
-    /// wide as "0.000 MHz", the room every column had before: a text in the place of a value ("needs more edges") is
-    /// cut at the end of its cell and costs the line no column (seen on a unit, 2026-11-18: five columns where seven
-    /// fit).
+    /// The pairs of each source that is shown, with the width of the name and the room of the value. The room is that
+    /// of the widest value the measurement's unit gives ("-00.0 mV", "-00.0 mV/s"), never that of the value of the
+    /// moment: with the width of the value itself the number of columns went from six to seven and back as the
+    /// values changed, and the whole strip moved every second (seen on a unit, 2026-11-18). A text in the place of
+    /// a value ("needs more edges") is cut at the end of its cell.
     fn classic_cells(&self) -> Vec<(WaveId, Vec<(MeasKey, i32, i32)>)> {
         let f = self.fonts();
         let rows = self.meas_rows();
-        let (floor, most) = (f.sb.width("00.0 mV"), f.sb.width("0.000 MHz"));
         self.classic_groups().into_iter().take(MAX_GROUPS).map(|(src, keys)| (src, keys.into_iter().filter_map(|key| {
             let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
-            Some((key, f.s.width(&self.studio_badge_name(key, &r.name)), (f.sb.width(&r.text()).clamp(floor, most) + 7) / 8 * 8))
+            Some((key, f.s.width(&self.studio_badge_name(key, &r.name)), f.sb.width(&format!("-00.0 m{}", r.unit))))
         }).collect())).collect()
     }
 
@@ -166,8 +165,12 @@ impl Ui {
             if self.studio.popup == Some(*key) { cv.round_outline(*r, 4, ACCENT); }
             let cy = r.y + (r.h + 1) / 2 + 4;
             cv.set_clip(Rect::new(r.x, r.y, r.w, r.h + 3));
-            cv.text(&f.s, r.x + 3, cy, &self.studio_badge_name(*key, &m.name), DIM);
-            cv.text(&f.sb, *value_x, cy, &m.text(), TEXT);
+            // as the row of the Default layout reads: the value in the colour of its source, the name in the same
+            // colour, dimmer (names were grey and values white: which source a value is of was said by the chip of
+            // its line alone)
+            let col = self.wave_color(Self::studio_key_source(*key));
+            cv.text(&f.s, r.x + 3, cy, &self.studio_badge_name(*key, &m.name), mix(BAR, col, 150));
+            cv.text(&f.sb, *value_x, cy, &m.text(), col);
             cv.no_clip();
         }
     }

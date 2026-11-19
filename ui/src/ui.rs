@@ -5261,6 +5261,13 @@ impl Ui {
                 }
                 prev = Some((x, y));
             }
+            // Studio: the badge of the trace on its zero line at the left of the lane, as a channel has one (a math
+            // lane was the one without a name at its side)
+            if self.m.layout == Layout::Studio {
+                let (zoom, center) = self.zoom_vertical_transform(self.area);
+                let zero = (cy - (c.offset - center) * zoom * ppy).clamp(-1e4, 1e4).round() as i32;
+                self.studio_source_badge(cv, &format!("M{}", k + 1), col, zero);
+            }
             let name = if c.op == MathOp::Expr { self.m.math_expr[k].clone() } else { c.op.formula(c.a, c.b) };
             label = format!("M{} = {}  {}/div", k + 1, name, Self::math_scale_text_of(&c));
         }

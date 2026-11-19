@@ -2616,11 +2616,14 @@ fn the_classic_strip_has_a_line_for_each_of_four_channels() {
     // the chip is the last thing of a line that has the room: no line gives it a pair while another has room
     let on_its_line = l.pairs.iter().filter(|(_, r)| r.y == chip.y).count();
     assert!(l.chips.iter().any(|(_, c)| c.y == chip.y) && on_its_line < l.pairs.iter().filter(|(_, r)| r.y == l.chips[0].1.y).count(), "the chip is on a line with room: {chip:?}");
-    // a text in the place of a value does not widen its column beyond the room of a value: no pair is wider than a
-    // name and "0.000 MHz" need
-    let f = u.fonts();
-    let widest = l.pairs.iter().map(|(_, r)| r.w).max().unwrap();
-    assert!(widest <= 4 + f.s.width("Ovshoot+") + 6 + f.sb.width("0.000 MHz") + 8 + 10, "a column of {widest} px");
+    // the strip stands still: the places are those of the names and the units, whatever the values read. A record
+    // that changes every value (and "----" where there was one) moves no pair
+    let before = l.pairs.clone();
+    u.m.ch[0].vscale = (u.m.ch[0].vscale + 3).min(crate::model::VSCALES.len() - 1);
+    for _ in 0..6 { u.step(0.05); frame(&mut u); }
+    assert_eq!(u.classic_layout().pairs, before, "the pairs stay where they are when the values change");
+    u.m.ch[0].vscale -= 3;
+    for _ in 0..3 { u.step(0.05); frame(&mut u); }
     assert!(u.plot_rect().bottom() <= row.y && u.plot_rect().h >= 250, "the plot keeps most of the screen: {:?}", u.plot_rect());
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let mut cv = Canvas::new(W, H);
@@ -2670,4 +2673,25 @@ fn choosing_stacked_or_overlay_fits_every_signal_to_its_height() {
     let now = (u.m.ch[0].vscale, u.m.ch[0].offset);
     u.choose_trace_mode(false);
     assert_eq!((u.m.ch[0].vscale, u.m.ch[0].offset), now);
+}
+
+/// A math trace has its badge at the left of its lane in Studio, as a channel has: "M1" in the colour of the trace.
+#[test]
+fn a_math_lane_has_its_badge() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = true;
+    u.m.math_hidden[0] = false;
+    u.m.math = crate::math::MathOp::Add;
+    assert!(u.m.math_shown(0), "M1 = CH1 + CH2 is on");
+    u.trace_mode(true);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let mut cv = Canvas::new(W, H);
+    cv.au_start();
+    u.render(&mut cv);
+    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+    assert!(texts.iter().any(|s| s == "M1"), "the badge of the math lane: {:?}", texts.iter().filter(|s| s.starts_with('M')).collect::<Vec<_>>());
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-math-badge.png"), crate::store::png_of(&cv)).unwrap();
+    }
 }

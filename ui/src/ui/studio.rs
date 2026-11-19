@@ -1312,6 +1312,17 @@ impl Ui {
         cv.text_in(&self.fonts().sb, r, 1, &format!("CH{}", c + 1), col);
     }
 
+    /// The badge of a source that is no channel (a math trace) at the left edge of its lane, on its zero line: the
+    /// look of `studio_lane_badge`, kept inside the lane. It is a name, not a handle: a tap on it is a tap on the lane.
+    pub(super) fn studio_source_badge(&self, cv: &mut Canvas, name: &str, col: Rgb, y: i32) {
+        let a = self.area;
+        let y = y.clamp(a.y + (a.h / 2).min(13), a.y + a.h - (a.h / 2).min(13));
+        let r = Rect::new(a.x + 3, y - 12, 44, 24);
+        cv.round(r, 4, col, 255);
+        cv.round(r.inset(1), 3, BG, 255);
+        cv.text_in(&self.fonts().sb, r, 1, name, col);
+    }
+
     /// The T marker over the lanes, the cursor tags and the shaded band between the cursors.
     pub(super) fn draw_studio_overlay(&self, cv: &mut Canvas) {
         if !self.studio_tags_on() || self.view_on() || self.eye_open() { return; }

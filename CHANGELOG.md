@@ -7,6 +7,7 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio: a math trace has its badge at the left of its lane ("M1"), as a channel has (host-tested).
 - Studio: choosing Stacked or Overlay fits every signal to the height it then has (host-tested, not yet verified on
   hardware). In Stacked each signal fills its own lane; in Overlay the signals lie on one another in the whole
   plot. Each channel that is on gets the scale at which its signal spans at most six of the eight divisions and
@@ -15,6 +16,11 @@ Fixed:
   its lane, and Overlay with them looked like lanes (seen on a unit, 2026-11-18). A mode that comes with a set-up
   or a view changes no channel.
 - Studio, the row of measurements (host-tested):
+  - The strip stands still: a column is as wide as its names and the widest value its units can give ("-00.0 mV"),
+    not as the values of the moment. With those the number of columns went from six to seven and back as the
+    values changed, and the whole strip moved every second (seen on a unit, 2026-11-18).
+  - The strip reads as the row of the Default layout does: a value in the colour of its source, its name in the
+    same colour, dimmer.
   - The row ends with one small chip: the number of the measurements, or "+N" for the pinned ones without a place,
     and an arrow; it opens the table. The button "Meas . N" over the whole height of the row and the "+N" chip
     beside it, which did the same, took the room of two measurements.
