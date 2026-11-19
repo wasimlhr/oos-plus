@@ -66,18 +66,25 @@ fn hostile_program_messages() {
             commands.push(c.to_string());
             Vec::new()
         });
-        // (oos-plus: a line that begins with `#` is a comment of a file of commands, no command)
-        let words: String = text
-            .split_inclusive(['\n', '\r'])
-            .filter(|l| !l.trim_start().starts_with('#'))
-            .flat_map(|l| l.chars())
-            .filter(|c| !c.is_whitespace() && *c != ';')
-            .collect();
-        let taken: String = commands.concat().chars().filter(|c| !c.is_whitespace()).collect();
-        if commands.len() > 1024 || (!commands.is_empty() && taken != words) {
+        // (oos-plus: a line that begins with `#` is a comment of a file of commands, no command; a definite-length
+        // block `#<n><len><bytes>` is one argument and keeps a `;` or a line end of its bytes, so with a `#` in the
+        // text the commands are only held to come from the text in its order)
+        let words: String = text.chars().filter(|c| !c.is_whitespace() && *c != ';').collect();
+        let taken: String = commands.concat().chars().filter(|c| !c.is_whitespace() && *c != ';').collect();
+        let in_order = if text.contains('#') {
+            let mut rest = words.chars();
+            taken.chars().all(|t| rest.any(|w| w == t))
+        } else {
+            taken == words
+        };
+        if commands.len() > 1024 || (!commands.is_empty() && !in_order) {
             return Err(format!("{} commands that are not the text in its order", commands.len()));
         }
-        match commands.iter().find(|c| c.is_empty() || c.trim() != c.as_str() || c.contains([';', '\n', '\r'])) {
+        let separator_outside_a_block = |c: &str| match c.find('#') {
+            Some(at) => c[..at].contains([';', '\n', '\r']),
+            None => c.contains([';', '\n', '\r']),
+        };
+        match commands.iter().find(|c| c.is_empty() || c.trim() != c.as_str() || separator_outside_a_block(c)) {
             Some(c) => Err(format!("the command {c:?}")),
             None => Ok(()),
         }
