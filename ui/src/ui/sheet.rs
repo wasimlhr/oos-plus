@@ -134,6 +134,17 @@ fn destructive(it: Item) -> bool {
     matches!(it, Item::SpecLimitClear | Item::EyeClear | Item::MaskClear | Item::SimDefaults | Item::CurRemove | Item::SrchRemove | Item::RefClear | Item::RefClearOne | Item::MeasClear | Item::UpdateRollback | Item::Stock | Item::PowerAct | Item::DefaultAct | Item::ZoneClear)
 }
 
+/// The colours of a channel among the choices of a decoder's line: fill, edge and text. The chosen one is filled with
+/// the channel's colour. The others keep their colour, dimmed: with every channel at full strength the row was four
+/// bright frames, and the one that is chosen did not stand out among them.
+pub(super) fn line_chip(col: Rgb, chosen: bool) -> (Rgb, Rgb, Rgb) {
+    if chosen {
+        (col, col, DARK_TEXT)
+    } else {
+        (BTN, mix(BTN, col, 90), mix(BTN, col, 170))
+    }
+}
+
 impl Ui {
     // ------------------------------------------------------------------------------------------------ the plan
 
@@ -917,8 +928,9 @@ impl Ui {
                     // the lines of a decoder: a channel in its colour, as its pill in the bottom bar
                     let wave = matches!(it, Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 | Item::DecDiff).then(|| o.strip_prefix("CH").and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=NCH).contains(n)).map(|n| CH_COLORS[n - 1])).flatten();
                     if let Some(col) = wave {
-                        if sel == Some(k) { cv.round(r, 5, col, 255); } else { btn(cv, r, BTN, col); }
-                        cv.text_in(&f.sb, r, 1, o, if sel == Some(k) { DARK_TEXT } else { col });
+                        let (fill, edge, ink) = line_chip(col, sel == Some(k));
+                        btn(cv, r, fill, edge);
+                        cv.text_in(&f.sb, r, 1, o, ink);
                     } else if sel == Some(k) {
                         cv.round(r, 5, ACCENT, 255);
                         cv.text_in(&f.sb, r, 1, o, DARK_TEXT);

@@ -503,6 +503,9 @@ Changed:
   text moved while the list scrolled. The widths are those of the record now. The buttons of its head are 40 px
   tall (36), and the one button of a narrow pane opens the list of the views where it stepped to the next one.
   A box of the band is at least 20 px wide to a finger (12).
+- Decode sheet: among the channels a line can have, the ones it does not have are dimmed (host-tested, not yet
+  verified on hardware). Every channel had a frame and a name in its full colour, and the chosen one, filled, did
+  not stand out among them.
 - SPI decoder: on the Decode sheet the four lines stand together on the first page (MISO was alone on Settings),
   the Mode heads Settings and Input ends it; the polarity of the select is the row "CS polarity" (it was "CS", as
   its line is), and the polarity of the data is "Data polarity" (host-tested, not yet verified on hardware).
