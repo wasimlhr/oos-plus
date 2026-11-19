@@ -7,6 +7,13 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- The channel traces no longer drop out of single pictures while the scope runs (host-tested; the fault seen on a
+  unit, the fix not yet verified on one). The answer of a measurement that is worked out in the background (the rows
+  of the measurement catalogue, pair measurements, measurements on large records and references) marked the picture
+  of the traces for clearing; without a new record in the same moment the plot showed no channel traces until the
+  next record, and with persistence the collected picture started over. On a unit with six jitter rows, 8 records
+  and 18 pictures a second, a third of the pictures had no channel traces; with System > Graphics = CPU the slower
+  frames hid it (docs/fork/trace-blanks.md).
 - The horizontal SCALE knob (host-tested; the knob itself not pushed on a unit): a push switches the fine time base
   on and off and says which, where it opened the zoom. A time base left in fine steps moved a hundredth per detent
   and nothing on the screen or the panel said why or led back. The time pill of Studio says "fine" while it is on.
