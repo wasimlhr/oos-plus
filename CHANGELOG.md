@@ -18,6 +18,14 @@ Fixed:
   table of the measurements without a word, and no row of the menu led to the other two. The page opens on the
   table that is on the screen, else on the events of a decoder or a search that is on; the row says On for any
   of the three.
+- Studio, the pill of a channel (host-tested): a tap selects the channel, wherever on the pill, and does
+  nothing else; a tap on the selected pill opens its sheet, so a double tap on any pill opens it, and the
+  second tap of a double tap does not close it. With a channel sheet open, a tap on another pill takes the
+  sheet to that channel. The coloured badge was the channel's switch and the rest of the pill opened the
+  sheet at once: a tap meant to select switched a channel off, with the math trace and measurements on it.
+  Off is the first row of a hold on the pill, a swipe of the pill off the screen, the sheet and the key. The
+  quick actions of a hold stand on the bar over their pill; with a pane under the plot they opened far above
+  it. The pills of math traces and references open their sheet at the first tap, as before.
 - Studio and Minimal, the height of menu rows (host-tested): a row of a list of words is 48 px (the menu of the
   plot, the quick actions of a hold, Add, the lists of the measurement panel; View 46, so it ends over the
   bottom bar) and a row of a settings sheet is 48 px with controls of 44. They were 40 px, which is 6 mm on

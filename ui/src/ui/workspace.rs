@@ -574,6 +574,8 @@ pub(super) struct Workspace {
     pub measure_docked: bool,
     gesture: Option<Gesture>,
     pub(super) popup: Option<Popup>,
+    /// where the next popup may stand, when that is not the plot (taken by `popup`)
+    popup_area: Option<Rect>,
     /// a hold opened the popup while the finger is still down: its lift is not a tap on a row
     pub(super) lift_pending: bool,
     /// the cursor a tap on its tag picked (`Ui::select_cursor`)
@@ -898,8 +900,9 @@ impl Ui {
     }
     /// A titled popup with a close in its title row, rows one finger tall, in columns when the plot is not tall enough.
     fn popup(&mut self, title: &str, x: i32, y: i32, rows: Vec<(String, Action)>) {
-        // inside the plot, so the popup never covers the bars or runs off the screen
-        let g = self.grid;
+        // inside the plot, so the popup never covers the bars or runs off the screen; the popup of a pill of the
+        // bottom bar has the room between the bars (`popup_area`)
+        let g = self.workspace.popup_area.take().unwrap_or(self.grid);
         let per_col = (((g.h - POPUP_TITLE - 10) / POPUP_ROW).max(1) as usize).min(rows.len().max(1));
         let cols = rows.len().div_ceil(per_col).max(1) as i32;
         let width = (POPUP_COL_W * cols).min(g.w - 8);
@@ -921,6 +924,21 @@ impl Ui {
     }
     /// The quick actions of a math or reference chip of the Studio bottom bar: what a hold or a right-click opens.
     pub(super) fn studio_chip_popup(&mut self, chip: super::measdrag::HoldOn, x: i32, y: i32) {
+        use super::measdrag::HoldOn;
+        // The popup stands on the bar, over its pill. It was kept inside the plot: with a pane under the plot it
+        // opened far above the pill, in the middle of the traces (seen on a unit, 2026-11-18).
+        let (x, y) = if self.m.layout == Layout::Studio {
+            let b = self.studio_bottom();
+            let pill = match chip { HoldOn::Math(k) => b.math[k], HoldOn::Chan(c) => b.ch[c], HoldOn::Ref(i) => b.refs[i], _ => Rect::new(x, y, 0, 0) };
+            let (top, bar) = (self.frame().top.bottom(), self.frame().bottom.y);
+            self.workspace.popup_area = Some(Rect::new(0, top, self.scr.w, bar - 2 - top));
+            (pill.x, bar)
+        } else { (x, y) };
+        self.studio_chip_popup_at(chip, x, y);
+        self.workspace.popup_area = None;
+    }
+
+    fn studio_chip_popup_at(&mut self, chip: super::measdrag::HoldOn, x: i32, y: i32) {
         use super::measdrag::HoldOn;
         match chip {
             HoldOn::Math(k) => {

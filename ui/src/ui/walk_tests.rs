@@ -401,10 +401,12 @@ fn walk_channel_taps() {
     }
 }
 
-/// Studio: the coloured badge of a channel pill switches the channel off, the rest of the pill opens its sheet, and
-/// the "+ CH" list switches it on again.
+/// Studio: a tap on the pill of a channel selects the channel and nothing else, wherever on the pill; a tap on the
+/// selected pill opens its sheet, and so do two quick taps on any pill; a hold has Turn off as its first row, over
+/// the pill. (The coloured badge was the channel's switch and the rest opened the sheet at once: a tap meant to
+/// select switched a channel off, with the math trace and the measurements that hang on it.)
 #[test]
-fn the_badge_of_a_channel_pill_is_its_switch() {
+fn a_tap_on_a_channel_pill_selects_and_the_next_one_opens_its_sheet() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
@@ -413,13 +415,62 @@ fn the_badge_of_a_channel_pill_is_its_switch() {
     let b = u.studio_bottom();
     let pill = b.ch[1];
     assert!(pill.w >= 110, "{pill:?}");
-    // the body: the sheet, and the channel stays on
-    tap(&mut u, pill.right() - 30, pill.y + pill.h / 2);
-    assert!(u.menu_open && u.menu == MenuId::Channel(1) && u.m.ch[1].on);
+    // (the first frame of a layout applies its entry rules, which close what is open)
+    frame(&mut u);
+    let (body, badge, y) = (pill.right() - 30, pill.x + 24, pill.y + pill.h / 2);
+    assert_eq!(u.selected_workspace_source(), Some(WaveId::Ch(0)));
+    // the badge and the body do the same: the first tap selects, and the channel stays on
+    for x in [badge, body] {
+        u.select_workspace_source(WaveId::Ch(0));
+        u.now += 5.0;
+        tap(&mut u, x, y);
+        assert!(u.m.ch[1].on && !u.menu_open, "a tap at {x} did more than select");
+        assert_eq!(u.selected_workspace_source(), Some(WaveId::Ch(1)));
+        // the next tap, whenever it comes, opens the sheet of the selected channel
+        u.now += 5.0;
+        tap(&mut u, x, y);
+        assert!(u.menu_open && u.menu == MenuId::Channel(1) && u.m.ch[1].on);
+        // and one more closes it
+        u.now += 5.0;
+        tap(&mut u, x, y);
+        assert!(!u.menu_open && u.m.ch[1].on);
+    }
+    // a double tap ends with the sheet open, on a pill that was selected (the second tap does not close it) and on
+    // one that was not
+    u.now += 5.0;
+    tap(&mut u, body, y);
+    u.now += 0.2;
+    tap(&mut u, body, y);
+    assert!(u.menu_open && u.menu == MenuId::Channel(1), "a double tap on the selected pill");
+    // with a channel sheet open, a tap on another pill takes the sheet to that channel
+    let first = u.studio_bottom().ch[0];
+    u.now += 5.0;
+    tap(&mut u, first.right() - 30, y);
+    assert!(u.menu_open && u.menu == MenuId::Channel(0));
     u.close_menu();
-    // the badge: off, without a menu
-    tap(&mut u, pill.x + 24, pill.y + pill.h / 2);
-    assert!(!u.m.ch[1].on && !u.menu_open, "the badge switches CH2 off");
+    u.select_workspace_source(WaveId::Ch(0));
+    u.now += 5.0;
+    tap(&mut u, body, y);
+    u.now += 0.2;
+    tap(&mut u, body, y);
+    assert!(u.menu_open && u.menu == MenuId::Channel(1), "a double tap on a pill that was not selected");
+    u.close_menu();
+    // a hold: the quick actions stand on the bar over the pill, Turn off first, rows a finger high
+    u.studio_chip_popup(super::measdrag::HoldOn::Chan(1), body, y);
+    let (rect, rows) = { let p = u.workspace.popup.as_ref().expect("the popup"); (p.rect, (0..p.rows.len()).map(|i| (p.rows[i].0.clone(), p.row_rect(i))).collect::<Vec<_>>()) };
+    let bar = u.frame().bottom.y;
+    assert!(rect.bottom() <= bar && bar - rect.bottom() <= 8, "the popup stands on the bar: {rect:?} {bar}");
+    assert!(rect.x <= pill.x && rect.right() >= pill.x + 40 && rect.y >= u.frame().top.bottom(), "over its pill: {rect:?} {pill:?}");
+    assert_eq!(rows[0].0, "Turn off");
+    assert!(rows.iter().all(|(_, r)| r.h >= 48), "{rows:?}");
+    if let Ok(dir) = std::env::var("OOS_WALK_SHOTS") {
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        u.render(&mut cv);
+        let _ = crate::store::write(&std::path::Path::new(&dir).join("pill-hold.png"), &crate::store::png_of(&cv));
+    }
+    let off = rows[0].1;
+    tap(&mut u, off.x + off.w / 2, off.y + off.h / 2);
+    assert!(!u.m.ch[1].on && !u.menu_open, "Turn off of the hold switches CH2 off");
     assert!(u.m.ch[0].on, "CH1 is not touched");
     // its pill stays as a smaller one, and a tap on that switches the channel on again without a sheet
     let small = u.studio_bottom().ch[1];
@@ -2247,7 +2298,7 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
         u.select_option(Item::CurMode, "Off");
         assert_eq!(u.m.cursor, CursorMode::Off, "{layout:?}");
     }
-    // four channels and two references on: the pills are under 110 px and still have a body, so the badge is the switch
+    // four channels and two references on: the pills are under 110 px, and a tap on one selects like on a wide one
     let mut u = fresh(Layout::Studio);
     for c in 0..4 { u.m.ch[c].on = true; }
     for i in 0..2 {
@@ -2258,10 +2309,9 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
     let pill = u.studio_bottom().ch[2];
     assert!((70..110).contains(&pill.w), "{pill:?}");
     tap(&mut u, pill.x + 24, pill.y + pill.h / 2);
-    assert!(!u.m.ch[2].on && !u.menu_open, "the badge of a pill of {} px switches CH3 off", pill.w);
-    let pill = u.studio_bottom().ch[1];
+    assert!(u.m.ch[2].on && !u.menu_open && u.m.active == 2, "a tap on a pill of {} px selects CH3", pill.w);
     tap(&mut u, pill.right() - 12, pill.y + pill.h / 2);
-    assert!(u.m.ch[1].on && u.menu_open && u.menu == MenuId::Channel(1), "the body opens the sheet");
+    assert!(u.m.ch[2].on && u.menu_open && u.menu == MenuId::Channel(2), "the next tap opens its sheet");
 }
 
 /// Studio's hold menu of the plot: rows of 40 px in two columns, on the screen wherever it is opened, without the rows

@@ -137,6 +137,8 @@ pub(super) struct Studio {
     pub eye_full: bool,
     /// the "+ CH" picker (channels that are off) is open
     pub ch_picker: bool,
+    /// the last tap on the pill of a channel that is on (channel, time): two taps in `PILL_AGAIN` are a double tap
+    pub pill_tap: Option<(usize, f64)>,
     /// Compact view: smaller lane gaps, badge row and measurement panel
     pub compact: bool,
     pub panel: StudioPanel,
@@ -1059,15 +1061,6 @@ impl Ui {
         }
         for c in 0..n_ch() {
             if !b.ch[c].contains(x, y) { continue; }
-            // the coloured badge of a pill is the channel's switch, like its key; the rest of the pill opens its sheet
-            // (a pill that is its badge alone, under 70 px, keeps the sheet: its Display row and a hold turn the
-            // channel off). It was the switch from 110 px on only, so the same spot did two things as pills shrank
-            if self.m.ch[c].on && b.ch[c].w >= 70 && x < b.ch[c].x + 54 {
-                if self.menu_open { self.close_menu(); }
-                self.source_toggle(WaveId::Ch(c));
-                if !self.m.ch[c].on { self.toast(&format!("CH{} off", c + 1)); }
-                return;
-            }
             if !self.m.ch[c].on {
                 // the pill of a channel that is off: on and selected, no sheet
                 if self.menu_open { self.close_menu(); }
@@ -1077,8 +1070,27 @@ impl Ui {
                 self.select_workspace_source(WaveId::Ch(c));
                 return;
             }
+            // A tap on the pill of a channel that is on selects the channel: the knobs and its lane follow, and
+            // nothing opens or is switched. A tap on the pill that is selected opens its sheet, so two taps on any
+            // pill end with its sheet open, as two presses of a channel key do. The coloured badge was the
+            // channel's switch and the rest of the pill opened the sheet at once: a tap meant to select a channel
+            // switched it off, with its math trace and its measurements, or covered the plot (asked from a unit,
+            // 2026-11-18). Off is the first row of a hold on the pill, a swipe of the pill off the screen, the
+            // Display row of the sheet and the key.
+            let selected = self.selected_workspace_source() == Some(WaveId::Ch(c));
+            let sheet = self.menu_open && matches!(self.menu_root(), MenuId::Channel(_));
+            let own = self.menu_open && self.menu_root() == MenuId::Channel(c);
+            let again = self.studio.pill_tap.is_some_and(|(k, at)| k == c && self.now - at < PILL_AGAIN);
+            self.studio.pill_tap = Some((c, self.now));
             self.select_workspace_source(WaveId::Ch(c));
-            return self.toggle_menu(MenuId::Channel(c));
+            if own {
+                // the second tap of a double tap does not close what the first one opened
+                if !again { self.close_menu(); }
+            } else if sheet || selected {
+                // (the sheet of another channel that is open goes to this one)
+                self.open_menu(MenuId::Channel(c));
+            }
+            return;
         }
         if let Some(i) = self.shown_refs().into_iter().find(|&i| b.refs[i].contains(x, y)) {
             let (prev, open) = (self.ref_sel, self.menu_open && self.menu == MenuId::Ref);
@@ -1394,7 +1406,9 @@ const BADGE_LINES: i32 = 2;
 pub(super) const SEARCH_ARROW_W: i32 = 46;
 /// Width of the action popup of a badge, and the height of its rows.
 const POPUP_W: i32 = 300;
-const POPUP_ROW: i32 = 40;
+const POPUP_ROW: i32 = super::workspace::MENU_ROW;
+/// Two taps on a pill within this time are a double tap: the second does not close the sheet the first opened.
+const PILL_AGAIN: f64 = 0.45;
 
 /// A thumbtack: a flat cap, a barrel, a rim and a needle. Filled when pinned, outline when not. `x` is the left edge of the
 /// 12 px wide glyph and `cy` its middle (it is 17 px high).
