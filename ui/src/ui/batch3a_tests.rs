@@ -49,9 +49,9 @@ fn sim_ui() -> Ui {
 fn top_bar_is_one_status_pill_a_single_button_plain_acquisition_and_the_default_buttons() {
     let mut u = studio();
     let t = u.studio_top();
-    // the pill and Single have the Default bar's size and place
+    // the pill has the Default bar's size and place; Single is the key of the front panel, as in the Default bar
     assert_eq!((t.run.x, t.run.y, t.run.h), (8, 6, 28));
-    assert_eq!((t.single.h, t.single.w), (30, 54));
+    assert_eq!(t.single.w, 0, "no Single button in the bar");
     assert_eq!(t.badge.w, 0, "no Live button while live");
     assert_eq!(t.sim.w, 0, "no SIM control while the SIM is not the source");
     // the source is in the caption, not a badge of its own
@@ -100,8 +100,8 @@ fn run_stop_and_single_play_hold_and_capture_the_sim() {
     tap_in(&mut u, t.run);
     for _ in 0..4 { u.step(0.05); }
     assert!(u.sim_playing() && u.m.run == RunState::Run);
-    // Single captures one frame and holds
-    tap_in(&mut u, t.single);
+    // Single (the key) captures one frame and holds
+    u.studio_single();
     u.wait_sim_generation();
     for _ in 0..40 { u.step(0.05); u.wait_sim_generation(); }
     assert_eq!(u.m.trig_mode, TrigMode::Single);

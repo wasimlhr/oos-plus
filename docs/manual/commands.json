@@ -1581,6 +1581,33 @@
      "returns": "On a freshly started default model the query returns `0`."
     },
     {
+     "header": ":CHANnel<n>:HIDE",
+     "set": ":CHANnel<n>:HIDE <value>",
+     "query": ":CHANnel<n>:HIDE?",
+     "desc": "Sets or queries Hide trace (menu: Channel > Hide trace).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:CHANnel1:HIDE` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- The channel stays on without its trace: it is acquired, measured, decoded and the input of a math trace as before, and has no trace, lane or ground mark.",
+      "- `:CHANnel<n>:DISPlay OFF` switches the channel off, and what is computed from it goes with it.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
      "header": ":CHANnel<n>:CLIPping?",
      "query": ":CHANnel<n>:CLIPping?",
      "desc": "`1` while the record on screen reaches the end of the ADC range on this channel (4.35 divisions above or below the middle of the screen), else `0`. `0` for a channel that is off.",
@@ -13319,7 +13346,7 @@
     {
      "header": ":UI:MENU",
      "query": ":UI:MENU?",
-     "desc": "The menu or popup that is open: its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. `\"\"` when none is open.",
+     "desc": "The menu or popup that is open: its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. Studio's View menu lists its views, its two switches as `\"Show pinned badges = On\"` and `\"Compact view = Off\"`, and `\"Reset layout\"`. `\"\"` when none is open.",
      "remarks": [
       "- Origin: OOS extension"
      ],
@@ -15516,6 +15543,12 @@
        "`true`: the GEN chip is not shown in the view shown (optional)",
        "`false`",
        "`:DISPlay:GENerator`"
+      ],
+      [
+       "`ch_hidden`",
+       "channels (1-based) that are on without their trace (optional)",
+       "-",
+       "`:CHANnel<n>:HIDE`"
       ],
       [
        "`gen`",

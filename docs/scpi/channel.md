@@ -17,6 +17,7 @@ Part of the [SCPI reference](README.md).
 | `:CHANnel<n>:BWLimit` | Set / Query | `OFF\|20M\|AUTO` or a supported filter name. OOS filtering extends stock choices. | `AUTO` | Channel > Bandwidth | Rigol-compatible |
 | `:CHANnel<n>:PROBe` | Set / Query | Positive attenuation factor. | `1.000000E+00` | Channel > Probe | Rigol-compatible |
 | `:CHANnel<n>:INVert` | Set / Query | Boolean. | `0` | Channel > Invert | Rigol-compatible |
+| `:CHANnel<n>:HIDE` | Set / Query | Boolean. The channel stays on without its trace: it is acquired, measured, decoded and the input of a math trace as before, and has no trace, lane or ground mark. `:CHANnel<n>:DISPlay OFF` switches the channel off, and what is computed from it goes with it. | `0` | Channel > Hide trace | OOS extension |
 | `:CHANnel<n>:CLIPping?` | Query | `1` while the record on screen reaches the end of the ADC range on this channel (4.35 divisions above or below the middle of the screen), else `0`. `0` for a channel that is off. | `0` | the red Clipping note in the plot | OOS extension |
 | `:CHANnel<n>:POSition` | Set / Query | The same value as `:CHANnel<n>:OFFSet`, in volts (not in divisions). | `-1.500000E+00` | Channel > Offset | Rigol-style (command family of the DHO guide) |
 | `:CHANnel<n>:UNITs` | Set / Query | Supported channel unit. Use the configured unit when interpreting cursor/readout values. | `VOLT` | Channel more > Unit | Rigol-style (command family of the DHO guide) |

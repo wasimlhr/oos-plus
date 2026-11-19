@@ -166,6 +166,7 @@ Commands: [display.md](display.md).
 | `view<n>` | `view<n>` is what view n keeps while another is shown: `key=value; ...` of the measurement list, panels, cursors, zoom, lanes shown and analysis set-ups, values escaped with `%3B` for `;` (optional) | - | - |
 | `math_hidden` | math channels (1-based) not shown in the view shown (optional) | - | `:MATH<n>:DISPlay` |
 | `gen_hidden` | `true`: the GEN chip is not shown in the view shown (optional) | `false` | `:DISPlay:GENerator` |
+| `ch_hidden` | channels (1-based) that are on without their trace (optional) | - | `:CHANnel<n>:HIDE` |
 | `gen` | The generator's wave: name (`Sine`, `Square`, `Ramp`, `Pulse`, `Noise`, `DC`), frequency Hz, amplitude Vpp, offset V, duty %, symmetry %. Not written for an arbitrary wave. Whether the output is on is not part of a set-up: after a recall it is off | `Sine 1000 1 0 50 50` | `:SOURce:FUNCtion`, `:SOURce:FREQuency`, `:SOURce:VOLTage`, `:SOURce:VOLTage:OFFSet` |
 | `gen_mod` | The generator's modulation: `Off`, `AM`, `FM` or `PM`, rate Hz, AM depth %, FM deviation Hz, PM deviation degrees, shape (`Sine`, `Square`, `Triangle`, `Up_ramp`, `Down_ramp`, `Noise`) | `Off 100 100 100 90 Sine` | `:SOURce:MOD:...` |
 | `studio_state` | what the Ui keeps of the view shown: pinned measurements, panel mode, search, zoom source, the columns of the event tables where a divider was dragged (optional; written each time) | empty | - |

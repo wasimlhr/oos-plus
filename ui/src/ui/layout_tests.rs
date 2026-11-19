@@ -115,7 +115,8 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     let mut u = studio();
     shot(&mut u, "01-top");
     let t = u.studio_top();
-    let all = [t.run, t.single, t.acq, t.add, t.view, t.gear];
+    let all = [t.run, t.acq, t.add, t.view, t.gear];
+    assert_eq!(t.single.w, 0, "Single is the key of the front panel");
     for (i, a) in all.iter().enumerate() {
         assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
         for b in &all[i + 1..] { assert!(!overlaps(*a, *b), "chips do not overlap"); }
@@ -126,7 +127,7 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     let run = u.m.run;
     tap_in(&mut u, t.run);
     assert_ne!(u.m.run, run);
-    tap_in(&mut u, t.single);
+    u.studio_single();
     assert_eq!(u.m.trig_mode, TrigMode::Single);
     // the acquisition chip opens Acquire, the gear the Main menu, Cursors its page
     tap_in(&mut u, t.acq);

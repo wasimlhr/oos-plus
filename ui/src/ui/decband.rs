@@ -343,11 +343,24 @@ impl Ui {
             let top = if bit_row { y - DEC_BITS } else { y };
             cv.blend(Rect::new(a.x, top - 3, a.w, y + h + 3 - (top - 3)), BG, 200);
         }
-        // the name in the source's colour, which says the source. In a plot it stands right of the channel markers
-        // at the left edge (Studio: of the lane badges), which are drawn after the band and would cover it
-        let name = format!("D{} {}", k + 1, m.dec_proto.name());
-        let px = a.x + if row.is_some() { 4 } else if self.m.layout == Layout::Studio { 50 } else { MARK_W + 2 };
-        let pill = Rect::new(px, y + 2, f.sb.width(&name) + 12, h - 4);
+        // the name in the source's colour, which says the source. Studio writes the source too, and the number only
+        // where several decoders are on ("UART CH1", "D2 SPI CH2"); a tap on the name opens the Decode menu of this
+        // decoder there (`studio.dec_labels`)
+        let studio = self.m.layout == Layout::Studio;
+        let name = if studio {
+            let number = if (0..DECODERS).filter(|&d| self.m.dec_is_on(d)).count() > 1 { format!("D{} ", k + 1) } else { String::new() };
+            let source = if m.dec_on_la() { String::new() } else { format!(" {}", decode_source_name(m.dec_src)) };
+            format!("{}{}{}", number, m.dec_proto.name(), source)
+        } else {
+            format!("D{} {}", k + 1, m.dec_proto.name())
+        };
+        // in a plot it stands right of the channel markers at the left edge (Studio: of the lane badges), which are
+        // drawn after the band and would cover it
+        let px = a.x + if row.is_some() { 4 } else if studio { 50 } else { MARK_W + 2 };
+        let pill = if row.is_some() { Rect::new(px, y, f.sb.width(&name) + 12, h) } else { Rect::new(px, y + 2, f.sb.width(&name) + 12, h - 4) };
+        if studio {
+            self.studio.dec_labels.borrow_mut().push((k, pill));
+        }
         cv.round(pill, 5, col, 255);
         cv.text_in(&f.sb, pill, 1, &name, DARK_TEXT);
         let left = pill.x + pill.w + 6;

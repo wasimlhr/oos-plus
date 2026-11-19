@@ -1912,8 +1912,9 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
         u.render(&mut cv);
         let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
         for (k, name) in ["UART", "I2C", "SPI", "CAN"].iter().enumerate() {
-            // the band's name; its colour says the source
-            let want = format!("D{} {}", k + 1, name);
+            // Studio names several decoders with their source ("D1 UART CH1"; one alone has no number); the other
+            // layouts have the decoder's number and protocol, and the colour of the name says the source
+            let want = if layout == Layout::Studio { format!("D{} {} CH{}", k + 1, name, k + 1) } else { format!("D{} {}", k + 1, name) };
             assert!(texts.iter().any(|t| *t == want), "{layout:?}: no bus named {want:?} on the plot");
         }
     }
@@ -2105,7 +2106,11 @@ fn the_badge_row_wraps_onto_a_second_line() {
         assert!(row.h > one.h && row.bottom() == one.bottom() && u.plot_rect().bottom() <= row.y, "{what}: {one:?} became {row:?}");
         let limit = u.studio_row_limit();
         for (i, (_, r)) in badges.iter().enumerate() {
-            assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= limit, "{what}: badge {i} at {r:?} in {row:?}");
+            // the chip at the end of the row is on one line: the badges of that line end before it, the others
+            // run to the end of the row
+            let (at, end) = (u.studio_list_chip(), row.right() - 4);
+            let beside = r.y < at.bottom() && at.y < r.bottom();
+            assert!(r.y >= row.y && r.bottom() <= row.bottom() && r.x >= row.x && r.right() <= if beside { limit } else { end }, "{what}: badge {i} at {r:?} in {row:?}");
             for (_, o) in &badges[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{what}: {r:?} over {o:?}"); }
         }
         if !classic { assert_eq!(u.studio_list_chip(), chip, "{what}: the button at the right stays on the line above the bar"); }
@@ -2121,7 +2126,8 @@ fn the_badge_row_wraps_onto_a_second_line() {
         assert_eq!(n + more.1, u.m.meas.len(), "{what}: every measurement is shown or counted");
         assert!(n >= 10, "{what}: {n} badges on the two lines");
         assert!(u.studio_row().h <= row.h + 24 && u.studio_row().bottom() == one.bottom(), "{what}: {:?}", u.studio_row());
-        assert!(more.0.y >= u.studio_row().y && more.0.right() <= limit + 60, "{what}: +N at {:?}", more.0);
+        // "+N" is said by the chip at the end of the row
+        assert!(more.0 == u.studio_list_chip() && more.0.y >= u.studio_row().y && more.0.right() <= u.studio_row().right(), "{what}: +N at {:?}", more.0);
         // back to a few: one line again
         u.m.meas.truncate(4);
         for _ in 0..2 { frame(&mut u); }
@@ -2501,7 +2507,8 @@ fn the_eye_page_takes_a_slow_time_base_after_a_fast_one() {
             assert!(u.m.eye_rate < 2e9, "found again from this record: {}", u.m.eye_rate);
         } else {
             assert_eq!(u.m.eye_rate, 2e9, "a set rate is the user's");
-            assert!(u.azr.eye_res.is_none(), "no eye of a clock the record cannot hold");
+            assert!(u.azr.eye_res.is_none() && u.azr.eye.is_none(), "no eye of a clock the record cannot hold");
+            assert!(u.azr.page.status[0].contains("needs a faster time base") && u.azr.page.img.is_empty(), "said in the plot: {:?}", u.azr.page.status);
         }
     }
 }
@@ -2542,4 +2549,240 @@ fn the_badges_button_does_not_cost_a_channel_pill_its_scale() {
     frame(&mut u);
     let b = u.studio_bottom();
     assert!(b.show.is_some_and(|r| r.w >= 80) && b.add.w >= 62, "{:?} {:?}", b.show, b.add);
+}
+
+/// The classic strip reads as a table and ends with one small chip. A column is as wide as its own widest name and
+/// value, and its values begin at one place; the chip at the end is as small as a pair, says how many measurements
+/// there are (or "+N" for those without a place) and opens the table. Before, every column was as wide as the
+/// widest pair of all, and a button "Meas . N" over the whole height of the strip stood beside a "+N" chip: six
+/// pairs a line where seven fit (seen on a unit, 2026-11-18, with these eighteen measurements).
+#[test]
+fn the_classic_strip_is_a_table_and_ends_with_one_small_chip() {
+    use oos_dsp::measure::Meas::*;
+    let mut u = fresh(Layout::Studio);
+    u.studio_set_classic(true);
+    u.m.ch[1].on = true;
+    u.m.meas = [Vamp, Vmax, Vmin, Vpp, Vtop, Vbase, Vupper, Vmid, Vlower, Overshoot, Vavg, Area, StdDev].into_iter().map(|m| (m, WaveId::Ch(0)))
+        .chain([Median, Mode, StdDev, VrmsAc].into_iter().map(|m| (m, WaveId::Ch(1)))).collect();
+    u.studio.pinned = None;
+    for _ in 0..3 { frame(&mut u); }
+    let (row, chip, l) = (u.studio_row(), u.studio_list_chip(), u.classic_layout());
+    eprintln!("row {row:?} chip {chip:?} pairs {} overflow {} lines {:?}", l.pairs.len(), l.overflow, l.chips.iter().map(|c| c.1.y).collect::<Vec<_>>());
+    assert!(chip.w <= 60 && chip.h <= 24 && chip.right() <= row.right() && chip.y >= row.y && chip.bottom() <= row.bottom(), "{chip:?} in {row:?}");
+    // the pairs: in the row, before the chip, none over another
+    for (i, (_, r)) in l.pairs.iter().enumerate() {
+        let beside = r.y < chip.bottom() && chip.y < r.bottom();
+        assert!(r.x >= row.x && r.right() <= if beside { chip.x } else { row.right() } && r.y >= row.y && r.bottom() <= row.bottom(), "pair {i} at {r:?}");
+        for (_, o) in &l.pairs[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{r:?} over {o:?}"); }
+    }
+    // a table: the pairs of a column begin at one place, and so do their values
+    let mut columns: std::collections::BTreeMap<i32, Vec<i32>> = Default::default();
+    for ((_, r), value) in l.pairs.iter().zip(&l.values) { columns.entry(r.x).or_default().push(*value); }
+    assert!(columns.values().all(|values| values.iter().all(|v| *v == values[0])), "{columns:?}");
+    assert!(columns.len() >= 7, "{} columns on a line", columns.len());
+    assert_eq!(l.pairs.len() + l.overflow, 17, "every measurement has a place or is counted");
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-classic-strip.png"), crate::store::png_of(&cv)).unwrap();
+    }
+    // the chip opens the table
+    let (x, y) = mid(chip);
+    tap(&mut u, x, y);
+    assert_eq!(u.studio.view, super::studio::StudioView::Docked);
+}
+
+/// Four channels with measurements have a line of the strip each; a fifth source (a reference) is behind "+N" with
+/// what has no place on the lines, and the chip counts them all. (The strip had three lines: the fourth channel's
+/// measurements were nowhere on it.)
+#[test]
+fn the_classic_strip_has_a_line_for_each_of_four_channels() {
+    use oos_dsp::measure::Meas::*;
+    let mut u = fresh(Layout::Studio);
+    u.studio_set_classic(true);
+    for c in 0..n_ch() { u.m.ch[c].on = true; }
+    for r in 0..3 {
+        u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0: -5e-3, dt: 1e-6, v: known_pulses(0.0).into(), vpd: 0.2, offset: 0.0, on: true });
+    }
+    let on = |ms: &[oos_dsp::measure::Meas], id: WaveId| ms.iter().map(|m| (*m, id)).collect::<Vec<_>>();
+    u.m.meas = [on(&[Vamp, Vpp, Vbase, Vlower, Preshoot, Overshoot, Vmax, Vmin, Vtop, Vmid, Vavg, Area], WaveId::Ch(0)), on(&[Median, Mode, StdDev, VrmsAc], WaveId::Ch(1)),
+        on(&[Overshoot, Median, Mode, Area, StdDev, Vrms, Freq, Period], WaveId::Ch(2)), on(&[Vpp, Freq, Rise, Fall], WaveId::Ch(3)), on(&[Vpp, Freq, Vavg, Vrms], WaveId::Ref(0))].concat();
+    u.studio.pinned = None;
+    for _ in 0..4 { u.step(0.03); frame(&mut u); }
+    let (l, row, chip) = (u.classic_layout(), u.studio_row(), u.studio_list_chip());
+    assert_eq!(l.chips.iter().map(|c| c.0).collect::<Vec<_>>(), (0..4).map(WaveId::Ch).collect::<Vec<_>>());
+    assert_eq!(l.pairs.len() + l.overflow, u.m.meas.len(), "every measurement has a place or is counted");
+    assert!(l.overflow >= 4 && u.studio_badges_more().map(|m| m.1) == Some(l.overflow), "the reference's four and what did not fit: {}", l.overflow);
+    assert!(l.pairs.iter().all(|(_, r)| r.y >= row.y && r.bottom() <= row.bottom() && r.right() <= row.right() && (r.right() <= chip.x || r.bottom() <= chip.y || chip.bottom() <= r.y)), "in the row, none under the chip");
+    // the chip is the last thing of a line that has the room: no line gives it a pair while another has room
+    let on_its_line = l.pairs.iter().filter(|(_, r)| r.y == chip.y).count();
+    assert!(l.chips.iter().any(|(_, c)| c.y == chip.y) && on_its_line < l.pairs.iter().filter(|(_, r)| r.y == l.chips[0].1.y).count(), "the chip is on a line with room: {chip:?}");
+    // the strip stands still: the places are those of the names and the units, whatever the values read. A record
+    // that changes every value (and "----" where there was one) moves no pair
+    let before = l.pairs.clone();
+    u.m.ch[0].vscale = (u.m.ch[0].vscale + 3).min(crate::model::VSCALES.len() - 1);
+    for _ in 0..6 { u.step(0.05); frame(&mut u); }
+    assert_eq!(u.classic_layout().pairs, before, "the pairs stay where they are when the values change");
+    u.m.ch[0].vscale -= 3;
+    for _ in 0..3 { u.step(0.05); frame(&mut u); }
+    assert!(u.plot_rect().bottom() <= row.y && u.plot_rect().h >= 250, "the plot keeps most of the screen: {:?}", u.plot_rect());
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-many-sources.png"), crate::store::png_of(&cv)).unwrap();
+    }
+}
+
+/// Choosing Stacked or Overlay in Studio fits every signal to the height it gets: a channel that was kept apart from
+/// the others by its offset (three divisions up, at a scale too coarse for it) is in the middle of its lane and
+/// fills it, and in Overlay the signals lie on one another in the whole plot. A mode that a set-up brings changes no
+/// channel.
+#[test]
+fn choosing_stacked_or_overlay_fits_every_signal_to_its_height() {
+    let mut u = fresh(Layout::Studio);
+    u.trace_mode(false);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    // the signal of the demo on CH1, parked high and small as in a plot shared with three others
+    let (lo, hi) = u.auto_levels(0);
+    assert!(hi - lo > 0.5, "the demo has a signal on CH1: {lo} {hi}");
+    (u.m.ch[0].vscale, u.m.ch[0].offset) = (VSCALES.iter().position(|v| *v == 5.0).unwrap(), 12.0);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let parked = (u.m.ch[0].vscale, u.m.ch[0].offset);
+    // a set-up or a view sets the mode: nothing is fitted
+    u.trace_mode(true);
+    assert_eq!((u.m.ch[0].vscale, u.m.ch[0].offset), parked);
+    u.trace_mode(false);
+    for stacked in [true, false] {
+        (u.m.ch[0].vscale, u.m.ch[0].offset) = parked;
+        for _ in 0..6 { u.step(0.03); frame(&mut u); }
+        u.choose_trace_mode(stacked);
+        let ch = &u.m.ch[0];
+        let (vdiv, span) = (ch.volts_per_div(), hi - lo);
+        assert!(span <= 6.0 * vdiv && span >= 2.0 * vdiv, "stacked {stacked}: {span} V at {vdiv} V/div fills its height");
+        assert!((ch.offset + (hi + lo) / 2.0).abs() < 0.2 * vdiv, "stacked {stacked}: in the middle, offset {}", ch.offset);
+        assert!(u.toast_text().contains(if stacked { "Stacked" } else { "Overlay" }), "{}", u.toast_text());
+        if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+            for _ in 0..6 { u.step(0.03); frame(&mut u); }
+            let mut cv = Canvas::new(W, H);
+            u.render(&mut cv);
+            let _ = std::fs::create_dir_all(&dir);
+            std::fs::write(std::path::Path::new(&dir).join(format!("walk-fit-{}.png", if stacked { "stacked" } else { "overlay" })), crate::store::png_of(&cv)).unwrap();
+        }
+    }
+    // the same mode again: nothing to fit, nothing said
+    let now = (u.m.ch[0].vscale, u.m.ch[0].offset);
+    u.choose_trace_mode(false);
+    assert_eq!((u.m.ch[0].vscale, u.m.ch[0].offset), now);
+}
+
+/// A math trace has its badge at the left of its lane in Studio, as a channel has: "M1" in the colour of the trace.
+#[test]
+fn a_math_lane_has_its_badge() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = true;
+    u.m.math_hidden[0] = false;
+    u.m.math = crate::math::MathOp::Add;
+    assert!(u.m.math_shown(0), "M1 = CH1 + CH2 is on");
+    u.trace_mode(true);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let mut cv = Canvas::new(W, H);
+    cv.au_start();
+    u.render(&mut cv);
+    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+    assert!(texts.iter().any(|s| s == "M1"), "the badge of the math lane: {:?}", texts.iter().filter(|s| s.starts_with('M')).collect::<Vec<_>>());
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-math-badge.png"), crate::store::png_of(&cv)).unwrap();
+    }
+}
+
+/// Hide trace takes the picture of a channel away and nothing else: the channel stays on, its math trace and its
+/// measurements go on, the set-up and SCPI hold the switch. Switching the channel off was the only way before, and
+/// that took the math trace with it.
+#[test]
+fn a_hidden_channel_stays_on_for_math_and_measurements() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = true;
+    // the demo has its signal on CH1: M1 = CH1 + CH1
+    u.m.math = crate::math::MathOp::Add;
+    u.m.math_b = u.m.math_a;
+    u.trace_mode(true);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let value = |u: &Ui| u.meas_rows().iter().find(|r| r.src == WaveId::Ch(0)).map(|r| r.v);
+    let math = |u: &mut Ui| { for _ in 0..40 { if u.math_record(0).is_ok_and(|w| w.is_some()) { return true; } u.step(0.03); frame(u); } false };
+    assert!(u.trace_sources().contains(&super::workspace::Trace::Channel(0)), "CH1 has its lane");
+    assert!(math(&mut u), "M1 = CH1 + CH1 is computed: {:?}", u.math_record(0).err());
+    let before = value(&u).expect("a measurement on CH1");
+    assert!(before.is_finite());
+    // by the menu of the channel
+    assert_eq!(u.value(Item::ChHide(0)), "Off");
+    u.activate(Item::ChHide(0));
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    assert!(u.m.ch[0].on && u.m.ch_hidden[0] && !u.m.ch_drawn(0));
+    assert!(!u.trace_sources().contains(&super::workspace::Trace::Channel(0)), "no lane for the hidden channel");
+    assert!(u.trace_sources().contains(&super::workspace::Trace::Math(0)) && math(&mut u), "its math trace goes on");
+    assert!(value(&u).is_some_and(|v| v.is_finite()), "its measurement goes on");
+    // the set-up holds it and brings it back
+    let text = u.setup_text_full();
+    assert!(text.lines().any(|l| l == "ch_hidden = 1"), "{:?}", text.lines().filter(|l| l.starts_with("ch")).take(3).collect::<Vec<_>>());
+    let mut other = fresh(Layout::Studio);
+    other.apply_setup_text(&text).unwrap();
+    assert!(other.m.ch_hidden[0] && !other.m.ch_hidden[1]);
+    // the pill's menu shows it again
+    u.workspace_action(super::workspace::Action::ChHide(0));
+    for _ in 0..3 { u.step(0.03); frame(&mut u); }
+    assert!(!u.m.ch_hidden[0] && u.trace_sources().contains(&super::workspace::Trace::Channel(0)));
+}
+
+/// The name of a decoder beside its band is a badge in Studio, and a tap on it opens the Decode menu of that
+/// decoder; a second tap closes it.
+#[test]
+fn a_tap_on_the_name_of_a_decoder_opens_its_decode_menu() {
+    let mut u = fresh(Layout::Studio);
+    u.m.dec_on = true;
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let mut cv = Canvas::new(W, H);
+    u.render(&mut cv);
+    let labels = u.studio.dec_labels.borrow().clone();
+    let &(k, r) = labels.first().expect("the decoder has its name in the plot");
+    assert!(k == 0 && r.w >= 40 && r.h >= 18 && u.plot_rect().x <= r.x, "{r:?}");
+    let (x, y) = mid(r);
+    tap(&mut u, x, y);
+    assert!(u.menu_open && u.menu == MenuId::Decode && u.m.dec_sel == 0, "the Decode menu of decoder 1");
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-decode-menu.png"), crate::store::png_of(&cv)).unwrap();
+    }
+}
+
+/// The Decode sheet: what the protocol needs is on the first page with its lines (the baud rate of a UART, the mode
+/// of SPI), the B line of a differential pair is a setting, the lines are named by their role, and the protocol is
+/// chosen from its list, without steps.
+#[test]
+fn the_decode_sheet_has_the_protocols_rows_on_its_first_page() {
+    let mut u = fresh(Layout::Studio);
+    u.m.dec_on = true;
+    for name in ["UART", "SPI"] {
+        u.select_option(Item::DecProto, name);
+        u.open_menu(MenuId::Decode);
+        for _ in 0..3 { u.step(0.03); frame(&mut u); }
+        let spec = u.sheet_spec(MenuId::Decode).expect("Decode is a sheet");
+        let first = &spec.tabs[0].rows;
+        eprintln!("{name}: first page {:?} | settings {:?}", first.iter().map(|it| u.sheet_label(*it)).collect::<Vec<_>>(), spec.tabs[1].rows.iter().map(|it| u.sheet_label(*it)).collect::<Vec<_>>());
+        assert!(first.len() <= 7 && !first.contains(&Item::DecDiff), "{name}: {first:?}");
+        assert!(first.contains(&if name == "UART" { Item::DecBaud } else { Item::DecMode }), "{name}: its own setting is on the first page: {first:?}");
+        assert!(Ui::sheet_pick_plain(Item::DecProto) && u.sheet_row_kind(Item::DecProto) == RowKind::Pick);
+        if name == "SPI" { assert_ne!(u.sheet_label(Item::DecSrc2), u.sheet_label(Item::DecSrc), "the lines have their roles"); }
+        if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+            let mut cv = Canvas::new(W, H);
+            u.render(&mut cv);
+            let _ = std::fs::create_dir_all(&dir);
+            std::fs::write(std::path::Path::new(&dir).join(format!("walk-decode-{}.png", name.to_lowercase())), crate::store::png_of(&cv)).unwrap();
+        }
+        u.close_menu();
+    }
 }

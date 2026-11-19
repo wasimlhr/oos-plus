@@ -147,13 +147,15 @@ fn the_badge_row_has_one_named_button_that_opens_the_table_and_the_style_is_on_t
     assert!(!u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
     let (list, row) = (u.studio_list_chip(), u.studio_row());
-    assert!(list.right() == row.right() - 4 && list.w >= 60 && Ui::hit40(list).h >= 40, "{list:?} in {row:?}");
+    assert!(list.right() == row.right() - 4 && list.w >= 56 && Ui::hit40(list).h >= 40, "{list:?} in {row:?}");
     for (_, r) in u.studio_badges() { assert!(r.right() <= list.x, "badges end before the button"); }
     // it says what it opens
     let mut cv = Canvas::new(W, H);
     cv.au_start();
     u.render(&mut cv);
-    let want = format!("Meas \u{b7} {}", u.measurement_count());
+    // (it said "Meas . N" over the whole height of the row; now it is as small as a badge: the number of the
+    // measurements, or "+N" for the pinned ones without a place, and an arrow)
+    let want = match u.studio_badges_more() { Some((_, n)) => format!("+{n}"), None => u.measurement_count().to_string() };
     let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), clip, .. }
         if s == want && list.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= clip.2 && ink.2 <= list.right()));
     assert!(said, "the button says {want}");
@@ -163,7 +165,8 @@ fn the_badge_row_has_one_named_button_that_opens_the_table_and_the_style_is_on_t
     frame(&mut u);
     assert!(u.studio_classic() && u.m.studio_classic);
     assert!(!u.studio.compact && !u.studio.hide_badges);
-    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= u.studio_list_chip().x));
+    let at = u.studio_list_chip();
+    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= at.x || r.bottom() <= at.y || at.bottom() <= r.y), "no pair under the chip");
     shot(&mut u, "badges-classic");
     u.select_option(Item::BadgeStyle, "Studio");
     frame(&mut u);

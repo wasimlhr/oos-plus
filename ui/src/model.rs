@@ -1457,6 +1457,10 @@ pub struct Model {
     pub studio_state: String,
     /// Math channels not shown in the view shown (their definition is shared; `ui/views.rs`)
     pub math_hidden: [bool; crate::math::NMATH],
+    /// Channels that are on and not drawn (Channel > Hide trace): acquired, measured, decoded and the input of a
+    /// math trace as before, but without a trace, a lane and a ground mark. Switching a channel off took its math
+    /// trace and its measurements with it; this is the way to take only the picture away.
+    pub ch_hidden: [bool; NCH],
     /// The GEN chip and card are not shown in the view shown (the output itself, `afg_on`, is shared)
     pub gen_hidden: bool,
     /// Z input: this channel sets the brightness of the other traces (low edge of the screen = dark)
@@ -1922,6 +1926,7 @@ impl Default for Model {
             view_slots: Default::default(),
             studio_state: String::new(),
             math_hidden: [false; crate::math::NMATH],
+            ch_hidden: [false; NCH],
             gen_hidden: false,
             z_src: None,
             hist: Hist::Off,
@@ -2414,6 +2419,11 @@ impl Model {
 
     /// Settings of math channel `k` (the selected one from the edit fields).
     /// Whether math channel `k` is defined and shown in the view shown.
+    /// Channel `c` has a trace on the screen: it is on and not hidden (`ch_hidden`).
+    pub fn ch_drawn(&self, c: usize) -> bool {
+        c < NCH && self.ch[c].on && !self.ch_hidden[c]
+    }
+
     pub fn math_shown(&self, k: usize) -> bool {
         k < crate::math::NMATH && self.math_ch(k).op != crate::math::MathOp::Off && !self.math_hidden[k]
     }

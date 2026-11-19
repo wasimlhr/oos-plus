@@ -7,6 +7,43 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- The Decode sheet of Studio and Minimal (host-tested): what the protocol itself needs is on the first page with its
+  lines (the baud rate, data bits and parity of a UART, the mode of SPI), where it was on Settings; the B line of a
+  differential pair is on Settings; a line is named by its role in the protocol (MOSI, Clock, CS); the channels of
+  a line have their colours; and the protocol is chosen from its list, without the - and + steps. In Studio one
+  decoder shows its name without a number ("UART CH1"); several say which they are ("D2 SPI CH2").
+- Studio: the top bar has no Single button. The front panel has the key and the Menu the row; the Default layout
+  has none either. Its room goes to the read-out of the acquisition (host-tested).
+- Studio: the name of a decoder beside its band ("1 UART CH1") is a badge in the colour of its source, and a tap
+  on it opens the Decode menu of that decoder (host-tested).
+- Studio: a math trace has its badge at the left of its lane ("M1"), as a channel has (host-tested).
+- Studio: choosing Stacked or Overlay fits every signal to the height it then has (host-tested, not yet verified on
+  hardware). In Stacked each signal fills its own lane; in Overlay the signals lie on one another in the whole
+  plot. Each channel that is on gets the scale at which its signal spans at most six of the eight divisions and
+  the offset that puts it in the middle; a channel without a swing keeps its scale and is put in the middle. The
+  mode alone changed no channel before: offsets that kept four channels apart in one plot put each at the edge of
+  its lane, and Overlay with them looked like lanes (seen on a unit, 2026-11-18). A mode that comes with a set-up
+  or a view changes no channel.
+- Studio, the row of measurements (host-tested):
+  - The strip stands still: a column is as wide as its names and the widest value its units can give ("-00.0 mV"),
+    not as the values of the moment. With those the number of columns went from six to seven and back as the
+    values changed, and the whole strip moved every second (seen on a unit, 2026-11-18).
+  - The strip reads as the row of the Default layout does: a value in the colour of its source, its name in the
+    same colour, dimmer.
+  - The row ends with one small chip: the number of the measurements, or "+N" for the pinned ones without a place,
+    and an arrow; it opens the table. The button "Meas . N" over the whole height of the row and the "+N" chip
+    beside it, which did the same, took the room of two measurements.
+  - The classic strip reads as a table: a column is as wide as its own widest name and value, and the values of a
+    column begin at one place. Seven to nine pairs fit a line of the 1024 px screen where six did. The chip at the
+    end of the row is the last thing of a line that has the room after its pairs, not a column of its own.
+  - Four channels with measurements have a line of the strip each (it had three lines: the measurements of the
+    fourth channel were all behind "+N").
+  - The Menu button of the top bar is three lines; the gear read as a sun at that size.
+- Eye: a bit rate that was set and does not fit the record (under 2 samples a bit) is said in the plot, "2 Gb/s
+  needs a faster time base", and the eye of the faster time base is no longer left standing (host-tested).
+- `:UI:MENU?` lists Studio's View menu (its views, its two switches with what they stand at, Reset layout),
+  `:UI:MENU:SELect` takes a row of it by name and `:UI:MENU:CLOSe` closes it. It answered `""` while the menu was
+  open (seen on a unit, 2026-11-18).
 - Studio: with the badges hidden, the button that brings them back no longer costs a channel pill its scale. With
   four channels, the LA and the generator in the bottom bar each pill had 29 px left and "500 mV" was cut to
   "500m" (seen on a unit, 2026-11-18). Where the bar is that full the button is its eye alone and "+ Source" its
@@ -165,6 +202,11 @@ Fixed:
 
 Added:
 
+- Channel > Hide trace, `:CHANnel<n>:HIDE` (host-tested, not yet verified on hardware). The channel stays on
+  without its picture: it is acquired, measured and decoded and is the input of a math trace as before, and has
+  no trace, no lane and no ground mark. Switching a channel off was the only way to take its trace away, and
+  that took its math trace and its measurements with it. The channel's pill says "trace hidden" and its menu has
+  Hide trace / Show trace; the set-up holds the switch (`ch_hidden`).
 - Waveform files of other scopes open as references (Reference > Load file, the web remote; host-tested on files
   built for the tests and on public captures, not on a file saved by a unit here): a RIGOL `.wfm` file of a DHO800,
   DHO900 or DHO1000, with the channels labelled CH1 onwards; the math traces of a Siglent binary file, as F1 to

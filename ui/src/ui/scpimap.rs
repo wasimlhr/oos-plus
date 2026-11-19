@@ -51,6 +51,7 @@ pub(super) fn map() -> Vec<Row> {
         r(":CHANnel<n>:BWLimit", Item::ChBw(0), "Channel"),
         r(":CHANnel<n>:PROBe", Item::ChProbe(0), "Channel"),
         r(":CHANnel<n>:INVert", Item::ChInvert(0), "Channel"),
+        r(":CHANnel<n>:HIDE", Item::ChHide(0), "Channel"),
         r(":CHANnel<n>:POSition", Item::ChOffset(0), "Channel"),
         r(":CHANnel<n>:UNITs", Item::ChUnit(0), "Channel more"),
         r(":CHANnel<n>:VERNier", Item::ChFine, "Channel"),

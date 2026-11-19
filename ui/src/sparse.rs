@@ -47,7 +47,7 @@ pub fn draw_with(ph: &mut Phosphor, m: &Model, f: &Frame, wgt: u16, mode: Interp
         let mut out = b.borrow_mut();
         for c in 0..NCH {
             let v = &f.ch[c];
-            if !m.ch[c].on || v.len() < 2 {
+            if !m.ch_drawn(c) || v.len() < 2 {
                 continue;
             }
             out.clear();
@@ -209,7 +209,7 @@ mod tests {
         let window = m.time_per_div() as f64 * HDIV as f64;
         let rec = crate::board::to_record(&fr, m, POINTS, window, m.delay as f64 - window / 2.0);
         for c in 0..NCH {
-            if m.ch[c].on && !rec.ch[c].is_empty() {
+            if m.ch_drawn(c) && !rec.ch[c].is_empty() {
                 ph.draw_ex(c, m, (m.time_per_div(), m.delay), rec.t0, rec.dt, &rec.ch[c], 24, None, rec.pairs);
             }
         }
