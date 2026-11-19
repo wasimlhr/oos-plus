@@ -355,7 +355,10 @@ pub fn manchester_packets(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32)
             let t = e[i].t * dt;
             if (t - t_mid).abs() <= 0.35 * bit_t {
                 bits.push((e[i].t, e[i].rising));
-                t_mid += bit_t;
+                // the next middle is a bit time from this one: every bit has its edge, and the clock follows it. A
+                // clock that ran on from the first edge was a cell off before a long packet ended (seen on a unit:
+                // a frame of 10BASE-T, 880 bits, with a wrong byte and a wrong checksum)
+                t_mid = t + bit_t;
             } else if t > t_mid + 0.35 * bit_t {
                 t_mid += bit_t;
                 continue;
@@ -515,6 +518,30 @@ mod tests {
         let p = manchester(&v, dt, 1.0 / bit_t, 0.5, 0.05);
         assert!(p.iter().any(|x| x.kind == Kind::Data && x.value == 0xd5), "{:?}", p);
         let _ = t;
+    }
+
+    /// A long packet whose sender's clock is not the rate set: 1500 bytes at 200 ppm above it, the tolerance of two
+    /// Ethernet stations against each other. The clock follows the edge in the middle of every bit, and every byte
+    /// is read. A clock that ran on from the first edge was 2.4 bits off at the end.
+    #[test]
+    fn manchester_follows_the_clock_of_a_long_packet() {
+        let bytes: Vec<u8> = (0..1500u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
+        let bits: Vec<bool> = bytes.iter().flat_map(|b| (0..8).map(move |k| b >> k & 1 == 1)).collect();
+        // 16 samples a bit at the rate set; the line is 200 ppm faster
+        let bit = 16.0 / 1.0002;
+        let n = (bits.len() as f64 * bit) as usize;
+        let mut v = vec![0.0f32; 48];
+        v.extend((0..n).map(|i| {
+            let x = i as f64 / bit;
+            // a one: low, then high (802.3)
+            let (one, second) = (bits[(x as usize).min(bits.len() - 1)], x.fract() >= 0.5);
+            if one == second { 1.0 } else { 0.0 }
+        }));
+        v.extend(std::iter::repeat_n(0.0, 48));
+        let p = manchester(&v, 1.0, 1.0 / 16.0, 0.5, 0.05);
+        let got: Vec<u8> = p.iter().filter(|x| x.kind == Kind::Data).map(|x| x.value as u8).collect();
+        let same = got.iter().zip(&bytes).take_while(|(a, b)| a == b).count();
+        assert_eq!((got.len(), same), (bytes.len(), bytes.len()), "the first wrong byte is number {same}");
     }
 
     /// A line of 12-bit packets with 2.5 bit times of quiet line between them: every packet is read from its own

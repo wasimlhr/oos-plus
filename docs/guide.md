@@ -187,7 +187,9 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
 - Other: USB low/full speed, USB PD, parallel
 - Line codes: Manchester, MLT-3, C-PHY. A Manchester line that is quiet between its packets is read packet by
-  packet. A packet is its bits in the order sent, or its bytes; with Decode > Sync bits or Header bits above 0 it
+  packet. A packet that is an Ethernet frame (10BASE-T) shows its preamble, addresses, type, bytes and frame
+  check, which is marked where it does not fit; on the negative wire of the pair set "A one is" to Falling.
+  Any other packet is its bits in the order sent, or its bytes; with Decode > Sync bits or Header bits above 0 it
   is cut into fields: so many bits of sync, so many of header, words of Data bits, and what is left as the
   trailer ("SYNC 0 HDR 7 3C TRL 2"), each field with its first bit as the least significant
 - Model railways: NMRA DCC (contributed by Arjen Halma), with a view of the layout in Display > Second pane > Bus view:

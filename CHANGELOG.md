@@ -689,6 +689,21 @@ Changed:
   trigger point in each picture looked at (before: no frame in 70 s), and at 200 us/div in 18 of 19. At 5 us/div
   it takes none: the record there (35 kpts at 625 MSa/s, 56 us) is shorter than the frame, and the decoder gives
   nothing of a frame that is cut off.
+- Manchester on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: the 10BASE-T output of a
+  demo board, 10 Mbit/s, about 1 V each way around 0 V). The decoder reads its packets at the rate it finds in
+  the signal: a ping of 102 bytes with the right frame check, and frames the board changes on purpose (other
+  header bytes, a check that does not fit), the same in every record. Which edge is a one depends on the wire of
+  the pair that is probed: CH1 was on the negative one, and "Falling (Thomas)" read it. Not checked: the
+  positive wire on CH2 at a time base fast enough for it, and the two changes below on the unit (host-tested).
+  Two things it brought:
+  - A packet that is an Ethernet frame shows its parts in place of its bytes: the preamble with its delimiter,
+    the destination and the source address, the type, the bytes behind it and the frame check, which is marked
+    where the CRC-32 of the frame is another. As bytes alone the board's good and changed frames looked alike;
+    Trigger > Bus > Error now finds the changed ones. A frame the record cuts off has no check.
+  - The bit clock follows the edge in the middle of every bit. It ran on from the first edge of a packet at the
+    rate set or found, and was a cell off before a long packet ended where the sender's clock was another: a
+    packet of 1500 bytes at 200 ppm from the rate set went wrong from its byte 234 (host; the frames of the
+    board, 110 bytes, were read right before the change too). A rate set 8 % off now still reads the line.
 - Protocol trigger with Memory on Auto: the record is the screen and the length of a frame on each side of it
   (at most 1 Mpts), where it was a screen and an eighth. The trigger moves the record so that the field it found
   stands at the trigger point, and can move it only as far as the record reaches beyond the screen: 6 us at

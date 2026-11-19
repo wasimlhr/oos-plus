@@ -39,6 +39,47 @@ const FIELD_BITS: [&str; 17] =
 /// A Manchester packet cut into its fields: `sync` bits, `header` bits, words of `word` bits, and the bits that fill
 /// no word as the trailer. A field is its bits with the first one sent as the least significant, as a byte of the
 /// line is. `bits`: the middle of each bit (a sample index) and its value; `half`: half a bit time in samples.
+/// The shortest Ethernet frame, from its destination address to its check.
+const ETHERNET_MIN: usize = 64;
+
+/// A packet that is an Ethernet frame (10BASE-T), from its `bytes`: a preamble of 0x55 and the start delimiter 0xD5,
+/// then at least the two addresses and the type. Its parts in place of the bytes that hold them: the preamble with
+/// its delimiter (value = how many bytes), the destination and the source address, the type, the bytes behind it
+/// as they are, and the frame check as the last four bytes where the packet is `whole` (the record has its end)
+/// and long enough for a frame: `ok` where the CRC-32 over the frame is that check. None where the packet is no
+/// such frame (and with the other convention for a one it is none: every byte is the other one).
+///
+/// Seen on a unit: a board that sends a ping and frames changed on purpose, which differ in a few header bytes and
+/// have a check that does not fit; as bytes alone the two looked alike.
+fn ethernet_frame(bytes: &[Packet], whole: bool) -> Option<Vec<Packet>> {
+    let sfd = bytes.iter().position(|b| b.value != 0x55).filter(|&i| (1..=8).contains(&i) && bytes[i].value == 0xd5)?;
+    let frame = &bytes[sfd + 1..];
+    if frame.len() < 14 {
+        return None;
+    }
+    let be = |r: std::ops::Range<usize>| frame[r].iter().fold(0u32, |v, b| v << 8 | b.value & 0xff);
+    let span = |kind, of: &[Packet], value: u32, value2: Option<u32>, ok: bool| {
+        let (t0, t1) = (of[0].t0, of[of.len() - 1].t1);
+        Packet { t0, t1, kind, value, value2, ok }
+    };
+    let mut out = vec![
+        span(Kind::Field("PRE"), &bytes[..=sfd], sfd as u32 + 1, None, true),
+        span(Kind::Field("MAC"), &frame[..6], be(0..4), Some(be(4..6)), true),
+        span(Kind::Field("SRC"), &frame[6..12], be(6..10), Some(be(10..12)), true),
+        span(Kind::Field("TYPE"), &frame[12..14], be(12..14), None, true),
+    ];
+    let checked = whole && frame.len() >= ETHERNET_MIN;
+    let end = frame.len() - if checked { 4 } else { 0 };
+    out.extend(frame[14..end].iter().cloned());
+    if checked {
+        let raw: Vec<u8> = frame.iter().map(|b| b.value as u8).collect();
+        // the check is sent with its least significant byte first
+        let sent = u32::from_le_bytes([raw[end], raw[end + 1], raw[end + 2], raw[end + 3]]);
+        out.push(span(Kind::Crc, &frame[end..], sent, None, oos_dsp::decode_ext2::usbpd_crc32(&raw[..end]) == sent));
+    }
+    Some(out)
+}
+
 fn manchester_fields(bits: &[(f64, bool)], half: f64, sync: usize, header: usize, word: usize) -> Vec<Packet> {
     let mut out = Vec::new();
     let mut at = 0;
@@ -135,7 +176,10 @@ impl Protocol for Manchester {
             if sync + header > 0 {
                 out.extend(manchester_fields(&bits, half, sync, header, word));
             } else if n > 32 || n % 8 == 0 {
-                out.extend(manchester_fields(&bits[..n - n % 8], half, 0, 0, 8));
+                let bytes = manchester_fields(&bits[..n - n % 8], half, 0, 0, 8);
+                // (whole: the pause that ends the packet is in the record)
+                let whole = bits[n - 1].0 + 4.0 * half < l.main().len() as f64 - 1.0;
+                out.extend(ethernet_frame(&bytes, whole).unwrap_or(bytes));
             } else {
                 let value = bits.iter().fold(0u32, |v, b| v << 1 | b.1 as u32);
                 let (kind, t1) = (Kind::Field("PKT"), bits[n - 1].0 + half);
@@ -294,6 +338,70 @@ mod tests {
         assert!(p(&start) && Manchester.mark(&start));
     }
 
+    /// Packets of 10BASE-T: an Ethernet frame is its preamble, its addresses, its type, its bytes and its check, and
+    /// a frame with a byte changed has a check that does not fit. A frame that the record cuts off has no check,
+    /// and with the other convention for a one the packet is its bytes.
+    #[test]
+    fn an_ethernet_frame_in_manchester_packets_has_its_fields_and_its_check() {
+        // (addresses of the kind a station gives itself, none of a real one)
+        let mut frame: Vec<u8> = vec![0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02];
+        frame.extend([0x08, 0x00]);
+        frame.extend((0..46u8).map(|i| i.wrapping_mul(7)));
+        let fcs = oos_dsp::decode_ext2::usbpd_crc32(&frame);
+        frame.extend(fcs.to_le_bytes());
+        let mut changed = frame.clone();
+        changed[14] ^= 0x02;
+        // 16 samples a bit, a one rising in the middle, the first bit of a byte the least significant; 4 bit times
+        // of quiet line between the packets
+        let mut v = vec![0.0f32; 64];
+        for f in [&frame, &changed, &frame] {
+            let bytes = [0x55u8; 7].iter().chain([0xd5u8].iter()).chain(f.iter());
+            for one in bytes.flat_map(|b| (0..8).map(move |k| b >> k & 1 == 1)) {
+                v.extend(std::iter::repeat_n(if one { 0.0 } else { 1.0 }, 8));
+                v.extend(std::iter::repeat_n(if one { 1.0 } else { 0.0 }, 8));
+            }
+            v.extend(std::iter::repeat_n(0.0, 64));
+        }
+        // the record ends in the third frame
+        v.truncate(v.len() - 64 - 20 * 16);
+        let decode = |opt: [usize; OPTS]| {
+            let lines = [Some(&v[..]), None, None, None];
+            let sh = Shared::default();
+            let l = Lines { lines, dt: 1.0, thr: 0.5, hy: 0.05, opt, sh, chans: [None; 4], src: [None; 4] };
+            Manchester.decode(&l).unwrap()
+        };
+        let p = decode([MANCHESTER_AUTO, 0, 0, 0]);
+        let frames = oos_dsp::decode::frames(&p, |x| x.kind == Kind::Start);
+        assert_eq!(frames.len(), 3);
+        let kinds = |r: &std::ops::Range<usize>| -> Vec<Kind> {
+            p[r.clone()].iter().filter(|x| x.kind != Kind::Data).map(|x| x.kind).collect()
+        };
+        let (pre, mac, src, ty) = (Kind::Field("PRE"), Kind::Field("MAC"), Kind::Field("SRC"), Kind::Field("TYPE"));
+        let whole = vec![Kind::Start, pre, mac, src, ty, Kind::Crc];
+        assert_eq!(kinds(&frames[0]), whole);
+        assert_eq!(kinds(&frames[1]), whole);
+        assert_eq!(kinds(&frames[2]), whole[..5], "a frame the record cuts off has no check");
+        let field = |r: &std::ops::Range<usize>, kind: Kind| -> Packet {
+            p[r.clone()].iter().find(|x| x.kind == kind).cloned().unwrap()
+        };
+        let (to, from) = (field(&frames[0], mac), field(&frames[0], src));
+        assert_eq!((to.value, to.value2, from.value, from.value2), (0x0200_0000, Some(1), 0x0200_0000, Some(2)));
+        assert_eq!((field(&frames[0], pre).value, field(&frames[0], ty).value), (8, 0x0800));
+        // 46 bytes behind the type, the check with its value, right in the first frame and wrong in the second
+        let data = |r: &std::ops::Range<usize>| p[r.clone()].iter().filter(|x| x.kind == Kind::Data).count();
+        assert_eq!((data(&frames[0]), data(&frames[1])), (46, 46));
+        let (first, second) = (field(&frames[0], Kind::Crc), field(&frames[1], Kind::Crc));
+        assert_eq!((first.value, first.ok, second.value, second.ok), (fcs, true, fcs, false));
+        // every part lies where its bytes are: the fields of a frame follow each other without a gap
+        for w in p[frames[0].clone()].windows(2).skip(1) {
+            assert!((w[1].t0 - w[0].t1).abs() < 1.0, "{:?} {:?}", w[0], w[1]);
+        }
+        // the other convention: no frame, the bytes
+        let other = decode([MANCHESTER_AUTO, 1, 0, 0]);
+        assert!(other.iter().all(|x| matches!(x.kind, Kind::Start | Kind::Data)));
+        assert_eq!(other.iter().find(|x| x.kind == Kind::Data).map(|x| x.value), Some(0xaa));
+    }
+
     /// A packet that is no whole number of bytes as its text.
     #[test]
     fn a_manchester_packet_is_one_value_with_its_bits() {
@@ -347,10 +455,12 @@ mod tests {
         };
         let auto = values([MANCHESTER_AUTO, 0, 0, 0]);
         assert!(auto.len() >= 4, "{auto:02X?}");
-        // at the rate of the signal the bytes are read the same as with the rate given; at 115200 they are not
         let other = values([MANCHESTER_AUTO, 1, 0, 0]);
         assert_eq!(other, auto.iter().map(|v| !v & 0xff).collect::<Vec<_>>());
-        assert_ne!(values([7, 0, 0, 0]), auto, "115200 is 8 % off");
+        // a rate that is set and 8 % off still reads the line: the clock follows the edge in the middle of every
+        // bit. At less than half the rate of the line it does not
+        assert_eq!(values([7, 0, 0, 0]), auto, "115200 is 8 % off");
+        assert_ne!(values([6, 0, 0, 0]), auto, "57600");
     }
 
     #[test]

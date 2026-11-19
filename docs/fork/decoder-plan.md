@@ -154,6 +154,12 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       an address for a time and nothing of the run before it.
    4. The other buses of his demo board, as he connects them: CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC
       429, USB.
+      10BASE-T (2026-11-19, the negative wire on CH1 and the positive one on CH2, 10 Mbit/s): the Manchester
+      decoder read it on the unit from CH1 with "A one is" on Falling, a ping of 102 bytes with the right
+      frame check and the frames the board changes on purpose, the same in every record. It brought the parts
+      of an Ethernet frame with a marked frame check and a bit clock that follows the line (host-tested; not
+      on the unit, where installs are paused at the owner's word). Open: CH2 at a time base fast enough, the
+      Events pane and the trigger on a frame with a wrong check.
       Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope
       makes the traffic, decodes it and shows it. That checks the screen and the path of the decoder on the
       unit, not the decode of a real signal. All eight decode without an error; the band and the columns of the
