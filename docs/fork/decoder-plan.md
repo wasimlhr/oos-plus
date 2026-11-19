@@ -42,7 +42,7 @@ Per decoder:
 | MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault); command and status told apart | band, columns | unit |
 | ARINC 429 | capture: agrees, no errors | band | - |
 | USB | capture: full speed packets agree | band | - |
-| 1-Wire | capture: transactions agree | band | command names |
+| 1-Wire | capture: transactions agree | band, columns, ROM command names | - |
 | I3C | capture: commands and bytes as on the lines; one read differs from the reference | band | command names |
 | C-PHY | capture: **nothing decoded** at 50 Msym/s with low-power states | band | low rates, LP states |
 | Manchester | capture: the bits agree at the rate of the signal; no packet structure | band | structure |

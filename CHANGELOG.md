@@ -548,6 +548,10 @@ Changed:
   standard writes them. A message begins with its command, and the Events pane has the columns RT, T/R, SA,
   WC/MC, Data and Status. On the capture the 13 words that the picture of its instrument lists are told apart as
   the instrument tells them; a word it calls "Command/Status" is a command here.
+- 1-Wire decoder: a ROM command has its name, and a transaction has its columns (host-tested, and on a capture
+  of a real bus with two devices on the host; not yet verified on hardware). "ROM 55" reads "ROM 55 Match"
+  (Read, Match, Skip, Search, Alarm search and the two overdrive commands; the commands after them are those of a
+  device family and stay numbers). The Events pane has ROM, Family, Serial, CRC and Data.
 - FlexRay decoder: Decode > Bit rate, 10, 5 or 2.5 Mbit/s (host-tested; not yet verified on hardware). The
   decoder read at 10 Mbit/s alone, so a cluster at one of the two other rates of the standard gave nothing. The
   frame CRC of either channel passes, as before (`:BUS<n>:OPTion1`).

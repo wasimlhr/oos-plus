@@ -10,10 +10,41 @@ use oos_dsp::decode_ext as x1;
 
 pub struct OneWire;
 
+/// The ROM commands of 1-Wire, which every device has, by their names. The commands after them are those of a
+/// device family and stay numbers.
+const ROM_COMMANDS: [(u32, &str); 7] = [
+    (0x33, "Read"),
+    (0x55, "Match"),
+    (0xcc, "Skip"),
+    (0xf0, "Search"),
+    (0xec, "Alarm search"),
+    (0x69, "Overdrive match"),
+    (0x3c, "Overdrive skip"),
+];
+
 impl Protocol for OneWire {
     /// A frame begins with a reset: what follows it is one transaction.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
         Some(|p| p.kind == oos_dsp::decode::Kind::Field("!RESET"))
+    }
+    /// A ROM command with its name ("ROM 55 Match"); one that is none of them keeps its number alone.
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        if p.kind != oos_dsp::decode::Kind::Field("ROM") {
+            return None;
+        }
+        let name = ROM_COMMANDS.iter().find(|c| c.0 == p.value)?.1;
+        Some(format!("ROM {:02X} {}{}", p.value, name, if p.ok { "" } else { " !" }))
+    }
+    /// A transaction in the Events pane: its ROM command, the family, the serial number and the CRC of the ROM it
+    /// names, and the bytes after them.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[
+            ("ROM", Col::Label("ROM ")),
+            ("Family", Col::Label("FAM ")),
+            ("Serial", Col::Label("SER ")),
+            ("CRC", Col::Label("CRC ")),
+            ("Data", Col::Data),
+        ]
     }
     fn key(&self) -> &'static str {
         "OneWire"
@@ -67,6 +98,18 @@ impl Protocol for Ds2482 {
 #[cfg(test)]
 mod tests {
     use crate::model::Proto;
+
+    /// A ROM command has its name; a byte that is none keeps the text of its kind.
+    #[test]
+    fn a_rom_command_has_its_name() {
+        use super::*;
+        use oos_dsp::decode::Kind;
+        let rom = |value: u32| Packet { t0: 0.0, t1: 1.0, kind: Kind::Field("ROM"), value, value2: None, ok: true };
+        assert_eq!(OneWire.text(&rom(0x55), &[0; OPTS]).as_deref(), Some("ROM 55 Match"));
+        assert_eq!(OneWire.text(&rom(0xf0), &[0; OPTS]).as_deref(), Some("ROM F0 Search"));
+        assert_eq!(OneWire.text(&rom(0x12), &[0; OPTS]), None);
+        assert_eq!(OneWire.text(&Packet { kind: Kind::Data, ..rom(0x55) }, &[0; OPTS]), None);
+    }
 
     // Break it catches: a setup written while 1-Wire and the DS2482 were built in losing its protocol
     #[test]
