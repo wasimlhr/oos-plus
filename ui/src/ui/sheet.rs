@@ -198,7 +198,9 @@ impl Ui {
                 _ => Slot::Tab(1),
             }),
             M::Decode | M::Bus => (&["Decode", "Settings", "Bus"], |it| match it {
-                DecSel | DecOn | DecProto | DecIn | DecSrc | DecSrc2 | DecCs | DecSrc4 | DecDiff => Slot::Tab(0),
+                // (the B line of a differential pair is a setting of its own: on the first page it stood under the
+                // source of every UART, where most have none)
+                DecSel | DecOn | DecProto | DecIn | DecSrc | DecSrc2 | DecCs | DecSrc4 => Slot::Tab(0),
                 DecTable | DecExport => Slot::Foot(1),
                 BusLabel => Slot::Foot(2),
                 BusOn | BusPos | BusClk | BusClkThr | BusData | BusDataThr | BusRw => Slot::Tab(2),
@@ -460,6 +462,17 @@ impl Ui {
                     }
                 }
             }
+            // Decode: what the protocol itself needs (baud rate, bits, parity, the SPI mode, the CAN rate ...) follows
+            // its lines on the first page while that page has the room; the rest stays on Settings. They were all on
+            // the second page: a UART was switched on and read nothing until the baud rate was found there
+            if matches!(menu, MenuId::Decode | MenuId::Bus) && tabs.len() > 1 {
+                use Item::*;
+                while tabs[0].rows.len() < SHEET_MAX_ROWS {
+                    let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
+                    let row = tabs[1].rows.remove(i);
+                    tabs[0].rows.push(row);
+                }
+            }
             // Trigger: Sweep (Auto, Normal, Single) goes with the type and the source while that tab has the room. A
             // type with many rows of its own keeps it on Settings: an eighth row would take the sheet away
             if menu == MenuId::Trigger && tabs.len() > 1 && tabs[0].rows.len() < SHEET_MAX_ROWS {
@@ -606,6 +619,12 @@ impl Ui {
         }
     }
 
+    /// A list row without its steps: the value alone, which opens the list. For the protocol of a decoder: the
+    /// steps went through some forty names in an order that says nothing.
+    pub(super) fn sheet_pick_plain(it: Item) -> bool {
+        it == Item::DecProto
+    }
+
     /// Options and selection of a Choice row. The trigger type shows its common types inline and the rest behind More.
     pub(super) fn sheet_choice(&self, it: Item) -> (Vec<String>, Option<usize>) {
         if it == Item::TrigType {
@@ -692,6 +711,11 @@ impl Ui {
             // the rows below are those of one decoder of four: the switch says whose it is
             Item::DecSel => "Decoders".into(),
             Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),
+            // a line is named by what it is in the protocol (Clock, Data, CS), where the protocol says so
+            Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 => {
+                let role = match it { Item::DecSrc => 0, Item::DecSrc2 => 1, Item::DecCs => 2, _ => 3 };
+                self.m.dec_proto.roles()[role].map_or_else(|| self.item_label(it).to_string(), str::to_string)
+            }
             Item::RefSaveNext => self.ref_store_next_label(),
             Item::RowF(measrow::RF::Used | measrow::RF::StMean | measrow::RF::StRange | measrow::RF::StN) => self.measrow_text(it).unwrap_or_default(),
             _ => self.item_label(it).to_string(),
@@ -868,7 +892,12 @@ impl Ui {
                         if sel == Some(k) { cv.round_outline(r.inset(-1), 6, TEXT); cv.round_outline(r, 5, DARK_TEXT); }
                         continue;
                     }
-                    if sel == Some(k) {
+                    // the lines of a decoder: a channel in its colour, as its pill in the bottom bar
+                    let wave = matches!(it, Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 | Item::DecDiff).then(|| o.strip_prefix("CH").and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=NCH).contains(n)).map(|n| CH_COLORS[n - 1])).flatten();
+                    if let Some(col) = wave {
+                        if sel == Some(k) { cv.round(r, 5, col, 255); } else { btn(cv, r, BTN, col); }
+                        cv.text_in(&f.sb, r, 1, o, if sel == Some(k) { DARK_TEXT } else { col });
+                    } else if sel == Some(k) {
                         cv.round(r, 5, ACCENT, 255);
                         cv.text_in(&f.sb, r, 1, o, DARK_TEXT);
                     } else if it == Item::DecSel && self.m.dec_is_on(k) {
@@ -883,10 +912,14 @@ impl Ui {
                 }
             }
             RowKind::Pick => {
-                // - value +: the steps of the dialog of the Default layout, and the value opens the list
-                let (mi, mid, pl) = Self::value_parts(c);
-                btn(cv, mi, BTN, BTN_BORDER);
-                Self::draw_sign(cv, mi, false);
+                // - value +: the steps of the dialog of the Default layout, and the value opens the list. A row
+                // whose list is long and has no order (the protocol of a decoder) is the value alone
+                let plain = Self::sheet_pick_plain(it);
+                let (mi, mid, pl) = if plain { (Rect::new(c.x, c.y, 0, 0), c, Rect::new(c.right(), c.y, 0, 0)) } else { Self::value_parts(c) };
+                if !plain {
+                    btn(cv, mi, BTN, BTN_BORDER);
+                    Self::draw_sign(cv, mi, false);
+                }
                 btn(cv, mid, BTN, BTN_BORDER);
                 let v = self.value(it);
                 let font = if f.m.width(&v) > mid.w - 34 { &f.s } else { &f.m };
@@ -894,8 +927,10 @@ impl Ui {
                 cv.text_in(font, Rect::new(mid.x + 10, mid.y, mid.w - 34, mid.h), 0, &v, TEXT);
                 cv.no_clip();
                 chevron_down(cv, mid.x + mid.w - 18, mid.y + mid.h / 2 - 3, DIM);
-                btn(cv, pl, BTN, BTN_BORDER);
-                Self::draw_sign(cv, pl, true);
+                if !plain {
+                    btn(cv, pl, BTN, BTN_BORDER);
+                    Self::draw_sign(cv, pl, true);
+                }
             }
             RowKind::Number => {
                 let (mi, mid, pl) = Self::value_parts(c);
@@ -1044,6 +1079,9 @@ impl Ui {
                     return self.open_picker(it);
                 }
                 self.select_option(it, &opts[k]);
+            }
+            RowKind::Pick if Self::sheet_pick_plain(it) => {
+                if row.ctrl.contains(x, y) || row.label.contains(x, y) { self.open_picker(it); }
             }
             RowKind::Pick => {
                 let (mi, _, pl) = Self::value_parts(row.ctrl);

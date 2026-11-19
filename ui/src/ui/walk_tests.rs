@@ -1912,7 +1912,8 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
         u.render(&mut cv);
         let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
         for (k, name) in ["UART", "I2C", "SPI", "CAN"].iter().enumerate() {
-            let want = format!("{} {} CH{}", k + 1, name, k + 1);
+            // Studio names several decoders "D1 UART CH1" (one alone has no number); the other layouts as before
+            let want = if layout == Layout::Studio { format!("D{} {} CH{}", k + 1, name, k + 1) } else { format!("{} {} CH{}", k + 1, name, k + 1) };
             assert!(texts.iter().any(|t| t.starts_with(&want)), "{layout:?}: no bus named {want:?} on the plot");
         }
     }
@@ -2754,5 +2755,33 @@ fn a_tap_on_the_name_of_a_decoder_opens_its_decode_menu() {
         u.render(&mut cv);
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(std::path::Path::new(&dir).join("walk-decode-menu.png"), crate::store::png_of(&cv)).unwrap();
+    }
+}
+
+/// The Decode sheet: what the protocol needs is on the first page with its lines (the baud rate of a UART, the mode
+/// of SPI), the B line of a differential pair is a setting, the lines are named by their role, and the protocol is
+/// chosen from its list, without steps.
+#[test]
+fn the_decode_sheet_has_the_protocols_rows_on_its_first_page() {
+    let mut u = fresh(Layout::Studio);
+    u.m.dec_on = true;
+    for name in ["UART", "SPI"] {
+        u.select_option(Item::DecProto, name);
+        u.open_menu(MenuId::Decode);
+        for _ in 0..3 { u.step(0.03); frame(&mut u); }
+        let spec = u.sheet_spec(MenuId::Decode).expect("Decode is a sheet");
+        let first = &spec.tabs[0].rows;
+        eprintln!("{name}: first page {:?} | settings {:?}", first.iter().map(|it| u.sheet_label(*it)).collect::<Vec<_>>(), spec.tabs[1].rows.iter().map(|it| u.sheet_label(*it)).collect::<Vec<_>>());
+        assert!(first.len() <= 7 && !first.contains(&Item::DecDiff), "{name}: {first:?}");
+        assert!(first.contains(&if name == "UART" { Item::DecBaud } else { Item::DecMode }), "{name}: its own setting is on the first page: {first:?}");
+        assert!(Ui::sheet_pick_plain(Item::DecProto) && u.sheet_row_kind(Item::DecProto) == RowKind::Pick);
+        if name == "SPI" { assert_ne!(u.sheet_label(Item::DecSrc2), u.sheet_label(Item::DecSrc), "the lines have their roles"); }
+        if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+            let mut cv = Canvas::new(W, H);
+            u.render(&mut cv);
+            let _ = std::fs::create_dir_all(&dir);
+            std::fs::write(std::path::Path::new(&dir).join(format!("walk-decode-{}.png", name.to_lowercase())), crate::store::png_of(&cv)).unwrap();
+        }
+        u.close_menu();
     }
 }

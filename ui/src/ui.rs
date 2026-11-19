@@ -5446,6 +5446,11 @@ impl Ui {
         }
         let name = if m.dec_on_la() { format!("{} {}", k + 1, m.dec_proto.name()) }
             else { format!("{} {} {}", k + 1, m.dec_proto.name(), decode_source_name(m.dec_src)) };
+        // Studio: one decoder needs no number ("UART CH1"); with several each says which it is ("D2 SPI CH2")
+        let name = if self.m.layout != Layout::Studio { name } else {
+            let rest = name.split_once(' ').map_or(name.as_str(), |(_, rest)| rest).to_string();
+            if (0..4).filter(|&d| self.m.dec_is_on(d)).count() > 1 { format!("D{} {}", k + 1, rest) } else { rest }
+        };
         if self.m.layout == Layout::Studio {
             // Studio: the name is a badge in the colour of the decoder's source, and a tap on it opens the Decode
             // menu of this decoder (`studio.dec_labels`)

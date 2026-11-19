@@ -7,6 +7,11 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- The Decode sheet of Studio and Minimal (host-tested): what the protocol itself needs is on the first page with its
+  lines (the baud rate, data bits and parity of a UART, the mode of SPI), where it was on Settings; the B line of a
+  differential pair is on Settings; a line is named by its role in the protocol (MOSI, Clock, CS); the channels of
+  a line have their colours; and the protocol is chosen from its list, without the - and + steps. In Studio one
+  decoder shows its name without a number ("UART CH1"); several say which they are ("D2 SPI CH2").
 - Studio: the name of a decoder beside its band ("1 UART CH1") is a badge in the colour of its source, and a tap
   on it opens the Decode menu of that decoder (host-tested).
 - Studio: a math trace has its badge at the left of its lane ("M1"), as a channel has (host-tested).
