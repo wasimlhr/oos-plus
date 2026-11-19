@@ -69,6 +69,20 @@ impl Protocol for Jtag {
     fn setup(&self) -> Setup {
         Setup { src: [Some(0), Some(1), Some(2), Some(3)], ..Setup::default() }
     }
+    /// A probe asks a device for its identification, TCK at 1 MHz: a reset of the TAP, the instruction 1110 into
+    /// the instruction register, and 32 bits out of the data register (4BA00477), every 100 us.
+    fn demo(&self) -> Option<Demo> {
+        let mut g = x2::gen::JtagGen::new();
+        g.reset();
+        g.idle(2);
+        let bits = |v: u32, n: u32| -> Vec<bool> { (0..n).map(|k| v >> k & 1 == 1).collect() };
+        g.shift(true, &bits(0b1110, 4), &bits(0b0001, 4), None);
+        g.shift(false, &bits(0, 32), &bits(0x4ba0_0477, 32), None);
+        g.idle(4);
+        let [tck, tms, tdi, tdo] = g.logic(1e6, 0.0, 3.3);
+        let line = |l: oos_dsp::sim::Logic| -> Option<DemoLine> { Some(Box::new(move |t| l.v(t))) };
+        Some(Demo { period: 100e-6, lines: [line(tms), line(tck), line(tdi), line(tdo)] })
+    }
 }
 
 #[cfg(test)]

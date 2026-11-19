@@ -93,11 +93,48 @@ impl Protocol for Ds2482 {
     fn setup(&self) -> Setup {
         Setup { la: [Some(13), Some(12), None, None], ..Setup::default() }
     }
+    /// A bridge at address 18h is told to reset the 1-Wire line and to send Skip ROM and the command 44h, and is
+    /// asked for its status after each: I2C at 400 kHz, a round every 800 us.
+    fn demo(&self) -> Option<Demo> {
+        use oos_dsp::sim::{i2c_logic, I2cXfer};
+        let xfer = |read: bool, data: &[u8]| {
+            I2cXfer { addr: 0x18, read, data: data.to_vec(), repeated: false, stop: true }
+        };
+        // (the status: the 1-Wire line is not busy; after the reset a device answered, presence pulse detected)
+        let (write, status) = (|data: &[u8]| xfer(false, data), |v: u8| xfer(true, &[v]));
+        let reset = [write(&[0xb4]), status(0x0a)];
+        let bytes = [write(&[0xa5, 0xcc]), status(0x08), write(&[0xa5, 0x44]), status(0x08)];
+        let round: Vec<I2cXfer> = reset.into_iter().chain(bytes).collect();
+        let (sda, scl) = i2c_logic(&round, 400e3, 0.0, 3.3);
+        let (sda, scl): (DemoLine, DemoLine) = (Box::new(move |t| sda.v(t)), Box::new(move |t| scl.v(t)));
+        Some(Demo { period: 800e-6, lines: [Some(sda), Some(scl), None, None] })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::model::Proto;
+
+    /// The demo of the bridge reads as the 1-Wire operations its commands start.
+    #[test]
+    fn the_bridge_demo_is_a_reset_and_two_bytes() {
+        use super::*;
+        let demo = Ds2482.demo().unwrap();
+        let dt = 2.5e-6 / 20.0;
+        let wave = |k: usize| -> Vec<f32> {
+            let line = demo.lines[k].as_ref().unwrap();
+            (0..(demo.period / dt) as usize).map(|i| line(i as f64 * dt) as f32).collect()
+        };
+        let (sda, scl, sh) = (wave(0), wave(1), Shared::default());
+        let lines = [Some(&sda[..]), Some(&scl[..]), None, None];
+        let l = Lines { lines, dt, thr: 1.65, hy: 0.2, opt: [0; OPTS], sh, chans: [None; 4], src: [None; 4] };
+        let p = Ds2482.decode(&l).unwrap();
+        let said: Vec<String> = p.iter().map(|x| format!("{:?} {:02X}", x.kind, x.value)).collect();
+        assert!(p.iter().all(|x| x.ok) && p.len() >= 4, "{said:?}");
+        use oos_dsp::decode::Kind;
+        let has = |kind: Kind, value: u32| p.iter().any(|x| x.kind == kind && x.value == value);
+        assert!(has(Kind::Field("!RESET"), 0) && has(Kind::Field("ROM"), 0xcc) && has(Kind::Data, 0x44), "{said:?}");
+    }
 
     /// A ROM command has its name; a byte that is none keeps the text of its kind.
     #[test]
