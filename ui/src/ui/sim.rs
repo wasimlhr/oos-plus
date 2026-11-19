@@ -1038,18 +1038,26 @@ impl Ui {
 }
 
 fn nearest_vdiv(want: f32) -> f32 {
-    VSCALES.iter().copied().min_by(|a, b| (a - want).abs().partial_cmp(&(b - want).abs()).unwrap()).unwrap_or(0.2)
+    VSCALES.iter().copied().min_by(|a, b| (a - want).abs().total_cmp(&(b - want).abs())).unwrap_or(0.2)
 }
 
 fn nearest_tscale(want: f64) -> usize {
     let ts = tscales();
-    ts.iter().copied().enumerate().min_by(|(_, a), (_, b)| (*a as f64 - want).abs().partial_cmp(&(*b as f64 - want).abs()).unwrap()).map(|(i, _)| i).unwrap_or(0)
+    ts.iter().copied().enumerate().min_by(|(_, a), (_, b)| (*a as f64 - want).abs().total_cmp(&(*b as f64 - want).abs())).map(|(i, _)| i).unwrap_or(0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::wave::Source;
+
+    /// A wanted scale of NaN: the nearest scale was chosen with `partial_cmp(..).unwrap()`, which panicked; every
+    /// distance is NaN now and the first scale is taken.
+    #[test]
+    fn nearest_scale_of_nan_takes_the_first() {
+        assert_eq!((nearest_vdiv(f32::NAN), nearest_tscale(f64::NAN)), (VSCALES[0], 0));
+        assert_eq!(nearest_vdiv(0.21), 0.2);
+    }
 
     fn ui() -> Ui {
         Ui::new(Source::Demo { t: 0.0 })

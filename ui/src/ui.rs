@@ -6381,8 +6381,9 @@ impl Ui {
     /// Left of the network box while a WLAN stick is plugged in.
     fn wlan_box(&self) -> Rect {
         let n = self.net_box();
-        let w = if self.m.text_size == TextSize::Normal { 104 } else { n.w };
-        Rect::new(n.x - 6 - w, n.y, w, n.h)
+        // as wide as LAN: room for an address (upstream issue #23: at the normal text size 104 px were too narrow for
+        // 192.168.177.164 in the bold small font, 113 px)
+        Rect::new(n.x - 6 - n.w, n.y, n.w, n.h)
     }
     /// Start menu button left of the channel cards (all menus and key functions by touch).
     /// The fork's compact bottom bar on the panel; `menu_btn` follows the frame on other screens.
@@ -7000,6 +7001,12 @@ impl Ui {
             m |= 1 << 4;
         } else {
             m |= 1 << 5;
+        }
+        if self.m.la.on {
+            m |= 1 << 8;
+        }
+        if self.m.afg_on {
+            m |= 1 << 9; // G1 (GI); G2 has no LED on the DHO900
         }
         if self.m.touch_lock {
             m |= 1 << 11;
@@ -13458,6 +13465,38 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(3));
         }
         assert!(n(&u) >= 20, "{} results taken in 120 frames", n(&u));
+    }
+
+    // Break it catches: a WLAN box too narrow for an address at the normal text size, its text running out of the box
+    // (upstream #255)
+    #[test]
+    fn the_wlan_box_has_room_for_an_address() {
+        use super::*;
+
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        for ts in [TextSize::Normal, TextSize::Large] {
+            ui.m.text_size = ts;
+            let f = ui.fonts();
+            assert!(20 + f.sb.width("255.255.255.255") <= ui.wlan_box().w, "{:?}: {:?}", ts, ui.wlan_box());
+        }
+    }
+
+    // Break it catches: the G and LA lamps of the front panel dark while the generator output and the LA are on
+    // (upstream #233; bits 8 and 9 were documented but never set)
+    #[test]
+    fn generator_and_la_light_their_front_panel_leds() {
+        use super::*;
+
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let off = ui.leds();
+        assert_eq!(off & (1 << 8), 0, "LA off");
+        assert_eq!(off & (1 << 9), 0, "GEN off");
+        ui.m.afg_on = true;
+        assert_ne!(ui.leds() & (1 << 9), 0, "G1 on while generator output is on");
+        ui.m.afg_on = false;
+        ui.m.la.on = true;
+        assert_ne!(ui.leds() & (1 << 8), 0, "LA on");
+        assert_eq!(ui.leds() & (1 << 9), 0, "G1 stays off without afg_on");
     }
 
     /// Measure > Add item: a second tap on a measurement removes it again, the others stay.

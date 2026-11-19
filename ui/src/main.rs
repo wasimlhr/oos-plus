@@ -697,6 +697,8 @@ fn device_main(mut ui: Ui, args: &[String]) {
     let mut mdns = mdns::Mdns::new(None);
     let mut mdns_now: Option<mdns::Config> = None;
     let mut mdns_t: Option<Instant> = None;
+    // when the ports of web and SCPI were last tried again
+    let mut listen_t: Option<Instant> = None;
     // HDMI mirror: a monitor is looked for every 3 s and gets the panel picture at 15 frames/s (`--no-hdmi`: off)
     let hdmi_on = !args.iter().any(|a| a == "--no-hdmi");
     let mut hdmi: Option<drm::Display> = None;
@@ -764,6 +766,16 @@ fn device_main(mut ui: Ui, args: &[String]) {
             }
             web.offer(http::Offer { scpi_port: scpi.port(), vxi11: vxi.service_port().is_some(), hislip_port: hislip.port() });
             remote_now = Some(want);
+        }
+        // a port the oos-ui before this one still held at the start is tried again once a second, while its switch is
+        // on: before, SCPI and the web page stayed off until the next start
+        if listen_t.is_none_or(|t| t.elapsed().as_secs() >= 1) {
+            listen_t = Some(Instant::now());
+            let web_again = want[0] && web.listen_again(web_port);
+            let scpi_again = want[1] && scpi.listen_again(scpi_port);
+            if web_again || scpi_again {
+                web.offer(http::Offer { scpi_port: scpi.port(), vxi11: vxi.service_port().is_some(), hislip_port: hislip.port() });
+            }
         }
         if mdns_t.map_or(true, |t| t.elapsed().as_secs() >= 1) {
             mdns_t = Some(Instant::now());

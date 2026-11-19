@@ -969,16 +969,16 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
                 return Err("bode_sweep: want 7 values".into());
             }
             let f = |s: &str| s.parse::<f64>().map_err(|e| e.to_string());
-            m.bode_sw_time = f(w[0])?;
-            if !m.bode_sw_time.is_finite() || m.bode_sw_time <= 0.0 {
+            // the whole line is read before any of it is taken: a refused line leaves the model as it was
+            let time = f(w[0])?;
+            if !time.is_finite() || time <= 0.0 {
                 return Err("bode_sweep: the sweep time must be above 0".into());
             }
-            m.bode_sw_log = p_bool(w[1])?;
-            m.bode_sync = p_idx(w[2], NCH + 1)?.max(1) - 1;
-            m.bode_sync_slope = p_enum(w[3], &SLOPES[..2])?;
-            m.bode_sync_level = p_f32(w[4])?;
-            m.bode_sw_in = p_idx(w[5], NCH + 1)?;
-            m.bode_ref = f(w[6])?;
+            let (log, sync) = (p_bool(w[1])?, p_idx(w[2], NCH + 1)?.max(1) - 1);
+            let (slope, level) = (p_enum(w[3], &SLOPES[..2])?, p_f32(w[4])?);
+            let (input, reference) = (p_idx(w[5], NCH + 1)?, f(w[6])?);
+            (m.bode_sw_time, m.bode_sw_log, m.bode_sync, m.bode_sync_slope) = (time, log, sync, slope);
+            (m.bode_sync_level, m.bode_sw_in, m.bode_ref) = (level, input, reference);
         }
         "spec" => {
             let w: Vec<&str> = v.split_whitespace().collect();
@@ -1822,7 +1822,7 @@ fn parse_oosw(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
     let dt = f64::from_le_bytes(b[20..28].try_into().unwrap());
     let t0 = f64::from_le_bytes(b[28..36].try_into().unwrap());
     if n > MAX_WAVEFORM_SAMPLES { return Err("waveform exceeds the 32-million-sample import limit".into()); }
-    if nch == 0 || nch > 8 || n < 2 || !dt.is_finite() || dt <= 0.0 || !t0.is_finite() {
+    if nch == 0 || nch > 8 || !oosw_timing_ok(n, dt, t0) {
         return Err("that file holds no waveform".into());
     }
     let need = n.checked_mul(4).and_then(|bytes| bytes.checked_add(4)).and_then(|bytes| bytes.checked_mul(nch)).and_then(|bytes| bytes.checked_add(36)).ok_or("OOS waveform is too large")?;
@@ -1903,6 +1903,10 @@ fn parse_wave_csv(text: &str, name: &str) -> Result<Vec<WaveTrace>, String> {
         (a, b, lines) if lines >= 2 && b > a => (b - a) / (lines - 1) as f64,
         _ => return Err("that file holds no waveform".into()),
     };
+    // the time base the binary readers ask for: a time of inf gives an infinite step or start
+    if !oosw_timing_ok(rows, dt, first) {
+        return Err("that file holds no waveform".into());
+    }
     let ntrace = columns.len();
     Ok(columns.into_iter().enumerate().map(|(k, v)| {
         let label = if ntrace == 1 { name.into() } else { format!("CH{}", k + 1) };
@@ -2940,6 +2944,12 @@ pub fn parse_session(b: &[u8], slots: usize) -> Result<Session, String> {
     Ok(Session { setup, record, refs, offline_ref })
 }
 
+/// The time base and length every reader of an OOSW record asks for: two samples or more, a finite start and a finite
+/// step above zero. Indexing, cursors and measurements divide by the step and add to the start.
+fn oosw_timing_ok(n: usize, dt: f64, t0: f64) -> bool {
+    n >= 2 && dt.is_finite() && dt > 0.0 && t0.is_finite()
+}
+
 /// One OOSW blob: the record and the number of bytes consumed.
 pub fn parse_wave_bin(b: &[u8]) -> Result<(Record, usize), String> {
     if b.len() < 36 || &b[..4] != b"OOSW" {
@@ -2955,7 +2965,7 @@ pub fn parse_wave_bin(b: &[u8]) -> Result<(Record, usize), String> {
     let n = usize::try_from(u64_le(b, 12).unwrap_or(0)).unwrap_or(usize::MAX);
     let dt = f64_le(b, 20).unwrap_or(0.0);
     let t0 = f64_le(b, 28).unwrap_or(0.0);
-    if nch == 0 || nch > NCH || dt <= 0.0 {
+    if nch == 0 || nch > NCH || !oosw_timing_ok(n, dt, t0) {
         return Err("waveform header".into());
     }
     if n > MAX_WAVEFORM_SAMPLES {
@@ -3062,6 +3072,12 @@ pub fn mask_text(src: usize, x: f32, y: f32, inv: bool, v: &[f32]) -> String {
 }
 
 pub fn parse_mask(text: &str) -> Result<MaskFile, String> {
+    // a tolerance is a number: inf or NaN would become the margin of the mask in the model
+    let tolerance = |v: &str| match v.trim().parse::<f32>() {
+        Ok(t) if t.is_finite() => Ok(t),
+        Ok(t) => Err(format!("mask tolerance {}", t)),
+        Err(e) => Err(e.to_string()),
+    };
     let mut lines = text.lines().peekable();
     let mut src = None;
     let mut x = None;
@@ -3088,8 +3104,8 @@ pub fn parse_mask(text: &str) -> Result<MaskFile, String> {
                     }
                     src = Some(n - 1);
                 }
-                "x" => x = Some(v.trim().parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
-                "y" => y = Some(v.trim().parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
+                "x" => x = Some(tolerance(v)?),
+                "y" => y = Some(tolerance(v)?),
                 "inv" => inv = Some(matches!(v.trim(), "1" | "true" | "on")),
                 _ => {}
             }
@@ -3372,11 +3388,13 @@ pub fn ppm_into(b: &[u8], cv: &mut Canvas) -> Option<(i32, i32)> {
         while p < b.len() && b[p].is_ascii_digit() {
             p += 1;
         }
-        fields.push(std::str::from_utf8(&b[s..p]).ok()?.parse::<i32>().ok()?);
+        // a header that ends inside a comment leaves p one past the end: no field
+        fields.push(std::str::from_utf8(b.get(s..p)?).ok()?.parse::<i32>().ok()?);
     }
     let (w, h, max) = (fields[0], fields[1], fields[2]);
     p += 1;
-    if max != 255 || w <= 0 || h <= 0 || b.len() < p + (w * h * 3) as usize {
+    // the size in usize (64 bits hold 3 * 2^31 * 2^31): in i32 it overflows past 2^31
+    if max != 255 || w <= 0 || h <= 0 || b.len() < p + w as usize * h as usize * 3 {
         return None;
     }
     cv.fill(crate::gfx::Rect::new(0, 0, cv.w, cv.h), 0);
@@ -3385,7 +3403,7 @@ pub fn ppm_into(b: &[u8], cv: &mut Canvas) -> Option<(i32, i32)> {
         for x in 0..w {
             let (cx, cy) = (ox + x, oy + y);
             if (0..cv.w).contains(&cx) && (0..cv.h).contains(&cy) {
-                let k = p + ((y * w + x) * 3) as usize;
+                let k = p + (y as usize * w as usize + x as usize) * 3;
                 cv.px[(cy * cv.w + cx) as usize] = crate::gfx::rgb(b[k] as u32, b[k + 1] as u32, b[k + 2] as u32);
             }
         }
@@ -3409,6 +3427,46 @@ pub fn sync_disks() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Break it catches: an OOSW record with a time base of NaN or inf, or of one sample, taken as a Record whose
+    // times indexing, cursors and measurements use (upstream #178)
+    #[test]
+    fn a_waveform_with_a_non_finite_time_base_is_refused() {
+        let two = [0.0f32, 1.0];
+        for (t0, dt) in [(0.0, f64::NAN), (0.0, f64::INFINITY), (0.0, 0.0), (0.0, -1e-9), (f64::NAN, 1e-9), (f64::NEG_INFINITY, 1e-9)] {
+            let b = wave_bin_of(t0, dt, &[(0, &two)]);
+            assert!(parse_wave_bin(&b).is_err(), "t0 {t0} dt {dt}");
+            assert!(parse_oosw(&b).is_err(), "t0 {t0} dt {dt}");
+        }
+        assert!(parse_wave_bin(&wave_bin_of(0.0, 1e-9, &[(0, &[1.0])])).is_err(), "one sample");
+        let b = wave_bin_of(-1e-6, 1e-9, &[(0, &two)]);
+        let (r, _) = parse_wave_bin(&b).unwrap();
+        let t = parse_oosw(&b).unwrap();
+        assert_eq!((r.t0, r.dt, r.ch[0].clone()), (t[0].t0, t[0].dt, t[0].v.clone()));
+    }
+
+    // Break it catches: files whose numbers are no numbers or whose header ends early taken, or a panic (upstream
+    // #219): a CSV time of inf, a mask tolerance of inf or NaN, a power-on picture that ends inside a comment or
+    // whose size overflows i32, a bode_sweep line that keeps its first values when a later one is refused
+    #[test]
+    fn files_with_values_out_of_range_are_refused_whole() {
+        assert!(parse_wave_csv("0,1\ninf,2\n", "x").is_err());
+        assert!(parse_wave_csv("-inf,1\n0,2\n", "x").is_err());
+        assert!(parse_wave_csv("0,1\n1e-3,2\n", "x").is_ok());
+        let mask = mask_text(0, 0.1, 0.1, false, &[0.0, 1.0]);
+        assert!(parse_mask(&mask).is_ok());
+        for bad in ["x=inf", "x=NaN", "y=-inf"] {
+            let t = mask.replacen(if bad.starts_with('x') { "x=0.1" } else { "y=0.1" }, bad, 1);
+            assert!(parse_mask(&t).is_err(), "{bad}");
+        }
+        let mut cv = crate::gfx::Canvas::new(8, 8);
+        assert!(ppm_into(b"P6\n#", &mut cv).is_none());
+        assert!(ppm_into(b"P6 65536 65536 255\n\0\0\0", &mut cv).is_none());
+        let (def, _) = parse_setup_lenient("");
+        let (m, errs) = parse_setup_lenient("bode_sweep = 7 maybe 1 rise 0 0 0\n");
+        assert!(!errs.is_empty());
+        assert_eq!(m.bode_sw_time, def.bode_sw_time, "a refused line leaves the model as it was");
+    }
 
     // Break it catches: a save command given a path into the vendor's data wrote there (ADR 0009).
     #[test]

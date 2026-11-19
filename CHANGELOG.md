@@ -7,6 +7,24 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Fixes taken from upstream OOS (host-tested only; none of them ran on a unit):
+  - Calibration (upstream #247): a cal_vertical.hex with 64-byte records, as a DHO804 writes it, is read at 64
+    bytes; it was read at 56, its gain codes came from the wrong place and the UI stopped at every start. A file
+    whose scale keys are out of order or whose gain codes are out of range is not used: the scope starts
+    uncalibrated and the boot check says the vertical file is missing or damaged. A self-calibration keeps the
+    file's record size.
+  - Acquisition (upstream #229): frame 0 of a small batch is kept when its edge is at the trigger point.
+  - Trigger (upstream #242): the level marker stays when the source channel is on AC coupling.
+  - The G1 and LA lamps of the front panel follow the generator output and the logic analyser (upstream #233).
+  - The WLAN box of the top bar has room for an address at the normal text size (upstream #255).
+  - Eye: Eye Width leaves out the picture's own spread of the crossing (upstream #244); SSC deviation and rate are
+    measured on the modulation (upstream #249).
+  - DCC: no holes at a phase slip, no broken packet at a false start (upstream #234).
+  - A NaN no longer stops the UI where a nearest or sorted value is taken (upstream #179).
+  - SCPI and the web page take their port once it is free when it was taken at the start (upstream #217).
+  - Outside input that is no number, never ends or nests too deep is refused: stored waveforms and settings, SSH
+    keys, mDNS names, USBTMC, system.conf, QSPI frames, update packages (upstream #178, #219, #223).
+  - An update's kexec start with the same device tree goes through kexec-tools too (upstream #203).
 - Cursors and the multipurpose knobs (host-tested): with the cursors on, the first knob moves cursor A and the
   second cursor B, with no menu open and with the Cursor menu that the Cursor key and button open. A turn opened
   the Menu, and in the Cursor menu it stepped through the rows, so no knob moved a cursor. A push opens or closes

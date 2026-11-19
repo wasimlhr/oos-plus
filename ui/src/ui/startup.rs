@@ -299,7 +299,7 @@ fn interlace(cv: &mut Canvas, area: Rect, paths: &[Vec<(f32, f32)>], hw: f32, c:
                     }
                 }
             }
-            xs.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+            xs.sort_by(|a, b| a.1.total_cmp(&b.1));
             let upper = xs.iter().map(|x| x.0 .1).fold(f32::INFINITY, f32::min);
             for (n, (p, _)) in xs.iter().enumerate() {
                 let j_over = if i == 0 && j == 1 { p.1 > upper } else { n % 2 == 0 };
@@ -308,7 +308,7 @@ fn interlace(cv: &mut Canvas, area: Rect, paths: &[Vec<(f32, f32)>], hw: f32, c:
                 let path = &paths[over];
                 let near = (0..path.len()).min_by(|&a, &b| {
                     let d = |k: usize| (path[k].0 - p.0).hypot(path[k].1 - p.1);
-                    d(a).partial_cmp(&d(b)).unwrap()
+                    d(a).total_cmp(&d(b))
                 });
                 let Some(k0) = near else { continue };
                 let reach = 3.0 * hw;

@@ -537,3 +537,13 @@ fn garbage_never_panics() {
         let _ = (usbpd_msg_name(h), usbpd_pdo(rnd() as u32 ^ k));
     }
 }
+
+// Break it catches: a CS# frame that ends where it starts, with a clock edge at that instant, panics; through the
+// decoder registry that ended oos-ui (upstream #223)
+#[test]
+fn qspi_frame_that_ends_where_it_starts_holds_nothing() {
+    // CS# falls and rises between samples so far apart that both crossings are at sample 1; so is the clock's edge
+    let (cs, sck) = ([1e30f32, 0.0, 1e17], [0.0f32, 0.0, 1e30]);
+    let p = qspi(&cs, &sck, &[&cs], &QspiCfg::new(1, 1, 1, 3, 0, false), true, 1.65, 0.3);
+    assert!(p.is_empty(), "a frame of no time holds no clock edge: {p:?}");
+}

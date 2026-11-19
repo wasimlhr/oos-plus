@@ -1156,13 +1156,53 @@ fn frame0_drop_from(conf: &str) -> bool {
 }
 
 #[cfg(any(target_os = "linux", test))]
+/// Largest batch whose frame 0 is checked at the trigger point instead of left out unseen (upstream issue #220). Frame
+/// 0 is the frame the FPGA held across the read-out and the arm (issue #5): usually a good trigger from just before the
+/// arm, now and then joined with older memory. At slow time bases a batch holds few frames (1 ms/div, 100 kpts: the
+/// held one and one more in the 25 ms wait), so leaving frame 0 out halved the records in the picture (upstream's
+/// unit, 2026-11-18: 18 of 37 a second with 1 channel). Up to this size frame 0 is a quarter of the batch or more; a
+/// longer batch keeps the rule of #5 as it was verified on the unit (batches of 26 to 32 frames at 10 us/div).
+const FRAME0_CHECK_MAX_FRAMES: usize = 4;
+
+/// Whether frame 0 of a batch of `avail` frames is worth the edge check (one more decode): the rule of #5 is on
+/// (`drop`), the batch holds several frames and at most `FRAME0_CHECK_MAX_FRAMES`, and the record is short enough for
+/// the decode (`FRAME1_CHECK_MAX` points).
+#[cfg(any(target_os = "linux", test))]
+fn frame0_check_wanted(avail: usize, drop: bool, memsel: u32) -> bool {
+    drop && (2..=FRAME0_CHECK_MAX_FRAMES).contains(&avail) && memsel <= FRAME1_CHECK_MAX
+}
+
+/// Whether frame 0 of a batch of `avail` frames is left out: never with the rule of #5 off (`drop` false) or in a
+/// batch of one (its only frame; the first batch after a change of settings has a rule of its own); in a batch of up
+/// to `FRAME0_CHECK_MAX_FRAMES` frames only when the edge check (`edge` of frame 0, None when not checked) does not put
+/// its edge at the trigger point; always in a longer batch. A trigger the check cannot judge leaves frame 0 out, as
+/// before.
+#[cfg(any(target_os = "linux", test))]
+fn frame0_left_out(avail: usize, drop: bool, edge: Option<Edge>) -> bool {
+    drop && avail > 1 && !(avail <= FRAME0_CHECK_MAX_FRAMES && edge == Some(Edge::At))
+}
+
+/// What the edge check of a frame found (`edge_check`).
+#[cfg(any(target_os = "linux", test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Edge {
+    /// a trigger type, source or coupling the check cannot judge, or a frame too short for it
+    Unchecked,
+    /// a crossing of the level in the trigger's direction near the trigger point
+    At,
+    /// none: the frame is not the trigger it claims to be
+    Off,
+}
+
+#[cfg(any(target_os = "linux", test))]
 /// Samples around the trigger point in which frame 1's edge must lie (`frame1_off_trigger`); the hardware puts it
 /// within a few samples (unit 2026-11-16: +6.5 at 6.25 MSa/s).
 const FRAME1_SPAN: usize = 32;
 
-#[cfg(target_os = "linux")]
-/// Largest record whose frame 1 the batch path decodes for `frame1_off_trigger`: one more decode per batch, cheap for
-/// the short records batches are made of; a longer record is searched for its edge by the fast path anyway.
+#[cfg(any(target_os = "linux", test))]
+/// Largest record whose frame 1 the batch path decodes for `frame1_off_trigger` (and frame 0 of a small batch for
+/// `frame0_left_out`): one more decode per batch, cheap for the short records batches are made of; a longer record is
+/// searched for its edge by the fast path anyway.
 const FRAME1_CHECK_MAX: u32 = 100_000;
 
 /// Counts a frame 1 left out (`frame1_off_trigger`) and logs the count at 1, 2, 4, 8, ...
@@ -1183,18 +1223,25 @@ fn frame1_left_out() {
 /// reject coupling and no rising (falling, either) crossing of the level within `FRAME1_SPAN` samples of `pre`. Other
 /// trigger types cannot be checked this way and keep their frame 1.
 fn frame1_off_trigger(f: &Frame, s: &Settings) -> bool {
+    edge_check(f, s) == Edge::Off
+}
+
+#[cfg(any(target_os = "linux", test))]
+/// The check of `frame1_off_trigger`: whether `f` has a crossing of the level in the trigger's direction within
+/// `FRAME1_SPAN` samples of `pre`, for an edge trigger on a channel with DC or HF reject coupling.
+fn edge_check(f: &Frame, s: &Settings) -> Edge {
     use oos_hal::dho::tpu::{Coupling, Slope};
     if !matches!(s.trigger, oos_hal::dho::seq::Trig::Edge) || !(1..=4).contains(&s.trig_src) || !matches!(s.trig_couple, Coupling::Dc | Coupling::HfReject) || f.envelope {
-        return false;
+        return Edge::Unchecked;
     }
     let tc = (s.trig_src - 1) as usize;
     let v = &f.ch[tc];
     if v.len() < 2 * FRAME1_SPAN || f.pre >= v.len() {
-        return false;
+        return Edge::Unchecked;
     }
     // a fifth of a division: an edge the trigger took crosses it, noise on a flat level near the level does not
     let hyst = (0.2 * s.ch[tc].scale) as f32;
-    crate::fastdraw::edge_near(v, f.pre, s.level as f32, hyst, s.slope != Slope::Falling, s.slope == Slope::Either, FRAME1_SPAN).is_none()
+    crate::fastdraw::edge_near(v, f.pre, s.level as f32, hyst, s.slope != Slope::Falling, s.slope == Slope::Either, FRAME1_SPAN).map_or(Edge::Off, |_| Edge::At)
 }
 
 /// Frames per batch while the zone trigger runs: `zone.batch = <n>` in system.conf, default 1.
@@ -2163,10 +2210,13 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                     // the raw newest frame stands for the newest compressed one (same record)
                     let raw_frame = raw_frame.filter(|_| avail as u32 == count);
                     let mut skip = 0usize;
+                    // frame 0 of a small batch: kept when its edge is at the trigger point (upstream issue #220), so a
+                    // batch of two at 1 ms/div does not lose every other record
+                    let f0_drop = after.is_none() && frame0_drop();
+                    let f0_edge = frame0_check_wanted(avail, f0_drop, p.memsel).then(|| edge_check(&decode(&dma.data()[..fb], &b, &p, 0), &b));
+                    let f0_left = frame0_left_out(avail, f0_drop, f0_edge);
                     let mut frames: Vec<Frame> = if let Some(pipe) = pipe {
                         n += avail as u64;
-                        // frame 1, when the workers get it: left out when its edge is not at the trigger point
-                        let f1_off = frame0_drop() && avail > 2 && p.memsel <= FRAME1_CHECK_MAX && frame1_off_trigger(&decode(&dma.data()[fb..2 * fb], &b, &p, 0), &b);
                         // the record of measurements: with the ADC-core correction, as on the path without batches
                         let mc = out.lock().unwrap().cores;
                         let newest = match raw_frame {
@@ -2176,6 +2226,14 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                                 Frame { stamp, ..decode_with(last, &b, &p, n, mc.then_some(&mut cores)) }
                             }
                         };
+                        // frame 1: left out when its edge is not at the trigger point. In a batch of two it is the
+                        // newest, checked before the workers are fed, so a frame 0 its edge check kept goes with it
+                        // (the workers take a run of frames; upstream issue #220)
+                        let f1_off = frame0_drop()
+                            && match avail {
+                                2 => frame1_off_trigger(&newest, &b),
+                                a => a > 2 && p.memsel <= FRAME1_CHECK_MAX && frame1_off_trigger(&decode(&dma.data()[fb..2 * fb], &b, &p, 0), &b),
+                            };
                         let next = pipe.take_buffer().and_then(|x| x.downcast::<oos_hal::dho::bus::DmaBuf>().ok()).map(|x| *x);
                         let next = next.or_else(|| (pool_made < POOL).then(|| {
                             pool_made += 1;
@@ -2188,9 +2246,12 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                                 let (cs, cp) = (b.clone(), p);
                                 let codes: crate::drawpipe::CodesInto = Arc::new(move |c: &[u8], f: &mut Frame| codes_into(c, &cs, &cp, 0, f));
                                 // frame 0 left out as on the path without batches (issue #5; unit 2026-11-16: the
-                                // one stray frame of 7,075 in batch mode was frame 0 of its batch)
-                                skip = frame0_drop() as usize + f1_off as usize;
-                                if f1_off {
+                                // one stray frame of 7,075 in batch mode was frame 0 of its batch), unless its edge
+                                // check kept it; a frame 1 off the trigger takes frame 0 with it (the workers take a
+                                // run of frames); frame 1 itself is counted here only when the workers hold it
+                                let f1_fed = f1_off && avail > 2;
+                                skip = (f0_left || f1_off) as usize + f1_fed as usize;
+                                if f1_fed {
                                     frame1_left_out();
                                 }
                                 pipe.feed_codes(Box::new(full), fb, skip, avail - 1, stamp, Arc::new(move |c: &[u8], f: &mut Frame| decode_into(c, &bs, &ps, 0, f)), Some(codes));
@@ -2198,7 +2259,7 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                             None => crate::drawpipe::Counters::add(&crate::drawpipe::counters().dropped, avail as u64 - 1),
                         }
                         // two frames: the newest is frame 1
-                        if avail == 2 && frame0_drop() && frame1_off_trigger(&newest, &b) {
+                        if avail == 2 && f1_off {
                             frame1_left_out();
                             skip += 1;
                             Vec::new()
@@ -2215,8 +2276,9 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                         let take = if after.is_some() { take.min(1) } else { take };
                         // frame 0 of a batch is the frame the FPGA held across the stop, read-out and arm: recorded
                         // before this arm, sometimes joined with older memory (a stray trace; issue #5, mj1911). With
-                        // more frames in the batch it is left out (1 of 26 at 1 kpts, 10 us/div)
-                        let stale = (avail > 1 && after.is_none() && frame0_drop()) as usize;
+                        // more frames in the batch it is left out (1 of 26 at 1 kpts, 10 us/div); in a small batch only
+                        // when its edge is not at the trigger point (`f0_left` above, upstream issue #220)
+                        let stale = f0_left as usize;
                         skip = (avail - take).max(stale);
                         n += skip as u64;
                         let mut all: Vec<Frame> = dma
@@ -2229,9 +2291,11 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                                 Frame { stamp, hw_avg: after.is_some(), ..decode_with(chunk, &b, &p, n, match_cores.then_some(&mut cores)) }
                             })
                             .collect();
-                        // frame 1 (frame 0 left out above) without its edge at the trigger point: left out too
-                        if stale == 1 && skip == 1 && all.first().is_some_and(|f| frame1_off_trigger(f, &b)) {
-                            all.remove(0);
+                        // frame 1 without its edge at the trigger point: left out too, whether frame 0 before it was
+                        // left out or kept by its edge check (`all` starts at frame `skip`)
+                        let at1 = (f0_drop && avail > 1 && skip <= 1).then(|| 1 - skip);
+                        if let Some(i) = at1.filter(|&i| all.get(i).is_some_and(|f| frame1_off_trigger(f, &b))) {
+                            all.remove(i);
                             frame1_left_out();
                             skip += 1;
                         }
@@ -2945,6 +3009,43 @@ mod tests {
         assert_eq!(overlay_in_use(false, || panic!("read with the key off")), oos_hal::dho::coretrim::Overlay::default());
         assert_eq!(overlay_in_use(true, || Some(file.clone())), file);
         assert_eq!(overlay_in_use(true, || None).modes, 0);
+    }
+
+    // Upstream issue #220 on its unit (2026-11-18): at 1 ms/div a batch holds the held frame 0 and one more, so leaving
+    // frame 0 out unseen put 18 of 37 records a second in the picture. The rule: frame 0 of a small batch is kept only
+    // when its edge check finds the edge at the trigger point; it is left out when the check cannot judge it, finds it
+    // off, or was not run, and always in a long batch (the rule of #5 as verified at 10 us/div). Breaks it catches:
+    // either side of that rule turned around, and the extra decode for a batch of one or a long one.
+    #[test]
+    fn frame0_of_a_small_batch_is_kept_at_the_trigger_point() {
+        let s = Settings { level: 0.0, ..Settings::default() };
+        let frame = |edge: usize| {
+            let mut f = Frame { pre: 500, ..Frame::default() };
+            f.ch[0] = (0..1000).map(|i| if i >= edge { 1.0 } else { -1.0 }).collect();
+            f
+        };
+        assert_eq!(edge_check(&frame(506), &s), Edge::At);
+        assert_eq!(edge_check(&frame(410), &s), Edge::Off);
+        let timeout = Settings { trigger: oos_hal::dho::seq::Trig::Timeout { time: 1e-6 }, ..s.clone() };
+        assert_eq!(edge_check(&frame(410), &timeout), Edge::Unchecked);
+        // 1 ms/div, 100 kpts: a batch of two, frame 0 at the trigger point is kept
+        assert!(frame0_check_wanted(2, true, 100_000));
+        assert!(!frame0_left_out(2, true, Some(Edge::At)));
+        for small in 2..=FRAME0_CHECK_MAX_FRAMES {
+            assert!(frame0_left_out(small, true, Some(Edge::Off)), "{} frames, off the trigger", small);
+            assert!(frame0_left_out(small, true, Some(Edge::Unchecked)), "{} frames, a trigger not checked", small);
+            assert!(frame0_left_out(small, true, None), "{} frames, no check", small);
+        }
+        // a long batch (10 us/div: 26 to 32 frames) leaves it out whatever the check, and does not decode it for one
+        let long = FRAME0_CHECK_MAX_FRAMES + 1;
+        assert!(frame0_left_out(long, true, Some(Edge::At)));
+        assert!(!frame0_check_wanted(long, true, 1000));
+        // a batch of one keeps its only frame; `acq.frame0 = keep` keeps it everywhere, unchecked
+        assert!(!frame0_left_out(1, true, None) && !frame0_check_wanted(1, true, 1000));
+        assert!(!frame0_left_out(2, false, None) && !frame0_left_out(long, false, None));
+        assert!(!frame0_check_wanted(2, false, 1000));
+        // a record too long for the extra decode: left out unseen, as before
+        assert!(!frame0_check_wanted(2, true, FRAME1_CHECK_MAX + 1));
     }
 
     // Issue #5 on the unit (2026-11-16): frame 1 now and then has its rising edge about 90 samples before the trigger

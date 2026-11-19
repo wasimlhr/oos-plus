@@ -160,7 +160,8 @@ pub fn parse_line(line: &str) -> Result<Key, String> {
         let _e = wire_string(&blob, &mut at).ok_or("RSA key cut short")?;
         let n = wire_string(&blob, &mut at).ok_or("RSA key cut short")?;
         let n = &n[n.iter().position(|&b| b != 0).unwrap_or(n.len())..];
-        let bits = n.len() * 8 - n.first().map_or(8, |b| b.leading_zeros() as usize);
+        // a modulus without a bit set is no key: 0 bits (counting from an empty one subtracted past zero)
+        let bits = n.first().map_or(0, |b| n.len() * 8 - b.leading_zeros() as usize);
         if bits < RSA_BITS_MIN {
             return Err(format!("RSA key of {} bits, at least {} needed", bits, RSA_BITS_MIN));
         }
@@ -388,6 +389,16 @@ mod tests {
 
     fn wire(parts: &[&[u8]]) -> Vec<u8> {
         parts.iter().flat_map(|p| (p.len() as u32).to_be_bytes().into_iter().chain(p.iter().copied())).collect()
+    }
+
+    // Break it catches: an RSA key whose modulus has no bit set counted 0 - 8 bits: a panic with overflow checks, a
+    // key of 2^64 - 8 bits that was trusted without them (upstream #219)
+    #[test]
+    fn an_rsa_key_without_a_modulus_is_refused() {
+        let line = format!("ssh-rsa {} r@h", crate::http::base64(&wire(&[b"ssh-rsa", &[1, 0, 1], &[]])));
+        assert!(parse_line(&line).is_err());
+        let line = format!("ssh-rsa {} r@h", crate::http::base64(&wire(&[b"ssh-rsa", &[1, 0, 1], &[0, 0]])));
+        assert!(parse_line(&line).is_err());
     }
 
     fn rsa_line(bits: usize) -> String {

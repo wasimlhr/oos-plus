@@ -156,16 +156,11 @@ fn serial_ssc_rate_and_spread() {
     let rate = eye::ssc_rate(&c);
     let (ppm, _) = eye::ssc_deviation(&c);
     assert!(close(rate, 33e3, 0.02), "ssc rate {}", rate);
-    // Independently interpolated rising edges in this binary fixture span
-    // 4,976,627.20..5,023,584.90 Hz about 5,000,021.24 Hz: 9,391.5 ppm.
-    // The former 5,000 ppm assertion divided by the 10 MHz UI hint instead of
-    // the measured 5 MHz cycle rate, masking the fixture's actual spread.
-    // That span includes crossing-interpolation error on its coarse sample grid.
-    // With the modulation line found, the deviation is the span of the rate
-    // series averaged over a thirty-second of the modulation period, which
-    // leaves most of that edge error out: 6,160.6 ppm. It still does not
-    // establish the generator's injected depth.
-    assert!(close(ppm, 6_160.6, 0.01) && ppm < 9_391.5, "ssc ppm {}", ppm);
+    // The generator's 0.5 % down-spread triangle spans 5,000 ppm. The rates of single cycles of this fixture span
+    // 9,391.5 ppm (4,976,627.20..5,023,584.90 Hz about 5,000,021.24 Hz), most of it crossing-interpolation error on
+    // the coarse sample grid. The rate over windows of 1/32 of the modulation period, weighted by the time of their
+    // intervals (upstream #249), reads a triangle 3 % under its span and leaves part of the interpolation error.
+    assert!(close(ppm, 5_000.0, 0.12), "ssc ppm {}", ppm);
     assert!(eye::is_clock(&c));
 }
 
