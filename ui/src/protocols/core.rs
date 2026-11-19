@@ -474,6 +474,40 @@ impl Protocol for Cphy {
     fn trigger_match(&self, what: BusWhat, _: u32, p: &Packet) -> Option<bool> {
         (what == BusWhat::Frame).then(|| p.kind == oos_dsp::decode::Kind::Field("SYNC") && p.value == 0)
     }
+    /// A lane at a symbol a nanosecond: the stop state, the request for a burst (C high, all low), a burst with a
+    /// short packet (virtual channel 1, data type 00, the data 01 00) and the stop state again. The low-power levels
+    /// are 0 and 1.2 V, the three of a burst 0, 0.2 and 0.4 V.
+    fn demo(&self) -> Option<Demo> {
+        use oos_dsp::cphy::{crc16, states_for_symbols, symbols_for_word, wire_values};
+        const SYMBOL: f64 = 1e-9;
+        // what the lines hold and until when: low-power states of 12 symbol times each, then a state a symbol
+        let mut held: Vec<(f64, [f32; 3])> = Vec::new();
+        let mut t = 0.0;
+        let mut hold = |time: f64, lines: [f32; 3]| {
+            t += time;
+            held.push((t, lines));
+        };
+        let low_power = |lines: [u8; 3]| lines.map(|l| 1.2 * l as f32);
+        hold(12.0 * SYMBOL, low_power([1, 1, 1]));
+        hold(12.0 * SYMBOL, low_power([0, 0, 1]));
+        hold(12.0 * SYMBOL, low_power([0, 0, 0]));
+        let header = [0x4000u16, 0x0001, crc16([0x00, 0x40, 0x01, 0x00])];
+        let mut symbols = vec![3u8; 14];
+        for _ in 0..2 {
+            symbols.extend([3, 4, 4, 4, 4, 4, 3]);
+            // (a word with its least significant symbol first)
+            header.iter().for_each(|&w| symbols.extend(symbols_for_word(w).iter().rev()));
+        }
+        symbols.extend([4; 14]);
+        states_for_symbols(0, &symbols).into_iter().for_each(|state| hold(SYMBOL, wire_values(state)));
+        hold(12.0 * SYMBOL, low_power([1, 1, 1]));
+        let period = t;
+        let line = |k: usize| -> Option<DemoLine> {
+            let held = held.clone();
+            Some(Box::new(move |t: f64| held[held.partition_point(|h| h.0 <= t).min(held.len() - 1)].1[k] as f64))
+        };
+        Some(Demo { period, lines: [line(0), line(1), line(2), None] })
+    }
     /// A, B, C on CH1..CH3, the receiver's 20 mV threshold, 16-bit words; the analog channels, not the LA.
     fn setup(&self) -> Setup {
         Setup { src: [Some(0), Some(1), Some(2), None], thr: 0.02, rows: &[(Row::Bits, 16)], la_off: true, ..Setup::default() }
@@ -533,6 +567,26 @@ mod tests {
         assert_eq!(I2c.text(&Packet { ok: false, ..addr(false) }, &with).as_deref(), Some("A0 W N"));
         assert!(I2c.text(&Packet { kind: Kind::Data, ..addr(false) }, &with).is_none());
         assert_eq!(I2c.options()[0].choices[I2c.options()[0].default], "Left out");
+    }
+
+    /// The demo lane of C-PHY reads as its low-power states and the short packet it carries.
+    #[test]
+    fn the_cphy_demo_is_a_burst_with_a_short_packet() {
+        let demo = Cphy.demo().unwrap();
+        let dt = 1e-9 / 20.0;
+        let wave = |k: usize| -> Vec<f32> {
+            let line = demo.lines[k].as_ref().unwrap();
+            (0..(2.0 * demo.period / dt) as usize).map(|i| line((i as f64 * dt) % demo.period) as f32).collect()
+        };
+        let (a, b, c, sh) = (wave(0), wave(1), wave(2), Shared::default());
+        let lines = [Some(&a[..]), Some(&b[..]), Some(&c[..]), None];
+        let l = Lines { lines, dt, thr: 0.02, hy: 0.0, opt: [0; OPTS], sh, chans: [None; 4], src: [None; 4] };
+        let p = Cphy.decode(&l).unwrap();
+        let text = |x: &Packet| Cphy.text(x, &[0; OPTS]).unwrap_or_else(|| format!("{:?}", x.kind));
+        let said = p.iter().map(text).collect::<Vec<_>>().join(" ");
+        let round = "LP-111 LP-001 LP-000 PRE 14 SYNC VC 1 DT 00 01 00 CRC";
+        assert!(p.iter().all(|x| x.ok) && said.starts_with(round), "{said}");
+        assert_eq!(said.matches("SYNC COPY POST").count(), 2, "{said}");
     }
 
     /// The C-PHY fields that last for a time have their name as text, a burst is found at its first sync word only,
