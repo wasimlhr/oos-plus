@@ -7446,7 +7446,7 @@
       [
        "<value>",
        "Text",
-       "Decoder threshold in source units. `AUTO` sets it once to the middle of the signal on the decoder's source (-230 without a signal); the query answers the value. A further line whose signal has another middle gets a threshold of its own by `AUTO` (see `:BUS<n>:SPI:SCLK:THReshold`).",
+       "Decoder threshold in source units. `AUTO` sets it once to the middle of the signal on the decoder's source (-230 without a signal); the query answers the value.",
        "1.650000E+00"
       ]
      ],
@@ -7720,126 +7720,6 @@
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `CHAN2`."
-    },
-    {
-     "header": ":BUS<n>:SPI:MOSI:THReshold",
-     "set": ":BUS<n>:SPI:MOSI:THReshold <value>",
-     "query": ":BUS<n>:SPI:MOSI:THReshold?",
-     "desc": "Sets or queries Threshold for UART, I2C and SPI (menu: Decode > Threshold).",
-     "params": [
-      [
-       "<n>",
-       "Integer",
-       "Numeric suffix of the header; `:BUS1:SPI:MOSI:THReshold` is `n` = 1",
-       "—"
-      ],
-      [
-       "<value>",
-       "Text",
-       "Threshold of the data line in volts: the decoder's threshold (`:BUS<n>:THReshold`).",
-       "1.650000E+00"
-      ]
-     ],
-     "remarks": [
-      "- Origin: Rigol-style (command family of the DHO guide)"
-     ],
-     "returns": "On a freshly started default model the query returns `1.650000E+00`."
-    },
-    {
-     "header": ":BUS<n>:SPI:SCLK:THReshold",
-     "set": ":BUS<n>:SPI:SCLK:THReshold <value>",
-     "query": ":BUS<n>:SPI:SCLK:THReshold?",
-     "desc": "Sets or queries Clock threshold for UART, I2C and SPI (menu: Decode > Clock threshold).",
-     "params": [
-      [
-       "<n>",
-       "Integer",
-       "Numeric suffix of the header; `:BUS1:SPI:SCLK:THReshold` is `n` = 1",
-       "—"
-      ],
-      [
-       "<value>",
-       "Text",
-       "Threshold of the clock line in volts, its own from then on; `SAME` gives the line the decoder's threshold again.",
-       "1.650000E+00"
-      ]
-     ],
-     "remarks": [
-      "- Origin: Rigol-style (command family of the DHO guide)"
-     ],
-     "returns": "The query answers the threshold in use. On a freshly started default model the query returns `1.650000E+00`."
-    },
-    {
-     "header": ":BUS<n>:SPI:SS:THReshold",
-     "set": ":BUS<n>:SPI:SS:THReshold <value>",
-     "query": ":BUS<n>:SPI:SS:THReshold?",
-     "desc": "Sets or queries CS threshold for UART, I2C and SPI (menu: Decode > CS threshold).",
-     "params": [
-      [
-       "<n>",
-       "Integer",
-       "Numeric suffix of the header; `:BUS1:SPI:SS:THReshold` is `n` = 1",
-       "—"
-      ],
-      [
-       "<value>",
-       "Text",
-       "Threshold of the select line in volts, or `SAME`.",
-       "1.650000E+00"
-      ]
-     ],
-     "remarks": [
-      "- Origin: Rigol-style (command family of the DHO guide)"
-     ],
-     "returns": "On a freshly started default model the query returns `1.650000E+00`."
-    },
-    {
-     "header": ":BUS<n>:IIC:SDA:THReshold",
-     "set": ":BUS<n>:IIC:SDA:THReshold <value>",
-     "query": ":BUS<n>:IIC:SDA:THReshold?",
-     "desc": "Sets or queries Threshold for UART, I2C and SPI (menu: Decode > Threshold).",
-     "params": [
-      [
-       "<n>",
-       "Integer",
-       "Numeric suffix of the header; `:BUS1:IIC:SDA:THReshold` is `n` = 1",
-       "—"
-      ],
-      [
-       "<value>",
-       "Text",
-       "Threshold of the data line in volts: the decoder's threshold.",
-       "1.650000E+00"
-      ]
-     ],
-     "remarks": [
-      "- Origin: Rigol-style (command family of the DHO guide)"
-     ],
-     "returns": "On a freshly started default model the query returns `1.650000E+00`."
-    },
-    {
-     "header": ":BUS<n>:IIC:SCLK:THReshold",
-     "set": ":BUS<n>:IIC:SCLK:THReshold <value>",
-     "query": ":BUS<n>:IIC:SCLK:THReshold?",
-     "desc": "Sets or queries Clock threshold for UART, I2C and SPI (menu: Decode > Clock threshold).",
-     "params": [
-      [
-       "<n>",
-       "Integer",
-       "Numeric suffix of the header; `:BUS1:IIC:SCLK:THReshold` is `n` = 1",
-       "—"
-      ],
-      [
-       "<value>",
-       "Text",
-       "Threshold of the clock line in volts, or `SAME`.",
-       "1.650000E+00"
-      ]
-     ],
-     "remarks": [
-      "- Origin: Rigol-style (command family of the DHO guide)"
-     ],
-     "returns": "On a freshly started default model the query returns `1.650000E+00`."
     },
     {
      "header": ":BUS<n>:SPI:DBITs",
@@ -16055,14 +15935,8 @@
        "`:DECode:THReshold`"
       ],
       [
-       "`dec_thr_line`",
-       "the thresholds of the decoder's second, third and fourth line in volts, `-` for a line that has the decoder's threshold",
-       "`- - -`",
-       "`:BUS<n>:SPI:SCLK:THReshold`, `:BUS<n>:SPI:SS:THReshold`, `:BUS<n>:IIC:SCLK:THReshold`"
-      ],
-      [
        "`dec_ascii`",
-       "selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex",
+       "as above",
        "`true`",
        "`:BUS<n>:FORMat`"
       ],
