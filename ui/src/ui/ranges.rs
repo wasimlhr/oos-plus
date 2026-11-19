@@ -113,6 +113,11 @@ impl Ui {
                 let vpd = self.decoder_vpd() as f64;
                 sym(LEVEL_DIVS * vpd, vpd / STEPS_PER_DIV, "V")
             }
+            // in the steps of its own line's scale
+            Item::DecThrLine(role) => {
+                let vpd = m.dec_role_src(role).map_or(1.0, |source| self.decoder_vpd_of(source)) as f64;
+                sym(LEVEL_DIVS * vpd, vpd / STEPS_PER_DIV, "V")
+            }
             Item::BusClkThr | Item::BusDataThr => {
                 let id = if it == Item::BusClkThr { m.bus.clk } else { m.bus.data };
                 let step = self.bus_volt_step(id) as f64;
@@ -191,6 +196,7 @@ impl Ui {
             Item::HDelay => m.delay as f64,
             Item::MathOffset => m.math_offset as f64,
             Item::DecThr => m.dec_thr as f64,
+            Item::DecThrLine(role) => m.dec_thr_of(role) as f64,
             Item::BusClkThr => m.bus.clk_thr as f64,
             Item::BusDataThr => m.bus.data_thr as f64,
             Item::SpecRef => m.spec_ref as f64,
@@ -217,6 +223,11 @@ impl Ui {
             Item::HDelay => m.delay = x,
             Item::MathOffset => m.math_offset = x,
             Item::DecThr => m.dec_thr = x,
+            Item::DecThrLine(role) => {
+                if let Some(t) = role.checked_sub(1).and_then(|k| m.dec_thr_line.get_mut(k)) {
+                    *t = Some(x);
+                }
+            }
             Item::BusClkThr => m.bus.clk_thr = x,
             Item::BusDataThr => m.bus.data_thr = x,
             Item::SpecRef => m.spec_ref = x,

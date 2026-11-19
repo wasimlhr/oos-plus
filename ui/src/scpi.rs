@@ -3728,14 +3728,33 @@ impl Scpi {
         }
         if n.len() == 1 && kw(n0, "THReshold") {
             if query {
-                return t(&e(cfg.thr as f64));
+                // `? <line>`: the threshold of that line of the decoder (2 to 4), its own or the decoder's
+                let line = arg.trim().parse::<usize>().ok().filter(|l| (2..=4).contains(l));
+                return t(&e(line.and_then(|l| cfg.thr_line[l - 2]).unwrap_or(cfg.thr) as f64));
             }
             let num = arg.split(',').next_back().unwrap_or("").trim();
-            // once, to the middle of the signal on the decoder's source
+            // once, each line to the middle of its own signal
             if kw(num, "AUTO") {
-                match ui.dec_signal_middle(&ui.m.dec_view(k)) {
-                    Some(v) => with_bus(ui, k, |m| m.dec_thr = v),
+                match ui.dec_signal_middles(&ui.m.dec_view(k)) {
+                    Some((main, lines)) => with_bus(ui, k, |m| {
+                        m.dec_thr = main;
+                        for (k, t) in lines.into_iter().enumerate() {
+                            if t.is_some() {
+                                m.dec_thr_line[k] = t;
+                            }
+                        }
+                    }),
                     None => self.push_err("-230,\"No signal on the decoder's source\"".to_string()),
+                }
+                return None;
+            }
+            // `<line>,<volts>`: the threshold of line 2 to 4 alone (`<line>,DEF`: the decoder's again)
+            let line = arg.split_once(',').and_then(|(l, _)| l.trim().parse::<usize>().ok()).filter(|l| (2..=4).contains(l));
+            if let Some(l) = line {
+                let own = if kw(num, "DEFault") { Some(None) } else { num.parse::<f64>().ok().filter(|v| v.is_finite()).map(|v| Some(v as f32)) };
+                match own {
+                    Some(v) => with_bus(ui, k, |m| m.dec_thr_line[l - 2] = v),
+                    None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
                 }
                 return None;
             }
@@ -4513,9 +4532,14 @@ impl Scpi {
             if query { return text(e(ui.m.dec_thr as f64)); }
             // once, to the middle of the signal on the decoder's source
             if kw(arg.trim(), "AUTO") {
-                match ui.dec_signal_middle(&ui.m) {
-                    Some(v) => {
-                        ui.m.dec_thr = v;
+                match ui.dec_signal_middles(&ui.m) {
+                    Some((main, lines)) => {
+                        ui.m.dec_thr = main;
+                        for (k, t) in lines.into_iter().enumerate() {
+                            if t.is_some() {
+                                ui.m.dec_thr_line[k] = t;
+                            }
+                        }
                         ui.mark_changed();
                     }
                     None => self.push_err("-230,\"No signal on the decoder's source\"".to_string()),

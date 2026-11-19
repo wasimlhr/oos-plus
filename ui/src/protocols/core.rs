@@ -114,7 +114,16 @@ impl Protocol for I2c {
 
 pub struct Spi;
 
+/// The order of the bits of a word on the line, and whether a high level of the data line is a 1.
+static SPI_OPTIONS: [Opt; 2] = [
+    Opt { name: "Bit order", choices: &["MSB first", "LSB first"], default: 0 },
+    Opt { name: "Data", choices: &["Active high", "Active low"], default: 0 },
+];
+
 impl Protocol for Spi {
+    fn options(&self) -> &'static [Opt] {
+        &SPI_OPTIONS
+    }
     fn key(&self) -> &'static str {
         "Spi"
     }
@@ -125,7 +134,7 @@ impl Protocol for Spi {
         [Some("MOSI"), Some("Clock"), Some("CS"), None]
     }
     fn shared(&self) -> &'static [Row] {
-        &[Row::SpiMode, Row::Bits]
+        &[Row::SpiMode, Row::Bits, Row::SpiCs]
     }
     fn bit_time(&self, _: &[usize; OPTS]) -> f64 {
         0.5e-6
@@ -141,7 +150,16 @@ impl Protocol for Spi {
             _ => None,
         };
         let cs = cs_hi.as_deref().or(l.lines[2]);
-        Ok(spi(clk, l.main(), None, cs, l.sh.spi_mode, l.sh.bits, true, l.thr, l.hy, gap))
+        let mut p = spi(clk, l.main(), None, cs, l.sh.spi_mode, l.sh.bits, l.opt[0] == 0, l.thr, l.hy, gap);
+        if l.opt[1] == 1 {
+            // a low level is a 1: every bit of a word the other way round
+            let mask = if l.sh.bits >= 32 { u32::MAX } else { (1u32 << l.sh.bits) - 1 };
+            for x in p.iter_mut().filter(|x| x.kind == oos_dsp::decode::Kind::Data) {
+                x.value = !x.value & mask;
+                x.value2 = x.value2.map(|v| !v & mask);
+            }
+        }
+        Ok(p)
     }
     /// A frame starts with the chip select.
     fn start_role(&self) -> usize {
