@@ -1,7 +1,7 @@
 {
  "meta": {
-  "software": "oos-ui 0.1.13",
-  "version": "0.1.13",
+  "software": "oos-ui 0.1.14",
+  "version": "0.1.14",
   "edition": "November 2026",
   "date": "19 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
@@ -65,8 +65,8 @@
       "- Menu equivalent: System > About.",
       "- Origin: Rigol-compatible. Not a Rigol identity string."
      ],
-     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.1.13`.",
-     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.1.13.*/"
+     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.1.14`.",
+     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.1.14.*/"
     },
     {
      "header": "*RST",
@@ -773,28 +773,6 @@
      "set": ":SYSTem:REMote:SERVice:VXI11 <value>",
      "query": ":SYSTem:REMote:SERVice:VXI11?",
      "desc": "Sets or queries VXI-11 for Remote services (menu: Remote services > VXI-11).",
-     "params": [
-      [
-       "<value>",
-       "Boolean",
-       "{ON|OFF|1|0}",
-       "1"
-      ]
-     ],
-     "remarks": [
-      "- Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`.",
-      "- Needs the literal `CONFIRM` argument; without it the command fails with -221 and does nothing. Ask the user before sending it.",
-      "- Origin: OOS extension"
-     ],
-     "returns": "On a freshly started default model the query returns `1`.",
-     "ext": true,
-     "confirm": true
-    },
-    {
-     "header": ":SYSTem:REMote:SERVice:TELNet",
-     "set": ":SYSTem:REMote:SERVice:TELNet <value>",
-     "query": ":SYSTem:REMote:SERVice:TELNet?",
-     "desc": "Sets or queries telnet for Remote services (menu: Remote services > telnet).",
      "params": [
       [
        "<value>",
@@ -15280,12 +15258,6 @@
        "segments recorded by the FPGA (not verified on a unit); wait after each segment, s",
        "`false`, `0`",
        "`:ACQuire:SEGMents:HARDware`, `:ACQuire:SEGMents:INTerval`"
-      ],
-      [
-       "`draw_path`",
-       "Acquire > Draw path: `standard` or `batch`",
-       "`standard`",
-       "`:SYSTem:PIPeline`"
       ]
      ]
     },

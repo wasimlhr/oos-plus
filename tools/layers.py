@@ -92,7 +92,8 @@ UI_LAYERS = (
     ("screen", "ui-screen-up", "base model settings board signal store", "ui"),
     ("command", "ui-command-up", "base model settings board signal store screen", "cmd scpi site"),
     ("transport", "ui-transport-skip", "base command", "announce hislip http vxi11"),
-    ("main", None, None, "gpu input"),
+    # oos-plus: the window of the Windows desktop build and the external generators (extgen) are wired in main
+    ("main", None, None, "gpu input desktop extgen"),
 )
 WIRING = UI_LAYERS[-1][0]
 UNPLACED = "ui-unplaced"  # the count of the files whose module has no row

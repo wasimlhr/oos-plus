@@ -24,9 +24,9 @@ TOLD = ("docs/adr/", "AGENTS.md", "tools/tests/test_no_windows_code.py")
 SCRIPTS = (".bat", ".cmd", ".ps1")
 # oos-plus keeps the Windows desktop build that upstream removed (the window, dropped files, the desktop services;
 # docs/fork/deps.md, AGENTS.md): its two scripts, and the Windows branches of oos-ui and its crates, behind cfg. The
-# rest of the tree (oos-dsp, oos-fpgad, oos-hal apart from two files, the tools and the workflows) stays without one.
+# rest of the tree (oos-dsp, oos-fpgad, oos-hal apart from three files, the tools and the workflows) stays without one.
 FORK_WINDOWS = ("build-windows.ps1", "run-windows.ps1", "ui/Cargo.toml", "ui/src/", "ui/system/", "ui/remote/",
-                "hal/src/fsutil.rs", "hal/src/wlan.rs")
+                "hal/src/fsutil.rs", "hal/src/wlan.rs", "hal/src/dbus.rs")
 
 
 def tracked():
