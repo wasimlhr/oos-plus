@@ -443,6 +443,9 @@ impl Protocol for Cphy {
             Kind::Field("DT") => Some(format!("VC {} DT {:02X}", p.value2.unwrap_or(0), p.value)),
             Kind::Field("WC") => Some(format!("WC {}", p.value)),
             Kind::Field("COPY") => Some(format!("COPY{}", if p.ok { "" } else { " !" })),
+            // the command of the escape mode, named where it is the one for low-power data
+            Kind::Field("ESC") if p.value == oos_dsp::cphy::LPDT => Some(format!("ESC {:02X} LPDT", p.value)),
+            Kind::Field("ESC") => Some(format!("ESC {:02X}", p.value)),
             Kind::Data => Some(format!("{:02X}", p.value)),
             Kind::Crc => Some(format!("CRC {:04X}{}", p.value, if p.ok { "" } else { " !" })),
             Kind::Word { .. } => Some(format!("{:04X}", p.value)),
@@ -547,6 +550,8 @@ mod tests {
         assert_eq!(Cphy.text(&dt, &[0; OPTS]).as_deref(), Some("VC 1 DT 2B"));
         assert_eq!(text(Kind::Field("WC"), 22).as_deref(), Some("WC 22"));
         assert_eq!(text(Kind::Field("COPY"), 0).as_deref(), Some("COPY"));
+        assert_eq!(text(Kind::Field("ESC"), 0x87).as_deref(), Some("ESC 87 LPDT"));
+        assert_eq!(text(Kind::Field("ESC"), 0x78).as_deref(), Some("ESC 78"));
         assert_eq!(text(Kind::Data, 0xca).as_deref(), Some("CA"));
         assert_eq!(text(Kind::Crc, 0x0e66).as_deref(), Some("CRC 0E66"));
         assert_eq!(text(Kind::Stop, 0).as_deref(), Some("POST"));

@@ -343,7 +343,48 @@ pub fn decode(a: &[f32], b: &[f32], c: &[f32], dt: f64, rate: Option<f64>, min_g
         }
     }
     if out.is_empty() { return alone(if measured.is_some() { "!SAMPLE" } else { "!SOURCE" }, n); }
-    packets(out)
+    low_power_data(packets(out))
+}
+
+/// The escape command for low-power data, its eight bits with the first one sent as the least significant.
+pub const LPDT: u32 = 0x87;
+
+/// Low-power data in the low-power states, as a capture of a real lane has it between its bursts. From the stop
+/// state (all lines high) the lane goes through A high, all low, C high, all low: the escape entry. Then a bit is
+/// one line high (A: a one, C: a zero) and all lines low after it. The first eight bits are the command, the bits
+/// after them bytes, each with its first bit as the least significant (the capture's command is 11100001 in the
+/// order sent, which its instrument lists as 87h).
+///
+/// The states of the entry stay listed. The bits become `Field("ESC")` (the command) and `Data` (a byte); bits
+/// that do not fill a byte, and the states the lane leaves the mode with, stay states.
+fn low_power_data(out: Vec<Packet>) -> Vec<Packet> {
+    let lp = |p: Option<&Packet>, name: &'static str| p.is_some_and(|p| p.kind == Kind::Field(name));
+    const ENTRY: [&str; 5] = ["!LP111", "!LP100", "!LP000", "!LP001", "!LP000"];
+    let mut done = Vec::with_capacity(out.len());
+    let mut i = 0;
+    while i < out.len() {
+        if !(0..5).all(|k| lp(out.get(i + k), ENTRY[k])) {
+            done.push(out[i].clone());
+            i += 1;
+            continue;
+        }
+        done.extend(out[i..i + 5].iter().cloned());
+        i += 5;
+        // a bit: one line high, then all low
+        let bit = |i: usize| -> Option<bool> {
+            let one = lp(out.get(i), "!LP100");
+            ((one || lp(out.get(i), "!LP001")) && lp(out.get(i + 1), "!LP000")).then_some(one)
+        };
+        let mut first = true;
+        while let Some(bits) = (0..8).map(|k| bit(i + 2 * k)).collect::<Option<Vec<bool>>>() {
+            let value = bits.iter().enumerate().fold(0u32, |v, (k, &b)| v | (b as u32) << k);
+            let kind = if first { Kind::Field("ESC") } else { Kind::Data };
+            done.push(Packet { kind, value, value2: None, t0: out[i].t0, t1: out[i + 15].t1, ok: true });
+            first = false;
+            i += 16;
+        }
+    }
+    done
 }
 
 /// The checksum of a packet header and of a payload: x^16 + x^12 + x^5 + 1, least significant bit first, seed FFFF.
@@ -635,6 +676,46 @@ mod tests {
         assert!(got.contains("COPY !") && got.ends_with(&format!("CRC {:04X} ! POST LP111", sum ^ 1)), "{got}");
         // a header whose checksum does not fit: words
         assert_eq!(run(&[&[0x1100, 0x0005, 0xbeef]]), "PRE 28 SYNC 0 1100 0005 BEEF POST LP111");
+    }
+
+    /// Low-power data: after the escape entry the bits are the command and bytes, the first bit sent the least
+    /// significant; without the entry the states stay states, and so do bits that fill no byte.
+    #[test]
+    fn low_power_data_after_the_escape_entry_is_a_command_and_bytes() {
+        let bits = |lane: &mut Lane, values: &[u8]| {
+            for &v in values {
+                for k in 0..8 {
+                    lane.low_power(&[if v >> k & 1 == 1 { 0b100 } else { 0b001 }, 0b000], 250);
+                }
+            }
+        };
+        let read = |entry: bool, tail: usize| {
+            let mut lane = Lane::captured();
+            lane.low_power(if entry { &[0b111, 0b100, 0b000, 0b001, 0b000] } else { &[0b000] }, 250);
+            bits(&mut lane, &[0x87, 0x08, 0x0f]);
+            for _ in 0..tail {
+                lane.low_power(&[0b100, 0b000], 250);
+            }
+            // out of the mode, as the capture has it: A high, A and C high, the stop state
+            lane.low_power(&[0b100, 0b101, 0b111], 250);
+            let [a, b, c] = lane.finish();
+            let p = decode(&a, &b, &c, 0.8e-9, None, 0.02);
+            let said = |x: &Packet| match x.kind {
+                Kind::Field("ESC") => format!("ESC {:02X}", x.value),
+                Kind::Data => format!("{:02X}", x.value),
+                _ => text(x),
+            };
+            (p.iter().map(said).collect::<Vec<_>>().join(" "), p)
+        };
+        let (said, p) = read(true, 0);
+        assert_eq!(said, "LP111 LP100 LP000 LP001 LP000 ESC 87 08 0F LP100 LP101 LP111");
+        assert_eq!(p[5].value, LPDT);
+        // the command where its sixteen states are: from the sixth state of the record, each 250 samples long
+        assert!((p[5].t0 - 1250.0).abs() <= 2.0 && (p[5].t1 - 5250.0).abs() <= 2.0, "{:?}", p[5]);
+        // three bits more: no byte, they stay states (the last of them runs into the one the lane leaves with)
+        assert!(read(true, 3).0.ends_with("ESC 87 08 0F LP100 LP000 LP100 LP000 LP100 LP000 LP100 LP101 LP111"));
+        // no entry: states
+        assert!(!read(false, 0).0.contains("ESC"));
     }
 
     /// With the high-speed levels near the low one of the low-power states, the lines on their way from one wire

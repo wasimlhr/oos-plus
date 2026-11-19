@@ -563,8 +563,10 @@ Changed:
   packet begins with its sync and every FlexRay frame with its start sequence, and a box with little room read "SYNC
   FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR 5 ...", "IND 4 ID 02A ..."); drawn
   as fields, and in the Fields view, it is there as before. A module says which field that is (`lead`).
-- Simulated traffic for Manchester, MLT-3 and Modbus ASCII (host-tested, and played and decoded on a unit): each has a
-  SIM bus preset now, 23 in all. Six bytes at the rate of the list's usual entry for the two line codes, the read
+- Simulated traffic for Manchester, MLT-3 and Modbus ASCII (host-tested, and played and decoded on a unit) and for
+  the DS2482 bridge and JTAG (host-tested: a 1-Wire reset, Skip ROM and a command through the bridge's I2C
+  commands; a TAP reset, an instruction and the 32 bits of an identification): each has a SIM bus preset now, 25
+  in all. Six bytes at the rate of the list's usual entry for the two line codes, the read
   request of the Modbus RTU preset as its characters for Modbus ASCII.
 - C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
   yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
@@ -587,7 +589,11 @@ Changed:
   type 00 and the data CA ED), "VC 0 DT 11 WC 5 CRC A2D0 ... 16 2E 2F FD C7 CRC 00A9" for a long one, the second
   header as "COPY". On the capture: 64 headers and 43 payloads, every checksum right. The Events pane has VC, DT,
   WC, Data and CRC. The layout is the one the capture shows; the low byte of the first header word is not read.
-  Not decoded: low-power data, of which the states are listed.
+  Low-power data is read too: after the escape entry (from the stop state: A high, all low, C high, all low) a
+  bit is one line high and all lines low after it, the first eight are the command and the bits after them
+  bytes, the first bit sent the least significant. The capture has 64 such messages, "ESC 87 LPDT 08 0F 0F 01",
+  where its instrument lists the LPDT command 87h and the same four bytes. Bits that fill no byte and the states
+  around the data stay states.
 - I3C decoder: a common command code has its name, "CCC 90 GETSTATUS" (host-tested; not yet verified on
   hardware). The decoder had the table of the names and the band wrote the number alone. A code the table does
   not have keeps its number.

@@ -44,7 +44,7 @@ Per decoder:
 | USB | capture: full speed packets agree | band | - |
 | 1-Wire | capture: transactions agree | band, columns, ROM command names | - |
 | I3C | capture: commands and bytes as on the lines; one read differs from the reference | band, command names | - |
-| C-PHY | capture: low-power states, 64 bursts as packets, every header and payload checksum right | band, columns | low-power data |
+| C-PHY | capture: 64 bursts as packets, every checksum right; 64 low-power messages as the instrument lists them | band, columns | - |
 | Manchester | capture: the bits agree at the rate of the signal; no packet structure | band | structure |
 | the 13 others | host only: no capture | band | captures |
 
@@ -140,8 +140,8 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
-   1-Wire and I3C write the names of their commands, the words of a C-PHY burst are read as its packet. Open
-   here: the low-power data of C-PHY, the packet structure of a Manchester line. For the latter the capture and
+   1-Wire and I3C write the names of their commands, the words of a C-PHY burst are read as its packet and its
+   low-power data as a command and bytes. Open here: the packet structure of a Manchester line. For the latter the capture and
    the picture of its instrument say what is wanted: packets of 12 bits every 14.5 bit times, read as a sync bit,
    a header of 3 bits, 6 data bits and a trailer of 2, each width a setting of the instrument. The decoder lists
    bytes. Packets need those widths as settings of the decoder, which a module's options (a list of choices
@@ -150,9 +150,9 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    9-bit, Modbus RTU, S/PDIF, USB PD): every one decodes its traffic without an error. That is the first run on a
    unit for seven of the decoders of step 5. It showed that a preset left the lines of the preset before it on
    the screen, which is fixed and seen fixed on the unit, as is the text of a USB packet. Manchester, MLT-3
-   and Modbus ASCII got traffic of their own and ran on the unit likewise: 23 presets, 10 of the 13 decoders of
-   step 5 among them. Without a preset: Parallel, JTAG, DS2482, Quad-SPI (their lines do not fit the four roles
-   of a preset as they are), and C-PHY.
+   and Modbus ASCII got traffic of their own and ran on the unit likewise, the DS2482 bridge and JTAG on the
+   host: 25 presets, 12 of the 13 decoders of step 5 among them. Without a preset: Quad-SPI (six lines, a preset
+   has four roles), Parallel (its lines are channels, not roles), and C-PHY.
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 
