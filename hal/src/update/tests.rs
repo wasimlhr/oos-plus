@@ -969,3 +969,54 @@ fn kexec_stage_takes_kexec_tools_for_the_same_tree_too() {
     let (_, staged) = kexec_stage(&mut f.card(), &f.state(), &p, &[pk()], &RUN, Some(&old), None, None).unwrap();
     assert!(staged.expect("a kexec start").tree.is_none());
 }
+
+// Break it catches: hex with a sign taken as a byte ("+f" was 0x0f), in a trusted key, a signature line or the update
+// state (upstream #223)
+#[test]
+fn unhex_takes_only_hex_digits() {
+    assert_eq!(hash::unhex("+f"), None);
+    assert_eq!(hash::unhex("-0"), None);
+    assert_eq!(hash::unhex("0aFf"), Some(vec![0x0a, 0xff]));
+    assert!(pkg::parse_keys(&format!("{}+f\n", "00".repeat(31))).is_empty());
+}
+
+/// A tree of `depth` nodes, each the only child of the one before.
+fn nested(depth: usize) -> Vec<u8> {
+    let mut b = Vec::new();
+    for v in [0xd00d_feedu32, 0, 56, 0, 40, 17, 16, 0, 0, 0] {
+        b.extend_from_slice(&v.to_be_bytes());
+    }
+    b.extend_from_slice(&[0; 16]);
+    b.extend([0, 0, 0, 1, 0, 0, 0, 0].repeat(depth));
+    b.extend([0, 0, 0, 2].repeat(depth));
+    b.extend_from_slice(&[0, 0, 0, 9]);
+    let total = (b.len() as u32).to_be_bytes();
+    b[4..8].copy_from_slice(&total);
+    b[12..16].copy_from_slice(&total);
+    b
+}
+
+// Break it catches: a damaged tree of 30 000 levels that overflows the stack when it is written, compared or dropped
+// (upstream #223)
+#[test]
+fn a_tree_nested_too_deep_is_refused() {
+    let deepest = fdt::Fdt::parse(&nested(fdt::DEPTH_MAX)).expect("a tree of DEPTH_MAX levels is taken");
+    assert_eq!(fdt::Fdt::parse(&deepest.to_bytes()), Ok(deepest));
+    assert!(fdt::Fdt::parse(&nested(fdt::DEPTH_MAX + 1)).is_err(), "a tree one level deeper is taken");
+    assert!(fdt::Fdt::parse(&nested(30_000)).is_err(), "a tree of 30 000 nested nodes is taken");
+}
+
+// Break it catches: an RSCE table longer than its container, read entry by entry up to 2^32 times (upstream #223)
+#[test]
+fn an_rsce_table_longer_than_its_container_is_refused() {
+    let mut b = rsce(b"tree");
+    assert_eq!(fdt::rsce_file(&b, fdt::TREE), Ok(&b"tree"[..]));
+    b[10] = 0; // entries of no blocks: every entry is the first
+    assert_eq!(fdt::rsce_file(&b, fdt::TREE), Ok(&b"tree"[..]), "one entry of no blocks is still the first");
+    b[12..16].copy_from_slice(&u32::MAX.to_le_bytes());
+    assert!(fdt::rsce_file(&b, fdt::TREE).is_err(), "a table of 2^32 - 1 entries in a container of {} bytes", b.len());
+    b[12..16].copy_from_slice(&2u32.to_le_bytes());
+    assert!(fdt::rsce_file(&b, fdt::TREE).is_err(), "two entries of no blocks");
+    (b[10], b[12]) = (1, 3);
+    assert!(fdt::rsce_file(&b, fdt::TREE).is_err(), "a table of three blocks from block 1 in {} bytes", b.len());
+}
