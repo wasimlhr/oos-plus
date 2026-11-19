@@ -1539,7 +1539,7 @@ impl Ui {
         // the row ends before the buttons at its right (`studio_row_limit`, without the row's own rectangle)
         let (x0, limit) = (span_x + 4, span_x + span_w - self.studio_row_tail());
         let value = f.sb.width("0.000 MHz");
-        if self.studio_classic() { return self.classic_wrap_now(limit - x0); }
+        if self.studio_classic() { return self.classic_wrap_now(span_w); }
         let mut x = x0;
         for (_, name) in &names {
             let w = 16 + name + 8 + value + 10;
@@ -1569,11 +1569,11 @@ impl Ui {
     /// place on the row, and an arrow. It opens the table of the measurements. It is as small as a badge: the row had
     /// a button "Meas . N" here over its whole height and a "+N" chip beside it, which did the same, and the two took
     /// the room of two measurements. Studio badges: on the last line (the row grows upwards: the chip stays); the
-    /// classic strip: at the end of its first line.
+    /// classic strip: the last thing of a line that has the room after its pairs (`classic_layout`).
     pub(super) fn studio_list_chip(&self) -> Rect {
         let r = self.studio_row();
         if self.studio_classic() && !self.studio_pinned().is_empty() {
-            return Rect::new(r.right() - 4 - LIST_W, r.y + 3, LIST_W, super::classicbadges::CLASSIC_ROW - 3);
+            return self.classic_layout().chip;
         }
         let h = self.studio_chip_h();
         Rect::new(r.right() - 4 - LIST_W, r.bottom() - 3 - h, LIST_W, h)

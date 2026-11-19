@@ -165,7 +165,8 @@ fn the_badge_row_has_one_named_button_that_opens_the_table_and_the_style_is_on_t
     frame(&mut u);
     assert!(u.studio_classic() && u.m.studio_classic);
     assert!(!u.studio.compact && !u.studio.hide_badges);
-    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= u.studio_list_chip().x));
+    let at = u.studio_list_chip();
+    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= at.x || r.bottom() <= at.y || at.bottom() <= r.y), "no pair under the chip");
     shot(&mut u, "badges-classic");
     u.select_option(Item::BadgeStyle, "Studio");
     frame(&mut u);

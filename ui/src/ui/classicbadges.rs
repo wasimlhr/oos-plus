@@ -4,7 +4,7 @@
 //! where there is no value. A column is as wide as its own widest name and widest value, and its values begin at
 //! one place, so the rows read as a table and as many columns fit as the names allow. A tap on a pair opens the
 //! same popup as a Studio badge.
-use super::studio::MeasKey;
+use super::studio::{MeasKey, LIST_W};
 use super::*;
 
 /// Height of a row of the strip.
@@ -26,6 +26,8 @@ pub(super) struct ClassicLayout {
     pub values: Vec<i32>,
     /// pinned measurements that have no place
     pub overflow: usize,
+    /// the chip at the end of the row (`Ui::studio_list_chip`): the last thing of one of the lines
+    pub chip: Rect,
 }
 
 impl Ui {
@@ -58,13 +60,14 @@ impl Ui {
     }
 
     /// The pairs of each source that is shown, with the width of the name and of the value. A value counts at least
-    /// as wide as "-00.0 mV" and in steps of 8 px, so a value that changes moves no column, and at most as wide as
-    /// "0.000 MHz", the room every column had before: a text in the place of a value ("needs more edges") is cut at
-    /// the end of its cell and costs the line no column (seen on a unit, 2026-11-18: five columns where seven fit).
+    /// as wide as "00.0 mV" and in steps of 8 px, so a value that changes by a digit moves no column, and at most as
+    /// wide as "0.000 MHz", the room every column had before: a text in the place of a value ("needs more edges") is
+    /// cut at the end of its cell and costs the line no column (seen on a unit, 2026-11-18: five columns where seven
+    /// fit).
     fn classic_cells(&self) -> Vec<(WaveId, Vec<(MeasKey, i32, i32)>)> {
         let f = self.fonts();
         let rows = self.meas_rows();
-        let (floor, most) = (f.sb.width("-00.0 mV"), f.sb.width("0.000 MHz"));
+        let (floor, most) = (f.sb.width("00.0 mV"), f.sb.width("0.000 MHz"));
         self.classic_groups().into_iter().take(MAX_GROUPS).map(|(src, keys)| (src, keys.into_iter().filter_map(|key| {
             let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
             Some((key, f.s.width(&self.studio_badge_name(key, &r.name)), (f.sb.width(&r.text()).clamp(floor, most) + 7) / 8 * 8))
@@ -73,7 +76,7 @@ impl Ui {
 
     /// The columns of the strip in `avail` px, each as (width of its names, width of its values): as many as fit,
     /// every column as wide as its own widest name and widest value. The strip had every column as wide as the widest
-    /// pair of all, with room for "0.000 MHz" in each: six columns where seven fit.
+    /// pair of all, with room for "0.000 MHz" in each: six columns where seven or eight fit.
     fn classic_columns(cells: &[(WaveId, Vec<(MeasKey, i32, i32)>)], avail: i32) -> Vec<(i32, i32)> {
         let longest = cells.iter().map(|(_, c)| c.len()).max().unwrap_or(0).max(1);
         // column k holds the pairs k, k + cols, ... of every source
@@ -83,17 +86,23 @@ impl Ui {
         (1..=longest).rev().map(widths).find(|w| w.iter().map(|&(n, v)| Self::classic_col_w(n, v)).sum::<i32>() <= avail).unwrap_or_else(|| widths(1))
     }
 
-    /// The width of a column: 4 to the name, 6 between the name and the value, 10 to the next column.
+    /// The width of a column: 3 to the name, 5 between the name and the value, 8 to the next column.
     fn classic_col_w(name: i32, value: i32) -> i32 {
-        4 + name + 6 + value + 10
+        3 + name + 5 + value + 8
     }
 
-    /// How many sources need a second line: their pairs do not fit one. `room`: from the first chip to the chip at
-    /// the end of the row. The columns are those of `classic_layout`.
-    pub(super) fn classic_wrap_now(&self, room: i32) -> i32 {
+    /// From the chip of a source to the end of the row: the room of the pairs. The chip at the end of the row
+    /// (`ClassicLayout::chip`) is on one line and takes no column from the others.
+    fn classic_room(row: Rect) -> i32 {
+        row.right() - 4 - (row.x + 4 + CHIP_W + 8)
+    }
+
+    /// How many sources need a second line: their pairs do not fit one. `width`: of the row. The columns are those of
+    /// `classic_layout`.
+    pub(super) fn classic_wrap_now(&self, width: i32) -> i32 {
         let cells = self.classic_cells();
         let n = cells.len() as i32;
-        let cols = Self::classic_columns(&cells, room - CHIP_W - 8).len();
+        let cols = Self::classic_columns(&cells, Self::classic_room(Rect::new(0, 0, width, 0))).len();
         let long = cells.iter().filter(|(_, c)| c.len() > cols).count() as i32;
         long.min((MAX_LINES - n).max(0))
     }
@@ -103,11 +112,11 @@ impl Ui {
         let groups = self.classic_groups();
         let cells = self.classic_cells();
         let x0 = row.x + 4;
-        let columns = Self::classic_columns(&cells, self.studio_row_limit() - (x0 + CHIP_W + 8));
+        let columns = Self::classic_columns(&cells, Self::classic_room(row));
         let cols = columns.len();
         // where each column starts, from the first
         let starts: Vec<i32> = columns.iter().scan(0, |x, &(n, v)| { let at = *x; *x += Self::classic_col_w(n, v); Some(at) }).collect();
-        let mut l = ClassicLayout { chips: Vec::new(), pairs: Vec::new(), values: Vec::new(), overflow: 0 };
+        let mut l = ClassicLayout { chips: Vec::new(), pairs: Vec::new(), values: Vec::new(), overflow: 0, chip: Rect::new(row.right() - 4 - LIST_W, row.y + 3, LIST_W, CLASSIC_ROW - 3) };
         // the lines beyond one per source go to the sources whose pairs do not fit their line, in order
         let mut spare = self.classic_spare(cells.len() as i32);
         let mut line = 0;
@@ -118,13 +127,25 @@ impl Ui {
             for (c, &(key, _, _)) in pairs.iter().enumerate() {
                 if c >= cols * lines { l.overflow += 1; continue; }
                 let (k, cy) = (c % cols, (c / cols) as i32 * CLASSIC_ROW);
-                let cell = Rect::new(x0 + CHIP_W + 8 + starts[k], y + cy, Self::classic_col_w(columns[k].0, columns[k].1) - 4, CLASSIC_ROW - 3);
+                let cell = Rect::new(x0 + CHIP_W + 8 + starts[k], y + cy, Self::classic_col_w(columns[k].0, columns[k].1) - 3, CLASSIC_ROW - 3);
                 l.pairs.push((key, cell));
                 // the values of a column begin at one place, after its widest name
-                l.values.push(cell.x + 4 + columns[k].0 + 6);
+                l.values.push(cell.x + 3 + columns[k].0 + 5);
             }
             line += lines as i32;
         }
+        // the chip at the end of the row is the last thing of a line, not a column of its own: it goes to the last
+        // line that has the room after its pairs, and only when every line is full does the last line give it a pair
+        let free = |y: i32| l.pairs.iter().filter(|(_, r)| r.y == y).map(|(_, r)| r.right()).max().unwrap_or(0) + 6 <= l.chip.x;
+        let ys: Vec<i32> = (0..line.max(1)).map(|k| row.y + 3 + k * CLASSIC_ROW).collect();
+        l.chip.y = ys.iter().rev().copied().find(|y| free(*y)).unwrap_or(ys[ys.len() - 1]);
+        let (chip, before) = (l.chip, l.pairs.len());
+        let keep: Vec<bool> = l.pairs.iter().map(|(_, r)| r.y != chip.y || r.right() + 6 <= chip.x).collect();
+        let mut kept = keep.iter();
+        l.pairs.retain(|_| *kept.next().unwrap());
+        let mut kept = keep.iter();
+        l.values.retain(|_| *kept.next().unwrap());
+        l.overflow += before - l.pairs.len();
         // the sources beyond the rows of the strip
         l.overflow += groups.iter().skip(MAX_GROUPS).map(|(_, keys)| keys.len()).sum::<usize>();
         l
@@ -136,7 +157,7 @@ impl Ui {
         let l = self.classic_layout();
         let row = self.studio_row();
         for (g, (src, r)) in l.chips.iter().enumerate() {
-            if g > 0 { cv.hline(row.x + 6, self.studio_row_limit(), r.y - 2, LINE); }
+            if g > 0 { cv.hline(row.x + 6, row.right() - 6, r.y - 2, LINE); }
             cv.round(*r, 4, self.wave_color(*src), 255);
             cv.text_in(&f.sb, *r, 1, &self.wave_name(*src), DARK_TEXT);
         }
@@ -145,7 +166,7 @@ impl Ui {
             if self.studio.popup == Some(*key) { cv.round_outline(*r, 4, ACCENT); }
             let cy = r.y + (r.h + 1) / 2 + 4;
             cv.set_clip(Rect::new(r.x, r.y, r.w, r.h + 3));
-            cv.text(&f.s, r.x + 4, cy, &self.studio_badge_name(*key, &m.name), DIM);
+            cv.text(&f.s, r.x + 3, cy, &self.studio_badge_name(*key, &m.name), DIM);
             cv.text(&f.sb, *value_x, cy, &m.text(), TEXT);
             cv.no_clip();
         }

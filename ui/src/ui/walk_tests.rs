@@ -2569,7 +2569,8 @@ fn the_classic_strip_is_a_table_and_ends_with_one_small_chip() {
     assert!(chip.w <= 60 && chip.h <= 24 && chip.right() <= row.right() && chip.y >= row.y && chip.bottom() <= row.bottom(), "{chip:?} in {row:?}");
     // the pairs: in the row, before the chip, none over another
     for (i, (_, r)) in l.pairs.iter().enumerate() {
-        assert!(r.x >= row.x && r.right() <= chip.x && r.y >= row.y && r.bottom() <= row.bottom(), "pair {i} at {r:?}");
+        let beside = r.y < chip.bottom() && chip.y < r.bottom();
+        assert!(r.x >= row.x && r.right() <= if beside { chip.x } else { row.right() } && r.y >= row.y && r.bottom() <= row.bottom(), "pair {i} at {r:?}");
         for (_, o) in &l.pairs[i + 1..] { assert!(r.right() <= o.x || o.right() <= r.x || r.bottom() <= o.y || o.bottom() <= r.y, "{r:?} over {o:?}"); }
     }
     // a table: the pairs of a column begin at one place, and so do their values
@@ -2611,7 +2612,10 @@ fn the_classic_strip_has_a_line_for_each_of_four_channels() {
     assert_eq!(l.chips.iter().map(|c| c.0).collect::<Vec<_>>(), (0..4).map(WaveId::Ch).collect::<Vec<_>>());
     assert_eq!(l.pairs.len() + l.overflow, u.m.meas.len(), "every measurement has a place or is counted");
     assert!(l.overflow >= 4 && u.studio_badges_more().map(|m| m.1) == Some(l.overflow), "the reference's four and what did not fit: {}", l.overflow);
-    assert!(l.pairs.iter().all(|(_, r)| r.y >= row.y && r.bottom() <= row.bottom() && r.right() <= chip.x), "in the row, before the chip");
+    assert!(l.pairs.iter().all(|(_, r)| r.y >= row.y && r.bottom() <= row.bottom() && r.right() <= row.right() && (r.right() <= chip.x || r.bottom() <= chip.y || chip.bottom() <= r.y)), "in the row, none under the chip");
+    // the chip is the last thing of a line that has the room: no line gives it a pair while another has room
+    let on_its_line = l.pairs.iter().filter(|(_, r)| r.y == chip.y).count();
+    assert!(l.chips.iter().any(|(_, c)| c.y == chip.y) && on_its_line < l.pairs.iter().filter(|(_, r)| r.y == l.chips[0].1.y).count(), "the chip is on a line with room: {chip:?}");
     // a text in the place of a value does not widen its column beyond the room of a value: no pair is wider than a
     // name and "0.000 MHz" need
     let f = u.fonts();

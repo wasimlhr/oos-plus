@@ -19,7 +19,8 @@ Fixed:
     and an arrow; it opens the table. The button "Meas . N" over the whole height of the row and the "+N" chip
     beside it, which did the same, took the room of two measurements.
   - The classic strip reads as a table: a column is as wide as its own widest name and value, and the values of a
-    column begin at one place. Seven pairs fit a line of the 1024 px screen where six did.
+    column begin at one place. Seven to nine pairs fit a line of the 1024 px screen where six did. The chip at the
+    end of the row is the last thing of a line that has the room after its pairs, not a column of its own.
   - Four channels with measurements have a line of the strip each (it had three lines: the measurements of the
     fourth channel were all behind "+N").
   - The Menu button of the top bar is three lines; the gear read as a sun at that size.
