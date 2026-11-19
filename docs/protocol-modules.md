@@ -26,6 +26,8 @@ demo traffic, a view), with one line that registers it:
 | first settings | channels, LA lines, threshold, shared-row values and the demo's trigger when the protocol is chosen | `setup` (CH3 / CH4, 1.65 V) |
 | old setups | how a setup saved before the protocol was a module maps onto its options | `legacy` (none) |
 | demo traffic | the host build's simulated signals, on the channels of `setup` | `demo` (none) |
+| frames | what a message is on the band and in the Events pane: a frame from one start field to the next, whatever pauses it has inside; and marks the module adds that are no field of the bus | `frame_start` (messages by idle time), `mark` (none) |
+| columns | the Events pane where it lists the frames of one protocol and is wide enough: a column for the identifier, the data, the CRC ... in place of one text | `columns` (one text) |
 | own view | Display > Second pane > Bus view: a status line and columns of rows, with a memory across records | `view` (none) |
 
 Only `info` is required, and in it the `decoder` and the `bit` time

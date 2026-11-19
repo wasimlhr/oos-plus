@@ -1197,7 +1197,9 @@ fn the_measurements_read_a_known_pulse_train() {
 /// drawn beside the live channel, both can be measured, and the eye diagram takes the reference as its source.
 #[test]
 fn every_sim_preset_sits_in_a_ref_beside_the_live_channels() {
-    let presets = Ui::new(Source::Demo { t: 0.0 }).options(Item::SimPreset);
+    // the lanes: a bus preset is a few rounds of traffic in several references, with a test of its own
+    // (`sim_protocol.rs`)
+    let presets: Vec<String> = oos_dsp::serial::names().into_iter().map(|s| s.to_string()).collect();
     assert!(presets.len() >= 3, "{presets:?}");
     for (n, name) in presets.iter().enumerate() {
         let mut u = fresh_live(Layout::Studio);

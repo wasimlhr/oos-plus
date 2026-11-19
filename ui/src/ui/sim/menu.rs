@@ -29,6 +29,10 @@ impl Ui {
             Item::SimShow,
             Item::SimDefaults,
         ];
+        // a bus preset is the traffic of a protocol: the knobs of a lane (rate, pattern, levels, jitter) are not its
+        if self.sim_bus().is_some() {
+            items = vec![Item::SimPreset, Item::SimSlot, Item::SimAddRef, Item::SimPlay, Item::SimShow];
+        }
         // Studio only: the sheet offers a file for the SIM slot
         if self.m.layout == Layout::Studio { items.insert(items.iter().position(|it| *it == Item::SimAddRef).map_or(0, |i| i + 1), Item::SimLoad); }
         // Run plays the signal of the knobs; the references that are shown (files, added signals) have a play of their own
@@ -115,7 +119,7 @@ impl Ui {
     pub(in crate::ui) fn sim_value(&self, it: Item) -> Option<String> {
         let m = &self.m;
         Some(match it {
-            Item::SimPreset => self.sim_lane().name.into(),
+            Item::SimPreset => self.sim_preset_name().into(),
             Item::SimRate => si_short(m.sim_rate, "b/s"),
             Item::SimPat => format!("PRBS-{}", m.sim_prbs),
             Item::SimHigh => si_short(m.sim_vhigh, "V"),
@@ -170,7 +174,11 @@ impl Ui {
 
     pub(in crate::ui) fn sim_options(&self, it: Item) -> Option<Vec<String>> {
         Some(match it {
-            Item::SimPreset => serial::names().into_iter().map(|s| s.to_string()).collect(),
+            // the lanes, then the buses
+            Item::SimPreset => {
+                let buses = sim_protocol::buses().iter().map(|b| b.1);
+                serial::names().into_iter().chain(buses).map(|s| s.to_string()).collect()
+            }
             Item::SimPat => PRBS.iter().map(|n| format!("PRBS-{n}")).collect(),
             Item::SimSsc => vec!["Off".into(), "On".into()],
             Item::SimSscCenter => vec!["Down, DC removed".into(), "Center".into()],
@@ -184,9 +192,19 @@ impl Ui {
         let running = self.sim_requested_running();
         match it {
             Item::SimPreset => {
-                let n = LANES.len() as i32;
-                self.m.sim_preset = (self.m.sim_preset as i32 + d).rem_euclid(n) as usize;
-                self.m.apply_sim_preset();
+                // one list: the lanes, then the buses
+                let buses = sim_protocol::buses();
+                let at = match self.sim_bus() {
+                    Some((p, _)) => LANES.len() + buses.iter().position(|b| b.0 == p).unwrap_or(0),
+                    None => self.m.sim_preset,
+                };
+                let next = (at as i32 + d).rem_euclid((LANES.len() + buses.len()) as i32) as usize;
+                if next < LANES.len() {
+                    (self.m.sim_preset, self.m.sim_bus) = (next, None);
+                    self.m.apply_sim_preset();
+                } else {
+                    self.m.sim_bus = Some(buses[next - LANES.len()].0);
+                }
             }
             Item::SimRate => { let v = self.ladder_eng(it, self.m.sim_rate.max(ranges::SIM_RATE.0), d, ranges::SIM_RATE); self.m.sim_rate = v; }
             Item::SimPat => {
@@ -281,6 +299,12 @@ impl Ui {
             }
             Item::SimPlay if self.sim_mode() => {
                 self.record_key(key::RUNSTOP);
+            }
+            // a bus preset: its lines into references, a decoder on them, and those played
+            Item::SimPlay if self.sim_bus().is_some() => {
+                if let Err(e) = self.sim_bus_play() {
+                    self.toast(&format!("SIM: {e}"));
+                }
             }
             // Run is the signal of the knobs, whatever else is on the screen: a reference that is shown stays shown
             // beside it, and the knobs go on changing the signal. (It used to play the shown references instead, and

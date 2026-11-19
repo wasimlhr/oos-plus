@@ -15,6 +15,8 @@ use std::sync::{mpsc, Arc};
 
 #[path = "sim_bus_candidate.rs"]
 mod sim_bus_candidate;
+#[path = "sim_protocol.rs"]
+mod sim_protocol;
 #[cfg(test)]
 #[path = "sim_bus_tests.rs"]
 mod sim_bus_tests;
@@ -463,6 +465,11 @@ impl Ui {
         let Some(free) = (0..NREF).find(|&i| self.refs[i].is_none()) else {
             return self.toast("All ten refs are in use: clear one to add a signal");
         };
+        // a bus: its lines from the first free slot on
+        if self.sim_bus().is_some() {
+            self.m.sim_slot = free;
+            return self.sim_bus_add();
+        }
         if self.sim_mode() {
             // Live restores the settings from before Play: the SIM knobs of now come along
             let now = self.m.clone();
@@ -478,6 +485,9 @@ impl Ui {
     }
 
     pub(super) fn sim_add_to_ref(&mut self) {
+        if self.sim_bus().is_some() {
+            return self.sim_bus_add();
+        }
         if self.sim_mode() {
             return self.sim_add_next();
         }
@@ -773,16 +783,21 @@ impl Ui {
     }
 
     pub(crate) fn sim_preset_name(&self) -> &'static str {
-        self.sim_lane().name
+        self.sim_bus().map_or(self.sim_lane().name, |b| b.1)
     }
 
     /// Selects a preset by the name on the SIM menu.
     pub(crate) fn sim_preset_set(&mut self, name: &str) -> bool {
         let name = name.trim().trim_matches('"');
+        if let Some(bus) = sim_protocol::buses().iter().find(|b| b.1.eq_ignore_ascii_case(name)) {
+            self.sim_cancel_generation();
+            self.m.sim_bus = Some(bus.0);
+            return true;
+        }
         match serial::LANES.iter().position(|l| l.name.eq_ignore_ascii_case(name)) {
             Some(i) => {
                 self.sim_cancel_generation();
-                self.m.sim_preset = i;
+                (self.m.sim_preset, self.m.sim_bus) = (i, None);
                 self.m.apply_sim_preset();
                 true
             }
@@ -809,7 +824,9 @@ impl Ui {
 
     /// On starts fresh captures of the selected preset. Off holds the accepted record.
     pub(crate) fn sim_play_set(&mut self, on: bool) -> Result<(), String> {
-        if on {
+        if on && self.sim_bus().is_some() {
+            self.sim_bus_play()?;
+        } else if on {
             self.sim_load(true)?;
         } else {
             self.sim_cancel_generation();

@@ -9,6 +9,10 @@ use super::*;
 pub struct I3c;
 
 impl Protocol for I3c {
+    /// A frame is a transfer: from a start condition to the next (a repeated start goes on with the same one).
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::I3C
     }

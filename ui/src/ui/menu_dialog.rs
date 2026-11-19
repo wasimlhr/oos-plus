@@ -132,7 +132,7 @@ impl Ui {
             Item::TrigSrc | Item::TrigSrc2 => {
                 return self.trigger_sources().into_iter().map(Self::trigger_wave_label).collect()
             }
-            Item::DecSrc => return self.decoder_sources().into_iter().map(decode_source_name).collect(),
+            Item::DecSrc => return self.decoder_source_names(Some(self.m.dec_src)),
             Item::RefSrc => return ch_names(),
             Item::MeasSrc | Item::MeasSrcB | Item::CurSrcB | Item::CatSourceC | Item::CatSourceD => {
                 return self.wave_names()
@@ -169,17 +169,16 @@ impl Ui {
                     .map_or(Vec::new(), |o| o.choices.iter().map(|c| c.to_string()).collect())
             }
             Item::DecSrc4 | Item::DecDiff => {
-                return std::iter::once("None".into())
-                    .chain(self.decoder_sources().into_iter().map(decode_source_name))
-                    .collect()
+                let own = if it == Item::DecSrc4 { self.m.dec_src4 } else { self.m.dec_diff };
+                return std::iter::once("None".into()).chain(self.decoder_source_names(own)).collect();
             }
             Item::DecCanH => &["RX/TX", "CAN_H"],
             Item::TrigBusWhat => &["Frame", "ID/Addr", "Data", "Error"],
-            Item::DecSrc2 => return self.decoder_sources().into_iter().map(decode_source_name).collect(),
+            Item::DecSrc2 => return self.decoder_source_names(Some(self.m.dec_src2)),
             Item::DecCs => {
                 return (if self.m.dec_proto == Proto::CPHY { Vec::new() } else { vec!["None".into()] })
                     .into_iter()
-                    .chain(self.decoder_sources().into_iter().map(decode_source_name))
+                    .chain(self.decoder_source_names(self.m.dec_cs))
                     .collect()
             }
             Item::DecMode => &["0", "1", "2", "3"],

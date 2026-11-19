@@ -160,6 +160,26 @@ pub fn bursts(p: &[Packet]) -> Vec<std::ops::Range<usize>> {
     out
 }
 
+/// The messages among decoded fields of a protocol that says where a frame begins: a message runs from one such
+/// field to the next. Fields before the first of them (a record that starts inside a frame) are a message too.
+/// Unlike [`bursts`] no pause splits a frame: a LIN response that comes late, a stretched I2C clock and the idle
+/// time inside a USB transaction belong to their frame.
+pub fn frames(p: &[Packet], begins: impl Fn(&Packet) -> bool) -> Vec<std::ops::Range<usize>> {
+    if p.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut from = 0;
+    for k in 1..p.len() {
+        if begins(&p[k]) {
+            out.push(from..k);
+            from = k;
+        }
+    }
+    out.push(from..p.len());
+    out
+}
+
 /// The bits of a byte `i2c` decoded: eight bits MSB first (of an address its seven bits and the read/write bit) and
 /// the acknowledge bit, each around the rising clock edge it was sampled at. A byte's packet runs from its first
 /// clock edge to its ninth; the seven between them are taken as evenly spaced, which a clock stretched inside a byte
@@ -633,6 +653,11 @@ mod tests {
             [at(0.0, Kind::Start), at(0.0, Kind::Data), at(1.0, Kind::Stop), at(1.0, Kind::Start), at(1.0, Kind::Data)];
         assert_eq!(bursts(&framed), [0..3, 3..5]);
         assert!(bursts(&[]).is_empty());
+        // a protocol that says where its frames begin: no pause splits one, and what stands before the first is one
+        let (data, brk) = (Kind::Data, Kind::Break);
+        let late = [at(0.0, data), at(1.0, brk), at(1.0, data), at(9.0, data), at(1.0, brk)];
+        assert_eq!(frames(&late, |x| x.kind == Kind::Break), [0..1, 1..4, 4..5]);
+        assert!(frames(&[], |_| true).is_empty());
     }
 
     /// The bits of an I2C byte lie on the clock edges of a decoded transfer: the data line read in the middle of

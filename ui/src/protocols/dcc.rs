@@ -18,6 +18,10 @@ use oos_dsp::decode::Kind;
 pub struct Dcc;
 
 impl Protocol for Dcc {
+    /// A frame begins with its preamble.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("PRE"))
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::DCC
     }

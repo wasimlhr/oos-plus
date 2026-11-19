@@ -12,6 +12,10 @@ use oos_dsp::decode::Kind;
 pub struct Swd;
 
 impl Protocol for Swd {
+    /// A frame begins with the request of the host.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("REQ"))
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::SWD
     }

@@ -174,9 +174,12 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
   `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART or I2C band
   has a row of its bits (start, data, parity, stop; for I2C the bits of a byte, read or write, and the
-  acknowledge) and marks where each was sampled
+  acknowledge) and marks where each was sampled. An I2C byte that was not acknowledged is an error, except the one
+  a controller ends a read with; an address of ten bits is one field ("2A5 W")
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
-- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553
+- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes its bit rate
+  from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses what a frame is
+  checked against
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
 - Other: USB low/full speed, USB PD, parallel
 - Model railways: NMRA DCC (contributed by Arjen Halma), with a view of the layout in Display > Second pane > Bus view:
@@ -318,6 +321,12 @@ run of lines whose time does not go back, so a file of several sweeps keeps the 
 **Live** restores the live session. Measurements follow each captured window and recompute when a stopped
 reference is panned. **Measure** opens categorized choices with Source, Settings, and Selected; large readout
 lists have page controls. The Windows app announces its actual SCPI and HiSLIP listeners over mDNS.
+
+**SIM > Preset** lists lanes for an eye (PCIe, USB 3, SATA, 10GBASE-KR) and, after them, a bus for every protocol
+whose traffic the scope can make ("I2C bus", "LIN bus", "CAN bus" ...). With a bus, **Run simulation mode** puts the
+lines of the bus into reference slots from the SIM slot on, sets a decoder that is off to the protocol on them, and
+plays them: a decoder can be tried with nothing connected, and **Live** brings the decoders back as they were.
+**Add to ref** does the same without playing.
 
 **SIM > Advanced** adds SSC profile, deviation and modulation frequency, duty-cycle distortion, and
 correlated random jitter with its corner frequency (in Minimal and Studio these are rows of the Jitter and
@@ -792,7 +801,9 @@ shows the gain over frequency, the settings come back afterwards.
 **Panes.** Display > Pane puts a second view under the waveform: Spectrum with a peak list, Results with statistics, cursors
 and peaks, decoder Events, or Trend with two charts. Tap the pane's title for its settings, a trend chart to change its
 measurement, the peak list's button to sort it. The x closes the pane. The Events pane has its choices in its head:
-Messages (what was sent without a long pause is one row), Fields (a row per character or field) or Lines (a character
+Messages (a frame of the protocol is one row, with the columns of the protocol where the pane is wide: ID, DLC, Data
+and CRC for CAN; for a UART or SPI without a chip select a row is what was sent without a long pause), Fields
+(a row per character or field) or Lines (a character
 stream split at its line feeds), and Errors only. Its list scrolls by the bar or the finger, and a tap on a row marks
 that message: the row, its box in the decoder's band and its time on the plot. A stopped scope also moves the view to
 it; a running one is left running. A tap on a box of the band marks its row from the plot. Made small, the pane keeps

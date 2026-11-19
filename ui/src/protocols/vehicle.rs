@@ -30,6 +30,14 @@ const CANFD_OPTIONS: [Opt; 3] = [
 pub struct CanFd;
 
 impl Protocol for CanFd {
+    /// A frame in the Events pane: its identifier, the number of its data bytes, the bytes, the CRC.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("ID", Col::Label("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+    }
+    /// A frame begins with its start of frame.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::CAN_FD
     }
@@ -50,6 +58,14 @@ impl Protocol for CanFd {
 pub struct FlexRay;
 
 impl Protocol for FlexRay {
+    /// A frame in the Events pane: its identifier, the cycle, the payload, the frame CRC.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("ID", Col::Label("ID ")), ("Cycle", Col::Label("CYC ")), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+    }
+    /// A frame begins with its transmission start sequence.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("TSS"))
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::FLEXRAY
     }
@@ -81,6 +97,14 @@ const SENT_OPTIONS: [Opt; 2] = [
 pub struct Sent;
 
 impl Protocol for Sent {
+    /// A frame in the Events pane: its status nibble, the data nibbles, the CRC.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("Status", Col::Label("STAT ")), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+    }
+    /// A frame begins with its calibration pulse.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("SYNC"))
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::SENT
     }

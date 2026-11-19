@@ -49,6 +49,14 @@ static I2C_OPTIONS: [Opt; 2] = [
 ];
 
 impl Protocol for I2c {
+    /// A transfer in the Events pane: the address it begins with, and what follows.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("Address", Col::Addr), ("Data", Col::Rest)]
+    }
+    /// A frame is a transfer: from a start condition to the next (a repeated start goes on with the same one).
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::I2C
     }
@@ -116,6 +124,14 @@ static SPI_OPTIONS: [Opt; 3] = [
 ];
 
 impl Protocol for Spi {
+    /// A frame in the Events pane: the words of each data line.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("MOSI", Col::First), ("MISO", Col::Second)]
+    }
+    /// The mark where the chip select goes active: it begins a message and is no field of the bus.
+    fn mark(&self, p: &Packet) -> bool {
+        p.kind == oos_dsp::decode::Kind::Start
+    }
     fn options(&self) -> &'static [Opt] {
         &SPI_OPTIONS
     }
@@ -163,6 +179,14 @@ impl Protocol for Spi {
 pub struct Can;
 
 impl Protocol for Can {
+    /// A frame in the Events pane: its identifier, the number of its data bytes, the bytes, the CRC.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("ID", Col::Label("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+    }
+    /// A frame begins with its start of frame.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::CAN
     }
@@ -197,6 +221,14 @@ const LIN_OPTIONS: [Opt; 1] =
 pub struct Lin;
 
 impl Protocol for Lin {
+    /// A frame in the Events pane: its identifier, the data of the response, the checksum.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("ID", Col::Label("ID ")), ("Data", Col::Data), ("Checksum", Col::Label("CS "))]
+    }
+    /// A frame begins with its break; the response may come late.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Break)
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::LIN
     }

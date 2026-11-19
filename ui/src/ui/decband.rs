@@ -143,16 +143,29 @@ fn run_piece(m: &Model, p: &Packet) -> String {
     packet_text(m, p)
 }
 
+/// Whether the piece of `p` in a message's text is a character: it stands beside the next character without a space.
+fn is_char(m: &Model, p: &Packet) -> bool {
+    ascii(m) && p.kind == DecKind::Data && packet_tag(m, p).is_none()
+}
+
+/// What stands between the pieces of two fields: nothing between two characters, a space where one of them is a
+/// number or a mark (an I2C address before its text read "50 ROSP").
+fn glue(m: &Model, before: &Packet, after: &Packet) -> &'static str {
+    if is_char(m, before) && is_char(m, after) { "" } else { " " }
+}
+
 /// The text of a message: its fields in order, as many as fit into `room` pixels, then "...". Characters stand side by
 /// side, other values with a space between them. Empty when not even the first field fits.
 pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String {
     let dots = f.width("...");
-    let glue = if ascii(m) { "" } else { " " };
     let mut s = String::new();
     let mut w = 0;
+    let mut before: Option<&Packet> = None;
     let mut fields = said(pk).peekable();
     while let Some(p) = fields.next() {
         let piece = run_piece(m, p);
+        let glue = before.map_or("", |b| glue(m, b, p));
+        before = Some(p);
         let pw = f.width(&piece) + if s.is_empty() { 0 } else { f.width(glue) };
         // what is left out is said by the dots, which need their room
         let rest = if fields.peek().is_none() { 0 } else { dots };
@@ -175,9 +188,27 @@ fn said(pk: &[Packet]) -> impl Iterator<Item = &Packet> {
     pk.iter().filter(|p| p.kind != DecKind::Start)
 }
 
+/// The messages among the fields `p` of the decoder `m` is the view of: the frames of a protocol that says where one
+/// begins ([`crate::protocols::Protocol::frame_start`]), else what was sent without a long pause.
+pub(super) fn messages(m: &Model, p: &[Packet]) -> Vec<std::ops::Range<usize>> {
+    match m.dec_proto.module().and_then(|x| x.frame_start()) {
+        Some(begins) => oos_dsp::decode::frames(p, begins),
+        None => oos_dsp::decode::bursts(p),
+    }
+}
+
 /// The whole text of a message, as its box would hold it with all the room.
 pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
-    said(pk).map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
+    let mut s = String::new();
+    let mut before: Option<&Packet> = None;
+    for p in said(pk) {
+        if let Some(b) = before {
+            s.push_str(glue(m, b, p));
+        }
+        s.push_str(&run_piece(m, p));
+        before = Some(p);
+    }
+    s
 }
 
 /// The lines of the decoder `m` is the view of, in the order of its roles ("CH4 CH3 CH2"; on the LA "D8 D10").
@@ -232,10 +263,12 @@ fn bit_label(b: &Bit) -> (String, &'static str) {
         // a stop bit is 1; what a failed one was read as is said
         BitKind::Stop if b.ok => ("Stop".into(), "T"),
         BitKind::Stop => (format!("Stop {}", v), "T"),
-        // I2C: the direction of an address, and whether the byte was acknowledged (a 0 on the line)
+        // I2C: the direction of an address, and whether the byte was acknowledged (a 0 on the line). The byte that
+        // ends a read is not, and its cell says so without being an error (`ok` colours it)
         BitKind::Rw if b.level == Some(true) => ("Read".into(), "R"),
         BitKind::Rw => ("Write".into(), "W"),
-        BitKind::Ack => (if b.ok { "ACK" } else { "NAK" }.into(), if b.ok { "A" } else { "N" }),
+        BitKind::Ack if b.level == Some(true) => ("NAK".into(), "N"),
+        BitKind::Ack => ("ACK".into(), "A"),
     }
 }
 
@@ -463,7 +496,7 @@ impl Ui {
             cv.round_outline(Rect::new(x0 - 2, y - 2, x1 - x0 + 5, h + 4), 4, ACCENT);
         };
         // the messages of the record, and of each field on the screen whether it begins one
-        let groups = oos_dsp::decode::bursts(&packets);
+        let groups = messages(m, &packets);
         let mut g = 0;
         let spans: Vec<Span> = packets
             .iter()

@@ -18,6 +18,14 @@ const ARINC_OPTIONS: [Opt; 1] = [Opt { name: "Bit rate", choices: &ARATE_NAMES, 
 pub struct Arinc429;
 
 impl Protocol for Arinc429 {
+    /// A word in the Events pane: its label, SDI, data and sign/status matrix.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("Label", Col::Label("L ")), ("SDI", Col::Label("SDI ")), ("Data", Col::Data), ("SSM", Col::Label("SSM "))]
+    }
+    /// A word is a message: it begins with its label.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| matches!(p.kind, oos_dsp::decode::Kind::Id { .. }))
+    }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::ARINC429
     }

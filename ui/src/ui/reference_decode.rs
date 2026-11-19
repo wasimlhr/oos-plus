@@ -389,6 +389,17 @@ impl Ui {
     pub(super) fn decoder_sources(&self) -> Vec<usize> {
         (0..n_ch()).chain((0..NREF).filter(|&i| self.refs[i].is_some()).map(|i| DEC_REF_BASE + i)).collect()
     }
+    /// The names a line's row of the Decode menu lists: the channels and the references that hold a waveform, and
+    /// the line's own source when that is a reference that is empty now. A decoder left on "R1" after the reference
+    /// was cleared, or after a restart, had a row of channels with none of them chosen and no word of R1.
+    pub(super) fn decoder_source_names(&self, own: Option<usize>) -> Vec<String> {
+        let mut sources = self.decoder_sources();
+        if let Some(own) = own.filter(|s| !sources.contains(s) && matches!(decode_wave(*s), Some(WaveId::Ref(_)))) {
+            sources.push(own);
+            sources.sort_unstable();
+        }
+        sources.into_iter().map(decode_source_name).collect()
+    }
     pub(super) fn decoder_vpd(&self) -> f32 {
         self.decoder_vpd_of(self.m.dec_src)
     }
