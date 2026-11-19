@@ -463,7 +463,9 @@ Changed:
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
   row not yet verified on hardware). A signal that does not reach the 1.65 V of a new set-up
   decoded nothing (seen on a unit, 2026-11-19: a 0.43 V swing through a probe set to 1x).
-- Decoders: each line of a decoder may have a threshold of its own (host-tested, not yet verified on hardware). A
+- Decoders: each line of a decoder may have a threshold of its own (host-tested; (unit), 2026-11-19: an SPI bus
+  of a 5 V data line and a clock and select of 0.5 V read nothing at one threshold, and its bytes after
+  `:BUS1:THReshold AUTO` gave 2.63 V, 0.23 V and 0.27 V; the rows by touch not yet verified on hardware). A
   bus whose lines have different levels (a 5 V data line beside a clock seen at 0.3 V) could not be read with the
   one threshold a decoder had. Decode lists a threshold for the second, third and fourth line of the protocol
   ("Clock threshold", "CS threshold"); a line that has none set takes the decoder's, as before, and a set-up from
