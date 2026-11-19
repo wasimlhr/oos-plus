@@ -582,8 +582,7 @@ mod tests {
             let l = Lines { lines, dt, thr: s.thr, hy: 0.1, opt, sh, chans: lines, src };
             let p = m.info().decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e));
             assert!(!p.is_empty(), "{}: nothing decoded from its demo", m.name());
-            // (I2C had an exception here: the byte that ends a read is not acknowledged, and the decoder called it an
-            // error. It does not any more.)
+            // the byte that ends an I2C read is not acknowledged, and is no error: no module has an exception here
             let bad = p.iter().find(|x| !x.ok);
             assert!(bad.is_none(), "{}: errors in its own demo: {:?}", m.name(), bad);
         }

@@ -693,10 +693,11 @@ pub fn distortion(v: &[f32], dt: f64, fundamental: Option<f64>, harmonics: usize
     if x.len() < 64 || !(dt > 0.0) {
         return None;
     }
-    // the periods in the record: from the frequency given, else from a first look through the narrowest window
+    // the periods in the record: from the frequency given when it lies below Nyquist (where `distortion_with` uses
+    // it), else from a first look through the narrowest window
     let span = x.len() as f64 * dt;
     let periods = match fundamental {
-        Some(f) if f > 0.0 => f * span,
+        Some(f) if f > 0.0 && f < 0.5 / dt => f * span,
         _ => distortion_with(&x, dt, None, 1, HANN)?.f1 * span,
     };
     let window = if periods >= 20.0 {
@@ -709,6 +710,7 @@ pub fn distortion(v: &[f32], dt: f64, fundamental: Option<f64>, harmonics: usize
     distortion_with(&x, dt, fundamental, harmonics, window)
 }
 
+/// `distortion` through one window of `BH7`, `BH4` and `HANN`, on the finite samples `x`.
 fn distortion_with(
     x: &[f64],
     dt: f64,
