@@ -803,7 +803,11 @@ impl Ui {
                 if f.mb.width(&text) > tw {
                     // the small font, then without the space ("500mV"); what still does not fit is cut at its end, so
                     // the digits stay. A scale is never left out: "1 V" fitted where "500 mV" drew nothing
-                    let text = if f.s.width(&text) <= tw { text } else { text.replace(' ', "") };
+                    let mut text = if f.s.width(&text) <= tw { text } else { text.replace(' ', "") };
+                    // (cut between two characters: half an "m" read as an "n", and 100 mV as "100n", seen on a unit)
+                    while f.s.width(&text) > tw && text.chars().count() > 1 {
+                        text.pop();
+                    }
                     cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM });
                 } else {
                     let detail = if hidden { "trace hidden".to_string() } else { self.studio_ch_detail(c, tw) };
