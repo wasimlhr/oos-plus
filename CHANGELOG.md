@@ -499,6 +499,11 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- MIL-STD-1553 decoder: the bits of a word are followed from edge to edge (host-tested, and on a capture of a real
+  bus on the host; not yet verified on hardware). Every bit has an edge in its middle; the decoder took the edge
+  in the sync and read all 17 bits on a 1 us grid from there, which a bus a few percent off its rate leaves
+  before the word ends: of the 71 words of a capture whose words are 20.8 us long, 37 were misread or had a
+  parity error. They are read now (2 are marked, the two the capture has a fault in), up to 5 % off the rate.
 - LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
   capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
   rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud
