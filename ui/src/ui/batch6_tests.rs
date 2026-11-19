@@ -38,8 +38,6 @@ fn drag(u: &mut Ui, (x0, y0): (i32, i32), (x1, y1): (i32, i32)) {
     touch(u, Phase::Up, x1, y1);
 }
 
-fn centre(r: Rect) -> (i32, i32) { (r.x + r.w / 2, r.y + r.h / 2) }
-
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -47,45 +45,6 @@ fn shot(u: &mut Ui, name: &str) {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(std::path::Path::new(&dir).join(format!("{name}.png")), crate::store::png_of(&cv)).unwrap();
     }
-}
-
-#[test]
-fn the_studio_zoom_bar_has_scale_plus_minus_readout_and_close() {
-    let mut u = zoomed(Layout::Studio);
-    shot(&mut u, "b6-zoom-bar-studio");
-    let bar = u.studio_zoom_bar().expect("bar");
-    let row = u.zoom_readout();
-    for (i, r) in [bar.label, bar.tdiv, bar.plus, bar.minus, bar.close].iter().enumerate() {
-        assert!(r.w > 0 && r.x >= row.x && r.right() <= row.right() && r.y >= row.y && r.bottom() <= row.bottom(), "part {i} {r:?} in {row:?}");
-    }
-    assert!(bar.label.right() <= bar.tdiv.x && bar.tdiv.right() <= bar.plus.x && bar.plus.right() <= bar.minus.x);
-    assert!(bar.minus.right() <= bar.center.x && bar.fit.right() <= bar.more.x && bar.more.right() <= bar.close.x);
-    let (tscale, delay, tfine) = (u.m.tscale, u.m.delay, u.m.tfine);
-    let z0 = u.m.zscale;
-    let factor0 = u.studio_time_zoom();
-    // + zooms in one 1-2-5 step, - back out; a touch 19 px off the middle of the drawn button still counts (40 px target)
-    let (x, y) = centre(bar.plus);
-    u.tap(x, y - 19);
-    assert!(u.m.zscale < z0, "plus zooms in");
-    assert!(u.studio_time_zoom() > factor0);
-    let (x, y) = centre(bar.minus);
-    u.tap(x, y + 19);
-    assert_eq!(u.m.zscale, z0, "minus zooms out");
-    // the main time base is never touched, and the readout is the one source of truth
-    assert_eq!((u.m.tscale, u.m.delay, u.m.tfine), (tscale, delay, tfine));
-    assert!((u.studio_time_zoom() - u.m.time_per_div() / tscales()[u.m.zscale]).abs() < 1e-3);
-    // the scale field opens the time/div entry
-    let (x, y) = centre(bar.tdiv);
-    u.tap(x, y);
-    assert_eq!(u.menu, MenuId::Horizontal);
-    u.close_menu();
-    // the readout "(Nx zoom)" has room
-    assert!(bar.readout.w >= 30, "room for the readout: {:?}", bar.readout);
-    // the close button turns zoom off
-    let (x, y) = centre(bar.close);
-    u.tap(x, y);
-    assert!(!u.m.zoom, "x closes the zoom");
-    assert_eq!((u.m.tscale, u.m.delay), (tscale, delay));
 }
 
 #[test]

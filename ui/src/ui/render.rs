@@ -44,15 +44,14 @@ impl Ui {
             cv.set_clip(o);
             cv.blend(Rect::new(o.x, o.y, (xa - o.x).max(0), o.h), BG, 170);
             cv.blend(Rect::new(xb, o.y, (o.x + o.w - xb).max(0), o.h), BG, 170);
+            // the window is the same slim frame with a handle at each end in every layout
+            cv.rect(Rect::new(xa, o.y, (xb - xa).max(2), o.h), ACCENT);
+            for edge in [xa, xb] {
+                cv.round(Rect::new(edge - 3, o.y + o.h / 2 - 12, 7, 24), 3, ACCENT, 255);
+            }
             if self.m.layout == Layout::Studio {
                 self.draw_studio_overview_axis(cv, o);
-                self.draw_studio_window(cv, o, xa, xb);
                 self.draw_studio_overview_cursors(cv, o);
-            } else {
-                cv.rect(Rect::new(xa, o.y, (xb - xa).max(2), o.h), ACCENT);
-                for edge in [xa, xb] {
-                    cv.round(Rect::new(edge - 3, o.y + o.h / 2 - 12, 7, 24), 3, ACCENT, 255);
-                }
             }
             cv.no_clip();
             for &lane in &self.wins {
@@ -123,7 +122,7 @@ impl Ui {
         let cv = l.over();
         if self.m.zoom && !self.xy_over() && !self.view_on() {
             let (tz, dz) = self.view();
-            if self.m.layout != Layout::Studio { self.draw_zoom_readout(cv, tz, dz); } else { self.draw_zoom_tab(cv); }
+            self.draw_zoom_readout(cv, tz, dz);
         }
         if self.eye_open() {
             // eye_pane_rect maps Full to the plot while retaining floating panes.
@@ -436,6 +435,12 @@ impl Ui {
                 if self.m.ch[k].on && self.shows(k) {
                     let y = self.y_of_volts(k, 0.0).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
                     taken.push(Rect::new(a.x, y - 9, MARK_W + 2, 18));
+                }
+            }
+            // Studio: every source has a handle there, the references and the math channels too
+            if self.m.layout == Layout::Studio {
+                for (_, r) in self.studio_handle_rects() {
+                    taken.push(Rect::new(a.x, r.y, r.right() - a.x + 2, r.h));
                 }
             }
             // what a lane has at its right edge: the corner buttons with their words, and the trigger tag with its value

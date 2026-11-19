@@ -89,10 +89,6 @@ impl Ui {
         if self.m.zoom {
             v.extend([Item::ZScale, Item::ZDelay]);
         }
-        // Studio: where the zoom controls are is a setting of the zoom, on its tab
-        if self.m.layout == Layout::Studio {
-            v.push(Item::ZoomBar);
-        }
         v.push(Item::AutoRoll);
         v
     }

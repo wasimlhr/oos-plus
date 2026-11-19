@@ -40,17 +40,9 @@ impl Ui {
     /// Name, volts per division, and the record's sample rate, beside the trace.
     pub(super) fn draw_ref_badge(&self, cv: &mut Canvas, area: Rect, y: i32, col: Rgb, slot: usize, r: &RefWave) {
         let f = self.fonts();
-        // Studio lanes: the same small outlined badge a channel has at the left of its lane. The name, the scale and
-        // the signal are on the reference's pill in the bottom bar, so nothing covers the trace
-        if self.m.layout == Layout::Studio && self.stacked() {
-            // at the middle of the lane, where a channel's badge sits when its ground line is centred: clear of the
-            // volt labels at the top and the time labels at the bottom
-            let _ = y;
-            // right of the volt labels, which a reference has down its whole lane
-            let b = Rect::new(area.x + 52, (area.y + area.h / 2 - 12).max(area.y + 2), 44, 24);
-            cv.round(b, 4, col, 255);
-            cv.round(b.inset(1), 3, BG, 255);
-            cv.text_in(&f.sb, b, 1, &format!("R{}", slot + 1), col);
+        // Studio: a reference has the handle of every source, on its zero level (`studio_draw_handles`). The name,
+        // the scale and the signal are on the reference's pill in the bottom bar, so nothing covers the trace
+        if self.m.layout == Layout::Studio {
             return;
         }
         let maximum = (area.w - 16).clamp(36, 300);
@@ -207,6 +199,10 @@ impl Ui {
     pub(super) fn draw_markers(&self, cv: &mut Canvas) {
         let f = self.fonts();
         let a = self.area;
+        // Studio: the handle of every source of this window, over the traces (`studio_handle_rects`)
+        if self.m.layout == Layout::Studio {
+            self.studio_draw_handles(cv);
+        }
         // channel ground markers at the left edge of the grid
         for c in 0..NCH {
             if !self.m.ch[c].on || !self.shows(c) {
@@ -214,7 +210,7 @@ impl Ui {
             }
             let y = self.y_of_volts(c, 0.0).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
             let col = CH_COLORS[c];
-            if self.m.layout == Layout::Studio { self.studio_lane_badge(cv, c, y); continue; }
+            if self.m.layout == Layout::Studio { continue; }
             let r = Rect::new(a.x + 2, y - 8, 16, 16);
             cv.round(r, 3, col, 255);
             cv.triangle([(a.x + 17, y - 6), (a.x + 24, y), (a.x + 17, y + 6)], col);

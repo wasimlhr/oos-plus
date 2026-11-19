@@ -723,10 +723,9 @@ impl Ui {
 
     /// Zoom: overview on top, a readout row (with Close), zoomed view below.
     pub(super) fn split_zoom(&self, g: Rect) -> (Rect, Rect) {
-        // Studio: no row of its own, the zoom controls are in the title strip of the waveform; the others keep their
-        // 32 px row
+        // the zoom row is the same 32 px in every layout
         let studio = self.m.layout == Layout::Studio;
-        let gap = if studio { 6 } else { 32 };
+        let gap = 32;
         // Studio: the overview has the height the user gave it; short, the overview goes first, the lanes and the
         // zoom bar keep their room
         let top = if studio {
@@ -744,15 +743,6 @@ impl Ui {
 
     /// The strip between the overview and the zoomed view.
     pub(super) fn zoom_readout(&self) -> Rect {
-        // Studio: the zoom controls sit in the pull-down tab over the zoom view, or in the title strip of the waveform
-        if self.zoom_tab_mode() { return self.zoom_tab_region(); }
-        if self.m.layout == Layout::Studio {
-            let r = self.dock_wave_rect();
-            let s = Self::dock_strip(r);
-            let left = s.x + 150;
-            let right = self.dock_extra_rect(dock::VKind::Wave, r).map_or(Self::dock_close_rect(r).x, |e| e.x);
-            return Rect::new(left, s.y, (right - left).max(1), s.h);
-        }
         let (o, z) = self.split_zoom(self.grid);
         Rect::new(o.x, o.y + o.h, o.w, (z.y - o.y - o.h).max(1))
     }

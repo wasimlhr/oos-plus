@@ -148,7 +148,6 @@ impl Ui {
         // does not matter)
         self.md_tick();
         self.panel_fling_step(dt_wall);
-        self.zoom_tab_tick();
         if self.m.layout == Layout::Studio
             && self.azr.spec.is_none()
             && self.last[0].is_some()

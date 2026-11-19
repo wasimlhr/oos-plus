@@ -195,7 +195,7 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Horizontal => (&["Time base", "Zoom"], |it| match it {
-                Zoom | ZScale | ZDelay | ZoomBar => Slot::Tab(1),
+                Zoom | ZScale | ZDelay => Slot::Tab(1),
                 AutoDeskew | ClearDeskew => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
@@ -444,6 +444,9 @@ impl Ui {
                 if menu == MenuId::Cursor && tabs.len() > 1 {
                     let rest: Vec<Item> = tabs.drain(1..).flat_map(|t| t.rows).collect();
                     tabs[0].rows.extend(rest);
+                    // one tab again: the rows in the order of the menu, as the dialog has them
+                    let order = self.sheet_source_items(menu);
+                    tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
                 }
             }
             // SIM: the slot's rows follow the slot, and Live comes last, so no row moves when SIM mode starts under

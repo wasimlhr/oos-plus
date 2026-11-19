@@ -73,6 +73,9 @@ there. These instructions are the same for every agent and every person; the rea
   from one list (ADR 0063). A second UI or a new layout of the screen needs a decision record first.
 - A row added to a menu gets its place on the Studio sheet of that menu (`sheet_plan`), so Studio offers what Default
   offers (oos-plus ADR 0030, `docs/adr/ui-ux/0030-studio-offers-what-default-offers.md`).
+- A source drawn in the Studio plot takes its handle from `studio_handle_rects`, and a sheet row keeps the name and
+  the place its row has in the menu: no badge and no row name of a layout's own (oos-plus ADR 0031,
+  `docs/adr/ui-ux/0031-every-source-has-one-handle-on-its-zero-level.md`).
 
 ## The development agent
 

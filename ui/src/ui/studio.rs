@@ -127,10 +127,6 @@ pub(super) struct Studio {
     pub add_menu: bool,
     /// Measure is open as the page of every layout (categories, Selected, Settings), not as the quick Add panel
     pub meas_page: bool,
-    /// the pull-down zoom toolbar is open: the time it was last used
-    pub zoom_open: Option<f64>,
-    /// a finger on the zoom tab or its label: where it went down, and whether it pulls the toolbar open (else shut)
-    pub zoom_pull: Option<(i32, bool)>,
     /// the context menu of the plot (a long press on the lanes)
     pub ctx: Option<super::studioctx::Ctx>,
     /// Full was chosen for the eye (Side is the Studio default: the waveform stays in view)
@@ -147,14 +143,14 @@ pub(super) struct Studio {
     /// the table and the panel list only the measurements of this source
     pub filter: Option<WaveId>,
     pub drag: Option<StudioDrag>,
-    /// the zoom toolbar menu is open
-    pub zoom_menu: bool,
     /// the display scale popup of this channel's lane is open
     pub yzoom: Option<usize>,
     /// where the lanes drew their channel badges last frame
     pub lane_badges: std::cell::RefCell<Vec<(usize, Rect)>>,
     /// where the decoders drew their names last frame (decoder, rectangle): a tap on one opens its Decode menu
     pub dec_labels: std::cell::RefCell<Vec<(usize, Rect)>>,
+    /// where the handles of the references and the math channels were drawn last frame (`studio_draw_handles`)
+    pub handles: std::cell::RefCell<Vec<(super::workspace::Trace, Rect)>>,
     /// Studio was the layout at the last frame: coming into it applies the entry rules (`studio_sync`)
     pub was: bool,
     /// Search 1 (Add > Search): its own source, level and slope
@@ -358,6 +354,7 @@ impl Ui {
     pub(super) fn studio_frame_start(&mut self) {
         self.studio.lane_badges.get_mut().clear();
         self.studio.dec_labels.get_mut().clear();
+        self.studio.handles.get_mut().clear();
         self.sync_view_state();
         // coming into Studio by any road (menu, recalled setup, restart) applies its entry rules: its bars show
         let is = self.m.layout == Layout::Studio;
@@ -1217,7 +1214,6 @@ impl Ui {
     /// A tap in Studio's own bars and panels. False: the tap belongs to the plot, a menu or a dialog.
     pub(super) fn studio_tap(&mut self, x: i32, y: i32) -> bool {
         self.studio_sync();
-        if self.zoom_tab_tap(x, y) { return true; }
         // the info card is above everything, the Add panel included
         if self.info_card_tap(x, y) { return true; }
         if self.power_dlg || self.wlan.osk.is_some() || self.dialog.is_some() || self.load_slot_ask { return false; }
@@ -1356,26 +1352,67 @@ impl Ui {
         g.x + ((0.5 + (t - delay as f64) / (HDIV as f64 * tpd as f64)) * g.w as f64).round() as i32
     }
 
-    /// The channel badge at the left edge of a lane, on the channel's ground line (`draw_markers`).
-    pub(super) fn studio_lane_badge(&self, cv: &mut Canvas, c: usize, y: i32) {
-        let a = self.area;
-        let col = CH_COLORS[c];
-        let r = Rect::new(a.x + 3, y - 12, 44, 24);
-        self.studio.lane_badges.borrow_mut().push((c, r));
-        cv.round(r, 4, col, 255);
-        cv.round(r.inset(1), 3, BG, 255);
-        cv.text_in(&self.fonts().sb, r, 1, &format!("CH{}", c + 1), col);
+    /// The zero level of a source in the window that is being drawn, as a screen line: the ground of a channel, the
+    /// zero of a reference or of a math channel. None for a source this window does not draw, and for a spectrum.
+    pub(super) fn studio_zero_y(&self, source: super::workspace::Trace) -> Option<i32> {
+        use super::workspace::Trace;
+        let y = match source {
+            Trace::Channel(c) => { if !self.m.ch[c].on || !self.shows(c) { return None; } self.y_of_volts(c, 0.0) }
+            Trace::Reference(i) => {
+                let r = self.refs.get(i)?.as_ref().filter(|r| r.on && r.vpd > 0.0)?;
+                if self.ref_win_of(i) != self.cur_win { return None; }
+                self.zoom_y_of_divs(self.area, r.offset / r.vpd).clamp(-1e4, 1e4).round() as i32
+            }
+            Trace::Math(k) => {
+                if !self.m.math_shown(k) || self.math_win_of(k) != self.cur_win { return None; }
+                let c = self.m.math_ch(k);
+                if c.op == MathOp::Fft { return None; }
+                self.zoom_y_of_divs(self.area, c.offset).clamp(-1e4, 1e4).round() as i32
+            }
+        };
+        Some(y)
     }
 
-    /// The badge of a source that is no channel (a math trace) at the left edge of its lane, on its zero line: the
-    /// look of `studio_lane_badge`, kept inside the lane. It is a name, not a handle: a tap on it is a tap on the lane.
-    pub(super) fn studio_source_badge(&self, cv: &mut Canvas, name: &str, col: Rgb, y: i32) {
+    /// Where the handles of the window that is being drawn sit, in the order of the sources (channels, references,
+    /// math). A handle is on its source's zero level at the left edge. A zero level outside the plot pins it to that
+    /// edge, clear of the time labels; handles that would cover each other (sources with the same zero level in one
+    /// graticule) stand side by side, so each stays on its own level.
+    pub(super) fn studio_handle_rects(&self) -> Vec<(super::workspace::Trace, Rect)> {
         let a = self.area;
-        let y = y.clamp(a.y + (a.h / 2).min(13), a.y + a.h - (a.h / 2).min(13));
-        let r = Rect::new(a.x + 3, y - 12, 44, 24);
-        cv.round(r, 4, col, 255);
-        cv.round(r.inset(1), 3, BG, 255);
-        cv.text_in(&self.fonts().sb, r, 1, name, col);
+        let half = 12.min(a.h / 2);
+        // the lane that carries the time labels keeps them readable, and the last one the Fit row above them
+        let last = self.cur_win + 1 >= self.wins.len();
+        let times = if last { self.ref_badge_pad(a).max(self.fonts().s.size + 8) } else if self.stacked() && !self.studio_lane_has_own_time() { 0 } else { self.fonts().s.size + 8 };
+        let low = (a.y + a.h - times - half).max(a.y + half);
+        let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
+        for source in self.trace_sources() {
+            let Some(zero) = self.studio_zero_y(source) else { continue };
+            let mut r = Rect::new(a.x + 3, zero.clamp(a.y + half, low) - 12, 44, 24);
+            while r.right() + 2 < a.x + a.w && out.iter().any(|(_, b)| overlaps(*b, r)) { r.x += r.w + 2; }
+            out.push((source, r));
+        }
+        out
+    }
+
+    /// Draws the handles of the window that is being drawn: an outlined badge with the name of each source on its
+    /// zero level (`studio_handle_rects`). Channels, references and math channels have the same one, in Stacked and
+    /// in Overlay; they are drawn after every trace, so none runs through a name.
+    pub(super) fn studio_draw_handles(&self, cv: &mut Canvas) {
+        use super::workspace::Trace;
+        for (source, r) in self.studio_handle_rects() {
+            let (name, col) = match source {
+                Trace::Channel(c) => (format!("CH{}", c + 1), CH_COLORS[c]),
+                Trace::Reference(i) => (format!("R{}", i + 1), self.wave_color(WaveId::Ref(i))),
+                Trace::Math(k) => (format!("M{}", k + 1), MATH_COLORS[k % MATH_COLORS.len()]),
+            };
+            match source {
+                Trace::Channel(c) => self.studio.lane_badges.borrow_mut().push((c, r)),
+                _ => self.studio.handles.borrow_mut().push((source, r)),
+            }
+            cv.round(r, 4, col, 255);
+            cv.round(r.inset(1), 3, BG, 255);
+            cv.text_in(&self.fonts().sb, r, 1, &name, col);
+        }
     }
 
     /// The T marker over the lanes, the cursor tags and the shaded band between the cursors.
@@ -1801,7 +1838,6 @@ impl Ui {
 
     /// What floats over the lanes and the bars: the badge popup.
     pub(super) fn draw_studio_floating(&self, cv: &mut Canvas) {
-        self.draw_studio_zoom_menu(cv);
         self.draw_studio_yzoom(cv);
         self.draw_studio_sz_pops(cv);
         let (Some(key), Some(p)) = (self.studio.popup, self.studio_popup_rect()) else { return };
@@ -2716,7 +2752,6 @@ impl Ui {
                 // the bars with an Undo are above the strips of the views
                 if [self.md_hide_bar(), self.md_undo_bar()].into_iter().flatten().any(|(bar, _)| bar.contains(x, y)) { return self.studio_eat(x, y); }
                 if self.ov_divider_down(x, y) { return true; }
-                if self.zoom_tab_down(x, y) { return self.studio_eat(x, y); }
                 if self.dock_down(x, y) { return true; }
                 if self.md_down(x, y) { return true; }
                 if self.axis_down(x, y) { return true; }
@@ -2756,7 +2791,6 @@ impl Ui {
                 false
             }
             Phase::Move => {
-                self.zoom_tab_move(y);
                 if let Some((_, x0, y0)) = self.studio.sz.press { if (x - x0).abs() > 12 || (y - y0).abs() > 12 { self.studio.sz.press = None; } }
                 if self.trig_slider_move(y) { return true; }
                 if self.ov_divider_move(y) { return true; }
@@ -2795,7 +2829,6 @@ impl Ui {
                 true
             }
             Phase::Up => {
-                self.studio.zoom_pull = None;
                 self.studio.sz.press = None;
                 // the lift of a hold (`studio_hold_tick`) is not a tap
                 if std::mem::take(&mut self.studio.sz.fired) {
@@ -2832,7 +2865,7 @@ impl Ui {
 
 // ---------------------------------------------------------------------------------------------------- zoom
 
-/// The rows of the Zoom & navigation menu.
+/// What the zoom row and the zoom commands do.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum ZoomRow {
     Minus,
@@ -2840,48 +2873,38 @@ pub(super) enum ZoomRow {
     /// vertical zoom in and out
     VPlus,
     VMinus,
-    Tdiv,
     Fit,
     Center,
     ResetY,
     Close,
 }
 
-/// The chips of the zoom toolbar.
+/// The buttons of the zoom row: the row of the Default layout (`Ui::zoom_controls`), by name.
 #[derive(Clone, Copy)]
 pub(super) struct ZoomBar {
-    /// the "Zoom" caption
+    /// the text at the left: "Zoom", the time per division, the position and the vertical factor
     pub label: Rect,
-    /// the time/div field of the zoomed view
-    pub tdiv: Rect,
-    /// [+] and [-]: one step of the 1-2-5 sequence in and out
+    /// H+ and H-: one step of the 1-2-5 sequence in and out
     pub plus: Rect,
     pub minus: Rect,
-    /// the vertical zoom: [Y+] and [Y-], one step of the display scale of the zoomed lanes (an empty rectangle when there is no room)
+    /// V+ and V-: one step of the display scale of the zoomed lanes
     pub vplus: Rect,
     pub vminus: Rect,
-    /// "(20x zoom)"
-    pub readout: Rect,
-    /// [x]: zoom off
-    pub close: Rect,
-    pub center: Rect,
-    pub fit: Rect,
-    /// "Box": arms the drawing of a zoom box on the plot
+    /// Box: arms the drawing of a zoom box on the plot
     pub boxr: Rect,
-    pub more: Rect,
+    /// Reset: the zoom window back to the whole screen
+    pub fit: Rect,
+    /// Close: zoom off
+    pub close: Rect,
 }
 
-const ZMENU_W: i32 = 300;
-
-/// A zoom factor as the toolbar writes it: "5x", "2.5x", "12x".
-pub(super) fn zoom_text_pub(n: f32) -> String { zoom_text(n) }
 fn zoom_text(n: f32) -> String {
     let n = if n.is_finite() { n.max(1.0) } else { 1.0 };
     if n >= 9.95 { format!("{:.0}\u{d7}", n) } else { format!("{:.1}\u{d7}", n).replace(".0\u{d7}", "\u{d7}") }
 }
 
 impl Ui {
-    /// Studio's zoom bar sits in the strip between the overview and the zoomed lanes.
+    /// Studio shows the zoom row while its plot is zoomed.
     pub(super) fn studio_zoom_active(&self) -> bool {
         self.m.layout == Layout::Studio && self.m.zoom && !self.xy_over() && !self.view_on() && self.studio.view != StudioView::Only
     }
@@ -2891,180 +2914,17 @@ impl Ui {
         self.m.time_per_div() / tscales()[self.m.zscale].max(1e-12)
     }
 
+    /// The zoom row of Studio is the row of the Default layout, between the overview and the zoomed lanes: the text
+    /// at the left, then H-, H+, V-, V+, Box, Reset and Close (`zoom_controls`, `draw_zoom_readout`). These are its
+    /// buttons by name.
     pub(super) fn studio_zoom_bar(&self) -> Option<ZoomBar> {
-        if !self.studio_zoom_active() || (self.zoom_tab_mode() && !self.zoom_tab_open()) { return None; }
+        if !self.studio_zoom_active() { return None; }
         let row = self.zoom_readout();
-        // a thin strip: the chips are 20 px high, the touch target around them is the usual 40 (`zoom_row_y`)
-        let (y, h) = (row.y + 1, (row.h - 2).max(18));
-        let close = Rect::new(row.right() - 46, y, 40, h);
-        let more = Rect::new(close.x - 6 - 40, y, 40, h);
-        // a narrow plot (the eye or SIM beside it) keeps these two as icons
-        let (fit_w, center_w) = if row.w < 560 { (40, 40) } else if row.w < 760 { (72, 92) } else { (118, 136) };
-        let fit = Rect::new(more.x - 6 - fit_w, y, fit_w, h);
-        let center = Rect::new(fit.x - 6 - center_w, y, center_w, h);
-        let boxr = Rect::new(center.x - 6 - 44, y, 44, h);
-        let f = self.fonts();
-        let label = Rect::new(row.x + 8, y, f.mb.width("Zoom") + 6, h);
-        let tdiv = Rect::new(label.right() + 6, y, 118, h);
-        let plus = Rect::new(tdiv.right() + 6, y, 40, h);
-        let minus = Rect::new(plus.right() + 6, y, 40, h);
-        // the vertical zoom comes after the time zoom, when the chips on the right leave the room
-        let vplus = Rect::new(minus.right() + 12, y, 40, h);
-        let vminus = Rect::new(vplus.right() + 6, y, 40, h);
-        let (vplus, vminus) = if vminus.right() + 8 <= boxr.x { (vplus, vminus) } else { (Rect::new(0, 0, 0, 0), Rect::new(0, 0, 0, 0)) };
-        // the readout takes what is left before the chips on the right; it is not drawn when there is no room
-        let rx = if vminus.w > 0 { vminus.right() } else { minus.right() } + 8;
-        let readout = Rect::new(rx, y, (boxr.x - 8 - rx).clamp(0, 120), h);
-        Some(ZoomBar { label, tdiv, plus, minus, vplus, vminus, readout, close, center, fit, boxr, more })
-    }
-
-    /// The trigger is outside the zoomed window.
-    fn studio_trigger_off_screen(&self) -> bool {
-        let (tz, dz) = self.view();
-        dz.abs() > tz * HDIV / 2.0
-    }
-
-    pub(super) fn studio_zoom_menu_rect(&self) -> Option<Rect> {
-        let bar = self.studio_zoom_bar().filter(|_| self.studio.zoom_menu)?;
-        let h = 40 + 44 + 44 + 36 + 8 + 4 * 38 + 8;
-        Some(Rect::new((bar.more.right() - ZMENU_W).max(4), bar.more.bottom() + 6, ZMENU_W, h))
-    }
-
-    /// The rows of the menu with their rectangles.
-    pub(super) fn studio_zoom_rows(&self) -> Vec<(ZoomRow, Rect)> {
-        let Some(p) = self.studio_zoom_menu_rect() else { return Vec::new() };
-        let x = p.x + 8;
-        let w = p.w - 16;
-        let mut y = p.y + 40;
-        let mut out = vec![
-            (ZoomRow::Minus, Rect::new(p.right() - 8 - 48 - 100 - 48 - 8, y + 4, 48, 36)),
-            (ZoomRow::Plus, Rect::new(p.right() - 8 - 48, y + 4, 48, 36)),
-        ];
-        y += 44;
-        out.push((ZoomRow::Tdiv, Rect::new(x, y + 2, w, 40)));
-        y += 44 + 36 + 8;
-        for row in [ZoomRow::Fit, ZoomRow::Center, ZoomRow::ResetY, ZoomRow::Close] {
-            out.push((row, Rect::new(x, y, w, 38)));
-            y += 38;
-        }
-        out
-    }
-
-    pub(super) fn draw_studio_zoom_bar(&self, cv: &mut Canvas) {
-        let Some(bar) = self.studio_zoom_bar() else { return };
-        let f = self.fonts();
-        cv.fill(self.zoom_readout(), BAR);
-        let open = self.studio.zoom_menu;
-        cv.text_in(&f.mb, bar.label, 0, "Zoom", TEXT);
-        chip(cv, bar.tdiv, BTN, BTN_BORDER);
-        cv.text_fit(&f.m, Rect::new(bar.tdiv.x + 10, bar.tdiv.y, bar.tdiv.w - 30, bar.tdiv.h), 0, &format!("{}/div", si_short(tscales()[self.m.zscale] as f64, "s")), TEXT);
-        chevron_down(cv, bar.tdiv.right() - 20, bar.tdiv.y + bar.tdiv.h / 2 - 2, DIM);
-        for (r, plus) in [(bar.plus, true), (bar.minus, false)] {
-            chip(cv, r, BTN, BTN_BORDER);
-            let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
-            cv.hline(cx - 6, cx + 6, cy, TEXT);
-            if plus { cv.vline(cx, cy - 6, cy + 6, TEXT); }
-        }
-        for (r, plus) in [(bar.vplus, true), (bar.vminus, false)] {
-            if r.w == 0 { continue; }
-            chip(cv, r, BTN, BTN_BORDER);
-            let (cx, cy) = (r.x + r.w / 2 - 7, r.y + r.h / 2);
-            cv.hline(cx - 5, cx + 5, cy, TEXT);
-            if plus { cv.vline(cx, cy - 5, cy + 5, TEXT); }
-            cv.text_in(&f.sb, Rect::new(r.x + r.w / 2 + 4, r.y, r.w / 2 - 6, r.h), 1, "Y", DIM);
-        }
-        let readout = format!("({} zoom)", zoom_text(self.studio_time_zoom()));
-        if bar.readout.w >= f.s.width(&readout) { cv.text_in(&f.s, bar.readout, 0, &readout, DIM); }
-        chip(cv, bar.close, BTN, BTN_BORDER);
-        let (cx, cy) = (bar.close.x + bar.close.w / 2, bar.close.y + bar.close.h / 2);
-        cv.line(cx - 5, cy - 5, cx + 5, cy + 5, TEXT);
-        cv.line(cx - 5, cy + 5, cx + 5, cy - 5, TEXT);
-        // Center trigger turns amber while the trigger is out of the window
-        let off = self.studio_trigger_off_screen();
-        chip(cv, bar.center, BTN, if off { AMBER } else { BTN_BORDER });
-        let icon_only = bar.center.w < 60;
-        let short = bar.center.w < 100;
-        let (cx, cy) = (if icon_only { bar.center.x + bar.center.w / 2 } else { bar.center.x + 18 }, bar.center.y + bar.center.h / 2);
-        cv.circle(cx, cy, 7, TEXT);
-        cv.circle(cx, cy, 5, BTN);
-        cv.circle(cx, cy, 2, TEXT);
-        if !icon_only { cv.text_fit(&f.m, Rect::new(bar.center.x + 32, bar.center.y, bar.center.w - 34, bar.center.h), 0, if short { "Centre" } else { "Center trigger" }, TEXT); }
-        chip(cv, bar.fit, BTN, BTN_BORDER);
-        icon_expand(cv, if icon_only { bar.fit.x + bar.fit.w / 2 } else { bar.fit.x + 18 }, bar.fit.y + bar.fit.h / 2, TEXT);
-        if !icon_only { cv.text_fit(&f.m, Rect::new(bar.fit.x + 32, bar.fit.y, bar.fit.w - 34, bar.fit.h), 0, if short { "Fit" } else { "Fit record" }, TEXT); }
-        let armed = self.zoom_arm;
-        chip(cv, bar.boxr, if armed { ACCENT } else { BTN }, if armed { ACCENT } else { BTN_BORDER });
-        cv.text_in(&f.sb, bar.boxr, 1, "Box", if armed { DARK_TEXT } else { TEXT });
-        chip(cv, bar.more, BTN, if open { ACCENT } else { BTN_BORDER });
-        for dx in [-8, 0, 8] { cv.circle(bar.more.x + bar.more.w / 2 + dx, bar.more.y + bar.more.h / 2, 2, TEXT); }
-    }
-
-    /// The window in the overview: shaded, framed, with a grip at each end.
-    pub(super) fn draw_studio_window(&self, cv: &mut Canvas, o: Rect, xa: i32, xb: i32) {
-        // a thin window (a large zoom of a long record) stays a visible bar
-        let (xa, xb) = if xb - xa < 6 { let m = (xa + xb) / 2; (m - 3, m + 3) } else { (xa, xb) };
-        let w = Rect::new(xa, o.y, (xb - xa).max(2), o.h);
-        cv.blend(w, BAND, 50);
-        cv.rect(w, BAND);
-        for edge in [xa, xb] {
-            let r = Rect::new(edge - 7, o.y + o.h / 2 - 14, 14, 28);
-            cv.round(r, 4, BAND, 255);
-            for k in [-3, 0, 3] { cv.vline(edge + k, r.y + 7, r.bottom() - 8, DARK_TEXT); }
-        }
-    }
-
-    /// The menu of the zoom toolbar's last chip.
-    pub(super) fn draw_studio_zoom_menu(&self, cv: &mut Canvas) {
-        let Some(p) = self.studio_zoom_menu_rect() else { return };
-        let f = self.fonts();
-        cv.round(p, 8, BTN_BORDER, 255);
-        cv.round(p.inset(1), 7, PANEL_BG, 255);
-        if let Some(bar) = self.studio_zoom_bar() {
-            let x = bar.more.x + bar.more.w / 2;
-            cv.triangle([(x - 7, p.y + 1), (x + 7, p.y + 1), (x, p.y - 6)], BTN_BORDER);
-            cv.triangle([(x - 6, p.y + 2), (x + 6, p.y + 2), (x, p.y - 4)], PANEL_BG);
-        }
-        cv.text(&f.lb, p.x + 14, p.y + 28, "Zoom & navigation", TEXT);
-        cv.hline(p.x + 8, p.right() - 9, p.y + 38, LINE);
-        let mut linked_y = p.y + 40 + 44 + 44;
-        for (row, r) in self.studio_zoom_rows() {
-            let cy = r.y + r.h / 2;
-            match row {
-                ZoomRow::Minus | ZoomRow::Plus => {
-                    chip(cv, r, BTN, BTN_BORDER);
-                    cv.hline(r.x + r.w / 2 - 6, r.x + r.w / 2 + 6, cy, TEXT);
-                    if row == ZoomRow::Plus { cv.vline(r.x + r.w / 2, cy - 6, cy + 6, TEXT); }
-                    if row == ZoomRow::Minus {
-                        cv.text(&f.m, p.x + 14, cy + 5, "Time zoom", TEXT);
-                        let v = Rect::new(r.right() + 6, r.y, 100, r.h);
-                        chip(cv, v, BTN, BTN_BORDER);
-                        cv.text_in(&f.mb, v, 1, &zoom_text(self.studio_time_zoom()), TEXT);
-                    }
-                }
-                ZoomRow::Tdiv => {
-                    chip(cv, r, BTN, BTN_BORDER);
-                    cv.text_in(&f.m, Rect::new(r.x + 12, r.y, r.w - 40, r.h), 0, &format!("{}/div", si_short(tscales()[self.m.zscale] as f64, "s")), TEXT);
-                    chevron_down(cv, r.right() - 22, cy - 2, DIM);
-                    linked_y = r.bottom() + 2;
-                }
-                _ => {
-                    if row == ZoomRow::Fit { cv.hline(p.x + 8, p.right() - 9, r.y - 4, LINE); }
-                    let label = match row { ZoomRow::Fit => "Fit record", ZoomRow::Center => "Center trigger", ZoomRow::ResetY => "Reset vertical zoom", _ => "Close zoom" };
-                    let (ix, iy) = (r.x + 18, cy);
-                    match row {
-                        ZoomRow::Fit => icon_expand(cv, ix, iy, TEXT),
-                        ZoomRow::Center => { cv.circle(ix, iy, 7, TEXT); cv.circle(ix, iy, 5, PANEL_BG); cv.circle(ix, iy, 2, TEXT); }
-                        ZoomRow::ResetY => { cv.vline(ix, iy - 7, iy + 7, TEXT); icon_arrow(cv, ix, iy - 8, true, TEXT); icon_arrow(cv, ix, iy + 8, false, TEXT); }
-                        _ => { cv.line(ix - 5, iy - 5, ix + 5, iy + 5, TEXT); cv.line(ix - 5, iy + 5, ix + 5, iy - 5, TEXT); }
-                    }
-                    cv.text_in(&f.m, Rect::new(r.x + 42, r.y, r.w - 44, r.h), 0, label, TEXT);
-                }
-            }
-        }
-        // the lanes of Studio always share one time axis
-        cv.circle(p.x + 28, linked_y + 18, 5, DIM);
-        cv.circle(p.x + 36, linked_y + 18, 5, DIM);
-        cv.text(&f.m, p.x + 52, linked_y + 23, "Zoom follows main", LABEL);
+        let c = self.zoom_controls();
+        let of = |name: &str| c.iter().find(|(_, text)| *text == name).map_or(Rect::new(0, 0, 0, 0), |(r, _)| *r);
+        let close = self.zoom_close();
+        let label = Rect::new(row.x + 4, row.y, (of("H-").x - row.x - 10).max(1), row.h);
+        Some(ZoomBar { label, plus: of("H+"), minus: of("H-"), vplus: of("V+"), vminus: of("V-"), boxr: of("Box"), fit: Rect::new(close.x - 76, close.y, 70, close.h), close })
     }
 
     /// The display scale popup of a lane (a tap on its channel badge while zoomed).
@@ -3143,11 +3003,10 @@ impl Ui {
             ZoomRow::Plus => self.zoom_horizontal_step(-1, area, 0.5),
             ZoomRow::VPlus => self.zoom_vertical_step(1, area, 0.5),
             ZoomRow::VMinus => self.zoom_vertical_step(-1, area, 0.5),
-            ZoomRow::Tdiv => { self.studio.zoom_menu = false; self.open_menu(MenuId::Horizontal); }
             ZoomRow::Fit => self.reset_zoom(),
             ZoomRow::Center => self.studio_center_trigger(),
             ZoomRow::ResetY => { self.zoom_vfactor = 1.0; self.zoom_vcenter = 0.0; self.dirty_map = true; }
-            ZoomRow::Close => { self.studio.zoom_menu = false; self.set_zoom(false); }
+            ZoomRow::Close => self.set_zoom(false),
         }
     }
 
@@ -3200,30 +3059,16 @@ impl Ui {
             self.studio.yzoom = None;
             return true;
         }
-        if self.studio.zoom_menu {
-            let inside = self.studio_zoom_menu_rect().is_some_and(|p| p.contains(x, y));
-            if inside {
-                if let Some((row, _)) = self.studio_zoom_rows().into_iter().find(|(_, r)| r.contains(x, y)) { self.studio_zoom_do(row); }
-                return true;
-            }
-            self.studio.zoom_menu = false;
-            // a tap on the chip that opened it only closes it
-            if self.studio_zoom_bar().is_some_and(|b| b.more.contains(x, y)) { return true; }
-        }
         if let Some(bar) = self.studio_zoom_bar() {
             let y = self.zoom_row_y(x, y);
             if self.zoom_readout().contains(x, y) {
-                if bar.readout.contains(x, y) { self.studio.zoom_menu = true; }
-                else if bar.plus.contains(x, y) { self.studio_zoom_do(ZoomRow::Plus); }
+                if bar.plus.contains(x, y) { self.studio_zoom_do(ZoomRow::Plus); }
                 else if bar.minus.contains(x, y) { self.studio_zoom_do(ZoomRow::Minus); }
                 else if bar.vplus.contains(x, y) { self.studio_zoom_do(ZoomRow::VPlus); }
                 else if bar.vminus.contains(x, y) { self.studio_zoom_do(ZoomRow::VMinus); }
                 else if bar.close.contains(x, y) { self.studio_zoom_do(ZoomRow::Close); }
-                else if bar.tdiv.contains(x, y) { self.open_menu(MenuId::Horizontal); }
-                else if bar.center.contains(x, y) { self.studio_center_trigger(); }
                 else if bar.fit.contains(x, y) { self.reset_zoom(); }
                 else if bar.boxr.contains(x, y) { self.arm_zoom_area(); }
-                else if bar.more.contains(x, y) { self.studio.zoom_menu = true; }
                 return true;
             }
         }
@@ -3242,14 +3087,22 @@ impl Ui {
             if self.studio_zoom_active() { self.studio.yzoom = Some(c); } else { self.toggle_menu(MenuId::Channel(c)); }
             return true;
         }
+        // the handle of a reference or a math channel: its sheet
+        let hit = self.studio.handles.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(s, _)| s);
+        match hit {
+            Some(super::workspace::Trace::Reference(i)) => {
+                self.select_workspace_source(WaveId::Ref(i));
+                self.toggle_menu(MenuId::Ref);
+                return true;
+            }
+            Some(super::workspace::Trace::Math(k)) => {
+                self.m.math_select(k);
+                self.toggle_menu(MenuId::Math);
+                return true;
+            }
+            _ => {}
+        }
         false
-    }
-}
-
-#[cfg(test)]
-impl Ui {
-    pub(super) fn studio_trigger_off_screen_for_test(&self) -> bool {
-        self.studio_trigger_off_screen()
     }
 }
 

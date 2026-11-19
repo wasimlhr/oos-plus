@@ -547,3 +547,69 @@ fn a_channel_pill_always_shows_its_scale() {
     let u = studio_ui();
     assert!(u.studio_bottom().add.w > 0);
 }
+
+// ------------------------------------------------------------------------------------------------ names and order
+
+fn layout_ui(layout: Layout) -> Ui {
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    u.m.layout = layout;
+    u.studio.enter = layout == Layout::Studio;
+    for _ in 0..8 { u.step(0.05); }
+    u
+}
+
+/// A name or a place of a sheet row that differs from the Default menu on purpose, with the reason. Everything else
+/// that differs fails `the_sheet_rows_have_the_names_and_the_order_of_the_default_menus`.
+fn meant(menu: MenuId, it: Item, what: &str) -> Option<&'static str> {
+    use Item::*;
+    use MenuId as M;
+    Some(match (menu, it, what) {
+        // ---- names: the sheet says whose row it is where the dialog says it in its title
+        (_, SrcOn, "name") => "names the channels it turns on",
+        (M::Ref, RefImport, "name") => "names the slot the file goes to",
+        (M::Ref, RefShow(_), _) => "one switch for the selected slot instead of ten buttons",
+        (M::Decode | M::Bus, DecSel | DecOn, "name") => "four decoders: the switch says whose it is",
+        (M::Sim | M::SimAdvanced, SimSsc | SimSscCenter | SimSscDeviation | SimSscHz | SimAddRef | SimShow, "name") => "the tab is named Spread, the slot is named on its rows",
+        (M::Remote, NetWeb | RemScpiInfo | RemVxiInfo, "name") => "the addresses stand apart from their switches: each says whose it is",
+        // ---- order: pages the sheet sorts by hand
+        (M::Remote, _, "order") => "Access: the name and who is allowed first, then the addresses",
+        (M::Utility, _, "order") => "Connectivity: the pages in the order of the state lines above them",
+        (M::Sim, _, "order") => "the slot's rows follow the slot, Live last",
+        (M::Network, _, "order") => "the WLAN rows are a tab of their own",
+        _ => return None,
+    })
+}
+
+/// The rows of a sheet have the names of the Default menu and, inside a tab, its order (a link to another page goes
+/// last, a pinned action is under the rows). In Minimal and in Studio, in every state that changes the rows. The
+/// controls are compared by `the_sheets_have_the_controls_of_the_default_dialogs`.
+#[test]
+fn the_sheet_rows_have_the_names_and_the_order_of_the_default_menus() {
+    let d0 = default_ui();
+    let mut wrong: Vec<String> = Vec::new();
+    for layout in [Layout::Studio, Layout::Minimal] {
+        for (menu, states) in menus() {
+            for (state, set) in states {
+                let (mut d, mut s) = (default_ui(), layout_ui(layout));
+                set(&mut d);
+                set(&mut s);
+                d.open_menu(menu);
+                s.open_menu(menu);
+                let Some(spec) = s.sheet_spec(menu) else { continue };
+                let mut last: Vec<Option<usize>> = vec![None; spec.tabs.len()];
+                for it in d.items(menu) {
+                    let Some((tab, i)) = spec.tabs.iter().enumerate().find_map(|(t, tab)| tab.rows.iter().position(|x| *x == it).map(|i| (t, i))) else { continue };
+                    let at = format!("{layout:?} {} {state}: {} ({it:?})", menu_name(&d0, menu), d.item_label(it));
+                    let name = s.sheet_label(it);
+                    if name != d.item_label(it) && meant(menu, it, "name").is_none() { wrong.push(format!("{at}: named {name:?}")); }
+                    if matches!(it, Item::Open(_)) { continue; }
+                    if last[tab].is_some_and(|l| l > i) && meant(menu, it, "order").is_none() { wrong.push(format!("{at}: above a row the menu has before it")); }
+                    last[tab] = Some(i);
+                }
+            }
+        }
+    }
+    wrong.sort();
+    wrong.dedup();
+    assert!(wrong.is_empty(), "sheet rows that differ from the Default menu:\n{}", wrong.join("\n"));
+}

@@ -9,7 +9,7 @@
 use super::dock::{Dir, Drop, Node, Side, VKind, KINDS};
 use super::scpiext::{bad, conflict, t, text_arg, Reply, DONE};
 use super::sharedzoom::{trace_name, ZPart};
-use super::studio::{StudioView, ZoomRow, TOP_LABELS};
+use super::studio::{StudioView, TOP_LABELS};
 use super::workspace::Action;
 use super::*;
 use crate::scpi::{e as en, kw, num};
@@ -429,7 +429,28 @@ impl Ui {
             for (i, d) in lay.dividers.iter().enumerate() {
                 push("DIVIDER", format!("{} {}", if d.dir == Dir::H { "Vertical divider" } else { "Horizontal divider" }, i + 1), d.hit);
             }
-            for (key, r) in self.studio_badges() { push("BADGE", format!("{key:?}"), r); }
+            // (a row that is hidden has no badges on the screen)
+            if self.studio_badges_visible() {
+                for (key, r) in self.studio_badges() { push("BADGE", format!("{key:?}"), r); }
+                // the one button at the end of the row ("Meas", a dot and the count): it opens the table
+                push("BADGE", "Meas".into(), self.studio_list_chip());
+            }
+            // the zoom row: the buttons of the Default layout's row, by their names
+            if let Some(bar) = self.studio_zoom_bar() {
+                for (label, r) in [("H-", bar.minus), ("H+", bar.plus), ("V-", bar.vminus), ("V+", bar.vplus), ("Box", bar.boxr), ("Reset", bar.fit), ("Close", bar.close)] { push("ZOOM", label.into(), r); }
+            }
+            if !self.view_on() {
+                // the plot: its lanes (one graticule in Overlay) and the handle of each source on its zero level
+                use super::workspace::Trace;
+                let name = |s: &Trace| match s { Trace::Channel(c) => format!("CH{}", c + 1), Trace::Reference(i) => format!("R{}", i + 1), Trace::Math(k) => format!("M{}", k + 1) };
+                let sources = self.trace_sources();
+                for (i, w) in self.wins.iter().enumerate() {
+                    let label = if self.stacked() { sources.get(i).map(name).unwrap_or_else(|| "Lane".into()) } else { "All sources".into() };
+                    push("LANE", label, *w);
+                }
+                for (c, r) in self.studio.lane_badges.borrow().iter() { push("HANDLE", format!("CH{}", c + 1), *r); }
+                for (s, r) in self.studio.handles.borrow().iter() { push("HANDLE", name(s), *r); }
+            }
             if !self.view_on() {
                 push("PLOT", "Full screen".into(), self.full_btn().1);
                 push("PLOT", "Zoom".into(), self.zoom_btn().1);
@@ -452,7 +473,8 @@ impl Ui {
         if self.studio.ctx.is_some() { return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect(); }
         if let Some(p) = &self.workspace.popup { return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect(); }
         if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
-        // Studio's View menu: its views, its two switches with what they stand at, Reset layout
+        // the View menu of the Studio bar (its views, its two switches with what they stand at, Reset layout),
+        // and the popup of Add source in the bottom bar
         if self.studio.view_menu {
             use super::studio::{STUDIO_VIEWS, VIEW_BADGES, VIEW_COMPACT, VIEW_RESET};
             let on = |v: bool| if v { "On" } else { "Off" };
@@ -462,11 +484,8 @@ impl Ui {
             rows.push(("Reset layout".to_string(), self.studio_view_row(VIEW_RESET)));
             return rows;
         }
-        if self.studio.zoom_menu {
-            return self.studio_zoom_rows().into_iter().map(|(row, r)| (match row {
-                ZoomRow::Minus => "Zoom out", ZoomRow::Plus => "Zoom in", ZoomRow::VPlus => "Vertical zoom in", ZoomRow::VMinus => "Vertical zoom out",
-                ZoomRow::Tdiv => "Time/div", ZoomRow::Fit => "Fit", ZoomRow::Center => "Center", ZoomRow::ResetY => "Reset vertical", ZoomRow::Close => "Close zoom",
-            }.to_string(), r)).collect();
+        if let Some((channels, extras)) = self.studio_picker_rows() {
+            return channels.into_iter().map(|(c, r)| (format!("CH{}", c + 1), r)).chain(extras.into_iter().map(|(k, r)| (k.label().to_string(), r))).collect();
         }
         if self.menu_open && self.menu_is_wide() {
             return self.menu_geo().groups.iter().flat_map(|g| g.items.iter()).map(|(it, r)| (self.item_label(*it).to_string(), *r)).collect();
@@ -482,7 +501,7 @@ impl Ui {
             else if let Some(p) = &self.workspace.popup { p.title.clone() }
             else if self.studio.add_menu { "Add".to_string() }
             else if self.studio.view_menu { "View".to_string() }
-            else if self.studio.zoom_menu { "Zoom".to_string() }
+            else if self.studio.ch_picker { "Add source".to_string() }
             else if self.menu_open { self.menu_title(self.menu).to_string() }
             else { return "\"\"".to_string(); };
         let mut out = vec![q_str(&title)];
@@ -522,7 +541,7 @@ impl Ui {
         self.workspace.popup = None;
         self.studio.add_menu = false;
         self.studio.view_menu = false;
-        self.studio.zoom_menu = false;
+        self.studio.ch_picker = false;
         if self.menu_open { self.close_menu(); }
         self.relayout();
     }

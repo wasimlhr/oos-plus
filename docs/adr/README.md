@@ -58,7 +58,9 @@ A decision that touches two categories goes where its consequences are largest a
 | [0030](process/0030-independent-reimplementation-from-black-box-descriptions.md) | process | OOS is an independent reimplementation: the tree holds black-box descriptions and code written to them | accepted |
 | [0030](ui-ux/0030-studio-offers-what-default-offers.md) | ui-ux | Studio offers what Default offers; the Add panel is the short way into the Measure page | accepted |
 | [0031](process/0031-every-change-enters-main-through-a-pull-request.md) | process | Every change enters main through a pull request, the maintainer's too; decision records are decided there | accepted |
+| [0031](ui-ux/0031-every-source-has-one-handle-on-its-zero-level.md) | ui-ux | every source has one handle on its zero level; a sheet keeps the names and the order of the menu | accepted |
 | [0032](process/0032-ci-compares-a-pull-request-with-its-base.md) | process | CI compares the pictures and the register sequences of a pull request with its base | accepted |
+| [0032](ui-ux/0032-studio-has-the-zoom-row-of-the-default-layout.md) | ui-ux | Studio has the zoom row and the zoom window of the Default layout | accepted |
 | [0033](process/0033-development-on-linux-macos-and-wsl.md) | process | OOS is developed on Linux, macOS and Windows with WSL; there is no native Windows build | accepted |
 | [0033](system/0033-a-file-of-commands-sets-the-scope-up-and-no-more.md) | system | A file of SCPI commands sets the scope up and runs it, and no more | accepted |
 | [0034](process/0034-standing-agents-get-their-task-from-a-machine-a-person-merges.md) | process | Standing agents get their task from a machine and open one pull request; a person merges | superseded by ADR 0039 |
@@ -108,8 +110,8 @@ the change: ADR 0009, 0010, 0013, 0015, 0021 and 0030 for anything near the hard
 SCPI, VXI-11, HiSLIP and the other network services, ADR 0026 and 0031 for how a change enters main. The records are
 short on purpose; reading the ones that apply costs minutes and saves a review round.
 
-oos-plus: the numbers 0027, 0029, 0030 and 0033 each name a record of the fork (`code/0027`, `ui-ux/0029`,
-`ui-ux/0030`, `system/0033`) and one of upstream; the fork's references to them mean its own unless they name the
+oos-plus: the numbers 0027, 0029, 0030, 0031, 0032 and 0033 each name a record of the fork (`code/0027`,
+`ui-ux/0029`, `ui-ux/0030`, `ui-ux/0031`, `ui-ux/0032`, `system/0033`) and one of upstream; the fork's references to them mean its own unless they name the
 file. A new record of the fork takes a number upstream has not used.
 
 ## Writing one

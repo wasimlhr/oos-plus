@@ -28,6 +28,8 @@ FORK_RECORDS = {
     "ui-ux/0030-studio-offers-what-default-offers.md",
     "system/0033-a-file-of-commands-sets-the-scope-up-and-no-more.md",
     "ui-ux/0029-a-storage-row-asks-for-the-name-of-its-file.md",
+    "ui-ux/0031-every-source-has-one-handle-on-its-zero-level.md",
+    "ui-ux/0032-studio-has-the-zoom-row-of-the-default-layout.md",
 }
 TITLE = re.compile(r"# ADR (\d{4}): (.+)$")
 REF = re.compile(r"ADR (\d{4})")

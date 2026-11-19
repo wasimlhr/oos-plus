@@ -226,8 +226,6 @@ pub(super) enum Item {
     MeasGate,
     /// Studio: the badge row under the lanes as Studio chips or as the classic strip
     BadgeStyle,
-    /// Studio: the zoom controls as a pull-down tab over the zoom view, or in the title bar of the waveform
-    ZoomBar,
     MeasTsetup,
     MeasThold,
     CurMode,

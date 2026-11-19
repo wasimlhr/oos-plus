@@ -135,7 +135,6 @@ impl Ui {
         }
         if let Some((x, y)) = pa.at { p.push(format!("panelat={}/{}", x, y)); }
         if pa.first != 0 || pa.sub != 0 { p.push(format!("scroll={}/{}", pa.first, pa.sub)); }
-        if s.zoom_open.is_some() { p.push("zoomtab=1".into()); }
         if !pa.query.is_empty() { p.push(format!("query={}", pa.query.replace(' ', "_"))); }
         if let Some(f) = s.filter { p.push(format!("filter={}", f.token())); }
         if let Some(q) = &s.search { p.push(format!("search={}/{}/{}", q.src.token(), q.level, q.slope)); }
@@ -169,8 +168,6 @@ impl Ui {
         self.studio.overlay = false;
         self.studio.eye_full = false;
         self.studio.panel = Default::default();
-        self.studio.zoom_open = None;
-        self.studio.zoom_pull = None;
         self.studio.add_menu = false;
         self.studio.ctx = None;
         self.studio.filter = None;
@@ -208,7 +205,8 @@ impl Ui {
                 }
                 "panelat" => if let [x, y] = num(v)[..] { self.studio.panel.at = Some((x, y)); },
                 "scroll" => if let [first, sub] = num(v)[..] { self.studio.panel.first = first.clamp(0, 100_000) as usize; self.studio.panel.sub = sub.clamp(0, 1000); },
-                "zoomtab" => self.studio.zoom_open = (v == "1").then_some(self.now),
+                // (a view saved with the pull-down zoom toolbar open: there is none any more)
+                "zoomtab" => {}
                 "query" => { self.studio.panel.query = v.replace('_', " "); self.studio.panel.searching = !self.studio.panel.query.is_empty(); }
                 "filter" => self.studio.filter = WaveId::parse(v).ok(),
                 "search" => {

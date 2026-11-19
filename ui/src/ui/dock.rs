@@ -747,8 +747,6 @@ impl Ui {
         let right = view.map_or(extra.map_or(close.x, |e| e.x), |v| v.x);
         let bar = self.dock_bar_content(k, r).map(|p| self.panel_bar(p));
         let right_title = bar.as_ref().map_or(right, |b| b.left - 6);
-        let zoom_in_strip = k == VKind::Wave && self.studio_zoom_active() && !self.zoom_tab_mode();
-        let right_title = if zoom_in_strip { self.zoom_readout().x - 4 } else { right_title };
         ((right_title - s.x - 30).max(1), bar.as_ref().is_some_and(|b| b.field.is_some()))
     }
 
@@ -1024,7 +1022,7 @@ impl Ui {
         let y = o.bottom();
         // the grip stays clear of the buttons of the zoom bar under it
         let bar = self.studio_zoom_bar();
-        let busy: Vec<Rect> = bar.map(|b| vec![b.label, b.tdiv, b.plus, b.minus, b.vplus, b.vminus, b.readout, b.center, b.fit, b.more, b.close]).unwrap_or_default();
+        let busy: Vec<Rect> = bar.map(|b| vec![b.label, b.plus, b.minus, b.vplus, b.vminus, b.boxr, b.fit, b.close]).unwrap_or_default();
         let clear = |cx: i32| { let hit = Rect::new(cx - 30, y - 40, 60, 42); !busy.iter().any(|r| r.w > 0 && hit.x < r.right() && r.x < hit.right() && hit.y < r.bottom() && r.y < hit.bottom()) };
         let cx = [o.x + o.w / 2, o.x + o.w * 62 / 100, o.x + o.w * 38 / 100, o.x + o.w * 25 / 100, o.x + o.w * 75 / 100].into_iter().find(|&c| clear(c)).unwrap_or(o.x + o.w / 2);
         // the grip lies in the bottom of the overview strip, above the buttons of the zoom bar
@@ -1285,8 +1283,6 @@ impl Ui {
     }
 
     fn dock_down_strip(&mut self, k: VKind, r: Rect, x: i32, y: i32, floating: bool) -> bool {
-        // the zoom controls in the strip of the waveform are the plot's own taps
-        if k == VKind::Wave && self.studio_zoom_active() && !self.zoom_tab_mode() && self.zoom_readout().contains(x, y) { return false; }
         if self.dock_bar_at(k, r, x, y) {
             self.studio.dock.press = Some(Press::Bar);
             return true;
@@ -1448,8 +1444,6 @@ impl Ui {
         // the controls of the measurements panel sit in the strip when it is wide: they take the room left of the switch
         let bar = self.dock_bar_content(k, r).map(|p| self.panel_bar(p));
         let right_title = bar.as_ref().map_or(right, |b| b.left - 6);
-        let zoom_in_strip = k == VKind::Wave && self.studio_zoom_active() && !self.zoom_tab_mode();
-        let right_title = if zoom_in_strip { self.zoom_readout().x - 4 } else { right_title };
         let avail = (right_title - s.x - 30).max(1);
         let tabs = if floating { Vec::new() } else { self.dock_tab_rects(k, r) };
         if bar.as_ref().is_some_and(|b| b.field.is_some()) {
@@ -1487,7 +1481,6 @@ impl Ui {
             cv.no_clip();
         }
         if let Some(b) = &bar { self.draw_panel_bar(cv, b); }
-        if zoom_in_strip { self.draw_studio_zoom_bar(cv); }
         if let Some(v) = view { self.draw_view_switch(cv, v); }
         if let Some(e) = extra {
             chip(cv, Rect::new(e.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);

@@ -412,7 +412,7 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
     for _ in 0..4 { frame(&mut u); }
     let bar = u.studio_zoom_bar().expect("the zoom bar");
     let (hit, handle) = u.ov_divider().unwrap();
-    for r in [bar.plus, bar.minus, bar.vplus, bar.vminus, bar.center, bar.fit, bar.more, bar.close, bar.tdiv] {
+    for r in [bar.plus, bar.minus, bar.vplus, bar.vminus, bar.boxr, bar.fit, bar.close] {
         if r.w == 0 { continue; }
         let over = hit.x < r.right() && r.x < hit.right() && hit.y < r.bottom() && r.y < hit.bottom();
         assert!(!over, "the grip {hit:?} sits on {r:?}");
