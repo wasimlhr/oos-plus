@@ -88,6 +88,13 @@ impl Ui {
         let setup = module.setup();
         // the decoder first: the traffic of the UART is at the rate its set-up gives
         let mut m = self.m.clone();
+        // a decoder that is off takes the bus: the selected one, when it is on, is set up for the bus on the inputs
+        // and keeps its settings (all four on: the selected one)
+        if m.dec_on {
+            if let Some(k) = (0..DECODERS).find(|&k| !m.dec_is_on(k)) {
+                m.dec_select(k);
+            }
+        }
         (m.dec_proto, m.dec_thr, m.dec_la_in, m.dec_thr_line) = (p, setup.thr, false, [None; 3]);
         Self::dec_apply_rows(&mut m, setup.rows);
         m.dec_opt = protocols::opt_default(i);
@@ -171,6 +178,9 @@ impl Ui {
             self.return_to_live();
             self.m.sim_bus = bus;
         }
+        // what Live brings back is the set-up from before the bus: the decoder as it was, too (seen on a unit: Live
+        // left the decoder on the references of the bus)
+        self.remember_live();
         let (main, period) = self.sim_bus_store()?;
         let want = period * 1.25 / HDIV as f64;
         let scales = tscales();
@@ -231,6 +241,37 @@ mod tests {
         }
     }
 
+    /// A decoder that is set up for a bus on the inputs keeps its settings: a bus preset takes a decoder that is off,
+    /// and Live brings the decoders back as they were before Play.
+    #[test]
+    fn a_bus_preset_leaves_the_decoder_of_the_inputs_alone() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = Layout::Studio;
+        // D1: SPI on the channels, with a threshold of its own on the clock
+        (u.m.dec_proto, u.m.dec_on, u.m.dec_src, u.m.dec_src2, u.m.dec_thr) = (Proto::SPI, true, 3, 2, 2.6);
+        u.m.dec_thr_line[0] = Some(0.2);
+        let before = u.m.dec_view(0);
+        let same = |m: &Model| {
+            let d = m.dec_view(0);
+            (d.dec_proto, d.dec_on, d.dec_src, d.dec_src2, d.dec_thr, d.dec_thr_line)
+                == (before.dec_proto, before.dec_on, before.dec_src, before.dec_src2, before.dec_thr, before.dec_thr_line)
+        };
+        assert!(u.sim_preset_set("LIN bus"));
+        u.sim_play_set(true).unwrap();
+        for _ in 0..4 {
+            u.step(0.05);
+        }
+        assert!(u.sim_mode() && same(&u.m), "D1 is as it was while the bus plays");
+        assert_eq!((u.m.dec_sel, u.m.dec_proto, u.m.dec_on), (1, Proto::LIN, true), "the bus is on D2");
+        u.return_to_live();
+        assert!(!u.sim_mode() && same(&u.m), "and after Live");
+        assert_eq!(u.m.dec_sel, 0, "the decoder that was selected is selected again");
+        assert!(!u.m.dec_is_on(1), "D2 is off as it was");
+        // Add to ref, which has no Live to go back by, takes a decoder that is off as well
+        u.sim_activate(Item::SimAddRef);
+        assert!(same(&u.m) && u.m.dec_is_on(1) && u.m.dec_view(1).dec_proto == Proto::LIN);
+    }
+
     /// The presets of the lanes are as before, and choosing one leaves the bus; Add to ref with a bus preset adds its
     /// lines without playing.
     #[test]
@@ -247,6 +288,7 @@ mod tests {
         u.sim_activate(Item::SimAddRef);
         assert!(!u.sim_mode() && u.m.dec_on && u.m.dec_proto == Proto::I2C);
         assert_eq!(u.refs.iter().flatten().filter(|r| r.label.starts_with("I2C ")).count(), 2);
+        assert_eq!(u.m.dec_sel, 0, "no decoder was on: the selected one takes the bus");
         // one step on from the last bus is the first lane again
         u.select_option(Item::SimPreset, "PCIe 4.0");
         assert_eq!((u.value(Item::SimPreset).as_str(), u.m.sim_bus), ("PCIe 4.0", None));

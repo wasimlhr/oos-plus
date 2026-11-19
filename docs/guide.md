@@ -324,8 +324,9 @@ lists have page controls. The Windows app announces its actual SCPI and HiSLIP l
 
 **SIM > Preset** lists lanes for an eye (PCIe, USB 3, SATA, 10GBASE-KR) and, after them, a bus for every protocol
 whose traffic the scope can make ("I2C bus", "LIN bus", "CAN bus" ...). With a bus, **Run simulation mode** puts the
-lines of the bus into reference slots from the SIM slot on, sets the selected decoder to the protocol on them, and
-plays them: a decoder can be tried with nothing connected. **Add to ref** does the same without playing.
+lines of the bus into reference slots from the SIM slot on, sets a decoder that is off to the protocol on them, and
+plays them: a decoder can be tried with nothing connected, and **Live** brings the decoders back as they were.
+**Add to ref** does the same without playing.
 
 **SIM > Advanced** adds SSC profile, deviation and modulation frequency, duty-cycle distortion, and
 correlated random jitter with its corner frequency (in Minimal and Studio these are rows of the Jitter and

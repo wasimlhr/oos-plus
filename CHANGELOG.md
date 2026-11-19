@@ -254,14 +254,19 @@ Fixed:
 
 Added:
 
-- SIM: a bus as a preset (host-tested, not yet verified on hardware). The presets were lanes for an eye (PCIe,
+- SIM: a bus as a preset (host-tested; the I2C bus (unit), 2026-11-19: Play put its two lines into R1 and R2, set
+  the decoder on them and listed its four messages without an error; the other buses not yet verified on
+  hardware). The presets were lanes for an eye (PCIe,
   USB 3, SATA); a decoder had nothing to read on a scope with nothing connected. After the lanes the list of
   SIM > Preset has a bus for every protocol whose traffic the scope can make: UART, I2C, SPI, CAN, CAN-FD, LIN,
   FlexRay, SENT, MIL-STD-1553, ARINC 429, USB, USB PD, I2S, S/PDIF, 1-Wire, SWD, DMX512, DCC, UART 9-bit, Modbus
   RTU. Play generates the lines of the bus into reference slots from the SIM slot on ("I2C SDA" in R1, "I2C SCL"
-  in R2), each in a band of its own, sets the selected decoder to the protocol on those references with the
-  settings the traffic is made for, and plays the references as the acquisition, a little more than one round
-  of the traffic on the screen. Add to ref does the same without playing; Live goes back. The knobs of a lane
+  in R2), each in a band of its own, sets a decoder to the protocol on those references with the settings the
+  traffic is made for, and plays the references as the acquisition, a little more than one round of the traffic
+  on the screen. The decoder is one that is off (the selected one when none is on), so a decoder that is set up
+  for the bus on the inputs keeps its settings. Add to ref does the same without playing; Live goes back to the
+  set-up from before Play, the decoders as they were (on the unit Live had left the decoder on the references:
+  fixed, host-tested). The knobs of a lane
   (rate, pattern, levels, jitter) are not rows of the menu while a bus is the preset. `:SIM:PRESet "I2C bus"`,
   `:SIM:PLAY ON`; the preset is part of the set-up (`sim_bus`). The traffic is the one the host build has on its
   demo channels and the tests decode.
