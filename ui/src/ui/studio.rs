@@ -801,14 +801,18 @@ impl Ui {
                 let two_lines = f.mb.size + f.s.size <= TWO_LINE_MAX;
                 let text = if f.mb.width(&full) <= tw { full } else { short };
                 if f.mb.width(&text) > tw {
-                    // the small font, then without the space ("500mV"); what still does not fit is cut at its end, so
-                    // the digits stay. A scale is never left out: "1 V" fitted where "500 mV" drew nothing
-                    let mut text = if f.s.width(&text) <= tw { text } else { text.replace(' ', "") };
-                    // (cut between two characters: half an "m" read as an "n", and 100 mV as "100n", seen on a unit)
-                    while f.s.width(&text) > tw && text.chars().count() > 1 {
-                        text.pop();
+                    // the small font, then without the space ("500mV"), then without the unit where its prefix says
+                    // enough ("500m"). A scale that still has no room is left out: a number cut short is another
+                    // number (cut by the pixel, 100 mV read "100n" on a unit, and cut by the character "1")
+                    let tight = text.replace(' ', "");
+                    // ("100mV" without its unit; "1V" has no prefix to keep, and "Off" is no scale)
+                    let prefixed = ch.on && tight.chars().rev().nth(1).is_some_and(char::is_alphabetic);
+                    let bare = prefixed.then(|| tight.chars().take(tight.chars().count() - 1).collect::<String>());
+                    let fits = |t: &String| f.s.width(t) <= tw;
+                    let shown = [Some(text.clone()), Some(tight.clone()), bare].into_iter().flatten().find(fits);
+                    if let Some(text) = shown {
+                        cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM });
                     }
-                    cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM });
                 } else {
                     let detail = if hidden { "trace hidden".to_string() } else { self.studio_ch_detail(c, tw) };
                     match Some(detail).filter(|d| ch.on && two_lines && f.s.width(d) <= tw) {
