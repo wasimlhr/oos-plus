@@ -1912,8 +1912,9 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
         u.render(&mut cv);
         let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
         for (k, name) in ["UART", "I2C", "SPI", "CAN"].iter().enumerate() {
-            let want = format!("{} {} CH{}", k + 1, name, k + 1);
-            assert!(texts.iter().any(|t| t.starts_with(&want)), "{layout:?}: no bus named {want:?} on the plot");
+            // the band's name; its colour says the source
+            let want = format!("D{} {}", k + 1, name);
+            assert!(texts.iter().any(|t| *t == want), "{layout:?}: no bus named {want:?} on the plot");
         }
     }
 }

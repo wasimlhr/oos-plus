@@ -4336,7 +4336,7 @@ impl Ui {
                 .map(|k| self.dec_band_h(&self.m.dec_view(k)))
                 .sum();
             if bands > 0 {
-                taken.push(Rect::new(a.x, a.y + a.h - 22 - bands, a.w, bands));
+                taken.push(Rect::new(a.x, a.y + a.h - (self.dec_foot() - 4) - bands, a.w, bands));
             }
             // the channel ground markers at the left edge: a label on their line is left out (as on the stock
             // screen, where the marker takes the place of the "0" label)
@@ -5396,6 +5396,14 @@ impl Ui {
         c.push((key, p.to_vec()));
     }
 
+    /// Room under the lowest decoder band of the window being drawn: the time labels along the lower edge of the
+    /// plot. A lane that has none (every Stacked lane but the last) has the band at its foot, clear of its trace.
+    fn dec_foot(&self) -> i32 {
+        let lanes = self.stacked() && self.wins.len() > 1;
+        let labels = self.cur_win + 1 >= self.wins.len() || self.studio_lane_has_own_time();
+        if lanes && !labels { 4 } else { 26 }
+    }
+
     /// All decoders that are on: bands at the bottom of the plot, or rows under the lanes for those on LA lines.
     fn draw_decode(&self, cv: &mut Canvas) {
         if self.last[0].is_none() && !self.refs.iter().any(Option::is_some) {
@@ -5403,8 +5411,7 @@ impl Ui {
         }
         // bands stand on each other from the bottom; one with a bit row is taller
         let (mut stack, mut lane) = (0, 0);
-        // the boxes end 26 px above the plot's lower edge, over the time labels
-        let bottom = self.area.y + self.area.h - 26 - DEC_BOX;
+        let bottom = self.area.y + self.area.h - self.dec_foot() - DEC_BOX;
         for k in 0..DECODERS {
             if !self.m.dec_is_on(k) {
                 continue;

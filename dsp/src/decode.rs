@@ -137,6 +137,37 @@ pub fn uart(v: &[f32], dt: f64, baud: f64, bits: u32, parity: Parity, thr: f32, 
     }
 }
 
+/// The messages among decoded fields: runs of fields with no more than the usual idle time between them, as index
+/// ranges that cover all fields in order. A start condition (a start of frame) or a break begins a message. So does
+/// a field after a gap clearly longer than the usual one: more than 1.75 times the median gap, and more than the
+/// median field is long, so that on a line without gaps a pause of one character ends the message.
+pub fn bursts(p: &[Packet]) -> Vec<std::ops::Range<usize>> {
+    if p.is_empty() {
+        return Vec::new();
+    }
+    let median = |mut v: Vec<f64>| -> f64 {
+        if v.is_empty() {
+            return 0.0;
+        }
+        let k = v.len() / 2;
+        *v.select_nth_unstable_by(k, f64::total_cmp).1
+    };
+    let gap = |k: usize| (p[k + 1].t0 - p[k].t1).max(0.0);
+    let usual = median((0..p.len() - 1).map(gap).collect());
+    let long = median(p.iter().map(|x| x.t1 - x.t0).filter(|&l| l > 0.0).collect());
+    let limit = (1.75 * usual).max(long);
+    let mut out = Vec::new();
+    let mut from = 0;
+    for k in 1..p.len() {
+        if matches!(p[k].kind, Kind::Start | Kind::Break) || gap(k - 1) > limit {
+            out.push(from..k);
+            from = k;
+        }
+    }
+    out.push(from..p.len());
+    out
+}
+
 /// What a bit of a character is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitKind {
@@ -319,6 +350,23 @@ mod tests {
         assert!(uart(&v, dt, baud, 7, Parity::Odd, 1.65, 0.2, false).iter().all(|x| !x.ok));
         // wrong baud rate: framing errors
         assert!(uart(&sample(|t| uart_logic(msg, baud, 8, None, 1.0, 0.0, 3.3).v(t), 0.0, dt, 1200), dt, baud * 1.5, 8, Parity::None, 1.65, 0.2, false).iter().any(|x| !x.ok));
+    }
+
+    /// Fields are messages by the idle time between them: a pause clearly longer than the usual one ends a message,
+    /// whatever the sender's pace, and a start condition begins one.
+    #[test]
+    fn bursts_are_split_at_the_long_pauses() {
+        let at = |t0: f64, kind: Kind| Packet { t0, t1: t0 + if kind == Kind::Data { 1.0 } else { 0.0 }, kind, value: 0, value2: None, ok: true };
+        // a slow sender: a character every 3.3 character times, a pause of 5.5 after the fifth (seen on a unit)
+        let slow: Vec<Packet> = [0.0, 3.3, 6.6, 9.9, 13.2, 19.7, 23.0, 26.3].iter().map(|&t| at(t, Kind::Data)).collect();
+        assert_eq!(bursts(&slow), [0..5, 5..8]);
+        // characters back to back: a pause of one character is enough, half a character is not
+        let dense: Vec<Packet> = [0.0, 1.0, 2.0, 3.5, 4.5, 6.6, 7.6].iter().map(|&t| at(t, Kind::Data)).collect();
+        assert_eq!(bursts(&dense), [0..5, 5..7]);
+        // a start condition begins a message without a pause
+        let framed = [at(0.0, Kind::Start), at(0.0, Kind::Data), at(1.0, Kind::Stop), at(1.0, Kind::Start), at(1.0, Kind::Data)];
+        assert_eq!(bursts(&framed), [0..3, 3..5]);
+        assert!(bursts(&[]).is_empty());
     }
 
     /// The bits of a character lie where `uart` sampled them and say what it read.

@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! A decoder's band on the plot: its name in a pill of the source's colour, and what it decoded along the time axis.
-//! How much the band says follows the time base. A field with room for its text has a box of its own. Fields too
-//! narrow for that share one box per burst, which holds as much of their text as fits and "..." for the rest, so a
-//! slow time base shows the messages and not an empty band. A burst too small for a box stays a mark: where the line
-//! is busy is seen at every time base. At a time base that shows single bits, a protocol that reports them
+//! How much the band says follows the time base. The fields are taken message by message (`oos_dsp::decode::bursts`:
+//! what the sender sent without a long pause). Where every field of a message has room for its text, each has a box
+//! of its own; a field narrower than its text takes the room from the idle line behind it, and a bar in the box
+//! says how long the field itself is. Else the message is one box, which holds as much of its text as fits and "..."
+//! for the rest, so a slow time base shows the messages and not an empty band. A message too small for a box stays
+//! a mark: where the line is busy is seen at every time base. At a time base that shows single bits, a protocol that reports them
 //! (`Protocol::bits`) has a row of bits above its boxes, and a mark on the threshold line where each was sampled.
 
 use super::*;
@@ -21,12 +23,10 @@ const BIT_MIN: f64 = 12.0;
 const ERR_FILL: Rgb = rgb(0x70, 0x18, 0x18);
 /// Room a box keeps around its text, both ends together.
 const BOX_PAD: i32 = 8;
-/// A field narrower than this is never asked for its text: no text fits.
+/// A field with less room than this is never asked for its text: no text fits.
 const OWN_MIN: i32 = 10;
-/// Fields this close (px) are one burst, whatever their width.
-const RUN_GAP: i32 = 3;
-/// A tag (start, stop ...) this close (px) to a burst is part of it.
-const TAG_PAD: i32 = 8;
+/// Room a box leaves to the field after it.
+const SLOT_GAP: i32 = 2;
 
 /// A decoded field as the band sees it.
 #[derive(Clone, Copy, Debug)]
@@ -38,102 +38,80 @@ pub(super) struct Span {
     /// an event without a value (start, stop, acknowledge ...), drawn as a tag at `x0`
     pub tag: bool,
     pub ok: bool,
+    /// it begins a message
+    pub first: bool,
 }
 
 /// What the band draws at one place.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Cell {
-    /// field `i` in a box of its own
-    One { i: usize, x0: i32, x1: i32 },
-    /// the fields `i0..i1`, too narrow for their texts, in one box; `bad`: one of them failed its check
+    /// field `i` in a box of its own from `x0` to `x1`. The field ends at `end`: before `x1` when the box took room
+    /// of the idle line behind the field for its text
+    One { i: usize, x0: i32, x1: i32, end: i32 },
+    /// the message of the fields `i0..i1`, which have no room for their texts, in one box; `bad`: one of them
+    /// failed its check
     Run { i0: usize, i1: usize, x0: i32, x1: i32, bad: bool },
     /// the tag of event `i`
     Tag { i: usize, x: i32 },
 }
 
-/// A burst that is still growing: the fields `i0..i1` from `x0` to `x1`.
-struct Open {
-    i0: usize,
-    i1: usize,
-    x0: i32,
-    x1: i32,
-    bad: bool,
-}
-
-/// The burst as a cell. A box starts right of `end`, the end of the box before it (at first the band's name).
-fn close(run: &mut Option<Open>, out: &mut Vec<Cell>, end: &mut i32) {
-    if let Some(r) = run.take() {
-        let x0 = r.x0.max(*end + 1);
-        if r.x1 >= x0 {
-            out.push(Cell::Run { i0: r.i0, i1: r.i1, x0, x1: r.x1, bad: r.bad });
-            *end = r.x1;
-        }
-    }
-}
-
 /// The cells of a band from the fields on the screen, in their order. `need(i)` is the width field `i` needs for its
 /// own text; `left` is where the band's name ends.
-pub(super) fn cells(spans: impl Iterator<Item = Span>, need: impl Fn(usize) -> i32, left: i32) -> Vec<Cell> {
+pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> Vec<Cell> {
     let mut out: Vec<Cell> = Vec::new();
-    let mut run: Option<Open> = None;
+    // the end of the box before: a box starts right of it (at first right of the band's name)
     let mut end = left;
-    for s in spans {
-        if s.tag {
-            // a tag at the end of a burst is part of it; one further away ends the burst
-            match run.as_mut().filter(|r| s.x0 <= r.x1 + TAG_PAD) {
-                Some(r) => {
-                    r.i1 = s.i + 1;
-                    r.bad |= !s.ok;
-                }
-                None => {
-                    close(&mut run, &mut out, &mut end);
-                    out.push(Cell::Tag { i: s.i, x: s.x0 });
-                }
-            }
+    let mut k = 0;
+    while k < spans.len() {
+        // one message: up to the next field that begins one
+        let n = spans[k + 1..].iter().position(|s| s.first).map_or(spans.len(), |d| k + 1 + d);
+        let burst = &spans[k..n];
+        k = n;
+        let fields: Vec<&Span> = burst.iter().filter(|s| !s.tag).collect();
+        let Some(head) = fields.first() else {
+            // events only
+            out.extend(burst.iter().map(|s| Cell::Tag { i: s.i, x: s.x0 }));
             continue;
-        }
-        let w = s.x1 - s.x0;
-        if w >= OWN_MIN && need(s.i) <= w {
-            close(&mut run, &mut out, &mut end);
-            out.push(Cell::One { i: s.i, x0: s.x0.max(end + 1), x1: s.x1 });
-            end = s.x1;
-            continue;
-        }
-        // the next field of a burst: no further away than it is wide
-        match run.as_mut().filter(|r| s.x0 <= r.x1 + RUN_GAP.max(w)) {
-            Some(r) => {
-                r.i1 = s.i + 1;
-                r.x1 = r.x1.max(s.x1);
-                r.bad |= !s.ok;
+        };
+        // where the field after this message starts: the idle line up to there is room for the last text
+        let after = spans[n..].iter().find(|s| !s.tag).map(|s| s.x0);
+        // the width each field needs for its text, when every one of them has that room up to the field after it
+        let widths: Option<Vec<i32>> = fields
+            .iter()
+            .enumerate()
+            .map(|(f, s)| {
+                let x0 = if f == 0 { s.x0.max(end + 1) } else { s.x0 };
+                let next = fields.get(f + 1).map(|t| t.x0).or(after);
+                let room = next.map_or(i32::MAX / 2, |x| (x - SLOT_GAP).max(s.x1)) - x0;
+                (room >= OWN_MIN).then(|| need(s.i)).filter(|&w| w <= room)
+            })
+            .collect();
+        match widths {
+            Some(widths) => {
+                let mut width = widths.into_iter();
+                for s in burst {
+                    if s.tag {
+                        out.push(Cell::Tag { i: s.i, x: s.x0 });
+                        continue;
+                    }
+                    let x0 = s.x0.max(end + 1);
+                    let x1 = s.x1.max(x0 + width.next().unwrap_or(0));
+                    out.push(Cell::One { i: s.i, x0, x1, end: s.x1 });
+                    end = x1;
+                }
             }
             None => {
-                close(&mut run, &mut out, &mut end);
-                // the tags right before it (a start condition) open the burst
-                let mut i0 = s.i;
-                while let Some(&Cell::Tag { i, x }) = out.last() {
-                    if i + 1 != i0 || x < s.x0 - TAG_PAD {
-                        break;
-                    }
-                    i0 = i;
-                    out.pop();
+                // one box from its first field to its last; its tags are said by its text
+                let x0 = head.x0.max(end + 1);
+                let x1 = fields.iter().map(|s| s.x1).max().unwrap_or(head.x1);
+                if x1 >= x0 {
+                    let bad = burst.iter().any(|s| !s.ok);
+                    out.push(Cell::Run { i0: burst[0].i, i1: burst[burst.len() - 1].i + 1, x0, x1, bad });
+                    end = x1;
                 }
-                run = Some(Open { i0, i1: s.i + 1, x0: s.x0, x1: s.x1, bad: !s.ok });
             }
         }
     }
-    close(&mut run, &mut out, &mut end);
-    // a tag under a burst is said by the burst's text
-    let runs: Vec<(i32, i32)> = out
-        .iter()
-        .filter_map(|c| match *c {
-            Cell::Run { x0, x1, .. } => Some((x0, x1)),
-            _ => None,
-        })
-        .collect();
-    out.retain(|c| match *c {
-        Cell::Tag { x, .. } => !runs.iter().any(|&(a, b)| x >= a - TAG_PAD && x <= b + TAG_PAD),
-        _ => true,
-    });
     out
 }
 
@@ -142,7 +120,7 @@ fn ascii(m: &Model) -> bool {
     m.dec_proto == Proto::UART && m.dec_ascii
 }
 
-/// One field in the text of a burst. A character line reads as text: control characters as `\r`, `\n`, `\t`, any
+/// One field in the text of a message. A character line reads as text: control characters as `\r`, `\n`, `\t`, any
 /// other byte without a character as `<1B>`.
 fn run_piece(m: &Model, p: &Packet) -> String {
     if let Some(tag) = packet_tag(m, p) {
@@ -160,7 +138,7 @@ fn run_piece(m: &Model, p: &Packet) -> String {
     packet_text(m, p)
 }
 
-/// The text of a burst: its fields in order, as many as fit into `room` pixels, then "...". Characters stand side by
+/// The text of a message: its fields in order, as many as fit into `room` pixels, then "...". Characters stand side by
 /// side, other values with a space between them. Empty when not even the first field fits.
 pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String {
     let dots = f.width("...");
@@ -348,12 +326,23 @@ impl Ui {
             let x = a.x as f64 + a.w as f64 / 2.0 + (t - delay as f64) / tdiv as f64 * ppx;
             (x.round() as i32).clamp(a.x - 64, right + 64)
         };
-        let spans = packets.iter().enumerate().filter_map(|(i, p)| {
-            let (x0, x1) = (xt(p.t0), xt(p.t1));
-            (x1 >= left && x0 <= right).then(|| Span { i, x0, x1, tag: packet_tag(m, p).is_some(), ok: p.ok })
-        });
+        // the messages of the record, and of each field on the screen whether it begins one
+        let groups = oos_dsp::decode::bursts(&packets);
+        let mut g = 0;
+        let spans: Vec<Span> = packets
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                while g + 1 < groups.len() && groups[g].end <= i {
+                    g += 1;
+                }
+                let (x0, x1) = (xt(p.t0), xt(p.t1));
+                let first = groups[g].start == i;
+                (x1 >= left && x0 <= right).then(|| Span { i, x0, x1, tag: packet_tag(m, p).is_some(), ok: p.ok, first })
+            })
+            .collect();
         let mut tag_end = left;
-        for c in cells(spans, |i| f.sb.width(&packet_text(m, &packets[i])) + BOX_PAD, left) {
+        for c in cells(&spans, |i| f.sb.width(&packet_text(m, &packets[i])) + BOX_PAD, left) {
             match c {
                 Cell::Tag { i, x } => {
                     let p = &packets[i];
@@ -370,7 +359,7 @@ impl Ui {
                     cv.text_in(&f.s, r, 1, tag, TEXT);
                     tag_end = r.x + r.w + 1;
                 }
-                Cell::One { i, x0, x1 } => {
+                Cell::One { i, x0, x1, end } => {
                     let p = &packets[i];
                     let head = matches!(
                         p.kind,
@@ -379,6 +368,10 @@ impl Ui {
                     let edge = if head { ACCENT } else { col };
                     if !field_box(cv, x0, x1, y, h, edge, if p.ok { scale(edge, 70) } else { ERR_FILL }) {
                         continue;
+                    }
+                    if end < x1 {
+                        // the box took room of the idle line for its text: the bar is the field itself
+                        cv.fill(Rect::new(x0 + 1, y + h - 4, (end - x0).max(2), 3), edge);
                     }
                     let txt = packet_text(m, p);
                     let (w, tw) = (x1 - x0, f.sb.width(&txt));
@@ -434,38 +427,55 @@ mod tests {
     use super::*;
 
     fn span(i: usize, x0: i32, x1: i32) -> Span {
-        Span { i, x0, x1, tag: false, ok: true }
+        Span { i, x0, x1, tag: false, ok: true, first: false }
     }
 
     fn byte(value: u32) -> Packet {
         Packet { t0: 0.0, t1: 1.0, kind: DecKind::Data, value, value2: None, ok: true }
     }
 
-    /// Fields with room for their text keep a box each; narrow ones that touch are one burst, and a gap wider than
-    /// they are starts the next burst.
+    /// Fields with room for their text keep a box each. A message whose fields have no room is one box, and the next
+    /// message another.
     #[test]
-    fn narrow_fields_share_a_box_per_burst() {
+    fn a_message_without_room_for_its_fields_is_one_box() {
         let wide = [span(0, 100, 140), span(1, 140, 180)];
-        let boxes = cells(wide.into_iter(), |_| 20, 50);
-        assert_eq!(boxes, [Cell::One { i: 0, x0: 100, x1: 140 }, Cell::One { i: 1, x0: 141, x1: 180 }]);
-        // ten fields of 2 px from 100, four more from 200
-        let at = |k: usize, x: i32| span(k, x + 2 * k as i32, x + 2 + 2 * k as i32);
-        let narrow = (0..10).map(|k| at(k, 100)).chain((10..14).map(|k| at(k, 180)));
+        let boxes = cells(&wide, |_| 20, 50);
+        assert_eq!(boxes, [Cell::One { i: 0, x0: 100, x1: 140, end: 140 }, Cell::One { i: 1, x0: 141, x1: 180, end: 180 }]);
+        // ten fields of 2 px from 100; four more from 200 are the next message
+        let at = |k: usize, x: i32| Span { first: k == 10, ..span(k, x + 2 * k as i32, x + 2 + 2 * k as i32) };
+        let narrow: Vec<Span> = (0..10).map(|k| at(k, 100)).chain((10..14).map(|k| at(k, 180))).collect();
         let first = Cell::Run { i0: 0, i1: 10, x0: 100, x1: 120, bad: false };
-        assert_eq!(cells(narrow, |_| 20, 50), [first, Cell::Run { i0: 10, i1: 14, x0: 200, x1: 208, bad: false }]);
+        assert_eq!(cells(&narrow, |_| 20, 50), [first, Cell::Run { i0: 10, i1: 14, x0: 200, x1: 208, bad: false }]);
+        // one message with a pause inside that is no longer than usual stays one box
+        let paced: Vec<Span> = (0..10).map(|k| span(k, 100 + 6 * k as i32, 102 + 6 * k as i32)).collect();
+        assert_eq!(cells(&paced, |_| 20, 50), [Cell::Run { i0: 0, i1: 10, x0: 100, x1: 156, bad: false }]);
         // a field under the band's name starts right of it
-        let under = cells([span(0, 20, 90)].into_iter(), |_| 200, 50);
-        assert_eq!(under, [Cell::Run { i0: 0, i1: 1, x0: 51, x1: 90, bad: false }]);
+        assert_eq!(cells(&[span(0, 20, 90)], |_| 30, 50), [Cell::One { i: 0, x0: 51, x1: 90, end: 90 }]);
     }
 
-    /// A burst says that one of its fields failed, and takes the tags at its ends into its text.
+    /// A field narrower than its text takes the room of the idle line behind it, and says where it ends itself.
     #[test]
-    fn a_burst_keeps_its_errors_and_its_tags() {
-        let tag = |i, x| Span { i, x0: x, x1: x, tag: true, ok: true };
+    fn a_narrow_field_takes_its_text_into_the_idle_line() {
+        let sparse = [span(0, 100, 102), span(1, 130, 132), span(2, 160, 162)];
+        let want = [
+            Cell::One { i: 0, x0: 100, x1: 112, end: 102 },
+            Cell::One { i: 1, x0: 130, x1: 142, end: 132 },
+            Cell::One { i: 2, x0: 160, x1: 172, end: 162 },
+        ];
+        assert_eq!(cells(&sparse, |_| 12, 50), want);
+        // with less room than the text needs the message is one box again
+        assert_eq!(cells(&sparse, |_| 40, 50), [Cell::Run { i0: 0, i1: 3, x0: 100, x1: 162, bad: false }]);
+    }
+
+    /// A message in one box says that one of its fields failed, and takes its tags into its text; a tag on its own
+    /// stays a tag.
+    #[test]
+    fn a_message_keeps_its_errors_and_its_tags() {
+        let tag = |i, x, first| Span { i, x0: x, x1: x, tag: true, ok: true, first };
         let failed = Span { ok: false, ..span(2, 104, 107) };
-        let spans = [tag(0, 100), span(1, 101, 104), failed, tag(3, 108), tag(4, 300)];
+        let spans = [tag(0, 100, true), span(1, 101, 104), failed, tag(3, 108, false), tag(4, 300, true)];
         let burst = Cell::Run { i0: 0, i1: 4, x0: 101, x1: 107, bad: true };
-        assert_eq!(cells(spans.into_iter(), |_| 20, 50), [burst, Cell::Tag { i: 4, x: 300 }]);
+        assert_eq!(cells(&spans, |_| 20, 50), [burst, Cell::Tag { i: 4, x: 300 }]);
     }
 
     /// A character line reads as text with its control characters spelled out; a hex line has spaces; what does not
