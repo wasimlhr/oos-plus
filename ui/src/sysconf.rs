@@ -158,6 +158,17 @@ pub fn tz_of(setting: &str, fallback: &str, lease: impl Fn(&str) -> Option<Strin
     (fallback.to_string(), NtpOrigin::NoDhcp)
 }
 
+/// The ids of a list (`features.off`, `decoders.off`). A word that starts with `#` is no id, and written out after
+/// its space it would start a comment: it is left out and named in `bad`, the other words stand, so a file with one
+/// still loads.
+fn id_list(k: &str, v: &str, bad: &mut Vec<String>) -> Vec<String> {
+    let (ids, hash): (Vec<&str>, Vec<&str>) = v.split_whitespace().partition(|w| !w.starts_with('#'));
+    if !hash.is_empty() {
+        bad.push(format!("{}: {:?} left out, no id starts with '#'", k, hash.join(" ")));
+    }
+    ids.into_iter().map(str::to_string).collect()
+}
+
 fn on_off(v: &str) -> Option<bool> {
     match v {
         "on" | "true" | "1" => Some(true),
@@ -228,11 +239,11 @@ impl SysConf {
                 },
                 "backlight" => v.parse::<u32>().ok().filter(|p| (10..=100).contains(p)).map(|p| c.backlight = p).is_some(),
                 "features.off" => {
-                    c.features_off = v.split_whitespace().map(str::to_string).collect();
+                    c.features_off = id_list(k, v, &mut bad);
                     true
                 }
                 "decoders.off" => {
-                    c.decoders_off = v.split_whitespace().map(str::to_string).collect();
+                    c.decoders_off = id_list(k, v, &mut bad);
                     true
                 }
                 _ => {
@@ -380,6 +391,18 @@ pub fn default_path() -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+
+    // Break it catches: a word of features.off that starts with '#' and becomes a comment once written out, so the
+    // list loses every word after it (upstream #219)
+    #[test]
+    fn a_list_word_with_a_hash_is_left_out_and_named() {
+        use super::SysConf;
+        let (c, _) = SysConf::parse("features.off =#eye bode\n");
+        assert_eq!(SysConf::parse(&c.text()).0.features_off, c.features_off, "written as {:?}", c.text());
+        let (c, bad) = SysConf::parse("features.off =#eye bode\ndecoders.off = Uart\u{3000}#x Spi\n");
+        assert_eq!((c.features_off, c.decoders_off), (vec!["bode".to_string()], vec!["Uart".to_string(), "Spi".into()]));
+        assert_eq!(bad.len(), 2, "{bad:?}");
+    }
 
     // Break it catches: a fork key (acq.pipeline, perf.place, acq.prearm) that only /oos/system.conf can set, so the
     // unit image's defaults (/etc/oos/system.conf) do nothing; or an image default that beats the user's setting
