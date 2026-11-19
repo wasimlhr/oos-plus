@@ -113,9 +113,10 @@ impl Ui {
                 let vpd = self.decoder_vpd() as f64;
                 sym(LEVEL_DIVS * vpd, vpd / STEPS_PER_DIV, "V")
             }
-            // in the steps of its own line's scale
-            Item::DecThrLine(role) => {
-                let vpd = m.dec_role_src(role).map_or(1.0, |source| self.decoder_vpd_of(source)) as f64;
+            // in the steps of the line's own source
+            Item::DecThrLine(k) => {
+                let src = [Some(m.dec_src2), m.dec_cs, m.dec_src4].get(k).copied().flatten();
+                let vpd = src.map_or(self.decoder_vpd(), |s| self.decoder_vpd_of(s)) as f64;
                 sym(LEVEL_DIVS * vpd, vpd / STEPS_PER_DIV, "V")
             }
             Item::BusClkThr | Item::BusDataThr => {
@@ -196,7 +197,7 @@ impl Ui {
             Item::HDelay => m.delay as f64,
             Item::MathOffset => m.math_offset as f64,
             Item::DecThr => m.dec_thr as f64,
-            Item::DecThrLine(role) => m.dec_thr_of(role) as f64,
+            Item::DecThrLine(k) => m.dec_thr_of(k + 1) as f64,
             Item::BusClkThr => m.bus.clk_thr as f64,
             Item::BusDataThr => m.bus.data_thr as f64,
             Item::SpecRef => m.spec_ref as f64,
@@ -223,11 +224,8 @@ impl Ui {
             Item::HDelay => m.delay = x,
             Item::MathOffset => m.math_offset = x,
             Item::DecThr => m.dec_thr = x,
-            Item::DecThrLine(role) => {
-                if let Some(t) = role.checked_sub(1).and_then(|k| m.dec_thr_line.get_mut(k)) {
-                    *t = Some(x);
-                }
-            }
+            // set onto the decoder's threshold, a line follows it again
+            Item::DecThrLine(k) if k < 3 => m.dec_thr_line[k] = if (x - m.dec_thr).abs() < 1e-6 { None } else { Some(x) },
             Item::BusClkThr => m.bus.clk_thr = x,
             Item::BusDataThr => m.bus.data_thr = x,
             Item::SpecRef => m.spec_ref = x,

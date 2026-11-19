@@ -714,18 +714,11 @@ impl Ui {
             // the rows below are those of one decoder of four: the switch says whose it is
             Item::DecSel => "Decoders".into(),
             Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),
+            Item::DecThrLine(k) => self.m.dec_proto.roles().get(k + 1).copied().flatten().map_or_else(|| self.item_label(it).to_string(), |r| format!("{r} threshold")),
             // a line is named by what it is in the protocol (Clock, Data, CS), where the protocol says so
             Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 => {
                 let role = match it { Item::DecSrc => 0, Item::DecSrc2 => 1, Item::DecCs => 2, _ => 3 };
                 self.m.dec_proto.roles()[role].map_or_else(|| self.item_label(it).to_string(), str::to_string)
-            }
-            // a line's own threshold is named after the line; the decoder's is the main line's where others have one
-            Item::DecThrLine(role) => match self.m.dec_proto.roles().get(role).copied().flatten() {
-                Some(name) => format!("{} threshold", name),
-                None => self.item_label(it).to_string(),
-            },
-            Item::DecThr if self.m.dec_proto != Proto::CPHY && (1..4).any(|r| self.m.dec_role_src(r).is_some()) => {
-                self.m.dec_proto.roles()[0].map_or_else(|| "Threshold".to_string(), |name| format!("{} threshold", name))
             }
             Item::RefSaveNext => self.ref_store_next_label(),
             Item::RowF(measrow::RF::Used | measrow::RF::StMean | measrow::RF::StRange | measrow::RF::StN) => self.measrow_text(it).unwrap_or_default(),

@@ -234,15 +234,15 @@ impl Ui {
         }
     }
 
-    /// The middle of the signal on line `role` of the decoder `m` is the view of (0: its main line): half way between
-    /// the lowest and the highest sample of the record on the screen (of A - B for a pair on the main line). `None`
-    /// on LA lines, for a line the decoder has not, without a record and for a line that does not move.
-    pub(crate) fn dec_line_middle(&self, m: &Model, role: usize) -> Option<f32> {
+    /// The middle of the signal on the source of the decoder `m` is the view of: half way between the lowest and
+    /// the highest sample of the record on the screen (of A - B for a pair). `None` on LA lines, without a record
+    /// and for a line that does not move.
+    pub(crate) fn dec_signal_middle(&self, m: &Model) -> Option<f32> {
         if m.dec_on_la() {
             return None;
         }
-        let a = self.dec_wave(m.dec_role_src(role)?)?;
-        let b = if role == 0 && m.dec_proto.diff_ok() { m.dec_diff.and_then(|b| self.dec_wave(b)) } else { None };
+        let a = self.dec_wave(m.dec_src)?;
+        let b = if m.dec_proto.diff_ok() { m.dec_diff.and_then(|b| self.dec_wave(b)) } else { None };
         let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
         for (k, &x) in a.iter().enumerate() {
             let v = x - b.and_then(|b| b.get(k)).copied().unwrap_or(0.0);
@@ -254,28 +254,31 @@ impl Ui {
         (hi > lo).then(|| (lo + hi) / 2.0)
     }
 
-    /// The middles of the lines of the decoder `m` is the view of: the main line's, and for each other line that
-    /// has a signal its own. `None` when the main line has none.
-    pub(crate) fn dec_signal_middles(&self, m: &Model) -> Option<(f32, [Option<f32>; 3])> {
-        Some((self.dec_line_middle(m, 0)?, std::array::from_fn(|k| self.dec_line_middle(m, k + 1))))
+    /// The thresholds of the further lines of the decoder `m` is the view of, when the source's is `thr`: for each
+    /// line the middle of its own signal, where that is not the source's (more than a tenth of the line's swing
+    /// away); `None` for a line that can share `thr`, has no source or does not move.
+    pub(crate) fn dec_line_middles(&self, m: &Model, thr: f32) -> [Option<f32>; 3] {
+        let r = m.dec_proto.roles();
+        let src = [r[1].map(|_| m.dec_src2), r[2].and(m.dec_cs), r[3].and(m.dec_src4)];
+        std::array::from_fn(|k| {
+            let w = self.dec_wave(src[k]?)?;
+            let (lo, hi) = w.iter().filter(|x| x.is_finite()).fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+            let mid = (lo + hi) / 2.0;
+            (hi > lo && (mid - thr).abs() > 0.1 * (hi - lo)).then_some(mid)
+        })
     }
 
-    /// Decode > Threshold to middle: the thresholds of the decoder the menu edits, once: each line's to the middle
-    /// of its own signal, so lines of different levels are read right.
+    /// Decode > Threshold to middle: the thresholds of the decoder the menu edits, once. The source's goes to the
+    /// middle of its signal, and each further line gets one of its own where its signal has another middle.
     pub(super) fn dec_threshold_to_middle(&mut self) {
-        match self.dec_signal_middles(&self.m) {
-            Some((main, lines)) => {
-                self.m.dec_thr = main;
-                // a line without a signal keeps what it has
-                for (k, t) in lines.into_iter().enumerate() {
-                    if t.is_some() {
-                        self.m.dec_thr_line[k] = t;
-                    }
-                }
+        match self.dec_signal_middle(&self.m) {
+            Some(v) => {
+                let lines = if self.m.dec_on_la() { [None; 3] } else { self.dec_line_middles(&self.m, v) };
+                (self.m.dec_thr, self.m.dec_thr_line) = (v, lines);
                 self.settings_changed();
-                let set = std::iter::once(main).chain(lines.into_iter().flatten());
-                let all: Vec<String> = set.map(|v| si(v as f64, "V")).collect();
-                self.toast(&format!("Threshold {}", all.join(", ")));
+                let roles = self.m.dec_proto.roles();
+                let own: Vec<String> = (0..3).filter_map(|k| lines[k].map(|t| format!("{} {}", roles[k + 1].unwrap_or("line"), si(t as f64, "V")))).collect();
+                self.toast(&if own.is_empty() { format!("Threshold {}", si(v as f64, "V")) } else { format!("Threshold {}, {}", si(v as f64, "V"), own.join(", ")) });
             }
             None => self.toast("No signal on the decoder's source"),
         }
@@ -526,16 +529,6 @@ impl Ui {
                 // the LO level of ARINC 429
                 let ty = self.y_of_wave(source, -m.dec_thr);
                 cv.dashed_hline(a.x + 26, a.x + a.w - 26, ty, 2, 6, scale(col, 160));
-            }
-            // the other lines: each threshold on its own trace, in that trace's colour
-            for role in 1..4 {
-                let Some(line) = m.dec_role_src(role).and_then(decode_wave) else { continue };
-                // a channel is drawn in its own window or lane; a line that is off has no trace
-                if matches!(line, WaveId::Ch(c) if !self.m.ch[c].on || !self.shows(c)) {
-                    continue;
-                }
-                let ty = self.y_of_wave(line, m.dec_thr_of(role));
-                cv.dashed_hline(a.x + 26, a.x + a.w - 26, ty, 2, 6, scale(self.wave_color(line), 160));
             }
         }
         cv.no_clip();

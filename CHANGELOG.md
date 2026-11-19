@@ -18,6 +18,13 @@ Fixed:
   table of the measurements without a word, and no row of the menu led to the other two. The page opens on the
   table that is on the screen, else on the events of a decoder or a search that is on; the row says On for any
   of the three.
+- Decoders, a threshold for each line (host-tested): a decoder of several lines (SPI, I2C and the others with a
+  clock or a select) has a threshold for each further line, on the Settings page of Decode (Clock threshold, CS
+  threshold). A line follows the decoder's threshold until it is given its own. On a unit an SPI clock and select
+  of 0.5 V stood beside a data line of 5 V whose low level is 0.3 V: no one threshold reads both safely. Threshold
+  to middle and `:BUS<n>:THReshold AUTO` give every line the middle of its own signal. New commands:
+  `:BUS<n>:SPI:SCLK:THReshold`, `:BUS<n>:SPI:MOSI:THReshold`, `:BUS<n>:SPI:SS:THReshold`,
+  `:BUS<n>:IIC:SCLK:THReshold`, `:BUS<n>:IIC:SDA:THReshold`; new set-up key `dec_thr_line`.
 - Studio, the pill of a channel (host-tested): a tap selects the channel, wherever on the pill, and does
   nothing else; a tap on the selected pill opens its sheet, so a double tap on any pill opens it, and the
   second tap of a double tap does not close it. With a channel sheet open, a tap on another pill takes the
@@ -463,16 +470,9 @@ Changed:
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
   row not yet verified on hardware). A signal that does not reach the 1.65 V of a new set-up
   decoded nothing (seen on a unit, 2026-11-19: a 0.43 V swing through a probe set to 1x).
-- Decoders: each line of a decoder may have a threshold of its own (host-tested, not yet verified on hardware). A
-  bus whose lines have different levels (a 5 V data line beside a clock seen at 0.3 V) could not be read with the
-  one threshold a decoder had. Decode lists a threshold for the second, third and fourth line of the protocol
-  ("Clock threshold", "CS threshold"); a line that has none set takes the decoder's, as before, and a set-up from
-  before reads as it did (`dec_thr2` to `dec_thr4`, `main`). Threshold to middle sets every line's to the middle
-  of its own signal. The plot has each line's threshold as a dashed line on its trace.
-  `:BUS<n>:THReshold <line>,<volts>` sets one, `<line>,DEF` gives it up. The hysteresis is the main line's.
 - SPI decoder: Bit order (MSB first, LSB first), Data (Active high, Active low: every bit of a word inverted) and
-  the CS polarity of the SPI trigger are rows of Decode (`:BUS<n>:OPTion1`, `:BUS<n>:OPTion2`; host-tested, not
-  yet verified on hardware). The clock's edge is the Mode row, as before.
+  the CS polarity of the SPI trigger, which the decoder followed already, are rows of Decode (`:BUS<n>:OPTion1`,
+  `:BUS<n>:OPTion2`; host-tested, not yet verified on hardware). The clock's edge is the Mode row, as before.
 - Studio: a decoder that is on has a pill in the bottom bar, after the channels, references and math: its number in
   the colour of its line, its protocol, and on a wide pill its lines in the order of their roles ("CH4 CH3 CH2").
   A tap opens the Decode sheet of that decoder, where each line has its row (MOSI, Clock, CS); a second tap closes

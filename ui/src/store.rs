@@ -173,10 +173,7 @@ fn dec_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     kv("ser.ten_bit", s.ten_bit.to_string());
     kv("ser.bytes", s.bytes.to_string());
     kv("dec_thr", m.dec_thr.to_string());
-    // a line's own threshold, or `main`: the decoder's
-    for (k, t) in m.dec_thr_line.iter().enumerate() {
-        kv(&format!("dec_thr{}", k + 2), t.map_or("main".into(), |t| t.to_string()));
-    }
+    kv("dec_thr_line", m.dec_thr_line.map(|t| t.map_or("-".to_string(), |x| x.to_string())).join(" "));
     kv("dec_ascii", m.dec_ascii.to_string());
     kv("dec_proto", m.dec_proto.key());
     kv("dec_opt", list(&m.dec_opt));
@@ -814,9 +811,16 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
         "ser.ten_bit" => m.ser.ten_bit = p_bool(v)?,
         "ser.bytes" => m.ser.bytes = p_u32(v)?.min(5) as u8,
         "dec_thr" => m.dec_thr = p_f32(v)?,
-        "dec_thr2" | "dec_thr3" | "dec_thr4" => {
-            let line = (k.as_bytes()[7] - b'2') as usize;
-            m.dec_thr_line[line] = if v.trim() == "main" { None } else { Some(p_f32(v)?) };
+        "dec_thr_line" => {
+            let w: Vec<&str> = v.split_whitespace().collect();
+            if w.len() != 3 {
+                return Err(format!("dec_thr_line: {:?}", v));
+            }
+            let mut t = [None; 3];
+            for (r, s) in t.iter_mut().zip(&w) {
+                *r = if *s == "-" { None } else { Some(p_f32(s)?) };
+            }
+            m.dec_thr_line = t;
         }
         "dec_ascii" => m.dec_ascii = p_bool(v)?,
         "dec_proto" => m.dec_proto = Proto::from_key(v.trim()).ok_or_else(|| format!("unknown protocol: {}", v.trim()))?,

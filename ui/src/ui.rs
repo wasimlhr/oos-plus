@@ -646,10 +646,10 @@ enum Item {
     I2cAddrBits,
     I2cBytes,
     DecThr,
+    /// the threshold of the decoder's second, third or fourth line (0, 1, 2), where it has one of its own
+    DecThrLine(usize),
     /// sets the threshold to the middle of the signal on the decoder's source, once
     DecThrMid,
-    /// the threshold of the decoder's second, third or fourth line (1..=3), where it is not the decoder's
-    DecThrLine(usize),
     DecFmt,
     DecProto,
     DecSrc2,
@@ -7597,10 +7597,13 @@ impl Ui {
         // LA lines: the probe's comparators set the levels (LA page)
         if !on_la {
             v.push(DecThr);
+            // a threshold for each further line the protocol has and the decoder has a source for
+            let has = [r[1].is_some(), r[2].is_some() && self.m.dec_cs.is_some(), r[3].is_some() && self.m.dec_src4.is_some()];
+            if p != Proto::CPHY {
+                v.extend((0..3).filter(|&k| has[k]).map(DecThrLine));
+            }
             // C-PHY has a level gap there, not a threshold between two levels
             if p != Proto::CPHY {
-                // the other lines the protocol has: each may have a threshold of its own
-                v.extend((1..4).filter(|&role| self.m.dec_role_src(role).is_some()).map(DecThrLine));
                 v.push(DecThrMid);
             }
         }
@@ -8155,11 +8158,10 @@ impl Ui {
             Item::DecSrc4 => "Source 4",
             Item::DecDiff => "B line (A-B)",
             Item::DecThr => "Threshold",
+            Item::DecThrLine(0) => "Line 2 threshold",
+            Item::DecThrLine(1) => "Line 3 threshold",
+            Item::DecThrLine(_) => "Line 4 threshold",
             Item::DecThrMid => "Threshold to middle",
-            // the Studio sheet names the line by its role ("Clock threshold", `sheet_label`)
-            Item::DecThrLine(1) => "Threshold 2",
-            Item::DecThrLine(2) => "Threshold 3",
-            Item::DecThrLine(_) => "Threshold 4",
             Item::DecFmt => "Format",
             Item::DecProto => "Protocol",
             Item::DecSrc2 => "Clock",
@@ -8535,7 +8537,11 @@ impl Ui {
             Item::DecSrc4 => m.dec_src4.map_or("None".into(), decode_source_name),
             Item::DecDiff => m.dec_diff.map_or("None".into(), decode_source_name),
             Item::DecThr => si(m.dec_thr as f64, "V"),
-            Item::DecThrLine(role) => si(m.dec_thr_of(role) as f64, "V"),
+            // a line without a threshold of its own says so beside the one it follows
+            Item::DecThrLine(k) => match m.dec_thr_line.get(k).copied().flatten() {
+                Some(t) => si(t as f64, "V"),
+                None => format!("{} \u{b7} same", si(m.dec_thr as f64, "V")),
+            },
             Item::DecFmt => if m.dec_ascii { "ASCII".into() } else { "Hex".into() },
             Item::DecProto => m.dec_proto.name().into(),
             Item::DecOpt(k) => m.dec_proto.module().and_then(|p| p.options().get(k)).map_or(String::new(), |o| o.choices[m.dec_opts()[k]].into()),

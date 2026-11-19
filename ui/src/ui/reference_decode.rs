@@ -252,9 +252,9 @@ impl Ui {
     pub(super) fn decoder_vpd(&self) -> f32 {
         self.decoder_vpd_of(self.m.dec_src)
     }
-    /// Volts per division of a decoder source (a channel or a reference).
-    pub(super) fn decoder_vpd_of(&self, source: usize) -> f32 {
-        self.decoder_samples(source).map_or(1.0, |(_, _, _, vpd)| vpd.max(1e-9))
+    /// The volts per division of the decoder source `src` (a channel or a reference).
+    pub(super) fn decoder_vpd_of(&self, src: usize) -> f32 {
+        self.decoder_samples(src).map_or(1.0, |(_, _, _, vpd)| vpd.max(1e-9))
     }
     #[cfg(test)]
     pub(super) fn decoder_worker_state_for_test(&self) -> (usize, usize) {
