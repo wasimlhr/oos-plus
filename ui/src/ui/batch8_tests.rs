@@ -219,7 +219,7 @@ fn the_results_table_adds_measurements_search_events_and_decode_needs_a_decoder(
     tap_in(&mut u, g.types[2].1);
     let add = foot(&u, super::addrail::RailAct::Add);
     tap_in(&mut u, add);
-    assert_ne!(u.table, Some(tables::TableKind::Decode));
+    assert!(!u.events_pane_on());
     // Remove takes the table away again
     let g = u.rail_geo();
     tap_in(&mut u, g.types[1].1);

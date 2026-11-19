@@ -61,6 +61,8 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
     let mut out: Vec<Cell> = Vec::new();
     // the end of the box before: a box starts right of it (at first right of the band's name)
     let mut end = left;
+    // the box before is a message with no room for even its first field
+    let mut mute = false;
     let mut k = 0;
     while k < spans.len() {
         // one message: up to the next field that begins one
@@ -71,6 +73,7 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
         let Some(head) = fields.first() else {
             // events only
             out.extend(burst.iter().map(|s| Cell::Tag { i: s.i, x: s.x0 }));
+            mute = false;
             continue;
         };
         // every field wide enough for its own text: a box each
@@ -87,6 +90,7 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
                 out.push(Cell::One { i: s.i, x0: s.x0.max(end + 1), x1: s.x1 });
                 end = s.x1;
             }
+            mute = false;
             continue;
         }
         // one box from its first field to its last; its tags are said by its text. The idle line up to the field
@@ -96,16 +100,29 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
         if x1 >= x0 {
             let bad = burst.iter().any(|s| !s.ok);
             let until = spans[n..].iter().find(|s| !s.tag).map_or(i32::MAX / 2, |s| s.x0 - SLOT_GAP);
-            out.push(Cell::Run { i0: burst[0].i, i1: burst[burst.len() - 1].i + 1, x0, x1, bad, until });
+            let i1 = burst[burst.len() - 1].i + 1;
+            // no room for even its first field, in the message or in the idle line behind it: short messages at a
+            // steady pace (a word per SPI frame). The band then reads them as one stream, as long as they go on so
+            let room = x1.max(until) - x0;
+            let now = room < OWN_MIN || need(head.i) > room;
+            match out.last_mut() {
+                Some(Cell::Run { i1: last, x1: to, bad: failed, until: free, .. }) if mute && now => {
+                    (*last, *to, *free) = (i1, x1, until);
+                    *failed |= bad;
+                }
+                _ => out.push(Cell::Run { i0: burst[0].i, i1, x0, x1, bad, until }),
+            }
+            mute = now;
             end = x1;
         }
     }
     out
 }
 
-/// Whether the decoder shows characters (UART with Format ASCII).
+/// Whether the decoder shows its data as characters: the UART with Format ASCII, or a module whose own Format
+/// option says so (SPI, I2C).
 pub(super) fn ascii(m: &Model) -> bool {
-    m.dec_proto == Proto::UART && m.dec_ascii
+    (m.dec_proto == Proto::UART && m.dec_ascii) || m.dec_proto.module().is_some_and(|p| p.chars(&m.dec_opts()))
 }
 
 /// One field in the text of a message. A character line reads as text: control characters as `\r`, `\n`, `\t`, any
@@ -133,11 +150,12 @@ pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String 
     let glue = if ascii(m) { "" } else { " " };
     let mut s = String::new();
     let mut w = 0;
-    for (k, p) in pk.iter().enumerate() {
+    let mut fields = said(pk).peekable();
+    while let Some(p) = fields.next() {
         let piece = run_piece(m, p);
         let pw = f.width(&piece) + if s.is_empty() { 0 } else { f.width(glue) };
         // what is left out is said by the dots, which need their room
-        let rest = if k + 1 == pk.len() { 0 } else { dots };
+        let rest = if fields.peek().is_none() { 0 } else { dots };
         if w + pw + rest > room {
             return if s.is_empty() { s } else { s + "..." };
         }
@@ -150,9 +168,16 @@ pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String 
     s
 }
 
+/// The fields a text is made of: all but the start marks. A message begins with its own (an I2C transfer with its
+/// start condition, an SPI frame with its chip select), and a stream of several messages in one box would have one
+/// between every two ("FF S FD S FA", seen on a unit with a word per SPI frame).
+fn said(pk: &[Packet]) -> impl Iterator<Item = &Packet> {
+    pk.iter().filter(|p| p.kind != DecKind::Start)
+}
+
 /// The whole text of a message, as its box would hold it with all the room.
 pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
-    pk.iter().map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
+    said(pk).map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
 }
 
 /// The lines of the decoder `m` is the view of, in the order of its roles ("CH4 CH3 CH2"; on the LA "D8 D10").
@@ -207,6 +232,10 @@ fn bit_label(b: &Bit) -> (String, &'static str) {
         // a stop bit is 1; what a failed one was read as is said
         BitKind::Stop if b.ok => ("Stop".into(), "T"),
         BitKind::Stop => (format!("Stop {}", v), "T"),
+        // I2C: the direction of an address, and whether the byte was acknowledged (a 0 on the line)
+        BitKind::Rw if b.level == Some(true) => ("Read".into(), "R"),
+        BitKind::Rw => ("Write".into(), "W"),
+        BitKind::Ack => (if b.ok { "ACK" } else { "NAK" }.into(), if b.ok { "A" } else { "N" }),
     }
 }
 
@@ -282,12 +311,18 @@ impl Ui {
     }
 
     /// Whether the band of the decoder `m` is the view of has its bit row: the protocol reports the bits of its
-    /// fields, and at this time base one is wide enough to be read.
+    /// fields, and at this time base one of them is wide enough to be read. The width is that of a bit the decoder
+    /// found, not of the protocol's nominal rate: an I2C bus runs at the speed of its controller.
     pub(super) fn dec_bit_row(&self, m: &Model) -> bool {
         let Some(p) = m.dec_proto.module().filter(|p| p.bit_row()) else { return false };
         let (tdiv, _) = self.view();
-        let bit = p.bit_time_sh(&m.dec_opts(), &crate::protocols::Shared::of(m));
-        tdiv > 0.0 && bit / tdiv as f64 * (self.area.w as f64 / HDIV as f64) >= BIT_MIN
+        if !(tdiv > 0.0) {
+            return false;
+        }
+        let Ok(packets) = self.decode_packets_of(m) else { return false };
+        let (opt, sh) = (m.dec_opts(), crate::protocols::Shared::of(m));
+        let bit = packets.iter().find_map(|x| p.bits(x, &opt, &sh)).and_then(|b| b.first().map(|b| b.t1 - b.t0));
+        bit.is_some_and(|bit| bit / tdiv as f64 * (self.area.w as f64 / HDIV as f64) >= BIT_MIN)
     }
 
     /// Height the band of that decoder takes of the plot.
@@ -417,8 +452,13 @@ impl Ui {
                 cv.vline(x1.max(x0 + 1), a.y, a.y + a.h - 1, DIM);
             }
         }
-        // a box a finger can find: a finger's height around it
-        let touch = |x0: i32, x1: i32| Rect::new(x0.max(left), y - 8, (x1 - x0.max(left)).max(12), h + 16);
+        // a box a finger can find: a finger's height around it, and no narrower than half a finger around its middle
+        // (a box beside it is found first where the two overlap, so a wider one would take taps from its neighbours)
+        let touch = |x0: i32, x1: i32| {
+            let x0 = x0.max(left);
+            let w = (x1 - x0).max(20);
+            Rect::new((x0 + x1) / 2 - w / 2, y - 8, w, h + 16)
+        };
         let mark = |cv: &mut Canvas, x0: i32, x1: i32| {
             cv.round_outline(Rect::new(x0 - 2, y - 2, x1 - x0 + 5, h + 4), 4, ACCENT);
         };
@@ -594,6 +634,24 @@ mod tests {
         assert_eq!(cells(&apart, |_| 12, 50), want);
     }
 
+    /// Short messages at a pace that leaves no room for one field's text (a word per SPI frame at a slow time base)
+    /// are one box while they go on so: the band reads them as a stream. The last one has the line behind it.
+    #[test]
+    fn messages_without_room_for_a_field_are_read_as_a_stream() {
+        // messages of one field of 2 px, each `pitch` px after the one before
+        let paced = |n: usize, pitch: i32| -> Vec<Span> {
+            (0..n).map(|k| Span { first: true, ..span(k, 100 + pitch * k as i32, 102 + pitch * k as i32) }).collect()
+        };
+        let dense = paced(5, 10);
+        let want = [
+            Cell::Run { i0: 0, i1: 4, x0: 100, x1: 132, bad: false, until: 138 },
+            Cell::Run { i0: 4, i1: 5, x0: 140, x1: 142, bad: false, until: OPEN },
+        ];
+        assert_eq!(cells(&dense, |_| 12, 50), want);
+        // with room for a field behind each message they stay apart
+        assert_eq!(cells(&paced(3, 30), |_| 12, 50).len(), 3);
+    }
+
     /// A message in one box says that one of its fields failed, and takes its tags into its text; a tag on its own
     /// stays a tag.
     #[test]
@@ -628,6 +686,21 @@ mod tests {
         assert!(u.m.dec_on && u.m.dec_src == 2, "the decoder is as it was set");
         u.m.ch[2].on = true;
         assert!(named(&mut u));
+    }
+
+    /// A stream of several messages in one box has no start mark between them, and a message none at its head.
+    #[test]
+    fn a_text_leaves_out_the_start_marks() {
+        let ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut m = Model::default();
+        m.dec_proto = Proto::SPI;
+        m.dec_bits = 8;
+        let mark = Packet { kind: DecKind::Start, ..byte(0) };
+        let pk = [mark.clone(), byte(0xff), mark.clone(), byte(0xfd), mark, byte(0xfa)];
+        assert_eq!(message_text(&m, &pk), "FF FD FA");
+        assert_eq!(run_text(&m, &pk, &ui.fonts().sb, 1000), "FF FD FA");
+        let two = ui.fonts().sb.width("FF FD...");
+        assert_eq!(run_text(&m, &pk, &ui.fonts().sb, two), "FF FD...");
     }
 
     /// A character line reads as text with its control characters spelled out; a hex line has spaces; what does not

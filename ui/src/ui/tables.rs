@@ -9,7 +9,6 @@ use super::*;
 /// What the table window shows.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum TableKind {
-    Decode,
     Search,
     /// hardware segments: trigger time since the first trigger, step from the previous one
     Segments,
@@ -108,18 +107,18 @@ impl Ui {
         EventRow { t, who: format!("{} #{}", self.trigger_source_label(), index + 1), text: self.m.trig_type.name().to_string(), ok: true }
     }
 
-    /// Whether the decoder event table is open.
-    pub(crate) fn decode_table_on(&self) -> bool {
-        self.table == Some(TableKind::Decode)
+    /// Whether the decoder events are on the screen: the Events pane. They also had a table over the plot, with three
+    /// columns, no titles and no views; what opened that table opens the pane.
+    pub(crate) fn events_pane_on(&self) -> bool {
+        self.m.pane == PANE_EVENTS
     }
 
-    /// Opens or closes the decoder event table. A search table stays up until this opens the decoder one.
-    pub(crate) fn set_decode_table(&mut self, on: bool) {
+    /// Shows the Events pane, or takes the second pane away while it is the one that lists the events.
+    pub(crate) fn set_events_pane(&mut self, on: bool) {
         if on {
-            self.table = Some(TableKind::Decode);
-            self.table_top = 0;
-        } else if self.table == Some(TableKind::Decode) {
-            self.table = None;
+            self.select_option(Item::PaneSel, PANES[PANE_EVENTS]);
+        } else if self.events_pane_on() {
+            self.select_option(Item::PaneSel, PANES[0]);
         }
     }
 
@@ -145,8 +144,6 @@ impl Ui {
 
     pub(super) fn table_rows(&self, k: TableKind) -> Vec<EventRow> {
         match k {
-            // as the Events pane lists them: messages, fields or lines
-            TableKind::Decode => self.decode_rows().into_iter().map(|e| EventRow { t: e.t, who: e.who, ok: e.errors == 0, text: e.text }).collect(),
             TableKind::Search => self.search_rows(),
             TableKind::Segments => self.segment_rows(),
         }
@@ -204,7 +201,6 @@ impl Ui {
         let Some(k) = self.table else { return String::new() };
         let total = self.table_total(k);
         match k {
-            TableKind::Decode => if self.decode_busy() { "Decoder events - Computing".into() } else { format!("Decoder events \u{b7} {}", total) },
             TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
                 else { format!("Search {} \u{b7} {}", self.trigger_source_label(), total) },
             TableKind::Segments => format!("Segments \u{b7} {}", total),
@@ -289,8 +285,7 @@ impl Ui {
         if rows.is_empty() {
             let empty = if k == TableKind::Search && self.m.trig_ref.is_some() && !self.reference_search_supported() {
                 "This condition needs physical hardware channels"
-            } else if k == TableKind::Decode && self.decode_busy() { "Decoding the full reference record..." }
-            else if k == TableKind::Search && self.reference_search_busy() { "Searching the full reference record…" }
+            } else if k == TableKind::Search && self.reference_search_busy() { "Searching the full reference record…" }
             else { "nothing found in this record" };
             cv.text(&f.s, r.x + 12, r.y + self.head_h(r) + 18, empty, DIM);
         }
@@ -370,9 +365,19 @@ impl Ui {
         self.toast(&if stopped { "Stopped to jump".to_string() } else { format!("At {}", si(t, "s")) });
     }
 
-    /// The events as CSV into the storage directory.
+    /// The rows of the Events pane (messages, fields or lines, as it lists them) as CSV into the storage directory.
+    pub(super) fn decode_export(&mut self) {
+        let rows = self.decode_rows().into_iter();
+        self.export_rows(rows.map(|e| EventRow { t: e.t, who: e.who, ok: e.errors == 0, text: e.text }).collect());
+    }
+
+    /// The events of a table as CSV into the storage directory.
     pub(super) fn events_export(&mut self, k: TableKind) {
         let rows = self.table_rows(k);
+        self.export_rows(rows);
+    }
+
+    fn export_rows(&mut self, rows: Vec<EventRow>) {
         if rows.is_empty() {
             return self.toast("No events in this record");
         }

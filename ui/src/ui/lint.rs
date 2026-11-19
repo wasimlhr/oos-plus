@@ -712,44 +712,51 @@ fn decoder_results_are_cached_per_record() {
     assert_eq!(u.dec_cache.borrow().len(), 2);
 }
 
+/// The Decode menu's row shows the Events pane (it opened a table over the plot): a tap on a row of a running scope
+/// only says how to get there, a stopped one goes to the event; the rows are exported as the pane lists them, and the
+/// row of the menu takes the pane away again.
 #[test]
-fn event_table_scrolls_and_goes_to_an_event() {
+fn the_events_pane_opens_from_the_menu_and_goes_to_an_event() {
     let dir = std::env::temp_dir().join(format!("oos-events-{}", std::process::id()));
     let mut u = with_two_channels();
     u.store_dir = dir.clone();
     u.m.ch[2].on = true;
     u.m.dec_on = true;
     u.m.dec_src = 2;
-    // a row per character: more rows than the table holds
+    // a row per character
     u.m.ev_view = EvView::Fields;
     for _ in 0..4 {
         u.step(0.04);
     }
+    assert_eq!(u.item_label(Item::DecTable), "Events pane");
     u.activate(Item::DecTable);
-    assert_eq!(u.table, Some(tables::TableKind::Decode));
-    let n = u.table_rows(tables::TableKind::Decode).len();
+    assert!(u.events_pane_on() && u.table.is_none());
+    for _ in 0..4 {
+        u.step(0.04);
+    }
+    let n = u.decode_rows().len();
     assert!(n > 3);
     let mut cv = Canvas::new(PANEL_W, PANEL_H);
     u.render(&mut cv);
     // running: a tap only says so
-    let (x, y) = (u.area.x + 100, u.area.y + 8 + 40 + 40);
+    let (_, rows) = u.events_bar().expect("the pane lists the events");
+    let (x, y) = (rows.x + 100, rows.y + 8);
     let d0 = u.m.delay;
     u.tap(x, y);
-    assert_eq!(u.m.delay, d0);
+    assert_eq!((u.m.delay, u.m.run), (d0, RunState::Run));
     assert!(u.toast.as_ref().is_some_and(|t| t.0.contains("Stop")));
-    // stopped: the view goes there
+    // stopped: the view goes there (a second tap on the row would let go of it: the next row)
     u.m.run = RunState::Stop;
-    u.tap(x, y);
+    u.tap(x, y + tables::ROW_H);
     assert_ne!(u.m.delay, d0);
     u.activate(Item::DecExport);
     let f = std::fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
     let t = std::fs::read_to_string(&f).unwrap();
     assert!(t.starts_with("Time (s),Source,Event,Ok") && t.lines().count() == n + 1, "{}", &t[..80.min(t.len())]);
     let _ = std::fs::remove_dir_all(&dir);
-    // the close button
-    let close = u.area.x + 30 + 420 - 46 + 10;
-    u.tap(close, u.area.y + 20);
-    assert!(u.table.is_none());
+    // the row of the menu again
+    u.activate(Item::DecTable);
+    assert!(!u.events_pane_on());
 }
 
 #[test]
@@ -2188,7 +2195,7 @@ fn gallery_at(dir: &std::path::Path, ts: TextSize) {
         ("s-decoders", |u| {
             u.m.ch[2].on = true; u.m.dec_on = true; u.m.dec_src = 2;
             u.m.dec_select(1); u.m.dec_on = true; u.m.dec_src = 2; u.set_dec_proto(Proto::SPI); u.m.dec_select(0);
-            u.table = Some(tables::TableKind::Decode);
+            u.m.pane = tables::PANE_EVENTS;
         }),
         ("s-track", |u| { u.m.cursor = CursorMode::Track; }),
         ("s-network", |u| {

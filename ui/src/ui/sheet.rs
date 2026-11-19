@@ -134,6 +134,17 @@ fn destructive(it: Item) -> bool {
     matches!(it, Item::SpecLimitClear | Item::EyeClear | Item::MaskClear | Item::SimDefaults | Item::CurRemove | Item::SrchRemove | Item::RefClear | Item::RefClearOne | Item::MeasClear | Item::UpdateRollback | Item::Stock | Item::PowerAct | Item::DefaultAct | Item::ZoneClear)
 }
 
+/// The colours of a channel among the choices of a decoder's line: fill, edge and text. The chosen one is filled with
+/// the channel's colour. The others keep their colour, dimmed: with every channel at full strength the row was four
+/// bright frames, and the one that is chosen did not stand out among them.
+pub(super) fn line_chip(col: Rgb, chosen: bool) -> (Rgb, Rgb, Rgb) {
+    if chosen {
+        (col, col, DARK_TEXT)
+    } else {
+        (BTN, mix(BTN, col, 90), mix(BTN, col, 170))
+    }
+}
+
 impl Ui {
     // ------------------------------------------------------------------------------------------------ the plan
 
@@ -198,15 +209,17 @@ impl Ui {
                 RefClear => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
-            M::Decode | M::Bus => (&["Decode", "Settings", "Bus"], |it| match it {
+            M::Decode | M::Bus => (&["Decode", "Settings", "Levels", "Bus"], |it| match it {
                 // (the B line of a differential pair is a setting of its own: on the first page it stood under the
                 // source of every UART, where most have none)
                 DecSel | DecOn | DecProto | DecIn | DecSrc | DecSrc2 | DecCs | DecSrc4 => Slot::Tab(0),
                 DecTable | DecExport => Slot::Foot(1),
-                // an action: under the sources, whose signal it reads (the foot of Settings has its two)
-                DecThrMid => Slot::Foot(0),
-                BusLabel => Slot::Foot(2),
-                BusOn | BusPos | BusClk | BusClkThr | BusData | BusDataThr | BusRw => Slot::Tab(2),
+                // the thresholds have a page of their own, with the action that finds them: a decoder of four lines
+                // has four, and Settings had no room for them beside the protocol's rows
+                DecThr | DecThrLine(_) => Slot::Tab(2),
+                DecThrMid => Slot::Foot(2),
+                BusLabel => Slot::Foot(3),
+                BusOn | BusPos | BusClk | BusClkThr | BusData | BusDataThr | BusRw => Slot::Tab(3),
                 _ => Slot::Tab(1),
             }),
             M::Math => (&["Function", "Scale"], |it| match it {
@@ -470,6 +483,15 @@ impl Ui {
             // the second page: a UART was switched on and read nothing until the baud rate was found there
             if matches!(menu, MenuId::Decode | MenuId::Bus) && tabs.len() > 1 {
                 use Item::*;
+                // SPI: its four lines stand together on the first page (MISO was alone on Settings, where a line is
+                // not looked for). The page has seven rows, so Input, which is chosen once, ends Settings, and the
+                // Mode heads it: a bus is read in mode 0 more often than not
+                if self.m.dec_proto == Proto::SPI && tabs[0].rows.contains(&DecSrc4) {
+                    if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecIn) {
+                        let row = tabs[0].rows.remove(i);
+                        tabs[1].rows.push(row);
+                    }
+                }
                 while tabs[0].rows.len() < SHEET_MAX_ROWS {
                     let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
                     let row = tabs[1].rows.remove(i);
@@ -509,7 +531,7 @@ impl Ui {
             }
             let first = match menu {
                 MenuId::ChMore(_) => 1,
-                MenuId::Bus => 2,
+                MenuId::Bus => 3,
                 _ => 0,
             };
             SheetSpec { tabs, first }
@@ -906,8 +928,9 @@ impl Ui {
                     // the lines of a decoder: a channel in its colour, as its pill in the bottom bar
                     let wave = matches!(it, Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 | Item::DecDiff).then(|| o.strip_prefix("CH").and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=NCH).contains(n)).map(|n| CH_COLORS[n - 1])).flatten();
                     if let Some(col) = wave {
-                        if sel == Some(k) { cv.round(r, 5, col, 255); } else { btn(cv, r, BTN, col); }
-                        cv.text_in(&f.sb, r, 1, o, if sel == Some(k) { DARK_TEXT } else { col });
+                        let (fill, edge, ink) = line_chip(col, sel == Some(k));
+                        btn(cv, r, fill, edge);
+                        cv.text_in(&f.sb, r, 1, o, ink);
                     } else if sel == Some(k) {
                         cv.round(r, 5, ACCENT, 255);
                         cv.text_in(&f.sb, r, 1, o, DARK_TEXT);
@@ -1430,7 +1453,7 @@ impl Ui {
     pub(super) fn panel_shown(&self, k: PanelKind) -> bool {
         match k {
             PanelKind::Measurements => matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Only),
-            PanelKind::Decode => self.table == Some(tables::TableKind::Decode),
+            PanelKind::Decode => self.events_pane_on(),
             PanelKind::Spectrum => self.m.pane == tables::PANE_SPECTRUM || self.m.view == AView::Spectrum,
             PanelKind::Eye => self.m.view == AView::Eye,
             PanelKind::Histogram => self.m.hist != Hist::Off,
@@ -1451,11 +1474,7 @@ impl Ui {
     pub(super) fn studio_apply_panel(&mut self, k: PanelKind) {
         match k {
             PanelKind::Measurements => self.studio_set_view(StudioView::Docked),
-            PanelKind::Decode => {
-                if self.table != Some(tables::TableKind::Decode) {
-                    self.activate(Item::DecTable);
-                }
-            }
+            PanelKind::Decode => self.set_events_pane(true),
             PanelKind::Spectrum => self.select_option(Item::PaneSel, "Spectrum"),
             PanelKind::Trend => self.select_option(Item::PaneSel, "Trend"),
             PanelKind::Eye => {

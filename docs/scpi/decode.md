@@ -2,7 +2,7 @@
 
 Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. A decoder on channels reads the samples the acquisition kept when those are finer than the screen record (up to 262144 points per line while running, 4 M when stopped), so `:DECode:EVENts?` and `:BUS<n>:DATA?` can list events of the whole record, also outside the screen. A UART character the record starts inside is not listed, nor the ones behind it until its bits can be read in one way only; in peak detect, roll and above 1 M points it reads the 3600 points of the screen. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference.
 
-Menu location: Decode and bus (Protocol, Source / clock / CS, Threshold, Format, Event table, protocol parameters, Plot bus, Save events).
+Menu location: Decode and bus (Protocol, Source / clock / CS, Threshold, Format, Events pane, protocol parameters, Plot bus, Save events).
 
 Part of the [SCPI reference](README.md).
 
@@ -25,7 +25,7 @@ Part of the [SCPI reference](README.md).
 | `:DECode:CPHY:RATE` | Set / Query | `AUTO` or known symbols/second; aliases CPHY:SRATe and DECode:SRATe. | `AUTO` | Decode and bus > C-PHY symbol rate | OOS extension |
 | `:DECode:BUSY` | Query | Worker readiness, without changing acquisition. | `0` | Decode and bus > Read decoded events | OOS extension |
 | `:DECode:EVENts` | Query | Physical-time event rows, `BUSY` while pending, or an error if unavailable. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block. | empty | Decode and bus > Read decoded events | OOS extension |
-| `:DECode:EVENts:VIEW` | Set / Query | `MESSages\|FIELds\|LINes`: what a row of the Events pane and of the event table is. A message is what was sent without a pause clearly longer than usual, or from one start condition to the next; a line is a UART character stream up to its line feed (other decoders list their messages). `:DECode:EVENts?` and `:BUS<n>:DATA?` always answer a row per field. | `MESSAGES` | Events pane > Messages, Fields, Lines | OOS extension |
+| `:DECode:EVENts:VIEW` | Set / Query | `MESSages\|FIELds\|LINes`: what a row of the Events pane is. A message is what was sent without a pause clearly longer than usual, or from one start condition to the next; a line is a UART character stream up to its line feed (other decoders list their messages). `:DECode:EVENts?` and `:BUS<n>:DATA?` always answer a row per field. | `MESSAGES` | Events pane > Messages, Fields, Lines | OOS extension |
 | `:DECode:EVENts:ERRors` | Set / Query | Boolean; the Events pane lists only the rows with a failed check. | `0` | Events pane > Errors only | OOS extension |
 | `:DECode:SAVE` | Action | Save the decoded events as CSV. | - | Decode and bus > Export events | OOS extension |
 
@@ -36,7 +36,7 @@ Part of the [SCPI reference](README.md).
 | `:BUS<n>:MODE` | Set / Query | Decoder protocol: `RS232` (alias `UART`), `IIC` (`I2C`), `SPI`, `CAN`, `LIN`, `PARallel`, or another protocol by its UI name without punctuation. The query answers `RS232`, `IIC`, `PAR`, ... | `RS232` | Decode > Protocol | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:DISPlay` | Set / Query | Boolean decoder visibility. | `0` | Decode > Decoder | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:FORMat` | Set / Query | `HEX\|ASCii`. | `ASC` | Decode > Format | Rigol-style (command family of the DHO guide) |
-| `:BUS<n>:EVENt` | Set / Query | Shared decode event-table visibility. | `0` | Decode and bus > Event table | Rigol-style (command family of the DHO guide) |
+| `:BUS<n>:EVENt` | Set / Query | Boolean; the Events pane, the second pane with the events of every decoder, on or off (the same pane as `:DISPlay:LOWer EVENTS`). It was a table over the plot. | `0` | Decode and bus > Events pane | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:THReshold` | Set / Query | Decoder threshold in source units. `<line>,<volts>` with line 2 to 4 sets the threshold of that line of the decoder alone (its second, third or fourth line, as Decode lists them), `<line>,DEF` gives it the decoder's again, and the query with a line number answers that line's. `AUTO` sets each line's once to the middle of its own signal (-230 without a signal on the main line); the query answers the value. | `1.650000E+00` | Decode > Threshold | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:DATA` | Query | Ready event rows in an IEEE block. `BUSY` while required decoding is pending; unavailable sources return an error. | - | Decode and bus > Read decoded events | Rigol-style (command family of the DHO guide) |
 

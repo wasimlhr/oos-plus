@@ -168,6 +168,31 @@ pub fn bursts(p: &[Packet]) -> Vec<std::ops::Range<usize>> {
     out
 }
 
+/// The bits of a byte `i2c` decoded: eight bits MSB first (of an address its seven bits and the read/write bit) and
+/// the acknowledge bit, each around the rising clock edge it was sampled at. A byte's packet runs from its first
+/// clock edge to its ninth; the seven between them are taken as evenly spaced, which a clock stretched inside a byte
+/// is not (assumed; between bytes, where targets usually stretch, it does not matter).
+pub fn i2c_bits(p: &Packet) -> Vec<Bit> {
+    let (byte, address) = match p.kind {
+        Kind::Addr { read } => ((p.value << 1) | u32::from(read), true),
+        Kind::Data => (p.value, false),
+        _ => return Vec::new(),
+    };
+    let step = (p.t1 - p.t0) / 8.0;
+    if !(step > 0.0) {
+        return Vec::new();
+    }
+    let cell = |k: u32, kind: BitKind, level: bool, ok: bool| {
+        let at = p.t0 + k as f64 * step;
+        Bit { t0: at - step / 2.0, t1: at + step / 2.0, kind, level: Some(level), ok }
+    };
+    let kind = |k: u32| if address && k == 7 { BitKind::Rw } else { BitKind::Data };
+    let mut out: Vec<Bit> = (0..8).map(|k| cell(k, kind(k), (byte >> (7 - k)) & 1 == 1, true)).collect();
+    // acknowledged is a 0 on the line
+    out.push(cell(8, BitKind::Ack, !p.ok, p.ok));
+    out
+}
+
 /// What a bit of a character is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BitKind {
@@ -175,6 +200,10 @@ pub enum BitKind {
     Data,
     Parity,
     Stop,
+    /// I2C: the read/write bit of an address byte (1 = read)
+    Rw,
+    /// I2C: the acknowledge bit (0 = acknowledged)
+    Ack,
 }
 
 /// One bit of a field as its decoder read it: from `t0` to `t1` in the time units of its packet, sampled in the
@@ -367,6 +396,36 @@ mod tests {
         let framed = [at(0.0, Kind::Start), at(0.0, Kind::Data), at(1.0, Kind::Stop), at(1.0, Kind::Start), at(1.0, Kind::Data)];
         assert_eq!(bursts(&framed), [0..3, 3..5]);
         assert!(bursts(&[]).is_empty());
+    }
+
+    /// The bits of an I2C byte lie on the clock edges of a decoded transfer: the data line read in the middle of
+    /// each cell is the level the cell says, the eighth bit of an address is its read/write bit, the ninth the
+    /// acknowledge.
+    #[test]
+    fn i2c_bits_match_the_lines() {
+        let xfer = I2cXfer { addr: 0x50, read: true, data: vec![0xa5], repeated: false, stop: true };
+        let (sda, scl) = i2c_logic(&[xfer], 100e3, 0.0, 3.3);
+        let dt = 0.25e-6;
+        let (d, c) = (sample(|t| sda.v(t), 0.0, dt, 1200), sample(|t| scl.v(t), 0.0, dt, 1200));
+        let p = i2c(&d, &c, 1.65, 0.2);
+        let bytes: Vec<&Packet> = p.iter().filter(|x| matches!(x.kind, Kind::Addr { .. } | Kind::Data)).collect();
+        assert_eq!(bytes.len(), 2, "{:?}", p);
+        for b in &bytes {
+            let bits = i2c_bits(b);
+            assert_eq!(bits.len(), 9);
+            for x in &bits {
+                let mid = ((x.t0 + x.t1) / 2.0).round() as usize;
+                assert_eq!(Some(d[mid] > 1.65), x.level, "{:?} of {:?}", x, b);
+            }
+        }
+        let address = i2c_bits(bytes[0]);
+        let levels: Vec<u8> = address.iter().map(|x| u8::from(x.level == Some(true))).collect();
+        // 0x50 read: 1010000 1, acknowledged
+        assert_eq!(levels, [1, 0, 1, 0, 0, 0, 0, 1, 0]);
+        assert_eq!((address[7].kind, address[8].kind, address[8].ok), (BitKind::Rw, BitKind::Ack, true));
+        assert_eq!(i2c_bits(bytes[1])[7].kind, BitKind::Data);
+        // a start condition has no bits
+        assert!(i2c_bits(&p[0]).is_empty());
     }
 
     /// The bits of a character lie where `uart` sampled them and say what it read.

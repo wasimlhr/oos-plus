@@ -1,7 +1,7 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! What the decoders found, as rows: the Events pane under the plot and the event table over it. The rows are the
+//! What the decoders found, as rows: the Events pane under the plot. The rows are the
 //! messages of the record (`oos_dsp::decode::bursts`), its single fields, or the lines of a character stream; the
 //! pane's head chooses, and can leave only the rows with a failed check. A message has its time, its decoder, the
 //! number of its fields, its text, for a character line the bytes in hex, and whether its checks passed. The pane
@@ -12,11 +12,11 @@
 use super::*;
 use oos_dsp::decode::{Kind as DecKind, Packet};
 
-/// Height of the pane's head (the view switch; as high as the close button) and of its column titles.
-const HEAD: i32 = 40;
+/// Height of the pane's head and of its column titles. The buttons of the head are a finger tall (`TOUCH_MIN`).
+const HEAD: i32 = workspace::TOUCH_MIN + 4;
 const TITLES: i32 = 20;
 /// Height of a pane with its head and one line of text.
-const EMPTY_H: i32 = HEAD + 24;
+const EMPTY_H: i32 = HEAD + 22;
 /// Below this width the pane has no columns for the decoder, the length and the hex bytes.
 const NARROW_W: i32 = 560;
 /// Below this width it lists the time and the text alone.
@@ -121,6 +121,22 @@ pub(super) fn want_h(rows: usize) -> i32 {
     if rows == 0 { EMPTY_H } else { HEAD + TITLES + rows as i32 * tables::ROW_H }
 }
 
+/// What the last column says of a row: how many of its fields failed a check. A row without one says nothing: an "OK"
+/// on every row took the room of the text and said no more than the missing red does.
+fn errors_text(errors: usize) -> String {
+    match errors {
+        0 => String::new(),
+        1 => "1 error".to_string(),
+        k => format!("{} errors", k),
+    }
+}
+
+/// Whether a pane `w` wide has its Errors column: it has the room, and `failed` rows of the record failed a check. A
+/// record without a failed check has no such column, and its text has the room.
+fn errors_column(w: i32, failed: usize) -> bool {
+    w >= SMALL_W && failed > 0
+}
+
 /// Text in a cell from `x`, `w` wide: cut with dots where it is longer, left out where not even that fits.
 fn cell(cv: &mut Canvas, f: &Font, at: (i32, i32), w: i32, s: &str, col: Rgb) {
     let room = w - 10;
@@ -183,7 +199,7 @@ impl Ui {
     }
 
     /// The buttons in the head of a pane `r`: the three views and Errors only, or in a pane too small for them one
-    /// button that goes through the views, and Errors while there is room.
+    /// button that says the view and opens the list of them, and Errors while there is room.
     fn events_head(&self, r: Rect) -> EvHead {
         let f = self.fonts();
         let h = HEAD - 4;
@@ -238,33 +254,80 @@ impl Ui {
     /// a tap on the chosen row lets go of it.
     pub(super) fn events_tap(&mut self, x: i32, y: i32) {
         let head = self.events_head(self.pane_rect());
-        if let Some(&(_, v)) = head.views.iter().find(|(b, _)| b.contains(x, y)) {
-            let at = EV_VIEWS.iter().position(|&w| w == v).unwrap_or(0);
-            self.m.ev_view = if head.cycle { EV_VIEWS[(at + 1) % EV_VIEWS.len()] } else { v };
-        } else if head.errors.is_some_and(|b| b.contains(x, y)) {
-            self.m.ev_errors = !self.m.ev_errors;
-        } else {
-            let Some((bar, rows)) = self.events_bar() else { return };
-            if !rows.contains(x, y) || (bar.needed() && bar.track.contains(x, y)) {
-                return;
-            }
-            let i = bar.top() as usize + ((y - rows.y) / tables::ROW_H) as usize;
-            let row = self.events_listed().nth(i).map(|e| (e.dec, e.t, e.t1, self.ev_is_selected(e)));
-            match row {
-                Some((_, _, _, true)) => self.pn.ev_sel = None,
-                Some((dec, t0, t1, false)) => {
-                    // the jump may stop the scope: the row is of the record that is shown after it
-                    self.go_to_time(t0);
-                    self.pn.ev_sel = Some(EvSel { dec, t0, t1, rec: self.ev_record() });
-                }
-                None => {}
-            }
+        if self.events_head_tap(&head, x, y) {
             return;
         }
-        // another list: from its top, at once; the choice is part of the set-up
+        let Some((bar, rows)) = self.events_bar() else { return };
+        if !rows.contains(x, y) || (bar.needed() && bar.track.contains(x, y)) {
+            return;
+        }
+        let i = bar.top() as usize + ((y - rows.y) / tables::ROW_H) as usize;
+        let row = self.events_listed().nth(i).map(|e| (e.dec, e.t, e.t1, self.ev_is_selected(e)));
+        match row {
+            Some((_, _, _, true)) => self.pn.ev_sel = None,
+            Some((dec, t0, t1, false)) => {
+                // a tap marks the row and its box. A stopped scope also goes to it; a running one is left as it is:
+                // a finger that missed its row on a list this dense stopped the acquisition and moved the
+                // horizontal position
+                if self.m.run == RunState::Run {
+                    self.toast("Stop the scope to go to an event");
+                } else {
+                    self.go_to_time(t0);
+                }
+                self.pn.ev_sel = Some(EvSel { dec, t0, t1, rec: self.ev_record() });
+            }
+            None => {}
+        }
+    }
+
+    /// A tap on the buttons `head` of the pane: a view, the list of the views, or Errors only. Whether it was one.
+    fn events_head_tap(&mut self, head: &EvHead, x: i32, y: i32) -> bool {
+        if let Some(&(b, v)) = head.views.iter().find(|(b, _)| b.contains(x, y)) {
+            if head.cycle {
+                // the one button of a narrow pane lists the views: stepping through them blind showed two wrong
+                // lists on the way to the third
+                let rows = EV_VIEWS.iter().map(|&w| (w.name().to_string(), workspace::Action::EvView(w))).collect();
+                self.popup("Rows", b.x, b.bottom() + 4, rows);
+            } else {
+                self.events_view(v);
+            }
+        } else if head.errors.is_some_and(|b| b.contains(x, y)) {
+            self.m.ev_errors = !self.m.ev_errors;
+            self.events_relist();
+        } else {
+            return false;
+        }
+        true
+    }
+
+    /// The pane lists other rows (another view, or the failed ones alone): from the top, at once; the choice is part
+    /// of the set-up.
+    fn events_relist(&mut self) {
         self.pn.ev_top = 0;
         self.pn.rows = self.decode_rows();
         self.mark_changed();
+    }
+
+    /// The view chosen from the list of a narrow pane's button.
+    pub(super) fn events_view(&mut self, v: EvView) {
+        self.m.ev_view = v;
+        self.events_relist();
+    }
+
+    /// The widths of the columns that depend on what is listed: the decoder names of the whole record (0 without a
+    /// row) and whether a row has hex bytes. Of the record, not of the rows on the screen: the columns stand still
+    /// while the list scrolls.
+    fn events_widths(&self, f: &Font) -> (i32, bool) {
+        let mut seen = [false; DECODERS];
+        let (mut who, mut hex) = (0, false);
+        for e in &self.pn.rows {
+            if !seen[e.dec] {
+                seen[e.dec] = true;
+                who = who.max(f.width(&e.who));
+            }
+            hex |= !e.hex.is_empty();
+        }
+        (who.min(140), hex)
     }
 
     /// A tap on a box of a decoder's band: its row is the chosen one (a second tap lets go of it), the Events pane
@@ -325,24 +388,33 @@ impl Ui {
         let (area, fit) = Self::events_rows(r);
         let n = self.events_count();
         if n == 0 || fit == 0 {
-            let note = if total == 0 { "No decoder events in this record" } else { "No row with an error" };
+            let note = if total > 0 {
+                "No row with an error"
+            } else if self.decode_busy() {
+                "Decoding the full reference record..."
+            } else {
+                "No decoder events in this record"
+            };
             let note = startup::fit_text(&f.sb, note, r.w - 20);
-            cv.text(&f.sb, r.x + 12, r.y + HEAD + 17, &note, DIM);
+            cv.text(&f.sb, r.x + 12, r.y + HEAD + 15, &note, DIM);
             return;
         }
         let bar = self.events_scroll(area, fit);
         let top = bar.top() as usize;
         let shown: Vec<&MsgRow> = self.events_listed().skip(top).take(fit).collect();
-        // the columns: number, time, decoder, length, text, hex, status. A narrow pane keeps number, time, text and
-        // status; a small one the time and the text, which is red where a check failed
+        // the columns: number, time, decoder, length, text, hex, errors. The last one is there when a row of the
+        // record failed a check (the whole record, so it does not come and go while the list scrolls). A narrow pane
+        // keeps number, time, text and errors; a small one the time and the text, which is red where a check failed
         let pad = 14;
         let (wide, small) = (r.w >= NARROW_W, r.w < SMALL_W);
-        let hex_on = wide && shown.iter().any(|e| !e.hex.is_empty());
+        let (who, hex) = self.events_widths(&f.s);
+        let hex_on = wide && hex;
         let w_number = if small { 0 } else { f.s.width("9999") + pad };
-        let w_time = shown.iter().map(|e| f.s.width(&si(e.t, "s"))).max().unwrap_or(0) + pad;
-        let w_who = if wide { shown.iter().map(|e| f.s.width(&e.who)).max().unwrap_or(0).min(140) + pad } else { 0 };
+        // the widest a time of three digits gets, whatever the rows on the screen say
+        let w_time = f.s.width("-888.8 \u{b5}s") + pad;
+        let w_who = if wide { who + pad } else { 0 };
         let w_len = if wide { f.s.width("Len").max(f.s.width("9999")) + pad } else { 0 };
-        let w_status = if small { 0 } else { f.s.width("999 errors") + pad };
+        let w_status = if errors_column(r.w, failed) { f.s.width("999 errors") + pad } else { 0 };
         let left = r.x + if small { 8 } else { 12 };
         // the bar is drawn narrow in the middle of its touch area: a small pane lets the text come close to it
         let end = area.right() - if !bar.needed() { 8 } else if small { 28 } else { scroll::BAR_W + 4 };
@@ -355,7 +427,7 @@ impl Ui {
             ("Len", w_len),
             ("Text", w_text),
             ("Hex", free - w_text),
-            ("Status", w_status),
+            ("Errors", w_status),
         ];
         let mut x = left;
         for (title, w) in cols {
@@ -375,16 +447,12 @@ impl Ui {
             } else if (top + i) % 2 == 1 {
                 cv.fill(line, ROW_ALT);
             }
-            let status = match e.errors {
-                0 => "OK".to_string(),
-                1 => "1 error".to_string(),
-                k => format!("{} errors", k),
-            };
+            let status = errors_text(e.errors);
             let len = if e.len > 0 { e.len.to_string() } else { String::new() };
             let number = (top + i + 1).to_string();
             let texts = [number, si(e.t, "s"), e.who.clone(), len, e.text.clone(), e.hex.clone(), status];
-            let (ink, mark) = if e.errors > 0 { (RED, RED) } else { (TEXT, GREEN) };
-            let inks = [DIM, LABEL, DIM, LABEL, ink, LABEL, mark];
+            let ink = if e.errors > 0 { RED } else { TEXT };
+            let inks = [DIM, LABEL, DIM, LABEL, ink, LABEL, RED];
             let mut x = left;
             for (k, (_, w)) in cols.iter().enumerate() {
                 if *w > 0 {
@@ -545,7 +613,73 @@ mod tests {
         let items = u.decode_items();
         let has = |it: Item| items.contains(&it);
         assert!(has(Item::SpiCs) && has(Item::DecOpt(0)) && has(Item::DecOpt(1)), "{items:?}");
-        assert_eq!((u.item_label(Item::DecOpt(0)), u.item_label(Item::DecOpt(1))), ("Bit order", "Data"));
+        assert_eq!((u.item_label(Item::DecOpt(0)), u.item_label(Item::DecOpt(1))), ("Bit order", "Data polarity"));
+        // the polarity of the select is not called like its line
+        assert_eq!((u.item_label(Item::DecCs), u.item_label(Item::SpiCs)), ("CS", "CS polarity"));
+    }
+
+    /// SPI with a chip select and a MISO line: each frame begins with a start mark and is a message of its own, and
+    /// a word is MOSI/MISO once the MISO line has a source.
+    #[test]
+    fn spi_frames_are_messages_and_miso_is_read() {
+        // three words a frame, a frame every 50 us, mode 0
+        let [cs, clk, mosi, miso] = oos_dsp::sim::spi_logic(&[(0x9f, 0xff), (0x00, 0x1f), (0x00, 0x40)], 8, 0, 2e6, 0.0, 3.3);
+        let (dt, period) = (25e-9, 50e-6);
+        let wave = |l: &oos_dsp::sim::Logic| -> Vec<f32> { oos_dsp::sim::sample(|t| l.v(t.rem_euclid(period)), 0.0, dt, 6400) };
+        let ch: [Vec<f32>; NCH] = [wave(&mosi), wave(&clk), wave(&cs), wave(&miso)];
+        let mut m = Model::default();
+        m.dec_proto = Proto::SPI;
+        (m.dec_src, m.dec_src2, m.dec_cs, m.dec_src4) = (0, 1, Some(2), None);
+        (m.dec_bits, m.dec_mode, m.dec_thr) = (8, 0, 1.65);
+        m.dec_opt = [0; crate::protocols::OPTS];
+        let p = crate::trig::decode(&m, std::array::from_fn(|c| &ch[c][..]), dt).unwrap();
+        let starts = p.iter().filter(|x| x.kind == DecKind::Start).count();
+        assert!(starts >= 2, "a start mark for each frame the chip select begins in the record: {starts}");
+        assert!(p.iter().all(|x| x.value2.is_none()), "no MISO without a source for it");
+        // a message per frame: every message after the first begins with its start mark and has the three words
+        let frames = oos_dsp::decode::bursts(&p);
+        assert!(frames.len() >= 3, "{frames:?}");
+        for f in &frames[1..frames.len() - 1] {
+            let words: Vec<u32> = p[f.clone()].iter().filter(|x| x.kind == DecKind::Data).map(|x| x.value).collect();
+            assert_eq!((p[f.start].kind, words), (DecKind::Start, vec![0x9f, 0x00, 0x00]));
+        }
+        assert_eq!(decband::message_text(&m, &p[frames[1].clone()]), "9F 00 00");
+        // with the MISO line
+        m.dec_src4 = Some(3);
+        let p = crate::trig::decode(&m, std::array::from_fn(|c| &ch[c][..]), dt).unwrap();
+        let frames = oos_dsp::decode::bursts(&p);
+        assert_eq!(decband::message_text(&m, &p[frames[1].clone()]), "9F/FF 00/1F 00/40");
+        // SPI names the line, and choosing SPI on a scope leaves it unset
+        assert_eq!(Proto::SPI.roles()[3], Some("MISO"));
+    }
+
+    /// SPI and I2C have a Format of their own: with ASCII a message reads as text and has its bytes in hex beside
+    /// it; an I2C address stays a number.
+    #[test]
+    fn spi_and_i2c_show_characters_on_request() {
+        let mut m = Model::default();
+        m.dec_proto = Proto::SPI;
+        m.dec_bits = 8;
+        m.dec_opt = [0; crate::protocols::OPTS];
+        let p: Vec<Packet> = b"Hi".iter().enumerate().map(|(k, &b)| byte(k as f64, b)).collect();
+        let hex = rows_of(&m, 0, "D1 SPI", &p, EvView::Messages);
+        assert_eq!((hex[0].text.as_str(), hex[0].hex.as_str()), ("48 69", ""));
+        m.dec_opt[2] = 1;
+        let text = rows_of(&m, 0, "D1 SPI", &p, EvView::Messages);
+        assert_eq!((text[0].text.as_str(), text[0].hex.as_str()), ("Hi", "48 69"));
+        assert_eq!(packet_text(&m, &p[0]), "H");
+        // I2C: the address as a number, the data as characters
+        m.dec_proto = Proto::I2C;
+        m.dec_opt = [0, 1, 0, 0];
+        let addr = Packet { kind: DecKind::Addr { read: false }, value: 0x50, ..byte(0.0, 0) };
+        assert_eq!((packet_text(&m, &addr), packet_text(&m, &byte(1.0, b'H'))), ("50 W".to_string(), "H".to_string()));
+        // a byte that was not acknowledged keeps its value and its mark
+        assert_eq!(packet_text(&m, &Packet { ok: false, ..byte(1.0, b'H') }), "48 N");
+        // the UART's own Format is as before
+        let mut u = Model::default();
+        u.dec_proto = Proto::UART;
+        (u.dec_bits, u.dec_ascii) = (8, false);
+        assert_eq!(packet_text(&u, &byte(0.0, b'H')), "48");
     }
 
     /// The Events pane lists the demo's UART line as messages, switches to fields by a tap on its head, and a tap on
@@ -588,6 +722,33 @@ mod tests {
         u.render(&mut cv);
     }
 
+    /// A row without a failed check says nothing in the last column, and a record without one has no such column: the
+    /// text has its room. A small pane never has it (its text is red where a check failed).
+    #[test]
+    fn the_errors_column_is_there_for_errors_only() {
+        assert_eq!(errors_text(0), "");
+        assert_eq!((errors_text(1).as_str(), errors_text(3).as_str()), ("1 error", "3 errors"));
+        assert!(!errors_column(NARROW_W + 200, 0) && !errors_column(SMALL_W, 0));
+        assert!(errors_column(NARROW_W + 200, 1) && errors_column(SMALL_W, 2));
+        assert!(!errors_column(SMALL_W - 1, 5));
+    }
+
+    /// What opened the table of decoder events over the plot opens the Events pane, and takes it away again.
+    #[test]
+    fn the_events_pane_is_shown_and_taken_away() {
+        for layout in [Layout::Default, Layout::Studio] {
+            let mut u = listing(layout);
+            u.set_events_pane(false);
+            assert!(!u.events_pane_on() && u.m.pane == 0, "{layout:?}");
+            u.set_events_pane(true);
+            assert!(u.events_pane_on() && u.table.is_none(), "{layout:?}");
+            // another pane is not taken away by switching the events off
+            u.m.pane = tables::PANE_TREND;
+            u.set_events_pane(false);
+            assert_eq!(u.m.pane, tables::PANE_TREND, "{layout:?}");
+        }
+    }
+
     /// A small pane has one button that goes through the views, and every text it draws stays inside it.
     #[test]
     fn a_small_pane_keeps_its_head_and_its_rows_inside() {
@@ -598,11 +759,85 @@ mod tests {
             assert_eq!(head.cycle, w < 420, "{w} px");
             let limit = r.right() - 54;
             for (b, _) in &head.views {
-                assert!(b.x >= r.x && b.right() <= limit && b.h >= 36, "{w} px: {b:?}");
+                assert!(b.x >= r.x && b.right() <= limit && b.h >= workspace::TOUCH_MIN, "{w} px: {b:?}");
             }
             if let Some(b) = head.errors {
-                assert!(b.right() <= limit, "{w} px: {b:?}");
+                assert!(b.right() <= limit && b.h >= workspace::TOUCH_MIN, "{w} px: {b:?}");
             }
         }
+    }
+
+    /// A UART decoder on the demo's line with the Events pane open, after a few records.
+    fn listing(layout: Layout) -> Ui {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = layout;
+        u.m.ch[2].on = true;
+        u.m.dec_on = true;
+        u.m.dec_src = 2;
+        u.m.pane = tables::PANE_EVENTS;
+        for _ in 0..12 {
+            u.step(0.1);
+        }
+        assert!(!u.pn.rows.is_empty(), "the demo's UART line decodes");
+        u
+    }
+
+    /// A tap on a row of a running scope marks the row and leaves the scope running, with its horizontal position: in
+    /// Studio it stopped the acquisition and moved the view. A stopped scope goes to the row.
+    #[test]
+    fn a_row_tap_leaves_a_running_scope_running() {
+        for layout in [Layout::Default, Layout::Studio] {
+            let mut u = listing(layout);
+            let (_, rows) = u.events_bar().unwrap();
+            let delay = u.m.delay;
+            assert_eq!(u.m.run, RunState::Run);
+            u.events_tap(rows.x + 60, rows.y + 4);
+            assert_eq!((u.m.run, u.m.delay), (RunState::Run, delay), "{layout:?}");
+            assert!(u.ev_selected().is_some(), "{layout:?}: the row is marked");
+            u.events_tap(rows.x + 60, rows.y + 4);
+            assert!(u.ev_selected().is_none(), "{layout:?}: a second tap lets go of it");
+            u.m.run = RunState::Stop;
+            u.m.delay = 1.0;
+            u.events_tap(rows.x + 60, rows.y + 4);
+            assert!(u.m.delay != 1.0 && u.ev_selected().is_some(), "{layout:?}: a stopped scope goes to the row");
+        }
+    }
+
+    /// The columns are as wide for one part of the list as for another: their widths are those of the record.
+    #[test]
+    fn the_columns_stand_still_while_the_list_scrolls() {
+        let mut u = listing(Layout::Default);
+        u.m.ev_view = EvView::Fields;
+        u.pn.rows = u.decode_rows();
+        let f = u.fonts();
+        let all = u.events_widths(&f.s);
+        assert!(all.0 >= f.s.width("D1 UART"));
+        // rows of another decoder with a longer name, and one row with hex bytes, anywhere in the record
+        let mut far = u.pn.rows[0].clone();
+        (far.dec, far.who, far.hex) = (1, "D2 Modbus RTU".to_string(), "4F".to_string());
+        u.pn.rows.push(far);
+        let (who, hex) = u.events_widths(&f.s);
+        assert!(who >= f.s.width("D2 Modbus RTU") && hex);
+    }
+
+    /// The one button of a narrow pane opens the list of the views, and a row of the list chooses it.
+    #[test]
+    fn a_narrow_pane_lists_its_views() {
+        let mut u = listing(Layout::Studio);
+        let messages = u.pn.rows.len();
+        let head = u.events_head(Rect::new(100, 100, 220, 200));
+        assert!(head.cycle && head.views.len() == 1);
+        assert!(u.workspace.popup.is_none());
+        let b = head.views[0].0;
+        assert!(u.events_head_tap(&head, b.x + 4, b.y + 4));
+        assert_eq!(u.m.ev_view, EvView::Messages, "the tap changes nothing by itself");
+        let popup = u.workspace.popup.as_ref().expect("the list of the views");
+        let names: Vec<&str> = popup.rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(names, ["Messages", "Fields", "Lines"]);
+        let row = popup.row_rect(1);
+        assert!(u.workspace_popup_tap(row.x + row.w / 2, row.y + row.h / 2));
+        assert_eq!(u.m.ev_view, EvView::Fields);
+        assert!(u.pn.rows.len() > messages && u.pn.ev_top == 0, "a row per character, from the top");
+        assert!(u.workspace.popup.is_none());
     }
 }

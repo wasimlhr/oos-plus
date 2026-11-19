@@ -29,6 +29,8 @@ pub(super) enum Action {
     RefHorizontal(usize),
     /// a note on a source at the time under a screen column (`callout.rs`)
     Note(WaveId, i32),
+    /// what a row of the Events pane is (the list of a narrow pane's button, `decrows.rs`)
+    EvView(crate::model::EvView),
 }
 
 #[cfg(test)]
@@ -899,7 +901,7 @@ impl Ui {
         }
     }
     /// A titled popup with a close in its title row, rows one finger tall, in columns when the plot is not tall enough.
-    fn popup(&mut self, title: &str, x: i32, y: i32, rows: Vec<(String, Action)>) {
+    pub(super) fn popup(&mut self, title: &str, x: i32, y: i32, rows: Vec<(String, Action)>) {
         // inside the plot, so the popup never covers the bars or runs off the screen; the popup of a pill of the
         // bottom bar has the room between the bars (`popup_area`)
         let g = self.workspace.popup_area.take().unwrap_or(self.grid);
@@ -1067,6 +1069,7 @@ impl Ui {
             Action::EyeBelow => { self.workspace.eye_float = None; self.workspace.eye_left = false; self.eye_set_place(EyePlace::Under); self.relayout(); }
             Action::EyeFloat => { self.workspace.eye_float = Some(Rect::new(360, 100, 620, 360)); self.relayout(); }
             Action::MathOff(k) => self.math_turn_off(k),
+            Action::EvView(v) => self.events_view(v),
             Action::MathSettings(k) => { self.m.math_select(k); self.open_menu(MenuId::Math); }
             Action::RefClear(i) => self.ref_clear_slot(i),
             Action::RefHorizontal(i) => { self.select_workspace_source(WaveId::Ref(i)); self.studio.sz.pop = false; self.studio.sz.ref_pop = Some(i); }

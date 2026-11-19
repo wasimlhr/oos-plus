@@ -7668,7 +7668,13 @@ impl Ui {
             if r[2].is_some() && (old[2].is_none() || m.dec_cs.is_none()) {
                 m.dec_cs = free(m);
             }
-            if r[3].is_some() && (old[3].is_none() || m.dec_src4.is_none()) {
+            // a fourth line the protocol's set-up has no place for is one it reads without (the MISO of SPI): it
+            // stays unset, where a channel that happens to be on would be read as that line
+            if r[3].is_some() && s.src[3].is_none() {
+                if old[3].is_none() {
+                    m.dec_src4 = None;
+                }
+            } else if r[3].is_some() && (old[3].is_none() || m.dec_src4.is_none()) {
                 m.dec_src4 = free(m);
             }
         }
@@ -8127,7 +8133,7 @@ impl Ui {
             Item::Open(MenuId::Decode) => "Decode",
             Item::DecOn => "Decoder",
             Item::DecSel => "Decoder no.",
-            Item::DecTable => "Event table",
+            Item::DecTable => "Events pane",
             Item::DecExport => "Export events",
             Item::SearchTable => "Event list",
             Item::SearchSave => "Save events",
@@ -8147,7 +8153,7 @@ impl Ui {
             Item::UartPol => "Polarity",
             Item::UartStop => "Stop bits",
             Item::UartErr => "Error type",
-            Item::SpiCs => "CS",
+            Item::SpiCs => "CS polarity",
             Item::SpiTimeout => "Timeout",
             Item::I2cDir => "Direction",
             Item::I2cAddrBits => "Address",
@@ -9392,9 +9398,13 @@ impl Ui {
                         self.toast("Counter cleared");
                     }
                 }
-                Item::DecTable => self.table_toggle(tables::TableKind::Decode),
+                Item::DecTable => {
+                    let on = self.events_pane_on();
+                    self.set_events_pane(!on);
+                    self.close_menu();
+                }
                 Item::DecThrMid => self.dec_threshold_to_middle(),
-                Item::DecExport => self.events_export(tables::TableKind::Decode),
+                Item::DecExport => self.decode_export(),
                 Item::SearchTable => self.table_toggle(tables::TableKind::Search),
                 Item::SearchSave => self.events_export(tables::TableKind::Search),
                 Item::StoreBin => self.store_wave(false, None),
@@ -12123,6 +12133,9 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
         return t;
     }
     let hex = |v: u32| if m.dec_bits > 8 { format!("{:04X}", v) } else { format!("{:02X}", v) };
+    // a character where the decoder shows characters: a word of one line that passed its check (an I2C byte that
+    // was not acknowledged keeps its value and its mark, a MOSI/MISO pair its two values)
+    let chars = p.kind == Kind::Data && p.value2.is_none() && p.ok && decband::ascii(m);
             match p.kind {
                 Kind::Addr { read } => format!("{} {}{}", hex(p.value), if read { "R" } else { "W" }, if p.ok { "" } else { " N" }),
                 Kind::Id { ext, rtr } => format!("ID {}{}{}", if ext { format!("{:08X}", p.value) } else if m.dec_proto == Proto::LIN { format!("{:02X}", p.value) } else { format!("{:03X}", p.value) }, if rtr { " RTR" } else { "" }, if p.ok { "" } else { " !P" }),
@@ -12138,8 +12151,8 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
                     _ => format!("{} {:X}{}", l, p.value, if p.ok { "" } else { " !" }),
                 },
                 Kind::Ack => format!("ACK {}", p.value),
-                _ if m.dec_proto == Proto::UART && m.dec_ascii && p.value == 0x20 => "SP".to_string(),
-                _ if m.dec_proto == Proto::UART && m.dec_ascii && (0x21..0x7f).contains(&p.value) => format!("{}", p.value as u8 as char),
+                _ if chars && p.value == 0x20 => "SP".to_string(),
+                _ if chars && (0x21..0x7f).contains(&p.value) => format!("{}", p.value as u8 as char),
                 _ => match p.value2 {
                     Some(v2) => format!("{}/{}", hex(p.value), hex(v2)),
                     None if m.dec_proto == Proto::I2C && !p.ok => format!("{} N", hex(p.value)),

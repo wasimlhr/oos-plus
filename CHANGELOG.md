@@ -59,7 +59,8 @@ Fixed:
   of its own in a panel 320 px wide; the cards and the list of the same panel have it, and the bar its filter.
   A tap anywhere on a row opens the settings of the measurement.
 - The Decode sheet of Studio and Minimal (host-tested): what the protocol itself needs is on the first page with its
-  lines (the baud rate, data bits and parity of a UART, the mode of SPI), where it was on Settings; the B line of a
+  lines (the baud rate, data bits and parity of a UART; SPI has its four lines there), where it was on Settings;
+  the B line of a
   differential pair is on Settings; a line is named by its role in the protocol (MOSI, Clock, CS); the channels of
   a line have their colours; and the protocol is chosen from its list, without the - and + steps. In Studio one
   decoder shows its name without a number ("UART CH1"); several say which they are ("D2 SPI CH2").
@@ -423,7 +424,7 @@ Added:
   - the measurement strip (stock layout and Minimal) takes the short name of a measurement (Pk-pk, Freq, +Duty)
     where the long one has no room: with several sources, in the column at a side, and at the larger text sizes.
     The long name was cut there ("Positive Duty Cy", "Peak-to-Pe", "Frequen") (host-tested);
-  - a docked event table (decoder events, search, segments) has its title and count in the title strip of the view,
+  - a docked event table (search, segments) has its title and count in the title strip of the view,
     which gives one more row; its columns fit their content, and a divider between two columns can be dragged.
     The dragged columns are kept in a setup and in a session;
   - a channel whose record reaches the end of the ADC range is named in red in the plot and gets a red pill border;
@@ -463,20 +464,21 @@ Changed:
   Lines (a UART line shown as ASCII, split at its line feeds; other decoders list their messages), and Errors only
   leaves the rows with a failed check. The rows have columns: number, time, decoder, number of fields, text, the
   bytes in hex beside a character text, and OK or the number of errors. The list scrolls by its bar or the finger,
-  and a tap on a row moves the view to it. The event table over the plot lists the same rows. `:DECode:EVENts?`,
+  and a tap on a row of a stopped scope moves the view to it.
+  `:DECode:EVENts?`,
   `:BUS<n>:DATA?` and the CSV export are unchanged, a row per field. The view and the filter are part of the
   set-up (`ev_view`, `ev_errors`) and have their commands, `:DECode:EVENts:VIEW` and `:DECode:EVENts:ERRors`
   (host-tested, not yet verified on hardware).
 - Decoders: a chosen message is marked (host-tested; a tap on a row (unit), 2026-11-19; a tap on a box of the
   band not yet verified on hardware). A tap on a row of the Events
-  pane moves the view to it and chooses it; a tap on a box of the band on the plot chooses its row, brings the
+  pane chooses it and, on a stopped scope, moves the view to it; a tap on a box of the band chooses its row, brings the
   pane to it and says its whole text in a note. The chosen row has a white frame, its boxes in the band have one,
   and its time span is shaded across the plot. A second tap lets go of it; a new record does too.
 - Decoders: the Events pane fits its size (host-tested; (unit), 2026-11-19, floating at 230 and 460 px). Made
   small, as a floating
   view of Studio, it wrote its columns over each other. Under 560 px it keeps number, time, text and status, under
   360 px the time and the text (red where a check failed), and a head too narrow for its buttons has one button
-  that goes through the views.
+  that lists the views.
 - Decode > Threshold to middle sets the threshold of a decoder half way between the lowest and the highest sample
   of its source in the record on the screen, once; `:BUS<n>:THReshold AUTO` and `:DECode:THReshold AUTO` do the
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
@@ -491,9 +493,68 @@ Changed:
   before reads as it did (`dec_thr2` to `dec_thr4`, `main`). Threshold to middle sets every line's to the middle
   of its own signal. The plot has each line's threshold as a dashed line on its trace.
   `:BUS<n>:THReshold <line>,<volts>` sets one, `<line>,DEF` gives it up. The hysteresis is the main line's.
-- SPI decoder: Bit order (MSB first, LSB first), Data (Active high, Active low: every bit of a word inverted) and
-  the CS polarity of the SPI trigger are rows of Decode (`:BUS<n>:OPTion1`, `:BUS<n>:OPTion2`; host-tested, not
-  yet verified on hardware). The clock's edge is the Mode row, as before.
+- SPI and I2C decoders: Decode > Format (Hex, ASCII) shows the data as characters, on the band, in the Events
+  pane (with the bytes in hex beside the text); Hex is as before and stays the choice of a
+  set-up from before (`:BUS<n>:OPTion3` for SPI, `:BUS<n>:OPTion2` for I2C; host-tested; SPI (unit),
+  2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
+  An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
+  before.
+- Decoders: a tap on a row of the Events pane leaves a running scope running (host-tested; (unit), 2026-11-19, in
+  Studio on an SPI bus: the tap left the scope triggered with its horizontal position and said how to get there;
+  stopped, the tap went to the row and marked it and its box). In Studio it stopped the acquisition and moved the
+  horizontal position, on rows 26 px tall that a finger misses. The tap marks the row and its box in the band; a
+  stopped scope also goes to it, as before, and a running one says "Stop the scope to go to an event".
+- Decoders: the Events pane holds its columns still (host-tested; the list of a narrow pane (unit), 2026-11-19,
+  floating at 230 px: the button listed Messages, Fields and Lines, and Fields was chosen from it; the columns
+  while a list scrolls not yet verified on hardware, the record had one row). The time and the
+  decoder column were as wide as the rows on the screen needed and the hex column came and went with them, so the
+  text moved while the list scrolled. The widths are those of the record now. The buttons of its head are 40 px
+  tall (36), and the one button of a narrow pane opens the list of the views where it stepped to the next one.
+  A box of the band is at least 20 px wide to a finger (12).
+- Decoders: one list of events, the Events pane (host-tested; `:BUS<n>:EVENt` (unit), 2026-11-19: it docked the
+  pane in Studio, and Decode lists the row "Events pane"; Add > Results table not yet verified on hardware). There
+  were two for
+  the same rows: the pane, and an older table over the plot with three columns, no titles and no views. The table
+  is gone, and what opened it opens the pane: Decode > Events pane (it was "Event table"), `:BUS<n>:EVENt`, and
+  Add > Results table > Decoder events in Studio. Decode > Export events writes the rows as the pane lists them.
+  The table of the search marks and of the segments is as before.
+- Decode sheet: among the channels a line can have, the ones it does not have are dimmed (host-tested; (unit),
+  2026-11-19, the sheet of an SPI decoder). Every channel had a frame and a name in its full colour, and the chosen
+  one, filled, did not stand out among them.
+- SPI decoder: on the Decode sheet the four lines stand together on the first page (MISO was alone on Settings),
+  the Mode heads Settings and Input ends it; the polarity of the select is the row "CS polarity" (it was "CS", as
+  its line is), and the polarity of the data is "Data polarity" (host-tested; (unit), 2026-11-19: MOSI, Clock, CS
+  and MISO on the first page of the sheet, and the two polarity rows by their names).
+- Decoders: the Events pane says nothing of a row that passed its checks (host-tested; (unit), 2026-11-19: an SPI
+  record without a failed check has no such column; a record with one not yet verified on hardware). Its last
+  column had a green OK on every such row, which took the room of the text and said no more than a row that is
+  not red. The column is named Errors, has the number of failed checks of a row in red, and is
+  there only when a row of the record failed one.
+- SPI decoder: a MISO line, and a message for each frame (host-tested; the frames (unit), 2026-11-19: a bus of
+  one word a frame every 500 us gave a row a frame in the Events pane and a box a frame at 200 us/div; the MISO
+  line not yet verified on hardware). MISO is a
+  fourth line of the decoder (Decode > MISO); with a source a word reads MOSI/MISO ("9F/FF"), and
+  without one, which is how SPI starts, the bus is read by MOSI alone: choosing SPI no longer gives a line to a
+  channel that happens to be on. Where the chip select goes active a frame begins: the band has a start mark
+  there, and the frame is one message on the band and one row of the Events pane. A bus of evenly spaced frames
+  was one message of all its words. A frame no word was read in has no mark. Without a chip select the words are
+  messages by their pauses, as before.
+- Decoders: messages too close together for even one field's text (a word per SPI frame at a slow time base) are
+  read as one stream on the band while they go on so, and the text of a message no longer begins with its own
+  start mark ("50 W 00 42 Sr 50 R 4F 53 N P") (host-tested; the stream (unit), 2026-11-19, the SPI bus above at
+  5 ms/div).
+- Studio: the Decode sheet has a Levels page for the thresholds and Threshold to middle. A decoder of four lines
+  has four thresholds, and Settings had no room for them beside the protocol's rows.
+- I2C decoder: at a time base that shows single bits the band has a bit row (host-tested, not yet verified on
+  hardware): the eight bits of a byte MSB first and the acknowledge, each around the clock edge it was read at;
+  the eighth bit of an address says Read or Write, a byte that was not acknowledged has a red NAK, and marks on
+  the data line's threshold show where the clock sampled it. The clock edges of a byte are taken as evenly spaced
+  (assumed; a clock stretched inside a byte moves the cells). The bit row of every decoder now comes when a bit
+  the decoder found is 12 px wide, not one of the protocol's nominal rate: an I2C bus at 100 kHz had its row
+  only at the time base of a 400 kHz one.
+- SPI decoder: Bit order (MSB first, LSB first), Data polarity (Active high, Active low: every bit of a word
+  inverted) and the CS polarity of the SPI trigger are rows of Decode (`:BUS<n>:OPTion1`, `:BUS<n>:OPTion2`;
+  host-tested, not yet verified on hardware). The clock's edge is the Mode row, as before.
 - Studio: a decoder that is on has a pill in the bottom bar, after the channels, references and math: its number in
   the colour of its line, its protocol, and on a wide pill its lines in the order of their roles ("CH4 CH3 CH2").
   A tap opens the Decode sheet of that decoder, where each line has its row (MOSI, Clock, CS); a second tap closes
@@ -504,8 +565,8 @@ Changed:
   hardware). The band stayed and said "source channel off", in the plot of the other channels (seen on a unit,
   2026-11-19). The decoder stays on and as it is set; its band is back when the channel is.
 - I2C decoder: Decode > R/W bit writes an address as its seven bits ("50 W", as before) or, Included, as the
-  first byte of the transfer with the read/write bit in it ("A0 W", "A1 R"), on the band, in the Events pane and
-  in the event table; `:BUS<n>:OPTion1 LEFT_OUT|INCLUDED` (host-tested, not yet verified on hardware). Triggers
+  first byte of the transfer with the read/write bit in it ("A0 W", "A1 R"), on the band and in the Events pane;
+  `:BUS<n>:OPTion1 LEFT_OUT|INCLUDED` (host-tested, not yet verified on hardware). Triggers
   and searches take the seven bits either way. The I2C lane on the plot had this choice, the decoder had not.
 - UART decoder: Decode has the Polarity row of the UART trigger (Normal, Inverted), which the decoder already
   followed (host-tested, not yet verified on hardware).

@@ -280,7 +280,7 @@ fn bus_is_a_tab_of_decode_and_the_gear_opens_a_short_main_sheet() {
     u.open_menu(MenuId::Decode);
     let spec = u.sheet_spec(MenuId::Decode).unwrap();
     assert!(spec.tabs.iter().any(|t| t.name == "Bus"));
-    assert!(spec.tabs[2].rows.contains(&Item::BusOn));
+    assert!(spec.tabs[3].rows.contains(&Item::BusOn));
     u.open_menu(MenuId::Bus);
     let g = u.sheet_geo().unwrap();
     assert!(g.rows.iter().any(|r| r.it == Item::BusOn), "Bus opens on its tab of the Decode sheet");
@@ -546,4 +546,21 @@ fn minimal_opens_the_sheets_and_a_tap_on_a_row_changes_the_setting() {
 fn a_long_info_line_breaks_in_two_instead_of_losing_its_start() {
     assert_eq!(Ui::two_lines("SCPI 5555, VXI-11, SSH 22 (password or key)"), ("SCPI 5555, VXI-11, SSH", "22 (password or key)"));
     assert_eq!(Ui::two_lines("nospace"), ("nospace", ""));
+}
+
+/// Among the channels a decoder's line can have, the one that is chosen is filled with its colour and the others are
+/// dimmed: still in their own colour, and readable on the button.
+#[test]
+fn the_channels_a_line_does_not_have_are_dimmed() {
+    let light = |c: Rgb| ((c >> 16) & 255) + ((c >> 8) & 255) + (c & 255);
+    for col in CH_COLORS {
+        let (fill, edge, ink) = line_chip(col, true);
+        assert_eq!((fill, edge, ink), (col, col, DARK_TEXT));
+        let (fill, edge, ink) = line_chip(col, false);
+        assert_eq!(fill, BTN);
+        assert!(light(edge) < light(col) * 6 / 10 && light(edge) > light(BTN), "edge {edge:06x} of {col:06x}");
+        assert!(light(ink) < light(col) * 8 / 10 && light(ink) > light(edge), "text {ink:06x} of {col:06x}");
+        // readable: nearer to the channel's colour than to the button it stands on
+        assert!(light(ink) >= (light(BTN) + light(col)) / 2, "text {ink:06x} on {BTN:06x}");
+    }
 }
