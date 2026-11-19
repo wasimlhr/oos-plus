@@ -915,14 +915,31 @@ impl Scpi {
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
+        let l = Self::bind_quietly(port);
+        if l.is_none() {
+            eprintln!("oos-ui: SCPI port {} not available", port);
+        }
+        l
+    }
+
+    /// `bind` without the message when the port is taken.
+    fn bind_quietly(port: u16) -> Option<TcpListener> {
         let l = crate::net6::tcp(port);
         if let Some(l) = &l {
             let _ = l.set_nonblocking(true);
             eprintln!("oos-ui: SCPI on port {}{}", port, if l.local_addr().is_ok_and(|a| a.is_ipv6()) { " (IPv4 and IPv6)" } else { "" });
-        } else {
-            eprintln!("oos-ui: SCPI port {} not available", port);
         }
         l
+    }
+
+    /// A port that was still taken when it was opened (the oos-ui before this one, ending): taken now if it is free.
+    /// True when that happened.
+    pub fn listen_again(&mut self, port: u16) -> bool {
+        if self.l.is_some() {
+            return false;
+        }
+        self.l = Self::bind_quietly(port);
+        self.l.is_some()
     }
 
     /// Queue a SCPI error and latch the matching *ESR bit. A query that fails still answers with this text,

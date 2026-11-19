@@ -753,15 +753,31 @@ impl Http {
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
-        let l = crate::net6::tcp(port);
-        match &l {
-            Some(l) => {
-                let _ = l.set_nonblocking(true);
-                eprintln!("oos-ui: web remote on port {}{}", port, if l.local_addr().is_ok_and(|a| a.is_ipv6()) { " (IPv4 and IPv6)" } else { "" });
-            }
-            None => eprintln!("oos-ui: web port {} not available", port),
+        let l = Self::bind_quietly(port);
+        if l.is_none() {
+            eprintln!("oos-ui: web port {} not available", port);
         }
         l
+    }
+
+    /// `bind` without the message when the port is taken.
+    fn bind_quietly(port: u16) -> Option<TcpListener> {
+        let l = crate::net6::tcp(port);
+        if let Some(l) = &l {
+            let _ = l.set_nonblocking(true);
+            eprintln!("oos-ui: web remote on port {}{}", port, if l.local_addr().is_ok_and(|a| a.is_ipv6()) { " (IPv4 and IPv6)" } else { "" });
+        }
+        l
+    }
+
+    /// A port that was still taken when it was opened (the oos-ui before this one, ending): taken now if it is free.
+    /// True when that happened.
+    pub fn listen_again(&mut self, port: u16) -> bool {
+        if self.l.is_some() {
+            return false;
+        }
+        self.l = Self::bind_quietly(port);
+        self.l.is_some()
     }
 
     pub fn port(&self) -> Option<u16> {
@@ -2113,5 +2129,31 @@ setTimeout(() => {
         assert_eq!(base64(b"f"), "Zg==");
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foobar"), "Zm9vYmFy");
+    }
+
+    /// A port still taken when the web page and SCPI open theirs (the oos-ui before this one, ending; seen on a unit
+    /// upstream, #212): neither listens, and once the port is free `listen_again` takes it. Before, they stayed off
+    /// until the next start.
+    #[test]
+    fn a_port_taken_at_the_start_is_taken_once_it_is_free() {
+        for web in [true, false] {
+            let holder = crate::net6::tcp(0).expect("a free port");
+            let port = holder.local_addr().unwrap().port();
+            let (mut h, mut scpi) = (Http::open(0), crate::scpi::Scpi::open(0));
+            let listens = |h: &Http, s: &crate::scpi::Scpi| if web { h.port() } else { s.port() };
+            if web {
+                h = Http::open(port);
+            } else {
+                scpi = crate::scpi::Scpi::open(port);
+            }
+            assert_eq!(listens(&h, &scpi), None, "web {web}: the port is taken");
+            let again =
+                |h: &mut Http, s: &mut crate::scpi::Scpi| if web { h.listen_again(port) } else { s.listen_again(port) };
+            assert!(!again(&mut h, &mut scpi), "web {web}: still taken");
+            drop(holder);
+            assert!(again(&mut h, &mut scpi), "web {web}: free now");
+            assert_eq!(listens(&h, &scpi), Some(port));
+            assert!(!again(&mut h, &mut scpi), "web {web}: listening already, nothing to do");
+        }
     }
 }
