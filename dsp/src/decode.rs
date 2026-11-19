@@ -137,6 +137,59 @@ pub fn uart(v: &[f32], dt: f64, baud: f64, bits: u32, parity: Parity, thr: f32, 
     }
 }
 
+/// What a bit of a character is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BitKind {
+    Start,
+    Data,
+    Parity,
+    Stop,
+}
+
+/// One bit of a field as its decoder read it: from `t0` to `t1` in the time units of its packet, sampled in the
+/// middle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Bit {
+    pub t0: f64,
+    pub t1: f64,
+    pub kind: BitKind,
+    /// the logic value read (a start bit is 0, the idle line and a stop bit are 1, whatever the line's polarity);
+    /// `None`: the packet does not say
+    pub level: Option<bool>,
+    /// false: the bit failed its check, or may be the one that did
+    pub ok: bool,
+}
+
+/// The bits of a character `uart` decoded with these settings: start bit, data bits LSB first, parity, stop bit, each
+/// where `uart` sampled it. The data bits are the character's value. A packet says that its checks passed, not which
+/// one failed: without parity a failed character is a stop bit read as 0; with parity the parity bit and the stop
+/// bit of a failed character have no level and both are marked.
+pub fn uart_bits(p: &Packet, bits: u32, parity: Parity) -> Vec<Bit> {
+    let bits = bits.min(32);
+    let cells = 2 + bits + u32::from(parity != Parity::None);
+    let spb = (p.t1 - p.t0) / cells as f64;
+    if p.kind != Kind::Data || !(spb > 0.0) {
+        return Vec::new();
+    }
+    let at = |k: u32| p.t0 + k as f64 * spb;
+    let cell = |k: u32, kind: BitKind, level: Option<bool>, ok: bool| Bit { t0: at(k), t1: at(k + 1), kind, level, ok };
+    let mut out = vec![cell(0, BitKind::Start, Some(false), true)];
+    out.extend((0..bits).map(|b| cell(1 + b, BitKind::Data, Some((p.value >> b) & 1 == 1), true)));
+    if parity == Parity::None {
+        out.push(cell(1 + bits, BitKind::Stop, Some(p.ok), p.ok));
+    } else if p.ok {
+        let mask = if bits == 32 { u32::MAX } else { (1u32 << bits) - 1 };
+        // the bit that makes the number of ones even (odd)
+        let odd = (p.value & mask).count_ones() % 2 == 1;
+        out.push(cell(1 + bits, BitKind::Parity, Some(odd == (parity == Parity::Even)), true));
+        out.push(cell(2 + bits, BitKind::Stop, Some(true), true));
+    } else {
+        out.push(cell(1 + bits, BitKind::Parity, None, false));
+        out.push(cell(2 + bits, BitKind::Stop, None, false));
+    }
+    out
+}
+
 /// I2C: START/STOP from SDA edges while SCL is high, bits sampled at SCL rising edges, 9th bit = ACK (low).
 /// One threshold and hysteresis for both lines.
 pub fn i2c(sda: &[f32], scl: &[f32], thr: f32, hyst: f32) -> Vec<Packet> {
@@ -266,6 +319,46 @@ mod tests {
         assert!(uart(&v, dt, baud, 7, Parity::Odd, 1.65, 0.2, false).iter().all(|x| !x.ok));
         // wrong baud rate: framing errors
         assert!(uart(&sample(|t| uart_logic(msg, baud, 8, None, 1.0, 0.0, 3.3).v(t), 0.0, dt, 1200), dt, baud * 1.5, 8, Parity::None, 1.65, 0.2, false).iter().any(|x| !x.ok));
+    }
+
+    /// The bits of a character lie where `uart` sampled them and say what it read.
+    #[test]
+    fn uart_bits_of_a_character() {
+        // 'H' = 0x48 at 8 samples a bit, 8N1
+        let p = Packet { t0: 100.0, t1: 180.0, kind: Kind::Data, value: 0x48, value2: None, ok: true };
+        let b = uart_bits(&p, 8, Parity::None);
+        assert_eq!(b.len(), 10);
+        assert_eq!((b[0].kind, b[0].t0, b[0].t1, b[0].level), (BitKind::Start, 100.0, 108.0, Some(false)));
+        let data: Vec<_> = b[1..9].iter().map(|x| x.level).collect();
+        assert_eq!(data, [0, 0, 0, 1, 0, 0, 1, 0].map(|v| Some(v == 1)));
+        let stop = b[9];
+        assert_eq!((stop.kind, stop.t0, stop.t1, stop.level, stop.ok), (BitKind::Stop, 172.0, 180.0, Some(true), true));
+        // without parity a failed character is its stop bit read as 0
+        let failed = *uart_bits(&Packet { ok: false, ..p.clone() }, 8, Parity::None).last().unwrap();
+        assert_eq!((failed.level, failed.ok), (Some(false), false));
+        // even parity: 0x48 has two ones, so the parity bit is 0
+        let p = Packet { t1: 188.0, ..p };
+        let b = uart_bits(&p, 8, Parity::Even);
+        assert_eq!((b.len(), b[9].kind, b[9].level, b[10].kind), (11, BitKind::Parity, Some(false), BitKind::Stop));
+        assert_eq!(uart_bits(&p, 8, Parity::Odd)[9].level, Some(true));
+        // a failed character with parity does not say which of the two bits failed
+        let b = uart_bits(&Packet { ok: false, ..p }, 8, Parity::Even);
+        assert_eq!((b[9].level, b[9].ok, b[10].level, b[10].ok), (None, false, None, false));
+    }
+
+    /// The bits lie on the samples of a decoded line: each data bit's middle reads the level the bit says.
+    #[test]
+    fn uart_bits_match_the_line() {
+        let baud = 115200.0;
+        let dt = 1.0 / baud / 10.0;
+        let l = uart_logic(b"H", baud, 8, None, 1.0, 0.0, 3.3);
+        let v = sample(|t| l.v(t), 0.0, dt, 300);
+        let p = uart(&v, dt, baud, 8, Parity::None, 1.65, 0.2, false);
+        assert_eq!(p.len(), 1);
+        for b in uart_bits(&p[0], 8, Parity::None) {
+            let mid = ((b.t0 + b.t1) / 2.0) as usize;
+            assert_eq!(Some(v[mid] > 1.65), b.level, "{:?}", b);
+        }
     }
 
     // Break it catches: a record that starts inside a character listed false first characters (FF, ED) made of the

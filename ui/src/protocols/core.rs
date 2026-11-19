@@ -44,6 +44,13 @@ impl Protocol for Uart {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(uart(l.main(), l.dt, l.sh.baud, l.sh.bits, l.sh.parity, l.thr, l.hy, l.sh.uart_inv))
     }
+    fn bit_row(&self) -> bool {
+        true
+    }
+    /// Start, data, parity and stop where the decoder sampled them.
+    fn bits(&self, p: &Packet, _: &[usize; OPTS], sh: &Shared) -> Option<Vec<oos_dsp::decode::Bit>> {
+        Some(oos_dsp::decode::uart_bits(p, sh.bits, sh.parity)).filter(|b| !b.is_empty())
+    }
     /// The UART line of the demo is CH3 whatever the decoder (the host's default traffic); 8 data bits.
     fn setup(&self) -> Setup {
         Setup { rows: &[(Row::Bits, 8)], ..Setup::default() }

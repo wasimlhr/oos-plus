@@ -370,6 +370,18 @@ pub trait Protocol: Sync {
         None
     }
 
+    /// Whether [`Protocol::bits`] gives the bits of a field. The band on the plot then has a bit row above its boxes
+    /// at a time base that shows single bits ([`Protocol::bit_time_sh`] says how long one is).
+    fn bit_row(&self) -> bool {
+        false
+    }
+
+    /// The bits of field `p` as the decoder read them, in the time units of `p` (they lie between its `t0` and
+    /// `t1`); `None` = this field has none.
+    fn bits(&self, _p: &Packet, _opt: &[usize; OPTS], _sh: &Shared) -> Option<Vec<oos_dsp::decode::Bit>> {
+        None
+    }
+
     /// The event table (and its CSV, `:...EVENts?`): one row per command, as (time of its first packet, text, check
     /// passed), instead of one row per field. `None` = a row per field with `text`.
     fn events(&self, _p: &[Packet], _opt: &[usize; OPTS]) -> Option<Vec<(f64, String, bool)>> {

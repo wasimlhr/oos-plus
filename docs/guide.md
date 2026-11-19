@@ -168,6 +168,10 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 **Protocol decoders (26)**
 - Four decoders at once, with an event table you can export and that jumps to an event; DCC lists one command per row
   ("Loco 5  Fwd 50/128")
+- A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
+  slow time base one box per burst with as much of its text as fits (a UART line set to ASCII reads as
+  `Hello World\r\n`); a burst with a failed check has a red edge. Zoomed in to single bits, a UART band has a row
+  of its bits (start, data, parity, stop) and marks where each was sampled
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII

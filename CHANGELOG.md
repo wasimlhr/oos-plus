@@ -348,6 +348,21 @@ Added:
 
 Changed:
 
+- Decoders: the band on the plot says what was decoded at every time base (not yet tested on the host, not yet
+  verified on hardware). A field too narrow for its text was an empty box, and one under 3 px was not drawn at all:
+  at 50 ms/div a 9600 baud line showed the decoder's name and nothing else (seen on a unit, 2026-11-18). Fields too
+  narrow for their text now share one box per burst, with as much of their text as fits and "..." for the rest; a
+  UART line set to ASCII reads as text there (`Hello World\r\n`, a byte without a character as `<1B>`), other
+  decoders give their values with spaces. A burst too small for a box stays a mark, and one with a failed check
+  has a red edge. A UART character with room beside it has its hex value there. The name is a pill in the colour
+  of the source ("D1 UART"), right of the channel markers, which covered it. The boxes are 24 px tall (20) with
+  bold text; a band takes 32 px of the plot (28).
+- UART decoder: at a time base where a bit is 12 px or wider, the band has a row of bits above its boxes (not yet
+  tested on the host, not yet verified on hardware): Start, the data bits in the order they came, the parity bit
+  and Stop, each as wide as it was on the line, and a mark on the threshold line where the decoder sampled it. A
+  stop bit read as 0 is red. With parity on, the parity and stop bits of a failed character are both red with a
+  "?": the decoder says that a check failed, not which one. A protocol module gets the row with two hooks
+  (`bit_row`, `bits`; docs/protocol-modules.md); UART is the first.
 - Bode with an external generator (host-tested, not yet verified on hardware): Generator is Built-in, External or
   Free-running sweep; the model, the connection and the address moved to the Ext generator page, and a setup from
   before reads as it did. The sweep uses the open connection of that page, or opens one for itself. It measures a

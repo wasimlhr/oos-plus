@@ -42,6 +42,13 @@ impl Protocol for Example {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(uart(l.need(0, "data line missing")?, l.dt, RATES[l.opt[0]], 8, Parity::None, l.thr, l.hy, false))
     }
+    /// The band has a bit row when the time base shows single bits: the ten bits of each byte.
+    fn bit_row(&self) -> bool {
+        true
+    }
+    fn bits(&self, p: &Packet, _: &[usize; OPTS], _: &Shared) -> Option<Vec<oos_dsp::decode::Bit>> {
+        Some(oos_dsp::decode::uart_bits(p, 8, Parity::None)).filter(|b| !b.is_empty())
+    }
     fn text(&self, p: &Packet, opt: &[usize; OPTS]) -> Option<String> {
         (p.kind == Kind::Data).then(|| if opt[1] == 1 { format!("{}", p.value) } else { format!("{:02X}", p.value) })
     }
