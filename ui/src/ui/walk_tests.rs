@@ -2733,3 +2733,26 @@ fn a_hidden_channel_stays_on_for_math_and_measurements() {
     for _ in 0..3 { u.step(0.03); frame(&mut u); }
     assert!(!u.m.ch_hidden[0] && u.trace_sources().contains(&super::workspace::Trace::Channel(0)));
 }
+
+/// The name of a decoder beside its band is a badge in Studio, and a tap on it opens the Decode menu of that
+/// decoder; a second tap closes it.
+#[test]
+fn a_tap_on_the_name_of_a_decoder_opens_its_decode_menu() {
+    let mut u = fresh(Layout::Studio);
+    u.m.dec_on = true;
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let mut cv = Canvas::new(W, H);
+    u.render(&mut cv);
+    let labels = u.studio.dec_labels.borrow().clone();
+    let &(k, r) = labels.first().expect("the decoder has its name in the plot");
+    assert!(k == 0 && r.w >= 40 && r.h >= 18 && u.plot_rect().x <= r.x, "{r:?}");
+    let (x, y) = mid(r);
+    tap(&mut u, x, y);
+    assert!(u.menu_open && u.menu == MenuId::Decode && u.m.dec_sel == 0, "the Decode menu of decoder 1");
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::create_dir_all(&dir);
+        std::fs::write(std::path::Path::new(&dir).join("walk-decode-menu.png"), crate::store::png_of(&cv)).unwrap();
+    }
+}

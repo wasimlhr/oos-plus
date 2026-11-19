@@ -7,6 +7,8 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio: the name of a decoder beside its band ("1 UART CH1") is a badge in the colour of its source, and a tap
+  on it opens the Decode menu of that decoder (host-tested).
 - Studio: a math trace has its badge at the left of its lane ("M1"), as a channel has (host-tested).
 - Studio: choosing Stacked or Overlay fits every signal to the height it then has (host-tested, not yet verified on
   hardware). In Stacked each signal fills its own lane; in Overlay the signals lie on one another in the whole

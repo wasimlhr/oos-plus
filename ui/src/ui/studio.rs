@@ -151,6 +151,8 @@ pub(super) struct Studio {
     pub yzoom: Option<usize>,
     /// where the lanes drew their channel badges last frame
     pub lane_badges: std::cell::RefCell<Vec<(usize, Rect)>>,
+    /// where the decoders drew their names last frame (decoder, rectangle): a tap on one opens its Decode menu
+    pub dec_labels: std::cell::RefCell<Vec<(usize, Rect)>>,
     /// Studio was the layout at the last frame: coming into it applies the entry rules (`studio_sync`)
     pub was: bool,
     /// Search 1 (Add > Search): its own source, level and slope
@@ -351,6 +353,7 @@ impl Ui {
     /// Start of a frame: the lanes draw their badges again, and a layout change made in the Display menu is applied.
     pub(super) fn studio_frame_start(&mut self) {
         self.studio.lane_badges.get_mut().clear();
+        self.studio.dec_labels.get_mut().clear();
         self.sync_view_state();
         // coming into Studio by any road (menu, recalled setup, restart) applies its entry rules: its bars show
         let is = self.m.layout == Layout::Studio;
@@ -3172,6 +3175,14 @@ impl Ui {
                 else if bar.more.contains(x, y) { self.studio.zoom_menu = true; }
                 return true;
             }
+        }
+        // the name of a decoder beside its band ("1 UART CH1"): the Decode menu of that decoder. It was a text and
+        // nothing to tap; the way to the menu was Add > Bus or the Menu
+        let decoder = self.studio.dec_labels.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(k, _)| k);
+        if let Some(k) = decoder {
+            if self.m.dec_sel != k { self.select_option(Item::DecSel, &format!("D{}", k + 1)); }
+            self.toggle_menu(MenuId::Decode);
+            return true;
         }
         // a lane's channel badge: its display scale while zoomed, its menu otherwise
         let hit = self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(c, _)| c);

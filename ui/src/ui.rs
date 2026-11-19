@@ -5446,11 +5446,20 @@ impl Ui {
         }
         let name = if m.dec_on_la() { format!("{} {}", k + 1, m.dec_proto.name()) }
             else { format!("{} {} {}", k + 1, m.dec_proto.name(), decode_source_name(m.dec_src)) };
-        cv.text(&f.sb, a.x + 4, y + 15, &name, DIM);
+        if self.m.layout == Layout::Studio {
+            // Studio: the name is a badge in the colour of the decoder's source, and a tap on it opens the Decode
+            // menu of this decoder (`studio.dec_labels`)
+            let badge = Rect::new(a.x + 3, y, f.sb.width(&name) + 12, h);
+            self.studio.dec_labels.borrow_mut().push((k, badge));
+            cv.round(badge, 4, col, 255);
+            cv.text_in(&f.sb, badge, 1, &name, DARK_TEXT);
+        } else {
+            cv.text(&f.sb, a.x + 4, y + 15, &name, DIM);
+        }
         let packets = match self.decode_packets_of(m) {
             Ok(p) => p,
             Err(e) => {
-                cv.text(&f.s, a.x + 16 + f.sb.width(&name), y + 15, e, DIM);
+                cv.text(&f.s, a.x + if self.m.layout == Layout::Studio { 24 } else { 16 } + f.sb.width(&name), y + 15, e, DIM);
                 cv.no_clip();
                 return;
             }
@@ -5458,7 +5467,7 @@ impl Ui {
         let (tdiv, delay) = self.view();
         let ppx = a.w as f64 / HDIV as f64;
         let xt = |t: f64| (a.x as f64 + a.w as f64 / 2.0 + (t - delay as f64) / tdiv as f64 * ppx).round() as i32;
-        let left = a.x + 10 + f.sb.width(&name);
+        let left = a.x + if self.m.layout == Layout::Studio { 20 } else { 10 } + f.sb.width(&name);
         let mut x_prev_end = left;
         for p in packets.iter() {
             let (x0, x1) = (xt(p.t0), xt(p.t1));
