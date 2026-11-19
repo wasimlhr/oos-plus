@@ -3,13 +3,13 @@
 
 //! A decoder's band on the plot: its name in a pill of the source's colour, and what it decoded along the time axis.
 //! How much the band says follows the time base. The fields are taken message by message (`oos_dsp::decode::bursts`:
-//! what the sender sent without a long pause). Where every field of a message has room for its text, each has a box
-//! of its own; a field narrower than its text takes the room from the idle line behind it, and a bar in the box
-//! says how long the field itself is. Else the message is one box, which holds as much of its text as fits and "..."
-//! for the rest, so a slow time base shows the messages and not an empty band. A message too small for a box stays
-//! a mark: where the line is busy is seen at every time base. At a time base that shows single bits, a protocol that
-//! reports them
-//! (`Protocol::bits`) has a row of bits above its boxes, and a mark on the threshold line where each was sampled.
+//! what the sender sent without a long pause). Where every field of a message is wide enough for its text, each has
+//! a box of its own. Else the message is one box, which holds as much of its text as fits and "..." for the rest, so
+//! a slow time base shows the messages and not an empty band or a row of single letters. A message shorter than its
+//! text takes the room of the idle line behind it, up to the next message, and a bar in the box says how long the
+//! message itself is. A message too small for a box stays a mark: where the line is busy is seen at every time base.
+//! At a time base that shows single bits, a protocol that reports them (`Protocol::bits`) has a row of bits above its
+//! boxes, and a mark on the threshold line where each was sampled.
 
 use super::*;
 use oos_dsp::decode::{Bit, BitKind, Kind as DecKind, Packet};
@@ -26,7 +26,7 @@ const ERR_FILL: Rgb = rgb(0x70, 0x18, 0x18);
 const BOX_PAD: i32 = 8;
 /// A field with less room than this is never asked for its text: no text fits.
 const OWN_MIN: i32 = 10;
-/// Room a box leaves to the field after it.
+/// Room the box of a message leaves to the message after it.
 const SLOT_GAP: i32 = 2;
 
 /// A decoded field as the band sees it.
@@ -46,12 +46,11 @@ pub(super) struct Span {
 /// What the band draws at one place.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Cell {
-    /// field `i` in a box of its own from `x0` to `x1`. The field ends at `end`: before `x1` when the box took room
-    /// of the idle line behind the field for its text
-    One { i: usize, x0: i32, x1: i32, end: i32 },
-    /// the message of the fields `i0..i1`, which have no room for their texts, in one box; `bad`: one of them
-    /// failed its check
-    Run { i0: usize, i1: usize, x0: i32, x1: i32, bad: bool },
+    /// field `i` in a box of its own
+    One { i: usize, x0: i32, x1: i32 },
+    /// the message of the fields `i0..i1`, which are not all wide enough for their texts, in one box; `bad`: one of
+    /// them failed its check; `until`: where the idle line behind the message ends, which its text may use
+    Run { i0: usize, i1: usize, x0: i32, x1: i32, bad: bool, until: i32 },
     /// the tag of event `i`
     Tag { i: usize, x: i32 },
 }
@@ -74,43 +73,31 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
             out.extend(burst.iter().map(|s| Cell::Tag { i: s.i, x: s.x0 }));
             continue;
         };
-        // where the field after this message starts: the idle line up to there is room for the last text
-        let after = spans[n..].iter().find(|s| !s.tag).map(|s| s.x0);
-        // the width each field needs for its text, when every one of them has that room up to the field after it
-        let widths: Option<Vec<i32>> = fields
-            .iter()
-            .enumerate()
-            .map(|(f, s)| {
-                let x0 = if f == 0 { s.x0.max(end + 1) } else { s.x0 };
-                let next = fields.get(f + 1).map(|t| t.x0).or(after);
-                let room = next.map_or(i32::MAX / 2, |x| (x - SLOT_GAP).max(s.x1)) - x0;
-                (room >= OWN_MIN).then(|| need(s.i)).filter(|&w| w <= room)
-            })
-            .collect();
-        match widths {
-            Some(widths) => {
-                let mut width = widths.into_iter();
-                for s in burst {
-                    if s.tag {
-                        out.push(Cell::Tag { i: s.i, x: s.x0 });
-                        continue;
-                    }
-                    let x0 = s.x0.max(end + 1);
-                    let x1 = s.x1.max(x0 + width.next().unwrap_or(0));
-                    out.push(Cell::One { i: s.i, x0, x1, end: s.x1 });
-                    end = x1;
+        // every field wide enough for its own text: a box each
+        let own = fields.iter().enumerate().all(|(f, s)| {
+            let room = s.x1 - if f == 0 { s.x0.max(end + 1) } else { s.x0 };
+            room >= OWN_MIN && need(s.i) <= room
+        });
+        if own {
+            for s in burst {
+                if s.tag {
+                    out.push(Cell::Tag { i: s.i, x: s.x0 });
+                    continue;
                 }
+                out.push(Cell::One { i: s.i, x0: s.x0.max(end + 1), x1: s.x1 });
+                end = s.x1;
             }
-            None => {
-                // one box from its first field to its last; its tags are said by its text
-                let x0 = head.x0.max(end + 1);
-                let x1 = fields.iter().map(|s| s.x1).max().unwrap_or(head.x1);
-                if x1 >= x0 {
-                    let bad = burst.iter().any(|s| !s.ok);
-                    out.push(Cell::Run { i0: burst[0].i, i1: burst[burst.len() - 1].i + 1, x0, x1, bad });
-                    end = x1;
-                }
-            }
+            continue;
+        }
+        // one box from its first field to its last; its tags are said by its text. The idle line up to the field
+        // after the message is room for a text longer than the message
+        let x0 = head.x0.max(end + 1);
+        let x1 = fields.iter().map(|s| s.x1).max().unwrap_or(head.x1);
+        if x1 >= x0 {
+            let bad = burst.iter().any(|s| !s.ok);
+            let until = spans[n..].iter().find(|s| !s.tag).map_or(i32::MAX / 2, |s| s.x0 - SLOT_GAP);
+            out.push(Cell::Run { i0: burst[0].i, i1: burst[burst.len() - 1].i + 1, x0, x1, bad, until });
+            end = x1;
         }
     }
     out
@@ -348,7 +335,8 @@ impl Ui {
         // decoder there (`studio.dec_labels`)
         let studio = self.m.layout == Layout::Studio;
         let name = if studio {
-            let number = if (0..DECODERS).filter(|&d| self.m.dec_is_on(d)).count() > 1 { format!("D{} ", k + 1) } else { String::new() };
+            let several = (0..DECODERS).filter(|&d| self.m.dec_is_on(d)).count() > 1;
+            let number = if several { format!("D{} ", k + 1) } else { String::new() };
             let source = if m.dec_on_la() { String::new() } else { format!(" {}", decode_source_name(m.dec_src)) };
             format!("{}{}{}", number, m.dec_proto.name(), source)
         } else {
@@ -357,7 +345,8 @@ impl Ui {
         // in a plot it stands right of the channel markers at the left edge (Studio: of the lane badges), which are
         // drawn after the band and would cover it
         let px = a.x + if row.is_some() { 4 } else if studio { 50 } else { MARK_W + 2 };
-        let pill = if row.is_some() { Rect::new(px, y, f.sb.width(&name) + 12, h) } else { Rect::new(px, y + 2, f.sb.width(&name) + 12, h - 4) };
+        let (py, ph) = if row.is_some() { (y, h) } else { (y + 2, h - 4) };
+        let pill = Rect::new(px, py, f.sb.width(&name) + 12, ph);
         if studio {
             self.studio.dec_labels.borrow_mut().push((k, pill));
         }
@@ -434,7 +423,7 @@ impl Ui {
                     cv.text_in(&f.s, r, 1, tag, TEXT);
                     tag_end = r.x + r.w + 1;
                 }
-                Cell::One { i, x0, x1, end } => {
+                Cell::One { i, x0, x1 } => {
                     let p = &packets[i];
                     let head = matches!(
                         p.kind,
@@ -447,10 +436,6 @@ impl Ui {
                     }
                     if chosen.is_some_and(|s| p.t0 >= s.t0 && p.t1 <= s.t1) {
                         mark(cv, x0, x1);
-                    }
-                    if end < x1 {
-                        // the box took room of the idle line for its text: the bar is the field itself
-                        cv.fill(Rect::new(x0 + 1, y + h - 4, (end - x0).max(2), 3), edge);
                     }
                     let txt = packet_text(m, p);
                     let (w, tw) = (x1 - x0, f.sb.width(&txt));
@@ -468,17 +453,26 @@ impl Ui {
                         None => cv.text_in(&f.sb, Rect::new(x0, y, w, h), 1, &txt, TEXT),
                     }
                 }
-                Cell::Run { i0, i1, x0, x1, bad } => {
-                    self.band_hits.borrow_mut().push((touch(x0, x1), k, packets[i0].t0));
-                    if !field_box(cv, x0, x1, y, h, if bad { RED } else { col }, scale(col, 70)) {
+                Cell::Run { i0, i1, x0, x1, bad, until } => {
+                    // the text is what the message begins with, from the left end of its box, which is on the
+                    // screen. A message shorter than its text takes the idle line behind it, as far as that goes
+                    let reach = if x1 >= right { x1 } else { x1.max(until.min(right)) };
+                    let room = reach.min(right) - x0 - BOX_PAD - 2;
+                    let txt = run_text(m, &packets[i0..i1], &f.sb, room);
+                    let need = x0 + f.sb.width(&txt) + BOX_PAD + 2;
+                    let wide = if txt.is_empty() { x1 } else { x1.max(need.min(reach)) };
+                    let edge = if bad { RED } else { col };
+                    self.band_hits.borrow_mut().push((touch(x0, wide), k, packets[i0].t0));
+                    if !field_box(cv, x0, wide, y, h, edge, scale(col, 70)) {
                         continue;
                     }
                     if chosen.is_some_and(|s| packets[i0].t0 <= s.t1 && packets[i1 - 1].t1 >= s.t0) {
-                        mark(cv, x0, x1);
+                        mark(cv, x0, wide);
                     }
-                    // from the left end of the box, which is on the screen: the text is what the burst begins with
-                    let room = x1.min(right) - x0 - BOX_PAD - 2;
-                    let txt = run_text(m, &packets[i0..i1], &f.sb, room);
+                    if wide > x1 {
+                        // the bar is the message itself
+                        cv.fill(Rect::new(x0 + 1, y + h - 4, (x1 - x0).max(2), 3), edge);
+                    }
                     if !txt.is_empty() {
                         cv.text_in(&f.sb, Rect::new(x0 + 5, y, room, h), 0, &txt, TEXT);
                     }
@@ -517,38 +511,44 @@ mod tests {
         Packet { t0: 0.0, t1: 1.0, kind: DecKind::Data, value, value2: None, ok: true }
     }
 
-    /// Fields with room for their text keep a box each. A message whose fields have no room is one box, and the next
+    /// No message behind it: the idle line is its to the end.
+    const OPEN: i32 = i32::MAX / 2;
+
+    /// Fields wide enough for their text keep a box each. A message whose fields are not is one box, and the next
     /// message another.
     #[test]
     fn a_message_without_room_for_its_fields_is_one_box() {
         let wide = [span(0, 100, 140), span(1, 140, 180)];
         let boxes = cells(&wide, |_| 20, 50);
-        let want = [Cell::One { i: 0, x0: 100, x1: 140, end: 140 }, Cell::One { i: 1, x0: 141, x1: 180, end: 180 }];
-        assert_eq!(boxes, want);
+        assert_eq!(boxes, [Cell::One { i: 0, x0: 100, x1: 140 }, Cell::One { i: 1, x0: 141, x1: 180 }]);
         // ten fields of 2 px from 100; four more from 200 are the next message
         let at = |k: usize, x: i32| Span { first: k == 10, ..span(k, x + 2 * k as i32, x + 2 + 2 * k as i32) };
         let narrow: Vec<Span> = (0..10).map(|k| at(k, 100)).chain((10..14).map(|k| at(k, 180))).collect();
-        let first = Cell::Run { i0: 0, i1: 10, x0: 100, x1: 120, bad: false };
-        assert_eq!(cells(&narrow, |_| 20, 50), [first, Cell::Run { i0: 10, i1: 14, x0: 200, x1: 208, bad: false }]);
+        let first = Cell::Run { i0: 0, i1: 10, x0: 100, x1: 120, bad: false, until: 198 };
+        let second = Cell::Run { i0: 10, i1: 14, x0: 200, x1: 208, bad: false, until: OPEN };
+        assert_eq!(cells(&narrow, |_| 20, 50), [first, second]);
         // one message with a pause inside that is no longer than usual stays one box
         let paced: Vec<Span> = (0..10).map(|k| span(k, 100 + 6 * k as i32, 102 + 6 * k as i32)).collect();
-        assert_eq!(cells(&paced, |_| 20, 50), [Cell::Run { i0: 0, i1: 10, x0: 100, x1: 156, bad: false }]);
+        assert_eq!(cells(&paced, |_| 20, 50), [Cell::Run { i0: 0, i1: 10, x0: 100, x1: 156, bad: false, until: OPEN }]);
         // a field under the band's name starts right of it
-        assert_eq!(cells(&[span(0, 20, 90)], |_| 30, 50), [Cell::One { i: 0, x0: 51, x1: 90, end: 90 }]);
+        assert_eq!(cells(&[span(0, 20, 90)], |_| 30, 50), [Cell::One { i: 0, x0: 51, x1: 90 }]);
     }
 
-    /// A field narrower than its text takes the room of the idle line behind it, and says where it ends itself.
+    /// Fields narrower than their texts with idle line between them are their message in one box, not a row of
+    /// boxes that took the idle line (seen on a unit: single letters where the message had been readable). The idle
+    /// line behind a message is room for its text, up to the next message.
     #[test]
-    fn a_narrow_field_takes_its_text_into_the_idle_line() {
+    fn narrow_fields_with_idle_between_them_stay_one_message() {
         let sparse = [span(0, 100, 102), span(1, 130, 132), span(2, 160, 162)];
+        assert_eq!(cells(&sparse, |_| 12, 50), [Cell::Run { i0: 0, i1: 3, x0: 100, x1: 162, bad: false, until: OPEN }]);
+        // three messages of one field: each has the line up to the next
+        let apart = sparse.map(|s| Span { first: true, ..s });
         let want = [
-            Cell::One { i: 0, x0: 100, x1: 112, end: 102 },
-            Cell::One { i: 1, x0: 130, x1: 142, end: 132 },
-            Cell::One { i: 2, x0: 160, x1: 172, end: 162 },
+            Cell::Run { i0: 0, i1: 1, x0: 100, x1: 102, bad: false, until: 128 },
+            Cell::Run { i0: 1, i1: 2, x0: 130, x1: 132, bad: false, until: 158 },
+            Cell::Run { i0: 2, i1: 3, x0: 160, x1: 162, bad: false, until: OPEN },
         ];
-        assert_eq!(cells(&sparse, |_| 12, 50), want);
-        // with less room than the text needs the message is one box again
-        assert_eq!(cells(&sparse, |_| 40, 50), [Cell::Run { i0: 0, i1: 3, x0: 100, x1: 162, bad: false }]);
+        assert_eq!(cells(&apart, |_| 12, 50), want);
     }
 
     /// A message in one box says that one of its fields failed, and takes its tags into its text; a tag on its own
@@ -558,7 +558,7 @@ mod tests {
         let tag = |i, x, first| Span { i, x0: x, x1: x, tag: true, ok: true, first };
         let failed = Span { ok: false, ..span(2, 104, 107) };
         let spans = [tag(0, 100, true), span(1, 101, 104), failed, tag(3, 108, false), tag(4, 300, true)];
-        let burst = Cell::Run { i0: 0, i1: 4, x0: 101, x1: 107, bad: true };
+        let burst = Cell::Run { i0: 0, i1: 4, x0: 101, x1: 107, bad: true, until: OPEN };
         assert_eq!(cells(&spans, |_| 20, 50), [burst, Cell::Tag { i: 4, x: 300 }]);
     }
 

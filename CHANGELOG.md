@@ -397,8 +397,10 @@ Changed:
   what was sent without a pause clearly longer than the usual one, or from one start condition to the next. Where
   the fields of a message have no room for their texts the message is one box, with as much of its text as fits
   and "..." for the rest; a UART line set to ASCII reads as text there (`Hello World\r\n`, a byte without a
-  character as `<1B>`), other decoders give their values with spaces. A field narrower than its text takes the
-  room of the idle line behind it, and a bar in its box says how long the field itself is. A message too small
+  character as `<1B>`), other decoders give their values with spaces. A message shorter than its text takes the
+  room of the idle line behind it, up to the next message, and a bar in its box says how long the message itself
+  is; its fields do not take that room one by one (seen on a unit, 2026-11-19: at 12.8 ms/div a message that had
+  been readable became a row of single letters). A message too small
   for a box stays a mark, one with a failed check has a red edge, and a band with nothing in it says "Nothing
   decoded". A UART character with room beside it has its hex value there. The name is a pill in the colour of the
   source ("D1 UART"), right of the channel markers, which covered it. The boxes are 24 px tall (20) with bold
