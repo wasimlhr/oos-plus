@@ -679,7 +679,10 @@ A channel key held for more than half a second, or a finger held on a channel's 
 AC and DC coupling. A short press switches a channel that is off on and opens its menu. With several channels on, the
 first press on one that is not selected only selects it, so the knobs act on it (its card has the coloured border);
 the next press opens its menu, and a press with its menu open switches it off. A tap on a channel's card selects and
-opens the menu the same way; a tap with the menu open closes it.
+opens the menu the same way; a tap with the menu open closes it. A push of the horizontal SCALE knob switches the
+time base between its 1-2-5 steps and fine steps of a hundredth (Horizontal > Fine time base; the time pill of Studio
+says "fine" while it is on); the zoom is the Zoom row of Horizontal or the Zoom button of Studio, and while it is
+open the knob sets its scale and a push closes it.
 
 **Backlight.** Display > Backlight sets the panel's brightness from 10 to 100 %, in steps that look even to the eye. It is
 a setting of the scope (`/oos/system.conf`).

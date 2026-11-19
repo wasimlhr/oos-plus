@@ -7,7 +7,7 @@ shot $S/h0-axes-offset.ppm
 # zoom with the cursor strip: a short zoom view, labels thinned out instead of overlapping
 key cursor
 key cursor
-knob hscale push
+zoom
 key ch4
 key ch4
 frames 10

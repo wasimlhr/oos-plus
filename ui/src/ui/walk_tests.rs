@@ -2785,3 +2785,43 @@ fn the_decode_sheet_has_the_protocols_rows_on_its_first_page() {
         u.close_menu();
     }
 }
+
+/// The push of the horizontal SCALE knob switches the fine time base, and the time pill says so. It opened the zoom: a
+/// time base left in fine steps then looked like a broken knob, with no way back from the panel (reported from a unit,
+/// 2026-11-18). The steps come back at the step beside the fine value, and a push closes a zoom that is open.
+#[test]
+fn a_push_of_the_time_knob_switches_the_fine_steps() {
+    let mut u = fresh(Layout::Studio);
+    let step = u.m.tscale;
+    assert!(!u.m.fine_t && !u.m.zoom);
+    assert!(u.studio_time_detail().starts_with("delay"));
+    u.key(key::HSCALE_CW + 2);
+    assert!(u.m.fine_t && !u.m.zoom, "the push opened the zoom");
+    assert!(u.studio_time_detail().starts_with("fine"), "{}", u.studio_time_detail());
+    // a turn in fine steps: a hundredth, not a step
+    let coarse = u.m.time_per_div();
+    u.key(key::HSCALE_CW);
+    u.key(key::HSCALE_CW);
+    let fine = u.m.time_per_div();
+    assert!(fine < coarse && fine > coarse * 0.9, "{coarse} {fine}");
+    // the push back: the time base stays where it is
+    u.key(key::HSCALE_CW + 2);
+    assert!(!u.m.fine_t);
+    assert_eq!(u.m.time_per_div(), fine);
+    assert!(u.studio_time_detail().starts_with("delay"));
+    // counter-clockwise is slower: the step above the fine value, not the one after it
+    u.key(key::HSCALE_CW + 1);
+    assert_eq!((u.m.tscale, u.m.tfine), (step, 1.0));
+    // and clockwise from a fine value: the step below it
+    u.key(key::HSCALE_CW + 2);
+    u.key(key::HSCALE_CW);
+    u.key(key::HSCALE_CW + 2);
+    u.key(key::HSCALE_CW);
+    assert_eq!((u.m.tscale, u.m.tfine), (step - 1, 1.0));
+    // the zoom has its own command; while it is open the push closes it and leaves the steps alone
+    crate::cmd::run(&mut u, "zoom");
+    assert!(u.m.zoom);
+    u.key(key::HSCALE_CW + 2);
+    assert!(!u.m.zoom && !u.m.fine_t);
+    assert!(crate::cmd::remote_ok("zoom") && !crate::cmd::remote_ok("zoom on"));
+}

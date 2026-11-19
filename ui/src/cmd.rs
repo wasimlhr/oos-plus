@@ -4,6 +4,7 @@
 //! Text commands (host test scripts and the device control FIFO /tmp/oos-ui.ctl):
 //!   key <name|0xNN>          front-panel key (names: ch1..ch4, runstop, single, auto, measure, ...)
 //!   knob <name> <+n|-n|push> knob turns (hpos vpos hscale vscale tlevel multi1 multi2)
+//!   zoom                     the zoom window on or off (the Zoom row of Horizontal)
 //!   tap <x> <y>              touch tap
 //!   drag <x0> <y0> <x1> <y1> touch drag (8 steps)
 //!   workflow <live|sim|load|measure|settings> direct source and measurement actions
@@ -38,7 +39,7 @@ pub enum Out {
 /// they stay with the local control FIFO and the host scripts.
 pub fn remote_ok(line: &str) -> bool {
     let words: Vec<&str> = line.split_whitespace().collect();
-    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag"))
+    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag")) || words == ["zoom"]
         || (words.len() == 2 && words[0] == "workflow" && matches!(words[1], "live" | "sim" | "load" | "measure" | "settings"))
 }
 
@@ -72,6 +73,8 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
                 }
             }
         }
+        // the zoom window: the push of the horizontal SCALE knob opened it, until that became the fine time base
+        "zoom" => ui.zoom_set_remote(!ui.m.zoom),
         "tap" if w.len() > 2 => {
             let (x, y) = (num(w[1]), num(w[2]));
             ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });

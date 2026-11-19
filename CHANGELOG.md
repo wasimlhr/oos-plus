@@ -7,6 +7,12 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- The horizontal SCALE knob (host-tested; the knob itself not pushed on a unit): a push switches the fine time base
+  on and off and says which, where it opened the zoom. A time base left in fine steps moved a hundredth per detent
+  and nothing on the screen or the panel said why or led back. The time pill of Studio says "fine" while it is on.
+  From a value between two steps a turn goes to the step beside it (26 us/div went to 100 us/div, past 50). The
+  zoom keeps its row, its button in Studio and `:TIMebase:DELay:ENABle`; while it is open a push closes it. The web
+  remote has a button for each.
 - The Decode sheet of Studio and Minimal (host-tested): what the protocol itself needs is on the first page with its
   lines (the baud rate, data bits and parity of a UART, the mode of SPI), where it was on Settings; the B line of a
   differential pair is on Settings; a line is named by its role in the protocol (MOSI, Clock, CS); the channels of
