@@ -463,6 +463,24 @@ Changed:
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
   row not yet verified on hardware). A signal that does not reach the 1.65 V of a new set-up
   decoded nothing (seen on a unit, 2026-11-19: a 0.43 V swing through a probe set to 1x).
+- Decoders: each line of a decoder may have a threshold of its own (host-tested; (unit), 2026-11-19: an SPI bus
+  of a 5 V data line and a clock and select of 0.5 V read nothing at one threshold, and its bytes after
+  `:BUS1:THReshold AUTO` gave 2.63 V, 0.23 V and 0.27 V; the rows by touch not yet verified on hardware). A
+  bus whose lines have different levels (a 5 V data line beside a clock seen at 0.3 V) could not be read with the
+  one threshold a decoder had. Decode lists a threshold for the second, third and fourth line of the protocol
+  ("Clock threshold", "CS threshold"); a line that has none set takes the decoder's, as before, and a set-up from
+  before reads as it did (`dec_thr2` to `dec_thr4`, `main`). Threshold to middle sets every line's to the middle
+  of its own signal. The plot has each line's threshold as a dashed line on its trace.
+  `:BUS<n>:THReshold <line>,<volts>` sets one, `<line>,DEF` gives it up. The hysteresis is the main line's.
+- SPI decoder: Bit order (MSB first, LSB first), Data (Active high, Active low: every bit of a word inverted) and
+  the CS polarity of the SPI trigger are rows of Decode (`:BUS<n>:OPTion1`, `:BUS<n>:OPTion2`; host-tested, not
+  yet verified on hardware). The clock's edge is the Mode row, as before.
+- Studio: a decoder that is on has a pill in the bottom bar, after the channels, references and math: its number in
+  the colour of its line, its protocol, and on a wide pill its lines in the order of their roles ("CH4 CH3 CH2").
+  A tap opens the Decode sheet of that decoder, where each line has its row (MOSI, Clock, CS); a second tap closes
+  it. A decoder added by + Source had nothing in the bar to find it by. The pill stays while the channel of its
+  line is off (its dot is dim then), so the decoder whose band is gone can still be reached. `:UI:ELEMents?`
+  lists it as `D<n>` (host-tested, not yet verified on hardware).
 - Decoders: a decoder whose source channel is off has no band on the plot (host-tested, not yet verified on
   hardware). The band stayed and said "source channel off", in the plot of the other channels (seen on a unit,
   2026-11-19). The decoder stays on and as it is set; its band is back when the channel is.

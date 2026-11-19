@@ -406,6 +406,7 @@ impl Ui {
             for c in 0..n_ch() { push("BOTTOM", format!("CH{}", c + 1), b.ch[c]); }
             for i in 0..NREF { push("BOTTOM", format!("R{}", i + 1), b.refs[i]); }
             for i in 0..NMATH { push("BOTTOM", format!("M{}", i + 1), b.math[i]); }
+            for i in 0..DECODERS { push("BOTTOM", format!("D{}", i + 1), b.dec[i]); }
             push("BOTTOM", "+ CH".into(), b.add);
             if let Some(r) = b.show { push("BOTTOM", "Show badges".into(), r); }
             if let Some(r) = b.la { push("BOTTOM", "LA".into(), r); }

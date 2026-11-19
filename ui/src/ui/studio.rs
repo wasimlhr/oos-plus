@@ -252,6 +252,8 @@ pub(super) struct StudioBottom {
     pub refs: [Rect; NREF],
     /// a small chip for each math channel that is on
     pub math: [Rect; NMATH],
+    /// a pill for each decoder that is on: a tap opens the Decode sheet of that decoder
+    pub dec: [Rect; DECODERS],
     /// "+ CH": the channels that are off, in one chip (zero wide when every channel is on)
     pub add: Rect,
     /// the button that shows the measurement badges again while they are hidden
@@ -656,8 +658,11 @@ impl Ui {
         let caps = &oos_hal::model::platform().caps;
         let la_w = if caps.la { 52 } else { 0 };
         let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { GEN_W } } else { 0 };
-        // the source pills (channels, refs, math) share what the fixed chips leave, by count
-        let count = (chans.len() + shown.len() + maths.len()) as i32;
+        // a decoder that is on has its pill too, whether its lines are on or not: its band goes with its channel,
+        // its pill stays and leads to its settings
+        let decs: Vec<usize> = (0..DECODERS).filter(|&k| self.m.dec_is_on(k)).collect();
+        // the source pills (channels, refs, math, decoders) share what the fixed chips leave, by count
+        let count = (chans.len() + shown.len() + maths.len() + decs.len()) as i32;
         // the generator's pill takes its short form ("GEN") before a source pill is too narrow for its scale: with four
         // channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
         let aux = |gen_w: i32| [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
@@ -708,12 +713,17 @@ impl Ui {
             math[k] = Rect::new(x, y, pw, ph);
             x += pw + 5;
         }
+        let mut dec = [Rect::new(0, y, 0, ph); DECODERS];
+        for &k in &decs {
+            dec[k] = Rect::new(x, y, pw, ph);
+            x += pw + 5;
+        }
         let add = Rect::new(x, y, add_w, h);
         let mut ax = add.right() + 5;
         let la = (la_w > 0).then(|| { let r = Rect::new(ax, y, la_w, h); ax += la_w + 5; r });
         let gen = (gen_w > 0).then(|| { let r = Rect::new(ax, y, gen_w, h); ax += gen_w + 5; r });
         let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, show_w - 6, bottom.h));
-        StudioBottom { ch, refs, math, add, show, la, gen, time, trig, panel }
+        StudioBottom { ch, refs, math, dec, add, show, la, gen, time, trig, panel }
     }
 
     /// The width a channel pill needs: the badge, the widest scale of the channels' units in the pill's font, and the
@@ -825,6 +835,18 @@ impl Ui {
             chip(cv, r, BTN, if self.m.math_sel == k && self.selected_workspace_source().is_none() { ACCENT } else { col });
             cv.circle(r.x + 5, r.y + 5, 3, GREEN);
             self.studio_pill_text(cv, r, &format!("M{}", k + 1), self.m.math_ch(k).op.name(), col);
+        }
+        // a decoder: its number in the colour of its source, its protocol, and its lines in the order of their roles
+        for k in 0..DECODERS {
+            let r = b.dec[k];
+            if r.w == 0 { continue; }
+            let m = self.m.dec_view(k);
+            let col = self.dec_color(&m);
+            let sel = root == Some(MenuId::Decode) && self.m.dec_sel == k;
+            chip(cv, r, BTN, if sel { ACCENT } else { col });
+            // the dot is dim while the channel of its line is off: the decoder is on and has nothing to read
+            cv.circle(r.x + 5, r.y + 5, 3, if self.dec_shown(k) { GREEN } else { DIM });
+            self.studio_source_pill(cv, r, &format!("D{}", k + 1), m.dec_proto.name(), &decband::dec_lines_text(&m), col);
         }
         if b.add.w > 0 {
             chip(cv, b.add, BTN, if self.studio.ch_picker { ACCENT } else { BTN_BORDER });
@@ -1058,6 +1080,13 @@ impl Ui {
             self.m.math_select(k);
             if open && prev != k { return; }
             return self.toggle_menu(MenuId::Math);
+        }
+        if let Some(k) = (0..DECODERS).find(|&k| b.dec[k].w > 0 && Self::hit40(b.dec[k]).contains(x, y)) {
+            // like a math pill: that decoder and its Decode sheet; a second tap closes it
+            let (prev, open) = (self.m.dec_sel, self.menu_open && self.menu == MenuId::Decode);
+            if prev != k { self.select_option(Item::DecSel, &format!("D{}", k + 1)); }
+            if open && prev != k { return; }
+            return self.toggle_menu(MenuId::Decode);
         }
         for c in 0..n_ch() {
             if !b.ch[c].contains(x, y) { continue; }
