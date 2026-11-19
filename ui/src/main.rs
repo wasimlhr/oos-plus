@@ -360,6 +360,15 @@ fn mdns_services(mut c: mdns::Config, web: Option<u16>, vxi: Option<u16>, hislip
     c
 }
 
+/// What a picture shows: the panel's screen, or on the monitor the UI laid out for it (Display > HDMI = Layout) or
+/// its waveform area (Waveform).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pic {
+    Panel,
+    Layout,
+    Waveform,
+}
+
 /// The layers of a GPU picture (System > Graphics = GPU): under and over the traces, and the traces as jobs. The
 /// picture itself is in the display's buffer; it comes back into the caller's canvas only when asked.
 struct GpuLayers {
@@ -379,16 +388,16 @@ impl GpuLayers {
         GpuLayers { under, over, jobs: Vec::new() }
     }
 
-    /// The screen in layers at `w` x `h`: the panel's, or (`view`) the monitor's own layout.
-    fn draw(&mut self, ui: &mut Ui, w: i32, h: i32, view: bool) {
+    /// The screen in layers at `w` x `h`: the panel's, the monitor's own layout or the monitor's waveform area.
+    fn draw(&mut self, ui: &mut Ui, w: i32, h: i32, pic: Pic) {
         if (self.under.w, self.under.h) != (w, h) {
             *self = GpuLayers::new(w, h);
         }
         let mut l = ui::Layers { under: &mut self.under, over: Some(&mut self.over), jobs: Vec::new() };
-        if view {
-            ui.render_view_layers(&mut l);
-        } else {
-            ui.render_layers(&mut l);
+        match pic {
+            Pic::Panel => ui.render_layers(&mut l),
+            Pic::Layout => ui.render_view_layers(&mut l),
+            Pic::Waveform => ui.render_waveform_layers(&mut l),
         }
         self.jobs = std::mem::take(&mut l.jobs);
     }
@@ -400,61 +409,41 @@ impl GpuLayers {
     /// The panel's picture into `target` (the size of `cv`); with `read` it also comes back into `cv` (the web page,
     /// screenshots, SCPI).
     fn compose(&mut self, ui: &mut Ui, g: &mut gpu::Gpu, cv: &mut Canvas, target: usize, read: bool) -> Result<(), String> {
-        self.draw(ui, cv.w, cv.h, false);
+        self.draw(ui, cv.w, cv.h, Pic::Panel);
         let full = gfx::Rect::new(0, 0, cv.w, cv.h);
         g.compose(target, None, &[self.quad(ui, full, full, false, false)], read.then_some(cv))
     }
 
 }
 
-/// The monitor's picture on the GPU (Display > HDMI with Graphics = GPU), right after the panel's: Mirror and
-/// Waveform take the panel's layers again without a new upload (quad 0); Layout draws the monitor's own layers.
+/// The monitor's picture on the GPU (Display > HDMI with Graphics = GPU), right after the panel's: Mirror takes the
+/// panel's layers again without a new upload (quad 0); Layout and Waveform draw the monitor's own layers at its size.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 #[allow(clippy::too_many_arguments)]
-fn hdmi_gpu_frame(ui: &mut Ui, g: &mut gpu::Gpu, panel: &GpuLayers, view: &mut GpuLayers, head: &mut Option<Canvas>, mw: i32, mh: i32, target: usize, read: bool) -> Result<gpu::Ticket, String> {
-    let whole = gfx::Rect::new(0, 0, ui.scr.w, ui.scr.h);
-    let fit_of = |sw: i32, sh: i32, dw: i32, dh: i32| {
-        let f = gfx::Fit::new(sw, sh, dw, dh);
-        let (w, h) = f.size();
-        gfx::Rect::new(f.x0 as i32, f.y0 as i32, w as i32, h as i32)
+fn hdmi_gpu_frame(ui: &mut Ui, g: &mut gpu::Gpu, panel: &GpuLayers, view: &mut GpuLayers, mw: i32, mh: i32, target: usize, read: bool) -> Result<gpu::Ticket, String> {
+    let pic = match ui.m.hdmi {
+        model::HdmiMode::Layout => Pic::Layout,
+        model::HdmiMode::Waveform => Pic::Waveform,
+        model::HdmiMode::Mirror => Pic::Panel,
     };
-    let mirror = |g: &mut gpu::Gpu| g.submit(target, Some(0), &[panel.quad(ui, whole, fit_of(whole.w, whole.h, mw, mh), true, true)], read);
-    match ui.m.hdmi {
-        model::HdmiMode::Layout => match ui::Screen::for_monitor(mw, mh) {
-            Some(s) => {
-                view.draw(ui, s.w, s.h, true);
-                // quad 0 stays the panel's: an empty one, the monitor's layers go to quad 1
-                let none = gpu::Quad { under: None, over: None, size: (1, 1), src: gfx::Rect::new(0, 0, 1, 1), dst: gfx::Rect::new(0, 0, 0, 0), filter: false, reuse: false, jobs: &[], ph: &ui.ph, phz: &ui.phz };
-                let q = view.quad(ui, gfx::Rect::new(0, 0, s.w, s.h), gfx::Rect::new(0, 0, mw, mh), true, false);
-                g.submit(target, None, &[none, q], read)
-            }
-            None => mirror(g),
-        },
-        model::HdmiMode::Waveform => {
-            // as `hdmi_workspace`: the settings line in a band on top, the waveform area as large as it fits under it
-            let body = ui.frame().body;
-            let (sw, sh) = (ui.scr.w, body.h);
-            let band = 48.max((mh - mw * sh / sw) / 2);
-            let r = fit_of(sw, sh, mw, mh - band);
-            let hc = head.get_or_insert_with(|| Canvas::new(mw, band));
-            if (hc.w, hc.h) != (mw, band) {
-                *hc = Canvas::new(mw, band);
-            }
-            hc.clear(HDMI_BG);
-            let f = font::Fonts::get(0);
-            hc.text_in(&f.xl, gfx::Rect::new(0, 0, mw, band), 1, &ui.hdmi_header(), gfx::rgb(0xe6, 0xed, 0xf3));
-            // the waveform area without the bars and menus: the layer over the traces as it was before them
-            let over = ui.hdmi_over.as_ref().filter(|o| (o.w, o.h) == (panel.under.w, panel.under.h)).unwrap_or(&panel.over);
-            let plot = gpu::Quad { over: Some(over), reuse: false, ..panel.quad(ui, body, gfx::Rect::new(r.x, band, r.w, r.h), true, false) };
-            let line = gpu::Quad { under: Some(hc), over: None, size: (mw, band), src: gfx::Rect::new(0, 0, mw, band), dst: gfx::Rect::new(0, 0, mw, band), filter: false, reuse: false, jobs: &[], ph: &ui.ph, phz: &ui.phz };
-            g.submit(target, Some(HDMI_BG), &[plot, line], read)
+    match ui::Screen::for_monitor(mw, mh).filter(|_| pic != Pic::Panel) {
+        Some(s) => {
+            view.draw(ui, s.w, s.h, pic);
+            // quad 0 stays the panel's: an empty one, the monitor's layers go to quad 1
+            let none = gpu::Quad { under: None, over: None, size: (1, 1), src: gfx::Rect::new(0, 0, 1, 1), dst: gfx::Rect::new(0, 0, 0, 0), filter: false, reuse: false, jobs: &[], ph: &ui.ph, phz: &ui.phz };
+            let q = view.quad(ui, gfx::Rect::new(0, 0, s.w, s.h), gfx::Rect::new(0, 0, mw, mh), true, false);
+            g.submit(target, None, &[none, q], read)
         }
-        model::HdmiMode::Mirror => mirror(g),
+        // the panel's picture, as large as it fits
+        None => {
+            let whole = gfx::Rect::new(0, 0, ui.scr.w, ui.scr.h);
+            let f = gfx::Fit::new(whole.w, whole.h, mw, mh);
+            let (w, h) = f.size();
+            let dst = gfx::Rect::new(f.x0 as i32, f.y0 as i32, w as i32, h as i32);
+            g.submit(target, Some(0), &[panel.quad(ui, whole, dst, true, true)], read)
+        }
     }
 }
-
-/// Background of the HDMI workspace.
-const HDMI_BG: u32 = 0x0d1117;
 
 /// The GPU helper with the panel's scan-out buffers as targets 0 to 2 (the monitor's follow them, up to the helper's 8).
 #[cfg(target_os = "linux")]
@@ -480,7 +469,7 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
     if let Some(m) = std::env::var("OOS_GPU_HDMI_MODE").ok().and_then(|v| model::HDMI_MODES.iter().copied().find(|x| format!("{:?}", x) == v)) {
         ui.m.hdmi = m;
     }
-    let (mut gl_view, mut gl_head, mut hdmi_cv) = (GpuLayers::new(1, 1), None, hdmi.map(|s| Canvas::new(s.w, s.h)));
+    let (mut gl_view, mut hdmi_cv) = (GpuLayers::new(1, 1), hdmi.map(|s| Canvas::new(s.w, s.h)));
     if let (Some(g), Some(s)) = (gpu.as_mut(), hdmi) {
         g.target_memory(2, s.w, s.h).expect("HDMI target");
     }
@@ -490,7 +479,6 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
     fn frame(ui: &mut Ui, cv: &mut Canvas, gpu: &mut Option<gpu::Gpu>, gl: &mut GpuLayers, shot_n: &mut u32, scpi: &mut scpi::Scpi) {
         ui.step(1.0 / 30.0);
         scpi.poll(ui, cv);
-        ui.hdmi_snap_want = std::env::var_os("OOS_GPU_HDMI").is_some();
         match gpu.as_mut() {
             Some(g) => {
                 if let Err(e) = gl.compose(ui, g, cv, 0, true) {
@@ -525,7 +513,7 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
                 println!("shot {}", p);
                 if let (Some(g), Some(hc)) = (gpu.as_mut(), hdmi_cv.as_mut()) {
                     let (w, h) = (hc.w, hc.h);
-                    if let Err(e) = hdmi_gpu_frame(ui, g, &gl, &mut gl_view, &mut gl_head, w, h, 2, true).and_then(|t| g.collect(t, Some(hc))) {
+                    if let Err(e) = hdmi_gpu_frame(ui, g, &gl, &mut gl_view, w, h, 2, true).and_then(|t| g.collect(t, Some(hc))) {
                         eprintln!("oos-ui: GPU HDMI: {}", e);
                         std::process::exit(3);
                     }
@@ -714,7 +702,6 @@ fn device_main(mut ui: Ui, args: &[String]) {
     let mut gpu_changed = false;
     let mut gl = GpuLayers::new(ui.scr.w, ui.scr.h);
     let mut gl_view = GpuLayers::new(1, 1);
-    let mut gl_head: Option<Canvas> = None;
     // the monitor's buffers are the targets after the panel's (`start_gpu`: one per panel buffer, three). They were
     // 2 to 4 while the panel had two: the monitor's first buffer took the place of the panel's third, the GPU drew the
     // panel's picture into it, and the panel showed an old picture in its turn (both screens flickered with HDMI and
@@ -806,7 +793,6 @@ fn device_main(mut ui: Ui, args: &[String]) {
         let t1 = Instant::now();
         ui.set_hdmi_present(hdmi.is_some());
         let hdmi_frame = hdmi.is_some() && (frame_n + 1) % 2 == 0;
-        ui.hdmi_snap_want = hdmi_frame && ui.m.hdmi == model::HdmiMode::Waveform;
         // System > Graphics: the helper follows the setting
         if ui.sys.gpu != gpu_want {
             gpu_changed = frame_n > 0;
@@ -855,7 +841,7 @@ fn device_main(mut ui: Ui, args: &[String]) {
                 let read = shot || web.picture_wanted() || frame_n % 15 == 0 || hdmi_cpu;
                 // 1. this frame's layers, while the GPU still puts the last one together
                 let tl = Instant::now();
-                gl.draw(&mut ui, cv.w, cv.h, false);
+                gl.draw(&mut ui, cv.w, cv.h, Pic::Panel);
                 let layers = tl.elapsed().as_secs_f32() * 1e3;
                 // 2. the last frame: shown once it is done (its picture into `cv` when it was asked for)
                 let mut wait = 0.0;
@@ -893,7 +879,7 @@ fn device_main(mut ui: Ui, args: &[String]) {
                 let th = match (hdmi.as_ref(), hdmi_gpu, hdmi_frame) {
                     (Some(h), Some(true), true) => {
                         let b2 = h.free();
-                        Some((hdmi_gpu_frame(&mut ui, g, &gl, &mut gl_view, &mut gl_head, h.width, h.height, hdmi_base + b2, false)?, b2))
+                        Some((hdmi_gpu_frame(&mut ui, g, &gl, &mut gl_view, h.width, h.height, hdmi_base + b2, false)?, b2))
                     }
                     _ => None,
                 };
@@ -935,11 +921,10 @@ fn device_main(mut ui: Ui, args: &[String]) {
         }
         frame_n += 1;
         if let Some(h) = hdmi.as_mut().filter(|_| hdmi_frame && !hdmi_done) {
-            // the monitor's picture: its own layout, the workspace, or the panel's
+            // the monitor's picture: its own layout, its waveform area, or the panel's
             let size = match ui.m.hdmi {
-                model::HdmiMode::Layout => ui::Screen::for_monitor(h.width, h.height),
-                model::HdmiMode::Waveform if !ui.hdmi_snap.is_empty() => Some(ui::Screen { w: h.width, h: h.height }),
-                _ => None,
+                model::HdmiMode::Layout | model::HdmiMode::Waveform => ui::Screen::for_monitor(h.width, h.height),
+                model::HdmiMode::Mirror => None,
             };
             match size {
                 Some(s) => {
@@ -950,7 +935,7 @@ fn device_main(mut ui: Ui, args: &[String]) {
                     if ui.m.hdmi == model::HdmiMode::Layout {
                         ui.render_view(hc);
                     } else {
-                        hdmi_workspace(&ui, hc);
+                        ui.render_waveform(hc);
                     }
                     h.present_scaled(hc);
                 }
@@ -1072,28 +1057,6 @@ fn eth_watch(ui: &mut Ui, now: f64) {
     }
 }
 
-/// The HDMI workspace: a settings line on top, below it the waveform area of the panel (plot and measurement rows,
-/// without the bars and menus) scaled to the monitor with its aspect ratio.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn hdmi_workspace(ui: &Ui, hc: &mut Canvas) {
-    hc.clear(HDMI_BG);
-    let body = ui.frame().body;
-    let (sw, sh) = (ui.scr.w, body.h);
-    if ui.hdmi_snap.len() < (sw * sh) as usize {
-        return;
-    }
-    // the waveform area as large as it fits; the settings line in the band above it (at least 48 px)
-    let head = 48.max((hc.h - hc.w * sh / sw) / 2);
-    let fit = gfx::Fit::new(sw, sh, hc.w, hc.h - head);
-    let stride = hc.w as usize;
-    // the monitor is large: its header keeps the normal text size
-    let f = font::Fonts::get(0);
-    hc.text_in(&f.xl, gfx::Rect::new(0, 0, hc.w, head), 1, &ui.hdmi_header(), gfx::rgb(0xe6, 0xed, 0xf3));
-    // `fit` centres in the rest: start at the band so the plot sits right under the settings line
-    let top = (head as usize).saturating_sub(fit.y0) * stride;
-    fit.scale(&ui.hdmi_snap, &mut hc.px[top..], stride);
-}
-
 /// The address to show in the top bar, and all of them, as (interface, address).
 #[cfg(target_os = "linux")]
 fn ipv4_addresses() -> ((String, String), Vec<(String, String)>) {
@@ -1157,23 +1120,74 @@ mod tests {
         assert_eq!(pick_addresses(Vec::new()).0, (String::new(), String::new()));
     }
 
-    /// The HDMI workspace on a 1920 x 1080 monitor: settings line on top, the waveform area below without menus.
+    /// Display > HDMI = Waveform on a 1920 x 1080 monitor, in each layout: the settings line on top, the waveform area
+    /// with its measurement row below, laid out for the monitor and drawn at its resolution. Every text the panel and
+    /// the monitor both show has the same glyphs (a scaled copy of the panel's 1024-wide picture would make them 1.875
+    /// times as large), and the text reaches across the monitor's width and height.
     #[test]
-    fn hdmi_workspace_picture() {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
-        let mut cv = Canvas::new(ui::PANEL_W, ui::PANEL_H);
-        ui.hdmi_snap_want = true;
-        for _ in 0..10 {
-            ui.step(1.0 / 30.0);
-            ui.render(&mut cv);
+    fn hdmi_waveform_picture() {
+        type Texts = std::collections::HashMap<String, std::collections::BTreeSet<(i32, i32)>>;
+        // each text drawn: the font sizes and heights of ink it is drawn with
+        fn texts(cv: &Canvas) -> Texts {
+            let mut t = Texts::new();
+            for e in cv.au.iter().flatten() {
+                if let gfx::Au::Text { s, ink: Some((_, y0, _, y1)), size, .. } = e {
+                    t.entry(s.clone()).or_default().insert((*size, y1 - y0));
+                }
+            }
+            t
         }
-        let mut hc = Canvas::new(1920, 1080);
-        hdmi_workspace(&ui, &mut hc);
-        // the plot fills the width under the settings band (1024 x 486 -> 1920 x 911 under an 84-px band)
-        assert_eq!(ui.hdmi_snap.len(), (ui.scr.w * ui.frame().body.h) as usize);
-        assert!(ui.hdmi_header().contains("CH1 1 V/div"));
-        if let Ok(d) = std::env::var("OOS_SHOT_DIR") {
-            let _ = std::fs::write(format!("{}/hdmi-workspace.png", d), store::png_of(&hc));
+        let (mw, mh) = (1920, 1080);
+        for layout in model::LAYOUTS {
+            let mut ui = Ui::new(Source::Demo { t: 0.0 });
+            ui.m.layout = layout;
+            ui.m.hdmi = model::HdmiMode::Waveform;
+            ui.m.meas = vec![(model::Meas::Vpp, model::WaveId::Ch(0)), (model::Meas::Freq, model::WaveId::Ch(0))];
+            let mut cv = Canvas::new(ui::PANEL_W, ui::PANEL_H);
+            for _ in 0..10 {
+                ui.step(1.0 / 30.0);
+                ui.render(&mut cv);
+            }
+            let (panel_frame, panel_scr) = (ui.frame(), ui.scr);
+            cv.au_start();
+            ui.render(&mut cv);
+            let mut hc = Canvas::new(mw, mh);
+            hc.au_start();
+            ui.render_waveform(&mut hc);
+            assert_eq!((ui.frame(), ui.scr), (panel_frame, panel_scr), "{:?}: the panel's layout is as it was", layout);
+            let (panel, monitor) = (texts(&cv), texts(&hc));
+            let header = ui.hdmi_header();
+            assert!(header.contains("CH1 1 V/div"));
+            let line = monitor.get(&header).expect("the settings line");
+            assert!(line.iter().all(|&(size, height)| size > 0 && height > 0));
+            // the same glyphs as on the panel
+            let both: Vec<&String> = monitor.keys().filter(|s| panel.contains_key(*s)).collect();
+            assert!(both.len() >= 4, "{:?}: texts on both screens: {:?}", layout, both);
+            for s in &both {
+                let (m, p) = (&monitor[*s], &panel[*s]);
+                assert!(m.is_subset(p), "{:?}: {:?} is drawn at the panel's size: {:?} {:?}", layout, s, m, p);
+            }
+            // the measurement row of the waveform area (Studio's badges: the panel draws them with its bottom bar);
+            // Studio's waveform is in a dock whose title strip comes along
+            let studio = layout == model::Layout::Studio;
+            let want: &[&str] = if studio { &["Pk-pk", "Waveform"] } else { &["Peak-to-Peak"] };
+            for w in want {
+                assert!(monitor.contains_key(*w), "{:?}: {:?} in {:?}", layout, w, monitor.keys());
+            }
+            // and no bars: the time base card and the menu button stay on the panel
+            for w in ["200 \u{b5}s/div", "Menu"] {
+                assert!(!monitor.contains_key(w), "{:?}: {:?} in {:?}", layout, w, monitor.keys());
+            }
+            // and laid out for the monitor, not the panel
+            let ink = |f: &dyn Fn(&(i32, i32, i32, i32)) -> bool| {
+                hc.au.iter().flatten().any(|e| matches!(e, gfx::Au::Text { ink: Some(i), .. } if f(i)))
+            };
+            assert!(ink(&|i| i.2 > ui::PANEL_W + 200), "{:?}: text right of the panel's width", layout);
+            assert!(ink(&|i| i.3 > ui::PANEL_H + 200), "{:?}: text below the panel's height", layout);
+            if let Ok(d) = std::env::var("OOS_SHOT_DIR") {
+                let p = format!("{}/hdmi-waveform-{:?}.png", d, layout).to_lowercase();
+                let _ = std::fs::write(p, store::png_of(&hc));
+            }
         }
     }
 }

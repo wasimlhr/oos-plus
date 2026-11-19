@@ -503,7 +503,6 @@ mod tests {
         render(&mut u);
         let normal = u.grid;
         u.set_hdmi_present(true);
-        u.hdmi_snap_want = true;
         u.select_option(Item::FullScreen, "On");
         let mut cv = Canvas::new(W, H);
         u.render(&mut cv);
@@ -515,14 +514,22 @@ mod tests {
         u.select_option(Item::Hdmi, "Waveform");
         u.render(&mut cv);
         assert!(!u.full && u.grid == normal, "waveform gives the panel its bars back");
-        let (head, _) = u.results_rects().unwrap();
-        let at = (head.y * W + head.x + 8) as usize;
-        let snap_at = ((head.y - TOP.h) * W + head.x + 8) as usize;
-        assert_eq!(u.hdmi_snap.len(), (W * (u.frame().bottom.y - TOP.h)) as usize);
-        assert_ne!(u.hdmi_snap[snap_at], cv.px[at], "Full leaves the statistics card off the external plot");
+        // the monitor's waveform area: in Full without the statistics card, in Scope with it
+        let (mw, mh) = (1920, 1080);
+        let mut full_pic = Canvas::new(mw, mh);
+        u.render_waveform(&mut full_pic);
         u.select_option(Item::FullScreen, "Off");
         u.render(&mut cv);
-        assert_eq!(u.hdmi_snap[snap_at], cv.px[at], "Scope copies the plot, strip and card");
+        let mut scope_pic = Canvas::new(mw, mh);
+        u.render_waveform(&mut scope_pic);
+        let head = u.with_waveform_pass(mw, mh, |u| {
+            u.render(&mut Canvas::new(mw, mh));
+            u.results_rects().unwrap().0
+        });
+        assert!(head.right() > W, "the card is placed for the monitor: {:?}", head);
+        let at = (head.y * mw + head.x + 8) as usize;
+        assert_ne!(full_pic.px[at], scope_pic.px[at], "Full leaves the statistics card off the external plot");
+        assert!(u.grid == normal && u.scr == Screen::PANEL, "the panel's layout is as it was");
         u.select_option(Item::WinLayout, "Four");
         u.render(&mut cv);
         assert_eq!(u.wins.len(), 4);
