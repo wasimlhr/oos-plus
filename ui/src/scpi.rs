@@ -1563,6 +1563,14 @@ impl Scpi {
                     }
                     return Some(None);
                 }
+                // :CHANnel<n>:HIDE: the channel stays on (acquired, measured, the input of a math trace) without its trace
+                if kw(n1, "HIDE") {
+                    if query {
+                        return Some(t(if m.ch_hidden[c] { "1" } else { "0" }));
+                    }
+                    m.ch_hidden[c] = parse_bool(arg)?;
+                    return Some(None);
+                }
                 let expand_gnd = m.v_expand_gnd;
                 let slow_deskew = m.time_per_div() > 10e-6;
                 let fine = m.fine_v;

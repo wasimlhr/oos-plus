@@ -2695,3 +2695,41 @@ fn a_math_lane_has_its_badge() {
         std::fs::write(std::path::Path::new(&dir).join("walk-math-badge.png"), crate::store::png_of(&cv)).unwrap();
     }
 }
+
+/// Hide trace takes the picture of a channel away and nothing else: the channel stays on, its math trace and its
+/// measurements go on, the set-up and SCPI hold the switch. Switching the channel off was the only way before, and
+/// that took the math trace with it.
+#[test]
+fn a_hidden_channel_stays_on_for_math_and_measurements() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = true;
+    // the demo has its signal on CH1: M1 = CH1 + CH1
+    u.m.math = crate::math::MathOp::Add;
+    u.m.math_b = u.m.math_a;
+    u.trace_mode(true);
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    let value = |u: &Ui| u.meas_rows().iter().find(|r| r.src == WaveId::Ch(0)).map(|r| r.v);
+    let math = |u: &mut Ui| { for _ in 0..40 { if u.math_record(0).is_ok_and(|w| w.is_some()) { return true; } u.step(0.03); frame(u); } false };
+    assert!(u.trace_sources().contains(&super::workspace::Trace::Channel(0)), "CH1 has its lane");
+    assert!(math(&mut u), "M1 = CH1 + CH1 is computed: {:?}", u.math_record(0).err());
+    let before = value(&u).expect("a measurement on CH1");
+    assert!(before.is_finite());
+    // by the menu of the channel
+    assert_eq!(u.value(Item::ChHide(0)), "Off");
+    u.activate(Item::ChHide(0));
+    for _ in 0..6 { u.step(0.03); frame(&mut u); }
+    assert!(u.m.ch[0].on && u.m.ch_hidden[0] && !u.m.ch_drawn(0));
+    assert!(!u.trace_sources().contains(&super::workspace::Trace::Channel(0)), "no lane for the hidden channel");
+    assert!(u.trace_sources().contains(&super::workspace::Trace::Math(0)) && math(&mut u), "its math trace goes on");
+    assert!(value(&u).is_some_and(|v| v.is_finite()), "its measurement goes on");
+    // the set-up holds it and brings it back
+    let text = u.setup_text_full();
+    assert!(text.lines().any(|l| l == "ch_hidden = 1"), "{:?}", text.lines().filter(|l| l.starts_with("ch")).take(3).collect::<Vec<_>>());
+    let mut other = fresh(Layout::Studio);
+    other.apply_setup_text(&text).unwrap();
+    assert!(other.m.ch_hidden[0] && !other.m.ch_hidden[1]);
+    // the pill's menu shows it again
+    u.workspace_action(super::workspace::Action::ChHide(0));
+    for _ in 0..3 { u.step(0.03); frame(&mut u); }
+    assert!(!u.m.ch_hidden[0] && u.trace_sources().contains(&super::workspace::Trace::Channel(0)));
+}

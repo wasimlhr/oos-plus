@@ -193,6 +193,11 @@ Fixed:
 
 Added:
 
+- Channel > Hide trace, `:CHANnel<n>:HIDE` (host-tested, not yet verified on hardware). The channel stays on
+  without its picture: it is acquired, measured and decoded and is the input of a math trace as before, and has
+  no trace, no lane and no ground mark. Switching a channel off was the only way to take its trace away, and
+  that took its math trace and its measurements with it. The channel's pill says "trace hidden" and its menu has
+  Hide trace / Show trace; the set-up holds the switch (`ch_hidden`).
 - Waveform files of other scopes open as references (Reference > Load file, the web remote; host-tested on files
   built for the tests and on public captures, not on a file saved by a unit here): a RIGOL `.wfm` file of a DHO800,
   DHO900 or DHO1000, with the channels labelled CH1 onwards; the math traces of a Siglent binary file, as F1 to

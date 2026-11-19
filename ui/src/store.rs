@@ -386,6 +386,7 @@ pub fn setup_text(m: &Model) -> String {
     kv("studio_state", m.studio_state.clone());
     if m.math_hidden.iter().any(|&h| h) { kv("math_hidden", m.math_hidden.iter().enumerate().filter(|(_, &h)| h).map(|(k, _)| (k + 1).to_string()).collect::<Vec<_>>().join(" ")); }
     if m.gen_hidden { kv("gen_hidden", "true".to_string()); }
+    if m.ch_hidden.iter().any(|&h| h) { kv("ch_hidden", m.ch_hidden.iter().enumerate().filter(|(_, &h)| h).map(|(c, _)| (c + 1).to_string()).collect::<Vec<_>>().join(" ")); }
     // The generator's wave and modulation. Not whether its output is on: a recalled set-up or session never switches
     // an output on (it is off after a recall). An arbitrary wave has its samples elsewhere and is not written.
     if m.afg_wave < AFG_WAVES.len() - 1 {
@@ -834,6 +835,13 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
             m.math_hidden = h;
         }
         "gen_hidden" => m.gen_hidden = p_bool(v)?,
+        "ch_hidden" => {
+            let mut h = [false; NCH];
+            for e in v.split_whitespace() {
+                h[p_idx(e, NCH + 1)?.checked_sub(1).ok_or_else(|| "channel 0".to_string())?] = true;
+            }
+            m.ch_hidden = h;
+        }
         "gen" | "gen_mod" => {
             let w: Vec<&str> = v.split_whitespace().collect();
             if w.len() != 6 {

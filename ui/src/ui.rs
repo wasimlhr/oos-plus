@@ -701,6 +701,8 @@ enum Item {
     ChBw(usize),
     ChProbe(usize),
     ChInvert(usize),
+    /// the channel stays on without its trace (`Model::ch_hidden`)
+    ChHide(usize),
     ChScale(usize),
     ChOffset(usize),
     HScale,
@@ -2342,7 +2344,7 @@ impl Ui {
 
     /// Whether channel `c` belongs to the window being drawn.
     fn shows(&self, c: usize) -> bool {
-        self.win_of(c) == self.cur_win
+        self.win_of(c) == self.cur_win && !self.m.ch_hidden[c]
     }
 
     /// The rectangle channel `c` is drawn in: its window, or the main waveform area (zoom).
@@ -7111,7 +7113,7 @@ impl Ui {
     fn menu_items(&self, menu: MenuId) -> Vec<Item> {
         match menu {
             MenuId::Main => self.main_groups().into_iter().flat_map(|g| g.1).collect(),
-            MenuId::Channel(c) => vec![Item::ChOn(c), Item::ChScale(c), Item::ChOffset(c), Item::ChCoupling(c), Item::ChBw(c), Item::ChProbe(c), Item::ChInvert(c), Item::ChFine, Item::ChLabel(c), Item::Open(MenuId::ChMore(c))],
+            MenuId::Channel(c) => vec![Item::ChOn(c), Item::ChScale(c), Item::ChOffset(c), Item::ChCoupling(c), Item::ChBw(c), Item::ChProbe(c), Item::ChInvert(c), Item::ChHide(c), Item::ChFine, Item::ChLabel(c), Item::Open(MenuId::ChMore(c))],
             MenuId::ChMore(c) => vec![Item::ChUnit(c), Item::ChBias(c), Item::ChBiasZero(c), Item::ChSkew(c), Item::AutoDeskew, Item::ChExpand],
             MenuId::Horizontal => {
                 let mut v = if self.m.zoom {
@@ -8216,6 +8218,7 @@ impl Ui {
             Item::ChBw(_) => "Bandwidth",
             Item::ChProbe(_) => "Probe",
             Item::ChInvert(_) => "Invert",
+            Item::ChHide(_) => "Hide trace",
             Item::ChScale(_) => "Scale",
             Item::ChOffset(_) => "Offset",
             Item::HScale => "Time/div",
@@ -8393,6 +8396,7 @@ impl Ui {
             Item::ChBw(c) => BWS[m.ch[c].bw].0.into(),
             Item::ChProbe(c) => format!("{}x", m.ch[c].probe),
             Item::ChInvert(c) => onoff(m.ch[c].invert),
+            Item::ChHide(c) => onoff(m.ch_hidden[c]),
             Item::ChScale(c) => si_short(m.ch[c].volts_per_div() as f64, m.unit(c)),
             Item::ChOffset(c) => si(m.ch[c].offset as f64, m.unit(c)),
             Item::ChUnit(c) => m.unit(c).into(),
@@ -8723,6 +8727,7 @@ impl Ui {
                 m.ch[c].probe = all[cyc(i, 3, d)];
             }
             Item::ChInvert(c) => m.ch[c].invert = !m.ch[c].invert,
+            Item::ChHide(c) => m.ch_hidden[c] = !m.ch_hidden[c],
             Item::ChScale(c) => {
                 let old = m.ch[c].volts_per_div();
                 if m.fine_v {
@@ -9989,7 +9994,7 @@ impl Ui {
         }
         let v: &[&str] = match it {
             Item::StripDock => return StripDock::ALL.iter().map(|s| s.label().to_string()).collect(),
-            Item::ChOn(_) | Item::ChInvert(_) | Item::MeasStats | Item::MeasLabels | Item::Zoom | Item::AutoRoll | Item::DecOn | Item::SearchOn | Item::ColorGrade | Item::MaskOn | Item::MaskInvert => &["Off", "On"],
+            Item::ChOn(_) | Item::ChInvert(_) | Item::ChHide(_) | Item::MeasStats | Item::MeasLabels | Item::Zoom | Item::AutoRoll | Item::DecOn | Item::SearchOn | Item::ColorGrade | Item::MaskOn | Item::MaskInvert => &["Off", "On"],
             Item::MaskSrc => return ch_names(),
             Item::MaskAction => &["None", "Stop"],
             Item::ChCoupling(_) => return board().couplings().iter().map(|c| c.name().to_string()).collect(),

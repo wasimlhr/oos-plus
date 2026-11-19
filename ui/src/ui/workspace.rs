@@ -22,7 +22,7 @@ pub(super) enum Action {
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     MeasureFloat, MeasureDock(StripDock), Close,
     /// the quick actions of a channel (its hold popup)
-    ChCoupling(usize), ChInvert(usize), ChZero(usize), Autoset,
+    ChCoupling(usize), ChInvert(usize), ChHide(usize), ChZero(usize), Autoset,
     /// the quick actions of a math or reference chip in the Studio bottom bar
     MathOff(usize), MathSettings(usize), RefClear(usize), RefSettings(usize),
     /// Studio: the horizontal scale of a reference (Follow main, or its own; `sharedzoom.rs`)
@@ -658,7 +658,8 @@ impl Ui {
     }
     pub(super) fn trace_sources(&self) -> Vec<Trace> {
         // a record session (SIM, offline) has no live data: its inputs keep their state but get no lane
-        let mut sources: Vec<_> = (0..n_ch()).filter(|&c| self.m.ch[c].on && !self.record_mode()).map(Trace::Channel).collect();
+        // a channel that is on without its trace (Hide trace) has no lane either
+        let mut sources: Vec<_> = (0..n_ch()).filter(|&c| self.m.ch_drawn(c) && !self.record_mode()).map(Trace::Channel).collect();
         sources.extend((0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on)).map(Trace::Reference));
         sources.extend((0..NMATH).filter(|&k| self.m.math_shown(k)).map(Trace::Math));
         sources
@@ -944,6 +945,7 @@ impl Ui {
         let mut rows = Vec::new();
         if board().couplings().contains(&to) { rows.push((format!("Coupling {}, set {}", ch.coupling.name(), to.name()), Action::ChCoupling(c))); }
         rows.push((format!("Invert {}", if ch.invert { "On, set Off" } else { "Off, set On" }), Action::ChInvert(c)));
+        rows.push((if self.m.ch_hidden[c] { "Show trace" } else { "Hide trace" }.to_string(), Action::ChHide(c)));
         rows.push(("Zero offset".into(), Action::ChZero(c)));
         // Studio: the first row is the one people look for
         if ch.on { if self.m.layout == Layout::Studio { rows.insert(0, ("Turn off".into(), Action::Source(WaveId::Ch(c)))); } else { rows.push(("Turn off".into(), Action::Source(WaveId::Ch(c)))); } }
@@ -1063,6 +1065,12 @@ impl Ui {
             }
             Action::ChCoupling(c) => self.toggle_ac_dc(c),
             Action::ChInvert(c) => { self.m.ch[c].invert = !self.m.ch[c].invert; self.toast(&format!("CH{}: invert {}", c + 1, if self.m.ch[c].invert { "on" } else { "off" })); self.settings_changed(); }
+            Action::ChHide(c) => {
+                self.m.ch_hidden[c] = !self.m.ch_hidden[c];
+                self.toast(&format!("CH{}: trace {}", c + 1, if self.m.ch_hidden[c] { "hidden, the channel stays on" } else { "shown" }));
+                self.settings_changed();
+                self.relayout();
+            }
             Action::ChZero(c) => { self.m.ch[c].offset = 0.0; self.toast(&format!("CH{}: offset 0", c + 1)); self.settings_changed(); }
             Action::Autoset => self.key(key::AUTO),
             Action::Note(id, x) => self.callout_add(id, x),

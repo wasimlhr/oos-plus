@@ -48,7 +48,7 @@ pub fn draw_frame(ph: &mut Phosphor, m: &Model, f: &Frame, stats: Option<Stats>)
         let window = tdiv * HDIV as f64;
         let rec = crate::board::to_record(&fr, m, 3600, window, m.delay as f64 - window / 2.0);
         for c in 0..NCH {
-            if m.ch[c].on && !rec.ch[c].is_empty() {
+            if m.ch_drawn(c) && !rec.ch[c].is_empty() {
                 ph.draw_ex(c, m, (m.time_per_div(), m.delay), rec.t0, rec.dt, &rec.ch[c], 24, None, rec.pairs);
             }
         }
@@ -107,7 +107,7 @@ fn dense(ph: &mut Phosphor, m: &Model, f: &Frame, x_per_sample: f64, pairs: bool
     let ppd_y = h as f32 / VDIV;
     for c in 0..NCH {
         let ch = &m.ch[c];
-        if !ch.on || !present[c] {
+        if !ch.on || m.ch_hidden[c] || !present[c] {
             continue;
         }
         let vpd = ch.volts_per_div();

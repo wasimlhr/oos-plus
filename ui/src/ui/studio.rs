@@ -767,8 +767,11 @@ impl Ui {
             let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
             let by = r.y + BAR_DY;
             let badge = if r.w >= 70 { Rect::new(r.x + 8, by + 5, bw, 20) } else { Rect::new(r.x + (r.w - bw) / 2, by + 8, bw, 18) };
+            // on without its trace (Hide trace): the badge as an outline, and the second line says so
+            let hidden = ch.on && self.m.ch_hidden[c];
             cv.round(badge, 4, if ch.on { col } else { mix(BAR, col, 70) }, 255);
-            cv.text_in(&f.sb, badge, 1, &label, if ch.on { DARK_TEXT } else { mix(BAR, col, 200) });
+            if hidden { cv.round(badge.inset(1), 3, BTN, 255); }
+            cv.text_in(&f.sb, badge, 1, &label, if hidden { col } else if ch.on { DARK_TEXT } else { mix(BAR, col, 200) });
             if r.w >= 70 {
                 let full = if ch.on { format!("{}/div", si_short(ch.volts_per_div() as f64, ch.unit.name())) } else { "Off".into() };
                 let short = if ch.on { si_short(ch.volts_per_div() as f64, ch.unit.name()) } else { "Off".into() };
@@ -784,7 +787,8 @@ impl Ui {
                     let text = if f.s.width(&text) <= tw { text } else { text.replace(' ', "") };
                     cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM });
                 } else {
-                    match Some(self.studio_ch_detail(c, tw)).filter(|d| ch.on && two_lines && f.s.width(d) <= tw) {
+                    let detail = if hidden { "trace hidden".to_string() } else { self.studio_ch_detail(c, tw) };
+                    match Some(detail).filter(|d| ch.on && two_lines && f.s.width(d) <= tw) {
                         Some(d) => {
                             cv.text(&f.mb, tx, r.y + 13 + BAR_DY, &text, TEXT);
                             cv.text(&f.s, tx, r.y + 25 + BAR_DY, &d, mix(BAR, col, 170));

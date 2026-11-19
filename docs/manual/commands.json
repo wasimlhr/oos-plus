@@ -1581,6 +1581,33 @@
      "returns": "On a freshly started default model the query returns `0`."
     },
     {
+     "header": ":CHANnel<n>:HIDE",
+     "set": ":CHANnel<n>:HIDE <value>",
+     "query": ":CHANnel<n>:HIDE?",
+     "desc": "Sets or queries Hide trace (menu: Channel > Hide trace).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:CHANnel1:HIDE` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- The channel stays on without its trace: it is acquired, measured, decoded and the input of a math trace as before, and has no trace, lane or ground mark.",
+      "- `:CHANnel<n>:DISPlay OFF` switches the channel off, and what is computed from it goes with it.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
      "header": ":CHANnel<n>:CLIPping?",
      "query": ":CHANnel<n>:CLIPping?",
      "desc": "`1` while the record on screen reaches the end of the ADC range on this channel (4.35 divisions above or below the middle of the screen), else `0`. `0` for a channel that is off.",
@@ -15474,6 +15501,12 @@
        "`true`: the GEN chip is not shown in the view shown (optional)",
        "`false`",
        "`:DISPlay:GENerator`"
+      ],
+      [
+       "`ch_hidden`",
+       "channels (1-based) that are on without their trace (optional)",
+       "-",
+       "`:CHANnel<n>:HIDE`"
       ],
       [
        "`gen`",
