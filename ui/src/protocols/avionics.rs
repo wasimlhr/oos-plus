@@ -154,6 +154,13 @@ impl Protocol for Mil1553 {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(oos_dsp::decode::mil1553(l.main(), l.dt, l.thr, l.hy))
     }
+    /// Trigger > Bus > Frame: the command word a message begins with (`frame_start`). A status word and the second
+    /// command of a transfer between two terminals have the same sync, and by the generic rule each was a start
+    /// too: two points a message (host, the demo traffic: 134 for its 67 messages). Not yet verified on hardware.
+    fn trigger_match(&self, what: BusWhat, _value: u32, p: &Packet) -> Option<bool> {
+        let command = p.kind == Kind::Word { cmd: true } && p.value2 == Some(oos_dsp::decode::MIL1553_COMMAND);
+        (what == BusWhat::Frame).then_some(command)
+    }
     /// The command word of the demo.
     fn trigger_default(&self) -> (BusWhat, u32) {
         (BusWhat::Id, 0x0c23)

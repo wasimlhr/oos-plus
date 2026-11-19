@@ -718,7 +718,13 @@ Changed:
   its check in every record read, and the frame behind it, which the record cuts off, without a check. With
   Trigger > Bus > Error and a record of 1 Mpts, six frames of the board in each of five records: five with a
   check that fits (the ping and four with other types) and a sixth with the ping's type and check and other
-  bytes, marked, its check at the trigger point.
+  bytes, marked, its check at the trigger point. The Events pane lists a frame a row with its parts and bytes
+  (Messages) and a part a row (Fields).
+- Trigger > Bus > Frame has one point a frame for Manchester packets and for MIL-STD-1553. On the unit with
+  10BASE-T the start of a frame stood at the trigger point in four of five records and the end of its preamble,
+  6.4 us later, in the fifth: the preamble is a field behind the mark of the packet, and its end counted as a
+  start as well. The same for 1553, where the status word has the sync of a command (host, the demo traffic: 134
+  points for its 67 messages). Host-tested; not yet run on a unit, and 1553 is not connected.
   - A packet that is an Ethernet frame shows its parts in place of its bytes: the preamble with its delimiter,
     the destination and the source address, the type, the bytes behind it and the frame check, which is marked
     where the CRC-32 of the frame is another. As bytes alone the board's good and changed frames looked alike;

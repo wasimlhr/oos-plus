@@ -161,6 +161,14 @@ impl Protocol for Manchester {
     fn mark(&self, p: &Packet) -> bool {
         p.kind == Kind::Start
     }
+    /// Trigger > Bus > Frame: where a packet begins, and nothing behind it. By the generic rule the end of a
+    /// preamble or of the sync bits was a start too, which is the first field of a frame for the decoders that
+    /// have no mark; here it stands behind the mark, and the trigger had two points a frame (seen on a unit with
+    /// 10BASE-T: the start of the frame at the trigger point in four records, and the end of its preamble, 6.4 us
+    /// later, in the fifth).
+    fn trigger_match(&self, what: BusWhat, _value: u32, p: &Packet) -> Option<bool> {
+        (what == BusWhat::Frame).then_some(p.kind == Kind::Start)
+    }
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         let (rate, other) = (manchester_rate(&l.opt), l.opt[1] == 1);
         let (packets, half) = oos_dsp::linecode::manchester_packets(l.main(), l.dt, rate, l.thr, l.hy);
@@ -383,6 +391,13 @@ mod tests {
         let p = decode([MANCHESTER_AUTO, 0, 0, 0]);
         let frames = oos_dsp::decode::frames(&p, |x| x.kind == Kind::Start);
         assert_eq!(frames.len(), 3);
+        // Trigger > Bus > Frame has one point a frame, where it begins: the preamble behind it is no second one.
+        // The other conditions are the generic ones
+        let starts: Vec<Kind> = p.iter().filter(|x| Manchester.trigger_match(BusWhat::Frame, 0, x) == Some(true)).map(|x| x.kind).collect();
+        assert_eq!(starts, vec![Kind::Start; 3]);
+        for what in [BusWhat::Id, BusWhat::Data, BusWhat::Error] {
+            assert_eq!(Manchester.trigger_match(what, 0, &p[1]), None, "{what:?}");
+        }
         let kinds = |r: &std::ops::Range<usize>| -> Vec<Kind> {
             p[r.clone()].iter().filter(|x| x.kind != Kind::Data).map(|x| x.kind).collect()
         };

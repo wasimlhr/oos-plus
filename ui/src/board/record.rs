@@ -329,6 +329,12 @@ mod tests {
             m.trig_bus = BusWhat::Frame;
             let starts = crate::trig::points(&m, &pk);
             assert!(!starts.is_empty(), "{}: no frame start in its demo traffic", p.name());
+            // one start a frame where a frame has a mark of its own: the end of a preamble behind the mark of a
+            // Manchester packet was a second one, and so was the status word of a 1553 message
+            if matches!(p.key(), "Manchester" | "Mil1553") {
+                let begins = p.frame_start().expect("a frame start");
+                assert_eq!(starts.len(), pk.iter().filter(|x| begins(x)).count(), "{}", p.name());
+            }
             for &t in starts.iter().filter(|&&t| inside(t)).take(12) {
                 found(&m, t);
             }
