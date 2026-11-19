@@ -1863,7 +1863,8 @@ impl Ui {
 
 /// The View menu: its width and the height of a row.
 const VIEW_W: i32 = 340;
-const VIEW_ROW: i32 = 40;
+/// (Nine rows, a head and the gaps between the groups end over the bottom bar at 46 px a row; `MENU_ROW` would not.)
+const VIEW_ROW: i32 = 46;
 
 /// What the View menu offers, in order.
 pub(super) const STUDIO_VIEWS: [(StudioView, &str); 6] = [

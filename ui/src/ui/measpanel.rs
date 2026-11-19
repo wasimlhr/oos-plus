@@ -302,7 +302,7 @@ impl Ui {
         if self.m.meas_full_record { "Full record" } else { "Screen" }
     }
 
-    /// The popup list of the open dropdown: under its button, one row of 40 px per option.
+    /// The popup list of the open dropdown: under its button, one row of `MENU_ROW` per option.
     pub(super) fn panel_drop_rect(&self) -> Option<Rect> {
         let which = self.studio.panel.drop?;
         let g = self.studio_panel_geo()?;
@@ -310,12 +310,12 @@ impl Ui {
         let n = self.panel_drop_options(which).len() as i32;
         let w = b.w.max(if which == PanelDrop::More { 190 } else { 130 }).min(g.p.w - 8);
         let x = b.x.min(g.p.right() - 4 - w).max(g.p.x + 4);
-        let h = n * 40 + 8;
+        let h = n * super::workspace::MENU_ROW + 8;
         Some(Rect::new(x, (b.bottom() + 2).min(self.scr.h - h - 2), w, h))
     }
 
     pub(super) fn panel_drop_row(p: Rect, i: usize) -> Rect {
-        Rect::new(p.x + 4, p.y + 4 + i as i32 * 40, p.w - 8, 40)
+        Rect::new(p.x + 4, p.y + 4 + i as i32 * super::workspace::MENU_ROW, p.w - 8, super::workspace::MENU_ROW)
     }
 
     /// A tap while a dropdown is open: it picks an option or closes. Always taken.

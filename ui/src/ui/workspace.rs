@@ -543,7 +543,11 @@ mod tests {
     }
 }
 /// Rows of every popup are one finger tall; the title row carries the close.
-pub(super) const POPUP_ROW: i32 = 40;
+/// The height of a row of a menu that is a list of words (the popups, the menu of the plot, Add, View, the lists of
+/// the measurement panel). Such a row has no outline to aim at and a neighbour right above and below: at the 40 px
+/// of `TOUCH_MIN` (6 mm on this screen) the finger took the row beside it (reported from a unit, 2026-11-18).
+pub(super) const MENU_ROW: i32 = 48;
+pub(super) const POPUP_ROW: i32 = MENU_ROW;
 pub(super) const POPUP_TITLE: i32 = 40;
 pub(super) const POPUP_COL_W: i32 = 244;
 /// The smallest touch target: what is drawn smaller gets a hit area of this size (`Ui::hit40`).
@@ -1089,7 +1093,7 @@ impl Ui {
             cv.hline(popup.rect.x + 5, popup.rect.right() - 6, popup.rect.y + 3 + POPUP_TITLE - 1, LINE);
             for (index, (label, action)) in popup.rows.iter().enumerate() {
                 let r = popup.row_rect(index);
-                cv.set_clip(r); cv.text_in(&self.fonts().s, Rect::new(r.x + 7, r.y, r.w - 34, r.h), 0, label, TEXT); cv.no_clip();
+                cv.set_clip(r); cv.text_in(&self.fonts().m, Rect::new(r.x + 7, r.y, r.w - 34, r.h), 0, label, TEXT); cv.no_clip();
                 let current = match action { Action::Overlay => !self.trace_stacked(), Action::Stacked => self.trace_stacked(), _ => false };
                 if current {
                     // a check at the right end marks the mode in force

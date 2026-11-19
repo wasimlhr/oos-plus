@@ -18,6 +18,11 @@ Fixed:
   table of the measurements without a word, and no row of the menu led to the other two. The page opens on the
   table that is on the screen, else on the events of a decoder or a search that is on; the row says On for any
   of the three.
+- Studio and Minimal, the height of menu rows (host-tested): a row of a list of words is 48 px (the menu of the
+  plot, the quick actions of a hold, Add, the lists of the measurement panel; View 46, so it ends over the
+  bottom bar) and a row of a settings sheet is 48 px with controls of 44. They were 40 px, which is 6 mm on
+  this screen, with no outline to aim at: the finger took the row beside it. The quick actions are in the
+  menu font.
 - Studio, the measurement panel (host-tested): the ... list of a narrow panel has the statistics and the gate with
   their choices (Statistics off, Mean + sigma, Min Max; Full record, Screen), the one in use marked, and one tap
   takes one. A tap went to the next choice and closed the list, which had to be opened again to go on. The

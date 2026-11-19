@@ -13,7 +13,8 @@ use super::*;
 
 /// Width of the docked sheet, and the row, header, tab strip and footer heights.
 pub(super) const SHEET_W: i32 = 380;
-pub(super) const SHEET_ROW: i32 = 44;
+/// (A row was 44 px with controls of 40: the controls are 44 now, a finger's width on this screen.)
+pub(super) const SHEET_ROW: i32 = 48;
 pub(super) const SHEET_MAX_ROWS: usize = 7;
 pub(super) const SHEET_MAX_TABS: usize = 4;
 /// The most options a choice shows as buttons; a longer one is a list.
@@ -754,9 +755,9 @@ impl Ui {
             let lw = self.sheet_label_w(it);
             let label = Rect::new(row.x, row.y, lw, row.h);
             let ctrl = match kind {
-                RowKind::Link => Rect::new(row.x, row.y + 2, row.w, 40),
-                RowKind::Toggle => Rect::new(row.right() - 56, row.y + 9, 52, 26),
-                _ => Rect::new(row.x + lw, row.y + 2, row.w - lw, 40),
+                RowKind::Link => Rect::new(row.x, row.y + 2, row.w, SHEET_ROW - 4),
+                RowKind::Toggle => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
+                _ => Rect::new(row.x + lw, row.y + 2, row.w - lw, SHEET_ROW - 4),
             };
             rows.push(SheetRowGeo { it, kind, row, label, ctrl });
         }
@@ -1133,7 +1134,7 @@ impl Ui {
         let w = (r.w - 2 * PAD - 8) / 2;
         let cells = (page * per..n.min((page + 1) * per)).enumerate().map(|(i, k)| {
             let (col, row) = ((i / SHEET_MAX_ROWS) as i32, (i % SHEET_MAX_ROWS) as i32);
-            (k, Rect::new(r.x + PAD + col * (w + 8), r.y + SHEET_HEAD + 6 + row * SHEET_ROW, w, 40))
+            (k, Rect::new(r.x + PAD + col * (w + 8), r.y + SHEET_HEAD + 6 + row * SHEET_ROW, w, SHEET_ROW - 4))
         }).collect();
         (cells, page, pages)
     }
