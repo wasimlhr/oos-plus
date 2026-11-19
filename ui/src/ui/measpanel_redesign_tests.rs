@@ -342,15 +342,15 @@ fn default_and_minimal_layouts_do_not_see_the_new_panel() {
 }
 
 #[test]
-fn zoom_on_with_the_panel_at_the_bottom_shows_six_rows_and_the_zoom_bar_is_a_thin_strip() {
+fn zoom_on_with_the_panel_at_the_bottom_shows_six_rows_and_the_zoom_row() {
     let mut u = studio_bottom(12);
     u.m.studio_zoom_tab = false;
     u.m.zoom = true;
     for _ in 0..8 { frame(&mut u); }
     let row = u.zoom_readout();
-    assert!(row.h <= 26, "the zoom strip is {} px", row.h);
+    assert_eq!(row.h, 32, "the zoom row has the height of the Default row");
     let bar = u.studio_zoom_bar().expect("the zoom bar");
-    for r in [bar.label, bar.tdiv, bar.plus, bar.minus, bar.close, bar.more] { assert!(r.y >= row.y && r.bottom() <= row.bottom(), "{r:?} in {row:?}"); }
+    for r in [bar.label, bar.plus, bar.minus, bar.fit, bar.close] { assert!(r.y >= row.y && r.bottom() <= row.bottom(), "{r:?} in {row:?}"); }
     assert!(full_rows(&u) >= 6, "{} rows", full_rows(&u));
     // the split stays resizable: the divider under the overview moves the zoom area
     let (hit, handle) = u.ov_divider().expect("the overview divider");
@@ -521,76 +521,6 @@ fn the_plot_context_menu_is_a_clamped_grouped_popover_with_the_lane_and_the_mode
 }
 
 #[test]
-fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
-    // title bar: no row between the overview and the zoom view, the bar is in the strip of the waveform
-    let mut u = zoomed(false);
-    let strip = Ui::dock_strip(u.dock_wave_rect());
-    let bar = u.studio_zoom_bar().expect("the bar");
-    for r in [bar.tdiv, bar.plus, bar.minus, bar.close, bar.more, bar.boxr] { assert!(r.y >= strip.y && r.bottom() <= strip.bottom(), "{r:?} in {strip:?}"); }
-    let (o, z) = u.split_zoom(u.grid);
-    assert!(z.y - o.bottom() <= 8, "no toolbar row between them");
-    shotb(&mut u, "zoom-titlebar");
-    // + zooms in
-    let z0 = u.m.zscale;
-    tap(&mut u, bar.plus);
-    assert!(u.m.zscale < z0);
-
-    // tab: closed, a small tab at the top of the zoom view; no bar
-    let mut u = zoomed(true);
-    assert!(u.m.studio_zoom_tab && u.studio_zoom_bar().is_none() && !u.zoom_tab_open());
-    let tab = u.zoom_tab_rect();
-    let (_, z) = u.split_zoom(u.grid);
-    assert!(tab.y == z.y && tab.w < 200 && tab.h <= 28);
-    shotb(&mut u, "zoom-tab-closed");
-    tap(&mut u, tab);
-    assert!(u.zoom_tab_open() && u.studio_zoom_bar().is_some());
-    let bar = u.studio_zoom_bar().unwrap();
-    let bar_rect = u.zoom_tab_bar_rect();
-    assert!(bar.close.bottom() <= bar_rect.bottom() && bar_rect.y == z.y, "it overlays the zoom view");
-    assert_eq!(u.split_zoom(u.grid).1, z, "and takes nothing from it");
-    shotb(&mut u, "zoom-tab-open");
-    // it works: + zooms in and keeps it open
-    let z0 = u.m.zscale;
-    tap(&mut u, bar.plus);
-    assert!(u.m.zscale < z0 && u.zoom_tab_open());
-    // it is used with a finger: the chips are a finger high, and it stays through a tap elsewhere and through time
-    assert!(bar.plus.h >= 40 && bar.minus.h >= 40 && bar.close.h >= 40, "{:?}", bar.plus);
-    tap_at(&mut u, 200, z.y + 80);
-    assert!(u.zoom_tab_open(), "a tap on the trace is not for the toolbar");
-    for _ in 0..30 { u.step(0.2); }
-    assert!(u.zoom_tab_open(), "it does not go away by itself");
-    // a long touch on the overview or on the toolbar opens no menu: a finger rests there while it works the zoom
-    let (overview, zoomed_view) = u.split_zoom(u.grid);
-    let bar_rect = u.zoom_tab_bar_rect();
-    for (x, y) in [(overview.x + overview.w / 3, overview.y + overview.h / 2), (bar_rect.x + bar_rect.w / 2, bar_rect.y + bar_rect.h / 2)] {
-        u.context_menu(x, y);
-        assert!(u.studio.ctx.is_none() && u.workspace.popup.is_none(), "a menu at ({x}, {y})");
-    }
-    u.context_menu(zoomed_view.x + zoomed_view.w / 3, zoomed_view.y + zoomed_view.h / 2 + 30);
-    assert!(u.studio.ctx.is_some(), "the zoom view keeps the menu of the plot");
-    u.studio.ctx = None;
-    // a tap on its label folds it to the tab again
-    let label = u.studio_zoom_bar().unwrap().label;
-    tap(&mut u, label);
-    assert!(!u.zoom_tab_open());
-    // pulled down it opens
-    let tab = u.zoom_tab_rect();
-    let (x, y) = (tab.x + tab.w / 2, tab.y + 8);
-    drag(&mut u, (x, y), (x, y + 40));
-    assert!(u.zoom_tab_open());
-    // and the label pushed up shuts it
-    let label = u.studio_zoom_bar().unwrap().label;
-    let (x, y) = (label.x + label.w / 2, label.y + label.h / 2);
-    drag(&mut u, (x, y), (x, y - 40));
-    assert!(!u.zoom_tab_open());
-    // the setting is saved
-    let mut m = Model::default();
-    m.studio_zoom_tab = false;
-    assert!(!crate::store::parse_setup(&crate::store::setup_text(&m)).unwrap().studio_zoom_tab);
-    assert!(Model::default().studio_zoom_tab, "the tab is the default");
-}
-
-#[test]
 fn a_zoom_box_can_be_armed_from_the_bar_the_menu_and_the_add_menu_and_zooms_in() {
     // from the bar (title bar variant), zoom already on: the box zooms further
     let mut u = zoomed(false);
@@ -634,21 +564,13 @@ fn a_zoom_box_can_be_armed_from_the_bar_the_menu_and_the_add_menu_and_zooms_in()
     let r = u.studio_ctx_rows().into_iter().find(|r| r.0 == super::studioctx::CtxRow::ZoomBox).unwrap().2;
     tap(&mut u, r);
     assert!(u.zoom_arm);
-
-    // and from the pull-down tab variant
-    let mut u = zoomed(true);
-    let tab = u.zoom_tab_rect();
-    tap(&mut u, tab);
-    let bar = u.studio_zoom_bar().unwrap();
-    tap(&mut u, bar.boxr);
-    assert!(u.zoom_arm);
 }
 
 #[test]
-fn the_new_presentation_state_is_per_view_and_the_zoom_controls_variant_is_global() {
+fn the_new_presentation_state_is_per_view() {
     let mut u = studio_bottom(12);
     u.views_set(2);
-    // view 1: List view, scrolled, a search, pinned only, the strip hidden, the zoom tab open
+    // view 1: List view, scrolled, a search, pinned only, the strip hidden
     u.panel_set_view(PanelView::List);
     u.studio.panel.first = 3;
     u.studio.panel.sub = 7;
@@ -657,10 +579,8 @@ fn the_new_presentation_state_is_per_view_and_the_zoom_controls_variant_is_globa
     u.studio.panel.pinned_only = true;
     u.studio.hide_badges = true;
     u.set_zoom(true);
-    u.zoom_tab_set(true);
-    u.m.studio_zoom_tab = true;
     u.sync_view_state();
-    // view 2 starts as a copy; make it differ: the table, nothing scrolled, no filter, strip shown, tab closed
+    // view 2 starts as a copy; make it differ: the table, nothing scrolled, no filter, strip shown
     u.view_go(1);
     u.panel_set_view(PanelView::Detailed);
     u.studio.panel.scroll_top();
@@ -668,20 +588,15 @@ fn the_new_presentation_state_is_per_view_and_the_zoom_controls_variant_is_globa
     u.studio.panel.searching = false;
     u.studio.panel.pinned_only = false;
     u.studio.hide_badges = false;
-    u.zoom_tab_set(false);
-    // the zoom-controls variant is a preference of the user, not of a view
-    u.m.studio_zoom_tab = false;
     u.view_go(0);
     assert_eq!(u.panel_view(), PanelView::List);
     assert_eq!((u.studio.panel.first, u.studio.panel.sub), (3, 7));
     assert_eq!(u.studio.panel.query, "freq");
-    assert!(u.studio.panel.searching && u.studio.panel.pinned_only && u.studio.hide_badges && u.zoom_tab_open());
-    assert!(!u.m.studio_zoom_tab, "the variant did not come back with the view");
+    assert!(u.studio.panel.searching && u.studio.panel.pinned_only && u.studio.hide_badges);
     u.view_go(1);
     assert_eq!(u.panel_view(), PanelView::Detailed);
     assert_eq!((u.studio.panel.first, u.studio.panel.sub), (0, 0));
-    assert!(u.studio.panel.query.is_empty() && !u.studio.panel.searching && !u.studio.panel.pinned_only && !u.studio.hide_badges && !u.zoom_tab_open());
-    assert!(!u.m.studio_zoom_tab);
+    assert!(u.studio.panel.query.is_empty() && !u.studio.panel.searching && !u.studio.panel.pinned_only && !u.studio.hide_badges);
     // Cards are per view too
     u.panel_set_view(PanelView::Cards);
     u.view_go(0);

@@ -25,9 +25,17 @@ pub(crate) const DEC_PAGE: usize = 18;
 pub(super) fn features() -> &'static [Feature] {
     static F: std::sync::OnceLock<Vec<Feature>> = std::sync::OnceLock::new();
     F.get_or_init(|| {
-        let pages = super::analysers::ANALYSERS.iter().map(|a| Feature { id: a.feature().0, name: a.feature().1, view: Some(a.view()), menu: Some(a.menu()) });
+        let pages = super::analysers::ANALYSERS.iter().map(|a| Feature {
+            id: a.feature().0,
+            name: a.feature().1,
+            view: Some(a.view()),
+            menu: Some(a.menu()),
+        });
         pages
-            .chain([Feature { id: "sim", name: "SIM", view: None, menu: Some(MenuId::Sim) }, Feature { id: "load", name: "Load file", view: None, menu: None }])
+            .chain([
+                Feature { id: "sim", name: "SIM", view: None, menu: Some(MenuId::Sim) },
+                Feature { id: "load", name: "Load file", view: None, menu: None },
+            ])
             .collect()
     })
 }
@@ -51,7 +59,7 @@ impl Ui {
     /// Whether the decoder `p` is offered.
     pub(super) fn proto_on(&self, p: Proto) -> bool {
         let k = p.key();
-        !self.sys.decoders_off.iter().any(|x| *x == k)
+        !self.sys.decoders_off.contains(&k)
     }
 
     /// A `decoders.off` that leaves out every decoder (a hand-edited system.conf) keeps the one in use, as System >
@@ -93,7 +101,12 @@ impl Ui {
 
     pub(super) fn features_items(&self, id: MenuId) -> Option<Vec<Item>> {
         match id {
-            MenuId::Features => Some((0..features().len()).map(Item::FeatOn).chain(std::iter::once(Item::Open(MenuId::Decoders(0)))).collect()),
+            MenuId::Features => Some(
+                (0..features().len())
+                    .map(Item::FeatOn)
+                    .chain(std::iter::once(Item::Open(MenuId::Decoders(0))))
+                    .collect(),
+            ),
             // a page of decoders, the next page after them (the dialog holds about twenty rows)
             MenuId::Decoders(k) => {
                 let (a, b) = (k * DEC_PAGE, ((k + 1) * DEC_PAGE).min(PROTOS.len()));
@@ -174,12 +187,11 @@ impl Ui {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wave::Source;
 
     // Break it catches: a feature left out still offered somewhere, still running, or not kept in system.conf
     #[test]
     fn what_is_left_out_is_gone_and_runs_nothing() {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         assert!(u.items(MenuId::Utility).contains(&Item::Open(MenuId::Features)));
         let has = |u: &Ui, it: Item| u.main_groups().iter().any(|g| g.1.contains(&it));
         assert!(has(&u, Item::Open(MenuId::Magnetic)) && has(&u, Item::Open(MenuId::Sim)));
@@ -206,7 +218,11 @@ mod tests {
         assert!(!u.options(Item::DecProto).contains(&Proto::UART.name().to_string()));
         // kept in the settings of the scope
         let (c, bad) = crate::sysconf::SysConf::parse(&u.sys.text());
-        assert!(bad.is_empty() && c.features_off == ["magnetic", "sim", "load"] && c.decoders_off == [Proto::UART.key()], "{:?}", c.features_off);
+        assert!(
+            bad.is_empty() && c.features_off == ["magnetic", "sim", "load"] && c.decoders_off == [Proto::UART.key()],
+            "{:?}",
+            c.features_off
+        );
         // and back
         u.select_option(Item::FeatOn(i), "On");
         assert!(u.feature_on("magnetic"));
@@ -219,7 +235,7 @@ mod tests {
         let all = PROTOS.iter().map(|p| p.key()).collect::<Vec<_>>().join(" ");
         let (c, bad) = crate::sysconf::SysConf::parse(&format!("decoders.off = {}\n", all));
         assert!(bad.is_empty());
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         u.sys.decoders_off = c.decoders_off.clone();
         u.open_menu(MenuId::Decode);
         u.adjust(Item::DecProto, 1);

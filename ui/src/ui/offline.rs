@@ -21,7 +21,6 @@ pub(super) struct LiveHold {
     delay: f32,
 }
 
-#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Ui {
     pub fn set_offline(&mut self, on: bool) {
         if on == self.offline {
@@ -206,31 +205,6 @@ impl Ui {
         }
     }
 
-    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    pub(super) fn draw_offline_card(&self, cv: &mut Canvas, r: Rect, sel: bool) {
-        let f = &self.fonts();
-        cv.round(r, 7, if sel { ACCENT } else { CARD_BORDER }, 255);
-        cv.round(r.inset(2), 5, BAR, 255);
-        let (name, sub) = self.ref_card_lines();
-        cv.set_clip(r.inset(3));
-        cv.text(&f.sb, r.x + 12, r.y + 18, &name, LABEL);
-        cv.text(Self::card_font(f, &sub, r.w - 24), r.x + 12, r.y + 48, &sub, TEXT);
-        cv.no_clip();
-    }
-
-    /// Run pill while the mode is on: play the loaded record, or hold it. It does not start the demo.
-    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    pub(super) fn toggle_offline_run(&mut self) {
-        if self.sim_play {
-            self.sim_play = false;
-            return;
-        }
-        let ready = self.refs.get(self.offline_ref).and_then(|r| r.as_ref()).is_some_and(|r| r.v.len() >= 2 && r.dt > 0.0);
-        if ready {
-            self.sim_play = true;
-        }
-    }
-
     pub(super) fn offline_kind(it: Item) -> Option<Kind> {
         match it {
             Item::Offline => Some(Kind::Choice),
@@ -293,9 +267,10 @@ mod tests {
     use super::*;
 
     fn ui() -> Ui {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         u.m.layout = crate::model::Layout::Minimal; // the Minimal cards
-        u.m.meas_full_record = false; // screen gating: these tests check the visible-window gate (the default is the whole record)
+        // screen gating: these tests check the visible-window gate (the default is the whole record)
+        u.m.meas_full_record = false;
         u
     }
 
@@ -340,7 +315,7 @@ mod tests {
 
     #[test]
     fn import_matches_play_on_the_record() {
-        let dir = std::env::temp_dir().join(format!("oos-offline-{}", std::process::id()));
+        let dir = crate::ui::testkit::Scratch::new("offline");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut live = ui();
@@ -349,7 +324,8 @@ mod tests {
         let scale = live.m.tscale;
         let dt = 5e-9;
         let n = 400;
-        let sine: Vec<f32> = (0..n).map(|k| (0.5 + (2.0 * std::f64::consts::PI * 40e6 * k as f64 * dt).sin()) as f32).collect();
+        let sine: Vec<f32> =
+            (0..n).map(|k| (0.5 + (2.0 * std::f64::consts::PI * 40e6 * k as f64 * dt).sin()) as f32).collect();
         write_csv(&dir, 1, 0.0, dt, &sine);
         live.activate(Item::RefImport);
         live.m.layout = Layout::Minimal;
@@ -358,7 +334,10 @@ mod tests {
         assert!(live.cards().0.iter().any(|card| card.w > 0));
         assert!(live.refs[0].as_ref().unwrap().on);
         live.set_look(reflook::RefLook::TakeOver);
-        assert!(live.m.ch.iter().all(|channel| !channel.on) && live.offline, "Take over explicitly enters a stored-waveform session");
+        assert!(
+            live.m.ch.iter().all(|channel| !channel.on) && live.offline,
+            "Take over explicitly enters a stored-waveform session"
+        );
 
         let mut play = ui();
         play.activate(Item::SimPlay);
@@ -399,7 +378,10 @@ mod tests {
         assert_eq!(u.ref_card_lines().0, "R1");
         let loaded = u.refs[0].as_ref().unwrap();
         assert_eq!(loaded.v.as_ref(), &sine);
-        assert!(u.m.time_per_div() > 0.0 && u.m.time_per_div() as f64 * HDIV as f64 <= n as f64 * dt * 1.01, "import fits a useful view of the record");
+        assert!(
+            u.m.time_per_div() > 0.0 && u.m.time_per_div() as f64 * HDIV as f64 <= n as f64 * dt * 1.01,
+            "import fits a useful view of the record"
+        );
         let (sr, live_mode) = u.acq_caption();
         assert!(!live_mode);
         assert!(sr.contains("200 MSa/s") || sr.contains("200.000"), "{}", sr);
@@ -425,27 +407,44 @@ mod tests {
         let mut u = ui();
         u.set_offline(true);
         u.refs[1] = Some(RefWave {
-            src: 0, color: 1, label: "previous capture".into(), t0: 0.0, dt: 1e-9,
-            v: ((0..20_000).map(|index| {
-                let amplitude = if index < 1000 { 1.0 } else { 5.0 };
-                if index % 4 < 2 { -amplitude } else { amplitude }
-            }).collect::<Vec<_>>()).into(), vpd: 1.0, offset: 0.0, on: true,
+            color: 1,
+            label: "previous capture".into(),
+            ..RefWave::test(
+                (0..20_000)
+                    .map(|index| {
+                        let amplitude = if index < 1000 { 1.0 } else { 5.0 };
+                        if index % 4 < 2 {
+                            -amplitude
+                        } else {
+                            amplitude
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+                1e-9,
+                0.0,
+            )
         });
         let mut csv = String::from("Time (s),Volts\n");
         for index in 0..100 {
             csv.push_str(&format!("{},{}\n", index as f64 * 1e-9, if index % 4 < 2 { -0.5 } else { 0.5 }));
         }
         u.load_waveform_bytes(csv.as_bytes(), "new record.csv").unwrap();
-        assert!((u.meas_at(WaveId::Ref(1), Meas::Vpp) - 2.0).abs() < 1e-6,
-            "existing refs use the imported screen gate immediately, not their full record");
+        assert!(
+            (u.meas_at(WaveId::Ref(1), Meas::Vpp) - 2.0).abs() < 1e-6,
+            "existing refs use the imported screen gate immediately, not their full record"
+        );
         assert!(u.reference_slice(1).unwrap().0.len() < 1000);
     }
 
     #[test]
     fn import_keeps_the_live_window_until_take_over() {
         let mut u = ui();
-        u.refs[1] = Some(RefWave { src: 0, color: 1, label: "existing".into(), t0: 0.0, dt: 1e-9,
-            v: (vec![0.0, 1.0, 0.0]).into(), vpd: 0.2, offset: 0.0, on: true });
+        u.refs[1] = Some(RefWave {
+            color: 1,
+            label: "existing".into(),
+            vpd: 0.2,
+            ..RefWave::test(vec![0.0, 1.0, 0.0], 1e-9, 0.0)
+        });
         let held = (u.m.tscale, u.m.tfine, u.m.delay);
         let mut csv = String::from("Time (s),Volts\n");
         for index in 0..100 {

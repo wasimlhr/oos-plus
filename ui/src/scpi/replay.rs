@@ -364,7 +364,7 @@ mod tests {
         }
         for line in [
             ":SYSTem:SET tdiv = 1e-3", ":SYST:SET tdiv = 1e-3", ":SYSTem:SETup #15hello", ":SYSTem:LOCK ON", ":SYST:LOG:INT 2",
-            ":SYSTem:AOUTput 1", ":SYSTem:PIPeline AUTO", ":CHANnel1:LABel \"/CS\"", ":CHANnel1:LABel \"Confirm\"",
+            ":SYSTem:AOUTput 1", ":CHANnel1:LABel \"/CS\"", ":CHANnel1:LABel \"Confirm\"",
             ":BUS1:LABel \"a..b\"", ":SAVE:IMAGe \"shots/a.png\"", ":SAVE:SETup", ":SAVE:SLOT 3", ":REFerence:SAVE 2",
             ":LOAD:SESSion \"bench.oss\"", ":CALibrate:DESKew 1,0", ":AUToscale", ":SINGle", ":TIMebase:SCALe 1e-3",
         ] {

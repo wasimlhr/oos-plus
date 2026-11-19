@@ -3,8 +3,8 @@
 //! Measure > Labels on trace: what a measurement measures, on the trace: level lines for levels, arrows for spans.
 
 use super::{si, Canvas, Rect, Ui, CH_COLORS, REF_COLORS};
-use crate::model::WaveId;
 use crate::gfx::Rgb;
+use crate::model::WaveId;
 use oos_dsp::measure::{Analysis, Meas};
 
 /// Labels at most, the rest stays in the measurement strip: more only hides the trace.
@@ -31,7 +31,9 @@ pub(super) enum Mark {
 
 /// First index of `v` above `after`.
 fn next_after(v: &[f64], after: f64) -> Option<f64> {
-    if after.is_nan() { return None; }
+    if after.is_nan() {
+        return None;
+    }
     v.get(v.partition_point(|&time| time <= after)).copied()
 }
 
@@ -112,7 +114,7 @@ pub(super) fn vertical_t(v: &[f32], t0: f64, dt: f64, t_lo: f64, t_hi: f64, _lo:
         }
         // sit on the high end of the span (pk-pk max / amplitude top)
         let d = (x as f64 - hi).abs();
-        if best.map_or(true, |(s, _)| d < s) {
+        if best.is_none_or(|(s, _)| d < s) {
             best = Some((d, t));
         }
     }
@@ -178,7 +180,12 @@ impl Ui {
     fn label_col(&self, id: WaveId) -> Rgb {
         match id {
             WaveId::Ch(c) => CH_COLORS[c.min(CH_COLORS.len() - 1)],
-            WaveId::Ref(i) => self.refs.get(i).and_then(|r| r.as_ref()).map(|r| REF_COLORS[r.color.min(REF_COLORS.len() - 1)].1).unwrap_or(CH_COLORS[0]),
+            WaveId::Ref(i) => self
+                .refs
+                .get(i)
+                .and_then(|r| r.as_ref())
+                .map(|r| REF_COLORS[r.color.min(REF_COLORS.len() - 1)].1)
+                .unwrap_or(CH_COLORS[0]),
         }
     }
 
@@ -261,7 +268,12 @@ impl Ui {
                         cv.line(x, y, x - 4, y + 7 * d, col);
                         cv.line(x, y, x + 4, y + 7 * d, col);
                     }
-                    pending.push((x + 8 + label_half(self, &text), (y0 + y1) / 2 + verts * (label_h(self) + 2), text.clone(), col));
+                    pending.push((
+                        x + 8 + label_half(self, &text),
+                        (y0 + y1) / 2 + verts * (label_h(self) + 2),
+                        text.clone(),
+                        col,
+                    ));
                     verts += 1;
                 }
                 Some(Mark::Area(span)) => {
@@ -290,8 +302,10 @@ impl Ui {
                     pending.push(((xa + xb) / 2, y0 - label_h(self) - 6, text.clone(), col));
                 }
                 Some(Mark::Span(t0, t1)) => {
-                    let (x0, x1) = (self.x_of_time((analysis_t0 + t0) as f32), self.x_of_time((analysis_t0 + t1) as f32));
-                    if x1 <= x0 + 1 || x1 < a.x || x0 > a.x + a.w {
+                    let (x0, x1) =
+                        (self.x_of_time((analysis_t0 + t0) as f32), self.x_of_time((analysis_t0 + t1) as f32));
+                    // a time far off the screen is the largest column there is: no sum with it
+                    if x1 <= x0.saturating_add(1) || x1 < a.x || x0 > a.x + a.w {
                         continue;
                     }
                     let mid = (ana.top + ana.base) / 2.0 + (ana.top - ana.base) * (0.22 - 0.16 * rows as f64);
@@ -329,7 +343,18 @@ mod tests {
 
     fn square() -> Analysis {
         // rises at 1, 3, 5 ms, falls at 2, 4, 6 ms, 0..1 V
-        Analysis { valid: true, vmin: -0.1, vmax: 1.1, top: 1.0, base: 0.0, rises: vec![1e-3, 3e-3, 5e-3], falls: vec![2e-3, 4e-3, 6e-3], rise_time: 1e-5, fall_time: 2e-5, ..Default::default() }
+        Analysis {
+            valid: true,
+            vmin: -0.1,
+            vmax: 1.1,
+            top: 1.0,
+            base: 0.0,
+            rises: vec![1e-3, 3e-3, 5e-3],
+            falls: vec![2e-3, 4e-3, 6e-3],
+            rise_time: 1e-5,
+            fall_time: 2e-5,
+            ..Default::default()
+        }
     }
 
     #[test]

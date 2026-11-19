@@ -37,15 +37,9 @@ use super::studio::{MeasKey, StudioView};
 use super::workspace::Trace;
 use super::*;
 use crate::store;
+use crate::store::views::KEYS;
+/// A view as kept in a setup is checked where the setup is read (store/views.rs).
 
-/// The most views.
-pub const VIEWS_MAX: usize = 4;
-/// Keys of a setup (store.rs) that belong to a view, besides the ones of the Ui (`xy`, `full`, `studio_view`,
-/// `studio_dock`, `studio_state`, `lanes`).
-const KEYS: [&str; 42] = [
-    "windows", "density", "split_pane", "ch_window", "math_window", "la_window", "ref_window", "meas", "meas2", "cat", "row_cfg", "meas_stat", "meas_full_record", "dvm", "counter", "cursor", "cur_a", "cur_b", "cur_c", "cur_d",
-    "cur_b_source", "pane", "meas_labels", "trend_sel", "strip", "studio_ov", "studio_meas_view", "studio_badges", "zoom", "zoom_tdiv", "zdelay", "hist", "view", "spec", "spec_peaks", "spec_acpr", "eye", "eye_place", "eye_more", "eye_pll", "math_hidden", "gen_hidden",
-];
 /// The strip at each edge of the plot where a horizontal swipe switches views (px).
 pub(super) const EDGE: i32 = 18;
 /// How far the swipe has to go (px).
@@ -60,21 +54,9 @@ pub(super) fn studio_box_w(views: usize) -> i32 {
     if views < 2 { 0 } else { NUM_W_STUDIO * views as i32 + 2 }
 }
 
-/// The keys of a view that are not a key of the model: they come from the Ui.
-const UI_KEYS: [&str; 7] = ["xy", "full", "studio_view", "studio_dock", "studio_state", "lanes", "math_def"];
-
-/// Whether `k` is a key of a view's model part (not `xy` and `full`).
-pub(super) fn is_view_key(k: &str) -> bool {
-    KEYS.contains(&k)
-}
-
 /// A view not set up yet: the plot alone.
 pub(super) fn plot_alone() -> String {
     snapshot_of(&Model::default(), false, false, &[])
-}
-
-fn known(k: &str) -> bool {
-    KEYS.contains(&k) || UI_KEYS.contains(&k)
 }
 
 /// `;` separates the keys of a slot, so a value that holds one (the docking text does) is written escaped.
@@ -84,17 +66,6 @@ pub(super) fn esc(v: &str) -> String {
 
 pub(super) fn unesc(v: &str) -> String {
     v.replace("%3B", ";").replace("%25", "%")
-}
-
-/// A view as kept in a setup: `key=value; key=value ...` of its keys only.
-pub fn slot_checked(v: &str) -> Result<String, String> {
-    for part in v.split(';').map(str::trim).filter(|p| !p.is_empty()) {
-        let k = part.split_once('=').map(|(k, _)| k.trim()).ok_or_else(|| format!("not key=value: {}", part))?;
-        if !known(k) {
-            return Err(format!("not part of a view: {}", k));
-        }
-    }
-    Ok(v.trim().to_string())
 }
 
 /// The value of `key` in a slot's text.
@@ -164,7 +135,6 @@ impl Ui {
         }
         if let Some((x, y)) = pa.at { p.push(format!("panelat={}/{}", x, y)); }
         if pa.first != 0 || pa.sub != 0 { p.push(format!("scroll={}/{}", pa.first, pa.sub)); }
-        if s.zoom_open.is_some() { p.push("zoomtab=1".into()); }
         if !pa.query.is_empty() { p.push(format!("query={}", pa.query.replace(' ', "_"))); }
         if let Some(f) = s.filter { p.push(format!("filter={}", f.token())); }
         if let Some(q) = &s.search { p.push(format!("search={}/{}/{}", q.src.token(), q.level, q.slope)); }
@@ -198,8 +168,6 @@ impl Ui {
         self.studio.overlay = false;
         self.studio.eye_full = false;
         self.studio.panel = Default::default();
-        self.studio.zoom_open = None;
-        self.studio.zoom_pull = None;
         self.studio.add_menu = false;
         self.studio.ctx = None;
         self.studio.filter = None;
@@ -237,7 +205,8 @@ impl Ui {
                 }
                 "panelat" => if let [x, y] = num(v)[..] { self.studio.panel.at = Some((x, y)); },
                 "scroll" => if let [first, sub] = num(v)[..] { self.studio.panel.first = first.clamp(0, 100_000) as usize; self.studio.panel.sub = sub.clamp(0, 1000); },
-                "zoomtab" => self.studio.zoom_open = (v == "1").then_some(self.now),
+                // (a view saved with the pull-down zoom toolbar open: there is none any more)
+                "zoomtab" => {}
                 "query" => { self.studio.panel.query = v.replace('_', " "); self.studio.panel.searching = !self.studio.panel.query.is_empty(); }
                 "filter" => self.studio.filter = WaveId::parse(v).ok(),
                 "search" => {
@@ -512,7 +481,8 @@ impl Ui {
     }
 
     pub(super) fn views_options(&self, it: Item) -> Option<Vec<String>> {
-        (it == Item::Views).then(|| (1..=VIEWS_MAX).map(|n| if n == 1 { "Off".to_string() } else { n.to_string() }).collect())
+        (it == Item::Views)
+            .then(|| (1..=VIEWS_MAX).map(|n| if n == 1 { "Off".to_string() } else { n.to_string() }).collect())
     }
 
     pub(super) fn views_adjust(&mut self, it: Item, d: i32) -> bool {
@@ -602,7 +572,7 @@ mod tests {
     use super::*;
 
     fn ui() -> Ui {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         u.step(1.0 / 30.0);
         u
     }

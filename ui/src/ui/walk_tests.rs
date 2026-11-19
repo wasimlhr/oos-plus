@@ -530,10 +530,6 @@ fn studio_overlay_and_stacked_switch_the_lanes() {
     u.trace_mode(true);
     for _ in 0..4 { u.step(0.04); }
     assert_eq!(u.wins.len(), 2, "Stacked: the lanes are back");
-    assert!(u.items(MenuId::Horizontal).contains(&Item::ZoomBar));
-    let tab = u.m.studio_zoom_tab;
-    u.select_option(Item::ZoomBar, if tab { "Title bar" } else { "Pull-down tab" });
-    assert_ne!(u.m.studio_zoom_tab, tab);
     // every measurement has a badge while none is pinned by hand and there is room
     assert!(u.studio.pinned.is_none());
     assert!(u.studio_badges().len() > 3, "{} badges", u.studio_badges().len());
@@ -902,47 +898,6 @@ fn fit_all_lanes_scales_every_source_to_its_lane() {
     assert!(text.contains("studio_traces = overlay"), "the setup has the trace mode");
 }
 
-/// The pull-down zoom tab by touch: a tap opens the toolbar, a pull down opens it, and zoom stays on either way.
-#[test]
-fn the_zoom_tab_opens_on_a_tap_and_on_a_pull() {
-    let studio = || {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
-        u.m.layout = Layout::Studio;
-        u.relayout();
-        for _ in 0..12 { u.step(0.04); u.render(&mut Canvas::new(1024, 600)); }
-        u.set_zoom(true);
-        for _ in 0..6 { u.step(0.04); u.render(&mut Canvas::new(1024, 600)); }
-        u
-    };
-    // a tap, at several places on the tab
-    for (dx, dy) in [(0, 10), (-50, 10), (50, 10), (0, 4), (0, 17), (0, 30)] {
-        let mut u = studio();
-        assert!(u.m.zoom && u.zoom_tab_mode(), "zoom with the pull-down tab");
-        let r = u.zoom_tab_rect();
-        let (x, y) = (r.x + r.w / 2 + dx, r.y + dy);
-        u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
-        u.step(0.04);
-        u.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
-        for _ in 0..3 { u.step(0.04); }
-        assert!(u.m.zoom, "tap at ({dx},{dy}): zoom stays on");
-        assert!(u.zoom_tab_open(), "tap at ({dx},{dy}): the toolbar opens");
-    }
-    // a pull down from the tab
-    for pull in [14, 30, 60] {
-        let mut u = studio();
-        let r = u.zoom_tab_rect();
-        let (x, y) = (r.x + r.w / 2, r.y + 10);
-        let zscale = u.m.zscale;
-        u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
-        for s in 1..=6 { u.handle(Ev::Touch { id: 0, phase: Phase::Move, x: x + 2, y: y + pull * s / 6 }); u.step(0.02); }
-        u.handle(Ev::Touch { id: 0, phase: Phase::Up, x: x + 2, y: y + pull });
-        for _ in 0..3 { u.step(0.04); }
-        assert!(u.m.zoom, "pull {pull}: zoom stays on");
-        assert!(u.zoom_tab_open(), "pull {pull}: the toolbar opens");
-        assert_eq!(u.m.zscale, zscale, "pull {pull}: the pull does not change the zoom");
-    }
-}
-
 /// One frame as the device runs it: the picture is drawn after every step.
 fn frame(u: &mut Ui) { u.step(0.033); u.render(&mut Canvas::new(1024, 600)); }
 
@@ -987,13 +942,12 @@ fn a_wandering_finger_still_taps_and_holds() {
         let r = rows.iter().find(|(k, _, _)| *k == super::studioctx::CtxRow::Overlay).unwrap().2;
         finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, wander.min(3));
         assert_eq!(u.wins.len(), 1, "wander {wander}: a tap on Overlay traces overlays");
-        // the zoom tab
+        // a button of the zoom row
         u.set_zoom(true);
         for _ in 0..6 { frame(&mut u); }
-        let t = u.zoom_tab_rect();
-        finger_tap(&mut u, t.x + t.w / 2, t.y + 10, wander);
-        assert!(u.m.zoom, "wander {wander}: a tap on the zoom tab keeps zoom on");
-        assert!(u.zoom_tab_open(), "wander {wander}: a tap on the zoom tab opens the toolbar");
+        let t = u.studio_zoom_bar().expect("the zoom row").boxr;
+        finger_tap(&mut u, t.x + t.w / 2, t.y + t.h / 2, wander);
+        assert!(u.m.zoom && u.zoom_arm, "wander {wander}: a tap on Box arms the zoom box");
     }
 }
 
@@ -1101,8 +1055,8 @@ fn meas_audit_table() {
         u.m.cat.clear();
         u.meas_src = WaveId::Ch(0);
         u.meas_src_b = WaveId::Ch(1);
-        u.cat_c = WaveId::Ch(2);
-        u.cat_d = WaveId::Ch(3);
+        u.cat.c = WaveId::Ch(2);
+        u.cat.d = WaveId::Ch(3);
         for _ in 0..6 { u.step(0.04); }
         u.catalog_add(def);
         let end = std::time::Instant::now() + std::time::Duration::from_secs(8);
@@ -1736,12 +1690,12 @@ fn remote_services_are_sheets_and_connectivity_leads_to_them() {
         let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
         for it in u.items(MenuId::Remote) { assert!(on_sheet.contains(&it), "{layout:?}: {it:?} is on the sheet"); }
         // a switch acts on one tap
-        let (kind, (x, y)) = row(&u, Item::RemTelnet);
-        assert!(kind == RowKind::Toggle && u.sys.remote_telnet);
+        let (kind, (x, y)) = row(&u, Item::RemVxi);
+        assert!(kind == RowKind::Toggle && u.sys.remote_vxi11);
         tap(&mut u, x, y);
-        assert!(!u.sys.remote_telnet, "{layout:?}: telnet off");
+        assert!(!u.sys.remote_vxi11, "{layout:?}: VXI-11 off");
         tap(&mut u, x, y);
-        assert!(u.sys.remote_telnet, "{layout:?}: and on again");
+        assert!(u.sys.remote_vxi11, "{layout:?}: and on again");
         // the addresses say whose they are
         assert_eq!(u.sheet_label(Item::RemScpiInfo), "SCPI port");
         assert_eq!(u.sheet_label(Item::NetWeb), "Web address");
@@ -2133,6 +2087,40 @@ fn a_session_saved_in_the_offline_view_comes_back_in_it() {
     held.extend_from_slice(&crate::store::session_view(1));
     assert_eq!(crate::store::parse_session(&held, NREF).unwrap().offline_ref, Some(1));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// HDMI Layout beside Studio: the monitor's pass is 1920 wide, where badges that fill two lines on the panel fill
+/// one. What that pass counts does not stay behind: the panel's badge row and its plot are the same after it, frame
+/// after frame. The count of the monitor's pass stayed, and the next step laid the panel out with one line: the
+/// plot changed its height from frame to frame and its traces were cleared each time.
+#[test]
+fn the_monitor_s_pass_leaves_the_panel_s_badge_row_and_plot_as_they_are() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = false;
+    u.m.hdmi = crate::model::HdmiMode::Layout;
+    let lines = |u: &Ui| {
+        let mut ys: Vec<i32> = u.studio_badges().iter().map(|b| b.1.y).collect();
+        ys.sort();
+        ys.dedup();
+        ys.len()
+    };
+    // measurements until the panel's row has two lines
+    for k in oos_dsp::measure::ALL {
+        if lines(&u) >= 2 { break; }
+        if !u.m.meas.iter().any(|m| m.0 == k) { u.m.meas.push((k, WaveId::Ch(0))); }
+        for _ in 0..2 { frame(&mut u); }
+    }
+    assert_eq!(lines(&u), 2, "{} measurements", u.m.meas.len());
+    let (row, plot) = (u.studio_row(), u.plot_rect());
+    let mut monitor = Canvas::new(1920, 1080);
+    for round in 0..4 {
+        u.render_view(&mut monitor);
+        assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the monitor's pass, round {round}");
+        u.step(0.033);
+        assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the step behind it, round {round}");
+        u.render(&mut Canvas::new(1024, 600));
+        assert_eq!((u.studio_row(), u.plot_rect(), lines(&u)), (row, plot, 2), "after the panel's pass, round {round}");
+    }
 }
 
 /// Studio's badge row takes a second line before a measurement goes behind "+N", in both badge styles. The row grows

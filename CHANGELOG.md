@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+The work of oos-plus since its merge of upstream 0.1.13, and since this merge on top of upstream OOS 0.1.14
+and the 17 changes of upstream after it (below).
+
+The merge of upstream 0.1.14 (host-tested; not yet run on a unit):
+
+- Install: a build of this version is a larger image. A scope with an oos-plus build from before the fix of the
+  kexec start (upstream #203, in oos-plus main since 2026-11-19) stops in a kernel panic at the trial start of
+  such an update ("unknown-block(0,0)"); nothing is written, and a mains power cycle brings the previous build back.
+  Install a build of main with that fix first, or install from a USB stick (GEL), or run
+  `oos-update install --no-kexec --execute` over SSH and then switch the scope off at the mains and on again.
+- There is no telnet any more (upstream ADR 0054): logs and the shell are reached over SSH. The setup key and the
+  `:SYSTem:REMote:SERVice:TELNet` command are gone; a `remote.telnet` line of an older system.conf is read without
+  a complaint.
+- Acquire > Draw path is gone with upstream's Standard path: Batch is the only one. `:SYSTem:PIPeline` still
+  answers `BATC` for scripts, and a setup with `draw_path` loads.
+- The Bode plot reaches its generator through the external generator page as before; upstream's own USB/LAN link
+  of the Bode page is not taken (its `bode_link` key still loads).
+- The code is laid out as upstream's: pages in one table, the UI, SCPI, the store and the model split into files
+  per part, the network services in the crates `oos-system` and `oos-remote`, the decoders in
+  `dsp/src/decode/`. The Windows desktop build stays, behind its `cfg`.
+
 Fixes from a review of 0.1.13, and the forum's report on it. All of it is tested on the host. Marked "(unit)" where
 it also ran on a DHO924S (2026-11-16).
 
@@ -152,6 +173,31 @@ Fixed:
   (host-tested).
 - Studio: Reset layout and a stored view bring a hidden badge row back; the Undo bar of the hiding stayed on the
   screen for its few seconds with nothing to undo. It goes with the row now (host-tested).
+- Studio has the zoom row and the zoom window of the Default layout (ADR 0032; walked on a DHO924S over SCPI): between
+  the overview and the zoomed lanes, the text with the time per division, the position and the vertical factor, then
+  H-, H+, V-, V+, Box, Reset and Close, and in the overview a slim frame with a handle at each end. Studio's own
+  pull-down tab ("Zoom 10x"), its toolbar, the menu Zoom & navigation and the Zoom bar row of Horizontal are gone. The
+  grip for the overview's height, the Zoom button's menu (zoom source, one lane) and the Y zoom on a lane's handle
+  stay. Center trigger is a row of the plot's menu while zoom is on (right click or a held finger), between Reset zoom
+  and Close zoom; `:TIMebase:DELay:CENTer` does the same. `:UI:MENU?` no longer has a menu named Zoom. `:UI:ELEMents?`
+  lists the buttons of the row (`ZOOM`) and, with the badges, the one button of the badge row (`BADGE`, `Meas`); a
+  hidden row has no badges on the list.
+- Studio, walked control by control (ADR 0031; 90 controls and functions over SCPI on the host and on a DHO924S, all
+  right on both, and 460 sheet rows by touch on the host):
+  - Overlay traces and Stacked traces: every source has one handle with its name at the left edge, on its own zero
+    level, in both modes. A reference had a badge in the middle of its lane in Stacked and a box over its trace in
+    Overlay, and a math channel had no handle, so with every source on one graticule nothing said where their zero
+    was. A handle at the bottom edge no longer lies under the time labels, handles on the same level stand side by
+    side, the volt labels keep clear of all of them, and a tap on the handle of a reference or of a math channel
+    opens its sheet. `:UI:ELEMents?` lists the lanes (`LANE`) and the handles (`HANDLE`).
+  - Set level here (the plot's right-click menu) puts the trigger level under the finger. It went to an end of the
+    range (-18.5 V or 21.5 V at 1 V/div) wherever the finger was: the search for the level went the wrong way.
+  - the View menu of the Studio bar and the popup of Add source are read with `:UI:MENU?` and pressed with
+    `:UI:MENU:SELect`, and `:UI:MENU:CLOSe` closes them. They opened, but a program could not see them.
+- Minimal and Studio: a sheet row has the name and, inside its tab, the place of its row in the Default menu
+  (ADR 0031). The cursor rows of Minimal, one tab there, were out of the menu's order. A test compares every row of
+  the 47 menus in both layouts; the 20 names that say whose row it is ("Turn on CH2", "Decoder D1") are listed in it
+  with their reason.
 - Studio offers what Default offers (ADR 0030; host-tested, not yet verified on hardware). The 47 menus and 508 rows
   of the Default layout were compared with the Studio sheets; the rows were there but for one, the gaps were at the
   entrances, and a test now keeps a row from going missing:
@@ -329,6 +375,17 @@ Added:
   something); what the web remote's keys and touches do is.
 - A line that starts with `#` is a comment to the SCPI interpreter and is not run, to the end of the line, so a
   file of commands with comment lines can be sent as it is.
+- Storage: a file gets the name you give it, and a load shows the files to choose from (ADR 0029; host-tested, not yet
+  run on a unit). Save session, Save waveform (CSV and binary), Save fast-frame, Save screenshot and Save setup as
+  SCPI open the keyboard with the next free name in it: OK takes it, or type another, which takes its place. A name
+  that is taken is said to be taken, and OK once more replaces the file. Load session and Load fast-frame list the
+  files of the folder, the newest first, where they took the newest one only; the list scrolls by its bar and by the
+  finger. Two new rows, Save setup to file and Load setup from file, do the same for a setup: it lies beside the
+  slots, or on the stick when Save to sends files there. Setup slot, Save setup and Recall setup are as they were and
+  do not ask, and neither do SCPI and the Quick key. The desktop build asks with the Save As and Open dialogs of
+  Windows, which choose the folder too. A waveform CSV saved under a name has its logic analyser lines in
+  `<name>-la.csv` beside it. In Minimal and Studio the Storage sheet has the pages Setup, Files and SCPI (were Save,
+  Export and SCPI).
 
 - The set-up as SCPI commands, `:SYSTem:SETup:SCPI?` (the first part of the SCPI recorder; host-tested, not yet run
   on a unit). The answer is a block of lines: `*RST`, then one command for every setting that differs from the
@@ -339,8 +396,8 @@ Added:
   that moves another setting too (a source that switches its channel on) gets a line after it that puts it right,
   and a value finer than its query writes it gets a key = value line. Reference waveforms and notes are not part of
   it. A value with a `;` in it (a floating panel of the Studio layout) cannot travel in a line: it is left out and
-  error -221 names its key. Storage > Save setup as SCPI writes the same lines to a new file
-  (`setup-NNN.scpi`, with date and time once the clock is set) where Storage saves; its message names a key that is left out.
+  error -221 names its key. Storage > Save setup as SCPI writes the same lines to a file where Storage saves
+  (`setup-NNN.scpi` is proposed, with date and time once the clock is set); its message names a key that is left out.
 
 - External generator page, Menu > Instruments > Ext generator (ADR 0028, docs/extgen.md; host-tested against a
   simulated generator, not yet verified on hardware). A generator on the USB-A port or the LAN has its model,
@@ -367,8 +424,9 @@ Added:
     had the trace and the window, and no time to read the window against;
   - the zoom toolbar of the pull-down tab is a finger high (44 px, its chips 42), and it stays open until its label
     "Zoom" is tapped or pushed up. It was 30 px with chips of 20, and it shut after four seconds and with any touch
-    beside it, so it had to be pulled down again for every step. The tab itself is larger too;
-  - a long touch on the zoom overview or on the zoom toolbar opens no menu: a finger rests there while it moves the
+    beside it, so it had to be pulled down again for every step. The tab itself is larger too (the tab and this
+    toolbar are replaced by the zoom row of the Default layout, see above; its buttons are 28 px high, as in Default);
+  - a long touch on the zoom overview or on the zoom row opens no menu: a finger rests there while it moves the
     window, and the menu of the plot opened under it. The zoom view and the lanes keep that menu;
   - the top bar says the sample rate, the memory depth and the acquisition mode, each a small label over its
     value, where it had the rate and the depth in one line.
@@ -476,6 +534,14 @@ Added:
 
 Changed:
 
+- HDMI Waveform: the monitor's picture is drawn at its own resolution (host-tested; not yet seen on a monitor). The
+  waveform area was the panel's, 1024 px wide, scaled up (to 1920 x 911 on a 1080p monitor), so its text, grid and
+  labels were blurred and blocky (the owner's 1080p monitor, 2026-11-19). It is now laid out again for the
+  monitor, up to 1920 x 1080 as in Layout: plot, lanes, decoder bands, docked views and measurement rows, Studio's
+  measurement badges included, with the glyphs the panel has, under the settings line in the top bar's place and
+  down to the lower edge. Still without the bars, menus and dialogs. The traces come from the panel's maps,
+  stretched as in Layout. The monitor's frame costs about what Layout's does (on a PC 2.1 ms against 0.6 ms for
+  the scaled copy; the panel's frame 0.7 ms).
 - Decoders: the band on the plot says what was decoded at every time base (host-tested; the UART decoder (unit),
   2026-11-19, a 9600 baud line; the other decoders not yet verified on hardware). A field too narrow for its text
   was an empty box, and one under 3 px was not drawn at all: at 50 ms/div that line showed the decoder's name and
@@ -538,6 +604,87 @@ Changed:
   in the sync and read all 17 bits on a 1 us grid from there, which a bus a few percent off its rate leaves
   before the word ends: of the 71 words of a capture whose words are 20.8 us long, 37 were misread or had a
   parity error. They are read now (2 are marked, the two the capture has a fault in), up to 5 % off the rate.
+- MIL-STD-1553 decoder: a word says what it is, and a message is a row with its columns (host-tested, and on a
+  capture of a real bus on the host; not yet verified on hardware). A command and a status word have the same
+  sync, and both read "C/S 8842". Which one a word is follows from its place in the message, by the formats of
+  the standard: a receive command, its data, the status after the response time; a transmit command, the status,
+  the data; two commands at once for a transfer between two terminals; a mode command with one data word or none;
+  no answer to a broadcast. A command reads "RT 17 R SA 02 WC 02" (a mode command "MC 18"), a status word "ST 17
+  TF" with the flags that are set, a data word its four digits; the numbers of a command are decimal, as the
+  standard writes them. A message begins with its command, and the Events pane has the columns RT, T/R, SA,
+  WC/MC, Data and Status. On the capture the 13 words that the picture of its instrument lists are told apart as
+  the instrument tells them; a word it calls "Command/Status" is a command here.
+- 1-Wire decoder: a ROM command has its name, and a transaction has its columns (host-tested, and on a capture
+  of a real bus with two devices on the host; not yet verified on hardware). "ROM 55" reads "ROM 55 Match"
+  (Read, Match, Skip, Search, Alarm search and the two overdrive commands; the commands after them are those of a
+  device family and stay numbers). The Events pane has ROM, Family, Serial, CRC and Data.
+- SIM bus presets: the lines stand above the band of the decoder (unit, before and after).
+  A line was scaled to the nearest step, which could be the smaller one: a bus of 3.3 V had 6.6 of the 8
+  divisions, ran down into the band, and its own label stood over the name of the band. A line has the first step
+  at which it fits its share, and the lowest division of the plot is left to the band. The start of a CAN-FD
+  frame reads "SOF", as that of a CAN frame does; it read "S". A preset takes the lines of the preset played
+  before it away: a bus of one line after a bus of three left two traces of the other bus on the screen (unit,
+  before and after); a reference that is no line of a preset stays.
+- USB and FlexRay: the text of a message begins with what the message is (unit, before and after for USB). Every USB
+  packet begins with its sync and every FlexRay frame with its start sequence, and a box with little room read "SYNC
+  FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR 5 ...", "IND 4 ID 02A ..."); drawn
+  as fields, and in the Fields view, it is there as before. A module says which field that is (`lead`).
+- Manchester decoder: a line that sends packets is read packet by packet (host-tested, and on a capture of a
+  real line on the host; the simulated line with its packets and their fields played on a unit; a real signal
+  is not yet verified on hardware). The decoder read a record as one stream of bits from its
+  first edge. A line that is quiet between its packets, as the capture is (13 bits every 14.5 bit times), was
+  half a bit off in every second packet, and its bits ran together into bytes that were none. A pause of more
+  than 1.5 bit times ends a packet, and where the bits lie is found anew in the next. A packet of up to 32 bits
+  that is no whole number of bytes is one field: its bits in the order sent ("0011100111101"), over 16 bits as
+  one number with their count. A record without a pause is read as before, and so is a packet of whole bytes. On
+  the capture: nine packets at the times its instrument lists, and their bits cut as that instrument has them (a
+  header of 3 bits, 6 data bits, a trailer of 2, each least significant bit first, after two sync bits) are its
+  values in the five rows its picture shows. Decode > Sync bits and Header bits (0 to 16 each, `:BUS<n>:OPTion3`
+  and `OPTion4`) cut a packet into fields: so many bits of sync, so many of header, words of Data bits, and what
+  is left as the trailer, each field with its first bit as the least significant. With both at 0, as a new
+  decoder has them, a packet is not cut. Set to 2, 3 and 6 data bits, the capture reads "SYNC 0 HDR 7 3C TRL 2",
+  "SYNC 0 HDR 6 3C TRL 2", ... as its instrument lists it. A packet is a message on the band and a row of the
+  Events pane.
+- Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3, Modbus
+  ASCII, the DS2482 bridge, JTAG, C-PHY, Quad-SPI and Parallel (a counter of three bits with its clock) have a SIM bus
+  preset now, 28 in all: every decoder has one. Six bytes at the rate of the list's usual entry for the two line
+  codes; the read request of the Modbus RTU preset as its characters; a 1-Wire reset, Skip ROM and a command through
+  the bridge's I2C commands; a TAP reset, an instruction and the 32 bits of an identification; a C-PHY lane with its
+  low-power states and a burst that carries a short packet; a flash asked for its identification and for two bytes at
+  an address. A JTAG scan with a TDO line says what came out as well as what went in, "DR 0 > 4BA00477": the preset
+  read "DR 0", the zeros shifted in, for the identification (unit, before and after).
+- C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
+  yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
+  - the levels were fixed voltages: a low-power level was one above 0.8 V, and the capture's lines swing 1.16 V
+    around 0 V, so no low-power state was found, and the noise between two lines at the same low-power level
+    counted as wire states one or two samples long, which made the symbol time come out under 2.5 samples. The
+    levels are taken from the record: a high-speed state has its three lines at three levels evenly apart, a
+    low-power state has two lines at the least at one level;
+  - the seven symbols of a word were read most significant first. On the wire the first one is the least
+    significant: the checksum of the packet header is right in 64 of the capture's 64 bursts this way, and in
+    none the other way;
+  - the sync word that stands a second time inside a burst, between the two copies of a packet header, was a code
+    error.
+  The capture reads: the low-power states around each burst ("LP-111 LP-001 LP-000"), the preamble as one field
+  ("PRE 28"), "SYNC", the words ("4000 EDCA 0E66"), and the post as one field; 64 bursts, 659 words, no error,
+  and the times of the instrument that took it to under a nanosecond. A message on the band is what the lane
+  does from one stop state to the next, and the Frame trigger takes the first sync word of a burst.
+  The packet in the words of a burst is read where the checksum of its header fits: "VC 1 DT 00 CA ED CRC 0E66"
+  for a short packet (the first burst of the capture, which its instrument lists with virtual channel 1, data
+  type 00 and the data CA ED), "VC 0 DT 11 WC 5 CRC A2D0 ... 16 2E 2F FD C7 CRC 00A9" for a long one, the second
+  header as "COPY". On the capture: 64 headers and 43 payloads, every checksum right. The Events pane has VC, DT,
+  WC, Data and CRC. The layout is the one the capture shows; the low byte of the first header word is not read.
+  Low-power data is read too: after the escape entry (from the stop state: A high, all low, C high, all low) a
+  bit is one line high and all lines low after it, the first eight are the command and the bits after them
+  bytes, the first bit sent the least significant. The capture has 64 such messages, "ESC 87 LPDT 08 0F 0F 01",
+  where its instrument lists the LPDT command 87h and the same four bytes. Bits that fill no byte and the states
+  around the data stay states.
+- I3C decoder: a common command code has its name, "CCC 90 GETSTATUS" (host-tested; not yet verified on
+  hardware). The decoder had the table of the names and the band wrote the number alone. A code the table does
+  not have keeps its number.
+- FlexRay decoder: Decode > Bit rate, 10, 5 or 2.5 Mbit/s (host-tested; not yet verified on hardware). The
+  decoder read at 10 Mbit/s alone, so a cluster at one of the two other rates of the standard gave nothing. The
+  frame CRC of either channel passes, as before (`:BUS<n>:OPTion1`).
 - LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
   capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
   rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud
@@ -549,6 +696,172 @@ Changed:
     longest time a frame may take, eight data bytes and the checksum at most;
   - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
     frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
+- SENT decoder: the slow channel, and the two values of a sensor with two channels (host-tested, and on a capture
+  of a real bus on the host; not yet verified on hardware). Two bits of the status nibble of every frame carry a
+  serial message over 16 frames (short) or 18 (enhanced): its identifier, data and CRC are listed in the frame
+  that completes it ("SID 07 SDATA 075 SCRC 01", as the capture has it and the instrument that took it reads it),
+  and the Events pane has the columns Slow ID and Slow data. Decode > Channels: One value (the data nibbles as one
+  number, as before) or 12 + 12 bit, the two values of six nibbles ("3C1 3BC"; the second is sent with its low
+  nibble first), `:BUS<n>:OPTion3`.
+- CAN and CAN-FD decoders: an error flag is listed, and a CAN-FD frame says how many bytes it has (host-tested; the
+  byte count on a capture of a real bus on the host; not yet verified on hardware). Six dominant bit times and
+  more in a row, which no frame holds, are "ERROR FRAME" where no frame is being read, a message of their own
+  with the error in the ID column of the Events pane. The length of a CAN-FD frame read "DLC C" for 24 bytes, the
+  code of the field: it reads "DLC 24".
+- Manchester decoder: Baud has Auto, the rate of the signal itself, and it is what a new decoder has (host-tested,
+  and on a capture of a real line at 125 kbit/s on the host; not yet verified on hardware). The list had no such
+  rate, and a Manchester line carries its clock. Decode > A one is: Rising (802.3), as before, or Falling
+  (Thomas), the other convention, with which the bits of the capture are those its instrument reads
+  (`:BUS<n>:OPTion2`).
+- CAN on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: a demo board at 500 kbit/s, CAN_H
+  and CAN_L on 10:1 probes that the channels read as 1:1). The decoder reads it right from CAN_H, from CAN_L and
+  from the difference of the two, each with the threshold found from the signal: 93 to 97 frames in 40 ms with
+  21 identifiers, standard and extended, data and remote frames, every CRC right and every frame acknowledged,
+  the same traffic a capture of the board has. The band and the Events pane with ID, DLC, Data and CRC work on
+  it. The trigger on an identifier is the next entry.
+- Reference > Load file and Import slot list the waveform files of a USB stick wherever they lie, three folders
+  deep (at most 40), with their path on the stick for those outside the folder `OOS`. They listed that folder
+  alone, so a file copied onto a stick could not be opened on the scope. Links on the stick are not followed.
+  There is no file manager: files cannot be moved, renamed or deleted on the scope.
+- Studio: the top bar has the links as small pills left of Add, a dot and a name each: LAN (green with an
+  address), and WLAN and USB while their stick is in, as the Default bar has its USB pill. A tap on LAN or WLAN
+  opens the Network page, which has the address; a tap on USB opens Storage. The bar had none of them, so a
+  stick that was mounted did not show. Seen on the unit with a stick in and the cable connected.
+- Studio: a reference has no box over its signal with overlaid traces either. It had a box of two rows there,
+  40 px high and as wide as its name; it has the handle every source has on its zero level, the name and the
+  scale are on its pill in the bottom bar, and the sample rate is in the note beside Fit. The other layouts keep
+  the two rows.
+- Protocol trigger on a bus that repeats its traffic, found and fixed on a unit (DHO924S, 2026-11-19: the CAN
+  bus above, 22 frames one behind the other every 9.5 ms and 5 ms of rest, trigger on an identifier, 100 kpts).
+  At 200 us/div the trigger held the frame, the end of the identifier at the trigger point. At 50 us/div and
+  5 us/div it did not, for three reasons:
+  - A frame whose field could not be moved to the trigger point was shown at the hardware point and called
+    triggered: the T stood on another frame, the identifier asked for 255 us to its left. Such a frame is none
+    of this trigger: Normal waits for one in which the field can stand at the T.
+  - The hardware fires on an edge of the line, and the frames of a batch followed each other at a fixed time. On
+    this bus the hardware point stood on the same few messages in every record: six places in 300 records, one
+    message in 100 of 100 with a holdoff of 6.1 ms, and the identifier asked for within reach of none. Each batch
+    of a protocol trigger the software decides now has a holdoff of its own, drawn up to 16 ms above the set
+    one. With it the hardware point falls all over the traffic, and the identifier stood within 70 us of it in 11
+    of 500 records.
+  - The search read the record a tenth of a screen past the hardware point, and a decoder gives nothing of a
+    frame that is cut off: an identifier at the trigger point was found only in frames that ended there, and
+    Normal still took no frame in 70 s. The search reads the length of a frame further. On the host, with the
+    traffic of every decoder and a frame start at the hardware point: the old search found none for CAN, CAN-FD
+    and FlexRay, and not all for USB, S/PDIF and DCC; the new one finds every one for every decoder, and every
+    identifier and data field tried (MLT-3 data left out: its bytes are counted from the first change of what
+    the decoder is given, so in a part of the record they can be other bytes; 7 of 40 were not found).
+  With the three, Normal at 50 us/div took a new frame in 15 of 29 seconds, the end of the identifier at the
+  trigger point in each picture looked at (before: no frame in 70 s), and at 200 us/div in 18 of 19. At 5 us/div
+  it takes none: the record there (35 kpts at 625 MSa/s, 56 us) is shorter than the frame, and the decoder gives
+  nothing of a frame that is cut off.
+- Studio with HDMI on Layout: the traces of the panel came and went (the owner's video of a unit, and 5 of 8
+  and 11 of 12 pictures of the panel without traces; none of 70 before HDMI was set to Layout). The pass that
+  draws the monitor counted the lines of the badge row for its own width and left that count behind: twelve
+  badges fill two lines on the panel and one on a monitor of 1920, so the next step laid the panel out with one
+  line, its plot changed its height from frame to frame, and its traces were cleared each time. What Studio
+  keeps of a frame (the lines of the badge row, where badges and labels were drawn for the touch) is the panel's
+  again after the monitor's pass. Reproduced and tested on the host, and on the unit (build 20261119-215725,
+  a monitor of 1920 x 1080 connected, HDMI on Layout, the panel's row with two lines): none of 48 pictures of
+  the panel without traces, with the zoom and without, with the panel's view and with view 1 on the monitor.
+- Studio, the zoom (the owner from the unit; host-tested): the grip that sets the height of the overview is a
+  slim bar on the edge it moves, in the last pixels of the overview above the zoom row. It was a chip of 44 x 24 px with three dots in the bottom of the overview, which read as one
+  more menu and stood on the time of the middle division. The area that takes the finger is the same
+  (60 x 42 px).
+- Manchester on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: the 10BASE-T output of a
+  demo board, 10 Mbit/s, about 1 V each way around 0 V). The decoder reads its packets at the rate it finds in
+  the signal: a ping of 102 bytes with the right frame check, and frames the board changes on purpose (other
+  header bytes, a check that does not fit), the same in every record. Which edge is a one depends on the wire of
+  the pair that is probed: CH1 was on the negative one, and "Falling (Thomas)" read it; the positive one on
+  CH2 (about 0.1 V each way, threshold on Auto) reads the same frames with "Rising (802.3)" at 20 us/div.
+  Two things it brought, both on the unit with build 20261119-215725: at 20 us/div the ping with its parts and
+  its check in every record read, and the frame behind it, which the record cuts off, without a check. With
+  Trigger > Bus > Error and a record of 1 Mpts, six frames of the board in each of five records: five with a
+  check that fits (the ping and four with other types) and a sixth with the ping's type and check and other
+  bytes, marked, its check at the trigger point. The Events pane lists a frame a row with its parts and bytes
+  (Messages) and a part a row (Fields).
+- Trigger > Bus > Frame has one point a frame for Manchester packets and for MIL-STD-1553. On the unit with
+  10BASE-T the start of a frame stood at the trigger point in four of five records and the end of its preamble,
+  6.4 us later, in the fifth: the preamble is a field behind the mark of the packet, and its end counted as a
+  start as well. The same for 1553, where the status word has the sync of a command (host, the demo traffic: 134
+  points for its 67 messages). Host-tested, and for 10BASE-T on the unit (build 20261119-223133): the start of
+  a frame at the trigger point in 12 of 12 records. 1553 is not connected to a unit.
+  - A packet that is an Ethernet frame shows its parts in place of its bytes: the preamble with its delimiter,
+    the destination and the source address, the type, the bytes behind it and the frame check, which is marked
+    where the CRC-32 of the frame is another. As bytes alone the board's good and changed frames looked alike;
+    Trigger > Bus > Error now finds the changed ones. A frame the record cuts off has no check. The start of
+    the frame is found as a receiver finds it, by the two ones that end the preamble, wherever they stand: the
+    first bit of a preamble was read wrong where the line leaves its rest (a first byte of 0x54 in a record of
+    the unit), and the frame behind it would have stayed bytes. Read on the host from records fetched from the
+    unit: the good frames with their parts, the changed one with its check marked.
+  - The bit clock follows the edge in the middle of every bit. It ran on from the first edge of a packet at the
+    rate set or found, and was a cell off before a long packet ended where the sender's clock was another: a
+    packet of 1500 bytes at 200 ppm from the rate set went wrong from its byte 234 (host; the frames of the
+    board, 110 bytes, were read right before the change too). A rate set 8 % off now still reads the line.
+- Protocol trigger with Memory on Auto: the record is the screen and the length of a frame on each side of it
+  (at most 1 Mpts), where it was a screen and an eighth. The trigger moves the record so that the field it found
+  stands at the trigger point, and can move it only as far as the record reaches beyond the screen: 6 us at
+  10 us/div, so on a unit the trigger on a CAN identifier took no frame in 24 s there, and at 5 us/div the record
+  began 4 us before the frame, too late to know its first edge for a start. A depth that is set stays as set, and
+  so does the record of a protocol trigger in the receiver. On the unit after it (the same bus, records of 531
+  to 563 kpts at 625 MSa/s): a new frame in 17 of 24 seconds at 5 us/div and in 19 of 24 at 10 us/div and at
+  20 us/div, the end of the identifier at the trigger point in the pictures looked at.
+- CAN and CAN-FD decoders: of a frame that the record cuts off they give what is whole, its start, its
+  identifier and the data bytes read so far, and no CRC (the owner's decision, 2026-11-19). They gave nothing of
+  such a frame, so at a time base whose record ends inside the frame the band had no field of it and the
+  protocol trigger took none (unit, CAN at 500 kbit/s, trigger on an identifier: no frame in 24 s at 10 us/div,
+  where the record of 160 us ends 88 us behind the start of a frame of 112 us). The last frame of a record now
+  shows without its CRC where the record ends in it, in the band and in the Events pane. On the unit with this
+  change alone: 13 of 24 seconds at 20 us/div where it was 6, and still none at 10 us/div and 5 us/div, which
+  the entry above is about.
+- CAN and CAN-FD decoders: the bit timing follows the edges from recessive to dominant alone, as a node's does.
+  They resynchronised on every edge, and on a line that is slow on its way back to recessive the bit behind that
+  edge was sampled in its neighbour. Found on a unit (DHO924S, 2026-11-19: CAN_H at 500 kbit/s, probed so that
+  the way back reached the threshold 1.1 us late): at 2 ms/div one frame of every cycle had a wrong CRC and one a
+  wrong identifier, at 50 us/div the frames beside the triggered one were not read. A record of it, read on the
+  host, gives no frame before the change and the right one after it. Five dominant bits behind such an edge last
+  longer than five and a half bit times and were taken for an error flag: a flag is dominant where a sixth bit
+  is sampled, too. On the unit after the change, the same line and threshold: 93 to 96 frames in 40 ms, the 21
+  identifiers of the bus, no field wrong (three records; before 85 to 92 frames, 5 to 7 fields wrong, up to 23
+  identifiers), and at 50 us/div the triggered frame whole with its neighbour.
+- Trigger > Bus > Frame for Modbus RTU and MLT-3: it never fired, since neither has a field the trigger took for
+  the start of a frame. Modbus RTU: a frame begins with its address. MLT-3: every byte, as for the UART.
+  Host-tested with their traffic, not on hardware.
+- CAN-FD decoder: a record with too few samples for the data rate still gives the frames that stay at the
+  nominal rate (unit: a bus of classic CAN frames at 500 kbit/s read with this decoder at 2 ms/div, 2.5 MSa/s,
+  gave nothing before the change and 88 frames with 21 identifiers, none wrong, after it). The decoder asked for
+  three samples a bit of the data rate before it read anything. It asks for three a bit of the nominal rate;
+  a frame that switches to a data rate the record cannot show gives its identifier and "TOO FAST" (host-tested;
+  the bus has no such frame).
+- SPI on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: data, clock and chip select of a
+  5 V bus at 200 kbit/s, one word a frame every 500 us and a frame of 16 words now and then; clock and chip select
+  on 10:1 probes that the channels read as 1:1, so 0.5 V beside the 5 V of the data). The decoder reads it right:
+  441 words in 200 ms, the 64 steps of the sine they draw and the frames of several words, none wrong, down to
+  2.5 samples a bit. Band, bit marks, Events pane, a tap on a row and the thresholds from the signals work on it.
+  Three flaws it showed are fixed, each seen on the unit before and after:
+  - Events pane: a frame of several words read "B0 ...". The MOSI column was as wide as the words of the first
+    rows, and the MISO column, which was empty, had the rest of the pane. A column that no row of the record
+    fills is left out (MISO of a bus read on one line, the slow channel of a SENT sensor without one), and the
+    columns of the data share what is left.
+  - Bus trigger: it never fired where the line the frames start on had a threshold of its own (the edge on the
+    chip select). The hardware edge on that line was at the threshold of the data line, 2.6 V on a chip select of
+    0.5 V, so Normal waited for ever and Auto showed records that were not on the word asked for. The edge is at
+    the threshold of its line: every frame holds still at once, a word that comes every 150 ms after some
+    seconds, since the word is looked for in the records the edge gives. The SPI and I2C triggers in the receiver
+    (`trig.serial_hw = on`, off by default) give each line its threshold likewise; that part is host-tested and
+    not yet verified on hardware.
+  - A record with too few samples for the clock listed words that were none: at 50 ms/div and 100 kpts,
+    125 kSa/s for a clock of 200 kHz, the frames of one word gave nothing and the frame of 16 words read
+    "05 05 05 05". Where most frames have clock edges and not one whole word, the band says "Frames shorter than
+    a word: too few samples for the clock, or Data bits" and lists nothing, and `:BUS<n>:DATA?` answers -230 with
+    that text. The same note stands for Data bits 16 on frames of 8, which was an empty band (host-tested).
+- UART on a channel of the scope, checked on a unit (DHO924S, 2026-11-19: 9600 baud, two lines of text with a
+  pause of one character in them): 236 characters in 800 ms, none wrong; the band beside the SPI band, the Events
+  pane with both decoders, the Lines view with the two lines, and the bus trigger holding a character still.
+- Studio: a narrow channel pill shows its scale whole or not at all (host-tested; the fault seen on a unit).
+  With four channels, a math trace and a decoder in the bottom bar, 100 mV read "100n": the text was cut by the
+  pixel, and half an "m" is an "n". The scale is tried as "100 mV", "100mV" and "100m"; where none of them has
+  room the pill keeps its badge alone.
 - Decoders: the Events pane has the columns of the protocol (host-tested, and on captures of real CAN and LIN
   buses on the host; not yet verified on hardware). A frame was one text ("SOF ID 101 01 03 CRC 562D ACK"). Where
   the pane lists messages, is at least 560 px wide and every decoder that is on has the same columns, a frame has
@@ -857,6 +1170,270 @@ Fixed:
   than the rail no longer crashes.
 - Tests no longer depend on the speed of the computer (wall-time limits replaced), and the SSH key tests run in a
   checkout without `local/`.
+
+### From upstream OOS after 0.1.14
+
+Not yet in an upstream release; upstream keeps such entries as files in `changelog.d/` (ADR 0065), which
+came along with this merge.
+
+Changed:
+
+- A picker longer than the screen scrolls by its bar, a finger and the knob, as the other lists do (ADR 0006): a WLAN
+  scan lists every network it found, not the 17 strongest, and the Bluetooth pickers every device, not the first 18.
+
+## 0.1.14
+
+From upstream OOS: its release 0.1.14, merged into oos-plus as it came. "The unit" in it is upstream's unit;
+none of it has run on a unit with an oos-plus build yet. Of its removals, oos-plus keeps the native Windows build
+(`build-windows.ps1`, `run-windows.ps1`, the desktop window); telnet and the frames draw path are gone here too.
+
+Released on 2026-11-19. Fixes from the review of 0.1.13 and from the forum's and the issues' reports, Bluetooth and a
+WLAN stick with its driver, mice and keyboards, a number pad for values, and the DHO802/DHO812 verified by a user's
+install. Telnet, the native Windows build and the frames draw path are gone. The code of oos-ui is split into crates and
+tables of pages and services without a change of what the scope does. All of it is tested on the host; marked "(unit)"
+where it also ran on a DHO924S. The release build itself ran on a DHO924S from its kexec start (the device tests of tier
+a0); its first start from power-on, which confirms an update, was not tried before the release.
+
+Added:
+
+- A number pad for the values of a channel's scale and offset, the time base and its position and the trigger level
+  (#22): a tap on the value opens it, a key with the unit (`mV`, `V`, `µs` ...) sets it, as `:CHANnel<n>:SCALe` and
+  the other remote commands do ([First Steps](wiki/First-Steps.md#the-keyboard)).
+- USB and Bluetooth mice and keyboards ([First Steps](wiki/First-Steps.md#mouse-and-keyboard)): the mouse is the
+  finger, with a pointer while it is in use that moves in even steps; the keys stand in for the front panel and type
+  into the on-screen keyboard. oos-ui takes them for itself, so no key reaches the console shell behind the screen
+  (unit, with a BLE keyboard and touchpad).
+- Bluetooth through a USB stick ([bluetooth.md](docs/bluetooth.md), ADR 0057): a TP-Link Archer TX10UB Nano is
+  switched out of its driver-CD mode, its Realtek 8851BU gets its firmware, and BlueZ runs on a system bus of its own;
+  pairings are kept on the data partition (unit: a BLE keyboard with touchpad paired, used, and reconnected after a
+  power cycle).
+- System > Network > Bluetooth ([bluetooth.md](docs/bluetooth.md#on-the-scope)): find, pair, connect, disconnect and
+  forget mice and keyboards; a keyboard's passkey is shown on the scope. While a Bluetooth stick is there, a `BT` box
+  in the top bar beside the WLAN box: green while a device is connected, a tap opens the page (unit).
+- WLAN on the TP-Link Archer TX10UB Nano (Realtek RTL8851BU, 2.4 and 5 GHz; [wlan.md](docs/wlan.md), ADR 0027):
+  `rtw89` of Linux 6.18.63 is built as modules beside the 6.12 kernel, and `oos-wlan` picks it by the stick's id
+  (unit: a saved WPA2 network joined on 5 GHz, DHCP, about 84 Mbit/s sent).
+- `tools/plan-matrix.sh` also covers averaging, the logic analyser, roll and scan, the generator, LA thresholds, the
+  cold-boot dry run and the PLL table of another clock.
+- `oos-fpgad made-up-cal DIR` writes a made-up calibration set: every calibration file the register sequences read,
+  with invented values that mean nothing for a scope. `tools/compare-base.sh` uses it when there are no files of a
+  unit, so CI now also compares the register values that calibration changes.
+- `tools/device-deploy.sh` checks every uploaded file with SHA-256 (unit); `device-deploy-ssh.sh` is gone.
+- `tools/check.sh` has a `sim` layer (not enforced) for the Docker and QEMU simulations.
+- `tools/device-test.py --changed BASE` runs only the device tests a change reaches (documents and CI: the six smoke
+  tests). A failed test runs again (`--retries`); one that passes then is reported as FLAKY. A failure that a known
+  run of main has too (`--known`, `--save-known`) is reported as KNOWN, except a differing register sequence and a
+  failed smoke test. Neither FLAKY nor KNOWN fails the run. The register sequences are compared section by section,
+  without the differences of the setup (among them the last empty line the unit's shell drops)
+  ([device-testing.md](docs/device-testing.md)).
+- CI: every commit of a pull request needs a Signed-off-by line (ADR 0026); CI runs `tools/check.sh` itself.
+- System > Network > Remote services > **Allowed** sets `net.allow` from the scope's screen (unit). The picker offers
+  every network the scope is on, and Other opens the keyboard. A wrong entry is refused with a message and not
+  stored. A change takes effect at once, without a restart:
+  - the firewall is reloaded;
+  - SCPI, VXI-11 and HiSLIP close the connections the new list leaves out, and the web remote checks every request;
+  - SSH starts or stops with the list.
+  The Firewall row shows the state in force (host-tested; the earlier build of the row ran on a unit).
+- System > **Start OOS again**, right under Boot mode: two taps within 5 s select OOS for the next power-on once more,
+  as `oos-boot-oos-again` does (it runs the same `oos-update arm`), and a dialog shows the result. With Boot mode
+  Persist it only says that OOS starts anyway. One-shot users no longer need a shell for this step (host-tested; not
+  yet run on a unit).
+- [docs/http.md](docs/http.md), the reference of the web remote's HTTP routes and the MCP tools `scpi` and
+  `screenshot` (issue #205): method, query, body, status codes, content type, limits and `net.allow` of each, and
+  the mark of ADR 0055 (proposed): stable, experimental or internal. The behaviour is unchanged.
+  `tools/http-coverage.py`, in the layer `ratchet` of `tools/check.sh`, fails when a route or tool has no entry or
+  mark there, or an entry names a route the code does not answer.
+
+Removed:
+
+- Telnet. The scope no longer starts a shell without password on port 23, and System > Network > Remote services has
+  no telnet switch. SSH is the only shell on the network: switch it on under Remote services, set **Allowed** to your
+  network, and log in with the password from SSH settings > Show password, then add a key with `ssh-copy-id`
+  ([Remote Control](wiki/Remote-Control.md), [docs/ssh.md](docs/ssh.md)). The serial console keeps its shell.
+  `remote.telnet` in an older `/oos/system.conf` is ignored and no longer written. `tools/device-deploy.sh` and
+  `tools/device-test.py` reach the scope over SSH only (`OOS_SHELL` is gone); a bench unit needs SSH and a key once
+  ([docs/device-testing.md](docs/device-testing.md)). ADR 0054 (host-tested; not yet run on a unit).
+- The native Windows build: `build-windows.ps1`, `run-windows.ps1` and the desktop window with its keyboard and mouse
+  shortcuts and its file dialog. On a computer OOS runs with `oos-ui --serve` and the web remote in a browser, on
+  Linux, macOS and Windows inside WSL 2 (ADR 0033). The scope is not affected.
+- The frames draw path (Standard) and its switch: Acquire > Draw path is gone, the scope always draws with Batch,
+  which puts every acquired frame into the picture and now holds the screen rate (issue #186, ADR 0059).
+  `acq.pipeline` in an older `/oos/system.conf` is ignored and no longer written, `OOS_PIPELINE` is not read, and
+  `draw_path` in an older setup is passed over. `:SYSTem:PIPeline?` answers `BATC`, `:SYSTem:PIPeline BATCh` is
+  taken and changes nothing, `FRAMes` and `STANdard` are refused with -224. The status line says `pipeline Off`
+  instead of `pipeline Frames` with a source other than the hardware, and System info no longer names the path
+  (unit: starts in Batch, `:SYSTem:PIPeline` as above, about 29 pictures a second; the Acquire menu was checked on
+  the host only).
+
+Changed:
+
+- The DHO802 and DHO812 count as verified ([models.md](docs/models.md) 2.1): a user installed OOS 0.1.13 on a DHO802
+  from the USB stick and it started, answered SCPI and the web page (issue #19). The first install from the stock
+  system now takes both models without `oos-any-model.txt`.
+- Batch draw path: at 10 us/div the screen shows about 29 pictures a second with one,
+  two or four channels, where it showed 14 to 19 (unit). The workers fold their maps once a screen on the little
+  cores, and the frame loop swaps them in. Frames that are read and not drawn now count as dropped in `:SYSTem:STAT?`.
+- System > Overclock is only in the menu with `adc.overclock = on` in `/oos/system.conf`, or while `limits.conf` already
+  sets another clock: above 1.25 GHz every step boots, but records at the full rate lose samples (unit). Every step
+  above 1.25 GHz is marked "(test)".
+- The waveform is drawn with the Batch path (the only one, see Removed): from 100 ns to 500 us/div it draws 1.2 to
+  3.4 times as many of the acquired frames, 5269 instead of 1563 a second with one channel at 100 ns/div (unit).
+- system.conf: of two lines with the same key the last one wins, and `#` starts a comment only at the start of a line
+  or after a space or tab, as `oos-conf` reads it.
+- `trig.serial_hw`, `acq.frame0`, `zone.batch` and `mask.map.*` are also taken from the image defaults
+  (/etc/oos/system.conf).
+- The computer's mDNS announcer refuses queries with forward name pointers, as the scope does.
+- `oos-fpgad`: a wrong FPGA version names the value read in `roll`, `selfcal` and `afg`; a bad number names its value.
+  The `roll [--scan]` dry run also lists the fill pulse, sweep restart and stop writes.
+- Image build: a new version in `rootfs/deps.lock` or a changed build script rebuilds wpa_supplicant, e2fsck, kexec,
+  the GPU helper and Mesa by itself. Mesa comes from archive.mesa3d.org (same SHA-256), no Ubuntu source package is
+  needed. Build images are made again when their Dockerfile changes.
+- Build: the Rust release (`rust-toolchain.toml`, 1.100.0) and the Docker base images (by digest, in
+  `tools/lib/docker.sh`) are pinned. `rustup toolchain install` in the tree installs that release, with the target for
+  the scope; CI and the image build use the same one (ADR 0045).
+- Card tools: `card-install.py`, `switch.py`, `sdcard-layout.py` and the image's `oos-oneshot` check the same stock
+  partition-table marks, now including `recovery`.
+- Docs: overclocking above 1.25 GHz loses about 5 % of the samples at the full rate (unit), so frequencies read too
+  high; 1.25 GHz stays (docs/models.md 4.1). Unit profiles for `OOS_UNIT=<name>` are described in docs/models.md 4.2;
+  `rootfs/unit/` is private and ignored by git.
+- SCPI setup and hold (`SETUP`, `HOLD`, `SETHOLD`, `FSETUP`, `FHOLD` in `:MEASure:ITEM?`) take the data first and the
+  clock second, as the tiles say (A = data, B = clock). Before, they took the clock first: a script that sends the
+  clock first gets swapped results now. These are OOS items; the stock programming guide has none.
+- A change of trigger type keeps the user's pulse width, pattern, levels and limits on the hardware, Live and Replay.
+  The demo's starting values are set on the demo only. Slope, Runt and Window keep the lower level at or below the
+  upper one; `:TRIGger:RUNT:UPPer/LOWer` refuses a threshold past the other with -224.
+- Choosing a decoder protocol on Live or a Replay keeps the sources, as on the hardware. Before, they moved to the
+  demo's channels.
+- Touch lock has one place on the screen: the Touch lock action in the start menu, next to the other front-panel
+  keys (and the TOUCH key itself). Utility > Touch, the same switch a second time, is gone.
+
+Fixed:
+
+- A remote client (SCPI on port 5555, VXI-11, HiSLIP) that reads its answers slowly or not at all no longer slows
+  the screen: answers go out as the network takes them, and the client's next command waits until its answers are
+  out. Before, such a client could hold the screen and the keys for up to 30 s per answer (#192; host tests).
+- A `cal_vertical.hex` with 64-byte records (one block group, seen on a DHO804) is read at 64 bytes a record instead
+  of stopping oos-ui at every start; a calibration file whose scale keys are out of order is not used, and the scope
+  starts uncalibrated instead of stopping (issue #37; host tests, and the usual 56-byte file still loads on a DHO924S).
+- The WLAN box of the top bar is as wide as the LAN box at every text size: at the normal size its address ran out
+  of it (#23).
+- SSC Freq Dev and SSC Modulation Rate are measured on the modulation (issue #196). The deviation was the span of
+  single cycles, mostly their timing error (about 9,400 ppm for a 5,000 ppm test clock, now about 5,500); it is now
+  the span of the rate averaged over 1/32 of the modulation period, which reads a sine 0.2 % and a triangle 3 % under
+  its span. The rate was the nearest spectral bin; it is now interpolated between bins, and with fewer than four
+  modulation periods in the record fitted with a sine (33 kHz with three periods read 29.3 kHz, now 33.0 kHz).
+- Double pulse: Ipeak and Irrm are the turn-on peak, not the end of the inductor's ramp later in the second pulse, so
+  Trr, Qrr and the diode's d/dt have values. The descriptions of Td(off), Tf and Toff name the current fall they
+  measure, not a voltage rise.
+- Measurements without an SI unit take no SI prefix: a ratio reads `0.498`, not `498 m`, a count `1`, not `1.00`, and
+  `ppm`, `rpm` and `rpm/s` are plain decimals (`1500 rpm`, not `1.50 krpm`).
+- The trigger level marker stays when the source channel is on AC coupling (#46): the scope couples ahead of
+  the ADC, so the level is a level on the AC trace as drawn. Only the demo, which triggers before it takes the mean
+  out, still hides it (on the unit: assumed, not yet checked).
+- Eye Width no longer reads short by the picture's own spread (issue #195): a crossing without jitter lights two
+  columns of the eye and read half a column of jitter, 6 % of the unit interval in a 96-column eye. That spread is
+  now taken out, so a signal without jitter reads 1 UI and one with 20 ps RJ on 1 ns reads 880 ps.
+- The PLL clock recovery of the eye in `oos-dsp` ends for every loop bandwidth (issue #194): one near the edge rate
+  drove the recovered period to zero or below, and the clock's ticks were added until memory ran out. The scope itself
+  only asks for the default bandwidth (rate / 1667), which never got there.
+- The G key lights up while the generator's output is on, and the LA key while the logic analyser is on; both stayed
+  dark before (contributed by halma1).
+- DCC decodes the signal of a live track (contributed by halma1, tested on a layout with an ESU ECoS): a phase slip no
+  longer breaks the bit stream, a 0 inside a long preamble is no longer a broken packet, and the decoders of a live
+  record read the acquisition's own samples instead of the screen's, so the 58 us halves of a DCC bit survive. A
+  decoder over a record of more than 262,144 points runs in the background and can show its result one record later.
+- Slow time bases put about every record in the picture again (issue #220): at 1 ms/div a batch holds the frame the
+  scope kept from before the arm and one more, and the first was always left out (issue #5), so only 18 of 37 records
+  a second were drawn. In a batch of up to four frames that frame is now kept when its edge is at the trigger point;
+  with other trigger types, and in longer batches, it is still left out (unit: 206 of 222 records at 1 ms/div).
+- SCPI and the web page come up when their port was still taken at the start (by the oos-ui before, ending): the
+  port is tried again every second. Before, both stayed off until the next start, while mDNS still announced them.
+- Update: an image with a larger initramfs (a 48 MB package) stopped in a kernel panic at the restart into it
+  ("unknown-block(0,0)"); a power cycle brought the previous build back, nothing was written. The restart now places
+  the new initramfs above 1 GiB through kexec-tools, also when the device tree stays the same (unit). An update to such
+  an image needs this build installed first.
+- Measure in roll and scan, and on compressed deep records: the frequency, the period and the other time values of
+  a slow signal read up to twice the true value now and then (25 Hz read as 50 Hz at 0.2 s/div). Their points are
+  min/max pairs, and on an edge each pair spans more than the hysteresis of the edge search; the time values are now
+  measured on the mean of neighbouring points. Max, Min, Pk-pk, Top and Base still come from the pairs (unit, #118).
+- Colour grade drawn by the GPU: the densest pixels (a summed count from 32768 up) were left out on a driver that
+  keeps `mediump` integers in 16 bits; the shaders now compute counts in `highp` (host, Mesa 26).
+- Bode: the generator amplitude knob reaches 10 mVpp (it stopped at 1 Vpp).
+- Measure: a burst idle, setup or hold time above 5 s (set over SCPI) steps down to 5 s instead of turning off, also
+  in a measurement's own settings.
+- Waveform import: a damaged file is refused with "truncated waveform" wherever a field lies past its end.
+- Fast-frame load (`frame-NNN.bin`): a frame whose time step or start is not a finite number, or with fewer than two
+  samples per channel, is refused, as the waveform import already refused such an `OOSW` file.
+- `oos-fpgad` without a command, or with `help`, prints its usage again (it printed nothing).
+- Tests no longer depend on the speed of the computer in the UI either (wall-time limits replaced).
+- The expand button in the plot's corner enlarges the panel also while HDMI is on Waveform or Layout. Before, it
+  only changed the density there and the panel stayed as it was (forum report). Full chosen under Density still
+  keeps the panel's bars while the external display has the waveform.
+- A typo in `net.allow` (`192.168.1.0/`, `2001:db8:::1`) made nft refuse the whole firewall, and the scope came up
+  without one while telnet listened. Such entries are left out and logged; a ruleset nft refuses anyway closes the
+  scope to everything but loopback.
+- STOP (unit): the stopped record is no longer counted twice in the statistics, trend and catalog, and a change of view while
+  stopped adds nothing. Clear while stopped keeps the hardware stopped (it went on acquiring and overwrote the stored
+  record). RUN after STOP starts with a frame from after the RUN press.
+- Deep records read as min/max pairs: Mean, RMS, Std dev and AC RMS statistics no longer count pair values while the
+  reading is empty; with the LA on or three channels the measurements no longer stand still waiting for a raw read
+  the hardware never makes; after a Clear a held deep measurement no longer shows the cleared record.
+- The acquisition thread no longer holds the shared state while it decodes a raw window (up to ~24 MB), and the
+  newest frame of a batch gets the ADC-core correction like every other record.
+- Leaving a reference, Take over, Offline or SIM session brings back the live set-up from before it, whichever way it
+  is left (Live, Record = With live, a channel key, a channel as trigger source, Sources). A set-up recalled during a
+  session ends it and stays. Leaving the Bus trigger after a recall keeps the recalled decoder on. In Live, switching
+  a channel on from Sources leaves the trigger and Run/Stop alone.
+- Issue #5, stray traces (unit): frame 0 of a batch is left out in Batch draw mode too. Frame 1 is the first
+  trigger after the arm, and now and then it holds a piece of older memory. With an edge trigger it is left out
+  when its edge is not at the trigger point. SINGLE returned no frame from before the arm in 40 tries.
+- `:REF:LOAD "/proc/kmsg"` froze the screen for good (unit). Files under /proc, /sys and /dev are refused now. So is
+  any file larger than the 128 MiB import limit, before it is read.
+- Waveform import (unit for the first two):
+  - A CSV with more columns than reference slots is refused while it is read. It used to take gigabytes first.
+  - An upload over the web page is parsed beside the frame loop: 32 MB took 6 s, and SCPI answered within 43 ms
+    meanwhile.
+  - A frame file (`frame-NNN.bin`) whose counts do not fit its size no longer crashes oos-ui.
+- Web remote: `/update` and `/mcp` from outside `net.allow` are refused at the request head, before the body is read.
+  Only one large body is read at a time.
+- HiSLIP (desktop): a tiny maximum message size no longer splits a reply into one message per byte.
+- The zoom window no longer overflows at extreme delays.
+- The console banner and the Network page said SSH takes a provisioned key only. It takes the password or a key.
+- With hardware segments recording, the DVM, the levels and the ADC core trim wait for the recording to end.
+- STOP on a deep record (e.g. 10 M at 1 ms/div): the views read again as min/max pairs are drawn, while Mean, RMS,
+  Std dev and the other readouts stay measured on the raw record of the STOP. Before, they turned to "----".
+- Reference > Clear also removes the readouts of the cleared slots. Before, an import's Vpp, Freq, RMS and Rise rows
+  stayed empty (unit).
+- A `system.conf` that leaves out every decoder no longer crashes Decode > Protocol.
+- Measurements: line and switching ripple without the rail's DC level on records of partial cycles; double pulse
+  I_L, td_on, tr, td_off, tf, di/dt, Ipeak - I_L and Qoss with a ramping load current; high time, low time and time
+  outside without noise from slow edges; Ones counts bits, not samples; setup/hold violations judged per clock edge,
+  and the Setup + Hold tile says it counts violations; Eye Width@BER in seconds; Hall shaft speed and angle
+  mechanical (divided by the pole pairs) and no longer stuck after a fault code at the record start.
+- Decoders: MLT-3 decodes every change between its three levels (half of the ones were lost).
+- Phase noise and switching dV/dt, dI/dt no longer take quadratic time on long records; a power-rail clock longer
+  than the rail no longer crashes.
+- Tests no longer depend on the speed of the computer (wall-time limits replaced), and the SSH key tests run in a
+  checkout without `local/`.
+- The power-on picture (`/etc/oos/splash.ppm`): one whose header ends inside a comment no longer ends oos-ui at the
+  start; it is left out like any picture oos-ui cannot read.
+- The power-on picture: one that claims a size of 2^31 bytes of pixels or more (65536 x 65536) no longer ends
+  oos-ui; it is refused unless the file holds all its pixels.
+- Bode with a generator on the USB port: a device that answers with transfers of no data and never ends the answer
+  no longer holds the generator's thread for ever. After 16 such transfers the read fails, and the Bode page says
+  that `*IDN?` failed.
+- Waveform import: a CSV whose time column gives an infinite time step or start (`inf` as a time) is refused, as an
+  `OOSW` file with such a time base is. It became a reference with an infinite time step.
+- Mask test: a mask file whose tolerance `x` or `y` is `inf` or `NaN` is refused with "Load failed"; such a
+  tolerance became the mask's margin.
+- Setup recall: a `bode_sweep` line that is refused (a sweep time of 0 or `inf`, or a later value that is wrong) no
+  longer leaves its first values in the Bode settings; the line changes nothing.
+- Decoders: Quad-SPI no longer ends oos-ui on a CS# frame that ends where it starts (both edges between the same two
+  samples) with a clock edge at that instant; such a frame holds no data.
+- Update: an image whose device tree nests deeper than 64 levels is refused with a message; oos-update ended on
+  one (from about 30 000 levels the stack overflowed).
+- Update: an image whose device tree section (RSCE) names a table longer than the section is refused; one with
+  entries of no length was read up to 2^32 times before the install went on.
 
 ## 0.1.13
 

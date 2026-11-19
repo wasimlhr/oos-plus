@@ -245,7 +245,8 @@ fn missing_glyphs() -> Vec<(char, String)> {
     while let Some(dir) = stack.pop() {
         for e in std::fs::read_dir(&dir).unwrap().flatten() {
             let p = e.path();
-            if p.is_dir() { stack.push(p); continue; }
+            // (the hostile inputs are tests: they are not drawn)
+            if p.is_dir() { if !p.ends_with("hostile") { stack.push(p); } continue; }
             let name = p.file_name().unwrap().to_string_lossy().to_string();
             if !name.ends_with(".rs") || name.contains("test") || name == "font.rs" || name == "desktop.rs" || name == "json.rs" { continue; }
             let text = std::fs::read_to_string(&p).unwrap_or_default();
@@ -411,12 +412,14 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
     for _ in 0..4 { frame(&mut u); }
     let bar = u.studio_zoom_bar().expect("the zoom bar");
     let (hit, handle) = u.ov_divider().unwrap();
-    for r in [bar.plus, bar.minus, bar.vplus, bar.vminus, bar.center, bar.fit, bar.more, bar.close, bar.tdiv] {
+    for r in [bar.plus, bar.minus, bar.vplus, bar.vminus, bar.boxr, bar.fit, bar.close] {
         if r.w == 0 { continue; }
         let over = hit.x < r.right() && r.x < hit.right() && hit.y < r.bottom() && r.y < hit.bottom();
         assert!(!over, "the grip {hit:?} sits on {r:?}");
     }
-    assert!(handle.w >= 40 && hit.h >= 40);
+    // the finger's area stays; the grip that is drawn is a slim bar inside it, on the edge it moves
+    assert!(hit.w >= 40 && hit.h >= 40, "{hit:?}");
+    assert!(handle.h <= 6 && handle.w <= hit.w && handle.y >= hit.y && handle.bottom() <= hit.bottom() + 6, "{handle:?} in {hit:?}");
     // a trigger level as high as the corner buttons
     u.set_zoom(false);
     frame(&mut u);

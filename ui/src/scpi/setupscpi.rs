@@ -45,7 +45,6 @@ pub(crate) const ROWS: &[(&str, &[&str])] = &[
     ("avg_hw", &[":ACQuire:AVERages:HARDware"]),
     ("seg_hw", &[":ACQuire:SEGMents:HARDware"]),
     ("seg_interval", &[":ACQuire:SEGMents:INTerval"]),
-    ("draw_path", &[":SYSTem:PIPeline"]),
     // ---- trigger
     ("trig_type", &[":TRIGger:MODE"]),
     ("trig_src", &[":TRIGger:EDGE:SOURce"]),
@@ -318,7 +317,7 @@ mod tests {
         ("ch<n>.coupling", "Ac"), ("ch<n>.coupling", "Gnd"), ("h_expand", "Left"), ("h_expand", "Trigger"), ("acq", "Peak"), ("acq", "Average"), ("acq", "HiRes"),
         ("trig_type", "Pulse"), ("slope", "Fall"), ("slope", "Either"), ("trig_slope2", "Fall"), ("trig_mode", "Normal"), ("trig_pol", "Neg"),
         ("trig_when", "Gt"), ("trig_when", "In"), ("video_std", "Ntsc"), ("video_sync", "Line"), ("video_sync", "Odd"), ("pat", "L X X H"), ("pat", "H X R H"),
-        ("win_mode", "Exit"), ("win_mode", "Inside"), ("cursor", "Time"), ("aux_out", "Off"), ("aux_out", "PassFail"), ("draw_path", "batch"),
+        ("win_mode", "Exit"), ("win_mode", "Inside"), ("cursor", "Time"), ("aux_out", "Off"), ("aux_out", "PassFail"),
         ("hdmi", "Mirror"), ("view", "Spectrum"), ("view", "Eye"), ("layout", "studio"), ("layout", "default"), ("ch<n>.unit", "A"), ("ch<n>.bias", "0.5"),
         ("ch<n>.vfine", "0.8"), ("tfine", "0.8"), ("gen_hidden", "true"), ("eye_pll", "100000"), ("ch<n>.bw", "20 MHz"),
         ("trig_coup", "Ac"), ("trig_coup", "LfReject"), ("hist", "Vertical"), ("hist", "Horizontal"), ("eye_place", "Side"), ("eye_place", "Under"),
@@ -525,8 +524,8 @@ mod tests {
         assert_eq!(got, want);
     }
 
-    /// Storage > Save setup as SCPI writes the lines of the query into a new file where Storage saves, at the next
-    /// poll of the interpreter, and leaves the client's error queue alone.
+    /// Storage > Save setup as SCPI asks for the name of the file (ADR 0029) and writes the lines of the query into
+    /// it where Storage saves, at the next poll of the interpreter, and leaves the client's error queue alone.
     #[test]
     fn the_storage_row_writes_the_lines_of_the_query_to_a_file() {
         let (mut s, mut ui, cv) = session();
@@ -541,6 +540,9 @@ mod tests {
         crate::store::set(&mut ui.m, "studio_dock", "tree;f@1:2:300:200").unwrap();
         ui.script_menu("Storage").unwrap();
         ui.script_do("Save setup as SCPI").unwrap();
+        s.poll(&mut ui, &cv);
+        assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "nothing is written before the name is given");
+        ui.script_ok().unwrap();
         assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "the file is written by the interpreter's poll");
         s.poll(&mut ui, &cv);
         let files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
@@ -549,8 +551,9 @@ mod tests {
         assert_eq!(s.queued_errors(), queued, "the queue is the client's: the row adds nothing and takes nothing");
         let message = ui.toast_text();
         assert!(message.starts_with("Saved setup") && message.ends_with("without studio_dock"), "{message}");
-        // a second press is a second file
+        // a second press proposes the next name: a second file
         ui.script_do("Save setup as SCPI").unwrap();
+        ui.script_ok().unwrap();
         s.poll(&mut ui, &cv);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
         let _ = std::fs::remove_dir_all(&dir);

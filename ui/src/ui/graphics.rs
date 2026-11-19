@@ -55,9 +55,11 @@ mod tests {
 
     #[test]
     fn the_choice_is_a_setting_of_the_scope() {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         assert!(u.sys.gpu, "the GPU by default");
-        assert!(u.items(MenuId::Utility).contains(&Item::Graphics) && !u.items(MenuId::Display).contains(&Item::Graphics));
+        assert!(
+            u.items(MenuId::Utility).contains(&Item::Graphics) && !u.items(MenuId::Display).contains(&Item::Graphics)
+        );
         u.select_option(Item::Graphics, "CPU");
         assert!(!u.sys.gpu && u.value(Item::Graphics) == "CPU");
         assert!(!crate::sysconf::SysConf::parse(&u.sys.text()).0.gpu);
@@ -70,7 +72,7 @@ mod tests {
 
     #[test]
     fn graphics_and_monitor_over_scpi() {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         u.sys_path = None;
         let cv = Canvas::new(PANEL_W, PANEL_H);
         let mut scpi = crate::scpi::Scpi::open(0);

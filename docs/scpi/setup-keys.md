@@ -105,7 +105,6 @@ Commands: [acquire.md](acquire.md).
 | `cores` | the offsets of the interleaved ADC cores taken off in software | `true` | `:ACQuire:CORes` |
 | `avg_hw` | Average mode in the FPGA where the board can (not verified on a unit) | `false` | `:ACQuire:AVERages:HARDware` |
 | `seg_hw`, `seg_interval` | segments recorded by the FPGA (not verified on a unit); wait after each segment, s | `false`, `0` | `:ACQuire:SEGMents:HARDware`, `:ACQuire:SEGMents:INTerval` |
-| `draw_path` | Acquire > Draw path: `standard` or `batch` | `standard` | `:SYSTem:PIPeline` |
 
 ## Calibration and deskew
 

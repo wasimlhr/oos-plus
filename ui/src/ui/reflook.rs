@@ -143,9 +143,7 @@ impl Ui {
 
     /// Visible references, in slot order.
     pub(super) fn wave_slots(&self) -> Vec<usize> {
-        (0..NREF)
-            .filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on && r.v.len() >= 2 && r.dt > 0.0))
-            .collect()
+        (0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on && r.v.len() >= 2 && r.dt > 0.0)).collect()
     }
 
     /// One added measurement, with shared cached analysis for untouched settings.
@@ -178,27 +176,33 @@ impl Ui {
     /// Measurement table of the set: each added kind across the visible references.
     pub(super) fn set_table(&self) -> (Vec<usize>, Vec<(Meas, Vec<f64>)>) {
         let slots = self.wave_slots();
-        let rows = self.set_kinds().into_iter().map(|k| {
-            let vals = slots.iter().map(|&s| self.set_cell(k, s)).collect();
-            (k, vals)
-        }).collect();
+        let rows = self
+            .set_kinds()
+            .into_iter()
+            .map(|k| {
+                let vals = slots.iter().map(|&s| self.set_cell(k, s)).collect();
+                (k, vals)
+            })
+            .collect();
         (slots, rows)
     }
 
     /// Min, max and mean of each measurement across the set.
     pub(super) fn set_summary(&self) -> Vec<(Meas, f64, f64, f64)> {
         let (_, rows) = self.set_table();
-        rows.into_iter().map(|(k, vals)| {
-            let finite: Vec<f64> = vals.into_iter().filter(|v| v.is_finite()).collect();
-            if finite.is_empty() {
-                (k, f64::NAN, f64::NAN, f64::NAN)
-            } else {
-                let min = finite.iter().copied().fold(f64::INFINITY, f64::min);
-                let max = finite.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-                let mean = finite.iter().sum::<f64>() / finite.len() as f64;
-                (k, min, max, mean)
-            }
-        }).collect()
+        rows.into_iter()
+            .map(|(k, vals)| {
+                let finite: Vec<f64> = vals.into_iter().filter(|v| v.is_finite()).collect();
+                if finite.is_empty() {
+                    (k, f64::NAN, f64::NAN, f64::NAN)
+                } else {
+                    let min = finite.iter().copied().fold(f64::INFINITY, f64::min);
+                    let max = finite.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    let mean = finite.iter().sum::<f64>() / finite.len() as f64;
+                    (k, min, max, mean)
+                }
+            })
+            .collect()
     }
 
     /// Voltage histogram of the references on screen, 24 bins from the combined range.
@@ -242,7 +246,13 @@ impl Ui {
         let mut y = r.y + 16;
         cv.text(&f.sb, r.x + 8, y, "Offline waveforms", TEXT);
         let state = if self.m.run == RunState::Run { "Playing" } else { "Stopped" };
-        cv.text(&f.s, r.x + r.w - 8 - f.s.width(state), y, state, if self.m.run == RunState::Run { GREEN } else { DIM });
+        cv.text(
+            &f.s,
+            r.x + r.w - 8 - f.s.width(state),
+            y,
+            state,
+            if self.m.run == RunState::Run { GREEN } else { DIM },
+        );
         y += 8;
         let (slots, table) = self.set_table();
         y = self.draw_set_table(cv, r, y, &slots, &table);
@@ -296,7 +306,13 @@ impl Ui {
         }
         for (k, min, max, mean) in rows.into_iter().take(4) {
             let line = if min.is_finite() {
-                format!("{}  {} .. {}   mean {}", k.name(), si_digits(min, k.unit(), 2), si_digits(max, k.unit(), 2), si_digits(mean, k.unit(), 2))
+                format!(
+                    "{}  {} .. {}   mean {}",
+                    k.name(),
+                    si_digits(min, k.unit(), 2),
+                    si_digits(max, k.unit(), 2),
+                    si_digits(mean, k.unit(), 2)
+                )
             } else {
                 format!("{}  ----", k.name())
             };
@@ -367,11 +383,16 @@ impl Ui {
         let Some(r) = self.waves_board_rect() else { return Vec::new() };
         let kinds = self.set_kinds();
         let y0 = r.y + 16 + 8 + 16 + 4 + 16;
-        kinds.into_iter().take(6).enumerate().filter_map(|(row, k)| {
-            let index = self.m.meas.iter().position(|e| e.0 == k)?;
-            let y = y0 + row as i32 * 15;
-            Some((index, Rect::new(r.x + 6, y, r.w - 12, 15)))
-        }).collect()
+        kinds
+            .into_iter()
+            .take(6)
+            .enumerate()
+            .filter_map(|(row, k)| {
+                let index = self.m.meas.iter().position(|e| e.0 == k)?;
+                let y = y0 + row as i32 * 15;
+                Some((index, Rect::new(r.x + 6, y, r.w - 12, 15)))
+            })
+            .collect()
     }
 
     pub(super) fn waves_board_tap(&mut self, x: i32, y: i32) -> bool {
@@ -412,15 +433,20 @@ impl Ui {
         }
     }
 
-
-    pub(super) fn meas_edge_coverage_caption(&self,id:WaveId,kind:Meas)->String {
-        let Some((analysis,_))=self.meas_number_analysis(id,kind) else {
-            return if self.meas_number_computing(id,kind){"Computing"}else{"Not retained"}.into();
+    pub(super) fn meas_edge_coverage_caption(&self, id: WaveId, kind: Meas) -> String {
+        let Some((analysis, _)) = self.meas_number_analysis(id, kind) else {
+            return if self.meas_number_computing(id, kind) { "Computing" } else { "Not retained" }.into();
         };
-        let (used,total)=if kind==Meas::Rise {(analysis.rise_count,analysis.rises.len())}
-            else {(analysis.fall_count,analysis.falls.len())};
-        if used==0 {format!("0 / {total}; unavailable")}
-        else {format!("{used} / {total} qualified")}
+        let (used, total) = if kind == Meas::Rise {
+            (analysis.rise_count, analysis.rises.len())
+        } else {
+            (analysis.fall_count, analysis.falls.len())
+        };
+        if used == 0 {
+            format!("0 / {total}; unavailable")
+        } else {
+            format!("{used} / {total} qualified")
+        }
     }
 
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
@@ -444,7 +470,7 @@ mod tests {
     use super::*;
 
     fn ui() -> Ui {
-        Ui::new(Source::Demo { t: 0.0 })
+        crate::ui::testkit::demo_ui()
     }
 
     fn square(amp: f32) -> Vec<f32> {
@@ -454,7 +480,9 @@ mod tests {
     #[test]
     fn plot_sampling_is_bounded_even_when_most_native_samples_are_not_finite() {
         let mut values = vec![f32::NAN; 1_000_003];
-        for value in values.iter_mut().step_by(1000) { *value = 1.0; }
+        for value in values.iter_mut().step_by(1000) {
+            *value = 1.0;
+        }
         let sampled = plot_samples(&values);
         assert!(sampled.len() <= 200);
         assert_eq!(sampled.first(), Some(&1.0));
@@ -471,12 +499,17 @@ mod tests {
     }
 
     fn put(u: &mut Ui, slot: usize, v: Vec<f32>, on: bool) {
-        u.refs[slot] = Some(RefWave { src: 0, color: slot % REF_COLORS.len(), label: format!("R{}", slot + 1), t0: 0.0, dt: 1e-9, v: v.into(), vpd: 1.0, offset: 0.0, on });
+        u.refs[slot] = Some(RefWave {
+            color: slot % REF_COLORS.len(),
+            label: format!("R{}", slot + 1),
+            on,
+            ..RefWave::test(v, 1e-9, 0.0)
+        });
     }
 
     #[test]
     fn take_over_fills_the_screen_with_the_loaded_reference() {
-        let dir = std::env::temp_dir().join(format!("oos-takeover-{}", std::process::id()));
+        let dir = crate::ui::testkit::Scratch::new("takeover");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut u = ui();
@@ -530,7 +563,10 @@ mod tests {
         let (_, vals) = table.iter().find(|(k, _)| *k == Meas::Vpp).unwrap();
         assert!((vals[0] - 2.0).abs() < 0.05 && (vals[1] - 6.0).abs() < 0.05, "{vals:?}");
         let (_, min, max, mean) = u.set_summary().into_iter().find(|(k, ..)| *k == Meas::Vpp).unwrap();
-        assert!((min - 2.0).abs() < 0.05 && (max - 6.0).abs() < 0.05 && (mean - 4.0).abs() < 0.05, "{min} {max} {mean}");
+        assert!(
+            (min - 2.0).abs() < 0.05 && (max - 6.0).abs() < 0.05 && (mean - 4.0).abs() < 0.05,
+            "{min} {max} {mean}"
+        );
         assert_eq!(u.wave_slots().len(), 2);
         assert!(u.set_histogram().iter().any(|&b| b > 0));
         let mut canvas = Canvas::new(W, H);
@@ -582,7 +618,7 @@ mod tests {
                     break;
                 }
             }
-            let next = u.cat_scroll + 80;
+            let next = u.cat.scroll + 80;
             u.scroll_to(super::scroll::List::Catalog, next);
         }
         assert_eq!(u.menu, MenuId::MeasRow, "Burst has a settings card");
@@ -627,5 +663,4 @@ mod tests {
             assert!(u.fonts().s.width(&u.measrow_text(Item::RowF(measrow::RF::Used)).unwrap()) <= sheet::SHEET_W - 24);
         }
     }
-
 }

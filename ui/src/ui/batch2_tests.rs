@@ -3,16 +3,20 @@
 use super::*;
 
 fn fresh(layout: Layout) -> Ui {
-    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    let mut u = super::testkit::demo_ui();
     u.m.layout = layout;
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     u
 }
 
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         std::fs::write(std::path::Path::new(&dir).join(format!("{name}.png")), crate::store::png_of(&cv)).unwrap();
@@ -20,12 +24,22 @@ fn shot(u: &mut Ui, name: &str) {
 }
 
 fn sine_ref(i: usize, n: usize, dt: f64) -> RefWave {
-    RefWave { src: 0, color: i, label: format!("R{}", i + 1), t0: 0.0, dt,
-        v: (0..n).map(|k| (k as f64 * dt * 5e3 * std::f64::consts::TAU).sin() as f32).collect::<Vec<_>>().into(), vpd: 0.5, offset: 0.0, on: true }
+    RefWave {
+        color: i,
+        label: format!("R{}", i + 1),
+        vpd: 0.5,
+        ..RefWave::test(
+            (0..n).map(|k| (k as f64 * dt * 5e3 * std::f64::consts::TAU).sin() as f32).collect::<Vec<_>>(),
+            dt,
+            0.0,
+        )
+    }
 }
 
 fn only_ch1(u: &mut Ui) {
-    for c in 1..NCH { u.m.ch[c].on = false; }
+    for c in 1..NCH {
+        u.m.ch[c].on = false;
+    }
     u.m.ch[0].on = true;
 }
 
@@ -34,7 +48,8 @@ fn trigger_type_change_touches_only_the_trigger() {
     for t in TRIG_TYPES {
         let mut u = fresh(Layout::Minimal);
         only_ch1(&mut u);
-        let (on, dec_on, proto, vscale1) = (std::array::from_fn::<bool, NCH, _>(|i| u.m.ch[i].on), u.m.dec_on, u.m.dec_proto, u.m.ch[1].vscale);
+        let (on, dec_on, proto, vscale1) =
+            (std::array::from_fn::<bool, NCH, _>(|i| u.m.ch[i].on), u.m.dec_on, u.m.dec_proto, u.m.ch[1].vscale);
         let off = u.m.ch[1].offset;
         let src = u.m.trig_src;
         u.trigger_type_set(t);
@@ -42,14 +57,19 @@ fn trigger_type_change_touches_only_the_trigger() {
         assert_eq!(u.m.dec_on, dec_on, "{t:?} must not create a decode");
         assert_eq!(u.m.dec_proto, proto);
         assert_eq!((u.m.ch[1].vscale, u.m.ch[1].offset), (vscale1, off), "{t:?} must not rescale a channel");
-        if !matches!(t, TrigType::Bus) { assert_eq!(u.m.trig_src, src, "{t:?} keeps the source"); }
+        if !matches!(t, TrigType::Bus) {
+            assert_eq!(u.m.trig_src, src, "{t:?} keeps the source");
+        }
     }
 }
 
 #[test]
 fn trigger_second_source_stays_on_an_enabled_channel() {
     let mut u = fresh(Layout::Minimal);
-    u.m.ch[0].on = true; u.m.ch[1].on = true; u.m.ch[2].on = false; u.m.ch[3].on = false;
+    u.m.ch[0].on = true;
+    u.m.ch[1].on = true;
+    u.m.ch[2].on = false;
+    u.m.ch[3].on = false;
     u.trigger_type_set(TrigType::SetupHold);
     assert!(u.m.ch[u.m.trig_src].on && u.m.ch[u.m.trig_src2].on);
     assert_ne!(u.m.trig_src, u.m.trig_src2);
@@ -97,7 +117,8 @@ fn sim_keeps_a_loaded_ref_and_every_channel() {
     let mut u = fresh(Layout::Default);
     u.refs[0] = Some(sine_ref(0, 2000, 1e-6));
     u.refs[0].as_mut().unwrap().label = "mine.csv".into();
-    u.m.ch[0].on = true; u.m.ch[1].on = true;
+    u.m.ch[0].on = true;
+    u.m.ch[1].on = true;
     u.m.sim_slot = 0;
     u.sim_play_set(true).unwrap();
     u.wait_sim_generation();
@@ -112,7 +133,10 @@ fn sim_keeps_a_loaded_ref_and_every_channel() {
 #[test]
 fn sim_with_every_slot_full_says_which_ref_it_replaced() {
     let mut u = fresh(Layout::Default);
-    for i in 0..NREF { u.refs[i] = Some(sine_ref(i, 200, 1e-6)); u.refs[i].as_mut().unwrap().label = format!("file{i}.csv"); }
+    for i in 0..NREF {
+        u.refs[i] = Some(sine_ref(i, 200, 1e-6));
+        u.refs[i].as_mut().unwrap().label = format!("file{i}.csv");
+    }
     u.m.sim_slot = 0;
     u.sim_play_set(true).unwrap();
     u.wait_sim_generation();
@@ -141,7 +165,9 @@ fn math_with_a_ref_source_fits_its_scale() {
     u.m.math = MathOp::Sub;
     u.m.math_a = 0;
     u.m.math_b = MATH_REF_BASE;
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     let scale = math_scales()[u.m.math_scale];
     assert!(scale >= 0.1, "CH1 - R1 spans volts, scale {scale}");
     let w = u.math_wave();
@@ -157,27 +183,49 @@ fn math_scale_set_by_the_user_is_not_refitted_and_a_flat_result_keeps_a_sane_sca
     u.m.math = MathOp::Sub;
     u.m.math_a = MATH_REF_BASE;
     u.m.math_b = MATH_REF_BASE;
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     let flat = math_scales()[u.m.math_scale];
     assert!(flat >= 5e-3, "R1 - R1 is flat but not shown at {flat} V/div");
     u.m.math_scale = 20;
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     assert_eq!(u.m.math_scale, 20, "an explicit scale stands");
 }
 
 #[test]
 fn setup_save_and_recall_keep_how_a_ref_looks() {
     let mut u = fresh(Layout::Default);
-    let dir = std::env::temp_dir().join(format!("oos-b2-setup-{}", std::process::id()));
+    let dir = crate::ui::testkit::Scratch::new("b2-setup");
     std::fs::create_dir_all(&dir).unwrap();
     u.store_dir = dir.clone();
     u.refs[0] = Some(sine_ref(0, 2000, 1e-6));
     u.refs[2] = Some(sine_ref(2, 2000, 1e-6));
-    { let r = u.refs[0].as_mut().unwrap(); r.on = false; r.vpd = 2.0; r.offset = -0.3; r.color = 3; r.label = "Probe A".into(); }
+    {
+        let r = u.refs[0].as_mut().unwrap();
+        r.on = false;
+        r.vpd = 2.0;
+        r.offset = -0.3;
+        r.color = 3;
+        r.label = "Probe A".into();
+    }
     let saved = (ref_look_state(&u, 0), ref_look_state(&u, 2));
     u.activate(Item::StoreSaveSetup);
-    { let r = u.refs[0].as_mut().unwrap(); r.on = true; r.vpd = 0.5; r.offset = 0.0; r.color = 0; r.label = "x".into(); }
-    { let r = u.refs[2].as_mut().unwrap(); r.vpd = 5.0; r.label = "y".into(); }
+    {
+        let r = u.refs[0].as_mut().unwrap();
+        r.on = true;
+        r.vpd = 0.5;
+        r.offset = 0.0;
+        r.color = 0;
+        r.label = "x".into();
+    }
+    {
+        let r = u.refs[2].as_mut().unwrap();
+        r.vpd = 5.0;
+        r.label = "y".into();
+    }
     u.recall_setup();
     assert_eq!((ref_look_state(&u, 0), ref_look_state(&u, 2)), saved);
     // an old setup has no ref lines: the refs stay as they are
@@ -190,7 +238,16 @@ fn setup_save_and_recall_keep_how_a_ref_looks() {
 
 #[test]
 fn ref_look_lines_round_trip_and_ignore_nonsense() {
-    let looks = vec![Some(crate::store::RefLook { on: Some(true), vdiv: Some(0.5), offset: Some(-1.0), color: Some(2), label: Some("a b".into()) }), None];
+    let looks = vec![
+        Some(crate::store::RefLook {
+            on: Some(true),
+            vdiv: Some(0.5),
+            offset: Some(-1.0),
+            color: Some(2),
+            label: Some("a b".into()),
+        }),
+        None,
+    ];
     assert_eq!(crate::store::parse_ref_looks(&crate::store::ref_setup_text(&looks), 2), looks);
     let bad = crate::store::parse_ref_looks("ref1.vdiv = -3\nref99.on = true\nref1.on = maybe\nref2 = 1\n", 2);
     assert_eq!(bad[0], Some(crate::store::RefLook::default()));
@@ -234,7 +291,9 @@ fn refs_without_channels_get_a_volt_axis() {
     for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
         let mut u = fresh(layout);
         assert!(u.ref_axis_source().is_none());
-        for c in 0..NCH { u.m.ch[c].on = false; }
+        for c in 0..NCH {
+            u.m.ch[c].on = false;
+        }
         u.refs[0] = Some(sine_ref(0, 2000, 1e-6));
         u.relayout();
         assert!(u.ref_axis_source().is_some(), "{layout:?}");
@@ -246,21 +305,27 @@ fn refs_without_channels_get_a_volt_axis() {
 #[test]
 fn power_page_says_why_it_has_no_numbers() {
     let mut u = fresh(Layout::Default);
-    for c in 0..NCH { u.m.ch[c].on = false; }
+    for c in 0..NCH {
+        u.m.ch[c].on = false;
+    }
     u.refs[0] = Some(sine_ref(0, 4000, 1e-6));
     u.refs[1] = Some(sine_ref(1, 4000, 1e-6));
     u.refs[1].as_mut().unwrap().v = vec![0.0; 4000].into();
     u.m.view = AView::Power;
     u.m.pw_mode = PowerMode::Quality;
     (u.m.pw_v, u.m.pw_i) = (WaveId::Ref(0), WaveId::Ref(1));
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     u.analyzer_update();
     let text = u.azr.power.join(" | ");
     assert!(text.contains("No current probe set"), "{text}");
     assert!(!text.contains("Vrms 0 V"), "{text}");
     // with a current, the numbers come back
     u.refs[1].as_mut().unwrap().v = u.refs[0].as_ref().unwrap().v.clone();
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     u.analyzer_update();
     let text = u.azr.power.join(" | ");
     assert!(text.contains("Vrms") && text.contains("cycles"), "{text}");
@@ -271,7 +336,9 @@ fn shots_refs_sim_axis_power() {
     for layout in [Layout::Default, Layout::Studio] {
         let name = format!("{layout:?}").to_lowercase();
         let mut u = fresh(layout);
-        for c in 1..NCH { u.m.ch[c].on = false; }
+        for c in 1..NCH {
+            u.m.ch[c].on = false;
+        }
         u.refs[0] = Some(sine_ref(0, 6000, 1e-6));
         u.refs[1] = Some(sine_ref(1, 6000, 1e-6));
         u.refs[1].as_mut().unwrap().color = 2;
@@ -281,19 +348,27 @@ fn shots_refs_sim_axis_power() {
         u.relayout();
         shot(&mut u, &format!("refs-only-{name}"));
         u.m.ch[0].on = true;
-        u.m.math = MathOp::Sub; u.m.math_a = 0; u.m.math_b = MATH_REF_BASE;
-        for _ in 0..4 { u.step(0.05); }
+        u.m.math = MathOp::Sub;
+        u.m.math_a = 0;
+        u.m.math_b = MATH_REF_BASE;
+        for _ in 0..4 {
+            u.step(0.05);
+        }
         shot(&mut u, &format!("math-ref-{name}"));
         let mut s = fresh(layout);
         s.refs[0] = Some(sine_ref(0, 6000, 1e-6));
         s.refs[0].as_mut().unwrap().label = "mine.csv".into();
         s.sim_play_set(true).unwrap();
         s.wait_sim_generation();
-        for _ in 0..4 { s.step(0.05); }
+        for _ in 0..4 {
+            s.step(0.05);
+        }
         shot(&mut s, &format!("sim-{name}"));
     }
     let mut p = fresh(Layout::Default);
-    for c in 0..NCH { p.m.ch[c].on = false; }
+    for c in 0..NCH {
+        p.m.ch[c].on = false;
+    }
     p.refs[0] = Some(sine_ref(0, 4000, 1e-6));
     p.refs[1] = Some(sine_ref(1, 4000, 1e-6));
     p.refs[1].as_mut().unwrap().v = vec![0.0; 4000].into();

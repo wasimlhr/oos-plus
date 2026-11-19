@@ -23,6 +23,8 @@ pub(super) enum CtxRow {
     ZoomHere,
     ZoomBox,
     ZoomReset,
+    /// the trigger in the middle of the zoom window
+    ZoomCenter,
     ZoomClose,
     Autoset,
     TrigOn(WaveId),
@@ -71,6 +73,7 @@ impl Ui {
             (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
         if self.m.zoom {
             view.push((CtxRow::ZoomReset, "Reset zoom".to_string()));
+            view.push((CtxRow::ZoomCenter, "Center trigger".to_string()));
             view.push((CtxRow::ZoomClose, "Close zoom".to_string()));
         }
         let mut here = Vec::new();
@@ -123,6 +126,8 @@ impl Ui {
             CtxRow::FitLanes => { cv.vline(cx, cy - 7, cy + 7, c); for d in [-1, 1] { cv.line(cx, cy + 7 * d, cx - 4, cy + 3 * d, c); cv.line(cx, cy + 7 * d, cx + 4, cy + 3 * d, c); } }
             CtxRow::ZoomHere | CtxRow::ZoomReset => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, BAR); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); }
             CtxRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
+            // the trigger mark between the two edges of the window
+            CtxRow::ZoomCenter => { cv.vline(cx - 7, cy - 5, cy + 5, c); cv.vline(cx + 7, cy - 5, cy + 5, c); cv.vline(cx, cy - 1, cy + 6, c); cv.triangle([(cx - 4, cy - 6), (cx + 4, cy - 6), (cx, cy - 1)], c); }
             CtxRow::ZoomClose => { cv.line(cx - 5, cy - 5, cx + 5, cy + 5, c); cv.line(cx - 5, cy + 5, cx + 5, cy - 5, c); }
             CtxRow::Autoset => cv.text_in(&f.sb, Rect::new(cx - 10, cy - 9, 20, 18), 1, "A", c),
             CtxRow::TrigOn(_) => { cv.hline(cx - 7, cx - 2, cy + 4, c); cv.vline(cx - 2, cy - 4, cy + 4, c); cv.hline(cx - 2, cx + 7, cy - 4, c); }
@@ -168,8 +173,9 @@ impl Ui {
         let up = self.y_of_volts(c, hi) < self.y_of_volts(c, lo);
         for _ in 0..30 {
             let mid = (lo + hi) / 2.0;
+            // the line of `mid` is under the point: with volts growing upwards the point is at more volts
             let below = self.y_of_volts(c, mid) > y;
-            if below == up { hi = mid; } else { lo = mid; }
+            if below == up { lo = mid; } else { hi = mid; }
         }
         (lo + hi) / 2.0
     }
@@ -192,6 +198,7 @@ impl Ui {
             }
             CtxRow::ZoomBox => self.arm_zoom_area(),
             CtxRow::ZoomReset => self.workspace_action(Action::ZoomReset),
+            CtxRow::ZoomCenter => { self.studio_center_trigger(); self.relayout(); }
             CtxRow::ZoomClose => self.workspace_action(Action::ZoomClose),
             CtxRow::Autoset => self.workspace_action(Action::Autoset),
             CtxRow::TrigOn(id) => self.workspace_action(Action::Trigger(id)),

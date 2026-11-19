@@ -5,6 +5,8 @@
 
 use crate::font::Font;
 
+pub mod png;
+
 pub type Rgb = u32;
 
 pub const fn rgb(r: u32, g: u32, b: u32) -> Rgb {
@@ -147,23 +149,30 @@ impl Canvas {
         self.rec = on.then(Box::default);
     }
 
-    /// The same content as `o` (its pixels, or its commands when it records); the same size.
-    pub fn copy_from(&mut self, o: &Canvas) {
-        match &o.rec {
-            Some(r) => self.rec = Some(r.clone()),
-            None => {
-                self.rec = None;
-                self.px.copy_from_slice(&o.px);
-            }
-        }
-    }
 
-    /// A command covering `(x0, y0, x1, y1)`, already clipped.
+    /// A command covering `(x0, y0, x1, y1)`, already clipped, with its source `(ax, ay, aw)` (`Cmd`).
     #[inline]
-    #[allow(clippy::too_many_arguments)]
-    fn cmd(&mut self, (x0, y0, x1, y1): (i32, i32, i32, i32), kind: u16, ax: i32, ay: i32, aw: i32, off: u32, col: u32) {
+    fn cmd(
+        &mut self,
+        (x0, y0, x1, y1): (i32, i32, i32, i32),
+        kind: u16,
+        (ax, ay, aw): (i32, i32, i32),
+        off: u32,
+        col: u32,
+    ) {
         if let Some(r) = self.rec.as_mut() {
-            r.cmds.push(Cmd { x0: x0 as i16, y0: y0 as i16, x1: x1 as i16, y1: y1 as i16, ax: ax as i16, ay: ay as i16, aw: aw as i16, kind, off, col });
+            r.cmds.push(Cmd {
+                x0: x0 as i16,
+                y0: y0 as i16,
+                x1: x1 as i16,
+                y1: y1 as i16,
+                ax: ax as i16,
+                ay: ay as i16,
+                aw: aw as i16,
+                kind,
+                off,
+                col,
+            });
         }
     }
 
@@ -175,7 +184,11 @@ impl Canvas {
     /// Covered: what is drawn opaque gets the full coverage on a layer.
     #[inline]
     fn solid(&self, c: Rgb) -> u32 {
-        if self.layer { c | 0xff00_0000 } else { c }
+        if self.layer {
+            c | 0xff00_0000
+        } else {
+            c
+        }
     }
 
     pub fn set_clip(&mut self, r: Rect) {
@@ -224,7 +237,7 @@ impl Canvas {
             r.img.clear();
             r.fonts.clear();
             if !self.layer || c != 0 {
-                self.cmd((0, 0, self.w, self.h), CMD_RECT, 0, 0, 0, 0, 0xff00_0000 | (c & 0xff_ffff));
+                self.cmd((0, 0, self.w, self.h), CMD_RECT, (0, 0, 0), 0, 0xff00_0000 | (c & 0xff_ffff));
             }
             return;
         }
@@ -258,7 +271,7 @@ impl Canvas {
         if let Some(rec) = self.rec.as_mut() {
             let off = rec.img.len() as u32;
             rec.img.extend_from_slice(&px[..(r.w * r.h) as usize]);
-            return self.cmd(c, if key { CMD_IMAGE_KEY } else { CMD_IMAGE }, r.x, r.y, r.w, off, 0);
+            return self.cmd(c, if key { CMD_IMAGE_KEY } else { CMD_IMAGE }, (r.x, r.y, r.w), off, 0);
         }
         let (x0, y0, x1, y1) = c;
         let solid = |p: u32| if self.layer { p | 0xff00_0000 } else { p };
@@ -278,7 +291,7 @@ impl Canvas {
         self.au_push(Au::Fill { r, opaque: true, c, clip: (0, 0, 0, 0) });
         if self.rec.is_some() {
             if let Some(cl) = self.clipr(r) {
-                self.cmd(cl, CMD_RECT, 0, 0, 0, 0, 0xff00_0000 | (c & 0xff_ffff));
+                self.cmd(cl, CMD_RECT, (0, 0, 0), 0, 0xff00_0000 | (c & 0xff_ffff));
             }
             return;
         }
@@ -302,7 +315,7 @@ impl Canvas {
         }
         if self.rec.is_some() {
             if let Some(cl) = self.clipr(r) {
-                self.cmd(cl, CMD_RECT, 0, 0, 0, 0, a << 24 | (c & 0xff_ffff));
+                self.cmd(cl, CMD_RECT, (0, 0, 0), 0, a << 24 | (c & 0xff_ffff));
             }
             return;
         }
@@ -324,7 +337,7 @@ impl Canvas {
             return;
         }
         if self.rec.is_some() {
-            return self.cmd((x, y, x + 1, y + 1), CMD_RECT, 0, 0, 0, 0, a.min(255) << 24 | (c & 0xff_ffff));
+            return self.cmd((x, y, x + 1, y + 1), CMD_RECT, (0, 0, 0), 0, a.min(255) << 24 | (c & 0xff_ffff));
         }
         let (layer, solid) = (self.layer, self.solid(c));
         let p = &mut self.px[(y * self.w + x) as usize];
@@ -455,11 +468,13 @@ impl Canvas {
         if rad <= 0 {
             return;
         }
-        for (m, ax, ay) in [(0u16, r.x, r.y), (1, r.x + r.w - 1, r.y), (2, r.x, r.y + r.h - 1), (3, r.x + r.w - 1, r.y + r.h - 1)] {
+        for (m, ax, ay) in
+            [(0u16, r.x, r.y), (1, r.x + r.w - 1, r.y), (2, r.x, r.y + r.h - 1), (3, r.x + r.w - 1, r.y + r.h - 1)]
+        {
             let bx = if m & 1 == 0 { ax } else { ax - rad + 1 };
             let by = if m & 2 == 0 { ay } else { ay - rad + 1 };
             if let Some(cl) = self.clipr(Rect::new(bx, by, rad, rad)) {
-                self.cmd(cl, kind | m << 8, ax, ay, rad, 0, col);
+                self.cmd(cl, kind | m << 8, (ax, ay, rad), 0, col);
             }
         }
     }
@@ -482,9 +497,19 @@ impl Canvas {
         if self.rec.is_some() {
             // the box of the pixels the loop below would touch: the major axis x0..=x1, the minor one the two rows
             let (lo, hi) = (y0.min(y1), y0.max(y1) + 2);
-            let b = if steep { Rect::new(lo, x0, hi - lo, dx as i32 + 1) } else { Rect::new(x0, lo, dx as i32 + 1, hi - lo) };
+            let b = if steep {
+                Rect::new(lo, x0, hi - lo, dx as i32 + 1)
+            } else {
+                Rect::new(x0, lo, dx as i32 + 1, hi - lo)
+            };
             if let Some(cl) = self.clipr(b) {
-                self.cmd(cl, if steep { CMD_LINE_STEEP } else { CMD_LINE }, x0, y0, 0, grad as u32, 0xff00_0000 | (c & 0xff_ffff));
+                self.cmd(
+                    cl,
+                    if steep { CMD_LINE_STEEP } else { CMD_LINE },
+                    (x0, y0, 0),
+                    grad as u32,
+                    0xff00_0000 | (c & 0xff_ffff),
+                );
             }
             return;
         }
@@ -524,7 +549,8 @@ impl Canvas {
         let maxx = p.iter().map(|q| q.0).max().unwrap();
         let miny = p.iter().map(|q| q.1).min().unwrap();
         let maxy = p.iter().map(|q| q.1).max().unwrap();
-        let (x0, y0, x1, y1, x2, y2) = (p[0].0 as f32, p[0].1 as f32, p[1].0 as f32, p[1].1 as f32, p[2].0 as f32, p[2].1 as f32);
+        let (x0, y0, x1, y1, x2, y2) =
+            (p[0].0 as f32, p[0].1 as f32, p[1].0 as f32, p[1].1 as f32, p[2].0 as f32, p[2].1 as f32);
         let area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
         if area == 0.0 {
             return;
@@ -538,7 +564,11 @@ impl Canvas {
                     let w0 = (x1 - x0) * (py - y0) - (y1 - y0) * (px - x0);
                     let w1 = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1);
                     let w2 = (x0 - x2) * (py - y2) - (y0 - y2) * (px - x2);
-                    let inside = if area > 0.0 { w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 } else { w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0 };
+                    let inside = if area > 0.0 {
+                        w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0
+                    } else {
+                        w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0
+                    };
                     if inside {
                         n += 1;
                     }
@@ -565,7 +595,7 @@ impl Canvas {
                 let (gx, gy) = (x + g.x0, y + g.y0);
                 if let Some(cl) = self.clipr(Rect::new(gx, gy, g.w, g.h)) {
                     let font = self.rec.as_mut().map_or(0, |r| r.font(f.alpha));
-                    self.cmd(cl, CMD_GLYPH | font << 8, gx, gy, g.w, g.off as u32, 0xff00_0000 | (c & 0xff_ffff));
+                    self.cmd(cl, CMD_GLYPH | font << 8, (gx, gy, g.w), g.off as u32, 0xff00_0000 | (c & 0xff_ffff));
                 }
                 x += g.adv;
             }
@@ -696,7 +726,13 @@ pub fn pick_mode(modes: &[(u16, u16, u32, bool, bool)], max: (u16, u16)) -> Opti
         let (w, h, r, _, _) = modes[i];
         (w as u32 * h as u32, std::cmp::Reverse((r as i64 - 60).unsigned_abs()))
     };
-    (0..modes.len()).filter(|&i| fits(&modes[i])).fold(None, |b: Option<usize>, i| if b.is_some_and(|b| key(b) >= key(i)) { b } else { Some(i) })
+    (0..modes.len()).filter(|&i| fits(&modes[i])).fold(None, |b: Option<usize>, i| {
+        if b.is_some_and(|b| key(b) >= key(i)) {
+            b
+        } else {
+            Some(i)
+        }
+    })
 }
 
 /// `corner_cov` with the arguments of a mirrored corner (the GPU shader computes the same).
@@ -723,7 +759,9 @@ impl Rec {
                     let (i, j) = (x - c.ax as i32, y - c.ay as i32);
                     let (mut col, mut a) = (c.col & 0xff_ffff, c.col >> 24);
                     match kind {
-                        CMD_GLYPH => a = self.fonts[sub as usize][c.off as usize + (j * c.aw as i32 + i) as usize] as u32,
+                        CMD_GLYPH => {
+                            a = self.fonts[sub as usize][c.off as usize + (j * c.aw as i32 + i) as usize] as u32
+                        }
                         CMD_IMAGE | CMD_IMAGE_KEY => {
                             col = self.img[c.off as usize + (j * c.aw as i32 + i) as usize] & 0xff_ffff;
                             a = if kind == CMD_IMAGE_KEY && col == 0 { 0 } else { 255 };
@@ -736,7 +774,13 @@ impl Rec {
                             let (maj, min) = if kind == CMD_LINE_STEEP { (y, x) } else { (x, y) };
                             let yf = ((c.ay as i32) << 16) + (maj - c.ax as i32) * c.off as i32;
                             let (yi, fr) = (yf >> 16, ((yf >> 8) & 255) as u32);
-                            a = if min == yi { 255 - fr } else if min == yi + 1 { fr } else { 0 };
+                            a = if min == yi {
+                                255 - fr
+                            } else if min == yi + 1 {
+                                fr
+                            } else {
+                                0
+                            };
                         }
                         _ => {}
                     }
@@ -753,7 +797,13 @@ mod tests {
 
     #[test]
     fn monitor_modes() {
-        let m = [(3840, 2160, 60, true, false), (1920, 1080, 50, false, false), (1920, 1080, 60, false, false), (1920, 1080, 60, false, true), (1280, 720, 60, false, false)];
+        let m = [
+            (3840, 2160, 60, true, false),
+            (1920, 1080, 50, false, false),
+            (1920, 1080, 60, false, false),
+            (1920, 1080, 60, false, true),
+            (1280, 720, 60, false, false),
+        ];
         assert_eq!(pick_mode(&m, (1920, 1080)), Some(2));
         // 1080i60 ties with 1080p60 on size and refresh: never interlaced, the first of equal ones
         let m = [(3840, 2160, 60, true, false), (1920, 1080, 60, false, true), (1920, 1080, 60, false, false)];
@@ -767,7 +817,9 @@ mod tests {
     /// or not, for sizes down to where the fill's corners meet; recorded, it covers less.
     #[test]
     fn framed_is_a_border_under_a_fill() {
-        let area = |c: &Canvas| c.rec.as_ref().unwrap().cmds.iter().map(|m| (m.x1 - m.x0) as i64 * (m.y1 - m.y0) as i64).sum::<i64>();
+        let area = |c: &Canvas| {
+            c.rec.as_ref().unwrap().cmds.iter().map(|m| (m.x1 - m.x0) as i64 * (m.y1 - m.y0) as i64).sum::<i64>()
+        };
         for layer in [false, true] {
             for (w, h) in [(120, 40), (40, 120), (300, 200), (20, 14), (14, 20), (9, 9), (4, 4), (3, 30)] {
                 for (rad, d, ri) in [(5, 2, 4), (8, 2, 7), (5, 1, 4), (6, 1, 5), (3, 3, 0)] {

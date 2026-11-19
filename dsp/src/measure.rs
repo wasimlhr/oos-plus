@@ -90,13 +90,66 @@ pub enum Meas {
 }
 
 pub const ALL: [Meas; 60] = [
-    Meas::Vmax, Meas::Vmin, Meas::Vpp, Meas::Vtop, Meas::Vbase, Meas::Vamp, Meas::Vupper, Meas::Vmid, Meas::Vlower, Meas::Vavg,
-    Meas::Vrms, Meas::VavgCyc, Meas::VrmsCyc, Meas::VrmsAc, Meas::StdDev, Meas::Overshoot, Meas::Preshoot, Meas::Area,
-    Meas::AreaCyc, Meas::Period, Meas::Freq, Meas::Rise, Meas::Fall, Meas::PWidth, Meas::NWidth, Meas::PDuty, Meas::NDuty,
-    Meas::PPulses, Meas::NPulses, Meas::PEdges, Meas::NEdges, Meas::TVmax, Meas::TVmin, Meas::PSlew, Meas::NSlew,
-    Meas::HighTime, Meas::LowTime, Meas::Burst, Meas::Outside, Meas::NPeriods, Meas::CycAmp, Meas::CycTop, Meas::CycBase,
-    Meas::CycPp, Meas::CycMax, Meas::CycMin, Meas::EstUi, Meas::Median, Meas::Mode, Meas::LinSlope, Meas::LinInt,
-    Meas::Pam0, Meas::Pam1, Meas::Pam2, Meas::Pam3, Meas::PamSep, Meas::Bits, Meas::PllUi, Meas::UiWtd, Meas::FoldRms,
+    Meas::Vmax,
+    Meas::Vmin,
+    Meas::Vpp,
+    Meas::Vtop,
+    Meas::Vbase,
+    Meas::Vamp,
+    Meas::Vupper,
+    Meas::Vmid,
+    Meas::Vlower,
+    Meas::Vavg,
+    Meas::Vrms,
+    Meas::VavgCyc,
+    Meas::VrmsCyc,
+    Meas::VrmsAc,
+    Meas::StdDev,
+    Meas::Overshoot,
+    Meas::Preshoot,
+    Meas::Area,
+    Meas::AreaCyc,
+    Meas::Period,
+    Meas::Freq,
+    Meas::Rise,
+    Meas::Fall,
+    Meas::PWidth,
+    Meas::NWidth,
+    Meas::PDuty,
+    Meas::NDuty,
+    Meas::PPulses,
+    Meas::NPulses,
+    Meas::PEdges,
+    Meas::NEdges,
+    Meas::TVmax,
+    Meas::TVmin,
+    Meas::PSlew,
+    Meas::NSlew,
+    Meas::HighTime,
+    Meas::LowTime,
+    Meas::Burst,
+    Meas::Outside,
+    Meas::NPeriods,
+    Meas::CycAmp,
+    Meas::CycTop,
+    Meas::CycBase,
+    Meas::CycPp,
+    Meas::CycMax,
+    Meas::CycMin,
+    Meas::EstUi,
+    Meas::Median,
+    Meas::Mode,
+    Meas::LinSlope,
+    Meas::LinInt,
+    Meas::Pam0,
+    Meas::Pam1,
+    Meas::Pam2,
+    Meas::Pam3,
+    Meas::PamSep,
+    Meas::Bits,
+    Meas::PllUi,
+    Meas::UiWtd,
+    Meas::FoldRms,
 ];
 
 impl Meas {
@@ -168,8 +221,21 @@ impl Meas {
         match self {
             Meas::Overshoot | Meas::Preshoot | Meas::PDuty | Meas::NDuty => "%",
             Meas::Area | Meas::AreaCyc => "Vs",
-            Meas::Period | Meas::Rise | Meas::Fall | Meas::PWidth | Meas::NWidth | Meas::TVmax | Meas::TVmin | Meas::HighTime
-            | Meas::LowTime | Meas::Burst | Meas::Outside | Meas::NPeriods | Meas::EstUi | Meas::PllUi | Meas::UiWtd => "s",
+            Meas::Period
+            | Meas::Rise
+            | Meas::Fall
+            | Meas::PWidth
+            | Meas::NWidth
+            | Meas::TVmax
+            | Meas::TVmin
+            | Meas::HighTime
+            | Meas::LowTime
+            | Meas::Burst
+            | Meas::Outside
+            | Meas::NPeriods
+            | Meas::EstUi
+            | Meas::PllUi
+            | Meas::UiWtd => "s",
             Meas::Freq => "Hz",
             Meas::PPulses | Meas::NPulses | Meas::PEdges | Meas::NEdges | Meas::Bits => "",
             Meas::PSlew | Meas::NSlew | Meas::LinSlope => "V/s",
@@ -311,28 +377,62 @@ impl Eq for Levels {}
 impl Levels {
     /// Percent levels: `lpct` / `hpct` with the middle at 50 %, the same fall levels, 5 % hysteresis.
     pub fn percent(lpct: f64, hpct: f64) -> Levels {
-        Levels { absolute: false, rise: [lpct, 0.5, hpct], fall: [lpct, 0.5, hpct], hyst: 0.05, base_top: BaseTop::Auto, out_volts: f64::NAN }
+        Levels {
+            absolute: false,
+            rise: [lpct, 0.5, hpct],
+            fall: [lpct, 0.5, hpct],
+            hyst: 0.05,
+            base_top: BaseTop::Auto,
+            out_volts: f64::NAN,
+        }
     }
 
     /// The levels as numbers for a cache key.
     pub fn bits(&self) -> [u64; 10] {
         let b = |x: f64| x.to_bits();
-        [self.absolute as u64 | (self.base_top as u64) << 8, b(self.rise[0]), b(self.rise[1]), b(self.rise[2]), b(self.fall[0]),
-            b(self.fall[1]), b(self.fall[2]), b(self.hyst), b(self.out_volts), 0]
+        [
+            self.absolute as u64 | (self.base_top as u64) << 8,
+            b(self.rise[0]),
+            b(self.rise[1]),
+            b(self.rise[2]),
+            b(self.fall[0]),
+            b(self.fall[1]),
+            b(self.fall[2]),
+            b(self.hyst),
+            b(self.out_volts),
+            0,
+        ]
     }
 
     /// Volts for the rise and fall triples and the hysteresis, given the top and base. A triple that is not
     /// ordered low < mid < high (or outside 0..1 as a percent) falls back to 10 / 50 / 90 %.
     fn resolve(&self, base: f64, amp: f64) -> ([f64; 3], [f64; 3], f64) {
-        let ok = |t: &[f64; 3]| t.iter().all(|x| x.is_finite()) && t[0] < t[1] && t[1] < t[2] && (self.absolute || (t[0] > 0.0 && t[2] < 1.0));
+        let ok = |t: &[f64; 3]| {
+            t.iter().all(|x| x.is_finite())
+                && t[0] < t[1]
+                && t[1] < t[2]
+                && (self.absolute || (t[0] > 0.0 && t[2] < 1.0))
+        };
         let conv = |t: &[f64; 3]| {
             if ok(t) {
-                if self.absolute { *t } else { t.map(|x| base + x * amp) }
+                if self.absolute {
+                    *t
+                } else {
+                    t.map(|x| base + x * amp)
+                }
             } else {
                 [0.1, 0.5, 0.9].map(|x| base + x * amp)
             }
         };
-        let h = if self.hyst.is_finite() && self.hyst > 0.0 { if self.absolute { self.hyst } else { self.hyst * amp } } else { 0.05 * amp };
+        let h = if self.hyst.is_finite() && self.hyst > 0.0 {
+            if self.absolute {
+                self.hyst
+            } else {
+                self.hyst * amp
+            }
+        } else {
+            0.05 * amp
+        };
         (conv(&self.rise), conv(&self.fall), h)
     }
 }
@@ -514,23 +614,35 @@ fn top_base_by(f: &[f32], vmin: f32, vmax: f32, method: BaseTop) -> (f64, f64) {
             let mid = (vmin as f64 + vmax as f64) / 2.0;
             let (mut hs, mut hn, mut ls, mut ln) = (0.0, 0usize, 0.0, 0usize);
             for &x in f {
-                if x as f64 >= mid { hs += x as f64; hn += 1 } else { ls += x as f64; ln += 1 }
+                if x as f64 >= mid {
+                    hs += x as f64;
+                    hn += 1
+                } else {
+                    ls += x as f64;
+                    ln += 1
+                }
             }
-            if hn == 0 || ln == 0 { (vmax as f64, vmin as f64) } else { (hs / hn as f64, ls / ln as f64) }
+            if hn == 0 || ln == 0 {
+                (vmax as f64, vmin as f64)
+            } else {
+                (hs / hn as f64, ls / ln as f64)
+            }
         }
+    }
+}
+
+/// The finite samples of `v`: `v` itself when it has no gap, else a copy without the gaps.
+pub fn finite_samples(v: &[f32]) -> std::borrow::Cow<'_, [f32]> {
+    if v.iter().all(|x| x.is_finite()) {
+        std::borrow::Cow::Borrowed(v)
+    } else {
+        std::borrow::Cow::Owned(v.iter().copied().filter(|x| x.is_finite()).collect())
     }
 }
 
 /// The measurements of a record with the reference levels and the top / base method of `lv`.
 pub fn analyze_levels(v: &[f32], dt: f64, min_amp: f64, lv: &Levels) -> Analysis {
-    // the finite samples: the record itself when it has no gap (a copy of 100 kpts per channel otherwise)
-    let own: Vec<f32>;
-    let f: &[f32] = if v.iter().all(|x| x.is_finite()) {
-        v
-    } else {
-        own = v.iter().copied().filter(|x| x.is_finite()).collect();
-        &own
-    };
+    let f: &[f32] = &finite_samples(v);
     if f.len() < 4 {
         return Analysis::default();
     }
@@ -595,11 +707,11 @@ pub fn analyze_levels(v: &[f32], dt: f64, min_amp: f64, lv: &Levels) -> Analysis
         hpct,
         mpct,
         est_ui: f64::NAN,
-        median: median_samples(&f),
-        mode: hist_mode(&f, vmin, vmax),
+        median: median_samples(f),
+        mode: hist_mode(f, vmin, vmax),
         lin_slope,
         lin_int,
-        pam: crate::linecode::pam4_levels(&f, vmin, vmax),
+        pam: crate::linecode::pam4_levels(f, vmin, vmax),
         bits: f64::NAN,
         pll_ui: f64::NAN,
         ui_wtd: f64::NAN,
@@ -613,8 +725,11 @@ pub fn analyze_levels(v: &[f32], dt: f64, min_amp: f64, lv: &Levels) -> Analysis
     let mid = rl[1] as f32;
     let e = level_edges(v, mid, hyst as f32);
     a.rises = e.iter().filter(|x| x.rising).map(|x| x.t * dt).collect();
-    a.falls = if fl[1] == rl[1] { e.iter().filter(|x| !x.rising).map(|x| x.t * dt).collect() }
-        else { level_edges(v, fl[1] as f32, hyst as f32).iter().filter(|x| !x.rising).map(|x| x.t * dt).collect() };
+    a.falls = if fl[1] == rl[1] {
+        e.iter().filter(|x| !x.rising).map(|x| x.t * dt).collect()
+    } else {
+        level_edges(v, fl[1] as f32, hyst as f32).iter().filter(|x| !x.rising).map(|x| x.t * dt).collect()
+    };
     let spacings: Vec<f64> = {
         let t = mids(&a);
         t.windows(2).map(|w| w[1] - w[0]).collect()
@@ -835,9 +950,17 @@ impl Analysis {
             Meas::Pam2 => self.pam[2],
             Meas::Pam3 => self.pam[3],
             Meas::PamSep => {
-                if self.pam.iter().any(|level| !level.is_finite()) { return f64::NAN; }
+                if self.pam.iter().any(|level| !level.is_finite()) {
+                    return f64::NAN;
+                }
                 let d = [self.pam[1] - self.pam[0], self.pam[2] - self.pam[1], self.pam[3] - self.pam[2]];
-                d.into_iter().filter(|x| x.is_finite() && *x > 0.0).fold(f64::NAN, |a, x| if a.is_nan() { x } else { a.min(x) })
+                d.into_iter().filter(|x| x.is_finite() && *x > 0.0).fold(f64::NAN, |a, x| {
+                    if a.is_nan() {
+                        x
+                    } else {
+                        a.min(x)
+                    }
+                })
             }
             Meas::Bits => self.bits,
             Meas::PllUi => self.pll_ui,
@@ -847,10 +970,18 @@ impl Analysis {
     }
 
     fn lpct_or_default(&self) -> f64 {
-        if self.lpct > 0.0 { self.lpct } else { 0.1 }
+        if self.lpct > 0.0 {
+            self.lpct
+        } else {
+            0.1
+        }
     }
     fn hpct_or_default(&self) -> f64 {
-        if self.hpct > 0.0 { self.hpct } else { 0.9 }
+        if self.hpct > 0.0 {
+            self.hpct
+        } else {
+            0.9
+        }
     }
 }
 
@@ -886,7 +1017,9 @@ fn pair_widths(open: &[f64], close: &[f64]) -> Vec<f64> {
         }
         let Some(&e) = close.get(j) else { break };
         next = next.max(i + 1);
-        while next < open.len() && (open[next].is_nan() || open[next] <= s) { next += 1; }
+        while next < open.len() && (open[next].is_nan() || open[next] <= s) {
+            next += 1;
+        }
         if s.is_nan() || !open.get(next).is_some_and(|&x| x < e) {
             w.push(e - s);
         }
@@ -897,7 +1030,8 @@ fn pair_widths(open: &[f64], close: &[f64]) -> Vec<f64> {
 /// Mean of the per-cycle histogram top and base, their difference, and the sample max, min and peak-to-peak.
 /// Cycles run from one rising mid crossing to the next. A record with fewer than two rising edges has no result.
 fn cycle_levels(v: &[f32], dt: f64, rises: &[f64]) -> (f64, f64, f64, f64, f64, f64) {
-    let (mut top, mut base, mut amp, mut pp, mut mx, mut mn) = (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let (mut top, mut base, mut amp, mut pp, mut mx, mut mn) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
     for w in rises.windows(2) {
         let s = (w[0] / dt).ceil() as usize;
         let e = ((w[1] / dt).floor() as usize).min(v.len().saturating_sub(1));
@@ -933,7 +1067,8 @@ fn mids(a: &Analysis) -> Vec<f64> {
 
 /// Mid crossings with their direction (true = rising), in time order.
 fn edge_seq(a: &Analysis) -> Vec<(f64, bool)> {
-    let mut e: Vec<(f64, bool)> = a.rises.iter().map(|&t| (t, true)).chain(a.falls.iter().map(|&t| (t, false))).collect();
+    let mut e: Vec<(f64, bool)> =
+        a.rises.iter().map(|&t| (t, true)).chain(a.falls.iter().map(|&t| (t, false))).collect();
     e.sort_by(|x, y| x.0.total_cmp(&y.0));
     e
 }
@@ -1018,7 +1153,11 @@ pub fn estimated_ui(t: &[f64]) -> f64 {
         time += x;
         bits += n;
     }
-    if bits > 0.0 { time / bits } else { f64::NAN }
+    if bits > 0.0 {
+        time / bits
+    } else {
+        f64::NAN
+    }
 }
 
 /// Unit interval as time over bits: every edge interval holds a whole number of bits, counted against the
@@ -1088,7 +1227,11 @@ fn outside_spans(v: &[f32], dt: f64, a: &Analysis, volts: f64) -> (Vec<f64>, Vec
             }
             _ => 0.0,
         };
-        if rising { hi_w.push(width) } else { lo_w.push(width) }
+        if rising {
+            hi_w.push(width)
+        } else {
+            lo_w.push(width)
+        }
     }
     (hi_w, lo_w)
 }
@@ -1145,7 +1288,11 @@ pub(crate) fn phase_values(ea: &[f64], eb: &[f64]) -> Vec<f64> {
 }
 
 fn edge_list<'a>(a: &'a Analysis, rising: bool) -> &'a [f64] {
-    if rising { &a.rises } else { &a.falls }
+    if rising {
+        &a.rises
+    } else {
+        &a.falls
+    }
 }
 
 /// Default skew window, seconds: only B edges within this of an A edge are paired.
@@ -1202,7 +1349,11 @@ pub enum Latch {
 
 impl Latch {
     pub fn of(rise: bool) -> Latch {
-        if rise { Latch::Rise } else { Latch::Fall }
+        if rise {
+            Latch::Rise
+        } else {
+            Latch::Fall
+        }
     }
 
     fn edges(self, clock: &Analysis) -> Vec<f64> {
@@ -1259,7 +1410,13 @@ pub fn setup_hold_times(clock: &Analysis, data: &Analysis, latch: Latch) -> (Vec
 /// those `latch` selects, data edges are every mid crossing of the data. Setup pairs each clock edge with the nearest
 /// data edge before it (clock - data); hold pairs each data edge with the nearest clock edge before it (data - clock).
 /// An edge is used in one pair at most, and a pair counts only when its value is inside the range.
-pub fn setup_hold_times_within(clock: &Analysis, data: &Analysis, latch: Latch, min: f64, max: f64) -> (Vec<f64>, Vec<f64>) {
+pub fn setup_hold_times_within(
+    clock: &Analysis,
+    data: &Analysis,
+    latch: Latch,
+    min: f64,
+    max: f64,
+) -> (Vec<f64>, Vec<f64>) {
     setup_hold_core(&latch.edges(clock), &mids(data), min, max)
 }
 
@@ -1419,31 +1576,44 @@ mod tests {
 
     #[test]
     fn complete_pulse_join_matches_suffix_reference_with_duplicate_and_nan_edges() {
-        fn old(open:&[f64],close:&[f64])->Vec<f64>{
-            let (mut widths,mut j)=(Vec::new(),0);
-            for (i,&s) in open.iter().enumerate(){
-                while j<close.len()&&close[j]<=s{j+=1;}
-                let Some(&e)=close.get(j) else{break};
-                if !open[i+1..].iter().any(|&x|x>s&&x<e){widths.push(e-s);}
+        fn old(open: &[f64], close: &[f64]) -> Vec<f64> {
+            let (mut widths, mut j) = (Vec::new(), 0);
+            for (i, &s) in open.iter().enumerate() {
+                while j < close.len() && close[j] <= s {
+                    j += 1;
+                }
+                let Some(&e) = close.get(j) else { break };
+                if !open[i + 1..].iter().any(|&x| x > s && x < e) {
+                    widths.push(e - s);
+                }
             }
             widths
         }
-        let cases:Vec<(Vec<f64>,Vec<f64>)>=vec![
-            (vec![],vec![]),(vec![1.0],vec![]),(vec![],vec![1.0]),
-            (vec![1.0,1.0,2.0,3.0],vec![1.0,1.5,2.0,2.5,3.5]),
-            (vec![3.0,4.0],vec![0.0,1.0]),(vec![0.0,1.0,2.0],vec![3.0]),
-            (vec![f64::NAN;3],vec![f64::NAN;3]),
+        let cases: Vec<(Vec<f64>, Vec<f64>)> = vec![
+            (vec![], vec![]),
+            (vec![1.0], vec![]),
+            (vec![], vec![1.0]),
+            (vec![1.0, 1.0, 2.0, 3.0], vec![1.0, 1.5, 2.0, 2.5, 3.5]),
+            (vec![3.0, 4.0], vec![0.0, 1.0]),
+            (vec![0.0, 1.0, 2.0], vec![3.0]),
+            (vec![f64::NAN; 3], vec![f64::NAN; 3]),
         ];
-        for (open,close) in cases {
-            let (a,b)=(pair_widths(&open,&close),old(&open,&close));
-            assert_eq!(a.len(),b.len());assert!(a.iter().zip(b).all(|(a,b)|*a==b||(a.is_nan()&&b.is_nan())));
+        for (open, close) in cases {
+            let (a, b) = (pair_widths(&open, &close), old(&open, &close));
+            assert_eq!(a.len(), b.len());
+            assert!(a.iter().zip(b).all(|(a, b)| *a == b || (a.is_nan() && b.is_nan())));
         }
-        let mut state=7u32;
-        for count in [2,17,100,1_000] {
-            let mut values=||{state=state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);(state%100) as f64};
-            let mut open:Vec<_>=(0..count).map(|_|values()).collect();let mut close:Vec<_>=(0..count+3).map(|_|values()).collect();
-            open.sort_by(f64::total_cmp);close.sort_by(f64::total_cmp);
-            assert_eq!(pair_widths(&open,&close),old(&open,&close));
+        let mut state = 7u32;
+        for count in [2, 17, 100, 1_000] {
+            let mut values = || {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state % 100) as f64
+            };
+            let mut open: Vec<_> = (0..count).map(|_| values()).collect();
+            let mut close: Vec<_> = (0..count + 3).map(|_| values()).collect();
+            open.sort_by(f64::total_cmp);
+            close.sort_by(f64::total_cmp);
+            assert_eq!(pair_widths(&open, &close), old(&open, &close));
         }
     }
 
@@ -1451,9 +1621,11 @@ mod tests {
     // shows a regression without a threshold that a loaded computer trips.
     #[test]
     fn complete_pulse_join_is_linear_on_a_large_sorted_record() {
-        let open:Vec<f64>=(0..400_000).map(|i|i as f64).collect();let close:Vec<f64>=open.iter().map(|t|t+0.5).collect();
-        let widths=pair_widths(&open,&close);
-        assert_eq!(widths.len(),400_000);assert!(widths.iter().all(|&width|width==0.5));
+        let open: Vec<f64> = (0..400_000).map(|i| i as f64).collect();
+        let close: Vec<f64> = open.iter().map(|t| t + 0.5).collect();
+        let widths = pair_widths(&open, &close);
+        assert_eq!(widths.len(), 400_000);
+        assert!(widths.iter().all(|&width| width == 0.5));
     }
 
     #[test]
@@ -1489,7 +1661,13 @@ mod tests {
         // what they mean, edge by edge
         fn width(a: &[f64], b: &[f64]) -> f64 {
             let w: Vec<f64> = a.iter().filter_map(|&s| b.iter().find(|&&e| e > s).map(|&e| e - s)).collect();
-            mean(&a.iter().zip(w.iter()).filter(|(&s, &wd)| !a.iter().any(|&x| x > s && x < s + wd)).map(|(_, &wd)| wd).collect::<Vec<f64>>())
+            mean(
+                &a.iter()
+                    .zip(w.iter())
+                    .filter(|(&s, &wd)| !a.iter().any(|&x| x > s && x < s + wd))
+                    .map(|(_, &wd)| wd)
+                    .collect::<Vec<f64>>(),
+            )
         }
         let mut x = 7u32;
         let mut r = || {
@@ -1497,7 +1675,8 @@ mod tests {
             (x >> 16) as f64
         };
         for n in [0usize, 1, 2, 3, 10, 200] {
-            let (mut rises, mut falls): (Vec<f64>, Vec<f64>) = ((0..n).map(|_| r()).collect(), (0..n + 1).map(|_| r()).collect());
+            let (mut rises, mut falls): (Vec<f64>, Vec<f64>) =
+                ((0..n).map(|_| r()).collect(), (0..n + 1).map(|_| r()).collect());
             rises.sort_by(f64::total_cmp);
             falls.sort_by(f64::total_cmp);
             let an = Analysis { rises: rises.clone(), falls: falls.clone(), ..Default::default() };
@@ -1561,7 +1740,10 @@ mod tests {
         let v = trapezoid();
         let a = analyze_refs(&v, 1e-9, 0.0, 0.1, 0.9);
         let b = analyze_levels(&v, 1e-9, 0.0, &Levels::percent(0.1, 0.9));
-        assert_eq!((a.rise_time, a.fall_time, a.top, a.base, a.rises.clone()), (b.rise_time, b.fall_time, b.top, b.base, b.rises.clone()));
+        assert_eq!(
+            (a.rise_time, a.fall_time, a.top, a.base, a.rises.clone()),
+            (b.rise_time, b.fall_time, b.top, b.base, b.rises.clone())
+        );
     }
 
     #[test]
@@ -1580,9 +1762,33 @@ mod tests {
     fn absolute_levels_are_volts_and_match_the_same_percent() {
         let v = trapezoid();
         let pct = analyze_levels(&v, 1e-9, 0.0, &Levels::percent(0.2, 0.8));
-        let abs = analyze_levels(&v, 1e-9, 0.0, &Levels { absolute: true, rise: [0.2, 0.5, 0.8], fall: [0.2, 0.5, 0.8], hyst: 0.05, base_top: BaseTop::Auto, out_volts: f64::NAN });
+        let abs = analyze_levels(
+            &v,
+            1e-9,
+            0.0,
+            &Levels {
+                absolute: true,
+                rise: [0.2, 0.5, 0.8],
+                fall: [0.2, 0.5, 0.8],
+                hyst: 0.05,
+                base_top: BaseTop::Auto,
+                out_volts: f64::NAN,
+            },
+        );
         assert!((pct.rise_time - abs.rise_time).abs() < 1e-12 && (pct.fall_time - abs.fall_time).abs() < 1e-12);
-        let narrow = analyze_levels(&v, 1e-9, 0.0, &Levels { absolute: true, rise: [0.4, 0.5, 0.6], fall: [0.4, 0.5, 0.6], hyst: 0.01, base_top: BaseTop::Auto, out_volts: f64::NAN });
+        let narrow = analyze_levels(
+            &v,
+            1e-9,
+            0.0,
+            &Levels {
+                absolute: true,
+                rise: [0.4, 0.5, 0.6],
+                fall: [0.4, 0.5, 0.6],
+                hyst: 0.01,
+                base_top: BaseTop::Auto,
+                out_volts: f64::NAN,
+            },
+        );
         assert!(close_abs(narrow.rise_time, 20e-9, 3e-9), "{}", narrow.rise_time);
     }
 
@@ -1659,14 +1865,19 @@ mod tests {
             let t0 = burst as f64 * 300e-9;
             for k in 0..16 {
                 let t = t0 + k as f64 * ui;
-                if k % 2 == 0 { rises.push(t) } else { falls.push(t) }
+                if k % 2 == 0 {
+                    rises.push(t)
+                } else {
+                    falls.push(t)
+                }
             }
             // two data changes per burst, each half a UI before a strobe edge (rising in one, falling in the other)
             data.push(t0 + 3.5 * ui);
             data.push(t0 + 10.5 * ui);
         }
         let clock = Analysis { valid: true, rises, falls, ..Analysis::default() };
-        let (rises, falls): (Vec<f64>, Vec<f64>) = (data.iter().step_by(2).copied().collect(), data.iter().skip(1).step_by(2).copied().collect());
+        let (rises, falls): (Vec<f64>, Vec<f64>) =
+            (data.iter().step_by(2).copied().collect(), data.iter().skip(1).step_by(2).copied().collect());
         (clock, Analysis { valid: true, rises, falls, ..Analysis::default() }, ui)
     }
 
@@ -1698,7 +1909,12 @@ mod tests {
         let falls: Vec<f64> = rises.iter().map(|t| t + 5e-9).collect();
         let d: Vec<f64> = rises.iter().map(|t| t - 3e-9).collect();
         let clock = Analysis { valid: true, rises, falls, ..Analysis::default() };
-        let data = Analysis { valid: true, rises: d.iter().step_by(2).copied().collect(), falls: d.iter().skip(1).step_by(2).copied().collect(), ..Analysis::default() };
+        let data = Analysis {
+            valid: true,
+            rises: d.iter().step_by(2).copied().collect(),
+            falls: d.iter().skip(1).step_by(2).copied().collect(),
+            ..Analysis::default()
+        };
         assert!((setup_time(&clock, &data) - 3e-9).abs() < 1e-15);
         // the next change is 7 ns after each edge, one before the last edge has none
         assert!((hold_time(&clock, &data) - 7e-9).abs() < 1e-15);

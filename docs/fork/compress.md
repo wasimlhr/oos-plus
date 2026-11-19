@@ -129,11 +129,11 @@ off.
     differ by more than one row (host 0, 2, 4; the record path drew 8 to 13 differently), dots and lines;
   - k by time base, smoothing length, opt-in parsing, model conditions;
   - `perf_guard_compressed_frame` (ignored, `tools/perf-guard.sh`): compressed frame <= 0.25 x raw frame.
-- `ui/src/board/dho/hw.rs` `live_compression_plan_by_time_base`: k, frame bytes and frames per batch from 1 us/div to
+- `ui/src/board/dho/hw/tests.rs` `live_compression_plan_by_time_base`: k, frame bytes and frames per batch from 1 us/div to
   1 ms/div, 1 and 2 channels; off at 100 ns/div, in Single, above 1 M.
 - `ui/src/ui.rs` `statistics_of_the_fast_path_leave_out_what_pairs_cannot_give`: frames of the fast path add Max but
   not Mean or Std dev of deep pairs, and nothing of live-compression pairs.
-- `fpgad/src/compcheck.rs`: the report names PASS, a different layout, or FAIL.
+- `fpgad/src/dho/compcheck.rs`: the report names PASS, a different layout, or FAIL.
 
 ## On-unit verification
 
@@ -162,7 +162,7 @@ Probe on the 1 kHz compensation output, CH1 and CH2 on the same probe or a secon
 5. Glitch: a pulse source with a narrow pulse (generator option if fitted, or a 20 ns pulse into CH1) at 1 ms/div, k =
    64: the compressed read holds the pulse top in the pair of its block (`compress-check` covers it when the pulse is
    in the compared middle of the record). Without a pulse source: skip and leave the glitch claim at host level.
-6. Waveform rate before / after. Restart oos-ui with `acq.pipeline = batch`. Per time base 1 us, 10 us, 100 us/div,
+6. Waveform rate before / after (the batch draw path, the only one: ADR 0059). Per time base 1 us, 10 us, 100 us/div,
    1 and 2 channels, Auto depth, probe comp on CH1 (CH2), Normal trigger: read `:SYSTem:STATe?` twice 10 s apart
    (frames acquired / used per second) with `acq.compress` absent, then with `acq.compress = on` and a restart.
    Record: frames per batch (`acquire_batch` log line), acquired/s, used/s, dropped/s, CPU of oos-ui (`top -H -d 1`).
@@ -173,7 +173,7 @@ Probe on the 1 kHz compensation output, CH1 and CH2 on the same probe or a secon
    (the factor of the last batch read, 1 = raw) drops to 1 at once, no `raw read of the newest frame` errors in
    /tmp/oos-ui.log.
 
-Record the results here and in `docs/fork/unit-dho804.md`; flip the default only after steps 2, 6 and 7 pass.
+Record the results here; flip the default only after steps 2, 6 and 7 pass.
 
 ## Risks and open points
 

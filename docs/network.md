@@ -119,12 +119,12 @@ eth0's string, else wlan0's, only when it is a valid zone (ASCII, at most 60 cha
 a minute, and logs a change. Option 101 (a tz database name such as `Europe/Amsterdam`) is not asked for: the image has
 no zoneinfo to turn a name into rules. Other on the keyboard starts from the fallback.
 
-**How a sync works.** oos-ui has its own SNTP client (`ui/src/sntp.rs`, RFC 4330: version 4, client mode, one request and
-one answer, the originate time checked, kiss-o'-death and unsynchronised servers refused); the busybox of the image has
-no `ntpd`. A worker thread does the exchange, so the screen never waits on the network. The clock is stepped
-(`clock_settime`) when it is off by 50 ms or more. When a link comes up (Ethernet with a cable and an address, or WLAN
-with an address), the first request goes out 3 s later, after DHCP set the route and the name server. A failure is
-tried again after 15 s, 30 s, 1 min and so on up to every 15 min; a success again after an hour. The log
+**How a sync works.** oos-ui has its own SNTP client (`ui/system/src/sntp.rs`, RFC 4330: version 4, client mode, one
+request and one answer, the originate time checked, kiss-o'-death and unsynchronised servers refused); the busybox of
+the image has no `ntpd`. A worker thread does the exchange, so the screen never waits on the network. The clock is
+stepped (`clock_settime`) when it is off by 50 ms or more. When a link comes up (Ethernet with a cable and an address,
+or WLAN with an address), the first request goes out 3 s later, after DHCP set the route and the name server. A failure
+is tried again after 15 s, 30 s, 1 min and so on up to every 15 min; a success again after an hour. The log
 `/tmp/oos-ui.log` has a line per sync with the server's address, its stratum, the offset and the delay.
 
 **Time zone.** A POSIX `TZ` string: `std offset [dst [offset] [,start[/time],end[/time]]]`, the offset counted west of
@@ -157,15 +157,17 @@ address and the clock above the pages that set them.
 | Web remote | 8080 | live picture, keys and touch, downloads, LXI identification, MCP, **the update page** |
 | SCPI | 5555 (TCP) | the SCPI commands |
 | VXI-11 | 111 (portmapper, TCP and UDP) and 9009 | SCPI through VISA (LXI instruments) |
-| telnet | 23 | a shell **without password** (bring-up; use it on the bench LAN only) |
 | SSH | 22 | a root shell with the scope's own password or a trusted key (section 7); **SSH settings** next to it |
 
-Web remote, SCPI, VXI-11 and telnet are on by default, SSH is off unless the image or the user switches it on. A
-service switched off closes its port at once, with the connections on it. Switching off the web remote also takes away
-the update page: an update then comes from a USB stick. telnet and SSH are started by `rcS` at power-on (`telnetd`,
-`/bin/oos-ssh`), which reads `remote.telnet` and `remote.ssh` from `/oos/system.conf`; oos-ui starts or stops them
-when a switch changes. With SSH set up, switch telnet off: it is a shell for anyone on the network. The serial
-console (UART2) keeps its shell without a login.
+Every route of the web remote, with what it answers and its mark, is in [http.md](http.md).
+
+Web remote, SCPI and VXI-11 are on by default, SSH is off unless the image or the user switches it on. A service
+switched off closes its port at once, with the connections on it. Switching off the web remote also takes away the
+update page: an update then comes from a USB stick. SSH is the only shell on the network: `rcS` starts it at power-on
+(`/bin/oos-ssh`, which reads `remote.ssh` from `/oos/system.conf`), and oos-ui starts or stops it when its switch
+changes. There is no telnet (ADR 0054): an image of this version starts no `telnetd` and nothing listens on port 23;
+a `remote.telnet` line that an earlier version wrote is read without a complaint and left out when the file is written
+again. The serial console (UART2) keeps its shell without a login.
 
 The last row: **Allowed**, the addresses that may reach the scope (`net.allow`, section 6), and **Firewall** beside it,
 which shows the state in force: `on`, `off: everyone`, `applying` while a change is being put in force, `failed: see
@@ -187,10 +189,11 @@ client sends it (`udhcpc -x hostname:`), so a router lists the scope by it. A ne
 router from the next lease (the next start, or the next WLAN connection). Without `net.name` (the very first start)
 rcS uses `oos`. An SD card moved to another scope keeps its name: choose the one from model and serial in the picker.
 
-**What it answers.** oos-ui has its own responder (`ui/src/mdns.rs`, RFC 6762 and RFC 6763), in a thread of its own
-that sleeps in `poll` between packets; there is no avahi on the image. It listens on UDP port 5353 at 224.0.0.251 and,
-where the kernel has IPv6, at ff02::fb, on every interface that is up, has an address and takes multicast (eth0, wlan0),
-and looks at the interfaces every 2 s: a cable plugged in later, DHCP after the link-local address, a WLAN stick.
+**What it answers.** oos-ui has its own responder (`ui/system/src/mdns.rs`, RFC 6762 and RFC 6763), in a thread of its
+own that sleeps in `poll` between packets; there is no avahi on the image. It listens on UDP port 5353 at 224.0.0.251
+and, where the kernel has IPv6, at ff02::fb, on every interface that is up, has an address and takes multicast (eth0,
+wlan0), and looks at the interfaces every 2 s: a cable plugged in later, DHCP after the link-local address, a WLAN
+stick.
 
 | name | type | data |
 |---|---|---|
@@ -260,7 +263,6 @@ eth.retry_10m = on
 remote.web = on
 remote.scpi = on
 remote.vxi11 = on
-remote.telnet = on
 remote.ssh = off
 ssh.password = on
 remote.mdns = on              # mDNS and DNS-SD (4.1)
@@ -320,7 +322,7 @@ above); then a thread of its own runs `oos-firewall reload`, and with the SSH sw
 start with the new list would leave it. The toast says `Allowed: <list>, in force` (`No address list: everyone, in
 force`), or names what failed, with the log (`/tmp/oos-net.log`, `/tmp/oos-ssh.log`, and oos-ui's own); the
 **Firewall** row says `applying` until then, `failed: see the log` after a failure, else `on` or `off: everyone`. A
-save that fails changes nothing. On a computer (the desktop build, `--serve`) there is no firewall: only oos-ui's list
+save that fails changes nothing. On a computer (`--serve`) there is no firewall: only oos-ui's list
 changes. Leave the computer that should reach the scope inside the list: a change that leaves it out closes its SCPI
 connection at once and refuses its next update. There is no SCPI command for it: SCPI has no login.
 

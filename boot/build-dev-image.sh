@@ -4,13 +4,12 @@
 # build-dev-image.sh - the first OOS development boot image for `recovery` (Phase 2).
 #
 #   boot/build-dev-image.sh            -> boot/out/oos-dev.img (+ .sha256)
-#   OOS_DECODERS="usb dcc" / OOS_DECODERS_OFF="avionics" boot/build-dev-image.sh   fewer decoders in oos-ui
-#   (ui/tools/decoder-features.sh; the seven core decoders are always in)
 #
 # Contents: the kernel and DHO900 DTB from kernel/out/base (kernel/build-base.sh), the DTB's bootargs
 # changed to log on the panel (tty0) and UART2, and an initramfs from rootfs/initramfs with a static busybox and the
-# modules for later FPGA bring-up (pcierockchiphost, xdma), the touch panel (edt-ft5x06), the beeper (pwm-gpio) and WLAN (rtl8xxxu),
-# wpa_supplicant, oos-hw and the scope screen oos-ui (started by etc/rcS).
+# modules for later FPGA bring-up (pcierockchiphost, xdma), the touch panel (edt-ft5x06), the beeper (pwm-gpio), WLAN
+# (rtl8xxxu, rtw89) and Bluetooth (btusb, hidp), wpa_supplicant, BlueZ, oos-hw and the scope screen oos-ui (started by
+# etc/rcS).
 # The image only exists as a file; installing it is a separate, explicit step.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
@@ -36,20 +35,18 @@ if command -v rustup >/dev/null 2>&1; then
 else
 	echo "no rustup: a cargo from the distribution usually lacks aarch64-unknown-linux-musl and rust-lld; Rust from https://rustup.rs has them" >&2
 fi
-# the initramfs is built in Docker: fail now, not after the Rust builds (a failed late step kept the OLD image)
-docker info >/dev/null 2>&1 || { echo "Docker is not running (macOS: open -a Docker; Linux: systemctl start docker, and be in the docker group)" >&2; exit 1; }
-# the image's busybox, wpa_supplicant and e2fsck come from arm64 containers: on other hosts they need QEMU's binfmt
-docker run --rm --platform linux/arm64 alpine:3.22 true >/dev/null 2>&1 || {
-	echo "Docker cannot run arm64 containers. On an x86-64 host, once: docker run --privileged --rm tonistiigi/binfmt --install arm64" >&2
-	echo "(or the distribution's qemu-user-static with binfmt-support)" >&2
-	exit 1
-}
+# the initramfs is built in Docker: fail now, not after the Rust builds (a failed late step kept the OLD image). The
+# image's busybox, wpa_supplicant and e2fsck come from arm64 containers.
+. "$root/tools/lib/docker.sh"
+need_docker_arm64
+# the sources the image builds from: rootfs/deps.lock, and the stamps that say when a part is built again
+DEPS_LOCK="$root/rootfs/deps.lock"
+. "$root/rootfs/deps.sh"
 sha256() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi; }
 owner="$(id -u):$(id -g)"
 ui="$root/ui/target/aarch64-unknown-linux-musl/release"
 # always rebuild (incremental), so the image never carries a stale binary
-feat=$("$root/ui/tools/decoder-features.sh") || exit 1
-(cd "$root/ui" && cargo build --release --target aarch64-unknown-linux-musl $feat) || exit 1
+(cd "$root/ui" && cargo build --release --target aarch64-unknown-linux-musl) || exit 1
 fpgad="$root/fpgad/target/aarch64-unknown-linux-musl/release"
 (cd "$root/fpgad" && cargo build --release --target aarch64-unknown-linux-musl) || exit 1
 # oos-hw with the kernel's compiler (kernel/build-base.sh image), for arm64 whatever the host is; ELF e_machine 0xb7 is
@@ -59,17 +56,30 @@ if [ ! -x "$hw" ] || [ "$(od -An -tx1 -j18 -N1 "$hw" | tr -d ' ')" != b7 ]; then
 	kimage=$("$root/kernel/build-base.sh" image)
 	docker run --rm -e OUT_OWNER="$owner" -v "$root/tools/hw:/src" "$kimage" sh -euc 'cd /src && aarch64-linux-gnu-gcc -static -O2 -Wall -o oos-hw oos-hw.c && chown "$OUT_OWNER" oos-hw'
 fi
+# oos-usbmode the same way: a WLAN/Bluetooth stick out of its driver-CD mode (docs/bluetooth.md)
+usbmode="$root/tools/hw/oos-usbmode"
+if [ ! -x "$usbmode" ] || [ "$root/tools/hw/oos-usbmode.c" -nt "$usbmode" ] || [ "$(od -An -tx1 -j18 -N1 "$usbmode" | tr -d ' ')" != b7 ]; then
+	kimage=$("$root/kernel/build-base.sh" image)
+	docker run --rm -e OUT_OWNER="$owner" -v "$root/tools/hw:/src" "$kimage" sh -euc 'cd /src && aarch64-linux-gnu-gcc -static -O2 -Wall -o oos-usbmode oos-usbmode.c && aarch64-linux-gnu-strip oos-usbmode && chown "$OUT_OWNER" oos-usbmode'
+fi
 mkdir -p "$out"
-# arm64 whatever the host is and whatever Docker's builder: its busybox goes into the image. An image of another
-# architecture under this name (left by an older script on an x86-64 host) is built again (tools/arm64-image.sh).
-image=oos-initramfs:ubuntu
-"$root/tools/arm64-image.sh" "$image" ubuntu:26.04 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      busybox-static cpio gzip device-tree-compiler && rm -rf /var/lib/apt/lists/*'
+# arm64 whatever the host is: its busybox goes into the image (tools/lib/docker.sh)
+image=$(initramfs_image)
 
-# WLAN: wpa_supplicant and wpa_cli (docs/wlan.md)
-[ -x "$root/rootfs/out/wpa_supplicant" ] && [ -x "$root/rootfs/out/wpa_cli" ] || "$root/rootfs/build-wlan-tools.sh"
+# The programs built from rootfs/deps.lock are built again when missing, or when their deps.lock lines or their build
+# script changed since (deps.sh stamps). WLAN: wpa_supplicant and wpa_cli (docs/wlan.md)
+o="$root/rootfs/out"
+if [ ! -x "$o/wpa_cli" ] || dep_stale "$o/wpa_supplicant" "$root/rootfs/build-wlan-tools.sh" wpa_supplicant libnl \
+	libnl-musl-patch; then
+	"$root/rootfs/build-wlan-tools.sh"
+fi
+# Bluetooth: dbus-daemon, bluetoothd and btmon (docs/bluetooth.md)
+if [ ! -x "$o/btmon" ] || [ ! -x "$o/dbus-daemon" ] || dep_stale "$o/bluetoothd" dbus bluez expat glib glib-patch-1 \
+	glib-patch-2 pcre2 gettext gettext-patch-1 gettext-patch-2 gettext-patch-3 "$root/rootfs/build-bluez.sh"; then
+	"$root/rootfs/build-bluez.sh"
+fi
 # /oos is checked before it is mounted
-[ -x "$root/rootfs/out/e2fsck" ] || "$root/rootfs/build-fsck.sh"
+if dep_stale "$o/e2fsck" "$root/rootfs/build-fsck.sh" e2fsprogs; then "$root/rootfs/build-fsck.sh"; fi
 # SSH (Dropbear, built by boot/unit-hook.sh): trusted public keys can be built into the image
 # (OOS_SSH_AUTHORIZED_KEYS); host keys and the password are made once on each scope, on /oos.
 ssh_seed="$root/rootfs/out/ssh-seed"
@@ -79,12 +89,14 @@ if [ -n "${OOS_SSH_AUTHORIZED_KEYS:-}" ]; then
 	python3 -I "$root/tools/ssh-keys.py" validate "$OOS_SSH_AUTHORIZED_KEYS" --out "$ssh_seed/authorized_keys"
 fi
 # an update with another device tree is tried by kexec_load with that tree (docs/update.md)
-[ -x "$root/rootfs/out/kexec" ] || "$root/rootfs/build-kexec.sh"
-# System > Graphics = GPU: the helper oos-gpu and Mesa (gpu/README.md)
-# (again when the helper's source is newer than the built one: Mesa itself is kept in rootfs/out/mesa)
-{ [ -x "$root/rootfs/out/gpu/bin/oos-gpu" ] && [ ! "$root/gpu/oos-gpu.c" -nt "$root/rootfs/out/gpu/bin/oos-gpu" ]; } || "$root/gpu/build.sh"
+if dep_stale "$o/kexec" "$root/rootfs/build-kexec.sh" kexec-tools; then "$root/rootfs/build-kexec.sh"; fi
+# System > Graphics = GPU: the helper oos-gpu and Mesa (gpu/README.md), again when gpu/build.sh, oos-gpu.c or the Mesa
+# line of rootfs/deps.lock changed since (deps.sh stamps; gpu/build.sh keeps Mesa itself in rootfs/out/mesa)
+if dep_stale "$o/gpu/bin/oos-gpu" "$root/gpu/build.sh" "$root/gpu/oos-gpu.c" mesa; then
+	"$root/gpu/build.sh"
+fi
 
-# the fork's unit defaults, firewall and build choices (docs/fork/sync-checklist.md)
+# the unit profile (OOS_UNIT, docs/models.md 4.2), the firewall and the SSH server (boot/unit-hook.sh)
 . "$here/unit-hook.sh"
 build_id="$(date -u +%Y%m%d-%H%M%S) kernel $(cat "$k/kernel.release")"
 docker run --rm --platform linux/arm64 -e OUT_OWNER="$owner" -e OOS_NO_AUTOACQ="${OOS_NO_AUTOACQ:-}" -v "$root/rootfs/initramfs:/src:ro" -v "$board:/board:ro" -v "$root/rootfs/out:/wlan:ro" -v "$root/tools/hw:/hw:ro" -v "$ui:/ui:ro" -v "$fpgad:/fpgad:ro" -v "$k:/k:ro" -v "$out:/out" -e BUILD_ID="$build_id" "$image" sh -euc '
@@ -96,15 +108,18 @@ docker run --rm --platform linux/arm64 -e OUT_OWNER="$owner" -e OOS_NO_AUTOACQ="
 	mkdir -p $r/bin $r/sbin $r/etc $r/proc $r/sys $r/dev $r/tmp $r/run $r/mnt $r/root $r/lib/modules
 	cp /bin/busybox $r/bin/busybox
 	cp /hw/oos-hw $r/bin/oos-hw
+	cp /hw/oos-usbmode $r/bin/oos-usbmode
 	cp /ui/oos-ui $r/bin/oos-ui
 	cp /fpgad/oos-fpgad $r/bin/oos-fpgad
 	cp /fpgad/oos-update $r/bin/oos-update
 	cp /wlan/wpa_supplicant /wlan/wpa_cli /wlan/e2fsck /wlan/kexec $r/bin/
+	cp /wlan/dbus-daemon /wlan/bluetoothd /wlan/btmon $r/bin/
 	if [ -s /wlan/ssh-seed/authorized_keys ]; then
 		mkdir -p $r/etc/oos-ssh; cp /wlan/ssh-seed/authorized_keys $r/etc/oos-ssh/authorized_keys
 		chmod 700 $r/etc/oos-ssh; chmod 600 $r/etc/oos-ssh/authorized_keys
 	fi
 	mkdir -p $r/etc/licenses; cp /wlan/wpa_supplicant.COPYING $r/etc/licenses/wpa_supplicant; cp /wlan/e2fsck.COPYING $r/etc/licenses/e2fsck; cp /wlan/kexec.COPYING $r/etc/licenses/kexec-tools
+	for l in bluez dbus expat pcre2; do cp /wlan/$l.COPYING $r/etc/licenses/$l; done
 	# the GPU helper with Mesa and glibc (their own loader; oos-ui and the rest stay static)
 	cp -a /wlan/gpu/. $r/
 	. /wlan/unit-hook/image.sh

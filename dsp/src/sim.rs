@@ -52,7 +52,17 @@ pub struct PulseTrain {
 
 impl PulseTrain {
     pub fn square(f: f64, lo: f64, hi: f64, tr: f64) -> PulseTrain {
-        PulseTrain { period: 1.0 / f, width: 0.5 / f, lo, hi, tr, offset: 0.0, every: 0, at: 0, special: Pulse { width: 0.0, height: 0.0 } }
+        PulseTrain {
+            period: 1.0 / f,
+            width: 0.5 / f,
+            lo,
+            hi,
+            tr,
+            offset: 0.0,
+            every: 0,
+            at: 0,
+            special: Pulse { width: 0.0, height: 0.0 },
+        }
     }
     fn pulse(&self, k: i64) -> Pulse {
         if self.every > 0 && k.rem_euclid(self.every) == self.at {
@@ -131,8 +141,8 @@ pub fn video(std: VideoStd, t: f64) -> f64 {
         let w = u - slot as f64 * l / 2.0;
         let group = slot / eq;
         let low = match group {
-            1 => w < l / 2.0 - std.hsync(),  // broad pulse: low except the last 4.7 us
-            _ => w < std.hsync() / 2.0,      // equalizing pulse: half an H sync
+            1 => w < l / 2.0 - std.hsync(), // broad pulse: low except the last 4.7 us
+            _ => w < std.hsync() / 2.0,     // equalizing pulse: half an H sync
         };
         return if low { 0.0 } else { blank };
     }
@@ -166,7 +176,12 @@ mod tests {
 
     #[test]
     fn pulse_train_with_runt() {
-        let p = PulseTrain { every: 4, at: 2, special: Pulse { width: 0.5e-3, height: 0.4 }, ..PulseTrain::square(1e3, 0.0, 2.0, 1e-6) };
+        let p = PulseTrain {
+            every: 4,
+            at: 2,
+            special: Pulse { width: 0.5e-3, height: 0.4 },
+            ..PulseTrain::square(1e3, 0.0, 2.0, 1e-6)
+        };
         assert!((p.v(0.25e-3) - 2.0).abs() < 1e-9);
         assert!((p.v(0.75e-3) - 0.0).abs() < 1e-9);
         assert!((p.v(2.25e-3) - 0.8).abs() < 1e-9); // runt: 40 %
@@ -196,7 +211,7 @@ impl Logic {
         Logic { seg: Vec::new(), lo, hi, tr }
     }
     pub fn push(&mut self, t: f64, level: bool) {
-        if self.seg.last().map_or(true, |&(_, l)| l != level) {
+        if self.seg.last().is_none_or(|&(_, l)| l != level) {
             self.seg.push((t, level));
         }
     }
@@ -204,7 +219,7 @@ impl Logic {
         // (level, time of the last change, previous level)
         let i = self.seg.partition_point(|&(s, _)| s <= t);
         if i == 0 {
-            let l = self.seg.first().map_or(false, |&(_, l)| l);
+            let l = self.seg.first().is_some_and(|&(_, l)| l);
             return (l, f64::NEG_INFINITY, l);
         }
         let (s, l) = self.seg[i - 1];
@@ -216,6 +231,14 @@ impl Logic {
         let x = |b: bool| if b { self.hi } else { self.lo };
         let f = if self.tr > 0.0 { ((t - s) / self.tr).clamp(0.0, 1.0) } else { 1.0 };
         x(p) + (x(l) - x(p)) * f
+    }
+    /// Time of the last level change (0 without one).
+    pub fn end(&self) -> f64 {
+        self.seg.last().map_or(0.0, |s| s.0)
+    }
+    /// The waveform from t = 0 until `extra` after the last level change, at `dt`.
+    pub fn sample(&self, dt: f64, extra: f64) -> Vec<f32> {
+        sample(|t| self.v(t), 0.0, dt, ((self.end() + extra) / dt) as usize)
     }
 }
 
@@ -464,7 +487,8 @@ pub fn lin_logic(frames: &[(u8, Vec<u8>, bool)], baud: f64, lo: f64, hi: f64) ->
 /// falling SCK edge. `fs` = sample rate (frames per second).
 pub fn i2s_logic(frames: &[(i32, i32)], bits: u32, fs: f64, lo: f64, hi: f64) -> (Logic, Logic, Logic) {
     let tb = 1.0 / (fs * 2.0 * bits as f64);
-    let (mut sck, mut ws, mut sd) = (Logic::new(lo, hi, tb / 20.0), Logic::new(lo, hi, tb / 20.0), Logic::new(lo, hi, tb / 20.0));
+    let (mut sck, mut ws, mut sd) =
+        (Logic::new(lo, hi, tb / 20.0), Logic::new(lo, hi, tb / 20.0), Logic::new(lo, hi, tb / 20.0));
     // a stream of bits: WS changes one clock before the MSB of each word
     let mut slots: Vec<(bool, bool)> = Vec::new(); // (ws, sd) per clock
     for &(l, r) in frames {
@@ -516,10 +540,17 @@ impl Levels {
 /// MIL-STD-1553 words (cmd sync?, value) as a bipolar bus signal of amplitude `a` (idle 0 V), `gap` us of idle
 /// between the words.
 pub fn mil1553_wave(words: &[(bool, u16)], a: f64, gap: f64) -> Levels {
+    let with: Vec<(bool, u16, f64)> = words.iter().map(|&(cmd, w)| (cmd, w, gap)).collect();
+    mil1553_message(&with, a)
+}
+
+/// `mil1553_wave` with a dead time (us) of its own after each word, as a message has them: none between the words
+/// of one sender, the response time before a status word, the gap before the next message.
+pub fn mil1553_message(words: &[(bool, u16, f64)], a: f64) -> Levels {
     let us = 1e-6;
     let mut l = Levels { seg: vec![(0.0, 0.0)], tr: 0.05 * us };
     let mut t = 4.0 * us;
-    for &(cmd, w) in words {
+    for &(cmd, w, gap) in words {
         let s = if cmd { a } else { -a };
         l.seg.push((t, s));
         l.seg.push((t + 1.5 * us, -s));
@@ -533,8 +564,11 @@ pub fn mil1553_wave(words: &[(bool, u16)], a: f64, gap: f64) -> Levels {
             l.seg.push((t + 0.5 * us, -first));
             t += us;
         }
-        l.seg.push((t, 0.0));
-        t += gap * us;
+        if gap > 0.0 {
+            l.seg.push((t, 0.0));
+            t += gap * us;
+        }
     }
+    l.seg.push((t, 0.0));
     l
 }

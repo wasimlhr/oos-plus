@@ -10,7 +10,17 @@ use super::*;
 impl Ui {
     /// Every menu the start menu and the top bar open, with the start menu itself.
     fn script_menus(&self) -> Vec<MenuId> {
-        let mut v = vec![MenuId::Main, MenuId::Display, MenuId::Utility, MenuId::Storage, MenuId::Measure, MenuId::Cursor, MenuId::Horizontal, MenuId::Trigger, MenuId::Acquire];
+        let mut v = vec![
+            MenuId::Main,
+            MenuId::Display,
+            MenuId::Utility,
+            MenuId::Storage,
+            MenuId::Measure,
+            MenuId::Cursor,
+            MenuId::Horizontal,
+            MenuId::Trigger,
+            MenuId::Acquire,
+        ];
         v.extend((0..NCH).map(MenuId::Channel));
         for (_, items) in self.main_groups() {
             for it in items {
@@ -28,7 +38,10 @@ impl Ui {
         let id = self
             .script_menus()
             .into_iter()
-            .find(|&id| self.menu_title(id).eq_ignore_ascii_case(name) || self.item_label(Item::Open(id)).eq_ignore_ascii_case(name))
+            .find(|&id| {
+                self.menu_title(id).eq_ignore_ascii_case(name)
+                    || self.item_label(Item::Open(id)).eq_ignore_ascii_case(name)
+            })
             .ok_or_else(|| format!("no menu {:?}", name))?;
         self.open_menu(id);
         Ok(())
@@ -92,6 +105,30 @@ impl Ui {
         Ok(())
     }
 
+    /// Puts `text` into the open on-screen keyboard, in place of what it holds.
+    pub fn script_type(&mut self, text: &str) -> Result<(), String> {
+        if self.osk_set(text.trim()) { Ok(()) } else { Err("no keyboard open".into()) }
+    }
+
+    /// OK of the open on-screen keyboard.
+    pub fn script_ok(&mut self) -> Result<(), String> {
+        if self.wlan.osk.is_none() {
+            return Err("no keyboard open".into());
+        }
+        self.osk_ok();
+        Ok(())
+    }
+
+    /// Takes an option of the open picker: by its text, or by its place in the list (1 is the first).
+    pub fn script_option(&mut self, want: &str) -> Result<(), String> {
+        let Some(p) = self.pick.filter(|_| self.menu_open && self.menu == MenuId::Pick) else { return Err("no picker open".into()) };
+        let (want, opts) = (want.trim(), self.options(p.it));
+        let k = opts.iter().position(|o| o.eq_ignore_ascii_case(want)).or_else(|| want.parse::<usize>().ok().filter(|n| (1..=opts.len()).contains(n)).map(|n| n - 1))
+            .ok_or_else(|| format!("no option {:?} in {}", want, self.menu_title(MenuId::Pick)))?;
+        self.activate(Item::PickOpt(k));
+        Ok(())
+    }
+
     /// Presses the item `label` of the open menu (an action, or a sub-menu). On the measurement page: the tile of that
     /// name, as a tap on it (on, or off again).
     pub fn script_do(&mut self, label: &str) -> Result<(), String> {
@@ -117,7 +154,7 @@ mod tests {
 
     #[test]
     fn menus_and_items_by_name() {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         assert!(u.script_menu("nothing").is_err());
         u.script_menu("Mask").unwrap();
         assert_eq!(u.menu, MenuId::Mask);

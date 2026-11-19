@@ -9,7 +9,7 @@ Menu > Instruments > Ext generator. Over SCPI: [scpi/extgen.md](scpi/extgen.md).
 ## How the scope talks to it
 
 - **USB.** A USB cable from the USB-A port of the scope to the USB device port of the generator. The scope is the
-  host, as a computer would be, and speaks USBTMC to the first instrument it finds (`ui/src/usbtmc.rs`: no kernel
+  host, as a computer would be, and speaks USBTMC to the first instrument it finds (`ui/system/src/usbtmc.rs`: no kernel
   driver, no computer). Nothing is typed in.
 - **LAN.** A socket to the address of the generator (`ip` or `ip:port`, port 5555 if none). The knob moves the last
   number of the address; `:EXTGen:ADDRess` sets all of it. A generator without a network port is not reached this

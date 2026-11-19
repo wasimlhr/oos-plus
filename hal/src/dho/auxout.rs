@@ -27,7 +27,7 @@ pub mod pf {
     /// bits 23:0: pulse width in FPGA sample clocks
     pub const WIDTH_MASK: u32 = 0x00ff_ffff;
     /// one width count in seconds (156.25 MHz)
-    pub const CLOCK_S: f64 = 6.4e-9;
+    pub const CLOCK_S: f64 = crate::dho::clock::FPGA_TICK_S;
     /// bit 29: result source, 1 = zone trigger, 0 = mask test
     pub const SRC_ZONE: u32 = 1 << 29;
     /// bit 30: idle level, 1 = idle high with a low pulse, 0 = idle low with a high pulse
@@ -85,20 +85,15 @@ impl PassFail {
 }
 
 /// What the AUX OUT BNC carries.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum AuxOut {
     /// a pulse per trigger (power-up state)
+    #[default]
     TriggerOut,
     /// constant low
     Off,
     /// the pass/fail pulse; needs the hardware mask unit (or the zone trigger) to produce results
     PassFail(PassFail),
-}
-
-impl Default for AuxOut {
-    fn default() -> AuxOut {
-        AuxOut::TriggerOut
-    }
 }
 
 /// The writes that put `a` on the BNC: the pulse configuration before the select, so the output never runs on the
@@ -137,7 +132,10 @@ mod tests {
         assert_eq!(PassFail { event: Event::Pass, ..p }.word(), 156 | 1 << 31);
         assert_eq!(PassFail { source: Source::Zone, ..p }.word(), 156 | 1 << 29);
         // the zone trigger's own set-up: 68 clocks, zone, idle high, on fail
-        assert_eq!(PassFail { width: 68.0 * 6.4e-9, source: Source::Zone, event: Event::Fail, idle_high: true }.word(), 0x6000_0044);
+        assert_eq!(
+            PassFail { width: 68.0 * 6.4e-9, source: Source::Zone, event: Event::Fail, idle_high: true }.word(),
+            0x6000_0044
+        );
         let all = PassFail { width: 1.0, source: Source::Zone, event: Event::Pass, idle_high: true };
         assert_eq!(all.word(), 0xe0ff_ffff);
     }

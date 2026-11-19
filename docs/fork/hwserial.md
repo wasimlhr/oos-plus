@@ -2,7 +2,7 @@
 
 The SPI and I2C protocol triggers in the TPU's receivers, next to the UART (`hwuart.md`). Opt-in with the same switch,
 `trig.serial_hw = on` in system.conf. Code: `hal/src/dho/serialtrig.rs` (words), `tpu::spi`, `tpu::i2c`,
-`seq::Trig::Spi`/`I2c`, `ui/src/board/dho/hw.rs` (`spi_of`, `i2c_of`, `serial_debug`). Register facts: assumed,
+`seq::Trig::Spi`/`I2c`, `ui/src/board/dho/hw/serial.rs` (`spi_of`, `i2c_of`, `serial_debug`). Register facts: assumed,
 not yet verified on hardware unless a step below says so.
 
 ## Hardware
@@ -18,8 +18,10 @@ not yet verified on hardware unless a step below says so.
   the ACK's SCL rise.
 - Each line routed as the stock system routes it (assumed): the channel's level-A comparator on both inputs of its event,
   pattern (2, invert, 2, invert): SPI data (2, 0, 2, 0), clock and CS with their inversion, I2C SCL and SDA (2, 0, 2, 0).
-  Only bits 23:20 reach the line (bit 23 the inversion); bits 19:16 are the stock values. The threshold is the
-  trigger level of the protocol trigger (Decode threshold) on every line.
+  Only bits 23:20 reach the line (bit 23 the inversion); bits 19:16 are the stock values. The threshold of a line
+  is the decoder's threshold of that line: Decode > Threshold, or the one of its own a line has (a clock on a
+  10:1 probe that the channel reads as 1:1 has 0.5 V beside data of 5 V). Each line has its comparator, so each
+  has its level (`seq::Settings::line_level`; host-tested, not yet verified on hardware).
 
 ## What OOS does
 
@@ -72,4 +74,4 @@ address 0x50, or an Arduino as master. Probes: CH1 on SDA, CH2 on SCL. Read the 
 6. With CH3 off while SPI uses it: debug shows the receiver, but the trigger falls back to edge (lines not acquired).
 7. `trig.serial_hw = off`: everything as before.
 
-Record the results in `docs/fork/unit-dho804.md`.
+Record the results here.

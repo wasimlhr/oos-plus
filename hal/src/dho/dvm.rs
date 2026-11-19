@@ -148,8 +148,8 @@ pub fn decode(r: &Raw, exp: u32) -> Option<Reading> {
 /// gain. A digital gain of 2 and more is split into the ADC x2 of 0x105c, which acts before the samples are stored,
 /// and the read-path rest (`levels::volts` does the same for the measure unit).
 fn volts_per_code(v: &Vert) -> f64 {
-    let dg = if v.gain >= 2.0 { v.gain / 2.0 } else { v.gain };
-    READOUT_PER_CODE * dg * v.scale / 7500.0
+    let dg = crate::dho::wpu::split_gain(v.gain).1;
+    READOUT_PER_CODE * dg * v.scale / crate::dho::readout::CODES_PER_DIV
 }
 
 /// The DVM value of a reading in volts as the records show them: DC = the mean; AC rms = the standard deviation;
@@ -232,7 +232,13 @@ mod tests {
         let n = (1u64 << EXP) as f64;
         let sum = (mean * n).round() as u64;
         let sq = ((mean * mean + sigma * sigma) * n).round() as u64;
-        Raw { cfg: (sq >> 32) as u32 & !0xff | 0x38, sum_lo: sum as u32, sum_hi: ((sum >> 32) as u32) << 16 | 0x00b8, sq_lo: sq as u32, sq_hi: (sq >> 32) as u32 }
+        Raw {
+            cfg: (sq >> 32) as u32 & !0xff | 0x38,
+            sum_lo: sum as u32,
+            sum_hi: ((sum >> 32) as u32) << 16 | 0x00b8,
+            sq_lo: sq as u32,
+            sq_hi: (sq >> 32) as u32,
+        }
     }
 
     // The readings of the unit session (2026-11-13, round 2), decoded and converted. Break it catches: the 16-bit
@@ -256,7 +262,15 @@ mod tests {
             assert!((r.mean - mean).abs() < 1e-6 && (r.mean_sq - mean * mean - sigma * sigma).abs() < 1e-3, "{:?}", r);
             let v = Vert { scale, offset, gain };
             let got = (volts(&r, Mode::Dc, &v), volts(&r, Mode::AcRms, &v));
-            assert!((got.0 - dc).abs() < 2e-5 && (got.1 - ac).abs() < 2e-5, "mean {} sigma {}: {:?} != ({}, {})", mean, sigma, got, dc, ac);
+            assert!(
+                (got.0 - dc).abs() < 2e-5 && (got.1 - ac).abs() < 2e-5,
+                "mean {} sigma {}: {:?} != ({}, {})",
+                mean,
+                sigma,
+                got,
+                dc,
+                ac
+            );
             let acdc = volts(&r, Mode::AcDcRms, &v);
             assert!((acdc - got.0.hypot(got.1)).abs() < 1e-9, "{} vs {:?}", acdc, got);
         }

@@ -110,6 +110,32 @@ fn tap_in(u: &mut Ui, r: Rect) {
     u.tap(r.x + r.w / 2, r.y + r.h / 2);
 }
 
+/// The links of the Studio bar: LAN as a small pill, and USB beside it while a stick is mounted, as the Default bar
+/// has a USB pill. They take their room from the read-out and overlap nothing; a tap on LAN opens Network, one on
+/// USB opens Storage.
+#[test]
+fn studio_top_bar_has_a_lan_pill_and_a_usb_pill_while_a_stick_is_in() {
+    let mut u = studio();
+    let t = u.studio_top();
+    assert!(t.lan.w > 0 && t.lan.w < 70 && t.usb.w == 0 && t.wlan.w == 0, "{:?}", (t.lan, t.usb, t.wlan));
+    let acq = t.acq.w;
+    u.usb = true;
+    let t = u.studio_top();
+    assert!(t.usb.w > 0 && t.usb.right() <= t.lan.x && t.acq.w < acq, "{:?}", (t.usb, t.lan, t.acq));
+    let all = [t.run, t.acq, t.usb, t.lan, t.add, t.cursors, t.display, t.storage, t.view, t.gear];
+    for (i, a) in all.iter().enumerate() {
+        assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
+        for b in &all[i + 1..] { assert!(!overlaps(*a, *b), "chips {i} do not overlap: {a:?} {b:?}"); }
+    }
+    shot(&mut u, "01-top-links");
+    tap_in(&mut u, t.usb);
+    assert!(u.menu_open && u.menu == MenuId::Storage);
+    u.close_menu();
+    tap_in(&mut u, t.lan);
+    assert!(u.menu_open && u.menu == MenuId::Network);
+    u.close_menu();
+}
+
 #[test]
 fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     let mut u = studio();
@@ -543,57 +569,6 @@ fn zoomed() -> Ui {
     u.m.zdelay = 0.0;
     u.relayout();
     u
-}
-
-#[test]
-fn studio_zoom_has_a_toolbar_an_overview_and_a_menu() {
-    let mut u = zoomed();
-    shot(&mut u, "13-zoom");
-    let bar = u.studio_zoom_bar().expect("toolbar");
-    let row = u.zoom_readout();
-    for (i, r) in [bar.label, bar.tdiv, bar.plus, bar.minus, bar.close, bar.center, bar.fit, bar.more].iter().enumerate() {
-        assert!(r.x >= row.x && r.right() <= row.right() && r.y >= row.y && r.bottom() <= row.bottom(), "chip {i} in the strip");
-    }
-    assert!(bar.tdiv.right() <= bar.center.x, "the chips do not overlap");
-    // the overview is over the toolbar, the zoomed lanes under it
-    let (overview, detail) = u.split_zoom(u.grid);
-    assert!(overview.bottom() <= detail.y, "the strip is in the waveform title bar, not between them");
-    // the factor is the ratio of the two time bases
-    assert!((u.studio_time_zoom() - u.m.time_per_div() / tscales()[u.m.zscale]).abs() < 1e-3);
-    // the hint of a pinch shows the factor under the fingers (mock 08)
-    u.pinch.active = true;
-    u.pinch.detail = true;
-    shot(&mut u, "18-zoom-pinch");
-    u.pinch.active = false;
-    // + and - on the menu step the zoom, Center trigger and Fit record move the window
-    tap_in(&mut u, bar.more);
-    assert!(u.studio.zoom_menu);
-    shot(&mut u, "14-zoom-menu");
-    let before = u.m.zscale;
-    let plus = u.studio_zoom_rows().into_iter().find(|(r, _)| *r == studio::ZoomRow::Plus).unwrap().1;
-    tap_in(&mut u, plus);
-    assert!(u.m.zscale < before, "Plus zooms in");
-    let minus = u.studio_zoom_rows().into_iter().find(|(r, _)| *r == studio::ZoomRow::Minus).unwrap().1;
-    tap_in(&mut u, minus);
-    assert_eq!(u.m.zscale, before);
-    // a tap outside closes the menu and nothing else
-    u.tap(20, 40 + 4);
-    assert!(!u.studio.zoom_menu && u.m.zoom);
-    u.m.zdelay = 3.0 * u.m.time_per_div();
-    assert!(u.studio_trigger_off_screen_for_test());
-    tap_in(&mut u, bar.center);
-    assert_eq!(u.m.zdelay, 0.0);
-    u.m.zscale = before.saturating_sub(2);
-    tap_in(&mut u, bar.fit);
-    assert_eq!(u.m.zscale, u.m.tscale, "Fit record shows the whole record again");
-    // the time/div chip opens Horizontal, Close zoom is on the menu
-    tap_in(&mut u, bar.tdiv);
-    assert_eq!(u.menu, MenuId::Horizontal);
-    u.close_menu();
-    tap_in(&mut u, bar.more);
-    let close = u.studio_zoom_rows().into_iter().find(|(r, _)| *r == studio::ZoomRow::Close).unwrap().1;
-    tap_in(&mut u, close);
-    assert!(!u.m.zoom && !u.studio.zoom_menu);
 }
 
 #[test]

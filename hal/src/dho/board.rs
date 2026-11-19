@@ -152,7 +152,9 @@ impl Beeper {
             .flatten()
             .map(|e| e.path())
             .find(|p| fs::read_link(p.join("device")).is_ok_and(|l| l.to_string_lossy().ends_with("pwm-gpio")))
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "no pwm-gpio pwmchip (modprobe pwm-gpio)"))?;
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::NotFound, "no pwm-gpio pwmchip (modprobe pwm-gpio)")
+            })?;
         let pwm = chip.join("pwm0");
         if !pwm.exists() {
             fs::write(chip.join("export"), "0")?;
@@ -195,16 +197,10 @@ mod tests {
 
     #[test]
     fn xadc_rejects_unloaded_fpga() {
-        struct R(u32);
-        impl crate::dho::bus::Bus for R {
-            fn wr(&mut self, _: u32, _: u32) {}
-            fn rd(&mut self, _: u32) -> u32 {
-                self.0
-            }
-        }
-        assert!(read_xadc(&mut R(u32::MAX)).is_none());
-        assert!(read_xadc(&mut R(0)).is_none());
-        assert!(read_xadc(&mut R(0x0555_09b0)).is_some());
+        let r = |v: u32| crate::dho::bus::Recorder { regs: [(XADC_REG, v)].into(), ..Default::default() };
+        assert!(read_xadc(&mut r(u32::MAX)).is_none());
+        assert!(read_xadc(&mut r(0)).is_none());
+        assert!(read_xadc(&mut r(0x0555_09b0)).is_some());
     }
 
     #[test]
@@ -243,7 +239,10 @@ mod tests {
         fs::create_dir_all(d.join("cooling_device0")).unwrap();
         let z = thermal_zones(&d);
         fs::remove_dir_all(&d).unwrap();
-        assert_eq!(z, vec![Zone { name: "cpu-thermal".into(), temp: 45.0 }, Zone { name: "gpu-thermal".into(), temp: 41.25 }]);
+        assert_eq!(
+            z,
+            vec![Zone { name: "cpu-thermal".into(), temp: 45.0 }, Zone { name: "gpu-thermal".into(), temp: 41.25 }]
+        );
     }
 
     #[test]

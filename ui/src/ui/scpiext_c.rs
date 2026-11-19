@@ -11,7 +11,7 @@ pub(super) const T3: &[&str] = &[
     "SYSTem:DATE", "SYSTem:TIME", "SYSTem:TZONe", "SYSTem:NTP:ENABle", "SYSTem:NTP:SERVer", "SYSTem:NTP:STATus", "SYSTem:NTP:SYNC",
     "SYSTem:COMMunicate:LAN:IPADdress", "SYSTem:COMMunicate:LAN:MAC", "SYSTem:COMMunicate:LAN:STATus", "SYSTem:COMMunicate:LAN:RETRy10",
     "SYSTem:WLAN:STATus", "SYSTem:WLAN:SCAN", "SYSTem:WLAN:NETWorks", "SYSTem:WLAN:SAVed", "SYSTem:WLAN:FORGet",
-    "SYSTem:REMote:SERVice:SCPI", "SYSTem:REMote:SERVice:VXI11", "SYSTem:REMote:SERVice:TELNet", "SYSTem:REMote:SERVice:WEB", "SYSTem:REMote:SERVice:MDNS",
+    "SYSTem:REMote:SERVice:SCPI", "SYSTem:REMote:SERVice:VXI11", "SYSTem:REMote:SERVice:WEB", "SYSTem:REMote:SERVice:MDNS",
     "SYSTem:NAME",
     "DISPlay:BACKlight", "DISPlay:HDMI", "DISPlay:TEXTsize", "DISPlay:LAYout",
     "SYSTem:LOCK", "SESSion", "SYSTem:INFO",
@@ -93,8 +93,8 @@ impl Ui {
                 DONE
             }
             // ---- remote services; switching the SCPI service off needs CONFIRM (the command that does it ends this session)
-            "SYSTem:REMote:SERVice:SCPI" | "SYSTem:REMote:SERVice:VXI11" | "SYSTem:REMote:SERVice:TELNet" | "SYSTem:REMote:SERVice:WEB" | "SYSTem:REMote:SERVice:MDNS" => {
-                let it = match key.rsplit(':').next().unwrap_or("") { "SCPI" => Item::RemScpi, "VXI11" => Item::RemVxi, "TELNet" => Item::RemTelnet, "WEB" => Item::RemWeb, _ => Item::RemMdns };
+            "SYSTem:REMote:SERVice:SCPI" | "SYSTem:REMote:SERVice:VXI11" | "SYSTem:REMote:SERVice:WEB" | "SYSTem:REMote:SERVice:MDNS" => {
+                let it = match key.rsplit(':').next().unwrap_or("") { "SCPI" => Item::RemScpi, "VXI11" => Item::RemVxi, "WEB" => Item::RemWeb, _ => Item::RemMdns };
                 let (a, yes) = confirm(arg);
                 if !q && it == Item::RemScpi && parse_bool(&a) == Some(false) && !yes { return Some(Err(needs_confirm("Switching SCPI off"))); }
                 return Some(self.sel(it, q, &a));
@@ -253,12 +253,12 @@ impl Ui {
                 let Some(id) = parts.first().and_then(|s| s.parse::<u16>().ok()) else { return Some(Err(bad(arg))) };
                 let Some(cat) = super::meascatalog::cat_from(id) else { return Some(Err(bad(arg))) };
                 let src = |i: usize, d: WaveId| match parts.get(i) { Some(s) => crate::scpi::parse_wave(s).ok_or_else(|| bad(arg)), None => Ok(d) };
-                let (a, b, c, d) = match (src(1, self.meas_src), src(2, self.meas_src_b), src(3, self.cat_c), src(4, self.cat_d)) { (Ok(a), Ok(b), Ok(c), Ok(d)) => (a, b, c, d), _ => return Some(Err(bad(arg))) };
+                let (a, b, c, d) = match (src(1, self.meas_src), src(2, self.meas_src_b), src(3, self.cat.c), src(4, self.cat.d)) { (Ok(a), Ok(b), Ok(c), Ok(d)) => (a, b, c, d), _ => return Some(Err(bad(arg))) };
                 if q { return Some(t(en(self.cat_row(id, a, b, c, d).map_or(f64::NAN, |r| r.v)))); }
-                let keep = (self.meas_src, self.meas_src_b, self.cat_c, self.cat_d);
-                (self.meas_src, self.meas_src_b, self.cat_c, self.cat_d) = (a, b, c, d);
+                let keep = (self.meas_src, self.meas_src_b, self.cat.c, self.cat.d);
+                (self.meas_src, self.meas_src_b, self.cat.c, self.cat.d) = (a, b, c, d);
                 if !self.cat_added(cat) { self.catalog_add(cat); }
-                (self.meas_src, self.meas_src_b, self.cat_c, self.cat_d) = keep;
+                (self.meas_src, self.meas_src_b, self.cat.c, self.cat.d) = keep;
                 DONE
             }
             // ---- small rows

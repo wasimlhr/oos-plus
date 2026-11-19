@@ -16,8 +16,8 @@
 
 use crate::dho::bus::Bus;
 
-/// How the FPGA average behaves once `count` triggers are in (decided on the unit by
-/// docs/fork/unit-dho804.md, "Hardware averaging" step 3).
+/// How the FPGA average behaves once `count` triggers are in (decided by a hardware test on the unit: the averaged
+/// frames read with a running count and with `OOS_HWAVG=hold`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     /// running average: shown after every batch, cleared only on a change
@@ -89,8 +89,9 @@ pub fn mean_words(frames: &[&[u16]]) -> Vec<u16> {
     (0..len).map(|i| (frames.iter().map(|f| f[i] as u64).sum::<u64>() / n) as u16).collect()
 }
 
-/// Bits the accumulator of `n` frames of 16-bit words needs.
-pub fn acc_bits(n: u32) -> u32 {
+/// Bits the accumulator of `n` frames of 16-bit words needs (the tests hold the widths against it).
+#[cfg(test)]
+fn acc_bits(n: u32) -> u32 {
     16 + n.max(1).next_power_of_two().trailing_zeros()
 }
 
@@ -101,15 +102,17 @@ mod tests {
 
     use crate::dho::acq::Mode;
     use crate::dho::bus::DmaBuf;
-    use crate::dho::seg::sim::{engine, Engine};
     use crate::dho::seq::{Settings, State, Step};
+    use crate::dho::sim::{engine, Engine};
 
     fn settings(mode: Mode) -> Settings {
         Settings { mode, tdiv: 100e-9, depth: 1000, window: None, frames: 10, ..Settings::default() }
     }
 
     fn writes(st: &[Step]) -> String {
-        st.iter().filter_map(|x| if let Step::Wr((o, v)) = x { Some(format!("{:#x} {:#x}\n", o, v)) } else { None }).collect()
+        st.iter()
+            .filter_map(|x| if let Step::Wr((o, v)) = x { Some(format!("{:#x} {:#x}\n", o, v)) } else { None })
+            .collect()
     }
 
     /// Acquisition block, arm and read of one batch of 10 frames with 4 recorded: the register writes.
@@ -158,7 +161,14 @@ mod tests {
     }
 
     /// One batch against the model; returns (triggers recorded, the step word of point 0 of the newest frame).
-    fn batch(st: &mut State, s: &Settings, p: &crate::dho::hz::Params, bar: &mut crate::dho::seg::sim::SimBus, c2h: &mut crate::dho::seg::sim::SimC2h, dma: &mut DmaBuf) -> (u32, u16) {
+    fn batch(
+        st: &mut State,
+        s: &Settings,
+        p: &crate::dho::hz::Params,
+        bar: &mut crate::dho::sim::SimBus,
+        c2h: &mut crate::dho::sim::SimC2h,
+        dma: &mut DmaBuf,
+    ) -> (u32, u16) {
         let count = seq::acquire_batch(st, s, p, bar, c2h, dma, false, 0, |_| {}).unwrap();
         // every recorded frame is played, 1000 words each; the newest is the last
         let fb = seq::frame_bytes(s, p);
@@ -220,7 +230,9 @@ mod tests {
         let mut st = State::handover(1, None);
         let s = settings(Mode::Average { count: 16 });
         assert!(st.configure(&Settings { la: Some(Default::default()), ..s.clone() }, None, None).is_err());
-        assert!(st.configure(&Settings { segments: Some(seq::Segments { n: 10, interval: 0.0 }), ..s.clone() }, None, None).is_err());
+        assert!(st
+            .configure(&Settings { segments: Some(seq::Segments { n: 10, interval: 0.0 }), ..s.clone() }, None, None)
+            .is_err());
         // 125 M points do not fit the average ring
         assert!(st.configure(&Settings { depth: 125_000_000, tdiv: 1.0, ..s }, None, None).is_err());
     }

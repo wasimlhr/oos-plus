@@ -1,7 +1,7 @@
 {
  "meta": {
-  "software": "oos-ui 0.1.13",
-  "version": "0.1.13",
+  "software": "oos-ui 0.1.14",
+  "version": "0.1.14",
   "edition": "November 2026",
   "date": "19 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
@@ -65,8 +65,8 @@
       "- Menu equivalent: System > About.",
       "- Origin: Rigol-compatible. Not a Rigol identity string."
      ],
-     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.1.13`.",
-     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.1.13.*/"
+     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.1.14`.",
+     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.1.14.*/"
     },
     {
      "header": "*RST",
@@ -773,28 +773,6 @@
      "set": ":SYSTem:REMote:SERVice:VXI11 <value>",
      "query": ":SYSTem:REMote:SERVice:VXI11?",
      "desc": "Sets or queries VXI-11 for Remote services (menu: Remote services > VXI-11).",
-     "params": [
-      [
-       "<value>",
-       "Boolean",
-       "{ON|OFF|1|0}",
-       "1"
-      ]
-     ],
-     "remarks": [
-      "- Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`.",
-      "- Needs the literal `CONFIRM` argument; without it the command fails with -221 and does nothing. Ask the user before sending it.",
-      "- Origin: OOS extension"
-     ],
-     "returns": "On a freshly started default model the query returns `1`.",
-     "ext": true,
-     "confirm": true
-    },
-    {
-     "header": ":SYSTem:REMote:SERVice:TELNet",
-     "set": ":SYSTem:REMote:SERVice:TELNet <value>",
-     "query": ":SYSTem:REMote:SERVice:TELNet?",
-     "desc": "Sets or queries telnet for Remote services (menu: Remote services > telnet).",
      "params": [
       [
        "<value>",
@@ -12848,7 +12826,7 @@
      "header": ":TIMebase:DELay:SOURce",
      "set": ":TIMebase:DELay:SOURce <value>",
      "query": ":TIMebase:DELay:SOURce?",
-     "desc": "Sets or queries Zoom source for Studio zoom (menu: Horizontal (Studio zoom) > Zoom source).",
+     "desc": "Sets or queries Zoom source for Studio zoom (menu: Zoom button, held or right-clicked (Studio) > Zoom source).",
      "params": [
       [
        "<value>",
@@ -12868,7 +12846,7 @@
      "header": ":TIMebase:DELay:VZOom",
      "set": ":TIMebase:DELay:VZOom <value>",
      "query": ":TIMebase:DELay:VZOom?",
-     "desc": "Sets or queries Y zoom +/- for Studio zoom (menu: Horizontal (Studio zoom) > Y zoom +/-).",
+     "desc": "Sets or queries V-, V+ for Studio zoom (menu: Zoom row > V-, V+).",
      "params": [
       [
        "<value>",
@@ -12889,7 +12867,7 @@
      "set": ":TIMebase:DELay:VZOom:RESet",
      "desc": "Vertical zoom back to 1",
      "remarks": [
-      "- Menu equivalent: Horizontal (Studio zoom) > Reset Y.",
+      "- Menu equivalent: A lane's handle while zoomed (Studio) > Reset Y.",
       "- Origin: OOS extension"
      ],
      "ext": true,
@@ -12900,7 +12878,7 @@
      "set": ":TIMebase:DELay:FIT",
      "desc": "The zoom window back to the whole screen",
      "remarks": [
-      "- Menu equivalent: Horizontal (Studio zoom) > Fit record.",
+      "- Menu equivalent: Zoom row > Reset.",
       "- Origin: OOS extension"
      ],
      "ext": true,
@@ -12911,7 +12889,7 @@
      "set": ":TIMebase:DELay:CENTer",
      "desc": "The trigger in the middle of the zoom window",
      "remarks": [
-      "- Menu equivalent: Horizontal (Studio zoom) > Center trigger.",
+      "- Menu equivalent: Right-click (Studio) > Center trigger.",
       "- Origin: OOS extension"
      ],
      "ext": true
@@ -13173,7 +13151,8 @@
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `OVER`.",
-     "ext": true
+     "ext": true,
+     "example": ":VIEW:TRACes OVERlay"
     },
     {
      "header": ":VIEW:FIT",
@@ -13290,7 +13269,7 @@
       [
        "[<kind>]",
        "Text",
-       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference, math and decoder chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE`, `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
+       ": every control on the screen now, one record each, separated by `;`: `<kind>,\"<label>\",x,y,w,h`. Kinds: `TOP` (top bar buttons), `BOTTOM` (channel, reference, math and decoder chips, time and trigger), `VIEW` (a view, label `Name (WAVE)`), `CLOSE`, `EXPAND`, `TAB`, `RESIZE` (a floating panel's corner), `DIVIDER` (the hit area of a divider), `BADGE` (a measurement badge, and `Meas`, the button at the end of the badge row, which opens the table of the measurements), `ZOOM` (the buttons of the zoom row: `H-`, `H+`, `V-`, `V+`, `Box`, `Reset`, `Close`), `LANE` (a lane of the plot, labelled with its source; one record labelled `All sources` in Overlay), `HANDLE` (the handle of a channel, reference or math channel, on its zero level), `PLOT` (the Full screen and Zoom buttons on the plot), `CURSOR`, `MENU` (rows of the menu that is open). With a kind, only those.",
        "—"
       ]
      ],
@@ -13298,7 +13277,7 @@
       "- Origin: OOS extension"
      ],
      "ext": true,
-     "example": ":UI:ELEMents? TOP"
+     "example": ":UI:ELEMents? LANE\n:UI:ELEMents? HANDLE\n:UI:ELEMents? TOP"
     },
     {
      "header": ":UI:TAP",
@@ -13356,7 +13335,7 @@
     {
      "header": ":UI:MENU",
      "query": ":UI:MENU?",
-     "desc": "The menu or popup that is open: its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. Studio's View menu lists its views, its two switches as `\"Show pinned badges = On\"` and `\"Compact view = Off\"`, and `\"Reset layout\"`. `\"\"` when none is open.",
+     "desc": "The menu or popup that is open (the View menu of the Studio bar, and the popup of Add source in the bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. Studio's View menu lists its views, its two switches as `\"Show pinned badges = On\"` and `\"Compact view = Off\"`, and `\"Reset layout\"`. `\"\"` when none is open.",
      "remarks": [
       "- Origin: OOS extension"
      ],
@@ -13446,6 +13425,15 @@
      "pre": ":UI:CONText 600,300\n:UI:MENU?\n\"Context\",\"Overlay traces\",\"Stacked traces\",\"Fit record\",\"Zoom here\",\"Zoom box\",\"Stop\",\"Single\",\"Autoset\",\"Trigger on CH2\",\"Set level here\",\"Trigger settings\",\"Measurement on CH2\",\"Cursor here\",\"Sources\",\"Maximise view\"\n:UI:MENU:SELect \"Stacked traces\""
     },
     {
+     "p": "Check that every source sits on its own zero level in Overlay. CH1 at 1 V/div with an offset of 1 V is one division (55 px here) above the middle of the graticule, CH2 with -1 V one below, and R1 with -2 V two below:"
+    },
+    {
+     "pre": ":VIEW:TRACes OVERlay\n:UI:ELEMents? LANE\nLANE,\"All sources\",0,66,1024,440\n:UI:ELEMents? HANDLE\nHANDLE,\"CH1\",3,219,44,24;HANDLE,\"CH2\",3,329,44,24;HANDLE,\"R1\",3,384,44,24"
+    },
+    {
+     "p": "(Replies of the host build, screen 1024 x 600; not yet read from a unit.)"
+    },
+    {
      "p": "Find a button on the screen and press it:"
     },
     {
@@ -13460,7 +13448,10 @@
      "p": "Save and load setups, waveforms, screenshots and the fast-frame history, and fetch what was saved. A relative path of a save is taken in the save folder. The save folder is the USB stick when one is in (`:SAVE:DESTination`), else the scope's local folder, which is in memory and empty again after a power cycle: fetch a file with `:MMEMory:DATA?` or save to a stick to keep it. Setup slots are kept on the card. `*SAV` and `*RCL` (see common) and the setup block `:SYSTem:SETup` (see system) are the same setup files."
     },
     {
-     "p": "Menu location: Storage (Save destination, Setup slot, Save setup, Recall setup, Save waveform, Save screenshot, Fast-frame save / load, Save setup as SCPI, SCPI recorder, Run SCPI file). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a new file. SCPI recorder writes what is set at the scope as commands while it is on and saves them as a file when it is switched off (`:SYSTem:RECorder:STATe`). Run SCPI file runs a file of commands on this scope: a recording, a setup saved as commands, or lines written by hand. The scope lists the `.scpi` files where Storage saves, the newest first; the desktop app asks with its Open dialog. The lines are run like a client's, one command a frame; a line that waits for an operation (`*OPC?`) is waited for, for at most 30 s; comment lines (`#`) are no commands. While a file runs the row reads Stop SCPI file. At the end the screen says how many commands were run, and the first one that was refused if any was; those errors do not reach a client: its error queue, event status and last error are as they were. A file sets the scope up, runs it and saves into the save folder, and no more (ADR 0033): refused from a file, and said as refused with -203, are a command with `CONFIRM` (the word would be the author's and not yours), every `:UI:` command that is not a query (a file does not press the screen), every `:SYSTem:` command that is not a query except `:SYSTem:SET`, `:SYSTem:SETup` and the ones a setup is written with (`:SYSTem:LOCK`, `:SYSTem:AOUTput`, `:SYSTem:PIPeline`, `:SYSTem:LOG:INTerval`), `:CALibrate:STARt`, `:MMEMory:DELete`, and a save or load whose file name is an absolute path or steps up with `..`: a file names files of the save folder. The rest of the file runs. A file saved by an editor with a byte order mark, or with CR LF or CR line ends, runs; a link or anything else that is not a regular file is not read. There is no command for this row: a client sends the lines itself."
+     "p": "Menu location: Storage (Save to, Setup slot, Save setup, Recall setup, Save setup to file, Load setup from file, Save waveform, Fast-frame save / load, Save session, Load session, Save screenshot, Save setup as SCPI, SCPI recorder, Run SCPI file). Save setup as SCPI writes the lines of `:SYSTem:SETup:SCPI?` to a file. SCPI recorder writes what is set at the scope as commands while it is on and saves them as a file when it is switched off (`:SYSTem:RECorder:STATe`). Run SCPI file runs a file of commands on this scope: a recording, a setup saved as commands, or lines written by hand. The scope lists the `.scpi` files where Storage saves, the newest first; the desktop app asks with its Open dialog. The lines are run like a client's, one command a frame; a line that waits for an operation (`*OPC?`) is waited for, for at most 30 s; comment lines (`#`) are no commands. While a file runs the row reads Stop SCPI file. At the end the screen says how many commands were run, and the first one that was refused if any was; those errors do not reach a client: its error queue, event status and last error are as they were. A file sets the scope up, runs it and saves into the save folder, and no more (ADR 0033): refused from a file, and said as refused with -203, are a command with `CONFIRM` (the word would be the author's and not yours), every `:UI:` command that is not a query (a file does not press the screen), every `:SYSTem:` command that is not a query except `:SYSTem:SET`, `:SYSTem:SETup` and the ones a setup is written with (`:SYSTem:LOCK`, `:SYSTem:AOUTput`, `:SYSTem:PIPeline`, `:SYSTem:LOG:INTerval`), `:CALibrate:STARt`, `:MMEMory:DELete`, and a save or load whose file name is an absolute path or steps up with `..`: a file names files of the save folder. The rest of the file runs. A file saved by an editor with a byte order mark, or with CR LF or CR line ends, runs; a link or anything else that is not a regular file is not read. There is no command for this row: a client sends the lines itself."
+    },
+    {
+     "p": "In the menu, a row that writes a file asks for its name first and a row that reads one asks which file (ADR 0029): the on-screen keyboard and a list of the folder on the scope, the Save As and Open dialogs on the desktop build. The setup slots do not ask; Save setup to file and Load setup from file are `:SAVE:SETup` and `:LOAD:SETup` with a path. A command never asks: a path it is given is used as given, and without one it takes the next free name (a save) or the newest numbered file (a load), as the table says. A setup saved by name from the menu goes to the stick when files go there, else beside the slots (on the scope `/oos/setups`); `:LOAD:SETup` loads it by its full path."
     },
     {
      "p": "Part of the SCPI reference."
@@ -13639,7 +13630,7 @@
     {
      "header": ":SAVE:FFRame",
      "set": ":SAVE:FFRame",
-     "desc": "Save the fast-frame history (`frame-NNN.bin` in the save folder).",
+     "desc": "Save the fast-frame history (the next `frame-NNN.bin` in the save folder; the menu row asks for the name).",
      "remarks": [
       "- Menu equivalent: Storage > Save fast-frame.",
       "- Origin: OOS extension"
@@ -13649,7 +13640,7 @@
     {
      "header": ":LOAD:FFRame",
      "set": ":LOAD:FFRame",
-     "desc": "Load the fast-frame history.",
+     "desc": "Load the fast-frame history (the newest `frame-NNN.bin` of the save folder; the menu row lists the files).",
      "remarks": [
       "- Menu equivalent: Storage > Load fast-frame.",
       "- Origin: OOS extension"
@@ -15280,12 +15271,6 @@
        "segments recorded by the FPGA (not verified on a unit); wait after each segment, s",
        "`false`, `0`",
        "`:ACQuire:SEGMents:HARDware`, `:ACQuire:SEGMents:INTerval`"
-      ],
-      [
-       "`draw_path`",
-       "Acquire > Draw path: `standard` or `batch`",
-       "`standard`",
-       "`:SYSTem:PIPeline`"
       ]
      ]
     },

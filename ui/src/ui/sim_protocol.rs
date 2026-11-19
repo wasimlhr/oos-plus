@@ -68,8 +68,18 @@ fn traffic(p: Proto, baud: f64) -> Option<Traffic> {
         return Some(record(bit, period, &|k, t| (k == 0).then(|| wave.v(t))));
     }
     let demo = protocols::demo(i)?;
-    let bit = module.bit_time(&protocols::opt_fit(i, protocols::opt_default(i)));
+    let sh = protocols::shared(&Default::default());
+    let bit = module.info().bit_time(&protocols::opt_fit(i, protocols::opt_default(i)), &sh);
     Some(record(bit, demo.period, &|k, t| demo.lines[k].as_ref().map(|f| f(t))))
+}
+
+/// Whether `label` is the name a bus preset gives one of its lines ("I2S WS", "CAN Source"): the name of a protocol
+/// that has a preset, and one of its roles.
+fn is_bus_line(label: &str) -> bool {
+    buses().iter().any(|&(p, _)| {
+        let role = |r: &str| p.roles().iter().flatten().any(|x| *x == r) || r == "line";
+        label.strip_prefix(p.name()).and_then(|rest| rest.strip_prefix(' ')).is_some_and(role)
+    })
 }
 
 impl Ui {
@@ -82,6 +92,8 @@ impl Ui {
     /// The lines of the chosen bus into reference slots from the SIM slot on, and the selected decoder on them with
     /// the settings the traffic is made for. The slot of the main line and one round of the traffic, or why not.
     fn sim_bus_store(&mut self) -> Result<(usize, f64), String> {
+        // the divisions at the bottom of the plot that the lines of a bus leave to the band of the decoder
+        const BAND_DIVS: f32 = 1.0;
         let (p, name) = self.sim_bus().ok_or("no bus preset is chosen")?;
         let Proto::Module(i) = p;
         let module = protocols::get(i);
@@ -100,20 +112,25 @@ impl Ui {
         m.dec_opt = protocols::opt_default(i);
         let baud = crate::decode::BAUDS[m.dec_baud.min(crate::decode::BAUDS.len() - 1)];
         let traffic = traffic(p, baud).ok_or("this protocol has no traffic to generate")?;
-        let roles = module.roles();
+        let roles = module.info().roles;
         let count = traffic.lines.iter().flatten().count();
         if count > NREF {
             return Err("not enough reference slots".into());
         }
-        // each line in a band of its own, from the top: a bus of three lines is three traces, not one tangle
-        let band = 8.0 / count as f32;
+        // each line in a band of its own, from the top: a bus of three lines is three traces, not one tangle. The
+        // lowest division stays free: the band of the decoder stands there, and a trace that reached into it had its
+        // own label over the name of the band (seen on a unit)
+        let band = (8.0 - BAND_DIVS) / count as f32;
         let mut slots: [Option<usize>; 4] = [None; 4];
         let mut at = 0;
         for (k, line) in traffic.lines.into_iter().enumerate() {
             let Some(v) = line else { continue };
             let slot = (self.m.sim_slot + at) % NREF;
             let (lo, hi) = v.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
-            let vpd = super::nearest_vdiv(((hi - lo).max(0.2) / (0.6 * band)).max(1e-3));
+            // the first step of the scale at which the line has 60 % of its band at the most: the nearest step may
+            // be the smaller one, at which a line of 3.3 V had 6.6 divisions of the 8
+            let want = ((hi - lo).max(0.2) / (0.6 * band)).max(1e-3);
+            let vpd = super::VSCALES.iter().copied().find(|&v| v >= want).unwrap_or_else(|| super::nearest_vdiv(want));
             let middle = 4.0 - (at as f32 + 0.5) * band;
             let label = format!("{} {}", p.name(), roles[k].unwrap_or("line"));
             self.refs[slot] = Some(RefWave {
@@ -131,6 +148,13 @@ impl Ui {
             at += 1;
         }
         let main = slots[0].ok_or("the traffic has no main line")?;
+        // the lines of the bus that was played before are gone with it: a bus of one line after one of three left
+        // two traces of the other bus on the screen (seen on a unit: the I2S clock under a DCC rail)
+        for slot in (0..NREF).filter(|s| !slots.contains(&Some(*s))) {
+            if self.refs[slot].as_ref().is_some_and(|r| is_bus_line(&r.label)) {
+                self.refs[slot] = None;
+            }
+        }
         let source = |s: usize| DEC_REF_BASE + s;
         m.dec_src = source(main);
         if let Some(s) = slots[1] {
@@ -218,6 +242,12 @@ mod tests {
             let Proto::Module(i) = p;
             let want = if p == Proto::UART { 1 } else { protocols::demo(i).unwrap().lines.iter().flatten().count() };
             assert_eq!(lines, want, "{name}: a reference for each line");
+            // the lines stand above the lowest division of the plot, which is the band's
+            for r in u.refs.iter().flatten().filter(|r| r.on && r.label.starts_with(p.name())) {
+                let (lo, hi) = r.v.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+                let (lo, hi) = ((lo + r.offset) / r.vpd, (hi + r.offset) / r.vpd);
+                assert!(lo >= -3.001 && hi <= 4.001, "{name}: {} from {lo} to {hi} divisions", r.label);
+            }
             assert!(matches!(decode_wave(u.m.dec_src), Some(WaveId::Ref(_))), "{name}: decoded from a reference");
             let mut packets = Err("never asked");
             for _ in 0..400 {
@@ -308,6 +338,30 @@ mod tests {
         // an empty reference is not offered to a line that is on a channel
         u.m.dec_src = 0;
         assert!(!u.options(Item::DecSrc).iter().any(|n| n == "R1"));
+    }
+
+    /// A bus of one line played after a bus of three leaves no line of the other bus behind; a reference that is no
+    /// line of a bus preset stays.
+    #[test]
+    fn a_bus_preset_takes_the_lines_of_the_bus_before_it_away() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = Layout::Studio;
+        let play = |u: &mut Ui, name: &str| {
+            assert!(u.sim_preset_set(name), "{name}");
+            u.sim_play_set(true).unwrap_or_else(|e| panic!("{name}: {e}"));
+        };
+        let labels = |u: &Ui| -> Vec<String> { u.refs.iter().flatten().map(|r| r.label.clone()).collect() };
+        play(&mut u, "SPI bus");
+        assert!(labels(&u).len() >= 3, "{:?}", labels(&u));
+        // (a reference of the user's own in a slot the buses do not use)
+        let own = u.refs[0].clone().map(|r| RefWave { label: "my capture".into(), ..r });
+        u.refs[NREF - 1] = own;
+        play(&mut u, "UART bus");
+        let now = labels(&u);
+        assert_eq!(now.iter().filter(|l| l.starts_with("SPI ")).count(), 0, "{now:?}");
+        assert!(now.iter().any(|l| l.starts_with("UART ")) && now.contains(&"my capture".to_string()), "{now:?}");
+        assert!(is_bus_line("SPI Clock") && is_bus_line("CAN Source"));
+        assert!(!is_bus_line("CAN") && !is_bus_line("my capture"));
     }
 
     /// The presets of the lanes are as before, and choosing one leaves the bus; Add to ref with a bus preset adds its

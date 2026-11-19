@@ -1,4 +1,6 @@
-# Storage menu (in the run's own storage directory, the same in every run): save setup (slot 1), save waveform CSV, save screenshot PNG, default set-up, recall the setup
+# Storage menu (in the run's own storage directory, the same in every run): save setup (slot 1), a waveform CSV and a
+# session under names typed on the keyboard, a screenshot under the name the keyboard proposes, default set-up, recall
+# the setup, then the session from the list of files
 key ch2
 close
 knob hscale -2
@@ -11,8 +13,20 @@ frames 1
 shot $S/b1-storage-setup-saved.ppm
 do Save waveform (CSV)
 frames 1
+shot $S/b2a-storage-csv-name.ppm
+type ripple
+ok
+frames 1
 shot $S/b2-storage-csv-saved.ppm
+do Save session
+type bench
+frames 1
+shot $S/b2b-storage-session-name.ppm
+ok
+frames 1
+shot $S/b2c-storage-session-saved.ppm
 do Save screenshot (PNG)
+ok
 frames 2
 shot $S/b3-storage-png-saved.ppm
 key default
@@ -22,3 +36,11 @@ menu Storage
 do Recall setup
 frames 5
 shot $S/b5-storage-recalled.ppm
+key default
+menu Storage
+do Load session
+frames 2
+shot $S/b6-storage-session-list.ppm
+option bench.oss
+frames 5
+shot $S/b7-storage-session-loaded.ppm

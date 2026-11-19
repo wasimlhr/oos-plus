@@ -173,24 +173,15 @@ fn zoom_bar_buttons_take_a_40_px_touch_in_default_and_studio() {
         u.set_zoom(true);
         u.render(&mut Canvas::new(W, H));
         let row = u.zoom_readout();
-        let (target, before): (Rect, i32) = if l == Layout::Studio {
-            (u.studio_zoom_bar().unwrap().more, 0)
-        } else {
-            (u.zoom_controls()[4].0, 0)
-        };
-        assert!(target.h < 40, "{l:?}: drawn {target:?}");
-        let _ = (row, before);
+        // the same row in both layouts; Studio names its buttons (`studio_zoom_bar`)
+        let target = u.zoom_controls()[4].0;
+        if l == Layout::Studio { assert_eq!(u.studio_zoom_bar().unwrap().boxr, target); }
+        assert!(target.h < 40 && target.y >= row.y && target.bottom() <= row.bottom(), "{l:?}: drawn {target:?} in {row:?}");
         let (x, y) = centre(target);
-        if l == Layout::Default {
-            // Box: arms the zoom box, from the edge of a 40 px target
-
-            u.tap(x, y - 19);
-            assert!(u.zoom_arm, "{l:?}: a touch 19 px over the middle of Box arms it");
-        } else {
-            assert!(!u.studio.zoom_menu);
-            u.tap(x, y - 19);
-            assert!(u.studio.zoom_menu, "{l:?}: the zoom menu button took the touch");
-        }
+        // Box: arms the zoom box, from the edge of a 40 px target
+        assert!(!u.zoom_arm);
+        u.tap(x, y - 19);
+        assert!(u.zoom_arm, "{l:?}: a touch 19 px over the middle of Box arms it");
     }
 }
 

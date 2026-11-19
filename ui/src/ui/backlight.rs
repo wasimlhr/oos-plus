@@ -23,7 +23,11 @@ pub fn apply(pct: u32) {
     let Ok(d) = std::fs::read_dir("/sys/class/backlight") else { return };
     for e in d.flatten() {
         let p = e.path();
-        let Some(max) = std::fs::read_to_string(p.join("max_brightness")).ok().and_then(|s| s.trim().parse::<u32>().ok()) else { continue };
+        let Some(max) =
+            std::fs::read_to_string(p.join("max_brightness")).ok().and_then(|s| s.trim().parse::<u32>().ok())
+        else {
+            continue;
+        };
         if let Err(err) = std::fs::write(p.join("brightness"), level(pct, max).to_string()) {
             eprintln!("oos-ui: backlight {}: {}", p.display(), err);
         }
@@ -74,7 +78,7 @@ mod tests {
     fn the_backlight_follows_the_eye() {
         assert_eq!((level(100, 255), level(50, 255), level(10, 255), level(0, 255)), (255, 64, 3, 3));
         assert_eq!(level(10, 10), 1, "never dark");
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         assert_eq!(u.value(Item::Backlight), "100 %");
         assert!(u.items(MenuId::Display).contains(&Item::Backlight));
         u.adjust(Item::Backlight, -3);

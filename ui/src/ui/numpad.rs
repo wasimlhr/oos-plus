@@ -316,4 +316,20 @@ impl Ui {
         let unit = self.numpad_value(it).map(|v| v.1).unwrap_or_default();
         Some(si(if high { r.hi } else { r.lo }, &unit))
     }
+
+    /// The `vscale` step and its fine factor for `want` V/div at the BNC: the nearest step of the ladder, or with the
+    /// fine scale the first row of the calibrated table at or above it, so the range never cuts the signal off (SCPI's
+    /// `:CHANnel<n>:SCALe`).
+    pub(crate) fn vscale_for(want: f32, fine: bool) -> (usize, f32) {
+        if !fine {
+            return (nearest_step(&VSCALES, want), 1.0);
+        }
+        let rows = board().vscale_steps_nv();
+        let nv = want as f64 * 1e9 * (1.0 - 1e-6);
+        let row = rows.iter().copied().find(|&k| k as f64 >= nv).unwrap_or(rows[rows.len() - 1]);
+        let row = (row as f64 * 1e-9) as f32;
+        let i = VSCALES.iter().rposition(|&s| s <= row * 1.000001).unwrap_or(0);
+        let f = row / VSCALES[i];
+        (i, if (f - 1.0).abs() < 1e-6 { 1.0 } else { f })
+    }
 }

@@ -29,7 +29,15 @@ fn can_standard_extended_and_remote_frames() {
     let dt = 1.0 / 25e6; // 50 samples per bit
     let v = sample(|t| l.v(t), 0.0, dt, 25_000);
     let p = can(&v, dt, br, 1.65, 0.2, false);
-    assert_eq!(ids(&p), vec![(0x123, false, false), (0x1abc_def0 & 0x1fff_ffff, true, false), (0x7ff, false, true), (0x0f0, false, false)]);
+    assert_eq!(
+        ids(&p),
+        vec![
+            (0x123, false, false),
+            (0x1abc_def0 & 0x1fff_ffff, true, false),
+            (0x7ff, false, true),
+            (0x0f0, false, false)
+        ]
+    );
     let mut want = vec![0xde, 0xad, 0xbe, 0xef, 0x00, 0xff, 0x55];
     want.extend([0xff; 8]);
     assert_eq!(data(&p), want);
@@ -68,7 +76,8 @@ fn can_on_can_h_with_noise() {
 
 #[test]
 fn lin_classic_and_enhanced_frames() {
-    let frames = [(0x10u8, vec![0x01, 0x02, 0x03], false), (0x3c, vec![0xaa, 0x55, 0x00, 0xff, 0x12, 0x34, 0x56, 0x78], true)];
+    let frames =
+        [(0x10u8, vec![0x01, 0x02, 0x03], false), (0x3c, vec![0xaa, 0x55, 0x00, 0xff, 0x12, 0x34, 0x56, 0x78], true)];
     let l = lin_logic(&frames, 19200.0, 0.0, 12.0);
     let dt = 1.0 / 1e6;
     let v = sample(|t| l.v(t), 0.0, dt, 20_000);
@@ -98,6 +107,45 @@ fn lin_wrong_checksum_is_flagged() {
     }
     let p = lin(&v, dt, 9600.0, 6.0, 0.5);
     assert_eq!(crcs(&p), vec![false], "{:?}", p);
+}
+
+/// An error flag is listed: six dominant bits and more in a row, which no frame holds. Here seven of them (the flag
+/// of one node and the start of another's behind it) between idle line and a frame; the frame after it is read.
+#[test]
+fn can_an_error_flag_is_listed() {
+    let frame = CanFrame { id: 0x123, ext: false, rtr: false, data: vec![1, 2] };
+    let mut bits = vec![true; 12];
+    bits.extend([false; 7]);
+    bits.extend([true; 12]);
+    bits.extend(can_bits(&frame, true));
+    bits.extend([true; 12]);
+    let rate = 500e3;
+    let l = bits_logic(&bits, 1.0 / rate, 12, 0.0, 3.3);
+    let dt = 1.0 / 25e6;
+    let v = sample(|t| l.v(t), 0.0, dt, 12_000);
+    let flag = Kind::Field("!ERROR FRAME");
+    for p in [can(&v, dt, rate, 1.65, 0.1, false), oos_dsp::decode::can_fd(&v, dt, rate, 2e6, 1.65, 0.1, false)] {
+        let flags: Vec<&Packet> = p.iter().filter(|x| x.kind == flag).collect();
+        assert_eq!(flags.len(), 1, "{p:?}");
+        assert!(!flags[0].ok && p[0].kind == flag, "it comes first and is an error");
+        let bit_times = (flags[0].t1 - flags[0].t0) * dt * rate;
+        assert!((bit_times - 7.0).abs() < 0.2, "{bit_times} bit times");
+        assert_eq!(ids(&p), vec![(0x123, false, false)]);
+        assert_eq!((data(&p), crcs(&p)), (vec![1, 2], vec![true]));
+    }
+    // a frame alone has no such field: five equal bits are the most it holds
+    let l = can_logic(&[CanFrame { id: 0, ext: false, rtr: false, data: vec![0; 8] }], rate, 0.0, 3.3);
+    let v = sample(|t| l.v(t), 0.0, dt, 12_000);
+    assert!(can(&v, dt, rate, 1.65, 0.1, false).iter().all(|x| x.kind != flag));
+    // a line that is no CAN bus has long low pulses and no frame: nothing is listed, no error either (a UART at
+    // 115200 baud read as CAN at 500 kbit/s; a trigger on errors fired on it)
+    let l = oos_dsp::sim::uart_logic(b"OOS 0.1 OOS", 115200.0, 8, None, 0.0, 0.0, 3.3);
+    let v = sample(|t| l.v(t), 0.0, dt, 30_000);
+    assert!(can(&v, dt, rate, 1.65, 0.1, false).iter().all(|x| x.kind != flag));
+    assert!(oos_dsp::decode::can_fd(&v, dt, rate, 2e6, 1.65, 0.1, false).iter().all(|x| x.kind != flag));
+    // and a pulse longer than the flags of two nodes is no flag: a bus held low
+    use oos_dsp::decode::can_error_flag;
+    assert!(!can_error_flag(13.0) && can_error_flag(6.0) && !can_error_flag(5.0));
 }
 
 /// What a packet says, without its times.
@@ -245,11 +293,97 @@ fn can_stuff_bit_after_the_crc() {
         let v = sample(|t| l.v(t), 0.0, dt, 8_000);
         let p = can(&v, dt, br, 1.65, 0.2, false);
         assert_eq!(crcs(&p), vec![true], "id {:#x}", id);
-        assert!(p.iter().any(|x| x.kind == Kind::Ack && x.ok), "id {:#x}: {:?}", id, p.iter().filter(|x| x.kind == Kind::Ack).collect::<Vec<_>>());
+        assert!(
+            p.iter().any(|x| x.kind == Kind::Ack && x.ok),
+            "id {:#x}: {:?}",
+            id,
+            p.iter().filter(|x| x.kind == Kind::Ack).collect::<Vec<_>>()
+        );
         checked += 1;
         if checked >= 5 {
             break;
         }
     }
     assert!(checked > 0, "no frame with a stuff bit after the CRC found");
+}
+
+/// A bus that is slow on its way back to recessive, as CAN_H was on a unit (500 kbit/s, the edge to dominant in
+/// under 0.1 us, the way back with a time constant of 1.6 us: at the threshold in the middle a dominant bit read
+/// 3.1 us long and a recessive one 0.9 us). The bit timing follows the edges to dominant alone, as a node's does,
+/// and every frame is read right with both decoders and both polarities. With a resynchronisation on every edge the
+/// bit behind a slow edge was sampled in its neighbour: no frame, or one with a wrong identifier.
+#[test]
+fn can_with_a_slow_edge_to_recessive_is_read_right() {
+    let frames = [
+        CanFrame { id: 0x519, ext: false, rtr: false, data: vec![0x11, 0x22, 0x33] },
+        CanFrame { id: 0x1597_eeb2, ext: true, rtr: false, data: vec![0xde, 0x55, 0xcb, 0xfa, 0x5d, 0x45, 0xad, 0x8c] },
+        CanFrame { id: 0x757, ext: false, rtr: true, data: vec![] },
+        CanFrame { id: 0x000, ext: false, rtr: false, data: vec![0x00; 8] },
+    ];
+    let rate = 500e3;
+    let l = can_logic(&frames, rate, 0.0, 3.3);
+    let dt = 1.0 / 25e6;
+    let ideal = sample(|t| l.v(t), 0.0, dt, 60_000);
+    // dominant (low on this line) at once, back to recessive with a time constant of 0.8 bit times
+    let k = (1.0 - (-dt / (0.8 / rate)).exp()) as f32;
+    let mut y = ideal[0];
+    let slow: Vec<f32> = ideal
+        .iter()
+        .map(|&x| {
+            y = if x < 1.65 { x } else { y + (x - y) * k };
+            y
+        })
+        .collect();
+    let high: Vec<f32> = slow.iter().map(|x| 3.3 - x).collect();
+    let want: Vec<(u32, bool, bool)> = frames.iter().map(|f| (f.id, f.ext, f.rtr)).collect();
+    for (v, invert) in [(&slow, false), (&high, true)] {
+        let fd = oos_dsp::decode::can_fd(v, dt, rate, 2e6, 1.65, 0.1, invert);
+        for p in [can(v, dt, rate, 1.65, 0.1, invert), fd] {
+            assert_eq!(ids(&p), want, "invert {invert}");
+            assert_eq!(crcs(&p), [true; 4], "invert {invert}");
+            assert!(p.iter().all(|x| x.ok), "invert {invert}: {:?}", p.iter().find(|x| !x.ok));
+        }
+    }
+}
+
+/// A frame that the end of the record cuts off: both decoders give what is whole of it, the start and the identifier
+/// once the record holds them, then each data byte it holds, and no CRC. With ten bits of the frame, nothing.
+#[test]
+fn can_gives_the_whole_fields_of_a_frame_the_record_cuts_off() {
+    use oos_dsp::decode::can_fd;
+    let rate = 500e3;
+    let dt = 1.0 / 25e6;
+    let bit = (1.0 / rate / dt) as usize;
+    for (frame, id_bits) in [
+        (CanFrame { id: 0x057, ext: false, rtr: false, data: vec![0x45, 0x68, 0x6c, 0x65, 0x72, 0x73] }, 20),
+        (CanFrame { id: 0x1597_eea3, ext: true, rtr: false, data: vec![0xdc, 0x55, 0xcb, 0xfa] }, 42),
+    ] {
+        let l = can_logic(std::slice::from_ref(&frame), rate, 0.0, 3.3);
+        let whole = sample(|t| l.v(t), 0.0, dt, 12_000);
+        let want = (frame.id, frame.ext, false);
+        // the 12 idle bits in front, then so many bits of the frame (stuff bits among them)
+        let first = |bits: usize| &whole[..(12 + bits) * bit];
+        type Decoder = fn(&[f32]) -> Vec<Packet>;
+        const DT: f64 = 1.0 / 25e6;
+        let plain: Decoder = |v| can(v, DT, 500e3, 1.65, 0.1, false);
+        let fd: Decoder = |v| can_fd(v, DT, 500e3, 2e6, 1.65, 0.1, false);
+        for decode in [plain, fd] {
+            // the whole frame, with its CRC
+            let p = decode(&whole);
+            assert_eq!((ids(&p), crcs(&p)), (vec![want], vec![true]));
+            // ten bits of it: nothing, the identifier is not whole
+            assert!(decode(first(10)).is_empty());
+            // the identifier and a few bits more: start and identifier
+            let p = decode(first(id_bits));
+            assert_eq!((p.len(), p[0].kind, ids(&p)), (2, Kind::Start, vec![want]), "{p:?}");
+            // into the data field: the bytes that are whole, in their places
+            let v = first(id_bits + 30);
+            let p = decode(v);
+            let got = data(&p);
+            let sent: Vec<u32> = frame.data.iter().map(|&b| b as u32).collect();
+            assert!((2..=3).contains(&got.len()) && got[..] == sent[..got.len()], "{p:?}");
+            assert_eq!(p.len(), 2 + got.len());
+            assert!(p.iter().all(|x| x.ok && x.t1 <= v.len() as f64));
+        }
+    }
 }

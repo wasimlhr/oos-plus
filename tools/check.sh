@@ -5,21 +5,26 @@
 #
 #   tools/check.sh                 every enforced layer, in order; stops at the first that fails
 #   tools/check.sh test target     only these layers
+#   tools/check.sh test:ui         a part of a layer: test:hal test:dsp test:ui test:fpgad test:tools. CI runs the
+#                                  parts a change can reach next to each other (tools/ci-parts.sh).
 #   tools/check.sh list            the layers, and which are enforced
 #
 # Not layers here, because they need a baseline from before the change, a quiet computer or a scope (ADR 0020):
-# ui/tools/layout-check.sh, tools/plan-matrix.sh, tools/perf-guard.sh, tools/device-test.py.
+# ui/tools/layout-check.sh and tools/plan-matrix.sh (tools/compare-base.sh runs both against a commit before the
+# change, and so does CI for a pull request), tools/perf-guard.sh, tools/device-test.py.
 #
-# Layers: fmt clippy text syntax test target decoders. A compiler warning fails a layer like an error (ADR 0017).
-# Needs a Rust tool chain with the aarch64-unknown-linux-musl target, python3 and git; touches no scope.
+# Layers: fmt clippy text syntax test target ratchet sim. A compiler warning fails a layer like an error (ADR 0017).
+# Needs a Rust tool chain with the aarch64-unknown-linux-musl target, python3 and git; touches no scope. The layer sim
+# also needs Docker that runs arm64 containers, qemu-system-aarch64 and the builds it names; it is run by name.
 set -e
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.cargo/bin:$PATH"
 
 crates="hal dsp ui fpgad"
-layers="fmt clippy text syntax test target decoders"
-# fmt and clippy join with the rollout of ADR 0016 and ADR 0017
-enforced="text syntax test target decoders"
+layers="fmt clippy text syntax test target ratchet sim"
+# sim needs Docker and builds that CI's check job lacks: it is run by name. oos-plus: fmt and clippy join after the
+# one formatting commit (AGENTS.md); until then they run by name and upstream's code passes them, the fork's not yet
+enforced="text syntax test target ratchet"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -55,8 +60,16 @@ layer_fmt() {
 
 layer_clippy() {
     for c in $crates; do
-        (cd "$c" && strict cargo clippy --locked --all-targets -- -D warnings) || fail "clippy: $c"
+        (cd "$c" && strict cargo clippy --locked --workspace --all-targets -- -D warnings) || fail "clippy: $c"
     done
+    # the code only Linux compiles (the scope's board, its buses) is not seen on another host: there, Clippy also
+    # reads the crates as built for the scope, as CI on Linux does
+    if [ "$(uname -s)" != Linux ]; then
+        for c in hal ui fpgad; do
+            (cd "$c" && strict cargo clippy --locked --workspace --all-targets \
+                --target aarch64-unknown-linux-musl -- -D warnings) || fail "clippy: $c for the scope"
+        done
+    fi
 }
 
 # ADR 0019. Taken from elsewhere, so left out: the licence texts, the XDMA driver, kernel patches, firmware licences,
@@ -78,6 +91,18 @@ kernel/firmware/LICENSE.wireless-regdb rootfs/initramfs/etc/licenses/wireless-re
 COPIES
 }
 
+# every tracked shell script of our own: the *.sh files and every file whose first line starts a shell (rcS, init,
+# the programs of the image, kernel/tools/git), so a new script is checked without a list to keep
+shell_scripts() {
+    git ls-files | outside | while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        case $f in
+        *.sh) echo "$f" ;;
+        *) if head -n 1 "$f" 2>/dev/null | grep -qE '^#!.*[/ ](ba|da)?sh( |$)'; then echo "$f"; fi ;;
+        esac
+    done
+}
+
 layer_text() {
     bad=0
     git ls-files -z | xargs -0 grep -IlE '[[:space:]]+$' 2>/dev/null | outside >"$tmp/trail" || true
@@ -97,7 +122,7 @@ layer_text() {
         sed 's/^/  /' "$tmp/eof"
         bad=1
     fi
-    git ls-files '*.rs' '*.sh' '*.py' '*.c' '*.h' | outside | while IFS= read -r f; do
+    { git ls-files '*.rs' '*.py' '*.c' '*.h' | outside; shell_scripts; } | sort -u | while IFS= read -r f; do
         head -n 5 "$f" | grep -q 'SPDX-License-Identifier:' || echo "$f"
     done >"$tmp/spdx"
     if [ -s "$tmp/spdx" ]; then
@@ -118,33 +143,65 @@ layer_text() {
         bad=1
     fi
     [ "$bad" = 0 ] || fail "text: see docs/adr/process/0019-one-style-for-text-files-and-commits.md"
+    # the index of the decision records is what the records say, and every change in changelog.d/ has its form
+    # (ADR 0065)
+    python3 -I tools/adr-index.py --check || fail "text: run tools/adr-index.py"
+    python3 -I tools/changelog.py --check || fail "text: a file in changelog.d/ (changelog.d/README.md)"
+    # every relative link and every named file of the documents exists
+    python3 -I tools/link-check.py || fail "text: a document names something that is not there (tools/link-check.py)"
+    # blocks of code in two or more places (issue 120): counted, not yet enforced
+    python3 -I tools/duplicates.py || true
 }
 
+# every tracked Python file, every shell script by its first line (shell_scripts), and the workflow files as YAML
 layer_syntax() {
-    for f in boot/*.py tools/*.py tools/tests/*.py; do
+    git ls-files '*.py' | outside >"$tmp/py"
+    while IFS= read -r f; do
         python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1])' "$f" ||
             fail "syntax: $f"
-    done
-    for f in boot/*.sh boot/gel/*.sh kernel/*.sh rootfs/*.sh tools/*.sh ui/*.sh ui/tools/*.sh gpu/*.sh \
-        rootfs/initramfs/bin/* rootfs/initramfs/etc/rcS; do
-        sh -n "$f" || fail "syntax: $f"
-    done
+    done <"$tmp/py"
+    shell_scripts >"$tmp/sh"
+    while IFS= read -r f; do
+        case $(head -n 1 "$f") in *bash*) sh=bash ;; *) sh=sh ;; esac
+        $sh -n "$f" || fail "syntax: $f"
+    done <"$tmp/sh"
+    # the workflow files: one that does not parse runs no job at all, and nothing says so
+    if command -v ruby >/dev/null 2>&1; then
+        for f in .github/workflows/*.yml; do
+            ruby -ryaml -e 'YAML.load_file(ARGV[0])' "$f" 2>"$tmp/yaml" || {
+                cat "$tmp/yaml" >&2
+                fail "syntax: $f"
+            }
+        done
+        yaml="$(ls .github/workflows/*.yml | wc -l | tr -d ' ') workflow files"
+    else
+        yaml="workflow files not parsed (no ruby)"
+    fi
+    echo "$(wc -l <"$tmp/py" | tr -d ' ') Python files, $(wc -l <"$tmp/sh" | tr -d ' ') shell scripts, $yaml"
 }
 
+# the tests of every crate and of the host tools; with a part (hal dsp ui fpgad tools) only that one. ui is a
+# workspace (ADR 0064): its crates are tested, linted and formatted with it
 layer_test() {
     for c in $crates; do
+        [ -z "$1" ] || [ "$1" = "$c" ] || continue
         say "test $c"
-        (cd "$c" && strict cargo test --locked) || fail "test: $c"
+        (cd "$c" && strict cargo test --locked --workspace) || fail "test: $c"
     done
     # the host tools' own tests: offline, no scope, no listener
-    say "test tools"
-    (cd tools && python3 -m unittest -q test_scpi_validate) || fail "test: tools/test_scpi_validate.py"
-    python3 -m unittest discover -q -s tools/tests || fail "test: tools/tests"
+    if [ -z "$1" ] || [ "$1" = tools ]; then
+        say "test tools"
+        python3 -m unittest discover -q -s tools/tests || fail "test: tools/tests"
+    fi
 }
 
+# the programs for the scope build for every board family of rootfs/board/ (OOS_BOARD, ADR 0067), dho first
 layer_target() {
-    for c in ui fpgad; do
-        (cd "$c" && strict cargo check --locked --target aarch64-unknown-linux-musl) || fail "target: $c"
+    for b in dho $(for d in rootfs/board/*/; do basename "$d"; done | grep -vx dho); do
+        for c in ui fpgad; do
+            (cd "$c" && OOS_BOARD=$b strict cargo check --locked --target aarch64-unknown-linux-musl) ||
+                fail "target: $c for the board family $b"
+        done
     done
     # ADR 0021: what runs on the scope depends on libc only; hal and dsp on every platform
     for c in hal dsp ui fpgad; do
@@ -155,14 +212,28 @@ layer_target() {
     done
 }
 
-# the core decoders only, and every optional decoder alone (tests that need every decoder skip themselves)
-layer_decoders() {
-    (cd ui && strict cargo test --locked --no-default-features) || fail "decoders: core only"
-    (cd ui && strict cargo check --locked --target aarch64-unknown-linux-musl --no-default-features) ||
-        fail "decoders: core only, target"
-    for d in $(ui/tools/decoder-features.sh list); do
-        (cd ui && strict cargo check --locked --all-targets --no-default-features --features "dec-$d") ||
-            fail "decoders: dec-$d alone"
+# the numbers that only go down: the size of the large files, switched-off lints, `unsafe`, what a remote command
+# or a setting lacks (docs/scpi.md, the comparison's queries; tools/scpi-coverage.txt), long functions, `.unwrap()`
+# and modules without a header (tools/code-metrics.txt), code that crosses a layer (tools/layers.txt) (ADR 0037,
+# issue 120); and, with nothing missing a plain check, an HTTP route or MCP tool without its entry and mark in
+# docs/http.md (ADR 0055)
+layer_ratchet() {
+    tools/ratchet.sh || fail "ratchet: see docs/adr/process/0037-numbers-that-only-go-down.md"
+    python3 -I tools/scpi-coverage.py --enforce ||
+        fail "ratchet: tools/scpi-coverage.py --list names what is missing (ADR 0037)"
+    python3 -I tools/http-coverage.py || fail "ratchet: docs/http.md lacks what tools/http-coverage.py names (ADR 0055)"
+    python3 -I tools/code-metrics.py --enforce || fail "ratchet: tools/code-metrics.py --list names them (ADR 0037)"
+    python3 -I tools/layers.py --enforce || fail "ratchet: tools/layers.py --list names them (ADR 0001, ADR 0037)"
+}
+
+# The simulations: the scripts of the image in arm64 containers and virtual machines, without a scope. Each needs what
+# its header says: rootfs/out (fw, ssh), kernel/out/base (unit-dtb), a finished boot/build-dev-image.sh (gel), QEMU
+# (usb, wlan), oos-ui built for aarch64-unknown-linux-musl (gpu).
+layer_sim() {
+    for s in tools/fw-sim.sh tools/ssh-sim.sh tools/unit-dtb-check.sh tools/gel-sim.sh tools/usb-sim.sh \
+        tools/wlan-sim.sh gpu/test-host.sh; do
+        say "sim $s"
+        sh "$s" || fail "sim: $s"
     done
 }
 
@@ -174,12 +245,24 @@ if [ "$1" = list ]; then
 fi
 
 run=${*:-$enforced}
+# a layer, or layer:part
+parts_test="$crates tools"
 for l in $run; do
-    case " $layers " in *" $l "*) ;; *) fail "unknown layer '$l' (layers: $layers)" ;; esac
+    name=${l%%:*}
+    case " $layers " in *" $name "*) ;; *) fail "unknown layer '$name' (layers: $layers)" ;; esac
+    case $l in
+    *:*)
+        case $name in test) parts=$parts_test ;; *) parts= ;; esac
+        case " $parts " in
+        *" ${l#*:} "*) ;;
+        *) fail "no part '${l#*:}' in layer '$name' (parts: ${parts:-none})" ;;
+        esac
+        ;;
+    esac
 done
 for l in $run; do
     say "$l"
-    "layer_$l"
+    case $l in *:*) "layer_${l%%:*}" "${l#*:}" ;; *) "layer_$l" "" ;; esac
 done
 say "passed: $run"
 if [ $# = 0 ]; then

@@ -364,8 +364,8 @@ fn the_zoom_bar_has_vertical_zoom_with_targets_of_40_px() {
     for r in [bar.vplus, bar.vminus] {
         assert!(r.w >= 40 && r.h >= 20 && r.x >= row.x && r.right() <= row.right(), "{r:?} in {row:?}");
     }
-    assert!(bar.minus.right() <= bar.vplus.x && bar.vplus.right() <= bar.vminus.x && bar.vminus.right() <= bar.center.x);
-    assert!(bar.vminus.right() <= bar.readout.x || bar.readout.w == 0);
+    // the order of the Default row: H-, H+, V-, V+, Box
+    assert!(bar.minus.right() <= bar.plus.x && bar.plus.right() <= bar.vminus.x && bar.vminus.right() <= bar.vplus.x && bar.vplus.right() <= bar.boxr.x);
     shot(&mut u, "zoom-bar");
     assert_eq!(u.zoom_vfactor, 1.0);
     // a touch 19 px off the middle still counts, as with the time chips
@@ -385,15 +385,6 @@ fn the_zoom_bar_has_vertical_zoom_with_targets_of_40_px() {
     u.tap(bar.vplus.x + 20, bar.vplus.y + 20);
     assert_eq!(u.m.zscale, z);
     assert!(u.zoom_vfactor > 1.0);
-}
-
-#[test]
-fn a_narrow_plot_drops_the_vertical_chips_instead_of_overlapping() {
-    let u = zoomed();
-    let bar = u.studio_zoom_bar().unwrap();
-    // the chips on the right never run into the ones on the left
-    assert!(bar.minus.right() <= bar.center.x);
-    if bar.vplus.w == 0 { assert_eq!(bar.vminus.w, 0); } else { assert!(bar.vminus.right() <= bar.center.x); }
 }
 
 // ------------------------------------------------------------------------------------------------ item 4

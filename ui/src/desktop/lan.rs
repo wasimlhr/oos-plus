@@ -3,15 +3,17 @@
 
 //! Network services belong to the same UI session as the desktop window.
 
-use crate::{announce, cmd, gfx::Canvas, hislip, http, scpi, ui::Ui, vxi11};
+use crate::{announce, cmd, gfx::Canvas, hislip, scpi, shots, site, ui::Ui, vxi11};
 use std::net::{Ipv4Addr, UdpSocket};
 use std::time::{Duration, Instant};
 
 pub struct Services {
-    web: http::Http,
+    web: site::Web,
+    /// the live picture of the web remote (`/screen.png`): the window's canvas, handed over as the GPU's pictures are
+    live: shots::Live,
     scpi: scpi::Scpi,
-    vxi: vxi11::Server,
-    hislip: hislip::Server,
+    vxi: vxi11::Server<scpi::Program>,
+    hislip: hislip::Server<scpi::Program>,
     announce: announce::Announcer,
     next_status: Instant,
 }
@@ -20,16 +22,19 @@ impl Services {
     /// This PC only by default (no firewall question); `--lan` opens the services to the network. `acl`: the address
     /// list of the window's session (`Ui::acl`), which Remote services > Allowed changes.
     pub fn open(args: &[String], acl: &crate::netacl::Shared) -> Self {
-        crate::set_loopback_only(!args.iter().any(|a| a == "--lan"));
+        crate::net::set_loopback_only(!args.iter().any(|a| a == "--lan"));
         let (web, scpi, vxi, hislip, announce) = crate::lan(false, args, acl);
-        Self { web, scpi, vxi, hislip, announce, next_status: Instant::now() }
+        Self { web, scpi, vxi, hislip, announce, live: shots::Live::default(), next_status: Instant::now() }
     }
 
     pub fn poll(&mut self, ui: &mut Ui, cv: &Canvas) {
         self.scpi.poll(ui, cv);
         self.vxi.poll_async(&mut |program| self.scpi.poll_program(ui, cv, program));
         self.hislip.poll_async(&mut |program| self.scpi.poll_program(ui, cv, program));
-        for command in self.web.poll(ui, cv, &mut self.scpi) {
+        // the canvas is drawn whole every frame and not swapped: a copy of it goes to the encoder when a viewer waits
+        self.live.before_gpu_frame();
+        self.live.picture_read_back(cv);
+        for command in self.web.poll(&mut site::Ctx::new(ui, cv, &mut self.scpi).with_live(&self.live)) {
             cmd::run(ui, &command);
         }
         self.announce.poll();
@@ -37,7 +42,7 @@ impl Services {
         self.next_status = Instant::now() + Duration::from_secs(1);
         ui.lan_web_port = self.web.port();
         let bound = |port: Option<u16>| port.map_or_else(|| "unavailable".into(), |p| p.to_string());
-        if crate::loopback_only() {
+        if crate::net::loopback_only() {
             ui.net = Ipv4Addr::LOCALHOST.to_string();
             ui.net_if = "lo".into();
             ui.eth_link = false;

@@ -19,8 +19,8 @@ Panel, Run, four channels, 30 frames a second in every column (2026-11-12, `:SYS
 
 | | CPU | GPU |
 |---|---|---|
-| HDMI Mirror / Waveform | the panel picture scaled on the CPU, nearest pixel | scaled by the GPU from what it already has, filtered, no CPU work |
-| HDMI Layout | the screen drawn again at the monitor's size on the CPU | drawn by the GPU at the monitor's size, the traces stretched and smoothed |
+| HDMI Mirror | the panel picture scaled on the CPU, nearest pixel | scaled by the GPU from what it already has, filtered, no CPU work |
+| HDMI Layout, Waveform | the screen (Waveform: its waveform area) drawn again at the monitor's size on the CPU | drawn by the GPU at the monitor's size, the traces stretched and smoothed |
 
 The GPU itself is no faster than the CPU at the traces (the CPU skips every empty pixel of the phosphor maps, the GPU
 shades all of them); what it saves is the CPU's drawing of everything else, and the monitor's picture.
@@ -32,7 +32,9 @@ With a 1920x1080 monitor, four channels, Run, a menu open (2026-11-13, frames a 
 | CPU | 30 / 51 % | 30 / 54 % | 26 / 70 % |
 | GPU | 30 / 22 % | 30 / 29 % | 30 / 28 % |
 
-The helper's GPU time per frame there: the panel 8 to 10 ms, the monitor 12 to 15 ms. Before the traces' two steps
+Waveform was then the panel's waveform area scaled up; since 2026-11-19 it is drawn at the monitor's size as Layout
+is, and costs about what Layout costs (not yet measured on the scope). The helper's GPU time per frame there: the
+panel 8 to 10 ms, the monitor 12 to 15 ms. Before the traces' two steps
 (below), the monitor's traces alone took 36 to 41 ms and the GPU fell behind the CPU (25 frames a second).
 
 ## How it works
@@ -96,7 +98,7 @@ every test passed. Two checks since:
 
 - **On the scope** (`tools/device-test.py --tier a0`, `frame_rate_by_graphics_and_monitor`): four channels in Run, a
   menu open, Graphics = CPU and = GPU, with a monitor plugged in in each HDMI mode. It fails below 27 frames a second
-  (22 for the CPU in Layout), when the GPU is more than 1.5 frames a second behind the CPU or its frame loop busier,
+  (22 for the CPU and 26 for the GPU in Layout), when the GPU is more than 1.5 frames a second behind the CPU or its frame loop busier,
   and when the GPU's own time (`gpu panel .. monitor ..` in `:SYSTem:STATe?`, the helper's upload and draw) leaves
   less than a third of the budget: 45 ms for a panel and a monitor frame together (a monitor frame comes with every
   second panel frame), 22 ms for a panel frame without a monitor. The frame rate alone missed it: with 0.1.11's

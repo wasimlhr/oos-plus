@@ -1,9 +1,17 @@
+// Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! The commit the binary was built from, for System > About (`OOS_GIT`): "which build is this" has one answer on the
-//! scope and on a desktop. Without git, or outside a checkout, it is left out and About shows the version alone.
+
+//! Build script of oos-ui: the board family this build is for, `cfg(oos_board = "<name>")` from `OOS_BOARD`
+//! (ADR 0067, hal/board_cfg.rs). oos-plus: also the commit the binary was built from, for System > About (`OOS_GIT`):
+//! "which build is this" has one answer on the scope and on a desktop. Without git, or outside a checkout, it is left
+//! out and About shows the version alone.
+
 use std::process::Command;
 
+include!("../hal/board_cfg.rs");
+
 fn main() {
+    board_cfg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")), "../hal/board_cfg.rs");
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/logs/HEAD");
     let git = |args: &[&str]| Command::new("git").args(args).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());

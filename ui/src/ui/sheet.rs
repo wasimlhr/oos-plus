@@ -190,12 +190,12 @@ impl Ui {
             // The rarer rows have the second tab: with averaging or segments on, one tab held more rows than a sheet
             // has, and the page fell back to the dialog. The way on to Horizontal is under both tabs
             M::Acquire => (&["Acquire", "More"], |it| match it {
-                AcqSegIvl | AcqSegTable | AcqCores | AcqDrawPath => Slot::Tab(1),
+                AcqSegIvl | AcqSegTable | AcqCores => Slot::Tab(1),
                 Open(M::Horizontal) => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
             M::Horizontal => (&["Time base", "Zoom"], |it| match it {
-                Zoom | ZScale | ZDelay | ZoomBar => Slot::Tab(1),
+                Zoom | ZScale | ZDelay => Slot::Tab(1),
                 AutoDeskew | ClearDeskew => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
@@ -257,11 +257,11 @@ impl Ui {
                 SrcOn => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
-            M::Storage => (&["Save", "Export", "SCPI"], |it| match it {
-                // a session is saved and recalled like a setup, with the samples: it sits beside the setup rows
-                StoreDest | StoreSlot | StoreSaveSetup | StoreRecall | StoreSessSave | StoreSessLoad => Slot::Tab(0),
-                // the set-up as commands, the recorder and the file that is run: with them Export had more rows
-                // than a tab holds
+            M::Storage => (&["Setup", "Files", "SCPI"], |it| match it {
+                // the setup as a slot and as a file with a name fills one page; what holds samples or a picture is on
+                // the next, the session first; the set-up as commands, the recorder and the file that is run on the
+                // third
+                StoreDest | StoreSlot | StoreSaveSetup | StoreRecall | StoreSetupSave | StoreSetupLoad => Slot::Tab(0),
                 StoreSaveScpi | StoreRecScpi | StoreRunScpi => Slot::Tab(2),
                 _ => Slot::Tab(1),
             }),
@@ -354,7 +354,7 @@ impl Ui {
             M::Windows => (&["Windows"], |_| Slot::Tab(0)),
             // the switches of the services, then who may reach them and where they are
             M::Remote => (&["Services", "Access"], |it| match it {
-                RemWeb | RemScpi | RemVxi | RemTelnet | RemSsh | RemMdns | Open(M::Ssh) => Slot::Tab(0),
+                RemWeb | RemScpi | RemVxi | RemSsh | RemMdns | Open(M::Ssh) => Slot::Tab(0),
                 _ => Slot::Tab(1),
             }),
             M::Ssh => (&["SSH"], |it| match it { SshImport | SshRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
@@ -444,6 +444,9 @@ impl Ui {
                 if menu == MenuId::Cursor && tabs.len() > 1 {
                     let rest: Vec<Item> = tabs.drain(1..).flat_map(|t| t.rows).collect();
                     tabs[0].rows.extend(rest);
+                    // one tab again: the rows in the order of the menu, as the dialog has them
+                    let order = self.sheet_source_items(menu);
+                    tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
                 }
             }
             // SIM: the slot's rows follow the slot, and Live comes last, so no row moves when SIM mode starts under
@@ -463,7 +466,7 @@ impl Ui {
             }
             // Remote services: the name and who is allowed first, then the addresses
             if menu == MenuId::Remote {
-                let order = [Item::RemName, Item::RemAllow, Item::RemFirewall, Item::NetWeb, Item::RemScpiInfo, Item::RemVxiInfo, Item::RemTelnetInfo];
+                let order = [Item::RemName, Item::RemAllow, Item::RemFirewall, Item::NetWeb, Item::RemScpiInfo, Item::RemVxiInfo];
                 tabs[1].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
             }
             // DVM and counter, the logic analyser and the double pulse had two tabs of two to five rows each: they are
@@ -716,7 +719,6 @@ impl Ui {
             Item::TimeNow if self.menu_root() == MenuId::Utility => "Clock".into(),
             Item::RemScpiInfo => "SCPI port".into(),
             Item::RemVxiInfo => "VXI-11 ports".into(),
-            Item::RemTelnetInfo => "telnet port".into(),
             Item::SimShow => format!("Show R{}", self.m.sim_slot + 1),
             Item::SimLive => "Back to live".into(),
             Item::SimPlayRefs => {

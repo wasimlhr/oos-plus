@@ -407,7 +407,6 @@ fn zoom_factor_time_per_div_and_the_overview_window_agree() {
 fn center_trigger_puts_t_in_the_middle_of_the_zoom_window() {
     for (main, zoom) in [(500e-6, 200e-6), (50e-3, 200e-6)] {
         let mut u = zoomed_demo(main, zoom, 0.439e-3);
-        assert!(u.studio_trigger_off_screen_for_test() || u.m.zdelay != 0.0);
         let g = u.grid;
         assert!((u.studio_x_of_time(0.0) - (g.x + g.w / 2)).abs() > 20, "T starts off centre");
         u.studio_center_trigger();

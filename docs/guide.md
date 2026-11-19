@@ -80,7 +80,8 @@ Installing OOS means that you accept in particular the following risks:
   the mains and all probes before you open it, and close it again before you connect mains. Only open it if you know
   how to do this safely.
 - **Network security.** Apart from SSH (password or key, [docs/network.md](network.md) 7) OOS has no
-  authentication: telnet (on by default, a shell without password), SCPI, VXI-11, HiSLIP (on a computer), the web remote and MCP are open to everyone who can reach the scope. The community signing key is public, so anyone on the
+  authentication: SCPI, VXI-11, HiSLIP (on a computer), the web remote and MCP are open to everyone who can reach the
+  scope; there is no telnet (ADR 0054). The community signing key is public, so anyone on the
   network can also install an update. This holds for WLAN as well. **Connect the scope to a trusted bench network only,
   never directly to the internet.**
 - **Experimental settings.** System > Overclock and `/oos/limits.conf` can change the sample clock, `limits.conf` can
@@ -147,7 +148,8 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   the LA in a window of your choice, all on one time base
 - Full screen: one tap at the top right of the plot hides the top bar and the cards, one more brings them back
 - Text size Normal, Large or Larger for the bars, cards, measurement rows, menus and dialogs; backlight brightness
-- HDMI output as a mirror, as a separate waveform workspace, or laid out again at the monitor's size
+- HDMI output as a mirror, as the waveform area alone drawn at the monitor's resolution under a settings line, or
+  laid out again at the monitor's size
 - the picture drawn on the GPU (Mali-T860, Panfrost; System > Graphics, CPU as before is the other choice): a third
   less load on the frame loop, a monitor scaled without CPU work ([gpu/README.md](../gpu/README.md)); the web picture as
   JPEG from the video encoder (VPU)
@@ -177,11 +179,21 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   acknowledge) and marks where each was sampled. An I2C byte that was not acknowledged is an error, except the one
   a controller ends a read with; an address of ten bits is one field ("2A5 W")
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
-- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes its bit rate
-  from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses what a frame is
-  checked against
+- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. FlexRay is read at the
+  Bit rate set (10, 5 or 2.5 Mbit/s), on either channel. A MIL-STD-1553 word says what it is: a command its
+  terminal, direction, subaddress and count ("RT 17 R SA 02 WC 02"), a status word its terminal and flags. LIN
+  takes its bit rate from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses
+  what a frame is
+  checked against; SENT lists the messages of its slow channel; an error flag of CAN is listed as an error
+  frame
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
 - Other: USB low/full speed, USB PD, parallel
+- Line codes: Manchester, MLT-3, C-PHY. A Manchester line that is quiet between its packets is read packet by
+  packet. A packet that is an Ethernet frame (10BASE-T) shows its preamble, addresses, type, bytes and frame
+  check, which is marked where it does not fit; on the negative wire of the pair set "A one is" to Falling.
+  Any other packet is its bits in the order sent, or its bytes; with Decode > Sync bits or Header bits above 0 it
+  is cut into fields: so many bits of sync, so many of header, words of Data bits, and what is left as the
+  trailer ("SYNC 0 HDR 7 3C TRL 2"), each field with its first bit as the least significant
 - Model railways: NMRA DCC (contributed by Arjen Halma), with a view of the layout in Display > Second pane > Bus view:
   locomotives, turnouts, signals, and the track status, green while live and red after an emergency stop
 - New decoders come as protocol modules: one file, one registration ([docs/protocol-modules.md](protocol-modules.md))
@@ -736,6 +748,19 @@ key open a quick panel that adds measurements on one source with the plot in vie
 opens the Measure page with the categories, the sources, Selected and Settings, and Menu > Measure opens that page at
 once. System, SIM and the network pages are entries of the Menu.
 
+In Studio the plot's right-click (long press) menu has Stacked traces, a lane for every source with its own scale at
+the right, and Overlay traces, every source on one graticule of the full height, each with its own position and scale
+(`:VIEW:TRACes`). In both, every channel, reference and math channel has a handle with its name at the left edge, on
+its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
+side. A tap on a handle opens the sheet of its source.
+
+Zoom has the same row in every layout, between the overview and the zoomed part: the time per division, the position
+and the vertical factor at the left, then H-, H+, V-, V+, Box, Reset and Close; the window in the overview is a slim
+frame with a handle at each end. Studio adds what the row has no place for: the grip at the lower edge of the overview
+sets its height, the Zoom button, held or right-clicked, has the zoom source and the zoom of one lane, and the menu
+of the plot (a right click or a held finger) has Center trigger, which puts the trigger in the middle of the zoom
+window.
+
 **Text size.** Display > Text size makes the text larger: Normal is the original look, Large and Larger use fonts 2 and 4
 pixels bigger in the top bar, the cards, the measurement and cursor rows, the menus, the keyboard and the dialogs. The rows
 under the plot grow with them, so the plot gets a little shorter. Where a long text would not fit (a narrow channel card
@@ -758,7 +783,7 @@ opens as a full analysis page with optional side or lower panes and has source/r
 use the button with three dots at the top right for Exit and Settings.
 
 **External generator.** Menu > Instruments > Ext generator is the page of a generator beside the scope
-([docs/extgen.md](docs/extgen.md)). Pick the Model (APPL for a Rigol DG, BSWV for a Siglent SDG, CHANnel for a UNI-T
+([docs/extgen.md](extgen.md)). Pick the Model (APPL for a Rigol DG, BSWV for a Siglent SDG, CHANnel for a UNI-T
 UTG900 such as the UTG932 and UTG962, OWON DGE, or SCPI for one that takes `FREQ` and `VOLT`), then Connection: LAN
 with Address (IP, port 5555 if none is given; the knob moves the last number) or USB for a generator in the USB-A port
 of the scope. On USB the scope takes the first USBTMC instrument it finds (no PC, no driver). Connect asks it for
@@ -802,7 +827,8 @@ shows the gain over frequency, the settings come back afterwards.
 and peaks, decoder Events, or Trend with two charts. Tap the pane's title for its settings, a trend chart to change its
 measurement, the peak list's button to sort it. The x closes the pane. The Events pane has its choices in its head:
 Messages (a frame of the protocol is one row, with the columns of the protocol where the pane is wide: ID, DLC, Data
-and CRC for CAN; for a UART or SPI without a chip select a row is what was sent without a long pause), Fields
+and CRC for CAN, without a column that no row fills, as MISO of an SPI bus read on one line; for a UART or SPI
+without a chip select a row is what was sent without a long pause), Fields
 (a row per character or field) or Lines (a character
 stream split at its line feeds), and Errors only. Its list scrolls by the bar or the finger, and a tap on a row marks
 that message: the row, its box in the decoder's band and its time on the plot. A stopped scope also moves the view to
@@ -811,7 +837,9 @@ the time and the text. Decode > Threshold to middle
 puts a decoder's threshold half way between the levels of its signal, for each of its lines by itself: a line can
 have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels; in Studio
 the thresholds are on the Levels page of the Decode sheet. An SPI decoder reads a second data line when MISO has a
-source, and each chip-select frame is one message.
+source, and each chip-select frame is one message. Where most frames end before a word is whole, its band says
+"Frames shorter than a word" and lists nothing: the record has too few samples for the clock (a slow time base
+with a short memory; more Memory or a faster time base helps), or Data bits is more than a frame has.
 In Studio each decoder that is on has a pill in the bottom bar; a tap on it opens that decoder's Decode sheet with a
 row for each of its lines.
 
@@ -835,8 +863,20 @@ own screen does not slow down for it. Pause stops the pictures, and a tab in the
 
 **Files.** Setups are kept on OOS's own persistent area `/oos` and survive a power cycle. Screenshots and CSV files go to
 a USB stick in the front port (FAT32, exFAT or ext4), into the folder `OOS`, and can be pulled whenever nothing is being
-saved. Without a stick they go to `/tmp/oos`, which is in RAM and lost at power-off, unless you set another directory
+saved. Reference > Load file lists the waveform files of the stick wherever they lie, three folders deep; the scope has
+no file manager. Without a stick they go to `/tmp/oos`, which is in RAM and lost at power-off, unless you set another
+directory
 with `--store-dir`. The web remote saves them to your computer too. `/oos` holds 16 MiB for calibration and settings.
+
+**File names.** A row of the Storage menu that saves (a session, a waveform, a screenshot, the fast-frame history, a
+setup to a file, the setup as SCPI) opens the keyboard with the next free name in it: OK takes it, or type your own,
+which takes its place (an arrow first keeps the name, to add to it).
+The suffix is added. A name that is taken is said to be taken, and OK once more replaces that file. Save to chooses the
+place: the stick or the local folder. A row that loads (a session, the fast-frame history, a setup from a file) shows
+the files of that kind in the folder, the newest first; tap one. The list scrolls by its bar and by the finger. Setup
+slot, Save setup and Recall setup are the quick way and do not ask; a setup saved by name lies beside the slots, or on
+the stick when files go there. The Quick key saves under the next free name without a question. The desktop build
+asks with the Save As and Open dialogs of Windows, which choose the folder too.
 
 **Self-calibration.** System > Self-cal. Let the scope warm up for 30 minutes and disconnect all inputs first. It takes
 about 5 minutes per channel and pass, with 4 passes. Results go to `/oos/cal` and are preferred over the factory files,

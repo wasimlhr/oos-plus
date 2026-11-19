@@ -161,7 +161,7 @@ pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String 
     let mut s = String::new();
     let mut w = 0;
     let mut before: Option<&Packet> = None;
-    let mut fields = said(pk).peekable();
+    let mut fields = said(m, pk).peekable();
     while let Some(p) = fields.next() {
         let piece = run_piece(m, p);
         let glue = before.map_or("", |b| glue(m, b, p));
@@ -183,9 +183,11 @@ pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String 
 
 /// The fields a text is made of: all but the start marks. A message begins with its own (an I2C transfer with its
 /// start condition, an SPI frame with its chip select), and a stream of several messages in one box would have one
-/// between every two ("FF S FD S FA", seen on a unit with a word per SPI frame).
-fn said(pk: &[Packet]) -> impl Iterator<Item = &Packet> {
-    pk.iter().filter(|p| p.kind != DecKind::Start)
+/// between every two ("FF S FD S FA", seen on a unit with a word per SPI frame). Nor the field every message of a
+/// protocol begins with ([`crate::protocols::Protocol::lead`]): a narrow box of a USB packet read "SYNC FS...".
+fn said<'a>(m: &Model, pk: &'a [Packet]) -> impl Iterator<Item = &'a Packet> {
+    let module = m.dec_proto.module();
+    pk.iter().filter(move |p| p.kind != DecKind::Start && !module.is_some_and(|x| x.lead(p)))
 }
 
 /// The messages among the fields `p` of the decoder `m` is the view of: the frames of a protocol that says where one
@@ -201,7 +203,7 @@ pub(super) fn messages(m: &Model, p: &[Packet]) -> Vec<std::ops::Range<usize>> {
 pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
     let mut s = String::new();
     let mut before: Option<&Packet> = None;
-    for p in said(pk) {
+    for p in said(m, pk) {
         if let Some(b) = before {
             s.push_str(glue(m, b, p));
         }
@@ -353,7 +355,7 @@ impl Ui {
             return false;
         }
         let Ok(packets) = self.decode_packets_of(m) else { return false };
-        let (opt, sh) = (m.dec_opts(), crate::protocols::Shared::of(m));
+        let (opt, sh) = (m.dec_opts(), crate::protocols::shared(m));
         let bit = packets.iter().find_map(|x| p.bits(x, &opt, &sh)).and_then(|b| b.first().map(|b| b.t1 - b.t0));
         bit.is_some_and(|bit| bit / tdiv as f64 * (self.area.w as f64 / HDIV as f64) >= BIT_MIN)
     }
@@ -368,7 +370,7 @@ impl Ui {
     fn draw_bit_row(&self, cv: &mut Canvas, m: &Model, packets: &[Packet], at: &BitRow) {
         let Some(module) = m.dec_proto.module() else { return };
         let f = self.fonts();
-        let (opt, sh) = (m.dec_opts(), crate::protocols::Shared::of(m));
+        let (opt, sh) = (m.dec_opts(), crate::protocols::shared(m));
         let xt = at.xt;
         let bh = DEC_BITS - 2;
         for p in packets {

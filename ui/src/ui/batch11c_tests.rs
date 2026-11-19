@@ -149,7 +149,8 @@ fn the_overview_box_moves_resizes_and_is_drawn_new() {
 fn the_overview_height_drags_clamps_and_is_saved() {
     let mut u = zoomed();
     let (hit, handle) = u.ov_divider().expect("a divider under the overview");
-    assert!(hit.h >= 40 && handle.w >= 40, "{hit:?} {handle:?}");
+    // a touch area of the finger's size around a slim grip
+    assert!(hit.h >= 40 && hit.w >= 40 && handle.h <= 6, "{hit:?} {handle:?}");
     let h0 = overview(&u).h;
     let (x, y) = (hit.x + hit.w / 2, hit.y + hit.h / 2);
     drag(&mut u, (x, y), (x, y + 40));

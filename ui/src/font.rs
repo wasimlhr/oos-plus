@@ -16,9 +16,8 @@ pub struct Glyph {
 
 pub struct Font {
     pub size: i32,
-    #[allow(dead_code)] // part of the atlas format, kept for line spacing
-    pub ascent: i32,
-    #[allow(dead_code)]
+    /// read by the layout tests only
+    #[cfg(test)]
     pub descent: i32,
     pub glyphs: Vec<Glyph>,
     pub alpha: &'static [u8],
@@ -33,12 +32,15 @@ pub struct Fonts {
     pub mb: Font,
     pub l: Font,
     pub lb: Font,
-    #[allow(dead_code)] // reserved for large read-outs
     pub xl: Font,
 }
 
 /// The atlases by text size: normal, large, larger.
-static BLOBS: [&[u8]; 3] = [include_bytes!("../assets/font.bin"), include_bytes!("../assets/font-large.bin"), include_bytes!("../assets/font-larger.bin")];
+static BLOBS: [&[u8]; 3] = [
+    include_bytes!("../assets/font.bin"),
+    include_bytes!("../assets/font-large.bin"),
+    include_bytes!("../assets/font-larger.bin"),
+];
 
 fn u16le(b: &[u8], o: usize) -> u16 {
     u16::from_le_bytes([b[o], b[o + 1]])
@@ -66,7 +68,8 @@ impl Font {
 impl Fonts {
     /// The set of text size `k` (0 normal, 1 large, 2 larger), loaded on first use.
     pub fn get(k: usize) -> &'static Fonts {
-        static SETS: [std::sync::OnceLock<Fonts>; 3] = [std::sync::OnceLock::new(), std::sync::OnceLock::new(), std::sync::OnceLock::new()];
+        static SETS: [std::sync::OnceLock<Fonts>; 3] =
+            [std::sync::OnceLock::new(), std::sync::OnceLock::new(), std::sync::OnceLock::new()];
         let k = k.min(SETS.len() - 1);
         SETS[k].get_or_init(|| Fonts::load(BLOBS[k]))
     }
@@ -79,7 +82,8 @@ impl Fonts {
         let mut v = Vec::new();
         for _ in 0..count {
             let size = u16le(b, o) as i32;
-            let ascent = u16le(b, o + 2) as i32;
+            // o + 2: the ascent, not used; o + 4: the descent, for the layout tests
+            #[cfg(test)]
             let descent = u16le(b, o + 4) as i32;
             let n = u16le(b, o + 6) as usize;
             let alen = u32le(b, o + 8) as usize;
@@ -99,7 +103,13 @@ impl Fonts {
             }
             let alpha = &b[o..o + alen];
             o += alen;
-            v.push(Font { size, ascent, descent, glyphs, alpha });
+            v.push(Font {
+                size,
+                #[cfg(test)]
+                descent,
+                glyphs,
+                alpha,
+            });
         }
         let mut it = v.into_iter();
         let mut next = || it.next().unwrap();

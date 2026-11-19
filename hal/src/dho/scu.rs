@@ -29,8 +29,19 @@ pub struct Shadows {
 
 impl Shadows {
     /// The stock register values at STOP after the hand-over of 2026-11-02 21:12 (CH1, 2.5 Mpts).
-    pub const HANDOVER: Shadows =
-        Shadows { s4004: 0x1, s4008: 0x80_0001, s400c: 0x6000_0000, s1000: 0, s1010: 0x2000_0000, s4080: 0x4000_0010, s1004: 0x0400_0000, s4020: 0x2001, s1080: 0x01e0_0000, s1084: 0, s40b8: 0 };
+    pub const HANDOVER: Shadows = Shadows {
+        s4004: 0x1,
+        s4008: 0x80_0001,
+        s400c: 0x6000_0000,
+        s1000: 0,
+        s1010: 0x2000_0000,
+        s4080: 0x4000_0010,
+        s1004: 0x0400_0000,
+        s4020: 0x2001,
+        s1080: 0x01e0_0000,
+        s1084: 0,
+        s40b8: 0,
+    };
 }
 
 /// Read-out window: `n` points from memory point `start`, interleave factor `ratio`, FSM channel mask `fsm`.
@@ -145,7 +156,7 @@ pub fn stop_sequence(w: &mut Vec<Write>, sh: &mut Shadows) {
 /// Read-out window: channel processing on, LA processing off, window 0x1100/0x1108, TX length 0x11f0,
 /// no frame header (0x1010 bit31), record sequence off (0x400c bit25); 7 writes.
 fn readout_window(w: &mut Vec<Write>, win: &Window, sh: &mut Shadows) {
-    let r4 = (win.n + 3) / 4 * 4;
+    let r4 = win.n.div_ceil(4) * 4;
     sh.s4008 |= 1 << 23;
     w.push((0x4008, sh.s4008));
     sh.s4008 &= !(1 << 24);
@@ -168,19 +179,29 @@ pub fn readout(win: &Window, sh: &mut Shadows) -> Vec<Write> {
     let mut w = Vec::new();
     readout_window(&mut w, win, sh);
     stop_sequence(&mut w, sh);
+    play_last_pulse(&mut w, sh);
+    fsm_run(&mut w, sh, win.fsm);
+    w
+}
+
+/// The play-last pulse: 0x4004 bit2 cleared, then set.
+pub(crate) fn play_last_pulse(w: &mut Vec<Write>, sh: &mut Shadows) {
     sh.s4004 &= !4;
     w.push((0x4004, sh.s4004));
     sh.s4004 |= 4;
     w.push((0x4004, sh.s4004));
-    sh.s4008 = (sh.s4008 & !0xf) | win.fsm;
+}
+
+/// The FSM channel mask `fsm` into 0x4008[3:0], then the FSM run bit 0x4004 bit0.
+pub(crate) fn fsm_run(w: &mut Vec<Write>, sh: &mut Shadows, fsm: u32) {
+    sh.s4008 = (sh.s4008 & !0xf) | fsm;
     w.push((0x4008, sh.s4008));
     sh.s4004 |= 1;
     w.push((0x4004, sh.s4004));
-    w
 }
 
 /// Before a run: roll (0x4008 bit17) and scan (bit22) off.
-fn set_run_prologue(w: &mut Vec<Write>, sh: &mut Shadows) {
+pub fn set_run_prologue(w: &mut Vec<Write>, sh: &mut Shadows) {
     sh.s4008 &= !(1 << 17);
     w.push((0x4008, sh.s4008));
     sh.s4008 &= !(1 << 22);
@@ -225,10 +246,7 @@ pub fn readout_play4(win: &Window, sh: &mut Shadows, first: u32, count: u32) -> 
     w.push((0x400c, sh.s400c));
     sh.s400c = (sh.s400c & !(1 << 26)) | 0x6000_0000;
     w.push((0x400c, sh.s400c));
-    sh.s4008 = (sh.s4008 & !0xf) | win.fsm;
-    w.push((0x4008, sh.s4008));
-    sh.s4004 |= 1;
-    w.push((0x4004, sh.s4004));
+    fsm_run(&mut w, sh, win.fsm);
     w
 }
 
@@ -259,15 +277,12 @@ fn record_run(fsm: u32, sh: &mut Shadows, first: u32, n: u32, interval_ticks: u3
     w.push((0x400c, sh.s400c));
     sh.s400c |= 0x2200_0000;
     w.push((0x400c, sh.s400c));
-    sh.s4008 = (sh.s4008 & !0xf) | fsm;
-    w.push((0x4008, sh.s4008));
-    sh.s4004 |= 1;
-    w.push((0x4004, sh.s4004));
+    fsm_run(&mut w, sh, fsm);
     w
 }
 
 /// One tick of the FSM delay 0x4068 and the acquisition timeout 0x406c: 6.4 ns.
-pub const FSM_TICK_FS: i128 = 6_400_000;
+pub const FSM_TICK_FS: i128 = crate::dho::clock::FPGA_TICK_FS;
 
 /// 0x4068 value for a record interval of `fs` femtoseconds (truncated like the stock value_fs / 6,400,000), saturated
 /// at the register width.
@@ -337,7 +352,10 @@ mod tests {
     fn auto_trigger_200us() {
         // acquisition-start.md: 200 us/div -> 0x4060 = 0x2625a0, 0x4064 = 0x17d7840; shadow 0x2001
         let mut sh = Shadows::HANDOVER;
-        assert_eq!(auto_trigger(&mut sh, true, 200_000_000_000, 8_000_000), [(0x4020, 0x2001), (0x4060, 0x2625a0), (0x4064, 0x17d7840)]);
+        assert_eq!(
+            auto_trigger(&mut sh, true, 200_000_000_000, 8_000_000),
+            [(0x4020, 0x2001), (0x4060, 0x2625a0), (0x4064, 0x17d7840)]
+        );
         assert_eq!(auto_trigger(&mut sh, false, 1_000_000_000, 0)[0], (0x4020, 0x2000));
     }
 
