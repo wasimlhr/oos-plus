@@ -12,11 +12,11 @@
 use super::*;
 use oos_dsp::decode::{Kind as DecKind, Packet};
 
-/// Height of the pane's head (the view switch; as high as the close button) and of its column titles.
-const HEAD: i32 = 40;
+/// Height of the pane's head and of its column titles. The buttons of the head are a finger tall (`TOUCH_MIN`).
+const HEAD: i32 = workspace::TOUCH_MIN + 4;
 const TITLES: i32 = 20;
 /// Height of a pane with its head and one line of text.
-const EMPTY_H: i32 = HEAD + 24;
+const EMPTY_H: i32 = HEAD + 22;
 /// Below this width the pane has no columns for the decoder, the length and the hex bytes.
 const NARROW_W: i32 = 560;
 /// Below this width it lists the time and the text alone.
@@ -121,7 +121,6 @@ pub(super) fn want_h(rows: usize) -> i32 {
     if rows == 0 { EMPTY_H } else { HEAD + TITLES + rows as i32 * tables::ROW_H }
 }
 
-/// Text in a cell from `x`, `w` wide: cut with dots where it is longer, left out where not even that fits.
 /// What the last column says of a row: how many of its fields failed a check. A row without one says nothing: an "OK"
 /// on every row took the room of the text and said no more than the missing red does.
 fn errors_text(errors: usize) -> String {
@@ -138,6 +137,7 @@ fn errors_column(w: i32, failed: usize) -> bool {
     w >= SMALL_W && failed > 0
 }
 
+/// Text in a cell from `x`, `w` wide: cut with dots where it is longer, left out where not even that fits.
 fn cell(cv: &mut Canvas, f: &Font, at: (i32, i32), w: i32, s: &str, col: Rgb) {
     let room = w - 10;
     // a message can be as long as the record: only what a row can hold is measured
@@ -199,7 +199,7 @@ impl Ui {
     }
 
     /// The buttons in the head of a pane `r`: the three views and Errors only, or in a pane too small for them one
-    /// button that goes through the views, and Errors while there is room.
+    /// button that says the view and opens the list of them, and Errors while there is room.
     fn events_head(&self, r: Rect) -> EvHead {
         let f = self.fonts();
         let h = HEAD - 4;
@@ -254,33 +254,80 @@ impl Ui {
     /// a tap on the chosen row lets go of it.
     pub(super) fn events_tap(&mut self, x: i32, y: i32) {
         let head = self.events_head(self.pane_rect());
-        if let Some(&(_, v)) = head.views.iter().find(|(b, _)| b.contains(x, y)) {
-            let at = EV_VIEWS.iter().position(|&w| w == v).unwrap_or(0);
-            self.m.ev_view = if head.cycle { EV_VIEWS[(at + 1) % EV_VIEWS.len()] } else { v };
-        } else if head.errors.is_some_and(|b| b.contains(x, y)) {
-            self.m.ev_errors = !self.m.ev_errors;
-        } else {
-            let Some((bar, rows)) = self.events_bar() else { return };
-            if !rows.contains(x, y) || (bar.needed() && bar.track.contains(x, y)) {
-                return;
-            }
-            let i = bar.top() as usize + ((y - rows.y) / tables::ROW_H) as usize;
-            let row = self.events_listed().nth(i).map(|e| (e.dec, e.t, e.t1, self.ev_is_selected(e)));
-            match row {
-                Some((_, _, _, true)) => self.pn.ev_sel = None,
-                Some((dec, t0, t1, false)) => {
-                    // the jump may stop the scope: the row is of the record that is shown after it
-                    self.go_to_time(t0);
-                    self.pn.ev_sel = Some(EvSel { dec, t0, t1, rec: self.ev_record() });
-                }
-                None => {}
-            }
+        if self.events_head_tap(&head, x, y) {
             return;
         }
-        // another list: from its top, at once; the choice is part of the set-up
+        let Some((bar, rows)) = self.events_bar() else { return };
+        if !rows.contains(x, y) || (bar.needed() && bar.track.contains(x, y)) {
+            return;
+        }
+        let i = bar.top() as usize + ((y - rows.y) / tables::ROW_H) as usize;
+        let row = self.events_listed().nth(i).map(|e| (e.dec, e.t, e.t1, self.ev_is_selected(e)));
+        match row {
+            Some((_, _, _, true)) => self.pn.ev_sel = None,
+            Some((dec, t0, t1, false)) => {
+                // a tap marks the row and its box. A stopped scope also goes to it; a running one is left as it is:
+                // a finger that missed its row on a list this dense stopped the acquisition and moved the
+                // horizontal position
+                if self.m.run == RunState::Run {
+                    self.toast("Stop the scope to go to an event");
+                } else {
+                    self.go_to_time(t0);
+                }
+                self.pn.ev_sel = Some(EvSel { dec, t0, t1, rec: self.ev_record() });
+            }
+            None => {}
+        }
+    }
+
+    /// A tap on the buttons `head` of the pane: a view, the list of the views, or Errors only. Whether it was one.
+    fn events_head_tap(&mut self, head: &EvHead, x: i32, y: i32) -> bool {
+        if let Some(&(b, v)) = head.views.iter().find(|(b, _)| b.contains(x, y)) {
+            if head.cycle {
+                // the one button of a narrow pane lists the views: stepping through them blind showed two wrong
+                // lists on the way to the third
+                let rows = EV_VIEWS.iter().map(|&w| (w.name().to_string(), workspace::Action::EvView(w))).collect();
+                self.popup("Rows", b.x, b.bottom() + 4, rows);
+            } else {
+                self.events_view(v);
+            }
+        } else if head.errors.is_some_and(|b| b.contains(x, y)) {
+            self.m.ev_errors = !self.m.ev_errors;
+            self.events_relist();
+        } else {
+            return false;
+        }
+        true
+    }
+
+    /// The pane lists other rows (another view, or the failed ones alone): from the top, at once; the choice is part
+    /// of the set-up.
+    fn events_relist(&mut self) {
         self.pn.ev_top = 0;
         self.pn.rows = self.decode_rows();
         self.mark_changed();
+    }
+
+    /// The view chosen from the list of a narrow pane's button.
+    pub(super) fn events_view(&mut self, v: EvView) {
+        self.m.ev_view = v;
+        self.events_relist();
+    }
+
+    /// The widths of the columns that depend on what is listed: the decoder names of the whole record (0 without a
+    /// row) and whether a row has hex bytes. Of the record, not of the rows on the screen: the columns stand still
+    /// while the list scrolls.
+    fn events_widths(&self, f: &Font) -> (i32, bool) {
+        let mut seen = [false; DECODERS];
+        let (mut who, mut hex) = (0, false);
+        for e in &self.pn.rows {
+            if !seen[e.dec] {
+                seen[e.dec] = true;
+                who = who.max(f.width(&e.who));
+            }
+            hex |= !e.hex.is_empty();
+        }
+        (who.min(140), hex)
     }
 
     /// A tap on a box of a decoder's band: its row is the chosen one (a second tap lets go of it), the Events pane
@@ -343,7 +390,7 @@ impl Ui {
         if n == 0 || fit == 0 {
             let note = if total == 0 { "No decoder events in this record" } else { "No row with an error" };
             let note = startup::fit_text(&f.sb, note, r.w - 20);
-            cv.text(&f.sb, r.x + 12, r.y + HEAD + 17, &note, DIM);
+            cv.text(&f.sb, r.x + 12, r.y + HEAD + 15, &note, DIM);
             return;
         }
         let bar = self.events_scroll(area, fit);
@@ -354,10 +401,12 @@ impl Ui {
         // keeps number, time, text and errors; a small one the time and the text, which is red where a check failed
         let pad = 14;
         let (wide, small) = (r.w >= NARROW_W, r.w < SMALL_W);
-        let hex_on = wide && shown.iter().any(|e| !e.hex.is_empty());
+        let (who, hex) = self.events_widths(&f.s);
+        let hex_on = wide && hex;
         let w_number = if small { 0 } else { f.s.width("9999") + pad };
-        let w_time = shown.iter().map(|e| f.s.width(&si(e.t, "s"))).max().unwrap_or(0) + pad;
-        let w_who = if wide { shown.iter().map(|e| f.s.width(&e.who)).max().unwrap_or(0).min(140) + pad } else { 0 };
+        // the widest a time of three digits gets, whatever the rows on the screen say
+        let w_time = f.s.width("-888.8 \u{b5}s") + pad;
+        let w_who = if wide { who + pad } else { 0 };
         let w_len = if wide { f.s.width("Len").max(f.s.width("9999")) + pad } else { 0 };
         let w_status = if errors_column(r.w, failed) { f.s.width("999 errors") + pad } else { 0 };
         let left = r.x + if small { 8 } else { 12 };
@@ -688,11 +737,85 @@ mod tests {
             assert_eq!(head.cycle, w < 420, "{w} px");
             let limit = r.right() - 54;
             for (b, _) in &head.views {
-                assert!(b.x >= r.x && b.right() <= limit && b.h >= 36, "{w} px: {b:?}");
+                assert!(b.x >= r.x && b.right() <= limit && b.h >= workspace::TOUCH_MIN, "{w} px: {b:?}");
             }
             if let Some(b) = head.errors {
-                assert!(b.right() <= limit, "{w} px: {b:?}");
+                assert!(b.right() <= limit && b.h >= workspace::TOUCH_MIN, "{w} px: {b:?}");
             }
         }
+    }
+
+    /// A UART decoder on the demo's line with the Events pane open, after a few records.
+    fn listing(layout: Layout) -> Ui {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = layout;
+        u.m.ch[2].on = true;
+        u.m.dec_on = true;
+        u.m.dec_src = 2;
+        u.m.pane = tables::PANE_EVENTS;
+        for _ in 0..12 {
+            u.step(0.1);
+        }
+        assert!(!u.pn.rows.is_empty(), "the demo's UART line decodes");
+        u
+    }
+
+    /// A tap on a row of a running scope marks the row and leaves the scope running, with its horizontal position: in
+    /// Studio it stopped the acquisition and moved the view. A stopped scope goes to the row.
+    #[test]
+    fn a_row_tap_leaves_a_running_scope_running() {
+        for layout in [Layout::Default, Layout::Studio] {
+            let mut u = listing(layout);
+            let (_, rows) = u.events_bar().unwrap();
+            let delay = u.m.delay;
+            assert_eq!(u.m.run, RunState::Run);
+            u.events_tap(rows.x + 60, rows.y + 4);
+            assert_eq!((u.m.run, u.m.delay), (RunState::Run, delay), "{layout:?}");
+            assert!(u.ev_selected().is_some(), "{layout:?}: the row is marked");
+            u.events_tap(rows.x + 60, rows.y + 4);
+            assert!(u.ev_selected().is_none(), "{layout:?}: a second tap lets go of it");
+            u.m.run = RunState::Stop;
+            u.m.delay = 1.0;
+            u.events_tap(rows.x + 60, rows.y + 4);
+            assert!(u.m.delay != 1.0 && u.ev_selected().is_some(), "{layout:?}: a stopped scope goes to the row");
+        }
+    }
+
+    /// The columns are as wide for one part of the list as for another: their widths are those of the record.
+    #[test]
+    fn the_columns_stand_still_while_the_list_scrolls() {
+        let mut u = listing(Layout::Default);
+        u.m.ev_view = EvView::Fields;
+        u.pn.rows = u.decode_rows();
+        let f = u.fonts();
+        let all = u.events_widths(&f.s);
+        assert!(all.0 >= f.s.width("D1 UART"));
+        // rows of another decoder with a longer name, and one row with hex bytes, anywhere in the record
+        let mut far = u.pn.rows[0].clone();
+        (far.dec, far.who, far.hex) = (1, "D2 Modbus RTU".to_string(), "4F".to_string());
+        u.pn.rows.push(far);
+        let (who, hex) = u.events_widths(&f.s);
+        assert!(who >= f.s.width("D2 Modbus RTU") && hex);
+    }
+
+    /// The one button of a narrow pane opens the list of the views, and a row of the list chooses it.
+    #[test]
+    fn a_narrow_pane_lists_its_views() {
+        let mut u = listing(Layout::Studio);
+        let messages = u.pn.rows.len();
+        let head = u.events_head(Rect::new(100, 100, 220, 200));
+        assert!(head.cycle && head.views.len() == 1);
+        assert!(u.workspace.popup.is_none());
+        let b = head.views[0].0;
+        assert!(u.events_head_tap(&head, b.x + 4, b.y + 4));
+        assert_eq!(u.m.ev_view, EvView::Messages, "the tap changes nothing by itself");
+        let popup = u.workspace.popup.as_ref().expect("the list of the views");
+        let names: Vec<&str> = popup.rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(names, ["Messages", "Fields", "Lines"]);
+        let row = popup.row_rect(1);
+        assert!(u.workspace_popup_tap(row.x + row.w / 2, row.y + row.h / 2));
+        assert_eq!(u.m.ev_view, EvView::Fields);
+        assert!(u.pn.rows.len() > messages && u.pn.ev_top == 0, "a row per character, from the top");
+        assert!(u.workspace.popup.is_none());
     }
 }

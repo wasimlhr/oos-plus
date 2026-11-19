@@ -459,20 +459,21 @@ Changed:
   Lines (a UART line shown as ASCII, split at its line feeds; other decoders list their messages), and Errors only
   leaves the rows with a failed check. The rows have columns: number, time, decoder, number of fields, text, the
   bytes in hex beside a character text, and OK or the number of errors. The list scrolls by its bar or the finger,
-  and a tap on a row moves the view to it. The event table over the plot lists the same rows. `:DECode:EVENts?`,
+  and a tap on a row of a stopped scope moves the view to it. The event table over the plot lists the same rows.
+  `:DECode:EVENts?`,
   `:BUS<n>:DATA?` and the CSV export are unchanged, a row per field. The view and the filter are part of the
   set-up (`ev_view`, `ev_errors`) and have their commands, `:DECode:EVENts:VIEW` and `:DECode:EVENts:ERRors`
   (host-tested, not yet verified on hardware).
 - Decoders: a chosen message is marked (host-tested; a tap on a row (unit), 2026-11-19; a tap on a box of the
   band not yet verified on hardware). A tap on a row of the Events
-  pane moves the view to it and chooses it; a tap on a box of the band on the plot chooses its row, brings the
+  pane chooses it and, on a stopped scope, moves the view to it; a tap on a box of the band chooses its row, brings the
   pane to it and says its whole text in a note. The chosen row has a white frame, its boxes in the band have one,
   and its time span is shaded across the plot. A second tap lets go of it; a new record does too.
 - Decoders: the Events pane fits its size (host-tested; (unit), 2026-11-19, floating at 230 and 460 px). Made
   small, as a floating
   view of Studio, it wrote its columns over each other. Under 560 px it keeps number, time, text and status, under
   360 px the time and the text (red where a check failed), and a head too narrow for its buttons has one button
-  that goes through the views.
+  that lists the views.
 - Decode > Threshold to middle sets the threshold of a decoder half way between the lowest and the highest sample
   of its source in the record on the screen, once; `:BUS<n>:THReshold AUTO` and `:DECode:THReshold AUTO` do the
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
@@ -493,6 +494,15 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- Decoders: a tap on a row of the Events pane leaves a running scope running (host-tested, not yet verified on
+  hardware). In Studio it stopped the acquisition and moved the horizontal position, on rows 26 px tall that a
+  finger misses. The tap marks the row and its box in the band; a stopped scope also goes to it, as before, and a
+  running one says "Stop the scope to go to an event".
+- Decoders: the Events pane holds its columns still (host-tested, not yet verified on hardware). The time and the
+  decoder column were as wide as the rows on the screen needed and the hex column came and went with them, so the
+  text moved while the list scrolled. The widths are those of the record now. The buttons of its head are 40 px
+  tall (36), and the one button of a narrow pane opens the list of the views where it stepped to the next one.
+  A box of the band is at least 20 px wide to a finger (12).
 - SPI decoder: on the Decode sheet the four lines stand together on the first page (MISO was alone on Settings),
   the Mode heads Settings and Input ends it; the polarity of the select is the row "CS polarity" (it was "CS", as
   its line is), and the polarity of the data is "Data polarity" (host-tested, not yet verified on hardware).

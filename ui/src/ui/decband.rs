@@ -452,8 +452,13 @@ impl Ui {
                 cv.vline(x1.max(x0 + 1), a.y, a.y + a.h - 1, DIM);
             }
         }
-        // a box a finger can find: a finger's height around it
-        let touch = |x0: i32, x1: i32| Rect::new(x0.max(left), y - 8, (x1 - x0.max(left)).max(12), h + 16);
+        // a box a finger can find: a finger's height around it, and no narrower than half a finger around its middle
+        // (a box beside it is found first where the two overlap, so a wider one would take taps from its neighbours)
+        let touch = |x0: i32, x1: i32| {
+            let x0 = x0.max(left);
+            let w = (x1 - x0).max(20);
+            Rect::new((x0 + x1) / 2 - w / 2, y - 8, w, h + 16)
+        };
         let mark = |cv: &mut Canvas, x0: i32, x1: i32| {
             cv.round_outline(Rect::new(x0 - 2, y - 2, x1 - x0 + 5, h + 4), 4, ACCENT);
         };

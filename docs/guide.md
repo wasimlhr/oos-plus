@@ -790,9 +790,10 @@ shows the gain over frequency, the settings come back afterwards.
 and peaks, decoder Events, or Trend with two charts. Tap the pane's title for its settings, a trend chart to change its
 measurement, the peak list's button to sort it. The x closes the pane. The Events pane has its choices in its head:
 Messages (what was sent without a long pause is one row), Fields (a row per character or field) or Lines (a character
-stream split at its line feeds), and Errors only. Its list scrolls by the bar or the finger, and a tap on a row moves the
-view to that message and marks it: the row, its box in the decoder's band and its time on the plot. A tap on a box of
-the band does the same from the plot. Made small, the pane keeps the time and the text. Decode > Threshold to middle
+stream split at its line feeds), and Errors only. Its list scrolls by the bar or the finger, and a tap on a row marks
+that message: the row, its box in the decoder's band and its time on the plot. A stopped scope also moves the view to
+it; a running one is left running. A tap on a box of the band marks its row from the plot. Made small, the pane keeps
+the time and the text. Decode > Threshold to middle
 puts a decoder's threshold half way between the levels of its signal, for each of its lines by itself: a line can
 have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels; in Studio
 the thresholds are on the Levels page of the Decode sheet. An SPI decoder reads a second data line when MISO has a
