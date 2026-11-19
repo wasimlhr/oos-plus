@@ -653,6 +653,14 @@ Changed:
   21 identifiers, standard and extended, data and remote frames, every CRC right and every frame acknowledged,
   the same traffic a capture of the board has. The band and the Events pane with ID, DLC, Data and CRC work on
   it. The trigger on an identifier is the next entry.
+- Reference > Load file and Import slot list the waveform files of a USB stick wherever they lie, three folders
+  deep (at most 40), with their path on the stick for those outside the folder `OOS`. They listed that folder
+  alone, so a file copied onto a stick could not be opened on the scope. Links on the stick are not followed.
+  There is no file manager: files cannot be moved, renamed or deleted on the scope.
+- Studio: the top bar has the links as small pills left of Add, a dot and a name each: LAN (green with an
+  address), and WLAN and USB while their stick is in, as the Default bar has its USB pill. A tap on LAN or WLAN
+  opens the Network page, which has the address; a tap on USB opens Storage. The bar had none of them, so a
+  stick that was mounted did not show.
 - Studio: a reference has the small tag of a channel on the plot ("R1") with overlaid traces too, as it has in
   lanes. It had a box of two rows there, 40 px high and as wide as its name, over the signal; the name and the
   scale are on its pill in the bottom bar, and the sample rate is in the note beside Fit. The other layouts keep

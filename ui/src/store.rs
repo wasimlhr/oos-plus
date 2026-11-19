@@ -76,6 +76,55 @@ pub fn file_name(p: &Path) -> String {
     p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string())
 }
 
+/// How many waveform files of a stick the lists of files to open take (`wave_files_under`).
+pub const STICK_FILES: usize = 40;
+
+/// The waveform files (`WAVE_EXTS`) under `root`, down to `depth` folders below it, at most `max`: the files of a
+/// folder in the order of their names, then its folders. For a stick, whose files lie where their owner put them.
+/// A link is not followed and a name that begins with a dot is left out (a stick is foreign data, `check_target`).
+pub fn wave_files_under(root: &Path, depth: usize, max: usize) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut dirs = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, level)) = dirs.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
+        entries.sort_by_key(|e| e.file_name());
+        let mut below = Vec::new();
+        for e in entries {
+            if e.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            // (the type of the entry itself: a link is neither a file nor a folder here)
+            let Ok(kind) = e.file_type() else { continue };
+            let path = e.path();
+            if kind.is_file() {
+                let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("").to_ascii_lowercase();
+                if WAVE_EXTS.contains(&ext.as_str()) {
+                    out.push(path);
+                    if out.len() >= max {
+                        return out;
+                    }
+                }
+            } else if kind.is_dir() && level < depth {
+                below.push((path, level + 1));
+            }
+        }
+        // (a stack: the folders in the order of their names come off it last one first)
+        dirs.extend(below.into_iter().rev());
+    }
+    out
+}
+
+/// The name of a file in a list of files to open: its name, and for a file in another folder of the stick than the
+/// one the scope saves to, its path on the stick ("captures/a.csv"), so two of one name can be told apart.
+pub fn list_name(p: &Path) -> String {
+    let stick = Path::new(USB_DIR).parent().unwrap_or(Path::new("/"));
+    match p.strip_prefix(stick) {
+        Ok(rel) if rel.components().count() > 1 && !p.starts_with(USB_DIR) => rel.to_string_lossy().replace('\\', "/"),
+        _ => file_name(p),
+    }
+}
+
 /// A stick is foreign data and this program runs as root: a link or a device node on it, under a name a save would use,
 /// could lead straight to the card. So only a regular file or a new one, and on the stick no link on the way there.
 pub fn check_target(path: &Path) -> std::io::Result<()> {
@@ -3799,6 +3848,35 @@ mod tests {
         assert!(text.contains("dec_proto = Usb\n") && text.contains("dec_uspeed = 1\n"));
         assert_eq!(parse_setup(&text).unwrap(), m);
         assert!(parse_setup("dec_uspeed = 3").is_err());
+    }
+
+    /// The files of a stick wherever they lie: waveform files only, three folders deep, files before folders, no
+    /// hidden names, and no more than asked for. In the list a file outside the scope's folder has its path.
+    #[test]
+    fn the_waveform_files_of_a_stick_are_found_in_its_folders() {
+        let root = std::env::temp_dir().join(format!("oos-ui-stick-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for d in ["OOS", "captures/can", "a/b/c/d", ".hidden"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        let waves = ["z.csv", "OOS/wave-001.bin", "captures/b.WFM", "captures/can/a.isf", "a/b/c/deep.csv"];
+        let others = ["notes.txt", "a/b/c/d/too-deep.csv", ".hidden/x.csv", "captures/picture.png"];
+        for f in waves.iter().chain(others.iter()) {
+            std::fs::write(root.join(f), b"x").unwrap();
+        }
+        let rel = |v: Vec<PathBuf>| -> Vec<String> {
+            v.iter().map(|p| p.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/")).collect()
+        };
+        let all = rel(wave_files_under(&root, 3, 40));
+        assert_eq!(all, ["z.csv", "OOS/wave-001.bin", "a/b/c/deep.csv", "captures/b.WFM", "captures/can/a.isf"]);
+        assert_eq!(rel(wave_files_under(&root, 3, 2)), ["z.csv", "OOS/wave-001.bin"]);
+        assert_eq!(rel(wave_files_under(&root, 0, 40)), ["z.csv"]);
+        let _ = std::fs::remove_dir_all(&root);
+        // the names in the list
+        assert_eq!(list_name(Path::new("/mnt/usb/OOS/wave-001.bin")), "wave-001.bin");
+        assert_eq!(list_name(Path::new("/mnt/usb/z.csv")), "z.csv");
+        assert_eq!(list_name(Path::new("/mnt/usb/captures/can/a.isf")), "captures/can/a.isf");
+        assert_eq!(list_name(Path::new("/tmp/oos/wave-002.csv")), "wave-002.csv");
     }
 
     #[test]

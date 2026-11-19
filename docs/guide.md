@@ -846,7 +846,9 @@ own screen does not slow down for it. Pause stops the pictures, and a tab in the
 
 **Files.** Setups are kept on OOS's own persistent area `/oos` and survive a power cycle. Screenshots and CSV files go to
 a USB stick in the front port (FAT32, exFAT or ext4), into the folder `OOS`, and can be pulled whenever nothing is being
-saved. Without a stick they go to `/tmp/oos`, which is in RAM and lost at power-off, unless you set another directory
+saved. Reference > Load file lists the waveform files of the stick wherever they lie, three folders deep; the scope has
+no file manager. Without a stick they go to `/tmp/oos`, which is in RAM and lost at power-off, unless you set another
+directory
 with `--store-dir`. The web remote saves them to your computer too. `/oos` holds 16 MiB for calibration and settings.
 
 **Self-calibration.** System > Self-cal. Let the scope warm up for 30 minutes and disconnect all inputs first. It takes
