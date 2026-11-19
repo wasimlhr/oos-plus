@@ -4183,11 +4183,23 @@ impl Ui {
     /// `render_view_layers` of the view in place.
     fn render_view_layers_as_is(&mut self, l: &mut Layers) {
         let keep = (self.scr, self.grid, std::mem::take(&mut self.wins), self.area, self.cur_win, self.frames, self.hdmi_snap_want);
+        // what Studio keeps of a frame (`studio_frame_start`): the lines of its badge row, counted for the width of
+        // the pass, and where it drew badges and labels, for the touch. The panel's stay the panel's. With the
+        // monitor's count of lines the plot of the panel changed its height from one frame to the next, and its
+        // traces were cleared each time (seen on a unit: HDMI Layout, twelve badges that fill two lines on the panel
+        // and one on a monitor of 1920, and the traces missing in most pictures of the panel)
+        let studio = (
+            self.studio.badge_wrap,
+            std::mem::take(self.studio.lane_badges.get_mut()),
+            std::mem::take(self.studio.dec_labels.get_mut()),
+        );
         self.scr = Screen { w: l.under.w, h: l.under.h };
         (self.view_pass, self.hdmi_snap_want) = (true, false);
         self.render_layers(l);
         self.view_pass = false;
         (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames, self.hdmi_snap_want) = keep;
+        self.studio.badge_wrap = studio.0;
+        (*self.studio.lane_badges.get_mut(), *self.studio.dec_labels.get_mut()) = (studio.1, studio.2);
     }
 
     /// Graticule in the classic scope style: dotted division lines (Full), a solid frame (Full, Light) and solid

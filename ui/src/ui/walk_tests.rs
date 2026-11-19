@@ -2135,6 +2135,40 @@ fn a_session_saved_in_the_offline_view_comes_back_in_it() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// HDMI Layout beside Studio: the monitor's pass is 1920 wide, where badges that fill two lines on the panel fill
+/// one. What that pass counts does not stay behind: the panel's badge row and its plot are the same after it, frame
+/// after frame. The count of the monitor's pass stayed, and the next step laid the panel out with one line: the
+/// plot changed its height from frame to frame and its traces were cleared each time.
+#[test]
+fn the_monitor_s_pass_leaves_the_panel_s_badge_row_and_plot_as_they_are() {
+    let mut u = fresh(Layout::Studio);
+    u.m.ch[1].on = false;
+    u.m.hdmi = crate::model::HdmiMode::Layout;
+    let lines = |u: &Ui| {
+        let mut ys: Vec<i32> = u.studio_badges().iter().map(|b| b.1.y).collect();
+        ys.sort();
+        ys.dedup();
+        ys.len()
+    };
+    // measurements until the panel's row has two lines
+    for k in oos_dsp::measure::ALL {
+        if lines(&u) >= 2 { break; }
+        if !u.m.meas.iter().any(|m| m.0 == k) { u.m.meas.push((k, WaveId::Ch(0))); }
+        for _ in 0..2 { frame(&mut u); }
+    }
+    assert_eq!(lines(&u), 2, "{} measurements", u.m.meas.len());
+    let (row, plot) = (u.studio_row(), u.plot_rect());
+    let mut monitor = Canvas::new(1920, 1080);
+    for round in 0..4 {
+        u.render_view(&mut monitor);
+        assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the monitor's pass, round {round}");
+        u.step(0.033);
+        assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the step behind it, round {round}");
+        u.render(&mut Canvas::new(1024, 600));
+        assert_eq!((u.studio_row(), u.plot_rect(), lines(&u)), (row, plot, 2), "after the panel's pass, round {round}");
+    }
+}
+
 /// Studio's badge row takes a second line before a measurement goes behind "+N", in both badge styles. The row grows
 /// upwards and the plot gives the room; the buttons at its right stay where they are; a badge of the upper line takes a
 /// tap. With more than two lines hold, "+N" is back.

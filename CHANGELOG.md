@@ -689,6 +689,13 @@ Changed:
   trigger point in each picture looked at (before: no frame in 70 s), and at 200 us/div in 18 of 19. At 5 us/div
   it takes none: the record there (35 kpts at 625 MSa/s, 56 us) is shorter than the frame, and the decoder gives
   nothing of a frame that is cut off.
+- Studio with HDMI on Layout: the traces of the panel came and went (the owner's video of a unit, and 5 of 8
+  and 11 of 12 pictures of the panel without traces; none of 70 before HDMI was set to Layout). The pass that
+  draws the monitor counted the lines of the badge row for its own width and left that count behind: twelve
+  badges fill two lines on the panel and one on a monitor of 1920, so the next step laid the panel out with one
+  line, its plot changed its height from frame to frame, and its traces were cleared each time. What Studio
+  keeps of a frame (the lines of the badge row, where badges and labels were drawn for the touch) is the panel's
+  again after the monitor's pass. Reproduced and tested on the host; not yet run on a unit.
 - Manchester on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: the 10BASE-T output of a
   demo board, 10 Mbit/s, about 1 V each way around 0 V). The decoder reads its packets at the rate it finds in
   the signal: a ping of 102 bytes with the right frame check, and frames the board changes on purpose (other
