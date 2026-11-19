@@ -296,6 +296,9 @@ impl Protocol for Can {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(can(l.main(), l.dt, l.sh.can_rate, l.thr, l.hy, l.sh.canh))
     }
+    fn decode_cut(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
+        Ok(oos_dsp::decode::can_cut(l.main(), l.dt, l.sh.can_rate, l.thr, l.hy, l.sh.canh))
+    }
     /// The standard frame of the demo.
     fn trigger_default(&self) -> (BusWhat, u32) {
         (BusWhat::Id, 0x123)

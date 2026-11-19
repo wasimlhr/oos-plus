@@ -39,6 +39,18 @@ pub fn decode_la(m: &Model, words: &[u16], dt: f64) -> Result<Vec<Packet>, &'sta
 
 /// `decode` with the threshold and hysteresis given.
 pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32) -> Result<Vec<Packet>, &'static str> {
+    decode_how(m, ch, dt, thr, hy, false)
+}
+
+/// `decode_at`; `cut`: with what is whole of a frame the record cuts off (`Protocol::decode_cut`).
+fn decode_how(
+    m: &Model,
+    ch: [&[f32]; NCH],
+    dt: f64,
+    thr: f32,
+    hy: f32,
+    cut: bool,
+) -> Result<Vec<Packet>, &'static str> {
     use oos_dsp::decode_ext as x1;
     let get = |c: usize| ch.get(c).copied().filter(|v| !v.is_empty()).ok_or("source channel off");
     let opt = |c: Option<usize>| -> Result<Option<&[f32]>, &'static str> { c.map(get).transpose() };
@@ -70,7 +82,9 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
     let lines = [lines[0], line(0), line(1), line(2)];
     let chans: [Option<&[f32]>; 4] = std::array::from_fn(|c| ch.get(c).copied().filter(|v| !v.is_empty()));
     let src = [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4];
-    p.decode(&crate::protocols::Lines { lines, dt, thr, hy, opt: m.dec_opts(), sh: crate::protocols::Shared::of(m), chans, src })
+    let (opt, sh) = (m.dec_opts(), crate::protocols::Shared::of(m));
+    let l = crate::protocols::Lines { lines, dt, thr, hy, opt, sh, chans, src };
+    if cut { p.decode_cut(&l) } else { p.decode(&l) }
 }
 
 /// Whether a packet satisfies the protocol trigger condition of `m` on its own. UART and SPI data take the relation,
@@ -208,6 +222,17 @@ pub fn find_all(m: &Model, inp: &Input) -> Vec<f64> {
         return points(m, &decode(m, inp.ch, inp.dt).unwrap_or_default());
     }
     oos_dsp::trigger::find_all(&m.trigger(), inp)
+}
+
+/// `find_all` for the trigger on a record of the hardware: the protocol trigger also finds a field of a frame that
+/// the record cuts off (`Protocol::decode_cut`). The search marks and the demo keep `find_all`, which finds what
+/// the band shows.
+pub fn find_all_cut(m: &Model, inp: &Input) -> Vec<f64> {
+    if m.trig_type == TrigType::Bus && m.dec_src < NCH {
+        let hy = 0.1 * m.ch[m.dec_src].volts_per_div();
+        return points(m, &decode_how(m, inp.ch, inp.dt, m.dec_thr, hy, true).unwrap_or_default());
+    }
+    find_all(m, inp)
 }
 
 /// The first trigger point after `from`.

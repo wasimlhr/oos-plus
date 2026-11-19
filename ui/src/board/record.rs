@@ -93,7 +93,7 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
         let (first, last) = (-t_first / f.dt, len as f64 - 1.0 - (t_first + window) / f.dt);
         let fits = |t: &f64| first > last || (first..=last).contains(t);
         let nearest = |a: &f64, b: &f64| (a - f.pre as f64).abs().total_cmp(&(b - f.pre as f64).abs());
-        let all: Vec<f64> = crate::trig::find_all(m, &inp).into_iter().map(|t| t + lo as f64).collect();
+        let all: Vec<f64> = crate::trig::find_all_cut(m, &inp).into_iter().map(|t| t + lo as f64).collect();
         all.iter().copied().filter(fits).min_by(nearest).or_else(|| {
             // the protocol trigger: the hardware fires on any frame, and the field asked for is found in the record.
             // Where it stands too far from the hardware point to be moved to the trigger point, the frame is none
@@ -353,6 +353,42 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    /// The protocol trigger on a frame that the record cuts off, as on the unit: CAN at 500 kbit/s, 10 us/div,
+    /// 100 000 points at 625 MSa/s (160 us), a frame of 222 us whose identifier ends at the hardware point, so the
+    /// record ends 52 us into its data. The decoder gives nothing of a frame that is cut off, and the trigger took
+    /// no frame; it finds the identifier with the fields that are whole (`Protocol::decode_cut`), also with the
+    /// CAN-FD decoder. (At 5 us/div the record there is 56 us and begins 4 us before the frame: too little of the
+    /// quiet bus before it to know its first edge for a start of frame, with any decoder.)
+    #[test]
+    fn a_bus_match_in_a_frame_the_record_cuts_off_is_found() {
+        use oos_dsp::sim::CanFrame;
+        let (dt, len, pre) = (1.6e-9, 100_000usize, 50_000usize);
+        let data = vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
+        let frames = [CanFrame { id: 0x057, ext: false, rtr: false, data }];
+        let l = oos_dsp::sim::can_logic(&frames, 500e3, 0.0, 3.3);
+        // (12 idle bits lead the wave; 50 us to the end of the identifier, which stands 2 us before the hardware point)
+        let lead = 52e-6 - pre as f64 * dt;
+        let v: Vec<f32> = (0..len).map(|i| l.v(i as f64 * dt + lead) as f32).collect();
+        let f = Arc::new(Frame { seq: 1, dt, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() });
+        let mut m = Model::default();
+        (m.trig_type, m.dec_src, m.dec_thr) = (TrigType::Bus, 0, 1.65);
+        (m.dec_canrate, m.dec_canh) = (crate::decode::CAN_RATES.iter().position(|&r| r == 500e3).unwrap(), false);
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Id, 0x057);
+        let window = 100e-6;
+        let fd = crate::protocols::MODULES.iter().position(|p| p.key() == "CanFd");
+        for proto in [Some(Proto::CAN), fd.map(|i| Proto::Module(i as u8))].into_iter().flatten() {
+            let Proto::Module(i) = proto;
+            (m.dec_proto, m.dec_opt) = (proto, crate::protocols::opt_default(i));
+            let at = trigger_point(&f, &m, 1000, window, -window / 2.0);
+            let at = at.expect("the identifier of a frame the record cuts off");
+            let back = (pre as f64 - at) * dt;
+            assert!((0.0..4e-6).contains(&back), "{back}");
+            // the band reads nothing of it, as before
+            let lines: [&[f32]; NCH] = std::array::from_fn(|k| &f.ch[k][..]);
+            assert!(crate::trig::decode(&m, lines, dt).unwrap().is_empty());
         }
     }
 

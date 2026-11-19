@@ -3,7 +3,7 @@
 
 //! CAN and LIN decoders against generated frames with known content.
 
-use oos_dsp::decode::{can, lin, lin_checksum, lin_pid, lin_with, Kind, LinChecksum, Packet};
+use oos_dsp::decode::{can, can_cut, lin, lin_checksum, lin_pid, lin_with, Kind, LinChecksum, Packet};
 use oos_dsp::sim::{add_noise, bits_logic, can_bits, can_logic, lin_logic, sample, CanFrame};
 
 fn ids(p: &[Packet]) -> Vec<(u32, bool, bool)> {
@@ -328,6 +328,54 @@ fn can_with_a_slow_edge_to_recessive_is_read_right() {
             assert_eq!(ids(&p), want, "invert {invert}");
             assert_eq!(crcs(&p), [true; 4], "invert {invert}");
             assert!(p.iter().all(|x| x.ok), "invert {invert}: {:?}", p.iter().find(|x| !x.ok));
+        }
+    }
+}
+
+/// A frame that the end of the record cuts off: the decoders give nothing of it, and their `_cut` forms give what is
+/// whole, for the protocol trigger: the start and the identifier once the record holds them, then each data byte
+/// it holds. A record that holds the frame whole reads the same with both.
+#[test]
+fn can_cut_gives_the_whole_fields_of_a_frame_the_record_cuts_off() {
+    use oos_dsp::decode_ext::{can_fd, can_fd_cut};
+    let rate = 500e3;
+    let dt = 1.0 / 25e6;
+    let bit = (1.0 / rate / dt) as usize;
+    for (frame, id_bits) in [
+        (CanFrame { id: 0x057, ext: false, rtr: false, data: vec![0x45, 0x68, 0x6c, 0x65, 0x72, 0x73] }, 20),
+        (CanFrame { id: 0x1597_eea3, ext: true, rtr: false, data: vec![0xdc, 0x55, 0xcb, 0xfa] }, 42),
+    ] {
+        let l = can_logic(std::slice::from_ref(&frame), rate, 0.0, 3.3);
+        let whole = sample(|t| l.v(t), 0.0, dt, 12_000);
+        let want = (frame.id, frame.ext, false);
+        // the 12 idle bits in front, then so many bits of the frame (stuff bits among them)
+        let first = |bits: usize| &whole[..(12 + bits) * bit];
+        type Decoder = fn(&[f32]) -> Vec<Packet>;
+        const DT: f64 = 1.0 / 25e6;
+        let pairs: [(Decoder, Decoder); 2] = [
+            (|v| can(v, DT, 500e3, 1.65, 0.1, false), |v| can_cut(v, DT, 500e3, 1.65, 0.1, false)),
+            (|v| can_fd(v, DT, 500e3, 2e6, 1.65, 0.1, false), |v| can_fd_cut(v, DT, 500e3, 2e6, 1.65, 0.1, false)),
+        ];
+        for (plain, cut) in pairs {
+            // the whole frame: the same with both
+            assert_eq!(plain(&whole), cut(&whole));
+            assert_eq!(ids(&plain(&whole)), [want]);
+            // ten bits of it: nothing, the identifier is not whole
+            assert!(cut(first(10)).is_empty());
+            // the identifier and a few bits more: nothing without, start and identifier with
+            let v = first(id_bits);
+            assert!(plain(v).is_empty());
+            let p = cut(v);
+            assert_eq!((p.len(), p[0].kind, ids(&p)), (2, Kind::Start, vec![want]), "{p:?}");
+            // into the data field: the bytes that are whole, in their places
+            let v = first(id_bits + 30);
+            assert!(plain(v).is_empty());
+            let p = cut(v);
+            let got = data(&p);
+            let sent: Vec<u32> = frame.data.iter().map(|&b| b as u32).collect();
+            assert!((2..=3).contains(&got.len()) && got[..] == sent[..got.len()], "{p:?}");
+            assert_eq!(p.len(), 2 + got.len());
+            assert!(p.iter().all(|x| x.ok && x.t1 <= v.len() as f64));
         }
     }
 }
