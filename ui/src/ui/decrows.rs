@@ -139,7 +139,7 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
     // sync byte of a LIN frame, which is data to the decoder, stands before its identifier)
     let takes = |k: usize| {
         cols.iter().any(|(_, c)| match *c {
-            Col::Label(l) | Col::LabelOr(l) => texts[k].starts_with(l),
+            Col::Label(l) | Col::LabelOr(l) | Col::Part(l, _) => texts[k].starts_with(l),
             Col::At(n) => k == n,
             Col::Addr => matches!(pk[k].kind, DecKind::Addr { .. }),
             _ => false,
@@ -147,7 +147,9 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
     };
     let head = (0..pk.len()).find(|&k| takes(k));
     let after = |k: usize| head.is_none_or(|h| k > h);
-    let is_data = |k: usize| pk[k].kind == DecKind::Data && after(k) && packet_tag(m, &pk[k]).is_none();
+    // (a data word of MIL-STD-1553 is data as a byte is)
+    let data_kind = |k: usize| matches!(pk[k].kind, DecKind::Data | DecKind::Word { cmd: false });
+    let is_data = |k: usize| data_kind(k) && after(k) && packet_tag(m, &pk[k]).is_none();
     let data: Vec<Packet> = (0..pk.len()).filter(|&k| is_data(k)).map(|k| pk[k].clone()).collect();
     // a word of two data lines is written "9F/FF"
     let half = |second: bool| {
@@ -166,6 +168,10 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
             Col::LabelOr(_) => {
                 let other = (0..pk.len()).filter(|&k| pk[k].kind != DecKind::Start).map(|k| texts[k].as_str());
                 other.collect::<Vec<_>>().join(" ")
+            }
+            Col::Part(l, n) => {
+                let labelled = texts.iter().filter(|t| t.starts_with(l));
+                labelled.filter_map(|t| t.split(' ').nth(n)).collect::<Vec<_>>().join(" ")
             }
             Col::At(n) => texts.get(n).cloned().unwrap_or_default(),
             Col::Addr => address().map_or_else(String::new, |k| texts[k].clone()),
@@ -896,6 +902,25 @@ mod tests {
         let (start, stop) = (at(0.0, DecKind::Start, 0), at(3.0, DecKind::Stop, 0));
         let p = [start, at(1.0, write, 0x50), at(2.0, DecKind::Data, 0x42), stop];
         assert_eq!(rows_of(&m, 0, "D1 I2C", &p, EvView::Messages)[0].cells, ["50 W", "42 P"]);
+        // MIL-STD-1553, where it is built in: the parts of the command word each in its column
+        if let Some(proto) = Proto::from_key("Mil1553") {
+            use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_STATUS};
+            m.dec_proto = proto;
+            let word = |t: f64, cmd: bool, v: u32, role: Option<u32>| {
+                Packet { value2: role, ..at(t, DecKind::Word { cmd }, v) }
+            };
+            let p = [
+                word(0.0, true, 0x8842, Some(MIL1553_COMMAND)),
+                word(1.0, false, 5, None),
+                word(2.0, false, 6, None),
+                word(3.0, true, 0x8801, Some(MIL1553_STATUS)),
+                word(9.0, true, 0x8c12, Some(MIL1553_COMMAND)),
+            ];
+            let rows = rows_of(&m, 0, "D1 1553", &p, EvView::Messages);
+            assert_eq!(titles(&rows), ["RT", "T/R", "SA", "WC/MC", "Data", "Status"]);
+            assert_eq!(rows[0].cells, ["17", "R", "02", "02", "0005 0006", "17 TF"]);
+            assert_eq!(rows[1].cells, ["17", "T", "00", "18", "", ""]);
+        }
         // a UART has no columns: a row is its text
         m.dec_proto = Proto::UART;
         assert!(rows_of(&m, 0, "D1 UART", &[byte(0.0, b'H')], EvView::Messages)[0].cols.is_empty());

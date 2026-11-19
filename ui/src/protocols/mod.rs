@@ -286,6 +286,9 @@ pub enum Col {
     /// like `Label`; in a frame without such a field, what the frame holds instead (an error frame of CAN says so in
     /// the column of the identifier)
     LabelOr(&'static str),
+    /// one word of the text of such a field, counted from the label, which is word 0 ("RT 17 T SA 02 WC 03": word 1
+    /// is the terminal of a MIL-STD-1553 command)
+    Part(&'static str, usize),
     /// the field at this place of the frame (the packet identifier after the sync of a USB packet)
     At(usize),
     /// the first address of the frame

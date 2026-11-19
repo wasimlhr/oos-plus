@@ -538,6 +538,16 @@ Changed:
   in the sync and read all 17 bits on a 1 us grid from there, which a bus a few percent off its rate leaves
   before the word ends: of the 71 words of a capture whose words are 20.8 us long, 37 were misread or had a
   parity error. They are read now (2 are marked, the two the capture has a fault in), up to 5 % off the rate.
+- MIL-STD-1553 decoder: a word says what it is, and a message is a row with its columns (host-tested, and on a
+  capture of a real bus on the host; not yet verified on hardware). A command and a status word have the same
+  sync, and both read "C/S 8842". Which one a word is follows from its place in the message, by the formats of
+  the standard: a receive command, its data, the status after the response time; a transmit command, the status,
+  the data; two commands at once for a transfer between two terminals; a mode command with one data word or none;
+  no answer to a broadcast. A command reads "RT 17 R SA 02 WC 02" (a mode command "MC 18"), a status word "ST 17
+  TF" with the flags that are set, a data word its four digits; the numbers of a command are decimal, as the
+  standard writes them. A message begins with its command, and the Events pane has the columns RT, T/R, SA,
+  WC/MC, Data and Status. On the capture the 13 words that the picture of its instrument lists are told apart as
+  the instrument tells them; a word it calls "Command/Status" is a command here.
 - LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
   capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
   rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud

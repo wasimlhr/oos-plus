@@ -4,7 +4,7 @@
 //! I2S and MIL-STD-1553 decoders against generated streams with known content.
 
 use oos_dsp::decode::{i2s, mil1553, Kind};
-use oos_dsp::sim::{add_noise, i2s_logic, mil1553_wave, sample};
+use oos_dsp::sim::{add_noise, i2s_logic, mil1553_message, mil1553_wave, sample};
 
 #[test]
 fn i2s_stereo_16_and_24_bit() {
@@ -36,6 +36,72 @@ fn mil1553_command_and_data_words_with_noise() {
     let p = mil1553(&v, dt, 0.0, 1.0);
     let got: Vec<(bool, u32, bool)> = p.iter().filter_map(|x| if let Kind::Word { cmd } = x.kind { Some((cmd, x.value, x.ok)) } else { None }).collect();
     assert_eq!(got, vec![(true, 0x0c21, true), (false, 0xbeef, true), (false, 0, true), (false, 0xffff, true)]);
+}
+
+/// A word with the command sync is a command or a status word by its place in the message: the formats of the
+/// standard, with the response time before a status word and no time between the words of one sender.
+#[test]
+fn mil1553_tells_commands_and_status_words_apart() {
+    use oos_dsp::decode::{MIL1553_COMMAND as C, MIL1553_COMMAND_2 as C2, MIL1553_STATUS as S};
+    let roles = |words: &[(bool, u16, f64)]| -> Vec<Option<u32>> {
+        let l = mil1553_message(words, 7.0);
+        let dt = 1e-6 / 50.0;
+        let us = words.iter().map(|w| 20.0 + w.2).sum::<f64>() + 14.0;
+        let v = sample(|t| l.v(t), 0.0, dt, (us * 50.0) as usize);
+        let p = mil1553(&v, dt, 0.0, 1.0);
+        assert_eq!(p.iter().map(|x| x.value).collect::<Vec<_>>(), words.iter().map(|w| w.1 as u32).collect::<Vec<_>>());
+        p.iter().map(|x| x.value2).collect()
+    };
+    let cmd = |rt: u16, transmit: bool, sa: u16, n: u16| rt << 11 | (transmit as u16) << 10 | sa << 5 | n;
+    let st = |rt: u16| rt << 11 | 1;
+    let (word, data) = (|v: u16, gap: f64| (true, v, gap), |v: u16, gap: f64| (false, v, gap));
+    // receive: the data at once, the status after the response time. Transmit: the status, then the data
+    let receive = [word(cmd(17, false, 2, 2), 0.0), data(5, 0.0), data(6, 7.0), word(st(17), 30.0)];
+    let transmit = [word(cmd(17, true, 2, 2), 7.0), word(st(17), 0.0), data(8, 0.0), data(9, 30.0)];
+    let both: Vec<_> = receive.iter().chain(&transmit).cloned().collect();
+    assert_eq!(roles(&both), [Some(C), None, None, Some(S), Some(C), Some(S), None, None]);
+    // the next command 5 us after a message that is complete is no status word of it
+    let close = [
+        word(cmd(17, false, 2, 1), 0.0),
+        data(5, 7.0),
+        word(st(17), 5.0),
+        word(cmd(18, true, 1, 1), 7.0),
+        word(st(18), 0.0),
+        data(1, 30.0),
+    ];
+    assert_eq!(roles(&close), [Some(C), None, Some(S), Some(C), Some(S), None]);
+    // between two terminals: two commands at once, the status and the data of the sender, the receiver's status
+    let two = [
+        word(cmd(3, false, 1, 1), 0.0),
+        word(cmd(4, true, 1, 1), 7.0),
+        word(st(4), 0.0),
+        data(0xaa55, 7.0),
+        word(st(3), 30.0),
+    ];
+    assert_eq!(roles(&two), [Some(C), Some(C2), Some(S), None, Some(S)]);
+    // a mode command without a data word (mode code 2) and one with (18)
+    let mode = [
+        word(cmd(17, true, 0, 2), 7.0),
+        word(st(17), 30.0),
+        word(cmd(17, true, 31, 18), 7.0),
+        word(st(17), 0.0),
+        data(0x8842, 30.0),
+    ];
+    assert_eq!(roles(&mode), [Some(C), Some(S), Some(C), Some(S), None]);
+    // a broadcast is not answered: the word 7 us after it is the next command. A terminal that does not answer
+    // within 14 us: the next word is a command too
+    let quiet = [
+        word(cmd(31, false, 2, 1), 0.0),
+        data(5, 7.0),
+        word(cmd(17, true, 2, 1), 30.0),
+        word(cmd(17, true, 2, 1), 7.0),
+        word(st(17), 0.0),
+        data(1, 30.0),
+    ];
+    assert_eq!(roles(&quiet), [Some(C), None, Some(C), Some(C), Some(S), None]);
+    // a record that begins inside a message: its data words stay as they are
+    let inside = [data(8, 7.0), word(st(17), 30.0), word(cmd(17, true, 0, 2), 7.0), word(st(17), 30.0)];
+    assert_eq!(roles(&inside), [None, Some(C), Some(C), Some(S)]);
 }
 
 /// A bus a few percent off its rate is read: the decoder follows the edge in the middle of every bit. On the 1 us

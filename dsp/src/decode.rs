@@ -1142,9 +1142,77 @@ pub fn i2s(sck: &[f32], ws: Option<&[f32]>, sd: &[f32], bits: u32, thr: f32, hys
     out
 }
 
+/// What a word with the command sync of MIL-STD-1553 is (`Packet::value2` of a `Word { cmd: true }`): the command
+/// that begins a message, the transmit command of a transfer between two terminals, or a status word.
+pub const MIL1553_COMMAND: u32 = 1;
+pub const MIL1553_COMMAND_2: u32 = 2;
+pub const MIL1553_STATUS: u32 = 3;
+
+/// Says of every word with the command sync what it is (`MIL1553_COMMAND` ...). A command and a status word have the
+/// same sync and the same 16 bits: which one a word is follows from its place in the message. The formats of the
+/// standard, with the times between words as dead time on the bus (`us` samples a microsecond):
+///
+/// - a receive command, its data words at once, and after the response time the status word of the terminal;
+/// - a transmit command, and after the response time the status word and the data words at once;
+/// - between two terminals: a receive command and a transmit command at once, the status and the data of the one
+///   that sends, the status of the one that receives;
+/// - a mode command (subaddress 0 or 31) has one data word where its mode code is 16 or more, else none;
+/// - a broadcast (terminal 31) is not answered.
+///
+/// A message ends where it is complete, or at 14 us without a word (a terminal answers within 12). A word with the
+/// command sync that no message waits for begins the next one. A record that begins inside a message has words
+/// before its first command, which stay as they are.
+fn mil1553_roles(w: &mut [Packet], us: f64) {
+    let is_cmd = |p: &Packet| p.kind == Kind::Word { cmd: true };
+    let dead = |w: &[Packet], j: usize| w[j].t0 - w[j - 1].t1;
+    // words of one sender follow one another at once, an answer after 2 us of quiet bus at the least. Between the
+    // two: a bus off its rate leaves up to 1.3 us between words that are sent at once (seen on a capture)
+    let at_once = 1.8 * us;
+    let mut i = 0;
+    while i < w.len() {
+        if !is_cmd(&w[i]) {
+            i += 1;
+            continue;
+        }
+        w[i].value2 = Some(MIL1553_COMMAND);
+        let c = w[i].value;
+        let (rt, transmit, sa, count) = (c >> 11, c >> 10 & 1 == 1, c >> 5 & 31, c & 31);
+        let mode = sa == 0 || sa == 31;
+        let mut j = i + 1;
+        let two = !transmit && !mode && j < w.len() && is_cmd(&w[j]) && dead(w, j) < at_once;
+        if two {
+            w[j].value2 = Some(MIL1553_COMMAND_2);
+            j += 1;
+        }
+        let words = if mode { (count >= 16) as u32 } else if count == 0 { 32 } else { count };
+        // how many status words the message has, and whether the first comes before the data
+        let want = if two { 2 } else { (rt != 31) as u32 };
+        let first = transmit || two;
+        let (mut data, mut seen) = (words, 0);
+        while j < w.len() && dead(w, j) <= 14.0 * us && !(seen == want && data == 0) {
+            if is_cmd(&w[j]) {
+                let place = if first && seen == 0 { data == words } else { data == 0 };
+                // (whatever the time before it: the word that begins the next message cannot follow at once)
+                if seen == want || !place {
+                    break;
+                }
+                w[j].value2 = Some(MIL1553_STATUS);
+                seen += 1;
+            } else if data == 0 {
+                break;
+            } else {
+                data -= 1;
+            }
+            j += 1;
+        }
+        i = j;
+    }
+}
+
 /// MIL-STD-1553: Manchester II at 1 Mbit/s on a bipolar bus signal (threshold normally 0 V). A word = 3 us sync
 /// (command/status: 1.5 us positive then 1.5 us negative; data: the inverse), 16 data bits MSB first (1 = positive
-/// then negative half), odd parity. `ok` = halves complementary and parity odd.
+/// then negative half), odd parity. `ok` = halves complementary and parity odd. A word with the command sync says
+/// in `value2` what it is (`mil1553_roles`).
 ///
 /// Every bit has an edge in its middle, and the decoder follows those edges from bit to bit: the place of the next
 /// one is the last one found plus the bit time seen so far. The bits were sampled on a 1 us grid from the edge in
@@ -1226,5 +1294,6 @@ pub fn mil1553(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
         out.push(Packet { t0: mid - 1.5 * us, t1: end, kind, value: val, value2: None, ok });
         busy_until = end - 0.5 * us;
     }
+    mil1553_roles(&mut out, us);
     out
 }
