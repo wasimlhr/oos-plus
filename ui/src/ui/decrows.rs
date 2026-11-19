@@ -1,7 +1,7 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! What the decoders found, as rows: the Events pane under the plot and the event table over it. The rows are the
+//! What the decoders found, as rows: the Events pane under the plot. The rows are the
 //! messages of the record (`oos_dsp::decode::bursts`), its single fields, or the lines of a character stream; the
 //! pane's head chooses, and can leave only the rows with a failed check. A message has its time, its decoder, the
 //! number of its fields, its text, for a character line the bytes in hex, and whether its checks passed. The pane
@@ -388,7 +388,13 @@ impl Ui {
         let (area, fit) = Self::events_rows(r);
         let n = self.events_count();
         if n == 0 || fit == 0 {
-            let note = if total == 0 { "No decoder events in this record" } else { "No row with an error" };
+            let note = if total > 0 {
+                "No row with an error"
+            } else if self.decode_busy() {
+                "Decoding the full reference record..."
+            } else {
+                "No decoder events in this record"
+            };
             let note = startup::fit_text(&f.sb, note, r.w - 20);
             cv.text(&f.sb, r.x + 12, r.y + HEAD + 15, &note, DIM);
             return;
@@ -725,6 +731,22 @@ mod tests {
         assert!(!errors_column(NARROW_W + 200, 0) && !errors_column(SMALL_W, 0));
         assert!(errors_column(NARROW_W + 200, 1) && errors_column(SMALL_W, 2));
         assert!(!errors_column(SMALL_W - 1, 5));
+    }
+
+    /// What opened the table of decoder events over the plot opens the Events pane, and takes it away again.
+    #[test]
+    fn the_events_pane_is_shown_and_taken_away() {
+        for layout in [Layout::Default, Layout::Studio] {
+            let mut u = listing(layout);
+            u.set_events_pane(false);
+            assert!(!u.events_pane_on() && u.m.pane == 0, "{layout:?}");
+            u.set_events_pane(true);
+            assert!(u.events_pane_on() && u.table.is_none(), "{layout:?}");
+            // another pane is not taken away by switching the events off
+            u.m.pane = tables::PANE_TREND;
+            u.set_events_pane(false);
+            assert_eq!(u.m.pane, tables::PANE_TREND, "{layout:?}");
+        }
     }
 
     /// A small pane has one button that goes through the views, and every text it draws stays inside it.

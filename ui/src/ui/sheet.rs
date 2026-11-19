@@ -1453,7 +1453,7 @@ impl Ui {
     pub(super) fn panel_shown(&self, k: PanelKind) -> bool {
         match k {
             PanelKind::Measurements => matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Only),
-            PanelKind::Decode => self.table == Some(tables::TableKind::Decode),
+            PanelKind::Decode => self.events_pane_on(),
             PanelKind::Spectrum => self.m.pane == tables::PANE_SPECTRUM || self.m.view == AView::Spectrum,
             PanelKind::Eye => self.m.view == AView::Eye,
             PanelKind::Histogram => self.m.hist != Hist::Off,
@@ -1474,11 +1474,7 @@ impl Ui {
     pub(super) fn studio_apply_panel(&mut self, k: PanelKind) {
         match k {
             PanelKind::Measurements => self.studio_set_view(StudioView::Docked),
-            PanelKind::Decode => {
-                if self.table != Some(tables::TableKind::Decode) {
-                    self.activate(Item::DecTable);
-                }
-            }
+            PanelKind::Decode => self.set_events_pane(true),
             PanelKind::Spectrum => self.select_option(Item::PaneSel, "Spectrum"),
             PanelKind::Trend => self.select_option(Item::PaneSel, "Trend"),
             PanelKind::Eye => {

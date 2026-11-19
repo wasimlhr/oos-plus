@@ -8130,7 +8130,7 @@ impl Ui {
             Item::Open(MenuId::Decode) => "Decode",
             Item::DecOn => "Decoder",
             Item::DecSel => "Decoder no.",
-            Item::DecTable => "Event table",
+            Item::DecTable => "Events pane",
             Item::DecExport => "Export events",
             Item::SearchTable => "Event list",
             Item::SearchSave => "Save events",
@@ -9395,9 +9395,13 @@ impl Ui {
                         self.toast("Counter cleared");
                     }
                 }
-                Item::DecTable => self.table_toggle(tables::TableKind::Decode),
+                Item::DecTable => {
+                    let on = self.events_pane_on();
+                    self.set_events_pane(!on);
+                    self.close_menu();
+                }
                 Item::DecThrMid => self.dec_threshold_to_middle(),
-                Item::DecExport => self.events_export(tables::TableKind::Decode),
+                Item::DecExport => self.decode_export(),
                 Item::SearchTable => self.table_toggle(tables::TableKind::Search),
                 Item::SearchSave => self.events_export(tables::TableKind::Search),
                 Item::StoreBin => self.store_wave(false, None),

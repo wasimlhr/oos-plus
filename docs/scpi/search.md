@@ -1,6 +1,6 @@
 # Search (mark events)
 
-Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Only an edge search exists. The decoded-event table has its own commands in [decode](decode.md).
+Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Only an edge search exists. The events of the decoders have their own commands in [decode](decode.md).
 
 Menu location: Decode and bus > Mark events, Search (source, slope, level, 50 %, from / to trigger, event, event list, save events, remove).
 

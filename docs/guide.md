@@ -166,7 +166,7 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Reference waveforms with scale, offset, colour, name and CSV export and import, mask test
 
 **Protocol decoders (26)**
-- Four decoders at once, with an event table you can export and that jumps to an event; DCC lists one command per row
+- Four decoders at once, with a list of events you can export and that jumps to an event; DCC lists one command per row
   ("Loco 5  Fwd 50/128"). The Events pane lists the record as messages, single fields or lines of text, with the
   time, the length, the text, the bytes in hex and, where a check failed, the number of errors in red; Errors only
   leaves the rows that failed

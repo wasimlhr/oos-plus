@@ -6803,7 +6803,7 @@
    "title": "Search (mark events)",
    "intro": [
     {
-     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Only an edge search exists. The decoded-event table has its own commands in decode."
+     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Only an edge search exists. The events of the decoders have their own commands in decode."
     },
     {
      "p": "Menu location: Decode and bus > Mark events, Search (source, slope, level, 50 %, from / to trigger, event, event list, save events, remove)."
@@ -7027,7 +7027,7 @@
      "p": "Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. A decoder on channels reads the samples the acquisition kept when those are finer than the screen record (up to 262144 points per line while running, 4 M when stopped), so `:DECode:EVENts?` and `:BUS<n>:DATA?` can list events of the whole record, also outside the screen. A UART character the record starts inside is not listed, nor the ones behind it until its bits can be read in one way only; in peak detect, roll and above 1 M points it reads the 3600 points of the screen. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference."
     },
     {
-     "p": "Menu location: Decode and bus (Protocol, Source / clock / CS, Threshold, Format, Event table, protocol parameters, Plot bus, Save events)."
+     "p": "Menu location: Decode and bus (Protocol, Source / clock / CS, Threshold, Format, Events pane, protocol parameters, Plot bus, Save events)."
     },
     {
      "p": "Part of the SCPI reference."
@@ -7287,7 +7287,7 @@
       ]
      ],
      "remarks": [
-      "- : what a row of the Events pane and of the event table is.",
+      "- : what a row of the Events pane is.",
       "- A message is what was sent without a pause clearly longer than usual, or from one start condition to the next; a line is a UART character stream up to its line feed (other decoders list their messages).",
       "- `:DECode:EVENts?` and `:BUS<n>:DATA?` always answer a row per field.",
       "- Origin: OOS extension"
@@ -7411,7 +7411,7 @@
      "header": ":BUS<n>:EVENt",
      "set": ":BUS<n>:EVENt <value>",
      "query": ":BUS<n>:EVENt?",
-     "desc": "Sets or queries Event table for Bus and common parameters (menu: Decode and bus > Event table).",
+     "desc": "Sets or queries Events pane for Bus and common parameters (menu: Decode and bus > Events pane).",
      "params": [
       [
        "<n>",
@@ -7421,12 +7421,14 @@
       ],
       [
        "<value>",
-       "Text",
-       "Shared decode event-table visibility.",
+       "Boolean",
+       "{ON|OFF|1|0}",
        "0"
       ]
      ],
      "remarks": [
+      "- Boolean; the Events pane, the second pane with the events of every decoder, on or off (the same pane as `:DISPlay:LOWer EVENTS`).",
+      "- It was a table over the plot.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `0`."
@@ -15960,7 +15962,7 @@
       ],
       [
        "`ev_view`",
-       "what the Events pane and the event table list: `messages`, `fields` or `lines`; `ev_errors`: only the rows with a failed check",
+       "what the Events pane lists: `messages`, `fields` or `lines`; `ev_errors`: only the rows with a failed check",
        "`messages`",
        "`:DECode:EVENts:VIEW`"
       ],

@@ -2768,7 +2768,7 @@ impl Scpi {
         if kw(n0, "DECode") && nodes.len() == 2 && kw(nodes[1], "EVENts") && query {
             return t(&ui.events_text());
         }
-        // what the Events pane and the event table list (the query above always answers a row per field)
+        // what the Events pane lists (the query above always answers a row per field)
         if kw(n0, "DECode") && nodes.len() == 3 && kw(nodes[1], "EVENts") && kw(nodes[2], "VIEW") {
             if query {
                 return t(&ui.m.ev_view.name().to_ascii_uppercase());
@@ -3661,7 +3661,7 @@ impl Scpi {
         }
     }
 
-    /// One of the four decoders. RS232 is the screen's UART. The event table is one window for every bus.
+    /// One of the four decoders. RS232 is the screen's UART. The Events pane is one list for every bus.
     fn bus_cmd(&mut self, ui: &mut Ui, k: usize, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
         let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = n.first().copied().unwrap_or("");
@@ -3712,11 +3712,11 @@ impl Scpi {
         }
         if n.len() == 1 && kw(n0, "EVENt") {
             if query {
-                return t(if ui.decode_table_on() { "1" } else { "0" });
+                return t(if ui.events_pane_on() { "1" } else { "0" });
             }
             return match parse_bool(arg) {
                 Some(on) => {
-                    ui.set_decode_table(on);
+                    ui.set_events_pane(on);
                     ui.mark_changed();
                     None
                 }

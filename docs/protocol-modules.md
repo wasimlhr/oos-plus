@@ -5,13 +5,13 @@ Everything around the decoder comes from that one type:
 
 | What | Where it shows | Hook (default) |
 |---|---|---|
-| name, stable key | Decode > Protocol, event table, decoder label, saved setups, SCPI setups | `name`, `key` (required) |
+| name, stable key | Decode > Protocol, Events pane, decoder label, saved setups, SCPI setups | `name`, `key` (required) |
 | source rows | Decode menu: one row per role, named after it ("SDA", "CC", "Data" ...) | `roles` (one "Source") |
 | differential input | the "B line (A-B)" row for an RS-485 style pair | `diff_ok` (off) |
 | shared rows | Decode menu rows several protocols use (Baud, Bits, Parity, SPI mode, CAN rate, USB speed ...), saved under their own setup keys | `shared` (none), `bit_time_sh`, `frame_span_sh` |
 | options | Decode menu rows with a list of choices, saved in setups (`dec_opt`) | `options` (none) |
-| the decoder | trace band, event table, Events pane, protocol trigger, CSV export | `decode` (required) |
-| field text | the labels on the trace and in the event table | `text` (the generic text of each kind) |
+| the decoder | trace band, Events pane, protocol trigger, CSV export | `decode` (required) |
+| field text | the labels on the trace and in the Events pane | `text` (the generic text of each kind) |
 | bit row | the band on the plot at a time base that shows single bits: a cell per bit above the field's box, and a mark on the threshold line where it was sampled | `bit_row` (off), `bits` (none) |
 | protocol trigger | Trigger > Bus: what "Frame", "ID/Addr", "Data", "Error" mean | `trigger_match` (the generic rule) |
 | trigger start value | what Trigger > Bus looks for when it is switched on | `trigger_default` (Frame) |

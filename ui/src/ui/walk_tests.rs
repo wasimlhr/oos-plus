@@ -1662,18 +1662,17 @@ fn the_measurement_strip_takes_the_short_name_where_the_long_one_is_cut() {
 #[test]
 fn the_docked_event_table_has_its_count_in_the_title_and_columns_that_can_be_dragged() {
     let mut u = fresh_live(Layout::Studio);
-    u.m.ch[2].on = true;
-    u.m.dec_on = true;
-    u.m.dec_src = 2;
+    // the marks of a search (the events of the decoders are the Events pane, which holds its columns itself)
+    u.search_on = true;
     for _ in 0..12 { u.step(0.04); }
-    u.table_toggle(super::tables::TableKind::Decode);
+    u.table_toggle(super::tables::TableKind::Search);
     u.relayout();
     for _ in 0..12 { u.step(0.04); }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     let title = u.table_title();
-    assert!(title.starts_with("Decoder events \u{b7} ") && !title.ends_with(" 0"), "{title}");
-    let (r, rows) = (u.dock_content(super::dock::VKind::Table).expect("the table is a view"), u.table_rows(super::tables::TableKind::Decode));
+    assert!(title.starts_with("Search ") && title.contains(" \u{b7} ") && !title.ends_with(" 0"), "{title}");
+    let (r, rows) = (u.dock_content(super::dock::VKind::Table).expect("the table is a view"), u.table_rows(super::tables::TableKind::Search));
     assert!(u.head_h(r) < 10, "no title row inside the docked table");
     let before = u.table_col_x(&rows, r.w);
     assert!(before[0] < before[1] && before[1] < before[2] && before[2] < r.w - 30, "{before:?}");
@@ -2950,7 +2949,7 @@ fn add_results_table_offers_the_three_tables() {
         tap(u, x, y);
         frame(u);
     };
-    let shown = |u: &Ui, i: usize| match i { 0 => u.studio_panel_shown(), 1 => u.table == Some(TableKind::Search), _ => u.table == Some(TableKind::Decode) };
+    let shown = |u: &Ui, i: usize| match i { 0 => u.studio_panel_shown(), 1 => u.table == Some(TableKind::Search), _ => u.events_pane_on() };
     let mut u = fresh(Layout::Studio);
     open(&mut u);
     assert!(u.menu_open && u.menu == MenuId::AddPanel);

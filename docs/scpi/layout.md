@@ -18,7 +18,7 @@ A view is named by one of these keywords. Replies use the short form in the firs
 | `MEAS` | `MEASurements` | The measurement table |
 | `EYE` | `EYE` | The eye diagram |
 | `PANE` | `PANE` | The second pane: spectrum, trend, results, events or bus |
-| `TABL` | `TABLe` | The decode or search-event table |
+| `TABL` | `TABLe` | The table of the search marks or of the segments |
 | `SIM` | `SIM` | The signal simulator |
 | `HIST` | `HISTogram` | The waveform histogram |
 | `XY` | `XY` | The XY picture |

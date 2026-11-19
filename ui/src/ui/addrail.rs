@@ -259,7 +259,7 @@ impl Ui {
         match i {
             0 => self.panel_shown(PanelKind::Measurements),
             1 => self.table == Some(tables::TableKind::Search),
-            _ => self.table == Some(tables::TableKind::Decode),
+            _ => self.events_pane_on(),
         }
     }
 
@@ -642,13 +642,18 @@ impl Ui {
             }
             _ => {
                 if !self.rail_kind_on(AddKind::Bus) { return self.toast("Turn a decoder on first: Add > Bus"); }
-                self.set_decode_table(true);
+                self.set_events_pane(true);
             }
         }
     }
 
     fn rail_table_remove(&mut self, i: usize) {
-        if i == 0 { self.studio_set_view(super::studio::StudioView::Waveform); } else { self.table = None; }
+        match i {
+            0 => self.studio_set_view(super::studio::StudioView::Waveform),
+            1 => self.table = None,
+            // the events of the decoders are the Events pane
+            _ => self.set_events_pane(false),
+        }
     }
 
     fn rail_plot_add(&mut self, i: usize) {

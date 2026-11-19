@@ -789,7 +789,7 @@ pub enum Layout {
 
 pub const LAYOUTS: [Layout; 3] = [Layout::Default, Layout::Minimal, Layout::Studio];
 
-/// What a row of the decoder results is (the Events pane and the event table over the plot).
+/// What a row of the decoder results is (the Events pane).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum EvView {
     /// one row per message
@@ -1395,7 +1395,7 @@ pub struct Model {
     /// the line takes `dec_thr`, as every line did before
     pub dec_thr_line: [Option<f32>; 3],
     pub dec_ascii: bool,
-    /// what the Events pane and the event table list: messages, fields or lines; and only the rows with a failed
+    /// what the Events pane lists: messages, fields or lines; and only the rows with a failed
     /// check (the pane). One choice for all decoders
     pub ev_view: EvView,
     pub ev_errors: bool,

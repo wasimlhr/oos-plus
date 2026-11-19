@@ -419,7 +419,7 @@ Added:
   - the measurement strip (stock layout and Minimal) takes the short name of a measurement (Pk-pk, Freq, +Duty)
     where the long one has no room: with several sources, in the column at a side, and at the larger text sizes.
     The long name was cut there ("Positive Duty Cy", "Peak-to-Pe", "Frequen") (host-tested);
-  - a docked event table (decoder events, search, segments) has its title and count in the title strip of the view,
+  - a docked event table (search, segments) has its title and count in the title strip of the view,
     which gives one more row; its columns fit their content, and a divider between two columns can be dragged.
     The dragged columns are kept in a setup and in a session;
   - a channel whose record reaches the end of the ADC range is named in red in the plot and gets a red pill border;
@@ -459,7 +459,7 @@ Changed:
   Lines (a UART line shown as ASCII, split at its line feeds; other decoders list their messages), and Errors only
   leaves the rows with a failed check. The rows have columns: number, time, decoder, number of fields, text, the
   bytes in hex beside a character text, and OK or the number of errors. The list scrolls by its bar or the finger,
-  and a tap on a row of a stopped scope moves the view to it. The event table over the plot lists the same rows.
+  and a tap on a row of a stopped scope moves the view to it.
   `:DECode:EVENts?`,
   `:BUS<n>:DATA?` and the CSV export are unchanged, a row per field. The view and the filter are part of the
   set-up (`ev_view`, `ev_errors`) and have their commands, `:DECode:EVENts:VIEW` and `:DECode:EVENts:ERRors`
@@ -489,7 +489,7 @@ Changed:
   of its own signal. The plot has each line's threshold as a dashed line on its trace.
   `:BUS<n>:THReshold <line>,<volts>` sets one, `<line>,DEF` gives it up. The hysteresis is the main line's.
 - SPI and I2C decoders: Decode > Format (Hex, ASCII) shows the data as characters, on the band, in the Events
-  pane (with the bytes in hex beside the text) and in the event table; Hex is as before and stays the choice of a
+  pane (with the bytes in hex beside the text); Hex is as before and stays the choice of a
   set-up from before (`:BUS<n>:OPTion3` for SPI, `:BUS<n>:OPTion2` for I2C; host-tested; SPI (unit),
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
@@ -503,6 +503,11 @@ Changed:
   text moved while the list scrolled. The widths are those of the record now. The buttons of its head are 40 px
   tall (36), and the one button of a narrow pane opens the list of the views where it stepped to the next one.
   A box of the band is at least 20 px wide to a finger (12).
+- Decoders: one list of events, the Events pane (host-tested, not yet verified on hardware). There were two for
+  the same rows: the pane, and an older table over the plot with three columns, no titles and no views. The table
+  is gone, and what opened it opens the pane: Decode > Events pane (it was "Event table"), `:BUS<n>:EVENt`, and
+  Add > Results table > Decoder events in Studio. Decode > Export events writes the rows as the pane lists them.
+  The table of the search marks and of the segments is as before.
 - Decode sheet: among the channels a line can have, the ones it does not have are dimmed (host-tested, not yet
   verified on hardware). Every channel had a frame and a name in its full colour, and the chosen one, filled, did
   not stand out among them.
@@ -548,8 +553,8 @@ Changed:
   hardware). The band stayed and said "source channel off", in the plot of the other channels (seen on a unit,
   2026-11-19). The decoder stays on and as it is set; its band is back when the channel is.
 - I2C decoder: Decode > R/W bit writes an address as its seven bits ("50 W", as before) or, Included, as the
-  first byte of the transfer with the read/write bit in it ("A0 W", "A1 R"), on the band, in the Events pane and
-  in the event table; `:BUS<n>:OPTion1 LEFT_OUT|INCLUDED` (host-tested, not yet verified on hardware). Triggers
+  first byte of the transfer with the read/write bit in it ("A0 W", "A1 R"), on the band and in the Events pane;
+  `:BUS<n>:OPTion1 LEFT_OUT|INCLUDED` (host-tested, not yet verified on hardware). Triggers
   and searches take the seven bits either way. The I2C lane on the plot had this choice, the decoder had not.
 - UART decoder: Decode has the Polarity row of the UART trigger (Normal, Inverted), which the decoder already
   followed (host-tested, not yet verified on hardware).
