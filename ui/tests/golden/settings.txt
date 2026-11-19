@@ -38,19 +38,19 @@ scpi :ACQuire:CORes "ON" -> query: MATC; errors: none
 scpi :ACQuire:CORes "RAW" -> query: RAW; errors: none
 scpi :ACQuire:CORes "x" -> query: MATC; errors: -113,"Undefined header" :ACQuire:CORes x
 scpi :ACQuire:CORes default -> query: MATC; errors: none
-scpi :ACQuire:MDEPth "" -> query: 5.000000E+05; errors: -113,"Undefined header" :ACQuire:MDEPth
-scpi :ACQuire:MDEPth "-1" -> query: 5.000000E+05; errors: none
+scpi :ACQuire:MDEPth "" -> query: 5.000000E+05; errors: -224,"Illegal parameter value"
+scpi :ACQuire:MDEPth "-1" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" -1
 scpi :ACQuire:MDEPth "1000" -> query: 1.000000E+03; errors: none
 scpi :ACQuire:MDEPth "1000000" -> query: 1.000000E+06; errors: none
 scpi :ACQuire:MDEPth "10k" -> query: 1.000000E+04; errors: none
 scpi :ACQuire:MDEPth "125M" -> query: 1.250000E+08; errors: none
 scpi :ACQuire:MDEPth "1M" -> query: 1.000000E+06; errors: none
-scpi :ACQuire:MDEPth "1e9" -> query: 5.000000E+05; errors: -113,"Undefined header" :ACQuire:MDEPth 1e9
+scpi :ACQuire:MDEPth "1e9" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 1e9
 scpi :ACQuire:MDEPth "1k" -> query: 1.000000E+03; errors: none
-scpi :ACQuire:MDEPth "200M" -> query: 5.000000E+05; errors: -113,"Undefined header" :ACQuire:MDEPth 200M
-scpi :ACQuire:MDEPth "7" -> query: 5.000000E+05; errors: -113,"Undefined header" :ACQuire:MDEPth 7
+scpi :ACQuire:MDEPth "200M" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 200M
+scpi :ACQuire:MDEPth "7" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 7
 scpi :ACQuire:MDEPth "AUTO" -> query: 5.000000E+05; errors: none
-scpi :ACQuire:MDEPth "x" -> query: 5.000000E+05; errors: -113,"Undefined header" :ACQuire:MDEPth x
+scpi :ACQuire:MDEPth "x" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" x
 scpi :ACQuire:MDEPth default -> query: 5.000000E+05; errors: none
 scpi :ACQuire:SEGMents "" -> query: 0; errors: -113,"Undefined header" :ACQuire:SEGMents
 scpi :ACQuire:SEGMents "-1" -> query: 0; errors: -113,"Undefined header" :ACQuire:SEGMents -1
@@ -354,18 +354,18 @@ scpi :CHANnel1:LABel:SHOW "x" -> query: 0; errors: -224,"Illegal parameter value
 scpi :CHANnel1:LABel:SHOW default -> query: 0; errors: none
 scpi :CHANnel1:OFFSet "" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:OFFSet
 scpi :CHANnel1:OFFSet "-1" -> query: -1.000000E+00; errors: none
-scpi :CHANnel1:OFFSet "-100" -> query: -1.000000E+02; errors: none
+scpi :CHANnel1:OFFSet "-100" -> query: -5.600000E+01; errors: none
 scpi :CHANnel1:OFFSet "0.25" -> query: 2.500000E-01; errors: none
-scpi :CHANnel1:OFFSet "100" -> query: 1.000000E+02; errors: none
+scpi :CHANnel1:OFFSet "100" -> query: 5.600000E+01; errors: none
 scpi :CHANnel1:OFFSet "1e39" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:OFFSet 1e39
-scpi :CHANnel1:OFFSet "1e9" -> query: 1.000000E+09; errors: none
+scpi :CHANnel1:OFFSet "1e9" -> query: 5.600000E+01; errors: none
 scpi :CHANnel1:OFFSet "x" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:OFFSet x
 scpi :CHANnel1:OFFSet default -> query: -1.500000E+00; errors: none
 scpi :CHANnel1:POSition "" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:POSition
 scpi :CHANnel1:POSition "-1" -> query: -1.000000E+00; errors: none
 scpi :CHANnel1:POSition "-5" -> query: -5.000000E+00; errors: none
 scpi :CHANnel1:POSition "1" -> query: 1.000000E+00; errors: none
-scpi :CHANnel1:POSition "1e9" -> query: 1.000000E+09; errors: none
+scpi :CHANnel1:POSition "1e9" -> query: 5.600000E+01; errors: none
 scpi :CHANnel1:POSition "5" -> query: 5.000000E+00; errors: none
 scpi :CHANnel1:POSition "50" -> query: 5.000000E+01; errors: none
 scpi :CHANnel1:POSition "x" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:POSition x
@@ -499,8 +499,8 @@ scpi :CURSor:MANual:SOURce "" -> query: CHAN1; errors: -224,"Illegal parameter v
 scpi :CURSor:MANual:SOURce "-1" -> query: CHAN1; errors: -224,"Illegal parameter value" -1
 scpi :CURSor:MANual:SOURce "1e9" -> query: CHAN1; errors: -224,"Illegal parameter value" 1e9
 scpi :CURSor:MANual:SOURce "CHAN1" -> query: CHAN1; errors: none
-scpi :CURSor:MANual:SOURce "CHAN2" -> query: CHAN2; errors: none
-scpi :CURSor:MANual:SOURce "CHAN4" -> query: CHAN4; errors: none
+scpi :CURSor:MANual:SOURce "CHAN2" -> query: CHAN1; errors: none
+scpi :CURSor:MANual:SOURce "CHAN4" -> query: CHAN1; errors: none
 scpi :CURSor:MANual:SOURce "CHAN5" -> query: CHAN1; errors: -224,"Illegal parameter value" CHAN5
 scpi :CURSor:MANual:SOURce "R1" -> query: CHAN1; errors: -224,"Cursor source is unavailable or unsupported"
 scpi :CURSor:MANual:SOURce "R10" -> query: CHAN1; errors: -224,"Cursor source is unavailable or unsupported"
@@ -571,8 +571,8 @@ scpi :CURSor:TRACk:SOURce "" -> query: CHAN1; errors: -224,"Illegal parameter va
 scpi :CURSor:TRACk:SOURce "-1" -> query: CHAN1; errors: -224,"Illegal parameter value" -1
 scpi :CURSor:TRACk:SOURce "1e9" -> query: CHAN1; errors: -224,"Illegal parameter value" 1e9
 scpi :CURSor:TRACk:SOURce "CHAN1" -> query: CHAN1; errors: none
-scpi :CURSor:TRACk:SOURce "CHAN2" -> query: CHAN2; errors: none
-scpi :CURSor:TRACk:SOURce "CHAN4" -> query: CHAN4; errors: none
+scpi :CURSor:TRACk:SOURce "CHAN2" -> query: CHAN1; errors: none
+scpi :CURSor:TRACk:SOURce "CHAN4" -> query: CHAN1; errors: none
 scpi :CURSor:TRACk:SOURce "CHAN5" -> query: CHAN1; errors: -224,"Illegal parameter value" CHAN5
 scpi :CURSor:TRACk:SOURce "R1" -> query: CHAN1; errors: -224,"Cursor source is unavailable or unsupported"
 scpi :CURSor:TRACk:SOURce "R10" -> query: CHAN1; errors: -224,"Cursor source is unavailable or unsupported"
@@ -583,8 +583,8 @@ scpi :CURSor:TRACk:SOURce1 "" -> query: CHAN1; errors: -224,"Illegal parameter v
 scpi :CURSor:TRACk:SOURce1 "-1" -> query: CHAN1; errors: -224,"Illegal parameter value" -1
 scpi :CURSor:TRACk:SOURce1 "1e9" -> query: CHAN1; errors: -224,"Illegal parameter value" 1e9
 scpi :CURSor:TRACk:SOURce1 "CHAN1" -> query: CHAN1; errors: none
-scpi :CURSor:TRACk:SOURce1 "CHAN2" -> query: CHAN2; errors: none
-scpi :CURSor:TRACk:SOURce1 "CHAN4" -> query: CHAN4; errors: none
+scpi :CURSor:TRACk:SOURce1 "CHAN2" -> query: CHAN1; errors: none
+scpi :CURSor:TRACk:SOURce1 "CHAN4" -> query: CHAN1; errors: none
 scpi :CURSor:TRACk:SOURce1 "CHAN5" -> query: CHAN1; errors: -224,"Illegal parameter value" CHAN5
 scpi :CURSor:TRACk:SOURce1 "R1" -> query: CHAN1; errors: -224,"Cursor source is unavailable or unsupported"
 scpi :CURSor:TRACk:SOURce1 "R10" -> query: CHAN1; errors: -224,"Cursor source is unavailable or unsupported"
@@ -653,22 +653,22 @@ scpi :DECode:CPHY:RATE "2.5e9" -> query: 2.500000E+09; errors: none
 scpi :DECode:CPHY:RATE "AUTO" -> query: AUTO; errors: none
 scpi :DECode:CPHY:RATE "x" -> query: AUTO; errors: -224,"Invalid C-PHY symbol rate" x
 scpi :DECode:CPHY:RATE default -> query: AUTO; errors: none
-scpi :DECode:CS "" -> query: CH2; errors: -224,"Illegal decoder parameter"
-scpi :DECode:CS "-1" -> query: CH2; errors: -224,"Illegal decoder parameter" -1
-scpi :DECode:CS "1e9" -> query: CH2; errors: -224,"Illegal decoder parameter" 1e9
-scpi :DECode:CS "CHAN1" -> query: CH1; errors: none
-scpi :DECode:CS "CHAN2" -> query: CH2; errors: none
+scpi :DECode:CS "" -> query: CHAN2; errors: -224,"Illegal decoder parameter"
+scpi :DECode:CS "-1" -> query: CHAN2; errors: -224,"Illegal decoder parameter" -1
+scpi :DECode:CS "1e9" -> query: CHAN2; errors: -224,"Illegal decoder parameter" 1e9
+scpi :DECode:CS "CHAN1" -> query: CHAN1; errors: none
+scpi :DECode:CS "CHAN2" -> query: CHAN2; errors: none
 scpi :DECode:CS "NONE" -> query: NONE; errors: none
-scpi :DECode:CS "OFF" -> query: CH2; errors: -224,"Illegal decoder parameter" OFF
-scpi :DECode:CS "R1" -> query: CH2; errors: -224,"Illegal decoder parameter" R1
-scpi :DECode:CS "R11" -> query: CH2; errors: -224,"Illegal decoder parameter" R11
-scpi :DECode:CS "x" -> query: CH2; errors: -224,"Illegal decoder parameter" x
-scpi :DECode:CS default -> query: CH2; errors: none
+scpi :DECode:CS "OFF" -> query: CHAN2; errors: -224,"Illegal decoder parameter" OFF
+scpi :DECode:CS "R1" -> query: CHAN2; errors: -224,"Illegal decoder parameter" R1
+scpi :DECode:CS "R11" -> query: CHAN2; errors: -224,"Illegal decoder parameter" R11
+scpi :DECode:CS "x" -> query: CHAN2; errors: -224,"Illegal decoder parameter" x
+scpi :DECode:CS default -> query: CHAN2; errors: none
 scpi :DECode:DIFFerential "" -> query: NONE; errors: -224,"Illegal decoder parameter"
 scpi :DECode:DIFFerential "-1" -> query: NONE; errors: -224,"Illegal decoder parameter" -1
 scpi :DECode:DIFFerential "1e9" -> query: NONE; errors: -224,"Illegal decoder parameter" 1e9
-scpi :DECode:DIFFerential "CHAN1" -> query: CH1; errors: none
-scpi :DECode:DIFFerential "CHAN2" -> query: CH2; errors: none
+scpi :DECode:DIFFerential "CHAN1" -> query: CHAN1; errors: none
+scpi :DECode:DIFFerential "CHAN2" -> query: CHAN2; errors: none
 scpi :DECode:DIFFerential "NONE" -> query: NONE; errors: none
 scpi :DECode:DIFFerential "OFF" -> query: NONE; errors: -224,"Illegal decoder parameter" OFF
 scpi :DECode:DIFFerential "R1" -> query: NONE; errors: -224,"Illegal decoder parameter" R1
@@ -703,33 +703,33 @@ scpi :DECode:SELect "4" -> query: 4; errors: none
 scpi :DECode:SELect "5" -> query: 1; errors: -224,"Illegal decoder parameter" 5
 scpi :DECode:SELect "x" -> query: 1; errors: -224,"Illegal decoder parameter" x
 scpi :DECode:SELect default -> query: 1; errors: none
-scpi :DECode:SOURce "" -> query: CH3; errors: -224,"Illegal decoder parameter"
-scpi :DECode:SOURce "-1" -> query: CH3; errors: -224,"Illegal decoder parameter" -1
-scpi :DECode:SOURce "1e9" -> query: CH3; errors: -224,"Illegal decoder parameter" 1e9
-scpi :DECode:SOURce "CHAN1" -> query: CH1; errors: none
-scpi :DECode:SOURce "CHAN2" -> query: CH2; errors: none
-scpi :DECode:SOURce "NONE" -> query: CH3; errors: -224,"Illegal decoder parameter" NONE
-scpi :DECode:SOURce "OFF" -> query: CH3; errors: -224,"Illegal decoder parameter" OFF
-scpi :DECode:SOURce "R1" -> query: CH3; errors: -224,"Illegal decoder parameter" R1
-scpi :DECode:SOURce "R11" -> query: CH3; errors: -224,"Illegal decoder parameter" R11
-scpi :DECode:SOURce "x" -> query: CH3; errors: -224,"Illegal decoder parameter" x
-scpi :DECode:SOURce default -> query: CH3; errors: none
-scpi :DECode:SOURce2 "" -> query: CH4; errors: -224,"Illegal decoder parameter"
-scpi :DECode:SOURce2 "-1" -> query: CH4; errors: -224,"Illegal decoder parameter" -1
-scpi :DECode:SOURce2 "1e9" -> query: CH4; errors: -224,"Illegal decoder parameter" 1e9
-scpi :DECode:SOURce2 "CHAN1" -> query: CH1; errors: none
-scpi :DECode:SOURce2 "CHAN2" -> query: CH2; errors: none
-scpi :DECode:SOURce2 "NONE" -> query: CH4; errors: -224,"Illegal decoder parameter" NONE
-scpi :DECode:SOURce2 "OFF" -> query: CH4; errors: -224,"Illegal decoder parameter" OFF
-scpi :DECode:SOURce2 "R1" -> query: CH4; errors: -224,"Illegal decoder parameter" R1
-scpi :DECode:SOURce2 "R11" -> query: CH4; errors: -224,"Illegal decoder parameter" R11
-scpi :DECode:SOURce2 "x" -> query: CH4; errors: -224,"Illegal decoder parameter" x
-scpi :DECode:SOURce2 default -> query: CH4; errors: none
+scpi :DECode:SOURce "" -> query: CHAN3; errors: -224,"Illegal decoder parameter"
+scpi :DECode:SOURce "-1" -> query: CHAN3; errors: -224,"Illegal decoder parameter" -1
+scpi :DECode:SOURce "1e9" -> query: CHAN3; errors: -224,"Illegal decoder parameter" 1e9
+scpi :DECode:SOURce "CHAN1" -> query: CHAN1; errors: none
+scpi :DECode:SOURce "CHAN2" -> query: CHAN2; errors: none
+scpi :DECode:SOURce "NONE" -> query: CHAN3; errors: -224,"Illegal decoder parameter" NONE
+scpi :DECode:SOURce "OFF" -> query: CHAN3; errors: -224,"Illegal decoder parameter" OFF
+scpi :DECode:SOURce "R1" -> query: CHAN3; errors: -224,"Illegal decoder parameter" R1
+scpi :DECode:SOURce "R11" -> query: CHAN3; errors: -224,"Illegal decoder parameter" R11
+scpi :DECode:SOURce "x" -> query: CHAN3; errors: -224,"Illegal decoder parameter" x
+scpi :DECode:SOURce default -> query: CHAN3; errors: none
+scpi :DECode:SOURce2 "" -> query: CHAN4; errors: -224,"Illegal decoder parameter"
+scpi :DECode:SOURce2 "-1" -> query: CHAN4; errors: -224,"Illegal decoder parameter" -1
+scpi :DECode:SOURce2 "1e9" -> query: CHAN4; errors: -224,"Illegal decoder parameter" 1e9
+scpi :DECode:SOURce2 "CHAN1" -> query: CHAN1; errors: none
+scpi :DECode:SOURce2 "CHAN2" -> query: CHAN2; errors: none
+scpi :DECode:SOURce2 "NONE" -> query: CHAN4; errors: -224,"Illegal decoder parameter" NONE
+scpi :DECode:SOURce2 "OFF" -> query: CHAN4; errors: -224,"Illegal decoder parameter" OFF
+scpi :DECode:SOURce2 "R1" -> query: CHAN4; errors: -224,"Illegal decoder parameter" R1
+scpi :DECode:SOURce2 "R11" -> query: CHAN4; errors: -224,"Illegal decoder parameter" R11
+scpi :DECode:SOURce2 "x" -> query: CHAN4; errors: -224,"Illegal decoder parameter" x
+scpi :DECode:SOURce2 default -> query: CHAN4; errors: none
 scpi :DECode:SOURce4 "" -> query: NONE; errors: -224,"Illegal decoder parameter"
 scpi :DECode:SOURce4 "-1" -> query: NONE; errors: -224,"Illegal decoder parameter" -1
 scpi :DECode:SOURce4 "1e9" -> query: NONE; errors: -224,"Illegal decoder parameter" 1e9
-scpi :DECode:SOURce4 "CHAN1" -> query: CH1; errors: none
-scpi :DECode:SOURce4 "CHAN2" -> query: CH2; errors: none
+scpi :DECode:SOURce4 "CHAN1" -> query: CHAN1; errors: none
+scpi :DECode:SOURce4 "CHAN2" -> query: CHAN2; errors: none
 scpi :DECode:SOURce4 "NONE" -> query: NONE; errors: none
 scpi :DECode:SOURce4 "OFF" -> query: NONE; errors: -224,"Illegal decoder parameter" OFF
 scpi :DECode:SOURce4 "R1" -> query: NONE; errors: -224,"Illegal decoder parameter" R1
@@ -806,13 +806,13 @@ scpi :DISPlay:RULers "ON" -> query: 1; errors: none
 scpi :DISPlay:RULers "on" -> query: 1; errors: none
 scpi :DISPlay:RULers "x" -> query: 1; errors: -224,"Illegal parameter value" x
 scpi :DISPlay:RULers default -> query: 1; errors: none
-scpi :DISPlay:TYPE "" -> query: DOTS; errors: -224,"Illegal parameter value"
-scpi :DISPlay:TYPE "-1" -> query: DOTS; errors: -224,"Illegal parameter value" -1
-scpi :DISPlay:TYPE "1e9" -> query: DOTS; errors: -224,"Illegal parameter value" 1e9
+scpi :DISPlay:TYPE "" -> query: VECT; errors: -224,"Illegal parameter value"
+scpi :DISPlay:TYPE "-1" -> query: VECT; errors: -224,"Illegal parameter value" -1
+scpi :DISPlay:TYPE "1e9" -> query: VECT; errors: -224,"Illegal parameter value" 1e9
 scpi :DISPlay:TYPE "DOTS" -> query: DOTS; errors: none
 scpi :DISPlay:TYPE "VECTors" -> query: VECT; errors: none
-scpi :DISPlay:TYPE "x" -> query: DOTS; errors: -224,"Illegal parameter value" x
-scpi :DISPlay:TYPE default -> query: DOTS; errors: none
+scpi :DISPlay:TYPE "x" -> query: VECT; errors: -224,"Illegal parameter value" x
+scpi :DISPlay:TYPE default -> query: VECT; errors: none
 scpi :DISPlay:VIEW "" -> query: 1; errors: -224,"Illegal parameter value"
 scpi :DISPlay:VIEW "-1" -> query: 1; errors: -224,"Illegal parameter value" -1
 scpi :DISPlay:VIEW "0" -> query: 1; errors: -224,"Illegal parameter value" 0
@@ -919,15 +919,15 @@ scpi :LA:DIGital1:DISPlay "ON" -> query: 1; errors: none
 scpi :LA:DIGital1:DISPlay "on" -> query: 1; errors: none
 scpi :LA:DIGital1:DISPlay "x" -> query: 1; errors: -224,"Illegal parameter value" x
 scpi :LA:DIGital1:DISPlay default -> query: 1; errors: none
-scpi :LA:POD1:THReshold "" -> query: 1.4e0; errors: -224,"Illegal parameter value"
-scpi :LA:POD1:THReshold "-1" -> query: -1e0; errors: none
-scpi :LA:POD1:THReshold "-15" -> query: -1.5e1; errors: none
-scpi :LA:POD1:THReshold "1.4" -> query: 1.4e0; errors: none
-scpi :LA:POD1:THReshold "15" -> query: 1.5e1; errors: none
-scpi :LA:POD1:THReshold "16" -> query: 1.4e0; errors: -224,"Illegal parameter value" 16
-scpi :LA:POD1:THReshold "1e9" -> query: 1.4e0; errors: -224,"Illegal parameter value" 1e9
-scpi :LA:POD1:THReshold "x" -> query: 1.4e0; errors: -224,"Illegal parameter value" x
-scpi :LA:POD1:THReshold default -> query: 1.4e0; errors: none
+scpi :LA:POD1:THReshold "" -> query: 1.400000E+00; errors: -224,"Illegal parameter value"
+scpi :LA:POD1:THReshold "-1" -> query: -1.000000E+00; errors: none
+scpi :LA:POD1:THReshold "-15" -> query: -1.500000E+01; errors: none
+scpi :LA:POD1:THReshold "1.4" -> query: 1.400000E+00; errors: none
+scpi :LA:POD1:THReshold "15" -> query: 1.500000E+01; errors: none
+scpi :LA:POD1:THReshold "16" -> query: 1.400000E+00; errors: -224,"Illegal parameter value" 16
+scpi :LA:POD1:THReshold "1e9" -> query: 1.400000E+00; errors: -224,"Illegal parameter value" 1e9
+scpi :LA:POD1:THReshold "x" -> query: 1.400000E+00; errors: -224,"Illegal parameter value" x
+scpi :LA:POD1:THReshold default -> query: 1.400000E+00; errors: none
 scpi :LA:STATe "" -> query: 0; errors: -224,"Illegal parameter value"
 scpi :LA:STATe "-1" -> query: 0; errors: -224,"Illegal parameter value" -1
 scpi :LA:STATe "0" -> query: 0; errors: none
@@ -1090,7 +1090,7 @@ scpi :MATH1:OPERator "MULTiply" -> query: MULT; errors: none
 scpi :MATH1:OPERator "NAND" -> query: NAND; errors: none
 scpi :MATH1:OPERator "NOR" -> query: NOR; errors: none
 scpi :MATH1:OPERator "NOT" -> query: NOT; errors: none
-scpi :MATH1:OPERator "OFF" -> query: OFF; errors: -224,"Illegal parameter value" OFF
+scpi :MATH1:OPERator "OFF" -> query: OFF; errors: none
 scpi :MATH1:OPERator "OR" -> query: OR; errors: none
 scpi :MATH1:OPERator "SQRT" -> query: SQRT; errors: none
 scpi :MATH1:OPERator "SUBT" -> query: SUBT; errors: none
@@ -1135,13 +1135,13 @@ scpi :MATH2:SOURce1 "MATH2" -> query: CHAN1; errors: -224,"Illegal parameter val
 scpi :MATH2:SOURce1 "MATH3" -> query: CHAN1; errors: -224,"Illegal parameter value" MATH3
 scpi :MATH2:SOURce1 "x" -> query: CHAN1; errors: -224,"Illegal parameter value" x
 scpi :MATH2:SOURce1 default -> query: CHAN1; errors: none
-scpi :MEASure:BURSt:IDLE "" -> query: 0.000000E+00; errors: -224,"Illegal parameter value"
-scpi :MEASure:BURSt:IDLE "-1" -> query: 0.000000E+00; errors: -224,"Illegal parameter value" -1
+scpi :MEASure:BURSt:IDLE "" -> query: 5.000000E-05; errors: -224,"Illegal parameter value"
+scpi :MEASure:BURSt:IDLE "-1" -> query: 5.000000E-05; errors: -224,"Illegal parameter value" -1
 scpi :MEASure:BURSt:IDLE "0" -> query: 0.000000E+00; errors: none
 scpi :MEASure:BURSt:IDLE "1e-6" -> query: 1.000000E-06; errors: none
 scpi :MEASure:BURSt:IDLE "1e9" -> query: 1.000000E+09; errors: none
-scpi :MEASure:BURSt:IDLE "x" -> query: 0.000000E+00; errors: -224,"Illegal parameter value" x
-scpi :MEASure:BURSt:IDLE default -> query: 0.000000E+00; errors: none
+scpi :MEASure:BURSt:IDLE "x" -> query: 5.000000E-05; errors: -224,"Illegal parameter value" x
+scpi :MEASure:BURSt:IDLE default -> query: 5.000000E-05; errors: none
 scpi :MEASure:EDGes "" -> query: CLOC; errors: -224,"Illegal parameter value"
 scpi :MEASure:EDGes "-1" -> query: CLOC; errors: -224,"Illegal parameter value" -1
 scpi :MEASure:EDGes "1e9" -> query: CLOC; errors: -224,"Illegal parameter value" 1e9
@@ -1149,13 +1149,13 @@ scpi :MEASure:EDGes "CLOCk" -> query: CLOC; errors: none
 scpi :MEASure:EDGes "DATA" -> query: DATA; errors: none
 scpi :MEASure:EDGes "x" -> query: CLOC; errors: -224,"Illegal parameter value" x
 scpi :MEASure:EDGes default -> query: CLOC; errors: none
-scpi :MEASure:GATing "" -> query: SCREEN; errors: -224,"Illegal parameter value"
-scpi :MEASure:GATing "-1" -> query: SCREEN; errors: -224,"Illegal parameter value" -1
-scpi :MEASure:GATing "1e9" -> query: SCREEN; errors: -224,"Illegal parameter value" 1e9
+scpi :MEASure:GATing "" -> query: NONE; errors: -224,"Illegal parameter value"
+scpi :MEASure:GATing "-1" -> query: NONE; errors: -224,"Illegal parameter value" -1
+scpi :MEASure:GATing "1e9" -> query: NONE; errors: -224,"Illegal parameter value" 1e9
 scpi :MEASure:GATing "NONE" -> query: NONE; errors: none
 scpi :MEASure:GATing "SCREEN" -> query: SCREEN; errors: none
-scpi :MEASure:GATing "x" -> query: SCREEN; errors: -224,"Illegal parameter value" x
-scpi :MEASure:GATing default -> query: SCREEN; errors: none
+scpi :MEASure:GATing "x" -> query: NONE; errors: -224,"Illegal parameter value" x
+scpi :MEASure:GATing default -> query: NONE; errors: none
 scpi :MEASure:INDicator "" -> query: 0; errors: -224,"Illegal parameter value"
 scpi :MEASure:INDicator "-1" -> query: 0; errors: -224,"Illegal parameter value" -1
 scpi :MEASure:INDicator "0" -> query: 0; errors: none
@@ -1166,24 +1166,24 @@ scpi :MEASure:INDicator "ON" -> query: 1; errors: none
 scpi :MEASure:INDicator "on" -> query: 1; errors: none
 scpi :MEASure:INDicator "x" -> query: 0; errors: -224,"Illegal parameter value" x
 scpi :MEASure:INDicator default -> query: 0; errors: none
-scpi :MEASure:NPERiods "" -> query: 2; errors: -224,"Illegal parameter value"
-scpi :MEASure:NPERiods "-1" -> query: 2; errors: -224,"Illegal parameter value" -1
-scpi :MEASure:NPERiods "0" -> query: 2; errors: -224,"Illegal parameter value" 0
+scpi :MEASure:NPERiods "" -> query: 6; errors: -224,"Illegal parameter value"
+scpi :MEASure:NPERiods "-1" -> query: 6; errors: -224,"Illegal parameter value" -1
+scpi :MEASure:NPERiods "0" -> query: 6; errors: -224,"Illegal parameter value" 0
 scpi :MEASure:NPERiods "1" -> query: 1; errors: none
-scpi :MEASure:NPERiods "1e9" -> query: 2; errors: -224,"Illegal parameter value" 1e9
+scpi :MEASure:NPERiods "1e9" -> query: 6; errors: -224,"Illegal parameter value" 1e9
 scpi :MEASure:NPERiods "32" -> query: 32; errors: none
-scpi :MEASure:NPERiods "33" -> query: 2; errors: -224,"Illegal parameter value" 33
+scpi :MEASure:NPERiods "33" -> query: 6; errors: -224,"Illegal parameter value" 33
 scpi :MEASure:NPERiods "4" -> query: 4; errors: none
-scpi :MEASure:NPERiods "x" -> query: 2; errors: -224,"Illegal parameter value" x
-scpi :MEASure:NPERiods default -> query: 2; errors: none
-scpi :MEASure:OUTSide "" -> query: BOTH; errors: -224,"Illegal parameter value"
-scpi :MEASure:OUTSide "-1" -> query: BOTH; errors: -224,"Illegal parameter value" -1
-scpi :MEASure:OUTSide "1e9" -> query: BOTH; errors: -224,"Illegal parameter value" 1e9
+scpi :MEASure:NPERiods "x" -> query: 6; errors: -224,"Illegal parameter value" x
+scpi :MEASure:NPERiods default -> query: 6; errors: none
+scpi :MEASure:OUTSide "" -> query: ABOV; errors: -224,"Illegal parameter value"
+scpi :MEASure:OUTSide "-1" -> query: ABOV; errors: -224,"Illegal parameter value" -1
+scpi :MEASure:OUTSide "1e9" -> query: ABOV; errors: -224,"Illegal parameter value" 1e9
 scpi :MEASure:OUTSide "ABOVe" -> query: ABOV; errors: none
 scpi :MEASure:OUTSide "BELow" -> query: BEL; errors: none
 scpi :MEASure:OUTSide "BOTH" -> query: BOTH; errors: none
-scpi :MEASure:OUTSide "x" -> query: BOTH; errors: -224,"Illegal parameter value" x
-scpi :MEASure:OUTSide default -> query: BOTH; errors: none
+scpi :MEASure:OUTSide "x" -> query: ABOV; errors: -224,"Illegal parameter value" x
+scpi :MEASure:OUTSide default -> query: ABOV; errors: none
 scpi :MEASure:REFS "" -> query: 10/90; errors: -224,"Illegal parameter value"
 scpi :MEASure:REFS "-1" -> query: 10/90; errors: -224,"Illegal parameter value" -1
 scpi :MEASure:REFS "10/90" -> query: 10/90; errors: none
@@ -1302,7 +1302,7 @@ scpi :REFerence:COLor "BLUE" -> query: BLUE; errors: none
 scpi :REFerence:COLor "GRAY" -> query: GRAY; errors: none
 scpi :REFerence:COLor "GREen" -> query: GRE; errors: none
 scpi :REFerence:COLor "ORANge" -> query: ORAN; errors: none
-scpi :REFerence:COLor "RED" -> query: GRAY; errors: -224,"Illegal parameter value" RED
+scpi :REFerence:COLor "RED" -> query: RED; errors: none
 scpi :REFerence:COLor "VIOLet" -> query: ORAN; errors: none
 scpi :REFerence:COLor "WHITe" -> query: GRAY; errors: none
 scpi :REFerence:COLor "x" -> query: GRAY; errors: -224,"Illegal parameter value" x
@@ -1631,10 +1631,10 @@ scpi :TRIGger:COUPling "x" -> query: DC; errors: -113,"Undefined header" :TRIGge
 scpi :TRIGger:COUPling default -> query: DC; errors: none
 scpi :TRIGger:EDGE:LEVel "" -> query: 1.500000E+00; errors: -113,"Undefined header" :TRIGger:EDGE:LEVel
 scpi :TRIGger:EDGE:LEVel "-1" -> query: -1.000000E+00; errors: none
-scpi :TRIGger:EDGE:LEVel "-100" -> query: -1.000000E+02; errors: none
+scpi :TRIGger:EDGE:LEVel "-100" -> query: -5.000000E+00; errors: none
 scpi :TRIGger:EDGE:LEVel "0.5" -> query: 5.000000E-01; errors: none
-scpi :TRIGger:EDGE:LEVel "100" -> query: 1.000000E+02; errors: none
-scpi :TRIGger:EDGE:LEVel "1e9" -> query: 1.000000E+09; errors: none
+scpi :TRIGger:EDGE:LEVel "100" -> query: 5.000000E+00; errors: none
+scpi :TRIGger:EDGE:LEVel "1e9" -> query: 5.000000E+00; errors: none
 scpi :TRIGger:EDGE:LEVel "x" -> query: 1.500000E+00; errors: -113,"Undefined header" :TRIGger:EDGE:LEVel x
 scpi :TRIGger:EDGE:LEVel default -> query: 1.500000E+00; errors: none
 scpi :TRIGger:EDGE:SLOPe "" -> query: POS; errors: -113,"Undefined header" :TRIGger:EDGE:SLOPe
@@ -1712,7 +1712,7 @@ scpi :TRIGger:RUNT:LOWer default -> query: 5.000000E-01; errors: none
 scpi :TRIGger:RUNT:UPPer "" -> query: 1.500000E+00; errors: -224,"Invalid runt threshold"
 scpi :TRIGger:RUNT:UPPer "-1" -> query: 1.500000E+00; errors: -224,"Illegal parameter value" below the lower threshold
 scpi :TRIGger:RUNT:UPPer "0.4" -> query: 1.500000E+00; errors: -224,"Illegal parameter value" below the lower threshold
-scpi :TRIGger:RUNT:UPPer "1e9" -> query: 1.000000E+09; errors: none
+scpi :TRIGger:RUNT:UPPer "1e9" -> query: 5.000000E+00; errors: none
 scpi :TRIGger:RUNT:UPPer "2" -> query: 2.000000E+00; errors: none
 scpi :TRIGger:RUNT:UPPer "x" -> query: 1.500000E+00; errors: -224,"Invalid runt threshold"
 scpi :TRIGger:RUNT:UPPer default -> query: 1.500000E+00; errors: none
@@ -1797,7 +1797,7 @@ scpi :WAVeform:SOURce "-1" -> query: CHAN1; errors: -224,"Illegal parameter valu
 scpi :WAVeform:SOURce "1e9" -> query: CHAN1; errors: -224,"Illegal parameter value" 1e9
 scpi :WAVeform:SOURce "CHAN1" -> query: CHAN1; errors: none
 scpi :WAVeform:SOURce "CHAN2" -> query: CHAN2; errors: none
-scpi :WAVeform:SOURce "MATH1" -> query: CHAN1; errors: -224,"Illegal parameter value" MATH1
+scpi :WAVeform:SOURce "MATH1" -> query: MATH1; errors: none
 scpi :WAVeform:SOURce "R1" -> query: R1; errors: none
 scpi :WAVeform:SOURce "R10" -> query: R10; errors: none
 scpi :WAVeform:SOURce "x" -> query: CHAN1; errors: -224,"Illegal parameter value" x
@@ -1913,7 +1913,7 @@ setup bode "-1" -> 100 1000000 40 1 1 2 0 192.168.1.100:5555; error: line 2: bod
 setup bode "100 -1 40 1 1 2 0 192.168.1.100:5555" -> 100 -1 40 1 1 2 0 192.168.1.100:5555
 setup bode "100 1000000 -1 1 1 2 0 192.168.1.100:5555" -> 100 1000000 40 1 1 2 0 192.168.1.100:5555; error: line 2: bode: not an integer: -1
 setup bode "100 1000000 1 1 1 2 0" -> "100 1000000 2 1 1 2 0 "
-setup bode "100 1000000 1000 1 1 2 5 10.1.2.3:5555" -> 100 1000000 1000 1 1 2 5 10.1.2.3:5555
+setup bode "100 1000000 1000 1 1 2 5 10.1.2.3:5555" -> 100 1000000 1000 1 1 2 5 10.1.2.3:5555; also: extgen = 5 1 hiz 1000 1
 setup bode "100 1000000 1e9 1 1 2 0 192.168.1.100:5555" -> 100 1000000 40 1 1 2 0 192.168.1.100:5555; error: line 2: bode: not an integer: 1e9
 setup bode "100 1000000 40 -1 1 2 0 192.168.1.100:5555" -> 100 1000000 40 -1 1 2 0 192.168.1.100:5555
 setup bode "100 1000000 40 1 -1 2 0 192.168.1.100:5555" -> 100 1000000 40 1 1 2 0 192.168.1.100:5555; error: line 2: bode: not a source: -1
@@ -2365,6 +2365,16 @@ setup ch5.on "1e9" -> (absent); error: line 2: ch5.on: unknown channel
 setup ch5.on "true" -> (absent); error: line 2: ch5.on: unknown channel
 setup ch5.on "x" -> (absent); error: line 2: ch5.on: unknown channel
 setup ch5.on default -> (absent)
+setup ch_hidden "" -> (absent)
+setup ch_hidden "-1" -> (absent); error: line 2: ch_hidden: not an index: -1
+setup ch_hidden "0" -> (absent); error: line 2: ch_hidden: channel 0
+setup ch_hidden "1 4" -> 1 4
+setup ch_hidden "1" -> 1
+setup ch_hidden "1e9" -> (absent); error: line 2: ch_hidden: not an index: 1e9
+setup ch_hidden "5" -> (absent); error: line 2: ch_hidden: 5 out of range (< 5)
+setup ch_hidden "none" -> (absent); error: line 2: ch_hidden: not an index: none
+setup ch_hidden "x" -> (absent); error: line 2: ch_hidden: not an index: x
+setup ch_hidden default -> (absent)
 setup ch_window "" -> 1 1 1 1; error: line 2: ch_window: 0 values, want 4
 setup ch_window "-1 1 1 1" -> 1 1 1 1; error: line 2: ch_window: not an index: -1
 setup ch_window "-1" -> 1 1 1 1; error: line 2: ch_window: not an index: -1
@@ -2831,6 +2841,29 @@ setup d2.dec_thr "NaN" -> 1.65; error: line 2: d2.dec_thr: not a number: NaN
 setup d2.dec_thr "inf" -> 1.65; error: line 2: d2.dec_thr: not a number: inf
 setup d2.dec_thr "x" -> 1.65; error: line 2: d2.dec_thr: not a number: x
 setup d2.dec_thr default -> 1.65
+setup d2.dec_thr2 "" -> main; error: "line 2: d2.dec_thr2: not a number: "
+setup d2.dec_thr2 "-1" -> -1
+setup d2.dec_thr2 "-1.25" -> -1.25
+setup d2.dec_thr2 "0.5" -> 0.5
+setup d2.dec_thr2 "1e9" -> 1000000000
+setup d2.dec_thr2 "inf" -> main; error: line 2: d2.dec_thr2: not a number: inf
+setup d2.dec_thr2 "main" -> main
+setup d2.dec_thr2 "x" -> main; error: line 2: d2.dec_thr2: not a number: x
+setup d2.dec_thr2 default -> main
+setup d2.dec_thr3 "" -> main; error: "line 2: d2.dec_thr3: not a number: "
+setup d2.dec_thr3 "-1" -> -1
+setup d2.dec_thr3 "0.5" -> 0.5
+setup d2.dec_thr3 "1e9" -> 1000000000
+setup d2.dec_thr3 "main" -> main
+setup d2.dec_thr3 "x" -> main; error: line 2: d2.dec_thr3: not a number: x
+setup d2.dec_thr3 default -> main
+setup d2.dec_thr4 "" -> main; error: "line 2: d2.dec_thr4: not a number: "
+setup d2.dec_thr4 "-1" -> -1
+setup d2.dec_thr4 "0.5" -> 0.5
+setup d2.dec_thr4 "1e9" -> 1000000000
+setup d2.dec_thr4 "main" -> main
+setup d2.dec_thr4 "x" -> main; error: line 2: d2.dec_thr4: not a number: x
+setup d2.dec_thr4 default -> main
 setup d2.dec_tick "" -> 0; error: "line 2: d2.dec_tick: not an index: "
 setup d2.dec_tick "+1" -> 1
 setup d2.dec_tick "-1" -> 0; error: line 2: d2.dec_tick: not an index: -1
@@ -3350,6 +3383,29 @@ setup dec_thr "NaN" -> 1.65; error: line 2: dec_thr: not a number: NaN
 setup dec_thr "inf" -> 1.65; error: line 2: dec_thr: not a number: inf
 setup dec_thr "x" -> 1.65; error: line 2: dec_thr: not a number: x
 setup dec_thr default -> 1.65
+setup dec_thr2 "" -> main; error: "line 2: dec_thr2: not a number: "
+setup dec_thr2 "-1" -> -1
+setup dec_thr2 "-1.25" -> -1.25
+setup dec_thr2 "0.5" -> 0.5
+setup dec_thr2 "1e9" -> 1000000000
+setup dec_thr2 "inf" -> main; error: line 2: dec_thr2: not a number: inf
+setup dec_thr2 "main" -> main
+setup dec_thr2 "x" -> main; error: line 2: dec_thr2: not a number: x
+setup dec_thr2 default -> main
+setup dec_thr3 "" -> main; error: "line 2: dec_thr3: not a number: "
+setup dec_thr3 "-1" -> -1
+setup dec_thr3 "0.5" -> 0.5
+setup dec_thr3 "1e9" -> 1000000000
+setup dec_thr3 "main" -> main
+setup dec_thr3 "x" -> main; error: line 2: dec_thr3: not a number: x
+setup dec_thr3 default -> main
+setup dec_thr4 "" -> main; error: "line 2: dec_thr4: not a number: "
+setup dec_thr4 "-1" -> -1
+setup dec_thr4 "0.5" -> 0.5
+setup dec_thr4 "1e9" -> 1000000000
+setup dec_thr4 "main" -> main
+setup dec_thr4 "x" -> main; error: line 2: dec_thr4: not a number: x
+setup dec_thr4 default -> main
 setup dec_tick "" -> 0; error: "line 2: dec_tick: not an index: "
 setup dec_tick "+1" -> 1
 setup dec_tick "-1" -> 0; error: line 2: dec_tick: not an index: -1
@@ -3461,19 +3517,19 @@ setup deskew_ref11 "1e-9" -> (absent); error: line 2: deskew_ref11: invalid desk
 setup deskew_ref11 "1e9" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 "x" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 default -> (absent)
-setup dots "" -> true; error: "line 2: dots: not a boolean: "
-setup dots "-1" -> true; error: line 2: dots: not a boolean: -1
+setup dots "" -> false; error: "line 2: dots: not a boolean: "
+setup dots "-1" -> false; error: line 2: dots: not a boolean: -1
 setup dots "0" -> false
 setup dots "1" -> true
-setup dots "1e9" -> true; error: line 2: dots: not a boolean: 1e9
-setup dots "TRUE" -> true; error: line 2: dots: not a boolean: TRUE
+setup dots "1e9" -> false; error: line 2: dots: not a boolean: 1e9
+setup dots "TRUE" -> false; error: line 2: dots: not a boolean: TRUE
 setup dots "false" -> false
 setup dots "off" -> false
 setup dots "on" -> true
 setup dots "true" -> true
-setup dots "x" -> true; error: line 2: dots: not a boolean: x
-setup dots "yes" -> true; error: line 2: dots: not a boolean: yes
-setup dots default -> true
+setup dots "x" -> false; error: line 2: dots: not a boolean: x
+setup dots "yes" -> false; error: line 2: dots: not a boolean: yes
+setup dots default -> false
 setup dpt "" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values
 setup dpt "-1 2 3 Off 4 10 Both" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: not a source: -1
 setup dpt "-1" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values
@@ -3526,6 +3582,53 @@ setup dvm "true 4 0" -> false 0 0; error: line 2: dvm: 4 out of range (< 4)
 setup dvm "x 0 0" -> false 0 0; error: line 2: dvm: not a boolean: x
 setup dvm "x" -> false 0 0; error: line 2: dvm: dvm: on source mode
 setup dvm default -> false 0 0
+setup ev_errors "" -> false; error: "line 2: ev_errors: not a boolean: "
+setup ev_errors "-1" -> false; error: line 2: ev_errors: not a boolean: -1
+setup ev_errors "0" -> false
+setup ev_errors "1" -> true
+setup ev_errors "1e9" -> false; error: line 2: ev_errors: not a boolean: 1e9
+setup ev_errors "TRUE" -> false; error: line 2: ev_errors: not a boolean: TRUE
+setup ev_errors "false" -> false
+setup ev_errors "off" -> false
+setup ev_errors "on" -> true
+setup ev_errors "true" -> true
+setup ev_errors "x" -> false; error: line 2: ev_errors: not a boolean: x
+setup ev_errors "yes" -> false; error: line 2: ev_errors: not a boolean: yes
+setup ev_errors default -> false
+setup ev_view "" -> messages; error: "line 2: ev_view: bad ev_view "
+setup ev_view "-1" -> messages; error: line 2: ev_view: bad ev_view -1
+setup ev_view "1e9" -> messages; error: line 2: ev_view: bad ev_view 1e9
+setup ev_view "Lines" -> lines
+setup ev_view "fields" -> fields
+setup ev_view "lines" -> lines
+setup ev_view "messages" -> messages
+setup ev_view "rows" -> messages; error: line 2: ev_view: bad ev_view rows
+setup ev_view "x" -> messages; error: line 2: ev_view: bad ev_view x
+setup ev_view default -> messages
+setup extgen "" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: want 5 values
+setup extgen "-1 1 hiz 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: not an index: -1
+setup extgen "-1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: want 5 values
+setup extgen "0 0 1 0 1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: 0 is not an external generator
+setup extgen "1 -1 hiz 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: not an index: -1
+setup extgen "1 1 -1 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: load is hiz or 50, not -1
+setup extgen "1 1 1e9 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: load is hiz or 50, not 1e9
+setup extgen "1 1 hiz -1 1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: not a positive number: -1
+setup extgen "1 1 hiz 1000 -1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: not a positive number: -1
+setup extgen "1 1 hiz 1000 1 0" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: want 5 values
+setup extgen "1 1 hiz 1000 1e9" -> 1 1 hiz 1000 1000000000
+setup extgen "1 1 hiz 1000 x" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: not a positive number: x
+setup extgen "1 1 hiz 1000" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: want 5 values
+setup extgen "1 1 hiz 1e9 1" -> 1 1 hiz 1000000000 1
+setup extgen "1 1 hiz x 1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: not a positive number: x
+setup extgen "1 1 x 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: load is hiz or 50, not x
+setup extgen "1 1e9 hiz 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: not an index: 1e9
+setup extgen "1 x hiz 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: not an index: x
+setup extgen "1e9 1 hiz 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: not an index: 1e9
+setup extgen "1e9" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: want 5 values
+setup extgen "9 0 1 0 1" -> 1 1 hiz 1000 1; error: line 2: extgen: 9 out of range (< 7)
+setup extgen "x 1 hiz 1000 1" -> 1 1 hiz 1000 1; error: line 2: extgen: not an index: x
+setup extgen "x" -> 1 1 hiz 1000 1; error: line 2: extgen: extgen: want 5 values
+setup extgen default -> 1 1 hiz 1000 1
 setup eye "" -> 1 0 0; error: line 2: eye: eye: source
 setup eye "-1 0 0" -> 1 0 0; error: line 2: eye: not a source: -1
 setup eye "-1" -> 1 0 0; error: line 2: eye: not a source: -1
@@ -3589,6 +3692,15 @@ setup eye_place "Under" -> Under
 setup eye_place "full" -> Full; error: line 2: eye_place: unknown value: full
 setup eye_place "x" -> Full; error: line 2: eye_place: unknown value: x
 setup eye_place default -> Full
+setup eye_pll "" -> (absent); error: line 2: eye_pll: eye_pll: Hz
+setup eye_pll "-1" -> (absent); error: line 2: eye_pll: eye_pll: Hz
+setup eye_pll "0" -> (absent)
+setup eye_pll "1e30" -> 100000000
+setup eye_pll "1e6" -> 1000000
+setup eye_pll "1e9" -> 100000000
+setup eye_pll "inf" -> (absent); error: line 2: eye_pll: eye_pll: Hz
+setup eye_pll "x" -> (absent); error: line 2: eye_pll: eye_pll: Hz
+setup eye_pll default -> (absent)
 setup fft_win "" -> Hann; error: "line 2: fft_win: unknown value: "
 setup fft_win "-1" -> Hann; error: line 2: fft_win: unknown value: -1
 setup fft_win "1e9" -> Hann; error: line 2: fft_win: unknown value: 1e9
@@ -3626,6 +3738,73 @@ setup fine_v "true" -> true
 setup fine_v "x" -> false; error: line 2: fine_v: not a boolean: x
 setup fine_v "yes" -> false; error: line 2: fine_v: not a boolean: yes
 setup fine_v default -> false
+setup gen "" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: want 6 values
+setup gen "-1 1000 1 0 50 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: unknown -1
+setup gen "-1" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: want 6 values
+setup gen "1e9 1000 1 0 50 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: unknown 1e9
+setup gen "1e9" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: want 6 values
+setup gen "Arb 1000 1 0 50 0" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: unknown Arb
+setup gen "Sine -1 1 0 50 50" -> Sine -1 1 0 50 50
+setup gen "Sine 1000 -1 0 50 50" -> Sine 1000 -1 0 50 50
+setup gen "Sine 1000 1 -1 50 50" -> Sine 1000 1 -1 50 50
+setup gen "Sine 1000 1 0 -1 50" -> Sine 1000 1 0 0 50
+setup gen "Sine 1000 1 0 1e9 50" -> Sine 1000 1 0 100 50
+setup gen "Sine 1000 1 0 50 -1" -> Sine 1000 1 0 50 0
+setup gen "Sine 1000 1 0 50 0" -> Sine 1000 1 0 50 0
+setup gen "Sine 1000 1 0 50 1e9" -> Sine 1000 1 0 50 100
+setup gen "Sine 1000 1 0 50 50 0" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: want 6 values
+setup gen "Sine 1000 1 0 50 x" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: bad number x
+setup gen "Sine 1000 1 0 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: want 6 values
+setup gen "Sine 1000 1 0 x 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: bad number x
+setup gen "Sine 1000 1 1e9 50 50" -> Sine 1000 1 1000000000 50 50
+setup gen "Sine 1000 1 x 50 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: bad number x
+setup gen "Sine 1000 1e9 0 50 50" -> Sine 1000 1000000000 0 50 50
+setup gen "Sine 1000 x 0 50 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: bad number x
+setup gen "Sine 1e9 1 0 50 50" -> Sine 1000000000 1 0 50 50
+setup gen "Sine x 1 0 50 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: bad number x
+setup gen "sine 1e3 1 0 50 0" -> Sine 1000 1 0 50 0
+setup gen "x 1000 1 0 50 50" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: unknown x
+setup gen "x" -> Sine 1000 1 0 50 50; error: line 2: gen: gen: want 6 values
+setup gen default -> Sine 1000 1 0 50 50
+setup gen_hidden "" -> (absent); error: "line 2: gen_hidden: not a boolean: "
+setup gen_hidden "-1" -> (absent); error: line 2: gen_hidden: not a boolean: -1
+setup gen_hidden "0" -> (absent)
+setup gen_hidden "1" -> true
+setup gen_hidden "1e9" -> (absent); error: line 2: gen_hidden: not a boolean: 1e9
+setup gen_hidden "TRUE" -> (absent); error: line 2: gen_hidden: not a boolean: TRUE
+setup gen_hidden "false" -> (absent)
+setup gen_hidden "off" -> (absent)
+setup gen_hidden "on" -> true
+setup gen_hidden "true" -> true
+setup gen_hidden "x" -> (absent); error: line 2: gen_hidden: not a boolean: x
+setup gen_hidden "yes" -> (absent); error: line 2: gen_hidden: not a boolean: yes
+setup gen_hidden default -> (absent)
+setup gen_mod "" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: want 6 values
+setup gen_mod "-1 100 100 100 90 Sine" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: unknown -1
+setup gen_mod "-1" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: want 6 values
+setup gen_mod "1e9 100 100 100 90 Sine" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: unknown 1e9
+setup gen_mod "1e9" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: want 6 values
+setup gen_mod "Off -1 100 100 90 Sine" -> Off -1 100 100 90 Sine
+setup gen_mod "Off 100 -1 100 90 Sine" -> Off 100 -1 100 90 Sine
+setup gen_mod "Off 100 100 -1 90 Sine" -> Off 100 100 -1 90 Sine
+setup gen_mod "Off 100 100 100 -1 Sine" -> Off 100 100 100 -1 Sine
+setup gen_mod "Off 100 100 100 1e9 Sine" -> Off 100 100 100 1000000000 Sine
+setup gen_mod "Off 100 100 100 90 -1" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: unknown -1
+setup gen_mod "Off 100 100 100 90 1e9" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: unknown 1e9
+setup gen_mod "Off 100 100 100 90 Sine 0" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: want 6 values
+setup gen_mod "Off 100 100 100 90 x" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: unknown x
+setup gen_mod "Off 100 100 100 90" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: want 6 values
+setup gen_mod "Off 100 100 100 x Sine" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: bad number x
+setup gen_mod "Off 100 100 1e9 90 Sine" -> Off 100 100 1000000000 90 Sine
+setup gen_mod "Off 100 100 x 90 Sine" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: bad number x
+setup gen_mod "Off 100 1e9 100 90 Sine" -> Off 100 1000000000 100 90 Sine
+setup gen_mod "Off 100 x 100 90 Sine" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: bad number x
+setup gen_mod "Off 1000 1 0 50 0" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: unknown 0
+setup gen_mod "Off 1e9 100 100 90 Sine" -> Off 1000000000 100 100 90 Sine
+setup gen_mod "Off x 100 100 90 Sine" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: bad number x
+setup gen_mod "x 100 100 100 90 Sine" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: unknown x
+setup gen_mod "x" -> Off 100 100 100 90 Sine; error: line 2: gen_mod: gen_mod: want 6 values
+setup gen_mod default -> Off 100 100 100 90 Sine
 setup grid "" -> Full; error: "line 2: grid: unknown value: "
 setup grid "-1" -> Full; error: line 2: grid: unknown value: -1
 setup grid "1e9" -> Full; error: line 2: grid: unknown value: 1e9
@@ -3874,6 +4053,16 @@ setup la_window "4" -> 4
 setup la_window "5" -> 1; error: line 2: la_window: 5 out of range (< 5)
 setup la_window "x" -> 1; error: line 2: la_window: not an index: x
 setup la_window default -> 1
+setup layout "" -> default; error: "line 2: layout: bad layout "
+setup layout "-1" -> default; error: line 2: layout: bad layout -1
+setup layout "1e9" -> default; error: line 2: layout: bad layout 1e9
+setup layout "Studio" -> studio
+setup layout "classic" -> default; error: line 2: layout: bad layout classic
+setup layout "default" -> default
+setup layout "minimal" -> minimal
+setup layout "studio" -> studio
+setup layout "x" -> default; error: line 2: layout: bad layout x
+setup layout default -> default
 setup log_ivl "" -> 0; error: "line 2: log_ivl: not an index: "
 setup log_ivl "+1" -> 1
 setup log_ivl "-1" -> 0; error: line 2: log_ivl: not an index: -1
@@ -4266,6 +4455,15 @@ setup math_fc "NaN" -> 10000; error: line 2: math_fc: not a number: NaN
 setup math_fc "inf" -> 10000; error: line 2: math_fc: not a number: inf
 setup math_fc "x" -> 10000; error: line 2: math_fc: not a number: x
 setup math_fc default -> 10000
+setup math_hidden "" -> (absent)
+setup math_hidden "-1" -> (absent); error: line 2: math_hidden: not an index: -1
+setup math_hidden "0" -> (absent); error: line 2: math_hidden: math 0
+setup math_hidden "1 8" -> 1 8
+setup math_hidden "1" -> 1
+setup math_hidden "1e9" -> (absent); error: line 2: math_hidden: not an index: 1e9
+setup math_hidden "9" -> (absent); error: line 2: math_hidden: 9 out of range (< 9)
+setup math_hidden "x" -> (absent); error: line 2: math_hidden: not an index: x
+setup math_hidden default -> (absent)
 setup math_lin "" -> 1 0; error: line 2: math_lin: math_lin: two numbers
 setup math_lin "-1 0" -> -1 0
 setup math_lin "-1" -> 1 0; error: line 2: math_lin: math_lin: two numbers
@@ -4378,45 +4576,45 @@ setup meas2 "0:1:2" -> 0:1:2
 setup meas2 "0:1:2:3" -> ""; error: line 2: meas2: not item:a:b: 0:1:2:3
 setup meas2 "0:R1:R2" -> 0:R1:R2
 setup meas2 "16:1:2" -> 16:1:2
-setup meas2 "17:1:2" -> ""; error: line 2: meas2: 17 out of range (< 17)
+setup meas2 "17:1:2" -> 17:1:2
 setup meas2 "1e9" -> ""; error: line 2: meas2: not item:a:b: 1e9
 setup meas2 "x" -> ""; error: line 2: meas2: not item:a:b: x
 setup meas2 default -> ""
-setup meas_cfg "" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "-1 Both 2 0 0.1 0.9 0 0" -> -1 Both 2 0 0.1 0.9 0 0
-setup meas_cfg "-1" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "0 -1 2 0 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: -1
-setup meas_cfg "0 1e9 2 0 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: 1e9
+setup meas_cfg "" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "-1 Above 6 0 0.1 0.9 0 0" -> -1 Above 6 0 0.1 0.9 0 0
+setup meas_cfg "-1" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
 setup meas_cfg "0 Below 0 0" -> 0 Below 1 0 0.1 0.9 0 0
-setup meas_cfg "0 Both -1 0 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: -1
-setup meas_cfg "0 Both 1e9 0 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: 1e9
-setup meas_cfg "0 Both 2 -1 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: -1
-setup meas_cfg "0 Both 2 0 -1 0.9 0 0" -> 0 Both 2 0 -1 0.9 0 0
-setup meas_cfg "0 Both 2 0 0.1 -1 0 0" -> 0 Both 2 0 0.1 -1 0 0
-setup meas_cfg "0 Both 2 0 0.1 0.9 -1 0" -> 0 Both 2 0 0.1 0.9 -1 0
-setup meas_cfg "0 Both 2 0 0.1 0.9 0 -1" -> 0 Both 2 0 0.1 0.9 0 -1
-setup meas_cfg "0 Both 2 0 0.1 0.9 0 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "0 Both 2 0 0.1 0.9 0 1e9" -> 0 Both 2 0 0.1 0.9 0 1000000000
-setup meas_cfg "0 Both 2 0 0.1 0.9 0 x" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0 Both 2 0 0.1 0.9 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "0 Both 2 0 0.1 0.9 1e9 0" -> 0 Both 2 0 0.1 0.9 1000000000 0
-setup meas_cfg "0 Both 2 0 0.1 0.9 x 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0 Both 2 0 0.1 0.9" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "0 Both 2 0 0.1 1e9 0 0" -> 0 Both 2 0 0.1 1000000000 0 0
-setup meas_cfg "0 Both 2 0 0.1 x 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0 Both 2 0 1e9 0.9 0 0" -> 0 Both 2 0 1000000000 0.9 0 0
-setup meas_cfg "0 Both 2 0 x 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0 Both 2 1e9 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: 1e9
-setup meas_cfg "0 Both 2 x 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: x
+setup meas_cfg "0 Both 2 0 0.1 0.9" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
 setup meas_cfg "0 Both 33 0 0.2 0.8 1e-9 1e-9" -> 0 Both 32 0 0.2 0.8 0.000000001 0.000000001
-setup meas_cfg "0 Both x 0 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: x
-setup meas_cfg "0 x 2 0 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: x
+setup meas_cfg "0.00005 -1 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: -1
+setup meas_cfg "0.00005 1e9 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: 1e9
+setup meas_cfg "0.00005 Above -1 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: -1
+setup meas_cfg "0.00005 Above 1e9 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: 1e9
+setup meas_cfg "0.00005 Above 6 -1 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: -1
+setup meas_cfg "0.00005 Above 6 0 -1 0.9 0 0" -> 0.00005 Above 6 0 -1 0.9 0 0
+setup meas_cfg "0.00005 Above 6 0 0.1 -1 0 0" -> 0.00005 Above 6 0 0.1 -1 0 0
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 -1 0" -> 0.00005 Above 6 0 0.1 0.9 -1 0
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 -1" -> 0.00005 Above 6 0 0.1 0.9 0 -1
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 1e9" -> 0.00005 Above 6 0 0.1 0.9 0 1000000000
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 x" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 1e9 0" -> 0.00005 Above 6 0 0.1 0.9 1000000000 0
+setup meas_cfg "0.00005 Above 6 0 0.1 0.9 x 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Above 6 0 0.1 1e9 0 0" -> 0.00005 Above 6 0 0.1 1000000000 0 0
+setup meas_cfg "0.00005 Above 6 0 0.1 x 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Above 6 0 1e9 0.9 0 0" -> 0.00005 Above 6 0 1000000000 0.9 0 0
+setup meas_cfg "0.00005 Above 6 0 x 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Above 6 1e9 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: 1e9
+setup meas_cfg "0.00005 Above 6 x 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: x
+setup meas_cfg "0.00005 Above x 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: x
+setup meas_cfg "0.00005 x 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: x
 setup meas_cfg "1e-6 Above 32 1" -> 0.000001 Above 32 1 0.1 0.9 0 0
-setup meas_cfg "1e9 Both 2 0 0.1 0.9 0 0" -> 1000000000 Both 2 0 0.1 0.9 0 0
-setup meas_cfg "1e9" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "x Both 2 0 0.1 0.9 0 0" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "x" -> 0 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg default -> 0 Both 2 0 0.1 0.9 0 0
+setup meas_cfg "1e9 Above 6 0 0.1 0.9 0 0" -> 1000000000 Above 6 0 0.1 0.9 0 0
+setup meas_cfg "1e9" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "x Above 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "x" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg default -> 0.00005 Above 6 0 0.1 0.9 0 0
 setup meas_full_record "" -> false; error: "line 2: meas_full_record: not a boolean: "
 setup meas_full_record "-1" -> false; error: line 2: meas_full_record: not a boolean: -1
 setup meas_full_record "0" -> false
@@ -4443,6 +4641,68 @@ setup meas_labels "true" -> true
 setup meas_labels "x" -> false; error: line 2: meas_labels: not a boolean: x
 setup meas_labels "yes" -> false; error: line 2: meas_labels: not a boolean: yes
 setup meas_labels default -> false
+setup meas_levels "" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
+setup meas_levels "-1 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: -1
+setup meas_levels "-1" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
+setup meas_levels "0 -1 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: -1
+setup meas_levels "0 0 -1 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 -1 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 -1 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 -1 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 -1 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 -1 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 -1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 -1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 -1 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 -1 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 -1 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: -1
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 -1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 -1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 -1 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 -1 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 -1 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 -1 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 -1 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 -1 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 -1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 -1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 -1" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: unknown value: -1
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 1e9" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: unknown value: 1e9
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto 0" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 x" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: unknown value: x
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1e9 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1000000000 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 x Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 1e9 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 1000000000 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 x 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 1e9 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 1000000000 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 x 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 1e9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 1000000000 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 x -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 1e9 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 1000000000 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 0.1 x 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 1e9 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 1000000000 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 0 x 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 1e9 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: 1e9
+setup meas_levels "0 0 0.5 0.05 -1 0 1 0.03 x 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: x
+setup meas_levels "0 0 0.5 0.05 -1 0 1 1e9 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 1000000000 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 1 x 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 0 1e9 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1000000000 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 0 x 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 -1 1e9 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 1000000000 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 -1 x 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 0.05 1e9 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 1000000000 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 0.05 x 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 0.5 1e9 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 1000000000 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 0.5 x -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 0 1e9 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 1000000000 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_levels "0 0 x 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: invalid float literal
+setup meas_levels "0 1e9 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: 1e9
+setup meas_levels "0 x 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: x
+setup meas_levels "1e9 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: 1e9
+setup meas_levels "1e9" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
+setup meas_levels "x 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: x
+setup meas_levels "x" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
+setup meas_levels default -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_stat "" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
+setup meas_stat "-1" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
+setup meas_stat "1e9" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
+setup meas_stat "false 0 false false" -> 0 0 0 0
+setup meas_stat "true 1 true true" -> 1 1 1 1
+setup meas_stat "true 1 true" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
+setup meas_stat "x" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
+setup meas_stat default -> (absent)
 setup nope "" -> (absent)
 setup nope "-1" -> (absent)
 setup nope "1" -> (absent)
@@ -4648,6 +4908,14 @@ setup ref_window "4 4 4 4 4 4 4 4 4 4" -> 4 4 4 4 4 4 4 4 4 4
 setup ref_window "x 1 1 1 1 1 1 1 1 1" -> 1 1 1 1 1 1 1 1 1 1; error: line 2: ref_window: not an index: x
 setup ref_window "x" -> 1 1 1 1 1 1 1 1 1 1; error: line 2: ref_window: not an index: x
 setup ref_window default -> 1 1 1 1 1 1 1 1 1 1
+setup row_cfg "" -> (absent)
+setup row_cfg "-1" -> (absent); error: line 2: row_cfg: not row|settings: -1
+setup row_cfg "1e9" -> (absent); error: line 2: row_cfg: not row|settings: 1e9
+setup row_cfg "m|Vpp|1|nope=1" -> (absent); error: line 2: row_cfg: not a measurement row: m
+setup row_cfg "m|Vpp|1|pol=1" -> (absent); error: line 2: row_cfg: not a measurement row: m
+setup row_cfg "x" -> (absent); error: line 2: row_cfg: not row|settings: x
+setup row_cfg "x|y" -> (absent); error: line 2: row_cfg: not a measurement row: x
+setup row_cfg default -> (absent)
 setup seg_hw "" -> false; error: "line 2: seg_hw: not a boolean: "
 setup seg_hw "-1" -> false; error: line 2: seg_hw: not a boolean: -1
 setup seg_hw "0" -> false
@@ -4902,6 +5170,16 @@ setup sim "3 x 16000000000 31 0.5 -0.5 0.00000000002 0.005 12000000000 4.5 1 0.0
 setup sim "x 0 16000000000 31 0.5 -0.5 0.00000000002 0.005 12000000000 4.5 1 0.0000000000012 0.000000000004 8000000 0" -> 3 0 16000000000 31 0.5 -0.5 0.00000000002 0.005 12000000000 4.5 1 0.0000000000012 0.000000000004 8000000 0; error: line 2: sim: not an index: x
 setup sim "x" -> 3 0 16000000000 31 0.5 -0.5 0.00000000002 0.005 12000000000 4.5 1 0.0000000000012 0.000000000004 8000000 0; error: line 2: sim: sim: preset slot
 setup sim default -> 3 0 16000000000 31 0.5 -0.5 0.00000000002 0.005 12000000000 4.5 1 0.0000000000012 0.000000000004 8000000 0
+setup sim_bus "" -> none; error: "line 2: sim_bus: unknown protocol: "
+setup sim_bus "-1" -> none; error: line 2: sim_bus: unknown protocol: -1
+setup sim_bus "1e9" -> none; error: line 2: sim_bus: unknown protocol: 1e9
+setup sim_bus "I2c" -> I2c
+setup sim_bus "Lin" -> Lin
+setup sim_bus "Nope" -> none; error: line 2: sim_bus: unknown protocol: Nope
+setup sim_bus "i2c" -> none; error: line 2: sim_bus: unknown protocol: i2c
+setup sim_bus "none" -> none
+setup sim_bus "x" -> none; error: line 2: sim_bus: unknown protocol: x
+setup sim_bus default -> none
 setup sim_extra "" -> false 0.005 33000 0 0 1000000; error: line 2: sim_extra: sim_extra: center deviation frequency DCD correlated-RJ corner
 setup sim_extra "-1 0.005 33000 0 0 1000000" -> false 0.005 33000 0 0 1000000; error: line 2: sim_extra: not a boolean: -1
 setup sim_extra "-1" -> false 0.005 33000 0 0 1000000; error: line 2: sim_extra: sim_extra: center deviation frequency DCD correlated-RJ corner
@@ -4934,6 +5212,15 @@ setup sim_extra "true 0.05 1000000 1e-10 5e-11 100000000" -> true 0.05 1000000 0
 setup sim_extra "x 0.005 33000 0 0 1000000" -> false 0.005 33000 0 0 1000000; error: line 2: sim_extra: not a boolean: x
 setup sim_extra "x" -> false 0.005 33000 0 0 1000000; error: line 2: sim_extra: sim_extra: center deviation frequency DCD correlated-RJ corner
 setup sim_extra default -> false 0.005 33000 0 0 1000000
+setup skin "" -> Oos; error: "line 2: skin: unknown value: "
+setup skin "-1" -> Oos; error: line 2: skin: unknown value: -1
+setup skin "1e9" -> Oos; error: line 2: skin: unknown value: 1e9
+setup skin "OOS Plus" -> Oos; error: line 2: skin: unknown value: OOS Plus
+setup skin "Oos" -> Oos
+setup skin "Plus" -> Plus
+setup skin "oos" -> Oos; error: line 2: skin: unknown value: oos
+setup skin "x" -> Oos; error: line 2: skin: unknown value: x
+setup skin default -> Oos
 setup slope "" -> Rise; error: "line 2: slope: unknown value: "
 setup slope "-1" -> Rise; error: line 2: slope: unknown value: -1
 setup slope "1e9" -> Rise; error: line 2: slope: unknown value: 1e9
@@ -5035,16 +5322,92 @@ setup split_pane "5" -> 5
 setup split_pane "6" -> 0; error: line 2: split_pane: 6 out of range (< 6)
 setup split_pane "x" -> 0; error: line 2: split_pane: not an index: x
 setup split_pane default -> 0
-setup strip_dock "" -> Under; error: "line 2: strip_dock: unknown value: "
-setup strip_dock "-1" -> Under; error: line 2: strip_dock: unknown value: -1
-setup strip_dock "1e9" -> Under; error: line 2: strip_dock: unknown value: 1e9
-setup strip_dock "Above" -> Above
-setup strip_dock "Left" -> Left
-setup strip_dock "Right" -> Right
-setup strip_dock "Under" -> Under
-setup strip_dock "under" -> Under; error: line 2: strip_dock: unknown value: under
-setup strip_dock "x" -> Under; error: line 2: strip_dock: unknown value: x
-setup strip_dock default -> Under
+setup strip "" -> Below; error: "line 2: strip: unknown value: "
+setup strip "-1" -> Below; error: line 2: strip: unknown value: -1
+setup strip "1e9" -> Below; error: line 2: strip: unknown value: 1e9
+setup strip "Above" -> Above
+setup strip "Below" -> Below
+setup strip "Hidden" -> Hidden
+setup strip "Left" -> Left
+setup strip "Right" -> Right
+setup strip "Under" -> Below; error: line 2: strip: unknown value: Under
+setup strip "below" -> Below; error: line 2: strip: unknown value: below
+setup strip "x" -> Below; error: line 2: strip: unknown value: x
+setup strip default -> Below
+setup strip_dock "" -> (absent); error: "line 2: strip_dock: unknown value: "
+setup strip_dock "-1" -> (absent); error: line 2: strip_dock: unknown value: -1
+setup strip_dock "1e9" -> (absent); error: line 2: strip_dock: unknown value: 1e9
+setup strip_dock "Above" -> (absent); also: strip = Above
+setup strip_dock "Left" -> (absent); also: strip = Left
+setup strip_dock "Right" -> (absent); also: strip = Right
+setup strip_dock "Under" -> (absent)
+setup strip_dock "under" -> (absent); error: line 2: strip_dock: unknown value: under
+setup strip_dock "x" -> (absent); error: line 2: strip_dock: unknown value: x
+setup strip_dock default -> (absent)
+setup studio_badges "" -> (absent); error: "line 2: studio_badges: bad studio_badges "
+setup studio_badges "-1" -> (absent); error: line 2: studio_badges: bad studio_badges -1
+setup studio_badges "1e9" -> (absent); error: line 2: studio_badges: bad studio_badges 1e9
+setup studio_badges "Classic" -> (absent); error: line 2: studio_badges: bad studio_badges Classic
+setup studio_badges "classic" -> (absent)
+setup studio_badges "studio" -> studio
+setup studio_badges "x" -> (absent); error: line 2: studio_badges: bad studio_badges x
+setup studio_badges default -> (absent)
+setup studio_dock "" -> (absent)
+setup studio_dock "-1" -> -1
+setup studio_dock "1e9" -> 1e9
+setup studio_dock "bottom" -> bottom
+setup studio_dock "right" -> right
+setup studio_dock "x" -> x
+setup studio_dock default -> (absent)
+setup studio_meas_view "" -> (absent); error: "line 2: studio_meas_view: bad studio_meas_view "
+setup studio_meas_view "-1" -> (absent); error: line 2: studio_meas_view: bad studio_meas_view -1
+setup studio_meas_view "1e9" -> (absent); error: line 2: studio_meas_view: bad studio_meas_view 1e9
+setup studio_meas_view "List" -> (absent); error: line 2: studio_meas_view: bad studio_meas_view List
+setup studio_meas_view "detailed" -> (absent)
+setup studio_meas_view "list" -> list
+setup studio_meas_view "x" -> (absent); error: line 2: studio_meas_view: bad studio_meas_view x
+setup studio_meas_view default -> (absent)
+setup studio_ov "" -> (absent); error: "line 2: studio_ov: bad studio_ov "
+setup studio_ov "-1" -> (absent); error: line 2: studio_ov: bad studio_ov -1
+setup studio_ov "0" -> (absent)
+setup studio_ov "1e9" -> (absent); error: line 2: studio_ov: bad studio_ov 1e9
+setup studio_ov "2000" -> 2000
+setup studio_ov "2001" -> (absent); error: line 2: studio_ov: bad studio_ov 2001
+setup studio_ov "x" -> (absent); error: line 2: studio_ov: bad studio_ov x
+setup studio_ov default -> (absent)
+setup studio_state "" -> ""
+setup studio_state "-1" -> -1
+setup studio_state "1 2 3" -> 1 2 3
+setup studio_state "1e9" -> 1e9
+setup studio_state "abc" -> abc
+setup studio_state "x" -> x
+setup studio_state default -> ""
+setup studio_traces "" -> (absent); error: "line 2: studio_traces: bad studio_traces "
+setup studio_traces "-1" -> (absent); error: line 2: studio_traces: bad studio_traces -1
+setup studio_traces "1e9" -> (absent); error: line 2: studio_traces: bad studio_traces 1e9
+setup studio_traces "Overlay" -> (absent); error: line 2: studio_traces: bad studio_traces Overlay
+setup studio_traces "overlay" -> overlay
+setup studio_traces "stacked" -> (absent)
+setup studio_traces "x" -> (absent); error: line 2: studio_traces: bad studio_traces x
+setup studio_traces default -> (absent)
+setup studio_view "" -> waveform; error: "line 2: studio_view: bad studio view "
+setup studio_view "-1" -> waveform; error: line 2: studio_view: bad studio view -1
+setup studio_view "1e9" -> waveform; error: line 2: studio_view: bad studio view 1e9
+setup studio_view "Docked" -> waveform; error: line 2: studio_view: bad studio view Docked
+setup studio_view "docked" -> docked
+setup studio_view "floating" -> floating
+setup studio_view "only" -> only
+setup studio_view "waveform" -> waveform
+setup studio_view "x" -> waveform; error: line 2: studio_view: bad studio view x
+setup studio_view default -> waveform
+setup studio_zoom_controls "" -> (absent); error: "line 2: studio_zoom_controls: bad studio_zoom_controls "
+setup studio_zoom_controls "-1" -> (absent); error: line 2: studio_zoom_controls: bad studio_zoom_controls -1
+setup studio_zoom_controls "1e9" -> (absent); error: line 2: studio_zoom_controls: bad studio_zoom_controls 1e9
+setup studio_zoom_controls "Tab" -> (absent); error: line 2: studio_zoom_controls: bad studio_zoom_controls Tab
+setup studio_zoom_controls "tab" -> (absent)
+setup studio_zoom_controls "titlebar" -> titlebar
+setup studio_zoom_controls "x" -> (absent); error: line 2: studio_zoom_controls: bad studio_zoom_controls x
+setup studio_zoom_controls default -> (absent)
 setup tdiv "" -> 0.0002; error: "line 2: tdiv: not a number: "
 setup tdiv "-1" -> 0.0002; error: line 2: tdiv: no time/div step -1
 setup tdiv "-2.25" -> 0.0002; error: line 2: tdiv: no time/div step -2.25
@@ -5448,7 +5811,7 @@ setup win_mode default -> Enter
 setup windows "" -> One; error: "line 2: windows: unknown value: "
 setup windows "-1" -> One; error: line 2: windows: unknown value: -1
 setup windows "1e9" -> One; error: line 2: windows: unknown value: 1e9
-setup windows "Cols" -> Rows; also: density = Split
+setup windows "Cols" -> Cols; also: density = Split
 setup windows "One" -> One
 setup windows "Quad" -> Quad; also: density = Four
 setup windows "Rows" -> Rows; also: density = Split
