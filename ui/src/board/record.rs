@@ -91,6 +91,13 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
         let nearest = |a: &f64, b: &f64| (a - f.pre as f64).abs().total_cmp(&(b - f.pre as f64).abs());
         let all: Vec<f64> = crate::trig::find_all(m, &inp).into_iter().map(|t| t + lo as f64).collect();
         all.iter().copied().filter(fits).min_by(nearest).or_else(|| {
+            // the protocol trigger: the hardware fires on any frame, and the field asked for is found in the record.
+            // Where it stands too far from the hardware point to be moved to the trigger point, the frame is none
+            // of this trigger: shown at the hardware point it had the T on another frame (seen on a unit: a CAN
+            // identifier 255 us left of the T at 50 us/div, with 100 kpts). Normal waits for a frame that fits
+            if m.trig_type == TrigType::Bus {
+                return None;
+            }
             // nothing of the set kind near `pre`: the hardware can fire on the other edge of a clean signal, so look
             // up to half a screen around it (edge trigger only, the others have their own time conditions)
             if m.trig_type != TrigType::Edge || near >= screen / 2 {
@@ -248,6 +255,37 @@ mod tests {
         let r = to_record(&Arc::new(f), &m, 3600, window, -window / 2.0);
         assert!(r.triggered);
         assert!(r.ch[0].iter().all(|y| y.is_finite()), "{} gaps", r.ch[0].iter().filter(|y| !y.is_finite()).count());
+    }
+
+    /// The protocol trigger: the frame is on the field asked for where that field can stand at the trigger point,
+    /// and is none of this trigger where it cannot (the screen window would leave the frame). Shown at the hardware
+    /// point such a frame had its T on whatever the hardware fired on.
+    #[test]
+    fn a_bus_match_that_cannot_stand_at_the_trigger_point_is_no_trigger() {
+        // a UART character 'T' at 115200 baud, 87 samples a bit: it ends `back` samples before the hardware point
+        // (the generator has ten bit times of quiet line before the character)
+        let frame = |back: usize| {
+            let (dt, len, pre) = (1e-7, 100_000usize, 50_000usize);
+            let l = oos_dsp::sim::uart_logic(b"T", 115_200.0, 8, None, 0.0, 0.0, 3.3);
+            let start = pre - back - 1736;
+            let wave = |i: usize| if i < start { 3.3 } else { l.v((i - start) as f64 * dt) as f32 };
+            let v: Vec<f32> = (0..len).map(wave).collect();
+            let f = Frame { seq: 1, dt, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() };
+            Arc::new(f)
+        };
+        let mut m = Model::default();
+        (m.trig_type, m.dec_proto, m.dec_src, m.dec_bits) = (TrigType::Bus, Proto::UART, 0, 8);
+        (m.dec_baud, m.dec_thr) = (crate::decode::BAUDS.iter().position(|&b| b == 115_200.0).unwrap_or(7), 1.65);
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Data, b'T' as u64);
+        // the screen is 80 000 of the frame's 100 000 samples: a match may stand 10 000 samples from the hardware point
+        let window = 80_000.0 * 1e-7;
+        let at = |back: usize| trigger_point(&frame(back), &m, 1000, window, -window / 2.0);
+        let near = at(500).expect("a character 500 samples before the hardware point is the trigger");
+        assert!((near - 49_500.0).abs() < 200.0, "{near}");
+        assert_eq!(at(20_000), None, "20 000 samples before it: the window would leave the frame");
+        // an edge trigger keeps the hardware point in such a frame, as before
+        m.trig_type = TrigType::Edge;
+        assert!(trigger_point(&frame(20_000), &m, 1000, window, -window / 2.0).is_some());
     }
 }
 

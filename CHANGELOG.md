@@ -647,6 +647,17 @@ Changed:
   rate, and a Manchester line carries its clock. Decode > A one is: Rising (802.3), as before, or Falling
   (Thomas), the other convention, with which the bits of the capture are those its instrument reads
   (`:BUS<n>:OPTion2`).
+- CAN on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: a demo board at 500 kbit/s, CAN_H
+  and CAN_L on 10:1 probes that the channels read as 1:1). The decoder reads it right from CAN_H, from CAN_L and
+  from the difference of the two, each with the threshold found from the signal: 93 to 97 frames in 40 ms with
+  21 identifiers, standard and extended, data and remote frames, every CRC right and every frame acknowledged,
+  the same traffic a capture of the board has. The band and the Events pane with ID, DLC, Data and CRC work on
+  it, and the trigger on an identifier holds the frame with the end of the identifier at the trigger point.
+  One flaw it showed is fixed (unit before the change, host-tested after it): at 50 us/div with 100 kpts the
+  screen held still with the T on another frame, the identifier asked for 255 us to its left. The hardware fires
+  on any frame and the field is looked for in the record; where it stood too far from the hardware point to be
+  moved to the trigger point, the frame was shown at the hardware point and called triggered. Such a frame is
+  none of the protocol trigger: Normal waits for one in which the field can stand at the T.
 - SPI on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: data, clock and chip select of a
   5 V bus at 200 kbit/s, one word a frame every 500 us and a frame of 16 words now and then; clock and chip select
   on 10:1 probes that the channels read as 1:1, so 0.5 V beside the 5 V of the data). The decoder reads it right:

@@ -33,7 +33,7 @@ Per decoder:
 | UART | capture: text and times agree; unit: 236 characters, none wrong | band, bit row, lines | a failed character on the unit |
 | SPI | capture: 13-bit words, MOSI/MISO, frames agree; unit: 441 words, none wrong | band, frames, columns, Format | MISO on the unit |
 | I2C | capture: bytes, errors and 10-bit addresses agree (one address differs, below) | band, bit row, Format | unit |
-| CAN | capture: 97 of 97 frames agree; error flags host only | band, columns | unit |
+| CAN | capture: 97 of 97 frames agree; unit: 93 to 97 frames in 40 ms, every CRC right; error flags host only | band, columns | an error frame on the unit |
 | CAN-FD | capture: frames agree, length in bytes; error flags host only | band, columns | unit |
 | LIN | capture: frames, errors and the rate from the sync agree | band | unit |
 | FlexRay | capture: frames agree at 10 Mbit/s; 9 CRC errors that repeat with the cycle, not compared | band, columns | unit |
@@ -126,8 +126,14 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       beside the SPI band, the Events pane with both decoders, the Lines view, which has the two lines of the
       text, and the bus trigger holding a character still. Nothing to fix. Open: a failed character, which the
       bench signal has none of.
-   3. The buses of his demo board, as he connects them: CAN, CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC 429,
-      USB (in this order: the three first are the ones whose decoders were changed on their captures).
+   3. CAN: on CH1 (CAN_H) and CH3 (CAN_L) of his demo board, 500 kbit/s. Done on the unit (2026-11-19): the
+      decode is right from CAN_H, from CAN_L and from the difference of the two (93 to 97 frames in 40 ms, 21
+      identifiers, every CRC right; the traffic of the capture), the thresholds from the signals, the band at
+      2 ms, 200 us, 50 us and 5 us/div, the Events pane with its columns, the trigger on an identifier. One
+      flaw it showed is fixed: a frame whose match could not be moved to the trigger point was shown at the
+      hardware point and called triggered. Open: an error frame, which the board does not send.
+   4. The other buses of his demo board, as he connects them: CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC
+      429, USB.
       Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope
       makes the traffic, decodes it and shows it. That checks the screen and the path of the decoder on the
       unit, not the decode of a real signal. All eight decode without an error; the band and the columns of the
