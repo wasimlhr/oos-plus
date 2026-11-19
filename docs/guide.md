@@ -186,6 +186,10 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   frame
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
 - Other: USB low/full speed, USB PD, parallel
+- Line codes: Manchester, MLT-3, C-PHY. A Manchester line that is quiet between its packets is read packet by
+  packet. A packet is its bits in the order sent, or its bytes; with Decode > Sync bits or Header bits above 0 it
+  is cut into fields: so many bits of sync, so many of header, words of Data bits, and what is left as the
+  trailer ("SYNC 0 HDR 7 3C TRL 2"), each field with its first bit as the least significant
 - Model railways: NMRA DCC (contributed by Arjen Halma), with a view of the layout in Display > Second pane > Bus view:
   locomotives, turnouts, signals, and the track status, green while live and red after an emergency stop
 - New decoders come as protocol modules: one file, one registration ([docs/protocol-modules.md](protocol-modules.md))

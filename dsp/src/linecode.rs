@@ -306,9 +306,36 @@ fn ethernet_fields(bytes: &[(f64, f64, u8)], out: &mut Vec<Packet>) {
 /// Else its bytes are `Data` as before, the first bit sent the least significant, and a record without a pause is
 /// one stream with the fields of an Ethernet frame where it has them.
 pub fn manchester(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> Vec<Packet> {
+    let (packets, half) = manchester_packets(v, dt, bitrate, thr, hyst);
+    let bytes_of = |bits: &[(f64, bool)]| -> Vec<Packet> {
+        bits_to_bytes(bits).iter().map(|&(s, e, v)| pkt(s, e, Kind::Data, v as u32, None, true)).collect()
+    };
+    if let [bits] = &packets[..] {
+        let mut out = bytes_of(bits);
+        ethernet_fields(&bits_to_bytes(bits), &mut out);
+        return out;
+    }
+    let mut out = Vec::new();
+    for bits in &packets {
+        let n = bits.len();
+        if n == 0 || n > 32 || n % 8 == 0 {
+            out.extend(bytes_of(bits));
+            continue;
+        }
+        let value = bits.iter().fold(0u32, |v, &(_, one)| v << 1 | one as u32);
+        out.push(pkt(bits[0].0 - half, bits[n - 1].0 + half, Kind::Field("PKT"), value, Some(n as u32), true));
+    }
+    out
+}
+
+/// The bits of a Manchester line, packet by packet (see `manchester`): for each stretch between two pauses of more
+/// than 1.5 bit times its bits, each with the place of its middle (a sample index) and whether its edge rises; and
+/// half a bit time in samples, so a bit lies from its middle less that to its middle plus that. A record without a
+/// pause is one stretch; none at all where the line has too few edges or no rate.
+pub fn manchester_packets(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> (Vec<Vec<(f64, bool)>>, f64) {
     let e = edges(v, thr, hyst);
     if e.len() < 4 {
-        return Vec::new();
+        return (Vec::new(), 0.0);
     }
     let spacings: Vec<f64> = e.windows(2).map(|w| (w[1].t - w[0].t) * dt).collect();
     let half = if bitrate > 0.0 {
@@ -317,7 +344,7 @@ pub fn manchester(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> Vec<
         eye::unit_interval(&spacings).unwrap_or(0.0)
     };
     if !(half > dt) {
-        return Vec::new();
+        return (Vec::new(), 0.0);
     }
     let bit_t = 2.0 * half;
     let decode_from = |start: usize, end: usize| -> Vec<(f64, bool)> {
@@ -344,33 +371,11 @@ pub fn manchester(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> Vec<
         let b = if end > start + 1 { decode_from(start + 1, end) } else { Vec::new() };
         if b.len() > a.len() { b } else { a }
     };
-    let bytes_of = |bits: &[(f64, bool)]| -> Vec<Packet> {
-        bits_to_bytes(bits).iter().map(|&(s, e, v)| pkt(s, e, Kind::Data, v as u32, None, true)).collect()
-    };
     // where a pause ends a packet
     let mut cuts: Vec<usize> = (1..e.len()).filter(|&i| (e[i].t - e[i - 1].t) * dt > 1.5 * bit_t).collect();
-    if cuts.is_empty() {
-        let bits = bits_of(0, e.len());
-        let mut out = bytes_of(&bits);
-        ethernet_fields(&bits_to_bytes(&bits), &mut out);
-        return out;
-    }
     cuts.insert(0, 0);
     cuts.push(e.len());
-    let half_samples = half / dt;
-    let mut out = Vec::new();
-    for w in cuts.windows(2) {
-        let bits = bits_of(w[0], w[1]);
-        let n = bits.len();
-        if n == 0 || n > 32 || n % 8 == 0 {
-            out.extend(bytes_of(&bits));
-            continue;
-        }
-        let value = bits.iter().fold(0u32, |v, &(_, one)| v << 1 | one as u32);
-        let (t0, t1) = (bits[0].0 - half_samples, bits[n - 1].0 + half_samples);
-        out.push(pkt(t0, t1, Kind::Field("PKT"), value, Some(n as u32), true));
-    }
-    out
+    (cuts.windows(2).map(|w| bits_of(w[0], w[1])).collect(), half / dt)
 }
 
 /// MLT-3: cycling −A / 0 / +A; every change of level is a 1, a hold is a 0. The line is sliced to its three levels

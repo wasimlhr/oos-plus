@@ -572,7 +572,12 @@ Changed:
   one number with their count. A record without a pause is read as before, and so is a packet of whole bytes. On
   the capture: nine packets at the times its instrument lists, and their bits cut as that instrument has them (a
   header of 3 bits, 6 data bits, a trailer of 2, each least significant bit first, after two sync bits) are its
-  values in the five rows its picture shows. The decoder does not cut a packet into fields.
+  values in the five rows its picture shows. Decode > Sync bits and Header bits (0 to 16 each, `:BUS<n>:OPTion3`
+  and `OPTion4`) cut a packet into fields: so many bits of sync, so many of header, words of Data bits, and what
+  is left as the trailer, each field with its first bit as the least significant. With both at 0, as a new
+  decoder has them, a packet is not cut. Set to 2, 3 and 6 data bits, the capture reads "SYNC 0 HDR 7 3C TRL 2",
+  "SYNC 0 HDR 6 3C TRL 2", ... as its instrument lists it. A packet is a message on the band and a row of the
+  Events pane.
 - Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3,
   Modbus ASCII, the DS2482 bridge, JTAG, C-PHY and Quad-SPI have a SIM bus preset now, 27 in all; of the decoders
   only Parallel has none. Six bytes at the rate of the list's usual entry for the two line codes; the read
