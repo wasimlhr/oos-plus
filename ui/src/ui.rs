@@ -215,6 +215,8 @@ const MARK_W: i32 = 26;
 const HIST_AXIS_W: i32 = 58;
 /// Height of the badge of a reference trace (name row, scale and rate row).
 const REF_BADGE_H: i32 = 40;
+/// Width and height of the tag of a reference trace in Studio ("R1"): its pill in the bottom bar has the rest.
+const REF_TAG: (i32, i32) = (44, 24);
 /// Width of the measurement strip when it is docked on the left or the right.
 const STRIP_SIDE: i32 = 220;
 /// Height of the fork's compact bottom bar (Menu, source pills, Overlay / Stacked, time, trigger) that replaces the
@@ -5502,14 +5504,22 @@ impl Ui {
     /// Name, volts per division, and the record's sample rate, beside the trace.
     fn draw_ref_badge(&self, cv: &mut Canvas, area: Rect, y: i32, col: Rgb, slot: usize, r: &RefWave) {
         let f = self.fonts();
-        // Studio lanes: the same small outlined badge a channel has at the left of its lane. The name, the scale and
-        // the signal are on the reference's pill in the bottom bar, so nothing covers the trace
-        if self.m.layout == Layout::Studio && self.stacked() {
-            // at the middle of the lane, where a channel's badge sits when its ground line is centred: clear of the
-            // volt labels at the top and the time labels at the bottom
-            let _ = y;
-            // right of the volt labels, which a reference has down its whole lane
-            let b = Rect::new(area.x + 52, (area.y + area.h / 2 - 12).max(area.y + 2), 44, 24);
+        // Studio: the same small outlined badge a channel has at the left of its lane. The name and the scale are on
+        // the reference's pill in the bottom bar and the rate is in the note beside Fit, so nothing covers the trace
+        // (overlaid traces had the box of two rows of the other layouts, 40 px high over the signal)
+        if self.m.layout == Layout::Studio {
+            let b = if self.stacked() {
+                // at the middle of the lane, where a channel's badge sits when its ground line is centred: clear of
+                // the volt labels at the top and the time labels at the bottom; right of the volt labels, which a
+                // reference has down its whole lane
+                Rect::new(area.x + 52, (area.y + area.h / 2 - 12).max(area.y + 2), REF_TAG.0, REF_TAG.1)
+            } else {
+                // where its trace enters the plot, clear of the volt labels and of the row of Fit
+                let lo = area.y + 2;
+                let hi = (area.y + area.h - REF_TAG.1 - self.ref_badge_pad(area)).max(lo);
+                let x = (area.x + 80).min((area.x + area.w - REF_TAG.0 - 4).max(area.x + 2));
+                Rect::new(x, y.clamp(lo, hi), REF_TAG.0, REF_TAG.1)
+            };
             cv.round(b, 4, col, 255);
             cv.round(b.inset(1), 3, BG, 255);
             cv.text_in(&f.sb, b, 1, &format!("R{}", slot + 1), col);

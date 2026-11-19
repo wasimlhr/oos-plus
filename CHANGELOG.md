@@ -653,6 +653,10 @@ Changed:
   21 identifiers, standard and extended, data and remote frames, every CRC right and every frame acknowledged,
   the same traffic a capture of the board has. The band and the Events pane with ID, DLC, Data and CRC work on
   it. The trigger on an identifier is the next entry.
+- Studio: a reference has the small tag of a channel on the plot ("R1") with overlaid traces too, as it has in
+  lanes. It had a box of two rows there, 40 px high and as wide as its name, over the signal; the name and the
+  scale are on its pill in the bottom bar, and the sample rate is in the note beside Fit. The other layouts keep
+  the two rows.
 - Protocol trigger on a bus that repeats its traffic, found and fixed on a unit (DHO924S, 2026-11-19: the CAN
   bus above, 22 frames one behind the other every 9.5 ms and 5 ms of rest, trigger on an identifier, 100 kpts).
   At 200 us/div the trigger held the frame, the end of the identifier at the trigger point. At 50 us/div and
