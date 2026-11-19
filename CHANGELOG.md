@@ -5,6 +5,24 @@
 The work of oos-plus since its merge of upstream 0.1.13, and since this merge on top of upstream OOS 0.1.14
 and the 17 changes of upstream after it (below).
 
+The merge of upstream 0.1.14 (host-tested; not yet run on a unit):
+
+- Install: a build of this version is a larger image. A scope with an oos-plus build from before the fix of the
+  kexec start (upstream #203, in oos-plus main since 2026-11-19) stops in a kernel panic at the trial start of
+  such an update ("unknown-block(0,0)"); nothing is written, and a mains power cycle brings the previous build back.
+  Install a build of main with that fix first, or install from a USB stick (GEL), or run
+  `oos-update install --no-kexec --execute` over SSH and then switch the scope off at the mains and on again.
+- There is no telnet any more (upstream ADR 0054): logs and the shell are reached over SSH. The setup key and the
+  `:SYSTem:REMote:SERVice:TELNet` command are gone; a `remote.telnet` line of an older system.conf is read without
+  a complaint.
+- Acquire > Draw path is gone with upstream's Standard path: Batch is the only one. `:SYSTem:PIPeline` still
+  answers `BATC` for scripts, and a setup with `draw_path` loads.
+- The Bode plot reaches its generator through the external generator page as before; upstream's own USB/LAN link
+  of the Bode page is not taken (its `bode_link` key still loads).
+- The code is laid out as upstream's: pages in one table, the UI, SCPI, the store and the model split into files
+  per part, the network services in the crates `oos-system` and `oos-remote`, the decoders in
+  `dsp/src/decode/`. The Windows desktop build stays, behind its `cfg`.
+
 Fixes from a review of 0.1.13, and the forum's report on it. All of it is tested on the host. Marked "(unit)" where
 it also ran on a DHO924S (2026-11-16).
 
