@@ -68,7 +68,8 @@ fn traffic(p: Proto, baud: f64) -> Option<Traffic> {
         return Some(record(bit, period, &|k, t| (k == 0).then(|| wave.v(t))));
     }
     let demo = protocols::demo(i)?;
-    let bit = module.bit_time(&protocols::opt_fit(i, protocols::opt_default(i)));
+    let sh = protocols::shared(&Default::default());
+    let bit = module.info().bit_time(&protocols::opt_fit(i, protocols::opt_default(i)), &sh);
     Some(record(bit, demo.period, &|k, t| demo.lines[k].as_ref().map(|f| f(t))))
 }
 
@@ -100,7 +101,7 @@ impl Ui {
         m.dec_opt = protocols::opt_default(i);
         let baud = crate::decode::BAUDS[m.dec_baud.min(crate::decode::BAUDS.len() - 1)];
         let traffic = traffic(p, baud).ok_or("this protocol has no traffic to generate")?;
-        let roles = module.roles();
+        let roles = module.info().roles;
         let count = traffic.lines.iter().flatten().count();
         if count > NREF {
             return Err("not enough reference slots".into());

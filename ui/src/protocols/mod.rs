@@ -554,14 +554,15 @@ mod tests {
     fn demo_packets(i: usize, rounds: f64) -> Option<Vec<Packet>> {
         let m = MODULES[i];
         let d = demo(i as u8)?;
-        let dt = m.bit_time(&opt_fit(i as u8, opt_default(i as u8))) / 40.0;
+        let sh = shared(&Default::default());
+        let dt = m.info().bit_time(&opt_fit(i as u8, opt_default(i as u8)), &sh) / 40.0;
         let n = (rounds * d.period / dt) as usize;
         let wave = |f: &DemoLine| (0..n).map(|k| f((k as f64 * dt).rem_euclid(d.period)) as f32).collect::<Vec<f32>>();
         let waves: Vec<Option<Vec<f32>>> = d.lines.iter().map(|l| l.as_ref().map(wave)).collect();
         let (opt, lines) = (opt_fit(i as u8, opt_default(i as u8)), std::array::from_fn(|k| waves[k].as_deref()));
-        let (thr, sh) = (m.setup().thr, Shared::default());
+        let thr = m.setup().thr;
         let l = Lines { lines, dt, thr, hy: 0.1, opt, sh, chans: [None; 4], src: [None; 4] };
-        Some(m.decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e)))
+        Some(m.info().decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e)))
     }
 
     /// A module that says where its frames begin: its demo traffic falls into frames that each begin with that

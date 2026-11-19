@@ -121,6 +121,11 @@ impl Ui {
 
     pub(super) fn setting_adjust(&mut self, it: Item, d: i32) -> bool {
         let Some((s, n)) = row(it) else { return false };
+        // oos-plus: the reference level steps in the range table (`Ui::range_step`), whose press back from a limit
+        // returns to a value off the step (`clamp_home`)
+        if it == Item::SpecRef {
+            return false;
+        }
         let before = (s.get)(&self.m, n);
         // the trigger level stays at the same place of the signal: with AC and LF reject it counts from the signal's
         // mean, so it moves by that mean when the coupling changes there or back. Left as it was, a level set with DC
@@ -276,6 +281,11 @@ mod tests {
     #[test]
     fn every_row_has_its_item_and_a_step_changes_it() {
         for s in crate::settings::all() {
+            // oos-plus: the Bode plot reaches its generator through the external generator page (`extgen`), which
+            // has the connection of its own; the key stays, so that a setup that has it still loads
+            if s.key == "bode_link" {
+                continue;
+            }
             // a numbered row by the item of its first instance
             let it = ITEMS.iter().find(|(_, k)| *k == s.key).map(|(i, _)| *i);
             let it = it.or_else(|| NUMBERED.iter().find(|(_, k)| *k == s.key).map(|(f, _)| f(0)));

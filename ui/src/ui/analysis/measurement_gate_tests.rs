@@ -129,6 +129,8 @@ fn screen_gate_is_half_open_at_f32_200ps_boundaries_with_nonzero_origins() {
 #[test]
 fn screen_gate_keeps_real_near_boundary_samples_without_rounding_the_view() {
     let mut ui = crate::ui::testkit::demo_ui();
+    // screen gating: this test checks the visible-window gate (oos-plus measures the whole record by default)
+    ui.m.meas_full_record = false;
     ui.m.zoom = false;
     ui.m.tscale = 0;
     ui.m.tfine = 200e-12f32 / tscales()[0];

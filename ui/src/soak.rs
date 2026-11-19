@@ -125,7 +125,7 @@ do Amplitude
 do Period
 do Fall Time
 close
-menu Measure settings
+menu Measure
 set Statistics = On
 close
 frames 2

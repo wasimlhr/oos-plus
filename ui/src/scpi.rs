@@ -211,6 +211,8 @@ pub(crate) fn message_end(buf: &[u8]) -> Option<usize> {
 fn split_message(text: &str) -> Vec<(String, bool)> {
     let b = text.as_bytes();
     let (mut out, mut start, mut first, mut i) = (Vec::new(), 0, true, 0);
+    // where the current line begins: a comment is a line that begins with `#`
+    let mut line_start = 0;
     let mut flush = |from: usize, to: usize, first: &mut bool| {
         let c = text[from..to].trim();
         if !c.is_empty() { out.push((c.to_string(), *first)); *first = false; }
@@ -218,10 +220,11 @@ fn split_message(text: &str) -> Vec<(String, bool)> {
     while i < b.len() {
         match b[i] {
             b';' => { flush(start, i, &mut first); start = i + 1; }
-            b'\n' | b'\r' => { flush(start, i, &mut first); start = i + 1; first = true; }
+            b'\n' | b'\r' => { flush(start, i, &mut first); start = i + 1; line_start = i + 1; first = true; }
             // a comment line of a file of commands (a recording, scpi/recorder.rs), sent as it is: it is no command,
-            // to the end of its line and with a `;` in it. A block is an argument and never starts a command.
-            b'#' if text[start..i].trim().is_empty() => {
+            // to the end of its line and with a `;` in it. Only at the start of a line: after a `;` a `#` is part of a
+            // command. A block is an argument and never starts a command.
+            b'#' if text[line_start..i].trim().is_empty() => {
                 while i < b.len() && b[i] != b'\n' && b[i] != b'\r' { i += 1; }
                 start = i;
                 continue;

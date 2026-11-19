@@ -692,7 +692,6 @@ fn system(t: &mut T) {
     assert!(!t.ui.sys.remote_web);
     t.shows(Item::RemWeb, "Off");
     t.rt(":SYST:REM:SERV:VXI11 OFF", ":SYST:REM:SERV:VXI11?", "0");
-    t.rt(":SYST:REM:SERV:TELN OFF", ":SYST:REM:SERV:TELN?", "0");
     t.rt(":SYST:REM:SERV:MDNS OFF", ":SYST:REM:SERV:MDNS?", "0");
     t.rt(":SYST:REM:SERV:WEB ON", ":SYST:REM:SERV:WEB?", "1");
     t.no(":SYST:REM:SERV:SCPI OFF", "-221");

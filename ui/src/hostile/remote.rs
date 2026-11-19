@@ -66,7 +66,13 @@ fn hostile_program_messages() {
             commands.push(c.to_string());
             Vec::new()
         });
-        let words: String = text.chars().filter(|c| !c.is_whitespace() && *c != ';').collect();
+        // (oos-plus: a line that begins with `#` is a comment of a file of commands, no command)
+        let words: String = text
+            .split_inclusive(['\n', '\r'])
+            .filter(|l| !l.trim_start().starts_with('#'))
+            .flat_map(|l| l.chars())
+            .filter(|c| !c.is_whitespace() && *c != ';')
+            .collect();
         let taken: String = commands.concat().chars().filter(|c| !c.is_whitespace()).collect();
         if commands.len() > 1024 || (!commands.is_empty() && taken != words) {
             return Err(format!("{} commands that are not the text in its order", commands.len()));
@@ -91,8 +97,9 @@ fn session() -> (Scpi, Ui, Canvas, Scratch) {
 
 /// One line through the interpreter, held to its contract.
 fn line_ok(scpi: &mut Scpi, ui: &mut Ui, cv: &Canvas, text: &str) -> Result<(), String> {
-    let commands: Vec<&str> =
-        text.split(['\n', '\r']).flat_map(|l| l.split(';')).map(str::trim).filter(|c| !c.is_empty()).collect();
+    // (oos-plus: a line that begins with `#` is a comment of a file of commands, no command)
+    let lines = text.split(['\n', '\r']).filter(|l| !l.trim_start().starts_with('#'));
+    let commands: Vec<&str> = lines.flat_map(|l| l.split(';')).map(str::trim).filter(|c| !c.is_empty()).collect();
     let asks = commands.iter().any(|c| c.split_whitespace().next().is_some_and(|head| head.ends_with('?')));
     match scpi.exec_message_checked(ui, cv, text) {
         Ok((response, has_reply)) => {

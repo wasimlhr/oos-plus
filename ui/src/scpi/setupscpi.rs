@@ -45,7 +45,6 @@ pub(crate) const ROWS: &[(&str, &[&str])] = &[
     ("avg_hw", &[":ACQuire:AVERages:HARDware"]),
     ("seg_hw", &[":ACQuire:SEGMents:HARDware"]),
     ("seg_interval", &[":ACQuire:SEGMents:INTerval"]),
-    ("draw_path", &[":SYSTem:PIPeline"]),
     // ---- trigger
     ("trig_type", &[":TRIGger:MODE"]),
     ("trig_src", &[":TRIGger:EDGE:SOURce"]),
@@ -318,7 +317,7 @@ mod tests {
         ("ch<n>.coupling", "Ac"), ("ch<n>.coupling", "Gnd"), ("h_expand", "Left"), ("h_expand", "Trigger"), ("acq", "Peak"), ("acq", "Average"), ("acq", "HiRes"),
         ("trig_type", "Pulse"), ("slope", "Fall"), ("slope", "Either"), ("trig_slope2", "Fall"), ("trig_mode", "Normal"), ("trig_pol", "Neg"),
         ("trig_when", "Gt"), ("trig_when", "In"), ("video_std", "Ntsc"), ("video_sync", "Line"), ("video_sync", "Odd"), ("pat", "L X X H"), ("pat", "H X R H"),
-        ("win_mode", "Exit"), ("win_mode", "Inside"), ("cursor", "Time"), ("aux_out", "Off"), ("aux_out", "PassFail"), ("draw_path", "batch"),
+        ("win_mode", "Exit"), ("win_mode", "Inside"), ("cursor", "Time"), ("aux_out", "Off"), ("aux_out", "PassFail"),
         ("hdmi", "Mirror"), ("view", "Spectrum"), ("view", "Eye"), ("layout", "studio"), ("layout", "default"), ("ch<n>.unit", "A"), ("ch<n>.bias", "0.5"),
         ("ch<n>.vfine", "0.8"), ("tfine", "0.8"), ("gen_hidden", "true"), ("eye_pll", "100000"), ("ch<n>.bw", "20 MHz"),
         ("trig_coup", "Ac"), ("trig_coup", "LfReject"), ("hist", "Vertical"), ("hist", "Horizontal"), ("eye_place", "Side"), ("eye_place", "Under"),

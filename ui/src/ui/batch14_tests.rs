@@ -245,7 +245,8 @@ fn missing_glyphs() -> Vec<(char, String)> {
     while let Some(dir) = stack.pop() {
         for e in std::fs::read_dir(&dir).unwrap().flatten() {
             let p = e.path();
-            if p.is_dir() { stack.push(p); continue; }
+            // (the hostile inputs are tests: they are not drawn)
+            if p.is_dir() { if !p.ends_with("hostile") { stack.push(p); } continue; }
             let name = p.file_name().unwrap().to_string_lossy().to_string();
             if !name.ends_with(".rs") || name.contains("test") || name == "font.rs" || name == "desktop.rs" || name == "json.rs" { continue; }
             let text = std::fs::read_to_string(&p).unwrap_or_default();

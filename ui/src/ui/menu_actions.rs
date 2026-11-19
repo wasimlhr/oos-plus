@@ -337,6 +337,29 @@ impl Ui {
             self.choose_trace_mode(stacked);
             return;
         }
+        // oos-plus: the trigger times step on the 1-2-5 ladder; a value between two rungs (30 us) goes to the nearest
+        // one in the direction of the press and the press back returns to it (`ladder_move`)
+        if matches!(it, Item::TrigT1 | Item::TrigT2 | Item::NthIdle | Item::Setup | Item::Hold) {
+            let m = &self.m;
+            let cur = match it {
+                Item::TrigT1 => m.trig_t1,
+                Item::TrigT2 => m.trig_t2,
+                Item::NthIdle => m.nth_idle,
+                Item::Setup => m.setup,
+                _ => m.hold,
+            } as f64;
+            let l: Vec<f64> = crate::model::time_ladder().iter().map(|&x| x as f64).collect();
+            let v = self.ladder_move(it, cur, d, &l) as f32;
+            match it {
+                Item::TrigT1 => self.m.trig_t1 = v,
+                Item::TrigT2 => self.m.trig_t2 = v,
+                Item::NthIdle => self.m.nth_idle = v,
+                Item::Setup => self.m.setup = v,
+                _ => self.m.hold = v,
+            }
+            self.settings_changed();
+            return;
+        }
         if PARTS.iter().any(|p| p.adjust.is_some_and(|f| f(self, it, d))) {
             return;
         }

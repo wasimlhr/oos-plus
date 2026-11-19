@@ -80,7 +80,8 @@ Installing OOS means that you accept in particular the following risks:
   the mains and all probes before you open it, and close it again before you connect mains. Only open it if you know
   how to do this safely.
 - **Network security.** Apart from SSH (password or key, [docs/network.md](network.md) 7) OOS has no
-  authentication: telnet (on by default, a shell without password), SCPI, VXI-11, HiSLIP (on a computer), the web remote and MCP are open to everyone who can reach the scope. The community signing key is public, so anyone on the
+  authentication: SCPI, VXI-11, HiSLIP (on a computer), the web remote and MCP are open to everyone who can reach the
+  scope; there is no telnet (ADR 0054). The community signing key is public, so anyone on the
   network can also install an update. This holds for WLAN as well. **Connect the scope to a trusted bench network only,
   never directly to the internet.**
 - **Experimental settings.** System > Overclock and `/oos/limits.conf` can change the sample clock, `limits.conf` can

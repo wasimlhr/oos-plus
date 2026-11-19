@@ -125,6 +125,10 @@ const DECODER: &[(&str, P)] = &[
     ("dec_mode", Idx(4)),
     ("dec_bits", Int(&["4", "32", "3", "33"])),
     ("dec_parity", Is(&["None", "Even", "Odd", "odd"])),
+    // oos-plus: the threshold of each further line of a decoder
+    ("dec_thr2", Is(&["main", "0.5", "-1.25", "inf"])),
+    ("dec_thr3", Is(&["main", "0.5"])),
+    ("dec_thr4", Is(&["main", "0.5"])),
 ];
 
 /// The other keys, in the order of `setup_text`; then legacy keys `set` still reads and keys it refuses.
@@ -392,6 +396,31 @@ const KEYS: &[(&str, P)] = &[
     ("text_size", Is(&["Normal", "Large", "Larger", "normal"])),
     ("la", Fields(&["true 00ff 7 6 -15 15 2", "true ffff 8 0 1 1 0", "false 0 0 0 16 -16 3", "false 1ffff 0 0 0 0 0"])),
     ("dec_la", Fields(&["1 0 15 16 -", "0 - - - -", "2 1 2 3 4", "1 a - - -"])),
+    // oos-plus keys
+    ("ch_hidden", Is(&["1", "1 4", "0", "5", "none"])),
+    ("math_hidden", Is(&["1", "1 8", "0", "9"])),
+    ("gen_hidden", Bool),
+    ("gen", Fields(&["Sine 1000 1 0 50 0", "Arb 1000 1 0 50 0", "sine 1e3 1 0 50 0"])),
+    ("gen_mod", Fields(&["Off 1000 1 0 50 0"])),
+    ("extgen", Fields(&["0 0 1 0 1", "9 0 1 0 1"])),
+    ("eye_pll", Is(&["0", "1e6", "-1", "inf", "1e30"])),
+    ("ev_view", Is(&["messages", "fields", "lines", "Lines", "rows"])),
+    ("ev_errors", Bool),
+    ("layout", Is(&["default", "minimal", "studio", "Studio", "classic"])),
+    ("skin", Is(&["Oos", "Plus", "oos", "OOS Plus"])),
+    ("strip", Is(&["Below", "Left", "Right", "Above", "Hidden", "below", "Under"])),
+    ("meas_levels", Fields(&[])),
+    ("meas_stat", Is(&["true 1 true true", "false 0 false false", "true 1 true"])),
+    ("row_cfg", Is(&["m|Vpp|1|pol=1", "x|y", "m|Vpp|1|nope=1"])),
+    ("sim_bus", Is(&["none", "I2c", "Lin", "i2c", "Nope"])),
+    ("studio_view", Is(&["waveform", "docked", "floating", "only", "Docked"])),
+    ("studio_dock", Is(&["right", "bottom"])),
+    ("studio_zoom_controls", Is(&["tab", "titlebar", "Tab"])),
+    ("studio_state", Is(&["abc", "1 2 3"])),
+    ("studio_traces", Is(&["overlay", "stacked", "Overlay"])),
+    ("studio_meas_view", Is(&["detailed", "list", "List"])),
+    ("studio_badges", Is(&["classic", "studio", "Classic"])),
+    ("studio_ov", Is(&["0", "2000", "2001", "-1"])),
     // legacy keys: read, never written
     ("ch1.vscale", Idx(15)),
     ("ch1.bw20", Bool),

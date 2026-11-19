@@ -65,7 +65,6 @@ The switches of the Remote services page. `SCPI OFF` needs `,CONFIRM`.
 | --- | --- | --- | --- | --- | --- |
 | `:SYSTem:REMote:SERVice:SCPI` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | System > Remote services > Remote services | OOS extension |
 | `:SYSTem:REMote:SERVice:VXI11` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | Remote services > VXI-11 | OOS extension |
-| `:SYSTem:REMote:SERVice:TELNet` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | Remote services > telnet | OOS extension |
 | `:SYSTem:REMote:SERVice:WEB` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | Remote services > Web remote | OOS extension |
 | `:SYSTem:REMote:SERVice:MDNS` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | Remote services > mDNS | OOS extension |
 

@@ -624,8 +624,10 @@ mod tests {
             if (p.title)(&ui, p.id).is_empty() {
                 missing.push(format!("{:?}: no title", p.id));
             }
-            // Add measurement is the catalogue, a layout of its own (`catalog_dialog`), not rows
-            if (p.items)(&ui, p.id).is_empty() && !same(p.id, MenuId::MeasAdd) {
+            // Add measurement is the catalogue, a layout of its own (`catalog_dialog`), not rows; so is the Add page of
+            // Studio (oos-plus, `draw_sheet_add_panel`)
+            let own_layout = same(p.id, MenuId::MeasAdd) || same(p.id, MenuId::AddPanel);
+            if (p.items)(&ui, p.id).is_empty() && !own_layout {
                 missing.push(format!("{:?}: no rows", p.id));
             }
         }
