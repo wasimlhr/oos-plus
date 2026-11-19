@@ -135,17 +135,24 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       Data, CRC; SENT without its slow columns, since the traffic has no slow channel). Three flaws the pass
       showed are fixed: a simulated line ran down into the band and its label covered the name of the band
       (seen right on the unit afterwards); the start of a CAN-FD frame read "S" beside CAN's "SOF"; a narrow box
-      of a USB packet read "SYNC FS..." (the last one host-tested, not yet on the unit). What is open for every
-      one of them is the real signal.
+      of a USB packet read "SYNC FS..." (it begins with the packet's type now, seen on the unit). What is open
+      for every one of them is the real signal.
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
    1-Wire and I3C write the names of their commands, the words of a C-PHY burst are read as its packet. Open
-   here: the low-power data of C-PHY, the packet structure of a Manchester line.
+   here: the low-power data of C-PHY, the packet structure of a Manchester line. For the latter the capture and
+   the picture of its instrument say what is wanted: packets of 12 bits every 14.5 bit times, read as a sync bit,
+   a header of 3 bits, 6 data bits and a trailer of 2, each width a setting of the instrument. The decoder lists
+   bytes. Packets need those widths as settings of the decoder, which a module's options (a list of choices
+   each) do not hold: a decision of the owner (below).
    The same day the other twelve presets ran on the unit (UART, I2C, SPI, I2S, 1-Wire, DCC, SWD, DMX512, UART
    9-bit, Modbus RTU, S/PDIF, USB PD): every one decodes its traffic without an error. That is the first run on a
    unit for seven of the decoders of step 5. It showed that a preset left the lines of the preset before it on
-   the screen, which is fixed (host-tested).
+   the screen, which is fixed and seen fixed on the unit, as is the text of a USB packet. Manchester, MLT-3
+   and Modbus ASCII got traffic of their own and ran on the unit likewise: 23 presets, 10 of the 13 decoders of
+   step 5 among them. Without a preset: Parallel, JTAG, DS2482, Quad-SPI (their lines do not fit the four roles
+   of a preset as they are), and C-PHY.
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 
@@ -154,3 +161,5 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
 - The height of a row of the Events pane: 26 px as in the other tables (5 rows in the docked pane), or a finger's
   40 px (3 rows).
 - Whether SMBus gets a decoder of its own on top of I2C.
+- Manchester packets: whether the decoder gets number settings for the widths of sync, header, data and trailer
+  (as the instrument of the capture has them), or a few fixed structures to choose from, or stays with bytes.

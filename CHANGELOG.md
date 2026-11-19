@@ -557,15 +557,14 @@ Changed:
   divisions, ran down into the band, and its own label stood over the name of the band. A line has the first step
   at which it fits its share, and the lowest division of the plot is left to the band. The start of a CAN-FD
   frame reads "SOF", as that of a CAN frame does; it read "S". A preset takes the lines of the preset played
-  before it away: a bus of one line after a bus of three left two traces of the other bus on the screen (unit
-  before the change, host-tested after it); a reference that is no line of a preset stays.
-- USB and FlexRay: the text of a message begins with what the message is (unit before the change, host-tested
-  after it). Every USB packet begins with its sync and every FlexRay frame with its start sequence, and a box
+  before it away: a bus of one line after a bus of three left two traces of the other bus on the screen (unit,
+  before and after); a reference that is no line of a preset stays.
+- USB and FlexRay: the text of a message begins with what the message is (unit, before and after for USB). Every USB packet begins with its sync and every FlexRay frame with its start sequence, and a box
   with little room read "SYNC FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR
   5 ...", "IND 4 ID 02A ..."); drawn as fields, and in the Fields view, it is there as before. A module says
   which field that is (`lead`).
-- Simulated traffic for Manchester, MLT-3 and Modbus ASCII (host-tested): each has a SIM bus preset now, 23 in
-  all. Six bytes at the rate of the list's usual entry for the two line codes, the read request of the Modbus RTU
+- Simulated traffic for Manchester, MLT-3 and Modbus ASCII (host-tested, and played and decoded on a unit): each
+  has a SIM bus preset now, 23 in all. Six bytes at the rate of the list's usual entry for the two line codes, the read request of the Modbus RTU
   preset as its characters for Modbus ASCII.
 - C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
   yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
