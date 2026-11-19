@@ -11,7 +11,7 @@ use super::*;
 
 /// Width of a column, height of a row and of the title.
 const CTX_COL: i32 = 232;
-const CTX_ROW: i32 = 40;
+const CTX_ROW: i32 = super::workspace::MENU_ROW;
 const CTX_HEAD: i32 = 30;
 
 #[derive(Clone, Copy, PartialEq, Debug)]

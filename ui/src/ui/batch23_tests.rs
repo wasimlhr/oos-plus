@@ -328,8 +328,11 @@ fn a_swipe_down_on_a_channel_pill_turns_it_off_and_undo_brings_it_back() {
     let mut u = studio();
     assert!(u.m.ch[0].on && u.m.ch[1].on);
     let r = u.studio_bottom().ch[1];
-    // a tap still opens the channel sheet
+    // a tap selects the channel, the next one opens its sheet
     tap(&mut u, r);
+    assert!(!u.menu_open && u.m.active == 1);
+    tap(&mut u, r);
+    assert!(u.menu_open);
     assert_eq!(u.menu, MenuId::Channel(1));
     u.close_menu();
     // a horizontal drag does not turn it off

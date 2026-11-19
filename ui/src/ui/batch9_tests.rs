@@ -104,7 +104,7 @@ fn default_and_minimal_keep_their_menus() {
 }
 
 #[test]
-fn rows_are_44_px_and_every_control_is_a_target_of_40_px() {
+fn rows_are_48_px_and_every_control_is_a_target_of_44_px() {
     let mut u = studio();
     u.m.la.preset = [la::USER, la::USER];
     for m in CONVERTED {
@@ -115,9 +115,9 @@ fn rows_are_44_px_and_every_control_is_a_target_of_40_px() {
             let g = u.sheet_geo().unwrap();
             for t in &g.tabs { assert!(t.h >= 40 && t.w >= 40, "{m:?} tab"); }
             for r in &g.rows {
-                assert_eq!(r.row.h, 44, "{m:?} row");
+                assert_eq!(r.row.h, 48, "{m:?} row");
                 assert!(r.ctrl.h >= 26 && r.row.bottom() <= g.r.bottom() - 56, "{m:?} {:?} fits above the footer", r.it);
-                if r.kind != RowKind::Toggle { assert!(r.ctrl.h >= 40, "{m:?} {:?} control", r.it); }
+                if r.kind != RowKind::Toggle { assert!(r.ctrl.h >= 44, "{m:?} {:?} control", r.it); }
             }
             for (_, b) in &g.foot { assert!(b.h >= 44 && b.bottom() <= g.r.bottom(), "{m:?} footer"); }
         }

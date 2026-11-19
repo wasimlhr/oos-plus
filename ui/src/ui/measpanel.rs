@@ -39,6 +39,16 @@ const BAR_ORDER: [BarItem; 6] = [BarItem::Source, BarItem::Gate, BarItem::Search
 const BAR_DROP: [BarItem; 4] = [BarItem::Gate, BarItem::Stats, BarItem::Source, BarItem::Pinned];
 const MORE_W: i32 = 34;
 
+/// What a row of the ... list does: a control of the bar, or one choice of the gate or of the statistics.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum MoreAct {
+    Item(BarItem),
+    /// the gate: the full record, or the screen
+    Gate(bool),
+    /// the statistics: 0 off, 1 mean and sigma, 2 minimum and maximum
+    Stats(u8),
+}
+
 /// One control: what is drawn, and the (larger) rectangle that takes the touch.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct BarSlot {
@@ -91,10 +101,34 @@ impl Ui {
     }
 
     pub(super) fn panel_stats_cycle(&mut self) {
-        let mode = (self.studio.panel.stats_mode + 1) % 3;
-        self.studio.panel.stats_mode = mode;
+        self.panel_stats_set((self.studio.panel.stats_mode + 1) % 3);
+    }
+
+    pub(super) fn panel_stats_set(&mut self, mode: u8) {
+        self.studio.panel.stats_mode = mode.min(2);
         self.studio.panel.stats = mode != 0;
         self.relayout();
+    }
+
+    /// The rows of the ... list: the controls that did not fit the bar. The gate and the statistics are there with
+    /// their choices, the one in use marked, so one tap chooses. They were one row each that said the choice in use:
+    /// a tap on the statistics went to the next one and closed the list, and the list had to be opened again to
+    /// go on or to see what came (reported from a unit, 2026-11-18).
+    pub(super) fn panel_more_rows(&self) -> Vec<(String, bool, MoreAct)> {
+        let hidden = self.studio_panel_geo().map(|g| self.panel_bar(g.p).hidden).unwrap_or_default();
+        let mut v = Vec::new();
+        for it in hidden {
+            match it {
+                BarItem::Gate => for full in [true, false] {
+                    v.push((format!("Gate: {}", if full { "Full record" } else { "Screen" }), self.m.meas_full_record == full, MoreAct::Gate(full)));
+                },
+                BarItem::Stats => for (mode, name) in [(0u8, "Statistics off"), (1, "Mean + \u{3c3}"), (2, "Min Max")] {
+                    v.push((name.to_string(), self.studio.panel.stats_mode == mode, MoreAct::Stats(mode)));
+                },
+                _ => v.push((self.panel_item_label(it), self.panel_item_on(it), MoreAct::Item(it))),
+            }
+        }
+        v
     }
 
     /// The panel `p` (under its title strip) has its controls in the strip.
@@ -256,7 +290,7 @@ impl Ui {
                 v
             }
             PanelDrop::Gate => vec![("Full record".to_string(), self.m.meas_full_record), ("Screen".to_string(), !self.m.meas_full_record)],
-            PanelDrop::More => self.studio_panel_geo().map(|g| self.panel_bar(g.p).hidden).unwrap_or_default().into_iter().map(|it| (self.panel_item_label(it), self.panel_item_on(it))).collect(),
+            PanelDrop::More => self.panel_more_rows().into_iter().map(|(label, on, _)| (label, on)).collect(),
         }
     }
 
@@ -268,7 +302,7 @@ impl Ui {
         if self.m.meas_full_record { "Full record" } else { "Screen" }
     }
 
-    /// The popup list of the open dropdown: under its button, one row of 40 px per option.
+    /// The popup list of the open dropdown: under its button, one row of `MENU_ROW` per option.
     pub(super) fn panel_drop_rect(&self) -> Option<Rect> {
         let which = self.studio.panel.drop?;
         let g = self.studio_panel_geo()?;
@@ -276,12 +310,12 @@ impl Ui {
         let n = self.panel_drop_options(which).len() as i32;
         let w = b.w.max(if which == PanelDrop::More { 190 } else { 130 }).min(g.p.w - 8);
         let x = b.x.min(g.p.right() - 4 - w).max(g.p.x + 4);
-        let h = n * 40 + 8;
+        let h = n * super::workspace::MENU_ROW + 8;
         Some(Rect::new(x, (b.bottom() + 2).min(self.scr.h - h - 2), w, h))
     }
 
     pub(super) fn panel_drop_row(p: Rect, i: usize) -> Rect {
-        Rect::new(p.x + 4, p.y + 4 + i as i32 * 40, p.w - 8, 40)
+        Rect::new(p.x + 4, p.y + 4 + i as i32 * super::workspace::MENU_ROW, p.w - 8, super::workspace::MENU_ROW)
     }
 
     /// A tap while a dropdown is open: it picks an option or closes. Always taken.
@@ -299,10 +333,12 @@ impl Ui {
                 self.studio.panel.scroll_top();
             }
             PanelDrop::Gate => self.select_option(Item::MeasGate, if i == 0 { "Full record" } else { "Screen" }),
-            PanelDrop::More => {
-                let hidden = self.studio_panel_geo().map(|g| self.panel_bar(g.p).hidden).unwrap_or_default();
-                if let Some(&it) = hidden.get(i) { self.panel_bar_do(it); }
-            }
+            PanelDrop::More => match self.panel_more_rows().get(i).map(|r| r.2) {
+                Some(MoreAct::Item(it)) => self.panel_bar_do(it),
+                Some(MoreAct::Gate(full)) => self.select_option(Item::MeasGate, if full { "Full record" } else { "Screen" }),
+                Some(MoreAct::Stats(mode)) => self.panel_stats_set(mode),
+                None => {}
+            },
         }
         true
     }
@@ -418,12 +454,17 @@ impl Ui {
         let f = self.fonts();
         cv.round(p, 8, ACCENT, 255);
         cv.round(p.inset(1), 7, PANEL_BG, 255);
+        // the ... list: a line between its groups (the gate, the statistics, each other control)
+        let groups: Vec<u8> = if which == PanelDrop::More {
+            self.panel_more_rows().iter().map(|r| match r.2 { MoreAct::Gate(_) => 1, MoreAct::Stats(_) => 2, MoreAct::Item(_) => 0 }).collect()
+        } else { Vec::new() };
         for (i, (label, cur)) in self.panel_drop_options(which).into_iter().enumerate() {
             let r = Self::panel_drop_row(p, i);
             if cur { cv.round(r, 5, mix(PANEL_BG, ACCENT, 40), 255); }
             cv.set_clip(r);
             cv.text_in(&f.m, Rect::new(r.x + 10, r.y, r.w - 12, r.h), 0, &label, if cur { ACCENT } else { TEXT });
             cv.no_clip();
+            if i > 0 && groups.get(i).is_some_and(|g| *g != groups[i - 1]) { cv.hline(p.x + 10, p.right() - 11, r.y, BTN_BORDER); }
         }
     }
 
@@ -484,14 +525,12 @@ impl Ui {
             let st = self.studio_stat_values(i);
             if self.studio.panel.stats_mode != 0 || st.is_some() {
                 let cell = |v: Option<f64>| v.map_or("----".to_string(), |v| row.fmt(v));
-                let line = if self.studio.panel.stats_mode == 2 {
-                    format!("min {}  max {}", cell(st.map(|s| s.1)), cell(st.map(|s| s.2)))
-                } else {
-                    format!("\u{b5} {}  \u{3c3} {}", cell(st.map(|s| s.0)), cell(st.map(|s| s.3)))
-                };
+                let room = r.w - 16;
+                let range = self.studio.panel.stats_mode == 2;
+                let (a, b) = if range { (cell(st.map(|s| s.1)), cell(st.map(|s| s.2))) } else { (cell(st.map(|s| s.0)), cell(st.map(|s| s.3))) };
+                let line = Self::card_stats_line(&f.s, range, row.unit, &a, &b, room);
                 let n = self.mstat.get(i).map_or(0, |s| s.n);
                 let count = if n > 0 { format!("n {n}") } else { String::new() };
-                let room = r.w - 16;
                 let with_count = !count.is_empty() && f.s.width(&line) + 10 + f.s.width(&count) <= room;
                 cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8 - if with_count { f.s.width(&count) + 8 } else { 0 }, 18));
                 cv.text(&f.s, r.x + 8, r.y + 53, &line, DIM);
@@ -503,6 +542,25 @@ impl Ui {
             cv.set_clip(g.list);
         }
         cv.no_clip();
+    }
+
+    /// The statistics line of a card `room` px wide: minimum and maximum (`range`), or mean and deviation. The form is
+    /// the longest that fits values as wide as "-00.0 m" and the unit: "min a  max b", then "a .. b" ("a \u{b1} b"
+    /// for the mean), then the same with the unit once. It follows the width of the card and the unit, never the
+    /// value of the moment, so a card does not change its form while it runs. Two cards beside each other in a side
+    /// panel are 148 px wide: "min 145 mV  max 212 mV" ended at "max" there.
+    pub(super) fn card_stats_line(f: &Font, range: bool, unit: &str, a: &str, b: &str, room: i32) -> String {
+        let widest = format!("-00.0 m{unit}");
+        let long = |a: &str, b: &str| if range { format!("min {a}  max {b}") } else { format!("\u{b5} {a}  \u{3c3} {b}") };
+        let short = |a: &str, b: &str| if range { format!("{a} .. {b}") } else { format!("{a} \u{b1} {b}") };
+        if f.width(&long(&widest, &widest)) <= room { return long(a, b); }
+        if f.width(&short(&widest, &widest)) <= room { return short(a, b); }
+        // the unit once: the first value without its unit, when both end in the same one
+        let tail = |s: &str| s.rsplit_once(' ').map(|(n, u)| (n.to_string(), u.to_string()));
+        match (tail(a), tail(b)) {
+            (Some((an, au)), Some((_, bu))) if au == bu => short(&an, b),
+            _ => short(a, b),
+        }
     }
 
     /// The name a row shows: for a measurement of one source, its name (pair and catalogue names are whole already).

@@ -7,8 +7,8 @@ use super::studio::icon_cursors;
 use super::*;
 
 const MENU_W: i32 = 252;
-/// A row is a finger high (it was 34 px).
-const ROW: i32 = 40;
+/// A row of a list of words (`MENU_ROW`; it was 34 px, then 40).
+const ROW: i32 = super::workspace::MENU_ROW;
 const SEP: i32 = 9;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
