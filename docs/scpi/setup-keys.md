@@ -264,7 +264,6 @@ The keys of the selected decoder are plain (`dec_*`); decoders 2 and up repeat t
 | `dec_src4` | selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex | `none` | `:DECode:SOURce4` |
 | `dec_diff` | selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex | `none` | `:DECode:DIFFerential` |
 | `dec_thr` | selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex | `1.65` | `:DECode:THReshold` |
-| `dec_thr_line` | the thresholds of the decoder's second, third and fourth line in volts, `-` for a line that has the decoder's threshold | `- - -` | `:BUS<n>:SPI:SCLK:THReshold`, `:BUS<n>:SPI:SS:THReshold`, `:BUS<n>:IIC:SCLK:THReshold` |
 | `dec_ascii` | selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex | `true` | `:BUS<n>:FORMat` |
 | `ev_view` | what the Events pane and the event table list: `messages`, `fields` or `lines`; `ev_errors`: only the rows with a failed check | `messages` | `:DECode:EVENts:VIEW` |
 | `ev_errors` | what the Events pane and the event table list: `messages`, `fields` or `lines`; `ev_errors`: only the rows with a failed check | `false` | `:DECode:EVENts:ERRors` |

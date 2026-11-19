@@ -3733,13 +3733,8 @@ impl Scpi {
             let num = arg.split(',').next_back().unwrap_or("").trim();
             // once, to the middle of the signal on the decoder's source
             if kw(num, "AUTO") {
-                let view = ui.m.dec_view(k);
-                match ui.dec_signal_middle(&view) {
-                    Some(v) => {
-                        // and each further line to the middle of its own signal, where that is another one
-                        let lines = ui.dec_line_middles(&view, v);
-                        with_bus(ui, k, |m| (m.dec_thr, m.dec_thr_line) = (v, lines));
-                    }
+                match ui.dec_signal_middle(&ui.m.dec_view(k)) {
+                    Some(v) => with_bus(ui, k, |m| m.dec_thr = v),
                     None => self.push_err("-230,\"No signal on the decoder's source\"".to_string()),
                 }
                 return None;
@@ -3773,32 +3768,6 @@ impl Scpi {
             if !put_bus_wave(ui, k, Proto::I2C, usize::from(clock), Some(source)) {
                 self.push_err("-224,\"Decoder source is unavailable\"".into());
             }
-            return None;
-        }
-        // the threshold of one line of an SPI or I2C decoder: the data line's is the decoder's threshold, the clock's
-        // and the select's are their own (SAME: the decoder's again)
-        let spi_line = kw(n0, "SPI") && n.len() == 3 && (kw(n[1], "SCLK") || kw(n[1], "MOSI") || kw(n[1], "SS"));
-        let iic_line = kw(n0, "IIC") && n.len() == 3 && (kw(n[1], "SCLK") || kw(n[1], "SDA"));
-        if (spi_line || iic_line) && kw(n[2], "THReshold") {
-            let role: usize = if kw(n[1], "SCLK") { 1 } else if kw(n[1], "SS") { 2 } else { 0 };
-            if query {
-                return t(&e(role.checked_sub(1).and_then(|r: usize| cfg.thr_line[r]).unwrap_or(cfg.thr) as f64));
-            }
-            let value = if role > 0 && kw(arg.trim(), "SAME") {
-                None
-            } else {
-                let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite()) else {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    return None;
-                };
-                Some(v as f32)
-            };
-            with_bus(ui, k, |m| match (role, value) {
-                (0, Some(v)) => m.dec_thr = v,
-                (0, None) => {}
-                (r, v) => m.dec_thr_line[r - 1] = v,
-            });
-            ui.mark_changed();
             return None;
         }
         if n.len() == 3 && kw(n0, "SPI") && kw(n[2], "SOURce") && (kw(n[1], "SCLK") || kw(n[1], "MOSI") || kw(n[1], "SS")) {
@@ -4546,8 +4515,7 @@ impl Scpi {
             if kw(arg.trim(), "AUTO") {
                 match ui.dec_signal_middle(&ui.m) {
                     Some(v) => {
-                        // (and each further line to the middle of its own signal, where that is another one)
-                        (ui.m.dec_thr, ui.m.dec_thr_line) = (v, ui.dec_line_middles(&ui.m, v));
+                        ui.m.dec_thr = v;
                         ui.mark_changed();
                     }
                     None => self.push_err("-230,\"No signal on the decoder's source\"".to_string()),

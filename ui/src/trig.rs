@@ -32,8 +32,6 @@ pub fn decode_la(m: &Model, words: &[u16], dt: f64) -> Result<Vec<Packet>, &'sta
     let slots: [Vec<f32>; NCH] = std::array::from_fn(|i| la.get(i).copied().flatten().map_or(Vec::new(), &wave));
     let mut s = m.clone();
     (s.dec_src, s.dec_src2, s.dec_cs, s.dec_src4, s.dec_diff) = (0, 1, la[2].map(|_| 2), la[3].map(|_| 3), None);
-    // the lines are 0 and 1 here: no line has a threshold of its own
-    s.dec_thr_line = [None; 3];
     decode_at(&s, std::array::from_fn(|c| &slots[c][..]), dt, thr, hy)
 }
 
@@ -56,15 +54,7 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
     let Proto::Module(i) = m.dec_proto;
     let p = crate::protocols::get(i);
     let r = p.roles();
-    let raw = [if r[1].is_some() { Some(get(m.dec_src2)?) } else { None }, if r[2].is_some() { opt(m.dec_cs)? } else { None }, if r[3].is_some() { opt(m.dec_src4)? } else { None }];
-    // A line with a threshold of its own (`dec_thr_line`) is moved by the difference, so that the one threshold the
-    // modules know decides it where its own would. The modules stay as they are, and a decoder whose lines share
-    // the threshold copies nothing.
-    let moved: [Option<Vec<f32>>; 3] = std::array::from_fn(|k| {
-        let own = m.dec_thr_line[k].filter(|t| t.is_finite() && (t - thr).abs() > 1e-9)?;
-        raw[k].map(|v| v.iter().map(|x| x + (thr - own)).collect())
-    });
-    let lines = [Some(line), moved[0].as_deref().or(raw[0]), moved[1].as_deref().or(raw[1]), moved[2].as_deref().or(raw[2])];
+    let lines = [Some(line), if r[1].is_some() { Some(get(m.dec_src2)?) } else { None }, if r[2].is_some() { opt(m.dec_cs)? } else { None }, if r[3].is_some() { opt(m.dec_src4)? } else { None }];
     let chans: [Option<&[f32]>; 4] = std::array::from_fn(|c| ch.get(c).copied().filter(|v| !v.is_empty()));
     let src = [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4];
     p.decode(&crate::protocols::Lines { lines, dt, thr, hy, opt: m.dec_opts(), sh: crate::protocols::Shared::of(m), chans, src })
@@ -265,56 +255,5 @@ mod serial_tests {
         (m.ser.bytes, m.ser.mask, m.ser.rel, m.trig_bus_val, m.ser.max) = (1, u64::MAX, Rel::In, 0x10, 0xaf);
         // the first byte of each frame: 0x12, 0xab and 0xa5 (the 7-bit reading of the third frame's address)
         assert_eq!(points(&m, &p), [2.0, 7.0, 11.0]);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// One SPI byte as a unit showed it (2026-11-18): select (CH2) and clock (CH3) swing from 0 to 0.55 V, the data
-    /// line (CH4) from a low of 0.3 V to 5 V. 100 ns a sample, eight clocks of 5 us.
-    fn spi_of_two_levels(byte: u8) -> [Vec<f32>; NCH] {
-        let n = 1200;
-        let mut w: [Vec<f32>; NCH] = std::array::from_fn(|_| vec![0.0; n]);
-        for i in 0..n {
-            let bit = (i as i32 - 150).div_euclid(50);
-            let clocked = (0..16).contains(&bit);
-            w[1][i] = if (100..1000).contains(&i) { 0.0 } else { 0.55 };
-            w[2][i] = if clocked && bit % 2 == 1 { 0.55 } else { 0.0 };
-            // the data changes with the falling edge, half a clock before it is read
-            let k = (i as i32 - 125).div_euclid(100);
-            w[3][i] = if (0..8).contains(&k) && byte >> (7 - k) & 1 == 1 { 5.0 } else { 0.3 };
-        }
-        w
-    }
-
-    /// Lines of different levels decode with a threshold each (`Model::dec_thr_line`), where no one threshold reads
-    /// them: the middle of the data line is above the clock, and the middle of the clock is under the data's low.
-    #[test]
-    fn spi_lines_of_two_levels_decode_with_a_threshold_each() {
-        let mut m = Model::default();
-        m.dec_proto = Proto::SPI;
-        (m.dec_src, m.dec_src2, m.dec_cs, m.dec_mode, m.dec_bits) = (3, 2, Some(1), 0, 8);
-        let w = spi_of_two_levels(0x0a);
-        let ch: [&[f32]; NCH] = std::array::from_fn(|c| &w[c][..]);
-        let words = |m: &Model| decode(m, ch, 1e-7).unwrap().iter().filter(|p| p.kind == Kind::Data).map(|p| p.value).collect::<Vec<_>>();
-        m.dec_thr = 2.65;
-        assert!(words(&m).is_empty(), "the clock never reaches the middle of the data line: {:?}", words(&m));
-        m.dec_thr = 0.27;
-        assert_ne!(words(&m), [0x0a], "the low level of the data line is over the middle of the clock");
-        (m.dec_thr, m.dec_thr_line) = (2.65, [Some(0.27), Some(0.27), None]);
-        assert_eq!(words(&m), [0x0a]);
-        // the other way round too: the decoder's threshold is the clock's, and the data line has its own... which is
-        // not a thing: the first line has the decoder's. A threshold of a line equal to the decoder's changes nothing.
-        (m.dec_thr, m.dec_thr_line) = (0.27, [Some(0.27), None, None]);
-        assert_ne!(words(&m), [0x0a]);
-        // lines of the logic analyser are 0 and 1: no threshold of a line reaches them
-        let mut la = m.clone();
-        la.dec_thr_line = [Some(9.0), Some(9.0), Some(9.0)];
-        la.dec_la = [Some(0), Some(1), Some(2), None];
-        let words16: Vec<u16> = (0..1200).map(|i| u16::from(w[3][i] > 2.5) | u16::from(w[2][i] > 0.27) << 1 | u16::from(w[1][i] > 0.27) << 2).collect();
-        let got: Vec<u32> = decode_la(&la, &words16, 1e-7).unwrap().iter().filter(|p| p.kind == Kind::Data).map(|p| p.value).collect();
-        assert_eq!(got, [0x0a]);
     }
 }

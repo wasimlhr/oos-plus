@@ -241,31 +241,13 @@ impl Ui {
         (hi > lo).then(|| (lo + hi) / 2.0)
     }
 
-    /// The thresholds of the further lines of the decoder `m` is the view of, when the source's is `thr`: for each
-    /// line the middle of its own signal, where that is not the source's (more than a tenth of the line's swing
-    /// away); `None` for a line that can share `thr`, has no source or does not move.
-    pub(crate) fn dec_line_middles(&self, m: &Model, thr: f32) -> [Option<f32>; 3] {
-        let r = m.dec_proto.roles();
-        let src = [r[1].map(|_| m.dec_src2), r[2].and(m.dec_cs), r[3].and(m.dec_src4)];
-        std::array::from_fn(|k| {
-            let w = self.dec_wave(src[k]?)?;
-            let (lo, hi) = w.iter().filter(|x| x.is_finite()).fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &x| (lo.min(x), hi.max(x)));
-            let mid = (lo + hi) / 2.0;
-            (hi > lo && (mid - thr).abs() > 0.1 * (hi - lo)).then_some(mid)
-        })
-    }
-
-    /// Decode > Threshold to middle: the thresholds of the decoder the menu edits, once. The source's goes to the
-    /// middle of its signal, and each further line gets one of its own where its signal has another middle.
+    /// Decode > Threshold to middle: the threshold of the decoder the menu edits, once.
     pub(super) fn dec_threshold_to_middle(&mut self) {
         match self.dec_signal_middle(&self.m) {
             Some(v) => {
-                let lines = if self.m.dec_on_la() { [None; 3] } else { self.dec_line_middles(&self.m, v) };
-                (self.m.dec_thr, self.m.dec_thr_line) = (v, lines);
+                self.m.dec_thr = v;
                 self.settings_changed();
-                let roles = self.m.dec_proto.roles();
-                let own: Vec<String> = (0..3).filter_map(|k| lines[k].map(|t| format!("{} {}", roles[k + 1].unwrap_or("line"), si(t as f64, "V")))).collect();
-                self.toast(&if own.is_empty() { format!("Threshold {}", si(v as f64, "V")) } else { format!("Threshold {}, {}", si(v as f64, "V"), own.join(", ")) });
+                self.toast(&format!("Threshold {}", si(v as f64, "V")));
             }
             None => self.toast("No signal on the decoder's source"),
         }
