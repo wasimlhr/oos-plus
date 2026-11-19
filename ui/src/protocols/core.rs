@@ -33,7 +33,7 @@ impl Protocol for Uart {
         true
     }
     fn shared(&self) -> &'static [Row] {
-        &[Row::Baud, Row::Bits, Row::Parity, Row::Fmt]
+        &[Row::Baud, Row::Bits, Row::Parity, Row::Pol, Row::Fmt]
     }
     fn bit_time(&self, _: &[usize; OPTS]) -> f64 {
         1.0 / 115200.0
@@ -44,6 +44,13 @@ impl Protocol for Uart {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(uart(l.main(), l.dt, l.sh.baud, l.sh.bits, l.sh.parity, l.thr, l.hy, l.sh.uart_inv))
     }
+    fn bit_row(&self) -> bool {
+        true
+    }
+    /// Start, data, parity and stop where the decoder sampled them.
+    fn bits(&self, p: &Packet, _: &[usize; OPTS], sh: &Shared) -> Option<Vec<oos_dsp::decode::Bit>> {
+        Some(oos_dsp::decode::uart_bits(p, sh.bits, sh.parity)).filter(|b| !b.is_empty())
+    }
     /// The UART line of the demo is CH3 whatever the decoder (the host's default traffic); 8 data bits.
     fn setup(&self) -> Setup {
         Setup { rows: &[(Row::Bits, 8)], ..Setup::default() }
@@ -52,12 +59,25 @@ impl Protocol for Uart {
 
 pub struct I2c;
 
+/// Whether an address is written as its seven bits or as the byte on the bus, with the read/write bit in it.
+static I2C_OPTIONS: [Opt; 1] = [Opt { name: "R/W bit", choices: &["Left out", "Included"], default: 0 }];
+
 impl Protocol for I2c {
     fn key(&self) -> &'static str {
         "I2c"
     }
     fn name(&self) -> &'static str {
         "I2C"
+    }
+    fn options(&self) -> &'static [Opt] {
+        &I2C_OPTIONS
+    }
+    /// The address: its seven bits ("50 W"), or with R/W bit Included the first byte of the transfer as it is on
+    /// the bus ("A0 W", "A1 R"). " N" marks one that was not acknowledged. Triggers and searches take the seven bits.
+    fn text(&self, p: &Packet, opt: &[usize; OPTS]) -> Option<String> {
+        let oos_dsp::decode::Kind::Addr { read } = p.kind else { return None };
+        let v = if opt[0] == 1 { (p.value << 1) | u32::from(read) } else { p.value };
+        Some(format!("{:02X} {}{}", v, if read { "R" } else { "W" }, if p.ok { "" } else { " N" }))
     }
     fn roles(&self) -> [Option<&'static str>; 4] {
         [Some("SDA"), Some("SCL"), None, None]
@@ -288,5 +308,26 @@ impl Protocol for Cphy {
     /// A, B, C on CH1..CH3, the receiver's 20 mV threshold, 16-bit words; the analog channels, not the LA.
     fn setup(&self) -> Setup {
         Setup { src: [Some(0), Some(1), Some(2), None], thr: 0.02, rows: &[(Row::Bits, 16)], la_off: true, ..Setup::default() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oos_dsp::decode::Kind;
+
+    /// The I2C address is its seven bits, or the byte on the bus when the R/W bit is included; other fields keep
+    /// the text of their kind.
+    #[test]
+    fn the_i2c_address_has_the_read_write_bit_on_request() {
+        let addr = |read: bool| Packet { t0: 0.0, t1: 1.0, kind: Kind::Addr { read }, value: 0x50, value2: None, ok: true };
+        let (out, with) = ([0; OPTS], [1, 0, 0, 0]);
+        assert_eq!(I2c.text(&addr(false), &out).as_deref(), Some("50 W"));
+        assert_eq!(I2c.text(&addr(true), &out).as_deref(), Some("50 R"));
+        assert_eq!(I2c.text(&addr(false), &with).as_deref(), Some("A0 W"));
+        assert_eq!(I2c.text(&addr(true), &with).as_deref(), Some("A1 R"));
+        assert_eq!(I2c.text(&Packet { ok: false, ..addr(false) }, &with).as_deref(), Some("A0 W N"));
+        assert!(I2c.text(&Packet { kind: Kind::Data, ..addr(false) }, &with).is_none());
+        assert_eq!(I2c.options()[0].choices[I2c.options()[0].default], "Left out");
     }
 }

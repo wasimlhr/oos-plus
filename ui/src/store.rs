@@ -357,6 +357,8 @@ pub fn setup_text(m: &Model) -> String {
         dec_lines(&m.dec_view(k), &mut |n: &str, v: String| kv(&format!("d{}.{}", k + 1, n), v));
     }
     kv("pane", m.pane.to_string());
+    kv("ev_view", m.ev_view.name().to_ascii_lowercase());
+    kv("ev_errors", m.ev_errors.to_string());
     kv("meas_labels", m.meas_labels.to_string());
     kv("strip", name(m.strip_dock));
     kv("trend_sel", format!("{} {}", m.trend_sel[0], m.trend_sel[1]));
@@ -730,6 +732,8 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
         }
         "dec_sel" => m.dec_sel = p_idx(v, DECODERS)?,
         "pane" => m.pane = p_idx(v, crate::ui::PANES_N)?,
+        "ev_view" => m.ev_view = EvView::parse(v.trim()).ok_or_else(|| format!("bad ev_view {v}"))?,
+        "ev_errors" => m.ev_errors = p_bool(v)?,
         "meas_labels" => m.meas_labels = p_bool(v)?,
         "strip" => m.strip_dock = p_enum(v, &StripDock::ALL)?,
         // before the strip setting was shared with Display > Windows the key was `strip_dock` and Below was called Under

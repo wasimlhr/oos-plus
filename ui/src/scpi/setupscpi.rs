@@ -75,6 +75,8 @@ pub(crate) const ROWS: &[(&str, &[&str])] = &[
     ("trig_level2", &[":TRIGger:LEVel2"]),
     // ---- display
     ("layout", &[":DISPlay:LAYout"]),
+    ("ev_view", &[":DECode:EVENts:VIEW"]),
+    ("ev_errors", &[":DECode:EVENts:ERRors"]),
     ("view", &[":VIEW"]),
     ("hdmi", &[":DISPlay:HDMI"]),
     ("hdmi_view", &[":DISPlay:VIEW:MONitor"]),
@@ -322,6 +324,7 @@ mod tests {
         ("trig_coup", "Ac"), ("trig_coup", "LfReject"), ("hist", "Vertical"), ("hist", "Horizontal"), ("eye_place", "Side"), ("eye_place", "Under"),
         ("bode_mode", "Psrr"), ("bode_mode", "Z"), ("avg_count", "32"), ("avg_count", "64"), ("segments", "100"), ("bus_label", "SPI"), ("dec_src4", "1"),
         ("dec_diff", "1"), ("zdelay", "0.0001"), ("dec_proto", "Spi"), ("dec_proto", "Can"), ("bus_pos", "-2"), ("bus_pos", "1"),
+        ("ev_view", "fields"), ("ev_view", "lines"),
     ];
 
     /// Other values a key could have: every blank-separated part of its default changed by itself.
@@ -559,6 +562,45 @@ mod tests {
         let keys: Vec<String> = ["a", "b", "c", "d", "e", "f"].map(String::from).to_vec();
         assert_eq!(named(&keys[..2]).unwrap(), "a b");
         assert_eq!(named(&keys).unwrap(), "a b c d and 2 more");
+    }
+
+    /// What the Events pane lists is set and read over SCPI, and the set-up text keeps it.
+    #[test]
+    fn the_view_of_the_events_pane_is_set_read_and_kept() {
+        let (mut s, mut ui, cv) = session();
+        let ask = |s: &mut Scpi, ui: &mut Ui, line: &str| String::from_utf8(s.exec_cmd(ui, &cv, line).unwrap_or_default()).unwrap().trim().to_string();
+        assert_eq!(ask(&mut s, &mut ui, ":DECode:EVENts:VIEW?"), "MESSAGES");
+        assert_eq!(ask(&mut s, &mut ui, ":DECode:EVENts:ERRors?"), "0");
+        s.exec_cmd(&mut ui, &cv, ":DECode:EVENts:VIEW LINes");
+        s.exec_cmd(&mut ui, &cv, ":DECode:EVENts:ERRors ON");
+        assert_eq!((ui.m.ev_view, ui.m.ev_errors), (EvView::Lines, true));
+        assert_eq!(ask(&mut s, &mut ui, ":DECode:EVENts:VIEW?"), "LINES");
+        assert!(s.err.is_empty(), "{:?}", s.err);
+        let back = crate::store::parse_setup(&crate::store::setup_text(&ui.m)).unwrap();
+        assert_eq!((back.ev_view, back.ev_errors), (EvView::Lines, true));
+        assert!(crate::store::parse_setup("ev_view = bytes\n").is_err());
+        s.exec_cmd(&mut ui, &cv, ":DECode:EVENts:VIEW BYTES");
+        assert!(s.err.iter().any(|e| e.starts_with("-224")), "{:?}", s.err);
+        assert_eq!(ui.m.ev_view, EvView::Lines);
+    }
+
+    /// `:BUS<n>:THReshold AUTO` puts the threshold of that decoder into the middle of its source's signal.
+    #[test]
+    fn the_threshold_goes_to_the_middle_over_scpi() {
+        let (mut s, mut ui, cv) = session();
+        ui.m.ch[2].on = true;
+        ui.m.dec_on = true;
+        ui.m.dec_src = 2;
+        for _ in 0..4 {
+            ui.step(0.1);
+        }
+        ui.m.dec_thr = 9.0;
+        s.exec_cmd(&mut ui, &cv, ":BUS1:THReshold AUTO");
+        assert!(s.err.is_empty(), "{:?}", s.err);
+        assert!((ui.m.dec_thr - 1.65).abs() < 0.3, "the demo's UART line swings from 0 to 3.3 V: {}", ui.m.dec_thr);
+        ui.m.dec_thr = 9.0;
+        s.exec_cmd(&mut ui, &cv, ":DECode:THReshold AUTO");
+        assert!((ui.m.dec_thr - 1.65).abs() < 0.3, "{}", ui.m.dec_thr);
     }
 
     /// The "Equivalent header" column of `docs/scpi/setup-keys.md` names the headers of the rows.

@@ -16,6 +16,8 @@ mod scroll;
 mod measure_pairs;
 mod bus;
 mod busview;
+mod decband;
+mod decrows;
 mod magnetic;
 mod motor;
 mod dpt;
@@ -407,8 +409,10 @@ const USPEED_NAMES: [&str; 3] = ["Auto", "Low 1.5M", "Full 12M"];
 /// Longest record the web page takes as CSV (about 50 MB of text).
 const WEB_CSV_MAX: usize = 2_000_000;
 
-/// Height of a decoder band in the plot.
-const DEC_BAND: i32 = 28;
+/// Height of a decoder band in the plot: its boxes and the room to the next band.
+const DEC_BAND: i32 = 32;
+/// Height of the boxes of a band: room for the bold small text and a finger.
+const DEC_BOX: i32 = 24;
 
 /// Colours of the references.
 const REF_COLORS: [(&str, Rgb); 5] = [("White", rgb(0xd8, 0xd8, 0xd8)), ("Red", rgb(0xf0, 0x60, 0x60)), ("Green", rgb(0x60, 0xe0, 0x90)), ("Blue", rgb(0x70, 0xa8, 0xf8)), ("Violet", rgb(0xc8, 0x88, 0xf0))];
@@ -642,6 +646,8 @@ enum Item {
     I2cAddrBits,
     I2cBytes,
     DecThr,
+    /// sets the threshold to the middle of the signal on the decoder's source, once
+    DecThrMid,
     DecFmt,
     DecProto,
     DecSrc2,
@@ -1817,6 +1823,8 @@ pub struct Ui {
     la_cols: std::cell::RefCell<la::Cache>,
     /// decoded LA lines of the record shown: (key of record and settings, packets with times in s)
     dec_cache: std::cell::RefCell<Vec<(u64, Vec<oos_dsp::decode::Packet>)>>,
+    /// the boxes of the decoder bands drawn in this frame: where a finger finds one, its decoder, its start time
+    band_hits: std::cell::RefCell<Vec<(Rect, usize, f64)>>,
     /// table window over the plot, first row shown
     table: Option<tables::TableKind>,
     table_top: usize,
@@ -1957,6 +1965,7 @@ impl Ui {
             auto_on: Vec::new(),
             la_cols: Default::default(),
             dec_cache: Default::default(),
+            band_hits: Default::default(),
             table: None,
             table_top: 0,
             table_cols: None,
@@ -4329,9 +4338,13 @@ impl Ui {
             if self.m.mask_on && self.mask.is_some() && self.shows(self.m.mask_src) {
                 taken.push(Rect::new(a.x, a.y + 22, a.w, 28));
             }
-            let bands = (0..DECODERS).filter(|&k| self.m.dec_is_on(k) && self.dec_band_win(k) == Some(self.cur_win)).count() as i32;
+            // the height of the bands of this window, their bit rows with them
+            let bands: i32 = (0..DECODERS)
+                .filter(|&k| self.dec_shown(k) && self.dec_band_win(k) == Some(self.cur_win))
+                .map(|k| self.dec_band_h(&self.m.dec_view(k)))
+                .sum();
             if bands > 0 {
-                taken.push(Rect::new(a.x, a.y + a.h - 50 - (bands - 1) * DEC_BAND, a.w, bands * DEC_BAND));
+                taken.push(Rect::new(a.x, a.y + a.h - (self.dec_foot() - 4) - bands, a.w, bands));
             }
             // the channel ground markers at the left edge: a label on their line is left out (as on the stock
             // screen, where the marker takes the place of the "0" label)
@@ -5398,15 +5411,40 @@ impl Ui {
         c.push((key, p.to_vec()));
     }
 
+    /// Whether decoder `k` has its band on the plot (or its row under the LA lanes): it is on, and so is the channel
+    /// of its main line. With that channel off the decoder stays as it is set and its band comes back with the
+    /// channel; a band that only said "source channel off" stood in the plot of the other channels (seen on a unit,
+    /// 2026-11-19).
+    fn dec_shown(&self, k: usize) -> bool {
+        if !self.m.dec_is_on(k) {
+            return false;
+        }
+        let m = self.m.dec_view(k);
+        m.dec_on_la() || !matches!(decode_wave(m.dec_src), Some(WaveId::Ch(c)) if !self.m.ch[c].on)
+    }
+
+    /// Room under the lowest decoder band of the window being drawn: the time labels along the lower edge of the
+    /// plot. A lane that has none (every Stacked lane but the last) has the band at its foot, clear of its trace.
+    fn dec_foot(&self) -> i32 {
+        let lanes = self.stacked() && self.wins.len() > 1;
+        let labels = self.cur_win + 1 >= self.wins.len() || self.studio_lane_has_own_time();
+        if lanes && !labels { 4 } else { 26 }
+    }
+
     /// All decoders that are on: bands at the bottom of the plot, or rows under the lanes for those on LA lines.
     fn draw_decode(&self, cv: &mut Canvas) {
+        // the boxes a finger can find are the ones of this frame
+        if self.cur_win == 0 {
+            self.band_hits.borrow_mut().clear();
+        }
         if self.last[0].is_none() && !self.refs.iter().any(Option::is_some) {
             return;
         }
-        let (mut band, mut lane) = (0, 0);
-        let bottom = self.area.y + self.area.h - 46;
+        // bands stand on each other from the bottom; one with a bit row is taller
+        let (mut stack, mut lane) = (0, 0);
+        let bottom = self.area.y + self.area.h - self.dec_foot() - DEC_BOX;
         for k in 0..DECODERS {
-            if !self.m.dec_is_on(k) {
+            if !self.dec_shown(k) {
                 continue;
             }
             let m = self.m.dec_view(k);
@@ -5422,103 +5460,14 @@ impl Ui {
             let y = match row {
                 Some(r) => r.y + 3,
                 None => {
-                    band += 1;
-                    bottom - (band - 1) * DEC_BAND
+                    // the boxes stand on what is under them; a bit row is above its boxes
+                    let y = bottom - stack;
+                    stack += self.dec_band_h(&m);
+                    y
                 }
             };
             self.draw_decoder(cv, &m, k, y, row);
         }
-    }
-
-    /// One decoder's band at height y; row = its place under the lanes.
-    fn draw_decoder(&self, cv: &mut Canvas, m: &Model, k: usize, y: i32, row: Option<Rect>) {
-        use oos_dsp::decode::Kind;
-        let f = self.fonts();
-        let a = self.area;
-        let col = if m.dec_on_la() { la::line_color(m.dec_la[0].unwrap_or(0)) }
-            else { decode_wave(m.dec_src).map_or(DIM, |source| self.wave_color(source)) };
-        // rows under the lanes span all windows, like the lanes
-        let a = if row.is_some() { self.lane_area() } else { a };
-        let h = 20;
-        cv.set_clip(row.unwrap_or(a));
-        if row.is_none() {
-            cv.blend(Rect::new(a.x, y - 3, a.w, h + 6), BG, 200);
-        }
-        let name = if m.dec_on_la() { format!("{} {}", k + 1, m.dec_proto.name()) }
-            else { format!("{} {} {}", k + 1, m.dec_proto.name(), decode_source_name(m.dec_src)) };
-        // Studio: one decoder needs no number ("UART CH1"); with several each says which it is ("D2 SPI CH2")
-        let name = if self.m.layout != Layout::Studio { name } else {
-            let rest = name.split_once(' ').map_or(name.as_str(), |(_, rest)| rest).to_string();
-            if (0..4).filter(|&d| self.m.dec_is_on(d)).count() > 1 { format!("D{} {}", k + 1, rest) } else { rest }
-        };
-        if self.m.layout == Layout::Studio {
-            // Studio: the name is a badge in the colour of the decoder's source, and a tap on it opens the Decode
-            // menu of this decoder (`studio.dec_labels`)
-            let badge = Rect::new(a.x + 3, y, f.sb.width(&name) + 12, h);
-            self.studio.dec_labels.borrow_mut().push((k, badge));
-            cv.round(badge, 4, col, 255);
-            cv.text_in(&f.sb, badge, 1, &name, DARK_TEXT);
-        } else {
-            cv.text(&f.sb, a.x + 4, y + 15, &name, DIM);
-        }
-        let packets = match self.decode_packets_of(m) {
-            Ok(p) => p,
-            Err(e) => {
-                cv.text(&f.s, a.x + if self.m.layout == Layout::Studio { 24 } else { 16 } + f.sb.width(&name), y + 15, e, DIM);
-                cv.no_clip();
-                return;
-            }
-        };
-        let (tdiv, delay) = self.view();
-        let ppx = a.w as f64 / HDIV as f64;
-        let xt = |t: f64| (a.x as f64 + a.w as f64 / 2.0 + (t - delay as f64) / tdiv as f64 * ppx).round() as i32;
-        let left = a.x + if self.m.layout == Layout::Studio { 20 } else { 10 } + f.sb.width(&name);
-        let mut x_prev_end = left;
-        for p in packets.iter() {
-            let (x0, x1) = (xt(p.t0), xt(p.t1));
-            if x1 < left || x0 > a.x + a.w {
-                continue;
-            }
-            let event = matches!(p.kind, Kind::Field(l) if l.starts_with('!'));
-            if let Some(tag) = packet_tag(m, p) {
-                let r = Rect::new(x0 - f.s.width(tag) / 2 - 3, y + 3, f.s.width(tag) + 6, h - 6);
-                let bad = p.kind == Kind::Stop || ((p.kind == Kind::Ack || event) && !p.ok);
-                cv.round(r, 3, if bad { mix(BG, RED, 140) } else { mix(BG, GREEN, 140) }, 255);
-                cv.text_in(&f.s, r, 1, tag, TEXT);
-                continue;
-            }
-            let x0 = x0.max(x_prev_end + 1);
-            if x1 - x0 < 3 {
-                continue;
-            }
-            let is_addr = matches!(p.kind, Kind::Addr { .. } | Kind::Id { .. } | Kind::Word { cmd: true } | Kind::Field(_));
-            let base = if is_addr { ACCENT } else { col };
-            let fill = if p.ok { scale(base, 70) } else { rgb(0x70, 0x18, 0x18) };
-            cv.fill(Rect::new(x0 + 3, y, x1 - x0 - 6, h), fill);
-            cv.line(x0, y + h / 2, x0 + 3, y, base);
-            cv.line(x0, y + h / 2, x0 + 3, y + h - 1, base);
-            cv.line(x1, y + h / 2, x1 - 3, y, base);
-            cv.line(x1, y + h / 2, x1 - 3, y + h - 1, base);
-            cv.hline(x0 + 3, x1 - 3, y, base);
-            cv.hline(x0 + 3, x1 - 3, y + h - 1, base);
-            let txt = packet_text(m, p);
-            if f.s.width(&txt) + 6 < x1 - x0 {
-                cv.text_in(&f.s, Rect::new(x0, y, x1 - x0, h), 1, &txt, TEXT);
-            }
-            x_prev_end = x1;
-        }
-        // threshold line on the source trace (LA lines have no analog level)
-        if !m.dec_on_la() && m.dec_proto != Proto::CPHY {
-            let Some(source) = decode_wave(m.dec_src) else { cv.no_clip(); return; };
-            let ty = self.y_of_wave(source, m.dec_thr);
-            cv.dashed_hline(a.x + 26, a.x + a.w - 26, ty, 2, 6, scale(col, 160));
-            if m.dec_proto.module().is_some_and(|p| p.key() == "Arinc429") {
-                // the LO level of ARINC 429
-                let ty = self.y_of_wave(source, -m.dec_thr);
-                cv.dashed_hline(a.x + 26, a.x + a.w - 26, ty, 2, 6, scale(col, 160));
-            }
-        }
-        cv.no_clip();
     }
 
     /// Vertical scale and the sample rate of this record. Time per division stays the one horizontal scale.
@@ -7638,12 +7587,17 @@ impl Ui {
                 Row::UsbSpeed => DecUsbSpeed,
                 Row::CphyRate => DecCphyRate,
                 Row::Fmt => DecFmt,
+                Row::Pol => UartPol,
             });
         }
         v.extend((0..p.module().map_or(0, |x| x.options().len())).map(DecOpt));
         // LA lines: the probe's comparators set the levels (LA page)
         if !on_la {
             v.push(DecThr);
+            // C-PHY has a level gap there, not a threshold between two levels
+            if p != Proto::CPHY {
+                v.push(DecThrMid);
+            }
         }
         // what it decoded, as a table, and as a file
         v.extend([DecTable, DecExport]);
@@ -7723,7 +7677,7 @@ impl Ui {
                 Row::CanRate => m.dec_canrate = v as usize,
                 Row::CanH => m.dec_canh = v != 0,
                 Row::UsbSpeed => m.dec_uspeed = v as usize,
-                Row::CphyRate | Row::Fmt => {}
+                Row::CphyRate | Row::Fmt | Row::Pol => {}
             }
         }
         if changed {
@@ -8095,7 +8049,7 @@ impl Ui {
             Item::RefSave | Item::RefSaveNext | Item::RefClear | Item::RefClearOne => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
             Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRunScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
-            Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
+            Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::DecThrMid | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
             Item::RunStop | Item::SingleAct | Item::AutosetAct | Item::DefaultAct | Item::SlopeAct | Item::ForceAct => Kind::Action,
@@ -8196,6 +8150,7 @@ impl Ui {
             Item::DecSrc4 => "Source 4",
             Item::DecDiff => "B line (A-B)",
             Item::DecThr => "Threshold",
+            Item::DecThrMid => "Threshold to middle",
             Item::DecFmt => "Format",
             Item::DecProto => "Protocol",
             Item::DecSrc2 => "Clock",
@@ -9418,6 +9373,7 @@ impl Ui {
                     }
                 }
                 Item::DecTable => self.table_toggle(tables::TableKind::Decode),
+                Item::DecThrMid => self.dec_threshold_to_middle(),
                 Item::DecExport => self.events_export(tables::TableKind::Decode),
                 Item::SearchTable => self.table_toggle(tables::TableKind::Search),
                 Item::SearchSave => self.events_export(tables::TableKind::Search),
@@ -11806,6 +11762,10 @@ impl Ui {
             return;
         }
         if self.table_tap(x, y) || self.pane_tap(x, y) {
+            return;
+        }
+        // a box of a decoder's band: its row
+        if !self.menu_open && self.band_tap(x, y) {
             return;
         }
         if self.eye_tap(x, y) {

@@ -132,6 +132,8 @@ pub enum Row {
     CphyRate,
     /// the event table in ASCII
     Fmt,
+    /// the UART line is inverted (idle low): the polarity of the protocol trigger, `Shared::uart_inv`
+    Pol,
 }
 
 /// The values of the shared rows.
@@ -367,6 +369,18 @@ pub trait Protocol: Sync {
 
     /// Text of a decoded field on the trace and in the event table; `None` = the generic text of its kind.
     fn text(&self, _p: &Packet, _opt: &[usize; OPTS]) -> Option<String> {
+        None
+    }
+
+    /// Whether [`Protocol::bits`] gives the bits of a field. The band on the plot then has a bit row above its boxes
+    /// at a time base that shows single bits ([`Protocol::bit_time_sh`] says how long one is).
+    fn bit_row(&self) -> bool {
+        false
+    }
+
+    /// The bits of field `p` as the decoder read them, in the time units of `p` (they lie between its `t0` and
+    /// `t1`); `None` = this field has none.
+    fn bits(&self, _p: &Packet, _opt: &[usize; OPTS], _sh: &Shared) -> Option<Vec<oos_dsp::decode::Bit>> {
         None
     }
 

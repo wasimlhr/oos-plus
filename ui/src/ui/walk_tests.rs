@@ -1963,9 +1963,10 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
         u.render(&mut cv);
         let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
         for (k, name) in ["UART", "I2C", "SPI", "CAN"].iter().enumerate() {
-            // Studio names several decoders "D1 UART CH1" (one alone has no number); the other layouts as before
-            let want = if layout == Layout::Studio { format!("D{} {} CH{}", k + 1, name, k + 1) } else { format!("{} {} CH{}", k + 1, name, k + 1) };
-            assert!(texts.iter().any(|t| t.starts_with(&want)), "{layout:?}: no bus named {want:?} on the plot");
+            // Studio names several decoders with their source ("D1 UART CH1"; one alone has no number); the other
+            // layouts have the decoder's number and protocol, and the colour of the name says the source
+            let want = if layout == Layout::Studio { format!("D{} {} CH{}", k + 1, name, k + 1) } else { format!("D{} {}", k + 1, name) };
+            assert!(texts.iter().any(|t| *t == want), "{layout:?}: no bus named {want:?} on the plot");
         }
     }
 }
@@ -2791,6 +2792,9 @@ fn a_hidden_channel_stays_on_for_math_and_measurements() {
 fn a_tap_on_the_name_of_a_decoder_opens_its_decode_menu() {
     let mut u = fresh(Layout::Studio);
     u.m.dec_on = true;
+    // the band is there while the channel of the decoder's line is on
+    let line = u.m.dec_src;
+    u.m.ch[line].on = true;
     for _ in 0..6 { u.step(0.03); frame(&mut u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
