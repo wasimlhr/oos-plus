@@ -24,6 +24,10 @@ fn arinc_rate(opt: &[usize; OPTS]) -> Option<f64> {
 pub struct Arinc429;
 
 impl Protocol for Arinc429 {
+    /// A word is a message: it begins with its label.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| matches!(p.kind, oos_dsp::decode::Kind::Id { .. }))
+    }
     fn key(&self) -> &'static str {
         "Arinc429"
     }

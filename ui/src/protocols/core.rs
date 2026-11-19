@@ -66,6 +66,10 @@ static I2C_OPTIONS: [Opt; 2] = [
 ];
 
 impl Protocol for I2c {
+    /// A frame is a transfer: from a start condition to the next (a repeated start goes on with the same one).
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+    }
     fn key(&self) -> &'static str {
         "I2c"
     }
@@ -142,6 +146,10 @@ static SPI_OPTIONS: [Opt; 3] = [
 ];
 
 impl Protocol for Spi {
+    /// The mark where the chip select goes active: it begins a message and is no field of the bus.
+    fn mark(&self, p: &Packet) -> bool {
+        p.kind == oos_dsp::decode::Kind::Start
+    }
     fn options(&self) -> &'static [Opt] {
         &SPI_OPTIONS
     }
@@ -230,6 +238,10 @@ impl Protocol for Spi {
 pub struct Can;
 
 impl Protocol for Can {
+    /// A frame begins with its start of frame.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+    }
     fn key(&self) -> &'static str {
         "Can"
     }
@@ -279,6 +291,10 @@ const LIN_OPTIONS: [Opt; 1] =
 pub struct Lin;
 
 impl Protocol for Lin {
+    /// A frame begins with its break; the response may come late.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Break)
+    }
     fn key(&self) -> &'static str {
         "Lin"
     }

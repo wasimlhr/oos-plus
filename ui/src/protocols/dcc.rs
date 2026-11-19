@@ -18,6 +18,10 @@ use oos_dsp::decode_ext3 as x3;
 pub struct Dcc;
 
 impl Protocol for Dcc {
+    /// A frame begins with its preamble.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("PRE"))
+    }
     fn key(&self) -> &'static str {
         "Dcc"
     }

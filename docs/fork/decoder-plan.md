@@ -1,5 +1,9 @@
 # Decoder plan (2026-11-19)
 
+**State, 2026-11-19:** step 0 and step 1 are done and merged (pull requests 75 and 76 of the fork, with the SIM bus
+presets). Of step 2 the first hook, where a frame starts, is done; the columns of the Events pane are next. Then
+step 3: what is missing in a decode, and each bus on the unit as the owner connects it.
+
 Goal: every protocol decoder is usable on the 1024x600 screen the way a bench scope shows a bus: a box per field on
 the plot, a list of messages beside it, settings that are found, and a decode that is right on real signals. The
 order follows what can be checked: first against captures of real buses on the host, then on the unit.
@@ -10,7 +14,7 @@ synthetic signals only), or **not checked**.
 
 ## Where it stands
 
-Shared UI, for every decoder (pull requests 71, 72 and 73 of the fork):
+Shared UI, for every decoder (pull requests 71, 72, 73 and 76 of the fork):
 
 - the band on the plot: a box per field, a box per message when fields have no room, a stream when messages have
   none; a bit row at a time base that shows single bits; hidden with its source channel (unit, for UART and SPI);
@@ -76,9 +80,12 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       bits (AC) are clocked before the stop, which the decoder leaves out, and the reference decode shows five
       bytes there. The capture is a generated one (a clock of 200 MHz); a real I3C bus is needed to say more.
 2. **Two hooks for every module**, so the rest is not built protocol by protocol:
-   - where a frame starts. Today I2C, SPI, CAN, CAN-FD, LIN and I3C say so; FlexRay, SENT, USB, I2S, ARINC 429,
-     1553 and 1-Wire are split into messages by idle time alone. The start marks then leave the Fields view (an
-     "S" row per SPI frame today);
+   - where a frame starts. **Done** (host; SENT and USB on their captures): a module names the field a frame
+     begins with (`frame_start`), and a message is a frame whatever pauses it has inside. I2C, I3C, CAN, CAN-FD,
+     LIN, FlexRay, SENT, USB, I2S, ARINC 429, 1-Wire, SWD and DCC do; the UART family, SPI without a chip select,
+     Modbus and 1553 are split by idle time as before (a 1553 command and a status word have the same sync). The
+     SENT capture, one message before, lists its 118 frames. The mark an SPI frame begins with is no row of the
+     Fields view any more;
    - columns for the Events pane (CAN: ID, DLC, data, CRC; LIN: ID, data, checksum; I2C: address, data), in place
      of one text.
 3. **Families, in the order they can be checked:** the bench buses on the unit (UART, SPI, I2C); the vehicle buses

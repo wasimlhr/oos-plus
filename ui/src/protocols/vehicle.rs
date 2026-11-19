@@ -31,6 +31,10 @@ const CANFD_OPTIONS: [Opt; 3] = [
 pub struct CanFd;
 
 impl Protocol for CanFd {
+    /// A frame begins with its start of frame.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+    }
     fn key(&self) -> &'static str {
         "CanFd"
     }
@@ -63,6 +67,10 @@ impl Protocol for CanFd {
 pub struct FlexRay;
 
 impl Protocol for FlexRay {
+    /// A frame begins with its transmission start sequence.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("TSS"))
+    }
     fn key(&self) -> &'static str {
         "FlexRay"
     }
@@ -106,6 +114,10 @@ fn tick(opt: &[usize; OPTS]) -> Option<f64> {
 pub struct Sent;
 
 impl Protocol for Sent {
+    /// A frame begins with its calibration pulse.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("SYNC"))
+    }
     fn key(&self) -> &'static str {
         "Sent"
     }

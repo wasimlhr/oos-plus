@@ -83,8 +83,11 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
     let ascii = decband::ascii(m);
     let hex = |x: &Packet| format!("{:02X}", x.value);
     if view == EvView::Fields {
+        // (a mark the module adds for the screen is no field of the bus)
+        let mark = |x: &Packet| m.dec_proto.module().is_some_and(|module| module.mark(x));
         return p
             .iter()
+            .filter(|x| !mark(x))
             .map(|x| {
                 let tag = packet_tag(m, x);
                 let text = tag.map_or_else(|| packet_text(m, x), str::to_string);
@@ -96,7 +99,7 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
             })
             .collect();
     }
-    let groups = if view == EvView::Lines && ascii { lines(p) } else { oos_dsp::decode::bursts(p) };
+    let groups = if view == EvView::Lines && ascii { lines(p) } else { decband::messages(m, p) };
     groups
         .into_iter()
         .map(|g| {
@@ -680,6 +683,40 @@ mod tests {
         u.dec_proto = Proto::UART;
         (u.dec_bits, u.dec_ascii) = (8, false);
         assert_eq!(packet_text(&u, &byte(0.0, b'H')), "48");
+    }
+
+    /// A protocol that says where its frames begin has a row for each frame, whatever pauses a frame has inside: a
+    /// LIN response that comes late stays with its header (the pause split it). And the mark an SPI frame begins
+    /// with is no row of the Fields view.
+    #[test]
+    fn a_frame_is_one_row_and_a_mark_is_no_field() {
+        let mut m = Model::default();
+        m.dec_proto = Proto::LIN;
+        m.dec_opt = [0; crate::protocols::OPTS];
+        let at = |t: f64, kind: DecKind, value: u32| Packet { kind, value, ..byte(t, 0) };
+        let id = DecKind::Id { ext: false, rtr: false };
+        // break, sync, identifier; the response 30 field times later; the next frame
+        let p = [
+            at(0.0, DecKind::Break, 0),
+            at(1.0, DecKind::Data, 0x55),
+            at(2.0, id, 0x21),
+            at(32.0, DecKind::Data, 0x10),
+            at(33.0, DecKind::Crc, 0xce),
+            at(40.0, DecKind::Break, 0),
+            at(41.0, DecKind::Data, 0x55),
+            at(42.0, id, 0x22),
+        ];
+        let rows = rows_of(&m, 0, "D1 LIN", &p, EvView::Messages);
+        assert_eq!(rows.len(), 2, "{:?}", rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>());
+        assert!(rows[0].text.ends_with("10 CS CE") && rows[1].text.contains("ID 22"), "{:?}", rows[0].text);
+        // SPI: two frames of a word each, each with its mark
+        m.dec_proto = Proto::SPI;
+        m.dec_bits = 8;
+        let (mark, word) = (DecKind::Start, DecKind::Data);
+        let p = [at(0.0, mark, 0), at(0.1, word, 0x9f), at(5.0, mark, 0), at(5.1, word, 0x01)];
+        let fields = rows_of(&m, 0, "D1 SPI", &p, EvView::Fields);
+        assert_eq!(fields.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["9F", "01"]);
+        assert_eq!(rows_of(&m, 0, "D1 SPI", &p, EvView::Messages).len(), 2);
     }
 
     /// An I2C read is no error: the byte the controller ends it with is not acknowledged, by the rule of the bus, and

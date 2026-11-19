@@ -12,6 +12,10 @@ use oos_dsp::decode_ext3::{self as x3, UsbSpeed, USB_FULL, USB_LOW};
 pub struct Usb;
 
 impl Protocol for Usb {
+    /// A frame begins with its sync field: a packet is a message.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("SYNC"))
+    }
     fn key(&self) -> &'static str {
         "Usb"
     }
