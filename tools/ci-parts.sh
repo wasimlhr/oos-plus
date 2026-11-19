@@ -65,13 +65,13 @@ entries=
 add() { entries="${entries:+$entries,}{\"name\":\"$1\",\"layers\":\"$2\",\"cache\":\"$3\"}"; }
 [ $((hal + haltests)) = 0 ] || add hal test:hal hal
 [ $ui = 0 ] || add ui test:ui ui
+# oos-plus: fmt and clippy are not parts until the one formatting commit, as in tools/check.sh's `enforced` (AGENTS.md)
 if [ $rust = 1 ]; then
-	name=fmt layers=fmt
-	[ $dsp = 0 ] || { name="$name, dsp" layers="$layers test:dsp"; }
-	[ $fpgad = 0 ] || { name="$name, fpgad" layers="$layers test:fpgad"; }
-	[ $((ui + fpgad)) = 0 ] || { name="$name, target" layers="$layers target"; }
-	add "$name" "$layers" small
-	add clippy clippy clippy
+	name= layers=
+	[ $dsp = 0 ] || { name="${name:+$name, }dsp" layers="${layers:+$layers }test:dsp"; }
+	[ $fpgad = 0 ] || { name="${name:+$name, }fpgad" layers="${layers:+$layers }test:fpgad"; }
+	[ $((ui + fpgad)) = 0 ] || { name="${name:+$name, }target" layers="${layers:+$layers }target"; }
+	[ -z "$name" ] || add "$name" "$layers" small
 fi
 if [ $ui = 1 ]; then
 	add "decoders, core" decoders:core core
