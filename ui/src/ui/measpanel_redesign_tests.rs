@@ -177,7 +177,8 @@ fn a_narrow_dock_keeps_name_and_value_and_puts_the_rest_of_the_controls_behind_t
     let p = u.panel_drop_rect().unwrap();
     let first = bar.hidden[0];
     tap(&mut u, Ui::panel_drop_row(p, 0));
-    if first == super::measpanel::BarItem::Gate { assert_eq!(u.studio.panel.drop, Some(super::measpanel::PanelDrop::Gate)); }
+    // the gate is in the list with its two choices: the first is the full record, taken with that one tap
+    if first == super::measpanel::BarItem::Gate { assert!(u.m.meas_full_record && u.studio.panel.drop.is_none()); }
 }
 
 #[test]
@@ -687,4 +688,66 @@ fn the_new_presentation_state_is_per_view_and_the_zoom_controls_variant_is_globa
     assert_eq!(u.panel_view(), PanelView::List);
     u.view_go(1);
     assert_eq!(u.panel_view(), PanelView::Cards);
+}
+
+/// The ... list of a narrow panel has the statistics and the gate with their choices, the one in use marked, and one tap
+/// takes one. They were one row each that named the choice in use: a tap on the statistics went to the next one and
+/// closed the list, which had to be opened again to go on (reported from a unit, 2026-11-18).
+#[test]
+fn the_dots_list_the_choices_of_the_statistics_and_one_tap_takes_one() {
+    use super::measpanel::{BarItem, MoreAct};
+    let mut u = with_dock("H0.780(W,M)", 12);
+    let g = u.studio_panel_geo().unwrap();
+    let bar = u.panel_bar(g.p);
+    assert!(bar.hidden.contains(&BarItem::Stats) && bar.hidden.contains(&BarItem::Gate), "{:?}", bar.hidden);
+    let more = bar.more.unwrap().r;
+    for (mode, name) in [(2u8, "Min Max"), (1, "Mean + \u{3c3}"), (0, "Statistics off"), (2, "Min Max")] {
+        tap(&mut u, more);
+        assert_eq!(u.studio.panel.drop, Some(super::measpanel::PanelDrop::More));
+        let rows = u.panel_more_rows();
+        assert_eq!(rows.iter().filter(|r| matches!(r.2, MoreAct::Stats(_)) && r.1).count(), 1, "one choice is the one in use: {rows:?}");
+        assert_eq!(rows.iter().filter(|r| matches!(r.2, MoreAct::Gate(_)) && r.1).count(), 1, "{rows:?}");
+        let i = rows.iter().position(|r| r.0 == name).expect(name);
+        let p = u.panel_drop_rect().unwrap();
+        assert!(p.y >= 0 && p.bottom() <= H && p.x >= 0 && p.right() <= W, "{p:?}");
+        assert!(Ui::panel_drop_row(p, rows.len() - 1).bottom() <= p.bottom());
+        if mode == 2 && u.studio.panel.stats_mode == 0 { shot(&mut u, "dots-list"); }
+        tap(&mut u, Ui::panel_drop_row(p, i));
+        assert_eq!(u.studio.panel.stats_mode, mode, "{name}");
+        assert_eq!(u.studio.panel.stats, mode != 0);
+        assert!(u.studio.panel.drop.is_none(), "the list stayed");
+    }
+    for (full, name) in [(false, "Gate: Screen"), (true, "Gate: Full record")] {
+        tap(&mut u, more);
+        let rows = u.panel_more_rows();
+        let i = rows.iter().position(|r| r.0 == name).expect(name);
+        let p = u.panel_drop_rect().unwrap();
+        tap(&mut u, Ui::panel_drop_row(p, i));
+        assert_eq!(u.m.meas_full_record, full, "{name}");
+    }
+}
+
+/// The statistics of a card fit the card: with the words where the card has the room, as "a .. b" and "a ± b" where it
+/// has not, and the form follows the width and the unit, never the value. Two cards beside each other in a side panel
+/// are 148 px wide, and "min 145 mV  max 212 mV" ended at "max" (reported from a unit, 2026-11-18).
+#[test]
+fn the_statistics_of_a_card_fit_the_card() {
+    let u = studio_with(6);
+    let f = &u.fonts().s;
+    assert_eq!(Ui::card_stats_line(f, true, "V", "145 mV", "212 mV", 300), "min 145 mV  max 212 mV");
+    assert_eq!(Ui::card_stats_line(f, false, "V", "187.6 mV", "1.2 mV", 300), "\u{b5} 187.6 mV  \u{3c3} 1.2 mV");
+    let room = 148 - 16;
+    for unit in ["V", "A", "Hz", "s", "%", "Vs", "W"] {
+        for range in [true, false] {
+            let mut forms = Vec::new();
+            for (a, b) in [("1", "2"), ("145 m", "212 m"), ("-9.89 m", "-9.80 m"), ("-99.9 m", "-99.9 m"), ("7.26 \u{b5}", "7.54 \u{b5}")] {
+                let (a, b) = (format!("{a}{unit}"), format!("{b}{unit}"));
+                let line = Ui::card_stats_line(f, range, unit, &a, &b, room);
+                assert!(f.width(&line) <= room, "{line:?} is {} wide in {room}", f.width(&line));
+                assert!(line.contains(&b), "{line:?} has no {b}");
+                forms.push((line.starts_with("min") || line.starts_with('\u{b5}'), line.contains(".."), line.contains('\u{b1}')));
+            }
+            assert!(forms.windows(2).all(|w| w[0] == w[1]), "the form changes with the value: {unit} {forms:?}");
+        }
+    }
 }

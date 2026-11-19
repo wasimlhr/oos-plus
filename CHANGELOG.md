@@ -18,6 +18,11 @@ Fixed:
   table of the measurements without a word, and no row of the menu led to the other two. The page opens on the
   table that is on the screen, else on the events of a decoder or a search that is on; the row says On for any
   of the three.
+- Studio, the measurement panel (host-tested): the ... list of a narrow panel has the statistics and the gate with
+  their choices (Statistics off, Mean + sigma, Min Max; Full record, Screen), the one in use marked, and one tap
+  takes one. A tap went to the next choice and closed the list, which had to be opened again to go on. The
+  statistics of a card fit the card: with the words where it is wide enough, as "145 mV .. 212 mV" and
+  "187 mV ± 1.2 mV" where two cards stand beside each other; "min 145 mV  max 212 mV" ended at "max" there.
 - Studio, the table of the measurements (host-tested): no thumbtack at the end of every name. It was a column
   of its own in a panel 320 px wide; the cards and the list of the same panel have it, and the bar its filter.
   A tap anywhere on a row opens the settings of the measurement.
