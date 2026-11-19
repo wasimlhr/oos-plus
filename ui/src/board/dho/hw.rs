@@ -125,9 +125,18 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
     });
     // protocol trigger: hardware edge on the line where frames start (the protocol's start role: SPI chip select, I2S
     // word select, else the data line)
+    // (`bus_role`: the role of that line, whose threshold is the level)
+    let mut bus_role = 0;
     let mut src = if m.trig_type == TrigType::Bus {
         let Proto::Module(i) = m.dec_proto;
-        [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4][crate::protocols::get(i).start_role().min(3)].unwrap_or(m.dec_src)
+        let role = crate::protocols::get(i).start_role().min(3);
+        match [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4][role] {
+            Some(c) => {
+                bus_role = role;
+                c
+            }
+            None => m.dec_src,
+        }
     } else {
         m.trig_src
     };
@@ -162,9 +171,10 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
         // two-level types: the upper level; all others: the level itself
         level: match m.trig_type {
             TrigType::Slope | TrigType::Runt | TrigType::Window => m.trig_level.max(m.trig_level2),
-            TrigType::Bus => m.dec_thr,
+            TrigType::Bus => m.dec_thr_of(bus_role),
             _ => m.trig_level,
         } as f64,
+        line_level: if m.trig_type == TrigType::Bus { bus_line_levels(m) } else { [None; 4] },
         auto: m.trig_mode == TrigMode::Auto,
         auto_fast: m.auto_fast && m.trig_mode == TrigMode::Auto,
         single: single_takes_first(m),
@@ -444,6 +454,19 @@ fn bus_line(m: &Model) -> Option<u8> {
     }
     let Proto::Module(i) = m.dec_proto;
     m.dec_la[crate::protocols::get(i).start_role().min(3)].or(m.dec_la[0])
+}
+
+/// The thresholds of the decoder's lines by channel, for the protocol trigger in the receiver: each line of the SPI
+/// and the I2C trigger has a comparator of its own, and a decoder may have a threshold for each line (a clock on a
+/// 10:1 probe that the channel reads as 1:1, beside data of 5 V). The first role a channel has decides.
+fn bus_line_levels(m: &Model) -> [Option<f64>; 4] {
+    let mut out = [None; 4];
+    for (role, c) in [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4].into_iter().enumerate() {
+        if let Some(c) = c.filter(|&c| c < NCH && out[c].is_none()) {
+            out[c] = Some(m.dec_thr_of(role) as f64);
+        }
+    }
+    out
 }
 
 /// The UI trigger as a hardware (TPU) trigger. Two-level types: `Settings::level` is the upper level.
@@ -2749,6 +2772,17 @@ mod tests {
         assert_eq!((s.clk, s.data, s.cs, s.clk_falling, s.width), (2, 1, 3, false, 8));
         m.dec_mode = 1;
         assert!(spi_of(&m).unwrap().clk_falling);
+        // the levels: the threshold of the decoder on every line, and the one of its own a line has. The edge that
+        // stands in where the receiver is not used is on the chip select, at that line's threshold
+        m.dec_thr = 2.5;
+        let s = settings(&m, false);
+        assert_eq!((s.level, s.line_level), (2.5, [Some(2.5), Some(2.5), Some(2.5), None]));
+        m.dec_thr_line = [Some(0.25), Some(0.5), None];
+        let s = settings(&m, false);
+        assert_eq!((s.trig_src, s.level, s.line_level), (3, 0.5, [Some(2.5), Some(0.25), Some(0.5), None]));
+        m.trig_type = TrigType::Edge;
+        assert_eq!(settings(&m, false).line_level, [None; 4], "another trigger type has none");
+        m.trig_type = TrigType::Bus;
         m.dec_cs = None;
         assert_eq!(spi_of(&m), None, "no chip select: software");
         // I2C: SDA on dec_src, SCL on dec_src2

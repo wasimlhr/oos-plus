@@ -502,24 +502,30 @@ fn line(t: &mut Tpu, ev: Ev, ch: u32, invert: bool) {
     t.pattern(ev, 2, i, 2, i);
 }
 
-/// Level A of every distinct channel in `chs` at `level` with its hysteresis.
-fn line_levels(t: &mut Tpu, chs: &[u32], level: f64, vt: &[Vert; 4]) {
+/// The levels of their own the lines of a protocol trigger have, by channel (`None`: the common level).
+pub type Own = [Option<f64>; 4];
+
+/// Level A of every distinct channel in `chs` with its hysteresis: at `level`, or at the level of its own the line
+/// of that channel has (`own`, by channel 1..4: a decoder with a threshold for each line, a clock of 0.5 V beside
+/// data of 5 V).
+fn line_levels(t: &mut Tpu, chs: &[u32], level: f64, own: &Own, vt: &[Vert; 4]) {
     let mut done = Vec::new();
     for &c in chs {
         if !done.contains(&c) {
-            t.levels(c, level, level, true, false, vt);
+            let l = (c as usize).checked_sub(1).and_then(|k| own.get(k).copied().flatten()).unwrap_or(level);
+            t.levels(c, l, l, true, false, vt);
             done.push(c);
         }
     }
 }
 
 /// SPI trigger (docs/fork/hwserial.md): clock on event A (inverted for the falling edge), data on R, chip select on B
-/// (inverted when active high), the levels of the three lines, the filter on the clock's channel, the receiver words,
-/// then mux 12. Channels only.
-pub fn spi(sh: &mut Shadows, s: &crate::dho::serialtrig::Spi, level: f64, vt: &[Vert; 4]) -> Vec<Write> {
+/// (inverted when active high), the levels of the three lines (`level`, or the line's own of `own`), the filter on
+/// the clock's channel, the receiver words, then mux 12. Channels only.
+pub fn spi(sh: &mut Shadows, s: &crate::dho::serialtrig::Spi, level: f64, own: &Own, vt: &[Vert; 4]) -> Vec<Write> {
     let mut t = Tpu { sh, w: Vec::new() };
     t.bypass(false);
-    line_levels(&mut t, &[s.clk, s.data, s.cs], level, vt);
+    line_levels(&mut t, &[s.clk, s.data, s.cs], level, own, vt);
     t.iir(s.clk);
     line(&mut t, Ev::A, s.clk, s.clk_falling);
     line(&mut t, Ev::R, s.data, false);
@@ -531,10 +537,10 @@ pub fn spi(sh: &mut Shadows, s: &crate::dho::serialtrig::Spi, level: f64, vt: &[
 
 /// I2C trigger (docs/fork/hwserial.md): SCL on event A, SDA on event B, their levels, the filter on SCL's channel, the
 /// receiver words, then mux 13. Channels only.
-pub fn i2c(sh: &mut Shadows, i: &crate::dho::serialtrig::I2c, level: f64, vt: &[Vert; 4]) -> Vec<Write> {
+pub fn i2c(sh: &mut Shadows, i: &crate::dho::serialtrig::I2c, level: f64, own: &Own, vt: &[Vert; 4]) -> Vec<Write> {
     let mut t = Tpu { sh, w: Vec::new() };
     t.bypass(false);
-    line_levels(&mut t, &[i.scl, i.sda], level, vt);
+    line_levels(&mut t, &[i.scl, i.sda], level, own, vt);
     t.iir(i.scl);
     line(&mut t, Ev::A, i.scl, false);
     line(&mut t, Ev::B, i.sda, false);
@@ -922,7 +928,7 @@ mod tests {
         let last = |w: &[Write], r: u32| w.iter().filter(|x| x.0 == r).last().map(|x| x.1);
         let mut sh = Shadows::APP;
         let s = Spi { clk: 2, data: 1, cs: 3, clk_falling: true, cs_high: false, timeout: None, width: 8, rel: Relation::Eq, min: 0x5a, max: 0x5a, mask: 0xff };
-        let w = spi(&mut sh, &s, 1.5e9, &vt);
+        let w = spi(&mut sh, &s, 1.5e9, &[None; 4], &vt);
         // the stock patterns: A = CH2 level A (code 2) (2, 1, 2, 1) for the falling clock, R = CH1 (code 0) (2, 0, 2, 0),
         // B = CH3 (code 4) (2, 0, 2, 0) for an active-low CS
         assert_eq!(last(&w, 0x201c).unwrap() & 0x00ff_ffff, 2 | 2 << 8 | 2 << 16 | 1 << 19 | 2 << 20 | 1 << 23);
@@ -931,8 +937,16 @@ mod tests {
         assert!([0x2004, 0x200c, 0x20b8].iter().all(|r| w.iter().any(|x| x.0 == *r)), "levels of CH1..CH3");
         assert_eq!(*w.last().unwrap(), (0x205c, 12));
         assert_eq!(last(&w, 0x2178), Some(7 << 4));
+        // a threshold for each line: the same writes, but for the levels of the line that has one of its own (the
+        // clock on CH2), and a line without one keeps the common level
+        let own = [None, Some(0.25e9), None, None];
+        let fresh = |own: &Own| spi(&mut { Shadows::APP }, &s, 1.5e9, own, &vt);
+        let (w1, w2) = (fresh(&[None; 4]), fresh(&own));
+        let differ: Vec<u32> = w1.iter().zip(&w2).filter(|(a, b)| a != b).map(|(a, _)| a.0).collect();
+        assert_eq!((w1.len(), differ), (w2.len(), vec![0x200c, 0x2010]), "only the two levels of CH2");
+        assert_eq!(fresh(&[Some(1.5e9); 4]), w1, "equal thresholds: the same writes");
         let i = I2c { scl: 1, sda: 2, cond: I2cCond::Start, dir: Dir::Either, ten_bit: false, addr_rel: Relation::Eq, addr: (0, 0, 0), data_rel: Relation::Eq, bytes: 1, data: (0, 0, 0) };
-        let w = i2c(&mut sh, &i, 1.5e9, &vt);
+        let w = i2c(&mut sh, &i, 1.5e9, &[None; 4], &vt);
         assert_eq!(last(&w, 0x201c).unwrap() & 0x00ff_ffff, 2 << 16 | 2 << 20);
         assert_eq!(last(&w, 0x2034).unwrap() & 0x00ff_ffff, 2 | 2 << 8 | 2 << 16 | 2 << 20);
         assert_eq!(*w.last().unwrap(), (0x205c, 13));

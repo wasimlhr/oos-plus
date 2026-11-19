@@ -96,6 +96,9 @@ pub struct Settings {
     pub trig_src: u32,
     pub slope: tpu::Slope,
     pub level: f64,
+    /// The level of a channel that is a line of the SPI or I2C trigger, where the decoder has a threshold of its own
+    /// for that line (`None`: `level`). Each line has a comparator of its own.
+    pub line_level: [Option<f64>; 4],
     pub auto: bool,
     /// AUTO sweep with the shortest auto-trigger time (10 ms) whatever the time base: the auto set-up reads the
     /// levels of a signal its trigger level may not cross yet, and must not wait 20 time/div per record for it
@@ -182,7 +185,7 @@ impl Default for Settings {
     /// verified window (4000 points from 1,248,000).
     fn default() -> Settings {
         let c = Chan { scale: 1.0, offset: 0.0, bw: afe::bw::OFF, probe: 1.0, bias: 0.0, skew: 0.0, couple: Couple::Dc, invert: false };
-        Settings { delay: 0.0, mode: acq::Mode::Normal, holdoff: HOLDOFF_MIN, mask: 1, tdiv: 200e-6, depth: 0, ch: [c; 4], afe: false, trig_src: 1, slope: tpu::Slope::Rising, level: 1.5, auto: true, auto_fast: false, single: false, trigger: Trig::Edge, window: Some((4000, -2000)), play4: true, blocks: 7, header: false, noise_reject: false, trig_couple: tpu::Coupling::Dc, frames: 1, compress: 1, la: None, segments: None, aux: auxout::AuxOut::TriggerOut, hwmask: None, hwzone: None }
+        Settings { delay: 0.0, mode: acq::Mode::Normal, holdoff: HOLDOFF_MIN, mask: 1, tdiv: 200e-6, depth: 0, ch: [c; 4], afe: false, trig_src: 1, slope: tpu::Slope::Rising, level: 1.5, line_level: [None; 4], auto: true, auto_fast: false, single: false, trigger: Trig::Edge, window: Some((4000, -2000)), play4: true, blocks: 7, header: false, noise_reject: false, trig_couple: tpu::Coupling::Dc, frames: 1, compress: 1, la: None, segments: None, aux: auxout::AuxOut::TriggerOut, hwmask: None, hwzone: None }
     }
 }
 
@@ -472,8 +475,8 @@ impl State {
             Trig::Nth { count, idle } => tpu::nth(ts, src, edge, *count, fs(*idle), nv(s.level), &vt),
             Trig::Video { std, sync, line } => tpu::video(ts, src, *std, true, *sync, *line, nv(s.level), &vt, tpu::VideoClk::Fast),
             Trig::Uart(u) => tpu::uart(ts, src, u, nv(s.level), &vt),
-            Trig::Spi(x) => tpu::spi(ts, x, nv(s.level), &vt),
-            Trig::I2c(x) => tpu::i2c(ts, x, nv(s.level), &vt),
+            Trig::Spi(x) => tpu::spi(ts, x, nv(s.level), &s.line_level.map(|l| l.map(nv)), &vt),
+            Trig::I2c(x) => tpu::i2c(ts, x, nv(s.level), &s.line_level.map(|l| l.map(nv)), &vt),
         };
         // the shortest holdoff is what every trigger type leaves behind; once changed, it is written until it is back
         let set = (s.holdoff - HOLDOFF_MIN).abs() > 1e-12;
