@@ -292,6 +292,40 @@ mod tests {
         assert!(trigger_point(&frame(20_000), &m, 1000, window, -window / 2.0).is_some());
     }
 
+    /// Trigger > Bus > Frame for every decoder with demo traffic: the traffic has frame starts, and one that stands
+    /// at the hardware point is found there on a screen that is short against a frame (a tenth of it is 40 bits).
+    /// With the search ending a tenth of a screen behind the hardware point this failed for CAN, CAN-FD and FlexRay
+    /// every time, and for USB, S/PDIF and DCC now and then.
+    #[test]
+    fn a_frame_start_at_the_hardware_point_is_found_for_every_decoder() {
+        for i in 0..crate::protocols::MODULES.len() as u8 {
+            let p = crate::protocols::get(i);
+            let Some(d) = crate::protocols::demo(i) else { continue };
+            let mut m = Model::default();
+            (m.dec_proto, m.dec_opt) = (Proto::Module(i), crate::protocols::opt_default(i));
+            let line = |k: usize| d.lines[k].as_ref().map(|_| k);
+            (m.dec_src, m.dec_src2, m.dec_cs, m.dec_src4) = (0, 1, line(2), line(3));
+            (m.dec_thr, m.trig_type, m.trig_bus) = (p.setup().thr, TrigType::Bus, BusWhat::Frame);
+            // 50 samples a bit and 400 000 of them or more: the search region is 2000 samples each way
+            let dt = m.bus_bit() / 50.0;
+            let n = ((3.0 * d.period / dt) as usize).clamp(400_000, 3_000_000);
+            let ch: [Vec<f32>; NCH] = std::array::from_fn(|k| match &d.lines[k] {
+                Some(f) => (0..n).map(|j| f((j as f64 * dt).rem_euclid(d.period)) as f32).collect(),
+                None => Vec::new(),
+            });
+            let lines: [&[f32]; NCH] = std::array::from_fn(|k| &ch[k][..]);
+            let pk = crate::trig::decode(&m, lines, dt).unwrap_or_else(|e| panic!("{}: {e}", p.name()));
+            let starts = crate::trig::points(&m, &pk);
+            assert!(!starts.is_empty(), "{}: no frame start in its demo traffic", p.name());
+            let (window, span) = (20_000.0 * dt, m.trig_span() / dt);
+            for &t in starts.iter().filter(|&&t| t > 30_000.0 && t < n as f64 - 30_000.0 - span).take(12) {
+                let f = Arc::new(Frame { seq: 1, dt, pre: t.round() as usize, ch: ch.clone(), ..Default::default() });
+                let at = trigger_point(&f, &m, 1000, window, -window / 2.0);
+                assert!(at.is_some_and(|x| (x - t).abs() < 60.0), "{}: frame start at {t}, found {at:?}", p.name());
+            }
+        }
+    }
+
     /// The protocol trigger on a field at the start of a long frame: the frame ends far behind the hardware point,
     /// and is read to its end. As on the unit: CAN at 500 kbit/s, 50 us/div, 100 kpts at 156.25 MSa/s, the
     /// identifier ending 20 us before the hardware point and the frame 216 us after it.

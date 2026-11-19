@@ -96,6 +96,11 @@ impl Protocol for ModbusRtu {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(x1::modbus_rtu(l.main(), l.dt, baud(&l.opt, 0), PARITIES[l.opt[1]], l.thr, l.hy, false))
     }
+    /// A frame begins with its address: the line has no field before it (the general rule knows no frame here, and
+    /// Trigger > Bus > Frame never fired).
+    fn trigger_match(&self, what: BusWhat, _value: u32, p: &Packet) -> Option<bool> {
+        (what == BusWhat::Frame).then(|| matches!(p.kind, oos_dsp::decode::Kind::Addr { .. }))
+    }
     /// Read holding registers (function 3) of device 0x11, 19200 baud, even parity.
     fn demo(&self) -> Option<Demo> {
         let f: Vec<u32> = x1::gen::modbus_rtu_frame(0x11, &[0x03, 0x00, 0x6B, 0x00, 0x03]).into_iter().map(u32::from).collect();

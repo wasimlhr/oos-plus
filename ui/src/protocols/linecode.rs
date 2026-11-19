@@ -182,6 +182,10 @@ impl Protocol for Mlt3 {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(oos_dsp::linecode::mlt3(l.main(), l.dt, baud(&l.opt), l.thr, l.hy))
     }
+    /// The line has no frames: every byte starts one, as for the UART (Trigger > Bus > Frame never fired).
+    fn trigger_match(&self, what: BusWhat, _value: u32, p: &Packet) -> Option<bool> {
+        (what == BusWhat::Frame && p.kind == Kind::Data).then_some(true)
+    }
     /// The same six bytes at the rate of the list's usual entry: a one steps the level on through 0, +1, 0, -1 V,
     /// a zero holds it; 16 bit times of quiet line before them and 24 after.
     fn demo(&self) -> Option<Demo> {
