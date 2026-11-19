@@ -45,7 +45,7 @@ Per decoder:
 | 1-Wire | capture: transactions agree | band, columns, ROM command names | - |
 | I3C | capture: commands and bytes as on the lines; one read differs from the reference | band, command names | - |
 | C-PHY | capture: 64 bursts as packets, every checksum right; 64 low-power messages as the instrument lists them | band, columns | - |
-| Manchester | capture: the bits agree at the rate of the signal; no packet structure | band | structure |
+| Manchester | capture: nine packets, their bits as the instrument has them in the five rows of its picture | band | fields of a packet |
 | the 13 others | host only: no capture | band | captures |
 
 The 13 others are Parallel, DCC, SWD, JTAG, DMX512, MLT-3, DS2482, Quad-SPI, UART 9-bit, Modbus RTU, Modbus ASCII,
@@ -141,11 +141,12 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
    1-Wire and I3C write the names of their commands, the words of a C-PHY burst are read as its packet and its
-   low-power data as a command and bytes. Open here: the packet structure of a Manchester line. For the latter the capture and
-   the picture of its instrument say what is wanted: packets of 12 bits every 14.5 bit times, read as a sync bit,
-   a header of 3 bits, 6 data bits and a trailer of 2, each width a setting of the instrument. The decoder lists
-   bytes. Packets need those widths as settings of the decoder, which a module's options (a list of choices
-   each) do not hold: a decision of the owner (below).
+   low-power data as a command and bytes. A Manchester line that sends packets is read packet by
+   packet: the capture has 13 bits every 14.5 bit times, and the decoder took the record for one stream, half a
+   bit off in every second packet. Open here: cutting a Manchester packet into fields. The instrument of the
+   capture has a setting for the width of each (here two sync bits, a header of 3, 6 data bits, a trailer of 2);
+   the decoder writes the bits of a packet in the order sent. Fields need those widths as settings, which a
+   module's options (a list of choices each) do not hold: a decision of the owner (below).
    The same day the other twelve presets ran on the unit (UART, I2C, SPI, I2S, 1-Wire, DCC, SWD, DMX512, UART
    9-bit, Modbus RTU, S/PDIF, USB PD): every one decodes its traffic without an error. That is the first run on a
    unit for seven of the decoders of step 5. It showed that a preset left the lines of the preset before it on
@@ -161,5 +162,6 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
 - The height of a row of the Events pane: 26 px as in the other tables (5 rows in the docked pane), or a finger's
   40 px (3 rows).
 - Whether SMBus gets a decoder of its own on top of I2C.
-- Manchester packets: whether the decoder gets number settings for the widths of sync, header, data and trailer
-  (as the instrument of the capture has them), or a few fixed structures to choose from, or stays with bytes.
+- Manchester packets: the decoder reads them one by one and writes the bits of each. Whether it gets number
+  settings for the widths of sync, header, data and trailer (as the instrument of the capture has them), or a few
+  fixed structures to choose from, or stays with the bits.

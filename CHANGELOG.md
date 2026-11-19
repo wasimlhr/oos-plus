@@ -563,6 +563,16 @@ Changed:
   packet begins with its sync and every FlexRay frame with its start sequence, and a box with little room read "SYNC
   FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR 5 ...", "IND 4 ID 02A ..."); drawn
   as fields, and in the Fields view, it is there as before. A module says which field that is (`lead`).
+- Manchester decoder: a line that sends packets is read packet by packet (host-tested, and on a capture of a
+  real line on the host; not yet verified on hardware). The decoder read a record as one stream of bits from its
+  first edge. A line that is quiet between its packets, as the capture is (13 bits every 14.5 bit times), was
+  half a bit off in every second packet, and its bits ran together into bytes that were none. A pause of more
+  than 1.5 bit times ends a packet, and where the bits lie is found anew in the next. A packet of up to 32 bits
+  that is no whole number of bytes is one field: its bits in the order sent ("0011100111101"), over 16 bits as
+  one number with their count. A record without a pause is read as before, and so is a packet of whole bytes. On
+  the capture: nine packets at the times its instrument lists, and their bits cut as that instrument has them (a
+  header of 3 bits, 6 data bits, a trailer of 2, each least significant bit first, after two sync bits) are its
+  values in the five rows its picture shows. The decoder does not cut a packet into fields.
 - Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3,
   Modbus ASCII, the DS2482 bridge, JTAG, C-PHY and Quad-SPI (the last one host-tested only: a flash asked for its
   identification and for two bytes at an address) have a SIM bus preset now, 27 in all. Six bytes at the rate of

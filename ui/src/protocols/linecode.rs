@@ -69,10 +69,28 @@ impl Protocol for Manchester {
         if l.opt[1] == 0 {
             return Ok(p);
         }
-        // the other convention: every bit is the other one. The bytes alone: the fields of an Ethernet frame the
-        // decoder finds are those of 802.3
-        let data = p.into_iter().filter(|x| x.kind == Kind::Data);
-        Ok(data.map(|x| Packet { value: !x.value & 0xff, ..x }).collect())
+        // the other convention: every bit is the other one. The bytes and the packets alone: the fields of an
+        // Ethernet frame the decoder finds are those of 802.3
+        let other = |x: Packet| match (x.kind, x.value2) {
+            (Kind::Data, _) => Some(Packet { value: !x.value & 0xff, ..x }),
+            (Kind::Field("PKT"), Some(n)) => {
+                let mask = u32::MAX >> (32 - n.clamp(1, 32));
+                Some(Packet { value: !x.value & mask, ..x })
+            }
+            _ => None,
+        };
+        Ok(p.into_iter().filter_map(other).collect())
+    }
+    /// A packet that is no whole number of bytes: its bits in the order they were sent ("0011100111101"), which
+    /// says nothing of where its fields end; over 16 bits as one number with the first bit the most significant,
+    /// and how many they are ("1F2A7 (17 b)").
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        let n = p.value2.filter(|_| p.kind == Kind::Field("PKT"))? as usize;
+        Some(if n <= 16 {
+            format!("{:0n$b}", p.value)
+        } else {
+            format!("{:0w$X} ({} b)", p.value, n, w = n.div_ceil(4))
+        })
     }
     fn legacy(&self, old: &Legacy) -> Option<[usize; OPTS]> {
         Some([old.baud, 0, 0, 0])
@@ -132,6 +150,17 @@ mod tests {
             assert!(m.dec_on && m.dec_opt[0] == 3, "{} {:?}", key, m.dec_opt);
             assert_eq!(m.bus_bit(), 1.0 / 9600.0);
         }
+    }
+
+    /// A packet that is no whole number of bytes as its text.
+    #[test]
+    fn a_manchester_packet_is_one_value_with_its_bits() {
+        let pkt = Packet { t0: 0.0, t1: 1.0, kind: Kind::Field("PKT"), value: 0x73d, value2: Some(13), ok: true };
+        let text = |p: Packet| Manchester.text(&p, &[0; OPTS]);
+        assert_eq!(text(pkt.clone()).as_deref(), Some("0011100111101"));
+        assert_eq!(text(Packet { value: 5, value2: Some(3), ..pkt.clone() }).as_deref(), Some("101"));
+        assert_eq!(text(Packet { value: 0x1f2a7, value2: Some(17), ..pkt.clone() }).as_deref(), Some("1F2A7 (17 b)"));
+        assert_eq!(text(Packet { kind: Kind::Data, value2: None, ..pkt }), None);
     }
 
     /// The demo lines of Manchester and MLT-3 carry the six bytes, and a new decoder of each reads them.

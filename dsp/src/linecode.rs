@@ -297,6 +297,14 @@ fn ethernet_fields(bytes: &[(f64, f64, u8)], out: &mut Vec<Packet>) {
 }
 
 /// IEEE 802.3 Manchester: a 1 is low→high in the bit cell (mid-cell rising). `bitrate` 0 = from the edge spacings.
+///
+/// A line that is quiet between its packets is read packet by packet: edges are never more than a bit time apart
+/// inside a packet, so a pause of more than 1.5 bit times ends one, and where the bits lie is found anew in the
+/// next (a line of 12-bit packets every 14.5 bit times, as a capture of a real one has it, was read as one stream
+/// from its first edge, half a bit off in every second packet). A packet of up to 32 bits that is no whole number
+/// of bytes is one `Field("PKT")`: its bits with the first one sent as the most significant, value2 = how many.
+/// Else its bytes are `Data` as before, the first bit sent the least significant, and a record without a pause is
+/// one stream with the fields of an Ethernet frame where it has them.
 pub fn manchester(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> Vec<Packet> {
     let e = edges(v, thr, hyst);
     if e.len() < 4 {
@@ -312,11 +320,11 @@ pub fn manchester(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> Vec<
         return Vec::new();
     }
     let bit_t = 2.0 * half;
-    let decode_from = |start: usize| -> Vec<(f64, bool)> {
+    let decode_from = |start: usize, end: usize| -> Vec<(f64, bool)> {
         let mut bits = Vec::new();
         let mut t_mid = e[start].t * dt;
         let mut i = start;
-        while i < e.len() {
+        while i < end {
             let t = e[i].t * dt;
             if (t - t_mid).abs() <= 0.35 * bit_t {
                 bits.push((e[i].t, e[i].rising));
@@ -329,12 +337,39 @@ pub fn manchester(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> Vec<
         }
         bits
     };
-    let a = decode_from(0);
-    let b = if e.len() > 1 { decode_from(1) } else { Vec::new() };
-    let bits = if b.len() > a.len() { b } else { a };
-    let bytes = bits_to_bytes(&bits);
-    let mut out: Vec<Packet> = bytes.iter().map(|&(s, e, v)| pkt(s, e, Kind::Data, v as u32, None, true)).collect();
-    ethernet_fields(&bytes, &mut out);
+    // the bits of the edges `start..end`: of the two ways to take them (the first edge in the middle of a bit, or
+    // between two), the one in which more cells have their edge
+    let bits_of = |start: usize, end: usize| -> Vec<(f64, bool)> {
+        let a = decode_from(start, end);
+        let b = if end > start + 1 { decode_from(start + 1, end) } else { Vec::new() };
+        if b.len() > a.len() { b } else { a }
+    };
+    let bytes_of = |bits: &[(f64, bool)]| -> Vec<Packet> {
+        bits_to_bytes(bits).iter().map(|&(s, e, v)| pkt(s, e, Kind::Data, v as u32, None, true)).collect()
+    };
+    // where a pause ends a packet
+    let mut cuts: Vec<usize> = (1..e.len()).filter(|&i| (e[i].t - e[i - 1].t) * dt > 1.5 * bit_t).collect();
+    if cuts.is_empty() {
+        let bits = bits_of(0, e.len());
+        let mut out = bytes_of(&bits);
+        ethernet_fields(&bits_to_bytes(&bits), &mut out);
+        return out;
+    }
+    cuts.insert(0, 0);
+    cuts.push(e.len());
+    let half_samples = half / dt;
+    let mut out = Vec::new();
+    for w in cuts.windows(2) {
+        let bits = bits_of(w[0], w[1]);
+        let n = bits.len();
+        if n == 0 || n > 32 || n % 8 == 0 {
+            out.extend(bytes_of(&bits));
+            continue;
+        }
+        let value = bits.iter().fold(0u32, |v, &(_, one)| v << 1 | one as u32);
+        let (t0, t1) = (bits[0].0 - half_samples, bits[n - 1].0 + half_samples);
+        out.push(pkt(t0, t1, Kind::Field("PKT"), value, Some(n as u32), true));
+    }
     out
 }
 
@@ -475,6 +510,36 @@ mod tests {
         let p = manchester(&v, dt, 1.0 / bit_t, 0.5, 0.05);
         assert!(p.iter().any(|x| x.kind == Kind::Data && x.value == 0xd5), "{:?}", p);
         let _ = t;
+    }
+
+    /// A line of 12-bit packets with 2.5 bit times of quiet line between them: every packet is read from its own
+    /// first bit, and is one value with its number of bits. One stream from the first edge had every second packet
+    /// half a bit off.
+    #[test]
+    fn manchester_packets_are_read_one_by_one() {
+        let packets = [0x7f2u32, 0x6f2, 0x673, 0x773, 0x6d2];
+        let (bit, half) = (16usize, 8usize);
+        let mut v = vec![0.0f32; 3 * bit];
+        for p in packets {
+            for k in (0..12).rev() {
+                // a one: low, then high
+                let one = p >> k & 1 == 1;
+                v.extend(std::iter::repeat_n(if one { 0.0 } else { 1.0 }, half));
+                v.extend(std::iter::repeat_n(if one { 1.0 } else { 0.0 }, half));
+            }
+            // 2.5 bit times of quiet line
+            v.extend(std::iter::repeat_n(0.0, 2 * bit + half));
+        }
+        for rate in [0.0, 1.0 / bit as f64] {
+            let p = manchester(&v, 1.0, rate, 0.5, 0.05);
+            let whole = p.iter().filter(|x| x.kind == Kind::Field("PKT"));
+            let got: Vec<(u32, Option<u32>)> = whole.map(|x| (x.value, x.value2)).collect();
+            assert_eq!(got, packets.map(|x| (x, Some(12))), "rate {rate}: {:?}", p);
+            assert_eq!(p.len(), 5);
+            // a packet lies where its 12 bits are
+            let (first, last) = ((3 * bit) as f64, (15 * bit) as f64);
+            assert!((p[0].t0 - first).abs() <= 1.0 && (p[0].t1 - last).abs() <= 1.0, "{:?}", p[0]);
+        }
     }
 
     #[test]
