@@ -60,7 +60,10 @@ impl Protocol for Uart {
 pub struct I2c;
 
 /// Whether an address is written as its seven bits or as the byte on the bus, with the read/write bit in it.
-static I2C_OPTIONS: [Opt; 1] = [Opt { name: "R/W bit", choices: &["Left out", "Included"], default: 0 }];
+static I2C_OPTIONS: [Opt; 2] = [
+    Opt { name: "R/W bit", choices: &["Left out", "Included"], default: 0 },
+    Opt { name: "Format", choices: &["Hex", "ASCII"], default: 0 },
+];
 
 impl Protocol for I2c {
     fn key(&self) -> &'static str {
@@ -71,6 +74,10 @@ impl Protocol for I2c {
     }
     fn options(&self) -> &'static [Opt] {
         &I2C_OPTIONS
+    }
+    /// The data bytes as characters; an address stays a number.
+    fn chars(&self, opt: &[usize; OPTS]) -> bool {
+        opt[1] == 1
     }
     fn bit_row(&self) -> bool {
         true
@@ -122,14 +129,18 @@ impl Protocol for I2c {
 pub struct Spi;
 
 /// The order of the bits of a word on the line, and whether a high level of the data line is a 1.
-static SPI_OPTIONS: [Opt; 2] = [
+static SPI_OPTIONS: [Opt; 3] = [
     Opt { name: "Bit order", choices: &["MSB first", "LSB first"], default: 0 },
     Opt { name: "Data", choices: &["Active high", "Active low"], default: 0 },
+    Opt { name: "Format", choices: &["Hex", "ASCII"], default: 0 },
 ];
 
 impl Protocol for Spi {
     fn options(&self) -> &'static [Opt] {
         &SPI_OPTIONS
+    }
+    fn chars(&self, opt: &[usize; OPTS]) -> bool {
+        opt[2] == 1
     }
     fn key(&self) -> &'static str {
         "Spi"

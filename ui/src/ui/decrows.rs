@@ -583,6 +583,35 @@ mod tests {
         assert_eq!(Proto::SPI.roles()[3], Some("MISO"));
     }
 
+    /// SPI and I2C have a Format of their own: with ASCII a message reads as text and has its bytes in hex beside
+    /// it; an I2C address stays a number.
+    #[test]
+    fn spi_and_i2c_show_characters_on_request() {
+        let mut m = Model::default();
+        m.dec_proto = Proto::SPI;
+        m.dec_bits = 8;
+        m.dec_opt = [0; crate::protocols::OPTS];
+        let p: Vec<Packet> = b"Hi".iter().enumerate().map(|(k, &b)| byte(k as f64, b)).collect();
+        let hex = rows_of(&m, 0, "D1 SPI", &p, EvView::Messages);
+        assert_eq!((hex[0].text.as_str(), hex[0].hex.as_str()), ("48 69", ""));
+        m.dec_opt[2] = 1;
+        let text = rows_of(&m, 0, "D1 SPI", &p, EvView::Messages);
+        assert_eq!((text[0].text.as_str(), text[0].hex.as_str()), ("Hi", "48 69"));
+        assert_eq!(packet_text(&m, &p[0]), "H");
+        // I2C: the address as a number, the data as characters
+        m.dec_proto = Proto::I2C;
+        m.dec_opt = [0, 1, 0, 0];
+        let addr = Packet { kind: DecKind::Addr { read: false }, value: 0x50, ..byte(0.0, 0) };
+        assert_eq!((packet_text(&m, &addr), packet_text(&m, &byte(1.0, b'H'))), ("50 W".to_string(), "H".to_string()));
+        // a byte that was not acknowledged keeps its value and its mark
+        assert_eq!(packet_text(&m, &Packet { ok: false, ..byte(1.0, b'H') }), "48 N");
+        // the UART's own Format is as before
+        let mut u = Model::default();
+        u.dec_proto = Proto::UART;
+        (u.dec_bits, u.dec_ascii) = (8, false);
+        assert_eq!(packet_text(&u, &byte(0.0, b'H')), "48");
+    }
+
     /// The Events pane lists the demo's UART line as messages, switches to fields by a tap on its head, and a tap on
     /// a row needs no more than the row.
     #[test]

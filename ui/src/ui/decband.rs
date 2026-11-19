@@ -119,9 +119,10 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
     out
 }
 
-/// Whether the decoder shows characters (UART with Format ASCII).
+/// Whether the decoder shows its data as characters: the UART with Format ASCII, or a module whose own Format
+/// option says so (SPI, I2C).
 pub(super) fn ascii(m: &Model) -> bool {
-    m.dec_proto == Proto::UART && m.dec_ascii
+    (m.dec_proto == Proto::UART && m.dec_ascii) || m.dec_proto.module().is_some_and(|p| p.chars(&m.dec_opts()))
 }
 
 /// One field in the text of a message. A character line reads as text: control characters as `\r`, `\n`, `\t`, any
