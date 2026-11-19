@@ -472,6 +472,13 @@ Changed:
   before reads as it did (`dec_thr2` to `dec_thr4`, `main`). Threshold to middle sets every line's to the middle
   of its own signal. The plot has each line's threshold as a dashed line on its trace.
   `:BUS<n>:THReshold <line>,<volts>` sets one, `<line>,DEF` gives it up. The hysteresis is the main line's.
+- I2C decoder: at a time base that shows single bits the band has a bit row (host-tested, not yet verified on
+  hardware): the eight bits of a byte MSB first and the acknowledge, each around the clock edge it was read at;
+  the eighth bit of an address says Read or Write, a byte that was not acknowledged has a red NAK, and marks on
+  the data line's threshold show where the clock sampled it. The clock edges of a byte are taken as evenly spaced
+  (assumed; a clock stretched inside a byte moves the cells). The bit row of every decoder now comes when a bit
+  the decoder found is 12 px wide, not one of the protocol's nominal rate: an I2C bus at 100 kHz had its row
+  only at the time base of a 400 kHz one.
 - SPI decoder: Bit order (MSB first, LSB first), Data (Active high, Active low: every bit of a word inverted) and
   the CS polarity of the SPI trigger are rows of Decode (`:BUS<n>:OPTion1`, `:BUS<n>:OPTion2`; host-tested, not
   yet verified on hardware). The clock's edge is the Mode row, as before.

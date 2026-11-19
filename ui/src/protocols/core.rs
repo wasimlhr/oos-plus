@@ -72,6 +72,13 @@ impl Protocol for I2c {
     fn options(&self) -> &'static [Opt] {
         &I2C_OPTIONS
     }
+    fn bit_row(&self) -> bool {
+        true
+    }
+    /// The eight bits of a byte and its acknowledge, at the clock edges.
+    fn bits(&self, p: &Packet, _: &[usize; OPTS], _: &Shared) -> Option<Vec<oos_dsp::decode::Bit>> {
+        Some(oos_dsp::decode::i2c_bits(p)).filter(|b| !b.is_empty())
+    }
     /// The address: its seven bits ("50 W"), or with R/W bit Included the first byte of the transfer as it is on
     /// the bus ("A0 W", "A1 R"). " N" marks one that was not acknowledged. Triggers and searches take the seven bits.
     fn text(&self, p: &Packet, opt: &[usize; OPTS]) -> Option<String> {

@@ -171,8 +171,9 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   time, the length, the text, the bytes in hex and the result of the checks; Errors only leaves the rows that failed
 - A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
   slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
-  `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART band has a
-  row of its bits (start, data, parity, stop) and marks where each was sampled
+  `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART or I2C band
+  has a row of its bits (start, data, parity, stop; for I2C the bits of a byte, read or write, and the
+  acknowledge) and marks where each was sampled
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII

@@ -375,7 +375,7 @@ pub trait Protocol: Sync {
     }
 
     /// Whether [`Protocol::bits`] gives the bits of a field. The band on the plot then has a bit row above its boxes
-    /// at a time base that shows single bits ([`Protocol::bit_time_sh`] says how long one is).
+    /// at a time base that shows single bits (a bit of the first field that has them is wide enough to read).
     fn bit_row(&self) -> bool {
         false
     }

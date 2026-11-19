@@ -207,6 +207,10 @@ fn bit_label(b: &Bit) -> (String, &'static str) {
         // a stop bit is 1; what a failed one was read as is said
         BitKind::Stop if b.ok => ("Stop".into(), "T"),
         BitKind::Stop => (format!("Stop {}", v), "T"),
+        // I2C: the direction of an address, and whether the byte was acknowledged (a 0 on the line)
+        BitKind::Rw if b.level == Some(true) => ("Read".into(), "R"),
+        BitKind::Rw => ("Write".into(), "W"),
+        BitKind::Ack => (if b.ok { "ACK" } else { "NAK" }.into(), if b.ok { "A" } else { "N" }),
     }
 }
 
@@ -282,12 +286,18 @@ impl Ui {
     }
 
     /// Whether the band of the decoder `m` is the view of has its bit row: the protocol reports the bits of its
-    /// fields, and at this time base one is wide enough to be read.
+    /// fields, and at this time base one of them is wide enough to be read. The width is that of a bit the decoder
+    /// found, not of the protocol's nominal rate: an I2C bus runs at the speed of its controller.
     pub(super) fn dec_bit_row(&self, m: &Model) -> bool {
         let Some(p) = m.dec_proto.module().filter(|p| p.bit_row()) else { return false };
         let (tdiv, _) = self.view();
-        let bit = p.bit_time_sh(&m.dec_opts(), &crate::protocols::Shared::of(m));
-        tdiv > 0.0 && bit / tdiv as f64 * (self.area.w as f64 / HDIV as f64) >= BIT_MIN
+        if !(tdiv > 0.0) {
+            return false;
+        }
+        let Ok(packets) = self.decode_packets_of(m) else { return false };
+        let (opt, sh) = (m.dec_opts(), crate::protocols::Shared::of(m));
+        let bit = packets.iter().find_map(|x| p.bits(x, &opt, &sh)).and_then(|b| b.first().map(|b| b.t1 - b.t0));
+        bit.is_some_and(|bit| bit / tdiv as f64 * (self.area.w as f64 / HDIV as f64) >= BIT_MIN)
     }
 
     /// Height the band of that decoder takes of the plot.
