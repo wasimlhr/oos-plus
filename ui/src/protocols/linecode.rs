@@ -34,6 +34,9 @@ fn manchester_rate(opt: &[usize; OPTS]) -> f64 {
     if opt[0] >= MANCHESTER_AUTO { 0.0 } else { baud(opt) }
 }
 
+/// What the demo lines of this file carry.
+const DEMO_BYTES: [u8; 6] = [0xa5, 0x3c, 0x0f, 0x99, 0x5a, 0xc3];
+
 pub struct Manchester;
 
 impl Protocol for Manchester {
@@ -50,6 +53,16 @@ impl Protocol for Manchester {
     fn bit_time(&self, opt: &[usize; OPTS]) -> f64 {
         let rate = manchester_rate(opt);
         1.0 / if rate > 0.0 { rate } else { crate::decode::BAUDS[BAUD_DEFAULT] }
+    }
+    /// Six bytes at the rate of the list's usual entry, least significant bit first, a one rising in the middle of
+    /// its bit, 0 to 3.3 V, with a pause of 24 bit times between the rounds.
+    fn demo(&self) -> Option<Demo> {
+        let half = 0.5 / crate::decode::BAUDS[BAUD_DEFAULT];
+        let bits = DEMO_BYTES.iter().flat_map(|b| (0..8).map(move |i| b >> i & 1 == 1));
+        let halves: Vec<bool> = bits.flat_map(|one| [!one, one]).collect();
+        let period = (halves.len() + 16 + 48) as f64 * half;
+        let line = oos_dsp::sim::bits_logic(&halves, half, 16, 0.0, 3.3);
+        Some(Demo { period, lines: [Some(Box::new(move |t| line.v(t))), None, None, None] })
     }
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         let p = oos_dsp::linecode::manchester(l.main(), l.dt, manchester_rate(&l.opt), l.thr, l.hy);
@@ -84,6 +97,23 @@ impl Protocol for Mlt3 {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(oos_dsp::linecode::mlt3(l.main(), l.dt, baud(&l.opt), l.thr, l.hy))
     }
+    /// The same six bytes at the rate of the list's usual entry: a one steps the level on through 0, +1, 0, -1 V,
+    /// a zero holds it; 16 bit times of quiet line before them and 24 after.
+    fn demo(&self) -> Option<Demo> {
+        let bit = 1.0 / crate::decode::BAUDS[BAUD_DEFAULT];
+        let mut line = oos_dsp::sim::Levels { seg: vec![(0.0, 0.0)], tr: bit / 20.0 };
+        let (mut at, mut t) = (0usize, 16.0 * bit);
+        for one in DEMO_BYTES.iter().flat_map(|b| (0..8).map(move |i| b >> i & 1 == 1)) {
+            if one {
+                at += 1;
+                line.seg.push((t, [0.0, 1.0, 0.0, -1.0][at % 4]));
+            }
+            t += bit;
+        }
+        // (back to where a round begins: the next round is the same picture)
+        line.seg.push((t, 0.0));
+        Some(Demo { period: t + 24.0 * bit, lines: [Some(Box::new(move |t| line.v(t))), None, None, None] })
+    }
     fn legacy(&self, old: &Legacy) -> Option<[usize; OPTS]> {
         Some([old.baud, 0, 0, 0])
     }
@@ -101,6 +131,27 @@ mod tests {
             assert_eq!(m.dec_proto.name(), name);
             assert!(m.dec_on && m.dec_opt[0] == 3, "{} {:?}", key, m.dec_opt);
             assert_eq!(m.bus_bit(), 1.0 / 9600.0);
+        }
+    }
+
+    /// The demo lines of Manchester and MLT-3 carry the six bytes, and a new decoder of each reads them.
+    #[test]
+    fn the_demo_lines_carry_their_bytes() {
+        let modules: [&dyn Protocol; 2] = [&Manchester, &Mlt3];
+        for m in modules {
+            let demo = m.demo().unwrap();
+            let opt: [usize; OPTS] = std::array::from_fn(|k| m.options().get(k).map_or(0, |o| o.default));
+            let dt = m.bit_time(&opt) / 20.0;
+            let line = demo.lines[0].as_ref().unwrap();
+            let n = (2.0 * demo.period / dt) as usize;
+            let v: Vec<f32> = (0..n).map(|i| line((i as f64 * dt) % demo.period) as f32).collect();
+            let (lines, sh) = ([Some(&v[..]), None, None, None], Shared::default());
+            let thr = if m.key() == "Mlt3" { 0.0 } else { 1.65 };
+            let l = Lines { lines, dt, thr, hy: 0.2, opt, sh, chans: [None; 4], src: [None; 4] };
+            let data = m.decode(&l).unwrap().into_iter().filter(|x| x.kind == Kind::Data);
+            let got: Vec<u32> = data.map(|x| x.value).collect();
+            let want: Vec<u32> = DEMO_BYTES.iter().map(|&b| b as u32).collect();
+            assert!(got.len() >= 6 && got[..6] == want[..], "{}: {:x?}", m.name(), got);
         }
     }
 

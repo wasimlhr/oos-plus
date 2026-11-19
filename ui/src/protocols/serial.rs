@@ -138,6 +138,14 @@ impl Protocol for ModbusAscii {
         let parity = if l.opt[2] == 1 { Parity::Odd } else { Parity::Even };
         Ok(x1::modbus_ascii(l.main(), l.dt, baud(&l.opt, 0), 7 + l.opt[1] as u32, parity, l.thr, l.hy, false))
     }
+    /// Read holding registers (function 3) of device 0x11, as its characters: 7 bits, even parity, at the rate of
+    /// the list's usual entry.
+    fn demo(&self) -> Option<Demo> {
+        let frame = x1::gen::modbus_ascii_frame(0x11, &[0x03, 0x00, 0x6B, 0x00, 0x03]);
+        let words: Vec<u32> = frame.into_iter().map(u32::from).collect();
+        let rate = crate::decode::BAUDS[BAUD_DEFAULT];
+        Some(uart_demo(&words, 7, Parity::Even, rate, 40.0 / rate))
+    }
     fn legacy(&self, old: &Legacy) -> Option<[usize; OPTS]> {
         Some([old.baud, old.bits.clamp(7, 8) as usize - 7, usize::from(old.parity == Parity::Odd), 0])
     }
