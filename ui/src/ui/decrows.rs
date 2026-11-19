@@ -669,7 +669,8 @@ mod tests {
     /// text has its room. A small pane never has it (its text is red where a check failed).
     #[test]
     fn the_errors_column_is_there_for_errors_only() {
-        assert_eq!((errors_text(0), errors_text(1), errors_text(3)), (String::new(), "1 error".to_string(), "3 errors".to_string()));
+        assert_eq!(errors_text(0), "");
+        assert_eq!((errors_text(1).as_str(), errors_text(3).as_str()), ("1 error", "3 errors"));
         assert!(!errors_column(NARROW_W + 200, 0) && !errors_column(SMALL_W, 0));
         assert!(errors_column(NARROW_W + 200, 1) && errors_column(SMALL_W, 2));
         assert!(!errors_column(SMALL_W - 1, 5));
