@@ -3,7 +3,7 @@ name = "oos-remote"
 version = "0.0.0"
 repository = "https://github.com/dekajoule/oos"
 edition = "2021"
-description = "OOS: the remote transports of oos-ui (VXI-11, HiSLIP, the LXI and DNS-SD announcement)"
+description = "OOS: the remote transports of oos-ui (VXI-11, HiSLIP, the web server, the LXI and DNS-SD announcement)"
 license = "GPL-2.0-or-later"
 publish = false
 
@@ -16,6 +16,10 @@ testkit = []
 libc = "0.2"
 oos-hal = { path = "../../hal" }
 oos-system = { path = "../system" }
+
+# the tests of the web server: its threads at their normal priority (`oos_system::system::lower_priority`)
+[dev-dependencies]
+oos-system = { path = "../system", features = ["testkit"] }
 
 # oos-plus: the Windows desktop build announces with its own sockets and interface list (src/announce/windows.rs);
 # the scope build does not use it

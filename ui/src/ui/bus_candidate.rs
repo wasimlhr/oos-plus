@@ -119,8 +119,7 @@ impl Ui {
                 self.scpi_arm_operation();
                 self.cancel_bus_candidate(true);
                 self.single_armed = false;
-                self.m.keep_sweep();
-                self.m.trig_mode = TrigMode::Single;
+                self.m.set_sweep(TrigMode::Single);
                 self.m.run = RunState::Run;
                 self.m.status = TrigStatus::Wait;
                 self.m.floor_live_tdiv();

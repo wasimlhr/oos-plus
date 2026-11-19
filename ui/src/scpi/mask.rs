@@ -74,9 +74,7 @@ impl Scpi {
             let a = arg.trim();
             if kw(a, "RUN") {
                 ui.m.run = RunState::Run;
-                if ui.m.trig_mode == TrigMode::Single {
-                    ui.m.trig_mode = ui.m.sweep_kept;
-                }
+                ui.m.run_sweep();
                 ui.mark_changed();
                 None
             } else if kw(a, "STOP") {

@@ -24,16 +24,15 @@ def scope(*files):
 
 
 # oos-plus: no fmt and no clippy until the one formatting commit (tools/ci-parts.sh, tools/check.sh)
-EVERYTHING = {"test:hal", "test:ui", "test:dsp", "test:fpgad", "target", "decoders:core",
-              "decoders:each/1", "decoders:each/2"}
-UI = {"test:ui", "target", "decoders:core", "decoders:each/1", "decoders:each/2"}
+EVERYTHING = {"test:hal", "test:ui", "test:dsp", "test:fpgad", "target"}
+UI = {"test:ui", "target"}
 
 
 class Parts(unittest.TestCase):
     def test_everything(self):
         self.assertEqual(parts(all_parts=True), (EVERYTHING, True))
         for f in (".github/workflows/ci.yml", "tools/check.sh", "tools/ci-parts.sh", "rustfmt.toml",
-                  "ui/tools/decoder-features.sh", "a-file-nobody-knows"):
+                  "a-file-nobody-knows"):
             self.assertEqual(parts(f), (EVERYTHING, True), f)
 
     def test_what_depends_on_what(self):
@@ -41,7 +40,7 @@ class Parts(unittest.TestCase):
         self.assertEqual(parts("keys/update.pub"), parts("hal/src/lib.rs"), "keys/ is compiled into hal")
         self.assertEqual(parts("dsp/src/fft.rs"), (UI | {"test:dsp"}, True), "dsp reaches ui")
         self.assertEqual(parts("ui/src/scpi.rs"), (UI, True))
-        self.assertEqual(parts("ui/Cargo.toml"), (UI, True), "the decoder list reaches what ui reaches")
+        self.assertEqual(parts("ui/Cargo.toml"), (UI, True), "the manifest reaches what ui reaches")
         self.assertEqual(parts("fpgad/src/main.rs"), ({"test:fpgad", "target"}, True),
                          "fpgad reaches nothing")
 

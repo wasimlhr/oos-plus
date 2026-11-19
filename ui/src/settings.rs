@@ -316,7 +316,6 @@ impl Setting {
             }
             Ty::Choice(list, _, Arg::Prefix) => {
                 let a = arg.to_ascii_uppercase();
-                m.keep_sweep();
                 list.iter().position(|c| a.starts_with(&short(c.scpi))).map(Val::Index)
             }
             Ty::Seconds { .. } | Ty::Hertz { .. } => crate::words::num(arg)

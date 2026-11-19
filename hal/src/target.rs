@@ -4,8 +4,9 @@
 //! The description of a board family: everything the neutral code needs to know about it (docs/porting.md). Where
 //! OOS lives on the card, what an update package is for, which models belong to it and what they can do.
 //!
-//! An image is built for one board family, so the choice is made when OOS is built (`ACTIVE`). The scripts in the
-//! image and the build read the same values from `rootfs/board/<name>/etc/oos-board`; a test keeps the two equal.
+//! An image is built for one board family, so the choice is made when OOS is built (`ACTIVE`): `OOS_BOARD=<name>`,
+//! `dho` by default, sets `cfg(oos_board = "<name>")` for every crate (build.rs, ADR 0067). The scripts in the image
+//! and the build read the same values from `rootfs/board/<name>/etc/oos-board`; a test keeps the two equal.
 
 use crate::model::{Caps, Limits};
 
@@ -95,12 +96,19 @@ pub struct Target {
     pub clock_steps: &'static [f64],
 }
 
-/// The board this build is for.
+/// The board this build is for: `OOS_BOARD` when OOS is built, `dho` by default (build.rs, ADR 0067).
+#[cfg(oos_board = "dho")]
 pub const ACTIVE: Target = crate::dho::target::DHO;
 
 /// Every board family in the tree, `ACTIVE` among them (ADR 0067). `hal/tests/board_families.rs` keeps this list equal
 /// to the folders of `rootfs/board/`, and the tests below compare each family's `etc/oos-board` with its `Target`.
 pub const FAMILIES: &[Target] = &[crate::dho::target::DHO];
+
+/// The memory depths of the Acquire menu of the board this build is for (name, points per channel; 0 = Auto first).
+/// Setups store the position. Chosen together with `ACTIVE` (hal test `the_depths_come_from_the_active_family`); not
+/// a field of `Target`, which would change the layout of `Target` in every program.
+#[cfg(oos_board = "dho")]
+pub const DEPTHS: &[(&str, u64)] = &crate::dho::target::DEPTHS;
 
 #[cfg(test)]
 mod tests {
@@ -112,10 +120,6 @@ mod tests {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../rootfs")
     }
 
-    /// Marks of the stock partition table that the update checks and the scripts do not yet: family, mark, why.
-    const MARKS_ONLY_IN_TARGET: [(&str, &str, &str); 1] =
-        [("dho", "0x00038000@0x0004c000(backup)", "issue #288: oos-oneshot and card-install.py do not ask for it yet")];
-
     fn board_file(name: &str) -> HashMap<String, String> {
         let t = std::fs::read_to_string(rootfs().join("board").join(name).join("etc/oos-board")).unwrap();
         t.lines()
@@ -124,6 +128,13 @@ mod tests {
             .filter_map(|l| l.split_once('='))
             .map(|(k, v)| (k.to_string(), v.trim_matches('"').to_string()))
             .collect()
+    }
+
+    /// The family this build was made for is the one `OOS_BOARD` named, or `dho` without it (build.rs).
+    #[test]
+    fn active_is_the_family_oos_board_names() {
+        let named = option_env!("OOS_BOARD").filter(|v| !v.is_empty()).unwrap_or("dho");
+        assert_eq!(ACTIVE.name, named);
     }
 
     /// The scripts of the image and the code must agree on where things are on the card, for every family.
@@ -156,13 +167,9 @@ mod tests {
         }
         assert_eq!(f["OOS_CARD_CONTROLLER"], t.card_controller);
         // the same marks both ways: a mark left out of the file would let the scripts take a card without it. `parm`
-        // is the magic, which the scripts check apart; the known differences only get fewer.
+        // is the magic, which the scripts check apart.
         let mut file: Vec<&str> = f["OOS_PARM_MARKS"].split_whitespace().collect();
-        let only: Vec<&str> = MARKS_ONLY_IN_TARGET.iter().filter(|m| m.0 == t.name).map(|m| m.1).collect();
-        for m in &only {
-            assert!(t.parm_marks.contains(m) && !file.contains(m), "{}: {} is no longer a difference", t.name, m);
-        }
-        let mut code: Vec<&str> = t.parm_marks.iter().copied().filter(|m| *m != "parm" && !only.contains(m)).collect();
+        let mut code: Vec<&str> = t.parm_marks.iter().copied().filter(|m| *m != "parm").collect();
         file.sort_unstable();
         code.sort_unstable();
         assert_eq!(file, code, "{}: OOS_PARM_MARKS and Target::parm_marks", t.name);

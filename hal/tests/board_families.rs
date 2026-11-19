@@ -3,10 +3,11 @@
 
 //! What every board family has (ADR 0067, CONTRIBUTING.md "A new board family"): a folder of `rootfs/board/` is a
 //! family, and it needs its `Target` in `oos_hal::target::FAMILIES` (`hal/src/target.rs` compares its values with
-//! `etc/oos-board`), its module in `ui/src/board/<name>/` with an `impl Board for`, the keys of `etc/oos-board` the build
-//! and the scripts read, a `bin/oos-board` that answers every command the common scripts ask, and its row in the table
-//! "Board families" of docs/porting.md, whose family name is the `Target`'s. A row or a `Target` without a folder fails
-//! too. `oos-fpgad` is not checked yet: it is the DHO800/DHO900 tool until it is split (ADR 0067).
+//! `etc/oos-board`), its module in `ui/src/board/<name>/` with an `impl Board for`, its matrix of register sequences
+//! `tools/board/<name>/plan-matrix.sh`, the keys of `etc/oos-board` the build and the scripts read, a `bin/oos-board`
+//! that answers every command the common scripts ask, and its row in the table "Board families" of docs/porting.md,
+//! whose family name is the `Target`'s, and the commands of oos-fpgad for it (`fpgad/src/<name>/mod.rs` with its
+//! `run`, brought in and chosen as `board` by `fpgad/src/main.rs`). A row or a `Target` without a folder fails too.
 
 // the file modes of the board scripts are Unix permissions (the oos-plus Windows desktop build has none)
 #![cfg(unix)]
@@ -164,6 +165,23 @@ fn missing(name: &str, family: Option<&str>, cmds: &BTreeSet<String>) -> Vec<Str
         }
         Err(_) => out.push(format!("rootfs/board/{}/etc/oos-board", name)),
     }
+    let fpgad = format!("fpgad/src/{}/mod.rs", name);
+    if !std::fs::read_to_string(t.join(&fpgad))
+        .is_ok_and(|s| s.contains("pub(crate) fn run(cmd: &str, args: &[String])"))
+    {
+        out.push(format!("{}: the commands of oos-fpgad for the family, with `pub(crate) fn run`", fpgad));
+    }
+    // the neutral main of oos-fpgad brings the module in and can choose it as `board`
+    let main = read(&t.join("fpgad/src/main.rs"));
+    for line in [format!("mod {};", name), format!("use {} as board;", name)] {
+        if !main.lines().any(|l| l.trim() == line) {
+            out.push(format!("fpgad/src/main.rs: `{}`", line));
+        }
+    }
+    let matrix = format!("tools/board/{}/plan-matrix.sh", name);
+    if !t.join(&matrix).is_file() {
+        out.push(format!("{}: its matrix of register sequences (tools/plan-matrix.sh)", matrix));
+    }
     let script = dir.join("bin/oos-board");
     match std::fs::read_to_string(&script) {
         Ok(s) => {
@@ -219,4 +237,25 @@ fn a_case_branch_is_an_answer() {
     assert!(answers(s, "late"));
     assert!(!answers(s, "bring-up"));
     assert!(!answers(s, "usage"));
+}
+
+/// The family that each `pub const NAME` of hal/src/target.rs takes its value from (`crate::<family>::...`), in order.
+fn chosen(src: &str, name: &str) -> Vec<String> {
+    let head = format!("pub const {}:", name);
+    src.lines()
+        .filter(|l| l.starts_with(&head))
+        .filter_map(|l| Some(l.split("crate::").nth(1)?.split("::").next()?.to_string()))
+        .collect()
+}
+
+#[test]
+fn the_depths_come_from_the_active_family() {
+    let src = read(&top().join("hal/src/target.rs"));
+    let active = chosen(&src, "ACTIVE");
+    assert!(!active.is_empty(), "hal/src/target.rs has no `pub const ACTIVE`");
+    assert_eq!(chosen(&src, "DEPTHS"), active, "hal/src/target.rs: `DEPTHS` is not chosen with `ACTIVE`");
+    for f in FAMILIES {
+        let p = top().join("hal/src").join(f.name).join("target.rs");
+        assert!(read(&p).contains("pub const DEPTHS:"), "{}: its `DEPTHS` (the Acquire menu)", p.display());
+    }
 }

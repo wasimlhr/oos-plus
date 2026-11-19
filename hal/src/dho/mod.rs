@@ -24,6 +24,7 @@ pub mod gpio;
 pub mod hz;
 pub mod la;
 pub mod levels;
+pub mod lines;
 pub mod lmx2582;
 pub mod madeup;
 pub mod mask;
@@ -46,3 +47,10 @@ pub mod zonegeom;
 
 /// One register write: (BAR1 offset, value).
 pub type Write = (u32, u32);
+
+/// The way back of the read-out, for the simulated unit; the tests only (ADR 0053).
+#[cfg(any(test, feature = "sim"))]
+pub mod encode;
+/// The simulated unit; the tests only (ADR 0053).
+#[cfg(any(test, feature = "sim"))]
+pub mod sim;

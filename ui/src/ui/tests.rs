@@ -170,7 +170,6 @@ fn bus_trigger_aligns_on_the_matching_frame() {
 /// Protocol trigger on ARINC 429 (label), SENT (data nibbles) and FlexRay (frame ID) with the demo traffic: the end
 /// of the matching field sits at the trigger point, Frame triggers, Error never fires on the clean traffic.
 #[test]
-#[cfg_attr(not(feature = "decoders"), ignore = "needs every decoder")]
 fn bus_trigger_on_arinc_sent_and_flexray() {
     use super::*;
     use oos_dsp::decode::Kind;
@@ -240,7 +239,6 @@ fn bus_trigger_on_arinc_sent_and_flexray() {
 /// Protocol trigger on USB with the demo traffic (full speed, D+ / D- on CH3 / CH4): the token address, a PID,
 /// a payload byte and Frame (end of SYNC) at the trigger point, Error never fires; D+ alone decodes the same.
 #[test]
-#[cfg_attr(not(feature = "decoders"), ignore = "needs every decoder")]
 fn bus_trigger_on_usb() {
     use super::*;
     use oos_dsp::decode::Kind;
@@ -371,7 +369,6 @@ fn zone_drawn_by_touch_filters_records() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "decoders"), ignore = "needs every decoder")]
 fn extended_decoders_decode_their_demo() {
     use super::*;
     // (protocol, time/div that shows a whole frame, a label or kind that must appear)
@@ -562,7 +559,6 @@ fn shots_of_new_views() {
 /// System > Graphics = GPU draws the layers from commands: replayed, they give exactly the pixels of drawing
 /// directly, on every kind of screen.
 #[test]
-#[cfg_attr(not(feature = "decoders"), ignore = "needs every decoder")]
 fn recorded_layers_replay_to_the_same_pixels() {
     use super::*;
     let same = |ui: &mut Ui, what: &str| {

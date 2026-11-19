@@ -132,9 +132,6 @@ impl Ui {
         // coupling was beyond the signal and the trigger stopped. (A remote command changes the coupling alone: a
         // program sets both.)
         let level_base = (it == Item::TrigCoup).then(|| self.trig_level_base());
-        if it == Item::TrigMode {
-            self.m.keep_sweep();
-        }
         s.step(&mut self.m, n, d);
         if let Some(b) = level_base {
             self.m.trig_level += b - self.trig_level_base();

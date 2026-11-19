@@ -43,7 +43,6 @@ impl Ui {
             wins: Vec::new(),
             cur_win: 0,
             full: false,
-            full_at: None,
             cursor_view: None,
             full_asked: false,
             vmaxz: [1; NCH],
