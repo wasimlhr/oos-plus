@@ -713,10 +713,10 @@ pub fn dcc_xor(bytes: &[u8]) -> u8 {
 
 /// NMRA DCC (S-9.2) on one channel (rail vs ground, or a differential A−B): edges mark half-bit boundaries.
 /// A short half (~58 us) is a `1`, a long half (>= ~80 us, up to several ms for a stretched zero) is a `0`. Bits are
-/// pairs of halves; a short/long mismatch or a gap resets the search. Packet: preamble (>=10 ones) → start `0` →
-/// address byte → (`0` + data byte)* → (`0` + XOR) → end `1`. Emits Field("PRE") (value = preamble ones), Id
-/// (address), Data (each data byte), Crc (received XOR, `ok` = matches). Cut packets and half-bit disagreements
-/// give Field("!ERR"); idle gaps and non-DCC bursts are skipped.
+/// pairs of halves; a gap resets the search, and a short/long phase slip drops one half and retries without a hole.
+/// Packet: preamble (>=10 ones) → start `0` → address byte → (`0` + data byte)* → (`0` + XOR) → end `1`. Emits
+/// Field("PRE") (value = preamble ones), Id (address), Data (each data byte), Crc (received XOR, `ok` = matches).
+/// Cut packets and false starts (too few bytes) are dropped; a hole mid-byte gives Field("!ERR"); idle gaps are skipped.
 pub fn dcc(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
     let mut out = Vec::new();
     if !(dt > 0.0) {
@@ -747,7 +747,9 @@ pub fn dcc(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
             Half::Gap
         }
     };
-    // bits: (t0, t1, is_one); gaps and mismatches leave holes that reset the packet search
+    // bits: (t0, t1, is_one); gaps leave holes that reset the packet search. A short/long pair is a phase slip:
+    // drop one half and retry; a hole there would let a mid-bit start (odd half before the next bit) poison the
+    // whole stream after a good preamble (PRE then !ERR on live track captures)
     let mut bits: Vec<Option<(f64, f64, bool)>> = Vec::new();
     let mut i = 0;
     while i + 1 < e.len() {
@@ -771,9 +773,8 @@ pub fn dcc(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
                 bits.push(None);
                 i += 1;
             }
-            // phase slip or noise: drop one half and try again
+            // phase slip or noise: drop one half and try again (no hole)
             _ => {
-                bits.push(None);
                 i += 1;
             }
         }
@@ -793,7 +794,7 @@ pub fn dcc(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
             continue;
         }
         // start bit 0
-        let Some((s0, s1, false)) = bits.get(k).copied().flatten() else {
+        let Some((_s0, s1, false)) = bits.get(k).copied().flatten() else {
             continue;
         };
         let pre_t0 = bits[pre0].unwrap().0;
@@ -858,21 +859,18 @@ pub fn dcc(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
                 }
             }
         }
-        if cut {
-            // packet truncated by the record: drop what we emitted for this attempt's PRE only if nothing else
+        if let Some((t0, t1)) = err_at {
+            out.push(tag("!ERR", t0, t1.max(t0 + 1.0), false));
+            continue;
+        }
+        if cut || bytes.len() < 2 {
+            // truncated by the record, or a false start (e.g. a 0 inside a long preamble then ones read as
+            // address + end): drop this attempt's PRE and keep searching, not a broken packet on the wire
             if let Some(last) = out.last() {
                 if last.kind == Kind::Field("PRE") {
                     out.pop();
                 }
             }
-            continue;
-        }
-        if let Some((t0, t1)) = err_at {
-            out.push(tag("!ERR", t0, t1.max(t0 + 1.0), false));
-            continue;
-        }
-        if bytes.len() < 2 {
-            out.push(tag("!ERR", s0, s0 + 1.0, false));
             continue;
         }
         let (xor_t0, xor_t1, xor) = bytes[bytes.len() - 1];
