@@ -145,16 +145,16 @@ fn run_piece(m: &Model, p: &Packet) -> String {
 /// The text of a message: its fields in order, as many as fit into `room` pixels, then "...". Characters stand side by
 /// side, other values with a space between them. Empty when not even the first field fits.
 pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String {
-    let pk = said(pk);
     let dots = f.width("...");
     let glue = if ascii(m) { "" } else { " " };
     let mut s = String::new();
     let mut w = 0;
-    for (k, p) in pk.iter().enumerate() {
+    let mut fields = said(pk).peekable();
+    while let Some(p) = fields.next() {
         let piece = run_piece(m, p);
         let pw = f.width(&piece) + if s.is_empty() { 0 } else { f.width(glue) };
         // what is left out is said by the dots, which need their room
-        let rest = if k + 1 == pk.len() { 0 } else { dots };
+        let rest = if fields.peek().is_none() { 0 } else { dots };
         if w + pw + rest > room {
             return if s.is_empty() { s } else { s + "..." };
         }
@@ -167,18 +167,16 @@ pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String 
     s
 }
 
-/// The fields a message's text is made of: all but the start mark it begins with, which every message of its
-/// decoder has (an I2C transfer its start condition, an SPI frame its chip select).
-fn said(pk: &[Packet]) -> &[Packet] {
-    match pk {
-        [first, rest @ ..] if first.kind == DecKind::Start && !rest.is_empty() => rest,
-        _ => pk,
-    }
+/// The fields a text is made of: all but the start marks. A message begins with its own (an I2C transfer with its
+/// start condition, an SPI frame with its chip select), and a stream of several messages in one box would have one
+/// between every two ("FF S FD S FA", seen on a unit with a word per SPI frame).
+fn said(pk: &[Packet]) -> impl Iterator<Item = &Packet> {
+    pk.iter().filter(|p| p.kind != DecKind::Start)
 }
 
 /// The whole text of a message, as its box would hold it with all the room.
 pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
-    said(pk).iter().map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
+    said(pk).map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
 }
 
 /// The lines of the decoder `m` is the view of, in the order of its roles ("CH4 CH3 CH2"; on the LA "D8 D10").
@@ -682,6 +680,21 @@ mod tests {
         assert!(u.m.dec_on && u.m.dec_src == 2, "the decoder is as it was set");
         u.m.ch[2].on = true;
         assert!(named(&mut u));
+    }
+
+    /// A stream of several messages in one box has no start mark between them, and a message none at its head.
+    #[test]
+    fn a_text_leaves_out_the_start_marks() {
+        let ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut m = Model::default();
+        m.dec_proto = Proto::SPI;
+        m.dec_bits = 8;
+        let mark = Packet { kind: DecKind::Start, ..byte(0) };
+        let pk = [mark.clone(), byte(0xff), mark.clone(), byte(0xfd), mark, byte(0xfa)];
+        assert_eq!(message_text(&m, &pk), "FF FD FA");
+        assert_eq!(run_text(&m, &pk, &ui.fonts().sb, 1000), "FF FD FA");
+        let two = ui.fonts().sb.width("FF FD...");
+        assert_eq!(run_text(&m, &pk, &ui.fonts().sb, two), "FF FD...");
     }
 
     /// A character line reads as text with its control characters spelled out; a hex line has spaces; what does not
