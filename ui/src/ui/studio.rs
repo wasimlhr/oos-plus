@@ -1471,10 +1471,12 @@ impl Ui {
             .collect()
     }
 
-    /// A source that shows a signal now: a channel that is on, a ref that is shown.
+    /// A source that shows a signal now: a channel that is on, a ref that is shown. While SIM plays references the
+    /// channels stay on and are not acquired: they show no signal, and their measurements were a row of "----" for
+    /// each of them under the simulated bus.
     pub(super) fn studio_source_live(&self, id: WaveId) -> bool {
         match id {
-            WaveId::Ch(c) => c < n_ch() && self.m.ch[c].on,
+            WaveId::Ch(c) => c < n_ch() && self.m.ch[c].on && self.sim_refs.is_empty(),
             WaveId::Ref(i) => self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on),
         }
     }

@@ -345,6 +345,7 @@ Commands: [sim.md](sim.md).
 | --- | --- | --- | --- |
 | `sim` | preset index, slot, rate b/s, PRBS order, high V, low V, rise s, noise V, bandwidth Hz, de-emphasis dB, spread 0/1, random jitter s, periodic jitter s, periodic jitter Hz, reserved 0 | `3 0 16000000000 31 0.5 -0.5 0.00000000002 0.005 12000000000 4.5 1 0.0000000000012 0.000000000004 8000000 0` | `:SIM:PRESet ...` |
 | `sim_extra` | spread centre true/false, spread deviation, spread frequency Hz, DCD s, correlated RJ s, correlated corner Hz | `false 0.005 33000 0 0 1000000` | `:SIM:SSC:MODE ...` |
+| `sim_bus` | the SIM preset is the bus of this protocol (its key, as `dec_proto` has it) instead of the lane of `sim`; `none` for a lane | `none` | `:SIM:PRESet` |
 
 ## Mask, zones, histogram
 

@@ -272,6 +272,22 @@ Fixed:
 
 Added:
 
+- SIM: a bus as a preset (host-tested; the I2C bus (unit), 2026-11-19: Play put its two lines into R1 and R2, set
+  the decoder on them and listed its four messages without an error; the other buses not yet verified on
+  hardware). The presets were lanes for an eye (PCIe,
+  USB 3, SATA); a decoder had nothing to read on a scope with nothing connected. After the lanes the list of
+  SIM > Preset has a bus for every protocol whose traffic the scope can make: UART, I2C, SPI, CAN, CAN-FD, LIN,
+  FlexRay, SENT, MIL-STD-1553, ARINC 429, USB, USB PD, I2S, S/PDIF, 1-Wire, SWD, DMX512, DCC, UART 9-bit, Modbus
+  RTU. Play generates the lines of the bus into reference slots from the SIM slot on ("I2C SDA" in R1, "I2C SCL"
+  in R2), each in a band of its own, sets a decoder to the protocol on those references with the settings the
+  traffic is made for, and plays the references as the acquisition, a little more than one round of the traffic
+  on the screen. The decoder is one that is off (the selected one when none is on), so a decoder that is set up
+  for the bus on the inputs keeps its settings. Add to ref does the same without playing; Live goes back to the
+  set-up from before Play, the decoders as they were (on the unit Live had left the decoder on the references:
+  fixed; (unit), 2026-11-19, the LIN bus: after Live the decoder was the one from before Play). The knobs of a lane
+  (rate, pattern, levels, jitter) are not rows of the menu while a bus is the preset. `:SIM:PRESet "I2C bus"`,
+  `:SIM:PLAY ON`; the preset is part of the set-up (`sim_bus`). The traffic is the one the host build has on its
+  demo channels and the tests decode.
 - Channel > Hide trace, `:CHANnel<n>:HIDE` (host-tested, not yet verified on hardware). The channel stays on
   without its picture: it is acquired, measured and decoded and is the input of a math trace as before, and has
   no trace, no lane and no ground mark. Switching a channel off was the only way to take its trace away, and
@@ -533,6 +549,14 @@ Changed:
     longest time a frame may take, eight data bytes and the checksum at most;
   - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
     frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
+- Studio: while SIM plays references the badge strip has no measurements of the channels (host-tested; (unit),
+  2026-11-19: with an I2C bus playing the four rows of the channels were gone, and back after Live). The
+  channels stay on and are not acquired then, and each had its row of "----" under the simulated signal (seen on
+  a unit, 2026-11-19).
+- Decode: the row of a line names its source also when that is a reference that is empty now (host-tested;
+  (unit), 2026-11-19: a UART decoder on the cleared R1 has CH1 to CH4 and R1 in its row, R1 chosen). The rows
+  list the channels and the references that hold a waveform; a decoder left on "R1" after the reference was
+  cleared, or after a restart, had a row of channels with none of them chosen.
 - I2C decoder: a read is no error, and a 10-bit address is one address (host-tested, and on two captures of real
   buses on the host; not yet verified on hardware). The byte a controller ends a read with is not acknowledged:
   that is the rule of the bus, and it was red on the band, counted as an error in the Events pane and marked

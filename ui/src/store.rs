@@ -440,6 +440,7 @@ pub fn setup_text(m: &Model) -> String {
     kv("dpt", format!("{} {} {} {:?} {} {} {:?}", m.dpt_v.token(), m.dpt_i.token(), m.dpt_g.token(), m.dpt_4th, m.dpt_4ch.token(), m.dpt_pct, m.dpt_zoom));
     kv("sim", format!("{} {} {} {} {} {} {} {} {} {} {} {} {} {} {}", m.sim_preset, m.sim_slot, m.sim_rate, m.sim_prbs, m.sim_vhigh, m.sim_vlow, m.sim_rise, m.sim_noise, m.sim_bw, m.sim_deemph, if m.sim_ssc { 1 } else { 0 }, m.sim_rj, m.sim_pj, m.sim_pjhz, 0));
     kv("sim_extra", format!("{} {} {} {} {} {}", m.sim_ssc_center, m.sim_ssc_deviation, m.sim_ssc_hz, m.sim_dcd_pp, m.sim_corr_rj, m.sim_corr_hz));
+    kv("sim_bus", m.sim_bus.map_or("none".into(), |p| p.key()));
     // zones: "on src inside t:v t:v ..."
     for (k, z) in m.zones.iter().enumerate() {
         let pts: Vec<String> = z.pts.iter().map(|(t, v)| format!("{}:{}", t, v)).collect();
@@ -738,6 +739,11 @@ pub fn set(m: &mut Model, k: &str, v: &str) -> Result<(), String> {
         "pane" => m.pane = p_idx(v, crate::ui::PANES_N)?,
         "ev_view" => m.ev_view = EvView::parse(v.trim()).ok_or_else(|| format!("bad ev_view {v}"))?,
         "ev_errors" => m.ev_errors = p_bool(v)?,
+        "sim_bus" => {
+            let v = v.trim();
+            let bus = |v: &str| Proto::from_key(v).ok_or_else(|| format!("unknown protocol: {v}"));
+            m.sim_bus = if v == "none" { None } else { Some(bus(v)?) }
+        }
         "meas_labels" => m.meas_labels = p_bool(v)?,
         "strip" => m.strip_dock = p_enum(v, &StripDock::ALL)?,
         // before the strip setting was shared with Display > Windows the key was `strip_dock` and Below was called Under

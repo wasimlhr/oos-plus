@@ -49,6 +49,10 @@ The captures are 16 demo sessions of a PC scope program of another manufacturer,
 outside the tree (`local/captures`, ignored), with the scripts that run a decoder of the host UI over them
 (`oos-ui --serve --open <file>`, the decoder on reference sources, `:DECode:EVENts?`).
 
+A decoder can also be tried on the scope with nothing connected: SIM > Preset has a bus for every protocol whose
+traffic the scope can make (20 of them), which it generates into references and decodes. That checks the screen
+and the decoder's path on the unit, not the decode of a real signal: the traffic is the one the tests decode.
+
 ## Steps
 
 0. **Done.** Every decoder that has a capture run against it; the table above.

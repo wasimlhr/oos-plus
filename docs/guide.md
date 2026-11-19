@@ -322,6 +322,12 @@ run of lines whose time does not go back, so a file of several sweeps keeps the 
 reference is panned. **Measure** opens categorized choices with Source, Settings, and Selected; large readout
 lists have page controls. The Windows app announces its actual SCPI and HiSLIP listeners over mDNS.
 
+**SIM > Preset** lists lanes for an eye (PCIe, USB 3, SATA, 10GBASE-KR) and, after them, a bus for every protocol
+whose traffic the scope can make ("I2C bus", "LIN bus", "CAN bus" ...). With a bus, **Run simulation mode** puts the
+lines of the bus into reference slots from the SIM slot on, sets a decoder that is off to the protocol on them, and
+plays them: a decoder can be tried with nothing connected, and **Live** brings the decoders back as they were.
+**Add to ref** does the same without playing.
+
 **SIM > Advanced** adds SSC profile, deviation and modulation frequency, duty-cycle distortion, and
 correlated random jitter with its corner frequency (in Minimal and Studio these are rows of the Jitter and
 Spread tabs of the SIM sheet). PRBS-13 is available alongside the other patterns.

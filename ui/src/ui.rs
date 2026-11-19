@@ -7624,6 +7624,24 @@ impl Ui {
     /// change another (the forum, eTobey): the channels and the trigger stay as they are, the sources the protocols
     /// share stay, and a role the old protocol did not have takes a channel that is on and no other role uses, or none.
     /// The protocol's own parameters (threshold, baud, bits ...) are set on both.
+    /// The shared rows a protocol's set-up gives (its baud rate, bits, parity ...) into the decoder of `m`.
+    fn dec_apply_rows(m: &mut Model, rows: &[(crate::protocols::Row, u32)]) {
+        use crate::protocols::Row;
+        use oos_dsp::decode::Parity;
+        for &(r, v) in rows {
+            match r {
+                Row::Baud => m.dec_baud = v as usize,
+                Row::Bits => m.dec_bits = v,
+                Row::Parity => m.dec_parity = [Parity::None, Parity::Even, Parity::Odd][(v as usize).min(2)],
+                Row::SpiMode => m.dec_mode = v as u8,
+                Row::CanRate => m.dec_canrate = v as usize,
+                Row::CanH => m.dec_canh = v != 0,
+                Row::UsbSpeed => m.dec_uspeed = v as usize,
+                Row::CphyRate | Row::Fmt | Row::Pol | Row::SpiCs => {}
+            }
+        }
+    }
+
     fn set_dec_proto(&mut self, p: Proto) {
         let Proto::Module(i) = p;
         let s = crate::protocols::get(i).setup();
@@ -7688,19 +7706,7 @@ impl Ui {
         if s.la_off {
             m.dec_la_in = false;
         }
-        use crate::protocols::Row;
-        for &(r, v) in s.rows {
-            match r {
-                Row::Baud => m.dec_baud = v as usize,
-                Row::Bits => m.dec_bits = v,
-                Row::Parity => m.dec_parity = [oos_dsp::decode::Parity::None, oos_dsp::decode::Parity::Even, oos_dsp::decode::Parity::Odd][(v as usize).min(2)],
-                Row::SpiMode => m.dec_mode = v as u8,
-                Row::CanRate => m.dec_canrate = v as usize,
-                Row::CanH => m.dec_canh = v != 0,
-                Row::UsbSpeed => m.dec_uspeed = v as usize,
-                Row::CphyRate | Row::Fmt | Row::Pol | Row::SpiCs => {}
-            }
-        }
+        Self::dec_apply_rows(m, s.rows);
         if changed {
             m.dec_opt = crate::protocols::opt_default(i);
             // a module with a view of its own: open it, when no other pane is open
@@ -10025,7 +10031,7 @@ impl Ui {
 
             Item::ChProbe(_) => &["1x", "10x", "100x"],
             Item::TrigSrc | Item::TrigSrc2 => return self.trigger_sources().into_iter().map(Self::trigger_wave_label).collect(),
-            Item::DecSrc => return self.decoder_sources().into_iter().map(decode_source_name).collect(),
+            Item::DecSrc => return self.decoder_source_names(Some(self.m.dec_src)),
             Item::RefSrc => return ch_names(),
             Item::MeasSrc | Item::MeasSrcB | Item::CurSrcB | Item::CatSourceC | Item::CatSourceD => return self.wave_names(),
             Item::MeasCopyTo => return self.wave_names().into_iter().filter(|n| *n != self.wave_name(self.meas_src)).collect(),
@@ -10056,12 +10062,15 @@ impl Ui {
             Item::DecProto => return self.protos_on().iter().map(|p| p.name().to_string()).collect(),
             Item::DecUsbSpeed => &USPEED_NAMES,
             Item::DecOpt(k) => return self.m.dec_proto.module().and_then(|p| p.options().get(k)).map_or(Vec::new(), |o| o.choices.iter().map(|c| c.to_string()).collect()),
-            Item::DecSrc4 | Item::DecDiff => return std::iter::once("None".into()).chain(self.decoder_sources().into_iter().map(decode_source_name)).collect(),
+            Item::DecSrc4 | Item::DecDiff => {
+                let own = if it == Item::DecSrc4 { self.m.dec_src4 } else { self.m.dec_diff };
+                return std::iter::once("None".into()).chain(self.decoder_source_names(own)).collect();
+            }
             Item::DecCanH => &["RX/TX", "CAN_H"],
             Item::TrigBusWhat => &["Frame", "ID/Addr", "Data", "Error"],
-            Item::DecSrc2 => return self.decoder_sources().into_iter().map(decode_source_name).collect(),
+            Item::DecSrc2 => return self.decoder_source_names(Some(self.m.dec_src2)),
             Item::DecCs => return (if self.m.dec_proto == Proto::CPHY { Vec::new() } else { vec!["None".into()] }).into_iter()
-                .chain(self.decoder_sources().into_iter().map(decode_source_name)).collect(),
+                .chain(self.decoder_source_names(self.m.dec_cs)).collect(),
             Item::DecMode => &["0", "1", "2", "3"],
             Item::DecParity => &["None", "Even", "Odd"],
             Item::AcqMode => &["Normal", "Peak", "Average", "High res"],

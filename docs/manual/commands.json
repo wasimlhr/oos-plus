@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.13",
   "version": "0.1.13",
   "edition": "November 2026",
-  "date": "18 November 2026",
+  "date": "19 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -11908,7 +11908,7 @@
       [
        "<name>",
        "Text",
-       "Select a supported preset by its UI name.",
+       "Select a supported preset by its UI name: a lane (`\"PCIe 4.0\"`) or the bus of a protocol (`\"I2C bus\"`, `\"LIN bus\"`, the name of the protocol and `bus`).",
        "PCIe 4.0"
       ]
      ],
@@ -11916,7 +11916,8 @@
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `PCIe 4.0`.",
-     "ext": true
+     "ext": true,
+     "example": ":SIM:PRESet \"I2C bus\""
     },
     {
      "header": ":SIM:SLOT",
@@ -11973,6 +11974,7 @@
      ],
      "remarks": [
       "- Start/apply the configured simulation or stop/cancel it.",
+      "- With a bus preset ON generates the lines of the bus into the references from the SIM slot on, sets the selected decoder on them and plays them.",
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `0`.",
@@ -12371,6 +12373,12 @@
    "after": [
     {
      "h": "Examples"
+    },
+    {
+     "p": "A bus for a decoder to read, with nothing connected."
+    },
+    {
+     "pre": ":SIM:PRESet \"I2C bus\"\n:SIM:PLAY ON\n:DECode:PROTocol?                      -> I2C\n:DECode:SOURce?                        -> R1\n:DECode:EVENts?                        -> ...,D1 I2C R1,50 W,ok ...\n:SIM:LIVE"
     },
     {
      "p": "Generate a PRBS signal into R1."
@@ -16266,6 +16274,12 @@
        "spread centre true/false, spread deviation, spread frequency Hz, DCD s, correlated RJ s, correlated corner Hz",
        "`false 0.005 33000 0 0 1000000`",
        "`:SIM:SSC:MODE ...`"
+      ],
+      [
+       "`sim_bus`",
+       "the SIM preset is the bus of this protocol (its key, as `dec_proto` has it) instead of the lane of `sim`; `none` for a lane",
+       "`none`",
+       "`:SIM:PRESet`"
       ]
      ]
     },
