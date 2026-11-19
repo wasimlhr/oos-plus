@@ -155,8 +155,11 @@ pub fn stat_text(ui: &Ui) -> String {
     let measured = crate::drawpipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
     let gpu = format!("{} pipeline {:?} interp {:?} acquired {} used {} dropped {} measured {} compress k {}", gpu, crate::drawpipe::mode(), crate::sparse::interp(), acq, used, dropped, measured, crate::compress::last_k());
     // the graphics chosen (the GPU part above only while the GPU really draws) and the monitor
-    // with the size of the monitor's own trace maps (ADR 0073), `maps panel` where it draws from the panel's
-    let maps = ui.ph.hi_size().map_or(" maps panel".to_string(), |(w, h)| format!(" maps {}x{}", w, h));
+    // with the size of the monitor's own trace maps (ADR 0073) and the frames they took in the last step (within
+    // their time budget), `maps panel` where it draws from the panel's
+    let maps = ui.ph.hi_size().map_or(" maps panel".to_string(), |(w, h)| {
+        format!(" maps {}x{} frames {}", w, h, ui.monitor_frames())
+    });
     let hdmi =
         ui.hdmi_out.map_or(" hdmi off".to_string(), |(w, h)| format!(" hdmi {}x{} {:?}{}", w, h, ui.m.hdmi, maps));
     // the GPU's time per frame of each screen: a monitor frame comes every second frame, the pair has 2/30 s

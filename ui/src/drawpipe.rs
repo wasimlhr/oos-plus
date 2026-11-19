@@ -37,7 +37,9 @@ pub struct Stats<'a> {
 pub fn draw_frame(ph: &mut Phosphor, m: &Model, f: &Frame, stats: Option<Stats>) -> bool {
     // the monitor's maps (`Phosphor::hi`): the same frame at their size, its statistics counted once
     if let Some(mut hi) = ph.hi.take() {
+        let t0 = std::time::Instant::now();
         draw_frame(&mut hi, m, f, None);
+        ph.hi_time += t0.elapsed();
         let t = draw_frame(ph, m, f, stats);
         ph.hi = Some(hi);
         return t;
@@ -190,8 +192,10 @@ pub fn draw_frame_codes(ph: &mut Phosphor, m: &Model, f: &Frame, bytes: &[u8], l
     }
     // the monitor's maps: wider, so this path may not apply to them; then neither map is drawn here (`draw_frame`)
     if let Some(mut hi) = ph.hi.take() {
-        let t = draw_frame_codes(&mut hi, m, f, bytes, lay, None)
-            .and_then(|_| draw_frame_codes(ph, m, f, bytes, lay, stats));
+        let t0 = std::time::Instant::now();
+        let hit = draw_frame_codes(&mut hi, m, f, bytes, lay, None);
+        ph.hi_time += t0.elapsed();
+        let t = hit.and_then(|_| draw_frame_codes(ph, m, f, bytes, lay, stats));
         ph.hi = Some(hi);
         return t;
     }
@@ -327,8 +331,6 @@ struct View {
     m: Model,
     w: usize,
     h: usize,
-    /// the size of the monitor's maps (`Phosphor::hi`)
-    hi: Option<(usize, usize)>,
 }
 
 /// The fields of the model `draw_frame` depends on (a change of any other field keeps the workers' maps).
@@ -341,12 +343,11 @@ struct Key {
     acq: AcqMode,
     dots: bool,
     size: (usize, usize),
-    hi: Option<(usize, usize)>,
 }
 
 impl Key {
-    fn of(m: &Model, w: usize, h: usize, hi: Option<(usize, usize)>) -> Key {
-        Key { ch: m.ch.clone(), tscale: m.tscale, delay: m.delay, trig: (m.trig_src, m.trig_line(), m.trig_type, m.slope, m.trig_level, m.trig_coup, m.trig_nrej, m.trig_on_la()), acq: m.acq, dots: m.dots, size: (w, h), hi }
+    fn of(m: &Model, w: usize, h: usize) -> Key {
+        Key { ch: m.ch.clone(), tscale: m.tscale, delay: m.delay, trig: (m.trig_src, m.trig_line(), m.trig_type, m.slope, m.trig_level, m.trig_coup, m.trig_nrej, m.trig_on_la()), acq: m.acq, dots: m.dots, size: (w, h) }
     }
 }
 
@@ -363,10 +364,8 @@ struct Acc {
 }
 
 impl Acc {
-    fn new(gen: u64, w: usize, h: usize, hi: Option<(usize, usize)>) -> Acc {
-        let mut ph = Phosphor::new(w, h);
-        ph.set_hi(hi);
-        Acc { gen, ph, folds: Vec::new(), frames: 0, triggered: 0, edges: [0; 4], off: (0.0, 0.0) }
+    fn new(gen: u64, w: usize, h: usize) -> Acc {
+        Acc { gen, ph: Phosphor::new(w, h), folds: Vec::new(), frames: 0, triggered: 0, edges: [0; 4], off: (0.0, 0.0) }
     }
     /// Empty again, keeping the maps' memory.
     fn reset(&mut self, gen: u64) {
@@ -461,18 +460,17 @@ impl Pipe {
         Pipe { view, counters, workers, mails, open: Default::default(), live: Default::default(), home, pool: Mutex::new(pool) }
     }
 
-    /// The UI's mapping for the frames to come (None: the fast path does not apply), into maps of `w` x `h` and, with
-    /// a monitor that has its own (`Phosphor::hi`), of `hi` too.
-    pub fn set_view(&self, m: Option<&Model>, w: usize, h: usize, hi: Option<(usize, usize)>) {
+    /// The UI's mapping for the frames to come (None: the fast path does not apply).
+    pub fn set_view(&self, m: Option<&Model>, w: usize, h: usize) {
         let mut v = self.view.lock().unwrap();
         let Some(m) = m else {
             (v.view, v.key) = (None, None);
             return;
         };
-        let key = Key::of(m, w, h, hi);
+        let key = Key::of(m, w, h);
         if v.key.as_ref() != Some(&key) {
             v.gen += 1;
-            v.view = Some(Arc::new(View { gen: v.gen, m: m.clone(), w, h, hi }));
+            v.view = Some(Arc::new(View { gen: v.gen, m: m.clone(), w, h }));
             v.key = Some(key);
         }
         v.stamp = m.hw_stamp;
@@ -586,7 +584,7 @@ impl Pipe {
         for mail in &self.mails {
             let full = mail.lock().unwrap().full.take();
             let Some(a) = full else { continue };
-            if Some(a.gen) == gen && same_maps(&a.ph, ph) && a.frames > 0 {
+            if Some(a.gen) == gen && (a.ph.w, a.ph.h) == (ph.w, ph.h) && a.frames > 0 {
                 if *clear {
                     ph.clear();
                     *clear = false;
@@ -613,11 +611,11 @@ impl Pipe {
 /// Empty maps for view `v`, reusing `spare` when it has the size.
 fn fresh_acc(spare: Option<Acc>, v: &View) -> Acc {
     let mut a = match spare {
-        Some(mut a) if (a.ph.w, a.ph.h, a.ph.hi_size()) == (v.w, v.h, v.hi) => {
+        Some(mut a) if (a.ph.w, a.ph.h) == (v.w, v.h) => {
             a.reset(v.gen);
             a
         }
-        _ => Acc::new(v.gen, v.w, v.h, v.hi),
+        _ => Acc::new(v.gen, v.w, v.h),
     };
     a.folds = crate::framestats::folds_for(&v.m);
     a
@@ -652,7 +650,7 @@ fn draw_range(b: &Batch, r: Range<usize>, v: &View, a: &mut Acc, f: &mut Frame, 
 fn publish(mail: &Mutex<Mail>, a: Acc, counters: &Counters) -> Option<Acc> {
     let mut mb = mail.lock().unwrap();
     match mb.full.as_mut() {
-        Some(full) if full.gen == a.gen && same_maps(&full.ph, &a.ph) => {
+        Some(full) if full.gen == a.gen && (full.ph.w, full.ph.h) == (a.ph.w, a.ph.h) => {
             full.add(&a);
             Some(a)
         }
@@ -695,27 +693,13 @@ fn work(rx: Receiver<Arc<Batch>>, view: &Mutex<ViewState>, mail: &Mutex<Mail>) {
     }
 }
 
-/// Maps of one size, with monitor maps of one size or none.
-fn same_maps(a: &Phosphor, b: &Phosphor) -> bool {
-    (a.w, a.h, a.hi_size()) == (b.w, b.h, b.hi_size())
-}
-
-/// `dst` += `src`, saturating, per channel map; the monitor's maps too where both have them.
+/// `dst` += `src`, saturating, per channel map.
 fn add(dst: &mut Phosphor, src: &Phosphor) {
     for (d, s) in dst.map.iter_mut().zip(src.map.iter()) {
         for (x, y) in d.iter_mut().zip(s.iter()) {
             *x = x.saturating_add(*y);
         }
     }
-    if let (Some(d), Some(s)) = (dst.hi.as_deref_mut(), src.hi.as_deref()) {
-        add(d, s);
-    }
-}
-
-/// `add` for the measurement of the monitor's maps (`ui::hdmimaps`).
-#[cfg(test)]
-pub fn add_for_bench(dst: &mut Phosphor, src: &Phosphor) {
-    add(dst, src)
 }
 
 /// Workers where the cores are all alike (the host): two.
@@ -738,7 +722,7 @@ pub fn set_enabled(on: bool) {
     let was = ENABLED.swap(on, std::sync::atomic::Ordering::Relaxed);
     if was && !on {
         if let Some(p) = PIPE.get() {
-            p.set_view(None, 0, 0, None);
+            p.set_view(None, 0, 0);
         }
     }
 }
@@ -850,7 +834,7 @@ mod tests {
             let (bytes, fb, s, p) = frames_of(mask, n, 9, &sig);
             assert!(fb >= CODES_MIN_BYTES);
             let pipe = Pipe::start(2, false, fresh());
-            pipe.set_view(Some(&m), w, h, None);
+            pipe.set_view(Some(&m), w, h);
             let (cs, cp) = (s.clone(), p);
             let codes: CodesInto = Arc::new(move |c: &[u8], f: &mut Frame| crate::board::dho::hw::codes_into(c, &cs, &cp, 0, f));
             pipe.feed_codes(Box::new(Bytes(bytes.clone())), fb, 0, 9, 0, dec(&s, &p), Some(codes));
@@ -864,51 +848,6 @@ mod tests {
             for c in 0..NCH {
                 assert!(got.map[c] == want.map[c], "mask {}: CH{} differs", mask, c + 1);
             }
-        }
-    }
-
-    // Break it catches (HDMI Layout and Waveform, ADR 0073): a frame of the workers missing from the monitor's maps or
-    // drawn there at the panel's size, the codes path drawing one map and not the other, the panel's picture or
-    // statistics changed by the monitor's maps, or maps of another monitor size merged.
-    #[test]
-    fn the_workers_draw_every_frame_into_the_monitor_s_maps_too() {
-        let (w, h, hi) = (970, 448, (1830, 846));
-        let sig = |k: usize, c: usize, i: usize| {
-            let x = (i as f64 + (k % 7) as f64 * 0.13 - 35_000.0) / 400.0;
-            0.9 * (x * (1.0 + c as f64 * 0.5) * std::f64::consts::TAU).sin()
-        };
-        let cases =
-            [(1e-5, 1u32, 100_000u32, true), (1e-5, 3, 70_312, true), (1e-6, 1, 12_512, false), (2e-8, 3, 400, false)];
-        for (tdiv, mask, n, codes) in cases {
-            let m = model(tdiv, mask == 3, false);
-            let (bytes, fb, s, p) = frames_of(mask, n, 9, &sig);
-            let pipe = Pipe::start(2, false, fresh());
-            pipe.set_view(Some(&m), w, h, Some(hi));
-            let (cs, cp) = (s.clone(), p);
-            let into: CodesInto =
-                Arc::new(move |c: &[u8], f: &mut Frame| crate::board::dho::hw::codes_into(c, &cs, &cp, 0, f));
-            pipe.feed_codes(Box::new(Bytes(bytes.clone())), fb, 0, 9, 0, dec(&s, &p), codes.then_some(into));
-            settle(&pipe);
-            let mut got = Phosphor::new(w, h);
-            got.set_hi(Some(hi));
-            let (mut edges, mut off) = ([0u64; 4], (0.0, 0.0));
-            let n_got = pipe.merge(&mut got, &mut false, &mut edges, &mut off);
-            let (want, trig, wedges, ..) = reference(&bytes, fb, &s, &p, &m, w, h);
-            let (want_hi, ..) = reference(&bytes, fb, &s, &p, &m, hi.0, hi.1);
-            let what = format!("{} s/div, mask {}", tdiv, mask);
-            assert_eq!((n_got.frames, n_got.triggered, edges), (9, trig, wedges), "{}", what);
-            let got_hi = got.hi.as_deref().unwrap();
-            for c in 0..NCH {
-                assert!(got.map[c] == want.map[c], "{}: CH{} differs on the panel", what, c + 1);
-                assert!(got_hi.map[c] == want_hi.map[c], "{}: CH{} differs on the monitor", what, c + 1);
-            }
-            assert!(got_hi.map[0].iter().any(|&x| x > 0), "{}", what);
-            // the workers' maps of one monitor size are not added to maps of another
-            pipe.feed_codes(Box::new(Bytes(bytes.clone())), fb, 0, 9, 0, dec(&s, &p), None);
-            settle(&pipe);
-            let mut other = Phosphor::new(w, h);
-            other.set_hi(Some((hi.0 - 2, hi.1)));
-            assert_eq!(pipe.merge(&mut other, &mut false, &mut [0; 4], &mut (0.0, 0.0)).frames, 0, "{}", what);
         }
     }
 
@@ -1049,7 +988,7 @@ mod tests {
             let (bytes, fb, s, p) = batch(41, memsel, two);
             let c = fresh();
             let pipe = Pipe::start(workers, false, c);
-            pipe.set_view(Some(&m), w, h, None);
+            pipe.set_view(Some(&m), w, h);
             assert!(pipe.accepting());
             pipe.feed(Box::new(Bytes(bytes[..17 * fb].to_vec())), fb, 17, 0, dec(&s, &p));
             pipe.feed(Box::new(Bytes(bytes[17 * fb..].to_vec())), fb, 24, 0, dec(&s, &p));
@@ -1099,7 +1038,7 @@ mod tests {
             m.meas = vec![(Meas::Vpp, crate::model::WaveId::Ch(0))];
             let (bytes, fb, s, p) = batch(20, memsel, false);
             let pipe = Pipe::start(0, false, fresh());
-            pipe.set_view(Some(&m), w, h, None);
+            pipe.set_view(Some(&m), w, h);
             let b = pipe.feed_batch(Box::new(Bytes(bytes.clone())), fb, 0, 20, 0, dec(&s, &p), None);
             let mut hp = Helper::default();
             let mut k = 0;
@@ -1124,7 +1063,7 @@ mod tests {
         let m = model(1e-6, false, false);
         let (bytes, fb, s, p) = batch(20, 12_512, false);
         let pipe = Pipe::start(0, false, fresh());
-        pipe.set_view(Some(&m), w, h, None);
+        pipe.set_view(Some(&m), w, h);
         let b = pipe.feed_batch(Box::new(Bytes(bytes.clone())), fb, 1, 20, 0, dec(&s, &p), None);
         let mut hp = Helper::default();
         let mut k = 0;
@@ -1154,7 +1093,7 @@ mod tests {
         assert!(!pipe.accepting());
         // settings stamp older than the view's: dropped
         m.hw_stamp = 3;
-        pipe.set_view(Some(&m), w, h, None);
+        pipe.set_view(Some(&m), w, h);
         pipe.feed(Box::new(Bytes(bytes.clone())), fb, 10, 2, dec(&s, &p));
         settle(&pipe);
         assert_eq!(merge(&mut ph), Merged::default());
@@ -1163,7 +1102,7 @@ mod tests {
         pipe.feed(Box::new(Bytes(bytes.clone())), fb, 10, 3, dec(&s, &p));
         settle(&pipe);
         m.ch[0].offset = 0.5;
-        pipe.set_view(Some(&m), w, h, None);
+        pipe.set_view(Some(&m), w, h);
         assert_eq!(merge(&mut ph), Merged::default());
         assert!(ph.map.iter().all(|x| x.iter().all(|&y| y == 0)));
         assert_eq!(c.read(), (0, 0, 20));
@@ -1171,7 +1110,7 @@ mod tests {
         pipe.feed(Box::new(Bytes(bytes.clone())), fb, 10, 3, dec(&s, &p));
         settle(&pipe);
         m.status = TrigStatus::Wait;
-        pipe.set_view(Some(&m), w, h, None);
+        pipe.set_view(Some(&m), w, h);
         assert_eq!(merge(&mut ph).frames, 10);
         // many batches at once: all drawn, nothing more dropped
         let (big, fb2, s2, p2) = batch(200, 12_512, false);
@@ -1183,11 +1122,11 @@ mod tests {
         assert_eq!(c.read().2, 20);
         // a batch dropped before anybody claimed a frame counts all of them
         let pipe0 = Pipe::start(0, false, c);
-        pipe0.set_view(Some(&m), w, h, None);
+        pipe0.set_view(Some(&m), w, h);
         pipe0.feed(Box::new(Bytes(bytes.clone())), fb, 10, 3, dec(&s, &p));
         assert_eq!(c.read().2, 30);
         // no view: the acquisition thread queues the frames itself
-        pipe.set_view(None, 0, 0, None);
+        pipe.set_view(None, 0, 0);
         assert!(!pipe.accepting());
     }
 
@@ -1217,7 +1156,7 @@ mod tests {
             // one worker of the pipeline, alternating (perfguard.rs); 2 and 4 workers are reported only
             let mut ph = Phosphor::new(w, h);
             let one = Pipe::start(1, false, fresh());
-            one.set_view(Some(&m), w, h, None);
+            one.set_view(Some(&m), w, h);
             // the buffers fed are copied before, outside the timing (the copy is not the pipeline's work)
             let mut copies: Vec<Bytes> = (0..crate::perfguard::ROUNDS).map(|_| Bytes(bytes.clone())).collect();
             let (old, one_t) = crate::perfguard::best_pair(
@@ -1236,7 +1175,7 @@ mod tests {
             let (old, mut per) = (old / frames as u32, vec![one_t / frames as u32]);
             for n in [2usize, 4] {
                 let pipe = Pipe::start(n, false, fresh());
-                pipe.set_view(Some(&m), w, h, None);
+                pipe.set_view(Some(&m), w, h);
                 let t0 = std::time::Instant::now();
                 for _ in 0..3 {
                     pipe.feed(Box::new(Bytes(bytes.clone())), fb, frames, 0, dec(&s, &p));

@@ -626,6 +626,10 @@ FPS_FLOOR_CPU_LAYOUT = 22.0
 # the GPU may be this far below the CPU in the same mode (noise), and its frame loop this much busier (points)
 GPU_BEHIND_FPS = 1.5
 GPU_BUSIER = 5.0
+# HDMI Layout and Waveform against Mirror with the GPU (ADR 0073: the monitor's own trace maps within a time budget
+# must not cost the scope's picture its rate): the shares of Mirror's screens and waveforms a second they keep (noise)
+MONITOR_FPS_SHARE = 0.95
+MONITOR_WFM_SHARE = 0.9
 # The GPU's own time (the helper's upload and draw, `gpu panel .. monitor ..` of the state line): a monitor frame comes
 # with every second panel frame, so the pair has 2/30 s; two thirds of that, and of one frame without a monitor. The
 # frame rate alone hides a GPU near its limit: up to 0.1.11 the pair took about 56 ms with a monitor and the panel
@@ -670,8 +674,10 @@ def frame_rate_by_graphics_and_monitor(s, o):
     """Four channels in Run, the frame rate and the frame loop's load with System > Graphics = CPU and = GPU, and with a
     monitor plugged in, in each HDMI mode. The GPU must not fall behind the CPU: with a monitor it did up to 0.1.11
     (25 frames a second against 30) and no test saw it. Waveform and Layout draw the traces into maps of the monitor's
-    size as well (ADR 0073): the state line must say so (`maps WxH`), and the table has the waveforms a second and the
-    fast path's time of each mode, to see what those maps cost against Mirror."""
+    size as well (ADR 0073), within a time budget a step: the state line must say so (`maps WxH`), and they must not
+    cost the scope's own picture its rate: with the GPU, screens and waveforms a second as with Mirror
+    (`MONITOR_FPS_SHARE`, `MONITOR_WFM_SHARE`). The table has the waveforms a second, the fast path's time and the
+    frames the monitor's maps took in the last step of each mode."""
     if s.sim:
         raise Skip("no frame loop of the scope in the simulation")
     keep_g, keep_h = s.q(":SYST:GRAP?"), s.q(":SYST:GET? hdmi")
@@ -703,7 +709,9 @@ def frame_rate_by_graphics_and_monitor(s, o):
                 pan = float(gp[1]) if gp else math.nan
                 mo = float(gp[2]) if gp and gp[2] else (math.nan if h else 0.0)
                 fast = re.search(r" fast ([\d.]+) ms", st)
-                rows[(g, h)] = (fps, loop, helper, pan, mo, wfm, float(fast[1]) if fast else math.nan)
+                took = re.search(r" maps \d+x\d+ frames (\d+)", st)
+                rows[(g, h)] = (fps, loop, helper, pan, mo, wfm, float(fast[1]) if fast else math.nan,
+                                int(took[1]) if took else None)
                 if g == "GPU":
                     if h and not pan + mo <= GPU_PAIR_MS:
                         bad.append(f"GPU {h}: panel {pan:.1f} + monitor {mo:.1f} ms of GPU time, at most {GPU_PAIR_MS:.0f} for the pair")
@@ -718,13 +726,22 @@ def frame_rate_by_graphics_and_monitor(s, o):
         floor = FPS_FLOOR_CPU_LAYOUT if (g, h) == ("CPU", "Layout") else FPS_FLOOR
         if fps < floor:
             bad.append(f"{g} {h or 'panel'}: {fps:.1f} frames a second, at least {floor:.0f} expected")
+    # with the GPU (the default) the monitor's picture costs the CPU only its maps; with the CPU it also draws the
+    # monitor's screen, which has its own floor above
+    mirror = rows.get(("GPU", "Mirror"))
+    for h in ("Waveform", "Layout") if mirror else ():
+        v = rows[("GPU", h)]
+        if v[0] < MONITOR_FPS_SHARE * mirror[0]:
+            bad.append(f"GPU {h}: {v[0]:.1f} frames a second, Mirror {mirror[0]:.1f}")
+        if v[5] < MONITOR_WFM_SHARE * mirror[5]:
+            bad.append(f"GPU {h}: {v[5]:.0f} waveforms a second, Mirror {mirror[5]:.0f}")
     for h in modes:
         c, gp = rows[("CPU", h)], rows[("GPU", h)]
         if gp[0] < c[0] - GPU_BEHIND_FPS:
             bad.append(f"{h or 'panel'}: the GPU {gp[0]:.1f} frames a second, the CPU {c[0]:.1f}")
         if gp[1] > c[1] + GPU_BUSIER:
             bad.append(f"{h or 'panel'}: the frame loop busier with the GPU ({gp[1]:.0f} %) than with the CPU ({c[1]:.0f} %)")
-    table = "; ".join(f"{g} {h or 'panel'} {v[0]:.1f} fps loop {v[1]:.0f} % {v[5]:.0f} wfm/s fast {v[6]:.1f} ms" + (f" helper {v[2]:.0f} % gpu {v[3]:.1f}" + (f"+{v[4]:.1f}" if h else "") + " ms" if g == "GPU" else "") for (g, h), v in rows.items())
+    table = "; ".join(f"{g} {h or 'panel'} {v[0]:.1f} fps loop {v[1]:.0f} % {v[5]:.0f} wfm/s fast {v[6]:.1f} ms" + (f" monitor maps {v[7]} frames" if v[7] is not None else "") + (f" helper {v[2]:.0f} % gpu {v[3]:.1f}" + (f"+{v[4]:.1f}" if h else "") + " ms" if g == "GPU" else "") for (g, h), v in rows.items())
     assert not bad, " / ".join(bad) + " -- " + table
     return (f"monitor {mon[1]}: " if mon else "no monitor: ") + table
 

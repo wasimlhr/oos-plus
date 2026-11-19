@@ -57,13 +57,14 @@ per frame there: the panel 8 to 10 ms, the monitor 12 to 15 ms. Before the trace
   after the mixing keeps thin traces bright); unstretched, the pixels are exactly the CPU's. Colour grade the same
   way with the summed maps.
 - **The monitor's own maps** (Layout, Waveform; ADR 0073): the panel's maps carry a second set at the size of the
-  monitor's plot windows (`Phosphor::hi`), filled from the same frames; the monitor's frame sends those
-  (`GpuLayers::monitor_quad`, `Ui::monitor_maps`), so its traces are drawn unstretched, one cell a pixel. They were
-  the panel's maps stretched about two times each way: each trace pixel a soft block of two monitor pixels or more.
-  The cost is on the CPU: each frame drawn twice into maps (on a PC 2.1 to 2.7 times the panel's alone), and about
-  12 MB of maps (four channels at 1080p) copied into the arena where they changed and uploaded with each monitor
-  frame, against about 3.5 MB for the panel's. Not yet measured on the scope; `hdmi.traces = stretched` in
-  `system.conf` (or `OOS_HDMI_TRACES=stretched`) keeps the stretched maps.
+  monitor's plot windows (`Phosphor::hi`), filled from a sample of the same frames, 3 ms of drawing a step; the
+  monitor's frame sends those (`GpuLayers::monitor_quad`, `Ui::monitor_maps`), so its traces are drawn unstretched,
+  one cell a pixel. They were the panel's maps stretched about two times each way: each trace pixel a soft block of
+  two monitor pixels or more. The GPU's part of the cost: about 12 MB of maps (four channels at 1080p) copied into
+  the arena where they changed and uploaded with each monitor frame, against about 3.5 MB for the panel's. With every
+  frame drawn into them (the first version, a DHO924S at 100 ns/div, 2026-11-19) the monitor's frame took 44 to 54 ms
+  of GPU time; with the budget not yet measured. `hdmi.traces = stretched` in `system.conf` (or
+  `OOS_HDMI_TRACES=stretched`) keeps the stretched maps.
 - **Two sets of textures**: the panel's frames and the monitor's keep their own layers, maps and indices in the
   helper (`set` in the frame), so each uploads only the rows that changed since its own last frame. Mirror takes the
   panel's set (`reuse`).

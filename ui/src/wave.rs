@@ -851,15 +851,18 @@ pub struct Phosphor {
     pub map: [Vec<u16>; NCH],
     /// the dots of a dots-only draw are 3 x 3 (the zoom shows real samples, not lines through too few of them)
     pub fat: bool,
-    /// The same maps at the size a monitor shows them (HDMI Layout and Waveform, ADR 0073): every clear, decay and
-    /// draw of these maps goes to them too, so the monitor's traces are drawn at its resolution, not stretched.
-    /// `halve` and the grading are left to the owner (`Ui::grade_refs`). None without such a monitor.
+    /// The same maps at the size a monitor shows them (HDMI Layout and Waveform, ADR 0073): every clear and decay of
+    /// these maps goes to them too, and every draw while they are here, so the monitor's traces are drawn at its
+    /// resolution, not stretched. The owner sets them aside for the frames beyond their time budget (`Ui::hi_hold`);
+    /// `halve` and the grading are left to it (`Ui::hi_grade_refs`). None without such a monitor.
     pub hi: Option<Box<Phosphor>>,
+    /// Time spent drawing into `hi` (`draw_ex`, `drawpipe::draw_frame`), for its owner's budget.
+    pub hi_time: std::time::Duration,
 }
 
 impl Phosphor {
     pub fn new(w: usize, h: usize) -> Phosphor {
-        Phosphor { w, h, map: Default::default(), fat: false, hi: None }.init()
+        Phosphor { w, h, map: Default::default(), fat: false, hi: None, hi_time: Default::default() }.init()
     }
 
     /// The size of the monitor's maps (`hi`), if there are any.
@@ -962,8 +965,10 @@ impl Phosphor {
     #[allow(clippy::too_many_arguments)]
     pub fn draw_ex(&mut self, c: usize, m: &Model, view: (f32, f32), rec_t0: f64, dt: f64, v: &[f32], w: u16, z: Option<&[f32]>, pairs: bool) {
         if let Some(hi) = &mut self.hi {
+            let t = std::time::Instant::now();
             hi.fat = self.fat;
             hi.draw_ex(c, m, view, rec_t0, dt, v, w, z, pairs);
+            self.hi_time += t.elapsed();
         }
         let (pw, ph) = (self.w, self.h);
         draw_trace(&mut self.map[c], pw, ph, 0, c, m, view, rec_t0, dt, v, w, z, pairs);

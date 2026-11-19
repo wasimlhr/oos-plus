@@ -476,13 +476,14 @@ Added:
 
 Changed:
 
-- HDMI Layout and Waveform: the traces are drawn at the monitor's resolution (host-tested; not yet run on a unit or
-  seen on a monitor). They came from the panel's trace maps, stretched about two times each way, so every trace
-  pixel was a block of two monitor pixels or more: on the owner's 1080p monitor (2026-11-19, Studio, zoom, 10 ns/div)
-  the waveform looked "aliased and broken as in 8 bit pixel". While such a monitor is attached, every acquired frame
-  is now drawn a second time into maps of the monitor plot's size, which the monitor shows one pixel a cell (ADR
-  0073). It costs: on a PC a frame takes 2.1 to 2.7 times as long to draw, so with a monitor the scope may put
-  fewer waveforms a second into the picture; Mirror and no monitor cost nothing extra. `hdmi.traces = stretched` in
+- HDMI Layout and Waveform: the traces are drawn at the monitor's resolution. They came from the panel's trace maps,
+  stretched about two times each way, so every trace pixel was a block of two monitor pixels or more: on the owner's
+  1080p monitor (2026-11-19, Studio, zoom, 10 ns/div) the waveform looked "aliased and broken as in 8 bit pixel".
+  While such a monitor is attached, frames are now drawn a second time into maps of the monitor plot's size, which
+  the monitor shows one pixel a cell (ADR 0073), within 3 ms a step: the panel takes every frame as before, the
+  monitor a sample of them. Drawing every frame twice, as a first version did, gave sharp traces on a DHO924S but
+  halved its screens and waveforms a second at 100 ns/div (Layout 9.5 -> 5.0 to 5.6 screens a second); the budget is
+  host-tested, not yet run on a unit. Mirror and no monitor cost nothing extra. `hdmi.traces = stretched` in
   system.conf keeps the stretched traces. `:SYSTem:STATe?` says `maps WxH` after the monitor.
 - HDMI Waveform: the monitor's picture is drawn at its own resolution (host-tested; not yet seen on a monitor). The
   waveform area was the panel's, 1024 px wide, scaled up (to 1920 x 911 on a 1080p monitor), so its text, grid and

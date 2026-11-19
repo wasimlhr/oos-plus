@@ -91,6 +91,6 @@ mod tests {
         assert!(st.ends_with("hdmi 1920x1080 Layout maps panel"), "{}", st);
         u.ph.set_hi(Some((1830, 846)));
         let st = String::from_utf8(scpi.exec_line(&mut u, &cv, ":SYST:STAT?")).unwrap();
-        assert!(st.ends_with("hdmi 1920x1080 Layout maps 1830x846"), "{}", st);
+        assert!(st.ends_with("hdmi 1920x1080 Layout maps 1830x846 frames 0"), "{}", st);
     }
 }

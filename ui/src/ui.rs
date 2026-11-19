@@ -3384,12 +3384,13 @@ impl Ui {
             let mut raw_rec: Option<Record> = None;
             if !fast {
                 if let Some(p) = crate::drawpipe::pipe() {
-                    p.set_view(None, 0, 0, None);
+                    p.set_view(None, 0, 0);
                 }
             }
             // fast display path (fastdraw.rs): every queued frame but the newest straight into the phosphor map
             if fast {
                 let t0 = std::time::Instant::now();
+                let hi0 = self.hi_fast_time();
                 let frames = self.src.drain_newest(self.fast_max());
                 if !frames.is_empty() && clear_pending {
                     self.ph.clear();
@@ -3403,7 +3404,8 @@ impl Ui {
                     self.m.status = TrigStatus::Triggered;
                 }
                 got += n;
-                let ms = t0.elapsed().as_secs_f32() * 1000.0;
+                // the monitor's maps are left out of the time the take follows (their own budget, hdmimaps.rs)
+                let ms = t0.elapsed().saturating_sub(self.hi_fast_time() - hi0).as_secs_f32() * 1000.0;
                 td += ms;
                 self.t_fast += 0.05 * (ms - self.t_fast);
                 if n > 0 && ms > 0.0 {
@@ -3416,7 +3418,7 @@ impl Ui {
                 // batch mode: the other frames of the batches, drawn by the deposit workers (drawpipe.rs)
                 if let Some(p) = crate::drawpipe::pipe() {
                     let t1 = std::time::Instant::now();
-                    p.set_view(Some(&self.m), self.ph.w, self.ph.h, self.ph.hi_size());
+                    p.set_view(Some(&self.m), self.ph.w, self.ph.h);
                     let d = p.merge(&mut self.ph, &mut clear_pending, &mut self.fast_edges, &mut self.fast_off);
                     if d.triggered > 0 {
                         self.m.status = TrigStatus::Triggered;
@@ -3494,6 +3496,7 @@ impl Ui {
                         // against one span per column) and the grading of the picture follows how many of each it holds:
                         // the trace flickered with the batch sizes (docs/fork/flicker.md)
                         let frame = rec.raw.as_ref().filter(|_| self.fast_ok()).map(|r| r.frame.clone());
+                        let held = self.hi_hold();
                         if let Some(f) = frame {
                             let stats = crate::drawpipe::Stats { edges: &mut self.fast_edges, off: &mut self.fast_off };
                             crate::drawpipe::draw_frame(&mut self.ph, &self.m, &f, Some(stats));
@@ -3514,6 +3517,7 @@ impl Ui {
                                 }
                             }
                         }
+                        self.hi_release(held);
                         td += t1.elapsed().as_secs_f32() * 1000.0;
                         if self.history.len() >= if hw_seg { HISTORY } else { HISTORY.max(self.seg_count()) } {
                             self.history.pop_front();
@@ -3570,6 +3574,7 @@ impl Ui {
             } else if got > 0 {
                 self.pic_frames = got as u32;
             }
+            self.hi_note_frames(persist != 0.0);
             if got > 0 {
                 let iv = (self.now - self.last_rec_t).min(2.0);
                 self.rec_iv += 0.3 * (iv - self.rec_iv);
@@ -3912,13 +3917,17 @@ impl Ui {
             }
         }
         let t2 = fast_fill(&self.m, &mut self.ph.map, &mut self.acc_t, w, h, &frames, &placed);
-        // the monitor's maps (`Phosphor::hi`): the same frames placed and drawn at their size
-        if let Some(mut hi) = self.ph.hi.take() {
-            let (w, h) = (hi.w, hi.h);
-            let m = &self.m;
-            let placed = crate::fastdraw::par_map(&frames, |f| fast_plan(m, w, h, f, [false; NCH]));
-            fast_fill(m, &mut hi.map, &mut self.hdmi_maps.acc_t, w, h, &frames, &placed);
-            self.ph.hi = Some(hi);
+        // the monitor's maps (`Phosphor::hi`): the newest frames that fit their budget, placed and drawn at their size
+        if self.ph.hi.is_some() {
+            let k = self.hi_fast_take(frames.len());
+            let t = std::time::Instant::now();
+            if let Some(hi) = self.ph.hi.as_deref_mut().filter(|_| k > 0) {
+                let (w, h) = (hi.w, hi.h);
+                let (m, frames) = (&self.m, &frames[frames.len() - k..]);
+                let placed = crate::fastdraw::par_map(frames, |f| fast_plan(m, w, h, f, [false; NCH]));
+                fast_fill(m, &mut hi.map, &mut self.hdmi_maps.acc_t, w, h, frames, &placed);
+            }
+            self.hi_fast_done(k, t.elapsed());
         }
         let (a, b) = ((t1 - t0).as_secs_f32() * 1e3, t1.elapsed().as_secs_f32() * 1e3);
         self.t_fast_ab.0 += 0.05 * (a - self.t_fast_ab.0);
