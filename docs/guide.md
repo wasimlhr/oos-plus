@@ -179,7 +179,8 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes its bit rate
   from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses what a frame is
-  checked against
+  checked against; SENT lists the messages of its slow channel; an error flag of CAN is listed as an error
+  frame
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
 - Other: USB low/full speed, USB PD, parallel
 - Model railways: NMRA DCC (contributed by Arjen Halma), with a view of the layout in Display > Second pane > Bus view:

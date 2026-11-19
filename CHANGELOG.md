@@ -549,6 +549,23 @@ Changed:
     longest time a frame may take, eight data bytes and the checksum at most;
   - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
     frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
+- SENT decoder: the slow channel, and the two values of a sensor with two channels (host-tested, and on a capture
+  of a real bus on the host; not yet verified on hardware). Two bits of the status nibble of every frame carry a
+  serial message over 16 frames (short) or 18 (enhanced): its identifier, data and CRC are listed in the frame
+  that completes it ("SID 07 SDATA 075 SCRC 01", as the capture has it and the instrument that took it reads it),
+  and the Events pane has the columns Slow ID and Slow data. Decode > Channels: One value (the data nibbles as one
+  number, as before) or 12 + 12 bit, the two values of six nibbles ("3C1 3BC"; the second is sent with its low
+  nibble first), `:BUS<n>:OPTion3`.
+- CAN and CAN-FD decoders: an error flag is listed, and a CAN-FD frame says how many bytes it has (host-tested; the
+  byte count on a capture of a real bus on the host; not yet verified on hardware). Six dominant bit times and
+  more in a row, which no frame holds, are "ERROR FRAME" where no frame is being read, a message of their own
+  with the error in the ID column of the Events pane. The length of a CAN-FD frame read "DLC C" for 24 bytes, the
+  code of the field: it reads "DLC 24".
+- Manchester decoder: Baud has Auto, the rate of the signal itself, and it is what a new decoder has (host-tested,
+  and on a capture of a real line at 125 kbit/s on the host; not yet verified on hardware). The list had no such
+  rate, and a Manchester line carries its clock. Decode > A one is: Rising (802.3), as before, or Falling
+  (Thomas), the other convention, with which the bits of the capture are those its instrument reads
+  (`:BUS<n>:OPTion2`).
 - Decoders: the Events pane has the columns of the protocol (host-tested, and on captures of real CAN and LIN
   buses on the host; not yet verified on hardware). A frame was one text ("SOF ID 101 01 03 CRC 562D ACK"). Where
   the pane lists messages, is at least 560 px wide and every decoder that is on has the same columns, a frame has

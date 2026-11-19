@@ -1,9 +1,11 @@
 # Decoder plan (2026-11-19)
 
 **State, 2026-11-19:** step 0 and step 1 are done and merged (pull requests 75 and 76 of the fork, with the SIM bus
-presets). Step 2 is done on the host: a message is a frame of the protocol, and the Events pane has the columns
-of the protocol. Next is step 3: what is missing in a decode (the SENT slow channel, CAN-FD error frames, a free
-bit rate for Manchester, C-PHY at low rates), and each bus on the unit as the owner connects it.
+presets). Step 2 is done and merged (pull request 78): a message is a frame of the protocol, and the Events pane
+has the columns of the protocol. Of step 3, what was missing in a decode is done on the host for SENT (slow
+channel, two channels), CAN and CAN-FD (error flags, the length in bytes) and Manchester (the rate of the signal,
+the other convention). Open: C-PHY at low rates, the packet structure of a Manchester line, and each bus on the
+unit as the owner connects it.
 
 Goal: every protocol decoder is usable on the 1024x600 screen the way a bench scope shows a bus: a box per field on
 the plot, a list of messages beside it, settings that are found, and a decode that is right on real signals. The
@@ -31,19 +33,19 @@ Per decoder:
 | UART | capture: text and times agree; unit | band, bit row, lines | a failed character on the unit |
 | SPI | capture: 13-bit words, MOSI/MISO, frames agree; unit | band, frames, Format | MISO on the unit |
 | I2C | capture: bytes, errors and 10-bit addresses agree (one address differs, below) | band, bit row, Format | unit |
-| CAN | capture: 97 of 97 frames agree | band | DLC, frame type as columns |
-| CAN-FD | capture: frames agree; error frame not listed; DLC as its code | band | error frames, DLC in bytes |
+| CAN | capture: 97 of 97 frames agree; error flags host only | band, columns | unit |
+| CAN-FD | capture: frames agree, length in bytes; error flags host only | band, columns | unit |
 | LIN | capture: frames, errors and the rate from the sync agree | band | unit |
 | FlexRay | capture: frames agree; 9 CRC errors not checked | band | bit rate, channel A/B |
 | I2S | capture: samples agree with the word length set | band | left and right as one row |
-| SENT | capture: fast channel agrees | band | slow channel, two channels, status |
+| SENT | capture: fast and slow channel and both values agree | band, columns | unit |
 | MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault) | band | word types as columns; unit |
 | ARINC 429 | capture: agrees, no errors | band | - |
 | USB | capture: full speed packets agree | band | - |
 | 1-Wire | capture: transactions agree | band | command names |
 | I3C | capture: commands and bytes as on the lines; one read differs from the reference | band | command names |
 | C-PHY | capture: **nothing decoded** at 50 Msym/s with low-power states | band | low rates, LP states |
-| Manchester | capture: not comparable (125 kbit/s not in the list, no packet structure) | band | rate, structure |
+| Manchester | capture: the bits agree at the rate of the signal; no packet structure | band | structure |
 | the 13 others | host only: no capture | band | captures |
 
 The 13 others are Parallel, DCC, SWD, JTAG, DMX512, MLT-3, DS2482, Quad-SPI, UART 9-bit, Modbus RTU, Modbus ASCII,
@@ -93,6 +95,11 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
      Cycle, Data, CRC; ARINC 429: Label, SDI, Data, SSM; USB: Packet, Address, Endpoint, Data, CRC; I2S: Left,
      Right. The pane uses them when it lists messages, is at least 560 px wide and every decoder that is on has
      the same columns; else a row is its text as before.
+   What was missing in a decode, done on the host: the SENT slow channel (the message of the capture reads
+   identifier 07, data 075, CRC 01, as the reference has it, and its CRC check passes) and the two 12-bit values;
+   CAN and CAN-FD error flags (on a generated bus: the "error frame" the reference lists first in the CAN-FD
+   capture is the frame the record begins in the middle of, not a flag on the bus) and the length in bytes;
+   Manchester at the rate of its signal, with either convention for a one.
 3. **Families, in the order they can be checked:** the bench buses on the unit (UART, SPI, I2C); the vehicle buses
    on their captures (CAN, CAN-FD, LIN, FlexRay, SENT); the avionics buses (1553, ARINC 429); USB, 1-Wire, I2S,
    I3C; then what is missing in a decode (SENT slow channel, CAN-FD error frames, a free bit rate for LIN and
