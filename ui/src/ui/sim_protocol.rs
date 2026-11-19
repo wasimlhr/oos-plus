@@ -29,7 +29,8 @@ pub(in crate::ui) fn buses() -> &'static [(Proto, &'static str)] {
     B.get_or_init(|| {
         let has = |p: &Proto| *p == Proto::UART || { let Proto::Module(i) = *p; protocols::demo(i).is_some() };
         // (the names live as long as the program: a preset's name is a `&'static str` like a lane's)
-        let named = |p: Proto| -> (Proto, &'static str) { (p, Box::leak(format!("{} bus", p.name()).into_boxed_str())) };
+        let leaked = |name: String| -> &'static str { Box::leak(name.into_boxed_str()) };
+        let named = |p: Proto| (p, leaked(format!("{} bus", p.name())));
         PROTOS.iter().copied().filter(has).map(named).collect()
     })
 }
