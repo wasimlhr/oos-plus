@@ -678,8 +678,9 @@ Changed:
     identifier and data field tried (MLT-3 data left out: its bytes are counted from the first change of what
     the decoder is given, so in a part of the record they can be other bytes; 7 of 40 were not found).
   With the three, Normal at 50 us/div took a new frame in 15 of 29 seconds, the end of the identifier at the
-  trigger point in each picture looked at (before: no frame in 70 s). 5 us/div and 200 us/div were not measured
-  again after the last change.
+  trigger point in each picture looked at (before: no frame in 70 s), and at 200 us/div in 18 of 19. At 5 us/div
+  it takes none: the record there (35 kpts at 625 MSa/s, 56 us) is shorter than the frame, and the decoder gives
+  nothing of a frame that is cut off.
 - CAN and CAN-FD decoders: the bit timing follows the edges from recessive to dominant alone, as a node's does.
   They resynchronised on every edge, and on a line that is slow on its way back to recessive the bit behind that
   edge was sampled in its neighbour. Found on a unit (DHO924S, 2026-11-19: CAN_H at 500 kbit/s, probed so that
@@ -687,7 +688,9 @@ Changed:
   wrong identifier, at 50 us/div the frames beside the triggered one were not read. A record of it, read on the
   host, gives no frame before the change and the right one after it. Five dominant bits behind such an edge last
   longer than five and a half bit times and were taken for an error flag: a flag is dominant where a sixth bit
-  is sampled, too.
+  is sampled, too. On the unit after the change, the same line and threshold: 93 to 96 frames in 40 ms, the 21
+  identifiers of the bus, no field wrong (three records; before 85 to 92 frames, 5 to 7 fields wrong, up to 23
+  identifiers), and at 50 us/div the triggered frame whole with its neighbour.
 - Trigger > Bus > Frame for Modbus RTU and MLT-3: it never fired, since neither has a field the trigger took for
   the start of a frame. Modbus RTU: a frame begins with its address. MLT-3: every byte, as for the UART.
   Host-tested with their traffic, not on hardware.

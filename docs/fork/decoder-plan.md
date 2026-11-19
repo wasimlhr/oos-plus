@@ -136,12 +136,18 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       15 of 29 seconds at 50 us/div in Normal, the end of the identifier at the trigger point (before: none in
       70 s). The CAN-FD decoder reads the same bus (its frames are classic ones) at 200 us/div and gave
       nothing at 2 ms/div, where its data rate has too few samples: it reads what stays at the nominal rate
-      now (unit: 88 frames, 21 identifiers, none wrong). Open: an error frame, which the board does not send;
-      the trigger at 5 us/div and 200 us/div after the last change; and the unit left the network about 100 s
-      after the start of the build with the last change (20261119-190204), in the run that measured the
-      trigger, cause not known. It was back later the same day after a restart, the build confirmed by its
-      trial start; its log of that start has the Ethernet without an address for a time, and nothing of the
-      run before it.
+      now (unit: 88 frames, 21 identifiers, none wrong). Connected a second time the same day, CAN_H on CH1
+      with a slow way back to recessive and CAN_L on CH2: the decoders resynchronised on that slow edge and
+      read fields wrong; the bit timing follows the edges to dominant alone now, and the unit reads the line
+      without a wrong field (93 to 96 frames in 40 ms, 21 identifiers). The trigger on an identifier, measured
+      again there: a new frame in 15 of 29 seconds at 50 us/div, in 18 of 19 at 200 us/div, none at 5 us/div,
+      where the record is shorter than the frame (the owner's decision below). Open: an error frame, which the
+      board does not send. CH2 was not read: its high level sags to within 8 mV of the threshold in the middle,
+      and the hysteresis of a tenth of a division (5 mV at 50 mV/div) lets it toggle; a record of it reads right
+      on the host with 20 mV. And the unit left the network about 100 s after the start of build
+      20261119-190204, in the run that measured the trigger, cause not known; it was back later the same day
+      after a restart, the build confirmed by its trial start, its log of that start with the Ethernet without
+      an address for a time and nothing of the run before it.
    4. The other buses of his demo board, as he connects them: CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC
       429, USB.
       Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope
@@ -185,7 +191,8 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
   widths of sync and header are two rows of the Decode menu, the word is Data bits, the trailer what is left. If
   a few fixed structures to choose from would serve better than numbers, the rows can become that.
 - A frame cut off by the end of the record: the CAN and CAN-FD decoders give nothing of it (by the code; the
-  protocol trigger showed it on the unit). At a time base whose record is shorter than a frame, the band then has
+  protocol trigger showed it on the unit, where the trigger on an identifier takes no frame at 5 us/div: the
+  record is 56 us, the frame 112 us). At a time base whose record is shorter than a frame, the band then has
   no field of that frame and its identifier cannot be triggered on. The decoders could give the fields that are
   whole (start, identifier, the data bytes so far); every record's last frame would then show as a frame without
   its CRC, in the band and in the Events pane.
