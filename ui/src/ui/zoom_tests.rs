@@ -194,19 +194,36 @@ fn vertical_detail_phosphor_and_reference_pixels_follow_the_same_transform_as_ma
 }
 
 #[test]
-fn ac_source_has_no_absolute_trigger_marker_and_dc_drag_draws_thin_guide() {
-    for coupling in [Coupling::Ac,Coupling::Dc] {
-        let mut ui=mixed();ui.refs[0]=None;ui.relayout();ui.set_zoom(true);
-        ui.m.ch[0].coupling=coupling;ui.m.trig_src=0;ui.m.trig_ref=None;
-        ui.m.trig_type=TrigType::Edge;ui.m.trig_level=0.0;
-        let area=ui.wave_area();let y=ui.trigger_level_y(0.0,false);
-        assert_eq!(y.is_some(),coupling==Coupling::Dc);
-        let from=(area.x+area.w-30,area.y+area.h/2);
-        pointer(&mut ui,Phase::Down,from.0,from.1);pointer(&mut ui,Phase::Move,from.0,from.1+24);
-        let mut cv=Canvas::new(W,H);ui.draw_markers(&mut cv);
-        if coupling==Coupling::Dc {
-            assert!(ui.touch.drag==Drag::Level);assert_ne!(ui.m.trig_level,0.0);
-            let y=ui.trigger_level_y(ui.m.trig_level,false).unwrap();
+fn ac_demo_source_has_no_absolute_trigger_marker_and_dc_drag_draws_thin_guide() {
+    // On the scope the AFE couples before the ADC, so the level is on the AC trace as drawn: the marker, its guide and
+    // the drag stay. The case of the hardware source breaks when channel AC coupling hides them again (#46).
+    for (scope, coupling) in [(false, Coupling::Ac), (false, Coupling::Dc), (true, Coupling::Ac)] {
+        let shown = scope || coupling == Coupling::Dc;
+        let mut ui = mixed();
+        if scope {
+            ui.src = Source::Hw { shared: Default::default(), seen: 0 };
+            ui.m.ch[0].offset = 0.4;
+        }
+        ui.refs[0] = None;
+        ui.relayout();
+        ui.set_zoom(true);
+        ui.m.ch[0].coupling = coupling;
+        ui.m.trig_src = 0;
+        ui.m.trig_ref = None;
+        ui.m.trig_type = TrigType::Edge;
+        ui.m.trig_level = 0.0;
+        let area = ui.wave_area();
+        let y = ui.trigger_level_y(0.0, false);
+        assert_eq!(y, shown.then(|| ui.y_of_volts(0, 0.0)), "scope {scope}, {coupling:?}");
+        let from = (area.x + area.w - 30, area.y + area.h / 2);
+        pointer(&mut ui, Phase::Down, from.0, from.1);
+        pointer(&mut ui, Phase::Move, from.0, from.1 + 24);
+        let mut cv = Canvas::new(W, H);
+        ui.draw_markers(&mut cv);
+        if shown {
+            assert!(ui.touch.drag == Drag::Level);
+            assert_ne!(ui.m.trig_level, 0.0);
+            let y = ui.trigger_level_y(ui.m.trig_level, false).unwrap();
             // a thin dashed line (6 on, 4 off, as after every level change)
             let on=(200..W-200).filter(|&x|cv.px[(y*W+x) as usize]==ACCENT).count() as i32;
             assert!(on>=(W-400)*5/10,"dashed guide: {on} of {} pixels",W-400);

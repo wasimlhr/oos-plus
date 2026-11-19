@@ -915,14 +915,31 @@ impl Scpi {
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
+        let l = Self::bind_quietly(port);
+        if l.is_none() {
+            eprintln!("oos-ui: SCPI port {} not available", port);
+        }
+        l
+    }
+
+    /// `bind` without the message when the port is taken.
+    fn bind_quietly(port: u16) -> Option<TcpListener> {
         let l = crate::net6::tcp(port);
         if let Some(l) = &l {
             let _ = l.set_nonblocking(true);
             eprintln!("oos-ui: SCPI on port {}{}", port, if l.local_addr().is_ok_and(|a| a.is_ipv6()) { " (IPv4 and IPv6)" } else { "" });
-        } else {
-            eprintln!("oos-ui: SCPI port {} not available", port);
         }
         l
+    }
+
+    /// A port that was still taken when it was opened (the oos-ui before this one, ending): taken now if it is free.
+    /// True when that happened.
+    pub fn listen_again(&mut self, port: u16) -> bool {
+        if self.l.is_some() {
+            return false;
+        }
+        self.l = Self::bind_quietly(port);
+        self.l.is_some()
     }
 
     /// Queue a SCPI error and latch the matching *ESR bit. A query that fails still answers with this text,
@@ -6786,14 +6803,24 @@ mod tests {
         let mut client = TcpStream::connect(("127.0.0.1", s.port().unwrap())).unwrap();
         client.write_all(b"*IDN?\n").unwrap();
         client.shutdown(std::net::Shutdown::Write).unwrap();
-        client.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-        for _ in 0..50 {
+        // a hang guard, not a time the test depends on: the session is polled until the client reads the end of the
+        // connection, however long the host takes (it was 50 polls, 100 ms, and failed under load)
+        let deadline = std::time::Instant::now() + Duration::from_secs(60);
+        client.set_nonblocking(true).unwrap();
+        let mut got = Vec::new();
+        let mut chunk = [0u8; 256];
+        loop {
             s.poll(&mut ui, &cv);
-            if s.clients.is_empty() { break; }
+            match std::io::Read::read(&mut client, &mut chunk) {
+                Ok(0) => break,
+                Ok(n) => got.extend_from_slice(&chunk[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+                Err(e) => panic!("{e}"),
+            }
+            assert!(std::time::Instant::now() < deadline, "no end of the connection");
             std::thread::sleep(Duration::from_millis(2));
         }
-        let mut answer = String::new();
-        std::io::Read::read_to_string(&mut client, &mut answer).unwrap();
+        let answer = String::from_utf8_lossy(&got);
         assert!(answer.starts_with("OOS,"), "{answer:?}");
     }
 

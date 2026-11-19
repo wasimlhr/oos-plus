@@ -1589,3 +1589,20 @@ fn phase_noise_window_matches_the_direct_sum() {
         }
     }
 }
+
+/// The eye width of a 2-UI eye of 96 columns without the picture's own spread (upstream #244's test: the width read 6 %
+/// of the UI short without it, 937.5 ps for a signal without jitter, 874.5 ps for 20 ps RJ).
+#[test]
+fn eye_width_leaves_out_the_pictures_own_spread() {
+    let rate = 1e9;
+    let bits = prbs7(6000);
+    for (rj, want, tol) in [(0.0, 1000e-12, 2e-12), (20e-12, 880e-12, 3e-12), (50e-12, 700e-12, 5e-12)] {
+        let mut g = Gauss(11);
+        let (v, dt) = nrz(&bits, rate, 32, 0.25, &mut |_, _| g.next(rj));
+        let c = eye::recover_clock(&v, dt, 0.5, 0.1, Some(rate)).unwrap();
+        let mut e = Eye::new(96, 96, 2, -0.25, 1.25);
+        e.accumulate(&v, dt, &c);
+        let width = e.eye_width(c.period);
+        assert!(close(width, want, tol), "RJ {rj:e}: width {width:e}, want {want:e}");
+    }
+}

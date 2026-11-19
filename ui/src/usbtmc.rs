@@ -30,6 +30,8 @@ pub const HEADER: usize = 12;
 const CHUNK: usize = 4096;
 /// An answer longer than this is cut off with an error.
 const MAX_ANSWER: usize = 1 << 20;
+/// Transfers without data and without the end of the message that one answer may have before it is given up.
+const MAX_EMPTY: usize = 16;
 
 /// Header of a DEV_DEP_MSG_OUT transfer with `size` data bytes; `eom` on the last transfer of a message.
 pub fn out_header(tag: u8, size: u32, eom: bool) -> [u8; HEADER] {
@@ -160,6 +162,7 @@ impl<B: Bulk> Usbtmc<B> {
         let mut out = Vec::new();
         // a multiple of every bulk packet size (64 at full speed, 512 at high speed), so no transfer overflows
         let mut buf = vec![0u8; (HEADER + CHUNK).next_multiple_of(512)];
+        let mut empty = 0;
         loop {
             let tag = self.next_tag();
             self.send(&request_header(tag, CHUNK as u32, None))?;
@@ -186,6 +189,13 @@ impl<B: Bulk> Usbtmc<B> {
             }
             if out.len() > MAX_ANSWER {
                 return Err("answer too long".into());
+            }
+            // a device that sends nothing and never ends the message would be asked for ever
+            if data.is_empty() {
+                empty += 1;
+                if empty >= MAX_EMPTY {
+                    return Err(format!("{} transfers without data and without an end", empty));
+                }
             }
         }
     }
@@ -457,6 +467,37 @@ pub fn connect(root: &Path) -> Result<(Usbtmc<UsbFs>, Device), String> {
 mod tests {
     use super::*;
     use std::collections::VecDeque;
+
+    /// A device that answers every request with a transfer of no data that is not the end of the message.
+    struct Silent {
+        tag: u8,
+        asked: usize,
+    }
+
+    impl Bulk for Silent {
+        fn bulk_out(&mut self, t: &[u8], _: u32) -> io::Result<usize> {
+            self.tag = t[1];
+            self.asked += 1;
+            Ok(t.len())
+        }
+        fn bulk_in(&mut self, buf: &mut [u8], _: u32) -> io::Result<usize> {
+            let r = [DEV_DEP_MSG_IN, self.tag, !self.tag, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            buf[..HEADER].copy_from_slice(&r);
+            Ok(HEADER)
+        }
+        fn clear_halt(&mut self, _: bool) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    // Break it catches: a read that asks for ever while the device sends neither data nor the end (upstream #219)
+    #[test]
+    fn a_device_that_sends_only_empty_transfers_is_given_up() {
+        let mut dev = Usbtmc::new(Silent { tag: 0, asked: 0 });
+        let answer = dev.read();
+        assert!(answer.is_err(), "{answer:?}");
+        assert!(dev.bus.asked < 300, "still asking after {} empty transfers", dev.bus.asked);
+    }
 
     /// A USBTMC device: checks every OUT transfer against the spec, keeps the messages, answers queries.
     #[derive(Default)]
