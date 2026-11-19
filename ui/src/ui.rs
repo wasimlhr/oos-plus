@@ -13255,6 +13255,53 @@ mod tests {
         }
     }
 
+    // Break it catches: the answer of a background measurement marking the phosphor maps for clearing. The next step
+    // then emptied the live picture, and without a new record in that step the traces were gone until one came: on a
+    // unit with six catalogue rows, 8 records and 18 pictures a second, a third of the pictures had no channel traces
+    // (docs/fork/trace-blanks.md). With persistence the collected picture started over at every answer.
+    #[test]
+    fn a_measurement_that_finishes_leaves_the_live_picture() {
+        use super::*;
+        use std::time::{Duration, Instant};
+        for persist in [0, PERSIST.len() - 1] {
+            let shared: crate::board::HwShared = Default::default();
+            let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+            ui.m.run = RunState::Run;
+            ui.m.persist = persist;
+            ui.m.trig_level = 0.15;
+            for c in 1..NCH {
+                ui.m.ch[c].on = false;
+            }
+            ui.m.meas.clear();
+            ui.m.meas2.clear();
+            let ch = WaveId::Ch(0);
+            ui.m.cat = vec![(meascatalog::cat::JitterSummary, ch, ch, ch, ch)];
+            // one record: 100 k samples over 1.2 screens, a 0.3 V square
+            let window = ui.m.time_per_div() as f64 * HDIV as f64;
+            let n = 100_000usize;
+            let v: Vec<f32> = (0..n).map(|k| if (k / 4000) % 2 == 1 { 0.3 } else { 0.0 }).collect();
+            let frame = crate::board::Frame { seq: 1, dt: window * 1.2 / n as f64, pre: n / 2, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() };
+            shared.lock().unwrap().queue.push_back(frame);
+            ui.step(0.033);
+            let picture = ui.ph.map[0].clone();
+            assert!(picture.iter().any(|&c| c != 0), "the record is in the picture");
+            // the screen asks for the value, which starts the analysis; then steps without a new record until its
+            // answer is in (the time limit only guards against a worker that never answers)
+            let _ = ui.meas_rows();
+            assert!(ui.catalog_jobs_submitted() > 0, "the row is worked out in the background");
+            let end = Instant::now() + Duration::from_secs(30);
+            loop {
+                ui.step(0.033);
+                assert!(ui.ph.map[0] == picture, "persistence {}: the traces left the picture when the answer came in", PERSIST[persist].0);
+                if !ui.catalog_measurement_busy() {
+                    break;
+                }
+                assert!(Instant::now() < end, "the measurement did not finish");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        }
+    }
+
     // Break it catches: Trig'd shown for a batch the auto timeout forced (the software found an edge in it), or the
     // hardware status ignored when the thread reports it
     #[test]
