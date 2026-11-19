@@ -140,7 +140,8 @@ impl Ui{
             let mut state=self.azr.catalog_measurements.borrow_mut();state.pending.retain(|(key,stored)|*stored!=row||Some(&*key)==current.as_ref());}
         let next=self.azr.catalog_measurements.borrow().pending.front().cloned();
         if let Some((_,(id,a,b,c,d)))=next{if let Some(cat)=cat_from(id){let _=self.catalog_reading(cat,[a,b,c,d]);}}
-        if changed{self.finish_deferred_capture_statistics();self.dirty_map=true;}
+        // the phosphor maps stay (`poll_reference_measurements`)
+        if changed{self.finish_deferred_capture_statistics();}
     }
 }
 /// An older answer may stand in while a new one is computed only for live channels whose gate, settings and conditioning
