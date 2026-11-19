@@ -403,9 +403,8 @@ mod tests {
                     }
                 })
                 .collect();
-            let mut m = Model::default();
-            m.tscale = tscales().iter().position(|&x| (x as f64 - tdiv).abs() < tdiv * 1e-3).unwrap();
-            m.trig_level = 0.0;
+            let tscale = tscales().iter().position(|&x| (x as f64 - tdiv).abs() < tdiv * 1e-3).unwrap();
+            let mut m = Model { tscale, trig_level: 0.0, ..Default::default() };
             for c in 0..NCH {
                 m.ch[c].on = true;
                 m.ch[c].offset = 0.0;
