@@ -266,7 +266,7 @@ Added:
   on the screen. The decoder is one that is off (the selected one when none is on), so a decoder that is set up
   for the bus on the inputs keeps its settings. Add to ref does the same without playing; Live goes back to the
   set-up from before Play, the decoders as they were (on the unit Live had left the decoder on the references:
-  fixed, host-tested). The knobs of a lane
+  fixed; (unit), 2026-11-19, the LIN bus: after Live the decoder was the one from before Play). The knobs of a lane
   (rate, pattern, levels, jitter) are not rows of the menu while a bus is the preset. `:SIM:PRESet "I2C bus"`,
   `:SIM:PLAY ON`; the preset is part of the set-up (`sim_bus`). The traffic is the one the host build has on its
   demo channels and the tests decode.
