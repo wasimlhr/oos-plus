@@ -638,6 +638,48 @@ pub fn pj_lines(df: f64, spec: &[f64], count: usize) -> Vec<(f64, f64)> {
     crate::math::peaks(spec, count).into_iter().filter(|&(_, v)| v > 6.0 * floor).map(|(k, v)| (k as f64 * df, v)).collect()
 }
 
+/// Variance (columns²) of the column centres that a Gaussian crossing of σ = `s` columns lights when it is centred on
+/// a column border.
+fn binned_variance(s: f64) -> f64 {
+    if !(s > 0.0 && s.is_finite()) {
+        return 0.25;
+    }
+    let k = (8.0 * s).ceil() as i64 + 1;
+    let (mut m1, mut m2) = (0.0, 0.0);
+    for m in -k..k {
+        let p = q_tail(m as f64 / s) - q_tail((m + 1) as f64 / s);
+        let x = m as f64 + 0.5;
+        m1 += p * x;
+        m2 += p * x * x;
+    }
+    m2 - m1 * m1
+}
+
+/// The crossing's own σ (columns) from the σ the picture reads (columns). A line through the rows at the crossing
+/// lights its column and a neighbour, and an edge takes time to pass those rows: a crossing without jitter reads half
+/// a column (measured upstream at 48 to 960 columns; 6 % of the UI in the 96 columns of a 2-UI eye), and a wide one
+/// reads a variance a twelfth of a column² above its own. A Gaussian centred on a column border reads both, so the
+/// reading is matched to that model by bisection (upstream #244).
+fn unbinned_sigma(read: f64) -> f64 {
+    let v = read * read;
+    if !read.is_finite() {
+        return f64::NAN;
+    }
+    if !(v > binned_variance(0.0)) {
+        return 0.0;
+    }
+    let (mut lo, mut hi) = (0.0, read);
+    for _ in 0..50 {
+        let mid = 0.5 * (lo + hi);
+        if binned_variance(mid) < v {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    0.5 * (lo + hi)
+}
+
 /// Gaussian tail probability Q(z), relative error below 1 % out to where it underflows.
 pub fn q_tail(z: f64) -> f64 {
     if z < 0.0 {
@@ -977,29 +1019,13 @@ impl Eye {
         let m = o.iter().map(|x| x.0 * x.1).sum::<f64>() / n;
         (m, (o.iter().map(|x| (x.0 - m).powi(2) * x.1).sum::<f64>() / n).sqrt())
     }
-    /// Eye width (s): 1 UI - 6 σ of the crossing time. The crossing is read from three rows of the picture, and an
-    /// edge takes time to pass through them: that spread (uniform over the rows' voltage divided by the edge slope) and
-    /// the width of the columns belong to the picture, not to the jitter, and are taken out of σ. Without this a
-    /// jitter-free signal read 5 % short of a unit interval in a picture of 96 columns.
+    /// Eye width (s): 1 UI - 6 σ of the crossing time, with the picture's own spread taken out (`unbinned_sigma`).
+    /// The crossing is read from three rows of the picture: a line through them lights its column and a neighbour, and
+    /// an edge takes time to pass them. Without this a jitter-free signal read about 6 % short of a unit interval in a
+    /// picture of 96 columns.
     pub fn eye_width(&self, period: f64) -> f64 {
-        let sigma = self.crossing_time().1;
-        let (one, zero, _, _) = self.levels();
-        let amplitude = one - zero;
-        let (rise, fall) = self.rise_fall(period);
-        let edges: Vec<f64> = [rise, fall].into_iter().filter(|t| t.is_finite() && *t > 0.0).collect();
-        // a line through the crossing rows lights the column it is in and part of its neighbour: measured on a
-        // jitter-free signal at 96, 480 and 960 columns, that is a σ of half a column
-        let column = self.span() / self.w as f64;
-        let mut picture = column * column / 4.0;
-        if !edges.is_empty() && amplitude > 0.0 && period > 0.0 {
-            // 20-80 % edge time in UI, as a slope over 0.6 of the amplitude
-            let edge = edges.iter().sum::<f64>() / edges.len() as f64 / period;
-            let rows = 3.0 * (self.v_max - self.v_min) as f64 / self.h as f64;
-            let through = rows / (0.6 * amplitude) * edge;
-            picture += through * through / 12.0;
-        }
-        let jitter = (sigma * sigma - picture).max(0.0).sqrt();
-        (1.0 - 6.0 * jitter) * period
+        let cols = self.w as f64 / self.span();
+        (1.0 - 6.0 * unbinned_sigma(self.crossing_time().1 * cols) / cols) * period
     }
     /// 20-80 % rise and fall times on the eye (s): at the 20 % and 80 % rows the hits left of the crossing belong to
     /// the rising (at 20 %) / falling (at 80 %) edges, those right of it to the other one.
