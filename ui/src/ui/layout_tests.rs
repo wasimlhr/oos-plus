@@ -110,6 +110,32 @@ fn tap_in(u: &mut Ui, r: Rect) {
     u.tap(r.x + r.w / 2, r.y + r.h / 2);
 }
 
+/// The links of the Studio bar: LAN as a small pill, and USB beside it while a stick is mounted, as the Default bar
+/// has a USB pill. They take their room from the read-out and overlap nothing; a tap on LAN opens Network, one on
+/// USB opens Storage.
+#[test]
+fn studio_top_bar_has_a_lan_pill_and_a_usb_pill_while_a_stick_is_in() {
+    let mut u = studio();
+    let t = u.studio_top();
+    assert!(t.lan.w > 0 && t.lan.w < 70 && t.usb.w == 0 && t.wlan.w == 0, "{:?}", (t.lan, t.usb, t.wlan));
+    let acq = t.acq.w;
+    u.usb = true;
+    let t = u.studio_top();
+    assert!(t.usb.w > 0 && t.usb.right() <= t.lan.x && t.acq.w < acq, "{:?}", (t.usb, t.lan, t.acq));
+    let all = [t.run, t.acq, t.usb, t.lan, t.add, t.cursors, t.display, t.storage, t.view, t.gear];
+    for (i, a) in all.iter().enumerate() {
+        assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
+        for b in &all[i + 1..] { assert!(!overlaps(*a, *b), "chips {i} do not overlap: {a:?} {b:?}"); }
+    }
+    shot(&mut u, "01-top-links");
+    tap_in(&mut u, t.usb);
+    assert!(u.menu_open && u.menu == MenuId::Storage);
+    u.close_menu();
+    tap_in(&mut u, t.lan);
+    assert!(u.menu_open && u.menu == MenuId::Network);
+    u.close_menu();
+}
+
 #[test]
 fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     let mut u = studio();

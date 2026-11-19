@@ -222,6 +222,10 @@ pub(super) struct StudioTop {
     pub acq: Rect,
     /// the search controls, at the end of the read-out's room (no width without a search)
     pub search: Rect,
+    /// the links as small pills left of the buttons: LAN, and WLAN and USB while their stick is in (else no width)
+    pub lan: Rect,
+    pub wlan: Rect,
+    pub usb: Rect,
     pub measure: Rect,
     pub cursors: Rect,
     pub display: Rect,
@@ -536,17 +540,36 @@ impl Ui {
         // the numbered view switcher (Display > Views), left of + Add, only while there is more than one view
         let vw = super::views::studio_box_w(self.m.views);
         let vbox = Rect::new(add.x - if vw > 0 { gap + vw } else { 0 }, CHIP_Y, vw, CHIP_H);
+        // the links, as the Default bar has them at its right end: a dot and a name each. The Default bar's box with
+        // the address has no room here; the address is on the Network page a tap on LAN opens
+        let mut lx = vbox.x - gap;
+        let mut link = |label: &str, there: bool| {
+            let w = if there { f.sb.width(label) + 26 } else { 0 };
+            let b = Rect::new(lx - w, CHIP_Y, w, CHIP_H);
+            if there {
+                lx = b.x - 4;
+            }
+            b
+        };
+        let lan = link("LAN", true);
+        let wlan = link("WLAN", self.wlan_stick);
+        let usb = link("USB", self.usb);
         // the search (Add > Search): previous, how many events, next. It has the end of the read-out's room. Its label
         // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
-        let room = vbox.x - 10 - x;
+        let links_x = lx + 4 - gap;
+        let room = links_x - 10 - x;
         let search_w = if self.studio.search.is_some() {
             let caption = self.studio_acq_need();
             let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
         } else { 0 };
         let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);
-        let search = Rect::new(vbox.x - 10 - search_w, CHIP_Y, search_w, CHIP_H);
-        StudioTop { vbox, add, badge, run: pill, single, sim, acq, search, measure, cursors, display, storage, view, gear, autoset, clear, force, tier }
+        let search = Rect::new(links_x - 10 - search_w, CHIP_Y, search_w, CHIP_H);
+        let run = pill;
+        StudioTop {
+            vbox, add, badge, run, single, sim, acq, search, lan, wlan, usb, measure, cursors, display, storage,
+            view, gear, autoset, clear, force, tier,
+        }
     }
 
     /// Measure and Cursors as the top-bar buttons (`top_buttons`); the others are Studio's own.
@@ -621,6 +644,20 @@ impl Ui {
         }
         self.draw_view_box(cv);
         self.draw_studio_search_chip(cv);
+        // the links: a dot (green with an address, or a mounted stick) and a name, as the USB pill of the Default bar
+        let lan_up = self.addr_of("eth0").filter(|_| self.eth_link).is_some();
+        let wlan_up = self.addr_of(oos_hal::wlan::IFACE).is_some();
+        let net = open(MenuId::Network);
+        let links = [(t.lan, "LAN", lan_up, net), (t.wlan, "WLAN", wlan_up, net), (t.usb, "USB", true, storing)];
+        for (r, label, up, on) in links {
+            if r.w == 0 {
+                continue;
+            }
+            cv.round(r, 5, if on { ACCENT } else { BTN_BORDER }, 255);
+            cv.round(r.inset(1), 4, BG, 255);
+            cv.circle(r.x + 10, r.y + r.h / 2, 3, if up { GREEN } else { DIM });
+            cv.text_in(&f.sb, Rect::new(r.x + 18, r.y, r.w - 20, r.h), 0, label, TEXT);
+        }
         // Autoset, Clear, Force: Force is dimmed while no trigger is waiting, and still works
         let waiting = !self.record_mode() && self.m.run == RunState::Run && self.m.status == TrigStatus::Wait;
         for (r, label, lit) in [(t.autoset, labels[0], true), (t.clear, labels[1], true), (t.force, labels[2], waiting)].into_iter().filter(|(r, ..)| r.w > 0) {
@@ -1318,6 +1355,11 @@ impl Ui {
         } else if t.sim.w > 0 && hit(t.sim) {
             if self.menu_open { self.close_menu(); }
             self.studio_set_view(StudioView::Sim);
+        } else if hit(t.lan) || (t.wlan.w > 0 && hit(t.wlan)) {
+            // the address and the services are on the Network page
+            self.toggle_menu(MenuId::Network);
+        } else if t.usb.w > 0 && hit(t.usb) {
+            self.toggle_menu(MenuId::Storage);
         } else if hit(t.acq) {
             self.toggle_menu(if self.record_mode() { MenuId::Ref } else { MenuId::Acquire });
         } else if hit(t.add) {
