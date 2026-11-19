@@ -747,6 +747,49 @@ Changed:
   trigger point in each picture looked at (before: no frame in 70 s), and at 200 us/div in 18 of 19. At 5 us/div
   it takes none: the record there (35 kpts at 625 MSa/s, 56 us) is shorter than the frame, and the decoder gives
   nothing of a frame that is cut off.
+- Studio with HDMI on Layout: the traces of the panel came and went (the owner's video of a unit, and 5 of 8
+  and 11 of 12 pictures of the panel without traces; none of 70 before HDMI was set to Layout). The pass that
+  draws the monitor counted the lines of the badge row for its own width and left that count behind: twelve
+  badges fill two lines on the panel and one on a monitor of 1920, so the next step laid the panel out with one
+  line, its plot changed its height from frame to frame, and its traces were cleared each time. What Studio
+  keeps of a frame (the lines of the badge row, where badges and labels were drawn for the touch) is the panel's
+  again after the monitor's pass. Reproduced and tested on the host, and on the unit (build 20261119-215725,
+  a monitor of 1920 x 1080 connected, HDMI on Layout, the panel's row with two lines): none of 48 pictures of
+  the panel without traces, with the zoom and without, with the panel's view and with view 1 on the monitor.
+- Studio, the zoom (the owner from the unit; host-tested, and seen on the unit with 20261119-221347): the grip
+  that sets the height of the overview is a slim bar on the edge it moves, in the gap between the overview and
+  the zoom view. It was a chip of 44 x 24 px with three dots in the bottom of the overview, which read as one
+  more menu and stood on the time of the middle division. The area that takes the finger is the same
+  (60 x 42 px).
+- Manchester on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: the 10BASE-T output of a
+  demo board, 10 Mbit/s, about 1 V each way around 0 V). The decoder reads its packets at the rate it finds in
+  the signal: a ping of 102 bytes with the right frame check, and frames the board changes on purpose (other
+  header bytes, a check that does not fit), the same in every record. Which edge is a one depends on the wire of
+  the pair that is probed: CH1 was on the negative one, and "Falling (Thomas)" read it; the positive one on
+  CH2 (about 0.1 V each way, threshold on Auto) reads the same frames with "Rising (802.3)" at 20 us/div.
+  Two things it brought, both on the unit with build 20261119-215725: at 20 us/div the ping with its parts and
+  its check in every record read, and the frame behind it, which the record cuts off, without a check. With
+  Trigger > Bus > Error and a record of 1 Mpts, six frames of the board in each of five records: five with a
+  check that fits (the ping and four with other types) and a sixth with the ping's type and check and other
+  bytes, marked, its check at the trigger point. The Events pane lists a frame a row with its parts and bytes
+  (Messages) and a part a row (Fields).
+- Trigger > Bus > Frame has one point a frame for Manchester packets and for MIL-STD-1553. On the unit with
+  10BASE-T the start of a frame stood at the trigger point in four of five records and the end of its preamble,
+  6.4 us later, in the fifth: the preamble is a field behind the mark of the packet, and its end counted as a
+  start as well. The same for 1553, where the status word has the sync of a command (host, the demo traffic: 134
+  points for its 67 messages). Host-tested; not yet run on a unit, and 1553 is not connected.
+  - A packet that is an Ethernet frame shows its parts in place of its bytes: the preamble with its delimiter,
+    the destination and the source address, the type, the bytes behind it and the frame check, which is marked
+    where the CRC-32 of the frame is another. As bytes alone the board's good and changed frames looked alike;
+    Trigger > Bus > Error now finds the changed ones. A frame the record cuts off has no check. The start of
+    the frame is found as a receiver finds it, by the two ones that end the preamble, wherever they stand: the
+    first bit of a preamble was read wrong where the line leaves its rest (a first byte of 0x54 in a record of
+    the unit), and the frame behind it would have stayed bytes. Read on the host from records fetched from the
+    unit: the good frames with their parts, the changed one with its check marked.
+  - The bit clock follows the edge in the middle of every bit. It ran on from the first edge of a packet at the
+    rate set or found, and was a cell off before a long packet ended where the sender's clock was another: a
+    packet of 1500 bytes at 200 ppm from the rate set went wrong from its byte 234 (host; the frames of the
+    board, 110 bytes, were read right before the change too). A rate set 8 % off now still reads the line.
 - Protocol trigger with Memory on Auto: the record is the screen and the length of a frame on each side of it
   (at most 1 Mpts), where it was a screen and an eighth. The trigger moves the record so that the field it found
   stands at the trigger point, and can move it only as far as the record reaches beyond the screen: 6 us at

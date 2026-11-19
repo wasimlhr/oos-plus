@@ -6,7 +6,7 @@
 use crate::decode::{opt_baud, Kind, Packet, BAUDS};
 use crate::edges::edges;
 use crate::eye;
-use crate::protocols::{every_word_is_a_frame, Lines, ModuleInfo, OPTS};
+use crate::protocols::{every_word_is_a_frame, BusWhat, Lines, ModuleInfo, OPTS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Gate {
@@ -322,7 +322,16 @@ pub static MANCHESTER: ModuleInfo = ModuleInfo::new("Manchester", "Manchester", 
         let rate = manchester_rate(opt);
         1.0 / if rate > 0.0 { rate } else { BAUDS[MANCHESTER_USUAL] }
     })
+    .trigger(manchester_trigger)
     .decoder(manchester_lines);
+
+/// Trigger > Bus > Frame: where a packet begins, and nothing behind it. By the generic rule the end of a preamble or
+/// of the sync bits was a start too, which is the first field of a frame for the decoders that have no mark; here it
+/// stands behind the mark, and the trigger had two points a frame (seen on a unit with 10BASE-T: the start of the
+/// frame at the trigger point in four records, and the end of its preamble, 6.4 us later, in the fifth).
+fn manchester_trigger(what: BusWhat, _value: u32, p: &Packet) -> Option<bool> {
+    (what == BusWhat::Frame).then_some(p.kind == Kind::Start)
+}
 
 /// The Manchester decoder of the module: a line without a pause is one stream of bytes (with the fields of an
 /// Ethernet frame where it has them); a line that is quiet between its packets gives each packet from its mark
@@ -350,13 +359,67 @@ fn manchester_lines(l: &Lines) -> Result<Vec<Packet>, &'static str> {
         if sync + header > 0 {
             out.extend(manchester_fields(&bits, half, sync, header, word));
         } else if n > 32 || n % 8 == 0 {
-            out.extend(manchester_fields(&bits[..n - n % 8], half, 0, 0, 8));
+            // (whole: the pause that ends the packet is in the record)
+            let whole = bits[n - 1].0 + 4.0 * half < l.main().len() as f64 - 1.0;
+            let frame = ethernet_frame(&bits, half, whole);
+            out.extend(frame.unwrap_or_else(|| manchester_fields(&bits[..n - n % 8], half, 0, 0, 8)));
         } else {
             let value = bits.iter().fold(0u32, |v, b| v << 1 | b.1 as u32);
             out.push(Packet::field("PKT", t0, bits[n - 1].0 + half, value, true).with_value2(n as u32));
         }
     }
     Ok(out)
+}
+
+/// The shortest Ethernet frame, from its destination address to its check.
+const ETHERNET_MIN: usize = 64;
+
+/// How far into a packet the start delimiter of an Ethernet frame is looked for, in bits: the 64 of a whole preamble
+/// and a few more.
+const ETHERNET_SFD_WITHIN: usize = 72;
+
+/// A packet that is an Ethernet frame (10BASE-T), from its `bits`: a preamble of ones and zeros in turn that ends
+/// in the start delimiter, two ones, then at least the two addresses and the type. The delimiter is found as a
+/// receiver finds it, by the two ones behind 14 bits of the pattern, wherever they stand: the first bits of a
+/// preamble are lost or read wrong where the line leaves its rest (seen on a unit: a first byte of 0x54 for 0x55,
+/// and the frame behind it was taken for bytes). Its parts in place of its bytes: the preamble with its delimiter
+/// (value = how many bytes, rounded up), the destination and the source address, the type, the bytes behind it,
+/// and the frame check as the last four bytes where the packet is `whole` (the record has its end) and long enough
+/// for a frame: `ok` where the CRC-32 over the frame is that check. None where the packet is no such frame (and
+/// with the other convention for a one it is none: every bit is the other one).
+///
+/// Seen on a unit: a board that sends a ping and frames changed on purpose, which differ in a few header bytes and
+/// have a check that does not fit; as bytes alone the two looked alike.
+fn ethernet_frame(bits: &[(f64, bool)], half: f64, whole: bool) -> Option<Vec<Packet>> {
+    // the delimiter ends at bit `k`: two ones, behind seven pairs of a one and a zero
+    let pattern = |k: usize| (0..14).all(|j| bits[k - 1 - j].1 == (j % 2 == 0)) && bits[k].1;
+    let k = (15..bits.len().min(ETHERNET_SFD_WITHIN)).find(|&k| pattern(k))?;
+    let frame = manchester_fields(&bits[k + 1..bits.len() - (bits.len() - k - 1) % 8], half, 0, 0, 8);
+    if frame.len() < 14 {
+        return None;
+    }
+    let be = |r: std::ops::Range<usize>| frame[r].iter().fold(0u32, |v, b| v << 8 | b.value & 0xff);
+    let span = |kind, of: &[Packet], value: u32, value2: Option<u32>, ok: bool| {
+        let (t0, t1) = (of[0].t0, of[of.len() - 1].t1);
+        Packet { t0, t1, kind, value, value2, ok }
+    };
+    let (t0, t1) = (bits[0].0 - half, bits[k].0 + half);
+    let mut out = vec![
+        Packet { t0, t1, kind: Kind::Field("PRE"), value: (k as u32 + 1).div_ceil(8), value2: None, ok: true },
+        span(Kind::Field("MAC"), &frame[..6], be(0..4), Some(be(4..6)), true),
+        span(Kind::Field("SRC"), &frame[6..12], be(6..10), Some(be(10..12)), true),
+        span(Kind::Field("TYPE"), &frame[12..14], be(12..14), None, true),
+    ];
+    let checked = whole && frame.len() >= ETHERNET_MIN;
+    let end = frame.len() - if checked { 4 } else { 0 };
+    out.extend(frame[14..end].iter().cloned());
+    if checked {
+        let raw: Vec<u8> = frame.iter().map(|b| b.value as u8).collect();
+        // the check is sent with its least significant byte first
+        let sent = u32::from_le_bytes([raw[end], raw[end + 1], raw[end + 2], raw[end + 3]]);
+        out.push(span(Kind::Crc, &frame[end..], sent, None, crate::decode::usbpd_crc32(&raw[..end]) == sent));
+    }
+    Some(out)
 }
 
 /// A Manchester packet cut into its fields: `sync` bits, `header` bits, words of `word` bits, and the bits that fill
@@ -444,7 +507,10 @@ pub fn manchester_packets(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32)
             let t = e[i].t * dt;
             if (t - t_mid).abs() <= 0.35 * bit_t {
                 bits.push((e[i].t, e[i].rising));
-                t_mid += bit_t;
+                // the next middle is a bit time from this one: every bit has its edge, and the clock follows it. A
+                // clock that ran on from the first edge was a cell off before a long packet ended (seen on a unit:
+                // a frame of 10BASE-T, 880 bits, with a wrong byte and a wrong checksum)
+                t_mid = t + bit_t;
             } else if t > t_mid + 0.35 * bit_t {
                 t_mid += bit_t;
                 continue;
@@ -611,6 +677,30 @@ mod tests {
         let p = manchester(&v, dt, 1.0 / bit_t, 0.5, 0.05);
         assert!(p.iter().any(|x| x.kind == Kind::Data && x.value == 0xd5), "{:?}", p);
         let _ = t;
+    }
+
+    /// A long packet whose sender's clock is not the rate set: 1500 bytes at 200 ppm above it, the tolerance of two
+    /// Ethernet stations against each other. The clock follows the edge in the middle of every bit, and every byte
+    /// is read. A clock that ran on from the first edge was 2.4 bits off at the end.
+    #[test]
+    fn manchester_follows_the_clock_of_a_long_packet() {
+        let bytes: Vec<u8> = (0..1500u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
+        let bits: Vec<bool> = bytes.iter().flat_map(|b| (0..8).map(move |k| b >> k & 1 == 1)).collect();
+        // 16 samples a bit at the rate set; the line is 200 ppm faster
+        let bit = 16.0 / 1.0002;
+        let n = (bits.len() as f64 * bit) as usize;
+        let mut v = vec![0.0f32; 48];
+        v.extend((0..n).map(|i| {
+            let x = i as f64 / bit;
+            // a one: low, then high (802.3)
+            let (one, second) = (bits[(x as usize).min(bits.len() - 1)], x.fract() >= 0.5);
+            if one == second { 1.0 } else { 0.0 }
+        }));
+        v.extend(std::iter::repeat_n(0.0, 48));
+        let p = manchester(&v, 1.0, 1.0 / 16.0, 0.5, 0.05);
+        let got: Vec<u8> = p.iter().filter(|x| x.kind == Kind::Data).map(|x| x.value as u8).collect();
+        let same = got.iter().zip(&bytes).take_while(|(a, b)| a == b).count();
+        assert_eq!((got.len(), same), (bytes.len(), bytes.len()), "the first wrong byte is number {same}");
     }
 
     /// A line of 12-bit packets with 2.5 bit times of quiet line between them: every packet is read from its own

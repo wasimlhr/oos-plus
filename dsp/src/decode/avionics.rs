@@ -14,8 +14,17 @@ use crate::protocols::{BusWhat, ModuleInfo, OPTS};
 /// MIL-STD-1553 on one line.
 pub static MIL1553: ModuleInfo = ModuleInfo::new("Mil1553", "1553", "avionics")
     .starts_on(BusWhat::Id, 0x0c23)
+    .trigger(mil1553_trigger)
     .bit(|_, _| 1e-6)
     .decoder(|l| Ok(mil1553(l.main(), l.dt, l.thr, l.hy)));
+
+/// Trigger > Bus > Frame: the command word a message begins with (the ui's `frame_start`). A status word and the
+/// second command of a transfer between two terminals have the same sync, and by the generic rule each was a start
+/// too: two points a message (host, the demo traffic: 134 for its 67 messages). Not yet verified on hardware.
+fn mil1553_trigger(what: BusWhat, _value: u32, p: &Packet) -> Option<bool> {
+    let command = p.kind == Kind::Word { cmd: true } && p.value2 == Some(MIL1553_COMMAND);
+    (what == BusWhat::Frame).then_some(command)
+}
 
 /// What a word with the command sync of MIL-STD-1553 is (`Packet::value2` of a `Word { cmd: true }`): the command
 /// that begins a message, the transmit command of a transfer between two terminals, or a status word.
