@@ -145,6 +145,7 @@ mod layout_tests;
 #[cfg(test)]
 mod fix_tests;
 mod feedback;
+mod files;
 mod hwmask;
 mod hwzone;
 mod init;
@@ -468,6 +469,7 @@ const REF_COLORS: [(&str, Rgb); 5] = [
 pub(crate) use analysers::scpi_views;
 
 pub use eyepage::EYE_ITEMS;
+pub use files::{FileAsk, FileKind};
 // the limits that the model, the settings and the setup files count with too (model/limits.rs)
 pub use crate::model::{CNT_MODES, DVM_MODES, PANE_HARMS, SEG_HW_MAX, SEG_IVL_MAX, VIEWS_MAX};
 pub(crate) use crate::protocols::PROTOS;
@@ -1151,6 +1153,13 @@ pub struct Ui {
     ref_src: usize,
     /// files the Import slot picker is showing
     ref_files: Vec<std::path::PathBuf>,
+    /// Storage, a file by its name (ui/files.rs): the question for the dialog of the desktop build
+    file_request: Option<FileAsk>,
+    /// the files the list of a Storage row is showing, and what they are
+    file_list: Vec<std::path::PathBuf>,
+    file_kind: FileKind,
+    /// the file the keyboard said is there already: OK once more replaces it
+    file_replace: Option<std::path::PathBuf>,
     /// the files of commands Storage > Run SCPI file offers on the scope, the newest first
     scpi_files: Vec<std::path::PathBuf>,
     /// Storage > Run SCPI file: the file to run, and the stop of the one that runs. The interpreter takes them at
@@ -1274,9 +1283,10 @@ pub struct Ui {
     /// why (hwmask.rs); the software test and filter take over
     unit_blocked: Option<String>,
     pub shot_request: Option<String>,
-    /// Storage > Save setup as SCPI was pressed. The interpreter writes the file at its next poll, since the lines
-    /// are the answers of its own queries (`Scpi::poll`, scpi/setupscpi.rs).
-    pub setup_scpi_request: bool,
+    /// Storage > Save setup as SCPI: the file to write, under the name the user gave it (ui/files.rs). The interpreter
+    /// writes it at its next poll, since the lines are the answers of its own queries (`Scpi::poll`,
+    /// scpi/setupscpi.rs).
+    pub setup_scpi_request: Option<std::path::PathBuf>,
     /// Storage > SCPI recorder, `:SYSTem:RECorder:STATe`: on or off. The interpreter follows at its next poll.
     pub scpi_rec_want: bool,
     /// What the SCPI recorder writes as a command and not as settings (scpi/recorder.rs): a key or a row that leaves
@@ -1389,9 +1399,9 @@ impl Ui {
     fn quick(&mut self) {
         match self.m.quick {
             Quick::Screenshot => { self.rec_action(":SAVE:IMAGe"); self.shot_request = Some(String::new()) }
-            Quick::SavePng => self.activate(Item::StorePng),
+            Quick::SavePng => self.file_save_auto(FileKind::Shot),
             Quick::SaveSetup => self.activate(Item::StoreSaveSetup),
-            Quick::SaveCsv => self.activate(Item::StoreCsv),
+            Quick::SaveCsv => self.file_save_auto(FileKind::WaveCsv),
             Quick::Autoset => self.key(key::AUTO),
             Quick::Single => self.key(key::SINGLE),
             Quick::RunStop => self.key(key::RUNSTOP),

@@ -18,6 +18,9 @@
 //!   set <label> = <value>    an item of the open menu by its label, to the option shown as <value>
 //!   do <label>               presses an item of the open menu (an action or a sub-menu)
 //!   pick <label>             opens the grid of all options of an item of the open menu (as a tap on its value)
+//!   option <text|n>          takes an option of the open picker, by its text or its place (1 is the first)
+//!   type <text>              puts a text into the open on-screen keyboard
+//!   ok                       OK of the open on-screen keyboard
 //!   stat [path]              write fps / frame count / state to /tmp/oos-ui.stat
 //!   replay <file>            runs a file of SCPI commands (scpi/replay.rs); a script goes on when it has ended
 //!   scpi <message>           host scripts only: a message that starts with : or * (no path), its answer printed
@@ -108,12 +111,15 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
         }
         "release" => ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x: 0, y: 0 }),
         // by name: the rest of the line (labels have spaces)
-        "menu" | "set" | "do" | "pick" => {
+        "menu" | "set" | "do" | "pick" | "option" | "type" | "ok" => {
             let rest = line.trim_start()[w[0].len()..].trim();
             let r = match w[0] {
                 "menu" => ui.script_menu(rest),
                 "do" => ui.script_do(rest),
                 "pick" => ui.script_pick(rest),
+                "option" => ui.script_option(rest),
+                "type" => ui.script_type(rest),
+                "ok" => ui.script_ok(),
                 _ => match rest.split_once(" = ") {
                     Some((l, v)) => ui.script_set(l, v),
                     None => Err("set <label> = <value>".into()),

@@ -304,7 +304,8 @@ impl Ui {
                 Some(Mark::Span(t0, t1)) => {
                     let (x0, x1) =
                         (self.x_of_time((analysis_t0 + t0) as f32), self.x_of_time((analysis_t0 + t1) as f32));
-                    if x1 <= x0 + 1 || x1 < a.x || x0 > a.x + a.w {
+                    // a time far off the screen is the largest column there is: no sum with it
+                    if x1 <= x0.saturating_add(1) || x1 < a.x || x0 > a.x + a.w {
                         continue;
                     }
                     let mid = (ana.top + ana.base) / 2.0 + (ana.top - ana.base) * (0.22 - 0.16 * rows as f64);

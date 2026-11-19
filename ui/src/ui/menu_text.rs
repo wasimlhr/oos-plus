@@ -66,6 +66,7 @@ impl Ui {
                 Some(p) if p.it == Item::AfgFreqEntry => {
                     format!("Frequency \u{b7} {}_ (max {})", self.keypad, si_short(self.m.gen_max_hz(), "Hz"))
                 }
+                Some(p) if p.it == Item::StoreFile => self.file_list_title(),
                 Some(p) if p.it == Item::RefImport && self.sheets_on() => format!("Load file into R{}", self.ref_sel + 1),
                 Some(p) => format!("{} \u{b7} {}", self.menu_title(p.menu), self.item_label(p.it)),
                 None => String::new(),
@@ -116,6 +117,9 @@ impl Ui {
             | Item::StoreSaveScpi
             | Item::StoreRunScpi
             | Item::StoreRecall
+            | Item::StoreSetupSave
+            | Item::StoreSetupLoad
+            | Item::StoreFile
             | Item::StoreCsv
             | Item::StorePng
             | Item::StoreFfSave
@@ -221,6 +225,9 @@ impl Ui {
             Item::StoreRecScpi => "SCPI recorder",
             Item::StoreRunScpi => "Run SCPI file",
             Item::StoreRecall => "Recall setup",
+            Item::StoreSetupSave => "Save setup to file",
+            Item::StoreSetupLoad => "Load setup from file",
+            Item::StoreFile => "Load file",
             Item::StoreCsv => "Save waveform (CSV)",
             Item::StorePng => "Save screenshot (PNG)",
             Item::StoreFfSave => "Save fast-frame",

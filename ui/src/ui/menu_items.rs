@@ -242,6 +242,8 @@ impl Ui {
             Item::StoreSlot,
             Item::StoreSaveSetup,
             Item::StoreRecall,
+            Item::StoreSetupSave,
+            Item::StoreSetupLoad,
             Item::StoreCsv,
             Item::StoreBin,
             Item::StoreFfSave,

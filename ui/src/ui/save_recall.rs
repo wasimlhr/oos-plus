@@ -81,6 +81,11 @@ impl Ui {
 
     pub(crate) fn session_save(&mut self, path: &str) -> Result<std::path::PathBuf, String> {
         let p = self.session_file(path, true)?;
+        self.session_write(p)
+    }
+
+    /// Save session to the file `p`.
+    pub(super) fn session_write(&mut self, p: std::path::PathBuf) -> Result<std::path::PathBuf, String> {
         let setup = self.setup_text_full();
         let refs: Vec<crate::store::SessionRef> = self.refs.iter().enumerate().filter_map(|(slot, r)| {
             r.as_ref().map(|r| crate::store::SessionRef { slot, src: r.src, t0: r.t0, dt: r.dt, v: r.v.to_vec() })
@@ -101,8 +106,18 @@ impl Ui {
     /// record becomes the one on the screen, and the reference slots are replaced by those of the file (a slot the file
     /// does not have is emptied: the session is the whole bench, not an addition to it).
     pub(crate) fn session_load(&mut self, path: &str) -> Result<(), String> {
+        match self.session_file(path, false) {
+            Ok(p) => self.session_read(p),
+            Err(e) => {
+                self.toast(&format!("Load failed: {e}"));
+                Err(e)
+            }
+        }
+    }
+
+    /// Load session from the file `p`.
+    pub(super) fn session_read(&mut self, p: std::path::PathBuf) -> Result<(), String> {
         let done = (|| {
-            let p = self.session_file(path, false)?;
             let data = crate::store::read_waveform_file(&p)?;
             let session = crate::store::parse_session(&data, NREF)?;
             // checked before anything is changed: a file with a setup this build cannot read leaves the bench as it is
@@ -158,17 +173,26 @@ impl Ui {
         if path.is_none() && self.last[0].is_some() {
             self.rec_action(if csv { ":SAVE:WAVeform" } else { ":SAVE:WAVeform ,BIN" });
         }
+        if self.last[0].is_none() {
+            return self.toast("No waveform to save");
+        }
+        // the LA lines of a file OOS names go to the next la-NNN.csv; a file of the caller is that one file
+        let la = (csv && path.is_none()).then(|| self.new_file(&self.save_dir(), "la", "csv"));
+        let p = path.unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
+        self.store_wave_to(csv, p, la);
+    }
+
+    /// The newest record to `p`; the LA lines of a CSV to `la`, when there is one and the analyser is on.
+    pub(super) fn store_wave_to(&mut self, csv: bool, p: std::path::PathBuf, la: Option<std::path::PathBuf>) {
         let Some(rec) = &self.last[0] else { return self.toast("No waveform to save") };
-        let p = path.clone().unwrap_or_else(|| self.new_file(&self.save_dir(), "wave", if csv { "csv" } else { "bin" }));
         let mut r = if csv {
             crate::store::write(&p, crate::store::wave_csv(rec, &self.m).as_bytes())
         } else {
             crate::store::write(&p, &crate::store::wave_bin(rec, &self.m))
         };
         // the LA lines go to their own file: another sample rate, and only the changes
-        if let (true, Ok(()), Some(la), true, None) = (csv, &r, &rec.la, self.m.la_on(), &path) {
-            let q = self.new_file(&self.save_dir(), "la", "csv");
-            r = crate::store::write(&q, crate::store::la_csv(la, &self.m.la.lines()).as_bytes());
+        if let (true, Ok(()), Some(lines), true, Some(q)) = (csv, &r, &rec.la, self.m.la_on(), &la) {
+            r = crate::store::write(q, crate::store::la_csv(lines, &self.m.la.lines()).as_bytes());
         }
         self.toast_saved(&p, r);
     }
@@ -352,7 +376,12 @@ impl Ui {
     /// build cannot take (a decoder it does not have, a key of a newer build) is left out and named.
     pub(super) fn recall_setup(&mut self) {
         let p = self.setup_path();
-        let text = match std::fs::read_to_string(&p) {
+        self.recall_setup_from(&p);
+    }
+
+    /// Recall setup from the file `p`: the slot's, or one the user chose (Storage > Load setup from file).
+    pub(super) fn recall_setup_from(&mut self, p: &std::path::Path) {
+        let text = match std::fs::read_to_string(p) {
             Ok(t) => t,
             Err(e) => return self.toast(&format!("Recall failed: {}", e)),
         };
@@ -367,10 +396,10 @@ impl Ui {
         }
         self.apply_setup_model(m, &text);
         match bad.first() {
-            None => self.toast(&format!("Recalled {}", crate::store::file_name(&p))),
+            None => self.toast(&format!("Recalled {}", crate::store::file_name(p))),
             Some(e) => self.toast(&format!(
                 "Recalled {}, {} line{} left out ({})",
-                crate::store::file_name(&p),
+                crate::store::file_name(p),
                 bad.len(),
                 if bad.len() == 1 { "" } else { "s" },
                 e
@@ -472,21 +501,14 @@ impl Ui {
         }
     }
 
-    /// Storage > Save setup as SCPI and the SCPI recorder: writes the commands the interpreter made into a new file
-    /// `<prefix>-NNN.scpi` where Storage saves (the name is taken now, when it is written). `note` is said after the
-    /// name: what no line could carry, or how many commands were recorded.
-    pub(crate) fn scpi_save(&mut self, prefix: &str, text: &str, note: Option<&str>) {
-        let path = self.scpi_new_file(prefix);
-        self.scpi_write(&path, text, note);
-    }
-
     /// A new file `<prefix>-NNN.scpi` where Storage saves. The SCPI recorder takes its file at the start and writes
     /// it again after every step.
     pub(crate) fn scpi_new_file(&self, prefix: &str) -> std::path::PathBuf {
         self.new_file(&self.save_dir(), prefix, "scpi")
     }
 
-    /// Writes a file of commands and says so, with `note` after the name.
+    /// Writes a file of commands and says so, with `note` after the name: what no line could carry (Storage > Save
+    /// setup as SCPI, to the file the user named, ui/files.rs), or how many commands were recorded.
     pub(crate) fn scpi_write(&mut self, path: &std::path::Path, text: &str, note: Option<&str>) {
         let r = crate::store::write(path, text.as_bytes());
         match (r.is_ok(), note) {

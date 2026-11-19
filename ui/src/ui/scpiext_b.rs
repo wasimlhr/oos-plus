@@ -369,11 +369,11 @@ impl Ui {
             }
             "SAVE:IMAGe" => {
                 if q { return Some(Err(undefined(key))); }
-                if arg.trim().is_empty() { self.activate(Item::StorePng); } else { let p = self.out_path(arg); self.close_menu(); self.shot_request = Some(p.to_string_lossy().into_owned()); }
+                if arg.trim().is_empty() { self.file_save_auto(FileKind::Shot); } else { let p = self.out_path(arg); self.close_menu(); self.shot_request = Some(p.to_string_lossy().into_owned()); }
                 DONE
             }
-            "SAVE:FFRame" => { self.activate(Item::StoreFfSave); action(q) }
-            "LOAD:FFRame" => { self.activate(Item::StoreFfLoad); action(q) }
+            "SAVE:FFRame" => { self.file_save_auto(FileKind::FastFrame); action(q) }
+            "LOAD:FFRame" => { self.file_load_latest(FileKind::FastFrame); action(q) }
             // ---- Studio zoom
             "TIMebase:DELay:SOURce" => {
                 if q { return Some(t(self.studio.sz.lane.map_or("ALL".to_string(), |l| match l { Trace::Channel(c) => format!("CHAN{}", c + 1), Trace::Reference(i) => format!("R{}", i + 1), Trace::Math(k) => format!("MATH{}", k + 1) }))); }

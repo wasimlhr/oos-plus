@@ -105,6 +105,30 @@ impl Ui {
         Ok(())
     }
 
+    /// Puts `text` into the open on-screen keyboard, in place of what it holds.
+    pub fn script_type(&mut self, text: &str) -> Result<(), String> {
+        if self.osk_set(text.trim()) { Ok(()) } else { Err("no keyboard open".into()) }
+    }
+
+    /// OK of the open on-screen keyboard.
+    pub fn script_ok(&mut self) -> Result<(), String> {
+        if self.wlan.osk.is_none() {
+            return Err("no keyboard open".into());
+        }
+        self.osk_ok();
+        Ok(())
+    }
+
+    /// Takes an option of the open picker: by its text, or by its place in the list (1 is the first).
+    pub fn script_option(&mut self, want: &str) -> Result<(), String> {
+        let Some(p) = self.pick.filter(|_| self.menu_open && self.menu == MenuId::Pick) else { return Err("no picker open".into()) };
+        let (want, opts) = (want.trim(), self.options(p.it));
+        let k = opts.iter().position(|o| o.eq_ignore_ascii_case(want)).or_else(|| want.parse::<usize>().ok().filter(|n| (1..=opts.len()).contains(n)).map(|n| n - 1))
+            .ok_or_else(|| format!("no option {:?} in {}", want, self.menu_title(MenuId::Pick)))?;
+        self.activate(Item::PickOpt(k));
+        Ok(())
+    }
+
     /// Presses the item `label` of the open menu (an action, or a sub-menu). On the measurement page: the tile of that
     /// name, as a tap on it (on, or off again).
     pub fn script_do(&mut self, label: &str) -> Result<(), String> {

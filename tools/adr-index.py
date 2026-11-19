@@ -27,6 +27,7 @@ FORK_RECORDS = {
     "code/0027-a-session-is-one-file-of-setup-record-and-references.md",
     "ui-ux/0030-studio-offers-what-default-offers.md",
     "system/0033-a-file-of-commands-sets-the-scope-up-and-no-more.md",
+    "ui-ux/0029-a-storage-row-asks-for-the-name-of-its-file.md",
 }
 TITLE = re.compile(r"# ADR (\d{4}): (.+)$")
 REF = re.compile(r"ADR (\d{4})")
@@ -87,7 +88,7 @@ def rows(root):
                 if not name.startswith(number + "-"):
                     raise ValueError("%s/%s: the file name and the first line name two numbers" % (category, name))
                 out.append((number, "%s/%s" % (category, name), category, decision, state))
-    # oos-plus: three records of the fork took a number that upstream gave to a record of its own later; they keep it,
+    # oos-plus: some records of the fork took a number that upstream gave to a record of its own; they keep it,
     # so the references in the fork stay valid, and the index lists both (the folder tells them apart)
     numbers = [r[0] for r in out if r[1] not in FORK_RECORDS]
     twice = sorted({n for n in numbers if numbers.count(n) > 1})

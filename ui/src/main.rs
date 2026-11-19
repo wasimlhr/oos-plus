@@ -573,7 +573,7 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
     for line in text.lines() {
         let out = cmd::run(ui, line);
         // Storage > Save setup as SCPI is written by the interpreter's poll: also when no frame follows the line
-        if ui.setup_scpi_request {
+        if ui.setup_scpi_request.is_some() {
             scpi.poll(ui, &cv);
         }
         match out {

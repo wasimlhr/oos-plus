@@ -941,6 +941,7 @@ impl Ui {
                         (page.pick)(self, it, k);
                     }
                 }
+                Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::StoreFile) => self.file_pick(k),
                 Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::StoreRunScpi) => {
                     let p = self.scpi_files.get(k).cloned();
                     self.close_picker();
@@ -1021,7 +1022,7 @@ impl Ui {
                 Item::DecExport => self.decode_export(),
                 Item::SearchTable => self.table_toggle(tables::TableKind::Search),
                 Item::SearchSave => self.events_export(tables::TableKind::Search),
-                Item::StoreBin => self.store_wave(false, None),
+                Item::StoreBin => self.file_save_ask(FileKind::WaveBin),
                 Item::RefExport => self.ref_export(),
                 Item::RefImport if self.sheets_on() => self.studio_load_file(self.ref_sel),
                 Item::RefImport => self.ref_import(),
@@ -1161,17 +1162,14 @@ impl Ui {
                     let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                     self.toast_saved(&p, r);
                 }
-                Item::StoreSaveScpi => self.setup_scpi_request = true,
+                // the rows below ask for the name of their file, or which file to load (ui/files.rs); the slots do not
+                Item::StoreSaveScpi => self.file_save_ask(FileKind::SetupScpi),
                 Item::StoreRunScpi => self.scpi_run_ask(),
                 Item::StoreRecall => self.recall_setup(),
-                Item::StoreCsv => self.store_wave(true, None),
-                Item::StorePng => {
-                    self.rec_action(":SAVE:IMAGe");
-                    // without the dialog: the screen is saved after the next frame (main loop / script runner)
-                    let p = self.new_file(&self.save_dir(), "shot", "png");
-                    self.close_menu();
-                    self.shot_request = Some(p.to_string_lossy().into_owned());
-                }
+                Item::StoreSetupSave => self.file_save_ask(FileKind::Setup),
+                Item::StoreSetupLoad => self.file_load_ask(FileKind::Setup),
+                Item::StoreCsv => self.file_save_ask(FileKind::WaveCsv),
+                Item::StorePng => self.file_save_ask(FileKind::Shot),
                 Item::MaskCreate => self.create_mask(),
                 Item::MaskFromRef => self.create_mask_from_ref(),
                 Item::MaskClear => {
@@ -1193,10 +1191,10 @@ impl Ui {
                         self.toast("Counts reset");
                     }
                 }
-                Item::StoreFfSave => self.ff_save(),
-                Item::StoreFfLoad => self.ff_load(),
-                Item::StoreSessSave => { let _ = self.session_save(""); }
-                Item::StoreSessLoad => { let _ = self.session_load(""); }
+                Item::StoreFfSave => self.file_save_ask(FileKind::FastFrame),
+                Item::StoreFfLoad => self.file_load_ask(FileKind::FastFrame),
+                Item::StoreSessSave => self.file_save_ask(FileKind::Session),
+                Item::StoreSessLoad => self.file_load_ask(FileKind::Session),
                 Item::Stock => self.stock_tap(),
                 Item::BootAgain => self.boot_again_tap(),
                 Item::Update => self.dialog = Some(self.update_lines()),

@@ -839,6 +839,16 @@ a USB stick in the front port (FAT32, exFAT or ext4), into the folder `OOS`, and
 saved. Without a stick they go to `/tmp/oos`, which is in RAM and lost at power-off, unless you set another directory
 with `--store-dir`. The web remote saves them to your computer too. `/oos` holds 16 MiB for calibration and settings.
 
+**File names.** A row of the Storage menu that saves (a session, a waveform, a screenshot, the fast-frame history, a
+setup to a file, the setup as SCPI) opens the keyboard with the next free name in it: OK takes it, or type your own,
+which takes its place (an arrow first keeps the name, to add to it).
+The suffix is added. A name that is taken is said to be taken, and OK once more replaces that file. Save to chooses the
+place: the stick or the local folder. A row that loads (a session, the fast-frame history, a setup from a file) shows
+the files of that kind in the folder, the newest first; tap one. The list scrolls by its bar and by the finger. Setup
+slot, Save setup and Recall setup are the quick way and do not ask; a setup saved by name lies beside the slots, or on
+the stick when files go there. The Quick key saves under the next free name without a question. The desktop build
+asks with the Save As and Open dialogs of Windows, which choose the folder too.
+
 **Self-calibration.** System > Self-cal. Let the scope warm up for 30 minutes and disconnect all inputs first. It takes
 about 5 minutes per channel and pass, with 4 passes. Results go to `/oos/cal` and are preferred over the factory files,
 which are never changed.

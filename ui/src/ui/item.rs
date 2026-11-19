@@ -484,6 +484,11 @@ pub(super) enum Item {
     /// runs a file of SCPI commands (scpi/replay.rs); while one runs, stops it
     StoreRunScpi,
     StoreRecall,
+    /// a setup as a file with a name of its own, beside the slots (ui/files.rs, ADR 0029)
+    StoreSetupSave,
+    StoreSetupLoad,
+    /// the list of files a Storage row loads from: its options are the files of the folder
+    StoreFile,
     StoreCsv,
     StorePng,
     StoreFfSave,

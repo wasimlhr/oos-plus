@@ -1109,13 +1109,17 @@ fn fast_frame_save_and_load_and_local_dest() {
         ui.step(0.033);
     }
     assert!(ui.history.len() >= 3);
+    // the row asks for the name, with the next free one in the keyboard (ui/files.rs)
     ui.activate(Item::StoreFfSave);
+    ui.osk_ok();
     let p = dir.join("frame-001.bin");
     assert!(p.is_file());
     let n = ui.history.len();
     ui.history.clear();
     ui.last[0] = None;
+    // and the load lists the files: the one there is
     ui.activate(Item::StoreFfLoad);
+    ui.activate(Item::PickOpt(0));
     assert_eq!(ui.history.len(), n);
     assert!(ui.hist_pos.is_some());
     assert_eq!(ui.m.run, RunState::Stop);
@@ -1135,7 +1139,9 @@ fn storage_save_and_recall() {
     ui.step(0.033);
     let saved = ui.m.clone();
     ui.activate(Item::StoreSaveSetup);
+    assert!(ui.wlan.osk.is_none(), "a slot is saved without a question");
     ui.activate(Item::StoreCsv);
+    ui.osk_ok();
     let csv = std::fs::read_to_string(dir.join("sub/wave-001.csv")).unwrap();
     assert!(csv.starts_with("Time (s),CH1 (V),CH3 (V)\n"));
     assert_eq!(csv.lines().count(), 1 + ui.last[0].as_ref().unwrap().ch[0].len());

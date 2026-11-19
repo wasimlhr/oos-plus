@@ -171,11 +171,13 @@ key navback
 frames 1
 key navplay
 frames 1
-# storage: set-up, CSV, PNG
+# storage: set-up, CSV, PNG (the two files take the name the keyboard proposes, ADR 0029)
 menu Storage
 do Save setup
 do Save waveform (CSV)
+ok
 do Save screenshot (PNG)
+ok
 frames 1
 close
 # remote: queries, a record, an unknown command and its error; a tool list, a command and a screenshot over MCP
@@ -241,13 +243,14 @@ impl Rig {
             ),
             "key" => known(KEY_NAMES.iter().any(|(name, _)| *name == rest)),
             "knob" => known(KNOB_NAMES.iter().any(|(name, _)| rest.starts_with(name))),
+            "ok" => self.ui.script_ok(),
             "frames" | "scpi" | "close" => Ok(()),
             _ => Err("not a command of the cycle".into()),
         };
         if let Err(e) = checked {
             panic!("{}: {}", line, e);
         }
-        if matches!(word, "menu" | "do" | "set" | "mcp") {
+        if matches!(word, "menu" | "do" | "set" | "mcp" | "ok") {
             return;
         }
         match crate::cmd::run(&mut self.ui, line) {

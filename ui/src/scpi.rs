@@ -483,9 +483,9 @@ impl Scpi {
 
     pub fn poll(&mut self, ui: &mut Ui, cv: &Canvas) {
         // Storage > Save setup as SCPI: the row asks, this interpreter has the queries the lines are made of
-        if std::mem::take(&mut ui.setup_scpi_request) {
+        if let Some(path) = ui.setup_scpi_request.take() {
             let (text, rest) = self.setup_scpi_proven(ui, cv);
-            ui.scpi_save("setup", &text, setupscpi::named(&rest).map(|keys| format!("without {keys}")).as_deref());
+            ui.scpi_write(&path, &text, setupscpi::named(&rest).map(|keys| format!("without {keys}")).as_deref());
         }
         // the SCPI recorder looks at the set-up here, before a client's message is run: what it sees is the user's
         self.rec_tick(ui, cv);

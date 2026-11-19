@@ -88,7 +88,8 @@ impl Ui {
         v
     }
 
-    pub(super) fn ff_save(&mut self) {
+    /// Save fast-frame: the history to `path`, or to the next `frame-NNN.bin` of the save folder.
+    pub(super) fn ff_save_to(&mut self, path: Option<std::path::PathBuf>) {
         let recs: Vec<Record> = if !self.history.is_empty() {
             self.history.iter().cloned().collect()
         } else if let Some(rec) = self.last[0].as_ref() {
@@ -96,17 +97,14 @@ impl Ui {
         } else {
             return self.toast("No frames to save");
         };
-        let p = crate::store::next_name(&self.save_dir(), "frame", "bin");
+        let p = path.unwrap_or_else(|| crate::store::next_name(&self.save_dir(), "frame", "bin"));
         let r = crate::store::write(&p, &crate::store::ff_bin(&recs, &self.m));
         self.toast_saved(&p, r);
     }
 
-    pub(super) fn ff_load(&mut self) {
-        let p = match crate::store::latest_name(&self.save_dir(), "frame", "bin") {
-            Some(p) => p,
-            None => return self.toast("No frame-NNN.bin in the save folder"),
-        };
-        let data = match std::fs::read(&p) {
+    /// Load fast-frame from the file `p`.
+    pub(super) fn ff_load_from(&mut self, p: &std::path::Path) {
+        let data = match std::fs::read(p) {
             Ok(b) => b,
             Err(e) => return self.toast(&format!("Load failed: {}", e)),
         };
@@ -118,7 +116,7 @@ impl Ui {
                 self.last[0] = Some(self.history[n - 1].clone());
                 self.m.run = RunState::Stop;
                 self.measure_last();
-                self.toast(&format!("Loaded {} frames from {}", n, crate::store::file_name(&p)));
+                self.toast(&format!("Loaded {} frames from {}", n, crate::store::file_name(p)));
             }
             Ok(_) => self.toast("That file holds no frames"),
             Err(e) => self.toast(&format!("Load failed: {}", e)),

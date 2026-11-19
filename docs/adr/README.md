@@ -54,6 +54,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0027](system/0027-newer-wlan-drivers-as-backported-modules.md) | system | A WLAN driver of a newer kernel comes as a module beside 6.12, with a patch of its own | accepted |
 | [0028](code/0028-an-external-generator-is-a-table-row-one-connection-and-a-page.md) | code | an external generator is a row of a table, one connection and a page of its own | accepted, to be reviewed |
 | [0029](code/0029-batch-is-the-default-draw-path.md) | code | Batch is the default draw path | superseded by ADR 0059 |
+| [0029](ui-ux/0029-a-storage-row-asks-for-the-name-of-its-file.md) | ui-ux | A Storage row asks for the name of its file, and which file to load | accepted, to be reviewed |
 | [0030](process/0030-independent-reimplementation-from-black-box-descriptions.md) | process | OOS is an independent reimplementation: the tree holds black-box descriptions and code written to them | accepted |
 | [0030](ui-ux/0030-studio-offers-what-default-offers.md) | ui-ux | Studio offers what Default offers; the Add panel is the short way into the Measure page | accepted |
 | [0031](process/0031-every-change-enters-main-through-a-pull-request.md) | process | Every change enters main through a pull request, the maintainer's too; decision records are decided there | accepted |
@@ -107,9 +108,9 @@ the change: ADR 0009, 0010, 0013, 0015, 0021 and 0030 for anything near the hard
 SCPI, VXI-11, HiSLIP and the other network services, ADR 0026 and 0031 for how a change enters main. The records are
 short on purpose; reading the ones that apply costs minutes and saves a review round.
 
-oos-plus: the numbers 0027, 0030 and 0033 each name a record of the fork (`code/0027`, `ui-ux/0030`, `system/0033`)
-and one of upstream; the fork's references to them mean its own unless they name the file. A new record of the fork
-takes a number upstream has not used.
+oos-plus: the numbers 0027, 0029, 0030 and 0033 each name a record of the fork (`code/0027`, `ui-ux/0029`,
+`ui-ux/0030`, `system/0033`) and one of upstream; the fork's references to them mean its own unless they name the
+file. A new record of the fork takes a number upstream has not used.
 
 ## Writing one
 
