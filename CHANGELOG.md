@@ -564,7 +564,8 @@ Changed:
   FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR 5 ...", "IND 4 ID 02A ..."); drawn
   as fields, and in the Fields view, it is there as before. A module says which field that is (`lead`).
 - Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3,
-  Modbus ASCII, the DS2482 bridge, JTAG and C-PHY have a SIM bus preset now, 26 in all. Six bytes at the rate of
+  Modbus ASCII, the DS2482 bridge, JTAG, C-PHY and Quad-SPI (the last one host-tested only: a flash asked for its
+  identification and for two bytes at an address) have a SIM bus preset now, 27 in all. Six bytes at the rate of
   the list's usual entry for the two line codes; the read request of the Modbus RTU preset as its characters; a
   1-Wire reset, Skip ROM and a command through the bridge's I2C commands; a TAP reset, an instruction and the 32
   bits of an identification; a C-PHY lane with its low-power states and a burst that carries a short packet.
