@@ -153,7 +153,9 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    the screen, which is fixed and seen fixed on the unit, as is the text of a USB packet. Manchester, MLT-3
    and Modbus ASCII got traffic of their own and ran on the unit likewise, and so did the DS2482 bridge, JTAG
    and a C-PHY lane with a short packet; Quad-SPI has frames on one line each way, which its four roles carry:
-   27 presets, all of the 13 decoders of step 5 but Parallel among them (its lines are channels, not roles).
+   27 presets, all of the 13 decoders of step 5 but Parallel among them (its lines are channels, not roles),
+   and every one of the 27 has played and decoded on the unit without an error (the last with build
+   20261119-143504).
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 

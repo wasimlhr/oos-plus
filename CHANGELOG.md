@@ -574,13 +574,13 @@ Changed:
   header of 3 bits, 6 data bits, a trailer of 2, each least significant bit first, after two sync bits) are its
   values in the five rows its picture shows. The decoder does not cut a packet into fields.
 - Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3,
-  Modbus ASCII, the DS2482 bridge, JTAG, C-PHY and Quad-SPI (the last one host-tested only: a flash asked for its
-  identification and for two bytes at an address) have a SIM bus preset now, 27 in all. Six bytes at the rate of
-  the list's usual entry for the two line codes; the read request of the Modbus RTU preset as its characters; a
-  1-Wire reset, Skip ROM and a command through the bridge's I2C commands; a TAP reset, an instruction and the 32
-  bits of an identification; a C-PHY lane with its low-power states and a burst that carries a short packet.
-  A JTAG scan with a TDO line says what came out as well as what went in, "DR 0 > 4BA00477": the preset on the
-  unit read "DR 0", the zeros shifted in, for the identification (the text host-tested, not on the unit yet).
+  Modbus ASCII, the DS2482 bridge, JTAG, C-PHY and Quad-SPI have a SIM bus preset now, 27 in all; of the decoders
+  only Parallel has none. Six bytes at the rate of the list's usual entry for the two line codes; the read
+  request of the Modbus RTU preset as its characters; a 1-Wire reset, Skip ROM and a command through the bridge's
+  I2C commands; a TAP reset, an instruction and the 32 bits of an identification; a C-PHY lane with its low-power
+  states and a burst that carries a short packet; a flash asked for its identification and for two bytes at an
+  address. A JTAG scan with a TDO line says what came out as well as what went in, "DR 0 > 4BA00477": the preset
+  read "DR 0", the zeros shifted in, for the identification (unit, before and after).
 - C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
   yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
   - the levels were fixed voltages: a low-power level was one above 0.8 V, and the capture's lines swing 1.16 V
