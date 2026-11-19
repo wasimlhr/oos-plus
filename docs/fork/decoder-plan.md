@@ -129,12 +129,17 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    3. CAN: on CH1 (CAN_H) and CH3 (CAN_L) of his demo board, 500 kbit/s. Done on the unit (2026-11-19): the
       decode is right from CAN_H, from CAN_L and from the difference of the two (93 to 97 frames in 40 ms, 21
       identifiers, every CRC right; the traffic of the capture), the thresholds from the signals, the band at
-      2 ms, 200 us, 50 us and 5 us/div, the Events pane with its columns, the trigger on an identifier. One
-      flaw it showed is fixed: a frame whose match could not be moved to the trigger point was shown at the
-      hardware point and called triggered (seen right on the unit afterwards). The CAN-FD decoder reads the
-      same bus (its frames are classic ones) at 200 us/div and gave nothing at 2 ms/div, where its data rate
-      has too few samples: it reads what stays at the nominal rate now (host-tested). Open: an error frame,
-      which the board does not send.
+      2 ms, 200 us, 50 us and 5 us/div, the Events pane with its columns. The trigger on an identifier held
+      the frame at 200 us/div and not at 50 us or 5 us/div; three faults behind that are fixed (the changelog
+      has them: a frame shown at the hardware point and called triggered, the hardware point on the same few
+      messages of a bus that repeats, a frame cut off by the search). After them, on the unit: a new frame in
+      15 of 29 seconds at 50 us/div in Normal, the end of the identifier at the trigger point (before: none in
+      70 s). The CAN-FD decoder reads the same bus (its frames are classic ones) at 200 us/div and gave
+      nothing at 2 ms/div, where its data rate has too few samples: it reads what stays at the nominal rate
+      now (unit: 88 frames, 21 identifiers, none wrong). Open: an error frame, which the board does not send;
+      the trigger at 5 us/div and 200 us/div after the last change; and the unit left the network about 100 s
+      after the start of the build with the last change (20261119-190204), in the run that measured the
+      trigger, cause not known.
    4. The other buses of his demo board, as he connects them: CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC
       429, USB.
       Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope

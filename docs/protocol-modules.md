@@ -15,7 +15,7 @@ Everything around the decoder comes from that one type:
 | bit row | the band on the plot at a time base that shows single bits: a cell per bit above the field's box, and a mark on the threshold line where it was sampled | `bit_row` (off), `bits` (none) |
 | protocol trigger | Trigger > Bus: what "Frame", "ID/Addr", "Data", "Error" mean | `trigger_match` (the generic rule) |
 | trigger start value | what Trigger > Bus looks for when it is switched on | `trigger_default` (Frame) |
-| trigger timing | sampling (a twentieth of a bit) and the search window | `bit_time` (required), `frame_span` (200 bits) |
+| trigger timing | sampling (a twentieth of a bit) and the search window: a frame before the hardware point and a frame behind the search region, so a frame that begins there is read whole | `bit_time` (required), `frame_span` (200 bits) |
 | hardware edge | the edge the hardware trigger arms on in front of the protocol trigger, and on which role's line | `start_edge` (falling), `start_role` (the main line) |
 | first settings | channels, LA lines, threshold, shared-row values and the demo's trigger when the protocol is chosen | `setup` (CH3 / CH4, 1.65 V) |
 | old setups | how a setup saved before the protocol was a module maps onto its options | `legacy` (none) |

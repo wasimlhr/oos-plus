@@ -222,6 +222,16 @@ Default holdoff = 8,000,000 fs = 8 ns, so 0x2084 = 1, 0x2088 = 0x00040000.
 The holdoff also enters the SCU auto-trigger time t2 = max(holdoff, ...) (see `acquisition-start.md` section 3).
 Event holdoff (0x2080) is not used.
 
+A holdoff for one batch (`State::holdoff_steps`, `Settings::holdoff_spread`). A protocol trigger that the software
+decides arms on an edge of the bus line, and the frames of a batch follow each other at the time the record and the
+holdoff take. On a bus that repeats its traffic the hardware point then stands on the same few messages in every
+record (verified on the unit, 2026-11-19: CAN at 500 kbit/s, 22 frames every 9.5 ms, 50 us/div, 100 kpts, falling
+edge: six places in 300 records; with a holdoff of 2.7 ms 99 of 100 on one message, with 6.1 ms 100 of 100 on
+another). For such a trigger the host writes the three holdoff writes alone before it arms a batch, with a time
+drawn between the set holdoff and 16 ms more. That these writes take effect without the rest of the trigger set-up is
+verified on the unit: with them the hardware point fell all over the same traffic (400 records, every message of
+the bus among them, about half on the first frame after the 5 ms of rest, which is its share of the time).
+
 ### 2.7 Noise reject
 
 Only through the hysteresis (2.3). No separate TPU bit. (0x2264 bit16 is cleared whatever the setting.)

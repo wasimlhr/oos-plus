@@ -652,17 +652,32 @@ Changed:
   from the difference of the two, each with the threshold found from the signal: 93 to 97 frames in 40 ms with
   21 identifiers, standard and extended, data and remote frames, every CRC right and every frame acknowledged,
   the same traffic a capture of the board has. The band and the Events pane with ID, DLC, Data and CRC work on
-  it, and the trigger on an identifier holds the frame with the end of the identifier at the trigger point.
-  One flaw it showed is fixed (unit, before and after): at 50 us/div with 100 kpts the
-  screen held still with the T on another frame, the identifier asked for 255 us to its left. The hardware fires
-  on any frame and the field is looked for in the record; where it stood too far from the hardware point to be
-  moved to the trigger point, the frame was shown at the hardware point and called triggered. Such a frame is
-  none of the protocol trigger: Normal waits for one in which the field can stand at the T.
+  it. The trigger on an identifier is the next entry.
+- Protocol trigger on a bus that repeats its traffic, found and fixed on a unit (DHO924S, 2026-11-19: the CAN
+  bus above, 22 frames one behind the other every 9.5 ms and 5 ms of rest, trigger on an identifier, 100 kpts).
+  At 200 us/div the trigger held the frame, the end of the identifier at the trigger point. At 50 us/div and
+  5 us/div it did not, for three reasons:
+  - A frame whose field could not be moved to the trigger point was shown at the hardware point and called
+    triggered: the T stood on another frame, the identifier asked for 255 us to its left. Such a frame is none
+    of this trigger: Normal waits for one in which the field can stand at the T.
+  - The hardware fires on an edge of the line, and the frames of a batch followed each other at a fixed time. On
+    this bus the hardware point stood on the same few messages in every record: six places in 300 records, one
+    message in 100 of 100 with a holdoff of 6.1 ms, and the identifier asked for within reach of none. Each batch
+    of a protocol trigger the software decides now has a holdoff of its own, drawn up to 16 ms above the set
+    one. With it the hardware point falls all over the traffic, and the identifier stood within 70 us of it in 11
+    of 500 records.
+  - The search read the record a tenth of a screen past the hardware point, and a decoder gives nothing of a
+    frame that is cut off: an identifier at the trigger point was found only in frames that ended there, and
+    Normal still took no frame in 70 s. The search reads the length of a frame further.
+  With the three, Normal at 50 us/div took a new frame in 15 of 29 seconds, the end of the identifier at the
+  trigger point in each picture looked at (before: no frame in 70 s). 5 us/div and 200 us/div were not measured
+  again after the last change.
 - CAN-FD decoder: a record with too few samples for the data rate still gives the frames that stay at the
-  nominal rate (unit before the change: a bus of classic CAN frames at 500 kbit/s read with this decoder gave
-  nothing at 2 ms/div, 2.5 MSa/s, and every frame at 200 us/div; host-tested after it). The decoder asked for
+  nominal rate (unit: a bus of classic CAN frames at 500 kbit/s read with this decoder at 2 ms/div, 2.5 MSa/s,
+  gave nothing before the change and 88 frames with 21 identifiers, none wrong, after it). The decoder asked for
   three samples a bit of the data rate before it read anything. It asks for three a bit of the nominal rate;
-  a frame that switches to a data rate the record cannot show gives its identifier and "TOO FAST".
+  a frame that switches to a data rate the record cannot show gives its identifier and "TOO FAST" (host-tested;
+  the bus has no such frame).
 - SPI on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: data, clock and chip select of a
   5 V bus at 200 kbit/s, one word a frame every 500 us and a frame of 16 words now and then; clock and chip select
   on 10:1 probes that the channels read as 1:1, so 0.5 V beside the 5 V of the data). The decoder reads it right:
