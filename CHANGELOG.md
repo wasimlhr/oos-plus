@@ -481,8 +481,9 @@ Changed:
 - SPI and I2C decoders: Decode > Format (Hex, ASCII) shows the data as characters, on the band, in the Events
   pane (with the bytes in hex beside the text) and in the event table; Hex is as before and stays the choice of a
   set-up from before (`:BUS<n>:OPTion3` for SPI, `:BUS<n>:OPTion2` for I2C; host-tested; SPI (unit),
-  2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware). An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its
-  Format row as before.
+  2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
+  An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
+  before.
 - SPI decoder: a MISO line, and a message for each frame (host-tested; the frames (unit), 2026-11-19: a bus of
   one word a frame every 500 us gave a row a frame in the Events pane and a box a frame at 200 us/div; the MISO
   line not yet verified on hardware). MISO is a
