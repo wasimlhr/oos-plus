@@ -564,7 +564,8 @@ Changed:
   FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR 5 ...", "IND 4 ID 02A ..."); drawn
   as fields, and in the Fields view, it is there as before. A module says which field that is (`lead`).
 - Manchester decoder: a line that sends packets is read packet by packet (host-tested, and on a capture of a
-  real line on the host; not yet verified on hardware). The decoder read a record as one stream of bits from its
+  real line on the host; the simulated line with its packets and their fields played on a unit; a real signal
+  is not yet verified on hardware). The decoder read a record as one stream of bits from its
   first edge. A line that is quiet between its packets, as the capture is (13 bits every 14.5 bit times), was
   half a bit off in every second packet, and its bits ran together into bytes that were none. A pause of more
   than 1.5 bit times ends a packet, and where the bits lie is found anew in the next. A packet of up to 32 bits
