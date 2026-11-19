@@ -552,6 +552,9 @@ Changed:
   of a real bus with two devices on the host; not yet verified on hardware). "ROM 55" reads "ROM 55 Match"
   (Read, Match, Skip, Search, Alarm search and the two overdrive commands; the commands after them are those of a
   device family and stay numbers). The Events pane has ROM, Family, Serial, CRC and Data.
+- I3C decoder: a common command code has its name, "CCC 90 GETSTATUS" (host-tested; not yet verified on
+  hardware). The decoder had the table of the names and the band wrote the number alone. A code the table does
+  not have keeps its number.
 - FlexRay decoder: Decode > Bit rate, 10, 5 or 2.5 Mbit/s (host-tested; not yet verified on hardware). The
   decoder read at 10 Mbit/s alone, so a cluster at one of the two other rates of the standard gave nothing. The
   frame CRC of either channel passes, as before (`:BUS<n>:OPTion1`).
