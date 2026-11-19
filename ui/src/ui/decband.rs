@@ -116,7 +116,7 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
 }
 
 /// Whether the decoder shows characters (UART with Format ASCII).
-fn ascii(m: &Model) -> bool {
+pub(super) fn ascii(m: &Model) -> bool {
     m.dec_proto == Proto::UART && m.dec_ascii
 }
 
@@ -160,6 +160,11 @@ pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String 
         w += pw;
     }
     s
+}
+
+/// The whole text of a message, as its box would hold it with all the room.
+pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
+    pk.iter().map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
 }
 
 /// The hex value beside a character, for a box with room for both.

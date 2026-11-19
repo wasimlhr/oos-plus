@@ -17,6 +17,7 @@ mod measure_pairs;
 mod bus;
 mod busview;
 mod decband;
+mod decrows;
 mod magnetic;
 mod motor;
 mod dpt;
