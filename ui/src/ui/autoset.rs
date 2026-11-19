@@ -265,7 +265,9 @@ impl Ui {
             // the trigger level follows its source, as after an auto set-up: it was a level of the old offset
             let (lo, hi) = self.auto_levels(self.m.trig_src);
             if lo.is_finite() && hi.is_finite() && hi - lo >= MIN_VPP * self.m.ch[self.m.trig_src.min(n_ch() - 1)].probe {
-                self.m.trig_level = self.m.trig_level.clamp(lo, hi);
+                // (counted from the signal's mean with AC trigger coupling, `trig_level_base`)
+                let base = self.trig_level_base();
+                self.m.trig_level = self.m.trig_level.clamp(lo - base, hi - base);
             }
             self.settings_changed();
             self.mark_changed();
@@ -498,7 +500,9 @@ impl Ui {
             ch.offset = -(hi + lo) / 2.0;
         }
         self.m.trig_src = first;
-        self.m.trig_level = mid_level(&a.st[first]);
+        // with AC or LF reject trigger coupling the level counts from the signal's mean (`Ui::trig_level_base`)
+        let base = if matches!(self.m.trig_coupling(), TrigCoup::Ac | TrigCoup::LfReject) && a.st[first].vavg.is_finite() { a.st[first].vavg } else { 0.0 };
+        self.m.trig_level = mid_level(&a.st[first]) - base;
         // the hardware search starts with one deep record; other sources go through the time bases from fast to slow
         a.deep = self.src.is_hw();
         a.plan = if a.deep { HW_PLAN.to_vec() } else { TBASES.iter().map(|&t| (t, 0)).collect() };

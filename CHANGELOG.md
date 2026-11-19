@@ -7,6 +7,12 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Trigger, AC and LF reject coupling (host-tested): the level counts from the signal's mean there, and the scope
+  now keeps it on the signal. Changing the coupling in the menu moves the level by that mean, the push of the
+  level knob gives the middle counted from the mean, and Auto does the same. The level stayed as set with DC
+  coupling, which the signal without its DC part never reached: the trigger stopped unless the signal was large
+  (a forum report on 0.1.13; on a unit a line of 0 to 0.55 V stopped at 0.255 V and triggered from 0.1 V down).
+  `:TRIGger:COUPling` changes the coupling alone, as before.
 - The horizontal SCALE knob (host-tested; the knob itself not pushed on a unit): a push switches the fine time base
   on and off and says which, where it opened the zoom. A time base left in fine steps moved a hundredth per detent
   and nothing on the screen or the panel said why or led back. The time pill of Studio says "fine" while it is on.

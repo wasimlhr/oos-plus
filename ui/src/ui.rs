@@ -8967,8 +8967,15 @@ impl Ui {
             Item::TrigNoise => m.trig_nrej = !m.trig_nrej,
             Item::TrigAutoNoise => m.auto_nrej = !m.auto_nrej,
             Item::TrigCoup => {
-                let i = TRIG_COUPS.iter().position(|&x| x == m.trig_coup).unwrap_or(0);
-                m.trig_coup = TRIG_COUPS[cyc(i, TRIG_COUPS.len(), d)];
+                // the level stays at the same place of the signal: with AC and LF reject it counts from the
+                // signal's mean, so it moves by that mean when the coupling changes there or back. Left as it
+                // was, a level set with DC coupling was beyond the signal and the trigger stopped. (A remote
+                // command changes the coupling alone: a program sets both.)
+                let before = self.trig_level_base();
+                let i = TRIG_COUPS.iter().position(|&x| x == self.m.trig_coup).unwrap_or(0);
+                self.m.trig_coup = TRIG_COUPS[cyc(i, TRIG_COUPS.len(), d)];
+                let after = self.trig_level_base();
+                self.m.trig_level += before - after;
             }
             Item::GridStyle => {
                 let all = [Grid::Full, Grid::Light, Grid::None];
@@ -9873,11 +9880,24 @@ impl Ui {
         dir.join(format!("setup{}.txt", self.store_slot))
     }
 
+    /// What the level of the edge trigger counts from: 0 V, or with AC or LF reject coupling the mean of the source's
+    /// signal. The trigger then sees the signal without its DC part (`tpu::edge_coupled` leaves the channel's offset
+    /// out of the level), so a level of 0 V is at the signal's mean and a level that was right with DC coupling is
+    /// off by that mean: on a unit a line between 0 and 0.55 V stopped triggering at 0.255 V when the coupling went
+    /// to AC and triggered again from 0.1 V down (2026-11-18). The mean is the one of the record on the screen,
+    /// which is assumed to be near what the trigger's filter settles on.
+    pub(crate) fn trig_level_base(&self) -> f32 {
+        let s = self.stats[self.m.trig_src.min(NCH - 1)];
+        if matches!(self.m.trig_coupling(), TrigCoup::Ac | TrigCoup::LfReject) && s.valid && s.vavg.is_finite() { s.vavg } else { 0.0 }
+    }
+
     fn level_50(&mut self) {
         if self.m.trig_ref.is_some() { self.fit_reference_trigger_levels(); self.settings_changed(); return; }
         let s = self.stats[self.m.trig_src];
         if s.valid {
-            self.m.trig_level = crate::wave::mid_level(&s);
+            // the middle of the signal, counted from where the trigger counts (its mean with AC coupling: the
+            // middle in volts was a level the signal without its DC part never reached)
+            self.m.trig_level = crate::wave::mid_level(&s) - self.trig_level_base();
             self.settings_changed();
         }
     }
