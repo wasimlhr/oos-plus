@@ -484,6 +484,10 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- Decoders: the Events pane says nothing of a row that passed its checks (host-tested, not yet verified on
+  hardware). Its last column had a green OK on every such row, which took the room of the text and said no more
+  than a row that is not red. The column is named Errors, has the number of failed checks of a row in red, and is
+  there only when a row of the record failed one.
 - SPI decoder: a MISO line, and a message for each frame (host-tested; the frames (unit), 2026-11-19: a bus of
   one word a frame every 500 us gave a row a frame in the Events pane and a box a frame at 200 us/div; the MISO
   line not yet verified on hardware). MISO is a

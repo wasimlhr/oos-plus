@@ -122,6 +122,22 @@ pub(super) fn want_h(rows: usize) -> i32 {
 }
 
 /// Text in a cell from `x`, `w` wide: cut with dots where it is longer, left out where not even that fits.
+/// What the last column says of a row: how many of its fields failed a check. A row without one says nothing: an "OK"
+/// on every row took the room of the text and said no more than the missing red does.
+fn errors_text(errors: usize) -> String {
+    match errors {
+        0 => String::new(),
+        1 => "1 error".to_string(),
+        k => format!("{} errors", k),
+    }
+}
+
+/// Whether a pane `w` wide has its Errors column: it has the room, and `failed` rows of the record failed a check. A
+/// record without a failed check has no such column, and its text has the room.
+fn errors_column(w: i32, failed: usize) -> bool {
+    w >= SMALL_W && failed > 0
+}
+
 fn cell(cv: &mut Canvas, f: &Font, at: (i32, i32), w: i32, s: &str, col: Rgb) {
     let room = w - 10;
     // a message can be as long as the record: only what a row can hold is measured
@@ -333,8 +349,9 @@ impl Ui {
         let bar = self.events_scroll(area, fit);
         let top = bar.top() as usize;
         let shown: Vec<&MsgRow> = self.events_listed().skip(top).take(fit).collect();
-        // the columns: number, time, decoder, length, text, hex, status. A narrow pane keeps number, time, text and
-        // status; a small one the time and the text, which is red where a check failed
+        // the columns: number, time, decoder, length, text, hex, errors. The last one is there when a row of the
+        // record failed a check (the whole record, so it does not come and go while the list scrolls). A narrow pane
+        // keeps number, time, text and errors; a small one the time and the text, which is red where a check failed
         let pad = 14;
         let (wide, small) = (r.w >= NARROW_W, r.w < SMALL_W);
         let hex_on = wide && shown.iter().any(|e| !e.hex.is_empty());
@@ -342,7 +359,7 @@ impl Ui {
         let w_time = shown.iter().map(|e| f.s.width(&si(e.t, "s"))).max().unwrap_or(0) + pad;
         let w_who = if wide { shown.iter().map(|e| f.s.width(&e.who)).max().unwrap_or(0).min(140) + pad } else { 0 };
         let w_len = if wide { f.s.width("Len").max(f.s.width("9999")) + pad } else { 0 };
-        let w_status = if small { 0 } else { f.s.width("999 errors") + pad };
+        let w_status = if errors_column(r.w, failed) { f.s.width("999 errors") + pad } else { 0 };
         let left = r.x + if small { 8 } else { 12 };
         // the bar is drawn narrow in the middle of its touch area: a small pane lets the text come close to it
         let end = area.right() - if !bar.needed() { 8 } else if small { 28 } else { scroll::BAR_W + 4 };
@@ -355,7 +372,7 @@ impl Ui {
             ("Len", w_len),
             ("Text", w_text),
             ("Hex", free - w_text),
-            ("Status", w_status),
+            ("Errors", w_status),
         ];
         let mut x = left;
         for (title, w) in cols {
@@ -375,16 +392,12 @@ impl Ui {
             } else if (top + i) % 2 == 1 {
                 cv.fill(line, ROW_ALT);
             }
-            let status = match e.errors {
-                0 => "OK".to_string(),
-                1 => "1 error".to_string(),
-                k => format!("{} errors", k),
-            };
+            let status = errors_text(e.errors);
             let len = if e.len > 0 { e.len.to_string() } else { String::new() };
             let number = (top + i + 1).to_string();
             let texts = [number, si(e.t, "s"), e.who.clone(), len, e.text.clone(), e.hex.clone(), status];
-            let (ink, mark) = if e.errors > 0 { (RED, RED) } else { (TEXT, GREEN) };
-            let inks = [DIM, LABEL, DIM, LABEL, ink, LABEL, mark];
+            let ink = if e.errors > 0 { RED } else { TEXT };
+            let inks = [DIM, LABEL, DIM, LABEL, ink, LABEL, RED];
             let mut x = left;
             for (k, (_, w)) in cols.iter().enumerate() {
                 if *w > 0 {
@@ -650,6 +663,16 @@ mod tests {
         assert!(u.m.ev_errors && u.events_count() == 0);
         let mut cv = Canvas::new(u.scr.w, u.scr.h);
         u.render(&mut cv);
+    }
+
+    /// A row without a failed check says nothing in the last column, and a record without one has no such column: the
+    /// text has its room. A small pane never has it (its text is red where a check failed).
+    #[test]
+    fn the_errors_column_is_there_for_errors_only() {
+        assert_eq!((errors_text(0), errors_text(1), errors_text(3)), (String::new(), "1 error".to_string(), "3 errors".to_string()));
+        assert!(!errors_column(NARROW_W + 200, 0) && !errors_column(SMALL_W, 0));
+        assert!(errors_column(NARROW_W + 200, 1) && errors_column(SMALL_W, 2));
+        assert!(!errors_column(SMALL_W - 1, 5));
     }
 
     /// A small pane has one button that goes through the views, and every text it draws stays inside it.

@@ -168,7 +168,8 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 **Protocol decoders (26)**
 - Four decoders at once, with an event table you can export and that jumps to an event; DCC lists one command per row
   ("Loco 5  Fwd 50/128"). The Events pane lists the record as messages, single fields or lines of text, with the
-  time, the length, the text, the bytes in hex and the result of the checks; Errors only leaves the rows that failed
+  time, the length, the text, the bytes in hex and, where a check failed, the number of errors in red; Errors only
+  leaves the rows that failed
 - A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
   slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
   `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART or I2C band
