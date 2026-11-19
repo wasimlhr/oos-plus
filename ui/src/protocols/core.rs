@@ -87,11 +87,17 @@ impl Protocol for I2c {
         Some(oos_dsp::decode::i2c_bits(p)).filter(|b| !b.is_empty())
     }
     /// The address: its seven bits ("50 W"), or with R/W bit Included the first byte of the transfer as it is on
-    /// the bus ("A0 W", "A1 R"). " N" marks one that was not acknowledged. Triggers and searches take the seven bits.
+    /// the bus ("A0 W", "A1 R"). An address of ten bits is its ten bits in three digits ("2A5 W"), whatever R/W bit
+    /// says: it has no one byte to show. " N" marks one that was not acknowledged. Triggers and searches take the
+    /// seven bits.
     fn text(&self, p: &Packet, opt: &[usize; OPTS]) -> Option<String> {
         let oos_dsp::decode::Kind::Addr { read } = p.kind else { return None };
+        let (rw, nak) = (if read { "R" } else { "W" }, if p.ok { "" } else { " N" });
+        if p.value2 == Some(oos_dsp::decode::I2C_TEN_BIT) {
+            return Some(format!("{:03X} {}{}", p.value, rw, nak));
+        }
         let v = if opt[0] == 1 { (p.value << 1) | u32::from(read) } else { p.value };
-        Some(format!("{:02X} {}{}", v, if read { "R" } else { "W" }, if p.ok { "" } else { " N" }))
+        Some(format!("{:02X} {}{}", v, rw, nak))
     }
     fn roles(&self) -> [Option<&'static str>; 4] {
         [Some("SDA"), Some("SCL"), None, None]

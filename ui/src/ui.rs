@@ -12135,7 +12135,9 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
     let hex = |v: u32| if m.dec_bits > 8 { format!("{:04X}", v) } else { format!("{:02X}", v) };
     // a character where the decoder shows characters: a word of one line that passed its check (an I2C byte that
     // was not acknowledged keeps its value and its mark, a MOSI/MISO pair its two values)
-    let chars = p.kind == Kind::Data && p.value2.is_none() && p.ok && decband::ascii(m);
+    // (the mark on the byte that ends an I2C read is no second value)
+    let second = p.value2.filter(|_| m.dec_proto != Proto::I2C);
+    let chars = p.kind == Kind::Data && second.is_none() && p.ok && decband::ascii(m);
             match p.kind {
                 Kind::Addr { read } => format!("{} {}{}", hex(p.value), if read { "R" } else { "W" }, if p.ok { "" } else { " N" }),
                 Kind::Id { ext, rtr } => format!("ID {}{}{}", if ext { format!("{:08X}", p.value) } else if m.dec_proto == Proto::LIN { format!("{:02X}", p.value) } else { format!("{:03X}", p.value) }, if rtr { " RTR" } else { "" }, if p.ok { "" } else { " !P" }),
@@ -12153,7 +12155,7 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
                 Kind::Ack => format!("ACK {}", p.value),
                 _ if chars && p.value == 0x20 => "SP".to_string(),
                 _ if chars && (0x21..0x7f).contains(&p.value) => format!("{}", p.value as u8 as char),
-                _ => match p.value2 {
+                _ => match second {
                     Some(v2) => format!("{}/{}", hex(p.value), hex(v2)),
                     None if m.dec_proto == Proto::I2C && !p.ok => format!("{} N", hex(p.value)),
                     None => hex(p.value),

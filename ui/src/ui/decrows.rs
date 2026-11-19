@@ -682,6 +682,39 @@ mod tests {
         assert_eq!(packet_text(&u, &byte(0.0, b'H')), "48");
     }
 
+    /// An I2C read is no error: the byte the controller ends it with is not acknowledged, by the rule of the bus, and
+    /// the row says nothing of it; a byte that is not acknowledged anywhere else keeps its mark and counts. An
+    /// address of ten bits is one field of three digits, whatever the R/W bit option says.
+    #[test]
+    fn an_i2c_read_is_no_error_and_a_ten_bit_address_is_one_field() {
+        use oos_dsp::decode::{I2C_NAK_END, I2C_TEN_BIT};
+        let mut m = Model::default();
+        m.dec_proto = Proto::I2C;
+        m.dec_bits = 8;
+        m.dec_opt = [0; crate::protocols::OPTS];
+        let at = |k: usize, kind: DecKind, value: u32| Packet { kind, value, ..byte(k as f64, 0) };
+        let ended = Packet { value2: Some(I2C_NAK_END), ..at(3, DecKind::Data, 0x53) };
+        let (start, stop) = (at(0, DecKind::Start, 0), at(4, DecKind::Stop, 0));
+        let read = [start, at(1, DecKind::Addr { read: true }, 0x50), at(2, DecKind::Data, 0x4f), ended, stop];
+        let rows = rows_of(&m, 0, "D1 I2C", &read, EvView::Messages);
+        assert_eq!((rows.len(), rows[0].text.as_str(), rows[0].errors), (1, "50 R 4F 53 P", 0));
+        // as characters, the last byte is one too
+        m.dec_opt[1] = 1;
+        assert_eq!(rows_of(&m, 0, "D1 I2C", &read, EvView::Messages)[0].text, "50 R OS P");
+        m.dec_opt[1] = 0;
+        // a write that was not acknowledged
+        let mut write = read.clone();
+        (write[1].kind, write[3]) = (DecKind::Addr { read: false }, Packet { ok: false, ..at(3, DecKind::Data, 0x53) });
+        let rows = rows_of(&m, 0, "D1 I2C", &write, EvView::Messages);
+        assert_eq!((rows[0].text.as_str(), rows[0].errors), ("50 W 4F 53 N P", 1));
+        // ten bits
+        let ten = Packet { value2: Some(I2C_TEN_BIT), ..at(1, DecKind::Addr { read: false }, 0x2a5) };
+        assert_eq!(packet_text(&m, &ten), "2A5 W");
+        assert_eq!(packet_text(&m, &Packet { value: 0x050, ..ten.clone() }), "050 W", "not the 7-bit address 50");
+        m.dec_opt[0] = 1;
+        assert_eq!(packet_text(&m, &ten), "2A5 W", "it has no one byte with the read/write bit in it");
+    }
+
     /// The Events pane lists the demo's UART line as messages, switches to fields by a tap on its head, and a tap on
     /// a row needs no more than the row.
     #[test]

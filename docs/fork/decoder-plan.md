@@ -25,7 +25,7 @@ Per decoder:
 |---|---|---|---|
 | UART | capture: text and times agree; unit | band, bit row, lines | a failed character on the unit |
 | SPI | capture: 13-bit words, MOSI/MISO, frames agree; unit | band, frames, Format | MISO on the unit |
-| I2C | capture: bytes agree; **a read ends in a false error; no 10-bit address** | band, bit row, Format | fix both |
+| I2C | capture: bytes, errors and 10-bit addresses agree (one address differs, below) | band, bit row, Format | unit |
 | CAN | capture: 97 of 97 frames agree | band | DLC, frame type as columns |
 | CAN-FD | capture: frames agree; error frame not listed; DLC as its code | band | error frames, DLC in bytes |
 | LIN | capture: **rate only from the list, bad sync dropped, stray byte as checksum** | band | fix; checksum version |
@@ -54,7 +54,11 @@ outside the tree (`local/captures`, ignored), with the scripts that run a decode
 0. **Done.** Every decoder that has a capture run against it; the table above.
 1. **Wrong decodes first**, each with a test that fails before the fix (a short synthetic signal of the same shape;
    the captures stay outside the tree) and a rerun on its capture:
-   1. I2C: the NAK that ends a read is not an error; 10-bit addresses.
+   1. I2C: the NAK that ends a read is not an error; 10-bit addresses. **Done** (host and capture): of 393
+      messages 162 have an error where 351 had one, and the rows the reference decode marks are the ones marked.
+      Two differences are left as they are: the read after a repeated start shows the ten bits of the address
+      written before it ("152 R") where the reference shows its one byte (79), and a general call (00 W) that
+      nobody acknowledged is an error here and unmarked there. The SMBus capture has no error (96 before).
    2. LIN: the bit rate from the sync field; a frame with a bad sync is shown with its error; a byte after the
       frame's longest time is not its checksum; the checksum version as an option.
    3. MIL-STD-1553: the bit clock follows the mid-bit edges.

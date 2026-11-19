@@ -499,6 +499,17 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- I2C decoder: a read is no error, and a 10-bit address is one address (host-tested, and on two captures of real
+  buses on the host; not yet verified on hardware). The byte a controller ends a read with is not acknowledged:
+  that is the rule of the bus, and it was red on the band, counted as an error in the Events pane and marked
+  " N", so every read was an error (351 of 393 messages of one capture, 162 now, the ones a device did not
+  answer). It is no error any more when its address was acknowledged and a stop or a repeated start follows; the
+  bit row still says NAK there, in the colour of a bit. An address of ten bits (11110 and two bits, then a byte)
+  was an address 78 to 7B and a data byte: it is one field of three digits ("2A5 W"), and the read after a
+  repeated start, which sends its first byte alone, has the ten bits of the write before it. The trigger and the
+  search compare the bytes on the bus as before, with their own setting of seven or ten bits. The I2C lane on
+  the plot follows. As characters (Format), an address or a mark has a space before the text ("50 R OS P", it
+  read "50 ROSP").
 - Decoders: a tap on a row of the Events pane leaves a running scope running (host-tested; (unit), 2026-11-19, in
   Studio on an SPI bus: the tap left the scope triggered with its horizontal position and said how to get there;
   stopped, the tap went to the row and marked it and its box). In Studio it stopped the acquisition and moved the

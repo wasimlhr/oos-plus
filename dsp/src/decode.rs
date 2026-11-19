@@ -40,11 +40,18 @@ pub struct Packet {
     pub t1: f64,
     pub kind: Kind,
     pub value: u32,
-    /// second value (SPI MISO)
+    /// second value (SPI MISO). I2C: [`I2C_TEN_BIT`] on a 10-bit address, [`I2C_NAK_END`] on the last byte of a read
     pub value2: Option<u32>,
-    /// UART: stop bit and parity ok; I2C: acknowledged
+    /// UART: stop bit and parity ok; I2C: acknowledged, or not acknowledged where that is the rule (the byte a
+    /// controller ends a read with)
     pub ok: bool,
 }
+
+/// `value2` of an I2C address of ten bits: `value` holds the ten bits. A write has it in two bytes on the bus, the
+/// read that follows a repeated start in one (its low eight bits are those of the write before it).
+pub const I2C_TEN_BIT: u32 = 10;
+/// `value2` of the data byte a controller ends a read with: it is not acknowledged, and that is no error (`ok`).
+pub const I2C_NAK_END: u32 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Parity {
@@ -172,24 +179,38 @@ pub fn bursts(p: &[Packet]) -> Vec<std::ops::Range<usize>> {
 /// the acknowledge bit, each around the rising clock edge it was sampled at. A byte's packet runs from its first
 /// clock edge to its ninth; the seven between them are taken as evenly spaced, which a clock stretched inside a byte
 /// is not (assumed; between bytes, where targets usually stretch, it does not matter).
+///
+/// A 10-bit address written is two bytes, 11110 with the two high bits and the write bit, then the low eight: 18
+/// cells, taken as evenly spaced over both. When one of the two was not acknowledged the packet does not say which:
+/// both acknowledge cells show it.
 pub fn i2c_bits(p: &Packet) -> Vec<Bit> {
-    let (byte, address) = match p.kind {
-        Kind::Addr { read } => ((p.value << 1) | u32::from(read), true),
-        Kind::Data => (p.value, false),
+    let ten = p.value2 == Some(I2C_TEN_BIT);
+    // the bytes on the bus, and whether the first is an address byte
+    let (bytes, address): (Vec<u32>, bool) = match p.kind {
+        Kind::Addr { read: false } if ten => (vec![0xf0 | (p.value >> 8 & 3) << 1, p.value & 0xff], true),
+        Kind::Addr { read: true } if ten => (vec![0xf0 | (p.value >> 8 & 3) << 1 | 1], true),
+        Kind::Addr { read } => (vec![(p.value << 1) | u32::from(read)], true),
+        Kind::Data => (vec![p.value], false),
         _ => return Vec::new(),
     };
-    let step = (p.t1 - p.t0) / 8.0;
+    let step = (p.t1 - p.t0) / (bytes.len() * 9 - 1) as f64;
     if !(step > 0.0) {
         return Vec::new();
     }
-    let cell = |k: u32, kind: BitKind, level: bool, ok: bool| {
+    let cell = |k: usize, kind: BitKind, level: bool, ok: bool| {
         let at = p.t0 + k as f64 * step;
         Bit { t0: at - step / 2.0, t1: at + step / 2.0, kind, level: Some(level), ok }
     };
-    let kind = |k: u32| if address && k == 7 { BitKind::Rw } else { BitKind::Data };
-    let mut out: Vec<Bit> = (0..8).map(|k| cell(k, kind(k), (byte >> (7 - k)) & 1 == 1, true)).collect();
-    // acknowledged is a 0 on the line
-    out.push(cell(8, BitKind::Ack, !p.ok, p.ok));
+    // acknowledged is a 0 on the line; the byte that ends a read is not acknowledged and is no error
+    let nak = !p.ok || p.value2 == Some(I2C_NAK_END);
+    let mut out = Vec::with_capacity(bytes.len() * 9);
+    for (n, byte) in bytes.iter().enumerate() {
+        for k in 0..8 {
+            let kind = if address && n == 0 && k == 7 { BitKind::Rw } else { BitKind::Data };
+            out.push(cell(n * 9 + k, kind, (byte >> (7 - k)) & 1 == 1, true));
+        }
+        out.push(cell(n * 9 + 8, BitKind::Ack, nak, p.ok));
+    }
     out
 }
 
@@ -251,7 +272,8 @@ pub fn uart_bits(p: &Packet, bits: u32, parity: Parity) -> Vec<Bit> {
 }
 
 /// I2C: START/STOP from SDA edges while SCL is high, bits sampled at SCL rising edges, 9th bit = ACK (low).
-/// One threshold and hysteresis for both lines.
+/// One threshold and hysteresis for both lines. A 10-bit address is one address packet, and the byte a controller
+/// ends a read with is no error (`i2c_settle`).
 pub fn i2c(sda: &[f32], scl: &[f32], thr: f32, hyst: f32) -> Vec<Packet> {
     i2c_at(sda, scl, thr, hyst, thr, hyst)
 }
@@ -302,6 +324,66 @@ pub fn i2c_at(sda: &[f32], scl: &[f32], sda_thr: f32, sda_hyst: f32, scl_thr: f3
                     first = false;
                     nbits = 0;
                     bits = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+    i2c_settle(out)
+}
+
+/// What the bytes of a transfer mean together, which the bit loop of `i2c_at` cannot know byte by byte:
+///
+/// - A 10-bit address: the first byte 11110xx0 and the byte after it are one address packet of ten bits
+///   ([`I2C_TEN_BIT`]), acknowledged when both were. The read that follows a repeated start sends 11110xx1 alone:
+///   it gets the ten bits of the write before it in the same transfer, when its two bits are the same. Such a byte
+///   without that write before it stays what it is on the bus, an address of seven bits.
+/// - The last byte of a read is not acknowledged by the controller: that is how it ends the read. It is `ok`, with
+///   [`I2C_NAK_END`], when its address was acknowledged and a stop, a repeated start or the end of the record
+///   follows. Any other byte that was not acknowledged stays an error.
+fn i2c_settle(raw: Vec<Packet>) -> Vec<Packet> {
+    let mut out: Vec<Packet> = Vec::with_capacity(raw.len());
+    // the 10-bit address written in this transfer (kept over repeated starts, until the stop)
+    let mut written: Option<u32> = None;
+    let mut k = 0;
+    while k < raw.len() {
+        let p = &raw[k];
+        let data_follows = raw.get(k + 1).is_some_and(|d| d.kind == Kind::Data);
+        match p.kind {
+            Kind::Start | Kind::Stop => written = None,
+            Kind::Addr { read: false } if p.value & 0x7c == 0x78 && data_follows => {
+                let low = &raw[k + 1];
+                let value = (p.value & 3) << 8 | (low.value & 0xff);
+                written = Some(value);
+                let (value2, ok) = (Some(I2C_TEN_BIT), p.ok && low.ok);
+                out.push(Packet { t0: p.t0, t1: low.t1, kind: p.kind, value, value2, ok });
+                k += 2;
+                continue;
+            }
+            Kind::Addr { read: true } if p.value & 0x7c == 0x78 => {
+                let after_restart = out.last().is_some_and(|x| x.kind == Kind::RepStart);
+                if let Some(value) = written.filter(|w| after_restart && w >> 8 == p.value & 3) {
+                    out.push(Packet { value, value2: Some(I2C_TEN_BIT), ..p.clone() });
+                    k += 1;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        out.push(p.clone());
+        k += 1;
+    }
+    // the byte that ends a read
+    let mut reading = false;
+    for k in 0..out.len() {
+        match out[k].kind {
+            Kind::Start | Kind::RepStart | Kind::Stop => reading = false,
+            Kind::Addr { read } => reading = read && out[k].ok,
+            Kind::Data if reading && !out[k].ok => {
+                let last = out.get(k + 1).is_none_or(|n| matches!(n.kind, Kind::Stop | Kind::RepStart | Kind::Start));
+                if last {
+                    out[k].ok = true;
+                    out[k].value2 = Some(I2C_NAK_END);
                 }
             }
             _ => {}
@@ -493,6 +575,104 @@ mod tests {
         assert_eq!(p.iter().map(|x| x.value as u8).collect::<Vec<_>>(), msg);
     }
 
+    /// A byte that was not acknowledged is an error, except the one a controller ends a read with: its address was
+    /// acknowledged and a stop or a repeated start follows it. On a real bus every read ended in an "error".
+    #[test]
+    fn i2c_the_byte_that_ends_a_read_is_no_error() {
+        let pk = |kind: Kind, value: u32, ok: bool| Packet { t0: 0.0, t1: 1.0, kind, value, value2: None, ok };
+        let (rd, wr) = (Kind::Addr { read: true }, Kind::Addr { read: false });
+        let settled = |raw: &[Packet]| -> Vec<(bool, Option<u32>)> {
+            i2c_settle(raw.to_vec()).iter().filter(|x| x.kind == Kind::Data).map(|x| (x.ok, x.value2)).collect()
+        };
+        let end = (true, Some(I2C_NAK_END));
+        // a read of two bytes, ended by a stop, by a repeated start, and by the end of the record
+        let (start, stop) = (pk(Kind::Start, 0, true), pk(Kind::Stop, 0, true));
+        let data = |value: u32, ok: bool| pk(Kind::Data, value, ok);
+        for last in [Some(Kind::Stop), Some(Kind::RepStart), None] {
+            let mut raw = vec![start.clone(), pk(rd, 0x50, true), data(0x10, true), data(0x12, false)];
+            raw.extend(last.map(|k| pk(k, 0, true)));
+            assert_eq!(settled(&raw), [(true, None), end], "{last:?}");
+        }
+        // a byte that is not acknowledged in the middle of a read is an error; the last one still ends it
+        let raw = [start.clone(), pk(rd, 0x50, true), data(1, false), data(2, false), stop.clone()];
+        assert_eq!(settled(&raw), [(false, None), end]);
+        // nobody answered the address: what follows is no read that ends well
+        let raw = [start.clone(), pk(rd, 0x50, false), data(0xff, false), stop.clone()];
+        assert_eq!(settled(&raw), [(false, None)]);
+        // a write that is not acknowledged is an error
+        let raw = [start.clone(), pk(wr, 0x50, true), data(1, true), data(2, false), stop.clone()];
+        assert_eq!(settled(&raw), [(true, None), (false, None)]);
+        // the acknowledge cell of the bit row says what was on the line, and is an error only where the byte is one
+        let ended = Packet { ok: true, value2: Some(I2C_NAK_END), ..data(0x12, true) };
+        let cell = |p: &Packet| {
+            let c = i2c_bits(p)[8];
+            (c.level, c.ok)
+        };
+        assert_eq!(cell(&ended), (Some(true), true));
+        assert_eq!(cell(&data(0x12, false)), (Some(true), false));
+        assert_eq!(cell(&data(0x12, true)), (Some(false), true));
+    }
+
+    /// A 10-bit address is one address: written, its two bytes; read after a repeated start, its one byte with the
+    /// low bits of the write before it. The cells of its bits lie on the clock edges of both bytes.
+    #[test]
+    fn i2c_ten_bit_addresses() {
+        let dt = 0.25e-6;
+        // write to 0x2A5 (11110 10 0, A5): 01; then read from it: 33 44; then a read header alone, to 0x79
+        let (sda, scl) = i2c_logic(
+            &[
+                I2cXfer { addr: 0x7a, read: false, data: vec![0xa5, 0x01], repeated: false, stop: false },
+                I2cXfer { addr: 0x7a, read: true, data: vec![0x33, 0x44], repeated: true, stop: true },
+                I2cXfer { addr: 0x79, read: true, data: vec![0x55], repeated: false, stop: true },
+            ],
+            100e3,
+            0.0,
+            3.3,
+        );
+        let (d, c) = (sample(|t| sda.v(t), 0.0, dt, 4200), sample(|t| scl.v(t), 0.0, dt, 4200));
+        let p = i2c(&d, &c, 1.65, 0.2);
+        let k: Vec<(Kind, u32, Option<u32>, bool)> = p.iter().map(|x| (x.kind, x.value, x.value2, x.ok)).collect();
+        let ten = Some(I2C_TEN_BIT);
+        assert_eq!(
+            k,
+            [
+                (Kind::Start, 0, None, true),
+                (Kind::Addr { read: false }, 0x2a5, ten, true),
+                (Kind::Data, 0x01, None, true),
+                (Kind::RepStart, 0, None, true),
+                (Kind::Addr { read: true }, 0x2a5, ten, true),
+                (Kind::Data, 0x33, None, true),
+                (Kind::Data, 0x44, Some(I2C_NAK_END), true),
+                (Kind::Stop, 0, None, true),
+                (Kind::Start, 0, None, true),
+                // no write before it in this transfer: the byte as it is on the bus
+                (Kind::Addr { read: true }, 0x79, None, true),
+                (Kind::Data, 0x55, Some(I2C_NAK_END), true),
+                (Kind::Stop, 0, None, true),
+            ]
+        );
+        // the written address: 18 cells over its two bytes, each what the data line is in its middle
+        let cells = i2c_bits(&p[1]);
+        assert_eq!(cells.len(), 18);
+        for x in &cells {
+            let mid = ((x.t0 + x.t1) / 2.0).round() as usize;
+            assert_eq!(Some(d[mid] > 1.65), x.level, "{:?}", x);
+        }
+        let levels: Vec<u8> = cells.iter().map(|x| u8::from(x.level == Some(true))).collect();
+        assert_eq!(levels, [1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0]);
+        let kinds: Vec<BitKind> = cells.iter().map(|x| x.kind).collect();
+        let (rw, ack, data) = (BitKind::Rw, BitKind::Ack, BitKind::Data);
+        assert_eq!((kinds[7], kinds[8], kinds[16], kinds[17]), (rw, ack, data, ack));
+        // the read header: one byte, 11110 10 1 and its acknowledge
+        let cells = i2c_bits(&p[4]);
+        let levels: Vec<u8> = cells.iter().map(|x| u8::from(x.level == Some(true))).collect();
+        assert_eq!(levels, [1, 1, 1, 1, 0, 1, 0, 1, 0]);
+        for x in &cells {
+            let mid = ((x.t0 + x.t1) / 2.0).round() as usize;
+            assert_eq!(Some(d[mid] > 1.65), x.level, "{:?}", x);
+        }
+    }
+
     #[test]
     fn i2c_write_then_read() {
         let rate = 100e3;
@@ -520,7 +700,7 @@ mod tests {
                 (Kind::RepStart, 0, true),
                 (Kind::Addr { read: true }, 0x50, true),
                 (Kind::Data, 0xab, true),
-                (Kind::Data, 0xcd, false), // master NACKs the last read byte
+                (Kind::Data, 0xcd, true), // the controller does not acknowledge the last byte it reads: no error
                 (Kind::Stop, 0, true),
             ]
         );
