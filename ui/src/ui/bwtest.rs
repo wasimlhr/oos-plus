@@ -10,7 +10,8 @@ use super::*;
 use oos_dsp::bandwidth;
 
 /// Frequency hints: 0 = Auto (the signal is below Nyquist, its tone is taken as it is).
-pub(super) const HINTS: [f64; 16] = [0.0, 1e6, 2e6, 5e6, 10e6, 20e6, 50e6, 100e6, 150e6, 200e6, 250e6, 300e6, 400e6, 500e6, 750e6, 1e9];
+pub(super) const HINTS: [f64; 16] =
+    [0.0, 1e6, 2e6, 5e6, 10e6, 20e6, 50e6, 100e6, 150e6, 200e6, 250e6, 300e6, 400e6, 500e6, 750e6, 1e9];
 /// Bins per period of the folded picture.
 pub(super) const BINS: [usize; 5] = [250, 500, 1000, 2000, 5000];
 
@@ -48,7 +49,13 @@ impl Ui {
     pub(super) fn bw_value(&self, it: Item) -> Option<String> {
         let m = &self.m;
         Some(match it {
-            Item::BwOn => if m.view == AView::Step { "On".into() } else { "Off".into() },
+            Item::BwOn => {
+                if m.view == AView::Step {
+                    "On".into()
+                } else {
+                    "Off".into()
+                }
+            }
             Item::BwSrc => format!("CH{}", m.bw_src + 1),
             Item::BwHint => Self::hint_name(m.bw_hint),
             Item::BwBins => m.bw_bins.to_string(),
@@ -68,17 +75,16 @@ impl Ui {
 
     pub(super) fn bw_adjust(&mut self, it: Item, d: i32) -> bool {
         let m = &mut self.m;
-        let step = |i: usize, n: usize| (i as i32 + d).clamp(0, n as i32 - 1) as usize;
         match it {
             Item::BwOn => m.view = if m.view == AView::Step { AView::Scope } else { AView::Step },
             Item::BwSrc => m.bw_src = src_step(m.bw_src, NCH, d),
             Item::BwHint => {
                 let i = HINTS.iter().position(|&h| h >= m.bw_hint * 0.999).unwrap_or(0);
-                m.bw_hint = HINTS[step(i, HINTS.len())];
+                m.bw_hint = HINTS[step_index(i, HINTS.len(), d)];
             }
             Item::BwBins => {
                 let i = BINS.iter().position(|&b| b >= m.bw_bins).unwrap_or(BINS.len() - 1);
-                m.bw_bins = BINS[step(i, BINS.len())];
+                m.bw_bins = BINS[step_index(i, BINS.len(), d)];
             }
             _ => return false,
         }
@@ -111,7 +117,13 @@ impl Ui {
         });
         match res {
             Some((f, step, r)) => {
-                self.azr.bw_info = format!("{} at {}, {} points, picture step {}", si(f, "Hz"), si_short(fs, "Sa/s"), fmt_count(v.len() as f64), si(step, "s"));
+                self.azr.bw_info = format!(
+                    "{} at {}, {} points, picture step {}",
+                    si(f, "Hz"),
+                    si_short(fs, "Sa/s"),
+                    fmt_count(v.len() as f64),
+                    si(step, "s")
+                );
                 self.azr.bw = Some(r);
             }
             None => {
@@ -126,7 +138,8 @@ impl Ui {
         let f = self.fonts();
         let col = CH_COLORS[self.m.bw_src.min(NCH - 1)];
         let Some(r) = &self.azr.bw else {
-            let msg = if self.azr.bw_info.is_empty() { "waiting for a record".to_string() } else { self.azr.bw_info.clone() };
+            let msg =
+                if self.azr.bw_info.is_empty() { "waiting for a record".to_string() } else { self.azr.bw_info.clone() };
             cv.text_in(&f.m, a, 1, &msg, DIM);
             return;
         };
@@ -226,10 +239,6 @@ impl super::analysers::Analyser for BandwidthPage {
         MenuId::BwTest
     }
 
-    fn stored(&self) -> bool {
-        false
-    }
-
     /// Identify (what is connected to the inputs) sits beside it in the start menu.
     fn start(&self) -> Vec<Item> {
         vec![Item::Open(MenuId::BwTest), Item::IdentifyAct]
@@ -250,7 +259,7 @@ mod tests {
 
     #[test]
     fn demo_square_gives_a_step_response() {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut ui = crate::ui::testkit::demo_ui();
         ui.activate(Item::Open(MenuId::BwTest));
         ui.adjust(Item::BwOn, 1);
         assert_eq!(ui.m.view, AView::Step);

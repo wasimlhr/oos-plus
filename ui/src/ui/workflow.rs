@@ -8,16 +8,23 @@ use super::*;
 mod slot_loading_tests {
     use super::*;
     fn trace(label: &str) -> crate::store::WaveTrace {
-        crate::store::WaveTrace { v: (0..64).map(|i| if i % 8 < 4 { -1.0 } else { 1.0 }).collect(),
-            dt: 1e-9, t0: -32e-9, label: label.into() }
+        crate::store::WaveTrace {
+            v: (0..64).map(|i| if i % 8 < 4 { -1.0 } else { 1.0 }).collect(),
+            dt: 1e-9,
+            t0: -32e-9,
+            label: label.into(),
+        }
     }
     fn tap(ui: &mut Ui, r: Rect) {
-        for phase in [Phase::Down, Phase::Up] { ui.handle(Ev::Touch { id: 0, phase, x: r.x + r.w / 2, y: r.y + r.h / 2 }); }
+        for phase in [Phase::Down, Phase::Up] {
+            ui.handle(Ev::Touch { id: 0, phase, x: r.x + r.w / 2, y: r.y + r.h / 2 });
+        }
     }
     #[test]
     fn destination_choice_is_modal_and_cancel_changes_no_source_or_model() {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
-        ui.m.meas.clear(); ui.ref_sel = 3;
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.meas.clear();
+        ui.ref_sel = 3;
         let before = ui.m.clone();
         ui.request_waveform();
         assert!(ui.load_slot_ask && !ui.open_wave_request);
@@ -25,59 +32,74 @@ mod slot_loading_tests {
         assert!(ui.load_slot_ask && !ui.open_wave_request, "the title is not a destination");
         tap(&mut ui, Ui::load_slot_cancel());
         assert!(!ui.load_slot_ask && !ui.open_wave_request && ui.waveform_destination().is_none());
-        assert_eq!(ui.m, before); assert_eq!(ui.ref_sel, 3); assert!(ui.refs.iter().all(Option::is_none));
-        ui.request_waveform(); ui.dismiss_context();
+        assert_eq!(ui.m, before);
+        assert_eq!(ui.ref_sel, 3);
+        assert!(ui.refs.iter().all(Option::is_none));
+        ui.request_waveform();
+        ui.dismiss_context();
         assert!(!ui.load_slot_ask && !ui.open_wave_request);
     }
     #[test]
     fn chosen_async_destination_is_transactional_and_live_import_is_an_overlay() {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut ui = crate::ui::testkit::demo_ui();
         ui.m.meas = vec![(Meas::Vpp, WaveId::Ch(0))];
-        ui.m.ch[1].on = true; ui.m.trig_mode = TrigMode::Normal; ui.m.delay = 6e-6;
+        ui.m.ch[1].on = true;
+        ui.m.trig_mode = TrigMode::Normal;
+        ui.m.delay = 6e-6;
         ui.ref_sel = 3;
         let before = ui.m.clone();
-        ui.request_waveform(); tap(&mut ui, Ui::load_slot_button(9));
+        ui.request_waveform();
+        tap(&mut ui, Ui::load_slot_button(9));
         assert_eq!(ui.waveform_destination(), Some(9));
         assert!(ui.open_wave_request && !ui.load_slot_ask);
         assert_eq!(ui.ref_sel, 3, "choosing a destination does not change focus before commit");
         assert!(ui.commit_waveform_traces_at(vec![trace("A"), trace("B")], "two", 9).is_err());
-        assert_eq!(ui.m, before); assert_eq!(ui.ref_sel, 3);
+        assert_eq!(ui.m, before);
+        assert_eq!(ui.ref_sel, 3);
         assert!(ui.refs.iter().all(Option::is_none), "overflow validates before replacing any slot");
         ui.ref_sel = 7; // A different source may be selected while the worker is reading.
         ui.commit_waveform_traces_at(vec![trace("R10")], "chosen", 9).unwrap();
         assert_eq!(ui.m, before, "live ADC/run/timebase/trigger/catalog are preserved");
         assert!(!ui.record_mode() && ui.m.ch[0].on && ui.m.ch[1].on);
-        assert_eq!(ui.ref_sel, 9); assert!(ui.refs[7].is_none() && ui.refs[9].as_ref().unwrap().on);
+        assert_eq!(ui.ref_sel, 9);
+        assert!(ui.refs[7].is_none() && ui.refs[9].as_ref().unwrap().on);
         assert_eq!(ui.replay.captures, 0);
         assert!(ui.set_trigger_source(WaveId::Ref(9), false));
         assert!(ui.record_mode() && ui.m.ch.iter().all(|ch| !ch.on));
         assert_eq!(ui.m.trigger_wave(), WaveId::Ref(9));
         ui.m.trig_level = 0.0;
-        ui.key(key::SINGLE); ui.step(0.2);
+        ui.key(key::SINGLE);
+        ui.step(0.2);
         assert_eq!(ui.replay.captures, 1, "an explicit Ref trigger uses stored acquisition, never ADC arming");
         assert_eq!(ui.m.run, RunState::Stop);
     }
 
     #[test]
     fn live_overlay_fit_reuses_bounded_selected_record_fit_and_keeps_adc_acquisition() {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut ui = crate::ui::testkit::demo_ui();
         ui.commit_waveform_traces_at(vec![trace("overlay")], "overlay", 2).unwrap();
         ui.m.deskew_ref[2] = 2e-9;
         ui.m.delay = 10e-3;
         let native = ui.ref_info(2).unwrap();
         let pointer = ui.refs[2].as_ref().unwrap().v.as_ptr();
-        let adc = ui.m.ch.clone(); let trigger = ui.m.trigger(); let run = ui.m.run;
+        let adc = ui.m.ch.clone();
+        let trigger = ui.m.trigger();
+        let run = ui.m.run;
         assert!(ui.live_ref_note().contains("outside this window"));
         ui.fit_shown_reference();
         assert_eq!((ui.m.ch.clone(), ui.m.trigger(), ui.m.run), (adc, trigger, run));
         assert!(!ui.record_mode() && !ui.m.zoom);
-        let (scale, delay) = ui.view(); let half = scale as f64 * HDIV as f64 * 0.5;
-        let first = native.2 - 2e-9; let last = first + (native.0 - 1) as f64 * native.1;
+        let (scale, delay) = ui.view();
+        let half = scale as f64 * HDIV as f64 * 0.5;
+        let first = native.2 - 2e-9;
+        let last = first + (native.0 - 1) as f64 * native.1;
         assert!(delay as f64 - half <= first && delay as f64 + half >= last);
         assert_eq!(ui.ref_info(2).unwrap().2, native.2);
         assert_eq!(ui.refs[2].as_ref().unwrap().v.as_ptr(), pointer);
         assert!(!ui.live_ref_note().contains("outside this window"));
-        for ch in &mut ui.m.ch { ch.on = false; }
+        for ch in &mut ui.m.ch {
+            ch.on = false;
+        }
         assert!(!ui.record_mode(), "reference visibility alone cannot silently choose stored acquisition");
     }
 }
@@ -99,7 +121,7 @@ mod import_measurement_tests {
 
     #[test]
     fn additive_imports_keep_all_configured_single_pair_and_gate_settings() {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut ui = crate::ui::testkit::demo_ui();
         ui.load_waveform_auto(CSV, "first.csv").unwrap();
         ui.m.meas = ALL_MEAS.iter().map(|&kind| (kind, WaveId::Ref(0))).collect();
         ui.m.meas2 = (0..PAIRS_N).map(|kind| (kind, WaveId::Ref(0), WaveId::Ref(1))).collect();
@@ -120,15 +142,21 @@ mod import_measurement_tests {
     #[test]
     fn a_first_import_respects_a_deliberately_empty_or_custom_catalog() {
         for custom in [Vec::new(), vec![(Meas::Vmax, WaveId::Ch(0))]] {
-            let mut ui = Ui::new(Source::Demo { t: 0.0 });
+            let mut ui = crate::ui::testkit::demo_ui();
             ui.m.meas = custom.clone();
             ui.load_waveform_auto(CSV, "custom.csv").unwrap();
             assert_eq!(ui.m.meas, custom);
         }
-        let mut untouched = Ui::new(Source::Demo { t: 0.0 });
+        let mut untouched = crate::ui::testkit::demo_ui();
         untouched.load_waveform_auto(CSV, "default.csv").unwrap();
-        assert!(untouched.m.meas.iter().any(|entry| entry.1 == WaveId::Ref(0)), "a first live import adds useful reference defaults");
-        assert!(untouched.m.meas.iter().any(|entry| matches!(entry.1, WaveId::Ch(_))), "live channel defaults remain in the overlay workspace");
+        assert!(
+            untouched.m.meas.iter().any(|entry| entry.1 == WaveId::Ref(0)),
+            "a first live import adds useful reference defaults"
+        );
+        assert!(
+            untouched.m.meas.iter().any(|entry| matches!(entry.1, WaveId::Ch(_))),
+            "live channel defaults remain in the overlay workspace"
+        );
     }
 }
 
@@ -137,23 +165,32 @@ mod tests {
     use super::*;
 
     fn replay() -> Ui {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
-        u.m.meas_full_record = false; // screen gating: these tests check the visible-window gate (the default is the whole record)
+        let mut u = crate::ui::testkit::demo_ui();
+        // screen gating: these tests check the visible-window gate (the default is the whole record)
+        u.m.meas_full_record = false;
         u.remember_live();
         u.offline = true;
         u.offline_ref = 0;
         u.m.trig_ref = Some(0);
-        for ch in &mut u.m.ch { ch.on = false; }
+        for ch in &mut u.m.ch {
+            ch.on = false;
+        }
         u.m.la.on = false;
         u.m.sim_slot = 0;
         u.m.trig_level = 0.0;
         u.m.trig_mode = TrigMode::Normal;
         u.m.tscale = tscales().iter().position(|&x| (x - 10e-9).abs() < 1e-14).unwrap();
-        let values: Vec<f32> = (0..5000).map(|i| {
-            let amplitude = if i < 2500 { 0.5 } else { 1.0 };
-            if i % 40 < 20 { -amplitude } else { amplitude }
-        }).collect();
-        u.refs[0] = Some(RefWave { src: 0, color: 0, label: "Test record".into(), t0: 0.0, dt: 1e-9, v: (values).into(), vpd: 0.5, offset: 0.0, on: true });
+        let values: Vec<f32> = (0..5000)
+            .map(|i| {
+                let amplitude = if i < 2500 { 0.5 } else { 1.0 };
+                if i % 40 < 20 {
+                    -amplitude
+                } else {
+                    amplitude
+                }
+            })
+            .collect();
+        u.refs[0] = Some(RefWave { label: "Test record".into(), vpd: 0.5, ..RefWave::test(values, 1e-9, 0.0) });
         u.meas_src = WaveId::Ref(0);
         u.m.meas = vec![(Meas::Vpp, WaveId::Ref(0))];
         u.m.run = RunState::Stop;
@@ -212,17 +249,7 @@ mod tests {
     }
 
     fn wave(dt: f64, vpd: f32, offset: f32, color: usize) -> RefWave {
-        RefWave {
-            src: 0,
-            color,
-            label: String::new(),
-            t0: 0.0,
-            dt,
-            v: (vec![0.0; 64]).into(),
-            vpd,
-            offset,
-            on: true,
-        }
+        RefWave { color, vpd, offset, ..RefWave::test(vec![0.0; 64], dt, 0.0) }
     }
 
     #[test]
@@ -237,7 +264,7 @@ mod tests {
 
     #[test]
     fn reference_badges_keep_one_horizontal_scale() {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         for ch in &mut u.m.ch {
             ch.on = false;
         }
@@ -271,8 +298,23 @@ mod tests {
     #[test]
     fn every_reference_uses_the_same_time_window_at_its_own_sample_interval() {
         let mut u = replay();
-        let values: Vec<f32> = (0..2500).map(|i| if i < 1250 { if i % 20 < 10 { -1.0 } else { 1.0 } } else if i % 20 < 10 { -3.0 } else { 3.0 }).collect();
-        u.refs[1] = Some(RefWave { src: 0, color: 1, label: "Second source".into(), t0: 0.0, dt: 2e-9, v: (values).into(), vpd: 1.0, offset: 0.0, on: false });
+        let values: Vec<f32> = (0..2500)
+            .map(|i| {
+                if i < 1250 {
+                    if i % 20 < 10 {
+                        -1.0
+                    } else {
+                        1.0
+                    }
+                } else if i % 20 < 10 {
+                    -3.0
+                } else {
+                    3.0
+                }
+            })
+            .collect();
+        u.refs[1] =
+            Some(RefWave { color: 1, label: "Second source".into(), on: false, ..RefWave::test(values, 2e-9, 0.0) });
         u.m.delay = 1e-6;
         u.step(0.01);
         assert!((u.meas_at(WaveId::Ref(1), Meas::Vpp) - 2.0).abs() < 0.01);
@@ -300,9 +342,15 @@ mod tests {
                 u.m.set_trigger_wave(secondary, true);
                 let values: Vec<f32> = (0..5000).map(|i| if i % 40 < 30 { -0.05 } else { 0.05 }).collect();
                 match secondary {
-                    WaveId::Ref(i) => u.refs[i] = Some(RefWave { src: 0, color: 1,
-                        label: "Low-amplitude secondary".into(), t0: 0.0, dt: 1e-9,
-                        v: (values).into(), vpd: 2.0, offset: 0.0, on: false }),
+                    WaveId::Ref(i) => {
+                        u.refs[i] = Some(RefWave {
+                            color: 1,
+                            label: "Low-amplitude secondary".into(),
+                            vpd: 2.0,
+                            on: false,
+                            ..RefWave::test(values, 1e-9, 0.0)
+                        })
+                    }
                     WaveId::Ch(c) => {
                         u.m.ch[c].probe = 1.0;
                         u.m.ch[c].vfine = 2.0 / VSCALES[u.m.ch[c].vscale];
@@ -315,8 +363,11 @@ mod tests {
 
                 u.key(key::SINGLE);
                 u.replay_acquire(0.2);
-                assert_eq!((u.m.status, u.replay.captures, u.m.run),
-                    (TrigStatus::Wait, 0, RunState::Run), "{kind:?} {secondary:?}: large secondary hysteresis should reject the small waveform");
+                assert_eq!(
+                    (u.m.status, u.replay.captures, u.m.run),
+                    (TrigStatus::Wait, 0, RunState::Run),
+                    "{kind:?} {secondary:?}: large secondary hysteresis should reject the small waveform"
+                );
 
                 // Change only its scale. The source buffer, thresholds and type
                 // are identical, so this also exercises cache invalidation.
@@ -326,8 +377,11 @@ mod tests {
                 }
                 u.now += 0.2;
                 u.replay_acquire(0.2);
-                assert_eq!((u.m.status, u.replay.captures, u.m.run),
-                    (TrigStatus::Triggered, 1, RunState::Stop), "{kind:?} {secondary:?}: secondary scale must control its own comparator");
+                assert_eq!(
+                    (u.m.status, u.replay.captures, u.m.run),
+                    (TrigStatus::Triggered, 1, RunState::Stop),
+                    "{kind:?} {secondary:?}: secondary scale must control its own comparator"
+                );
 
                 match secondary {
                     WaveId::Ref(i) => u.refs[i].as_mut().unwrap().vpd = 2.0,
@@ -336,8 +390,11 @@ mod tests {
                 u.key(key::SINGLE);
                 u.now += 0.2;
                 u.replay_acquire(0.2);
-                assert_eq!((u.m.status, u.replay.captures, u.m.run),
-                    (TrigStatus::Wait, 1, RunState::Run), "{kind:?} {secondary:?}: cached hits must be removed when secondary hysteresis grows");
+                assert_eq!(
+                    (u.m.status, u.replay.captures, u.m.run),
+                    (TrigStatus::Wait, 1, RunState::Run),
+                    "{kind:?} {secondary:?}: cached hits must be removed when secondary hysteresis grows"
+                );
             }
         }
     }
@@ -371,9 +428,9 @@ mod tests {
 
     #[test]
     fn a_file_waits_for_a_slot_and_lands_on_the_one_chosen() {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         let kept: Vec<f32> = (0..40).map(|i| if i < 20 { -0.2 } else { 0.2 }).collect();
-        u.refs[0] = Some(RefWave { src: 0, color: 0, label: "keep".into(), t0: 0.0, dt: 1e-9, v: kept.clone().into(), vpd: 0.2, offset: 0.0, on: true });
+        u.refs[0] = Some(RefWave { label: "keep".into(), vpd: 0.2, ..RefWave::test(kept.clone(), 1e-9, 0.0) });
         u.request_waveform();
         assert!(u.load_slot_ask && !u.open_wave_request);
         let title = Ui::load_slot_box();
@@ -399,22 +456,33 @@ mod tests {
     }
 
     fn square(delay: usize) -> Vec<f32> {
-        (0..1600).map(|i| if ((i + 8000 - delay) / 80) % 2 == 0 { -0.5 } else { 0.5 }).collect()
+        (0..1600).map(|i| if ((i + 8000 - delay) / 80).is_multiple_of(2) { -0.5 } else { 0.5 }).collect()
     }
 
     #[test]
     fn auto_deskew_lines_up_the_shown_traces() {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         u.m.run = RunState::Stop;
-        for ch in &mut u.m.ch { ch.on = false; }
+        for ch in &mut u.m.ch {
+            ch.on = false;
+        }
         u.m.ch[0].on = true;
         u.m.ch[1].on = true;
         let mut samples = std::array::from_fn(|_| Vec::new());
         samples[0] = square(0);
         samples[1] = square(40);
-        u.last[0] = Some(Record { t0: 0.0, dt: 1e-9, ch: samples, triggered: true, partial: false, raw: None, la: None, pairs: false });
-        u.refs[3] = Some(RefWave { src: 0, color: 1, label: String::new(), t0: 0.0, dt: 1e-9, v: square(80).into(), vpd: 0.2, offset: 0.0, on: true });
-        u.refs[4] = Some(RefWave { src: 0, color: 2, label: String::new(), t0: 0.0, dt: 1e-9, v: square(200).into(), vpd: 0.2, offset: 0.0, on: false });
+        u.last[0] = Some(Record {
+            t0: 0.0,
+            dt: 1e-9,
+            ch: samples,
+            triggered: true,
+            partial: false,
+            raw: None,
+            la: None,
+            pairs: false,
+        });
+        u.refs[3] = Some(RefWave { color: 1, vpd: 0.2, ..RefWave::test(square(80), 1e-9, 0.0) });
+        u.refs[4] = Some(RefWave { color: 2, vpd: 0.2, on: false, ..RefWave::test(square(200), 1e-9, 0.0) });
         u.measure_last();
         // delay rise-rise (row 0): a 40 ns skew is outside the default +/-10 ns skew window
         let before = u.pair_at(0, WaveId::Ch(0), WaveId::Ch(1));
@@ -469,14 +537,24 @@ pub(super) struct Replay {
 
 impl Replay {
     #[cfg(test)]
-    pub(super) fn frame_for_test(&self) -> Option<(usize,usize,usize)> { self.frame }
-    pub(super) fn force_requested(&self) -> bool { self.force }
-    pub(super) fn request_force(&mut self) { self.force = true; }
-    pub(super) fn clear_deferred_statistics(&mut self) { self.deferred_statistics = None; }
+    pub(super) fn frame_for_test(&self) -> Option<(usize, usize, usize)> {
+        self.frame
+    }
+    pub(super) fn force_requested(&self) -> bool {
+        self.force
+    }
+    pub(super) fn request_force(&mut self) {
+        self.force = true;
+    }
+    pub(super) fn clear_deferred_statistics(&mut self) {
+        self.deferred_statistics = None;
+    }
 
     pub(super) fn reset_trigger_source(&mut self) {
-        self.cursor=0.0;self.force=false;self.trigger_time=None;
-        self.deferred_statistics=None;
+        self.cursor = 0.0;
+        self.force = false;
+        self.trigger_time = None;
+        self.deferred_statistics = None;
     }
 
     pub(super) fn reset_search(&mut self) {
@@ -484,11 +562,15 @@ impl Replay {
     }
 }
 
-#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Ui {
     fn capture_statistics_context(&self) -> String {
-        let refs: Vec<_> = self.refs.iter().map(|r| r.as_ref().map(|r|
-            (r.v.as_ptr() as usize, r.v.len(), r.dt.to_bits(), r.t0.to_bits(), r.vpd.to_bits()))).collect();
+        let refs: Vec<_> = self
+            .refs
+            .iter()
+            .map(|r| {
+                r.as_ref().map(|r| (r.v.as_ptr() as usize, r.v.len(), r.dt.to_bits(), r.t0.to_bits(), r.vpd.to_bits()))
+            })
+            .collect();
         let channels: Vec<_> = self.m.ch.iter().map(|ch| (ch.volts_per_div().to_bits(), ch.unit.name())).collect();
         let gate = (!self.m.meas_full_record).then(|| { let (scale, delay) = self.view(); (scale.to_bits(), delay.to_bits()) });
         format!("{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}", self.m.meas, (&self.m.meas2, &self.m.cat),
@@ -508,7 +590,9 @@ stat.push(value, current);
     /// gate/configuration. A worker completion or repeated read is not a capture.
     pub(super) fn finish_deferred_capture_statistics(&mut self) {
         let Some(mut pending) = self.replay.deferred_statistics.take() else { return };
-        if pending.capture != self.replay.captures || pending.context != self.capture_statistics_context() { return; }
+        if pending.capture != self.replay.captures || pending.context != self.capture_statistics_context() {
+            return;
+        }
         let rows = self.meas_rows();
         self.mstat.resize(rows.len(), MStat::default());
         pending.rows.retain(|&index| {
@@ -517,7 +601,9 @@ stat.push(value, current);
             Self::add_capture_statistic(&mut self.mstat[index], row.v, self.m.meas_pop_current);
             false
         });
-        if !pending.rows.is_empty() { self.replay.deferred_statistics = Some(pending); }
+        if !pending.rows.is_empty() {
+            self.replay.deferred_statistics = Some(pending);
+        }
     }
     pub fn record_mode(&self) -> bool {
         // A reference drawn with the live channels is not a session. Take over, Offline waveforms, and SIM are.
@@ -545,7 +631,9 @@ stat.push(value, current);
         }
     }
 
-    pub fn waveform_epoch(&self) -> u64 { self.workflow_epoch }
+    pub fn waveform_epoch(&self) -> u64 {
+        self.workflow_epoch
+    }
 
     /// Ends a reference, Take over or SIM session: the live set-up from before it (`remember_live`) comes back and
     /// nothing of it stays held, so a later session remembers afresh. Whether a set-up was held.
@@ -626,21 +714,30 @@ stat.push(value, current);
     }
 
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    pub fn waveform_destination(&self) -> Option<usize> { self.load_destination }
+    pub fn waveform_destination(&self) -> Option<usize> {
+        self.load_destination
+    }
 
-    pub(super) fn load_slot_box() -> Rect { Rect::new((W - 560) / 2, (H - 248) / 2, 560, 248) }
+    pub(super) fn load_slot_box() -> Rect {
+        Rect::new((W - 560) / 2, (H - 248) / 2, 560, 248)
+    }
     pub(super) fn load_slot_button(slot: usize) -> Rect {
         let r = Self::load_slot_box();
         Rect::new(r.x + 20 + (slot % 5) as i32 * 106, r.y + 78 + (slot / 5) as i32 * 52, 98, 44)
     }
     pub(super) fn load_slot_cancel() -> Rect {
-        let r = Self::load_slot_box(); Rect::new(r.x + r.w / 2 - 70, r.y + r.h - 52, 140, 36)
+        let r = Self::load_slot_box();
+        Rect::new(r.x + r.w / 2 - 70, r.y + r.h - 52, 140, 36)
     }
     pub(super) fn cancel_load_slot(&mut self) {
-        self.load_slot_ask = false; self.load_destination = None; self.open_wave_request = false;
+        self.load_slot_ask = false;
+        self.load_destination = None;
+        self.open_wave_request = false;
     }
     pub(super) fn load_slot_tap(&mut self, x: i32, y: i32) -> bool {
-        if !self.load_slot_ask { return false; }
+        if !self.load_slot_ask {
+            return false;
+        }
         if let Some(slot) = (0..NREF).find(|&slot| Self::load_slot_button(slot).contains(x, y)) {
             self.load_slot_ask = false;
             self.load_destination = Some(slot);
@@ -651,34 +748,45 @@ stat.push(value, current);
         true
     }
     pub(super) fn draw_load_slot(&self, cv: &mut Canvas) {
-        if !self.load_slot_ask { return; }
+        if !self.load_slot_ask {
+            return;
+        }
         cv.blend(Rect::new(0, 0, W, H), rgb(0, 0, 0), 150);
         let r = Self::load_slot_box();
         cv.framed(r, 8, 2, ACCENT, 7, DLG_BG);
         cv.text_in(&self.fonts().lb, Rect::new(r.x, r.y + 16, r.w, 28), 1, "Load into", ACCENT);
-        cv.text_in(&self.fonts().m, Rect::new(r.x, r.y + 46, r.w, 22), 1, "Choose a destination before opening the file.", DIM);
+        cv.text_in(
+            &self.fonts().m,
+            Rect::new(r.x, r.y + 46, r.w, 22),
+            1,
+            "Choose a destination before opening the file.",
+            DIM,
+        );
         for slot in 0..NREF {
             let b = Self::load_slot_button(slot);
             btn(cv, b, BTN, if self.refs[slot].is_some() { AMBER } else { BTN_BORDER });
             let label = format!("R{}{}", slot + 1, if self.refs[slot].is_some() { " replace" } else { "" });
             cv.text_in(&self.fonts().mb, b, 1, &label, TEXT);
         }
-        let cancel = Self::load_slot_cancel(); btn(cv, cancel, BTN, BTN_BORDER);
+        let cancel = Self::load_slot_cancel();
+        btn(cv, cancel, BTN, BTN_BORDER);
         cv.text_in(&self.fonts().mb, cancel, 1, "Cancel", TEXT);
     }
 
+    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     pub fn load_waveform_bytes(&mut self, data: &[u8], name: &str) -> Result<(), String> {
         let traces = crate::store::parse_wave(data, name)?;
         self.commit_waveform_traces(traces, name, false)
     }
 
+    #[cfg(test)]
     pub fn load_waveform_bytes_at(&mut self, data: &[u8], name: &str, slot: usize) -> Result<(), String> {
         let traces = crate::store::parse_wave(data, name)?;
         self.commit_waveform_traces_at(traces, name, slot)
     }
 
     /// Native/tool Load adds a file without silently replacing the prior source.
-    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
+    #[cfg(test)]
     pub fn load_waveform_auto(&mut self, data: &[u8], name: &str) -> Result<(), String> {
         let traces = crate::store::parse_wave(data, name)?;
         self.commit_waveform_traces(traces, name, true)
@@ -686,24 +794,47 @@ stat.push(value, current);
 
     /// Main-thread commit for a native file parsed by the import worker. Validate
     /// before mutating the session; failure leaves the working screen intact.
-    pub fn commit_waveform_traces(&mut self, traces: Vec<crate::store::WaveTrace>, name: &str, auto: bool) -> Result<(), String> {
+    pub fn commit_waveform_traces(
+        &mut self,
+        traces: Vec<crate::store::WaveTrace>,
+        name: &str,
+        auto: bool,
+    ) -> Result<(), String> {
         let destination = if auto { None } else { Some(self.ref_sel.min(NREF - 1)) };
         self.commit_waveform_traces_to(traces, name, destination)
     }
 
-    pub fn commit_waveform_traces_at(&mut self, traces: Vec<crate::store::WaveTrace>, name: &str, slot: usize) -> Result<(), String> {
-        if slot >= NREF { return Err("Choose a reference slot from R1 to R10".into()); }
+    pub fn commit_waveform_traces_at(
+        &mut self,
+        traces: Vec<crate::store::WaveTrace>,
+        name: &str,
+        slot: usize,
+    ) -> Result<(), String> {
+        if slot >= NREF {
+            return Err("Choose a reference slot from R1 to R10".into());
+        }
         self.commit_waveform_traces_to(traces, name, Some(slot))
     }
 
-    fn commit_waveform_traces_to(&mut self, traces: Vec<crate::store::WaveTrace>, name: &str, destination: Option<usize>) -> Result<(), String> {
-        if traces.is_empty() || traces.iter().any(|t| t.v.len() < 2 || !t.dt.is_finite() || t.dt <= 0.0 || !t.t0.is_finite()) {
+    fn commit_waveform_traces_to(
+        &mut self,
+        traces: Vec<crate::store::WaveTrace>,
+        name: &str,
+        destination: Option<usize>,
+    ) -> Result<(), String> {
+        if traces.is_empty()
+            || traces.iter().any(|t| t.v.len() < 2 || !t.dt.is_finite() || t.dt <= 0.0 || !t.t0.is_finite())
+        {
             return Err("The file needs at least two samples and a valid sample interval.".into());
         }
-        let first = if destination.is_none() {
-            (0..NREF).find(|&start| start + traces.len() <= NREF && self.refs[start..start + traces.len()].iter().all(Option::is_none))
-                .ok_or("No empty reference slots; select a slot and use Reference > Import to replace it")?
-        } else { destination.unwrap() };
+        let first = match destination {
+            Some(d) => d,
+            None => (0..NREF)
+                .find(|&start| {
+                    start + traces.len() <= NREF && self.refs[start..start + traces.len()].iter().all(Option::is_none)
+                })
+                .ok_or("No empty reference slots; select a slot and use Reference > Import to replace it")?,
+        };
         if first + traces.len() > NREF {
             return Err("The file has more traces than the remaining reference slots".into());
         }
@@ -752,12 +883,19 @@ stat.push(value, current);
         }
         if initialize_measurements {
             let defaults = [Meas::Vpp, Meas::Freq, Meas::Vrms, Meas::Rise].into_iter().map(|k| (k, WaveId::Ref(first)));
-            if reference_session { self.m.meas = defaults.collect(); }
-            else { self.m.meas.extend(defaults); }
+            if reference_session {
+                self.m.meas = defaults.collect();
+            } else {
+                self.m.meas.extend(defaults);
+            }
         }
-        if reference_session { self.clear_measurement_statistics(); }
+        if reference_session {
+            self.clear_measurement_statistics();
+        }
         self.meas_src = WaveId::Ref(first);
-        if self.look == reflook::RefLook::TakeOver { self.solo_reference(first); }
+        if self.look == reflook::RefLook::TakeOver {
+            self.solo_reference(first);
+        }
         self.ensure_meas_own();
         self.close_menu();
         if reference_session {
@@ -806,7 +944,13 @@ stat.push(value, current);
             let end = t0 + r.v.len().saturating_sub(1) as f64 * r.dt;
             let outside = (end < left || t0 > right) && self.studio_ref_own(i).is_none();
             let where_ = if outside { " · outside this window" } else { "" };
-            parts.push(format!("R{} {} · {}{}", i + 1, si_digits(1.0 / r.dt, "Sa/s", 3), si_digits(r.v.len() as f64, "pts", 3), where_));
+            parts.push(format!(
+                "R{} {} · {}{}",
+                i + 1,
+                si_digits(1.0 / r.dt, "Sa/s", 3),
+                si_digits(r.v.len() as f64, "pts", 3),
+                where_
+            ));
         }
         if parts.is_empty() {
             String::new()
@@ -859,8 +1003,12 @@ stat.push(value, current);
     }
 
     pub(crate) fn record_key(&mut self, key_code: u8) -> bool {
-        if matches!(key_code, key::RUNSTOP | key::SINGLE | key::FORCE) { self.sim_cancel_generation(); }
-        if !self.record_mode() { return false; }
+        if matches!(key_code, key::RUNSTOP | key::SINGLE | key::FORCE) {
+            self.sim_cancel_generation();
+        }
+        if !self.record_mode() {
+            return false;
+        }
         if key_code == key::DEFAULT {
             self.return_to_live();
             self.key(key_code);
@@ -870,7 +1018,10 @@ stat.push(value, current);
             self.activate_live_channel((key_code - 0x15) as usize);
             return true;
         }
-        if matches!(key_code, key::RUNSTOP | key::SINGLE | key::FORCE) && !self.replay.sim_initial_armed && self.refs.get(self.active_reference()).and_then(Option::as_ref).is_none() {
+        if matches!(key_code, key::RUNSTOP | key::SINGLE | key::FORCE)
+            && !self.replay.sim_initial_armed
+            && self.refs.get(self.active_reference()).and_then(Option::as_ref).is_none()
+        {
             self.m.run = RunState::Stop;
             self.sim_play = false;
             self.m.status = TrigStatus::Stop;
@@ -891,7 +1042,9 @@ stat.push(value, current);
                     self.sim_play = false;
                     self.m.status = TrigStatus::Stop;
                 } else {
-                    if self.m.trig_mode == TrigMode::Single { self.m.trig_mode = TrigMode::Normal; }
+                    if self.m.trig_mode == TrigMode::Single {
+                        self.m.trig_mode = TrigMode::Normal;
+                    }
                     self.m.run = RunState::Run;
                     self.sim_play = true;
                     self.m.status = TrigStatus::Wait;
@@ -918,19 +1071,30 @@ stat.push(value, current);
         }
         // A user arm/force starts immediately; the prior capture's periodic
         // cadence cannot delay a new Single or Run after Stop/cancellation.
-        if self.m.run==RunState::Run {self.replay.sim_next=self.now;}
+        if self.m.run == RunState::Run {
+            self.replay.sim_next = self.now;
+        }
         true
     }
 
     pub(super) fn replay_acquire(&mut self, _dt_wall: f64) {
-        if self.m.run != RunState::Run || !self.sim_play || self.now < self.replay.next { return; }
+        if self.m.run != RunState::Run || !self.sim_play || self.now < self.replay.next {
+            return;
+        }
         self.replay.next = self.now + 0.1;
         let slot = self.m.trig_ref.unwrap_or_else(|| self.active_reference());
-        let Some(r) = self.refs.get(slot).and_then(Option::as_ref) else { return; };
-        if r.v.len() < 8 || r.dt <= 0.0 { return; }
+        let Some(r) = self.refs.get(slot).and_then(Option::as_ref) else {
+            return;
+        };
+        if r.v.len() < 8 || r.dt <= 0.0 {
+            return;
+        }
         let t0 = self.source_time_origin(WaveId::Ref(slot), r.t0);
         let count = ((self.view().0 as f64 * HDIV as f64 / r.dt).ceil() as usize).clamp(8, r.v.len());
-        let Some(hits) = self.reference_trigger_hits(slot) else { self.m.status = TrigStatus::Wait; return; };
+        let Some(hits) = self.reference_trigger_hits(slot) else {
+            self.m.status = TrigStatus::Wait;
+            return;
+        };
         let after = t0 + self.replay.cursor * r.dt;
         let next = hits.partition_point(|&time| time <= after);
         let hit = hits.get(next).or_else(|| hits.first()).copied();
@@ -938,7 +1102,9 @@ stat.push(value, current);
             self.m.status = TrigStatus::Wait;
             return;
         }
-        let middle = hit.map(|time| (time - t0) / r.dt).unwrap_or((self.replay.cursor + count as f64 * 0.5).min((r.v.len() - 1) as f64));
+        let middle = hit
+            .map(|time| (time - t0) / r.dt)
+            .unwrap_or((self.replay.cursor + count as f64 * 0.5).min((r.v.len() - 1) as f64));
         let lo = (middle.max(count as f64 * 0.5) as usize).saturating_sub(count / 2).min(r.v.len() - count);
         let hi = lo + count;
         let centre = t0 + middle * r.dt;
@@ -951,7 +1117,11 @@ stat.push(value, current);
             self.replay.sim_revision = self.replay.sim_revision.wrapping_add(1);
             self.replay.fresh_sim = false;
         }
-        if self.m.zoom { self.m.zdelay = centre as f32; } else { self.m.delay = centre as f32; }
+        if self.m.zoom {
+            self.m.zdelay = centre as f32;
+        } else {
+            self.m.delay = centre as f32;
+        }
         self.replay.viewport = Some((slot, self.view().0, self.view().1));
         self.m.status = if hit.is_some() { TrigStatus::Triggered } else { TrigStatus::Auto };
         if self.m.trig_mode == TrigMode::Single {
@@ -975,7 +1145,10 @@ stat.push(value, current);
             else { Self::add_capture_statistic(stat, row.v, current); }
         }
         self.replay.deferred_statistics = (!pending.is_empty()).then(|| DeferredCaptureStatistics {
-            capture: self.replay.captures, context: self.capture_statistics_context(), rows: pending });
+            capture: self.replay.captures,
+            context: self.capture_statistics_context(),
+            rows: pending,
+        });
     }
 
     pub fn workflow_command(&mut self, action: &str) {
@@ -993,10 +1166,16 @@ stat.push(value, current);
         let slot = self.active_reference();
         let (scale, delay) = self.view();
         let viewport = (slot, scale, delay);
-        if self.replay.viewport == Some(viewport) { return; }
+        if self.replay.viewport == Some(viewport) {
+            return;
+        }
         self.replay.viewport = Some(viewport);
-        let Some(r) = self.refs.get(slot).and_then(Option::as_ref) else { return; };
-        if r.dt <= 0.0 || r.v.len() < 2 { return; }
+        let Some(r) = self.refs.get(slot).and_then(Option::as_ref) else {
+            return;
+        };
+        if r.dt <= 0.0 || r.v.len() < 2 {
+            return;
+        }
         let t0 = self.source_time_origin(WaveId::Ref(slot), r.t0);
         let half = scale as f64 * HDIV as f64 * 0.5;
         let lo = (((delay as f64 - half - t0) / r.dt).floor().max(0.0) as usize).min(r.v.len());
@@ -1017,18 +1196,29 @@ stat.push(value, current);
     pub fn workflow_state(&self) -> String {
         use crate::json::J;
         let status = match self.m.status {
-            TrigStatus::Triggered => "TRIGGERED", TrigStatus::Wait => "WAIT", TrigStatus::Auto => "AUTO", TrigStatus::Stop => "STOP",
+            TrigStatus::Triggered => "TRIGGERED",
+            TrigStatus::Wait => "WAIT",
+            TrigStatus::Auto => "AUTO",
+            TrigStatus::Stop => "STOP",
         };
         J::obj(&[
             ("mode", J::s(if self.sim_mode() { "sim" } else if self.record_mode() { "reference" } else { "live" })),
             ("running", J::Bool(self.m.run == RunState::Run)),
             ("busy", J::Bool(self.sim_generating())),
             ("measurementBusy", J::Bool(self.measurement_busy())),
-            ("source", J::s(&if self.record_mode() { format!("R{}", self.active_reference() + 1) } else { format!("CH{}", self.m.active + 1) })),
+            (
+                "source",
+                J::s(&if self.record_mode() {
+                    format!("R{}", self.active_reference() + 1)
+                } else {
+                    format!("CH{}", self.m.active + 1)
+                }),
+            ),
             ("captures", J::Num(self.replay.captures as f64)),
             ("status", J::s(status)),
             ("gate", J::s(if self.m.meas_full_record { "full-record" } else { "screen" })),
-        ]).to_string()
+        ])
+        .to_string()
     }
 
     pub(super) fn record_cards(&self) -> Vec<(usize, Rect)> {
@@ -1036,33 +1226,23 @@ stat.push(value, current);
         let mut shown: Vec<_> = slots.iter().copied().take(4).collect();
         let active = self.active_reference();
         if !shown.contains(&active) && self.refs[active].is_some() {
-            if shown.len() == 4 { shown.pop(); }
+            if shown.len() == 4 {
+                shown.pop();
+            }
             shown.push(active);
         }
         let width = 574 / shown.len().max(1) as i32 - 7;
-        shown.into_iter().enumerate().map(|(n, i)| (i, Rect::new(75 + n as i32 * (width + 7), 530, width, 66))).collect()
-    }
-
-    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    pub(super) fn draw_record_cards(&self, cv: &mut Canvas) {
-        for (slot, rect) in self.record_cards() {
-            let r = self.refs[slot].as_ref().unwrap();
-            let col = REF_COLORS[r.color.min(REF_COLORS.len() - 1)].1;
-            btn(cv, rect, BAR, if r.on { col } else { CARD_BORDER });
-            cv.set_clip(rect.inset(7));
-            cv.text(&self.fonts().sb, rect.x + 10, rect.y + 18, &format!("R{}", slot + 1), col);
-            cv.text(&self.fonts().s, rect.x + rect.w - 34, rect.y + 18, if r.on { "On" } else { "Off" }, if r.on { col } else { DIM });
-            let (scale, rate) = Self::ref_badge_readout(r);
-            cv.text(Self::card_font(&self.fonts(), &scale, rect.w - 24), rect.x + 10, rect.y + 42, &scale, TEXT);
-            let sub = if r.label.is_empty() { rate } else { format!("{}  \u{b7}  {}", rate, r.label) };
-            cv.text(&self.fonts().s, rect.x + 10, rect.y + 58, &sub, DIM);
-            cv.no_clip();
-        }
+        shown
+            .into_iter()
+            .enumerate()
+            .map(|(n, i)| (i, Rect::new(75 + n as i32 * (width + 7), 530, width, 66)))
+            .collect()
     }
 
     pub(super) fn session_buttons(r: Rect) -> (Rect, Rect) {
         (Rect::new(r.x + 6, r.y + 22, r.w / 2 - 9, 40), Rect::new(r.x + r.w / 2 + 3, r.y + 22, r.w / 2 - 9, 40))
     }
+
 
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     pub(super) fn draw_session_card(&self, cv: &mut Canvas, r: Rect) {

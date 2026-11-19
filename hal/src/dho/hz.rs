@@ -5,9 +5,9 @@
 //! (docs/protocols/horizontal-config.md). Times are in femtoseconds.
 
 pub const FS: i128 = 1_000_000_000_000_000;
-/// ADC sample clock the model is made for. At another clock (`clock`, experimental) `prep` and `requested_rate`
-/// take real times and return real rates; inside they work in this nominal domain, so the registers stay the same.
-pub const CLOCK: i128 = 1_250_000_000;
+// The model is made for `clock::NOMINAL_HZ`. At another clock (`clock`, experimental) `prep` and `requested_rate`
+// take real times and return real rates; inside they work in this nominal domain, so the registers stay the same.
+use crate::dho::clock::NOMINAL_HZ;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Params {
@@ -163,7 +163,7 @@ pub fn requested_rate(mask: u32, tdiv_fs: i128, depth: i128) -> i128 {
 }
 
 fn requested_rate_nominal(mask: u32, tdiv_fs: i128, depth: i128) -> i128 {
-    let mr = CLOCK / ratio(mask) as i128;
+    let mr = NOMINAL_HZ / ratio(mask) as i128;
     if depth > 0 {
         return (depth * FS / tdiv_fs / 10).min(mr);
     }
@@ -181,7 +181,12 @@ fn requested_rate_nominal(mask: u32, tdiv_fs: i128, depth: i128) -> i128 {
 /// Times in and rates out are real: at an experimental ADC clock (`clock`) they are converted to and from the nominal
 /// 1.25 GHz domain the model works in (points and register values do not change).
 pub fn prep(mask: u32, tdiv_fs: i128, depth: i128, offset_fs: i128) -> Params {
-    let mut p = prep_nominal(mask, crate::dho::clock::to_nominal_fs(tdiv_fs), depth, crate::dho::clock::to_nominal_fs(offset_fs));
+    let mut p = prep_nominal(
+        mask,
+        crate::dho::clock::to_nominal_fs(tdiv_fs),
+        depth,
+        crate::dho::clock::to_nominal_fs(offset_fs),
+    );
     if crate::dho::clock::overclocked() {
         p.rate = crate::dho::clock::from_nominal_rate(p.rate as i128) as u64;
         p.dot_fs = crate::dho::clock::from_nominal_fs(p.dot_fs as i128) as u64;
@@ -191,7 +196,7 @@ pub fn prep(mask: u32, tdiv_fs: i128, depth: i128, offset_fs: i128) -> Params {
 
 fn prep_nominal(mask: u32, tdiv_fs: i128, depth: i128, offset_fs: i128) -> Params {
     let ratio = ratio(mask) as i128;
-    let mr = CLOCK / ratio;
+    let mr = NOMINAL_HZ / ratio;
     let cnt = (mask & 0xf).count_ones();
     let (mut memsel, mut rate);
     if depth > 0 {
@@ -236,7 +241,16 @@ fn prep_nominal(mask: u32, tdiv_fs: i128, depth: i128, offset_fs: i128) -> Param
     let x = memsel * dot + memstart;
     let post = -((-x).div_euclid(dot));
     let pre = (memsel - post).max(0);
-    Params { ratio: ratio as u32, rate: rate as u64, memsel: memsel as u32, dot_fs: dot as u64, seg: seg as u32, max_frames: max_frames as u32, pre: pre as u32, post: post as u32 }
+    Params {
+        ratio: ratio as u32,
+        rate: rate as u64,
+        memsel: memsel as u32,
+        dot_fs: dot as u64,
+        seg: seg as u32,
+        max_frames: max_frames as u32,
+        pre: pre as u32,
+        post: post as u32,
+    }
 }
 
 #[cfg(test)]
@@ -324,7 +338,10 @@ mod tests {
     fn ch1_200us_auto_matches_the_unit() {
         // observed on the unit: 2.5 Mpts at 1.25 GSa/s, memsel 0x2625a0
         let p = prep(1, 200 * US, 0, 0);
-        assert_eq!((p.ratio, p.rate, p.memsel, p.seg, p.pre, p.post), (1, 1_250_000_000, 2_500_000, 0x40000, 1_250_000, 1_250_000));
+        assert_eq!(
+            (p.ratio, p.rate, p.memsel, p.seg, p.pre, p.post),
+            (1, 1_250_000_000, 2_500_000, 0x40000, 1_250_000, 1_250_000)
+        );
     }
 
     #[test]

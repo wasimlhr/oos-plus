@@ -176,11 +176,8 @@ pub trait Board: Sync + 'static {
 
 /// Six inexpensive full-frame readings, prepared outside the UI event loop.
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 pub struct BasicStats {
     pub valid: bool,
-    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    pub count: u64,
     /// Vmin, Vmax, Vpp, Vavg, Vrms (including DC), population StdDev.
     pub values: [f64; 6],
 }
@@ -196,17 +193,31 @@ impl BasicStats {
             mean += delta / count as f64;
             m2 += delta * (value - mean);
             squares += value * value;
-            low = low.min(value); high = high.max(value);
+            low = low.min(value);
+            high = high.max(value);
         }
-        if count == 0 { return Self::default(); }
-        Self { valid: true, count, values: [low, high, high - low, mean,
-            (squares / count as f64).sqrt(), (m2 / count as f64).max(0.0).sqrt()] }
+        if count == 0 {
+            return Self::default();
+        }
+        Self {
+            valid: true,
+            values: [low, high, high - low, mean, (squares / count as f64).sqrt(), (m2 / count as f64).max(0.0).sqrt()],
+        }
     }
     pub fn reading(self, measurement: crate::model::Meas) -> Option<f64> {
         use crate::model::Meas;
-        if !self.valid { return None; }
-        let index = match measurement { Meas::Vmin => 0, Meas::Vmax => 1, Meas::Vpp => 2,
-            Meas::Vavg => 3, Meas::Vrms => 4, Meas::StdDev => 5, _ => return None };
+        if !self.valid {
+            return None;
+        }
+        let index = match measurement {
+            Meas::Vmin => 0,
+            Meas::Vmax => 1,
+            Meas::Vpp => 2,
+            Meas::Vavg => 3,
+            Meas::Vrms => 4,
+            Meas::StdDev => 5,
+            _ => return None,
+        };
         Some(self.values[index])
     }
 }
@@ -235,7 +246,7 @@ pub struct Frame {
     pub basic: [BasicStats; NCH],
     /// logic analyser words of the acquisition, times relative to the hardware trigger point (la.md 4.2; the last
     /// frame of a batch only, roll/scan: none yet)
-    pub la: Option<crate::ui::la::LaRec>,
+    pub la: Option<crate::logic::LaRec>,
     /// a frame read again from the stored record in STOP (another part or zoom of it): the trigger is at this
     /// (fractional) sample, which may lie outside the frame, and no software trigger moves it
     pub fixed_ti: Option<f64>,
@@ -251,7 +262,10 @@ pub enum Slow {
     Off,
     Roll,
     /// `delay`: horizontal position (scan trigger position 0x4058); `single`: stop after one sweep
-    Scan { delay: f64, single: bool },
+    Scan {
+        delay: f64,
+        single: bool,
+    },
 }
 
 /// The hardware frequency counter as the UI wants it: channel, mode (0 frequency, 1 period, 2 totalize), resolution in
@@ -580,7 +594,9 @@ mod boundary {
         }
         assert!(bad.is_empty(), "board code outside board/dho:\n{}", bad.join("\n"));
         // the check itself sees what it is meant to see
-        assert!(production("use oos_hal::dho::afg;\n#[cfg(test)]\nmod tests {\n use oos_hal::dho::seq;\n}").contains("afg"));
+        assert!(
+            production("use oos_hal::dho::afg;\n#[cfg(test)]\nmod tests {\n use oos_hal::dho::seq;\n}").contains("afg")
+        );
         assert!(!production("fn a() {}\n#[cfg(test)]\nmod tests {\n use oos_hal::dho::seq;\n}").contains("seq"));
         assert!(test_only.iter().any(|p| p.ends_with("ui/lint.rs")), "{:?}", test_only);
     }

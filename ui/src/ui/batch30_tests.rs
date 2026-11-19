@@ -323,9 +323,9 @@ fn clearing_with_nothing_to_clear_says_so_and_clearing_something_says_what_was_c
         u.activate(Item::EyeClear);
         assert_eq!(toast(&u), "Nothing to clear", "{l:?}: now it is empty");
 
-        u.cnt_total = 12;
+        u.cnt.total = 12;
         u.activate(Item::CntClear);
-        assert_eq!((toast(&u), u.cnt_total), ("Counter cleared".to_string(), 0), "{l:?}");
+        assert_eq!((toast(&u), u.cnt.total), ("Counter cleared".to_string(), 0), "{l:?}");
 
         u.mask_pass = 3;
         u.mask_fail = 1;

@@ -33,7 +33,7 @@ impl Ui {
             match k {
                 "xy" => xy = v == "true",
                 "full" => full = v == "true",
-                _ if views::is_view_key(k) => {
+                _ if crate::store::views::is_view_key(k) => {
                     let _ = crate::store::set(&mut m, k, v);
                 }
                 _ => {}
@@ -84,7 +84,11 @@ impl Ui {
     }
 
     pub(super) fn monitor_options(&self, it: Item) -> Option<Vec<String>> {
-        (it == Item::HdmiView).then(|| std::iter::once("Panel's".to_string()).chain((1..=self.m.views.max(1)).map(|n| format!("View {}", n))).collect())
+        (it == Item::HdmiView).then(|| {
+            std::iter::once("Panel's".to_string())
+                .chain((1..=self.m.views.max(1)).map(|n| format!("View {}", n)))
+                .collect()
+        })
     }
 
     pub(super) fn monitor_value(&self, it: Item) -> Option<String> {
@@ -112,10 +116,9 @@ impl Ui {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wave::Source;
 
     fn ui() -> Ui {
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         u.m.hdmi = HdmiMode::Layout;
         u.views_set(2);
         u
@@ -155,7 +158,7 @@ mod tests {
         let mut u = ui();
         let cv = Canvas::new(crate::ui::PANEL_W, crate::ui::PANEL_H);
         let mut scpi = crate::scpi::Scpi::open(0);
-        let mut q = |u: &mut Ui, c: &str| String::from_utf8(scpi.exec_line(u, &cv, c)).unwrap();
+        let mut q = |u: &mut Ui, c: &str| crate::ui::testkit::q(&mut scpi, u, &cv, c);
         assert_eq!(q(&mut u, ":DISP:VIEW:MON?"), "0");
         q(&mut u, ":DISPlay:VIEW:MONitor 2");
         assert_eq!(u.m.hdmi_view, 2);

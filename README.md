@@ -156,7 +156,7 @@ def ask(command):
     return io.readline().strip()
 
 
-print(ask("*IDN?"))                                   # OOS,DHO924S,0,oos-ui 0.1.13
+print(ask("*IDN?"))                                   # OOS,DHO924S,0,oos-ui 0.1.14
 io.write(":CHANnel1:SCALe 0.5\n:MEASure:ITEM VPP,CHAN1\n")
 print("Vpp:", float(ask(":MEASure:ITEM? VPP,CHAN1")), "V")
 print(ask(":SYSTem:ERRor?"))                          # 0,"No error"

@@ -9,6 +9,8 @@
 //!   drag <x0> <y0> <x1> <y1> touch drag (8 steps)
 //!   workflow <live|sim|load|measure|settings> direct source and measurement actions
 //!   shot <path>              screenshot (PPM)
+//!   scpi <path> <message>    host scripts only: a program message through the SCPI interpreter; the message and
+//!                            its answer are appended to <path> (the comparison of two builds, tools/compare-base.sh)
 //!   frames <n>               host only: advance n frames
 //!   storedir <path>          storage directory (setups, CSV, PNG)
 //!   textsize <name>          Display > Text size (normal, large, larger)
@@ -18,7 +20,7 @@
 //!   pick <label>             opens the grid of all options of an item of the open menu (as a tap on its value)
 //!   stat [path]              write fps / frame count / state to /tmp/oos-ui.stat
 //!   replay <file>            runs a file of SCPI commands (scpi/replay.rs); a script goes on when it has ended
-//!   scpi <message>           host scripts only: one SCPI message, its answer printed
+//!   scpi <message>           host scripts only: a message that starts with : or * (no path), its answer printed
 //!   quit
 
 use crate::gfx::Canvas;
@@ -29,18 +31,22 @@ pub enum Out {
     None,
     Frames(u32),
     Shot(String),
-    /// a file of SCPI commands was given to run: the script runner waits for its end
+    /// a file of SCPI commands was given to run: the script runner waits for its end (oos-plus)
     Replay,
-    /// a SCPI message for the script runner's interpreter
-    Scpi(String),
+    /// (file, program message): `run_script` runs the message and appends it and its answer to the file; without a
+    /// file (oos-plus's `scpi <message>`) it prints the answer
+    Scpi(Option<String>, String),
 }
 
 /// Commands the web remote may run: its own buttons and touch gestures. The others name files or end the program;
 /// they stay with the local control FIFO and the host scripts.
 pub fn remote_ok(line: &str) -> bool {
     let words: Vec<&str> = line.split_whitespace().collect();
-    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag")) || words == ["zoom"]
-        || (words.len() == 2 && words[0] == "workflow" && matches!(words[1], "live" | "sim" | "load" | "measure" | "settings"))
+    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag"))
+        || words == ["zoom"]
+        || (words.len() == 2
+            && words[0] == "workflow"
+            && matches!(words[1], "live" | "sim" | "load" | "measure" | "settings"))
 }
 
 pub fn run(ui: &mut Ui, line: &str) -> Out {
@@ -64,12 +70,7 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
                 if w[2] == "push" {
                     ui.key(cw + 2);
                 } else {
-                    // a turn, not a loop that stops the screen for minutes
-                    let n = num(w[2]).clamp(-100, 100);
-                    for _ in 0..n.abs() {
-                        ui.key(if n > 0 { cw } else { cw + 1 });
-                        ui.now += 0.2; // no acceleration for scripted turns
-                    }
+                    ui.knob_turn(cw, num(w[2]));
                 }
             }
         }
@@ -124,12 +125,20 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
         }
         "frames" if w.len() > 1 => return Out::Frames(num(w[1]).max(0) as u32),
         "shot" if w.len() > 1 => return Out::Shot(w[1].to_string()),
+        // `scpi <message>` (oos-plus: a message starts with ':' or '*'), its answer printed
+        "scpi" if w.len() > 1 && w[1].starts_with([':', '*']) => {
+            return Out::Scpi(None, line.trim_start()[w[0].len()..].trim().to_string())
+        }
+        "scpi" if w.len() > 2 => {
+            // the message as written, with its spaces: everything after the path
+            let rest = line.trim_start()[4..].trim_start();
+            return Out::Scpi(Some(w[1].to_string()), rest[w[1].len()..].trim().to_string());
+        }
         "quit" => ui.quit = true,
         "replay" if w.len() > 1 => {
             ui.scpi_replay_file = Some(line.trim_start()[w[0].len()..].trim().into());
             return Out::Replay;
         }
-        "scpi" if w.len() > 1 => return Out::Scpi(line.trim_start()[w[0].len()..].trim().to_string()),
         "close" => ui.script_close(),
         "selfcal" if w.len() > 1 => ui.selfcal_remote_full(w[1], w[2..].contains(&"zero"), w[2..].contains(&"adc")),
         "storedir" if w.len() > 1 => ui.store_dir = w[1].into(),
@@ -148,16 +157,33 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
 /// The running state in one line: the `stat` command and `:SYSTem:STATe?`.
 pub fn stat_text(ui: &Ui) -> String {
     let e = ui.fast_edges;
-    let gpu = ui.t_gpu.map_or(String::new(), |t| format!(" gpu layers {:.1} copy {:.1} wait {:.1} (upload {:.1} draw {:.1} read {:.1}) ms", t[0], t[1], t[2], t[3], t[4], t[5]));
-    let p = ui.t_parts;
+    let gpu = ui.times.gpu.map_or(String::new(), |t| {
+        format!(
+            " gpu layers {:.1} copy {:.1} wait {:.1} (upload {:.1} draw {:.1} read {:.1}) ms",
+            t[0], t[1], t[2], t[3], t[4], t[5]
+        )
+    });
+    let p = ui.times.parts;
     let gpu = format!(" parts meas {:.1} analyse {:.1} pane {:.1} max {:.1} ms{}", p[0], p[1], p[2], p[3], gpu);
     let (acq, used, dropped) = crate::drawpipe::counters().read();
     let measured = crate::drawpipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
-    let gpu = format!("{} pipeline {:?} interp {:?} acquired {} used {} dropped {} measured {} compress k {}", gpu, crate::drawpipe::mode(), crate::sparse::interp(), acq, used, dropped, measured, crate::compress::last_k());
+    let gpu = format!(
+        "{} pipeline {} interp {:?} acquired {} used {} dropped {} measured {} compress k {}",
+        gpu,
+        crate::drawpipe::status(),
+        crate::sparse::interp(),
+        acq,
+        used,
+        dropped,
+        measured,
+        crate::compress::last_k()
+    );
     // the graphics chosen (the GPU part above only while the GPU really draws) and the monitor
     let hdmi = ui.hdmi_out.map_or(" hdmi off".to_string(), |(w, h)| format!(" hdmi {}x{} {:?}", w, h, ui.m.hdmi));
     // the GPU's time per frame of each screen: a monitor frame comes every second frame, the pair has 2/30 s
-    let screens = ui.t_gpu_screens.map_or(String::new(), |(p, m)| format!(" gpu panel {:.1}{} ms", p, m.map_or(String::new(), |m| format!(" monitor {:.1}", m))));
+    let screens = ui.times.gpu_screens.map_or(String::new(), |(p, m)| {
+        format!(" gpu panel {:.1}{} ms", p, m.map_or(String::new(), |m| format!(" monitor {:.1}", m)))
+    });
     let gpu = format!("{}{} graphics {}{}", gpu, screens, if ui.sys.gpu { "gpu" } else { "cpu" }, hdmi);
     // the hardware's frames: decoded, and dropped unseen when the screen fell behind
     let gpu = match ui.src.hw_frames() {
@@ -169,7 +195,7 @@ pub fn stat_text(ui: &Ui) -> String {
     };
     format!(
         "fps {:.1} frames {} records {} run {:?} status {:?} t {:.1} step {:.1} ms (acq {:.1} draw {:.1}) render {:.1} ms present {:.1} ms edges {} {} {} {} off {:.0} {:.0}{}\n",
-        ui.fps, ui.frames, ui.records, ui.m.run, ui.m.status, ui.now, ui.t_step, ui.t_acq, ui.t_draw, ui.t_render, ui.t_present, e[0], e[1], e[2], e[3], ui.fast_off.0, ui.fast_off.1, gpu
+        ui.fps, ui.frames, ui.records, ui.m.run, ui.m.status, ui.now, ui.times.step, ui.times.acq, ui.times.draw, ui.times.render, ui.times.present, e[0], e[1], e[2], e[3], ui.fast_off.0, ui.fast_off.1, gpu
     )
 }
 

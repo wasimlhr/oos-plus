@@ -1,11 +1,10 @@
 # Copyright (C) 2026 dekajoule
 # SPDX-License-Identifier: GPL-2.0-or-later
-# unit-hook.sh - the fork's part of boot/build-dev-image.sh on the host, sourced once before the initramfs container
-# (docs/fork/unit-dho804.md). Kept out of upstream's script so a sync conflicts on two lines, not on every fork line
-# (docs/fork/sync-checklist.md). Uses root, here, k from the script.
+# unit-hook.sh - the unit profile and the extra programs of boot/build-dev-image.sh on the host, sourced once before
+# the initramfs container. Uses root, here, k from the script.
 #
-#   OOS_UNIT=dho804 boot/build-dev-image.sh   the image with the defaults of one unit in /etc/oos
-#                                      (rootfs/unit/<name>/: limits.conf, system.conf, build.env)
+#   OOS_UNIT=<name> boot/build-dev-image.sh   the image with the defaults of one unit in /etc/oos
+#                                      (rootfs/unit/<name>/: limits.conf, system.conf, build.env; docs/models.md 4.2)
 #
 # The container sees rootfs/out as /wlan, so the hook stages its part there: rootfs/out/unit-hook/ with image.sh
 # (boot/unit-hook-image.sh), the unit's build.env and its *.conf under etc-oos/. Staged anew on every build.
@@ -30,11 +29,8 @@ if [ -n "${OOS_UNIT:-}" ]; then
 	[ -n "$mac" ] && echo "$mac" > "$stage/dtb.mac"
 fi
 [ -f "$k/$OOS_KERNEL_DTB" ] || { echo "no $k/$OOS_KERNEL_DTB: run kernel/build-base.sh again" >&2; exit 1; }
-# the fork's own builds from rootfs/deps.lock (docs/fork/deps.md): built again when missing, or when the manifest line
-# or the build script changed since (deps.sh stamps)
-DEPS_LOCK="$root/rootfs/deps.lock"
-. "$root/rootfs/deps.sh"
-o="$root/rootfs/out"
+# built from rootfs/deps.lock (docs/fork/deps.md): again when missing, or when the deps.lock lines or the build script
+# changed since (deps.sh stamps; boot/build-dev-image.sh sourced deps.sh and set o)
 # the LAN-only firewall (net.allow, docs/network.md 6)
 if dep_stale "$o/nft" "$root/rootfs/build-nft.sh" libmnl libnftnl nftables; then "$root/rootfs/build-nft.sh"; fi
 # the SSH server and its SFTP subsystem (docs/network.md 7)

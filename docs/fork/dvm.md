@@ -17,7 +17,7 @@ Code:
 | part | where |
 |---|---|
 | registers, writes, read, decode, volts | `hal/src/dho/dvm.rs` |
-| start, stop, poll in the acquisition thread; `dvm.hw` | `ui/src/board/dho/hw.rs` (`dvm_step`, `dvm_reading`, `dvm_hw_on`) |
+| start, stop, poll in the acquisition thread; `dvm.hw` | `ui/src/board/dho/hw/units.rs` (`dvm_step`, `dvm_reading`, `dvm_hw_on`) |
 | UI value and fallback | `ui/src/ui/tools.rs` (`dvm_poll`, `dvm_value`) |
 | raw dump | SCPI `:SYSTem:DEBug:DVM?` |
 
@@ -137,4 +137,4 @@ mode. `off,sw=...` without a reading.
 8. STOP: press STOP, read 5 dumps. Note whether n and the result words keep changing.
 9. Off: DVM off. `:SYSTem:DEBug:DVM?` must answer `off`; the last write to 0x2244 is the stop pulse.
 
-Record the results in `docs/fork/unit-dho804.md` and update the evidence column above.
+Record the results here and update the evidence column above.

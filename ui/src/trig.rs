@@ -10,7 +10,9 @@ use oos_dsp::trigger::Input;
 
 /// Packets of the decoder settings in `m` on the channels of `inp` (times = fractional sample indices).
 pub fn decode(m: &Model, ch: [&[f32]; NCH], dt: f64) -> Result<Vec<Packet>, &'static str> {
-    if m.dec_src >= NCH { return Err("stored decoder inputs need the reference adapter"); }
+    if m.dec_src >= NCH {
+        return Err("stored decoder inputs need the reference adapter");
+    }
     decode_at(m, ch, dt, m.dec_thr, 0.1 * m.ch[m.dec_src].volts_per_div())
 }
 
@@ -24,10 +26,15 @@ pub fn decode_la(m: &Model, words: &[u16], dt: f64) -> Result<Vec<Packet>, &'sta
     if m.dec_proto == Proto::PARALLEL {
         // up to 16 data lines upwards from the main source, skipping the clock line
         let first = la[0].unwrap_or(0);
-        let lines: Vec<Vec<f32>> = (0..16u8).map(|k| (first + k) % 16).filter(|&n| Some(n) != la[2]).take(m.dec_bits.clamp(1, 16) as usize).map(wave).collect();
+        let lines: Vec<Vec<f32>> = (0..16u8)
+            .map(|k| (first + k) % 16)
+            .filter(|&n| Some(n) != la[2])
+            .take(m.dec_bits.clamp(1, 16) as usize)
+            .map(wave)
+            .collect();
         let refs: Vec<&[f32]> = lines.iter().map(|l| &l[..]).collect();
         let clk = la[2].map(wave);
-        return Ok(oos_dsp::decode_ext::parallel(&refs, clk.as_deref(), oos_dsp::trigger::Slope::Rising, thr, hy));
+        return Ok(oos_dsp::decode::parallel(&refs, clk.as_deref(), oos_dsp::trigger::Slope::Rising, thr, hy));
     }
     let slots: [Vec<f32>; NCH] = std::array::from_fn(|i| la.get(i).copied().flatten().map_or(Vec::new(), &wave));
     let mut s = m.clone();
@@ -39,14 +46,14 @@ pub fn decode_la(m: &Model, words: &[u16], dt: f64) -> Result<Vec<Packet>, &'sta
 
 /// `decode` with the threshold and hysteresis given.
 pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32) -> Result<Vec<Packet>, &'static str> {
-    use oos_dsp::decode_ext as x1;
+    use oos_dsp::decode;
     let get = |c: usize| ch.get(c).copied().filter(|v| !v.is_empty()).ok_or("source channel off");
     let opt = |c: Option<usize>| -> Result<Option<&[f32]>, &'static str> { c.map(get).transpose() };
     // RS-485 / differential: A - B, threshold around 0 V like the pair's receiver
     let diff;
     let line: &[f32] = match (m.dec_proto.diff_ok(), m.dec_diff) {
         (true, Some(b)) => {
-            diff = x1::diff(get(m.dec_src)?, get(b)?);
+            diff = decode::diff(get(m.dec_src)?, get(b)?);
             &diff
         }
         _ => get(m.dec_src)?,
@@ -55,10 +62,15 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
     // "none")
     let Proto::Module(i) = m.dec_proto;
     let p = crate::protocols::get(i);
-    let r = p.roles();
-    let lines = [Some(line), if r[1].is_some() { Some(get(m.dec_src2)?) } else { None }, if r[2].is_some() { opt(m.dec_cs)? } else { None }, if r[3].is_some() { opt(m.dec_src4)? } else { None }];
+    let r = p.info().roles;
+    let lines = [
+        Some(line),
+        if r[1].is_some() { Some(get(m.dec_src2)?) } else { None },
+        if r[2].is_some() { opt(m.dec_cs)? } else { None },
+        if r[3].is_some() { opt(m.dec_src4)? } else { None },
+    ];
     // a line with a threshold of its own is moved so that this threshold lies on the decoder's: the decoders take
-    // one threshold for all their lines (the hysteresis stays that of the main line)
+    // one threshold for all their lines (the hysteresis stays that of the main line; oos-plus)
     let moved: [Option<Vec<f32>>; 3] = std::array::from_fn(|k| {
         let by = m.dec_thr_line[k]? - m.dec_thr;
         if by == 0.0 {
@@ -70,38 +82,54 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
     let lines = [lines[0], line(0), line(1), line(2)];
     let chans: [Option<&[f32]>; 4] = std::array::from_fn(|c| ch.get(c).copied().filter(|v| !v.is_empty()));
     let src = [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4];
-    p.decode(&crate::protocols::Lines { lines, dt, thr, hy, opt: m.dec_opts(), sh: crate::protocols::Shared::of(m), chans, src })
+    p.info().decode(&crate::protocols::Lines {
+        lines,
+        dt,
+        thr,
+        hy,
+        opt: m.dec_opts(),
+        sh: crate::protocols::shared(m),
+        chans,
+        src,
+    })
 }
 
 /// Whether a packet satisfies the protocol trigger condition of `m` on its own. UART and SPI data take the relation,
 /// limit and mask of `m.ser`; I2C addresses and data need the frame around them (`points`).
 pub fn matches(m: &Model, p: &Packet) -> bool {
     let v = m.trig_bus_val;
-    if let Some(r) = m.dec_proto.module().and_then(|x| x.trigger_match(m.trig_bus, v as u32, p)) {
-        return r;
-    }
-    let v32 = v as u32;
     if matches!(m.dec_proto, Proto::UART | Proto::SPI) && m.trig_bus == BusWhat::Data {
         return p.kind == Kind::Data && m.ser.rel.test(p.value as u64, v, m.ser.max, m.ser.mask);
     }
     if m.dec_proto == Proto::I2C && matches!(m.trig_bus, BusWhat::Id | BusWhat::Data) {
         return false;
     }
-    let v = v32;
-    match m.trig_bus {
-        BusWhat::Frame => match p.kind {
-            Kind::Start | Kind::Break | Kind::Word { cmd: true } => true,
-            Kind::Data => matches!(m.dec_proto, Proto::UART | Proto::SPI | Proto::PARALLEL),
-            Kind::Sample { right: false } => true,
-            // the first field of a frame of the extended decoders
-            Kind::Field(l) => matches!(l, "!RESET" | "PRE" | "TSS" | "CMD" | "REQ" | "BLK" | "IR" | "DR" | "SYNC"),
-            _ => false,
-        },
-        // USB: the token address or the PID byte
-        BusWhat::Id => (matches!(p.kind, Kind::Id { .. } | Kind::Addr { .. } | Kind::Word { cmd: true }) || p.kind == Kind::Field("ROM") || p.kind == Kind::Field("CMD") || p.kind == Kind::Field("HDR") || p.kind == Kind::Field("STAT")) && p.value == v,
-        BusWhat::Data => matches!(p.kind, Kind::Data | Kind::Sample { .. } | Kind::Word { cmd: false }) && p.value == v,
-        BusWhat::Error => !p.ok,
+    let Proto::Module(i) = m.dec_proto;
+    crate::protocols::get(i).info().trigger_match(m.trig_bus, v as u32, p)
+}
+
+/// I2C packets byte by byte, as they are on the bus: the decoder joins the two bytes of a 10-bit address into one
+/// packet for the screen (`I2C_TEN_BIT`), and the trigger compares bytes, with the address width of its own setting.
+/// The first byte of a joined address ends at its ninth clock of eighteen, taken as evenly spaced.
+fn i2c_on_the_bus(packets: &[Packet]) -> Vec<Packet> {
+    let mut out = Vec::with_capacity(packets.len());
+    for p in packets {
+        match p.kind {
+            Kind::Addr { read } if p.value2 == Some(oos_dsp::decode::I2C_TEN_BIT) => {
+                let high = Packet { value: 0x78 | (p.value >> 8 & 3), value2: None, ..p.clone() };
+                if read {
+                    out.push(high);
+                } else {
+                    let step = (p.t1 - p.t0) / 17.0;
+                    out.push(Packet { t1: p.t0 + 8.0 * step, ..high });
+                    let low = Packet { kind: Kind::Data, value: p.value & 0xff, value2: None, ..p.clone() };
+                    out.push(Packet { t0: p.t0 + 9.0 * step, ..low });
+                }
+            }
+            _ => out.push(p.clone()),
+        }
     }
+    out
 }
 
 /// The trigger points (packet ends) of `m`'s protocol condition among `packets`: `matches` per packet, and for I2C
@@ -111,6 +139,8 @@ pub fn points(m: &Model, packets: &[Packet]) -> Vec<f64> {
     if m.dec_proto != Proto::I2C || !matches!(m.trig_bus, BusWhat::Id | BusWhat::Data) {
         return packets.iter().filter(|p| matches(m, p)).map(|p| p.t1).collect();
     }
+    let bytes = i2c_on_the_bus(packets);
+    let packets = &bytes[..];
     let s = &m.ser;
     let mut out = Vec::new();
     // per frame: the address (10-bit: its high bits until the second byte), then the data bytes so far
@@ -255,6 +285,20 @@ mod serial_tests {
         // 10-bit: the address completes with the second byte
         (m.ser.dir, m.ser.ten_bit, m.trig_bus_val) = (I2cDir::Either, true, 0x2a5);
         assert_eq!(points(&m, &p), [11.0]);
+        // the decoder joins the two bytes of that address into one packet: the points are the same, and with the
+        // trigger set to seven bits its first byte is still the address 7A and its second a data byte
+        let mut joined = p[..10].to_vec();
+        let ten = Some(oos_dsp::decode::I2C_TEN_BIT);
+        joined.push(Packet { t0: 9.5, t1: 11.0, value2: ten, ..pk(11.0, Addr { read: false }, 0x2a5) });
+        joined.extend_from_slice(&p[12..]);
+        assert_eq!(points(&m, &joined), [11.0]);
+        (m.ser.ten_bit, m.trig_bus_val) = (false, 0x7a);
+        let seven = points(&m, &joined);
+        assert_eq!(seven.len(), 1);
+        assert!(seven[0] > 9.5 && seven[0] < 11.0, "at the end of the first byte: {seven:?}");
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Data, 0xa5);
+        assert_eq!(points(&m, &joined), [11.0], "the low byte is a data byte to a trigger on seven bits");
+        (m.trig_bus, m.ser.ten_bit, m.trig_bus_val) = (BusWhat::Id, true, 0x2a5);
         // data: any byte, then the first two bytes after the address, big-endian
         (m.ser.ten_bit, m.trig_bus, m.trig_bus_val) = (false, BusWhat::Data, 0x34);
         assert_eq!(points(&m, &p), [3.0]);

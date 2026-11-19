@@ -5,10 +5,12 @@ use super::workspace::Action;
 use super::*;
 
 fn fresh() -> Ui {
-    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    let mut u = super::testkit::demo_ui();
     u.m.layout = crate::model::Layout::Minimal; // these tests check the Minimal bars
     u.relayout();
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u
 }
 
@@ -28,7 +30,9 @@ fn studio() -> Ui {
 fn shot(u: &mut Ui, name: &str) -> Canvas {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         std::fs::write(std::path::Path::new(&dir).join(format!("{name}.png")), crate::store::png_of(&cv)).unwrap();

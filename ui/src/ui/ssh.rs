@@ -25,7 +25,14 @@ pub(super) struct SshUi {
 
 impl Default for SshUi {
     fn default() -> Self {
-        SshUi { dir: None, stick: "/mnt/usb".into(), keys: Vec::new(), state: String::new(), host_fp: None, read_at: None }
+        SshUi {
+            dir: None,
+            stick: "/mnt/usb".into(),
+            keys: Vec::new(),
+            state: String::new(),
+            host_fp: None,
+            read_at: None,
+        }
     }
 }
 
@@ -59,7 +66,16 @@ impl Ui {
     }
 
     pub(super) fn ssh_items(&self) -> Vec<Item> {
-        vec![Item::SshState, Item::SshPassword, Item::SshShowPass, Item::SshHostKey, Item::SshKeys, Item::SshKeyList, Item::SshImport, Item::SshRemove]
+        vec![
+            Item::SshState,
+            Item::SshPassword,
+            Item::SshShowPass,
+            Item::SshHostKey,
+            Item::SshKeys,
+            Item::SshKeyList,
+            Item::SshImport,
+            Item::SshRemove,
+        ]
     }
 
     pub(super) fn ssh_kind(it: Item) -> Option<Kind> {
@@ -96,7 +112,9 @@ impl Ui {
             Item::SshState if s.state.is_empty() => "not started".into(),
             Item::SshState => s.state.clone(),
             Item::SshPassword => if self.sys.ssh_password { "On" } else { "Off" }.into(),
-            Item::SshHostKey => s.host_fp.as_ref().map_or("not made yet".into(), |f| format!("{}\u{2026}", &f[..f.len().min(19)])),
+            Item::SshHostKey => {
+                s.host_fp.as_ref().map_or("not made yet".into(), |f| format!("{}\u{2026}", &f[..f.len().min(19)]))
+            }
             Item::SshKeys if s.keys.is_empty() => "none".into(),
             Item::SshKeys => s.keys.len().to_string(),
             Item::SshRemoveKey => String::new(),
@@ -244,7 +262,7 @@ mod tests {
         let d = std::env::temp_dir().join(format!("oos-ui-ssh-{}-{}", name, std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(d.join("usb")).unwrap();
-        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        let mut u = crate::ui::testkit::demo_ui();
         u.set_ssh_dir(d.join("ssh"));
         u.ssh.stick = d.join("usb");
         u.sys.remote_ssh = true;

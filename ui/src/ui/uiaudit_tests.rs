@@ -38,7 +38,7 @@ fn repro_add_measurements() {
         u.key(key::MEASURE);
         note(&format!("ts={n} menu={:?} count={}", u.menu, u.measurement_count()));
         shot_to(&mut u, &std::path::Path::new(&out).join(format!("audit-repro-ts{n}.png")));
-        u.cat_sel = Cat::Area;
+        u.cat.sel = Cat::Area;
         for k in 1..8 { if let Some(c) = cat_from(k) { u.catalog_add(c); } }
         note(&format!("count={}", u.measurement_count()));
         shot_to(&mut u, &std::path::Path::new(&out).join(format!("audit-repro-ts{n}-b.png")));
@@ -53,11 +53,11 @@ fn repro_add_measurements_scroll() {
     u.key(key::MEASURE);
     let up = Rect::new(965, 288, 40, 42);
     tap_at(&mut u, up.x + 5, up.y + 5);
-    note(&format!("scroll after Up at top = {}", u.cat_scroll));
+    note(&format!("scroll after Up at top = {}", u.cat.scroll));
     shot_to(&mut u, &std::path::Path::new(&out).join("audit-repro-up.png"));
     let dn = Rect::new(965, 510, 40, 42);
     tap_at(&mut u, dn.x + 5, dn.y + 5);
-    note(&format!("scroll after Down = {}", u.cat_scroll));
+    note(&format!("scroll after Down = {}", u.cat.scroll));
     shot_to(&mut u, &std::path::Path::new(&out).join("audit-repro-down.png"));
 }
 
@@ -74,10 +74,10 @@ fn repro_add_measurements_open_groups() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     for _ in 0..10 { u.step(0.05); }
     u.key(key::MEASURE);
-    u.cat_open = [u16::MAX; crate::measures::CATEGORIES.len()];
+    u.cat.open = [u16::MAX; crate::measures::CATEGORIES.len()];
     shot_to(&mut u, &std::path::Path::new(&out).join("audit-repro-open.png"));
     for _ in 0..2 { tap_at(&mut u, 985, 530); }
-    note(&format!("open groups scroll={}", u.cat_scroll));
+    note(&format!("open groups scroll={}", u.cat.scroll));
     shot_to(&mut u, &std::path::Path::new(&out).join("audit-repro-open-scrolled.png"));
 }
 
@@ -158,9 +158,9 @@ fn apply(u: &mut Ui, a: &Act) {
         Act::Slider => { u.studio.trig_slider = true; frame(u); }
         Act::CatTab(t) => {
             u.open_menu(MenuId::MeasAdd);
-            u.cat_tab = *t;
-            u.cat_open[*t as usize] = u16::MAX;
-            u.cat_scroll = 0;
+            u.cat.tab = *t;
+            u.cat.open[*t as usize] = u16::MAX;
+            u.cat.scroll = 0;
             frame(u);
         }
     }
@@ -464,7 +464,7 @@ fn key_of(u: &Ui, f: &Frame) -> String {
     }).collect();
     v.sort();
     v.dedup();
-    format!("{}|{:?}|{:?}|{}|{}|{}|{}|{}", u.menu_open, u.menu, u.pick.map(|p| p.it), u.numpad.is_some(), u.cat_tab, u.cat_scroll, u.cat_open[u.cat_tab as usize], v.join("\u{1}"))
+    format!("{}|{:?}|{:?}|{}|{}|{}|{}|{}", u.menu_open, u.menu, u.pick.map(|p| p.it), u.numpad.is_some(), u.cat.tab, u.cat.scroll, u.cat.open[u.cat.tab as usize], v.join("\u{1}"))
 }
 
 fn slug(s: &str) -> String {
@@ -683,5 +683,5 @@ fn debug_catalog_down() {
     let f = record(&mut u);
     for t in targets(&f).iter().filter(|t| t.rect.x > 950) { note(&format!("target {} {:?}", t.label, (t.rect.x, t.rect.y, t.rect.w, t.rect.h))); }
     let ok = tap_label(&mut u, "Down");
-    note(&format!("down tapped={ok} scroll={}", u.cat_scroll));
+    note(&format!("down tapped={ok} scroll={}", u.cat.scroll));
 }

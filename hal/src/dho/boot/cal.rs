@@ -8,17 +8,7 @@
 
 use crate::dho::adc::CalAdc;
 
-/// CRC-32 (IEEE 802.3, reflected, as zlib.crc32).
-pub fn crc32(d: &[u8]) -> u32 {
-    let mut c = 0xffff_ffffu32;
-    for &b in d {
-        c ^= b as u32;
-        for _ in 0..8 {
-            c = if c & 1 != 0 { (c >> 1) ^ 0xedb8_8320 } else { c >> 1 };
-        }
-    }
-    !c
-}
+pub use crate::crc32;
 
 /// Payload of a cal container if the length and the crc32 are right.
 pub fn payload(d: &[u8]) -> Option<&[u8]> {
@@ -59,7 +49,13 @@ pub struct CalFiles {
     pub notes: Vec<String>,
 }
 
-fn read_first(own: Option<&str>, dir: &str, name: &str, parse: impl Fn(&[u8]) -> bool, notes: &mut Vec<String>) -> Option<Vec<u8>> {
+fn read_first(
+    own: Option<&str>,
+    dir: &str,
+    name: &str,
+    parse: impl Fn(&[u8]) -> bool,
+    notes: &mut Vec<String>,
+) -> Option<Vec<u8>> {
     let dir = dir.trim_end_matches('/');
     let first = own.map(|d| format!("{}/{}", d, name));
     for path in first.into_iter().chain([format!("{}/{}", dir, name), format!("{}/default/{}", dir, name)]) {
@@ -81,9 +77,16 @@ impl CalFiles {
     /// makes one) from `dir` (on the unit `/rigol/data`), read only.
     pub fn load(dir: &str) -> CalFiles {
         let mut notes = Vec::new();
-        let adc = read_first(Some(crate::dho::calfile::OOS_CAL_DIR), dir, "cal_adc.hex", |d| payload(d).is_some() && CalAdc::from_file_bytes(d).is_some(), &mut notes)
-            .and_then(|d| CalAdc::from_file_bytes(&d));
-        let ddr = read_first(None, dir, "cal_ddr.hex", |d| DdrCal::from_file_bytes(d).is_some(), &mut notes).and_then(|d| DdrCal::from_file_bytes(&d));
+        let adc = read_first(
+            Some(crate::dho::calfile::OOS_CAL_DIR),
+            dir,
+            "cal_adc.hex",
+            |d| payload(d).is_some() && CalAdc::from_file_bytes(d).is_some(),
+            &mut notes,
+        )
+        .and_then(|d| CalAdc::from_file_bytes(&d));
+        let ddr = read_first(None, dir, "cal_ddr.hex", |d| DdrCal::from_file_bytes(d).is_some(), &mut notes)
+            .and_then(|d| DdrCal::from_file_bytes(&d));
         CalFiles { adc, ddr, notes }
     }
 }
@@ -120,7 +123,7 @@ mod tests {
     /// The unit's files (device data, not in the tree); skipped when missing.
     #[test]
     fn unit_files() {
-        let dir = std::env::var("OOS_CAL_DIR").unwrap_or(concat!(env!("CARGO_MANIFEST_DIR"), "/../local/cal").into());
+        let dir = crate::dho::calfile::test_dir(false);
         let c = CalFiles::load(&dir);
         if let Some(d) = c.ddr {
             assert_eq!(d.taps, [0x12, 0x4d6, 0x8a2, 0x924, 0x1ef, 0]); // = oos-hw ddr-cal, cold-boot.md 3.2

@@ -3,6 +3,10 @@
 How the Rigol DHO800/DHO900 hardware works and how OOS drives it. "Verified on the unit" means seen on a running scope;
 "assumed" or "not yet verified on hardware" means it was never run.
 
+These pages are black-box descriptions: they say what goes in and comes out at the scope's interfaces, as behaviour
+and in our own words. The code of OOS is written to them
+([ADR 0030](adr/process/0030-independent-reimplementation-from-black-box-descriptions.md)).
+
 ## System
 
 - [guide.md](guide.md): the long guide: disclaimer, models, features, status, the three ways to install, daily use,
@@ -16,10 +20,20 @@ How the Rigol DHO800/DHO900 hardware works and how OOS drives it. "Verified on t
 - [update.md](update.md): signed update packages, trial start and rollback.
 - [wlan.md](wlan.md): WLAN through a USB stick.
 - [network.md](network.md): Ethernet and a link at 10 Mbit/s, date and time from NTP, time zones, `/oos/system.conf`.
-- [models.md](models.md): model identity, capabilities, limits, overclocking and `/oos/limits.conf`.
+- [ssh.md](ssh.md): SSH access, trusted keys and how to provision them.
+- [device-testing.md](device-testing.md): testing on a unit: only the tests a change reaches, retries, known failures.
+- [models.md](models.md): model identity, capabilities, limits, overclocking, `/oos/limits.conf` and unit profiles.
+- [scpi.md](scpi.md): the SCPI reference: transports, syntax, every command OOS answers.
+- [http.md](http.md): the HTTP reference: every route of the web remote and the MCP tools, with their marks.
+- [reference-analysis.md](reference-analysis.md): loaded waveforms, zoom, the measurement page and automatic analysis
+  (eye, jitter, serial decoding of references).
 - [protocol-modules.md](protocol-modules.md): adding a protocol decoder as a module: one file, one registration.
 - [measurement-modules.md](measurement-modules.md): adding measurements as a module: their tiles, sources and computation behind one trait.
 - [analyser-modules.md](analyser-modules.md): adding an analyser page: its start menu entry, Features, view bar, SCPI, setups and drawing behind one trait.
+- [fork/deps.md](fork/deps.md): the sources the image builds from (`rootfs/deps.lock`), when a part is built again,
+  how to update one.
+  how to update one; the platform crates of the desktop builds.
+- [../wiki/](../wiki/README.md): the guide for people who use a scope; published as the wiki of the repository.
 - [porting.md](porting.md): other models (MHO900, DHO1000/4000): what carries over, and how to describe one.
 - [bandwidth-test.md](bandwidth-test.md): procedure to measure the analog bandwidth.
 - [extgen.md](extgen.md): a generator on the USB-A port or the LAN: its page, the models and how each is known, trying one on a unit.
@@ -42,6 +56,7 @@ How the Rigol DHO800/DHO900 hardware works and how OOS drives it. "Verified on t
 - [afe-spi.md](protocols/afe-spi.md): the bus to the four RT1642 front ends.
 - [afg.md](protocols/afg.md): built-in generator: DDS registers, relays, calibration, DAC codes.
 - [board.md](protocols/board.md): fan, temperatures, voltages, MCU power commands, beeper, probes.
+- [counter.md](protocols/counter.md): the hardware frequency counter behind Instruments > DVM / counter.
 - [cold-boot.md](protocols/cold-boot.md): full sequence from power-on to the first acquisition.
 - [cold-clock.md](protocols/cold-clock.md): the ADC clock counter 0x1210 on a cold start.
 - [fpga-boot.md](protocols/fpga-boot.md): FPGA boot and PCIe bring-up.

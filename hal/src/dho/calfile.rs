@@ -83,6 +83,18 @@ pub fn now() -> Stamp {
     (y as u32, m as u32, d as u32, (rem / 3600) as u32, (rem / 60 % 60) as u32, (rem % 60) as u32)
 }
 
+/// The calibration files of a real unit for the tests: OOS_CAL_DIR, else `local/cal` of the tree (`full`:
+/// `local/cal-full`, the complete set). They are not in the tree; a test that needs them skips itself without them.
+#[cfg(test)]
+pub fn test_dir(full: bool) -> String {
+    let local = if full {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../local/cal-full")
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../local/cal")
+    };
+    std::env::var("OOS_CAL_DIR").unwrap_or_else(|_| local.into())
+}
+
 /// Writes `name` in `dir` atomically: `name.new`, fsync, the old file to `name.bak`, rename. Never under /rigol.
 pub fn save(dir: &str, name: &str, payload: &[u8], s: Stamp) -> std::io::Result<()> {
     let refuse = |m: &str| std::io::Error::new(std::io::ErrorKind::PermissionDenied, m.to_string());
@@ -91,12 +103,22 @@ pub fn save(dir: &str, name: &str, payload: &[u8], s: Stamp) -> std::io::Result<
         return Err(refuse("calibration files are never written under /rigol"));
     }
     // without the data partition, /oos is a directory of the initramfs: the file would be gone at the next start
-    if cfg!(target_os = "linux") && canon.starts_with("/oos") && !std::fs::read_to_string("/proc/mounts").is_ok_and(|m| oos_mounted(&m)) {
-        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "/oos is not mounted (see /tmp/oos-data.log): the result would be lost at the next start"));
+    if cfg!(target_os = "linux")
+        && canon.starts_with("/oos")
+        && !std::fs::read_to_string("/proc/mounts").is_ok_and(|m| oos_mounted(&m))
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "/oos is not mounted (see /tmp/oos-data.log): the result would be lost at the next start",
+        ));
     }
     std::fs::create_dir_all(dir)?;
     let path = format!("{}/{}", dir.trim_end_matches('/'), name);
-    crate::fsutil::write_atomic(path.as_ref(), &build(payload, s), &crate::fsutil::Opts { bak: true, ..Default::default() })
+    crate::fsutil::write_atomic(
+        path.as_ref(),
+        &build(payload, s),
+        &crate::fsutil::Opts { bak: true, ..Default::default() },
+    )
 }
 
 /// The data partition is mounted at /oos, by the text of /proc/mounts.
@@ -121,18 +143,29 @@ mod tests {
     #[test]
     fn data_partition_mounted() {
         assert!(oos_mounted("rootfs / rootfs rw 0 0\n/dev/mmcblk0p1 /oos ext4 rw,noatime 0 0\n"));
-        assert!(!oos_mounted("rootfs / rootfs rw 0 0\n/dev/sda1 /oos/usb vfat rw 0 0\n/dev/mmcblk0p9 /rigol ext4 ro 0 0\n"));
+        assert!(!oos_mounted(
+            "rootfs / rootfs rw 0 0\n/dev/sda1 /oos/usb vfat rw 0 0\n/dev/mmcblk0p9 /rigol ext4 ro 0 0\n"
+        ));
     }
 
     fn unit_dir() -> String {
-        std::env::var("OOS_CAL_DIR").unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/../local/cal-full").into())
+        crate::dho::calfile::test_dir(true)
     }
 
     #[test]
     fn unit_files_parse_and_rebuild_byte_for_byte() {
         let dir = unit_dir();
         let mut n = 0;
-        for f in ["cal_adc.hex", "cal_afe_bandwidth.hex", "cal_afe_zero.hex", "cal_lsb.hex", "cal_vertical.hex", "cal_ddr.hex", "cal_la.hex", "cal_afg.hex"] {
+        for f in [
+            "cal_adc.hex",
+            "cal_afe_bandwidth.hex",
+            "cal_afe_zero.hex",
+            "cal_lsb.hex",
+            "cal_vertical.hex",
+            "cal_ddr.hex",
+            "cal_la.hex",
+            "cal_afg.hex",
+        ] {
             let Ok(b) = std::fs::read(format!("{}/{}", dir, f)) else { continue };
             let p = parse(&b).unwrap_or_else(|e| panic!("{}: {:?}", f, e));
             assert_eq!(build(p, stamp(&b).unwrap()), b, "{}", f);

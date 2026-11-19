@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+The work of oos-plus since its merge of upstream 0.1.13, and since this merge on top of upstream OOS 0.1.14
+and the 17 changes of upstream after it (below).
+
 Fixes from a review of 0.1.13, and the forum's report on it. All of it is tested on the host. Marked "(unit)" where
 it also ran on a DHO924S (2026-11-16).
 
@@ -272,6 +275,22 @@ Fixed:
 
 Added:
 
+- SIM: a bus as a preset (host-tested; the I2C bus (unit), 2026-11-19: Play put its two lines into R1 and R2, set
+  the decoder on them and listed its four messages without an error; the other buses not yet verified on
+  hardware). The presets were lanes for an eye (PCIe,
+  USB 3, SATA); a decoder had nothing to read on a scope with nothing connected. After the lanes the list of
+  SIM > Preset has a bus for every protocol whose traffic the scope can make: UART, I2C, SPI, CAN, CAN-FD, LIN,
+  FlexRay, SENT, MIL-STD-1553, ARINC 429, USB, USB PD, I2S, S/PDIF, 1-Wire, SWD, DMX512, DCC, UART 9-bit, Modbus
+  RTU. Play generates the lines of the bus into reference slots from the SIM slot on ("I2C SDA" in R1, "I2C SCL"
+  in R2), each in a band of its own, sets a decoder to the protocol on those references with the settings the
+  traffic is made for, and plays the references as the acquisition, a little more than one round of the traffic
+  on the screen. The decoder is one that is off (the selected one when none is on), so a decoder that is set up
+  for the bus on the inputs keeps its settings. Add to ref does the same without playing; Live goes back to the
+  set-up from before Play, the decoders as they were (on the unit Live had left the decoder on the references:
+  fixed; (unit), 2026-11-19, the LIN bus: after Live the decoder was the one from before Play). The knobs of a lane
+  (rate, pattern, levels, jitter) are not rows of the menu while a bus is the preset. `:SIM:PRESet "I2C bus"`,
+  `:SIM:PLAY ON`; the preset is part of the set-up (`sim_bus`). The traffic is the one the host build has on its
+  demo channels and the tests decode.
 - Channel > Hide trace, `:CHANnel<n>:HIDE` (host-tested, not yet verified on hardware). The channel stays on
   without its picture: it is acquired, measured and decoded and is the input of a math trace as before, and has
   no trace, no lane and no ground mark. Switching a channel off was the only way to take its trace away, and
@@ -517,6 +536,41 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- MIL-STD-1553 decoder: the bits of a word are followed from edge to edge (host-tested, and on a capture of a real
+  bus on the host; not yet verified on hardware). Every bit has an edge in its middle; the decoder took the edge
+  in the sync and read all 17 bits on a 1 us grid from there, which a bus a few percent off its rate leaves
+  before the word ends: of the 71 words of a capture whose words are 20.8 us long, 37 were misread or had a
+  parity error. They are read now (2 are marked, the two the capture has a fault in), up to 5 % off the rate.
+- LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
+  capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
+  rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud
+  is now only for a record in which no sync can be read. Three more faults of the same capture:
+  - a frame whose sync is not 55 was a break alone, without a word of what was wrong. It is listed, read at the
+    rate of the frames beside it, with its sync as the error;
+  - the last byte before the next break was the checksum, however late it came: a byte 80 ms after a frame took
+    the place of that frame's checksum and made it an error. A frame is what follows its break within the
+    longest time a frame may take, eight data bytes and the checksum at most;
+  - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
+    frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
+- Studio: while SIM plays references the badge strip has no measurements of the channels (host-tested; (unit),
+  2026-11-19: with an I2C bus playing the four rows of the channels were gone, and back after Live). The
+  channels stay on and are not acquired then, and each had its row of "----" under the simulated signal (seen on
+  a unit, 2026-11-19).
+- Decode: the row of a line names its source also when that is a reference that is empty now (host-tested;
+  (unit), 2026-11-19: a UART decoder on the cleared R1 has CH1 to CH4 and R1 in its row, R1 chosen). The rows
+  list the channels and the references that hold a waveform; a decoder left on "R1" after the reference was
+  cleared, or after a restart, had a row of channels with none of them chosen.
+- I2C decoder: a read is no error, and a 10-bit address is one address (host-tested, and on two captures of real
+  buses on the host; not yet verified on hardware). The byte a controller ends a read with is not acknowledged:
+  that is the rule of the bus, and it was red on the band, counted as an error in the Events pane and marked
+  " N", so every read was an error (351 of 393 messages of one capture, 162 now, the ones a device did not
+  answer). It is no error any more when its address was acknowledged and a stop or a repeated start follows; the
+  bit row still says NAK there, in the colour of a bit. An address of ten bits (11110 and two bits, then a byte)
+  was an address 78 to 7B and a data byte: it is one field of three digits ("2A5 W"), and the read after a
+  repeated start, which sends its first byte alone, has the ten bits of the write before it. The trigger and the
+  search compare the bytes on the bus as before, with their own setting of seven or ten bits. The I2C lane on
+  the plot follows. As characters (Format), an address or a mark has a space before the text ("50 R OS P", it
+  read "50 ROSP").
 - Decoders: a tap on a row of the Events pane leaves a running scope running (host-tested; (unit), 2026-11-19, in
   Studio on an SPI bus: the tap left the scope triggered with its horizontal position and said how to get there;
   stopped, the tap went to the row and marked it and its box). In Studio it stopped the acquisition and moved the
@@ -789,6 +843,270 @@ Fixed:
   than the rail no longer crashes.
 - Tests no longer depend on the speed of the computer (wall-time limits replaced), and the SSH key tests run in a
   checkout without `local/`.
+
+### From upstream OOS after 0.1.14
+
+Not yet in an upstream release; upstream keeps such entries as files in `changelog.d/` (ADR 0065), which
+came along with this merge.
+
+Changed:
+
+- A picker longer than the screen scrolls by its bar, a finger and the knob, as the other lists do (ADR 0006): a WLAN
+  scan lists every network it found, not the 17 strongest, and the Bluetooth pickers every device, not the first 18.
+
+## 0.1.14
+
+From upstream OOS: its release 0.1.14, merged into oos-plus as it came. "The unit" in it is upstream's unit;
+none of it has run on a unit with an oos-plus build yet. Of its removals, oos-plus keeps the native Windows build
+(`build-windows.ps1`, `run-windows.ps1`, the desktop window); telnet and the frames draw path are gone here too.
+
+Released on 2026-11-19. Fixes from the review of 0.1.13 and from the forum's and the issues' reports, Bluetooth and a
+WLAN stick with its driver, mice and keyboards, a number pad for values, and the DHO802/DHO812 verified by a user's
+install. Telnet, the native Windows build and the frames draw path are gone. The code of oos-ui is split into crates and
+tables of pages and services without a change of what the scope does. All of it is tested on the host; marked "(unit)"
+where it also ran on a DHO924S. The release build itself ran on a DHO924S from its kexec start (the device tests of tier
+a0); its first start from power-on, which confirms an update, was not tried before the release.
+
+Added:
+
+- A number pad for the values of a channel's scale and offset, the time base and its position and the trigger level
+  (#22): a tap on the value opens it, a key with the unit (`mV`, `V`, `µs` ...) sets it, as `:CHANnel<n>:SCALe` and
+  the other remote commands do ([First Steps](wiki/First-Steps.md#the-keyboard)).
+- USB and Bluetooth mice and keyboards ([First Steps](wiki/First-Steps.md#mouse-and-keyboard)): the mouse is the
+  finger, with a pointer while it is in use that moves in even steps; the keys stand in for the front panel and type
+  into the on-screen keyboard. oos-ui takes them for itself, so no key reaches the console shell behind the screen
+  (unit, with a BLE keyboard and touchpad).
+- Bluetooth through a USB stick ([bluetooth.md](docs/bluetooth.md), ADR 0057): a TP-Link Archer TX10UB Nano is
+  switched out of its driver-CD mode, its Realtek 8851BU gets its firmware, and BlueZ runs on a system bus of its own;
+  pairings are kept on the data partition (unit: a BLE keyboard with touchpad paired, used, and reconnected after a
+  power cycle).
+- System > Network > Bluetooth ([bluetooth.md](docs/bluetooth.md#on-the-scope)): find, pair, connect, disconnect and
+  forget mice and keyboards; a keyboard's passkey is shown on the scope. While a Bluetooth stick is there, a `BT` box
+  in the top bar beside the WLAN box: green while a device is connected, a tap opens the page (unit).
+- WLAN on the TP-Link Archer TX10UB Nano (Realtek RTL8851BU, 2.4 and 5 GHz; [wlan.md](docs/wlan.md), ADR 0027):
+  `rtw89` of Linux 6.18.63 is built as modules beside the 6.12 kernel, and `oos-wlan` picks it by the stick's id
+  (unit: a saved WPA2 network joined on 5 GHz, DHCP, about 84 Mbit/s sent).
+- `tools/plan-matrix.sh` also covers averaging, the logic analyser, roll and scan, the generator, LA thresholds, the
+  cold-boot dry run and the PLL table of another clock.
+- `oos-fpgad made-up-cal DIR` writes a made-up calibration set: every calibration file the register sequences read,
+  with invented values that mean nothing for a scope. `tools/compare-base.sh` uses it when there are no files of a
+  unit, so CI now also compares the register values that calibration changes.
+- `tools/device-deploy.sh` checks every uploaded file with SHA-256 (unit); `device-deploy-ssh.sh` is gone.
+- `tools/check.sh` has a `sim` layer (not enforced) for the Docker and QEMU simulations.
+- `tools/device-test.py --changed BASE` runs only the device tests a change reaches (documents and CI: the six smoke
+  tests). A failed test runs again (`--retries`); one that passes then is reported as FLAKY. A failure that a known
+  run of main has too (`--known`, `--save-known`) is reported as KNOWN, except a differing register sequence and a
+  failed smoke test. Neither FLAKY nor KNOWN fails the run. The register sequences are compared section by section,
+  without the differences of the setup (among them the last empty line the unit's shell drops)
+  ([device-testing.md](docs/device-testing.md)).
+- CI: every commit of a pull request needs a Signed-off-by line (ADR 0026); CI runs `tools/check.sh` itself.
+- System > Network > Remote services > **Allowed** sets `net.allow` from the scope's screen (unit). The picker offers
+  every network the scope is on, and Other opens the keyboard. A wrong entry is refused with a message and not
+  stored. A change takes effect at once, without a restart:
+  - the firewall is reloaded;
+  - SCPI, VXI-11 and HiSLIP close the connections the new list leaves out, and the web remote checks every request;
+  - SSH starts or stops with the list.
+  The Firewall row shows the state in force (host-tested; the earlier build of the row ran on a unit).
+- System > **Start OOS again**, right under Boot mode: two taps within 5 s select OOS for the next power-on once more,
+  as `oos-boot-oos-again` does (it runs the same `oos-update arm`), and a dialog shows the result. With Boot mode
+  Persist it only says that OOS starts anyway. One-shot users no longer need a shell for this step (host-tested; not
+  yet run on a unit).
+- [docs/http.md](docs/http.md), the reference of the web remote's HTTP routes and the MCP tools `scpi` and
+  `screenshot` (issue #205): method, query, body, status codes, content type, limits and `net.allow` of each, and
+  the mark of ADR 0055 (proposed): stable, experimental or internal. The behaviour is unchanged.
+  `tools/http-coverage.py`, in the layer `ratchet` of `tools/check.sh`, fails when a route or tool has no entry or
+  mark there, or an entry names a route the code does not answer.
+
+Removed:
+
+- Telnet. The scope no longer starts a shell without password on port 23, and System > Network > Remote services has
+  no telnet switch. SSH is the only shell on the network: switch it on under Remote services, set **Allowed** to your
+  network, and log in with the password from SSH settings > Show password, then add a key with `ssh-copy-id`
+  ([Remote Control](wiki/Remote-Control.md), [docs/ssh.md](docs/ssh.md)). The serial console keeps its shell.
+  `remote.telnet` in an older `/oos/system.conf` is ignored and no longer written. `tools/device-deploy.sh` and
+  `tools/device-test.py` reach the scope over SSH only (`OOS_SHELL` is gone); a bench unit needs SSH and a key once
+  ([docs/device-testing.md](docs/device-testing.md)). ADR 0054 (host-tested; not yet run on a unit).
+- The native Windows build: `build-windows.ps1`, `run-windows.ps1` and the desktop window with its keyboard and mouse
+  shortcuts and its file dialog. On a computer OOS runs with `oos-ui --serve` and the web remote in a browser, on
+  Linux, macOS and Windows inside WSL 2 (ADR 0033). The scope is not affected.
+- The frames draw path (Standard) and its switch: Acquire > Draw path is gone, the scope always draws with Batch,
+  which puts every acquired frame into the picture and now holds the screen rate (issue #186, ADR 0059).
+  `acq.pipeline` in an older `/oos/system.conf` is ignored and no longer written, `OOS_PIPELINE` is not read, and
+  `draw_path` in an older setup is passed over. `:SYSTem:PIPeline?` answers `BATC`, `:SYSTem:PIPeline BATCh` is
+  taken and changes nothing, `FRAMes` and `STANdard` are refused with -224. The status line says `pipeline Off`
+  instead of `pipeline Frames` with a source other than the hardware, and System info no longer names the path
+  (unit: starts in Batch, `:SYSTem:PIPeline` as above, about 29 pictures a second; the Acquire menu was checked on
+  the host only).
+
+Changed:
+
+- The DHO802 and DHO812 count as verified ([models.md](docs/models.md) 2.1): a user installed OOS 0.1.13 on a DHO802
+  from the USB stick and it started, answered SCPI and the web page (issue #19). The first install from the stock
+  system now takes both models without `oos-any-model.txt`.
+- Batch draw path: at 10 us/div the screen shows about 29 pictures a second with one,
+  two or four channels, where it showed 14 to 19 (unit). The workers fold their maps once a screen on the little
+  cores, and the frame loop swaps them in. Frames that are read and not drawn now count as dropped in `:SYSTem:STAT?`.
+- System > Overclock is only in the menu with `adc.overclock = on` in `/oos/system.conf`, or while `limits.conf` already
+  sets another clock: above 1.25 GHz every step boots, but records at the full rate lose samples (unit). Every step
+  above 1.25 GHz is marked "(test)".
+- The waveform is drawn with the Batch path (the only one, see Removed): from 100 ns to 500 us/div it draws 1.2 to
+  3.4 times as many of the acquired frames, 5269 instead of 1563 a second with one channel at 100 ns/div (unit).
+- system.conf: of two lines with the same key the last one wins, and `#` starts a comment only at the start of a line
+  or after a space or tab, as `oos-conf` reads it.
+- `trig.serial_hw`, `acq.frame0`, `zone.batch` and `mask.map.*` are also taken from the image defaults
+  (/etc/oos/system.conf).
+- The computer's mDNS announcer refuses queries with forward name pointers, as the scope does.
+- `oos-fpgad`: a wrong FPGA version names the value read in `roll`, `selfcal` and `afg`; a bad number names its value.
+  The `roll [--scan]` dry run also lists the fill pulse, sweep restart and stop writes.
+- Image build: a new version in `rootfs/deps.lock` or a changed build script rebuilds wpa_supplicant, e2fsck, kexec,
+  the GPU helper and Mesa by itself. Mesa comes from archive.mesa3d.org (same SHA-256), no Ubuntu source package is
+  needed. Build images are made again when their Dockerfile changes.
+- Build: the Rust release (`rust-toolchain.toml`, 1.100.0) and the Docker base images (by digest, in
+  `tools/lib/docker.sh`) are pinned. `rustup toolchain install` in the tree installs that release, with the target for
+  the scope; CI and the image build use the same one (ADR 0045).
+- Card tools: `card-install.py`, `switch.py`, `sdcard-layout.py` and the image's `oos-oneshot` check the same stock
+  partition-table marks, now including `recovery`.
+- Docs: overclocking above 1.25 GHz loses about 5 % of the samples at the full rate (unit), so frequencies read too
+  high; 1.25 GHz stays (docs/models.md 4.1). Unit profiles for `OOS_UNIT=<name>` are described in docs/models.md 4.2;
+  `rootfs/unit/` is private and ignored by git.
+- SCPI setup and hold (`SETUP`, `HOLD`, `SETHOLD`, `FSETUP`, `FHOLD` in `:MEASure:ITEM?`) take the data first and the
+  clock second, as the tiles say (A = data, B = clock). Before, they took the clock first: a script that sends the
+  clock first gets swapped results now. These are OOS items; the stock programming guide has none.
+- A change of trigger type keeps the user's pulse width, pattern, levels and limits on the hardware, Live and Replay.
+  The demo's starting values are set on the demo only. Slope, Runt and Window keep the lower level at or below the
+  upper one; `:TRIGger:RUNT:UPPer/LOWer` refuses a threshold past the other with -224.
+- Choosing a decoder protocol on Live or a Replay keeps the sources, as on the hardware. Before, they moved to the
+  demo's channels.
+- Touch lock has one place on the screen: the Touch lock action in the start menu, next to the other front-panel
+  keys (and the TOUCH key itself). Utility > Touch, the same switch a second time, is gone.
+
+Fixed:
+
+- A remote client (SCPI on port 5555, VXI-11, HiSLIP) that reads its answers slowly or not at all no longer slows
+  the screen: answers go out as the network takes them, and the client's next command waits until its answers are
+  out. Before, such a client could hold the screen and the keys for up to 30 s per answer (#192; host tests).
+- A `cal_vertical.hex` with 64-byte records (one block group, seen on a DHO804) is read at 64 bytes a record instead
+  of stopping oos-ui at every start; a calibration file whose scale keys are out of order is not used, and the scope
+  starts uncalibrated instead of stopping (issue #37; host tests, and the usual 56-byte file still loads on a DHO924S).
+- The WLAN box of the top bar is as wide as the LAN box at every text size: at the normal size its address ran out
+  of it (#23).
+- SSC Freq Dev and SSC Modulation Rate are measured on the modulation (issue #196). The deviation was the span of
+  single cycles, mostly their timing error (about 9,400 ppm for a 5,000 ppm test clock, now about 5,500); it is now
+  the span of the rate averaged over 1/32 of the modulation period, which reads a sine 0.2 % and a triangle 3 % under
+  its span. The rate was the nearest spectral bin; it is now interpolated between bins, and with fewer than four
+  modulation periods in the record fitted with a sine (33 kHz with three periods read 29.3 kHz, now 33.0 kHz).
+- Double pulse: Ipeak and Irrm are the turn-on peak, not the end of the inductor's ramp later in the second pulse, so
+  Trr, Qrr and the diode's d/dt have values. The descriptions of Td(off), Tf and Toff name the current fall they
+  measure, not a voltage rise.
+- Measurements without an SI unit take no SI prefix: a ratio reads `0.498`, not `498 m`, a count `1`, not `1.00`, and
+  `ppm`, `rpm` and `rpm/s` are plain decimals (`1500 rpm`, not `1.50 krpm`).
+- The trigger level marker stays when the source channel is on AC coupling (#46): the scope couples ahead of
+  the ADC, so the level is a level on the AC trace as drawn. Only the demo, which triggers before it takes the mean
+  out, still hides it (on the unit: assumed, not yet checked).
+- Eye Width no longer reads short by the picture's own spread (issue #195): a crossing without jitter lights two
+  columns of the eye and read half a column of jitter, 6 % of the unit interval in a 96-column eye. That spread is
+  now taken out, so a signal without jitter reads 1 UI and one with 20 ps RJ on 1 ns reads 880 ps.
+- The PLL clock recovery of the eye in `oos-dsp` ends for every loop bandwidth (issue #194): one near the edge rate
+  drove the recovered period to zero or below, and the clock's ticks were added until memory ran out. The scope itself
+  only asks for the default bandwidth (rate / 1667), which never got there.
+- The G key lights up while the generator's output is on, and the LA key while the logic analyser is on; both stayed
+  dark before (contributed by halma1).
+- DCC decodes the signal of a live track (contributed by halma1, tested on a layout with an ESU ECoS): a phase slip no
+  longer breaks the bit stream, a 0 inside a long preamble is no longer a broken packet, and the decoders of a live
+  record read the acquisition's own samples instead of the screen's, so the 58 us halves of a DCC bit survive. A
+  decoder over a record of more than 262,144 points runs in the background and can show its result one record later.
+- Slow time bases put about every record in the picture again (issue #220): at 1 ms/div a batch holds the frame the
+  scope kept from before the arm and one more, and the first was always left out (issue #5), so only 18 of 37 records
+  a second were drawn. In a batch of up to four frames that frame is now kept when its edge is at the trigger point;
+  with other trigger types, and in longer batches, it is still left out (unit: 206 of 222 records at 1 ms/div).
+- SCPI and the web page come up when their port was still taken at the start (by the oos-ui before, ending): the
+  port is tried again every second. Before, both stayed off until the next start, while mDNS still announced them.
+- Update: an image with a larger initramfs (a 48 MB package) stopped in a kernel panic at the restart into it
+  ("unknown-block(0,0)"); a power cycle brought the previous build back, nothing was written. The restart now places
+  the new initramfs above 1 GiB through kexec-tools, also when the device tree stays the same (unit). An update to such
+  an image needs this build installed first.
+- Measure in roll and scan, and on compressed deep records: the frequency, the period and the other time values of
+  a slow signal read up to twice the true value now and then (25 Hz read as 50 Hz at 0.2 s/div). Their points are
+  min/max pairs, and on an edge each pair spans more than the hysteresis of the edge search; the time values are now
+  measured on the mean of neighbouring points. Max, Min, Pk-pk, Top and Base still come from the pairs (unit, #118).
+- Colour grade drawn by the GPU: the densest pixels (a summed count from 32768 up) were left out on a driver that
+  keeps `mediump` integers in 16 bits; the shaders now compute counts in `highp` (host, Mesa 26).
+- Bode: the generator amplitude knob reaches 10 mVpp (it stopped at 1 Vpp).
+- Measure: a burst idle, setup or hold time above 5 s (set over SCPI) steps down to 5 s instead of turning off, also
+  in a measurement's own settings.
+- Waveform import: a damaged file is refused with "truncated waveform" wherever a field lies past its end.
+- Fast-frame load (`frame-NNN.bin`): a frame whose time step or start is not a finite number, or with fewer than two
+  samples per channel, is refused, as the waveform import already refused such an `OOSW` file.
+- `oos-fpgad` without a command, or with `help`, prints its usage again (it printed nothing).
+- Tests no longer depend on the speed of the computer in the UI either (wall-time limits replaced).
+- The expand button in the plot's corner enlarges the panel also while HDMI is on Waveform or Layout. Before, it
+  only changed the density there and the panel stayed as it was (forum report). Full chosen under Density still
+  keeps the panel's bars while the external display has the waveform.
+- A typo in `net.allow` (`192.168.1.0/`, `2001:db8:::1`) made nft refuse the whole firewall, and the scope came up
+  without one while telnet listened. Such entries are left out and logged; a ruleset nft refuses anyway closes the
+  scope to everything but loopback.
+- STOP (unit): the stopped record is no longer counted twice in the statistics, trend and catalog, and a change of view while
+  stopped adds nothing. Clear while stopped keeps the hardware stopped (it went on acquiring and overwrote the stored
+  record). RUN after STOP starts with a frame from after the RUN press.
+- Deep records read as min/max pairs: Mean, RMS, Std dev and AC RMS statistics no longer count pair values while the
+  reading is empty; with the LA on or three channels the measurements no longer stand still waiting for a raw read
+  the hardware never makes; after a Clear a held deep measurement no longer shows the cleared record.
+- The acquisition thread no longer holds the shared state while it decodes a raw window (up to ~24 MB), and the
+  newest frame of a batch gets the ADC-core correction like every other record.
+- Leaving a reference, Take over, Offline or SIM session brings back the live set-up from before it, whichever way it
+  is left (Live, Record = With live, a channel key, a channel as trigger source, Sources). A set-up recalled during a
+  session ends it and stays. Leaving the Bus trigger after a recall keeps the recalled decoder on. In Live, switching
+  a channel on from Sources leaves the trigger and Run/Stop alone.
+- Issue #5, stray traces (unit): frame 0 of a batch is left out in Batch draw mode too. Frame 1 is the first
+  trigger after the arm, and now and then it holds a piece of older memory. With an edge trigger it is left out
+  when its edge is not at the trigger point. SINGLE returned no frame from before the arm in 40 tries.
+- `:REF:LOAD "/proc/kmsg"` froze the screen for good (unit). Files under /proc, /sys and /dev are refused now. So is
+  any file larger than the 128 MiB import limit, before it is read.
+- Waveform import (unit for the first two):
+  - A CSV with more columns than reference slots is refused while it is read. It used to take gigabytes first.
+  - An upload over the web page is parsed beside the frame loop: 32 MB took 6 s, and SCPI answered within 43 ms
+    meanwhile.
+  - A frame file (`frame-NNN.bin`) whose counts do not fit its size no longer crashes oos-ui.
+- Web remote: `/update` and `/mcp` from outside `net.allow` are refused at the request head, before the body is read.
+  Only one large body is read at a time.
+- HiSLIP (desktop): a tiny maximum message size no longer splits a reply into one message per byte.
+- The zoom window no longer overflows at extreme delays.
+- The console banner and the Network page said SSH takes a provisioned key only. It takes the password or a key.
+- With hardware segments recording, the DVM, the levels and the ADC core trim wait for the recording to end.
+- STOP on a deep record (e.g. 10 M at 1 ms/div): the views read again as min/max pairs are drawn, while Mean, RMS,
+  Std dev and the other readouts stay measured on the raw record of the STOP. Before, they turned to "----".
+- Reference > Clear also removes the readouts of the cleared slots. Before, an import's Vpp, Freq, RMS and Rise rows
+  stayed empty (unit).
+- A `system.conf` that leaves out every decoder no longer crashes Decode > Protocol.
+- Measurements: line and switching ripple without the rail's DC level on records of partial cycles; double pulse
+  I_L, td_on, tr, td_off, tf, di/dt, Ipeak - I_L and Qoss with a ramping load current; high time, low time and time
+  outside without noise from slow edges; Ones counts bits, not samples; setup/hold violations judged per clock edge,
+  and the Setup + Hold tile says it counts violations; Eye Width@BER in seconds; Hall shaft speed and angle
+  mechanical (divided by the pole pairs) and no longer stuck after a fault code at the record start.
+- Decoders: MLT-3 decodes every change between its three levels (half of the ones were lost).
+- Phase noise and switching dV/dt, dI/dt no longer take quadratic time on long records; a power-rail clock longer
+  than the rail no longer crashes.
+- Tests no longer depend on the speed of the computer (wall-time limits replaced), and the SSH key tests run in a
+  checkout without `local/`.
+- The power-on picture (`/etc/oos/splash.ppm`): one whose header ends inside a comment no longer ends oos-ui at the
+  start; it is left out like any picture oos-ui cannot read.
+- The power-on picture: one that claims a size of 2^31 bytes of pixels or more (65536 x 65536) no longer ends
+  oos-ui; it is refused unless the file holds all its pixels.
+- Bode with a generator on the USB port: a device that answers with transfers of no data and never ends the answer
+  no longer holds the generator's thread for ever. After 16 such transfers the read fails, and the Bode page says
+  that `*IDN?` failed.
+- Waveform import: a CSV whose time column gives an infinite time step or start (`inf` as a time) is refused, as an
+  `OOSW` file with such a time base is. It became a reference with an infinite time step.
+- Mask test: a mask file whose tolerance `x` or `y` is `inf` or `NaN` is refused with "Load failed"; such a
+  tolerance became the mask's margin.
+- Setup recall: a `bode_sweep` line that is refused (a sweep time of 0 or `inf`, or a later value that is wrong) no
+  longer leaves its first values in the Bode settings; the line changes nothing.
+- Decoders: Quad-SPI no longer ends oos-ui on a CS# frame that ends where it starts (both edges between the same two
+  samples) with a clock edge at that instant; such a frame holds no data.
+- Update: an image whose device tree nests deeper than 64 levels is refused with a message; oos-update ended on
+  one (from about 30 000 levels the stack overflowed).
+- Update: an image whose device tree section (RSCE) names a table longer than the section is refused; one with
+  entries of no length was read up to 2^32 times before the install went on.
 
 ## 0.1.13
 

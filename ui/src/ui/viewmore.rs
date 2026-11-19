@@ -134,11 +134,12 @@ impl Ui {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{Item, MenuId, Source, Ui};
+    use super::super::{Item, MenuId, Ui};
     use super::*;
+    use crate::wave::Source;
 
     fn at(view: AView) -> Ui {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut ui = crate::ui::testkit::demo_ui();
         ui.m.view = view;
         ui.step(1.0 / 30.0);
         ui.render(&mut Canvas::new(super::super::PANEL_W, super::super::PANEL_H));
@@ -173,7 +174,9 @@ mod tests {
 
     #[test]
     fn the_button_opens_the_menu_and_exit_ends_the_view() {
-        for view in [AView::Spectrum, AView::Power, AView::Bode, AView::Step, AView::Magnetic, AView::Inverter, AView::Dpt] {
+        for view in
+            [AView::Spectrum, AView::Power, AView::Bode, AView::Step, AView::Magnetic, AView::Inverter, AView::Dpt]
+        {
             let mut ui = at(view);
             let r = ui.view_btn();
             ui.tap(r.x + 5, r.y + 5);

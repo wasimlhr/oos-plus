@@ -43,8 +43,20 @@ pub struct RowOpts {
 
 impl Default for RowOpts {
     fn default() -> Self {
-        RowOpts { pol: EdgePol::First, offset: 0, step: 1, os_top: None, os_base: None, idle: 0.0, burst_falling: false,
-            side: Outside::Above, n: 6, n_edge: NEdge::Rise, n_offset: 0, n_step: 1 }
+        RowOpts {
+            pol: EdgePol::First,
+            offset: 0,
+            step: 1,
+            os_top: None,
+            os_base: None,
+            idle: 0.0,
+            burst_falling: false,
+            side: Outside::Above,
+            n: 6,
+            n_edge: NEdge::Rise,
+            n_offset: 0,
+            n_step: 1,
+        }
     }
 }
 
@@ -98,9 +110,14 @@ impl Analysis {
             Meas::PDuty | Meas::NDuty => {
                 let rising = o.pol != EdgePol::Fall;
                 // a cycle that starts falling reports its low part first
-                let d: Vec<f64> = self.duty_list(rising).into_iter().map(|x| if rising { x } else { 100.0 - x }).collect();
+                let d: Vec<f64> =
+                    self.duty_list(rising).into_iter().map(|x| if rising { x } else { 100.0 - x }).collect();
                 let pos = mean(&pick(&d, o.offset, o.step));
-                if m == Meas::PDuty { pos } else { 100.0 - pos }
+                if m == Meas::PDuty {
+                    pos
+                } else {
+                    100.0 - pos
+                }
             }
             Meas::Overshoot | Meas::Preshoot => {
                 let (top, base) = (o.os_top.unwrap_or(self.top), o.os_base.unwrap_or(self.base));
@@ -108,7 +125,11 @@ impl Analysis {
                 if !(amp > 0.0) {
                     return f64::NAN;
                 }
-                if m == Meas::Overshoot { (self.vmax - top) / amp * 100.0 } else { (base - self.vmin) / amp * 100.0 }
+                if m == Meas::Overshoot {
+                    (self.vmax - top) / amp * 100.0
+                } else {
+                    (base - self.vmin) / amp * 100.0
+                }
             }
             Meas::Burst => burst_width_pol(self, o.idle, !o.burst_falling),
             Meas::Outside => time_outside(self, o.side),
@@ -194,7 +215,9 @@ fn typed_pairs(a: &Analysis, b: &Analysis, o: &PairOpts) -> Vec<(Vec<f64>, Vec<f
     };
     match (o.from, o.to) {
         (EdgeSel::Both, ToSel::Same) => vec![(a.rises.clone(), b.rises.clone()), (a.falls.clone(), b.falls.clone())],
-        (EdgeSel::Both, ToSel::Opposite) => vec![(a.rises.clone(), b.falls.clone()), (a.falls.clone(), b.rises.clone())],
+        (EdgeSel::Both, ToSel::Opposite) => {
+            vec![(a.rises.clone(), b.falls.clone()), (a.falls.clone(), b.rises.clone())]
+        }
         (EdgeSel::Both, to) => vec![(mids(a), to_edges(to))],
         (from, ToSel::Same) => vec![(edges_of(a, from), edges_of(b, from))],
         (from, ToSel::Opposite) => {
@@ -295,7 +318,17 @@ mod tests {
     use super::*;
 
     fn an(rises: &[f64], falls: &[f64]) -> Analysis {
-        Analysis { valid: true, top: 1.0, base: 0.0, vmax: 1.1, vmin: -0.1, rises: rises.to_vec(), falls: falls.to_vec(), t_end: 1e-3, ..Default::default() }
+        Analysis {
+            valid: true,
+            top: 1.0,
+            base: 0.0,
+            vmax: 1.1,
+            vmin: -0.1,
+            rises: rises.to_vec(),
+            falls: falls.to_vec(),
+            t_end: 1e-3,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -303,7 +336,19 @@ mod tests {
         let a = an(&[1.0, 3.0, 5.0, 7.0], &[2.0, 4.0, 6.0]);
         let b = an(&[1.4, 3.4, 5.4], &[2.4, 4.4, 6.4]);
         let o = RowOpts::default();
-        for m in [Meas::Period, Meas::Freq, Meas::PWidth, Meas::NWidth, Meas::PDuty, Meas::NDuty, Meas::Overshoot, Meas::Preshoot, Meas::Burst, Meas::Outside, Meas::NPeriods] {
+        for m in [
+            Meas::Period,
+            Meas::Freq,
+            Meas::PWidth,
+            Meas::NWidth,
+            Meas::PDuty,
+            Meas::NDuty,
+            Meas::Overshoot,
+            Meas::Preshoot,
+            Meas::Burst,
+            Meas::Outside,
+            Meas::NPeriods,
+        ] {
             let (x, y) = (a.get(m), a.get_row(m, &o));
             assert!(x == y || (x.is_nan() && y.is_nan()), "{m:?} {x} {y}");
         }
@@ -381,7 +426,10 @@ mod tests {
         let both = RowOpts { n: 1, n_edge: NEdge::Both, ..Default::default() };
         assert!((a.get_row(Meas::NPeriods, &both) - duration_n(&a, 1, true)).abs() < 1e-18);
         let fl = RowOpts { n: 1, n_edge: NEdge::Fall, ..Default::default() };
-        assert!((a.get_row(Meas::NPeriods, &fl) - mean(&a.falls.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>())).abs() < 1e-18);
+        assert!(
+            (a.get_row(Meas::NPeriods, &fl) - mean(&a.falls.windows(2).map(|w| w[1] - w[0]).collect::<Vec<_>>())).abs()
+                < 1e-18
+        );
         // rising windows of N = 1: 1, 1, 198, 1, 1 us
         let skip = RowOpts { n: 1, n_offset: 3, ..Default::default() };
         assert!((a.get_row(Meas::NPeriods, &skip) - 1e-6).abs() < 1e-12, "{}", a.get_row(Meas::NPeriods, &skip));

@@ -320,7 +320,7 @@ impl Ui {
             return false;
         }
         let Ok(packets) = self.decode_packets_of(m) else { return false };
-        let (opt, sh) = (m.dec_opts(), crate::protocols::Shared::of(m));
+        let (opt, sh) = (m.dec_opts(), crate::protocols::shared(m));
         let bit = packets.iter().find_map(|x| p.bits(x, &opt, &sh)).and_then(|b| b.first().map(|b| b.t1 - b.t0));
         bit.is_some_and(|bit| bit / tdiv as f64 * (self.area.w as f64 / HDIV as f64) >= BIT_MIN)
     }
@@ -335,7 +335,7 @@ impl Ui {
     fn draw_bit_row(&self, cv: &mut Canvas, m: &Model, packets: &[Packet], at: &BitRow) {
         let Some(module) = m.dec_proto.module() else { return };
         let f = self.fonts();
-        let (opt, sh) = (m.dec_opts(), crate::protocols::Shared::of(m));
+        let (opt, sh) = (m.dec_opts(), crate::protocols::shared(m));
         let xt = at.xt;
         let bh = DEC_BITS - 2;
         for p in packets {

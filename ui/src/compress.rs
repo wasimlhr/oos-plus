@@ -39,12 +39,10 @@ pub const MAX_DEPTH: u32 = 1_000_000;
 /// has passed the procedure in docs/fork/compress.md.
 pub fn enabled() -> bool {
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        let env = std::env::var("OOS_COMPRESS").ok().map(|v| if v.is_empty() || v == "0" { "off" } else { "on" });
-        let conf = crate::sysconf::fork_text();
-        enabled_from(env, &conf)
-    })
+    *ON.get_or_init(|| FLAG.get())
 }
+
+const FLAG: crate::sysconf::Flag = crate::sysconf::Flag { key: "acq.compress", env: Some("OOS_COMPRESS"), on: "on" };
 
 /// The live-compression factor of the last batch read: 1 for raw frames (`:SYSTem:STATe?` `compress k`).
 static LAST_K: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
@@ -55,11 +53,6 @@ pub fn note_batch_k(k: u32) {
 
 pub fn last_k() -> u32 {
     LAST_K.load(std::sync::atomic::Ordering::Relaxed)
-}
-
-/// `env` if set, else the `acq.compress` line of `conf`; off unless `on`.
-pub fn enabled_from(env: Option<&str>, conf: &str) -> bool {
-    crate::drawpipe::conf_value(env, conf, "acq.compress").as_deref() == Some("on")
 }
 
 /// Whether the UI leaves the newest record unmeasured: running (not Single), and the record is of live-compression
@@ -83,7 +76,8 @@ pub fn allowed(m: &Model) -> bool {
         && m.z_src.is_none()
         && !m.zones.iter().any(|z| z.usable())
         && !m.la_on()
-        && (0..NCH).all(|c| !m.ch[c].on || (matches!(m.ch[c].coupling, Coupling::Dc | Coupling::Dc50) && m.ch[c].bw != BW_20M))
+        && (0..NCH)
+            .all(|c| !m.ch[c].on || (matches!(m.ch[c].coupling, Coupling::Dc | Coupling::Dc50) && m.ch[c].bw != BW_20M))
         && raw_consumers_off(m)
 }
 
@@ -104,7 +98,11 @@ pub fn raw_consumers_off(m: &Model) -> bool {
 pub fn k_for(rate: u64, tdiv: f64, memsel: u32) -> u32 {
     let per_column = rate as f64 * tdiv * HDIV as f64 / SCREEN_COLUMNS;
     let k = (per_column / POINTS_PER_COLUMN).floor().min(K_MAX as f64) as u32;
-    if k < K_MIN || memsel > MAX_DEPTH { 1 } else { k }
+    if k < K_MIN || memsel > MAX_DEPTH {
+        1
+    } else {
+        k
+    }
 }
 
 /// A frame of the live compression (min/max pairs at most `MAX_DEPTH` deep), as opposed to the deep-memory read,
@@ -185,6 +183,9 @@ mod tests {
     use super::*;
     use oos_hal::dho::pairs;
 
+    /// Read-out bytes and the settings they were read under.
+    type ReadOut = (Vec<u8>, oos_hal::dho::seq::Settings);
+
     /// The FPGA's compressed read of `raw` volts (codes 7500 per volt around 32768) with factor `k`, in volts, in the
     /// assumed layout (`pairs::LAYOUT`).
     fn fpga(raw: &[f32], k: usize) -> Vec<f32> {
@@ -215,7 +216,9 @@ mod tests {
 
     /// The same, over the samples from `pad` before to `pad` after the column (`pad` < 0 narrows it).
     fn soft_pad(raw: &[f32], m: &Map, w: usize, pad: f64) -> Vec<Option<(f32, f32)>> {
-        let at = |c: usize, d: f64| ((m.ti + (c as f64 - m.x0) / m.x_per_sample + d).ceil().max(0.0) as usize).min(raw.len());
+        let at = |c: usize, d: f64| {
+            ((m.ti + (c as f64 - m.x0) / m.x_per_sample + d).ceil().max(0.0) as usize).min(raw.len())
+        };
         (0..w)
             .map(|c| {
                 let (a, b) = (at(c, -pad), at(c + 1, pad));
@@ -261,7 +264,11 @@ mod tests {
         for k in [4usize, 16, 64, 256] {
             let per_column = (POINTS_PER_COLUMN as usize * k) as f64;
             let n = (w as f64 * per_column) as usize;
-            for raw in [square(n, 37.3 * per_column, 11.0, 0.0), square(n, 5.7 * per_column, 3.0, 0.2), sine(n, 13.1 * per_column)] {
+            for raw in [
+                square(n, 37.3 * per_column, 11.0, 0.0),
+                square(n, 5.7 * per_column, 3.0, 0.2),
+                sine(n, 13.1 * per_column),
+            ] {
                 let comp = fpga(&raw, k);
                 let mr = Map { ti: 0.0, x_per_sample: 1.0 / per_column, x0: 0.0, y_per_volt: -56.0, y0: 224.0 };
                 let mc = Map { x_per_sample: 1.0 / POINTS_PER_COLUMN, ..mr };
@@ -293,9 +300,25 @@ mod tests {
                 for c in 1..w - 1 {
                     let Some((a, b)) = got[c] else { panic!("k {} column {} empty", k, c) };
                     let (wa, wb) = wide[c].unwrap();
-                    assert!(a >= wa - ONE_CODE && b <= wb + ONE_CODE, "k {} ti {} column {}: {:?} outside {:?}", k, ti, c, got[c], wide[c]);
+                    assert!(
+                        a >= wa - ONE_CODE && b <= wb + ONE_CODE,
+                        "k {} ti {} column {}: {:?} outside {:?}",
+                        k,
+                        ti,
+                        c,
+                        got[c],
+                        wide[c]
+                    );
                     if let Some((na, nb)) = narrow[c] {
-                        assert!(a <= na + ONE_CODE && b >= nb - ONE_CODE, "k {} ti {} column {}: {:?} inside {:?}", k, ti, c, got[c], narrow[c]);
+                        assert!(
+                            a <= na + ONE_CODE && b >= nb - ONE_CODE,
+                            "k {} ti {} column {}: {:?} inside {:?}",
+                            k,
+                            ti,
+                            c,
+                            got[c],
+                            narrow[c]
+                        );
                     }
                 }
             }
@@ -318,7 +341,14 @@ mod tests {
                 let m = Map { ti: 0.0, x_per_sample: 1.0 / POINTS_PER_COLUMN, x0: 0.0, y_per_volt: -56.0, y0: 224.0 };
                 let c = (at as f64 / per_column) as usize;
                 let got = ranges(&comp, &m, w)[c].unwrap();
-                assert!(if up { got.1 >= 2.5 - ONE_CODE } else { got.0 <= -2.5 + ONE_CODE }, "k {} glitch at {}: column {} {:?}", k, at, c, got);
+                assert!(
+                    if up { got.1 >= 2.5 - ONE_CODE } else { got.0 <= -2.5 + ONE_CODE },
+                    "k {} glitch at {}: column {} {:?}",
+                    k,
+                    at,
+                    c,
+                    got
+                );
                 // in the picture: the glitch row lit in its column
                 let (h, mut map) = (448usize, vec![0u16; w * 448]);
                 deposit_pairs(&mut map, w, h, &comp, &m, 24, false);
@@ -376,14 +406,24 @@ mod tests {
     /// 10 us/div, CH1: 100 k points at 625 MSa/s (k = 15), a 40 kHz square of 3 div peak to peak with its rising
     /// edge `jitter` samples after the trigger point and a little noise: the model, the raw read-out bytes and settings,
     /// the compressed ones.
-    #[allow(clippy::type_complexity)]
-    fn square_10us(jitter: f64) -> (Model, oos_hal::dho::hz::Params, (Vec<u8>, oos_hal::dho::seq::Settings), (Vec<u8>, oos_hal::dho::seq::Settings)) {
+    fn square_10us(jitter: f64) -> (Model, oos_hal::dho::hz::Params, ReadOut, ReadOut) {
         use oos_hal::dho::{hz, seq::Settings};
-        let p = hz::Params { ratio: 1, rate: 625_000_000, memsel: 100_000, dot_fs: 1_600_000, seg: 16384, max_frames: 448, pre: 50_000, post: 50_000 };
+        let p = hz::Params {
+            ratio: 1,
+            rate: 625_000_000,
+            memsel: 100_000,
+            dot_fs: 1_600_000,
+            seg: 16384,
+            max_frames: 448,
+            pre: 50_000,
+            post: 50_000,
+        };
         let k = k_for(p.rate, 10e-6, p.memsel) as usize;
         assert_eq!(k, 15);
-        let mut m = Model::default();
-        m.tscale = tscales().iter().position(|&t| (t as f64 - 10e-6).abs() < 1e-11).unwrap();
+        let mut m = Model {
+            tscale: tscales().iter().position(|&t| (t as f64 - 10e-6).abs() < 1e-11).unwrap(),
+            ..Default::default()
+        };
         (m.trig_level, m.ch[0].on, m.ch[0].offset) = (0.0, true, 0.0);
         let vpd = m.ch[0].volts_per_div() as f64;
         let mut x = 7u32;
@@ -396,7 +436,14 @@ mod tests {
                 (32768.0 + v / vpd * 7500.0).round() as u16
             })
             .collect();
-        let raw_s = Settings { mask: 1, window: None, compress: 1, header: false, ch: [oos_hal::dho::seq::Chan { scale: vpd, offset: 0.0, ..Settings::default().ch[0] }; 4], ..Settings::default() };
+        let raw_s = Settings {
+            mask: 1,
+            window: None,
+            compress: 1,
+            header: false,
+            ch: [oos_hal::dho::seq::Chan { scale: vpd, offset: 0.0, ..Settings::default().ch[0] }; 4],
+            ..Settings::default()
+        };
         let comp_s = Settings { compress: k as u32, ..raw_s.clone() };
         let raw_bytes: Vec<u8> = codes.iter().flat_map(|c| c.to_le_bytes()).collect();
         let mut comp = pairs::model(&codes, k, pairs::LAYOUT);
@@ -430,7 +477,14 @@ mod tests {
             // 6.4 periods on screen, 13 edges: an edge may move by one column where the trigger on pairs (good to
             // about a pair, a quarter column) lands on the other side of a column boundary. Host: 0, 2 and 4 columns;
             // the record path drew 8 to 13 columns differently.
-            assert!(off.len() <= 4, "dots {} jitter {}: {} columns differ: {:?}", dots, jitter, off.len(), &off[..off.len().min(40)]);
+            assert!(
+                off.len() <= 4,
+                "dots {} jitter {}: {} columns differ: {:?}",
+                dots,
+                jitter,
+                off.len(),
+                &off[..off.len().min(40)]
+            );
         }
     }
 
@@ -445,14 +499,31 @@ mod tests {
             crate::perfguard::ROUNDS,
             25,
             || {
-                std::hint::black_box(crate::drawpipe::draw_frame(&mut pa, &m, &crate::board::dho::hw::decode(&raw_bytes, &raw_s, &p, 0), None));
+                std::hint::black_box(crate::drawpipe::draw_frame(
+                    &mut pa,
+                    &m,
+                    &crate::board::dho::hw::decode(&raw_bytes, &raw_s, &p, 0),
+                    None,
+                ));
             },
             || {
-                std::hint::black_box(crate::drawpipe::draw_frame(&mut pb, &m, &crate::board::dho::hw::decode(&comp_bytes, &comp_s, &p, 0), None));
+                std::hint::black_box(crate::drawpipe::draw_frame(
+                    &mut pb,
+                    &m,
+                    &crate::board::dho::hw::decode(&comp_bytes, &comp_s, &p, 0),
+                    None,
+                ));
             },
         );
         let r = comp.as_secs_f64() / raw.as_secs_f64();
-        println!("10 us/div 100 k pt, k = 15: raw {:?}/frame, compressed {:?}/frame (ratio {:.3}); read {} -> {} bytes", raw, comp, r, raw_bytes.len(), comp_bytes.len());
+        println!(
+            "10 us/div 100 k pt, k = 15: raw {:?}/frame, compressed {:?}/frame (ratio {:.3}); read {} -> {} bytes",
+            raw,
+            comp,
+            r,
+            raw_bytes.len(),
+            comp_bytes.len()
+        );
         assert!(r <= 0.25, "a compressed frame must cost far less than its raw frame: {:.3}", r);
     }
 
@@ -498,15 +569,24 @@ mod tests {
 
     #[test]
     fn opt_in_and_the_model_conditions() {
-        assert!(!enabled_from(None, ""));
-        assert!(enabled_from(None, "acq.compress = on\n"));
-        assert!(!enabled_from(Some("off"), "acq.compress = on\n"));
+        FLAG.check_both_files();
         let mut m = Model::default();
         m.ch[0].on = true;
         assert!(allowed(&m));
         m.dots = false;
         assert!(allowed(&m));
-        for f in [|m: &mut Model| m.trig_mode = TrigMode::Single, |m: &mut Model| m.acq = AcqMode::Average, |m: &mut Model| m.acq = AcqMode::HiRes, |m: &mut Model| m.acq = AcqMode::Peak, |m: &mut Model| m.zoom = true, |m: &mut Model| m.mask_on = true, |m: &mut Model| m.segments = 4, |m: &mut Model| m.trig_type = TrigType::Pulse, |m: &mut Model| m.ch[0].bw = BW_20M, |m: &mut Model| m.ch[0].coupling = Coupling::Ac] {
+        for f in [
+            |m: &mut Model| m.trig_mode = TrigMode::Single,
+            |m: &mut Model| m.acq = AcqMode::Average,
+            |m: &mut Model| m.acq = AcqMode::HiRes,
+            |m: &mut Model| m.acq = AcqMode::Peak,
+            |m: &mut Model| m.zoom = true,
+            |m: &mut Model| m.mask_on = true,
+            |m: &mut Model| m.segments = 4,
+            |m: &mut Model| m.trig_type = TrigType::Pulse,
+            |m: &mut Model| m.ch[0].bw = BW_20M,
+            |m: &mut Model| m.ch[0].coupling = Coupling::Ac,
+        ] {
             let mut x = m.clone();
             f(&mut x);
             assert!(!allowed(&x));

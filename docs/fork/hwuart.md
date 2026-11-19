@@ -2,7 +2,7 @@
 
 The UART protocol trigger in the TPU's receiver. Opt-in: `trig.serial_hw = on` in system.conf, read once at start,
 off by default. Code: `hal/src/dho/uarttrig.rs` (words, timing), `tpu::uart` (the write sequence),
-`seq::Trig::Uart`, `ui/src/board/dho/hw.rs` (`hw_uart`, `uart_debug`). Register facts: assumed, not
+`seq::Trig::Uart`, `ui/src/board/dho/hw/serial.rs` (`uart_of`, `uart_debug`). Register facts: assumed, not
 yet verified on hardware unless a step below says so.
 
 ## Hardware
@@ -81,5 +81,5 @@ Note `:SYSTem:DEBug:UART?` (expect `on,src=CH1,baud=115200,...,clocks=1356,r2100
 6. Inverted line: not offered by the UI (the software decoder has no idle-low setting). Skip.
 7. `trig.serial_hw = off`, restart: `:SYSTem:DEBug:UART?` returns `off,...`, the protocol trigger behaves as before.
 
-Record the results in `docs/fork/unit-dho804.md`.
+Record the results here.
 - SPI and I2C: `hwserial.md`.

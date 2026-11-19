@@ -366,9 +366,9 @@ fn the_slot_escapes_what_it_separates_with() {
     let raw = "tree;H@1:2:3:4;H!;100%3B";
     assert_eq!(super::views::unesc(&super::views::esc(raw)), raw);
     assert!(!super::views::esc(raw).contains(';'));
-    assert!(crate::ui::views::slot_checked("meas=Freq:1; studio_dock=x%3By; studio_state=pin=; lanes=R1 B").is_ok());
-    assert!(crate::ui::views::slot_checked("tdiv=3").is_err());
-    assert!(crate::ui::views::slot_checked("ch1.on=true").is_err(), "the scope is not part of a view");
+    assert!(crate::store::views::slot_checked("meas=Freq:1; studio_dock=x%3By; studio_state=pin=; lanes=R1 B").is_ok());
+    assert!(crate::store::views::slot_checked("tdiv=3").is_err());
+    assert!(crate::store::views::slot_checked("ch1.on=true").is_err(), "the scope is not part of a view");
 }
 
 

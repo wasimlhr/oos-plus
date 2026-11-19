@@ -20,10 +20,13 @@ mod reference_search_navigation_tests {
 
     #[test]
     fn stopped_reference_table_jumps_to_an_event_outside_the_current_main_window() {
-        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        let mut ui = crate::ui::testkit::demo_ui();
         ui.set_offline(true);
-        ui.refs[0] = Some(RefWave { src: 0, color: 0, label: "Long reference".into(), t0: -7e-6, dt: 2e-9,
-            v: ((0..1600).map(|i| if i % 16 < 8 { -1.0 } else { 1.0 }).collect::<Vec<_>>()).into(), vpd: 0.5, offset: 0.0, on: true });
+        ui.refs[0] = Some(RefWave {
+            label: "Long reference".into(),
+            vpd: 0.5,
+            ..RefWave::test((0..1600).map(|i| if i % 16 < 8 { -1.0 } else { 1.0 }).collect::<Vec<_>>(), 2e-9, -7e-6)
+        });
         ui.m.set_trigger_wave(WaveId::Ref(0), false);
         ui.m.trig_level = 0.0;
         ui.m.slope = Slope::Rise;
@@ -39,7 +42,10 @@ mod reference_search_navigation_tests {
         assert_eq!(events.len(), 100);
         let (rect, _) = ui.table_rect(events.len());
         ui.tap(rect.x + 16, rect.y + HEAD_H + 8);
-        assert!((ui.m.zdelay as f64 - events[0]).abs() < 1e-12, "detail must reach the stored event, not clamp back into the previous ADC window");
+        assert!(
+            (ui.m.zdelay as f64 - events[0]).abs() < 1e-12,
+            "detail must reach the stored event, not clamp back into the previous ADC window"
+        );
         assert!((ui.m.delay as f64 - events[0]).abs() < 1e-12, "overview follows an event outside its former range");
         assert_eq!(ui.m.run, RunState::Stop);
         assert_eq!(ui.replay.captures, 9);
@@ -51,7 +57,7 @@ mod reference_search_navigation_tests {
 }
 
 /// What Split puts under the plot. 0 is traces: two stacked windows, and this pane is not drawn.
-pub const PANES: [&str; 6] = ["Traces", "Spectrum", "Results", "Events", "Trend", "Bus view"];
+pub const PANES: [&str; PANES_N] = ["Traces", "Spectrum", "Results", "Events", "Trend", "Bus view"];
 pub(super) const PANE_SPECTRUM: usize = 1;
 pub(super) const PANE_RESULTS: usize = 2;
 pub(super) const PANE_EVENTS: usize = 3;
@@ -86,13 +92,23 @@ impl Ui {
             let Ok(p) = self.decode_packets_of(&m) else { continue };
             // a module may give a row per command
             if let Some(rows) = m.dec_proto.module().and_then(|x| x.events(&p, &m.dec_opts())) {
-                v.extend(rows.into_iter().map(|(t, text, ok)| EventRow { t, who: format!("D{} {}", k + 1, m.dec_proto.name()), text, ok }));
+                v.extend(rows.into_iter().map(|(t, text, ok)| EventRow {
+                    t,
+                    who: format!("D{} {}", k + 1, m.dec_proto.name()),
+                    text,
+                    ok,
+                }));
                 continue;
             }
             for x in p.iter() {
                 let text = packet_tag(&m, x).map_or_else(|| packet_text(&m, x), |t| t.to_string());
                 let source = if m.dec_on_la() { String::new() } else { format!(" {}", decode_source_name(m.dec_src)) };
-                v.push(EventRow { t: x.t0, who: format!("D{} {}{}", k + 1, m.dec_proto.name(), source), text, ok: x.ok });
+                v.push(EventRow {
+                    t: x.t0,
+                    who: format!("D{} {}{}", k + 1, m.dec_proto.name(), source),
+                    text,
+                    ok: x.ok,
+                });
             }
         }
         v.sort_by(|a, b| a.t.total_cmp(&b.t));
@@ -104,7 +120,12 @@ impl Ui {
     }
 
     fn search_row(&self, index: usize, t: f64) -> EventRow {
-        EventRow { t, who: format!("{} #{}", self.trigger_source_label(), index + 1), text: self.m.trig_type.name().to_string(), ok: true }
+        EventRow {
+            t,
+            who: format!("{} #{}", self.trigger_source_label(), index + 1),
+            text: self.m.trig_type.name().to_string(),
+            ok: true,
+        }
     }
 
     /// Whether the decoder events are on the screen: the Events pane. They also had a table over the plot, with three
@@ -139,7 +160,11 @@ impl Ui {
 
     /// The decoder events as text, one per line: time, decoder, content (SCPI).
     pub fn events_text(&self) -> String {
-        self.decode_events().iter().map(|r| format!("{:e},{},{},{}", r.t, r.who, r.text, if r.ok { "ok" } else { "error" })).collect::<Vec<_>>().join("\n")
+        self.decode_events()
+            .iter()
+            .map(|r| format!("{:e},{},{},{}", r.t, r.who, r.text, if r.ok { "ok" } else { "error" }))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     pub(super) fn table_rows(&self, k: TableKind) -> Vec<EventRow> {
@@ -175,7 +200,11 @@ impl Ui {
 
     /// The number of rows of the open table.
     fn table_total(&self, k: TableKind) -> usize {
-        if k == TableKind::Search { self.search_events().len() } else { self.table_rows(k).len() }
+        if k == TableKind::Search {
+            self.search_events().len()
+        } else {
+            self.table_rows(k).len()
+        }
     }
 
     /// The scroll bar of the open table and its rows.
@@ -263,13 +292,27 @@ impl Ui {
     pub(super) fn draw_table(&self, cv: &mut Canvas) {
         let Some(k) = self.table else { return };
         let f = self.fonts();
-        let (total, mut rows) = if k == TableKind::Search { (self.search_events().len(), Vec::new()) }
-            else { let rows = self.table_rows(k); (rows.len(), rows) };
+        let (total, mut rows) = if k == TableKind::Search {
+            (self.search_events().len(), Vec::new())
+        } else {
+            let rows = self.table_rows(k);
+            (rows.len(), rows)
+        };
         let (r, fit) = self.table_rect(total);
         let top = self.table_top.min(total.saturating_sub(fit));
         if k == TableKind::Search {
-            rows = self.search_events().iter().copied().enumerate().skip(top).take(fit).map(|(i, t)| self.search_row(i, t)).collect();
-        } else { rows = rows.into_iter().skip(top).take(fit).collect(); }
+            rows = self
+                .search_events()
+                .iter()
+                .copied()
+                .enumerate()
+                .skip(top)
+                .take(fit)
+                .map(|(i, t)| self.search_row(i, t))
+                .collect();
+        } else {
+            rows = rows.into_iter().skip(top).take(fit).collect();
+        }
         cv.round(r, 6, CARD_BORDER, 255);
         cv.round(r.inset(1), 5, BAR, 240);
         // docked, the title and its count are in the title strip of the view
@@ -330,7 +373,9 @@ impl Ui {
             let i = self.table_top + ((y - r.y - self.head_h(r)) / ROW_H) as usize;
             if k == TableKind::Segments && i < rows.len() {
                 self.seg_show(i);
-            } else if let Some(t) = events.as_ref().and_then(|events| events.get(i).copied()).or_else(|| rows.get(i).map(|event| event.t)) {
+            } else if let Some(t) =
+                events.as_ref().and_then(|events| events.get(i).copied()).or_else(|| rows.get(i).map(|event| event.t))
+            {
                 self.go_to_time(t);
             }
         }
@@ -352,7 +397,9 @@ impl Ui {
                 let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
                 if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
                     self.m.delay = t as f32;
-                    if let Some(saved) = self.zoom_saved.as_mut() { saved.2 = t as f32; }
+                    if let Some(saved) = self.zoom_saved.as_mut() {
+                        saved.2 = t as f32;
+                    }
                 }
             }
             self.m.zdelay = t as f32;
@@ -405,7 +452,11 @@ impl Ui {
         // the plot keeps its height; with many LA lanes there may be no room left
         let room = self.plot_base() - self.la_strip_h() - 160;
         let h = (self.frame().body.h * 2 / 5).min(room);
-        if h < 100 { 0 } else { h.min(self.pane_want() + 4) }
+        if h < 100 {
+            0
+        } else {
+            h.min(self.pane_want() + 4)
+        }
     }
 
     /// The second pane: under the plot and the lanes.

@@ -68,7 +68,6 @@ impl Window {
     }
 }
 
-#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 impl Cores {
     /// Takes the core offsets off the words `w` of channel `key.1`. Returns the turn applied (word k had the offset
     /// of phase (k + turn) % 8 of the learnt pattern), None when the frame was left as it is.
@@ -110,7 +109,7 @@ impl Cores {
     }
 
     /// The learnt pattern of `key` (codes, phase 0 first) and the samples it stands for.
-    #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
+    #[cfg(test)]
     pub fn pattern(&self, key: Key) -> Option<([f64; P], f64)> {
         self.learnt.get(&key).map(|e| (e.l, e.n))
     }
@@ -133,7 +132,7 @@ fn take_off(w: &mut [u16], l: &[f64; P], turn: usize) {
 /// A frame's own estimate of the pattern: the Hann-weighted mean of each phase k % 8 of the first `LOOK` words, less
 /// the mean of the 8 (a windowed DFT at the multiples of a 8th of the rate). With the samples it used; None for short
 /// frames.
-#[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
+#[cfg(test)]
 pub fn estimate(w: &[u16]) -> Option<([f64; P], f64)> {
     estimate_with(w, &mut Window::default())
 }
@@ -194,8 +193,17 @@ mod tests {
     /// A frame of n words: a sine of `amp` codes at `cyc` cycles a sample, noise of 90 codes, the pattern starting at
     /// phase `turn`.
     fn frame(rng: &mut Rng, n: usize, amp: f64, cyc: f64, turn: usize, pat: &[f64; P]) -> Vec<u16> {
-        let ph = rng.next() * 6.283;
-        (0..n).map(|k| (32768.0 + amp * (6.283185307 * cyc * k as f64 + ph).sin() + 90.0 * rng.gauss() + pat[(k + turn) % P]).round().clamp(0.0, 65535.0) as u16).collect()
+        let ph = rng.next() * std::f64::consts::TAU;
+        (0..n)
+            .map(|k| {
+                (32768.0
+                    + amp * (std::f64::consts::TAU * cyc * k as f64 + ph).sin()
+                    + 90.0 * rng.gauss()
+                    + pat[(k + turn) % P])
+                    .round()
+                    .clamp(0.0, 65535.0) as u16
+            })
+            .collect()
     }
 
     /// The pattern left in a corrected frame, measured on a long copy without signal: rms of the 8 phases.

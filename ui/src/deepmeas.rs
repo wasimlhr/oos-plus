@@ -49,22 +49,17 @@ pub fn enabled() -> bool {
         return on;
     }
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *ON.get_or_init(|| {
-        let env = std::env::var("OOS_DEEP_RAW").ok().map(|v| if v.is_empty() || v == "0" { "off" } else { "on" });
-        let conf = crate::sysconf::fork_text();
-        enabled_from(env, &conf)
-    })
+    *ON.get_or_init(|| !OFF.get())
 }
 
-/// `env` if set, else the `meas.deep_raw` line of `conf`; on unless `off`.
-pub fn enabled_from(env: Option<&str>, conf: &str) -> bool {
-    crate::drawpipe::conf_value(env, conf, "meas.deep_raw").as_deref() != Some("off")
-}
+/// Off: the switch of `enabled` reads `off`.
+const OFF: crate::sysconf::Flag = crate::sysconf::Flag { key: "meas.deep_raw", env: Some("OOS_DEEP_RAW"), on: "off" };
 
 /// The request for the model: on, and a shown measurement (or the software DVM) needs samples. Normal acquisition
 /// only: in Peak the memory holds peak pairs, not samples; Average and High res have their own records.
 pub fn want(m: &Model) -> Option<Want> {
-    let needs = m.meas.iter().any(|&(k, s)| s.ch().is_some_and(|c| m.ch[c].on) && crate::framestats::needs_samples(k)) || (m.dvm_on && m.ch[m.dvm_src].on);
+    let needs = m.meas.iter().any(|&(k, s)| s.ch().is_some_and(|c| m.ch[c].on) && crate::framestats::needs_samples(k))
+        || (m.dvm_on && m.ch[m.dvm_src].on);
     (enabled() && needs && m.acq == AcqMode::Normal).then_some(Want { every: m.trig_mode == TrigMode::Single })
 }
 
@@ -92,13 +87,15 @@ pub fn fits(rate: f64, tdiv: f64, memsel: usize, channels: usize) -> bool {
 /// record (at most about `PERIOD` old).
 pub fn hold(m: &Model, f: Option<&Frame>) -> bool {
     let Some(f) = f.filter(|f| deep_pairs(f)) else { return false };
-    // the thread reads no raw window while the LA records (`deep_raw_settings` in board/dho/hw.rs): holding for one
-    // would freeze the measurements
+    // the thread reads no raw window while the LA records (`deep_raw_settings` in board/dho/hw/plan.rs): holding for
+    // one would freeze the measurements
     if m.la_on() {
         return false;
     }
     let channels = f.ch.iter().filter(|v| !v.is_empty()).count();
-    m.run == RunState::Run && want(m).is_some_and(|w| !w.every) && fits(f.acq.0, m.hw_time_per_div() as f64, f.acq.1, channels)
+    m.run == RunState::Run
+        && want(m).is_some_and(|w| !w.every)
+        && fits(f.acq.0, m.hw_time_per_div() as f64, f.acq.1, channels)
 }
 
 /// Least time between two raw deep reads of `bytes`: `PERIOD` per `PERIOD_BYTES`, at least `PERIOD`.
@@ -117,15 +114,18 @@ mod tests {
     use super::*;
 
     fn deep(envelope: bool) -> Frame {
-        Frame { envelope, acq: (1.25e9, 10_000_000), ch: [vec![0.0; 16], Vec::new(), Vec::new(), Vec::new()], ..Default::default() }
+        Frame {
+            envelope,
+            acq: (1.25e9, 10_000_000),
+            ch: [vec![0.0; 16], Vec::new(), Vec::new(), Vec::new()],
+            ..Default::default()
+        }
     }
 
     #[test]
     fn asked_for_only_when_on_and_a_measurement_needs_samples() {
-        assert!(enabled_from(None, ""), "on by default");
-        assert!(!enabled_from(None, "meas.deep_raw = off\n"));
-        assert!(enabled_from(None, "meas.deep_raw = on\n"));
-        assert!(!enabled_from(Some("off"), "meas.deep_raw = on\n"));
+        OFF.check_both_files();
+        assert!(!OFF.of(None, "meas.deep_raw = on\n"));
         force(Some(true));
         let mut m = Model::default();
         m.ch[0].on = true;
@@ -157,7 +157,10 @@ mod tests {
         // 10 M at 1 ms/div: the 10 M record is the window, 20 MB
         assert!(hold(&m, Some(&deep(true))));
         assert!(!hold(&m, Some(&deep(false))), "a raw record is measured");
-        assert!(!hold(&m, Some(&Frame { acq: (1.25e9, 1_000_000), ..deep(true) })), "live compression: the newest frame is raw anyway");
+        assert!(
+            !hold(&m, Some(&Frame { acq: (1.25e9, 1_000_000), ..deep(true) })),
+            "live compression: the newest frame is raw anyway"
+        );
         assert!(!hold(&m, None));
         m.run = RunState::Stop;
         assert!(!hold(&m, Some(&deep(true))));

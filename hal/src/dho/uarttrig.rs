@@ -18,7 +18,7 @@ pub const BIT_HI: u32 = 0x221c;
 pub const MUX: u32 = 4;
 
 /// FPGA clock of the receiver (adc156), Hz.
-pub const CLOCK_HZ: f64 = 156.25e6;
+pub const CLOCK_HZ: f64 = crate::dho::clock::NOMINAL_FPGA_HZ as f64;
 const BIT_LO_BITS: u32 = 21;
 const BIT_LO_MASK: u32 = (1 << BIT_LO_BITS) - 1;
 const BIT_HI_MASK: u32 = 0x7ff;
@@ -200,7 +200,11 @@ mod tests {
             (u(Cond::Data(Relation::Out, 0x30, 0x39)), 1 | 5 << 2, 7 | 0x30 << 3 | 0x39 << 11),
             (u(Cond::Error(ErrKind::Parity)), 2, 7),
             (u(Cond::Error(ErrKind::Either)), 2 | 2 << 5, 7),
-            (Uart { bits: 7, parity: Parity::Even, stop: Stop::Two, ..u(Cond::Error(ErrKind::Framing)) }, 2 | 1 << 5 | 1 << 7 | 2 << 9, 6),
+            (
+                Uart { bits: 7, parity: Parity::Even, stop: Stop::Two, ..u(Cond::Error(ErrKind::Framing)) },
+                2 | 1 << 5 | 1 << 7 | 2 << 9,
+                6,
+            ),
             (Uart { bits: 5, parity: Parity::Odd, stop: Stop::OneHalf, ..u(Cond::Start) }, 2 << 7 | 1 << 9, 4),
         ];
         for (x, hi, data) in cases {
@@ -215,7 +219,10 @@ mod tests {
         let pipe = 4.0 / 156.25e6;
         assert!((event_s(&u(Cond::Start)) - (0.6 * bit + pipe)).abs() < 1e-12);
         assert!((event_s(&u(Cond::Data(Relation::Eq, 0, 0))) - (8.7 * bit + pipe)).abs() < 1e-12);
-        assert!((event_s(&Uart { parity: Parity::Even, ..u(Cond::Error(ErrKind::Either)) }) - (10.7 * bit + pipe)).abs() < 1e-12);
+        assert!(
+            (event_s(&Uart { parity: Parity::Even, ..u(Cond::Error(ErrKind::Either)) }) - (10.7 * bit + pipe)).abs()
+                < 1e-12
+        );
         // the software point is the end of the stop bit: 10 bit times for 8N1
         assert!((sw_offset_s(&u(Cond::Start)) - (9.4 * bit - pipe)).abs() < 1e-12);
         assert!((sw_offset_s(&u(Cond::Data(Relation::Eq, 0, 0))) - (1.3 * bit - pipe)).abs() < 1e-12);

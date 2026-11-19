@@ -1101,8 +1101,8 @@ fn meas_audit_table() {
         u.m.cat.clear();
         u.meas_src = WaveId::Ch(0);
         u.meas_src_b = WaveId::Ch(1);
-        u.cat_c = WaveId::Ch(2);
-        u.cat_d = WaveId::Ch(3);
+        u.cat.c = WaveId::Ch(2);
+        u.cat.d = WaveId::Ch(3);
         for _ in 0..6 { u.step(0.04); }
         u.catalog_add(def);
         let end = std::time::Instant::now() + std::time::Duration::from_secs(8);
@@ -1734,12 +1734,12 @@ fn remote_services_are_sheets_and_connectivity_leads_to_them() {
         let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
         for it in u.items(MenuId::Remote) { assert!(on_sheet.contains(&it), "{layout:?}: {it:?} is on the sheet"); }
         // a switch acts on one tap
-        let (kind, (x, y)) = row(&u, Item::RemTelnet);
-        assert!(kind == RowKind::Toggle && u.sys.remote_telnet);
+        let (kind, (x, y)) = row(&u, Item::RemVxi);
+        assert!(kind == RowKind::Toggle && u.sys.remote_vxi11);
         tap(&mut u, x, y);
-        assert!(!u.sys.remote_telnet, "{layout:?}: telnet off");
+        assert!(!u.sys.remote_vxi11, "{layout:?}: VXI-11 off");
         tap(&mut u, x, y);
-        assert!(u.sys.remote_telnet, "{layout:?}: and on again");
+        assert!(u.sys.remote_vxi11, "{layout:?}: and on again");
         // the addresses say whose they are
         assert_eq!(u.sheet_label(Item::RemScpiInfo), "SCPI port");
         assert_eq!(u.sheet_label(Item::NetWeb), "Web address");

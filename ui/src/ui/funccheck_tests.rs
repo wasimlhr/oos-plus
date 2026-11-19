@@ -158,7 +158,7 @@ fn ui_fields(u: &Ui) -> BTreeMap<&'static str, String> {
     v.insert("power_dlg", format!("{}", u.power_dlg));
     v.insert("panel_tx", format!("{}", u.panel_tx.len()));
     v.insert("table", format!("{}", u.table.is_some()));
-    v.insert("cat", format!("{}/{}/{}", u.cat_tab, u.cat_sel, u.cat_scroll));
+    v.insert("cat", format!("{}/{}/{}", u.cat.tab, u.cat.sel, u.cat.scroll));
     v.insert("single_armed", format!("{}", u.single_armed));
     v.insert("cleared", format!("{}", u.cleared));
     v.insert("refs", format!("{:?}", u.refs.iter().map(|r| r.as_ref().map(|r| (r.on, r.color))).collect::<Vec<_>>()));
