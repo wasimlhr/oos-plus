@@ -3001,3 +3001,43 @@ fn add_results_table_offers_the_three_tables() {
     let on = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { ref s, bound: Some(b), .. } if s == "On" && b.y == row.y));
     assert!(on, "the row does not say On with the decoder events on the screen");
 }
+
+/// With AC trigger coupling the level counts from the signal's mean. Changing the coupling in the menu keeps the level
+/// at the same place of the signal, and the push of the level knob (50 %) gives the middle counted from that mean. The
+/// level stayed as set with DC coupling, where the signal without its DC part never reached it: the trigger stopped
+/// (a forum report on 0.1.13, and seen on a unit, 2026-11-18).
+#[test]
+fn the_trigger_level_follows_the_signals_mean_with_ac_coupling() {
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    u.m.ch[2].on = true;
+    u.m.trig_src = 2;
+    u.relayout();
+    for _ in 0..8 { u.step(0.1); }
+    let s = u.stats[2];
+    assert!(s.valid, "the demo's line on CH3");
+    let (mid, mean) = (crate::wave::mid_level(&s), s.vavg);
+    assert!(mean > 1.0 && (mid - mean).abs() > 0.05, "a signal with a mean far from 0 V that is not its middle: mid {mid} mean {mean}");
+    // DC: the middle in volts
+    u.key(key::TLEVEL_CW + 2);
+    assert!((u.m.trig_level - mid).abs() < 0.05, "{} {mid}", u.m.trig_level);
+    assert_eq!(u.trig_level_base(), 0.0);
+    // to AC in the menu: the level moves by the mean and stays on the same place of the signal
+    let at = u.m.trig_level;
+    u.adjust(Item::TrigCoup, 1);
+    assert_eq!(u.m.trig_coup, TrigCoup::Ac);
+    assert!((u.trig_level_base() - mean).abs() < 0.2);
+    assert!((u.m.trig_level + u.trig_level_base() - at).abs() < 1e-4, "{} + {} against {at}", u.m.trig_level, u.trig_level_base());
+    // the push of the knob with AC coupling: the middle, counted from the mean
+    u.m.trig_level = 9.0;
+    u.key(key::TLEVEL_CW + 2);
+    let s = u.stats[2];
+    assert!((u.m.trig_level - (crate::wave::mid_level(&s) - s.vavg)).abs() < 0.05, "{}", u.m.trig_level);
+    // on through LF reject and HF reject back to DC: in volts again
+    let place = u.m.trig_level + u.trig_level_base();
+    u.adjust(Item::TrigCoup, 1);
+    assert_eq!(u.m.trig_coup, TrigCoup::LfReject);
+    assert!((u.m.trig_level + u.trig_level_base() - place).abs() < 1e-4);
+    u.adjust(Item::TrigCoup, 1);
+    assert_eq!((u.m.trig_coup, u.trig_level_base()), (TrigCoup::HfReject, 0.0));
+    assert!((u.m.trig_level - place).abs() < 1e-4, "HF reject counts in volts: {} {place}", u.m.trig_level);
+}

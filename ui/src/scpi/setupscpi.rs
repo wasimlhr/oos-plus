@@ -615,6 +615,22 @@ mod tests {
     }
 
     /// The "Equivalent header" column of `docs/scpi/setup-keys.md` names the headers of the rows.
+    /// A remote command changes the trigger coupling alone: the level a program has set stays as it set it (the menu
+    /// moves the level by the signal's mean, `Ui::trig_level_base`, so that it stays on the same place of the signal).
+    #[test]
+    fn the_coupling_command_leaves_the_trigger_level() {
+        let (mut s, mut ui, cv) = session();
+        for _ in 0..6 {
+            ui.step(0.1);
+        }
+        s.exec_cmd(&mut ui, &cv, ":TRIGger:EDGE:LEVel 0.7");
+        s.exec_cmd(&mut ui, &cv, ":TRIGger:COUPling AC");
+        assert!(s.err.is_empty(), "{:?}", s.err);
+        assert_eq!((ui.m.trig_coup, ui.m.trig_level), (TrigCoup::Ac, 0.7));
+        s.exec_cmd(&mut ui, &cv, ":TRIGger:COUPling DC");
+        assert_eq!((ui.m.trig_coup, ui.m.trig_level), (TrigCoup::Dc, 0.7));
+    }
+
     #[test]
     fn the_setup_keys_page_names_the_headers_of_the_rows() {
         let page = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi/setup-keys.md")).unwrap();
