@@ -85,8 +85,10 @@ fn rows_of(m: &Model, who: &str, p: &[Packet], view: EvView) -> Vec<MsgRow> {
                 let tag = packet_tag(m, x);
                 let text = tag.map_or_else(|| packet_text(m, x), str::to_string);
                 // beside a character its value; a byte without a character is shown as its value already
-                let hex = if ascii && tag.is_none() && x.kind == DecKind::Data && text != hex(x) { hex(x) } else { String::new() };
-                MsgRow { t: x.t0, who: who.to_string(), len: usize::from(tag.is_none()), text, hex, errors: usize::from(!x.ok) }
+                let character = ascii && tag.is_none() && x.kind == DecKind::Data && text != hex(x);
+                let hex = if character { hex(x) } else { String::new() };
+                let (len, errors) = (usize::from(tag.is_none()), usize::from(!x.ok));
+                MsgRow { t: x.t0, who: who.to_string(), len, text, hex, errors }
             })
             .collect();
     }
@@ -137,7 +139,10 @@ impl Ui {
             let Ok(p) = self.decode_packets_of(&m) else { continue };
             let who = format!("D{} {}", k + 1, m.dec_proto.name());
             match m.dec_proto.module().and_then(|x| x.events(&p, &m.dec_opts())) {
-                Some(rows) => v.extend(rows.into_iter().map(|(t, text, ok)| MsgRow { t, who: who.clone(), len: 1, text, hex: String::new(), errors: usize::from(!ok) })),
+                Some(rows) => v.extend(rows.into_iter().map(|(t, text, ok)| {
+                    let (hex, errors) = (String::new(), usize::from(!ok));
+                    MsgRow { t, who: who.clone(), len: 1, text, hex, errors }
+                })),
                 None => v.extend(rows_of(&m, &who, &p, self.pn.ev_view)),
             }
         }
@@ -174,14 +179,19 @@ impl Ui {
         (Rect::new(r.x, r.y + HEAD + TITLES, r.w, fit * tables::ROW_H), fit as usize)
     }
 
+    /// The scroll bar beside the rows `area`, of which `fit` are on the screen.
+    fn events_scroll(&self, area: Rect, fit: usize) -> scroll::Bar {
+        let track = Rect::new(area.x + area.w - scroll::BAR_W - 2, area.y, scroll::BAR_W, area.h);
+        scroll::Bar { track, total: self.events_count() as i32, shown: fit as i32, pos: self.pn.ev_top as i32 }
+    }
+
     /// The scroll bar of the Events pane and its rows, while the pane shows them.
     pub(super) fn events_bar(&self) -> Option<(scroll::Bar, Rect)> {
         if self.pane_h() == 0 || self.m.pane != tables::PANE_EVENTS {
             return None;
         }
         let (rows, fit) = Self::events_rows(self.pane_rect());
-        let track = Rect::new(rows.x + rows.w - scroll::BAR_W - 2, rows.y, scroll::BAR_W, rows.h);
-        Some((scroll::Bar { track, total: self.events_count() as i32, shown: fit as i32, pos: self.pn.ev_top as i32 }, rows))
+        Some((self.events_scroll(rows, fit), rows))
     }
 
     /// A tap on the Events pane: a view, Errors only, or a row (the view moves to it).
@@ -241,7 +251,7 @@ impl Ui {
             cv.text(&f.sb, r.x + 12, r.y + HEAD + 17, note, DIM);
             return;
         }
-        let bar = scroll::Bar { track: Rect::new(area.x + area.w - scroll::BAR_W - 2, area.y, scroll::BAR_W, area.h), total: n as i32, shown: fit as i32, pos: self.pn.ev_top as i32 };
+        let bar = self.events_scroll(area, fit);
         let top = bar.top() as usize;
         let shown: Vec<&MsgRow> = self.events_listed().skip(top).take(fit).collect();
         // the columns: number, time, decoder, length, text, hex, status. A narrow pane keeps number, time, text, status
@@ -255,7 +265,15 @@ impl Ui {
         let end = area.right() - if bar.needed() { scroll::BAR_W + 4 } else { 8 };
         let free = (end - w_status - (r.x + 12) - widths.iter().sum::<i32>()).max(0);
         let w_text = if hex_on { free * 2 / 5 } else { free };
-        let cols = [("#", widths[0]), ("Time", widths[1]), ("Source", w_who), ("Len", w_len), ("Text", w_text), ("Hex", free - w_text), ("Status", w_status)];
+        let cols = [
+            ("#", widths[0]),
+            ("Time", widths[1]),
+            ("Source", w_who),
+            ("Len", w_len),
+            ("Text", w_text),
+            ("Hex", free - w_text),
+            ("Status", w_status),
+        ];
         let mut x = r.x + 12;
         for (title, w) in cols {
             if w > 0 {
@@ -275,8 +293,10 @@ impl Ui {
                 k => format!("{} errors", k),
             };
             let len = if e.len > 0 { e.len.to_string() } else { String::new() };
-            let texts = [(top + i + 1).to_string(), si(e.t, "s"), e.who.clone(), len, e.text.clone(), e.hex.clone(), status];
-            let inks = [DIM, LABEL, DIM, LABEL, if e.errors > 0 { RED } else { TEXT }, LABEL, if e.errors > 0 { RED } else { GREEN }];
+            let number = (top + i + 1).to_string();
+            let texts = [number, si(e.t, "s"), e.who.clone(), len, e.text.clone(), e.hex.clone(), status];
+            let (ink, mark) = if e.errors > 0 { (RED, RED) } else { (TEXT, GREEN) };
+            let inks = [DIM, LABEL, DIM, LABEL, ink, LABEL, mark];
             let mut x = r.x + 12;
             for (k, (_, w)) in cols.iter().enumerate() {
                 if *w > 0 {
@@ -314,8 +334,8 @@ mod tests {
         p[1].ok = false;
         let m = uart();
         let msgs = rows_of(&m, "D1 UART", &p, EvView::Messages);
-        assert_eq!(msgs.iter().map(|e| (e.t, e.len, e.text.as_str(), e.hex.as_str(), e.errors)).collect::<Vec<_>>(),
-            [(0.0, 3, "Hi\\n", "48 69 0A", 1), (20.0, 2, "yo", "79 6F", 0)]);
+        let shown: Vec<_> = msgs.iter().map(|e| (e.t, e.len, e.text.as_str(), e.hex.as_str(), e.errors)).collect();
+        assert_eq!(shown, [(0.0, 3, "Hi\\n", "48 69 0A", 1), (20.0, 2, "yo", "79 6F", 0)]);
         let fields = rows_of(&m, "D1 UART", &p, EvView::Fields);
         assert_eq!(fields.len(), 5);
         assert_eq!((fields[0].text.as_str(), fields[0].hex.as_str(), fields[1].errors), ("H", "48", 1));
@@ -329,7 +349,8 @@ mod tests {
         let mut hexm = uart();
         hexm.dec_ascii = false;
         let rows = rows_of(&hexm, "D1 UART", &p, EvView::Lines);
-        assert_eq!(rows.iter().map(|e| (e.text.as_str(), e.hex.as_str())).collect::<Vec<_>>(), [("48 69 0A", ""), ("79 6F", "")]);
+        let shown: Vec<_> = rows.iter().map(|e| (e.text.as_str(), e.hex.as_str())).collect();
+        assert_eq!(shown, [("48 69 0A", ""), ("79 6F", "")]);
     }
 
     /// The Events pane lists the demo's UART line as messages, switches to fields by a tap on its head, and a tap on

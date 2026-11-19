@@ -362,6 +362,15 @@ Changed:
   source ("D1 UART"), right of the channel markers, which covered it. The boxes are 24 px tall (20) with bold
   text; a band takes 32 px of the plot (28). In a Stacked lane without time labels the band stands at the foot of
   the lane.
+- Decoders: the Events pane lists messages (host-tested; the UART decoder (unit), 2026-11-19; the other decoders
+  not yet verified on hardware). It had a row per field in two columns of small text, cut off where the pane ended.
+  Its head now chooses what a row is: Messages (what the band on the plot puts into one box), Fields (as before) or
+  Lines (a UART line shown as ASCII, split at its line feeds; other decoders list their messages), and Errors only
+  leaves the rows with a failed check. The rows have columns: number, time, decoder, number of fields, text, the
+  bytes in hex beside a character text, and OK or the number of errors. The list scrolls by its bar or the finger,
+  and a tap on a row moves the view to it. The event table over the plot lists the same rows. `:DECode:EVENts?`,
+  `:BUS<n>:DATA?` and the CSV export are unchanged, a row per field. The view and the filter are kept while the
+  scope is on, not yet in the set-up, and have no remote command yet.
 - UART decoder: at a time base where a bit is 12 px or wider, the band has a row of bits above its boxes
   (host-tested; (unit), 2026-11-19: the bits of three characters read against the trace): Start, the data bits in
   the order they came, the parity bit and Stop, each as wide as it was on the line, and a mark on the threshold
