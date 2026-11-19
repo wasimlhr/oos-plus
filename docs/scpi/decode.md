@@ -21,7 +21,7 @@ Part of the [SCPI reference](README.md).
 | `:DECode:CS` | Set / Query | Chip-select role; optional roles accept `NONE`. Roles depend on the protocol. | `CHAN2` | Decode > CS | OOS extension |
 | `:DECode:SOURce4` | Set / Query | Fourth role; optional, `NONE` clears it. | `NONE` | Decode and bus > Source / clock / CS / source 4 / B line | OOS extension |
 | `:DECode:DIFFerential` | Set / Query | Differential (B line) role; optional, `NONE` clears it. | `NONE` | Decode and bus > Source / clock / CS / source 4 / B line | OOS extension |
-| `:DECode:THReshold` | Set / Query | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. `AUTO` sets it once to the middle of the signal on the decoder's source, half way between the lowest and the highest sample of the record on the screen (-230 without a signal); the query answers the value. | `1.650000E+00` | Decode > Threshold | OOS extension |
+| `:DECode:THReshold` | Set / Query | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. `AUTO` sets it once to the middle of the signal on the decoder's source, half way between the lowest and the highest sample of the record on the screen, and each further line's to the middle of its own (-230 without a signal); the query answers the value. | `1.650000E+00` | Decode > Threshold | OOS extension |
 | `:DECode:CPHY:RATE` | Set / Query | `AUTO` or known symbols/second; aliases CPHY:SRATe and DECode:SRATe. | `AUTO` | Decode and bus > C-PHY symbol rate | OOS extension |
 | `:DECode:BUSY` | Query | Worker readiness, without changing acquisition. | `0` | Decode and bus > Read decoded events | OOS extension |
 | `:DECode:EVENts` | Query | Physical-time event rows, `BUSY` while pending, or an error if unavailable. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block. | empty | Decode and bus > Read decoded events | OOS extension |
@@ -37,7 +37,7 @@ Part of the [SCPI reference](README.md).
 | `:BUS<n>:DISPlay` | Set / Query | Boolean decoder visibility. | `0` | Decode > Decoder | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:FORMat` | Set / Query | `HEX\|ASCii`. | `ASC` | Decode > Format | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:EVENt` | Set / Query | Shared decode event-table visibility. | `0` | Decode and bus > Event table | Rigol-style (command family of the DHO guide) |
-| `:BUS<n>:THReshold` | Set / Query | Decoder threshold in source units. `AUTO` sets it once to the middle of the signal on the decoder's source (-230 without a signal); the query answers the value. | `1.650000E+00` | Decode > Threshold | Rigol-style (command family of the DHO guide) |
+| `:BUS<n>:THReshold` | Set / Query | Decoder threshold in source units. `<line>,<volts>` with line 2 to 4 sets the threshold of that line of the decoder alone (its second, third or fourth line, as Decode lists them), `<line>,DEF` gives it the decoder's again, and the query with a line number answers that line's. `AUTO` sets each line's once to the middle of its own signal (-230 without a signal on the main line); the query answers the value. | `1.650000E+00` | Decode > Threshold | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:DATA` | Query | Ready event rows in an IEEE block. `BUSY` while required decoding is pending; unavailable sources return an error. | - | Decode and bus > Read decoded events | Rigol-style (command family of the DHO guide) |
 
 ### UART, I2C and SPI

@@ -464,29 +464,82 @@ mod tests {
         assert!(!u.decode_items().contains(&Item::UartPol));
     }
 
-    /// SPI: the bits of a word LSB first, a data line whose low level is a 1, and the chip select's polarity among
-    /// the decoder's rows.
-    #[test]
-    fn spi_has_bit_order_and_data_polarity() {
-        // the word 9F, mode 0, 2 MHz, 3.3 V
+    /// An SPI word 9F on MOSI at 3.3 V, with the clock and the chip select at a tenth of that level.
+    fn spi_mixed_levels() -> (Model, [Vec<f32>; NCH], f64) {
         let [cs, clk, mosi, _] = oos_dsp::sim::spi_logic(&[(0x9f, 0xff)], 8, 0, 2e6, 0.0, 3.3);
         let dt = 25e-9;
-        let wave = |l: &oos_dsp::sim::Logic| -> Vec<f32> { oos_dsp::sim::sample(|t| l.v(t), 0.0, dt, 2400) };
-        let ch: [Vec<f32>; NCH] = [wave(&mosi), wave(&clk), wave(&cs), Vec::new()];
+        let wave = |l: &oos_dsp::sim::Logic, gain: f32| -> Vec<f32> {
+            oos_dsp::sim::sample(|t| l.v(t), 0.0, dt, 2400).into_iter().map(|v| v * gain).collect()
+        };
         let mut m = Model::default();
         m.dec_proto = Proto::SPI;
         (m.dec_src, m.dec_src2, m.dec_cs) = (0, 1, Some(2));
         (m.dec_bits, m.dec_mode, m.dec_thr) = (8, 0, 1.65);
-        let words = |m: &Model| -> Vec<u32> {
-            let p = crate::trig::decode(m, std::array::from_fn(|c| &ch[c][..]), dt).unwrap();
-            p.iter().filter(|x| x.kind == DecKind::Data).map(|x| x.value).collect()
-        };
         m.dec_opt = [0; crate::protocols::OPTS];
-        assert_eq!(words(&m), [0x9f]);
+        (m, [wave(&mosi, 1.0), wave(&clk, 0.1), wave(&cs, 0.1), Vec::new()], dt)
+    }
+
+    fn words(m: &Model, ch: &[Vec<f32>; NCH], dt: f64) -> Vec<u32> {
+        let p = crate::trig::decode(m, std::array::from_fn(|c| &ch[c][..]), dt).unwrap();
+        p.iter().filter(|x| x.kind == DecKind::Data).map(|x| x.value).collect()
+    }
+
+    /// Lines of different levels are read with a threshold each: a clock at a tenth of the data's level gives no
+    /// word at the decoder's threshold, and the word with its own. The set-up keeps a line's threshold, and `main`
+    /// for a line that has none.
+    #[test]
+    fn a_line_has_a_threshold_of_its_own() {
+        let (mut m, ch, dt) = spi_mixed_levels();
+        assert!(words(&m, &ch, dt).is_empty(), "the clock never reaches 1.65 V");
+        m.dec_thr_line = [Some(0.165), Some(0.165), None];
+        assert_eq!(words(&m, &ch, dt), [0x9f]);
+        assert_eq!((m.dec_thr_of(0), m.dec_thr_of(1), m.dec_thr_of(3)), (1.65, 0.165, 1.65));
+        let text = crate::store::setup_text(&m);
+        let has = |line: &str| text.lines().any(|l| l == line);
+        assert!(has("dec_thr2 = 0.165") && has("dec_thr4 = main"), "{text}");
+        let back = crate::store::parse_setup(&text).unwrap();
+        assert_eq!(back.dec_thr_line, m.dec_thr_line);
+        // the decoder keeps them when another decoder is edited and it comes back
+        m.dec_select(1);
+        assert_eq!(m.dec_thr_line, [None; 3]);
+        m.dec_select(0);
+        assert_eq!(m.dec_thr_line, [Some(0.165), Some(0.165), None]);
+    }
+
+    /// Threshold to middle sets each line's threshold to the middle of its own signal, and the sheet names the
+    /// rows by their lines.
+    #[test]
+    fn threshold_to_middle_is_each_lines_own() {
+        let (m, ch, dt) = spi_mixed_levels();
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        (u.m.dec_proto, u.m.dec_src, u.m.dec_src2, u.m.dec_cs) = (m.dec_proto, m.dec_src, m.dec_src2, m.dec_cs);
+        (u.m.dec_bits, u.m.dec_mode, u.m.dec_on) = (8, 0, true);
+        let (triggered, partial, pairs) = (true, false, false);
+        u.last[0] = Some(Record { t0: 0.0, dt, ch: ch.clone(), triggered, partial, raw: None, la: None, pairs });
+        let items = u.decode_items();
+        let lines: Vec<usize> = (1..4).filter(|&r| items.contains(&Item::DecThrLine(r))).collect();
+        assert_eq!(lines, [1, 2], "a threshold for the clock and the chip select, none for a fourth line");
+        let labels = [Item::DecThr, Item::DecThrLine(1), Item::DecThrLine(2)].map(|it| u.sheet_label(it));
+        assert_eq!(labels, ["MOSI threshold", "Clock threshold", "CS threshold"]);
+        u.dec_threshold_to_middle();
+        let near = |a: f32, b: f32| (a - b).abs() < 0.05 * b;
+        assert!(near(u.m.dec_thr, 1.65), "{}", u.m.dec_thr);
+        let own = u.m.dec_thr_line;
+        assert!(own[0].is_some_and(|t| near(t, 0.165)) && own[1].is_some_and(|t| near(t, 0.165)), "{own:?}");
+        assert_eq!(u.m.dec_thr_line[2], None, "a line the protocol has not keeps none");
+        assert_eq!(words(&u.m, &ch, dt), [0x9f], "and the word is read");
+    }
+
+    /// SPI: the bits of a word LSB first, a data line whose low level is a 1, and the chip select's polarity among
+    /// the decoder's rows.
+    #[test]
+    fn spi_has_bit_order_and_data_polarity() {
+        let (mut m, ch, dt) = spi_mixed_levels();
+        m.dec_thr_line = [Some(0.165), Some(0.165), None];
         m.dec_opt[0] = 1;
-        assert_eq!(words(&m), [0xf9], "9F with its bits the other way round");
+        assert_eq!(words(&m, &ch, dt), [0xf9], "9F with its bits the other way round");
         m.dec_opt = [0, 1, 0, 0];
-        assert_eq!(words(&m), [0x60], "9F with every bit inverted");
+        assert_eq!(words(&m, &ch, dt), [0x60], "9F with every bit inverted");
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.dec_proto = Proto::SPI;
         let items = u.decode_items();

@@ -1009,6 +1009,7 @@ pub struct DecCfg {
     pub la: [Option<u8>; 4],
     pub diff: Option<usize>,
     pub thr: f32,
+    pub thr_line: [Option<f32>; 3],
     pub ascii: bool,
     pub proto: Proto,
     pub src2: usize,
@@ -1390,6 +1391,9 @@ pub struct Model {
     pub trig_bus_val: u64,
     pub ser: SerialTrig,
     pub dec_thr: f32,
+    /// the thresholds of the second, third and fourth line of the decoder, where a line has one of its own; `None`:
+    /// the line takes `dec_thr`, as every line did before
+    pub dec_thr_line: [Option<f32>; 3],
     pub dec_ascii: bool,
     /// what the Events pane and the event table list: messages, fields or lines; and only the rows with a failed
     /// check (the pane). One choice for all decoders
@@ -1890,6 +1894,7 @@ impl Default for Model {
             trig_bus_val: 0x123,
             ser: SerialTrig::default(),
             dec_thr: 1.65,
+            dec_thr_line: [None; 3],
             dec_ascii: true,
             ev_view: EvView::Messages,
             ev_errors: false,
@@ -2437,8 +2442,19 @@ impl Model {
     }
 
     /// The settings of the decoder the menu edits.
+    /// The source of line `role` of the decoder (0: the main line), where the protocol has that line and it is set.
+    pub fn dec_role_src(&self, role: usize) -> Option<usize> {
+        self.dec_proto.roles().get(role).copied().flatten()?;
+        [Some(self.dec_src), Some(self.dec_src2), self.dec_cs, self.dec_src4][role]
+    }
+
+    /// The threshold of line `role` of the decoder: its own, or the decoder's.
+    pub fn dec_thr_of(&self, role: usize) -> f32 {
+        role.checked_sub(1).and_then(|k| self.dec_thr_line.get(k).copied().flatten()).unwrap_or(self.dec_thr)
+    }
+
     pub fn dec_cfg(&self) -> DecCfg {
-        DecCfg { on: self.dec_on.clone(), src: self.dec_src.clone(), baud: self.dec_baud.clone(), canrate: self.dec_canrate.clone(), canh: self.dec_canh.clone(), fdrate: self.dec_fdrate.clone(), arate: self.dec_arate.clone(), tick: self.dec_tick.clone(), nibbles: self.dec_nibbles.clone(), uspeed: self.dec_uspeed.clone(), cphy_rate: self.dec_cphy_rate, src4: self.dec_src4.clone(), la_in: self.dec_la_in.clone(), la: self.dec_la.clone(), diff: self.dec_diff.clone(), thr: self.dec_thr.clone(), ascii: self.dec_ascii.clone(), proto: self.dec_proto.clone(), src2: self.dec_src2.clone(), cs: self.dec_cs.clone(), mode: self.dec_mode.clone(), bits: self.dec_bits.clone(), parity: self.dec_parity.clone(), opt: self.dec_opt }
+        DecCfg { on: self.dec_on.clone(), src: self.dec_src.clone(), baud: self.dec_baud.clone(), canrate: self.dec_canrate.clone(), canh: self.dec_canh.clone(), fdrate: self.dec_fdrate.clone(), arate: self.dec_arate.clone(), tick: self.dec_tick.clone(), nibbles: self.dec_nibbles.clone(), uspeed: self.dec_uspeed.clone(), cphy_rate: self.dec_cphy_rate, src4: self.dec_src4.clone(), la_in: self.dec_la_in.clone(), la: self.dec_la.clone(), diff: self.dec_diff.clone(), thr: self.dec_thr.clone(), thr_line: self.dec_thr_line, ascii: self.dec_ascii.clone(), proto: self.dec_proto.clone(), src2: self.dec_src2.clone(), cs: self.dec_cs.clone(), mode: self.dec_mode.clone(), bits: self.dec_bits.clone(), parity: self.dec_parity.clone(), opt: self.dec_opt }
     }
 
     fn dec_load(&mut self, c: &DecCfg) {
@@ -2458,6 +2474,7 @@ impl Model {
         self.dec_la = c.la.clone();
         self.dec_diff = c.diff.clone();
         self.dec_thr = c.thr.clone();
+        self.dec_thr_line = c.thr_line;
         self.dec_ascii = c.ascii.clone();
         self.dec_proto = c.proto.clone();
         self.dec_src2 = c.src2.clone();

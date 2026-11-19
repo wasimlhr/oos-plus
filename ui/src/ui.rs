@@ -648,6 +648,8 @@ enum Item {
     DecThr,
     /// sets the threshold to the middle of the signal on the decoder's source, once
     DecThrMid,
+    /// the threshold of the decoder's second, third or fourth line (1..=3), where it is not the decoder's
+    DecThrLine(usize),
     DecFmt,
     DecProto,
     DecSrc2,
@@ -7597,6 +7599,8 @@ impl Ui {
             v.push(DecThr);
             // C-PHY has a level gap there, not a threshold between two levels
             if p != Proto::CPHY {
+                // the other lines the protocol has: each may have a threshold of its own
+                v.extend((1..4).filter(|&role| self.m.dec_role_src(role).is_some()).map(DecThrLine));
                 v.push(DecThrMid);
             }
         }
@@ -8042,7 +8046,7 @@ impl Ui {
             return k;
         }
         match it {
-            Item::LogIvl | Item::ChBias(_) | Item::ChSkew(_) | Item::RefColor | Item::CurC | Item::CurD | Item::RefSel | Item::RefVpd | Item::RefOffset | Item::MathLinA | Item::MathLinB | Item::TrigHoldoff | Item::CntDigits | Item::MathScale | Item::MathOffset | Item::MathFc | Item::MathBw | Item::ZScale | Item::ZDelay | Item::DecThr => Kind::Value,
+            Item::LogIvl | Item::ChBias(_) | Item::ChSkew(_) | Item::RefColor | Item::CurC | Item::CurD | Item::RefSel | Item::RefVpd | Item::RefOffset | Item::MathLinA | Item::MathLinB | Item::TrigHoldoff | Item::CntDigits | Item::MathScale | Item::MathOffset | Item::MathFc | Item::MathBw | Item::ZScale | Item::ZDelay | Item::DecThr | Item::DecThrLine(_) => Kind::Value,
             Item::MathAuto | Item::ZoneBox | Item::ZoneShape | Item::ZoneClear => Kind::Action,
             Item::DecBits => Kind::Value,
             Item::TrigLevel2 | Item::TrigT1 | Item::TrigT2 | Item::VidLine | Item::PatLevel | Item::NthIdle | Item::NthN | Item::Setup | Item::Hold => Kind::Value,
@@ -8152,6 +8156,10 @@ impl Ui {
             Item::DecDiff => "B line (A-B)",
             Item::DecThr => "Threshold",
             Item::DecThrMid => "Threshold to middle",
+            // the Studio sheet names the line by its role ("Clock threshold", `sheet_label`)
+            Item::DecThrLine(1) => "Threshold 2",
+            Item::DecThrLine(2) => "Threshold 3",
+            Item::DecThrLine(_) => "Threshold 4",
             Item::DecFmt => "Format",
             Item::DecProto => "Protocol",
             Item::DecSrc2 => "Clock",
@@ -8527,6 +8535,7 @@ impl Ui {
             Item::DecSrc4 => m.dec_src4.map_or("None".into(), decode_source_name),
             Item::DecDiff => m.dec_diff.map_or("None".into(), decode_source_name),
             Item::DecThr => si(m.dec_thr as f64, "V"),
+            Item::DecThrLine(role) => si(m.dec_thr_of(role) as f64, "V"),
             Item::DecFmt => if m.dec_ascii { "ASCII".into() } else { "Hex".into() },
             Item::DecProto => m.dec_proto.name().into(),
             Item::DecOpt(k) => m.dec_proto.module().and_then(|p| p.options().get(k)).map_or(String::new(), |o| o.choices[m.dec_opts()[k]].into()),

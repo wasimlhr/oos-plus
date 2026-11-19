@@ -601,6 +601,17 @@ mod tests {
         ui.m.dec_thr = 9.0;
         s.exec_cmd(&mut ui, &cv, ":DECode:THReshold AUTO");
         assert!((ui.m.dec_thr - 1.65).abs() < 0.3, "{}", ui.m.dec_thr);
+        // a line's own threshold: set, read and given up
+        let ask = |s: &mut Scpi, ui: &mut Ui, line: &str| String::from_utf8(s.exec_cmd(ui, &cv, line).unwrap_or_default()).unwrap().trim().to_string();
+        s.exec_cmd(&mut ui, &cv, ":BUS1:THReshold 2,0.3");
+        assert_eq!(ui.m.dec_thr_line, [Some(0.3), None, None]);
+        assert_eq!(ask(&mut s, &mut ui, ":BUS1:THReshold? 2").parse::<f32>().ok(), Some(0.3));
+        // a line without one answers the decoder's (to the digits of the answer)
+        let third = ask(&mut s, &mut ui, ":BUS1:THReshold? 3").parse::<f32>().unwrap();
+        assert!((third - ui.m.dec_thr).abs() < 1e-4, "{third} {}", ui.m.dec_thr);
+        s.exec_cmd(&mut ui, &cv, ":BUS1:THReshold 2,DEF");
+        assert_eq!(ui.m.dec_thr_line, [None; 3]);
+        assert!(s.err.is_empty(), "{:?}", s.err);
     }
 
     /// The "Equivalent header" column of `docs/scpi/setup-keys.md` names the headers of the rows.

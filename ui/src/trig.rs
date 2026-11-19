@@ -31,6 +31,8 @@ pub fn decode_la(m: &Model, words: &[u16], dt: f64) -> Result<Vec<Packet>, &'sta
     }
     let slots: [Vec<f32>; NCH] = std::array::from_fn(|i| la.get(i).copied().flatten().map_or(Vec::new(), &wave));
     let mut s = m.clone();
+    // the LA's comparators have decided the levels: no line has a threshold here
+    s.dec_thr_line = [None; 3];
     (s.dec_src, s.dec_src2, s.dec_cs, s.dec_src4, s.dec_diff) = (0, 1, la[2].map(|_| 2), la[3].map(|_| 3), None);
     decode_at(&s, std::array::from_fn(|c| &slots[c][..]), dt, thr, hy)
 }
@@ -55,6 +57,17 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
     let p = crate::protocols::get(i);
     let r = p.roles();
     let lines = [Some(line), if r[1].is_some() { Some(get(m.dec_src2)?) } else { None }, if r[2].is_some() { opt(m.dec_cs)? } else { None }, if r[3].is_some() { opt(m.dec_src4)? } else { None }];
+    // a line with a threshold of its own is moved so that this threshold lies on the decoder's: the decoders take
+    // one threshold for all their lines (the hysteresis stays that of the main line)
+    let moved: [Option<Vec<f32>>; 3] = std::array::from_fn(|k| {
+        let by = m.dec_thr_line[k]? - m.dec_thr;
+        if by == 0.0 {
+            return None;
+        }
+        lines[k + 1].map(|v| v.iter().map(|x| x - by).collect())
+    });
+    let line = |k: usize| moved[k].as_deref().or(lines[k + 1]);
+    let lines = [lines[0], line(0), line(1), line(2)];
     let chans: [Option<&[f32]>; 4] = std::array::from_fn(|c| ch.get(c).copied().filter(|v| !v.is_empty()));
     let src = [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4];
     p.decode(&crate::protocols::Lines { lines, dt, thr, hy, opt: m.dec_opts(), sh: crate::protocols::Shared::of(m), chans, src })
