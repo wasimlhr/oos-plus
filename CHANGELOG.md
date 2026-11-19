@@ -764,9 +764,8 @@ Changed:
   again after the monitor's pass. Reproduced and tested on the host, and on the unit (build 20261119-215725,
   a monitor of 1920 x 1080 connected, HDMI on Layout, the panel's row with two lines): none of 48 pictures of
   the panel without traces, with the zoom and without, with the panel's view and with view 1 on the monitor.
-- Studio, the zoom (the owner from the unit; host-tested, and seen on the unit with 20261119-221347): the grip
-  that sets the height of the overview is a slim bar on the edge it moves, in the gap between the overview and
-  the zoom view. It was a chip of 44 x 24 px with three dots in the bottom of the overview, which read as one
+- Studio, the zoom (the owner from the unit; host-tested): the grip that sets the height of the overview is a
+  slim bar on the edge it moves, in the last pixels of the overview above the zoom row. It was a chip of 44 x 24 px with three dots in the bottom of the overview, which read as one
   more menu and stood on the time of the middle division. The area that takes the finger is the same
   (60 x 42 px).
 - Manchester on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: the 10BASE-T output of a
