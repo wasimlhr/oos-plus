@@ -35,10 +35,14 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
     // trigger condition needs before its decision (pulse widths, timeouts, Nth-edge idle time)
     let near = (screen / 10).max(2000);
     let span = (m.trig_span() / f.dt).ceil().max(0.0) as usize;
+    // the protocol trigger reads frames: one whose field stands near the hardware point is read to its end, a frame
+    // further. A decoder gives nothing of a frame that is cut off (CAN: seen on a unit, an identifier at the trigger
+    // point was found only in frames that ended within a tenth of a screen after it)
+    let after = if m.trig_type == TrigType::Bus { span } else { 0 };
     let (lo, hi) = if m.trig_type == TrigType::Video {
         (0, len)
     } else {
-        (f.pre.saturating_sub(near + span), (f.pre + near).min(len))
+        (f.pre.saturating_sub(near + span), (f.pre + near + after).min(len))
     };
     let e: [f32; 0] = [];
     let refs: [&[f32]; NCH] = std::array::from_fn(|c| if f.ch[c].len() < hi || lo >= hi { &e[..] } else { &f.ch[c][lo..hi] });
@@ -286,6 +290,33 @@ mod tests {
         // an edge trigger keeps the hardware point in such a frame, as before
         m.trig_type = TrigType::Edge;
         assert!(trigger_point(&frame(20_000), &m, 1000, window, -window / 2.0).is_some());
+    }
+
+    /// The protocol trigger on a field at the start of a long frame: the frame ends far behind the hardware point,
+    /// and is read to its end. As on the unit: CAN at 500 kbit/s, 50 us/div, 100 kpts at 156.25 MSa/s, the
+    /// identifier ending 20 us before the hardware point and the frame 216 us after it.
+    #[test]
+    fn a_bus_match_at_the_start_of_a_long_frame_is_found() {
+        use oos_dsp::sim::CanFrame;
+        let (dt, len, pre) = (6.4e-9, 100_000usize, 50_000usize);
+        let frames = [CanFrame { id: 0x057, ext: false, rtr: false, data: vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88] }];
+        let l = oos_dsp::sim::can_logic(&frames, 500e3, 0.0, 3.3);
+        // 12 idle bits lead the wave, then the SOF, 11 identifier bits and one stuff bit: 50 us to the identifier's end
+        let start = pre - ((20e-6 + 50e-6) / dt) as usize;
+        let wave = |i: usize| if i < start { 3.3 } else { l.v((i - start) as f64 * dt) as f32 };
+        let v: Vec<f32> = (0..len).map(wave).collect();
+        let f = Arc::new(Frame { seq: 1, dt, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() });
+        let mut m = Model::default();
+        (m.trig_type, m.dec_proto, m.dec_src, m.dec_thr) = (TrigType::Bus, Proto::CAN, 0, 1.65);
+        (m.dec_canrate, m.dec_canh) = (crate::decode::CAN_RATES.iter().position(|&r| r == 500e3).unwrap(), false);
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Id, 0x057);
+        let window = 500e-6;
+        let at = trigger_point(&f, &m, 1000, window, -window / 2.0).expect("the identifier of a frame that ends later");
+        let back = (pre as f64 - at) * dt;
+        assert!((14e-6..26e-6).contains(&back), "{back}");
+        // another identifier: none
+        m.trig_bus_val = 0x058;
+        assert_eq!(trigger_point(&f, &m, 1000, window, -window / 2.0), None);
     }
 }
 
