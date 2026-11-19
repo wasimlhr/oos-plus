@@ -272,6 +272,44 @@ mod tests {
         assert!(same(&u.m) && u.m.dec_is_on(1) && u.m.dec_view(1).dec_proto == Proto::LIN);
     }
 
+    /// While a bus is played the channels are not acquired: their measurements leave the badge strip, which had a row
+    /// of "----" for each channel, and come back with Live. And a decoder whose line is a reference that is gone still
+    /// names it in its row.
+    #[test]
+    fn a_played_bus_has_no_empty_badges_and_an_empty_reference_stays_named() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = Layout::Studio;
+        u.m.ch[1].on = true;
+        u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(1))];
+        for _ in 0..4 {
+            u.step(0.05);
+        }
+        let on_channel = |k: &super::super::studio::MeasKey| matches!(Ui::studio_key_source(*k), WaveId::Ch(_));
+        let of_channels = |u: &Ui| u.studio_pinned().iter().filter(|k| on_channel(k)).count();
+        assert_eq!(of_channels(&u), 2);
+        assert!(u.sim_preset_set("UART bus"));
+        u.sim_play_set(true).unwrap();
+        for _ in 0..4 {
+            u.step(0.05);
+        }
+        assert!(u.sim_mode());
+        assert_eq!(of_channels(&u), 0, "no badge of a channel that is not acquired");
+        // the row of the decoder's line: the channels and the reference of the bus
+        let names = u.options(Item::DecSrc);
+        assert!(names.iter().any(|n| n == "R1") && names.iter().any(|n| n == "CH1"), "{names:?}");
+        u.return_to_live();
+        assert_eq!(of_channels(&u), 2, "and back with Live");
+        // a decoder on a reference that was cleared: the row still says R1, as the value does
+        u.m.dec_src = DEC_REF_BASE;
+        u.refs[0] = None;
+        let names = u.options(Item::DecSrc);
+        let listed = names.iter().filter(|n| *n == "R1").count();
+        assert_eq!((u.value(Item::DecSrc).as_str(), listed), ("R1", 1), "{names:?}");
+        // an empty reference is not offered to a line that is on a channel
+        u.m.dec_src = 0;
+        assert!(!u.options(Item::DecSrc).iter().any(|n| n == "R1"));
+    }
+
     /// The presets of the lanes are as before, and choosing one leaves the bus; Add to ref with a bus preset adds its
     /// lines without playing.
     #[test]
