@@ -79,7 +79,21 @@ impl Protocol for CanFd {
 
 pub struct FlexRay;
 
+/// The bit rates of a FlexRay cluster.
+const FLEXRAY_RATES: [f64; 3] = [10e6, 5e6, 2.5e6];
+
+const FLEXRAY_OPTIONS: [Opt; 1] =
+    [Opt { name: "Bit rate", choices: &["10 Mbit/s", "5 Mbit/s", "2.5 Mbit/s"], default: 0 }];
+
+/// The rate the option says.
+fn flexray_rate(opt: &[usize; OPTS]) -> f64 {
+    FLEXRAY_RATES[opt[0].min(FLEXRAY_RATES.len() - 1)]
+}
+
 impl Protocol for FlexRay {
+    fn options(&self) -> &'static [Opt] {
+        &FLEXRAY_OPTIONS
+    }
     /// A frame in the Events pane: its identifier, the cycle, the payload, the frame CRC.
     fn columns(&self) -> &'static [(&'static str, Col)] {
         &[("ID", Col::Label("ID ")), ("Cycle", Col::Label("CYC ")), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
@@ -97,11 +111,12 @@ impl Protocol for FlexRay {
     fn diff_ok(&self) -> bool {
         true
     }
-    fn bit_time(&self, _: &[usize; OPTS]) -> f64 {
-        0.1e-6
+    fn bit_time(&self, opt: &[usize; OPTS]) -> f64 {
+        1.0 / flexray_rate(opt)
     }
+    /// The frame CRC of either channel passes: the decoder tries both (`x1::flexray`).
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
-        Ok(x1::flexray(l.main(), l.dt, 10e6, l.thr, l.hy, false))
+        Ok(x1::flexray(l.main(), l.dt, flexray_rate(&l.opt), l.thr, l.hy, false))
     }
     /// The frame ID of the demo.
     fn trigger_default(&self) -> (BusWhat, u32) {
@@ -208,6 +223,40 @@ impl Protocol for Sent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A FlexRay cluster at 5 or 2.5 Mbit/s is read at the rate the option says, and not at another.
+    #[test]
+    fn flexray_reads_at_the_rate_of_its_option() {
+        let fr = x1::gen::FrFrame {
+            ppi: false,
+            nf: true,
+            sync: false,
+            startup: false,
+            id: 0x2a,
+            cycle: 5,
+            payload: vec![0x11, 0x22, 0x33, 0x44],
+            channel_b: true,
+        };
+        let bits = x1::gen::flexray_bits(&fr, 11);
+        let ids = |rate: f64, option: usize| -> Vec<(u32, bool)> {
+            let l = oos_dsp::sim::bits_logic(&bits, 1.0 / rate, 20, 0.0, 3.3);
+            let dt = 1.0 / rate / 20.0;
+            let v = oos_dsp::sim::sample(|t| l.v(t), 0.0, dt, 20 * (bits.len() + 60));
+            let (lines, opt) = ([Some(&v[..]), None, None, None], [option, 0, 0, 0]);
+            let sh = Shared::default();
+            let l = Lines { lines, dt, thr: 1.65, hy: 0.2, opt, sh, chans: [None; 4], src: [None; 4] };
+            let p = FlexRay.decode(&l).unwrap();
+            p.iter().filter(|x| matches!(x.kind, Kind::Id { .. } | Kind::Crc)).map(|x| (x.value, x.ok)).collect()
+        };
+        for (option, rate) in FLEXRAY_RATES.iter().enumerate() {
+            let got = ids(*rate, option);
+            assert_eq!(got.first(), Some(&(0x2a, true)), "{} bit/s", rate);
+            assert!(got.len() == 2 && got[1].1, "the frame CRC of channel B passes: {:x?}", got);
+            assert_eq!(FlexRay.bit_time(&[option, 0, 0, 0]), 1.0 / rate);
+        }
+        // a cluster at 5 Mbit/s read at 10: no frame
+        assert!(ids(5e6, 0).iter().all(|x| x.0 != 0x2a));
+    }
 
     // Break it catches: a setup written while CAN FD, FlexRay and SENT were built in losing its protocol or rates
     #[test]

@@ -548,6 +548,9 @@ Changed:
   standard writes them. A message begins with its command, and the Events pane has the columns RT, T/R, SA,
   WC/MC, Data and Status. On the capture the 13 words that the picture of its instrument lists are told apart as
   the instrument tells them; a word it calls "Command/Status" is a command here.
+- FlexRay decoder: Decode > Bit rate, 10, 5 or 2.5 Mbit/s (host-tested; not yet verified on hardware). The
+  decoder read at 10 Mbit/s alone, so a cluster at one of the two other rates of the standard gave nothing. The
+  frame CRC of either channel passes, as before (`:BUS<n>:OPTion1`).
 - LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
   capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
   rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud

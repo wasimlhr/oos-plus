@@ -177,8 +177,11 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   acknowledge) and marks where each was sampled. An I2C byte that was not acknowledged is an error, except the one
   a controller ends a read with; an address of ten bits is one field ("2A5 W")
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
-- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes its bit rate
-  from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses what a frame is
+- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. FlexRay is read at the
+  Bit rate set (10, 5 or 2.5 Mbit/s), on either channel. A MIL-STD-1553 word says what it is: a command its
+  terminal, direction, subaddress and count ("RT 17 R SA 02 WC 02"), a status word its terminal and flags. LIN
+  takes its bit rate from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses
+  what a frame is
   checked against; SENT lists the messages of its slow channel; an error flag of CAN is listed as an error
   frame
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII

@@ -36,7 +36,7 @@ Per decoder:
 | CAN | capture: 97 of 97 frames agree; error flags host only | band, columns | unit |
 | CAN-FD | capture: frames agree, length in bytes; error flags host only | band, columns | unit |
 | LIN | capture: frames, errors and the rate from the sync agree | band | unit |
-| FlexRay | capture: frames agree; 9 CRC errors not checked | band | bit rate, channel A/B |
+| FlexRay | capture: frames agree at 10 Mbit/s; 9 CRC errors that repeat with the cycle, not compared | band, columns | unit |
 | I2S | capture: samples agree with the word length set | band, columns | - |
 | SENT | capture: fast and slow channel and both values agree | band, columns | unit |
 | MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault); command and status told apart | band, columns | unit |
