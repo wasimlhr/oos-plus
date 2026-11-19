@@ -543,6 +543,43 @@ mod tests {
         assert!(pane.y >= TOP.h && pane.y + pane.h <= u.frame().bottom.y);
     }
 
+    /// Studio with so many measurement badges that their row takes two lines on the panel and one on the monitor:
+    /// the monitor's waveform pass counts the lines for its own width, and the panel's next step still has its own
+    /// (with HDMI Layout the row and the plot changed height every frame and the panel's maps were cleared: seen on a
+    /// DHO924S, 2026-11-19, found on the decoder branch).
+    #[test]
+    fn the_waveform_pass_leaves_the_panel_s_badge_row_and_plot_as_they_are() {
+        let mut u = ui();
+        u.m.layout = Layout::Studio;
+        u.m.hdmi = HdmiMode::Waveform;
+        u.set_hdmi_present(true);
+        // Measure > Badge style = Studio: a row of badges that wraps onto a second line
+        u.m.studio_classic = false;
+        u.m.meas = [Meas::Vpp, Meas::Vmax, Meas::Vmin, Meas::Freq, Meas::Period]
+            .into_iter()
+            .flat_map(|k| [(k, WaveId::Ch(0)), (k, WaveId::Ch(1))])
+            .collect();
+        let mut cv = render(&mut u);
+        u.step(1.0 / 30.0);
+        u.render(&mut cv);
+        let wrap = u.studio.badge_wrap;
+        assert!(wrap > 0, "the row wraps on the panel");
+        let wide = u.with_waveform_pass(1920, 1080, |u| {
+            u.render(&mut Canvas::new(1920, 1080));
+            u.studio.badge_wrap
+        });
+        assert!(wide < wrap, "and less on the monitor: {} {}", wide, wrap);
+        let (row, plot) = (u.studio_row(), u.plot_rect());
+        let mut hc = Canvas::new(1920, 1080);
+        for round in 0..4 {
+            u.render_waveform(&mut hc);
+            assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the monitor's pass, round {}", round);
+            u.step(1.0 / 30.0);
+            u.render(&mut cv);
+            assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the panel's frame, round {}", round);
+        }
+    }
+
     #[test]
     fn a_drag_in_the_second_window_moves_a_channel_of_that_window() {
         let mut u = ui();

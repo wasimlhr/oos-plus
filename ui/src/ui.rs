@@ -4211,7 +4211,10 @@ impl Ui {
     /// with the touch targets the panel's last frame left (the pass draws its own at the monitor's places).
     pub(crate) fn with_waveform_pass<R>(&mut self, w: i32, h: i32, f: impl FnOnce(&mut Ui) -> R) -> R {
         let wins = std::mem::take(&mut self.wins);
-        let keep = (self.scr, self.grid, wins, self.area, self.cur_win, self.frames, self.full);
+        // Studio's badge row is counted again for the pass's width (`studio_frame_start`): the panel's count comes
+        // back, else the panel's next step lays out a row of another height and its maps are cleared
+        let wrap = self.studio.badge_wrap;
+        let keep = (self.scr, self.grid, wins, self.area, self.cur_win, self.frames, self.full, wrap);
         let hits = (
             self.studio.lane_badges.take(),
             self.studio.dec_labels.take(),
@@ -4223,7 +4226,9 @@ impl Ui {
         (self.view_pass, self.wave_pass, self.full) = (true, true, false);
         let r = f(self);
         (self.view_pass, self.wave_pass) = (false, false);
-        (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames, self.full) = keep;
+        let wrap;
+        (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames, self.full, wrap) = keep;
+        self.studio.badge_wrap = wrap;
         self.studio.lane_badges.replace(hits.0);
         self.studio.dec_labels.replace(hits.1);
         self.studio.label_rects.replace(hits.2);
