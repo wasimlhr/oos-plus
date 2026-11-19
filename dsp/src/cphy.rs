@@ -4,7 +4,8 @@
 //! Mapper: MIPI DevCon 2016, "Implementing MIPI C-PHY", p12. Symbol/state
 //! rules and the independent 0224100 -> 7290 example: MIPI "Introduction from
 //! Basic Theory to Practical Implementation", pp14-16. This is not base-five
-//! decoding, eighteen-wirestate mode, lane merging, or a CSI/DSI packet parser.
+//! decoding, eighteen-wirestate mode or lane merging. The packet in the words of a
+//! burst is read as far as a capture shows it (`packets`).
 //!
 //! No level is a fixed voltage. Seen in a capture of a real lane (1.25 GS/s, 25 samples a symbol): the low-power
 //! levels 1.16 V apart and both away from 0 V, the three high-speed levels at a quarter, a half and three quarters
@@ -342,7 +343,87 @@ pub fn decode(a: &[f32], b: &[f32], c: &[f32], dt: f64, rate: Option<f64>, min_g
         }
     }
     if out.is_empty() { return alone(if measured.is_some() { "!SAMPLE" } else { "!SOURCE" }, n); }
-    out
+    packets(out)
+}
+
+/// The checksum of a packet header and of a payload: x^16 + x^12 + x^5 + 1, least significant bit first, seed FFFF.
+pub fn crc16(bytes: impl IntoIterator<Item = u8>) -> u16 {
+    bytes.into_iter().fold(0xffff, |crc, b| {
+        (0..8).fold(crc ^ b as u16, |c, _| if c & 1 != 0 { (c >> 1) ^ 0x8408 } else { c >> 1 })
+    })
+}
+
+/// The packet in the words of a burst, where they are one: a camera or display packet over C-PHY, as a capture of a
+/// real lane has it in each of its 64 bursts. Three words of header (the data identifier in the high byte of the
+/// first, the word count, the checksum of those four bytes), a sync word, the same three words again, and for a long
+/// packet the payload, two bytes a word with the low one first and a fill byte where the count is odd, and a
+/// checksum over all those bytes. A short packet (data type under 10h) has two data bytes in place of the count.
+///
+/// A burst is taken for a packet when the checksum of its header fits; else its words stay words. The fields:
+/// `Field("DT")` (the data type; value2 = the virtual channel, the two top bits of the identifier), `Field("WC")`,
+/// `Crc` (ok: it fits), `Field("COPY")` for the second header (ok: the same three words), `Data` for each byte of
+/// the payload or of a short packet, `Crc` for the payload. A payload whose words are not as many as the count
+/// says stays words. The low byte of the first word is not read (seen as 00; assumed reserved).
+fn packets(out: Vec<Packet>) -> Vec<Packet> {
+    let word = |p: Option<&Packet>| p.filter(|p| matches!(p.kind, Kind::Word { .. })).map(|p| p.value as u16);
+    let is_sync = |p: &Packet, first: bool| p.kind == Kind::Field("SYNC") && (p.value == 0) == first;
+    let sync = |p: Option<&Packet>, first: bool| p.is_some_and(|p| is_sync(p, first));
+    let bytes_of = |w: u16| [w as u8, (w >> 8) as u8];
+    let field = |kind: Kind, value: u32, value2: Option<u32>, t: (f64, f64), ok: bool| {
+        Packet { kind, value, value2, t0: t.0, t1: t.1, ok }
+    };
+    let halves = |p: &Packet| {
+        let middle = 0.5 * (p.t0 + p.t1);
+        let [low, high] = bytes_of(p.value as u16);
+        let byte = |v: u8, t: (f64, f64)| field(Kind::Data, v as u32, None, t, true);
+        [byte(low, (p.t0, middle)), byte(high, (middle, p.t1))]
+    };
+    // the three words after the field at `i`
+    let three = |i: usize| -> Option<[u16; 3]> {
+        Some([word(out.get(i + 1))?, word(out.get(i + 2))?, word(out.get(i + 3))?])
+    };
+    let fits = |h: &[u16; 3]| crc16(bytes_of(h[0]).into_iter().chain(bytes_of(h[1]))) == h[2];
+    let mut done = Vec::with_capacity(out.len());
+    let mut i = 0;
+    while i < out.len() {
+        let Some(h) = three(i).filter(|h| sync(out.get(i), true) && fits(h)) else {
+            done.push(out[i].clone());
+            i += 1;
+            continue;
+        };
+        let (id, short) = ((h[0] >> 8) as u32, (h[0] >> 8) & 0x3f < 0x10);
+        let (w1, w2, w3) = (&out[i + 1], &out[i + 2], &out[i + 3]);
+        done.push(out[i].clone());
+        done.push(field(Kind::Field("DT"), id & 0x3f, Some(id >> 6), (w1.t0, w1.t1), true));
+        if short {
+            done.extend(halves(w2));
+        } else {
+            done.push(field(Kind::Field("WC"), h[1] as u32, None, (w2.t0, w2.t1), true));
+        }
+        done.push(field(Kind::Crc, h[2] as u32, None, (w3.t0, w3.t1), true));
+        i += 4;
+        // the second header, after its sync word
+        if let Some(copy) = three(i).filter(|_| sync(out.get(i), false)) {
+            done.push(out[i].clone());
+            done.push(field(Kind::Field("COPY"), 0, None, (out[i + 1].t0, out[i + 3].t1), copy == h));
+            i += 4;
+        }
+        // the payload of a long packet: as many words as the count says, and the checksum
+        let count = (h[1] as usize).div_ceil(2);
+        let payload: Vec<u16> = (0..=count).map_while(|k| word(out.get(i + k))).collect();
+        if !short && payload.len() == count + 1 && word(out.get(i + count + 1)).is_none() {
+            for (k, p) in out[i..i + count].iter().enumerate() {
+                // (the fill byte of an odd count is no data)
+                let keep = if 2 * k + 1 < h[1] as usize { 2 } else { 1 };
+                done.extend(halves(p).into_iter().take(keep));
+            }
+            let all = payload[..count].iter().flat_map(|&w| bytes_of(w));
+            let last = &out[i + count];
+            done.push(field(Kind::Crc, last.value, None, (last.t0, last.t1), crc16(all) == payload[count]));
+            i += count + 1;
+        }
+    }
+    done
 }
 
 #[cfg(test)]
@@ -507,6 +588,53 @@ mod tests {
                 near(pre + 14, hs + 151 * 25, hs + 151 * 25 + 250);
             }
         }
+    }
+
+    /// A burst whose header checksum fits is a packet: a short one with its two data bytes, a long one with its
+    /// count, its bytes without the fill byte and its payload checksum; the second header is one field. A header
+    /// that does not fit leaves the words of its burst as they are.
+    #[test]
+    fn the_words_of_a_burst_are_a_packet_where_the_header_checksum_fits() {
+        let header = |id: u8, count: u16| {
+            let first = (id as u16) << 8;
+            [first, count, crc16([0, id, count as u8, (count >> 8) as u8])]
+        };
+        let run = |groups: &[&[u16]]| {
+            let mut lane = Lane::captured();
+            lane.low_power(&[0b111, 0b001, 0b000], 250);
+            lane.high_speed(&states_for_symbols(0, &burst(28, groups, 38)), 25);
+            lane.low_power(&[0b111], 250);
+            let [a, b, c] = lane.finish();
+            let p = decode(&a, &b, &c, 0.8e-9, None, 0.02);
+            let said = |x: &Packet| match x.kind {
+                Kind::Field("DT") => format!("VC {} DT {:02X}", x.value2.unwrap(), x.value),
+                Kind::Field("WC") => format!("WC {}", x.value),
+                Kind::Field("COPY") => format!("COPY{}", if x.ok { "" } else { " !" }),
+                Kind::Data => format!("{:02X}", x.value),
+                Kind::Crc => format!("CRC {:04X}{}", x.value, if x.ok { "" } else { " !" }),
+                _ => text(x),
+            };
+            p.iter().skip(3).map(said).collect::<Vec<_>>().join(" ")
+        };
+        // a short packet (data type 00 on virtual channel 1), as the first burst of the capture is
+        let short = header(0x40, 0xedca);
+        assert_eq!(short, [0x4000, 0xedca, 0x0e66], "the checksum the capture has");
+        assert_eq!(run(&[&short, &short]), "PRE 28 SYNC 0 VC 1 DT 00 CA ED CRC 0E66 SYNC 1 COPY POST LP111");
+        // a long packet of five bytes: three words, of which the last has the fill byte, and the checksum over six
+        let long = header(0x11, 5);
+        let payload = [0x2e16, 0xfd2f, 0x7ec7];
+        let sum = crc16([0x16, 0x2e, 0x2f, 0xfd, 0xc7, 0x7e]);
+        let second: Vec<u16> = long.iter().chain(&payload).copied().chain([sum]).collect();
+        let want = ["PRE 28 SYNC 0 VC 0 DT 11 WC 5", "SYNC 1 COPY 16 2E 2F FD C7", "POST LP111"];
+        let want = format!("{} CRC {:04X} {} CRC {:04X} {}", want[0], long[2], want[1], sum, want[2]);
+        assert_eq!(run(&[&long, &second]), want);
+        // a payload checksum that does not fit, and a second header that differs
+        let mut bad = second.clone();
+        (bad[1], bad[6]) = (6, sum ^ 1);
+        let got = run(&[&long, &bad]);
+        assert!(got.contains("COPY !") && got.ends_with(&format!("CRC {:04X} ! POST LP111", sum ^ 1)), "{got}");
+        // a header whose checksum does not fit: words
+        assert_eq!(run(&[&[0x1100, 0x0005, 0xbeef]]), "PRE 28 SYNC 0 1100 0005 BEEF POST LP111");
     }
 
     /// With the high-speed levels near the low one of the low-power states, the lines on their way from one wire

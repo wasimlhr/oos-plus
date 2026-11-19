@@ -44,7 +44,7 @@ Per decoder:
 | USB | capture: full speed packets agree | band | - |
 | 1-Wire | capture: transactions agree | band, columns, ROM command names | - |
 | I3C | capture: commands and bytes as on the lines; one read differs from the reference | band, command names | - |
-| C-PHY | capture: low-power states, 64 bursts, 659 words, every header checksum right | band, messages | packets in the words, low-power data |
+| C-PHY | capture: low-power states, 64 bursts as packets, every header and payload checksum right | band, columns | low-power data |
 | Manchester | capture: the bits agree at the rate of the signal; no packet structure | band | structure |
 | the 13 others | host only: no capture | band | captures |
 
@@ -140,8 +140,8 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
-   1-Wire and I3C write the names of their commands. Open here: the packets inside the C-PHY words and its
-   low-power data, the packet structure of a Manchester line.
+   1-Wire and I3C write the names of their commands, the words of a C-PHY burst are read as its packet. Open
+   here: the low-power data of C-PHY, the packet structure of a Manchester line.
    The same day the other twelve presets ran on the unit (UART, I2C, SPI, I2S, 1-Wire, DCC, SWD, DMX512, UART
    9-bit, Modbus RTU, S/PDIF, USB PD): every one decodes its traffic without an error. That is the first run on a
    unit for seven of the decoders of step 5. It showed that a preset left the lines of the preset before it on

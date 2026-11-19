@@ -438,10 +438,28 @@ impl Protocol for Cphy {
             Kind::Field(label) if label.starts_with("!LP") => Some(format!("LP-{}", &label[3..])),
             Kind::Field("PRE") => Some(format!("PRE {}", p.value)),
             Kind::Field("SYNC") => Some("SYNC".into()),
+            // the header of a packet: the virtual channel and the data type, the word count; the second header,
+            // which says the same, as one field; a byte as its two digits (a word has four)
+            Kind::Field("DT") => Some(format!("VC {} DT {:02X}", p.value2.unwrap_or(0), p.value)),
+            Kind::Field("WC") => Some(format!("WC {}", p.value)),
+            Kind::Field("COPY") => Some(format!("COPY{}", if p.ok { "" } else { " !" })),
+            Kind::Data => Some(format!("{:02X}", p.value)),
+            Kind::Crc => Some(format!("CRC {:04X}{}", p.value, if p.ok { "" } else { " !" })),
             Kind::Word { .. } => Some(format!("{:04X}", p.value)),
             Kind::Stop => Some("POST".into()),
             _ => None,
         }
+    }
+    /// A burst that is a packet in the Events pane: its virtual channel, data type and word count, its bytes, and
+    /// the checksums of the header and of the payload.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[
+            ("VC", Col::Part("VC ", 1)),
+            ("DT", Col::Part("VC ", 3)),
+            ("WC", Col::Label("WC ")),
+            ("Data", Col::Data),
+            ("CRC", Col::Label("CRC ")),
+        ]
     }
     /// A message is what a lane does from one stop state (all three lines high) to the next: a burst with the
     /// low-power states that ask for it, or low-power data.
@@ -524,6 +542,13 @@ mod tests {
         assert_eq!(text(Kind::Field("PRE"), 28).as_deref(), Some("PRE 28"));
         assert_eq!(text(Kind::Field("SYNC"), 1).as_deref(), Some("SYNC"));
         assert_eq!(text(Kind::Word { cmd: false }, 0x7290).as_deref(), Some("7290"));
+        // the fields of a packet
+        let dt = Packet { value2: Some(1), ..pk(Kind::Field("DT"), 0x2b) };
+        assert_eq!(Cphy.text(&dt, &[0; OPTS]).as_deref(), Some("VC 1 DT 2B"));
+        assert_eq!(text(Kind::Field("WC"), 22).as_deref(), Some("WC 22"));
+        assert_eq!(text(Kind::Field("COPY"), 0).as_deref(), Some("COPY"));
+        assert_eq!(text(Kind::Data, 0xca).as_deref(), Some("CA"));
+        assert_eq!(text(Kind::Crc, 0x0e66).as_deref(), Some("CRC 0E66"));
         assert_eq!(text(Kind::Stop, 0).as_deref(), Some("POST"));
         // a symbol outside a word and the errors keep the text of their kind
         assert!(text(Kind::Field("SYM"), 3).is_none() && text(Kind::Field("!CODE"), 0).is_none());

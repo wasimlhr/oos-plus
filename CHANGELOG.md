@@ -564,6 +564,9 @@ Changed:
   with little room read "SYNC FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR
   5 ...", "IND 4 ID 02A ..."); drawn as fields, and in the Fields view, it is there as before. A module says
   which field that is (`lead`).
+- Simulated traffic for Manchester, MLT-3 and Modbus ASCII (host-tested): each has a SIM bus preset now, 23 in
+  all. Six bytes at the rate of the list's usual entry for the two line codes, the read request of the Modbus RTU
+  preset as its characters for Modbus ASCII.
 - C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
   yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
   - the levels were fixed voltages: a low-power level was one above 0.8 V, and the capture's lines swing 1.16 V
@@ -579,8 +582,13 @@ Changed:
   The capture reads: the low-power states around each burst ("LP-111 LP-001 LP-000"), the preamble as one field
   ("PRE 28"), "SYNC", the words ("4000 EDCA 0E66"), and the post as one field; 64 bursts, 659 words, no error,
   and the times of the instrument that took it to under a nanosecond. A message on the band is what the lane
-  does from one stop state to the next, and the Frame trigger takes the first sync word of a burst. Not decoded:
-  the packets inside the words (header fields, payload) and low-power data, of which the states are listed.
+  does from one stop state to the next, and the Frame trigger takes the first sync word of a burst.
+  The packet in the words of a burst is read where the checksum of its header fits: "VC 1 DT 00 CA ED CRC 0E66"
+  for a short packet (the first burst of the capture, which its instrument lists with virtual channel 1, data
+  type 00 and the data CA ED), "VC 0 DT 11 WC 5 CRC A2D0 ... 16 2E 2F FD C7 CRC 00A9" for a long one, the second
+  header as "COPY". On the capture: 64 headers and 43 payloads, every checksum right. The Events pane has VC, DT,
+  WC, Data and CRC. The layout is the one the capture shows; the low byte of the first header word is not read.
+  Not decoded: low-power data, of which the states are listed.
 - I3C decoder: a common command code has its name, "CCC 90 GETSTATUS" (host-tested; not yet verified on
   hardware). The decoder had the table of the names and the band wrote the number alone. A code the table does
   not have keeps its number.
