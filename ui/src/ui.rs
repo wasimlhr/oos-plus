@@ -7625,7 +7625,7 @@ impl Ui {
     /// share stay, and a role the old protocol did not have takes a channel that is on and no other role uses, or none.
     /// The protocol's own parameters (threshold, baud, bits ...) are set on both.
     /// The shared rows a protocol's set-up gives (its baud rate, bits, parity ...) into the decoder of `m`.
-    fn dec_apply_rows(m: &mut Model, rows: &[(crate::protocols::Row, u32)]) {
+    pub(crate) fn dec_apply_rows(m: &mut Model, rows: &[(crate::protocols::Row, u32)]) {
         use crate::protocols::Row;
         use oos_dsp::decode::Parity;
         for &(r, v) in rows {

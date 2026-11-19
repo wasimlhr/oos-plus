@@ -574,7 +574,10 @@ mod tests {
         let wave = |f: &DemoLine| (0..n).map(|k| f((k as f64 * dt).rem_euclid(d.period)) as f32).collect::<Vec<f32>>();
         let waves: Vec<Option<Vec<f32>>> = d.lines.iter().map(|l| l.as_ref().map(wave)).collect();
         let (opt, lines) = (opt_fit(i as u8, opt_default(i as u8)), std::array::from_fn(|k| waves[k].as_deref()));
-        let (thr, sh) = (m.setup().thr, Shared::default());
+        // (the shared rows of its set-up: the traffic is made for that baud rate, those bits)
+        let mut model = crate::model::Model::default();
+        crate::ui::Ui::dec_apply_rows(&mut model, m.setup().rows);
+        let (thr, sh) = (m.setup().thr, Shared::of(&model));
         // (the lines as the four channels too, in the order of their roles: a Parallel bus reads a bank of them)
         let src = [Some(0), Some(1), Some(2), Some(3)];
         let l = Lines { lines, dt, thr, hy: 0.1, opt, sh, chans: lines, src };

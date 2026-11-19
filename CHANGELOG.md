@@ -670,7 +670,8 @@ Changed:
     frame that is cut off: an identifier at the trigger point was found only in frames that ended there, and
     Normal still took no frame in 70 s. The search reads the length of a frame further. On the host, with the
     traffic of every decoder and a frame start at the hardware point: the old search found none for CAN, CAN-FD
-    and FlexRay, and not all for USB, S/PDIF and DCC; the new one finds every one for every decoder.
+    and FlexRay, and not all for USB, S/PDIF and DCC; the new one finds every one for every decoder, and every
+    identifier and data field tried (MLT-3 data left out: 7 of 40 bytes were not found at their place).
   With the three, Normal at 50 us/div took a new frame in 15 of 29 seconds, the end of the identifier at the
   trigger point in each picture looked at (before: no frame in 70 s). 5 us/div and 200 us/div were not measured
   again after the last change.
