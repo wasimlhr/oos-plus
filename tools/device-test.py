@@ -634,13 +634,17 @@ GPU_PAIR_MS = 45.0
 GPU_PANEL_MS = 22.0
 
 
-def frame_rate(s, secs=4.0):
-    """Frames a second over `secs` (the frame counter, not the smoothed value) and the last state line."""
+def frame_rate(s, secs=4.0, used=False):
+    """Frames a second over `secs` (the frame counter, not the smoothed value) and the last state line; with `used`
+    also the acquired frames drawn into the picture a second (`used` of the state line)."""
     t0, a = time.time(), s.q(":SYST:STAT?")
     time.sleep(secs)
     b = s.q(":SYST:STAT?")
-    n = lambda t: int(re.search(r"frames (\d+)", t)[1])
-    return (n(b) - n(a)) / (time.time() - t0), b
+    n = lambda t, k="frames": int(re.search(rf"{k} (\d+)", t)[1])
+    secs = time.time() - t0
+    if used:
+        return (n(b) - n(a)) / secs, b, (n(b, "used") - n(a, "used")) / secs
+    return (n(b) - n(a)) / secs, b
 
 
 def loop_load(s, secs=3):
@@ -665,7 +669,9 @@ def loop_load(s, secs=3):
 def frame_rate_by_graphics_and_monitor(s, o):
     """Four channels in Run, the frame rate and the frame loop's load with System > Graphics = CPU and = GPU, and with a
     monitor plugged in, in each HDMI mode. The GPU must not fall behind the CPU: with a monitor it did up to 0.1.11
-    (25 frames a second against 30) and no test saw it."""
+    (25 frames a second against 30) and no test saw it. Waveform and Layout draw the traces into maps of the monitor's
+    size as well (ADR 0073): the state line must say so (`maps WxH`), and the table has the waveforms a second and the
+    fast path's time of each mode, to see what those maps cost against Mirror."""
     if s.sim:
         raise Skip("no frame loop of the scope in the simulation")
     keep_g, keep_h = s.q(":SYST:GRAP?"), s.q(":SYST:GET? hdmi")
@@ -687,14 +693,17 @@ def frame_rate_by_graphics_and_monitor(s, o):
                 if h:
                     s.w(f":SYST:SET hdmi = {h}")
                 time.sleep(2)
-                fps, st = frame_rate(s)
+                fps, st, wfm = frame_rate(s, used=True)
                 loop, helper = loop_load(s)
                 if g == "GPU" and " gpu layers" not in st:
                     bad.append(f"GPU {h or 'panel'}: Graphics = GPU, but the CPU draws (the helper did not start or failed)")
+                if h in ("Waveform", "Layout") and not re.search(r" maps \d+x\d+", st):
+                    bad.append(f"{g} {h}: the monitor's traces are stretched from the panel's maps")
                 gp = re.search(r"gpu panel ([\d.]+)(?: monitor ([\d.]+))? ms", st)
                 pan = float(gp[1]) if gp else math.nan
                 mo = float(gp[2]) if gp and gp[2] else (math.nan if h else 0.0)
-                rows[(g, h)] = (fps, loop, helper, pan, mo)
+                fast = re.search(r" fast ([\d.]+) ms", st)
+                rows[(g, h)] = (fps, loop, helper, pan, mo, wfm, float(fast[1]) if fast else math.nan)
                 if g == "GPU":
                     if h and not pan + mo <= GPU_PAIR_MS:
                         bad.append(f"GPU {h}: panel {pan:.1f} + monitor {mo:.1f} ms of GPU time, at most {GPU_PAIR_MS:.0f} for the pair")
@@ -715,7 +724,7 @@ def frame_rate_by_graphics_and_monitor(s, o):
             bad.append(f"{h or 'panel'}: the GPU {gp[0]:.1f} frames a second, the CPU {c[0]:.1f}")
         if gp[1] > c[1] + GPU_BUSIER:
             bad.append(f"{h or 'panel'}: the frame loop busier with the GPU ({gp[1]:.0f} %) than with the CPU ({c[1]:.0f} %)")
-    table = "; ".join(f"{g} {h or 'panel'} {v[0]:.1f} fps loop {v[1]:.0f} %" + (f" helper {v[2]:.0f} % gpu {v[3]:.1f}" + (f"+{v[4]:.1f}" if h else "") + " ms" if g == "GPU" else "") for (g, h), v in rows.items())
+    table = "; ".join(f"{g} {h or 'panel'} {v[0]:.1f} fps loop {v[1]:.0f} % {v[5]:.0f} wfm/s fast {v[6]:.1f} ms" + (f" helper {v[2]:.0f} % gpu {v[3]:.1f}" + (f"+{v[4]:.1f}" if h else "") + " ms" if g == "GPU" else "") for (g, h), v in rows.items())
     assert not bad, " / ".join(bad) + " -- " + table
     return (f"monitor {mon[1]}: " if mon else "no monitor: ") + table
 

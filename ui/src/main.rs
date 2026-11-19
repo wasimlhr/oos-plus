@@ -402,8 +402,15 @@ impl GpuLayers {
         self.jobs = std::mem::take(&mut l.jobs);
     }
 
+    /// The layers as a quad, with the panel's trace maps.
     fn quad<'a>(&'a self, ui: &'a Ui, src: gfx::Rect, dst: gfx::Rect, filter: bool, reuse: bool) -> gpu::Quad<'a> {
         gpu::Quad { under: Some(&self.under), over: Some(&self.over), size: (self.under.w, self.under.h), src, dst, filter, reuse, jobs: &self.jobs, ph: &ui.ph, phz: &ui.phz }
+    }
+
+    /// The monitor's own layers (Layout, Waveform) as a quad, with the monitor's trace maps (`Ui::monitor_maps`).
+    fn monitor_quad<'a>(&'a self, ui: &'a Ui, src: gfx::Rect, dst: gfx::Rect) -> gpu::Quad<'a> {
+        let (ph, phz) = ui.monitor_maps();
+        gpu::Quad { ph, phz, ..self.quad(ui, src, dst, true, false) }
     }
 
     /// The panel's picture into `target` (the size of `cv`); with `read` it also comes back into `cv` (the web page,
@@ -431,7 +438,7 @@ fn hdmi_gpu_frame(ui: &mut Ui, g: &mut gpu::Gpu, panel: &GpuLayers, view: &mut G
             view.draw(ui, s.w, s.h, pic);
             // quad 0 stays the panel's: an empty one, the monitor's layers go to quad 1
             let none = gpu::Quad { under: None, over: None, size: (1, 1), src: gfx::Rect::new(0, 0, 1, 1), dst: gfx::Rect::new(0, 0, 0, 0), filter: false, reuse: false, jobs: &[], ph: &ui.ph, phz: &ui.phz };
-            let q = view.quad(ui, gfx::Rect::new(0, 0, s.w, s.h), gfx::Rect::new(0, 0, mw, mh), true, false);
+            let q = view.monitor_quad(ui, gfx::Rect::new(0, 0, s.w, s.h), gfx::Rect::new(0, 0, mw, mh));
             g.submit(target, None, &[none, q], read)
         }
         // the panel's picture, as large as it fits

@@ -20,7 +20,7 @@ Panel, Run, four channels, 30 frames a second in every column (2026-11-12, `:SYS
 | | CPU | GPU |
 |---|---|---|
 | HDMI Mirror | the panel picture scaled on the CPU, nearest pixel | scaled by the GPU from what it already has, filtered, no CPU work |
-| HDMI Layout, Waveform | the screen (Waveform: its waveform area) drawn again at the monitor's size on the CPU | drawn by the GPU at the monitor's size, the traces stretched and smoothed |
+| HDMI Layout, Waveform | the screen (Waveform: its waveform area) drawn again at the monitor's size on the CPU | drawn by the GPU at the monitor's size, the traces from the monitor's own maps |
 
 The GPU itself is no faster than the CPU at the traces (the CPU skips every empty pixel of the phosphor maps, the GPU
 shades all of them); what it saves is the CPU's drawing of everything else, and the monitor's picture.
@@ -33,8 +33,9 @@ With a 1920x1080 monitor, four channels, Run, a menu open (2026-11-13, frames a 
 | GPU | 30 / 22 % | 30 / 29 % | 30 / 28 % |
 
 Waveform was then the panel's waveform area scaled up; since 2026-11-19 it is drawn at the monitor's size as Layout
-is, and costs about what Layout costs (not yet measured on the scope). The helper's GPU time per frame there: the
-panel 8 to 10 ms, the monitor 12 to 15 ms. Before the traces' two steps
+is, and costs about what Layout costs (not yet measured on the scope). Since then both also draw the traces into maps
+of the monitor's size (below, "The monitor's own maps"); the table is from before both changes. The helper's GPU time
+per frame there: the panel 8 to 10 ms, the monitor 12 to 15 ms. Before the traces' two steps
 (below), the monitor's traces alone took 36 to 41 ms and the GPU fell behind the CPU (25 frames a second).
 
 ## How it works
@@ -52,8 +53,17 @@ panel 8 to 10 ms, the monitor 12 to 15 ms. Before the traces' two steps
   (`recorded_layers_replay_to_the_same_pixels`).
 - **The traces in two steps**: first, at the size of the maps, each cell as the index into its channel's LUT plus 1
   (0: empty), the four channels in one half-float texture; then in the target one read of it per pixel, the LUT
-  after it. Stretched for a monitor, the GPU's filter mixes the indices (the LUT after the mixing keeps thin traces
-  bright); unstretched, the panel's pixels are exactly the CPU's. Colour grade the same way with the summed maps.
+  after it. Stretched (Mirror, or maps of another size than the plot), the GPU's filter mixes the indices (the LUT
+  after the mixing keeps thin traces bright); unstretched, the pixels are exactly the CPU's. Colour grade the same
+  way with the summed maps.
+- **The monitor's own maps** (Layout, Waveform; ADR 0073): the panel's maps carry a second set at the size of the
+  monitor's plot windows (`Phosphor::hi`), filled from the same frames; the monitor's frame sends those
+  (`GpuLayers::monitor_quad`, `Ui::monitor_maps`), so its traces are drawn unstretched, one cell a pixel. They were
+  the panel's maps stretched about two times each way: each trace pixel a soft block of two monitor pixels or more.
+  The cost is on the CPU: each frame drawn twice into maps (on a PC 2.1 to 2.7 times the panel's alone), and about
+  12 MB of maps (four channels at 1080p) copied into the arena where they changed and uploaded with each monitor
+  frame, against about 3.5 MB for the panel's. Not yet measured on the scope; `hdmi.traces = stretched` in
+  `system.conf` (or `OOS_HDMI_TRACES=stretched`) keeps the stretched maps.
 - **Two sets of textures**: the panel's frames and the monitor's keep their own layers, maps and indices in the
   helper (`set` in the frame), so each uploads only the rows that changed since its own last frame. Mirror takes the
   panel's set (`reuse`).

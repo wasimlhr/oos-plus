@@ -148,7 +148,8 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Full screen: one tap at the top right of the plot hides the top bar and the cards, one more brings them back
 - Text size Normal, Large or Larger for the bars, cards, measurement rows, menus and dialogs; backlight brightness
 - HDMI output as a mirror, as the waveform area alone drawn at the monitor's resolution under a settings line, or
-  laid out again at the monitor's size
+  laid out again at the monitor's size; in both the traces are drawn into maps of the monitor's size, not stretched
+  from the panel's
 - the picture drawn on the GPU (Mali-T860, Panfrost; System > Graphics, CPU as before is the other choice): a third
   less load on the frame loop, a monitor scaled without CPU work ([gpu/README.md](../gpu/README.md)); the web picture as
   JPEG from the video encoder (VPU)

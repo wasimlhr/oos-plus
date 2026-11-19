@@ -53,6 +53,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0028](code/0028-an-external-generator-is-a-table-row-one-connection-and-a-page.md) | code | An external generator is a row of a table, one connection and a page of its own | accepted, to be reviewed |
 | [0030](ui-ux/0030-studio-offers-what-default-offers.md) | ui-ux | Studio offers what Default offers; the Add panel is the short way into the Measure page | accepted |
 | [0033](system/0033-a-file-of-commands-sets-the-scope-up-and-no-more.md) | system | A file of SCPI commands sets the scope up and runs it, and no more: no press on the screen, no system command, no path outside the save folder | accepted |
+| [0073](code/0073-a-monitor-that-lays-the-screen-out-gets-trace-maps-of-its-size.md) | code | A monitor that lays the screen out (HDMI Layout, Waveform) gets trace maps of its own size | proposed |
 
 ## Reading order for agents
 

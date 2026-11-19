@@ -189,6 +189,7 @@ mod backlight;
 mod graphics;
 pub mod views;
 mod monitor;
+mod hdmimaps;
 mod features;
 #[cfg(test)]
 mod interplay_tests;
@@ -1562,6 +1563,8 @@ pub struct Ui {
     pub fast_n: f32,
     /// the fast path's collected differences per channel (`fastdraw::diff_span`), zero between screens
     acc_t: [Vec<u16>; NCH],
+    /// the monitor's own trace maps (HDMI Layout and Waveform): their sizes, grading and fast-path differences
+    hdmi_maps: hdmimaps::MonitorMaps,
     /// segmented recording: records since the acquisition started, and whether it ran in the last frame
     seg_n: usize,
     /// hardware segments: recording number told to the thread, its state, the segment shown (browsing), the trigger
@@ -1994,6 +1997,7 @@ impl Ui {
             t_fast_fold: 0.0,
             fast_n: 0.0,
             acc_t: Default::default(),
+            hdmi_maps: Default::default(),
             seg_n: 0,
             seg_run: 0,
             seg_view: None,
@@ -3229,6 +3233,7 @@ impl Ui {
         self.sim_poll();
         self.eye_auto_poll();
         self.relayout();
+        self.hi_maps_sync();
         self.now += dt_wall;
         self.meas_hold_tick();
         self.studio_hold_tick();
@@ -3379,7 +3384,7 @@ impl Ui {
             let mut raw_rec: Option<Record> = None;
             if !fast {
                 if let Some(p) = crate::drawpipe::pipe() {
-                    p.set_view(None, 0, 0);
+                    p.set_view(None, 0, 0, None);
                 }
             }
             // fast display path (fastdraw.rs): every queued frame but the newest straight into the phosphor map
@@ -3411,7 +3416,7 @@ impl Ui {
                 // batch mode: the other frames of the batches, drawn by the deposit workers (drawpipe.rs)
                 if let Some(p) = crate::drawpipe::pipe() {
                     let t1 = std::time::Instant::now();
-                    p.set_view(Some(&self.m), self.ph.w, self.ph.h);
+                    p.set_view(Some(&self.m), self.ph.w, self.ph.h, self.ph.hi_size());
                     let d = p.merge(&mut self.ph, &mut clear_pending, &mut self.fast_edges, &mut self.fast_off);
                     if d.triggered > 0 {
                         self.m.status = TrigStatus::Triggered;
@@ -3711,6 +3716,7 @@ impl Ui {
             self.vmaxz.iter_mut().for_each(|v| *v = (*v / 2).max(1));
             self.vmaxz_cg = (self.vmaxz_cg / 2).max(1);
         }
+        self.hi_grade_refs();
         if let Some((_, t)) = &self.toast {
             if self.now > *t {
                 self.toast = None;
@@ -3905,42 +3911,15 @@ impl Ui {
                 }
             }
         }
-        // the maps: each channel's frames collected as differences (`fastdraw::diff_span`), in bands of columns so one
-        // channel alone also spreads over the cores, then summed into the map once
-        let m = &self.m;
-        let on: Vec<usize> = (0..NCH).filter(|&c| m.ch[c].on).collect();
-        for &c in &on {
-            if self.acc_t[c].len() != w * (h + 1) {
-                self.acc_t[c] = vec![0; w * (h + 1)];
-            }
+        let t2 = fast_fill(&self.m, &mut self.ph.map, &mut self.acc_t, w, h, &frames, &placed);
+        // the monitor's maps (`Phosphor::hi`): the same frames placed and drawn at their size
+        if let Some(mut hi) = self.ph.hi.take() {
+            let (w, h) = (hi.w, hi.h);
+            let m = &self.m;
+            let placed = crate::fastdraw::par_map(&frames, |f| fast_plan(m, w, h, f, [false; NCH]));
+            fast_fill(m, &mut hi.map, &mut self.hdmi_maps.acc_t, w, h, &frames, &placed);
+            self.ph.hi = Some(hi);
         }
-        let bands = if frames.len() < 2 || on.is_empty() { 1 } else { (crate::fastdraw::helpers() + 1).div_ceil(on.len()) };
-        let band_cols = w.div_ceil(bands).max(1);
-        let mut jobs: Vec<(usize, usize, &mut [u16])> = Vec::new();
-        for (c, acc) in self.acc_t.iter_mut().enumerate() {
-            if on.contains(&c) {
-                jobs.extend(acc.chunks_mut(band_cols * (h + 1)).enumerate().map(|(b, band)| (c, b * band_cols, band)));
-            }
-        }
-        crate::fastdraw::par_each(jobs, |(c, c_lo, band)| {
-            for (f, p) in frames.iter().zip(&placed) {
-                fast_deposit_t(m, w, h, c, band, c_lo, f, &p.plan);
-            }
-        });
-        // the rows the frames touched, per channel: only those are added (a trace covers a part of the height)
-        let rows: [(usize, usize); NCH] = std::array::from_fn(|c| {
-            placed.iter().fold((usize::MAX, 0), |(a, b), p| {
-                let (x, y) = match &p.plan {
-                    FastPlan::Raw { spans, .. } => spans[c].as_ref().map_or((0, h), crate::fastdraw::span_rows),
-                    // a screen record: its points' rows (a segment between two points stays between them)
-                    FastPlan::Rec(rec) => rec_rows(m, h, c, &rec.ch[c]),
-                };
-                (a.min(x), b.max(y))
-            })
-        });
-        let t2 = std::time::Instant::now();
-        let pairs: Vec<(usize, &mut Vec<u16>, &mut Vec<u16>)> = self.ph.map.iter_mut().zip(self.acc_t.iter_mut()).enumerate().filter(|(c, _)| on.contains(c)).map(|(c, (a, b))| (c, a, b)).collect();
-        crate::fastdraw::par_each(pairs, |(c, map, acc)| crate::fastdraw::fold_t(map, acc, w, h, band_cols, rows[c].0..rows[c].1));
         let (a, b) = ((t1 - t0).as_secs_f32() * 1e3, t1.elapsed().as_secs_f32() * 1e3);
         self.t_fast_ab.0 += 0.05 * (a - self.t_fast_ab.0);
         self.t_fast_ab.1 += 0.05 * (b - self.t_fast_ab.1);
@@ -4136,7 +4115,7 @@ impl Ui {
     /// window's maps.
     /// `all_sources`: every channel that is on (the zoom overview), else only those of the window being drawn.
     fn traces(&self, l: &mut Layers, area: Rect, zoom: bool, all_sources: bool) {
-        let (ph, vmax, vmax_cg) = if zoom { (&self.phz, &self.vmaxz, self.vmaxz_cg) } else { (&self.ph, &self.vmax, self.vmax_cg) };
+        let (ph, vmax, vmax_cg) = self.trace_maps(zoom, area);
         if l.over.is_none() {
             return self.draw_traces(l.under, area, ph, vmax, vmax_cg, all_sources);
         }
@@ -4185,6 +4164,7 @@ impl Ui {
         let keep = (self.scr, self.grid, std::mem::take(&mut self.wins), self.area, self.cur_win, self.frames);
         self.scr = Screen { w: l.under.w, h: l.under.h };
         self.view_pass = true;
+        self.hi_maps_pass();
         self.render_layers(l);
         self.view_pass = false;
         (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames) = keep;
@@ -4224,6 +4204,7 @@ impl Ui {
         self.scr = Screen { w, h };
         // the panel's full screen is the panel's: the monitor shows the waveform area as it is with the bars
         (self.view_pass, self.wave_pass, self.full) = (true, true, false);
+        self.hi_maps_pass();
         let r = f(self);
         (self.view_pass, self.wave_pass) = (false, false);
         let wrap;
@@ -12383,6 +12364,63 @@ pub struct FastFrame {
     pub plan: FastPlan,
     pub triggered: bool,
     pub fold: [Option<crate::fastdraw::Fold>; NCH],
+}
+
+/// The maps of `fast_draw_all` (`w` x `h`) from the placed frames: each channel's frames collected as differences
+/// (`fastdraw::diff_span`) in `acc`, in bands of columns so one channel alone also spreads over the cores, then summed
+/// into the map once. Returns when the summing started.
+#[allow(clippy::too_many_arguments)]
+fn fast_fill(
+    m: &Model,
+    maps: &mut [Vec<u16>; NCH],
+    acc_t: &mut [Vec<u16>; NCH],
+    w: usize,
+    h: usize,
+    frames: &[std::sync::Arc<crate::board::Frame>],
+    placed: &[FastFrame],
+) -> std::time::Instant {
+    let on: Vec<usize> = (0..NCH).filter(|&c| m.ch[c].on).collect();
+    for &c in &on {
+        if acc_t[c].len() != w * (h + 1) {
+            acc_t[c] = vec![0; w * (h + 1)];
+        }
+    }
+    let bands = if frames.len() < 2 || on.is_empty() { 1 } else { (crate::fastdraw::helpers() + 1).div_ceil(on.len()) };
+    let band_cols = w.div_ceil(bands).max(1);
+    let mut jobs: Vec<(usize, usize, &mut [u16])> = Vec::new();
+    for (c, acc) in acc_t.iter_mut().enumerate() {
+        if on.contains(&c) {
+            jobs.extend(acc.chunks_mut(band_cols * (h + 1)).enumerate().map(|(b, band)| (c, b * band_cols, band)));
+        }
+    }
+    crate::fastdraw::par_each(jobs, |(c, c_lo, band)| {
+        for (f, p) in frames.iter().zip(placed) {
+            fast_deposit_t(m, w, h, c, band, c_lo, f, &p.plan);
+        }
+    });
+    // the rows the frames touched, per channel: only those are added (a trace covers a part of the height)
+    let rows: [(usize, usize); NCH] = std::array::from_fn(|c| {
+        placed.iter().fold((usize::MAX, 0), |(a, b), p| {
+            let (x, y) = match &p.plan {
+                FastPlan::Raw { spans, .. } => spans[c].as_ref().map_or((0, h), crate::fastdraw::span_rows),
+                // a screen record: its points' rows (a segment between two points stays between them)
+                FastPlan::Rec(rec) => rec_rows(m, h, c, &rec.ch[c]),
+            };
+            (a.min(x), b.max(y))
+        })
+    });
+    let t2 = std::time::Instant::now();
+    let pairs: Vec<(usize, &mut Vec<u16>, &mut Vec<u16>)> = maps
+        .iter_mut()
+        .zip(acc_t.iter_mut())
+        .enumerate()
+        .filter(|(c, _)| on.contains(c))
+        .map(|(c, (a, b))| (c, a, b))
+        .collect();
+    crate::fastdraw::par_each(pairs, |(c, map, acc)| {
+        crate::fastdraw::fold_t(map, acc, w, h, band_cols, rows[c].0..rows[c].1)
+    });
+    t2
 }
 
 /// Where channel `c` of a dense frame lands on the `w` x `h` map with the trigger at sample `ti`.

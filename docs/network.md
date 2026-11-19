@@ -266,6 +266,8 @@ ssh.password = on
 remote.mdns = on              # mDNS and DNS-SD (4.1)
 net.name = dho924s-123456     # the name on the network, written at the first start
 graphics = gpu                # System > Graphics: gpu or cpu (gpu/README.md)
+hdmi.traces = own             # HDMI Layout and Waveform: traces from maps of the monitor's size; stretched: the
+                              # panel's maps stretched, less CPU (ADR 0073, read at the start, no menu row)
 ```
 
 ## 6. Firewall, remote access and the MAC address

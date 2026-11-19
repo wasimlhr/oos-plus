@@ -851,11 +851,46 @@ pub struct Phosphor {
     pub map: [Vec<u16>; NCH],
     /// the dots of a dots-only draw are 3 x 3 (the zoom shows real samples, not lines through too few of them)
     pub fat: bool,
+    /// The same maps at the size a monitor shows them (HDMI Layout and Waveform, ADR 0073): every clear, decay and
+    /// draw of these maps goes to them too, so the monitor's traces are drawn at its resolution, not stretched.
+    /// `halve` and the grading are left to the owner (`Ui::grade_refs`). None without such a monitor.
+    pub hi: Option<Box<Phosphor>>,
 }
 
 impl Phosphor {
     pub fn new(w: usize, h: usize) -> Phosphor {
-        Phosphor { w, h, map: Default::default(), fat: false }.init()
+        Phosphor { w, h, map: Default::default(), fat: false, hi: None }.init()
+    }
+
+    /// The size of the monitor's maps (`hi`), if there are any.
+    pub fn hi_size(&self) -> Option<(usize, usize)> {
+        self.hi.as_ref().map(|h| (h.w, h.h))
+    }
+
+    /// Gives these maps monitor maps of `size`, or none. New ones start as these maps stretched to their size (the
+    /// nearest cell), so a persistent or stopped picture is there at once; the next clear replaces it.
+    pub fn set_hi(&mut self, size: Option<(usize, usize)>) {
+        let size = size.filter(|&(w, h)| w > 0 && h > 0);
+        if self.hi_size() == size {
+            return;
+        }
+        self.hi = size.map(|(w, h)| {
+            let mut hi = Phosphor::new(w, h);
+            let xs: Vec<usize> = (0..w).map(|x| x * self.w / w).collect();
+            for (c, map) in hi.map.iter_mut().enumerate() {
+                let src = &self.map[c];
+                if src.iter().all(|&v| v == 0) {
+                    continue;
+                }
+                for (y, row) in map.chunks_mut(w).enumerate() {
+                    let s = &src[y * self.h / h * self.w..][..self.w];
+                    for (d, &sx) in row.iter_mut().zip(&xs) {
+                        *d = s[sx];
+                    }
+                }
+            }
+            Box::new(hi)
+        });
     }
     fn init(mut self) -> Phosphor {
         for c in 0..NCH {
@@ -867,16 +902,25 @@ impl Phosphor {
         for m in self.map.iter_mut() {
             m.iter_mut().for_each(|x| *x = 0);
         }
+        if let Some(hi) = &mut self.hi {
+            hi.clear();
+        }
     }
     #[allow(dead_code)]
     pub fn clear_ch(&mut self, c: usize) {
         self.map[c].iter_mut().for_each(|x| *x = 0);
+        if let Some(hi) = &mut self.hi {
+            hi.clear_ch(c);
+        }
     }
     /// Multiplies every count by f (0..1).
     pub fn decay(&mut self, f: f32) {
         let k = (f.clamp(0.0, 1.0) * 65536.0) as u32;
         if k >= 65536 {
             return;
+        }
+        if let Some(hi) = &mut self.hi {
+            hi.decay(f);
         }
         for m in self.map.iter_mut() {
             for x in m.iter_mut() {
@@ -888,7 +932,8 @@ impl Phosphor {
     }
 
     /// Halves every count (non-zero counts stay >= 1, so rare hits survive): keeps the density ratios when the
-    /// counts approach saturation under long persistence.
+    /// counts approach saturation under long persistence. These maps only: the monitor's (`hi`) are halved by their
+    /// own counts.
     pub fn halve(&mut self) {
         for m in self.map.iter_mut() {
             for x in m.iter_mut() {
@@ -916,6 +961,10 @@ impl Phosphor {
     /// between its extremes; two dots would drop the edges of a slow time base.
     #[allow(clippy::too_many_arguments)]
     pub fn draw_ex(&mut self, c: usize, m: &Model, view: (f32, f32), rec_t0: f64, dt: f64, v: &[f32], w: u16, z: Option<&[f32]>, pairs: bool) {
+        if let Some(hi) = &mut self.hi {
+            hi.fat = self.fat;
+            hi.draw_ex(c, m, view, rec_t0, dt, v, w, z, pairs);
+        }
         let (pw, ph) = (self.w, self.h);
         draw_trace(&mut self.map[c], pw, ph, 0, c, m, view, rec_t0, dt, v, w, z, pairs);
         // fat: where the zoom has too few samples, each real sample is marked with a 3 x 3 dot (the line goes on through them)
