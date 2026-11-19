@@ -423,6 +423,13 @@ pub trait Protocol: Sync {
         false
     }
 
+    /// Whether `p` is a field every message begins with and that says nothing of what the message is (the sync of
+    /// a USB packet, the start sequence of a FlexRay frame). The text of a message leaves it out, so a box with
+    /// little room begins with what tells one message from the next; as a field it has its box and its row.
+    fn lead(&self, _p: &Packet) -> bool {
+        false
+    }
+
     /// Whether the data of the decoder is shown as characters with these options (a Format option of the module:
     /// Hex, ASCII). The UART has the shared Format row instead ([`Row::Fmt`]).
     fn chars(&self, _opt: &[usize; OPTS]) -> bool {

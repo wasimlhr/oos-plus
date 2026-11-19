@@ -102,6 +102,10 @@ impl Protocol for FlexRay {
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
         Some(|p| p.kind == oos_dsp::decode::Kind::Field("TSS"))
     }
+    /// Which says nothing of the frame: its text begins with the indicators and the identifier.
+    fn lead(&self, p: &Packet) -> bool {
+        p.kind == oos_dsp::decode::Kind::Field("TSS")
+    }
     fn key(&self) -> &'static str {
         "FlexRay"
     }

@@ -552,11 +552,16 @@ Changed:
   of a real bus with two devices on the host; not yet verified on hardware). "ROM 55" reads "ROM 55 Match"
   (Read, Match, Skip, Search, Alarm search and the two overdrive commands; the commands after them are those of a
   device family and stay numbers). The Events pane has ROM, Family, Serial, CRC and Data.
-- SIM bus presets: the lines stand above the band of the decoder (unit before the change, host-tested after it).
+- SIM bus presets: the lines stand above the band of the decoder (unit, before and after).
   A line was scaled to the nearest step, which could be the smaller one: a bus of 3.3 V had 6.6 of the 8
   divisions, ran down into the band, and its own label stood over the name of the band. A line has the first step
   at which it fits its share, and the lowest division of the plot is left to the band. The start of a CAN-FD
   frame reads "SOF", as that of a CAN frame does; it read "S".
+- USB and FlexRay: the text of a message begins with what the message is (unit before the change, host-tested
+  after it). Every USB packet begins with its sync and every FlexRay frame with its start sequence, and a box
+  with little room read "SYNC FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR
+  5 ...", "IND 4 ID 02A ..."); drawn as fields, and in the Fields view, it is there as before. A module says
+  which field that is (`lead`).
 - C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
   yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
   - the levels were fixed voltages: a low-power level was one above 0.8 V, and the capture's lines swing 1.16 V

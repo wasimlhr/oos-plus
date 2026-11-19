@@ -128,6 +128,15 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       bench signal has none of.
    3. The buses of his demo board, as he connects them: CAN, CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC 429,
       USB (in this order: the three first are the ones whose decoders were changed on their captures).
+      Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope
+      makes the traffic, decodes it and shows it. That checks the screen and the path of the decoder on the
+      unit, not the decode of a real signal. All eight decode without an error; the band and the columns of the
+      Events pane are as meant for each (1553: RT, T/R, SA, WC/MC, Data, Status; USB: Packet, Address, Endpoint,
+      Data, CRC; SENT without its slow columns, since the traffic has no slow channel). Three flaws the pass
+      showed are fixed: a simulated line ran down into the band and its label covered the name of the band
+      (seen right on the unit afterwards); the start of a CAN-FD frame read "S" beside CAN's "SOF"; a narrow box
+      of a USB packet read "SYNC FS..." (the last one host-tested, not yet on the unit). What is open for every
+      one of them is the real signal.
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),

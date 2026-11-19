@@ -26,6 +26,10 @@ impl Protocol for Usb {
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
         Some(|p| p.kind == oos_dsp::decode::Kind::Field("SYNC"))
     }
+    /// Every packet begins with its sync: the text of a packet begins with what it is ("SETUP ADDR 5 ...").
+    fn lead(&self, p: &Packet) -> bool {
+        p.kind == oos_dsp::decode::Kind::Field("SYNC")
+    }
     fn key(&self) -> &'static str {
         "Usb"
     }

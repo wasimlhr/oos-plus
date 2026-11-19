@@ -921,6 +921,17 @@ mod tests {
             assert_eq!(rows[0].cells, ["17", "R", "02", "02", "0005 0006", "17 TF"]);
             assert_eq!(rows[1].cells, ["17", "T", "00", "18", "", ""]);
         }
+        // FlexRay, where it is built in: the start sequence every frame begins with is no part of the text of a
+        // frame, and it is a field with its row
+        if let Some(proto) = Proto::from_key("FlexRay") {
+            m.dec_proto = proto;
+            let p = [at(0.0, DecKind::Field("TSS"), 11), at(1.0, id(false), 0x2a), at(2.0, DecKind::Data, 0x11)];
+            let text = |view: EvView| -> Vec<String> {
+                rows_of(&m, 0, "D1 FlexRay", &p, view).iter().map(|r| r.text.clone()).collect()
+            };
+            assert_eq!(text(EvView::Messages), ["ID 02A 11"]);
+            assert_eq!(text(EvView::Fields).first().map(String::as_str), Some("TSS B"));
+        }
         // a UART has no columns: a row is its text
         m.dec_proto = Proto::UART;
         assert!(rows_of(&m, 0, "D1 UART", &[byte(0.0, b'H')], EvView::Messages)[0].cols.is_empty());
