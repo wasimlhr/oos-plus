@@ -139,7 +139,9 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       now (unit: 88 frames, 21 identifiers, none wrong). Open: an error frame, which the board does not send;
       the trigger at 5 us/div and 200 us/div after the last change; and the unit left the network about 100 s
       after the start of the build with the last change (20261119-190204), in the run that measured the
-      trigger, cause not known.
+      trigger, cause not known. It was back later the same day after a restart, the build confirmed by its
+      trial start; its log of that start has the Ethernet without an address for a time, and nothing of the
+      run before it.
    4. The other buses of his demo board, as he connects them: CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC
       429, USB.
       Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope
