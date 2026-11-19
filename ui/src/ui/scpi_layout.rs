@@ -644,7 +644,8 @@ mod tests {
     fn elements_list_the_bars_and_views_and_the_context_menu_by_name() {
         let mut u = studio();
         let e = text(cmd(&mut u, ":UI:ELEMents?", ""));
-        assert!(e.contains("TOP,\"Single\","), "{e}");
+        // (the bar has no Single button: the key of the front panel)
+        assert!(e.contains("TOP,\"Stop\",") && !e.contains("TOP,\"Single\","), "{e}");
         assert!(e.contains("BOTTOM,\"CH1\","), "{e}");
         assert!(e.contains("VIEW,\"Waveform (WAVE)\","), "{e}");
         let only_top = text(cmd(&mut u, ":UI:ELEMents?", "TOP"));

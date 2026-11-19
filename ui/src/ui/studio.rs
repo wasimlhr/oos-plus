@@ -499,7 +499,9 @@ impl Ui {
         // the same sizes as the Default bar: the status pill at the left, small buttons of the bar height
         let btn_w = |label: &str| (f.mb.width(label) + pad).max(floor);
         let pill = Rect::new(8, 6, 92.max(30 + f.mb.width("TRIG'D") + 12), 28);
-        let single = Rect::new(pill.right() + 4, CHIP_Y, 54, CHIP_H);
+        // no Single button: the front panel has the key (as the Default layout has none), and the Menu has the row.
+        // Its 58 px go to the read-out of the acquisition
+        let single = Rect::new(pill.right(), CHIP_Y, 0, CHIP_H);
         let mut x = single.right() + gap;
         // Live: the way back from a loaded file or a SIM, as in the Default bar
         let badge = if self.record_mode() { Rect::new(x, CHIP_Y, btn_w("Live"), CHIP_H) } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
@@ -572,8 +574,10 @@ impl Ui {
             cv.triangle([(gx - 4, gy - 6), (gx - 4, gy + 6), (gx + 6, gy)], col);
         }
         cv.text_in(&f.mb, Rect::new(r.x + 30, r.y, r.w - 30, r.h), 0, txt, col);
-        btn(cv, t.single, BTN, BTN_BORDER);
-        cv.text_in(&f.s, t.single, 1, "Single", TEXT);
+        if t.single.w > 0 {
+            btn(cv, t.single, BTN, BTN_BORDER);
+            cv.text_in(&f.s, t.single, 1, "Single", TEXT);
+        }
         if t.badge.w > 0 {
             btn(cv, t.badge, mix(BAR, ACCENT, 50), ACCENT);
             cv.text_in(&f.mb, t.badge, 1, "Live", ACCENT);
@@ -1251,7 +1255,7 @@ impl Ui {
             self.view_box_tap(x, y);
         } else if hit(t.run) {
             self.studio_run_stop();
-        } else if hit(t.single) {
+        } else if t.single.w > 0 && hit(t.single) {
             self.studio_single();
         } else if t.autoset.w > 0 && hit(t.autoset) {
             self.key(key::AUTO);
