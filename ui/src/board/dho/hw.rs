@@ -148,6 +148,7 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
         delay: if slow_mode(m) == Slow::Off { m.delay as f64 } else { 0.0 },
         mode: if m.acq == AcqMode::Peak { oos_hal::dho::acq::Mode::Peak } else { oos_hal::dho::acq::Mode::Normal },
         holdoff: (m.holdoff as f64).max(oos_hal::dho::seq::HOLDOFF_MIN),
+        holdoff_spread: 0.0,
         mask,
         tdiv,
         depth,
@@ -209,6 +210,11 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
     if !serial_lines_acquired(&s.trigger, s.mask) {
         s.trigger = Trig::Edge;
     }
+    // the protocol trigger on an edge of its line: the software finds the event in the record, and each batch has
+    // a holdoff of its own, so a bus that repeats is not met at the same messages every time
+    if m.trig_type == TrigType::Bus && s.trigger == Trig::Edge {
+        s.holdoff_spread = BUS_HOLDOFF_SPREAD;
+    }
     if let Some(count) = hw_avg_count(m, &s) {
         s.mode = oos_hal::dho::acq::Mode::Average { count };
     }
@@ -217,6 +223,11 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
     }
     s
 }
+
+/// The longest time the holdoff of a batch is drawn above the set one for a protocol trigger the software decides
+/// (`Settings::holdoff_spread`). Longer than the period of a bus that sends its messages in a cycle of 10 ms; a
+/// batch lasts 25 ms after its first frame, so with a longer cycle the frames of a batch are spread without it.
+const BUS_HOLDOFF_SPREAD: f64 = 16e-3;
 
 /// The live compression for the model (compress.rs): the factor of `compress::k_for` for the record of `s` where the
 /// model allows it (not in roll or scan), else none.
@@ -1540,6 +1551,8 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
         let mut armed: Option<(Settings, u64)> = None;
         // the SINGLE stamp whose batch brought its frame (`single_wants_more`)
         let mut single_done: Option<u64> = None;
+        // draws the holdoff of each batch where the settings ask for one (`Settings::holdoff_spread`)
+        let mut spread = crate::wave::Rng::new(0x9e37_79b9_7f4a_7c15);
         // the hardware segmented recording in progress or read back
         let mut segrun: Option<SegRun> = None;
         // hardware average: triggers since the last clear, the `Shared::avg_clear` it was cleared for, batches logged
@@ -2068,6 +2081,9 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
             let ahead = armed.as_ref().is_some_and(|(a, st)| *a == b && *st == stamp);
             if !ahead {
                 disarm(&mut armed, &mut state, &mut bar, &mut c2h);
+                if b.holdoff_spread > 0.0 {
+                    bar.apply(&state.holdoff_steps(&b, spread.uniform() * b.holdoff_spread));
+                }
             }
             armed = None;
             let changed = || {
@@ -2213,6 +2229,9 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
                         single_done = Some(stamp);
                     }
                     if prearm_on() && avg.is_none() && !b.single && prearm_keeps_replay(&b, &p, deep_want) {
+                        if b.holdoff_spread > 0.0 {
+                            bar.apply(&state.holdoff_steps(&b, spread.uniform() * b.holdoff_spread));
+                        }
                         match seq::prearm(&mut state, &b, &p, &mut bar, &mut c2h, |_| {}) {
                             Ok(()) => armed = Some((b.clone(), stamp)),
                             Err(e) => status(format!("prearm: {}", e)),
@@ -2782,9 +2801,13 @@ mod tests {
         assert_eq!((s.trig_src, s.level, s.line_level), (3, 0.5, [Some(2.5), Some(0.25), Some(0.5), None]));
         m.trig_type = TrigType::Edge;
         assert_eq!(settings(&m, false).line_level, [None; 4], "another trigger type has none");
+        assert_eq!(settings(&m, false).holdoff_spread, 0.0, "nor a holdoff of its own for each batch");
         m.trig_type = TrigType::Bus;
         m.dec_cs = None;
         assert_eq!(spi_of(&m), None, "no chip select: software");
+        // the software decides on an edge of the line: each batch with a holdoff of its own
+        let s = settings(&m, false);
+        assert_eq!((s.trigger == Trig::Edge, s.holdoff_spread), (true, BUS_HOLDOFF_SPREAD));
         // I2C: SDA on dec_src, SCL on dec_src2
         let mut m = Model::default();
         (m.trig_type, m.dec_proto, m.dec_src, m.dec_src2) = (TrigType::Bus, Proto::I2C, 0, 1);

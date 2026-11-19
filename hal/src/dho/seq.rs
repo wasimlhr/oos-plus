@@ -82,6 +82,12 @@ pub const HOLDOFF_MIN: f64 = 8e-9;
 pub struct Settings {
     /// trigger holdoff, seconds (`HOLDOFF_MIN` = none)
     pub holdoff: f64,
+    /// How much longer than `holdoff` the holdoff of a batch may be, seconds; the host draws it anew for every batch
+    /// (`State::holdoff_steps`). 0: `holdoff` for all. For a trigger whose event the software finds in the record
+    /// (a protocol trigger on an edge of its line): with one holdoff the frames of a batch follow each other at a
+    /// fixed time, and on a bus that repeats its traffic they hold the same messages every time (seen on a unit: a
+    /// CAN bus with a period of 9.5 ms, 100 of 100 records on one message, another one for each holdoff).
+    pub holdoff_spread: f64,
     /// time in the middle of the record relative to the trigger, seconds; kept within half a record
     pub delay: f64,
     pub mode: acq::Mode,
@@ -185,7 +191,7 @@ impl Default for Settings {
     /// verified window (4000 points from 1,248,000).
     fn default() -> Settings {
         let c = Chan { scale: 1.0, offset: 0.0, bw: afe::bw::OFF, probe: 1.0, bias: 0.0, skew: 0.0, couple: Couple::Dc, invert: false };
-        Settings { delay: 0.0, mode: acq::Mode::Normal, holdoff: HOLDOFF_MIN, mask: 1, tdiv: 200e-6, depth: 0, ch: [c; 4], afe: false, trig_src: 1, slope: tpu::Slope::Rising, level: 1.5, line_level: [None; 4], auto: true, auto_fast: false, single: false, trigger: Trig::Edge, window: Some((4000, -2000)), play4: true, blocks: 7, header: false, noise_reject: false, trig_couple: tpu::Coupling::Dc, frames: 1, compress: 1, la: None, segments: None, aux: auxout::AuxOut::TriggerOut, hwmask: None, hwzone: None }
+        Settings { delay: 0.0, mode: acq::Mode::Normal, holdoff: HOLDOFF_MIN, holdoff_spread: 0.0, mask: 1, tdiv: 200e-6, depth: 0, ch: [c; 4], afe: false, trig_src: 1, slope: tpu::Slope::Rising, level: 1.5, line_level: [None; 4], auto: true, auto_fast: false, single: false, trigger: Trig::Edge, window: Some((4000, -2000)), play4: true, blocks: 7, header: false, noise_reject: false, trig_couple: tpu::Coupling::Dc, frames: 1, compress: 1, la: None, segments: None, aux: auxout::AuxOut::TriggerOut, hwmask: None, hwzone: None }
     }
 }
 
@@ -485,6 +491,13 @@ impl State {
         }
         self.holdoff_set = set;
         w
+    }
+
+    /// The holdoff of the next batch alone: `s.holdoff` and `extra` seconds on top of it (`Settings::holdoff_spread`).
+    /// Written between two batches, with nothing armed. The next trigger set-up writes `s.holdoff` again.
+    pub fn holdoff_steps(&mut self, s: &Settings, extra: f64) -> Vec<Write> {
+        self.holdoff_set = true;
+        tpu::holdoff(&mut self.ts, time_fs(s.holdoff + extra.max(0.0)))
     }
 
     /// One acquisition with the configured registers: arm, wait, read-out window, read.
@@ -1294,6 +1307,12 @@ mod tests {
         let on = Settings { holdoff: 1e-3, ..base.clone() };
         assert!(has(&st.trigger(&on)));
         assert!(has(&st.trigger(&base)), "back to none must reach the hardware");
+        assert!(!has(&st.trigger(&base)));
+        // a holdoff of one batch (`holdoff_steps`): 2 ms and 8 ns are 312 501 ticks of 6.4 ns; the set-up after it
+        // writes the holdoff of the settings again
+        let w = st.holdoff_steps(&base, 2e-3);
+        assert_eq!(w.iter().find(|x| x.0 == 0x2084).map(|x| x.1), Some(312_501));
+        assert!(has(&st.trigger(&base)), "the set holdoff after one of a batch");
         assert!(!has(&st.trigger(&base)));
     }
 
