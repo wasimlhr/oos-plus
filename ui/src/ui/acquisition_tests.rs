@@ -61,9 +61,14 @@ fn live_raw_at(tdiv: f64) {
             ui.step(0.02);
         }
         ui.meas_bg.as_mut().unwrap().busy = false;
-        for _ in 0..50 {
+        // steps until the worker has answered the record waiting for it (however slow or loaded the computer)
+        let t = std::time::Instant::now();
+        loop {
             ui.step(0.02);
-            std::thread::sleep(std::time::Duration::from_millis(2));
+            if (!ui.meas_bg.as_ref().unwrap().busy && !ui.meas_want) || t.elapsed().as_secs() > 20 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
         }
         let avg = ui.meas(0, Meas::Vavg);
         assert!((avg - high as f64 / 4.0).abs() < 0.03, "Mean live at {} s/div, round {}: {}", tdiv, round, avg);
