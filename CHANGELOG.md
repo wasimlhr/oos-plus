@@ -699,7 +699,11 @@ Changed:
   - A packet that is an Ethernet frame shows its parts in place of its bytes: the preamble with its delimiter,
     the destination and the source address, the type, the bytes behind it and the frame check, which is marked
     where the CRC-32 of the frame is another. As bytes alone the board's good and changed frames looked alike;
-    Trigger > Bus > Error now finds the changed ones. A frame the record cuts off has no check.
+    Trigger > Bus > Error now finds the changed ones. A frame the record cuts off has no check. The start of
+    the frame is found as a receiver finds it, by the two ones that end the preamble, wherever they stand: the
+    first bit of a preamble was read wrong where the line leaves its rest (a first byte of 0x54 in a record of
+    the unit), and the frame behind it would have stayed bytes. Read on the host from records fetched from the
+    unit: the good frames with their parts, the changed one with its check marked.
   - The bit clock follows the edge in the middle of every bit. It ran on from the first edge of a packet at the
     rate set or found, and was a cell off before a long packet ended where the sender's clock was another: a
     packet of 1500 bytes at 200 ppm from the rate set went wrong from its byte 234 (host; the frames of the

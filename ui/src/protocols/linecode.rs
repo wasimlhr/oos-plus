@@ -42,18 +42,27 @@ const FIELD_BITS: [&str; 17] =
 /// The shortest Ethernet frame, from its destination address to its check.
 const ETHERNET_MIN: usize = 64;
 
-/// A packet that is an Ethernet frame (10BASE-T), from its `bytes`: a preamble of 0x55 and the start delimiter 0xD5,
-/// then at least the two addresses and the type. Its parts in place of the bytes that hold them: the preamble with
-/// its delimiter (value = how many bytes), the destination and the source address, the type, the bytes behind it
-/// as they are, and the frame check as the last four bytes where the packet is `whole` (the record has its end)
-/// and long enough for a frame: `ok` where the CRC-32 over the frame is that check. None where the packet is no
-/// such frame (and with the other convention for a one it is none: every byte is the other one).
+/// How far into a packet the start delimiter of an Ethernet frame is looked for, in bits: the 64 of a whole preamble
+/// and a few more.
+const ETHERNET_SFD_WITHIN: usize = 72;
+
+/// A packet that is an Ethernet frame (10BASE-T), from its `bits`: a preamble of ones and zeros in turn that ends
+/// in the start delimiter, two ones, then at least the two addresses and the type. The delimiter is found as a
+/// receiver finds it, by the two ones behind 14 bits of the pattern, wherever they stand: the first bits of a
+/// preamble are lost or read wrong where the line leaves its rest (seen on a unit: a first byte of 0x54 for 0x55,
+/// and the frame behind it was taken for bytes). Its parts in place of its bytes: the preamble with its delimiter
+/// (value = how many bytes, rounded up), the destination and the source address, the type, the bytes behind it,
+/// and the frame check as the last four bytes where the packet is `whole` (the record has its end) and long enough
+/// for a frame: `ok` where the CRC-32 over the frame is that check. None where the packet is no such frame (and
+/// with the other convention for a one it is none: every bit is the other one).
 ///
 /// Seen on a unit: a board that sends a ping and frames changed on purpose, which differ in a few header bytes and
 /// have a check that does not fit; as bytes alone the two looked alike.
-fn ethernet_frame(bytes: &[Packet], whole: bool) -> Option<Vec<Packet>> {
-    let sfd = bytes.iter().position(|b| b.value != 0x55).filter(|&i| (1..=8).contains(&i) && bytes[i].value == 0xd5)?;
-    let frame = &bytes[sfd + 1..];
+fn ethernet_frame(bits: &[(f64, bool)], half: f64, whole: bool) -> Option<Vec<Packet>> {
+    // the delimiter ends at bit `k`: two ones, behind seven pairs of a one and a zero
+    let pattern = |k: usize| (0..14).all(|j| bits[k - 1 - j].1 == (j % 2 == 0)) && bits[k].1;
+    let k = (15..bits.len().min(ETHERNET_SFD_WITHIN)).find(|&k| pattern(k))?;
+    let frame = manchester_fields(&bits[k + 1..bits.len() - (bits.len() - k - 1) % 8], half, 0, 0, 8);
     if frame.len() < 14 {
         return None;
     }
@@ -62,8 +71,9 @@ fn ethernet_frame(bytes: &[Packet], whole: bool) -> Option<Vec<Packet>> {
         let (t0, t1) = (of[0].t0, of[of.len() - 1].t1);
         Packet { t0, t1, kind, value, value2, ok }
     };
+    let (t0, t1) = (bits[0].0 - half, bits[k].0 + half);
     let mut out = vec![
-        span(Kind::Field("PRE"), &bytes[..=sfd], sfd as u32 + 1, None, true),
+        Packet { t0, t1, kind: Kind::Field("PRE"), value: (k as u32 + 1).div_ceil(8), value2: None, ok: true },
         span(Kind::Field("MAC"), &frame[..6], be(0..4), Some(be(4..6)), true),
         span(Kind::Field("SRC"), &frame[6..12], be(6..10), Some(be(10..12)), true),
         span(Kind::Field("TYPE"), &frame[12..14], be(12..14), None, true),
@@ -176,10 +186,10 @@ impl Protocol for Manchester {
             if sync + header > 0 {
                 out.extend(manchester_fields(&bits, half, sync, header, word));
             } else if n > 32 || n % 8 == 0 {
-                let bytes = manchester_fields(&bits[..n - n % 8], half, 0, 0, 8);
                 // (whole: the pause that ends the packet is in the record)
                 let whole = bits[n - 1].0 + 4.0 * half < l.main().len() as f64 - 1.0;
-                out.extend(ethernet_frame(&bytes, whole).unwrap_or(bytes));
+                let frame = ethernet_frame(&bits, half, whole);
+                out.extend(frame.unwrap_or_else(|| manchester_fields(&bits[..n - n % 8], half, 0, 0, 8)));
             } else {
                 let value = bits.iter().fold(0u32, |v, b| v << 1 | b.1 as u32);
                 let (kind, t1) = (Kind::Field("PKT"), bits[n - 1].0 + half);
@@ -395,6 +405,33 @@ mod tests {
         // every part lies where its bytes are: the fields of a frame follow each other without a gap
         for w in p[frames[0].clone()].windows(2).skip(1) {
             assert!((w[1].t0 - w[0].t1).abs() < 1.0, "{:?} {:?}", w[0], w[1]);
+        }
+        // the first bits of a preamble are lost or wrong where the line leaves its rest: the delimiter is found
+        // all the same, three bits short, with the first bit the other one, or with a bit too many in front
+        for damage in 0..3 {
+            let bytes = [0x55u8; 7].iter().chain([0xd5u8].iter()).chain(frame.iter());
+            let mut bits: Vec<bool> = bytes.flat_map(|b| (0..8).map(move |k| b >> k & 1 == 1)).collect();
+            match damage {
+                0 => drop(bits.drain(..3)),
+                1 => bits[0] = false,
+                _ => bits.insert(0, false),
+            }
+            let mut w = vec![0.0f32; 64];
+            for one in bits {
+                w.extend(std::iter::repeat_n(if one { 0.0 } else { 1.0 }, 8));
+                w.extend(std::iter::repeat_n(if one { 1.0 } else { 0.0 }, 8));
+            }
+            w.extend(std::iter::repeat_n(0.0, 64));
+            // (a second packet: a line with a pause)
+            w.extend([1.0f32; 8].iter().chain([0.0f32; 8].iter()).cycle().take(16 * 8));
+            w.extend(std::iter::repeat_n(0.0, 64));
+            let lines = [Some(&w[..]), None, None, None];
+            let (opt, sh) = ([MANCHESTER_AUTO, 0, 0, 0], Shared::default());
+            let l = Lines { lines, dt: 1.0, thr: 0.5, hy: 0.05, opt, sh, chans: [None; 4], src: [None; 4] };
+            let q = Manchester.decode(&l).unwrap();
+            let check = q.iter().find(|x| x.kind == Kind::Crc);
+            let check = check.unwrap_or_else(|| panic!("damage {damage}: {:?}", &q[..6.min(q.len())]));
+            assert_eq!((check.value, check.ok), (fcs, true), "damage {damage}");
         }
         // the other convention: no frame, the bytes
         let other = decode([MANCHESTER_AUTO, 1, 0, 0]);
