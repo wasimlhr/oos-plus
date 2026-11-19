@@ -575,7 +575,9 @@ mod tests {
         let waves: Vec<Option<Vec<f32>>> = d.lines.iter().map(|l| l.as_ref().map(wave)).collect();
         let (opt, lines) = (opt_fit(i as u8, opt_default(i as u8)), std::array::from_fn(|k| waves[k].as_deref()));
         let (thr, sh) = (m.setup().thr, Shared::default());
-        let l = Lines { lines, dt, thr, hy: 0.1, opt, sh, chans: [None; 4], src: [None; 4] };
+        // (the lines as the four channels too, in the order of their roles: a Parallel bus reads a bank of them)
+        let src = [Some(0), Some(1), Some(2), Some(3)];
+        let l = Lines { lines, dt, thr, hy: 0.1, opt, sh, chans: lines, src };
         Some(m.decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e)))
     }
 
@@ -611,7 +613,10 @@ mod tests {
             let n = (3.0 * d.period / dt) as usize;
             let waves: Vec<Option<Vec<f32>>> = d.lines.iter().map(|l| l.as_ref().map(|f| (0..n).map(|k| f((k as f64 * dt).rem_euclid(d.period)) as f32).collect())).collect();
             let s = m.setup();
-            let l = Lines { lines: std::array::from_fn(|k| waves[k].as_deref()), dt, thr: s.thr, hy: 0.1, opt: opt_fit(i as u8, opt_default(i as u8)), sh: Shared::default(), chans: [None; 4], src: [None; 4] };
+            let lines: [Option<&[f32]>; 4] = std::array::from_fn(|k| waves[k].as_deref());
+            let (opt, sh) = (opt_fit(i as u8, opt_default(i as u8)), Shared::default());
+            let src = [Some(0), Some(1), Some(2), Some(3)];
+            let l = Lines { lines, dt, thr: s.thr, hy: 0.1, opt, sh, chans: lines, src };
             let p = m.decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e));
             assert!(!p.is_empty(), "{}: nothing decoded from its demo", m.name());
             // (I2C had an exception here: the byte that ends a read is not acknowledged, and the decoder called it an

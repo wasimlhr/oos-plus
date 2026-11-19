@@ -57,7 +57,7 @@ outside the tree (`local/captures`, ignored), with the scripts that run a decode
 (`oos-ui --serve --open <file>`, the decoder on reference sources, `:DECode:EVENts?`).
 
 A decoder can also be tried on the scope with nothing connected: SIM > Preset has a bus for every protocol whose
-traffic the scope can make (27 of them), which it generates into references and decodes. That checks the screen
+traffic the scope can make (28 of them: every decoder), which it generates into references and decodes. That checks the screen
 and the decoder's path on the unit, not the decode of a real signal: the traffic is the one the tests decode.
 
 ## Steps
@@ -153,9 +153,9 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    the screen, which is fixed and seen fixed on the unit, as is the text of a USB packet. Manchester, MLT-3
    and Modbus ASCII got traffic of their own and ran on the unit likewise, and so did the DS2482 bridge, JTAG
    and a C-PHY lane with a short packet; Quad-SPI has frames on one line each way, which its four roles carry:
-   27 presets, all of the 13 decoders of step 5 but Parallel among them (its lines are channels, not roles),
-   and every one of the 27 has played and decoded on the unit without an error (the last with build
-   20261119-143504).
+   27 presets, and every one of the 27 has played and decoded on the unit without an error (the last with build
+   20261119-143504). Parallel reads a bank of stored lines as it reads a bank of channels, so it has a preset
+   too (a counter of three bits with its clock): 28, one for every decoder.
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 

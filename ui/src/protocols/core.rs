@@ -398,6 +398,17 @@ impl Protocol for Parallel {
         let lines: Vec<&[f32]> = (0..n).map(|k| (d0 + k) % n).filter(|&c| Some(c) != l.src[2]).take(l.sh.bits.clamp(1, 4) as usize).map(|c| l.chans[c].ok_or("source channel off")).collect::<Result<_, _>>()?;
         Ok(x1::parallel(&lines, l.lines[2], oos_dsp::trigger::Slope::Rising, l.thr, l.hy))
     }
+    /// A counter of three bits, 0 to 7 and round again, with a clock of 500 kHz whose rising edge stands in the
+    /// middle of each value. The lines are a bank as the decoder takes one: D0 and D1 on the first two, the clock
+    /// on the third (its role), D2 on the fourth.
+    fn demo(&self) -> Option<Demo> {
+        const STEP: f64 = 2e-6;
+        let data = |bit: u32| -> Option<DemoLine> {
+            Some(Box::new(move |t: f64| if ((t / STEP) as u32 >> bit) & 1 == 1 { 3.3 } else { 0.0 }))
+        };
+        let clock: DemoLine = Box::new(|t: f64| if (t / STEP).fract() >= 0.5 { 3.3 } else { 0.0 });
+        Some(Demo { period: 8.0 * STEP, lines: [data(0), data(1), Some(clock), data(2)] })
+    }
     /// D0..D2 on CH1..CH3, the clock on CH4, every channel on (LA: D0).
     fn setup(&self) -> Setup {
         Setup { src: [Some(0), None, Some(3), None], la: [Some(0), None, None, None], rows: &[(Row::Bits, 3)], show_all: true, ..Setup::default() }
