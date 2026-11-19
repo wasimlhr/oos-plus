@@ -250,12 +250,12 @@ mod tests {
         // D1: SPI on the channels, with a threshold of its own on the clock
         (u.m.dec_proto, u.m.dec_on, u.m.dec_src, u.m.dec_src2, u.m.dec_thr) = (Proto::SPI, true, 3, 2, 2.6);
         u.m.dec_thr_line[0] = Some(0.2);
-        let before = u.m.dec_view(0);
-        let same = |m: &Model| {
+        let settings = |m: &Model| {
             let d = m.dec_view(0);
             (d.dec_proto, d.dec_on, d.dec_src, d.dec_src2, d.dec_thr, d.dec_thr_line)
-                == (before.dec_proto, before.dec_on, before.dec_src, before.dec_src2, before.dec_thr, before.dec_thr_line)
         };
+        let before = settings(&u.m);
+        let same = |m: &Model| settings(m) == before;
         assert!(u.sim_preset_set("LIN bus"));
         u.sim_play_set(true).unwrap();
         for _ in 0..4 {
