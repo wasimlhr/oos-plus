@@ -478,7 +478,9 @@ Changed:
   before reads as it did (`dec_thr2` to `dec_thr4`, `main`). Threshold to middle sets every line's to the middle
   of its own signal. The plot has each line's threshold as a dashed line on its trace.
   `:BUS<n>:THReshold <line>,<volts>` sets one, `<line>,DEF` gives it up. The hysteresis is the main line's.
-- SPI decoder: a MISO line, and a message for each frame (host-tested, not yet verified on hardware). MISO is a
+- SPI decoder: a MISO line, and a message for each frame (host-tested; the frames (unit), 2026-11-19: a bus of
+  one word a frame every 500 us gave a row a frame in the Events pane and a box a frame at 200 us/div; the MISO
+  line not yet verified on hardware). MISO is a
   fourth line of the decoder (Decode > Settings > MISO); with a source a word reads MOSI/MISO ("9F/FF"), and
   without one, which is how SPI starts, the bus is read by MOSI alone: choosing SPI no longer gives a line to a
   channel that happens to be on. Where the chip select goes active a frame begins: the band has a start mark
@@ -487,7 +489,8 @@ Changed:
   messages by their pauses, as before.
 - Decoders: messages too close together for even one field's text (a word per SPI frame at a slow time base) are
   read as one stream on the band while they go on so, and the text of a message no longer begins with its own
-  start mark ("50 W 00 42 Sr 50 R 4F 53 N P") (host-tested, not yet verified on hardware).
+  start mark ("50 W 00 42 Sr 50 R 4F 53 N P") (host-tested; the stream (unit), 2026-11-19, the SPI bus above at
+  5 ms/div).
 - Studio: the Decode sheet has a Levels page for the thresholds and Threshold to middle. A decoder of four lines
   has four thresholds, and Settings had no room for them beside the protocol's rows.
 - I2C decoder: at a time base that shows single bits the band has a bit row (host-tested, not yet verified on
