@@ -155,7 +155,8 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    and a C-PHY lane with a short packet; Quad-SPI has frames on one line each way, which its four roles carry:
    27 presets, and every one of the 27 has played and decoded on the unit without an error (the last with build
    20261119-143504). Parallel reads a bank of stored lines as it reads a bank of channels, so it has a preset
-   too (a counter of three bits with its clock): 28, one for every decoder.
+   too (a counter of three bits with its clock, which the unit reads as 00 to 07 with build 20261119-150142):
+   28, one for every decoder, and every one has run on the unit.
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 
