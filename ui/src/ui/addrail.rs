@@ -42,7 +42,7 @@ pub(super) const ADD_KINDS: [(AddKind, &str, &str); 5] = [
 pub(super) const TABLES: [(&str, &str); 3] = [
     ("Measurements", "Every measurement with its statistics, docked at the right."),
     ("Search events", "The time of every search event; tap a row to go there."),
-    ("Bus decode", "The decoded packets of the bus, under the waveform."),
+    ("Decoder events", "What the decoders read, one row an event, under the waveform."),
 ];
 
 /// Plot types of the Plot page.
@@ -248,6 +248,13 @@ impl Ui {
         }
     }
 
+    /// The table the page opens on: one that is on the screen, else the events of what is on (a decoder, then a
+    /// search), else the measurements.
+    pub(super) fn rail_table_default(&self) -> usize {
+        if let Some(i) = (0..TABLES.len()).rev().find(|&i| self.rail_table_shown(i)) { return i; }
+        if self.rail_kind_on(AddKind::Bus) { 2 } else if self.studio.search.is_some() { 1 } else { 0 }
+    }
+
     fn rail_table_shown(&self, i: usize) -> bool {
         match i {
             0 => self.panel_shown(PanelKind::Measurements),
@@ -282,7 +289,7 @@ impl Ui {
             },
             AddKind::Table => {
                 let i = self.sheet.add.table.min(TABLES.len() - 1);
-                if self.rail_table_shown(i) { "On the screen".to_string() } else if i == 2 && self.value(Item::DecOn) != "On" { "Needs a decoder: turn one on in Menu".to_string() } else { String::new() }
+                if self.rail_table_shown(i) { "On the screen".to_string() } else if i == 2 && !self.rail_kind_on(AddKind::Bus) { "Needs a decoder: Add > Bus".to_string() } else { String::new() }
             }
             AddKind::Plot => if self.rail_plot_shown(self.sheet.add.plot) { "On the screen".to_string() } else { String::new() },
             AddKind::Measure => match self.measurement_count() { 0 => "No measurements yet".to_string(), 1 => "1 measurement on the screen".to_string(), n => format!("{n} measurements on the screen") },
@@ -634,7 +641,7 @@ impl Ui {
                 self.table_top = 0;
             }
             _ => {
-                if self.value(Item::DecOn) != "On" { return self.toast("Turn a decoder on first (Menu)"); }
+                if !self.rail_kind_on(AddKind::Bus) { return self.toast("Turn a decoder on first: Add > Bus"); }
                 self.set_decode_table(true);
             }
         }

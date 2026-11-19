@@ -2789,3 +2789,128 @@ fn the_decode_sheet_has_the_protocols_rows_on_its_first_page() {
         u.close_menu();
     }
 }
+
+/// The push of the horizontal SCALE knob switches the fine time base, and the time pill says so. It opened the zoom: a
+/// time base left in fine steps then looked like a broken knob, with no way back from the panel (reported from a unit,
+/// 2026-11-18). The steps come back at the step beside the fine value, and a push closes a zoom that is open.
+#[test]
+fn a_push_of_the_time_knob_switches_the_fine_steps() {
+    let mut u = fresh(Layout::Studio);
+    let step = u.m.tscale;
+    assert!(!u.m.fine_t && !u.m.zoom);
+    assert!(u.studio_time_detail().starts_with("delay"));
+    u.key(key::HSCALE_CW + 2);
+    assert!(u.m.fine_t && !u.m.zoom, "the push opened the zoom");
+    assert!(u.studio_time_detail().starts_with("fine"), "{}", u.studio_time_detail());
+    // a turn in fine steps: a hundredth, not a step
+    let coarse = u.m.time_per_div();
+    u.key(key::HSCALE_CW);
+    u.key(key::HSCALE_CW);
+    let fine = u.m.time_per_div();
+    assert!(fine < coarse && fine > coarse * 0.9, "{coarse} {fine}");
+    // the push back: the time base stays where it is
+    u.key(key::HSCALE_CW + 2);
+    assert!(!u.m.fine_t);
+    assert_eq!(u.m.time_per_div(), fine);
+    assert!(u.studio_time_detail().starts_with("delay"));
+    // counter-clockwise is slower: the step above the fine value, not the one after it
+    u.key(key::HSCALE_CW + 1);
+    assert_eq!((u.m.tscale, u.m.tfine), (step, 1.0));
+    // and clockwise from a fine value: the step below it
+    u.key(key::HSCALE_CW + 2);
+    u.key(key::HSCALE_CW);
+    u.key(key::HSCALE_CW + 2);
+    u.key(key::HSCALE_CW);
+    assert_eq!((u.m.tscale, u.m.tfine), (step - 1, 1.0));
+    // the zoom has its own command; while it is open the push closes it and leaves the steps alone
+    crate::cmd::run(&mut u, "zoom");
+    assert!(u.m.zoom);
+    u.key(key::HSCALE_CW + 2);
+    assert!(!u.m.zoom && !u.m.fine_t);
+    assert!(crate::cmd::remote_ok("zoom") && !crate::cmd::remote_ok("zoom on"));
+}
+
+/// Add > Results table opens the page of the three tables (measurements, search events, decoder events), and each is
+/// put on the screen and taken off there. The row docked the table of the measurements without a word, and no row of
+/// the menu led to the events of a decoder or of a search (asked from a unit, 2026-11-18).
+#[test]
+fn add_results_table_offers_the_three_tables() {
+    use super::addmenu::AddRow;
+    use super::addrail::{AddKind, RailAct};
+    use super::tables::TableKind;
+    let shots = std::env::var("OOS_WALK_SHOTS").ok();
+    let shot = |u: &mut Ui, name: &str| {
+        let Some(dir) = &shots else { return };
+        for _ in 0..20 { u.step(0.04); }
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        u.render(&mut cv);
+        let _ = crate::store::write(&std::path::Path::new(dir).join(format!("{name}.png")), &crate::store::png_of(&cv));
+    };
+    let open = |u: &mut Ui| {
+        if u.menu_open { u.close_menu(); }
+        frame(u);
+        let (x, y) = mid(u.studio_top().add);
+        tap(u, x, y);
+        let (_, row) = u.studio_add_rows().into_iter().find(|(r, _)| *r == AddRow::ResultsTable).expect("the row");
+        let (x, y) = mid(row);
+        tap(u, x, y);
+        frame(u);
+    };
+    let shown = |u: &Ui, i: usize| match i { 0 => u.studio_panel_shown(), 1 => u.table == Some(TableKind::Search), _ => u.table == Some(TableKind::Decode) };
+    let mut u = fresh(Layout::Studio);
+    open(&mut u);
+    assert!(u.menu_open && u.menu == MenuId::AddPanel);
+    assert_eq!(u.sheet.add.kind, Some(AddKind::Table));
+    assert!(!u.studio_panel_shown(), "the row docked the table of the measurements");
+    assert_eq!(u.sheet.add.table, 0, "nothing is on: the measurements");
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    cv.au_start();
+    u.render(&mut cv);
+    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+    for want in ["Measurements", "Search events", "Decoder events"] {
+        assert!(texts.iter().any(|s| s == want), "{want}: {texts:?}");
+    }
+    shot(&mut u, "tables-0-page");
+    // the events of a decoder need one: the page says so and Add shows nothing
+    let ty = u.rail_geo().types[2].1;
+    tap(&mut u, mid(ty).0, mid(ty).1);
+    let g = u.rail_geo();
+    assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [RailAct::Add]);
+    tap(&mut u, mid(g.foot[0].1).0, mid(g.foot[0].1).1);
+    assert!(!shown(&u, 2));
+    u.adjust(Item::DecOn, 1);
+    // every table: chosen, added, named as on the screen, removed
+    for i in 0..3 {
+        frame(&mut u);
+        let ty = u.rail_geo().types[i].1;
+        tap(&mut u, mid(ty).0, mid(ty).1);
+        let g = u.rail_geo();
+        assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [RailAct::Add], "table {i}");
+        tap(&mut u, mid(g.foot[0].1).0, mid(g.foot[0].1).1);
+        frame(&mut u);
+        assert!(shown(&u, i), "table {i} is not on the screen");
+        assert!(u.menu_open && u.menu == MenuId::AddPanel, "the page stays for the next table");
+        shot(&mut u, &format!("tables-{}-on", i + 1));
+        let g = u.rail_geo();
+        assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [RailAct::Remove], "table {i}");
+        tap(&mut u, mid(g.foot[0].1).0, mid(g.foot[0].1).1);
+        frame(&mut u);
+        assert!(!shown(&u, i), "table {i} stayed");
+    }
+    // with a decoder on and no table, the page opens on its events; the row of the menu says On for any of the three
+    open(&mut u);
+    assert_eq!(u.sheet.add.table, 2);
+    let g = u.rail_geo();
+    tap(&mut u, mid(g.foot[0].1).0, mid(g.foot[0].1).1);
+    assert!(shown(&u, 2));
+    u.close_menu();
+    frame(&mut u);
+    let (x, y) = mid(u.studio_top().add);
+    tap(&mut u, x, y);
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    cv.au_start();
+    u.render(&mut cv);
+    let (_, row) = u.studio_add_rows().into_iter().find(|(r, _)| *r == AddRow::ResultsTable).unwrap();
+    let on = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { ref s, bound: Some(b), .. } if s == "On" && b.y == row.y));
+    assert!(on, "the row does not say On with the decoder events on the screen");
+}

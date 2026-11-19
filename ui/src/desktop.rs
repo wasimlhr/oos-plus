@@ -12,7 +12,7 @@
 //!   Alt+wheel      trigger level                            PgUp / PgDn  trigger level
 //!   Space  Run/Stop     S  Single     A  Auto     C  Clear     M  Measure    U  Cursor
 //!   1-4    CH1-CH4      F  Math       R  Ref      L  LA        G  Generator  T  Trigger menu
-//!   H      Horizontal menu            Q  Quick    Z  zoom (H scale push)     F12  screenshot (PNG)
+//!   H      Horizontal menu            Q  Quick    Z  zoom                    F12  screenshot (PNG)
 //!
 //! Hardware buttons and knobs are a separate movable window. The scope display
 //! always uses its full 1024 x 600 buffer. F6 shows or hides the hardware window.
@@ -54,7 +54,7 @@ fn key_cmd(k: Key) -> Option<&'static str> {
         Key::T => "key tmenu",
         Key::H => "key hmenu",
         Key::Q => "key quick",
-        Key::Z => "knob hscale push",
+        Key::Z => "zoom",
         Key::Enter | Key::NumPadEnter => "knob multi1 push",
         Key::Up => "knob vpos +5",
         Key::Down => "knob vpos -5",

@@ -8743,6 +8743,10 @@ impl Ui {
                 if m.fine_t {
                     (m.tscale, m.tfine) = fine_time(old, d);
                 } else {
+                    // from a value between two steps (the fine time base left it there, or a pinch): the step
+                    // beside it comes first. `tscale` is the step above a factor under 1 and the one below a
+                    // factor over 1, so one step towards it is that step itself: 26 us went to 100 us, past 50
+                    let d = if m.tfine < 1.0 && d > 0 { d - 1 } else if m.tfine > 1.0 && d < 0 { d + 1 } else { d };
                     m.tscale = step(m.tscale, tscales().len(), d);
                     m.tfine = 1.0;
                 }
@@ -10674,6 +10678,13 @@ impl Ui {
         self.key(k);
     }
 
+    /// The push of the horizontal SCALE knob: the fine time base on or off, and a line that says which, since the
+    /// knob itself shows nothing. The time base stays where it is; the next turn goes on from there.
+    fn push_fine_time(&mut self) {
+        self.adjust(Item::HFine, 1);
+        self.toast(if self.m.fine_t { "Time base: fine steps" } else { "Time base: 1-2-5 steps" });
+    }
+
     /// A held channel key let go: its own action, unless it was held long enough for AC/DC.
     fn ch_release(&mut self) {
         if let Some((c, _, long)) = self.ch_hold.take() {
@@ -10956,8 +10967,12 @@ impl Ui {
             }
             0xc0 => {
                 if push {
-                    let on = !self.m.zoom;
-                    self.set_zoom(on);
+                    // a push switches between the 1-2-5 steps and the fine time base, as the name of the knob's
+                    // push says on the panel of other scopes. It opened the zoom: a time base left in fine steps
+                    // (the row is in the Horizontal menu) then looked like a broken knob, with no way back from
+                    // the panel (reported from a unit, 2026-11-18). The zoom has its button on the screen and its
+                    // row; while it is open the knob is the zoom's, and a push closes it.
+                    if self.m.zoom { self.set_zoom(false); } else { self.push_fine_time(); }
                 } else if self.m.zoom {
                     self.adjust(Item::ZScale, -dir);
                 } else {

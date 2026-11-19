@@ -3,17 +3,16 @@
 //! under the value when they are on. Detailed: a table (source, name, value, mean, min, max, sigma, count) that drops
 //! sigma and count when the panel is narrow and scrolls sideways when what is left does not fit.
 use super::*;
-use super::studio::{chip, icon_pin, MeasKey, StudioView};
+use super::studio::{chip, MeasKey, StudioView};
 
 /// The columns of the detailed table: name and width. Sigma and Count go first when the room is short.
 /// Widths when the panel is narrow: the source is a colour bar, so Name, Value and Mean fit.
 pub(super) const DETAIL_NARROW_W: [i32; 8] = [44, 54, 76, 74, 74, 74, 62, 52];
 /// Below this width the source is a colour bar only (no name).
 pub(super) const DETAIL_BAR_ONLY_BELOW: i32 = 240;
-/// The room the pin keeps at the right end of the Name cell.
-pub(super) const DETAIL_PIN_W: i32 = 18;
-/// The widest the Name column grows: a long name ("Positive Duty Cycle") and its pin.
-pub(super) const DETAIL_NAME_MAX: i32 = 170;
+/// The widest the Name column grows: a long name ("Positive Duty Cycle"). The table has no thumbtack: it stood at
+/// the end of every name, a column of its own in a panel 320 px wide, and the cards and the list have it.
+pub(super) const DETAIL_NAME_MAX: i32 = 152;
 /// Below this width the table uses them.
 pub(super) const DETAIL_NARROW_BELOW: i32 = 330;
 pub(super) const DETAIL_COLS: [(&str, i32); 8] = [("Source", 44), ("Name", 104), ("Value", 90), ("Mean", 84), ("Min", 84), ("Max", 84), ("\u{3c3}", 76), ("Count", 64)];
@@ -173,14 +172,6 @@ impl Ui {
             .take_while(|(_, r)| r.y < g.list.bottom()).collect()
     }
 
-    /// The pin of a table row: the end of the name cell.
-    pub(super) fn detail_pin_rect(&self, g: &studio::PanelGeo, r: Rect) -> Rect {
-        let hx = self.studio.panel.hx.clamp(0, self.detail_hmax(g.list.w));
-        let (cols, _) = Self::detail_cols(g.list.w);
-        let name = cols.iter().find(|c| c.0 == 1).map_or(0, |c| Self::detail_cell(r, c.1, c.2, hx).right());
-        Rect::new(name - 24, r.y, 28, r.h)
-    }
-
     /// The detailed table in the panel: the column heads in its head row and one row per measurement.
     pub(super) fn draw_panel_detail(&self, cv: &mut Canvas, g: &studio::PanelGeo, rows: &[tools::MeasRow], keys: &[MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
@@ -215,7 +206,6 @@ impl Ui {
             cv.fill(r, if pos % 2 == 1 { mix(PANEL_BG, TEXT, 10) } else { PANEL_BG });
             let row = &rows[i];
             let stats = self.studio_stat_values(i);
-            let pinned = keys.get(i).is_some_and(|key| self.studio_is_pinned(*key));
             for &(c, x, w) in &cols {
                 let cell = Self::detail_cell(r, x, w, hx);
                 let dash = || "----".to_string();
@@ -231,15 +221,12 @@ impl Ui {
                             cv.set_clip(g.list);
                         }
                     }
-                    // the thumbtack comes after the name, in a place of its own
+                    // the name has its whole cell
                     1 => {
-                        let room = cell.w - DETAIL_PIN_W;
-                        let text = Rect::new(cell.x, cell.y, room.max(1), cell.h);
-                        cv.clip_within(text);
-                        let (shown, small) = self.detail_name(keys.get(i).copied(), &row.name, room);
-                        cv.text_in(if small { &f.s } else { &f.m }, text, 0, &shown, TEXT);
+                        cv.clip_within(cell);
+                        let (shown, small) = self.detail_name(keys.get(i).copied(), &row.name, cell.w);
+                        cv.text_in(if small { &f.s } else { &f.m }, cell, 0, &shown, TEXT);
                         cv.set_clip(g.list);
-                        icon_pin(cv, cell.right() - 13, r.y + r.h / 2 + 1, pinned, if pinned { AMBER } else { DIM });
                     }
                     2 => cv.text_in(&f.mb, cell, 2, &row.text(), TEXT),
                     3 => cv.text_in(&f.m, cell, 2, &stats.map_or_else(dash, |s| row.fmt4(s.0)), TEXT),

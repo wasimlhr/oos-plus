@@ -880,7 +880,7 @@ impl Ui {
         let detail = self.studio_time_detail();
         if two && f.mb.width(&label) <= r.w - 52 && f.s.width(&detail) <= r.w - 52 {
             cv.text(&f.mb, r.x + 32, r.y + 13 + BAR_DY, &label, TEXT);
-            cv.text(&f.s, r.x + 32, r.y + 25 + BAR_DY, &detail, if self.m.zoom { ACCENT } else { DIM });
+            cv.text(&f.s, r.x + 32, r.y + 25 + BAR_DY, &detail, if self.m.zoom || self.m.fine_t { ACCENT } else { DIM });
         } else {
             cv.text_fit(&f.mb, Rect::new(r.x + 32, r.y, r.w - 52, r.h), 0, &label, TEXT);
         }
@@ -948,10 +948,13 @@ impl Ui {
     }
 
     /// The second line of the time pill, as the TIME card of the Default layout has it: the zoom scale while the zoom
-    /// is on, else the delay.
+    /// is on, else the delay. With the fine time base on it says so in the place of the word: the knob then moves
+    /// in hundredths, and nothing else on the screen tells why.
     pub(super) fn studio_time_detail(&self) -> String {
         if self.m.zoom {
             format!("zoom {}/div", si_short(tscales()[self.m.zscale] as f64, "s"))
+        } else if self.m.fine_t {
+            format!("fine \u{b7} {}", si_short(self.m.delay as f64, "s"))
         } else {
             format!("delay {}", si_short(self.m.delay as f64, "s"))
         }
@@ -2581,10 +2584,8 @@ impl Ui {
                         let key = keys.get(i).copied();
                         if Self::panel_card_pin(row).contains(x, y) { if let Some(key) = key { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); } } else { self.studio_configure(i); }
                     } else if self.studio_detailed() {
-                        // the thumbtack at the end of the name toggles the pin, the rest of the row opens its settings
-                        if self.detail_pin_rect(&g, row).contains(x, y) {
-                            if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
-                        } else { self.studio_configure(i); }
+                        // the table: the whole row opens its settings (the pin is on the cards and in the list)
+                        self.studio_configure(i);
                     }
                     else if menu.contains(x, y) {
                         if let Some(&key) = keys.get(i) { self.studio.md.menu = Some(key); }
