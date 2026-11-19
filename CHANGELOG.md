@@ -698,8 +698,8 @@ Changed:
   again after the monitor's pass. Reproduced and tested on the host, and on the unit (build 20261119-215725,
   a monitor of 1920 x 1080 connected, HDMI on Layout, the panel's row with two lines): none of 48 pictures of
   the panel without traces, with the zoom and without, with the panel's view and with view 1 on the monitor.
-- Studio, the zoom with its pull-down tab (the owner from the unit; host-tested, the tab and the X also on the
-  unit with build 20261119-215725):
+- Studio, the zoom with its pull-down tab (the owner from the unit; host-tested, and seen on the unit: the tab
+  and the X with build 20261119-215725, the grip in its gap with 20261119-221347):
   - the tab is as wide as what it says ("Zoom 20x"); it was 150 px whatever it said;
   - the X of the toolbar that the tab opened folds the toolbar, and the zoom stays. It closed the zoom, so the
     toolbar could not be put away without losing the zoom. The zoom goes off with its button on the plot, with
