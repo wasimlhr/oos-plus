@@ -167,7 +167,12 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 
 **Protocol decoders (26)**
 - Four decoders at once, with an event table you can export and that jumps to an event; DCC lists one command per row
-  ("Loco 5  Fwd 50/128")
+  ("Loco 5  Fwd 50/128"). The Events pane lists the record as messages, single fields or lines of text, with the
+  time, the length, the text, the bytes in hex and the result of the checks; Errors only leaves the rows that failed
+- A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
+  slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
+  `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART band has a
+  row of its bits (start, data, parity, stop) and marks where each was sampled
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
@@ -780,7 +785,12 @@ shows the gain over frequency, the settings come back afterwards.
 
 **Panes.** Display > Pane puts a second view under the waveform: Spectrum with a peak list, Results with statistics, cursors
 and peaks, decoder Events, or Trend with two charts. Tap the pane's title for its settings, a trend chart to change its
-measurement, the peak list's button to sort it. The x closes the pane.
+measurement, the peak list's button to sort it. The x closes the pane. The Events pane has its choices in its head:
+Messages (what was sent without a long pause is one row), Fields (a row per character or field) or Lines (a character
+stream split at its line feeds), and Errors only. Its list scrolls by the bar or the finger, and a tap on a row moves the
+view to that message and marks it: the row, its box in the decoder's band and its time on the plot. A tap on a box of
+the band does the same from the plot. Made small, the pane keeps the time and the text. Decode > Threshold to middle
+puts a decoder's threshold half way between the levels of its signal.
 
 **Measurements.** A default set-up shows six in the strip under the plot. Measure > Dock moves that strip to the left, the
 right, or above the trace. In Measure > Add item a tap adds a measurement of the source channel and a second tap removes

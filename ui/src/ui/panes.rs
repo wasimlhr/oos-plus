@@ -42,21 +42,17 @@ pub(super) fn harm_names() -> Vec<String> {
     PANE_HARMS.iter().map(|&h| if h == 0 { "All".to_string() } else { h.to_string() }).collect()
 }
 
-/// Columns and rows per column for `n` events in a height: one column while they are few.
-pub(super) fn event_grid(n: usize, h: i32) -> (usize, usize) {
-    let fit = (h / 20).max(1) as usize;
-    let cols = if n <= 4 { 1 } else { 2 };
-    (cols, n.div_ceil(cols).clamp(1, fit))
-}
-
 /// What the second pane keeps between frames.
 #[derive(Default)]
 pub struct PaneState {
     /// first row of the results table
     pub top: usize,
-    /// decoder events, refreshed a few times a second
-    pub events: Vec<tables::EventRow>,
+    /// the rows of the Events pane, refreshed a few times a second (`decrows.rs`)
+    pub rows: Vec<super::decrows::MsgRow>,
     events_t: f64,
+    /// the first row the Events pane shows, and the row chosen by a tap
+    pub ev_top: usize,
+    pub ev_sel: Option<super::decrows::EvSel>,
     /// rows the Events pane is high enough for, and when the list last needed them
     event_rows: usize,
     event_seen: f64,
@@ -376,8 +372,7 @@ impl Ui {
                 }
                 (BAND_H + n.max(1) * ROW_WANT).max(BAND_H + side * 18)
             }
-            tables::PANE_EVENTS if self.pn.event_rows > 0 => self.pn.event_rows as i32 * 24,
-            tables::PANE_EVENTS => HINT_H,
+            tables::PANE_EVENTS => super::decrows::want_h(self.pn.event_rows),
             tables::PANE_BUS if self.pn.views.is_empty() => HINT_H,
             tables::PANE_BUS => self.bus_view_h(),
             tables::PANE_TREND if n == 0 => HINT_H,
@@ -396,9 +391,8 @@ impl Ui {
             self.pn.views = self.bus_views();
             return;
         }
-        self.pn.events = self.decode_events();
-        let n = self.pn.events.len();
-        let want = n.div_ceil(if n <= 4 { 1 } else { 2 });
+        self.pn.rows = self.decode_rows();
+        let want = self.events_count();
         if want >= self.pn.event_rows {
             (self.pn.event_rows, self.pn.event_seen) = (want, self.now);
         } else if self.now - self.pn.event_seen > SHRINK_AFTER {
@@ -994,6 +988,7 @@ impl Ui {
                 }
             }
             tables::PANE_TREND => self.trend_tap(x, y),
+            tables::PANE_EVENTS => self.events_tap(x, y),
             _ => {}
         }
         true

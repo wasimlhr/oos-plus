@@ -25,6 +25,8 @@ pub(super) enum List {
     Results,
     /// the event / search / segment table over the plot (rows)
     Table,
+    /// the Events pane (rows)
+    Events,
 }
 
 /// A scroll bar: where it is, how much there is, how much shows, and where the list stands. Units are the list's own.
@@ -96,6 +98,7 @@ impl Ui {
             List::Catalog => self.catalog_bar(),
             List::Results => self.results_bar(),
             List::Table => self.table_bar(),
+            List::Events => self.events_bar(),
         }
     }
 
@@ -107,13 +110,14 @@ impl Ui {
             List::Catalog => self.cat_scroll = p,
             List::Results => self.pn.top = p as usize,
             List::Table => self.table_top = p as usize,
+            List::Events => self.pn.ev_top = p as usize,
         }
     }
 
     /// The list a finger went down on, and how it holds it. A press on the track outside the thumb jumps there.
     pub(super) fn scroll_grip(&mut self, x: i32, y: i32) -> Option<(List, Grip)> {
         // the topmost first: the measurement page covers the table, the table covers the pane
-        let order: &[List] = if self.menu_open { &[List::Catalog] } else { &[List::Table, List::Results] };
+        let order: &[List] = if self.menu_open { &[List::Catalog] } else { &[List::Table, List::Results, List::Events] };
         for &l in order {
             let Some((bar, area)) = self.scroll_bar(l) else { continue };
             if !bar.needed() {
@@ -153,7 +157,7 @@ impl Ui {
                 let units = match l {
                     List::Catalog => dy,
                     List::Results => dy / self.results_row_pitch().max(1),
-                    List::Table => dy / tables::ROW_H,
+                    List::Table | List::Events => dy / tables::ROW_H,
                 };
                 self.scroll_to(l, pos - units);
                 true
@@ -220,6 +224,8 @@ mod tests {
                 ui.m.ch[2].on = true;
                 ui.m.dec_on = true;
                 ui.m.dec_src = 2;
+                // a row per character: more rows than the table shows
+                ui.m.ev_view = EvView::Fields;
                 crate::cmd::run(&mut ui, &format!("knob hscale +{k}"));
                 for _ in 0..4 {
                     ui.step(0.04);

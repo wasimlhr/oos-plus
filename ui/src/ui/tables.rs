@@ -145,7 +145,8 @@ impl Ui {
 
     pub(super) fn table_rows(&self, k: TableKind) -> Vec<EventRow> {
         match k {
-            TableKind::Decode => self.decode_events(),
+            // as the Events pane lists them: messages, fields or lines
+            TableKind::Decode => self.decode_rows().into_iter().map(|e| EventRow { t: e.t, who: e.who, ok: e.errors == 0, text: e.text }).collect(),
             TableKind::Search => self.search_rows(),
             TableKind::Segments => self.segment_rows(),
         }
@@ -412,30 +413,6 @@ impl Ui {
     /// The close button of the pane.
     pub(super) fn pane_close(r: Rect) -> Rect {
         Rect::new(r.x + r.w - 46, r.y + 2, 42, 36)
-    }
-
-    pub(super) fn draw_pane_events(&self, cv: &mut Canvas, r: Rect) {
-        let f = self.fonts();
-        let rows = &self.pn.events;
-        if rows.is_empty() {
-            cv.text(&f.sb, r.x + 12, r.y + r.h / 2 + 5, "No decoder events in this record", DIM);
-            return;
-        }
-        let (cols, fit) = panes::event_grid(rows.len(), r.h);
-        let pitch = r.h / fit as i32;
-        let col_w = (r.w - 54) / cols as i32;
-        for (i, e) in rows.iter().take(fit * cols).enumerate() {
-            let (cx, y) = (r.x + (i / fit) as i32 * col_w, r.y + (i % fit) as i32 * pitch);
-            if i % fit % 2 == 1 {
-                cv.fill(Rect::new(cx, y, col_w - 4, pitch), ROW_ALT);
-            }
-            // columns at 12, 102 and 212 px with the normal text size, wider with the larger ones
-            let ty = y + (pitch + f.s.size * 3 / 4) / 2;
-            let (x1, x2) = (12 + 90 * f.s.size / 12, 12 + 200 * f.s.size / 12);
-            cv.text(&f.s, cx + 12, ty, &si(e.t, "s"), LABEL);
-            cv.text(&f.s, cx + x1, ty, &e.who, DIM);
-            cv.text(&f.sb, cx + x2, ty, &e.text, if e.ok { TEXT } else { RED });
-        }
     }
 
     pub(super) fn draw_pane_close(&self, cv: &mut Canvas) {
