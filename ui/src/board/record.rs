@@ -333,8 +333,9 @@ mod tests {
                 found(&m, t);
             }
             for what in [BusWhat::Id, BusWhat::Data] {
-                // MLT-3 has no frames: where its bytes begin depends on where the slice begins, and 7 of 40 bytes
-                // were not found at their place (not looked into)
+                // MLT-3 has no frames: its decoder starts the bit grid at the first change of what it is given and
+                // counts bytes from there, so a byte of the whole record is another byte in a slice that begins
+                // elsewhere (7 of 40 bytes of the traffic were not found at their place)
                 if p.key() == "Mlt3" && what == BusWhat::Data {
                     continue;
                 }
