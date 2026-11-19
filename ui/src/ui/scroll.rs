@@ -225,7 +225,7 @@ mod tests {
                 ui.m.dec_on = true;
                 ui.m.dec_src = 2;
                 // a row per character: more rows than the table shows
-                ui.pn.ev_view = decrows::EvView::Fields;
+                ui.m.ev_view = EvView::Fields;
                 crate::cmd::run(&mut ui, &format!("knob hscale +{k}"));
                 for _ in 0..4 {
                     ui.step(0.04);

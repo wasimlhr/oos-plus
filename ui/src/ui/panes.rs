@@ -50,10 +50,9 @@ pub struct PaneState {
     /// the rows of the Events pane, refreshed a few times a second (`decrows.rs`)
     pub rows: Vec<super::decrows::MsgRow>,
     events_t: f64,
-    /// what the Events pane lists: messages, fields or lines; only the rows with a failed check; its first row
-    pub ev_view: super::decrows::EvView,
-    pub ev_errors: bool,
+    /// the first row the Events pane shows, and the row chosen by a tap
     pub ev_top: usize,
+    pub ev_sel: Option<super::decrows::EvSel>,
     /// rows the Events pane is high enough for, and when the list last needed them
     event_rows: usize,
     event_seen: f64,

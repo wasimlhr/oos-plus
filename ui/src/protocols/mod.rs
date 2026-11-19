@@ -132,6 +132,8 @@ pub enum Row {
     CphyRate,
     /// the event table in ASCII
     Fmt,
+    /// the UART line is inverted (idle low): the polarity of the protocol trigger, `Shared::uart_inv`
+    Pol,
 }
 
 /// The values of the shared rows.

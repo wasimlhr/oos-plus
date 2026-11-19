@@ -721,7 +721,7 @@ fn event_table_scrolls_and_goes_to_an_event() {
     u.m.dec_on = true;
     u.m.dec_src = 2;
     // a row per character: more rows than the table holds
-    u.pn.ev_view = decrows::EvView::Fields;
+    u.m.ev_view = EvView::Fields;
     for _ in 0..4 {
         u.step(0.04);
     }

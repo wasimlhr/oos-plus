@@ -264,6 +264,8 @@ The keys of the selected decoder are plain (`dec_*`); decoders 2 and up repeat t
 | `dec_diff` | selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex | `none` | `:DECode:DIFFerential` |
 | `dec_thr` | selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex | `1.65` | `:DECode:THReshold` |
 | `dec_ascii` | selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex | `true` | `:BUS<n>:FORMat` |
+| `ev_view` | what the Events pane and the event table list: `messages`, `fields` or `lines`; `ev_errors`: only the rows with a failed check | `messages` | `:DECode:EVENts:VIEW` |
+| `ev_errors` | what the Events pane and the event table list: `messages`, `fields` or `lines`; `ev_errors`: only the rows with a failed check | `false` | `:DECode:EVENts:ERRors` |
 | `dec_baud` | protocol parameters: ladder indices (baud, CAN, FD, ARINC, SENT tick, USB speed), `dec_opt` is four numbers whose meaning depends on the protocol | `7` | `:BUS<n>:RS232:BAUD` |
 | `dec_canrate` | protocol parameters: ladder indices (baud, CAN, FD, ARINC, SENT tick, USB speed), `dec_opt` is four numbers whose meaning depends on the protocol | `2` | - |
 | `dec_canh` | protocol parameters: ladder indices (baud, CAN, FD, ARINC, SENT tick, USB speed), `dec_opt` is four numbers whose meaning depends on the protocol | `false` | - |

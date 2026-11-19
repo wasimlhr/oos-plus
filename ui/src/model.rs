@@ -789,6 +789,45 @@ pub enum Layout {
 
 pub const LAYOUTS: [Layout; 3] = [Layout::Default, Layout::Minimal, Layout::Studio];
 
+/// What a row of the decoder results is (the Events pane and the event table over the plot).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum EvView {
+    /// one row per message
+    #[default]
+    Messages,
+    /// one row per field
+    Fields,
+    /// one row per line of a character stream (UART shown as ASCII); messages for every other decoder
+    Lines,
+}
+
+pub const EV_VIEWS: [EvView; 3] = [EvView::Messages, EvView::Fields, EvView::Lines];
+
+impl EvView {
+    /// The name on the pane and in the setup file (lower case there).
+    pub fn name(self) -> &'static str {
+        match self {
+            EvView::Messages => "Messages",
+            EvView::Fields => "Fields",
+            EvView::Lines => "Lines",
+        }
+    }
+
+    /// The keyword of `:DECode:EVENts:VIEW`.
+    pub fn scpi(self) -> &'static str {
+        match self {
+            EvView::Messages => "MESSages",
+            EvView::Fields => "FIELds",
+            EvView::Lines => "LINes",
+        }
+    }
+
+    /// A setup value, `messages`, `fields` or `lines`.
+    pub fn parse(s: &str) -> Option<EvView> {
+        EV_VIEWS.into_iter().find(|v| v.name().eq_ignore_ascii_case(s))
+    }
+}
+
 impl Layout {
     /// The name in the menu and in the setup file (lower case there).
     pub fn name(self) -> &'static str {
@@ -1352,6 +1391,10 @@ pub struct Model {
     pub ser: SerialTrig,
     pub dec_thr: f32,
     pub dec_ascii: bool,
+    /// what the Events pane and the event table list: messages, fields or lines; and only the rows with a failed
+    /// check (the pane). One choice for all decoders
+    pub ev_view: EvView,
+    pub ev_errors: bool,
     pub dec_proto: Proto,
     /// second source: SCL (I2C), CLK (SPI)
     pub dec_src2: usize,
@@ -1844,6 +1887,8 @@ impl Default for Model {
             ser: SerialTrig::default(),
             dec_thr: 1.65,
             dec_ascii: true,
+            ev_view: EvView::Messages,
+            ev_errors: false,
             dec_proto: Proto::UART,
             dec_src2: 3,
             dec_cs: Some(1),

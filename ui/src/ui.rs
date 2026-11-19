@@ -646,6 +646,8 @@ enum Item {
     I2cAddrBits,
     I2cBytes,
     DecThr,
+    /// sets the threshold to the middle of the signal on the decoder's source, once
+    DecThrMid,
     DecFmt,
     DecProto,
     DecSrc2,
@@ -1819,6 +1821,8 @@ pub struct Ui {
     la_cols: std::cell::RefCell<la::Cache>,
     /// decoded LA lines of the record shown: (key of record and settings, packets with times in s)
     dec_cache: std::cell::RefCell<Vec<(u64, Vec<oos_dsp::decode::Packet>)>>,
+    /// the boxes of the decoder bands drawn in this frame: where a finger finds one, its decoder, its start time
+    band_hits: std::cell::RefCell<Vec<(Rect, usize, f64)>>,
     /// table window over the plot, first row shown
     table: Option<tables::TableKind>,
     table_top: usize,
@@ -1959,6 +1963,7 @@ impl Ui {
             auto_on: Vec::new(),
             la_cols: Default::default(),
             dec_cache: Default::default(),
+            band_hits: Default::default(),
             table: None,
             table_top: 0,
             table_cols: None,
@@ -5407,6 +5412,10 @@ impl Ui {
 
     /// All decoders that are on: bands at the bottom of the plot, or rows under the lanes for those on LA lines.
     fn draw_decode(&self, cv: &mut Canvas) {
+        // the boxes a finger can find are the ones of this frame
+        if self.cur_win == 0 {
+            self.band_hits.borrow_mut().clear();
+        }
         if self.last[0].is_none() && !self.refs.iter().any(Option::is_some) {
             return;
         }
@@ -7557,12 +7566,17 @@ impl Ui {
                 Row::UsbSpeed => DecUsbSpeed,
                 Row::CphyRate => DecCphyRate,
                 Row::Fmt => DecFmt,
+                Row::Pol => UartPol,
             });
         }
         v.extend((0..p.module().map_or(0, |x| x.options().len())).map(DecOpt));
         // LA lines: the probe's comparators set the levels (LA page)
         if !on_la {
             v.push(DecThr);
+            // C-PHY has a level gap there, not a threshold between two levels
+            if p != Proto::CPHY {
+                v.push(DecThrMid);
+            }
         }
         // what it decoded, as a table, and as a file
         v.extend([DecTable, DecExport]);
@@ -7642,7 +7656,7 @@ impl Ui {
                 Row::CanRate => m.dec_canrate = v as usize,
                 Row::CanH => m.dec_canh = v != 0,
                 Row::UsbSpeed => m.dec_uspeed = v as usize,
-                Row::CphyRate | Row::Fmt => {}
+                Row::CphyRate | Row::Fmt | Row::Pol => {}
             }
         }
         if changed {
@@ -8014,7 +8028,7 @@ impl Ui {
             Item::RefSave | Item::RefSaveNext | Item::RefClear | Item::RefClearOne => Kind::Action,
             Item::StoreSlot | Item::MaskX | Item::MaskY => Kind::Value,
             Item::StoreSaveSetup | Item::StoreSaveScpi | Item::StoreRunScpi | Item::StoreRecall | Item::StoreCsv | Item::StorePng | Item::StoreFfSave | Item::StoreFfLoad | Item::StoreSessSave | Item::StoreSessLoad | Item::MaskCreate | Item::MaskFromRef | Item::MaskReset | Item::MaskClear => Kind::Action,
-            Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
+            Item::Open(_) | Item::MathExprEdit | Item::ChBiasZero(_) | Item::RefLabel | Item::RefExport | Item::RefImport | Item::RefLoad | Item::DecTable | Item::DecExport | Item::DecThrMid | Item::SearchTable | Item::SearchSave | Item::StoreBin | Item::MeasPair(_) | Item::CntClear | Item::MaskSave | Item::MaskLoad | Item::ChLabel(_) | Item::SrcOn | Item::WlanInfo | Item::WlanScan | Item::WlanForget | Item::HZero | Item::Trig50 | Item::MeasAdd(_) | Item::AddMeas | Item::MeasCfg(_) | Item::MeasRemove(_) | Item::MeasClear | Item::AcqSegTable | Item::ClearDisp | Item::MathOff | Item::About | Item::SysInfo | Item::Shot | Item::Stock | Item::Update | Item::UpdateRollback => Kind::Action,
             Item::PickOpt(_) | Item::ViewExit | Item::ViewSettings => Kind::Action,
             Item::SpiTimeout => Kind::Value,
             Item::RunStop | Item::SingleAct | Item::AutosetAct | Item::DefaultAct | Item::SlopeAct | Item::ForceAct => Kind::Action,
@@ -8115,6 +8129,7 @@ impl Ui {
             Item::DecSrc4 => "Source 4",
             Item::DecDiff => "B line (A-B)",
             Item::DecThr => "Threshold",
+            Item::DecThrMid => "Threshold to middle",
             Item::DecFmt => "Format",
             Item::DecProto => "Protocol",
             Item::DecSrc2 => "Clock",
@@ -9330,6 +9345,7 @@ impl Ui {
                     }
                 }
                 Item::DecTable => self.table_toggle(tables::TableKind::Decode),
+                Item::DecThrMid => self.dec_threshold_to_middle(),
                 Item::DecExport => self.events_export(tables::TableKind::Decode),
                 Item::SearchTable => self.table_toggle(tables::TableKind::Search),
                 Item::SearchSave => self.events_export(tables::TableKind::Search),
@@ -11707,6 +11723,10 @@ impl Ui {
             return;
         }
         if self.table_tap(x, y) || self.pane_tap(x, y) {
+            return;
+        }
+        // a box of a decoder's band: its row
+        if !self.menu_open && self.band_tap(x, y) {
             return;
         }
         if self.eye_tap(x, y) {

@@ -200,6 +200,8 @@ impl Ui {
             M::Decode | M::Bus => (&["Decode", "Settings", "Bus"], |it| match it {
                 DecSel | DecOn | DecProto | DecIn | DecSrc | DecSrc2 | DecCs | DecSrc4 | DecDiff => Slot::Tab(0),
                 DecTable | DecExport => Slot::Foot(1),
+                // an action: under the sources, whose signal it reads (the foot of Settings has its two)
+                DecThrMid => Slot::Foot(0),
                 BusLabel => Slot::Foot(2),
                 BusOn | BusPos | BusClk | BusClkThr | BusData | BusDataThr | BusRw => Slot::Tab(2),
                 _ => Slot::Tab(1),

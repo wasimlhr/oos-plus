@@ -7193,7 +7193,7 @@
       [
        "<value>",
        "Text",
-       "Configured threshold. For C-PHY this is minimum adjacent-wire level separation.",
+       "Configured threshold. For C-PHY this is minimum adjacent-wire level separation. `AUTO` sets it once to the middle of the signal on the decoder's source, half way between the lowest and the highest sample of the record on the screen (-230 without a signal); the query answers the value.",
        "1.650000E+00"
       ]
      ],
@@ -7244,6 +7244,48 @@
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `empty`.",
+     "ext": true
+    },
+    {
+     "header": ":DECode:EVENts:VIEW",
+     "set": ":DECode:EVENts:VIEW <value>",
+     "query": ":DECode:EVENts:VIEW?",
+     "desc": "Sets or queries Messages, Fields, Lines for Decoder slot (menu: Events pane > Messages, Fields, Lines).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{MESSages|FIELds|LINes}",
+       "MESSAGES"
+      ]
+     ],
+     "remarks": [
+      "- : what a row of the Events pane and of the event table is.",
+      "- A message is what was sent without a pause clearly longer than usual, or from one start condition to the next; a line is a UART character stream up to its line feed (other decoders list their messages).",
+      "- `:DECode:EVENts?` and `:BUS<n>:DATA?` always answer a row per field.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `MESSAGES`.",
+     "ext": true
+    },
+    {
+     "header": ":DECode:EVENts:ERRors",
+     "set": ":DECode:EVENts:ERRors <value>",
+     "query": ":DECode:EVENts:ERRors?",
+     "desc": "Sets or queries Errors only for Decoder slot (menu: Events pane > Errors only).",
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Boolean; the Events pane lists only the rows with a failed check.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
      "ext": true
     },
     {
@@ -7377,7 +7419,7 @@
       [
        "<value>",
        "Text",
-       "Decoder threshold in source units.",
+       "Decoder threshold in source units. `AUTO` sets it once to the middle of the signal on the decoder's source (-230 without a signal); the query answers the value.",
        "1.650000E+00"
       ]
      ],
@@ -15864,6 +15906,18 @@
        "as above",
        "`true`",
        "`:BUS<n>:FORMat`"
+      ],
+      [
+       "`ev_view`",
+       "what the Events pane and the event table list: `messages`, `fields` or `lines`; `ev_errors`: only the rows with a failed check",
+       "`messages`",
+       "`:DECode:EVENts:VIEW`"
+      ],
+      [
+       "`ev_errors`",
+       "as above",
+       "`false`",
+       "`:DECode:EVENts:ERRors`"
       ],
       [
        "`dec_baud`",

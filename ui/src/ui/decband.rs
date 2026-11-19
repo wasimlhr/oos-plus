@@ -7,7 +7,8 @@
 //! of its own; a field narrower than its text takes the room from the idle line behind it, and a bar in the box
 //! says how long the field itself is. Else the message is one box, which holds as much of its text as fits and "..."
 //! for the rest, so a slow time base shows the messages and not an empty band. A message too small for a box stays
-//! a mark: where the line is busy is seen at every time base. At a time base that shows single bits, a protocol that reports them
+//! a mark: where the line is busy is seen at every time base. At a time base that shows single bits, a protocol that
+//! reports them
 //! (`Protocol::bits`) has a row of bits above its boxes, and a mark on the threshold line where each was sampled.
 
 use super::*;
@@ -225,6 +226,46 @@ struct BitRow<'a> {
 }
 
 impl Ui {
+    /// The samples of a decoder source in the record on the screen.
+    fn dec_wave(&self, source: usize) -> Option<&[f32]> {
+        match decode_wave(source)? {
+            WaveId::Ch(c) => self.last[0].as_ref().map(|r| &r.ch[c][..]),
+            WaveId::Ref(i) => self.refs.get(i)?.as_ref().map(|r| &r.v[..]),
+        }
+    }
+
+    /// The middle of the signal on the source of the decoder `m` is the view of: half way between the lowest and
+    /// the highest sample of the record on the screen (of A - B for a pair). `None` on LA lines, without a record
+    /// and for a line that does not move.
+    pub(crate) fn dec_signal_middle(&self, m: &Model) -> Option<f32> {
+        if m.dec_on_la() {
+            return None;
+        }
+        let a = self.dec_wave(m.dec_src)?;
+        let b = if m.dec_proto.diff_ok() { m.dec_diff.and_then(|b| self.dec_wave(b)) } else { None };
+        let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+        for (k, &x) in a.iter().enumerate() {
+            let v = x - b.and_then(|b| b.get(k)).copied().unwrap_or(0.0);
+            if v.is_finite() {
+                lo = lo.min(v);
+                hi = hi.max(v);
+            }
+        }
+        (hi > lo).then(|| (lo + hi) / 2.0)
+    }
+
+    /// Decode > Threshold to middle: the threshold of the decoder the menu edits, once.
+    pub(super) fn dec_threshold_to_middle(&mut self) {
+        match self.dec_signal_middle(&self.m) {
+            Some(v) => {
+                self.m.dec_thr = v;
+                self.settings_changed();
+                self.toast(&format!("Threshold {}", si(v as f64, "V")));
+            }
+            None => self.toast("No signal on the decoder's source"),
+        }
+    }
+
     /// Whether the band of the decoder `m` is the view of has its bit row: the protocol reports the bits of its
     /// fields, and at this time base one is wide enough to be read.
     pub(super) fn dec_bit_row(&self, m: &Model) -> bool {
@@ -331,6 +372,21 @@ impl Ui {
             let x = a.x as f64 + a.w as f64 / 2.0 + (t - delay as f64) / tdiv as f64 * ppx;
             (x.round() as i32).clamp(a.x - 64, right + 64)
         };
+        // the row chosen in the Events pane: its time span across the plot, lightly, and below its boxes marked
+        let chosen = self.ev_selected().filter(|s| s.dec == k);
+        if let Some(s) = chosen.filter(|_| row.is_none()) {
+            let (x0, x1) = (xt(s.t0).max(a.x), xt(s.t1).min(right));
+            if x1 >= x0 {
+                cv.blend(Rect::new(x0, a.y, (x1 - x0).max(2), a.h), ACCENT, 26);
+                cv.vline(x0, a.y, a.y + a.h - 1, DIM);
+                cv.vline(x1.max(x0 + 1), a.y, a.y + a.h - 1, DIM);
+            }
+        }
+        // a box a finger can find: a finger's height around it
+        let touch = |x0: i32, x1: i32| Rect::new(x0.max(left), y - 8, (x1 - x0.max(left)).max(12), h + 16);
+        let mark = |cv: &mut Canvas, x0: i32, x1: i32| {
+            cv.round_outline(Rect::new(x0 - 2, y - 2, x1 - x0 + 5, h + 4), 4, ACCENT);
+        };
         // the messages of the record, and of each field on the screen whether it begins one
         let groups = oos_dsp::decode::bursts(&packets);
         let mut g = 0;
@@ -343,7 +399,8 @@ impl Ui {
                 }
                 let (x0, x1) = (xt(p.t0), xt(p.t1));
                 let first = groups[g].start == i;
-                (x1 >= left && x0 <= right).then(|| Span { i, x0, x1, tag: packet_tag(m, p).is_some(), ok: p.ok, first })
+                let seen = x1 >= left && x0 <= right;
+                seen.then(|| Span { i, x0, x1, tag: packet_tag(m, p).is_some(), ok: p.ok, first })
             })
             .collect();
         let mut tag_end = left;
@@ -371,8 +428,12 @@ impl Ui {
                         DecKind::Addr { .. } | DecKind::Id { .. } | DecKind::Word { cmd: true } | DecKind::Field(_)
                     );
                     let edge = if head { ACCENT } else { col };
+                    self.band_hits.borrow_mut().push((touch(x0, x1), k, p.t0));
                     if !field_box(cv, x0, x1, y, h, edge, if p.ok { scale(edge, 70) } else { ERR_FILL }) {
                         continue;
+                    }
+                    if chosen.is_some_and(|s| p.t0 >= s.t0 && p.t1 <= s.t1) {
+                        mark(cv, x0, x1);
                     }
                     if end < x1 {
                         // the box took room of the idle line for its text: the bar is the field itself
@@ -395,8 +456,12 @@ impl Ui {
                     }
                 }
                 Cell::Run { i0, i1, x0, x1, bad } => {
+                    self.band_hits.borrow_mut().push((touch(x0, x1), k, packets[i0].t0));
                     if !field_box(cv, x0, x1, y, h, if bad { RED } else { col }, scale(col, 70)) {
                         continue;
+                    }
+                    if chosen.is_some_and(|s| packets[i0].t0 <= s.t1 && packets[i1 - 1].t1 >= s.t0) {
+                        mark(cv, x0, x1);
                     }
                     // from the left end of the box, which is on the screen: the text is what the burst begins with
                     let room = x1.min(right) - x0 - BOX_PAD - 2;
@@ -445,7 +510,8 @@ mod tests {
     fn a_message_without_room_for_its_fields_is_one_box() {
         let wide = [span(0, 100, 140), span(1, 140, 180)];
         let boxes = cells(&wide, |_| 20, 50);
-        assert_eq!(boxes, [Cell::One { i: 0, x0: 100, x1: 140, end: 140 }, Cell::One { i: 1, x0: 141, x1: 180, end: 180 }]);
+        let want = [Cell::One { i: 0, x0: 100, x1: 140, end: 140 }, Cell::One { i: 1, x0: 141, x1: 180, end: 180 }];
+        assert_eq!(boxes, want);
         // ten fields of 2 px from 100; four more from 200 are the next message
         let at = |k: usize, x: i32| Span { first: k == 10, ..span(k, x + 2 * k as i32, x + 2 + 2 * k as i32) };
         let narrow: Vec<Span> = (0..10).map(|k| at(k, 100)).chain((10..14).map(|k| at(k, 180))).collect();

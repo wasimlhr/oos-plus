@@ -33,7 +33,7 @@ impl Protocol for Uart {
         true
     }
     fn shared(&self) -> &'static [Row] {
-        &[Row::Baud, Row::Bits, Row::Parity, Row::Fmt]
+        &[Row::Baud, Row::Bits, Row::Parity, Row::Pol, Row::Fmt]
     }
     fn bit_time(&self, _: &[usize; OPTS]) -> f64 {
         1.0 / 115200.0

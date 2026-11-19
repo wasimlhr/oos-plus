@@ -2760,6 +2760,33 @@ impl Scpi {
         if kw(n0, "DECode") && nodes.len() == 2 && kw(nodes[1], "EVENts") && query {
             return t(&ui.events_text());
         }
+        // what the Events pane and the event table list (the query above always answers a row per field)
+        if kw(n0, "DECode") && nodes.len() == 3 && kw(nodes[1], "EVENts") && kw(nodes[2], "VIEW") {
+            if query {
+                return t(&ui.m.ev_view.name().to_ascii_uppercase());
+            }
+            match EV_VIEWS.into_iter().find(|v| kw(arg, v.scpi())) {
+                Some(v) => {
+                    ui.m.ev_view = v;
+                    ui.mark_changed();
+                }
+                None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+            }
+            return None;
+        }
+        if kw(n0, "DECode") && nodes.len() == 3 && kw(nodes[1], "EVENts") && kw(nodes[2], "ERRors") {
+            if query {
+                return t(if ui.m.ev_errors { "1" } else { "0" });
+            }
+            match parse_bool(arg) {
+                Some(on) => {
+                    ui.m.ev_errors = on;
+                    ui.mark_changed();
+                }
+                None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+            }
+            return None;
+        }
         // fork: the TPU UART receiver's words for the current settings (docs/fork/hwuart.md)
         if kw(n0, "SYSTem") && nodes.len() == 3 && kw(nodes[1], "DEBug") && (kw(nodes[2], "UART") || kw(nodes[2], "SERial")) && query {
             return t(&board().uart_debug(&ui.m));
@@ -3696,6 +3723,14 @@ impl Scpi {
                 return t(&e(cfg.thr as f64));
             }
             let num = arg.split(',').next_back().unwrap_or("").trim();
+            // once, to the middle of the signal on the decoder's source
+            if kw(num, "AUTO") {
+                match ui.dec_signal_middle(&ui.m.dec_view(k)) {
+                    Some(v) => with_bus(ui, k, |m| m.dec_thr = v),
+                    None => self.push_err("-230,\"No signal on the decoder's source\"".to_string()),
+                }
+                return None;
+            }
             let Some(v) = num.parse::<f64>().ok().filter(|v| v.is_finite()) else {
                 self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
                 return None;
@@ -4468,6 +4503,17 @@ impl Scpi {
         }
         if kw(node, "THReshold") {
             if query { return text(e(ui.m.dec_thr as f64)); }
+            // once, to the middle of the signal on the decoder's source
+            if kw(arg.trim(), "AUTO") {
+                match ui.dec_signal_middle(&ui.m) {
+                    Some(v) => {
+                        ui.m.dec_thr = v;
+                        ui.mark_changed();
+                    }
+                    None => self.push_err("-230,\"No signal on the decoder's source\"".to_string()),
+                }
+                return None;
+            }
             let Some(threshold) = num(arg) else { return illegal(self) };
             ui.m.dec_thr = threshold;
             ui.mark_changed();

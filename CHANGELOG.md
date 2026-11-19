@@ -369,8 +369,23 @@ Changed:
   leaves the rows with a failed check. The rows have columns: number, time, decoder, number of fields, text, the
   bytes in hex beside a character text, and OK or the number of errors. The list scrolls by its bar or the finger,
   and a tap on a row moves the view to it. The event table over the plot lists the same rows. `:DECode:EVENts?`,
-  `:BUS<n>:DATA?` and the CSV export are unchanged, a row per field. The view and the filter are kept while the
-  scope is on, not yet in the set-up, and have no remote command yet.
+  `:BUS<n>:DATA?` and the CSV export are unchanged, a row per field. The view and the filter are part of the
+  set-up (`ev_view`, `ev_errors`) and have their commands, `:DECode:EVENts:VIEW` and `:DECode:EVENts:ERRors`
+  (host-tested, not yet verified on hardware).
+- Decoders: a chosen message is marked (host-tested, not yet verified on hardware). A tap on a row of the Events
+  pane moves the view to it and chooses it; a tap on a box of the band on the plot chooses its row, brings the
+  pane to it and says its whole text in a note. The chosen row has a white frame, its boxes in the band have one,
+  and its time span is shaded across the plot. A second tap lets go of it; a new record does too.
+- Decoders: the Events pane fits its size (host-tested, not yet verified on hardware). Made small, as a floating
+  view of Studio, it wrote its columns over each other. Under 560 px it keeps number, time, text and status, under
+  360 px the time and the text (red where a check failed), and a head too narrow for its buttons has one button
+  that goes through the views.
+- Decode > Threshold to middle sets the threshold of a decoder half way between the lowest and the highest sample
+  of its source in the record on the screen, once; `:BUS<n>:THReshold AUTO` and `:DECode:THReshold AUTO` do the
+  same (host-tested, not yet verified on hardware). A signal that does not reach the 1.65 V of a new set-up
+  decoded nothing (seen on a unit, 2026-11-19: a 0.43 V swing through a probe set to 1x).
+- UART decoder: Decode has the Polarity row of the UART trigger (Normal, Inverted), which the decoder already
+  followed (host-tested, not yet verified on hardware).
 - UART decoder: at a time base where a bit is 12 px or wider, the band has a row of bits above its boxes
   (host-tested; (unit), 2026-11-19: the bits of three characters read against the trace): Start, the data bits in
   the order they came, the parity bit and Stop, each as wide as it was on the line, and a mark on the threshold
