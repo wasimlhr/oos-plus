@@ -72,6 +72,15 @@ fn traffic(p: Proto, baud: f64) -> Option<Traffic> {
     Some(record(bit, demo.period, &|k, t| demo.lines[k].as_ref().map(|f| f(t))))
 }
 
+/// Whether `label` is the name a bus preset gives one of its lines ("I2S WS", "CAN Source"): the name of a protocol
+/// that has a preset, and one of its roles.
+fn is_bus_line(label: &str) -> bool {
+    buses().iter().any(|&(p, _)| {
+        let role = |r: &str| p.roles().iter().flatten().any(|x| *x == r) || r == "line";
+        label.strip_prefix(p.name()).and_then(|rest| rest.strip_prefix(' ')).is_some_and(role)
+    })
+}
+
 impl Ui {
     /// The bus preset that is chosen, when one is.
     pub(in crate::ui) fn sim_bus(&self) -> Option<(Proto, &'static str)> {
@@ -138,6 +147,13 @@ impl Ui {
             at += 1;
         }
         let main = slots[0].ok_or("the traffic has no main line")?;
+        // the lines of the bus that was played before are gone with it: a bus of one line after one of three left
+        // two traces of the other bus on the screen (seen on a unit: the I2S clock under a DCC rail)
+        for slot in (0..NREF).filter(|s| !slots.contains(&Some(*s))) {
+            if self.refs[slot].as_ref().is_some_and(|r| is_bus_line(&r.label)) {
+                self.refs[slot] = None;
+            }
+        }
         let source = |s: usize| DEC_REF_BASE + s;
         m.dec_src = source(main);
         if let Some(s) = slots[1] {
@@ -321,6 +337,30 @@ mod tests {
         // an empty reference is not offered to a line that is on a channel
         u.m.dec_src = 0;
         assert!(!u.options(Item::DecSrc).iter().any(|n| n == "R1"));
+    }
+
+    /// A bus of one line played after a bus of three leaves no line of the other bus behind; a reference that is no
+    /// line of a bus preset stays.
+    #[test]
+    fn a_bus_preset_takes_the_lines_of_the_bus_before_it_away() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = Layout::Studio;
+        let play = |u: &mut Ui, name: &str| {
+            assert!(u.sim_preset_set(name), "{name}");
+            u.sim_play_set(true).unwrap_or_else(|e| panic!("{name}: {e}"));
+        };
+        let labels = |u: &Ui| -> Vec<String> { u.refs.iter().flatten().map(|r| r.label.clone()).collect() };
+        play(&mut u, "SPI bus");
+        assert!(labels(&u).len() >= 3, "{:?}", labels(&u));
+        // (a reference of the user's own in a slot the buses do not use)
+        let own = u.refs[0].clone().map(|r| RefWave { label: "my capture".into(), ..r });
+        u.refs[NREF - 1] = own;
+        play(&mut u, "UART bus");
+        let now = labels(&u);
+        assert_eq!(now.iter().filter(|l| l.starts_with("SPI ")).count(), 0, "{now:?}");
+        assert!(now.iter().any(|l| l.starts_with("UART ")) && now.contains(&"my capture".to_string()), "{now:?}");
+        assert!(is_bus_line("SPI Clock") && is_bus_line("CAN Source"));
+        assert!(!is_bus_line("CAN") && !is_bus_line("my capture"));
     }
 
     /// The presets of the lanes are as before, and choosing one leaves the bus; Add to ref with a bus preset adds its

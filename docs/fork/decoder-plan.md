@@ -142,6 +142,10 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
    1-Wire and I3C write the names of their commands. Open here: the packets inside the C-PHY words and its
    low-power data, the packet structure of a Manchester line.
+   The same day the other twelve presets ran on the unit (UART, I2C, SPI, I2S, 1-Wire, DCC, SWD, DMX512, UART
+   9-bit, Modbus RTU, S/PDIF, USB PD): every one decodes its traffic without an error. That is the first run on a
+   unit for seven of the decoders of step 5. It showed that a preset left the lines of the preset before it on
+   the screen, which is fixed (host-tested).
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 

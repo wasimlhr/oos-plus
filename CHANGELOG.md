@@ -556,7 +556,9 @@ Changed:
   A line was scaled to the nearest step, which could be the smaller one: a bus of 3.3 V had 6.6 of the 8
   divisions, ran down into the band, and its own label stood over the name of the band. A line has the first step
   at which it fits its share, and the lowest division of the plot is left to the band. The start of a CAN-FD
-  frame reads "SOF", as that of a CAN frame does; it read "S".
+  frame reads "SOF", as that of a CAN frame does; it read "S". A preset takes the lines of the preset played
+  before it away: a bus of one line after a bus of three left two traces of the other bus on the screen (unit
+  before the change, host-tested after it); a reference that is no line of a preset stays.
 - USB and FlexRay: the text of a message begins with what the message is (unit before the change, host-tested
   after it). Every USB packet begins with its sync and every FlexRay frame with its start sequence, and a box
   with little room read "SYNC FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR
