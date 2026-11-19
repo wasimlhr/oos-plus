@@ -31,13 +31,15 @@ const CANFD_OPTIONS: [Opt; 3] = [
 pub struct CanFd;
 
 impl Protocol for CanFd {
-    /// A frame in the Events pane: its identifier, the number of its data bytes, the bytes, the CRC.
+    /// A frame in the Events pane: its identifier (an error frame says so there), the number of its data bytes, the
+    /// bytes, the CRC.
     fn columns(&self) -> &'static [(&'static str, Col)] {
-        &[("ID", Col::Label("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+        &[("ID", Col::LabelOr("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
     }
-    /// A frame begins with its start of frame.
+    /// A frame begins with its start of frame; an error flag outside a frame is a message of its own.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
-        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+        use oos_dsp::decode::Kind;
+        Some(|p| matches!(p.kind, Kind::Start | Kind::Field("!ERROR FRAME")))
     }
     fn key(&self) -> &'static str {
         "CanFd"
@@ -57,6 +59,13 @@ impl Protocol for CanFd {
     }
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(x1::can_fd(l.main(), l.dt, crate::decode::CAN_RATES[l.opt[0]], crate::decode::FD_RATES[l.opt[1]], l.thr, l.hy, l.opt[2] == 1))
+    }
+    /// The data length as the number of bytes the frame has (the code C of a frame of 24 bytes read "DLC C").
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        match p.kind {
+            Kind::Field("DLC") => Some(format!("DLC {}", p.value2.unwrap_or(p.value))),
+            _ => None,
+        }
     }
     /// A CAN FD frame with ID 123, bit rate switch and 12 bytes, 500 kbit/s and 2 Mbit/s.
     fn demo(&self) -> Option<Demo> {

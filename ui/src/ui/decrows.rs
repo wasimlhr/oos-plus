@@ -139,7 +139,7 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
     // sync byte of a LIN frame, which is data to the decoder, stands before its identifier)
     let takes = |k: usize| {
         cols.iter().any(|(_, c)| match *c {
-            Col::Label(l) => texts[k].starts_with(l),
+            Col::Label(l) | Col::LabelOr(l) => texts[k].starts_with(l),
             Col::At(n) => k == n,
             Col::Addr => matches!(pk[k].kind, DecKind::Addr { .. }),
             _ => false,
@@ -159,6 +159,14 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
     cols.iter()
         .map(|(_, c)| match *c {
             Col::Label(l) => texts.iter().filter_map(|t| t.strip_prefix(l)).collect::<Vec<_>>().join(" "),
+            Col::LabelOr(l) if texts.iter().any(|t| t.starts_with(l)) => {
+                texts.iter().filter_map(|t| t.strip_prefix(l)).collect::<Vec<_>>().join(" ")
+            }
+            // (without the start of frame, which every frame has)
+            Col::LabelOr(_) => {
+                let other = (0..pk.len()).filter(|&k| pk[k].kind != DecKind::Start).map(|k| texts[k].as_str());
+                other.collect::<Vec<_>>().join(" ")
+            }
             Col::At(n) => texts.get(n).cloned().unwrap_or_default(),
             Col::Addr => address().map_or_else(String::new, |k| texts[k].clone()),
             Col::Data => decband::message_text(m, &data),

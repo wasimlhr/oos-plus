@@ -283,6 +283,9 @@ impl Default for Setup {
 pub enum Col {
     /// the fields whose text begins with this label, without the label ("ID ", "CRC ")
     Label(&'static str),
+    /// like `Label`; in a frame without such a field, what the frame holds instead (an error frame of CAN says so in
+    /// the column of the identifier)
+    LabelOr(&'static str),
     /// the field at this place of the frame (the packet identifier after the sync of a USB packet)
     At(usize),
     /// the first address of the frame

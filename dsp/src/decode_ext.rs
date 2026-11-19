@@ -835,6 +835,10 @@ impl BitClock<'_> {
 /// Field("DLC") (value = DLC, value2 = data bytes), Data per byte, FD only: Field("SBC") (stuff count mod 8 from the
 /// Gray code; `ok` = parity and count right), Crc (value = received CRC-15/17/21, `ok` = it matches and the fixed
 /// stuff bits are right), Ack (`ok` = dominant). A stuff error ends the frame with Field("!ERR").
+///
+/// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
+/// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
+/// (`decode::can_keep_flags`).
 pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
     let tn = 1.0 / nominal / dt;
     let td = 1.0 / data_rate / dt;
@@ -855,6 +859,11 @@ pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: 
         if x.t < busy_until {
             continue;
         }
+        if let Some(end) = e.get(k + 1).map(|n| n.t).filter(|&end| crate::decode::can_error_flag((end - x.t) / tn)) {
+            out.push(tag("!ERROR FRAME", x.t, end, false));
+            busy_until = end;
+            continue;
+        }
         let idle_from = last_rec_start.unwrap_or(if k == 0 && rec(x.t - 1.0) == Some(true) { 0.0 } else { f64::INFINITY });
         if x.t - idle_from < 7.0 * tn {
             continue;
@@ -865,6 +874,7 @@ pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: 
             out.extend(pk);
         }
     }
+    crate::decode::can_keep_flags(&mut out);
     out
 }
 

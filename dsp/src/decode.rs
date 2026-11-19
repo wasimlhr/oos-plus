@@ -792,6 +792,10 @@ pub fn can_crc15(bits: &[bool]) -> u16 {
 /// CAN 2.0A/B data and remote frames at `bitrate`. `invert` = false: logic level as on the RX/TX pin (dominant low,
 /// idle high); true for CAN_H probed against ground (dominant high). Hard sync on the start of frame after at least 7
 /// recessive bit times, resynchronisation on every edge, sampling at 70 % of the bit, bit de-stuffing, CRC check.
+///
+/// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
+/// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
+/// (`can_keep_flags`).
 pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
     let spb = 1.0 / bitrate / dt;
     let mut out = Vec::new();
@@ -818,6 +822,11 @@ pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) 
         if x.t < busy_until {
             continue;
         }
+        if let Some(end) = e.get(k + 1).map(|n| n.t).filter(|&end| can_error_flag((end - x.t) / spb)) {
+            out.push(Packet { t0: x.t, t1: end, kind: Kind::Field("!ERROR FRAME"), value: 0, value2: None, ok: false });
+            busy_until = end;
+            continue;
+        }
         // SOF: dominant edge after >= 7 recessive bit times (or the record start when the bus was idle before)
         let idle_from = last_rec_start.unwrap_or(if k == 0 && rec(x.t - 1.0) == Some(true) { 0.0 } else { f64::INFINITY });
         if x.t - idle_from < 7.0 * spb {
@@ -828,6 +837,7 @@ pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) 
             out.extend(pk);
         }
     }
+    can_keep_flags(&mut out);
     out
 }
 
@@ -911,6 +921,24 @@ fn can_frame(sof: f64, spb: f64, rec: &dyn Fn(f64) -> Option<bool>, edge_near: &
     out.push(pk(Kind::Crc, crc_at, crc_at + 14, crc_rx as u32, crc_rx == crc_calc));
     out.push(Packet { t0: ack.1, t1: ack.2, kind: Kind::Ack, value: 0, value2: None, ok: !ack.0 });
     Some((out, ack_del.2))
+}
+
+/// The dominant time, in bit times, of an error or overload flag on a CAN bus: a frame has five equal bits in a row
+/// at most, a flag has six, and twelve where the flags of several nodes follow one another.
+pub const CAN_ERROR_FLAG: std::ops::RangeInclusive<f64> = 5.5..=12.6;
+
+/// Whether a dominant pulse of `bits` bit times is an error flag.
+pub fn can_error_flag(bits: f64) -> bool {
+    CAN_ERROR_FLAG.contains(&bits)
+}
+
+/// Error flags count only in a record that holds a frame with the right CRC: a line that carries something else
+/// than CAN, or CAN at another rate, has long low pulses too, and each of them would be an error frame (and fire a
+/// trigger on errors). Without such a frame the flags leave the list.
+pub fn can_keep_flags(out: &mut Vec<Packet>) {
+    if !out.iter().any(|p| p.kind == Kind::Crc && p.ok) {
+        out.retain(|p| p.kind != Kind::Field("!ERROR FRAME"));
+    }
 }
 
 /// LIN protected identifier: ID with the two parity bits P0 = ID0^ID1^ID2^ID4, P1 = !(ID1^ID3^ID4^ID5).

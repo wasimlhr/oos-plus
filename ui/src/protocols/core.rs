@@ -246,13 +246,15 @@ impl Protocol for Spi {
 pub struct Can;
 
 impl Protocol for Can {
-    /// A frame in the Events pane: its identifier, the number of its data bytes, the bytes, the CRC.
+    /// A frame in the Events pane: its identifier (an error frame says so there), the number of its data bytes, the
+    /// bytes, the CRC.
     fn columns(&self) -> &'static [(&'static str, Col)] {
-        &[("ID", Col::Label("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+        &[("ID", Col::LabelOr("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
     }
-    /// A frame begins with its start of frame.
+    /// A frame begins with its start of frame; an error flag outside a frame is a message of its own.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
-        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+        use oos_dsp::decode::Kind;
+        Some(|p| matches!(p.kind, Kind::Start | Kind::Field("!ERROR FRAME")))
     }
     fn key(&self) -> &'static str {
         "Can"

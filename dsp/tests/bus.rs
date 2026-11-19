@@ -100,6 +100,45 @@ fn lin_wrong_checksum_is_flagged() {
     assert_eq!(crcs(&p), vec![false], "{:?}", p);
 }
 
+/// An error flag is listed: six dominant bits and more in a row, which no frame holds. Here seven of them (the flag
+/// of one node and the start of another's behind it) between idle line and a frame; the frame after it is read.
+#[test]
+fn can_an_error_flag_is_listed() {
+    let frame = CanFrame { id: 0x123, ext: false, rtr: false, data: vec![1, 2] };
+    let mut bits = vec![true; 12];
+    bits.extend([false; 7]);
+    bits.extend([true; 12]);
+    bits.extend(can_bits(&frame, true));
+    bits.extend([true; 12]);
+    let rate = 500e3;
+    let l = bits_logic(&bits, 1.0 / rate, 12, 0.0, 3.3);
+    let dt = 1.0 / 25e6;
+    let v = sample(|t| l.v(t), 0.0, dt, 12_000);
+    let flag = Kind::Field("!ERROR FRAME");
+    for p in [can(&v, dt, rate, 1.65, 0.1, false), oos_dsp::decode_ext::can_fd(&v, dt, rate, 2e6, 1.65, 0.1, false)] {
+        let flags: Vec<&Packet> = p.iter().filter(|x| x.kind == flag).collect();
+        assert_eq!(flags.len(), 1, "{p:?}");
+        assert!(!flags[0].ok && p[0].kind == flag, "it comes first and is an error");
+        let bit_times = (flags[0].t1 - flags[0].t0) * dt * rate;
+        assert!((bit_times - 7.0).abs() < 0.2, "{bit_times} bit times");
+        assert_eq!(ids(&p), vec![(0x123, false, false)]);
+        assert_eq!((data(&p), crcs(&p)), (vec![1, 2], vec![true]));
+    }
+    // a frame alone has no such field: five equal bits are the most it holds
+    let l = can_logic(&[CanFrame { id: 0, ext: false, rtr: false, data: vec![0; 8] }], rate, 0.0, 3.3);
+    let v = sample(|t| l.v(t), 0.0, dt, 12_000);
+    assert!(can(&v, dt, rate, 1.65, 0.1, false).iter().all(|x| x.kind != flag));
+    // a line that is no CAN bus has long low pulses and no frame: nothing is listed, no error either (a UART at
+    // 115200 baud read as CAN at 500 kbit/s; a trigger on errors fired on it)
+    let l = oos_dsp::sim::uart_logic(b"OOS 0.1 OOS", 115200.0, 8, None, 0.0, 0.0, 3.3);
+    let v = sample(|t| l.v(t), 0.0, dt, 30_000);
+    assert!(can(&v, dt, rate, 1.65, 0.1, false).iter().all(|x| x.kind != flag));
+    assert!(oos_dsp::decode_ext::can_fd(&v, dt, rate, 2e6, 1.65, 0.1, false).iter().all(|x| x.kind != flag));
+    // and a pulse longer than the flags of two nodes is no flag: a bus held low
+    use oos_dsp::decode::can_error_flag;
+    assert!(!can_error_flag(13.0) && can_error_flag(6.0) && !can_error_flag(5.0));
+}
+
 /// What a packet says, without its times.
 fn said(p: &[Packet]) -> Vec<(Kind, u32, bool)> {
     p.iter().map(|x| (x.kind, if x.kind == Kind::Break { 0 } else { x.value }, x.ok)).collect()
