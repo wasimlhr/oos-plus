@@ -604,6 +604,57 @@ mod tests {
     }
 
     /// The "Equivalent header" column of `docs/scpi/setup-keys.md` names the headers of the rows.
+    /// A line of an SPI or I2C decoder has a threshold of its own over SCPI, by the names of the DHO guide's command
+    /// family; it is kept with the set-up; SAME gives the line the decoder's again; and AUTO puts every line at the
+    /// middle of its own signal.
+    #[test]
+    fn a_line_of_a_decoder_has_its_threshold_over_scpi() {
+        let (mut s, mut ui, cv) = session();
+        ui.m.dec_on = true;
+        s.exec_cmd(&mut ui, &cv, ":BUS1:MODE SPI");
+        s.exec_cmd(&mut ui, &cv, ":BUS1:THReshold 2.5");
+        let q = |s: &mut Scpi, ui: &mut Ui, h: &str| String::from_utf8(s.exec_cmd(ui, &cv, h).unwrap_or_default()).unwrap().trim().to_string();
+        for line in ["SCLK", "MOSI", "SS"] {
+            assert_eq!(q(&mut s, &mut ui, &format!(":BUS1:SPI:{line}:THReshold?")), "2.500000E+00", "{line} follows the decoder's threshold");
+        }
+        s.exec_cmd(&mut ui, &cv, ":BUS1:SPI:SCLK:THReshold 0.3");
+        s.exec_cmd(&mut ui, &cv, ":BUS1:SPI:SS:THReshold 0.25");
+        assert!(s.err.is_empty(), "{:?}", s.err);
+        assert_eq!((ui.m.dec_thr, ui.m.dec_thr_line), (2.5, [Some(0.3), Some(0.25), None]));
+        assert_eq!(q(&mut s, &mut ui, ":BUS1:SPI:SCLK:THReshold?"), "3.000000E-01");
+        assert_eq!(q(&mut s, &mut ui, ":BUS1:THReshold?"), "2.500000E+00");
+        // the data line's is the decoder's
+        s.exec_cmd(&mut ui, &cv, ":BUS1:SPI:MOSI:THReshold 2.6");
+        assert_eq!(ui.m.dec_thr, 2.6);
+        // the set-up keeps them, and a second scope gets them
+        let text = crate::store::setup_text(&ui.m);
+        assert!(text.contains("dec_thr_line = 0.3 0.25 -"), "{text}");
+        let m = crate::store::parse_setup(&text).unwrap();
+        assert_eq!(m.dec_thr_line, [Some(0.3), Some(0.25), None]);
+        // another decoder has its own
+        s.exec_cmd(&mut ui, &cv, ":BUS2:MODE IIC");
+        s.exec_cmd(&mut ui, &cv, ":BUS2:IIC:SCLK:THReshold 1.2");
+        assert!(s.err.is_empty(), "{:?}", s.err);
+        assert_eq!(q(&mut s, &mut ui, ":BUS2:IIC:SCLK:THReshold?"), "1.200000E+00");
+        assert_eq!(ui.m.dec_thr_line, [Some(0.3), Some(0.25), None], "decoder 1 is not touched");
+        // SAME: the decoder's again
+        s.exec_cmd(&mut ui, &cv, ":BUS1:SPI:SCLK:THReshold SAME");
+        assert_eq!(ui.m.dec_thr_line[0], None);
+        assert_eq!(q(&mut s, &mut ui, ":BUS1:SPI:SCLK:THReshold?"), "2.600000E+00");
+        s.exec_cmd(&mut ui, &cv, ":BUS1:SPI:SCLK:THReshold x");
+        assert!(s.err.iter().any(|e| e.starts_with("-224")), "{:?}", s.err);
+        s.err.clear();
+        // AUTO: the demo plays the decoder's bus on its lines, all of one level, so they go on sharing the threshold
+        for c in 0..3 { ui.m.ch[c].on = true; }
+        (ui.m.dec_src, ui.m.dec_src2, ui.m.dec_cs) = (2, 1, None);
+        ui.m.dec_thr_line = [Some(0.1), Some(0.1), None];
+        for _ in 0..4 { ui.step(0.1); }
+        s.exec_cmd(&mut ui, &cv, ":BUS1:THReshold AUTO");
+        assert!(s.err.is_empty(), "{:?}", s.err);
+        assert!((ui.m.dec_thr - 1.65).abs() < 0.3, "{}", ui.m.dec_thr);
+        assert_eq!(ui.m.dec_thr_line, [None; 3], "lines of one level share the threshold");
+    }
+
     #[test]
     fn the_setup_keys_page_names_the_headers_of_the_rows() {
         let page = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi/setup-keys.md")).unwrap();

@@ -18,6 +18,13 @@ Fixed:
   table of the measurements without a word, and no row of the menu led to the other two. The page opens on the
   table that is on the screen, else on the events of a decoder or a search that is on; the row says On for any
   of the three.
+- Decoders, a threshold for each line (host-tested): a decoder of several lines (SPI, I2C and the others with a
+  clock or a select) has a threshold for each further line, on the Settings page of Decode (Clock threshold, CS
+  threshold). A line follows the decoder's threshold until it is given its own. On a unit an SPI clock and select
+  of 0.5 V stood beside a data line of 5 V whose low level is 0.3 V: no one threshold reads both safely. Threshold
+  to middle and `:BUS<n>:THReshold AUTO` give every line the middle of its own signal. New commands:
+  `:BUS<n>:SPI:SCLK:THReshold`, `:BUS<n>:SPI:MOSI:THReshold`, `:BUS<n>:SPI:SS:THReshold`,
+  `:BUS<n>:IIC:SCLK:THReshold`, `:BUS<n>:IIC:SDA:THReshold`; new set-up key `dec_thr_line`.
 - Studio, the pill of a channel (host-tested): a tap selects the channel, wherever on the pill, and does
   nothing else; a tap on the selected pill opens its sheet, so a double tap on any pill opens it, and the
   second tap of a double tap does not close it. With a channel sheet open, a tap on another pill takes the

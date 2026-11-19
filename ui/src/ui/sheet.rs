@@ -714,6 +714,7 @@ impl Ui {
             // the rows below are those of one decoder of four: the switch says whose it is
             Item::DecSel => "Decoders".into(),
             Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),
+            Item::DecThrLine(k) => self.m.dec_proto.roles().get(k + 1).copied().flatten().map_or_else(|| self.item_label(it).to_string(), |r| format!("{r} threshold")),
             // a line is named by what it is in the protocol (Clock, Data, CS), where the protocol says so
             Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 => {
                 let role = match it { Item::DecSrc => 0, Item::DecSrc2 => 1, Item::DecCs => 2, _ => 3 };

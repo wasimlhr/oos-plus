@@ -250,7 +250,11 @@ impl Ui {
         (0..n_ch()).chain((0..NREF).filter(|&i| self.refs[i].is_some()).map(|i| DEC_REF_BASE + i)).collect()
     }
     pub(super) fn decoder_vpd(&self) -> f32 {
-        self.decoder_samples(self.m.dec_src).map_or(1.0, |(_, _, _, vpd)| vpd.max(1e-9))
+        self.decoder_vpd_of(self.m.dec_src)
+    }
+    /// The volts per division of the decoder source `src` (a channel or a reference).
+    pub(super) fn decoder_vpd_of(&self, src: usize) -> f32 {
+        self.decoder_samples(src).map_or(1.0, |(_, _, _, vpd)| vpd.max(1e-9))
     }
     #[cfg(test)]
     pub(super) fn decoder_worker_state_for_test(&self) -> (usize, usize) {
