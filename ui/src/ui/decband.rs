@@ -61,6 +61,8 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
     let mut out: Vec<Cell> = Vec::new();
     // the end of the box before: a box starts right of it (at first right of the band's name)
     let mut end = left;
+    // the box before is a message with no room for even its first field
+    let mut mute = false;
     let mut k = 0;
     while k < spans.len() {
         // one message: up to the next field that begins one
@@ -71,6 +73,7 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
         let Some(head) = fields.first() else {
             // events only
             out.extend(burst.iter().map(|s| Cell::Tag { i: s.i, x: s.x0 }));
+            mute = false;
             continue;
         };
         // every field wide enough for its own text: a box each
@@ -87,6 +90,7 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
                 out.push(Cell::One { i: s.i, x0: s.x0.max(end + 1), x1: s.x1 });
                 end = s.x1;
             }
+            mute = false;
             continue;
         }
         // one box from its first field to its last; its tags are said by its text. The idle line up to the field
@@ -96,7 +100,19 @@ pub(super) fn cells(spans: &[Span], need: impl Fn(usize) -> i32, left: i32) -> V
         if x1 >= x0 {
             let bad = burst.iter().any(|s| !s.ok);
             let until = spans[n..].iter().find(|s| !s.tag).map_or(i32::MAX / 2, |s| s.x0 - SLOT_GAP);
-            out.push(Cell::Run { i0: burst[0].i, i1: burst[burst.len() - 1].i + 1, x0, x1, bad, until });
+            let i1 = burst[burst.len() - 1].i + 1;
+            // no room for even its first field, in the message or in the idle line behind it: short messages at a
+            // steady pace (a word per SPI frame). The band then reads them as one stream, as long as they go on so
+            let room = x1.max(until) - x0;
+            let now = room < OWN_MIN || need(head.i) > room;
+            match out.last_mut() {
+                Some(Cell::Run { i1: last, x1: to, bad: failed, until: free, .. }) if mute && now => {
+                    (*last, *to, *free) = (i1, x1, until);
+                    *failed |= bad;
+                }
+                _ => out.push(Cell::Run { i0: burst[0].i, i1, x0, x1, bad, until }),
+            }
+            mute = now;
             end = x1;
         }
     }
@@ -129,6 +145,7 @@ fn run_piece(m: &Model, p: &Packet) -> String {
 /// The text of a message: its fields in order, as many as fit into `room` pixels, then "...". Characters stand side by
 /// side, other values with a space between them. Empty when not even the first field fits.
 pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String {
+    let pk = said(pk);
     let dots = f.width("...");
     let glue = if ascii(m) { "" } else { " " };
     let mut s = String::new();
@@ -150,9 +167,18 @@ pub(super) fn run_text(m: &Model, pk: &[Packet], f: &Font, room: i32) -> String 
     s
 }
 
+/// The fields a message's text is made of: all but the start mark it begins with, which every message of its
+/// decoder has (an I2C transfer its start condition, an SPI frame its chip select).
+fn said(pk: &[Packet]) -> &[Packet] {
+    match pk {
+        [first, rest @ ..] if first.kind == DecKind::Start && !rest.is_empty() => rest,
+        _ => pk,
+    }
+}
+
 /// The whole text of a message, as its box would hold it with all the room.
 pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
-    pk.iter().map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
+    said(pk).iter().map(|p| run_piece(m, p)).collect::<Vec<_>>().join(if ascii(m) { "" } else { " " })
 }
 
 /// The lines of the decoder `m` is the view of, in the order of its roles ("CH4 CH3 CH2"; on the LA "D8 D10").
@@ -602,6 +628,24 @@ mod tests {
             Cell::Run { i0: 2, i1: 3, x0: 160, x1: 162, bad: false, until: OPEN },
         ];
         assert_eq!(cells(&apart, |_| 12, 50), want);
+    }
+
+    /// Short messages at a pace that leaves no room for one field's text (a word per SPI frame at a slow time base)
+    /// are one box while they go on so: the band reads them as a stream. The last one has the line behind it.
+    #[test]
+    fn messages_without_room_for_a_field_are_read_as_a_stream() {
+        // messages of one field of 2 px, each `pitch` px after the one before
+        let paced = |n: usize, pitch: i32| -> Vec<Span> {
+            (0..n).map(|k| Span { first: true, ..span(k, 100 + pitch * k as i32, 102 + pitch * k as i32) }).collect()
+        };
+        let dense = paced(5, 10);
+        let want = [
+            Cell::Run { i0: 0, i1: 4, x0: 100, x1: 132, bad: false, until: 138 },
+            Cell::Run { i0: 4, i1: 5, x0: 140, x1: 142, bad: false, until: OPEN },
+        ];
+        assert_eq!(cells(&dense, |_| 12, 50), want);
+        // with room for a field behind each message they stay apart
+        assert_eq!(cells(&paced(3, 30), |_| 12, 50).len(), 3);
     }
 
     /// A message in one box says that one of its fields failed, and takes its tags into its text; a tag on its own

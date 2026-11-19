@@ -548,6 +548,41 @@ mod tests {
         assert_eq!((u.item_label(Item::DecOpt(0)), u.item_label(Item::DecOpt(1))), ("Bit order", "Data"));
     }
 
+    /// SPI with a chip select and a MISO line: each frame begins with a start mark and is a message of its own, and
+    /// a word is MOSI/MISO once the MISO line has a source.
+    #[test]
+    fn spi_frames_are_messages_and_miso_is_read() {
+        // three words a frame, a frame every 50 us, mode 0
+        let [cs, clk, mosi, miso] = oos_dsp::sim::spi_logic(&[(0x9f, 0xff), (0x00, 0x1f), (0x00, 0x40)], 8, 0, 2e6, 0.0, 3.3);
+        let (dt, period) = (25e-9, 50e-6);
+        let wave = |l: &oos_dsp::sim::Logic| -> Vec<f32> { oos_dsp::sim::sample(|t| l.v(t.rem_euclid(period)), 0.0, dt, 6400) };
+        let ch: [Vec<f32>; NCH] = [wave(&mosi), wave(&clk), wave(&cs), wave(&miso)];
+        let mut m = Model::default();
+        m.dec_proto = Proto::SPI;
+        (m.dec_src, m.dec_src2, m.dec_cs, m.dec_src4) = (0, 1, Some(2), None);
+        (m.dec_bits, m.dec_mode, m.dec_thr) = (8, 0, 1.65);
+        m.dec_opt = [0; crate::protocols::OPTS];
+        let p = crate::trig::decode(&m, std::array::from_fn(|c| &ch[c][..]), dt).unwrap();
+        let starts = p.iter().filter(|x| x.kind == DecKind::Start).count();
+        assert!(starts >= 2, "a start mark for each frame the chip select begins in the record: {starts}");
+        assert!(p.iter().all(|x| x.value2.is_none()), "no MISO without a source for it");
+        // a message per frame: every message after the first begins with its start mark and has the three words
+        let frames = oos_dsp::decode::bursts(&p);
+        assert!(frames.len() >= 3, "{frames:?}");
+        for f in &frames[1..frames.len() - 1] {
+            let words: Vec<u32> = p[f.clone()].iter().filter(|x| x.kind == DecKind::Data).map(|x| x.value).collect();
+            assert_eq!((p[f.start].kind, words), (DecKind::Start, vec![0x9f, 0x00, 0x00]));
+        }
+        assert_eq!(decband::message_text(&m, &p[frames[1].clone()]), "9F 00 00");
+        // with the MISO line
+        m.dec_src4 = Some(3);
+        let p = crate::trig::decode(&m, std::array::from_fn(|c| &ch[c][..]), dt).unwrap();
+        let frames = oos_dsp::decode::bursts(&p);
+        assert_eq!(decband::message_text(&m, &p[frames[1].clone()]), "9F/FF 00/1F 00/40");
+        // SPI names the line, and choosing SPI on a scope leaves it unset
+        assert_eq!(Proto::SPI.roles()[3], Some("MISO"));
+    }
+
     /// The Events pane lists the demo's UART line as messages, switches to fields by a tap on its head, and a tap on
     /// a row needs no more than the row.
     #[test]

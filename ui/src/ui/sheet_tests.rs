@@ -280,7 +280,7 @@ fn bus_is_a_tab_of_decode_and_the_gear_opens_a_short_main_sheet() {
     u.open_menu(MenuId::Decode);
     let spec = u.sheet_spec(MenuId::Decode).unwrap();
     assert!(spec.tabs.iter().any(|t| t.name == "Bus"));
-    assert!(spec.tabs[2].rows.contains(&Item::BusOn));
+    assert!(spec.tabs[3].rows.contains(&Item::BusOn));
     u.open_menu(MenuId::Bus);
     let g = u.sheet_geo().unwrap();
     assert!(g.rows.iter().any(|r| r.it == Item::BusOn), "Bus opens on its tab of the Decode sheet");

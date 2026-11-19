@@ -138,7 +138,7 @@ impl Protocol for Spi {
         "SPI"
     }
     fn roles(&self) -> [Option<&'static str>; 4] {
-        [Some("MOSI"), Some("Clock"), Some("CS"), None]
+        [Some("MOSI"), Some("Clock"), Some("CS"), Some("MISO")]
     }
     fn shared(&self) -> &'static [Row] {
         &[Row::SpiMode, Row::Bits, Row::SpiCs]
@@ -157,7 +157,8 @@ impl Protocol for Spi {
             _ => None,
         };
         let cs = cs_hi.as_deref().or(l.lines[2]);
-        let mut p = spi(clk, l.main(), None, cs, l.sh.spi_mode, l.sh.bits, l.opt[0] == 0, l.thr, l.hy, gap);
+        // the second data line, where it has a source: a word is then MOSI/MISO
+        let mut p = spi(clk, l.main(), l.lines[3], cs, l.sh.spi_mode, l.sh.bits, l.opt[0] == 0, l.thr, l.hy, gap);
         if l.opt[1] == 1 {
             // a low level is a 1: every bit of a word the other way round
             let mask = if l.sh.bits >= 32 { u32::MAX } else { (1u32 << l.sh.bits) - 1 };
@@ -166,13 +167,32 @@ impl Protocol for Spi {
                 x.value2 = x.value2.map(|v| !v & mask);
             }
         }
+        // a frame starts where the chip select goes active: a start mark there makes each frame a message of its
+        // own, as a start condition does for I2C. Without a chip select the words are messages by their pauses
+        if let Some(c) = cs {
+            use oos_dsp::decode::Kind;
+            let edges = oos_dsp::edges::edges(c, l.thr, l.hy);
+            let falls: Vec<f64> = edges.iter().filter(|e| !e.rising).map(|e| e.t).collect();
+            // only a frame a word was read in: where the clock is too fast for the record the band stays empty and
+            // says so, it does not fill with marks
+            let ends = |k: usize, t: f64| falls.get(k + 1).is_none_or(|&next| t < next);
+            let read = |k: usize| p.iter().any(|x| x.t0 >= falls[k] && ends(k, x.t0));
+            let marks: Vec<Packet> = (0..falls.len())
+                .filter(|&k| read(k))
+                .map(|k| Packet { t0: falls[k], t1: falls[k], kind: Kind::Start, value: 0, value2: None, ok: true })
+                .collect();
+            p.extend(marks);
+            // a mark before the word that begins at the same time
+            p.sort_by(|a, b| a.t0.total_cmp(&b.t0).then((a.kind != Kind::Start).cmp(&(b.kind != Kind::Start))));
+        }
         Ok(p)
     }
     /// A frame starts with the chip select.
     fn start_role(&self) -> usize {
         2
     }
-    /// MOSI on CH3, clock on CH4, CS on CH2 (LA: D11, D10, D9); mode 0, 8 bits; the trigger on CS falling.
+    /// MOSI on CH3, clock on CH4, CS on CH2 (LA: D11, D10, D9); mode 0, 8 bits; the trigger on CS falling. MISO has
+    /// no source until it is given one: a bus is read by its MOSI line alone.
     fn setup(&self) -> Setup {
         Setup {
             src: [Some(2), Some(3), Some(1), None],

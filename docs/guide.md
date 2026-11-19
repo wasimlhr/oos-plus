@@ -793,7 +793,9 @@ stream split at its line feeds), and Errors only. Its list scrolls by the bar or
 view to that message and marks it: the row, its box in the decoder's band and its time on the plot. A tap on a box of
 the band does the same from the plot. Made small, the pane keeps the time and the text. Decode > Threshold to middle
 puts a decoder's threshold half way between the levels of its signal, for each of its lines by itself: a line can
-have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels.
+have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels; in Studio
+the thresholds are on the Levels page of the Decode sheet. An SPI decoder reads a second data line when MISO has a
+source, and each chip-select frame is one message.
 In Studio each decoder that is on has a pill in the bottom bar; a tap on it opens that decoder's Decode sheet with a
 row for each of its lines.
 

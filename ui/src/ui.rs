@@ -7665,7 +7665,13 @@ impl Ui {
             if r[2].is_some() && (old[2].is_none() || m.dec_cs.is_none()) {
                 m.dec_cs = free(m);
             }
-            if r[3].is_some() && (old[3].is_none() || m.dec_src4.is_none()) {
+            // a fourth line the protocol's set-up has no place for is one it reads without (the MISO of SPI): it
+            // stays unset, where a channel that happens to be on would be read as that line
+            if r[3].is_some() && s.src[3].is_none() {
+                if old[3].is_none() {
+                    m.dec_src4 = None;
+                }
+            } else if r[3].is_some() && (old[3].is_none() || m.dec_src4.is_none()) {
                 m.dec_src4 = free(m);
             }
         }

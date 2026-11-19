@@ -198,15 +198,17 @@ impl Ui {
                 RefClear => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
-            M::Decode | M::Bus => (&["Decode", "Settings", "Bus"], |it| match it {
+            M::Decode | M::Bus => (&["Decode", "Settings", "Levels", "Bus"], |it| match it {
                 // (the B line of a differential pair is a setting of its own: on the first page it stood under the
                 // source of every UART, where most have none)
                 DecSel | DecOn | DecProto | DecIn | DecSrc | DecSrc2 | DecCs | DecSrc4 => Slot::Tab(0),
                 DecTable | DecExport => Slot::Foot(1),
-                // an action: under the sources, whose signal it reads (the foot of Settings has its two)
-                DecThrMid => Slot::Foot(0),
-                BusLabel => Slot::Foot(2),
-                BusOn | BusPos | BusClk | BusClkThr | BusData | BusDataThr | BusRw => Slot::Tab(2),
+                // the thresholds have a page of their own, with the action that finds them: a decoder of four lines
+                // has four, and Settings had no room for them beside the protocol's rows
+                DecThr | DecThrLine(_) => Slot::Tab(2),
+                DecThrMid => Slot::Foot(2),
+                BusLabel => Slot::Foot(3),
+                BusOn | BusPos | BusClk | BusClkThr | BusData | BusDataThr | BusRw => Slot::Tab(3),
                 _ => Slot::Tab(1),
             }),
             M::Math => (&["Function", "Scale"], |it| match it {
@@ -470,6 +472,14 @@ impl Ui {
             // the second page: a UART was switched on and read nothing until the baud rate was found there
             if matches!(menu, MenuId::Decode | MenuId::Bus) && tabs.len() > 1 {
                 use Item::*;
+                // SPI: the MISO line is one the bus is read without. It heads Settings, and the Mode has its place
+                // on the first page
+                if self.m.dec_proto == Proto::SPI {
+                    if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecSrc4) {
+                        let row = tabs[0].rows.remove(i);
+                        tabs[1].rows.insert(0, row);
+                    }
+                }
                 while tabs[0].rows.len() < SHEET_MAX_ROWS {
                     let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
                     let row = tabs[1].rows.remove(i);
@@ -509,7 +519,7 @@ impl Ui {
             }
             let first = match menu {
                 MenuId::ChMore(_) => 1,
-                MenuId::Bus => 2,
+                MenuId::Bus => 3,
                 _ => 0,
             };
             SheetSpec { tabs, first }
