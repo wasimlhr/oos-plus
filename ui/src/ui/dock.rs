@@ -1027,10 +1027,12 @@ impl Ui {
         let busy: Vec<Rect> = bar.map(|b| vec![b.label, b.tdiv, b.plus, b.minus, b.vplus, b.vminus, b.readout, b.center, b.fit, b.more, b.close]).unwrap_or_default();
         let clear = |cx: i32| { let hit = Rect::new(cx - 30, y - 40, 60, 42); !busy.iter().any(|r| r.w > 0 && hit.x < r.right() && r.x < hit.right() && hit.y < r.bottom() && r.y < hit.bottom()) };
         let cx = [o.x + o.w / 2, o.x + o.w * 62 / 100, o.x + o.w * 38 / 100, o.x + o.w * 25 / 100, o.x + o.w * 75 / 100].into_iter().find(|&c| clear(c)).unwrap_or(o.x + o.w / 2);
-        // the grip lies in the bottom of the overview strip, above the buttons of the zoom bar: a slim bar on the
-        // edge it moves. It was a chip of 44 x 24 px with three dots, which read as one more menu beside the tab
-        // under it ("redundant and too big", the owner from the unit). The touch area is the finger's as before
-        Some((Rect::new(cx - 30, y - 40, 60, 42), Rect::new(cx - 18, y - 8, 36, 5)))
+        // the grip is a slim bar on the edge it moves, in the gap of 6 px between the overview and the zoom view. It
+        // was a chip of 44 x 24 px with three dots in the bottom of the overview, which read as one more menu beside
+        // the tab under it ("redundant and too big", the owner from the unit) and stood on the time of the middle
+        // division; so did a bar inside the strip (seen on a unit). The touch area is the finger's as before, in
+        // the bottom of the overview and above the buttons of the zoom bar
+        Some((Rect::new(cx - 30, y - 40, 60, 42), Rect::new(cx - 18, y + 1, 36, 4)))
     }
 
     pub(super) fn ov_divider_down(&mut self, x: i32, y: i32) -> bool {

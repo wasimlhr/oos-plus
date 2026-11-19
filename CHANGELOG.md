@@ -695,22 +695,30 @@ Changed:
   badges fill two lines on the panel and one on a monitor of 1920, so the next step laid the panel out with one
   line, its plot changed its height from frame to frame, and its traces were cleared each time. What Studio
   keeps of a frame (the lines of the badge row, where badges and labels were drawn for the touch) is the panel's
-  again after the monitor's pass. Reproduced and tested on the host; not yet run on a unit.
-- Studio, the zoom with its pull-down tab (the owner from the unit; host-tested):
+  again after the monitor's pass. Reproduced and tested on the host, and on the unit (build 20261119-215725,
+  a monitor of 1920 x 1080 connected, HDMI on Layout, the panel's row with two lines): none of 48 pictures of
+  the panel without traces, with the zoom and without, with the panel's view and with view 1 on the monitor.
+- Studio, the zoom with its pull-down tab (the owner from the unit; host-tested, the tab and the X also on the
+  unit with build 20261119-215725):
   - the tab is as wide as what it says ("Zoom 20x"); it was 150 px whatever it said;
   - the X of the toolbar that the tab opened folds the toolbar, and the zoom stays. It closed the zoom, so the
     toolbar could not be put away without losing the zoom. The zoom goes off with its button on the plot, with
     Close zoom behind the dots of the toolbar, or with the X of the title strip where the tab is switched off;
-  - the grip that sets the height of the overview is a slim bar on the edge it moves. It was a chip of 44 x 24 px
-    with three dots that stood right over the tab and read as one more menu. The area that takes the finger is
-    the same (60 x 42 px).
+  - the grip that sets the height of the overview is a slim bar on the edge it moves, in the gap between the
+    overview and the zoom view. It was a chip of 44 x 24 px with three dots in the bottom of the overview, right
+    over the tab, which read as one more menu and stood on the time of the middle division. The area that takes
+    the finger is the same (60 x 42 px).
 - Manchester on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: the 10BASE-T output of a
   demo board, 10 Mbit/s, about 1 V each way around 0 V). The decoder reads its packets at the rate it finds in
   the signal: a ping of 102 bytes with the right frame check, and frames the board changes on purpose (other
   header bytes, a check that does not fit), the same in every record. Which edge is a one depends on the wire of
-  the pair that is probed: CH1 was on the negative one, and "Falling (Thomas)" read it. Not checked: the
-  positive wire on CH2 at a time base fast enough for it, and the two changes below on the unit (host-tested).
-  Two things it brought:
+  the pair that is probed: CH1 was on the negative one, and "Falling (Thomas)" read it; the positive one on
+  CH2 (about 0.1 V each way, threshold on Auto) reads the same frames with "Rising (802.3)" at 20 us/div.
+  Two things it brought, both on the unit with build 20261119-215725: at 20 us/div the ping with its parts and
+  its check in every record read, and the frame behind it, which the record cuts off, without a check. With
+  Trigger > Bus > Error and a record of 1 Mpts, six frames of the board in each of five records: five with a
+  check that fits (the ping and four with other types) and a sixth with the ping's type and check and other
+  bytes, marked, its check at the trigger point.
   - A packet that is an Ethernet frame shows its parts in place of its bytes: the preamble with its delimiter,
     the destination and the source address, the type, the bytes behind it and the frame check, which is marked
     where the CRC-32 of the frame is another. As bytes alone the board's good and changed frames looked alike;
