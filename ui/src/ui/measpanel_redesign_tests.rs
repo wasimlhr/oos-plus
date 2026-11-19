@@ -410,7 +410,7 @@ fn the_top_bar_has_one_add_button_and_its_menu_starts_with_measurement() {
     tap(&mut u, r);
     assert!(!u.studio.add_menu && u.menu_open && u.menu == MenuId::MeasAdd);
     u.close_menu();
-    // Results table shows the panel
+    // Results table opens the page of the tables, and Add there shows the panel
     u.studio_set_view(StudioView::Waveform);
     frame(&mut u);
     tap(&mut u, t.add);
@@ -439,6 +439,9 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
         assert!(u.studio.hide_badges);
         let show = u.studio_bottom().show.expect("a restore chip in the bottom bar");
         shotb(&mut u, "strip-hidden");
+    assert!(u.menu_open && u.menu == MenuId::AddPanel && !u.studio_panel_shown());
+    let add = u.rail_geo().foot[0].1;
+    tap(&mut u, add);
         tap(&mut u, show);
         assert!(!u.studio.hide_badges, "one tap brings the strip back");
         // the Add menu adds things: showing the strip is the chip above and View > Show pinned badges

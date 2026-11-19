@@ -13,6 +13,11 @@ Fixed:
   From a value between two steps a turn goes to the step beside it (26 us/div went to 100 us/div, past 50). The
   zoom keeps its row, its button in Studio and `:TIMebase:DELay:ENABle`; while it is open a push closes it. The web
   remote has a button for each.
+- Studio, Add > Results table (host-tested): the row opens the page of the three tables, where each is put on the
+  screen and taken off: the measurements, the events of the search, the events of the decoders. It docked the
+  table of the measurements without a word, and no row of the menu led to the other two. The page opens on the
+  table that is on the screen, else on the events of a decoder or a search that is on; the row says On for any
+  of the three.
 - The Decode sheet of Studio and Minimal (host-tested): what the protocol itself needs is on the first page with its
   lines (the baud rate, data bits and parity of a UART, the mode of SPI), where it was on Settings; the B line of a
   differential pair is on Settings; a line is named by its role in the protocol (MOSI, Clock, CS); the channels of

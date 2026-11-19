@@ -3,7 +3,7 @@
 //! button and the Meas button: Measurement comes first, then the views (results table, plot, cursors, search), the sources
 //! (math, reference, bus) and the screen (zoom, the measurement strip). Every row is a short way into a page that exists.
 use super::addrail::AddKind;
-use super::studio::{icon_cursors, StudioView};
+use super::studio::icon_cursors;
 use super::*;
 
 const MENU_W: i32 = 252;
@@ -55,7 +55,7 @@ impl Ui {
     fn add_row_on(&self, r: AddRow) -> bool {
         match r {
             AddRow::Measurement => self.measurement_count() > 0,
-            AddRow::ResultsTable => self.studio_panel_shown(),
+            AddRow::ResultsTable => self.rail_kind_on_pub(AddKind::Table),
             AddRow::Plot => self.rail_kind_on_pub(AddKind::Plot),
             AddRow::Cursors => self.m.cursor != CursorMode::Off,
             AddRow::Search => self.studio.search.is_some(),
@@ -151,7 +151,9 @@ impl Ui {
         let Some((row, _)) = self.studio_add_rows().into_iter().find(|(_, r)| r.contains(x, y)) else { return true };
         match row {
             AddRow::Measurement => self.open_meas_list(),
-            AddRow::ResultsTable => self.studio_set_view(StudioView::Docked),
+            // the page with the three tables (measurements, search events, decoder events). The row docked the
+            // table of the measurements and said nothing of the other two, which no row of this menu led to
+            AddRow::ResultsTable => self.add_open_table(),
             AddRow::Plot => self.add_open_kind(AddKind::Plot),
             AddRow::Cursors => self.add_open_kind(AddKind::Cursors),
             AddRow::Search => self.add_open_kind(AddKind::Search),
@@ -162,6 +164,13 @@ impl Ui {
             AddRow::ZoomBox => self.arm_zoom_area(),
         }
         true
+    }
+
+    /// The Results table page, on the table that makes sense now: one that is on the screen, else the events of a
+    /// decoder or of a search that is on, else the measurements.
+    fn add_open_table(&mut self) {
+        self.add_open_kind(AddKind::Table);
+        self.sheet.add.table = self.rail_table_default();
     }
 
     /// A page of the Add panel, straight from the menu.
