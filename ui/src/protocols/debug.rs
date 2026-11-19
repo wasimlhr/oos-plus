@@ -58,6 +58,16 @@ impl Protocol for Jtag {
     fn roles(&self) -> [Option<&'static str>; 4] {
         [Some("TMS"), Some("TCK"), Some("TDI"), Some("TDO")]
     }
+    /// A scan with a TDO line says what went in and what came out: "DR 0 > 4BA00477" (the answer to a request for
+    /// the identification read "DR 0", the zeros that were shifted in).
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        match (p.kind, p.value2) {
+            (oos_dsp::decode::Kind::Field(l @ ("IR" | "DR" | "IR+" | "DR+")), Some(out)) => {
+                Some(format!("{} {:X} > {:X}", l, p.value, out))
+            }
+            _ => None,
+        }
+    }
     fn bit_time(&self, _: &[usize; OPTS]) -> f64 {
         0.5e-6
     }
@@ -88,6 +98,19 @@ impl Protocol for Jtag {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A JTAG scan with TDO says both directions; without TDO it keeps the text of its kind.
+    #[test]
+    fn a_jtag_scan_says_what_came_out() {
+        use oos_dsp::decode::Kind;
+        let scan = |label: &'static str, value2: Option<u32>| {
+            Packet { t0: 0.0, t1: 1.0, kind: Kind::Field(label), value: 0, value2, ok: true }
+        };
+        assert_eq!(Jtag.text(&scan("DR", Some(0x4ba0_0477)), &[0; OPTS]).as_deref(), Some("DR 0 > 4BA00477"));
+        assert_eq!(Jtag.text(&scan("IR", Some(1)), &[0; OPTS]).as_deref(), Some("IR 0 > 1"));
+        assert_eq!(Jtag.text(&scan("DR", None), &[0; OPTS]), None);
+        assert_eq!(Jtag.text(&scan("!TLR", None), &[0; OPTS]), None);
+    }
 
     // Break it catches: a setup written while SWD and JTAG were built in losing its protocol or its sources
     #[test]

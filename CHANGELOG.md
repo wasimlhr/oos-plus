@@ -563,12 +563,13 @@ Changed:
   packet begins with its sync and every FlexRay frame with its start sequence, and a box with little room read "SYNC
   FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR 5 ...", "IND 4 ID 02A ..."); drawn
   as fields, and in the Fields view, it is there as before. A module says which field that is (`lead`).
-- Simulated traffic for Manchester, MLT-3 and Modbus ASCII (host-tested, and played and decoded on a unit) and for the
-  DS2482 bridge and JTAG (host-tested: a 1-Wire reset, Skip ROM and a command through the bridge's I2C commands; a TAP
-  reset, an instruction and the 32 bits of an identification) and for C-PHY (host-tested: a lane with its low-power
-  states and a burst that carries a short packet): each has a SIM bus preset now, 26 in all. Six bytes at the rate of
-  the list's usual entry for the two line codes, the read request of the Modbus RTU preset as its characters for
-  Modbus ASCII.
+- Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3,
+  Modbus ASCII, the DS2482 bridge, JTAG and C-PHY have a SIM bus preset now, 26 in all. Six bytes at the rate of
+  the list's usual entry for the two line codes; the read request of the Modbus RTU preset as its characters; a
+  1-Wire reset, Skip ROM and a command through the bridge's I2C commands; a TAP reset, an instruction and the 32
+  bits of an identification; a C-PHY lane with its low-power states and a burst that carries a short packet.
+  A JTAG scan with a TDO line says what came out as well as what went in, "DR 0 > 4BA00477": the preset on the
+  unit read "DR 0", the zeros shifted in, for the identification (the text host-tested, not on the unit yet).
 - C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
   yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
   - the levels were fixed voltages: a low-power level was one above 0.8 V, and the capture's lines swing 1.16 V

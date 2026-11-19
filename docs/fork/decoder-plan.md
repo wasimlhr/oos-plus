@@ -150,8 +150,8 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    9-bit, Modbus RTU, S/PDIF, USB PD): every one decodes its traffic without an error. That is the first run on a
    unit for seven of the decoders of step 5. It showed that a preset left the lines of the preset before it on
    the screen, which is fixed and seen fixed on the unit, as is the text of a USB packet. Manchester, MLT-3
-   and Modbus ASCII got traffic of their own and ran on the unit likewise, the DS2482 bridge and JTAG on the
-   host, and C-PHY has a lane with a short packet: 26 presets, 12 of the 13 decoders of step 5 among them.
+   and Modbus ASCII got traffic of their own and ran on the unit likewise, and so did the DS2482 bridge, JTAG
+   and a C-PHY lane with a short packet: 26 presets, 12 of the 13 decoders of step 5 among them.
    Without a preset: Quad-SPI (six lines, a preset has four roles) and Parallel (its lines are channels, not
    roles).
 5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
