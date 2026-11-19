@@ -40,11 +40,18 @@ pub struct Packet {
     pub t1: f64,
     pub kind: Kind,
     pub value: u32,
-    /// second value (SPI MISO)
+    /// second value (SPI MISO). I2C: [`I2C_TEN_BIT`] on a 10-bit address, [`I2C_NAK_END`] on the last byte of a read
     pub value2: Option<u32>,
-    /// UART: stop bit and parity ok; I2C: acknowledged
+    /// UART: stop bit and parity ok; I2C: acknowledged, or not acknowledged where that is the rule (the byte a
+    /// controller ends a read with)
     pub ok: bool,
 }
+
+/// `value2` of an I2C address of ten bits: `value` holds the ten bits. A write has it in two bytes on the bus, the
+/// read that follows a repeated start in one (its low eight bits are those of the write before it).
+pub const I2C_TEN_BIT: u32 = 10;
+/// `value2` of the data byte a controller ends a read with: it is not acknowledged, and that is no error (`ok`).
+pub const I2C_NAK_END: u32 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Parity {
@@ -172,24 +179,38 @@ pub fn bursts(p: &[Packet]) -> Vec<std::ops::Range<usize>> {
 /// the acknowledge bit, each around the rising clock edge it was sampled at. A byte's packet runs from its first
 /// clock edge to its ninth; the seven between them are taken as evenly spaced, which a clock stretched inside a byte
 /// is not (assumed; between bytes, where targets usually stretch, it does not matter).
+///
+/// A 10-bit address written is two bytes, 11110 with the two high bits and the write bit, then the low eight: 18
+/// cells, taken as evenly spaced over both. When one of the two was not acknowledged the packet does not say which:
+/// both acknowledge cells show it.
 pub fn i2c_bits(p: &Packet) -> Vec<Bit> {
-    let (byte, address) = match p.kind {
-        Kind::Addr { read } => ((p.value << 1) | u32::from(read), true),
-        Kind::Data => (p.value, false),
+    let ten = p.value2 == Some(I2C_TEN_BIT);
+    // the bytes on the bus, and whether the first is an address byte
+    let (bytes, address): (Vec<u32>, bool) = match p.kind {
+        Kind::Addr { read: false } if ten => (vec![0xf0 | (p.value >> 8 & 3) << 1, p.value & 0xff], true),
+        Kind::Addr { read: true } if ten => (vec![0xf0 | (p.value >> 8 & 3) << 1 | 1], true),
+        Kind::Addr { read } => (vec![(p.value << 1) | u32::from(read)], true),
+        Kind::Data => (vec![p.value], false),
         _ => return Vec::new(),
     };
-    let step = (p.t1 - p.t0) / 8.0;
+    let step = (p.t1 - p.t0) / (bytes.len() * 9 - 1) as f64;
     if !(step > 0.0) {
         return Vec::new();
     }
-    let cell = |k: u32, kind: BitKind, level: bool, ok: bool| {
+    let cell = |k: usize, kind: BitKind, level: bool, ok: bool| {
         let at = p.t0 + k as f64 * step;
         Bit { t0: at - step / 2.0, t1: at + step / 2.0, kind, level: Some(level), ok }
     };
-    let kind = |k: u32| if address && k == 7 { BitKind::Rw } else { BitKind::Data };
-    let mut out: Vec<Bit> = (0..8).map(|k| cell(k, kind(k), (byte >> (7 - k)) & 1 == 1, true)).collect();
-    // acknowledged is a 0 on the line
-    out.push(cell(8, BitKind::Ack, !p.ok, p.ok));
+    // acknowledged is a 0 on the line; the byte that ends a read is not acknowledged and is no error
+    let nak = !p.ok || p.value2 == Some(I2C_NAK_END);
+    let mut out = Vec::with_capacity(bytes.len() * 9);
+    for (n, byte) in bytes.iter().enumerate() {
+        for k in 0..8 {
+            let kind = if address && n == 0 && k == 7 { BitKind::Rw } else { BitKind::Data };
+            out.push(cell(n * 9 + k, kind, (byte >> (7 - k)) & 1 == 1, true));
+        }
+        out.push(cell(n * 9 + 8, BitKind::Ack, nak, p.ok));
+    }
     out
 }
 
@@ -251,7 +272,8 @@ pub fn uart_bits(p: &Packet, bits: u32, parity: Parity) -> Vec<Bit> {
 }
 
 /// I2C: START/STOP from SDA edges while SCL is high, bits sampled at SCL rising edges, 9th bit = ACK (low).
-/// One threshold and hysteresis for both lines.
+/// One threshold and hysteresis for both lines. A 10-bit address is one address packet, and the byte a controller
+/// ends a read with is no error (`i2c_settle`).
 pub fn i2c(sda: &[f32], scl: &[f32], thr: f32, hyst: f32) -> Vec<Packet> {
     i2c_at(sda, scl, thr, hyst, thr, hyst)
 }
@@ -303,6 +325,66 @@ pub fn i2c_at(sda: &[f32], scl: &[f32], sda_thr: f32, sda_hyst: f32, scl_thr: f3
                     first = false;
                     nbits = 0;
                     bits = 0;
+                }
+            }
+            _ => {}
+        }
+    }
+    i2c_settle(out)
+}
+
+/// What the bytes of a transfer mean together, which the bit loop of `i2c_at` cannot know byte by byte:
+///
+/// - A 10-bit address: the first byte 11110xx0 and the byte after it are one address packet of ten bits
+///   ([`I2C_TEN_BIT`]), acknowledged when both were. The read that follows a repeated start sends 11110xx1 alone:
+///   it gets the ten bits of the write before it in the same transfer, when its two bits are the same. Such a byte
+///   without that write before it stays what it is on the bus, an address of seven bits.
+/// - The last byte of a read is not acknowledged by the controller: that is how it ends the read. It is `ok`, with
+///   [`I2C_NAK_END`], when its address was acknowledged and a stop, a repeated start or the end of the record
+///   follows. Any other byte that was not acknowledged stays an error.
+fn i2c_settle(raw: Vec<Packet>) -> Vec<Packet> {
+    let mut out: Vec<Packet> = Vec::with_capacity(raw.len());
+    // the 10-bit address written in this transfer (kept over repeated starts, until the stop)
+    let mut written: Option<u32> = None;
+    let mut k = 0;
+    while k < raw.len() {
+        let p = &raw[k];
+        let data_follows = raw.get(k + 1).is_some_and(|d| d.kind == Kind::Data);
+        match p.kind {
+            Kind::Start | Kind::Stop => written = None,
+            Kind::Addr { read: false } if p.value & 0x7c == 0x78 && data_follows => {
+                let low = &raw[k + 1];
+                let value = (p.value & 3) << 8 | (low.value & 0xff);
+                written = Some(value);
+                let (value2, ok) = (Some(I2C_TEN_BIT), p.ok && low.ok);
+                out.push(Packet { t0: p.t0, t1: low.t1, kind: p.kind, value, value2, ok });
+                k += 2;
+                continue;
+            }
+            Kind::Addr { read: true } if p.value & 0x7c == 0x78 => {
+                let after_restart = out.last().is_some_and(|x| x.kind == Kind::RepStart);
+                if let Some(value) = written.filter(|w| after_restart && w >> 8 == p.value & 3) {
+                    out.push(Packet { value, value2: Some(I2C_TEN_BIT), ..p.clone() });
+                    k += 1;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        out.push(p.clone());
+        k += 1;
+    }
+    // the byte that ends a read
+    let mut reading = false;
+    for k in 0..out.len() {
+        match out[k].kind {
+            Kind::Start | Kind::RepStart | Kind::Stop => reading = false,
+            Kind::Addr { read } => reading = read && out[k].ok,
+            Kind::Data if reading && !out[k].ok => {
+                let last = out.get(k + 1).is_none_or(|n| matches!(n.kind, Kind::Stop | Kind::RepStart | Kind::Start));
+                if last {
+                    out[k].ok = true;
+                    out[k].value2 = Some(I2C_NAK_END);
                 }
             }
             _ => {}
@@ -494,6 +576,104 @@ mod tests {
         assert_eq!(p.iter().map(|x| x.value as u8).collect::<Vec<_>>(), msg);
     }
 
+    /// A byte that was not acknowledged is an error, except the one a controller ends a read with: its address was
+    /// acknowledged and a stop or a repeated start follows it. On a real bus every read ended in an "error".
+    #[test]
+    fn i2c_the_byte_that_ends_a_read_is_no_error() {
+        let pk = |kind: Kind, value: u32, ok: bool| Packet { t0: 0.0, t1: 1.0, kind, value, value2: None, ok };
+        let (rd, wr) = (Kind::Addr { read: true }, Kind::Addr { read: false });
+        let settled = |raw: &[Packet]| -> Vec<(bool, Option<u32>)> {
+            i2c_settle(raw.to_vec()).iter().filter(|x| x.kind == Kind::Data).map(|x| (x.ok, x.value2)).collect()
+        };
+        let end = (true, Some(I2C_NAK_END));
+        // a read of two bytes, ended by a stop, by a repeated start, and by the end of the record
+        let (start, stop) = (pk(Kind::Start, 0, true), pk(Kind::Stop, 0, true));
+        let data = |value: u32, ok: bool| pk(Kind::Data, value, ok);
+        for last in [Some(Kind::Stop), Some(Kind::RepStart), None] {
+            let mut raw = vec![start.clone(), pk(rd, 0x50, true), data(0x10, true), data(0x12, false)];
+            raw.extend(last.map(|k| pk(k, 0, true)));
+            assert_eq!(settled(&raw), [(true, None), end], "{last:?}");
+        }
+        // a byte that is not acknowledged in the middle of a read is an error; the last one still ends it
+        let raw = [start.clone(), pk(rd, 0x50, true), data(1, false), data(2, false), stop.clone()];
+        assert_eq!(settled(&raw), [(false, None), end]);
+        // nobody answered the address: what follows is no read that ends well
+        let raw = [start.clone(), pk(rd, 0x50, false), data(0xff, false), stop.clone()];
+        assert_eq!(settled(&raw), [(false, None)]);
+        // a write that is not acknowledged is an error
+        let raw = [start.clone(), pk(wr, 0x50, true), data(1, true), data(2, false), stop.clone()];
+        assert_eq!(settled(&raw), [(true, None), (false, None)]);
+        // the acknowledge cell of the bit row says what was on the line, and is an error only where the byte is one
+        let ended = Packet { ok: true, value2: Some(I2C_NAK_END), ..data(0x12, true) };
+        let cell = |p: &Packet| {
+            let c = i2c_bits(p)[8];
+            (c.level, c.ok)
+        };
+        assert_eq!(cell(&ended), (Some(true), true));
+        assert_eq!(cell(&data(0x12, false)), (Some(true), false));
+        assert_eq!(cell(&data(0x12, true)), (Some(false), true));
+    }
+
+    /// A 10-bit address is one address: written, its two bytes; read after a repeated start, its one byte with the
+    /// low bits of the write before it. The cells of its bits lie on the clock edges of both bytes.
+    #[test]
+    fn i2c_ten_bit_addresses() {
+        let dt = 0.25e-6;
+        // write to 0x2A5 (11110 10 0, A5): 01; then read from it: 33 44; then a read header alone, to 0x79
+        let (sda, scl) = i2c_logic(
+            &[
+                I2cXfer { addr: 0x7a, read: false, data: vec![0xa5, 0x01], repeated: false, stop: false },
+                I2cXfer { addr: 0x7a, read: true, data: vec![0x33, 0x44], repeated: true, stop: true },
+                I2cXfer { addr: 0x79, read: true, data: vec![0x55], repeated: false, stop: true },
+            ],
+            100e3,
+            0.0,
+            3.3,
+        );
+        let (d, c) = (sample(|t| sda.v(t), 0.0, dt, 4200), sample(|t| scl.v(t), 0.0, dt, 4200));
+        let p = i2c(&d, &c, 1.65, 0.2);
+        let k: Vec<(Kind, u32, Option<u32>, bool)> = p.iter().map(|x| (x.kind, x.value, x.value2, x.ok)).collect();
+        let ten = Some(I2C_TEN_BIT);
+        assert_eq!(
+            k,
+            [
+                (Kind::Start, 0, None, true),
+                (Kind::Addr { read: false }, 0x2a5, ten, true),
+                (Kind::Data, 0x01, None, true),
+                (Kind::RepStart, 0, None, true),
+                (Kind::Addr { read: true }, 0x2a5, ten, true),
+                (Kind::Data, 0x33, None, true),
+                (Kind::Data, 0x44, Some(I2C_NAK_END), true),
+                (Kind::Stop, 0, None, true),
+                (Kind::Start, 0, None, true),
+                // no write before it in this transfer: the byte as it is on the bus
+                (Kind::Addr { read: true }, 0x79, None, true),
+                (Kind::Data, 0x55, Some(I2C_NAK_END), true),
+                (Kind::Stop, 0, None, true),
+            ]
+        );
+        // the written address: 18 cells over its two bytes, each what the data line is in its middle
+        let cells = i2c_bits(&p[1]);
+        assert_eq!(cells.len(), 18);
+        for x in &cells {
+            let mid = ((x.t0 + x.t1) / 2.0).round() as usize;
+            assert_eq!(Some(d[mid] > 1.65), x.level, "{:?}", x);
+        }
+        let levels: Vec<u8> = cells.iter().map(|x| u8::from(x.level == Some(true))).collect();
+        assert_eq!(levels, [1, 1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0]);
+        let kinds: Vec<BitKind> = cells.iter().map(|x| x.kind).collect();
+        let (rw, ack, data) = (BitKind::Rw, BitKind::Ack, BitKind::Data);
+        assert_eq!((kinds[7], kinds[8], kinds[16], kinds[17]), (rw, ack, data, ack));
+        // the read header: one byte, 11110 10 1 and its acknowledge
+        let cells = i2c_bits(&p[4]);
+        let levels: Vec<u8> = cells.iter().map(|x| u8::from(x.level == Some(true))).collect();
+        assert_eq!(levels, [1, 1, 1, 1, 0, 1, 0, 1, 0]);
+        for x in &cells {
+            let mid = ((x.t0 + x.t1) / 2.0).round() as usize;
+            assert_eq!(Some(d[mid] > 1.65), x.level, "{:?}", x);
+        }
+    }
+
     #[test]
     fn i2c_write_then_read() {
         let rate = 100e3;
@@ -521,7 +701,7 @@ mod tests {
                 (Kind::RepStart, 0, true),
                 (Kind::Addr { read: true }, 0x50, true),
                 (Kind::Data, 0xab, true),
-                (Kind::Data, 0xcd, false), // master NACKs the last read byte
+                (Kind::Data, 0xcd, true), // the controller does not acknowledge the last byte it reads: no error
                 (Kind::Stop, 0, true),
             ]
         );
@@ -728,44 +908,116 @@ pub fn lin_checksum(bytes: &[u8]) -> u8 {
     !(s as u8)
 }
 
-/// LIN frames: break (dominant >= 11 bit times), sync 0x55, protected ID, data bytes and the checksum (the last byte
-/// before the next break or the end; classic or enhanced checksum accepted). Bytes are UART 8N1, idle high.
+/// Which checksum a LIN frame is checked against.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinChecksum {
+    /// the classic or the enhanced one: a bus of mixed nodes, or one whose version is not known
+    Either,
+    /// LIN 2.x: over the protected identifier and the data (the diagnostic frames 3C and 3D keep the classic one)
+    Enhanced,
+    /// LIN 1.x: over the data alone
+    Classic,
+}
+
+/// LIN frames with either checksum accepted (`lin_with`).
 pub fn lin(v: &[f32], dt: f64, baud: f64, thr: f32, hyst: f32) -> Vec<Packet> {
-    let spb = 1.0 / baud / dt;
+    lin_with(v, dt, baud, LinChecksum::Either, thr, hyst)
+}
+
+/// The longest a LIN frame may take, in bit times from the start of its break: 1.4 times the header of 34 bits and
+/// a response of eight data bytes and the checksum (LIN 2.x, T_Frame_Maximum).
+const LIN_FRAME_BITS: f64 = 1.4 * (34.0 + 90.0);
+
+/// LIN frames: break, sync 0x55, protected ID, up to eight data bytes and the checksum. Bytes are UART 8N1, idle
+/// high.
+///
+/// The bit time of a frame is measured on its sync field, as a node does: its five falling edges are two bits apart.
+/// A dominant pulse of at least 10 of those bit times before it is the break (13 are sent). A frame whose sync
+/// cannot be read that way is read at the rate of the other frames of the record (their median), and only a record
+/// without one readable sync at `baud`: a pulse of 11 of those bit times is its break, and the byte after it is
+/// listed as a failed sync. The value of the break packet is the measured bit rate in bit/s (0 when it was not
+/// measured).
+///
+/// A frame is what follows its break within the longest time a frame may take, at most eight data bytes and the
+/// checksum: a byte that comes later is not part of it (it was taken for its checksum).
+pub fn lin_with(v: &[f32], dt: f64, baud: f64, checksum: LinChecksum, thr: f32, hyst: f32) -> Vec<Packet> {
+    let nominal = 1.0 / baud / dt;
     let mut out = Vec::new();
-    if spb < 2.5 {
-        return out;
-    }
     let e = edges(v, thr, hyst);
-    // breaks: falling edge followed by the next rising edge >= 11 bit times later
-    let mut breaks = Vec::new();
-    for w in e.windows(2) {
-        if !w[0].rising && w[1].rising && w[1].t - w[0].t >= 11.0 * spb {
-            breaks.push((w[0].t, w[1].t));
-        }
-    }
-    let bytes = uart(v, dt, baud, 8, Parity::None, thr, hyst, false);
-    for (k, &(b0, b1)) in breaks.iter().enumerate() {
-        let end = breaks.get(k + 1).map_or(f64::INFINITY, |b| b.0);
-        let fr: Vec<&Packet> = bytes.iter().filter(|p| p.t0 > b1 && p.t0 < end).collect();
-        out.push(Packet { t0: b0, t1: b1, kind: Kind::Break, value: 0, value2: None, ok: true });
-        if fr.len() < 2 || fr[0].value != 0x55 {
+    let st = states(v, thr, hyst);
+    let level = |x: f64| -> Option<bool> { st.get(x as usize).copied().flatten() };
+    // the falling edges, each with how long the line stays low after it
+    let low = |w: &[crate::edges::Edge]| (!w[0].rising && w[1].rising).then(|| (w[0].t, w[1].t - w[0].t));
+    let falls: Vec<(f64, f64)> = e.windows(2).filter_map(low).collect();
+    // the bit time of the sync field after the pulse `k`, when that pulse is a break and a sync follows it: five
+    // falling edges two bits apart, soon after the break
+    let sync = |k: usize| -> Option<f64> {
+        let (b0, low) = falls[k];
+        let f = falls.get(k + 1..k + 6)?;
+        let bit = (f[4].0 - f[0].0) / 8.0;
+        let even = f.windows(2).all(|p| ((p[1].0 - p[0].0) / (2.0 * bit) - 1.0).abs() < 0.15);
+        (bit >= 2.5 && even && low >= 10.0 * bit && f[0].0 - (b0 + low) <= 15.0 * bit).then_some(bit)
+    };
+    // the rate of the bus, for a frame whose own sync cannot be read
+    let mut rates: Vec<f64> = (0..falls.len()).filter_map(sync).collect();
+    rates.sort_by(|a, b| a.total_cmp(b));
+    let bus = rates.get(rates.len() / 2).copied().unwrap_or(nominal);
+    let mut busy_until = f64::NEG_INFINITY;
+    for (k, &(b0, low)) in falls.iter().enumerate() {
+        if b0 < busy_until {
             continue;
         }
-        out.push(Packet { kind: Kind::Data, ..fr[0].clone() }); // sync
-        let pid = fr[1].value as u8;
-        out.push(Packet { kind: Kind::Id { ext: false, rtr: false }, value: (pid & 0x3f) as u32, ok: lin_pid(pid & 0x3f) == pid, ..fr[1].clone() });
-        if fr.len() >= 3 {
-            let data: Vec<u8> = fr[2..fr.len() - 1].iter().map(|p| p.value as u8).collect();
-            for p in &fr[2..fr.len() - 1] {
-                out.push(Packet { kind: Kind::Data, ..(*p).clone() });
+        let b1 = b0 + low;
+        let (bit, measured) = match sync(k) {
+            Some(bit) => (bit, true),
+            None if bus >= 2.5 && low >= 11.0 * bus => (bus, false),
+            None => continue,
+        };
+        let rate = if measured { (1.0 / (bit * dt)).round() as u32 } else { 0 };
+        out.push(Packet { t0: b0, t1: b1, kind: Kind::Break, value: rate, value2: None, ok: true });
+        busy_until = b1;
+        // the bytes of the frame: sync, protected identifier, up to eight data bytes, the checksum
+        let last = b0 + LIN_FRAME_BITS * bit;
+        let mut bytes: Vec<Packet> = Vec::new();
+        let mut from = b1;
+        for &(s, low) in &falls[k + 1..] {
+            if s < from {
+                continue;
             }
-            let cs = fr[fr.len() - 1];
-            let mut enh = vec![pid];
-            enh.extend(&data);
-            let ok = cs.value as u8 == lin_checksum(&data) || cs.value as u8 == lin_checksum(&enh);
-            out.push(Packet { kind: Kind::Crc, ok, ..cs.clone() });
+            // the next break, a byte that comes too late, or a frame that is full
+            if low >= 10.0 * bit || s + 10.0 * bit > last || bytes.len() == 11 {
+                break;
+            }
+            let bits: Option<Vec<bool>> = (0..9).map(|b| level(s + (1.5 + b as f64) * bit)).collect();
+            let Some(bits) = bits else { break };
+            let value = (0..8).fold(0u32, |v, b| v | (bits[b] as u32) << b);
+            // (a stop bit that is low is a framing error)
+            bytes.push(Packet { t0: s, t1: s + 10.0 * bit, kind: Kind::Data, value, value2: None, ok: bits[8] });
+            from = s + 9.5 * bit;
+            busy_until = s + 10.0 * bit;
         }
+        let mut bytes = bytes.into_iter();
+        let Some(first) = bytes.next() else { continue };
+        // a sync that could not be measured is listed with what was read in its place
+        out.push(Packet { ok: first.ok && measured && first.value == 0x55, ..first });
+        let Some(second) = bytes.next() else { continue };
+        let pid = second.value as u8;
+        let id = pid & 0x3f;
+        let kind = Kind::Id { ext: false, rtr: false };
+        out.push(Packet { kind, value: id as u32, ok: second.ok && lin_pid(id) == pid, ..second });
+        let rest: Vec<Packet> = bytes.collect();
+        let Some((cs, data)) = rest.split_last() else { continue };
+        out.extend(data.iter().cloned());
+        let values: Vec<u8> = data.iter().map(|p| p.value as u8).collect();
+        let mut with_pid = vec![pid];
+        with_pid.extend(&values);
+        let (classic, enhanced) = (cs.value as u8 == lin_checksum(&values), cs.value as u8 == lin_checksum(&with_pid));
+        let sum_ok = match checksum {
+            LinChecksum::Either => classic || enhanced,
+            LinChecksum::Classic => classic,
+            LinChecksum::Enhanced => if id >= 0x3c { classic } else { enhanced },
+        };
+        out.push(Packet { kind: Kind::Crc, ok: cs.ok && sum_ok, ..cs.clone() });
     }
     out
 }
@@ -840,6 +1092,11 @@ pub fn i2s(sck: &[f32], ws: Option<&[f32]>, sd: &[f32], bits: u32, thr: f32, hys
 /// MIL-STD-1553: Manchester II at 1 Mbit/s on a bipolar bus signal (threshold normally 0 V). A word = 3 us sync
 /// (command/status: 1.5 us positive then 1.5 us negative; data: the inverse), 16 data bits MSB first (1 = positive
 /// then negative half), odd parity. `ok` = halves complementary and parity odd.
+///
+/// Every bit has an edge in its middle, and the decoder follows those edges from bit to bit: the place of the next
+/// one is the last one found plus the bit time seen so far. The bits were sampled on a 1 us grid from the edge in
+/// the sync alone, which a bus a few percent off its rate leaves before the word ends (seen on a capture: words of
+/// 20.8 us, of which the later bits were read in the wrong half).
 pub fn mil1553(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
     let us = 1e-6 / dt; // samples per microsecond
     let mut out = Vec::new();
@@ -865,30 +1122,56 @@ pub fn mil1553(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
         if !held(mid - 1.3 * us, mid - 0.15 * us, first_pos) || !held(mid + 0.15 * us, mid + 1.3 * us, !first_pos) {
             continue;
         }
-        let start = mid + 1.5 * us; // first data bit
+        // the edge nearest to `t`, when it is within 0.3 bit times of it: the one in the middle of a bit, not one of
+        // the edges between two bits, which lie half a bit away
+        let edge_at = |t: f64, bit: f64| -> Option<(f64, bool)> {
+            let k = e.partition_point(|x| x.t < t);
+            let near = [k.checked_sub(1), Some(k)].into_iter().flatten().filter_map(|i| e.get(i));
+            let off = |x: &(f64, bool)| (x.0 - t).abs();
+            near.map(|x| (x.t, x.rising)).filter(|x| off(x) <= 0.3 * bit).min_by(|a, b| off(a).total_cmp(&off(b)))
+        };
         let mut val = 0u32;
         let mut ones = 0;
         let mut ok = true;
         let mut complete = true;
+        // the middle of the bit before (of the sync: its edge, 2 bit times before the middle of the first bit)
+        let (mut last, mut bit, mut step) = (mid, us, 2.0);
         for i in 0..17 {
-            let t = start + i as f64 * us;
-            match (level(t + 0.25 * us), level(t + 0.75 * us)) {
-                (Some(h1), Some(h2)) => {
-                    ok &= h1 != h2;
-                    if i < 16 {
-                        val = val << 1 | h1 as u32;
-                    }
-                    ones += h1 as u32;
+            let want = last + step * bit;
+            let one = match edge_at(want, bit) {
+                // a one is positive, then negative: its edge falls
+                Some((t, rising)) => {
+                    bit = 0.5 * bit + 0.5 * (t - last) / step;
+                    last = t;
+                    !rising
                 }
-                _ => complete = false,
+                // no edge where a bit has its middle: the halves as they are read on the grid, and an error
+                None => match (level(want - 0.25 * bit), level(want + 0.25 * bit)) {
+                    (Some(h1), Some(h2)) => {
+                        ok &= h1 != h2;
+                        last = want;
+                        h1
+                    }
+                    _ => {
+                        complete = false;
+                        break;
+                    }
+                },
+            };
+            step = 1.0;
+            if i < 16 {
+                val = val << 1 | one as u32;
             }
+            ones += one as u32;
         }
         if !complete {
             continue;
         }
         ok &= ones % 2 == 1;
-        out.push(Packet { t0: mid - 1.5 * us, t1: start + 17.0 * us, kind: Kind::Word { cmd: first_pos }, value: val, value2: None, ok });
-        busy_until = start + 17.0 * us - 0.5 * us;
+        let end = last + 0.5 * bit;
+        let kind = Kind::Word { cmd: first_pos };
+        out.push(Packet { t0: mid - 1.5 * us, t1: end, kind, value: val, value2: None, ok });
+        busy_until = end - 0.5 * us;
     }
     out
 }

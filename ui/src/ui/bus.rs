@@ -396,6 +396,8 @@ impl Ui {
 
 fn bus_word(p: &Packet, addr_rw: bool) -> Option<String> {
     match p.kind {
+        // an address of ten bits is its ten bits: it has no one byte with the read/write bit in it
+        DecKind::Addr { .. } if p.value2 == Some(oos_dsp::decode::I2C_TEN_BIT) => Some(format!("{:03X}", p.value)),
         DecKind::Addr { read } => {
             let v = if addr_rw {
                 (p.value << 1) | u32::from(read)

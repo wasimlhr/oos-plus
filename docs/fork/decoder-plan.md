@@ -25,18 +25,18 @@ Per decoder:
 |---|---|---|---|
 | UART | capture: text and times agree; unit | band, bit row, lines | a failed character on the unit |
 | SPI | capture: 13-bit words, MOSI/MISO, frames agree; unit | band, frames, Format | MISO on the unit |
-| I2C | capture: bytes agree; **a read ends in a false error; no 10-bit address** | band, bit row, Format | fix both |
+| I2C | capture: bytes, errors and 10-bit addresses agree (one address differs, below) | band, bit row, Format | unit |
 | CAN | capture: 97 of 97 frames agree | band | DLC, frame type as columns |
 | CAN-FD | capture: frames agree; error frame not listed; DLC as its code | band | error frames, DLC in bytes |
-| LIN | capture: **rate only from the list, bad sync dropped, stray byte as checksum** | band | fix; checksum version |
+| LIN | capture: frames, errors and the rate from the sync agree | band | unit |
 | FlexRay | capture: frames agree; 9 CRC errors not checked | band | bit rate, channel A/B |
 | I2S | capture: samples agree with the word length set | band | left and right as one row |
 | SENT | capture: fast channel agrees | band | slow channel, two channels, status |
-| MIL-STD-1553 | capture: **37 of 71 words misread** (bus 4 % slow, no resync; assumed) | band | resync on edges |
+| MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault) | band | word types as columns; unit |
 | ARINC 429 | capture: agrees, no errors | band | - |
 | USB | capture: full speed packets agree | band | - |
 | 1-Wire | capture: transactions agree | band | command names |
-| I3C | capture: commands agree; **a 5-byte read loses its end** | band | fix; command names |
+| I3C | capture: commands and bytes as on the lines; one read differs from the reference | band | command names |
 | C-PHY | capture: **nothing decoded** at 50 Msym/s with low-power states | band | low rates, LP states |
 | Manchester | capture: not comparable (125 kbit/s not in the list, no packet structure) | band | rate, structure |
 | the 13 others | host only: no capture | band | captures |
@@ -54,11 +54,23 @@ outside the tree (`local/captures`, ignored), with the scripts that run a decode
 0. **Done.** Every decoder that has a capture run against it; the table above.
 1. **Wrong decodes first**, each with a test that fails before the fix (a short synthetic signal of the same shape;
    the captures stay outside the tree) and a rerun on its capture:
-   1. I2C: the NAK that ends a read is not an error; 10-bit addresses.
+   1. I2C: the NAK that ends a read is not an error; 10-bit addresses. **Done** (host and capture): of 393
+      messages 162 have an error where 351 had one, and the rows the reference decode marks are the ones marked.
+      Two differences are left as they are: the read after a repeated start shows the ten bits of the address
+      written before it ("152 R") where the reference shows its one byte (79), and a general call (00 W) that
+      nobody acknowledged is an error here and unmarked there. The SMBus capture has no error (96 before).
    2. LIN: the bit rate from the sync field; a frame with a bad sync is shown with its error; a byte after the
-      frame's longest time is not its checksum; the checksum version as an option.
-   3. MIL-STD-1553: the bit clock follows the mid-bit edges.
-   4. I3C: the read that loses its end.
+      frame's longest time is not its checksum; the checksum version as an option. **Done** (host and capture):
+      the 37 frames of the capture read the same at every Baud setting, the frame with the bad sync is listed, and
+      with Checksum = Enhanced the frames with a classic checksum are marked as the reference marks them (it also
+      marks the diagnostic frame 3C, which keeps the classic checksum by the standard and passes here).
+   3. MIL-STD-1553: the bit clock follows the mid-bit edges. **Done** (host and capture): the words of the capture
+      are 20.8 us long (a bus 4 % slow, which was the assumed cause and is the measured one); 2 of 71 are marked
+      where 37 were, and the first 13 are the command, status and data words the reference decode lists.
+   4. I3C: the read that loses its end. **No fault found.** Read sample by sample, the lines of that read hold
+      three bytes AC with T = 1, then 59 with T = 0, the end of the read, as the decoder lists them; eight more
+      bits (AC) are clocked before the stop, which the decoder leaves out, and the reference decode shows five
+      bytes there. The capture is a generated one (a clock of 200 MHz); a real I3C bus is needed to say more.
 2. **Two hooks for every module**, so the rest is not built protocol by protocol:
    - where a frame starts. Today I2C, SPI, CAN, CAN-FD, LIN and I3C say so; FlexRay, SENT, USB, I2S, ARINC 429,
      1553 and 1-Wire are split into messages by idle time alone. The start marks then leave the Fields view (an

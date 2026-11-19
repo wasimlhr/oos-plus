@@ -517,6 +517,33 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- MIL-STD-1553 decoder: the bits of a word are followed from edge to edge (host-tested, and on a capture of a real
+  bus on the host; not yet verified on hardware). Every bit has an edge in its middle; the decoder took the edge
+  in the sync and read all 17 bits on a 1 us grid from there, which a bus a few percent off its rate leaves
+  before the word ends: of the 71 words of a capture whose words are 20.8 us long, 37 were misread or had a
+  parity error. They are read now (2 are marked, the two the capture has a fault in), up to 5 % off the rate.
+- LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
+  capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
+  rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud
+  is now only for a record in which no sync can be read. Three more faults of the same capture:
+  - a frame whose sync is not 55 was a break alone, without a word of what was wrong. It is listed, read at the
+    rate of the frames beside it, with its sync as the error;
+  - the last byte before the next break was the checksum, however late it came: a byte 80 ms after a frame took
+    the place of that frame's checksum and made it an error. A frame is what follows its break within the
+    longest time a frame may take, eight data bytes and the checksum at most;
+  - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
+    frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
+- I2C decoder: a read is no error, and a 10-bit address is one address (host-tested, and on two captures of real
+  buses on the host; not yet verified on hardware). The byte a controller ends a read with is not acknowledged:
+  that is the rule of the bus, and it was red on the band, counted as an error in the Events pane and marked
+  " N", so every read was an error (351 of 393 messages of one capture, 162 now, the ones a device did not
+  answer). It is no error any more when its address was acknowledged and a stop or a repeated start follows; the
+  bit row still says NAK there, in the colour of a bit. An address of ten bits (11110 and two bits, then a byte)
+  was an address 78 to 7B and a data byte: it is one field of three digits ("2A5 W"), and the read after a
+  repeated start, which sends its first byte alone, has the ten bits of the write before it. The trigger and the
+  search compare the bytes on the bus as before, with their own setting of seven or ten bits. The I2C lane on
+  the plot follows. As characters (Format), an address or a mark has a space before the text ("50 R OS P", it
+  read "50 ROSP").
 - Decoders: a tap on a row of the Events pane leaves a running scope running (host-tested; (unit), 2026-11-19, in
   Studio on an SPI bus: the tap left the scope triggered with its horizontal position and said how to get there;
   stopped, the tap went to the row and marked it and its box). In Studio it stopped the acquisition and moved the

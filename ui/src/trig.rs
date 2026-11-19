@@ -104,6 +104,30 @@ pub fn matches(m: &Model, p: &Packet) -> bool {
     }
 }
 
+/// I2C packets byte by byte, as they are on the bus: the decoder joins the two bytes of a 10-bit address into one
+/// packet for the screen (`I2C_TEN_BIT`), and the trigger compares bytes, with the address width of its own setting.
+/// The first byte of a joined address ends at its ninth clock of eighteen, taken as evenly spaced.
+fn i2c_on_the_bus(packets: &[Packet]) -> Vec<Packet> {
+    let mut out = Vec::with_capacity(packets.len());
+    for p in packets {
+        match p.kind {
+            Kind::Addr { read } if p.value2 == Some(oos_dsp::decode::I2C_TEN_BIT) => {
+                let high = Packet { value: 0x78 | (p.value >> 8 & 3), value2: None, ..p.clone() };
+                if read {
+                    out.push(high);
+                } else {
+                    let step = (p.t1 - p.t0) / 17.0;
+                    out.push(Packet { t1: p.t0 + 8.0 * step, ..high });
+                    let low = Packet { kind: Kind::Data, value: p.value & 0xff, value2: None, ..p.clone() };
+                    out.push(Packet { t0: p.t0 + 9.0 * step, ..low });
+                }
+            }
+            _ => out.push(p.clone()),
+        }
+    }
+    out
+}
+
 /// The trigger points (packet ends) of `m`'s protocol condition among `packets`: `matches` per packet, and for I2C
 /// the address (relation, direction, 10-bit) and the first `ser.bytes` data bytes after it, big-endian, as the TPU's
 /// receiver compares them.
@@ -111,6 +135,8 @@ pub fn points(m: &Model, packets: &[Packet]) -> Vec<f64> {
     if m.dec_proto != Proto::I2C || !matches!(m.trig_bus, BusWhat::Id | BusWhat::Data) {
         return packets.iter().filter(|p| matches(m, p)).map(|p| p.t1).collect();
     }
+    let bytes = i2c_on_the_bus(packets);
+    let packets = &bytes[..];
     let s = &m.ser;
     let mut out = Vec::new();
     // per frame: the address (10-bit: its high bits until the second byte), then the data bytes so far
@@ -255,6 +281,20 @@ mod serial_tests {
         // 10-bit: the address completes with the second byte
         (m.ser.dir, m.ser.ten_bit, m.trig_bus_val) = (I2cDir::Either, true, 0x2a5);
         assert_eq!(points(&m, &p), [11.0]);
+        // the decoder joins the two bytes of that address into one packet: the points are the same, and with the
+        // trigger set to seven bits its first byte is still the address 7A and its second a data byte
+        let mut joined = p[..10].to_vec();
+        let ten = Some(oos_dsp::decode::I2C_TEN_BIT);
+        joined.push(Packet { t0: 9.5, t1: 11.0, value2: ten, ..pk(11.0, Addr { read: false }, 0x2a5) });
+        joined.extend_from_slice(&p[12..]);
+        assert_eq!(points(&m, &joined), [11.0]);
+        (m.ser.ten_bit, m.trig_bus_val) = (false, 0x7a);
+        let seven = points(&m, &joined);
+        assert_eq!(seven.len(), 1);
+        assert!(seven[0] > 9.5 && seven[0] < 11.0, "at the end of the first byte: {seven:?}");
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Data, 0xa5);
+        assert_eq!(points(&m, &joined), [11.0], "the low byte is a data byte to a trigger on seven bits");
+        (m.trig_bus, m.ser.ten_bit, m.trig_bus_val) = (BusWhat::Id, true, 0x2a5);
         // data: any byte, then the first two bytes after the address, big-endian
         (m.ser.ten_bit, m.trig_bus, m.trig_bus_val) = (false, BusWhat::Data, 0x34);
         assert_eq!(points(&m, &p), [3.0]);

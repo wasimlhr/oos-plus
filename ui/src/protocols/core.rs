@@ -7,7 +7,7 @@
 //! name, so they stay where they were. They stand first in `MODULES` at fixed places, which `Proto::UART` ... name.
 
 use super::*;
-use oos_dsp::decode::{can, i2c, lin, spi, uart};
+use oos_dsp::decode::{can, i2c, spi, uart};
 use oos_dsp::decode_ext as x1;
 
 /// Demo traffic on one line: `a` repeated every `period` seconds.
@@ -87,11 +87,17 @@ impl Protocol for I2c {
         Some(oos_dsp::decode::i2c_bits(p)).filter(|b| !b.is_empty())
     }
     /// The address: its seven bits ("50 W"), or with R/W bit Included the first byte of the transfer as it is on
-    /// the bus ("A0 W", "A1 R"). " N" marks one that was not acknowledged. Triggers and searches take the seven bits.
+    /// the bus ("A0 W", "A1 R"). An address of ten bits is its ten bits in three digits ("2A5 W"), whatever R/W bit
+    /// says: it has no one byte to show. " N" marks one that was not acknowledged. Triggers and searches take the
+    /// seven bits.
     fn text(&self, p: &Packet, opt: &[usize; OPTS]) -> Option<String> {
         let oos_dsp::decode::Kind::Addr { read } = p.kind else { return None };
+        let (rw, nak) = (if read { "R" } else { "W" }, if p.ok { "" } else { " N" });
+        if p.value2 == Some(oos_dsp::decode::I2C_TEN_BIT) {
+            return Some(format!("{:03X} {}{}", p.value, rw, nak));
+        }
         let v = if opt[0] == 1 { (p.value << 1) | u32::from(read) } else { p.value };
-        Some(format!("{:02X} {}{}", v, if read { "R" } else { "W" }, if p.ok { "" } else { " N" }))
+        Some(format!("{:02X} {}{}", v, rw, nak))
     }
     fn roles(&self) -> [Option<&'static str>; 4] {
         [Some("SDA"), Some("SCL"), None, None]
@@ -266,6 +272,10 @@ impl Protocol for Can {
     }
 }
 
+/// LIN: which checksum a frame is checked against. Either is what the decoder did before the option was there.
+const LIN_OPTIONS: [Opt; 1] =
+    [Opt { name: "Checksum", choices: &["Either", "Enhanced (2.x)", "Classic (1.x)"], default: 0 }];
+
 pub struct Lin;
 
 impl Protocol for Lin {
@@ -278,8 +288,12 @@ impl Protocol for Lin {
     fn diff_ok(&self) -> bool {
         true
     }
+    /// The bit rate of a frame is measured on its sync field; Baud is for a frame whose sync cannot be read.
     fn shared(&self) -> &'static [Row] {
         &[Row::Baud]
+    }
+    fn options(&self) -> &'static [Opt] {
+        &LIN_OPTIONS
     }
     fn bit_time(&self, _: &[usize; OPTS]) -> f64 {
         1.0 / 19200.0
@@ -288,7 +302,9 @@ impl Protocol for Lin {
         1.0 / sh.baud
     }
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
-        Ok(lin(l.main(), l.dt, l.sh.baud, l.thr, l.hy))
+        use oos_dsp::decode::LinChecksum::*;
+        let checksum = [Either, Enhanced, Classic][l.opt[0].min(2)];
+        Ok(oos_dsp::decode::lin_with(l.main(), l.dt, l.sh.baud, checksum, l.thr, l.hy))
     }
     /// The frame of the demo.
     fn trigger_default(&self) -> (BusWhat, u32) {
