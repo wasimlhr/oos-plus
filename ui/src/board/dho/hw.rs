@@ -77,6 +77,24 @@ fn delay_depth(mask: u32, tdiv: f64, delay: f64, base: i128) -> i128 {
     ((want + 7) / 8 * 8).max(base)
 }
 
+/// The longest record Auto depth takes for a protocol trigger (`bus_depth`).
+const BUS_DEPTH: i128 = 1_000_000;
+
+/// Auto depth for the protocol trigger that the software decides: the screen and the length of a frame on each side
+/// of it at the full rate of the channels, which a record longer than a screen is sampled at (and `base` where that
+/// is more). The trigger moves the record so that the field it
+/// found stands at the trigger point, and can move it only as far as the record reaches beyond the screen. With a
+/// screen and an eighth that is 6 us at 10 us/div, and the trigger on a CAN identifier took no frame in 24 s (unit,
+/// 2026-11-19); at 5 us/div the record began 4 us before the frame, too late to know its first edge for a start.
+fn bus_depth(m: &Model, mask: u32, tdiv: f64, base: i128) -> i128 {
+    if m.trig_type != TrigType::Bus || hw_serial(m).is_some() || base <= 0 {
+        return base;
+    }
+    let full = (hz::CLOCK / hz::ratio(mask) as i128) as f64;
+    let want = ((10.0 * tdiv + 2.0 * m.trig_span()) * full).ceil().min(BUS_DEPTH as f64) as i128;
+    ((want + 7) / 8 * 8).max(base)
+}
+
 /// The hardware settings for the UI model.
 pub fn settings(m: &Model, program_afe: bool) -> Settings {
     let mut mask = (0..NCH).filter(|&c| m.ch[c].on).fold(0u32, |a, c| a | 1 << c);
@@ -94,7 +112,7 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
         0 => {
             let auto = hz::prep(mask, oos_hal::dho::seq::tdiv_fs(tdiv), 0, 0);
             let base = if auto.memsel as i128 > LIVE_DEPTH { LIVE_DEPTH } else { screen_margin(auto.memsel as i128) };
-            delay_depth(mask, tdiv, m.delay as f64, base)
+            bus_depth(m, mask, tdiv, delay_depth(mask, tdiv, m.delay as f64, base))
         }
         // roll and scan: a fixed depth below 1 M becomes 1 M (roll-mode.md 1.3)
         d if slow_mode(m) != Slow::Off => (d as i128).max(1_000_000),
@@ -3290,6 +3308,30 @@ mod tests {
         assert_eq!(p.pre, 704);
         // the smallest records get at least 64 more points
         assert_eq!(screen_margin(62), 128);
+        // the protocol trigger the software decides: a frame of room on each side of the screen (CAN at 500 kbit/s:
+        // 200 bits, 400 us), so 10 us/div has 900 us of record where an edge trigger has a screen and an eighth
+        {
+            let mut b = m.clone();
+            b.tscale = tscales().iter().position(|&t| (t - 1e-5).abs() < 1e-9).unwrap();
+            // (the trigger and the decoder on the same channel: the same channels acquired)
+            (b.trig_src, b.dec_src, b.dec_proto) = (0, 0, Proto::CAN);
+            b.dec_canrate = crate::decode::CAN_RATES.iter().position(|&r| r == 500e3).unwrap();
+            let span = |b: &Model| {
+                let s = settings(b, false);
+                s.depth as f64 / hz::prep(s.mask, oos_hal::dho::seq::tdiv_fs(1e-5), s.depth, 0).rate as f64
+            };
+            // two channels, 625 MSa/s: 112.5 us, and 900 us
+            b.ch[1].on = true;
+            assert!((span(&b) - 112.5e-6).abs() < 1e-6, "{}", span(&b));
+            b.trig_type = TrigType::Bus;
+            assert!((span(&b) - 900e-6).abs() < 1e-6, "{}", span(&b));
+            // one channel at 1.25 GSa/s: the million points it may take, 800 us
+            b.ch[1].on = false;
+            assert_eq!((settings(&b, false).depth, span(&b)), (1_000_000, 800e-6));
+            // a set depth is the owner's
+            b.mdepth = mdepths().iter().position(|d| d.1 == 10_000).unwrap();
+            assert_eq!(settings(&b, false).depth, 10_000);
+        }
         // 1 ns/div: 12 points per screen, read 80 at the full rate (more than stock's smallest record, 62 at 5 ns)
         m.tscale = tscales().iter().position(|&t| (t - 1e-9).abs() < 1e-12).unwrap();
         assert!((tscales()[m.tscale] - 1e-9).abs() < 1e-12);
