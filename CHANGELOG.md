@@ -660,7 +660,7 @@ Changed:
 - Studio: the top bar has the links as small pills left of Add, a dot and a name each: LAN (green with an
   address), and WLAN and USB while their stick is in, as the Default bar has its USB pill. A tap on LAN or WLAN
   opens the Network page, which has the address; a tap on USB opens Storage. The bar had none of them, so a
-  stick that was mounted did not show.
+  stick that was mounted did not show. Seen on the unit with a stick in and the cable connected.
 - Studio: a reference has the small tag of a channel on the plot ("R1") with overlaid traces too, as it has in
   lanes. It had a box of two rows there, 40 px high and as wide as its name, over the signal; the name and the
   scale are on its pill in the bottom bar, and the sample rate is in the note beside Fit. The other layouts keep
@@ -694,13 +694,17 @@ Changed:
   stands at the trigger point, and can move it only as far as the record reaches beyond the screen: 6 us at
   10 us/div, so on a unit the trigger on a CAN identifier took no frame in 24 s there, and at 5 us/div the record
   began 4 us before the frame, too late to know its first edge for a start. A depth that is set stays as set, and
-  so does the record of a protocol trigger in the receiver.
+  so does the record of a protocol trigger in the receiver. On the unit after it (the same bus, records of 531
+  to 563 kpts at 625 MSa/s): a new frame in 17 of 24 seconds at 5 us/div and in 19 of 24 at 10 us/div and at
+  20 us/div, the end of the identifier at the trigger point in the pictures looked at.
 - CAN and CAN-FD decoders: of a frame that the record cuts off they give what is whole, its start, its
   identifier and the data bytes read so far, and no CRC (the owner's decision, 2026-11-19). They gave nothing of
   such a frame, so at a time base whose record ends inside the frame the band had no field of it and the
   protocol trigger took none (unit, CAN at 500 kbit/s, trigger on an identifier: no frame in 24 s at 10 us/div,
   where the record of 160 us ends 88 us behind the start of a frame of 112 us). The last frame of a record now
-  shows without its CRC where the record ends in it, in the band and in the Events pane.
+  shows without its CRC where the record ends in it, in the band and in the Events pane. On the unit with this
+  change alone: 13 of 24 seconds at 20 us/div where it was 6, and still none at 10 us/div and 5 us/div, which
+  the entry above is about.
 - CAN and CAN-FD decoders: the bit timing follows the edges from recessive to dominant alone, as a node's does.
   They resynchronised on every edge, and on a line that is slow on its way back to recessive the bit behind that
   edge was sampled in its neighbour. Found on a unit (DHO924S, 2026-11-19: CAN_H at 500 kbit/s, probed so that

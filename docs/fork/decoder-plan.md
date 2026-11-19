@@ -143,8 +143,9 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       again there: a new frame in 15 of 29 seconds at 50 us/div, in 18 of 19 at 200 us/div, none at 5 us/div,
       where the record is shorter than the frame. The owner decided that the decoders give what is whole of a
       frame the record cuts off (start, identifier, data bytes; the last frame of a record then shows without
-      its CRC); 5 us/div stays out of reach, since the record there begins 4 us before the frame. Open: an
-      error frame, which the
+      its CRC), and with Auto memory the record of a protocol trigger has a frame of room on each side of the
+      screen. After both, on the unit: a new frame in 17 of 24 seconds at 5 us/div and in 19 of 24 at 10 us/div
+      and 20 us/div. Open: an error frame, which the
       board does not send. CH2 was not read: its high level sags to within 8 mV of the threshold in the middle,
       and the hysteresis of a tenth of a division (5 mV at 50 mV/div) lets it toggle; a record of it reads right
       on the host with 20 mV. And the unit left the network about 100 s after the start of build
