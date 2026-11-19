@@ -160,7 +160,10 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       of an Ethernet frame with a marked frame check and a bit clock that follows the line. On the unit with
       build 20261119-215725: the parts and the check of the ping in every record at 20 us/div, the same frames
       from CH2 with "Rising (802.3)", and Trigger > Bus > Error with the frame whose check does not fit at the
-      trigger point in five of five records. Done for this bus.
+      trigger point in five of five records. Trigger > Bus > Frame had two points a frame (its start and the
+      end of its preamble); with one, the start stands at the trigger point in 12 of 12 records (build
+      20261119-223133). The same flaw was in 1553 (a status word counted as a start) and is changed there on
+      the host, to be seen when that bus is connected. Done for this bus.
       Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope
       makes the traffic, decodes it and shows it. That checks the screen and the path of the decoder on the
       unit, not the decode of a real signal. All eight decode without an error; the band and the columns of the

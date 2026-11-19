@@ -724,7 +724,8 @@ Changed:
   10BASE-T the start of a frame stood at the trigger point in four of five records and the end of its preamble,
   6.4 us later, in the fifth: the preamble is a field behind the mark of the packet, and its end counted as a
   start as well. The same for 1553, where the status word has the sync of a command (host, the demo traffic: 134
-  points for its 67 messages). Host-tested; not yet run on a unit, and 1553 is not connected.
+  points for its 67 messages). Host-tested, and for 10BASE-T on the unit (build 20261119-223133): the start of
+  a frame at the trigger point in 12 of 12 records. 1553 is not connected to a unit.
   - A packet that is an Ethernet frame shows its parts in place of its bytes: the preamble with its delimiter,
     the destination and the source address, the type, the bytes behind it and the frame check, which is marked
     where the CRC-32 of the frame is another. As bytes alone the board's good and changed frames looked alike;
