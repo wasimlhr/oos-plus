@@ -82,6 +82,8 @@ impl Ui {
     /// The lines of the chosen bus into reference slots from the SIM slot on, and the selected decoder on them with
     /// the settings the traffic is made for. The slot of the main line and one round of the traffic, or why not.
     fn sim_bus_store(&mut self) -> Result<(usize, f64), String> {
+        // the divisions at the bottom of the plot that the lines of a bus leave to the band of the decoder
+        const BAND_DIVS: f32 = 1.0;
         let (p, name) = self.sim_bus().ok_or("no bus preset is chosen")?;
         let Proto::Module(i) = p;
         let module = protocols::get(i);
@@ -105,15 +107,20 @@ impl Ui {
         if count > NREF {
             return Err("not enough reference slots".into());
         }
-        // each line in a band of its own, from the top: a bus of three lines is three traces, not one tangle
-        let band = 8.0 / count as f32;
+        // each line in a band of its own, from the top: a bus of three lines is three traces, not one tangle. The
+        // lowest division stays free: the band of the decoder stands there, and a trace that reached into it had its
+        // own label over the name of the band (seen on a unit)
+        let band = (8.0 - BAND_DIVS) / count as f32;
         let mut slots: [Option<usize>; 4] = [None; 4];
         let mut at = 0;
         for (k, line) in traffic.lines.into_iter().enumerate() {
             let Some(v) = line else { continue };
             let slot = (self.m.sim_slot + at) % NREF;
             let (lo, hi) = v.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
-            let vpd = super::nearest_vdiv(((hi - lo).max(0.2) / (0.6 * band)).max(1e-3));
+            // the first step of the scale at which the line has 60 % of its band at the most: the nearest step may
+            // be the smaller one, at which a line of 3.3 V had 6.6 divisions of the 8
+            let want = ((hi - lo).max(0.2) / (0.6 * band)).max(1e-3);
+            let vpd = super::VSCALES.iter().copied().find(|&v| v >= want).unwrap_or_else(|| super::nearest_vdiv(want));
             let middle = 4.0 - (at as f32 + 0.5) * band;
             let label = format!("{} {}", p.name(), roles[k].unwrap_or("line"));
             self.refs[slot] = Some(RefWave {
@@ -218,6 +225,12 @@ mod tests {
             let Proto::Module(i) = p;
             let want = if p == Proto::UART { 1 } else { protocols::demo(i).unwrap().lines.iter().flatten().count() };
             assert_eq!(lines, want, "{name}: a reference for each line");
+            // the lines stand above the lowest division of the plot, which is the band's
+            for r in u.refs.iter().flatten().filter(|r| r.on && r.label.starts_with(p.name())) {
+                let (lo, hi) = r.v.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+                let (lo, hi) = ((lo + r.offset) / r.vpd, (hi + r.offset) / r.vpd);
+                assert!(lo >= -3.001 && hi <= 4.001, "{name}: {} from {lo} to {hi} divisions", r.label);
+            }
             assert!(matches!(decode_wave(u.m.dec_src), Some(WaveId::Ref(_))), "{name}: decoded from a reference");
             let mut packets = Err("never asked");
             for _ in 0..400 {
