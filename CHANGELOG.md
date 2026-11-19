@@ -431,6 +431,10 @@ Changed:
   same (host-tested; `:BUS<n>:THReshold AUTO` (unit), 2026-11-19: 0.27 V on a line from 0.02 to 0.52 V; the menu
   row not yet verified on hardware). A signal that does not reach the 1.65 V of a new set-up
   decoded nothing (seen on a unit, 2026-11-19: a 0.43 V swing through a probe set to 1x).
+- I2C decoder: Decode > R/W bit writes an address as its seven bits ("50 W", as before) or, Included, as the
+  first byte of the transfer with the read/write bit in it ("A0 W", "A1 R"), on the band, in the Events pane and
+  in the event table; `:BUS<n>:OPTion1 LEFT_OUT|INCLUDED` (host-tested, not yet verified on hardware). Triggers
+  and searches take the seven bits either way. The I2C lane on the plot had this choice, the decoder had not.
 - UART decoder: Decode has the Polarity row of the UART trigger (Normal, Inverted), which the decoder already
   followed (host-tested, not yet verified on hardware).
 - UART decoder: at a time base where a bit is 12 px or wider, the band has a row of bits above its boxes
