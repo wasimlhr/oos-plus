@@ -69,7 +69,7 @@ back to OOS as pull requests.
 | **High-speed serial** | Lane presets from PCIe 1.0 to 5.0, USB 2.0 HS and 3.2, SATA and 10GBASE-KR, for simulated or loaded records: NRZ rate, de-emphasis, eye width at a BER. Not a compliance test. |
 | **Power, motor, magnetics** | Power quality, harmonics, switching loss, ripple and rail sequencing; DQ0 transform, shaft speed and angle for motor drives; a magnetics page; a double-pulse page with switching times and diode recovery. |
 | **Spectrum, Bode, more** | Spectrum with a peak list beside the waveform, Bode plot with the built-in or an external generator (LAN or USB), bandwidth test, histogram, XY, mask and zone tests. |
-| **Decoders** | 29 protocols, from UART, I2C, SPI and CAN to USB PD, FlexRay, MIL-STD-1553 and DCC. Each is a module of one file; a decoder reads the samples the acquisition kept, not the points of the screen. |
+| **Decoders** | 29 protocol decoders, from UART, I2C, SPI and CAN to USB PD, FlexRay, MIL-STD-1553 and DCC. Each is a module of one file; a decoder reads the samples the acquisition kept, not the points of the screen. |
 | **Three layouts** | **Default**, the screen of OOS. **Minimal**, a quiet screen with settings in sheets. **Studio**, views you dock, tab, float and resize: waveform lanes, measurements, eye, spectrum, tables, histogram. |
 | **Skin** | Display > Skin, in the menu of the Default layout, gives the same screen another look: OOS or OOS Plus. |
 | **References and sessions** | Ten reference slots (R1 to R10) that are measured, decoded, zoomed and triggered on like a channel. A session keeps the setup, the record and every reference in one `.oss` file. |

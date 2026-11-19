@@ -126,6 +126,7 @@ do Period
 do Fall Time
 close
 menu Measure
+do Statistics
 set Statistics = On
 close
 frames 2
