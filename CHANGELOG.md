@@ -653,11 +653,16 @@ Changed:
   21 identifiers, standard and extended, data and remote frames, every CRC right and every frame acknowledged,
   the same traffic a capture of the board has. The band and the Events pane with ID, DLC, Data and CRC work on
   it, and the trigger on an identifier holds the frame with the end of the identifier at the trigger point.
-  One flaw it showed is fixed (unit before the change, host-tested after it): at 50 us/div with 100 kpts the
+  One flaw it showed is fixed (unit, before and after): at 50 us/div with 100 kpts the
   screen held still with the T on another frame, the identifier asked for 255 us to its left. The hardware fires
   on any frame and the field is looked for in the record; where it stood too far from the hardware point to be
   moved to the trigger point, the frame was shown at the hardware point and called triggered. Such a frame is
   none of the protocol trigger: Normal waits for one in which the field can stand at the T.
+- CAN-FD decoder: a record with too few samples for the data rate still gives the frames that stay at the
+  nominal rate (unit before the change: a bus of classic CAN frames at 500 kbit/s read with this decoder gave
+  nothing at 2 ms/div, 2.5 MSa/s, and every frame at 200 us/div; host-tested after it). The decoder asked for
+  three samples a bit of the data rate before it read anything. It asks for three a bit of the nominal rate;
+  a frame that switches to a data rate the record cannot show gives its identifier and "TOO FAST".
 - SPI on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: data, clock and chip select of a
   5 V bus at 200 kbit/s, one word a frame every 500 us and a frame of 16 words now and then; clock and chip select
   on 10:1 probes that the channels read as 1:1, so 0.5 V beside the 5 V of the data). The decoder reads it right:

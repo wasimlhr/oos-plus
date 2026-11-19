@@ -131,7 +131,10 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       identifiers, every CRC right; the traffic of the capture), the thresholds from the signals, the band at
       2 ms, 200 us, 50 us and 5 us/div, the Events pane with its columns, the trigger on an identifier. One
       flaw it showed is fixed: a frame whose match could not be moved to the trigger point was shown at the
-      hardware point and called triggered. Open: an error frame, which the board does not send.
+      hardware point and called triggered (seen right on the unit afterwards). The CAN-FD decoder reads the
+      same bus (its frames are classic ones) at 200 us/div and gave nothing at 2 ms/div, where its data rate
+      has too few samples: it reads what stays at the nominal rate now (host-tested). Open: an error frame,
+      which the board does not send.
    4. The other buses of his demo board, as he connects them: CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC
       429, USB.
       Before they are connected (2026-11-19), each of the eight ran on the unit as its SIM preset: the scope

@@ -836,6 +836,10 @@ impl BitClock<'_> {
 /// Gray code; `ok` = parity and count right), Crc (value = received CRC-15/17/21, `ok` = it matches and the fixed
 /// stuff bits are right), Ack (`ok` = dominant). A stuff error ends the frame with Field("!ERR").
 ///
+/// A record needs three samples a bit of the nominal rate. With fewer than three a bit of the data rate the frames
+/// that stay at the nominal rate are read as ever (classic frames, FD frames without a rate switch); one that
+/// switches gives its start, its identifier and Field("!TOO FAST").
+///
 /// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
 /// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
 /// (`decode::can_keep_flags`).
@@ -843,7 +847,9 @@ pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: 
     let tn = 1.0 / nominal / dt;
     let td = 1.0 / data_rate / dt;
     let mut out = Vec::new();
-    if !(tn >= 3.0 && td >= 3.0) {
+    // (three samples a bit of the nominal rate. A record with fewer than three a bit of the data rate still holds
+    // every frame that does not switch to it: `can_fd_frame` says where one does)
+    if !(tn >= 3.0 && td > 0.0) {
         return out;
     }
     let st = states(v, thr, hyst);
@@ -920,6 +926,17 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f6
         }
         bits.push(b);
         if idx == brs_at && b.0 {
+            if td < 3.0 {
+                // the frame goes on at the data rate, of which the record has under three samples a bit: its
+                // identifier is read, the rest is not (a bus of classic frames read with this decoder at a slow
+                // time base gave nothing at all, seen on a unit)
+                let id = |r: std::ops::Range<usize>| bits[r].iter().fold(0u32, |a, x| a << 1 | x.0 as u32);
+                let value = if ext { id(1..12) << 18 | id(14..32) } else { id(1..12) };
+                let last = if ext { 31 } else { 11 };
+                let start = pk(Kind::Start, bits[0].1, bits[0].2, 0, None, true);
+                let ident = pk(Kind::Id { ext, rtr: false }, bits[1].1, bits[last].2, value, None, true);
+                return Some((vec![start, ident, tag("!TOO FAST", b.1, b.2, false)], b.2));
+            }
             fast = true;
         }
         let n = bits.len();
