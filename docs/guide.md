@@ -749,7 +749,7 @@ opens as a full analysis page with optional side or lower panes and has source/r
 use the button with three dots at the top right for Exit and Settings.
 
 **External generator.** Menu > Instruments > Ext generator is the page of a generator beside the scope
-([docs/extgen.md](docs/extgen.md)). Pick the Model (APPL for a Rigol DG, BSWV for a Siglent SDG, CHANnel for a UNI-T
+([docs/extgen.md](extgen.md)). Pick the Model (APPL for a Rigol DG, BSWV for a Siglent SDG, CHANnel for a UNI-T
 UTG900 such as the UTG932 and UTG962, OWON DGE, or SCPI for one that takes `FREQ` and `VOLT`), then Connection: LAN
 with Address (IP, port 5555 if none is given; the knob moves the last number) or USB for a generator in the USB-A port
 of the scope. On USB the scope takes the first USBTMC instrument it finds (no PC, no driver). Connect asks it for
