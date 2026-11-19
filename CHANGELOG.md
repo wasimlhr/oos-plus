@@ -566,6 +566,30 @@ Changed:
   rate, and a Manchester line carries its clock. Decode > A one is: Rising (802.3), as before, or Falling
   (Thomas), the other convention, with which the bits of the capture are those its instrument reads
   (`:BUS<n>:OPTion2`).
+- SPI on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: data, clock and chip select of a
+  5 V bus at 200 kbit/s, one word a frame every 500 us and a frame of 16 words now and then; clock and chip select
+  on 10:1 probes that the channels read as 1:1, so 0.5 V beside the 5 V of the data). The decoder reads it right:
+  441 words in 200 ms, the 64 steps of the sine they draw and the frames of several words, none wrong, down to
+  2.5 samples a bit. Band, bit marks, Events pane, a tap on a row and the thresholds from the signals work on it.
+  Two flaws it showed are fixed:
+  - Events pane: a frame of several words read "B0 ..." (unit). The MOSI column was as wide as the words of the
+    first rows, and the MISO column, which was empty, had the rest of the pane. A column that no row of the
+    record fills is left out (MISO of a bus read on one line, the slow channel of a SENT sensor without one), and
+    the columns of the data share what is left.
+  - Bus trigger: it never fired where the line the frames start on had a threshold of its own (the edge on the
+    chip select; unit before the change, host-tested after it). The hardware edge on that line was at the
+    threshold of the data line, 2.6 V on a chip select of 0.5 V, so Normal waited for ever and Auto showed records
+    that were not on the word asked for. The edge is at the threshold of its line. The SPI and I2C triggers in the
+    receiver (`trig.serial_hw = on`, off by default) give each line its threshold likewise; that part is
+    host-tested and not yet verified on hardware.
+  - A record with too few samples for the clock listed words that were none (unit before the change, host-tested
+    after it): at 50 ms/div and 100 kpts, 125 kSa/s for a clock of 200 kHz, the frames of one word gave nothing and
+    the frame of 16 words read "05 05 05 05". Where most frames have clock edges and not one whole word, the band
+    says "Frames shorter than a word: too few samples for the clock, or Data bits" and lists nothing. The same
+    note stands for Data bits 16 on frames of 8, which was an empty band.
+- Studio: the scale on a narrow channel pill is cut between two characters. With four channels, a math trace and
+  two decoders in the bottom bar, 100 mV read "100n": the text was cut by the pixel, and half an "m" is an "n"
+  (seen on a unit).
 - Decoders: the Events pane has the columns of the protocol (host-tested, and on captures of real CAN and LIN
   buses on the host; not yet verified on hardware). A frame was one text ("SOF ID 101 01 03 CRC 562D ACK"). Where
   the pane lists messages, is at least 560 px wide and every decoder that is on has the same columns, a frame has

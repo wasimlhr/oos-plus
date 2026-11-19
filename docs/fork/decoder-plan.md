@@ -4,8 +4,8 @@
 presets). Step 2 is done and merged (pull request 78): a message is a frame of the protocol, and the Events pane
 has the columns of the protocol. Of step 3, what was missing in a decode is done on the host for SENT (slow
 channel, two channels), CAN and CAN-FD (error flags, the length in bytes) and Manchester (the rate of the signal,
-the other convention). Open: C-PHY at low rates, the packet structure of a Manchester line, and each bus on the
-unit as the owner connects it.
+the other convention). The order from here on is the owner's (step 3): the buses that are live on his scope
+first, one after the other; the decoders that can only be checked on stored waveforms last.
 
 Goal: every protocol decoder is usable on the 1024x600 screen the way a bench scope shows a bus: a box per field on
 the plot, a list of messages beside it, settings that are found, and a decode that is right on real signals. The
@@ -30,8 +30,8 @@ Per decoder:
 
 | Decoder | Decode on real signals | Shown as | Open |
 |---|---|---|---|
-| UART | capture: text and times agree; unit | band, bit row, lines | a failed character on the unit |
-| SPI | capture: 13-bit words, MOSI/MISO, frames agree; unit | band, frames, Format | MISO on the unit |
+| UART | capture: text and times agree; unit: 236 characters, none wrong | band, bit row, lines | a failed character on the unit |
+| SPI | capture: 13-bit words, MOSI/MISO, frames agree; unit: 441 words, none wrong | band, frames, columns, Format | MISO on the unit |
 | I2C | capture: bytes, errors and 10-bit addresses agree (one address differs, below) | band, bit row, Format | unit |
 | CAN | capture: 97 of 97 frames agree; error flags host only | band, columns | unit |
 | CAN-FD | capture: frames agree, length in bytes; error flags host only | band, columns | unit |
@@ -100,11 +100,33 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
    CAN and CAN-FD error flags (on a generated bus: the "error frame" the reference lists first in the CAN-FD
    capture is the frame the record begins in the middle of, not a flag on the bus) and the length in bytes;
    Manchester at the rate of its signal, with either convention for a one.
-3. **Families, in the order they can be checked:** the bench buses on the unit (UART, SPI, I2C); the vehicle buses
-   on their captures (CAN, CAN-FD, LIN, FlexRay, SENT); the avionics buses (1553, ARINC 429); USB, 1-Wire, I2S,
-   I3C; then what is missing in a decode (SENT slow channel, CAN-FD error frames, a free bit rate for LIN and
-   Manchester, C-PHY at low rates).
-4. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
+3. **The buses that are live on the owner's scope, one after the other.** His direction (2026-11-19): the signals
+   that can be decoded live on the scope come first; the decoders that can only be checked on stored waveforms
+   come at the end. For each live bus the same list, on the unit:
+   - the decode is right: what the scope lists is what is known of the signal (its sender's data, or a second
+     instrument);
+   - the band at a slow, a middle and a fast time base, and the bit row where the protocol has one;
+   - the Events pane: a row for each frame, the columns of the protocol, the Fields view, Errors only;
+   - the thresholds found by Threshold to middle, and the protocol trigger holding a frame still.
+   What it shows is fixed and verified on the unit before the next bus.
+   1. SPI: on CH4 (data), CH3 (clock) and CH2 (select) of his bench; one word a frame every 500 us, the words a
+      sine of 64 steps, and a frame of 16 words now and then. Done on the unit (2026-11-19): the decode is right
+      (441 words in 200 ms, none wrong, down to 2.5 samples a bit), the band at 10 us, 100 us, 1 ms and 5 ms/div,
+      the Events pane (a row a frame, Fields, a tap on a row), the thresholds from the signals. Three flaws it
+      showed are fixed: the MOSI column cut a frame of several words; the bus trigger never fired where the chip
+      select has a threshold of its own; a record with too few samples for the clock listed words that were none.
+      Open: MISO (the bench bus has one data line), and the SPI trigger in the receiver, which is off by default
+      and not verified on hardware.
+   2. UART: on CH1 of his bench (9600 baud, " Tektronix \n Enabling Innovation \n", a pause of one character
+      before the second line feed). Done on the unit (2026-11-19): 236 characters in 800 ms, none wrong; the band
+      beside the SPI band, the Events pane with both decoders, and the Lines view, which has the two lines of the
+      text. Nothing to fix. Open: a failed character, which the bench signal has none of.
+   3. The buses of his demo board, as he connects them: CAN, CAN-FD, LIN, MIL-STD-1553, SENT, FlexRay, ARINC 429,
+      USB (in this order: the three first are the ones whose decoders were changed on their captures).
+4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
+   their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Open here: C-PHY at low
+   symbol rates, the packet structure of a Manchester line.
+5. **The 13 decoders without a capture:** captures from the net (the owner is asked before a download) or from his
    bench; until then they are host only and say so.
 
 ## Decisions that are the owner's
