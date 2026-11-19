@@ -472,12 +472,13 @@ impl Ui {
             // the second page: a UART was switched on and read nothing until the baud rate was found there
             if matches!(menu, MenuId::Decode | MenuId::Bus) && tabs.len() > 1 {
                 use Item::*;
-                // SPI: the MISO line is one the bus is read without. It heads Settings, and the Mode has its place
-                // on the first page
-                if self.m.dec_proto == Proto::SPI {
-                    if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecSrc4) {
+                // SPI: its four lines stand together on the first page (MISO was alone on Settings, where a line is
+                // not looked for). The page has seven rows, so Input, which is chosen once, ends Settings, and the
+                // Mode heads it: a bus is read in mode 0 more often than not
+                if self.m.dec_proto == Proto::SPI && tabs[0].rows.contains(&DecSrc4) {
+                    if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecIn) {
                         let row = tabs[0].rows.remove(i);
-                        tabs[1].rows.insert(0, row);
+                        tabs[1].rows.push(row);
                     }
                 }
                 while tabs[0].rows.len() < SHEET_MAX_ROWS {

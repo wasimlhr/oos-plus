@@ -2849,9 +2849,9 @@ fn a_decoder_has_a_pill_in_the_bottom_bar_that_opens_its_sheet() {
     }
 }
 
-/// The Decode sheet: what the protocol needs is on the first page with its lines (the baud rate of a UART, the mode
-/// of SPI), the B line of a differential pair is a setting, the lines are named by their role, and the protocol is
-/// chosen from its list, without steps.
+/// The Decode sheet: what the protocol needs is on the first page with its lines (the baud rate of a UART; SPI has
+/// its four lines there, and its mode heads Settings), the B line of a differential pair is a setting, the lines
+/// are named by their role, and the protocol is chosen from its list, without steps.
 #[test]
 fn the_decode_sheet_has_the_protocols_rows_on_its_first_page() {
     let mut u = fresh(Layout::Studio);
@@ -2864,7 +2864,14 @@ fn the_decode_sheet_has_the_protocols_rows_on_its_first_page() {
         let first = &spec.tabs[0].rows;
         eprintln!("{name}: first page {:?} | settings {:?}", first.iter().map(|it| u.sheet_label(*it)).collect::<Vec<_>>(), spec.tabs[1].rows.iter().map(|it| u.sheet_label(*it)).collect::<Vec<_>>());
         assert!(first.len() <= 7 && !first.contains(&Item::DecDiff), "{name}: {first:?}");
-        assert!(first.contains(&if name == "UART" { Item::DecBaud } else { Item::DecMode }), "{name}: its own setting is on the first page: {first:?}");
+        if name == "UART" {
+            assert!(first.contains(&Item::DecBaud), "its own setting is on the first page: {first:?}");
+        } else {
+            let lines = [Item::DecSrc, Item::DecSrc2, Item::DecCs, Item::DecSrc4];
+            assert!(lines.iter().all(|it| first.contains(it)), "the four lines stand together: {first:?}");
+            assert_eq!(spec.tabs[1].rows.first(), Some(&Item::DecMode), "the mode heads Settings");
+            assert!(spec.tabs[1].rows.len() <= 7, "{:?}", spec.tabs[1].rows);
+        }
         assert!(Ui::sheet_pick_plain(Item::DecProto) && u.sheet_row_kind(Item::DecProto) == RowKind::Pick);
         if name == "SPI" { assert_ne!(u.sheet_label(Item::DecSrc2), u.sheet_label(Item::DecSrc), "the lines have their roles"); }
         if let Some(dir) = std::env::var_os("OOS_SHOTS") {

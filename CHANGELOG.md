@@ -54,7 +54,8 @@ Fixed:
   of its own in a panel 320 px wide; the cards and the list of the same panel have it, and the bar its filter.
   A tap anywhere on a row opens the settings of the measurement.
 - The Decode sheet of Studio and Minimal (host-tested): what the protocol itself needs is on the first page with its
-  lines (the baud rate, data bits and parity of a UART, the mode of SPI), where it was on Settings; the B line of a
+  lines (the baud rate, data bits and parity of a UART; SPI has its four lines there), where it was on Settings;
+  the B line of a
   differential pair is on Settings; a line is named by its role in the protocol (MOSI, Clock, CS); the channels of
   a line have their colours; and the protocol is chosen from its list, without the - and + steps. In Studio one
   decoder shows its name without a number ("UART CH1"); several say which they are ("D2 SPI CH2").
@@ -492,6 +493,9 @@ Changed:
   2026-11-19: the pane had the characters with the bytes in hex beside them; I2C not yet verified on hardware).
   An I2C address stays a number, and so does a byte that was not acknowledged. The UART has its Format row as
   before.
+- SPI decoder: on the Decode sheet the four lines stand together on the first page (MISO was alone on Settings),
+  the Mode heads Settings and Input ends it; the polarity of the select is the row "CS polarity" (it was "CS", as
+  its line is), and the polarity of the data is "Data polarity" (host-tested, not yet verified on hardware).
 - Decoders: the Events pane says nothing of a row that passed its checks (host-tested, not yet verified on
   hardware). Its last column had a green OK on every such row, which took the room of the text and said no more
   than a row that is not red. The column is named Errors, has the number of failed checks of a row in red, and is
@@ -499,7 +503,7 @@ Changed:
 - SPI decoder: a MISO line, and a message for each frame (host-tested; the frames (unit), 2026-11-19: a bus of
   one word a frame every 500 us gave a row a frame in the Events pane and a box a frame at 200 us/div; the MISO
   line not yet verified on hardware). MISO is a
-  fourth line of the decoder (Decode > Settings > MISO); with a source a word reads MOSI/MISO ("9F/FF"), and
+  fourth line of the decoder (Decode > MISO); with a source a word reads MOSI/MISO ("9F/FF"), and
   without one, which is how SPI starts, the bus is read by MOSI alone: choosing SPI no longer gives a line to a
   channel that happens to be on. Where the chip select goes active a frame begins: the band has a start mark
   there, and the frame is one message on the band and one row of the Events pane. A bus of evenly spaced frames
@@ -518,9 +522,9 @@ Changed:
   (assumed; a clock stretched inside a byte moves the cells). The bit row of every decoder now comes when a bit
   the decoder found is 12 px wide, not one of the protocol's nominal rate: an I2C bus at 100 kHz had its row
   only at the time base of a 400 kHz one.
-- SPI decoder: Bit order (MSB first, LSB first), Data (Active high, Active low: every bit of a word inverted) and
-  the CS polarity of the SPI trigger are rows of Decode (`:BUS<n>:OPTion1`, `:BUS<n>:OPTion2`; host-tested, not
-  yet verified on hardware). The clock's edge is the Mode row, as before.
+- SPI decoder: Bit order (MSB first, LSB first), Data polarity (Active high, Active low: every bit of a word
+  inverted) and the CS polarity of the SPI trigger are rows of Decode (`:BUS<n>:OPTion1`, `:BUS<n>:OPTion2`;
+  host-tested, not yet verified on hardware). The clock's edge is the Mode row, as before.
 - Studio: a decoder that is on has a pill in the bottom bar, after the channels, references and math: its number in
   the colour of its line, its protocol, and on a wide pill its lines in the order of their roles ("CH4 CH3 CH2").
   A tap opens the Decode sheet of that decoder, where each line has its row (MOSI, Clock, CS); a second tap closes

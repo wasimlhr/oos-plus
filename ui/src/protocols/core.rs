@@ -131,7 +131,7 @@ pub struct Spi;
 /// The order of the bits of a word on the line, and whether a high level of the data line is a 1.
 static SPI_OPTIONS: [Opt; 3] = [
     Opt { name: "Bit order", choices: &["MSB first", "LSB first"], default: 0 },
-    Opt { name: "Data", choices: &["Active high", "Active low"], default: 0 },
+    Opt { name: "Data polarity", choices: &["Active high", "Active low"], default: 0 },
     Opt { name: "Format", choices: &["Hex", "ASCII"], default: 0 },
 ];
 

@@ -8150,7 +8150,7 @@ impl Ui {
             Item::UartPol => "Polarity",
             Item::UartStop => "Stop bits",
             Item::UartErr => "Error type",
-            Item::SpiCs => "CS",
+            Item::SpiCs => "CS polarity",
             Item::SpiTimeout => "Timeout",
             Item::I2cDir => "Direction",
             Item::I2cAddrBits => "Address",

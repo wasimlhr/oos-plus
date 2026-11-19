@@ -558,7 +558,9 @@ mod tests {
         let items = u.decode_items();
         let has = |it: Item| items.contains(&it);
         assert!(has(Item::SpiCs) && has(Item::DecOpt(0)) && has(Item::DecOpt(1)), "{items:?}");
-        assert_eq!((u.item_label(Item::DecOpt(0)), u.item_label(Item::DecOpt(1))), ("Bit order", "Data"));
+        assert_eq!((u.item_label(Item::DecOpt(0)), u.item_label(Item::DecOpt(1))), ("Bit order", "Data polarity"));
+        // the polarity of the select is not called like its line
+        assert_eq!((u.item_label(Item::DecCs), u.item_label(Item::SpiCs)), ("CS", "CS polarity"));
     }
 
     /// SPI with a chip select and a MISO line: each frame begins with a start mark and is a message of its own, and
