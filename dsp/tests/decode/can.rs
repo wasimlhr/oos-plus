@@ -16,6 +16,31 @@ fn ids(p: &[Packet]) -> Vec<(u32, bool, bool)> {
     p.iter().filter_map(|x| if let Kind::Id { ext, rtr } = x.kind { Some((x.value, ext, rtr)) } else { None }).collect()
 }
 
+/// A record with too few samples for the data rate: a classic frame and an FD frame without a rate switch are read,
+/// and a frame that switches gives its identifier and says that the rest is too fast.
+#[test]
+fn can_fd_reads_what_stays_at_the_nominal_rate_in_a_slow_record() {
+    let frames = [
+        FdFrame { id: 0x0f0, ext: false, fd: false, brs: false, esi: false, data: vec![0xde, 0xad] },
+        FdFrame { id: 0x055, ext: false, fd: true, brs: false, esi: false, data: vec![1, 2, 3] },
+        FdFrame { id: 0x1234_567, ext: true, fd: true, brs: true, esi: false, data: vec![9; 8] },
+        FdFrame { id: 0x1fff_ffff, ext: true, fd: false, brs: false, esi: false, data: vec![0xff; 8] },
+    ];
+    let (nom, dat) = (500e3, 2e6);
+    let l = gen::can_fd_logic(&frames, nom, dat, 0.0, 3.3);
+    // 5 samples a nominal bit, 1.25 a bit of the data rate
+    let dt = 1.0 / 2.5e6;
+    let v = l.sample(dt, 20.0 / nom);
+    let p = can_fd(&v, dt, nom, dat, 1.65, 0.3, false);
+    let want = [(0x0f0, false, false), (0x055, false, false), (0x1234_567, true, false), (0x1fff_ffff, true, false)];
+    assert_eq!(ids(&p), want);
+    let data: Vec<u32> = p.iter().filter(|x| x.kind == Kind::Data).map(|x| x.value).collect();
+    assert_eq!(data, [vec![0xde, 0xad], vec![1, 2, 3], vec![0xff; 8]].concat());
+    let fast: Vec<bool> = p.iter().filter(|x| x.kind == Kind::Field("!TOO FAST")).map(|x| x.ok).collect();
+    assert_eq!(fast, [false]);
+    assert_eq!(p.iter().filter(|x| x.kind == Kind::Crc).map(|x| x.ok).collect::<Vec<_>>(), [true; 3]);
+}
+
 #[test]
 fn can_fd_500k_2m_with_8_20_64_bytes() {
     let mut r = rng(77);

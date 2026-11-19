@@ -30,13 +30,21 @@ const CANFD_OPTIONS: [Opt; 3] = [
 pub struct CanFd;
 
 impl Protocol for CanFd {
-    /// A frame in the Events pane: its identifier, the number of its data bytes, the bytes, the CRC.
+    /// A frame in the Events pane: its identifier (an error frame says so there), the number of its data bytes, the
+    /// bytes, the CRC.
     fn columns(&self) -> &'static [(&'static str, Col)] {
-        &[("ID", Col::Label("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+        &[("ID", Col::LabelOr("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
     }
-    /// A frame begins with its start of frame.
+    /// A frame begins with its start of frame; an error flag outside a frame is a message of its own.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
-        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+        Some(|p| matches!(p.kind, Kind::Start | Kind::Field("!ERROR FRAME")))
+    }
+    /// The data length as the number of bytes the frame has (the code C of a frame of 24 bytes read "DLC C").
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        match p.kind {
+            Kind::Field("DLC") => Some(format!("DLC {}", p.value2.unwrap_or(p.value))),
+            _ => None,
+        }
     }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::CAN_FD
@@ -57,7 +65,14 @@ impl Protocol for CanFd {
 
 pub struct FlexRay;
 
+/// The bit rates of a FlexRay cluster (`oos_dsp::decode::FLEXRAY_RATES`).
+const FLEXRAY_OPTIONS: [Opt; 1] =
+    [Opt { name: "Bit rate", choices: &["10 Mbit/s", "5 Mbit/s", "2.5 Mbit/s"], default: 0 }];
+
 impl Protocol for FlexRay {
+    fn options(&self) -> &'static [Opt] {
+        &FLEXRAY_OPTIONS
+    }
     /// A frame in the Events pane: its identifier, the cycle, the payload, the frame CRC.
     fn columns(&self) -> &'static [(&'static str, Col)] {
         &[("ID", Col::Label("ID ")), ("Cycle", Col::Label("CYC ")), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
@@ -66,6 +81,11 @@ impl Protocol for FlexRay {
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
         Some(|p| p.kind == oos_dsp::decode::Kind::Field("TSS"))
     }
+    /// Which says nothing of the frame: its text begins with the indicators and the identifier.
+    fn lead(&self, p: &Packet) -> bool {
+        p.kind == oos_dsp::decode::Kind::Field("TSS")
+    }
+    /// (the rate of the option; the frame CRC of either channel passes: `oos_dsp::decode::flexray` tries both)
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::FLEXRAY
     }
@@ -89,17 +109,27 @@ impl Protocol for FlexRay {
 const TICK_NAMES: [&str; 8] =
     ["3 \u{b5}s", "5 \u{b5}s", "10 \u{b5}s", "20 \u{b5}s", "30 \u{b5}s", "50 \u{b5}s", "90 \u{b5}s", "Auto"];
 
-const SENT_OPTIONS: [Opt; 2] = [
+const SENT_OPTIONS: [Opt; 3] = [
     Opt { name: "Clock tick", choices: &TICK_NAMES, default: 0 },
     Opt { name: "Data nibbles", choices: &["1", "2", "3", "4", "5", "6"], default: 5 },
+    // what the six data nibbles are: one number as they are sent, or the two 12-bit values of a sensor with two
+    // channels (the second one is sent with its low nibble first)
+    Opt { name: "Channels", choices: &["One value", "12 + 12 bit"], default: 0 },
 ];
 
 pub struct Sent;
 
 impl Protocol for Sent {
-    /// A frame in the Events pane: its status nibble, the data nibbles, the CRC.
+    /// A frame in the Events pane: its status nibble, the data nibbles, the CRC, and in the frame that completes a
+    /// message of the slow channel that message.
     fn columns(&self) -> &'static [(&'static str, Col)] {
-        &[("Status", Col::Label("STAT ")), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+        &[
+            ("Status", Col::Label("STAT ")),
+            ("Data", Col::Data),
+            ("CRC", Col::Label("CRC ")),
+            ("Slow ID", Col::Label("SID ")),
+            ("Slow data", Col::Label("SDATA ")),
+        ]
     }
     /// A frame begins with its calibration pulse.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
@@ -111,13 +141,25 @@ impl Protocol for Sent {
     fn options(&self) -> &'static [Opt] {
         &SENT_OPTIONS
     }
-    /// The tick the sync pulse gave; the data as its nibbles.
-    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+    /// The tick the sync pulse gave; the data as its nibbles, or as the two values of a sensor with two channels
+    /// (the second one comes with its low nibble first: "3C1CB3" is 3C1 and 3BC); a message of the slow channel
+    /// with the digits its identifier and its data have.
+    fn text(&self, p: &Packet, opt: &[usize; OPTS]) -> Option<String> {
+        let bad = if p.ok { "" } else { " !" };
         match p.kind {
-            Kind::Field("SYNC") => {
-                Some(format!("SYNC {}{}", crate::model::si(p.value as f64 * 1e-9, "s"), if p.ok { "" } else { " !" }))
+            Kind::Field("SYNC") => Some(format!("SYNC {}{}", crate::model::si(p.value as f64 * 1e-9, "s"), bad)),
+            Kind::Data if opt[2] == 1 && p.value2 == Some(6) => {
+                let second = p.value & 0xfff;
+                let turned = (second & 0xf) << 8 | (second & 0xf0) | second >> 8;
+                Some(format!("{:03X} {:03X}", p.value >> 12, turned))
             }
             Kind::Data => Some(format!("{:0w$X}", p.value, w = p.value2.unwrap_or(1) as usize)),
+            Kind::Field("SID") => Some(format!("SID {:02X}", p.value)),
+            Kind::Field("SDATA") => {
+                let digits = p.value2.unwrap_or(12).div_ceil(4) as usize;
+                Some(format!("SDATA {:0w$X}", p.value, w = digits))
+            }
+            Kind::Field("SCRC") => Some(format!("SCRC {:02X}{}", p.value, bad)),
             _ => None,
         }
     }
@@ -147,6 +189,40 @@ impl Protocol for Sent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A FlexRay cluster at 5 or 2.5 Mbit/s is read at the rate the option says, and not at another.
+    #[test]
+    fn flexray_reads_at_the_rate_of_its_option() {
+        let fr = decode::gen::FrFrame {
+            ppi: false,
+            nf: true,
+            sync: false,
+            startup: false,
+            id: 0x2a,
+            cycle: 5,
+            payload: vec![0x11, 0x22, 0x33, 0x44],
+            channel_b: true,
+        };
+        let bits = decode::gen::flexray_bits(&fr, 11);
+        let ids = |rate: f64, option: usize| -> Vec<(u32, bool)> {
+            let l = oos_dsp::sim::bits_logic(&bits, 1.0 / rate, 20, 0.0, 3.3);
+            let dt = 1.0 / rate / 20.0;
+            let v = oos_dsp::sim::sample(|t| l.v(t), 0.0, dt, 20 * (bits.len() + 60));
+            let (lines, opt) = ([Some(&v[..]), None, None, None], [option, 0, 0, 0]);
+            let sh = shared(&crate::model::Model::default());
+            let l = Lines { lines, dt, thr: 1.65, hy: 0.2, opt, sh, chans: [None; 4], src: [None; 4] };
+            let p = FlexRay.info().decode(&l).unwrap();
+            p.iter().filter(|x| matches!(x.kind, Kind::Id { .. } | Kind::Crc)).map(|x| (x.value, x.ok)).collect()
+        };
+        for (option, rate) in decode::FLEXRAY_RATES.iter().enumerate() {
+            let got = ids(*rate, option);
+            assert_eq!(got.first(), Some(&(0x2a, true)), "{} bit/s", rate);
+            assert!(got.len() == 2 && got[1].1, "the frame CRC of channel B passes: {:x?}", got);
+            assert_eq!(FlexRay.info().bit_time(&[option, 0, 0, 0], &shared(&crate::model::Model::default())), 1.0 / rate);
+        }
+        // a cluster at 5 Mbit/s read at 10: no frame
+        assert!(ids(5e6, 0).iter().all(|x| x.0 != 0x2a));
+    }
 
     // Break it catches: a setup written while CAN FD, FlexRay and SENT were built in losing its protocol or rates
     #[test]

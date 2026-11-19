@@ -540,10 +540,17 @@ impl Levels {
 /// MIL-STD-1553 words (cmd sync?, value) as a bipolar bus signal of amplitude `a` (idle 0 V), `gap` us of idle
 /// between the words.
 pub fn mil1553_wave(words: &[(bool, u16)], a: f64, gap: f64) -> Levels {
+    let with: Vec<(bool, u16, f64)> = words.iter().map(|&(cmd, w)| (cmd, w, gap)).collect();
+    mil1553_message(&with, a)
+}
+
+/// `mil1553_wave` with a dead time (us) of its own after each word, as a message has them: none between the words
+/// of one sender, the response time before a status word, the gap before the next message.
+pub fn mil1553_message(words: &[(bool, u16, f64)], a: f64) -> Levels {
     let us = 1e-6;
     let mut l = Levels { seg: vec![(0.0, 0.0)], tr: 0.05 * us };
     let mut t = 4.0 * us;
-    for &(cmd, w) in words {
+    for &(cmd, w, gap) in words {
         let s = if cmd { a } else { -a };
         l.seg.push((t, s));
         l.seg.push((t + 1.5 * us, -s));
@@ -557,8 +564,11 @@ pub fn mil1553_wave(words: &[(bool, u16)], a: f64, gap: f64) -> Levels {
             l.seg.push((t + 0.5 * us, -first));
             t += us;
         }
-        l.seg.push((t, 0.0));
-        t += gap * us;
+        if gap > 0.0 {
+            l.seg.push((t, 0.0));
+            t += gap * us;
+        }
     }
+    l.seg.push((t, 0.0));
     l
 }

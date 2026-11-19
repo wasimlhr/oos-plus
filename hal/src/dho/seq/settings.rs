@@ -120,6 +120,12 @@ pub const HOLDOFF_MIN: f64 = 8e-9;
 pub struct Settings {
     /// trigger holdoff, seconds (`HOLDOFF_MIN` = none)
     pub holdoff: f64,
+    /// How much longer than `holdoff` the holdoff of a batch may be, seconds; the host draws it anew for every batch
+    /// (`State::holdoff_steps`). 0: `holdoff` for all. For a trigger whose event the software finds in the record
+    /// (a protocol trigger on an edge of its line): with one holdoff the frames of a batch follow each other at a
+    /// fixed time, and on a bus that repeats its traffic they hold the same messages every time (seen on a unit: a
+    /// CAN bus with a period of 9.5 ms, 100 of 100 records on one message, another one for each holdoff).
+    pub holdoff_spread: f64,
     /// time in the middle of the record relative to the trigger, seconds; kept within half a record
     pub delay: f64,
     pub mode: acq::Mode,
@@ -134,6 +140,9 @@ pub struct Settings {
     pub trig_src: u32,
     pub slope: tpu::Slope,
     pub level: f64,
+    /// The level of a channel that is a line of the SPI or I2C trigger, where the decoder has a threshold of its own
+    /// for that line (`None`: `level`). Each line has a comparator of its own.
+    pub line_level: [Option<f64>; 4],
     pub auto: bool,
     /// AUTO sweep with the shortest auto-trigger time (10 ms) whatever the time base: the auto set-up reads the
     /// levels of a signal its trigger level may not cross yet, and must not wait 20 time/div per record for it
@@ -233,6 +242,7 @@ impl Default for Settings {
             delay: 0.0,
             mode: acq::Mode::Normal,
             holdoff: HOLDOFF_MIN,
+            holdoff_spread: 0.0,
             mask: 1,
             tdiv: 200e-6,
             depth: 0,
@@ -241,6 +251,7 @@ impl Default for Settings {
             trig_src: 1,
             slope: tpu::Slope::Rising,
             level: 1.5,
+            line_level: [None; 4],
             auto: true,
             auto_fast: false,
             single: false,

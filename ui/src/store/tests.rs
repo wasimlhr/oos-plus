@@ -482,6 +482,35 @@ fn setup_protocols_by_name() {
     assert!(parse_setup("dec_uspeed = 3").is_err());
 }
 
+/// The files of a stick wherever they lie: waveform files only, three folders deep, files before folders, no
+/// hidden names, and no more than asked for. In the list a file outside the scope's folder has its path.
+#[test]
+fn the_waveform_files_of_a_stick_are_found_in_its_folders() {
+    let root = std::env::temp_dir().join(format!("oos-ui-stick-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    for d in ["OOS", "captures/can", "a/b/c/d", ".hidden"] {
+        std::fs::create_dir_all(root.join(d)).unwrap();
+    }
+    let waves = ["z.csv", "OOS/wave-001.bin", "captures/b.WFM", "captures/can/a.isf", "a/b/c/deep.csv"];
+    let others = ["notes.txt", "a/b/c/d/too-deep.csv", ".hidden/x.csv", "captures/picture.png"];
+    for f in waves.iter().chain(others.iter()) {
+        std::fs::write(root.join(f), b"x").unwrap();
+    }
+    let rel = |v: Vec<PathBuf>| -> Vec<String> {
+        v.iter().map(|p| p.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/")).collect()
+    };
+    let all = rel(wave_files_under(&root, 3, 40));
+    assert_eq!(all, ["z.csv", "OOS/wave-001.bin", "a/b/c/deep.csv", "captures/b.WFM", "captures/can/a.isf"]);
+    assert_eq!(rel(wave_files_under(&root, 3, 2)), ["z.csv", "OOS/wave-001.bin"]);
+    assert_eq!(rel(wave_files_under(&root, 0, 40)), ["z.csv"]);
+    let _ = std::fs::remove_dir_all(&root);
+    // the names in the list
+    assert_eq!(list_name(Path::new("/mnt/usb/OOS/wave-001.bin")), "wave-001.bin");
+    assert_eq!(list_name(Path::new("/mnt/usb/z.csv")), "z.csv");
+    assert_eq!(list_name(Path::new("/mnt/usb/captures/can/a.isf")), "captures/can/a.isf");
+    assert_eq!(list_name(Path::new("/tmp/oos/wave-002.csv")), "wave-002.csv");
+}
+
 #[test]
 fn csv_of_a_record() {
     let mut m = Model::default();

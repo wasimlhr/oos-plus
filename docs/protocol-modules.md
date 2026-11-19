@@ -21,12 +21,12 @@ demo traffic, a view), with one line that registers it:
 | bit row (oos-plus) | the band on the plot at a time base that shows single bits: a cell per bit above the field's box, and a mark on the threshold line where it was sampled | `bit_row` (off), `bits` (none) |
 | protocol trigger | Trigger > Bus: what "Frame", "ID/Addr", "Data", "Error" mean | `info`: `trigger`, the protocol's own rule (none: `ModuleInfo::trigger_match` uses the generic rule of `dsp/src/protocols.rs`) |
 | trigger start value | what Trigger > Bus looks for when it is switched on | `info`: `trigger_default` (Frame) |
-| trigger timing | sampling (a twentieth of a bit) and the search window | `info`: `bit` (required), `span` (200 bits) |
+| trigger timing | sampling (a twentieth of a bit) and the search window: a frame before the hardware point and a frame behind the search region, so a frame that begins there is read whole | `info`: `bit` (required), `span` (200 bits) |
 | hardware edge | the edge the hardware trigger arms on in front of the protocol trigger, and on which role's line | `start_edge` (falling), `start_role` (the main line) |
 | first settings | channels, LA lines, threshold, shared-row values and the demo's trigger when the protocol is chosen | `setup` (CH3 / CH4, 1.65 V) |
 | old setups | how a setup saved before the protocol was a module maps onto its options | `legacy` (none) |
 | demo traffic | the host build's simulated signals, on the channels of `setup` | `demo` (none) |
-| frames | what a message is on the band and in the Events pane: a frame from one start field to the next, whatever pauses it has inside; and marks the module adds that are no field of the bus | `frame_start` (messages by idle time), `mark` (none) |
+| frames | what a message is on the band and in the Events pane: a frame from one start field to the next, whatever pauses it has inside; marks the module adds that are no field of the bus; and the field every message begins with, which the text of a message leaves out | `frame_start` (messages by idle time), `mark` (none), `lead` (none) |
 | columns | the Events pane where it lists the frames of one protocol and is wide enough: a column for the identifier, the data, the CRC ... in place of one text | `columns` (one text) |
 | own view | Display > Second pane > Bus view: a status line and columns of rows, with a memory across records | `view` (none) |
 

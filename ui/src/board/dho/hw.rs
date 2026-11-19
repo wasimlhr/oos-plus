@@ -238,6 +238,8 @@ fn run<P: port::Port>(
         let mut armed: Option<(Settings, u64)> = None;
         // the SINGLE stamp whose batch brought its frame (`single_wants_more`)
         let mut single_done: Option<u64> = None;
+        // draws the holdoff of each batch where the settings ask for one (`Settings::holdoff_spread`)
+        let mut spread = crate::wave::Rng::new(0x9e37_79b9_7f4a_7c15);
         // the hardware segmented recording in progress or read back
         let mut segrun: Option<SegRun> = None;
         // hardware average: triggers since the last clear, the `Shared::avg_clear` it was cleared for, batches logged
@@ -934,6 +936,9 @@ fn run<P: port::Port>(
             let ahead = armed.as_ref().is_some_and(|(a, st)| *a == b && *st == stamp);
             if !ahead {
                 disarm(&mut armed, &mut state, &mut bar, &mut c2h);
+                if b.holdoff_spread > 0.0 {
+                    bar.apply(&state.holdoff_steps(&b, spread.uniform() * b.holdoff_spread));
+                }
             }
             armed = None;
             let changed = || {
@@ -1143,6 +1148,9 @@ fn run<P: port::Port>(
                         single_done = Some(stamp);
                     }
                     if prearm_on() && avg.is_none() && !b.single && prearm_keeps_replay(&b, &p, deep_want) {
+                        if b.holdoff_spread > 0.0 {
+                            bar.apply(&state.holdoff_steps(&b, spread.uniform() * b.holdoff_spread));
+                        }
                         match seq::prearm(&mut state, &b, &p, &mut bar, &mut c2h, |_| {}) {
                             Ok(()) => armed = Some((b.clone(), stamp)),
                             Err(e) => status(format!("prearm: {}", e)),

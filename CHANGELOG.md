@@ -596,6 +596,87 @@ Changed:
   in the sync and read all 17 bits on a 1 us grid from there, which a bus a few percent off its rate leaves
   before the word ends: of the 71 words of a capture whose words are 20.8 us long, 37 were misread or had a
   parity error. They are read now (2 are marked, the two the capture has a fault in), up to 5 % off the rate.
+- MIL-STD-1553 decoder: a word says what it is, and a message is a row with its columns (host-tested, and on a
+  capture of a real bus on the host; not yet verified on hardware). A command and a status word have the same
+  sync, and both read "C/S 8842". Which one a word is follows from its place in the message, by the formats of
+  the standard: a receive command, its data, the status after the response time; a transmit command, the status,
+  the data; two commands at once for a transfer between two terminals; a mode command with one data word or none;
+  no answer to a broadcast. A command reads "RT 17 R SA 02 WC 02" (a mode command "MC 18"), a status word "ST 17
+  TF" with the flags that are set, a data word its four digits; the numbers of a command are decimal, as the
+  standard writes them. A message begins with its command, and the Events pane has the columns RT, T/R, SA,
+  WC/MC, Data and Status. On the capture the 13 words that the picture of its instrument lists are told apart as
+  the instrument tells them; a word it calls "Command/Status" is a command here.
+- 1-Wire decoder: a ROM command has its name, and a transaction has its columns (host-tested, and on a capture
+  of a real bus with two devices on the host; not yet verified on hardware). "ROM 55" reads "ROM 55 Match"
+  (Read, Match, Skip, Search, Alarm search and the two overdrive commands; the commands after them are those of a
+  device family and stay numbers). The Events pane has ROM, Family, Serial, CRC and Data.
+- SIM bus presets: the lines stand above the band of the decoder (unit, before and after).
+  A line was scaled to the nearest step, which could be the smaller one: a bus of 3.3 V had 6.6 of the 8
+  divisions, ran down into the band, and its own label stood over the name of the band. A line has the first step
+  at which it fits its share, and the lowest division of the plot is left to the band. The start of a CAN-FD
+  frame reads "SOF", as that of a CAN frame does; it read "S". A preset takes the lines of the preset played
+  before it away: a bus of one line after a bus of three left two traces of the other bus on the screen (unit,
+  before and after); a reference that is no line of a preset stays.
+- USB and FlexRay: the text of a message begins with what the message is (unit, before and after for USB). Every USB
+  packet begins with its sync and every FlexRay frame with its start sequence, and a box with little room read "SYNC
+  FS..." for each of them. The text of a message leaves that field out ("SETUP ADDR 5 ...", "IND 4 ID 02A ..."); drawn
+  as fields, and in the Fields view, it is there as before. A module says which field that is (`lead`).
+- Manchester decoder: a line that sends packets is read packet by packet (host-tested, and on a capture of a
+  real line on the host; the simulated line with its packets and their fields played on a unit; a real signal
+  is not yet verified on hardware). The decoder read a record as one stream of bits from its
+  first edge. A line that is quiet between its packets, as the capture is (13 bits every 14.5 bit times), was
+  half a bit off in every second packet, and its bits ran together into bytes that were none. A pause of more
+  than 1.5 bit times ends a packet, and where the bits lie is found anew in the next. A packet of up to 32 bits
+  that is no whole number of bytes is one field: its bits in the order sent ("0011100111101"), over 16 bits as
+  one number with their count. A record without a pause is read as before, and so is a packet of whole bytes. On
+  the capture: nine packets at the times its instrument lists, and their bits cut as that instrument has them (a
+  header of 3 bits, 6 data bits, a trailer of 2, each least significant bit first, after two sync bits) are its
+  values in the five rows its picture shows. Decode > Sync bits and Header bits (0 to 16 each, `:BUS<n>:OPTion3`
+  and `OPTion4`) cut a packet into fields: so many bits of sync, so many of header, words of Data bits, and what
+  is left as the trailer, each field with its first bit as the least significant. With both at 0, as a new
+  decoder has them, a packet is not cut. Set to 2, 3 and 6 data bits, the capture reads "SYNC 0 HDR 7 3C TRL 2",
+  "SYNC 0 HDR 6 3C TRL 2", ... as its instrument lists it. A packet is a message on the band and a row of the
+  Events pane.
+- Simulated traffic for more decoders (host-tested, and each played and decoded on a unit): Manchester, MLT-3, Modbus
+  ASCII, the DS2482 bridge, JTAG, C-PHY, Quad-SPI and Parallel (a counter of three bits with its clock) have a SIM bus
+  preset now, 28 in all: every decoder has one. Six bytes at the rate of the list's usual entry for the two line
+  codes; the read request of the Modbus RTU preset as its characters; a 1-Wire reset, Skip ROM and a command through
+  the bridge's I2C commands; a TAP reset, an instruction and the 32 bits of an identification; a C-PHY lane with its
+  low-power states and a burst that carries a short packet; a flash asked for its identification and for two bytes at
+  an address. A JTAG scan with a TDO line says what came out as well as what went in, "DR 0 > 4BA00477": the preset
+  read "DR 0", the zeros shifted in, for the identification (unit, before and after).
+- C-PHY decoder: a real lane is read (host-tested, and on a capture of a real lane at 50 Msym/s on the host; not
+  yet verified on hardware). The capture gave one "SAMPLE" error and nothing else. Three faults:
+  - the levels were fixed voltages: a low-power level was one above 0.8 V, and the capture's lines swing 1.16 V
+    around 0 V, so no low-power state was found, and the noise between two lines at the same low-power level
+    counted as wire states one or two samples long, which made the symbol time come out under 2.5 samples. The
+    levels are taken from the record: a high-speed state has its three lines at three levels evenly apart, a
+    low-power state has two lines at the least at one level;
+  - the seven symbols of a word were read most significant first. On the wire the first one is the least
+    significant: the checksum of the packet header is right in 64 of the capture's 64 bursts this way, and in
+    none the other way;
+  - the sync word that stands a second time inside a burst, between the two copies of a packet header, was a code
+    error.
+  The capture reads: the low-power states around each burst ("LP-111 LP-001 LP-000"), the preamble as one field
+  ("PRE 28"), "SYNC", the words ("4000 EDCA 0E66"), and the post as one field; 64 bursts, 659 words, no error,
+  and the times of the instrument that took it to under a nanosecond. A message on the band is what the lane
+  does from one stop state to the next, and the Frame trigger takes the first sync word of a burst.
+  The packet in the words of a burst is read where the checksum of its header fits: "VC 1 DT 00 CA ED CRC 0E66"
+  for a short packet (the first burst of the capture, which its instrument lists with virtual channel 1, data
+  type 00 and the data CA ED), "VC 0 DT 11 WC 5 CRC A2D0 ... 16 2E 2F FD C7 CRC 00A9" for a long one, the second
+  header as "COPY". On the capture: 64 headers and 43 payloads, every checksum right. The Events pane has VC, DT,
+  WC, Data and CRC. The layout is the one the capture shows; the low byte of the first header word is not read.
+  Low-power data is read too: after the escape entry (from the stop state: A high, all low, C high, all low) a
+  bit is one line high and all lines low after it, the first eight are the command and the bits after them
+  bytes, the first bit sent the least significant. The capture has 64 such messages, "ESC 87 LPDT 08 0F 0F 01",
+  where its instrument lists the LPDT command 87h and the same four bytes. Bits that fill no byte and the states
+  around the data stay states.
+- I3C decoder: a common command code has its name, "CCC 90 GETSTATUS" (host-tested; not yet verified on
+  hardware). The decoder had the table of the names and the band wrote the number alone. A code the table does
+  not have keeps its number.
+- FlexRay decoder: Decode > Bit rate, 10, 5 or 2.5 Mbit/s (host-tested; not yet verified on hardware). The
+  decoder read at 10 Mbit/s alone, so a cluster at one of the two other rates of the standard gave nothing. The
+  frame CRC of either channel passes, as before (`:BUS<n>:OPTion1`).
 - LIN decoder: the bit rate comes from the sync field of each frame, as a node takes it (host-tested, and on a
   capture of a real bus at 18350 bit/s on the host; not yet verified on hardware). The frames were read at the
   rate of Decode > Baud, whose list has no such rate; set to another rate the decoder listed breaks alone. Baud
@@ -607,6 +688,129 @@ Changed:
     longest time a frame may take, eight data bytes and the checksum at most;
   - Decode > Checksum: Either (as before: the classic or the enhanced one passes), Enhanced (2.x; the diagnostic
     frames 3C and 3D keep the classic one) or Classic (1.x) (`:BUS<n>:OPTion1`).
+- SENT decoder: the slow channel, and the two values of a sensor with two channels (host-tested, and on a capture
+  of a real bus on the host; not yet verified on hardware). Two bits of the status nibble of every frame carry a
+  serial message over 16 frames (short) or 18 (enhanced): its identifier, data and CRC are listed in the frame
+  that completes it ("SID 07 SDATA 075 SCRC 01", as the capture has it and the instrument that took it reads it),
+  and the Events pane has the columns Slow ID and Slow data. Decode > Channels: One value (the data nibbles as one
+  number, as before) or 12 + 12 bit, the two values of six nibbles ("3C1 3BC"; the second is sent with its low
+  nibble first), `:BUS<n>:OPTion3`.
+- CAN and CAN-FD decoders: an error flag is listed, and a CAN-FD frame says how many bytes it has (host-tested; the
+  byte count on a capture of a real bus on the host; not yet verified on hardware). Six dominant bit times and
+  more in a row, which no frame holds, are "ERROR FRAME" where no frame is being read, a message of their own
+  with the error in the ID column of the Events pane. The length of a CAN-FD frame read "DLC C" for 24 bytes, the
+  code of the field: it reads "DLC 24".
+- Manchester decoder: Baud has Auto, the rate of the signal itself, and it is what a new decoder has (host-tested,
+  and on a capture of a real line at 125 kbit/s on the host; not yet verified on hardware). The list had no such
+  rate, and a Manchester line carries its clock. Decode > A one is: Rising (802.3), as before, or Falling
+  (Thomas), the other convention, with which the bits of the capture are those its instrument reads
+  (`:BUS<n>:OPTion2`).
+- CAN on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: a demo board at 500 kbit/s, CAN_H
+  and CAN_L on 10:1 probes that the channels read as 1:1). The decoder reads it right from CAN_H, from CAN_L and
+  from the difference of the two, each with the threshold found from the signal: 93 to 97 frames in 40 ms with
+  21 identifiers, standard and extended, data and remote frames, every CRC right and every frame acknowledged,
+  the same traffic a capture of the board has. The band and the Events pane with ID, DLC, Data and CRC work on
+  it. The trigger on an identifier is the next entry.
+- Reference > Load file and Import slot list the waveform files of a USB stick wherever they lie, three folders
+  deep (at most 40), with their path on the stick for those outside the folder `OOS`. They listed that folder
+  alone, so a file copied onto a stick could not be opened on the scope. Links on the stick are not followed.
+  There is no file manager: files cannot be moved, renamed or deleted on the scope.
+- Studio: the top bar has the links as small pills left of Add, a dot and a name each: LAN (green with an
+  address), and WLAN and USB while their stick is in, as the Default bar has its USB pill. A tap on LAN or WLAN
+  opens the Network page, which has the address; a tap on USB opens Storage. The bar had none of them, so a
+  stick that was mounted did not show. Seen on the unit with a stick in and the cable connected.
+- Studio: a reference has no box over its signal with overlaid traces either. It had a box of two rows there,
+  40 px high and as wide as its name; it has the handle every source has on its zero level, the name and the
+  scale are on its pill in the bottom bar, and the sample rate is in the note beside Fit. The other layouts keep
+  the two rows.
+- Protocol trigger on a bus that repeats its traffic, found and fixed on a unit (DHO924S, 2026-11-19: the CAN
+  bus above, 22 frames one behind the other every 9.5 ms and 5 ms of rest, trigger on an identifier, 100 kpts).
+  At 200 us/div the trigger held the frame, the end of the identifier at the trigger point. At 50 us/div and
+  5 us/div it did not, for three reasons:
+  - A frame whose field could not be moved to the trigger point was shown at the hardware point and called
+    triggered: the T stood on another frame, the identifier asked for 255 us to its left. Such a frame is none
+    of this trigger: Normal waits for one in which the field can stand at the T.
+  - The hardware fires on an edge of the line, and the frames of a batch followed each other at a fixed time. On
+    this bus the hardware point stood on the same few messages in every record: six places in 300 records, one
+    message in 100 of 100 with a holdoff of 6.1 ms, and the identifier asked for within reach of none. Each batch
+    of a protocol trigger the software decides now has a holdoff of its own, drawn up to 16 ms above the set
+    one. With it the hardware point falls all over the traffic, and the identifier stood within 70 us of it in 11
+    of 500 records.
+  - The search read the record a tenth of a screen past the hardware point, and a decoder gives nothing of a
+    frame that is cut off: an identifier at the trigger point was found only in frames that ended there, and
+    Normal still took no frame in 70 s. The search reads the length of a frame further. On the host, with the
+    traffic of every decoder and a frame start at the hardware point: the old search found none for CAN, CAN-FD
+    and FlexRay, and not all for USB, S/PDIF and DCC; the new one finds every one for every decoder, and every
+    identifier and data field tried (MLT-3 data left out: its bytes are counted from the first change of what
+    the decoder is given, so in a part of the record they can be other bytes; 7 of 40 were not found).
+  With the three, Normal at 50 us/div took a new frame in 15 of 29 seconds, the end of the identifier at the
+  trigger point in each picture looked at (before: no frame in 70 s), and at 200 us/div in 18 of 19. At 5 us/div
+  it takes none: the record there (35 kpts at 625 MSa/s, 56 us) is shorter than the frame, and the decoder gives
+  nothing of a frame that is cut off.
+- Protocol trigger with Memory on Auto: the record is the screen and the length of a frame on each side of it
+  (at most 1 Mpts), where it was a screen and an eighth. The trigger moves the record so that the field it found
+  stands at the trigger point, and can move it only as far as the record reaches beyond the screen: 6 us at
+  10 us/div, so on a unit the trigger on a CAN identifier took no frame in 24 s there, and at 5 us/div the record
+  began 4 us before the frame, too late to know its first edge for a start. A depth that is set stays as set, and
+  so does the record of a protocol trigger in the receiver. On the unit after it (the same bus, records of 531
+  to 563 kpts at 625 MSa/s): a new frame in 17 of 24 seconds at 5 us/div and in 19 of 24 at 10 us/div and at
+  20 us/div, the end of the identifier at the trigger point in the pictures looked at.
+- CAN and CAN-FD decoders: of a frame that the record cuts off they give what is whole, its start, its
+  identifier and the data bytes read so far, and no CRC (the owner's decision, 2026-11-19). They gave nothing of
+  such a frame, so at a time base whose record ends inside the frame the band had no field of it and the
+  protocol trigger took none (unit, CAN at 500 kbit/s, trigger on an identifier: no frame in 24 s at 10 us/div,
+  where the record of 160 us ends 88 us behind the start of a frame of 112 us). The last frame of a record now
+  shows without its CRC where the record ends in it, in the band and in the Events pane. On the unit with this
+  change alone: 13 of 24 seconds at 20 us/div where it was 6, and still none at 10 us/div and 5 us/div, which
+  the entry above is about.
+- CAN and CAN-FD decoders: the bit timing follows the edges from recessive to dominant alone, as a node's does.
+  They resynchronised on every edge, and on a line that is slow on its way back to recessive the bit behind that
+  edge was sampled in its neighbour. Found on a unit (DHO924S, 2026-11-19: CAN_H at 500 kbit/s, probed so that
+  the way back reached the threshold 1.1 us late): at 2 ms/div one frame of every cycle had a wrong CRC and one a
+  wrong identifier, at 50 us/div the frames beside the triggered one were not read. A record of it, read on the
+  host, gives no frame before the change and the right one after it. Five dominant bits behind such an edge last
+  longer than five and a half bit times and were taken for an error flag: a flag is dominant where a sixth bit
+  is sampled, too. On the unit after the change, the same line and threshold: 93 to 96 frames in 40 ms, the 21
+  identifiers of the bus, no field wrong (three records; before 85 to 92 frames, 5 to 7 fields wrong, up to 23
+  identifiers), and at 50 us/div the triggered frame whole with its neighbour.
+- Trigger > Bus > Frame for Modbus RTU and MLT-3: it never fired, since neither has a field the trigger took for
+  the start of a frame. Modbus RTU: a frame begins with its address. MLT-3: every byte, as for the UART.
+  Host-tested with their traffic, not on hardware.
+- CAN-FD decoder: a record with too few samples for the data rate still gives the frames that stay at the
+  nominal rate (unit: a bus of classic CAN frames at 500 kbit/s read with this decoder at 2 ms/div, 2.5 MSa/s,
+  gave nothing before the change and 88 frames with 21 identifiers, none wrong, after it). The decoder asked for
+  three samples a bit of the data rate before it read anything. It asks for three a bit of the nominal rate;
+  a frame that switches to a data rate the record cannot show gives its identifier and "TOO FAST" (host-tested;
+  the bus has no such frame).
+- SPI on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: data, clock and chip select of a
+  5 V bus at 200 kbit/s, one word a frame every 500 us and a frame of 16 words now and then; clock and chip select
+  on 10:1 probes that the channels read as 1:1, so 0.5 V beside the 5 V of the data). The decoder reads it right:
+  441 words in 200 ms, the 64 steps of the sine they draw and the frames of several words, none wrong, down to
+  2.5 samples a bit. Band, bit marks, Events pane, a tap on a row and the thresholds from the signals work on it.
+  Three flaws it showed are fixed, each seen on the unit before and after:
+  - Events pane: a frame of several words read "B0 ...". The MOSI column was as wide as the words of the first
+    rows, and the MISO column, which was empty, had the rest of the pane. A column that no row of the record
+    fills is left out (MISO of a bus read on one line, the slow channel of a SENT sensor without one), and the
+    columns of the data share what is left.
+  - Bus trigger: it never fired where the line the frames start on had a threshold of its own (the edge on the
+    chip select). The hardware edge on that line was at the threshold of the data line, 2.6 V on a chip select of
+    0.5 V, so Normal waited for ever and Auto showed records that were not on the word asked for. The edge is at
+    the threshold of its line: every frame holds still at once, a word that comes every 150 ms after some
+    seconds, since the word is looked for in the records the edge gives. The SPI and I2C triggers in the receiver
+    (`trig.serial_hw = on`, off by default) give each line its threshold likewise; that part is host-tested and
+    not yet verified on hardware.
+  - A record with too few samples for the clock listed words that were none: at 50 ms/div and 100 kpts,
+    125 kSa/s for a clock of 200 kHz, the frames of one word gave nothing and the frame of 16 words read
+    "05 05 05 05". Where most frames have clock edges and not one whole word, the band says "Frames shorter than
+    a word: too few samples for the clock, or Data bits" and lists nothing, and `:BUS<n>:DATA?` answers -230 with
+    that text. The same note stands for Data bits 16 on frames of 8, which was an empty band (host-tested).
+- UART on a channel of the scope, checked on a unit (DHO924S, 2026-11-19: 9600 baud, two lines of text with a
+  pause of one character in them): 236 characters in 800 ms, none wrong; the band beside the SPI band, the Events
+  pane with both decoders, the Lines view with the two lines, and the bus trigger holding a character still.
+- Studio: a narrow channel pill shows its scale whole or not at all (host-tested; the fault seen on a unit).
+  With four channels, a math trace and a decoder in the bottom bar, 100 mV read "100n": the text was cut by the
+  pixel, and half an "m" is an "n". The scale is tried as "100 mV", "100mV" and "100m"; where none of them has
+  room the pill keeps its badge alone.
 - Decoders: the Events pane has the columns of the protocol (host-tested, and on captures of real CAN and LIN
   buses on the host; not yet verified on hardware). A frame was one text ("SOF ID 101 01 03 CRC 562D ACK"). Where
   the pane lists messages, is at least 560 px wide and every decoder that is on has the same columns, a frame has

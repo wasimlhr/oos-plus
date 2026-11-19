@@ -175,8 +175,16 @@ pub fn lin_with(v: &[f32], dt: f64, baud: f64, checksum: LinChecksum, thr: f32, 
 pub static FLEXRAY: ModuleInfo = ModuleInfo::new("FlexRay", "FlexRay", "automotive")
     .differential()
     .starts_on(BusWhat::Id, 0x2a)
-    .bit(|_, _| 0.1e-6)
-    .decoder(|l| Ok(flexray(l.main(), l.dt, 10e6, l.thr, l.hy, false)));
+    .bit(|opt, _| 1.0 / flexray_rate(opt))
+    .decoder(|l| Ok(flexray(l.main(), l.dt, flexray_rate(&l.opt), l.thr, l.hy, false)));
+
+/// The bit rates of a FlexRay cluster, the option row of the ui's module.
+pub const FLEXRAY_RATES: [f64; 3] = [10e6, 5e6, 2.5e6];
+
+/// The rate the option says.
+fn flexray_rate(opt: &[usize; OPTS]) -> f64 {
+    FLEXRAY_RATES[opt[0].min(FLEXRAY_RATES.len() - 1)]
+}
 
 /// FlexRay frames (FlexRay Protocol Specification V3.0.1) on one channel at `rate` (normally 10 Mbit/s), as on the
 /// transceiver RxD pin (idle high; `invert` = low) or a BP − BM difference from `diff` (idle 0 V reads as high).
@@ -311,8 +319,14 @@ pub static SENT: ModuleInfo = ModuleInfo::new("Sent", "SENT", "automotive")
 /// nibble), Data (the data nibbles, the first one most significant; value2 = their count), Crc (received CRC
 /// nibble, `ok` = matches `sent_crc`, recommended method) and Field("PAUSE") (value = ticks). With a nominal tick a
 /// nibble out of 0..15 after a sync gives Field("!ERR"); frames cut by the record end are skipped.
+///
+/// The slow channel: two bits of the status nibble of each frame carry a serial message over 16 or 18 frames
+/// (`sent_slow`). At the end of the frame that completes one stand Field("SID") (its identifier), Field("SDATA")
+/// (its data; value2 = their number of bits) and Field("SCRC") (its CRC, `ok` = it matches).
 pub fn sent(v: &[f32], dt: f64, tick: Option<f64>, nibbles: usize, thr: f32, hyst: f32) -> Vec<Packet> {
     let mut out = Vec::new();
+    // the status nibble of each frame in order and where the frame ends; `None` where the chain of frames breaks
+    let mut chain: Vec<Option<(u32, f64)>> = Vec::new();
     if dt.is_nan() || dt <= 0.0 {
         return out;
     }
@@ -368,6 +382,7 @@ pub fn sent(v: &[f32], dt: f64, tick: Option<f64>, nibbles: usize, thr: f32, hys
         out.push(Packet::field("SYNC", f[i], f[i + 1], (tk * dt * 1e9).round() as u32, tick_ok));
         if let Some(k) = bad {
             out.push(Packet::tag("!ERR", f[i + 1 + k], f[i + 2 + k], false));
+            chain.push(None);
             i += 1 + k;
             continue;
         }
@@ -383,14 +398,92 @@ pub fn sent(v: &[f32], dt: f64, tick: Option<f64>, nibbles: usize, thr: f32, hys
             vals[nn + 1],
             vals[nn + 1] == sent_crc(&data, false) as u32,
         ));
-        i += nn + 3; // the edge that ends the CRC nibble
-                     // a pause pulse: followed by a sync of this tick
+        // the edge that ends the CRC nibble
+        i += nn + 3;
+        chain.push(Some((vals[0], f[i])));
+        // a pause pulse: followed by a sync of this tick
         if let (Some(&a), Some(&b)) = (f.get(i + 1), f.get(i + 2)) {
             let p = (a - f[i]) / tk;
             if (11.5..=768.5).contains(&p) && ((b - a) / (56.0 * tk) - 1.0).abs() < 0.1 {
                 out.push(Packet::field("PAUSE", f[i], a, p.round() as u32, true));
                 i += 1;
             }
+        }
+    }
+    // the serial messages of the slow channel, each at the end of the frame that completes it (after the pause
+    // pulse that begins there: the sort keeps the order of fields that begin together)
+    let slow = sent_slow(&chain);
+    if !slow.is_empty() {
+        out.extend(slow);
+        out.sort_by(|a, b| a.t0.total_cmp(&b.t0));
+    }
+    out
+}
+
+/// The CRC of a SENT enhanced serial message (SAE J2716): polynomial x^6 + x^4 + x^3 + 1, seed 010101, over the 24
+/// message bits and six zero bits after them.
+pub fn sent_crc6(bits: &[bool]) -> u8 {
+    let mut c = 0x15u8;
+    for bit in bits.iter().copied().chain([false; 6]) {
+        let top = c & 0x20 != 0;
+        c = (c << 1 | bit as u8) & 0x3f;
+        if top {
+            c ^= 0x19;
+        }
+    }
+    c
+}
+
+/// The serial messages of the SENT slow channel in a chain of frames (`sent`: the status nibble of each frame and
+/// the time the frame ends; `None` breaks the chain). Bit 3 of the status nibble frames a message and bit 2 carries
+/// its data, one bit a frame:
+///
+/// - the short message, 16 frames: bit 3 is 1 in the first frame and 0 in the other fifteen; bit 2 holds a 4-bit
+///   identifier, 8 data bits and a 4-bit CRC (`sent_crc` over the three nibbles);
+/// - the enhanced message, 18 frames: bit 3 holds 1111110, a configuration bit, four identifier bits, 0, four more
+///   bits, 0; bit 2 holds a 6-bit CRC and 12 data bits. With the configuration bit 0 the identifier has 8 bits (the
+///   two groups of four on bit 3) and the data 12; with 1 the identifier has 4 bits and the second group of four is
+///   the top of 16 data bits (assumed: no capture of that form was at hand). The CRC (`sent_crc6`) is over the bits
+///   of frames 7 to 18, bit 2 then bit 3 of each frame.
+///
+/// For each message: Field("SID"), Field("SDATA") (value2 = the number of data bits) and Field("SCRC"), without a
+/// length, at the end of its last frame.
+pub fn sent_slow(chain: &[Option<(u32, f64)>]) -> Vec<Packet> {
+    let mut out = Vec::new();
+    // the two bits of frame `k`, when the chain holds from `from` to it
+    let b3 = |k: usize| chain.get(k).copied().flatten().map(|(s, _)| s & 8 != 0);
+    let b2 = |k: usize| chain.get(k).copied().flatten().map(|(s, _)| s & 4 != 0);
+    type Bits<'a> = &'a dyn Fn(usize) -> Option<bool>;
+    let all = |mut range: std::ops::Range<usize>, get: Bits, want: bool| range.all(|k| get(k) == Some(want));
+    let bit = |get: Bits, k: usize| get(k).unwrap_or(false) as u32;
+    let word = |range: std::ops::Range<usize>, get: Bits| range.fold(0u32, |v, k| v << 1 | bit(get, k));
+    let mut emit = |at: f64, id: u32, data: u32, bits: u32, crc: u32, ok: bool| {
+        out.push(Packet::field("SID", at, at, id, true));
+        out.push(Packet::field("SDATA", at, at, data, true).with_value2(bits));
+        out.push(Packet::field("SCRC", at, at, crc, ok));
+    };
+    let mut k = 0;
+    while k < chain.len() {
+        let whole = |n: usize| (k..k + n).all(|j| chain.get(j).copied().flatten().is_some());
+        let end = |n: usize| chain[k + n - 1].map_or(0.0, |x| x.1);
+        let zero = |j: usize| b3(k + j) == Some(false);
+        if whole(18) && all(k..k + 6, &b3, true) && zero(6) && zero(12) && zero(17) {
+            let wide = b3(k + 7) == Some(true);
+            let (high, low) = (word(k + 8..k + 12, &b3), word(k + 13..k + 17, &b3));
+            let data12 = word(k + 6..k + 18, &b2);
+            let (id, data, bits) = if wide { (high, low << 12 | data12, 16) } else { (high << 4 | low, data12, 12) };
+            let crc = word(k..k + 6, &b2);
+            let pair = |j: usize| [b2(j).unwrap_or(false), b3(j).unwrap_or(false)];
+            let message: Vec<bool> = (k + 6..k + 18).flat_map(pair).collect();
+            emit(end(18), id, data, bits, crc, crc == sent_crc6(&message) as u32);
+            k += 18;
+        } else if whole(16) && b3(k) == Some(true) && all(k + 1..k + 16, &b3, false) {
+            let (id, data, crc) = (word(k..k + 4, &b2), word(k + 4..k + 12, &b2), word(k + 12..k + 16, &b2));
+            let ok = crc == sent_crc(&[id as u8, (data >> 4) as u8, (data & 15) as u8], false) as u32;
+            emit(end(16), id, data, 8, crc, ok);
+            k += 16;
+        } else {
+            k += 1;
         }
     }
     out

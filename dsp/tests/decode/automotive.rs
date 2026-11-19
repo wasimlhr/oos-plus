@@ -219,6 +219,71 @@ fn sent_frames_with_pause_and_tick_tolerance() {
     assert_eq!(skv(&sent(&v, 0.3e-6, Some(3e-6), 3, 2.5, 0.5)), sent_want(&fr3, 3000));
 }
 
+/// The status nibbles of an enhanced serial message of the slow channel: identifier of 8 bits, 12 data bits.
+fn sent_enhanced(id: u32, data: u32) -> Vec<u8> {
+    let bit = |v: u32, i: u32| v >> i & 1 == 1;
+    // bit 3 of the 18 frames: 1111110, the configuration bit 0, four identifier bits, 0, four more, 0
+    let mut b3 = vec![true, true, true, true, true, true, false, false];
+    b3.extend((4..8).rev().map(|i| bit(id, i)));
+    b3.push(false);
+    b3.extend((0..4).rev().map(|i| bit(id, i)));
+    b3.push(false);
+    let d: Vec<bool> = (0..12).rev().map(|i| bit(data, i)).collect();
+    let message: Vec<bool> = (0..12).flat_map(|n| [d[n], b3[6 + n]]).collect();
+    let crc = sent_crc6(&message) as u32;
+    let b2: Vec<bool> = (0..6).rev().map(|i| bit(crc, i)).chain(d).collect();
+    // (the two low bits of the status nibble are the sensor's own)
+    (0..18).map(|k| (b3[k] as u8) << 3 | (b2[k] as u8) << 2 | 1).collect()
+}
+
+/// The slow channel: a serial message over the status nibbles of 18 frames (enhanced) or 16 (short) is listed at the
+/// end of the frame that completes it, with its identifier, its data and its CRC.
+#[test]
+fn sent_slow_channel_messages() {
+    let slow = |p: &[Packet]| -> Vec<(Kind, u32, Option<u32>, bool)> {
+        let keep = |x: &&Packet| matches!(x.kind, Kind::Field("SID" | "SDATA" | "SCRC"));
+        p.iter().filter(keep).map(|x| (x.kind, x.value, x.value2, x.ok)).collect()
+    };
+    // identifier 07, data 075: its CRC is 01, as a capture of a real bus has it and the instrument that took it
+    // reads it
+    let status = sent_enhanced(0x07, 0x075);
+    let chain: Vec<Option<(u32, f64)>> = status.iter().enumerate().map(|(k, &s)| Some((s as u32, k as f64))).collect();
+    let got = sent_slow(&chain);
+    let want = [(F("SID"), 0x07, None, true), (F("SDATA"), 0x075, Some(12), true), (F("SCRC"), 0x01, None, true)];
+    assert_eq!(slow(&got), want);
+    assert!(got.iter().all(|x| x.t0 == 17.0 && x.t1 == 17.0), "at the end of the 18th frame");
+    // one data bit turned: the CRC does not match
+    let mut turned = chain.clone();
+    turned[10] = turned[10].map(|(s, t)| (s ^ 4, t));
+    assert_eq!(slow(&sent_slow(&turned))[2].3, false);
+    // a frame missing in the chain: no message
+    let mut broken = chain.clone();
+    broken[9] = None;
+    assert!(sent_slow(&broken).is_empty());
+    // two messages one after the other, with frames before them that are none
+    let mut twice = vec![Some((0u32, 0.0)); 3];
+    twice.extend(chain.iter().cloned());
+    twice.extend(chain.iter().cloned());
+    assert_eq!(sent_slow(&twice).len(), 6);
+    // the short message, 16 frames: identifier 3, data A5, the CRC of the fast channel over its three nibbles
+    let crc = sent_crc(&[0x3, 0xa, 0x5], false) as u32;
+    let word = 0x3 << 12 | 0xa5 << 4 | crc;
+    let status = |k: u32| (k == 0) as u32 * 8 | (word >> (15 - k) & 1) * 4;
+    let short: Vec<Option<(u32, f64)>> = (0..16).map(|k| Some((status(k), k as f64))).collect();
+    let want_short = [(F("SID"), 3, None, true), (F("SDATA"), 0xa5, Some(8), true), (F("SCRC"), crc, None, true)];
+    assert_eq!(slow(&sent_slow(&short)), want_short);
+    // through the signal: 18 frames with those status nibbles, and the message stands in the last of them
+    let frame = |&s: &u8| SentFrame { status: s, data: vec![1, 2, 3, 4, 5, 6], crc: None, pause: 77 };
+    let fr: Vec<SentFrame> = sent_enhanced(0x07, 0x075).iter().map(frame).collect();
+    let (tick, dt) = (3e-6, 0.3e-6);
+    let p = sent(&gen::sent(&fr, tick, 0.0, 5.0).sample(dt, 10.0 * tick), dt, Some(tick), 6, 2.5, 0.5);
+    assert_eq!(slow(&p), want);
+    let at = p.iter().position(|x| x.kind == F("SID")).unwrap();
+    let syncs_before = p[..at].iter().filter(|x| x.kind == F("SYNC")).count();
+    let syncs_after = p[at + 3..].iter().filter(|x| x.kind == F("SYNC")).count();
+    assert_eq!((syncs_before, syncs_after), (18, 0), "in the 18th frame");
+}
+
 #[test]
 fn sent_crc_error_invalid_nibble_and_cut_frames() {
     let mut fr = frames();

@@ -8,7 +8,7 @@
 //! (ADR 0002).
 
 use super::{field_be, modbus_crc, opt_baud, uart, Byte, Kind, Packet, Parity};
-use crate::protocols::ModuleInfo;
+use crate::protocols::{BusWhat, ModuleInfo};
 
 /// Modbus ASCII LRC: two's complement of the 8-bit sum.
 pub fn modbus_lrc(bytes: &[u8]) -> u8 {
@@ -21,6 +21,9 @@ pub const PARITIES: [Parity; 3] = [Parity::None, Parity::Even, Parity::Odd];
 /// Modbus RTU on one line or an RS-485 pair.
 pub static MODBUS_RTU: ModuleInfo = ModuleInfo::new("ModbusRtu", "Modbus RTU", "modbus")
     .differential()
+    // a frame begins with its address: the line has no field before it (the generic rule knows no frame here, and
+    // Trigger > Bus > Frame never fired)
+    .trigger(|what, _, p| (what == BusWhat::Frame).then(|| matches!(p.kind, Kind::Addr { .. })))
     .bit(|opt, _| 1.0 / opt_baud(opt, 0))
     .decoder(|l| Ok(modbus_rtu(l.main(), l.dt, opt_baud(&l.opt, 0), PARITIES[l.opt[1]], l.thr, l.hy, false)));
 

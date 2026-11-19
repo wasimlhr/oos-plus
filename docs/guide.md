@@ -178,11 +178,19 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   acknowledge) and marks where each was sampled. An I2C byte that was not acknowledged is an error, except the one
   a controller ends a read with; an address of ten bits is one field ("2A5 W")
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
-- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes its bit rate
-  from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses what a frame is
-  checked against
+- Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. FlexRay is read at the
+  Bit rate set (10, 5 or 2.5 Mbit/s), on either channel. A MIL-STD-1553 word says what it is: a command its
+  terminal, direction, subaddress and count ("RT 17 R SA 02 WC 02"), a status word its terminal and flags. LIN
+  takes its bit rate from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses
+  what a frame is
+  checked against; SENT lists the messages of its slow channel; an error flag of CAN is listed as an error
+  frame
 - Audio, lighting, industrial: I2S, S/PDIF, DMX512, Modbus RTU, Modbus ASCII
 - Other: USB low/full speed, USB PD, parallel
+- Line codes: Manchester, MLT-3, C-PHY. A Manchester line that is quiet between its packets is read packet by
+  packet. A packet is its bits in the order sent, or its bytes; with Decode > Sync bits or Header bits above 0 it
+  is cut into fields: so many bits of sync, so many of header, words of Data bits, and what is left as the
+  trailer ("SYNC 0 HDR 7 3C TRL 2"), each field with its first bit as the least significant
 - Model railways: NMRA DCC (contributed by Arjen Halma), with a view of the layout in Display > Second pane > Bus view:
   locomotives, turnouts, signals, and the track status, green while live and red after an emergency stop
 - New decoders come as protocol modules: one file, one registration ([docs/protocol-modules.md](protocol-modules.md))
@@ -816,7 +824,8 @@ shows the gain over frequency, the settings come back afterwards.
 and peaks, decoder Events, or Trend with two charts. Tap the pane's title for its settings, a trend chart to change its
 measurement, the peak list's button to sort it. The x closes the pane. The Events pane has its choices in its head:
 Messages (a frame of the protocol is one row, with the columns of the protocol where the pane is wide: ID, DLC, Data
-and CRC for CAN; for a UART or SPI without a chip select a row is what was sent without a long pause), Fields
+and CRC for CAN, without a column that no row fills, as MISO of an SPI bus read on one line; for a UART or SPI
+without a chip select a row is what was sent without a long pause), Fields
 (a row per character or field) or Lines (a character
 stream split at its line feeds), and Errors only. Its list scrolls by the bar or the finger, and a tap on a row marks
 that message: the row, its box in the decoder's band and its time on the plot. A stopped scope also moves the view to
@@ -825,7 +834,9 @@ the time and the text. Decode > Threshold to middle
 puts a decoder's threshold half way between the levels of its signal, for each of its lines by itself: a line can
 have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels; in Studio
 the thresholds are on the Levels page of the Decode sheet. An SPI decoder reads a second data line when MISO has a
-source, and each chip-select frame is one message.
+source, and each chip-select frame is one message. Where most frames end before a word is whole, its band says
+"Frames shorter than a word" and lists nothing: the record has too few samples for the clock (a slow time base
+with a short memory; more Memory or a faster time base helps), or Data bits is more than a frame has.
 In Studio each decoder that is on has a pill in the bottom bar; a tap on it opens that decoder's Decode sheet with a
 row for each of its lines.
 
@@ -849,7 +860,9 @@ own screen does not slow down for it. Pause stops the pictures, and a tab in the
 
 **Files.** Setups are kept on OOS's own persistent area `/oos` and survive a power cycle. Screenshots and CSV files go to
 a USB stick in the front port (FAT32, exFAT or ext4), into the folder `OOS`, and can be pulled whenever nothing is being
-saved. Without a stick they go to `/tmp/oos`, which is in RAM and lost at power-off, unless you set another directory
+saved. Reference > Load file lists the waveform files of the stick wherever they lie, three folders deep; the scope has
+no file manager. Without a stick they go to `/tmp/oos`, which is in RAM and lost at power-off, unless you set another
+directory
 with `--store-dir`. The web remote saves them to your computer too. `/oos` holds 16 MiB for calibration and settings.
 
 **File names.** A row of the Storage menu that saves (a session, a waveform, a screenshot, the fast-frame history, a

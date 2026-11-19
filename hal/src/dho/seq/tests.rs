@@ -234,6 +234,12 @@ fn holdoff_is_written_when_it_matters() {
     assert!(has(&st.trigger(&on)));
     assert!(has(&st.trigger(&base)), "back to none must reach the hardware");
     assert!(!has(&st.trigger(&base)));
+    // a holdoff of one batch (`holdoff_steps`): 2 ms and 8 ns are 312 501 ticks of 6.4 ns; the set-up after it
+    // writes the holdoff of the settings again
+    let w = st.holdoff_steps(&base, 2e-3);
+    assert_eq!(w.iter().find(|x| x.0 == 0x2084).map(|x| x.1), Some(312_501));
+    assert!(has(&st.trigger(&base)), "the set holdoff after one of a batch");
+    assert!(!has(&st.trigger(&base)));
 }
 
 use super::*;

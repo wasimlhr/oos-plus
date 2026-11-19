@@ -179,13 +179,15 @@ impl Protocol for Spi {
 pub struct Can;
 
 impl Protocol for Can {
-    /// A frame in the Events pane: its identifier, the number of its data bytes, the bytes, the CRC.
+    /// A frame in the Events pane: its identifier (an error frame says so there), the number of its data bytes, the
+    /// bytes, the CRC.
     fn columns(&self) -> &'static [(&'static str, Col)] {
-        &[("ID", Col::Label("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
+        &[("ID", Col::LabelOr("ID ")), ("DLC", Col::Count), ("Data", Col::Data), ("CRC", Col::Label("CRC "))]
     }
-    /// A frame begins with its start of frame.
+    /// A frame begins with its start of frame; an error flag outside a frame is a message of its own.
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
-        Some(|p| p.kind == oos_dsp::decode::Kind::Start)
+        use oos_dsp::decode::Kind;
+        Some(|p| matches!(p.kind, Kind::Start | Kind::Field("!ERROR FRAME")))
     }
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::CAN
@@ -258,6 +260,17 @@ impl Protocol for Parallel {
     fn shared(&self) -> &'static [Row] {
         &[Row::Bits]
     }
+    /// A counter of three bits, 0 to 7 and round again, with a clock of 500 kHz whose rising edge stands in the
+    /// middle of each value. The lines are a bank as the decoder takes one: D0 and D1 on the first two, the clock
+    /// on the third (its role), D2 on the fourth.
+    fn demo(&self) -> Option<Demo> {
+        const STEP: f64 = 2e-6;
+        let data = |bit: u32| -> Option<DemoLine> {
+            Some(Box::new(move |t: f64| if ((t / STEP) as u32 >> bit) & 1 == 1 { 3.3 } else { 0.0 }))
+        };
+        let clock: DemoLine = Box::new(|t: f64| if (t / STEP).fract() >= 0.5 { 3.3 } else { 0.0 });
+        Some(Demo { period: 8.0 * STEP, lines: [data(0), data(1), Some(clock), data(2)] })
+    }
     /// D0..D2 on CH1..CH3, the clock on CH4, every channel on (LA: D0).
     fn setup(&self) -> Setup {
         Setup {
@@ -278,6 +291,79 @@ impl Protocol for Cphy {
     }
     fn shared(&self) -> &'static [Row] {
         &[Row::CphyRate]
+    }
+    /// A low-power state, the preamble and the post last for a time and are boxes with their name, not the marks
+    /// of an event: "LP-001" (the lines A, B, C), "PRE 28" (its symbols), "SYNC", "POST". A word is its 16 bits.
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        use oos_dsp::decode::Kind;
+        match p.kind {
+            Kind::Field(label) if label.starts_with("!LP") => Some(format!("LP-{}", &label[3..])),
+            Kind::Field("PRE") => Some(format!("PRE {}", p.value)),
+            Kind::Field("SYNC") => Some("SYNC".into()),
+            // the header of a packet: the virtual channel and the data type, the word count; the second header,
+            // which says the same, as one field; a byte as its two digits (a word has four)
+            Kind::Field("DT") => Some(format!("VC {} DT {:02X}", p.value2.unwrap_or(0), p.value)),
+            Kind::Field("WC") => Some(format!("WC {}", p.value)),
+            Kind::Field("COPY") => Some(format!("COPY{}", if p.ok { "" } else { " !" })),
+            // the command of the escape mode, named where it is the one for low-power data
+            Kind::Field("ESC") if p.value == oos_dsp::cphy::LPDT => Some(format!("ESC {:02X} LPDT", p.value)),
+            Kind::Field("ESC") => Some(format!("ESC {:02X}", p.value)),
+            Kind::Data => Some(format!("{:02X}", p.value)),
+            Kind::Crc => Some(format!("CRC {:04X}{}", p.value, if p.ok { "" } else { " !" })),
+            Kind::Word { .. } => Some(format!("{:04X}", p.value)),
+            Kind::Stop => Some("POST".into()),
+            _ => None,
+        }
+    }
+    /// A burst that is a packet in the Events pane: its virtual channel, data type and word count, its bytes, and
+    /// the checksums of the header and of the payload.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[
+            ("VC", Col::Part("VC ", 1)),
+            ("DT", Col::Part("VC ", 3)),
+            ("WC", Col::Label("WC ")),
+            ("Data", Col::Data),
+            ("CRC", Col::Label("CRC ")),
+        ]
+    }
+    /// A message is what a lane does from one stop state (all three lines high) to the next: a burst with the
+    /// low-power states that ask for it, or low-power data.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("!LP111"))
+    }
+    /// A lane at a symbol a nanosecond: the stop state, the request for a burst (C high, all low), a burst with a
+    /// short packet (virtual channel 1, data type 00, the data 01 00) and the stop state again. The low-power levels
+    /// are 0 and 1.2 V, the three of a burst 0, 0.2 and 0.4 V.
+    fn demo(&self) -> Option<Demo> {
+        use oos_dsp::cphy::{crc16, states_for_symbols, symbols_for_word, wire_values};
+        const SYMBOL: f64 = 1e-9;
+        // what the lines hold and until when: low-power states of 12 symbol times each, then a state a symbol
+        let mut held: Vec<(f64, [f32; 3])> = Vec::new();
+        let mut t = 0.0;
+        let mut hold = |time: f64, lines: [f32; 3]| {
+            t += time;
+            held.push((t, lines));
+        };
+        let low_power = |lines: [u8; 3]| lines.map(|l| 1.2 * l as f32);
+        hold(12.0 * SYMBOL, low_power([1, 1, 1]));
+        hold(12.0 * SYMBOL, low_power([0, 0, 1]));
+        hold(12.0 * SYMBOL, low_power([0, 0, 0]));
+        let header = [0x4000u16, 0x0001, crc16([0x00, 0x40, 0x01, 0x00])];
+        let mut symbols = vec![3u8; 14];
+        for _ in 0..2 {
+            symbols.extend([3, 4, 4, 4, 4, 4, 3]);
+            // (a word with its least significant symbol first)
+            header.iter().for_each(|&w| symbols.extend(symbols_for_word(w).iter().rev()));
+        }
+        symbols.extend([4; 14]);
+        states_for_symbols(0, &symbols).into_iter().for_each(|state| hold(SYMBOL, wire_values(state)));
+        hold(12.0 * SYMBOL, low_power([1, 1, 1]));
+        let period = t;
+        let line = |k: usize| -> Option<DemoLine> {
+            let held = held.clone();
+            Some(Box::new(move |t: f64| held[held.partition_point(|h| h.0 <= t).min(held.len() - 1)].1[k] as f64))
+        };
+        Some(Demo { period, lines: [line(0), line(1), line(2), None] })
     }
     /// A, B, C on CH1..CH3, the receiver's 20 mV threshold, 16-bit words; the analog channels, not the LA.
     fn setup(&self) -> Setup {
@@ -309,5 +395,94 @@ mod tests {
         assert_eq!(I2c.text(&Packet { ok: false, ..addr(false) }, &with).as_deref(), Some("A0 W N"));
         assert!(I2c.text(&Packet { kind: Kind::Data, ..addr(false) }, &with).is_none());
         assert_eq!(I2c.options()[0].choices[I2c.options()[0].default], "Left out");
+    }
+
+    /// An SPI bus the record has too few samples for: the frames of one word give nothing and a long frame gives
+    /// words that are none. The decoder says what is wrong; it lists no such words.
+    #[test]
+    fn spi_says_when_the_frames_are_shorter_than_a_word() {
+        use oos_dsp::decode::SPI_CUT;
+        use oos_dsp::sim::{sample, spi_logic};
+        let m = Spi;
+        // one word a frame, a frame every 50 us, clock 200 kHz; every eighth frame has 16 words
+        let short = spi_logic(&[(0xa5, 0)], 8, 0, 200e3, 0.0, 3.3);
+        let words: Vec<(u32, u32)> = (0..16).map(|k| (k, 0)).collect();
+        let long = spi_logic(&words, 8, 0, 200e3, 0.0, 3.3);
+        let (period, burst) = (500e-6, 8.0 * 500e-6);
+        let line = |i: usize, dt: f64| -> Vec<f32> {
+            let v = |t: f64| {
+                let t = t.rem_euclid(burst);
+                if t < 2.0 * period { long[i].v(t) } else { short[i].v(t.rem_euclid(period)) }
+            };
+            sample(v, 0.0, dt, (40e-3 / dt) as usize)
+        };
+        let decode = |dt: f64, bits: u32| {
+            let [cs, clk, mosi] = [0, 1, 2].map(|i| line(i, dt));
+            let sh = Shared { bits, spi_mode: 0, ..shared(&crate::model::Model::default()) };
+            let lines = [Some(&mosi[..]), Some(&clk[..]), Some(&cs[..]), None];
+            m.info().decode(&Lines { lines, dt, thr: 1.65, hy: 0.2, opt: [0; OPTS], sh, chans: [None; 4], src: [None; 4] })
+        };
+        // 2.5 samples a bit, as on the unit: every word is read
+        let p = decode(2e-6, 8).unwrap();
+        let data: Vec<u32> = p.iter().filter(|x| x.kind == Kind::Data).map(|x| x.value).collect();
+        let first: Vec<u32> = (0..16).chain([0xa5, 0xa5]).collect();
+        assert_eq!((data.len(), &data[..18]), (10 * 22, &first[..]));
+        // 8 us a sample: under one sample a bit
+        assert_eq!(decode(8e-6, 8).err(), Some(SPI_CUT));
+        // enough samples, and Data bits 16 on frames of 8: the same note
+        assert_eq!(decode(2e-6, 16).err(), Some(SPI_CUT));
+    }
+
+    /// The demo lane of C-PHY reads as its low-power states and the short packet it carries.
+    #[test]
+    fn the_cphy_demo_is_a_burst_with_a_short_packet() {
+        let demo = Cphy.demo().unwrap();
+        let dt = 1e-9 / 20.0;
+        let wave = |k: usize| -> Vec<f32> {
+            let line = demo.lines[k].as_ref().unwrap();
+            (0..(2.0 * demo.period / dt) as usize).map(|i| line((i as f64 * dt) % demo.period) as f32).collect()
+        };
+        let (a, b, c, sh) = (wave(0), wave(1), wave(2), shared(&crate::model::Model::default()));
+        let lines = [Some(&a[..]), Some(&b[..]), Some(&c[..]), None];
+        let l = Lines { lines, dt, thr: 0.02, hy: 0.0, opt: [0; OPTS], sh, chans: [None; 4], src: [None; 4] };
+        let p = Cphy.info().decode(&l).unwrap();
+        let text = |x: &Packet| Cphy.text(x, &[0; OPTS]).unwrap_or_else(|| format!("{:?}", x.kind));
+        let said = p.iter().map(text).collect::<Vec<_>>().join(" ");
+        let round = "LP-111 LP-001 LP-000 PRE 14 SYNC VC 1 DT 00 01 00 CRC";
+        assert!(p.iter().all(|x| x.ok) && said.starts_with(round), "{said}");
+        assert_eq!(said.matches("SYNC COPY POST").count(), 2, "{said}");
+    }
+
+    /// The C-PHY fields that last for a time have their name as text, a burst is found at its first sync word only,
+    /// and a message begins at the stop state.
+    #[test]
+    fn cphy_names_its_fields_and_a_burst_is_a_frame_once() {
+        use oos_dsp::protocols::BusWhat;
+        let pk = |kind: Kind, value: u32| Packet { t0: 0.0, t1: 1.0, kind, value, value2: None, ok: true };
+        let text = |kind: Kind, value: u32| Cphy.text(&pk(kind, value), &[0; OPTS]);
+        assert_eq!(text(Kind::Field("!LP001"), 0).as_deref(), Some("LP-001"));
+        assert_eq!(text(Kind::Field("PRE"), 28).as_deref(), Some("PRE 28"));
+        assert_eq!(text(Kind::Field("SYNC"), 1).as_deref(), Some("SYNC"));
+        assert_eq!(text(Kind::Word { cmd: false }, 0x7290).as_deref(), Some("7290"));
+        // the fields of a packet
+        let dt = Packet { value2: Some(1), ..pk(Kind::Field("DT"), 0x2b) };
+        assert_eq!(Cphy.text(&dt, &[0; OPTS]).as_deref(), Some("VC 1 DT 2B"));
+        assert_eq!(text(Kind::Field("WC"), 22).as_deref(), Some("WC 22"));
+        assert_eq!(text(Kind::Field("COPY"), 0).as_deref(), Some("COPY"));
+        assert_eq!(text(Kind::Field("ESC"), 0x87).as_deref(), Some("ESC 87 LPDT"));
+        assert_eq!(text(Kind::Field("ESC"), 0x78).as_deref(), Some("ESC 78"));
+        assert_eq!(text(Kind::Data, 0xca).as_deref(), Some("CA"));
+        assert_eq!(text(Kind::Crc, 0x0e66).as_deref(), Some("CRC 0E66"));
+        assert_eq!(text(Kind::Stop, 0).as_deref(), Some("POST"));
+        // a symbol outside a word and the errors keep the text of its kind
+        assert!(text(Kind::Field("SYM"), 3).is_none() && text(Kind::Field("!CODE"), 0).is_none());
+        let rule = oos_dsp::cphy::CPHY.trigger;
+        let frame = |kind: Kind, value: u32| rule(BusWhat::Frame, 0, &pk(kind, value));
+        assert_eq!((frame(Kind::Field("SYNC"), 0), frame(Kind::Field("SYNC"), 1)), (Some(true), Some(false)));
+        assert_eq!(frame(Kind::Field("PRE"), 28), Some(false));
+        assert!(rule(BusWhat::Data, 0x7290, &pk(Kind::Word { cmd: false }, 0x7290)).is_none());
+        let begins = Cphy.frame_start().unwrap();
+        assert!(begins(&pk(Kind::Field("!LP111"), 0)));
+        assert!(!begins(&pk(Kind::Field("!LP000"), 0)) && !begins(&pk(Kind::Field("SYNC"), 0)));
     }
 }

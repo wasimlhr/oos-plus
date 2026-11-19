@@ -375,7 +375,7 @@ fn extended_decoders_decode_their_demo() {
     // (the modules DMX512, S/PDIF and USB PD run through the same path as every protocol)
     let m = |k: &str| Proto::from_key(k).unwrap();
     // every optional module with demo traffic has its case here (`protocols::tests::every_decoder_is_complete`)
-    let cases: [(Proto, f32, &str); 16] = [
+    let cases: [(Proto, f32, &str); 22] = [
         (m("Dcc"), 10e-3, "PRE"),
         (m("CanFd"), 50e-6, "BRS"),
         (m("Dmx512"), 100e-6, "SC"),
@@ -392,6 +392,12 @@ fn extended_decoders_decode_their_demo() {
         (m("Usb"), 5e-6, "ENDP"),
         (m("Mil1553"), 20e-6, "cmd: true"),
         (m("I2s"), 20e-6, "right: true"),
+        (m("Manchester"), 100e-6, "Data"),
+        (m("Mlt3"), 100e-6, "Data"),
+        (m("ModbusAscii"), 200e-6, "FUNC"),
+        (m("Ds2482"), 100e-6, "ROM"),
+        (m("Jtag"), 10e-6, "IR"),
+        (m("Qspi"), 20e-6, "CMD"),
     ];
     for (p, tdiv, want) in cases {
         let mut ui = crate::ui::testkit::demo_ui();

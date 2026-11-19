@@ -503,8 +503,8 @@ impl State {
                 tpu::video(ts, src, *std, true, *sync, *line, nv(s.level), &vt, tpu::VideoClk::Fast)
             }
             Trig::Uart(u) => tpu::uart(ts, src, u, nv(s.level), &vt),
-            Trig::Spi(x) => tpu::spi(ts, x, nv(s.level), &vt),
-            Trig::I2c(x) => tpu::i2c(ts, x, nv(s.level), &vt),
+            Trig::Spi(x) => tpu::spi(ts, x, nv(s.level), &s.line_level.map(|l| l.map(nv)), &vt),
+            Trig::I2c(x) => tpu::i2c(ts, x, nv(s.level), &s.line_level.map(|l| l.map(nv)), &vt),
         };
         // the shortest holdoff is what every trigger type leaves behind; once changed, it is written until it is back
         let set = (s.holdoff - HOLDOFF_MIN).abs() > 1e-12;
@@ -513,6 +513,13 @@ impl State {
         }
         self.holdoff_set = set;
         w
+    }
+
+    /// The holdoff of the next batch alone: `s.holdoff` and `extra` seconds on top of it (`Settings::holdoff_spread`).
+    /// Written between two batches, with nothing armed. The next trigger set-up writes `s.holdoff` again.
+    pub fn holdoff_steps(&mut self, s: &Settings, extra: f64) -> Vec<Write> {
+        self.holdoff_set = true;
+        tpu::holdoff(&mut self.ts, time_fs(s.holdoff + extra.max(0.0)))
     }
 
     /// One acquisition with the configured registers: arm, wait, read-out window, read.

@@ -13,7 +13,7 @@ use super::plan::{
 use super::serial::{i2c_of, serial_debug, serial_lines_acquired, spi_of, uart_debug, uart_of, SERIAL_HW};
 use super::settings::{
     live_compress, raw_for_ui, raw_newest, screen_margin, seg_max, seg_read_plan, settings, single_wants_more,
-    slow_mode, LIVE_DEPTH, ROLL_TDIV, SCAN_TDIV,
+    slow_mode, BUS_HOLDOFF_SPREAD, LIVE_DEPTH, ROLL_TDIV, SCAN_TDIV,
 };
 use super::trim::{overlay_in_use, TrimPending, CORE_OFFSET, TRIM_HOLD};
 use super::units::{
@@ -277,8 +277,23 @@ fn spi_and_i2c_from_the_decoder_settings() {
     assert_eq!((s.clk, s.data, s.cs, s.clk_falling, s.width), (2, 1, 3, false, 8));
     m.dec_mode = 1;
     assert!(spi_of(&m).unwrap().clk_falling);
+    // the levels: the threshold of the decoder on every line, and the one of its own a line has. The edge that
+    // stands in where the receiver is not used is on the chip select, at that line's threshold
+    m.dec_thr = 2.5;
+    let s = settings(&m, false);
+    assert_eq!((s.level, s.line_level), (2.5, [Some(2.5), Some(2.5), Some(2.5), None]));
+    m.dec_thr_line = [Some(0.25), Some(0.5), None];
+    let s = settings(&m, false);
+    assert_eq!((s.trig_src, s.level, s.line_level), (3, 0.5, [Some(2.5), Some(0.25), Some(0.5), None]));
+    m.trig_type = TrigType::Edge;
+    assert_eq!(settings(&m, false).line_level, [None; 4], "another trigger type has none");
+    assert_eq!(settings(&m, false).holdoff_spread, 0.0, "nor a holdoff of its own for each batch");
+    m.trig_type = TrigType::Bus;
     m.dec_cs = None;
     assert_eq!(spi_of(&m), None, "no chip select: software");
+    // the software decides on an edge of the line: each batch with a holdoff of its own
+    let s = settings(&m, false);
+    assert_eq!((s.trigger == Trig::Edge, s.holdoff_spread), (true, BUS_HOLDOFF_SPREAD));
     // I2C: SDA on dec_src, SCL on dec_src2
     let mut m = Model::default();
     (m.trig_type, m.dec_proto, m.dec_src, m.dec_src2) = (TrigType::Bus, Proto::I2C, 0, 1);
@@ -815,6 +830,30 @@ fn short_time_bases_read_beyond_the_screen() {
     assert_eq!(p.pre, 704);
     // the smallest records get at least 64 more points
     assert_eq!(screen_margin(62), 128);
+    // the protocol trigger the software decides: a frame of room on each side of the screen (CAN at 500 kbit/s:
+    // 200 bits, 400 us), so 10 us/div has 900 us of record where an edge trigger has a screen and an eighth
+    {
+        let mut b = m.clone();
+        b.tscale = tscales().iter().position(|&t| (t - 1e-5).abs() < 1e-9).unwrap();
+        // (the trigger and the decoder on the same channel: the same channels acquired)
+        (b.trig_src, b.dec_src, b.dec_proto) = (0, 0, Proto::CAN);
+        b.dec_canrate = crate::decode::CAN_RATES.iter().position(|&r| r == 500e3).unwrap();
+        let span = |b: &Model| {
+            let s = settings(b, false);
+            s.depth as f64 / hz::prep(s.mask, oos_hal::dho::seq::tdiv_fs(1e-5), s.depth, 0).rate as f64
+        };
+        // two channels, 625 MSa/s: 112.5 us, and 900 us
+        b.ch[1].on = true;
+        assert!((span(&b) - 112.5e-6).abs() < 1e-6, "{}", span(&b));
+        b.trig_type = TrigType::Bus;
+        assert!((span(&b) - 900e-6).abs() < 1e-6, "{}", span(&b));
+        // one channel at 1.25 GSa/s: the million points it may take, 800 us
+        b.ch[1].on = false;
+        assert_eq!((settings(&b, false).depth, span(&b)), (1_000_000, 800e-6));
+        // a set depth is the owner's
+        b.mdepth = mdepths().iter().position(|d| d.1 == 10_000).unwrap();
+        assert_eq!(settings(&b, false).depth, 10_000);
+    }
     // 1 ns/div: 12 points per screen, read 80 at the full rate (more than stock's smallest record, 62 at 5 ns)
     m.tscale = tscales().iter().position(|&t| (t - 1e-9).abs() < 1e-12).unwrap();
     assert!((tscales()[m.tscale] - 1e-9).abs() < 1e-12);

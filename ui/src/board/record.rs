@@ -39,10 +39,14 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
     // trigger condition needs before its decision (pulse widths, timeouts, Nth-edge idle time)
     let near = (screen / 10).max(2000);
     let span = (m.trig_span() / f.dt).ceil().max(0.0) as usize;
+    // the protocol trigger reads frames: one whose field stands near the hardware point is read to its end, a frame
+    // further. A decoder gives nothing of a frame that is cut off (CAN: seen on a unit, an identifier at the trigger
+    // point was found only in frames that ended within a tenth of a screen after it)
+    let after = if m.trig_type == TrigType::Bus { span } else { 0 };
     let (lo, hi) = if m.trig_type == TrigType::Video {
         (0, len)
     } else {
-        (f.pre.saturating_sub(near + span), (f.pre + near).min(len))
+        (f.pre.saturating_sub(near + span), (f.pre + near + after).min(len))
     };
     let e: [f32; 0] = [];
     let refs: [&[f32]; NCH] =
@@ -115,6 +119,13 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
         let nearest = |a: &f64, b: &f64| (a - f.pre as f64).abs().total_cmp(&(b - f.pre as f64).abs());
         let all: Vec<f64> = crate::trig::find_all(m, &inp).into_iter().map(|t| t + lo as f64).collect();
         all.iter().copied().filter(fits).min_by(nearest).or_else(|| {
+            // the protocol trigger: the hardware fires on any frame, and the field asked for is found in the record.
+            // Where it stands too far from the hardware point to be moved to the trigger point, the frame is none
+            // of this trigger: shown at the hardware point it had the T on another frame (seen on a unit: a CAN
+            // identifier 255 us left of the T at 50 us/div, with 100 kpts). Normal waits for a frame that fits
+            if m.trig_type == TrigType::Bus {
+                return None;
+            }
             // nothing of the set kind near `pre`: the hardware can fire on the other edge of a clean signal, so look
             // up to half a screen around it (edge trigger only, the others have their own time conditions)
             if m.trig_type != TrigType::Edge || near >= screen / 2 {
@@ -330,6 +341,166 @@ mod tests {
         let r = to_record(&Arc::new(f), &m, 3600, window, -window / 2.0);
         assert!(r.triggered);
         assert!(r.ch[0].iter().all(|y| y.is_finite()), "{} gaps", r.ch[0].iter().filter(|y| !y.is_finite()).count());
+    }
+
+    /// The protocol trigger: the frame is on the field asked for where that field can stand at the trigger point,
+    /// and is none of this trigger where it cannot (the screen window would leave the frame). Shown at the hardware
+    /// point such a frame had its T on whatever the hardware fired on.
+    #[test]
+    fn a_bus_match_that_cannot_stand_at_the_trigger_point_is_no_trigger() {
+        // a UART character 'T' at 115200 baud, 87 samples a bit: it ends `back` samples before the hardware point
+        // (the generator has ten bit times of quiet line before the character)
+        let frame = |back: usize| {
+            let (dt, len, pre) = (1e-7, 100_000usize, 50_000usize);
+            let l = oos_dsp::sim::uart_logic(b"T", 115_200.0, 8, None, 0.0, 0.0, 3.3);
+            let start = pre - back - 1736;
+            let wave = |i: usize| if i < start { 3.3 } else { l.v((i - start) as f64 * dt) as f32 };
+            let v: Vec<f32> = (0..len).map(wave).collect();
+            let f = Frame { seq: 1, dt, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() };
+            Arc::new(f)
+        };
+        let mut m = Model::default();
+        (m.trig_type, m.dec_proto, m.dec_src, m.dec_bits) = (TrigType::Bus, Proto::UART, 0, 8);
+        (m.dec_baud, m.dec_thr) = (crate::decode::BAUDS.iter().position(|&b| b == 115_200.0).unwrap_or(7), 1.65);
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Data, b'T' as u64);
+        // the screen is 80 000 of the frame's 100 000 samples: a match may stand 10 000 samples from the hardware point
+        let window = 80_000.0 * 1e-7;
+        let at = |back: usize| trigger_point(&frame(back), &m, 1000, window, -window / 2.0);
+        let near = at(500).expect("a character 500 samples before the hardware point is the trigger");
+        assert!((near - 49_500.0).abs() < 200.0, "{near}");
+        assert_eq!(at(20_000), None, "20 000 samples before it: the window would leave the frame");
+        // an edge trigger keeps the hardware point in such a frame, as before
+        m.trig_type = TrigType::Edge;
+        assert!(trigger_point(&frame(20_000), &m, 1000, window, -window / 2.0).is_some());
+    }
+
+    /// Trigger > Bus for every decoder with demo traffic, on a screen that is short against a frame (a tenth of it is
+    /// 40 bits). Frame: the traffic has frame starts, and one that stands at the hardware point is found there. ID
+    /// and Data: a field the condition can name, standing at the hardware point, is found there with its value.
+    /// With the search ending a tenth of a screen behind the hardware point the frame starts failed for CAN, CAN-FD
+    /// and FlexRay every time, and for USB, S/PDIF and DCC now and then.
+    #[test]
+    fn a_field_at_the_hardware_point_is_found_for_every_decoder() {
+        for i in 0..crate::protocols::MODULES.len() as u8 {
+            let p = crate::protocols::get(i);
+            let Some(d) = crate::protocols::demo(i) else { continue };
+            let mut m = Model::default();
+            (m.dec_proto, m.dec_opt) = (Proto::Module(i), crate::protocols::opt_default(i));
+            let line = |k: usize| d.lines[k].as_ref().map(|_| k);
+            (m.dec_src, m.dec_src2, m.dec_cs, m.dec_src4) = (0, 1, line(2), line(3));
+            (m.dec_thr, m.trig_type) = (p.setup().thr, TrigType::Bus);
+            // (its baud rate, bits ...: the traffic is made for them)
+            crate::ui::Ui::dec_apply_rows(&mut m, p.setup().rows);
+            // 50 samples a bit and 400 000 of them or more: the search region is 2000 samples each way
+            let dt = m.bus_bit() / 50.0;
+            let n = ((3.0 * d.period / dt) as usize).clamp(400_000, 3_000_000);
+            let ch: [Vec<f32>; NCH] = std::array::from_fn(|k| match &d.lines[k] {
+                Some(f) => (0..n).map(|j| f((j as f64 * dt).rem_euclid(d.period)) as f32).collect(),
+                None => Vec::new(),
+            });
+            let lines: [&[f32]; NCH] = std::array::from_fn(|k| &ch[k][..]);
+            let pk = crate::trig::decode(&m, lines, dt).unwrap_or_else(|e| panic!("{}: {e}", p.name()));
+            let (window, span) = (20_000.0 * dt, m.trig_span() / dt);
+            let inside = |t: f64| t > 60_000.0 && t < n as f64 - 60_000.0 - span;
+            let found = |m: &Model, t: f64| {
+                let f = Arc::new(Frame { seq: 1, dt, pre: t.round() as usize, ch: ch.clone(), ..Default::default() });
+                let at = trigger_point(&f, m, 1000, window, -window / 2.0);
+                let near = at.is_some_and(|x| (x - t).abs() < 60.0);
+                assert!(near, "{} {:?} {:#x} at {t}: found {at:?}", p.name(), m.trig_bus, m.trig_bus_val);
+            };
+            m.trig_bus = BusWhat::Frame;
+            let starts = crate::trig::points(&m, &pk);
+            assert!(!starts.is_empty(), "{}: no frame start in its demo traffic", p.name());
+            for &t in starts.iter().filter(|&&t| inside(t)).take(12) {
+                found(&m, t);
+            }
+            for what in [BusWhat::Id, BusWhat::Data] {
+                // MLT-3 has no frames: its decoder starts the bit grid at the first change of what it is given and
+                // counts bytes from there, so a byte of the whole record is another byte in a slice that begins
+                // elsewhere (7 of 40 bytes of the traffic were not found at their place)
+                if p.key() == "Mlt3" && what == BusWhat::Data {
+                    continue;
+                }
+                m.trig_bus = what;
+                let mut tried = 0;
+                for x in pk.iter().filter(|x| inside(x.t1)) {
+                    m.trig_bus_val = x.value as u64;
+                    // (a field this condition names with this value: its end is a trigger point of the whole record)
+                    if crate::trig::points(&m, &pk).iter().any(|t| (t - x.t1).abs() < 1.0) {
+                        found(&m, x.t1);
+                        tried += 1;
+                        if tried == 12 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The protocol trigger on a frame that the record cuts off, as on the unit: CAN at 500 kbit/s, 10 us/div,
+    /// 100 000 points at 625 MSa/s (160 us), a frame of 222 us whose identifier ends at the hardware point, so the
+    /// record ends 52 us into its data. The decoders gave nothing of a frame that is cut off, and the trigger took
+    /// no frame; they give the fields that are whole, and the trigger finds the identifier, with the CAN-FD decoder
+    /// too. (At 5 us/div the record there is 56 us and begins 4 us before the frame: too little of the quiet bus
+    /// before it to know its first edge for a start of frame, with any decoder.)
+    #[test]
+    fn a_bus_match_in_a_frame_the_record_cuts_off_is_found() {
+        use oos_dsp::sim::CanFrame;
+        let (dt, len, pre) = (1.6e-9, 100_000usize, 50_000usize);
+        let data = vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88];
+        let frames = [CanFrame { id: 0x057, ext: false, rtr: false, data }];
+        let l = oos_dsp::sim::can_logic(&frames, 500e3, 0.0, 3.3);
+        // (12 idle bits lead the wave; 50 us to the end of the identifier, which stands 2 us before the hardware point)
+        let lead = 52e-6 - pre as f64 * dt;
+        let v: Vec<f32> = (0..len).map(|i| l.v(i as f64 * dt + lead) as f32).collect();
+        let f = Arc::new(Frame { seq: 1, dt, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() });
+        let mut m = Model::default();
+        (m.trig_type, m.dec_src, m.dec_thr) = (TrigType::Bus, 0, 1.65);
+        (m.dec_canrate, m.dec_canh) = (crate::decode::CAN_RATES.iter().position(|&r| r == 500e3).unwrap(), false);
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Id, 0x057);
+        let window = 100e-6;
+        let fd = crate::protocols::MODULES.iter().position(|p| p.key() == "CanFd");
+        for proto in [Some(Proto::CAN), fd.map(|i| Proto::Module(i as u8))].into_iter().flatten() {
+            let Proto::Module(i) = proto;
+            (m.dec_proto, m.dec_opt) = (proto, crate::protocols::opt_default(i));
+            let at = trigger_point(&f, &m, 1000, window, -window / 2.0);
+            let at = at.expect("the identifier of a frame the record cuts off");
+            let back = (pre as f64 - at) * dt;
+            assert!((0.0..4e-6).contains(&back), "{back}");
+            // the band has what is whole of it: start, identifier and four data bytes
+            let lines: [&[f32]; NCH] = std::array::from_fn(|k| &f.ch[k][..]);
+            let p = crate::trig::decode(&m, lines, dt).unwrap();
+            let data: Vec<u32> = p.iter().filter(|x| x.kind == oos_dsp::decode::Kind::Data).map(|x| x.value).collect();
+            assert_eq!((p.len(), &data[..]), (6, &[0x11, 0x22, 0x33, 0x44][..]), "{p:?}");
+        }
+    }
+
+    /// The protocol trigger on a field at the start of a long frame: the frame ends far behind the hardware point,
+    /// and is read to its end. As on the unit: CAN at 500 kbit/s, 50 us/div, 100 kpts at 156.25 MSa/s, the
+    /// identifier ending 20 us before the hardware point and the frame 216 us after it.
+    #[test]
+    fn a_bus_match_at_the_start_of_a_long_frame_is_found() {
+        use oos_dsp::sim::CanFrame;
+        let (dt, len, pre) = (6.4e-9, 100_000usize, 50_000usize);
+        let frames = [CanFrame { id: 0x057, ext: false, rtr: false, data: vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88] }];
+        let l = oos_dsp::sim::can_logic(&frames, 500e3, 0.0, 3.3);
+        // 12 idle bits lead the wave, then the SOF, 11 identifier bits and one stuff bit: 50 us to the identifier's end
+        let start = pre - ((20e-6 + 50e-6) / dt) as usize;
+        let wave = |i: usize| if i < start { 3.3 } else { l.v((i - start) as f64 * dt) as f32 };
+        let v: Vec<f32> = (0..len).map(wave).collect();
+        let f = Arc::new(Frame { seq: 1, dt, pre, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() });
+        let mut m = Model::default();
+        (m.trig_type, m.dec_proto, m.dec_src, m.dec_thr) = (TrigType::Bus, Proto::CAN, 0, 1.65);
+        (m.dec_canrate, m.dec_canh) = (crate::decode::CAN_RATES.iter().position(|&r| r == 500e3).unwrap(), false);
+        (m.trig_bus, m.trig_bus_val) = (BusWhat::Id, 0x057);
+        let window = 500e-6;
+        let at = trigger_point(&f, &m, 1000, window, -window / 2.0).expect("the identifier of a frame that ends later");
+        let back = (pre as f64 - at) * dt;
+        assert!((14e-6..26e-6).contains(&back), "{back}");
+        // another identifier: none
+        m.trig_bus_val = 0x058;
+        assert_eq!(trigger_point(&f, &m, 1000, window, -window / 2.0), None);
     }
 }
 

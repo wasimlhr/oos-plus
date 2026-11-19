@@ -63,9 +63,60 @@ impl Protocol for Arinc429 {
 
 pub struct Mil1553;
 
+/// The flags of a MIL-STD-1553 status word: message error, instrumentation, service request, broadcast command
+/// received, busy, subsystem flag, dynamic bus control acceptance, terminal flag.
+const MIL1553_FLAGS: [(u32, &str); 8] = [
+    (0x400, "ME"),
+    (0x200, "INS"),
+    (0x100, "SRQ"),
+    (0x10, "BCR"),
+    (0x8, "BUSY"),
+    (0x4, "SSF"),
+    (0x2, "DBC"),
+    (0x1, "TF"),
+];
+
 impl Protocol for Mil1553 {
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::MIL1553
+    }
+    /// A command word says its terminal, the direction, the subaddress and the number of data words ("RT 17 R SA 02
+    /// WC 02"; a mode command its mode code, "MC 18"); a status word its terminal and the flags that are set ("ST 17
+    /// TF"); a data word its four digits. The numbers of a command are decimal, as the standard writes them.
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_COMMAND_2, MIL1553_STATUS};
+        let (v, bad) = (p.value, if p.ok { "" } else { " !P" });
+        match (p.kind, p.value2) {
+            (Kind::Word { cmd: false }, _) => Some(format!("{:04X}{}", v, bad)),
+            (Kind::Word { cmd: true }, Some(MIL1553_COMMAND | MIL1553_COMMAND_2)) => {
+                let (dir, sa, n) = (if v >> 10 & 1 == 1 { "T" } else { "R" }, v >> 5 & 31, v & 31);
+                let mode = sa == 0 || sa == 31;
+                let (what, n) = if mode { ("MC", n) } else { ("WC", if n == 0 { 32 } else { n }) };
+                Some(format!("RT {:02} {} SA {:02} {} {:02}{}", v >> 11, dir, sa, what, n, bad))
+            }
+            (Kind::Word { cmd: true }, Some(MIL1553_STATUS)) => {
+                let set = MIL1553_FLAGS.iter().filter(|f| v & f.0 != 0);
+                let flags: String = set.map(|f| format!(" {}", f.1)).collect();
+                Some(format!("ST {:02}{}{}", v >> 11, flags, bad))
+            }
+            _ => None,
+        }
+    }
+    /// A message begins with its command word.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == Kind::Word { cmd: true } && p.value2 == Some(oos_dsp::decode::MIL1553_COMMAND))
+    }
+    /// A message in the Events pane: the terminal, the direction, the subaddress and the count of its command (two
+    /// of each for a transfer between two terminals), its data words, and what the status says.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[
+            ("RT", Col::Part("RT ", 1)),
+            ("T/R", Col::Part("RT ", 2)),
+            ("SA", Col::Part("RT ", 4)),
+            ("WC/MC", Col::Part("RT ", 6)),
+            ("Data", Col::Data),
+            ("Status", Col::Label("ST ")),
+        ]
     }
     /// The sync of a word goes either way.
     fn start_edge(&self) -> Slope {
@@ -79,16 +130,40 @@ impl Protocol for Mil1553 {
             ..Setup::default()
         }
     }
-    /// A command word and three data words, +-7 V, every 120 us.
+    /// A message every 120 us, +-7 V: terminal 1 is asked for three words of its subaddress 1, and answers after
+    /// 7 us with its status word and the three words.
     fn demo(&self) -> Option<Demo> {
-        let l =
-            oos_dsp::sim::mil1553_wave(&[(true, 0x0c23), (false, 0xbeef), (false, 0x1234), (false, 0x00ff)], 7.0, 4.0);
+        let data = [(false, 0xbeef, 0.0), (false, 0x1234, 0.0), (false, 0x00ff, 4.0)];
+        let words = [&[(true, 0x0c23, 7.0), (true, 0x0800, 0.0)][..], &data[..]].concat();
+        let l = oos_dsp::sim::mil1553_message(&words, 7.0);
         Some(Demo { period: 120e-6, lines: [Some(Box::new(move |t| l.v(t))), None, None, None] })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    /// A word of MIL-STD-1553 as the band writes it: a command by its fields, a status word by its terminal and
+    /// its flags, a data word by its digits.
+    #[test]
+    fn a_1553_word_reads_as_its_fields() {
+        use super::*;
+        use oos_dsp::decode::{MIL1553_COMMAND as C, MIL1553_COMMAND_2 as C2, MIL1553_STATUS as S};
+        let text = |cmd: bool, value: u32, value2: Option<u32>, ok: bool| {
+            Mil1553.text(&Packet { t0: 0.0, t1: 1.0, kind: Kind::Word { cmd }, value, value2, ok }, &[0; OPTS])
+        };
+        assert_eq!(text(true, 0x8842, Some(C), true).as_deref(), Some("RT 17 R SA 02 WC 02"));
+        assert_eq!(text(true, 0x8c12, Some(C2), true).as_deref(), Some("RT 17 T SA 00 MC 18"));
+        // a count of 0 is 32 words; a mode code of 0 is 0
+        assert_eq!(text(true, 0x8840, Some(C), true).as_deref(), Some("RT 17 R SA 02 WC 32"));
+        assert_eq!(text(true, 0x8be0, Some(C), true).as_deref(), Some("RT 17 R SA 31 MC 00"));
+        assert_eq!(text(true, 0x8801, Some(S), true).as_deref(), Some("ST 17 TF"));
+        assert_eq!(text(true, 0x9000, Some(S), true).as_deref(), Some("ST 18"));
+        assert_eq!(text(true, 0x9404, Some(S), false).as_deref(), Some("ST 18 ME SSF !P"));
+        assert_eq!(text(false, 0x0008, None, true).as_deref(), Some("0008"));
+        // a word with the command sync that has no place in a message keeps the text of its kind
+        assert_eq!(text(true, 0x8842, None, true), None);
+    }
+
     // Break it catches: a setup written while ARINC 429 and 1553 were built in losing its protocol or its bit rate
     #[test]
     fn old_setups_keep_protocol_and_rate() {

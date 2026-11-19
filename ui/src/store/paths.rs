@@ -71,6 +71,55 @@ pub fn file_name(p: &Path) -> String {
     p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string())
 }
 
+/// How many waveform files of a stick the lists of files to open take (`wave_files_under`).
+pub const STICK_FILES: usize = 40;
+
+/// The waveform files (`WAVE_EXTS`) under `root`, down to `depth` folders below it, at most `max`: the files of a
+/// folder in the order of their names, then its folders. For a stick, whose files lie where their owner put them.
+/// A link is not followed and a name that begins with a dot is left out (a stick is foreign data, `check_target`).
+pub fn wave_files_under(root: &Path, depth: usize, max: usize) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut dirs = vec![(root.to_path_buf(), 0usize)];
+    while let Some((dir, level)) = dirs.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let mut entries: Vec<_> = rd.filter_map(|e| e.ok()).collect();
+        entries.sort_by_key(|e| e.file_name());
+        let mut below = Vec::new();
+        for e in entries {
+            if e.file_name().to_string_lossy().starts_with('.') {
+                continue;
+            }
+            // (the type of the entry itself: a link is neither a file nor a folder here)
+            let Ok(kind) = e.file_type() else { continue };
+            let path = e.path();
+            if kind.is_file() {
+                let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("").to_ascii_lowercase();
+                if WAVE_EXTS.contains(&ext.as_str()) {
+                    out.push(path);
+                    if out.len() >= max {
+                        return out;
+                    }
+                }
+            } else if kind.is_dir() && level < depth {
+                below.push((path, level + 1));
+            }
+        }
+        // (a stack: the folders in the order of their names come off it last one first)
+        dirs.extend(below.into_iter().rev());
+    }
+    out
+}
+
+/// The name of a file in a list of files to open: its name, and for a file in another folder of the stick than the
+/// one the scope saves to, its path on the stick ("captures/a.csv"), so two of one name can be told apart.
+pub fn list_name(p: &Path) -> String {
+    let stick = Path::new(USB_DIR).parent().unwrap_or(Path::new("/"));
+    match p.strip_prefix(stick) {
+        Ok(rel) if rel.components().count() > 1 && !p.starts_with(USB_DIR) => rel.to_string_lossy().replace('\\', "/"),
+        _ => file_name(p),
+    }
+}
+
 /// A stick is foreign data and this program runs as root: a link or a device node on it, under a name a save would use,
 /// could lead straight to the card. So only a regular file or a new one, and on the stick no link on the way there.
 pub fn check_target(path: &Path) -> std::io::Result<()> {

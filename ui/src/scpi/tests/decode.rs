@@ -72,7 +72,7 @@ fn cphy_scpi_configures_three_refs_and_exports_the_published_16_bit_word() {
     let (mut s, mut ui, cv) = session();
     let mut symbols = vec![3; 12];
     symbols.extend([3, 4, 4, 4, 4, 4, 3]);
-    symbols.extend([0, 2, 2, 4, 1, 0, 0]);
+    symbols.extend([0, 0, 1, 4, 2, 2, 0]); // 7290, its least significant symbol first
     symbols.extend([4; 7]);
     let states = oos_dsp::cphy::states_for_symbols(0, &symbols);
     let traces = (0..3)

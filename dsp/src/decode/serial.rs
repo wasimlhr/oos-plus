@@ -412,6 +412,10 @@ pub static SPI: ModuleInfo = ModuleInfo::new("Spi", "SPI", "serial")
     .bit(|_, _| 0.5e-6)
     .decoder(spi_lines);
 
+/// What the band of an SPI decoder says where most frames end before a word is whole: the record has too few samples
+/// for the clock (a slower time base at the same memory), or the frames are shorter than the Data bits set.
+pub const SPI_CUT: &str = "Frames shorter than a word: too few samples for the clock, or Data bits";
+
 /// SPI on the lines of its module, with the shared rows: a clock pause of the trigger's timeout starts a frame (else
 /// 20 samples), and an active-high CS is mirrored at the threshold, since `spi` takes CS active low. The options
 /// (the ui's protocol module): 0 bit order (MSB first, LSB first), 1 data polarity (active high, active low). A
@@ -444,8 +448,22 @@ fn spi_lines(l: &Lines) -> Result<Vec<Packet>, &'static str> {
         // says so, it does not fill with marks
         let ends = |k: usize, t: f64| falls.get(k + 1).is_none_or(|&next| t < next);
         let read = |k: usize| p.iter().any(|x| x.t0 >= falls[k] && ends(k, x.t0));
+        let read: Vec<bool> = (0..falls.len()).map(read).collect();
+        // a bus the record does not show: most frames have clock edges and not one whole word. What a long frame
+        // still gives is then no reading of the bus (seen on a unit: 200 kbit/s in a record of 125 kSa/s read
+        // "05 05 05 05" for a frame of 16 words, and nothing for the frames of one word around it)
+        let rising = matches!(l.sh.spi_mode, 0 | 3);
+        let clocks: Vec<f64> = edges(clk, l.thr, l.hy).iter().filter(|e| e.rising == rising).map(|e| e.t).collect();
+        let clocked = |k: usize| {
+            let end = es.iter().find(|e| e.rising && e.t > falls[k]).map_or(f64::INFINITY, |e| e.t);
+            clocks.get(clocks.partition_point(|&t| t <= falls[k])).is_some_and(|&t| t < end)
+        };
+        let cut = (0..falls.len()).filter(|&k| !read[k] && clocked(k)).count();
+        if cut > read.iter().filter(|&&r| r).count() {
+            return Err(SPI_CUT);
+        }
         let marks: Vec<Packet> = (0..falls.len())
-            .filter(|&k| read(k))
+            .filter(|&k| read[k])
             .map(|k| Packet { t0: falls[k], t1: falls[k], kind: Kind::Start, value: 0, value2: None, ok: true })
             .collect();
         p.extend(marks);

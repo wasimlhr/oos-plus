@@ -748,7 +748,8 @@ mod tests {
     fn cphy_three_reference_roles_decode_the_published_synchronized_word() {
         let mut symbols = vec![3; 12];
         symbols.extend([3, 4, 4, 4, 4, 4, 3]);
-        symbols.extend([0, 2, 2, 4, 1, 0, 0]);
+        // 7290 as it is on the wire: its least significant symbol first
+        symbols.extend([0, 0, 1, 4, 2, 2, 0]);
         symbols.extend([4; 7]);
         let states = oos_dsp::cphy::states_for_symbols(0, &symbols);
         let mut ui = crate::ui::testkit::demo_ui();

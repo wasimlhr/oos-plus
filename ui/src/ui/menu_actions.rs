@@ -9,7 +9,7 @@ use super::*;
 
 impl Ui {
     /// The shared rows a protocol's set-up gives (its baud rate, bits, parity ...) into the decoder of `m`.
-    pub(super) fn dec_apply_rows(m: &mut Model, rows: &[(crate::protocols::Row, u32)]) {
+    pub(crate) fn dec_apply_rows(m: &mut Model, rows: &[(crate::protocols::Row, u32)]) {
         use crate::protocols::Row;
         use oos_dsp::decode::Parity;
         for &(r, v) in rows {

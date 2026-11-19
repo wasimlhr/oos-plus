@@ -47,15 +47,49 @@ impl Protocol for Jtag {
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::JTAG
     }
+    /// A scan with a TDO line says what went in and what came out: "DR 0 > 4BA00477" (the answer to a request for
+    /// the identification read "DR 0", the zeros that were shifted in).
+    fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
+        match (p.kind, p.value2) {
+            (Kind::Field(l @ ("IR" | "DR" | "IR+" | "DR+")), Some(out)) => Some(format!("{} {:X} > {:X}", l, p.value, out)),
+            _ => None,
+        }
+    }
     /// TMS, TCK, TDI, TDO on CH1 to CH4.
     fn setup(&self) -> Setup {
         Setup { src: [Some(0), Some(1), Some(2), Some(3)], ..Setup::default() }
+    }
+    /// A probe asks a device for its identification, TCK at 1 MHz: a reset of the TAP, the instruction 1110 into
+    /// the instruction register, and 32 bits out of the data register (4BA00477), every 100 us.
+    fn demo(&self) -> Option<Demo> {
+        let mut g = decode::gen::JtagGen::new();
+        g.reset();
+        g.idle(2);
+        let bits = |v: u32, n: u32| -> Vec<bool> { (0..n).map(|k| v >> k & 1 == 1).collect() };
+        g.shift(true, &bits(0b1110, 4), &bits(0b0001, 4), None);
+        g.shift(false, &bits(0, 32), &bits(0x4ba0_0477, 32), None);
+        g.idle(4);
+        let [tck, tms, tdi, tdo] = g.logic(1e6, 0.0, 3.3);
+        let line = |l: oos_dsp::sim::Logic| -> Option<DemoLine> { Some(Box::new(move |t| l.v(t))) };
+        Some(Demo { period: 100e-6, lines: [line(tms), line(tck), line(tdi), line(tdo)] })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A JTAG scan with TDO says both directions; without TDO it keeps the text of its kind.
+    #[test]
+    fn a_jtag_scan_says_what_came_out() {
+        let scan = |label: &'static str, value2: Option<u32>| {
+            Packet { t0: 0.0, t1: 1.0, kind: Kind::Field(label), value: 0, value2, ok: true }
+        };
+        assert_eq!(Jtag.text(&scan("DR", Some(0x4ba0_0477)), &[0; OPTS]).as_deref(), Some("DR 0 > 4BA00477"));
+        assert_eq!(Jtag.text(&scan("IR", Some(1)), &[0; OPTS]).as_deref(), Some("IR 0 > 1"));
+        assert_eq!(Jtag.text(&scan("DR", None), &[0; OPTS]), None);
+        assert_eq!(Jtag.text(&scan("!TLR", None), &[0; OPTS]), None);
+    }
 
     // Break it catches: a setup written while SWD and JTAG were built in losing its protocol or its sources
     #[test]

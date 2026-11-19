@@ -79,6 +79,24 @@ fn delay_depth(mask: u32, tdiv: f64, delay: f64, base: i128) -> i128 {
     ((want + 7) / 8 * 8).max(base)
 }
 
+/// The longest record Auto depth takes for a protocol trigger (`bus_depth`).
+const BUS_DEPTH: i128 = 1_000_000;
+
+/// Auto depth for the protocol trigger that the software decides: the screen and the length of a frame on each side
+/// of it at the full rate of the channels, which a record longer than a screen is sampled at (and `base` where that
+/// is more). The trigger moves the record so that the field it
+/// found stands at the trigger point, and can move it only as far as the record reaches beyond the screen. With a
+/// screen and an eighth that is 6 us at 10 us/div, and the trigger on a CAN identifier took no frame in 24 s (unit,
+/// 2026-11-19); at 5 us/div the record began 4 us before the frame, too late to know its first edge for a start.
+fn bus_depth(m: &Model, mask: u32, tdiv: f64, base: i128) -> i128 {
+    if m.trig_type != TrigType::Bus || hw_serial(m).is_some() || base <= 0 {
+        return base;
+    }
+    let full = (oos_hal::dho::clock::NOMINAL_HZ / hz::ratio(mask) as i128) as f64;
+    let want = ((10.0 * tdiv + 2.0 * m.trig_span()) * full).ceil().min(BUS_DEPTH as f64) as i128;
+    ((want + 7) / 8 * 8).max(base)
+}
+
 /// The hardware settings for the UI model.
 pub fn settings(m: &Model, program_afe: bool) -> Settings {
     let mut mask = (0..NCH).filter(|&c| m.ch[c].on).fold(0u32, |a, c| a | 1 << c);
@@ -96,7 +114,7 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
         0 => {
             let auto = hz::prep(mask, oos_hal::dho::seq::tdiv_fs(tdiv), 0, 0);
             let base = if auto.memsel as i128 > LIVE_DEPTH { LIVE_DEPTH } else { screen_margin(auto.memsel as i128) };
-            delay_depth(mask, tdiv, m.delay as f64, base)
+            bus_depth(m, mask, tdiv, delay_depth(mask, tdiv, m.delay as f64, base))
         }
         // roll and scan: a fixed depth below 1 M becomes 1 M (roll-mode.md 1.3)
         d if slow_mode(m) != Slow::Off => (d as i128).max(1_000_000),
@@ -141,10 +159,18 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
     });
     // protocol trigger: hardware edge on the line where frames start (the protocol's start role: SPI chip select, I2S
     // word select, else the data line)
+    // (`bus_role`: the role of that line, whose threshold is the level)
+    let mut bus_role = 0;
     let mut src = if m.trig_type == TrigType::Bus {
         let Proto::Module(i) = m.dec_proto;
-        [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4][crate::protocols::get(i).start_role().min(3)]
-            .unwrap_or(m.dec_src)
+        let role = crate::protocols::get(i).start_role().min(3);
+        match [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4][role] {
+            Some(c) => {
+                bus_role = role;
+                c
+            }
+            None => m.dec_src,
+        }
     } else {
         m.trig_src
     };
@@ -156,6 +182,7 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
         delay: if slow_mode(m) == Slow::Off { m.delay as f64 } else { 0.0 },
         mode: if m.acq == AcqMode::Peak { oos_hal::dho::acq::Mode::Peak } else { oos_hal::dho::acq::Mode::Normal },
         holdoff: (m.holdoff as f64).max(oos_hal::dho::seq::HOLDOFF_MIN),
+        holdoff_spread: 0.0,
         mask,
         tdiv,
         depth,
@@ -181,9 +208,10 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
         // two-level types: the upper level; all others: the level itself
         level: match m.trig_type {
             TrigType::Slope | TrigType::Runt | TrigType::Window => m.trig_level.max(m.trig_level2),
-            TrigType::Bus => m.dec_thr,
+            TrigType::Bus => m.dec_thr_of(bus_role),
             _ => m.trig_level,
         } as f64,
+        line_level: if m.trig_type == TrigType::Bus { bus_line_levels(m) } else { [None; 4] },
         auto: m.trig_mode == TrigMode::Auto,
         auto_fast: m.auto_fast && m.trig_mode == TrigMode::Auto,
         single: single_takes_first(m),
@@ -219,6 +247,11 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
     if !serial_lines_acquired(&s.trigger, s.mask) {
         s.trigger = Trig::Edge;
     }
+    // the protocol trigger on an edge of its line: the software finds the event in the record, and each batch has
+    // a holdoff of its own, so a bus that repeats is not met at the same messages every time
+    if m.trig_type == TrigType::Bus && s.trigger == Trig::Edge {
+        s.holdoff_spread = BUS_HOLDOFF_SPREAD;
+    }
     if let Some(count) = hw_avg_count(m, &s) {
         s.mode = oos_hal::dho::acq::Mode::Average { count };
     }
@@ -227,6 +260,11 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
     }
     s
 }
+
+/// The longest time the holdoff of a batch is drawn above the set one for a protocol trigger the software decides
+/// (`Settings::holdoff_spread`). Longer than the period of a bus that sends its messages in a cycle of 10 ms; a
+/// batch lasts 25 ms after its first frame, so with a longer cycle the frames of a batch are spread without it.
+pub(super) const BUS_HOLDOFF_SPREAD: f64 = 16e-3;
 
 /// The live compression for the model (compress.rs): the factor of `compress::k_for` for the record of `s` where the
 /// model allows it (not in roll or scan), else none.
@@ -335,6 +373,19 @@ fn bus_line(m: &Model) -> Option<u8> {
     }
     let Proto::Module(i) = m.dec_proto;
     m.dec_la[crate::protocols::get(i).start_role().min(3)].or(m.dec_la[0])
+}
+
+/// The thresholds of the decoder's lines by channel, for the protocol trigger in the receiver: each line of the SPI
+/// and the I2C trigger has a comparator of its own, and a decoder may have a threshold for each line (a clock on a
+/// 10:1 probe that the channel reads as 1:1, beside data of 5 V). The first role a channel has decides.
+fn bus_line_levels(m: &Model) -> [Option<f64>; 4] {
+    let mut out = [None; 4];
+    for (role, c) in [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4].into_iter().enumerate() {
+        if let Some(c) = c.filter(|&c| c < NCH && out[c].is_none()) {
+            out[c] = Some(m.dec_thr_of(role) as f64);
+        }
+    }
+    out
 }
 
 /// The UI trigger as a hardware (TPU) trigger. Two-level types: `Settings::level` is the upper level.

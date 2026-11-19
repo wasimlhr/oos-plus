@@ -191,6 +191,12 @@ impl Default for Setup {
 pub enum Col {
     /// the fields whose text begins with this label, without the label ("ID ", "CRC ")
     Label(&'static str),
+    /// like `Label`; in a frame without such a field, what the frame holds instead (an error frame of CAN says so in
+    /// the column of the identifier)
+    LabelOr(&'static str),
+    /// one word of the text of such a field, counted from the label, which is word 0 ("RT 17 T SA 02 WC 03": word 1
+    /// is the terminal of a MIL-STD-1553 command)
+    Part(&'static str, usize),
     /// the field at this place of the frame (the packet identifier after the sync of a USB packet)
     At(usize),
     /// the first address of the frame
@@ -298,6 +304,13 @@ pub trait Protocol: Sync {
     /// Whether `p` is a mark the module adds for the screen and not a field of the bus (the start of an SPI frame,
     /// where the chip select goes active). A mark begins a message and is no row of the Fields view.
     fn mark(&self, _p: &Packet) -> bool {
+        false
+    }
+
+    /// Whether `p` is a field every message begins with and that says nothing of what the message is (the sync of
+    /// a USB packet, the start sequence of a FlexRay frame). The text of a message leaves it out, so a box with
+    /// little room begins with what tells one message from the next; as a field it has its box and its row.
+    fn lead(&self, _p: &Packet) -> bool {
         false
     }
 
@@ -511,14 +524,19 @@ mod tests {
     fn demo_packets(i: usize, rounds: f64) -> Option<Vec<Packet>> {
         let m = MODULES[i];
         let d = demo(i as u8)?;
-        let sh = shared(&Default::default());
+        // (the shared rows of its set-up: the traffic is made for that baud rate, those bits)
+        let mut model = crate::model::Model::default();
+        crate::ui::Ui::dec_apply_rows(&mut model, m.setup().rows);
+        let sh = shared(&model);
         let dt = m.info().bit_time(&opt_fit(i as u8, opt_default(i as u8)), &sh) / 40.0;
         let n = (rounds * d.period / dt) as usize;
         let wave = |f: &DemoLine| (0..n).map(|k| f((k as f64 * dt).rem_euclid(d.period)) as f32).collect::<Vec<f32>>();
         let waves: Vec<Option<Vec<f32>>> = d.lines.iter().map(|l| l.as_ref().map(wave)).collect();
         let (opt, lines) = (opt_fit(i as u8, opt_default(i as u8)), std::array::from_fn(|k| waves[k].as_deref()));
         let thr = m.setup().thr;
-        let l = Lines { lines, dt, thr, hy: 0.1, opt, sh, chans: [None; 4], src: [None; 4] };
+        // (the lines as the four channels too, in the order of their roles: a Parallel bus reads a bank of them)
+        let src = [Some(0), Some(1), Some(2), Some(3)];
+        let l = Lines { lines, dt, thr, hy: 0.1, opt, sh, chans: lines, src };
         Some(m.info().decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e)))
     }
 
@@ -559,16 +577,9 @@ mod tests {
                 .map(|l| l.as_ref().map(|f| (0..n).map(|k| f((k as f64 * dt).rem_euclid(d.period)) as f32).collect()))
                 .collect();
             let s = m.setup();
-            let l = Lines {
-                lines: std::array::from_fn(|k| waves[k].as_deref()),
-                dt,
-                thr: s.thr,
-                hy: 0.1,
-                opt: opt_fit(i as u8, opt_default(i as u8)),
-                sh,
-                chans: [None; 4],
-                src: [None; 4],
-            };
+            let lines: [Option<&[f32]>; 4] = std::array::from_fn(|k| waves[k].as_deref());
+            let (opt, src) = (opt_fit(i as u8, opt_default(i as u8)), [Some(0), Some(1), Some(2), Some(3)]);
+            let l = Lines { lines, dt, thr: s.thr, hy: 0.1, opt, sh, chans: lines, src };
             let p = m.info().decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e));
             assert!(!p.is_empty(), "{}: nothing decoded from its demo", m.name());
             // (I2C had an exception here: the byte that ends a read is not acknowledged, and the decoder called it an
@@ -581,16 +592,8 @@ mod tests {
     /// The modules without demo traffic, each with the reason: `modules_decode_their_demo` runs none of them, and
     /// the host build shows no signal for them. A module in this list that has demo traffic fails the test, so the
     /// list only gets shorter.
-    const NO_DEMO: [(&str, &str); 10] = [
+    const NO_DEMO: [(&str, &str); 2] = [
         ("Uart", "the demo source has UART traffic on CH3 by itself, whatever the decoder"),
-        ("Parallel", "none written yet; the decoder is tested in oos-dsp (dsp/tests/decode/parallel.rs)"),
-        ("Cphy", "none written yet; the decoder is tested in oos-dsp (dsp/src/cphy.rs)"),
-        ("Manchester", "none written yet; the decoder is tested in oos-dsp (dsp/src/linecode.rs)"),
-        ("Mlt3", "none written yet; the decoder is tested in oos-dsp (dsp/src/linecode.rs)"),
-        ("ModbusAscii", "none written yet; the decoder is tested in oos-dsp (dsp/tests/decode/modbus.rs)"),
-        ("Ds2482", "none written yet; the decoder is tested in oos-dsp (dsp/tests/decode/onewire.rs)"),
-        ("Jtag", "none written yet; the decoder is tested in oos-dsp (dsp/tests/decode/debug.rs)"),
-        ("Qspi", "none written yet; the decoder is tested in oos-dsp (dsp/tests/decode/qspi.rs)"),
         ("I3c", "none written yet; the decoder is tested in oos-dsp (dsp/tests/decode/i3c.rs)"),
     ];
 

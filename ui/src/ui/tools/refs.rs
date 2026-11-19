@@ -36,6 +36,15 @@ impl Ui {
                 }
             }
         }
+        // a stick: its waveform files wherever they lie, three folders deep, and not only those in the folder the
+        // scope saves to (the owner, from the unit: a stick was in and nothing on it could be opened)
+        if self.usb {
+            if let Some(stick) = std::path::Path::new(crate::store::USB_DIR).parent() {
+                for p in crate::store::wave_files_under(stick, 3, crate::store::STICK_FILES) {
+                    add(p);
+                }
+            }
+        }
         v
     }
 

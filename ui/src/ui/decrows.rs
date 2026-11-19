@@ -139,7 +139,7 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
     // sync byte of a LIN frame, which is data to the decoder, stands before its identifier)
     let takes = |k: usize| {
         cols.iter().any(|(_, c)| match *c {
-            Col::Label(l) => texts[k].starts_with(l),
+            Col::Label(l) | Col::LabelOr(l) | Col::Part(l, _) => texts[k].starts_with(l),
             Col::At(n) => k == n,
             Col::Addr => matches!(pk[k].kind, DecKind::Addr { .. }),
             _ => false,
@@ -147,7 +147,9 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
     };
     let head = (0..pk.len()).find(|&k| takes(k));
     let after = |k: usize| head.is_none_or(|h| k > h);
-    let is_data = |k: usize| pk[k].kind == DecKind::Data && after(k) && packet_tag(m, &pk[k]).is_none();
+    // (a data word of MIL-STD-1553 is data as a byte is)
+    let data_kind = |k: usize| matches!(pk[k].kind, DecKind::Data | DecKind::Word { cmd: false });
+    let is_data = |k: usize| data_kind(k) && after(k) && packet_tag(m, &pk[k]).is_none();
     let data: Vec<Packet> = (0..pk.len()).filter(|&k| is_data(k)).map(|k| pk[k].clone()).collect();
     // a word of two data lines is written "9F/FF"
     let half = |second: bool| {
@@ -159,6 +161,18 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
     cols.iter()
         .map(|(_, c)| match *c {
             Col::Label(l) => texts.iter().filter_map(|t| t.strip_prefix(l)).collect::<Vec<_>>().join(" "),
+            Col::LabelOr(l) if texts.iter().any(|t| t.starts_with(l)) => {
+                texts.iter().filter_map(|t| t.strip_prefix(l)).collect::<Vec<_>>().join(" ")
+            }
+            // (without the start of frame, which every frame has)
+            Col::LabelOr(_) => {
+                let other = (0..pk.len()).filter(|&k| pk[k].kind != DecKind::Start).map(|k| texts[k].as_str());
+                other.collect::<Vec<_>>().join(" ")
+            }
+            Col::Part(l, n) => {
+                let labelled = texts.iter().filter(|t| t.starts_with(l));
+                labelled.filter_map(|t| t.split(' ').nth(n)).collect::<Vec<_>>().join(" ")
+            }
             Col::At(n) => texts.get(n).cloned().unwrap_or_default(),
             Col::Addr => address().map_or_else(String::new, |k| texts[k].clone()),
             Col::Data => decband::message_text(m, &data),
@@ -187,6 +201,24 @@ fn errors_text(errors: usize) -> String {
 
 /// Whether a pane `w` wide has its Errors column: it has the room, and `failed` rows of the record failed a check. A
 /// record without a failed check has no such column, and its text has the room.
+/// The widths of a protocol's columns in `free` pixels. A column that no row of the record fills is left out (the
+/// MISO column of an SPI bus read on one line, the slow channel of a SENT sensor that has none). Of the others each
+/// is as wide as its title and its cells need (`need`; a third of the room at most), and the columns of the data
+/// (`data`; the last column where there is none) share what is left.
+fn own_widths(need: &[i32], data: &[bool], filled: &[bool], free: i32) -> Vec<i32> {
+    let n = need.len();
+    let last = (0..n).rev().find(|&k| filled[k]);
+    let any = (0..n).any(|k| filled[k] && data[k]);
+    let wide = |k: usize| filled[k] && if any { data[k] } else { Some(k) == last };
+    let mut w: Vec<i32> = (0..n).map(|k| if filled[k] && !wide(k) { need[k].min(free / 3) } else { 0 }).collect();
+    let share = (0..n).filter(|&k| wide(k)).count() as i32;
+    let left = (free - w.iter().sum::<i32>()).max(0);
+    for k in (0..n).filter(|&k| wide(k)) {
+        w[k] = left / share;
+    }
+    w
+}
+
 fn errors_column(w: i32, failed: usize) -> bool {
     w >= SMALL_W && failed > 0
 }
@@ -376,19 +408,20 @@ impl Ui {
         (!own.is_empty() && self.pn.rows.iter().all(|e| std::ptr::eq(e.cols, own))).then_some(own)
     }
 
-    /// The widths of the protocol's columns in `free` pixels: each as wide as its title and its cells need, and the
-    /// column of the data (the last one where there is none) takes what is left. The cells measured are those of the
-    /// first rows of the record, not of the screen, so the columns stand still while the list scrolls.
+    /// The widths of the protocol's columns in `free` pixels (`own_widths`). The cells measured are those of the
+    /// first rows of the record, and a column is there when a row of the whole record fills it: of the record, not
+    /// of the screen, so the columns stand still while the list scrolls.
     fn events_own_widths(&self, own: &[(&'static str, Col)], f: &Font, free: i32, pad: i32) -> Vec<i32> {
-        let wide = own.iter().position(|c| matches!(c.1, Col::Data | Col::Rest | Col::Second)).unwrap_or(own.len() - 1);
         let need = |k: usize| -> i32 {
             let cells = self.pn.rows.iter().take(64).filter_map(|e| e.cells.get(k)).map(|c| f.width(c));
             cells.fold(f.width(own[k].0), i32::max) + pad
         };
-        // a column that is not the data's has a third of the room at most
-        let mut w: Vec<i32> = (0..own.len()).map(|k| if k == wide { 0 } else { need(k).min(free / 3) }).collect();
-        w[wide] = (free - w.iter().sum::<i32>()).max(0);
-        w
+        let need: Vec<i32> = (0..own.len()).map(need).collect();
+        let is_data = |c: &(&str, Col)| matches!(c.1, Col::Data | Col::Rest | Col::First | Col::Second);
+        let data: Vec<bool> = own.iter().map(is_data).collect();
+        let filled = |k: usize| self.pn.rows.iter().any(|e| e.cells.get(k).is_some_and(|c| !c.is_empty()));
+        let filled: Vec<bool> = (0..own.len()).map(filled).collect();
+        own_widths(&need, &data, &filled, free)
     }
 
     /// The widths of the columns that depend on what is listed: the decoder names of the whole record (0 without a
@@ -567,6 +600,23 @@ mod tests {
     }
 
     /// The same characters as messages (split at the long pause), as fields and as lines (split at the line feed).
+    /// The columns of a protocol share the room: one that no row fills is left out, the data takes what is left.
+    #[test]
+    fn a_column_no_row_fills_is_left_out() {
+        // SPI read on one line: the MOSI column has the whole room, a frame of many bytes is not cut
+        assert_eq!(own_widths(&[40, 40], &[true, true], &[true, false], 600), [600, 0]);
+        // both lines: they share it
+        assert_eq!(own_widths(&[40, 40], &[true, true], &[true, true], 600), [300, 300]);
+        // CAN: identifier, length and CRC as wide as they need, the data the rest
+        assert_eq!(own_widths(&[60, 30, 50, 70], &[false, false, true, false], &[true; 4], 600), [60, 30, 440, 70]);
+        // a record of remote frames has no data: the last column that is filled takes the room
+        let no_data = [true, true, false, true];
+        assert_eq!(own_widths(&[60, 30, 50, 70], &[false, false, true, false], &no_data, 600), [60, 30, 0, 510]);
+        // a column that is not the data's has a third of the room at most; no row at all: no column
+        assert_eq!(own_widths(&[500, 40], &[false, true], &[true, true], 600), [200, 400]);
+        assert_eq!(own_widths(&[40, 40], &[true, true], &[false, false], 600), [0, 0]);
+    }
+
     #[test]
     fn the_rows_are_messages_fields_or_lines() {
         // "Hi\n" at one pace, a long pause, then "yo"
@@ -852,6 +902,36 @@ mod tests {
         let (start, stop) = (at(0.0, DecKind::Start, 0), at(3.0, DecKind::Stop, 0));
         let p = [start, at(1.0, write, 0x50), at(2.0, DecKind::Data, 0x42), stop];
         assert_eq!(rows_of(&m, 0, "D1 I2C", &p, EvView::Messages)[0].cells, ["50 W", "42 P"]);
+        // MIL-STD-1553, where it is built in: the parts of the command word each in its column
+        if let Some(proto) = Proto::from_key("Mil1553") {
+            use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_STATUS};
+            m.dec_proto = proto;
+            let word = |t: f64, cmd: bool, v: u32, role: Option<u32>| {
+                Packet { value2: role, ..at(t, DecKind::Word { cmd }, v) }
+            };
+            let p = [
+                word(0.0, true, 0x8842, Some(MIL1553_COMMAND)),
+                word(1.0, false, 5, None),
+                word(2.0, false, 6, None),
+                word(3.0, true, 0x8801, Some(MIL1553_STATUS)),
+                word(9.0, true, 0x8c12, Some(MIL1553_COMMAND)),
+            ];
+            let rows = rows_of(&m, 0, "D1 1553", &p, EvView::Messages);
+            assert_eq!(titles(&rows), ["RT", "T/R", "SA", "WC/MC", "Data", "Status"]);
+            assert_eq!(rows[0].cells, ["17", "R", "02", "02", "0005 0006", "17 TF"]);
+            assert_eq!(rows[1].cells, ["17", "T", "00", "18", "", ""]);
+        }
+        // FlexRay, where it is built in: the start sequence every frame begins with is no part of the text of a
+        // frame, and it is a field with its row
+        if let Some(proto) = Proto::from_key("FlexRay") {
+            m.dec_proto = proto;
+            let p = [at(0.0, DecKind::Field("TSS"), 11), at(1.0, id(false), 0x2a), at(2.0, DecKind::Data, 0x11)];
+            let text = |view: EvView| -> Vec<String> {
+                rows_of(&m, 0, "D1 FlexRay", &p, view).iter().map(|r| r.text.clone()).collect()
+            };
+            assert_eq!(text(EvView::Messages), ["ID 02A 11"]);
+            assert_eq!(text(EvView::Fields).first().map(String::as_str), Some("TSS B"));
+        }
         // a UART has no columns: a row is its text
         m.dec_proto = Proto::UART;
         assert!(rows_of(&m, 0, "D1 UART", &[byte(0.0, b'H')], EvView::Messages)[0].cols.is_empty());

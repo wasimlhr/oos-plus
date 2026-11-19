@@ -108,6 +108,34 @@ fn the_ref_badge_has_two_rows_and_keeps_clear_of_the_fit_row() {
     shot(&mut u, "ref-badge");
 }
 
+/// Studio: a reference has no box over its signal, overlaid as in lanes: it has the handle of every source, and its
+/// pill has the name and the scale. The box of two rows (40 px over the signal, as wide as the name) is for the
+/// layouts without that pill.
+#[test]
+fn studio_draws_no_ref_badge_and_the_other_layouts_keep_two_rows() {
+    let size = |u: &Ui, y: i32| -> Option<(i32, i32)> {
+        let (mut cv, col) = (Canvas::new(400, 300), REF_COLORS[0].1);
+        let mut r = a_ref("PCIe 4.0");
+        r.label = "PCIe 4.0".into();
+        u.draw_ref_badge(&mut cv, Rect::new(0, 0, 400, 300), y, col, 0, &r);
+        let on = |x: i32, y: i32| cv.px[(y * cv.w + x) as usize] == col;
+        let rows: Vec<i32> = (0..cv.h).filter(|&y| (0..cv.w).any(|x| on(x, y))).collect();
+        let cols: Vec<i32> = (0..cv.w).filter(|&x| (0..cv.h).any(|y| on(x, y))).collect();
+        Some((cols.last()? - cols.first()? + 1, rows.last()? - rows.first()? + 1))
+    };
+    let mut u = studio();
+    u.trace_mode(false);
+    frame(&mut u);
+    assert!(!u.stacked(), "overlaid traces");
+    assert_eq!(size(&u, 100), None);
+    u.trace_mode(true);
+    frame(&mut u);
+    assert_eq!(size(&u, 100), None, "in lanes neither");
+    u.m.layout = Layout::Default;
+    let (w, h) = size(&u, 100).unwrap();
+    assert!(h == super::REF_BADGE_H && w > 44, "{w} x {h}");
+}
+
 #[test]
 fn the_peaks_list_has_a_fixed_header_row_above_its_first_line() {
     let u = studio();

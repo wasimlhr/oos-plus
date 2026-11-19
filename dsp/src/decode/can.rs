@@ -25,7 +25,19 @@ pub static CAN: ModuleInfo = ModuleInfo::new("Can", "CAN", "can")
 
 /// CAN 2.0A/B data and remote frames at `bitrate`. `invert` = false: logic level as on the RX/TX pin (dominant low,
 /// idle high); true for CAN_H probed against ground (dominant high). Hard sync on the start of frame after at least 7
-/// recessive bit times, resynchronisation on every edge, sampling at 70 % of the bit, bit de-stuffing, CRC check.
+/// recessive bit times, resynchronisation on every edge from recessive to dominant, sampling at 70 % of the bit, bit
+/// de-stuffing, CRC check. The edge to dominant is the one a transceiver drives and a node synchronises on; the way
+/// back is the bus letting go, and on a line that is slow there it crosses the threshold late (seen on a unit:
+/// 1.1 us late on a bus at 500 kbit/s, and with a resynchronisation on it the next bit was sampled in its neighbour).
+///
+/// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
+/// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
+/// (`can_keep_flags`).
+///
+/// Of a frame that the end of the record cuts off, the fields that are whole: its start, its identifier and the data
+/// bytes read so far, and no CRC. A record that ends inside a frame gave nothing of it, so at a time base whose
+/// record is shorter than a frame the band was empty and no field could be triggered on (seen on a unit: a record
+/// of 160 us at 10 us/div, a frame of 112 us that begins 72 us before its end).
 pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
     let spb = 1.0 / bitrate / dt;
     if spb < 3.0 {
@@ -35,9 +47,11 @@ pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) 
     // recessive = true
     let rec = |x: f64| -> Option<bool> { st.get(x as usize).copied().flatten().map(|b| b != invert) };
     let e = edges(v, thr, hyst);
+    // the edges to dominant: the bit timing follows these alone
+    let dominant: Vec<f64> = e.iter().filter(|x| x.rising == invert).map(|x| x.t).collect();
     let edge_near = |from: f64, to: f64| -> Option<f64> {
-        let i = e.partition_point(|x| x.t < from);
-        e.get(i).filter(|x| x.t < to).map(|x| x.t)
+        let i = dominant.partition_point(|&t| t < from);
+        dominant.get(i).copied().filter(|&t| t < to)
     };
     frames(&e, invert, spb, &rec, |sof| can_frame(sof, spb, &rec, &edge_near))
 }
@@ -63,6 +77,14 @@ fn frames(
         if x.t < busy_until {
             continue;
         }
+        // (dominant where a sixth bit is sampled too: five bits behind which the line is slow back to recessive
+        // last longer than five and a half bit times, and are no flag)
+        let sixth = rec(x.t + 5.7 * bit) == Some(false);
+        if let Some(end) = e.get(k + 1).map(|n| n.t).filter(|&end| sixth && can_error_flag((end - x.t) / bit)) {
+            out.push(Packet::tag("!ERROR FRAME", x.t, end, false));
+            busy_until = end;
+            continue;
+        }
         // SOF: dominant edge after >= 7 recessive bit times (or the record start when the bus was idle before)
         let idle_from =
             last_rec_start.unwrap_or(if k == 0 && rec(x.t - 1.0) == Some(true) { 0.0 } else { f64::INFINITY });
@@ -74,10 +96,53 @@ fn frames(
             out.extend(pk);
         }
     }
+    can_keep_flags(&mut out);
     out
 }
 
-/// One CAN frame from its SOF edge at `sof`: the packets and the time after the ACK delimiter.
+/// The dominant time, in bit times, of an error or overload flag on a CAN bus: a frame has five equal bits in a row
+/// at most, a flag has six, and twelve where the flags of several nodes follow one another.
+pub const CAN_ERROR_FLAG: std::ops::RangeInclusive<f64> = 5.5..=12.6;
+
+/// Whether a dominant pulse of `bits` bit times is an error flag.
+pub fn can_error_flag(bits: f64) -> bool {
+    CAN_ERROR_FLAG.contains(&bits)
+}
+
+/// Error flags count only in a record that holds a frame with the right CRC: a line that carries something else
+/// than CAN, or CAN at another rate, has long low pulses too, and each of them would be an error frame (and fire a
+/// trigger on errors). Without such a frame the flags leave the list.
+pub fn can_keep_flags(out: &mut Vec<Packet>) {
+    if !out.iter().any(|p| p.kind == Kind::Crc && p.ok) {
+        out.retain(|p| p.kind != Kind::Field("!ERROR FRAME"));
+    }
+}
+
+/// What is whole of a CAN frame that the record cuts off, from its de-stuffed bits so far: start and identifier
+/// once the format is known, and the data bytes read. None where the identifier is not whole.
+fn can_cut_off(bits: &[(bool, f64, f64)], ext: bool, known: bool) -> Option<(Vec<Packet>, f64)> {
+    let n = bits.len();
+    if n < 14 || (ext && n < 33) {
+        return None;
+    }
+    let val = |r: std::ops::Range<usize>| bits[r].iter().fold(0u32, |a, b| a << 1 | b.0 as u32);
+    let pk = |kind, a: usize, b: usize, value: u32| Packet::new(kind, bits[a].1, bits[b].2, value, true);
+    let (id, rtr, dlc_at, id_end) = match ext {
+        true => (val(1..12) << 18 | val(14..32), bits[32].0, 35, 31),
+        false => (val(1..12), bits[12].0, 15, 11),
+    };
+    let mut out = vec![pk(Kind::Start, 0, 0, 0), pk(Kind::Id { ext, rtr }, 1, id_end, id)];
+    if known && !rtr {
+        let data_at = dlc_at + 4;
+        for i in (0..val(dlc_at..data_at).min(8) as usize).take_while(|i| data_at + 8 * i + 8 <= n) {
+            out.push(pk(Kind::Data, data_at + 8 * i, data_at + 8 * i + 7, val(data_at + 8 * i..data_at + 8 * i + 8)));
+        }
+    }
+    Some((out, bits[n - 1].2))
+}
+
+/// One CAN frame from its SOF edge at `sof`: the packets and the time after the ACK delimiter; of a frame that the
+/// record cuts off, what `can_cut_off` gives.
 fn can_frame(
     sof: f64,
     spb: f64,
@@ -102,7 +167,7 @@ fn can_frame(
     let mut need = 19usize; // SOF + ID 11 + RTR/SRR + IDE + r0 + DLC 4, grows when the header is known
     let (mut ext, mut known) = (false, false);
     while bits.len() < need {
-        let b = next()?;
+        let Some(b) = next() else { return can_cut_off(&bits, ext, known) };
         raw.push(b);
         if run == 5 {
             // stuff bit: must be the complement, not part of the data
@@ -146,13 +211,13 @@ fn can_frame(
     let crc_calc = can_crc15(&bits[..crc_at].iter().map(|b| b.0).collect::<Vec<_>>());
     let crc_rx = val(crc_at..crc_at + 15) as u16;
     // stuffing covers SOF .. CRC sequence: a run of five at the end of the CRC is followed by one more stuff bit
-    if run == 5 {
-        let (_, _, _) = next()?;
+    if run == 5 && next().is_none() {
+        return can_cut_off(&bits, ext, known);
     }
     // CRC delimiter, ACK slot, ACK delimiter are not stuffed
-    let (_, _, _) = next()?;
-    let ack = next()?;
-    let ack_del = next()?;
+    let (Some(_), Some(ack), Some(ack_del)) = (next(), next(), next()) else {
+        return can_cut_off(&bits, ext, known);
+    };
     let pk = |kind, a: usize, b: usize, value: u32, ok: bool| Packet::new(kind, bits[a].1, bits[b].2, value, ok);
     let mut out = vec![Packet::new(Kind::Start, bits[0].1, bits[0].2, 0, true)];
     let id_end = if ext { 31 } else { 11 };
@@ -172,7 +237,8 @@ pub const FD_LEN: [usize; 16] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 
 /// and used by `gen::can_fd_bits`.
 pub const FD_SP: f64 = 0.75;
 
-/// Bit timing reader: one bit at a time from the current position, resynchronised on edges near the bit end.
+/// Bit timing reader: one bit at a time from the current position, resynchronised on the edges it is given (for
+/// CAN: those from recessive to dominant, `decode::can`) near the bit end.
 struct BitClock<'a> {
     t: f64,
     rec: &'a dyn Fn(f64) -> Option<bool>,
@@ -212,19 +278,59 @@ pub static CAN_FD: ModuleInfo = ModuleInfo::new("CanFd", "CAN-FD", "can")
 /// Field("DLC") (value = DLC, value2 = data bytes), Data per byte, FD only: Field("SBC") (stuff count mod 8 from the
 /// Gray code; `ok` = parity and count right), Crc (value = received CRC-15/17/21, `ok` = it matches and the fixed
 /// stuff bits are right), Ack (`ok` = dominant). A stuff error ends the frame with Field("!ERR").
+///
+/// A record needs three samples a bit of the nominal rate. With fewer than three a bit of the data rate the frames
+/// that stay at the nominal rate are read as ever (classic frames, FD frames without a rate switch); one that
+/// switches gives its start, its identifier and Field("!TOO FAST").
+///
+/// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
+/// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
+/// (`can_keep_flags`).
+///
+/// Of a frame that the end of the record cuts off, the fields that are whole: its start, its identifier and the data
+/// bytes read so far (`can`).
 pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
     let tn = 1.0 / nominal / dt;
     let td = 1.0 / data_rate / dt;
-    if !(tn >= 3.0 && td >= 3.0) {
+    // (three samples a bit of the nominal rate. A record with fewer than three a bit of the data rate still holds
+    // every frame that does not switch to it: `can_fd_frame` says where one does)
+    if !(tn >= 3.0 && td > 0.0) {
         return Vec::new();
     }
     let st = states(v, thr, hyst);
     let rec = |x: f64| -> Option<bool> { st.get(x as usize).copied().flatten().map(|b| b != invert) };
     let e = edges(v, thr, hyst);
-    frames(&e, invert, tn, &rec, |sof| can_fd_frame(&mut BitClock { t: sof, rec: &rec, e: &e }, tn, td))
+    // the edges to dominant: the bit timing follows these alone (`can`)
+    let dominant: Vec<Edge> = e.iter().filter(|x| x.rising == invert).cloned().collect();
+    frames(&e, invert, tn, &rec, |sof| can_fd_frame(&mut BitClock { t: sof, rec: &rec, e: &dominant }, tn, td))
 }
 
-/// One CAN / CAN FD frame from its SOF: the packets and the time after the ACK delimiter.
+/// What is whole of a frame that the record cuts off, from its de-stuffed bits so far: start and identifier once
+/// the format is known, and the data bytes read (`data` = where the data field begins and ends, once the length is
+/// known). None where the identifier is not whole.
+fn can_fd_cut_off(bits: &[(bool, f64, f64)], ext: bool, data: Option<(usize, usize)>) -> Option<(Vec<Packet>, f64)> {
+    let n = bits.len();
+    if n < 14 || (ext && n < 33) {
+        return None;
+    }
+    let val = |r: std::ops::Range<usize>| bits[r].iter().fold(0u32, |a, b| a << 1 | b.0 as u32);
+    let span = |kind, a: usize, b: usize, value: u32| Packet::new(kind, bits[a].1, bits[b].2, value, true);
+    // (the bit of a classic remote frame; an FD frame has a dominant bit there)
+    let (id, rtr, id_end) = match ext {
+        true => (val(1..12) << 18 | val(14..32), bits[32].0, 31),
+        false => (val(1..12), bits[12].0, 11),
+    };
+    let mut out = vec![span(Kind::Start, 0, 0, 0), span(Kind::Id { ext, rtr }, 1, id_end, id)];
+    if let Some((from, to)) = data {
+        for a in (from..to).step_by(8).take_while(|a| a + 8 <= n) {
+            out.push(span(Kind::Data, a, a + 7, val(a..a + 8)));
+        }
+    }
+    Some((out, bits[n - 1].2))
+}
+
+/// One CAN / CAN FD frame from its SOF: the packets and the time after the ACK delimiter; of a frame that the record
+/// cuts off, what `can_fd_cut_off` gives.
 fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f64)> {
     let sof = clk.t;
     let mut raw: Vec<bool> = Vec::new(); // SOF .. data end with the dynamic stuff bits (FD CRC input)
@@ -240,13 +346,17 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f6
     while bits.len() < need {
         let idx = bits.len();
         let stuff = run == 5;
-        let b = if fast {
-            clk.bit(0.65 * td, data)?
+        let got = if fast {
+            clk.bit(0.65 * td, data)
         } else if !stuff && idx == brs_at {
             // BRS: a recessive BRS switches to the data bit rate at its sample point
-            clk.bit(0.65 * tn, |l| if l { (FD_SP * tn + (1.0 - FD_SP) * td, 0.4 * td) } else { (tn, 0.4 * tn) })?
+            clk.bit(0.65 * tn, |l| if l { (FD_SP * tn + (1.0 - FD_SP) * td, 0.4 * td) } else { (tn, 0.4 * tn) })
         } else {
-            clk.bit(0.65 * tn, nominal)?
+            clk.bit(0.65 * tn, nominal)
+        };
+        let Some(b) = got else {
+            let field = (data_end != usize::MAX).then(|| (dlc_at + 4, data_end));
+            return can_fd_cut_off(&bits, ext, field);
         };
         raw.push(b.0);
         if stuff {
@@ -267,6 +377,17 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f6
         }
         bits.push(b);
         if idx == brs_at && b.0 {
+            if td < 3.0 {
+                // the frame goes on at the data rate, of which the record has under three samples a bit: its
+                // identifier is read, the rest is not (a bus of classic frames read with this decoder at a slow
+                // time base gave nothing at all, seen on a unit)
+                let id = |r: std::ops::Range<usize>| bits[r].iter().fold(0u32, |a, x| a << 1 | x.0 as u32);
+                let value = if ext { id(1..12) << 18 | id(14..32) } else { id(1..12) };
+                let last = if ext { 31 } else { 11 };
+                let start = Packet::new(Kind::Start, bits[0].1, bits[0].2, 0, true);
+                let ident = Packet::new(Kind::Id { ext, rtr: false }, bits[1].1, bits[last].2, value, true);
+                return Some((vec![start, ident, Packet::tag("!TOO FAST", b.1, b.2, false)], b.2));
+            }
             fast = true;
         }
         let n = bits.len();
@@ -307,6 +428,15 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f6
     let id = if ext { val(1..12) << 18 | val(14..32) } else { val(1..12) };
     let dlc = val(dlc_at..dlc_at + 4);
     let nb = (data_end - dlc_at - 4) / 8;
+    // a bit behind the stuffed part, or what is whole of the frame where the record ends there
+    macro_rules! bit {
+        ($e:expr) => {
+            match $e {
+                Some(b) => b,
+                None => return can_fd_cut_off(&bits, ext, Some((dlc_at + 4, data_end))),
+            }
+        };
+    }
     let mut out =
         vec![span(Kind::Start, 0, 0, 0, true), span(Kind::Id { ext, rtr }, 1, if ext { 31 } else { 11 }, id, true)];
     if fd {
@@ -327,10 +457,10 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f6
         let mut seq: Vec<(bool, f64, f64)> = Vec::new();
         for i in 0..4 + crc_len {
             if i % 4 == 0 {
-                let f = clk.bit(ds, dd)?;
+                let f = bit!(clk.bit(ds, dd));
                 fixed_ok &= f.0 != prev;
             }
-            let b = clk.bit(ds, dd)?;
+            let b = bit!(clk.bit(ds, dd));
             prev = b.0;
             seq.push(b);
         }
@@ -347,7 +477,7 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f6
     } else {
         // a stuff bit after the last CRC bit
         if run == 5 {
-            clk.bit(0.65 * tn, nominal)?;
+            bit!(clk.bit(0.65 * tn, nominal));
         }
         let crc_at = data_end;
         let calc = can_crc15(&bits[..crc_at].iter().map(|b| b.0).collect::<Vec<_>>());
@@ -356,12 +486,12 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f6
     }
     // CRC delimiter (back to the nominal rate at its sample point), ACK slot, ACK delimiter
     if fast {
-        clk.bit(0.65 * td, |_| (FD_SP * td + (1.0 - FD_SP) * tn, 0.4 * td))?;
+        bit!(clk.bit(0.65 * td, |_| (FD_SP * td + (1.0 - FD_SP) * tn, 0.4 * td)));
     } else {
-        clk.bit(0.65 * tn, nominal)?;
+        bit!(clk.bit(0.65 * tn, nominal));
     }
-    let ack = clk.bit(0.65 * tn, nominal)?;
-    let del = clk.bit(0.65 * tn, nominal)?;
+    let ack = bit!(clk.bit(0.65 * tn, nominal));
+    let del = bit!(clk.bit(0.65 * tn, nominal));
     out.push(Packet::new(Kind::Ack, ack.1, ack.2, 0, !ack.0));
     Some((out, del.2))
 }

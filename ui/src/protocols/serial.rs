@@ -94,6 +94,14 @@ impl Protocol for ModbusAscii {
     fn options(&self) -> &'static [Opt] {
         &ASCII_OPTIONS
     }
+    /// Read holding registers (function 3) of device 0x11, as its characters: 7 bits, even parity, at the rate of
+    /// the list's usual entry.
+    fn demo(&self) -> Option<Demo> {
+        let frame = decode::gen::modbus_ascii_frame(0x11, &[0x03, 0x00, 0x6B, 0x00, 0x03]);
+        let words: Vec<u32> = frame.into_iter().map(u32::from).collect();
+        let rate = crate::decode::BAUDS[BAUD_DEFAULT];
+        Some(uart_demo(&words, 7, Parity::Even, rate, 40.0 / rate))
+    }
     fn legacy(&self, old: &Legacy) -> Option<[usize; OPTS]> {
         Some([old.baud, old.bits.clamp(7, 8) as usize - 7, usize::from(old.parity == Parity::Odd), 0])
     }

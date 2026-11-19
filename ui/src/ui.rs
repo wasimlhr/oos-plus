@@ -1657,7 +1657,8 @@ fn packet_tag(m: &Model, p: &oos_dsp::decode::Packet) -> Option<&'static str> {
     }
     Some(match p.kind {
         Kind::Field(l) => &l[1..],
-        Kind::Start if matches!(m.dec_proto, Proto::CAN) => "SOF",
+        // (CAN and CAN-FD alike: the start of a frame is the same bit on both)
+        Kind::Start if m.dec_proto.module().is_some_and(|x| matches!(x.key(), "Can" | "CanFd")) => "SOF",
         Kind::Start => "S",
         Kind::RepStart => "Sr",
         Kind::Break => "BRK",
