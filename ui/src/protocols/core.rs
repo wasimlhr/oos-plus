@@ -149,6 +149,10 @@ static SPI_OPTIONS: [Opt; 3] = [
     Opt { name: "Format", choices: &["Hex", "ASCII"], default: 0 },
 ];
 
+/// What the band of an SPI decoder says where most frames end before a word is whole: the record has too few samples
+/// for the clock (a slower time base at the same memory), or the frames are shorter than the Data bits set.
+pub const SPI_CUT: &str = "Frames shorter than a word: too few samples for the clock, or Data bits";
+
 impl Protocol for Spi {
     /// A frame in the Events pane: the words of each data line.
     fn columns(&self) -> &'static [(&'static str, Col)] {
@@ -210,8 +214,23 @@ impl Protocol for Spi {
             // says so, it does not fill with marks
             let ends = |k: usize, t: f64| falls.get(k + 1).is_none_or(|&next| t < next);
             let read = |k: usize| p.iter().any(|x| x.t0 >= falls[k] && ends(k, x.t0));
+            let read: Vec<bool> = (0..falls.len()).map(read).collect();
+            // a bus the record does not show: most frames have clock edges and not one whole word. What a long frame
+            // still gives is then no reading of the bus (seen on a unit: 200 kbit/s in a record of 125 kSa/s read
+            // "05 05 05 05" for a frame of 16 words, and nothing for the frames of one word around it)
+            let rising = matches!(l.sh.spi_mode, 0 | 3);
+            let clocks = oos_dsp::edges::edges(clk, l.thr, l.hy);
+            let clocks: Vec<f64> = clocks.iter().filter(|e| e.rising == rising).map(|e| e.t).collect();
+            let clocked = |k: usize| {
+                let end = edges.iter().find(|e| e.rising && e.t > falls[k]).map_or(f64::INFINITY, |e| e.t);
+                clocks.get(clocks.partition_point(|&t| t <= falls[k])).is_some_and(|&t| t < end)
+            };
+            let cut = (0..falls.len()).filter(|&k| !read[k] && clocked(k)).count();
+            if cut > read.iter().filter(|&&r| r).count() {
+                return Err(SPI_CUT);
+            }
             let marks: Vec<Packet> = (0..falls.len())
-                .filter(|&k| read(k))
+                .filter(|&k| read[k])
                 .map(|k| Packet { t0: falls[k], t1: falls[k], kind: Kind::Start, value: 0, value2: None, ok: true })
                 .collect();
             p.extend(marks);
@@ -421,6 +440,41 @@ impl Protocol for Cphy {
 mod tests {
     use super::*;
     use oos_dsp::decode::Kind;
+
+    /// An SPI bus the record has too few samples for: the frames of one word give nothing and a long frame gives
+    /// words that are none. The decoder says what is wrong; it lists no such words.
+    #[test]
+    fn spi_says_when_the_frames_are_shorter_than_a_word() {
+        use oos_dsp::sim::{sample, spi_logic};
+        let m = Spi;
+        // one word a frame, a frame every 50 us, clock 200 kHz; every eighth frame has 16 words
+        let short = spi_logic(&[(0xa5, 0)], 8, 0, 200e3, 0.0, 3.3);
+        let words: Vec<(u32, u32)> = (0..16).map(|k| (k, 0)).collect();
+        let long = spi_logic(&words, 8, 0, 200e3, 0.0, 3.3);
+        let (period, burst) = (500e-6, 8.0 * 500e-6);
+        let line = |i: usize, dt: f64| -> Vec<f32> {
+            let v = |t: f64| {
+                let t = t.rem_euclid(burst);
+                if t < 2.0 * period { long[i].v(t) } else { short[i].v(t.rem_euclid(period)) }
+            };
+            sample(v, 0.0, dt, (40e-3 / dt) as usize)
+        };
+        let decode = |dt: f64, bits: u32| {
+            let [cs, clk, mosi] = [0, 1, 2].map(|i| line(i, dt));
+            let sh = Shared { bits, spi_mode: 0, ..Shared::default() };
+            let lines = [Some(&mosi[..]), Some(&clk[..]), Some(&cs[..]), None];
+            m.decode(&Lines { lines, dt, thr: 1.65, hy: 0.2, opt: [0; OPTS], sh, chans: [None; 4], src: [None; 4] })
+        };
+        // 2.5 samples a bit, as on the unit: every word is read
+        let p = decode(2e-6, 8).unwrap();
+        let data: Vec<u32> = p.iter().filter(|x| x.kind == Kind::Data).map(|x| x.value).collect();
+        let first: Vec<u32> = (0..16).chain([0xa5, 0xa5]).collect();
+        assert_eq!((data.len(), &data[..18]), (10 * 22, &first[..]));
+        // 8 us a sample: under one sample a bit
+        assert_eq!(decode(8e-6, 8).err(), Some(SPI_CUT));
+        // enough samples, and Data bits 16 on frames of 8: the same note
+        assert_eq!(decode(2e-6, 16).err(), Some(SPI_CUT));
+    }
 
     /// The I2C address is its seven bits, or the byte on the bus when the R/W bit is included; other fields keep
     /// the text of their kind.
