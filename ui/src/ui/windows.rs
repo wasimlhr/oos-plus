@@ -499,7 +499,6 @@ mod tests {
         render(&mut u);
         let normal = u.grid;
         u.set_hdmi_present(true);
-        u.hdmi_snap_want = true;
         u.select_option(Item::FullScreen, "On");
         let mut cv = Canvas::new(W, H);
         u.render(&mut cv);
@@ -511,14 +510,22 @@ mod tests {
         u.select_option(Item::Hdmi, "Waveform");
         u.render(&mut cv);
         assert!(!u.full && u.grid == normal, "waveform gives the panel its bars back");
-        let (head, _) = u.results_rects().unwrap();
-        let at = (head.y * W + head.x + 8) as usize;
-        let snap_at = ((head.y - TOP.h) * W + head.x + 8) as usize;
-        assert_eq!(u.hdmi_snap.len(), (W * (u.frame().bottom.y - TOP.h)) as usize);
-        assert_ne!(u.hdmi_snap[snap_at], cv.px[at], "Full leaves the statistics card off the external plot");
+        // the monitor's waveform area: in Full without the statistics card, in Scope with it
+        let (mw, mh) = (1920, 1080);
+        let mut full_pic = Canvas::new(mw, mh);
+        u.render_waveform(&mut full_pic);
         u.select_option(Item::FullScreen, "Off");
         u.render(&mut cv);
-        assert_eq!(u.hdmi_snap[snap_at], cv.px[at], "Scope copies the plot, strip and card");
+        let mut scope_pic = Canvas::new(mw, mh);
+        u.render_waveform(&mut scope_pic);
+        let head = u.with_waveform_pass(mw, mh, |u| {
+            u.render(&mut Canvas::new(mw, mh));
+            u.results_rects().unwrap().0
+        });
+        assert!(head.right() > W, "the card is placed for the monitor: {:?}", head);
+        let at = (head.y * mw + head.x + 8) as usize;
+        assert_ne!(full_pic.px[at], scope_pic.px[at], "Full leaves the statistics card off the external plot");
+        assert!(u.grid == normal && u.scr == Screen::PANEL, "the panel's layout is as it was");
         u.select_option(Item::WinLayout, "Four");
         u.render(&mut cv);
         assert_eq!(u.wins.len(), 4);
@@ -530,6 +537,43 @@ mod tests {
         assert!(u.pane_h() > 0 && u.wins.len() == 1 && !u.full);
         let pane = u.pane_rect();
         assert!(pane.y >= TOP.h && pane.y + pane.h <= u.frame().bottom.y);
+    }
+
+    /// Studio with so many measurement badges that their row takes two lines on the panel and one on the monitor:
+    /// the monitor's waveform pass counts the lines for its own width, and the panel's next step still has its own
+    /// (with HDMI Layout the row and the plot changed height every frame and the panel's maps were cleared: seen on a
+    /// DHO924S, 2026-11-19, found on the decoder branch).
+    #[test]
+    fn the_waveform_pass_leaves_the_panel_s_badge_row_and_plot_as_they_are() {
+        let mut u = ui();
+        u.m.layout = Layout::Studio;
+        u.m.hdmi = HdmiMode::Waveform;
+        u.set_hdmi_present(true);
+        // Measure > Badge style = Studio: a row of badges that wraps onto a second line
+        u.m.studio_classic = false;
+        u.m.meas = [Meas::Vpp, Meas::Vmax, Meas::Vmin, Meas::Freq, Meas::Period]
+            .into_iter()
+            .flat_map(|k| [(k, WaveId::Ch(0)), (k, WaveId::Ch(1))])
+            .collect();
+        let mut cv = render(&mut u);
+        u.step(1.0 / 30.0);
+        u.render(&mut cv);
+        let wrap = u.studio.badge_wrap;
+        assert!(wrap > 0, "the row wraps on the panel");
+        let wide = u.with_waveform_pass(1920, 1080, |u| {
+            u.render(&mut Canvas::new(1920, 1080));
+            u.studio.badge_wrap
+        });
+        assert!(wide < wrap, "and less on the monitor: {} {}", wide, wrap);
+        let (row, plot) = (u.studio_row(), u.plot_rect());
+        let mut hc = Canvas::new(1920, 1080);
+        for round in 0..4 {
+            u.render_waveform(&mut hc);
+            assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the monitor's pass, round {}", round);
+            u.step(1.0 / 30.0);
+            u.render(&mut cv);
+            assert_eq!((u.studio_row(), u.plot_rect()), (row, plot), "after the panel's frame, round {}", round);
+        }
     }
 
     #[test]

@@ -1,34 +1,13 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! Saving and recalling: the band the HDMI capture takes, the toast after a save, the USB stick (where files go, the
+//! Saving and recalling: the toast after a save, the USB stick (where files go, the
 //! flush before it is pulled, noticing it come and go) and the set-up file with the looks of the references, and
 //! recalling it. A new kind of file to save goes next to `Ui::save_dir`.
 
 use super::*;
 
 impl Ui {
-    /// The band the external display scales when it shows the waveform: between the top bar and the cards.
-    /// HDMI workspace: the waveform area as it is now (one canvas: the band between the bars; with layers: the layer
-    /// over the traces, the GPU puts it together itself).
-    pub(super) fn capture_hdmi(&mut self, l: &Layers) {
-        match l.over.as_deref() {
-            None => {
-                let cv = &*l.under;
-                let body = self.frame().body;
-                self.hdmi_snap.clear();
-                self.hdmi_snap.extend_from_slice(&cv.px[(body.y * cv.w) as usize..(body.bottom() * cv.w) as usize]);
-            }
-            Some(o) => {
-                let s = self.hdmi_over.get_or_insert_with(|| Canvas::new_layer(o.w, o.h));
-                if (s.w, s.h) != (o.w, o.h) {
-                    *s = Canvas::new_layer(o.w, o.h);
-                }
-                s.copy_from(o);
-            }
-        }
-    }
-
     /// The file of a session: `path` as given (relative: beside the setups), or the next `session-NNN.oss` of the save
     /// folder for an empty one.
     pub(super) fn session_file(&self, path: &str, new: bool) -> Result<std::path::PathBuf, String> {

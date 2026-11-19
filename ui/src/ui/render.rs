@@ -141,8 +141,8 @@ impl Ui {
         self.draw_auto_bar(cv);
         self.draw_strip(cv);
         // Full on the external display is the plot and the strip. The statistics card and a lower pane stay on the panel.
-        if self.hdmi_snap_want && self.m.density == Density::Full {
-            self.capture_hdmi(l);
+        if self.wave_pass && self.m.density == Density::Full {
+            return self.draw_wave_pass_badges(l.over());
         }
         let cv = l.over();
         if self.pane_h() > 0 {
@@ -162,10 +162,9 @@ impl Ui {
         self.draw_md_overlays(cv);
         self.draw_axis_highlight(cv);
         self.draw_full_chrome(cv);
-        // waveform on the external display: the band between the bars, before the bars and the menus go over it
-        // (the GPU puts it together from the layers itself)
-        if self.hdmi_snap_want && self.m.density != Density::Full {
-            self.capture_hdmi(l);
+        // waveform on the external display: the waveform area is done, the bars, menus and dialogs stay on the panel
+        if self.wave_pass {
+            return self.draw_wave_pass_badges(l.over());
         }
         let cv = l.over();
         if !self.full_on() {
@@ -238,15 +237,7 @@ impl Ui {
 
     /// `render_view_layers` of the view in place.
     fn render_view_layers_as_is(&mut self, l: &mut Layers) {
-        let keep = (
-            self.scr,
-            self.grid,
-            std::mem::take(&mut self.wins),
-            self.area,
-            self.cur_win,
-            self.frames,
-            self.hdmi_snap_want,
-        );
+        let keep = (self.scr, self.grid, std::mem::take(&mut self.wins), self.area, self.cur_win, self.frames);
         // what Studio keeps of a frame (`studio_frame_start`): the lines of its badge row, counted for the width of
         // the pass, and where it drew badges and labels, for the touch. The panel's stay the panel's. With the
         // monitor's count of lines the plot of the panel changed its height from one frame to the next, and its
@@ -258,12 +249,79 @@ impl Ui {
             std::mem::take(self.studio.dec_labels.get_mut()),
         );
         self.scr = Screen { w: l.under.w, h: l.under.h };
-        (self.view_pass, self.hdmi_snap_want) = (true, false);
+        self.view_pass = true;
         self.render_layers(l);
         self.view_pass = false;
-        (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames, self.hdmi_snap_want) = keep;
+        (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames) = keep;
         self.studio.badge_wrap = studio.0;
         (*self.studio.lane_badges.get_mut(), *self.studio.dec_labels.get_mut()) = (studio.1, studio.2);
+    }
+
+    /// The monitor's picture in Display > HDMI = Waveform at the size of `cv`: the waveform area of the panel's view
+    /// (plot, lanes, decoder bands, docked panels, measurement rows) laid out for the monitor and drawn at its
+    /// resolution, without the bars, menus and dialogs, under a settings line in the top bar's place. The traces come
+    /// from the panel's phosphor maps, stretched to the larger plot as in `render_view`.
+    pub fn render_waveform(&mut self, cv: &mut Canvas) {
+        self.render_waveform_layers(&mut Layers { under: cv, over: None, jobs: Vec::new() });
+    }
+
+    /// `render_waveform` into layers (System > Graphics = GPU): the traces become jobs at the monitor's size.
+    pub fn render_waveform_layers(&mut self, l: &mut Layers) {
+        let (w, h) = (l.under.w, l.under.h);
+        self.with_waveform_pass(w, h, |u| {
+            u.render_layers(l);
+            u.draw_hdmi_header(l.over());
+        });
+    }
+
+    /// Runs `f` with the Ui laid out as the monitor's waveform area of `w` x `h`, then puts the panel's layout back,
+    /// with the touch targets the panel's last frame left (the pass draws its own at the monitor's places).
+    pub(crate) fn with_waveform_pass<R>(&mut self, w: i32, h: i32, f: impl FnOnce(&mut Ui) -> R) -> R {
+        let wins = std::mem::take(&mut self.wins);
+        // Studio's badge row is counted again for the pass's width (`studio_frame_start`): the panel's count comes
+        // back, else the panel's next step lays out a row of another height and its maps are cleared
+        let wrap = self.studio.badge_wrap;
+        let keep = (self.scr, self.grid, wins, self.area, self.cur_win, self.frames, self.full, wrap);
+        let hits = (
+            self.studio.lane_badges.take(),
+            self.studio.dec_labels.take(),
+            self.studio.label_rects.take(),
+            self.band_hits.take(),
+            self.studio.handles.take(),
+        );
+        self.scr = Screen { w, h };
+        // the panel's full screen is the panel's: the monitor shows the waveform area as it is with the bars
+        (self.view_pass, self.wave_pass, self.full) = (true, true, false);
+        let r = f(self);
+        (self.view_pass, self.wave_pass) = (false, false);
+        let wrap;
+        (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames, self.full, wrap) = keep;
+        self.studio.badge_wrap = wrap;
+        self.studio.lane_badges.replace(hits.0);
+        self.studio.dec_labels.replace(hits.1);
+        self.studio.label_rects.replace(hits.2);
+        self.band_hits.replace(hits.3);
+        self.studio.handles.replace(hits.4);
+        r
+    }
+
+    /// Studio's measurement badges in the monitor's waveform area: their row is in the waveform area, but the panel
+    /// draws them with its bottom bar, which the monitor leaves out.
+    fn draw_wave_pass_badges(&self, cv: &mut Canvas) {
+        if self.m.layout == Layout::Studio {
+            self.draw_studio_badges(cv);
+        }
+    }
+
+    /// The settings line of the monitor's waveform area, in the top bar's place.
+    fn draw_hdmi_header(&self, cv: &mut Canvas) {
+        let top = self.frame().top;
+        cv.no_clip();
+        cv.fill(top, BAR);
+        cv.hline(top.x, top.right() - 1, top.bottom() - 1, LINE);
+        // the monitor is large: the line keeps the normal text size, whatever the panel's text size is
+        let f = crate::font::Fonts::get(0);
+        cv.text_in(&f.xl, top, 1, &self.hdmi_header(), TEXT);
     }
 
     /// Graticule in the classic scope style: dotted division lines (Full), a solid frame (Full, Light) and solid

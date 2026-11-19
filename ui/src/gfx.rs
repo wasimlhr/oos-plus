@@ -149,16 +149,6 @@ impl Canvas {
         self.rec = on.then(Box::default);
     }
 
-    /// The same content as `o` (its pixels, or its commands when it records); the same size.
-    pub fn copy_from(&mut self, o: &Canvas) {
-        match &o.rec {
-            Some(r) => self.rec = Some(r.clone()),
-            None => {
-                self.rec = None;
-                self.px.copy_from_slice(&o.px);
-            }
-        }
-    }
 
     /// A command covering `(x0, y0, x1, y1)`, already clipped, with its source `(ax, ay, aw)` (`Cmd`).
     #[inline]

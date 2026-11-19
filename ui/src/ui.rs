@@ -1107,14 +1107,11 @@ pub struct Ui {
     /// Reference named on the card that replaces the trigger card, and read by the DVM and the counter.
     offline_ref: usize,
     offline_hold: Option<offline::LiveHold>,
-    /// HDMI workspace: set by the main loop on frames it shows on the monitor; the waveform area (full width, top bar
-    /// to cards) is copied here during `render`
-    pub hdmi_snap_want: bool,
     /// An external display is attached. Only then does "waveform on the external display" keep the panel bars in Full.
     hdmi_present: bool,
-    pub hdmi_snap: Vec<u32>,
-    /// the same for the GPU: the layer over the traces at that point (the monitor's workspace has no menus)
-    pub hdmi_over: Option<Canvas>,
+    /// `render_waveform` is drawing the monitor's waveform area (Display > HDMI = Waveform): the frame has no bottom
+    /// bar, and the drawing stops before the bars and menus
+    wave_pass: bool,
     /// the monitor's size while one is driven (main.rs), for `:SYSTem:STATe?`
     pub hdmi_out: Option<(u32, u32)>,
     /// start-up screen (startup.rs) and the last start-up's result (About)

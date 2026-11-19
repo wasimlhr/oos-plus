@@ -85,6 +85,14 @@ impl Ui {
     /// Top bar, waveform area and bottom bar of the screen.
     pub fn frame(&self) -> Frame {
         let mut f = Frame::of(self.scr);
+        if self.wave_pass {
+            // the monitor's waveform area: no bottom bar, the body reaches the lower edge; the settings line takes the
+            // top bar's place
+            f.body.h = self.scr.h - f.body.y;
+            f.bottom = Rect::new(f.body.x, self.scr.h, f.body.w, 0);
+            (f.menu_btn, f.cards) = (f.bottom, f.bottom);
+            return f;
+        }
         if !self.m.compact() {
             return f;
         }

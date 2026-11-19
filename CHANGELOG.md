@@ -534,6 +534,14 @@ Added:
 
 Changed:
 
+- HDMI Waveform: the monitor's picture is drawn at its own resolution (host-tested; not yet seen on a monitor). The
+  waveform area was the panel's, 1024 px wide, scaled up (to 1920 x 911 on a 1080p monitor), so its text, grid and
+  labels were blurred and blocky (the owner's 1080p monitor, 2026-11-19). It is now laid out again for the
+  monitor, up to 1920 x 1080 as in Layout: plot, lanes, decoder bands, docked views and measurement rows, Studio's
+  measurement badges included, with the glyphs the panel has, under the settings line in the top bar's place and
+  down to the lower edge. Still without the bars, menus and dialogs. The traces come from the panel's maps,
+  stretched as in Layout. The monitor's frame costs about what Layout's does (on a PC 2.1 ms against 0.6 ms for
+  the scaled copy; the panel's frame 0.7 ms).
 - Decoders: the band on the plot says what was decoded at every time base (host-tested; the UART decoder (unit),
   2026-11-19, a 9600 baud line; the other decoders not yet verified on hardware). A field too narrow for its text
   was an empty box, and one under 3 px was not drawn at all: at 50 ms/div that line showed the decoder's name and
