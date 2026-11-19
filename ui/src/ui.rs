@@ -1517,6 +1517,8 @@ pub struct Ui {
     zone_path: Vec<(i32, i32)>,
     /// Persistent draw-a-box tool; independent of the corner zoom-display toggle.
     zoom_arm: bool,
+    /// XY cursors: the multipurpose knobs move the level pair (C, D), not the time pair (`cursor_knob`)
+    cur_knob_level: bool,
     /// screen corners of the zoom box being drawn
     zoom_path: Vec<(i32, i32)>,
     /// waveform rectangle and time base the zoom box started in: (rect, s/div, delay)
@@ -1975,6 +1977,7 @@ impl Ui {
             zone_arm: None,
             zone_path: Vec::new(),
             zoom_arm: false,
+            cur_knob_level: false,
             zoom_path: Vec::new(),
             zoom_map: None,
             zone_drops: 0,
@@ -11031,6 +11034,13 @@ impl Ui {
                 }
             }
             0xb0 | 0xa0 => {
+                // Cursors on the screen: the two knobs are theirs, the first moves cursor A and the second cursor B,
+                // with no menu open or with the Cursor menu, which the Cursor key and button open. A turn opened
+                // the Menu, and in the Cursor menu it went through its rows, so the knobs moved no cursor at all
+                // (reported from a unit, 2026-11-18). Other menus keep the knobs for their rows.
+                if self.m.cursor != CursorMode::Off && (!self.menu_open || self.menu_root() == MenuId::Cursor) {
+                    return self.cursor_knob(base == 0xb0, push, dir * acc);
+                }
                 let items = self.items(self.menu);
                 if !self.menu_open {
                     self.open_menu(MenuId::Main);
@@ -11064,6 +11074,29 @@ impl Ui {
             }
             _ => {}
         }
+    }
+
+    /// A multipurpose knob while the cursors are on: `first` is the knob of cursor A, the other the one of B. With
+    /// the time and the level pair on (XY) a push of either knob gives the knobs to the other pair; in the other
+    /// modes a push opens or closes the Cursor menu. Which knob the panel calls A is assumed, not verified.
+    fn cursor_knob(&mut self, first: bool, push: bool, d: i32) {
+        let xy = self.m.cursor == CursorMode::Xy;
+        if push {
+            if xy {
+                self.cur_knob_level = !self.cur_knob_level;
+                self.toast(if self.cur_knob_level { "Knobs: the level cursors" } else { "Knobs: the time cursors" });
+            } else {
+                self.toggle_menu(MenuId::Cursor);
+            }
+            return;
+        }
+        let it = match (xy && self.cur_knob_level, first) {
+            (false, true) => Item::CurA,
+            (false, false) => Item::CurB,
+            (true, true) => Item::CurC,
+            (true, false) => Item::CurD,
+        };
+        self.adjust(it, d);
     }
 
     /// Two fingers in the grid: horizontal spread = time/div, vertical spread = V/div of the active channel.

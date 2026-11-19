@@ -7,6 +7,11 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Cursors and the multipurpose knobs (host-tested): with the cursors on, the first knob moves cursor A and the
+  second cursor B, with no menu open and with the Cursor menu that the Cursor key and button open. A turn opened
+  the Menu, and in the Cursor menu it stepped through the rows, so no knob moved a cursor. A push opens or closes
+  the Cursor menu; with time and level cursors together (XY) it gives the knobs to the other pair. Other menus
+  keep the knobs for their rows, and without cursors a turn opens the Menu as before.
 - Trigger, AC and LF reject coupling (host-tested): the level counts from the signal's mean there, and the scope
   now keeps it on the signal. Changing the coupling in the menu moves the level by that mean, the push of the
   level knob gives the middle counted from the mean, and Auto does the same. The level stayed as set with DC

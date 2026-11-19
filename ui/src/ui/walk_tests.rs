@@ -3041,3 +3041,60 @@ fn the_trigger_level_follows_the_signals_mean_with_ac_coupling() {
     assert_eq!((u.m.trig_coup, u.trig_level_base()), (TrigCoup::HfReject, 0.0));
     assert!((u.m.trig_level - place).abs() < 1e-4, "HF reject counts in volts: {} {place}", u.m.trig_level);
 }
+
+/// With the cursors on, the two multipurpose knobs move them: the first cursor A, the second cursor B, with no menu
+/// open and with the Cursor menu open. A turn opened the Menu, and in the Cursor menu it stepped through the rows, so
+/// no knob moved a cursor (reported from a unit, 2026-11-18). Without cursors a turn opens the Menu as before.
+#[test]
+fn the_multipurpose_knobs_move_the_cursors() {
+    const A_CW: u8 = 0xba;
+    const B_CW: u8 = 0xaa;
+    for layout in [Layout::Studio, Layout::Minimal, Layout::Default] {
+        let mut u = fresh(layout);
+        // no cursors: the knob opens the Menu
+        u.key(A_CW);
+        assert!(u.menu_open && u.menu == MenuId::Main, "{layout:?}");
+        u.close_menu();
+        // the Cursor key puts them on and opens their menu: the knobs move the cursors there, the menu stays
+        u.key(key::CURSOR);
+        assert!(u.m.cursor != CursorMode::Off && u.menu_open && u.menu == MenuId::Cursor, "{layout:?}");
+        let (a, b) = (u.m.cur_a, u.m.cur_b);
+        u.now += 1.0;
+        u.key(A_CW);
+        assert!(u.m.cur_a > a && u.m.cur_b == b, "{layout:?}: knob 1 moves cursor A: {} {}", u.m.cur_a, a);
+        u.now += 1.0;
+        u.key(B_CW + 1);
+        assert!(u.m.cur_b < b, "{layout:?}: knob 2 moves cursor B back");
+        assert!(u.menu_open && u.menu == MenuId::Cursor, "{layout:?}: the menu stays");
+        // and with no menu open
+        u.close_menu();
+        let a = u.m.cur_a;
+        u.now += 1.0;
+        u.key(A_CW + 1);
+        assert!(u.m.cur_a < a && !u.menu_open, "{layout:?}: no menu opens, the cursor moves");
+        // a push opens the Cursor menu, the next closes it
+        u.key(A_CW + 2);
+        assert!(u.menu_open && u.menu == MenuId::Cursor, "{layout:?}");
+        u.key(B_CW + 2);
+        assert!(!u.menu_open, "{layout:?}");
+        // another menu keeps the knobs for its rows
+        u.open_menu(MenuId::Trigger);
+        let a = u.m.cur_a;
+        u.now += 1.0;
+        u.key(A_CW);
+        assert_eq!(u.m.cur_a, a, "{layout:?}: the Trigger menu has the knob");
+        u.close_menu();
+        // time and level cursors together: a push gives the knobs to the other pair
+        u.m.cursor = CursorMode::Xy;
+        let (a, c) = (u.m.cur_a, u.m.cur_c);
+        u.key(A_CW + 2);
+        assert!(!u.menu_open, "{layout:?}: the push changes the pair, no menu");
+        u.now += 1.0;
+        u.key(A_CW);
+        assert!(u.m.cur_c != c && u.m.cur_a == a, "{layout:?}: knob 1 moves the first level cursor");
+        u.key(A_CW + 2);
+        u.now += 1.0;
+        u.key(A_CW);
+        assert!(u.m.cur_a != a, "{layout:?}: and the time cursor again");
+    }
+}
