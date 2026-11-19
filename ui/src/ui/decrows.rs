@@ -195,6 +195,24 @@ fn errors_text(errors: usize) -> String {
 
 /// Whether a pane `w` wide has its Errors column: it has the room, and `failed` rows of the record failed a check. A
 /// record without a failed check has no such column, and its text has the room.
+/// The widths of a protocol's columns in `free` pixels. A column that no row of the record fills is left out (the
+/// MISO column of an SPI bus read on one line, the slow channel of a SENT sensor that has none). Of the others each
+/// is as wide as its title and its cells need (`need`; a third of the room at most), and the columns of the data
+/// (`data`; the last column where there is none) share what is left.
+fn own_widths(need: &[i32], data: &[bool], filled: &[bool], free: i32) -> Vec<i32> {
+    let n = need.len();
+    let last = (0..n).rev().find(|&k| filled[k]);
+    let any = (0..n).any(|k| filled[k] && data[k]);
+    let wide = |k: usize| filled[k] && if any { data[k] } else { Some(k) == last };
+    let mut w: Vec<i32> = (0..n).map(|k| if filled[k] && !wide(k) { need[k].min(free / 3) } else { 0 }).collect();
+    let share = (0..n).filter(|&k| wide(k)).count() as i32;
+    let left = (free - w.iter().sum::<i32>()).max(0);
+    for k in (0..n).filter(|&k| wide(k)) {
+        w[k] = left / share;
+    }
+    w
+}
+
 fn errors_column(w: i32, failed: usize) -> bool {
     w >= SMALL_W && failed > 0
 }
@@ -384,19 +402,20 @@ impl Ui {
         (!own.is_empty() && self.pn.rows.iter().all(|e| std::ptr::eq(e.cols, own))).then_some(own)
     }
 
-    /// The widths of the protocol's columns in `free` pixels: each as wide as its title and its cells need, and the
-    /// column of the data (the last one where there is none) takes what is left. The cells measured are those of the
-    /// first rows of the record, not of the screen, so the columns stand still while the list scrolls.
+    /// The widths of the protocol's columns in `free` pixels (`own_widths`). The cells measured are those of the
+    /// first rows of the record, and a column is there when a row of the whole record fills it: of the record, not
+    /// of the screen, so the columns stand still while the list scrolls.
     fn events_own_widths(&self, own: &[(&'static str, Col)], f: &Font, free: i32, pad: i32) -> Vec<i32> {
-        let wide = own.iter().position(|c| matches!(c.1, Col::Data | Col::Rest | Col::Second)).unwrap_or(own.len() - 1);
         let need = |k: usize| -> i32 {
             let cells = self.pn.rows.iter().take(64).filter_map(|e| e.cells.get(k)).map(|c| f.width(c));
             cells.fold(f.width(own[k].0), i32::max) + pad
         };
-        // a column that is not the data's has a third of the room at most
-        let mut w: Vec<i32> = (0..own.len()).map(|k| if k == wide { 0 } else { need(k).min(free / 3) }).collect();
-        w[wide] = (free - w.iter().sum::<i32>()).max(0);
-        w
+        let need: Vec<i32> = (0..own.len()).map(need).collect();
+        let is_data = |c: &(&str, Col)| matches!(c.1, Col::Data | Col::Rest | Col::First | Col::Second);
+        let data: Vec<bool> = own.iter().map(is_data).collect();
+        let filled = |k: usize| self.pn.rows.iter().any(|e| e.cells.get(k).is_some_and(|c| !c.is_empty()));
+        let filled: Vec<bool> = (0..own.len()).map(filled).collect();
+        own_widths(&need, &data, &filled, free)
     }
 
     /// The widths of the columns that depend on what is listed: the decoder names of the whole record (0 without a
@@ -575,6 +594,23 @@ mod tests {
     }
 
     /// The same characters as messages (split at the long pause), as fields and as lines (split at the line feed).
+    /// The columns of a protocol share the room: one that no row fills is left out, the data takes what is left.
+    #[test]
+    fn a_column_no_row_fills_is_left_out() {
+        // SPI read on one line: the MOSI column has the whole room, a frame of many bytes is not cut
+        assert_eq!(own_widths(&[40, 40], &[true, true], &[true, false], 600), [600, 0]);
+        // both lines: they share it
+        assert_eq!(own_widths(&[40, 40], &[true, true], &[true, true], 600), [300, 300]);
+        // CAN: identifier, length and CRC as wide as they need, the data the rest
+        assert_eq!(own_widths(&[60, 30, 50, 70], &[false, false, true, false], &[true; 4], 600), [60, 30, 440, 70]);
+        // a record of remote frames has no data: the last column that is filled takes the room
+        let no_data = [true, true, false, true];
+        assert_eq!(own_widths(&[60, 30, 50, 70], &[false, false, true, false], &no_data, 600), [60, 30, 0, 510]);
+        // a column that is not the data's has a third of the room at most; no row at all: no column
+        assert_eq!(own_widths(&[500, 40], &[false, true], &[true, true], 600), [200, 400]);
+        assert_eq!(own_widths(&[40, 40], &[true, true], &[false, false], 600), [0, 0]);
+    }
+
     #[test]
     fn the_rows_are_messages_fields_or_lines() {
         // "Hi\n" at one pace, a long pause, then "yo"
