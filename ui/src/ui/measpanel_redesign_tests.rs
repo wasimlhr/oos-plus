@@ -274,12 +274,35 @@ fn the_thumbtack_toggles_the_pin_and_is_filled_when_pinned() {
     let row = u.detail_layout(&g, n, 0)[2].1;
     let key = u.studio_keys()[u.studio_listed(&u.meas_rows())[2]];
     let was = u.studio_is_pinned(key);
-    let pin = u.detail_pin_rect(&g, row);
-    assert!(pin.x >= g.list.x && pin.right() <= g.list.right());
+    // the table has no thumbtack (it took the end of every name, in a panel 320 px wide): where it was, a tap opens
+    // the settings of the row as anywhere else on it, and the pin stays
+    let (cols, _) = Ui::detail_cols(g.list.w);
+    let name = Ui::detail_cell(row, cols[1].1, cols[1].2, 0);
+    tap_at(&mut u, name.right() - 10, row.y + row.h / 2);
+    assert_eq!(u.studio_is_pinned(key), was);
+    assert!(u.meas_cfg.is_some(), "the tap opened no settings");
+    u.close_menu();
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    cv.au_start();
+    u.render(&mut cv);
+    // the cards have it: a tap on the tack of a card pins and unpins
+    u.m.studio_detail = false;
+    u.studio.panel.cards = true;
+    u.relayout();
+    frame(&mut u);
+    let g = u.studio_panel_geo().unwrap();
+    let (pos, card) = u.panel_cards_layout(0, n, g.list)[2];
+    let key = u.studio_keys()[u.studio_listed(&u.meas_rows())[pos]];
+    let was = u.studio_is_pinned(key);
+    let pin = Ui::panel_card_pin(card);
     tap(&mut u, pin);
     assert_eq!(u.studio_is_pinned(key), !was);
     tap(&mut u, pin);
     assert_eq!(u.studio_is_pinned(key), was);
+    u.m.studio_detail = true;
+    u.studio.panel.cards = false;
+    u.relayout();
+    frame(&mut u);
     // the picture: a filled tack covers more pixels than an outline one, and both stay in their 12 x 17 box
     let ink = |filled: bool| {
         let mut cv = Canvas::new(40, 40);
@@ -416,7 +439,11 @@ fn the_top_bar_has_one_add_button_and_its_menu_starts_with_measurement() {
     tap(&mut u, t.add);
     let r = u.studio_add_rows().into_iter().find(|(k, _)| *k == super::addmenu::AddRow::ResultsTable).unwrap().1;
     tap(&mut u, r);
+    assert!(u.menu_open && u.menu == MenuId::AddPanel && !u.studio_panel_shown());
+    let add = u.rail_geo().foot[0].1;
+    tap(&mut u, add);
     assert!(u.studio_panel_shown());
+    u.close_menu();
     // a tap outside closes it
     tap(&mut u, t.add);
     assert!(u.studio.add_menu);
@@ -439,9 +466,6 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
         assert!(u.studio.hide_badges);
         let show = u.studio_bottom().show.expect("a restore chip in the bottom bar");
         shotb(&mut u, "strip-hidden");
-    assert!(u.menu_open && u.menu == MenuId::AddPanel && !u.studio_panel_shown());
-    let add = u.rail_geo().foot[0].1;
-    tap(&mut u, add);
         tap(&mut u, show);
         assert!(!u.studio.hide_badges, "one tap brings the strip back");
         // the Add menu adds things: showing the strip is the chip above and View > Show pinned badges

@@ -18,6 +18,9 @@ Fixed:
   table of the measurements without a word, and no row of the menu led to the other two. The page opens on the
   table that is on the screen, else on the events of a decoder or a search that is on; the row says On for any
   of the three.
+- Studio, the table of the measurements (host-tested): no thumbtack at the end of every name. It was a column
+  of its own in a panel 320 px wide; the cards and the list of the same panel have it, and the bar its filter.
+  A tap anywhere on a row opens the settings of the measurement.
 - The Decode sheet of Studio and Minimal (host-tested): what the protocol itself needs is on the first page with its
   lines (the baud rate, data bits and parity of a UART, the mode of SPI), where it was on Settings; the B line of a
   differential pair is on Settings; a line is named by its role in the protocol (MOSI, Clock, CS); the channels of

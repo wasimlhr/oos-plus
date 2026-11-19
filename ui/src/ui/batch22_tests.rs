@@ -89,7 +89,7 @@ fn check_table(u: &Ui) {
     let rows = u.meas_rows();
     let keys = u.studio_keys();
     for (i, r) in rows.iter().enumerate() {
-        let room = cells[1].w - super::measview::DETAIL_PIN_W;
+        let room = cells[1].w;
         let (shown, small) = u.detail_name(keys.get(i).copied(), &r.name, room);
         assert!(if small { f.s.width(&shown) } else { f.m.width(&shown) } <= room, "{shown:?} in {room}");
         assert!(f.mb.width(&r.text()) <= cells[2].w, "value {:?} in {:?}", r.text(), cells[2]);
@@ -108,7 +108,7 @@ fn the_detailed_table_has_no_overlaps_at_the_default_and_the_minimum_panel_width
     let i = rows.iter().position(|r| r.name.contains("Peak")).expect("a Peak-to-Peak row");
     let (cols, _) = Ui::detail_cols(g.list.w);
     let cell = Ui::detail_cell(Rect::new(0, 0, g.list.w, 38), cols[1].1, cols[1].2, 0);
-    let shown = u.detail_name(keys.get(i).copied(), &rows[i].name, cell.w - super::measview::DETAIL_PIN_W).0;
+    let shown = u.detail_name(keys.get(i).copied(), &rows[i].name, cell.w).0;
     assert!(shown == rows[i].name || shown == "Pk-pk", "{shown:?}");
     shot(&mut u, "meas-detailed");
     panel_width(&mut u, 200);
@@ -301,7 +301,7 @@ fn narrow_columns_are_whole_or_gone_and_eye_names_stay_apart() {
     let rows = u.meas_rows();
     let keys = u.studio_keys();
     let name = Ui::detail_cell(Rect::new(0, 0, g.list.w, 38), cols[1].1, cols[1].2, 0);
-    let room = name.w - super::measview::DETAIL_PIN_W;
+    let room = name.w;
     let shown: Vec<(String, String)> = rows.iter().enumerate().map(|(i, r)| (r.name.clone(), u.detail_name(keys.get(i).copied(), &r.name, room).0)).collect();
     for (long, s) in &shown { assert!(f.s.width(s).max(f.m.width(s).min(room)) <= room, "{long:?} -> {s:?}"); }
     for (a, sa) in &shown { for (b, sb) in &shown { if a != b { assert_ne!(sa, sb, "{a:?} and {b:?} read the same"); } } }

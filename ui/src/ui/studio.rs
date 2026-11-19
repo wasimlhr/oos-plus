@@ -2584,10 +2584,8 @@ impl Ui {
                         let key = keys.get(i).copied();
                         if Self::panel_card_pin(row).contains(x, y) { if let Some(key) = key { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); } } else { self.studio_configure(i); }
                     } else if self.studio_detailed() {
-                        // the thumbtack at the end of the name toggles the pin, the rest of the row opens its settings
-                        if self.detail_pin_rect(&g, row).contains(x, y) {
-                            if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
-                        } else { self.studio_configure(i); }
+                        // the table: the whole row opens its settings (the pin is on the cards and in the list)
+                        self.studio_configure(i);
                     }
                     else if menu.contains(x, y) {
                         if let Some(&key) = keys.get(i) { self.studio.md.menu = Some(key); }
