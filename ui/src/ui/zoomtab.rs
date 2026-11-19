@@ -7,7 +7,6 @@
 use super::studio::chip;
 use super::*;
 
-const TAB_W: i32 = 150;
 const TAB_H: i32 = 26;
 /// The open toolbar: its chips are the 40 px a finger needs.
 const BAR_H: i32 = 44;
@@ -27,10 +26,17 @@ impl Ui {
     /// The top edge of the zoom view.
     fn zoom_view_top(&self) -> Rect { self.split_zoom(self.grid).1 }
 
-    /// The closed tab: a handle centred at the top of the zoom view.
+    /// What the closed tab says: the zoom and its factor ("Zoom 10x").
+    fn zoom_tab_text(&self) -> String {
+        format!("Zoom {}", super::studio::zoom_text_pub(self.studio_time_zoom()))
+    }
+
+    /// The closed tab: a handle centred at the top of the zoom view, as wide as its arrow and its words (it was
+    /// 150 px whatever it said: "too long", the owner from the unit).
     pub(super) fn zoom_tab_rect(&self) -> Rect {
         let z = self.zoom_view_top();
-        Rect::new(z.x + z.w / 2 - TAB_W / 2, z.y, TAB_W, TAB_H)
+        let w = 26 + self.fonts().sb.width(&self.zoom_tab_text()) + 12;
+        Rect::new(z.x + z.w / 2 - w / 2, z.y, w, TAB_H)
     }
 
     /// The open toolbar: over the top of the zoom view, no room taken from it.
@@ -64,8 +70,7 @@ impl Ui {
         chip(cv, r, BAR, BTN_BORDER);
         let f = self.fonts();
         chevron_down(cv, r.x + 14, r.y + r.h / 2 - 2, DIM);
-        let text = format!("Zoom {}", super::studio::zoom_text_pub(self.studio_time_zoom()));
-        cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 30, r.h), 0, &text, TEXT);
+        cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 30, r.h), 0, &self.zoom_tab_text(), TEXT);
     }
 
     /// The touch area of the closed tab (the usual 40 px target grows it down and sideways).

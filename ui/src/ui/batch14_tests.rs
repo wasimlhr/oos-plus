@@ -416,7 +416,9 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
         let over = hit.x < r.right() && r.x < hit.right() && hit.y < r.bottom() && r.y < hit.bottom();
         assert!(!over, "the grip {hit:?} sits on {r:?}");
     }
-    assert!(handle.w >= 40 && hit.h >= 40);
+    // the finger's area stays; the grip that is drawn is a slim bar inside it, on the edge it moves
+    assert!(hit.w >= 40 && hit.h >= 40, "{hit:?}");
+    assert!(handle.h <= 6 && handle.w <= hit.w && handle.y >= hit.y && handle.bottom() <= hit.bottom() + 6, "{handle:?} in {hit:?}");
     // a trigger level as high as the corner buttons
     u.set_zoom(false);
     frame(&mut u);

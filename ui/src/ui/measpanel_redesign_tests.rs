@@ -541,6 +541,9 @@ fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
     let tab = u.zoom_tab_rect();
     let (_, z) = u.split_zoom(u.grid);
     assert!(tab.y == z.y && tab.w < 200 && tab.h <= 28);
+    // as wide as its arrow and its words, and no wider
+    let words = u.fonts().sb.width(&format!("Zoom {}", super::studio::zoom_text_pub(u.studio_time_zoom())));
+    assert!(tab.w >= words + 30 && tab.w <= words + 44 && tab.w < 130, "{tab:?} for {words} px of words");
     shotb(&mut u, "zoom-tab-closed");
     tap(&mut u, tab);
     assert!(u.zoom_tab_open() && u.studio_zoom_bar().is_some());
@@ -583,6 +586,13 @@ fn the_zoom_controls_are_in_the_title_bar_or_in_a_pull_down_tab() {
     let (x, y) = (label.x + label.w / 2, label.y + label.h / 2);
     drag(&mut u, (x, y), (x, y - 40));
     assert!(!u.zoom_tab_open());
+    // the X of the toolbar folds the toolbar: the zoom stays, with its window
+    let tab = u.zoom_tab_rect();
+    tap(&mut u, tab);
+    let (close, window) = (u.studio_zoom_bar().expect("the toolbar").close, (u.m.zscale, u.m.zdelay));
+    tap(&mut u, close);
+    assert!(!u.zoom_tab_open() && u.studio_zoom_bar().is_none(), "the X folds the toolbar");
+    assert!(u.m.zoom && (u.m.zscale, u.m.zdelay) == window, "and the zoom stays as it was");
     // the setting is saved
     let mut m = Model::default();
     m.studio_zoom_tab = false;

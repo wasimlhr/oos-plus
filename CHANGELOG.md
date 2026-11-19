@@ -696,6 +696,14 @@ Changed:
   line, its plot changed its height from frame to frame, and its traces were cleared each time. What Studio
   keeps of a frame (the lines of the badge row, where badges and labels were drawn for the touch) is the panel's
   again after the monitor's pass. Reproduced and tested on the host; not yet run on a unit.
+- Studio, the zoom with its pull-down tab (the owner from the unit; host-tested):
+  - the tab is as wide as what it says ("Zoom 20x"); it was 150 px whatever it said;
+  - the X of the toolbar that the tab opened folds the toolbar, and the zoom stays. It closed the zoom, so the
+    toolbar could not be put away without losing the zoom. The zoom goes off with its button on the plot, with
+    Close zoom behind the dots of the toolbar, or with the X of the title strip where the tab is switched off;
+  - the grip that sets the height of the overview is a slim bar on the edge it moves. It was a chip of 44 x 24 px
+    with three dots that stood right over the tab and read as one more menu. The area that takes the finger is
+    the same (60 x 42 px).
 - Manchester on the channels of the scope, checked on a unit (DHO924S, 2026-11-19: the 10BASE-T output of a
   demo board, 10 Mbit/s, about 1 V each way around 0 V). The decoder reads its packets at the rate it finds in
   the signal: a ping of 102 bytes with the right frame check, and frames the board changes on purpose (other

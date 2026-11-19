@@ -3268,7 +3268,12 @@ impl Ui {
                 else if bar.minus.contains(x, y) { self.studio_zoom_do(ZoomRow::Minus); }
                 else if bar.vplus.contains(x, y) { self.studio_zoom_do(ZoomRow::VPlus); }
                 else if bar.vminus.contains(x, y) { self.studio_zoom_do(ZoomRow::VMinus); }
-                else if bar.close.contains(x, y) { self.studio_zoom_do(ZoomRow::Close); }
+                // the X of the toolbar that the tab opened folds the toolbar: the zoom stays (it closed the zoom,
+                // "not just the menu", the owner from the unit). The zoom goes off with its button on the plot, or
+                // with Close zoom in the list behind the dots. In the title strip the X is the zoom's own
+                else if bar.close.contains(x, y) {
+                    if self.zoom_tab_mode() && self.zoom_tab_open() { self.zoom_tab_set(false); } else { self.studio_zoom_do(ZoomRow::Close); }
+                }
                 else if bar.tdiv.contains(x, y) { self.open_menu(MenuId::Horizontal); }
                 else if bar.center.contains(x, y) { self.studio_center_trigger(); }
                 else if bar.fit.contains(x, y) { self.reset_zoom(); }
