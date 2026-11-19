@@ -16,7 +16,6 @@ Everything around the decoder comes from that one type:
 | protocol trigger | Trigger > Bus: what "Frame", "ID/Addr", "Data", "Error" mean | `trigger_match` (the generic rule) |
 | trigger start value | what Trigger > Bus looks for when it is switched on | `trigger_default` (Frame) |
 | trigger timing | sampling (a twentieth of a bit) and the search window: a frame before the hardware point and a frame behind the search region, so a frame that begins there is read whole | `bit_time` (required), `frame_span` (200 bits) |
-| trigger in a short record | what is whole of a frame that the record cuts off, for the trigger on the hardware alone (the band reads with `decode`) | `decode_cut` (the same as `decode`; CAN and CAN-FD give start, identifier and the data bytes read) |
 | hardware edge | the edge the hardware trigger arms on in front of the protocol trigger, and on which role's line | `start_edge` (falling), `start_role` (the main line) |
 | first settings | channels, LA lines, threshold, shared-row values and the demo's trigger when the protocol is chosen | `setup` (CH3 / CH4, 1.65 V) |
 | old setups | how a setup saved before the protocol was a module maps onto its options | `legacy` (none) |

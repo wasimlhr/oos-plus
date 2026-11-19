@@ -60,10 +60,6 @@ impl Protocol for CanFd {
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
         Ok(x1::can_fd(l.main(), l.dt, crate::decode::CAN_RATES[l.opt[0]], crate::decode::FD_RATES[l.opt[1]], l.thr, l.hy, l.opt[2] == 1))
     }
-    fn decode_cut(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
-        let (nominal, data) = (crate::decode::CAN_RATES[l.opt[0]], crate::decode::FD_RATES[l.opt[1]]);
-        Ok(x1::can_fd_cut(l.main(), l.dt, nominal, data, l.thr, l.hy, l.opt[2] == 1))
-    }
     /// The data length as the number of bytes the frame has (the code C of a frame of 24 bytes read "DLC C").
     fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
         match p.kind {

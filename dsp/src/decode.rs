@@ -799,19 +799,12 @@ pub fn can_crc15(bits: &[bool]) -> u16 {
 /// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
 /// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
 /// (`can_keep_flags`).
+///
+/// Of a frame that the end of the record cuts off, the fields that are whole: its start, its identifier and the data
+/// bytes read so far, and no CRC. A record that ends inside a frame gave nothing of it, so at a time base whose
+/// record is shorter than a frame the band was empty and no field could be triggered on (seen on a unit: a record
+/// of 160 us at 10 us/div, a frame of 112 us that begins 72 us before its end).
 pub fn can(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
-    can_frames(v, dt, bitrate, thr, hyst, invert, false)
-}
-
-/// `can`, and of a frame that the end of the record cuts off the fields that are whole: its start, its identifier
-/// and the data bytes read so far. For the protocol trigger, which has to find a field in a record that is shorter
-/// than its frame (seen on a unit: a record of 56 us at 5 us/div, a frame of 112 us, and no trigger on its
-/// identifier).
-pub fn can_cut(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
-    can_frames(v, dt, bitrate, thr, hyst, invert, true)
-}
-
-fn can_frames(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: bool, cut: bool) -> Vec<Packet> {
     let spb = 1.0 / bitrate / dt;
     let mut out = Vec::new();
     if spb < 3.0 {
@@ -852,7 +845,7 @@ fn can_frames(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: boo
         if x.t - idle_from < 7.0 * spb {
             continue;
         }
-        if let Some((pk, end)) = can_frame(x.t, spb, &rec, &edge_near, cut) {
+        if let Some((pk, end)) = can_frame(x.t, spb, &rec, &edge_near) {
             busy_until = end;
             out.extend(pk);
         }
@@ -861,12 +854,11 @@ fn can_frames(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32, invert: boo
     out
 }
 
-/// What is whole of a CAN frame that the record cuts off, from its de-stuffed bits so far (`can_cut`): start and
-/// identifier once the format is known, and the data bytes read. None where `cut` is off or the identifier is not
-/// whole.
-fn can_cut_off(cut: bool, bits: &[(bool, f64, f64)], ext: bool, known: bool) -> Option<(Vec<Packet>, f64)> {
+/// What is whole of a CAN frame that the record cuts off, from its de-stuffed bits so far: start and identifier
+/// once the format is known, and the data bytes read. None where the identifier is not whole.
+fn can_cut_off(bits: &[(bool, f64, f64)], ext: bool, known: bool) -> Option<(Vec<Packet>, f64)> {
     let n = bits.len();
-    if !cut || n < 14 || (ext && n < 33) {
+    if n < 14 || (ext && n < 33) {
         return None;
     }
     let val = |r: std::ops::Range<usize>| bits[r].iter().fold(0u32, |a, b| a << 1 | b.0 as u32);
@@ -888,14 +880,13 @@ fn can_cut_off(cut: bool, bits: &[(bool, f64, f64)], ext: bool, known: bool) -> 
     Some((out, bits[n - 1].2))
 }
 
-/// One CAN frame from its SOF edge at `sof`: the packets and the time after the ACK delimiter. `cut`: of a frame
-/// that the record cuts off, what `can_cut_off` gives.
+/// One CAN frame from its SOF edge at `sof`: the packets and the time after the ACK delimiter; of a frame that the
+/// record cuts off, what `can_cut_off` gives.
 fn can_frame(
     sof: f64,
     spb: f64,
     rec: &dyn Fn(f64) -> Option<bool>,
     edge_near: &dyn Fn(f64, f64) -> Option<f64>,
-    cut: bool,
 ) -> Option<(Vec<Packet>, f64)> {
     let mut start = sof;
     let mut raw: Vec<(bool, f64, f64)> = Vec::new(); // (level, bit start, bit end)
@@ -915,7 +906,7 @@ fn can_frame(
     let mut need = 19usize; // SOF + ID 11 + RTR/SRR + IDE + r0 + DLC 4, grows when the header is known
     let (mut ext, mut known) = (false, false);
     while bits.len() < need {
-        let Some(b) = next() else { return can_cut_off(cut, &bits, ext, known) };
+        let Some(b) = next() else { return can_cut_off(&bits, ext, known) };
         raw.push(b);
         if run == 5 {
             // stuff bit: must be the complement, not part of the data
@@ -959,11 +950,11 @@ fn can_frame(
     let crc_rx = val(crc_at..crc_at + 15) as u16;
     // stuffing covers SOF .. CRC sequence: a run of five at the end of the CRC is followed by one more stuff bit
     if run == 5 && next().is_none() {
-        return can_cut_off(cut, &bits, ext, known);
+        return can_cut_off(&bits, ext, known);
     }
     // CRC delimiter, ACK slot, ACK delimiter are not stuffed
     let (Some(_), Some(ack), Some(ack_del)) = (next(), next(), next()) else {
-        return can_cut_off(cut, &bits, ext, known);
+        return can_cut_off(&bits, ext, known);
     };
     let pk = |kind, a: usize, b: usize, value: u32, ok: bool| Packet { t0: bits[a].1, t1: bits[b].2, kind, value, value2: None, ok };
     let mut out = vec![Packet { t0: bits[0].1, t1: bits[0].2, kind: Kind::Start, value: 0, value2: None, ok: true }];

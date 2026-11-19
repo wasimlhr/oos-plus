@@ -681,13 +681,14 @@ Changed:
   trigger point in each picture looked at (before: no frame in 70 s), and at 200 us/div in 18 of 19. At 5 us/div
   it takes none: the record there (35 kpts at 625 MSa/s, 56 us) is shorter than the frame, and the decoder gives
   nothing of a frame that is cut off.
-- Protocol trigger on CAN and CAN-FD: it finds a field of a frame that the record cuts off. The decoders give
-  nothing of such a frame, so at a time base whose record ends inside the frame the trigger took none (unit,
-  CAN at 500 kbit/s, trigger on an identifier: no frame in 24 s at 10 us/div, where the record of 160 us ends
-  88 us behind the start of a frame of 112 us). For the trigger on the hardware the decoders give what is whole
-  of such a frame: its start, its identifier, the data bytes read so far. The band, the Events pane and the
-  search marks read as before. At 5 us/div the record (56 us) begins 4 us before the frame: too little of the
-  quiet bus to know a start of frame, and the trigger takes none there.
+- CAN and CAN-FD decoders: of a frame that the record cuts off they give what is whole, its start, its
+  identifier and the data bytes read so far, and no CRC (the owner's decision, 2026-11-19). They gave nothing of
+  such a frame, so at a time base whose record ends inside the frame the band had no field of it and the
+  protocol trigger took none (unit, CAN at 500 kbit/s, trigger on an identifier: no frame in 24 s at 10 us/div,
+  where the record of 160 us ends 88 us behind the start of a frame of 112 us). The last frame of a record now
+  shows without its CRC where the record ends in it, in the band and in the Events pane. At 5 us/div the record
+  (56 us) begins 4 us before the frame: too little of the quiet bus to know a start of frame, and the trigger
+  takes none there.
 - CAN and CAN-FD decoders: the bit timing follows the edges from recessive to dominant alone, as a node's does.
   They resynchronised on every edge, and on a line that is slow on its way back to recessive the bit behind that
   edge was sampled in its neighbour. Found on a unit (DHO924S, 2026-11-19: CAN_H at 500 kbit/s, probed so that

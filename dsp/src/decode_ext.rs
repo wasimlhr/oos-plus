@@ -844,27 +844,10 @@ impl BitClock<'_> {
 /// Six to twelve dominant bit times in a row are an error flag (or an overload flag), which no frame holds: where no
 /// frame is being read they are Field("!ERROR FRAME"), in a record that holds a frame with the right CRC
 /// (`decode::can_keep_flags`).
+///
+/// Of a frame that the end of the record cuts off, the fields that are whole: its start, its identifier and the data
+/// bytes read so far (`decode::can`).
 pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
-    can_fd_frames(v, dt, nominal, data_rate, thr, hyst, invert, false)
-}
-
-/// `can_fd`, and of a frame that the end of the record cuts off the fields that are whole: its start, its identifier
-/// and the data bytes read so far (`decode::can_cut`).
-pub fn can_fd_cut(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: f32, invert: bool) -> Vec<Packet> {
-    can_fd_frames(v, dt, nominal, data_rate, thr, hyst, invert, true)
-}
-
-#[allow(clippy::too_many_arguments)] // the arguments of `can_fd` and what to do with a frame that is cut off
-fn can_fd_frames(
-    v: &[f32],
-    dt: f64,
-    nominal: f64,
-    data_rate: f64,
-    thr: f32,
-    hyst: f32,
-    invert: bool,
-    cut: bool,
-) -> Vec<Packet> {
     let tn = 1.0 / nominal / dt;
     let td = 1.0 / data_rate / dt;
     let mut out = Vec::new();
@@ -901,7 +884,7 @@ fn can_fd_frames(
             continue;
         }
         let mut clk = BitClock { t: x.t, rec: &rec, e: &dominant };
-        if let Some((pk, end)) = can_fd_frame(&mut clk, tn, td, cut) {
+        if let Some((pk, end)) = can_fd_frame(&mut clk, tn, td) {
             busy_until = end;
             out.extend(pk);
         }
@@ -910,17 +893,12 @@ fn can_fd_frames(
     out
 }
 
-/// What is whole of a frame that the record cuts off, from its de-stuffed bits so far (`can_fd_cut`): start and
-/// identifier once the format is known, and the data bytes read (`data` = where the data field begins and ends, once
-/// the length is known). None where `cut` is off or the identifier is not whole.
-fn can_fd_cut_off(
-    cut: bool,
-    bits: &[(bool, f64, f64)],
-    ext: bool,
-    data: Option<(usize, usize)>,
-) -> Option<(Vec<Packet>, f64)> {
+/// What is whole of a frame that the record cuts off, from its de-stuffed bits so far: start and identifier once
+/// the format is known, and the data bytes read (`data` = where the data field begins and ends, once the length is
+/// known). None where the identifier is not whole.
+fn can_fd_cut_off(bits: &[(bool, f64, f64)], ext: bool, data: Option<(usize, usize)>) -> Option<(Vec<Packet>, f64)> {
     let n = bits.len();
-    if !cut || n < 14 || (ext && n < 33) {
+    if n < 14 || (ext && n < 33) {
         return None;
     }
     let val = |r: std::ops::Range<usize>| bits[r].iter().fold(0u32, |a, b| a << 1 | b.0 as u32);
@@ -939,9 +917,9 @@ fn can_fd_cut_off(
     Some((out, bits[n - 1].2))
 }
 
-/// One CAN / CAN FD frame from its SOF: the packets and the time after the ACK delimiter. `cut`: of a frame that the
-/// record cuts off, what `can_fd_cut_off` gives.
-fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64, cut: bool) -> Option<(Vec<Packet>, f64)> {
+/// One CAN / CAN FD frame from its SOF: the packets and the time after the ACK delimiter; of a frame that the record
+/// cuts off, what `can_fd_cut_off` gives.
+fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64) -> Option<(Vec<Packet>, f64)> {
     let sof = clk.t;
     let mut raw: Vec<bool> = Vec::new(); // SOF .. data end with the dynamic stuff bits (FD CRC input)
     let mut bits: Vec<(bool, f64, f64)> = Vec::new(); // de-stuffed
@@ -966,7 +944,7 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64, cut: bool) -> Option<(Vec<
         };
         let Some(b) = got else {
             let field = (data_end != usize::MAX).then(|| (dlc_at + 4, data_end));
-            return can_fd_cut_off(cut, &bits, ext, field);
+            return can_fd_cut_off(&bits, ext, field);
         };
         raw.push(b.0);
         if stuff {
@@ -1030,7 +1008,7 @@ fn can_fd_frame(clk: &mut BitClock, tn: f64, td: f64, cut: bool) -> Option<(Vec<
         ($e:expr) => {
             match $e {
                 Some(b) => b,
-                None => return can_fd_cut_off(cut, &bits, ext, Some((dlc_at + 4, data_end))),
+                None => return can_fd_cut_off(&bits, ext, Some((dlc_at + 4, data_end))),
             }
         };
     }

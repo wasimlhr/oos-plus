@@ -397,14 +397,6 @@ pub trait Protocol: Sync {
     /// Decodes the lines. Packet times are fractional sample indices.
     fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str>;
 
-    /// `decode` for the protocol trigger on the hardware: with the fields that are whole of a frame the end of the
-    /// lines cuts off, where the decoder gives nothing of such a frame. At a time base whose record is shorter
-    /// than a frame the trigger has nothing else to find (CAN on a unit: 56 us of record, a frame of 112 us). The
-    /// band and the Events pane read with `decode`.
-    fn decode_cut(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
-        self.decode(l)
-    }
-
     /// Text of a decoded field on the trace and in the event table; `None` = the generic text of its kind.
     fn text(&self, _p: &Packet, _opt: &[usize; OPTS]) -> Option<String> {
         None

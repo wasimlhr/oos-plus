@@ -93,7 +93,7 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
         let (first, last) = (-t_first / f.dt, len as f64 - 1.0 - (t_first + window) / f.dt);
         let fits = |t: &f64| first > last || (first..=last).contains(t);
         let nearest = |a: &f64, b: &f64| (a - f.pre as f64).abs().total_cmp(&(b - f.pre as f64).abs());
-        let all: Vec<f64> = crate::trig::find_all_cut(m, &inp).into_iter().map(|t| t + lo as f64).collect();
+        let all: Vec<f64> = crate::trig::find_all(m, &inp).into_iter().map(|t| t + lo as f64).collect();
         all.iter().copied().filter(fits).min_by(nearest).or_else(|| {
             // the protocol trigger: the hardware fires on any frame, and the field asked for is found in the record.
             // Where it stands too far from the hardware point to be moved to the trigger point, the frame is none
@@ -358,10 +358,10 @@ mod tests {
 
     /// The protocol trigger on a frame that the record cuts off, as on the unit: CAN at 500 kbit/s, 10 us/div,
     /// 100 000 points at 625 MSa/s (160 us), a frame of 222 us whose identifier ends at the hardware point, so the
-    /// record ends 52 us into its data. The decoder gives nothing of a frame that is cut off, and the trigger took
-    /// no frame; it finds the identifier with the fields that are whole (`Protocol::decode_cut`), also with the
-    /// CAN-FD decoder. (At 5 us/div the record there is 56 us and begins 4 us before the frame: too little of the
-    /// quiet bus before it to know its first edge for a start of frame, with any decoder.)
+    /// record ends 52 us into its data. The decoders gave nothing of a frame that is cut off, and the trigger took
+    /// no frame; they give the fields that are whole, and the trigger finds the identifier, with the CAN-FD decoder
+    /// too. (At 5 us/div the record there is 56 us and begins 4 us before the frame: too little of the quiet bus
+    /// before it to know its first edge for a start of frame, with any decoder.)
     #[test]
     fn a_bus_match_in_a_frame_the_record_cuts_off_is_found() {
         use oos_dsp::sim::CanFrame;
@@ -386,9 +386,11 @@ mod tests {
             let at = at.expect("the identifier of a frame the record cuts off");
             let back = (pre as f64 - at) * dt;
             assert!((0.0..4e-6).contains(&back), "{back}");
-            // the band reads nothing of it, as before
+            // the band has what is whole of it: start, identifier and four data bytes
             let lines: [&[f32]; NCH] = std::array::from_fn(|k| &f.ch[k][..]);
-            assert!(crate::trig::decode(&m, lines, dt).unwrap().is_empty());
+            let p = crate::trig::decode(&m, lines, dt).unwrap();
+            let data: Vec<u32> = p.iter().filter(|x| x.kind == oos_dsp::decode::Kind::Data).map(|x| x.value).collect();
+            assert_eq!((p.len(), &data[..]), (6, &[0x11, 0x22, 0x33, 0x44][..]), "{p:?}");
         }
     }
 

@@ -141,7 +141,10 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       read fields wrong; the bit timing follows the edges to dominant alone now, and the unit reads the line
       without a wrong field (93 to 96 frames in 40 ms, 21 identifiers). The trigger on an identifier, measured
       again there: a new frame in 15 of 29 seconds at 50 us/div, in 18 of 19 at 200 us/div, none at 5 us/div,
-      where the record is shorter than the frame (the owner's decision below). Open: an error frame, which the
+      where the record is shorter than the frame. The owner decided that the decoders give what is whole of a
+      frame the record cuts off (start, identifier, data bytes; the last frame of a record then shows without
+      its CRC); 5 us/div stays out of reach, since the record there begins 4 us before the frame. Open: an
+      error frame, which the
       board does not send. CH2 was not read: its high level sags to within 8 mV of the threshold in the middle,
       and the hysteresis of a tenth of a division (5 mV at 50 mV/div) lets it toggle; a record of it reads right
       on the host with 20 mV. And the unit left the network about 100 s after the start of build
@@ -190,9 +193,3 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
 - Manchester packets (taken without waiting, since it adds settings and changes nothing while they are 0): the
   widths of sync and header are two rows of the Decode menu, the word is Data bits, the trailer what is left. If
   a few fixed structures to choose from would serve better than numbers, the rows can become that.
-- A frame cut off by the end of the record: the CAN and CAN-FD decoders give nothing of it (by the code; the
-  protocol trigger showed it on the unit, where the trigger on an identifier takes no frame at 5 us/div: the
-  record is 56 us, the frame 112 us). At a time base whose record is shorter than a frame, the band then has
-  no field of that frame and its identifier cannot be triggered on. The decoders could give the fields that are
-  whole (start, identifier, the data bytes so far); every record's last frame would then show as a frame without
-  its CRC, in the band and in the Events pane.
