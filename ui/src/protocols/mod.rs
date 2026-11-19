@@ -277,6 +277,28 @@ impl Default for Setup {
     }
 }
 
+/// What a column of the Events pane holds of a frame ([`Protocol::columns`]). The texts are those of the band.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(not(feature = "decoders"), allow(dead_code))] // some are for the optional modules alone
+pub enum Col {
+    /// the fields whose text begins with this label, without the label ("ID ", "CRC ")
+    Label(&'static str),
+    /// the field at this place of the frame (the packet identifier after the sync of a USB packet)
+    At(usize),
+    /// the first address of the frame
+    Addr,
+    /// the data fields after the first field another column takes by its label, place or kind
+    Data,
+    /// how many data fields those are
+    Count,
+    /// everything after that first field, as the band writes it
+    Rest,
+    /// the first values of the data words (SPI: MOSI)
+    First,
+    /// their second values (SPI: MISO)
+    Second,
+}
+
 /// The trigger of [`Setup::trig`]: an edge of `slope` on the channel of role `role` at `level` (V). With an `idle` time
 /// (s) only the first edge after the line was quiet that long (Nth edge, n = 1), else every edge (Edge).
 #[derive(Clone, Copy, Debug)]
@@ -372,6 +394,27 @@ pub trait Protocol: Sync {
     /// Text of a decoded field on the trace and in the event table; `None` = the generic text of its kind.
     fn text(&self, _p: &Packet, _opt: &[usize; OPTS]) -> Option<String> {
         None
+    }
+
+    /// The field a frame of the protocol begins with, for a protocol that has one (the break of LIN, the sync of
+    /// SENT, the start condition of I2C). A message on the band and in the Events pane is then a frame, from one
+    /// such field to the next, whatever pauses it has inside. `None`: the messages are what was sent without a pause
+    /// clearly longer than the usual one (a UART line, SPI without a chip select, Modbus).
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        None
+    }
+
+    /// The columns the Events pane has for a frame of the protocol in place of one text: a title and what the
+    /// column holds of the frame ([`Col`]). Empty: the frame is one text, as the band writes it. The pane uses them
+    /// when it lists messages, is wide enough, and every decoder that is on has the same columns.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[]
+    }
+
+    /// Whether `p` is a mark the module adds for the screen and not a field of the bus (the start of an SPI frame,
+    /// where the chip select goes active). A mark begins a message and is no row of the Fields view.
+    fn mark(&self, _p: &Packet) -> bool {
+        false
     }
 
     /// Whether the data of the decoder is shown as characters with these options (a Format option of the module:
@@ -507,6 +550,43 @@ mod tests {
         for (p, key) in [(crate::model::Proto::UART, "Uart"), (crate::model::Proto::I2C, "I2c"), (crate::model::Proto::SPI, "Spi"), (crate::model::Proto::CAN, "Can"), (crate::model::Proto::LIN, "Lin"), (crate::model::Proto::PARALLEL, "Parallel"), (crate::model::Proto::CPHY, "Cphy")] {
             assert_eq!(p.key(), key);
         }
+    }
+
+    /// The packets of a module's demo traffic over `rounds` rounds of it, decoded as the scope decodes them.
+    fn demo_packets(i: usize, rounds: f64) -> Option<Vec<Packet>> {
+        let m = MODULES[i];
+        let d = demo(i as u8)?;
+        let dt = m.bit_time(&opt_fit(i as u8, opt_default(i as u8))) / 40.0;
+        let n = (rounds * d.period / dt) as usize;
+        let wave = |f: &DemoLine| (0..n).map(|k| f((k as f64 * dt).rem_euclid(d.period)) as f32).collect::<Vec<f32>>();
+        let waves: Vec<Option<Vec<f32>>> = d.lines.iter().map(|l| l.as_ref().map(wave)).collect();
+        let (opt, lines) = (opt_fit(i as u8, opt_default(i as u8)), std::array::from_fn(|k| waves[k].as_deref()));
+        let (thr, sh) = (m.setup().thr, Shared::default());
+        let l = Lines { lines, dt, thr, hy: 0.1, opt, sh, chans: [None; 4], src: [None; 4] };
+        Some(m.decode(&l).unwrap_or_else(|e| panic!("{}: {}", m.name(), e)))
+    }
+
+    /// A module that says where its frames begin: its demo traffic falls into frames that each begin with that
+    /// field and hold no second one, and three rounds of the traffic are more than one frame. (A record may begin
+    /// inside a frame: what stands before the first start is a message of its own.)
+    #[test]
+    fn a_module_with_frames_has_one_start_in_each() {
+        let mut seen = Vec::new();
+        for (i, m) in MODULES.iter().enumerate() {
+            let (Some(begins), Some(p)) = (m.frame_start(), demo_packets(i, 3.0)) else { continue };
+            let frames = oos_dsp::decode::frames(&p, begins);
+            let starts = p.iter().filter(|x| begins(x)).count();
+            assert!(starts >= 2, "{}: {starts} frame starts in three rounds of its demo", m.name());
+            let before = usize::from(!begins(&p[0]));
+            assert_eq!(frames.len(), starts + before, "{}", m.name());
+            for f in frames.iter().skip(before) {
+                let inside = p[f.clone()].iter().filter(|x| begins(x)).count();
+                assert!(begins(&p[f.start]) && inside == 1, "{}: {f:?}", m.name());
+            }
+            seen.push(m.name());
+        }
+        // (with the core decoders alone: I2C, CAN, LIN)
+        assert!(seen.len() >= 3 && seen.contains(&"I2C") && seen.contains(&"LIN"), "{seen:?}");
     }
 
     /// Every module with demo traffic decodes it without errors and finds something.

@@ -11,6 +11,10 @@ use oos_dsp::decode_ext as x1;
 pub struct OneWire;
 
 impl Protocol for OneWire {
+    /// A frame begins with a reset: what follows it is one transaction.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Field("!RESET"))
+    }
     fn key(&self) -> &'static str {
         "OneWire"
     }

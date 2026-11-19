@@ -13,6 +13,14 @@ const PERIOD: f64 = 4.0 / 48e3;
 const T0: f64 = 4.0 / (48e3 * 32.0);
 
 impl Protocol for I2s {
+    /// A frame in the Events pane: the left and the right sample.
+    fn columns(&self) -> &'static [(&'static str, Col)] {
+        &[("Left", Col::Label("L ")), ("Right", Col::Label("R "))]
+    }
+    /// A frame is a left sample and the right one after it.
+    fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
+        Some(|p| p.kind == oos_dsp::decode::Kind::Sample { right: false })
+    }
     fn key(&self) -> &'static str {
         "I2s"
     }

@@ -1,5 +1,10 @@
 # Decoder plan (2026-11-19)
 
+**State, 2026-11-19:** step 0 and step 1 are done and merged (pull requests 75 and 76 of the fork, with the SIM bus
+presets). Step 2 is done on the host: a message is a frame of the protocol, and the Events pane has the columns
+of the protocol. Next is step 3: what is missing in a decode (the SENT slow channel, CAN-FD error frames, a free
+bit rate for Manchester, C-PHY at low rates), and each bus on the unit as the owner connects it.
+
 Goal: every protocol decoder is usable on the 1024x600 screen the way a bench scope shows a bus: a box per field on
 the plot, a list of messages beside it, settings that are found, and a decode that is right on real signals. The
 order follows what can be checked: first against captures of real buses on the host, then on the unit.
@@ -10,7 +15,7 @@ synthetic signals only), or **not checked**.
 
 ## Where it stands
 
-Shared UI, for every decoder (pull requests 71, 72 and 73 of the fork):
+Shared UI, for every decoder (pull requests 71, 72, 73 and 76 of the fork):
 
 - the band on the plot: a box per field, a box per message when fields have no room, a stream when messages have
   none; a bit row at a time base that shows single bits; hidden with its source channel (unit, for UART and SPI);
@@ -76,11 +81,18 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       bits (AC) are clocked before the stop, which the decoder leaves out, and the reference decode shows five
       bytes there. The capture is a generated one (a clock of 200 MHz); a real I3C bus is needed to say more.
 2. **Two hooks for every module**, so the rest is not built protocol by protocol:
-   - where a frame starts. Today I2C, SPI, CAN, CAN-FD, LIN and I3C say so; FlexRay, SENT, USB, I2S, ARINC 429,
-     1553 and 1-Wire are split into messages by idle time alone. The start marks then leave the Fields view (an
-     "S" row per SPI frame today);
-   - columns for the Events pane (CAN: ID, DLC, data, CRC; LIN: ID, data, checksum; I2C: address, data), in place
-     of one text.
+   - where a frame starts. **Done** (host; SENT and USB on their captures): a module names the field a frame
+     begins with (`frame_start`), and a message is a frame whatever pauses it has inside. I2C, I3C, CAN, CAN-FD,
+     LIN, FlexRay, SENT, USB, I2S, ARINC 429, 1-Wire, SWD and DCC do; the UART family, SPI without a chip select,
+     Modbus and 1553 are split by idle time as before (a 1553 command and a status word have the same sync). The
+     SENT capture, one message before, lists its 118 frames. The mark an SPI frame begins with is no row of the
+     Fields view any more;
+   - columns for the Events pane, in place of one text. **Done** (host; CAN and LIN on their captures): a module
+     gives a table of titles and what each column holds of a frame (`columns`). CAN and CAN-FD: ID, DLC, Data,
+     CRC; LIN: ID, Data, Checksum; I2C: Address, Data; SPI: MOSI, MISO; SENT: Status, Data, CRC; FlexRay: ID,
+     Cycle, Data, CRC; ARINC 429: Label, SDI, Data, SSM; USB: Packet, Address, Endpoint, Data, CRC; I2S: Left,
+     Right. The pane uses them when it lists messages, is at least 560 px wide and every decoder that is on has
+     the same columns; else a row is its text as before.
 3. **Families, in the order they can be checked:** the bench buses on the unit (UART, SPI, I2C); the vehicle buses
    on their captures (CAN, CAN-FD, LIN, FlexRay, SENT); the avionics buses (1553, ARINC 429); USB, 1-Wire, I2S,
    I3C; then what is missing in a decode (SENT slow channel, CAN-FD error frames, a free bit rate for LIN and

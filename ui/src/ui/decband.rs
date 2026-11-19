@@ -188,6 +188,15 @@ fn said(pk: &[Packet]) -> impl Iterator<Item = &Packet> {
     pk.iter().filter(|p| p.kind != DecKind::Start)
 }
 
+/// The messages among the fields `p` of the decoder `m` is the view of: the frames of a protocol that says where one
+/// begins ([`crate::protocols::Protocol::frame_start`]), else what was sent without a long pause.
+pub(super) fn messages(m: &Model, p: &[Packet]) -> Vec<std::ops::Range<usize>> {
+    match m.dec_proto.module().and_then(|x| x.frame_start()) {
+        Some(begins) => oos_dsp::decode::frames(p, begins),
+        None => oos_dsp::decode::bursts(p),
+    }
+}
+
 /// The whole text of a message, as its box would hold it with all the room.
 pub(super) fn message_text(m: &Model, pk: &[Packet]) -> String {
     let mut s = String::new();
@@ -487,7 +496,7 @@ impl Ui {
             cv.round_outline(Rect::new(x0 - 2, y - 2, x1 - x0 + 5, h + 4), 4, ACCENT);
         };
         // the messages of the record, and of each field on the screen whether it begins one
-        let groups = oos_dsp::decode::bursts(&packets);
+        let groups = messages(m, &packets);
         let mut g = 0;
         let spans: Vec<Span> = packets
             .iter()
