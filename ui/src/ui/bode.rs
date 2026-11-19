@@ -781,7 +781,7 @@ impl Ui {
         } else if self.bode.running {
             format!("sweeping {} of {}: {}", self.bode.idx + 1, self.bode.freqs.len(), si_short(self.bode.freqs[self.bode.idx], "Hz"))
         } else if mode == oos_dsp::bode::Mode::Loop {
-            if let Some(&(hz, g, p)) = self.bode.points.iter().min_by(|a, b| ((a.1 + 3.0).abs()).partial_cmp(&(b.1 + 3.0).abs()).unwrap()) {
+            if let Some(&(hz, g, p)) = self.bode.points.iter().min_by(|a, b| (a.1 + 3.0).abs().total_cmp(&(b.1 + 3.0).abs())) {
                 let ph = if p.is_nan() { String::new() } else { format!(", {:.0}\u{b0}", p) };
                 format!("{} points; nearest -3 dB: {} ({:.1} dB{})", self.bode.points.len(), si_short(hz, "Hz"), g, ph)
             } else {

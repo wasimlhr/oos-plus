@@ -1627,7 +1627,7 @@ impl Ui {
 
 #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 fn nearest_ref_vdiv(want: f32) -> f32 {
-    VSCALES.iter().copied().min_by(|a, b| (a - want).abs().partial_cmp(&(b - want).abs()).unwrap()).unwrap_or(0.2)
+    VSCALES.iter().copied().min_by(|a, b| (a - want).abs().total_cmp(&(b - want).abs())).unwrap_or(0.2)
 }
 
 /// One knob step of a measurement time (burst idle, setup, hold): off, then 1-2-5 from 1 ns to 5 s. A longer time

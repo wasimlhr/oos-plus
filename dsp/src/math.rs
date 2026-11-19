@@ -250,7 +250,7 @@ pub fn dbv(vrms: f64) -> f64 {
 /// The `count` largest local maxima of a spectrum (bin, value), excluding DC, highest first.
 pub fn peaks(spec: &[f64], count: usize) -> Vec<(usize, f64)> {
     let mut p: Vec<(usize, f64)> = (2..spec.len().saturating_sub(1)).filter(|&k| spec[k] > spec[k - 1] && spec[k] >= spec[k + 1]).map(|k| (k, spec[k])).collect();
-    p.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    p.sort_by(|a, b| b.1.total_cmp(&a.1));
     p.truncate(count);
     p
 }
@@ -258,6 +258,14 @@ pub fn peaks(spec: &[f64], count: usize) -> Vec<(usize, f64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A NaN bin is no peak and makes no neighbour one (every comparison with NaN is false), so the sort of the peaks
+    /// never sees a NaN.
+    #[test]
+    fn peaks_pass_over_nan_bins() {
+        let spec = [9.0, 9.0, 1.0, 5.0, 1.0, f64::NAN, 1.0, 3.0, 1.0, 7.0, f64::NAN, 0.0];
+        assert_eq!(peaks(&spec, 3), vec![(3, 5.0), (7, 3.0)]);
+    }
 
     #[test]
     fn band_pass_and_stop() {
