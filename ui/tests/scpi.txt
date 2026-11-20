@@ -228,6 +228,8 @@ scpi $S/scpi-answers.txt :TRIGger:TYPe?
 scpi $S/scpi-answers.txt :POWer:ITEM? VRMS,CHANnel1,CHANnel2
 scpi $S/scpi-answers.txt :POWer:HARMonics? CHANnel1
 scpi $S/scpi-answers.txt :SPECtrum:ITEM? THD,CHANnel1
+scpi $S/scpi-answers.txt :SPECtrum:RBW:ACTual?
+scpi $S/scpi-answers.txt :SPECtrum:PEAK:LIST?
 scpi $S/scpi-answers.txt :MAGnetic:ITEM? L,CHANnel1,CHANnel2
 scpi $S/scpi-answers.txt :INVerter:ITEM? FREQ,CHANnel1,CHANnel2,CHANnel3
 scpi $S/scpi-answers.txt :DPT:ITEM? VPEAK,CHANnel1,CHANnel2

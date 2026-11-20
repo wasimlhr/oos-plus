@@ -9074,6 +9074,17 @@
      "example": ":SPECtrum:RBW 1e3"
     },
     {
+     "header": ":SPECtrum:RBW:ACTual",
+     "query": ":SPECtrum:RBW:ACTual?",
+     "desc": "The resolution bandwidth, Hz, of the spectrum last computed; `9.9E37` before the first one. The record on the screen limits how fine it can be, so it can be coarser than `:SPECtrum:RBW` asks for: make the time base slower for a finer one.",
+     "remarks": [
+      "- Menu equivalent: Spectrum > RBW in the title of the plot.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":SPECtrum:RBW:ACTual?    /*The query returns 1.000000E+03.*/"
+    },
+    {
      "header": ":SPECtrum:WINDow",
      "set": ":SPECtrum:WINDow <value>",
      "query": ":SPECtrum:WINDow?",
@@ -9227,7 +9238,7 @@
       [
        "<item>[,source]",
        "Text",
-       "`F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`.",
+       "`F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`. `F1` to `ENOB` answer `9.9E37` when the record has no fundamental (noise alone: no line stands 20 dB above the median of the spectrum); `ACPR` and `FLOOR` need none.",
        "—"
       ]
      ],
@@ -9236,6 +9247,17 @@
       "- Origin: OOS extension"
      ],
      "ext": true
+    },
+    {
+     "header": ":SPECtrum:PEAK:LIST",
+     "query": ":SPECtrum:PEAK:LIST?",
+     "desc": "The lines of the peak table in its order (by frequency or by level): `frequency,level;...`, Hz and dBV, up to 8 lines, also those the table has no room for; `9.9E37` when there is none.",
+     "remarks": [
+      "- Menu equivalent: Spectrum > Peak list.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":SPECtrum:PEAK:LIST?    /*The query returns 4.000100E+07,-2.070000E+01;7.999900E+07,-5.020000E+01;....*/"
     }
    ],
    "after": [
@@ -9243,10 +9265,16 @@
      "h": "Examples"
     },
     {
-     "p": "Centre, span and resolution bandwidth."
+     "p": "Centre, span and resolution bandwidth. `:SPECtrum:RBW:ACTual?` answers the RBW the page computed with, which is coarser than the one asked for when the record on the screen is short."
     },
     {
-     "pre": ":SPECtrum:SOURce CHAN1\n:SPECtrum:CENTer 1e6\n:SPECtrum:SPAN 2e6\n:SPECtrum:RBW 1e3\n:SPECtrum:CENTer?                      -> 1.000000E+06\n:SPECtrum:SPAN?                        -> 2.000000E+06"
+     "pre": ":SPECtrum:SOURce CHAN1\n:SPECtrum:CENTer 1e6\n:SPECtrum:SPAN 2e6\n:SPECtrum:RBW 1e3\n:SPECtrum:CENTer?                      -> 1.000000E+06\n:SPECtrum:SPAN?                        -> 2.000000E+06\n:SPECtrum:RBW:ACTual?                  -> 1.000000E+03"
+    },
+    {
+     "p": "The peak table: frequency and level of each line, in the order of the table."
+    },
+    {
+     "pre": ":SPECtrum:PEAK:LIST?                   -> 4.000100E+07,-2.070000E+01;7.999900E+07,-5.020000E+01;..."
     },
     {
      "p": "Window and limit line."

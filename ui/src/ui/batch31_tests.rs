@@ -503,3 +503,38 @@ fn the_graphics_choice_shows_what_was_chosen_and_an_even_step_does_nothing() {
 
 
 
+
+fn scpi_q(u: &mut Ui, cmd: &str) -> String {
+    let cv = Canvas::new(u.scr.w, u.scr.h);
+    let mut s = crate::scpi::Scpi::open(0);
+    String::from_utf8_lossy(&s.exec_line(u, &cv, cmd)).trim().to_string()
+}
+
+// Break it catches: on a unit `:SPECtrum:RBW?` answered the 100 kHz asked for while the page used 44.2 MHz (a short
+// time base), and the peak table was on the screen only (2026-11-19).
+#[test]
+fn the_rbw_in_use_and_the_peak_table_are_answered_as_the_page_shows_them() {
+    let mut u = fresh(Layout::Default);
+    assert_eq!(scpi_q(&mut u, ":SPECtrum:RBW:ACTual?"), "9.9E37", "no spectrum yet");
+    assert_eq!(scpi_q(&mut u, ":SPECtrum:PEAK:LIST?"), "9.9E37");
+    let mut u = spectrum_scope(Layout::Default);
+    u.m.spec_rbw = 1.0; // finer than the record allows: the page uses a coarser one
+    u.analyzer_update();
+    let used = u.azr.spec.as_ref().map(|s| s.rbw).expect("a spectrum");
+    assert!(used > 1.0, "{used}");
+    assert_eq!(scpi_q(&mut u, ":SPECtrum:RBW?").parse::<f64>().unwrap(), 1.0, "the setting stays as set");
+    let actual: f64 = scpi_q(&mut u, ":SPECtrum:RBW:ACTual?").parse().unwrap();
+    assert!((actual - used).abs() <= 1e-6 * used, "{actual} {used}");
+    let list = scpi_q(&mut u, ":SPEC:PEAK:LIST?");
+    let lines: Vec<(f64, f64)> = list
+        .split(';')
+        .map(|p| {
+            let (f, l) = p.split_once(',').expect("frequency,level");
+            (f.parse().unwrap(), l.parse().unwrap())
+        })
+        .collect();
+    assert_eq!(lines.len(), u.azr.peaks.len(), "{list}");
+    for (got, m) in lines.iter().zip(&u.azr.peaks) {
+        assert!((got.0 - m.f).abs() <= 1e-6 * m.f.abs().max(1.0) && (got.1 - m.dbv).abs() < 1e-3, "{got:?} {m:?}");
+    }
+}

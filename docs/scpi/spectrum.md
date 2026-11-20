@@ -18,6 +18,7 @@ Part of the [SCPI reference](README.md).
 | `:SPECtrum:CENTer` | Set / Query | Centre frequency, Hz. Range 0.0 to 1e12. | `0.000000E+00` | Spectrum > Centre | name not verified against the DHO guide |
 | `:SPECtrum:SPAN` | Set / Query | Span, Hz; 0 is full / automatic. Range 0.0 to 1e12. | `0.000000E+00` | Spectrum > Span | name not verified against the DHO guide |
 | `:SPECtrum:RBW` | Set / Query | Resolution bandwidth, Hz. Range 0.0 to 1e12. | `0.000000E+00` | Spectrum > RBW | name not verified against the DHO guide |
+| `:SPECtrum:RBW:ACTual` | Query | The resolution bandwidth, Hz, of the spectrum last computed; `9.9E37` before the first one. The record on the screen limits how fine it can be, so it can be coarser than `:SPECtrum:RBW` asks for: make the time base slower for a finer one. | - | Spectrum > RBW in the title of the plot | OOS extension |
 | `:SPECtrum:WINDow` | Set / Query | Option text of the menu row (the query answers it in capitals). | `BLACKMAN` | Spectrum > Window | name not verified against the DHO guide |
 | `:SPECtrum:TRACe` | Set / Query | Option text of the menu row (the query answers it in capitals). | `NORMAL` | Spectrum > Trace | name not verified against the DHO guide |
 | `:SPECtrum:RLEVel` | Set / Query | DBV Range -300.0 to 300.0. | `1.000000E+01` | Spectrum > Ref level | name not verified against the DHO guide |
@@ -26,11 +27,13 @@ Part of the [SCPI reference](README.md).
 | `:SPECtrum:PEAK:HARMonics` | Set / Query | Option text of the Harmonics row | `10` | Spectrum > Peak list | name not verified against the DHO guide |
 | `:SPECtrum:ACPR:WIDTh` | Set / Query | Hz. Range 1.0 to 1e12. | `1.000000E+06` | Spectrum > Ch width | name not verified against the DHO guide |
 | `:SPECtrum:ACPR:SPACing` | Set / Query | Hz. Range 1.0 to 1e12. | `2.000000E+06` | Spectrum > Ch space | name not verified against the DHO guide |
-| `:SPECtrum:ITEM` | Query | `<item>[,source]` `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`. | - | Spectrum > Read spectrum figures (THD, SNR, SFDR, ...) | OOS extension |
+| `:SPECtrum:ITEM` | Query | `<item>[,source]` `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`. `F1` to `ENOB` answer `9.9E37` when the record has no fundamental (noise alone: no line stands 20 dB above the median of the spectrum); `ACPR` and `FLOOR` need none. | - | Spectrum > Read spectrum figures (THD, SNR, SFDR, ...) | OOS extension |
+| `:SPECtrum:PEAK:LIST` | Query | The lines of the peak table in its order (by frequency or by level): `frequency,level;...`, Hz and dBV, up to 8 lines, also those the table has no room for; `9.9E37` when there is none. | - | Spectrum > Peak list | OOS extension |
 
 ## Examples
 
-Centre, span and resolution bandwidth.
+Centre, span and resolution bandwidth. `:SPECtrum:RBW:ACTual?` answers the RBW the page computed with, which is
+coarser than the one asked for when the record on the screen is short.
 
 ```text
 :SPECtrum:SOURce CHAN1
@@ -39,6 +42,13 @@ Centre, span and resolution bandwidth.
 :SPECtrum:RBW 1e3
 :SPECtrum:CENTer?                      -> 1.000000E+06
 :SPECtrum:SPAN?                        -> 2.000000E+06
+:SPECtrum:RBW:ACTual?                  -> 1.000000E+03
+```
+
+The peak table: frequency and level of each line, in the order of the table.
+
+```text
+:SPECtrum:PEAK:LIST?                   -> 4.000100E+07,-2.070000E+01;7.999900E+07,-5.020000E+01;...
 ```
 
 Window and limit line.

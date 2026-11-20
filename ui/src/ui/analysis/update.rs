@@ -31,6 +31,16 @@ impl Ui {
         self.azr.peaks.iter().copied().max_by(|a, b| a.dbv.total_cmp(&b.dbv))
     }
 
+    /// The resolution bandwidth of the spectrum last computed, None before the first one (`:SPECtrum:RBW:ACTual?`).
+    pub(crate) fn spectrum_rbw(&self) -> Option<f64> {
+        self.azr.spec.as_ref().map(|s| s.rbw).filter(|r| *r > 0.0)
+    }
+
+    /// The lines of the peak table, in the table's order (`:SPECtrum:PEAK:LIST?`).
+    pub(crate) fn spectrum_peaks(&self) -> &[spectrum::Marker] {
+        &self.azr.peaks
+    }
+
     /// The spectrum is on the screen and its span is left to the signal.
     pub(crate) fn spec_follows(&self) -> bool {
         let shown = self.m.view == AView::Spectrum
