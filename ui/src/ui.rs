@@ -1357,6 +1357,12 @@ impl Ui {
         self.settings_changed();
     }
 
+    /// After `:RUN`, `:STOP` or `:SINGle`: as `mark_changed`, but the measurement statistics stay (on a unit,
+    /// 2026-11-20, `:STOP` dropped a count of 104 to 1; the Run/Stop key keeps them).
+    pub fn mark_run_state(&mut self) {
+        self.acquiring_changed();
+    }
+
     pub fn toast(&mut self, s: &str) {
         self.toast = Some((s.to_string(), self.now + 2.5));
     }

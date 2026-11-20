@@ -402,6 +402,12 @@ impl Ui {
         self.meas_bg = MeasWorker::start();
     }
 
+    /// `:MEASure:PENDing?`: the measurements of the record shown are still out: it waits for the background worker or
+    /// is with it, or a catalogue row computes. A value queried meanwhile answers `9.9E37` as one that does not exist.
+    pub(crate) fn meas_pending_now(&self) -> bool {
+        self.meas_want || self.meas_bg.as_ref().is_some_and(|w| w.busy) || self.meas_rows().iter().any(|r| r.computing)
+    }
+
     /// The background's side, every frame: takes a finished result, and gives it the record shown when it wants one.
     pub(super) fn meas_poll(&mut self) {
         let Some(w) = self.meas_bg.as_mut() else { return };

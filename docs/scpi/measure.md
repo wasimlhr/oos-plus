@@ -17,6 +17,7 @@ Part of the [SCPI reference](README.md).
 | `:MEASure:SOURce` | Set / Query | `<A>[,<B>]` Default Measure source(s); query returns A. Sources are `CHANn\|Rn`. | `CHAN1` | Measure > Source A | Rigol-compatible |
 | `:MEASure:CLEar` | Action | Clear standard, pair and catalog selections through the shared statistics reset. | - | Measurements > Clear all | Rigol-compatible |
 | `:MEASure:STRip` | Query | Configured standard/pair/catalog rows, then enabled DVM/counter rows. | - | Measurements > Read all measurement values | OOS extension |
+| `:MEASure:PENDing` | Query | `1` while the measurements of the record shown are still computed (in the background, or a catalogue row), else `0`. A value read meanwhile answers `9.9E37` like one that does not exist: after `:SINGle`, wait for `0`, then read. | - | Measurements > Computing | OOS extension |
 | `:MEASure:READout` | Query | Strip rows plus Eye figures when that analysis page is active. | - | Measurements > Read all measurement values | OOS extension |
 | `:MEASure:COPY` | Action | `<source>` Copy the measurements of Source A to another source | - | Measurements > Copy to | OOS extension |
 | `:MEASure:ITEM:REMove` | Action | `<n>` Remove one row, by its number in `:MEASure:STRip?` order, or by item and source | - | Measurements > Remove | OOS extension |
@@ -79,10 +80,10 @@ Statistics count accepted observations. A stopped reference can have a valid cur
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:MEASure:STATistic:DISPlay` | Set / Query | Statistics summary visibility. Toggling it retains accumulated observations. | `0` | Statistics > Statistics | Rigol-style (command family of the DHO guide) |
-| `:MEASure:STATistic:RESet` | Action | Central statistics reset, including catalog/deferred accounting. It does not create an acquisition. | - | Measurements > Statistics | Rigol-style (command family of the DHO guide) |
+| `:MEASure:STATistic:RESet` | Action | Central statistics reset, including catalog/deferred accounting. It does not create an acquisition. `:RUN`, `:STOP` and `:SINGle` keep the statistics; a change of a setting starts them again. | - | Measurements > Statistics | Rigol-style (command family of the DHO guide) |
 | `:MEASure:STATistic:POPulation` | Set / Query | `CURRent` (the statistics of the shown acquisition run) or `ACCumulated`. A change resets the statistics. | `ACC` | Statistics > Population | OOS extension |
 | `:MEASure:STATistic:SHOW` | Set / Query | Statistics columns: any of `SDEViation`, `MINimum`, `MAXimum` comma-separated, or `NONE`. | `SDEV,MIN,MAX` | Measurements > Statistics columns | OOS extension |
-| `:MEASure:STATistic:ITEM` | Set / Query | `<item>[,source[,source]]` Set: add the readout and show statistics. Query `:MEASure:STATistic:ITEM? <field>,<item>[,source[,source]]` with field `MAXimum\|MINimum\|CURRent\|AVERages\|DEViation\|CNT` (`COUNt` alias). | - | Measurements > Statistics | Rigol-compatible |
+| `:MEASure:STATistic:ITEM` | Set / Query | `<item>[,source[,source]]` Set: add the readout and show statistics. Query `:MEASure:STATistic:ITEM? <field>,<item>[,source[,source]]` with field `MAXimum\|MINimum\|CURRent\|AVERages\|DEViation\|CNT` (`COUNt` alias). `CNT` counts frames for `VMAX`, `VMIN`, `VPP`, `VAVG`, `VRMS`, `ACRms` and `SDEViation`: they are measured on every acquired frame (not on frames shown as 3600 interpolated points, short time bases); of an envelope frame (above 1 M points, roll, scan) only `VMAX`, `VMIN` and `VPP` count. Every other item counts the records measured, a few a second, so its `CNT` is much smaller in the same run. | - | Measurements > Statistics | Rigol-compatible |
 
 ## Items
 

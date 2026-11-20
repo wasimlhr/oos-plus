@@ -31,14 +31,67 @@ impl Ui {
         self.azr.peaks.iter().copied().max_by(|a, b| a.dbv.total_cmp(&b.dbv))
     }
 
-    /// The resolution bandwidth of the spectrum last computed, None before the first one (`:SPECtrum:RBW:ACTual?`).
-    pub(crate) fn spectrum_rbw(&self) -> Option<f64> {
-        self.azr.spec.as_ref().map(|s| s.rbw).filter(|r| *r > 0.0)
+    /// The spectrum is computed on every record: its page is shown, or its pane beside the waveform or the eye.
+    pub(crate) fn spectrum_runs(&self) -> bool {
+        let pane = self.pane_h() > 0;
+        match self.m.view {
+            AView::Spectrum => true,
+            AView::Scope => pane && matches!(self.m.pane, tables::PANE_SPECTRUM | tables::PANE_RESULTS),
+            AView::Eye => pane && self.dock_on() && self.m.pane == tables::PANE_SPECTRUM,
+            _ => false,
+        }
     }
 
-    /// The lines of the peak table, in the table's order (`:SPECtrum:PEAK:LIST?`).
-    pub(crate) fn spectrum_peaks(&self) -> &[spectrum::Marker] {
-        &self.azr.peaks
+    /// For `:SPECtrum:RBW:ACTual?` and `:SPECtrum:PEAK:LIST?`: the resolution bandwidth and the lines of the spectrum of
+    /// the record now, in the order of the peak table, as many as the Harmonics setting asks (All: every harmonic). While
+    /// the page runs, of the spectrum it shows; else computed here with its settings (on a unit, 2026-11-20, the page's
+    /// old result answered for ten new records while it was not shown). None without a record or a source.
+    pub(crate) fn spectrum_now(&self) -> Option<(f64, Vec<spectrum::Marker>)> {
+        let id = self.m.spec_src;
+        let blank;
+        let rec = match self.last[0].as_ref() {
+            Some(r) => r,
+            // a loaded ref is measured without a live record
+            None if matches!(id, WaveId::Ref(_)) => {
+                blank = Self::blank_record();
+                &blank
+            }
+            None => return None,
+        };
+        let f1 = self.wave_freq(rec, id);
+        let harms = PANE_HARMS[self.m.spec_harm.min(PANE_HARMS.len() - 1)];
+        let fresh;
+        let sp = match self.azr.spec.as_ref().filter(|_| self.spectrum_runs()) {
+            Some(sp) => sp,
+            None => {
+                let s = self.wave_samples(rec, id)?;
+                let (center, span) = if self.m.spec_span == 0.0 && harms > 0 {
+                    let stop = spectrum::auto_stop(f1, harms, 0.0);
+                    (stop / 2.0, stop)
+                } else {
+                    (self.m.spec_center, self.m.spec_span)
+                };
+                let finest = spectrum::enbw(self.m.spec_win) / (s.v.len().max(1) as f64 * s.dt);
+                let settings = spectrum::Settings {
+                    center,
+                    span,
+                    rbw: if self.m.spec_rbw > 0.0 { self.m.spec_rbw } else { finest },
+                    window: self.m.spec_win,
+                    averaging: 1,
+                    trace: spectrum::Trace::Normal,
+                    detector: spectrum::Detector::Peak,
+                    points: 801,
+                    ref_level_dbv: self.m.spec_ref as f64,
+                };
+                fresh = spectrum::analyze(&s.v, s.dt, &settings, &mut None);
+                &fresh
+            }
+        };
+        let mut lines = spectrum::rank_lines(sp, Some(f1), if harms == 0 { usize::MAX } else { harms.max(panes::PEAKS_MAX) });
+        if self.m.spec_sort == 0 {
+            lines.sort_by(|a, b| a.f.total_cmp(&b.f));
+        }
+        Some((sp.rbw, lines))
     }
 
     /// The spectrum is on the screen and its span is left to the signal.
