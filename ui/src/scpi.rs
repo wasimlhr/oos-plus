@@ -285,8 +285,9 @@ pub struct Scpi {
     replay: Option<Box<replay::Replay>>,
     /// The command that runs is one of that file, not a client's: `replay::file_refuses` says what it may not send.
     from_file: bool,
-    /// The CSV of the last MCP `waveform` call, served as `GET /mcp/waveform.csv` (site/mcp.rs).
-    pub(crate) mcp_file: Option<Vec<u8>>,
+    /// The CSV of the last MCP `waveform` call and when it was made, served as `GET /mcp/waveform.csv` for
+    /// `site::mcp::FILE_TTL` (site/mcp.rs).
+    pub(crate) mcp_file: Option<(std::time::Instant, Vec<u8>)>,
 }
 
 pub(crate) use crate::words::{e, kw, nearest_index, num, parse_bool};
