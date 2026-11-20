@@ -89,6 +89,8 @@ mod system;
 mod timebase;
 mod trigger;
 mod waveform;
+
+pub(crate) use measure::measurement_items;
 #[cfg(test)]
 use std::io::Read;
 use std::net::{TcpListener, TcpStream};

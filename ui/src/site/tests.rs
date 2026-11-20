@@ -16,6 +16,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 mod hostile;
+mod mcp;
 
 /// The tests that fetch large answers one after the other: `SENDERS` is shared by the whole process and lets
 /// `MAX_SENDERS` through, and under load (tests in parallel, CI) a sender at `SCHED_IDLE` holds its place long

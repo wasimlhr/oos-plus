@@ -14,8 +14,8 @@ ROOT is the top of a tree (default: this tree). Read from it as it is:
                  as GET); an arm without a guard answers every method, or GET when an earlier arm of the same path
                  took POST. Arms of `_` (the foreign check, not found) are no route. Any other guard has to be in
                  GUARDS below with its reason, so that a new kind of arm is looked at rather than passed over;
-  the tools      the names `Some("name") =>` that the arm `"tools/call"` of `fn mcp` in ui/src/site.rs answers, and
-                 the names (`"name", J::s("...")`) of the arm `"tools/list"` before it;
+  the tools      the names `Some("name") =>` that the arm `"tools/call"` of `fn mcp` in ui/src/site/mcp.rs answers,
+                 and the names (`"name", J::s("...")`) of the arm `"tools/list"` before it;
   the entries    the headings of docs/http.md of the form `### \\`METHOD /path\\`` and `### MCP tool \\`name\\``, each
                  with one line `- Mark: **stable**`, `**experimental**` or `**internal**` before the next heading.
 
@@ -33,6 +33,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HTTP_RS = "ui/remote/src/http.rs"
 SITE_RS = "ui/src/site.rs"
+MCP_RS = "ui/src/site/mcp.rs"
 HTTP_MD = "docs/http.md"
 MARKS = ("stable", "experimental", "internal")
 
@@ -232,18 +233,18 @@ def check(root):
         for path, methods in h.items():
             have.setdefault(path, set()).update(methods)
         arms, findings = arms + a, findings + f
-    # fn mcp is in site.rs; the first one of the two files
-    called, listed = tools("\n".join(src for _, src in srcs))
+    # fn mcp is in site/mcp.rs (oos-plus, ADR 0074)
+    called, listed = tools(read(root, MCP_RS))
     if not have:
         findings.append("%s, %s: no route found in `match route` of fn answer" % (HTTP_RS, SITE_RS))
     if not called:
-        findings.append("%s: no MCP tool found in fn mcp" % SITE_RS)
+        findings.append("%s: no MCP tool found in fn mcp" % MCP_RS)
     for name in called:
         if name not in listed:
-            findings.append("%s: MCP tool `%s` is answered by tools/call but not in tools/list" % (SITE_RS, name))
+            findings.append("%s: MCP tool `%s` is answered by tools/call but not in tools/list" % (MCP_RS, name))
     for name in listed:
         if name not in called:
-            findings.append("%s: MCP tool `%s` is in tools/list but tools/call does not answer it" % (SITE_RS, name))
+            findings.append("%s: MCP tool `%s` is in tools/list but tools/call does not answer it" % (MCP_RS, name))
     found, seen = [], set()
     for kind, key, marks, line in entries(md):
         where = "%s:%d" % (HTTP_MD, line)
@@ -257,7 +258,7 @@ def check(root):
             findings.append("%s: %s: fn answer of %s and %s takes only %s on %s" %
                             (where, name, HTTP_RS, SITE_RS, " and ".join(sorted(have[key[1]])), key[1]))
         if kind == "tool" and key not in called + listed:
-            findings.append("%s: %s: no such tool in fn mcp of %s" % (where, name, SITE_RS))
+            findings.append("%s: %s: no such tool in fn mcp of %s" % (where, name, MCP_RS))
         if len(marks) != 1 or marks[0] not in MARKS:
             findings.append("%s: %s needs one line `- Mark: **stable**` (or experimental, internal), has %s" %
                             (where, name, ", ".join(marks) or "none"))
@@ -270,7 +271,7 @@ def check(root):
     for name in called:
         if ("tool", name) not in seen:
             findings.append("%s: MCP tool `%s` has no entry `### MCP tool \\`%s\\`` in %s" %
-                            (SITE_RS, name, name, HTTP_MD))
+                            (MCP_RS, name, name, HTTP_MD))
     return findings, found
 
 
