@@ -4,7 +4,7 @@
 //! under it when it is narrow, with what does not fit behind a ... button. The views are Table, List and Cards
 //! (measview.rs); there is no footer and no paging: the list scrolls by swipe (measscroll.rs).
 use super::dock::{VKind, STRIP_H};
-use super::studio::{chip, icon_pin, icon_pin_small, PanelGeo, StudioView};
+use super::studio::{chip, icon_pin, PanelGeo, StudioView};
 use super::*;
 
 /// Height of the toolbar of a narrow panel: its buttons are a finger high (it was 32 px).
@@ -607,4 +607,20 @@ impl Ui {
     pub(super) fn panel_row_name(&self, _key: Option<studio::MeasKey>, long: &str) -> String {
         long.to_string()
     }
+}
+
+/// The pin of a measurement card: about two thirds of the toolbar's, so it sits on the name line (the owner, 2026-11-20:
+/// the pin was too big beside the name).
+fn icon_pin_small(cv: &mut Canvas, x: i32, cy: i32, filled: bool, c: Rgb) {
+    let (cap, barrel, rim) = (Rect::new(x + 2, cy - 6, 8, 3), Rect::new(x + 4, cy - 3, 4, 3), Rect::new(x + 2, cy, 8, 2));
+    if filled {
+        cv.fill(cap, c);
+        cv.fill(barrel, c);
+    } else {
+        cv.round_outline(cap, 1, c);
+        cv.round_outline(barrel, 1, c);
+    }
+    cv.fill(rim, c);
+    cv.vline(x + 5, cy + 2, cy + 6, c);
+    cv.vline(x + 6, cy + 2, cy + 5, c);
 }
