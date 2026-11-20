@@ -58,13 +58,13 @@ fn mcp_lists_every_tool_with_its_schema_and_annotation() {
         let t = tools.iter().find(|t| t.get("name").and_then(J::str) == Some(name)).expect(name);
         t.get("annotations").and_then(|a| a.get("readOnlyHint")) == Some(&J::Bool(true))
     };
-    for name in ["screenshot", "scope_state", "measure", "waveform", "decode_results", "errors"] {
+    for name in ["screenshot", "scope_state", "measure", "waveform", "decode_results", "errors", "scpi_reference"] {
         assert!(read_only(name), "{name} only reads");
     }
     for name in ["scpi", "configure", "acquire", "setup_decoder"] {
         assert!(!read_only(name), "{name} can change the scope");
     }
-    assert_eq!(tools.len(), 10);
+    assert_eq!(tools.len(), 11);
     let s = r.to_string();
     assert!(s.contains("\"VPP\"") && s.contains("\"RRDELAY\""), "the measurement items are an enum");
     let protocol = crate::protocols::PROTOS[0].name();
@@ -258,7 +258,7 @@ fn mcp_read_only_and_off() {
     let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
     let tools = items(r.get("result").and_then(|x| x.get("tools")));
     let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
-    assert_eq!(names, ["scpi", "screenshot", "scope_state", "measure", "waveform", "decode_results", "errors"]);
+    assert_eq!(names, ["scpi", "screenshot", "scope_state", "measure", "waveform", "decode_results", "errors", "scpi_reference"]);
     assert!(tools.iter().all(|t| t.get("annotations").and_then(|a| a.get("readOnlyHint")) == Some(&J::Bool(true))));
     let scale = ui.m.time_per_div();
     for (name, args) in [
@@ -288,4 +288,31 @@ fn mcp_read_only_and_off() {
     let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
     let e = r.get("error").unwrap_or_else(|| panic!("{r}"));
     assert_eq!((num(e.get("code")), r.get("id")), (-32001.0, Some(&J::Num(7.0))));
+}
+
+// Break it catches: a guessed command answered with a bare error and no way to the right one (an assistant then
+// guesses again), the reference that does not find a command by what it does or by either form of its header
+#[test]
+fn mcp_scpi_reference_finds_a_command_instead_of_a_guess() {
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let r = call(&mut ui, &cv, &mut scpi, "scpi", r#"{"command":":CHAN1:VDIV 0.5"}"#);
+    assert!(failed(&r) && r.to_string().contains("-113") && r.to_string().contains("scpi_reference"), "{r}");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi", r#"{"commands":[":CHAN1:VDIV?"]}"#);
+    assert!(data(&r).get("hint").and_then(J::str).is_some_and(|h| h.contains("scpi_reference")), "{r}");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"search":"channel scale"}"#);
+    let found = r.to_string();
+    assert!(!failed(&r) && found.contains(":CHANnel<n>:SCALe"), "{found}");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"header":":chan1:scal?"}"#);
+    let d = data(&r);
+    assert_eq!(num(d.get("found")), 1.0, "{d}");
+    let c = &items(d.get("commands"))[0];
+    assert!(c.get("params").is_some() && c.get("query").and_then(J::str) == Some(":CHANnel<n>:SCALe?"), "{c}");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"header":":CHAN1:VDIV"}"#);
+    assert_eq!(num(data(&r).get("found")), 0.0);
+    let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", "{}");
+    assert!(items(data(&r).get("subsystems")).len() > 50, "{r}");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"subsystem":"timebase","max_results":3}"#);
+    assert_eq!(items(data(&r).get("commands")).len(), 3, "{r}");
+    assert!(failed(&call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"search":""}"#)));
+    assert!(failed(&call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"max_results":51}"#)));
 }
