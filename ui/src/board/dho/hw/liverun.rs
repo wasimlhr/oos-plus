@@ -50,11 +50,23 @@ enum Act {
     Hold,
     /// the next SINGLE press, once the scan sweep of the last has halted (at this pass or the first after it)
     Rearm,
+    /// hardware segments: RUN starts a recording (`HwSeg::run`), a segment asked to be shown
+    SegRun,
+    SegShow(u32),
+    /// STOP that wants the newest frame read raw (`Shared::final_req`)
+    FinalRaw,
+    /// in STOP: the view the screen shows (time per division, delay), read again from the stored record
+    StopView(f64, f64),
+    /// the force-trigger key
+    Force,
+    /// the measurements want the screen window of a deep record raw, for every batch (`Shared::deep_raw`)
+    DeepRaw,
 }
 
 /// One case of the matrix: the model as the screen sets it, the frequency of the scene's sine, the trigger period of
 /// the scene (None: it never triggers; roll and scan do not wait for it), the passes of the loop, and what the screen
 /// does at which pass.
+#[derive(Clone, Copy)]
 struct Case {
     name: &'static str,
     model: fn(&mut Model),
@@ -62,8 +74,33 @@ struct Case {
     /// a square of the sine's sign instead of the sine (an edge a slow time base sees as steep)
     square: bool,
     period_us: Option<i128>,
+    /// the logic analyser on, its lines a count of `LA_TICK_S` steps
+    la: bool,
+    /// the loop starts with the made-up calibration set in its folder (else with none)
+    cal: bool,
+    /// the live compression on (`compress::enabled`, a switch of the unit that is off by default)
+    compress: bool,
     passes: u32,
     script: &'static [(u32, Act)],
+}
+
+/// What a case has unless it says otherwise.
+const BASE: Case = Case {
+    name: "",
+    model: |_| {},
+    freq_hz: 1e6,
+    square: false,
+    period_us: Some(50),
+    la: false,
+    cal: false,
+    compress: false,
+    passes: 30,
+    script: &[],
+};
+
+/// The memory depth of the menu named `name`.
+fn depth(m: &mut Model, name: &str) {
+    m.mdepth = mdepths().iter().position(|d| d.0 == name).expect("a depth of the menu");
 }
 
 fn tdiv(m: &mut Model, t: f32) {
@@ -85,6 +122,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e6,
         square: false,
         period_us: Some(50),
+        la: false,
+        cal: false,
+        compress: false,
         passes: 30,
         script: &[],
     },
@@ -94,6 +134,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e6,
         square: false,
         period_us: Some(50),
+        la: false,
+        cal: false,
+        compress: false,
         passes: 30,
         script: &[],
     },
@@ -103,6 +146,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e6,
         square: false,
         period_us: Some(50),
+        la: false,
+        cal: false,
+        compress: false,
         passes: 30,
         script: &[],
     },
@@ -112,6 +158,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e3,
         square: true,
         period_us: Some(1_000),
+        la: false,
+        cal: false,
+        compress: false,
         passes: 20,
         script: &[],
     },
@@ -121,6 +170,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e6,
         square: false,
         period_us: None,
+        la: false,
+        cal: false,
+        compress: false,
         passes: 6,
         script: &[],
     },
@@ -130,6 +182,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e6,
         square: false,
         period_us: None,
+        la: false,
+        cal: false,
+        compress: false,
         passes: 8,
         script: &[(3, Act::Set(|m| tdiv(m, 2e-6)))],
     },
@@ -139,6 +194,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e6,
         square: false,
         period_us: Some(50),
+        la: false,
+        cal: false,
+        compress: false,
         passes: 20,
         script: &[],
     },
@@ -148,6 +206,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e6,
         square: false,
         period_us: Some(50),
+        la: false,
+        cal: false,
+        compress: false,
         passes: 30,
         script: &[(12, Act::Hold)],
     },
@@ -157,6 +218,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e3,
         square: false,
         period_us: None,
+        la: false,
+        cal: false,
+        compress: false,
         passes: 40,
         script: &[],
     },
@@ -166,6 +230,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e3,
         square: false,
         period_us: None,
+        la: false,
+        cal: false,
+        compress: false,
         passes: 40,
         script: &[],
     },
@@ -175,6 +242,9 @@ const CASES: &[Case] = &[
         freq_hz: 1e3,
         square: false,
         period_us: None,
+        la: false,
+        cal: false,
+        compress: false,
         passes: SCAN_PASSES,
         script: &[],
     },
@@ -184,10 +254,117 @@ const CASES: &[Case] = &[
         freq_hz: 1e3,
         square: false,
         period_us: None,
+        la: false,
+        cal: false,
+        compress: false,
         passes: SCAN_PASSES,
         script: &[(SCAN_PASSES / 2, Act::Rearm)],
     },
+    Case {
+        name: "scan-run-ch1-200ms-delayed",
+        model: |m| (ch(m, &[0]), tdiv(m, 0.2), m.auto_roll = false, m.delay = 1.5).0,
+        freq_hz: 1e3,
+        period_us: None,
+        passes: 60,
+        ..BASE
+    },
+    Case {
+        name: "roll-ch1-la-200ms",
+        model: |m| (ch(m, &[0]), tdiv(m, 0.2), m.auto_roll = true, m.la.on = true).0,
+        freq_hz: 1e3,
+        square: false,
+        period_us: None,
+        la: true,
+        cal: false,
+        compress: false,
+        passes: 40,
+        script: &[],
+    },
+    Case {
+        name: "scan-run-ch1-la-200ms",
+        model: |m| (ch(m, &[0]), tdiv(m, 0.2), m.auto_roll = false, m.la.on = true).0,
+        freq_hz: 1e3,
+        square: false,
+        period_us: None,
+        la: true,
+        cal: false,
+        compress: false,
+        passes: SCAN_PASSES,
+        script: &[],
+    },
+    Case {
+        name: "segments-20-then-show-one",
+        model: |m| segments(m, 20),
+        freq_hz: 1e6,
+        square: false,
+        period_us: Some(50),
+        la: false,
+        cal: false,
+        compress: false,
+        passes: 60,
+        script: &[(1, Act::SegRun), (40, Act::SegShow(7))],
+    },
+    Case {
+        name: "segments-10-1ms-apart",
+        model: |m| (segments(m, 10), m.seg_ivl = 1e-3).0,
+        passes: 60,
+        script: &[(1, Act::SegRun)],
+        ..BASE
+    },
+    Case { name: "auto-ch1-1us-calibrated", model: |m| (ch(m, &[0]), tdiv(m, 1e-6)).0, cal: true, ..BASE },
+    Case {
+        name: "auto-ch1-200us-compressed-then-stop-raw",
+        compress: true,
+        model: |m| (ch(m, &[0]), tdiv(m, 2e-4)).0,
+        freq_hz: 1e3,
+        square: true,
+        period_us: Some(1_000),
+        passes: 20,
+        script: &[(14, Act::Hold), (14, Act::FinalRaw)],
+        ..BASE
+    },
+    Case {
+        name: "auto-then-stop-two-views",
+        model: |m| (ch(m, &[0]), tdiv(m, 1e-6)).0,
+        script: &[(12, Act::Hold), (14, Act::StopView(1e-6, 0.0)), (17, Act::StopView(5e-7, 1e-6))],
+        ..BASE
+    },
+    Case {
+        name: "auto-ch1-deep-10m-screen-window",
+        compress: true,
+        model: |m| (ch(m, &[0]), tdiv(m, 5e-3), depth(m, "10M")).0,
+        freq_hz: 1e3,
+        square: true,
+        period_us: Some(1_000),
+        passes: 6,
+        script: &[(1, Act::DeepRaw)],
+        ..BASE
+    },
+    Case {
+        name: "normal-no-trigger-force",
+        model: |m| (ch(m, &[0]), tdiv(m, 1e-6), m.trig_mode = TrigMode::Normal).0,
+        period_us: None,
+        passes: 8,
+        script: &[(3, Act::Force)],
+        ..BASE
+    },
 ];
+
+/// The model with hardware segments: `n` of them, CH1 at 1 us/div.
+fn segments(m: &mut Model, n: usize) {
+    ch(m, &[0]);
+    tdiv(m, 1e-6);
+    (m.seg_hw, m.segments) = (true, n);
+}
+
+/// The step of the count on the logic analyser's lines: longer than the spacing of its words in every case, so two
+/// words next to each other differ by 0 or 1, and a chunk lost or out of order (100 words) shows as a larger step.
+const LA_TICK_S: f64 = 1e-4;
+
+/// The lines of the logic analyser at `t` s: the count of `LA_TICK_S` steps.
+fn la_lines(t: f64) -> u16 {
+    (t / LA_TICK_S) as u64 as u16
+}
 
 /// Passes of a scan case: a sweep of 2 s at 200 ms/div (a read and an empty poll of 9 ms per 4 to 5 chunks of 2 ms),
 /// the pause or the halt after it, and the start of the next sweep.
@@ -216,13 +393,36 @@ fn frame_line(f: &Frame) -> String {
             .fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100_0000_01b3));
         s += &format!(" | CH{} n {} lo {:.4} hi {:.4} mean {:.4} sum {:016x}", c + 1, v.len(), lo, hi, mean, sum);
     }
+    if let Some(la) = &f.la {
+        let sum = la
+            .words
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100_0000_01b3));
+        s += &format!(" | LA n {} t0 {:e} dt {:e} sum {:016x}", la.words.len(), la.t0, la.dt, sum);
+    }
     s
 }
 
-/// Runs `case` and returns the unit's trace, the frames delivered and the channels of the settings.
-fn run_case(case: &Case) -> (String, Vec<Frame>, u32) {
+/// The switches a case sets for the test's thread (`compress::force`, `deepmeas::force`): back to the build's when
+/// dropped.
+struct Switches;
+
+impl Drop for Switches {
+    fn drop(&mut self) {
+        crate::compress::force(None);
+        crate::deepmeas::force(None);
+    }
+}
+
+/// Runs `case` and returns the unit's trace, the frames delivered, the channels of the settings and what the loop left
+/// in the shared state.
+fn run_case(case: &Case) -> (String, Vec<Frame>, u32, HwShared) {
     let mut m = Model::default();
     (case.model)(&mut m);
+    // the switches of this thread, put back when the case ends (a failing one too)
+    let _switches = Switches;
+    crate::compress::force(Some(case.compress));
     let want = super::settings(&m, false);
     let mut st = oos_hal::dho::seq::State::handover(want.mask, None);
     let p = st.configure(&want, None, None).expect("settings the unit takes").1;
@@ -230,13 +430,16 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32) {
     let view = View { cal, dot_fs: p.dot_fs as i128, pre: p.pre, post: p.post };
     let scene = Scene {
         volts: signal(case.freq_hz, case.square),
+        la: case.la.then(|| Box::new(la_lines) as Box<dyn Fn(f64) -> u16>),
         first_fs: case.period_us.unwrap_or(1) * US,
         period_fs: case.period_us.map(|p| p * US),
         auto_fs: None,
         view,
     };
     let (u, bar, c2h, clock) = unit(scene);
-    let hw = Hw { bar, c2h, afe: None, lines: oos_hal::dho::lines::Recorded::default(), clock, port: SimPort };
+    // with the calibration the front ends are programmed too, through a stub that answers them
+    let afe = case.cal.then_some(oos_hal::dho::boot::sim::AfeStub { writes: 0, reads: 0 });
+    let hw = Hw { bar, c2h, afe, lines: oos_hal::dho::lines::Recorded::default(), clock, port: SimPort };
     let out: HwShared = std::sync::Arc::new(std::sync::Mutex::new(Shared::default()));
     let mask = want.mask;
     {
@@ -247,8 +450,23 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32) {
     let (mut pass, mut rearm_due) = (0, false);
     // roll and scan replace the picture in the queue: every one published is taken here, as the screen takes it
     let mut slow_frames: Vec<Frame> = Vec::new();
+    let mut replays: Vec<Frame> = Vec::new();
     let shared = out.clone();
-    super::run(hw, super::settings(&m, false).mask, false, "/nonexistent".into(), out.clone(), || {
+    // the made-up calibration set in a folder of this case (its files are always the same bytes)
+    let cal_dir = if case.cal {
+        let d = std::env::temp_dir().join(format!("oos-liverun-cal-{}", std::process::id()));
+        let d = d.to_str().expect("a folder name in UTF-8").to_string();
+        oos_hal::dho::madeup::write(&d).expect("the made-up set written");
+        d
+    } else {
+        "/nonexistent".to_string()
+    };
+    // the deep measurements' raw window is a switch of the build; on for this thread, as on the scope
+    crate::deepmeas::force(Some(true));
+    // the drawing workers are another test's when its screen switched them on: this loop keeps out of them (their
+    // hand-over is run on a unit, docs/board-on-a-host.md 7)
+    let _out = crate::drawpipe::keep_out();
+    super::run(hw, super::settings(&m, false).mask, case.cal, cal_dir.clone(), out.clone(), || {
         pass += 1;
         let mut g = shared.lock().unwrap();
         for (_, act) in case.script.iter().filter(|(at, _)| *at == pass) {
@@ -260,6 +478,12 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32) {
                 }
                 Act::Hold => g.hold = true,
                 Act::Rearm => rearm_due = true,
+                Act::SegRun => (g.seg.run, g.seg.running) = (g.seg.run + 1, true),
+                Act::SegShow(k) => g.seg.want = Some(*k),
+                Act::FinalRaw => g.final_req += 1,
+                Act::StopView(t, d) => g.stop_view = Some((*t, *d)),
+                Act::Force => g.force = true,
+                Act::DeepRaw => g.deep_raw = Some(crate::deepmeas::Want { every: true }),
             }
         }
         if rearm_due && g.halted {
@@ -268,12 +492,34 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32) {
         if (g.frame.roll || g.frame.scan) && slow_frames.last().is_none_or(|f| f.seq != g.frame.seq) {
             slow_frames.push(g.frame.clone());
         }
+        // STOP: every view read again
+        if let Some(f) = g.replay.take() {
+            replays.push(f);
+        }
         pass <= case.passes
     });
     let queued = out.lock().unwrap().queue.iter().filter(|f| !f.roll && !f.scan).cloned().collect::<Vec<_>>();
-    let frames: Vec<Frame> = slow_frames.into_iter().chain(queued).collect();
+    if case.cal {
+        let _ = std::fs::remove_dir_all(&cal_dir);
+    }
+    let frames: Vec<Frame> = slow_frames.into_iter().chain(queued).chain(replays).collect();
     let trace = u.borrow().trace_text();
-    (trace, frames, mask)
+    (trace, frames, mask, out)
+}
+
+/// The line of a segmented recording: segments asked for, recorded, read back, the time of each and the one shown.
+fn seg_line(g: &Shared) -> String {
+    let times: Vec<String> =
+        g.seg.times.iter().map(|t| t.map_or("-".to_string(), |t| format!("{:.3}", t * 1e6))).collect();
+    let shown = g.seg.shown.as_ref().map_or("none".to_string(), |(k, f)| format!("{}: {}", k, frame_line(f)));
+    format!(
+        "segments total {} recorded {} read {} times_us [{}] shown {}\n",
+        g.seg.total,
+        g.seg.recorded,
+        g.seg.read,
+        times.join(" "),
+        shown
+    )
 }
 
 // Stage 2 of ADR 0053: the loop against the simulated unit for every case of the matrix. Break it catches: a case
@@ -286,7 +532,8 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
         std::fs::create_dir_all(d).expect("OOS_LIVE_OUT is a folder");
     }
     for case in CASES {
-        let (trace, frames, mask) = run_case(case);
+        let (trace, frames, mask, out) = run_case(case);
+        let g = out.lock().unwrap();
         if let Some(d) = &dir {
             let mut text = format!("# {}\n", case.name);
             text += &trace;
@@ -294,10 +541,53 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
                 text += &frame_line(f);
                 text.push('\n');
             }
+            if g.seg.total > 0 {
+                text += &seg_line(&g);
+            }
             std::fs::write(d.join(format!("{}.txt", case.name)), text).expect("write the case's file");
         }
         let count = |what: &str| trace.lines().filter(|l| l.starts_with(what)).count();
         let (played, streamed) = (count("Played"), count("Stream"));
+        // what the screen asked for in the script was done
+        let asked = |f: fn(&Act) -> bool| case.script.iter().filter(|(_, a)| f(a)).count();
+        if asked(|a| matches!(a, Act::Force)) > 0 {
+            assert!(trace.contains("off: 8284, v: 32 }") && !g.force, "{}: no force pulse (0x205c bit 5)", case.name);
+        }
+        let views = asked(|a| matches!(a, Act::StopView(..)));
+        let replayed = frames.iter().filter(|f| f.fixed_ti.is_some()).count();
+        assert_eq!(replayed, views, "{}: every view in STOP read again from the stored record", case.name);
+        if asked(|a| matches!(a, Act::FinalRaw)) > 0 {
+            assert_eq!(g.final_ack, g.final_req, "{}: the final frame request answered", case.name);
+            let last = frames.last().expect("frames before the STOP");
+            assert!(!last.envelope, "{}: the newest frame read raw at STOP", case.name);
+        }
+        // live compression: the batches before the STOP came through it (frames of min/max pairs)
+        if case.compress && !case.script.iter().any(|(_, a)| matches!(a, Act::DeepRaw)) {
+            let before = &frames[..frames.len().saturating_sub(1)];
+            assert!(before.iter().any(|f| f.envelope), "{}: no frame through the live compression", case.name);
+        }
+        // the deep measurements: the record read compressed, then its screen window raw, every sample of more than
+        // the deepest compressed record
+        if asked(|a| matches!(a, Act::DeepRaw)) > 0 {
+            let raw = frames.iter().filter(|f| !f.envelope && f.ch[0].len() > crate::compress::MAX_DEPTH as usize);
+            assert!(raw.count() > 0, "{}: no raw screen window of the deep record", case.name);
+            let mut plays: Vec<&str> = trace
+                .lines()
+                .filter(|l| l.starts_with("Played"))
+                .filter_map(|l| l.find("bytes").map(|i| &l[i..]))
+                .collect();
+            plays.sort_unstable();
+            plays.dedup();
+            assert!(plays.len() >= 2, "{}: the compressed read and the raw window: {:?}", case.name, plays);
+        }
+        // the calibration reaches the configuration: the same case without it writes other values
+        if case.cal {
+            let (plain, _, _, _) = run_case(&Case { cal: false, ..*case });
+            let writes = |t: &str| -> Vec<String> {
+                t.lines().filter(|l| l.starts_with("Write")).map(|l| l[l.find("off").unwrap()..].to_string()).collect()
+            };
+            assert_ne!(writes(&trace), writes(&plain), "{}: the same writes as without the calibration", case.name);
+        }
         // roll or scan from the case's settings, not from what came out: a slow case that delivers nothing fails
         let slow = {
             let mut m = Model::default();
@@ -319,13 +609,83 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
                     assert!((hi - 0.5).abs() < 0.01 && (lo + 0.5).abs() < 0.01, "{}: {} to {} V", case.name, lo, hi);
                 }
             }
-            if frames[0].scan {
+            if case.la {
+                let mut swept = false;
+                for f in &frames {
+                    let w = &f.la.as_ref().expect("the LA words with every picture").words;
+                    assert!(!w.is_empty(), "{}: picture {} without LA words", case.name, f.seq);
+                    // a partial scan picture after a whole sweep holds the sweep being written up to its write
+                    // position, then what is left of the sweep before: one jump at that seam, none anywhere else
+                    let jumps = w.windows(2).filter(|p| p[1].wrapping_sub(p[0]) > 1).count();
+                    let seams = usize::from(f.scan && f.partial && swept);
+                    assert!(jumps <= seams, "{}: picture {}: the LA count jumps {} times", case.name, f.seq, jumps);
+                    swept |= f.scan && !f.partial;
+                }
+            }
+            // scan with the trigger point left of the screen: the scan trigger position, enabled (0x4058 bit 31)
+            let mut m = Model::default();
+            (case.model)(&mut m);
+            if frames[0].scan && m.delay as f64 > 5.1 * m.hw_time_per_div() as f64 {
+                let pos = trace.lines().filter(|l| l.starts_with("Write") && l.contains("off: 16472,"));
+                let on = pos.filter_map(|l| l.rsplit("v: ").next()?.trim_end_matches(" }").parse::<u32>().ok());
+                assert!(on.into_iter().any(|v| v & 1 << 31 != 0), "{}: no scan trigger position", case.name);
+            }
+            // a whole sweep and the next where the case runs long enough for one
+            if frames[0].scan && case.passes >= SCAN_PASSES {
                 assert!(frames.iter().any(|f| !f.partial), "{}: no sweep completed", case.name);
                 let sweeps = trace.lines().filter(|l| l.contains("counter: 1,")).count();
                 assert!(sweeps >= 2, "{}: {} sweeps started", case.name, sweeps);
             }
         } else if case.period_us.is_some() {
-            assert!(played > 0 && !frames.is_empty(), "{}: played {}, {} frames", case.name, played, frames.len());
+            // hardware segments: every segment recorded is read back with its time, a trigger period after the one
+            // before it; delivered to the screen when the recording ended by itself, not after STOP
+            let stopped = g.seg.total > 0 && g.seg.recorded < g.seg.total;
+            if g.seg.total > 0 {
+                assert!(g.seg.recorded > 0 && g.seg.read == g.seg.recorded, "{}: {}", case.name, seg_line(&g));
+                // a segment is a trigger of the scene, and the next is the first trigger after the record before it
+                // and the interval: back to back without one, a whole number of trigger periods apart, never less
+                // than the interval
+                let period = case.period_us.unwrap() as f64 * 1e-6;
+                let mut m = Model::default();
+                (case.model)(&mut m);
+                let ivl = m.seg_ivl as f64;
+                let times: Vec<f64> = g
+                    .seg
+                    .times
+                    .iter()
+                    .enumerate()
+                    .map(|(k, t)| t.unwrap_or_else(|| panic!("{}: segment {} without a stamp", case.name, k)))
+                    .collect();
+                for (k, w) in times.windows(2).enumerate() {
+                    let periods = (w[1] - w[0]) / period;
+                    assert!((periods - periods.round()).abs() < 1e-6, "{}: segment {} at {} s", case.name, k + 1, w[1]);
+                    let want = if ivl == 0.0 { periods.round() == 1.0 } else { w[1] - w[0] >= ivl };
+                    assert!(want, "{}: segment {} {} s after the one before", case.name, k + 1, w[1] - w[0]);
+                }
+                let delivered = if stopped { 0 } else { g.seg.recorded as usize };
+                assert_eq!(frames.len(), delivered, "{}: frames delivered", case.name);
+                if let Some(k) =
+                    case.script.iter().find_map(|(_, a)| if let Act::SegShow(k) = a { Some(*k) } else { None })
+                {
+                    assert_eq!(g.seg.shown.as_ref().map(|s| s.0), Some(k), "{}: the segment shown", case.name);
+                    let v = &g.seg.shown.as_ref().unwrap().1.ch[0];
+                    let (lo, hi) = v.iter().fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
+                    assert!(
+                        (hi - 0.5).abs() < 0.01 && (lo + 0.5).abs() < 0.01,
+                        "{}: shown {} to {} V",
+                        case.name,
+                        lo,
+                        hi
+                    );
+                }
+            }
+            assert!(
+                played > 0 && (stopped || !frames.is_empty()),
+                "{}: played {}, {} frames",
+                case.name,
+                played,
+                frames.len()
+            );
             let volts = signal(case.freq_hz, case.square);
             for f in &frames {
                 let on = (0..4).filter(|&c| !f.ch[c].is_empty()).fold(0, |m, c| m | 1 << c);

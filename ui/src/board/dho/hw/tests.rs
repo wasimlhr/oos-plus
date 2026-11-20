@@ -6,9 +6,9 @@
 
 use super::decode::{decode, LIVE_READ};
 use super::plan::{
-    batch_plan, deep_raw_settings, edge_check, final_replay, frame0_check_wanted, frame0_left_out, frame1_off_trigger,
-    prearm_keeps_replay, stop_plan, whole_plan, zone_batch, zone_batch_from, Edge, FRAME0_CHECK_MAX_FRAMES, FRAME0_KEEP,
-    FRAME1_CHECK_MAX, PREARM,
+    batch_plan, deep_raw_settings, edge_check, final_replay, frame0_check_wanted, frame0_left_out,
+    frame1_left_out_unseen, frame1_off_trigger, prearm_keeps_replay, stop_plan, whole_plan, zone_batch, zone_batch_from,
+    Edge, FRAME0_CHECK_MAX_FRAMES, FRAME0_KEEP, FRAME1_CHECK_MAX, PREARM,
 };
 use super::serial::{i2c_of, serial_debug, serial_lines_acquired, spi_of, uart_debug, uart_of, SERIAL_HW};
 use super::settings::{
@@ -623,6 +623,21 @@ fn frame1_without_its_edge_is_found() {
     assert!(!frame1_off_trigger(&frame(410), &Settings { trig_couple: oos_hal::dho::tpu::Coupling::Ac, ..s.clone() }));
     assert!(!frame1_off_trigger(&Frame { envelope: true, ..frame(410) }, &s));
     assert!(!frame1_off_trigger(&frame(410), &Settings { trig_src: 9, ..s.clone() }));
+}
+
+// Issue #5 on the unit (2026-11-19, 1 kpts, 10 us/div, batches of 26 to 32): frame 1 with its edge at the trigger point
+// but older memory before it drew a full-swing step at -38 us. Breaks it catches: frame 1 of a long batch kept when its
+// edge is in place, frame 1 of a small batch (slow time bases, #220) left out unseen, and either with the rule off.
+#[test]
+fn frame1_of_a_long_batch_is_left_out_unseen() {
+    let long = FRAME0_CHECK_MAX_FRAMES + 1;
+    for avail in [long, 26, 32] {
+        assert!(frame1_left_out_unseen(avail, true), "{} frames", avail);
+        assert!(!frame1_left_out_unseen(avail, false), "{} frames, acq.frame0 = keep", avail);
+    }
+    for small in 1..=FRAME0_CHECK_MAX_FRAMES {
+        assert!(!frame1_left_out_unseen(small, true), "{} frames: the edge check decides", small);
+    }
 }
 
 // Issue #220 on the unit (2026-11-18): at 1 ms/div a batch holds the held frame 0 and one more, so leaving frame 0
@@ -1287,7 +1302,8 @@ fn the_acquisition_loop_runs_on_the_simulated_unit() {
     let view = View { cal, dot_fs: p.dot_fs as i128, pre: p.pre, post: p.post };
     // a 1 MHz sine, triggering every 50 us
     let volts = Box::new(|_c: usize, t: f64| 0.5 * (2.0 * std::f64::consts::PI * 1e6 * t).sin());
-    let scene = Scene { volts, first_fs: 1_000_000_000, period_fs: Some(50_000_000_000), auto_fs: None, view };
+    let scene =
+        Scene { volts, la: None, first_fs: 1_000_000_000, period_fs: Some(50_000_000_000), auto_fs: None, view };
     let (u, bar, c2h, clock) = unit(scene);
     let lines = oos_hal::dho::lines::Recorded::default();
     let hw = super::port::Hw { bar, c2h, afe: None, lines, clock, port: super::liverun::SimPort };

@@ -390,6 +390,31 @@ impl Ui {
         if self.seg_adjust(it, d) {
             return;
         }
+        // a step of the search switch changes no setting: no new acquisition, no statistics cleared
+        if it == Item::SearchOn {
+            self.search_on = !self.search_on;
+            return;
+        }
+        let _ = self.adjust_scope(it, d) || self.adjust_tools(it, d) || self.adjust_more(it, d);
+        // moving the strip does not change what was measured
+        if it == Item::StripDock {
+            self.relayout();
+            return;
+        }
+        // nor does the pane that shows the values, or which values a trend chart shows
+        if matches!(it, Item::PaneSel | Item::TrendSel(_)) {
+            self.relayout();
+            if self.m.run == RunState::Run { self.dirty_map = true; }
+            return;
+        }
+        self.settings_changed();
+        if it == Item::Hdmi {
+            self.sync_full();
+        }
+    }
+
+    /// `adjust` of the channels, the time base, the logger and the trigger. True when `it` is one of them.
+    fn adjust_scope(&mut self, it: Item, d: i32) -> bool {
         let m = &mut self.m;
         match it {
             Item::ChCoupling(c) => {
@@ -478,10 +503,6 @@ impl Ui {
                 }
             }
             Item::TrigSrc2 => m.trig_src2 = src_step(m.trig_src2, NCH, d),
-            Item::SearchOn => {
-                self.search_on = !self.search_on;
-                return;
-            }
             Item::TrigWhen => {
                 let all: &[WhenKind] = if m.trig_type == TrigType::Runt {
                     &[WhenKind::Off, WhenKind::Gt, WhenKind::Lt, WhenKind::In, WhenKind::Out]
@@ -505,15 +526,19 @@ impl Ui {
                 m.pat[c] = all[cycle(i, all.len(), d)];
             }
             Item::NthN => m.nth_n = (m.nth_n as i32 + d).clamp(ranges::NTH_N.0, ranges::NTH_N.1) as u32,
+            _ => return false,
+        }
+        true
+    }
+
+    /// `adjust` of the acquisition depth, measurements, cursors, references, zones, display and math. True when `it`
+    /// is one of them.
+    fn adjust_tools(&mut self, it: Item, d: i32) -> bool {
+        let m = &mut self.m;
+        match it {
             Item::AcqDepth => m.mdepth = cycle(m.mdepth, mdepths().len(), d),
-            Item::MeasSrc => {
-                let cur = self.meas_src;
-                self.meas_src = self.step_wave(cur, d);
-            }
-            Item::MeasSrcB => {
-                let cur = self.meas_src_b;
-                self.meas_src_b = self.step_wave(cur, d);
-            }
+            Item::MeasSrc => self.meas_src = self.step_wave(self.meas_src, d),
+            Item::MeasSrcB => self.meas_src_b = self.step_wave(self.meas_src_b, d),
             // Track cursor B on its own source (follows cursor A's until set)
             Item::CurSrcB => {
                 let cur = self.cursor_b_source();
@@ -649,6 +674,15 @@ impl Ui {
                 self.workspace.measure_docked = true;
                 self.workspace.measure_float = None;
             }
+            _ => return false,
+        }
+        true
+    }
+
+    /// `adjust` of the decoder, zoom, XY, boot and storage choices, the mask and the reference slots. True when `it`
+    /// is one of them.
+    fn adjust_more(&mut self, it: Item, d: i32) -> bool {
+        match it {
             Item::DecOn => self.m.dec_on = !self.m.dec_on,
             Item::DecSel => {
                 let k = (self.m.dec_sel as i32 + d).rem_euclid(DECODERS as i32) as usize;
@@ -790,23 +824,9 @@ impl Ui {
                     r.on = !r.on;
                 }
             }
-            _ => {}
+            _ => return false,
         }
-        // moving the strip does not change what was measured
-        if it == Item::StripDock {
-            self.relayout();
-            return;
-        }
-        // nor does the pane that shows the values, or which values a trend chart shows
-        if matches!(it, Item::PaneSel | Item::TrendSel(_)) {
-            self.relayout();
-            if self.m.run == RunState::Run { self.dirty_map = true; }
-            return;
-        }
-        self.settings_changed();
-        if it == Item::Hdmi {
-            self.sync_full();
-        }
+        true
     }
 
     pub(super) fn clear_measurement_statistics(&mut self) {
@@ -848,374 +868,392 @@ impl Ui {
         match Self::kind(it) {
             Kind::Choice => self.adjust(it, 1),
             Kind::Value => {}
-            Kind::Action => match it {
-                Item::Open(MenuId::La) if !self.m.la.on && !self.la_probe_ok() => self.toast("No LA probe connected"),
-                // start menu > Measure: the measurement page, as the Measure button and key open it
-                Item::Open(MenuId::Measure) if self.menu == MenuId::Main => {
-                    self.ensure_meas_own();
-                    self.open_submenu(MenuId::MeasAdd);
-                    // Studio: the Menu opens the page itself; Add > Measurement and the key open the quick Add panel
-                    self.studio.meas_page = self.m.layout == Layout::Studio;
+            Kind::Action => {
+                let _ = self.activate_menus(it) || self.activate_measure(it) || self.activate_more(it);
+            }
+        }
+    }
+
+    /// `activate` of an action: the start menu, its key functions and the pickers. True when `it` is one of them.
+    fn activate_menus(&mut self, it: Item) -> bool {
+        match it {
+            Item::Open(MenuId::La) if !self.m.la.on && !self.la_probe_ok() => self.toast("No LA probe connected"),
+            // start menu > Measure: the measurement page, as the Measure button and key open it
+            Item::Open(MenuId::Measure) if self.menu == MenuId::Main => {
+                self.ensure_meas_own();
+                self.open_submenu(MenuId::MeasAdd);
+                // Studio: the Menu opens the page itself; Add > Measurement and the key open the quick Add panel
+                self.studio.meas_page = self.m.layout == Layout::Studio;
+            }
+            // the footer of the Measure sheet: the same list, with a source that is on the screen
+            Item::Open(MenuId::MeasAdd) => {
+                self.ensure_meas_own();
+                self.open_submenu(MenuId::MeasAdd);
+                if self.m.layout == Layout::Studio { self.sheet_add_open(); }
+            }
+            Item::Open(id) => {
+                if id == MenuId::Cursor && self.m.cursor == CursorMode::Off {
+                    // like the CURSOR key
+                    self.m.cursor = CursorMode::Time;
                 }
-                // the footer of the Measure sheet: the same list, with a source that is on the screen
-                Item::Open(MenuId::MeasAdd) => {
-                    self.ensure_meas_own();
-                    self.open_submenu(MenuId::MeasAdd);
-                    if self.m.layout == Layout::Studio { self.sheet_add_open(); }
-                }
-                Item::Open(id) => {
-                    if id == MenuId::Cursor && self.m.cursor == CursorMode::Off {
-                        // like the CURSOR key
-                        self.m.cursor = CursorMode::Time;
-                    }
-                    self.open_submenu(id);
-                }
-                // start menu: the front-panel key functions; one-shot actions close the menu, stepping ones keep it
-                Item::RunStop
-                | Item::SingleAct
-                | Item::AutosetAct
-                | Item::DefaultAct
-                | Item::ForceAct
-                | Item::LockAct => {
-                    self.close_menu();
-                    self.key(match it {
-                        Item::RunStop => key::RUNSTOP,
-                        Item::SingleAct => key::SINGLE,
-                        Item::AutosetAct => key::AUTO,
-                        Item::DefaultAct => key::DEFAULT,
-                        Item::ForceAct => key::FORCE,
-                        _ => key::TOUCHLOCK,
-                    });
-                }
-                Item::SlopeAct => self.key(key::SLOPE),
-                Item::NavHist => self.key(key::NAVIGATE),
-                Item::NavBack => self.key(0x08),
-                Item::NavFwd => self.key(0x06),
-                Item::QuickRun => {
-                    self.close_menu();
-                    self.quick();
-                }
-                Item::PowerAct => {
-                    // the dialog of the POWER key, without the MCU answer that belongs to a key press
-                    self.close_menu();
-                    self.dialog = None;
-                    self.power_dlg = true;
-                }
-                Item::HZero => {
-                    self.m.delay = 0.0;
-                    self.settings_changed();
-                }
-                Item::AutoDeskew => self.auto_deskew(),
-                Item::ClearDeskew => self.clear_deskew(),
-                Item::Trig50 => self.level_50(),
-                Item::PickOpt(k) if self.pick.is_some_and(|p| Self::hex_item(p.it)) => {
-                    // keypad: digits edit the entry, OK sets the value and goes back
-                    match KEYPAD.get(k).copied() {
-                        Some("OK") => {
-                            let v = u64::from_str_radix(if self.keypad.is_empty() { "0" } else { &self.keypad }, 16)
-                                .unwrap_or(0)
-                                .min(BUS_VAL_MAX);
-                            if let Some(p) = self.pick {
-                                self.set_hex(p.it, v);
-                            }
-                            self.close_picker();
+                self.open_submenu(id);
+            }
+            // start menu: the front-panel key functions; one-shot actions close the menu, stepping ones keep it
+            Item::RunStop | Item::SingleAct | Item::AutosetAct | Item::DefaultAct | Item::ForceAct | Item::LockAct => {
+                self.close_menu();
+                self.key(match it {
+                    Item::RunStop => key::RUNSTOP,
+                    Item::SingleAct => key::SINGLE,
+                    Item::AutosetAct => key::AUTO,
+                    Item::DefaultAct => key::DEFAULT,
+                    Item::ForceAct => key::FORCE,
+                    _ => key::TOUCHLOCK,
+                });
+            }
+            Item::SlopeAct => self.key(key::SLOPE),
+            Item::NavHist => self.key(key::NAVIGATE),
+            Item::NavBack => self.key(0x08),
+            Item::NavFwd => self.key(0x06),
+            Item::QuickRun => {
+                self.close_menu();
+                self.quick();
+            }
+            Item::PowerAct => {
+                // the dialog of the POWER key, without the MCU answer that belongs to a key press
+                self.close_menu();
+                self.dialog = None;
+                self.power_dlg = true;
+            }
+            Item::HZero => {
+                self.m.delay = 0.0;
+                self.settings_changed();
+            }
+            Item::AutoDeskew => self.auto_deskew(),
+            Item::ClearDeskew => self.clear_deskew(),
+            Item::Trig50 => self.level_50(),
+            Item::PickOpt(k) if self.pick.is_some_and(|p| Self::hex_item(p.it)) => {
+                // keypad: digits edit the entry, OK sets the value and goes back
+                match KEYPAD.get(k).copied() {
+                    Some("OK") => {
+                        let v = u64::from_str_radix(if self.keypad.is_empty() { "0" } else { &self.keypad }, 16)
+                            .unwrap_or(0)
+                            .min(BUS_VAL_MAX);
+                        if let Some(p) = self.pick {
+                            self.set_hex(p.it, v);
                         }
-                        Some("Clear") => self.keypad.clear(),
-                        Some("Del") => {
-                            self.keypad.pop();
-                        }
-                        Some(d) if self.keypad.len() < 10 => {
-                            if self.keypad == "0" {
-                                self.keypad.clear();
-                            }
-                            self.keypad.push_str(d);
-                        }
-                        _ => {}
-                    }
-                }
-                Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::AfgFreqEntry) => self.freq_key(k),
-                // a picker its page answers for (ADR 0060)
-                Item::PickOpt(k) if self.pick.is_some_and(|p| Self::page_of_pick(p.it).is_some()) => {
-                    if let Some((it, page)) = self.pick.and_then(|p| Some((p.it, Self::page_of_pick(p.it)?))) {
                         self.close_picker();
-                        (page.pick)(self, it, k);
                     }
+                    Some("Clear") => self.keypad.clear(),
+                    Some("Del") => {
+                        self.keypad.pop();
+                    }
+                    Some(d) if self.keypad.len() < 10 => {
+                        if self.keypad == "0" {
+                            self.keypad.clear();
+                        }
+                        self.keypad.push_str(d);
+                    }
+                    _ => {}
                 }
-                Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::StoreFile) => self.file_pick(k),
-                Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::StoreRunScpi) => {
-                    let p = self.scpi_files.get(k).cloned();
+            }
+            Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::AfgFreqEntry) => self.freq_key(k),
+            // a picker its page answers for (ADR 0060)
+            Item::PickOpt(k) if self.pick.is_some_and(|p| Self::page_of_pick(p.it).is_some()) => {
+                if let Some((it, page)) = self.pick.and_then(|p| Some((p.it, Self::page_of_pick(p.it)?))) {
                     self.close_picker();
-                    self.scpi_replay_file = p;
+                    (page.pick)(self, it, k);
                 }
-                Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::RefImport) => {
-                    let p = self.ref_files.get(k).cloned();
+            }
+            Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::StoreFile) => self.file_pick(k),
+            Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::StoreRunScpi) => {
+                let p = self.scpi_files.get(k).cloned();
+                self.close_picker();
+                self.scpi_replay_file = p;
+            }
+            Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::RefImport) => {
+                let p = self.ref_files.get(k).cloned();
+                self.close_picker();
+                if let Some(p) = p {
+                    self.ref_load_path(&p);
+                }
+            }
+            Item::PickOpt(k) => {
+                if let Some(p) = self.pick {
+                    let opts = self.options(p.it);
                     self.close_picker();
-                    if let Some(p) = p {
-                        self.ref_load_path(&p);
+                    if let Some(o) = opts.get(k) {
+                        self.select_option(p.it, o);
                     }
                 }
-                Item::PickOpt(k) => {
-                    if let Some(p) = self.pick {
-                        let opts = self.options(p.it);
-                        self.close_picker();
-                        if let Some(o) = opts.get(k) {
-                            self.select_option(p.it, o);
-                        }
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// `activate` of an action: the measurements, math, references. True when `it` is one of them.
+    fn activate_measure(&mut self, it: Item) -> bool {
+        match it {
+            Item::AddMeas => {
+                if let Some(k) = self.next_usual_meas() {
+                    self.activate(Item::MeasAdd(k));
+                }
+            }
+            Item::MeasCfg(i) => self.open_meas_cfg(i as usize),
+            Item::MeasAdd(k) => {
+                let e = (k, self.meas_src);
+                if let Some(index) = self.m.meas.iter().position(|item| *item == e) {
+                    self.m.meas.remove(index);
+                    self.meas_own.remove(&e);
+                    if self.meas_cfg == Some(index as u16) {
+                        self.meas_cfg = None;
+                    } else if self.meas_cfg.is_some_and(|n| n as usize > index) {
+                        self.meas_cfg = self.meas_cfg.map(|n| n - 1);
                     }
-                }
-                Item::AddMeas => {
-                    if let Some(k) = self.next_usual_meas() {
-                        self.activate(Item::MeasAdd(k));
+                    self.clear_measurement_statistics();
+                    self.toast(&format!(
+                        "{} {} removed",
+                        meascatalog::meas_display_name(k),
+                        self.wave_name(self.meas_src)
+                    ));
+                    return true;
+                } else {
+                    if !self.meas_make_room() {
+                        return true;
                     }
-                }
-                Item::MeasCfg(i) => self.open_meas_cfg(i as usize),
-                Item::MeasAdd(k) => {
-                    let e = (k, self.meas_src);
-                    if let Some(index) = self.m.meas.iter().position(|item| *item == e) {
-                        self.m.meas.remove(index);
-                        self.meas_own.remove(&e);
-                        if self.meas_cfg == Some(index as u16) {
-                            self.meas_cfg = None;
-                        } else if self.meas_cfg.is_some_and(|n| n as usize > index) {
-                            self.meas_cfg = self.meas_cfg.map(|n| n - 1);
-                        }
-                        self.clear_measurement_statistics();
-                        self.toast(&format!(
-                            "{} {} removed",
-                            meascatalog::meas_display_name(k),
-                            self.wave_name(self.meas_src)
-                        ));
-                        return;
-                    } else {
-                        if !self.meas_make_room() {
-                            return;
-                        }
-                        self.m.meas.push(e);
-                        self.clear_measurement_statistics();
-                    }
-                    if k == Meas::Burst && !(self.m.meas_idle > 0.0) {
-                        if let Some((a, _)) = self.meas_analysis(self.meas_src) {
-                            let p = a.period();
-                            if p.is_finite() && p > 0.0 {
-                                self.m.meas_idle = p;
-                            }
-                        }
-                    }
-                    self.ensure_meas_own();
-                    self.toast(&format!("{} {} added", meascatalog::meas_display_name(k), self.wave_name(self.meas_src)));
-                }
-                Item::MeasPair(k) => self.meas_pair_toggle(k),
-                Item::CntClear => {
-                    if self.cnt.total == 0 && self.cnt.hw.is_none() {
-                        self.toast(NOTHING_TO_CLEAR);
-                    } else {
-                        self.counter_clear();
-                        self.toast("Counter cleared");
-                    }
-                }
-                Item::DecTable => {
-                    let on = self.events_pane_on();
-                    self.set_events_pane(!on);
-                    self.close_menu();
-                }
-                Item::DecThrMid => self.dec_threshold_to_middle(),
-                Item::DecExport => self.decode_export(),
-                Item::SearchTable => self.table_toggle(tables::TableKind::Search),
-                Item::SearchSave => self.events_export(tables::TableKind::Search),
-                Item::StoreBin => self.file_save_ask(FileKind::WaveBin),
-                Item::RefExport => self.ref_export(),
-                Item::RefImport if self.sheets_on() => self.studio_load_file(self.ref_sel),
-                Item::RefImport => self.ref_import(),
-                Item::RefLoad => self.ref_load(),
-                Item::MaskSave => self.mask_save(),
-                Item::MaskLoad => self.mask_load(),
-                Item::ChLabel(c) => self.wlan.osk = Some(wlan::Osk::for_label(c, &self.m.ch_label[c])),
-                Item::BusLabel => self.wlan.osk = Some(wlan::Osk::for_bus(&self.m.bus.label)),
-                Item::RefLabel => match &self.refs[self.ref_sel] {
-                    Some(r) => self.wlan.osk = Some(wlan::Osk::for_ref(self.ref_sel, &r.label)),
-                    None => self.toast("That slot is empty"),
-                },
-                Item::ChBiasZero(c) => self.zero_input(c),
-                Item::MathExprEdit => {
-                    self.wlan.osk = Some(wlan::Osk::for_expr(self.m.math_sel, &self.m.math_expr[self.m.math_sel]))
-                }
-                Item::MeasRemove(index) => self.remove_measurement(index as usize),
-                Item::MeasClear => {
-                    self.m.meas.clear();
-                    self.m.meas2.clear();
-                    self.m.cat.clear();
-                    self.meas_own.clear();
-                    self.meas_cfg = None;
+                    self.m.meas.push(e);
                     self.clear_measurement_statistics();
                 }
-                Item::RefSave | Item::RefSaveNext => {
-                    let c = self.ref_src;
-                    let rec = self.last[0].clone();
-                    let saved = rec.as_ref().filter(|r| !r.ch[c].is_empty()).map(|r| {
-                        let (v, dt) = self.meas_wave(r, c);
-                        let t0 =
-                            if v.len() > r.ch[c].len() { r.raw.as_ref().map(|x| x.t0).unwrap_or(r.t0) } else { r.t0 };
-                        RefWave {
-                            src: c,
-                            color: 0,
-                            label: String::new(),
-                            t0,
-                            dt,
-                            v: v.into(),
-                            vpd: self.m.ch[c].volts_per_div(),
-                            offset: self.m.ch[c].offset,
-                            on: true,
+                if k == Meas::Burst && !(self.m.meas_idle > 0.0) {
+                    if let Some((a, _)) = self.meas_analysis(self.meas_src) {
+                        let p = a.period();
+                        if p.is_finite() && p > 0.0 {
+                            self.m.meas_idle = p;
                         }
-                    });
-                    match saved {
-                        Some(w) => {
-                            let next = self.refs.iter().position(|r| r.is_none()).unwrap_or(NREF - 1);
-                            // Studio: into the slot the picker shows; the secondary action goes to the next free one
-                            let slot = if self.sheets_on() && it != Item::RefSaveNext { self.ref_sel } else { next };
-                            self.m.deskew_ref[slot] = self.m.deskew_ch[c];
-                            self.refs[slot] = Some(w);
-                            self.toast(&format!("CH{} saved to R{}", c + 1, slot + 1));
-                            self.measure_refs();
-                            self.analyzer_update();
-                        }
-                        None => self.toast("Source channel has no data"),
                     }
                 }
-                Item::RefClearOne => self.ref_clear_slot(self.ref_sel),
-                Item::RefClear => {
-                    self.refs = std::array::from_fn(|_| None);
-                    self.measure_refs();
-                    self.analyzer_update();
+                self.ensure_meas_own();
+                self.toast(&format!("{} {} added", meascatalog::meas_display_name(k), self.wave_name(self.meas_src)));
+            }
+            Item::MeasPair(k) => self.meas_pair_toggle(k),
+            Item::CntClear => {
+                if self.cnt.total == 0 && self.cnt.hw.is_none() {
+                    self.toast(NOTHING_TO_CLEAR);
+                } else {
+                    self.counter_clear();
+                    self.toast("Counter cleared");
                 }
-                Item::ClearDisp => {
-                    if self.menu == MenuId::Main {
-                        self.close_menu();
-                    }
-                    self.clear_display();
-                }
-                Item::SysInfo => self.sysinfo_open(),
-                Item::ViewExit => self.view_exit(),
-                Item::ViewSettings => self.view_settings(),
-                Item::About => {
-                    let p = oos_hal::model::platform();
-                    let build = std::fs::read_to_string("/etc/oos-build").unwrap_or_default();
-                    let mut d = vec![
-                        "OOS".into(),
-                        "An open operating system for the DHO800/DHO900".into(),
-                        if build.is_empty() {
-                            format!("oos-ui {}", env!("CARGO_PKG_VERSION"))
-                        } else {
-                            format!("Build {}", oos_hal::update::short(build.trim()))
-                        },
-                        // the commit this binary was built from: the same line on the scope and on a desktop
-                        option_env!("OOS_GIT").map_or(String::new(), |g| format!("Commit {g}")),
-                        self.info.clone(),
-                        format!("Rigol {}", p.ident()),
-                        p.caps_line(),
-                    ];
-                    // experimental limits (limits.conf) and detection problems: the details are on System info
-                    if p.experimental() {
-                        d.push(format!("EXPERIMENTAL limits ({}), see System info", p.overrides.len()));
-                    }
-                    if !p.warnings.is_empty() {
-                        d.push(format!("{} warning(s), see System info", p.warnings.len()));
-                    }
-                    d.extend([
-                        format!("Source: {}   {:.0} fps", self.src.name(), self.fps),
-                        self.start_up_summary().unwrap_or_default(),
-                        "Tap to close".into(),
-                    ]);
-                    d.retain(|l| !l.is_empty());
-                    self.dialog = Some(d)
-                }
-                Item::Shot => {
-                    self.rec_action(":SAVE:IMAGe");
-                    // without the dialog on it
-                    self.close_menu();
-                    self.shot_request = Some(String::new());
-                }
-                Item::MathAuto => self.math_autoscale(),
-                Item::MathOff => self.math_turn_off(self.m.math_sel),
-                Item::ZoneBox | Item::ZoneShape => {
-                    self.zone_arm = Some((self.zone_sel, it == Item::ZoneShape));
-                    self.close_menu();
-                    self.toast(if it == Item::ZoneShape {
-                        "Draw the zone with one finger"
-                    } else {
-                        "Drag a box for the zone"
-                    });
-                }
-                Item::ZoneClear => {
-                    let blank = crate::zone::Zone { src: self.m.zones[self.zone_sel].src, ..Default::default() };
-                    if self.m.zones[self.zone_sel] == blank {
-                        self.toast(NOTHING_TO_CLEAR);
-                    } else {
-                        self.m.zones[self.zone_sel] = blank;
-                        self.toast(&format!("Zone {} deleted", self.zone_sel + 1));
-                    }
-                }
-                Item::StoreSaveSetup => {
-                    // for the SCPI recorder: the slot is the menu's and no part of the set-up, so the command names
-                    // it. `:SAVE:SETup` would write the slot the scope that runs the recording happens to stand at
-                    self.rec_action(&format!("*SAV {}", self.store_slot));
-                    let p = self.setup_path();
-                    let r = crate::store::write(&p, self.setup_text_full().as_bytes());
-                    self.toast_saved(&p, r);
-                }
-                // the rows below ask for the name of their file, or which file to load (ui/files.rs); the slots do not
-                Item::StoreSaveScpi => self.file_save_ask(FileKind::SetupScpi),
-                Item::StoreRunScpi => self.scpi_run_ask(),
-                Item::StoreRecall => self.recall_setup(),
-                Item::StoreSetupSave => self.file_save_ask(FileKind::Setup),
-                Item::StoreSetupLoad => self.file_load_ask(FileKind::Setup),
-                Item::StoreCsv => self.file_save_ask(FileKind::WaveCsv),
-                Item::StorePng => self.file_save_ask(FileKind::Shot),
-                Item::MaskCreate => self.create_mask(),
-                Item::MaskFromRef => self.create_mask_from_ref(),
-                Item::MaskClear => {
-                    if self.mask.is_none() && self.mask_ref.is_none() && !self.m.mask_on && self.mask_pass == 0 && self.mask_fail == 0 {
-                        self.toast(NOTHING_TO_CLEAR);
-                    } else {
-                        self.mask = None;
-                        self.mask_ref = None;
-                        self.m.mask_on = false;
-                        self.mask_counts_reset();
-                        self.toast("Mask cleared");
-                    }
-                }
-                Item::MaskReset => {
-                    if self.mask_pass == 0 && self.mask_fail == 0 {
-                        self.toast(NOTHING_TO_CLEAR);
-                    } else {
-                        self.mask_counts_reset();
-                        self.toast("Counts reset");
-                    }
-                }
-                Item::StoreFfSave => self.file_save_ask(FileKind::FastFrame),
-                Item::StoreFfLoad => self.file_load_ask(FileKind::FastFrame),
-                Item::StoreSessSave => self.file_save_ask(FileKind::Session),
-                Item::StoreSessLoad => self.file_load_ask(FileKind::Session),
-                Item::Stock => self.stock_tap(),
-                Item::BootAgain => self.boot_again_tap(),
-                Item::Update => self.dialog = Some(self.update_lines()),
-                Item::AcqSegTable => self.table_toggle(tables::TableKind::Segments),
-                Item::SrcOn => {
-                    let v = self.off_sources(self.menu);
-                    for &c in &v {
-                        self.m.ch[c].on = true;
-                    }
-                    self.focus = 0;
-                    self.settings_changed();
-                    let names: Vec<String> = v.iter().map(|c| format!("CH{}", c + 1)).collect();
-                    self.toast(&format!("{} on", names.join(", ")));
-                }
-                Item::WlanInfo => self.dialog = Some(self.wlan_lines()),
-                Item::WlanScan => self.wlan_scan(),
-                Item::WlanForget => self.wlan_forget_tap(),
-                Item::UpdateRollback => self.update_rollback_tap(),
-                _ => {}
+            }
+            Item::DecTable => {
+                let on = self.events_pane_on();
+                self.set_events_pane(!on);
+                self.close_menu();
+            }
+            Item::DecThrMid => self.dec_threshold_to_middle(),
+            Item::DecExport => self.decode_export(),
+            Item::SearchTable => self.table_toggle(tables::TableKind::Search),
+            Item::SearchSave => self.events_export(tables::TableKind::Search),
+            Item::StoreBin => self.file_save_ask(FileKind::WaveBin),
+            Item::RefExport => self.ref_export(),
+            Item::RefImport if self.sheets_on() => self.studio_load_file(self.ref_sel),
+            Item::RefImport => self.ref_import(),
+            Item::RefLoad => self.ref_load(),
+            Item::MaskSave => self.mask_save(),
+            Item::MaskLoad => self.mask_load(),
+            Item::ChLabel(c) => self.wlan.osk = Some(wlan::Osk::for_label(c, &self.m.ch_label[c])),
+            Item::BusLabel => self.wlan.osk = Some(wlan::Osk::for_bus(&self.m.bus.label)),
+            Item::RefLabel => match &self.refs[self.ref_sel] {
+                Some(r) => self.wlan.osk = Some(wlan::Osk::for_ref(self.ref_sel, &r.label)),
+                None => self.toast("That slot is empty"),
             },
+            Item::ChBiasZero(c) => self.zero_input(c),
+            Item::MathExprEdit => {
+                self.wlan.osk = Some(wlan::Osk::for_expr(self.m.math_sel, &self.m.math_expr[self.m.math_sel]))
+            }
+            Item::MeasRemove(index) => self.remove_measurement(index as usize),
+            Item::MeasClear => {
+                self.m.meas.clear();
+                self.m.meas2.clear();
+                self.m.cat.clear();
+                self.meas_own.clear();
+                self.meas_cfg = None;
+                self.clear_measurement_statistics();
+            }
+            Item::RefSave | Item::RefSaveNext => {
+                let c = self.ref_src;
+                let rec = self.last[0].clone();
+                let saved = rec.as_ref().filter(|r| !r.ch[c].is_empty()).map(|r| {
+                    let (v, dt) = self.meas_wave(r, c);
+                    let t0 = if v.len() > r.ch[c].len() { r.raw.as_ref().map(|x| x.t0).unwrap_or(r.t0) } else { r.t0 };
+                    RefWave {
+                        src: c,
+                        color: 0,
+                        label: String::new(),
+                        t0,
+                        dt,
+                        v: v.into(),
+                        vpd: self.m.ch[c].volts_per_div(),
+                        offset: self.m.ch[c].offset,
+                        on: true,
+                    }
+                });
+                match saved {
+                    Some(w) => {
+                        let next = self.refs.iter().position(|r| r.is_none()).unwrap_or(NREF - 1);
+                        // Studio: into the slot the picker shows; the secondary action goes to the next free one
+                        let slot = if self.sheets_on() && it != Item::RefSaveNext { self.ref_sel } else { next };
+                        self.m.deskew_ref[slot] = self.m.deskew_ch[c];
+                        self.refs[slot] = Some(w);
+                        self.toast(&format!("CH{} saved to R{}", c + 1, slot + 1));
+                        self.measure_refs();
+                        self.analyzer_update();
+                    }
+                    None => self.toast("Source channel has no data"),
+                }
+            }
+            Item::RefClearOne => self.ref_clear_slot(self.ref_sel),
+            Item::RefClear => {
+                self.refs = std::array::from_fn(|_| None);
+                self.measure_refs();
+                self.analyzer_update();
+            }
+            _ => return false,
         }
+        true
+    }
+
+    /// `activate` of an action: display, storage, zones, mask, system and network. True when `it` is one of them.
+    fn activate_more(&mut self, it: Item) -> bool {
+        match it {
+            Item::ClearDisp => {
+                if self.menu == MenuId::Main {
+                    self.close_menu();
+                }
+                self.clear_display();
+            }
+            Item::SysInfo => self.sysinfo_open(),
+            Item::ViewExit => self.view_exit(),
+            Item::ViewSettings => self.view_settings(),
+            Item::About => {
+                let p = oos_hal::model::platform();
+                let build = std::fs::read_to_string("/etc/oos-build").unwrap_or_default();
+                let mut d = vec![
+                    "OOS".into(),
+                    "An open operating system for the DHO800/DHO900".into(),
+                    if build.is_empty() {
+                        format!("oos-ui {}", env!("CARGO_PKG_VERSION"))
+                    } else {
+                        format!("Build {}", oos_hal::update::short(build.trim()))
+                    },
+                    // the commit this binary was built from: the same line on the scope and on a desktop
+                    option_env!("OOS_GIT").map_or(String::new(), |g| format!("Commit {g}")),
+                    self.info.clone(),
+                    format!("Rigol {}", p.ident()),
+                    p.caps_line(),
+                ];
+                // experimental limits (limits.conf) and detection problems: the details are on System info
+                if p.experimental() {
+                    d.push(format!("EXPERIMENTAL limits ({}), see System info", p.overrides.len()));
+                }
+                if !p.warnings.is_empty() {
+                    d.push(format!("{} warning(s), see System info", p.warnings.len()));
+                }
+                d.extend([
+                    format!("Source: {}   {:.0} fps", self.src.name(), self.fps),
+                    self.start_up_summary().unwrap_or_default(),
+                    "Tap to close".into(),
+                ]);
+                d.retain(|l| !l.is_empty());
+                self.dialog = Some(d)
+            }
+            Item::Shot => {
+                self.rec_action(":SAVE:IMAGe");
+                // without the dialog on it
+                self.close_menu();
+                self.shot_request = Some(String::new());
+            }
+            Item::MathAuto => self.math_autoscale(),
+            Item::MathOff => self.math_turn_off(self.m.math_sel),
+            Item::ZoneBox | Item::ZoneShape => {
+                self.zone_arm = Some((self.zone_sel, it == Item::ZoneShape));
+                self.close_menu();
+                self.toast(if it == Item::ZoneShape {
+                    "Draw the zone with one finger"
+                } else {
+                    "Drag a box for the zone"
+                });
+            }
+            Item::ZoneClear => {
+                let blank = crate::zone::Zone { src: self.m.zones[self.zone_sel].src, ..Default::default() };
+                if self.m.zones[self.zone_sel] == blank {
+                    self.toast(NOTHING_TO_CLEAR);
+                } else {
+                    self.m.zones[self.zone_sel] = blank;
+                    self.toast(&format!("Zone {} deleted", self.zone_sel + 1));
+                }
+            }
+            Item::StoreSaveSetup => {
+                // for the SCPI recorder: the slot is the menu's and no part of the set-up, so the command names
+                // it. `:SAVE:SETup` would write the slot the scope that runs the recording happens to stand at
+                self.rec_action(&format!("*SAV {}", self.store_slot));
+                let p = self.setup_path();
+                let r = crate::store::write(&p, self.setup_text_full().as_bytes());
+                self.toast_saved(&p, r);
+            }
+            // the rows below ask for the name of their file, or which file to load (ui/files.rs); the slots do not
+            Item::StoreSaveScpi => self.file_save_ask(FileKind::SetupScpi),
+            Item::StoreRunScpi => self.scpi_run_ask(),
+            Item::StoreRecall => self.recall_setup(),
+            Item::StoreSetupSave => self.file_save_ask(FileKind::Setup),
+            Item::StoreSetupLoad => self.file_load_ask(FileKind::Setup),
+            Item::StoreCsv => self.file_save_ask(FileKind::WaveCsv),
+            Item::StorePng => self.file_save_ask(FileKind::Shot),
+            Item::MaskCreate => self.create_mask(),
+            Item::MaskFromRef => self.create_mask_from_ref(),
+            Item::MaskClear => {
+                if self.mask.is_none() && self.mask_ref.is_none() && !self.m.mask_on && self.mask_pass == 0 && self.mask_fail == 0 {
+                    self.toast(NOTHING_TO_CLEAR);
+                } else {
+                    self.mask = None;
+                    self.mask_ref = None;
+                    self.m.mask_on = false;
+                    self.mask_counts_reset();
+                    self.toast("Mask cleared");
+                }
+            }
+            Item::MaskReset => {
+                if self.mask_pass == 0 && self.mask_fail == 0 {
+                    self.toast(NOTHING_TO_CLEAR);
+                } else {
+                    self.mask_counts_reset();
+                    self.toast("Counts reset");
+                }
+            }
+            Item::StoreFfSave => self.file_save_ask(FileKind::FastFrame),
+            Item::StoreFfLoad => self.file_load_ask(FileKind::FastFrame),
+            Item::StoreSessSave => self.file_save_ask(FileKind::Session),
+            Item::StoreSessLoad => self.file_load_ask(FileKind::Session),
+            Item::Stock => self.stock_tap(),
+            Item::BootAgain => self.boot_again_tap(),
+            Item::Update => self.dialog = Some(self.update_lines()),
+            Item::AcqSegTable => self.table_toggle(tables::TableKind::Segments),
+            Item::SrcOn => {
+                let v = self.off_sources(self.menu);
+                for &c in &v {
+                    self.m.ch[c].on = true;
+                }
+                self.focus = 0;
+                self.settings_changed();
+                let names: Vec<String> = v.iter().map(|c| format!("CH{}", c + 1)).collect();
+                self.toast(&format!("{} on", names.join(", ")));
+            }
+            Item::WlanInfo => self.dialog = Some(self.wlan_lines()),
+            Item::WlanScan => self.wlan_scan(),
+            Item::WlanForget => self.wlan_forget_tap(),
+            Item::UpdateRollback => self.update_rollback_tap(),
+            _ => return false,
+        }
+        true
     }
 }
 
