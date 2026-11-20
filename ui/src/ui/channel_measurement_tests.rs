@@ -273,3 +273,23 @@ fn a_running_record_larger_than_the_worker_is_fast_shows_the_value_of_the_record
     next_record(&mut u);
     assert!(freq(&u).is_nan(), "a stopped record is not given the value of another");
 }
+
+#[test]
+fn a_running_line_without_edges_says_no_value_not_computing() {
+    let mut u = native(600_000);
+    // a level with a little noise, no edge
+    let mut frame = u.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.as_ref().clone();
+    frame.ch[0] = (0..600_000).map(|k| 0.1 + 0.001 * ((k % 7) as f32 - 3.0)).collect();
+    frame.basic[0] = crate::board::BasicStats::of(&frame.ch[0]);
+    u.last[0].as_mut().unwrap().raw.as_mut().unwrap().frame = Arc::new(frame);
+    u.m.meas = vec![(Meas::Freq, WaveId::Ch(0))];
+    u.m.meas2.clear();
+    u.m.run = RunState::Run;
+    next_record(&mut u);
+    assert_eq!(u.meas_rows()[0].text(), "Computing", "nothing is measured yet");
+    for round in 0..3 {
+        next_record(&mut u);
+        answer(&mut u);
+        assert_eq!(u.meas_rows()[0].text(), "----", "round {round}");
+    }
+}

@@ -506,7 +506,7 @@ impl Ui {
                 analysis = self.azr.ch_measure[channel]
                     .borrow()
                     .as_ref()
-                    .filter(|cache| !cache.key.basic && cache.analysis.valid)
+                    .filter(|cache| !cache.key.basic)
                     .map(|cache| Arc::clone(&cache.analysis));
                 if analysis.is_none() && self.ana[channel].valid {
                     continue;
