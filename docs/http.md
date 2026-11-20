@@ -297,6 +297,22 @@ answers as `9.9E37` (none) is `null`.
 - Answer: `errors_queued`, the entries of `:SYSTem:ERRor?` oldest first, read until `0,"No error"`; the queue is then
   empty.
 
+### MCP tool `scpi_reference`
+
+- Mark: **experimental**
+- Request: one of `header` (a command as a client sends it, short or long form, number suffixes and `?` as sent:
+  `:CHAN1:SCAL?`), `search` (words, each of which the header, the syntax, the description or the subsystem's title
+  holds; those in the header count first) or `subsystem` (part of a subsystem's title), each a text of 1 to 200
+  characters; `max_results` 1 to 50 (20) for `search` and `subsystem`. Without any: the subsystems.
+- Answer: for `header`, `found` and `commands`, each whole: `header`, `set`, `query`, `desc`, `subsystem`, `params`
+  (`name`, `type`, `description`, `range`), `returns`, `example`, `remarks`, `oos_extension`; with none found a
+  `hint`. For `search` and `subsystem`, `total` and up to `max_results` `commands` with `header`, `set`, `query`,
+  `desc` and `subsystem`, and a `hint` when more match. Without arguments, `subsystems`, each `title` and its number
+  of `commands`. The data is the command chapter of the SCPI Programming Manual, `docs/manual/commands.json`, built
+  into oos-ui; it is read the first time the tool is called.
+- Any tool whose command was answered -113 (undefined header), `scpi` among them, adds to its answer a text that
+  names `scpi_reference`, so that a client looks the command up instead of guessing another name.
+
 ### MCP tool `configure`
 
 - Mark: **experimental**

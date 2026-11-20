@@ -40,11 +40,18 @@ The tools of this record:
 | `waveform` | no | the statistics of a record and a link to a CSV of it (samples or min/max pairs); the interpreter's waveform selection is left as it was |
 | `decode_results` | no | the events of a decoder slot as rows, a limited number per call |
 | `errors` | no (empties the error queue) | the error queue as a list |
+| `scpi_reference` | no | a command of the SCPI reference, found by what it does or by its header, with its syntax and parameters |
 | `configure` | yes | channels, timebase, trigger and acquisition from one object; answers what was applied, read back |
 | `acquire` | yes | run, stop, single, force, autoset, clear; answers the trigger status at once, it does not wait |
 | `setup_decoder` | yes | protocol, input, sources, threshold and state of a decoder slot |
 | `scpi` | yes | as before, and a list of messages that stops at the first error |
 | `screenshot` | no | as before |
+
+`scpi_reference` is the one tool that does not ask the interpreter: it answers from the command chapter of the
+programming manual (`docs/manual/commands.json`, written from docs/scpi/ and checked against it), built into oos-ui. A
+model that does not know a command guesses one that looks right (`:CHAN1:VDIV`); the reference is what the dialect is,
+and `tools/scpi-coverage.py` keeps it and the interpreter alike. A command answered -113 makes a tool name
+`scpi_reference` in its answer.
 
 Every tool carries the annotations of MCP: `readOnlyHint` for those that do not change the scope. The words a tool takes
 from a closed set (measurement items, protocols, trigger types) are an `enum` of its schema, read from the tables of the
