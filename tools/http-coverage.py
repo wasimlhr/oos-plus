@@ -42,9 +42,9 @@ MARKS = ("stable", "experimental", "internal")
 # a guard this check passes over, with the paths of its arm: an arm with that guard and other paths is a finding, so a
 # route added to such an arm is not passed over with it
 GUARDS = {
-    '(post || route == "/mcp") && !peer_ok': (
-        {"/update", "/mcp"},
-        "the 403 of POST /update and /mcp outside net.allow (docs/http.md, Common answers)",
+    '(post || route != "/update") && !peer_ok': (
+        {"/update", "/mcp", "/mcp/waveform.csv"},
+        "the 403 of POST /update, /mcp and /mcp/waveform.csv outside net.allow (docs/http.md, Common answers)",
     ),
 }
 

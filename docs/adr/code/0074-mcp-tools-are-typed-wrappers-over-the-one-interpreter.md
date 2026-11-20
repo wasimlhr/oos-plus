@@ -37,7 +37,7 @@ The tools of this record:
 |---|---|---|
 | `scope_state` | no | channels, timebase, trigger and acquisition in one answer |
 | `measure` | no | items of the measurement list for a source (pairs: two), as numbers; pending values as `null` |
-| `waveform` | no | a record cut to a number of min/max pairs, with its statistics; the interpreter's waveform selection is left as it was |
+| `waveform` | no | the statistics of a record and a link to a CSV of it (samples or min/max pairs); the interpreter's waveform selection is left as it was |
 | `decode_results` | no | the events of a decoder slot as rows, a limited number per call |
 | `errors` | no (empties the error queue) | the error queue as a list |
 | `configure` | yes | channels, timebase, trigger and acquisition from one object; answers what was applied, read back |
@@ -50,8 +50,11 @@ Every tool carries the annotations of MCP: `readOnlyHint` for those that do not 
 from a closed set (measurement items, protocols, trigger types) are an `enum` of its schema, read from the tables of the
 interpreter, so a client sees them in `tools/list` and does not guess.
 
-Limits, so that one call cannot take the scope's memory or a model's context: `waveform` answers at most 10000 points
-(1000 by default) and reads at most 1 Mi samples of a record per call, saying where the next call starts;
+Limits, so that one call cannot take the scope's memory or a model's context: `waveform` puts no samples into its
+answer by default (at most 1000 when asked), but a link to a CSV of up to 100000 rows (10000 by default) that the web
+remote serves (`GET /mcp/waveform.csv`, the last call's) and a client downloads to its computer; it reads at most 1 Mi
+samples of a record per call, saying where the next call starts. A record in the answer fills the context of a small
+local model at once (seen with a 4B model and 500 min/max pairs);
 `decode_results` at most 2000 rows (200 by default). MCP as a whole answers only a peer in `net.allow` (ADR 0025).
 
 What MCP offers is a setting of the scope, Remote services > MCP (`remote.mcp`): **Full** (the default, every tool),
