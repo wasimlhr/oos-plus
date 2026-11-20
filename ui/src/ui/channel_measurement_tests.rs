@@ -223,7 +223,10 @@ fn next_record(u: &mut Ui) {
     let last = u.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.as_ref().clone();
     let frame = Arc::new(crate::board::Frame { seq: last.seq + 1, ..last });
     let count = frame.ch[0].len() as f64;
-    u.last[0] = Some(crate::board::to_record(&frame, &u.m, 3600, count * 1e-9, -count * 0.5e-9));
+    let mut record = crate::board::to_record(&frame, &u.m, 3600, count * 1e-9, -count * 0.5e-9);
+    // as on hardware: the trigger point is a fraction of a sample, another one in every record
+    record.raw.as_mut().unwrap().t0 += frame.seq as f64 * 0.37e-9;
+    u.last[0] = Some(record);
     u.wfm_total += 1;
     u.measure_last();
 }

@@ -40,9 +40,19 @@ pub(in crate::ui) struct RefMeasureKey {
 }
 
 impl RefMeasureKey {
-    /// The same measurement of another record: everything is equal but the record the samples are of.
+    /// The same measurement of another record: everything is equal but the record the samples are of, and its start
+    /// time. On hardware the trigger point is found in each record as a fraction of a sample (`board::trigger_point`),
+    /// so no two records start at the same time (unit 2026-11-20: with the start time compared, no answer was ever
+    /// taken). Whether the worker measured edges or only the basic values is left to the caller.
     fn same_settings(self, other: Self) -> bool {
-        Self { samples: self.samples, revision: self.revision, capture: self.capture, ..other } == self
+        Self {
+            samples: self.samples,
+            revision: self.revision,
+            capture: self.capture,
+            t0: self.t0,
+            basic: self.basic,
+            ..other
+        } == self
     }
 }
 
@@ -589,8 +599,9 @@ impl Ui {
         let cache = self.azr.ch_measure[channel].borrow();
         cache.as_ref().is_some_and(|c| {
             let k = c.key;
-            (k.len, k.dt, k.t0, k.vpd, k.low, k.high, k.epoch, k.full)
-                == (
+            (running && k.same_settings(pending))
+                || (k.len, k.dt, k.t0, k.vpd, k.low, k.high, k.epoch, k.full)
+                    == (
                     pending.len,
                     pending.dt,
                     pending.t0,
