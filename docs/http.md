@@ -206,6 +206,11 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
   and an empty `Content-Type`.
 - Limits: 1 MiB.
 - net.allow: yes, as soon as the head is in, for every method.
+- Mode (oos-plus, Remote services > MCP, `remote.mcp`, [network.md](network.md) 4), read at each request: **Full**
+  (the default) as above. **Read only**: `tools/list` names only the tools whose `readOnlyHint` is true, and `scpi`
+  with that hint; `tools/call` of `configure`, `acquire` or `setup_decoder`, and of `scpi` with a message that holds a
+  command whose header does not end in `?` (or a line break), answers `isError: true` with a text that says MCP is
+  read only, and runs nothing. **Off**: every message with an `id` gets the JSON-RPC error -32001.
 
 The tools are in `ui/src/site/mcp.rs` (oos-plus,
 [ADR 0074](adr/code/0074-mcp-tools-are-typed-wrappers-over-the-one-interpreter.md)). `tools/list` gives each one an

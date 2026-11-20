@@ -155,6 +155,7 @@ address and the clock above the pages that set them.
 | service | port | what goes with it |
 |---|---|---|
 | Web remote | 8080 | live picture, keys and touch, downloads, LXI identification, MCP, **the update page** |
+| MCP | 8080 (`/mcp`) | **Off**, **Read only** or **Full** (the default): the tools for AI assistants ([http.md](http.md)); read only offers the tools that only read and `scpi` for queries alone |
 | SCPI | 5555 (TCP) | the SCPI commands |
 | VXI-11 | 111 (portmapper, TCP and UDP) and 9009 | SCPI through VISA (LXI instruments) |
 | SSH | 22 | a root shell with the scope's own password or a trusted key (section 7); **SSH settings** next to it |
@@ -266,6 +267,7 @@ remote.vxi11 = on
 remote.ssh = off
 ssh.password = on
 remote.mdns = on              # mDNS and DNS-SD (4.1)
+remote.mcp = read             # MCP of the web remote: off, read or full (4); written when not full
 net.name = dho924s-123456     # the name on the network, written at the first start
 graphics = gpu                # System > Graphics: gpu or cpu (gpu/README.md)
 ```

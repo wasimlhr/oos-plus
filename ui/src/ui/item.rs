@@ -424,6 +424,9 @@ pub(super) enum Item {
     RemSsh,
     RemScpiInfo,
     RemVxiInfo,
+    /// what MCP of the web remote offers (Off, Read only, Full; `remote.mcp`), and where it is reached
+    RemMcp,
+    RemMcpInfo,
     /// System > Network > Bluetooth (ui/bt.rs): the state, the actions, and the pickers of found, paired and to be
     /// forgotten devices
     BtState,

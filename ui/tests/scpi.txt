@@ -147,6 +147,7 @@ scpi $S/scpi-answers.txt :MATH1:EXPRession?
 scpi $S/scpi-answers.txt :SYSTem:PIPeline?
 scpi $S/scpi-answers.txt :SYSTem:GRAPhics?
 scpi $S/scpi-answers.txt :SYSTem:AOUTput?
+scpi $S/scpi-answers.txt :SYSTem:REMote:SERVice:MCP?
 scpi $S/scpi-answers.txt :DEBug:SLOTs?
 scpi $S/scpi-answers.txt :SYSTem:DEBug:UART?
 scpi $S/scpi-answers.txt :SYSTem:DEBug:ZONE?

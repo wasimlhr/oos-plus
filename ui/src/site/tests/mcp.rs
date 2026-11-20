@@ -215,3 +215,41 @@ fn mcp_decoder_set_up_and_its_rows() {
     assert_eq!(data(&r).get("pending"), Some(&J::Bool(false)), "{r}");
     assert!(failed(&call(&mut ui, &cv, &mut scpi, "decode_results", r#"{"max_rows":0}"#)));
 }
+
+// Break it catches: a tool that changes the scope still offered or still run while MCP is read only, a setter hidden
+// in a message of the `scpi` tool (after a `;` or a line break), MCP that answers while it is off
+#[test]
+fn mcp_read_only_and_off() {
+    use crate::sysconf::McpMode;
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    ui.sys.remote_mcp = McpMode::Read;
+    let body = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
+    let tools = items(r.get("result").and_then(|x| x.get("tools")));
+    let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
+    assert_eq!(names, ["scpi", "screenshot", "scope_state", "measure", "waveform", "decode_results", "errors"]);
+    assert!(tools.iter().all(|t| t.get("annotations").and_then(|a| a.get("readOnlyHint")) == Some(&J::Bool(true))));
+    let scale = ui.m.time_per_div();
+    for (name, args) in [
+        ("configure", r#"{"timebase":{"scale":0.5}}"#),
+        ("acquire", r#"{"action":"stop"}"#),
+        ("setup_decoder", r#"{"state":true}"#),
+        ("scpi", r#"{"command":":TIM:SCAL 0.5"}"#),
+        ("scpi", r#"{"command":":TIM:SCAL?;:TIM:SCAL 0.5"}"#),
+        ("scpi", r#"{"command":":TIM:SCAL?\n:TIM:SCAL 0.5"}"#),
+        ("scpi", r#"{"commands":[":TIM:SCAL?",":STOP"]}"#),
+        ("scpi", r#"{"command":""}"#),
+    ] {
+        let r = call(&mut ui, &cv, &mut scpi, name, args);
+        assert!(failed(&r) && r.to_string().contains("read only"), "{name} {args}: {r}");
+    }
+    assert_eq!(ui.m.time_per_div(), scale, "nothing was set");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi", r#"{"command":":TIM:SCAL?;*IDN?"}"#);
+    assert!(!failed(&r) && r.to_string().contains("OOS,"), "queries run: {r}");
+    assert!(!failed(&call(&mut ui, &cv, &mut scpi, "scope_state", "{}")));
+    ui.sys.remote_mcp = McpMode::Off;
+    let body = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
+    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
+    let e = r.get("error").unwrap_or_else(|| panic!("{r}"));
+    assert_eq!((num(e.get("code")), r.get("id")), (-32001.0, Some(&J::Num(7.0))));
+}

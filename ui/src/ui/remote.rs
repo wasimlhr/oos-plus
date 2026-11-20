@@ -22,6 +22,7 @@
 use super::worker::Worker;
 use super::*;
 use crate::remote::{Runner, Step};
+use crate::sysconf::McpMode;
 use crate::{mdns, netacl};
 use std::sync::mpsc::{TryRecvError, TrySendError};
 
@@ -49,6 +50,15 @@ pub(super) struct RemoteUi {
     pub lans: Vec<String>,
 }
 
+/// The words of MCP's row, for each mode.
+fn mcp_label(m: McpMode) -> &'static str {
+    match m {
+        McpMode::Off => "Off",
+        McpMode::Read => "Read only",
+        McpMode::Full => "Full",
+    }
+}
+
 const OTHER: &str = "Other ...";
 /// Characters of a name in the picker.
 const NAME_SHOW: usize = 18;
@@ -65,12 +75,14 @@ impl Ui {
     pub(super) fn remote_items(&self) -> Vec<Item> {
         vec![
             Item::RemWeb,
+            Item::RemMcp,
             Item::RemScpi,
             Item::RemVxi,
             Item::RemSsh,
             Item::RemMdns,
             Item::RemAllow,
             Item::NetWeb,
+            Item::RemMcpInfo,
             Item::RemScpiInfo,
             Item::RemVxiInfo,
             Item::Open(MenuId::Ssh),
@@ -82,6 +94,7 @@ impl Ui {
     pub(super) fn remote_kind(it: Item) -> Option<Kind> {
         match it {
             Item::RemWeb
+            | Item::RemMcp
             | Item::RemScpi
             | Item::RemVxi
             | Item::RemSsh
@@ -420,13 +433,15 @@ impl Ui {
 
     /// Rows that are only text.
     pub(super) fn remote_text(it: Item) -> bool {
-        matches!(it, Item::NetWeb | Item::RemScpiInfo | Item::RemVxiInfo | Item::RemFirewall) || Self::ssh_text(it)
+        matches!(it, Item::NetWeb | Item::RemMcpInfo | Item::RemScpiInfo | Item::RemVxiInfo | Item::RemFirewall)
+            || Self::ssh_text(it)
     }
 
     pub(super) fn remote_label(it: Item) -> Option<&'static str> {
         Some(match it {
             Item::Open(MenuId::Remote) => "Remote services",
             Item::RemWeb => "Web remote",
+            Item::RemMcp => "MCP",
             Item::RemScpi => "SCPI",
             Item::RemVxi => "VXI-11",
             Item::RemSsh => "SSH",
@@ -434,7 +449,7 @@ impl Ui {
             Item::RemName => "Name",
             Item::RemAllow => "Allowed",
             Item::RemFirewall => "Firewall",
-            Item::NetWeb => "Address",
+            Item::NetWeb | Item::RemMcpInfo => "Address",
             Item::RemScpiInfo | Item::RemVxiInfo => "Port",
             _ => return Self::ssh_label(it),
         })
@@ -446,6 +461,7 @@ impl Ui {
         let port = |on: bool, text: String| if on { text } else { "off".into() };
         Some(match it {
             Item::RemWeb => onoff(s.remote_web),
+            Item::RemMcp => mcp_label(s.remote_mcp).into(),
             Item::RemScpi => onoff(s.remote_scpi),
             Item::RemVxi => onoff(s.remote_vxi11),
             Item::RemSsh => onoff(s.remote_ssh),
@@ -456,6 +472,9 @@ impl Ui {
             Item::NetWeb if !s.remote_web => "off".into(),
             Item::NetWeb if self.net.is_empty() => "not connected".into(),
             Item::NetWeb => format!("http://{}:8080", self.net),
+            Item::RemMcpInfo if !s.remote_web || s.remote_mcp == McpMode::Off => "off".into(),
+            Item::RemMcpInfo if self.net.is_empty() => "not connected".into(),
+            Item::RemMcpInfo => format!("http://{}:8080/mcp", self.net),
             Item::RemScpiInfo => port(s.remote_scpi, "5555 (TCP)".into()),
             Item::RemVxiInfo => port(s.remote_vxi11, format!("111 and {} (LXI)", crate::net::VXI11_CORE_PORT)),
             _ => return self.ssh_value(it),
@@ -469,11 +488,33 @@ impl Ui {
         match it {
             Item::RemName => Some(self.name_options()),
             Item::RemAllow => Some(self.allow_choices().into_iter().map(|c| c.0).collect()),
+            Item::RemMcp => Some(McpMode::ALL.iter().map(|m| mcp_label(*m).to_string()).collect()),
             _ => Self::remote_kind(it).filter(|k| *k == Kind::Choice).map(|_| vec!["Off".into(), "On".into()]),
         }
     }
 
+    /// MCP's row: Off, Read only, Full, `d` steps on (a pick from the list steps as far as it needs). The next request
+    /// to `/mcp` is answered by the new mode (site/mcp.rs).
+    fn mcp_adjust(&mut self, d: i32) -> bool {
+        let all = McpMode::ALL;
+        let k = all.iter().position(|m| *m == self.sys.remote_mcp).unwrap_or(all.len() - 1) as i32;
+        let m = all[(k + d).rem_euclid(all.len() as i32) as usize];
+        if m != self.sys.remote_mcp {
+            self.sys.remote_mcp = m;
+            self.sys_save();
+            self.toast(match m {
+                McpMode::Off => "MCP off",
+                McpMode::Read => "MCP read only: the tools that change the scope are refused",
+                McpMode::Full => "MCP: every tool",
+            });
+        }
+        true
+    }
+
     pub(super) fn remote_adjust(&mut self, it: Item, d: i32) -> bool {
+        if it == Item::RemMcp {
+            return self.mcp_adjust(d);
+        }
         let s = &mut self.sys;
         let (on, what) = match it {
             Item::RemWeb => (&mut s.remote_web, "Web remote"),
@@ -508,10 +549,11 @@ mod tests {
         let mut u = crate::ui::testkit::demo_ui();
         u.open_menu(MenuId::Remote);
         let d = u.dlg_layout().unwrap();
-        // two columns of six: each switch has its address, port, settings or name on the same row, the address list
+        // two columns of seven: each switch has its address, port, settings or name on the same row, the address list
         // its firewall
         for (sw, info) in [
             (Item::RemWeb, Item::NetWeb),
+            (Item::RemMcp, Item::RemMcpInfo),
             (Item::RemScpi, Item::RemScpiInfo),
             (Item::RemVxi, Item::RemVxiInfo),
             (Item::RemSsh, Item::Open(MenuId::Ssh)),
@@ -539,6 +581,37 @@ mod tests {
         assert_eq!(u.value(Item::RemScpiInfo), "off");
         u.select_option(Item::RemScpi, "On");
         assert_eq!(u.value(Item::RemScpiInfo), "5555 (TCP)");
+    }
+
+    // Break it catches: a mode that is not saved, a pick from the list that lands on the wrong mode, the address of
+    // MCP shown while MCP or the web remote is off, the SCPI command and the row that differ
+    #[test]
+    fn what_mcp_offers_from_the_row_and_over_scpi() {
+        let mut u = crate::ui::testkit::demo_ui();
+        u.net = "192.168.1.9".into();
+        assert_eq!((u.value(Item::RemMcp), u.value(Item::RemMcpInfo)), ("Full".into(), "http://192.168.1.9:8080/mcp".into()));
+        assert_eq!(u.options(Item::RemMcp), vec!["Off", "Read only", "Full"]);
+        u.select_option(Item::RemMcp, "Read only");
+        assert_eq!(u.sys.remote_mcp, McpMode::Read);
+        assert!(u.toast.as_ref().unwrap().0.starts_with("MCP read only"));
+        assert!(u.sys.text().contains("\nremote.mcp = read\n"), "kept in the settings");
+        u.select_option(Item::RemMcp, "Off");
+        assert_eq!((u.sys.remote_mcp, u.value(Item::RemMcpInfo).as_str()), (McpMode::Off, "off"));
+        u.adjust(Item::RemMcp, -1);
+        assert_eq!(u.sys.remote_mcp, McpMode::Full, "the knob goes round");
+        u.select_option(Item::RemWeb, "Off");
+        assert_eq!(u.value(Item::RemMcpInfo), "off", "MCP is reached through the web remote");
+        // the same over SCPI
+        let (mut scpi, cv) = (crate::scpi::Scpi::open(0), crate::gfx::Canvas::new(crate::ui::W, crate::ui::H));
+        let mut q = |c: &str| crate::ui::testkit::q(&mut scpi, &mut u, &cv, c);
+        assert_eq!(q(":SYST:REM:SERV:MCP?"), "FULL");
+        q(":SYSTem:REMote:SERVice:MCP READ_ONLY");
+        assert_eq!(q(":SYST:REM:SERV:MCP?"), "READ_ONLY");
+        q(":SYST:REM:SERV:MCP OFF");
+        assert_eq!(q(":SYST:REM:SERV:MCP?"), "OFF");
+        assert!(q(":SYST:REM:SERV:MCP SOMETIMES;:SYST:ERR?").contains("-224"));
+        drop(q);
+        assert_eq!(u.sys.remote_mcp, McpMode::Off);
     }
 
     #[test]

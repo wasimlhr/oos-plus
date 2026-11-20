@@ -693,6 +693,9 @@ fn system(t: &mut T) {
     t.shows(Item::RemWeb, "Off");
     t.rt(":SYST:REM:SERV:VXI11 OFF", ":SYST:REM:SERV:VXI11?", "0");
     t.rt(":SYST:REM:SERV:MDNS OFF", ":SYST:REM:SERV:MDNS?", "0");
+    t.rt(":SYST:REM:SERV:MCP READ_ONLY", ":SYST:REM:SERV:MCP?", "READ_ONLY");
+    t.shows(Item::RemMcp, "Read only");
+    t.rt(":SYST:REM:SERV:MCP FULL", ":SYST:REM:SERV:MCP?", "FULL");
     t.rt(":SYST:REM:SERV:WEB ON", ":SYST:REM:SERV:WEB?", "1");
     t.no(":SYST:REM:SERV:SCPI OFF", "-221");
     assert!(t.ui.sys.remote_scpi, "SCPI stays on without CONFIRM");
