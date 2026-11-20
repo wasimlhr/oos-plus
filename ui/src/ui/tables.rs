@@ -135,6 +135,21 @@ impl Ui {
         EventRow { t, who: format!("{} #{}", source, index + 1), text: what.to_string(), ok: true }
     }
 
+    /// The count in the title of the search table. Studio's own search says how much of the record it looked at
+    /// when that is a part ("24000 in 300 us of 800 us") and that it ended at its limit ("100000+").
+    fn search_total_text(&self, total: usize) -> String {
+        if self.m.layout != Layout::Studio || self.studio.search.is_none() {
+            return total.to_string();
+        }
+        let more = if total >= super::addrail::SEARCH_MAX { "+" } else { "" };
+        match self.studio_search_part() {
+            Some((searched, record)) => {
+                format!("{total}{more} in {} of {}", si_short(searched, "s"), si_short(record, "s"))
+            }
+            None => format!("{total}{more}"),
+        }
+    }
+
     /// What the events of the table are of: the source and the condition. Studio's own search (Search 1) has its
     /// source and is an edge search; the table named the trigger's source and type for it.
     fn search_names(&self) -> (String, &'static str) {
@@ -247,7 +262,7 @@ impl Ui {
         let total = self.table_total(k);
         match k {
             TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
-                else { format!("Search {} \u{b7} {}", self.search_names().0, total) },
+                else { format!("Search {} \u{b7} {}", self.search_names().0, self.search_total_text(total)) },
             TableKind::Segments => format!("Segments \u{b7} {}", total),
         }
     }

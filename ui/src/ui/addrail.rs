@@ -104,6 +104,9 @@ pub(super) struct RailGeo {
 
 const SLOPES: [&str; 3] = ["Rising", "Falling", "Either"];
 
+/// Search 1 stops at this many events; the count then says "+".
+pub(super) const SEARCH_MAX: usize = 100_000;
+
 impl Ui {
     // ------------------------------------------------------------------------------------------------ the pages
 
@@ -284,7 +287,7 @@ impl Ui {
                 _ => format!("Cursors on {}", self.wave_name(self.cursor_source())),
             },
             AddKind::Search => match self.studio.search {
-                Some(sp) => { let n = self.studio_search_events().len(); format!("Search 1 on {}: {} event{}", self.wave_name(sp.src), n, if n == 1 { "" } else { "s" }) }
+                Some(sp) => format!("Search 1 on {}: {}", self.wave_name(sp.src), self.studio_search_count()),
                 None => "No search yet".to_string(),
             },
             AddKind::Table => {
@@ -893,11 +896,38 @@ impl Ui {
             };
             if armed_up && v >= level && p < level && sp.slope != 1 { cross(&mut out); armed_up = false; }
             if armed_down && v <= level && p > level && sp.slope != 0 { cross(&mut out); armed_down = false; }
-            if out.len() >= 100_000 { break; }
+            if out.len() >= SEARCH_MAX { break; }
         }
         let ev = Arc::new(out);
         *self.studio.search_cache.borrow_mut() = Some((key, ev.clone()));
         ev
+    }
+
+    /// What Search 1 looked at when that is not the whole record, in seconds: (searched, record). The scope reads a
+    /// stopped record and a deep one in part, the screen with a margin (`stop_plan`, `screen_window` of the board), so
+    /// 64 000 events of a running 1 Mpts record were 24 000 after Stop with nothing to say why (unit 2026-11-20).
+    /// None for the whole record, and where the frame does not say how long its record is.
+    pub(super) fn studio_search_part(&self) -> Option<(f64, f64)> {
+        let sp = self.studio.search?;
+        let WaveId::Ch(_) = sp.src else { return None };
+        let (w, dt, _) = self.deskew_samples(sp.src)?;
+        let (rate, points) = self.last[0].as_ref()?.raw.as_ref()?.frame.acq;
+        if !(rate > 0.0) || points == 0 {
+            return None;
+        }
+        let (searched, record) = (w.len() as f64 * dt, points as f64 / rate);
+        (searched < 0.99 * record).then_some((searched, record))
+    }
+
+    /// The count of Search 1 as the top bar writes it: "64000 events", "24000 in 300 us" for a part of the record,
+    /// "100000+ events" where the search ended at `SEARCH_MAX`.
+    pub(super) fn studio_search_count(&self) -> String {
+        let n = self.studio_search_events().len();
+        let more = if n >= SEARCH_MAX { "+" } else { "" };
+        match self.studio_search_part() {
+            Some((searched, _)) => format!("{n}{more} in {}", si_short(searched, "s")),
+            None => format!("{n}{more} event{}", if n == 1 { "" } else { "s" }),
+        }
     }
 
     /// The events to draw and list while Studio has a search of its own.
@@ -943,8 +973,7 @@ impl Ui {
         let f = self.fonts();
         let top = self.frame().top;
         let room = self.studio_top().search;
-        let n = self.studio_search_events().len();
-        let events = format!("{} event{}", n, if n == 1 { "" } else { "s" });
+        let events = self.studio_search_count();
         let full = format!("Search 1 \u{b7} {events}");
         let arrow = super::studio::SEARCH_ARROW_W;
         let label_w = room.w - 2 * arrow - 4;

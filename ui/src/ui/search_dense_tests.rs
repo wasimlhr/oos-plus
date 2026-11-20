@@ -7,6 +7,11 @@ use std::sync::Arc;
 
 /// Studio, stopped, CH2 alone: 1 Mpts at 1.25 GSa/s of a 40 MHz square between 0.56 V and 2.52 V, 20 us/div.
 fn dense() -> Ui {
+    dense_of(1_000_000, (0.0, 0))
+}
+
+/// The same with `points` in the frame, of an acquisition `acq` (sample rate, points of the record).
+fn dense_of(points: usize, acq: (f64, usize)) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.m.studio_detail = false;
@@ -21,7 +26,7 @@ fn dense() -> Ui {
     u.m.delay = -250e-6;
     u.m.run = RunState::Stop;
     let dt = 0.8e-9;
-    let data: Vec<f32> = (0..1_000_000)
+    let data: Vec<f32> = (0..points)
         .map(|i| {
             let phase = (i as f64 * dt * 40e6).fract();
             // edges of about 1.7 ns
@@ -33,13 +38,13 @@ fn dense() -> Ui {
     let frame = Arc::new(crate::board::Frame {
         seq: 3,
         dt,
-        pre: 500_000,
+        pre: points / 2,
         ch: [Vec::new(), data, Vec::new(), Vec::new()],
         roll: false,
         scan: false,
         partial: false,
         envelope: false,
-        acq: (0.0, 0),
+        acq,
         stamp: 0,
         basic: Default::default(),
         la: None,
@@ -150,4 +155,27 @@ fn the_search_sheet_opens_the_list_of_events_and_the_list_names_the_search() {
     u.render(&mut cv);
     u.activate(Item::SearchTable);
     assert_eq!(u.table, None, "the same button closes it");
+}
+
+#[test]
+fn the_count_says_when_the_search_is_of_a_part_of_the_record_or_ended_at_its_limit() {
+    let text = |u: &Ui| u.studio_search_chip().unwrap().3;
+    // the whole record of the acquisition: the count alone
+    let mut u = dense_of(1_000_000, (1.25e9, 1_000_000));
+    u.studio_search_add(Some(WaveId::Ch(1)));
+    assert_eq!(u.studio_search_part(), None);
+    assert!(text(&u).ends_with("64000 events"), "{}", text(&u));
+    // stopped, the scope read 300 us of the 800 us again: the count names the part
+    let mut u = dense_of(375_000, (1.25e9, 1_000_000));
+    u.studio_search_add(Some(WaveId::Ch(1)));
+    assert!(text(&u).ends_with("24000 in 300 \u{b5}s"), "{}", text(&u));
+    u.table = Some(tables::TableKind::Search);
+    assert_eq!(u.table_title(), "Search CH2 \u{b7} 24000 in 300 \u{b5}s of 800 \u{b5}s");
+    // more events than the search keeps
+    let mut u = dense_of(2_000_000, (0.0, 0));
+    u.studio_search_add(Some(WaveId::Ch(1)));
+    assert_eq!(u.studio_search_events().len(), super::addrail::SEARCH_MAX);
+    assert!(text(&u).ends_with("100000+ events"), "{}", text(&u));
+    u.table = Some(tables::TableKind::Search);
+    assert_eq!(u.table_title(), "Search CH2 \u{b7} 100000+");
 }
