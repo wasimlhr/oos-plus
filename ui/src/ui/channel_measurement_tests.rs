@@ -215,3 +215,58 @@ fn min_max_pairs_are_measured_in_time_on_the_mean_of_neighbours_on_every_path() 
     let hires=ui.channel_measurement_key(0,false).unwrap().0;assert!(!hires.pairs);assert!(hires!=key);
     assert!(ui.channel_measurement(0,true).is_some_and(|(a,_)|(a.get(Meas::Freq)-40.0).abs()>5.0));
 }
+
+// A record that is replaced before the worker has measured it (a 40 MHz square in 1 Mpts at 20 us/div, unit 2026-11-20).
+
+/// The next record of a running acquisition: the same signal, a new frame.
+fn next_record(u: &mut Ui) {
+    let last = u.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.as_ref().clone();
+    let frame = Arc::new(crate::board::Frame { seq: last.seq + 1, ..last });
+    let count = frame.ch[0].len() as f64;
+    u.last[0] = Some(crate::board::to_record(&frame, &u.m, 3600, count * 1e-9, -count * 0.5e-9));
+    u.wfm_total += 1;
+    u.measure_last();
+}
+
+/// Polls until the worker's answer is taken and the next record is given to it.
+fn answer(u: &mut Ui) {
+    let jobs = |u: &Ui| u.azr.ref_measure_worker.borrow().as_ref().map_or(0, |w| w.submitted);
+    let before = jobs(u);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while jobs(u) == before {
+        assert!(Instant::now() < deadline, "the measurement worker did not answer");
+        std::thread::sleep(Duration::from_millis(2));
+        u.poll_reference_measurements();
+    }
+}
+
+#[test]
+fn a_running_record_larger_than_the_worker_is_fast_shows_the_value_of_the_record_before() {
+    let mut u = native(600_000);
+    u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Rise, WaveId::Ch(0))];
+    u.m.meas2.clear();
+    u.m.run = RunState::Run;
+    let freq = |u: &Ui| u.meas_at(WaveId::Ch(0), Meas::Freq);
+    next_record(&mut u);
+    assert!(freq(&u).is_nan() && u.meas_rows()[0].computing, "nothing is measured yet");
+    // every answer comes after the next record is there
+    for round in 0..4 {
+        next_record(&mut u);
+        answer(&mut u);
+        assert!((freq(&u) - 25e6).abs() < 1e3, "round {round}: {}", freq(&u));
+        let rows = u.meas_rows();
+        assert!(rows.iter().all(|r| !r.computing), "round {round}: {:?}", rows.iter().map(|r| r.text()).collect::<Vec<_>>());
+    }
+    // other settings: the value of the old ones does not stand in
+    u.m.meas_hpct = 80.0;
+    next_record(&mut u);
+    answer(&mut u);
+    assert!(freq(&u).is_nan() && u.meas_rows()[0].computing, "an answer for other levels is not shown");
+    next_record(&mut u);
+    answer(&mut u);
+    assert!((freq(&u) - 25e6).abs() < 1e3, "{}", freq(&u));
+    // stopped, the record stays and its own answer comes
+    u.m.run = RunState::Stop;
+    next_record(&mut u);
+    assert!(freq(&u).is_nan(), "a stopped record is not given the value of another");
+}
