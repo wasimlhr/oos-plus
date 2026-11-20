@@ -248,6 +248,14 @@ answers as `9.9E37` (none) is `null`.
   answers `isError: true` with a text, queues error -221, and drops the commands after it (the ones before it ran).
   With `commands`: the JSON object `ran`, a list of `{command, reply}` of the messages that ran, in order; the first
   message that queues an error ends the call, with `stopped_at` (its index from 0) and `errors`.
+- Read back (oos-plus): after a message that ran without an error, each of its commands that sets something (not a
+  query, not a common command `*...`) and whose entry in the reference of `scpi_reference` has a query without
+  parameters is asked as that query, in the header the client sent (`:CHAN1:SCAL 0.5` -> `:CHAN1:SCAL?`). The text
+  answer gets a line `read back <query> -> <answer>` for each, after the message's own answer; with `commands` a
+  message's item gets `read_back`, a list of `{query, value}`. A query that queues an error reads back as
+  `error: <errors>`, and its error stays queued. What the scope took shows there when it differs from what was sent.
+  A command after a `;` without a leading `:` (relative to the one before) is looked up as written, from the root,
+  and so is usually not read back.
 
 ### MCP tool `scope_state`
 

@@ -106,6 +106,17 @@ pub fn lookup(header: &str) -> Vec<&'static (usize, J, Vec<Node>)> {
     reference().commands.iter().filter(|(_, _, n)| matches(n, &g)).collect()
 }
 
+/// The query that reads back what one command of a message set, `:CHAN1:SCAL 0.5` -> `:CHAN1:SCAL?`: None for a
+/// query, a common command (`*RST`), or a command whose reference entry has no query without parameters.
+pub fn read_back(command: &str) -> Option<String> {
+    let header = command.split_whitespace().next()?;
+    if header.ends_with('?') || header.starts_with('*') {
+        return None;
+    }
+    let plain = |c: &J| c.get("query").and_then(J::str).is_some_and(|q| q.ends_with('?') && !q.contains(' '));
+    lookup(header).iter().any(|(_, c, _)| plain(c)).then(|| format!("{header}?"))
+}
+
 /// The commands whose header, syntax, description or subsystem holds every word of `words`, those with a word in the
 /// header first.
 pub fn search(words: &str, subsystem: Option<&str>) -> Vec<&'static (usize, J, Vec<Node>)> {
