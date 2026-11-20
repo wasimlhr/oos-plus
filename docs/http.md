@@ -207,14 +207,100 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - Limits: 1 MiB.
 - net.allow: yes, as soon as the head is in, for every method.
 
+The tools are in `ui/src/site/mcp.rs` (oos-plus,
+[ADR 0074](adr/code/0074-mcp-tools-are-typed-wrappers-over-the-one-interpreter.md)). `tools/list` gives each one an
+`inputSchema` (`additionalProperties: false`; the measurement items, protocols and trigger types as an `enum`) and
+the `annotations` `readOnlyHint` (true for those that do not change the scope), `destructiveHint` and `openWorldHint`
+(false). Each typed tool, from `scope_state` on, is a fixed sequence of commands for the interpreter, one message at a
+time: its answer is one JSON object, as `structuredContent` and as the one `text` content item. A command that queued
+an error puts `"<command>: <errors>"` into the object's list `errors`, and the answer says `isError: true`; the errors
+stay queued for `:SYSTem:ERRor?` and the tool `errors`. Arguments that are wrong (an unknown key, a value of the wrong
+type or out of range, a word with a character other than a letter, digit, `_`, `-`, `+` or `.`) refuse the call before
+any command runs: `isError: true` and one `text` that says which. Values are in base units; a value the interpreter
+answers as `9.9E37` (none) is `null`.
+
 ### MCP tool `scpi`
 
 - Mark: **stable**
 - Request: argument `command`, a string: one SCPI program message (commands separated by `;`) for the interpreter
-  (`Scpi::exec_message_checked`, [scpi.md](scpi.md)); a missing one is an empty message.
+  (`Scpi::exec_message_checked`, [scpi.md](scpi.md)); a missing one is an empty message. Or `commands` (in place of
+  `command`, oos-plus): a list of up to 64 program messages.
 - Answer: one `text` content item: the answer of the queries, `ok` for a message without a query, an empty text for a
   query that answers nothing, `(binary response)` for an answer that is not UTF-8. A message that waits on `*OPC?`
   answers `isError: true` with a text, queues error -221, and drops the commands after it (the ones before it ran).
+  With `commands`: the JSON object `ran`, a list of `{command, reply}` of the messages that ran, in order; the first
+  message that queues an error ends the call, with `stopped_at` (its index from 0) and `errors`.
+
+### MCP tool `scope_state`
+
+- Mark: **experimental**
+- Request: no arguments.
+- Answer: `channels` (one per input of the model: `channel`, `display` true or false, `scale`, `offset`, `coupling`,
+  `probe`, `bwlimit`), `timebase` (`scale`, `offset`), `acquire` (`sample_rate`, `memory_depth`, `type`) and `trigger`
+  (`type`, `status`, `sweep`, `source`, `level`, `slope`, `coupling`), each the answer of its query (`:CHAN<n>:SCAL?`,
+  `:TIM:SCAL?`, `:ACQ:SRAT?`, `:TRIG:STAT?`, ...).
+
+### MCP tool `measure`
+
+- Mark: **experimental**
+- Request: `items`, 1 to 20 items of `:MEASure:ITEM?` ([scpi.md](scpi.md), Scalar identifiers; any case);
+  `source` and `source2`, optional (a pair item takes both, a single one `source`; without, the Measure menu's).
+- Answer: `source`, and `results`, a list of `{item, value}` in the order asked, each from `:MEAS:ITEM? <item>[,<A>[,<B>]]`
+  (`item` in the spelling `:MEASure:STRip?` prints). Asks only: no row is added to the measurement strip.
+
+### MCP tool `waveform`
+
+- Mark: **experimental**
+- Request: `source` (`CHAN1` by default, a reference `Rn` or `MATHn`), `record` `screen` (`:WAV:MODE NORM`, the
+  default) or `memory` (`RAW`), `points` 2 to 10000 (1000), `start` from 1 (1).
+- Answer: `source`, `record`, `total_samples` (the record's length), `start`, `samples_read` (at most 1 Mi samples
+  from `start`), `next_start` (null at the end of the record), `dt` and `t0` (s, of the first sample read), `unit`
+  `V`, `clipped` (samples at the end of the WORD range), `stats` (`min`, `max`, `vpp`, `mean`, `rms`), and either
+  `samples` (every sample, when there are no more than `points`) or `minmax` (`points` pairs `[low, high]`, each over
+  an equal share of the samples) with `bucket_dt`. Numbers have six significant digits. Read as `:WAV:FORM WORD` and
+  `:WAV:DATA?` with the scale of `:WAV:PRE?`; the interpreter's waveform selection (`SOURce`, `MODE`, `FORMat`,
+  `STARt`, `STOP`), which every SCPI client shares, is as it was after the call. A start past the record's end is an
+  error.
+
+### MCP tool `decode_results`
+
+- Mark: **experimental**
+- Request: `offset` from 0 (0), `max_rows` 1 to 2000 (200).
+- Answer: from `:DECode:EVENts?`: `pending` true while the decoders compute (nothing else then), else `pending`
+  false, `total_rows`, `offset`, `rows` (`{t, decoder, text, ok}`) and `next_offset` (null after the last row).
+
+### MCP tool `errors`
+
+- Mark: **experimental**
+- Request: no arguments.
+- Answer: `errors_queued`, the entries of `:SYSTem:ERRor?` oldest first, read until `0,"No error"`; the queue is then
+  empty.
+
+### MCP tool `configure`
+
+- Mark: **experimental**
+- Request: optional parts: `acquire` (`memory_depth`, `type`, `averages`), `timebase` (`scale`, `offset`),
+  `channels`, a list of objects with `channel` (1 to the model's inputs) and `display`, `probe`, `scale`, `offset`,
+  `coupling`, `bwlimit`, `invert`, and `trigger` (`type`, `source`, `slope`, `coupling`, `sweep`, `holdoff`, `level`).
+- Answer: `applied`, the commands that ran without an error, in the order sent (the parts in the order above; in a
+  channel the probe before the scale; in the trigger the source before the level), and `state`, what `scope_state`
+  answers after them. A command the interpreter refuses does not stop the others.
+
+### MCP tool `acquire`
+
+- Mark: **experimental**
+- Request: `action`: `run`, `stop`, `single`, `force`, `autoset` or `clear` (`:RUN`, `:STOP`, `:SINGle`, `:TFORce`,
+  `:AUToscale`, `:CLEar`).
+- Answer: `done` (the command), `trigger_status` (`:TRIG:STAT?`) and `autoset_running` (`:AUToscale?`) right after
+  it. It does not wait: one call is answered in one pass of the frame loop.
+
+### MCP tool `setup_decoder`
+
+- Mark: **experimental**
+- Request: optional `slot` (from 1), `protocol` (a name of the list, any case), `input` (`WAVEFORM` or `LA`),
+  `source`, `source2`, `cs`, `source4`, `threshold`, `state`.
+- Answer: `applied`, the commands that ran (`:DEC:SEL`, then `:DEC:PROT`, then the others), and `decoder`, the slot
+  read back (`slot`, `protocol`, `state`, `input`, `source`, `source2`, `threshold`).
 
 ### MCP tool `screenshot`
 

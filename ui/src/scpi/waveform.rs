@@ -10,7 +10,20 @@ use crate::math::math_scales;
 use crate::model::*;
 use crate::ui::Ui;
 
+/// The waveform selection (`SOURce`, `MODE`, `FORMat`, `STARt`, `STOP`), one for every client of the interpreter: the
+/// `waveform` tool of MCP puts it back after its read (site/mcp.rs).
+#[derive(Clone, Copy)]
+pub(crate) struct WaveSelection(WaveId, Option<usize>, u8, u8, u64, u64);
+
 impl Scpi {
+    pub(crate) fn wave_selection(&self) -> WaveSelection {
+        WaveSelection(self.wav_src, self.wav_math, self.wav_fmt, self.wav_mode, self.wav_start, self.wav_stop)
+    }
+
+    pub(crate) fn set_wave_selection(&mut self, s: WaveSelection) {
+        WaveSelection(self.wav_src, self.wav_math, self.wav_fmt, self.wav_mode, self.wav_start, self.wav_stop) = s;
+    }
+
     pub(super) fn wav_source_text(&self) -> String {
         if let Some(k) = self.wav_math { return format!("MATH{}", k + 1); }
         match self.wav_src {

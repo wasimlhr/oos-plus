@@ -118,8 +118,13 @@ impl Ui {
         let col_x = a.x + a.w - PEAK_W;
         let title = Rect::new(a.x + AXIS_W, a.y, a.w - AXIS_W - PEAK_W - 8, TITLE_H);
         let plot = Rect::new(title.x, a.y + TITLE_H, title.w, a.h - self.spec_wf_h(a, pane) - TITLE_H - XLABEL_H);
-        // the full view: under the full-screen and zoom buttons, which sit at the top of this column
-        let below = (self.zoom_btn().1.bottom() + 2).max(a.y + 46);
+        // the full view: under the full-screen and zoom buttons, where they sit at the top of this column. In
+        // Studio the spectrum can be a view of its own beside the waveform, and those buttons are the waveform's:
+        // with the spectrum docked over the waveform the list was put under buttons that lie below the whole view,
+        // so the column stayed empty and the plot looked cut short (the owner, from the web remote of the unit)
+        let zoom = self.zoom_btn().1;
+        let mine = zoom.y >= a.y && zoom.bottom() <= a.bottom() && zoom.x >= a.x && zoom.right() <= a.right();
+        let below = if mine { (zoom.bottom() + 2).max(a.y + 46) } else { a.y + 46 };
         let sort = if pane { Rect::new(col_x, a.y + 2, PEAK_W - 50, 36) } else { Rect::new(col_x, below, PEAK_W - 6, 36) };
         // a fixed header row of its own (Frequency / Level) between the button and the first line
         let y = sort.y + sort.h + 2 + PEAK_HEAD;
