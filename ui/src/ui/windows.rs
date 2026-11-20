@@ -223,6 +223,7 @@ mod tests {
         let mut u = ui();
         for l in WinLayout::ALL {
             u.m.win_layout = l;
+            u.spread_wins();
             render(&mut u);
             assert_eq!(u.wins.len(), l.count(), "{:?}", l);
             let g = u.grid;
@@ -242,6 +243,26 @@ mod tests {
             // one phosphor map per channel at the size of a window
             assert_eq!((u.ph.w, u.ph.h), (u.wins[0].w as usize, u.wins[0].h as usize));
         }
+    }
+
+    // Break it catches: an empty window beside the one that holds every source. On a unit, 2026-11-20: Overlay with
+    // Windows = Rows and only CH2 on drew a second, empty lane under it
+    #[test]
+    fn a_split_with_every_source_in_one_window_is_that_window_alone() {
+        let mut u = crate::ui::testkit::demo_ui();
+        for c in 0..n_ch() {
+            u.m.ch[c].on = c == 1;
+        }
+        u.m.win_layout = WinLayout::Rows;
+        u.m.ch_win = [1; NCH];
+        render(&mut u);
+        assert_eq!(u.wins.len(), 1, "one source, one window");
+        assert_eq!(u.ch_area(1), u.wins[0]);
+        // a second source in the other window: two windows again
+        u.m.ch[0].on = true;
+        u.m.ch_win[0] = 0;
+        render(&mut u);
+        assert_eq!(u.wins.len(), 2);
     }
 
     #[test]
@@ -274,6 +295,7 @@ mod tests {
     fn zoom_and_views_keep_one_window() {
         let mut u = ui();
         u.m.win_layout = WinLayout::Quad;
+        u.spread_wins();
         u.m.zoom = true;
         render(&mut u);
         assert_eq!(u.wins.len(), 1);

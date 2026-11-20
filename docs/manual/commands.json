@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.14",
   "version": "0.1.14",
   "edition": "November 2026",
-  "date": "19 November 2026",
+  "date": "20 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -1405,7 +1405,7 @@
      "header": ":CHANnel<n>:DISPlay",
      "set": ":CHANnel<n>:DISPlay <value>",
      "query": ":CHANnel<n>:DISPlay?",
-     "desc": "Sets or queries Display (menu: Channel > Display).",
+     "desc": "Sets or queries Channel (menu: Channel > Channel).",
      "params": [
       [
        "<n>",

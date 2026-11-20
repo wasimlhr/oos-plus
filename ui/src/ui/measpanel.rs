@@ -4,7 +4,7 @@
 //! under it when it is narrow, with what does not fit behind a ... button. The views are Table, List and Cards
 //! (measview.rs); there is no footer and no paging: the list scrolls by swipe (measscroll.rs).
 use super::dock::{VKind, STRIP_H};
-use super::studio::{chip, icon_pin, PanelGeo, StudioView};
+use super::studio::{chip, icon_pin, icon_pin_small, PanelGeo, StudioView};
 use super::*;
 
 /// Height of the toolbar of a narrow panel: its buttons are a finger high (it was 32 px).
@@ -502,25 +502,41 @@ impl Ui {
     pub(super) fn draw_panel_cards(&self, cv: &mut Canvas, g: &PanelGeo, rows: &[tools::MeasRow], keys: &[studio::MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
         let pinned = self.studio_pinned();
+        // one font for the values of every card of the list, from the width of the cards and the units, not from the
+        // values of the moment (on a unit, 2026-11-20, "68.5 mV" stood smaller than "270 mV" on the card beside it)
+        let cards = self.panel_cards_layout(first, listed.len(), g.list);
+        let vf = match cards.first() {
+            Some((_, r)) => Self::card_value_shared(f, r.w, listed.iter().filter_map(|&i| rows.get(i)).map(|row| (row.unit, f.sb.width(&self.wave_name(row.src))))),
+            None => &f.lb,
+        };
         cv.set_clip(g.list);
-        for (pos, r) in self.panel_cards_layout(first, listed.len(), g.list) {
+        for (pos, r) in cards {
             let i = listed[pos];
             let row = &rows[i];
             let is_pinned = keys.get(i).is_some_and(|k| pinned.contains(k));
             let col = self.wave_color(row.src);
             chip(cv, r, BTN, if is_pinned { mix(BTN_BORDER, AMBER, 90) } else { BTN_BORDER });
             // the name and the pin
-            cv.set_clip(Rect::new(r.x + 4, r.y, r.w - 30, 20));
+            cv.set_clip(Rect::new(r.x + 4, r.y, r.w - 24, 20));
             cv.text(&f.s, r.x + 8, r.y + 15, &self.panel_row_name(keys.get(i).copied(), &row.name), LABEL);
             cv.set_clip(g.list);
-            icon_pin(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
+            icon_pin_small(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
             // the value, and the source at the right of its line
             let src = self.wave_name(row.src);
             let sw = f.sb.width(&src);
-            cv.set_clip(Rect::new(r.x + 4, r.y + 18, (r.w - 8 - sw - 10).max(1), 24));
-            cv.text(&f.lb, r.x + 8, r.y + 38, &row.text(), TEXT);
-            cv.set_clip(Rect::new(r.x + 4, r.y + 18, r.w - 8, 24));
-            cv.text(&f.sb, r.right() - 8 - sw, r.y + 37, &src, col);
+            // the value whole (on a unit, 2026-11-20, two cards in a side panel showed "1.73 n" and "91.8 M"): beside
+            // the source where it fits there, else across the line in the colour of its source, without the tag
+            let value = row.text();
+            // the tag by the widest value of the unit too, so it does not come and go as the value runs (on a unit,
+            // 2026-11-20, "70.4 mV" lost it and "269 mV" beside it kept it)
+            let tag = vf.width(&Self::card_value_widest(row.unit)) <= Self::card_value_beside(r.w, sw);
+            let room = if tag { (r.w - 8 - sw - 10).max(1) } else { r.w - 8 };
+            cv.set_clip(Rect::new(r.x + 4, r.y + 18, room, 24));
+            cv.text(vf, r.x + 8, r.y + 38, &value, if tag { TEXT } else { col });
+            if tag {
+                cv.set_clip(Rect::new(r.x + 4, r.y + 18, r.w - 8, 24));
+                cv.text(&f.sb, r.right() - 8 - sw, r.y + 37, &src, col);
+            }
             // the statistics: mean and deviation, or minimum and maximum, then the count while there is room
             let st = self.studio_stat_values(i);
             if self.studio.panel.stats_mode != 0 || st.is_some() {
@@ -557,10 +573,34 @@ impl Ui {
         if f.width(&short(&widest, &widest)) <= room { return short(a, b); }
         // the unit once: the first value without its unit, when both end in the same one
         let tail = |s: &str| s.rsplit_once(' ').map(|(n, u)| (n.to_string(), u.to_string()));
-        match (tail(a), tail(b)) {
+        let once = match (tail(a), tail(b)) {
             (Some((an, au)), Some((_, bu))) if au == bu => short(&an, b),
             _ => short(a, b),
+        };
+        if f.width(&short("-00.0", &widest)) <= room {
+            return once;
         }
+        // no room for the unit at all: the numbers, whose unit the value above shows
+        let num = |s: &str| tail(s).map_or(s.to_string(), |(n, _)| n);
+        short(&num(a), &num(b))
+    }
+
+    /// The largest font in which a card's value fits `room` px: large, then medium bold, then small bold.
+    /// The widest value a card of `unit` shows: three digits with a sign and a prefix.
+    pub(super) fn card_value_widest(unit: &str) -> String { format!("-00.0 m{unit}") }
+
+    /// The room of a card's value beside its source tag `sw` px wide, on a card `w` px wide.
+    pub(super) fn card_value_beside(w: i32, sw: i32) -> i32 { w - 8 - sw - 10 - 4 }
+
+    /// The one font of the values of cards `w` px wide, given each card's unit and the width of its source tag: the
+    /// largest in which the widest value of every unit ("-00.0 m" and the unit) fits beside its tag, else the largest
+    /// in which it fits across the line, else the smallest.
+    pub(super) fn card_value_shared<'a>(f: &'a crate::font::Fonts, w: i32, cards: impl Iterator<Item = (&'static str, i32)>) -> &'a Font {
+        let cards: Vec<(String, i32)> = cards.map(|(unit, sw)| (Self::card_value_widest(unit), sw)).collect();
+        let fonts = [&f.lb, &f.mb, &f.sb];
+        fonts.into_iter().find(|ft| cards.iter().all(|(v, sw)| ft.width(v) <= Self::card_value_beside(w, *sw)))
+            .or_else(|| fonts.into_iter().find(|ft| cards.iter().all(|(v, _)| ft.width(v) <= w - 12)))
+            .unwrap_or(&f.sb)
     }
 
     /// The name a row shows: for a measurement of one source, its name (pair and catalogue names are whole already).
