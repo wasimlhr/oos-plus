@@ -206,6 +206,26 @@ fn distortion_snr_of_white_noise() {
     assert!(close(d.thdn_db, -snr, 0.5), "{}", d.thdn_db);
 }
 
+// Break it catches: CH2 with nothing connected (4 mVpp of noise) gave a "fundamental" at 97.6 MHz with SNR -8.7 dB
+// and ENOB -1.5 bit on a unit (2026-11-19); noise has no fundamental, so there are no figures.
+#[test]
+fn distortion_of_noise_alone_is_none_and_a_weak_line_still_counts() {
+    let dt = 8e-10;
+    for seed in 1..6 {
+        let mut g = Gauss(seed);
+        let noise: Vec<f32> = (0..100_000).map(|_| g.next(0.001) as f32).collect();
+        assert!(spectrum::distortion(&noise, dt, None, 10).is_none(), "seed {seed}: a line found in noise");
+        // a line at the noise's own rms level is far above any single noise bin
+        let weak: Vec<f32> = noise
+            .iter()
+            .enumerate()
+            .map(|(k, &x)| x + 0.001 * (2.0 * PI * 40e6 * k as f64 * dt).sin() as f32)
+            .collect();
+        let d = spectrum::distortion(&weak, dt, None, 10).expect("the weak line");
+        assert!(close(d.f1, 40e6, 1e3), "seed {seed}: {}", d.f1);
+    }
+}
+
 #[test]
 fn distortion_enob_of_an_ideal_quantiser() {
     for bits in [8u32, 12] {

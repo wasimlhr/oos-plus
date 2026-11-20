@@ -701,6 +701,19 @@ impl Scpi {
         if kw(n0, "SPECtrum") && nodes.len() == 2 && kw(nodes[1], "ITEM") && query {
             return Some(self.sourced(ui, arg, |ui, item, src| ui.fact_spectrum(item, src)));
         }
+        // the RBW the spectrum was computed with (the record length can make it coarser than `:SPECtrum:RBW`)
+        if kw(n0, "SPECtrum") && nodes.len() == 3 && kw(nodes[1], "RBW") && kw(nodes[2], "ACTual") && query {
+            return Some(t(&ui.spectrum_rbw().map_or_else(|| "9.9E37".to_string(), e)));
+        }
+        // the lines of the peak table, in its order: frequency,level;...
+        if kw(n0, "SPECtrum") && nodes.len() == 3 && kw(nodes[1], "PEAK") && kw(nodes[2], "LIST") && query {
+            let p = ui.spectrum_peaks();
+            return Some(if p.is_empty() {
+                t("9.9E37")
+            } else {
+                t(&p.iter().map(|m| format!("{},{}", e(m.f), e(m.dbv))).collect::<Vec<_>>().join(";"))
+            });
+        }
         if kw(n0, "MAGnetic") && nodes.len() == 2 && kw(nodes[1], "ITEM") && query {
             return Some(self.sourced(ui, arg, |ui, item, src| ui.fact_magnetic(item, src)));
         }

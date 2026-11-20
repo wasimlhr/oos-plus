@@ -669,6 +669,11 @@ const BH7: (&[f64], f64) = (
     ],
     9.0,
 );
+/// How far (power ratio, 20 dB) the fundamental's strongest bin must stand above the median bin for `distortion` to
+/// call it a line. The largest of N bins of white noise is about ln N / ln 2 times the median (12 dB at 65 536 bins),
+/// so noise alone does not pass; on a unit, CH2 with only noise on it gave THD, SNR and ENOB of a "fundamental" at
+/// 97.6 MHz before this test (2026-11-19).
+const LINE_OVER_MEDIAN: f64 = 100.0;
 const BH4: (&[f64], f64) = (&[0.358_75, 0.488_29, 0.141_28, 0.011_68], 5.0);
 const HANN: (&[f64], f64) = (&[0.5, 0.5], 3.0);
 
@@ -748,6 +753,13 @@ fn distortion_with(
         }
         _ => (hw + 1..nb).max_by(|&a, &b| p[a].total_cmp(&p[b]))?,
     };
+    // noise alone has no fundamental (`LINE_OVER_MEDIAN`)
+    let mut bins = p[hw + 1..].to_vec();
+    let mid = bins.len() / 2;
+    let median = *bins.select_nth_unstable_by(mid, |a, b| a.total_cmp(b)).1;
+    if !(p[k1] >= LINE_OVER_MEDIAN * median) {
+        return None;
+    }
     let lobe = |c: usize| c.saturating_sub(hw)..=(c + hw).min(nb - 1);
     let (sp, swp) = lobe(k1).fold((0.0, 0.0), |(a, b), k| (a + p[k], b + p[k] * k as f64));
     if !(sp > 0.0) {

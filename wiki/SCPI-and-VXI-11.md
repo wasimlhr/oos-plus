@@ -317,7 +317,9 @@ Values are in base units, phase in degrees, duty and overshoot in percent. `*OPC
 |---|---|
 | `:VIEW[?]` | the page: `SCOPE\|SPECTRUM\|EYE\|POWER\|BODE\|MAGNETIC\|INVERTER\|DPT` |
 | `:EYE:ITEM? <figure>` | eye figures: `ONE`, `ZERO`, `AMPLITUDE`, `CROSSING`, `RISE`, `FALL`, `HEIGHT`, `WIDTH`, `Q`, `HBER`, `UI`, `TJ`, `RJ`, `DJ`, `DCD`, `DDJ`, `TPP`, `TRMS`, `J2`, `J9`, `OPENING`, ... (all in [docs/scpi.md](https://github.com/dekajoule/oos/blob/main/docs/scpi.md#eye-figures)) |
-| `:SPECtrum:ITEM? <item>[,src]` | `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR` |
+| `:SPECtrum:ITEM? <item>[,src]` | `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`; `F1` to `ENOB` are `9.9E37` when there is only noise |
+| `:SPECtrum:RBW:ACTual?` | the resolution bandwidth the spectrum uses (a short time base makes it coarser than the one set) |
+| `:SPECtrum:PEAK:LIST?` | the peak table: `frequency,level;...` in Hz and dBV |
 | `:POWer:ITEM? <item>[,V,I]` | `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND`, `RDSON`, ripple items |
 | `:POWer:HARMonics? [src]` | harmonic number and amplitude pairs, `;`-separated |
 | `:MAGnetic:ITEM? <item>[,V,I]` | `L`, `B`, `H`, `MUR`, `LOSS` (needs the core geometry) |
