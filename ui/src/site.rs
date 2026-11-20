@@ -50,6 +50,7 @@ impl oos_remote::http::Site for Ctx<'_> {
         if let Some(live) = self.live {
             live.tick(self.cv);
         }
+        mcp::expire_file(self.scpi);
     }
 
     /// The live picture answers it; 503 without one (tests that ask for no picture).

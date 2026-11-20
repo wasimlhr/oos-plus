@@ -358,3 +358,24 @@ fn mcp_scpi_reads_back_what_it_set() {
     assert!(ran[1].get("read_back").is_none(), "{r}");
     assert!(scpi.queued_errors().is_empty(), "{:?}", scpi.queued_errors());
 }
+
+// Break it catches: the file of a waveform call kept for good (it is a temporary file for one download), the time it
+// is kept not said in the answer
+#[test]
+fn mcp_waveform_file_is_deleted_after_its_time() {
+    let _sends = sends();
+    let mut h = Web::open(0);
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    square_in_r1(&mut ui);
+    let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory"}"#);
+    let file = data(&r).get("file").unwrap();
+    assert_eq!(num(file.get("expires_in_s")), crate::site::mcp::FILE_TTL.as_secs() as f64);
+    assert!(get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv").starts_with("HTTP/1.1 200"));
+    // as if the call had been made longer ago than the file is kept
+    let past = std::time::Instant::now().checked_sub(crate::site::mcp::FILE_TTL + Duration::from_secs(1));
+    let Some(past) = past else { return };
+    scpi.mcp_file.as_mut().unwrap().0 = past;
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv");
+    assert!(r.starts_with("HTTP/1.1 409") && r.contains("within 2 minutes"), "{r}");
+    assert!(scpi.mcp_file.is_none(), "the web server's pass deleted it");
+}
