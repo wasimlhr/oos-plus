@@ -127,7 +127,8 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
 const INSTRUCTIONS: &str = "OOS oscilloscope (Rigol DHO800/DHO900). Rules:
 1. Start with scope_state.
 2. Use the typed tools first: configure, acquire, measure, waveform, decode_results. Use scpi only for what they lack.
-3. Never guess a SCPI command. Find it with scpi_reference (search, then header), then send it with scpi.
+3. Look up, send, verify. Never guess a SCPI command: find it with scpi_reference (search, then header), send it with
+scpi, then check the value read back in its answer. Sent is not done: a setting may be refused, rounded or limited.
 4. waveform answers statistics and a CSV link: download the file; never ask for the samples inline.
 5. acquire does not wait: after single, ask scope_state until trigger.status is STOP.
 6. After an error, read its hint. Do not resend the same command.
@@ -137,7 +138,9 @@ Values in base units: V, s, Hz.";
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
     the response of its queries; or `commands`, a list of messages run in order that stops at the first error. The \
     commands are those of OOS's SCPI reference (Rigol-style: :TIM:SCAL 1e-3, :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1): \
-    look a command up with scpi_reference before sending it, do not guess its name.";
+    look a command up with scpi_reference before sending it, do not guess its name. Every command that sets something \
+    and has a query form is read back after the message (`read back :CHAN1:SCAL? -> 5.000000E-1`): compare it with \
+    what was sent.";
 const SCPI_QUERIES: &str = "Run SCPI queries on the oscilloscope (MCP is read only on this scope): `command`, one \
     program message whose every command is a query (its header ends in '?', commands separated by ';'), or \
     `commands`, a list of such messages. The queries are those of OOS's SCPI reference (:TIM:SCAL?, \
@@ -575,10 +578,35 @@ fn scpi_tool(run: &mut Run, args: &J) -> J {
             ])
         }
         Ok((r, has_reply)) => {
-            text(if r.is_empty() && !has_reply { "ok" } else { std::str::from_utf8(&r).unwrap_or("(binary response)") })
+            let reply = if r.is_empty() && !has_reply { "ok" } else { std::str::from_utf8(&r).unwrap_or("(binary response)") };
+            let checks = read_back(run, c);
+            if checks.is_empty() {
+                return text(reply);
+            }
+            let lines: Vec<String> = checks.iter().map(|(q, v)| format!("read back {q} -> {v}")).collect();
+            text(&format!("{}\n{}", reply.trim_end(), lines.join("\n")))
         }
         Err(error) => refuse(error),
     }
+}
+
+/// Lookup, send, verify: each command of `message` that sets something and has a query form in the reference
+/// (`:CHAN1:SCAL 0.5` -> `:CHAN1:SCAL?`) asked back, with what the scope answers; a command whose query fails reads
+/// back as its error. A setting that was taken but changed (rounded to a step, limited to a range) shows here.
+fn read_back(run: &mut Run, message: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for query in message.split(';').filter_map(reference::read_back) {
+        let queued = run.scpi.queued_errors().len();
+        let value = match run.scpi.exec_message_checked(run.ui, run.cv, &query) {
+            Ok(_) if run.scpi.queued_errors().len() > queued => {
+                format!("error: {}", run.scpi.queued_errors()[queued..].join("; "))
+            }
+            Ok((r, _)) => String::from_utf8_lossy(&r).trim().to_string(),
+            Err(e) => format!("error: {e}"),
+        };
+        out.push((query, value));
+    }
+    out
 }
 
 /// `commands` of the `scpi` tool: each message in its turn, until one fails.
@@ -597,7 +625,13 @@ fn scpi_messages(run: &mut Run, messages: &J) -> J {
             return answer(run, data);
         };
         let reply = J::Str(String::from_utf8_lossy(&r).trim_end().to_string());
-        replies.push(J::obj(&[("command", J::s(message)), ("reply", reply)]));
+        let checks = read_back(run, message);
+        let mut item = vec![("command", J::s(message)), ("reply", reply)];
+        if !checks.is_empty() {
+            let checks = checks.into_iter().map(|(q, v)| J::obj(&[("query", J::Str(q)), ("value", J::Str(v))]));
+            item.push(("read_back", J::Arr(checks.collect())));
+        }
+        replies.push(J::obj(&item));
     }
     answer(run, J::obj(&[("ran", J::Arr(replies))]))
 }

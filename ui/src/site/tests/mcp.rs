@@ -337,3 +337,24 @@ fn mcp_initialize_gives_short_rules_that_name_only_real_tools() {
         assert!(names.contains(&word), "the rules name `{word}`, which is no tool");
     }
 }
+
+// Break it catches: a setting answered "ok" with nothing that shows what the scope took (an assistant takes sent for
+// done), a query or a common command read back, the read back missing from a list of messages
+#[test]
+fn mcp_scpi_reads_back_what_it_set() {
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let text = |r: &J| r.get("content").map(|c| items(Some(c))[0].get("text").and_then(J::str).unwrap().to_string());
+    let r = call(&mut ui, &cv, &mut scpi, "scpi", r#"{"command":":CHAN1:SCAL 0.5;:TIM:SCAL 0.001"}"#);
+    let t = text(&r).unwrap();
+    assert!(t.starts_with("ok\nread back :CHAN1:SCAL? -> ") && t.contains("read back :TIM:SCAL? -> "), "{t}");
+    let value: f64 = t.lines().nth(1).unwrap().rsplit(' ').next().unwrap().parse().unwrap();
+    assert!((value - 0.5).abs() < 1e-9, "{t}");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi", r#"{"command":":CHAN1:SCAL?;*CLS"}"#);
+    assert!(!text(&r).unwrap().contains("read back"), "{r}");
+    let r = call(&mut ui, &cv, &mut scpi, "scpi", r#"{"commands":[":CHAN2:DISP ON",":CHAN2:DISP?"]}"#);
+    let ran = items(data(&r).get("ran"));
+    let back = items(ran[0].get("read_back"));
+    assert_eq!(back[0].get("query").and_then(J::str), Some(":CHAN2:DISP?"), "{r}");
+    assert!(ran[1].get("read_back").is_none(), "{r}");
+    assert!(scpi.queued_errors().is_empty(), "{:?}", scpi.queued_errors());
+}
