@@ -65,6 +65,8 @@ pub struct SysConf {
     pub ssh_password: bool,
     /// the mDNS responder (mdns.rs): `<net_name>.local` and the services for computers that browse
     pub remote_mdns: bool,
+    /// what MCP of the web remote offers (`remote.mcp`); written only when it is not `full`
+    pub remote_mcp: McpMode,
     /// the scope's name on the network (`mdns::name_ok`): host name, sent to DHCP, `<name>.local`. Empty: not set yet,
     /// then the one from model and serial number (`Ui::net_name`)
     pub net_name: String,
@@ -98,6 +100,7 @@ impl Default for SysConf {
             remote_ssh: false,
             ssh_password: true,
             remote_mdns: true,
+            remote_mcp: McpMode::Full,
             net_name: String::new(),
             gpu: true,
             backlight: 100,
@@ -126,6 +129,29 @@ pub enum NtpOrigin {
     Dhcp(&'static str),
     /// `dhcp`, but no lease names a server: `FALLBACK_SERVER`
     NoDhcp,
+}
+
+/// What MCP of the web remote offers (`remote.mcp`, docs/network.md 4, ADR 0074): nothing, the tools that only read,
+/// or every tool. Full by default, as MCP was before the setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum McpMode {
+    Off,
+    Read,
+    #[default]
+    Full,
+}
+
+impl McpMode {
+    pub const ALL: [McpMode; 3] = [McpMode::Off, McpMode::Read, McpMode::Full];
+
+    /// The word of the settings file.
+    pub fn word(self) -> &'static str {
+        match self {
+            McpMode::Off => "off",
+            McpMode::Read => "read",
+            McpMode::Full => "full",
+        }
+    }
 }
 
 /// The server to ask for the setting `ntp.server`: the setting itself, or with `dhcp` the first good server of the
@@ -231,6 +257,7 @@ impl SysConf {
                 "remote.ssh" => on_off(v).map(|b| c.remote_ssh = b).is_some(),
                 "ssh.password" => on_off(v).map(|b| c.ssh_password = b).is_some(),
                 "remote.mdns" => on_off(v).map(|b| c.remote_mdns = b).is_some(),
+                "remote.mcp" => McpMode::ALL.into_iter().find(|m| m.word() == v).map(|m| c.remote_mcp = m).is_some(),
                 "net.name" => {
                     let n = v.to_ascii_lowercase();
                     crate::mdns::name_ok(&n).then(|| c.net_name = n).is_some()
@@ -280,6 +307,9 @@ impl SysConf {
         s.push_str(&format!("remote.ssh = {}\n", word(self.remote_ssh)));
         s.push_str(&format!("ssh.password = {}\n", word(self.ssh_password)));
         s.push_str(&format!("remote.mdns = {}\n", word(self.remote_mdns)));
+        if self.remote_mcp != McpMode::Full {
+            s.push_str(&format!("remote.mcp = {}\n", self.remote_mcp.word()));
+        }
         if !self.net_name.is_empty() {
             s.push_str(&format!("net.name = {}\n", self.net_name));
         }
@@ -569,6 +599,22 @@ mod tests {
             let (e, bad) = SysConf::parse(&format!("net.name = {}\n", bad_name));
             assert_eq!((e.net_name.as_str(), bad.len()), ("", 1), "{}", bad_name);
         }
+    }
+
+    // Break it catches: a mode lost at the next start, a file of an earlier version that gets a new line, a word that
+    // is no mode taken as one
+    #[test]
+    fn what_mcp_offers() {
+        let c = SysConf::default();
+        assert_eq!(c.remote_mcp, McpMode::Full, "every tool, as before the setting");
+        assert!(!c.text().contains("remote.mcp"), "the default is not written");
+        for m in McpMode::ALL {
+            let (d, bad) = SysConf::parse(&format!("remote.mcp = {}\n", m.word()));
+            assert!(bad.is_empty() && d.remote_mcp == m, "{m:?}");
+            assert_eq!(SysConf::parse(&d.text()).0.remote_mcp, m);
+        }
+        let (e, bad) = SysConf::parse("remote.mcp = maybe\n");
+        assert_eq!((e.remote_mcp, bad.len()), (McpMode::Full, 1));
     }
 
     #[test]

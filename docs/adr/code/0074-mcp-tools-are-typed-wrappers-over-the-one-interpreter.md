@@ -52,9 +52,12 @@ interpreter, so a client sees them in `tools/list` and does not guess.
 
 Limits, so that one call cannot take the scope's memory or a model's context: `waveform` answers at most 10000 points
 (1000 by default) and reads at most 1 Mi samples of a record per call, saying where the next call starts;
-`decode_results` at most 2000 rows (200 by default). A tool that changes the scope is refused, like `scpi`, unless the
-peer is in `net.allow` (ADR 0025); a mode of MCP that offers only the reading tools is a setting of Remote services and
-comes with its own change.
+`decode_results` at most 2000 rows (200 by default). MCP as a whole answers only a peer in `net.allow` (ADR 0025).
+
+What MCP offers is a setting of the scope, Remote services > MCP (`remote.mcp`): **Full** (the default, every tool),
+**Read only** (the tools that only read, and `scpi` for messages whose every command is a query), or **Off**. It is a
+setting on the scope and not an argument of a call, because a client chooses its arguments: the owner lends the bench
+to an assistant in Read only and knows that it changes nothing, whatever the assistant sends.
 
 ## Alternatives
 

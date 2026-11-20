@@ -48,6 +48,9 @@ as rows), `errors` and `screenshot`. Tools that change the scope: `configure` (c
 acquisition from one object, read back after), `acquire` (run, stop, single, force, autoset, clear),
 `setup_decoder`, and `scpi` for any command of [[SCPI and VXI-11]]. Each answers JSON and names the errors of its
 commands. When **Allowed** is set (System > Network > Remote services), MCP answers only the addresses it lists.
+**MCP** on the same page says what it offers: **Full** (every tool, the default), **Read only** (the tools that only
+read, and `scpi` for queries alone: an assistant can look at the scope but change nothing) or **Off**. Its address,
+`http://<scope>:8080/mcp`, stands next to it; `:SYSTem:REMote:SERVice:MCP` sets it over SCPI.
 Every tool with its arguments: [docs/http.md](https://github.com/wasimlhr/oos-plus/blob/main/docs/http.md).
 
 ## Ethernet

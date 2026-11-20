@@ -67,6 +67,7 @@ The switches of the Remote services page. `SCPI OFF` needs `,CONFIRM`.
 | `:SYSTem:REMote:SERVice:VXI11` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | Remote services > VXI-11 | OOS extension |
 | `:SYSTem:REMote:SERVice:WEB` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | Remote services > Web remote | OOS extension |
 | `:SYSTem:REMote:SERVice:MDNS` | Set / Query | Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`. | `1` | Remote services > mDNS | OOS extension |
+| `:SYSTem:REMote:SERVice:MCP` | Set / Query | `OFF`, `READ_ONLY` (also `READONLY`) or `FULL`: what MCP of the web remote offers (nothing; the tools that only read and `scpi` for queries; every tool). The query answers `OFF`, `READ_ONLY` or `FULL`. Kept in `/oos/system.conf` (`remote.mcp`). | `FULL` | Remote services > MCP | OOS extension (oos-plus) |
 
 ### Power, update and boot
 
