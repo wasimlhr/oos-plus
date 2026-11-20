@@ -28,7 +28,7 @@ Part of the [SCPI reference](README.md).
 | `:SPECtrum:ACPR:WIDTh` | Set / Query | Hz. Range 1.0 to 1e12. | `1.000000E+06` | Spectrum > Ch width | name not verified against the DHO guide |
 | `:SPECtrum:ACPR:SPACing` | Set / Query | Hz. Range 1.0 to 1e12. | `2.000000E+06` | Spectrum > Ch space | name not verified against the DHO guide |
 | `:SPECtrum:ITEM` | Query | `<item>[,source]` `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`. `F1` to `ENOB` answer `9.9E37` when the record has no fundamental (noise alone: no line stands 20 dB above the median of the spectrum); `ACPR` and `FLOOR` need none. | - | Spectrum > Read spectrum figures (THD, SNR, SFDR, ...) | OOS extension |
-| `:SPECtrum:PEAK:LIST` | Query | The lines of the spectrum of the record now, in the order of the peak table (by frequency or by level): `frequency,level;...`, Hz and dBV, as many as the Harmonics row asks (at least 8; All: every harmonic), also those the table has no room for; computed for the query when the page is not shown; `9.9E37` when there is none. | - | Spectrum > Peak list | OOS extension |
+| `:SPECtrum:PEAK:LIST` | Query | The lines of the spectrum of the record now, in the order of the peak table (by frequency or by level): `frequency,level;...`, Hz and dBV: the lines found above the noise within the page's span (the fundamental's harmonics, and others within the spur range of the strongest), strongest first, up to the Harmonics row (at least 8; All: no limit), also those the table has no room for; a harmonic below the noise is not listed. Computed for the query when the page is not shown; `9.9E37` when there is none (also when the span holds no line). | - | Spectrum > Peak list | OOS extension |
 
 ## Examples
 

@@ -320,7 +320,7 @@ Values are in base units, phase in degrees, duty and overshoot in percent. `*OPC
 | `:EYE:ITEM? <figure>` | eye figures: `ONE`, `ZERO`, `AMPLITUDE`, `CROSSING`, `RISE`, `FALL`, `HEIGHT`, `WIDTH`, `Q`, `HBER`, `UI`, `TJ`, `RJ`, `DJ`, `DCD`, `DDJ`, `TPP`, `TRMS`, `J2`, `J9`, `OPENING`, ... (all in [docs/scpi.md](https://github.com/dekajoule/oos/blob/main/docs/scpi.md#eye-figures)) |
 | `:SPECtrum:ITEM? <item>[,src]` | `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`; `F1` to `ENOB` are `9.9E37` when there is only noise |
 | `:SPECtrum:RBW:ACTual?` | the resolution bandwidth the spectrum uses (a short time base makes it coarser than the one set), also with the Spectrum page closed |
-| `:SPECtrum:PEAK:LIST?` | the spectrum's lines: `frequency,level;...` in Hz and dBV, as many as the Harmonics row asks, also with the Spectrum page closed |
+| `:SPECtrum:PEAK:LIST?` | the spectrum's lines: `frequency,level;...` in Hz and dBV, the lines above the noise in the page's span, up to the Harmonics row, also with the Spectrum page closed |
 | `:POWer:ITEM? <item>[,V,I]` | `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND`, `RDSON`, ripple items |
 | `:POWer:HARMonics? [src]` | harmonic number and amplitude pairs, `;`-separated |
 | `:MAGnetic:ITEM? <item>[,V,I]` | `L`, `B`, `H`, `MUR`, `LOSS` (needs the core geometry) |
