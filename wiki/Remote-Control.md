@@ -10,7 +10,7 @@
 | VXI-11 | 111, 9009 | on the scope, where port 111 is free: VISA `TCPIP::<ip>::INSTR` |
 | HiSLIP | 4880 | on a computer only: the same SCPI interpreter, `TCPIP::<ip>::hislip0::INSTR` |
 | LXI identification | 8080 | `/lxi/identification` |
-| MCP | 8080 | `POST /mcp`: tools `scpi` and `screenshot` for AI assistants |
+| MCP | 8080 | `POST /mcp`: tools for AI assistants ([below](#mcp)) |
 | SSH | 22 | root shell with the scope's own password or a trusted key, off by default ([below](#ssh)) |
 | mDNS, DNS-SD | 5353 (UDP) | the scope by name, `http://dho924s-123456.local:8080`, and its services for browsing ([below](#ethernet)): the web remote (`_http._tcp`, path `/`), LXI discovery (`_lxi._tcp`, path `/lxi/identification`), the SCPI socket and VXI-11; on a computer (`--serve`) HiSLIP instead of VXI-11 |
 
@@ -38,6 +38,17 @@ own screen does not slow down for it. Pause stops the pictures, and a tab in the
 own. **From 0.1.8** the live picture can be a JPEG made by the scope's video encoder (the button JPEG next
 to PNG): about 75 KB a picture against 115 KB, at under a third of the processor time of a PNG; text is a little less
 sharp, and screenshots stay PNG.
+
+## MCP
+
+An AI assistant that speaks the Model Context Protocol drives the scope through `http://<scope>:8080/mcp` (streamable
+HTTP). Tools that only read: `scope_state` (the whole set-up at once), `measure` (items of the measurement list as
+numbers), `waveform` (a record cut to up to 10000 points with its statistics), `decode_results` (the decoders' events
+as rows), `errors` and `screenshot`. Tools that change the scope: `configure` (channels, timebase, trigger and
+acquisition from one object, read back after), `acquire` (run, stop, single, force, autoset, clear),
+`setup_decoder`, and `scpi` for any command of [[SCPI and VXI-11]]. Each answers JSON and names the errors of its
+commands. When **Allowed** is set (System > Network > Remote services), MCP answers only the addresses it lists.
+Every tool with its arguments: [docs/http.md](https://github.com/wasimlhr/oos-plus/blob/main/docs/http.md).
 
 ## Ethernet
 

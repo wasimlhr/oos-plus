@@ -115,6 +115,19 @@ const PAIR_ITEMS: &[(&str, &str, usize)] = &[
     ("DSEThold", "DSETHOLD", 19),
 ];
 
+/// The items `:MEASure:ITEM?` takes, each once in the spelling `STRip?` prints, and whether it is a pair (two
+/// sources): the closed list the `measure` tool of MCP offers (site/mcp.rs).
+pub(crate) fn measurement_items() -> Vec<(&'static str, bool)> {
+    let mut v: Vec<(&'static str, bool)> = Vec::new();
+    for (_, token, _) in MEAS_ITEMS {
+        if !v.iter().any(|(t, _)| t == token) {
+            v.push((token, false));
+        }
+    }
+    v.extend(PAIR_ITEMS.iter().map(|(_, token, _)| (*token, true)));
+    v
+}
+
 pub(crate) fn meas_kind(item: &str) -> Option<Meas> {
     MEAS_ITEMS.iter().find(|it| kw(item, it.0)).map(|it| it.2)
 }
