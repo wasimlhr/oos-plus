@@ -19,7 +19,7 @@ HTTP_RS = r'''impl Http {
         let peer_ok = true; // the peer's address
         let (ctype, body): (&str, Vec<u8>) = match route {
             _ if foreign(&text, route, post) => ("text/plain", b"refused".to_vec()),
-            "/update" | "/mcp" if (post || route == "/mcp") && !peer_ok => ("text/plain", b"refused".to_vec()),
+            "/update" | "/mcp" | "/mcp/waveform.csv" if (post || route != "/update") && !peer_ok => ("text/plain", b"refused".to_vec()),
             "/" => ("text/html", PAGE.as_bytes().to_vec()),
             // the scope's state: a comment with an apostrophe and a brace { that count for nothing
             "/ui-state" if !post => ("application/json", format!("{{\"a\":{}}}", 1).into_bytes()),
@@ -225,11 +225,12 @@ class Coverage(unittest.TestCase):
                                            "`if peer_ok` (GUARDS)"])
 
     def test_a_path_added_to_the_arm_of_a_known_guard_is_not_passed_over(self):
-        rs = HTTP_RS.replace('"/update" | "/mcp" if (post', '"/update" | "/mcp" | "/admin" if (post')
+        rs = HTTP_RS.replace('"/mcp/waveform.csv" if (post', '"/mcp/waveform.csv" | "/admin" if (post')
         self.write(rs, HTTP_MD)
         self.assertEqual(self.findings(), [
-            "ui/remote/src/http.rs: arm /update | /mcp | /admin has the guard `if (post || route == \"/mcp\") && !peer_ok`, "
-            "which is known for /mcp | /update only (GUARDS)"])
+            "ui/remote/src/http.rs: arm /update | /mcp | /mcp/waveform.csv | /admin has the guard "
+            "`if (post || route != \"/update\") && !peer_ok`, which is known for /mcp | /mcp/waveform.csv | /update "
+            "only (GUARDS)"])
 
     def test_tools_need_an_entry_and_the_same_name_in_list_and_call(self):
         self.write(HTTP_RS, HTTP_MD.replace("### MCP tool `screenshot`\n\n- Mark: **stable**\n", ""))

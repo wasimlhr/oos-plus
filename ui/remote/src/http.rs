@@ -436,7 +436,8 @@ impl<U: Send + 'static> Http<U> {
                 too_big = n > limit || req.len() > limit + e;
                 if !too_big && need.is_none() {
                     // what only `net.allow` may send is refused before its body is read, not after
-                    let guarded = upload_path == "/mcp" || (first.starts_with("post ") && upload_path == "/update");
+                    let mcp = upload_path == "/mcp" || upload_path == "/mcp/waveform.csv";
+                    let guarded = mcp || (first.starts_with("post ") && upload_path == "/update");
                     if guarded && !self.acl.permits_peer(s.peer_addr()) {
                         early = Some("403 Forbidden");
                         return false;
@@ -552,7 +553,7 @@ impl<U: Send + 'static> Http<U> {
         let refused = || (FORBIDDEN, "text/plain", b"refused".to_vec());
         let (status, ctype, body): (&str, &str, Vec<u8>) = match route {
             _ if foreign(&text, route, post) => refused(),
-            "/update" | "/mcp" if (post || route == "/mcp") && !peer_ok => refused(),
+            "/update" | "/mcp" | "/mcp/waveform.csv" if (post || route != "/update") && !peer_ok => refused(),
             "/" => (OK, "text/html; charset=utf-8", PAGE.as_bytes().to_vec()),
             "/style.css" => (OK, "text/css", STYLE.as_bytes().to_vec()),
             "/waveform" if post => {

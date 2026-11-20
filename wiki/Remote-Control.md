@@ -43,8 +43,10 @@ sharp, and screenshots stay PNG.
 
 An AI assistant that speaks the Model Context Protocol drives the scope through `http://<scope>:8080/mcp` (streamable
 HTTP). Tools that only read: `scope_state` (the whole set-up at once), `measure` (items of the measurement list as
-numbers), `waveform` (a record cut to up to 10000 points with its statistics), `decode_results` (the decoders' events
-as rows), `errors` and `screenshot`. Tools that change the scope: `configure` (channels, timebase, trigger and
+numbers), `waveform` (a record's statistics and a link to a CSV of it, up to 100000 rows, which the assistant
+downloads instead of reading it into the conversation), `decode_results` (the decoders' events
+as rows), `errors`, `screenshot` and `scpi_reference`, which finds a command of the SCPI reference by what it
+does, so that the assistant does not guess its name. Tools that change the scope: `configure` (channels, timebase, trigger and
 acquisition from one object, read back after), `acquire` (run, stop, single, force, autoset, clear),
 `setup_decoder`, and `scpi` for any command of [[SCPI and VXI-11]]. Each answers JSON and names the errors of its
 commands. When **Allowed** is set (System > Network > Remote services), MCP answers only the addresses it lists.

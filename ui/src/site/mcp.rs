@@ -16,9 +16,14 @@ use crate::scpi::Scpi;
 use crate::sysconf::McpMode;
 use crate::ui::Ui;
 
-/// Points `waveform` answers by default, and at most.
-const POINTS_DEFAULT: usize = 1000;
-const POINTS_MAX: usize = 10_000;
+mod reference;
+
+/// Rows of the CSV file of `waveform` by default, and at most; points it puts into its answer at most.
+const POINTS_DEFAULT: usize = 10_000;
+const POINTS_MAX: usize = 100_000;
+const INLINE_MAX: usize = 1000;
+/// Where the web remote serves the CSV of the last `waveform` call.
+const WAVEFORM_CSV: &str = "/mcp/waveform.csv";
 /// Samples of a record `waveform` reads in one call (2 MiB as WORD); the answer says where the next call starts.
 const READ_MAX: u64 = 1 << 20;
 /// Rows `decode_results` answers by default, and at most.
@@ -80,6 +85,7 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
                 tool(("name", J::s("waveform")), WAVEFORM, waveform_schema(), READS),
                 tool(("name", J::s("decode_results")), DECODE_RESULTS, decode_results_schema(), READS),
                 tool(("name", J::s("errors")), ERRORS, schema(&[], &[]), READS),
+                tool(("name", J::s("scpi_reference")), SCPI_REFERENCE, scpi_reference_schema(), READS),
                 tool(("name", J::s("configure")), CONFIGURE, configure_schema(), WRITES),
                 tool(("name", J::s("acquire")), ACQUIRE, acquire_schema(), WRITES),
                 tool(("name", J::s("setup_decoder")), SETUP_DECODER, setup_decoder_schema(), WRITES),
@@ -104,6 +110,7 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
             Some("waveform") => waveform(&mut run, &args),
             Some("decode_results") => decode_results(&mut run, &args),
             Some("errors") => errors(&mut run),
+            Some("scpi_reference") => scpi_reference(&mut run, &args),
             Some("configure") => configure(&mut run, &args),
             Some("acquire") => acquire(&mut run, &args),
             Some("setup_decoder") => setup_decoder(&mut run, &args),
@@ -117,11 +124,13 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
 const INSTRUCTIONS: &str = "Rigol DHO800/DHO900 running OOS. Start with scope_state to see the set-up, configure and \
     acquire to change it, measure and waveform to read the signal, decode_results for protocol decoders, screenshot to \
     see the screen. The scpi tool takes any command of OOS's SCPI reference (Rigol-style: :TIM:SCAL 1e-3, \
-    :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1). Values are in base units (V, s, Hz).";
+    :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1): never guess a command, find it with scpi_reference first (search: what it \
+    does; header: its syntax and parameters). Values are in base units (V, s, Hz).";
 
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
     the response of its queries; or `commands`, a list of messages run in order that stops at the first error. The \
-    commands are those of OOS's SCPI reference (Rigol-style: :TIM:SCAL 1e-3, :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1).";
+    commands are those of OOS's SCPI reference (Rigol-style: :TIM:SCAL 1e-3, :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1): \
+    look a command up with scpi_reference before sending it, do not guess its name.";
 const SCPI_QUERIES: &str = "Run SCPI queries on the oscilloscope (MCP is read only on this scope): `command`, one \
     program message whose every command is a query (its header ends in '?', commands separated by ';'), or \
     `commands`, a list of such messages. The queries are those of OOS's SCPI reference (:TIM:SCAL?, \
@@ -137,13 +146,24 @@ const SCOPE_STATE: &str = "The whole set-up in one answer: every channel (displa
 const MEASURE: &str = "Measure items of the measurement list on a source, as numbers in base units (V, s, Hz, %, \
     degrees); null where the scope has no value (no edge on screen, still computing). Pair items (delay, phase, skew, \
     setup, hold) take `source` and `source2`. Does not add rows to the screen's measurement strip.";
-const WAVEFORM: &str = "A record of a source cut to a number of points: statistics (min, max, mean, rms, peak-to-peak \
-    in volts) and the samples, or min/max pairs per bucket when the record is longer than `points`. `record` screen \
-    reads what is drawn, memory the acquisition memory, 1 Mi samples per call from `start` (the answer gives \
-    `next_start`). The waveform selection of other SCPI clients is left as it was.";
+const WAVEFORM: &str = "A record of a source: its statistics (min, max, mean, rms, peak-to-peak in volts, clipped \
+    samples) and a link to a CSV file of it, `points` rows (the samples, or min/max per bucket when the record is \
+    longer). The samples are not in the answer: download the file to the computer (curl -o wave.csv <url>) and work \
+    on it there instead of reading it into the conversation; it holds the last call's record. `inline` puts up to \
+    1000 points into the answer as well. `record` screen reads what is drawn, memory the acquisition memory, 1 Mi \
+    samples per call from `start` (the answer gives `next_start`). The waveform selection of other SCPI clients is \
+    left as it was.";
 const DECODE_RESULTS: &str = "The events of the decoders that are on, as rows (time s, decoder, text, ok), \
     `max_rows` from `offset`. `pending` while the decoders are still computing: ask again.";
 const ERRORS: &str = "Empty the SCPI error queue and answer its entries, oldest first.";
+const SCPI_REFERENCE: &str = "OOS's SCPI reference (the command chapter of its programming manual), to find a command \
+    instead of guessing it: `search`, words of what it does (\"trigger level\", \"channel scale\"), answers matching \
+    commands with their syntax; `header`, a command as it is sent (:CHAN1:SCAL, :TRIG:EDGE:LEV?), answers it whole: \
+    parameters with their ranges, what the query returns, an example; `subsystem`, part of a subsystem's title, lists \
+    its commands. Without arguments: the subsystems. A header that is not here is not a command of this scope.";
+/// What an answer adds when a command was not known (-113): the way to the right one.
+const UNDEFINED: &str = "Undefined header: the command is not in OOS's SCPI reference. Find the right one with the \
+    tool scpi_reference (search: what it should do) instead of guessing another name.";
 const CONFIGURE: &str = "Set channels, timebase, trigger and acquisition from one object; every part is optional. \
     Answers the commands that were applied, the errors, and the set-up read back as scope_state answers it (a scale \
     is set to the nearest one the scope has).";
@@ -256,6 +276,18 @@ fn choice(words: &[&str], description: &str) -> J {
     ])
 }
 
+fn scpi_reference_schema() -> J {
+    schema(
+        &[
+            ("search", string("Words of what the command does; every word must match.")),
+            ("header", string("A command as it is sent, short or long form, e.g. :CHAN1:SCAL or :TRIGger:EDGE:LEVel?.")),
+            ("subsystem", string("Part of a subsystem's title, e.g. Channels, Trigger, Measure.")),
+            ("max_results", integer("Commands in the answer, 1 to 50; default 20.")),
+        ],
+        &[],
+    )
+}
+
 fn scpi_schema() -> J {
     schema(
         &[
@@ -295,7 +327,8 @@ fn waveform_schema() -> J {
         &[
             ("source", string("CHAN1..CHAN4, R1..R10 or MATH1..MATH4; default CHAN1.")),
             ("record", choice(&["screen", "memory"], "What is drawn, or the acquisition memory; default screen.")),
-            ("points", integer("Points (or min/max pairs) in the answer, 2 to 10000; default 1000.")),
+            ("points", integer("Rows of the CSV file (samples, or min/max buckets), 2 to 100000; default 10000.")),
+            ("inline", integer("Points (or min/max pairs) also in the answer, 0 to 1000; default 0.")),
             ("start", integer("First sample of the record to read, from 1; default 1.")),
         ],
         &[],
@@ -428,6 +461,9 @@ fn answer(run: &mut Run, data: J) -> J {
     let mut data = data;
     let failed = !run.errors.is_empty();
     if let J::Obj(fields) = &mut data {
+        if run.errors.iter().any(|e| e.contains("-113")) {
+            fields.push(("hint".into(), J::s(UNDEFINED)));
+        }
         if failed {
             fields.push(("errors".into(), J::Arr(run.errors.drain(..).map(J::Str).collect())));
         }
@@ -524,7 +560,8 @@ fn scpi_tool(run: &mut Run, args: &J) -> J {
             let errors = run.scpi.queued_errors()[queued..].join("; ");
             let reply =
                 if r.is_empty() && !has_reply { String::new() } else { format!("{}\n", String::from_utf8_lossy(&r)) };
-            let message = J::Str(format!("{reply}error: {errors}"));
+            let hint = if errors.contains("-113") { format!("\n{UNDEFINED}") } else { String::new() };
+            let message = J::Str(format!("{reply}error: {errors}{hint}"));
             J::obj(&[
                 ("isError", J::Bool(true)),
                 ("content", J::Arr(vec![J::obj(&[("type", J::s("text")), ("text", message)])])),
@@ -641,18 +678,23 @@ fn waveform(run: &mut Run, args: &J) -> J {
         Ok(n) => n,
         Err(e) => return refuse(&e),
     };
+    let inline = match count(args, "inline", 0, 0, INLINE_MAX) {
+        Ok(n) => n,
+        Err(e) => return refuse(&e),
+    };
     let start = match count(args, "start", 1, 1, usize::MAX) {
         Ok(n) => n as u64,
         Err(e) => return refuse(&e),
     };
     let saved = run.scpi.wave_selection();
-    let data = read_record(run, source, memory, points, start);
+    let data = read_record(run, source, memory, (points, inline), start);
     run.scpi.set_wave_selection(saved);
     answer(run, data)
 }
 
-/// The record of `source` from `start`, at most `READ_MAX` samples, as statistics and `points` points.
-fn read_record(run: &mut Run, source: &str, memory: bool, points: usize, start: u64) -> J {
+/// The record of `source` from `start`, at most `READ_MAX` samples, as statistics, a CSV file of `points` rows kept
+/// for `GET /mcp/waveform.csv`, and `inline` points in the answer.
+fn read_record(run: &mut Run, source: &str, memory: bool, (points, inline): (usize, usize), start: u64) -> J {
     let mode = if memory { "RAW" } else { "NORM" };
     let selected = run.w(&format!(":WAV:SOUR {source}"))
         && run.w(&format!(":WAV:MODE {mode}"))
@@ -704,21 +746,56 @@ fn read_record(run: &mut Run, source: &str, memory: bool, points: usize, start: 
     let mut stats = stats.to_vec();
     stats.push(("rms", short(rms)));
     out.push(("stats", J::obj(&stats)));
-    if n <= points {
-        out.push(("samples", J::Arr(volts.iter().map(|&v| short(v)).collect())));
+    // bucket `k` of `m` over the samples read: its first sample and the one after its last
+    let bucket = |k: usize, m: usize| (k * n / m, ((k + 1) * n / m).max(k * n / m + 1));
+    let t = |i: usize| t0 + dt * i as f64;
+    let (columns, rows) = if n <= points {
+        ("time_s,v", volts.iter().enumerate().map(|(i, v)| format!("{:.9e},{:.6e}\n", t(i), v)).collect::<String>())
     } else {
-        // `points` buckets over the samples read, each its lowest and highest sample
-        let pairs: Vec<J> = (0..points)
+        let rows = (0..points).map(|k| {
+            let (a, b) = bucket(k, points);
+            let (lo, hi) = range(&volts[a..b]);
+            format!("{:.9e},{:.6e},{:.6e}\n", t(a), lo, hi)
+        });
+        ("time_s,min_v,max_v", rows.collect())
+    };
+    let csv = format!("{columns}\n{rows}").into_bytes();
+    let url = match run.ui.net.as_str() {
+        "" => J::s(WAVEFORM_CSV),
+        net => J::Str(format!("http://{net}:8080{WAVEFORM_CSV}")),
+    };
+    out.push((
+        "file",
+        J::obj(&[
+            ("url", url),
+            ("columns", J::s(columns)),
+            ("rows", J::Num(n.min(points) as f64)),
+            ("bytes", J::Num(csv.len() as f64)),
+        ]),
+    ));
+    run.scpi.mcp_file = Some(csv);
+    if inline > 0 && n <= inline {
+        out.push(("samples", J::Arr(volts.iter().map(|&v| short(v)).collect())));
+    } else if inline > 0 {
+        let pairs: Vec<J> = (0..inline)
             .map(|k| {
-                let (a, b) = (k * n / points, ((k + 1) * n / points).max(k * n / points + 1));
+                let (a, b) = bucket(k, inline);
                 let (lo, hi) = range(&volts[a..b]);
                 J::Arr(vec![short(lo), short(hi)])
             })
             .collect();
-        out.push(("bucket_dt", short(dt * n as f64 / points as f64)));
+        out.push(("bucket_dt", short(dt * n as f64 / inline as f64)));
         out.push(("minmax", J::Arr(pairs)));
     }
     J::obj(&out)
+}
+
+/// `GET /mcp/waveform.csv`: the CSV of the last `waveform` call; refused while MCP is off or before a call.
+pub fn waveform_csv(ui: &Ui, scpi: &Scpi) -> Result<Vec<u8>, String> {
+    if ui.sys.remote_mcp == McpMode::Off {
+        return Err(OFF.into());
+    }
+    scpi.mcp_file.clone().ok_or_else(|| "No waveform yet: call the MCP tool waveform first".into())
 }
 
 /// The payload of an IEEE definite-length block, `#<n><n digits of length><payload>`.
@@ -727,6 +804,50 @@ fn block_payload(b: &[u8]) -> Option<&[u8]> {
     let n = (*b.get(at + 1)? as char).to_digit(10)? as usize;
     let len: usize = std::str::from_utf8(b.get(at + 2..at + 2 + n)?).ok()?.parse().ok()?;
     b.get(at + 2 + n..at + 2 + n + len)
+}
+
+/// `scpi_reference`: a header looked up whole, a search, a subsystem's commands, or the subsystems.
+fn scpi_reference(run: &mut Run, args: &J) -> J {
+    let max = match count(args, "max_results", reference::RESULTS_DEFAULT, 1, reference::RESULTS_MAX) {
+        Ok(n) => n,
+        Err(e) => return refuse(&e),
+    };
+    let mut text = [None; 3];
+    for (k, key) in ["header", "search", "subsystem"].into_iter().enumerate() {
+        match args.get(key) {
+            None => {}
+            Some(J::Str(s)) if !s.trim().is_empty() && s.len() <= 200 => text[k] = Some(s.as_str()),
+            Some(_) => return refuse(&format!("{key}: a text of 1 to 200 characters")),
+        }
+    }
+    let data = match text {
+        [Some(header), _, _] => {
+            let found: Vec<J> = reference::lookup(header).into_iter().map(reference::full).collect();
+            let mut out = vec![("header", J::s(header)), ("found", J::Num(found.len() as f64))];
+            if found.is_empty() {
+                out.push(("hint", J::s("No command of this scope has this header: search by what it should do.")));
+            }
+            out.push(("commands", J::Arr(found)));
+            J::obj(&out)
+        }
+        [None, None, None] => {
+            let r = reference::reference();
+            let n = |k: usize| r.commands.iter().filter(|(s, _, _)| *s == k).count() as f64;
+            let titles = r.titles.iter().enumerate();
+            let list = titles.map(|(k, t)| J::obj(&[("title", J::s(t)), ("commands", J::Num(n(k)))])).collect();
+            J::obj(&[("subsystems", J::Arr(list))])
+        }
+        [None, words, subsystem] => {
+            let found = reference::search(words.unwrap_or(""), subsystem);
+            let list: Vec<J> = found.iter().take(max).map(|e| reference::brief(e)).collect();
+            let mut out = vec![("total", J::Num(found.len() as f64)), ("commands", J::Arr(list))];
+            if found.len() > max {
+                out.push(("hint", J::s("More commands match: add words, or name the subsystem.")));
+            }
+            J::obj(&out)
+        }
+    };
+    answer(run, data)
 }
 
 fn decode_results(run: &mut Run, args: &J) -> J {
