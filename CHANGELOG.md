@@ -34,7 +34,8 @@ Fixed:
 - Studio, the spectrum as a view of its own over the waveform: the list of peaks is in its column beside the plot
   again. It was placed under the full-screen and zoom buttons, which there are the waveform's and lie below the
   whole spectrum view, so the list was outside the view, the column stayed empty and the graticule looked cut short
-  (the owner, from the web remote of the unit). Host-tested; not yet run on a unit.
+  (the owner, from the web remote of the unit). Host-tested, and seen on the unit (build 20261120-065812): the
+  list of eight peaks in its column, each numbered on the trace.
 - Fixes taken from upstream OOS (host-tested only; none of them ran on a unit):
   - Calibration (upstream #247): a cal_vertical.hex with 64-byte records, as a DHO804 writes it, is read at 64
     bytes; it was read at 56, its gain codes came from the wrong place and the UI stopped at every start. A file
