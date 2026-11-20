@@ -316,3 +316,24 @@ fn mcp_scpi_reference_finds_a_command_instead_of_a_guess() {
     assert!(failed(&call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"search":""}"#)));
     assert!(failed(&call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"max_results":51}"#)));
 }
+
+// Break it catches: the rules of `initialize` grown into a text a small model skips, or naming a tool that was
+// renamed or removed (the model then calls a tool that does not exist)
+#[test]
+fn mcp_initialize_gives_short_rules_that_name_only_real_tools() {
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let ask = |ui: &mut Ui, scpi: &mut crate::scpi::Scpi, body: &str| {
+        parse(&crate::site::mcp(body, &mut Ctx::new(ui, &cv, scpi)).unwrap()).unwrap()
+    };
+    let init = ask(&mut ui, &mut scpi, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#);
+    let rules = init.get("result").and_then(|r| r.get("instructions")).and_then(J::str).unwrap().to_string();
+    assert!(rules.len() < 1000, "{} characters", rules.len());
+    assert!(rules.lines().filter(|l| l.starts_with(|c: char| c.is_ascii_digit())).count() >= 5, "{rules}");
+    let list = ask(&mut ui, &mut scpi, r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
+    let tools = items(list.get("result").and_then(|r| r.get("tools")));
+    let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
+    let words = rules.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'));
+    for word in words.filter(|w| w.contains('_') || ["configure", "acquire", "measure", "waveform", "scpi"].contains(w)) {
+        assert!(names.contains(&word), "the rules name `{word}`, which is no tool");
+    }
+}
