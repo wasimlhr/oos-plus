@@ -13,6 +13,7 @@ use super::Ctx;
 use crate::gfx::Canvas;
 use crate::json::{parse, J};
 use crate::scpi::Scpi;
+use crate::sysconf::McpMode;
 use crate::ui::Ui;
 
 /// Points `waveform` answers by default, and at most.
@@ -46,6 +47,13 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
     let method = req.get("method").and_then(J::str).unwrap_or("");
     let params = req.get("params").cloned().unwrap_or(J::Null);
     let args = params.get("arguments").cloned().unwrap_or(J::Obj(Vec::new()));
+    // Remote services > MCP (`remote.mcp`): off answers every request with an error; read only offers the tools that
+    // only read, and `scpi` for queries alone
+    let read = match ui.sys.remote_mcp {
+        McpMode::Off => return Some(err(id, -32001.0, OFF)),
+        McpMode::Read => true,
+        McpMode::Full => false,
+    };
     let mut run = Run { ui, cv, scpi, errors: Vec::new() };
     let result = match method {
         "initialize" => {
@@ -60,8 +68,12 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
         "ping" => J::obj(&[]),
         "tools/list" => J::obj(&[(
             "tools",
-            J::Arr(vec![
-                tool(("name", J::s("scpi")), SCPI, scpi_schema(), WRITES),
+            J::Arr(only_reads(read, vec![
+                if read {
+                    tool(("name", J::s("scpi")), SCPI_QUERIES, scpi_schema(), READS)
+                } else {
+                    tool(("name", J::s("scpi")), SCPI, scpi_schema(), WRITES)
+                },
                 tool(("name", J::s("screenshot")), SCREENSHOT, schema(&[], &[]), READS),
                 tool(("name", J::s("scope_state")), SCOPE_STATE, schema(&[], &[]), READS),
                 tool(("name", J::s("measure")), MEASURE, measure_schema(), READS),
@@ -71,9 +83,10 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
                 tool(("name", J::s("configure")), CONFIGURE, configure_schema(), WRITES),
                 tool(("name", J::s("acquire")), ACQUIRE, acquire_schema(), WRITES),
                 tool(("name", J::s("setup_decoder")), SETUP_DECODER, setup_decoder_schema(), WRITES),
-            ]),
+            ])),
         )]),
         "tools/call" => match params.get("name").and_then(J::str) {
+            name if read && !reads_only(name, &args) => refuse(READ_ONLY),
             Some("scpi") => scpi_tool(&mut run, &args),
             Some("screenshot") => J::obj(&[(
                 "content",
@@ -109,7 +122,14 @@ const INSTRUCTIONS: &str = "Rigol DHO800/DHO900 running OOS. Start with scope_st
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
     the response of its queries; or `commands`, a list of messages run in order that stops at the first error. The \
     commands are those of OOS's SCPI reference (Rigol-style: :TIM:SCAL 1e-3, :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1).";
-const SCREENSHOT: &str = "The current oscilloscope screen as a PNG image.";
+const SCPI_QUERIES: &str = "Run SCPI queries on the oscilloscope (MCP is read only on this scope): `command`, one \
+    program message whose every command is a query (its header ends in '?', commands separated by ';'), or \
+    `commands`, a list of such messages. The queries are those of OOS's SCPI reference (:TIM:SCAL?, \
+    :MEAS:ITEM? VPP,CHAN1).";
+const OFF: &str = "MCP is off on this scope (System > Network > Remote services > MCP)";
+const READ_ONLY: &str = "MCP is read only on this scope (System > Network > Remote services > MCP): this tool, or \
+    a command that is not a query, is refused";
+const SCREENSHOT: &str ="The current oscilloscope screen as a PNG image.";
 const SCOPE_STATE: &str = "The whole set-up in one answer: every channel (display, scale V/div, offset V, coupling, \
     probe, bandwidth limit), the timebase (s/div, delay s), the acquisition (sample rate, memory depth, mode) and the \
     trigger (type, status STOP|TD|AUTO|WAIT, sweep, source, level, slope, coupling). Ask it after `acquire` to see \
@@ -167,6 +187,32 @@ fn tool(name: (&str, J), description: &str, input: J, read_only: bool) -> J {
             ]),
         ),
     ])
+}
+
+/// The tools of `tools/list`, without those that can change the scope while MCP is read only.
+fn only_reads(read: bool, mut tools: Vec<J>) -> Vec<J> {
+    if read {
+        tools.retain(|t| t.get("annotations").and_then(|a| a.get("readOnlyHint")) == Some(&J::Bool(true)));
+    }
+    tools
+}
+
+/// While MCP is read only: whether a call of `name` only reads. `scpi` does when every command of every message is a
+/// query, its header ending in `?` (a line break, which could start a command of its own, is refused).
+fn reads_only(name: Option<&str>, args: &J) -> bool {
+    let query = |message: &str| {
+        !message.contains(['\n', '\r'])
+            && message.split(';').all(|c| c.split_whitespace().next().is_some_and(|h| h.ends_with('?')))
+    };
+    match name {
+        Some("configure" | "acquire" | "setup_decoder") => false,
+        Some("scpi") => match (args.get("command"), args.get("commands")) {
+            (Some(J::Str(m)), None) => query(m),
+            (None, Some(J::Arr(ms))) => ms.iter().all(|m| m.str().is_some_and(query)),
+            _ => false,
+        },
+        _ => true,
+    }
 }
 
 fn schema(props: &[(&str, J)], required: &[&str]) -> J {

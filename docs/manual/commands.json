@@ -834,6 +834,25 @@
      "returns": "On a freshly started default model the query returns `1`.",
      "ext": true,
      "confirm": true
+    },
+    {
+     "header": ":SYSTem:REMote:SERVice:MCP",
+     "set": ":SYSTem:REMote:SERVice:MCP <value>",
+     "query": ":SYSTem:REMote:SERVice:MCP?",
+     "desc": "Sets or queries MCP for Remote services (menu: Remote services > MCP).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`OFF`, `READ_ONLY` (also `READONLY`) or `FULL`: what MCP of the web remote offers (nothing; the tools that only read and `scpi` for queries; every tool). Kept in `/oos/system.conf` (`remote.mcp`).",
+       "FULL"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension (oos-plus)"
+     ],
+     "returns": "The query answers `OFF`, `READ_ONLY` or `FULL`. On a freshly started default model the query returns `FULL`.",
+     "ext": true
     }
    ],
    "after": []

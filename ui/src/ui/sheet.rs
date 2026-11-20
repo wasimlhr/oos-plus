@@ -354,7 +354,7 @@ impl Ui {
             M::Windows => (&["Windows"], |_| Slot::Tab(0)),
             // the switches of the services, then who may reach them and where they are
             M::Remote => (&["Services", "Access"], |it| match it {
-                RemWeb | RemScpi | RemVxi | RemSsh | RemMdns | Open(M::Ssh) => Slot::Tab(0),
+                RemWeb | RemMcp | RemScpi | RemVxi | RemSsh | RemMdns | Open(M::Ssh) => Slot::Tab(0),
                 _ => Slot::Tab(1),
             }),
             M::Ssh => (&["SSH"], |it| match it { SshImport | SshRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
@@ -466,7 +466,15 @@ impl Ui {
             }
             // Remote services: the name and who is allowed first, then the addresses
             if menu == MenuId::Remote {
-                let order = [Item::RemName, Item::RemAllow, Item::RemFirewall, Item::NetWeb, Item::RemScpiInfo, Item::RemVxiInfo];
+                let order = [
+                    Item::RemName,
+                    Item::RemAllow,
+                    Item::RemFirewall,
+                    Item::NetWeb,
+                    Item::RemMcpInfo,
+                    Item::RemScpiInfo,
+                    Item::RemVxiInfo,
+                ];
                 tabs[1].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
             }
             // DVM and counter, the logic analyser and the double pulse had two tabs of two to five rows each: they are
@@ -717,6 +725,7 @@ impl Ui {
             // on the Access tab of Remote services the addresses stand apart from their switches: they say whose they are
             Item::NetWeb if matches!(self.menu_root(), MenuId::Remote | MenuId::Utility) => "Web address".into(),
             Item::TimeNow if self.menu_root() == MenuId::Utility => "Clock".into(),
+            Item::RemMcpInfo => "MCP address".into(),
             Item::RemScpiInfo => "SCPI port".into(),
             Item::RemVxiInfo => "VXI-11 ports".into(),
             Item::SimShow => format!("Show R{}", self.m.sim_slot + 1),

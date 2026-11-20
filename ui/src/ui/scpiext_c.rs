@@ -11,7 +11,7 @@ pub(super) const T3: &[&str] = &[
     "SYSTem:DATE", "SYSTem:TIME", "SYSTem:TZONe", "SYSTem:NTP:ENABle", "SYSTem:NTP:SERVer", "SYSTem:NTP:STATus", "SYSTem:NTP:SYNC",
     "SYSTem:COMMunicate:LAN:IPADdress", "SYSTem:COMMunicate:LAN:MAC", "SYSTem:COMMunicate:LAN:STATus", "SYSTem:COMMunicate:LAN:RETRy10",
     "SYSTem:WLAN:STATus", "SYSTem:WLAN:SCAN", "SYSTem:WLAN:NETWorks", "SYSTem:WLAN:SAVed", "SYSTem:WLAN:FORGet",
-    "SYSTem:REMote:SERVice:SCPI", "SYSTem:REMote:SERVice:VXI11", "SYSTem:REMote:SERVice:WEB", "SYSTem:REMote:SERVice:MDNS",
+    "SYSTem:REMote:SERVice:SCPI", "SYSTem:REMote:SERVice:VXI11", "SYSTem:REMote:SERVice:WEB", "SYSTem:REMote:SERVice:MDNS", "SYSTem:REMote:SERVice:MCP",
     "SYSTem:NAME",
     "DISPlay:BACKlight", "DISPlay:HDMI", "DISPlay:TEXTsize", "DISPlay:LAYout",
     "SYSTem:LOCK", "SESSion", "SYSTem:INFO",
@@ -93,6 +93,7 @@ impl Ui {
                 DONE
             }
             // ---- remote services; switching the SCPI service off needs CONFIRM (the command that does it ends this session)
+            "SYSTem:REMote:SERVice:MCP" => return Some(self.sel(Item::RemMcp, q, arg)),
             "SYSTem:REMote:SERVice:SCPI" | "SYSTem:REMote:SERVice:VXI11" | "SYSTem:REMote:SERVice:WEB" | "SYSTem:REMote:SERVice:MDNS" => {
                 let it = match key.rsplit(':').next().unwrap_or("") { "SCPI" => Item::RemScpi, "VXI11" => Item::RemVxi, "WEB" => Item::RemWeb, _ => Item::RemMdns };
                 let (a, yes) = confirm(arg);
