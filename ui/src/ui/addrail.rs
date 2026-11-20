@@ -826,7 +826,7 @@ impl Ui {
     // ------------------------------------------------------------------------------------------------ search
 
     pub(super) fn addrail_search_items(&self) -> Vec<Item> {
-        vec![Item::SrchSrc, Item::SrchSlope, Item::SrchLevel, Item::Srch50, Item::SrchFromTrig, Item::SrchToTrig, Item::SrchEvent, Item::SrchRemove]
+        vec![Item::SrchSrc, Item::SrchSlope, Item::SrchLevel, Item::Srch50, Item::SrchFromTrig, Item::SrchToTrig, Item::SrchEvent, Item::SearchTable, Item::SrchRemove]
     }
 
     /// Search 1 is added with the defaults the signal asks for: Edge on `src`, the level at 50 %, rising.

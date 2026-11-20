@@ -80,6 +80,17 @@ pub(super) struct EventRow {
     pub ok: bool,
 }
 
+/// The digits the times of `rows` are written with: three, and more where rows next to each other would read the
+/// same (edges 12.5 ns apart, 400 us before the trigger, were all "-400 us").
+pub(super) fn table_time_digits(rows: &[EventRow]) -> usize {
+    let far = rows.iter().map(|e| e.t.abs()).fold(0.0, f64::max);
+    let gap = rows.windows(2).map(|w| (w[1].t - w[0].t).abs()).filter(|g| *g > 0.0).fold(f64::INFINITY, f64::min);
+    if !gap.is_finite() || far <= 0.0 {
+        return 3;
+    }
+    ((far / gap).log10().ceil() as i64 + 2).clamp(3, 9) as usize
+}
+
 impl Ui {
     /// Everything the decoders found in the record, in time order.
     pub(super) fn decode_events(&self) -> Vec<EventRow> {
@@ -120,11 +131,16 @@ impl Ui {
     }
 
     fn search_row(&self, index: usize, t: f64) -> EventRow {
-        EventRow {
-            t,
-            who: format!("{} #{}", self.trigger_source_label(), index + 1),
-            text: self.m.trig_type.name().to_string(),
-            ok: true,
+        let (source, what) = self.search_names();
+        EventRow { t, who: format!("{} #{}", source, index + 1), text: what.to_string(), ok: true }
+    }
+
+    /// What the events of the table are of: the source and the condition. Studio's own search (Search 1) has its
+    /// source and is an edge search; the table named the trigger's source and type for it.
+    fn search_names(&self) -> (String, &'static str) {
+        match self.studio.search {
+            Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), TrigType::Edge.name()),
+            _ => (self.trigger_source_label(), self.m.trig_type.name()),
         }
     }
 
@@ -231,7 +247,7 @@ impl Ui {
         let total = self.table_total(k);
         match k {
             TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
-                else { format!("Search {} \u{b7} {}", self.trigger_source_label(), total) },
+                else { format!("Search {} \u{b7} {}", self.search_names().0, total) },
             TableKind::Segments => format!("Segments \u{b7} {}", total),
         }
     }
@@ -244,14 +260,15 @@ impl Ui {
             let b = b.clamp(40, (w - 80).max(40));
             return [12, b, c.clamp(b + 30, (w - 30).max(b + 30))];
         }
-        let time = rows.iter().map(|e| f.s.width(&si(e.t, "s"))).max().unwrap_or(60);
+        let digits = table_time_digits(rows);
+        let time = rows.iter().map(|e| f.s.width(&si_digits(e.t, "s", digits))).max().unwrap_or(60);
         let who = rows.iter().map(|e| f.s.width(&e.who)).max().unwrap_or(60);
         let b = 12 + time + 18;
         [12, b, (b + who + 18).min((w - 60).max(b + 30))]
     }
 
     /// The rows of the table that are on the screen, and its rectangle.
-    fn table_shown(&self) -> Option<(Rect, Vec<EventRow>)> {
+    pub(super) fn table_shown(&self) -> Option<(Rect, Vec<EventRow>)> {
         let k = self.table?;
         let total = self.table_total(k);
         let (r, fit) = self.table_rect(total);
@@ -333,12 +350,13 @@ impl Ui {
             cv.text(&f.s, r.x + 12, r.y + self.head_h(r) + 18, empty, DIM);
         }
         let cols = self.table_col_x(&rows, r.w);
+        let digits = table_time_digits(&rows);
         let end = r.right() - scroll::BAR_W - 8;
         for (i, e) in rows.iter().enumerate() {
             let y = r.y + self.head_h(r) + i as i32 * ROW_H;
             cv.hline(r.x + 8, r.x + r.w - 9, y, LINE);
             // each column is cut at the next one: a column made narrow hides the end of its text, not its neighbour
-            for (k, (font, text, color)) in [(&f.s, si(e.t, "s"), LABEL), (&f.s, e.who.clone(), DIM), (&f.sb, e.text.clone(), if e.ok { TEXT } else { RED })].into_iter().enumerate() {
+            for (k, (font, text, color)) in [(&f.s, si_digits(e.t, "s", digits), LABEL), (&f.s, e.who.clone(), DIM), (&f.sb, e.text.clone(), if e.ok { TEXT } else { RED })].into_iter().enumerate() {
                 let right = if k < 2 { r.x + cols[k + 1] - 10 } else { end };
                 cv.set_clip(Rect::new(r.x + cols[k], y, (right - r.x - cols[k]).max(1), ROW_H));
                 cv.text(font, r.x + cols[k], y + 18, &text, color);

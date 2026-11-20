@@ -7,6 +7,11 @@
 
 use super::*;
 
+/// Search marks nearer than this many pixels (the width of a mark) are drawn as a strip, not one by one.
+const SEARCH_MARK_GAP: i32 = 9;
+/// The height of that strip, under the top edge of the plot.
+pub(super) const SEARCH_STRIP_H: i32 = 4;
+
 impl Ui {
     /// Vertical scale and the sample rate of this record. Time per division stays the one horizontal scale.
     pub(super) fn ref_badge_readout(r: &RefWave) -> (String, String) {
@@ -574,14 +579,26 @@ impl Ui {
         let mut first = events.partition_point(|&time| time < left);
         // At most one marker per occupied pixel, without walking millions of
         // off-screen events or hiding their actual count in Search results.
+        let mut columns = Vec::new();
         for column in 0..a.w {
             let next = events.partition_point(|&time| time < left + (column + 1) as f64 * per_pixel);
             if next > first {
-                let x = a.x + column;
+                columns.push(column);
+            }
+            first = next;
+        }
+        for (i, &column) in columns.iter().enumerate() {
+            let x = a.x + column;
+            let near = |other: Option<&i32>| other.is_some_and(|&o| (o - column).abs() < SEARCH_MARK_GAP);
+            if near(i.checked_sub(1).and_then(|p| columns.get(p))) || near(columns.get(i + 1)) {
+                // events too close to tell apart: a strip at the top says where they are. A mark and a dashed line
+                // in every column drew the lines side by side, and their dashes made bands across the whole plot
+                // (64 000 edges of a 40 MHz square at 20 us/div, unit 2026-11-20)
+                cv.vline(x, a.y + 1, a.y + SEARCH_STRIP_H, mark_col);
+            } else {
                 cv.triangle([(x - 4, a.y + 1), (x + 4, a.y + 1), (x, a.y + 8)], mark_col);
                 cv.dashed_vline(x, a.y + 9, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90));
             }
-            first = next;
         }
     }
 }
