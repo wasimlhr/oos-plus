@@ -138,7 +138,8 @@ class Coverage(unittest.TestCase):
         self.write(HTTP_RS, HTTP_MD)
 
     def write(self, rs, md, site="// the screen's routes: none in these tests but the one that says so\n"):
-        for rel, text in ((cov.HTTP_RS, rs), (cov.SITE_RS, site), (cov.HTTP_MD, md)):
+        # fn mcp stands in the made-up transport; its tools are read from the MCP file, so it gets the same text
+        for rel, text in ((cov.HTTP_RS, rs), (cov.SITE_RS, site), (cov.MCP_RS, rs), (cov.HTTP_MD, md)):
             (self.root / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.root / rel).write_text(text)
 
@@ -233,12 +234,12 @@ class Coverage(unittest.TestCase):
     def test_tools_need_an_entry_and_the_same_name_in_list_and_call(self):
         self.write(HTTP_RS, HTTP_MD.replace("### MCP tool `screenshot`\n\n- Mark: **stable**\n", ""))
         self.assertEqual(self.findings(), [
-            "ui/src/site.rs: MCP tool `screenshot` has no entry `### MCP tool \\`screenshot\\`` in docs/http.md"])
+            "ui/src/site/mcp.rs: MCP tool `screenshot` has no entry `### MCP tool \\`screenshot\\`` in docs/http.md"])
         rs = HTTP_RS.replace('Some("screenshot") => text("png"),', 'Some("screenshot") => text("png"),\n'
                                                                     '            Some("hidden") => text("x"),')
         self.write(rs, HTTP_MD + "\n### MCP tool `hidden`\n\n- Mark: **internal**\n")
         self.assertEqual(self.findings(), [
-            "ui/src/site.rs: MCP tool `hidden` is answered by tools/call but not in tools/list"])
+            "ui/src/site/mcp.rs: MCP tool `hidden` is answered by tools/call but not in tools/list"])
 
     def test_main_exits_1_on_a_finding_and_0_on_this_tree(self):
         self.write(HTTP_RS, HTTP_MD.replace("### `POST /mcp`\n\n- Mark: **stable**\n", ""))
