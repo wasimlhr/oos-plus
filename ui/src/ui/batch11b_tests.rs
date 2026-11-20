@@ -216,7 +216,7 @@ fn the_measurements_resize_move_and_float() {
     drag(&mut u, p, (p.0, p.1 + 40));
     let (t_c, m_c) = (leaf(&u, VKind::Table), leaf(&u, VKind::Measure));
     assert!(m_c.h > m_b.h && t_c.h < t_b.h, "the search panel resizes both ways");
-    assert!(m_c.h >= STRIP_H + 100);
+    assert!(m_c.h >= super::dock::MEAS_MIN_H);
     // it moves: under the waveform
     let w = leaf(&u, VKind::Wave);
     let g = grip(&u, VKind::Measure);
@@ -245,6 +245,31 @@ fn the_measurements_resize_move_and_float() {
 }
 
 // ------------------------------------------------------------------------------------------------ old setups, other layouts
+
+/// The measurements as tiles, docked under the waveform: the divider pulled all the way down leaves one row of tiles
+/// and no empty band under it. The least height was 100 px under the strip, and a row of tiles is 60: 40 px stayed
+/// empty and the divider went no lower (the owner from the unit).
+#[test]
+fn the_measurements_under_the_waveform_shrink_to_one_row_of_tiles() {
+    let mut u = studio();
+    u.panel_set_view(super::measpanel::PanelView::Cards);
+    frame(&mut u);
+    let w = leaf(&u, VKind::Wave);
+    let g = grip(&u, VKind::Measure);
+    drag(&mut u, g, (w.x + w.w / 2, w.bottom() - 14));
+    let (w, m) = (leaf(&u, VKind::Wave), leaf(&u, VKind::Measure));
+    assert!(w.bottom() <= m.y, "{w:?} {m:?}");
+    let p = handle(&u, Dir::V, 0);
+    drag(&mut u, p, (p.0, H + 200));
+    frame(&mut u);
+    let m = leaf(&u, VKind::Measure);
+    assert_eq!(m.h, super::dock::MEAS_MIN_H, "{m:?}");
+    let geo = u.studio_panel_geo().expect("the panel");
+    assert!(u.panel_is_cards() && geo.list.h >= super::measpanel::CARD_H, "a whole row of tiles: {:?}", geo.list);
+    let under = m.bottom() - (geo.list.y + super::measpanel::CARD_H);
+    assert!((0..=10).contains(&under), "{under} px under the row of tiles: {m:?} {:?}", geo.list);
+    shot(&mut u, "meas-one-row");
+}
 
 #[test]
 fn old_layout_strings_still_load() {
