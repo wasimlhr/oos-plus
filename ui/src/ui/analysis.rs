@@ -98,4 +98,22 @@ pub struct State {
     pub bw: Option<oos_dsp::bandwidth::StepResponse>,
     pub bw_info: String,
     pub bw_t: f64,
+    /// the monitor view's page results while the panel's are in place (`swap_monitor`)
+    monitor: Option<Box<State>>,
+}
+
+impl State {
+    /// Puts the page results of the monitor view (Display > Monitor view, monitor.rs) in place of the panel's, or the
+    /// panel's back: each view works out and draws its own spectrum, eye and figures. The measurement caches and
+    /// workers stay shared.
+    pub(super) fn swap_monitor(&mut self) {
+        let mut o = self.monitor.take().unwrap_or_default();
+        macro_rules! swap {
+            ($($f:ident),*) => { $(std::mem::swap(&mut self.$f, &mut o.$f);)* };
+        }
+        swap!(spec, spec_avg, wf, dist, peaks, spec_stop, spec_t, limit, limit_n, limit_over, limit_worst, eye,
+              eye_auto, eye_key, eye_ref, eye_sim_revision, eye_res, page, power, mag, mag_note, dq, mech, inv_note,
+              dpt, dpt_loss, dpt_note, dpt_t, dpt_v, dpt_i, dpt_g);
+        self.monitor = Some(o);
+    }
 }
