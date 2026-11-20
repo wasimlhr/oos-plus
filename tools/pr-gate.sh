@@ -19,7 +19,9 @@
 #            a refactoring the comparison found equal: its title begins with `Lints:` or `Refactor:`, it says
 #            `Behaviour: unchanged`, CI's job `compare` passed with calibration values (artifact `compare-calibrated`)
 #            and kept nothing, and it touches only code that builds
-#            register sequences, which the comparison proves - nothing of $live, all of $proven (ADR 0042)
+#            register sequences, which the comparison proves - nothing of $live, all of $proven (ADR 0042) - and
+#            code the live run reaches on every path, $looped, when the comparison ran the live run on both sides
+#            (artifact `compare-live`, ADR 0073)
 #   review   GitHub Copilot has reviewed it, once per pull request (ADR 0039), and left no open issue, or every
 #            thread it opened is resolved; pending until then, and for a draft. When the review was of an earlier
 #            commit, the status says so: what came after it was not read by Copilot.
@@ -42,7 +44,12 @@ hardware='^(hal/src/dho/|hal/src/update/|ui/src/board/|fpgad/|boot/|kernel/|root
 # what only a run on a unit proves even for a refactoring (ADR 0042): how the scope starts and updates, and what runs
 # live against the board with its timing (the buses, the read paths, the roll stream, self-calibration, the panel)
 live='^(rust-toolchain\.toml$|boot/|kernel/|rootfs/|hal/src/update/|hal/src/dho/boot/|fpgad/src/(bin/oos-update|main|dho/(mod|board|afg|bringup|roll|selfcal|tool))\.rs$|ui/src/board/|'
-live="${live}hal/src/dho/(bus|roll|seg|gpio|lines|panel|board|selfcal|coretrim|levels)\.rs$|hal/src/dho/seq/exec\.rs$)"
+live="${live}hal/src/dho/(bus|seg|gpio|lines|panel|board|selfcal|coretrim|levels)\.rs$|hal/src/dho/seq/exec\.rs$)"
+# what the comparison's live run proves of the board code (ADR 0053, ADR 0073): the files whose every path of the loop
+# (docs/board-on-a-host.md 7) the live run reaches, so a change of what they do to the unit or deliver shows in its
+# trace and frames. A class of its own, before $live and $proven (it takes these files out of `ui/src/board/`); a file
+# joins only when the live run reaches all of its paths
+looped='^(hal/src/dho/roll\.rs$)'
 # what the comparison does prove of the hardware paths: the code that builds register sequences, and what only builds
 # oos-fpgad. Every file of the hardware paths is in $live or here (tools/tests/test_pr_scripts.py fails on one that is
 # in neither or in both), and one that is in neither counts as live: a new or a split file needs a unit until it is
@@ -163,10 +170,12 @@ one() {
 		status "$sha" waited pending "open for $age h of $hours h"
 	fi
 
-	# owner
+	# owner: the maintainer's last review of this commit that decides something. A reply to a thread is a review in
+	# the state COMMENTED too, and one written after the approval must not hide it (#333); a dismissed approval counts
 	approved=$(api --paginate "repos/$repo/pulls/$n/reviews" |
 		jq -s --arg m "$maintainer" --arg s "$sha" \
-			'add | [.[] | select(.user.login == $m and .commit_id == $s)] | last | .state == "APPROVED"')
+			'add | [.[] | select(.user.login == $m and .commit_id == $s and .state != "COMMENTED" and .state != "PENDING")]
+			| last | .state == "APPROVED"')
 	held=false
 	case " $labels " in *" hold "*) held=true ;; esac
 	if [ $held = true ]; then
@@ -212,8 +221,10 @@ one() {
 		fi
 	fi
 
-	# unit: the files of the hardware paths, without the tests inside them
+	# unit: the files of the hardware paths, without the tests inside them; those the live run reaches apart
 	hw=$(printf '%s\n' "$files" | grep -Ev "$testonly" || true)
+	loop=$(printf '%s\n' "$hw" | grep -E "$looped" || true)
+	rest=$(printf '%s\n' "$hw" | grep -Ev "$looped" || true)
 	if printf '%s\n' "$hw" | grep -Eq "$hardware"; then
 		case " $labels " in
 		*" unit-tested "*) status "$sha" unit success "tried on a unit or released by the maintainer (label unit-tested)" ;;
@@ -222,12 +233,13 @@ one() {
 			if ! printf '%s\n' "$hw" | grep -Eq '^(boot|kernel|rootfs)/' &&
 				[ "$(ci_job scope)" = success ] && [ "$(ci_kept scope-binaries-differ)" = 0 ]; then
 				status "$sha" unit success "the programs for the scope are byte-identical to the base's (job scope)"
-			elif ! printf '%s\n' "$hw" | grep -Eq "$live" &&
-				! printf '%s\n' "$hw" | grep -E "$hardware" | grep -Evq "$proven" &&
+			elif ! printf '%s\n' "$rest" | grep -Eq "$live" &&
+				! printf '%s\n' "$rest" | grep -E "$hardware" | grep -Evq "$proven" &&
 				printf '%s\n' "$title" | grep -Eq '^(Lints|Refactor):' && [ -n "$unchanged" ] &&
 				[ "$(ci_job compare)" = success ] && [ "$(ci_kept compare-base)" = 0 ] &&
-				[ "$(ci_kept compare-calibrated 0)" = 1 ]; then
-				status "$sha" unit success "a refactoring the comparison found equal: no run on a unit (ADR 0042)"
+				[ "$(ci_kept compare-calibrated 0)" = 1 ] &&
+				{ [ -z "$loop" ] || [ "$(ci_kept compare-live 0)" = 1 ]; }; then
+				status "$sha" unit success "a refactoring the comparison found equal: no run on a unit (ADR 0042, 0073)"
 			else
 				status "$sha" unit pending "changes what is only proven on a scope: the label unit-tested after a run on a unit"
 			fi

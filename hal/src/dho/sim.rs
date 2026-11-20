@@ -16,16 +16,19 @@
 //! registers written what decides which bytes come (arm, stop, the frames of a play, the window, the channels, the
 //! header, the compression) and answers the reads the loop polls, all on one virtual clock. What the signal is, when it
 //! triggers and how the front ends scale it is the test's `Scene`; the writes of the front ends, the ADC, the trigger
-//! and the time base are recorded, not interpreted (3.2). Every access leaves a line in the trace. Not modelled yet:
-//! the roll stream, scan and the segmented record (stage 3), the hardware average (`Engine` has it), the front-end bus
-//! and the single lines (stage 1).
+//! and the time base are recorded, not interpreted (3.2). Every access leaves a line in the trace. The roll stream and
+//! scan (roll-mode.md) come as chunks on the same clock (`Roll`), with the logic analyser's chunks when it is on. Not
+//! modelled yet: the hardware average (`Engine` has it). The stamps of a segmented record are those of the head of
+//! `seg`: the latch holds the trigger of the last frame played, the first-trigger stamp that of the first frame recorded
+//! since its clear, both in ticks of 0.8 ns.
 
 pub use crate::dho::seg::sim::{engine, Engine, SimBus, SimC2h};
 
 use crate::dho::boot::Clock;
 use crate::dho::bus::{Bus, FPGA_VERSION};
-use crate::dho::seg::HEADER_TICK_FS;
-use crate::dho::{encode, pairs, scu};
+use crate::dho::roll::{CHUNK_BYTES, CHUNK_WORDS};
+use crate::dho::seg::{HEADER_TICK_FS, LATCH_TICK_FS};
+use crate::dho::{encode, pairs, readout, scu};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
@@ -37,6 +40,15 @@ const US: i128 = 1_000_000_000;
 pub const WRITE_FS: i128 = 10 * US;
 pub const READ_FS: i128 = US;
 pub const STREAM_BYTE_FS: i128 = 10_000_000;
+
+/// Chunks of a scan sweep: 10 divisions of 100 columns, a chunk each (roll-mode.md 9.1, at 1-2-5 time bases).
+pub const SWEEP_CHUNKS: u64 = 1000;
+/// Chunks of a sweep still to come when 0x40d0 reports it done (roll-mode.md 9.1: 3 to 4 on the unit).
+pub const DONE_EARLY: u64 = 4;
+/// One tick of the interval of a segmented record, 0x4068 (acquisition-start.md, `record_seq`: interval / 6.4e6).
+const INTERVAL_TICK_FS: i128 = 6_400_000;
+/// What 0x11e8 counts for a whole chunk waiting (roll-mode.md 2.2 and 8).
+const FILL_PER_CHUNK: u32 = 27;
 
 /// How the front ends and the time base turn the scene into codes and samples: what the settings the test asks for
 /// would make of it, told by the test and not read from the registers (3.2). A new view takes effect at the next arm.
@@ -53,9 +65,11 @@ pub struct View {
 
 /// The signal and its triggers: the volts of a channel at a time (seconds on the virtual clock), and the instants at
 /// which it triggers: `first_fs` and every `period_fs` after it, none without a period. With `auto_fs`, a frame is
-/// recorded that long after the arm or the frame before it when no trigger came (AUTO).
+/// recorded that long after the arm or the frame before it when no trigger came (AUTO). `la`: the 16 lines of the logic
+/// analyser at a time (bit n = Dn), where a test has them.
 pub struct Scene {
     pub volts: Box<dyn Fn(usize, f64) -> f64>,
+    pub la: Option<Box<dyn Fn(f64) -> u16>>,
     pub first_fs: i128,
     pub period_fs: Option<i128>,
     pub auto_fs: Option<i128>,
@@ -80,11 +94,38 @@ impl Scene {
 /// line with its count.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
-    Write { us: i128, off: u32, v: u32 },
-    Read { us: i128, off: u32, v: u32, times: u32 },
-    Stream { us: i128, bytes: usize },
-    Recorded { us: i128, frame: u32, trigger_us: i128 },
-    Played { us: i128, first: u32, last: u32, bytes: usize },
+    Write {
+        us: i128,
+        off: u32,
+        v: u32,
+    },
+    Read {
+        us: i128,
+        off: u32,
+        v: u32,
+        times: u32,
+    },
+    Stream {
+        us: i128,
+        bytes: usize,
+    },
+    Recorded {
+        us: i128,
+        frame: u32,
+        trigger_us: i128,
+    },
+    Played {
+        us: i128,
+        first: u32,
+        last: u32,
+        bytes: usize,
+    },
+    /// roll and scan: chunks made, the first with this counter
+    Chunks {
+        us: i128,
+        counter: u16,
+        n: u64,
+    },
 }
 
 /// An armed record: the frames `first..=last`, and when it was armed.
@@ -94,6 +135,26 @@ struct Rec {
     armed_fs: i128,
     /// frames recorded so far
     n: u32,
+}
+
+/// The roll or scan stream (roll-mode.md 2, 5 and 9): started by the FSM run (0x4004 bit 0) while 0x4008 bit 17
+/// (roll) or bit 22 (scan) is set, ended by a stop (0x4004 bit 31). The point spacing is read from the display chain
+/// written: 0x1170 bits 27:0 (10 x ratio x k) sample periods of the view, times the interpolation fraction
+/// (0x115c + 1) / 2^32 while 0x1154 bit 0 is clear; a chunk holds 0x11fc points of each channel. Each point is the
+/// scene's sample at its time (that the unit sends min/max pairs is assumed, roll-mode.md 3.3; the decode does not tell
+/// them apart). A scan sweep has `SWEEP_CHUNKS` chunks and then waits for the next start; its counter starts at 1 in
+/// every sweep. It does not wait for a trigger: 0x1204 reports one at the column of the screen's centre when 0x4058 is
+/// 0 (a scan trigger position is not modelled). With the logic analyser on at the start (0x4008 bit 24, la.md 4.4) a
+/// chunk of 100 LA words (header word 1 bit 1) comes before each analog chunk, over the same time, and the two share
+/// the counter (LA 1, analog 2, LA 3: roll-mode.md, "Scan with the LA on"); words of a scene without lines are 0.
+struct Roll {
+    scan: bool,
+    la: bool,
+    start_fs: i128,
+    point_fs: i128,
+    per: u32,
+    /// chunks made since the start
+    made: u64,
 }
 
 /// The simulated unit. Its sides are `Bar`, `Stream` and `Time`, which share it (`unit`).
@@ -109,6 +170,14 @@ pub struct Unit {
     recorded: u32,
     stream: VecDeque<u8>,
     prev_4004: u32,
+    roll: Option<Roll>,
+    /// scan: 0x40d0 (the sweep is complete), until the next start
+    sweep_done: bool,
+    /// the stamps: the last frame played, the latched trigger time (0x40b0/0x40b4, ticks), the trigger of the first
+    /// frame recorded since the first-trigger stamp was cleared (0x40c0/0x40c4, fs)
+    last_played: Option<u32>,
+    latched: u64,
+    first_trigger_fs: Option<i128>,
     pub trace: Vec<Event>,
     /// microseconds slept through `Time` (the waits of the code under test, not the cost of its accesses)
     pub slept_us: u64,
@@ -126,6 +195,11 @@ impl Unit {
             recorded: 0,
             stream: VecDeque::new(),
             prev_4004: 0,
+            roll: None,
+            sweep_done: false,
+            last_played: None,
+            latched: 0,
+            first_trigger_fs: None,
             trace: Vec::new(),
             slept_us: 0,
         }
@@ -153,18 +227,22 @@ impl Unit {
     /// Records the frames whose trigger has come by now. The first takes the first trigger once its pre-trigger points
     /// are filled after the arm (record-play.md: a record takes the pre-trigger fill, then the wait for the next edge);
     /// a trigger inside the fill is not taken. Each later frame takes the first trigger after the pre- and post-trigger
-    /// points of the frame before it. The record stops by itself after its last frame.
+    /// points of the frame before it and the wait of 0x4068 (the interval of a segmented record, `scu::record_arm`; that
+    /// the FPGA waits it after each frame is assumed). The record stops by itself after its last frame.
     fn advance(&mut self) {
+        self.stream_chunks();
+        let wait = self.reg(0x4068) as i128 * INTERVAL_TICK_FS;
         let Some(r) = self.rec.as_mut() else { return };
         let span = (self.view.pre + self.view.post) as i128 * self.view.dot_fs;
         loop {
             let from = match r.n {
                 0 => r.armed_fs + self.view.pre as i128 * self.view.dot_fs,
-                _ => self.ring[&(r.first + r.n - 1)] + span,
+                _ => self.ring[&(r.first + r.n - 1)] + span + wait,
             };
             let Some(at) = self.scene.next_trigger(from).filter(|&at| at <= self.t_fs) else { break };
             let k = r.first + r.n;
             self.ring.insert(k, at);
+            self.first_trigger_fs.get_or_insert(at);
             r.n += 1;
             self.trace.push(Event::Recorded { us: self.t_fs / US, frame: k, trigger_us: at / US });
             if r.first + r.n > r.last {
@@ -173,6 +251,60 @@ impl Unit {
                 break;
             }
         }
+    }
+
+    /// Makes the chunks of the roll or scan stream whose last point has come by now, into the stream.
+    fn stream_chunks(&mut self) {
+        let Some(r) = self.roll.as_ref() else { return };
+        let (scan, la, start_fs, point_fs, per, made) = (r.scan, r.la, r.start_fs, r.point_fs, r.per as usize, r.made);
+        // the counter of the analog chunk k
+        let counter = |k: u64| if la { 2 * k + 2 } else { k + 1 } as u16;
+        let mask = self.reg(0x4008) & 0xf;
+        let chunk_fs = per as i128 * point_fs;
+        let mut n = 0;
+        while !(scan && made + n >= SWEEP_CHUNKS) && start_fs + (made + n + 1) as i128 * chunk_fs <= self.t_fs {
+            let k = made + n;
+            if la {
+                let mut words = [0u16; CHUNK_WORDS];
+                for (j, w) in words.iter_mut().enumerate() {
+                    let t = start_fs + k as i128 * per as i128 * point_fs + j as i128 * per as i128 * point_fs / 100;
+                    *w = self.scene.la.as_ref().map_or(0, |f| f(t as f64 * 1e-15));
+                }
+                self.stream.extend(encode::chunk(counter(k) - 1, true, &words));
+            }
+            let ch: Vec<Vec<u16>> = (0..4)
+                .map(|c| {
+                    if mask & (1 << c) == 0 {
+                        return Vec::new();
+                    }
+                    let (scale, offset) = self.view.cal[c];
+                    (0..per)
+                        .map(|j| {
+                            let t = start_fs + (k as i128 * per as i128 + j as i128) * point_fs;
+                            encode::code((self.scene.volts)(c, t as f64 * 1e-15), scale, offset)
+                        })
+                        .collect()
+                })
+                .collect();
+            let bytes = encode::interleave([&ch[0], &ch[1], &ch[2], &ch[3]], mask);
+            let mut words = [readout::MID as u16; CHUNK_WORDS];
+            for (w, b) in words.iter_mut().zip(bytes.as_chunks::<2>().0) {
+                *w = u16::from_le_bytes(*b);
+            }
+            self.stream.extend(encode::chunk(counter(k), false, &words));
+            n += 1;
+        }
+        if n == 0 {
+            return;
+        }
+        if let Some(r) = self.roll.as_mut() {
+            r.made += n;
+            if r.scan && r.made + DONE_EARLY >= SWEEP_CHUNKS {
+                self.sweep_done = true;
+            }
+        }
+        let first = counter(made) - la as u16;
+        self.trace.push(Event::Chunks { us: self.t_fs / US, counter: first, n: n << la as u32 });
     }
 
     /// The code words of channel `c` for `n` points from memory point `start` of the frame triggered at `trig`.
@@ -222,6 +354,7 @@ impl Unit {
             self.stream.extend(encode::interleave([&ch[0], &ch[1], &ch[2], &ch[3]], mask));
         }
         let bytes = self.stream.len() - at;
+        self.last_played = Some(last);
         self.trace.push(Event::Played { us: self.t_fs / US, first, last, bytes });
     }
 
@@ -229,21 +362,49 @@ impl Unit {
         self.t_fs += WRITE_FS;
         self.advance();
         self.trace.push(Event::Write { us: self.t_fs / US, off, v });
-        self.regs.insert(off, v);
+        let before = self.regs.insert(off, v).unwrap_or(0);
+        if off == scu::stamp::CTRL {
+            if v & scu::stamp::FIRST_CLEAR != 0 {
+                self.first_trigger_fs = None;
+            }
+            if v & scu::stamp::LATCH != 0 && before & scu::stamp::LATCH == 0 {
+                let at = self.last_played.and_then(|k| self.ring.get(&k)).copied().unwrap_or(0);
+                self.latched = (at / LATCH_TICK_FS) as u64;
+            }
+        }
         if off != 0x4004 {
             return;
         }
         let rise = v & !self.prev_4004;
         self.prev_4004 = v;
         if v & 1 << 31 != 0 {
-            // stop: the record ends where it is, the ring keeps it
+            // stop: the record ends where it is, the ring keeps it; a roll or scan stream ends, its chunks not read
+            // are dropped
             if let Some(r) = self.rec.take() {
                 self.recorded = r.n;
+            }
+            if self.roll.take().is_some() {
+                self.stream.clear();
             }
         }
         let c = self.reg(0x400c);
         let (first, last) = (self.reg(0x4010), self.reg(0x4018));
-        if rise & 1 != 0 && c & 0x4000_0000 != 0 {
+        let r4008 = self.reg(0x4008);
+        if rise & 1 != 0 && r4008 & (1 << 17 | 1 << 22) != 0 {
+            let r1170 = self.reg(0x1170) & 0x0fff_ffff;
+            let frac = if self.reg(0x1154) & 1 == 0 { self.reg(0x115c) as i128 + 1 } else { 1 << 32 };
+            let point_fs = (r1170.max(1) as i128 * self.scene.view.dot_fs * frac) >> 32;
+            self.view = self.scene.view;
+            self.roll = Some(Roll {
+                scan: r4008 & 1 << 22 != 0,
+                la: r4008 & 1 << 24 != 0,
+                start_fs: self.t_fs,
+                point_fs: point_fs.max(1),
+                per: self.reg(0x11fc).clamp(1, CHUNK_WORDS as u32),
+                made: 0,
+            });
+            self.sweep_done = false;
+        } else if rise & 1 != 0 && c & 0x4000_0000 != 0 {
             self.play(first, last);
         } else if rise & 1 != 0 && c & 0x2200_0000 == 0x2200_0000 {
             // a new view takes effect at the arm
@@ -274,6 +435,28 @@ impl Unit {
             0x4010 => match &self.rec {
                 Some(r) => r.first + r.n.max(1) - 1,
                 None => self.reg(0x4014) + self.recorded.max(1) - 1,
+            },
+            0x11e8 => (self.stream.len() / CHUNK_BYTES) as u32 * FILL_PER_CHUNK,
+            scu::stamp::CTRL => {
+                self.reg(off) & !scu::stamp::FIRST_VALID
+                    | if self.first_trigger_fs.is_some() { scu::stamp::FIRST_VALID } else { 0 }
+            }
+            0x40b0 => self.latched as u32,
+            0x40b4 => (self.latched >> 32) as u32,
+            0x40c0 | 0x40c4 => {
+                let t = (self.first_trigger_fs.unwrap_or(0) / LATCH_TICK_FS) as u64;
+                if off == 0x40c0 {
+                    t as u32
+                } else {
+                    (t >> 32) as u32
+                }
+            }
+            0x40d0 => self.sweep_done as u32,
+            0x1204 => match &self.roll {
+                Some(r) if r.scan && !self.sweep_done && r.made >= SWEEP_CHUNKS / 2 && self.reg(0x4058) == 0 => {
+                    1 << 31 | (SWEEP_CHUNKS / 2) as u32
+                }
+                _ => 0,
             },
             0x4034 => match &self.rec {
                 Some(r) => scu::status::WAIT_TRIG | if r.n > 0 { 0x20 } else { 0 },
@@ -363,7 +546,7 @@ mod tests {
     /// The scene of `sine` in the view `p` gives, triggering every `period_fs` from 1 us.
     fn scene(p: &hz::Params, period_fs: Option<i128>, auto_fs: Option<i128>) -> Scene {
         let view = View { cal: CAL, dot_fs: p.dot_fs as i128, pre: p.pre, post: p.post };
-        Scene { volts: Box::new(sine), first_fs: US, period_fs, auto_fs, view }
+        Scene { volts: Box::new(sine), la: None, first_fs: US, period_fs, auto_fs, view }
     }
 
     fn configured(s: &Settings) -> (State, hz::Params) {
@@ -612,5 +795,192 @@ mod tests {
             assert_eq!(u16::from_le_bytes([f[16], f[17]]), Engine::word(k, 0), "frame {}: its words", k);
         }
         assert!(c2h.read(&mut [0u8; 1]).is_err(), "nothing more was played");
+    }
+
+    /// The roll (or scan) stream of `s` started on a unit as the loop starts it (roll-mode.md 6, A and B), on a scene of
+    /// a 1 kHz sine of 0.3 V on every channel: the state, the roll parameters, the unit and its sides.
+    fn rolling(s: &Settings, scan: bool) -> (State, crate::dho::roll::Params, Rc<RefCell<Unit>>, Bar, Stream, Time) {
+        rolling_la(s, scan, None)
+    }
+
+    /// `rolling` with the logic analyser's lines `la` (and the LA on in the acquisition block, 0x4008 bit 24).
+    fn rolling_la(
+        s: &Settings,
+        scan: bool,
+        la: Option<Box<dyn Fn(f64) -> u16>>,
+    ) -> (State, crate::dho::roll::Params, Rc<RefCell<Unit>>, Bar, Stream, Time) {
+        use crate::dho::roll;
+        let (mut st, p) = configured(s);
+        if la.is_some() {
+            st.sh.s4008 |= 1 << 24;
+        }
+        let rp = roll::params(s.mask, seq::tdiv_fs(s.tdiv), s.depth, &p);
+        let view = View { cal: CAL, dot_fs: p.dot_fs as i128, pre: p.pre, post: p.post };
+        let volts = Box::new(|_c: usize, t: f64| 0.3 * (2.0 * std::f64::consts::PI * 1e3 * t).sin());
+        let (u, mut bar, c2h, clock) = unit(Scene { volts, la, first_fs: US, period_fs: None, auto_fs: None, view });
+        let a = if scan {
+            roll::config_scan(&mut st.sh, &rp, p.memsel, 0)
+        } else {
+            roll::config(&mut st.sh, &rp, p.memsel)
+        };
+        bar.apply(&a);
+        bar.apply(&roll::start(&mut st.sh, s.mask));
+        (st, rp, u, bar, c2h, clock)
+    }
+
+    /// The counters of the chunks in `b`.
+    fn counters(b: &[u8]) -> Vec<u16> {
+        b.as_chunks::<CHUNK_BYTES>().0.iter().map(|c| crate::dho::roll::counter(c)).collect()
+    }
+
+    // Break it catches: a roll stream at another spacing than `roll::params`, a fill level that does not count whole
+    // chunks, chunks out of order, or points of each channel other than the scene's at their times
+    #[test]
+    fn the_roll_stream_is_the_scene_at_the_spacing_of_the_roll_parameters() {
+        use crate::dho::roll;
+        for mask in [0x1, 0x3, 0x7, 0xf] {
+            let s = Settings { mask, tdiv: 0.2, window: None, ..Settings::default() };
+            let (_, rp, u, mut bar, mut c2h, mut clock) = rolling(&s, false);
+            let start = u.borrow().t_fs;
+            let per = roll::points_per_chunk(mask);
+            let chunk_us = (per as i128 * rp.spacing_fs as i128 / US) as u64;
+            clock.sleep_us(10 * chunk_us + 1);
+            let c = roll::chunks(bar.rd(0x11e8));
+            assert_eq!(c, 10, "mask {:#x}: ten chunks of {} us", mask, chunk_us);
+            let mut b = vec![0u8; c * CHUNK_BYTES];
+            c2h.read_exact(&mut b).unwrap();
+            assert_eq!(counters(&b), (1..=10).collect::<Vec<u16>>());
+            let w = roll::split(&b, mask);
+            for (c, w) in w.iter().enumerate() {
+                if mask & 1 << c == 0 {
+                    assert!(w.is_empty(), "CH{} is off", c + 1);
+                    continue;
+                }
+                assert_eq!(w.len(), 10 * per, "mask {:#x}, CH{}", mask, c + 1);
+                for (i, &x) in seq::volts(w, CAL[c].0, CAL[c].1).iter().enumerate() {
+                    let t = (start + i as i128 * rp.spacing_fs as i128) as f64 * 1e-15;
+                    let want = 0.3 * (2.0 * std::f64::consts::PI * 1e3 * t).sin();
+                    assert!(
+                        (x as f64 - want).abs() <= CAL[c].0 / 7500.0,
+                        "CH{} point {}: {} V, not {} V",
+                        c + 1,
+                        i,
+                        x,
+                        want
+                    );
+                }
+            }
+        }
+    }
+
+    // Break it catches: a stop that leaves the chunks not read in the stream or in the fill level, so that the next
+    // read after a change of settings gets old chunks
+    #[test]
+    fn a_stop_drops_the_chunks_not_read() {
+        use crate::dho::roll;
+        let s = Settings { mask: 1, tdiv: 0.2, window: None, ..Settings::default() };
+        let (mut st, _, _u, mut bar, mut c2h, mut clock) = rolling(&s, false);
+        clock.sleep_us(20_000);
+        assert!(roll::chunks(bar.rd(0x11e8)) > 0, "chunks wait");
+        bar.apply(&roll::stop(&mut st.sh));
+        assert_eq!(bar.rd(0x11e8), 0, "none after the stop");
+        clock.sleep_us(20_000);
+        assert_eq!(bar.rd(0x11e8), 0, "and none made after it");
+        assert!(c2h.read(&mut [0u8; 1]).is_err(), "nothing left to read");
+    }
+
+    // Break it catches: a sweep that does not end after its 1000 chunks, a done flag that is not early, a trigger
+    // reported away from the centre, a counter that does not start again with the next sweep
+    #[test]
+    fn a_scan_sweep_ends_after_its_chunks_and_the_next_counts_from_1() {
+        use crate::dho::roll;
+        let s = Settings { mask: 1, tdiv: 0.2, window: None, ..Settings::default() };
+        let (mut st, rp, _u, mut bar, mut c2h, mut clock) = rolling(&s, true);
+        let chunk_us = (roll::points_per_chunk(1) as i128 * rp.spacing_fs as i128 / US) as u64;
+        assert_eq!(chunk_us, 2000, "roll-mode.md 9.1: 2 ms a chunk at 200 ms/div");
+        clock.sleep_us(500 * chunk_us + 1);
+        assert_eq!((bar.rd(0x1204), bar.rd(0x40d0)), (1 << 31 | 500, 0), "the centre column, not done");
+        clock.sleep_us(496 * chunk_us);
+        assert_eq!((bar.rd(0x1204), bar.rd(0x40d0)), (0, 1), "done 4 chunks early");
+        clock.sleep_us(1_000_000);
+        let c = roll::chunks(bar.rd(0x11e8));
+        assert_eq!(c, 1000, "the sweep stops after its last column");
+        let mut b = vec![0u8; c * CHUNK_BYTES];
+        c2h.read_exact(&mut b).unwrap();
+        assert_eq!(counters(&b), (1..=1000).collect::<Vec<u16>>());
+        // the next sweep, as the loop starts it in RUN
+        bar.apply(&roll::scan_done(&mut st.sh));
+        let p = configured(&s).1;
+        bar.apply(&roll::config_scan(&mut st.sh, &rp, p.memsel, 0));
+        bar.apply(&roll::start(&mut st.sh, s.mask));
+        assert_eq!(bar.rd(0x40d0), 0, "done clears with the start");
+        clock.sleep_us(2 * chunk_us + 1);
+        let mut b = vec![0u8; 2 * CHUNK_BYTES];
+        c2h.read_exact(&mut b).unwrap();
+        assert_eq!(counters(&b), vec![1, 2]);
+    }
+
+    // Break it catches: LA chunks that do not alternate with the analog ones, a counter they do not share, LA words
+    // at another spacing than `roll::la_spacing_fs` or other than the scene's lines
+    #[test]
+    fn with_the_la_on_its_chunks_come_before_each_analog_chunk() {
+        use crate::dho::roll;
+        let s = Settings { mask: 1, tdiv: 0.2, window: None, ..Settings::default() };
+        // the lines: a count of 7 us steps (every word another)
+        let lines = |t: f64| (t * 1e6 / 7.0) as u64 as u16;
+        let (_, rp, u, mut bar, mut c2h, mut clock) = rolling_la(&s, false, Some(Box::new(lines)));
+        let start = u.borrow().t_fs;
+        let chunk_us = (roll::points_per_chunk(1) as i128 * rp.spacing_fs as i128 / US) as u64;
+        clock.sleep_us(10 * chunk_us + 1);
+        let c = roll::la_chunks(roll::chunks(bar.rd(0x11e8)));
+        assert_eq!(c, 20, "ten LA and ten analog chunks");
+        let mut b = vec![0u8; c * CHUNK_BYTES];
+        c2h.read_exact(&mut b).unwrap();
+        assert_eq!(counters(&b), (1..=20).collect::<Vec<u16>>());
+        let la: Vec<bool> = b.as_chunks::<CHUNK_BYTES>().0.iter().map(|c| roll::is_la_chunk(c)).collect();
+        assert!(la.iter().enumerate().all(|(i, &x)| x == (i % 2 == 0)), "LA first, then analog: {:?}", la);
+        let (w, lw) = roll::split_la(&b, 1);
+        assert_eq!((w[0].len(), lw.len()), (1000, 1000));
+        for (i, &x) in lw.iter().enumerate() {
+            let want = lines((start + i as i128 * roll::la_spacing_fs(&rp) as i128) as f64 * 1e-15);
+            assert!(x.abs_diff(want) <= 1, "LA word {}: {:#x}, not {:#x}", i, x, want);
+        }
+    }
+
+    // Break it catches: stamps other than the head of `seg` states (the latch holds the trigger of the frame played
+    // last, a frame's header that of the frame before it, the first-trigger stamp that of the first frame since its
+    // clear), or a segmented record that does not record on the clock
+    #[test]
+    fn a_segmented_record_runs_on_the_unit_with_its_stamps() {
+        use crate::dho::seg;
+        let segments = Some(seq::Segments { n: 20, interval: 0.0 });
+        let s = Settings { tdiv: 100e-9, depth: 1000, window: None, segments, ..Settings::default() };
+        let (mut st, p) = configured(&s);
+        let ms = 1000 * US;
+        let (u, mut bar, mut c2h, mut clock) = unit(scene(&p, Some(ms), None));
+        let n = seg::start(&mut st, &s, &p, &mut bar, &mut c2h).unwrap();
+        assert_eq!(n, 20);
+        clock.sleep_us(5_500);
+        let x = seg::status(&mut bar, n);
+        assert!(x.recorded > 0 && !x.complete(n), "a part after 5.5 ms: {}", x.recorded);
+        clock.sleep_us(20_000);
+        assert!(seg::status(&mut bar, n).complete(n), "all 20 after 25.5 ms");
+        let first = *u.borrow().ring.values().next().unwrap();
+        let tag = seg::first_trigger(&mut bar);
+        assert_eq!(tag, Some((first / LATCH_TICK_FS) as u64), "the first trigger since the clear");
+        seg::stop(&mut st, &mut bar, &mut c2h).unwrap();
+        let sts = seg::stamps(&mut st, &s, &p, &mut bar, &mut c2h, 0, n).unwrap();
+        let mut tl = seg::Timeline::new(tag);
+        for (k, x) in sts.iter().enumerate() {
+            let t = tl.push(*x).unwrap();
+            assert!((t - k as f64 * 1e-3).abs() < 1e-12, "segment {}: {} s", k, t);
+            if k > 0 {
+                assert_eq!(x.header, sts[k - 1].latch, "segment {}: the header holds the trigger before it", k);
+            }
+        }
+        let rs = seg::read_settings(&s, n);
+        let mut dma = DmaBuf::new();
+        seg::read(&mut st, &rs, &p, &mut bar, &mut c2h, &mut dma, 0, n).unwrap();
+        assert_eq!(dma.data().len(), n as usize * seq::frame_bytes(&rs, &p));
     }
 }
