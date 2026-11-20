@@ -28,6 +28,9 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Studio, the Measurements pane under the waveform: the divider can be pulled down until one row of tiles is left.
+  The least height of the pane was 100 px under its title strip, and a row of tiles is 60, so 40 px stayed empty
+  under a single row and the divider went no lower (the owner from the unit). Host-tested; not yet run on a unit.
 - Fixes taken from upstream OOS (host-tested only; none of them ran on a unit):
   - Calibration (upstream #247): a cal_vertical.hex with 64-byte records, as a DHO804 writes it, is read at 64
     bytes; it was read at 56, its gain codes came from the wrong place and the UI stopped at every start. A file

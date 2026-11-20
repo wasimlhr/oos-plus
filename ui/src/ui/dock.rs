@@ -22,9 +22,11 @@ pub(super) const DIV_HIT: i32 = 44;
 /// Smallest docked views, strip included.
 const MIN_W: i32 = 150;
 const MIN_H: i32 = STRIP_H + 80;
-/// The measurement list stays usable small: a few rows, and it scrolls.
+/// The measurement list stays usable small: a few rows, and it scrolls. Its least height is one row of tiles (60 px
+/// and the space around it): with 100 px under the strip a single row of tiles left 40 px empty under it, and the
+/// divider would not go lower (the owner from the unit: "wasting space when only one line of badges is shown").
 const MEAS_MIN_W: i32 = 200;
-const MEAS_MIN_H: i32 = STRIP_H + 100;
+pub(super) const MEAS_MIN_H: i32 = STRIP_H + super::measpanel::CARD_H + 6;
 const WAVE_MIN_W: i32 = 300;
 const WAVE_MIN_H: i32 = 210;
 /// A drag starts when the finger has moved this far.
