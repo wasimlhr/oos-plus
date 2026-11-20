@@ -121,11 +121,18 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
     Some(J::obj(&[("jsonrpc", J::s("2.0")), ("id", id), ("result", result)]).to_string())
 }
 
-const INSTRUCTIONS: &str = "Rigol DHO800/DHO900 running OOS. Start with scope_state to see the set-up, configure and \
-    acquire to change it, measure and waveform to read the signal, decode_results for protocol decoders, screenshot to \
-    see the screen. The scpi tool takes any command of OOS's SCPI reference (Rigol-style: :TIM:SCAL 1e-3, \
-    :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1): never guess a command, find it with scpi_reference first (search: what it \
-    does; header: its syntax and parameters). Values are in base units (V, s, Hz).";
+/// What `initialize` tells the client's model, as short rules: a small local model follows a numbered list better than
+/// a paragraph. Each rule is a trap seen with such models (a guessed command, samples asked into the context, a single
+/// shot taken as done, the same failed command sent again).
+const INSTRUCTIONS: &str = "OOS oscilloscope (Rigol DHO800/DHO900). Rules:
+1. Start with scope_state.
+2. Use the typed tools first: configure, acquire, measure, waveform, decode_results. Use scpi only for what they lack.
+3. Never guess a SCPI command. Find it with scpi_reference (search, then header), then send it with scpi.
+4. waveform answers statistics and a CSV link: download the file; never ask for the samples inline.
+5. acquire does not wait: after single, ask scope_state until trigger.status is STOP.
+6. After an error, read its hint. Do not resend the same command.
+7. If a tool says MCP is read only, do not try to change the scope.
+Values in base units: V, s, Hz.";
 
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
     the response of its queries; or `commands`, a list of messages run in order that stops at the first error. The \

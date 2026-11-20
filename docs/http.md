@@ -210,7 +210,9 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - Mark: **stable**
 - Request: one JSON-RPC 2.0 message (no batch), Model Context Protocol over streamable HTTP with plain JSON answers:
   no session, no event stream. Methods: `initialize` (answers the `protocolVersion` asked, `2025-06-18` without one,
-  capability `tools`, `serverInfo` `oos-ui` and its version), `ping`, `tools/list`, `tools/call` with the tools below.
+  capability `tools`, `serverInfo` `oos-ui` and its version, and `instructions`: numbered rules for the client's
+  model, under 1000 characters, that name only tools of `tools/list`), `ping`, `tools/list`, `tools/call` with the
+  tools below.
   Any method of HTTP is taken alike; a `GET` has no body and gets the parse error.
 - Answer: 200 `application/json`, the JSON-RPC answer; errors as JSON-RPC errors with status 200: -32700 parse error,
   -32601 method not found, -32602 unknown tool. A message without `id` (a notification) gets 202 with no body
