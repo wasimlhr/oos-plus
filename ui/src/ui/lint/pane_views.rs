@@ -220,6 +220,23 @@ fn the_sort_button_works_by_touch_in_pane_and_view() {
     assert_eq!(u.m.pane, 0);
 }
 
+/// The spectrum as a view of its own over the waveform (Studio): the full-screen and zoom buttons are the waveform's
+/// and lie below the whole view. The peak list stays in its column of the spectrum's view; it was put under those
+/// buttons, outside the view, and the column beside the plot stayed empty. Where the buttons sit at the top of the
+/// column, the list is under them as before.
+#[test]
+fn the_peak_list_of_a_spectrum_view_stays_inside_the_view() {
+    let mut u = crate::ui::testkit::demo_ui();
+    u.m.view = AView::Spectrum;
+    u.relayout();
+    let zoom = u.zoom_btn().1;
+    let a = crate::gfx::Rect::new(0, zoom.y - 300, PANEL_W, 250);
+    let b = u.spec_box(a, false);
+    assert!(b.sort.y >= a.y && b.list.y > b.sort.bottom() && b.list.h >= 100 && b.list.bottom() <= a.bottom(), "{a:?}: {:?} {:?}", b.sort, b.list);
+    let own = crate::gfx::Rect::new(0, zoom.y - 10, PANEL_W, 400);
+    assert!(u.spec_box(own, false).sort.y >= zoom.bottom(), "under the buttons of its own column");
+}
+
 /// Everything the panes write stays inside its pane, and in the width it was given.
 #[test]
 fn pane_text_fits() {
