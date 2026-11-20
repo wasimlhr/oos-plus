@@ -736,7 +736,7 @@ mod tests {
                 c.kind == Kind::Module && measures::find(c.id).is_some_and(|x| measures::get(x.0).key() != "example")
             })
             .collect::<Vec<_>>();
-        assert_eq!(catalog.len(), 83);
+        assert_eq!(catalog.len(), 88);
         ui.m.cat = catalog.iter().map(|&c| row(c)).collect();
         for &cat in &catalog {
             let r = wait(&mut ui, cat);

@@ -85,3 +85,8 @@
 184 double_pulse Irrm
 185 double_pulse Diode d/dt
 186 double_pulse Qoss
+52 clock_jitter Period Jitter RMS
+53 clock_jitter Period Jitter Pk-Pk
+54 clock_jitter Cycle-to-Cycle
+55 clock_jitter Clock TIE RMS
+56 clock_jitter Clock TIE Pk-Pk
