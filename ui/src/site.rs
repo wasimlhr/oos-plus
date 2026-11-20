@@ -65,7 +65,7 @@ impl oos_remote::http::Site for Ctx<'_> {
         crate::cmd::remote_ok(line)
     }
 
-    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp and /mcp.
+    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp, /mcp and /mcp/waveform.csv.
     fn answer(&mut self, route: &str, post: bool, body: &[u8]) -> Option<(&'static str, Vec<u8>, bool)> {
         let ok = |ctype: &'static str, b: Vec<u8>| Some((ctype, b, false));
         let file = |ctype: &'static str, r: Result<Vec<u8>, String>| match r {
@@ -86,6 +86,7 @@ impl oos_remote::http::Site for Ctx<'_> {
                 Err(e) => Some(("text/plain", format!("REFUSED: {}", e).into_bytes(), true)),
             },
             "/screen.bmp" => ok("image/bmp", crate::scpi::bmp(self.cv)),
+            "/mcp/waveform.csv" if !post => file("text/csv; charset=utf-8", waveform_csv(ui, self.scpi)),
             "/mcp" => match mcp(&String::from_utf8_lossy(body), self) {
                 Some(r) => ok("application/json", r.into_bytes()),
                 None => ok("", Vec::new()),
@@ -135,7 +136,7 @@ impl oos_remote::http::Site for Ctx<'_> {
 }
 
 mod mcp;
-pub use mcp::mcp;
+pub use mcp::{mcp, waveform_csv};
 
 #[cfg(test)]
 mod tests;

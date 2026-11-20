@@ -112,14 +112,45 @@ fn mcp_measure_answers_numbers_and_refuses_what_is_not_an_item() {
 }
 
 // Break it catches: the waveform selection of another client changed by the tool, the WORD codes turned into volts
-// with the wrong scale, a long record answered whole, a start past the end answered as an empty success
+// with the wrong scale, a long record answered whole (the samples in the answer, where they fill a model's context),
+// the file at the link not the record of the answer, a start past the end answered as an empty success
 #[test]
 fn mcp_waveform_cuts_a_record_and_leaves_the_selection() {
+    let _sends = sends();
+    let mut h = Web::open(0);
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv");
+    assert!(r.starts_with("HTTP/1.1 409") && r.contains("call the MCP tool waveform"), "{r}");
     square_in_r1(&mut ui);
     let q = |scpi: &mut crate::scpi::Scpi, ui: &mut Ui, c: &str| crate::ui::testkit::q(scpi, ui, &cv, c);
     q(&mut scpi, &mut ui, ":WAV:SOUR CHAN2;:WAV:FORM ASC;:WAV:MODE MAX;:WAV:STAR 7");
-    let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":100}"#);
+    // by default no samples in the answer: the statistics and the link
+    let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory"}"#);
+    let d = data(&r);
+    assert!(d.get("samples").is_none() && d.get("minmax").is_none(), "{d}");
+    let file = d.get("file").unwrap();
+    assert_eq!(file.get("url").and_then(J::str), Some("/mcp/waveform.csv"), "no address: the path alone");
+    assert_eq!((num(file.get("rows")), file.get("columns").and_then(J::str)), (4000.0, Some("time_s,v")));
+    let csv = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv");
+    assert!(csv.starts_with("HTTP/1.1 200") && csv.contains("text/csv"), "{}", &csv[..200]);
+    let body = |csv: &str| csv.split("\r\n\r\n").nth(1).unwrap().to_string();
+    let csv = body(&csv);
+    let rows: Vec<&str> = csv.lines().collect();
+    assert_eq!((rows.len(), rows[0]), (4001, "time_s,v"));
+    let row = |i: usize| -> Vec<f64> { rows[i].split(',').map(|x| x.parse().unwrap()).collect() };
+    assert!((row(2)[0] - row(1)[0] - 1e-9).abs() < 1e-15 && (row(1)[1] + 0.5).abs() < 0.01, "{:?}", &rows[..3]);
+    assert_eq!(num(file.get("bytes")), csv.len() as f64);
+    // fewer rows than samples: min/max per bucket in the file
+    call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":100}"#);
+    let csv = body(&get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv"));
+    let rows: Vec<&str> = csv.lines().collect();
+    assert_eq!((rows.len(), rows[0]), (101, "time_s,min_v,max_v"));
+    ui.net = "192.168.1.9".into();
+    let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":100,"inline":100}"#);
+    assert_eq!(
+        data(&r).get("file").and_then(|f| f.get("url")).and_then(J::str),
+        Some("http://192.168.1.9:8080/mcp/waveform.csv")
+    );
     assert!(!failed(&r), "{r}");
     let d = data(&r);
     assert_eq!(num(d.get("total_samples")), 4000.0);
@@ -134,14 +165,14 @@ fn mcp_waveform_cuts_a_record_and_leaves_the_selection() {
     assert!(pairs.iter().all(|p| (num(items(Some(p)).get(1)) - num(items(Some(p)).first())) > 0.9), "{d}");
     assert!((num(d.get("dt")) - 1e-9).abs() < 1e-15);
     // fewer samples than points: the samples themselves
-    let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","start":3991}"#);
+    let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","start":3991,"inline":20}"#);
     assert_eq!(items(data(&r).get("samples")).len(), 10, "{r}");
     // the other client's selection is as it was
     let sel = q(&mut scpi, &mut ui, ":WAV:SOUR?;:WAV:FORM?;:WAV:MODE?;:WAV:STAR?");
     assert_eq!(sel, "CHAN2;ASC;MAX;7");
     let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","start":5000}"#);
     assert!(failed(&r), "{r}");
-    for args in [r#"{"points":1}"#, r#"{"points":10001}"#, r#"{"record":"all"}"#, r#"{"source":"R1 R2"}"#] {
+    for args in [r#"{"points":1}"#, r#"{"points":100001}"#, r#"{"inline":1001}"#, r#"{"source":"R1 R2"}"#] {
         assert!(failed(&call(&mut ui, &cv, &mut scpi, "waveform", args)), "{args}");
     }
 }
@@ -247,7 +278,12 @@ fn mcp_read_only_and_off() {
     let r = call(&mut ui, &cv, &mut scpi, "scpi", r#"{"command":":TIM:SCAL?;*IDN?"}"#);
     assert!(!failed(&r) && r.to_string().contains("OOS,"), "queries run: {r}");
     assert!(!failed(&call(&mut ui, &cv, &mut scpi, "scope_state", "{}")));
+    // the waveform tool reads, and its file is there; while off the file is refused too
+    square_in_r1(&mut ui);
+    assert!(!failed(&call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory"}"#)));
+    assert!(crate::site::waveform_csv(&ui, &scpi).is_ok());
     ui.sys.remote_mcp = McpMode::Off;
+    assert!(crate::site::waveform_csv(&ui, &scpi).unwrap_err().contains("off"));
     let body = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
     let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
     let e = r.get("error").unwrap_or_else(|| panic!("{r}"));

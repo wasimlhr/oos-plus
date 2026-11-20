@@ -16,9 +16,12 @@ use crate::scpi::Scpi;
 use crate::sysconf::McpMode;
 use crate::ui::Ui;
 
-/// Points `waveform` answers by default, and at most.
-const POINTS_DEFAULT: usize = 1000;
-const POINTS_MAX: usize = 10_000;
+/// Rows of the CSV file of `waveform` by default, and at most; points it puts into its answer at most.
+const POINTS_DEFAULT: usize = 10_000;
+const POINTS_MAX: usize = 100_000;
+const INLINE_MAX: usize = 1000;
+/// Where the web remote serves the CSV of the last `waveform` call.
+const WAVEFORM_CSV: &str = "/mcp/waveform.csv";
 /// Samples of a record `waveform` reads in one call (2 MiB as WORD); the answer says where the next call starts.
 const READ_MAX: u64 = 1 << 20;
 /// Rows `decode_results` answers by default, and at most.
@@ -137,10 +140,13 @@ const SCOPE_STATE: &str = "The whole set-up in one answer: every channel (displa
 const MEASURE: &str = "Measure items of the measurement list on a source, as numbers in base units (V, s, Hz, %, \
     degrees); null where the scope has no value (no edge on screen, still computing). Pair items (delay, phase, skew, \
     setup, hold) take `source` and `source2`. Does not add rows to the screen's measurement strip.";
-const WAVEFORM: &str = "A record of a source cut to a number of points: statistics (min, max, mean, rms, peak-to-peak \
-    in volts) and the samples, or min/max pairs per bucket when the record is longer than `points`. `record` screen \
-    reads what is drawn, memory the acquisition memory, 1 Mi samples per call from `start` (the answer gives \
-    `next_start`). The waveform selection of other SCPI clients is left as it was.";
+const WAVEFORM: &str = "A record of a source: its statistics (min, max, mean, rms, peak-to-peak in volts, clipped \
+    samples) and a link to a CSV file of it, `points` rows (the samples, or min/max per bucket when the record is \
+    longer). The samples are not in the answer: download the file to the computer (curl -o wave.csv <url>) and work \
+    on it there instead of reading it into the conversation; it holds the last call's record. `inline` puts up to \
+    1000 points into the answer as well. `record` screen reads what is drawn, memory the acquisition memory, 1 Mi \
+    samples per call from `start` (the answer gives `next_start`). The waveform selection of other SCPI clients is \
+    left as it was.";
 const DECODE_RESULTS: &str = "The events of the decoders that are on, as rows (time s, decoder, text, ok), \
     `max_rows` from `offset`. `pending` while the decoders are still computing: ask again.";
 const ERRORS: &str = "Empty the SCPI error queue and answer its entries, oldest first.";
@@ -295,7 +301,8 @@ fn waveform_schema() -> J {
         &[
             ("source", string("CHAN1..CHAN4, R1..R10 or MATH1..MATH4; default CHAN1.")),
             ("record", choice(&["screen", "memory"], "What is drawn, or the acquisition memory; default screen.")),
-            ("points", integer("Points (or min/max pairs) in the answer, 2 to 10000; default 1000.")),
+            ("points", integer("Rows of the CSV file (samples, or min/max buckets), 2 to 100000; default 10000.")),
+            ("inline", integer("Points (or min/max pairs) also in the answer, 0 to 1000; default 0.")),
             ("start", integer("First sample of the record to read, from 1; default 1.")),
         ],
         &[],
@@ -641,18 +648,23 @@ fn waveform(run: &mut Run, args: &J) -> J {
         Ok(n) => n,
         Err(e) => return refuse(&e),
     };
+    let inline = match count(args, "inline", 0, 0, INLINE_MAX) {
+        Ok(n) => n,
+        Err(e) => return refuse(&e),
+    };
     let start = match count(args, "start", 1, 1, usize::MAX) {
         Ok(n) => n as u64,
         Err(e) => return refuse(&e),
     };
     let saved = run.scpi.wave_selection();
-    let data = read_record(run, source, memory, points, start);
+    let data = read_record(run, source, memory, (points, inline), start);
     run.scpi.set_wave_selection(saved);
     answer(run, data)
 }
 
-/// The record of `source` from `start`, at most `READ_MAX` samples, as statistics and `points` points.
-fn read_record(run: &mut Run, source: &str, memory: bool, points: usize, start: u64) -> J {
+/// The record of `source` from `start`, at most `READ_MAX` samples, as statistics, a CSV file of `points` rows kept
+/// for `GET /mcp/waveform.csv`, and `inline` points in the answer.
+fn read_record(run: &mut Run, source: &str, memory: bool, (points, inline): (usize, usize), start: u64) -> J {
     let mode = if memory { "RAW" } else { "NORM" };
     let selected = run.w(&format!(":WAV:SOUR {source}"))
         && run.w(&format!(":WAV:MODE {mode}"))
@@ -704,21 +716,56 @@ fn read_record(run: &mut Run, source: &str, memory: bool, points: usize, start: 
     let mut stats = stats.to_vec();
     stats.push(("rms", short(rms)));
     out.push(("stats", J::obj(&stats)));
-    if n <= points {
-        out.push(("samples", J::Arr(volts.iter().map(|&v| short(v)).collect())));
+    // bucket `k` of `m` over the samples read: its first sample and the one after its last
+    let bucket = |k: usize, m: usize| (k * n / m, ((k + 1) * n / m).max(k * n / m + 1));
+    let t = |i: usize| t0 + dt * i as f64;
+    let (columns, rows) = if n <= points {
+        ("time_s,v", volts.iter().enumerate().map(|(i, v)| format!("{:.9e},{:.6e}\n", t(i), v)).collect::<String>())
     } else {
-        // `points` buckets over the samples read, each its lowest and highest sample
-        let pairs: Vec<J> = (0..points)
+        let rows = (0..points).map(|k| {
+            let (a, b) = bucket(k, points);
+            let (lo, hi) = range(&volts[a..b]);
+            format!("{:.9e},{:.6e},{:.6e}\n", t(a), lo, hi)
+        });
+        ("time_s,min_v,max_v", rows.collect())
+    };
+    let csv = format!("{columns}\n{rows}").into_bytes();
+    let url = match run.ui.net.as_str() {
+        "" => J::s(WAVEFORM_CSV),
+        net => J::Str(format!("http://{net}:8080{WAVEFORM_CSV}")),
+    };
+    out.push((
+        "file",
+        J::obj(&[
+            ("url", url),
+            ("columns", J::s(columns)),
+            ("rows", J::Num(n.min(points) as f64)),
+            ("bytes", J::Num(csv.len() as f64)),
+        ]),
+    ));
+    run.scpi.mcp_file = Some(csv);
+    if inline > 0 && n <= inline {
+        out.push(("samples", J::Arr(volts.iter().map(|&v| short(v)).collect())));
+    } else if inline > 0 {
+        let pairs: Vec<J> = (0..inline)
             .map(|k| {
-                let (a, b) = (k * n / points, ((k + 1) * n / points).max(k * n / points + 1));
+                let (a, b) = bucket(k, inline);
                 let (lo, hi) = range(&volts[a..b]);
                 J::Arr(vec![short(lo), short(hi)])
             })
             .collect();
-        out.push(("bucket_dt", short(dt * n as f64 / points as f64)));
+        out.push(("bucket_dt", short(dt * n as f64 / inline as f64)));
         out.push(("minmax", J::Arr(pairs)));
     }
     J::obj(&out)
+}
+
+/// `GET /mcp/waveform.csv`: the CSV of the last `waveform` call; refused while MCP is off or before a call.
+pub fn waveform_csv(ui: &Ui, scpi: &Scpi) -> Result<Vec<u8>, String> {
+    if ui.sys.remote_mcp == McpMode::Off {
+        return Err(OFF.into());
+    }
+    scpi.mcp_file.clone().ok_or_else(|| "No waveform yet: call the MCP tool waveform first".into())
 }
 
 /// The payload of an IEEE definite-length block, `#<n><n digits of length><payload>`.
