@@ -84,7 +84,7 @@ fn the_gear_sheet_is_the_grouped_menu_with_every_group_and_entry() {
         ("Analysers", vec![Open(M::Spectrum), Open(M::Eye), Open(M::Power), Open(M::Bode), Open(M::BwTest), IdentifyAct, Open(M::Magnetic), Open(M::Inverter), Open(M::Dpt)]),
         ("Instruments", vec![Open(M::Dvm), Open(M::Logger)]),
         ("Display", vec![Open(M::Display), Open(M::Horizontal), NavHist]),
-        ("System", vec![Open(M::Storage), Shot, QuickRun, LockAct, Open(M::Utility), PowerAct]),
+        ("System", vec![Open(M::Utility), Open(M::Storage), Shot, QuickRun, LockAct, PowerAct]),
     ];
     for (name, items) in want {
         let grp = g.groups.iter().find(|x| x.name == name).unwrap();
