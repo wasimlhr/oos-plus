@@ -434,6 +434,12 @@ impl Ui {
                 tabs[0].rows.push(row);
             }
         }
+        // the name and the place of the band are settings; where the protocol fills that page they have their own
+        if tabs[1].rows.len() > SHEET_MAX_ROWS {
+            let (band, rest) = std::mem::take(&mut tabs[1].rows).into_iter().partition(|it| matches!(it, DecLabel | DecPos));
+            tabs[1].rows = rest;
+            tabs.push(SheetTab { name: "Band", rows: band, foot: Vec::new() });
+        }
         let order = self.sheet_source_items(menu);
         for t in tabs.iter_mut().take(2) {
             t.rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));

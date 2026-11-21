@@ -193,13 +193,7 @@ impl Ui {
     /// Before, Auto in Overlay put each channel in a band of its own, and the plot looked like lanes. Overlay keeps a
     /// split (`trace_mode`): channels that share a window of it keep their bands there.
     pub(super) fn auto_apart(&self) -> bool {
-        !self.trace_stacked() && (self.m.layout != Layout::Studio || self.n_wins() > 1 || self.split_in_one_window())
-    }
-
-    /// A split of the plot whose sources all sit in one window is drawn as that window alone (`n_wins`), but it is still
-    /// the window of a split: the channels in it keep their bands.
-    fn split_in_one_window(&self) -> bool {
-        self.m.win_layout.count() > 1 && !self.m.zoom && !self.view_on() && !self.eye_open()
+        !self.trace_stacked() && (self.m.layout != Layout::Studio || self.n_wins() > 1)
     }
 
     pub(super) fn auto_operation(&self) -> Option<u64> {
@@ -1419,6 +1413,8 @@ mod tests {
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
         ui.m.layout = Layout::Studio;
         ui.m.ch[1].on = true;
+        // CH3 in the second window: a split with every source in one window is that window alone
+        ui.m.ch[2].on = true;
         ui.m.win_layout = WinLayout::Rows;
         ui.m.ch_win = [0, 0, 1, 1];
         ui.relayout();
