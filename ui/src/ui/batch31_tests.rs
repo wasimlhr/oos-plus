@@ -133,6 +133,10 @@ fn the_magnetic_turns_the_math_offset_and_the_reference_level_stop_at_a_limit() 
         assert_eq!(u.numpad_apply(Item::MagN, 1e9), 10_000.0);
         for _ in 0..4 { u.adjust(Item::MagN, -4096); }
         assert_eq!(u.m.mag_n, 1.0);
+        // the math offset stops in Minimal and Studio; Default adds its step as upstream's (batch29)
+        if layout == Layout::Default {
+            continue;
+        }
         for _ in 0..3000 {
             u.adjust(Item::MathOffset, 1);
             u.adjust(Item::SpecRef, 1);
@@ -172,6 +176,10 @@ fn a_press_up_into_the_limit_and_the_same_number_down_return_to_the_start_for_ev
         for it in CLAMPED {
             for dir in [1, -1] {
                 let mut u = fresh(layout);
+                // the items Default adds its step to without a limit, as upstream (batch29)
+                if !u.range_limited(it) {
+                    continue;
+                }
                 // an awkward start: not a multiple of the step
                 if let Some(Step::Add(s)) = u.item_range(it).map(|r| r.step) {
                     let v = u.range_get(it).unwrap();
@@ -192,7 +200,7 @@ fn a_press_up_into_the_limit_and_the_same_number_down_return_to_the_start_for_ev
 #[test]
 fn the_trigger_level_of_the_function_check_comes_back_from_the_limit() {
     // Level 1.65 V at 1 V/div: to the limit in 209 presses and back 1.69 V before
-    let mut u = fresh(Layout::Default);
+    let mut u = fresh(Layout::Minimal);
     u.m.trig_level = 1.65;
     let n = to_the_limit(&mut u, Item::TrigLevel, 1);
     assert!((u.m.trig_level as f64 - 5.0 * u.trigger_vpd(false) as f64).abs() < 1e-5);
@@ -206,7 +214,7 @@ fn the_trigger_level_of_the_function_check_comes_back_from_the_limit() {
 fn the_trigger_level_and_the_channel_offset_follow_the_volts_per_division() {
     let mut seen = Vec::new();
     for vs in [0usize, 4, 8, 11] {
-        let mut u = fresh(Layout::Default);
+        let mut u = fresh(Layout::Minimal);
         u.m.ch[0].vscale = vs;
         u.m.ch[0].vfine = 1.0;
         u.m.trig_src = 0;
