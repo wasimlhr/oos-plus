@@ -16031,14 +16031,8 @@
        "`:DISPlay:RULers`"
       ],
       [
-       "`skin`",
-       "display settings: Display > Skin, `OOS` or `OOS Plus`",
-       "`OOS`",
-       "-"
-      ],
-      [
        "`color_grade`",
-       "display settings",
+       "as above",
        "`false`",
        "`:DISPlay:COLor`"
       ],

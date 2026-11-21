@@ -300,7 +300,6 @@ impl Default for Model {
             afg_arb: 0,
             grid_bright: 100,
             grid_frame: true,
-            skin: Default::default(),
             win_layout: WinLayout::One,
             density: Density::Scope,
             ch_win: [0; NCH],

@@ -170,7 +170,6 @@ impl Ui {
     /// The display menu; the trend selectors while the trend pane is shown.
     pub(super) fn display_items(&self) -> Vec<Item> {
         let mut v = vec![
-            Item::Skin,
             Item::Open(MenuId::Windows),
             Item::Layout,
             Item::Views,

@@ -383,8 +383,6 @@ pub struct Model {
     /// graticule brightness in % (10..100), and whether the frame with its ticks is drawn
     pub grid_bright: u32,
     pub grid_frame: bool,
-    /// Display > Skin: the look of the screen (ui/skin.rs)
-    pub skin: Skin,
     /// waveform windows, and the window (0-based) of each channel and math channel
     pub win_layout: WinLayout,
     /// Scope, Full, Split, Four. This is what the Windows row sets; `win_layout` is the split it asked for.

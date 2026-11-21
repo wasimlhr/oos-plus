@@ -5212,15 +5212,6 @@ setup sim_extra "true 0.05 1000000 1e-10 5e-11 100000000" -> true 0.05 1000000 0
 setup sim_extra "x 0.005 33000 0 0 1000000" -> false 0.005 33000 0 0 1000000; error: line 2: sim_extra: not a boolean: x
 setup sim_extra "x" -> false 0.005 33000 0 0 1000000; error: line 2: sim_extra: sim_extra: center deviation frequency DCD correlated-RJ corner
 setup sim_extra default -> false 0.005 33000 0 0 1000000
-setup skin "" -> Oos; error: "line 2: skin: unknown value: "
-setup skin "-1" -> Oos; error: line 2: skin: unknown value: -1
-setup skin "1e9" -> Oos; error: line 2: skin: unknown value: 1e9
-setup skin "OOS Plus" -> Oos; error: line 2: skin: unknown value: OOS Plus
-setup skin "Oos" -> Oos
-setup skin "Plus" -> Plus
-setup skin "oos" -> Oos; error: line 2: skin: unknown value: oos
-setup skin "x" -> Oos; error: line 2: skin: unknown value: x
-setup skin default -> Oos
 setup slope "" -> Rise; error: "line 2: slope: unknown value: "
 setup slope "-1" -> Rise; error: line 2: slope: unknown value: -1
 setup slope "1e9" -> Rise; error: line 2: slope: unknown value: 1e9

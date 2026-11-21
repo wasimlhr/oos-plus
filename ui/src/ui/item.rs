@@ -332,8 +332,6 @@ pub(super) enum Item {
     AfgArbFile,
     GridBright,
     GridFrame,
-    /// Display > Skin (ui/skin.rs)
-    Skin,
     /// noise reject of the trigger comparators
     TrigNoise,
     /// the auto set-up turns noise reject on for a noisy trigger signal (opt-in)
@@ -632,8 +630,8 @@ const NO_PART: Part =
 
 /// The parts of the menus, asked by `kind`, `label`, `value`, `adjust`, `activate`, `options` and `ctl` before the
 /// items `ui.rs` keeps itself. `remote` answers for `ssh` too, except the actions.
-pub(super) const PARTS: [Part; 28] = [
-    // oos-plus parts: the Add rail of Studio, the per-row measurement sheet, the external generator, the skins
+pub(super) const PARTS: [Part; 27] = [
+    // oos-plus parts: the Add rail of Studio, the per-row measurement sheet, the external generator
     Part {
         kind: Some(Ui::addrail_kind),
         label: Some(Ui::addrail_label),
@@ -658,14 +656,6 @@ pub(super) const PARTS: [Part; 28] = [
         activate: Some(Ui::ext_activate),
         options: Some(Ui::ext_options),
         text: Some(Ui::ext_text),
-    },
-    Part {
-        kind: Some(Ui::skin_kind),
-        label: Some(Ui::skin_label),
-        value: Some(Ui::skin_value),
-        adjust: Some(Ui::skin_adjust),
-        options: Some(Ui::skin_options),
-        ..NO_PART
     },
     Part {
         kind: Some(Ui::meas_kind),

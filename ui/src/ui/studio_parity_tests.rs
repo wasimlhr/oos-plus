@@ -152,8 +152,8 @@ fn elsewhere(s: &Ui, menu: MenuId, it: Item) -> Place {
         }
         // where the strip docks: Studio has no strip, its measurements are badges and the table (View menu)
         (M::Measure, StripDock) => Place::Elsewhere("View menu: badges, docked or floating table"),
-        // the skin and the choice of the bottom bar belong to the Default bars
-        (M::Display, Skin | BottomBar) => Place::Elsewhere("Default only: Studio has its own bars"),
+        // the choice of the bottom bar belongs to the Default bars
+        (M::Display, BottomBar) => Place::Elsewhere("Default only: Studio has its own bars"),
         // the SIM sheet holds the rows of the Advanced page on its own tabs
         (M::Sim, Open(M::SimAdvanced)) => Place::Elsewhere("the Levels, Jitter and Spread tabs of the same sheet"),
         // the ten Show switches are one: the switch of the selected slot
