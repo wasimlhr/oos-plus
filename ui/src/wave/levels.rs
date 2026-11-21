@@ -12,7 +12,8 @@ pub use oos_dsp::levels::{stats, Stats};
 
 /// Auto set-up: per channel find amplitude and frequency, choose V/div, offset, timebase and trigger.
 /// Live channels only. A shown reference uses `autoset_shown`.
-pub fn autoset(m: &mut Model, src: &Source) {
+/// `apart`: the channels share a graticule and get a band each (`place`).
+pub fn autoset(m: &mut Model, src: &Source, apart: bool) {
     // pass 1: which channels carry a signal, their levels and periods
     let mut found: Vec<(usize, Stats, f64)> = Vec::new();
     for c in (0..NCH).filter(|&c| m.ch[c].on) {
@@ -31,7 +32,7 @@ pub fn autoset(m: &mut Model, src: &Source) {
         }
         found.push((c, s, period));
     }
-    place(m, &found);
+    place(m, &found, apart);
 }
 
 /// Auto set-up of stored records. Each entry is one shown reference: its samples and its own sample interval.
@@ -190,16 +191,22 @@ pub fn flat_noise(v: &[f32]) -> Option<f32> {
     (m1 - m0 > 6.0 * sigma).then_some(sigma)
 }
 
-/// The end of an auto set-up: `found` = channel, levels, period; the rest of the set-up stays.
-pub fn place(m: &mut Model, found: &[(usize, Stats, f64)]) {
+/// The end of an auto set-up: `found` = channel, levels, period; the rest of the set-up stays. `apart`: the channels
+/// share a graticule and are kept apart, a band each. Without it every channel gets the whole height: a lane of its
+/// own (Stacked), or Studio's Overlay, where the signals lie on one another as `fit_vertical` puts them.
+pub fn place(m: &mut Model, found: &[(usize, Stats, f64)], apart: bool) {
     // one horizontal band per channel (8 div / n), signal fills 80 % of its band; in a split plot per window: n and the
     // band count the channels of the window
     let nw = if m.zoom || m.view != AView::Scope { 1 } else { m.win_layout.count() };
     let win_of = |c: usize| m.ch_win[c].min(nw - 1);
     let wins: Vec<usize> = found.iter().map(|f| win_of(f.0)).collect();
     for (i, (c, s, _)) in found.iter().enumerate() {
-        let n = wins.iter().filter(|&&w| w == wins[i]).count().max(1) as f32;
-        let k = wins[..i].iter().filter(|&&w| w == wins[i]).count();
+        let same = |w: &&usize| **w == wins[i];
+        let (n, k) = if apart {
+            (wins.iter().filter(same).count().max(1) as f32, wins[..i].iter().filter(same).count())
+        } else {
+            (1.0, 0)
+        };
         let band = VDIV / n;
         let ch = &mut m.ch[*c];
         ch.on = true;

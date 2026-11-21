@@ -720,9 +720,11 @@ the Default layout; Minimal and Studio work some of it differently (Layouts, bel
 **Backlight.** Display > Backlight sets the panel's brightness from 10 to 100 %, in steps that look even to the eye. It is
 a setting of the scope (`/oos/system.conf`).
 
-**Auto.** Works on the channels that are on, at full bandwidth, and sets the memory depth back to Auto; each channel then
-gets its own bandwidth back. With no signal it restores the set-up. Afterwards a bar at the top of the plot offers a few
-periods, many periods, the rising edge or the falling edge of the trigger channel; its x or a tap elsewhere closes it.
+**Auto.** Works on the channels that are on, at full bandwidth, and sets the memory depth back to Auto; each channel
+then gets its own bandwidth back. With no signal it restores the set-up. Channels that share one plot get a band each,
+one above the other; in a lane each (Stacked) or in Studio's Overlay on one plot every channel gets the whole height,
+and the trace mode stays as it was. Afterwards a bar at the top of the plot offers a few periods, many periods, the
+rising edge or the falling edge of the trigger channel; its x or a tap elsewhere closes it.
 
 **Windows and full screen.** Display > Windows splits the plot into two windows side by side, two stacked, or four. The
 same page puts each channel, math channel and the LA into a window; a new split spreads the channels that are on. All
