@@ -581,3 +581,17 @@ fn the_trigger_tag_keeps_clear_of_the_windows_button() {
     let x1 = u.trigger_tag_x(g.x + g.w - MARK_W, y);
     assert!(x1 + MARK_W <= b.x, "the tag {x1} reaches the button {b:?}");
 }
+
+#[test]
+fn clearing_a_reference_takes_the_measurements_that_read_it() {
+    let mut u = studio();
+    u.refs[0] = Some(RefWave::test(vec![0.0, 1.0, 0.0, 1.0], 1e-6, 0.0));
+    let eye = crate::measures::all().map(|x| x.1).find(|d| d.name == "Eye Height").expect("Eye Height");
+    u.m.cat.push((eye.id, WaveId::Ref(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)));
+    u.m.meas.push((Meas::Vpp, WaveId::Ref(0)));
+    u.m.meas.push((Meas::Vpp, WaveId::Ch(0)));
+    u.ref_clear_slot(0);
+    assert!(u.m.cat.is_empty(), "the catalogue's row went with the slot");
+    assert!(!u.m.meas.iter().any(|(_, w)| matches!(w, WaveId::Ref(_))), "the standard ones too");
+    assert!(u.m.meas.contains(&(Meas::Vpp, WaveId::Ch(0))), "a channel's stay");
+}

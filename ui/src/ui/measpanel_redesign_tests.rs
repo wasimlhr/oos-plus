@@ -681,3 +681,30 @@ fn the_trend_page_reaches_every_measurement() {
     assert_eq!(u.m.pane, super::tables::PANE_TREND);
     shotb(&mut u, "trend-more");
 }
+
+/// The cards of a side panel: the value has the whole line when the source does not fit beside it, and the source
+/// takes the line under it (it was cut off: "1.00 kl", "4.05 \u{b5}").
+#[test]
+fn a_narrow_card_gives_its_value_the_whole_line() {
+    let mut u = studio_with(6);
+    u.studio.panel.cards = true;
+    u.m.studio_detail = false;
+    // the compact panel of a small screen: cards 94 px wide
+    u.studio.compact = true;
+    // a row that reads a slot with nothing in it says "R1 empty", the widest value there is
+    let eye = crate::measures::all().map(|x| x.1).find(|d| d.name == "Eye Height").expect("Eye Height");
+    u.m.cat.push((eye.id, WaveId::Ref(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)));
+    for _ in 0..4 { frame(&mut u); }
+    u.mstat.clear();
+    u.studio.panel.stats_mode = 0;
+    // no statistics yet: the card's third line says the source
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::write(std::path::Path::new(&dir).join("b32b-cards-nostats.png"), crate::store::png_of(&cv));
+    }
+    let g = u.studio_panel_geo().expect("the panel");
+    let cards = u.panel_cards_layout(0, 6, g.list);
+    assert!(cards.len() >= 4 && cards.iter().all(|(_, r)| r.w >= 90 && r.h == super::measpanel::CARD_H), "{cards:?}");
+    shotb(&mut u, "cards-narrow");
+}
