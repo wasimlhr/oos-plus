@@ -367,7 +367,7 @@ impl Ui {
             Item::MeasOutside => "Outside",
             Item::MeasN => "N periods",
             Item::MeasEdges => "Edges",
-            Item::MeasRefs => "Preset",
+            Item::MeasRefs => "Refs",
             Item::MeasLvType => "Level type",
             Item::MeasLow => "Low",
             Item::MeasMid => "Mid",
@@ -434,7 +434,11 @@ impl Ui {
         Some(match it {
             Item::MeasOutside => ["Above", "Below", "Both"].iter().map(|s| s.to_string()).collect(),
             Item::MeasEdges => vec!["Clock".into(), "Data".into()],
-            Item::MeasRefs => vec!["10/90".into(), "20/80".into(), "Custom".into()],
+            Item::MeasRefs => {
+                let mut v = vec!["10/90".into(), "20/80".into()];
+                if self.refs_custom_offered() { v.push("Custom".into()); }
+                v
+            }
             Item::MeasLvType => vec!["Percent".into(), "Volts".into()],
             Item::MeasBaseTop => oos_dsp::measure::BaseTop::ALL.iter().map(|b| b.label().to_string()).collect(),
             Item::MeasSepFall => vec!["Same as rise".into(), "Separate".into()],
@@ -498,7 +502,8 @@ impl Ui {
             Item::MeasRefs => {
                 if self.m.meas_lv.absolute { return true; }
                 let cur = match meas_preset_name(&self.m) { "10/90" => 0, "20/80" => 1, _ => 2 };
-                match (cur + d).rem_euclid(3) {
+                let n = if self.refs_custom_offered() { 3 } else { 2 };
+                match (cur + d).rem_euclid(n) {
                     0 => (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) = (0.1, 0.9, 0.5, false),
                     1 => (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) = (0.2, 0.8, 0.5, false),
                     _ => self.m.meas_lv.custom = true,

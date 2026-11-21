@@ -610,7 +610,7 @@ impl Ui {
             Item::StoreDest => self.store_dest.name().into(),
             Item::MeasStats => onoff(self.stats_on),
             Item::MeasLabels => onoff(self.m.meas_labels),
-            Item::StripDock => self.m.strip_dock.label().into(),
+            Item::StripDock => self.strip_dock_label(self.m.strip_dock).into(),
             Item::Zoom => onoff(m.zoom),
             Item::AutoRoll => onoff(m.auto_roll),
             _ => return None,

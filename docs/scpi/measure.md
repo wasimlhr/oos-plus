@@ -39,7 +39,7 @@ Part of the [SCPI reference](README.md).
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:MEASure:GATing` | Set / Query | `SCREEN` follows the viewport; `NONE` means Full record. This gate is an OOS extension. | `NONE` | Measure > Gate | OOS extension |
-| `:MEASure:REFS` | Set / Query | `10/90\|20/80` edge thresholds. | `10/90` | Measure levels > Preset | OOS extension |
+| `:MEASure:REFS` | Set / Query | `10/90\|20/80` edge thresholds. | `10/90` | Measure levels > Refs | OOS extension |
 | `:MEASure:TSETup` | Set / Query | Seconds, nonnegative: `SETHOLD` counts the clock edges whose setup or hold is shorter. | `0.000000E+00` | Measure > Tsetup | Rigol-compatible |
 | `:MEASure:THOLd` | Set / Query | Seconds, nonnegative: `SETHOLD` counts the clock edges whose setup or hold is shorter. | `0.000000E+00` | Measure > Thold | Rigol-compatible |
 | `:MEASure:SETup:MIN` | Set / Query | Global default low threshold in percent. Per-row overrides remain a separate UI feature. | `10` | Measurements > Low level | Rigol-style (command family of the DHO guide) |
@@ -61,7 +61,7 @@ Low, mid and high are percent or volts depending on `:MEASure:LEVel:TYPE`.
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:MEASure:LEVel:TYPE` | Set / Query | Reference levels as `PERCent` of the waveform or `VOLTs`. Query answers `PERC` or `VOLT`. | `PERC` | Measure levels > Level type | OOS extension |
-| `:MEASure:LEVel:PRESet` | Set / Query | `10/90`, `20/80` or `CUSTom` (the Reference preset row). | `10/90` | Measure levels > Preset | OOS extension |
+| `:MEASure:LEVel:PRESet` | Set / Query | `10/90`, `20/80` or `CUSTom` (the Reference preset row). | `10/90` | Measure levels > Refs | OOS extension |
 | `:MEASure:LEVel:LOW` | Set / Query | Reference level, percent or volts (by `:MEASure:LEVel:TYPE`). | `10` | Measure levels > Low | OOS extension |
 | `:MEASure:LEVel:MID` | Set / Query | Reference level, percent or volts (by `:MEASure:LEVel:TYPE`). | `50` | Measure levels > Mid | OOS extension |
 | `:MEASure:LEVel:HIGH` | Set / Query | Reference level, percent or volts (by `:MEASure:LEVel:TYPE`). | `90` | Measure levels > High | OOS extension |

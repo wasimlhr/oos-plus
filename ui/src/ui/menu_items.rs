@@ -132,8 +132,30 @@ impl Ui {
         ]
     }
 
-    /// The measurement menu.
+    /// The measurement menu: upstream's rows in the Default layout; Minimal and Studio open the levels and the
+    /// statistics as pages of their own.
     pub(super) fn measure_items(&self) -> Vec<Item> {
+        if self.m.layout == Layout::Default {
+            return vec![
+                Item::MeasSrc,
+                Item::MeasSrcB,
+                Item::MeasCopyTo,
+                Item::MeasGate,
+                Item::MeasRefs,
+                Item::MeasStats,
+                Item::MeasLabels,
+                Item::StripDock,
+                Item::MeasIdle,
+                Item::MeasTsetup,
+                Item::MeasThold,
+                Item::MeasOutside,
+                Item::MeasN,
+                Item::MeasEdges,
+                Item::Open(MenuId::MeasPair),
+                Item::Open(MenuId::Dvm),
+                Item::MeasClear,
+            ];
+        }
         let mut v = vec![
             Item::MeasSrc,
             Item::MeasSrcB,
@@ -164,6 +186,30 @@ impl Ui {
             v.splice(at..=at, self.items(MenuId::MeasLevels));
         }
         v
+    }
+
+    /// Refs offers upstream's 10/90 and 20/80; Custom only while the levels are custom (an edit of Low, Mid or High on
+    /// the levels page makes them so).
+    pub(super) fn refs_custom_offered(&self) -> bool {
+        self.m.meas_lv.custom
+    }
+
+    /// The places of the measurement strip that the Dock row offers: upstream's four in the Default layout (and Hidden
+    /// while it is the one chosen), every one in Minimal and Studio.
+    pub(super) fn strip_docks(&self) -> Vec<StripDock> {
+        StripDock::ALL
+            .into_iter()
+            .filter(|&d| self.m.layout != Layout::Default || d != StripDock::Hidden || self.m.strip_dock == d)
+            .collect()
+    }
+
+    /// A place of the strip by the name its row shows: upstream's names in the Default layout.
+    pub(super) fn strip_dock_label(&self, d: StripDock) -> &'static str {
+        match (self.m.layout, d) {
+            (Layout::Default, StripDock::Below) => "Under",
+            (Layout::Default, StripDock::Above) => "Above",
+            _ => d.label(),
+        }
     }
 
     /// The reference menu; Load only with its feature on.
