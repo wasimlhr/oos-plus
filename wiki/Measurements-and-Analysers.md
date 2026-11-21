@@ -217,7 +217,8 @@ Harmonics in the Spectrum menu sets how far the view follows the signal, All sho
 
 ![Eye](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/eye.png)
 
-White figures are measured, amber ones come from a model. Where data is missing the page says what it needs.
+White figures are measured, amber ones come from a model. Where data is missing the page says what it needs. Edges are
+timed at the middle of the source's Top and Base, the same levels the Top and Base measurements show.
 
 ## High resolution
 
