@@ -1144,8 +1144,8 @@ impl Ui {
         let ch = &self.m.ch[c];
         let to = if ch.coupling == Coupling::Ac { Coupling::Dc } else { Coupling::Ac };
         let mut rows = Vec::new();
-        if board().couplings().contains(&to) { rows.push((format!("Coupling {}, set {}", ch.coupling.name(), to.name()), Action::ChCoupling(c))); }
-        rows.push((format!("Invert {}", if ch.invert { "On, set Off" } else { "Off, set On" }), Action::ChInvert(c)));
+        if board().couplings().contains(&to) { rows.push((format!("Coupling to {}", to.name()), Action::ChCoupling(c))); }
+        rows.push((if ch.invert { "Invert off" } else { "Invert on" }.to_string(), Action::ChInvert(c)));
         rows.push((if self.m.ch_hidden[c] { "Show trace" } else { "Hide trace" }.to_string(), Action::ChHide(c)));
         rows.push(("Zero offset".into(), Action::ChZero(c)));
         // Studio: the first row is the one people look for

@@ -61,19 +61,18 @@ impl Ui {
         let toast = self.toast.take();
         let keep = (self.xy, self.full.on, self.results.on);
         (self.xy, self.full.on, self.results.on) = (xy, full, stats);
+        self.azr.swap_monitor();
         let r = f(self);
+        self.azr.swap_monitor();
         self.m = panel;
         (self.xy, self.full.on, self.results.on) = keep;
         self.toast = toast;
         Some(r)
     }
 
-    /// The monitor view's analyser page or second pane, where it is not the panel's: worked out beside it.
+    /// The monitor view's analyser page or second pane: worked out beside the panel's, into its own results (the same
+    /// page can have another source or other settings there).
     pub(super) fn monitor_analyzer_update(&mut self) {
-        let Some((m, _, _)) = self.monitor_view() else { return };
-        if m.view == self.m.view && m.pane == self.m.pane {
-            return;
-        }
         self.with_monitor_view(|u| u.analyzer_update());
     }
 
@@ -151,6 +150,33 @@ mod tests {
         u.view_go(0);
         u.m.hdmi = HdmiMode::Mirror;
         assert!(u.monitor_view().is_none());
+    }
+
+    // Break it catches: the monitor's analyser page written over the panel's. On a unit, 2026-11-20, the panel's
+    // spectrum of CH3 drew the CH2 spectrum of the monitor's view, and `:SPECtrum:PEAK:LIST?` answered it
+    #[test]
+    fn each_view_keeps_its_own_spectrum() {
+        let mut u = ui();
+        u.m.ch[1].on = true;
+        // view 2: the spectrum of CH1; the panel: the spectrum of CH2
+        u.view_go(1);
+        u.m.view = AView::Spectrum;
+        u.m.spec_src = WaveId::Ch(0);
+        u.view_go(0);
+        u.m.view = AView::Spectrum;
+        u.m.spec_src = WaveId::Ch(1);
+        u.m.hdmi_view = 2;
+        for _ in 0..4 {
+            u.step(0.05);
+        }
+        let lines = |u: &Ui| u.azr.peaks.iter().map(|p| p.f).collect::<Vec<_>>();
+        u.analyzer_update();
+        let panel = lines(&u);
+        assert!(!panel.is_empty(), "the panel's spectrum");
+        u.monitor_analyzer_update();
+        assert_eq!(lines(&u), panel, "the panel's lines after the monitor's update");
+        let monitor = u.with_monitor_view(|u| lines(u)).expect("view 2 on the monitor");
+        assert!(!monitor.is_empty() && monitor != panel, "the monitor's own: {monitor:?} {panel:?}");
     }
 
     #[test]

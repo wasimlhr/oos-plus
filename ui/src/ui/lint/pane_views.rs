@@ -237,6 +237,31 @@ fn the_peak_list_of_a_spectrum_view_stays_inside_the_view() {
     assert!(u.spec_box(own, false).sort.y >= zoom.bottom(), "under the buttons of its own column");
 }
 
+/// The spectrum view of Studio: with the overflow button alone at the top of the peak column, the sort button sits on
+/// its line, left of it, and the list starts under the two (the owner: both on one line).
+#[test]
+fn the_sort_button_of_a_studio_spectrum_view_shares_the_line_of_the_overflow_button() {
+    let mut u = crate::ui::testkit::demo_ui();
+    u.m.layout = Layout::Studio;
+    u.m.view = AView::Spectrum;
+    // the analyser view over the waveform, as on the unit
+    u.m.studio_dock = "V0.545(A,W)".into();
+    u.restore_view_state();
+    u.relayout();
+    let mut cv = Canvas::new(PANEL_W, PANEL_H);
+    for _ in 0..4 {
+        u.render(&mut cv);
+        u.step(0.05);
+    }
+    let a = u.view_tile_rect().expect("the spectrum's own view");
+    assert!(a.w >= panes::SPEC_NARROW_W, "wide enough for the list: {a:?}");
+    let more = u.view_btn();
+    let b = u.spec_box(a, false);
+    assert_eq!((b.sort.y, b.sort.h), (more.y, more.h), "one line: {:?} {more:?}", b.sort);
+    assert!(b.sort.w >= 120 && !overlaps(b.sort, more) && b.list.y > b.sort.bottom(), "{:?} {:?}", b.sort, b.list);
+    assert!(b.sort.right() < more.x, "left of it");
+}
+
 /// The sort button of the peak list and the overflow button of an analyser's view are drawn smaller than the area
 /// that takes the finger: at the size of that area they were the largest things of the view.
 #[test]
