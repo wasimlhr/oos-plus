@@ -33,8 +33,12 @@ pub fn infer(v: &[f32], dt: f64, requested: Option<f64>, explicit_clock: bool) -
     // an explicit clock keeps its threshold at the middle of the extremes and its hysteresis from the levels of
     // `stats`, as before: a wider band (the extremes of a clock with overshoot) loses the transitions of its bursts
     let level = if explicit_clock { None } else { decision_level(v) };
-    let stats_amplitude = if st.valid { (st.top - st.base).max(span * 0.25) } else { span };
-    let amplitude = level.map_or(stats_amplitude, |(_, a)| a.max(span * 0.25));
+    // data without two levels takes the whole span, as the eye page's own recovery does (`automatic::infer`)
+    let amplitude = if explicit_clock {
+        if st.valid { (st.top - st.base).max(span * 0.25) } else { span }
+    } else {
+        level.map_or(span, |(_, a)| a.max(span * 0.25))
+    };
     let threshold = level.map_or(0.5 * (st.vmax + st.vmin), |(t, _)| t);
     // Voltage thresholds follow the data, never the waveform's display zoom.
     let hysteresis = amplitude * if explicit_clock { 0.2 } else { 0.1 };
@@ -153,6 +157,11 @@ mod tests {
         let mut v = vec![0.5f32; 4000];
         (v[100], v[200]) = (0.0, 1.0);
         assert_eq!(decision_level(&v), None);
+        // data without two levels: the hysteresis of the whole span (0.1 of 1 V), as the PLL path of the eye page
+        let (summary, _) = infer(&v, 1e-9, Some(1e6), false).map_or((None, ()), |(s, _)| (Some(s), ()));
+        if let Some(summary) = summary {
+            assert!((summary.hysteresis - 0.1).abs() < 1e-3, "{}", summary.hysteresis);
+        }
         // a 0/1 V clock with one excursion to -0.5 and 1.5 V: the hysteresis is of its levels, not of its extremes
         let mut clk: Vec<f32> = (0..4000).map(|i| if (i / 10) % 2 == 0 { 1.0 } else { 0.0 }).collect();
         (clk[5], clk[15]) = (1.5, -0.5);
