@@ -660,7 +660,11 @@ impl Ui {
         if let Some(e) = self.dec_cache.borrow().iter().find(|e| e.0 == key) {
             return Ok(std::sync::Arc::new(e.1.clone()));
         }
-        let mut p = crate::trig::decode(m, std::array::from_fn(|c| &rec.ch[c][..]), rec.dt)?;
+        // (a screen record of min/max pairs is read as `trig::decode` reads a Peak detect record)
+        let means: [Vec<f32>; NCH] =
+            std::array::from_fn(|c| if rec.pairs { crate::trig::pair_means(&rec.ch[c]) } else { Vec::new() });
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if rec.pairs { &means[c][..] } else { &rec.ch[c][..] });
+        let mut p = crate::trig::decode(m, ch, rec.dt)?;
         for x in p.iter_mut() {
             x.t0 = rec.t0 + x.t0 * rec.dt;
             x.t1 = rec.t0 + x.t1 * rec.dt;
