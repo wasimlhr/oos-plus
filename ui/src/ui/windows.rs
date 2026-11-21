@@ -770,7 +770,7 @@ mod tests {
         use crate::wave::{place, Stats};
         let mut m = Model { win_layout: WinLayout::Rows, ch_win: [0, 1, 1, 0], ..Default::default() };
         let s = Stats { vmin: -1.0, vmax: 1.0, ..Stats::default() };
-        place(&mut m, &[(0, s, 1e-3), (1, s, 1e-3), (2, s, 1e-3)]);
+        place(&mut m, &[(0, s, 1e-3), (1, s, 1e-3), (2, s, 1e-3)], true);
         // CH1 alone in window 1: its 2 Vpp fill about 80 % of 8 div, centred
         assert!(
             2.0 / m.ch[0].volts_per_div() >= 3.9 && m.ch[0].offset.abs() < 1e-6,
@@ -788,7 +788,7 @@ mod tests {
         );
         // one window: three bands
         m.win_layout = WinLayout::One;
-        place(&mut m, &[(0, s, 1e-3), (1, s, 1e-3), (2, s, 1e-3)]);
+        place(&mut m, &[(0, s, 1e-3), (1, s, 1e-3), (2, s, 1e-3)], true);
         assert!(2.0 / m.ch[0].volts_per_div() <= 2.2 && m.ch[0].offset > 0.0);
     }
 
