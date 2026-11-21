@@ -4,6 +4,8 @@
 use super::*;
 
 const LAYOUTS: [Layout; 3] = [Layout::Default, Layout::Minimal, Layout::Studio];
+/// The layouts with the fork's own touch model; Default takes the touches of upstream OOS (tests at the end).
+const COMPACT: [Layout; 2] = [Layout::Minimal, Layout::Studio];
 
 fn layout(l: Layout) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
@@ -40,8 +42,8 @@ fn there_is_one_long_press_time() {
 }
 
 #[test]
-fn a_hold_on_a_channel_chip_opens_its_quick_actions_in_every_layout() {
-    for l in LAYOUTS {
+fn a_hold_on_a_channel_chip_opens_its_quick_actions_in_minimal_and_studio() {
+    for l in COMPACT {
         let mut u = layout(l);
         let coupling = u.m.ch[0].coupling;
         let (x, y) = centre(chip(&u, 0));
@@ -73,7 +75,7 @@ fn hold_more(u: &mut Ui, secs: f64) {
 
 #[test]
 fn a_hold_on_a_lane_badge_or_marker_opens_the_same_quick_actions() {
-    for l in LAYOUTS {
+    for l in COMPACT {
         let mut u = layout(l);
         let (x, y) = if l == Layout::Studio {
             centre(u.studio.lane_badges.borrow().iter().find(|b| b.0 == 0).unwrap().1)
@@ -91,7 +93,7 @@ fn a_hold_on_a_lane_badge_or_marker_opens_the_same_quick_actions() {
 
 #[test]
 fn a_ring_fills_under_a_held_finger_and_the_popup_has_a_title_a_close_and_finger_sized_rows() {
-    for l in LAYOUTS {
+    for l in COMPACT {
         let mut u = layout(l);
         let (x, y) = centre(chip(&u, 0));
         touch(&mut u, Phase::Down, x, y);
@@ -188,8 +190,8 @@ fn zoom_bar_buttons_take_a_40_px_touch_in_default_and_studio() {
 fn toast_text(u: &Ui) -> String { u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default() }
 
 #[test]
-fn the_trigger_marker_opens_trigger_in_every_layout() {
-    for l in LAYOUTS {
+fn the_trigger_marker_opens_trigger_in_minimal_and_studio() {
+    for l in COMPACT {
         let mut u = layout(l);
         let rects = u.trigger_marker_rects();
         assert!(!rects.is_empty(), "{l:?}");
@@ -211,7 +213,7 @@ fn the_trigger_marker_opens_trigger_in_every_layout() {
 
 #[test]
 fn a_cursor_tag_selects_that_cursor() {
-    for l in LAYOUTS {
+    for l in COMPACT {
         let mut u = layout(l);
         u.m.cursor = CursorMode::Time;
         u.render(&mut Canvas::new(W, H));
@@ -241,7 +243,7 @@ fn on_trace(u: &Ui, c: usize) -> (i32, i32) {
 
 #[test]
 fn a_tap_on_a_trace_or_lane_selects_that_source() {
-    for l in LAYOUTS {
+    for l in COMPACT {
         let mut u = layout(l);
         u.select_workspace_source(WaveId::Ch(0));
         let (x, y) = on_trace(&u, 1);
@@ -259,7 +261,7 @@ fn a_tap_on_a_trace_or_lane_selects_that_source() {
 
 #[test]
 fn a_vertical_drag_moves_the_trace_under_the_finger() {
-    for l in LAYOUTS {
+    for l in COMPACT {
         let mut u = layout(l);
         u.select_workspace_source(WaveId::Ch(0));
         let (o0, o1) = (u.m.ch[0].offset, u.m.ch[1].offset);
@@ -336,33 +338,31 @@ fn finger_tap(u: &mut Ui, x: i32, y: i32) {
     touch(u, Phase::Up, x, y);
 }
 
+/// Default's TIME and trigger cards, as upstream OOS: the lower half of the TIME card toggles the zoom, the upper half
+/// opens Horizontal; the right half of the trigger card steps the source (upper half) and the sweep (lower half), the
+/// rest opens Trigger. The fork had taken the halves away (only the drawn buttons counted); Minimal and Studio have
+/// bars of their own and do not reach these cards.
 #[test]
-fn the_default_time_and_trigger_cards_have_no_hidden_split_targets() {
+fn the_default_time_and_trigger_cards_split_as_upstream() {
     let mut u = layout(Layout::Default);
     let (_, tr, trg) = u.cards();
-    // the lower half of the Time card opens Horizontal; it no longer toggles the zoom
     let zoom = u.m.zoom;
     u.tap(tr.x + tr.w / 2, tr.y + tr.h - 6);
-    assert!(u.menu_open && u.menu == MenuId::Horizontal);
-    assert_eq!(u.m.zoom, zoom);
+    assert!(u.m.zoom != zoom && !u.menu_open, "the lower half of the TIME card toggles the zoom");
+    u.tap(tr.x + tr.w / 2, tr.y + tr.h - 6);
+    assert_eq!(u.m.zoom, zoom, "and back");
+    u.tap(tr.x + tr.w / 2, tr.y + 6);
+    assert!(u.menu_open && u.menu == MenuId::Horizontal, "the upper half opens Horizontal");
     u.close_menu();
-    // the drawn Source button cycles the source, the Mode button the mode; anywhere else on the card opens Trigger
-    let (sb, mb) = Ui::trig_parts(trg);
+    let (sb, _) = Ui::trig_parts(trg);
     let (src, mode) = (u.m.trig_src, u.m.trig_mode);
-    let (x, y) = centre(sb);
-    u.tap(x, y);
-    assert!(u.m.trig_src != src && !u.menu_open);
-    let (x, y) = centre(mb);
-    u.tap(x, y);
-    assert!(u.m.trig_mode != mode && !u.menu_open);
-    // the right edge of the card, beside the buttons, and the lower half under the level are not buttons
+    // beside the buttons, outside what is drawn: still the half that steps
+    u.tap(sb.x - 4, trg.y + 4);
+    assert!(u.m.trig_src != src && !u.menu_open, "the upper right steps the source");
+    u.tap(sb.x - 4, trg.y + trg.h - 4);
+    assert!(u.m.trig_mode != mode && !u.menu_open, "the lower right steps the sweep");
     u.tap(trg.x + 20, trg.y + trg.h - 6);
-    assert!(u.menu_open && u.menu == MenuId::Trigger);
-    u.close_menu();
-    let src = u.m.trig_src;
-    u.tap(sb.right() + 5, sb.y + sb.h + 2);
-    assert_eq!(u.m.trig_src, src);
-    assert!(u.menu_open && u.menu == MenuId::Trigger, "the gap between the buttons is the card's");
+    assert!(u.menu_open && u.menu == MenuId::Trigger, "the left of the card opens Trigger");
 }
 
 fn shot(u: &mut Ui, name: &str) {
@@ -390,4 +390,107 @@ fn shots_hold_ring_and_popups() {
         u.context_menu(g.x + g.w / 2, g.y + g.h / 2);
         shot(&mut u, &format!("b4-{name}-plot-popup"));
     }
+}
+
+/// Default, as upstream OOS: a finger held on a channel's card switches AC/DC coupling (the ring fills while it is
+/// held), no popup, and a hold on the channel's marker opens the plot's menu. Minimal keeps the quick actions
+/// (`a_hold_on_a_channel_chip_opens_its_quick_actions_in_minimal_and_studio`).
+#[test]
+fn a_hold_on_a_default_channel_card_switches_ac_dc() {
+    let mut u = layout(Layout::Default);
+    let coupling = u.m.ch[0].coupling;
+    let (x, y) = centre(chip(&u, 0));
+    hold(&mut u, x, y, 0.3);
+    assert!(u.press_ring().is_some(), "the ring while holding");
+    hold_more(&mut u, 0.3);
+    touch(&mut u, Phase::Up, x, y);
+    assert!(u.workspace.popup.is_none(), "no quick actions in Default");
+    assert!(u.m.ch[0].coupling != coupling, "the hold switched the coupling");
+    assert!(!u.menu_open, "the lift of the hold is no tap");
+    let a = u.plot.area;
+    u.context_menu(a.x + 10, u.y_of_volts(0, 0.0));
+    assert_eq!(u.workspace.popup.as_ref().map(|p| p.title.as_str()), Some("Plot"), "the marker: the plot's menu");
+    let mut u = layout(Layout::Minimal);
+    let coupling = u.m.ch[0].coupling;
+    let (x, y) = centre(chip(&u, 0));
+    hold(&mut u, x, y, LONG_PRESS + 0.1);
+    touch(&mut u, Phase::Up, x, y);
+    assert_eq!(u.workspace.popup.as_ref().map(|p| p.title.as_str()), Some("CH1"), "Minimal: the quick actions");
+    assert_eq!(u.m.ch[0].coupling, coupling);
+}
+
+/// Default, as upstream OOS: a vertical drag on the plot moves the selected channel, wherever the finger is, and a tap
+/// on a trace or on the trigger marker selects nothing and opens nothing. Studio drags the trace under the finger
+/// (`a_vertical_drag_moves_the_trace_under_the_finger`).
+#[test]
+fn a_vertical_drag_in_default_moves_the_active_channel() {
+    let mut u = layout(Layout::Default);
+    u.m.active = 0;
+    u.select_workspace_source(WaveId::Ch(0));
+    let (o0, o1) = (u.m.ch[0].offset, u.m.ch[1].offset);
+    let (x, y) = on_trace(&u, 1);
+    touch(&mut u, Phase::Down, x, y);
+    for k in 1..=4 { touch(&mut u, Phase::Move, x, y + k * 10); }
+    touch(&mut u, Phase::Up, x, y + 40);
+    assert!(u.m.ch[0].offset != o0, "the active channel moved");
+    assert_eq!(u.m.ch[1].offset, o1, "the trace under the finger stays");
+    assert_eq!(u.selected_workspace_source(), Some(WaveId::Ch(0)));
+    let (x, y) = on_trace(&u, 1);
+    finger_tap(&mut u, x, y);
+    assert_eq!(u.selected_workspace_source(), Some(WaveId::Ch(0)), "a tap on a trace selects nothing");
+    let (tx, ty) = centre(u.trigger_marker_rects()[0]);
+    u.tap(tx, ty);
+    assert!(!u.menu_open, "the trigger marker opens nothing");
+    let mut u = layout(Layout::Studio);
+    u.select_workspace_source(WaveId::Ch(0));
+    let (o0, o1) = (u.m.ch[0].offset, u.m.ch[1].offset);
+    let (x, y) = on_trace(&u, 1);
+    touch(&mut u, Phase::Down, x, y);
+    for k in 1..=4 { touch(&mut u, Phase::Move, x, y + k * 10); }
+    touch(&mut u, Phase::Up, x, y + 40);
+    assert_eq!(u.m.ch[0].offset, o0, "Studio: the selected channel stays");
+    assert!(u.m.ch[1].offset != o1, "Studio: the trace under the finger moved");
+}
+
+/// Default, as upstream OOS: a push of the horizontal SCALE knob opens and closes the zoom and leaves the time base in
+/// its 1-2-5 steps; Minimal keeps the fine time base on the push (`a_push_of_the_time_knob_switches_the_fine_steps`).
+#[test]
+fn a_push_of_the_time_knob_in_default_toggles_the_zoom() {
+    let mut u = layout(Layout::Default);
+    assert!(!u.m.zoom && !u.m.fine_t);
+    u.key(key::HSCALE_CW + 2);
+    assert!(u.m.zoom && !u.m.fine_t, "the push opens the zoom");
+    u.key(key::HSCALE_CW + 2);
+    assert!(!u.m.zoom && !u.m.fine_t, "and closes it");
+    let mut u = layout(Layout::Minimal);
+    u.key(key::HSCALE_CW + 2);
+    assert!(!u.m.zoom && u.m.fine_t, "Minimal: the fine steps");
+}
+
+/// Default, as upstream OOS: with the cursors on, the multipurpose knobs keep their job: with no menu open a turn opens
+/// the Menu, and in the Cursor menu the first knob goes through the rows. Minimal and Studio give the knobs to the
+/// cursors (`the_multipurpose_knobs_move_the_cursors`).
+#[test]
+fn the_multipurpose_knobs_keep_their_job_with_cursors_in_default() {
+    const A_CW: u8 = 0xba;
+    let mut u = layout(Layout::Default);
+    u.m.cursor = CursorMode::Time;
+    let (a, b) = (u.m.cur_a, u.m.cur_b);
+    u.now += 1.0;
+    u.key(A_CW);
+    assert!(u.menu_open && u.menu == MenuId::Main, "a turn opens the Menu");
+    assert_eq!((u.m.cur_a, u.m.cur_b), (a, b));
+    u.close_menu();
+    u.open_menu(MenuId::Cursor);
+    let focus = u.focus;
+    u.now += 1.0;
+    u.key(A_CW);
+    assert!(u.focus != focus && u.menu == MenuId::Cursor, "the first knob goes through the rows");
+    assert_eq!((u.m.cur_a, u.m.cur_b), (a, b), "no cursor moved");
+    let mut u = layout(Layout::Minimal);
+    u.m.cursor = CursorMode::Time;
+    let a = u.m.cur_a;
+    u.now += 1.0;
+    u.key(A_CW);
+    assert!(u.m.cur_a > a && !u.menu_open, "Minimal: knob 1 moves cursor A");
 }

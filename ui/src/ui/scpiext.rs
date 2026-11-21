@@ -37,8 +37,8 @@ pub(super) fn pick<T: Copy + PartialEq>(q: bool, arg: &str, cur: &mut T, table: 
 }
 
 impl Ui {
-    /// A trigger level (`TrigLevel` or `TrigLevel2`) by SCPI: the query answers the level, a number sets it limited to
-    /// the range of the table, like the stepper and the number pad (a level beyond the screen is not an error).
+    /// A trigger level (`TrigLevel` or `TrigLevel2`) by SCPI: the query answers the level, a number sets it as it is
+    /// (`scpi_range_set`; a level beyond the screen is not an error).
     pub(super) fn scpi_level(&mut self, q: bool, arg: &str, it: Item) -> Reply {
         if q { return t(en(self.range_get(it).unwrap_or(0.0))); }
         match num(arg).filter(|v| v.is_finite()) {

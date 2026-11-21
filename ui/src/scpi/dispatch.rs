@@ -21,12 +21,6 @@ use crate::gfx::Canvas;
 use crate::model::*;
 use crate::ui::Ui;
 
-/// The offset a channel keeps when its scale or probe changes: within what the front end can shift at that scale.
-fn clamp_channel_offset(ch: &mut Channel) {
-    let max = ch.offset_max();
-    ch.offset = ch.offset.clamp(-max, max);
-}
-
 impl Scpi {
     pub(super) fn exec_cmd(&mut self, ui: &mut Ui, cv: &Canvas, cmd: &str) -> Option<Vec<u8>> {
         if cmd.is_empty() {
@@ -1106,14 +1100,11 @@ impl Scpi {
                 if expand_gnd && old > 0.0 {
                     ch.offset *= ch.volts_per_div() / old;
                 }
-                clamp_channel_offset(ch);
             } else if kw(n1, "OFFSet") || kw(n1, "POSition") {
                 if query {
                     return Some(t(&e(ch.offset as f64)));
                 }
-                let Some(v) = num(arg) else { return None };
-                ch.offset = v;
-                clamp_channel_offset(ch);
+                ch.offset = num(arg)?;
             } else if kw(n1, "COUPling") {
                 if query {
                     return Some(t(ch.coupling.name()));
@@ -1130,7 +1121,6 @@ impl Scpi {
                     return Some(t(&e(ch.probe as f64)));
                 }
                 ch.probe = num(arg).filter(|&p| p > 0.0)?;
-                clamp_channel_offset(ch);
             } else if kw(n1, "BIAS") {
                 // The screen's zero correction, subtracted from the channel reading.
                 // The DHO programmer manual has no header for it.
