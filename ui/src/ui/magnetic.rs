@@ -158,7 +158,7 @@ impl Ui {
     }
 
     pub(super) fn draw_magnetic(&self, cv: &mut Canvas) {
-        let a = self.area;
+        let a = self.plot.area;
         let m = &self.m;
         let bh = m.mag_plot == MagPlot::BH && m.mag_ae > 0.0 && m.mag_le > 0.0;
         let (n, ae, le) = (m.mag_n.max(1.0), m.mag_ae, m.mag_le);
@@ -422,16 +422,13 @@ impl Ui {
             req.iter().map(|(id, s)| (*id, s)).chain(opt_s.iter().flatten().map(|(id, s)| (*id, s))).collect();
         let refs: Vec<(WaveId, &WaveSamp)> =
             pool.iter().copied().filter(|(id, _)| matches!(id, WaveId::Ref(_))).collect();
-        let grid = if refs.is_empty() {
-            pool[0]
-        } else {
-            let best = refs.iter().map(|(_, s)| s.dt).min_by(|a, b| a.total_cmp(b)).unwrap_or(0.0);
-            *refs
-                .iter()
-                .filter(|(_, s)| (s.dt - best).abs() <= best.abs() * 1e-9)
-                .max_by_key(|(_, s)| s.v.len())
-                .unwrap()
-        };
+        let best = refs.iter().map(|(_, s)| s.dt).min_by(|a, b| a.total_cmp(b)).unwrap_or(0.0);
+        // the reference of the finest step leads, the first source when there is no reference
+        let grid = *refs
+            .iter()
+            .filter(|(_, s)| (s.dt - best).abs() <= best.abs() * 1e-9)
+            .max_by_key(|(_, s)| s.v.len())
+            .unwrap_or(&pool[0]);
         let (t0, dt, n) = (grid.1.t0, grid.1.dt, grid.1.v.len());
         let mut moved = false;
         let mut v = Vec::with_capacity(req.len());

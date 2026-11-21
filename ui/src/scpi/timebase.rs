@@ -5,7 +5,7 @@
 //! A new `:TIMebase` command goes into `timebase_cmd` here, with its line in docs/scpi.md and its query in
 //! ui/tests/scpi.txt (AGENTS.md).
 
-use super::{e, kw, nearest, num, parse_bool, parse_ch, Scpi};
+use super::{e, kw, nearest, num, parse_bool, parse_ch, t, Scpi};
 use crate::board::Board;
 use crate::model::*;
 use crate::ui::Ui;
@@ -52,7 +52,6 @@ pub(super) fn set_time_scale(m: &mut Model, want: f32) {
 impl Scpi {
     /// `:TIMebase` (`nodes` with the root).
     pub(super) fn timebase_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n = &nodes[1..];
         let n0 = n.first().copied().unwrap_or("");
         // scale and position; delayed sweep, XY, the expand point and fine adjust below
@@ -132,7 +131,6 @@ impl Scpi {
 
     /// `:TIMebase:HREFerence:MODE`: the point the scale expands around.
     fn timebase_href(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         if query {
             return t(match ui.m.h_expand {
                 HExpand::Center => "CENT",
@@ -160,7 +158,6 @@ impl Scpi {
 
     /// `:TIMebase:DELay:ENABle|SCALe|OFFSet|POSition`: the zoom window (`n` without the root).
     fn timebase_delay(&mut self, ui: &mut Ui, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         if kw(n[1], "ENABle") {
             if query {
                 return t(if ui.m.zoom { "1" } else { "0" });
@@ -214,7 +211,6 @@ impl Scpi {
 
     /// `:TIMebase:MODE`: MAIN or XY.
     fn timebase_mode(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         // MAIN is YT. XY is the screen's XY plot. This screen has no forced roll mode; auto roll is :TIMebase:ROLL.
         // The query names XY while that plot is on, so a controller can read the mode it just set.
         if query {
@@ -234,7 +230,6 @@ impl Scpi {
 
     /// `:TIMebase:XY:ENABle|X|Y|Z`: the XY plot (`n` without the root).
     fn timebase_xy(&mut self, ui: &mut Ui, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         if kw(n[1], "ENABle") {
             if query {
                 return t(if ui.xy_on() { "1" } else { "0" });

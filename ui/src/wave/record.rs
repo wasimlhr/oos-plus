@@ -4,8 +4,9 @@
 //! A frame of the hardware made into a screen record: software trigger near the hardware trigger point, then the
 //! screen window. Board-neutral: it works on frames in volts.
 
-use super::Frame;
+use crate::board::Frame;
 use crate::model::*;
+use crate::platform::Platform;
 use std::sync::Arc;
 
 /// The level the software trigger looks for on the samples of the source: the set level, and with AC or LF-reject
@@ -13,18 +14,30 @@ use std::sync::Arc;
 /// trigger.md 2.5; the frame holds the signal as the channel's own coupling gives it). At most 4096 samples of the
 /// frame enter the mean.
 pub fn sw_trig_level(m: &Model, f: &Frame) -> f32 {
+    m.trig_level + trig_mean(m, &f.ch[m.trig_src.min(NCH - 1)])
+}
+
+/// What the trigger's coupling takes off the source `v` before its comparators: with AC or LF-reject the mean (at most
+/// 4096 samples of `v`), else nothing. The trigger level is set from there (`sw_trig_level`, level 50 %). Verified on
+/// the unit: AC and LF reject remove the DC and their level counts from the filtered signal (trigger.md 2.5,
+/// 2026-11-13); level 50 % from this mean fires on a 0 to 2 V square, from the middle in volts it did not (#279,
+/// 2026-11-20). That the removed part is the mean over the record is assumed.
+pub fn trig_mean(m: &Model, v: &[f32]) -> f32 {
     match m.trig_coupling() {
         TrigCoup::Ac | TrigCoup::LfReject => {
-            let v = &f.ch[m.trig_src.min(NCH - 1)];
             let step = (v.len() / 4096).max(1);
             let (sum, n) = v
                 .iter()
                 .step_by(step)
                 .filter(|y| y.is_finite())
                 .fold((0.0f64, 0u32), |(s, n), &y| (s + y as f64, n + 1));
-            m.trig_level + if n > 0 { (sum / n as f64) as f32 } else { 0.0 }
+            if n > 0 {
+                (sum / n as f64) as f32
+            } else {
+                0.0
+            }
         }
-        TrigCoup::Dc | TrigCoup::HfReject => m.trig_level,
+        TrigCoup::Dc | TrigCoup::HfReject => 0.0,
     }
 }
 
@@ -38,7 +51,7 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
     // the hardware trigger already put the event near `pre`: look a tenth of a screen around it, plus the time the
     // trigger condition needs before its decision (pulse widths, timeouts, Nth-edge idle time)
     let near = (screen / 10).max(2000);
-    let span = (m.trig_span() / f.dt).ceil().max(0.0) as usize;
+    let span = (crate::trig::span(m) / f.dt).ceil().max(0.0) as usize;
     // the protocol trigger reads frames: one whose field stands near the hardware point is read to its end, a frame
     // further. A decoder gives nothing of a frame that is cut off (CAN: seen on a unit, an identifier at the trigger
     // point was found only in frames that ended within a tenth of a screen after it)
@@ -392,7 +405,7 @@ mod tests {
             // (its baud rate, bits ...: the traffic is made for them)
             crate::ui::Ui::dec_apply_rows(&mut m, p.setup().rows);
             // 50 samples a bit and 400 000 of them or more: the search region is 2000 samples each way
-            let dt = m.bus_bit() / 50.0;
+            let dt = crate::protocols::Decoder::bus_bit(&m) / 50.0;
             let n = ((3.0 * d.period / dt) as usize).clamp(400_000, 3_000_000);
             let ch: [Vec<f32>; NCH] = std::array::from_fn(|k| match &d.lines[k] {
                 Some(f) => (0..n).map(|j| f((j as f64 * dt).rem_euclid(d.period)) as f32).collect(),
@@ -400,7 +413,7 @@ mod tests {
             });
             let lines: [&[f32]; NCH] = std::array::from_fn(|k| &ch[k][..]);
             let pk = crate::trig::decode(&m, lines, dt).unwrap_or_else(|e| panic!("{}: {e}", p.name()));
-            let (window, span) = (20_000.0 * dt, m.trig_span() / dt);
+            let (window, span) = (20_000.0 * dt, crate::trig::span(&m) / dt);
             let inside = |t: f64| t > 60_000.0 && t < n as f64 - 60_000.0 - span;
             let found = |m: &Model, t: f64| {
                 let f = Arc::new(Frame { seq: 1, dt, pre: t.round() as usize, ch: ch.clone(), ..Default::default() });
@@ -688,7 +701,7 @@ mod bench {
             for _ in 0..n {
                 let t0 = std::time::Instant::now();
                 let ti =
-                    crate::fastdraw::edge_near(&fr.ch[0], fr.pre, 0.0, 0.0, true, false, 16).unwrap_or(fr.pre as f64);
+                    oos_dsp::edges::edge_near(&fr.ch[0], fr.pre, 0.0, 0.0, true, false, 16).unwrap_or(fr.pre as f64);
                 let xm = crate::fastdraw::Map {
                     ti,
                     x_per_sample: dt / window * 970.0,

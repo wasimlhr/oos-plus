@@ -19,7 +19,7 @@ fn native(count: usize) -> Ui {
         basic: [basic, Default::default(), Default::default(), Default::default()],
         ..Default::default()
     });
-    let mut record = crate::board::to_record(&frame, &ui.m, 3600, count as f64 * 1e-9, -(count as f64) * 0.5e-9);
+    let mut record = crate::wave::to_record(&frame, &ui.m, 3600, count as f64 * 1e-9, -(count as f64) * 0.5e-9);
     // A physical origin away from trigger zero catches timestamp/gate errors.
     record.raw.as_mut().unwrap().t0 = 0.01 + record.raw.as_ref().unwrap().i0 as f64 * frame.dt;
     ui.last[0] = Some(record);
@@ -53,7 +53,7 @@ fn native_full_basic_values_are_inline_and_do_not_start_edge_analysis() {
     assert!(start.elapsed() < Duration::from_millis(250));
     assert!(ui.azr.ref_measure_worker.borrow().is_none());
     assert_eq!(ui.measurement_statistics_snapshot_for_test(), before, "polling never counts an acquisition");
-    assert!(ui.ana[0].rises.is_empty());
+    assert!(ui.measured.ch[0].rises.is_empty());
     assert!(!ui.measurement_busy());
 }
 
@@ -83,7 +83,7 @@ fn native_full_edge_job_is_nonblocking_shared_and_reused_after_pan() {
     assert!(Arc::ptr_eq(&analysis, &again));
     assert_eq!(again_t0, t0);
     assert_eq!(ui.azr.ref_measure_worker.borrow().as_ref().unwrap().submitted, 1);
-    assert_eq!((ui.m.run, ui.records), (RunState::Stop, 0));
+    assert_eq!((ui.m.run, ui.counts.records), (RunState::Stop, 0));
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn large_screen_pan_rejects_old_gate_and_preserves_native_timebase() {
     assert!(t0 > 0.0106 && t0 < 0.0107);
     assert!((analysis.get(Meas::Period) - 40e-9).abs() < 1e-12);
     assert_eq!(ui.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.dt, 1e-9);
-    assert_eq!((ui.m.run, ui.records), (RunState::Stop, 0));
+    assert_eq!((ui.m.run, ui.counts.records), (RunState::Stop, 0));
 }
 
 #[test]
@@ -126,14 +126,14 @@ fn native_cache_rejects_conditioning_changes_and_new_acceptance_without_mutating
     assert_eq!(frame.ch[0][0].to_bits(), original, "settings invalidate results, not immutable captures");
     // Replay can keep seq=1 and an allocator may repeat addresses. The accepted
     // acquisition counter must still invalidate that otherwise identical key.
-    ui.wfm_total += 1;
+    ui.counts.wfm_total += 1;
     let accepted = ui.channel_measurement_key(0, false).unwrap().0;
     assert!(accepted != changed);
     assert!(ui.channel_measurement(0, true).is_none());
     let _ = wait(&mut ui);
     assert_eq!(ui.azr.ch_measure[0].borrow().as_ref().unwrap().key, accepted);
     assert_eq!(frame.ch[0][0].to_bits(), original);
-    assert_eq!((ui.m.run, ui.records), (RunState::Stop, 0));
+    assert_eq!((ui.m.run, ui.counts.records), (RunState::Stop, 0));
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn min_max_pairs_are_measured_in_time_on_the_mean_of_neighbours_on_every_path() 
     // the frame loop's path (measure_channels) and the one of SCPI and the screen numbers (channel_measurement)
     let record=sine_pairs_record(true);
     ui.measure_rec(&record);
-    assert!((ui.ana[0].get(Meas::Freq)-40.0).abs()<0.05,"measure_channels: {}",ui.ana[0].get(Meas::Freq));
+    assert!((ui.measured.ch[0].get(Meas::Freq)-40.0).abs()<0.05,"measure_channels: {}",ui.measured.ch[0].get(Meas::Freq));
     ui.last[0]=Some(record);ui.measure_last();
     let key=ui.channel_measurement_key(0,false).unwrap().0;assert!(key.pairs);
     assert!((ui.meas_at(WaveId::Ch(0),Meas::Freq)-40.0).abs()<0.05,"channel_measurement: {}",ui.meas_at(WaveId::Ch(0),Meas::Freq));
@@ -223,11 +223,11 @@ fn next_record(u: &mut Ui) {
     let last = u.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.as_ref().clone();
     let frame = Arc::new(crate::board::Frame { seq: last.seq + 1, ..last });
     let count = frame.ch[0].len() as f64;
-    let mut record = crate::board::to_record(&frame, &u.m, 3600, count * 1e-9, -count * 0.5e-9);
+    let mut record = crate::wave::to_record(&frame, &u.m, 3600, count * 1e-9, -count * 0.5e-9);
     // as on hardware: the trigger point is a fraction of a sample, another one in every record
     record.raw.as_mut().unwrap().t0 += frame.seq as f64 * 0.37e-9;
     u.last[0] = Some(record);
-    u.wfm_total += 1;
+    u.counts.wfm_total += 1;
     u.measure_last();
 }
 

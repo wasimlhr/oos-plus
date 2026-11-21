@@ -71,7 +71,7 @@ impl Ui {
     /// The lane being drawn (`cur_win`) as a source, in Studio's stacked lanes.
     fn studio_cur_trace(&self) -> Option<Trace> {
         if self.m.layout != Layout::Studio || !self.stacked() { return None; }
-        self.trace_sources().get(self.cur_win).copied()
+        self.trace_sources().get(self.plot.cur_win).copied()
     }
 
     /// The single zoom lane, while it is still a lane.
@@ -119,7 +119,7 @@ impl Ui {
     /// The vertical zoom applies to this lane rectangle (every detail lane, or the chosen one).
     pub(super) fn studio_vzoom_covers(&self, area: Rect) -> bool {
         let Some(z) = self.studio_zoom_lane() else { return true };
-        self.trace_sources().iter().position(|t| *t == z).and_then(|i| self.wins.get(i)).is_some_and(|w| *w == area)
+        self.trace_sources().iter().position(|t| *t == z).and_then(|i| self.plot.wins.get(i)).is_some_and(|w| *w == area)
     }
 
     // ------------------------------------------------------------------------------------------ own horizontal
@@ -256,7 +256,7 @@ impl Ui {
         if self.m.layout != Layout::Studio { return; }
         let Some((t0, x, y)) = self.studio.sz.press else { return };
         if self.studio.sz.fired || self.now - t0 < LONG_PRESS { return; }
-        if self.m.touch_lock || self.full_on() || self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() { return; }
+        if self.m.touch_lock || self.full_on() || self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() { return; }
         if self.touch.down && self.touch.drag != Drag::None && self.touch.drag != Drag::Pending { return; }
         if !self.view_on() && self.zoom_btn().1.contains(x, y) {
             self.studio.sz.fired = true;
@@ -335,7 +335,7 @@ impl Ui {
                     if matches!(part, ZPart::XPlus | ZPart::YPlus) { cv.vline(cx, cy - 6, cy + 6, TEXT); }
                     let label = match part {
                         ZPart::XMinus => Some(format!("X zoom {}", zoom_text_of(self.studio_sz_xfactor()))),
-                        ZPart::YMinus => Some(format!("Y zoom {}", zoom_text_of(self.zoom_vfactor))),
+                        ZPart::YMinus => Some(format!("Y zoom {}", zoom_text_of(self.zoom_view.vfactor))),
                         _ => None,
                     };
                     if let Some(label) = label {

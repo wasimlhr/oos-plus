@@ -43,10 +43,10 @@ impl Services {
         ui.lan_web_port = self.web.port();
         let bound = |port: Option<u16>| port.map_or_else(|| "unavailable".into(), |p| p.to_string());
         if crate::net::loopback_only() {
-            ui.net = Ipv4Addr::LOCALHOST.to_string();
-            ui.net_if = "lo".into();
-            ui.eth_link = false;
-            ui.net_ifs = vec![("lo".into(), ui.net.clone())];
+            ui.net.addr = Ipv4Addr::LOCALHOST.to_string();
+            ui.net.iface = "lo".into();
+            ui.net.eth_link = false;
+            ui.net.ifs = vec![("lo".into(), ui.net.addr.clone())];
             ui.lan_status = format!("SCPI {} / HiSLIP {} on this PC only (start with --lan for the network)", bound(self.scpi.port()), bound(self.hislip.port()));
             return;
         }
@@ -57,10 +57,10 @@ impl Services {
             match socket.local_addr().ok()?.ip() { std::net::IpAddr::V4(ip) => Some(ip.octets()), _ => None }
         }).filter(|ip| addresses.contains(ip));
         let primary = routed.or_else(|| addresses.first().copied());
-        ui.net = primary.map(|a| Ipv4Addr::from(a).to_string()).unwrap_or_default();
-        ui.net_if = "eth0".into();
-        ui.eth_link = primary.is_some();
-        ui.net_ifs = primary.into_iter().map(|ip| ("eth0".into(), Ipv4Addr::from(ip).to_string()))
+        ui.net.addr = primary.map(|a| Ipv4Addr::from(a).to_string()).unwrap_or_default();
+        ui.net.iface = "eth0".into();
+        ui.net.eth_link = primary.is_some();
+        ui.net.ifs = primary.into_iter().map(|ip| ("eth0".into(), Ipv4Addr::from(ip).to_string()))
             .chain(addresses.iter().copied().filter(|a| Some(*a) != primary).enumerate().map(|(i, ip)| (format!("LAN{}", i + 2), Ipv4Addr::from(ip).to_string()))).collect();
         ui.lan_status = format!("SCPI {} / HiSLIP {} / mDNS {}", bound(self.scpi.port()), bound(self.hislip.port()), if self.announce.available() { "on" } else { "unavailable" });
     }

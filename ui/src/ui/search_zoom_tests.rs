@@ -45,7 +45,7 @@ fn the_overview_has_a_line_of_ticks_for_each_search_and_the_zoomed_part_its_mark
     assert_eq!([0, 1, 2].map(|i| u.studio_search_events_of(i).len()), [42, 1, 21]);
     let cv = frame(&mut u);
     shot(&cv, "search-zoom");
-    let (o, z) = u.split_zoom(u.grid);
+    let (o, z) = u.split_zoom(u.plot.grid);
     // the overview shows 10 ms of the record: ten of the 1 ms periods, the narrow pulse among them
     // (a note at the top left of the plot covers the first ticks of the lower lines)
     for (slot, want) in [(0, 18..=24), (1, 1..=1), (2, 8..=12)] {
@@ -60,7 +60,7 @@ fn the_overview_has_a_line_of_ticks_for_each_search_and_the_zoomed_part_its_mark
     let want = o.x + ((at / (1e-3 * HDIV as f64) + 0.5) * o.w as f64) as i32;
     assert!((x - want).abs() <= 2, "{x} for {want}");
     // the zoomed part (1 ms around the trigger) has the marks of the searches that have an event there
-    let mark = |slot: usize| (z.x..z.right()).filter(|&x| (0..SEARCH_LANE_H).any(|dy| px(&cv, x, u.area.y + slot as i32 * SEARCH_LANE_H + dy) == SEARCH_COLS[slot])).count();
+    let mark = |slot: usize| (z.x..z.right()).filter(|&x| (0..SEARCH_LANE_H).any(|dy| px(&cv, x, u.plot.area.y + slot as i32 * SEARCH_LANE_H + dy) == SEARCH_COLS[slot])).count();
     assert!(mark(0) > 0 && mark(2) > 0, "{} {}", mark(0), mark(2));
     assert_eq!(mark(1), 0, "the pulse is not in the zoomed part");
 }
@@ -74,12 +74,12 @@ fn previous_and_next_move_the_zoom_window_and_take_the_main_view_along_when_they
     u.studio_search_go(1);
     assert!((u.m.zdelay as f64 - at).abs() < 1e-7 && u.m.delay == 0.0, "zoom {} main {} for {at}", u.m.zdelay, u.m.delay);
     let cv = frame(&mut u);
-    let (o, z) = u.split_zoom(u.grid);
+    let (o, z) = u.split_zoom(u.plot.grid);
     let (xa, xb) = u.zoom_window_x(o);
     let tick = (o.x..o.right()).find(|&x| px(&cv, x, o.y + 1 + SEARCH_STRIP_H + 2) == SEARCH_COLS[1]).unwrap();
     assert!(xa < tick && tick < xb, "the window {xa}..{xb} is on the tick {tick}");
     // and the mark of the event is in the middle of the zoomed part, with the dashed line of the selected search
-    let mark = (z.x..z.right()).find(|&x| (0..SEARCH_LANE_H).any(|dy| px(&cv, x, u.area.y + SEARCH_LANE_H + dy) == SEARCH_COLS[1])).unwrap();
+    let mark = (z.x..z.right()).find(|&x| (0..SEARCH_LANE_H).any(|dy| px(&cv, x, u.plot.area.y + SEARCH_LANE_H + dy) == SEARCH_COLS[1])).unwrap();
     assert!((mark - (z.x + z.w / 2)).abs() <= 6, "{mark} in {z:?}");
     // Search 1: its last event is 9.75 ms after the trigger, beyond the 5 ms the main view reaches
     u.studio_search_select(0);

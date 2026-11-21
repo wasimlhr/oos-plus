@@ -99,7 +99,16 @@ type ColKey = (usize, usize, u64, u64, usize);
 
 /// Columns of the last drawn LA record (the screen redraws ~30 times a second; deep records are walked once).
 #[derive(Default)]
-pub struct Cache(Option<(ColKey, Arc<Vec<Col>>)>);
+struct Cache(Option<(ColKey, Arc<Vec<Col>>)>);
+
+/// The logic analyser between frames (ADR 0062).
+#[derive(Default)]
+pub(super) struct Lanes {
+    /// the probe detect: None = not known (no hardware, not read yet)
+    probe: Option<bool>,
+    /// pixel columns of the last LA record drawn
+    cols: std::cell::RefCell<Cache>,
+}
 
 impl Ui {
     pub(super) fn la_items(&self) -> Vec<Item> {
@@ -296,7 +305,7 @@ impl Ui {
     /// From `step`: the probe state the hardware thread read.
     pub(super) fn la_probe_poll(&mut self) {
         if let Source::Hw { shared, .. } = &self.src {
-            let p = shared.lock().unwrap().la_probe;
+            let p = crate::wave::hw(shared).la_probe;
             self.la_probe_set(p);
         }
     }
@@ -305,22 +314,22 @@ impl Ui {
     /// without a probe. SCPI can still switch it on afterwards (no change of the state here), which is the way out if the
     /// detection ever reads wrong.
     pub(super) fn la_probe_set(&mut self, p: Option<bool>) {
-        if self.la_probe != Some(false) && p == Some(false) && self.m.la.on {
+        if self.la.probe != Some(false) && p == Some(false) && self.m.la.on {
             self.m.la.on = false;
             self.settings_changed();
             self.toast("No LA probe: LA off");
         }
-        self.la_probe = p;
+        self.la.probe = p;
     }
 
     /// The LA can be switched on: the probe is there, or nobody knows otherwise (demo signals, not read yet).
     pub(super) fn la_probe_ok(&self) -> bool {
-        self.la_probe != Some(false)
+        self.la.probe != Some(false)
     }
 
     /// Page title with the probe state (GPIO 120 on the unit).
     pub(super) fn la_title(&self) -> String {
-        let probe = match (&self.src, self.la_probe) {
+        let probe = match (&self.src, self.la.probe) {
             (Source::Hw { .. }, Some(true)) => "probe connected",
             (Source::Hw { .. }, Some(false)) => "no probe",
             (Source::Hw { .. }, None) => "probe not read",
@@ -372,7 +381,7 @@ impl Ui {
     /// the bottom of their window: over its lower half while a channel shares the window, all of it when not.
     pub(super) fn la_band(&self, n: usize) -> (Rect, i32) {
         // stacked lanes have one source each: the LA keeps its strip under them instead of sharing the first lane
-        if self.wins.len() > 1 && !self.stacked() {
+        if self.plot.wins.len() > 1 && !self.stacked() {
             let w = self.lane_area();
             let shared = self.win_has_analog(self.la_win_of());
             // the time labels of the window stay readable under the lanes
@@ -385,7 +394,7 @@ impl Ui {
             return (Rect::new(w.x, w.y + w.h - AXIS_ROW - h, w.w, h), pitch);
         }
         let (h, pitch) = self.la_fit(n);
-        let g = self.grid;
+        let g = self.plot.grid;
         (Rect::new(g.x, g.y + g.h + 2 + self.eye_below(), g.w, h - 2), pitch)
     }
 
@@ -427,22 +436,22 @@ impl Ui {
         )
         .hash(&mut h);
         let key = h.finish();
-        if let Some(e) = self.dec_cache.borrow().iter().find(|e| e.0 == key) {
-            return Ok(e.1.clone());
+        if let Some(p) = self.decoded.get(key) {
+            return Ok(p);
         }
         let mut p = crate::trig::decode_la(m, &la.words, la.dt)?;
         for x in p.iter_mut() {
             x.t0 = la.t0 + x.t0 * la.dt;
             x.t1 = la.t0 + x.t1 * la.dt;
         }
-        self.dec_cache_put(key, &p);
+        self.decoded.put(key, &p);
         Ok(p)
     }
 
     /// The columns of the LA record for the trace width `w` with sample k at x0 + k xps, cached.
     fn la_columns(&self, la: &LaRec, x0: f64, xps: f64, w: usize) -> Arc<Vec<Col>> {
         let key = (Arc::as_ptr(&la.words) as usize, la.words.len(), x0.to_bits(), xps.to_bits(), w);
-        let mut c = self.la_cols.borrow_mut();
+        let mut c = self.la.cols.borrow_mut();
         if let Some((k, v)) = &c.0 {
             if *k == key {
                 return v.clone();

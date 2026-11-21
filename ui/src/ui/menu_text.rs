@@ -62,7 +62,7 @@ impl Ui {
             Item::DecSrc4 if self.m.dec_proto.roles()[3].is_some() => self.m.dec_proto.roles()[3].unwrap_or("Source 4"),
             Item::DecThr if self.m.dec_proto == Proto::CPHY => "Min level gap",
             Item::TrigT1 if matches!(self.m.trig_when, WhenKind::In | WhenKind::Out) => "Lower limit",
-            Item::NavHist if self.hist_pos.is_some() => "Live",
+            Item::NavHist if self.history.pos.is_some() => "Live",
             _ => Self::label(it),
         }
     }
@@ -78,7 +78,7 @@ impl Ui {
                     format!("Frequency \u{b7} {}_ (max {})", self.keypad, si_short(self.m.gen_max_hz(), "Hz"))
                 }
                 Some(p) if p.it == Item::StoreFile => self.file_list_title(),
-                Some(p) if p.it == Item::RefImport && self.sheets_on() => format!("Load file into R{}", self.ref_sel + 1),
+                Some(p) if p.it == Item::RefImport && self.sheets_on() => format!("Load file into R{}", self.ref_page.sel + 1),
                 Some(p) => format!("{} \u{b7} {}", self.menu_title(p.menu), self.item_label(p.it)),
                 None => String::new(),
             },
@@ -506,9 +506,10 @@ impl Ui {
             Item::ChSkew(c) => si(m.ch[c].skew as f64, "s"),
             Item::HFine => onoff(m.fine_t),
             Item::HExpandI => format!("{:?}", m.h_expand),
-            Item::RefColor => {
-                self.refs[self.ref_sel].as_ref().map_or("-", |r| REF_COLORS[r.color.min(REF_COLORS.len() - 1)].0).into()
-            }
+            Item::RefColor => self.refs[self.ref_page.sel]
+                .as_ref()
+                .map_or("-", |r| REF_COLORS[r.color.min(REF_COLORS.len() - 1)].0)
+                .into(),
             Item::HScale => si_short(m.time_per_div() as f64, "s"),
             Item::HDelay => si(m.delay as f64, "s"),
             Item::TrigSrc => self.trigger_source_label(),
@@ -561,13 +562,13 @@ impl Ui {
         let m = &self.m;
         let onoff = |b: bool| if b { "On".to_string() } else { "Off".to_string() };
         Some(match it {
-            Item::MeasSrc => self.wave_name(self.meas_src),
+            Item::MeasSrc => self.wave_name(self.sources.a),
             Item::MeasCopyTo => match self.meas_copied {
                 // what the last copy did, while the source is still the one it was made from
-                Some((from, to, _)) if from == self.meas_src => format!("Copied to {}", self.wave_name(to)),
+                Some((from, to, _)) if from == self.sources.a => format!("Copied to {}", self.wave_name(to)),
                 _ => "Pick".into(),
             },
-            Item::MeasSrcB => self.wave_name(self.meas_src_b),
+            Item::MeasSrcB => self.wave_name(self.sources.b),
             Item::CurSrcB => self.wave_name(self.cursor_b_source()),
             Item::MathExprI => {
                 if m.math_expr[m.math_sel].is_empty() {
@@ -582,11 +583,13 @@ impl Ui {
             Item::LogInfo => self.log_info(),
             Item::CurC => self.cursor_values().get(2).map_or(format!("{:.0} %", m.cur_c * 100.0), |v| v.1.clone()),
             Item::CurD => self.cursor_values().get(3).map_or(format!("{:.0} %", m.cur_d * 100.0), |v| v.1.clone()),
-            Item::RefSel => format!("R{}", self.ref_sel + 1),
-            Item::RefVpd => {
-                self.refs[self.ref_sel].as_ref().map_or("-".into(), |r| format!("{}/div", si_short(r.vpd as f64, "V")))
+            Item::RefSel => format!("R{}", self.ref_page.sel + 1),
+            Item::RefVpd => self.refs[self.ref_page.sel]
+                .as_ref()
+                .map_or("-".into(), |r| format!("{}/div", si_short(r.vpd as f64, "V"))),
+            Item::RefOffset => {
+                self.refs[self.ref_page.sel].as_ref().map_or("-".into(), |r| si_short(r.offset as f64, "V"))
             }
-            Item::RefOffset => self.refs[self.ref_sel].as_ref().map_or("-".into(), |r| si_short(r.offset as f64, "V")),
             Item::DvmSrc => format!("CH{}", m.dvm_src + 1),
             Item::CntSrc => format!("CH{}", m.cnt_src + 1),
             Item::MathLinA => format!("{:.3}", m.math_lin.0),
@@ -604,11 +607,11 @@ impl Ui {
             Item::Traces => if self.trace_stacked() { "Stacked" } else { "Overlay" }.into(),
             Item::Hdmi => format!("{:?}", m.hdmi),
             Item::TextSize => m.text_size.name().into(),
-            Item::ZoneSel => format!("Z{}", self.zone_sel + 1),
-            Item::ZoneOn => onoff(m.zones[self.zone_sel].on),
-            Item::ZoneSrc => format!("CH{}", m.zones[self.zone_sel].src + 1),
+            Item::ZoneSel => format!("Z{}", self.zone_trig.sel + 1),
+            Item::ZoneOn => onoff(m.zones[self.zone_trig.sel].on),
+            Item::ZoneSrc => format!("CH{}", m.zones[self.zone_trig.sel].src + 1),
             Item::ZoneMode => {
-                if m.zones[self.zone_sel].inside {
+                if m.zones[self.zone_trig.sel].inside {
                     "Intersect".into()
                 } else {
                     "Not intersect".into()
@@ -617,9 +620,9 @@ impl Ui {
             Item::ZInput => m.z_src.map_or("Off".to_string(), |c| format!("CH{}", c + 1)),
             Item::AuxOut => m.aux_out.name().into(),
             Item::MathOpI => m.math.name().into(),
-            Item::MathFam => self.math_fam.name().into(),
-            Item::StoreDest => self.store_dest.name().into(),
-            Item::MeasStats => onoff(self.stats_on),
+            Item::MathFam => self.math.family.name().into(),
+            Item::StoreDest => self.files.dest.name().into(),
+            Item::MeasStats => onoff(self.results.on),
             Item::MeasLabels => onoff(self.m.meas_labels),
             Item::StripDock => self.m.strip_dock.label().into(),
             Item::Zoom => onoff(m.zoom),
@@ -706,9 +709,9 @@ impl Ui {
         let m = &self.m;
         match it {
             Item::BootMode => self.boot_mode().into(),
-            Item::Overclock => overclock::label(self.clock_next),
+            Item::Overclock => overclock::label(self.overclock.hz),
             Item::NetEth | Item::NetMac | Item::NetPorts | Item::NetWlan => self.net_value(it),
-            Item::RefSrc => format!("CH{}", self.ref_src + 1),
+            Item::RefSrc => format!("CH{}", self.ref_page.src + 1),
             Item::RefShow(i) => match &self.refs[i] {
                 None => "empty".into(),
                 Some(r) => {
@@ -721,7 +724,7 @@ impl Ui {
             Item::MathSel => format!("M{}", m.math_sel + 1),
             Item::MathScale => self.math_scale_text(),
             Item::MathOffset => format!("{:.2} div", m.math_offset),
-            Item::StoreSlot => format!("{}  (setup{}.txt)", self.store_slot, self.store_slot),
+            Item::StoreSlot => format!("{}  (setup{}.txt)", self.files.slot, self.files.slot),
             Item::MaskSrc => format!("CH{}", m.mask_src + 1),
             Item::MaskX => format!("{:.2} div", m.mask_x),
             Item::MaskY => format!("{:.2} div", m.mask_y),

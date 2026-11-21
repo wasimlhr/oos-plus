@@ -315,16 +315,15 @@ impl Ui {
                 return;
             }
         };
-        if analog.is_some() && taken.opt[0].is_none() {
-            self.azr.inv_note = missing_wave(m.inv_an);
-            return;
-        }
         let (a, b, c, dt, t0) = (&taken.v[0], &taken.v[1], &taken.v[2], taken.dt, taken.t0);
         let owned;
         let theta = match ang {
             InvAngle::Off | InvAngle::Phase => Theta::Vector,
             InvAngle::Analog => {
-                let v = taken.opt[0].as_deref().unwrap();
+                let Some(v) = taken.opt[0].as_deref() else {
+                    self.azr.inv_note = missing_wave(m.inv_an);
+                    return;
+                };
                 owned = motor::analog_elec(v, degv, off, elec, poles);
                 Theta::Elec(&owned)
             }
@@ -486,7 +485,7 @@ impl Ui {
     }
 
     fn draw_dq(&self, cv: &mut Canvas) {
-        let a = self.area;
+        let a = self.plot.area;
         let f = &self.fonts();
         let mut lines =
             vec![format!("{}   angle {}", if self.m.inv_volt { "voltage" } else { "current" }, self.ang_name())];
@@ -561,7 +560,7 @@ impl Ui {
     }
 
     fn draw_mech(&self, cv: &mut Canvas) {
-        let a = self.area;
+        let a = self.plot.area;
         let mut lines = vec![format!("angle {}", self.ang_name())];
         if let Some(me) = &self.azr.mech {
             let s = &me.shaft;

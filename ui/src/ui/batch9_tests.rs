@@ -81,7 +81,7 @@ fn the_remaining_studio_menus_are_sheets_and_every_setting_stays_reachable() {
     u.m.la.preset = [la::USER, la::USER];
     all_reachable(&u, MenuId::La);
     assert!(u.items(MenuId::La).contains(&Item::LaUser(1)));
-    u.offline = true;
+    u.offline.on = true;
     assert!(u.items(MenuId::Sim).contains(&Item::SimLive));
     all_reachable(&u, MenuId::Sim);
 }
@@ -367,24 +367,24 @@ fn the_zoom_bar_has_vertical_zoom_with_targets_of_40_px() {
     // the order of the Default row: H-, H+, V-, V+, Box
     assert!(bar.minus.right() <= bar.plus.x && bar.plus.right() <= bar.vminus.x && bar.vminus.right() <= bar.vplus.x && bar.vplus.right() <= bar.boxr.x);
     shot(&mut u, "zoom-bar");
-    assert_eq!(u.zoom_vfactor, 1.0);
+    assert_eq!(u.zoom_view.vfactor, 1.0);
     // a touch 19 px off the middle still counts, as with the time chips
     let (x, y) = (bar.vplus.x + bar.vplus.w / 2, bar.vplus.y + bar.vplus.h / 2);
     u.tap(x, y - 19);
-    assert_eq!(u.zoom_vfactor, 2.0, "Y+ doubles the display scale");
+    assert_eq!(u.zoom_view.vfactor, 2.0, "Y+ doubles the display scale");
     u.tap(x, y + 19);
-    assert_eq!(u.zoom_vfactor, 4.0);
+    assert_eq!(u.zoom_view.vfactor, 4.0);
     let (x, y) = (bar.vminus.x + bar.vminus.w / 2, bar.vminus.y + bar.vminus.h / 2);
     u.tap(x, y);
     u.tap(x, y);
-    assert_eq!(u.zoom_vfactor, 1.0, "Y- halves it, never below one");
+    assert_eq!(u.zoom_view.vfactor, 1.0, "Y- halves it, never below one");
     u.tap(x, y);
-    assert_eq!(u.zoom_vfactor, 1.0);
+    assert_eq!(u.zoom_view.vfactor, 1.0);
     // the time zoom is not touched
     let z = u.m.zscale;
     u.tap(bar.vplus.x + 20, bar.vplus.y + 20);
     assert_eq!(u.m.zscale, z);
-    assert!(u.zoom_vfactor > 1.0);
+    assert!(u.zoom_view.vfactor > 1.0);
 }
 
 // ------------------------------------------------------------------------------------------------ item 4

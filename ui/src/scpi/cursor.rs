@@ -5,7 +5,7 @@
 //! BYValue`), the deltas (`XDELta|IXDelta|YDELta`) and `MEASure:INDicator`. A new `:CURSor` command goes into
 //! `cursor_cmd` here, with its line in docs/scpi.md and its query in ui/tests/scpi.txt (AGENTS.md).
 
-use super::{e, kw, parse_wave, shown, wave_tok, Scpi};
+use super::{e, kw, parse_wave, shown, t, wave_tok, Scpi};
 use crate::model::*;
 use crate::ui::Ui;
 
@@ -78,7 +78,6 @@ impl Scpi {
 
     /// `:CURSor:MODE`: OFF, MANual, TRACk or XY.
     fn cursor_mode(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         if query {
             let s = match ui.m.cursor {
                 CursorMode::Off => "OFF",
@@ -110,7 +109,6 @@ impl Scpi {
 
     /// `:CURSor:MANual:TYPE`: TIME or AMPLitude.
     fn cursor_type(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         if query {
             return t(if ui.m.cursor == CursorMode::Volt { "AMPL" } else { "TIME" });
         }
@@ -131,7 +129,6 @@ impl Scpi {
 
     /// `:CURSor:MANual|TRACk:SOURce[1|2]`: the waveform a cursor reads (`n` without the root).
     fn cursor_src(&mut self, ui: &mut Ui, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = n[0];
         let second = kw(n[1], "SOURce2");
         let track = kw(n0, "TRACk");
@@ -157,7 +154,6 @@ impl Scpi {
 
     /// The read-outs under `:CURSor:MANual|TRACk|XY` (`AXValue?` to `YDELta?`, `n` without the root).
     fn cursor_readout(&mut self, ui: &Ui, n: &[&str]) -> Option<Vec<u8>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let which = n[1];
         let miss = || Some(b"9.9E37".to_vec());
         let (ta, tb) = (ui.cursor_time_at(ui.m.cur_a), ui.cursor_time_at(ui.m.cur_b));

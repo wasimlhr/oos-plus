@@ -294,6 +294,11 @@ pub struct Scpi {
 
 pub(crate) use crate::words::{e, kw, nearest_index, num, parse_bool};
 
+/// The answer of a query that is the text `s`, as the subsystems return it.
+fn t(s: &str) -> Option<Vec<u8>> {
+    Some(s.as_bytes().to_vec())
+}
+
 /// Splits a keyword with a numeric suffix: "CHAN2" -> ("CHAN", 2).
 pub(crate) fn suffix(tok: &str) -> (&str, Option<usize>) {
     let i = tok.find(|c: char| c.is_ascii_digit()).unwrap_or(tok.len());
@@ -400,23 +405,9 @@ impl Scpi {
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
-        let l = Self::bind_quietly(port);
+        let l = crate::net6::tcp_service(port, "SCPI");
         if l.is_none() {
             eprintln!("oos-ui: SCPI port {} not available", port);
-        }
-        l
-    }
-
-    /// `bind` without the message when the port is taken.
-    fn bind_quietly(port: u16) -> Option<TcpListener> {
-        let l = crate::net6::tcp(port);
-        if let Some(l) = &l {
-            let _ = l.set_nonblocking(true);
-            eprintln!(
-                "oos-ui: SCPI on port {}{}",
-                port,
-                if l.local_addr().is_ok_and(|a| a.is_ipv6()) { " (IPv4 and IPv6)" } else { "" }
-            );
         }
         l
     }
@@ -427,7 +418,7 @@ impl Scpi {
         if self.l.is_some() {
             return false;
         }
-        self.l = Self::bind_quietly(port);
+        self.l = crate::net6::tcp_service(port, "SCPI");
         self.l.is_some()
     }
 
@@ -550,7 +541,8 @@ impl Scpi {
                     let line: Vec<u8> = self.clients[i].buf.drain(..=p).collect();
                     self.clients[i].program = Some(Program::new(&String::from_utf8_lossy(&line)));
                 }
-                let mut program = self.clients[i].program.take().unwrap();
+                // there is one: kept from before, or made from the line just taken
+                let Some(mut program) = self.clients[i].program.take() else { break };
                 let Some(mut response) = self.poll_program(ui, cv, &mut program) else {
                     // after the end of the input a program that would have to wait is dropped, and no later line runs
                     if eof {

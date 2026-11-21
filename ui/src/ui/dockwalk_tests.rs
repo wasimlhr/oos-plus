@@ -82,7 +82,7 @@ fn open(u: &mut Ui, k: VKind) {
         VKind::Pane => u.studio_apply_panel(PanelKind::Spectrum),
         VKind::Hist => u.studio_apply_panel(PanelKind::Histogram),
         VKind::Xy => u.select_option(Item::XyMode, "XY"),
-        VKind::Table => u.table = Some(tables::TableKind::Search),
+        VKind::Table => u.table.kind = Some(tables::TableKind::Search),
         VKind::Sim | VKind::View => {}
     }
     settle(u);

@@ -32,7 +32,7 @@ impl Ui {
     /// The buttons of the bar at the very top of the waveform window, the views centred, the close button (None) right of
     /// them.
     pub(in crate::ui) fn auto_bar_rects(&self) -> Vec<(Rect, Option<AutoView>)> {
-        let g = self.grid;
+        let g = self.plot.grid;
         let n = AUTO_VIEWS.len() as i32;
         let w = n * AB_W + (n - 1) * AB_GAP;
         let x0 = g.x + (g.w - w) / 2;
@@ -47,7 +47,7 @@ impl Ui {
     }
 
     pub(in crate::ui) fn auto_bar_on(&self) -> bool {
-        self.auto_bar.is_some_and(|t| self.now - t < AUTO_BAR_S) && !self.view_on()
+        self.auto.bar.is_some_and(|t| self.now - t < AUTO_BAR_S) && !self.view_on()
     }
 
     /// A tap while the bar shows: a button sets its view and keeps the bar; anywhere else closes it (and the tap goes on
@@ -60,13 +60,13 @@ impl Ui {
             match v {
                 Some(v) => {
                     self.auto_view(v);
-                    self.auto_bar = Some(self.now);
+                    self.auto.bar = Some(self.now);
                 }
-                None => self.auto_bar = None,
+                None => self.auto.bar = None,
             }
             return true;
         }
-        self.auto_bar = None;
+        self.auto.bar = None;
         false
     }
 

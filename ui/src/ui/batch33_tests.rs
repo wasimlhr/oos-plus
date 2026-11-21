@@ -118,7 +118,7 @@ fn cursors_and_zoom_are_per_view() {
         u.m.zdelay = 1e-6;
         u.studio.sz.lane = Some(super::workspace::Trace::Channel(1));
         u.studio.sz.ref_h.insert(0, (1e-6, 0.0));
-        u.zoom_vfactor = 4.0;
+        u.zoom_view.vfactor = 4.0;
         u.views_set(2);
         u.view_go(1);
         // a copy ...
@@ -133,7 +133,7 @@ fn cursors_and_zoom_are_per_view() {
         u.m.zdelay = -2e-6;
         u.studio.sz.lane = None;
         u.studio.sz.ref_h.clear();
-        u.zoom_vfactor = 1.0;
+        u.zoom_view.vfactor = 1.0;
         u.view_go(0);
         assert_eq!(u.m.cursor, CursorMode::Time, "{l:?}");
         assert!((u.m.cur_a - 0.3).abs() < 1e-6 && (u.m.cur_b - 0.6).abs() < 1e-6, "{l:?}");
@@ -141,9 +141,9 @@ fn cursors_and_zoom_are_per_view() {
         assert!(u.m.zoom && (u.m.zdelay - 1e-6).abs() < 1e-12, "{l:?}");
         assert_eq!(u.studio.sz.lane, Some(super::workspace::Trace::Channel(1)), "{l:?}");
         assert_eq!(u.studio.sz.ref_h.get(&0), Some(&(1e-6, 0.0)), "{l:?}: the horizontal scale of a reference");
-        assert_eq!(u.zoom_vfactor, 4.0, "{l:?}: Y zoom");
+        assert_eq!(u.zoom_view.vfactor, 4.0, "{l:?}: Y zoom");
         u.view_go(1);
-        assert!(u.m.cursor == CursorMode::Volt && !u.m.zoom && u.studio.sz.lane.is_none() && u.studio.sz.ref_h.is_empty() && u.zoom_vfactor == 1.0, "{l:?}");
+        assert!(u.m.cursor == CursorMode::Volt && !u.m.zoom && u.studio.sz.lane.is_none() && u.studio.sz.ref_h.is_empty() && u.zoom_view.vfactor == 1.0, "{l:?}");
         assert_eq!(u.m.cur_b_source, Some(WaveId::Ch(1)), "{l:?}");
     }
 }
