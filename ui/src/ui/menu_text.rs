@@ -74,6 +74,7 @@ impl Ui {
         match menu {
             MenuId::Pick => match self.pick {
                 Some(p) if Self::hex_item(p.it) => format!("{} \u{b7} 0x{}_", self.item_label(p.it), self.keypad),
+                Some(p) if p.it == Item::NumEntry => self.row_pad_title(),
                 Some(p) if p.it == Item::AfgFreqEntry => {
                     format!("Frequency \u{b7} {}_ (max {})", self.keypad, si_short(self.m.gen_max_hz(), "Hz"))
                 }
