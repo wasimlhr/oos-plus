@@ -716,8 +716,10 @@ open the knob sets its scale and a push closes it.
 a setting of the scope (`/oos/system.conf`).
 
 **Auto.** Works on the channels that are on, at full bandwidth, and sets the memory depth back to Auto; each channel then
-gets its own bandwidth back. With no signal it restores the set-up. Afterwards a bar at the top of the plot offers a few
-periods, many periods, the rising edge or the falling edge of the trigger channel; its x or a tap elsewhere closes it.
+gets its own bandwidth back. With no signal it restores the set-up. Channels that share one plot get a band each, one
+above the other; in a lane each (Stacked) or in Studio's Overlay every channel gets the whole height, and the trace mode
+stays as it was. Afterwards a bar at the top of the plot offers a few periods, many periods, the rising edge or the
+falling edge of the trigger channel; its x or a tap elsewhere closes it.
 
 **Windows and full screen.** Display > Windows splits the plot into two windows side by side, two stacked, or four. The
 same page puts each channel, math channel and the LA into a window; a new split spreads the channels that are on. All
