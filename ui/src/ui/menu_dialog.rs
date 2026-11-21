@@ -117,14 +117,7 @@ impl Ui {
             Item::StripDock => {
                 return self.strip_docks().into_iter().map(|d| self.strip_dock_label(d).to_string()).collect();
             }
-            Item::ChHide(_)
-            | Item::MeasStats
-            | Item::MeasLabels
-            | Item::Zoom
-            | Item::AutoRoll
-            | Item::DecOn
-            | Item::SearchOn
-            | Item::StoreRecScpi => &["Off", "On"],
+            Item::ChHide(_) | Item::MeasStats | Item::Zoom | Item::DecOn | Item::SearchOn | Item::StoreRecScpi => &["Off", "On"],
             Item::MaskSrc => return ch_names(),
             Item::ChCoupling(_) => return board().couplings().iter().map(|c| c.name().to_string()).collect(),
 
@@ -187,8 +180,6 @@ impl Ui {
             Item::ZoneOn => &["Off", "On"],
             Item::Layout => &["Default", "Minimal", "Studio"],
             Item::Traces => &["Overlay", "Stacked"],
-            Item::Hdmi => &["Mirror", "Waveform", "Layout"],
-            Item::TextSize => return TEXT_SIZES.iter().map(|t| t.name().to_string()).collect(),
             Item::ZoneSel => &["Z1", "Z2"],
             Item::ZoneSrc => return ch_names(),
             Item::ZoneMode => &["Intersect", "Not intersect"],
@@ -206,7 +197,6 @@ impl Ui {
             Item::TrendSel(_) => return self.trend_options(),
             Item::DvmSrc | Item::CntSrc => return (0..n_ch()).map(|c| format!("CH{}", c + 1)).collect(),
             Item::HFine | Item::LogOn => &["Off", "On"],
-            Item::HExpandI => &["Center", "Left", "Right", "Trigger"],
             Item::BootMode => &["One-shot", "Persist"],
             // long lists: shown as a picker (see `ctl`)
             Item::MathOpI => return self.math_ops_in_family().iter().map(|o| o.name().to_string()).collect(),
