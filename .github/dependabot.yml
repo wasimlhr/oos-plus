@@ -14,3 +14,48 @@ updates:
     commit-message:
       prefix: CI
     open-pull-requests-limit: 2
+
+  - package-ecosystem: cargo
+    directory: /dsp
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      crates-dsp:
+        patterns: ['*']
+    commit-message:
+      prefix: deps
+    open-pull-requests-limit: 2
+  - package-ecosystem: cargo
+    directory: /fpgad
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      crates-fpgad:
+        patterns: ['*']
+    commit-message:
+      prefix: deps
+    open-pull-requests-limit: 2
+  - package-ecosystem: cargo
+    directory: /hal
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      crates-hal:
+        patterns: ['*']
+    commit-message:
+      prefix: deps
+    open-pull-requests-limit: 2
+  - package-ecosystem: cargo
+    directory: /ui
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      crates-ui:
+        patterns: ['*']
+    commit-message:
+      prefix: deps
+    open-pull-requests-limit: 2
