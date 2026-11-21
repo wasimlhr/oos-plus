@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.14",
   "version": "0.1.14",
   "edition": "November 2026",
-  "date": "20 November 2026",
+  "date": "21 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
