@@ -173,6 +173,11 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       (seen right on the unit afterwards); the start of a CAN-FD frame read "S" beside CAN's "SOF"; a narrow box
       of a USB packet read "SYNC FS..." (it begins with the packet's type now, seen on the unit). What is open
       for every one of them is the real signal.
+      LIN and MIL-STD-1553 (2026-11-21) were connected and are checked on the unit, decode and trigger; their
+      rows in the table above say what ran. With them the step ends, by the owner's word that no further bus
+      comes: SPI, UART, CAN, 10BASE-T, LIN and MIL-STD-1553 are decoded on the unit from a real signal. CAN-FD,
+      SENT, FlexRay, ARINC 429 and USB were not connected: for them the recorded captures on the host and the
+      SIM presets on the unit stand, and a real signal on the unit stays open.
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
