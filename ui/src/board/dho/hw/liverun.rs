@@ -86,6 +86,9 @@ enum Act {
     /// the loop busy this many microseconds before the pass (its work on the batch it read, such as decoding): the
     /// unit's clock runs on, and a batch armed ahead records
     Busy(u64),
+    /// the screen published a view the deposit workers draw into: from this pass on they accept batches (`Deposit`);
+    /// a case with it runs with them from its start
+    Deposit,
 }
 
 /// A switch of system.conf that the board reads itself and a case turns on for the test's thread.
@@ -116,9 +119,31 @@ struct Case {
     compress: bool,
     /// the switches of system.conf on for this case (all others off, as by default)
     switches: &'static [Switch],
+    /// the loop waits for the start-up first, whose status file has these lines (`StartUp`), as `spawn` does on the
+    /// scope; None: it starts at once
+    start_up: Option<StartUp>,
     passes: u32,
     script: &'static [(u32, Act)],
 }
+
+/// The lines of a start-up's status file (`oos_hal::bootstatus`): the virtual microseconds at which the start-up
+/// writes each, its state, stage and detail.
+type StartUp = &'static [(u64, &'static str, &'static str, &'static str)];
+
+/// A start-up that ends after 1.43 s: two stages, then `end`.
+const START_UP_ENDS: StartUp = &[
+    (0, "run", "FPGA", "loading"),
+    (700_000, "ok", "FPGA", ""),
+    (750_000, "run", "Acquisition", "cold boot"),
+    (1_430_000, "end", "", ""),
+];
+
+/// A start-up that stops after 0.45 s: its first stage fails, then `abort`.
+const START_UP_ABORTS: StartUp = &[
+    (0, "run", "FPGA", "loading"),
+    (400_000, "fail", "FPGA", "not configured"),
+    (450_000, "abort", "", "FPGA: not configured"),
+];
 
 /// What a case has unless it says otherwise.
 const BASE: Case = Case {
@@ -131,6 +156,7 @@ const BASE: Case = Case {
     cal: false,
     compress: false,
     switches: &[],
+    start_up: None,
     passes: 30,
     script: &[],
 };
@@ -163,6 +189,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 30,
         script: &[],
     },
@@ -176,6 +203,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 30,
         script: &[],
     },
@@ -189,6 +217,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 30,
         script: &[],
     },
@@ -202,6 +231,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 20,
         script: &[],
     },
@@ -215,6 +245,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 6,
         script: &[],
     },
@@ -228,6 +259,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 8,
         script: &[(3, Act::Set(|m| tdiv(m, 2e-6)))],
     },
@@ -241,6 +273,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 20,
         script: &[],
     },
@@ -254,6 +287,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 30,
         script: &[(12, Act::Hold)],
     },
@@ -267,6 +301,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 40,
         script: &[],
     },
@@ -280,6 +315,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 40,
         script: &[],
     },
@@ -293,6 +329,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: SCAN_PASSES,
         script: &[],
     },
@@ -306,6 +343,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: SCAN_PASSES,
         script: &[(SCAN_PASSES / 2, Act::Rearm)],
     },
@@ -327,6 +365,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 40,
         script: &[],
     },
@@ -340,6 +379,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: SCAN_PASSES,
         script: &[],
     },
@@ -353,6 +393,7 @@ const CASES: &[Case] = &[
         cal: false,
         compress: false,
         switches: &[],
+        start_up: None,
         passes: 60,
         script: &[(1, Act::SegRun), (40, Act::SegShow(7))],
     },
@@ -542,6 +583,26 @@ const CASES: &[Case] = &[
         ],
         ..BASE
     },
+    Case {
+        name: "start-up-waited-for-then-auto-ch1-1us",
+        model: |m| (ch(m, &[0]), tdiv(m, 1e-6)).0,
+        start_up: Some(START_UP_ENDS),
+        passes: 10,
+        ..BASE
+    },
+    Case {
+        name: "deposit-workers-ch1-1us",
+        model: |m| (ch(m, &[0]), tdiv(m, 1e-6)).0,
+        passes: 12,
+        script: &[(2, Act::Deposit)],
+        ..BASE
+    },
+    Case {
+        name: "start-up-aborted-nothing-touched",
+        model: |m| (ch(m, &[0]), tdiv(m, 1e-6)).0,
+        start_up: Some(START_UP_ABORTS),
+        ..BASE
+    },
 ];
 
 /// Passes of the mask and zone cases: three requests of ten passes each, the last one stalled twice and dropped.
@@ -616,6 +677,30 @@ fn access(line: &str) -> Option<(bool, u32, u32)> {
 /// An arm in the trace: the write of 0x400c that sets record-seq mode (bits 29 and 25) without play (bit 30).
 fn is_arm(line: &str) -> bool {
     access(line).is_some_and(|(w, off, v)| w && off == 0x400c && v & 0x6200_0000 == 0x2200_0000)
+}
+
+/// The checks of the wait for the start-up (`Case::start_up`), whose last line is its `end` or `abort`: the status
+/// file read at the start and every 100 ms of the virtual clock after it, up to the first read that finds that line;
+/// nothing of the unit touched before that read; after an `abort` nothing at all, no frame, and the status line says
+/// why. True when the start-up stopped, so the loop did not run. Break it catches: a wait that does not wait, polls at
+/// another period or goes on after the end, the FPGA touched before the end or after an abort.
+fn start_up_checks(case: &Case, trace: &str, frames: &[Frame], g: &Shared, reads: &[u64]) -> bool {
+    let Some(lines) = case.start_up else {
+        assert!(reads.is_empty(), "{}: the start-up read without one", case.name);
+        return false;
+    };
+    let &(end, state, _, detail) = lines.last().expect("the lines of a start-up");
+    let want: Vec<u64> = (0..=end.div_ceil(100_000)).map(|k| k * 100_000).collect();
+    assert_eq!(reads, want, "{}: the reads of the start-up's status file", case.name);
+    if state == "abort" {
+        assert!(trace.is_empty() && frames.is_empty(), "{}: the unit touched after an abort: {}", case.name, trace);
+        assert_eq!(g.status, format!("acquisition hardware not started: {}", detail), "{}: the status", case.name);
+        return true;
+    }
+    let first =
+        trace.lines().next().and_then(|l| l.split("us: ").nth(1)?.split([',', ' ']).next()?.parse::<u64>().ok());
+    assert!(first.is_some_and(|us| us >= want[want.len() - 1]), "{}: the unit touched at {:?} us", case.name, first);
+    false
 }
 
 /// The checks of arming ahead (`Switch::Prearm`), on the unit's trace pass by pass: every pass that reads a batch
@@ -1095,9 +1180,138 @@ fn view_of(m: &Model) -> View {
     View { cal, dot_fs: p.dot_fs as i128, pre: p.pre, post: p.post }
 }
 
-/// Runs `case` and returns the unit's trace, the frames delivered, the channels of the settings, what the loop left
-/// in the shared state and what the screen's side saw after each pass.
-fn run_case(case: &Case) -> (String, Vec<Frame>, u32, HwShared, Vec<Seen>) {
+/// The deposit workers of the draw pipeline (drawpipe.rs) as the live run stands them in for the loop's thread
+/// (`pipe::stand_in`), on that thread and in the order the loop calls them: they accept batches once the screen
+/// published a view (`Act::Deposit`), keep the batches fed, and draw one frame of the oldest each time the loop helps
+/// while it waits (`Workers::help`): decoded with the batch's `decode`, and its `codes` checked to give the same frame.
+/// A batch drawn to its end gives its buffer back.
+struct Deposit(std::sync::Mutex<Option<Drawn>>);
+
+/// What the stand-in holds and has done in a case.
+#[derive(Default)]
+struct Drawn {
+    accepting: bool,
+    /// the batches fed and not yet drawn to their end: the batch, its next frame and its end
+    open: std::collections::VecDeque<(crate::board::pipe::Feed, usize, usize)>,
+    /// the buffers of the batches drawn, until the loop takes them back
+    back: Vec<Box<dyn std::any::Any + Send>>,
+    frames: Vec<Frame>,
+    fed: usize,
+    /// buffers the loop took back, frames drawn, frames whose codes were compared with their decode
+    returned: usize,
+    drawn: usize,
+    compared: usize,
+}
+
+/// The live run's deposit workers: one case at a time uses them (`run_case`).
+static DEPOSIT: Deposit = Deposit(std::sync::Mutex::new(None));
+
+impl Deposit {
+    fn with<T>(&self, f: impl FnOnce(&mut Drawn) -> T) -> T {
+        f(self.0.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(Drawn::default))
+    }
+}
+
+impl crate::board::pipe::Workers for Deposit {
+    fn accepting(&self) -> bool {
+        self.with(|d| d.accepting)
+    }
+    fn take_buffer(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        self.with(|d| {
+            let b = d.back.pop();
+            d.returned += b.is_some() as usize;
+            b
+        })
+    }
+    fn feed(&self, b: crate::board::pipe::Feed) {
+        self.with(|d| {
+            // as drawpipe's `feed_codes`: the frames the buffer holds, from `first`
+            let end = b.raw.bytes().len().checked_div(b.fb).map_or(0, |n| b.frames.min(n));
+            let first = b.first.min(end);
+            d.open.push_back((b, first, end));
+            d.fed += 1;
+        })
+    }
+    fn help(&self, _: &mut crate::board::pipe::Helper) -> bool {
+        self.with(|d| {
+            while d.open.front().is_some_and(|(_, next, end)| next >= end) {
+                let (b, ..) = d.open.pop_front().expect("a batch drawn to its end");
+                d.back.push(b.raw.into_any());
+            }
+            let Some((b, next, end)) = d.open.front_mut() else { return false };
+            let bytes = &b.raw.bytes()[*next * b.fb..(*next + 1) * b.fb];
+            let mut f = Frame::default();
+            (b.decode)(bytes, &mut f);
+            f.stamp = b.stamp;
+            // the codes the workers draw from where they can: the same fields and, channel by channel, the same volts
+            let mut c = Frame::default();
+            if let Some(lay) = b.codes.as_ref().and_then(|codes| codes(bytes, &mut c)) {
+                assert_eq!((c.seq, c.pre, c.dt), (f.seq, f.pre, f.dt), "the codes' frame is not the decode's");
+                for (k, w) in lay.word.iter().enumerate().filter_map(|(k, w)| Some((k, (*w)?))) {
+                    let mut v = Vec::new();
+                    (lay.volts)(bytes, lay.stride, w, 0, f.ch[k].len(), lay.affine[k], &mut v);
+                    assert!(v == f.ch[k], "CH{}: the codes' volts are not the decode's", k + 1);
+                }
+                d.compared += 1;
+            }
+            *next += 1;
+            let last = *next >= *end;
+            d.drawn += 1;
+            d.frames.push(f);
+            // as the real pipe: drawing the last frame of a batch gives its buffer back at once
+            if last {
+                let (b, ..) = d.open.pop_front().expect("the batch just drawn");
+                d.back.push(b.raw.into_any());
+            }
+            true
+        })
+    }
+    fn help_done(&self, _: &mut crate::board::pipe::Helper) {}
+}
+
+/// The checks of the hand-over to the deposit workers (`Act::Deposit`), once they accept: every batch read from then
+/// on is fed to them (its newest frame queued by the loop itself), its frames are drawn while the loop waits for the
+/// next batch, and its buffer comes back to the loop; the codes of the frames give what their decode gives. The frames
+/// drawn go with the others into the checks against the scene. Break it catches: a batch not handed over or handed
+/// over twice, a buffer not reused, a decode or code layout of other settings.
+fn deposit_checks(case: &Case, trace: &str, drawn: Option<&Drawn>) {
+    let Some(at) = case.script.iter().find(|(_, a)| matches!(a, Act::Deposit)).map(|(k, _)| *k) else { return };
+    let d = drawn.unwrap_or_else(|| panic!("{}: no deposit workers", case.name));
+    let batches = trace.lines().filter(|l| l.starts_with("Played")).count();
+    // one batch a pass, the first one the workers take that of the pass they accept at
+    assert!(d.fed >= 3 && d.fed + at as usize == batches + 1, "{}: {} of {} batches fed", case.name, d.fed, batches);
+    // each batch drawn while the loop waits for the next, its buffer then taken back; the last one still open
+    let back = d.returned + d.open.len() == d.fed && d.open.len() <= 1;
+    assert!(back, "{}: {} buffers back, {} open of {}", case.name, d.returned, d.open.len(), d.fed);
+    assert!(
+        d.drawn > d.fed && d.compared == d.drawn,
+        "{}: {} frames drawn, {} compared",
+        case.name,
+        d.drawn,
+        d.compared
+    );
+}
+
+/// What a case's run left (`run_case`).
+struct Ran {
+    /// the unit's trace
+    trace: String,
+    /// the frames delivered, the deposit workers' among them
+    frames: Vec<Frame>,
+    /// the channels of the settings
+    mask: u32,
+    /// what the loop left in the shared state
+    out: HwShared,
+    /// what the screen's side saw after each pass
+    seen: Vec<Seen>,
+    /// the virtual times of the start-up's reads
+    reads: Vec<u64>,
+    /// what the deposit workers did, where the case has them
+    drawn: Option<Drawn>,
+}
+
+/// Runs `case` (`Ran`).
+fn run_case(case: &Case) -> Ran {
     let mut m = Model::default();
     (case.model)(&mut m);
     // the switches of this thread, put back when the case ends (a failing one too)
@@ -1120,20 +1334,33 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32, HwShared, Vec<Seen>) {
         auto_fs: None,
         view: view_of(&m),
     };
-    let (u, bar, c2h, clock) = unit(scene);
+    let (u, bar, c2h, mut clock) = unit(scene);
     let sim = u.clone();
     // what the screen's side saw after each pass
     let mut seen = Vec::new();
     // with the calibration the front ends are programmed too, through a stub that answers them
     let afe = case.cal.then_some(oos_hal::dho::boot::sim::AfeStub { writes: 0, reads: 0 });
     let port = SimPort(Some(u.clone()));
-    let hw = Hw { bar, c2h, afe, lines: oos_hal::dho::lines::Recorded::default(), clock, port };
     let out: HwShared = std::sync::Arc::new(std::sync::Mutex::new(Shared::default()));
     let mask = want.mask;
     {
         let mut g = lock(&out);
         g.want = Some(want);
         g.slow = super::slow_mode(&m);
+    }
+    // the start-up first, as `spawn` waits for it: at each read its status file as far as the start-up has written it
+    let mut reads = Vec::new();
+    let mut file = |lines: StartUp| -> String {
+        let now = sim.borrow().now_us() as u64;
+        reads.push(now);
+        let written = lines.iter().take_while(|l| l.0 <= now);
+        written
+            .map(|&(us, state, stage, detail)| oos_hal::bootstatus::line(us as f64 * 1e-6, state, stage, detail))
+            .collect()
+    };
+    if case.start_up.is_some_and(|lines| !super::wait_start_up(&mut clock, || file(lines), &out)) {
+        // it stopped: the loop does not start
+        return Ran { trace: u.borrow().trace_text(), frames: Vec::new(), mask, out, seen, reads, drawn: None };
     }
     let (mut pass, mut rearm_due) = (0, false);
     // roll and scan replace the picture in the queue: every one published is taken here, as the screen takes it
@@ -1155,9 +1382,13 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32, HwShared, Vec<Seen>) {
     }
     // the deep measurements' raw window is a switch of the build; on for this thread, as on the scope
     crate::deepmeas::force(Some(true));
-    // the drawing workers are another test's when its screen switched them on: this loop keeps out of them (their
-    // hand-over is run on a unit, docs/board-on-a-host.md 7)
+    // the drawing workers are another test's when its screen switched them on: this loop keeps out of them; a case
+    // with deposit workers runs with the live run's (`Deposit`) on this thread, which accept batches from `Act::Deposit`
     let _out = crate::drawpipe::keep_out();
+    let deposit = case.script.iter().any(|(_, a)| matches!(a, Act::Deposit));
+    *DEPOSIT.0.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    let _workers = deposit.then(|| crate::board::pipe::stand_in(&DEPOSIT));
+    let hw = Hw { bar, c2h, afe, lines: oos_hal::dho::lines::Recorded::default(), clock, port };
     super::run(hw, super::settings(&m, false).mask, case.cal, cal_dir.clone(), out.clone(), || {
         pass += 1;
         let mut g = lock(&shared);
@@ -1209,6 +1440,7 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32, HwShared, Vec<Seen>) {
                 Act::Force => g.force = true,
                 Act::DeepRaw => g.deep_raw = Some(crate::board::policy::deep::Want { every: true }),
                 Act::Busy(us) => sim.borrow_mut().pass_us(*us),
+                Act::Deposit => DEPOSIT.with(|d| d.accepting = true),
             }
         }
         if rearm_due && g.halted {
@@ -1227,9 +1459,13 @@ fn run_case(case: &Case) -> (String, Vec<Frame>, u32, HwShared, Vec<Seen>) {
     if case.cal {
         let _ = std::fs::remove_dir_all(&cal_dir);
     }
-    let frames: Vec<Frame> = slow_frames.into_iter().chain(queued).chain(replays).collect();
+    // the frames the workers drew, among the others; what they hold goes with the case
+    let mut drawn = deposit.then(|| DEPOSIT.0.lock().unwrap_or_else(|e| e.into_inner()).take()).flatten();
+    let workers = drawn.as_mut().map(|d| std::mem::take(&mut d.frames));
+    let frames: Vec<Frame> =
+        slow_frames.into_iter().chain(queued).chain(replays).chain(workers.into_iter().flatten()).collect();
     let trace = u.borrow().trace_text();
-    (trace, frames, mask, out, seen)
+    Ran { trace, frames, mask, out, seen, reads, drawn }
 }
 
 /// The line of a segmented recording: segments asked for, recorded, read back, the time of each and the one shown.
@@ -1257,10 +1493,13 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
         std::fs::create_dir_all(d).expect("OOS_LIVE_OUT is a folder");
     }
     for case in CASES {
-        let (trace, frames, mask, out, seen) = run_case(case);
+        let Ran { trace, frames, mask, out, seen, reads, drawn } = run_case(case);
         let g = lock(&out);
         if let Some(d) = &dir {
             let mut text = format!("# {}\n", case.name);
+            if case.start_up.is_some() {
+                text += &format!("start-up read at us {:?}, status: {}\n", reads, g.status);
+            }
             text += &trace;
             for f in &frames {
                 text += &frame_line(f);
@@ -1269,7 +1508,20 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
             if g.seg.total > 0 {
                 text += &seg_line(&g);
             }
+            if let Some(w) = &drawn {
+                text += &format!(
+                    "deposit fed {} drawn {} compared {} buffers back {} left {}\n",
+                    w.fed,
+                    w.drawn,
+                    w.compared,
+                    w.returned,
+                    w.open.len()
+                );
+            }
             std::fs::write(d.join(format!("{}.txt", case.name)), text).expect("write the case's file");
+        }
+        if start_up_checks(case, &trace, &frames, &g, &reads) {
+            continue;
         }
         generator_checks(case, &seen);
         counter_checks(case, &trace, &seen);
@@ -1278,6 +1530,7 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
         mask_checks(case, &trace, &seen);
         zone_checks(case, &trace, &seen);
         prearm_checks(case, &trace, &seen);
+        deposit_checks(case, &trace, drawn.as_ref());
         trim_checks(case, &trace, &seen);
         let count = |what: &str| trace.lines().filter(|l| l.starts_with(what)).count();
         let (played, streamed) = (count("Played"), count("Stream"));
@@ -1319,7 +1572,7 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
         }
         // the calibration reaches the configuration: the same case without it writes other values
         if case.cal {
-            let (plain, ..) = run_case(&Case { cal: false, ..*case });
+            let plain = run_case(&Case { cal: false, ..*case }).trace;
             let writes = |t: &str| -> Vec<String> {
                 t.lines().filter(|l| l.starts_with("Write")).map(|l| l[l.find("off").unwrap()..].to_string()).collect()
             };

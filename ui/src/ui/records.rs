@@ -83,7 +83,8 @@ impl Ui {
 
     #[cfg(test)]
     pub(crate) fn measurement_statistics_snapshot_for_test(&self) -> Vec<(u64, [u64; 4])> {
-        self.mstat
+        self.results
+            .rows
             .iter()
             .map(|stat| (stat.n, [stat.sum.to_bits(), stat.sumsq.to_bits(), stat.min.to_bits(), stat.max.to_bits()]))
             .collect()
@@ -197,18 +198,28 @@ impl Ui {
     /// The samples a `:WAVeform` read uses. `memory` is RAW, or MAXimum while stopped: the deep record when the
     /// acquisition kept one, otherwise the screen record.
     pub(crate) fn channel_view(&self, c: usize, memory: bool) -> Option<(&[f32], f64, f64)> {
-        let rec = self.last[0].as_ref()?;
         if memory {
-            if let Some(raw) = self.memory_raw().filter(|r| !r.frame.envelope) {
-                if let Some(v) = raw.frame.ch.get(c) {
-                    if !v.is_empty() && raw.frame.dt.is_finite() && raw.frame.dt > 0.0 {
-                        return Some((v.as_slice(), raw.frame.dt, raw.t0 - raw.i0 as f64 * raw.frame.dt));
-                    }
-                }
+            if let Some(view) = self.native_view(c) {
+                return Some(view);
             }
         }
+        let rec = self.last[0].as_ref()?;
         let v = rec.ch.get(c)?;
         (!v.is_empty()).then_some((v.as_slice(), rec.dt, rec.t0))
+    }
+
+    /// The native record of channel `c` (the acquisition's samples, no envelope), its dt and t0. None without one.
+    fn native_view(&self, c: usize) -> Option<(&[f32], f64, f64)> {
+        let raw = self.memory_raw().filter(|r| !r.frame.envelope)?;
+        let v = raw.frame.ch.get(c)?;
+        (!v.is_empty() && raw.frame.dt.is_finite() && raw.frame.dt > 0.0)
+            .then(|| (v.as_slice(), raw.frame.dt, raw.t0 - raw.i0 as f64 * raw.frame.dt))
+    }
+
+    /// The first `max` samples of channel `c`'s native record and its dt, never the screen record (`:SYSTem:DEBug:CORes?`).
+    pub fn channel_raw(&self, c: usize, max: usize) -> Option<(Vec<f32>, f64)> {
+        let (v, dt, _) = self.native_view(c)?;
+        Some((v[..v.len().min(max)].iter().map(|x| if x.is_finite() { *x } else { 0.0 }).collect(), dt))
     }
 
     /// How many points `channel_page` can walk. Zero when that source has no record.
@@ -392,12 +403,12 @@ impl Ui {
     /// Statistics of measurements made on every frame by the deposit workers (framestats.rs) into the Measure page's
     /// statistics, once these exist (the first measured record starts them).
     pub(super) fn mstat_fold(&mut self, folds: &crate::framestats::Folds) {
-        if self.mstat.len() < self.m.meas.len() {
+        if self.results.rows.len() < self.m.meas.len() {
             return;
         }
         for (key, f) in folds.iter().filter(|x| x.1.n > 0) {
             if let Some(i) = self.m.meas.iter().position(|e| *e == (key.0, WaveId::Ch(key.1))) {
-                let st = &mut self.mstat[i];
+                let st = &mut self.results.rows[i];
                 if st.n == 0 {
                     (st.min, st.max) = (f.min, f.max);
                 }
@@ -432,10 +443,10 @@ impl Ui {
     fn meas_set(&mut self, done: Vec<(usize, Stats, oos_dsp::measure::Analysis)>) {
         self.meas_bg.env = self.meas_bg.env_sent;
         for c in 0..NCH {
-            (self.stats[c], self.measured.ch[c]) = (Stats::default(), Default::default());
+            (self.measured.stats[c], self.measured.ch[c]) = (Stats::default(), Default::default());
         }
         for (c, st, an) in done {
-            (self.stats[c], self.measured.ch[c]) = (st, std::sync::Arc::new(an));
+            (self.measured.stats[c], self.measured.ch[c]) = (st, std::sync::Arc::new(an));
         }
     }
 
