@@ -14,7 +14,7 @@ impl Ui {
         let ts = self.m.trig_src;
         if self.m.trig_ref.is_none() && self.m.ch[ts].on && self.shows(ts) && self.m.trig_line().is_none() && self.trigger_absolute_level_visible(false) {
             let y = self.y_of_volts(ts, self.trig_level_shown()).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
-            // where the tag is drawn: Studio moves it left of the corner buttons
+            // where the marker is drawn: in Studio left of the corner buttons and the dock's grips (`trigger_tag_x`)
             out.push(Rect::new(self.trigger_tag_x(a.x + a.w - MARK_W, y) + 8, y - 8, 16, 16));
         }
         if self.studio_tags_on() && !self.view_on() && !self.eye_open() {
