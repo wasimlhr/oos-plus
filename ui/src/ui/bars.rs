@@ -408,7 +408,18 @@ impl Ui {
     /// All bottom cards. LA and generator sit behind the channels, wide like them when they are on and the channels keep
     /// room for their text, else narrow.
     pub(super) fn card_layout(&self) -> Cards {
-        if self.m.layout == Layout::Studio { self.studio_cards() } else if self.m.compact() { self.compact_cards() } else { self.classic_card_layout() }
+        if self.m.layout == Layout::Studio {
+            self.studio_cards()
+        } else if self.m.compact() {
+            self.compact_cards()
+        } else if self.record_mode() {
+            // a stored record or the simulator on the screen (Offline, Take over, SIM): no analog channel, LA or
+            // generator cards, the time base and trigger stay (as the compact bar has it, upstream PR #8)
+            let c = self.classic_card_layout();
+            Cards { ch: c.ch.map(|r| Rect::new(r.x, r.y, 0, r.h)), la: None, gen: None, ..c }
+        } else {
+            self.classic_card_layout()
+        }
     }
 
     /// The stock OOS bottom row (Display > Layout > Default).

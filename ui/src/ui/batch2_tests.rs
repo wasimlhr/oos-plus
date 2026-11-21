@@ -377,3 +377,21 @@ fn shots_refs_sim_axis_power() {
     p.analyzer_update();
     shot(&mut p, "power-noprobe");
 }
+
+// Break it catches: the Default bottom row keeping the channel, LA and generator cards while a stored record or the
+// simulator is on the screen (Offline, Take over, SIM), as upstream's PR #8 took them out; the time base and trigger
+// cards stay
+#[test]
+fn default_layout_in_a_record_mode_has_no_channel_la_or_generator_cards() {
+    let mut u = fresh(Layout::Default);
+    u.m.ch[1].on = true;
+    u.relayout();
+    assert!(u.card_layout().ch[0].w > 0, "live: the channel cards are there");
+    u.offline.on = true;
+    assert!(u.record_mode());
+    let c = u.card_layout();
+    assert!(c.ch.iter().all(|r| r.w == 0) && c.la.is_none() && c.gen.is_none(), "{:?}", c.ch);
+    assert!(c.time.w > 0 && c.trig.w > 0, "the time base and trigger cards stay");
+    u.offline.on = false;
+    assert!(u.card_layout().ch[0].w > 0);
+}
