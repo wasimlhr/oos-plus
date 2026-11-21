@@ -5802,7 +5802,7 @@ setup win_mode default -> Enter
 setup windows "" -> One; error: "line 2: windows: unknown value: "
 setup windows "-1" -> One; error: line 2: windows: unknown value: -1
 setup windows "1e9" -> One; error: line 2: windows: unknown value: 1e9
-setup windows "Cols" -> Cols; also: density = Split
+setup windows "Cols" -> Rows; also: density = Split
 setup windows "One" -> One
 setup windows "Quad" -> Quad; also: density = Four
 setup windows "Rows" -> Rows; also: density = Split

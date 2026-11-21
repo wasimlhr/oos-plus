@@ -53,7 +53,17 @@ The x or a tap anywhere else closes the bar; otherwise it goes after 30 seconds.
 
 ## Windows and full screen
 
-**Display > Windows** splits the plot:
+**Display > Windows** splits the plot. In the Default layout its first row is **Density**:
+
+| Density | Plot |
+|---|---|
+| Scope | the whole plot, with the bars |
+| Full | the whole plot without the top bar and the cards (full screen) |
+| Split | two windows, one above the other, or with **Lower** a second pane under the plot |
+| Four | four windows, two by two |
+
+The Minimal and Studio layouts have **Layout**, **Full screen** (Off, On) and **Strip** (where the measurement strip
+stands, or Hidden) instead:
 
 | Layout | Windows |
 |---|---|
@@ -67,9 +77,9 @@ On the same page each channel, each math channel that is on and the logic analys
 ![Full screen](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/full-screen.png)
 
 **Full screen:** the button with four corners at the top right of the plot hides the top bar and the cards. The same
-button, now with the corners pointing inwards, brings them back. Also on Display > Windows > Full screen. While the
-touch lock is on there is no full screen, because the Menu button is the way out of the lock. The button stays where
-it is: a drag that starts on it moves neither the button nor the trace.
+button, now with the corners pointing inwards, brings them back. Also Display > Windows > Density Full (in Minimal and
+Studio: Full screen). While the touch lock is on there is no full screen, because the Menu button is the way out of
+the lock. The button stays where it is: a drag that starts on it moves neither the button nor the trace.
 
 **Zoom:** the magnifier under it opens and closes the zoom view. **Box** in the zoom bar arms one drag: the next drag
 on the plot draws a box, and that box is the zoom window. A tap does not zoom.
