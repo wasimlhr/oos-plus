@@ -354,18 +354,18 @@ scpi :CHANnel1:LABel:SHOW "x" -> query: 0; errors: -224,"Illegal parameter value
 scpi :CHANnel1:LABel:SHOW default -> query: 0; errors: none
 scpi :CHANnel1:OFFSet "" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:OFFSet
 scpi :CHANnel1:OFFSet "-1" -> query: -1.000000E+00; errors: none
-scpi :CHANnel1:OFFSet "-100" -> query: -5.600000E+01; errors: none
+scpi :CHANnel1:OFFSet "-100" -> query: -1.000000E+02; errors: none
 scpi :CHANnel1:OFFSet "0.25" -> query: 2.500000E-01; errors: none
-scpi :CHANnel1:OFFSet "100" -> query: 5.600000E+01; errors: none
+scpi :CHANnel1:OFFSet "100" -> query: 1.000000E+02; errors: none
 scpi :CHANnel1:OFFSet "1e39" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:OFFSet 1e39
-scpi :CHANnel1:OFFSet "1e9" -> query: 5.600000E+01; errors: none
+scpi :CHANnel1:OFFSet "1e9" -> query: 1.000000E+09; errors: none
 scpi :CHANnel1:OFFSet "x" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:OFFSet x
 scpi :CHANnel1:OFFSet default -> query: -1.500000E+00; errors: none
 scpi :CHANnel1:POSition "" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:POSition
 scpi :CHANnel1:POSition "-1" -> query: -1.000000E+00; errors: none
 scpi :CHANnel1:POSition "-5" -> query: -5.000000E+00; errors: none
 scpi :CHANnel1:POSition "1" -> query: 1.000000E+00; errors: none
-scpi :CHANnel1:POSition "1e9" -> query: 5.600000E+01; errors: none
+scpi :CHANnel1:POSition "1e9" -> query: 1.000000E+09; errors: none
 scpi :CHANnel1:POSition "5" -> query: 5.000000E+00; errors: none
 scpi :CHANnel1:POSition "50" -> query: 5.000000E+01; errors: none
 scpi :CHANnel1:POSition "x" -> query: -1.500000E+00; errors: -113,"Undefined header" :CHANnel1:POSition x
@@ -1631,10 +1631,10 @@ scpi :TRIGger:COUPling "x" -> query: DC; errors: -113,"Undefined header" :TRIGge
 scpi :TRIGger:COUPling default -> query: DC; errors: none
 scpi :TRIGger:EDGE:LEVel "" -> query: 1.500000E+00; errors: -113,"Undefined header" :TRIGger:EDGE:LEVel
 scpi :TRIGger:EDGE:LEVel "-1" -> query: -1.000000E+00; errors: none
-scpi :TRIGger:EDGE:LEVel "-100" -> query: -5.000000E+00; errors: none
+scpi :TRIGger:EDGE:LEVel "-100" -> query: -1.000000E+02; errors: none
 scpi :TRIGger:EDGE:LEVel "0.5" -> query: 5.000000E-01; errors: none
-scpi :TRIGger:EDGE:LEVel "100" -> query: 5.000000E+00; errors: none
-scpi :TRIGger:EDGE:LEVel "1e9" -> query: 5.000000E+00; errors: none
+scpi :TRIGger:EDGE:LEVel "100" -> query: 1.000000E+02; errors: none
+scpi :TRIGger:EDGE:LEVel "1e9" -> query: 1.000000E+09; errors: none
 scpi :TRIGger:EDGE:LEVel "x" -> query: 1.500000E+00; errors: -113,"Undefined header" :TRIGger:EDGE:LEVel x
 scpi :TRIGger:EDGE:LEVel default -> query: 1.500000E+00; errors: none
 scpi :TRIGger:EDGE:SLOPe "" -> query: POS; errors: -113,"Undefined header" :TRIGger:EDGE:SLOPe
@@ -1712,7 +1712,7 @@ scpi :TRIGger:RUNT:LOWer default -> query: 5.000000E-01; errors: none
 scpi :TRIGger:RUNT:UPPer "" -> query: 1.500000E+00; errors: -224,"Invalid runt threshold"
 scpi :TRIGger:RUNT:UPPer "-1" -> query: 1.500000E+00; errors: -224,"Illegal parameter value" below the lower threshold
 scpi :TRIGger:RUNT:UPPer "0.4" -> query: 1.500000E+00; errors: -224,"Illegal parameter value" below the lower threshold
-scpi :TRIGger:RUNT:UPPer "1e9" -> query: 5.000000E+00; errors: none
+scpi :TRIGger:RUNT:UPPer "1e9" -> query: 1.000000E+09; errors: none
 scpi :TRIGger:RUNT:UPPer "2" -> query: 2.000000E+00; errors: none
 scpi :TRIGger:RUNT:UPPer "x" -> query: 1.500000E+00; errors: -224,"Invalid runt threshold"
 scpi :TRIGger:RUNT:UPPer default -> query: 1.500000E+00; errors: none
