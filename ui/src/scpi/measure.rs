@@ -3,8 +3,9 @@
 
 //! `:MEASure`: the items and channel pairs the strip can show (`ITEM`, `STRip?`, `READout?`, `SOURce`, `CLEar`),
 //! statistics, thresholds (`REFS`, `SETup`, `THOLd`), gating, burst idle, Time Outside, Duration N, the edges and the
-//! indicator. A new `:MEASure` command goes into `measure_cmd` here (a new item into `MEAS_ITEMS` or `PAIR_ITEMS`),
-//! with its line in docs/scpi.md and its query in ui/tests/scpi.txt (AGENTS.md).
+//! indicator (a row of settings/measure.rs). A new `:MEASure` setting of a setup file is a row of that table; another
+//! command goes into `measure_cmd` here (a new item into `MEAS_ITEMS` or `PAIR_ITEMS`), with its line in docs/scpi.md;
+//! either with its query in ui/tests/scpi.txt (AGENTS.md).
 
 use super::math::math_index;
 use super::{e, kw, parse_bool, parse_wave, shown, t, wave_tok, Scpi};
@@ -657,22 +658,10 @@ impl Scpi {
         None
     }
 
-    /// The labels the screen draws on the trace for the measurements. Both Rigol headers drive that one switch.
+    /// The labels the screen draws on the trace for the measurements, a row of settings/measure.rs. Both Rigol headers
+    /// drive that one switch.
     pub(super) fn meas_indicator(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
-        if query {
-            return t(if ui.m.meas_labels { "1" } else { "0" });
-        }
-        match parse_bool(arg) {
-            Some(on) => {
-                ui.m.meas_labels = on;
-                ui.mark_changed();
-                None
-            }
-            None => {
-                self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                None
-            }
-        }
+        self.setting_cmd(ui, crate::settings::measure::INDICATOR, query, arg)
     }
 
     /// :MEASure:ITEM? <item>[,CHANn|Rn[,src]]
