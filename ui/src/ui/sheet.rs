@@ -652,7 +652,7 @@ impl Ui {
 
     /// The toggle rows whose value is not "Off" or "On": one step is the switch.
     pub(super) fn sheet_is_switch(it: Item) -> bool {
-        matches!(it, Item::RefShow(_) | Item::SimShow)
+        matches!(it, Item::SimShow)
     }
 
     /// The row type of an item, from the control the classic dialog would give it.
@@ -1184,7 +1184,9 @@ impl Ui {
             }
             RowKind::Toggle => {
                 if let Item::RefShow(_) = it {
-                    self.activate(it);
+                    // Off | On like the others, but one activation is what flips it
+                    let want = if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !self.sheet_on(it) };
+                    if want != self.sheet_on(it) { self.activate(it); }
                 } else if it == Item::SimShow {
                     // one step is the switch: its value is the slot's name, never "On" or "Off", and selecting an
                     // option stepped it eight times, back to where it was
