@@ -42,6 +42,9 @@ impl Ui {
             return;
         }
         let demo = self.src.is_demo();
+        // Default is upstream's: on the demo a protocol moves the trigger onto its traffic; Studio and Minimal leave
+        // the trigger alone (a protocol only configures the decoder)
+        let upstream = !self.m.compact();
         let m = &mut self.m;
         let changed = m.dec_proto != p;
         let old = m.dec_proto.roles();
@@ -134,8 +137,82 @@ impl Ui {
                 channel.on = true;
             }
         }
-        // the trigger is not touched: choosing a protocol only configures the decoder (and shows its sources)
+        // Studio and Minimal: the trigger is not touched, choosing a protocol only configures the decoder (and shows
+        // its sources). Default (upstream): on the demo, a trigger that holds its traffic still, on the channel of the
+        // role
+        if let Some(t) = s.trig.filter(|_| demo && upstream) {
+            let c = [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4][t.role.min(3)];
+            if let Some(c) = c.filter(|&c| c < NCH) {
+                (m.trig_src, m.slope, m.trig_level) = (c, t.slope, t.level);
+                if t.idle > 0.0 {
+                    (m.trig_type, m.nth_idle, m.nth_n) = (TrigType::NthEdge, t.idle, 1);
+                } else {
+                    m.trig_type = TrigType::Edge;
+                }
+            }
+        }
         self.dirty_map = true;
+    }
+
+    /// Default (upstream): Bus switches the decoder on with its demo sources and a value its traffic contains, and
+    /// remembers what it switched on (`bus_auto`), which leaving Bus switches off again.
+    fn bus_with_decoder(&mut self, was_bus: bool) {
+        let before: [bool; NCH] = std::array::from_fn(|c| self.m.ch[c].on);
+        let dec_before = self.m.dec_on;
+        self.m.dec_on = true;
+        let p = self.m.dec_proto;
+        self.set_dec_proto(p);
+        // Bus chosen again keeps what the first choice switched on
+        if !was_bus {
+            self.bus_auto = Some((std::array::from_fn(|c| self.m.ch[c].on && !before[c]), !dec_before));
+        }
+        let m = &mut self.m;
+        m.trig_type = TrigType::Bus;
+        let Proto::Module(i) = p;
+        let (what, val) = crate::protocols::get(i).info().trigger_default;
+        (m.trig_bus, m.trig_bus_val, m.ser) = (what, val as u64, SerialTrig::default());
+        self.dirty_map = true;
+    }
+
+    /// Default (upstream): on the demo each trigger type also goes to the channel that shows it, switched on. Studio and
+    /// Minimal keep the source and the channels: a trigger type change only touches the trigger.
+    fn upstream_demo_source(m: &mut Model, t: TrigType) {
+        let on = |c: usize, m: &mut Model| m.ch[c].on = true;
+        match t {
+            TrigType::Edge | TrigType::Slope | TrigType::Duration | TrigType::Timeout | TrigType::Runt => m.trig_src = 0,
+            TrigType::Pulse => {
+                on(3, m);
+                m.trig_src = 3;
+            }
+            TrigType::Video => {
+                on(1, m);
+                m.trig_src = 1;
+                m.ch[1].vscale = VSCALES.iter().position(|&v| (v - 0.2).abs() < 1e-6).unwrap_or(8);
+                m.ch[1].offset = -0.5;
+            }
+            TrigType::Pattern => {
+                on(3, m);
+                m.trig_src = 0;
+            }
+            TrigType::Window => {
+                on(1, m);
+                m.trig_src = 1;
+            }
+            TrigType::Delay => {
+                on(3, m);
+                (m.trig_src, m.trig_src2) = (0, 3);
+            }
+            TrigType::SetupHold => {
+                on(2, m);
+                on(3, m);
+                (m.trig_src, m.trig_src2) = (2, 3);
+            }
+            TrigType::NthEdge => {
+                on(2, m);
+                m.trig_src = 2;
+            }
+            TrigType::Bus => {}
+        }
     }
 
     /// Switches the trigger type and sets starting values that trigger on the demo signals.
@@ -164,9 +241,13 @@ impl Ui {
         if self.set_reference_trigger_type(t) {
             return;
         }
+        if t == TrigType::Bus && !self.m.compact() {
+            self.bus_with_decoder(was_bus);
+            return;
+        }
         if t == TrigType::Bus {
-            // the decoder's protocol defines the bus: the starting match is a value its traffic contains.
-            // Choosing the trigger type neither switches a decoder on nor touches its sources or any channel.
+            // Studio and Minimal: the decoder's protocol defines the bus: the starting match is a value its traffic
+            // contains. Choosing the trigger type neither switches a decoder on nor touches its sources or any channel.
             let m = &mut self.m;
             m.trig_type = t;
             // a value the protocol's demo traffic contains
@@ -181,6 +262,7 @@ impl Ui {
         // also the width, the pattern, the lower level and the rest that several types share (the forum, eTobey: one
         // setting must not change another). A SIM session triggers on its reference: set_reference_trigger_type
         let demo = self.src.is_demo();
+        let upstream = !self.m.compact();
         let m = &mut self.m;
         m.trig_type = t;
         // Only fields of the trigger itself change: a source that is still valid stays, and no channel is switched on.
@@ -255,6 +337,9 @@ impl Ui {
             TrigType::NthEdge => {
                 (m.slope, m.nth_idle, m.nth_n, m.trig_level) = (Slope::Fall, 50e-6, 1, 1.65);
             }
+        }
+        if demo && upstream {
+            Self::upstream_demo_source(m, t);
         }
         if m.trig_type != TrigType::Runt && m.trig_when == WhenKind::Off {
             m.trig_when = WhenKind::Lt;
