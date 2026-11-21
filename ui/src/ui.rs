@@ -166,6 +166,7 @@ mod logger;
 mod magnetic;
 mod meascatalog;
 mod measlabels;
+mod measure_page;
 mod measure_pairs;
 mod measurement_nav;
 mod menu_actions;
@@ -205,8 +206,6 @@ mod windows;
 mod wlan;
 mod worker;
 mod measrow;
-/// Skins: another look for the same screen (Display > Skin)
-pub mod skin;
 mod workflow;
 mod workspace;
 pub(crate) use scpi_operations::{OperationState, OperationToken, Operations};

@@ -4553,7 +4553,7 @@
      "header": ":MEASure:REFS",
      "set": ":MEASure:REFS <value>",
      "query": ":MEASure:REFS?",
-     "desc": "Sets or queries Preset for Gate and edge settings (menu: Measure levels > Preset).",
+     "desc": "Sets or queries Refs for Gate and edge settings (menu: Measure levels > Refs).",
      "params": [
       [
        "<value>",
@@ -4834,7 +4834,7 @@
      "header": ":MEASure:LEVel:PRESet",
      "set": ":MEASure:LEVel:PRESet <value>",
      "query": ":MEASure:LEVel:PRESet?",
-     "desc": "Sets or queries Preset for Reference levels (menu: Measure levels > Preset).",
+     "desc": "Sets or queries Refs for Reference levels (menu: Measure levels > Refs).",
      "params": [
       [
        "<value>",
@@ -16031,14 +16031,8 @@
        "`:DISPlay:RULers`"
       ],
       [
-       "`skin`",
-       "display settings: Display > Skin, `OOS` or `OOS Plus`",
-       "`OOS`",
-       "-"
-      ],
-      [
        "`color_grade`",
-       "display settings",
+       "as above",
        "`false`",
        "`:DISPlay:COLor`"
       ],

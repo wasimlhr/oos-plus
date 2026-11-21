@@ -687,9 +687,8 @@ impl Ui {
             Item::Layout => {
                 let i = LAYOUTS.iter().position(|&l| l == m.layout).unwrap_or(0);
                 m.layout = LAYOUTS[cycle(i, LAYOUTS.len(), d)];
-                if m.layout == Layout::Studio {
-                    self.studio.enter = true;
-                }
+                self.studio.enter |= m.layout == Layout::Studio;
+                self.meas_own.dialog = None; // a row's settings are the card in Minimal and Studio, a dialog in Default
                 // Default is the stock OOS screen: its cards and top bar, not the compact bars a Bottom bar choice left
                 if m.layout == Layout::Default {
                     m.bar_compact = false;
@@ -757,7 +756,7 @@ impl Ui {
             Item::MeasStats => self.results.on = !self.results.on,
             Item::MeasLabels => self.m.meas_labels = !self.m.meas_labels,
             Item::StripDock => {
-                let all = StripDock::ALL;
+                let (all, m) = (self.strip_docks(), &mut self.m);
                 let i = all.iter().position(|&s| s == m.strip_dock).unwrap_or(0);
                 m.strip_dock = all[step_index(i, all.len(), d)];
                 // the statistics card follows the dock the strip uses

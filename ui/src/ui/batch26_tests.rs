@@ -143,11 +143,11 @@ fn the_slider_works_for_a_ref_trigger_and_the_classic_layouts_keep_the_sheet() {
     let ty = u.trig_slider_thumb_y();
     drag(&mut u, (g.x, ty), (g.x, ty + 50));
     assert!(u.m.trig_level < before, "the ref's level follows");
-    // Default keeps the Trigger sheet on the tag
+    // Minimal keeps the Trigger sheet on the tag (Default opens nothing there, as upstream OOS)
     let mut d = Ui::new(Source::Demo { t: 0.0 });
+    d.m.layout = Layout::Minimal;
     for _ in 0..10 { d.step(0.05); }
     frame(&mut d);
-    assert_ne!(d.m.layout, Layout::Studio);
     let r = d.trigger_marker_rects()[0];
     d.plot_tap(r.x + r.w / 2, r.y + r.h / 2);
     assert!(!d.studio.trig_slider && d.menu_open && d.menu_root() == MenuId::Trigger);

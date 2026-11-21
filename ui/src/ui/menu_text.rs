@@ -624,7 +624,7 @@ impl Ui {
             Item::StoreDest => self.files.dest.name().into(),
             Item::MeasStats => onoff(self.results.on),
             Item::MeasLabels => onoff(self.m.meas_labels),
-            Item::StripDock => self.m.strip_dock.label().into(),
+            Item::StripDock => self.strip_dock_label(self.m.strip_dock).into(),
             Item::Zoom => onoff(m.zoom),
             Item::AutoRoll => onoff(m.auto_roll),
             _ => return None,

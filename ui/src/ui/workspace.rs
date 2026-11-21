@@ -1166,7 +1166,8 @@ impl Ui {
         if let Some(chip) = self.md_chip_at(x, y) { return self.studio_chip_popup(chip, x, y); }
         let eye = self.eye_open() && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER).contains(x, y);
         let measurements = self.results_rects().is_some_and(|(head, _)| head.contains(x, y));
-        if !eye && !measurements {
+        // a channel's marker: its quick actions in Minimal and Studio; Default opens the plot's menu, as upstream OOS
+        if !eye && !measurements && self.m.layout != Layout::Default {
             if let Some(c) = self.channel_hotspot(x, y) { return self.channel_popup(c, x, y); }
         }
         // Studio: the plot has a context menu of its own, at the press point (studioctx.rs)
