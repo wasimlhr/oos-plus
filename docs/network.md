@@ -270,6 +270,9 @@ remote.mdns = on              # mDNS and DNS-SD (4.1)
 remote.mcp = read             # MCP of the web remote: off, read or full (4); written when not full
 net.name = dho924s-123456     # the name on the network, written at the first start
 graphics = gpu                # System > Graphics: gpu or cpu (gpu/README.md)
+mem.upper = on                # System > Opt. memory: the memory above 256 MiB used (off by default; written once
+                              # probed or switched; protocols/horizontal-config.md 1.8)
+mem.upper.found = yes         # what System > Probe optional memory found last on this unit (no line: never probed)
 ```
 
 ## 6. Firewall, remote access and the MAC address
