@@ -1293,9 +1293,10 @@ mod tests {
         ui.catalog_add(tile(measures::std_id(Meas::Vamp)));
         ui.catalog_add(tile(measures::std_id(Meas::LowTime)));
         let rows = ready_rows(&mut ui);
-        let amp = rows.iter().find(|r| r.name == meas_display_name(Meas::Vamp)).expect("amplitude");
+        // Default: the rows have upstream's short names
+        let amp = rows.iter().find(|r| r.name == Meas::Vamp.name()).expect("amplitude");
         assert!((amp.v - 2.0).abs() < 0.15, "amplitude {}", amp.v);
-        assert!(rows.iter().any(|r| r.name == meas_display_name(Meas::LowTime) && r.v.is_finite()), "low time");
+        assert!(rows.iter().any(|r| r.name == Meas::LowTime.name() && r.v.is_finite()), "low time");
         ui.catalog_add(tile(measures::serial::DATA_RATE));
         let rate = ready_rows(&mut ui).into_iter().find(|r| r.name == "NRZ Data Rate").unwrap();
         assert!(rate.v.is_finite() && rate.v > 0.0, "{}", rate.v);

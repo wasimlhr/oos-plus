@@ -311,6 +311,28 @@ fn a_square_wave_shows_its_odd_harmonics_in_a_followed_span() {
 }
 
 #[test]
+fn fifty_harmonics_are_all_found_and_the_resolution_is_known_without_the_transform() {
+    // 50 tones of 0.1 V at 10, 20 .. 500 kHz, 10 ms at 2 MSa/s: more lines than the 32 the search once kept
+    let dt = 0.5e-6;
+    let v: Vec<f32> = (0..20_000)
+        .map(|i| {
+            let t = i as f64 * dt;
+            (1..=50).map(|k| 0.1 * (2.0 * std::f64::consts::PI * 10e3 * k as f64 * t + k as f64).sin()).sum::<f64>() as f32
+        })
+        .collect();
+    let stop = spectrum::auto_stop(10e3, 50, 0.0);
+    let s =
+        Settings { center: stop / 2.0, span: stop, rbw: 1.0, window: Window::Blackman, points: 801, ..Default::default() };
+    let sp = spectrum::analyze(&v, dt, &s, &mut None);
+    let m = spectrum::rank_lines(&sp, Some(10e3), 50);
+    assert_eq!(m.len(), 50, "{:?}", m.iter().map(|l| l.f).collect::<Vec<_>>());
+    assert_eq!(spectrum::resolution(&v, dt, &s), sp.rbw);
+    let wide = Settings { rbw: 2e3, ..s };
+    assert_eq!(spectrum::resolution(&v, dt, &wide), spectrum::analyze(&v, dt, &wide, &mut None).rbw);
+    assert_eq!(spectrum::resolution(&v[..8], dt, &s), 0.0);
+}
+
+#[test]
 fn the_whole_band_still_finds_the_fundamental_beside_the_dc_skirt() {
     let (v, dt) = square_record(0.5, 2.0);
     for w in [Window::Hann, Window::Blackman, Window::Flattop] {

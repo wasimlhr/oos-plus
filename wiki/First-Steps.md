@@ -36,7 +36,7 @@ Tap the sample rate at the top for **Acquire**. The rate itself follows the time
 
 ## Auto
 
-The Auto key sets up the channels that are on: levels, time base and trigger, and it sets the memory depth back to Auto. It searches at full bandwidth and then gives each channel its own bandwidth back. With no signal it restores your set-up.
+The Auto key sets up the channels that are on: levels, time base and trigger, and it sets the memory depth back to Auto. It searches at full bandwidth and then gives each channel its own bandwidth back. With no signal it restores your set-up. In one shared plot the channels get a band each, one above the other; with Stacked traces, or Overlay in Studio on one plot, each channel gets the whole height and the view stays as it was.
 
 ![After Auto](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/auto-bar.png)
 
@@ -53,7 +53,17 @@ The x or a tap anywhere else closes the bar; otherwise it goes after 30 seconds.
 
 ## Windows and full screen
 
-**Display > Windows** splits the plot:
+**Display > Windows** splits the plot. In the Default layout its first row is **Density**:
+
+| Density | Plot |
+|---|---|
+| Scope | the whole plot, with the bars |
+| Full | the whole plot without the top bar and the cards (full screen) |
+| Split | two windows, one above the other, or with **Lower** a second pane under the plot |
+| Four | four windows, two by two |
+
+The Minimal and Studio layouts have **Layout**, **Full screen** (Off, On) and **Strip** (where the measurement strip
+stands, or Hidden) instead:
 
 | Layout | Windows |
 |---|---|
@@ -67,9 +77,9 @@ On the same page each channel, each math channel that is on and the logic analys
 ![Full screen](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/full-screen.png)
 
 **Full screen:** the button with four corners at the top right of the plot hides the top bar and the cards. The same
-button, now with the corners pointing inwards, brings them back. Also on Display > Windows > Full screen. While the
-touch lock is on there is no full screen, because the Menu button is the way out of the lock. The button stays where
-it is: a drag that starts on it moves neither the button nor the trace.
+button, now with the corners pointing inwards, brings them back. Also Display > Windows > Density Full (in Minimal and
+Studio: Full screen). While the touch lock is on there is no full screen, because the Menu button is the way out of
+the lock. The button stays where it is: a drag that starts on it moves neither the button nor the trace.
 
 **Zoom:** the magnifier under it opens and closes the zoom view. **Box** in the zoom bar arms one drag: the next drag
 on the plot draws a box, and that box is the zoom window. A tap does not zoom.
@@ -79,7 +89,7 @@ the window layout); a second tap closes it. While zoom is on it sits under the z
 
 ## Views
 
-**From 0.1.12.** Instead of one screen with everything on it, **Display > Views** (2, 3 or 4) gives screens to switch between. Each view keeps what is shown and where: the windows, the second pane, the measurements and their bar, DVM and counter, the cursors, the zoom, the histogram, the analyser page, XY and full screen. The channels, the time base, the trigger and the acquisition are the same in all of them. What you change while a view is shown stays with it; a view not used yet starts with the plot alone.
+**From 0.1.12.** Instead of one screen with everything on it, **Display > Views** (2, 3 or 4) gives screens to switch between. Each view keeps what is shown and where: the windows, the second pane, the measurements and their bar, DVM and counter, the cursors, the zoom, the histogram, the analyser page, XY and full screen. The channels, the time base, the trigger and the acquisition are the same in all of them. What you change while a view is shown stays with it; a view not used yet starts with the plot alone. In the Minimal and Studio layouts a view added by raising the count starts as a copy of the view shown, and lowering the count keeps what is on screen.
 
 To switch: the numbers left of the top bar's buttons, a swipe from the left or right edge of the plot inwards (a
 vertical drag there still moves a channel or the trigger level), the Quick key set to **Next view** (System > Quick
@@ -119,7 +129,8 @@ A number is typed on the number pad: tap the value itself (not - or +) of a chan
 or its position, or the trigger level. Type the digits, a point and a leading minus, then tap the key with the unit
 you mean (`mV`, `V`, `µs`, `ns` ...), which sets the value and closes the pad. The value lands where a remote command
 would put it: the scale on the nearest step (with Fine on, on the next calibrated step above it). Cancel leaves it as
-it was.
+it was. This is the pad of the Default layout; Minimal and Studio have a larger pad that opens on every number row,
+with Exp, Min, Max and the prefixes from G to p, and Enter to set what was typed.
 
 ## Mouse and keyboard
 

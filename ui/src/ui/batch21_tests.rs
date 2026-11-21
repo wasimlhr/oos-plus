@@ -84,7 +84,7 @@ fn the_gear_sheet_is_the_grouped_menu_with_every_group_and_entry() {
         ("Analysers", vec![Open(M::Spectrum), Open(M::Eye), Open(M::Power), Open(M::Bode), Open(M::BwTest), IdentifyAct, Open(M::Magnetic), Open(M::Inverter), Open(M::Dpt)]),
         ("Instruments", vec![Open(M::Dvm), Open(M::Logger)]),
         ("Display", vec![Open(M::Display), Open(M::Horizontal), NavHist]),
-        ("System", vec![Open(M::Storage), Shot, QuickRun, LockAct, Open(M::Utility), PowerAct]),
+        ("System", vec![Open(M::Utility), Open(M::Storage), Shot, QuickRun, LockAct, PowerAct]),
     ];
     for (name, items) in want {
         let grp = g.groups.iter().find(|x| x.name == name).unwrap();
@@ -349,7 +349,7 @@ fn the_list_has_the_header_with_source_gate_search_count_and_pinned_only() {
     let src = bar.slots.iter().find(|s| s.item == super::measpanel::BarItem::Source).expect("the source control").r;
     assert!(src.h >= 24 && src.bottom() <= g.list.y, "{src:?}");
     assert_eq!(u.panel_source_label(), "All sources");
-    assert_eq!(u.panel_gate_label(), "Full record");
+    assert_eq!(u.panel_gate_label(), "Screen");
     let total = listed(&u);
     assert_eq!(total, 5);
     shot(&mut u, "meas-list");

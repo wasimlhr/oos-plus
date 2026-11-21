@@ -1083,7 +1083,7 @@ fn known_pulses(delay: f64) -> Vec<f32> {
     }).collect()
 }
 
-/// One catalog measurement on the known pulse train in R1 (and the same train 100 µs later in R2): its value.
+/// One catalog measurement on the known pulse train in R1 (the same 100 µs later in R2) over the record: its value.
 fn known_value(def: &'static crate::measures::Def) -> (f64, String) {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.run = RunState::Stop;
@@ -1091,7 +1091,7 @@ fn known_value(def: &'static crate::measures::Def) -> (f64, String) {
     u.m.meas.clear();
     u.m.meas2.clear();
     u.m.cat.clear();
-    u.m.meas_full_record = true;
+    (u.m.meas_full_record, u.m.meas_out, u.m.meas_n) = (true, oos_dsp::measure::Outside::Above, 6);
     for (r, delay) in [(0, 0.0), (1, 100e-6)] {
         u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0: -5e-3, dt: 1e-6, v: known_pulses(delay).into(), vpd: 0.2, offset: 0.0, on: true });
     }
@@ -1927,16 +1927,16 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
 }
 
 /// Display > Screen in Minimal and Studio has no row that does nothing there: Bottom bar chooses between the bars of
-/// the Default layout, and Skin is offered with it. Both stay in the menu of the Default layout.
+/// the Default layout and stays in the menu of the Default layout.
 #[test]
-fn the_display_sheet_has_no_skin_and_no_bottom_bar() {
+fn the_display_sheet_has_no_bottom_bar() {
     for layout in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(layout);
         u.open_menu(MenuId::Display);
         u.step(0.04);
         let spec = u.sheet_spec(MenuId::Display).expect("a sheet");
         let rows: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().chain(&t.foot).copied()).collect();
-        assert!(!rows.contains(&Item::Skin) && !rows.contains(&Item::BottomBar), "{layout:?}: {rows:?}");
+        assert!(!rows.contains(&Item::BottomBar), "{layout:?}: {rows:?}");
         let screen = spec.tabs.iter().find(|t| t.name == "Screen").expect("the Screen tab");
         assert_eq!(screen.rows, [Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize], "{layout:?}");
         // what Bottom bar chooses is the same either way: the bars are the compact ones, and nothing moves
@@ -1950,7 +1950,7 @@ fn the_display_sheet_has_no_skin_and_no_bottom_bar() {
     }
     let u = fresh(Layout::Default);
     let items = u.items(MenuId::Display);
-    assert!(items.contains(&Item::Skin) && items.contains(&Item::BottomBar), "the Default layout keeps both");
+    assert!(items.contains(&Item::BottomBar), "the Default layout keeps it");
 }
 
 /// A channel pill of Studio's bottom bar is as wide as its badge, the widest scale and its chevron need: with one or
@@ -3038,14 +3038,14 @@ fn the_trigger_level_follows_the_signals_mean_with_ac_coupling() {
     assert!((u.m.trig_level - place).abs() < 1e-4, "HF reject counts in volts: {} {place}", u.m.trig_level);
 }
 
-/// With the cursors on, the two multipurpose knobs move them: the first cursor A, the second cursor B, with no menu
-/// open and with the Cursor menu open. A turn opened the Menu, and in the Cursor menu it stepped through the rows, so
-/// no knob moved a cursor (reported from a unit, 2026-11-18). Without cursors a turn opens the Menu as before.
+/// Minimal and Studio, cursors on: the multipurpose knobs move them (the first A, the second B), with no menu open
+/// and with the Cursor menu open; a turn had opened the Menu or stepped its rows (reported from a unit, 2026-11-18).
+/// Without cursors a turn opens the Menu as before. Default keeps the knobs' job, as upstream OOS (batch4_tests.rs).
 #[test]
 fn the_multipurpose_knobs_move_the_cursors() {
     const A_CW: u8 = 0xba;
     const B_CW: u8 = 0xaa;
-    for layout in [Layout::Studio, Layout::Minimal, Layout::Default] {
+    for layout in [Layout::Studio, Layout::Minimal] {
         let mut u = fresh(layout);
         // no cursors: the knob opens the Menu
         u.key(A_CW);

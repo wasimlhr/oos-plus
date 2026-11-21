@@ -199,6 +199,12 @@ fn menus_fit_at(scr: Screen, ts: TextSize, all: &mut BTreeSet<String>) {
     walk(&|| open(Display, &trend), "Display Trend", &mut out);
     walk(&|| open(Windows, &|u| u.select_option(Item::WinLayout, "Stacked")), "Windows split", &mut out);
     walk(&|| open(Windows, &|u| u.select_option(Item::WinLayout, "Four")), "Windows four", &mut out);
+    // Default's page: upstream's density row
+    let default_split = |u: &mut Ui| {
+        u.m.layout = crate::model::Layout::Default;
+        u.select_option(Item::WinLayout, "Split");
+    };
+    walk(&|| open(Windows, &default_split), "Windows Default split", &mut out);
     walk(&|| open(Bode, &|u| u.m.bode_gen = crate::model::bode::FREE), "Bode free sweep", &mut out);
     walk(
         &|| {

@@ -600,3 +600,82 @@ fn measurement_gate_changes_burst_outside_and_duration() {
     assert!(err.starts_with("-224,"), "{err}");
     assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:NPER?;:MEAS:EDG?"), "1;DATA");
 }
+
+// Break it catches: `:STOP` throws the accumulated statistics away (on a unit, 2026-11-20: the count of a running
+// Frequency row stood at 104, one second after `:STOP` at 1)
+#[test]
+fn stop_keeps_the_accumulated_statistics() {
+    let (mut s, mut ui, cv) = session();
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:STAT:ITEM FREQ,CHAN1;:MEAS:STAT:RES;:RUN;:SYST:ERR?"), "0,\"No error\"");
+    let count = |s: &mut _, ui: &mut Ui| line(s, ui, &cv, ":MEAS:STAT:ITEM? CNT,FREQ,CHAN1").parse::<f64>().unwrap();
+    let end = std::time::Instant::now() + Duration::from_secs(20);
+    while count(&mut s, &mut ui) < 5.0 {
+        assert!(std::time::Instant::now() < end, "no statistics while running");
+        ui.step(0.05);
+    }
+    let before = count(&mut s, &mut ui);
+    line(&mut s, &mut ui, &cv, ":STOP");
+    for _ in 0..20 {
+        ui.step(0.05);
+    }
+    let after = count(&mut s, &mut ui);
+    assert!(after >= before, "the count went from {before} to {after} on :STOP");
+}
+
+/// A pulse train of `f` Hz, 30 % duty, 0 to 1 V, 20 000 points at 100 MSa/s, as a CSV for a reference slot.
+fn pulse_csv(f: f64) -> String {
+    let mut csv = String::from("Time (s),Volts\n");
+    for i in 0..20_000 {
+        let t = i as f64 * 1e-8;
+        csv.push_str(&format!("{:.12e},{}\n", t, if (t * f).fract() < 0.3 { 1.0 } else { 0.0 }));
+    }
+    csv
+}
+
+// Break it catches: `:SPECtrum:RBW:ACTual?` and `:SPECtrum:PEAK:LIST?` answer the page's old result while the page is
+// not shown (on a unit, 2026-11-20: the same answer for ten new records), and the list stops at 8 lines whatever the
+// Harmonics setting (240, 320 and 400 MHz of a 40 MHz clock were left out)
+#[test]
+fn spectrum_queries_answer_the_record_now_with_every_harmonic_asked_for() {
+    let (mut s, mut ui, cv) = session();
+    ui.load_waveform_auto(pulse_csv(1e6).as_bytes(), "a.csv").unwrap();
+    ui.load_waveform_auto(pulse_csv(2e6).as_bytes(), "b.csv").unwrap();
+    ui.set_offline(true);
+    let lines = |s: &mut _, ui: &mut Ui, src: &str| -> Vec<(f64, f64)> {
+        line(s, ui, &cv, &format!(":VIEW SCOPE;:SPEC:SOUR {src};:SPEC:SPAN 0;:SPEC:PEAK:HARM 20"));
+        let a = line(s, ui, &cv, ":SPEC:PEAK:LIST?");
+        a.split(';').map(|p| {
+            let mut x = p.split(',').map(|v| v.parse::<f64>().unwrap());
+            (x.next().unwrap(), x.next().unwrap())
+        }).collect()
+    };
+    assert!(!ui.spectrum_runs(), "the page is not shown");
+    let one = lines(&mut s, &mut ui, "R1");
+    let two = lines(&mut s, &mut ui, "R2");
+    let fundamental = |l: &[(f64, f64)]| l.iter().copied().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap().0;
+    assert!((fundamental(&one) - 1e6).abs() < 2e4, "{one:?}");
+    assert!((fundamental(&two) - 2e6).abs() < 4e4, "the answer follows the source: {two:?}");
+    assert!(one.len() > 8, "more than 8 lines when 20 harmonics are asked for: {one:?}");
+    assert!(one.windows(2).all(|w| w[0].0 < w[1].0), "in the order of the table (by frequency): {one:?}");
+    let rbw = line(&mut s, &mut ui, &cv, ":SPEC:RBW:ACT?").parse::<f64>().unwrap();
+    assert!(rbw > 0.0 && rbw < 1e5, "{rbw}");
+}
+
+// Break it catches: a script cannot tell a measurement still computed from one that does not exist (both 9.9E37; on
+// a unit, 2026-11-20, one to four reads after a Single): `:MEASure:PENDing?` says which, and at 0 the value is there
+#[test]
+fn pending_says_when_the_measurements_of_a_single_are_done() {
+    let (mut s, mut ui, cv) = session();
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:ITEM VPP,CHAN1;:SING;:SYST:ERR?"), "0,\"No error\"");
+    let end = std::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        ui.step(0.05);
+        let stopped = line(&mut s, &mut ui, &cv, ":TRIG:STAT?") == "STOP";
+        if stopped && line(&mut s, &mut ui, &cv, ":MEAS:PEND?") == "0" {
+            break;
+        }
+        assert!(std::time::Instant::now() < end, "still pending");
+    }
+    let v = line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,CHAN1").parse::<f64>().unwrap();
+    assert!(v.abs() < 1e30, "at 0 the value is there: {v}");
+}

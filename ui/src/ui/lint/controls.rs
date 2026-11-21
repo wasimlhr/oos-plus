@@ -274,6 +274,8 @@ fn decoder_results_are_cached_per_record() {
 fn the_events_pane_opens_from_the_menu_and_goes_to_an_event() {
     let dir = crate::ui::testkit::Scratch::new("events");
     let mut u = with_two_channels();
+    // Minimal's and Studio's row (Default's opens upstream's Event table)
+    u.m.layout = Layout::Minimal;
     u.files.dir = dir.clone();
     u.m.ch[2].on = true;
     u.m.dec_on = true;
@@ -312,6 +314,50 @@ fn the_events_pane_opens_from_the_menu_and_goes_to_an_event() {
     // the row of the menu again
     u.activate(Item::DecTable);
     assert!(!u.events_pane_on());
+}
+
+/// Default keeps upstream's Event table over the plot: Decode > Event table opens it, a tap on a row of a running
+/// scope only says how to get there, a stopped one goes to the event, the events are exported a row per field, and
+/// the close button takes it away.
+#[test]
+fn event_table_scrolls_and_goes_to_an_event() {
+    let dir = crate::ui::testkit::Scratch::new("evtable");
+    let mut u = with_two_channels();
+    assert_eq!(u.m.layout, Layout::Default);
+    u.files.dir = dir.clone();
+    u.m.ch[2].on = true;
+    u.m.dec_on = true;
+    u.m.dec_src = 2;
+    for _ in 0..4 {
+        u.step(0.04);
+    }
+    assert_eq!(u.item_label(Item::DecTable), "Event table");
+    u.activate(Item::DecTable);
+    assert_eq!(u.table.kind, Some(tables::TableKind::Decode));
+    assert!(u.decode_table_on() && !u.events_pane_on());
+    let n = u.table_rows(tables::TableKind::Decode).len();
+    assert!(n > 3);
+    let mut cv = Canvas::new(PANEL_W, PANEL_H);
+    u.render(&mut cv);
+    // running: a tap only says so
+    let (x, y) = (u.plot.area.x + 100, u.plot.area.y + 8 + 40 + 40);
+    let d0 = u.m.delay;
+    u.tap(x, y);
+    assert_eq!(u.m.delay, d0);
+    assert!(u.toast.as_ref().is_some_and(|t| t.0.contains("Stop")));
+    // stopped: the view goes there
+    u.m.run = RunState::Stop;
+    u.tap(x, y);
+    assert_ne!(u.m.delay, d0);
+    u.activate(Item::DecExport);
+    let f = std::fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
+    let t = std::fs::read_to_string(&f).unwrap();
+    assert!(t.starts_with("Time (s),Source,Event,Ok") && t.lines().count() == n + 1, "{}", &t[..80.min(t.len())]);
+    let _ = std::fs::remove_dir_all(&dir);
+    // the close button
+    let close = u.plot.area.x + 30 + 420 - 46 + 10;
+    u.tap(close, u.plot.area.y + 20);
+    assert!(u.table.kind.is_none() && !u.decode_table_on());
 }
 
 #[test]

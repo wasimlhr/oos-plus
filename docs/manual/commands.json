@@ -361,7 +361,7 @@
     {
      "header": ":SYSTem:INFO",
      "query": ":SYSTem:INFO?",
-     "desc": "The System info page in one line: each line of the page a quoted string, `\"label,value\"` or `\"# heading\"`, separated by commas",
+     "desc": "The System info page in one line (the model, its rated bandwidth, channels, software): each line of the page a quoted string, `\"label,value\"` or `\"# heading\"`, separated by commas",
      "remarks": [
       "- Menu equivalent: System > System info.",
       "- Origin: OOS extension"
@@ -4225,6 +4225,16 @@
      "example": ":MEASure:STRip?    /*The query returns VPP,CHAN1,2.564586E+00;PERIOD,CHAN1,1.000014E-03.*/"
     },
     {
+     "header": ":MEASure:PENDing",
+     "query": ":MEASure:PENDing?",
+     "desc": "`1` while the measurements of the record shown are still computed (in the background, a catalogue row, or a queried item, ref or pair measurement), else `0`. A value read meanwhile answers `9.9E37` like one that does not exist. `0` can still be of the previous record: after `:SINGle`, wait until `:TRIGger:STATus?` answers `STOP`, then for `0`, then read.",
+     "remarks": [
+      "- Menu equivalent: Measurements > Computing.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
      "header": ":MEASure:READout",
      "query": ":MEASure:READout?",
      "desc": "Strip rows plus Eye figures when that analysis page is active.",
@@ -4553,7 +4563,7 @@
      "header": ":MEASure:REFS",
      "set": ":MEASure:REFS <value>",
      "query": ":MEASure:REFS?",
-     "desc": "Sets or queries Preset for Gate and edge settings (menu: Measure levels > Preset).",
+     "desc": "Sets or queries Refs for Gate and edge settings (menu: Measure levels > Refs).",
      "params": [
       [
        "<value>",
@@ -4834,7 +4844,7 @@
      "header": ":MEASure:LEVel:PRESet",
      "set": ":MEASure:LEVel:PRESet <value>",
      "query": ":MEASure:LEVel:PRESet?",
-     "desc": "Sets or queries Preset for Reference levels (menu: Measure levels > Preset).",
+     "desc": "Sets or queries Refs for Reference levels (menu: Measure levels > Refs).",
      "params": [
       [
        "<value>",
@@ -5051,7 +5061,7 @@
     {
      "header": ":MEASure:STATistic:RESet",
      "set": ":MEASure:STATistic:RESet",
-     "desc": "Central statistics reset, including catalog/deferred accounting. It does not create an acquisition.",
+     "desc": "Central statistics reset, including catalog/deferred accounting. It does not create an acquisition. `:RUN`, `:STOP` and `:SINGle` keep the statistics; a change of a setting starts them again.",
      "remarks": [
       "- Menu equivalent: Measurements > Statistics.",
       "- Origin: Rigol-style (command family of the DHO guide)"
@@ -5105,7 +5115,7 @@
       [
        "<item>[,source[,source]]",
        "Text",
-       "Set: add the readout and show statistics.",
+       "Set: add the readout and show statistics. `CNT` counts frames for `VMAX`, `VMIN`, `VPP`, `VAVG`, `VRMS`, `ACRms` and `SDEViation`: they are measured on every acquired frame (not on frames shown as 3600 interpolated points, short time bases); of an envelope frame (above 1 M points, roll, scan) only `VMAX`, `VMIN` and `VPP` count. Every other item counts the records measured, a few a second, so its `CNT` is much smaller in the same run.",
        "—"
       ]
      ],
@@ -9689,7 +9699,7 @@
     {
      "header": ":SPECtrum:RBW:ACTual",
      "query": ":SPECtrum:RBW:ACTual?",
-     "desc": "The resolution bandwidth, Hz, of the spectrum last computed; `9.9E37` before the first one. The record on the screen limits how fine it can be, so it can be coarser than `:SPECtrum:RBW` asks for: make the time base slower for a finer one.",
+     "desc": "The resolution bandwidth, Hz, of the spectrum of the record now: the one the page shows while it is on the screen, else computed for the query from the page's settings (without the transform); `9.9E37` without a record. The record on the screen limits how fine it can be, so it can be coarser than `:SPECtrum:RBW` asks for: make the time base slower for a finer one.",
      "remarks": [
       "- Menu equivalent: Spectrum > RBW in the title of the plot.",
       "- Origin: OOS extension"
@@ -9864,7 +9874,7 @@
     {
      "header": ":SPECtrum:PEAK:LIST",
      "query": ":SPECtrum:PEAK:LIST?",
-     "desc": "The lines of the peak table in its order (by frequency or by level): `frequency,level;...`, Hz and dBV, up to 8 lines, also those the table has no room for; `9.9E37` when there is none.",
+     "desc": "The lines of the spectrum of the record now, in the order of the peak table (by frequency or by level): `frequency,level;...`, Hz and dBV: the lines found above the noise within the page's span (the fundamental's harmonics, and others within the spur range of the strongest), strongest first, up to the Harmonics row (at least 8; All: every line the search keeps, up to 64), also those the table has no room for; a harmonic below the noise is not listed. Computed for the query when the page is not on the screen (also behind another Studio tab); `9.9E37` when there is none (also when the span holds no line).",
      "remarks": [
       "- Menu equivalent: Spectrum > Peak list.",
       "- Origin: OOS extension"
@@ -16031,14 +16041,8 @@
        "`:DISPlay:RULers`"
       ],
       [
-       "`skin`",
-       "display settings: Display > Skin, `OOS` or `OOS Plus`",
-       "`OOS`",
-       "-"
-      ],
-      [
        "`color_grade`",
-       "display settings",
+       "as above",
        "`false`",
        "`:DISPlay:COLor`"
       ],

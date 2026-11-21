@@ -293,6 +293,7 @@ The example deliberately stops acquisition and retains that state. It reads one 
 | `:MEASure:TSETup[?]` / `:THOLd[?]` | Nonnegative seconds: `SETHOLD` counts the clock edges whose setup or hold is shorter. |
 | `:MEASure:STRip?` | Configured standard/pair/catalog rows, then enabled DVM/counter rows. |
 | `:MEASure:READout?` | Strip rows plus Eye figures when that analysis page is active. |
+| `:MEASure:PENDing?` | `1` while the measurements of the record shown are still computed, else `0`. |
 | `:EYE:ITEM? <figure>` | Current configured Eye result; does not itself run one-click Auto Eye. |
 | `:VIEW[?]` | `SCOPE|SPECTRUM|EYE|POWER|BODE|MAGNETIC|INVERTER|DPT`. |
 
@@ -635,7 +636,7 @@ Statistics count accepted observations. A stopped reference can have a valid cur
 | `:MATH<n>:FFT:SOURce[?]`, `:SCALe[?]` | FFT input and dB display scale; the window is below. |
 | `:MATH<n>:FILTer:TYPE[?]`, `:W1[?]`, `:W2[?]` | Supported low/high/band-pass/stop filter and valid corner frequencies. |
 | `:BUS<n>:MODE[?]`, `:DISPlay[?]`, `:FORMat[?]` | Decoder protocol, visibility, `HEX|ASCii` formatting. |
-| `:BUS<n>:EVENt[?]` | Shared decode event-table visibility. |
+| `:BUS<n>:EVENt[?]` | Shared decode event-table visibility: the Event table over the plot in the Default layout, the Events pane in Minimal and Studio. |
 | `:BUS<n>:THReshold[?]` | Decoder threshold in source units. |
 | `:BUS<n>:DATA?` | Ready event rows in an IEEE block. `BUSY` while required decoding is pending; unavailable sources return an error. |
 | `:BUS<n>:RS232:TX[?]`, `:RX[?]` | CH/ref role identities. UART decoding uses the configured primary input. |

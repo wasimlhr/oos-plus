@@ -415,7 +415,7 @@ fn a_loaded_ref_feeds_measure_power_bode_spectrum_and_eye() {
     u.m.ch[0].bw = BW_20M;
     u.m.ch[0].coupling = Coupling::Ac;
     u.m.meas = vec![(Meas::Vpp, WaveId::Ref(0))];
-    let row = u.meas_rows().into_iter().find(|r| r.name == "Peak-to-Peak").expect("pk-pk");
+    let row = u.meas_rows().into_iter().find(|r| r.name == Meas::Vpp.name()).expect("pk-pk");
     let direct = oos_dsp::measure::analyze_min(&sine, dt, 0.4 * 0.2);
     assert!((row.v - direct.get(Meas::Vpp)).abs() < 1e-6, "{} vs {}", row.v, direct.get(Meas::Vpp));
     let mut filtered = sine.clone();
