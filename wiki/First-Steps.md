@@ -79,7 +79,7 @@ the window layout); a second tap closes it. While zoom is on it sits under the z
 
 ## Views
 
-**From 0.1.12.** Instead of one screen with everything on it, **Display > Views** (2, 3 or 4) gives screens to switch between. Each view keeps what is shown and where: the windows, the second pane, the measurements and their bar, DVM and counter, the cursors, the zoom, the histogram, the analyser page, XY and full screen. The channels, the time base, the trigger and the acquisition are the same in all of them. What you change while a view is shown stays with it; a view not used yet starts with the plot alone.
+**From 0.1.12.** Instead of one screen with everything on it, **Display > Views** (2, 3 or 4) gives screens to switch between. Each view keeps what is shown and where: the windows, the second pane, the measurements and their bar, DVM and counter, the cursors, the zoom, the histogram, the analyser page, XY and full screen. The channels, the time base, the trigger and the acquisition are the same in all of them. What you change while a view is shown stays with it; a view not used yet starts with the plot alone. In the Minimal and Studio layouts a view added by raising the count starts as a copy of the view shown, and lowering the count keeps what is on screen.
 
 To switch: the numbers left of the top bar's buttons, a swipe from the left or right edge of the plot inwards (a
 vertical drag there still moves a channel or the trigger level), the Quick key set to **Next view** (System > Quick
