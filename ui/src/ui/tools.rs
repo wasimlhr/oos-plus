@@ -203,10 +203,17 @@ impl Ui {
         if !self.m.ch[c].on || !self.computing_like_last(c) || matches!(k, Meas::TVmax | Meas::TVmin) {
             return f64::NAN;
         }
-        if self.meas_env[c] && crate::framestats::needs_samples(k) {
+        if self.meas_bg.env[c] && crate::framestats::needs_samples(k) {
             return f64::NAN;
         }
         self.meas_of(&self.ana[c], k)
+    }
+
+    /// The last finished measurement of a channel stands in for the one being made (`computing_like_last`): a value
+    /// it has not got is then "no value", not "Computing". A line with no edges, running at 1 Mpts, said Computing
+    /// for its Frequency for as long as it ran (CH1 on a unit, 2026-11-20).
+    fn last_answer_stands_in(&self, id: WaveId) -> bool {
+        matches!(id, WaveId::Ch(c) if self.computing_like_last(c))
     }
 
     /// Measurement `k` of a channel or a reference. A channel that is off, or a ref with no samples, is NaN.
@@ -276,7 +283,7 @@ impl Ui {
             .iter()
             .map(|&(k, id)| {
                 let val = self.meas_number(id, k);
-                MeasRow { name: super::meascatalog::meas_display_name(k).to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k), reason: String::new() }
+                MeasRow { name: super::meascatalog::meas_display_name(k).to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k) && !self.last_answer_stands_in(id), reason: String::new() }
             })
             .collect();
         for &(k, a, b) in &self.m.meas2 {
@@ -1225,8 +1232,9 @@ impl Ui {
                 sigma: f64::NAN,
             });
         }
-        let first = bins.iter().position(|&b| b > 0).unwrap() as f64;
-        let last = bins.iter().rposition(|&b| b > 0).unwrap() as f64;
+        // n > 0: some bin holds a count
+        let first = bins.iter().position(|&b| b > 0).unwrap_or(0) as f64;
+        let last = bins.iter().rposition(|&b| b > 0).unwrap_or(0) as f64;
         let (min_px, max_px) = if high_is_low_index { (last, first) } else { (first, last) };
         let mut peaks = 0u64;
         for i in 0..bins.len() {

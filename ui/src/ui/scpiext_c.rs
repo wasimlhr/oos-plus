@@ -76,7 +76,7 @@ impl Ui {
             // ---- network
             "SYSTem:COMMunicate:LAN:IPADdress" => {
                 if !q { return Some(Err(undefined(key))); }
-                t(self.net_ifs.iter().find(|i| i.0 == "eth0").map(|i| i.1.clone()).unwrap_or_else(|| self.net.clone()))
+                t(self.net.ifs.iter().find(|i| i.0 == "eth0").map(|i| i.1.clone()).unwrap_or_else(|| self.net.addr.clone()))
             }
             "SYSTem:COMMunicate:LAN:MAC" => if q { t(self.net_value(Item::NetMac)) } else { Err(undefined(key)) },
             "SYSTem:COMMunicate:LAN:STATus" => if q { t(self.net_value(Item::NetEth)) } else { Err(undefined(key)) },

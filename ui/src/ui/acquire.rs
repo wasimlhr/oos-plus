@@ -31,6 +31,79 @@ pub(crate) struct FrameTimes {
     pub parts: [f32; 4],
 }
 
+/// The fast path for the queued hardware frames (`Ui::fast_draw_all`): its trigger statistics, how many frames it
+/// takes in one screen, its times, and its buffers between screens. The `stat` line of the console and
+/// `:SYSTem:STATe?` read them. ADR 0062.
+pub(crate) struct FastPath {
+    /// frames by where the edge of the set direction was: at the hardware trigger point; further away with an edge of
+    /// the other direction at the point (the hardware fired on the wrong edge); further away with no edge at the point
+    /// (the point is off); none found. And the offsets of the last kind in samples: sum, largest (`stat`, trigger.md 8)
+    pub edges: [u64; 4],
+    pub off: (f64, f64),
+    /// frames the fast path takes in one screen (`fast_max`), its time in the last screens (ms, smoothed) and that of
+    /// its two phases (placing, drawing; `:SYSTem:STATe?`)
+    pub take: f32,
+    pub t: f32,
+    pub t_ab: (f32, f32),
+    /// of the drawing: adding the collected frames to the maps (ms), frames a call (smoothed)
+    pub t_fold: f32,
+    pub n: f32,
+    /// the collected differences per channel (`fastdraw::diff_span`), zero between screens
+    acc: [Vec<u16>; NCH],
+}
+
+impl Default for FastPath {
+    fn default() -> FastPath {
+        FastPath {
+            edges: [0; 4],
+            off: (0.0, 0.0),
+            take: crate::board::QUEUE_MAX as f32,
+            t: 0.0,
+            t_ab: (0.0, 0.0),
+            t_fold: 0.0,
+            n: 0.0,
+            acc: Default::default(),
+        }
+    }
+}
+
+/// What the step saw last (ADR 0062).
+pub(super) struct Seen {
+    /// the trigger level last seen and when it changed: the level line shows for `LEVEL_LINE_S` after a change (knob,
+    /// touch, remote), so the level can be followed while it moves
+    pub level: (f32, f32),
+    pub level_changed: f64,
+    /// time of the last record (UI clock), for the WAIT status
+    pub rec_t: f64,
+    /// smoothed time between two records (deep hardware records arrive about once per second)
+    pub rec_iv: f64,
+}
+
+impl Default for Seen {
+    fn default() -> Self {
+        // NaN: the first look at the level (start-up) is no change
+        Seen { level: (f32::NAN, f32::NAN), level_changed: 0.0, rec_t: 0.0, rec_iv: 0.0 }
+    }
+}
+
+/// A STOP of the hardware (docs/fork/stop-exact.md): the request for its final frame and the wait for it, and the
+/// records shown after it (`stop_replay`). ADR 0062.
+#[derive(Default)]
+pub(super) struct Stop {
+    /// the request number of the final frame, counted at every RUN (`OperationToken::Stop`)
+    pub final_req: u64,
+    /// waiting for the final frame: until when (`STOP_FINAL_WAIT`)
+    pub final_until: Option<f64>,
+    /// the software trigger of the record shown at the stop (s from the hardware trigger point), kept for the
+    /// records read again
+    pub ti_off: Option<f64>,
+    /// the raw record shown at the stop (the final frame of a deep or live-compressed record), and the min/max pair
+    /// record the thread read again for the view when that came as pairs. The pairs are drawn; the raw record stays
+    /// `last[0]`, the record measured and read out
+    pub raw: Option<Record>,
+    pub pic: Option<Record>,
+}
+
 /// What a part runs on each frame to take what its thread or its probe has for it.
 type Poll = fn(&mut Ui);
 
@@ -56,6 +129,15 @@ const POLLS: [(&str, Poll); 15] = [
 ];
 
 /// The polls that are called from elsewhere on purpose, and why. The list only gets shorter (ADR 0061).
+/// Whether the raw record `r` holds the whole acquisition: samples, not min/max pairs, and every point of the memory
+/// (`Frame::acq`). A view read again from the memory then holds nothing it does not; a window of a deep record does not.
+fn raw_whole(r: &Record) -> bool {
+    r.raw.as_ref().is_some_and(|x| {
+        let len = x.frame.ch.iter().map(Vec::len).max().unwrap_or(0);
+        !x.frame.envelope && x.frame.dt > 0.0 && len > 0 && len >= x.frame.acq.1
+    })
+}
+
 #[cfg(test)]
 const POLLED_ELSEWHERE: [(&str, &str); 7] = [
     ("sim_poll", "step_polls, before relayout, and sim.rs while a SIM run is started"),
@@ -92,7 +174,9 @@ impl Ui {
         // a source started in STOP (replay) still shows its first record, unless the screen was cleared
         if !self.record_mode()
             && live
-            && (self.m.run == RunState::Run || self.stop_final.is_some() || (self.last[0].is_none() && !self.cleared))
+            && (self.m.run == RunState::Run
+                || self.stop.final_until.is_some()
+                || (self.last[0].is_none() && !self.cleared))
         {
             self.step_live(dt_wall, persist, hw_seg);
         } else if !self.record_mode() {
@@ -112,8 +196,13 @@ impl Ui {
         }
         self.step_meas_rows();
         // the final frame was taken (or did not come in time): stopped
-        if self.stop_final.is_some_and(|t| final_done || self.now > t) {
-            self.stop_final = None;
+        if self.stop.final_until.is_some_and(|t| final_done || self.now > t) {
+            self.stop.final_until = None;
+            // only an answered request is a STOP in place: after the time limit a `*OPC?` waiting for it is cancelled
+            // (-410), not told `1` about a record the thread did not confirm
+            if self.m.run == RunState::Stop && final_done {
+                self.scpi_finish_operation(OperationToken::Stop(self.stop.final_req));
+            }
         }
         if self.m.run == RunState::Stop {
             if !self.record_mode() {
@@ -162,12 +251,12 @@ impl Ui {
 
     /// Trigger level changes, SINGLE arming, the channels of the platform and the sources that point at them.
     fn step_guards(&mut self) {
-        if (self.m.trig_level, self.m.trig_level2) != self.level_seen {
+        if (self.m.trig_level, self.m.trig_level2) != self.seen.level {
             // the first look (start-up) is no change
-            if !self.level_seen.0.is_nan() {
-                self.level_changed = self.now;
+            if !self.seen.level.0.is_nan() {
+                self.seen.level_changed = self.now;
             }
-            self.level_seen = (self.m.trig_level, self.m.trig_level2);
+            self.seen.level = (self.m.trig_level, self.m.trig_level2);
         }
         self.src.publish_afg(&self.m);
         // SINGLE armed: from here on only what comes after the press counts
@@ -209,26 +298,32 @@ impl Ui {
         // RUN after STOP: the hardware average starts over (stock clears it on every state change)
         if running && !self.was_running {
             self.hw_avg_restart();
+            // the final-frame request of the next STOP, counted here so that a `*OPC?` taken with the STOP, before
+            // this step sees it, waits for it (`OperationToken::Stop`)
+            self.stop.final_req += 1;
         }
         if running && !self.was_running && self.m.segments > 0 {
-            self.seg_n = 0;
+            self.seg.n = 0;
             self.history.clear();
             self.hist_pos = None;
             if hw_seg {
-                self.seg_run += 1;
-                (self.seg_pos, self.seg_view) = (None, None);
-                self.seg_times.clear();
+                self.seg.run += 1;
+                (self.seg.pos, self.seg.view) = (None, None);
+                self.seg.times.clear();
             }
         }
         // STOP of a deep record on pairs with raw deep measurements: the hardware reads the newest frame raw and
         // stops arming; until it is here the records go on (docs/fork/stop-exact.md)
-        if !running && self.was_running && self.stop_wants_final() {
-            self.final_req += 1;
-            self.stop_final = Some(self.now + STOP_FINAL_WAIT);
+        if !running && self.was_running {
+            if self.stop_wants_final() {
+                self.stop.final_until = Some(self.now + STOP_FINAL_WAIT);
+            } else {
+                self.scpi_finish_operation(OperationToken::Stop(self.stop.final_req));
+            }
         }
         // held while stopped, unless the screen still waits for a first record (a source started in STOP, as the
         // record path below takes it); a Clear in STOP leaves the screen empty, not the thread free to arm
-        let final_done = self.src.hw_hold(!running && (self.last[0].is_some() || self.cleared), self.final_req);
+        let final_done = self.src.hw_hold(!running && (self.last[0].is_some() || self.cleared), self.stop.final_req);
         // the protocol watch and XY read every record: no live compression for them (compress.rs)
         self.src.hw_needs_raw(self.needs_raw());
         self.was_running = running;
@@ -261,9 +356,8 @@ impl Ui {
     /// The records of this step: the fast path, the record loop, the rates and the measurement of the newest.
     fn step_live(&mut self, dt_wall: f64, persist: f32, hw_seg: bool) {
         if self.m.run == RunState::Run {
-            self.stop_ti_off = None;
-            self.stop_whole = None;
-            (self.stop_raw, self.stop_pic) = (None, None);
+            self.stop.ti_off = None;
+            (self.stop.raw, self.stop.pic) = (None, None);
             self.loaded_record = false;
         }
         // a changed setting while running: the picture is replaced when the next record is drawn, not at once. A step
@@ -345,19 +439,19 @@ impl Ui {
         take.got += n;
         let ms = t0.elapsed().as_secs_f32() * 1000.0;
         take.td += ms;
-        self.t_fast += 0.05 * (ms - self.t_fast);
+        self.fast.t += 0.05 * (ms - self.fast.t);
         if n > 0 && ms > 0.0 {
             // as many as would have filled the budget at this pace: with a fixed part in each screen's time
             // (starting the helpers) this settles where the time meets the budget. Down only when the budget
             // was exceeded, up only when the take was the limit: the hardware delivers in bursts, and a screen
             // with a few frames says nothing about how many fit
-            self.fast_take = fast_take_next(self.fast_take, n, ms, self.fast_budget());
+            self.fast.take = fast_take_next(self.fast.take, n, ms, self.fast_budget());
         }
         // batch mode: the other frames of the batches, drawn by the deposit workers (drawpipe.rs)
         if let Some(p) = crate::drawpipe::pipe() {
             let t1 = std::time::Instant::now();
             p.set_view(Some(&self.m), self.ph.w, self.ph.h);
-            let d = p.merge(&mut self.ph, &mut take.clear_pending, &mut self.fast_edges, &mut self.fast_off);
+            let d = p.merge(&mut self.ph, &mut take.clear_pending, &mut self.fast.edges, &mut self.fast.off);
             if d.triggered > 0 {
                 self.m.status = TrigStatus::Triggered;
             }
@@ -380,7 +474,7 @@ impl Ui {
                 Some(mut rec) if !crate::zone::pass(&self.m.zones, &rec.ch, rec.t0, rec.dt) => {
                     // zone trigger: not a qualifying record
                     let _ = &mut rec;
-                    self.zone_drops += 1;
+                    self.zone_trig.drops += 1;
                     // what the filter saw of the record it refused last (`:SYSTem:DEBug:ZONE?`)
                     self.zone_last = self.m.zones.iter().filter(|z| z.usable()).map(|z| {
                         let v = &rec.ch[z.src.min(NCH - 1)];
@@ -407,7 +501,7 @@ impl Ui {
                 }
                 None => {}
             }
-            if self.m.run == RunState::Stop && self.stop_final.is_none() {
+            if self.m.run == RunState::Stop && self.stop.final_until.is_none() {
                 break;
             }
         }
@@ -438,7 +532,7 @@ impl Ui {
         // the trace flickered with the batch sizes (docs/fork/flicker.md)
         let frame = rec.raw.as_ref().filter(|_| self.fast_ok()).map(|r| r.frame.clone());
         if let Some(f) = frame {
-            let stats = crate::drawpipe::Stats { edges: &mut self.fast_edges, off: &mut self.fast_off };
+            let stats = crate::drawpipe::Stats { edges: &mut self.fast.edges, off: &mut self.fast.off };
             crate::drawpipe::draw_frame(&mut self.ph, &self.m, &f, Some(stats));
         } else {
             self.draw_channels(&rec, detail.as_deref(), zw.as_deref(), 24);
@@ -460,18 +554,18 @@ impl Ui {
         take.got += 1;
         self.records += 1;
         if self.m.segments > 0 {
-            self.seg_n += 1;
+            self.seg.n += 1;
             // hardware segments end when the thread has read them all back (`seg_poll`)
-            if !hw_seg && self.seg_n >= self.seg_count() {
+            if !hw_seg && self.seg.n >= self.seg_count() {
                 if self.m.trig_mode == TrigMode::Single {
-                    self.scpi_finish_operation(OperationToken::Single(self.single_operation));
+                    self.scpi_finish_operation(OperationToken::Single(self.ops.single));
                 }
                 self.m.run = RunState::Stop;
-                self.toast(&format!("{} segments recorded", self.seg_n));
+                self.toast(&format!("{} segments recorded", self.seg.n));
                 return true;
             }
         } else if self.m.trig_mode == TrigMode::Single && !self.last[0].as_ref().is_some_and(|r| r.partial) {
-            self.scpi_finish_operation(OperationToken::Single(self.single_operation));
+            self.scpi_finish_operation(OperationToken::Single(self.ops.single));
             self.m.run = RunState::Stop;
             return true;
         }
@@ -515,7 +609,7 @@ impl Ui {
         // at large depths the hardware delivers fewer records than frames: WAIT only after 0.5 s without one, or
         // 1.5 record lengths at slow time bases (a 1 s record at 100 ms/div comes once per second), or 2.5 usual
         // record intervals (a 125 M record takes ~1 s to read)
-        let wait_after = 0.5f64.max(1.5 * HDIV as f64 * self.m.time_per_div() as f64).max(2.5 * self.rec_iv);
+        let wait_after = 0.5f64.max(1.5 * HDIV as f64 * self.m.time_per_div() as f64).max(2.5 * self.seen.rec_iv);
         // `trig.hw_status = on`: the SCU says whether the TPU fired or the auto timeout forced the batch; it
         // overrides what the software refinement concluded (docs/fork/trigger-lockin.md)
         if take.got > 0 {
@@ -525,15 +619,15 @@ impl Ui {
         }
         // minimum persistence shows the frames of this step alone: their number grades the picture (`picture_ref`)
         if persist != 0.0 {
-            self.pic_frames = 0;
+            self.grade.frames = 0;
         } else if take.got > 0 {
-            self.pic_frames = take.got as u32;
+            self.grade.frames = take.got as u32;
         }
         if take.got > 0 {
-            let iv = (self.now - self.last_rec_t).min(2.0);
-            self.rec_iv += 0.3 * (iv - self.rec_iv);
-            self.last_rec_t = self.now;
-        } else if self.m.run == RunState::Run && self.now - self.last_rec_t > wait_after {
+            let iv = (self.now - self.seen.rec_t).min(2.0);
+            self.seen.rec_iv += 0.3 * (iv - self.seen.rec_iv);
+            self.seen.rec_t = self.now;
+        } else if self.m.run == RunState::Run && self.now - self.seen.rec_t > wait_after {
             self.m.status = TrigStatus::Wait;
         }
         self.times.acq += 0.05 * (take.ta - self.times.acq);
@@ -555,18 +649,18 @@ impl Ui {
             if hold {
                 // the measurement shown stays that of the last raw deep record, or of this step's
                 if let Some(r) = take.raw_rec.take() {
-                    if self.meas_bg.is_some() {
-                        self.meas_want = true;
-                        self.meas_pending = Some(r);
+                    if self.meas_bg.worker.is_some() {
+                        self.meas_bg.want = true;
+                        self.meas_bg.pending = Some(r);
                     } else {
                         self.measure_rec(&r);
-                        self.meas_new = true;
+                        self.meas_bg.new = true;
                     }
                 }
-            } else if self.meas_bg.is_some() {
+            } else if self.meas_bg.worker.is_some() {
                 // the result for the last record is still good when it comes after this one: `meas_n` only
                 // changes where a result out becomes wrong (a clear, measuring here at once)
-                self.meas_want = true;
+                self.meas_bg.want = true;
                 // raw deep reads: this raw record is the one to measure, even when pair records (held) follow
                 // before the worker is free; measuring the newest then measured a pair record (Mean NaN live)
                 // (only a raw deep record: a clone of every record cost the screen rate, 26 instead of 27 frames a
@@ -576,11 +670,11 @@ impl Ui {
                     .and_then(|r| r.raw.as_ref())
                     .is_some_and(|r| crate::deepmeas::deep_raw_frame(&r.frame));
                 if raw_deep && crate::deepmeas::want(&self.m).is_some() {
-                    self.meas_pending = self.last[0].clone();
+                    self.meas_bg.pending = self.last[0].clone();
                 }
             } else {
                 self.measure_last();
-                self.meas_new = true;
+                self.meas_bg.new = true;
             }
             let p1 = std::time::Instant::now();
             // an analyser behind another tab is not on the screen: its analysis waits until its tab is in front
@@ -617,7 +711,7 @@ impl Ui {
     fn step_meas_rows(&mut self) {
         // the measurements of the newest record (in the background: when they are done, also after a stop)
         self.meas_poll();
-        if std::mem::take(&mut self.meas_new) {
+        if std::mem::take(&mut self.meas_bg.new) {
             let rows = self.meas_rows();
             self.trend_update(self.mstat.is_empty(), &rows);
             self.mstat.resize(rows.len(), MStat::default());
@@ -653,13 +747,13 @@ impl Ui {
         // long or infinite persistence: halve the maps before the counts saturate (keeps the density ratios)
         if full {
             self.ph.halve();
-            self.vmax.iter_mut().for_each(|v| *v = (*v / 2).max(1));
-            self.vmax_cg = (self.vmax_cg / 2).max(1);
+            self.grade.vmax.iter_mut().for_each(|v| *v = (*v / 2).max(1));
+            self.grade.vmax_cg = (self.grade.vmax_cg / 2).max(1);
         }
         if fullz {
             self.phz.halve();
-            self.vmaxz.iter_mut().for_each(|v| *v = (*v / 2).max(1));
-            self.vmaxz_cg = (self.vmaxz_cg / 2).max(1);
+            self.grade.vmaxz.iter_mut().for_each(|v| *v = (*v / 2).max(1));
+            self.grade.vmaxz_cg = (self.grade.vmaxz_cg / 2).max(1);
         }
         if let Some((_, t)) = &self.toast {
             if self.now > *t {
@@ -700,13 +794,13 @@ impl Ui {
     /// Frames the fast path takes in one screen: as many as fit into `fast_budget` at the pace of the last screens.
     /// Beyond that the frame rate would drop (and with it the time the newest frame waits to be seen).
     pub(super) fn fast_max(&self) -> usize {
-        (self.fast_take as usize).clamp(4, crate::board::QUEUE_MAX)
+        (self.fast.take as usize).clamp(4, crate::board::QUEUE_MAX)
     }
 
     /// Time of a screen the fast path may spend (ms): what a frame of the 30 a second (33 ms) leaves after the rest of
     /// the step, drawing and showing the screen, less 2 ms of slack; 5 to 28 ms.
     pub(super) fn fast_budget(&self) -> f32 {
-        let rest = (self.times.step - self.t_fast).max(0.0) + self.times.render + self.times.present;
+        let rest = (self.times.step - self.fast.t).max(0.0) + self.times.render + self.times.present;
         (31.0 - rest).clamp(5.0, 28.0)
     }
 
@@ -760,75 +854,65 @@ impl Ui {
             && !self.loaded_record
             && self.last[0].as_ref().is_some_and(|r| r.raw.is_some());
         if !ok {
-            self.src.hw_stop(None, false);
-            self.stop_ti_off = None;
-            self.stop_whole = None;
-            (self.stop_raw, self.stop_pic) = (None, None);
+            self.src.hw_stop(None);
+            self.stop.ti_off = None;
+            (self.stop.raw, self.stop.pic) = (None, None);
             return;
         }
         // the software trigger of the record shown at the stop, as a time from the hardware trigger point
-        if self.stop_ti_off.is_none() {
+        if self.stop.ti_off.is_none() {
             // and that record itself when it is of samples: measured while the views come as pairs
-            self.stop_raw = self.last[0].clone().filter(|r| r.raw.as_ref().is_some_and(|x| !x.frame.envelope));
-            self.stop_pic = None;
-            self.stop_ti_off = self.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|raw| {
+            self.stop.raw = self.last[0].clone().filter(|r| r.raw.as_ref().is_some_and(|x| !x.frame.envelope));
+            self.stop.pic = None;
+            self.stop.ti_off = self.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|raw| {
                 let f = &raw.frame;
                 let ti = raw.i0 as f64 - raw.t0 / f.dt;
                 (ti - f.fixed_ti.unwrap_or(f.pre as f64)) * f.dt
             });
-            // that record is the last one the screen took. The hardware goes on to the end of its batch, so what its
-            // memory holds, and every view below is read from, may be a later acquisition: the screen and the
-            // measurements showed one acquisition and the memory read out (RAW) another (seen on a unit, 2026-11-18:
-            // a 2.16 V peak on the screen that was not in the memory). A whole record is so read whole once more
-            // first, with a view that holds all of it, and what comes is the record of the stop. Not after a mask
-            // that stops on a failure: the record on the screen is the one that failed, and it is the one to keep
-            // (as `stop_wants_final`)
-            let keep = self.m.mask_on && self.m.mask_stop;
-            self.stop_whole = self.stop_raw.as_ref().filter(|_| !keep).and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame)).map(|r| {
-                let (n, f) = (r.frame.acq.1 as f64, &r.frame);
-                ((n * f.dt / HDIV as f64, (n / 2.0 - f.pre as f64) * f.dt), self.now + STOP_WHOLE_WAIT)
-            });
-        }
-        // no answer (the read failed, or the hardware holds no record to read again): the views are not kept waiting
-        if self.stop_whole.is_some_and(|w| self.now > w.1) {
-            self.stop_whole = None;
         }
         let view = (self.m.time_per_div() as f64, self.m.delay as f64);
-        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.map_or(view, |w| w.0)), self.stop_whole.is_some()) else { return };
-        if let (Some(t), Some(off)) = (f.fixed_ti, self.stop_ti_off) {
-            f.fixed_ti = Some(t + off / f.dt);
-        }
-        let whole = whole_frame(&f);
-        let window = view.0 * HDIV as f64;
-        let rec = crate::board::to_record(&std::sync::Arc::new(f), &self.m, 3600, window, view.1 - window / 2.0);
-        if self.stop_whole.take().is_some() {
-            // not whole (the answer to a view asked before the stop, or a read that failed): the record of the
-            // stop stays. Either way the view shown is asked for next
-            if whole {
-                self.stop_raw = Some(rec.clone());
-                (self.last[0], self.stop_pic) = (Some(rec), None);
+        // the raw record of the STOP holds the whole acquisition: it stays the record shown, measured and read out,
+        // drawn for every view from its own samples. Read again by the thread, the view was a record of its own (another
+        // length and origin) that replaced it some 90 ms after the STOP, between two queries of a client (#24)
+        let covered = self.stop.raw.as_ref().filter(|r| raw_whole(r));
+        if let Some(rec) = covered.and_then(|r| self.captured_record_view(r, (view.0 as f32, view.1 as f32))) {
+            // nothing to read: the thread stays held (and drops a view asked for before)
+            self.src.hw_stop(None);
+            if self.last[0]
+                .as_ref()
+                .and_then(|r| r.raw.as_ref())
+                .map(|r| (std::sync::Arc::as_ptr(&r.frame), r.i0, r.i1))
+                != rec.raw.as_ref().map(|r| (std::sync::Arc::as_ptr(&r.frame), r.i0, r.i1))
+            {
+                (self.last[0], self.stop.pic) = (Some(rec.as_ref().clone()), None);
                 self.measure_last();
             }
             return;
         }
+        let Some(mut f) = self.src.hw_stop(Some(view)) else { return };
+        if let (Some(t), Some(off)) = (f.fixed_ti, self.stop.ti_off) {
+            f.fixed_ti = Some(t + off / f.dt);
+        }
+        let window = view.0 * HDIV as f64;
+        let rec = crate::wave::to_record(&std::sync::Arc::new(f), &self.m, 3600, window, view.1 - window / 2.0);
         // a view read as min/max pairs (zoomed out on a record above `LIVE_READ`: the whole record compressed) after a
         // STOP on a raw record (the final frame of a deep record): the pairs are drawn, the raw record stays the one
         // measured and read out; pairs hold no Mean, RMS or Std dev (A3 of the 2026-11-16 review). A view read raw (far
         // zoomed in) is the record shown and measured, as before
-        match self.stop_raw.as_ref().filter(|_| rec.raw.as_ref().is_some_and(|r| r.frame.envelope)) {
-            Some(raw) => (self.last[0], self.stop_pic) = (Some(raw.clone()), Some(rec)),
-            None => (self.last[0], self.stop_pic) = (Some(rec), None),
+        match self.stop.raw.as_ref().filter(|_| rec.raw.as_ref().is_some_and(|r| r.frame.envelope)) {
+            Some(raw) => (self.last[0], self.stop.pic) = (Some(raw.clone()), Some(rec)),
+            None => (self.last[0], self.stop.pic) = (Some(rec), None),
         }
         // the record counted when it came in RUN: its values for the view, not a new one for the statistics, the trend
         // and the catalog (as `refresh_stopped_measurements`)
         self.measure_last();
     }
 
-    /// STOP: the pair record to draw for the view (`stop_pic`) while the raw record of the stop is the record shown.
+    /// STOP: the pair record to draw for the view (`Stop::pic`) while the raw record of the stop is the record shown.
     pub(super) fn stop_picture(&self) -> Option<&Record> {
         let frame = |r: Option<&Record>| r.and_then(|r| r.raw.as_ref()).map(|r| std::sync::Arc::as_ptr(&r.frame));
-        let same = frame(self.last[0].as_ref()).is_some_and(|f| Some(f) == frame(self.stop_raw.as_ref()));
-        self.stop_pic.as_ref().filter(|_| same)
+        let same = frame(self.last[0].as_ref()).is_some_and(|f| Some(f) == frame(self.stop.raw.as_ref()));
+        self.stop.pic.as_ref().filter(|_| same)
     }
 
     /// The fast display path applies: hardware frames with a plain edge trigger and nothing that needs every record
@@ -873,9 +957,9 @@ impl Ui {
         for (p, f) in placed.iter().zip(&frames) {
             trig += p.triggered as usize;
             if let FastPlan::Raw { class: Some(k), off, .. } = p.plan {
-                self.fast_edges[k] += 1;
+                self.fast.edges[k] += 1;
                 if k == 2 {
-                    self.fast_off = (self.fast_off.0 + off, self.fast_off.1.max(off));
+                    self.fast.off = (self.fast.off.0 + off, self.fast.off.1.max(off));
                 }
             }
             // as the deposit workers (`framestats::fold_frame`): nothing of live-compression pairs (the raw newest
@@ -897,14 +981,14 @@ impl Ui {
         let m = &self.m;
         let on: Vec<usize> = (0..NCH).filter(|&c| m.ch[c].on).collect();
         for &c in &on {
-            if self.acc_t[c].len() != w * (h + 1) {
-                self.acc_t[c] = vec![0; w * (h + 1)];
+            if self.fast.acc[c].len() != w * (h + 1) {
+                self.fast.acc[c] = vec![0; w * (h + 1)];
             }
         }
         let bands = if frames.len() < 2 || on.is_empty() { 1 } else { (helpers + 1).div_ceil(on.len()) };
         let band_cols = w.div_ceil(bands).max(1);
         let mut jobs: Vec<(usize, usize, &mut [u16])> = Vec::new();
-        for (c, acc) in self.acc_t.iter_mut().enumerate() {
+        for (c, acc) in self.fast.acc.iter_mut().enumerate() {
             if on.contains(&c) {
                 jobs.extend(acc.chunks_mut(band_cols * (h + 1)).enumerate().map(|(b, band)| (c, b * band_cols, band)));
             }
@@ -930,7 +1014,7 @@ impl Ui {
             .ph
             .map
             .iter_mut()
-            .zip(self.acc_t.iter_mut())
+            .zip(self.fast.acc.iter_mut())
             .enumerate()
             .filter(|(c, _)| on.contains(c))
             .map(|(c, (a, b))| (c, a, b))
@@ -939,10 +1023,10 @@ impl Ui {
             crate::fastdraw::fold_t(map, acc, w, h, band_cols, rows[c].0..rows[c].1)
         });
         let (a, b) = ((t1 - t0).as_secs_f32() * 1e3, t1.elapsed().as_secs_f32() * 1e3);
-        self.t_fast_ab.0 += 0.05 * (a - self.t_fast_ab.0);
-        self.t_fast_ab.1 += 0.05 * (b - self.t_fast_ab.1);
-        self.t_fast_fold += 0.05 * (t2.elapsed().as_secs_f32() * 1e3 - self.t_fast_fold);
-        self.fast_n += 0.05 * (frames.len() as f32 - self.fast_n);
+        self.fast.t_ab.0 += 0.05 * (a - self.fast.t_ab.0);
+        self.fast.t_ab.1 += 0.05 * (b - self.fast.t_ab.1);
+        self.fast.t_fold += 0.05 * (t2.elapsed().as_secs_f32() * 1e3 - self.fast.t_fold);
+        self.fast.n += 0.05 * (frames.len() as f32 - self.fast.n);
         trig
     }
 }
@@ -963,7 +1047,7 @@ pub enum FastPlan {
     /// sparse views (fewer than 2 samples a column), envelopes, roll and scan: a screen record, drawn as a trace
     /// (made here, so the interpolation is spread over the frames, not the channels)
     Rec(crate::wave::Record),
-    /// dense views: the raw samples with the trigger at sample `ti`; `class`: the `Ui::fast_edges` index (None: the
+    /// dense views: the raw samples with the trigger at sample `ti`; `class`: the `FastPath::edges` index (None: the
     /// source is an LA line), `off`: how far the edge was from the hardware point (class 2); per channel the columns'
     /// spans (None: dots, drawn sample by sample)
     Raw { ti: f64, class: Option<usize>, off: f64, spans: [Option<crate::fastdraw::Spans>; NCH] },
@@ -1013,7 +1097,7 @@ pub fn fast_plan(
     if x_per_sample > 0.5 || f.envelope || f.roll || f.scan {
         // the record's 3600 points: fewer thin out the picture of a fast signal (at 8 samples a period, two points a
         // column lit a fifth fewer pixels than 3600, and those a sixth fewer than a nearly continuous curve)
-        let rec = crate::board::to_record(f, m, 3600, window, t_first);
+        let rec = crate::wave::to_record(f, m, 3600, window, t_first);
         // the statistics on the screen record, as the measurements of a sparse record
         let fold = std::array::from_fn(|c| (fold[c] && m.ch[c].on).then(|| crate::fastdraw::Fold::of(&rec.ch[c])));
         let triggered = rec.triggered;

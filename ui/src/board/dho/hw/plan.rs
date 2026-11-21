@@ -264,25 +264,15 @@ pub fn stop_plan(b: &Settings, p: &hz::Params, tdiv: f64, delay: f64) -> (Settin
     (r, pre / k)
 }
 
-/// STOP: the stored record read whole at every sample, for the record the memory holds when the scope stopped
-/// (`Ui::stop_whole`). For a record the live read takes that way: up to 1 M points (`batch_plan`), the same read
-/// with one frame. `stop_plan` reads a record above `LIVE_READ` through the compression when the view holds all of
-/// it: at 1 M points the answer was min/max pairs, which are not the record. None for a deeper record: its live
-/// frames are pairs or a window, and the STOP has its own read for those (`final_replay`).
-pub fn whole_plan(b: &Settings, p: &hz::Params) -> Option<(Settings, f64)> {
-    if p.memsel > 1_000_000 {
-        return None;
-    }
-    let mut r = b.clone();
-    (r.frames, r.window, r.compress) = (1, None, 1);
-    Some((r, p.pre as f64))
-}
-
 /// Whether arming ahead (`acq.prearm`) leaves the replay at STOP possible: not for a batch of the live compression or
 /// one whose newest frame the deep measurements may read raw (`deep_raw_settings`), since the next batch would write
 /// the ring under it. Prearm gains at
 /// short time bases; deep compressed records take most of a batch in the read anyway.
-pub(super) fn prearm_keeps_replay(b: &Settings, p: &hz::Params, deep: Option<crate::deepmeas::Want>) -> bool {
+pub(super) fn prearm_keeps_replay(
+    b: &Settings,
+    p: &hz::Params,
+    deep: Option<crate::board::policy::deep::Want>,
+) -> bool {
     !raw_newest(b, p) && (deep.is_none() || deep_raw_settings(b, p).is_none())
 }
 
@@ -297,7 +287,7 @@ pub(super) fn final_replay(
     count: u32,
     newest_raw: bool,
     ahead: bool,
-    deep: Option<crate::deepmeas::Want>,
+    deep: Option<crate::board::policy::deep::Want>,
 ) -> Option<Settings> {
     if count == 0 || newest_raw || ahead {
         return None;
@@ -310,17 +300,17 @@ pub(super) fn final_replay(
 
 /// The raw read of a deep record's screen window for the measurements (deepmeas.rs): the batch `b` read the whole
 /// record through the compression (`batch_plan`, above 1 M points), Normal acquisition, no LA; the window of
-/// `screen_window` with the record's edge allowed, at most `deepmeas::MAX_BYTES`. Settings for `seq::read_raw_again`.
+/// `screen_window` with the record's edge allowed, at most `policy::deep::MAX_BYTES`. Settings for `seq::read_raw_again`.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(super) fn deep_raw_settings(b: &Settings, p: &hz::Params) -> Option<Settings> {
     if b.compress < 2
         || b.window.is_some()
-        || p.memsel <= crate::compress::MAX_DEPTH
+        || p.memsel <= crate::board::policy::compress::MAX_DEPTH
         || !matches!(b.mode, oos_hal::dho::acq::Mode::Normal)
     {
         return None;
     }
-    let cap = (crate::deepmeas::MAX_BYTES / (2 * p.ratio.max(1) as usize)) as i64 + 1;
+    let cap = (crate::board::policy::deep::MAX_BYTES / (2 * p.ratio.max(1) as usize)) as i64 + 1;
     // the whole record when the window would reach past it (`window_below` refuses a window beyond the end)
     let w = window_below(b, p, cap)
         .or_else(|| ((p.memsel as i64) < cap && b.la.is_none()).then(|| (p.memsel, -(p.pre as i64))))?;

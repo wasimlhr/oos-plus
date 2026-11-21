@@ -222,7 +222,7 @@ impl Ui {
         m.tfine = 1.0;
         m.delay = 0.0;
         m.run = RunState::Run;
-        self.operation_serial = self.operation_serial.wrapping_add(1);
+        let id = self.ops.next();
         m.hw_stamp += 1;
         let stamp = m.hw_stamp;
         // any channel set: the slots per channel follow the core table (`levels::slots`); a channel whose slots
@@ -230,7 +230,7 @@ impl Ui {
         let unit = (unit_levels_on() && self.src.hw_levels(Some((stamp, stamp, UNIT_RUNS))).is_some())
             .then_some(Unit { id: stamp, tries: 1, since: self.now });
         self.auto = Some(AutoRun {
-            id: self.operation_serial,
+            id,
             back,
             stamp,
             unit,
@@ -574,9 +574,9 @@ impl Ui {
         found.extend((0..n_ch()).filter(|&c| a.want[c] && a.period[c].is_none()).map(|c| (c, stats(c), f64::NAN)));
         if found.is_empty() {
             // the stamp only counts up: records of the run must not pass as taken with the set-up restored
-            let stamp = self.m.hw_stamp;
-            self.m = *a.back;
-            self.m.hw_stamp = stamp;
+            let mut back = *a.back;
+            back.keep_session(&self.m);
+            self.m = back;
             self.toast("Auto set-up: no signal found");
         } else {
             // the others as they were: on, with their scale
@@ -628,13 +628,9 @@ impl Ui {
             return;
         }
         // Borrow the records: four 20M files must not create four extra 80MB vectors.
-        let waves: Vec<(&[f32], f64)> = shown
-            .iter()
-            .map(|&i| {
-                let r = self.refs[i].as_ref().unwrap();
-                (r.v.as_slice(), r.dt)
-            })
-            .collect();
+        // `shown` holds slots with a reference only
+        let waves: Vec<(&[f32], f64)> =
+            shown.iter().filter_map(|&i| self.refs[i].as_ref().map(|r| (r.v.as_slice(), r.dt))).collect();
         let views = autoset_shown(&mut self.m, &waves);
         let mut any = false;
         let mut fitted = Vec::new();
@@ -910,7 +906,7 @@ mod tests {
             stamp,
             ..Default::default()
         });
-        crate::board::to_record(&f, &ui.m, 3600, window, ui.m.delay as f64 - window / 2.0)
+        crate::wave::to_record(&f, &ui.m, 3600, window, ui.m.delay as f64 - window / 2.0)
     }
 
     /// Runs an auto set-up on hardware-like records (`hw_record_of`) without letting time pass; returns the stages seen.
@@ -1154,7 +1150,7 @@ mod tests {
                     stamp: a.stamp,
                     ..Default::default()
                 });
-                ui.last[0] = Some(crate::board::to_record(&fr, &ui.m, 3600, window, -window / 2.0));
+                ui.last[0] = Some(crate::wave::to_record(&fr, &ui.m, 3600, window, -window / 2.0));
                 ui.auto_step();
             }
             assert!(ui.auto.is_none(), "{} Hz: {:?}", f, seen);

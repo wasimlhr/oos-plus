@@ -947,7 +947,7 @@ fn a_wandering_finger_still_taps_and_holds() {
         for _ in 0..6 { frame(&mut u); }
         let t = u.studio_zoom_bar().expect("the zoom row").boxr;
         finger_tap(&mut u, t.x + t.w / 2, t.y + t.h / 2, wander);
-        assert!(u.m.zoom && u.zoom_arm, "wander {wander}: a tap on Box arms the zoom box");
+        assert!(u.m.zoom && u.zoom_box.arm, "wander {wander}: a tap on Box arms the zoom box");
     }
 }
 

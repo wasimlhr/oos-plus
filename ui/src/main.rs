@@ -1081,7 +1081,7 @@ impl Device {
         self.hdmi_picture(hdmi_frame, hdmi_done);
         let t3 = Instant::now();
         self.hdmi_watch();
-        self.ui.hdmi_out = self.hdmi.as_ref().map(|h| (h.width as u32, h.height as u32));
+        self.ui.hdmi.out = self.hdmi.as_ref().map(|h| (h.width as u32, h.height as u32));
         let a = 0.05;
         self.ui.times.step += a * ((t1 - t0).as_secs_f32() * 1000.0 - self.ui.times.step);
         self.ui.times.render += a * ((t2 - t1).as_secs_f32() * 1000.0 - self.ui.times.render);
@@ -1229,9 +1229,9 @@ impl Device {
             match size {
                 Some(s) => {
                     if self.hdmi_cv.as_ref().is_none_or(|c| (c.w, c.h) != (s.w, s.h)) {
-                        self.hdmi_cv = Some(Canvas::new(s.w, s.h));
+                        self.hdmi_cv = None;
                     }
-                    let hc = self.hdmi_cv.as_mut().unwrap();
+                    let hc = self.hdmi_cv.get_or_insert_with(|| Canvas::new(s.w, s.h));
                     if self.ui.m.hdmi == model::HdmiMode::Layout {
                         self.ui.render_view(hc);
                     } else {
@@ -1299,10 +1299,10 @@ impl Device {
         if self.net_t.is_none_or(|t| t.elapsed().as_secs() >= 5) {
             let ui = &mut self.ui;
             let (first, all) = ipv4_addresses();
-            (ui.net_if, ui.net) = first;
-            ui.net_ifs = all;
-            ui.net_fixed = std::path::Path::new("/tmp/oos-net.fallback").exists();
-            ui.eth_link = std::fs::read_to_string("/sys/class/net/eth0/carrier").is_ok_and(|c| c.trim() == "1");
+            (ui.net.iface, ui.net.addr) = first;
+            ui.net.ifs = all;
+            ui.net.fixed = std::path::Path::new("/tmp/oos-net.fallback").exists();
+            ui.net.eth_link = std::fs::read_to_string("/sys/class/net/eth0/carrier").is_ok_and(|c| c.trim() == "1");
             self.net_t = Some(Instant::now());
         }
         if self.eth_t.is_none_or(|t| t.elapsed().as_secs() >= 1) {
@@ -1368,13 +1368,13 @@ fn hdmi_targets(g: &mut gpu::Gpu, h: &drm::Display, base: usize) -> Result<bool,
 #[cfg(target_os = "linux")]
 fn eth_watch(ui: &mut Ui, now: f64) {
     let speed = ethlink::speed();
-    match ui.eth.step(now, ethlink::carrier(), speed, ui.sys.eth_retry_10m) {
+    match ui.net.eth.step(now, ethlink::carrier(), speed, ui.sys.eth_retry_10m) {
         Some(ethlink::Act::Restart) => {
             eprintln!(
                 "oos-ui: {} up at 10 Mbit/s {}, restarting the autonegotiation ({} of {}; {})",
                 ethlink::IFACE,
                 ethlink::duplex(),
-                ui.eth.tries,
+                ui.net.eth.tries,
                 ethlink::MAX_TRIES,
                 ethlink::mii_regs()
             );
@@ -1399,26 +1399,11 @@ fn eth_watch(ui: &mut Ui, now: f64) {
 /// The address to show in the top bar, and all of them, as (interface, address).
 #[cfg(target_os = "linux")]
 fn ipv4_addresses() -> ((String, String), Vec<(String, String)>) {
-    let mut found = Vec::new();
-    unsafe {
-        let mut ifa: *mut libc::ifaddrs = std::ptr::null_mut();
-        if libc::getifaddrs(&mut ifa) != 0 {
-            return ((String::new(), String::new()), Vec::new());
-        }
-        let mut p = ifa;
-        while !p.is_null() {
-            let a = &*p;
-            let up = a.ifa_flags & (libc::IFF_UP as u32) != 0 && a.ifa_flags & (libc::IFF_LOOPBACK as u32) == 0;
-            if up && !a.ifa_addr.is_null() && (*a.ifa_addr).sa_family as i32 == libc::AF_INET {
-                let link = a.ifa_flags & (libc::IFF_RUNNING as u32) != 0;
-                let sin = &*(a.ifa_addr as *const libc::sockaddr_in);
-                let name = std::ffi::CStr::from_ptr(a.ifa_name).to_string_lossy().into_owned();
-                found.push((name, std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr)), link));
-            }
-            p = a.ifa_next;
-        }
-        libc::freeifaddrs(ifa);
-    }
+    let found = oos_system::ifaddrs::list()
+        .into_iter()
+        .filter(|e| e.has(libc::IFF_UP) && !e.has(libc::IFF_LOOPBACK))
+        .filter_map(|e| e.v4().map(|a| (e.name.clone(), a, e.has(libc::IFF_RUNNING))))
+        .collect();
     pick_addresses(found)
 }
 
