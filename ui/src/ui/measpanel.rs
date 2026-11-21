@@ -514,7 +514,7 @@ impl Ui {
             cv.set_clip(Rect::new(r.x + 4, r.y, r.w - 24, 20));
             cv.text(&f.s, r.x + 8, r.y + 15, &self.panel_row_name(keys.get(i).copied(), &row.name), LABEL);
             cv.set_clip(g.list);
-            icon_pin(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
+            icon_pin_small(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
             // the value, and the source at the right of its line: when the value is too wide for both (a card of a
             // side panel is 148 px) it has the whole line, and the source goes to the line under it
             let src = self.wave_name(row.src);
