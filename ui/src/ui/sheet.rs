@@ -7,7 +7,7 @@
 //! with `value`, `options`, `select_option`, `adjust` and `activate`. This file maps items to row types, splits
 //! long pages into tabs and draws them. A page that does not fit the pattern (more than seven rows in a tab, more
 //! than four tabs, keypad lists) is not converted: `sheet_spec` returns None and the classic dialog is used.
-use super::meascatalog::{AddEntry, Preview, ADD_GROUPS};
+use super::meascatalog::{AddEntry, Preview};
 use super::studio::StudioView;
 use super::*;
 
@@ -84,6 +84,8 @@ pub(super) struct SheetState {
     page_key: Option<(MenuId, Option<Item>)>,
     page: usize,
     pub add_group: usize,
+    /// the list of the categories of the add flow is open
+    pub add_cats: bool,
     pub search: String,
     /// how far the Menu page is moved up
     pub scroll: i32,
@@ -214,18 +216,23 @@ impl Ui {
                 RefClear => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
-            M::Decode | M::Bus => (&["Decode", "Settings", "Levels", "Bus"], |it| match it {
+            M::Decode => (&["Decode", "Settings", "Levels"], |it| match it {
                 // (the B line of a differential pair is a setting of its own: on the first page it stood under the
                 // source of every UART, where most have none)
                 DecSel | DecOn | DecProto | DecIn | DecSrc | DecSrc2 | DecCs | DecSrc4 => Slot::Tab(0),
-                DecTable | DecExport => Slot::Foot(1),
-                // the thresholds have a page of their own, with the action that finds them: a decoder of four lines
-                // has four, and Settings had no room for them beside the protocol's rows
-                DecThr | DecThrLine(_) => Slot::Tab(2),
-                DecThrMid => Slot::Foot(2),
-                BusLabel => Slot::Foot(3),
-                BusOn | BusPos | BusClk | BusClkThr | BusData | BusDataThr | BusRw => Slot::Tab(3),
+                // what it decoded is under the first page: under Settings it was not found, and a protocol without
+                // settings had a page of these two buttons alone (the owner, 2026-11-21, with MIL-STD-1553)
+                DecTable | DecExport => Slot::Foot(0),
+                // the thresholds with the action that finds them: a page of their own for a decoder whose first page
+                // is full (four lines have four), else under its lines (`sheet_spec`)
+                DecThr | DecThrLine(_) | DecThrMid => Slot::Tab(2),
                 _ => Slot::Tab(1),
+            }),
+            // the I2C lane of the plot is no part of a decoder: as a tab of the Decode sheet named "Bus" it was taken
+            // for the settings of the decoder that was open (the owner, 2026-11-21)
+            M::Bus => (&["I2C lane"], |it| match it {
+                BusLabel => Slot::Foot(0),
+                _ => Slot::Tab(0),
             }),
             M::Math => (&["Function", "Scale"], |it| match it {
                 MathSel | MathFam | MathOpI | MathA | MathB | MathExprEdit | FftWin => Slot::Tab(0),
@@ -372,6 +379,45 @@ impl Ui {
         matches!(menu, MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
     }
 
+    /// The pages of the Decode sheet from its three planned tabs (Decode, Settings, Levels).
+    /// What the protocol itself needs (baud rate, bits, parity, the SPI mode, the CAN rate ...) follows
+    /// its lines on the first page while that page has the room; the rest stays on Settings. They were all on
+    /// the second page: a UART was switched on and read nothing until the baud rate was found there
+    fn decode_tabs(&self, menu: MenuId, tabs: &mut Vec<SheetTab>) {
+        use Item::*;
+        // SPI: its four lines stand together on the first page (MISO was alone on Settings, where a line is
+        // not looked for). The page has seven rows, so Input, which is chosen once, ends Settings, and the
+        // Mode heads it: a bus is read in mode 0 more often than not
+        if self.m.dec_proto == Proto::SPI && tabs[0].rows.contains(&DecSrc4) {
+            if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecIn) {
+                let row = tabs[0].rows.remove(i);
+                tabs[1].rows.push(row);
+            }
+        }
+        while tabs[0].rows.len() < SHEET_MAX_ROWS {
+            let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
+            let row = tabs[1].rows.remove(i);
+            tabs[0].rows.push(row);
+        }
+        // the thresholds, and "Turn on CH1" for a line that is switched off, come to the first page when they
+        // fit it: a decoder of one line with few settings is one page then, without tabs. The rows keep the
+        // order of the menu (ADR 0031)
+        if tabs[0].rows.len() + tabs[2].rows.len() <= SHEET_MAX_ROWS {
+            let levels = std::mem::take(&mut tabs[2].rows);
+            tabs[0].rows.extend(levels);
+        }
+        if tabs[0].rows.len() < SHEET_MAX_ROWS {
+            if let Some(i) = tabs[1].rows.iter().position(|it| *it == SrcOn) {
+                let row = tabs[1].rows.remove(i);
+                tabs[0].rows.push(row);
+            }
+        }
+        let order = self.sheet_source_items(menu);
+        tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+        // (a page without a row is no tab here: which ones a decoder has changes with its protocol only)
+        tabs.retain(SheetTab::holds);
+    }
+
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
     fn sheet_max_rows(menu: MenuId) -> usize {
         if menu == MenuId::MeasPair { SHEET_MAX_ROWS + 1 } else { SHEET_MAX_ROWS }
@@ -381,7 +427,6 @@ impl Ui {
     fn sheet_source_items(&self, menu: MenuId) -> Vec<Item> {
         match menu {
             MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c))).collect(),
-            MenuId::Decode | MenuId::Bus => self.items(MenuId::Decode).into_iter().chain(self.items(MenuId::Bus)).collect(),
             MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
             // Measure: its footer leads to the list of measurements to add
             MenuId::Measure => [Item::Open(MenuId::MeasAdd)].into_iter().chain(self.items(MenuId::Measure)).collect(),
@@ -397,11 +442,12 @@ impl Ui {
             // menu has one level down
             MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow].into_iter()
                 .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
-            // Display: the skin and the choice of the bottom bar are rows of the Default layout's menu. A sheet is up
-            // only in Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
+            // Display: the choice of the bottom bar is a row of the Default layout's menu. A sheet is up only in
+            // Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
             MenuId::Display => {
                 // and Overlay or Stacked, which Studio had in the hold menu of the plot alone
-                self.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::Skin | Item::BottomBar)).chain([Item::Traces]).collect()
+                let rows = self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar);
+                rows.chain([Item::Traces]).collect()
             }
             m => self.items(m),
         }
@@ -494,25 +540,8 @@ impl Ui {
                     }
                 }
             }
-            // Decode: what the protocol itself needs (baud rate, bits, parity, the SPI mode, the CAN rate ...) follows
-            // its lines on the first page while that page has the room; the rest stays on Settings. They were all on
-            // the second page: a UART was switched on and read nothing until the baud rate was found there
-            if matches!(menu, MenuId::Decode | MenuId::Bus) && tabs.len() > 1 {
-                use Item::*;
-                // SPI: its four lines stand together on the first page (MISO was alone on Settings, where a line is
-                // not looked for). The page has seven rows, so Input, which is chosen once, ends Settings, and the
-                // Mode heads it: a bus is read in mode 0 more often than not
-                if self.m.dec_proto == Proto::SPI && tabs[0].rows.contains(&DecSrc4) {
-                    if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecIn) {
-                        let row = tabs[0].rows.remove(i);
-                        tabs[1].rows.push(row);
-                    }
-                }
-                while tabs[0].rows.len() < SHEET_MAX_ROWS {
-                    let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
-                    let row = tabs[1].rows.remove(i);
-                    tabs[0].rows.push(row);
-                }
+            if menu == MenuId::Decode && tabs.len() == 3 {
+                self.decode_tabs(menu, &mut tabs);
             }
             // Trigger: Sweep (Auto, Normal, Single) goes with the type and the source while that tab has the room. A
             // type with many rows of its own keeps it on Settings: an eighth row would take the sheet away
@@ -547,7 +576,6 @@ impl Ui {
             }
             let first = match menu {
                 MenuId::ChMore(_) => 1,
-                MenuId::Bus => 3,
                 _ => 0,
             };
             SheetSpec { tabs, first }
@@ -639,6 +667,18 @@ impl Ui {
             Ctl::Seg(o, _) if need < LABEL_W && o.len() <= SHEET_MAX_SEGS => need,
             _ => LABEL_W,
         }
+    }
+
+    /// The button of an Off | On row that sets `on` (tests tap it).
+    #[cfg(test)]
+    pub(super) fn sheet_toggle_half(c: Rect, on: bool) -> Rect {
+        let sw = (c.w - 4) / 2;
+        Rect::new(c.x + if on { sw + 4 } else { 0 }, c.y, sw, c.h)
+    }
+
+    /// The toggle rows whose value is not "Off" or "On": one step is the switch.
+    pub(super) fn sheet_is_switch(it: Item) -> bool {
+        matches!(it, Item::SimShow)
     }
 
     /// The row type of an item, from the control the classic dialog would give it.
@@ -804,7 +844,7 @@ impl Ui {
             let label = Rect::new(row.x, row.y, lw, row.h);
             let ctrl = match kind {
                 RowKind::Link => Rect::new(row.x, row.y + 2, row.w, SHEET_ROW - 4),
-                RowKind::Toggle => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
+                RowKind::Toggle if Self::sheet_is_switch(it) => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
                 _ => Rect::new(row.x + lw, row.y + 2, row.w - lw, SHEET_ROW - 4),
             };
             rows.push(SheetRowGeo { it, kind, row, label, ctrl });
@@ -993,6 +1033,20 @@ impl Ui {
                 btn(cv, pl, BTN, BTN_BORDER);
                 Self::draw_sign(cv, pl, true);
             }
+            RowKind::Toggle if !Self::sheet_is_switch(it) => {
+                let on = self.sheet_on(it);
+                let sw = (c.w - 4) / 2;
+                for (k, o) in ["Off", "On"].into_iter().enumerate() {
+                    let r = Rect::new(c.x + k as i32 * (sw + 4), c.y, sw, c.h);
+                    if on == (k == 1) {
+                        cv.round(r, 5, ACCENT, 255);
+                        cv.text_in(&f.sb, r, 1, o, DARK_TEXT);
+                    } else {
+                        btn(cv, r, BTN, BTN_BORDER);
+                        cv.text_in(&f.s, r, 1, o, TEXT);
+                    }
+                }
+            }
             RowKind::Toggle => {
                 let on = self.sheet_on(it);
                 cv.round(c, c.h / 2, if on { ACCENT } else { BTN_BORDER }, 255);
@@ -1156,14 +1210,21 @@ impl Ui {
             }
             RowKind::Toggle => {
                 if let Item::RefShow(_) = it {
-                    self.activate(it);
+                    // Off | On like the others, but one activation is what flips it
+                    let want = if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !self.sheet_on(it) };
+                    if want != self.sheet_on(it) { self.activate(it); }
                 } else if it == Item::SimShow {
                     // one step is the switch: its value is the slot's name, never "On" or "Off", and selecting an
                     // option stepped it eight times, back to where it was
                     self.adjust(it, 1);
                 } else {
                     let on = self.sheet_on(it);
-                    self.select_option(it, if on { "Off" } else { "On" });
+                    // Off | On: a button sets its own state, the one that is set stays; a tap beside the two
+                    // (the label) flips it
+                    let want = if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !on };
+                    if want != on {
+                        self.select_option(it, if on { "Off" } else { "On" });
+                    }
                 }
             }
             RowKind::Link => self.activate(it),
@@ -1273,6 +1334,14 @@ impl Ui {
         self.sheet.search.clear();
     }
 
+    /// The category of the add list (the categories of the Measure page).
+    fn sheet_add_category(&mut self, i: i32) {
+        self.sheet.add_group = i as usize;
+        self.sheet.search.clear();
+        self.studio.md.tile_scroll = 0;
+        self.sheet_set_page(None, 0);
+    }
+
     pub(super) fn sheet_pick_source(&mut self, id: WaveId) {
         let name = self.wave_name(id);
         self.select_option(Item::MeasSrc, &name);
@@ -1281,8 +1350,11 @@ impl Ui {
     /// The entries of the list the filter leaves: the search text, else the category chip.
     pub(super) fn sheet_add_entries(&self) -> Vec<AddEntry> {
         let q = self.sheet.search.trim().to_ascii_lowercase();
+        let mut seen: Vec<u16> = Vec::new();
         super::meascatalog::add_entries().into_iter().filter(|e| {
-            if q.is_empty() { e.group == self.sheet.add_group } else { e.name.to_ascii_lowercase().contains(&q) }
+            if q.is_empty() { return e.group == self.sheet.add_group; }
+            // a measurement that several categories list is found once
+            e.name.to_ascii_lowercase().contains(&q) && !seen.contains(&e.cat.id) && { seen.push(e.cat.id); true }
         }).collect()
     }
 
@@ -1295,23 +1367,29 @@ impl Ui {
         let n = shown.len().clamp(1, 8) as i32;
         let cw = (w - (n - 1) * 4) / n;
         let chips = shown.iter().take(8).enumerate().map(|(i, &id)| (id, Rect::new(r.x + PAD + i as i32 * (cw + 4), y0 + 2, cw, 40))).collect();
-        let gw = (w - 4 * 4) / 5;
-        let groups = (0..ADD_GROUPS.len()).map(|i| Rect::new(r.x + PAD + i as i32 * (gw + 4), y0 + 46, gw, 40)).collect();
-        let find = Rect::new(r.x + PAD + 4 * (gw + 4), y0 + 46, gw, 40);
-        let list_y = y0 + 90;
+        // the category as in a menu row: - name + (the name opens the list of them), and Find at its right
+        let find = Rect::new(r.x + PAD + w - 76, y0 + 46, 76, 44);
+        let (cat_minus, cat_value, cat_plus) = Self::value_parts(Rect::new(r.x + PAD, y0 + 46, w - 76 - 6, 44));
+        let list_y = y0 + 94;
         // a grid of tiles, two across: a picture and a name each
-        let fit = Self::tile_fit(self.tiles_avail(list_y));
-        let entries = self.sheet_add_entries();
-        let _ = fit;
         // the grid scrolls inside its category: no pages, no pager
         let list = Rect::new(r.x + PAD, list_y, w, r.bottom() - 8 - list_y);
-        let scroll = self.studio.md.tile_scroll.clamp(0, self.tile_scroll_max_of(entries.len(), list.h));
-        let rows: Vec<(usize, Rect)> = (0..entries.len())
-            .map(|k| (k, Self::tile_rect(Rect::new(list.x, list.y - scroll, list.w, list.h), k)))
+        let (tiles, heads, total) = self.add_layout(list);
+        let scroll = self.studio.md.tile_scroll.clamp(0, self.tile_scroll_max_of(total, list.h));
+        let rows: Vec<(usize, Rect)> = tiles
+            .into_iter()
+            .enumerate()
+            .map(|(k, t)| (k, Rect::new(t.x, t.y - scroll, t.w, t.h)))
             .filter(|(_, t)| t.bottom() > list.y && t.y < list.bottom())
             .collect();
+        let heads: Vec<(Rect, &'static str)> = heads
+            .into_iter()
+            .map(|(r, n)| (Rect::new(r.x, r.y - scroll, r.w, r.h), n))
+            .filter(|(r, _)| r.bottom() > list.y && r.y < list.bottom())
+            .collect();
         let none = Rect::new(0, 0, 0, 0);
-        AddGeo { chips, groups, find, rows, page: 0, pages: 1, prev: none, next: none, list }
+        let cat_rows = (0..super::meascatalog::add_categories().count()).map(|i| Rect::new(list.x, list.y + i as i32 * 48, list.w, 44)).collect();
+        AddGeo { chips, cat_minus, cat_value, cat_plus, cat_rows, find, rows, heads, page: 0, pages: 1, prev: none, next: none, list }
     }
 
     /// The button beside the close button of the quick Add panel: it opens the Measure page of every layout, with
@@ -1349,16 +1427,17 @@ impl Ui {
             cv.text_in(&f.mb, c, 1, &self.wave_name(id), if on { DARK_TEXT } else { TEXT });
         }
         let searching = !self.sheet.search.trim().is_empty();
-        for (i, c) in g.groups.iter().enumerate() {
-            let on = !searching && i == self.sheet.add_group;
-            if on {
-                cv.round(*c, 5, rgb(0x2e, 0x2e, 0x32), 255);
-                cv.round_outline(*c, 5, ACCENT);
-            } else {
-                btn(cv, *c, BTN, BTN_BORDER);
-            }
-            cv.text_in(&f.s, *c, 1, ADD_GROUPS[i], if on { TEXT } else { DIM });
-        }
+        let names: Vec<&str> = super::meascatalog::add_categories().collect();
+        btn(cv, g.cat_minus, BTN, BTN_BORDER);
+        Self::draw_sign(cv, g.cat_minus, false);
+        btn(cv, g.cat_value, BTN, BTN_BORDER);
+        let name = names[self.sheet.add_group.min(names.len() - 1)];
+        cv.set_clip(Rect::new(g.cat_value.x + 6, g.cat_value.y, g.cat_value.w - 30, g.cat_value.h));
+        cv.text_in(if searching { &f.s } else { &f.m }, Rect::new(g.cat_value.x + 10, g.cat_value.y, g.cat_value.w - 34, g.cat_value.h), 0, if searching { "Results" } else { name }, if searching { DIM } else { TEXT });
+        cv.no_clip();
+        chevron_down(cv, g.cat_value.x + g.cat_value.w - 18, g.cat_value.y + g.cat_value.h / 2 - 3, DIM);
+        btn(cv, g.cat_plus, BTN, BTN_BORDER);
+        Self::draw_sign(cv, g.cat_plus, true);
         btn(cv, g.find, if searching { ACCENT } else { BTN }, if searching { ACCENT } else { BTN_BORDER });
         let label = if searching { format!("\u{d7} {}", self.sheet.search.trim()) } else { "Find".to_string() };
         cv.set_clip(g.find);
@@ -1373,9 +1452,21 @@ impl Ui {
         for &(k, tile) in &g.rows {
             self.draw_add_tile(cv, tile, entries[k].cat);
         }
+        for &(r, name) in &g.heads {
+            cv.text_in(&f.s, Rect::new(r.x + 4, r.y, r.w - 8, r.h), 0, name, DIM);
+        }
         cv.no_clip();
+        if self.sheet.add_cats {
+            // the list of the categories, over the tiles
+            cv.round(g.list.inset(-2), 6, PANEL_BG, 255);
+            for (i, r) in g.cat_rows.iter().enumerate() {
+                let on = i == self.sheet.add_group;
+                if on { cv.round(*r, 5, ACCENT, 255); } else { btn(cv, *r, BTN, BTN_BORDER); }
+                cv.text_in(&f.m, Rect::new(r.x + 12, r.y, r.w - 12, r.h), 0, names[i], if on { DARK_TEXT } else { TEXT });
+            }
+        }
         // a scrollbar, since there is no pager
-        let total = entries.len().div_ceil(super::addtiles::TILE_COLS as usize) as i32 * super::addtiles::TILE_H;
+        let total = self.add_layout(g.list).2;
         if total > g.list.h {
             let (x, th) = (g.list.right() - 3, (g.list.h * g.list.h / total).max(20));
             let ty = g.list.y + (g.list.h - th) * self.studio.md.tile_scroll.clamp(0, (total - g.list.h).max(1)) / (total - g.list.h).max(1);
@@ -1395,15 +1486,16 @@ impl Ui {
                 return true;
             }
         }
-        for (i, c) in g.groups.iter().enumerate() {
-            if c.contains(x, y) {
-                self.sheet.add_group = i;
-                self.sheet.search.clear();
-                self.studio.md.tile_scroll = 0;
-                self.sheet_set_page(None, 0);
-                return true;
-            }
+        let n = g.cat_rows.len() as i32;
+        if self.sheet.add_cats {
+            // the list is open: a row chooses, a tap elsewhere only closes it
+            self.sheet.add_cats = false;
+            if let Some(i) = g.cat_rows.iter().position(|r| r.contains(x, y)) { self.sheet_add_category(i as i32); }
+            return true;
         }
+        if g.cat_value.contains(x, y) { self.sheet.add_cats = true; return true; }
+        if g.cat_minus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 - 1).rem_euclid(n)); return true; }
+        if g.cat_plus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 + 1).rem_euclid(n)); return true; }
         if g.find.contains(x, y) {
             if self.sheet.search.trim().is_empty() {
                 self.wlan.osk = Some(wlan::Osk::for_search(""));
@@ -1517,9 +1609,15 @@ pub(super) struct AddGeo {
     /// the room of the tile grid
     pub list: Rect,
     pub chips: Vec<(WaveId, Rect)>,
-    pub groups: Vec<Rect>,
+    pub cat_minus: Rect,
+    pub cat_value: Rect,
+    pub cat_plus: Rect,
+    /// the rows of the list of the categories, while it is open
+    pub cat_rows: Vec<Rect>,
     pub find: Rect,
     pub rows: Vec<(usize, Rect)>,
+    /// the headings of the groups between the tiles
+    pub heads: Vec<(Rect, &'static str)>,
     #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub page: usize,
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it

@@ -528,6 +528,18 @@ fn top_base(f: &[f32], vmin: f32, vmax: f32, poor_peak_check: bool) -> (f64, f64
     (lo_v + hi as f64 * width, lo_v + lo as f64 * width)
 }
 
+/// Top and base of `v` by the automatic method of the measurements (`BaseTop::Auto`, `top_base`): histogram modes,
+/// max/min when a level has no peak. None without two different finite samples.
+pub fn top_base_auto(v: &[f32]) -> Option<(f32, f32)> {
+    let f = finite_samples(v);
+    let vmax = f.iter().copied().fold(f32::MIN, f32::max);
+    let vmin = f.iter().copied().fold(f32::MAX, f32::min);
+    (vmax > vmin).then(|| {
+        let (top, base) = top_base(&f, vmin, vmax, true);
+        (top as f32, base as f32)
+    })
+}
+
 /// Smallest count a histogram peak needs to be a real level: about twice the mean count per bin. `stride` is the
 /// spacing of populated bins (above 1 when the samples are quantised more coarsely than the bins).
 fn peak_threshold(hist: &[u64], n: usize) -> f64 {

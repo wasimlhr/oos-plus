@@ -64,6 +64,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0033](process/0033-development-on-linux-macos-and-wsl.md) | process | OOS is developed on Linux, macOS and Windows with WSL; there is no native Windows build | accepted |
 | [0033](system/0033-a-file-of-commands-sets-the-scope-up-and-no-more.md) | system | A file of SCPI commands sets the scope up and runs it, and no more | accepted |
 | [0034](process/0034-standing-agents-get-their-task-from-a-machine-a-person-merges.md) | process | Standing agents get their task from a machine and open one pull request; a person merges | superseded by ADR 0039 |
+| [0034](ui-ux/0034-a-decoder-is-a-bus-with-its-settings-in-one-place.md) | ui-ux | a decoder is a bus of its own, with its settings in one place | proposed |
 | [0035](process/0035-every-text-has-one-home-the-wiki-comes-from-the-tree.md) | process | Every text has one home; the wiki is published from the tree, and a change brings its texts along | accepted |
 | [0036](process/0036-the-rules-of-the-repository-are-files-a-change-by-others-needs-the-maintainers-review.md) | process | The rules of the repository are files in the tree; a change by anyone else needs the maintainer's review | accepted |
 | [0037](process/0037-numbers-that-only-go-down.md) | process | Numbers that only go down: large files, switched-off lints, `unsafe` | accepted |

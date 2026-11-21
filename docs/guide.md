@@ -171,13 +171,19 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Four decoders at once, with a list of events you can export and that jumps to an event; DCC lists one command per row
   ("Loco 5  Fwd 50/128"). The Events pane lists the record as messages, single fields or lines of text, with the
   time, the length, the text, the bytes in hex and, where a check failed, the number of errors in red; Errors only
-  leaves the rows that failed
+  leaves the rows that failed. The single fields of MIL-STD-1553 are its words, each with what it is (command, status,
+  data), terminal, direction, subaddress, the mode code by its name or the number of words, the data, the flags of a
+  status word, and "Parity" where the word failed it. These are Minimal's and Studio's: the Default layout keeps
+  upstream's, where Decode > Event table opens a table over the plot (time, decoder, field; a tap on a row of a
+  stopped scope goes to it) and the Events pane is a list of the fields in one or two columns
 - A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
   slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
   `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART or I2C band
   has a row of its bits (start, data, parity, stop; for I2C the bits of a byte, read or write, and the
   acknowledge) and marks where each was sampled. An I2C byte that was not acknowledged is an error, except the one
-  a controller ends a read with; an address of ten bits is one field ("2A5 W")
+  a controller ends a read with; an address of ten bits is one field ("2A5 W"). The Default layout keeps upstream's
+  band: the decoder's number, protocol and source dim at its left ("1 UART CH1"), a box per field, the band there
+  while its source channel is off, and " N" on the byte that ends an I2C read
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. FlexRay is read at the
   Bit rate set (10, 5 or 2.5 Mbit/s), on either channel. A MIL-STD-1553 word says what it is: a command its
@@ -707,17 +713,20 @@ A channel key held for more than half a second, or a finger held on a channel's 
 AC and DC coupling. A short press switches a channel that is off on and opens its menu. With several channels on, the
 first press on one that is not selected only selects it, so the knobs act on it (its card has the coloured border);
 the next press opens its menu, and a press with its menu open switches it off. A tap on a channel's card selects and
-opens the menu the same way; a tap with the menu open closes it. A push of the horizontal SCALE knob switches the
-time base between its 1-2-5 steps and fine steps of a hundredth (Horizontal > Fine time base; the time pill of Studio
-says "fine" while it is on); the zoom is the Zoom row of Horizontal or the Zoom button of Studio, and while it is
-open the knob sets its scale and a push closes it.
+opens the menu the same way; a tap with the menu open closes it. A push of the horizontal SCALE knob opens or closes
+the zoom; a tap on the lower half of the TIME card does the same, and the right half of the trigger card steps its
+source (upper half) or its sweep (lower half). On the plot a vertical drag moves the selected channel (from the left
+edge the channel whose marker is nearest), and a held finger opens the plot's menu. This is how upstream OOS works
+the Default layout; Minimal and Studio work some of it differently (Layouts, below).
 
 **Backlight.** Display > Backlight sets the panel's brightness from 10 to 100 %, in steps that look even to the eye. It is
 a setting of the scope (`/oos/system.conf`).
 
-**Auto.** Works on the channels that are on, at full bandwidth, and sets the memory depth back to Auto; each channel then
-gets its own bandwidth back. With no signal it restores the set-up. Afterwards a bar at the top of the plot offers a few
-periods, many periods, the rising edge or the falling edge of the trigger channel; its x or a tap elsewhere closes it.
+**Auto.** Works on the channels that are on, at full bandwidth, and sets the memory depth back to Auto; each channel
+then gets its own bandwidth back. With no signal it restores the set-up. Channels that share one plot get a band each,
+one above the other; in a lane each (Stacked) or in Studio's Overlay on one plot every channel gets the whole height,
+and the trace mode stays as it was. Afterwards a bar at the top of the plot offers a few periods, many periods, the
+rising edge or the falling edge of the trigger channel; its x or a tap elsewhere closes it.
 
 **Windows and full screen.** Display > Windows splits the plot into two windows side by side, two stacked, or four. The
 same page puts each channel, math channel and the LA into a window; a new split spreads the channels that are on. All
@@ -741,9 +750,16 @@ double tap on any) opens its sheet, and a hold has the quick actions, Turn off f
 right is the Menu; the read-out of the sample rate, the memory depth and the mode opens Acquire, and Horizontal is
 under it; the pill of the time base opens Horizontal and names the delay or the zoom scale; the trigger pill names the
 type and the sweep and opens Trigger; Cursors in the top bar puts the cursors on, and the next tap opens the Cursor menu. In
-every layout the two multipurpose knobs move the cursors while they are on (the first cursor A, the second cursor B), with
-no menu open or with the Cursor menu; a push opens or closes that menu, or with time and level cursors together gives the
-knobs to the other pair. Add > Measurement and the Measure
+Minimal and Studio the two multipurpose knobs move the cursors while they are on (the first cursor A, the second cursor
+B), with no menu open or with the Cursor menu; a push opens or closes that menu, or with time and level cursors together
+gives the knobs to the other pair (in Default the knobs keep their usual job, and the Cursor menu's rows move the
+cursors). There a push of the horizontal SCALE knob switches the time base between its 1-2-5 steps and fine steps of a
+hundredth (Horizontal > Fine time base; the time pill of Studio says "fine" while it is on); the zoom is the Zoom row of
+Horizontal or the Zoom button of Studio, and while it is open the knob sets its scale and a push closes it. A finger
+held on a channel's chip, badge or marker opens its quick actions (coupling, invert, hide, zero offset, settings)
+instead of switching AC/DC; a tap on a trace, a lane or a channel marker selects that source, a tap on the trigger
+marker opens Trigger, a tap on a cursor tag selects that cursor, and a vertical drag moves the trace under the finger.
+Only what is drawn as a button on the bars takes a tap. Add > Measurement and the Measure
 key open a quick panel that adds measurements on one source with the plot in view; the button beside its close button
 opens the Measure page with the categories, the sources, Selected and Settings, and Menu > Measure opens that page at
 once. System, SIM and the network pages are entries of the Menu.
@@ -882,7 +898,9 @@ it; a running one is left running. A tap on a box of the band marks its row from
 the time and the text. Decode > Threshold to middle
 puts a decoder's threshold half way between the levels of its signal, for each of its lines by itself: a line can
 have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels; in Studio
-the thresholds are on the Levels page of the Decode sheet. An SPI decoder reads a second data line when MISO has a
+the thresholds are on the first page of the Decode sheet where they fit it (a decoder of one line with few settings
+is one page, without tabs), else on its Levels page. The sheet holds the decoder alone: the I2C lane of the plot
+(Menu > Bus) has a sheet of its own. An SPI decoder reads a second data line when MISO has a
 source, and each chip-select frame is one message. Where most frames end before a word is whole, its band says
 "Frames shorter than a word" and lists nothing: the record has too few samples for the clock (a slow time base
 with a short memory; more Memory or a faster time base helps), or Data bits is more than a frame has.

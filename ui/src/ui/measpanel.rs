@@ -502,13 +502,7 @@ impl Ui {
     pub(super) fn draw_panel_cards(&self, cv: &mut Canvas, g: &PanelGeo, rows: &[tools::MeasRow], keys: &[studio::MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
         let pinned = self.studio_pinned();
-        // one font for the values of every card of the list, from the width of the cards and the units, not from the
-        // values of the moment (on a unit, 2026-11-20, "68.5 mV" stood smaller than "270 mV" on the card beside it)
         let cards = self.panel_cards_layout(first, listed.len(), g.list);
-        let vf = match cards.first() {
-            Some((_, r)) => Self::card_value_shared(f, r.w, listed.iter().filter_map(|&i| rows.get(i)).map(|row| (row.unit, f.sb.width(&self.wave_name(row.src))))),
-            None => &f.lb,
-        };
         cv.set_clip(g.list);
         for (pos, r) in cards {
             let i = listed[pos];
@@ -520,40 +514,50 @@ impl Ui {
             cv.set_clip(Rect::new(r.x + 4, r.y, r.w - 24, 20));
             cv.text(&f.s, r.x + 8, r.y + 15, &self.panel_row_name(keys.get(i).copied(), &row.name), LABEL);
             cv.set_clip(g.list);
-            icon_pin_small(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
-            // the value, and the source at the right of its line
+            icon_pin(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
+            // the value, and the source at the right of its line: when the value is too wide for both (a card of a
+            // side panel is 148 px) it has the whole line, and the source goes to the line under it
             let src = self.wave_name(row.src);
             let sw = f.sb.width(&src);
-            // the value whole (on a unit, 2026-11-20, two cards in a side panel showed "1.73 n" and "91.8 M"): beside
-            // the source where it fits there, else across the line in the colour of its source, without the tag
-            let value = row.text();
-            // the tag by the widest value of the unit too, so it does not come and go as the value runs (on a unit,
-            // 2026-11-20, "70.4 mV" lost it and "269 mV" beside it kept it)
-            let tag = vf.width(&Self::card_value_widest(row.unit)) <= Self::card_value_beside(r.w, sw);
-            let room = if tag { (r.w - 8 - sw - 10).max(1) } else { r.w - 8 };
-            cv.set_clip(Rect::new(r.x + 4, r.y + 18, room, 24));
-            cv.text(vf, r.x + 8, r.y + 38, &value, if tag { TEXT } else { col });
-            if tag {
+            let text = row.text();
+            let st = self.studio_stat_values(i);
+            let stats = self.studio.panel.stats_mode != 0 || st.is_some();
+            // without statistics the third line says the source, and the value has the whole line
+            let beside = stats && f.lb.width(&text) + sw + 14 <= r.w - 8;
+            cv.set_clip(Rect::new(r.x + 4, r.y + 18, if beside { (r.w - 8 - sw - 10).max(1) } else { r.w - 8 }, 24));
+            cv.text(&f.lb, r.x + 8, r.y + 38, &text, TEXT);
+            if beside {
                 cv.set_clip(Rect::new(r.x + 4, r.y + 18, r.w - 8, 24));
                 cv.text(&f.sb, r.right() - 8 - sw, r.y + 37, &src, col);
+            } else if !stats {
+                // no statistics: the line under the value says where it was measured
+                cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8, 18));
+                cv.text(&f.sb, r.x + 8, r.y + 54, &src, col);
             }
             // the statistics: mean and deviation, or minimum and maximum, then the count while there is room
-            let st = self.studio_stat_values(i);
-            if self.studio.panel.stats_mode != 0 || st.is_some() {
+            let mut src_said = beside || !stats;
+            if stats {
                 let cell = |v: Option<f64>| v.map_or("----".to_string(), |v| row.fmt(v));
                 let room = r.w - 16;
                 let range = self.studio.panel.stats_mode == 2;
                 let (a, b) = if range { (cell(st.map(|s| s.1)), cell(st.map(|s| s.2))) } else { (cell(st.map(|s| s.0)), cell(st.map(|s| s.3))) };
                 let line = Self::card_stats_line(&f.s, range, row.unit, &a, &b, room);
                 let n = self.results.rows.get(i).map_or(0, |s| s.n);
-                let count = if n > 0 { format!("n {n}") } else { String::new() };
-                let with_count = !count.is_empty() && f.s.width(&line) + 10 + f.s.width(&count) <= room;
-                cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8 - if with_count { f.s.width(&count) + 8 } else { 0 }, 18));
+                // the source takes the place of the count when it did not fit beside the value
+                let tail = if beside { if n > 0 { format!("n {n}") } else { String::new() } } else { src.clone() };
+                let with_tail = !tail.is_empty() && f.s.width(&line) + 10 + f.sb.width(&tail) <= room;
+                cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8 - if with_tail { f.sb.width(&tail) + 8 } else { 0 }, 18));
                 cv.text(&f.s, r.x + 8, r.y + 53, &line, DIM);
-                if with_count {
+                if with_tail {
                     cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8, 18));
-                    cv.text(&f.s, r.right() - 8 - f.s.width(&count), r.y + 53, &count, DIM);
+                    cv.text(&f.sb, r.right() - 8 - f.sb.width(&tail), r.y + 53, &tail, if beside { DIM } else { col });
+                    src_said |= !beside;
                 }
+            }
+            // no room to say the source in words: the edge of the card has its colour
+            if !src_said {
+                cv.set_clip(g.list);
+                cv.round(Rect::new(r.x, r.y + 6, 3, r.h - 12), 1, col, 255);
             }
             cv.set_clip(g.list);
         }
@@ -583,24 +587,6 @@ impl Ui {
         // no room for the unit at all: the numbers, whose unit the value above shows
         let num = |s: &str| tail(s).map_or(s.to_string(), |(n, _)| n);
         short(&num(a), &num(b))
-    }
-
-    /// The largest font in which a card's value fits `room` px: large, then medium bold, then small bold.
-    /// The widest value a card of `unit` shows: three digits with a sign and a prefix.
-    pub(super) fn card_value_widest(unit: &str) -> String { format!("-00.0 m{unit}") }
-
-    /// The room of a card's value beside its source tag `sw` px wide, on a card `w` px wide.
-    pub(super) fn card_value_beside(w: i32, sw: i32) -> i32 { w - 8 - sw - 10 - 4 }
-
-    /// The one font of the values of cards `w` px wide, given each card's unit and the width of its source tag: the
-    /// largest in which the widest value of every unit ("-00.0 m" and the unit) fits beside its tag, else the largest
-    /// in which it fits across the line, else the smallest.
-    pub(super) fn card_value_shared<'a>(f: &'a crate::font::Fonts, w: i32, cards: impl Iterator<Item = (&'static str, i32)>) -> &'a Font {
-        let cards: Vec<(String, i32)> = cards.map(|(unit, sw)| (Self::card_value_widest(unit), sw)).collect();
-        let fonts = [&f.lb, &f.mb, &f.sb];
-        fonts.into_iter().find(|ft| cards.iter().all(|(v, sw)| ft.width(v) <= Self::card_value_beside(w, *sw)))
-            .or_else(|| fonts.into_iter().find(|ft| cards.iter().all(|(v, _)| ft.width(v) <= w - 12)))
-            .unwrap_or(&f.sb)
     }
 
     /// The name a row shows: for a measurement of one source, its name (pair and catalogue names are whole already).

@@ -2,13 +2,14 @@
 //! Studio: the Add measurement panel as a grid of tiles (a picture and a name each, nothing computed while browsing),
 //! and the info card of a measurement: the picture, what it is, how it is computed, its sources and its unit.
 use super::meascatalog::{cat_info, cat_of_key, Cat};
-use super::sheet::SHEET_FOOT;
 use super::studio::MeasKey;
 use super::*;
 
 /// Height of a tile, and the two columns of the grid.
 pub(super) const TILE_H: i32 = 84;
 pub(super) const TILE_COLS: i32 = 2;
+/// Height of the heading of a group of tiles.
+const HEAD_H: i32 = 26;
 const CARD_W: i32 = 520;
 const CARD_H: i32 = 460;
 
@@ -16,27 +17,36 @@ impl Ui {
     /// The "i" of a tile: a 40 px target in its top right corner.
     pub(super) fn tile_info_rect(tile: Rect) -> Rect { Rect::new(tile.right() - 40, tile.y, 40, 40) }
 
-    /// How many tiles one page of the panel holds.
-    pub(super) fn tile_fit(avail_h: i32) -> usize { ((avail_h / TILE_H).max(1) * TILE_COLS) as usize }
-
-    /// How far the grid can scroll.
-    pub(super) fn tile_scroll_max_of(&self, entries: usize, list_h: i32) -> i32 {
-        ((entries.div_ceil(TILE_COLS as usize) as i32) * TILE_H - list_h).max(0)
+    /// How far the grid can scroll, for a grid of `total` px.
+    pub(super) fn tile_scroll_max_of(&self, total: i32, list_h: i32) -> i32 {
+        (total - list_h).max(0)
     }
     pub(super) fn tile_scroll_max(&self) -> i32 {
         let g = self.sheet_add_geo();
-        self.tile_scroll_max_of(self.sheet_add_entries().len(), g.list.h)
+        self.tile_scroll_max_of(self.add_layout(g.list).2, g.list.h)
     }
 
-    pub(super) fn tile_rect(list: Rect, i: usize) -> Rect {
+    /// The tiles of the list, in the grid of `list` (not scrolled), with the headings of the groups of the Measure
+    /// page between them (not while the list is a search), and the height of it all.
+    pub(super) fn add_layout(&self, list: Rect) -> (Vec<Rect>, Vec<(Rect, &'static str)>, i32) {
+        let entries = self.sheet_add_entries();
+        let headed = self.sheet.search.trim().is_empty();
         let w = (list.w - 4) / TILE_COLS;
-        let (col, row) = (i as i32 % TILE_COLS, i as i32 / TILE_COLS);
-        Rect::new(list.x + col * (w + 4), list.y + row * TILE_H, w, TILE_H - 4)
-    }
-
-    pub(super) fn tiles_avail(&self, list_y: i32) -> i32 {
-        let (r, _, _) = self.sheet_chrome();
-        r.bottom() - SHEET_FOOT - list_y
+        let (mut tiles, mut heads) = (Vec::new(), Vec::new());
+        let (mut y, mut col, mut last) = (0, 0, None);
+        for e in &entries {
+            if headed && last != Some(e.section) {
+                if col != 0 { y += TILE_H; col = 0; }
+                heads.push((Rect::new(list.x, list.y + y, list.w, HEAD_H), e.section));
+                y += HEAD_H;
+                last = Some(e.section);
+            }
+            tiles.push(Rect::new(list.x + col * (w + 4), list.y + y, w, TILE_H - 4));
+            col += 1;
+            if col == TILE_COLS { col = 0; y += TILE_H; }
+        }
+        if col != 0 { y += TILE_H; }
+        (tiles, heads, y)
     }
 
     /// One tile: a picture over its name, a mark when it is added, the "i".

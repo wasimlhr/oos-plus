@@ -21,10 +21,9 @@ use crate::gfx::Canvas;
 use crate::model::*;
 use crate::ui::Ui;
 
-/// The offset a channel keeps when its scale or probe changes: within what the front end can shift at that scale.
-fn clamp_channel_offset(ch: &mut Channel) {
-    let max = ch.offset_max();
-    ch.offset = ch.offset.clamp(-max, max);
+/// `:RUN`, `:STOP` or `:SINGle`: they start and stop acquiring and change no setting.
+fn run_state(nodes: &[&str]) -> bool {
+    nodes.len() == 1 && ["RUN", "STOP", "SINGle"].iter().any(|c| kw(nodes[0], c))
 }
 
 impl Scpi {
@@ -109,7 +108,9 @@ impl Scpi {
         let clipping: Vec<bool> = (0..NCH).map(|c| ui.channel_clipping(c)).collect();
         let r = self.model_cmd(&mut ui.m, &ui.src, &clipping, &nodes, query, arg);
         if let Some(resp) = r {
-            if !query {
+            if !query && run_state(&nodes) {
+                ui.mark_run_state();
+            } else if !query {
                 ui.mark_changed();
             }
             return resp;
@@ -513,7 +514,7 @@ impl Scpi {
         }
         if !query && nodes.len() == 1 && kw(nodes[0], "STOP") && ui.sim_generating() {
             let _ = ui.sim_play_set(false);
-            ui.mark_changed();
+            ui.mark_run_state();
             return Some(None);
         }
         // A reference capture uses the same acquisition state as the screen.
@@ -542,7 +543,7 @@ impl Scpi {
             } else {
                 ui.record_key(crate::ui::key::SINGLE);
             }
-            ui.mark_changed();
+            ui.mark_run_state();
             return Some(None);
         }
         None
@@ -698,11 +699,11 @@ impl Scpi {
         }
         // the RBW the spectrum was computed with (the record length can make it coarser than `:SPECtrum:RBW`)
         if kw(n0, "SPECtrum") && nodes.len() == 3 && kw(nodes[1], "RBW") && kw(nodes[2], "ACTual") && query {
-            return Some(t(&ui.spectrum_rbw().map_or_else(|| "9.9E37".to_string(), e)));
+            return Some(t(&ui.spectrum_rbw_now().filter(|r| *r > 0.0).map_or_else(|| "9.9E37".to_string(), e)));
         }
-        // the lines of the peak table, in its order: frequency,level;...
+        // the lines of the spectrum in the order of the peak table, up to the Harmonics setting: frequency,level;...
         if kw(n0, "SPECtrum") && nodes.len() == 3 && kw(nodes[1], "PEAK") && kw(nodes[2], "LIST") && query {
-            let p = ui.spectrum_peaks();
+            let p = ui.spectrum_lines_now().unwrap_or_default();
             return Some(if p.is_empty() {
                 t("9.9E37")
             } else {
@@ -1106,14 +1107,11 @@ impl Scpi {
                 if expand_gnd && old > 0.0 {
                     ch.offset *= ch.volts_per_div() / old;
                 }
-                clamp_channel_offset(ch);
             } else if kw(n1, "OFFSet") || kw(n1, "POSition") {
                 if query {
                     return Some(t(&e(ch.offset as f64)));
                 }
-                let Some(v) = num(arg) else { return None };
-                ch.offset = v;
-                clamp_channel_offset(ch);
+                ch.offset = num(arg)?;
             } else if kw(n1, "COUPling") {
                 if query {
                     return Some(t(ch.coupling.name()));
@@ -1130,7 +1128,6 @@ impl Scpi {
                     return Some(t(&e(ch.probe as f64)));
                 }
                 ch.probe = num(arg).filter(|&p| p > 0.0)?;
-                clamp_channel_offset(ch);
             } else if kw(n1, "BIAS") {
                 // The screen's zero correction, subtracted from the channel reading.
                 // The DHO programmer manual has no header for it.

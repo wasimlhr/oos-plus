@@ -28,6 +28,10 @@ it also ran on a DHO924S (2026-11-16).
 
 Fixed:
 
+- Spectrum: the sort button of the peak list ("Peaks by frequency") and the overflow button with the three dots are
+  drawn smaller, 26 px high and the sort button with the text size of the list. They were drawn at the size of
+  their touch areas and in the menu font, the largest text of the view (the owner, from the unit). The areas that
+  take the finger are unchanged. Host-tested; not yet run on a unit.
 - Studio, the Measurements pane under the waveform: the divider can be pulled down until one row of tiles is left.
   The least height of the pane was 100 px under its title strip, and a row of tiles is 60, so 40 px stayed empty
   under a single row and the divider went no lower (the owner from the unit). Host-tested; not yet run on a unit.

@@ -38,6 +38,13 @@ pub(super) fn harm_names() -> Vec<String> {
     PANE_HARMS.iter().map(|&h| if h == 0 { "All".to_string() } else { h.to_string() }).collect()
 }
 
+/// Columns and rows per column for `n` events in a height: one column while they are few (Default's Events pane).
+pub(super) fn event_grid(n: usize, h: i32) -> (usize, usize) {
+    let fit = (h / 20).max(1) as usize;
+    let cols = if n <= 4 { 1 } else { 2 };
+    (cols, n.div_ceil(cols).clamp(1, fit))
+}
+
 /// What the second pane keeps between frames.
 #[derive(Default)]
 pub struct PaneState {
@@ -45,6 +52,8 @@ pub struct PaneState {
     pub top: usize,
     /// the rows of the Events pane, refreshed a few times a second (`decrows.rs`)
     pub rows: Vec<super::decrows::MsgRow>,
+    /// Default's Events pane (upstream's): the decoder events, a row per field, refreshed a few times a second
+    pub events: Vec<tables::EventRow>,
     events_t: f64,
     /// the first row the Events pane shows, and the row chosen by a tap
     pub ev_top: usize,
@@ -141,6 +150,12 @@ impl Ui {
         // a fixed header row of its own (Frequency / Level) between the button and the first line
         let y = sort.y + sort.h + 2 + PEAK_HEAD;
         SpecBox { title, plot, sort, list: Rect::new(col_x, y, PEAK_W - 6, a.y + a.h - y) }
+    }
+
+    /// What is drawn of the sort button `sort`: 26 px high, in the middle of its touch area.
+    pub(super) fn spec_sort_chip(sort: Rect) -> Rect {
+        let h = sort.h.min(26);
+        Rect::new(sort.x, sort.y + (sort.h - h) / 2, sort.w, h)
     }
 
     /// Lines shown on the trace and in the list: the numbers must match, so no more than the list has room for.
@@ -271,14 +286,11 @@ impl Ui {
     pub(super) fn draw_peaks(&self, cv: &mut Canvas, b: &SpecBox, sp: &spectrum::Spectrum, pane: bool) {
         let f = self.fonts();
         if b.sort.w == 0 { return; }
-        btn(cv, b.sort, BTN, BTN_BORDER);
-        cv.text_in(
-            super::fit_font(&[&f.mb, &f.sb, &crate::font::Fonts::get(0).mb], b.sort.w - 8, self.sort_name()),
-            b.sort,
-            1,
-            self.sort_name(),
-            TEXT,
-        );
+        // the button is drawn 26 px high in its touch area of 36, with the text of the list's size: at the height
+        // of the touch area and in the menu font it was the largest text of the view (the owner, from the unit)
+        let chip = Self::spec_sort_chip(b.sort);
+        btn(cv, chip, BTN, BTN_BORDER);
+        cv.text_in(super::fit_font(&[&f.sb, &f.s], chip.w - 8, self.sort_name()), chip, 1, self.sort_name(), TEXT);
         let r = b.list;
         // the header row: above the list, never over a line of it
         let head = Rect::new(r.x, r.y - PEAK_HEAD, r.w, PEAK_HEAD);
@@ -421,6 +433,11 @@ impl Ui {
                 }
                 (BAND_H + n.max(1) * ROW_WANT).max(BAND_H + side * 18)
             }
+            // Default's pane is upstream's: rows of 24 pixels, the hint while there are none
+            tables::PANE_EVENTS if self.m.layout == Layout::Default && self.pn.event_rows > 0 => {
+                self.pn.event_rows as i32 * 24
+            }
+            tables::PANE_EVENTS if self.m.layout == Layout::Default => HINT_H,
             tables::PANE_EVENTS => super::decrows::want_h(self.pn.event_rows),
             tables::PANE_BUS if self.pn.views.is_empty() => HINT_H,
             tables::PANE_BUS => self.bus_view_h(),
@@ -441,8 +458,15 @@ impl Ui {
             self.pn.views = self.bus_views();
             return;
         }
-        self.pn.rows = self.decode_rows();
-        let want = self.events_count();
+        let want = if self.m.layout == Layout::Default {
+            // upstream's pane: the events in one column while they are few, else two
+            self.pn.events = self.decode_events();
+            let n = self.pn.events.len();
+            n.div_ceil(if n <= 4 { 1 } else { 2 })
+        } else {
+            self.pn.rows = self.decode_rows();
+            self.events_count()
+        };
         if want >= self.pn.event_rows {
             (self.pn.event_rows, self.pn.event_seen) = (want, self.now);
         } else if self.now - self.pn.event_seen > SHRINK_AFTER {
@@ -1045,6 +1069,7 @@ impl Ui {
                 cv.set_clip(r);
                 match self.m.pane {
                     tables::PANE_RESULTS => self.draw_results_pane(cv, r),
+                    tables::PANE_EVENTS if self.m.layout == Layout::Default => self.draw_pane_events_default(cv, r),
                     tables::PANE_EVENTS => self.draw_pane_events(cv, r),
                     tables::PANE_TREND => self.draw_trends(cv, r),
                     tables::PANE_BUS => self.draw_pane_bus(cv, r),
@@ -1092,7 +1117,8 @@ impl Ui {
                 }
             }
             tables::PANE_TREND => self.trend_tap(x, y),
-            tables::PANE_EVENTS => self.events_tap(x, y),
+            // Default's pane is upstream's list: a tap on it does nothing
+            tables::PANE_EVENTS if self.m.layout != Layout::Default => self.events_tap(x, y),
             _ => {}
         }
         true

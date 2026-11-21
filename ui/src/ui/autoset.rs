@@ -181,12 +181,27 @@ impl Ui {
         if self.src.is_hw() {
             self.auto_start();
         } else {
-            autoset(&mut self.m, &self.src);
+            let apart = self.auto_apart();
+            autoset(&mut self.m, &self.src, apart);
             self.dirty_map = true;
             self.settings_changed();
             self.toast("Auto set-up");
         }
     }
+    /// The auto set-up keeps the channels apart, a band each, only where they share one graticule: not in a lane each
+    /// (Stacked), and not in Studio's Overlay on one plot, where the signals lie on one another (`choose_trace_mode`).
+    /// Before, Auto in Overlay put each channel in a band of its own, and the plot looked like lanes. Overlay keeps a
+    /// split (`trace_mode`): channels that share a window of it keep their bands there.
+    pub(super) fn auto_apart(&self) -> bool {
+        !self.trace_stacked() && (self.m.layout != Layout::Studio || self.n_wins() > 1 || self.split_in_one_window())
+    }
+
+    /// A split of the plot whose sources all sit in one window is drawn as that window alone (`n_wins`), but it is still
+    /// the window of a split: the channels in it keep their bands.
+    fn split_in_one_window(&self) -> bool {
+        self.m.win_layout.count() > 1 && !self.m.zoom && !self.view_on() && !self.eye_open()
+    }
+
     pub(super) fn auto_operation(&self) -> Option<u64> {
         self.auto.run.as_ref().map(|job| job.id)
     }
@@ -599,7 +614,8 @@ impl Ui {
             for &(c, _, _) in &found {
                 self.m.ch[c].bw = a.back.ch[c].bw;
             }
-            place(&mut self.m, &found);
+            let apart = self.auto_apart();
+            place(&mut self.m, &found, apart);
             if self.m.auto_nrej {
                 self.auto_noise_reject();
             }
@@ -1381,5 +1397,47 @@ mod tests {
         assert_eq!((ui.m.trig_src, ui.m.trig_level), (2, 9.0));
         assert!(ui.refs[0].is_none());
         assert!(!ui.auto_running());
+    }
+
+    #[test]
+    fn auto_keeps_the_channels_apart_only_where_they_share_a_graticule() {
+        // (layout, Stacked) -> (volts per division, offset) of CH1 and CH2 after Auto
+        let auto = |layout: Layout, stacked: bool| {
+            let mut ui = Ui::new(Source::Demo { t: 0.0 });
+            ui.m.layout = layout;
+            ui.m.ch[1].on = true;
+            ui.relayout();
+            ui.trace_mode(stacked);
+            let mode = (ui.trace_stacked(), ui.plot.wins.len());
+            ui.autoset_live_only();
+            assert_eq!((ui.trace_stacked(), ui.plot.wins.len()), mode, "{layout:?}: Auto keeps the trace mode");
+            [0, 1].map(|c| (ui.m.ch[c].volts_per_div(), ui.m.ch[c].offset))
+        };
+        // one graticule shared: a band each, CH1 two divisions over the centre, CH2 two under it
+        let apart = auto(Layout::Default, false);
+        // Studio's Overlay keeps a split, and two channels in one window of it keep their bands there
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.m.layout = Layout::Studio;
+        ui.m.ch[1].on = true;
+        ui.m.win_layout = WinLayout::Rows;
+        ui.m.ch_win = [0, 0, 1, 1];
+        ui.relayout();
+        ui.trace_mode(false);
+        assert_eq!(ui.m.win_layout, WinLayout::Rows, "Overlay keeps the split");
+        assert!(ui.auto_apart(), "CH1 and CH2 share the first window");
+        // Zoom shows one window of a split: the whole plot is shared again
+        ui.m.zoom = true;
+        assert_eq!(ui.n_wins(), 1);
+        assert!(!ui.auto_apart(), "Zoom on a split overlays the channels on one plot");
+        ui.m.zoom = false;
+        for (layout, stacked) in [(Layout::Studio, false), (Layout::Studio, true), (Layout::Default, true)] {
+            let whole = auto(layout, stacked);
+            for (c, y) in [(0, 2.0), (1, -2.0)] {
+                let ((va, oa), (vw, ow)) = (apart[c], whole[c]);
+                // the same signal: its middle sits on the centre now, at a scale for the whole height
+                assert!(((y * va - oa) + ow).abs() < 1e-3, "{layout:?} stacked {stacked} CH{}: {oa} {ow}", c + 1);
+                assert!(vw <= va, "{layout:?} stacked {stacked} CH{}: {va} {vw}", c + 1);
+            }
+        }
     }
 }

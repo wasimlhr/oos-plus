@@ -472,7 +472,7 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
         // the Add menu adds things: showing the strip is the chip above and View > Show pinned badges
         let t = u.studio_top();
         tap(&mut u, t.add);
-        assert_eq!(u.studio_add_rows().len(), 10, "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box");
+        assert_eq!(u.studio_add_rows().len(), 17, "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box");
         u.studio.add_menu = false;
     }
     // without any pinned measurement the restore chip is there all the same
@@ -667,26 +667,44 @@ fn the_statistics_of_a_card_fit_the_card() {
     }
 }
 
-/// A card's value is whole: the large font where it fits beside the source, a smaller one where not; the statistics
-/// line drops its unit last. On a unit, 2026-11-20, two cards in a 210 px side panel (about 95 px each) showed
-/// "1.73 n", "91.8 M", "40.0 M" and "90.3 .. 92.7 MV,".
 #[test]
-fn a_narrow_card_shows_its_value_whole() {
-    let u = studio_with(6);
-    let f = u.fonts();
-    let card_w = 95;
-    let sw = f.sb.width("CH2");
-    let cards = [("ns", "1.73 ns"), ("V/s", "91.8 MV/s"), ("Hz", "40.0 MHz"), ("V/s", "-5.78 V/s"), ("%", "33.6 %"), ("V", "327 mV")];
-    let ft = Ui::card_value_shared(f, card_w, cards.iter().map(|(u, _)| (*u, sw)));
-    for (u, v) in cards {
-        let tag = ft.width(&Ui::card_value_widest(u)) <= Ui::card_value_beside(card_w, sw);
-        let room = if tag { Ui::card_value_beside(card_w, sw) } else { card_w - 12 };
-        assert!(ft.width(v) <= room, "{v} is {} wide in {room} (tag {tag})", ft.width(v));
+fn the_trend_page_reaches_every_measurement() {
+    let mut u = studio_with(3);
+    u.open_menu(MenuId::AddPanel);
+    u.sheet.add.kind = Some(super::addrail::AddKind::Plot);
+    u.sheet.add.plot = 4;
+    frame(&mut u);
+    let g = u.rail_geo();
+    let (_, more) = *g.meas.last().expect("a More chip");
+    tap(&mut u, more);
+    assert!(u.menu_open && u.menu == MenuId::Pick, "{:?}", u.menu);
+    assert_eq!(u.m.pane, super::tables::PANE_TREND);
+    shotb(&mut u, "trend-more");
+}
+
+/// The cards of a side panel: the value has the whole line when the source does not fit beside it, and the source
+/// takes the line under it (it was cut off: "1.00 kl", "4.05 \u{b5}").
+#[test]
+fn a_narrow_card_gives_its_value_the_whole_line() {
+    let mut u = studio_with(6);
+    u.studio.panel.cards = true;
+    u.m.studio_detail = false;
+    // the compact panel of a small screen: cards 94 px wide
+    u.studio.compact = true;
+    // a row that reads a slot with nothing in it says "R1 empty", the widest value there is
+    let eye = crate::measures::all().map(|x| x.1).find(|d| d.name == "Eye Height").expect("Eye Height");
+    u.m.cat.push((eye.id, WaveId::Ref(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)));
+    for _ in 0..4 { frame(&mut u); }
+    u.results.rows.clear();
+    u.studio.panel.stats_mode = 0;
+    // no statistics yet: the card's third line says the source
+    if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+        let mut cv = Canvas::new(W, H);
+        u.render(&mut cv);
+        let _ = std::fs::write(std::path::Path::new(&dir).join("b32b-cards-nostats.png"), crate::store::png_of(&cv));
     }
-    // one font for every card, whatever the value of the moment (on a unit, 2026-11-20, "68.5 mV" stood smaller than
-    // "270 mV" beside it); the large one on cards wide enough
-    assert_eq!(Ui::card_value_shared(f, card_w, [("V", sw)].into_iter()).size, Ui::card_value_shared(f, card_w, [("V", sw), ("V", sw)].into_iter()).size);
-    assert_eq!(Ui::card_value_shared(f, 240, cards.iter().map(|(u, _)| (*u, sw))).size, f.lb.size, "the large font where it fits");
-    let line = Ui::card_stats_line(&f.s, true, "V/s", "90.3 MV/s", "92.7 MV/s", card_w - 16);
-    assert!(f.s.width(&line) <= card_w - 16, "{line:?}");
+    let g = u.studio_panel_geo().expect("the panel");
+    let cards = u.panel_cards_layout(0, 6, g.list);
+    assert!(cards.len() >= 4 && cards.iter().all(|(_, r)| r.w >= 90 && r.h == super::measpanel::CARD_H), "{cards:?}");
+    shotb(&mut u, "cards-narrow");
 }

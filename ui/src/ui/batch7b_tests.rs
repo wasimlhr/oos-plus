@@ -346,8 +346,8 @@ fn taps_on_the_sheet_change_the_row_and_the_reset_footer_follows_shared_again() 
 }
 
 #[test]
-fn minimal_and_default_open_the_card_as_a_dialog_with_forty_pixel_controls() {
-    for l in [Layout::Minimal, Layout::Default] {
+fn minimal_opens_the_card_as_a_dialog_with_forty_pixel_controls() {
+    for l in [Layout::Minimal] {
         let r0 = WaveId::Ref(0);
         let mut u = card(l, &[(Meas::Period, r0), (Meas::Rise, r0)], &[(0, r0, WaveId::Ref(1))]);
         for i in 0..3 {
@@ -366,6 +366,52 @@ fn minimal_and_default_open_the_card_as_a_dialog_with_forty_pixel_controls() {
         tap_in(&mut u, d.close);
         assert!(!u.menu_open && u.meas_own.dialog.is_none());
     }
+}
+
+#[test]
+fn every_card_of_a_single_row_has_its_own_reference_levels() {
+    // the dialog of the Default layout sets the reference levels of every row; the card offers them too (ADR 0030)
+    let r0 = WaveId::Ref(0);
+    let kinds = [Meas::PllUi, Meas::Vpp, Meas::Vupper, Meas::Overshoot, Meas::Period, Meas::Rise, Meas::Burst];
+    for k in kinds.into_iter().chain([Meas::NPeriods, Meas::Outside]) {
+        let mut u = card(Layout::Studio, &[(k, r0)], &[]);
+        u.open_meas_cfg(0);
+        let rows: Vec<Item> = u.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();
+        assert!(rows.contains(&Item::RowF(RF::Low)) && rows.contains(&Item::RowF(RF::High)), "{k:?}");
+        assert!(u.measrow_sheet_tabs().iter().all(|t| t.rows.len() <= SHEET_MAX_ROWS), "{k:?}");
+    }
+}
+
+#[test]
+fn default_opens_the_dialog_of_upstream_for_a_standard_row_and_the_card_for_a_pair() {
+    let r0 = WaveId::Ref(0);
+    let mut u = card(Layout::Default, &[(Meas::Period, r0), (Meas::Rise, r0)], &[(0, r0, WaveId::Ref(1))]);
+    for i in 0..2 {
+        u.open_meas_cfg(i);
+        assert!(!u.menu_open || u.menu != MenuId::MeasRow, "row {i}: no card in Default");
+        let g = u.cfg_geom().expect("upstream's dialog");
+        assert!(g.source_m.w > 0 && g.refs.w > 0);
+        tap_in(&mut u, g.close);
+        assert!(u.cfg_geom().is_none() && u.meas_own.dialog.is_none());
+    }
+    // upstream has no settings of a pair: the card is the only place for them
+    u.open_meas_cfg(2);
+    assert_eq!(u.menu, MenuId::MeasRow);
+    assert!(u.cfg_geom().is_none());
+}
+
+// Break it catches: the card of a row left in Minimal came back as the dialog after Display > Layout went to Default.
+#[test]
+fn a_card_left_in_minimal_does_not_open_the_dialog_in_default() {
+    let r0 = WaveId::Ref(0);
+    let mut u = card(Layout::Minimal, &[(Meas::Period, r0)], &[]);
+    u.open_meas_cfg(0);
+    assert_eq!(u.menu, MenuId::MeasRow);
+    u.close_menu();
+    while u.m.layout != Layout::Default {
+        u.activate(Item::Layout);
+    }
+    assert!(u.meas_own.dialog.is_none() && u.cfg_geom().is_none(), "no dialog without a Set in Default");
 }
 
 #[test]
@@ -447,7 +493,7 @@ fn statistics_settings_are_a_page_with_a_reset_and_follow_the_toggles() {
     let g = u.sheet_geo().unwrap();
     assert!(g.rows.iter().filter(|r| matches!(r.it, Item::MeasShowSd | Item::MeasShowMin | Item::MeasShowMax)).all(|r| r.kind == RowKind::Toggle));
     let sd = g.rows.iter().find(|r| r.it == Item::MeasShowSd).unwrap().ctrl;
-    tap_in(&mut u, sd);
+    tap_in(&mut u, Ui::sheet_toggle_half(sd, false));
     assert_eq!(u.m.meas_show, [false, true, true]);
     // the reset button of the footer
     u.results.rows = vec![MStat { n: 9, ..Default::default() }];
@@ -574,4 +620,58 @@ fn the_pll_loop_bandwidth_is_a_setting_and_reaches_the_clock_recovery() {
     assert!(text.contains("eye_pll = 2500000"), "{text}");
     assert_eq!(crate::store::parse_setup(&text).unwrap().eye_pll_bw, 2.5e6);
     assert!(!crate::store::setup_text(&Model::default()).contains("eye_pll"));
+}
+
+// Break it catches: the Studio card of a measurement without an option upstream's dialog of the same measurement has
+// (Default's Set), so a setting reachable in Default is not reachable in Studio (oos-plus ADR 0030). Upstream's dialog:
+// Source and Reference on every measurement, Edges used on Rise and Fall, Idle on Burst, Outside on Outside, N periods
+// and Clock/Data (Edge type) on N periods.
+#[test]
+fn the_studio_card_offers_every_option_of_upstreams_dialog() {
+    let r0 = WaveId::Ref(0);
+    let upstream = |k: Meas| -> Vec<RF> {
+        let mut v = vec![RF::Source, RF::Refs];
+        match k {
+            Meas::Rise | Meas::Fall => v.push(RF::Used),
+            Meas::Burst => v.push(RF::Idle),
+            Meas::Outside => v.push(RF::Side),
+            Meas::NPeriods => v.extend([RF::N, RF::NEdge]),
+            _ => {}
+        }
+        v
+    };
+    let rows: Vec<(Meas, WaveId)> = measure::ALL.iter().map(|&k| (k, r0)).collect();
+    let mut u = card(Layout::Studio, &rows, &[]);
+    let mut missing = Vec::new();
+    for (i, &(k, _)) in rows.iter().enumerate() {
+        u.open_meas_cfg(i);
+        let have = rows_of(&u);
+        missing.extend(upstream(k).into_iter().filter(|f| !have.contains(&Item::RowF(*f))).map(|f| format!("{k:?}: {f:?}")));
+        u.close_menu();
+    }
+    assert!(missing.is_empty(), "options of upstream's dialog missing from the Studio card: {missing:?}");
+}
+
+// Break it catches: the Reference of the card stepping without setting the row's levels, or a level of the row's own
+// left behind on the way back to Shared
+#[test]
+fn the_reference_of_the_card_sets_the_levels_of_the_row() {
+    let r0 = WaveId::Ref(0);
+    let mut u = card(Layout::Studio, &[(Meas::Vupper, r0)], &[]);
+    let key = RowKey::One(Meas::Vupper, r0);
+    u.open_meas_cfg(0);
+    let it = Item::RowF(RF::Refs);
+    assert_eq!(u.options(it), ["Shared (10/90)", "10/90", "20/80"]);
+    let shared = u.meas_number(r0, Meas::Vupper);
+    u.select_option(it, "20/80");
+    let c = u.m.row_cfg(key).unwrap();
+    assert_eq!((c.lo, c.hi), (Some(0.2), Some(0.8)));
+    assert_eq!(u.value(it), "20/80");
+    let own = u.meas_number(r0, Meas::Vupper);
+    assert!(own < shared, "the upper level follows the reference: {own} {shared}");
+    u.select_option(it, "Shared (10/90)");
+    assert!(u.m.row_cfg(key).is_none(), "Shared removes the row's levels");
+    // in the volts mode the levels are volts: the card has Low and High there, not the percent presets
+    u.m.meas_lv.absolute = true;
+    assert!(!rows_of(&u).contains(&it));
 }

@@ -1,11 +1,46 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! The numeric entry pad of the Studio sheets: a tap on the value of a "- value +" row opens it. The typed text and the
-//! unit are in the field at the top (the current value is selected: the first key replaces it); the digits, the sign,
-//! Exp, Bksp and Clear edit it; a prefix key (G M k m u n p) or None ends the entry with that prefix; Min and Max set
-//! the limits of the item; Enter parses and sets the value, Cancel closes with no change.
+//! The number pads, one per layout family.
+//!
+//! Default: upstream's pad (issue #22). A tap on the middle of a value row whose number can be typed (the scale and
+//! offset of a channel, the time base and its position, the trigger level) opens a picker of keys: the digits, the
+//! point, the sign, and a key for each prefix of the row's unit (`nV` ... `kV`, `ns` ... `ks`), which ends the entry
+//! and sets the row. The value is taken as SCPI takes it (`:CHANnel<n>:SCALe`, `:TIMebase:SCALe`, ...): onto the
+//! nearest step of a ladder, the fine scale onto its calibrated row. Its state is `Ui::row_pad`, its text `Ui::keypad`.
+//!
+//! Minimal and Studio: the numeric entry pad of the Studio sheets: a tap on the value of a "- value +" row opens it.
+//! The typed text and the unit are in the field at the top (the current value is selected: the first key replaces
+//! it); the digits, the sign, Exp, Bksp and Clear edit it; a prefix key (G M k m u n p) or None ends the entry with
+//! that prefix; Min and Max set the limits of the item; Enter parses and sets the value, Cancel closes with no change.
 //! The text is `Ui::keypad`, as for the other keypads. The value goes in through the stepper's own path (`adjust`), or
 //! straight into the setting where the stepper's grid is coarser than what can be typed (the trigger level).
+use super::menu_actions::keep_expand_point;
 use super::*;
+
+/// Default's pad (upstream's): the row it enters into, while it is open.
+#[derive(Default)]
+pub(super) struct RowPad {
+    pub target: Option<Item>,
+}
+
+/// The keys of Default's pad, four in a row; a prefix key (`n`, `u`, `m`, `1`, `k`) is shown with the row's unit and
+/// ends the entry.
+const ROW_PAD_KEYS: [&str; 20] =
+    ["7", "8", "9", "n", "4", "5", "6", "u", "1", "2", "3", "m", "0", ".", "-", "1x", "Del", "Clear", "Cancel", "k"];
+
+/// The factor and the shown prefix of a prefix key of Default's pad.
+fn row_pad_prefix(key: &str) -> Option<(f64, &'static str)> {
+    Some(match key {
+        "n" => (1e-9, "n"),
+        "u" => (1e-6, "\u{b5}"),
+        "m" => (1e-3, "m"),
+        "1x" => (1.0, ""),
+        "k" => (1e3, "k"),
+        _ => return None,
+    })
+}
+
+/// Longest entry of Default's pad, in characters.
+const ROW_PAD_MAX: usize = 12;
 
 /// The pad.
 #[derive(Clone, Debug)]
@@ -317,6 +352,113 @@ impl Ui {
         Some(si(if high { r.hi } else { r.lo }, &unit))
     }
 
+    // ------------------------------------------------------------------------------------------------ Default's pad
+
+    /// The unit of a row whose number can be typed in Default's pad, or none.
+    pub(super) fn row_pad_unit(&self, it: Item) -> Option<&'static str> {
+        let m = &self.m;
+        match it {
+            Item::ChScale(c) | Item::ChOffset(c) if c < NCH => Some(m.unit(c)),
+            Item::HScale | Item::HDelay => Some("s"),
+            Item::TrigLevel if m.trig_src < NCH => Some(m.unit(m.trig_src)),
+            _ => None,
+        }
+    }
+
+    /// Opens Default's pad for row `it`, with an empty entry.
+    pub(super) fn open_row_pad(&mut self, it: Item) {
+        self.row_pad.target = Some(it);
+        self.keypad.clear();
+        self.open_picker(Item::NumEntry);
+    }
+
+    /// The keys of Default's pad, the prefix keys with the unit of its row.
+    pub(super) fn row_pad_keys(&self) -> Vec<String> {
+        let unit = self.row_pad.target.and_then(|it| self.row_pad_unit(it)).unwrap_or("");
+        ROW_PAD_KEYS
+            .iter()
+            .map(|&k| match row_pad_prefix(k) {
+                Some((_, p)) => format!("{}{}", p, unit),
+                None => k.to_string(),
+            })
+            .collect()
+    }
+
+    /// The title of Default's pad: the row and the entry so far.
+    pub(super) fn row_pad_title(&self) -> String {
+        let row = self.row_pad.target.map_or(String::new(), |it| self.item_label(it).to_string());
+        format!("{} \u{b7} {}_", row, self.keypad)
+    }
+
+    /// Key `k` of Default's pad was tapped.
+    pub(super) fn row_pad_key(&mut self, k: usize) {
+        let Some(&key) = ROW_PAD_KEYS.get(k) else { return };
+        if let Some((factor, _)) = row_pad_prefix(key) {
+            let typed = self.keypad.parse::<f64>().ok().filter(|v| v.is_finite());
+            let target = self.row_pad.target.take();
+            self.close_picker();
+            if let (Some(v), Some(it)) = (typed, target) {
+                self.row_pad_set(it, v * factor);
+            }
+            return;
+        }
+        match key {
+            "Cancel" => {
+                self.row_pad.target = None;
+                self.close_picker();
+            }
+            "Clear" => self.keypad.clear(),
+            "Del" => {
+                self.keypad.pop();
+            }
+            "." if self.keypad.contains('.') => {}
+            "-" if !self.keypad.is_empty() => {}
+            d if self.keypad.chars().count() < ROW_PAD_MAX => self.keypad.push_str(d),
+            _ => {}
+        }
+    }
+
+    /// Sets row `it` to `v` (in its unit), as SCPI would.
+    fn row_pad_set(&mut self, it: Item, v: f64) {
+        let m = &mut self.m;
+        let v = v as f32;
+        match it {
+            Item::ChScale(c) => {
+                if v <= 0.0 {
+                    return self.toast("The scale must be above 0");
+                }
+                let old = m.ch[c].volts_per_div();
+                let want = v / m.ch[c].probe;
+                (m.ch[c].vscale, m.ch[c].vfine) = Self::vscale_for(want, m.fine_v);
+                // around ground: the zero line keeps its place on the screen
+                if m.v_expand_gnd && old > 0.0 {
+                    m.ch[c].offset *= m.ch[c].volts_per_div() / old;
+                }
+            }
+            Item::ChOffset(c) => m.ch[c].offset = v,
+            Item::HScale => {
+                if v <= 0.0 {
+                    return self.toast("The scale must be above 0");
+                }
+                let old = m.time_per_div();
+                (m.tscale, m.tfine) = (nearest_step(&tscales(), v), 1.0);
+                keep_expand_point(m, old);
+            }
+            Item::HDelay => m.delay = v,
+            Item::TrigLevel => m.trig_level = v,
+            _ => return,
+        }
+        self.settings_changed();
+    }
+
+    pub(super) fn row_pad_kind(it: Item) -> Option<Kind> {
+        (it == Item::NumEntry).then_some(Kind::Choice)
+    }
+
+    pub(super) fn row_pad_label(it: Item) -> Option<&'static str> {
+        (it == Item::NumEntry).then_some("Enter a value")
+    }
+
     /// The `vscale` step and its fine factor for `want` V/div at the BNC: the nearest step of the ladder, or with the
     /// fine scale the first row of the calibrated table at or above it, so the range never cuts the signal off (SCPI's
     /// `:CHANnel<n>:SCALe`).
@@ -331,5 +473,122 @@ impl Ui {
         let i = VSCALES.iter().rposition(|&s| s <= row * 1.000001).unwrap_or(0);
         let f = row / VSCALES[i];
         (i, if (f - 1.0).abs() < 1e-6 { 1.0 } else { f })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn press(u: &mut Ui, keys: &[&str]) {
+        let shown = u.row_pad_keys();
+        for k in keys {
+            let i = shown.iter().position(|s| s == k).unwrap_or_else(|| panic!("no key {:?} in {:?}", k, shown));
+            u.activate(Item::PickOpt(i));
+        }
+    }
+
+    fn opened(it: Item) -> Ui {
+        let mut u = crate::ui::testkit::demo_ui();
+        assert_eq!(u.m.layout, Layout::Default);
+        u.open_menu(MenuId::Channel(0));
+        u.open_row_pad(it);
+        assert!(u.menu == MenuId::Pick && u.pick.is_some_and(|p| p.it == Item::NumEntry));
+        u
+    }
+
+    /// Default: upstream's pad (issue #22); the unit key ends the entry, the value lands where SCPI puts it.
+    #[test]
+    fn default_a_typed_scale_offset_time_and_level_are_set() {
+        let mut u = opened(Item::ChScale(0));
+        assert_eq!(u.row_pad_keys()[11], "mV");
+        press(&mut u, &["2", "0", "0", "mV"]);
+        assert!((u.m.ch[0].volts_per_div() - 0.2).abs() < 1e-6, "{}", u.m.ch[0].volts_per_div());
+        assert!(u.menu != MenuId::Pick && u.row_pad.target.is_none(), "the pad closes");
+        // between two steps of the ladder: the nearest step, as `:CHANnel1:SCALe 0.23` would
+        let mut u = opened(Item::ChScale(0));
+        press(&mut u, &["2", "3", "0", "mV"]);
+        assert!((u.m.ch[0].volts_per_div() - 0.2).abs() < 1e-6, "{}", u.m.ch[0].volts_per_div());
+
+        let mut u = opened(Item::ChOffset(0));
+        press(&mut u, &["-", "1", ".", "5", "V"]);
+        assert_eq!(u.m.ch[0].offset, -1.5);
+
+        let mut u = opened(Item::HScale);
+        press(&mut u, &["5", "\u{b5}s"]);
+        assert!((u.m.time_per_div() - 5e-6).abs() < 1e-12, "{}", u.m.time_per_div());
+
+        let mut u = opened(Item::HDelay);
+        press(&mut u, &["1", "2", "ns"]);
+        assert!((u.m.delay - 12e-9).abs() < 1e-15);
+
+        let mut u = opened(Item::TrigLevel);
+        press(&mut u, &["3", "0", "0", "mV"]);
+        assert!((u.m.trig_level - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn default_the_entry_keys_and_cancel() {
+        let mut u = opened(Item::ChOffset(0));
+        let before = u.m.ch[0].offset;
+        press(&mut u, &["1", ".", ".", "2", "-", "Del", "3"]);
+        assert_eq!(u.keypad, "1.3", "one point, the sign only first, Del takes the last");
+        assert!(u.row_pad_title().ends_with("1.3_"), "{}", u.row_pad_title());
+        press(&mut u, &["Clear", "Cancel"]);
+        assert_eq!(u.m.ch[0].offset, before);
+        assert!(u.menu != MenuId::Pick && u.row_pad.target.is_none());
+        // nothing typed: the unit key closes and sets nothing; a scale of 0 is refused
+        let mut u = opened(Item::ChScale(0));
+        let scale = u.m.ch[0].volts_per_div();
+        press(&mut u, &["V"]);
+        assert_eq!(u.m.ch[0].volts_per_div(), scale);
+        let mut u = opened(Item::ChScale(0));
+        press(&mut u, &["0", "V"]);
+        assert_eq!(u.m.ch[0].volts_per_div(), scale);
+        assert_eq!(u.toast.as_ref().map(|t| t.0.as_str()), Some("The scale must be above 0"));
+    }
+
+    /// Default: a tap on the middle of a value row with a unit opens upstream's pad; of a value row without one it
+    /// does not, and the pad of Minimal and Studio does not open.
+    #[test]
+    fn default_a_tap_on_the_value_opens_upstreams_pad_only_on_rows_with_a_unit() {
+        let mut u = crate::ui::testkit::demo_ui();
+        u.open_menu(MenuId::Channel(0));
+        let row = |u: &Ui, it: Item| u.dlg_layout().unwrap().rows.into_iter().find(|r| r.it == it).unwrap().ctrl;
+        let r = row(&u, Item::ChScale(0));
+        u.tap(r.x + r.w / 2, r.y + r.h / 2);
+        assert_eq!(u.row_pad.target, Some(Item::ChScale(0)));
+        assert!(u.pick.is_some_and(|p| p.it == Item::NumEntry) && u.numpad.is_none());
+        // Display > Intensity is a number without a unit: upstream offers no pad there
+        let mut u = crate::ui::testkit::demo_ui();
+        u.open_menu(MenuId::Display);
+        let r = row(&u, Item::Intensity);
+        u.tap(r.x + r.w / 2, r.y + r.h / 2);
+        assert!(u.row_pad.target.is_none() && u.numpad.is_none() && u.menu == MenuId::Display);
+    }
+
+    /// Minimal and Studio keep oos-plus's pad (Exp, Min, Max, G ... p) on their number rows, not upstream's.
+    #[test]
+    fn minimal_and_studio_keep_their_own_pad() {
+        for layout in [Layout::Minimal, Layout::Studio] {
+            let mut u = crate::ui::testkit::demo_ui();
+            u.m.layout = layout;
+            u.relayout();
+            u.open_menu(MenuId::Channel(0));
+            for _ in 0..3 {
+                u.step(0.05);
+            }
+            let it = Item::ChScale(0);
+            let r = if u.sheet_active() {
+                u.sheet_geo().and_then(|g| g.rows.into_iter().find(|r| r.it == it).map(|r| r.ctrl))
+            } else {
+                u.dlg_layout().and_then(|d| d.rows.into_iter().find(|r| r.it == it).map(|r| r.ctrl))
+            };
+            let r = r.unwrap_or_else(|| panic!("{layout:?}: no scale row"));
+            let mid = Ui::value_parts(r).1;
+            u.tap(mid.x + mid.w / 2, mid.y + mid.h / 2);
+            assert_eq!(u.numpad.as_ref().map(|p| p.it), Some(it), "{layout:?}: oos-plus's pad");
+            assert!(u.row_pad.target.is_none() && u.pick.is_none(), "{layout:?}: not upstream's");
+        }
     }
 }

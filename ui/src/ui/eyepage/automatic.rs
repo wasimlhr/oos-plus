@@ -134,8 +134,9 @@ pub(in crate::ui) fn infer(
     if !span.is_finite() || span <= 1e-9 {
         return Err("Flat source: no transitions to recover a clock".into());
     }
-    let amplitude = if st.valid { (st.top - st.base).max(span * 0.25) } else { span };
-    let threshold = if st.valid { 0.5 * (st.top + st.base) } else { 0.5 * (st.vmax + st.vmin) };
+    let level = eye::decision_level(v);
+    let amplitude = level.map_or(span, |(_, a)| a.max(span * 0.25));
+    let threshold = level.map_or(0.5 * (st.vmax + st.vmin), |(t, _)| t);
     // Voltage thresholds follow the data, never the waveform's display zoom.
     let hysteresis = amplitude * 0.1;
     let mean_clock = eye::recover_clock(v, dt, threshold, hysteresis, requested)

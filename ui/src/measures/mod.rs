@@ -21,6 +21,7 @@
 use crate::model::{Model, WaveId, NCH};
 use oos_dsp::measure::Meas;
 
+pub mod clock;
 pub mod double_pulse;
 #[cfg(test)]
 pub mod example;
@@ -40,6 +41,7 @@ pub static MODULES: &[&dyn MeasModule] = &[
     &standard::Standard,
     &pairs::Pairs,
     &jitter::Jitter,
+    &clock::Clock,
     &power::Quality,
     &power::Harmonics,
     &power::Inrush,
@@ -194,7 +196,7 @@ pub const CATEGORIES: [Category; 8] = [
         slots: AB,
         one: "Source",
         min: 1,
-        groups: &["JITTER", "EYE", "AMPLITUDE", "TIMING"],
+        groups: &["JITTER", "EYE", "AMPLITUDE", "TIMING", "CLOCK JITTER"],
     },
     Category {
         name: "Power",

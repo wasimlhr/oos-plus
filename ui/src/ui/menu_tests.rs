@@ -255,18 +255,18 @@ fn measure_tap_lists_and_hold_adds() {
         Item::MeasSrcB,
         Item::MeasCopyTo,
         Item::MeasGate,
-        Item::Open(MenuId::MeasPair),
-        Item::Open(MenuId::Dvm),
-        Item::Open(MenuId::MeasLevels),
+        Item::MeasRefs,
+        Item::MeasStats,
+        Item::MeasLabels,
+        Item::StripDock,
         Item::MeasIdle,
         Item::MeasTsetup,
         Item::MeasThold,
         Item::MeasOutside,
         Item::MeasN,
         Item::MeasEdges,
-        Item::Open(MenuId::MeasStat),
-        Item::MeasLabels,
-        Item::StripDock,
+        Item::Open(MenuId::MeasPair),
+        Item::Open(MenuId::Dvm),
         Item::MeasClear,
     ];
     ui.key(key::MEASURE);
@@ -457,8 +457,11 @@ fn a_long_press_of_a_channel_key_switches_ac_dc() {
     // scripts and the remote: every press at once
     ui.key(key::CH1);
     assert!(ui.m.ch[0].on);
-    // a finger held on the channel's card: its quick actions (no silent AC/DC), and lifting it opens no menu
+    // Minimal, a finger held on the channel's chip: its quick actions (no silent AC/DC), and lifting it opens no menu
+    // (Default switches AC/DC there, as upstream OOS: batch4_tests.rs)
     ui.close_menu();
+    ui.m.layout = Layout::Minimal;
+    ui.step(0.033);
     let (x, y) = mid(ui.cards().0[0]);
     ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
     ui.step(LONG_PRESS + 0.05);

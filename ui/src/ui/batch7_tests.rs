@@ -67,32 +67,28 @@ fn the_levels_tab_has_seven_rows_and_the_fall_page_is_in_the_footer() {
 }
 
 #[test]
-fn the_minimal_and_default_menus_list_the_levels() {
-    for (l, name) in [(Layout::Default, "b7-levels-default")] {
-        let mut u = fresh(l);
-        u.open_menu(MenuId::Measure);
-        assert!(u.items(MenuId::Measure).contains(&Item::Open(MenuId::MeasLevels)), "{l:?}");
-        assert!(!u.items(MenuId::Measure).contains(&Item::MeasLow), "{l:?}");
-        u.activate(Item::Open(MenuId::MeasLevels));
-        assert_eq!(u.menu, MenuId::MeasLevels);
-        let items = u.items(MenuId::MeasLevels);
-        for it in [Item::MeasLvType, Item::MeasRefs, Item::MeasLow, Item::MeasMid, Item::MeasHigh, Item::MeasHyst, Item::MeasBaseTop, Item::Open(MenuId::MeasFall)] {
-            assert!(items.contains(&it), "{l:?} {it:?}");
-        }
-        shot(&mut u, name);
+fn the_minimal_sheet_has_the_levels_and_default_has_upstreams_rows() {
+    let u = fresh(Layout::Default);
+    let rows = u.items(MenuId::Measure);
+    assert!(rows.contains(&Item::MeasRefs) && rows.contains(&Item::MeasStats), "Default has upstream's rows");
+    assert!(!rows.contains(&Item::Open(MenuId::MeasLevels)) && !rows.contains(&Item::Open(MenuId::MeasStat)));
+    // Minimal and Studio have the levels on their sheet (a tab of their own)
+    let u = fresh(Layout::Minimal);
+    let rows = u.items(MenuId::Measure);
+    let levels = [Item::MeasLvType, Item::MeasRefs, Item::MeasLow, Item::MeasMid, Item::MeasHigh, Item::MeasHyst];
+    for it in levels.into_iter().chain([Item::MeasBaseTop]) {
+        assert!(rows.contains(&it), "Minimal {it:?}");
     }
 }
 
 #[test]
 fn preset_low_mid_high_and_hysteresis_adjust_in_percent() {
     let mut u = fresh(Layout::Default);
-    // preset: 10/90 -> 20/80 -> Custom -> 10/90
+    // refs: 10/90 -> 20/80 -> 10/90, as upstream; Custom is not a choice until the levels are edited
     u.adjust(Item::MeasRefs, 1);
     assert_eq!((u.m.meas_lpct, u.m.meas_hpct), (0.2, 0.8));
     assert_eq!(u.meas_value(Item::MeasRefs).unwrap(), "20/80");
-    u.adjust(Item::MeasRefs, 1);
-    assert_eq!(u.meas_value(Item::MeasRefs).unwrap(), "Custom");
-    assert_eq!((u.m.meas_lpct, u.m.meas_hpct), (0.2, 0.8));
+    assert_eq!(u.options(Item::MeasRefs), ["10/90", "20/80"]);
     u.adjust(Item::MeasRefs, 1);
     assert_eq!((u.m.meas_lpct, u.m.meas_hpct, u.m.meas_lv.custom), (0.1, 0.9, false));
     // editing the low level makes it Custom

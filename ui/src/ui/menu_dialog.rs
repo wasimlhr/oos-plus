@@ -114,7 +114,9 @@ impl Ui {
             return o;
         }
         let v: &[&str] = match it {
-            Item::StripDock => return StripDock::ALL.iter().map(|s| s.label().to_string()).collect(),
+            Item::StripDock => {
+                return self.strip_docks().into_iter().map(|d| self.strip_dock_label(d).to_string()).collect();
+            }
             Item::ChHide(_)
             | Item::MeasStats
             | Item::MeasLabels
@@ -232,6 +234,7 @@ impl Ui {
             | Item::I2cAddrBits
             | Item::I2cBytes => return Self::serial_options(it),
             Item::AfgFreqEntry => return FREQ_KEYS.iter().map(|k| k.to_string()).collect(),
+            Item::NumEntry => return self.row_pad_keys(),
             Item::WlanNet => return self.wlan_net_options(),
             Item::WlanForgetNet => return self.wlan_forget_options(),
             Item::RefImport => return self.ref_page.files.iter().map(|p| crate::store::list_name(p)).collect(),
@@ -356,7 +359,7 @@ impl Ui {
         }
         if it == Item::StripDock {
             // every dock choice docks the card, also the one already selected after it was floated
-            if let Some(dock) = StripDock::ALL.into_iter().find(|d| d.label() == want) {
+            if let Some(dock) = StripDock::ALL.into_iter().find(|&d| self.strip_dock_label(d) == want) {
                 self.m.strip_dock = dock;
                 self.workspace.measure_docked = true;
                 self.workspace.measure_float = None;
@@ -390,7 +393,7 @@ impl Ui {
 
     /// x centre of what opened the menu, and whether that is in the top bar (the dialog hangs below it) or a card
     /// (the dialog sits above it).
-    fn menu_anchor(&self) -> (i32, bool) {
+    pub(super) fn menu_anchor(&self) -> (i32, bool) {
         if let Some(a) = pages::page(self.menu_root()).and_then(|p| p.anchor) {
             return a(self, self.menu_root());
         }
@@ -414,6 +417,9 @@ impl Ui {
         }
         if self.menu == MenuId::Main {
             return Some(self.main_layout());
+        }
+        if let Some(d) = self.measure_layout() {
+            return Some(d);
         }
         let items = self.items(self.menu);
         let n = items.len() as i32;
@@ -798,6 +804,13 @@ impl Ui {
                         self.adjust(row.it, -1);
                     } else if pl.contains(x, y) {
                         self.adjust(row.it, 1);
+                    } else if self.m.layout == Layout::Default {
+                        // upstream's: the number itself is typed on its pad (issue #22), on the rows with a unit
+                        if matches!(row.ctl, Ctl::Value) && self.row_pad_unit(row.it).is_some() {
+                            self.open_row_pad(row.it);
+                        } else if let Ctl::Pick = row.ctl {
+                            self.open_picker(row.it);
+                        }
                     } else if let Ctl::Pick = row.ctl {
                         self.open_picker(row.it);
                     } else if mid.contains(x, y) {

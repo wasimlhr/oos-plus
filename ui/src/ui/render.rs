@@ -173,6 +173,7 @@ impl Ui {
             self.draw_bottom(cv);
         }
         self.draw_menu(cv);
+        self.draw_meas_cfg(cv);
         self.draw_info_card(cv);
         self.draw_toast(cv);
         self.draw_overlay(cv);
@@ -181,8 +182,6 @@ impl Ui {
         self.draw_studio_view_menu(cv);
         self.draw_studio_add_menu(cv);
         self.draw_studio_ctx(cv);
-        // the skin recolours the finished frame (ui/skin.rs); the OOS skin leaves it as drawn
-        self.skin_pass(cv);
         self.draw_pointer(cv);
         self.counts.frames += 1;
     }
