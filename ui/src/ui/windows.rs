@@ -56,10 +56,22 @@ impl Ui {
 
     /// Expand button and the Full density: Scope goes to Full, Full goes back to Scope, Split and Four go to Full.
     pub(super) fn toggle_expand(&mut self) {
-        self.m.density = if self.m.density == Density::Full { Density::Scope } else { Density::Full };
+        let leaving = self.m.density == Density::Full;
+        // Full closes the lower pane (Trend, Events, ...); the way back from it opens that pane again
+        if !leaving {
+            self.workspace.pane_before_full = self.m.pane;
+        }
+        self.m.density = if leaving { Density::Scope } else { Density::Full };
         // a tap asks for the panel itself, also while the external display shows the waveform
         self.full.asked = self.m.density == Density::Full;
         self.apply_density();
+        if leaving && std::mem::take(&mut self.workspace.pane_before_full) != 0 {
+            let pane = self.m.split_pane;
+            if pane != 0 {
+                self.m.density = Density::Split;
+                self.apply_density();
+            }
+        }
     }
 
     /// Makes the windows, the lower pane and the panel bars follow the density.

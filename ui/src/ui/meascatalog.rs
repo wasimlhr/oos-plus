@@ -958,14 +958,13 @@ impl Ui {
     }
 }
 
-/// The categories of the Studio add list: the six tabs of the catalogue, the last three as one.
-pub(super) const ADD_GROUPS: [&str; 4] = ["Basic", "Jitter", "Power", "Other"];
-
 /// One line of the Studio add list.
 pub(super) struct AddEntry {
     pub cat: Cat,
     pub name: &'static str,
     pub group: usize,
+    /// the heading of its group on the Measure page (AMPLITUDE, TIMING, ...)
+    pub section: &'static str,
 }
 
 /// What a row of the add list says about its measurement right now.
@@ -980,16 +979,19 @@ pub(super) enum Preview {
     Reason(String),
 }
 
-/// Every measurement of the catalogue once, in the order of its tabs, with its category.
+/// The names of the categories of the Measure page, which the Add list of Studio takes as they are.
+pub(super) fn add_categories() -> impl Iterator<Item = &'static str> {
+    CATEGORIES.iter().map(|c| c.name)
+}
+
+/// Every measurement of every category of the Measure page, in its order, with the number of its category.
 pub(super) fn add_entries() -> Vec<AddEntry> {
     let mut v: Vec<AddEntry> = Vec::new();
     for tab in 0..CATEGORIES.len() as u8 {
-        for (_, items) in tab_groups(tab) {
+        for (section, items) in tab_groups(tab) {
             for cat in items.iter() {
-                if !v.iter().any(|e| e.cat.id == cat.id) {
-                    // the Studio groups (ADD_GROUPS): Basic, Jitter, Power and the rest
-                    let group = match CATEGORIES[tab as usize].name { "Basic" => 0, "Jitter & eye" => 1, "Power" => 2, _ => 3 };
-                    v.push(AddEntry { cat, name: cat.name, group });
+                if !v.iter().any(|e| e.group == tab as usize && e.cat.id == cat.id) {
+                    v.push(AddEntry { cat, name: cat.name, group: tab as usize, section });
                 }
             }
         }

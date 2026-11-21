@@ -1692,9 +1692,9 @@ fn remote_services_are_sheets_and_connectivity_leads_to_them() {
         // a switch acts on one tap
         let (kind, (x, y)) = row(&u, Item::RemVxi);
         assert!(kind == RowKind::Toggle && u.sys.remote_vxi11);
-        tap(&mut u, x, y);
+        tap(&mut u, x - 40, y);
         assert!(!u.sys.remote_vxi11, "{layout:?}: VXI-11 off");
-        tap(&mut u, x, y);
+        tap(&mut u, x + 40, y);
         assert!(u.sys.remote_vxi11, "{layout:?}: and on again");
         // the addresses say whose they are
         assert_eq!(u.sheet_label(Item::RemScpiInfo), "SCPI port");
@@ -1900,7 +1900,7 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
         let (x, y) = mid(chip(&u, 1));
         tap(&mut u, x, y);
         let (x, y) = mid(ctrl(&u, Item::DecOn));
-        tap(&mut u, x, y);
+        tap(&mut u, x - 40, y);
         let (x, y) = mid(chip(&u, 3));
         tap(&mut u, x, y);
         assert!(!u.m.dec_is_on(1) && u.m.dec_is_on(0) && u.m.dec_is_on(2) && u.m.dec_is_on(3), "{layout:?}");

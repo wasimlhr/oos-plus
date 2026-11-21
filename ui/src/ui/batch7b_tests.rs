@@ -447,7 +447,7 @@ fn statistics_settings_are_a_page_with_a_reset_and_follow_the_toggles() {
     let g = u.sheet_geo().unwrap();
     assert!(g.rows.iter().filter(|r| matches!(r.it, Item::MeasShowSd | Item::MeasShowMin | Item::MeasShowMax)).all(|r| r.kind == RowKind::Toggle));
     let sd = g.rows.iter().find(|r| r.it == Item::MeasShowSd).unwrap().ctrl;
-    tap_in(&mut u, sd);
+    tap_in(&mut u, Ui::sheet_toggle_half(sd, false));
     assert_eq!(u.m.meas_show, [false, true, true]);
     // the reset button of the footer
     u.results.rows = vec![MStat { n: 9, ..Default::default() }];

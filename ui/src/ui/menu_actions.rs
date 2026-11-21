@@ -1102,11 +1102,7 @@ impl Ui {
                 }
             }
             Item::RefClearOne => self.ref_clear_slot(self.ref_page.sel),
-            Item::RefClear => {
-                self.refs = std::array::from_fn(|_| None);
-                self.measure_refs();
-                self.analyzer_update();
-            }
+            Item::RefClear => self.ref_clear_all(),
             _ => return false,
         }
         true
