@@ -144,10 +144,6 @@ impl Protocol for Spi {
     fn shared(&self) -> &'static [Row] {
         &[Row::SpiMode, Row::Bits, Row::SpiCs]
     }
-    /// A frame starts with the chip select.
-    fn start_role(&self) -> usize {
-        2
-    }
     /// MOSI on CH3, clock on CH4, CS on CH2 (LA: D11, D10, D9); mode 0, 8 bits; the trigger on CS falling. MISO has
     /// no source until it is given one: a bus is read by its MOSI line alone.
     fn setup(&self) -> Setup {

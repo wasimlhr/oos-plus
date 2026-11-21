@@ -265,7 +265,7 @@ fn the_controls_of_an_empty_reference_slot_are_greyed_and_say_what_to_do_in_ever
         }
         // with a stored reference they work and say nothing
         u.refs[0] = Some(a_reference());
-        u.ref_sel = 0;
+        u.ref_page.sel = 0;
         for it in [Item::RefShow(0), Item::RefColor, Item::RefOffset, Item::RefVpd] {
             assert_eq!(u.item_blocked(it), None, "{l:?} {it:?}");
         }
@@ -327,10 +327,10 @@ fn clearing_with_nothing_to_clear_says_so_and_clearing_something_says_what_was_c
         u.activate(Item::CntClear);
         assert_eq!((toast(&u), u.cnt.total), ("Counter cleared".to_string(), 0), "{l:?}");
 
-        u.mask_pass = 3;
-        u.mask_fail = 1;
+        u.mask_sw.pass = 3;
+        u.mask_sw.fail = 1;
         u.activate(Item::MaskReset);
-        assert_eq!((toast(&u), u.mask_pass, u.mask_fail), ("Counts reset".to_string(), 0, 0), "{l:?}");
+        assert_eq!((toast(&u), u.mask_sw.pass, u.mask_sw.fail), ("Counts reset".to_string(), 0, 0), "{l:?}");
 
         u.azr.limit = Some(Default::default());
         u.activate(Item::SpecLimitClear);
@@ -365,14 +365,14 @@ fn copy_meas_to_says_what_it_copied_and_the_row_stops_saying_pick() {
     for l in LAYOUTS {
         let mut u = fresh(l);
         u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0))];
-        u.meas_src = WaveId::Ch(0);
+        u.sources.a = WaveId::Ch(0);
         assert_eq!(u.value(Item::MeasCopyTo), "Pick", "{l:?}");
         u.select_option(Item::MeasCopyTo, "CH2");
         assert_eq!(toast(&u), "Copied 2 measurements to CH2", "{l:?}");
         assert_eq!(u.value(Item::MeasCopyTo), "Copied to CH2", "{l:?}: no stale Pick");
         assert!(u.m.meas.contains(&(Meas::Vpp, WaveId::Ch(1))), "{l:?}");
         // another source: nothing copied from it yet
-        u.meas_src = WaveId::Ch(1);
+        u.sources.a = WaveId::Ch(1);
         assert_eq!(u.value(Item::MeasCopyTo), "Pick", "{l:?}");
         // one measurement
         u.m.meas = vec![(Meas::Freq, WaveId::Ch(1))];

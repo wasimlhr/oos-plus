@@ -16,7 +16,7 @@ fn studio() -> Ui {
     let dir = std::env::temp_dir().join(format!("oos-batch24-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -45,8 +45,8 @@ fn shot(u: &mut Ui, name: &str) {
 fn load_csv(u: &mut Ui, slot: usize, name: &str) {
     let mut csv = String::from("Time (s),Voltage (V)\n");
     for i in 0..20_000 { csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-7, (i as f64 * 0.02).sin() + 0.2 * (i as f64 * 0.31).sin())); }
-    std::fs::write(u.store_dir.join(name), &csv).unwrap();
-    let data = std::fs::read(u.store_dir.join(name)).unwrap();
+    std::fs::write(u.files.dir.join(name), &csv).unwrap();
+    let data = std::fs::read(u.files.dir.join(name)).unwrap();
     u.load_waveform_bytes_at(&data, name, slot).expect("the CSV loads");
 }
 

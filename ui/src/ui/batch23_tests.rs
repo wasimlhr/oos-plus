@@ -12,7 +12,7 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    u.store_dir = std::env::temp_dir().join("oos-batch23");
+    u.files.dir = std::env::temp_dir().join("oos-batch23");
     for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);

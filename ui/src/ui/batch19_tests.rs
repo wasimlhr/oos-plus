@@ -59,7 +59,7 @@ fn store_goes_into_the_selected_slot_and_a_full_one_offers_replace_and_next_free
     for _ in 0..4 { frame(&mut u); }
     u.refs[0] = Some(a_ref("R1"));
     // an empty selected slot: Store names it, and no second action is offered
-    u.ref_sel = 1;
+    u.ref_page.sel = 1;
     u.open_menu(MenuId::Ref);
     for _ in 0..3 { frame(&mut u); }
     assert_eq!(u.ref_store_label(), "Store CH1 as R2");
@@ -67,7 +67,7 @@ fn store_goes_into_the_selected_slot_and_a_full_one_offers_replace_and_next_free
     u.activate(Item::RefSave);
     assert!(u.refs[1].is_some() && u.refs[2].is_none(), "into R2, the selected slot");
     // a full selected slot: the button replaces it, the secondary action takes the next free one
-    u.ref_sel = 0;
+    u.ref_page.sel = 0;
     frame(&mut u);
     assert_eq!(u.ref_store_label(), "Replace R1 with CH1");
     assert_eq!(u.ref_store_next_label(), "Store as R3 (next free)");
@@ -87,7 +87,7 @@ fn store_goes_into_the_selected_slot_and_a_full_one_offers_replace_and_next_free
 fn the_reference_title_does_not_say_the_slot_twice() {
     let mut u = studio();
     u.refs[0] = Some(a_ref("R1"));
-    u.ref_sel = 0;
+    u.ref_page.sel = 0;
     assert_eq!(u.menu_title(MenuId::Ref), "Reference R1");
     u.refs[0].as_mut().unwrap().label = String::new();
     assert_eq!(u.menu_title(MenuId::Ref), "Reference R1");
@@ -99,11 +99,11 @@ fn the_reference_title_does_not_say_the_slot_twice() {
 fn the_ref_badge_has_two_rows_and_keeps_clear_of_the_fit_row() {
     let mut u = studio();
     u.refs[0] = Some(a_ref("R1"));
-    u.ref_sel = 0;
+    u.ref_page.sel = 0;
     for _ in 0..4 { frame(&mut u); }
     assert!(!u.live_ref_note().is_empty());
     // the Fit row of the note is 48 px above the bottom of the lane; the badge may not go below that
-    assert!(u.ref_badge_pad(u.area) >= 48, "pad {}", u.ref_badge_pad(u.area));
+    assert!(u.ref_badge_pad(u.plot.area) >= 48, "pad {}", u.ref_badge_pad(u.plot.area));
     assert!(super::REF_BADGE_H >= 38, "a row for the name and a row for the scale and rate");
     shot(&mut u, "ref-badge");
 }

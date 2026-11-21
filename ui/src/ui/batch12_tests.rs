@@ -141,7 +141,7 @@ fn a_tap_on_a_row_opens_its_settings_and_does_not_swipe() {
     touch(&mut u, Phase::Up, a.0 - 6, a.1 + 2);
     frame(&mut u);
     assert_eq!(keys(&u), before);
-    assert!(u.meas_cfg.is_some() || u.menu_open, "the settings opened");
+    assert!(u.meas_own.dialog.is_some() || u.menu_open, "the settings opened");
     assert!(u.studio.md.swipe.is_none());
 }
 
@@ -258,7 +258,7 @@ fn a_tile_dragged_onto_a_channel_adds_the_measurement_for_that_channel() {
     let before = keys(&u);
     // the lane of CH2
     let lane = u.trace_sources().iter().position(|t| *t == workspace::Trace::Channel(1)).expect("CH2 has a lane");
-    let a = u.wins[lane];
+    let a = u.plot.wins[lane];
     let to = (a.x + a.w / 2, a.y + a.h / 2);
     let from = (row.x + 40, row.y + row.h / 2);
     touch(&mut u, Phase::Down, from.0, from.1);

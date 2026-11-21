@@ -125,7 +125,7 @@ impl Ui {
             }
             Item::SpecRef => flt(SPEC_REF_DBV, 5.0, "dBV"),
             Item::RefOffset => {
-                let vpd = self.refs.get(self.ref_sel).and_then(|r| r.as_ref()).map_or(1.0, |r| r.vpd as f64);
+                let vpd = self.refs.get(self.ref_page.sel).and_then(|r| r.as_ref()).map_or(1.0, |r| r.vpd as f64);
                 sym(LEVEL_DIVS * vpd, 0.1 * vpd, "V")
             }
             Item::MathLinA | Item::MathLinB => flt(MATH_LIN, 0.1, ""),
@@ -200,7 +200,7 @@ impl Ui {
             Item::BusClkThr => m.bus.clk_thr as f64,
             Item::BusDataThr => m.bus.data_thr as f64,
             Item::SpecRef => m.spec_ref as f64,
-            Item::RefOffset => self.refs.get(self.ref_sel)?.as_ref()?.offset as f64,
+            Item::RefOffset => self.refs.get(self.ref_page.sel)?.as_ref()?.offset as f64,
             _ => return None,
         })
     }
@@ -232,7 +232,7 @@ impl Ui {
             Item::BusDataThr => m.bus.data_thr = x,
             Item::SpecRef => m.spec_ref = x,
             Item::RefOffset => {
-                if let Some(Some(r)) = self.refs.get_mut(self.ref_sel) { r.offset = x; } else { return None; }
+                if let Some(Some(r)) = self.refs.get_mut(self.ref_page.sel) { r.offset = x; } else { return None; }
             }
             _ => return None,
         }

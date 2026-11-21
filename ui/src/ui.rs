@@ -8,6 +8,8 @@ use crate::font::{Font, Fonts};
 use crate::gfx::*;
 use crate::math::*;
 use crate::model::*;
+use crate::platform::Platform;
+use crate::protocols::Decoder;
 use crate::wave::*;
 
 mod acquire;
@@ -462,6 +464,39 @@ const DEC_BAND: i32 = 32;
 /// Height of the boxes of a band: room for the bold small text and a finger.
 const DEC_BOX: i32 = 24;
 
+/// Channel colours (yellow, teal, pink, sky blue: a colour-blind safe set). CH2 teal and CH4 blue as the colour
+/// rings of the scope's own probes and inputs have them (CH2 cyan, CH4 blue); until 0.1.11 the two were the other way.
+const PALETTE: [Rgb; 8] = [
+    rgb(0xf0, 0xe4, 0x42),
+    rgb(0x2e, 0xc4, 0xa0),
+    rgb(0xe0, 0x8c, 0xc0),
+    rgb(0x56, 0xb4, 0xe9),
+    rgb(0xf0, 0x90, 0x40),
+    rgb(0xa0, 0x90, 0xf0),
+    rgb(0xc0, 0xd0, 0x60),
+    rgb(0xe0, 0x60, 0x60),
+];
+const CH_COLORS: [Rgb; NCH] = {
+    let mut c = [PALETTE[0]; NCH];
+    let mut i = 0;
+    while i < NCH {
+        c[i] = PALETTE[i];
+        i += 1;
+    }
+    c
+};
+const MATH_COLOR: Rgb = rgb(0xa9, 0x8b, 0xff);
+/// Trace colours of M1..M8 (M1 = the classic math colour).
+const MATH_COLORS: [Rgb; 8] = [
+    MATH_COLOR,
+    rgb(0xff, 0x8b, 0xd0),
+    rgb(0x8b, 0xe9, 0xff),
+    rgb(0xff, 0xc8, 0x6b),
+    rgb(0x9b, 0xff, 0x8b),
+    rgb(0xff, 0x9b, 0x8b),
+    rgb(0xd8, 0xd8, 0xd8),
+    rgb(0x8b, 0xa8, 0xff),
+];
 /// Colours of the references.
 const REF_COLORS: [(&str, Rgb); 5] = [
     ("White", rgb(0xd8, 0xd8, 0xd8)),
@@ -790,31 +825,31 @@ impl Ui {
             self.toast("Update running: wait until it is done");
             return false;
         }
-        self.power_action = Some(action);
+        self.power.action = Some(action);
         self.toast(match action { PowerAction::Off => "Powering off ...", PowerAction::Restart => "Restarting ..." });
         true
     }
 
     /// How many stored frames can be shown. Frame 1 is the oldest.
     pub(crate) fn history_len(&self) -> usize {
-        self.history.len()
+        self.history.recs.len()
     }
 
     /// The frame on screen, 1-based. Live is the newest stored frame.
     pub(crate) fn history_frame(&self) -> usize {
-        self.hist_pos.map(|i| i + 1).unwrap_or(self.history.len())
+        self.history.pos.map(|i| i + 1).unwrap_or(self.history.recs.len())
     }
 
     /// Shows frame `frame` (1-based) and stops. Frame 1 is the oldest.
     pub(crate) fn history_show(&mut self, frame: usize) -> bool {
-        let n = self.history.len();
+        let n = self.history.recs.len();
         if frame == 0 || frame > n {
             return false;
         }
         self.m.run = RunState::Stop;
         let i = frame - 1;
-        self.hist_pos = Some(i);
-        self.last[0] = Some(self.history[i].clone());
+        self.history.pos = Some(i);
+        self.last[0] = Some(self.history.recs[i].clone());
         self.measure_last();
         self.toast(&format!("History {}/{}", frame, n));
         true
@@ -913,8 +948,8 @@ impl MeasWorker {
 /// which only goes down).
 pub struct Ui {
     cat: meascatalog::Catalog,
-    meas_page: usize,
-    meas_catalog_page: usize,
+    /// the page of the measurement readouts shown and of Measure > Selected (measurement_nav.rs)
+    meas_pages: measurement_nav::Pages,
     workflow_hold: Option<workflow::LiveSession>,
     session_is_sim: bool,
     replay: workflow::Replay,
@@ -927,25 +962,16 @@ pub struct Ui {
     pub src: Source,
     pub ph: Phosphor,
     pub phz: Phosphor,
-    area: Rect,
-    /// plot rectangle (10 x 8 div) of the current layout
-    grid: Rect,
     /// the zoom window: its vertical magnification, the time base it opened on, how it was closed (plot_layout.rs)
     zoom_view: plot_layout::ZoomView,
     /// The last Measure > Copy meas. to: from, to, how many (the row shows the result instead of "Pick").
     meas_copied: Option<(WaveId, WaveId, usize)>,
-    /// the waveform windows in the plot (one: the plot itself); `area` is the first while nothing else is drawn
-    wins: Vec<Rect>,
-    /// the window being drawn
-    cur_win: usize,
-    /// Full density on the panel: the plot covers the top bar and the cards. Stays off while the external display
-    /// shows the waveform, so the panel keeps the controls, unless the expand button asked for it (`full_asked`).
-    full: bool,
+    /// the plot's rectangles, its waveform windows, the one being drawn, the pass of the second picture (plot_layout.rs)
+    plot: plot_layout::Plot,
+    /// Full density on the panel, and whether the expand button asked for it (windows.rs)
+    full: windows::Full,
     /// The time view (zoomed or not, s/div, delay) the time cursors were last placed in (`cursor_follow_view`).
     cursor_view: Option<(bool, f32, f32)>,
-    /// Full came from a tap on the expand button: the panel enlarges its plot even while the external display shows
-    /// the waveform. Full chosen under Density, a display plugged in, or leaving Full clears it.
-    full_asked: bool,
     rng: Rng,
     trace_bus: std::cell::RefCell<bus::Cache>,
     menu: MenuId,
@@ -957,27 +983,18 @@ pub struct Ui {
     /// the open picker (menu == MenuId::Pick)
     pick: Option<Pick>,
     focus: usize,
-    meas_src: WaveId,
+    /// the sources the measurements are added for: A, and B of delay and phase (analysis/measure.rs)
+    sources: analysis::Sources,
     last: [Option<Record>; 1],
     stats: [Stats; NCH],
-    /// the last acquired records (newest last) for history playback
-    history: std::collections::VecDeque<Record>,
-    /// position in `history` while viewing it (None = live)
-    hist_pos: Option<usize>,
+    /// history playback: the last acquired records and the one viewed (records.rs)
+    history: records::History,
     /// mark all trigger events in the record (search)
     pub(crate) search_on: bool,
-    /// measurements per channel (oos-dsp) of the last record
-    ana: [std::sync::Arc<oos_dsp::measure::Analysis>; NCH],
-    /// measurements of each ref slot, from the stored samples (no front-end bandwidth)
-    ref_ana: [std::sync::Arc<oos_dsp::measure::Analysis>; NREF],
-    /// False when a hidden, unrequested reference skipped the capture-time scan.
-    ref_ana_valid: [bool; NREF],
+    /// the measurements (oos-dsp) of the last record per channel and of each ref slot (analysis/measure.rs)
+    measured: analysis::Measured,
     /// the measurements in the background (records.rs)
     meas_bg: records::MeasBackground,
-    /// counts what makes a background result still out wrong (a clear, a measurement made here at once), a result
-    /// sent before is dropped; a new record does not count (in Run one comes nearly every frame, and every result
-    /// would be dropped). The setup files and SCPI count it too
-    meas_n: u64,
     /// what choosing the Bus trigger switched on by itself (`set_trig_type`): the channels and whether the decoder; leaving
     /// Bus switches exactly those off again, what the user had on stays
     bus_auto: Option<([bool; NCH], bool)>,
@@ -1005,8 +1022,6 @@ pub struct Ui {
     /// STOP: the record shown was loaded from a session, with its samples. What the hardware has in its memory is
     /// another acquisition, so the STOP does not read that again in its place (`stop_replay`); RUN ends it
     loaded_record: bool,
-    /// the acquisition ran in the last frame
-    was_running: bool,
     /// analysers (analysis.rs)
     azr: analysis::State,
     /// self-calibration page (selfcal.rs)
@@ -1015,54 +1030,42 @@ pub struct Ui {
     bode: bode::State,
     /// the external generator and its connection (extgen.rs)
     ext: extgen::ExtUi,
-    /// SIM: Play is moving the timebase window through the selected record
-    workspace: workspace::Workspace,
+    pub(crate) workspace: workspace::Workspace,
     studio: studio::Studio,
     sheet: sheet::SheetState,
-    pub desktop_panel: Option<bool>,
-    /// the analyser view the last frame had: a change of view analyses what is already there (a stopped record gets no new one)
-    analyzed_view: AView,
+    /// SIM: Play is moving the timebase window through the selected record
     sim_play: bool,
     /// SIM mode playing offline refs (file or Add to R<n>) as live acquisitions: the slots in play.
     sim_refs: Vec<usize>,
-    sim_generation: Option<sim::Generation>,
-    sim_error: Option<String>,
-    /// Offline mode. Off, the live screen stays as it is.
-    offline: bool,
+    /// SIM: the generator thread and the error it left for SCPI (sim.rs)
+    sim_gen: sim::Generator,
+    /// Offline mode: whether it is on, the reference on its card, the live settings it puts back (offline.rs)
+    offline: offline::Mode,
     /// Take over, offline waveforms, or the live scope.
     look: reflook::RefLook,
-    /// Settings of each added measurement. Missing keys follow the shared measure menu.
-    meas_own: std::collections::HashMap<(Meas, WaveId), reflook::MeasOwn>,
+    /// the settings of each added measurement, and the row whose settings dialog is open (reflook.rs)
+    meas_own: reflook::OwnMeas,
     /// The same of the views that are not shown (`ui/views.rs`).
     view_own: [std::collections::HashMap<(Meas, WaveId), reflook::MeasOwn>; VIEWS_MAX],
     /// The gate a row measures with while its key or samples are made (None: the shared one).
     row_gate: std::cell::Cell<Option<bool>>,
-    /// Settings dialog open on this index of `m.meas`.
-    meas_cfg: Option<u16>,
-    /// Reference named on the card that replaces the trigger card, and read by the DVM and the counter.
-    offline_ref: usize,
-    offline_hold: Option<offline::LiveHold>,
     /// the external display: whether one is attached and its size (windows.rs)
     pub hdmi: windows::Hdmi,
     /// `render_waveform` is drawing the monitor's waveform area (Display > HDMI = Waveform): the frame has no bottom
     /// bar, and the drawing stops before the bars and menus
     wave_pass: bool,
-    /// start-up screen (startup.rs) and the last start-up's result (About)
-    pub start_up: Option<startup::StartScreen>,
-    start_up_last: Option<oos_hal::bootstatus::View>,
+    /// the start-up screen and the last start-up's result for About (startup.rs)
+    start_up: startup::StartUp,
     /// signed updates (update.rs): running oos-update job, watcher notice
     upd: update::UpdateUi,
     wlan: wlan::WlanUi,
     mstat: Vec<MStat>,
-    /// past values of each measurement row
-    trend: Vec<panes::Trend>,
     /// what the second pane keeps between frames
     pn: panes::PaneState,
     log: logger::Logger,
     single_armed: bool,
-    stats_on: bool,
-    /// measurement results overlay folded to its header
-    results_min: bool,
+    /// the statistics panel of the measurements: shown, folded to its header (strip.rs)
+    results: strip::Results,
     /// Eye page: its right column, sliding, and the plot that fills the chart area (eyepage.rs)
     eye_col: eyepage::Column,
     /// Clear pressed: the screen stays empty (also in STOP) until the next record
@@ -1072,13 +1075,9 @@ pub struct Ui {
     callouts: Vec<callout::Callout>,
     cnt: tools::Counter,
     dvm: tools::Dvm,
-    /// source B of delay and phase
-    meas_src_b: WaveId,
-    /// the reference the Slot rows work on
-    ref_sel: usize,
-    ref_src: usize,
-    /// files the Import slot picker is showing
-    ref_files: Vec<std::path::PathBuf>,
+    /// the Reference page: the slot its rows work on, the channel Save copies, the files the Import picker shows
+    /// (tools/refs.rs)
+    ref_page: tools::RefPage,
     /// Storage, a file by its name (ui/files.rs): the question for the dialog of the desktop build
     file_request: Option<FileAsk>,
     /// the files the list of a Storage row is showing, and what they are
@@ -1103,22 +1102,12 @@ pub struct Ui {
     pub now: f64,
     /// what the step saw last: the trigger level and its change, the last record and the usual interval (acquire.rs)
     seen: acquire::Seen,
-    pub frames: u64,
-    /// records taken in, for the state line
-    pub records: u64,
-    /// auto set-up under way on the hardware (autoset.rs)
-    auto: Option<autoset::AutoRun>,
+    /// the counts of the screen and the acquisition: frames drawn, records taken in, their rates (acquire.rs)
+    pub counts: acquire::Counts,
+    /// the auto set-up under way on the hardware, the bar of views after one, the last `:DEBug:SLOTs?` (autoset.rs)
+    auto: autoset::Auto,
     /// the jobs a remote command can wait for: their numbers and the receipts of the finished ones (scpi_operations.rs)
     ops: scpi_operations::Ledger,
-    /// when the bar of views after an auto set-up came up (ui/autoset.rs)
-    auto_bar: Option<f64>,
-    /// request number of the last `:DEBug:SLOTs?`
-    slot_req: u64,
-    pub fps: f32,
-    /// acquisitions per second (smoothed)
-    pub wfm_rate: f32,
-    /// every waveform acquired since the start (Clear resets it)
-    pub wfm_total: u64,
     /// the network as the main loop last read it: the addresses, the LAN link, the WLAN stick (wlan.rs)
     pub net: wlan::Network,
     /// a mouse and a keyboard (USB or Bluetooth): the pointer and the modifier keys (ui/pointer.rs)
@@ -1130,8 +1119,7 @@ pub struct Ui {
     /// System > Network > Bluetooth (ui/bt.rs), and the stick and its inputs for the top bar
     bt: bt::BtUi,
     /// System > Overclock: limits.conf and the ADC clock of the next start (overclock.rs)
-    pub limits_path: String,
-    clock_next: f64,
+    pub overclock: overclock::Next,
     /// settings of the scope itself (sysconf.rs); written to `sys_path` (none in tests: nothing written)
     pub sys: crate::sysconf::SysConf,
     pub sys_path: Option<std::path::PathBuf>,
@@ -1147,38 +1135,22 @@ pub struct Ui {
     pub dirty_map: bool,
     /// the counts the traces are graded against (render.rs)
     grade: render::Grade,
-    /// storage directory (setups, CSV, PNG), created when missing
-    pub store_dir: std::path::PathBuf,
-    /// Auto / USB stick / desktop for waveform, mask and screenshot files
-    store_dest: crate::store::StoreDest,
-    /// Math menu category (kept when the operation is Off)
-    math_fam: MathFamily,
-    math_state: std::cell::RefCell<mathwave::State>,
+    /// where files are stored: the folder, the destination, the setup slot (save_recall.rs)
+    pub files: save_recall::Files,
+    /// the math channels: the menu's category, the results and their worker, the scales to refit (mathwave.rs)
+    math: mathwave::Math,
     capture_views: std::cell::RefCell<capture_memory::State>,
     /// the screen the layout is made for: the panel, or another size in host test runs (`--size`)
     pub scr: Screen,
-    /// `render_view` is drawing the second picture: the layout must not touch the phosphor maps
-    view_pass: bool,
-    /// a USB stick is mounted
-    usb: bool,
-    /// LA probe detect: None = not known (no hardware, not read yet)
-    la_probe: Option<bool>,
-    usb_check: f64,
-    /// setup slot n = file setup<n>.txt
-    store_slot: u32,
-    /// mask test: reference waveform (volts, screen time), the mask built from it, counts
-    mask_ref: Option<Vec<f32>>,
-    mask: Option<oos_dsp::mask::Mask>,
-    mask_pass: u64,
-    mask_fail: u64,
-    /// the mask in the columns of the hardware table (hwmask.rs), the latest counters of the mask unit, and a number
-    /// raised to clear them
-    mask_cols: Option<(Vec<f32>, Vec<f32>)>,
-    mask_hw: Option<crate::board::MaskRead>,
-    mask_hw_clear: u64,
-    /// the acquisition thread dropped the mask/zone unit for the current settings after it stalled the acquisition:
-    /// why (hwmask.rs); the software test and filter take over
-    unit_blocked: Option<String>,
+    /// the USB stick: whether one is mounted, and when the sticks are looked for next (save_recall.rs)
+    stick: save_recall::Stick,
+    /// the logic analyser: the probe as last read, the pixel columns of the last LA record drawn (la.rs)
+    la: la::Lanes,
+    /// the mask test in software: the reference waveform, the mask built from it, its counts (render_derived.rs)
+    mask_sw: render_derived::MaskTest,
+    /// the mask unit in the FPGA: the mask in its columns, its latest counters, the number that clears them, and why
+    /// the acquisition thread dropped the unit (hwmask.rs)
+    mask_unit: hwmask::Unit,
     pub shot_request: Option<String>,
     /// Storage > Save setup as SCPI: the file to write, under the name the user gave it (ui/files.rs). The interpreter
     /// writes it at its next poll, since the lines are the answers of its own queries (`Scpi::poll`,
@@ -1193,9 +1165,8 @@ pub struct Ui {
     pub quit: bool,
     /// commands for the front panel, sent by the main loop (power handshake)
     pub panel_tx: Vec<crate::board::PanelCmd>,
-    /// power dialog open (power key)
-    pub power_dlg: bool,
-    pub power_action: Option<PowerAction>,
+    /// the power key's dialog and what it asked the main loop for (input.rs)
+    pub power: input::Power,
     /// hex entry of the keypad picker (protocol trigger value)
     keypad: String,
     /// the numeric entry pad of the Studio sheets (ui/numpad.rs); its text is `keypad`
@@ -1211,15 +1182,12 @@ pub struct Ui {
     eye_src_chosen: bool,
     /// Channels a source row turned on by itself (`feedback.rs`): turned off again when the row moves on, unless used.
     auto_on: Vec<usize>,
-    /// logic analyser lanes: pixel columns of the last LA record drawn (la.rs)
-    la_cols: std::cell::RefCell<la::Cache>,
-    /// decoded LA lines of the record shown: (key of record and settings, packets with times in s)
-    dec_cache: std::cell::RefCell<Vec<(u64, Vec<oos_dsp::decode::Packet>)>>,
+    /// the decoded lines of the records shown, analog and LA, with times in s (render_derived.rs)
+    decoded: render_derived::Decoded,
+    /// the table window over the plot: what it shows and its first row shown (tables.rs)
+    table: tables::Window,
     /// the boxes of the decoder bands drawn in this frame: where a finger finds one, its decoder, its start time
     band_hits: std::cell::RefCell<Vec<(Rect, usize, f64)>>,
-    /// table window over the plot, first row shown
-    table: Option<tables::TableKind>,
-    table_top: usize,
     /// where the second and the third column of the event table start, from its left edge, once a divider was dragged
     table_cols: Option<[i32; 2]>,
 }
@@ -1261,19 +1229,19 @@ impl Ui {
     /// search marks start over; in STOP the screen stays empty until the next acquisition (RUN draws again at once).
     fn clear_display(&mut self) {
         self.rec_action(":CLEar");
-        self.wfm_total = 0;
+        self.counts.wfm_total = 0;
         self.bus_views_clear();
         self.ph.clear();
         self.phz.clear();
         (self.grade.vmax, self.grade.vmaxz, self.grade.vmax_cg, self.grade.vmaxz_cg) = ([1; NCH], [1; NCH], 1, 1);
         // without a last record there is nothing to redraw in STOP, average with, compute math / decode / search on
         self.last[0] = None;
-        self.hist_pos = None;
+        self.history.pos = None;
         self.cleared = true;
         self.stats = [Stats::default(); NCH];
         // a measurement still out, or a record waiting for the worker, belongs to what was cleared away
-        (self.meas_n, self.meas_bg.want, self.meas_bg.pending) = (self.meas_n + 1, false, None);
-        self.ana = Default::default();
+        (self.meas_bg.n, self.meas_bg.want, self.meas_bg.pending) = (self.meas_bg.n + 1, false, None);
+        self.measured.ch = Default::default();
         self.clear_measurement_statistics();
         self.mask_counts_reset();
         (self.zone_trig.drops, self.zone_trig.clear) = (0, self.zone_trig.clear + 1);

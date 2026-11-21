@@ -197,7 +197,7 @@ impl Ui {
         let on = match it {
             Item::RunStop => self.m.run == RunState::Run,
             Item::SingleAct => self.m.trig_mode == TrigMode::Single && self.m.run == RunState::Run,
-            Item::NavHist => self.hist_pos.is_some(),
+            Item::NavHist => self.history.pos.is_some(),
             Item::LockAct => self.m.touch_lock,
             _ => false,
         };

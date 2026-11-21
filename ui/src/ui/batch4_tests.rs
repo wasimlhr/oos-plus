@@ -78,7 +78,7 @@ fn a_hold_on_a_lane_badge_or_marker_opens_the_same_quick_actions() {
         let (x, y) = if l == Layout::Studio {
             centre(u.studio.lane_badges.borrow().iter().find(|b| b.0 == 0).unwrap().1)
         } else {
-            let a = u.area;
+            let a = u.plot.area;
             (a.x + 10, u.y_of_volts(0, 0.0))
         };
         hold(&mut u, x, y, LONG_PRESS + 0.1);
@@ -123,7 +123,7 @@ fn the_plot_hold_popup_has_a_title_and_fits_with_rows_of_40_px() {
         // Studio has a context menu of its own (studioctx.rs, tested in measpanel_redesign_tests)
         if l == Layout::Studio { continue; }
         let mut u = layout(l);
-        let g = u.grid;
+        let g = u.plot.grid;
         u.context_menu(g.x + g.w / 2, g.y + g.h / 2);
         let p = u.workspace.popup.as_ref().unwrap();
         assert_eq!(p.title, "Plot");
@@ -310,7 +310,7 @@ fn autoset_is_two_taps_away_in_every_layout() {
     for l in LAYOUTS {
         // hold on the plot, then Autoset
         let mut u = layout(l);
-        let g = u.grid;
+        let g = u.plot.grid;
         u.context_menu(g.x + g.w / 2, g.y + g.h / 2);
         let (x, y) = if l == Layout::Studio {
             centre(u.studio_ctx_rows().into_iter().find(|r| r.0 == super::studioctx::CtxRow::Autoset).unwrap().2)
@@ -386,7 +386,7 @@ fn shots_hold_ring_and_popups() {
         touch(&mut u, Phase::Up, x, y);
         shot(&mut u, &format!("b4-{name}-chip-popup"));
         u.dismiss_context();
-        let g = u.grid;
+        let g = u.plot.grid;
         u.context_menu(g.x + g.w / 2, g.y + g.h / 2);
         shot(&mut u, &format!("b4-{name}-plot-popup"));
     }

@@ -36,7 +36,7 @@ impl Ui {
     /// The hit area of the trigger level tag on the plot (value and T marker), at least 40 px high.
     pub(super) fn trigger_tag_hit(&self) -> Option<Rect> {
         let f = self.fonts();
-        let a = self.area;
+        let a = self.plot.area;
         let ts = self.m.trig_src;
         let clamp = |y: i32, a: Rect| { let m = (a.h / 2).min(9); y.clamp(a.y + m, a.y + a.h - m) };
         match self.m.trigger_wave() {
@@ -63,7 +63,7 @@ impl Ui {
     }
 
     pub(super) fn trig_slider_geo(&self) -> SliderGeo {
-        let g = self.grid;
+        let g = self.plot.grid;
         let w = SLIDER_W;
         let h = (g.h - 16).clamp(260, 440).min(self.scr.h - 8);
         let x = (g.right() - w - 96).max(g.x + 4);

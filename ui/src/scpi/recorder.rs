@@ -297,7 +297,7 @@ mod tests {
     fn session_in(name: &str) -> (Scpi, Ui, Canvas, Folder) {
         let (s, mut ui, cv) = session();
         let dir = Folder::new(name);
-        ui.store_dir = dir.0.clone();
+        ui.files.dir = dir.0.clone();
         (s, ui, cv, dir)
     }
 
