@@ -24,6 +24,8 @@ const POINTS_MAX: usize = 100_000;
 const INLINE_MAX: usize = 1000;
 /// Where the web remote serves the CSV of the last `waveform` call.
 const WAVEFORM_CSV: &str = "/mcp/waveform.csv";
+/// How long the file of a `waveform` call stays to be downloaded; then it is deleted.
+pub const FILE_TTL: std::time::Duration = std::time::Duration::from_secs(120);
 /// Samples of a record `waveform` reads in one call (2 MiB as WORD); the answer says where the next call starts.
 const READ_MAX: u64 = 1 << 20;
 /// Rows `decode_results` answers by default, and at most.
@@ -127,8 +129,10 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
 const INSTRUCTIONS: &str = "OOS oscilloscope (Rigol DHO800/DHO900). Rules:
 1. Start with scope_state.
 2. Use the typed tools first: configure, acquire, measure, waveform, decode_results. Use scpi only for what they lack.
-3. Never guess a SCPI command. Find it with scpi_reference (search, then header), then send it with scpi.
-4. waveform answers statistics and a CSV link: download the file; never ask for the samples inline.
+3. Look up, send, verify. Never guess a SCPI command: find it with scpi_reference (search, then header), send it with
+scpi, then check the value read back in its answer. Sent is not done: a setting may be refused, rounded or limited.
+4. waveform answers statistics and a CSV link: download the file at once (it is deleted after 2 minutes); never ask
+for the samples inline.
 5. acquire does not wait: after single, ask scope_state until trigger.status is STOP.
 6. After an error, read its hint. Do not resend the same command.
 7. If a tool says MCP is read only, do not try to change the scope.
@@ -137,7 +141,9 @@ Values in base units: V, s, Hz.";
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
     the response of its queries; or `commands`, a list of messages run in order that stops at the first error. The \
     commands are those of OOS's SCPI reference (Rigol-style: :TIM:SCAL 1e-3, :CHAN1:SCAL 0.5, :MEAS:ITEM? VPP,CHAN1): \
-    look a command up with scpi_reference before sending it, do not guess its name.";
+    look a command up with scpi_reference before sending it, do not guess its name. Every command that sets something \
+    and has a query form is read back after the message (`read back :CHAN1:SCAL? -> 5.000000E-1`): compare it with \
+    what was sent.";
 const SCPI_QUERIES: &str = "Run SCPI queries on the oscilloscope (MCP is read only on this scope): `command`, one \
     program message whose every command is a query (its header ends in '?', commands separated by ';'), or \
     `commands`, a list of such messages. The queries are those of OOS's SCPI reference (:TIM:SCAL?, \
@@ -156,7 +162,8 @@ const MEASURE: &str = "Measure items of the measurement list on a source, as num
 const WAVEFORM: &str = "A record of a source: its statistics (min, max, mean, rms, peak-to-peak in volts, clipped \
     samples) and a link to a CSV file of it, `points` rows (the samples, or min/max per bucket when the record is \
     longer). The samples are not in the answer: download the file to the computer (curl -o wave.csv <url>) and work \
-    on it there instead of reading it into the conversation; it holds the last call's record. `inline` puts up to \
+    on it there instead of reading it into the conversation; it holds the last call's record and is deleted 2 \
+    minutes after the call (`expires_in_s`), so download it at once. `inline` puts up to \
     1000 points into the answer as well. `record` screen reads what is drawn, memory the acquisition memory, 1 Mi \
     samples per call from `start` (the answer gives `next_start`). The waveform selection of other SCPI clients is \
     left as it was.";
@@ -575,10 +582,35 @@ fn scpi_tool(run: &mut Run, args: &J) -> J {
             ])
         }
         Ok((r, has_reply)) => {
-            text(if r.is_empty() && !has_reply { "ok" } else { std::str::from_utf8(&r).unwrap_or("(binary response)") })
+            let reply = if r.is_empty() && !has_reply { "ok" } else { std::str::from_utf8(&r).unwrap_or("(binary response)") };
+            let checks = read_back(run, c);
+            if checks.is_empty() {
+                return text(reply);
+            }
+            let lines: Vec<String> = checks.iter().map(|(q, v)| format!("read back {q} -> {v}")).collect();
+            text(&format!("{}\n{}", reply.trim_end(), lines.join("\n")))
         }
         Err(error) => refuse(error),
     }
+}
+
+/// Lookup, send, verify: each command of `message` that sets something and has a query form in the reference
+/// (`:CHAN1:SCAL 0.5` -> `:CHAN1:SCAL?`) asked back, with what the scope answers; a command whose query fails reads
+/// back as its error. A setting that was taken but changed (rounded to a step, limited to a range) shows here.
+fn read_back(run: &mut Run, message: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for query in message.split(';').filter_map(reference::read_back) {
+        let queued = run.scpi.queued_errors().len();
+        let value = match run.scpi.exec_message_checked(run.ui, run.cv, &query) {
+            Ok(_) if run.scpi.queued_errors().len() > queued => {
+                format!("error: {}", run.scpi.queued_errors()[queued..].join("; "))
+            }
+            Ok((r, _)) => String::from_utf8_lossy(&r).trim().to_string(),
+            Err(e) => format!("error: {e}"),
+        };
+        out.push((query, value));
+    }
+    out
 }
 
 /// `commands` of the `scpi` tool: each message in its turn, until one fails.
@@ -597,7 +629,13 @@ fn scpi_messages(run: &mut Run, messages: &J) -> J {
             return answer(run, data);
         };
         let reply = J::Str(String::from_utf8_lossy(&r).trim_end().to_string());
-        replies.push(J::obj(&[("command", J::s(message)), ("reply", reply)]));
+        let checks = read_back(run, message);
+        let mut item = vec![("command", J::s(message)), ("reply", reply)];
+        if !checks.is_empty() {
+            let checks = checks.into_iter().map(|(q, v)| J::obj(&[("query", J::Str(q)), ("value", J::Str(v))]));
+            item.push(("read_back", J::Arr(checks.collect())));
+        }
+        replies.push(J::obj(&item));
     }
     answer(run, J::obj(&[("ran", J::Arr(replies))]))
 }
@@ -778,9 +816,10 @@ fn read_record(run: &mut Run, source: &str, memory: bool, (points, inline): (usi
             ("columns", J::s(columns)),
             ("rows", J::Num(n.min(points) as f64)),
             ("bytes", J::Num(csv.len() as f64)),
+            ("expires_in_s", J::Num(FILE_TTL.as_secs() as f64)),
         ]),
     ));
-    run.scpi.mcp_file = Some(csv);
+    run.scpi.mcp_file = Some((std::time::Instant::now(), csv));
     if inline > 0 && n <= inline {
         out.push(("samples", J::Arr(volts.iter().map(|&v| short(v)).collect())));
     } else if inline > 0 {
@@ -797,12 +836,24 @@ fn read_record(run: &mut Run, source: &str, memory: bool, (points, inline): (usi
     J::obj(&out)
 }
 
-/// `GET /mcp/waveform.csv`: the CSV of the last `waveform` call; refused while MCP is off or before a call.
+/// `GET /mcp/waveform.csv`: the CSV of the last `waveform` call, for `FILE_TTL` after it; refused while MCP is off,
+/// before a call and after that time.
 pub fn waveform_csv(ui: &Ui, scpi: &Scpi) -> Result<Vec<u8>, String> {
     if ui.sys.remote_mcp == McpMode::Off {
         return Err(OFF.into());
     }
-    scpi.mcp_file.clone().ok_or_else(|| "No waveform yet: call the MCP tool waveform first".into())
+    match &scpi.mcp_file {
+        Some((made, csv)) if made.elapsed() < FILE_TTL => Ok(csv.clone()),
+        _ => Err("No waveform file: call the MCP tool waveform, then download its file within 2 minutes".into()),
+    }
+}
+
+/// The file of `waveform` deleted once `FILE_TTL` has passed (each pass of the web server, `Site::pass`): it is a
+/// file for one client to fetch at once, not a store.
+pub fn expire_file(scpi: &mut Scpi) {
+    if scpi.mcp_file.as_ref().is_some_and(|(made, _)| made.elapsed() >= FILE_TTL) {
+        scpi.mcp_file = None;
+    }
 }
 
 /// The payload of an IEEE definite-length block, `#<n><n digits of length><payload>`.

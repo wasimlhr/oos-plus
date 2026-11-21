@@ -201,8 +201,9 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - Answer: 200 `text/csv; charset=utf-8`, the file of the last call of the MCP tool `waveform` (below): a header
   `time_s,v` and one row per sample, or `time_s,min_v,max_v` and one row per bucket (its first sample's time, its
   lowest and highest sample) when the record read was longer than the tool's `points`; time as `%.9e`, volts as
-  `%.6e`. The file stays as it was until the next call, from any MCP client. 409 `text/plain`: before the first
-  call, or while Remote services > MCP is Off.
+  `%.6e`. It is a temporary file for one download: the next call, from any MCP client, replaces it, and 2 minutes
+  after its call (`FILE_TTL`) it is deleted, at the web server's next pass. 409 `text/plain`: before the first call,
+  after those 2 minutes, or while Remote services > MCP is Off.
 - net.allow: yes, as `/mcp`.
 
 ### `POST /mcp`
@@ -248,6 +249,14 @@ answers as `9.9E37` (none) is `null`.
   answers `isError: true` with a text, queues error -221, and drops the commands after it (the ones before it ran).
   With `commands`: the JSON object `ran`, a list of `{command, reply}` of the messages that ran, in order; the first
   message that queues an error ends the call, with `stopped_at` (its index from 0) and `errors`.
+- Read back (oos-plus): after a message that ran without an error, each of its commands that sets something (not a
+  query, not a common command `*...`) and whose entry in the reference of `scpi_reference` has a query without
+  parameters is asked as that query, in the header the client sent (`:CHAN1:SCAL 0.5` -> `:CHAN1:SCAL?`). The text
+  answer gets a line `read back <query> -> <answer>` for each, after the message's own answer; with `commands` a
+  message's item gets `read_back`, a list of `{query, value}`. A query that queues an error reads back as
+  `error: <errors>`, and its error stays queued. What the scope took shows there when it differs from what was sent.
+  A command after a `;` without a leading `:` (relative to the one before) is looked up as written, from the root,
+  and so is usually not read back.
 
 ### MCP tool `scope_state`
 
@@ -276,7 +285,8 @@ answers as `9.9E37` (none) is `null`.
   from `start`), `next_start` (null at the end of the record), `dt` and `t0` (s, of the first sample read), `unit`
   `V`, `clipped` (samples at the end of the WORD range), `stats` (`min`, `max`, `vpp`, `mean`, `rms`), and `file`:
   `url` (`http://<address>:8080/mcp/waveform.csv`, the path alone while the scope has no address), `columns`, `rows`
-  and `bytes` of the CSV that `GET /mcp/waveform.csv` then serves, the samples read as `points` rows. The samples are
+  `bytes` and `expires_in_s` (120) of the CSV that `GET /mcp/waveform.csv` then serves for that long, the samples read
+  as `points` rows. The samples are
   not in the answer, where they would fill a model's context: a client downloads the file (`curl -o`). With `inline`
   above 0 the answer also has `samples` (every sample, when there are no more than `inline`) or `minmax` (`inline`
   pairs `[low, high]`, each over an equal share of the samples) with `bucket_dt`. Numbers have six significant
