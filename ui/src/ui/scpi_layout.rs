@@ -444,7 +444,7 @@ impl Ui {
                 use super::workspace::Trace;
                 let name = |s: &Trace| match s { Trace::Channel(c) => format!("CH{}", c + 1), Trace::Reference(i) => format!("R{}", i + 1), Trace::Math(k) => format!("M{}", k + 1) };
                 let sources = self.trace_sources();
-                for (i, w) in self.wins.iter().enumerate() {
+                for (i, w) in self.plot.wins.iter().enumerate() {
                     let label = if self.stacked() { sources.get(i).map(name).unwrap_or_else(|| "Lane".into()) } else { "All sources".into() };
                     push("LANE", label, *w);
                 }
@@ -671,7 +671,7 @@ mod tests {
         let only_top = text(cmd(&mut u, ":UI:ELEMents?", "TOP"));
         assert!(only_top.split(';').all(|r| r.starts_with("TOP,")));
         // right-click on the plot, then a row by name
-        let a = u.area;
+        let a = u.plot.area;
         cmd(&mut u, ":UI:CONText", &format!("{},{}", a.x + a.w / 2, a.y + a.h / 2)).unwrap();
         let m = text(cmd(&mut u, ":UI:MENU?", ""));
         assert!(m.starts_with("\"Context\"") && m.contains("\"Stacked traces\""), "{m}");

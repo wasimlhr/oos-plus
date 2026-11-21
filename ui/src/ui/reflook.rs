@@ -19,6 +19,15 @@ pub(super) enum RefLook {
     Waves,
 }
 
+/// The settings of the added measurements (ADR 0062).
+#[derive(Default)]
+pub(super) struct OwnMeas {
+    /// the settings of each added measurement; missing keys follow the shared measure menu
+    pub rows: std::collections::HashMap<(Meas, WaveId), MeasOwn>,
+    /// the settings dialog is open on this index of `m.meas`
+    pub dialog: Option<u16>,
+}
+
 /// Settings that belong to one added measurement. Unset fields follow the shared measure menu.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct MeasOwn {
@@ -77,7 +86,7 @@ impl Ui {
                 self.relayout();
             }
             RefLook::TakeOver => {
-                if !self.offline {
+                if !self.offline.on {
                     self.remember_live();
                     self.set_offline(true);
                 }
@@ -87,7 +96,7 @@ impl Ui {
                 self.solo_reference(slot);
             }
             RefLook::Waves => {
-                if !self.offline {
+                if !self.offline.on {
                     self.remember_live();
                     self.set_offline(true);
                 }
@@ -106,7 +115,7 @@ impl Ui {
                 r.on = i == slot;
             }
         }
-        self.offline_ref = slot;
+        self.offline.slot = slot;
     }
 
     /// Every loaded reference with samples stays on screen.
@@ -119,14 +128,14 @@ impl Ui {
     }
 
     pub(super) fn waves_on(&self) -> bool {
-        self.look == RefLook::Waves && !self.view_on() && !self.xy_over() && self.wins.len() <= 1
+        self.look == RefLook::Waves && !self.view_on() && !self.xy_over() && self.plot.wins.len() <= 1
     }
 
     pub(super) fn waves_board_rect(&self) -> Option<Rect> {
         if !self.waves_on() {
             return None;
         }
-        let g = self.grid;
+        let g = self.plot.grid;
         if g.w < 200 || g.h < 80 {
             return None;
         }
@@ -154,7 +163,7 @@ impl Ui {
     /// A set cell inherits the first added row of this kind unless it has its own row.
     pub(super) fn set_cell(&self, kind: Meas, slot: usize) -> f64 {
         let id = WaveId::Ref(slot);
-        let owner = if self.meas_own.contains_key(&(kind, id)) || self.m.meas.contains(&(kind, id)) {
+        let owner = if self.meas_own.rows.contains_key(&(kind, id)) || self.m.meas.contains(&(kind, id)) {
             id
         } else {
             let Some(&(_, source)) = self.m.meas.iter().find(|e| e.0 == kind) else { return f64::NAN };
@@ -408,7 +417,7 @@ impl Ui {
     pub(super) fn ensure_meas_own(&mut self) {
         let fresh = MeasOwn::shared(&self.m);
         for &(k, id) in &self.m.meas.clone() {
-            self.meas_own.entry((k, id)).or_insert(fresh);
+            self.meas_own.rows.entry((k, id)).or_insert(fresh);
         }
     }
 
@@ -416,13 +425,13 @@ impl Ui {
     /// sheet, or a dialog in Minimal and Default.
     pub(super) fn open_meas_cfg(&mut self, index: usize) {
         if index >= self.measurement_count() {
-            self.meas_cfg = None;
+            self.meas_own.dialog = None;
             return;
         }
         self.ensure_meas_own();
-        self.meas_cfg = Some(index as u16);
+        self.meas_own.dialog = Some(index as u16);
         if self.measrow_plan().is_empty() {
-            self.meas_cfg = None;
+            self.meas_own.dialog = None;
             self.toast("No settings for this measurement");
             return;
         }
@@ -456,7 +465,7 @@ impl Ui {
         }
         self.ensure_meas_own();
         let (k, id) = self.m.meas[index];
-        if let Some(own) = self.meas_own.get_mut(&(k, id)) {
+        if let Some(own) = self.meas_own.rows.get_mut(&(k, id)) {
             own.low = low;
             own.high = high;
             own.refs_set = true;
@@ -514,7 +523,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let mut u = ui();
         u.m.layout = Layout::Default; // the direct slot import of the stock dialog
-        u.store_dir = dir.clone();
+        u.files.dir = dir.clone();
         put(&mut u, 1, square(1.0), true);
         assert!(u.m.ch[0].on && u.look == RefLook::Live);
         let held = (u.m.tscale, u.m.tfine, u.m.delay, u.m.ch[0].on);
@@ -523,15 +532,15 @@ mod tests {
             csv.push_str(&format!("{:.12e},{}\n", i as f64 * 1e-9, x));
         }
         std::fs::write(dir.join("ref1.csv"), csv).unwrap();
-        u.ref_sel = 0;
+        u.ref_page.sel = 0;
         u.activate(Item::RefImport);
         u.m.layout = Layout::Minimal;
         assert_eq!(u.look, RefLook::Live, "import adds a reference without changing the live acquisition");
-        assert!(!u.offline && u.m.ch[0].on, "import keeps the live channels");
+        assert!(!u.offline.on && u.m.ch[0].on, "import keeps the live channels");
         assert!(u.refs[0].as_ref().unwrap().on && u.refs[1].as_ref().unwrap().on);
         u.set_look(RefLook::TakeOver);
         assert_eq!(u.look, RefLook::TakeOver);
-        assert!(u.offline);
+        assert!(u.offline.on);
         assert!(u.m.ch.iter().all(|c| !c.on), "other channels are hidden");
         assert!(u.cards().0.iter().all(|c| c.w == 0));
         assert!(u.refs[0].as_ref().unwrap().on);
@@ -539,7 +548,7 @@ mod tests {
         assert!(u.m.time_per_div() > 0.0);
         u.set_look(RefLook::Live);
         assert_eq!(u.look, RefLook::Live);
-        assert!(!u.offline);
+        assert!(!u.offline.on);
         assert_eq!((u.m.tscale, u.m.tfine, u.m.delay, u.m.ch[0].on), held);
         assert!(u.refs[1].as_ref().unwrap().on);
         let _ = std::fs::remove_dir_all(&dir);
@@ -551,8 +560,8 @@ mod tests {
         put(&mut u, 0, square(1.0), true);
         put(&mut u, 1, square(3.0), true);
         u.m.meas.clear();
-        u.meas_own.clear();
-        u.meas_src = WaveId::Ref(0);
+        u.meas_own.rows.clear();
+        u.sources.a = WaveId::Ref(0);
         u.activate(Item::MeasAdd(Meas::Vpp));
         u.set_look(RefLook::Waves);
         assert_eq!(u.look, RefLook::Waves);
@@ -577,18 +586,18 @@ mod tests {
         u.step(0.25);
         assert!(u.replay.captures >= 1, "the set plays");
         u.set_look(RefLook::Live);
-        assert!(u.m.ch[0].on && !u.offline && u.waves_board_rect().is_none());
+        assert!(u.m.ch[0].on && !u.offline.on && u.waves_board_rect().is_none());
     }
 
     #[test]
     fn every_added_measurement_opens_its_own_settings() {
         let mut u = ui();
         u.m.meas.clear();
-        u.meas_own.clear();
+        u.meas_own.rows.clear();
         u.activate(Item::MeasAdd(Meas::Vpp));
         u.activate(Item::MeasAdd(Meas::Burst));
-        assert!(u.meas_own.contains_key(&(Meas::Vpp, WaveId::Ch(0))));
-        assert!(u.meas_own.contains_key(&(Meas::Burst, WaveId::Ch(0))));
+        assert!(u.meas_own.rows.contains_key(&(Meas::Vpp, WaveId::Ch(0))));
+        assert!(u.meas_own.rows.contains_key(&(Meas::Burst, WaveId::Ch(0))));
         u.key(key::MEASURE);
         let vpp = u.catalog_set_rect(Meas::Vpp).expect("a place to open Vpp settings");
         u.tap(vpp.x + vpp.w / 2, vpp.y + vpp.h / 2);
@@ -597,7 +606,7 @@ mod tests {
         assert!(plan.contains(&Item::RowF(measrow::RF::Gate)) && !plan.contains(&Item::RowF(measrow::RF::Idle)));
         u.close_menu();
         u.key(key::MEASURE);
-        u.meas_cfg = None;
+        u.meas_own.dialog = None;
         let mut opened = false;
         for _ in 0..12 {
             let view = u.catalog_view();
@@ -636,10 +645,10 @@ mod tests {
         put(&mut u, 0, edge(), true);
         put(&mut u, 1, edge(), true);
         u.m.meas.clear();
-        u.meas_own.clear();
-        u.meas_src = WaveId::Ref(0);
+        u.meas_own.rows.clear();
+        u.sources.a = WaveId::Ref(0);
         u.activate(Item::MeasAdd(Meas::Rise));
-        u.meas_src = WaveId::Ref(1);
+        u.sources.a = WaveId::Ref(1);
         u.activate(Item::MeasAdd(Meas::Rise));
         u.measure_refs();
         u.set_meas_refs(0, 0.1, 0.9);

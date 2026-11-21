@@ -113,7 +113,7 @@ impl Ui {
         match l {
             List::Catalog => self.cat.scroll = p,
             List::Results => self.pn.top = p as usize,
-            List::Table => self.table_top = p as usize,
+            List::Table => self.table.top = p as usize,
             List::Events => self.pn.ev_top = p as usize,
             List::Pick => self.pick_scroll_to(bar, p),
         }

@@ -22,19 +22,19 @@ fn layout_plot_size_and_touch_targets() {
     ui.m.layout = crate::model::Layout::Minimal;
     ui.relayout();
     // Minimal: one measurement row under the plot
-    assert_eq!((ui.grid.x, ui.grid.y, ui.grid.w, ui.grid.h), (0, 40, 1024, 496));
+    assert_eq!((ui.plot.grid.x, ui.plot.grid.y, ui.plot.grid.w, ui.plot.grid.h), (0, 40, 1024, 496));
     ui.m.meas.clear();
     ui.relayout();
     // statistics: the results panel takes no room
     ui.m.meas = vec![(Meas::Freq, WaveId::Ch(0))];
-    ui.stats_on = true;
+    ui.results.on = true;
     ui.relayout();
-    assert_eq!((ui.grid.w, ui.grid.h), (1024, 520));
+    assert_eq!((ui.plot.grid.w, ui.plot.grid.h), (1024, 520));
     for (_, _, r) in ui.top_buttons() {
         assert!(ui.top_hit(r).h >= 40 && r.x + r.w <= ui.net_box().x, "{:?}", r);
     }
     // sticks: their boxes beside the network box, the buttons move over and stay on the bar
-    (ui.usb, ui.net.wlan_stick) = (true, true);
+    (ui.stick.mounted, ui.net.wlan_stick) = (true, true);
     for (_, _, r) in ui.top_buttons() {
         assert!(r.x > ui.run_pill().x + ui.run_pill().w && r.x + r.w <= ui.status_box("USB").unwrap().x, "{:?}", r);
     }
@@ -46,7 +46,7 @@ fn layout_plot_size_and_touch_targets() {
     ui.tap(w.x + 5, 10);
     assert!(ui.menu_open && ui.menu_root() == MenuId::Network);
     ui.tap(w.x + 5, 10);
-    (ui.usb, ui.net.wlan_stick) = (false, false);
+    (ui.stick.mounted, ui.net.wlan_stick) = (false, false);
     for n in 0..=NCH {
         for c in 0..NCH {
             ui.m.ch[c].on = c < n;
@@ -215,7 +215,7 @@ fn clear_empties_the_display_in_stop() {
     ui.step(0.033);
     ui.key(key::RUNSTOP);
     ui.step(0.033);
-    assert!(lit(&ui) > 500 && ui.mask_pass > 0 && !ui.mstat.is_empty());
+    assert!(lit(&ui) > 500 && ui.mask_sw.pass > 0 && !ui.mstat.is_empty());
     ui.key(key::CLEAR);
     let mut cv = Canvas::new(PANEL_W, PANEL_H);
     for _ in 0..5 {
@@ -223,12 +223,12 @@ fn clear_empties_the_display_in_stop() {
         ui.render(&mut cv);
     }
     assert_eq!(lit(&ui), 0);
-    assert!(ui.last[0].is_none() && ui.mstat.is_empty() && (ui.mask_pass, ui.mask_fail) == (0, 0));
+    assert!(ui.last[0].is_none() && ui.mstat.is_empty() && (ui.mask_sw.pass, ui.mask_sw.fail) == (0, 0));
     assert!(ui.meas(0, Meas::Freq).is_nan());
     assert_eq!(ui.toast.as_ref().unwrap().0, "Display cleared");
     assert_eq!(ui.m.run, RunState::Stop);
     // no trace pixel in the plot (below the mask pill)
-    let a = ui.area;
+    let a = ui.plot.area;
     let yellow = (a.y + 60..a.y + a.h - 20)
         .flat_map(|y| (a.x + 60..a.x + a.w - 60).map(move |x| (x, y)))
         .filter(|&(x, y)| cv.px[(y * PANEL_W + x) as usize] == CH_COLORS[0])
@@ -323,7 +323,7 @@ fn quick_key_dispatch() {
     use super::*;
     let dir = crate::ui::testkit::Scratch::new("ui-quick");
     let mut ui = crate::ui::testkit::demo_ui();
-    ui.store_dir = dir.clone();
+    ui.files.dir = dir.clone();
     ui.step(0.033);
     // default: screenshot as before
     ui.key(key::QUICK);
@@ -556,15 +556,15 @@ fn start_menu_and_keys_reach_everything() {
     assert!(!ui.items(MenuId::Main).contains(&Item::NavBack));
     let (x, y) = mid(row_of(&ui, Item::NavHist).ctrl);
     ui.tap(x, y);
-    assert!(ui.hist_pos.is_some() && ui.items(MenuId::Main).contains(&Item::NavBack));
-    let i = ui.hist_pos.unwrap();
+    assert!(ui.history.pos.is_some() && ui.items(MenuId::Main).contains(&Item::NavBack));
+    let i = ui.history.pos.unwrap();
     let (x, y) = mid(row_of(&ui, Item::NavBack).ctrl);
     ui.tap(x, y);
-    assert_eq!(ui.hist_pos, Some(i - 1));
+    assert_eq!(ui.history.pos, Some(i - 1));
     // power: the dialog, without the MCU frame of a key press
     let (x, y) = mid(row_of(&ui, Item::PowerAct).ctrl);
     ui.tap(x, y);
-    assert!(ui.power_dlg && ui.panel_tx.is_empty() && !ui.menu_open);
+    assert!(ui.power.open && ui.panel_tx.is_empty() && !ui.menu_open);
     ui.tap(5, 300);
     // touch lock from the start menu: touches do nothing, except the Menu button, which unlocks
     ui.open_menu(MenuId::Main);

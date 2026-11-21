@@ -79,7 +79,7 @@ fn a_narrow_spectrum_keeps_the_plot_wide_and_draws_only_in_its_view() {
 #[test]
 fn a_narrow_search_table_has_its_controls_on_a_row_of_their_own() {
     let mut u = studio();
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     for _ in 0..4 { render(&mut u); }
     let r = u.dock_content(VKind::Table).expect("the table view");
     // wide: one row

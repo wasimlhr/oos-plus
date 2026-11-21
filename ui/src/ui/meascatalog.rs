@@ -354,7 +354,7 @@ impl Ui {
         let cat = &CATEGORIES[(self.cat.tab as usize).min(CATEGORIES.len() - 1)];
         let need = self.cat_sel().roles.iter().max().map_or(1, |r| r + 1);
         let n = cat.min.max(need).min(4);
-        let ids = [self.meas_src, self.meas_src_b, self.cat.c, self.cat.d];
+        let ids = [self.sources.a, self.sources.b, self.cat.c, self.cat.d];
         (0..n).map(|k| (k as u8, if n == 1 { cat.one } else { cat.slots[k] }, ids[k])).collect()
     }
 
@@ -583,7 +583,7 @@ impl Ui {
         cv.set_clip(Rect::new(tx, lay.preview.y, tw, lay.preview.h));
         cv.text(&f.mb, tx, lay.preview.y + 24, info.name, TEXT);
         if info.kind == Kind::Module && self.cat_added(sel) {
-            let reading = self.catalog_reading(sel, [self.meas_src, self.meas_src_b, self.cat.c, self.cat.d]);
+            let reading = self.catalog_reading(sel, [self.sources.a, self.sources.b, self.cat.c, self.cat.d]);
             let status = if reading.computing {
                 "Computing".into()
             } else if let Some(reason) = reading.reason {
@@ -749,7 +749,7 @@ impl Ui {
             return true;
         }
         if lay.selected.contains(x, y) {
-            self.meas_catalog_page = 0;
+            self.meas_pages.selected = 0;
             self.open_submenu(MenuId::MeasSelected);
             return true;
         }
@@ -812,7 +812,7 @@ impl Ui {
                             if set.contains(x, y) {
                                 if let Kind::Standard(k) = c.kind {
                                     if let Some(i) =
-                                        self.m.meas.iter().position(|&(mk, id)| mk == k && id == self.meas_src)
+                                        self.m.meas.iter().position(|&(mk, id)| mk == k && id == self.sources.a)
                                     {
                                         self.open_meas_cfg(i);
                                     }
@@ -853,10 +853,10 @@ impl Ui {
 
     pub(super) fn cat_added(&self, c: Cat) -> bool {
         match c.kind {
-            Kind::Standard(k) => self.m.meas.iter().any(|e| e.0 == k && e.1 == self.meas_src),
-            Kind::Pair(k) => self.m.meas2.iter().any(|e| e.0 == k && e.1 == self.meas_src && e.2 == self.meas_src_b),
+            Kind::Standard(k) => self.m.meas.iter().any(|e| e.0 == k && e.1 == self.sources.a),
+            Kind::Pair(k) => self.m.meas2.iter().any(|e| e.0 == k && e.1 == self.sources.a && e.2 == self.sources.b),
             Kind::Module => self.m.cat.iter().any(|e| {
-                e.0 == c.id && e.1 == self.meas_src && e.2 == self.meas_src_b && e.3 == self.cat.c && e.4 == self.cat.d
+                e.0 == c.id && e.1 == self.sources.a && e.2 == self.sources.b && e.3 == self.cat.c && e.4 == self.cat.d
             }),
         }
     }
@@ -866,7 +866,7 @@ impl Ui {
             Kind::Standard(k) => self.activate(Item::MeasAdd(k)),
             Kind::Pair(k) => self.meas_pair_toggle(k),
             Kind::Module => {
-                let row = (c.id, self.meas_src, self.meas_src_b, self.cat.c, self.cat.d);
+                let row = (c.id, self.sources.a, self.sources.b, self.cat.c, self.cat.d);
                 if let Some(i) = self.m.cat.iter().position(|e| *e == row) {
                     self.m.cat.remove(i);
                     self.toast(&format!("{} removed", c.name));
@@ -999,7 +999,7 @@ pub(super) fn add_entries() -> Vec<AddEntry> {
 
 impl Ui {
     fn add_row(&self) -> [WaveId; 4] {
-        [self.meas_src, self.meas_src_b, self.cat.c, self.cat.d]
+        [self.sources.a, self.sources.b, self.cat.c, self.cat.d]
     }
 
     pub(super) fn add_is_on(&self, c: Cat) -> bool {
@@ -1152,7 +1152,7 @@ mod integration_tests {
         assert_eq!(ui.menu, MenuId::MeasSelected);
         let mut found = HashSet::new();
         for page in 0..76usize.div_ceil(16) {
-            ui.meas_catalog_page = page;
+            ui.meas_pages.selected = page;
             let dialog = ui.dlg_layout().unwrap();
             for row in dialog.rows {
                 assert!(row.ctrl.x >= dialog.r.x && row.ctrl.x + row.ctrl.w <= dialog.r.x + dialog.r.w);
@@ -1164,7 +1164,7 @@ mod integration_tests {
         }
         assert_eq!(found, (0..76).collect());
         assert!(ui.selected_measurement_label(73).contains("R1-R2 Power Quality"));
-        ui.meas_catalog_page = 73 / 16;
+        ui.meas_pages.selected = 73 / 16;
         let remove = ui.dlg_layout().unwrap().rows.into_iter().find(|row| row.it == Item::MeasRemove(73)).unwrap().ctrl;
         tap(&mut ui, remove);
         assert_eq!(ui.m.cat.len(), 2);
@@ -1173,7 +1173,7 @@ mod integration_tests {
         ui.activate(Item::MeasClear);
         assert_eq!(ui.measurement_count(), 0);
         assert!(ui.mstat.is_empty());
-        assert_eq!((ui.m.run, ui.wfm_total), (RunState::Stop, 0));
+        assert_eq!((ui.m.run, ui.counts.wfm_total), (RunState::Stop, 0));
     }
 
     #[test]
@@ -1269,7 +1269,7 @@ mod tests {
         ui.m.meas = vec![(Meas::Vpp, r1), (Meas::Freq, r1), (Meas::Vpp, ch1), (Meas::Freq, r2)];
         ui.m.meas2 = vec![(0, r1, ch1)];
         ui.m.cat = vec![(measures::serial::DATA_RATE, r1, r1, r1, r1)];
-        ui.meas_src = r1;
+        ui.sources.a = r1;
         assert!(ui.options(Item::MeasCopyTo).iter().all(|n| n != "R1"));
         ui.select_option(Item::MeasCopyTo, "R2");
         assert_eq!(
@@ -1286,7 +1286,7 @@ mod tests {
         let mut ui = crate::ui::testkit::demo_ui();
         ui.m.meas_full_record = true;
         put(&mut ui, 1, square(1.0, 2000, 40), 1e-6);
-        ui.meas_src = WaveId::Ref(1);
+        ui.sources.a = WaveId::Ref(1);
         ui.m.meas.clear();
         ui.catalog_add(tile(measures::std_id(Meas::Vamp)));
         ui.catalog_add(tile(measures::std_id(Meas::LowTime)));
@@ -1308,14 +1308,14 @@ mod tests {
         let i: Vec<f32> = (0..n).map(|i| 0.4 * (i as f32 * 0.02).sin()).collect();
         put(&mut ui, 0, v, 1e-4);
         put(&mut ui, 1, i, 1e-4);
-        ui.meas_src = WaveId::Ref(0);
-        ui.meas_src_b = WaveId::Ref(1);
+        ui.sources.a = WaveId::Ref(0);
+        ui.sources.b = WaveId::Ref(1);
         ui.m.cat.clear();
         ui.catalog_add(tile(measures::power::POWER_QUALITY));
         let p = ready_rows(&mut ui).into_iter().find(|r| r.name == "Power Quality").unwrap();
         assert!(p.v.is_finite() && p.v > 0.0, "power {}", p.v);
         put(&mut ui, 2, square(0.5, 4000, 20), 1e-9);
-        ui.meas_src = WaveId::Ref(2);
+        ui.sources.a = WaveId::Ref(2);
         ui.catalog_add(tile(measures::jitter::EYE_HEIGHT));
         ui.catalog_add(tile(measures::jitter::TIE));
         let rows = ready_rows(&mut ui);
@@ -1375,8 +1375,8 @@ mod tests {
         put(&mut ui, 3, (0..n).map(|k| pwl(&vds, k as f64 * dt)).collect(), dt);
         put(&mut ui, 4, (0..n).map(|k| pwl(&id, k as f64 * dt)).collect(), dt);
         put(&mut ui, 5, (0..n).map(|k| pwl(&gate, k as f64 * dt)).collect(), dt);
-        ui.meas_src = WaveId::Ref(3);
-        ui.meas_src_b = WaveId::Ref(4);
+        ui.sources.a = WaveId::Ref(3);
+        ui.sources.b = WaveId::Ref(4);
         ui.cat.c = WaveId::Ref(5);
         ui.catalog_add(tile(measures::double_pulse::VPEAK));
         let peak = ready_rows(&mut ui).into_iter().find(|r| r.name == "Vpeak").unwrap();
@@ -1391,7 +1391,7 @@ mod tests {
             ui.step(0.05);
         }
         ui.open_menu(MenuId::MeasAdd);
-        ui.meas_src = WaveId::Ref(1);
+        ui.sources.a = WaveId::Ref(1);
         ui.cat.tab = 0;
         ui.cat.sel = measures::std_id(Meas::Vamp);
         ui.cat.open[0] = 1;
@@ -1409,8 +1409,8 @@ mod tests {
         ui.cat.sel = measures::power::POWER_QUALITY;
         ui.cat.open[measures::POWER as usize] = 1;
         ui.cat.scroll = 0;
-        ui.meas_src = WaveId::Ch(0);
-        ui.meas_src_b = WaveId::Ch(1);
+        ui.sources.a = WaveId::Ch(0);
+        ui.sources.b = WaveId::Ch(1);
         ui.render(&mut cv);
         std::fs::write(format!("{dir}/oos-power.png"), crate::store::png_of(&cv)).unwrap();
         for tab in 0..CATEGORIES.len() {
@@ -1423,7 +1423,7 @@ mod tests {
         }
         ui.m.meas = ALL_MEAS.iter().map(|&kind| (kind, WaveId::Ref(0))).collect();
         ui.m.meas2 = (0..17).map(|kind| (kind, WaveId::Ref(0), WaveId::Ref(1))).collect();
-        ui.meas_catalog_page = 0;
+        ui.meas_pages.selected = 0;
         ui.open_submenu(MenuId::MeasSelected);
         ui.render(&mut cv);
         std::fs::write(format!("{dir}/catalog-selected.png"), crate::store::png_of(&cv)).unwrap();

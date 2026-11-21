@@ -93,7 +93,7 @@ fn bus_depth(m: &Model, mask: u32, tdiv: f64, base: i128) -> i128 {
         return base;
     }
     let full = (oos_hal::dho::clock::NOMINAL_HZ / hz::ratio(mask) as i128) as f64;
-    let want = ((10.0 * tdiv + 2.0 * m.trig_span()) * full).ceil().min(BUS_DEPTH as f64) as i128;
+    let want = ((10.0 * tdiv + 2.0 * crate::trig::span(m)) * full).ceil().min(BUS_DEPTH as f64) as i128;
     ((want + 7) / 8 * 8).max(base)
 }
 
@@ -162,8 +162,7 @@ pub fn settings(m: &Model, program_afe: bool) -> Settings {
     // (`bus_role`: the role of that line, whose threshold is the level)
     let mut bus_role = 0;
     let mut src = if m.trig_type == TrigType::Bus {
-        let Proto::Module(i) = m.dec_proto;
-        let role = crate::protocols::get(i).start_role().min(3);
+        let role = m.dec_proto.start_role().min(3);
         match [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4][role] {
             Some(c) => {
                 bus_role = role;
@@ -291,7 +290,6 @@ pub(super) fn raw_for_ui(s: &mut Settings, needs_raw: bool) {
 
 /// The batch was read with the live compression (`live_compress`): its newest frame is read again raw
 /// (`seq::read_raw_again`) for the record the UI keeps.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(super) fn raw_newest(b: &Settings, p: &hz::Params) -> bool {
     b.compress > 1 && p.memsel <= crate::board::policy::compress::MAX_DEPTH
 }
@@ -371,8 +369,7 @@ fn bus_line(m: &Model) -> Option<u8> {
     if !m.bus_on_la() {
         return None;
     }
-    let Proto::Module(i) = m.dec_proto;
-    m.dec_la[crate::protocols::get(i).start_role().min(3)].or(m.dec_la[0])
+    m.dec_la[m.dec_proto.start_role().min(3)].or(m.dec_la[0])
 }
 
 /// The thresholds of the decoder's lines by channel, for the protocol trigger in the receiver: each line of the SPI
