@@ -147,7 +147,7 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
         }
         "close" => ui.script_close(),
         "selfcal" if w.len() > 1 => ui.selfcal_remote_full(w[1], w[2..].contains(&"zero"), w[2..].contains(&"adc")),
-        "storedir" if w.len() > 1 => ui.store_dir = w[1].into(),
+        "storedir" if w.len() > 1 => ui.files.dir = w[1].into(),
         "textsize" if w.len() > 1 => match TEXT_SIZES.iter().find(|t| t.name().eq_ignore_ascii_case(w[1])) {
             Some(&t) => ui.m.text_size = t,
             None => eprintln!("oos-ui: unknown text size: {}", w[1]),
@@ -171,8 +171,8 @@ pub fn stat_text(ui: &Ui) -> String {
     });
     let p = ui.times.parts;
     let gpu = format!(" parts meas {:.1} analyse {:.1} pane {:.1} max {:.1} ms{}", p[0], p[1], p[2], p[3], gpu);
-    let (acq, used, dropped) = crate::drawpipe::counters().read();
-    let measured = crate::drawpipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
+    let (acq, used, dropped) = crate::board::pipe::counters().read();
+    let measured = crate::board::pipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
     let gpu = format!(
         "{} pipeline {} interp {:?} acquired {} used {} dropped {} measured {} compress k {}",
         gpu,
@@ -201,7 +201,7 @@ pub fn stat_text(ui: &Ui) -> String {
     };
     format!(
         "fps {:.1} frames {} records {} run {:?} status {:?} t {:.1} step {:.1} ms (acq {:.1} draw {:.1}) render {:.1} ms present {:.1} ms edges {} {} {} {} off {:.0} {:.0}{}\n",
-        ui.fps, ui.frames, ui.records, ui.m.run, ui.m.status, ui.now, ui.times.step, ui.times.acq, ui.times.draw, ui.times.render, ui.times.present, e[0], e[1], e[2], e[3], ui.fast.off.0, ui.fast.off.1, gpu
+        ui.counts.fps, ui.counts.frames, ui.counts.records, ui.m.run, ui.m.status, ui.now, ui.times.step, ui.times.acq, ui.times.draw, ui.times.render, ui.times.present, e[0], e[1], e[2], e[3], ui.fast.off.0, ui.fast.off.1, gpu
     )
 }
 

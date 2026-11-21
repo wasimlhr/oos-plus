@@ -200,7 +200,7 @@ fn setup_save_and_recall_keep_how_a_ref_looks() {
     let mut u = fresh(Layout::Default);
     let dir = crate::ui::testkit::Scratch::new("b2-setup");
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir.clone();
+    u.files.dir = dir.clone();
     u.refs[0] = Some(sine_ref(0, 2000, 1e-6));
     u.refs[2] = Some(sine_ref(2, 2000, 1e-6));
     {
@@ -283,7 +283,7 @@ fn studio_bottom_bar_has_a_chip_per_shown_ref() {
     assert!(b.refs[0].x >= b.ch[n_ch() - 1].right() && b.refs[0].right() <= b.time.x);
     u.tap(b.refs[0].x + 5, b.refs[0].y + 5);
     assert_eq!(u.selected_workspace_source(), Some(WaveId::Ref(0)));
-    assert_eq!(u.ref_sel, 0);
+    assert_eq!(u.ref_page.sel, 0);
 }
 
 #[test]

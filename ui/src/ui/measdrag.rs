@@ -177,7 +177,7 @@ impl Ui {
     pub(super) fn md_remove(&mut self, key: MeasKey) {
         let Some(index) = self.studio_index(key) else { return };
         let pinned = self.studio_is_pinned(key);
-        let own = match key { MeasKey::One(k, id) => self.meas_own.get(&(k, id)).copied(), _ => None };
+        let own = match key { MeasKey::One(k, id) => self.meas_own.rows.get(&(k, id)).copied(), _ => None };
         self.studio.md.undo = Some(Undo { key, index, pinned, own, at: self.now });
         self.studio_set_pin(key, false);
         self.remove_measurement(index);
@@ -191,7 +191,7 @@ impl Ui {
             MeasKey::One(k, id) => {
                 let at = u.index.min(self.m.meas.len());
                 self.m.meas.insert(at, (k, id));
-                if let Some(o) = u.own { self.meas_own.insert((k, id), o); }
+                if let Some(o) = u.own { self.meas_own.rows.insert((k, id), o); }
             }
             MeasKey::Pair(k, a, b) => {
                 let at = u.index.saturating_sub(self.m.meas.len()).min(self.m.meas2.len());
@@ -539,7 +539,7 @@ impl Ui {
         if let Some(&(c, _)) = self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)) { return Some(c); }
         let b = self.studio_bottom();
         if let Some(c) = (0..n_ch()).find(|&c| b.ch[c].w > 0 && b.ch[c].contains(x, y)) { return Some(c); }
-        let lane = self.wins.iter().position(|a| a.contains(x, y))?;
+        let lane = self.plot.wins.iter().position(|a| a.contains(x, y))?;
         match self.trace_sources().get(lane)? {
             workspace::Trace::Channel(c) => Some(*c),
             _ => None,
@@ -552,8 +552,8 @@ impl Ui {
         if let Some(&(_, r)) = self.studio.lane_badges.borrow().iter().find(|(k, r)| *k == c && Self::hit40(*r).contains(x, y)) { return Some((c, r)); }
         let b = self.studio_bottom();
         if b.ch[c].w > 0 && b.ch[c].contains(x, y) { return Some((c, b.ch[c])); }
-        let lane = self.wins.iter().position(|a| a.contains(x, y))?;
-        Some((c, self.wins[lane]))
+        let lane = self.plot.wins.iter().position(|a| a.contains(x, y))?;
+        Some((c, self.plot.wins[lane]))
     }
 
     fn md_drop_tile(&mut self, k: usize, x: i32, y: i32) {

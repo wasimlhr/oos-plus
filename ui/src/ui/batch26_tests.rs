@@ -16,7 +16,7 @@ fn studio() -> Ui {
     let dir = std::env::temp_dir().join(format!("oos-batch26-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -66,7 +66,7 @@ fn csv_bytes() -> Vec<u8> {
 }
 
 fn load_csv(u: &mut Ui, slot: usize, name: &str) {
-    std::fs::write(u.store_dir.join(name), csv_bytes()).unwrap();
+    std::fs::write(u.files.dir.join(name), csv_bytes()).unwrap();
     u.load_waveform_bytes_at(&csv_bytes(), name, slot).expect("the CSV loads");
 }
 
@@ -125,7 +125,7 @@ fn a_tap_on_the_trigger_tag_opens_a_slider_that_sets_the_level_live() {
     u.numpad_key(NumKey::Cancel);
     assert!(u.numpad.is_none() && u.studio.trig_slider);
     // a tap outside closes it
-    let o = (u.grid.x + 20, u.grid.y + 20);
+    let o = (u.plot.grid.x + 20, u.plot.grid.y + 20);
     tap_at(&mut u, o.0, o.1);
     assert!(!u.studio.trig_slider, "a tap outside closes the slider");
 }

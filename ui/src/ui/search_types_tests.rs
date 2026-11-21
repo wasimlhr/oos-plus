@@ -69,7 +69,7 @@ fn every_type_finds_its_events() {
     assert_eq!(count(&mut u, |s| (s.slope, s.when) = (0, WhenKind::Off)), 1);
     assert_eq!(count(&mut u, |s| s.slope = 1), 0, "no negative runt");
     assert_eq!(u.studio_search_count(), "0 events");
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     assert_eq!(count(&mut u, |s| s.slope = 0), 1);
     assert_eq!(u.table_rows(tables::TableKind::Search)[0].text, "Runt", "the list names the type");
 }
@@ -267,7 +267,7 @@ fn a_search_whose_marks_are_hidden_keeps_its_events_its_badge_and_its_place() {
     let amber = |u: &mut Ui, cv: &mut Canvas| {
         for _ in 0..4 { u.step(0.05); }
         u.render(cv);
-        let a = u.area;
+        let a = u.plot.area;
         (a.x..a.right()).flat_map(|x| (a.y..a.bottom()).map(move |y| (x, y))).filter(|&(x, y)| px(cv, x, y) == SEARCH_COLS[0]).count()
     };
     // (the trigger's marker is amber too: the marks are what a search adds to it)

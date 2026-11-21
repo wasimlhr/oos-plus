@@ -146,7 +146,7 @@ fn a_narrow_table_drops_sigma_and_count_and_scrolls_sideways() {
     // a tap on a row of the table still opens its settings
     u.studio.panel.hx = 0;
     tap(&mut u, Rect::new(g.list.x + 40, y - 10, 20, 20));
-    assert!(u.meas_cfg.is_some() || u.menu_open);
+    assert!(u.meas_own.dialog.is_some() || u.menu_open);
     u.close_menu();
     shot(&mut u, "detailed-narrow");
 }
@@ -417,7 +417,7 @@ fn a_pinch_on_the_waveform_itself_does_nothing_and_ctrl_wheel_is_as_it_was() {
     u.m.tscale = u.m.tscale.max(12);
     u.set_zoom(true);
     frame(&mut u);
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let (x, y) = (lane.x + lane.w / 2, lane.y + lane.h / 3);
     assert_eq!(u.axis_at(x, y), None, "not on a strip");
     let before = (u.m.tscale, u.m.zscale, u.m.ch[0].vscale, u.m.ch[1].vscale);
@@ -427,7 +427,7 @@ fn a_pinch_on_the_waveform_itself_does_nothing_and_ctrl_wheel_is_as_it_was() {
     // Ctrl-wheel over the waveform (no zoom): the main time base, as before
     u.set_zoom(false);
     frame(&mut u);
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let t0 = u.m.tscale;
     assert!(u.pointer_wheel(lane.x + lane.w / 2, lane.y + lane.h / 3, 1, true));
     assert_ne!(u.m.tscale, t0);

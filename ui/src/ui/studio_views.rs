@@ -38,7 +38,7 @@ impl Ui {
             self.set_offline(true);
         }
         let loaded: Vec<usize> = (0..NREF).filter(|&i| self.refs[i].is_some()).collect();
-        if let Some(&first) = loaded.iter().find(|&&i| i == self.offline_ref).or(loaded.first()) {
+        if let Some(&first) = loaded.iter().find(|&&i| i == self.offline.slot).or(loaded.first()) {
             self.present_record(first);
             let shown: Vec<usize> = std::iter::once(first).chain(loaded.iter().copied().filter(|&i| i != first)).take(OFFLINE_LANES).collect();
             for &i in &loaded {
@@ -51,7 +51,7 @@ impl Ui {
                 self.m.meas2.clear();
                 self.m.cat.clear();
                 self.clear_measurement_statistics();
-                self.meas_src = WaveId::Ref(first);
+                self.sources.a = WaveId::Ref(first);
                 self.ensure_meas_own();
             }
         }
@@ -63,7 +63,7 @@ impl Ui {
     pub(super) fn studio_offline_empty(&self) -> Option<(Rect, Rect)> {
         if self.m.layout != Layout::Studio || self.studio.view != StudioView::Offline || self.view_on() { return None; }
         if !self.record_mode() || self.refs.iter().any(Option::is_some) { return None; }
-        let g = self.grid;
+        let g = self.plot.grid;
         let card = Rect::new(g.x + (g.w - 380) / 2, g.y + (g.h - 190) / 2, 380, 190);
         Some((card, Rect::new(card.x + (card.w - 180) / 2, card.bottom() - 64, 180, 42)))
     }
@@ -90,7 +90,7 @@ impl Ui {
         // the navigator: the overview of the whole record carries its span
         if self.m.zoom && !self.xy_over() && self.refs.iter().any(Option::is_some) {
             if let Some(text) = self.studio_record_tag() {
-                let (o, _) = self.split_zoom(self.grid);
+                let (o, _) = self.split_zoom(self.plot.grid);
                 let w = f.sb.width(&text) + 16;
                 // under the lane tags of the overview, clear of its buttons
                 let r = Rect::new(o.x + (o.w - w) / 2, o.bottom() - 26, w, 20);
@@ -344,10 +344,10 @@ mod tests {
         assert!(!u.record_mode());
         choose(&mut u, StudioView::Offline);
         assert_eq!(u.studio.view, StudioView::Offline);
-        assert!(u.record_mode() && u.offline, "the view switches to record mode");
+        assert!(u.record_mode() && u.offline.on, "the view switches to record mode");
         for _ in 0..3 { u.step(0.05); }
         let (card, load) = u.studio_offline_empty().expect("the empty card");
-        let g = u.grid;
+        let g = u.plot.grid;
         assert!(g.contains(card.x, card.y) && g.contains(card.right() - 1, card.bottom() - 1));
         assert!(card.contains(load.x, load.y) && card.contains(load.right() - 1, load.bottom() - 1));
         assert_eq!(u.studio_acq_caption(), "No file loaded");
@@ -361,7 +361,7 @@ mod tests {
         let badge = u.studio_top().badge;
         assert_eq!(u.studio_badge_label(), "Live");
         tap_in(&mut u, badge);
-        assert!(!u.record_mode() && !u.offline);
+        assert!(!u.record_mode() && !u.offline.on);
         assert_eq!(u.studio.view, StudioView::Waveform, "Live ends the view");
         assert!(u.studio_offline_empty().is_none());
     }
@@ -380,14 +380,14 @@ mod tests {
         assert!(u.studio_offline_empty().is_none());
         assert!(u.studio_acq_caption().starts_with("bus.csv"), "{}", u.studio_acq_caption());
         // the references are lanes
-        assert_eq!(u.wins.len(), 2, "one lane per reference");
+        assert_eq!(u.plot.wins.len(), 2, "one lane per reference");
         // the measurements are docked and the plot has given them the width
         let panel = u.studio_panel_rect().expect("docked measurements");
-        assert!(panel.x >= u.grid.right() && panel.right() <= W, "the panel is beside the plot");
+        assert!(panel.x >= u.plot.grid.right() && panel.right() <= W, "the panel is beside the plot");
         assert_eq!(u.studio_panel_geo().map(|g| g.p), Some(panel));
         assert!(u.m.meas.iter().all(|&(_, id)| matches!(id, WaveId::Ref(_))), "the measurements read the records");
         // the tag over the navigator sits inside the overview
-        let (o, _) = u.split_zoom(u.grid);
+        let (o, _) = u.split_zoom(u.plot.grid);
         assert!(o.w > 0 && u.studio_record_tag().unwrap().contains("Whole record"));
         shot(&mut u, "21-offline-analysis");
         // Live in the badge returns to the live acquisition the existing way
@@ -434,7 +434,7 @@ mod tests {
 
     fn sim_ui() -> Ui {
         let mut u = studio();
-        u.store_dir = std::env::temp_dir().join("oos-studio-views-sim");
+        u.files.dir = std::env::temp_dir().join("oos-studio-views-sim");
         choose(&mut u, StudioView::Sim);
         u
     }
@@ -445,7 +445,7 @@ mod tests {
         assert_eq!(u.studio.view, StudioView::Sim);
         assert!(!u.record_mode(), "nothing plays until Play");
         let g = u.studio_sim_geo().expect("the SIM panel");
-        assert!(g.p.x >= u.grid.right() && g.p.right() <= W && g.p.bottom() <= u.frame().bottom.y, "beside the plot, above the bar");
+        assert!(g.p.x >= u.plot.grid.right() && g.p.right() <= W && g.p.bottom() <= u.frame().bottom.y, "beside the plot, above the bar");
         assert_eq!(u.studio_panel_rect(), Some(g.p));
         for r in [g.presets, g.knobs, g.up, g.down, g.play, g.add, g.list] {
             assert!(g.p.contains(r.x, r.y) && g.p.contains(r.right() - 1, r.bottom() - 1), "{r:?} inside the panel");
@@ -496,7 +496,7 @@ mod tests {
         assert!(u.session_is_sim && u.record_mode(), "Play runs the same action as the SIM menu");
         assert_eq!(u.studio_badge_label(), "SIM");
         assert!(u.refs[u.m.sim_slot].as_ref().is_some_and(|r| r.on), "the simulated source is on");
-        assert_eq!(u.wins.len(), 1, "a lane for it");
+        assert_eq!(u.plot.wins.len(), 1, "a lane for it");
         assert!(u.studio_sim_running());
         shot(&mut u, "24-sim-playing");
         // Stop stops the run, the session stays

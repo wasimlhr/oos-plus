@@ -197,7 +197,7 @@ impl Ui {
         } else {
             kv("Network", self.net.addr.clone())
         });
-        a.push(kv("Source", format!("{}  {:.0} fps", self.src.name(), self.fps)));
+        a.push(kv("Source", format!("{}  {:.0} fps", self.src.name(), self.counts.fps)));
         a
     }
 
@@ -237,8 +237,8 @@ impl Ui {
             d.push(kvc("ramp", si_short(g.ramp, "Hz"), mark(g.ramp == n.ramp)));
         }
         d.push(kv("ADC clock", exact(l.adc_clock_hz, "Hz")));
-        if self.clock_next != l.adc_clock_hz {
-            d.push(kvc("after power off and on", exact(self.clock_next, "Hz"), AMBER));
+        if self.overclock.hz != l.adc_clock_hz {
+            d.push(kvc("after power off and on", exact(self.overclock.hz, "Hz"), AMBER));
         }
         if c.has_gen() {
             d.push(kv("Generator clock", exact(l.afg_clock_hz, "Hz")));
@@ -248,9 +248,9 @@ impl Ui {
         let (sr, depth) = self.src.rate_depth(&self.m);
         d.push(kv("Sample rate", si_short(sr, "Sa/s")));
         d.push(kv("Record", si_short(depth as f64, "pts")));
-        d.push(kv("Waveforms/s", format!("{:.0}", self.wfm_rate)));
-        d.push(kv("Waveforms", fmt_count(self.wfm_total as f64)));
-        let (acq, used, dropped) = crate::drawpipe::counters().read();
+        d.push(kv("Waveforms/s", format!("{:.0}", self.counts.wfm_rate)));
+        d.push(kv("Waveforms", fmt_count(self.counts.wfm_total as f64)));
+        let (acq, used, dropped) = crate::board::pipe::counters().read();
         if acq > 0 {
             d.push(kv(
                 "Frames used",
@@ -262,13 +262,13 @@ impl Ui {
                 ),
             ));
             // short time bases measure the interpolated record: those frames stay out of the statistics
-            let measured = crate::drawpipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
+            let measured = crate::board::pipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
             d.push(kv(
                 "Frames in statistics",
                 format!("{} of {} (not at short time bases)", fmt_count(measured as f64), fmt_count(used as f64)),
             ));
         }
-        d.push(kv("Screen", format!("{:.0} fps", self.fps)));
+        d.push(kv("Screen", format!("{:.0} fps", self.counts.fps)));
         if p.experimental() {
             d.push(Row::Head("Experimental limits".into()));
             d.extend(p.overrides.iter().map(|o| Row::Note(o.clone(), AMBER)));
