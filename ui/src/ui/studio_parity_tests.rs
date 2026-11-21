@@ -476,7 +476,7 @@ fn the_sheets_have_the_controls_of_the_default_dialogs() {
 }
 
 /// Controls that differ on purpose, each with its reason. A line of `control_drift` that contains the text is let pass.
-const KNOWN_DRIFT: [(&str, &str); 10] = [
+const KNOWN_DRIFT: [(&str, &str); 11] = [
     ("Type is Pick in Default, Choice on the sheet", "Trigger: the three common types are buttons, the other ten are behind More"),
     ("Coupling is Choice in Default, Pick on the sheet", "Trigger: the four names do not fit the width of the sheet"),
     ("Channel is Choice in Default, Pick on the sheet", "Math: M1 to M4 beside the label do not fit the width of the sheet"),
@@ -486,6 +486,7 @@ const KNOWN_DRIFT: [(&str, &str); 10] = [
     ("Slot color is Number in Default, Choice on the sheet", "Reference: the five colours are swatches"),
     (": Slot ", "Reference: the ten slots are one list, the dialog steps through them"),
     ("Windows : Density is Choice in Default, Pick on the sheet", "Windows: Default has upstream's density, the sheet oos-next's Layout"),
+    ("Decoder no. options", "Decode: the same four decoders; the sheet names them as buses, B1 to B4 (ADR 0034, ui-ux), Default as upstream"),
     ("Windows : Density options", "Windows: Default has upstream's densities, the sheet oos-next's layouts (Full screen is a row)"),
 ];
 

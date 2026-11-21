@@ -176,7 +176,10 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   status word, and "Parity" where the word failed it. These are Minimal's and Studio's: the Default layout keeps
   upstream's, where Decode > Event table opens a table over the plot (time, decoder, field; a tap on a row of a
   stopped scope goes to it) and the Events pane is a list of the fields in one or two columns
-- A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
+- A band per decoder on the plot. In Minimal and Studio a decoder is a bus, B1 to B4: its band, its pill in the
+  bottom bar of Studio, the Decode sheet and the Events pane name it by that number and its protocol or label
+  ("B1 UART"), and Studio writes its input after them ("B1 UART CH1"). The name is in the colour of its source. A
+  box per field with its value, and at a
   slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
   `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART or I2C band
   has a row of its bits (start, data, parity, stop; for I2C the bits of a byte, read or write, and the

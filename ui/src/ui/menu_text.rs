@@ -626,7 +626,7 @@ impl Ui {
         let m = &self.m;
         Some(match it {
             Item::DecOn => on_off(m.dec_on),
-            Item::DecSel => format!("D{}", m.dec_sel + 1),
+            Item::DecSel => self.dec_tag(m.dec_sel),
             Item::PaneSel => tables::PANES[m.pane.min(tables::PANES.len() - 1)].into(),
             Item::TrendSel(k) => self.trend_options().get(m.trend_sel[k]).cloned().unwrap_or_else(|| "Auto".into()),
             Item::DecSrc => decode_source_name(m.dec_src),

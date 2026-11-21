@@ -797,7 +797,7 @@ impl Ui {
             Item::RefClearOne => format!("Clear R{}", self.ref_page.sel + 1),
             // the rows below are those of one decoder of four: the switch says whose it is
             Item::DecSel => "Decoders".into(),
-            Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),
+            Item::DecOn => format!("Decoder {}", self.dec_tag(self.m.dec_sel)),
             // a line is named by what it is in the protocol (Clock, Data, CS), where the protocol says so
             Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 => {
                 let role = match it { Item::DecSrc => 0, Item::DecSrc2 => 1, Item::DecCs => 2, _ => 3 };

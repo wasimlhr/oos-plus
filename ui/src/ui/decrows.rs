@@ -31,7 +31,7 @@ pub struct MsgRow {
     /// start of its first field and end of its last one (s from the trigger)
     pub t: f64,
     pub t1: f64,
-    /// its decoder, as the band on the plot names it ("D1 UART")
+    /// its decoder, as the band on the plot names it ("B1 UART"; Default: "D1 UART")
     pub who: String,
     /// fields with a value in it
     pub len: usize,
@@ -255,7 +255,7 @@ impl Ui {
             }
             let m = self.m.dec_view(k);
             let Ok(p) = self.decode_packets_of(&m) else { continue };
-            let who = format!("D{} {}", k + 1, m.dec_proto.name());
+            let who = format!("{} {}", self.dec_tag(k), m.dec_name());
             match m.dec_proto.module().and_then(|x| x.events(&p, &m.dec_opts())) {
                 Some(rows) => v.extend(rows.into_iter().map(|(t, text, ok)| {
                     let (hex, errors) = (String::new(), usize::from(!ok));
@@ -1011,7 +1011,7 @@ mod tests {
         }
         let messages = u.pn.rows.len();
         assert!(messages > 0, "the demo's UART line decodes");
-        assert!(u.pn.rows.iter().all(|e| e.who == "D1 UART" && e.len >= 1));
+        assert!(u.pn.rows.iter().all(|e| e.who == "B1 UART" && e.len >= 1));
         assert!(u.pane_h() > EMPTY_H, "the pane has room for its rows");
         let r = u.pane_rect();
         let head = u.events_head(r);
@@ -1155,7 +1155,7 @@ mod tests {
         u.pn.rows = u.decode_rows();
         let f = u.fonts();
         let all = u.events_widths(&f.s);
-        assert!(all.0 >= f.s.width("D1 UART"));
+        assert!(all.0 >= f.s.width("B1 UART"));
         // rows of another decoder with a longer name, and one row with hex bytes, anywhere in the record
         let mut far = u.pn.rows[0].clone();
         (far.dec, far.who, far.hex) = (1, "D2 Modbus RTU".to_string(), "4F".to_string());
