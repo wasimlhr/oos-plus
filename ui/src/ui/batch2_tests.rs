@@ -378,6 +378,39 @@ fn shots_refs_sim_axis_power() {
     shot(&mut p, "power-noprobe");
 }
 
+// Break it catches: the Default layout without upstream's side effects of a trigger type or a protocol (the presets of
+// the demo on the channel that shows each type, Bus switching the decoder on, a protocol moving the trigger onto its
+// traffic), or Studio and Minimal with them (there a trigger type change only touches the trigger)
+#[test]
+fn default_has_upstreams_trigger_side_effects_and_studio_and_minimal_do_not() {
+    let mut u = fresh(Layout::Default);
+    only_ch1(&mut u);
+    u.trigger_type_set(TrigType::Pulse);
+    assert!(u.m.ch[3].on && u.m.trig_src == 3, "Default: Pulse goes to CH4 on the demo");
+    u.trigger_type_set(TrigType::Video);
+    assert!(u.m.ch[1].on && u.m.trig_src == 1, "Default: Video goes to CH2");
+    let mut u = fresh(Layout::Default);
+    u.m.dec_on = false;
+    u.trigger_type_set(TrigType::Bus);
+    assert!(u.m.dec_on, "Default: Bus switches the decoder on");
+    u.trigger_type_set(TrigType::Edge);
+    assert!(!u.m.dec_on, "leaving Bus switches off what it switched on");
+    let mut u = fresh(Layout::Default);
+    u.m.trig_type = TrigType::Pulse;
+    u.set_dec_proto(Proto::SPI);
+    assert!(matches!(u.m.trig_type, TrigType::Edge | TrigType::NthEdge), "Default: a protocol moves the trigger onto its traffic");
+    for layout in [Layout::Minimal, Layout::Studio] {
+        let mut u = fresh(layout);
+        only_ch1(&mut u);
+        let src = u.m.trig_src;
+        u.trigger_type_set(TrigType::Pulse);
+        assert!(!u.m.ch[3].on && u.m.trig_src == src, "{layout:?}: the source and the channels stay");
+        u.m.dec_on = false;
+        u.trigger_type_set(TrigType::Bus);
+        assert!(!u.m.dec_on, "{layout:?}: Bus leaves the decoder");
+    }
+}
+
 // Break it catches: the Default bottom row keeping the channel, LA and generator cards while a stored record or the
 // simulator is on the screen (Offline, Take over, SIM), as upstream's PR #8 took them out; the time base and trigger
 // cards stay

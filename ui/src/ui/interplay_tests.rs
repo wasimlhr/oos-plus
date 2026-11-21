@@ -251,7 +251,6 @@ fn a_decoder_on_a_replay_keeps_its_sources() {
 }
 
 #[test]
-#[ignore = "the fork keeps choosing Bus from switching a decoder on (batch2_tests)"]
 fn leaving_bus_after_a_recall_leaves_the_recalled_decoder() {
     // what choosing Bus switched on is switched off when Bus is left (`bus_auto`), but only in the set-up it came
     // from: a recalled set-up with Bus and its decoder keeps them

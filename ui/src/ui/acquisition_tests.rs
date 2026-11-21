@@ -1140,6 +1140,9 @@ fn hardware_average_bypasses_the_blend_and_restarts() {
 #[test]
 fn batch_mode_uses_every_record_at_1_ms_per_div() {
     use super::*;
+    // the frames go straight into the queue: a frame another test's acquisition loop gave the drawing workers (one
+    // set for the whole process) is not one of these, and counted it made a record too many under load
+    let _out = crate::drawpipe::keep_out();
     for mask in [1u32, 15] {
         let shared: crate::board::HwShared = Default::default();
         let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
