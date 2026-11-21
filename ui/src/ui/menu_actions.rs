@@ -671,7 +671,7 @@ impl Ui {
             Item::MeasStats => self.results.on = !self.results.on,
             Item::MeasLabels => self.m.meas_labels = !self.m.meas_labels,
             Item::StripDock => {
-                let all = StripDock::ALL;
+                let (all, m) = (self.strip_docks(), &mut self.m);
                 let i = all.iter().position(|&s| s == m.strip_dock).unwrap_or(0);
                 m.strip_dock = all[step_index(i, all.len(), d)];
                 // the statistics card follows the dock the strip uses

@@ -329,10 +329,10 @@ pub(super) const PAGES: [Page; 56] = [
         Some(|u, _| (u.menu_btn().x, false)),
         None,
     ),
-    page!(MenuId::Measure, "Measure", |u, _| u.measure_items(), None),
+    page!(MenuId::Measure, "Measure settings", |u, _| u.measure_items(), None),
     page!(MenuId::MeasHold, "Add", |_, _| vec![Item::AddMeas], None),
     // its catalogue is a layout of its own (`catalog_dialog`), not rows
-    page!(MenuId::MeasAdd, "Add measurements", |_, _| Vec::new(), None),
+    page!(MenuId::MeasAdd, "Add measurement", |_, _| Vec::new(), None),
     // oos-plus pages: the full catalogue, the Add panel of Studio, the search, the measurement row sheet, the
     // statistics and the level pages, the external generator
     page!(MenuId::MeasLegacy, "All measurements", |u, _| u.measurement_catalog(), None),

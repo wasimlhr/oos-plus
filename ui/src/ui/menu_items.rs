@@ -132,40 +132,6 @@ impl Ui {
         ]
     }
 
-    /// The measurement menu.
-    pub(super) fn measure_items(&self) -> Vec<Item> {
-        let mut v = vec![
-            Item::MeasSrc,
-            Item::MeasSrcB,
-            Item::MeasCopyTo,
-            Item::MeasGate,
-            Item::Open(MenuId::MeasPair),
-            Item::Open(MenuId::Dvm),
-            Item::Open(MenuId::MeasLevels),
-            Item::MeasIdle,
-            Item::MeasTsetup,
-            Item::MeasThold,
-            Item::MeasOutside,
-            Item::MeasN,
-            Item::MeasEdges,
-            Item::Open(MenuId::MeasStat),
-            Item::MeasLabels,
-            Item::StripDock,
-            Item::MeasClear,
-        ];
-        if self.m.layout == Layout::Studio {
-            v.retain(|i| *i != Item::StripDock);
-            let g = v.iter().position(|i| *i == Item::MeasGate).unwrap_or(0);
-            v.insert(g + 1, Item::BadgeStyle);
-        }
-        if self.sheets_on() {
-            // the sheet has the levels on a tab of their own; the stock layout opens them from one row
-            let at = v.iter().position(|i| *i == Item::Open(MenuId::MeasLevels)).unwrap_or(0);
-            v.splice(at..=at, self.items(MenuId::MeasLevels));
-        }
-        v
-    }
-
     /// The reference menu; Load only with its feature on.
     pub(super) fn ref_items(&self) -> Vec<Item> {
         vec![
