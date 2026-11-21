@@ -157,11 +157,16 @@ mod tests {
         let mut v = vec![0.5f32; 4000];
         (v[100], v[200]) = (0.0, 1.0);
         assert_eq!(decision_level(&v), None);
-        // data without two levels: the hysteresis of the whole span (0.1 of 1 V), as the PLL path of the eye page
-        let (summary, _) = infer(&v, 1e-9, Some(1e6), false).map_or((None, ()), |(s, _)| (Some(s), ()));
-        if let Some(summary) = summary {
-            assert!((summary.hysteresis - 0.1).abs() < 1e-3, "{}", summary.hysteresis);
-        }
+        // data without two levels: the hysteresis of the whole span, as the PLL path of the eye page. At 0.5 V most of
+        // the time, with an excursion to 1 V and then to 0 V in every bit of 1 us (a transition a bit), and one sample at
+        // 2 V and one at -1 V within them: the span is 3 V, 0.3 V of hysteresis; the levels of the histogram (0 and 1 V)
+        // gave 0.1 V
+        let mut data: Vec<f32> =
+            (0..40_000).map(|i| if i % 1000 >= 150 { 0.5 } else if (i / 1000) % 2 == 0 { 1.0 } else { 0.0 }).collect();
+        (data[2050], data[3050]) = (2.0, -1.0);
+        assert_eq!(decision_level(&data), None);
+        let (summary, _) = infer(&data, 1e-9, Some(1e6), false).expect("a clock from the transitions");
+        assert!((summary.hysteresis - 0.3).abs() < 1e-3, "{}", summary.hysteresis);
         // a 0/1 V clock with one excursion to -0.5 and 1.5 V: the hysteresis is of its levels, not of its extremes
         let mut clk: Vec<f32> = (0..4000).map(|i| if (i / 10) % 2 == 0 { 1.0 } else { 0.0 }).collect();
         (clk[5], clk[15]) = (1.5, -0.5);
