@@ -1692,7 +1692,6 @@ fn remote_services_are_sheets_and_connectivity_leads_to_them() {
         // a switch acts on one tap
         let (kind, (x, y)) = row(&u, Item::RemVxi);
         assert!(kind == RowKind::Toggle && u.sys.remote_vxi11);
-        // Off | On: the left button is off, the right one on
         tap(&mut u, x - 40, y);
         assert!(!u.sys.remote_vxi11, "{layout:?}: VXI-11 off");
         tap(&mut u, x + 40, y);
@@ -1900,7 +1899,6 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
         let marked = edge(&mut u, 1);
         let (x, y) = mid(chip(&u, 1));
         tap(&mut u, x, y);
-        // Off | On: the left button turns the decoder off
         let (x, y) = mid(ctrl(&u, Item::DecOn));
         tap(&mut u, x - 40, y);
         let (x, y) = mid(chip(&u, 3));
