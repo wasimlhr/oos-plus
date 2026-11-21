@@ -407,3 +407,15 @@ fn mcp_waveform_gives_each_call_its_own_file() {
     assert!(get(&mut h, &mut ui, &cv, &mut scpi, &first).starts_with("HTTP/1.1 409"));
     assert!(get(&mut h, &mut ui, &cv, &mut scpi, &second).starts_with("HTTP/1.1 200"));
 }
+
+// Break it catches: the stop the tool asks (u64::MAX) answered as the length of a record that is not there, a channel
+// that is off answered without the reason
+#[test]
+fn mcp_waveform_of_a_channel_that_is_off_has_no_samples() {
+    let _sends = sends();
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    crate::ui::testkit::q(&mut scpi, &mut ui, &cv, ":CHAN2:DISP 0");
+    let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"CHAN2"}"#);
+    assert!(failed(&r) && r.to_string().contains("CHAN2 is off"), "{r}");
+    assert_eq!(num(data(&r).get("total_samples")), 0.0, "{r}");
+}

@@ -753,7 +753,9 @@ fn read_record(run: &mut Run, source: &str, memory: bool, (points, inline): (usi
     let mut out = vec![
         ("source", J::s(source)),
         ("record", J::s(if memory { "memory" } else { "screen" })),
-        ("total_samples", J::Num(total.unwrap_or(0) as f64)),
+        // a source without a record (a channel that is off) keeps the stop that was asked, u64::MAX: no samples, and
+        // :WAV:DATA? below names why
+        ("total_samples", J::Num(total.filter(|&t| t != u64::MAX).unwrap_or(0) as f64)),
         ("start", J::Num(start as f64)),
     ];
     let Some(total) = total else { return J::obj(&out) };
