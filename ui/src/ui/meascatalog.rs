@@ -1128,9 +1128,9 @@ mod integration_tests {
         let back = ui.dlg_layout().unwrap().back.unwrap();
         tap(&mut ui, back);
         assert_eq!(ui.menu, MenuId::MeasAdd);
-        // the 83 analysis measurements of the scope build (the test build adds the example module's)
+        // the 88 analysis measurements of the scope build (the test build adds the example module's)
         let ids: HashSet<_> = listed().into_iter().filter(|c| c.kind == Kind::Module).map(|c| c.id).collect();
-        assert_eq!(ids.iter().filter(|&&id| id < 1000).count(), 83);
+        assert_eq!(ids.iter().filter(|&&id| id < 1000).count(), 88);
         for id in 0..=255 {
             assert_eq!(crate::measures::catalog_id_valid(id), ids.contains(&id), "persisted ID{id}");
         }

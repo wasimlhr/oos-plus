@@ -49,6 +49,11 @@ both sources first, then the tile. In the strip such a measurement names both, `
 
 ![Two sources](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/meas-two-sources.png)
 
+**Jitter & eye** has two kinds of jitter. JITTER and EYE are for serial data: they recover the data's clock first.
+For a clock take **CLOCK JITTER**: period jitter (RMS and peak-peak), cycle-to-cycle and the time interval error of
+the rising edges, over the whole record. These include the scope's own timing jitter and noise, so they are an upper
+bound of the clock's jitter.
+
 ### Settings of one measurement
 
 A white tile has a **Set** button. It opens the settings of that one measurement: its **Source**, and its
