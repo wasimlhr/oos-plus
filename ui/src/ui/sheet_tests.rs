@@ -610,3 +610,27 @@ fn clearing_a_reference_takes_the_measurements_that_read_it() {
     assert!(!u.m.meas.iter().any(|(_, w)| matches!(w, WaveId::Ref(_))), "the standard ones too");
     assert!(u.m.meas.contains(&(Meas::Vpp, WaveId::Ch(0))), "a channel's stay");
 }
+
+/// A sheet covers the right of the body, and with it the column of a measurement strip docked there. The plot has
+/// the room up to the sheet then: it left the column's width free as well, a black gap beside the sheet (the Default
+/// layout with the compact bottom bar, on a unit). A strip docked at the left keeps its column.
+#[test]
+fn the_plot_reaches_the_sheet_where_the_strip_is_docked_under_it() {
+    for dock in [crate::model::StripDock::Right, crate::model::StripDock::Left] {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        (u.m.bar_compact, u.m.strip_dock) = (true, dock);
+        for _ in 0..5 { u.step(0.05); }
+        assert!(u.strip_rows() > 0, "the demo has a measurement in the strip");
+        let (x0, w0) = u.plot_span();
+        u.open_menu(MenuId::Display);
+        assert!(u.sheet_active());
+        let (x, w) = u.plot_span();
+        let sheet = u.sheet_rect();
+        if dock == crate::model::StripDock::Right {
+            assert_eq!(x + w + 4, sheet.x, "the plot ends at the sheet: {x} {w} {sheet:?}");
+        } else {
+            assert_eq!((x, x + w + 4), (x0, sheet.x), "the column at the left stays, the plot ends at the sheet");
+        }
+        assert!(w < w0);
+    }
+}
