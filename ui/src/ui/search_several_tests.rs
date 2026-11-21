@@ -81,7 +81,7 @@ fn each_search_has_its_line_of_marks_in_its_colour() {
 fn the_count_previous_next_and_the_list_are_of_the_selected_search() {
     let mut u = three();
     u.studio_search_select(0);
-    assert!(u.studio_search_chip().unwrap().3.ends_with("64000 events"));
+    assert!(u.studio_search_chip().unwrap().3.contains("\u{b7} 64000"));
     u.studio_search_go(1);
     let first = u.m.delay;
     // the row of the sheet goes to the next search that is there
@@ -91,7 +91,7 @@ fn the_count_previous_next_and_the_list_are_of_the_selected_search() {
     assert_eq!((u.studio.search_sel, u.value(Item::SrchWhich)), (1, "2".to_string()));
     assert_eq!(u.value(Item::SrchSlope), "Falling");
     let chip = u.studio_search_chip().unwrap().3;
-    assert!(chip.ends_with("32000 events"), "{chip}");
+    assert!(chip.contains("\u{b7} 32000"), "{chip}");
     u.studio_search_go(1);
     u.studio_search_go(1);
     assert_eq!(u.studio.search_at, [1, 2, 0], "each search keeps the event it stands on");
@@ -134,7 +134,7 @@ fn a_search_of_a_channel_that_is_off_counts_no_events_and_names_no_part() {
     u.studio_search_add(Some(WaveId::Ch(0)));
     assert_eq!(u.studio.search_sel, 1);
     let chip = u.studio_search_chip().unwrap().3;
-    assert!(chip.ends_with("0 events"), "{chip}");
+    assert!(chip.contains("\u{b7} 0"), "{chip}");
     u.table = Some(tables::TableKind::Search);
     assert_eq!(u.table_title(), "Search 2 \u{b7} CH1 \u{b7} 0");
 }
@@ -158,4 +158,70 @@ fn a_frame_searches_nothing() {
     for (i, ev) in first.iter().enumerate() {
         assert!(std::sync::Arc::ptr_eq(ev, &u.studio_search_events_of(i)), "search {} was searched again", i + 1);
     }
+}
+
+#[test]
+fn every_search_has_its_badge_in_the_top_bar_and_a_tap_selects_it_and_opens_its_sheet() {
+    let mut u = three();
+    u.studio_search_select(1);
+    u.studio_search_set_kind(TrigType::Pulse);
+    let cv = frame(&mut u);
+    shot(&cv, "search-badges");
+    let badges = u.studio_search_badges();
+    let (prev, label, next, text) = u.studio_search_chip().unwrap();
+    assert_eq!(badges.iter().map(|b| b.0).collect::<Vec<_>>(), vec![0, 1, 2]);
+    // the selected one names its type, the others their number and count; each is a finger wide and they are apart
+    assert_eq!(badges[0].2, "1 \u{b7} 64000");
+    assert!(badges[1].2.starts_with("2 Pulse \u{b7} 3"), "{}", badges[1].2);
+    assert_eq!((badges[1].1, badges[1].2.clone()), (label, text));
+    assert_eq!(badges[2].2, "3 \u{b7} 32000");
+    assert_eq!(badges[0].1.w + badges[1].1.w + badges[2].1.w + 4, next.x - prev.right() - 4, "they fill the room between the arrows");
+    let f = u.fonts();
+    for (i, (slot, r, text)) in badges.iter().enumerate() {
+        assert!(r.w >= 40 && r.h >= 40 && f.mb.width(text) + 8 <= r.w, "badge {}: {r:?} for {text:?}", slot + 1);
+        assert!(r.x >= if i == 0 { prev.right() } else { badges[i - 1].1.right() } && r.right() <= next.x, "badge {}: {r:?}", slot + 1);
+        // in its colour: the border, and the text
+        let n = (r.x..r.right()).flat_map(|x| (r.y..r.bottom()).map(move |y| (x, y))).filter(|&(x, y)| px(&cv, x, y) == SEARCH_COLS[*slot]).count();
+        assert!(n > 20, "badge {}: {n} pixels of its colour", slot + 1);
+    }
+    // the read-out of the acquisition keeps its room beside them
+    assert!(u.studio_top().acq.right() <= prev.x && u.studio_top().acq.w >= 40);
+    // a tap on another badge selects its search and opens its sheet
+    let mid = |r: Rect| (r.x + r.w / 2, r.y + r.h / 2);
+    let (x, y) = mid(badges[2].1);
+    u.tap(x, y);
+    assert_eq!(u.studio.search_sel, 2);
+    assert!(u.menu_open && u.menu == MenuId::Search);
+    assert_eq!((u.value(Item::SrchWhich), u.value(Item::SrchType)), ("3".to_string(), "Edge".to_string()));
+    // with the sheet open another badge changes the search the sheet is of
+    let (x, y) = mid(u.studio_search_badges()[1].1);
+    u.tap(x, y);
+    assert!(u.studio.search_sel == 1 && u.menu_open && u.menu == MenuId::Search);
+    assert_eq!(u.value(Item::SrchType), "Pulse");
+    // the badge of the selected search closes it again, and opens it
+    let (x, y) = mid(u.studio_search_badges()[1].1);
+    u.tap(x, y);
+    assert!(u.studio.search_sel == 1 && !u.menu_open);
+    u.tap(x, y);
+    assert!(u.menu_open && u.menu == MenuId::Search);
+    u.close_menu();
+    // previous and next walk the selected search
+    let (x, y) = mid(u.studio_search_chip().unwrap().2);
+    u.tap(x, y);
+    assert_eq!(u.studio.search_at, [0, 1, 0]);
+    // one search: one badge between the arrows, as there was one label
+    u.studio_search_remove();
+    u.studio_search_remove();
+    let badges = u.studio_search_badges();
+    assert_eq!(badges.len(), 1);
+    assert!(badges[0].2.starts_with(&format!("{} Edge \u{b7} ", badges[0].0 + 1)), "{}", badges[0].2);
+}
+
+#[test]
+fn a_badge_of_a_part_of_the_record_keeps_saying_so_beside_two_others() {
+    let mut u = super::search_dense_tests::dense_of(375_000, (1.25e9, 1_000_000));
+    for _ in 0..3 { u.studio_search_add(Some(WaveId::Ch(1))); }
+    let (_, label, _, text) = u.studio_search_chip().unwrap();
+    assert!(text.ends_with("24000 in 300 \u{b5}s"), "{text}");
+    assert!(u.fonts().mb.width(&text) + 8 <= label.w, "{text:?} in {label:?}");
 }

@@ -557,7 +557,7 @@ impl Ui {
         let room = links_x - 10 - x;
         let search_w = if self.studio.search().is_some() {
             let caption = self.studio_acq_need();
-            let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
+            let (full, least) = self.studio_search_need();
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
         } else { 0 };
         let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);

@@ -773,8 +773,13 @@ with its settings, Copy from trigger takes the trigger's (its edge, where the tr
 not). The conditions are found in the samples by the code that finds the trigger in a stored record
 (`oos_dsp::trigger`), with a hysteresis of a tenth of a division. A search keeps its number and its colour while it is there (amber, blue, green;
 no channel's colour, so two searches of one channel are told apart), and the place of a removed one is the next taken.
-One search is the selected one: the top bar counts its events between a previous and a next button, in its colour, and
-a tap on the count opens the Search sheet. The sheet's row **Search** selects another one; under it are the type, the source,
+Every search has a badge in the top bar, in its colour, between a previous and a next button. One search is the
+selected one: its badge is the bright one and names its type and its count (`2 Pulse · 31999`), the others say their
+number and count (`1 · 64000`); previous and next walk the events of the selected search. A tap on a badge selects its
+search and opens the Search sheet for it, a tap on the badge of the selected search closes the sheet again. The badges
+share the room the one count had: the selected badge says less (the count as a number, then no type) before the bar
+shortens the names of its buttons, and a count of a part of the record keeps saying so.
+The sheet's row **Search** selects a search too; under it are the type, the source,
 the slope or polarity and the levels, on the second tab the time condition, the event the search stands on and the
 copies from and to the trigger, and at the foot **Event list** and Remove search. Event list (also Add > Results table > Search events) opens the table of
 the selected search's events, one row an event with its time, however many there are; a tap on a row moves the view

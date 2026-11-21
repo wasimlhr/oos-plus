@@ -171,7 +171,7 @@ fn the_count_says_when_the_search_is_of_a_part_of_the_record_or_ended_at_its_lim
     let mut u = dense_of(1_000_000, (1.25e9, 1_000_000));
     u.studio_search_add(Some(WaveId::Ch(1)));
     assert_eq!(u.studio_search_part(), None);
-    assert!(text(&u).ends_with("64000 events"), "{}", text(&u));
+    assert!(text(&u).contains("\u{b7} 64000"), "{}", text(&u));
     // stopped, the scope read 300 us of the 800 us again: the count names the part
     let mut u = dense_of(375_000, (1.25e9, 1_000_000));
     u.studio_search_add(Some(WaveId::Ch(1)));
@@ -182,7 +182,7 @@ fn the_count_says_when_the_search_is_of_a_part_of_the_record_or_ended_at_its_lim
     let mut u = dense_of(2_000_000, (0.0, 0));
     u.studio_search_add(Some(WaveId::Ch(1)));
     assert_eq!(u.studio_search_events().len(), super::addrail::SEARCH_MAX);
-    assert!(text(&u).ends_with("100000+ events"), "{}", text(&u));
+    assert!(text(&u).contains("\u{b7} 100000+"), "{}", text(&u));
     u.table = Some(tables::TableKind::Search);
     assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 100000+");
 }

@@ -1125,52 +1125,102 @@ impl Ui {
         self.settings_changed();
     }
 
-    /// The search controls of Studio's top bar: previous, the label and next as their touch areas (the height of the
-    /// bar), and what the label says. They were at the left of the badge row, where they took the place of two
-    /// measurements and were as low as a badge.
+    /// What the badge of the search at `slot` says, with less at each `detail`: its number, its type and its count as
+    /// the count is written ("1 Pulse \u{b7} 64000 events"), the count as a number, then without the type. A count
+    /// of a part of the record keeps saying so ("24000 in 300 \u{b5}s"). A search that is not selected has its number
+    /// and its count.
+    fn studio_search_badge_text(&self, slot: usize, detail: usize) -> String {
+        let n = self.studio_search_events_of(slot).len();
+        let number = format!("{n}{}", if n >= SEARCH_MAX { "+" } else { "" });
+        if slot != self.studio.search_sel { return format!("{} \u{b7} {number}", slot + 1); }
+        let kind = self.studio.searches[slot].map_or("", |s| s.kind.name());
+        let count = if detail == 0 || self.studio_search_part().is_some() { self.studio_search_count() } else { number };
+        if detail < 2 { format!("{} {kind} \u{b7} {count}", slot + 1) } else { format!("{} \u{b7} {count}", slot + 1) }
+    }
+
+    /// The width of a badge that says `text`: no narrower than a finger.
+    fn studio_search_badge_w(&self, text: &str) -> i32 {
+        (self.fonts().mb.width(text) + 16).max(40)
+    }
+
+    /// The room the badges of the searches ask for between previous and next: with the selected one in full, and the
+    /// least they take. The searches that are not selected say their number and count.
+    pub(super) fn studio_search_need(&self) -> (i32, i32) {
+        let (sel, others) = (self.studio.search_sel, self.studio_search_others_w());
+        // (a count that names a part of the record is longer than the least a count takes, and is not cut)
+        let (full, least) = (self.studio_search_badge_text(sel, 0), self.studio_search_badge_text(sel, 2));
+        let w = |a: &str, b: &str| self.studio_search_badge_w(a).max(self.studio_search_badge_w(b)) + others;
+        (w("1 Timeout \u{b7} 00000 events", &full), w("1 \u{b7} 0000", &least))
+    }
+
+    /// The width of the badges of the searches that are not selected, each with its gap.
+    fn studio_search_others_w(&self) -> i32 {
+        let sel = self.studio.search_sel;
+        self.studio.search_list().filter(|&(i, _)| i != sel).map(|(i, _)| self.studio_search_badge_w(&self.studio_search_badge_text(i, 2)) + 2).sum()
+    }
+
+    /// The badges of the searches in Studio's top bar, between previous and next: one for each search, in the order of
+    /// their numbers, as its touch area (the height of the bar) with what it says. The selected one names its type
+    /// and has the room the others leave; it says less before it is cut.
+    pub(super) fn studio_search_badges(&self) -> Vec<(usize, Rect, String)> {
+        let (top, room) = (self.frame().top, self.studio_top().search);
+        let sel = self.studio.search_sel;
+        let short = |i: usize| self.studio_search_badge_text(i, 2);
+        let own = room.w - 2 * super::studio::SEARCH_ARROW_W - 4 - self.studio_search_others_w();
+        let detail = (0..2).find(|&d| self.fonts().mb.width(&self.studio_search_badge_text(sel, d)) + 16 <= own).unwrap_or(2);
+        let mut x = room.x + super::studio::SEARCH_ARROW_W + 2;
+        self.studio.search_list().map(|(i, _)| {
+            let text = if i == sel { self.studio_search_badge_text(i, detail) } else { short(i) };
+            let r = Rect::new(x, top.y, if i == sel { own } else { self.studio_search_badge_w(&text) }, top.h);
+            x = r.right() + 2;
+            (i, r, text)
+        }).collect()
+    }
+
+    /// The search controls of Studio's top bar: previous, the badge of the selected search and next as their touch
+    /// areas (the height of the bar), and what the badge says. They were at the left of the badge row, where they
+    /// took the place of two measurements and were as low as a badge.
     pub(super) fn studio_search_chip(&self) -> Option<(Rect, Rect, Rect, String)> {
         self.studio.search()?;
-        let f = self.fonts();
-        let top = self.frame().top;
-        let room = self.studio_top().search;
-        let events = self.studio_search_count();
-        let full = format!("Search {} \u{b7} {events}", self.studio.search_sel + 1);
+        let (top, room) = (self.frame().top, self.studio_top().search);
         let arrow = super::studio::SEARCH_ARROW_W;
-        let label_w = room.w - 2 * arrow - 4;
-        // a narrow bar keeps the count alone
-        let text = if f.mb.width(&full) + 16 <= label_w { full } else { events };
-        let prev = Rect::new(room.x, top.y, arrow, top.h);
-        let label = Rect::new(prev.right() + 2, top.y, label_w, top.h);
-        let next = Rect::new(label.right() + 2, top.y, arrow, top.h);
-        Some((prev, label, next, text))
+        let (_, label, text) = self.studio_search_badges().into_iter().find(|b| b.0 == self.studio.search_sel)?;
+        Some((Rect::new(room.x, top.y, arrow, top.h), label, Rect::new(room.right() - arrow, top.y, arrow, top.h), text))
     }
 
     pub(super) fn draw_studio_search_chip(&self, cv: &mut Canvas) {
-        let Some((prev, label, next, text)) = self.studio_search_chip() else { return };
+        let Some((prev, _, next, _)) = self.studio_search_chip() else { return };
         let f = self.fonts();
         // drawn as the buttons of the bar are: the touch area is the whole height of the bar
         let bar = self.studio_top().search;
         let shrink = |r: Rect| Rect::new(r.x, bar.y, r.w, bar.h);
-        let (prev, next, label) = (shrink(prev), shrink(next), shrink(label));
+        let (prev, next) = (shrink(prev), shrink(next));
         chip(cv, prev, BTN, BTN_BORDER);
         chip(cv, next, BTN, BTN_BORDER);
-        let col = SEARCH_COLS[self.studio.search_sel];
-        chip(cv, label, BAR, col);
         let (cx, cy) = (prev.x + prev.w / 2, prev.y + prev.h / 2);
         cv.triangle([(cx + 5, cy - 7), (cx + 5, cy + 7), (cx - 5, cy)], TEXT);
         let (cx, cy) = (next.x + next.w / 2, next.y + next.h / 2);
         cv.triangle([(cx - 5, cy - 7), (cx - 5, cy + 7), (cx + 5, cy)], TEXT);
-        cv.set_clip(label.inset(2));
-        cv.text_in(&f.mb, label, 1, &text, col);
-        cv.no_clip();
+        // each search in its colour; the selected one is the bright one
+        for (slot, r, text) in self.studio_search_badges() {
+            let (r, col, on) = (shrink(r), SEARCH_COLS[slot], slot == self.studio.search_sel);
+            chip(cv, r, if on { mix(BAR, col, 48) } else { BAR }, if on { col } else { mix(BAR, col, 120) });
+            cv.set_clip(r.inset(2));
+            cv.text_in(&f.mb, r, 1, &text, col);
+            cv.no_clip();
+        }
     }
 
-    /// A tap in the top bar on the search controls. True when it was taken.
+    /// A tap in the top bar on the search controls. True when it was taken. A badge selects its search and opens its
+    /// sheet; the badge of the selected search closes the sheet again.
     pub(super) fn studio_search_chip_tap(&mut self, x: i32, y: i32) -> bool {
-        let Some((prev, label, next, _)) = self.studio_search_chip() else { return false };
+        let Some((prev, _, next, _)) = self.studio_search_chip() else { return false };
         if prev.contains(x, y) { self.studio_search_go(-1); }
         else if next.contains(x, y) { self.studio_search_go(1); }
-        else if label.contains(x, y) { self.toggle_menu(MenuId::Search); }
+        else if let Some((slot, _, _)) = self.studio_search_badges().into_iter().find(|b| b.1.contains(x, y)) {
+            if slot == self.studio.search_sel || !(self.menu_open && self.menu == MenuId::Search) { self.toggle_menu(MenuId::Search); }
+            self.studio_search_select(slot);
+        }
         else { return false; }
         true
     }
