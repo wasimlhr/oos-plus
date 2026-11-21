@@ -18,12 +18,17 @@ ROOT is the top of a tree (default: this tree). Read from it as it is:
                  kind of arm is looked at rather than passed over;
   the tools      the names `Some("name") =>` that the arm `"tools/call"` of `fn mcp` in ui/src/site/mcp.rs answers,
                  and the names (`"name", J::s("...")`) of the arm `"tools/list"` before it;
+  the methods    the arms `"/path" | ... => Some("GET, HEAD")` of `fn methods_of` in ui/remote/src/http.rs: what each
+                 route takes before it is answered (another method is 405 there, and a path without an arm takes
+                 every method), so every route needs an arm, and the methods of its arm but HEAD are those of its
+                 entries (a HEAD is the head of a GET, with no entry of its own);
   the entries    the headings of docs/http.md of the form `### \\`METHOD /path\\`` and `### MCP tool \\`name\\``, each
                  with one line `- Mark: **stable**`, `**experimental**` or `**internal**` before the next heading.
 
 A finding: a route or tool without an entry; an entry without a mark, with more than one, or with another word; an
 entry whose route the code does not answer with that method (an arm without a guard takes either), or whose tool it
-does not have; a tool that tools/list and tools/call do not name alike; an unknown guard. With none missing this is
+does not have; a tool that tools/list and tools/call do not name alike; an unknown guard; a route without an arm of
+`methods_of`, or one whose arm takes other methods than its entries name. With none missing this is
 a plain check, not a number that only goes down: the layer `ratchet` of tools/check.sh runs it. Python's standard
 library; reads files, touches no scope.
 """
@@ -44,7 +49,7 @@ MARKS = ("stable", "experimental", "internal")
 # a guard this check passes over, with the paths of its arm: an arm with that guard and other paths is a finding, so a
 # route added to such an arm is not passed over with it
 GUARDS = {
-    '(post || route != "/update") && !peer_ok': (
+    '(post || route == "/mcp") && !peer_ok': (
         {"/update", "/mcp"},
         "the 403 of POST /update and /mcp outside net.allow (docs/http.md, Common answers)",
     ),
@@ -194,6 +199,30 @@ def routes(src, where=HTTP_RS, taken=None):
     return out, arms, findings
 
 
+def methods_of(src):
+    """The arms of `fn methods_of`: {path: set of methods}, empty without the function."""
+    body = fn_tokens(src, "methods_of")
+    out, paths = {}, []
+    # read from the tokens, so an arm in a comment is none: the strings of a pattern, `=>`, `Some`, `(`, a string
+    for i, (kind, text, _, _) in enumerate(body):
+        if kind == "str" and [t[1] for t in body[i - 2:i]] == ["starts_with", "("]:
+            # an arm `r if r.starts_with("/dir/")`: the files under the directory, as routes() reads them
+            paths = [text[1:-1] + "<file>"]
+        elif kind == "str":
+            paths.append(text[1:-1])
+        elif text == ")" and paths and paths[-1].endswith("<file>"):
+            continue
+        elif kind == "arrow" and [t[1] for t in body[i + 1:i + 3]] == ["Some", "("] and \
+                i + 3 < len(body) and body[i + 3][0] == "str":
+            for path in paths:
+                # split as the server does (`a.split(", ")` in fn answer): "GET,HEAD" is one method there, and so here
+                out.setdefault(path, set()).update(body[i + 3][1][1:-1].split(", "))
+            paths = []
+        elif text not in ("|", "=>"):
+            paths = []
+    return out
+
+
 def tools(src):
     """The MCP tools: (the names tools/call answers, the names tools/list announces), in the order of the file."""
     body = fn_tokens(src, "mcp")
@@ -275,6 +304,21 @@ def check(root):
         if not any(p == path and m in methods for m, p in documented):
             findings.append("%s: route %s %s has no entry `### \\`%s %s\\`` in %s" %
                             (HTTP_RS, "/".join(sorted(methods)), path, min(methods), path, HTTP_MD))
+    # what methods_of lets through to the arms, against the entries (#364)
+    allow = methods_of(srcs[0][1])
+    if not allow:
+        findings.append("%s: no arm found in fn methods_of" % HTTP_RS)
+    for path in sorted(have):
+        if allow and path not in allow:
+            findings.append("%s: route %s has no arm in fn methods_of: it would take every method" % (HTTP_RS, path))
+    for path, methods in sorted(allow.items()):
+        named = {m for m, p in documented if p == path}
+        if methods - {"HEAD"} != named:
+            findings.append("%s: fn methods_of lets %s through to %s, its entries in %s name %s" %
+                            (HTTP_RS, ", ".join(sorted(methods - {"HEAD"})) or "none", path, HTTP_MD,
+                             ", ".join(sorted(named)) or "none"))
+        if "HEAD" in methods and "GET" not in methods:
+            findings.append("%s: fn methods_of takes HEAD on %s without GET" % (HTTP_RS, path))
     for name in called:
         if ("tool", name) not in seen:
             findings.append("%s: MCP tool `%s` has no entry `### MCP tool \\`%s\\`` in %s" %

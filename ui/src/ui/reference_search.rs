@@ -129,10 +129,10 @@ impl Ui {
         }
     }
     fn source_vpd(&self, id: WaveId, candidate: Option<(usize, f32)>) -> f32 {
-        match id {
-            WaveId::Ref(i) if candidate.is_some_and(|(slot, _)| slot == i) => candidate.unwrap().1,
-            WaveId::Ref(i) => self.refs[i].as_ref().map_or(1.0, |r| r.vpd),
-            WaveId::Ch(c) => self.m.ch[c].volts_per_div(),
+        match (id, candidate) {
+            (WaveId::Ref(i), Some((slot, vpd))) if slot == i => vpd,
+            (WaveId::Ref(i), _) => self.refs[i].as_ref().map_or(1.0, |r| r.vpd),
+            (WaveId::Ch(c), _) => self.m.ch[c].volts_per_div(),
         }
         .max(1e-6)
     }
@@ -334,7 +334,7 @@ mod tests {
         let mut ui = fixture(1600);
         assert!(ui.last[0].is_none());
         ui.replay.captures = 9;
-        ui.mstat = vec![MStat { n: 7, sum: 14.0, ..MStat::default() }];
+        ui.results.rows = vec![MStat { n: 7, sum: 14.0, ..MStat::default() }];
         ui.adjust(Item::SearchOn, 1);
         let events = ui.search_events();
         assert_eq!(events.len(), 100);
@@ -347,7 +347,7 @@ mod tests {
         }
         assert_eq!(ui.azr.reference_search.borrow().scans, 1);
         assert_eq!(ui.replay.captures, 9);
-        assert_eq!((ui.mstat[0].n, ui.mstat[0].sum), (7, 14.0));
+        assert_eq!((ui.results.rows[0].n, ui.results.rows[0].sum), (7, 14.0));
         assert_eq!(ui.m.run, RunState::Stop);
         assert_eq!(ui.m.status, TrigStatus::Stop);
         assert!(ui.last[0].is_none());

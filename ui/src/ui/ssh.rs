@@ -167,10 +167,10 @@ impl Ui {
     }
 
     fn ssh_login(&self) -> String {
-        if self.net.is_empty() {
+        if self.net.addr.is_empty() {
             "ssh root@<address of the scope>".into()
         } else {
-            format!("ssh root@{}", self.net)
+            format!("ssh root@{}", self.net.addr)
         }
     }
 
@@ -206,7 +206,7 @@ impl Ui {
     fn ssh_import(&mut self) {
         // (no key store: the desktop app. The button said nothing there)
         let Some(dir) = self.ssh.dir.clone() else { return self.toast("SSH keys are kept on a scope: none on this system") };
-        if !self.usb {
+        if !self.stick.mounted {
             return self.toast("No USB stick in the front port");
         }
         let text = match ssh::stick_text(&self.ssh.stick) {
@@ -279,7 +279,7 @@ mod tests {
         assert!(u.sys.ssh_password, "no key: password login must stay on");
         assert!(u.toast.as_ref().unwrap().0.contains("locks root out"));
         // a key from the stick, then it may go off
-        u.usb = true;
+        u.stick.mounted = true;
         std::fs::write(d.join("usb").join("id_ed25519.pub"), ED).unwrap();
         u.activate(Item::SshImport);
         assert_eq!(u.toast.as_ref().unwrap().0, "1 key added");
@@ -304,7 +304,7 @@ mod tests {
         let (mut u, d) = with_dir("import");
         u.activate(Item::SshImport);
         assert_eq!(u.toast.as_ref().unwrap().0, "No USB stick in the front port");
-        u.usb = true;
+        u.stick.mounted = true;
         u.activate(Item::SshImport);
         assert!(u.toast.as_ref().unwrap().0.starts_with("No *.pub"));
         std::fs::write(d.join("usb").join("id_ed25519"), "-----BEGIN OPENSSH PRIVATE KEY-----\n").unwrap();
@@ -320,7 +320,7 @@ mod tests {
         let (mut u, d) = with_dir("show");
         std::fs::create_dir_all(d.join("ssh")).unwrap();
         std::fs::write(d.join("ssh").join("password"), "abcd-efgh-jkmn-pqrs\n").unwrap();
-        u.net = "192.0.2.10".into();
+        u.net.addr = "192.0.2.10".into();
         let d_items = u.dlg_layout().unwrap();
         for r in &d_items.rows {
             assert!(!u.value(r.it).contains("abcd"), "{:?} shows the password", r.it);

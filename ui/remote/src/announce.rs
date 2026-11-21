@@ -322,25 +322,11 @@ pub fn answer(query: &[u8], id: &Identity, services: &[Svc], legacy: bool) -> Op
 /// Non-loopback IPv4 addresses that are up.
 #[cfg(unix)]
 fn addresses() -> Vec<[u8; 4]> {
-    let mut out = Vec::new();
-    unsafe {
-        let mut ifa: *mut libc::ifaddrs = std::ptr::null_mut();
-        if libc::getifaddrs(&mut ifa) != 0 {
-            return out;
-        }
-        let mut p = ifa;
-        while !p.is_null() {
-            let a = &*p;
-            let up = a.ifa_flags & (libc::IFF_UP as u32) != 0 && a.ifa_flags & (libc::IFF_LOOPBACK as u32) == 0;
-            if up && !a.ifa_addr.is_null() && (*a.ifa_addr).sa_family as i32 == libc::AF_INET {
-                let sin = &*(a.ifa_addr as *const libc::sockaddr_in);
-                out.push(u32::from_be(sin.sin_addr.s_addr).to_be_bytes());
-            }
-            p = a.ifa_next;
-        }
-        libc::freeifaddrs(ifa);
-    }
-    out
+    oos_system::ifaddrs::list()
+        .into_iter()
+        .filter(|e| e.has(libc::IFF_UP) && !e.has(libc::IFF_LOOPBACK))
+        .filter_map(|e| e.v4().map(|a| a.octets()))
+        .collect()
 }
 
 /// Prefer the address the OS would use to leave this host. A connected UDP socket
@@ -402,19 +388,8 @@ fn mcast_socket() -> Option<UdpSocket> {
 
 #[cfg(unix)]
 fn join(sock: &UdpSocket, addr: [u8; 4]) {
-    let mreq = libc::ip_mreq {
-        imr_multiaddr: libc::in_addr { s_addr: u32::from(GROUP).to_be() },
-        imr_interface: libc::in_addr { s_addr: u32::from(Ipv4Addr::from(addr)).to_be() },
-    };
-    unsafe {
-        libc::setsockopt(
-            sock.as_raw_fd(),
-            libc::IPPROTO_IP,
-            libc::IP_ADD_MEMBERSHIP,
-            &mreq as *const _ as *const _,
-            std::mem::size_of_val(&mreq) as libc::socklen_t,
-        );
-    }
+    // IP_ADD_MEMBERSHIP with an ip_mreq of the group and the interface's address
+    let _ = sock.join_multicast_v4(&GROUP, &Ipv4Addr::from(addr));
 }
 
 #[cfg(unix)]

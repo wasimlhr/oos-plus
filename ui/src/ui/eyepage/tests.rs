@@ -445,7 +445,7 @@ fn it_draws_at_every_height_and_with_the_source_off() {
     let mut ui = page(NOISY, 4);
     let mut cv = Canvas::new(PANEL_W, PANEL_H);
     for h in [160, 240, 352, 480] {
-        ui.area.h = h;
+        ui.plot.area.h = h;
         ui.analyzer_update();
         ui.draw_eye(&mut cv);
     }
@@ -507,7 +507,7 @@ fn one_press_reads_the_rate_and_keeps_the_trace() {
     let mut n = Noise(3);
     ui.last[0] = Some(record(CLEAN, &mut n));
     ui.render(&mut Canvas::new(W, H));
-    let g = ui.grid;
+    let g = ui.plot.grid;
     ui.tap(g.x + 40, g.y + 30);
     assert_ne!(ui.m.view, AView::Eye, "the waveform has no Eye shortcut");
     ui.open_menu(MenuId::Eye);
@@ -521,7 +521,7 @@ fn one_press_reads_the_rate_and_keeps_the_trace() {
     assert_eq!(ui.m.eye_place, EyePlace::Side);
     assert!((ui.m.eye_rate - CLEAN.rate).abs() / CLEAN.rate < 0.02, "rate {}", ui.m.eye_rate);
     ui.render(&mut Canvas::new(W, H));
-    let (wave, eye) = (ui.grid, ui.eye_pane_rect());
+    let (wave, eye) = (ui.plot.grid, ui.eye_pane_rect());
     assert!(separated(wave, eye), "wave {:?} eye {:?}", wave, eye);
     assert!(eye.x >= wave.x + wave.w);
     assert!(wave.w > eye.w && eye.w > 250, "wave {:?} eye {:?}", wave, eye);
@@ -534,7 +534,7 @@ fn one_press_reads_the_rate_and_keeps_the_trace() {
     let _ = (popup_x, popup_y);
     ui.tap(row.x + 24, row.y + row.h / 2); // Dock Eye below.
     ui.render(&mut Canvas::new(W, H));
-    let (wave, eye) = (ui.grid, ui.eye_pane_rect());
+    let (wave, eye) = (ui.plot.grid, ui.eye_pane_rect());
     assert_eq!(ui.m.eye_place, EyePlace::Under);
     assert!(separated(wave, eye), "wave {:?} eye {:?}", wave, eye);
     assert!(eye.y >= wave.y + wave.h - 1);
@@ -567,7 +567,7 @@ fn the_column_slides_off_and_the_eye_takes_its_room() {
     assert_eq!(placed(ui.eye_page_rect(), 1.0), home);
     let tab = ui.eye_tab();
     ui.tap(tab.x + 8, tab.y + 8);
-    assert_eq!(ui.eye_to, 0.0);
+    assert_eq!(ui.eye_col.to, 0.0);
     assert!(ui.eye_column_open() > 0.9, "{}", ui.eye_column_open());
     ui.now += SLIDE * 0.5;
     let mid = ui.eye_column_open();
@@ -613,9 +613,9 @@ fn sliding_the_column_keeps_the_eye() {
 fn the_column_tab_stays_clear_of_the_overflow_button() {
     let mut ui = page(CLEAN, 1);
     for open in [0.0, 0.35, 1.0] {
-        ui.eye_from = open;
-        ui.eye_to = open;
-        ui.eye_t = ui.now;
+        ui.eye_col.from = open;
+        ui.eye_col.to = open;
+        ui.eye_col.t = ui.now;
         let tab = ui.eye_tab_hit();
         assert!(!overlaps(tab, ui.view_btn()), "open {} tab {:?} btn {:?}", open, tab, ui.view_btn());
         assert!(tab.w >= 40 && tab.h >= 40, "{:?}", tab);
@@ -637,13 +637,13 @@ fn a_tap_on_a_plot_fills_the_chart_area_and_a_second_tap_restores_the_four() {
     for k in 0..4 {
         let r = home.charts[k];
         ui.tap(r.x + r.w / 2, r.y + r.h / 2);
-        assert_eq!(ui.eye_big, Some(k as u8));
+        assert_eq!(ui.eye_col.big, Some(k as u8));
         let (charts, plots) = charts_shown(&home, Some(k as u8));
         let span = home.charts[1].x + home.charts[1].w - home.charts[0].x;
         assert_eq!(charts[k].w, span);
         assert!(plots[k].w > home.plots[k].w);
         ui.tap(charts[k].x + 12, charts[k].y + 12);
-        assert_eq!(ui.eye_big, None);
+        assert_eq!(ui.eye_col.big, None);
     }
 }
 
@@ -652,12 +652,12 @@ fn a_tap_on_a_plot_fills_the_chart_area_and_a_second_tap_restores_the_four() {
 fn a_hidden_column_has_no_plot_to_open() {
     let mut ui = page(CLEAN, 2);
     let home = layout(ui.eye_page_rect(), false);
-    ui.eye_from = 0.0;
-    ui.eye_to = 0.0;
-    ui.eye_t = ui.now;
+    ui.eye_col.from = 0.0;
+    ui.eye_col.to = 0.0;
+    ui.eye_col.t = ui.now;
     let r = home.charts[2];
     ui.tap(r.x + 8, r.y + 8);
-    assert_eq!(ui.eye_big, None);
+    assert_eq!(ui.eye_col.big, None);
 }
 
 #[test]
@@ -665,9 +665,9 @@ fn the_heat_scale_stays_clear_of_the_top_buttons() {
     let mut ui = page(CLEAN, 2);
     let home = layout(ui.eye_page_rect(), false);
     assert_eq!(ui.heat_x(home.plot), home.plot.x + home.plot.w - 128);
-    ui.eye_from = 0.0;
-    ui.eye_to = 0.0;
-    ui.eye_t = ui.now;
+    ui.eye_col.from = 0.0;
+    ui.eye_col.to = 0.0;
+    ui.eye_col.t = ui.now;
     let r = placed(ui.eye_page_rect(), 0.0).plot;
     let kx = ui.heat_x(r);
     let scale = Rect::new(kx - 30, ui.eye_page_rect().y, 68 + ui.fonts().s.width("dense") + 34, 18);
@@ -682,10 +682,10 @@ fn it_draws_while_the_column_moves_and_a_plot_is_open() {
     let mut ui = page(NOISY, 4);
     let mut cv = Canvas::new(W, H);
     for (open, big) in [(1.0, None), (0.6, Some(1)), (0.25, Some(3)), (0.0, None)] {
-        ui.eye_from = open;
-        ui.eye_to = open;
-        ui.eye_t = ui.now;
-        ui.eye_big = big;
+        ui.eye_col.from = open;
+        ui.eye_col.to = open;
+        ui.eye_col.t = ui.now;
+        ui.eye_col.big = big;
         ui.draw_eye(&mut cv);
     }
 }

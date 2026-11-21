@@ -38,7 +38,7 @@ impl Ui {
 
     pub(super) fn view_btn(&self) -> Rect {
         if let Some(t) = self.view_tile_rect() { return Rect::new(t.right() - 48, t.y + 6, 42, 36); }
-        Rect::new(self.area.x + self.area.w - 48, self.area.y + 6, 42, 36)
+        Rect::new(self.plot.area.x + self.plot.area.w - 48, self.plot.area.y + 6, 42, 36)
     }
 
     pub(super) fn draw_view_btn(&self, cv: &mut Canvas) {
@@ -64,7 +64,7 @@ impl Ui {
         } else {
             return None;
         };
-        let t = self.view_tile_rect().unwrap_or(self.area);
+        let t = self.view_tile_rect().unwrap_or(self.plot.area);
         let w = 200.min(t.w - 16);
         Some((Rect::new(t.x + (t.w - w) / 2, t.y + t.h / 2 - 20, w, 40), label))
     }

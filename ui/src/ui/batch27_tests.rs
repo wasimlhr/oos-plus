@@ -16,7 +16,7 @@ fn studio() -> Ui {
     let dir = std::env::temp_dir().join(format!("oos-batch27-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -80,8 +80,8 @@ fn sata_ref(u: &mut Ui) {
 
 fn lane_views(u: &mut Ui) -> Vec<(f32, f32)> {
     let mut out = Vec::new();
-    for i in 0..u.wins.len() { u.cur_win = i; out.push(u.view()); }
-    u.cur_win = 0;
+    for i in 0..u.plot.wins.len() { u.plot.cur_win = i; out.push(u.view()); }
+    u.plot.cur_win = 0;
     out
 }
 
@@ -92,7 +92,7 @@ fn the_zoom_box_applies_to_every_lane_at_once() {
     let mut u = studio();
     sata_ref(&mut u);
     set_tdiv(&mut u, 5e-3);
-    assert_eq!(u.wins.len(), 3, "CH1, CH2 and R1 each have a lane");
+    assert_eq!(u.plot.wins.len(), 3, "CH1, CH2 and R1 each have a lane");
     u.set_zoom(true);
     frame(&mut u);
     let z = (tscales()[u.m.zscale], u.m.zdelay);
@@ -142,7 +142,7 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     let (_, parts) = u.studio_sz_parts().unwrap();
     let plus = parts.iter().find(|(p, _)| *p == ZPart::YPlus).unwrap().1;
     tap_rect(&mut u, plus);
-    assert!(u.zoom_vfactor > 1.0);
+    assert!(u.zoom_view.vfactor > 1.0);
     // and the horizontal one: plus is a shorter zoom time base around the same centre, minus the way back
     let (before, centre, x) = (u.m.zscale, u.m.zdelay, u.studio_sz_xfactor());
     let (_, parts) = u.studio_sz_parts().unwrap();
@@ -165,7 +165,7 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     for v in lane_views(&mut u) { assert_eq!(v, z); }
     let (_, parts) = u.studio_sz_parts().unwrap();
     tap_rect(&mut u, parts.iter().find(|(p, _)| *p == ZPart::Reset).unwrap().1);
-    assert_eq!(u.zoom_vfactor, 1.0);
+    assert_eq!(u.zoom_view.vfactor, 1.0);
     assert_eq!(u.m.zscale, u.m.tscale, "the window is the whole record again");
     // a tap outside closes it; a plain tap on Zoom still toggles
     tap_at(&mut u, 300, 300);
@@ -197,7 +197,7 @@ fn a_reference_with_its_own_horizontal_fills_its_lane_next_to_channels_at_5_ms()
     // the trace spans the whole lane: its colour is at both edges
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
-    let lane = u.wins[2];
+    let lane = u.plot.wins[2];
     let col = REF_COLORS[0].1;
     let has = |x0: i32, x1: i32| (x0..x1).any(|x| (lane.y..lane.bottom()).any(|y| cv.px[(y * cv.w + x) as usize] == col));
     assert!(has(lane.x, lane.x + lane.w / 10), "the record starts at the left edge");
@@ -205,9 +205,9 @@ fn a_reference_with_its_own_horizontal_fills_its_lane_next_to_channels_at_5_ms()
     assert!(has(lane.x + lane.w * 4 / 10, lane.x + lane.w * 6 / 10), "and is in the middle too");
     shot(&mut u, "ref-own-fit");
     // its lane labels its own time scale
-    u.cur_win = 2;
+    u.plot.cur_win = 2;
     assert!(u.studio_lane_has_own_time());
-    u.cur_win = 0;
+    u.plot.cur_win = 0;
     // hold the R pill: Follow main / Own, steppers, Fit
     u.studio.sz.ref_h.clear();
     let pill = u.studio_bottom().refs[0];
@@ -248,8 +248,8 @@ fn default_and_minimal_are_unchanged() {
         u.studio.sz.ref_h.insert(0, (1e-7, 1e-6));
         u.set_zoom(true);
         let z = (tscales()[u.m.zscale], u.m.zdelay);
-        for i in 0..u.wins.len().max(1) { u.cur_win = i.min(u.wins.len().saturating_sub(1)); assert_eq!(u.view(), z, "{layout:?}"); }
-        u.cur_win = 0;
+        for i in 0..u.plot.wins.len().max(1) { u.plot.cur_win = i.min(u.plot.wins.len().saturating_sub(1)); assert_eq!(u.view(), z, "{layout:?}"); }
+        u.plot.cur_win = 0;
         assert!(u.studio_zoom_lane().is_none() && u.studio_ref_own(0).is_none());
         u.set_zoom(false);
         u.studio.sz.ref_h.clear();

@@ -220,14 +220,14 @@ impl Ui {
                 r
             }
             "REFerence:HORizontal:MODE" => {
-                let slot = self.ref_sel;
+                let slot = self.ref_page.sel;
                 if q { return Some(t(if self.studio.sz.ref_h.contains_key(&slot) { "OWN" } else { "FOLL" })); }
                 if kw(arg.trim(), "OWN") { self.studio_ref_set_own(slot, true); DONE }
                 else if kw(arg.trim(), "FOLLow") { self.studio_ref_set_own(slot, false); DONE }
                 else { Err(bad(arg)) }
             }
             "REFerence:HORizontal:SCALe" | "REFerence:HORizontal:OFFSet" => {
-                let slot = self.ref_sel;
+                let slot = self.ref_page.sel;
                 let scale = key.ends_with("SCALe");
                 if q {
                     let (tdiv, pos) = self.studio.sz.ref_h.get(&slot).copied().unwrap_or((self.m.time_per_div(), self.m.delay));
@@ -241,14 +241,14 @@ impl Ui {
             }
             "REFerence:HORizontal:FIT" => {
                 if q { return Some(Err(undefined(key))); }
-                if self.studio_ref_fit(self.ref_sel) { DONE } else { Err(conflict("Studio lanes and a reference with samples are needed")) }
+                if self.studio_ref_fit(self.ref_page.sel) { DONE } else { Err(conflict("Studio lanes and a reference with samples are needed")) }
             }
             // ---- mask
             "MASK:CREate:REF" => {
                 if q { return Some(Err(undefined(key))); }
                 let Some(WaveId::Ref(i)) = parse_wave(arg) else { return Some(Err(bad(arg))) };
                 if self.refs[i].is_none() { return Some(Err(conflict("that reference is empty"))); }
-                self.ref_sel = i;
+                self.ref_page.sel = i;
                 self.activate(Item::MaskFromRef);
                 DONE
             }
@@ -262,7 +262,7 @@ impl Ui {
             }
             "MASK:SAVE" => {
                 if q { return Some(Err(undefined(key))); }
-                if self.mask_ref.is_none() { return Some(Err(conflict("no mask yet"))); }
+                if self.mask_sw.reference.is_none() { return Some(Err(conflict("no mask yet"))); }
                 let path = (!arg.trim().is_empty()).then(|| self.out_path(arg));
                 self.mask_save_to(path);
                 DONE
@@ -271,7 +271,7 @@ impl Ui {
                 if q { return Some(Err(undefined(key))); }
                 let path = (!arg.trim().is_empty()).then(|| self.out_path(arg));
                 self.mask_load_from(path);
-                if self.mask_ref.is_none() { Err(conflict("no mask loaded")) } else { DONE }
+                if self.mask_sw.reference.is_none() { Err(conflict("no mask loaded")) } else { DONE }
             }
             // ---- SIM
             "SIM:DEFault" => { self.sim_activate(Item::SimDefaults); action(q) }
@@ -279,13 +279,13 @@ impl Ui {
             "SIM:LIVE" => { self.sim_activate(Item::SimLive); action(q) }
             "SIM:LOAD" => {
                 if q { return Some(Err(undefined(key))); }
-                self.ref_sel = self.m.sim_slot;
+                self.ref_page.sel = self.m.sim_slot;
                 match self.ref_load_named(arg) { Ok(()) => { self.mark_changed(); DONE } Err(e) => Err(bad(&e)) }
             }
             // ---- storage
             "*SAV" | "*RCL" => {
                 let Some(n) = arg.trim().parse::<u32>().ok().filter(|n| (1..=9).contains(n)) else { return Some(Err(bad(arg))) };
-                self.store_slot = n;
+                self.files.slot = n;
                 self.activate(if key == "*SAV" { Item::StoreSaveSetup } else { Item::StoreRecall });
                 DONE
             }
@@ -355,9 +355,9 @@ impl Ui {
             }
             "SAVE:DESTination" => {
                 const D: [(crate::store::StoreDest, &str); 3] = [(crate::store::StoreDest::Auto, "AUTO"), (crate::store::StoreDest::Stick, "USB"), (crate::store::StoreDest::Local, "DESKtop")];
-                pick(q, arg, &mut self.store_dest, &D)
+                pick(q, arg, &mut self.files.dest, &D)
             }
-            "SAVE:SLOT" => intf(q, arg, &mut self.store_slot, 1, 9),
+            "SAVE:SLOT" => intf(q, arg, &mut self.files.slot, 1, 9),
             "SAVE:WAVeform" => {
                 if q { return Some(Err(undefined(key))); }
                 let mut it = arg.split(',');
@@ -369,7 +369,7 @@ impl Ui {
             }
             "SAVE:IMAGe" => {
                 if q { return Some(Err(undefined(key))); }
-                if arg.trim().is_empty() { self.file_save_auto(FileKind::Shot); } else { let p = self.out_path(arg); self.close_menu(); self.shot_request = Some(p.to_string_lossy().into_owned()); }
+                if arg.trim().is_empty() { self.file_save_auto(FileKind::Shot); } else { let p = self.out_path(arg); self.close_menu(); self.asks.shot = Some(p.to_string_lossy().into_owned()); }
                 DONE
             }
             "SAVE:FFRame" => { self.file_save_auto(FileKind::FastFrame); action(q) }
@@ -389,11 +389,11 @@ impl Ui {
                 DONE
             }
             "TIMebase:DELay:VZOom" => {
-                if q { return Some(t(en(self.zoom_vfactor as f64))); }
+                if q { return Some(t(en(self.zoom_view.vfactor as f64))); }
                 let Some(v) = num(arg).filter(|v| *v >= 1.0 && *v <= 1024.0) else { return Some(Err(bad(arg))) };
                 if !self.m.zoom { self.set_zoom(true); }
                 let want = v.log2().round() as i32;
-                let have = self.zoom_vfactor.log2().round() as i32;
+                let have = self.zoom_view.vfactor.log2().round() as i32;
                 for _ in 0..(want - have).abs() { self.studio_zoom_do(if want > have { studio::ZoomRow::VPlus } else { studio::ZoomRow::VMinus }); }
                 DONE
             }

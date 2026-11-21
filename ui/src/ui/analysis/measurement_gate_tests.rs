@@ -178,7 +178,7 @@ fn long_reference_cache_reuses_analysis_and_invalidates_accepted_sim_settings() 
     ui.measure_refs();
     let (pan, _) = ui.reference_measurement(0).unwrap();
     assert!(Arc::ptr_eq(&first, &pan), "full-record panning and capture ticks must reuse the exact analysis");
-    assert!(Arc::ptr_eq(&pan, &ui.ref_ana[0]), "every readout shares the cached result");
+    assert!(Arc::ptr_eq(&pan, &ui.measured.refs[0]), "every readout shares the cached result");
     ui.refs[0].as_mut().unwrap().vpd = 2.0;
     let (scale, _) = ui.reference_measurement(0).unwrap();
     assert!(!Arc::ptr_eq(&pan, &scale));
@@ -247,11 +247,14 @@ fn large_full_measurements_are_nonblocking_and_use_one_worker_without_fake_captu
     assert_eq!(ui.meas_rows()[0].text(), "Computing");
     assert!(ui.workflow_state().contains("\"measurementBusy\":true"));
     let captures = ui.replay.captures;
-    ui.mstat = vec![MStat { n: 7, ..Default::default() }];
+    ui.results.rows = vec![MStat { n: 7, ..Default::default() }];
     pump(&mut ui);
     assert_eq!(ui.fact_meas(Meas::Vpp, WaveId::Ref(0)), 2.0);
     assert_eq!(ui.replay.captures, captures);
-    assert_eq!(ui.mstat[0].n, 7, "analysis completion must preserve acquisition statistics without adding a sample");
+    assert_eq!(
+        ui.results.rows[0].n, 7,
+        "analysis completion must preserve acquisition statistics without adding a sample"
+    );
     assert_eq!(ui.azr.ref_measure_worker.borrow().as_ref().unwrap().submitted, 1);
 }
 

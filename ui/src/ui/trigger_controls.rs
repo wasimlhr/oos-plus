@@ -46,7 +46,7 @@ impl Ui {
                     }
                     self.select_workspace_source(WaveId::Ref(i));
                     if !self.session_is_sim {
-                        self.offline_ref = i;
+                        self.offline.slot = i;
                     }
                 }
                 _ => {}
@@ -88,8 +88,8 @@ impl Ui {
         } else {
             self.workflow_epoch = self.workflow_epoch.wrapping_add(1);
             self.sim_cancel_generation();
-            self.offline = false;
-            self.offline_hold = None;
+            self.offline.on = false;
+            self.offline.hold = None;
             self.session_is_sim = false;
             self.sim_play = false;
             self.sim_refs.clear();
@@ -297,7 +297,7 @@ mod acquisition_source_tests {
         assert_eq!(ui.replay.captures, 1);
         assert_eq!(ui.m.status, TrigStatus::Triggered);
         assert!(Arc::ptr_eq(&samples, &ui.refs[0].as_ref().unwrap().v));
-        assert_eq!(ui.mstat[0].n, 1);
+        assert_eq!(ui.results.rows[0].n, 1);
     }
     #[test]
     fn choosing_primary_ref_while_stopped_holds_until_single_accepts_exactly_once() {
@@ -326,9 +326,9 @@ mod acquisition_source_tests {
             assert_eq!(ui.m.run, if running { RunState::Run } else { RunState::Stop });
             assert_eq!(ui.m.status, if running { TrigStatus::Wait } else { TrigStatus::Stop });
             if !running {
-                let count = ui.wfm_total;
+                let count = ui.counts.wfm_total;
                 ui.step(0.2);
-                assert_eq!(ui.wfm_total, count, "choosing a source while Stop cannot acquire a preview");
+                assert_eq!(ui.counts.wfm_total, count, "choosing a source while Stop cannot acquire a preview");
             }
         }
     }

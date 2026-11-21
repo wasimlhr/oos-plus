@@ -37,8 +37,8 @@ pub(super) fn pick<T: Copy + PartialEq>(q: bool, arg: &str, cur: &mut T, table: 
 }
 
 impl Ui {
-    /// A trigger level (`TrigLevel` or `TrigLevel2`) by SCPI: the query answers the level, a number sets it limited to
-    /// the range of the table, like the stepper and the number pad (a level beyond the screen is not an error).
+    /// A trigger level (`TrigLevel` or `TrigLevel2`) by SCPI: the query answers the level, a number sets it as it is
+    /// (`scpi_range_set`; a level beyond the screen is not an error).
     pub(super) fn scpi_level(&mut self, q: bool, arg: &str, it: Item) -> Reply {
         if q { return t(en(self.range_get(it).unwrap_or(0.0))); }
         match num(arg).filter(|v| v.is_finite()) {
@@ -298,29 +298,29 @@ impl Ui {
     fn ext_history_search(&mut self, key: &str, q: bool, arg: &str) -> Option<Reply> {
         Some(match key {
             "ACQuire:HISTory:ENABle" => {
-                if q { return Some(t(b01(self.hist_pos.is_some()))); }
+                if q { return Some(t(b01(self.history.pos.is_some()))); }
                 match parse_bool(arg) {
-                    Some(true) if self.hist_pos.is_none() => { if self.history.is_empty() { return Some(Err(conflict("history empty"))); } self.history_step(0); DONE }
-                    Some(false) if self.hist_pos.is_some() => { self.key(key::NAVIGATE); DONE }
+                    Some(true) if self.history.pos.is_none() => { if self.history.recs.is_empty() { return Some(Err(conflict("history empty"))); } self.history_step(0); DONE }
+                    Some(false) if self.history.pos.is_some() => { self.key(key::NAVIGATE); DONE }
                     Some(_) => DONE,
                     None => Err(bad(arg)),
                 }
             }
-            "ACQuire:HISTory:COUNt" => if q { t(self.history.len().to_string()) } else { Err(undefined(key)) },
+            "ACQuire:HISTory:COUNt" => if q { t(self.history.recs.len().to_string()) } else { Err(undefined(key)) },
             "ACQuire:HISTory:FRAMe" => {
-                if q { return Some(t(self.hist_pos.map_or(0, |i| i + 1).to_string())); }
-                let n = self.history.len();
+                if q { return Some(t(self.history.pos.map_or(0, |i| i + 1).to_string())); }
+                let n = self.history.recs.len();
                 if n == 0 { return Some(Err(conflict("history empty"))); }
                 let Some(v) = arg.trim().parse::<usize>().ok().filter(|v| (1..=n).contains(v)) else { return Some(Err(bad(arg))) };
-                if self.hist_pos.is_none() { self.history_step(0); }
-                let cur = self.hist_pos.unwrap_or(n - 1) as i32;
+                if self.history.pos.is_none() { self.history_step(0); }
+                let cur = self.history.pos.unwrap_or(n - 1) as i32;
                 if cur != v as i32 - 1 { self.history_step(v as i32 - 1 - cur); }
                 DONE
             }
             // the NAVBack / NAVFwd keys of the Display menu
             "ACQuire:HISTory:NEXT" | "ACQuire:HISTory:PREVious" => {
                 if q { return Some(Err(undefined(key))); }
-                if self.history.is_empty() { return Some(Err(conflict("history empty"))); }
+                if self.history.recs.is_empty() { return Some(Err(conflict("history empty"))); }
                 self.key(if key.ends_with("NEXT") { 0x06 } else { 0x08 });
                 DONE
             }

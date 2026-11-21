@@ -158,7 +158,7 @@ impl PointerState {
 }
 
 pub fn run(mut ui: Ui, args: &[String]) {
-    ui.desktop_panel = Some(true);
+    ui.workspace.desktop_panel = Some(true);
     let opts = WindowOptions { resize: true, scale: Scale::X1, scale_mode: ScaleMode::AspectRatioStretch, ..WindowOptions::default() };
     let mut win = match Window::new("OOS — F6: Hardware controls", ui::W as usize, ui::H as usize, opts) {
         Ok(w) => w,
@@ -174,9 +174,9 @@ pub fn run(mut ui: Ui, args: &[String]) {
     let mut cv = Canvas::new(ui::W, ui::H);
     let mut front_window: Option<front_window::FrontWindow> = None;
     // the layout and the Studio view come back after a restart: the setup of the unit, in the storage folder
-    let mut setup = crate::store::SetupFile::new(&ui.store_dir);
+    let mut setup = crate::store::readers::SetupFile::new(&ui.files.dir);
     match setup.restore(&mut ui) {
-        Ok(true) => eprintln!("oos-ui: settings restored from {}", ui.store_dir.join(crate::store::SetupFile::NAME).display()),
+        Ok(true) => eprintln!("oos-ui: settings restored from {}", ui.files.dir.join(crate::store::readers::SetupFile::NAME).display()),
         Ok(false) => {}
         Err(e) => eprintln!("oos-ui: {}", e),
     }
@@ -190,10 +190,10 @@ pub fn run(mut ui: Ui, args: &[String]) {
     let mut was_right = false;
     let controls = panel::controls();
     let mut shot_n = 0u32;
-    while win.is_open() && !ui.quit {
+    while win.is_open() && !ui.asks.quit {
         if front_window.as_mut().is_some_and(|panel| !panel.poll(&mut ui)) {
             front_window = None;
-            ui.desktop_panel = Some(false);
+            ui.workspace.desktop_panel = Some(false);
         }
         // mouse = finger 0; a drag that leaves the picture ends where it left
         let down = win.get_mouse_down(MouseButton::Left);
@@ -228,7 +228,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
                 }
                 input::Event::Key { key, ctrl, repeat } => {
                     if key == Key::O && ctrl && !repeat { ui.request_waveform(); }
-                    else if key == Key::F6 && !repeat { ui.desktop_panel = Some(!ui.desktop_panel.unwrap_or(false)); }
+                    else if key == Key::F6 && !repeat { ui.workspace.desktop_panel = Some(!ui.workspace.desktop_panel.unwrap_or(false)); }
                     else if key == Key::Escape && !repeat {
                         if loader.busy() { loader.cancel(); ui.toast("Waveform load canceled"); }
                         else { ui.dismiss_context(); }
@@ -236,8 +236,8 @@ pub fn run(mut ui: Ui, args: &[String]) {
                     else if !ctrl {
                         if key == Key::M && !repeat { ui.workflow_command("measure"); }
                         else if key == Key::F12 && !repeat {
-                            let path = crate::store::next_name(&ui.store_dir, "shot", "png");
-                            ui.shot_request = Some(path.to_string_lossy().into_owned());
+                            let path = crate::store::next_name(&ui.files.dir, "shot", "png");
+                            ui.asks.shot = Some(path.to_string_lossy().into_owned());
                         } else if !repeat || matches!(key, Key::Up | Key::Down | Key::Left | Key::Right | Key::PageUp | Key::PageDown) {
                             if let Some(command) = key_cmd(key) { cmd::run(&mut ui, command); }
                         }
@@ -299,12 +299,12 @@ pub fn run(mut ui: Ui, args: &[String]) {
             was_down = false;
             was_right = false;
         }
-        if ui.desktop_panel == Some(true) && front_window.is_none() {
+        if ui.workspace.desktop_panel == Some(true) && front_window.is_none() {
             match front_window::FrontWindow::open(&win) {
                 Ok(panel) => front_window = Some(panel),
-                Err(error) => { ui.desktop_panel = Some(false); ui.toast(&error); }
+                Err(error) => { ui.workspace.desktop_panel = Some(false); ui.toast(&error); }
             }
-        } else if ui.desktop_panel != Some(true) { front_window = None; }
+        } else if ui.workspace.desktop_panel != Some(true) { front_window = None; }
         if last.elapsed().as_secs_f64() < 1.0 / 30.0 {
             win.update();
             continue;
@@ -313,7 +313,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
         last = Instant::now();
         ui.step(dt);
         ui.render(&mut cv);
-        if let Some(p) = ui.shot_request.take() {
+        if let Some(p) = ui.asks.shot.take() {
             crate::save_shot(&mut ui, &cv, p, &mut shot_n);
         }
         if let Err(e) = win.update_with_buffer(&cv.px, ui::W as usize, ui::H as usize) {
@@ -322,7 +322,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
         }
         if front_window.as_mut().is_some_and(|panel| !panel.draw(&ui)) {
             front_window = None;
-            ui.desktop_panel = Some(false);
+            ui.workspace.desktop_panel = Some(false);
         }
     }
     // the last change reaches the file even when the window closes within two seconds of it
@@ -355,7 +355,7 @@ mod tests {
         std::fs::write(&b, record(&[2.0, 3.0])).unwrap();
         std::fs::write(&bad, [0xffu8, 0xfe, 0x00, 0x01]).unwrap();
         let mut ui = Ui::new(crate::wave::Source::Demo { t: 0.0 });
-        ui.store_dir = dir.clone();
+        ui.files.dir = dir.clone();
         // two captures with a file between them that is no waveform, and one that is not there
         open_dropped(&mut ui, &[a.clone(), bad, dir.join("gone.pwwf"), b]);
         assert_eq!(ui.ref_volts(0), [0.0, 1.0, 0.5]);
@@ -366,7 +366,7 @@ mod tests {
         let session = dir.join("bench.oss");
         ui.session_save(session.to_str().unwrap()).unwrap();
         let mut other = Ui::new(crate::wave::Source::Demo { t: 0.0 });
-        other.store_dir = dir.clone();
+        other.files.dir = dir.clone();
         open_dropped(&mut other, &[session, a]);
         assert_eq!((other.ref_volts(0), other.ref_volts(1)), (vec![0.0, 1.0, 0.5], vec![2.0, 3.0]));
         assert_eq!(other.ref_volts(2), [0.0, 1.0, 0.5], "a capture dropped with a session is added to it");

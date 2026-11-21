@@ -33,7 +33,7 @@ struct CardRes {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct ModeInfo {
     clock: u32,
     hdisplay: u16,
@@ -84,7 +84,7 @@ struct GetEncoder {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 struct Crtc {
     set_connectors_ptr: u64,
     count_connectors: u32,
@@ -213,9 +213,9 @@ const CONNECTOR_DSI: u32 = 16;
 /// a type and a length (u32 each) and their data.
 fn flip_events(buf: &[u8]) -> u32 {
     let (mut at, mut n) = (0, 0);
-    while at + 8 <= buf.len() {
-        let typ = u32::from_ne_bytes(buf[at..at + 4].try_into().unwrap());
-        let len = u32::from_ne_bytes(buf[at + 4..at + 8].try_into().unwrap()) as usize;
+    while let Some(h) = buf.get(at..at + 8) {
+        let typ = u32::from_ne_bytes([h[0], h[1], h[2], h[3]]);
+        let len = u32::from_ne_bytes([h[4], h[5], h[6], h[7]]) as usize;
         if len < 8 {
             break;
         }
@@ -227,7 +227,7 @@ fn flip_events(buf: &[u8]) -> u32 {
 
 impl Display {
     pub fn open(path: &str) -> io::Result<Display> {
-        let c = CString::new(path).unwrap();
+        let c = CString::new(path).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         let fd = unsafe { libc::open(c.as_ptr(), libc::O_RDWR | libc::O_CLOEXEC) };
         if fd < 0 {
             return Err(io::Error::last_os_error());
@@ -275,7 +275,7 @@ impl Display {
             if gc.connection != 1 || gc.count_modes == 0 || want.is_some_and(|t| t != gc.connector_type) {
                 continue;
             }
-            let mut modes = vec![unsafe { std::mem::zeroed::<ModeInfo>() }; gc.count_modes as usize];
+            let mut modes = vec![ModeInfo::default(); gc.count_modes as usize];
             let mut encoders = vec![0u32; gc.count_encoders as usize];
             let mut props = vec![0u32; gc.count_props as usize];
             let mut pvals = vec![0u64; gc.count_props as usize];
@@ -334,8 +334,7 @@ impl Display {
                 io::Error::new(io::ErrorKind::NotFound, "no connected display")
             }
         })?;
-        let mut saved: Crtc = unsafe { std::mem::zeroed() };
-        saved.crtc_id = crtc_id;
+        let mut saved = Crtc { crtc_id, ..Default::default() };
         let saved = if ioc(fd, GETCRTC, &mut saved).is_ok() { Some(saved) } else { None };
 
         let (w, h) = (mode.hdisplay as u32, mode.vdisplay as u32);
@@ -531,7 +530,8 @@ impl Display {
         }
         let back = self.free();
         let b = &self.bufs[back];
-        let fit = self.fit.as_ref().unwrap();
+        // made just above when there was none
+        let Some(fit) = self.fit.as_ref() else { return };
         let stride = (b.pitch / 4) as usize;
         let dst = unsafe { std::slice::from_raw_parts_mut(b.map, b.size / 4) };
         fit.scale(&cv.px, dst, stride);
@@ -563,7 +563,7 @@ impl Display {
     pub fn connected(&self) -> bool {
         let mut gc = GetConnector { connector_id: self.conn_id, ..Default::default() };
         // count_modes 0 asks the kernel to probe; GETCONNECTOR with modes_ptr set and count_modes 1 does not
-        let mut mode = unsafe { std::mem::zeroed::<ModeInfo>() };
+        let mut mode = ModeInfo::default();
         gc.modes_ptr = &mut mode as *mut ModeInfo as u64;
         gc.count_modes = 1;
         ioc(self.fd, GETCONNECTOR, &mut gc).is_ok() && gc.connection == 1

@@ -151,7 +151,7 @@ impl Ui {
         if !s.sz.ref_h.is_empty() {
             p.push(format!("refh={}", s.sz.ref_h.iter().map(|(i, (t, d))| format!("{}/{}/{}", i, t, d)).collect::<Vec<_>>().join(",")));
         }
-        if self.zoom_vfactor != 1.0 || self.zoom_vcenter != 0.0 { p.push(format!("yzoom={}/{}", self.zoom_vfactor, self.zoom_vcenter)); }
+        if self.zoom_view.vfactor != 1.0 || self.zoom_view.vcenter != 0.0 { p.push(format!("yzoom={}/{}", self.zoom_view.vfactor, self.zoom_view.vcenter)); }
         let w = &self.workspace;
         if w.stacked { p.push("stacked=1".into()); }
         if w.measure_docked { p.push("mdock=1".into()); }
@@ -187,8 +187,8 @@ impl Ui {
         self.studio.popup = None;
         self.studio.sz = Default::default();
         self.studio.badge_first = 0;
-        self.zoom_vfactor = 1.0;
-        self.zoom_vcenter = 0.0;
+        self.zoom_view.vfactor = 1.0;
+        self.zoom_view.vcenter = 0.0;
         self.workspace.stacked = false;
         self.workspace.measure_docked = false;
         self.workspace.measure_float = None;
@@ -257,7 +257,7 @@ impl Ui {
                     let f: Vec<&str> = v.split('/').collect();
                     if let [a, b] = f[..] {
                         if let (Ok(a), Ok(b)) = (a.parse::<f32>(), b.parse::<f32>()) {
-                            if a.is_finite() && b.is_finite() { (self.zoom_vfactor, self.zoom_vcenter) = (a.clamp(1.0, 1024.0), b); }
+                            if a.is_finite() && b.is_finite() { (self.zoom_view.vfactor, self.zoom_view.vcenter) = (a.clamp(1.0, 1024.0), b); }
                         }
                     }
                 }
@@ -350,7 +350,7 @@ impl Ui {
         let mut ui = vec![("studio_view", self.studio.view.token().to_string()), ("studio_dock", self.dock_text()), ("studio_state", self.view_ui_text())];
         if let Some(l) = self.view_lanes_text() { ui.push(("lanes", l)); }
         ui.push(("math_def", (0..NMATH).filter(|&k| self.m.math_ch(k).op != MathOp::Off).map(|k| (k + 1).to_string()).collect::<Vec<_>>().join(" ")));
-        snapshot_of(&self.m, self.xy, self.full, &ui)
+        snapshot_of(&self.m, self.xy, self.full.on, &ui)
     }
 
     /// Shows a kept view. A slot from before the views kept their own state (no `studio_state`) leaves the Ui's part as it is.
@@ -378,7 +378,7 @@ impl Ui {
             let (k, v) = (k.trim(), unesc(v.trim()));
             match k {
                 "xy" => self.xy = v == "true",
-                "full" => self.full = v == "true",
+                "full" => self.full.on = v == "true",
                 // a record session (SIM, a loaded file) has its own panel and goes with the session, not the view
                 "studio_view" => if !self.studio.view.is_record() { self.studio.view = StudioView::from_token(&v); },
                 "studio_dock" => {
@@ -415,9 +415,9 @@ impl Ui {
             self.m.zscale = self.m.tscale;
         }
         // what pointed into the list of the view that was shown
-        self.meas_cfg = None;
-        self.meas_page = 0;
-        self.meas_catalog_page = 0;
+        self.meas_own.dialog = None;
+        self.meas_pages.readouts = 0;
+        self.meas_pages.selected = 0;
         // the scroll of the panel is part of the view (`scroll=` of its state); a slot from before keeps no state: top
         if !new { self.studio.panel.scroll_top(); }
         self.studio.md = Default::default();
@@ -436,14 +436,14 @@ impl Ui {
         let cur = self.m.view_cur.min(n - 1);
         let snap = self.view_snapshot();
         self.m.view_slots[cur] = snap.clone();
-        self.view_own[cur] = std::mem::take(&mut self.meas_own);
+        self.view_own[cur] = std::mem::take(&mut self.meas_own.rows);
         let mut s = std::mem::take(&mut self.m.view_slots[j]);
         if s.is_empty() {
             // never set up (a setup from before the views): a copy of the one that was shown
             s = snap;
             self.view_own[j] = self.view_own[cur].clone();
         }
-        self.meas_own = std::mem::take(&mut self.view_own[j]);
+        self.meas_own.rows = std::mem::take(&mut self.view_own[j]);
         self.view_apply(&s);
         self.m.view_cur = j;
         self.sync_view_state();
@@ -471,7 +471,7 @@ impl Ui {
             let snap = self.view_snapshot();
             for k in old.max(1)..n {
                 self.m.view_slots[k] = snap.clone();
-                self.view_own[k] = self.meas_own.clone();
+                self.view_own[k] = self.meas_own.rows.clone();
             }
         } else if self.m.view_cur >= n {
             self.m.view_cur = n - 1;
@@ -571,7 +571,7 @@ impl Ui {
 
     /// A finger went down at x in the plot: whether it is in an edge strip where a swipe switches views.
     pub(super) fn view_edge(&self, x: i32) -> bool {
-        self.m.views >= 2 && (x < self.grid.x + EDGE || x >= self.grid.x + self.grid.w - EDGE)
+        self.m.views >= 2 && (x < self.plot.grid.x + EDGE || x >= self.plot.grid.x + self.plot.grid.w - EDGE)
     }
 
     /// The finger moved by (dx, dy) from x0 in an edge strip: Some(true) switched, Some(false) still open, None it is
@@ -583,7 +583,7 @@ impl Ui {
         if dx.abs() < SWIPE {
             return Some(false);
         }
-        let from_left = x0 < self.grid.x + EDGE;
+        let from_left = x0 < self.plot.grid.x + EDGE;
         // inwards only: from the left edge to the right shows the view before, from the right edge to the left the next
         match (from_left, dx > 0) {
             (true, true) => self.view_step(-1),
@@ -668,7 +668,7 @@ mod tests {
     #[test]
     fn edge_swipes_and_buttons_switch_views() {
         let mut u = ui();
-        let g = u.grid;
+        let g = u.plot.grid;
         let y = g.y + g.h / 2;
         // off: a swipe from the right edge moves the waveform as always
         let d0 = u.m.delay;

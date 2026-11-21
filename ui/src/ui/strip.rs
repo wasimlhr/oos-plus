@@ -7,6 +7,17 @@
 
 use super::*;
 
+/// The statistics panel of the measurements, as the screen keeps it (ADR 0062).
+#[derive(Default)]
+pub(super) struct Results {
+    /// the panel is shown (Measure > Statistics)
+    pub on: bool,
+    /// the panel is folded to its header
+    pub folded: bool,
+    /// the statistics of each measurement row since their reset: count, sum, squares, smallest, largest
+    pub rows: Vec<MStat>,
+}
+
 impl Ui {
     /// Height the strip takes when it sits under the plot or above the trace, with the measurement card if that is
     /// docked there too.
@@ -43,7 +54,7 @@ impl Ui {
         let page = self.results_page_size();
         let lines = total.min(page).div_ceil(self.results_cols()) as i32;
         let nav = if total > page { 38 } else { 0 };
-        30 + if self.results_min { 0 } else { lines * self.results_row(total as i32) + nav + 4 } + 4
+        30 + if self.results.folded { 0 } else { lines * self.results_row(total as i32) + nav + 4 } + 4
     }
 
     /// Left edge and width of the graticule. A side dock keeps a column for the strip and for a docked card.
@@ -65,7 +76,7 @@ impl Ui {
             let top = if self.full_on() { 0 } else { self.frame().body.y };
             return top + 2;
         }
-        let g = self.grid;
+        let g = self.plot.grid;
         // the rows sit on the cards: what the plot's whole divisions leave over goes between plot and rows
         (self.plot_bottom() + 2 - self.strip_rows() * self.lay().strip_row)
             .max(g.y + g.h + 4 + self.eye_below() + self.la_strip_h() + self.pane_h())
@@ -73,7 +84,7 @@ impl Ui {
 
     /// The column a side dock reserves, from the graticule down to the cards.
     pub(super) fn strip_column(&self) -> Rect {
-        let y = self.grid.y;
+        let y = self.plot.grid.y;
         let h = (self.plot_bottom() - y).max(0);
         let body = self.frame().body;
         let x = if self.m.strip_dock == StripDock::Left { body.x } else { body.right() - STRIP_SIDE };
@@ -306,7 +317,7 @@ impl Ui {
         let page = self.results_page_size();
         let n = total.min(page).div_ceil(self.results_cols()) as i32;
         let nav = if total > page { 38 } else { 0 };
-        let body_h = if self.results_min { 0 } else { n * self.results_row(total as i32) + nav + 4 };
+        let body_h = if self.results.folded { 0 } else { n * self.results_row(total as i32) + nav + 4 };
         let panel_h = 30 + body_h;
         let rw = self.lay().results_w * self.results_cols() as i32;
         let fr = self.frame();
@@ -381,16 +392,16 @@ impl Ui {
         let all = Rect::new(head.x, head.y, head.w, head.h + body.h);
         cv.round(all, 6, CARD_BORDER, 255);
         cv.round(all.inset(1), 5, BAR, 215);
-        if self.results_min {
+        if self.results.folded {
             chevron(cv, head.x + 13, head.y + 15, 1, DIM);
         } else {
             chevron_down(cv, head.x + 9, head.y + 12, DIM);
         }
         cv.text(&f.s, head.x + 24, head.y + 19, &format!("Meas · {}", self.measurement_gate_label()), TEXT);
-        let n = self.mstat.first().map(|s| s.n).unwrap_or(0);
+        let n = self.results.rows.first().map(|s| s.n).unwrap_or(0);
         let ns = format!("n {}", fmt_count(n as f64));
         cv.text(&f.s, head.x + head.w - 10 - f.s.width(&ns), head.y + 19, &ns, DIM);
-        if self.results_min {
+        if self.results.folded {
             return;
         }
         let rows: Vec<(usize, tools::MeasRow)> = self.meas_rows().into_iter().enumerate().filter(|(_, r)| !self.meas_row_hidden(r)).collect();
@@ -406,7 +417,7 @@ impl Ui {
             let body = Rect::new(body.x + (page_row % cols) as i32 * cw, body.y, cw, body.h);
             let by = body.y + (page_row / cols) as i32 * pitch;
             cv.hline(body.x + 8, body.x + body.w - 9, by, LINE);
-            let st = self.mstat.get(*i).copied().unwrap_or_default();
+            let st = self.results.rows.get(*i).copied().unwrap_or_default();
             let mean = st.sum / st.n.max(1) as f64;
             let name = self.results_name(*i, r);
             let value = r.text();

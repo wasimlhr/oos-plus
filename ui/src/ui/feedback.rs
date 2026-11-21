@@ -16,7 +16,7 @@ impl Ui {
     pub(super) fn item_blocked(&self, it: Item) -> Option<&'static str> {
         match it {
             Item::RefShow(i) if self.refs.get(i).is_some_and(|r| r.is_none()) => Some(STORE_A_REFERENCE),
-            Item::RefColor | Item::RefOffset | Item::RefVpd if self.refs.get(self.ref_sel).is_some_and(|r| r.is_none()) => Some(STORE_A_REFERENCE),
+            Item::RefColor | Item::RefOffset | Item::RefVpd if self.refs.get(self.ref_page.sel).is_some_and(|r| r.is_none()) => Some(STORE_A_REFERENCE),
             _ => None,
         }
     }

@@ -170,23 +170,23 @@ fn live_skips_unrequested_refs_but_keeps_hidden_measurements_and_remote_facts() 
     u.return_to_live();
     assert!(!u.refs[0].as_ref().unwrap().on);
     u.measure_refs();
-    assert!(u.ref_ana[0].get(Meas::Vpp).is_nan(), "an unused hidden ref has no cached analysis");
-    assert!(!u.ref_ana_valid[0]);
+    assert!(u.measured.refs[0].get(Meas::Vpp).is_nan(), "an unused hidden ref has no cached analysis");
+    assert!(!u.measured.refs_valid[0]);
     assert!(u.meas_at(WaveId::Ref(0), Meas::Vpp) > 0.5, "direct UI measurement also analyzes on demand");
-    assert!(!u.ref_ana_valid[0], "an on-demand read must not enable repeated idle rescans");
+    assert!(!u.measured.refs_valid[0], "an on-demand read must not enable repeated idle rescans");
     assert!(u.fact_meas(Meas::Vpp, WaveId::Ref(0)) > 0.5, "explicit SCPI facts still analyze a hidden ref");
     u.m.meas.push((Meas::Vpp, WaveId::Ref(0)));
     u.measure_refs();
-    assert!(u.ref_ana[0].get(Meas::Vpp) > 0.5, "a hidden measured source remains current");
+    assert!(u.measured.refs[0].get(Meas::Vpp) > 0.5, "a hidden measured source remains current");
     u.m.meas.clear();
     u.m.meas2.push((0, WaveId::Ref(0), WaveId::Ch(0)));
     u.measure_refs();
-    assert!(u.ref_ana[0].get(Meas::Vpp) > 0.5, "pairs retain their hidden reference source");
+    assert!(u.measured.refs[0].get(Meas::Vpp) > 0.5, "pairs retain their hidden reference source");
     u.m.meas2.clear();
     u.set_offline(true);
     u.m.dvm_on = true;
     u.measure_refs();
-    assert!(u.ref_ana[0].get(Meas::Vpp) > 0.5, "the offline meter retains its source");
+    assert!(u.measured.refs[0].get(Meas::Vpp) > 0.5, "the offline meter retains its source");
 }
 
 #[test]
@@ -301,7 +301,7 @@ fn sim_play_loads_the_preset_into_the_slot() {
     assert!((u.m.eye_rate - 16e9).abs() < 1.0);
     assert!(u.m.ch[0].on, "SIM is a reference and does not switch the analog channels off");
     assert!(u.last[0].is_none());
-    assert_eq!(u.meas_src, WaveId::Ref(2));
+    assert_eq!(u.sources.a, WaveId::Ref(2));
     assert!(u.m.zoom);
     // The overview fits the complete SSC period; zoom retains the bit scale.
     let record_span = r.v.len() as f64 * r.dt;
@@ -616,23 +616,23 @@ fn large_full_record_sim_backpressure_finishes_values_and_counts_statistics_once
     u.m.meas_full_record = true;
     u.sim_play_set(true).unwrap();
     drive_until(&mut u, |u| u.replay.captures >= 1);
-    drive_until(&mut u, |u| u.mstat.first().is_some_and(|stat| stat.n >= 1));
+    drive_until(&mut u, |u| u.results.rows.first().is_some_and(|stat| stat.n >= 1));
     assert!(u.meas_at(WaveId::Ref(0), Meas::Vpp).is_finite());
     assert_eq!(u.m.run, RunState::Run, "Full record must become ready without stopping");
     let first = u.refs[0].as_ref().unwrap().v[..8192].to_vec();
     let value = u.meas_at(WaveId::Ref(0), Meas::Vpp);
-    drive_until(&mut u, |u| u.mstat.first().is_some_and(|stat| stat.n >= 2));
-    assert_eq!(u.mstat[0].n, u.replay.captures);
+    drive_until(&mut u, |u| u.results.rows.first().is_some_and(|stat| stat.n >= 2));
+    assert_eq!(u.results.rows[0].n, u.replay.captures);
     assert_ne!(u.refs[0].as_ref().unwrap().v[..8192], first);
     assert_ne!(u.meas_at(WaveId::Ref(0), Meas::Vpp), value);
     u.key(key::RUNSTOP);
-    let n = u.mstat[0].n;
+    let n = u.results.rows[0].n;
     for _ in 0..10 {
         u.poll_reference_measurements();
         u.finish_deferred_capture_statistics();
         let _ = u.meas_rows();
     }
-    assert_eq!(u.mstat[0].n, n, "worker polling and reads cannot count an accepted revision twice");
+    assert_eq!(u.results.rows[0].n, n, "worker polling and reads cannot count an accepted revision twice");
     u.wait_sim_worker();
 }
 
@@ -711,7 +711,7 @@ fn external_reference_scan_holds_one_candidate_without_exposing_it_and_keeps_its
         u.sim_finish(request, generated);
         assert_eq!(u.refs[0].as_ref().unwrap().v.as_ptr(), pointer);
         assert_eq!(u.replay.captures, captures);
-        assert!(u.sim_generation.as_ref().unwrap().pending.is_some());
+        assert!(u.sim_gen.worker.as_ref().unwrap().pending.is_some());
         u.wait_sim_generation();
         assert_eq!(u.replay.captures, captures + 1);
         assert_eq!(u.m.run, RunState::Stop);

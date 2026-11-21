@@ -397,11 +397,12 @@ impl Ui {
             // menu has one level down
             MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow].into_iter()
                 .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
-            // Display: the skin and the choice of the bottom bar are rows of the Default layout's menu. A sheet is up
-            // only in Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
+            // Display: the choice of the bottom bar is a row of the Default layout's menu. A sheet is up only in
+            // Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
             MenuId::Display => {
                 // and Overlay or Stacked, which Studio had in the hold menu of the plot alone
-                self.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::Skin | Item::BottomBar)).chain([Item::Traces]).collect()
+                let rows = self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar);
+                rows.chain([Item::Traces]).collect()
             }
             m => self.items(m),
         }
@@ -528,12 +529,12 @@ impl Ui {
                 for t in &mut tabs { t.rows.sort_by_key(|it| matches!(it, Item::Open(_))); }
             }
             // the next-free action is offered only when the selected slot is taken
-            if matches!(menu, MenuId::Ref) && self.refs[self.ref_sel].is_none() {
+            if matches!(menu, MenuId::Ref) && self.refs[self.ref_page.sel].is_none() {
                 for t in &mut tabs { t.rows.retain(|it| *it != Item::RefSaveNext); }
             }
             // Ref: the ten slots are one Pick, and the shown switch is the one of the selected slot
             if matches!(menu, MenuId::Ref) {
-                let sel = self.ref_sel;
+                let sel = self.ref_page.sel;
                 let at = 2.min(tabs[0].rows.len());
                 tabs[0].rows.insert(at, Item::RefShow(sel));
             }
@@ -679,7 +680,7 @@ impl Ui {
         }
         if it == Item::RefColor {
             // the five slot colours as one choice (drawn as swatches)
-            let sel = self.refs.get(self.ref_sel).and_then(Option::as_ref).map(|r| r.color.min(REF_COLORS.len() - 1));
+            let sel = self.refs.get(self.ref_page.sel).and_then(Option::as_ref).map(|r| r.color.min(REF_COLORS.len() - 1));
             return (REF_COLORS.iter().map(|c| c.0.to_string()).collect(), sel);
         }
         match self.ctl(it, SHEET_W - 2 * PAD - self.sheet_label_w(it)) {
@@ -701,7 +702,7 @@ impl Ui {
     /// What a row says: its label.
     /// The label of the Store button: the slot the picker shows, and "Replace" when it is taken.
     pub(super) fn ref_store_label(&self) -> String {
-        let (src, sel) = (self.wave_name(WaveId::Ch(self.ref_src)), self.ref_sel);
+        let (src, sel) = (self.wave_name(WaveId::Ch(self.ref_page.src)), self.ref_page.sel);
         if self.refs[sel].is_some() { format!("Replace R{} with {}", sel + 1, src) } else { format!("Store {} as R{}", src, sel + 1) }
     }
 
@@ -745,10 +746,10 @@ impl Ui {
             Item::SimSscCenter => "Profile".into(),
             Item::SimSscDeviation => "Deviation".into(),
             Item::SimSscHz => "Frequency".into(),
-            Item::RefImport => format!("Load file into R{}…", self.ref_sel + 1),
+            Item::RefImport => format!("Load file into R{}…", self.ref_page.sel + 1),
             Item::RefShow(_) => "Shown".into(),
             Item::Open(MenuId::MeasAdd) => "Add measurement".into(),
-            Item::RefClearOne => format!("Clear R{}", self.ref_sel + 1),
+            Item::RefClearOne => format!("Clear R{}", self.ref_page.sel + 1),
             // the rows below are those of one decoder of four: the switch says whose it is
             Item::DecSel => "Decoders".into(),
             Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),
@@ -871,7 +872,7 @@ impl Ui {
             let label = if armed { "Tap again to confirm".to_string() } else if it == Item::RefSave {
                 self.ref_store_label()
             } else if it == Item::MeasSrc || it == Item::MeasSrcB {
-                format!("{}: {}", if it == Item::MeasSrc { "A" } else { "B" }, self.pair_source_caption(if it == Item::MeasSrc { self.meas_src } else { self.meas_src_b }))
+                format!("{}: {}", if it == Item::MeasSrc { "A" } else { "B" }, self.pair_source_caption(if it == Item::MeasSrc { self.sources.a } else { self.sources.b }))
             } else { self.sheet_label(it) };
             let font = if f.mb.width(&label) > b.w - 12 { &f.sb } else { &f.mb };
             cv.text_in(font, b, 1, &label, if red { RED } else { TEXT });
@@ -1016,7 +1017,7 @@ impl Ui {
             RowKind::Link => {
                 let open = matches!(it, Item::Open(_));
                 // a pair that is measured between the two sources shown is marked: a tap takes it away again
-                let added = matches!(it, Item::MeasPair(k) if self.m.meas2.contains(&(k, self.meas_src, self.meas_src_b)));
+                let added = matches!(it, Item::MeasPair(k) if self.m.meas2.contains(&(k, self.sources.a, self.sources.b)));
                 btn(cv, c, if added { mix(BTN, ACCENT, 50) } else { BTN }, if added { ACCENT } else { BTN_BORDER });
                 if added {
                     let (kx, ky) = (c.right() - 30, c.y + c.h / 2);
@@ -1265,7 +1266,7 @@ impl Ui {
     /// Opens the add flow with a source that is on the screen.
     pub(super) fn sheet_add_open(&mut self) {
         let shown = self.sheet_shown_sources();
-        if !shown.contains(&self.meas_src) {
+        if !shown.contains(&self.sources.a) {
             if let Some(&first) = shown.first() {
                 self.sheet_pick_source(first);
             }
@@ -1340,7 +1341,7 @@ impl Ui {
             cv.text_in(&f.m, Rect::new(r.x + PAD, r.y + SHEET_HEAD + 2, r.w - 2 * PAD, 40), 0, "No source is on: turn on a channel", DIM);
         }
         for &(id, c) in &g.chips {
-            let on = id == self.meas_src;
+            let on = id == self.sources.a;
             if on {
                 cv.round(c, 5, self.wave_color(id), 255);
             } else {

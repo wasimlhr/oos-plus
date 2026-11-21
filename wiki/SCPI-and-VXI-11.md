@@ -420,7 +420,7 @@ A reference can be a trigger, measurement, cursor, Math or decoder source like a
 |---|---|
 | `:SYSTem:ERRor?` | the next error, see [Errors](#errors) |
 | `:SYSTem:STATe?` | diagnostic state of the application (also whether the GPU draws) |
-| `:SYSTem:GET? <key>`, `:SYSTem:SET <key> = <value>` | any setting by its setup key, also those without a command of their own (keys in [store.rs](https://github.com/dekajoule/oos/blob/main/ui/src/store.rs)) |
+| `:SYSTem:GET? <key>`, `:SYSTem:SET <key> = <value>` | any setting by its setup key, also those without a command of their own (keys in [lib.rs of oos-store](https://github.com/dekajoule/oos/blob/main/ui/store/src/lib.rs)) |
 | `:SYSTem:GRAPhics[?] CPU\|GPU` | System > Graphics |
 | `:SYSTem:AOUTput[?] TOUT\|PFAil\|OFF` | the rear AUX OUT: trigger out, pass/fail (where the mask or zone unit is there), or low |
 | `:SYSTem:LOG ON\|OFF` | measurement logger |
@@ -430,7 +430,7 @@ A reference can be a trigger, measurement, cursor, Math or decoder source like a
 
 ## Synchronisation: *OPC, *ESR?
 
-- `*OPC?` waits until the operation in progress is finished, then answers `1`. It waits for Auto, a SIM generation and an armed `:SINGle`. It does **not** wait for continuous Run, measurements, Math, decoding or the eye: poll their values instead.
+- `*OPC?` waits until the operation in progress is finished, then answers `1`. It waits for Auto, a SIM generation, an armed `:SINGle`, and a `:STOP` until the record of the stop is in place (a moment, at most 3 s): after `:STOP;*OPC?` the preamble and the data belong to the same record. It does **not** wait for continuous Run, measurements, Math, decoding or the eye: poll their values instead.
 - `*OPC` sets bit 0 of the event register when they are finished; `*ESR?` reads and clears it. Bits: 0 operation complete, 2 query error, 3 device error, 4 execution error, 5 command error.
 - A `:SINGle` that never triggers makes `*OPC?` wait forever: set a timeout in the client, or `:TFORce`.
 - While a client waits, the scope keeps running and serves other clients.

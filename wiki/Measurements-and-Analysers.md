@@ -51,6 +51,10 @@ duration of N periods. Rise and fall time show under **Edges used** how many of 
 (`12 / 12 qualified`). What is set here holds for this measurement only; the others keep the values of the Measure
 settings.
 
+In Studio and Minimal the same settings are on the card of the measurement (the gear on its row), with more: every
+field starts as **Shared** and follows the Measure settings until the row sets its own. **Reference** there offers
+Shared, 10/90 and 20/80; in the volts mode of the levels the card has **Low level** and **High level** in volts instead.
+
 ![Settings of one measurement](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/meas-set.png)
 
 ### Removing measurements

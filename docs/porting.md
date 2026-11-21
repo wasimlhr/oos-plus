@@ -49,11 +49,21 @@ The code keeps the board apart:
   board. `oos_dsp::CHANNELS` must equal `MAX_CHANNELS`, the compiler checks it. With 2 generators, and with 2 or 6
   channels, the neutral code was tried on the host: it builds, and with 2 generators all tests pass.
 
-A port adds `hal/src/<board>/` with its `Target`, `ui/src/board/<board>/` with its `Board` and `rootfs/board/<board>/`,
-and points `target::ACTIVE`, `target::DEPTHS` and `board::Active` at them (the hal test
-`the_depths_come_from_the_active_family` holds the first two together); the image is built with `OOS_BOARD=<board>`. The
-compiler names every part of the interface still missing. `oos-fpgad` is a DHO800/DHO900 tool and stays one; only that
-board's `oos-board` calls it.
+A port adds `hal/src/<board>/` with its `Target`, `ui/src/board/<board>/` with its `Board`, `fpgad/src/<board>/` with
+its commands and `rootfs/board/<board>/`, and gives `target::ACTIVE`, `target::DEPTHS`, `board::Active`, `board()` and
+the macro `if_board!` a line for it under `#[cfg(oos_board = "<board>")]` (the hal test
+`the_depths_come_from_the_active_family` holds the first two together), and `fpgad/src/main.rs` an `oos_hal::if_board!`
+block with its `mod` and `use ... as board` lines. `OOS_BOARD=<board>` picks it for the whole build, the image as well
+as the crates (`hal/board_cfg.rs`, from the build scripts of oos-hal and oos-ui; oos-fpgad follows oos-hal); without it
+the build is for `dho`, and a name with no folder in `rootfs/board/` stops the build. The compiler names every part of
+the interface still missing.
+
+CI checks the port as it checks `dho`, with nothing to add: its folder in `rootfs/board/` puts it on the list of
+families (`tools/ci-parts.sh`), and the jobs `check`, `compare` and `scope` run for each family a change reaches
+(every family for neutral code, only the port for a change in its own folders). Until main has the family, its
+comparison and its programs count as new. For the test on a unit, the port adds its entry to `PROFILES` in
+`tools/device-test.py`: the pattern of its models in `*IDN?`, its channels, vertical scales, highest sample rate and
+whether it has a generator; `--board <board>` picks it, and the model in `*IDN?` does by default.
 
 ## Board families
 

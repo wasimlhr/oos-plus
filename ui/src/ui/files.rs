@@ -117,7 +117,7 @@ fn starts_with(path: &Path, magic: &[u8]) -> bool {
 impl Ui {
     /// The desktop build asks with the dialogs of its system; the scope has none.
     fn native_files(&self) -> bool {
-        self.desktop_panel.is_some()
+        self.workspace.desktop_panel.is_some()
     }
 
     /// The folder a file of `kind` is saved to and looked for in: the save folder (Storage > Save to). A setup follows
@@ -145,7 +145,7 @@ impl Ui {
     fn nothing_to_save(&self, kind: FileKind) -> Option<&'static str> {
         match kind {
             FileKind::WaveCsv | FileKind::WaveBin if self.last[0].is_none() => Some("No waveform to save"),
-            FileKind::FastFrame if self.history.is_empty() && self.last[0].is_none() => Some("No frames to save"),
+            FileKind::FastFrame if self.history.recs.is_empty() && self.last[0].is_none() => Some("No frames to save"),
             _ => None,
         }
     }
@@ -211,7 +211,7 @@ impl Ui {
                 self.rec_action(":SAVE:IMAGe");
                 // without the dialog on it: the screen is saved after the next frame
                 self.close_menu();
-                self.shot_request = Some(path.to_string_lossy().into_owned());
+                self.asks.shot = Some(path.to_string_lossy().into_owned());
             }
             FileKind::FastFrame => self.ff_save_to(Some(path)),
         }
@@ -343,8 +343,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let mut u = Ui::new(Source::Demo { t: 0.0 });
-        u.store_dir = dir.clone();
-        u.store_dest = crate::store::StoreDest::Local;
+        u.files.dir = dir.clone();
+        u.files.dest = crate::store::StoreDest::Local;
         u.step(0.05);
         (u, dir)
     }
@@ -387,7 +387,7 @@ mod tests {
         u.activate(Item::StorePng);
         u.wlan.osk.as_mut().unwrap().text = "front".into();
         u.osk_ok();
-        assert_eq!(u.shot_request.take(), Some(dir.join("front.png").to_string_lossy().into_owned()));
+        assert_eq!(u.asks.shot.take(), Some(dir.join("front.png").to_string_lossy().into_owned()));
         assert!(!u.menu_open, "the screenshot is taken without the menu on it");
         u.open_menu(MenuId::Storage);
         u.activate(Item::StoreSaveScpi);
@@ -485,7 +485,7 @@ mod tests {
     #[test]
     fn slots_stay_and_a_setup_by_name_is_a_file_beside_them() {
         let (mut u, dir) = bench("setup");
-        u.store_slot = 4;
+        u.files.slot = 4;
         u.activate(Item::StoreSaveSetup);
         assert!(u.wlan.osk.is_none() && dir.join("setup4.txt").is_file());
         u.m.tscale = 2;
@@ -515,7 +515,7 @@ mod tests {
         let (mut u, dir) = bench("dest");
         assert_eq!(u.file_dir(FileKind::Setup), dir);
         assert_eq!(u.file_dir(FileKind::Session), dir);
-        u.store_dest = crate::store::StoreDest::Stick;
+        u.files.dest = crate::store::StoreDest::Stick;
         assert_eq!(u.file_dir(FileKind::Setup), Path::new(crate::store::USB_DIR));
         assert_eq!(u.setup_path().parent(), Some(dir.as_path()), "the slots stay where they are kept");
         let _ = std::fs::remove_dir_all(&dir);
@@ -526,7 +526,7 @@ mod tests {
     #[test]
     fn the_desktop_build_asks_with_its_dialog() {
         let (mut u, dir) = bench("desktop");
-        u.desktop_panel = Some(false);
+        u.workspace.desktop_panel = Some(false);
         u.activate(Item::StoreSessSave);
         assert!(u.wlan.osk.is_none());
         let ask = u.take_file_request().expect("a question for the dialog");
@@ -555,20 +555,20 @@ mod tests {
     fn scpi_and_the_quick_key_never_ask() {
         let (mut u, dir) = bench("auto");
         for native in [false, true] {
-            u.desktop_panel = native.then_some(false);
+            u.workspace.desktop_panel = native.then_some(false);
             u.m.quick = Quick::SaveCsv;
             u.quick();
             u.file_save_auto(FileKind::FastFrame);
             u.file_save_auto(FileKind::Shot);
             assert!(u.wlan.osk.is_none() && u.take_file_request().is_none());
-            assert!(u.shot_request.take().is_some_and(|p| p.ends_with(".png")));
+            assert!(u.asks.shot.take().is_some_and(|p| p.ends_with(".png")));
         }
         let names: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         assert_eq!(names.iter().filter(|n| n.starts_with("wave-") && n.ends_with(".csv")).count(), 2, "{names:?}");
         assert!(names.contains(&"frame-001.bin".to_string()) && names.contains(&"frame-002.bin".to_string()), "{names:?}");
-        u.history.clear();
+        u.history.recs.clear();
         u.file_load_latest(FileKind::FastFrame);
-        assert!(!u.history.is_empty(), "{:?}", u.toast);
+        assert!(!u.history.recs.is_empty(), "{:?}", u.toast);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

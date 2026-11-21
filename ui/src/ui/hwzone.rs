@@ -4,10 +4,24 @@
 //! The zone trigger in the FPGA (`zone.hw = on` in system.conf, docs/fork/hwzone.md): the zones go to the zone tables
 //! of the mask unit, which qualifies the trigger, so only qualifying frames arrive and the fast display path stays on.
 //! The software zone filter stays the fallback and the reference: it still runs on every full record that reaches the
-//! UI, and alone where the hardware cannot qualify.
+//! UI, and alone where the hardware cannot qualify. `ZoneTrig` keeps the zone trigger's state of the screen: the
+//! Zone menu's zone, the drawing it armed, what the software filter dropped and the zone unit's reading.
 
 use super::*;
 use crate::board::ZoneWant;
+
+/// The zone trigger's state of the screen (ADR 0062).
+#[derive(Default)]
+pub(super) struct ZoneTrig {
+    /// zone being edited in the Zone menu; a "draw" action arms the next drag in the plot (zone, shape)
+    pub sel: usize,
+    pub arm: Option<(usize, bool)>,
+    /// records dropped by the zone condition
+    pub drops: u64,
+    /// the zone unit: latest reading, and a number raised to clear its counter
+    pub unit: Option<crate::board::ZoneRead>,
+    pub clear: u64,
+}
 
 impl Ui {
     /// The zone trigger runs in the hardware: enabled on this board, live hardware frames, at least one usable zone,
@@ -17,7 +31,7 @@ impl Ui {
             && self.src.is_hw()
             && self.zone_hw_src().is_some_and(|c| self.m.ch[c].on)
             && !self.mask_hw_active()
-            && self.unit_blocked.is_none()
+            && self.mask_unit.blocked.is_none()
     }
 
     /// The one source channel of the usable zones; None without usable zones or with zones on different channels.
@@ -32,19 +46,20 @@ impl Ui {
         let want = self.zone_hw_active().then(|| ZoneWant {
             ch: self.zone_hw_src().unwrap_or(0),
             zones: self.m.zones.iter().filter(|z| z.usable()).map(|z| (z.polygon(), z.inside)).collect(),
-            clear: self.zone_hw_clear,
+            clear: self.zone_trig.clear,
         });
         if let Some(r) = self.src.hw_zone(want) {
-            self.zone_hw = r;
+            self.zone_trig.unit = r;
         }
     }
 
     /// Fork, `:SYSTem:DEBug:ZONE?`: the zone unit's raw status and counter next to the software filter and the frame
     /// counters of the pipeline (docs/fork/hwzone.md).
     pub fn zone_debug_text(&self) -> String {
-        let (acq, used, _) = crate::drawpipe::counters().read();
-        let sw = format!("sw_drops={},acquired={},used={},records={},last_drop=[{}]", self.zone_drops, acq, used, self.records, self.zone_last);
-        let Some(r) = self.zone_hw else {
+        let (acq, used, _) = crate::board::pipe::counters().read();
+        let sw =
+            format!("sw_drops={},acquired={},used={},records={},last_drop=[{}]", self.zone_trig.drops, acq, used, self.counts.records, self.zone_last);
+        let Some(r) = self.zone_trig.unit else {
             return format!("off,enabled={},active={},{}", board().zone_hw() as u8, self.zone_hw_active() as u8, sw);
         };
         format!(
@@ -92,7 +107,7 @@ mod tests {
         // the demo source is no hardware
         assert!(!ui.zone_hw_active());
         assert!(ui.zone_debug_text().starts_with("off,enabled=0,active=0,sw_drops=0,"));
-        ui.zone_hw = Some(crate::board::ZoneRead {
+        ui.zone_trig.unit = Some(crate::board::ZoneRead {
             ch: 1,
             slot: 1,
             armed: true,

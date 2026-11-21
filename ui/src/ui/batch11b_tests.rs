@@ -141,7 +141,7 @@ fn the_waveform_can_float_but_the_last_docked_view_cannot() {
     let f = float_rect_of(&u, VKind::Wave);
     assert!(f.w >= 300 && f.h >= 250, "{f:?}");
     // the plot is in the floating panel
-    assert!(u.grid.x >= f.x && u.grid.right() <= f.right() + 1 && u.grid.y >= f.y, "{:?} in {f:?}", u.grid);
+    assert!(u.plot.grid.x >= f.x && u.plot.grid.right() <= f.right() + 1 && u.plot.grid.y >= f.y, "{:?} in {f:?}", u.plot.grid);
     // the measurements are the last docked view: they stay
     assert!(!u.dock_can_float(VKind::Measure));
     let before = u.studio.view;
@@ -183,7 +183,7 @@ fn offline_measurements_can_float() {
 #[test]
 fn the_measurements_resize_move_and_float() {
     let mut u = studio();
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     frame(&mut u);
     let (m0, t0) = (leaf(&u, VKind::Measure), leaf(&u, VKind::Table));
     // a divider with a visible handle between the waveform and the column

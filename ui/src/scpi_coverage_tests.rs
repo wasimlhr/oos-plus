@@ -26,8 +26,8 @@ fn header_of(c: &str) -> Option<&'static str> {
 impl T {
     fn new() -> T {
         let mut t = T { s: Scpi::open(0), ui: Ui::new(Source::Demo { t: 0.0 }), cv: Canvas::new(W, H), used: BTreeSet::new() };
-        t.ui.store_dir = std::env::temp_dir().join(format!("oos-scpiext-{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&t.ui.store_dir);
+        t.ui.files.dir = std::env::temp_dir().join(format!("oos-scpiext-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&t.ui.files.dir);
         for _ in 0..40 { t.ui.step(0.05); }
         assert!(t.ui.last[0].is_some(), "the demo source gave a record");
         t.ui.m.run = RunState::Stop;
@@ -180,8 +180,8 @@ fn trigger(t: &mut T) {
     t.rn(":TRIG:LEV 0.7", ":TRIG:LEV?", 0.7);
     t.rn(":TRIG:LEV2 -0.7", ":TRIG:LEV2?", -0.7);
     t.go(":TRIG:EDGE:SOUR CHAN1;:TRIG:EDGE:LEV 5");
-    t.ui.stats[0].valid = true;
-    (t.ui.stats[0].vmax, t.ui.stats[0].vmin, t.ui.stats[0].top, t.ui.stats[0].base) = (2.0, 0.0, 2.0, 0.0);
+    t.ui.measured.stats[0].valid = true;
+    (t.ui.measured.stats[0].vmax, t.ui.measured.stats[0].vmin, t.ui.measured.stats[0].top, t.ui.measured.stats[0].base) = (2.0, 0.0, 2.0, 0.0);
     t.go(":TRIG:LEV:AUTO");
     assert_eq!(t.ui.m.trig_level, 1.0, "level 50 % is the middle of the signal, as the Trig50 action");
     // the typed commands do not change the trigger type
@@ -191,13 +191,13 @@ fn trigger(t: &mut T) {
 fn history_search(t: &mut T) {
     // history: stored records of the acquisition
     let rec = t.ui.last[0].clone().expect("a record");
-    t.ui.history.clear();
-    for _ in 0..4 { t.ui.history.push_back(rec.clone()); }
+    t.ui.history.recs.clear();
+    for _ in 0..4 { t.ui.history.recs.push_back(rec.clone()); }
     t.rt(":ACQ:HIST:COUN?", ":ACQ:HIST:COUN?", "4");
     t.rt(":ACQ:HIST:ENAB ON", ":ACQ:HIST:ENAB?", "1");
-    assert_eq!(t.ui.hist_pos, Some(3), "the newest record");
+    assert_eq!(t.ui.history.pos, Some(3), "the newest record");
     t.rt(":ACQ:HIST:FRAM 2", ":ACQ:HIST:FRAM?", "2");
-    assert_eq!(t.ui.hist_pos, Some(1));
+    assert_eq!(t.ui.history.pos, Some(1));
     t.go(":ACQ:HIST:NEXT");
     assert_eq!(t.go(":ACQ:HIST:FRAM?"), "3");
     t.go(":ACQ:HIST:PREV");
@@ -205,9 +205,9 @@ fn history_search(t: &mut T) {
     assert_eq!(t.go(":ACQ:HIST:FRAM?"), "1");
     t.no(":ACQ:HIST:FRAM 9", "-224");
     t.rt(":ACQ:HIST:ENAB OFF", ":ACQ:HIST:ENAB?", "0");
-    assert_eq!(t.ui.hist_pos, None);
+    assert_eq!(t.ui.history.pos, None);
     assert_eq!(t.go(":ACQ:HIST:FRAM?"), "0");
-    t.ui.history.clear();
+    t.ui.history.recs.clear();
     t.no(":ACQ:HIST:ENAB ON", "-221");
     // search: mark events
     t.rt(":SEAR:STAT ON", ":SEAR:STAT?", "1");
@@ -370,9 +370,9 @@ fn measure_channel_math(t: &mut T) {
 
 fn reference_mask_sim(t: &mut T) {
     t.ui.refs[0] = Some(RefWave { src: 0, color: 0, label: "r".into(), t0: 0.0, dt: 1e-9, v: (0..200).map(|i| if i % 20 < 10 { -1.0 } else { 1.0 }).collect::<Vec<f32>>().into(), vpd: 1.0, offset: 0.0, on: true });
-    t.ui.ref_sel = 0;
+    t.ui.ref_page.sel = 0;
     // export: to a named file and to the slot's own file
-    let dir = t.ui.store_dir.clone();
+    let dir = t.ui.files.dir.clone();
     let p = dir.join("export.csv");
     t.go(&format!(":REF:EXP \"{}\"", p.display()));
     assert!(std::fs::read_to_string(&p).unwrap().starts_with("Time (s),Volts"));
@@ -396,7 +396,7 @@ fn reference_mask_sim(t: &mut T) {
     t.no(":REF:HOR:SCAL -1", "-224");
     // mask
     t.go(":MASK:CRE:REF R1");
-    assert!(t.ui.mask_ref.is_some() && t.ui.m.mask_on, "Create from ref");
+    assert!(t.ui.mask_sw.reference.is_some() && t.ui.m.mask_on, "Create from ref");
     t.no(":MASK:CRE:REF R9", "-221");
     t.rt(":MASK:INV ON", ":MASK:INV?", "1");
     t.shows(Item::MaskInvert, "On");
@@ -408,10 +408,10 @@ fn reference_mask_sim(t: &mut T) {
     t.go(&format!(":MASK:SAVE \"{}\"", mp.display()));
     assert!(mp.is_file());
     t.go(":MASK:CLE");
-    assert!(t.ui.mask_ref.is_none() && !t.ui.m.mask_on);
+    assert!(t.ui.mask_sw.reference.is_none() && !t.ui.m.mask_on);
     t.no(":MASK:SAVE", "-221");
     t.go(&format!(":MASK:LOAD \"{}\"", mp.display()));
-    assert!(t.ui.mask_ref.is_some() && t.ui.m.mask_on);
+    assert!(t.ui.mask_sw.reference.is_some() && t.ui.m.mask_on);
     // SIM actions
     t.go(":SIM:PRES?");
     t.go(":SIM:DEF");
@@ -450,20 +450,20 @@ fn reference_mask_sim(t: &mut T) {
 }
 
 fn storage_zoom(t: &mut T) {
-    let dir = t.ui.store_dir.clone();
+    let dir = t.ui.files.dir.clone();
     // slot and destination
     t.rt(":SAVE:SLOT 3", ":SAVE:SLOT?", "3");
     t.shows(Item::StoreSlot, "3  (setup3.txt)");
     t.no(":SAVE:SLOT 10", "-224");
     t.rt(":SAVE:DEST DESK", ":SAVE:DEST?", "DESK");
-    assert_eq!(t.ui.store_dest, crate::store::StoreDest::Local);
+    assert_eq!(t.ui.files.dest, crate::store::StoreDest::Local);
     t.rt(":SAVE:DEST AUTO", ":SAVE:DEST?", "AUTO");
     t.shows(Item::StoreDest, "Auto");
     // *SAV / *RCL are Save setup / Recall setup of the chosen slot
     t.go(":TIM:SCAL 1e-4;:CHAN2:SCAL 0.5");
     t.go("*SAV 2");
     assert!(t.ui.setup_path().is_file(), "setup2.txt");
-    assert_eq!(t.ui.store_slot, 2);
+    assert_eq!(t.ui.files.slot, 2);
     t.go(":TIM:SCAL 1e-3;:CHAN2:SCAL 2");
     t.go("*RCL 2");
     assert_eq!(t.go(":TIM:SCAL?").parse::<f64>().unwrap(), 1e-4);
@@ -512,7 +512,7 @@ fn storage_zoom(t: &mut T) {
     t.go(":SAVE:WAV");
     let ip = dir.join("image-out.png");
     t.go(&format!(":SAVE:IMAG \"{}\"", ip.display()));
-    assert_eq!(t.ui.shot_request.as_deref(), Some(ip.to_string_lossy().as_ref()));
+    assert_eq!(t.ui.asks.shot.as_deref(), Some(ip.to_string_lossy().as_ref()));
     t.go(":SAVE:IMAG");
     t.go(":SAVE:FFR");
     // callouts: placed by source and time, listed, removed
@@ -530,7 +530,7 @@ fn storage_zoom(t: &mut T) {
     t.go(":CALL:CLE");
     assert_eq!(t.raw(":CALL:COUN?"), "0");
     // a session: saved, the bench changed, loaded back
-    let sess = t.ui.store_dir.join("bench.oss");
+    let sess = t.ui.files.dir.join("bench.oss");
     t.go(&format!(":SAVE:SESS \"{}\"", sess.display()));
     assert!(sess.is_file());
     let before = t.raw(":TIM:SCAL?");
@@ -551,12 +551,12 @@ fn storage_zoom(t: &mut T) {
     assert!(t.ui.studio.sz.lane.is_none());
     t.no(":TIM:DEL:SOUR NOWHERE", "-224");
     t.rn(":TIM:DEL:VZO 4", ":TIM:DEL:VZO?", 4.0);
-    assert_eq!(t.ui.zoom_vfactor, 4.0);
+    assert_eq!(t.ui.zoom_view.vfactor, 4.0);
     t.go(":TIM:DEL:VZO 1");
-    assert_eq!(t.ui.zoom_vfactor, 1.0);
+    assert_eq!(t.ui.zoom_view.vfactor, 1.0);
     t.go(":TIM:DEL:VZO 8");
     t.go(":TIM:DEL:VZO:RES");
-    assert_eq!(t.ui.zoom_vfactor, 1.0);
+    assert_eq!(t.ui.zoom_view.vfactor, 1.0);
     t.go(":TIM:DEL:SCAL 1e-4;:TIM:DEL:OFFS 3e-4");
     t.go(":TIM:DEL:CENT");
     assert_eq!(t.ui.m.zdelay, 0.0, "Center trigger");
@@ -804,13 +804,13 @@ fn system(t: &mut T) {
     // the commands that need CONFIRM
     t.no(":SYST:POW:OFF", "-221");
     t.no(":SYST:POW:REST", "-221");
-    assert_eq!(t.ui.power_action, None, "refused: nothing was asked of the main loop");
+    assert_eq!(t.ui.power.action, None, "refused: nothing was asked of the main loop");
     t.go(":SYST:POW:OFF CONFIRM");
-    assert_eq!(t.ui.power_action, Some(PowerAction::Off), "the main loop would carry it out");
-    t.ui.power_action = None;
+    assert_eq!(t.ui.power.action, Some(PowerAction::Off), "the main loop would carry it out");
+    t.ui.power.action = None;
     t.go(":SYST:POW:REST CONFIRM");
-    assert_eq!(t.ui.power_action, Some(PowerAction::Restart));
-    t.ui.power_action = None;
+    assert_eq!(t.ui.power.action, Some(PowerAction::Restart));
+    t.ui.power.action = None;
     let update = t.go(":SYST:UPD:STAT?");
     assert!(update.starts_with('"') && !update.contains('\n'), "one line of quoted strings: {update}");
     t.no(":SYST:UPD:ROLL", "-221");
@@ -928,7 +928,7 @@ fn extras(t: &mut T) {
     assert!(t.ui.m.zones[1].pts.is_empty());
     t.no(":ZONE3:STAT ON", "-113");
     // generator wave from a file
-    let arb = t.ui.store_dir.join("arb-test.csv");
+    let arb = t.ui.files.dir.join("arb-test.csv");
     std::fs::write(&arb, (0..64).map(|i| format!("{}\n", (i as f64 * 0.2).sin())).collect::<String>()).unwrap();
     t.go(&format!(":SOUR:ARB:LOAD \"{}\"", arb.display()));
     t.go(&format!(":SOUR1:ARB:LOAD \"{}\"", arb.display()));
@@ -964,7 +964,7 @@ fn every_new_header_is_set_and_queried_and_changes_what_the_menu_changes() {
     system(&mut t);
     extras(&mut t);
     catalogue_and_inverter_index(&mut t);
-    let _ = std::fs::remove_dir_all(&t.ui.store_dir);
+    let _ = std::fs::remove_dir_all(&t.ui.files.dir);
     let missing: Vec<&str> = all_headers().filter(|h| !t.used.contains(h)).collect();
     assert!(missing.is_empty(), "headers no test exercised: {missing:?}");
 }
@@ -1155,7 +1155,7 @@ fn every_menu_item_of_the_map_follows_its_scpi_header_and_the_header_its_item() 
     for r in &rows {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = Layout::Default;
-        u.store_dir = std::env::temp_dir().join(format!("oos-scpimap-{}", std::process::id()));
+        u.files.dir = std::env::temp_dir().join(format!("oos-scpimap-{}", std::process::id()));
         // the scope of a bench: every input on, a reference in R1
         for c in 0..n_ch() { u.m.ch[c].on = true; }
         u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 128].into(), vpd: 0.5, offset: 0.0, on: true });

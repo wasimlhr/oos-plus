@@ -140,31 +140,31 @@ fn ui_fields(u: &Ui) -> BTreeMap<&'static str, String> {
     v.insert("menu", format!("{:?}/{}", u.menu, u.menu_open));
     v.insert("pick", format!("{:?}", u.pick.map(|p| p.it)));
     v.insert("xy", format!("{}", u.xy));
-    v.insert("full", format!("{}", u.full));
-    v.insert("meas_src", format!("{:?}", u.meas_src));
-    v.insert("meas_src_b", format!("{:?}", u.meas_src_b));
-    v.insert("ref_sel", format!("{}", u.ref_sel));
-    v.insert("ref_src", format!("{}", u.ref_src));
+    v.insert("full", format!("{}", u.full.on));
+    v.insert("meas_src", format!("{:?}", u.sources.a));
+    v.insert("meas_src_b", format!("{:?}", u.sources.b));
+    v.insert("ref_sel", format!("{}", u.ref_page.sel));
+    v.insert("ref_src", format!("{}", u.ref_page.src));
     v.insert("hist_ch", format!("{:?}", u.hist_ch));
-    v.insert("hist_pos", format!("{:?}", u.hist_pos));
-    v.insert("zone_sel", format!("{}", u.zone_sel));
-    v.insert("offline", format!("{}", u.offline));
+    v.insert("hist_pos", format!("{:?}", u.history.pos));
+    v.insert("zone_sel", format!("{}", u.zone_trig.sel));
+    v.insert("offline", format!("{}", u.offline.on));
     v.insert("sim_play", format!("{}", u.sim_play));
     v.insert("search_on", format!("{}", u.search_on));
     v.insert("dialog", format!("{:?}", u.dialog));
     v.insert("numpad", format!("{}", u.numpad.is_some()));
-    v.insert("store_slot", format!("{}", u.store_slot));
-    v.insert("shot_request", format!("{:?}", u.shot_request));
-    v.insert("power_dlg", format!("{}", u.power_dlg));
-    v.insert("panel_tx", format!("{}", u.panel_tx.len()));
-    v.insert("table", format!("{}", u.table.is_some()));
+    v.insert("store_slot", format!("{}", u.files.slot));
+    v.insert("shot_request", format!("{:?}", u.asks.shot));
+    v.insert("power_dlg", format!("{}", u.power.open));
+    v.insert("panel_tx", format!("{}", u.asks.panel.len()));
+    v.insert("table", format!("{}", u.table.kind.is_some()));
     v.insert("cat", format!("{}/{}/{}", u.cat.tab, u.cat.sel, u.cat.scroll));
     v.insert("single_armed", format!("{}", u.single_armed));
     v.insert("cleared", format!("{}", u.cleared));
     v.insert("refs", format!("{:?}", u.refs.iter().map(|r| r.as_ref().map(|r| (r.on, r.color))).collect::<Vec<_>>()));
-    v.insert("mask", format!("{}", u.mask.is_some()));
-    v.insert("offline_ref", format!("{}", u.offline_ref));
-    v.insert("auto_run", format!("{}", u.auto.is_some()));
+    v.insert("mask", format!("{}", u.mask_sw.mask.is_some()));
+    v.insert("offline_ref", format!("{}", u.offline.slot));
+    v.insert("auto_run", format!("{}", u.auto.run.is_some()));
     v
 }
 
@@ -233,7 +233,7 @@ fn build(l: Layout, n: usize) -> Ui {
     let dir = std::env::temp_dir().join(format!("oos-func-{}-{}", std::process::id(), n % 40));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     for _ in 0..10 { u.step(0.05); }
     u.m.run = RunState::Stop;
     for _ in 0..3 { frame(&mut u); }
@@ -347,7 +347,7 @@ fn fresh_for(ctx: &mut Ctx) -> Ui {
 fn reopen(u: &mut Ui, ctx: &Ctx, tab: usize) {
     u.numpad = None;
     u.dialog = None;
-    u.power_dlg = false;
+    u.power.open = false;
     if !(u.menu_open && u.menu == ctx.menu) {
         u.open_menu(ctx.menu);
         frame(u);
@@ -830,8 +830,8 @@ impl Walker {
         if u.menu == MenuId::Pick { u.close_picker(); }
         u.numpad = None;
         u.dialog = None;
-        u.power_dlg = false;
-        u.sysinfo = None;
+        u.power.open = false;
+        u.sysinfo.rows = None;
         u.wlan.osk = None;
         if u.m.layout != self.ctx.layout { u.m.layout = self.ctx.layout; }
         reopen(u, &self.ctx, tab);
@@ -996,7 +996,7 @@ fn plot_metrics(u: &mut Ui, n: usize) -> (u64, usize, usize, u64) {
     u.toast = None;
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
-    let g = u.grid;
+    let g = u.plot.grid;
     let (mut ink, mut lit, mut grey) = (0u64, 0usize, 0u64);
     let mut cols = std::collections::HashSet::new();
     for y in g.y..g.y + g.h {
@@ -1097,7 +1097,7 @@ fn utility_probe() {
                 let Some(c) = c else { println!("FC {:?} {:?}: not on the page", l, it); continue };
                 if by_tap { tap_c(&mut u, &c, "tap"); } else { u.activate(it); frame(&mut u); }
                 let t = u.toast.as_ref().map(|t| t.0.clone());
-                println!("FC {:?} {:?} tap={} rect {:?} -> menu {:?}/{} dialog {} toast {:?} shot {:?}", l, it, by_tap, c.rect, u.menu, u.menu_open, u.dialog.is_some() || u.sysinfo.is_some(), t, u.shot_request);
+                println!("FC {:?} {:?} tap={} rect {:?} -> menu {:?}/{} dialog {} toast {:?} shot {:?}", l, it, by_tap, c.rect, u.menu, u.menu_open, u.dialog.is_some() || u.sysinfo.rows.is_some(), t, u.asks.shot);
             }
         }
     }

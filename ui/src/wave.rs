@@ -7,16 +7,17 @@
 use crate::board::{board, Board};
 use crate::model::*;
 
-/// The state shared with the acquisition thread, locked: the one `unwrap` for every reader and writer of `HwShared`
-/// in this file. A lock fails only when another holder panicked while it held it, and the state may then be half
-/// written; this panics then, as each of these lines did before.
-fn hw(shared: &crate::board::HwShared) -> std::sync::MutexGuard<'_, crate::board::Shared> {
-    shared.lock().unwrap()
-}
+/// A state shared with a thread of the board (`HwShared` of the acquisition thread, `LiveShared` of the read-out of
+/// `--fpga-live`), locked: the board's one lock helper (`board::lock`), which panics when another holder panicked
+/// while it held the lock.
+pub(crate) use crate::board::lock as hw;
 
 mod levels;
+mod record;
 
 pub use levels::*;
+pub use record::resample as resample_record;
+pub use record::{sw_trig_level, to_record, trig_mean, trigger_point};
 
 pub struct Rng(u64);
 impl Rng {
@@ -241,11 +242,13 @@ fn demo_signal(cfg: DemoCfg, ch: usize, t: f64) -> f64 {
                 2.5 * h * (-(ph - 0.5) / tau).exp()
             }
         }
-        1 if cfg.video.is_some() => oos_dsp::sim::video(cfg.video.unwrap(), t),
-        1 => {
-            let w = 2.0 * PI * 10e3 * t;
-            1.0 * w.sin() + 0.08 * (3.0 * w).sin()
-        }
+        1 => match cfg.video {
+            Some(v) => oos_dsp::sim::video(v, t),
+            None => {
+                let w = 2.0 * PI * 10e3 * t;
+                1.0 * w.sin() + 0.08 * (3.0 * w).sin()
+            }
+        },
         2 => {
             // UART 115200 8N1, 0 / 3.3 V, idle high, sending "OOS 0.1 " in a loop with one idle byte between strings
             const MSG: &[u8] = b"OOS 0.1 ";
@@ -342,7 +345,7 @@ fn demo_la(t: f64) -> u16 {
 /// The record `Source::acquire` makes of a hardware frame: 3600 points across the screen.
 pub fn hw_record(m: &Model, f: crate::board::Frame) -> Record {
     let window = m.time_per_div() as f64 * HDIV as f64;
-    crate::board::to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)
+    to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)
 }
 
 impl Source {
@@ -607,16 +610,15 @@ impl Source {
         let Source::Hw { shared, .. } = self else { return None };
         let (k, f) = hw(shared).seg.shown.take()?;
         let window = m.time_per_div() as f64 * HDIV as f64;
-        Some((k, crate::board::to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)))
+        Some((k, to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)))
     }
 
     /// Hardware source in STOP: the view shown (time per div, delay; None: none to read for), and the frame the
     /// thread has read again from the stored record for it, if a new one came (`board::Shared::stop_view`).
-    /// `whole`: the view is the stored record as a whole, wanted at every sample (`board::Shared::stop_whole`).
-    pub fn hw_stop(&mut self, view: Option<(f64, f64)>, whole: bool) -> Option<crate::board::Frame> {
+    pub fn hw_stop(&mut self, view: Option<(f64, f64)>) -> Option<crate::board::Frame> {
         if let Source::Hw { shared, .. } = self {
             let mut g = hw(shared);
-            (g.stop_view, g.stop_whole) = (view, whole && view.is_some());
+            g.stop_view = view;
             return g.replay.take().filter(|_| view.is_some());
         }
         None
@@ -649,7 +651,7 @@ impl Source {
             let skip = n.saturating_sub(max);
             g.queue.drain(..skip);
             g.dropped += skip as u64;
-            crate::drawpipe::Counters::add(&crate::drawpipe::counters().dropped, skip as u64);
+            crate::board::pipe::Counters::add(&crate::board::pipe::counters().dropped, skip as u64);
             return g.queue.drain(..n - skip).collect();
         }
         Vec::new()
@@ -680,7 +682,7 @@ impl Source {
             return acquire_hw(m, shared, seen);
         }
         if let Source::Live { shared, seen, words, xinc, yinc, yorg, yref } = self {
-            let g = shared.lock().unwrap();
+            let g = hw(shared);
             if g.0 == *seen || g.1.is_empty() {
                 return None; // no new frame
             }
@@ -722,7 +724,7 @@ fn acquire_hw(m: &Model, shared: &crate::board::HwShared, seen: &mut u64) -> Opt
     g.deep_raw = crate::deepmeas::want(m);
     g.slow = board().slow_mode(m);
     // running: no STOP view any more, the thread acquires again
-    (g.stop_view, g.stop_whole, g.replay) = (None, false, None);
+    (g.stop_view, g.replay) = (None, None);
     g.stamp = m.hw_stamp;
     g.cores = m.cores;
     g.avg_clear = m.hw_avg_clear;
@@ -794,8 +796,8 @@ fn acquire_demo(m: &Model, t: &mut f64, dt_wall: f64, rng: &mut Rng, g: &ScreenG
 /// Where the demo signals from `start` trigger, in seconds; None when they do not.
 fn demo_trigger(m: &Model, cfg: DemoCfg, start: f64, window: f64, dt: f64) -> Option<f64> {
     let used = m.trig_channels();
-    let span = window * 1.5 + m.trig_span();
-    let mut dts = dt.min(m.trig_feature()).max(1e-9);
+    let span = window * 1.5 + crate::trig::span(m);
+    let mut dts = dt.min(crate::trig::feature(m)).max(1e-9);
     let mut ns = (span / dts).ceil() as usize;
     if ns > 400_000 {
         ns = 400_000;
@@ -1032,7 +1034,7 @@ impl Phosphor {
     /// options: dots (`Model::dots`, one pixel per sample) and per-sample brightness weights 0..1 (Z input).
     /// `pairs` (`Record::pairs`): with dots, each min/max pair is one vertical span, since it stands for every sample
     /// between its extremes; two dots would drop the edges of a slow time base.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // a record's parts as each caller holds them, not always a `Record`
     pub fn draw_ex(
         &mut self,
         c: usize,

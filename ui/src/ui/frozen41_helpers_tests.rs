@@ -21,12 +21,12 @@ fn force_queues_exactly_one_live_mock_request_even_with_a_modal_open() {
     for modal in 0..3 {
         ui.m.run = RunState::Stop;
         ui.dialog = None;
-        ui.power_dlg = false;
+        ui.power.open = false;
         ui.close_menu();
         match modal {
             0 => ui.dialog = Some(vec!["modal".into()]),
             1 => ui.open_menu(MenuId::Trigger),
-            _ => ui.power_dlg = true,
+            _ => ui.power.open = true,
         }
         shared.lock().unwrap().force = false;
         ui.key(key::FORCE);
@@ -34,7 +34,7 @@ fn force_queues_exactly_one_live_mock_request_even_with_a_modal_open() {
         assert!(state.force);
         assert_eq!(state.force_requests, modal + 1, "one key press must not request the pulse twice");
         assert_eq!(ui.m.run, RunState::Run);
-        assert_eq!((ui.records, ui.wfm_total, ui.replay.captures), (0, 0, 0));
+        assert_eq!((ui.counts.records, ui.counts.wfm_total, ui.replay.captures), (0, 0, 0));
     }
 }
 
@@ -50,7 +50,7 @@ fn force_in_stored_and_sim_sessions_never_touches_the_mock_hardware() {
             ui.set_offline(true);
         }
         ui.m.sim_slot = 0;
-        ui.ref_sel = 0;
+        ui.ref_page.sel = 0;
         ui.m.trig_mode = TrigMode::Single;
         ui.m.run = RunState::Stop;
         ui.dialog = Some(vec!["modal must not swallow Force".into()]);
@@ -84,14 +84,14 @@ fn force_after_completed_single_arms_a_fresh_receipt_in_live_and_stored_modes() 
             ui.refs[0] = Some(reference(vec![0.0; 100], 1e-9, 0.0));
             ui.set_offline(true);
         }
-        let accepted = ui.wfm_total;
+        let accepted = ui.counts.wfm_total;
         ui.force_trigger();
         assert_eq!(
             ui.scpi_operations().state(&ui),
             OperationState::Pending,
             "the earlier accepted Single receipt must not complete a newly forced one-shot"
         );
-        assert_eq!(ui.wfm_total, accepted);
+        assert_eq!(ui.counts.wfm_total, accepted);
         assert_eq!(shared.lock().unwrap().force_requests, u64::from(!stored));
     }
 }
@@ -178,7 +178,7 @@ fn remote_current_statistics_use_the_selected_rows_own_thresholds() {
         .collect();
     ui.refs[0] = Some(reference(values, 1e-9, 0.001));
     ui.m.meas = vec![(Meas::Rise, WaveId::Ref(0))];
-    ui.meas_own.insert(
+    ui.meas_own.rows.insert(
         (Meas::Rise, WaveId::Ref(0)),
         reflook::MeasOwn { refs_set: true, low: 0.4, high: 0.6, ..reflook::MeasOwn::shared(&ui.m) },
     );
@@ -221,7 +221,7 @@ fn statistics_reset_keeps_rows_and_pending_single_but_rejects_old_deferred_count
     }
     ui.finish_deferred_capture_statistics();
     assert_eq!(ui.m.meas, selection);
-    assert!(ui.mstat.iter().all(|s| s.n == 0));
+    assert!(ui.results.rows.iter().all(|s| s.n == 0));
     assert_eq!(ui.replay.captures, 1);
     assert_eq!(fence.state(&ui), OperationState::Pending);
 }
@@ -234,12 +234,12 @@ fn histogram_statistics_use_the_detail_lane_transform_and_horizontal_time_axis()
     ui.workspace.stacked = true;
     ui.set_zoom(true);
     ui.relayout();
-    ui.zoom_vfactor = 4.0;
-    ui.zoom_vcenter = 0.5;
+    ui.zoom_view.vfactor = 4.0;
+    ui.zoom_view.vcenter = 0.5;
     ui.m.ch[0].offset = 0.1;
     ui.m.ch[0].vscale = VSCALES.iter().position(|&v| v == 0.2).unwrap();
     ui.m.ch[0].unit = AmpUnit::A;
-    ui.meas_src = WaveId::Ch(0);
+    ui.sources.a = WaveId::Ch(0);
     ui.m.hist = Hist::Vertical;
     let (w, h) = (ui.phz.w, ui.phz.h);
     let (top, bottom) = (h / 4, 3 * h / 4);
@@ -271,10 +271,10 @@ fn histogram_statistics_use_the_detail_lane_transform_and_horizontal_time_axis()
 fn invalid_reference_color_and_mask_pair_do_not_partially_mutate_configuration() {
     let mut ui = Ui::new(Source::Demo { t: 0.0 });
     ui.refs[0] = Some(reference(vec![0.0; 10], 1e-9, 0.0));
-    ui.ref_sel = 0;
+    ui.ref_page.sel = 0;
     assert!(!ui.ref_color_set(1, 1));
     assert!(!ui.ref_color_set(0, REF_COLORS.len()));
-    assert_eq!(ui.ref_sel, 0);
+    assert_eq!(ui.ref_page.sel, 0);
     assert_eq!(ui.refs[0].as_ref().unwrap().color, 0);
     let before = (ui.m.mask_x, ui.m.mask_y);
     assert!(!ui.mask_tolerance(Some(1.0), Some(f32::NAN)));

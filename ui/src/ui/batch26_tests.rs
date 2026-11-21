@@ -16,7 +16,7 @@ fn studio() -> Ui {
     let dir = std::env::temp_dir().join(format!("oos-batch26-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -66,7 +66,7 @@ fn csv_bytes() -> Vec<u8> {
 }
 
 fn load_csv(u: &mut Ui, slot: usize, name: &str) {
-    std::fs::write(u.store_dir.join(name), csv_bytes()).unwrap();
+    std::fs::write(u.files.dir.join(name), csv_bytes()).unwrap();
     u.load_waveform_bytes_at(&csv_bytes(), name, slot).expect("the CSV loads");
 }
 
@@ -113,7 +113,7 @@ fn a_tap_on_the_trigger_tag_opens_a_slider_that_sets_the_level_live() {
     // 50%: the middle of the signal
     let t = u.trig_slider_thumb_y();
     drag(&mut u, (g.x, t), (g.x, g.top));
-    let s = u.stats[u.m.trig_src];
+    let s = u.measured.stats[u.m.trig_src];
     assert!(s.valid, "the demo signal is measured");
     tap_at(&mut u, g.fifty.x + g.fifty.w / 2, g.fifty.y + g.fifty.h / 2);
     assert!((u.m.trig_level - (s.vmax + s.vmin) / 2.0).abs() < 0.05 * (s.vmax - s.vmin).abs().max(1e-3), "level {} for {}..{}", u.m.trig_level, s.vmin, s.vmax);
@@ -125,7 +125,7 @@ fn a_tap_on_the_trigger_tag_opens_a_slider_that_sets_the_level_live() {
     u.numpad_key(NumKey::Cancel);
     assert!(u.numpad.is_none() && u.studio.trig_slider);
     // a tap outside closes it
-    let o = (u.grid.x + 20, u.grid.y + 20);
+    let o = (u.plot.grid.x + 20, u.plot.grid.y + 20);
     tap_at(&mut u, o.0, o.1);
     assert!(!u.studio.trig_slider, "a tap outside closes the slider");
 }
@@ -143,11 +143,11 @@ fn the_slider_works_for_a_ref_trigger_and_the_classic_layouts_keep_the_sheet() {
     let ty = u.trig_slider_thumb_y();
     drag(&mut u, (g.x, ty), (g.x, ty + 50));
     assert!(u.m.trig_level < before, "the ref's level follows");
-    // Default keeps the Trigger sheet on the tag
+    // Minimal keeps the Trigger sheet on the tag (Default opens nothing there, as upstream OOS)
     let mut d = Ui::new(Source::Demo { t: 0.0 });
+    d.m.layout = Layout::Minimal;
     for _ in 0..10 { d.step(0.05); }
     frame(&mut d);
-    assert_ne!(d.m.layout, Layout::Studio);
     let r = d.trigger_marker_rects()[0];
     d.plot_tap(r.x + r.w / 2, r.y + r.h / 2);
     assert!(!d.studio.trig_slider && d.menu_open && d.menu_root() == MenuId::Trigger);

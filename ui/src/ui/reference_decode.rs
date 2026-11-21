@@ -249,7 +249,7 @@ impl Ui {
                 candidate
                     .or(self.last[0].as_ref())
                     .and_then(|rec| rec.raw.as_ref())
-                    .map_or(self.wfm_total, |raw| raw.frame.seq)
+                    .map_or(self.counts.wfm_total, |raw| raw.frame.seq)
             } else if self.session_is_sim && id == DEC_REF_BASE + self.m.sim_slot {
                 self.replay.sim_attempt
             } else {
@@ -440,8 +440,9 @@ impl Ui {
         let assign = |m: &mut Model| {
             m.dec_la_in = false;
             match role {
-                0 => m.dec_src = source.unwrap(),
-                1 => m.dec_src2 = source.unwrap(),
+                // roles 0 and 1 have a source: checked above
+                0 => m.dec_src = source.unwrap_or(m.dec_src),
+                1 => m.dec_src2 = source.unwrap_or(m.dec_src2),
                 2 => m.dec_cs = source,
                 3 => m.dec_src4 = source,
                 _ => m.dec_diff = source,

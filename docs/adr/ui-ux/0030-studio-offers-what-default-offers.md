@@ -52,8 +52,9 @@ next one opens the Cursor menu, whose first row is the Mode row of the Default m
 
 ## Alternatives
 
-- Measure and System buttons in the Studio bar, as in Default. The bar is the scarcest place, and it already
-  shortens its labels to keep the read-out; Add and the gear lead to the two, and SIM leaves the bar for this reason.
+- Measure and System buttons in the Studio bar (the Default bar has Measure; System is the first entry of its Menu's
+  System group, as upstream has it). The bar is the scarcest place, and it already shortens its labels to keep the
+  read-out; Add and the gear lead to the two, and SIM leaves the bar for this reason.
 - The dialogs of the Default layout in Studio, in place of the sheets. A dialog covers the plot; the sheet leaves it
   in view. The sheet keeps the rows and the controls of the dialog instead.
 - The Measure page in place of the Add panel. The page covers the plot (ADR 0005), and the panel is what Studio is

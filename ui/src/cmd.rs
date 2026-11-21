@@ -140,14 +140,14 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
             let rest = line.trim_start()[4..].trim_start();
             return Out::Scpi(Some(w[1].to_string()), rest[w[1].len()..].trim().to_string());
         }
-        "quit" => ui.quit = true,
+        "quit" => ui.asks.quit = true,
         "replay" if w.len() > 1 => {
             ui.scpi_replay_file = Some(line.trim_start()[w[0].len()..].trim().into());
             return Out::Replay;
         }
         "close" => ui.script_close(),
         "selfcal" if w.len() > 1 => ui.selfcal_remote_full(w[1], w[2..].contains(&"zero"), w[2..].contains(&"adc")),
-        "storedir" if w.len() > 1 => ui.store_dir = w[1].into(),
+        "storedir" if w.len() > 1 => ui.files.dir = w[1].into(),
         "textsize" if w.len() > 1 => match TEXT_SIZES.iter().find(|t| t.name().eq_ignore_ascii_case(w[1])) {
             Some(&t) => ui.m.text_size = t,
             None => eprintln!("oos-ui: unknown text size: {}", w[1]),
@@ -162,7 +162,7 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
 
 /// The running state in one line: the `stat` command and `:SYSTem:STATe?`.
 pub fn stat_text(ui: &Ui) -> String {
-    let e = ui.fast_edges;
+    let e = ui.fast.edges;
     let gpu = ui.times.gpu.map_or(String::new(), |t| {
         format!(
             " gpu layers {:.1} copy {:.1} wait {:.1} (upload {:.1} draw {:.1} read {:.1}) ms",
@@ -171,8 +171,8 @@ pub fn stat_text(ui: &Ui) -> String {
     });
     let p = ui.times.parts;
     let gpu = format!(" parts meas {:.1} analyse {:.1} pane {:.1} max {:.1} ms{}", p[0], p[1], p[2], p[3], gpu);
-    let (acq, used, dropped) = crate::drawpipe::counters().read();
-    let measured = crate::drawpipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
+    let (acq, used, dropped) = crate::board::pipe::counters().read();
+    let measured = crate::board::pipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
     let gpu = format!(
         "{} pipeline {} interp {:?} acquired {} used {} dropped {} measured {} compress k {}",
         gpu,
@@ -182,10 +182,10 @@ pub fn stat_text(ui: &Ui) -> String {
         used,
         dropped,
         measured,
-        crate::compress::last_k()
+        crate::board::policy::compress::last_k()
     );
     // the graphics chosen (the GPU part above only while the GPU really draws) and the monitor
-    let hdmi = ui.hdmi_out.map_or(" hdmi off".to_string(), |(w, h)| format!(" hdmi {}x{} {:?}", w, h, ui.m.hdmi));
+    let hdmi = ui.hdmi.out.map_or(" hdmi off".to_string(), |(w, h)| format!(" hdmi {}x{} {:?}", w, h, ui.m.hdmi));
     // the GPU's time per frame of each screen: a monitor frame comes every second frame, the pair has 2/30 s
     let screens = ui.times.gpu_screens.map_or(String::new(), |(p, m)| {
         format!(" gpu panel {:.1}{} ms", p, m.map_or(String::new(), |m| format!(" monitor {:.1}", m)))
@@ -195,13 +195,13 @@ pub fn stat_text(ui: &Ui) -> String {
     let gpu = match ui.src.hw_frames() {
         Some((d, x)) => format!(
             "{} hw frames {} dropped {} fast {:.1} ms (place {:.1} draw {:.1} of it fold {:.1}, {:.0} frames a call) take {} map {}x{}",
-            gpu, d, x, ui.t_fast, ui.t_fast_ab.0, ui.t_fast_ab.1, ui.t_fast_fold, ui.fast_n, ui.fast_take as usize, ui.ph.w, ui.ph.h
+            gpu, d, x, ui.fast.t, ui.fast.t_ab.0, ui.fast.t_ab.1, ui.fast.t_fold, ui.fast.n, ui.fast.take as usize, ui.ph.w, ui.ph.h
         ),
         None => gpu,
     };
     format!(
         "fps {:.1} frames {} records {} run {:?} status {:?} t {:.1} step {:.1} ms (acq {:.1} draw {:.1}) render {:.1} ms present {:.1} ms edges {} {} {} {} off {:.0} {:.0}{}\n",
-        ui.fps, ui.frames, ui.records, ui.m.run, ui.m.status, ui.now, ui.times.step, ui.times.acq, ui.times.draw, ui.times.render, ui.times.present, e[0], e[1], e[2], e[3], ui.fast_off.0, ui.fast_off.1, gpu
+        ui.counts.fps, ui.counts.frames, ui.counts.records, ui.m.run, ui.m.status, ui.now, ui.times.step, ui.times.acq, ui.times.draw, ui.times.render, ui.times.present, e[0], e[1], e[2], e[3], ui.fast.off.0, ui.fast.off.1, gpu
     )
 }
 

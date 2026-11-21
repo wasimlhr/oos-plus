@@ -68,10 +68,6 @@ impl Ui {
     pub(super) fn single_btn(&self) -> Rect {
         if self.m.layout == Layout::Studio { return self.studio_top().single; }
         let p = self.run_pill();
-        // the Default layout has no Single button (the front-panel key), the caption follows the pill as in stock OOS
-        if !self.m.compact() {
-            return Rect::new(p.right() + 2, Self::SINGLE_BTN.y, 0, Self::SINGLE_BTN.h);
-        }
         Rect::new(p.right() + 4, Self::SINGLE_BTN.y, Self::SINGLE_BTN.w, Self::SINGLE_BTN.h)
     }
 
@@ -91,8 +87,9 @@ impl Ui {
             (TopBtn::System, "System"),
         ];
         if !self.m.compact() {
-            // stock OOS buttons; Load and SIM stay in the Sources menu and Menu > Analysis
-            all.retain(|(b, _)| !matches!(b, TopBtn::Load | TopBtn::Menu(MenuId::Sim)));
+            // the four buttons of upstream OOS (ADR 0007); Load and SIM stay in the Sources menu and Menu > Analysis,
+            // System is the first entry of the Menu's System group
+            all.retain(|(b, _)| !matches!(b, TopBtn::Load | TopBtn::Menu(MenuId::Sim) | TopBtn::System));
         }
         if self.m.compact() {
             // Measure is a key of the front panel (it opens Add measurements) and an entry of the Menu. Cursor has its
@@ -197,7 +194,7 @@ impl Ui {
 
     /// The address of an interface, if it has one.
     pub(super) fn addr_of(&self, name: &str) -> Option<&str> {
-        self.net_ifs.iter().find(|i| i.0 == name).map(|i| i.1.as_str())
+        self.net.ifs.iter().find(|i| i.0 == name).map(|i| i.1.as_str())
     }
 
     /// Touch area of a top-bar button: the full bar height.
@@ -329,7 +326,7 @@ impl Ui {
         if self.eye_open() {
             let pane = self.eye_pane_rect();
             if overlaps(pane, r) {
-                let wave = self.grid;
+                let wave = self.plot.grid;
                 let room = pane.x - wave.x - 12;
                 if room >= tw {
                     r.x = wave.x + (room - tw) / 2;
@@ -408,7 +405,18 @@ impl Ui {
     /// All bottom cards. LA and generator sit behind the channels, wide like them when they are on and the channels keep
     /// room for their text, else narrow.
     pub(super) fn card_layout(&self) -> Cards {
-        if self.m.layout == Layout::Studio { self.studio_cards() } else if self.m.compact() { self.compact_cards() } else { self.classic_card_layout() }
+        if self.m.layout == Layout::Studio {
+            self.studio_cards()
+        } else if self.m.compact() {
+            self.compact_cards()
+        } else if self.record_mode() {
+            // a stored record or the simulator on the screen (Offline, Take over, SIM): no analog channel, LA or
+            // generator cards, the time base and trigger stay (as the compact bar has it, upstream PR #8)
+            let c = self.classic_card_layout();
+            Cards { ch: c.ch.map(|r| Rect::new(r.x, r.y, 0, r.h)), la: None, gen: None, ..c }
+        } else {
+            self.classic_card_layout()
+        }
     }
 
     /// The stock OOS bottom row (Display > Layout > Default).
@@ -821,10 +829,10 @@ pub(super) const STATUS_BOXES: [StatusBox; 4] = [
         chip: false,
         // an address without a cable is only the fallback waiting for one
         draw: |u, cv, r, _| {
-            let lan = u.addr_of("eth0").filter(|_| u.eth_link);
+            let lan = u.addr_of("eth0").filter(|_| u.net.eth_link);
             let l1 = if lan.is_none() {
                 "LAN"
-            } else if u.net_fixed {
+            } else if u.net.fixed {
                 "LAN \u{b7} local"
             } else {
                 "LAN \u{b7} DHCP"
@@ -835,7 +843,7 @@ pub(super) const STATUS_BOXES: [StatusBox; 4] = [
     },
     StatusBox {
         label: "WLAN",
-        shown: |u| u.wlan_stick,
+        shown: |u| u.net.wlan_stick,
         // as wide as LAN: room for an address (issue #23: at the normal text size 104 px were too narrow)
         width: |u| u.net_box().w,
         chip: false,
@@ -853,7 +861,7 @@ pub(super) const STATUS_BOXES: [StatusBox; 4] = [
     },
     StatusBox {
         label: "USB",
-        shown: |u| u.usb,
+        shown: |u| u.stick.mounted,
         width: |_| 46,
         chip: true,
         draw: |u, cv, r, label| u.draw_chip(cv, r, label, true),

@@ -134,13 +134,13 @@ fn selected_reference_cursors_match_stacked_zoom_readouts_and_touch_keeps_xy_axe
     assert_eq!(ui.wave_at(7e-9), None);
     ui.workspace.stacked = true;
     ui.m.zoom = true;
-    ui.zoom_vfactor = 4.0;
-    ui.zoom_vcenter = 0.5;
+    ui.zoom_view.vfactor = 4.0;
+    ui.zoom_view.vcenter = 0.5;
     ui.m.cursor = CursorMode::Xy;
     (ui.m.cur_a, ui.m.cur_b, ui.m.cur_c, ui.m.cur_d) = (0.2, 0.8, 0.3, 0.7);
     ui.key(key::SINGLE);
     let fence = ui.scpi_operations();
-    let acquisition = (ui.m.run, ui.m.trigger_wave(), ui.replay.captures, ui.wfm_total);
+    let acquisition = (ui.m.run, ui.m.trigger_wave(), ui.replay.captures, ui.counts.wfm_total);
     assert!(ui.set_cursor_source(WaveId::Ch(0)));
     assert!(ui.set_cursor_source(WaveId::Ref(0)));
     ui.relayout();
@@ -160,7 +160,7 @@ fn selected_reference_cursors_match_stacked_zoom_readouts_and_touch_keeps_xy_axe
     assert!(ui.m.cur_c > 0.3, "the visible Y cursor must be draggable on the reference lane");
     assert_eq!((ui.m.cur_a, ui.m.cur_b, ui.m.cur_d), (0.2, 0.8, 0.7));
     assert_eq!((ui.m.ch[0].vscale, ui.m.ch[0].offset), channel);
-    assert_eq!((ui.m.run, ui.m.trigger_wave(), ui.replay.captures, ui.wfm_total), acquisition);
+    assert_eq!((ui.m.run, ui.m.trigger_wave(), ui.replay.captures, ui.counts.wfm_total), acquisition);
     assert_eq!(ui.measurement_statistics_snapshot_for_test(), statistics);
     assert_eq!(ui.last[0].as_ref().unwrap().ch[0].as_ptr(), accepted);
     assert_eq!(
@@ -213,10 +213,10 @@ fn remote_clear_cancels_deferred_statistics_before_same_row_is_readded() {
     }
     assert_eq!(ui.replay.captures, 1);
     assert!(ui.measurement_busy());
-    assert_eq!(ui.mstat[0].n, 0);
+    assert_eq!(ui.results.rows[0].n, 0);
     assert!(ui.meas_clear_remote());
     assert!(!ui.meas_clear_remote(), "clearing an empty selection is idempotent");
-    assert!(ui.mstat.is_empty());
+    assert!(ui.results.rows.is_empty());
     assert_eq!(ui.meas_add(Meas::Period, WaveId::Ref(0)), Ok(true));
     let deadline = Instant::now() + Duration::from_secs(10);
     while ui.measurement_busy() {
@@ -227,7 +227,7 @@ fn remote_clear_cancels_deferred_statistics_before_same_row_is_readded() {
     ui.finish_deferred_capture_statistics();
     assert!((ui.meas_number(WaveId::Ref(0), Meas::Period) - 20e-9).abs() < 1e-14);
     assert!(
-        ui.mstat.iter().all(|s| s.n == 0),
+        ui.results.rows.iter().all(|s| s.n == 0),
         "old completion must not count as a new acquisition for the readded row"
     );
     assert_eq!(ui.replay.captures, 1);
@@ -237,13 +237,13 @@ fn remote_clear_cancels_deferred_statistics_before_same_row_is_readded() {
 fn rejected_reference_edits_do_not_change_the_selected_slot_or_loaded_data() {
     let mut ui = crate::ui::testkit::demo_ui();
     ui.refs[0] = Some(reference(vec![0.0, 1.0], 1e-9, 0.0));
-    ui.ref_sel = 0;
+    ui.ref_page.sel = 0;
     let owner = Arc::clone(&ui.refs[0].as_ref().unwrap().v);
     assert!(!ui.ref_vscale_set(1, 0.5));
     assert!(!ui.ref_voffset_set(1, 0.1));
     assert!(!ui.ref_label_set(1, "empty".into()));
     assert!(!ui.ref_show_slot(1, true));
     assert!(!ui.ref_vscale_set(0, f32::INFINITY));
-    assert_eq!(ui.ref_sel, 0);
+    assert_eq!(ui.ref_page.sel, 0);
     assert!(Arc::ptr_eq(&owner, &ui.refs[0].as_ref().unwrap().v));
 }

@@ -521,7 +521,7 @@ impl Ui {
             VKind::Hist => v != StudioView::Only && self.m.hist != Hist::Off,
             VKind::Xy => v != StudioView::Only && self.xy,
             VKind::View => v != StudioView::Only && !self.xy_over() && !matches!(self.m.view, AView::Scope | AView::Eye),
-            VKind::Table => v != StudioView::Only && self.table.is_some(),
+            VKind::Table => v != StudioView::Only && self.table.kind.is_some(),
         }
     }
 
@@ -1020,7 +1020,7 @@ impl Ui {
     /// The divider under the overview strip: its 44 px hit area and the handle in the middle of it.
     pub(super) fn ov_divider(&self) -> Option<(Rect, Rect)> {
         if !self.dock_on() || !self.m.zoom || self.view_on() || self.studio.view == StudioView::Only || self.dock_floating(VKind::Wave) { return None; }
-        let o = self.split_zoom(self.grid).0;
+        let o = self.split_zoom(self.plot.grid).0;
         let y = o.bottom();
         // the grip stays clear of the buttons of the zoom bar under it
         let bar = self.studio_zoom_bar();
@@ -1040,7 +1040,7 @@ impl Ui {
         self.studio.ov_drag = None;
         let Some((hit, _)) = self.ov_divider() else { return false };
         if !hit.contains(x, y) { return false; }
-        self.studio.ov_drag = Some((y, self.studio_ov_h(self.grid)));
+        self.studio.ov_drag = Some((y, self.studio_ov_h(self.plot.grid)));
         true
     }
 
@@ -1052,7 +1052,7 @@ impl Ui {
         true
     }
 
-    fn studio_ov_h_of(&self, want: i32) -> i32 { want.clamp(OV_MIN, (self.grid.h * 6 / 10).max(OV_MIN)) }
+    fn studio_ov_h_of(&self, want: i32) -> i32 { want.clamp(OV_MIN, (self.plot.grid.h * 6 / 10).max(OV_MIN)) }
 
     pub(super) fn ov_divider_up(&mut self) -> bool { self.studio.ov_drag.take().is_some() }
 
@@ -1217,7 +1217,7 @@ impl Ui {
             VKind::Measure | VKind::Sim => self.studio_set_view(StudioView::Waveform),
             VKind::Eye => { if self.m.view == AView::Eye { self.adjust(Item::EyeOn, 1); } }
             VKind::Pane => { self.m.pane = 0; self.m.split_pane = 0; }
-            VKind::Table => self.table = None,
+            VKind::Table => self.table.kind = None,
             VKind::Hist => self.m.hist = Hist::Off,
             VKind::Xy => { self.xy = false; self.close_menu(); }
             VKind::View => self.view_exit(),

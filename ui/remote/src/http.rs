@@ -40,9 +40,10 @@ pub trait Site {
     fn remote_ok(&self, line: &str) -> bool;
     /// The answer of a route of the program: (content type, body, whether the body is the reason it failed and not
     /// the data asked for); None for a route that is none of its. An empty content type is 202 with no body.
-    fn answer(&mut self, route: &str, post: bool, body: &[u8]) -> Option<(&'static str, Vec<u8>, bool)>;
-    /// What `GET /update` shows: the state of the update and the result of the last upload.
-    fn update_state(&mut self) -> (String, String);
+    fn answer(&mut self, route: &str, post: bool, body: &[u8]) -> Option<(&'static str, Body, bool)>;
+    /// What `GET /update` shows: what gives the state of the update (it may take a while: the server calls it on a
+    /// thread of its own, not in the frame loop) and the result of the last upload.
+    fn update_state(&mut self) -> (fn() -> String, String);
     /// The session of the screen: an upload that started in another one is not taken.
     fn waveform_epoch(&self) -> u64;
     /// Reads an uploaded waveform file (on the server's thread for it, not the frame loop).
@@ -163,7 +164,36 @@ pub struct Http<U> {
     offer: Offer,
 }
 
-/// The web page /update: the state of `Ui::update_state` and an upload form.
+/// The body of an answer of the program (`Site::answer`): made, or made on a sender thread of the server when making
+/// it takes long (a picture encoded from a copy of the screen), never in the frame loop (#205).
+pub enum Body {
+    Now(Vec<u8>),
+    Later(Box<dyn FnOnce() -> Vec<u8> + Send>),
+}
+
+impl Body {
+    /// The bytes, made now if they are made later.
+    pub fn bytes(self) -> Vec<u8> {
+        match self {
+            Body::Now(b) => b,
+            Body::Later(make) => make(),
+        }
+    }
+
+    /// `bytes` as text (an MCP answer for a test or the soak run).
+    pub fn text(self) -> String {
+        String::from_utf8_lossy(&self.bytes()).into_owned()
+    }
+}
+
+/// The head of an answer of `Http::answer`: status, type (none for an answer without a body: the 202 of an MCP
+/// notification), length, the `extra` lines, no caching, and the connection closes after it.
+fn answer_head(status: &str, ctype: &str, length: usize, extra: &str) -> String {
+    let ctype = if ctype.is_empty() { String::new() } else { format!("Content-Type: {ctype}\r\n") };
+    format!("HTTP/1.1 {status}\r\n{ctype}Content-Length: {length}\r\n{extra}Cache-Control: no-store\r\nConnection: close\r\n\r\n")
+}
+
+/// The web page /update: the state of `Ui::update_status` and an upload form.
 fn update_page(status: &str, last: &str) -> String {
     let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;");
     format!(
@@ -223,7 +253,7 @@ pub const PAGE: &str = r#"<!DOCTYPE html><html lang="en"><head><meta charset="ut
 <div class="g">
 <div class="k"><span>V scale</span><div><button onclick="c('knob vscale -1')">-</button><button onclick="c('knob vscale +1')">+</button></div></div>
 <div class="k"><span>V pos</span><div><button onclick="c('knob vpos -5')">-</button><button onclick="c('knob vpos +5')">+</button></div></div>
-<div class="k"><span>H scale</span><div><button onclick="c('knob hscale -1')">-</button><button onclick="c('knob hscale +1')">+</button><button onclick="c('knob hscale push')">fine</button><button onclick="c('zoom')">zoom</button></div></div>
+<div class="k"><span>H scale</span><div><button onclick="c('knob hscale -1')">-</button><button onclick="c('knob hscale +1')">+</button><button onclick="c('knob hscale push')">push</button><button onclick="c('zoom')">zoom</button></div></div>
 <div class="k"><span>H pos</span><div><button onclick="c('knob hpos -5')">-</button><button onclick="c('knob hpos +5')">+</button></div></div>
 <div class="k"><span>Trig level</span><div><button onclick="c('knob tlevel -5')">-</button><button onclick="c('knob tlevel +5')">+</button><button onclick="c('knob tlevel push')">50%</button></div></div>
 <div class="k"><span>Multi 1</span><div><button onclick="c('knob multi1 -1')">-</button><button onclick="c('knob multi1 +1')">+</button><button onclick="c('knob multi1 push')">push</button></div></div>
@@ -343,23 +373,9 @@ impl<U: Send + 'static> Http<U> {
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
-        let l = Self::bind_quietly(port);
+        let l = oos_system::net6::tcp_service(port, "web remote");
         if l.is_none() {
             eprintln!("oos-ui: web port {} not available", port);
-        }
-        l
-    }
-
-    /// `bind` without the message when the port is taken.
-    fn bind_quietly(port: u16) -> Option<TcpListener> {
-        let l = oos_system::net6::tcp(port);
-        if let Some(l) = &l {
-            let _ = l.set_nonblocking(true);
-            eprintln!(
-                "oos-ui: web remote on port {}{}",
-                port,
-                if l.local_addr().is_ok_and(|a| a.is_ipv6()) { " (IPv4 and IPv6)" } else { "" }
-            );
         }
         l
     }
@@ -370,7 +386,7 @@ impl<U: Send + 'static> Http<U> {
         if self.l.is_some() {
             return false;
         }
-        self.l = Self::bind_quietly(port);
+        self.l = oos_system::net6::tcp_service(port, "web remote");
         self.l.is_some()
     }
 
@@ -458,19 +474,14 @@ impl<U: Send + 'static> Http<U> {
                 }
                 too_big || e.checked_add(n).is_some_and(|need| req.len() >= need)
             });
+            // a HEAD gets no body here either
+            let head_only = req.starts_with(b"HEAD ");
             if let Some(status) = early {
                 let msg = if status.starts_with("403") { "refused" } else { "busy, try again" };
-                let head = format!(
-                    "HTTP/1.1 {status}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\
-                    Cache-Control: no-store\r\nConnection: close\r\n\r\n{msg}",
-                    msg.len()
-                );
-                last = Some(head.into_bytes());
+                last = Some(early_answer(status, msg, head_only));
                 dead = true;
             } else if too_big {
-                let msg = "request too large";
-                let head = format!("HTTP/1.1 413 Payload Too Large\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{msg}", msg.len());
-                last = Some(head.into_bytes());
+                last = Some(early_answer("413 Payload Too Large", "request too large", head_only));
                 dead = true;
             } else if complete {
                 if !self.answer(i, hdr_end, site, &mut cmds) {
@@ -494,8 +505,8 @@ impl<U: Send + 'static> Http<U> {
 
     /// Answers the waveform upload whose parsing has finished.
     fn finish_wave<S: Site<Upload = U>>(&mut self, site: &mut S) {
-        if let Some((ok, text)) = self.wave.as_ref().and_then(|job| job.finish(site)) {
-            let job = self.wave.take().unwrap();
+        let Some((ok, text)) = self.wave.as_ref().and_then(|job| job.finish(site)) else { return };
+        if let Some(job) = self.wave.take() {
             let status = if ok { "200 OK" } else { "409 Conflict" };
             let head = format!(
                 "HTTP/1.1 {status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\n\
@@ -550,6 +561,10 @@ impl<U: Send + 'static> Http<U> {
         let (route, query) = path.split_once('?').unwrap_or((&path, ""));
         let req_body = &req[hdr_end.unwrap_or(req.len())..];
         let post = text.starts_with("POST ");
+        let method = text.split_whitespace().next().unwrap_or("");
+        // HEAD: the head GET would have, without its body (#205)
+        let head_only = method == "HEAD";
+        let allow = methods_of(route);
         // what changes the scope beyond keys and knobs: only from the allowed prefixes (also at the head)
         let peer_ok = self.acl.permits_peer(s.peer_addr());
         // each answer with its status, chosen where the answer is made (#205: not read back from the body's text)
@@ -558,8 +573,12 @@ impl<U: Send + 'static> Http<U> {
         let refused = || (FORBIDDEN, "text/plain", b"refused".to_vec());
         let (status, ctype, body): (&str, &str, Vec<u8>) = match route {
             _ if foreign(&text, route, post) => refused(),
-            "/update" | "/mcp" if (post || route != "/update") && !peer_ok => refused(),
+            "/update" | "/mcp" if (post || route == "/mcp") && !peer_ok => refused(),
             _ if mcp_path(route) && !peer_ok => refused(),
+            // a route asked with a method it does not take: 405 with the ones it takes (#205)
+            _ if allow.is_some_and(|a| !a.split(", ").any(|m| m == method)) => {
+                ("405 Method Not Allowed", "text/plain", b"method not allowed".to_vec())
+            }
             "/" => (OK, "text/html; charset=utf-8", PAGE.as_bytes().to_vec()),
             "/style.css" => (OK, "text/css", STYLE.as_bytes().to_vec()),
             "/waveform" if post => {
@@ -586,10 +605,21 @@ impl<U: Send + 'static> Http<U> {
                 self.pending.remove(i);
                 return false;
             }
-            "/update" if !post => (OK, "text/html; charset=utf-8", {
+            // the state comes from a program that takes a while: the page is made and sent on a thread of the senders
+            // (#205), 503 when they are all busy
+            "/update" if !post => {
                 let (status, last) = site.update_state();
-                update_page(&status, &last).into_bytes()
-            }),
+                let made = oos_system::net::answer_in_background(s, move || {
+                    let page = update_page(&status(), &last).into_bytes();
+                    let head = answer_head(OK, "text/html; charset=utf-8", page.len(), "");
+                    (head, if head_only { Vec::new() } else { page })
+                });
+                if !made {
+                    oos_system::net::busy_answer(s);
+                }
+                self.pending.remove(i);
+                return false;
+            }
             "/lxi/identification" => {
                 (OK, "text/xml", lxi_identification(&self.offer, &oos_hal::model::platform().caps.name).into_bytes())
             }
@@ -599,15 +629,33 @@ impl<U: Send + 'static> Http<U> {
                 false => refused(),
             },
             _ => match site.answer(route, post, req_body) {
+                // made on a sender thread, 503 when they are all busy (#205)
+                Some((ctype, Body::Later(make), failed)) => {
+                    let status = if failed { "409 Conflict" } else { OK };
+                    let made = oos_system::net::answer_in_background(s, move || {
+                        let body = make();
+                        (answer_head(status, ctype, body.len(), ""), if head_only { Vec::new() } else { body })
+                    });
+                    if !made {
+                        oos_system::net::busy_answer(s);
+                    }
+                    self.pending.remove(i);
+                    return false;
+                }
                 // the route says the body is why it failed, not the data asked for
-                Some((ctype, body, true)) => ("409 Conflict", ctype, body),
+                Some((ctype, Body::Now(body), true)) => ("409 Conflict", ctype, body),
                 // an MCP notification: no body
-                Some(("", body, false)) => ("202 Accepted", "", body),
-                Some((ctype, body, false)) => (OK, ctype, body),
+                Some(("", Body::Now(body), false)) => ("202 Accepted", "", body),
+                Some((ctype, Body::Now(body), false)) => (OK, ctype, body),
                 None => ("404 Not Found", "text/plain", b"not found".to_vec()),
             },
         };
-        let head = format!("HTTP/1.1 {}\r\nContent-Type: {}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n", status, ctype, body.len());
+        let allowed = match allow {
+            Some(a) if status.starts_with("405") => format!("Allow: {}\r\n", a),
+            _ => String::new(),
+        };
+        let head = answer_head(status, ctype, body.len(), &allowed);
+        let body = if head_only { Vec::new() } else { body };
         if body.len() > SEND_INLINE {
             if !oos_system::net::send_in_background(s, head, body) {
                 oos_system::net::busy_answer(s);
@@ -676,6 +724,29 @@ fn read_some(s: &TcpStream, req: &mut Vec<u8>, t: &mut Instant, need: Option<usi
         }
     }
     dead
+}
+
+/// The methods a route takes, as its `Allow` header names them; None for a path that is no route (404 whatever the
+/// method). A HEAD is taken where a GET is, except on `/cmd`, whose GET does something, and on the live pictures,
+/// whose status, type and length are known only once the program answers one, after this.
+fn methods_of(route: &str) -> Option<&'static str> {
+    match route {
+        "/waveform" | "/mcp" => Some("POST"),
+        // the CSV files of MCP `waveform`, one per call (oos-plus)
+        r if r.starts_with("/mcp/waveform/") => Some("GET, HEAD"),
+        "/update" => Some("GET, HEAD, POST"),
+        "/cmd" | "/screen.png" | "/screen.jpg" => Some("GET"),
+        "/"
+        | "/style.css"
+        | "/screen.bmp"
+        | "/wave.csv"
+        | "/wave.bin"
+        | "/la.csv"
+        | "/ui-state"
+        | "/stamp"
+        | "/lxi/identification" => Some("GET, HEAD"),
+        _ => None,
+    }
 }
 
 /// GET /cmd: the commands `c=` of the query go to `cmds` when a remote may give every one of them; false and none of
@@ -788,3 +859,14 @@ impl<U> Http<U> {
 
 #[cfg(test)]
 mod tests;
+
+/// An answer of `poll` before the request is read whole (403, 413, 503): the text `msg`, or only its head after a HEAD.
+fn early_answer(status: &str, msg: &str, head_only: bool) -> Vec<u8> {
+    let head = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nCache-Control: no-store\r\n\
+        Connection: close\r\n\r\n",
+        msg.len()
+    );
+    let body = if head_only { "" } else { msg };
+    format!("{head}{body}").into_bytes()
+}

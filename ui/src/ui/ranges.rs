@@ -121,11 +121,13 @@ impl Ui {
             Item::BusClkThr | Item::BusDataThr => {
                 let id = if it == Item::BusClkThr { m.bus.clk } else { m.bus.data };
                 let step = self.bus_volt_step(id) as f64;
-                sym(LEVEL_DIVS * STEPS_PER_DIV * step, step, "V")
+                // upstream's bus thresholds stop at 40 V
+                let r = if m.layout == Layout::Default { 40.0 } else { LEVEL_DIVS * STEPS_PER_DIV * step };
+                sym(r, step, "V")
             }
             Item::SpecRef => flt(SPEC_REF_DBV, 5.0, "dBV"),
             Item::RefOffset => {
-                let vpd = self.refs.get(self.ref_sel).and_then(|r| r.as_ref()).map_or(1.0, |r| r.vpd as f64);
+                let vpd = self.refs.get(self.ref_page.sel).and_then(|r| r.as_ref()).map_or(1.0, |r| r.vpd as f64);
                 sym(LEVEL_DIVS * vpd, 0.1 * vpd, "V")
             }
             Item::MathLinA | Item::MathLinB => flt(MATH_LIN, 0.1, ""),
@@ -200,15 +202,45 @@ impl Ui {
             Item::BusClkThr => m.bus.clk_thr as f64,
             Item::BusDataThr => m.bus.data_thr as f64,
             Item::SpecRef => m.spec_ref as f64,
-            Item::RefOffset => self.refs.get(self.ref_sel)?.as_ref()?.offset as f64,
+            Item::RefOffset => self.refs.get(self.ref_page.sel)?.as_ref()?.offset as f64,
             _ => return None,
         })
     }
 
-    /// Sets an item that moves by `Step::Add` to `v`, limited to its range. Returns the value it has now.
+    /// Whether the steppers and the pad stop `it` at the limits of the table. The Default layout is upstream's, whose
+    /// steppers add a step to the levels, offsets, thresholds and the delay with no limit (the channel offsets are kept
+    /// within what the front end can shift by `Model::clamp_offsets` at every step, in every layout); its other limits
+    /// (deskew, bus thresholds and position, the terms of a linear math) are in the table as well.
+    pub(super) fn range_limited(&self, it: Item) -> bool {
+        self.m.layout != Layout::Default
+            || !matches!(
+                it,
+                Item::TrigLevel
+                    | Item::TrigLevel2
+                    | Item::PatLevel
+                    | Item::ChOffset(_)
+                    | Item::ChBias(_)
+                    | Item::HDelay
+                    | Item::MathOffset
+                    | Item::DecThr
+                    | Item::DecThrLine(_)
+                    | Item::RefOffset
+            )
+    }
+
+    /// Sets an item that moves by `Step::Add` to `v`, limited to its range where `range_limited`. Returns the value it
+    /// has now.
     pub(super) fn range_set(&mut self, it: Item, v: f64) -> Option<f64> {
+        self.range_put(it, v, self.range_limited(it))
+    }
+
+    /// Sets an item that moves by `Step::Add` to `v`, limited to its range when `limit`.
+    fn range_put(&mut self, it: Item, v: f64, limit: bool) -> Option<f64> {
         let r = self.item_range(it).filter(|r| matches!(r.step, Step::Add(_)))?;
-        let v = if v.is_finite() { v.clamp(r.lo, r.hi) } else { return self.range_get(it) };
+        if !v.is_finite() {
+            return self.range_get(it);
+        }
+        let v = if limit { v.clamp(r.lo, r.hi) } else { v };
         let x = v as f32;
 
         let m = &mut self.m;
@@ -232,7 +264,7 @@ impl Ui {
             Item::BusDataThr => m.bus.data_thr = x,
             Item::SpecRef => m.spec_ref = x,
             Item::RefOffset => {
-                if let Some(Some(r)) = self.refs.get_mut(self.ref_sel) { r.offset = x; } else { return None; }
+                if let Some(Some(r)) = self.refs.get_mut(self.ref_page.sel) { r.offset = x; } else { return None; }
             }
             _ => return None,
         }
@@ -245,6 +277,11 @@ impl Ui {
     pub(super) fn range_step(&mut self, it: Item, d: i32) -> bool {
         let Some(Range { step: Step::Add(step), .. }) = self.item_range(it) else { return false };
         let Some(v) = self.range_get(it) else { return false };
+        // upstream's steppers add the step to the value as it is, with no limit
+        if !self.range_limited(it) {
+            self.range_set(it, v + step * d as f64);
+            return true;
+        }
         let near = |a: f64, b: f64| (a - b).abs() <= step * 1e-3;
         let mut to = add_step(v, step, d);
         // a press back from a limit that the last press ran into returns to where that press came from (the limit is
@@ -264,15 +301,16 @@ impl Ui {
     /// After any stepper: a value that is outside its range (a setting loaded, a path that did not clamp) comes back in.
     pub(super) fn range_enforce(&mut self, it: Item) {
         let Some(r) = self.item_range(it) else { return };
-        if !matches!(r.step, Step::Add(_)) { return; }
+        if !matches!(r.step, Step::Add(_)) || !self.range_limited(it) { return; }
         if let Some(v) = self.range_get(it) {
             if v < r.lo || v > r.hi { self.range_set(it, v); }
         }
     }
 
-    /// An SCPI number for an item of the table: limited like the stepper, not refused.
+    /// An SCPI number for an item of the table: taken as it is, as upstream's setters take it (the limits of the table
+    /// are for the steppers and the pad).
     pub(super) fn scpi_range_set(&mut self, it: Item, v: f64) -> bool {
-        self.range_set(it, v).is_some()
+        self.range_put(it, v, false).is_some()
     }
 }
 
@@ -283,7 +321,7 @@ impl Ui {
         if secondary { self.m.trig_level2 } else { self.m.trig_level }
     }
 
-    /// A trigger level by SCPI, limited like the stepper and the number pad (same table).
+    /// A trigger level by SCPI, taken as it is (`scpi_range_set`).
     pub(crate) fn scpi_set_trigger_level(&mut self, secondary: bool, v: f32) {
         self.scpi_range_set(if secondary { Item::TrigLevel2 } else { Item::TrigLevel }, v as f64);
     }

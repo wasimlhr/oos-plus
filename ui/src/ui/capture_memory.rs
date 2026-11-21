@@ -67,7 +67,7 @@ fn acquire_demo(job: DemoJob) -> DemoResult {
             hw_avg: false,
         });
         let window = job.model.time_per_div() as f64 * HDIV as f64;
-        crate::board::resample_record(
+        crate::wave::resample_record(
             &frame,
             &job.model,
             3600,
@@ -140,7 +140,7 @@ impl Ui {
         if !values.valid {
             return;
         }
-        self.mstat.resize(self.measurement_count(), MStat::default());
+        self.results.rows.resize(self.measurement_count(), MStat::default());
         for (row, &(kind, source)) in self.m.meas.iter().enumerate() {
             if source != WaveId::Ch(channel) {
                 continue;
@@ -148,7 +148,7 @@ impl Ui {
             let Some(value) = values.reading(kind) else {
                 continue;
             };
-            self.mstat[row].add(value);
+            self.results.rows[row].add(value);
         }
     }
 
@@ -227,7 +227,7 @@ impl Ui {
             return Some(Arc::clone(cached));
         }
         let window = view.0 as f64 * HDIV as f64;
-        let mut display = crate::board::resample_record(
+        let mut display = crate::wave::resample_record(
             &raw.frame,
             &self.m,
             3600,
@@ -292,7 +292,7 @@ mod tests {
             fixed_ti: None,
             hw_avg: false,
         });
-        ui.last[0] = Some(crate::board::to_record(&frame, &ui.m, 3600, 1e-6, -0.5e-6));
+        ui.last[0] = Some(crate::wave::to_record(&frame, &ui.m, 3600, 1e-6, -0.5e-6));
         ui
     }
     #[test]
@@ -300,7 +300,7 @@ mod tests {
         let mut ui = long_capture();
         assert_eq!(ui.raw_info(0), Some((100_000, 1e-9, -50e-6)));
         assert_eq!(ui.raw_volts(0).unwrap()[88_888], 0.75);
-        let (original, captures) = (ui.raw_volts(0).unwrap(), ui.records);
+        let (original, captures) = (ui.raw_volts(0).unwrap(), ui.counts.records);
         for delay in [-48.766e-6, 38.888e-6] {
             ui.m.delay = delay;
             ui.step(0.02);
@@ -315,7 +315,7 @@ mod tests {
         ui.m.delay = 38.888e-6;
         ui.step(0.02);
         assert_eq!(ui.raw_volts(0).unwrap(), original);
-        assert_eq!(ui.records, captures);
+        assert_eq!(ui.counts.records, captures);
         assert_eq!(ui.m.run, RunState::Stop);
         let first = ui.captured_view((ui.m.time_per_div(), ui.m.delay)).unwrap();
         assert!(Arc::ptr_eq(&first, &ui.captured_view((ui.m.time_per_div(), ui.m.delay)).unwrap()));
@@ -348,7 +348,7 @@ mod tests {
             ui.accumulate_fast_basic(&frame, 1.0);
         }
         let expected = [1.0, -1.0, 2.0, 0.0, 1.0, 1.0];
-        for (stat, value) in ui.mstat.iter().zip(expected) {
+        for (stat, value) in ui.results.rows.iter().zip(expected) {
             assert_eq!(stat.n, 193, "no 96-frame refresh cap or duplicate final frame");
             assert!((stat.sum / stat.n as f64 - value).abs() < 1e-12);
         }
@@ -476,12 +476,12 @@ mod tests {
         ui.key(key::SINGLE);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         for (captures, stamp) in [(1, 8), (2, 9)] {
-            while ui.records < captures {
+            while ui.counts.records < captures {
                 ui.step(0.02);
                 assert!(std::time::Instant::now() < deadline);
                 std::thread::sleep(std::time::Duration::from_millis(2));
             }
-            assert_eq!((ui.records, ui.m.run, ui.m.hw_stamp), (captures, RunState::Stop, stamp));
+            assert_eq!((ui.counts.records, ui.m.run, ui.m.hw_stamp), (captures, RunState::Stop, stamp));
             assert_eq!(ui.last[0].as_ref().unwrap().raw.as_ref().unwrap().frame.stamp, stamp);
             if captures == 1 {
                 ui.key(key::SINGLE);
@@ -509,8 +509,8 @@ mod tests {
         record.raw = Some(crate::wave::Raw { frame, i0: 0, i1: 8, t0: 0.0, conditioned: true });
         ui.accumulate_record_basic(&record);
         ui.last[0] = Some(record);
-        assert_eq!(ui.mstat[0].n, 1);
-        assert_eq!(ui.mstat[0].sum, 0.25, "statistics must follow HiRes display samples");
+        assert_eq!(ui.results.rows[0].n, 1);
+        assert_eq!(ui.results.rows[0].sum, 0.25, "statistics must follow HiRes display samples");
         assert_eq!(ui.meas_at(WaveId::Ch(0), Meas::Vavg), 0.25);
     }
 }

@@ -209,7 +209,7 @@ struct Rig {
 impl Rig {
     fn new(store: &std::path::Path) -> Rig {
         let mut ui = crate::ui::testkit::demo_ui();
-        ui.store_dir = store.to_path_buf();
+        ui.files.dir = store.to_path_buf();
         // What grows to a bound by design, at its bound before the first cycle. The receipts of finished operations:
         // a Single adds one, up to 128 (`Ui::scpi_finish_operation`), one per cycle here.
         ui.scpi_receipts_fill();
@@ -223,7 +223,7 @@ impl Rig {
     fn frame(&mut self) {
         self.ui.step(1.0 / 30.0);
         self.ui.render(&mut self.cv);
-        if let Some(path) = self.ui.shot_request.take() {
+        if let Some(path) = self.ui.asks.shot.take() {
             crate::save_shot(&mut self.ui, &self.cv, path, &mut self.shots);
         }
     }
@@ -239,7 +239,7 @@ impl Rig {
             "set" => rest.split_once(" = ").map_or(Err("no value".into()), |(l, v)| self.ui.script_set(l, v)),
             "mcp" => known(
                 crate::site::mcp(rest, &mut crate::site::Ctx::new(&mut self.ui, &self.cv, &mut self.scpi))
-                    .is_some_and(|a| a.contains("\"result\"")),
+                    .is_some_and(|a| a.text().contains("\"result\"")),
             ),
             "key" => known(KEY_NAMES.iter().any(|(name, _)| *name == rest)),
             "knob" => known(KNOB_NAMES.iter().any(|(name, _)| rest.starts_with(name))),
@@ -274,10 +274,10 @@ impl Rig {
 
     /// `CYCLE` once; the storage folder is emptied, so the next cycle writes the same names.
     fn cycle(&mut self) {
-        let records = self.ui.records;
+        let records = self.ui.counts.records;
         CYCLE.lines().filter(|line| !line.is_empty() && !line.starts_with('#')).for_each(|line| self.line(line));
-        assert!(self.ui.records > records, "the cycle acquired nothing");
-        let stored: Vec<_> = std::fs::read_dir(&self.ui.store_dir).expect("storage folder").flatten().collect();
+        assert!(self.ui.counts.records > records, "the cycle acquired nothing");
+        let stored: Vec<_> = std::fs::read_dir(&self.ui.files.dir).expect("storage folder").flatten().collect();
         assert_eq!(stored.len(), 3, "a set-up, a CSV and a PNG: {:?}", stored);
         for file in stored {
             std::fs::remove_file(file.path()).expect("remove a stored file");

@@ -84,12 +84,12 @@ fn scpi_validation_fixture() {
     assert!(h.port().is_some() && scpi.port().is_some(), "private acceptance ports must bind");
     let mut ui = crate::ui::testkit::demo_ui();
     ui.set_offline(true);
-    ui.store_dir = std::env::var_os("OOS_VALIDATION_STORE_DIR")
+    ui.files.dir = std::env::var_os("OOS_VALIDATION_STORE_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::temp_dir().join(format!("oos-scpi-validation-{}", std::process::id())));
     let mut cv = Canvas::new(crate::ui::W, crate::ui::H);
     let end = std::time::Instant::now() + Duration::from_secs(var("OOS_VALIDATION_SECONDS", 90));
-    while !ui.quit && std::time::Instant::now() < end {
+    while !ui.asks.quit && std::time::Instant::now() < end {
         ui.step(0.04);
         ui.render(&mut cv);
         scpi.poll(&mut ui, &cv);
@@ -109,7 +109,7 @@ fn waveform_upload_loads_the_chosen_reference_and_preserves_it_on_error() {
     let mut h = Web::open(0);
     let mut ui = crate::ui::testkit::demo_ui();
     let store = crate::ui::testkit::Scratch::new("http-no-write");
-    ui.store_dir = store.clone();
+    ui.files.dir = store.clone();
     let cv = Canvas::new(crate::ui::W, crate::ui::H);
     let mut scpi = crate::scpi::Scpi::open(0);
     let post = |path: &str, body: &[u8]| {
@@ -334,14 +334,15 @@ fn page_lets_the_viewer_pick_png_or_bmp() {
 }
 
 /// GET /update: the state of `oos-update status --quick` and the last result, escaped, above the upload form; through
-/// the server it shows what `Ui::update_state` gives (on the host: why `oos-update` did not run).
+/// the server it shows what `Ui::update_status` gives (on the host: why `oos-update` did not run), made on a sender
+/// thread, not in the frame loop.
 #[test]
 fn the_update_page_shows_the_state_the_last_result_and_the_form() {
     let _sends = sends();
     let mut h = Web::open(0);
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
     let r = get(&mut h, &mut ui, &cv, &mut scpi, "/update");
-    let (status, last) = ui.update_state();
+    let (status, last) = (Ui::update_status(), ui.update_last());
     let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;");
     assert!(r.starts_with("HTTP/1.1 200") && r.contains("text/html"), "{r}");
     assert!(r.contains(&format!("<pre>{}</pre>", esc(&status))), "{r}");
@@ -751,6 +752,9 @@ fn a_large_body_at_a_time_and_net_allow_before_the_body() {
         let r = request(&mut h, &mut ui, &cv, &mut scpi, head(path, 1 << 20).into_bytes());
         assert!(r.starts_with("HTTP/1.1 403") && r.ends_with("refused"), "{path}: {r}");
     }
+    // a HEAD refused at the head: the length of the text, and no text
+    let r = request(&mut h, &mut ui, &cv, &mut scpi, b"HEAD /mcp HTTP/1.1\r\n\r\n".to_vec());
+    assert!(r.starts_with("HTTP/1.1 403") && r.contains("Content-Length: 7\r\n") && r.ends_with("\r\n\r\n"), "{r}");
     let r = request(&mut h, &mut ui, &cv, &mut scpi, b"GET /lxi/identification HTTP/1.1\r\n\r\n".to_vec());
     assert!(r.starts_with("HTTP/1.1 200"), "{r}");
 }
@@ -841,7 +845,7 @@ fn mcp_pending_opc_is_an_explicit_tool_error_not_success() {
     ui.m.trig_level = 10.0;
     let cv = crate::gfx::Canvas::new(crate::ui::W, crate::ui::H);
     let mut scpi = crate::scpi::Scpi::open(0);
-    let reply=crate::site::mcp(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":SINGLE;*OPC?;:RUN"}}}"#,&mut Ctx::new(&mut ui,&cv,&mut scpi)).unwrap();
+    let reply=crate::site::mcp(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":SINGLE;*OPC?;:RUN"}}}"#,&mut Ctx::new(&mut ui,&cv,&mut scpi)).unwrap().text();
     let reply = crate::json::parse(&reply).unwrap();
     assert_eq!(reply.get("result").unwrap().get("isError"), Some(&crate::json::J::Bool(true)));
     assert_eq!(
@@ -855,22 +859,31 @@ fn mcp_pending_opc_is_an_explicit_tool_error_not_success() {
 fn mcp_empty_query_is_empty_text_while_an_empty_write_is_ok() {
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
     let empty = crate::site::mcp(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":MEAS:CLEAR;:MEAS:STRIP?"}}}"#,
-            &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap();
+            &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text();
     assert!(empty.contains("\"text\":\"\""), "{empty}");
     assert!(!empty.contains("\"text\":\"ok\""));
     let write = crate::site::mcp(r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":MEAS:CLEAR"}}}"#,
-            &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap();
+            &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text();
     assert!(write.contains("\"text\":\"ok\""), "{write}");
     let compound = crate::site::mcp(r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":MEAS:STRIP?;*OPC?"}}}"#,
-            &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap();
+            &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text();
     assert!(compound.contains("\"text\":\";1\""), "{compound}");
 }
 
 #[test]
 fn mcp_session() {
+    // over HTTP: a notification gets 202 with no body and no type
+    let mut h = Web::open(0);
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let note = r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#;
+    let req = format!("POST /mcp HTTP/1.1\r\nContent-Length: {}\r\n\r\n{note}", note.len());
+    let r = request(&mut h, &mut ui, &cv, &mut scpi, req.into_bytes());
+    assert!(r.starts_with("HTTP/1.1 202 Accepted\r\n") && r.ends_with("\r\n\r\n"), "{r}");
+    assert!(r.contains("Content-Length: 0\r\n") && !r.contains("Content-Type"), "{r}");
     use crate::json::{parse, J};
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
-    let mut call = |b: &str| crate::site::mcp(b, &mut Ctx::new(&mut ui, &cv, &mut scpi)).map(|r| parse(&r).unwrap());
+    let mut call =
+        |b: &str| crate::site::mcp(b, &mut Ctx::new(&mut ui, &cv, &mut scpi)).map(|r| parse(&r.text()).unwrap());
     let r =
         call(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}"#).unwrap();
     assert_eq!(r.get("result").and_then(|x| x.get("protocolVersion")).and_then(J::str), Some("2025-06-18"));
@@ -1029,4 +1042,53 @@ fn a_port_taken_at_the_start_is_taken_once_it_is_free() {
         assert_eq!(listens(&h, &scpi), Some(port));
         assert!(!again(&mut h, &mut scpi), "web {web}: listening already, nothing to do");
     }
+}
+
+// Break it catches (#205): every method but POST taken as GET, a HEAD answered with the body, a POST to a GET route
+// answered as the GET (POST /wave.csv gave the CSV) and a GET of a POST route as a route that is none.
+#[test]
+fn each_route_takes_its_methods_and_a_head_gets_no_body() {
+    let mut h = Web::open(0);
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let mut ask = |line: &str, ui: &mut Ui, scpi: &mut crate::scpi::Scpi| {
+        request(&mut h, ui, &cv, scpi, format!("{line} HTTP/1.1\r\nContent-Length: 0\r\n\r\n").into_bytes())
+    };
+    let parts = |r: &str| {
+        let (head, body) = r.split_once("\r\n\r\n").unwrap_or((r, ""));
+        (head.to_string(), body.to_string())
+    };
+    // a HEAD: the head of the GET, its length, no body
+    let (get_head, get_body) = parts(&ask("GET /ui-state", &mut ui, &mut scpi));
+    let (head, body) = parts(&ask("HEAD /ui-state", &mut ui, &mut scpi));
+    assert!(get_head.starts_with("HTTP/1.1 200") && !get_body.is_empty(), "{get_head}");
+    assert!(head.starts_with("HTTP/1.1 200") && body.is_empty(), "{head} / {body}");
+    assert!(head.contains(&format!("Content-Length: {}", get_body.len())), "{head}");
+    // a method a route does not take: 405, with the ones it takes
+    for (line, allow) in [
+        ("POST /wave.csv", "GET, HEAD"),
+        ("PUT /ui-state", "GET, HEAD"),
+        ("GET /mcp", "POST"),
+        ("GET /waveform?slot=1", "POST"),
+        ("DELETE /update", "GET, HEAD, POST"),
+        ("HEAD /cmd?c=key%20runstop", "GET"),
+        ("HEAD /screen.png", "GET"),
+    ] {
+        let (head, body) = parts(&ask(line, &mut ui, &mut scpi));
+        assert!(head.starts_with("HTTP/1.1 405"), "{line}: {head}");
+        assert!(
+            head.contains(&format!("Allow: {allow}\r\n")) || head.ends_with(&format!("Allow: {allow}")),
+            "{line}: {head}"
+        );
+        assert_eq!(body, if line.starts_with("HEAD") { "" } else { "method not allowed" }, "{line}");
+    }
+    // a path that is no route: 404 whatever the method
+    for line in ["GET /nothing", "PUT /nothing"] {
+        assert!(ask(line, &mut ui, &mut scpi).starts_with("HTTP/1.1 404"), "{line}");
+    }
+    // refused before the request is read whole (413 here): a HEAD still gets no body
+    let too_big = |m: &str| format!("{m} /ui-state HTTP/1.1\r\nContent-Length: 999999999\r\n\r\n").into_bytes();
+    let (head, body) = parts(&request(&mut h, &mut ui, &cv, &mut scpi, too_big("HEAD")));
+    assert!(head.starts_with("HTTP/1.1 413") && body.is_empty(), "{head} / {body}");
+    let (head, body) = parts(&request(&mut h, &mut ui, &cv, &mut scpi, too_big("GET")));
+    assert!(head.starts_with("HTTP/1.1 413") && body == "request too large", "{head} / {body}");
 }

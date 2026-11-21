@@ -132,40 +132,6 @@ impl Ui {
         ]
     }
 
-    /// The measurement menu.
-    pub(super) fn measure_items(&self) -> Vec<Item> {
-        let mut v = vec![
-            Item::MeasSrc,
-            Item::MeasSrcB,
-            Item::MeasCopyTo,
-            Item::MeasGate,
-            Item::Open(MenuId::MeasPair),
-            Item::Open(MenuId::Dvm),
-            Item::Open(MenuId::MeasLevels),
-            Item::MeasIdle,
-            Item::MeasTsetup,
-            Item::MeasThold,
-            Item::MeasOutside,
-            Item::MeasN,
-            Item::MeasEdges,
-            Item::Open(MenuId::MeasStat),
-            Item::MeasLabels,
-            Item::StripDock,
-            Item::MeasClear,
-        ];
-        if self.m.layout == Layout::Studio {
-            v.retain(|i| *i != Item::StripDock);
-            let g = v.iter().position(|i| *i == Item::MeasGate).unwrap_or(0);
-            v.insert(g + 1, Item::BadgeStyle);
-        }
-        if self.sheets_on() {
-            // the sheet has the levels on a tab of their own; the stock layout opens them from one row
-            let at = v.iter().position(|i| *i == Item::Open(MenuId::MeasLevels)).unwrap_or(0);
-            v.splice(at..=at, self.items(MenuId::MeasLevels));
-        }
-        v
-    }
-
     /// The reference menu; Load only with its feature on.
     pub(super) fn ref_items(&self) -> Vec<Item> {
         vec![
@@ -204,7 +170,6 @@ impl Ui {
     /// The display menu; the trend selectors while the trend pane is shown.
     pub(super) fn display_items(&self) -> Vec<Item> {
         let mut v = vec![
-            Item::Skin,
             Item::Open(MenuId::Windows),
             Item::Layout,
             Item::Views,
@@ -377,7 +342,7 @@ impl Ui {
             Item::Stock,
         ];
         // overclocking loses samples at the full rate: only with `adc.overclock = on` (overclock.rs)
-        if !overclock::shown(overclock::switch_on(), self.clock_next) {
+        if !overclock::shown(overclock::switch_on(), self.overclock.hz) {
             v.retain(|&i| i != Item::Overclock);
         }
         v
@@ -429,7 +394,7 @@ impl Ui {
     pub(super) fn main_groups(&self) -> Vec<(&'static str, Vec<Item>)> {
         use Item::*;
         let mut disp = vec![Open(MenuId::Display), Open(MenuId::Horizontal), NavHist];
-        if self.hist_pos.is_some() {
+        if self.history.pos.is_some() {
             disp.extend([NavBack, NavFwd]);
         }
         // System > Features: what is left out is not offered
@@ -472,7 +437,7 @@ impl Ui {
             ("Analysers", ana),
             ("Instruments", ins),
             ("Display", disp),
-            ("System", vec![Open(MenuId::Storage), Shot, QuickRun, LockAct, Open(MenuId::Utility), PowerAct]),
+            ("System", vec![Open(MenuId::Utility), Open(MenuId::Storage), Shot, QuickRun, LockAct, PowerAct]),
         ];
         g.retain(|x| !x.1.is_empty());
         g

@@ -14,13 +14,11 @@
 //! a module next to `dho`, implements `Board` for it, and gives `Active` and `board()` a line for its name.
 
 pub mod dho;
-mod record;
-
-pub use record::resample as resample_record;
-pub use record::{sw_trig_level, to_record, trigger_point};
+pub mod pipe;
+pub mod policy;
 
 use crate::model::{Coupling, GenCh, Model, NCH, NGEN};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// The board this build drives: `OOS_BOARD` when OOS is built, `dho` by default (build.rs, ADR 0067).
 #[cfg(oos_board = "dho")]
@@ -370,6 +368,9 @@ pub struct MaskRead {
     pub chans: u32,
 }
 
+/// What the UI wants of raw reads of deep records for the measurements (`Shared::deep_raw`; None: off).
+pub type DeepWant = Option<policy::deep::Want>;
+
 /// Shared between UI and the acquisition thread: the settings the UI wants, the latest frame, a status line.
 #[derive(Default)]
 pub struct Shared {
@@ -385,9 +386,6 @@ pub struct Shared {
     /// STOP: the view the UI shows (time per div, delay); the thread acquires nothing and reads the last record again
     /// for it when it changes, into `replay` (`hw::stop_window`)
     pub stop_view: Option<(f64, f64)>,
-    /// STOP: the view asked for is the stored record as a whole, wanted at every sample (`hw::whole_plan`), not as
-    /// the view of the screen that happens to hold all of it
-    pub stop_whole: bool,
     pub replay: Option<Frame>,
     /// frames decoded, and those dropped from the queue unseen because the screen fell behind (`:SYSTem:STATe?`)
     pub decoded: u64,
@@ -437,7 +435,7 @@ pub struct Shared {
     /// the UI reads records the model does not tell the board about (protocol watch, XY): no live compression
     pub needs_raw: bool,
     /// raw reads of deep records for the measurements, as the UI wants them (deepmeas.rs; None: off)
-    pub deep_raw: Option<crate::deepmeas::Want>,
+    pub deep_raw: DeepWant,
     /// the FPGA's mask unit: wanted by the UI (None: off), the latest reading
     pub mask_want: Option<MaskWant>,
     pub mask: Option<MaskRead>,
@@ -516,6 +514,15 @@ pub const QUEUE_MAX: usize = 256;
 pub const QUEUE_SAMPLES: usize = 32 << 20;
 
 pub type HwShared = Arc<Mutex<Shared>>;
+
+/// A state shared with a thread of the board (`HwShared` of the acquisition thread, `LiveShared` of the read-out of
+/// `--fpga-live`, the board's own cells), locked: the one place for every reader and writer of it, the threads' and the
+/// screen's (`wave::hw` is this). A lock fails only when another holder panicked while it held it, and the state may
+/// then be half written; this panics then, as each of these places did before: neither a thread of the board nor the
+/// screen goes on with such a state.
+pub fn lock<T>(shared: &Mutex<T>) -> MutexGuard<'_, T> {
+    shared.lock().expect("a holder of the shared state panicked while holding it: the state may be half written")
+}
 
 #[cfg(test)]
 mod boundary {

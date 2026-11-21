@@ -537,8 +537,8 @@ impl Ui {
         let m = &mut self.m;
         match it {
             Item::AcqDepth => m.mdepth = cycle(m.mdepth, mdepths().len(), d),
-            Item::MeasSrc => self.meas_src = self.step_wave(self.meas_src, d),
-            Item::MeasSrcB => self.meas_src_b = self.step_wave(self.meas_src_b, d),
+            Item::MeasSrc => self.sources.a = self.step_wave(self.sources.a, d),
+            Item::MeasSrcB => self.sources.b = self.step_wave(self.sources.b, d),
             // Track cursor B on its own source (follows cursor A's until set)
             Item::CurSrcB => {
                 let cur = self.cursor_b_source();
@@ -555,7 +555,7 @@ impl Ui {
             }
             Item::CurMode => {
                 let all = [CursorMode::Off, CursorMode::Time, CursorMode::Volt, CursorMode::Track, CursorMode::Xy];
-                let i = all.iter().position(|&x| x == m.cursor).unwrap();
+                let i = all.iter().position(|&x| x == m.cursor).unwrap_or(0);
                 m.cursor = all[cycle(i, all.len(), d)];
             }
             // a cursor on a voltage reads higher the further up the screen it is: + raises the reading (moves it up)
@@ -566,40 +566,44 @@ impl Ui {
                 *field = (*field + delta).clamp(0.0, 1.0);
             }
             Item::RefSel => {
-                let slot = (self.ref_sel as i32 + d).clamp(0, NREF as i32 - 1) as usize;
+                let slot = (self.ref_page.sel as i32 + d).clamp(0, NREF as i32 - 1) as usize;
                 self.select_workspace_source(WaveId::Ref(slot));
             }
             Item::RefColor => {
-                if let Some(r) = &mut self.refs[self.ref_sel] {
+                if let Some(r) = &mut self.refs[self.ref_page.sel] {
                     r.color = cycle(r.color.min(REF_COLORS.len() - 1), REF_COLORS.len(), d);
                 }
             }
             Item::RefVpd => {
-                if let Some(r) = &mut self.refs[self.ref_sel] {
+                if let Some(r) = &mut self.refs[self.ref_page.sel] {
                     let i = VSCALES.iter().position(|&s| s >= r.vpd * 0.999).unwrap_or(VSCALES.len() - 1);
                     r.vpd = VSCALES[step_index(i, VSCALES.len(), d)];
                 }
                 self.measure_refs();
             }
-            Item::ZoneSel => self.zone_sel = cycle(self.zone_sel, 2, d),
+            Item::RefOffset => {
+                if let Some(r) = &mut self.refs[self.ref_page.sel] {
+                    r.offset += 0.1 * r.vpd * d as f32;
+                }
+            }
+            Item::ZoneSel => self.zone_trig.sel = cycle(self.zone_trig.sel, 2, d),
             Item::ZoneOn => {
-                let z = &mut m.zones[self.zone_sel];
+                let z = &mut m.zones[self.zone_trig.sel];
                 z.on = !z.on;
             }
             Item::ZoneSrc => {
-                let z = &mut m.zones[self.zone_sel];
+                let z = &mut m.zones[self.zone_trig.sel];
                 z.src = src_step(z.src, NCH, d);
             }
             Item::ZoneMode => {
-                let z = &mut m.zones[self.zone_sel];
+                let z = &mut m.zones[self.zone_trig.sel];
                 z.inside = !z.inside;
             }
             Item::Layout => {
                 let i = LAYOUTS.iter().position(|&l| l == m.layout).unwrap_or(0);
                 m.layout = LAYOUTS[cycle(i, LAYOUTS.len(), d)];
-                if m.layout == Layout::Studio {
-                    self.studio.enter = true;
-                }
+                self.studio.enter |= m.layout == Layout::Studio;
+                self.meas_own.dialog = None; // a row's settings are the card in Minimal and Studio, a dialog in Default
                 // Default is the stock OOS screen: its cards and top bar, not the compact bars a Bottom bar choice left
                 if m.layout == Layout::Default {
                     m.bar_compact = false;
@@ -633,7 +637,7 @@ impl Ui {
                 m.quick = QUICKS[cycle(i, QUICKS.len(), d)];
             }
             Item::MathOpI => {
-                let fam = self.math_fam;
+                let fam = self.math.family;
                 let mut ops = vec![MathOp::Off];
                 ops.extend_from_slice(fam.ops());
                 let i = ops.iter().position(|&x| x == m.math).unwrap_or(0);
@@ -642,10 +646,10 @@ impl Ui {
                 self.math_autoscale();
             }
             Item::MathFam => {
-                let i = MathFamily::ALL.iter().position(|&f| f == self.math_fam).unwrap_or(0);
-                self.math_fam = MathFamily::ALL[cycle(i, MathFamily::ALL.len(), d)];
-                if m.math != MathOp::Off && m.math.family() != self.math_fam {
-                    m.math = self.math_fam.ops()[0];
+                let i = MathFamily::ALL.iter().position(|&f| f == self.math.family).unwrap_or(0);
+                self.math.family = MathFamily::ALL[cycle(i, MathFamily::ALL.len(), d)];
+                if m.math != MathOp::Off && m.math.family() != self.math.family {
+                    m.math = self.math.family.ops()[0];
                     m.math_offset = 0.0;
                     self.math_autoscale();
                 }
@@ -657,17 +661,17 @@ impl Ui {
                 let k = cycle(m.math_sel, NMATH, d);
                 m.math_select(k);
                 if m.math != MathOp::Off {
-                    self.math_fam = m.math.family();
+                    self.math.family = m.math.family();
                 }
             }
             Item::MathScale => {
                 let n = if m.math == MathOp::Fft { FFT_DB.len() } else { math_scales().len() };
                 m.math_scale = step_index(m.math_scale, n, d);
             }
-            Item::MeasStats => self.stats_on = !self.stats_on,
+            Item::MeasStats => self.results.on = !self.results.on,
             Item::MeasLabels => self.m.meas_labels = !self.m.meas_labels,
             Item::StripDock => {
-                let all = StripDock::ALL;
+                let (all, m) = (self.strip_docks(), &mut self.m);
                 let i = all.iter().position(|&s| s == m.strip_dock).unwrap_or(0);
                 m.strip_dock = all[step_index(i, all.len(), d)];
                 // the statistics card follows the dock the strip uses
@@ -779,7 +783,7 @@ impl Ui {
             Item::DecParity => {
                 use oos_dsp::decode::Parity;
                 let all = [Parity::None, Parity::Even, Parity::Odd];
-                let i = all.iter().position(|&x| x == self.m.dec_parity).unwrap();
+                let i = all.iter().position(|&x| x == self.m.dec_parity).unwrap_or(0);
                 self.m.dec_parity = all[cycle(i, 3, d)];
             }
             Item::Zoom => {
@@ -798,16 +802,15 @@ impl Ui {
             Item::XyMode => self.xy = !self.xy_over(),
             Item::BootMode => self.boot_mode_toggle(),
             Item::Overclock => self.overclock_step(d),
-            Item::StoreSlot => self.store_slot = (self.store_slot as i32 + d).clamp(ranges::STORE_SLOT.0, ranges::STORE_SLOT.1) as u32,
+            Item::StoreSlot => self.files.slot = (self.files.slot as i32 + d).clamp(ranges::STORE_SLOT.0, ranges::STORE_SLOT.1) as u32,
             Item::StoreDest => {
-                let i = crate::store::StoreDest::ALL.iter().position(|&x| x == self.store_dest).unwrap_or(0);
-                self.store_dest = crate::store::StoreDest::ALL[cycle(i, crate::store::StoreDest::ALL.len(), d)];
+                let i = crate::store::StoreDest::ALL.iter().position(|&x| x == self.files.dest).unwrap_or(0);
+                self.files.dest = crate::store::StoreDest::ALL[cycle(i, crate::store::StoreDest::ALL.len(), d)];
             }
             Item::MaskSrc => {
                 // a mask belongs to its channel: the new source needs a new one
                 self.m.mask_src = src_step(self.m.mask_src, NCH, d);
-                self.mask = None;
-                self.mask_ref = None;
+                self.mask_sw.forget();
                 self.m.mask_on = false;
             }
             Item::MaskX => {
@@ -818,7 +821,7 @@ impl Ui {
                 self.m.mask_y = ((self.m.mask_y + d as f32 * 0.04) * 100.0).round().clamp(4.0, 400.0) / 100.0;
                 self.build_mask();
             }
-            Item::RefSrc => self.ref_src = src_step(self.ref_src, NCH, d),
+            Item::RefSrc => self.ref_page.src = src_step(self.ref_page.src, NCH, d),
             Item::RefShow(i) => {
                 if let Some(r) = &mut self.refs[i] {
                     r.on = !r.on;
@@ -830,7 +833,7 @@ impl Ui {
     }
 
     pub(super) fn clear_measurement_statistics(&mut self) {
-        self.mstat.clear();
+        self.results.rows.clear();
         // the settings of a row that is no longer selected go with it
         if !self.m.row_cfg.is_empty() {
             let keys = self.m.row_keys();
@@ -928,7 +931,7 @@ impl Ui {
                 // the dialog of the POWER key, without the MCU answer that belongs to a key press
                 self.close_menu();
                 self.dialog = None;
-                self.power_dlg = true;
+                self.power.open = true;
             }
             Item::HZero => {
                 self.m.delay = 0.0;
@@ -977,7 +980,7 @@ impl Ui {
                 self.scpi_replay_file = p;
             }
             Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::RefImport) => {
-                let p = self.ref_files.get(k).cloned();
+                let p = self.ref_page.files.get(k).cloned();
                 self.close_picker();
                 if let Some(p) = p {
                     self.ref_load_path(&p);
@@ -1007,20 +1010,20 @@ impl Ui {
             }
             Item::MeasCfg(i) => self.open_meas_cfg(i as usize),
             Item::MeasAdd(k) => {
-                let e = (k, self.meas_src);
+                let e = (k, self.sources.a);
                 if let Some(index) = self.m.meas.iter().position(|item| *item == e) {
                     self.m.meas.remove(index);
-                    self.meas_own.remove(&e);
-                    if self.meas_cfg == Some(index as u16) {
-                        self.meas_cfg = None;
-                    } else if self.meas_cfg.is_some_and(|n| n as usize > index) {
-                        self.meas_cfg = self.meas_cfg.map(|n| n - 1);
+                    self.meas_own.rows.remove(&e);
+                    if self.meas_own.dialog == Some(index as u16) {
+                        self.meas_own.dialog = None;
+                    } else if self.meas_own.dialog.is_some_and(|n| n as usize > index) {
+                        self.meas_own.dialog = self.meas_own.dialog.map(|n| n - 1);
                     }
                     self.clear_measurement_statistics();
                     self.toast(&format!(
                         "{} {} removed",
                         meascatalog::meas_display_name(k),
-                        self.wave_name(self.meas_src)
+                        self.wave_name(self.sources.a)
                     ));
                     return true;
                 } else {
@@ -1031,7 +1034,7 @@ impl Ui {
                     self.clear_measurement_statistics();
                 }
                 if k == Meas::Burst && !(self.m.meas_idle > 0.0) {
-                    if let Some((a, _)) = self.meas_analysis(self.meas_src) {
+                    if let Some((a, _)) = self.meas_analysis(self.sources.a) {
                         let p = a.period();
                         if p.is_finite() && p > 0.0 {
                             self.m.meas_idle = p;
@@ -1039,7 +1042,7 @@ impl Ui {
                     }
                 }
                 self.ensure_meas_own();
-                self.toast(&format!("{} {} added", meascatalog::meas_display_name(k), self.wave_name(self.meas_src)));
+                self.toast(&format!("{} {} added", meascatalog::meas_display_name(k), self.wave_name(self.sources.a)));
             }
             Item::MeasPair(k) => self.meas_pair_toggle(k),
             Item::CntClear => {
@@ -1061,15 +1064,15 @@ impl Ui {
             Item::SearchSave => self.events_export(tables::TableKind::Search),
             Item::StoreBin => self.file_save_ask(FileKind::WaveBin),
             Item::RefExport => self.ref_export(),
-            Item::RefImport if self.sheets_on() => self.studio_load_file(self.ref_sel),
+            Item::RefImport if self.sheets_on() => self.studio_load_file(self.ref_page.sel),
             Item::RefImport => self.ref_import(),
             Item::RefLoad => self.ref_load(),
             Item::MaskSave => self.mask_save(),
             Item::MaskLoad => self.mask_load(),
             Item::ChLabel(c) => self.wlan.osk = Some(wlan::Osk::for_label(c, &self.m.ch_label[c])),
             Item::BusLabel => self.wlan.osk = Some(wlan::Osk::for_bus(&self.m.bus.label)),
-            Item::RefLabel => match &self.refs[self.ref_sel] {
-                Some(r) => self.wlan.osk = Some(wlan::Osk::for_ref(self.ref_sel, &r.label)),
+            Item::RefLabel => match &self.refs[self.ref_page.sel] {
+                Some(r) => self.wlan.osk = Some(wlan::Osk::for_ref(self.ref_page.sel, &r.label)),
                 None => self.toast("That slot is empty"),
             },
             Item::ChBiasZero(c) => self.zero_input(c),
@@ -1081,43 +1084,29 @@ impl Ui {
                 self.m.meas.clear();
                 self.m.meas2.clear();
                 self.m.cat.clear();
-                self.meas_own.clear();
-                self.meas_cfg = None;
+                self.meas_own.rows.clear();
+                self.meas_own.dialog = None;
                 self.clear_measurement_statistics();
             }
             Item::RefSave | Item::RefSaveNext => {
-                let c = self.ref_src;
+                let c = self.ref_page.src;
                 let rec = self.last[0].clone();
                 let saved = rec.as_ref().filter(|r| !r.ch[c].is_empty()).map(|r| {
                     let (v, dt) = self.meas_wave(r, c);
-                    let t0 = if v.len() > r.ch[c].len() { r.raw.as_ref().map(|x| x.t0).unwrap_or(r.t0) } else { r.t0 };
-                    RefWave {
-                        src: c,
-                        color: 0,
-                        label: String::new(),
-                        t0,
-                        dt,
-                        v: v.into(),
-                        vpd: self.m.ch[c].volts_per_div(),
-                        offset: self.m.ch[c].offset,
-                        on: true,
-                    }
+                    self.ref_of_channel(r, c, v, dt)
                 });
                 match saved {
                     Some(w) => {
                         let next = self.refs.iter().position(|r| r.is_none()).unwrap_or(NREF - 1);
                         // Studio: into the slot the picker shows; the secondary action goes to the next free one
-                        let slot = if self.sheets_on() && it != Item::RefSaveNext { self.ref_sel } else { next };
-                        self.m.deskew_ref[slot] = self.m.deskew_ch[c];
-                        self.refs[slot] = Some(w);
+                        let slot = if self.sheets_on() && it != Item::RefSaveNext { self.ref_page.sel } else { next };
                         self.toast(&format!("CH{} saved to R{}", c + 1, slot + 1));
-                        self.measure_refs();
-                        self.analyzer_update();
+                        self.ref_put(slot, w);
                     }
                     None => self.toast("Source channel has no data"),
                 }
             }
-            Item::RefClearOne => self.ref_clear_slot(self.ref_sel),
+            Item::RefClearOne => self.ref_clear_slot(self.ref_page.sel),
             Item::RefClear => {
                 self.refs = std::array::from_fn(|_| None);
                 self.measure_refs();
@@ -1165,7 +1154,7 @@ impl Ui {
                     d.push(format!("{} warning(s), see System info", p.warnings.len()));
                 }
                 d.extend([
-                    format!("Source: {}   {:.0} fps", self.src.name(), self.fps),
+                    format!("Source: {}   {:.0} fps", self.src.name(), self.counts.fps),
                     self.start_up_summary().unwrap_or_default(),
                     "Tap to close".into(),
                 ]);
@@ -1176,12 +1165,12 @@ impl Ui {
                 self.rec_action(":SAVE:IMAGe");
                 // without the dialog on it
                 self.close_menu();
-                self.shot_request = Some(String::new());
+                self.asks.shot = Some(String::new());
             }
             Item::MathAuto => self.math_autoscale(),
             Item::MathOff => self.math_turn_off(self.m.math_sel),
             Item::ZoneBox | Item::ZoneShape => {
-                self.zone_arm = Some((self.zone_sel, it == Item::ZoneShape));
+                self.zone_trig.arm = Some((self.zone_trig.sel, it == Item::ZoneShape));
                 self.close_menu();
                 self.toast(if it == Item::ZoneShape {
                     "Draw the zone with one finger"
@@ -1190,18 +1179,18 @@ impl Ui {
                 });
             }
             Item::ZoneClear => {
-                let blank = crate::zone::Zone { src: self.m.zones[self.zone_sel].src, ..Default::default() };
-                if self.m.zones[self.zone_sel] == blank {
+                let blank = crate::zone::Zone { src: self.m.zones[self.zone_trig.sel].src, ..Default::default() };
+                if self.m.zones[self.zone_trig.sel] == blank {
                     self.toast(NOTHING_TO_CLEAR);
                 } else {
-                    self.m.zones[self.zone_sel] = blank;
-                    self.toast(&format!("Zone {} deleted", self.zone_sel + 1));
+                    self.m.zones[self.zone_trig.sel] = blank;
+                    self.toast(&format!("Zone {} deleted", self.zone_trig.sel + 1));
                 }
             }
             Item::StoreSaveSetup => {
                 // for the SCPI recorder: the slot is the menu's and no part of the set-up, so the command names
                 // it. `:SAVE:SETup` would write the slot the scope that runs the recording happens to stand at
-                self.rec_action(&format!("*SAV {}", self.store_slot));
+                self.rec_action(&format!("*SAV {}", self.files.slot));
                 let p = self.setup_path();
                 let r = crate::store::write(&p, self.setup_text_full().as_bytes());
                 self.toast_saved(&p, r);
@@ -1217,18 +1206,18 @@ impl Ui {
             Item::MaskCreate => self.create_mask(),
             Item::MaskFromRef => self.create_mask_from_ref(),
             Item::MaskClear => {
-                if self.mask.is_none() && self.mask_ref.is_none() && !self.m.mask_on && self.mask_pass == 0 && self.mask_fail == 0 {
+                if self.mask_sw.mask.is_none() && self.mask_sw.reference.is_none() && !self.m.mask_on && self.mask_sw.pass == 0 && self.mask_sw.fail == 0 {
                     self.toast(NOTHING_TO_CLEAR);
                 } else {
-                    self.mask = None;
-                    self.mask_ref = None;
+                    self.mask_sw.mask = None;
+                    self.mask_sw.reference = None;
                     self.m.mask_on = false;
                     self.mask_counts_reset();
                     self.toast("Mask cleared");
                 }
             }
             Item::MaskReset => {
-                if self.mask_pass == 0 && self.mask_fail == 0 {
+                if self.mask_sw.pass == 0 && self.mask_sw.fail == 0 {
                     self.toast(NOTHING_TO_CLEAR);
                 } else {
                     self.mask_counts_reset();

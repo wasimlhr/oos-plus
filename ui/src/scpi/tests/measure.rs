@@ -300,7 +300,7 @@ fn saved_files_are_listed_fetched_and_deleted_and_the_memory_is_saved() {
     let dir = std::env::temp_dir().join(format!("oos-mmem-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let (mut s, mut ui, cv) = session();
-    ui.store_dir = dir.clone();
+    ui.files.dir = dir.clone();
     ui.step(0.05);
     line(&mut s, &mut ui, &cv, ":STOP;*CLS;:SAVE:DEST DESK;:SAVE:WAV \"a.csv\";:SAVE:MEM:WAV \"m.bin\";:SAVE:MEM:WAV \"m.csv\"");
     assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");

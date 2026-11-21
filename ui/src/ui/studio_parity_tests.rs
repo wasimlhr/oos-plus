@@ -146,10 +146,14 @@ fn elsewhere(s: &Ui, menu: MenuId, it: Item) -> Place {
         (M::Channel(_), Open(M::ChMore(_))) => Place::Elsewhere("the More tab of the same sheet"),
         // the sheet has the levels on a tab of its own
         (M::Measure, Open(M::MeasLevels)) if s.sheet_spec(M::Measure).is_some_and(|sp| sp.tabs.iter().any(|t| t.name == "Levels" && t.holds())) => Place::Elsewhere("the Levels tab of the same sheet"),
+        // the statistics switch of the Default page is the first row of the Statistics page, which the sheet opens
+        (M::Measure, MeasStats) if s.sheet_source_has(M::Measure, Open(M::MeasStat)) => {
+            Place::Elsewhere("the Statistics page of the same sheet")
+        }
         // where the strip docks: Studio has no strip, its measurements are badges and the table (View menu)
         (M::Measure, StripDock) => Place::Elsewhere("View menu: badges, docked or floating table"),
-        // the skin and the choice of the bottom bar belong to the Default bars
-        (M::Display, Skin | BottomBar) => Place::Elsewhere("Default only: Studio has its own bars"),
+        // the choice of the bottom bar belongs to the Default bars
+        (M::Display, BottomBar) => Place::Elsewhere("Default only: Studio has its own bars"),
         // the SIM sheet holds the rows of the Advanced page on its own tabs
         (M::Sim, Open(M::SimAdvanced)) => Place::Elsewhere("the Levels, Jitter and Spread tabs of the same sheet"),
         // the ten Show switches are one: the switch of the selected slot
@@ -612,4 +616,72 @@ fn the_sheet_rows_have_the_names_and_the_order_of_the_default_menus() {
     wrong.sort();
     wrong.dedup();
     assert!(wrong.is_empty(), "sheet rows that differ from the Default menu:\n{}", wrong.join("\n"));
+}
+
+/// Every option of the Default layout's dialog of one measurement is on the card of Studio for every kind of
+/// measurement (ADR 0030): Reference as the card's Low and High, Idle, Outside, N periods, Clock/Data as the card's
+/// Edge type, and Edges used. A field the dialog gains and the card has not fails here.
+#[test]
+fn every_option_of_the_default_measurement_dialog_is_on_the_studio_card() {
+    use super::measrow::RF;
+    use oos_dsp::measure::ALL;
+    let mut missing = Vec::new();
+    for k in ALL {
+        let mut d = default_ui();
+        d.m.meas = vec![(k, WaveId::Ch(0))];
+        d.open_meas_cfg(0);
+        let Some(g) = d.cfg_geom() else {
+            missing.push(format!("{k:?}: no dialog in Default"));
+            continue;
+        };
+        let mut want: Vec<(&str, Vec<RF>)> = Vec::new();
+        if g.refs.w > 0 {
+            want.push(("Reference", vec![RF::Low, RF::High]));
+        }
+        if g.idle_m.is_some() {
+            want.push(("Idle", vec![RF::Idle]));
+        }
+        if g.side.is_some() {
+            want.push(("Outside", vec![RF::Side]));
+        }
+        if g.n_m.is_some() {
+            want.push(("N periods", vec![RF::N]));
+        }
+        if g.edges.is_some() {
+            want.push(("Edges", vec![RF::NEdge]));
+        }
+        if matches!(k, Meas::Rise | Meas::Fall) {
+            want.push(("Edges used", vec![RF::Used]));
+        }
+        let mut s = studio_ui();
+        s.m.meas = vec![(k, WaveId::Ch(0))];
+        s.open_meas_cfg(0);
+        let rows: Vec<Item> = s.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();
+        for (name, fields) in want {
+            if !fields.iter().all(|f| rows.contains(&Item::RowF(*f))) {
+                missing.push(format!("{k:?}: {name}"));
+            }
+        }
+    }
+    assert!(missing.is_empty(), "options of the Default dialog the Studio card has not:\n{}", missing.join("\n"));
+}
+
+/// What the dialog of the Default layout sets is what the card of Studio shows: both are the row's own settings.
+#[test]
+fn the_default_dialog_and_the_studio_card_show_the_same_settings() {
+    use super::measrow::RF;
+    let mut u = default_ui();
+    u.m.meas = vec![(Meas::NPeriods, WaveId::Ch(0))];
+    u.open_meas_cfg(0);
+    let g = u.cfg_geom().unwrap();
+    tap_in(&mut u, g.refs);
+    tap_in(&mut u, g.n_p.unwrap());
+    tap_in(&mut u, g.edges.unwrap());
+    u.close_meas_dlg();
+    u.m.layout = Layout::Studio;
+    u.open_meas_cfg(0);
+    let other = if u.m.meas_lpct < 0.15 { "20%" } else { "10%" };
+    assert_eq!(u.measrow_value(Item::RowF(RF::Low)).unwrap(), other);
+    assert_eq!(u.measrow_value(Item::RowF(RF::N)).unwrap(), (u.m.meas_n + 1).to_string());
+    assert_ne!(u.measrow_value(Item::RowF(RF::NEdge)).unwrap(), "Shared");
 }

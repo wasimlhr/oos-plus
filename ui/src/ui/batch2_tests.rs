@@ -200,7 +200,7 @@ fn setup_save_and_recall_keep_how_a_ref_looks() {
     let mut u = fresh(Layout::Default);
     let dir = crate::ui::testkit::Scratch::new("b2-setup");
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir.clone();
+    u.files.dir = dir.clone();
     u.refs[0] = Some(sine_ref(0, 2000, 1e-6));
     u.refs[2] = Some(sine_ref(2, 2000, 1e-6));
     {
@@ -283,7 +283,7 @@ fn studio_bottom_bar_has_a_chip_per_shown_ref() {
     assert!(b.refs[0].x >= b.ch[n_ch() - 1].right() && b.refs[0].right() <= b.time.x);
     u.tap(b.refs[0].x + 5, b.refs[0].y + 5);
     assert_eq!(u.selected_workspace_source(), Some(WaveId::Ref(0)));
-    assert_eq!(u.ref_sel, 0);
+    assert_eq!(u.ref_page.sel, 0);
 }
 
 #[test]
@@ -376,4 +376,22 @@ fn shots_refs_sim_axis_power() {
     (p.m.pw_v, p.m.pw_i) = (WaveId::Ref(0), WaveId::Ref(1));
     p.analyzer_update();
     shot(&mut p, "power-noprobe");
+}
+
+// Break it catches: the Default bottom row keeping the channel, LA and generator cards while a stored record or the
+// simulator is on the screen (Offline, Take over, SIM), as upstream's PR #8 took them out; the time base and trigger
+// cards stay
+#[test]
+fn default_layout_in_a_record_mode_has_no_channel_la_or_generator_cards() {
+    let mut u = fresh(Layout::Default);
+    u.m.ch[1].on = true;
+    u.relayout();
+    assert!(u.card_layout().ch[0].w > 0, "live: the channel cards are there");
+    u.offline.on = true;
+    assert!(u.record_mode());
+    let c = u.card_layout();
+    assert!(c.ch.iter().all(|r| r.w == 0) && c.la.is_none() && c.gen.is_none(), "{:?}", c.ch);
+    assert!(c.time.w > 0 && c.trig.w > 0, "the time base and trigger cards stay");
+    u.offline.on = false;
+    assert!(u.card_layout().ch[0].w > 0);
 }

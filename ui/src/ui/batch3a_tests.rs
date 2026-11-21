@@ -39,7 +39,7 @@ fn shots_top_bar_vs_default() {
 
 fn sim_ui() -> Ui {
     let mut u = studio();
-    u.store_dir = std::env::temp_dir().join("oos-batch3a-sim");
+    u.files.dir = std::env::temp_dir().join("oos-batch3a-sim");
     u.studio_set_view(StudioView::Sim);
     for _ in 0..3 { u.step(0.05); }
     u
@@ -67,10 +67,10 @@ fn top_bar_is_one_status_pill_a_single_button_plain_acquisition_and_the_default_
     assert_ne!(u.m.run, run);
     // nothing hangs under the bar: the Meas tab is in the badge row at the bottom
     u.studio_set_pin_all_for_test();
-    if let Some(tab) = u.studio_tab() { assert!(tab.y >= u.grid.bottom(), "the Meas tab is under the lanes"); }
+    if let Some(tab) = u.studio_tab() { assert!(tab.y >= u.plot.grid.bottom(), "the Meas tab is under the lanes"); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    assert!(u.grid.y - u.frame().top.bottom() <= 40, "only the strip sits under the bar; T is inside the scale");
+    assert!(u.plot.grid.y - u.frame().top.bottom() <= 40, "only the strip sits under the bar; T is inside the scale");
 }
 
 #[test]
@@ -108,7 +108,7 @@ fn run_stop_and_single_play_hold_and_capture_the_sim() {
     assert!(!u.sim_playing() || u.m.run == RunState::Stop || u.m.status != TrigStatus::Auto, "one frame, then held");
     // a SIM started elsewhere (the SIM menu) shows the chip too; a tap opens the SIM panel
     let mut u = studio();
-    u.store_dir = std::env::temp_dir().join("oos-batch3a-sim2");
+    u.files.dir = std::env::temp_dir().join("oos-batch3a-sim2");
     u.sim_activate(Item::SimPlay);
     u.wait_sim_generation();
     for _ in 0..8 { u.step(0.05); }
@@ -121,7 +121,7 @@ fn run_stop_and_single_play_hold_and_capture_the_sim() {
 
 fn sim_eye(preset: &str) -> Ui {
     let mut u = studio();
-    u.store_dir = std::env::temp_dir().join("oos-batch3a-eye");
+    u.files.dir = std::env::temp_dir().join("oos-batch3a-eye");
     assert!(u.sim_preset_set(preset));
     u.studio_set_view(StudioView::Sim);
     u.sim_activate(Item::SimPlay);
@@ -161,8 +161,8 @@ fn studio_eye_opens_beside_the_plot_and_full_is_an_explicit_choice() {
     for _ in 0..3 { u.step(0.05); }
     assert_eq!(u.m.eye_place, EyePlace::Side, "Studio opens the eye next to the plot");
     let pane = u.eye_pane_rect();
-    assert!(!u.wins.is_empty() && u.wins[0].w > 200, "the waveform lane stays: {:?}", u.wins);
-    assert!(u.wins[0].right() <= pane.x + 1 || u.wins[0].bottom() <= pane.y + 1, "beside or under, not over it");
+    assert!(!u.plot.wins.is_empty() && u.plot.wins[0].w > 200, "the waveform lane stays: {:?}", u.plot.wins);
+    assert!(u.plot.wins[0].right() <= pane.x + 1 || u.plot.wins[0].bottom() <= pane.y + 1, "beside or under, not over it");
     shot(&mut u, "eye-side");
     // Full by choice stays Full, also when the eye is opened again
     u.eye_set_place(EyePlace::Full);
@@ -185,8 +185,8 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
     u.studio_set_pin_all_for_test();
     u.studio_set_view(StudioView::Docked);
     for _ in 0..3 { u.step(0.05); }
-    let (gap0, row0, panel0, prow0) = (u.wins[1].y - u.wins[0].bottom(), u.studio_row_px(), u.studio_panel_w(), u.studio_panel_row());
-    let plot0 = u.wins[0].w;
+    let (gap0, row0, panel0, prow0) = (u.plot.wins[1].y - u.plot.wins[0].bottom(), u.studio_row_px(), u.studio_panel_w(), u.studio_panel_row());
+    let plot0 = u.plot.wins[0].w;
     shot(&mut u, "compact-off");
     // the View menu has the row
     u.studio.view_menu = true;
@@ -195,10 +195,10 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
     tap_in(&mut u, row);
     assert!(u.studio.compact);
     for _ in 0..3 { u.step(0.05); }
-    assert!(u.wins[1].y - u.wins[0].bottom() < gap0, "smaller lane gap");
+    assert!(u.plot.wins[1].y - u.plot.wins[0].bottom() < gap0, "smaller lane gap");
     assert!(u.studio_row_px() < row0, "smaller badge row");
     assert!(u.studio_panel_w() < panel0 && u.studio_panel_row() < prow0, "narrower panel");
-    assert!(u.wins[0].w > plot0, "the lanes get the room");
+    assert!(u.plot.wins[0].w > plot0, "the lanes get the room");
     shot(&mut u, "compact-on");
     // the small toggle in the badge row turns it off again
     u.studio.view_menu = false;
@@ -212,7 +212,7 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
     let mut d = Ui::new(Source::Demo { t: 0.0 });
     d.studio.compact = true;
     d.step(0.05);
-    assert!(d.m.layout != Layout::Studio && d.split_wins(d.grid).len() == 1);
+    assert!(d.m.layout != Layout::Studio && d.split_wins(d.plot.grid).len() == 1);
 }
 
 #[test]
@@ -286,7 +286,7 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     let _ = std::fs::remove_dir_all(&dir);
     // nothing saved yet: a normal start
     let mut fresh = Ui::new(Source::Demo { t: 0.0 });
-    let mut file = crate::store::SetupFile::new(&dir);
+    let mut file = crate::store::readers::SetupFile::new(&dir);
     assert_eq!(file.restore(&mut fresh), Ok(false));
     // Studio with the measurements docked, a time base, then saved (the folder is created)
     let mut u = studio();
@@ -294,11 +294,11 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     u.m.tscale = 12;
     u.render(&mut Canvas::new(W, H));
     file.save(&u, true);
-    assert!(dir.join(crate::store::SetupFile::NAME).is_file());
+    assert!(dir.join(crate::store::readers::SetupFile::NAME).is_file());
     // a restart: a new interface reads it
     let mut again = Ui::new(Source::Demo { t: 0.0 });
     assert_eq!(again.m.layout, Layout::Default);
-    let mut file2 = crate::store::SetupFile::new(&dir);
+    let mut file2 = crate::store::readers::SetupFile::new(&dir);
     assert_eq!(file2.restore(&mut again), Ok(true));
     assert_eq!(again.m.layout, Layout::Studio);
     assert_eq!(again.studio.view, StudioView::Docked);
@@ -307,16 +307,16 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     again.render(&mut Canvas::new(W, H));
     assert!(again.stacked() && again.studio.view == StudioView::Docked);
     // an unchanged setup writes nothing; a change is written by the next save
-    let before = std::fs::metadata(dir.join(crate::store::SetupFile::NAME)).unwrap().modified().unwrap();
+    let before = std::fs::metadata(dir.join(crate::store::readers::SetupFile::NAME)).unwrap().modified().unwrap();
     file2.save(&again, true);
-    assert_eq!(std::fs::metadata(dir.join(crate::store::SetupFile::NAME)).unwrap().modified().unwrap(), before);
+    assert_eq!(std::fs::metadata(dir.join(crate::store::readers::SetupFile::NAME)).unwrap().modified().unwrap(), before);
     again.m.tscale = 10;
     file2.save(&again, true);
-    assert_eq!(std::fs::read_to_string(dir.join(crate::store::SetupFile::NAME)).unwrap(), crate::store::setup_text(&again.m));
+    assert_eq!(std::fs::read_to_string(dir.join(crate::store::readers::SetupFile::NAME)).unwrap(), crate::store::setup_text(&again.m));
     // a damaged file is reported, not applied
-    std::fs::write(dir.join(crate::store::SetupFile::NAME), "layout = wide\n").unwrap();
+    std::fs::write(dir.join(crate::store::readers::SetupFile::NAME), "layout = wide\n").unwrap();
     let mut third = Ui::new(Source::Demo { t: 0.0 });
-    assert!(crate::store::SetupFile::new(&dir).restore(&mut third).is_err());
+    assert!(crate::store::readers::SetupFile::new(&dir).restore(&mut third).is_err());
     assert_eq!(third.m.layout, Layout::Default);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -326,6 +326,7 @@ fn scale_index(t: f32) -> usize { tscales().iter().position(|&s| (s / t - 1.0).a
 /// The owner's two cases on the demo source: main 500 us/div with zoom 2.5x, main 50 ms/div with zoom 250x.
 fn zoomed_demo(main: f32, zoom: f32, zdelay: f32) -> Ui {
     let mut u = studio();
+    u.m.dots = false; // vectors: the zoom joins the samples
     u.m.tscale = scale_index(main);
     u.m.delay = 0.0;
     for _ in 0..8 { u.step(0.05); }
@@ -374,7 +375,7 @@ fn zoom_detail_shows_real_samples_not_invented_ramps() {
     assert!(hint.ends_with("samples/div") && hint.starts_with("1.4"), "{hint}");
     assert!(u.phz.fat, "each sample is marked with a dot");
     // the samples are joined: the pixel columns between two samples are lit
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let map = &u.phz.map[0];
     let lit_cols = (0..u.phz.w).filter(|&x| (0..u.phz.h).any(|y| map[y * u.phz.w + x] > 0)).count();
     assert!(lit_cols > u.phz.w / 2, "the samples are joined by a line: {lit_cols} of {}", u.phz.w);
@@ -393,7 +394,7 @@ fn zoom_factor_time_per_div_and_the_overview_window_agree() {
         let (pct, f) = u.zoom_box();
         assert!((f / factor - 1.0).abs() < 0.01);
         assert!((pct - 50.0).abs() < 0.5, "centered box is at 50 %: {pct}");
-        let (o, _) = u.split_zoom(u.grid);
+        let (o, _) = u.split_zoom(u.plot.grid);
         let (xa, xb) = u.zoom_window_x(o);
         let want = o.w as f32 / factor;
         assert!(((xb - xa) as f32 - want).abs() <= 1.5, "window {} px, {} expected", xb - xa, want);
@@ -407,7 +408,7 @@ fn zoom_factor_time_per_div_and_the_overview_window_agree() {
 fn center_trigger_puts_t_in_the_middle_of_the_zoom_window() {
     for (main, zoom) in [(500e-6, 200e-6), (50e-3, 200e-6)] {
         let mut u = zoomed_demo(main, zoom, 0.439e-3);
-        let g = u.grid;
+        let g = u.plot.grid;
         assert!((u.studio_x_of_time(0.0) - (g.x + g.w / 2)).abs() > 20, "T starts off centre");
         u.studio_center_trigger();
         assert_eq!(u.m.zdelay, 0.0);
@@ -428,7 +429,7 @@ fn center_trigger_puts_t_in_the_middle_of_the_zoom_window() {
 fn panning_the_zoom_never_changes_the_main_time_base() {
     let mut u = zoomed_demo(500e-6, 200e-6, 0.0);
     let (tscale, tfine, delay) = (u.m.tscale, u.m.tfine, u.m.delay);
-    let (o, z) = u.split_zoom(u.grid);
+    let (o, z) = u.split_zoom(u.plot.grid);
     let same = |u: &Ui| (u.m.tscale, u.m.tfine, u.m.delay) == (tscale, tfine, delay);
     // a drag in the zoom view pans the box
     let zdelay = u.m.zdelay;
@@ -477,7 +478,7 @@ fn drawing_a_box_turns_the_zoom_on_framed_to_it() {
     let mut u = studio();
     for _ in 0..8 { u.step(0.05); }
     assert!(!u.m.zoom);
-    let g = u.grid;
+    let g = u.plot.grid;
     u.arm_zoom_area();
     touch(&mut u, Phase::Down, g.x + 400, g.y + 100);
     touch(&mut u, Phase::Move, g.x + 500, g.y + 200);

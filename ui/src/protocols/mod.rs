@@ -127,7 +127,6 @@ pub const BAUD_DEFAULT: usize = 7;
 /// The decoder settings of a setup from before a protocol became a module: what its option rows were kept in.
 /// A module that was a built-in protocol maps them onto its options (`Protocol::legacy`).
 #[derive(Clone, Copy, Debug)]
-#[allow(dead_code)] // the rows of protocols that are still built in (USB speed: no module reads it yet)
 pub struct Legacy {
     pub baud: usize,
     pub bits: u32,
@@ -138,7 +137,6 @@ pub struct Legacy {
     pub arate: usize,
     pub tick: usize,
     pub nibbles: u32,
-    pub uspeed: usize,
 }
 
 /// One option row of the Decode menu: a name and its choices; the setting is the index of the choice.
@@ -338,11 +336,6 @@ pub trait Protocol: Sync {
         None
     }
 
-    /// The edge a frame starts with, for the hardware trigger in front of the protocol trigger.
-    fn start_edge(&self) -> Slope {
-        Slope::Fall
-    }
-
     /// Sources and threshold when the protocol is chosen.
     fn setup(&self) -> Setup {
         Setup::default()
@@ -363,12 +356,6 @@ pub trait Protocol: Sync {
     /// The shared rows of the Decode menu the protocol shows, before its own options ([`Row`]).
     fn shared(&self) -> &'static [Row] {
         &[]
-    }
-
-    /// The role whose line frames start on, where the hardware trigger in front of the protocol trigger looks
-    /// (`start_edge`): the main line, or e.g. a chip select or word select.
-    fn start_role(&self) -> usize {
-        0
     }
 
     /// For a protocol that was built in before it became a module: its option settings from a setup that kept them in
@@ -394,68 +381,57 @@ impl dyn Protocol {
 pub static PROTOS: std::sync::LazyLock<Vec<Proto>> =
     std::sync::LazyLock::new(|| (0..MODULES.len()).map(|i| Proto::Module(i as u8)).collect());
 
-// What a protocol of the model is, and what the model's decoder settings mean, is asked of this registry: the model
-// holds the index and the option settings, the registry knows the modules (ADR 0049).
-impl Proto {
+/// The module of a protocol of the model: the model holds the index, the registry knows the modules (ADR 0049). A
+/// trait of the registry, since the model's types can have methods only in oos-model (ADR 0064).
+pub trait Module {
     /// The module behind the protocol.
-    pub fn module(self) -> Option<&'static dyn Protocol> {
+    fn module(self) -> Option<&'static dyn Protocol>;
+}
+
+impl Module for Proto {
+    fn module(self) -> Option<&'static dyn Protocol> {
         let Proto::Module(i) = self;
         Some(get(i))
     }
-
-    /// Name in saved setups: the module's key.
-    pub fn key(self) -> String {
-        let Proto::Module(i) = self;
-        get(i).key().to_string()
-    }
-
-    pub fn from_key(k: &str) -> Option<Proto> {
-        PROTOS.iter().copied().find(|p| p.key() == k)
-    }
-
-    pub fn name(self) -> &'static str {
-        let Proto::Module(i) = self;
-        get(i).name()
-    }
-
-    /// Role names of the sources (main, second, third optional, fourth optional); None = not used.
-    pub fn roles(self) -> [Option<&'static str>; 4] {
-        let Proto::Module(i) = self;
-        get(i).info().roles
-    }
-
-    /// Serial protocols on one line that can also be decoded from a differential pair (RS-485: A - B).
-    pub fn diff_ok(self) -> bool {
-        let Proto::Module(i) = self;
-        get(i).info().diff_ok
-    }
 }
 
-impl Model {
+/// What the model's decoder settings mean with the module's options: a trait of the registry, since the model's types
+/// can have methods only where they are declared (ADR 0064: the model becomes a crate of its own).
+pub trait Decoder {
     /// Switches the decoder's protocol and nothing else (SCPI configures an instrument, not the demo's sources); a
     /// module that is newly chosen starts from its default options.
-    pub fn set_dec_proto_only(&mut self, p: Proto) {
+    fn set_dec_proto_only(&mut self, p: Proto);
+
+    /// The option settings of the decoder's protocol module, in range.
+    fn dec_opts(&self) -> [usize; OPTS];
+
+    /// Bit time of the decoder's protocol (s), for the protocol trigger's sampling and search window.
+    fn bus_bit(&self) -> f64;
+
+    /// The record length the protocol trigger needs: a whole frame of the protocol before the trigger point (a module
+    /// may say: USB auto, low-speed packets), else 200 bit times.
+    fn bus_frame_span(&self) -> f64;
+}
+
+impl Decoder for Model {
+    fn set_dec_proto_only(&mut self, p: Proto) {
         if let (Proto::Module(i), true) = (p, self.dec_proto != p) {
             self.dec_opt = opt_default(i);
         }
         self.dec_proto = p;
     }
 
-    /// The option settings of the decoder's protocol module, in range.
-    pub fn dec_opts(&self) -> [usize; OPTS] {
+    fn dec_opts(&self) -> [usize; OPTS] {
         let Proto::Module(i) = self.dec_proto;
         opt_fit(i, self.dec_opt)
     }
 
-    /// Bit time of the decoder's protocol (s), for the protocol trigger's sampling and search window.
-    pub fn bus_bit(&self) -> f64 {
+    fn bus_bit(&self) -> f64 {
         let Proto::Module(i) = self.dec_proto;
         get(i).info().bit_time(&self.dec_opts(), &shared(self))
     }
 
-    /// The record length the protocol trigger needs: a whole frame of the protocol before the trigger point (a module
-    /// may say: USB auto, low-speed packets), else 200 bit times.
-    pub fn bus_frame_span(&self) -> f64 {
+    fn bus_frame_span(&self) -> f64 {
         self.dec_proto
             .module()
             .and_then(|p| p.info().frame_span(&self.dec_opts(), &shared(self)))
@@ -641,7 +617,7 @@ mod tests {
         }
         let order: Vec<&str> = dsp.iter().map(|i| i.key).filter(|k| keys.contains(k)).collect();
         assert_eq!(keys, order, "MODULES: not in the order of oos_dsp::protocols::MODULES");
-        for i in dsp.iter() {
+        for i in dsp.iter().filter(|i| i.key != "Example") {
             assert!(keys.contains(&i.key), "{}: in oos_dsp::protocols::MODULES, no module in ui/src/protocols", i.key);
         }
         exempt_once("NO_DEMO", &NO_DEMO.map(|x| x.0), &keys);

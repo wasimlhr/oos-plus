@@ -115,7 +115,7 @@ fn load_and_import_csv_bin_and_wfm() {
     let dir = crate::ui::testkit::Scratch::new("ref");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    ui.store_dir = dir.clone();
+    ui.files.dir = dir.clone();
 
     let csv = dir.join("lane.csv");
     std::fs::write(&csv, "Time (s),Volts\n0,0.1\n1e-9,0.4\n2e-9,-0.2\n").unwrap();
@@ -222,6 +222,28 @@ fn load_refuses_kernel_files_and_oversize_files_before_reading() {
     assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
     assert!(ui.ref_shown_slot(0).is_some());
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_bare_value_sets_the_selected_slot() {
+    let (mut s, mut ui, cv) = reference_session();
+    // A value without a slot (`:VSCale 2`, docs/scpi.md `[<slot>,]<V/div>`) was read as slot 2 and refused.
+    line(&mut s, &mut ui, &cv, ":REF:CURR 1;:REF:VSC 2;:REF:VOFF -0.1;:REF:COL RED;:REF:LAB:CONT Ramp;:REF:SHOW 0");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    let vsc: f64 = line(&mut s, &mut ui, &cv, ":REF:VSC?").parse().unwrap();
+    let voff: f64 = line(&mut s, &mut ui, &cv, ":REF:VOFF? 1").parse().unwrap();
+    assert!((vsc - 2.0).abs() < 1e-6 && (voff + 0.1).abs() < 1e-6, "{vsc} {voff}");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":REF:COL?;:REF:LAB:CONT? R1;:REF:SHOW? REF1"), "RED;Ramp;0");
+    // with a slot as before; a query and :RESet still take a bare slot
+    line(&mut s, &mut ui, &cv, ":REF:SHOW ON;:REF:VSC R1,0.5;:REF:VSC REF1,0.25");
+    let vsc: f64 = line(&mut s, &mut ui, &cv, ":REF:VSC? R1").parse().unwrap();
+    assert!((vsc - 0.25).abs() < 1e-6, "{vsc}");
+    line(&mut s, &mut ui, &cv, ":REF:RES 1");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":REF:SHOW?;:SYST:ERR?"), "1;0,\"No error\"");
+    let v = ui.ref_vscale(0);
+    assert!(v.is_some_and(|v| (v - 0.25).abs() > 1e-6), "RES 1 resets slot 1 and keeps it: {v:?}");
+    line(&mut s, &mut ui, &cv, ":REF:VSC 0,2");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"), "a bad slot stays an error");
 }
 
 #[test]

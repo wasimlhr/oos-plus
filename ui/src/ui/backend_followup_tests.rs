@@ -60,7 +60,7 @@ fn actual_gen7_reference_math_zoom_and_automatic_eye_backend() {
     ui.set_zoom(true);
     ui.m.zscale = tscales().iter().position(|&t| (t - 100e-12).abs() < 1e-18).unwrap();
     ui.m.zdelay = 0.0;
-    ui.zoom_vertical_step(1, ui.area, 0.5);
+    ui.zoom_vertical_step(1, ui.plot.area, 0.5);
     ui.relayout();
     output(&mut ui, "02-gen7-reference-math-stacked-zoom.png");
     ui.m.zdelay = 1e-9;
@@ -218,13 +218,13 @@ fn full_eye_owns_plot_input_and_keeps_close_clear_of_the_corner_button() {
     ui.m.view = AView::Eye;
     ui.m.eye_place = EyePlace::Full;
     ui.relayout();
-    let before = (ui.m.tscale, ui.m.delay, ui.m.zscale, ui.m.zdelay, ui.zoom_vfactor, ui.m.zoom);
+    let before = (ui.m.tscale, ui.m.delay, ui.m.zscale, ui.m.zdelay, ui.zoom_view.vfactor, ui.m.zoom);
     let a = ui.eye_page_rect();
     assert!(!ui.pointer_wheel(a.x + a.w / 2, a.y + a.h / 2, 1, false));
     assert!(!ui.pointer_wheel(a.x + a.w / 2, a.y + a.h / 2, 1, true));
     let hidden = ui.zoom_controls().iter().find(|(_, name)| *name == "H+").unwrap().0;
     ui.tap(hidden.x + 2, hidden.y + 2);
-    assert_eq!((ui.m.tscale, ui.m.delay, ui.m.zscale, ui.m.zdelay, ui.zoom_vfactor, ui.m.zoom), before);
+    assert_eq!((ui.m.tscale, ui.m.delay, ui.m.zscale, ui.m.zdelay, ui.zoom_view.vfactor, ui.m.zoom), before);
     let close = ui.eye_pane_close();
     assert!(!overlaps(close, ui.full_btn().1));
     ui.tap(close.x + 4, close.y + 4);
