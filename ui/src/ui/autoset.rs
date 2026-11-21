@@ -222,7 +222,7 @@ impl Ui {
         m.tfine = 1.0;
         m.delay = 0.0;
         m.run = RunState::Run;
-        self.operation_serial = self.operation_serial.wrapping_add(1);
+        let id = self.ops.next();
         m.hw_stamp += 1;
         let stamp = m.hw_stamp;
         // any channel set: the slots per channel follow the core table (`levels::slots`); a channel whose slots
@@ -230,7 +230,7 @@ impl Ui {
         let unit = (unit_levels_on() && self.src.hw_levels(Some((stamp, stamp, UNIT_RUNS))).is_some())
             .then_some(Unit { id: stamp, tries: 1, since: self.now });
         self.auto = Some(AutoRun {
-            id: self.operation_serial,
+            id,
             back,
             stamp,
             unit,
@@ -906,7 +906,7 @@ mod tests {
             stamp,
             ..Default::default()
         });
-        crate::board::to_record(&f, &ui.m, 3600, window, ui.m.delay as f64 - window / 2.0)
+        crate::wave::to_record(&f, &ui.m, 3600, window, ui.m.delay as f64 - window / 2.0)
     }
 
     /// Runs an auto set-up on hardware-like records (`hw_record_of`) without letting time pass; returns the stages seen.
@@ -1150,7 +1150,7 @@ mod tests {
                     stamp: a.stamp,
                     ..Default::default()
                 });
-                ui.last[0] = Some(crate::board::to_record(&fr, &ui.m, 3600, window, -window / 2.0));
+                ui.last[0] = Some(crate::wave::to_record(&fr, &ui.m, 3600, window, -window / 2.0));
                 ui.auto_step();
             }
             assert!(ui.auto.is_none(), "{} Hz: {:?}", f, seen);

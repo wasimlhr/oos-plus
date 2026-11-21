@@ -551,12 +551,12 @@ fn storage_zoom(t: &mut T) {
     assert!(t.ui.studio.sz.lane.is_none());
     t.no(":TIM:DEL:SOUR NOWHERE", "-224");
     t.rn(":TIM:DEL:VZO 4", ":TIM:DEL:VZO?", 4.0);
-    assert_eq!(t.ui.zoom_vfactor, 4.0);
+    assert_eq!(t.ui.zoom_view.vfactor, 4.0);
     t.go(":TIM:DEL:VZO 1");
-    assert_eq!(t.ui.zoom_vfactor, 1.0);
+    assert_eq!(t.ui.zoom_view.vfactor, 1.0);
     t.go(":TIM:DEL:VZO 8");
     t.go(":TIM:DEL:VZO:RES");
-    assert_eq!(t.ui.zoom_vfactor, 1.0);
+    assert_eq!(t.ui.zoom_view.vfactor, 1.0);
     t.go(":TIM:DEL:SCAL 1e-4;:TIM:DEL:OFFS 3e-4");
     t.go(":TIM:DEL:CENT");
     assert_eq!(t.ui.m.zdelay, 0.0, "Center trigger");

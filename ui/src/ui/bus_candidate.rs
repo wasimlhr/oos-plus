@@ -143,7 +143,7 @@ impl Ui {
             candidate_model.trig_ref = None;
             candidate_model.trig_level = candidate_model.dec_thr;
             candidate_model.slope = Slope::Rise;
-            let mut state = shared.lock().unwrap();
+            let mut state = crate::wave::hw(shared);
             state.want = Some(board().want(&candidate_model));
             state.slow = crate::board::Slow::Off;
             state.stamp = self.m.hw_stamp;
@@ -157,7 +157,7 @@ impl Ui {
             // Preserve the hardware's original time zero. Refining an Edge on
             // CH alone here would shift it relative to the fixed R roles.
             let pre = frame.pre as f64;
-            return Some(crate::board::resample_record(
+            return Some(crate::wave::resample_record(
                 &std::sync::Arc::new(frame),
                 &self.m,
                 3600,

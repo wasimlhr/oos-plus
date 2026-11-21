@@ -337,7 +337,7 @@ fn clearing_with_nothing_to_clear_says_so_and_clearing_something_says_what_was_c
         assert_eq!(toast(&u), "Limit cleared", "{l:?}");
         assert!(u.azr.limit.is_none());
 
-        u.zone_sel = 0;
+        u.zone_trig.sel = 0;
         u.m.zones[0].pts = vec![(0.0, 0.0), (1e-6, 1.0)];
         u.activate(Item::ZoneClear);
         assert_eq!(toast(&u), "Zone 1 deleted", "{l:?}");

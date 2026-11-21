@@ -299,7 +299,7 @@ impl Ui {
     fn measurement_with_own_raw(&self, source: WaveId, kind: Meas, owner: WaveId) -> f64 {
         let Some(own) = self.own_params(kind, owner) else { return self.meas_at(source, kind) };
         let Some((key, t0)) = self.own_key(source, own) else { return f64::NAN };
-        let index = ALL_MEAS.iter().position(|&entry| entry == kind).unwrap();
+        let Some(index) = ALL_MEAS.iter().position(|&entry| entry == kind) else { return f64::NAN };
         if let Some(value) = self
             .azr
             .own_measure

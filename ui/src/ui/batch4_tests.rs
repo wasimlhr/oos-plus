@@ -179,9 +179,9 @@ fn zoom_bar_buttons_take_a_40_px_touch_in_default_and_studio() {
         assert!(target.h < 40 && target.y >= row.y && target.bottom() <= row.bottom(), "{l:?}: drawn {target:?} in {row:?}");
         let (x, y) = centre(target);
         // Box: arms the zoom box, from the edge of a 40 px target
-        assert!(!u.zoom_arm);
+        assert!(!u.zoom_box.arm);
         u.tap(x, y - 19);
-        assert!(u.zoom_arm, "{l:?}: a touch 19 px over the middle of Box arms it");
+        assert!(u.zoom_box.arm, "{l:?}: a touch 19 px over the middle of Box arms it");
     }
 }
 

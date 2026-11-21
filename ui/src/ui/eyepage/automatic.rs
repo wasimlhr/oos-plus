@@ -902,7 +902,7 @@ mod performance_and_timing_tests {
             assert!(button.w >= 40 && ui.top_hit(button).h >= 40);
         }
         ui.usb = true;
-        ui.wlan_stick = true;
+        ui.net.wlan_stick = true;
         let room = ui.top_buttons()[0].2.x - 12 - 166;
         let caption = ui.top_acq_caption(room).0;
         assert!(caption.contains("REF") && caption.contains("20.0 Mpts"));
@@ -924,7 +924,7 @@ mod performance_and_timing_tests {
         let key = ui.auto_eye_key();
         assert_eq!(ui.azr.eye_auto.submitted, 1);
         ui.eye_set_place(EyePlace::Side);
-        ui.eye_big = Some(3);
+        ui.eye_col.big = Some(3);
         assert_eq!(ui.auto_eye_key(), key);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
         while ui.azr.eye_auto.applied_results == 0 {

@@ -389,11 +389,11 @@ impl Ui {
                 DONE
             }
             "TIMebase:DELay:VZOom" => {
-                if q { return Some(t(en(self.zoom_vfactor as f64))); }
+                if q { return Some(t(en(self.zoom_view.vfactor as f64))); }
                 let Some(v) = num(arg).filter(|v| *v >= 1.0 && *v <= 1024.0) else { return Some(Err(bad(arg))) };
                 if !self.m.zoom { self.set_zoom(true); }
                 let want = v.log2().round() as i32;
-                let have = self.zoom_vfactor.log2().round() as i32;
+                let have = self.zoom_view.vfactor.log2().round() as i32;
                 for _ in 0..(want - have).abs() { self.studio_zoom_do(if want > have { studio::ZoomRow::VPlus } else { studio::ZoomRow::VMinus }); }
                 DONE
             }
