@@ -15,7 +15,7 @@ use super::display::bmp;
 use super::math::{math_index, unquote};
 use super::replay;
 use super::ser;
-use super::{arg_item, arg_rest, block, e, kw, num, parse_bool, parse_ch, parse_wave, suffix, Scpi};
+use super::{arg_item, arg_rest, block, e, kw, num, parse_bool, parse_ch, parse_wave, suffix, t, Scpi};
 use crate::board::{board, Board};
 use crate::gfx::Canvas;
 use crate::model::*;
@@ -39,7 +39,6 @@ impl Scpi {
         let query = head.ends_with('?');
         let head = head.trim_end_matches('?');
         let up = head.to_ascii_uppercase();
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         // a command of a file (scpi/replay.rs) is not a client's: what it may not send is refused before any handler
         if self.from_file && !query {
             if let Some(why) = replay::file_refuses(head, arg) {
@@ -361,7 +360,6 @@ impl Scpi {
     /// The IEEE 488.2 common commands (`*IDN?`, `*OPC`, `*ESR?`, `*CLS`, `*RST` and the others), by the header in
     /// capitals `up`. None when `up` is none of them (`exec_cmd` goes on), else the answer.
     fn common_cmd(&mut self, ui: &mut Ui, up: &str, query: bool, arg: &str) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         match up {
             "*IDN" => {
                 let p = oos_hal::model::platform();
@@ -462,7 +460,6 @@ impl Scpi {
     /// acquisition router, the decoder's and the LA's. None when no branch takes the nodes (`exec_cmd` goes on), else
     /// the answer.
     fn run_state_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         if !query && nodes.len() == 1 {
             let command = if kw(nodes[0], "STOP") {
                 Some(0)
@@ -554,7 +551,6 @@ impl Scpi {
     /// The trigger source (an LA line, a reference) and the thresholds, through the acquisition router. None when no
     /// branch takes the nodes (`exec_cmd` goes on), else the answer.
     fn trigger_source_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         // Reference trigger identities belong to the UI acquisition router, not
         // a silent physical-channel alias inside Model::trigger().
         if nodes.first().is_some_and(|node| kw(node, "TRIGger")) {
@@ -671,7 +667,6 @@ impl Scpi {
     /// The analyser pages' queries: `:EYE:ITEM?`, `:POWer:*?`, `:SPECtrum:ITEM?` and the others. None when no branch
     /// takes the nodes (`exec_cmd` goes on), else the answer.
     fn analyser_item_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = nodes.first().copied().unwrap_or("");
         if kw(n0, "EYE") && nodes.len() == 2 && kw(nodes[1], "ITEM") && query {
             return Some(self.eye_item(ui, arg));
@@ -746,7 +741,6 @@ impl Scpi {
     /// `:WAVeform:*`: the source, the mode, the format, the page, the preamble and the data. None when no branch takes
     /// the nodes (`exec_cmd` goes on), else the answer.
     fn waveform_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = nodes.first().copied().unwrap_or("");
         if kw(n0, "WAVeform") && nodes.len() == 2 {
             let n1 = nodes[1];
@@ -871,7 +865,6 @@ impl Scpi {
         query: bool,
         arg: &str,
     ) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = nodes.first().copied().unwrap_or("");
         if kw(n0, "REFerence") {
             return Some(self.ref_cmd(ui, &nodes[1..], query, arg));
@@ -1016,7 +1009,6 @@ impl Scpi {
         query: bool,
         arg: &str,
     ) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = nodes.first().copied().unwrap_or("");
         let (k0, sfx) = suffix(n0);
         if !query && nodes.len() == 1 {
@@ -1181,7 +1173,6 @@ impl Scpi {
         query: bool,
         arg: &str,
     ) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = nodes.first().copied().unwrap_or("");
         if kw(n0, "TRIGger") && nodes.len() == 3 && ["RS232", "SPI", "IIC"].iter().any(|b| kw(nodes[1], b)) {
             return ser::trig(m, nodes[1], nodes[2], arg, query);
@@ -1346,7 +1337,6 @@ impl Scpi {
         arg: &str,
         cmd: &str,
     ) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let n0 = nodes.first().copied().unwrap_or("");
         if !oos_hal::model::platform().caps.has_gen() {
             self.push_err(format!(
@@ -1453,7 +1443,6 @@ impl Scpi {
     /// :MOD:FM:DEViation <Hz>, :MOD:PM:DEViation <deg>, :MOD:<type>:INTernal:FREQuency <Hz> and
     /// :MOD:<type>:INTernal:FUNCtion <shape>.
     fn source_mod_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Option<Vec<u8>>> {
-        let t = |s: &str| Some(s.as_bytes().to_vec());
         let has = |k: &str| nodes[1..].iter().any(|n| kw(suffix(n).0, k));
         let m = &ui.m;
         let x = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite());

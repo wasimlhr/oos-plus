@@ -151,7 +151,7 @@ impl Ui {
         if !s.sz.ref_h.is_empty() {
             p.push(format!("refh={}", s.sz.ref_h.iter().map(|(i, (t, d))| format!("{}/{}/{}", i, t, d)).collect::<Vec<_>>().join(",")));
         }
-        if self.zoom_vfactor != 1.0 || self.zoom_vcenter != 0.0 { p.push(format!("yzoom={}/{}", self.zoom_vfactor, self.zoom_vcenter)); }
+        if self.zoom_view.vfactor != 1.0 || self.zoom_view.vcenter != 0.0 { p.push(format!("yzoom={}/{}", self.zoom_view.vfactor, self.zoom_view.vcenter)); }
         let w = &self.workspace;
         if w.stacked { p.push("stacked=1".into()); }
         if w.measure_docked { p.push("mdock=1".into()); }
@@ -187,8 +187,8 @@ impl Ui {
         self.studio.popup = None;
         self.studio.sz = Default::default();
         self.studio.badge_first = 0;
-        self.zoom_vfactor = 1.0;
-        self.zoom_vcenter = 0.0;
+        self.zoom_view.vfactor = 1.0;
+        self.zoom_view.vcenter = 0.0;
         self.workspace.stacked = false;
         self.workspace.measure_docked = false;
         self.workspace.measure_float = None;
@@ -257,7 +257,7 @@ impl Ui {
                     let f: Vec<&str> = v.split('/').collect();
                     if let [a, b] = f[..] {
                         if let (Ok(a), Ok(b)) = (a.parse::<f32>(), b.parse::<f32>()) {
-                            if a.is_finite() && b.is_finite() { (self.zoom_vfactor, self.zoom_vcenter) = (a.clamp(1.0, 1024.0), b); }
+                            if a.is_finite() && b.is_finite() { (self.zoom_view.vfactor, self.zoom_view.vcenter) = (a.clamp(1.0, 1024.0), b); }
                         }
                     }
                 }

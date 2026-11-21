@@ -145,7 +145,7 @@ fn mcp_waveform_cuts_a_record_and_leaves_the_selection() {
     let csv = body(&get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform/r1-2.csv"));
     let rows: Vec<&str> = csv.lines().collect();
     assert_eq!((rows.len(), rows[0]), (101, "time_s,min_v,max_v"));
-    ui.net = "192.168.1.9".into();
+    ui.net.addr = "192.168.1.9".into();
     let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":100,"inline":100}"#);
     assert_eq!(
         data(&r).get("file").and_then(|f| f.get("url")).and_then(J::str),

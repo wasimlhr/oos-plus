@@ -421,8 +421,9 @@ fn set_decoder(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
         }
         // a module's option indices; brought into range where they are used (`protocols::opt_fit`)
         "dec_opt" => {
+            let opts = p_list(v, crate::protocols::OPTS, |x| x.parse::<u8>().map_err(|e| e.to_string()))?;
             m.dec_opt =
-                p_list(v, crate::protocols::OPTS, |x| x.parse::<u8>().map_err(|e| e.to_string()))?.try_into().unwrap()
+                opts.try_into().map_err(|o: Vec<u8>| format!("{} values, want {}", o.len(), crate::protocols::OPTS))?
         }
         "dec_src2" => m.dec_src2 = p_decode_source(v)?,
         "dec_cs" => m.dec_cs = if v == "none" { None } else { Some(p_decode_source(v)?) },
@@ -897,7 +898,7 @@ fn set_more(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
 
 /// Parses a setup file on top of the default set-up (keys missing in the file keep their defaults). Errors name the
 /// line and the key; unknown keys are ignored.
-#[cfg_attr(not(test), allow(dead_code))] // the strict form, for the tests
+// the strict form: the tests, and a session's setup (`session_read`)
 pub fn parse_setup(text: &str) -> Result<Model, String> {
     let (m, bad) = parse_setup_lenient(text);
     match bad.into_iter().next() {
@@ -952,7 +953,6 @@ fn parse_lines(text: &str, bad: &mut Vec<String>) -> Model {
             arate: m.dec_arate,
             tick: m.dec_tick,
             nibbles: m.dec_nibbles,
-            uspeed: m.dec_uspeed,
         };
         if let Some(o) = crate::protocols::get(i).legacy(&old) {
             m.dec_opt = o.map(|x| x as u8);

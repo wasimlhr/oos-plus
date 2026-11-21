@@ -10,6 +10,15 @@
 
 use super::*;
 
+/// The external display (ADR 0062).
+#[derive(Default)]
+pub struct Hdmi {
+    /// An external display is attached. Only then does "waveform on the external display" keep the panel bars in Full.
+    present: bool,
+    /// the monitor's size while one is driven (main.rs), for `:SYSTem:STATe?`
+    pub out: Option<(u32, u32)>,
+}
+
 const CH_NAMES: [&str; 4] = ["CH1", "CH2", "CH3", "CH4"];
 const REF_NAMES: [&str; NREF] = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10"];
 const MATH_NAMES: [&str; 8] = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"];
@@ -108,14 +117,14 @@ impl Ui {
         }
         // waveform on an external display keeps the panel's bars unless the button asked; with no display attached
         // Full enlarges the panel
-        let external = self.m.hdmi != HdmiMode::Mirror && self.hdmi_present;
+        let external = self.m.hdmi != HdmiMode::Mirror && self.hdmi.present;
         self.full = self.m.density == Density::Full && (!external || self.full_asked);
     }
 
     /// Called when an external display comes or goes, so Full follows it.
     pub(crate) fn set_hdmi_present(&mut self, present: bool) {
-        if self.hdmi_present != present {
-            self.hdmi_present = present;
+        if self.hdmi.present != present {
+            self.hdmi.present = present;
             // a display plugged in takes the waveform; the panel keeps its bars until the button is tapped again
             if present {
                 self.full_asked = false;

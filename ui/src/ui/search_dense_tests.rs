@@ -57,7 +57,7 @@ pub(super) fn of_samples(data: Vec<f32>, dt: f64, acq: (f64, usize)) -> Ui {
         fixed_ti: None,
         hw_avg: false,
     });
-    u.last[0] = Some(crate::board::to_record(&frame, &u.m, 3600, 20e-6, -250e-6));
+    u.last[0] = Some(crate::wave::to_record(&frame, &u.m, 3600, 20e-6, -250e-6));
     // no measurement whose answer comes from its worker between two pictures
     u.m.meas.clear();
     u.m.meas2.clear();
