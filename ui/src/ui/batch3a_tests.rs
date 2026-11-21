@@ -286,7 +286,7 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     let _ = std::fs::remove_dir_all(&dir);
     // nothing saved yet: a normal start
     let mut fresh = Ui::new(Source::Demo { t: 0.0 });
-    let mut file = crate::store::SetupFile::new(&dir);
+    let mut file = crate::store::readers::SetupFile::new(&dir);
     assert_eq!(file.restore(&mut fresh), Ok(false));
     // Studio with the measurements docked, a time base, then saved (the folder is created)
     let mut u = studio();
@@ -294,11 +294,11 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     u.m.tscale = 12;
     u.render(&mut Canvas::new(W, H));
     file.save(&u, true);
-    assert!(dir.join(crate::store::SetupFile::NAME).is_file());
+    assert!(dir.join(crate::store::readers::SetupFile::NAME).is_file());
     // a restart: a new interface reads it
     let mut again = Ui::new(Source::Demo { t: 0.0 });
     assert_eq!(again.m.layout, Layout::Default);
-    let mut file2 = crate::store::SetupFile::new(&dir);
+    let mut file2 = crate::store::readers::SetupFile::new(&dir);
     assert_eq!(file2.restore(&mut again), Ok(true));
     assert_eq!(again.m.layout, Layout::Studio);
     assert_eq!(again.studio.view, StudioView::Docked);
@@ -307,16 +307,16 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     again.render(&mut Canvas::new(W, H));
     assert!(again.stacked() && again.studio.view == StudioView::Docked);
     // an unchanged setup writes nothing; a change is written by the next save
-    let before = std::fs::metadata(dir.join(crate::store::SetupFile::NAME)).unwrap().modified().unwrap();
+    let before = std::fs::metadata(dir.join(crate::store::readers::SetupFile::NAME)).unwrap().modified().unwrap();
     file2.save(&again, true);
-    assert_eq!(std::fs::metadata(dir.join(crate::store::SetupFile::NAME)).unwrap().modified().unwrap(), before);
+    assert_eq!(std::fs::metadata(dir.join(crate::store::readers::SetupFile::NAME)).unwrap().modified().unwrap(), before);
     again.m.tscale = 10;
     file2.save(&again, true);
-    assert_eq!(std::fs::read_to_string(dir.join(crate::store::SetupFile::NAME)).unwrap(), crate::store::setup_text(&again.m));
+    assert_eq!(std::fs::read_to_string(dir.join(crate::store::readers::SetupFile::NAME)).unwrap(), crate::store::setup_text(&again.m));
     // a damaged file is reported, not applied
-    std::fs::write(dir.join(crate::store::SetupFile::NAME), "layout = wide\n").unwrap();
+    std::fs::write(dir.join(crate::store::readers::SetupFile::NAME), "layout = wide\n").unwrap();
     let mut third = Ui::new(Source::Demo { t: 0.0 });
-    assert!(crate::store::SetupFile::new(&dir).restore(&mut third).is_err());
+    assert!(crate::store::readers::SetupFile::new(&dir).restore(&mut third).is_err());
     assert_eq!(third.m.layout, Layout::Default);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -326,6 +326,7 @@ fn scale_index(t: f32) -> usize { tscales().iter().position(|&s| (s / t - 1.0).a
 /// The owner's two cases on the demo source: main 500 us/div with zoom 2.5x, main 50 ms/div with zoom 250x.
 fn zoomed_demo(main: f32, zoom: f32, zdelay: f32) -> Ui {
     let mut u = studio();
+    u.m.dots = false; // vectors: the zoom joins the samples
     u.m.tscale = scale_index(main);
     u.m.delay = 0.0;
     for _ in 0..8 { u.step(0.05); }

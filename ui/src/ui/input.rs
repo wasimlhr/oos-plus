@@ -16,6 +16,17 @@ pub struct Power {
     pub action: Option<PowerAction>,
 }
 
+/// What the screen asks of the main loop (main.rs), which takes it (ADR 0062).
+#[derive(Default)]
+pub struct Asks {
+    /// a screenshot: its file, or empty for the default name
+    pub shot: Option<String>,
+    /// the end of the program (the command file's `quit`, the tests)
+    pub quit: bool,
+    /// commands for the front panel (the power handshake)
+    pub panel: Vec<crate::board::PanelCmd>,
+}
+
 /// What the input keeps between two events (ADR 0062).
 pub(super) struct State {
     /// a channel key held on the front panel: channel, since when, and whether it was long enough for AC/DC already
@@ -171,7 +182,8 @@ impl Ui {
     }
 
     /// A channel key held for `LONG_PRESS`: AC/DC once; letting it go then does nothing more. A finger held on a
-    /// channel's card opens that channel's quick actions (never a silent AC/DC); the lift is no tap.
+    /// channel's card: in Default AC/DC as the key, as upstream OOS; in Minimal and Studio that channel's quick
+    /// actions (never a silent AC/DC). Either way the lift is no tap.
     pub(super) fn ch_hold_poll(&mut self) {
         if let Some((c, t)) = self.input.card {
             let still = self.touch.down
@@ -183,8 +195,12 @@ impl Ui {
                 self.input.card = None;
                 let (x, y) = (self.touch.x0, self.touch.y0);
                 self.touch.down = false;
-                self.channel_popup(c, x, y);
-                self.workspace.lift_pending = true;
+                if self.m.layout == Layout::Default {
+                    self.toggle_ac_dc(c);
+                } else {
+                    self.channel_popup(c, x, y);
+                    self.workspace.lift_pending = true;
+                }
             }
         }
         if let Some((c, t, false)) = self.input.ch {
@@ -367,7 +383,7 @@ impl Ui {
     fn power_key(&mut self) {
         // the stock Launcher answers every power-key press with "cancel power-down" (FA 05 02); the MCU very
         // likely cuts power by itself otherwise (board.md section 4)
-        self.panel_tx.push(crate::board::PanelCmd::CancelPowerDown);
+        self.asks.panel.push(crate::board::PanelCmd::CancelPowerDown);
         self.power.open = !self.power.open;
         if self.power.open {
             self.dialog = None;
@@ -477,12 +493,16 @@ impl Ui {
                 }
             }
             0xc0 => {
-                if push {
-                    // a push switches between the 1-2-5 steps and the fine time base, as the name of the knob's
-                    // push says on the panel of other scopes. It opened the zoom: a time base left in fine steps
-                    // (the row is in the Horizontal menu) then looked like a broken knob, with no way back from
-                    // the panel (reported from a unit, 2026-11-18). The zoom has its button on the screen and its
-                    // row; while it is open the knob is the zoom's, and a push closes it.
+                if push && self.m.layout == Layout::Default {
+                    // Default works as upstream OOS: the push opens or closes the zoom
+                    let on = !self.m.zoom;
+                    self.set_zoom(on);
+                } else if push {
+                    // Minimal and Studio: a push switches between the 1-2-5 steps and the fine time base, as the
+                    // name of the knob's push says on the panel of other scopes. It opened the zoom: a time base
+                    // left in fine steps (the row is in the Horizontal menu) then looked like a broken knob, with no
+                    // way back from the panel (reported from a unit, 2026-11-18). The zoom has its button on the
+                    // screen and its row; while it is open the knob is the zoom's, and a push closes it.
                     if self.m.zoom { self.set_zoom(false); } else { self.push_fine_time(); }
                 } else if self.m.zoom {
                     self.adjust(Item::ZScale, -dir);
@@ -512,11 +532,15 @@ impl Ui {
                 }
             }
             0xb0 | 0xa0 => {
-                // Cursors on the screen: the two knobs are theirs, the first moves cursor A and the second cursor B,
-                // with no menu open or with the Cursor menu, which the Cursor key and button open. A turn opened
-                // the Menu, and in the Cursor menu it went through its rows, so the knobs moved no cursor at all
-                // (reported from a unit, 2026-11-18). Other menus keep the knobs for their rows.
-                if self.m.cursor != CursorMode::Off && (!self.menu_open || self.menu_root() == MenuId::Cursor) {
+                // Minimal and Studio, cursors on the screen: the two knobs are theirs, the first moves cursor A and
+                // the second cursor B, with no menu open or with the Cursor menu, which the Cursor key and button
+                // open. A turn opened the Menu, and in the Cursor menu it went through its rows, so the knobs moved
+                // no cursor at all (reported from a unit, 2026-11-18). Other menus keep the knobs for their rows.
+                // Default works as upstream OOS: the knobs do their usual job, and the Cursor menu's rows move them.
+                if self.m.layout != Layout::Default
+                    && self.m.cursor != CursorMode::Off
+                    && (!self.menu_open || self.menu_root() == MenuId::Cursor)
+                {
                     return self.cursor_knob(base == 0xb0, push, dir * acc);
                 }
                 let items = self.items(self.menu);
@@ -887,7 +911,13 @@ impl Ui {
         let here = self.cursor_visible_here();
         let cur_hit =
             |frac: f32, vertical: bool| (here || (vertical && self.plot.wins.len() > 1)) && cur_hit(frac, vertical);
-        let under = if dy.abs() > dx.abs() && !near_left && !m.zoom { self.trace_under(tx0, ty0) } else { None };
+        // Minimal and Studio: a vertical drag moves the trace under the finger; Default moves the active channel, as
+        // upstream OOS
+        let under = if m.layout != Layout::Default && dy.abs() > dx.abs() && !near_left && !m.zoom {
+            self.trace_under(tx0, ty0)
+        } else {
+            None
+        };
         let overview_drag = if m.zoom {
             let overview = self.split_zoom(self.plot.grid).0;
             if overview.contains(tx0, ty0) {
@@ -1401,6 +1431,9 @@ impl Ui {
         if self.wlan.osk.is_some() {
             return self.osk_tap(x, y);
         }
+        if self.meas_cfg_tap(x, y) {
+            return;
+        }
         if self.dialog.is_some() {
             self.dialog = None;
             return;
@@ -1579,6 +1612,13 @@ impl Ui {
         }
         if self.card_layout().refs.is_some_and(|r| r.contains(x, y)) { return self.cycle_active_ref(); }
         if tr.contains(x, y) {
+            // Default's cards, as upstream OOS: the zoom/delay line, the lower half, toggles zoom without opening
+            // Horizontal. The compact bars of Minimal and Studio count only what is drawn as a button.
+            if !self.m.compact() && y >= tr.y + tr.h / 2 {
+                let on = !self.m.zoom;
+                self.set_zoom(on);
+                return;
+            }
             return self.toggle_menu(MenuId::Horizontal);
         }
         if self.record_mode() {
@@ -1609,7 +1649,11 @@ impl Ui {
                 }
                 return;
             }
-            // the Source and Mode buttons are what is drawn as buttons; the rest of the card opens the trigger page
+            // Default's card, as upstream OOS: the buttons are low, each takes its half of the card for the finger
+            if !self.m.compact() && x >= Self::trig_parts(trg).0.x - 6 {
+                return self.adjust(if y < trg.y + trg.h / 2 { Item::TrigSrc } else { Item::TrigMode }, 1);
+            }
+            // compact bars: the Source and Mode buttons are what is drawn as buttons; the rest opens the trigger page
             let (sb, mb) = Self::trig_parts(trg);
             let near = |b: Rect| Rect::new(b.x - 2, b.y - 2, b.w + 4, b.h + 4).contains(x, y);
             if near(sb) { return self.adjust(Item::TrigSrc, 1); }

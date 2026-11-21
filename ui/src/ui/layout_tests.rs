@@ -26,10 +26,10 @@ fn default_layout_has_the_stock_bars_and_minimal_the_compact_ones() {
     assert_eq!(d.frame(), Frame::of(d.scr));
     assert!(m.frame().bottom.h < d.frame().bottom.h, "the compact bar gives the plot more room");
     assert!(m.plot_rect().h > d.plot_rect().h);
-    // stock top bar: no Single, Load or SIM button
-    assert_eq!(d.single_btn().w, 0);
+    // the top bar of upstream OOS: Single beside the run pill, and the four buttons of ADR 0007
+    assert!(d.single_btn().w > 0);
     let names = |u: &Ui| u.top_buttons().into_iter().map(|b| b.1).collect::<Vec<_>>();
-    assert!(!names(&d).iter().any(|n| n.starts_with("Load") || *n == "SIM"));
+    assert_eq!(names(&d), ["Measure", "Cursor", "Display", "Storage"]);
     assert!(names(&m).iter().any(|n| *n == "SIM"));
     assert!(m.single_btn().w > 0);
 }
@@ -52,7 +52,7 @@ fn default_layout_cards_open_their_menus() {
 fn layout_is_a_display_setting_kept_in_the_setup() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     assert_eq!(u.m.layout, Layout::Default, "a new setup starts with the stock bars");
-    assert!(!u.m.dots, "samples are joined by default");
+    assert!(u.m.dots, "samples are dots by default, as upstream draws them");
     assert!(u.items(MenuId::Display).contains(&Item::Layout));
     for layout in LAYOUTS {
         u.m.layout = layout;
@@ -392,7 +392,7 @@ fn twelve() -> Ui {
         .chain([Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::Fall, Meas::Vavg].into_iter().map(|k| (k, WaveId::Ch(1)))).collect();
     u.m.meas2.clear();
     u.m.cat.clear();
-    u.mstat.clear();
+    u.results.rows.clear();
     u.studio.pinned = None;
     u.relayout();
     u
@@ -544,9 +544,9 @@ fn studio_measurements_only_is_a_table_with_statistics_and_a_source_filter() {
     assert_eq!(u.studio.filter, None);
     // Reset statistics starts the counting again
     let (_, _, [reset, ..]) = u.studio_table_geo().unwrap();
-    assert!(u.mstat.iter().any(|s| s.n > 0));
+    assert!(u.results.rows.iter().any(|s| s.n > 0));
     tap_in(&mut u, reset);
-    assert!(u.mstat.iter().all(|s| s.n <= 1));
+    assert!(u.results.rows.iter().all(|s| s.n <= 1));
     // the table has the body: a tap on its empty part does not reach the lanes, Waveform goes back
     tap_in(&mut u, add);
     assert_eq!(u.menu, MenuId::MeasAdd);

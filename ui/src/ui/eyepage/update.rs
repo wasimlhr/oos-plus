@@ -190,13 +190,13 @@ impl Ui {
         let recov = clk_v.as_deref().unwrap_or(&v);
         let recov_id = clk_id.unwrap_or(id);
         let st = match recov_id {
-            WaveId::Ch(c) if clk_id.is_none() && rec.raw.is_none() => self.stats[c],
+            WaveId::Ch(c) if clk_id.is_none() && rec.raw.is_none() => self.measured.stats[c],
             _ => stats(recov, dt),
         };
         let (clk_vpd, _) = self.eye_scale(recov_id);
         // A strobe idles near one rail between bursts; histogram top/base sit on that rail and the
         // comparator chatters. Peak-to-peak with a wide hysteresis keeps the burst edges.
-        let (thr, hyst) = self.eye_threshold(&st, clk_id, clk_vpd);
+        let (thr, hyst) = self.eye_threshold(recov, &st, clk_id, clk_vpd);
         let mut rate = (self.m.eye_rate > 0.0).then_some(self.m.eye_rate);
         // the rate is of the record it was set or found on. At a slower time base its bit is shorter than two
         // samples: a rate found from a record is found again from this one, a rate that was set is said to need
@@ -285,14 +285,14 @@ impl Ui {
     }
 
     /// The threshold and hysteresis that recover the clock: the auto setup's, the strobe's swing or the source's level.
-    fn eye_threshold(&self, st: &Stats, clk_id: Option<WaveId>, clk_vpd: f32) -> (f32, f32) {
+    fn eye_threshold(&self, recov: &[f32], st: &Stats, clk_id: Option<WaveId>, clk_vpd: f32) -> (f32, f32) {
         if let Some(summary) = self.azr.eye_auto.summary.as_ref().filter(|_| self.azr.eye_auto.enabled) {
             (summary.threshold, summary.hysteresis)
         } else if clk_id.is_some() {
             let (lo, hi) = (st.vmin, st.vmax);
             (0.5 * (lo + hi), (0.2 * (hi - lo)).max(0.1 * clk_vpd))
         } else {
-            let thr = if st.valid { 0.5 * (st.top + st.base) } else { 0.5 * (st.vmax + st.vmin) };
+            let thr = eye::decision_level(recov).map_or(0.5 * (st.vmax + st.vmin), |(t, _)| t);
             (thr, 0.1 * clk_vpd)
         }
     }

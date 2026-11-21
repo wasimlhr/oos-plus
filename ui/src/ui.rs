@@ -9,7 +9,7 @@ use crate::gfx::*;
 use crate::math::*;
 use crate::model::*;
 use crate::platform::Platform;
-use crate::protocols::Decoder;
+use crate::protocols::{Decoder, Module};
 use crate::wave::*;
 
 mod acquire;
@@ -166,6 +166,7 @@ mod logger;
 mod magnetic;
 mod meascatalog;
 mod measlabels;
+mod measure_page;
 mod measure_pairs;
 mod measurement_nav;
 mod menu_actions;
@@ -205,8 +206,6 @@ mod windows;
 mod wlan;
 mod worker;
 mod measrow;
-/// Skins: another look for the same screen (Display > Skin)
-pub mod skin;
 mod workflow;
 mod workspace;
 pub(crate) use scpi_operations::{OperationState, OperationToken, Operations};
@@ -939,6 +938,8 @@ impl MeasWorker {
 /// of its module and has one field here (`bt: bt::BtUi`, `cat: meascatalog::Catalog`, ...). What stays a field of its
 /// own here, and why:
 /// - the model `m` and the source `src`: every part reads the settings and the records;
+/// - the scope's own settings `sys` and their file `sys_path`: most pages, the main loop, the remote commands and
+///   the command file read them, and every page that changes one writes the file (`sys_save`);
 /// - the screen `scr` and the time `now`: every part draws on the one and counts by the other;
 /// - the open menu (`menu`, `menu_open`, `parent`, `menu_history`, `pick`, `focus`): the shared menu code runs every
 ///   page from it (ADR 0060);
@@ -986,7 +987,6 @@ pub struct Ui {
     /// the sources the measurements are added for: A, and B of delay and phase (analysis/measure.rs)
     sources: analysis::Sources,
     last: [Option<Record>; 1],
-    stats: [Stats; NCH],
     /// history playback: the last acquired records and the one viewed (records.rs)
     history: records::History,
     /// mark all trigger events in the record (search)
@@ -1059,7 +1059,6 @@ pub struct Ui {
     /// signed updates (update.rs): running oos-update job, watcher notice
     upd: update::UpdateUi,
     wlan: wlan::WlanUi,
-    mstat: Vec<MStat>,
     /// what the second pane keeps between frames
     pn: panes::PaneState,
     log: logger::Logger,
@@ -1151,7 +1150,8 @@ pub struct Ui {
     /// the mask unit in the FPGA: the mask in its columns, its latest counters, the number that clears them, and why
     /// the acquisition thread dropped the unit (hwmask.rs)
     mask_unit: hwmask::Unit,
-    pub shot_request: Option<String>,
+    /// what the screen asks of the main loop: a screenshot, the end, commands for the front panel (input.rs)
+    pub asks: input::Asks,
     /// Storage > Save setup as SCPI: the file to write, under the name the user gave it (ui/files.rs). The interpreter
     /// writes it at its next poll, since the lines are the answers of its own queries (`Scpi::poll`,
     /// scpi/setupscpi.rs).
@@ -1162,15 +1162,14 @@ pub struct Ui {
     /// no setting or owns the settings it changes, each with the model from before it acted. The interpreter takes
     /// them at its next poll. Filled only while the recorder is on.
     pub scpi_rec_actions: Vec<(String, Box<Model>)>,
-    pub quit: bool,
-    /// commands for the front panel, sent by the main loop (power handshake)
-    pub panel_tx: Vec<crate::board::PanelCmd>,
     /// the power key's dialog and what it asked the main loop for (input.rs)
     pub power: input::Power,
     /// hex entry of the keypad picker (protocol trigger value)
     keypad: String,
     /// the numeric entry pad of the Studio sheets (ui/numpad.rs); its text is `keypad`
     numpad: Option<numpad::NumPad>,
+    /// the number pad of a value row in Default, upstream's (ui/numpad.rs); its text is `keypad`
+    row_pad: numpad::RowPad,
     /// the value a ladder stepper started from when it was between two rungs: (item, that value, the rung it went to)
     ladder_home: Option<(Item, f64, f64)>,
     /// the last press of an `Add` stepper that ran into a limit: (item, the limit, the value it came from)
@@ -1220,6 +1219,12 @@ impl Ui {
         self.settings_changed();
     }
 
+    /// After `:RUN`, `:STOP` or `:SINGle`: as `mark_changed`, but the measurement statistics stay (on a unit,
+    /// 2026-11-20, `:STOP` dropped a count of 104 to 1; the Run/Stop key keeps them).
+    pub fn mark_run_state(&mut self) {
+        self.acquiring_changed();
+    }
+
     pub fn toast(&mut self, s: &str) {
         self.toast = Some((s.to_string(), self.now + 2.5));
     }
@@ -1238,7 +1243,7 @@ impl Ui {
         self.last[0] = None;
         self.history.pos = None;
         self.cleared = true;
-        self.stats = [Stats::default(); NCH];
+        self.measured.stats = [Stats::default(); NCH];
         // a measurement still out, or a record waiting for the worker, belongs to what was cleared away
         (self.meas_bg.n, self.meas_bg.want, self.meas_bg.pending) = (self.meas_bg.n + 1, false, None);
         self.measured.ch = Default::default();
@@ -1259,7 +1264,7 @@ impl Ui {
     /// QUICK key and the Quick button of the top bar: the action chosen in System > Quick key.
     fn quick(&mut self) {
         match self.m.quick {
-            Quick::Screenshot => { self.rec_action(":SAVE:IMAGe"); self.shot_request = Some(String::new()) }
+            Quick::Screenshot => { self.rec_action(":SAVE:IMAGe"); self.asks.shot = Some(String::new()) }
             Quick::SavePng => self.file_save_auto(FileKind::Shot),
             Quick::SaveSetup => self.activate(Item::StoreSaveSetup),
             Quick::SaveCsv => self.file_save_auto(FileKind::WaveCsv),
@@ -1289,7 +1294,7 @@ impl Ui {
     /// to AC and triggered again from 0.1 V down (2026-11-18). The mean is the one of the record on the screen,
     /// which is assumed to be near what the trigger's filter settles on.
     pub(crate) fn trig_level_base(&self) -> f32 {
-        let s = self.stats[self.m.trig_src.min(NCH - 1)];
+        let s = self.measured.stats[self.m.trig_src.min(NCH - 1)];
         if matches!(self.m.trig_coupling(), TrigCoup::Ac | TrigCoup::LfReject) && s.valid && s.vavg.is_finite() { s.vavg } else { 0.0 }
     }
 
@@ -1299,7 +1304,7 @@ impl Ui {
             self.settings_changed();
             return;
         }
-        let s = self.stats[self.m.trig_src];
+        let s = self.measured.stats[self.m.trig_src];
         if s.valid {
             // with AC or LF-reject coupling the trigger compares the source without its mean, and its level counts from
             // there: halfway through the signal is the middle less the mean. The middle itself sat above the whole
@@ -1442,7 +1447,7 @@ fn fmt_count(v: f64) -> String {
 
 /// Text of one decoded field.
 fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
-    use oos_dsp::decode::Kind;
+    use oos_dsp::decode::{Kind, I2C_NAK_END};
     if let Some(t) = m.dec_proto.module().and_then(|x| x.text(p, &m.dec_opts())) {
         return t;
     }
@@ -1452,6 +1457,8 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
     // (the mark on the byte that ends an I2C read is no second value)
     let second = p.value2.filter(|_| m.dec_proto != Proto::I2C);
     let chars = p.kind == Kind::Data && second.is_none() && p.ok && decband::ascii(m);
+    // Default keeps upstream's mark on the byte a controller ends an I2C read with: not acknowledged, and no error
+    let nak_end = m.layout == Layout::Default && m.dec_proto == Proto::I2C && p.value2 == Some(I2C_NAK_END);
     match p.kind {
         Kind::Addr { read } => {
             format!("{} {}{}", hex(p.value), if read { "R" } else { "W" }, if p.ok { "" } else { " N" })
@@ -1501,6 +1508,7 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
             _ => format!("{} {:X}{}", l, p.value, if p.ok { "" } else { " !" }),
         },
         Kind::Ack => format!("ACK {}", p.value),
+        _ if nak_end => format!("{} N", hex(p.value)),
         _ if chars && p.value == 0x20 => "SP".to_string(),
         _ if chars && (0x21..0x7f).contains(&p.value) => format!("{}", p.value as u8 as char),
         _ => match second {

@@ -10,6 +10,8 @@ const BAND_PAGE: usize = 18;
 const BAND_ROWS: i32 = 3;
 /// Cells of the band a page shows while Prev / Next take the end of its last two rows.
 const BAND_NAV_PAGE: usize = BAND_PAGE - 2;
+/// Rows under the band of the stock readouts (Default): Prev / Next and "Measurements a-b of N".
+const NAV_ROWS: i32 = 2;
 /// Rows of the Selected page: two columns of this many.
 const SEL_ROWS: usize = 8;
 
@@ -161,13 +163,17 @@ impl Ui {
     }
 
     /// The band has more than one page: Prev / Next take the last cell of its second and third row.
+    /// Default (the stock band) has its own row for them under the band instead.
     fn band_nav(&self) -> bool {
-        self.measurement_count() > BAND_PAGE
+        !self.stock_readouts() && self.measurement_count() > BAND_PAGE
     }
 
-    /// Rows of the band: what its values need, at most three. One page has no row of its own for page controls.
+    /// Rows of the band: what its values need, at most three. One page has no row of its own for page controls. The
+    /// stock band (Default) always has three rows and the two of its page controls.
     fn band_rows(&self) -> i32 {
-        if self.band_nav() {
+        if self.stock_readouts() {
+            BAND_ROWS + NAV_ROWS
+        } else if self.band_nav() {
             BAND_ROWS
         } else {
             (self.measurement_count().div_ceil(tools::STRIP_PER_ROW) as i32).clamp(1, BAND_ROWS)
@@ -203,6 +209,10 @@ impl Ui {
             StripDock::Left | StripDock::Right => {
                 let r = self.strip_column();
                 Some((Rect::new(r.x + r.w - 96, r.y + 4, 42, 32), Rect::new(r.x + r.w - 50, r.y + 4, 42, 32)))
+            }
+            _ if self.stock_readouts() => {
+                let y = self.strip_band_y() + BAND_ROWS * STRIP_ROW;
+                Some((Rect::new(W - 170, y, 74, 32), Rect::new(W - 88, y, 74, 32)))
             }
             _ => {
                 if !self.band_nav() { return None; }
@@ -253,7 +263,7 @@ impl Ui {
     /// The name of a measurement in `room` pixels of the strip's small font: the long one where it fits, else the short
     /// one (Positive Duty Cycle, +Duty). A pair or a catalog row has one name only.
     pub(super) fn strip_name(&self, key: Option<MeasKey>, long: &str, room: i32) -> String {
-        if self.fonts().s.width(long) <= room { return long.to_string(); }
+        if self.stock_readouts() || self.fonts().s.width(long) <= room { return long.to_string(); }
         key.map_or_else(|| long.to_string(), |k| self.studio_badge_name(k, long))
     }
 
@@ -296,7 +306,8 @@ impl Ui {
                     let value_x = right - self.fonts().sb.width(&line.value);
                     let room = (value_x - r.x - 16).max(0);
                     // the long name where it fits, else the short one
-                    let name = if self.fonts().s.width(&named(&line.name)) <= room { named(&line.name) } else { named(&line.short) };
+                    let fits = self.stock_readouts() || self.fonts().s.width(&named(&line.name)) <= room;
+                    let name = if fits { named(&line.name) } else { named(&line.short) };
                     cv.set_clip(Rect::new(r.x + 8, y, room, 19));
                     cv.text(&self.fonts().s, r.x + 8, y + 14, &name, LABEL);
                     cv.no_clip();
@@ -317,8 +328,10 @@ impl Ui {
                         cv.fill(r, BAR);
                         let color = self.wave_color(item.src);
                         let source = self.wave_name(item.src);
-                        // the name starts after the source, however wide its name is
-                        let nx = cv.text(&self.fonts().sb, r.x + 3, y + 12, &source, color) + 6;
+                        // the name starts after the source, however wide its name is; the stock band (Default) has a
+                        // fixed place for it
+                        let sx = cv.text(&self.fonts().sb, r.x + 3, y + 12, &source, color) + 6;
+                        let nx = if self.stock_readouts() { r.x + 28 } else { sx };
                         let value = item.text();
                         let vx = r.x + r.w - 3 - self.fonts().sb.width(&value);
                         let room = (vx - nx - 5).max(0);
@@ -328,7 +341,11 @@ impl Ui {
                         cv.text(&self.fonts().sb, vx, y + 12, &value, color);
                     }
                 }
-                if let Some((prev, next)) = self.page_buttons() {
+                if self.stock_readouts() {
+                    let gate = self.measurement_gate_label();
+                    let text = format!("Measurements {}-{} of {} · {}", first + 1, end, rows.len(), gate);
+                    cv.text(&self.fonts().sb, 12, y0 + BAND_ROWS * STRIP_ROW + 21, &text, TEXT);
+                } else if let Some((prev, next)) = self.page_buttons() {
                     let (_, _, pages) = self.page_bounds(rows.len(), size);
                     let mid = Rect::new(prev.right(), prev.y, next.x - prev.right(), prev.h);
                     let page = format!("{}/{}", self.meas_pages.readouts.min(pages - 1) + 1, pages);
@@ -361,8 +378,9 @@ impl Ui {
             }
         }
         if let Some((prev, next)) = self.page_buttons() {
-            let side = matches!(self.m.strip_dock, StripDock::Left | StripDock::Right);
-            for (rect, label) in [(prev, if side { "Prev" } else { "<" }), (next, if side { "Next" } else { ">" })] {
+            // words where the buttons have the room (a column at a side, the stock band's own row), arrows in a cell
+            let words = self.stock_readouts() || matches!(self.m.strip_dock, StripDock::Left | StripDock::Right);
+            for (rect, label) in [(prev, if words { "Prev" } else { "<" }), (next, if words { "Next" } else { ">" })] {
                 btn(cv, rect, BTN, BTN_BORDER);
                 cv.text_in(&self.fonts().sb, rect, 1, label, TEXT);
             }
@@ -559,6 +577,64 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    /// Default keeps upstream's readouts: the short names, "----" with no reason, the rows of a channel that is off,
+    /// and a paged band with a row of its own (Prev, Next, "Measurements a-b of N"). Minimal and Studio keep the
+    /// fork's: long names, a reason, those rows left out and Prev / Next in the band's last column.
+    #[test]
+    fn default_keeps_the_stock_readouts_and_minimal_and_studio_the_fork_ones() {
+        use super::super::meascatalog::cat as Cat;
+        for layout in LAYOUTS {
+            let mut ui = crate::ui::testkit::demo_ui();
+            ui.m.layout = layout;
+            ui.m.strip_dock = StripDock::Below;
+            ui.m.meas = vec![(Meas::PDuty, WaveId::Ch(0)), (Meas::Vupper, WaveId::Ch(1))];
+            ui.m.meas2.clear();
+            ui.m.cat = vec![(Cat::EyeHeightBer as u16, WaveId::Ref(0), WaveId::Ref(0), WaveId::Ref(0), WaveId::Ref(0))];
+            ui.m.ch[1].on = false;
+            let stock = layout == Layout::Default;
+            let rows = ui.meas_rows();
+            let names: Vec<&str> = rows.iter().take(2).map(|r| r.name.as_str()).collect();
+            let eye = rows.last().expect("the catalog row").text();
+            if stock {
+                assert_eq!(names, ["+Duty", "Upper"], "{layout:?}");
+                assert_eq!(eye, "----", "{layout:?}: no reason");
+                assert_eq!(ui.meas_shown_count(), 3, "{layout:?}: CH2 is off and its row stays");
+                assert!(ui.meas_groups().contains(&WaveId::Ch(1)), "{layout:?}");
+            } else {
+                assert_eq!(names, ["Positive Duty Cycle", "Upper Level"], "{layout:?}");
+                assert!(eye.contains("R1") && eye.contains("empty"), "{layout:?}: {eye}");
+                assert_eq!(ui.meas_shown_count(), 2, "{layout:?}: the row of CH2 is left out");
+            }
+            ui.m.ch[1].on = true;
+            // a paged band: more measurements than three rows hold
+            ui.m.cat.clear();
+            ui.m.meas = ALL_MEAS.iter().take(20).map(|&kind| (kind, WaveId::Ch(0))).collect();
+            ui.relayout();
+            if !ui.paged_strip() {
+                // Studio shows its measurements in its own panel
+                assert_ne!(layout, Layout::Default);
+                continue;
+            }
+            let (prev, next) = ui.page_buttons().expect("a paged band has Prev and Next");
+            let band_bottom = ui.strip_band_y() + BAND_ROWS * STRIP_ROW;
+            if stock {
+                assert_eq!(ui.band_rows(), BAND_ROWS + NAV_ROWS);
+                assert_eq!(ui.measurement_page_size(), BAND_PAGE);
+                let row = |x| Rect::new(x, band_bottom, 74, 32);
+                assert_eq!((prev, next), (row(W - 170), row(W - 88)), "Prev / Next in the row under the band");
+                assert_eq!(ui.band_cell(BAND_PAGE - 1), (BAND_ROWS - 1, tools::STRIP_PER_ROW as i32 - 1));
+            } else {
+                assert_eq!(ui.band_rows(), BAND_ROWS, "{layout:?}");
+                assert_eq!(ui.measurement_page_size(), BAND_NAV_PAGE, "{layout:?}");
+                assert!(next.y + next.h <= band_bottom, "{layout:?}: Prev / Next inside the band");
+            }
+            ui.tap(next.x + next.w / 2, next.y + next.h / 2);
+            assert_eq!(ui.meas_pages.readouts, 1, "{layout:?}: Next pages");
+            let mut canvas = Canvas::new(W, H);
+            ui.render(&mut canvas);
         }
     }
 }

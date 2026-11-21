@@ -289,3 +289,4 @@ impl StripDock {
 /// Persistence: name, seconds (0 = minimum, <0 = infinite).
 pub const PERSIST: [(&str, f32); 7] =
     [("Min", 0.0), ("100 ms", 0.1), ("500 ms", 0.5), ("1 s", 1.0), ("5 s", 5.0), ("10 s", 10.0), ("Infinite", -1.0)];
+

@@ -2643,7 +2643,7 @@ impl Ui {
             cv.restore_clip(outer);
             cv.text_in(&f.mb, Rect::new(r.x + cols[2].0, r.y, cols[2].1 - 6, r.h), 0, &row.text(), TEXT);
             if on {
-                let st = self.mstat.get(i).copied().unwrap_or_default();
+                let st = self.results.rows.get(i).copied().unwrap_or_default();
                 let cell = |v: f64| if st.n == 0 { "----".to_string() } else { row.fmt4(v) };
                 let mean = st.sum / st.n.max(1) as f64;
                 let sd = (st.sumsq / st.n.max(1) as f64 - mean * mean).max(0.0).sqrt();

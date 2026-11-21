@@ -423,13 +423,14 @@ fn the_measurement_strip_docks_on_four_sides() {
     // the control on the Measure page picks the side
     u.m.strip_dock = StripDock::Below;
     u.open_menu(MenuId::Measure);
-    // five positions with the oos-next names are too wide for a row of buttons: the row is a pick list
+    // the Default layout has upstream's row of four buttons
+    let four = [StripDock::Below, StripDock::Left, StripDock::Right, StripDock::Above];
     let d = u.dlg_layout().unwrap();
     let row = d.rows.iter().find(|r| r.it == Item::StripDock).expect("dock row");
-    assert!(matches!(row.ctl, Ctl::Pick));
-    assert_eq!(u.options(Item::StripDock), ["Below plot", "Left", "Right", "Above plot", "Hidden"]);
-    for side in StripDock::ALL {
-        u.select_option(Item::StripDock, side.label());
+    let Ctl::Seg(opts, _) = &row.ctl else { panic!("dock is a row of buttons") };
+    assert_eq!(opts.as_slice(), ["Under", "Left", "Right", "Above"]);
+    for (side, name) in four.into_iter().zip(["Under", "Left", "Right", "Above"]) {
+        u.select_option(Item::StripDock, name);
         assert_eq!(u.m.strip_dock, side);
         assert!(u.menu_open);
     }
@@ -437,9 +438,16 @@ fn the_measurement_strip_docks_on_four_sides() {
     u.m.strip_dock = StripDock::Below;
     u.adjust(Item::StripDock, -1);
     assert_eq!(u.m.strip_dock, StripDock::Below);
+    u.m.strip_dock = StripDock::Above;
+    u.adjust(Item::StripDock, 1);
+    assert_eq!(u.m.strip_dock, StripDock::Above);
+    // Minimal also offers Hidden, with the oos-next names
+    u.m.layout = Layout::Minimal;
+    assert_eq!(u.options(Item::StripDock), ["Below plot", "Left", "Right", "Above plot", "Hidden"]);
     u.m.strip_dock = StripDock::Hidden;
     u.adjust(Item::StripDock, 1);
     assert_eq!(u.m.strip_dock, StripDock::Hidden);
+    u.m.layout = Layout::Default;
     u.m.strip_dock = StripDock::Above;
 
     let text = crate::store::setup_text(&u.m);

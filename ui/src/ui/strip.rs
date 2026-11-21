@@ -8,12 +8,14 @@
 use super::*;
 
 /// The statistics panel of the measurements, as the screen keeps it (ADR 0062).
-#[derive(Clone, Copy, Default)]
+#[derive(Default)]
 pub(super) struct Results {
     /// the panel is shown (Measure > Statistics)
     pub on: bool,
     /// the panel is folded to its header
     pub folded: bool,
+    /// the statistics of each measurement row since their reset: count, sum, squares, smallest, largest
+    pub rows: Vec<MStat>,
 }
 
 impl Ui {
@@ -199,6 +201,12 @@ impl Ui {
                     let pitch = (row(y).right() - 2 - vx) / part.len() as i32;
                     for (i, &(k, r)) in part.iter().enumerate() {
                         let x = vx + i as i32 * pitch;
+                        if self.stock_readouts() {
+                            // the stock row (Default): the short name, then the value
+                            let x2 = cv.text(&f.s, x, y + base, &r.name, DIM) + 8;
+                            cv.text(&f.sb, x2, y + base, &r.text(), col);
+                            continue;
+                        }
                         // name and value share the cell; where the long name does not fit (the larger text sizes) the
                         // short one is taken, then it is cut, then dropped, and the value is cut last, so nothing runs
                         // over the edge of the screen
@@ -293,7 +301,8 @@ impl Ui {
             let name_w = vx - 6 - text_x;
             if name_w > 8 && !line.name.is_empty() {
                 cv.set_clip(Rect::new(text_x, bar.y, name_w, bar.h));
-                cv.text(&f.s, text_x, base, if f.s.width(&line.name) <= name_w { &line.name } else { &line.short }, DIM);
+                let fits = self.stock_readouts() || f.s.width(&line.name) <= name_w;
+                cv.text(&f.s, text_x, base, if fits { &line.name } else { &line.short }, DIM);
                 cv.set_clip(col);
             }
             y += pitch;
@@ -396,7 +405,7 @@ impl Ui {
             chevron_down(cv, head.x + 9, head.y + 12, DIM);
         }
         cv.text(&f.s, head.x + 24, head.y + 19, &format!("Meas · {}", self.measurement_gate_label()), TEXT);
-        let n = self.mstat.first().map(|s| s.n).unwrap_or(0);
+        let n = self.results.rows.first().map(|s| s.n).unwrap_or(0);
         let ns = format!("n {}", fmt_count(n as f64));
         cv.text(&f.s, head.x + head.w - 10 - f.s.width(&ns), head.y + 19, &ns, DIM);
         if self.results.folded {
@@ -415,7 +424,7 @@ impl Ui {
             let body = Rect::new(body.x + (page_row % cols) as i32 * cw, body.y, cw, body.h);
             let by = body.y + (page_row / cols) as i32 * pitch;
             cv.hline(body.x + 8, body.x + body.w - 9, by, LINE);
-            let st = self.mstat.get(*i).copied().unwrap_or_default();
+            let st = self.results.rows.get(*i).copied().unwrap_or_default();
             let mean = st.sum / st.n.max(1) as f64;
             let name = self.results_name(*i, r);
             let value = r.text();

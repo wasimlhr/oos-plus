@@ -161,7 +161,8 @@ meaningful absolute level regardless of an unrelated channel's AC setting.
 
 Choose Auto Eye/Jitter in the analysis menu/settings. The action
 uses the selected source, clears stale companion/notch settings, estimates NRZ
-rate/threshold/hysteresis, opens the full Eye page with optional Side/Under panes, TIE trend, histogram,
+rate/threshold/hysteresis (the threshold is the middle of Top and Base as Measure finds them, so edges are timed at
+the 50 % level), opens the full Eye page with optional Side/Under panes, TIE trend, histogram,
 spectrum and bathtub plots, and closes setup. Long immutable records run in a
 background worker. Small accepted live/SIM captures accumulate. Large captures
 use completed native-record snapshots: the last result remains visible while the

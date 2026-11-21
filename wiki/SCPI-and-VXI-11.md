@@ -289,6 +289,7 @@ Without SCPI: `http://<scope>:8080/screen.png` (or `.bmp`) gives the same pictur
 | `:MEASure:BURSt:IDLE[?]`, `:OUTSide[?] ABOVe\|BELow\|BOTH`, `:NPERiods[?]`, `:EDGes[?] CLOCk\|DATA` | settings of the measurements that use them |
 | `:MEASure:INDicator[?]` | markers on the trace (`:CURSor:MEASure:INDicator` too) |
 | `:MEASure:STRip?` | every row of the strip, `;`-separated |
+| `:MEASure:PENDing?` | `1` while the measurements of the record shown are still computed (a value then reads `9.9E37`), else `0` |
 | `:MEASure:READout?` | the strip plus the eye figures while the eye page is open |
 | `:MEASure:STATistic:DISPlay[?]` | statistics on/off (keeps what is counted) |
 | `:MEASure:STATistic:ITEM <item>[,src[,src]]` | adds a row with statistics |
@@ -318,8 +319,8 @@ Values are in base units, phase in degrees, duty and overshoot in percent. `*OPC
 | `:VIEW[?]` | the page: `SCOPE\|SPECTRUM\|EYE\|POWER\|BODE\|MAGNETIC\|INVERTER\|DPT` |
 | `:EYE:ITEM? <figure>` | eye figures: `ONE`, `ZERO`, `AMPLITUDE`, `CROSSING`, `RISE`, `FALL`, `HEIGHT`, `WIDTH`, `Q`, `HBER`, `UI`, `TJ`, `RJ`, `DJ`, `DCD`, `DDJ`, `TPP`, `TRMS`, `J2`, `J9`, `OPENING`, ... (all in [docs/scpi.md](https://github.com/dekajoule/oos/blob/main/docs/scpi.md#eye-figures)) |
 | `:SPECtrum:ITEM? <item>[,src]` | `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`; `F1` to `ENOB` are `9.9E37` when there is only noise |
-| `:SPECtrum:RBW:ACTual?` | the resolution bandwidth the spectrum uses (a short time base makes it coarser than the one set) |
-| `:SPECtrum:PEAK:LIST?` | the peak table: `frequency,level;...` in Hz and dBV |
+| `:SPECtrum:RBW:ACTual?` | the resolution bandwidth the spectrum uses (a short time base makes it coarser than the one set), also with the Spectrum page closed |
+| `:SPECtrum:PEAK:LIST?` | the spectrum's lines: `frequency,level;...` in Hz and dBV, the lines above the noise in the page's span, up to the Harmonics row, also with the Spectrum page closed |
 | `:POWer:ITEM? <item>[,V,I]` | `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND`, `RDSON`, ripple items |
 | `:POWer:HARMonics? [src]` | harmonic number and amplitude pairs, `;`-separated |
 | `:MAGnetic:ITEM? <item>[,V,I]` | `L`, `B`, `H`, `MUR`, `LOSS` (needs the core geometry) |
@@ -419,7 +420,7 @@ A reference can be a trigger, measurement, cursor, Math or decoder source like a
 |---|---|
 | `:SYSTem:ERRor?` | the next error, see [Errors](#errors) |
 | `:SYSTem:STATe?` | diagnostic state of the application (also whether the GPU draws) |
-| `:SYSTem:GET? <key>`, `:SYSTem:SET <key> = <value>` | any setting by its setup key, also those without a command of their own (keys in [store.rs](https://github.com/dekajoule/oos/blob/main/ui/src/store.rs)) |
+| `:SYSTem:GET? <key>`, `:SYSTem:SET <key> = <value>` | any setting by its setup key, also those without a command of their own (keys in [lib.rs of oos-store](https://github.com/dekajoule/oos/blob/main/ui/store/src/lib.rs)) |
 | `:SYSTem:GRAPhics[?] CPU\|GPU` | System > Graphics |
 | `:SYSTem:AOUTput[?] TOUT\|PFAil\|OFF` | the rear AUX OUT: trigger out, pass/fail (where the mask or zone unit is there), or low |
 | `:SYSTem:LOG ON\|OFF` | measurement logger |

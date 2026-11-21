@@ -329,10 +329,10 @@ pub(super) const PAGES: [Page; 56] = [
         Some(|u, _| (u.menu_btn().x, false)),
         None,
     ),
-    page!(MenuId::Measure, "Measure", |u, _| u.measure_items(), None),
+    page!(MenuId::Measure, "Measure settings", |u, _| u.measure_items(), None),
     page!(MenuId::MeasHold, "Add", |_, _| vec![Item::AddMeas], None),
     // its catalogue is a layout of its own (`catalog_dialog`), not rows
-    page!(MenuId::MeasAdd, "Add measurements", |_, _| Vec::new(), None),
+    page!(MenuId::MeasAdd, "Add measurement", |_, _| Vec::new(), None),
     // oos-plus pages: the full catalogue, the Add panel of Studio, the search, the measurement row sheet, the
     // statistics and the level pages, the external generator
     page!(MenuId::MeasLegacy, "All measurements", |u, _| u.measurement_catalog(), None),
@@ -436,6 +436,18 @@ pub(super) type Layout = (MenuId, &'static str, fn(&mut Ui), &'static [Item]);
 /// The longest states of the pages of `PAGES`, for the layout lint.
 #[cfg(test)]
 pub(super) const LAYOUTS: &[Layout] = &[
+    // Default's number pad (upstream's picker, numpad.rs) with the longest entry, its title the longest row name of a
+    // channel
+    (
+        MenuId::Channel(0),
+        "default number pad",
+        |u| {
+            u.m.layout = crate::model::Layout::Default;
+            u.row_pad.target = Some(Item::ChOffset(0));
+            u.keypad = "-1234.5678901".into();
+        },
+        &[Item::NumEntry],
+    ),
     // the number pad (oos-plus's overlay, numpad.rs) with the longest entry, over the page of a channel
     (
         MenuId::Channel(0),
