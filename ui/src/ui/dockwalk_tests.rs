@@ -789,3 +789,26 @@ fn the_tree_text_of_a_group_round_trips() {
     }
     assert!(Node::parse("G2(WE)").is_none() && Node::parse("G0(W)").is_none() && Node::parse("G0(WW)").is_none() && Node::parse("H0.500(G0(WE),E)").is_none());
 }
+
+// Break it catches: behind another tab the spectrum is not updated with new records, and the spectrum queries answered
+// its old result (a review of the change that computes them for the query when the page is closed).
+#[test]
+fn the_spectrum_queries_compute_from_the_record_when_the_spectrum_is_behind_a_tab() {
+    let mut u = studio();
+    u.studio_set_view(StudioView::Waveform);
+    u.m.view = AView::Spectrum;
+    settle(&mut u);
+    u.analyzer_update();
+    assert!(u.dock_leaf(VKind::View).is_some() && u.dock_leaf(VKind::Wave).is_some());
+    extra_tap(&mut u, VKind::View);
+    tab_tap(&mut u, VKind::View, VKind::Wave);
+    assert!(u.spectrum_runs() && u.analyser_tabbed_out(), "the spectrum is behind the waveform's tab");
+    let fresh = (u.spectrum_rbw_now().unwrap(), u.spectrum_lines_now().unwrap());
+    // what the page held when its tab went behind
+    let sp = u.azr.spec.as_mut().expect("a spectrum");
+    sp.rbw = 12_345.0;
+    sp.lines.clear();
+    assert_eq!(u.spectrum_rbw_now(), Some(fresh.0));
+    assert_eq!(u.spectrum_lines_now().map(|l| l.len()), Some(fresh.1.len()));
+    assert!(!fresh.1.is_empty());
+}

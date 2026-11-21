@@ -31,14 +31,97 @@ impl Ui {
         self.azr.peaks.iter().copied().max_by(|a, b| a.dbv.total_cmp(&b.dbv))
     }
 
-    /// The resolution bandwidth of the spectrum last computed, None before the first one (`:SPECtrum:RBW:ACTual?`).
-    pub(crate) fn spectrum_rbw(&self) -> Option<f64> {
-        self.azr.spec.as_ref().map(|s| s.rbw).filter(|r| *r > 0.0)
+    /// The spectrum is computed on every record: its page is shown, or its pane beside the waveform or the eye.
+    pub(crate) fn spectrum_runs(&self) -> bool {
+        let pane = self.pane_h() > 0;
+        match self.m.view {
+            AView::Spectrum => true,
+            AView::Scope => pane && matches!(self.m.pane, tables::PANE_SPECTRUM | tables::PANE_RESULTS),
+            AView::Eye => pane && self.dock_on() && self.m.pane == tables::PANE_SPECTRUM,
+            _ => false,
+        }
     }
 
-    /// The lines of the peak table, in the table's order (`:SPECtrum:PEAK:LIST?`).
-    pub(crate) fn spectrum_peaks(&self) -> &[spectrum::Marker] {
-        &self.azr.peaks
+    /// The spectrum the page computes on every record is the one on the screen now: it runs, and its tab is in front.
+    fn spectrum_shown_now(&self) -> Option<&spectrum::Spectrum> {
+        self.azr.spec.as_ref().filter(|_| self.spectrum_runs() && !self.analyser_tabbed_out())
+    }
+
+    /// The record the spectrum queries compute from: the newest, or a blank one for a loaded ref without a live record.
+    fn spectrum_record<R>(&self, f: impl FnOnce(&Record) -> R) -> Option<R> {
+        match self.last[0].as_ref() {
+            Some(r) => Some(f(r)),
+            // a loaded ref is measured without a live record
+            None if matches!(self.m.spec_src, WaveId::Ref(_)) => Some(f(&Self::blank_record())),
+            None => None,
+        }
+    }
+
+    /// The source samples the spectrum queries compute from, with the frequency of the source and the Harmonics
+    /// setting. None without a record or a source.
+    fn spectrum_input<R>(&self, f: impl FnOnce(&crate::ui::magnetic::WaveSamp, f64, usize) -> R) -> Option<R> {
+        let harms = PANE_HARMS[self.m.spec_harm.min(PANE_HARMS.len() - 1)];
+        self.spectrum_record(|rec| {
+            let id = self.m.spec_src;
+            let s = self.wave_samples(rec, id)?;
+            Some(f(&s, self.wave_freq(rec, id), harms))
+        })?
+    }
+
+    /// The settings of the page for these samples, the span auto set from the Harmonics setting.
+    fn spectrum_settings(&self, s: &crate::ui::magnetic::WaveSamp, f1: f64, harms: usize) -> spectrum::Settings {
+        let (center, span) = if self.m.spec_span == 0.0 && harms > 0 {
+            let stop = spectrum::auto_stop(f1, harms, 0.0);
+            (stop / 2.0, stop)
+        } else {
+            (self.m.spec_center, self.m.spec_span)
+        };
+        let finest = spectrum::enbw(self.m.spec_win) / (s.v.len().max(1) as f64 * s.dt);
+        spectrum::Settings {
+            center,
+            span,
+            rbw: if self.m.spec_rbw > 0.0 { self.m.spec_rbw } else { finest },
+            window: self.m.spec_win,
+            averaging: 1,
+            trace: spectrum::Trace::Normal,
+            detector: spectrum::Detector::Peak,
+            points: 801,
+            ref_level_dbv: self.m.spec_ref as f64,
+        }
+    }
+
+    /// For `:SPECtrum:RBW:ACTual?`: the resolution bandwidth of the spectrum of the record now. While the page is on
+    /// the screen, of the spectrum it shows; else from its settings without the transform. None without a record or a
+    /// source.
+    pub(crate) fn spectrum_rbw_now(&self) -> Option<f64> {
+        if let Some(sp) = self.spectrum_shown_now() {
+            return Some(sp.rbw);
+        }
+        self.spectrum_input(|s, f1, harms| spectrum::resolution(&s.v, s.dt, &self.spectrum_settings(s, f1, harms)))
+    }
+
+    /// For `:SPECtrum:PEAK:LIST?`: the lines of the spectrum of the record now, in the order of the peak table, as many
+    /// as the Harmonics setting asks (All: every line the search keeps). While the page is on the screen, of the
+    /// spectrum it shows; else computed here with its settings (on a unit, 2026-11-20, the page's old result answered
+    /// for ten new records while it was not shown, and a page behind another Studio tab is not updated either). None
+    /// without a record or a source.
+    pub(crate) fn spectrum_lines_now(&self) -> Option<Vec<spectrum::Marker>> {
+        let harms = PANE_HARMS[self.m.spec_harm.min(PANE_HARMS.len() - 1)];
+        let n = if harms == 0 { usize::MAX } else { harms.max(panes::PEAKS_MAX) };
+        let mut lines = match self.spectrum_shown_now() {
+            Some(sp) => {
+                let f1 = self.spectrum_record(|rec| self.wave_freq(rec, self.m.spec_src))?;
+                spectrum::rank_lines(sp, Some(f1), n)
+            }
+            None => self.spectrum_input(|s, f1, harms| {
+                let sp = spectrum::analyze(&s.v, s.dt, &self.spectrum_settings(s, f1, harms), &mut None);
+                spectrum::rank_lines(&sp, Some(f1), n)
+            })?,
+        };
+        if self.m.spec_sort == 0 {
+            lines.sort_by(|a, b| a.f.total_cmp(&b.f));
+        }
+        Some(lines)
     }
 
     /// The spectrum is on the screen and its span is left to the signal.

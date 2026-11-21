@@ -172,6 +172,51 @@ impl Avg {
     }
 }
 
+/// The band, the halving steps, the sample rate after them and the window length that `analyze` takes for `n` finite
+/// samples.
+struct Plan {
+    start: f64,
+    stop: f64,
+    stages: u32,
+    fs: f64,
+    l: usize,
+}
+
+fn plan(n: usize, dt: f64, s: &Settings) -> Plan {
+    let fs0 = 1.0 / dt;
+    let nyq = fs0 / 2.0;
+    let (mut start, mut stop) = if s.span > 0.0 && s.center.is_finite() {
+        ((s.center - s.span / 2.0).max(0.0), (s.center + s.span / 2.0).min(nyq))
+    } else {
+        (0.0, nyq)
+    };
+    if !(stop > start) {
+        (start, stop) = (0.0, nyq);
+    }
+    let (mut fs, mut m, mut stages) = (fs0, n, 0);
+    while fs / 2.0 >= OVERSAMPLE * stop && m >= 128 {
+        m = (m - 3) / 2; // as `halve`
+        fs /= 2.0;
+        stages += 1;
+    }
+    let rbw_req = if s.rbw > 0.0 && s.rbw.is_finite() { s.rbw } else { (stop - start) / 100.0 };
+    let l = ((enbw(s.window) * fs / rbw_req).round().min(1e9) as usize).clamp(16, m.min(MAX_WINDOW));
+    // where the record sets the window, a record that varies by a sample must not restart the averaging
+    let l = if l == m && l >= 256 { l / 64 * 64 } else { l };
+    Plan { start, stop, stages, fs, l }
+}
+
+/// The resolution bandwidth `analyze` reaches for `v` and `s` (`Spectrum::rbw`), without the transform; 0 where it
+/// computes no spectrum.
+pub fn resolution(v: &[f32], dt: f64, s: &Settings) -> f64 {
+    let n = v.iter().filter(|x| x.is_finite()).take(MAX_SAMPLES).count();
+    if n < 16 || !(dt > 0.0) || !dt.is_finite() {
+        return 0.0;
+    }
+    let p = plan(n, dt, s);
+    enbw(s.window) * p.fs / p.l as f64
+}
+
 /// Spectrum of `v` for the display described by `s`. A band far below Nyquist is first decimated by halving steps (the
 /// record time and so the resolution stay, the FFT gets short; the steps' droop is taken out again). The window length is
 /// chosen so that the window's ENBW gives the requested RBW (limited by the record length and `MAX_WINDOW`;
@@ -185,31 +230,15 @@ pub fn analyze(v: &[f32], dt: f64, s: &Settings, state: &mut Option<Avg>) -> Spe
     if x.len() < 16 || !(dt > 0.0) || !dt.is_finite() {
         return Spectrum { ref_level_dbv: s.ref_level_dbv, ..Default::default() };
     }
+    let Plan { start, stop, stages, fs, l } = plan(x.len(), dt, s);
     let fs0 = 1.0 / dt;
-    let nyq = fs0 / 2.0;
-    let (mut start, mut stop) = if s.span > 0.0 && s.center.is_finite() {
-        ((s.center - s.span / 2.0).max(0.0), (s.center + s.span / 2.0).min(nyq))
-    } else {
-        (0.0, nyq)
-    };
-    if !(stop > start) {
-        (start, stop) = (0.0, nyq);
-    }
-    let mut fs = fs0;
-    let mut stages = 0;
-    while fs / 2.0 >= OVERSAMPLE * stop && x.len() >= 128 {
+    for _ in 0..stages {
         halve(&mut x);
-        fs /= 2.0;
-        stages += 1;
     }
     let m = x.len();
     let points = if s.points >= 2 { s.points } else { 801 };
     let ddf = (stop - start) / (points - 1) as f64;
     let e = enbw(s.window);
-    let rbw_req = if s.rbw > 0.0 && s.rbw.is_finite() { s.rbw } else { (stop - start) / 100.0 };
-    let l = ((e * fs / rbw_req).round().min(1e9) as usize).clamp(16, m.min(MAX_WINDOW));
-    // where the record sets the window, a record that varies by a sample must not restart the averaging
-    let l = if l == m && l >= 256 { l / 64 * 64 } else { l };
     let rbw = e * fs / l as f64;
     let n0 = l.next_power_of_two();
     let mut n = n0;
@@ -321,8 +350,9 @@ pub fn analyze(v: &[f32], dt: f64, s: &Settings, state: &mut Option<Avg>) -> Spe
     }
 }
 
-/// Lines kept by the search.
-const MAX_LINES: usize = 32;
+/// Lines kept by the search: as many as there are harmonics to rank (`MAX_HARMONIC`), so Harmonics 50 and All of the
+/// peak list get theirs.
+const MAX_LINES: usize = 64;
 /// The lowest tenth of a band of noise lies this far (power) under its median: a band full of lines has no median of noise.
 const LOW_TENTH: f64 = 6.6;
 /// A line stands this far (power) over the noise: 15 dB, more than noise reaches in a band.

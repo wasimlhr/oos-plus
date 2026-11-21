@@ -929,6 +929,13 @@ impl Ui {
     }
 
     pub(super) fn settings_changed(&mut self) {
+        self.acquiring_changed();
+        self.clear_measurement_statistics();
+    }
+
+    /// What a change of a setting and a Run, Stop or Single have in common, without clearing the statistics: those
+    /// three change no setting, so the statistics of what was acquired stay.
+    pub(super) fn acquiring_changed(&mut self) {
         // whatever moved the upper level (50 %, SCPI's LEVel, a fit) leaves the two levels in order
         self.m.order_trigger_levels();
         self.cancel_bus_candidate(true);
@@ -939,7 +946,6 @@ impl Ui {
         if self.m.run == RunState::Run {
             self.dirty_map = true;
         }
-        self.clear_measurement_statistics();
     }
 
     pub(super) fn activate(&mut self, it: Item) {

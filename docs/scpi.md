@@ -293,6 +293,7 @@ The example deliberately stops acquisition and retains that state. It reads one 
 | `:MEASure:TSETup[?]` / `:THOLd[?]` | Nonnegative seconds: `SETHOLD` counts the clock edges whose setup or hold is shorter. |
 | `:MEASure:STRip?` | Configured standard/pair/catalog rows, then enabled DVM/counter rows. |
 | `:MEASure:READout?` | Strip rows plus Eye figures when that analysis page is active. |
+| `:MEASure:PENDing?` | `1` while the measurements of the record shown are still computed, else `0`. |
 | `:EYE:ITEM? <figure>` | Current configured Eye result; does not itself run one-click Auto Eye. |
 | `:VIEW[?]` | `SCOPE|SPECTRUM|EYE|POWER|BODE|MAGNETIC|INVERTER|DPT`. |
 
