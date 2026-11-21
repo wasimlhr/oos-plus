@@ -28,6 +28,7 @@ demo traffic, a view), with one line that registers it:
 | demo traffic | the host build's simulated signals, on the channels of `setup` | `demo` (none) |
 | frames | what a message is on the band and in the Events pane: a frame from one start field to the next, whatever pauses it has inside; marks the module adds that are no field of the bus; and the field every message begins with, which the text of a message leaves out | `frame_start` (messages by idle time), `mark` (none), `lead` (none) |
 | columns | the Events pane where it lists the frames of one protocol and is wide enough: a column for the identifier, the data, the CRC ... in place of one text | `columns` (one text) |
+| columns of a field | the Events pane where it lists single fields: a column for each part of a field that has parts (a word of MIL-STD-1553: what it is, terminal, direction, subaddress, mode code or word count, data, status), and what failed in it in place of the number of errors | `field_columns`, `field_cells` (the field's text), `field_error` (the count) |
 | own view | Display > Second pane > Bus view: a status line and columns of rows, with a memory across records | `view` (none) |
 
 Only `info` is required, and in it the `decoder` and the `bit` time

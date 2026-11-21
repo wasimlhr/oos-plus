@@ -171,9 +171,11 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Four decoders at once, with a list of events you can export and that jumps to an event; DCC lists one command per row
   ("Loco 5  Fwd 50/128"). The Events pane lists the record as messages, single fields or lines of text, with the
   time, the length, the text, the bytes in hex and, where a check failed, the number of errors in red; Errors only
-  leaves the rows that failed. These are Minimal's and Studio's: the Default layout keeps upstream's, where
-  Decode > Event table opens a table over the plot (time, decoder, field; a tap on a row of a stopped scope goes to
-  it) and the Events pane is a list of the fields in one or two columns
+  leaves the rows that failed. The single fields of MIL-STD-1553 are its words, each with what it is (command, status,
+  data), terminal, direction, subaddress, the mode code by its name or the number of words, the data, the flags of a
+  status word, and "Parity" where the word failed it. These are Minimal's and Studio's: the Default layout keeps
+  upstream's, where Decode > Event table opens a table over the plot (time, decoder, field; a tap on a row of a
+  stopped scope goes to it) and the Events pane is a list of the fields in one or two columns
 - A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
   slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
   `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART or I2C band
