@@ -121,8 +121,8 @@ impl Ui {
                 self.cleared = false;
             }
             // whatever the hardware still holds is not this record
-            self.stop_ti_off = None;
-            (self.stop_raw, self.stop_pic) = (None, None);
+            self.stop.ti_off = None;
+            (self.stop.raw, self.stop.pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
             if let Some(slot) = offline_ref {
@@ -258,7 +258,7 @@ impl Ui {
             return;
         }
         self.usb_check = self.now + 2.0;
-        self.wlan_stick = wlan::stick_there();
+        self.net.wlan_stick = wlan::stick_there();
         self.bt.stick = bt::stick_there();
         self.bt.inputs = bt::inputs_connected(&bt::inputs());
         let on = std::fs::read_to_string("/proc/mounts").is_ok_and(|t| crate::store::usb_mounted(&t));

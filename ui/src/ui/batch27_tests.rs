@@ -142,7 +142,7 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     let (_, parts) = u.studio_sz_parts().unwrap();
     let plus = parts.iter().find(|(p, _)| *p == ZPart::YPlus).unwrap().1;
     tap_rect(&mut u, plus);
-    assert!(u.zoom_vfactor > 1.0);
+    assert!(u.zoom_view.vfactor > 1.0);
     // and the horizontal one: plus is a shorter zoom time base around the same centre, minus the way back
     let (before, centre, x) = (u.m.zscale, u.m.zdelay, u.studio_sz_xfactor());
     let (_, parts) = u.studio_sz_parts().unwrap();
@@ -165,7 +165,7 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     for v in lane_views(&mut u) { assert_eq!(v, z); }
     let (_, parts) = u.studio_sz_parts().unwrap();
     tap_rect(&mut u, parts.iter().find(|(p, _)| *p == ZPart::Reset).unwrap().1);
-    assert_eq!(u.zoom_vfactor, 1.0);
+    assert_eq!(u.zoom_view.vfactor, 1.0);
     assert_eq!(u.m.zscale, u.m.tscale, "the window is the whole record again");
     // a tap outside closes it; a plain tap on Zoom still toggles
     tap_at(&mut u, 300, 300);

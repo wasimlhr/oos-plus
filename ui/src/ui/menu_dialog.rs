@@ -9,9 +9,7 @@ use super::*;
 
 impl Ui {
     pub(super) fn open_menu(&mut self, id: MenuId) {
-        self.zoom_arm = false;
-        self.zoom_path.clear();
-        self.zoom_map = None;
+        self.zoom_box.cancel();
         self.menu = id;
         self.menu_open = true;
         self.parent = None;
@@ -932,7 +930,7 @@ impl Ui {
                 cv.text_in(&f.mb, b, 1, t, c);
             }
         }
-        if self.dialog.is_some() && self.sysinfo.is_some() {
+        if self.dialog.is_some() && self.sysinfo.rows.is_some() {
             self.draw_sysinfo(cv);
         } else if let Some(lines) = &self.dialog {
             let scr = self.scr.rect();

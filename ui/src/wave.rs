@@ -7,16 +7,19 @@
 use crate::board::{board, Board};
 use crate::model::*;
 
-/// The state shared with the acquisition thread, locked: the one `unwrap` for every reader and writer of `HwShared`
-/// in this file. A lock fails only when another holder panicked while it held it, and the state may then be half
-/// written; this panics then, as each of these lines did before.
-fn hw(shared: &crate::board::HwShared) -> std::sync::MutexGuard<'_, crate::board::Shared> {
+/// The state shared with the acquisition thread (`HwShared`, `LiveShared`), locked: the one `unwrap` for every reader
+/// and writer of it on the screen's side. A lock fails only when another holder panicked while it held it, and the
+/// state may then be half written; this panics then, as each of these lines did before.
+pub(crate) fn hw<T>(shared: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     shared.lock().unwrap()
 }
 
 mod levels;
+mod record;
 
 pub use levels::*;
+pub use record::resample as resample_record;
+pub use record::{sw_trig_level, to_record, trig_mean, trigger_point};
 
 pub struct Rng(u64);
 impl Rng {
@@ -344,7 +347,7 @@ fn demo_la(t: f64) -> u16 {
 /// The record `Source::acquire` makes of a hardware frame: 3600 points across the screen.
 pub fn hw_record(m: &Model, f: crate::board::Frame) -> Record {
     let window = m.time_per_div() as f64 * HDIV as f64;
-    crate::board::to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)
+    to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)
 }
 
 impl Source {
@@ -609,7 +612,7 @@ impl Source {
         let Source::Hw { shared, .. } = self else { return None };
         let (k, f) = hw(shared).seg.shown.take()?;
         let window = m.time_per_div() as f64 * HDIV as f64;
-        Some((k, crate::board::to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)))
+        Some((k, to_record(&std::sync::Arc::new(f), m, 3600, window, m.delay as f64 - window / 2.0)))
     }
 
     /// Hardware source in STOP: the view shown (time per div, delay; None: none to read for), and the frame the
@@ -681,7 +684,7 @@ impl Source {
             return acquire_hw(m, shared, seen);
         }
         if let Source::Live { shared, seen, words, xinc, yinc, yorg, yref } = self {
-            let g = shared.lock().unwrap();
+            let g = hw(shared);
             if g.0 == *seen || g.1.is_empty() {
                 return None; // no new frame
             }
@@ -1033,7 +1036,7 @@ impl Phosphor {
     /// options: dots (`Model::dots`, one pixel per sample) and per-sample brightness weights 0..1 (Z input).
     /// `pairs` (`Record::pairs`): with dots, each min/max pair is one vertical span, since it stands for every sample
     /// between its extremes; two dots would drop the edges of a slow time base.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // a record's parts as each caller holds them, not always a `Record`
     pub fn draw_ex(
         &mut self,
         c: usize,
