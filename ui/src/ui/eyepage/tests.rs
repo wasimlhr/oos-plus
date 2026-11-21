@@ -445,7 +445,7 @@ fn it_draws_at_every_height_and_with_the_source_off() {
     let mut ui = page(NOISY, 4);
     let mut cv = Canvas::new(PANEL_W, PANEL_H);
     for h in [160, 240, 352, 480] {
-        ui.area.h = h;
+        ui.plot.area.h = h;
         ui.analyzer_update();
         ui.draw_eye(&mut cv);
     }
@@ -507,7 +507,7 @@ fn one_press_reads_the_rate_and_keeps_the_trace() {
     let mut n = Noise(3);
     ui.last[0] = Some(record(CLEAN, &mut n));
     ui.render(&mut Canvas::new(W, H));
-    let g = ui.grid;
+    let g = ui.plot.grid;
     ui.tap(g.x + 40, g.y + 30);
     assert_ne!(ui.m.view, AView::Eye, "the waveform has no Eye shortcut");
     ui.open_menu(MenuId::Eye);
@@ -521,7 +521,7 @@ fn one_press_reads_the_rate_and_keeps_the_trace() {
     assert_eq!(ui.m.eye_place, EyePlace::Side);
     assert!((ui.m.eye_rate - CLEAN.rate).abs() / CLEAN.rate < 0.02, "rate {}", ui.m.eye_rate);
     ui.render(&mut Canvas::new(W, H));
-    let (wave, eye) = (ui.grid, ui.eye_pane_rect());
+    let (wave, eye) = (ui.plot.grid, ui.eye_pane_rect());
     assert!(separated(wave, eye), "wave {:?} eye {:?}", wave, eye);
     assert!(eye.x >= wave.x + wave.w);
     assert!(wave.w > eye.w && eye.w > 250, "wave {:?} eye {:?}", wave, eye);
@@ -534,7 +534,7 @@ fn one_press_reads_the_rate_and_keeps_the_trace() {
     let _ = (popup_x, popup_y);
     ui.tap(row.x + 24, row.y + row.h / 2); // Dock Eye below.
     ui.render(&mut Canvas::new(W, H));
-    let (wave, eye) = (ui.grid, ui.eye_pane_rect());
+    let (wave, eye) = (ui.plot.grid, ui.eye_pane_rect());
     assert_eq!(ui.m.eye_place, EyePlace::Under);
     assert!(separated(wave, eye), "wave {:?} eye {:?}", wave, eye);
     assert!(eye.y >= wave.y + wave.h - 1);

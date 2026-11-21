@@ -188,9 +188,9 @@ fn default_and_power_off_ask_before_they_act_in_the_menu() {
     open_menu(&mut u);
     scroll_to(&mut u, PowerAct);
     tap_cell(&mut u, PowerAct);
-    assert!(!u.power_dlg, "the first tap only asks");
+    assert!(!u.power.open, "the first tap only asks");
     tap_cell(&mut u, PowerAct);
-    assert!(u.power_dlg, "the second tap does it");
+    assert!(u.power.open, "the second tap does it");
 }
 
 #[test]
@@ -245,7 +245,7 @@ fn la_and_gen_pills_sit_after_plus_ch_and_open_their_sheets() {
 #[test]
 fn sim_is_in_the_menu_and_live_is_in_the_top_bar_when_viewing_a_record() {
     let mut u = studio();
-    u.store_dir = std::env::temp_dir().join("oos-batch21-sim");
+    u.files.dir = std::env::temp_dir().join("oos-batch21-sim");
     let t = u.studio_top();
     assert!(!u.record_mode());
     assert!(t.badge.w == 0, "no Live while live");
@@ -524,16 +524,16 @@ fn an_r_pill_selects_its_slot_and_opens_the_reference_sheet_like_a_channel_pill(
     let b = u.studio_bottom();
     assert!(b.refs[0].w > 0 && b.refs[1].w > 0);
     tap(&mut u, b.refs[0]);
-    assert_eq!(u.ref_sel, 0);
+    assert_eq!(u.ref_page.sel, 0);
     assert!(u.menu_open && u.menu == MenuId::Ref && u.sheet_active(), "the Reference sheet opens on that slot");
     shot(&mut u, "r1-pill");
     // the other pill changes the slot and keeps the sheet; a second tap on the same pill closes it
     tap(&mut u, b.refs[1]);
-    assert!(u.menu_open && u.ref_sel == 1);
+    assert!(u.menu_open && u.ref_page.sel == 1);
     tap(&mut u, b.refs[1]);
     assert!(!u.menu_open, "a second tap closes it");
     tap(&mut u, b.refs[0]);
-    assert!(u.menu_open && u.ref_sel == 0);
+    assert!(u.menu_open && u.ref_page.sel == 0);
     tap(&mut u, b.refs[0]);
     assert!(!u.menu_open);
 }

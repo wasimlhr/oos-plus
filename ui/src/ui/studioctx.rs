@@ -49,10 +49,10 @@ impl Ui {
     /// The lane under a point: in stacked lanes the one whose area it is, otherwise the selected source.
     pub(super) fn ctx_lane(&self, x: i32, y: i32) -> Option<WaveId> {
         let n = n_ch();
-        if self.wins.len() > 1 {
+        if self.plot.wins.len() > 1 {
             if let Some(c) = (0..n).find(|&c| self.m.ch[c].on && self.ch_area(c).contains(x, y)) { return Some(WaveId::Ch(c)); }
         }
-        let sel = if self.record_mode() { WaveId::Ref(self.ref_sel) } else { WaveId::Ch(self.m.active) };
+        let sel = if self.record_mode() { WaveId::Ref(self.ref_page.sel) } else { WaveId::Ch(self.m.active) };
         match sel { WaveId::Ch(c) if c < n && self.m.ch[c].on => Some(sel), WaveId::Ref(_) => Some(sel), _ => (0..n).find(|&c| self.m.ch[c].on).map(WaveId::Ch) }
     }
 
@@ -188,7 +188,7 @@ impl Ui {
             CtxRow::FitLanes => self.fit_all_lanes(),
             CtxRow::ZoomHere => {
                 // the zoom window goes to the time under the finger
-                let a = self.area;
+                let a = self.plot.area;
                 let (tdiv, delay) = self.view();
                 let t = delay + (at.x - a.x - a.w / 2) as f32 / (a.w as f32 / HDIV) * tdiv;
                 if !self.m.zoom { self.set_zoom(true); }
@@ -211,7 +211,7 @@ impl Ui {
                     self.relayout();
                 }
             }
-            CtxRow::MeasOn(id) => { self.meas_src = id; self.open_meas_list(); }
+            CtxRow::MeasOn(id) => { self.sources.a = id; self.open_meas_list(); }
             CtxRow::CursorHere => self.studio_cursors_add(None),
             CtxRow::NoteHere(id) => self.callout_add(id, at.x),
             CtxRow::Layout => { if !self.dock_exit_full() { self.dock_maximise(super::dock::VKind::Wave); } }

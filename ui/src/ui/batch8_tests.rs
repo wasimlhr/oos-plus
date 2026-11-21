@@ -97,8 +97,8 @@ fn entering_studio_by_any_road_shows_its_bars() {
     let mut w = Ui::new(Source::Demo { t: 0.0 });
     w.m.layout = Layout::Default;
     for _ in 0..3 { w.step(0.05); }
-    w.store_dir = dir.clone();
-    w.store_slot = 0;
+    w.files.dir = dir.clone();
+    w.files.slot = 0;
     w.recall_setup();
     for _ in 0..3 { w.step(0.05); w.render(&mut cv); }
     assert_eq!(w.m.layout, Layout::Studio);
@@ -211,7 +211,7 @@ fn the_results_table_adds_measurements_search_events_and_decode_needs_a_decoder(
     let add = foot(&u, super::addrail::RailAct::Add);
     tap_in(&mut u, add);
     assert!(u.studio.search().is_some());
-    assert_eq!(u.table, Some(tables::TableKind::Search));
+    assert_eq!(u.table.kind, Some(tables::TableKind::Search));
     assert_eq!(u.table_rows(tables::TableKind::Search).len(), u.studio_search_events().len());
     assert!(!u.table_rows(tables::TableKind::Search).is_empty());
     // decode without a decoder says so and adds nothing
@@ -225,7 +225,7 @@ fn the_results_table_adds_measurements_search_events_and_decode_needs_a_decoder(
     tap_in(&mut u, g.types[1].1);
     let rm = foot(&u, super::addrail::RailAct::Remove);
     tap_in(&mut u, rm);
-    assert!(u.table.is_none());
+    assert!(u.table.kind.is_none());
 }
 
 // ------------------------------------------------------------------------------------------------ item 2
@@ -269,7 +269,7 @@ fn cursor_readouts_have_a_box_at_each_cursor_and_a_delta_box() {
     u.studio_cursors_add(None);
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    let a = u.area;
+    let a = u.plot.area;
     // the delta box is a CURSOR-coloured frame near the bottom of the lane, between the cursors
     let (ta, tb) = u.cursor_times();
     assert!(u.wave_at_source(u.cursor_source(), ta).is_some() && u.wave_at_source(u.cursor_source(), tb).is_some());
@@ -299,7 +299,7 @@ fn cursors_show_in_the_overview_and_in_the_zoom_view() {
     // put the cursors where the zoom window is, so the overview and the zoom view both hold them
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    let (o, _) = u.split_zoom(u.grid);
+    let (o, _) = u.split_zoom(u.plot.grid);
     let (ta, tb) = u.cursor_times();
     let tdiv = u.m.time_per_div();
     let x_of = |t: f64| o.x + (o.w as f32 / 2.0 + (t as f32 - u.m.delay) / tdiv * (o.w as f32 / HDIV)) as i32;
@@ -312,7 +312,7 @@ fn cursors_show_in_the_overview_and_in_the_zoom_view() {
     }
     assert!(seen >= 1, "overview shows a cursor line ({ta} {tb} in {o:?})");
     // and the zoom view has its own lines at the fractions
-    let lane = u.area;
+    let lane = u.plot.area;
     let zx = lane.x + (u.m.cur_a * lane.w as f32) as i32;
     let hits = (lane.y..lane.bottom()).filter(|&y| px(&cv, zx, y) == CURSOR).count();
     assert!(hits > 8, "zoom view shows cursor A");
@@ -364,7 +364,7 @@ fn linked_cursors_move_together_and_independent_ones_do_not() {
     let mut u = studio();
     u.m.run = RunState::Stop;
     u.studio_cursors_add(None);
-    let lane = u.area;
+    let lane = u.plot.area;
     let x = lane.x + (u.m.cur_a * lane.w as f32) as i32;
     let y = lane.y + lane.h / 2;
     let (a0, b0) = (u.m.cur_a, u.m.cur_b);
@@ -403,7 +403,7 @@ fn add_search_makes_an_edge_search_with_level_at_50_percent_and_marks() {
     // the marks are on the waveform: amber pixels at the top of the plot
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    let a = u.area;
+    let a = u.plot.area;
     let amber = (a.x..a.right()).filter(|&x| (a.y..a.y + 10).any(|y| px(&cv, x, y) == AMBER)).count();
     assert!(amber > 0, "marks");
     shot(&mut u, "search-added");

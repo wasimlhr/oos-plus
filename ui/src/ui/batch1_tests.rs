@@ -48,7 +48,7 @@ fn many_measurements(u: &mut Ui) {
 #[test]
 fn every_dock_choice_docks_the_card_again_also_the_one_already_selected() {
     let mut u = fresh();
-    u.stats_on = true;
+    u.results.on = true;
     u.relayout();
     for dock in [StripDock::Below, StripDock::Right] {
         u.m.strip_dock = dock;
@@ -146,7 +146,7 @@ fn a_card_under_the_plot_pages_many_rows_at_once() {
     for dock in [StripDock::Below, StripDock::Above] {
         let mut u = fresh();
         many_measurements(&mut u);
-        u.stats_on = true;
+        u.results.on = true;
         u.workspace_action(Action::MeasureDock(dock));
         u.relayout();
         assert!(u.results_page_size() >= 6, "{dock:?}: {} rows per page", u.results_page_size());
@@ -205,7 +205,7 @@ fn the_floating_studio_panel_clears_the_corner_buttons_and_the_head_row() {
     let mut u = studio();
     u.studio.view = StudioView::Floating;
     u.relayout();
-    for at in [None, Some((W - 300, 0)), Some((W - 280, u.grid.y + 8)), Some((W - 40, 100))] {
+    for at in [None, Some((W - 300, 0)), Some((W - 280, u.plot.grid.y + 8)), Some((W - 40, 100))] {
         u.studio.panel.at = at;
         let p = u.studio_panel_rect().unwrap();
         let hits = |r: Rect| p.x < r.right() && r.x < p.right() && p.y < r.bottom() && r.y < p.bottom();

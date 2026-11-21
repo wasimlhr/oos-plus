@@ -119,7 +119,7 @@ fn studio_top_bar_has_a_lan_pill_and_a_usb_pill_while_a_stick_is_in() {
     let t = u.studio_top();
     assert!(t.lan.w > 0 && t.lan.w < 70 && t.usb.w == 0 && t.wlan.w == 0, "{:?}", (t.lan, t.usb, t.wlan));
     let acq = t.acq.w;
-    u.usb = true;
+    u.stick.mounted = true;
     let t = u.studio_top();
     assert!(t.usb.w > 0 && t.usb.right() <= t.lan.x && t.acq.w < acq, "{:?}", (t.usb, t.lan, t.acq));
     let all = [t.run, t.acq, t.usb, t.lan, t.add, t.cursors, t.display, t.storage, t.view, t.gear];
@@ -223,19 +223,19 @@ fn studio_plot_has_lanes_with_channel_badges_the_t_marker_and_cursor_tags() {
     u.m.cur_b = 0.80;
     shot(&mut u, "03-plot");
     // one lane per channel that is on, one under the other, inside the plot under the tag row
-    assert_eq!(u.wins.len(), 2);
-    assert!(u.wins[0].bottom() <= u.wins[1].y);
+    assert_eq!(u.plot.wins.len(), 2);
+    assert!(u.plot.wins[0].bottom() <= u.plot.wins[1].y);
     assert!(u.studio_tags_on());
-    assert_eq!(u.grid.y, u.frame().body.y + super::dock::STRIP_H, "the strip of the waveform, then the scale: no tag row");
+    assert_eq!(u.plot.grid.y, u.frame().body.y + super::dock::STRIP_H, "the strip of the waveform, then the scale: no tag row");
     let t = u.studio_tag_rect(u.studio_x_of_time(0.0));
-    assert!(t.y > u.grid.y && t.bottom() < u.grid.y + 26, "T sits inside the scale, on its top edge");
+    assert!(t.y > u.plot.grid.y && t.bottom() < u.plot.grid.y + 26, "T sits inside the scale, on its top edge");
     // the tag row, the lanes and the bars do not overlap
     let top = u.studio_top();
-    assert!(u.grid.y - super::dock::STRIP_H >= top.run.bottom());
-    assert!(u.grid.bottom() <= u.frame().bottom.y);
+    assert!(u.plot.grid.y - super::dock::STRIP_H >= top.run.bottom());
+    assert!(u.plot.grid.bottom() <= u.frame().bottom.y);
     // the T tag sits at the trigger position: 0 s at the centre with no delay
     u.m.delay = 0.0;
-    assert_eq!(u.studio_x_of_time(0.0), u.grid.x + u.grid.w / 2);
+    assert_eq!(u.studio_x_of_time(0.0), u.plot.grid.x + u.plot.grid.w / 2);
     // Default and Minimal keep their plot exactly
     u.m.layout = Layout::Minimal;
     assert!(!u.studio_tags_on());
@@ -264,16 +264,16 @@ fn studio_pinned_badges_sit_under_the_lanes_and_the_eye_hides_them() {
     shot(&mut u, "04-badges");
     let row = u.studio_row();
     assert_eq!(row.bottom(), u.frame().bottom.y);
-    assert!(u.grid.bottom() <= row.y, "the lanes end above the badges");
+    assert!(u.plot.grid.bottom() <= row.y, "the lanes end above the badges");
     let list = u.studio_badges();
     assert_eq!(list.len(), 3);
     for (_, r) in &list { assert!(row.contains(r.x, r.y) && r.right() <= u.studio_list_chip().x, "badge inside the row"); }
     // the row is paid for by the lanes: hiding the badges gives the height back (mock 02)
-    let with = u.grid.h;
+    let with = u.plot.grid.h;
     u.studio_hide_badges();
     assert!(u.studio.hide_badges);
     assert_eq!(u.studio_row_h(), 0);
-    assert!(u.grid.h > with);
+    assert!(u.plot.grid.h > with);
     shot(&mut u, "05-badges-hidden");
 }
 
@@ -299,7 +299,7 @@ fn studio_badge_popup_configures_unpins_floats_and_removes() {
     // Configure opens the measurement's own settings
     let p = open(&mut u, vpp);
     tap_in(&mut u, Ui::studio_popup_row(p, 0));
-    assert_eq!(u.meas_cfg, Some(1));
+    assert_eq!(u.meas_own.dialog, Some(1));
     u.close_menu();
     // Unpin leaves the measurement in the list
     let p = open(&mut u, vpp);
@@ -401,17 +401,17 @@ fn twelve() -> Ui {
 #[test]
 fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
     let mut u = twelve();
-    let full = u.grid.w;
+    let full = u.plot.grid.w;
     u.studio_set_view(StudioView::Docked);
     for _ in 0..4 { u.step(0.05); }
     shot(&mut u, "08-docked");
     let g = u.studio_panel_geo().expect("docked panel");
-    assert_eq!(u.grid.w, full - 274, "the lanes give their width to the panel");
-    assert!(g.p.x >= u.grid.right() && g.p.right() <= W && g.p.bottom() <= u.frame().bottom.y && g.p.y >= TOP.h);
+    assert_eq!(u.plot.grid.w, full - 274, "the lanes give their width to the panel");
+    assert!(g.p.x >= u.plot.grid.right() && g.p.right() <= W && g.p.bottom() <= u.frame().bottom.y && g.p.y >= TOP.h);
     assert!(g.list.bottom() <= g.p.bottom(), "no pager and no footer: the list has the room");
     assert!(g.page >= 5, "about six rows to a page, like the mock");
     // the badges sit under the lanes only, the panel keeps its column
-    assert_eq!(u.studio_row().right(), u.grid.right());
+    assert_eq!(u.studio_row().right(), u.plot.grid.right());
     // there is no pager: the list scrolls by pixels and stops at both ends
     let total = 12;
     let max = u.panel_scroll_max(total, &g);
@@ -432,7 +432,7 @@ fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
     assert_eq!(u.studio_pinned().len(), all);
     // a tap on the name opens the settings of the measurement
     tap_in(&mut u, Rect::new(g.list.x + 80, g.list.y + 5, 40, 30));
-    assert_eq!(u.meas_cfg, Some(0));
+    assert_eq!(u.meas_own.dialog, Some(0));
     u.close_menu();
     // + Add measurement opens the chooser
     tap_in(&mut u, g.add);
@@ -443,7 +443,7 @@ fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
     let leaf = u.dock_leaf(super::dock::VKind::Measure).unwrap();
     strip(&mut u, Ui::dock_close_rect(leaf));
     assert_eq!(u.studio.view, StudioView::Waveform);
-    assert_eq!(u.grid.w, full);
+    assert_eq!(u.plot.grid.w, full);
     u.studio_set_view(StudioView::Docked);
     let leaf = u.dock_leaf(super::dock::VKind::Measure).unwrap();
     strip(&mut u, Rect::new(leaf.right() - 96, leaf.y, 48, 40));
@@ -461,7 +461,7 @@ fn studio_list_scrolls_with_the_finger() {
     u.touch_ev(Phase::Move, x, y - 130);
     u.touch_ev(Phase::Up, x, y - 130);
     assert_eq!(u.studio.panel.first, 2, "the list follows an upward finger by rows");
-    assert!(u.meas_cfg.is_none(), "a scroll is not a tap");
+    assert!(u.meas_own.dialog.is_none(), "a scroll is not a tap");
     // a drag the other way brings it back
     u.touch_ev(Phase::Down, x, y - 100);
     u.touch_ev(Phase::Move, x, y + 40);
@@ -470,7 +470,7 @@ fn studio_list_scrolls_with_the_finger() {
     // a tap through the touch path still reaches the row
     u.touch_ev(Phase::Down, g.list.x + 60, g.list.y + 5);
     u.touch_ev(Phase::Up, g.list.x + 60, g.list.y + 5);
-    assert_eq!(u.meas_cfg, Some(0));
+    assert_eq!(u.meas_own.dialog, Some(0));
 }
 
 #[test]
@@ -484,7 +484,7 @@ fn studio_floating_panel_lists_the_measurements_moves_docks_and_opens_the_table(
     let p = u.studio_panel_rect().unwrap();
     assert!(r.x >= 0 && r.right() <= W && r.y >= TOP.h && r.bottom() <= u.frame().bottom.y);
     assert!(p.y == r.y + super::dock::STRIP_H && p.h == r.h - super::dock::STRIP_H, "the panel draws under its strip");
-    assert_eq!(u.grid.w, W, "a floating panel takes no room from the lanes");
+    assert_eq!(u.plot.grid.w, W, "a floating panel takes no room from the lanes");
     // it follows a finger on its title
     let (x, y) = (r.x + 100, r.y + 12);
     u.touch_ev(Phase::Down, x, y);
@@ -496,7 +496,7 @@ fn studio_floating_panel_lists_the_measurements_moves_docks_and_opens_the_table(
     assert_eq!(u.studio.view, StudioView::Floating, "dragging the title is not a tap");
     // a touch on the lanes outside it is the plot's, not the panel's
     let delay = u.m.delay;
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let (lx, ly) = (lane.x + 120, lane.y + 40);
     u.touch_ev(Phase::Down, lx, ly);
     u.touch_ev(Phase::Move, lx + 50, ly);
@@ -577,7 +577,7 @@ fn studio_zoom_overview_window_drags_and_a_lane_badge_scales_vertically() {
     for _ in 0..4 { u.step(0.05); }
     shot(&mut u, "15-zoom-navigator");
     // the overview window moves with a finger on it (the existing gesture, restyled)
-    let (overview, _) = u.split_zoom(u.grid);
+    let (overview, _) = u.split_zoom(u.plot.grid);
     let before = u.m.zdelay;
     let (x, y) = (overview.x + overview.w / 2, overview.y + 45);
     u.touch_ev(Phase::Down, x, y);
@@ -585,7 +585,7 @@ fn studio_zoom_overview_window_drags_and_a_lane_badge_scales_vertically() {
     u.touch_ev(Phase::Up, x + 80, y);
     assert!(u.m.zdelay > before, "the window follows the finger to later time");
     // a pan in the detail lanes moves the time too
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let before = u.m.zdelay;
     u.touch_ev(Phase::Down, lane.x + 300, lane.y + 60);
     u.touch_ev(Phase::Move, lane.x + 360, lane.y + 60);

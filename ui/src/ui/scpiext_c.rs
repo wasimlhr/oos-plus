@@ -116,7 +116,7 @@ impl Ui {
             "DISPlay:LAYout" => return Some(self.sel(Item::Layout, q, arg)),
             "SYSTem:LOCK" => boolf(q, arg, &mut self.m.touch_lock),
             "SESSion" => {
-                if q { return Some(t(if self.session_is_sim { "SIM" } else if self.offline { "REF" } else { "LIVE" })); }
+                if q { return Some(t(if self.session_is_sim { "SIM" } else if self.offline.on { "REF" } else { "LIVE" })); }
                 if kw(arg.trim(), "LIVE") { self.return_to_live(); DONE } else { Err(bad(arg)) }
             }
             "SYSTem:INFO" => if q { t(one_line(self.sysinfo_text().lines())) } else { Err(undefined(key)) },
@@ -153,13 +153,13 @@ impl Ui {
                 DONE
             }
             "SYSTem:OVERclock" => {
-                if q { return Some(t(en(self.clock_next))); }
+                if q { return Some(t(en(self.overclock.hz))); }
                 let (a, yes) = confirm(arg);
                 let Some(hz) = a.trim().parse::<f64>().ok().filter(|h| h.is_finite()) else { return Some(Err(bad(arg))) };
                 let steps = board().clock_steps();
                 let to = steps.iter().position(|&s| (s - hz).abs() <= s * 1e-3).ok_or_else(|| bad(arg));
                 let to = match to { Ok(i) => i, Err(e) => return Some(Err(e)) };
-                let from = steps.iter().position(|&s| s == self.clock_next).unwrap_or(0);
+                let from = steps.iter().position(|&s| s == self.overclock.hz).unwrap_or(0);
                 if to == from { return Some(DONE); }
                 if !yes { return Some(Err(needs_confirm("Overclock"))); }
                 self.overclock_step(to as i32 - from as i32);
@@ -242,7 +242,7 @@ impl Ui {
             // ---- generator: arbitrary wave from a file
             "SOURce:ARB:LOAD" | "SOURce<n>:ARB:LOAD" => {
                 if q { return Some(Err(undefined(key))); }
-                let p = if arg.trim().is_empty() { self.store_dir.join("arb.csv") } else { std::path::PathBuf::from(text_arg(arg)) };
+                let p = if arg.trim().is_empty() { self.files.dir.join("arb.csv") } else { std::path::PathBuf::from(text_arg(arg)) };
                 let v = std::fs::read_to_string(&p).map(|t| board().arb_parse(&t)).unwrap_or_default();
                 if self.afg_arb_load(&v) { DONE } else { Err(conflict(&format!("no wave in {}", p.display()))) }
             }
@@ -254,12 +254,12 @@ impl Ui {
                 let Some(id) = parts.first().and_then(|s| s.parse::<u16>().ok()) else { return Some(Err(bad(arg))) };
                 let Some(cat) = super::meascatalog::cat_from(id) else { return Some(Err(bad(arg))) };
                 let src = |i: usize, d: WaveId| match parts.get(i) { Some(s) => crate::scpi::parse_wave(s).ok_or_else(|| bad(arg)), None => Ok(d) };
-                let (a, b, c, d) = match (src(1, self.meas_src), src(2, self.meas_src_b), src(3, self.cat.c), src(4, self.cat.d)) { (Ok(a), Ok(b), Ok(c), Ok(d)) => (a, b, c, d), _ => return Some(Err(bad(arg))) };
+                let (a, b, c, d) = match (src(1, self.sources.a), src(2, self.sources.b), src(3, self.cat.c), src(4, self.cat.d)) { (Ok(a), Ok(b), Ok(c), Ok(d)) => (a, b, c, d), _ => return Some(Err(bad(arg))) };
                 if q { return Some(t(en(self.cat_row(id, a, b, c, d).map_or(f64::NAN, |r| r.v)))); }
-                let keep = (self.meas_src, self.meas_src_b, self.cat.c, self.cat.d);
-                (self.meas_src, self.meas_src_b, self.cat.c, self.cat.d) = (a, b, c, d);
+                let keep = (self.sources.a, self.sources.b, self.cat.c, self.cat.d);
+                (self.sources.a, self.sources.b, self.cat.c, self.cat.d) = (a, b, c, d);
                 if !self.cat_added(cat) { self.catalog_add(cat); }
-                (self.meas_src, self.meas_src_b, self.cat.c, self.cat.d) = keep;
+                (self.sources.a, self.sources.b, self.cat.c, self.cat.d) = keep;
                 DONE
             }
             // ---- small rows

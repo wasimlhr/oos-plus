@@ -26,7 +26,7 @@ fn log_header(h: &[u8], v: &[f32], s: &Settings, pre: usize, k: usize) {
     let hyst = (0.3 * s.ch[tc].scale) as f32;
     let span = v.len();
     let near = |rising: bool| {
-        crate::fastdraw::edge_near(v, pre, s.level as f32, hyst, rising, false, span).map(|t| t - pre as f64)
+        oos_dsp::edges::edge_near(v, pre, s.level as f32, hyst, rising, false, span).map(|t| t - pre as f64)
     };
     let off = |rising: bool| near(rising).map_or("-".to_string(), |t| format!("{:.1}", t));
     let only_off = std::env::var_os("OOS_FRAME_HEADER").is_some_and(|x| x == "off");
@@ -162,7 +162,7 @@ pub fn codes_into(
     p: &hz::Params,
     seq: u64,
     f: &mut Frame,
-) -> Option<crate::drawpipe::CodeLayout> {
+) -> Option<crate::board::pipe::CodeLayout> {
     if s.header || oos_hal::dho::seq::compress_k(s, p) > 1 || bytes.is_empty() {
         return None;
     }
@@ -171,7 +171,7 @@ pub fn codes_into(
     }
     set_meta(s, p, seq, f);
     let m = oos_hal::dho::seq::code_map(s.mask, s.ch.map(|k| (k.scale, k.offset)));
-    Some(crate::drawpipe::CodeLayout {
+    Some(crate::board::pipe::CodeLayout {
         stride: m.ratio,
         word: m.word,
         affine: m.affine,
@@ -186,7 +186,7 @@ pub fn codes_into(
 pub(super) const POOL: usize = 3;
 
 /// The read-out buffer lent to the deposit workers as it is (drawpipe.rs).
-impl crate::drawpipe::RawBatch for oos_hal::dho::bus::DmaBuf {
+impl crate::board::pipe::RawBatch for oos_hal::dho::bus::DmaBuf {
     fn bytes(&self) -> &[u8] {
         self.data()
     }

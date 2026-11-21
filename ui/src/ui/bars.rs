@@ -329,7 +329,7 @@ impl Ui {
         if self.eye_open() {
             let pane = self.eye_pane_rect();
             if overlaps(pane, r) {
-                let wave = self.grid;
+                let wave = self.plot.grid;
                 let room = pane.x - wave.x - 12;
                 if room >= tw {
                     r.x = wave.x + (room - tw) / 2;
@@ -853,7 +853,7 @@ pub(super) const STATUS_BOXES: [StatusBox; 4] = [
     },
     StatusBox {
         label: "USB",
-        shown: |u| u.usb,
+        shown: |u| u.stick.mounted,
         width: |_| 46,
         chip: true,
         draw: |u, cv, r, label| u.draw_chip(cv, r, label, true),

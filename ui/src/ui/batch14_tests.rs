@@ -287,7 +287,7 @@ fn measurements_show_the_name_people_use_not_the_internal_key() {
     let mut u = studio();
     assert_eq!(super::meascatalog::meas_display_name(Meas::Vamp), "Amplitude");
     u.m.meas.clear();
-    u.meas_src = WaveId::Ch(0);
+    u.sources.a = WaveId::Ch(0);
     u.activate(Item::MeasAdd(Meas::Vamp));
     let t = u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default();
     assert!(t.contains("Amplitude") && !t.contains("Vamp"), "{t}");
@@ -424,9 +424,9 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
     u.set_zoom(false);
     frame(&mut u);
     let (_, zb) = u.zoom_btn();
-    let x1 = u.trigger_tag_x(u.grid.right() - 26, zb.y + 10);
+    let x1 = u.trigger_tag_x(u.plot.grid.right() - 26, zb.y + 10);
     assert!(x1 + 26 <= zb.x, "the tag moved left of the icons: {x1} vs {zb:?}");
-    assert_eq!(u.trigger_tag_x(u.grid.right() - 26, u.grid.bottom() - 40), u.grid.right() - 26, "low levels stay put");
+    assert_eq!(u.trigger_tag_x(u.plot.grid.right() - 26, u.plot.grid.bottom() - 40), u.plot.grid.right() - 26, "low levels stay put");
 }
 
 // labels on trace -------------------------------------------------------------------------------- Studio
@@ -450,13 +450,13 @@ fn labels_on_trace_draw_in_the_waveform_lane_of_their_channel_and_can_be_switche
     assert!(u.m.meas_labels, "Labels on trace is on");
     let mut on = Canvas::new(W, H);
     u.render(&mut on);
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let wave = u.dock_leaf(VKind::Wave).unwrap();
     let mut inside = 0;
     for y in 0..H {
         for x in 0..W {
             if on.px[(y * W + x) as usize] != off.px[(y * W + x) as usize] {
-                if lane.contains(x, y) { inside += 1; } else { assert!(!wave.contains(x, y) || !u.wins[1].contains(x, y), "a label on the other lane at {x},{y}"); }
+                if lane.contains(x, y) { inside += 1; } else { assert!(!wave.contains(x, y) || !u.plot.wins[1].contains(x, y), "a label on the other lane at {x},{y}"); }
             }
         }
     }
@@ -608,7 +608,7 @@ fn the_strip_of_a_view_is_slim_and_its_buttons_are_still_forty_pixels() {
     // the cursor tags and the trigger tag are not under it
     u.m.cursor = CursorMode::Time;
     for _ in 0..3 { frame(&mut u); }
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let strip = Ui::dock_strip(u.dock_rect(VKind::Wave).unwrap());
     assert!(lane.y >= strip.bottom(), "the lane starts under the strip: {lane:?} {strip:?}");
 }
