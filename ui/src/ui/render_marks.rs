@@ -583,23 +583,43 @@ impl Ui {
         }
     }
 
-    /// One line of marks with its top at `top`; from `lines` down a dashed line under each mark that stands alone.
-    fn draw_search_marks(&self, cv: &mut Canvas, events: &[f64], top: i32, mark_col: Rgb, lines: Option<i32>) {
-        let a = self.area;
-        let (scale, delay) = self.view();
+    /// The searches in the overview of a zoomed view: each has a line of ticks at the top, in its colour and in the
+    /// order of the numbers, over the whole of the main view. The zoomed part has the marks themselves; the overview
+    /// says where in the record the events are, which the zoom window is moved to (it had no marks at all).
+    pub(super) fn draw_search_overview(&self, cv: &mut Canvas, o: Rect) {
+        let view = (self.m.time_per_div(), self.m.delay);
+        let mut line = |slot: usize, events: &[f64], col: Rgb| {
+            let top = o.y + 1 + slot as i32 * (SEARCH_STRIP_H + 1);
+            for column in Self::search_columns(events, o.w, view) { cv.vline(o.x + column, top, top + SEARCH_STRIP_H - 1, col); }
+        };
+        if self.studio_search_marks().is_some() {
+            for (slot, _) in self.studio.search_list() { line(slot, &self.studio_search_events_of(slot), super::addrail::SEARCH_COLS[slot]); }
+        } else if self.search_on {
+            line(0, &self.search_events(), AMBER);
+        }
+    }
+
+    /// The columns of a plot `w` wide showing `view` (time per division, delay) that have an event. At most one a
+    /// pixel, without walking the events that are off the screen.
+    fn search_columns(events: &[f64], w: i32, (scale, delay): (f32, f32)) -> Vec<i32> {
         let left = delay as f64 - scale as f64 * HDIV as f64 * 0.5;
-        let per_pixel = scale as f64 * HDIV as f64 / a.w.max(1) as f64;
+        let per_pixel = scale as f64 * HDIV as f64 / w.max(1) as f64;
         let mut first = events.partition_point(|&time| time < left);
-        // At most one marker per occupied pixel, without walking millions of
-        // off-screen events or hiding their actual count in Search results.
         let mut columns = Vec::new();
-        for column in 0..a.w {
+        for column in 0..w {
             let next = events.partition_point(|&time| time < left + (column + 1) as f64 * per_pixel);
             if next > first {
                 columns.push(column);
             }
             first = next;
         }
+        columns
+    }
+
+    /// One line of marks with its top at `top`; from `lines` down a dashed line under each mark that stands alone.
+    fn draw_search_marks(&self, cv: &mut Canvas, events: &[f64], top: i32, mark_col: Rgb, lines: Option<i32>) {
+        let a = self.area;
+        let columns = Self::search_columns(events, a.w, self.view());
         for (i, &column) in columns.iter().enumerate() {
             let x = a.x + column;
             let near = |other: Option<&i32>| other.is_some_and(|&o| (o - column).abs() < SEARCH_MARK_GAP);

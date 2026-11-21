@@ -430,14 +430,14 @@ impl Ui {
             stopped = true;
         }
         if self.m.zoom {
-            if self.m.trig_ref.is_some() {
-                let half_main = self.m.time_per_div() * HDIV * 0.5;
-                let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
-                if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
-                    self.m.delay = t as f32;
-                    if let Some(saved) = self.zoom_saved.as_mut() {
-                        saved.2 = t as f32;
-                    }
+            // an event the zoom window cannot reach in the main view takes the main view along (it did so for a
+            // reference only: the window stopped at the edge of the overview, short of the event)
+            let half_main = self.m.time_per_div() * HDIV * 0.5;
+            let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
+            if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
+                self.m.delay = t as f32;
+                if let Some(saved) = self.zoom_saved.as_mut() {
+                    saved.2 = t as f32;
                 }
             }
             self.m.zdelay = t as f32;

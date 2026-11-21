@@ -41,6 +41,8 @@ mod search_several_tests;
 #[cfg(test)]
 mod search_types_tests;
 #[cfg(test)]
+mod search_zoom_tests;
+#[cfg(test)]
 mod batch9_tests;
 #[cfg(test)]
 mod batch10_tests;

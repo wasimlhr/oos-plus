@@ -787,7 +787,10 @@ there, and the title names the search and its source (`Search 2 · CH1 · 10`). 
 at the top edge, one under the other in the order of their numbers; the selected search also draws a dashed line down
 the plot under each of its marks. Events nearer than a mark is
 wide are drawn as a strip in that line instead, so tens of thousands of events leave the trace readable; zoom in
-and each has its mark again. A view (Display > Views) and a set-up keep every search. The search looks at the samples the scope has read. Running with a record of up to 1 Mpts
+and each has its mark again. With zoom on, the marks are in the zoomed part, and the overview above it has a line
+of ticks for each search at its top edge, in the search's colour, over the whole main view: they show where the
+events are and where the zoom window stands among them. Previous and next move the zoom window to the event; an
+event the window cannot reach in the main view takes the main view along. A view (Display > Views) and a set-up keep every search. The search looks at the samples the scope has read. Running with a record of up to 1 Mpts
 that is the whole record. A stopped record and a deeper one are read in part, the screen with a quarter of a screen
 on each side, and the count then names the part: `24000 in 300 µs` in the top bar, `24000 in 300 µs of 800 µs` in the
 title of the table; move the view to search another part. The search keeps 100000 events and writes `100000+` when
