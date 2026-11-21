@@ -35,7 +35,7 @@ Per decoder:
 | I2C | capture: bytes, errors and 10-bit addresses agree (one address differs, below) | band, bit row, Format | unit |
 | CAN | capture: 97 of 97 frames agree; unit: 93 to 97 frames in 40 ms, every CRC right; error flags host only | band, columns | an error frame on the unit |
 | CAN-FD | capture: frames agree, length in bytes; error flags host only | band, columns | unit |
-| LIN | capture: frames, errors and the rate from the sync agree | band | unit |
+| LIN | capture: frames, errors and the rate from the sync agree; unit: frames with identifier, data and checksum read, the rate taken from the sync; wrong bytes in Peak detect (fixed on the host) | band | the fix for Peak detect and the trigger on the unit |
 | FlexRay | capture: frames agree at 10 Mbit/s; 9 CRC errors that repeat with the cycle, not compared | band, columns | unit |
 | I2S | capture: samples agree with the word length set | band, columns | - |
 | SENT | capture: fast and slow channel and both values agree | band, columns | unit |
