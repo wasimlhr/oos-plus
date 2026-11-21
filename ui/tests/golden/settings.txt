@@ -806,13 +806,13 @@ scpi :DISPlay:RULers "ON" -> query: 1; errors: none
 scpi :DISPlay:RULers "on" -> query: 1; errors: none
 scpi :DISPlay:RULers "x" -> query: 1; errors: -224,"Illegal parameter value" x
 scpi :DISPlay:RULers default -> query: 1; errors: none
-scpi :DISPlay:TYPE "" -> query: VECT; errors: -224,"Illegal parameter value"
-scpi :DISPlay:TYPE "-1" -> query: VECT; errors: -224,"Illegal parameter value" -1
-scpi :DISPlay:TYPE "1e9" -> query: VECT; errors: -224,"Illegal parameter value" 1e9
+scpi :DISPlay:TYPE "" -> query: DOTS; errors: -224,"Illegal parameter value"
+scpi :DISPlay:TYPE "-1" -> query: DOTS; errors: -224,"Illegal parameter value" -1
+scpi :DISPlay:TYPE "1e9" -> query: DOTS; errors: -224,"Illegal parameter value" 1e9
 scpi :DISPlay:TYPE "DOTS" -> query: DOTS; errors: none
 scpi :DISPlay:TYPE "VECTors" -> query: VECT; errors: none
-scpi :DISPlay:TYPE "x" -> query: VECT; errors: -224,"Illegal parameter value" x
-scpi :DISPlay:TYPE default -> query: VECT; errors: none
+scpi :DISPlay:TYPE "x" -> query: DOTS; errors: -224,"Illegal parameter value" x
+scpi :DISPlay:TYPE default -> query: DOTS; errors: none
 scpi :DISPlay:VIEW "" -> query: 1; errors: -224,"Illegal parameter value"
 scpi :DISPlay:VIEW "-1" -> query: 1; errors: -224,"Illegal parameter value" -1
 scpi :DISPlay:VIEW "0" -> query: 1; errors: -224,"Illegal parameter value" 0
@@ -1149,13 +1149,13 @@ scpi :MEASure:EDGes "CLOCk" -> query: CLOC; errors: none
 scpi :MEASure:EDGes "DATA" -> query: DATA; errors: none
 scpi :MEASure:EDGes "x" -> query: CLOC; errors: -224,"Illegal parameter value" x
 scpi :MEASure:EDGes default -> query: CLOC; errors: none
-scpi :MEASure:GATing "" -> query: NONE; errors: -224,"Illegal parameter value"
-scpi :MEASure:GATing "-1" -> query: NONE; errors: -224,"Illegal parameter value" -1
-scpi :MEASure:GATing "1e9" -> query: NONE; errors: -224,"Illegal parameter value" 1e9
+scpi :MEASure:GATing "" -> query: SCREEN; errors: -224,"Illegal parameter value"
+scpi :MEASure:GATing "-1" -> query: SCREEN; errors: -224,"Illegal parameter value" -1
+scpi :MEASure:GATing "1e9" -> query: SCREEN; errors: -224,"Illegal parameter value" 1e9
 scpi :MEASure:GATing "NONE" -> query: NONE; errors: none
 scpi :MEASure:GATing "SCREEN" -> query: SCREEN; errors: none
-scpi :MEASure:GATing "x" -> query: NONE; errors: -224,"Illegal parameter value" x
-scpi :MEASure:GATing default -> query: NONE; errors: none
+scpi :MEASure:GATing "x" -> query: SCREEN; errors: -224,"Illegal parameter value" x
+scpi :MEASure:GATing default -> query: SCREEN; errors: none
 scpi :MEASure:INDicator "" -> query: 0; errors: -224,"Illegal parameter value"
 scpi :MEASure:INDicator "-1" -> query: 0; errors: -224,"Illegal parameter value" -1
 scpi :MEASure:INDicator "0" -> query: 0; errors: none
@@ -1166,24 +1166,24 @@ scpi :MEASure:INDicator "ON" -> query: 1; errors: none
 scpi :MEASure:INDicator "on" -> query: 1; errors: none
 scpi :MEASure:INDicator "x" -> query: 0; errors: -224,"Illegal parameter value" x
 scpi :MEASure:INDicator default -> query: 0; errors: none
-scpi :MEASure:NPERiods "" -> query: 6; errors: -224,"Illegal parameter value"
-scpi :MEASure:NPERiods "-1" -> query: 6; errors: -224,"Illegal parameter value" -1
-scpi :MEASure:NPERiods "0" -> query: 6; errors: -224,"Illegal parameter value" 0
+scpi :MEASure:NPERiods "" -> query: 2; errors: -224,"Illegal parameter value"
+scpi :MEASure:NPERiods "-1" -> query: 2; errors: -224,"Illegal parameter value" -1
+scpi :MEASure:NPERiods "0" -> query: 2; errors: -224,"Illegal parameter value" 0
 scpi :MEASure:NPERiods "1" -> query: 1; errors: none
-scpi :MEASure:NPERiods "1e9" -> query: 6; errors: -224,"Illegal parameter value" 1e9
+scpi :MEASure:NPERiods "1e9" -> query: 2; errors: -224,"Illegal parameter value" 1e9
 scpi :MEASure:NPERiods "32" -> query: 32; errors: none
-scpi :MEASure:NPERiods "33" -> query: 6; errors: -224,"Illegal parameter value" 33
+scpi :MEASure:NPERiods "33" -> query: 2; errors: -224,"Illegal parameter value" 33
 scpi :MEASure:NPERiods "4" -> query: 4; errors: none
-scpi :MEASure:NPERiods "x" -> query: 6; errors: -224,"Illegal parameter value" x
-scpi :MEASure:NPERiods default -> query: 6; errors: none
-scpi :MEASure:OUTSide "" -> query: ABOV; errors: -224,"Illegal parameter value"
-scpi :MEASure:OUTSide "-1" -> query: ABOV; errors: -224,"Illegal parameter value" -1
-scpi :MEASure:OUTSide "1e9" -> query: ABOV; errors: -224,"Illegal parameter value" 1e9
+scpi :MEASure:NPERiods "x" -> query: 2; errors: -224,"Illegal parameter value" x
+scpi :MEASure:NPERiods default -> query: 2; errors: none
+scpi :MEASure:OUTSide "" -> query: BOTH; errors: -224,"Illegal parameter value"
+scpi :MEASure:OUTSide "-1" -> query: BOTH; errors: -224,"Illegal parameter value" -1
+scpi :MEASure:OUTSide "1e9" -> query: BOTH; errors: -224,"Illegal parameter value" 1e9
 scpi :MEASure:OUTSide "ABOVe" -> query: ABOV; errors: none
 scpi :MEASure:OUTSide "BELow" -> query: BEL; errors: none
 scpi :MEASure:OUTSide "BOTH" -> query: BOTH; errors: none
-scpi :MEASure:OUTSide "x" -> query: ABOV; errors: -224,"Illegal parameter value" x
-scpi :MEASure:OUTSide default -> query: ABOV; errors: none
+scpi :MEASure:OUTSide "x" -> query: BOTH; errors: -224,"Illegal parameter value" x
+scpi :MEASure:OUTSide default -> query: BOTH; errors: none
 scpi :MEASure:REFS "" -> query: 10/90; errors: -224,"Illegal parameter value"
 scpi :MEASure:REFS "-1" -> query: 10/90; errors: -224,"Illegal parameter value" -1
 scpi :MEASure:REFS "10/90" -> query: 10/90; errors: none
@@ -3517,19 +3517,19 @@ setup deskew_ref11 "1e-9" -> (absent); error: line 2: deskew_ref11: invalid desk
 setup deskew_ref11 "1e9" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 "x" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 default -> (absent)
-setup dots "" -> false; error: "line 2: dots: not a boolean: "
-setup dots "-1" -> false; error: line 2: dots: not a boolean: -1
+setup dots "" -> true; error: "line 2: dots: not a boolean: "
+setup dots "-1" -> true; error: line 2: dots: not a boolean: -1
 setup dots "0" -> false
 setup dots "1" -> true
-setup dots "1e9" -> false; error: line 2: dots: not a boolean: 1e9
-setup dots "TRUE" -> false; error: line 2: dots: not a boolean: TRUE
+setup dots "1e9" -> true; error: line 2: dots: not a boolean: 1e9
+setup dots "TRUE" -> true; error: line 2: dots: not a boolean: TRUE
 setup dots "false" -> false
 setup dots "off" -> false
 setup dots "on" -> true
 setup dots "true" -> true
-setup dots "x" -> false; error: line 2: dots: not a boolean: x
-setup dots "yes" -> false; error: line 2: dots: not a boolean: yes
-setup dots default -> false
+setup dots "x" -> true; error: line 2: dots: not a boolean: x
+setup dots "yes" -> true; error: line 2: dots: not a boolean: yes
+setup dots default -> true
 setup dpt "" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values
 setup dpt "-1 2 3 Off 4 10 Both" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: not a source: -1
 setup dpt "-1" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values
@@ -4580,41 +4580,41 @@ setup meas2 "17:1:2" -> 17:1:2
 setup meas2 "1e9" -> ""; error: line 2: meas2: not item:a:b: 1e9
 setup meas2 "x" -> ""; error: line 2: meas2: not item:a:b: x
 setup meas2 default -> ""
-setup meas_cfg "" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "-1 Above 6 0 0.1 0.9 0 0" -> -1 Above 6 0 0.1 0.9 0 0
-setup meas_cfg "-1" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "-1 Both 2 0 0.1 0.9 0 0" -> -1 Both 2 0 0.1 0.9 0 0
+setup meas_cfg "-1" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
 setup meas_cfg "0 Below 0 0" -> 0 Below 1 0 0.1 0.9 0 0
-setup meas_cfg "0 Both 2 0 0.1 0.9" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "0 Both 2 0 0.1 0.9" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
 setup meas_cfg "0 Both 33 0 0.2 0.8 1e-9 1e-9" -> 0 Both 32 0 0.2 0.8 0.000000001 0.000000001
-setup meas_cfg "0.00005 -1 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: -1
-setup meas_cfg "0.00005 1e9 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: 1e9
-setup meas_cfg "0.00005 Above -1 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: -1
-setup meas_cfg "0.00005 Above 1e9 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: 1e9
-setup meas_cfg "0.00005 Above 6 -1 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: -1
-setup meas_cfg "0.00005 Above 6 0 -1 0.9 0 0" -> 0.00005 Above 6 0 -1 0.9 0 0
-setup meas_cfg "0.00005 Above 6 0 0.1 -1 0 0" -> 0.00005 Above 6 0 0.1 -1 0 0
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 -1 0" -> 0.00005 Above 6 0 0.1 0.9 -1 0
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 -1" -> 0.00005 Above 6 0 0.1 0.9 0 -1
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 1e9" -> 0.00005 Above 6 0 0.1 0.9 0 1000000000
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0 x" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 1e9 0" -> 0.00005 Above 6 0 0.1 0.9 1000000000 0
-setup meas_cfg "0.00005 Above 6 0 0.1 0.9 x 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0.00005 Above 6 0 0.1 1e9 0 0" -> 0.00005 Above 6 0 0.1 1000000000 0 0
-setup meas_cfg "0.00005 Above 6 0 0.1 x 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0.00005 Above 6 0 1e9 0.9 0 0" -> 0.00005 Above 6 0 1000000000 0.9 0 0
-setup meas_cfg "0.00005 Above 6 0 x 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "0.00005 Above 6 1e9 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: 1e9
-setup meas_cfg "0.00005 Above 6 x 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: x
-setup meas_cfg "0.00005 Above x 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: x
-setup meas_cfg "0.00005 x 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: x
+setup meas_cfg "0.00005 -1 2 0 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: -1
+setup meas_cfg "0.00005 1e9 2 0 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: 1e9
+setup meas_cfg "0.00005 Both -1 0 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: -1
+setup meas_cfg "0.00005 Both 1e9 0 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: 1e9
+setup meas_cfg "0.00005 Both 2 -1 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: -1
+setup meas_cfg "0.00005 Both 2 0 -1 0.9 0 0" -> 0.00005 Both 2 0 -1 0.9 0 0
+setup meas_cfg "0.00005 Both 2 0 0.1 -1 0 0" -> 0.00005 Both 2 0 0.1 -1 0 0
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 -1 0" -> 0.00005 Both 2 0 0.1 0.9 -1 0
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 0 -1" -> 0.00005 Both 2 0 0.1 0.9 0 -1
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 0 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 0 1e9" -> 0.00005 Both 2 0 0.1 0.9 0 1000000000
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 0 x" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 1e9 0" -> 0.00005 Both 2 0 0.1 0.9 1000000000 0
+setup meas_cfg "0.00005 Both 2 0 0.1 0.9 x 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Both 2 0 0.1 1e9 0 0" -> 0.00005 Both 2 0 0.1 1000000000 0 0
+setup meas_cfg "0.00005 Both 2 0 0.1 x 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Both 2 0 1e9 0.9 0 0" -> 0.00005 Both 2 0 1000000000 0.9 0 0
+setup meas_cfg "0.00005 Both 2 0 x 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "0.00005 Both 2 1e9 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: 1e9
+setup meas_cfg "0.00005 Both 2 x 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not a boolean: x
+setup meas_cfg "0.00005 Both x 0 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: not an integer: x
+setup meas_cfg "0.00005 x 2 0 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: unknown value: x
 setup meas_cfg "1e-6 Above 32 1" -> 0.000001 Above 32 1 0.1 0.9 0 0
-setup meas_cfg "1e9 Above 6 0 0.1 0.9 0 0" -> 1000000000 Above 6 0 0.1 0.9 0 0
-setup meas_cfg "1e9" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg "x Above 6 0 0.1 0.9 0 0" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
-setup meas_cfg "x" -> 0.00005 Above 6 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
-setup meas_cfg default -> 0.00005 Above 6 0 0.1 0.9 0 0
+setup meas_cfg "1e9 Both 2 0 0.1 0.9 0 0" -> 1000000000 Both 2 0 0.1 0.9 0 0
+setup meas_cfg "1e9" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg "x Both 2 0 0.1 0.9 0 0" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: invalid float literal
+setup meas_cfg "x" -> 0.00005 Both 2 0 0.1 0.9 0 0; error: line 2: meas_cfg: meas_cfg: idle outside n data [lpct hpct tsetup thold]
+setup meas_cfg default -> 0.00005 Both 2 0 0.1 0.9 0 0
 setup meas_full_record "" -> false; error: "line 2: meas_full_record: not a boolean: "
 setup meas_full_record "-1" -> false; error: line 2: meas_full_record: not a boolean: -1
 setup meas_full_record "0" -> false

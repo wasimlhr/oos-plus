@@ -326,6 +326,7 @@ fn scale_index(t: f32) -> usize { tscales().iter().position(|&s| (s / t - 1.0).a
 /// The owner's two cases on the demo source: main 500 us/div with zoom 2.5x, main 50 ms/div with zoom 250x.
 fn zoomed_demo(main: f32, zoom: f32, zdelay: f32) -> Ui {
     let mut u = studio();
+    u.m.dots = false; // vectors: the zoom joins the samples
     u.m.tscale = scale_index(main);
     u.m.delay = 0.0;
     for _ in 0..8 { u.step(0.05); }

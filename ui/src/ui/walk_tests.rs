@@ -1092,6 +1092,9 @@ fn known_value(def: &'static crate::measures::Def) -> (f64, String) {
     u.m.meas2.clear();
     u.m.cat.clear();
     u.m.meas_full_record = true;
+    // the table is for Time Outside above the upper level and Duration of N = 6 periods
+    u.m.meas_out = oos_dsp::measure::Outside::Above;
+    u.m.meas_n = 6;
     for (r, delay) in [(0, 0.0), (1, 100e-6)] {
         u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0: -5e-3, dt: 1e-6, v: known_pulses(delay).into(), vpd: 0.2, offset: 0.0, on: true });
     }

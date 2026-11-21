@@ -190,6 +190,7 @@ fn scale_index(t: f32) -> usize { tscales().iter().position(|&s| (s / t - 1.0).a
 
 fn sparse_zoom() -> Ui {
     let mut u = studio();
+    u.m.dots = false; // vectors: the zoom joins the samples
     u.m.tscale = scale_index(50e-3);
     u.m.delay = 0.0;
     for _ in 0..8 { u.step(0.05); }
