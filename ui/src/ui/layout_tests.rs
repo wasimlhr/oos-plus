@@ -52,7 +52,7 @@ fn default_layout_cards_open_their_menus() {
 fn layout_is_a_display_setting_kept_in_the_setup() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     assert_eq!(u.m.layout, Layout::Default, "a new setup starts with the stock bars");
-    assert!(!u.m.dots, "samples are joined by default");
+    assert!(u.m.dots, "samples are dots by default, as upstream draws them");
     assert!(u.items(MenuId::Display).contains(&Item::Layout));
     for layout in LAYOUTS {
         u.m.layout = layout;

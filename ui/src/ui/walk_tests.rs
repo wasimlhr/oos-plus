@@ -1083,7 +1083,7 @@ fn known_pulses(delay: f64) -> Vec<f32> {
     }).collect()
 }
 
-/// One catalog measurement on the known pulse train in R1 (and the same train 100 µs later in R2): its value.
+/// One catalog measurement on the known pulse train in R1 (the same 100 µs later in R2) over the record: its value.
 fn known_value(def: &'static crate::measures::Def) -> (f64, String) {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.run = RunState::Stop;
@@ -1091,7 +1091,7 @@ fn known_value(def: &'static crate::measures::Def) -> (f64, String) {
     u.m.meas.clear();
     u.m.meas2.clear();
     u.m.cat.clear();
-    u.m.meas_full_record = true;
+    (u.m.meas_full_record, u.m.meas_out, u.m.meas_n) = (true, oos_dsp::measure::Outside::Above, 6);
     for (r, delay) in [(0, 0.0), (1, 100e-6)] {
         u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0: -5e-3, dt: 1e-6, v: known_pulses(delay).into(), vpd: 0.2, offset: 0.0, on: true });
     }

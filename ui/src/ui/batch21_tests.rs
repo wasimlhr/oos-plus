@@ -349,7 +349,7 @@ fn the_list_has_the_header_with_source_gate_search_count_and_pinned_only() {
     let src = bar.slots.iter().find(|s| s.item == super::measpanel::BarItem::Source).expect("the source control").r;
     assert!(src.h >= 24 && src.bottom() <= g.list.y, "{src:?}");
     assert_eq!(u.panel_source_label(), "All sources");
-    assert_eq!(u.panel_gate_label(), "Full record");
+    assert_eq!(u.panel_gate_label(), "Screen");
     let total = listed(&u);
     assert_eq!(total, 5);
     shot(&mut u, "meas-list");

@@ -155,8 +155,8 @@ impl Default for Model {
             zscale: 0,
             zdelay: 0.0,
             color_grade: false,
-            // samples joined as lines by default
-            dots: false,
+            // samples as dots by default, as upstream OOS
+            dots: true,
             layout: Layout::Default,
             studio_view: "waveform".into(),
             studio_dock: String::new(),
@@ -224,18 +224,18 @@ impl Default for Model {
             auto_fast: false,
             bode_addr: "192.168.1.100:5555".into(),
             bode_mode: oos_dsp::bode::Mode::Loop,
-            // the reference scope's defaults: 50 us burst idle, time outside above the upper level, N = 6 periods,
-            // measured on the whole record
+            // upstream OOS: time outside on both sides, N = 2 periods, measured on the screen. The burst idle stays
+            // 50 us: oos-dsp reads an idle of 0 as 50 us, where upstream reads it as one period
             meas_idle: oos_dsp::measure::BURST_IDLE,
             meas_lv: MeasLevels::default(),
             meas_pop_current: false,
             meas_show: [true; 3],
-            meas_out: oos_dsp::measure::Outside::Above,
-            meas_n: 6,
+            meas_out: oos_dsp::measure::Outside::Both,
+            meas_n: 2,
             meas_data: false,
             meas_lpct: 0.1,
             meas_hpct: 0.9,
-            meas_full_record: true,
+            meas_full_record: false,
             meas_tsetup: 0.0,
             meas_thold: 0.0,
             spec_acpr_w: 1e6,
