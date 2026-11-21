@@ -41,12 +41,19 @@ impl Ui {
         Rect::new(self.area.x + self.area.w - 48, self.area.y + 6, 42, 36)
     }
 
-    pub(super) fn draw_view_btn(&self, cv: &mut Canvas) {
+    /// What is drawn of the overflow button: a chip of 30 x 26 px in the middle of its touch area (`view_btn`, 42 x 36).
+    /// Drawn at the size of the touch area it was the largest thing of an analyser's view (the owner, from the unit).
+    pub(super) fn view_btn_chip(&self) -> Rect {
         let r = self.view_btn();
+        Rect::new(r.x + (r.w - 30) / 2, r.y + (r.h - 26) / 2, 30, 26)
+    }
+
+    pub(super) fn draw_view_btn(&self, cv: &mut Canvas) {
+        let r = self.view_btn_chip();
         cv.round(r, 6, PANEL_BG, 235);
         cv.round_outline(r, 6, BTN_BORDER);
         for k in -1..=1 {
-            cv.circle(r.x + r.w / 2, r.y + r.h / 2 + 8 * k, 2, TEXT);
+            cv.fill(Rect::new(r.x + r.w / 2 - 1, r.y + r.h / 2 + 6 * k - 1, 2, 2), TEXT);
         }
         self.draw_view_fix(cv);
     }
