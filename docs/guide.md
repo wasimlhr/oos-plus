@@ -882,7 +882,9 @@ it; a running one is left running. A tap on a box of the band marks its row from
 the time and the text. Decode > Threshold to middle
 puts a decoder's threshold half way between the levels of its signal, for each of its lines by itself: a line can
 have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels; in Studio
-the thresholds are on the Levels page of the Decode sheet. An SPI decoder reads a second data line when MISO has a
+the thresholds are on the first page of the Decode sheet where they fit it (a decoder of one line with few settings
+is one page, without tabs), else on its Levels page. The sheet holds the decoder alone: the I2C lane of the plot
+(Menu > Bus) has a sheet of its own. An SPI decoder reads a second data line when MISO has a
 source, and each chip-select frame is one message. Where most frames end before a word is whole, its band says
 "Frames shorter than a word" and lists nothing: the record has too few samples for the clock (a slow time base
 with a short memory; more Memory or a faster time base helps), or Data bits is more than a frame has.
