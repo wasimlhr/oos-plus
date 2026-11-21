@@ -86,15 +86,15 @@ fn the_range_table_covers_the_steppers_and_every_entry_is_well_formed() {
 #[test]
 fn n_presses_up_then_n_down_return_to_the_start_for_every_stepper_of_the_table() {
     let n = 3;
-    let count = fresh(Layout::Default).range_items().len();
+    let count = fresh(Layout::Minimal).range_items().len();
     let mut bad = Vec::new();
     for k in 0..count {
-        let it = fresh(Layout::Default).range_items()[k];
+        let it = fresh(Layout::Minimal).range_items()[k];
         let mut done = false;
         // from where it starts; a short range (a count of seven) from one of its ends
         for (pre, dir) in [(0, 1), (0, -1), (-1, 1), (1, -1)] {
             // a fresh scope for each try: a press that ends at a limit leaves nothing behind
-            let mut u = fresh(Layout::Default);
+            let mut u = fresh(Layout::Minimal);
             for _ in 0..if pre == 0 { 0 } else { 600 } { u.adjust(it, pre); }
             let tol = tol_of(&range_of(&u, it));
             // onto the grid or the ladder of the item first
@@ -123,10 +123,10 @@ fn n_presses_up_then_n_down_return_to_the_start_for_every_stepper_of_the_table()
 
 #[test]
 fn two_hundred_presses_either_way_stay_inside_the_range() {
-    let count = fresh(Layout::Default).range_items().len();
+    let count = fresh(Layout::Minimal).range_items().len();
     let mut bad = Vec::new();
     for k in 0..count {
-        let mut u = fresh(Layout::Default);
+        let mut u = fresh(Layout::Minimal);
         let it = u.range_items()[k];
         let r = range_of(&u, it);
         let exact = u.range_get(it).is_some();
@@ -154,7 +154,7 @@ fn two_hundred_presses_either_way_stay_inside_the_range() {
 
 #[test]
 fn the_trigger_level_stops_at_the_screen_and_does_not_wrap() {
-    for layout in [Layout::Minimal, Layout::Default, Layout::Studio] {
+    for layout in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(layout);
         let vpd = u.trigger_vpd(false) as f64;
         for _ in 0..200 { u.adjust(Item::TrigLevel, 1); }
@@ -203,7 +203,7 @@ fn the_picoseconds_of_the_simulator_ladders_step_one_rung_at_a_time() {
 #[test]
 fn the_horizontal_delay_steps_on_a_grid_and_comes_back_exactly_at_every_time_base() {
     for ts in 0..tscales().len() {
-        let mut u = fresh(Layout::Default);
+        let mut u = fresh(Layout::Minimal);
         u.m.tscale = ts;
         u.m.tfine = 1.0;
         u.m.delay = 0.0;
@@ -234,8 +234,8 @@ fn the_horizontal_delay_steps_on_a_grid_and_comes_back_exactly_at_every_time_bas
 }
 
 #[test]
-fn the_delay_stays_within_fifty_screens_in_every_layout() {
-    for layout in [Layout::Minimal, Layout::Default, Layout::Studio] {
+fn the_delay_stays_within_fifty_screens_in_minimal_and_studio() {
+    for layout in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(layout);
         let hi = range_of(&u, Item::HDelay).hi;
         for _ in 0..40_000 { u.adjust(Item::HDelay, 1); }
@@ -370,32 +370,56 @@ fn the_value_of_a_text_row_does_not_open_the_pad() {
 // ------------------------------------------------------------------------------------------------ SCPI and the pad
 
 #[test]
-fn scpi_limits_a_trigger_level_like_the_stepper_and_the_pad() {
-    let mut u = fresh(Layout::Default);
+fn scpi_takes_a_trigger_level_as_it_is_and_the_steppers_of_minimal_stop_at_the_screen() {
+    let mut u = fresh(Layout::Minimal);
     let hi = range_of(&u, Item::TrigLevel).hi;
     let mut scpi = crate::scpi::Scpi::open(0);
     let cv = Canvas::new(W, H);
     let mut line = |u: &mut Ui, c: &str| String::from_utf8(scpi.exec_line(u, &cv, c)).unwrap();
+    // upstream's setters take the number they are sent, in every layout
     for header in [":TRIGger:EDGE:LEVel", ":TRIGger:LEVel"] {
         line(&mut u, &format!("{header} 99"));
-        assert!((u.m.trig_level as f64 - hi).abs() < 1e-5, "{header}: {}", u.m.trig_level);
+        assert!((u.m.trig_level - 99.0).abs() < 1e-5, "{header}: {}", u.m.trig_level);
         line(&mut u, &format!("{header} -99"));
-        assert!((u.m.trig_level as f64 + hi).abs() < 1e-5, "{header}: {}", u.m.trig_level);
+        assert!((u.m.trig_level + 99.0).abs() < 1e-5, "{header}: {}", u.m.trig_level);
         line(&mut u, &format!("{header} 0.25"));
         assert!((u.m.trig_level - 0.25).abs() < 1e-6, "{header}");
     }
     let q = line(&mut u, ":TRIGger:EDGE:LEVel?");
     assert!(q.trim().parse::<f64>().is_ok_and(|v| (v - 0.25).abs() < 1e-6), "{q}");
-    // the stepper and the pad end at the same place
+    // the stepper and the pad of Minimal stop at the screen
     for _ in 0..300 { u.adjust(Item::TrigLevel, 1); }
-    let stepped = u.m.trig_level;
-    line(&mut u, ":TRIGger:EDGE:LEVel 1e6");
-    assert_eq!(u.m.trig_level, stepped);
-    assert_eq!(u.numpad_apply(Item::TrigLevel, 1e6), stepped as f64);
+    assert!((u.m.trig_level as f64 - hi).abs() < 1e-5, "{}", u.m.trig_level);
+    assert_eq!(u.numpad_apply(Item::TrigLevel, 1e6), hi as f32 as f64);
     // the lower level of a runt trigger
     u.set_trig_type(TrigType::Runt);
     line(&mut u, ":TRIGger:RUNT:LOWer -50");
-    assert!((u.m.trig_level2 as f64 + hi).abs() < 1e-5, "{}", u.m.trig_level2);
+    assert!((u.m.trig_level2 + 50.0).abs() < 1e-5, "{}", u.m.trig_level2);
+}
+
+// Break it catches: the Default layout stopped the levels, offsets and the delay at five divisions, which upstream's
+// steppers do not, and SCPI answered 5 for `:TRIGger:EDGE:LEVel 100`.
+#[test]
+fn the_steppers_of_default_add_their_step_without_a_limit_as_upstreams() {
+    let mut u = fresh(Layout::Default);
+    let (vpd, l0) = (u.trigger_vpd(false), u.m.trig_level);
+    for _ in 0..200 { u.adjust(Item::TrigLevel, 1); }
+    assert!((u.m.trig_level - l0 - 200.0 * vpd / 25.0).abs() < 1e-3, "{} at {vpd} V/div", u.m.trig_level);
+    let ovpd = u.m.ch[0].volts_per_div();
+    let o0 = u.m.ch[0].offset;
+    for _ in 0..10 { u.adjust(Item::ChOffset(0), 1); }
+    assert!((u.m.ch[0].offset - o0 - 10.0 * ovpd / 25.0).abs() < 1e-4, "{}", u.m.ch[0].offset);
+    let tdiv = u.m.time_per_div();
+    let (d0, m0) = (u.m.delay, u.m.math_offset);
+    for _ in 0..30 { u.adjust(Item::HDelay, 1); }
+    assert!((u.m.delay - d0 - 30.0 * tdiv / 25.0).abs() < 1e-3 * tdiv, "{}", u.m.delay);
+    for _ in 0..200 { u.adjust(Item::MathOffset, 1); }
+    assert!((u.m.math_offset - m0 - 20.0).abs() < 1e-3, "{}", u.m.math_offset);
+    // upstream's own limits stay: the deskew and the bus thresholds
+    u.adjust(Item::ChSkew(0), 100_000);
+    assert_eq!(u.m.ch[0].skew, SKEW_MAX);
+    for _ in 0..100_000 { u.adjust(Item::BusClkThr, 1); }
+    assert!((u.m.bus.clk_thr - 40.0).abs() < 1e-3, "{}", u.m.bus.clk_thr);
 }
 
 // ------------------------------------------------------------------------------------------------ pictures
