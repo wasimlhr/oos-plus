@@ -192,7 +192,6 @@ fn acquire_window_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     kv("seg_interval", m.seg_ivl.to_string());
     kv("mdepth", m.mdepth.to_string());
     crate::settings::write(&crate::settings::display::VIEW, m, 0, kv);
-    kv("skin", name(m.skin));
     kv("windows", name(m.win_layout));
     kv("density", name(m.density));
     kv("split_pane", m.split_pane.to_string());

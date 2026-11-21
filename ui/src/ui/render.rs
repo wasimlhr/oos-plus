@@ -180,8 +180,6 @@ impl Ui {
         self.draw_studio_view_menu(cv);
         self.draw_studio_add_menu(cv);
         self.draw_studio_ctx(cv);
-        // the skin recolours the finished frame (ui/skin.rs); the OOS skin leaves it as drawn
-        self.skin_pass(cv);
         self.draw_pointer(cv);
         self.frames += 1;
     }

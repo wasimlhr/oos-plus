@@ -1927,16 +1927,16 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
 }
 
 /// Display > Screen in Minimal and Studio has no row that does nothing there: Bottom bar chooses between the bars of
-/// the Default layout, and Skin is offered with it. Both stay in the menu of the Default layout.
+/// the Default layout and stays in the menu of the Default layout.
 #[test]
-fn the_display_sheet_has_no_skin_and_no_bottom_bar() {
+fn the_display_sheet_has_no_bottom_bar() {
     for layout in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(layout);
         u.open_menu(MenuId::Display);
         u.step(0.04);
         let spec = u.sheet_spec(MenuId::Display).expect("a sheet");
         let rows: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().chain(&t.foot).copied()).collect();
-        assert!(!rows.contains(&Item::Skin) && !rows.contains(&Item::BottomBar), "{layout:?}: {rows:?}");
+        assert!(!rows.contains(&Item::BottomBar), "{layout:?}: {rows:?}");
         let screen = spec.tabs.iter().find(|t| t.name == "Screen").expect("the Screen tab");
         assert_eq!(screen.rows, [Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize], "{layout:?}");
         // what Bottom bar chooses is the same either way: the bars are the compact ones, and nothing moves
@@ -1950,7 +1950,7 @@ fn the_display_sheet_has_no_skin_and_no_bottom_bar() {
     }
     let u = fresh(Layout::Default);
     let items = u.items(MenuId::Display);
-    assert!(items.contains(&Item::Skin) && items.contains(&Item::BottomBar), "the Default layout keeps both");
+    assert!(items.contains(&Item::BottomBar), "the Default layout keeps it");
 }
 
 /// A channel pill of Studio's bottom bar is as wide as its badge, the widest scale and its chevron need: with one or

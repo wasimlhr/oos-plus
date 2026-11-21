@@ -231,7 +231,6 @@ fn set_time_trigger(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
         "segments" => m.segments = (p_u32(v)? as usize).min(crate::model::SEG_HW_MAX),
         "seg_interval" => m.seg_ivl = p_f32(v)?.clamp(0.0, crate::model::SEG_IVL_MAX),
         "mdepth" => m.mdepth = p_idx(v, mdepths().len())?,
-        "skin" => m.skin = p_enum(v, &crate::ui::skin::SKINS)?,
         "windows" => m.win_layout = p_enum(v, &WinLayout::ALL)?,
         "density" => m.density = p_enum(v, &Density::ALL)?,
         "split_pane" => m.split_pane = p_idx(v, crate::model::PANES_N)?,

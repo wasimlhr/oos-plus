@@ -195,8 +195,6 @@ mod windows;
 mod wlan;
 mod worker;
 mod measrow;
-/// Skins: another look for the same screen (Display > Skin)
-pub mod skin;
 mod workflow;
 mod workspace;
 pub(crate) use scpi_operations::{OperationState, OperationToken, Operations};

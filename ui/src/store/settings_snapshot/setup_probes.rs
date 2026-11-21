@@ -407,7 +407,6 @@ const KEYS: &[(&str, P)] = &[
     ("ev_view", Is(&["messages", "fields", "lines", "Lines", "rows"])),
     ("ev_errors", Bool),
     ("layout", Is(&["default", "minimal", "studio", "Studio", "classic"])),
-    ("skin", Is(&["Oos", "Plus", "oos", "OOS Plus"])),
     ("strip", Is(&["Below", "Left", "Right", "Above", "Hidden", "below", "Under"])),
     ("meas_levels", Fields(&[])),
     ("meas_stat", Is(&["true 1 true true", "false 0 false false", "true 1 true"])),
