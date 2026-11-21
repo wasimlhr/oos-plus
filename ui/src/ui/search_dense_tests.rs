@@ -6,12 +6,12 @@ use super::*;
 use std::sync::Arc;
 
 /// Studio, stopped, CH2 alone: 1 Mpts at 1.25 GSa/s of a 40 MHz square between 0.56 V and 2.52 V, 20 us/div.
-fn dense() -> Ui {
+pub(super) fn dense() -> Ui {
     dense_of(1_000_000, (0.0, 0))
 }
 
 /// The same with `points` in the frame, of an acquisition `acq` (sample rate, points of the record).
-fn dense_of(points: usize, acq: (f64, usize)) -> Ui {
+pub(super) fn dense_of(points: usize, acq: (f64, usize)) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.m.studio_detail = false;
@@ -66,9 +66,9 @@ fn dense_of(points: usize, acq: (f64, usize)) -> Ui {
     u
 }
 
-fn px(cv: &Canvas, x: i32, y: i32) -> u32 { cv.px[(y * W + x) as usize] }
+pub(super) fn px(cv: &Canvas, x: i32, y: i32) -> u32 { cv.px[(y * W + x) as usize] }
 
-fn shot(cv: &Canvas, name: &str) {
+pub(super) fn shot(cv: &Canvas, name: &str) {
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
         std::fs::write(std::path::Path::new(&dir).join(format!("{name}.png")), crate::store::png_of(cv)).unwrap();
@@ -93,7 +93,8 @@ fn events_too_close_to_tell_apart_are_a_strip_at_the_top_and_leave_the_plot_alon
     assert_eq!(u.studio_search_events().len(), 64_000, "every edge of the record");
     shot(&cv, "dense-search");
     let a = u.area;
-    let col = u.wave_color(WaveId::Ch(1));
+    // (in the colour of Search 1, which is no channel's: two searches of one channel are told apart)
+    let col = super::addrail::SEARCH_COLS[0];
     // the strip: every column of the plot holds events
     let strip = (a.x..a.right()).filter(|&x| px(&cv, x, a.y + 2) == col).count();
     // (but the ones under the buttons at the top right)
@@ -138,7 +139,7 @@ fn the_search_sheet_opens_the_list_of_events_and_the_list_names_the_search() {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     shot(&cv, "dense-search-list");
-    assert_eq!(u.table_title(), "Search CH2 \u{b7} 64000");
+    assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 64000");
     // edges 12.5 ns apart, 400 us before the trigger: the times of two rows differ
     let (_, rows) = u.table_shown().unwrap();
     let digits = tables::table_time_digits(&rows);
@@ -149,7 +150,7 @@ fn the_search_sheet_opens_the_list_of_events_and_the_list_names_the_search() {
     assert_eq!(bar.total, 64_000);
     // the trigger is on another channel: the list still names the search's source
     u.m.trig_src = 0;
-    assert_eq!(u.table_title(), "Search CH2 \u{b7} 64000");
+    assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 64000");
     // the last rows are reached
     u.table_top = 63_990;
     u.render(&mut cv);
@@ -170,12 +171,12 @@ fn the_count_says_when_the_search_is_of_a_part_of_the_record_or_ended_at_its_lim
     u.studio_search_add(Some(WaveId::Ch(1)));
     assert!(text(&u).ends_with("24000 in 300 \u{b5}s"), "{}", text(&u));
     u.table = Some(tables::TableKind::Search);
-    assert_eq!(u.table_title(), "Search CH2 \u{b7} 24000 in 300 \u{b5}s of 800 \u{b5}s");
+    assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 24000 in 300 \u{b5}s of 800 \u{b5}s");
     // more events than the search keeps
     let mut u = dense_of(2_000_000, (0.0, 0));
     u.studio_search_add(Some(WaveId::Ch(1)));
     assert_eq!(u.studio_search_events().len(), super::addrail::SEARCH_MAX);
     assert!(text(&u).ends_with("100000+ events"), "{}", text(&u));
     u.table = Some(tables::TableKind::Search);
-    assert_eq!(u.table_title(), "Search CH2 \u{b7} 100000+");
+    assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 100000+");
 }

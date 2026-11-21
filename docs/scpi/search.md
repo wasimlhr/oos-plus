@@ -1,6 +1,6 @@
 # Search (mark events)
 
-Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Only an edge search exists. The events of the decoders have their own commands in [decode](decode.md).
+Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. Only an edge search exists. The events of the decoders have their own commands in [decode](decode.md).
 
 Menu location: Decode and bus > Mark events, Search (source, slope, level, 50 %, from / to trigger, event, event list, save events, remove).
 
@@ -22,7 +22,7 @@ Part of the [SCPI reference](README.md).
 | `:SEARch:EVENt` | Set / Query | Go to event `1`..count (the view moves there); the query answers the current one | `1` | Decode and bus > Event | name not verified against the DHO guide |
 | `:SEARch:DATA` | Query | Rows `time,source #n,type,ok`, one per line, like `:DECode:EVENts?` | - | Decode and bus > Event list | name not verified against the DHO guide |
 | `:SEARch:SAVE` | Action | Save the events as CSV (`events-*.csv` in the save folder) | - | Decode and bus > Save events | name not verified against the DHO guide |
-| `:SEARch:REMove` | Action | Remove Search 1 | - | Decode and bus > Remove | name not verified against the DHO guide |
+| `:SEARch:REMove` | Action | Remove the search (Search 1 without a number) | - | Decode and bus > Remove | name not verified against the DHO guide |
 | `:SEARch:VALue` | Query | Time of event `n` in seconds (`n` empty: the event last gone to) | - | - | fork command; name not verified against the DHO guide |
 
 ## Examples
@@ -47,5 +47,15 @@ Copy the trigger condition into the search and back.
 :SEARch:EDGE:SOURce?                   -> CHAN1
 :SEARch:COPY:TO TRIGger
 :SEARch:REMove
+```
+
+A second search on the same channel, for the falling edges only.
+
+```text
+:SEARch2:EDGE:SOURce CHAN1
+:SEARch2:EDGE:SLOPe NEGative
+:SEARch2:COUNt?                        -> 1
+:SEARch2:EVENt 1
+:SEARch2:REMove
 ```
 

@@ -280,7 +280,7 @@ fn three_views(l: Layout) -> Ui {
     u.m.cat.clear();
     u.m.pane = 1;
     u.studio_set_view(StudioView::Waveform);
-    u.studio.search = Some(super::addrail::SearchSpec { src: WaveId::Ch(1), level: 0.5, slope: 1 });
+    u.studio.search_put(super::addrail::SearchSpec { src: WaveId::Ch(1), level: 0.5, slope: 1 });
     u
 }
 
@@ -295,7 +295,7 @@ fn a_setup_with_three_views_round_trips_through_save_recall_and_the_scpi_block()
         v.apply_setup_text(&text).unwrap();
         assert_eq!((v.m.views, v.m.view_cur), (3, 2), "{l:?}");
         assert!(v.m.meas.is_empty() && v.m.pane == 1 && v.studio.view == StudioView::Waveform, "{l:?}");
-        assert_eq!(v.studio.search.map(|s| (s.src, s.slope)), Some((WaveId::Ch(1), 1)), "{l:?}");
+        assert_eq!(v.studio.search().map(|s| (s.src, s.slope)), Some((WaveId::Ch(1), 1)), "{l:?}");
         v.view_go(0);
         assert_eq!(v.m.meas, vec![one(Meas::Freq, 0)], "{l:?}");
         assert_eq!(v.studio.view, StudioView::Docked, "{l:?}");
@@ -306,7 +306,7 @@ fn a_setup_with_three_views_round_trips_through_save_recall_and_the_scpi_block()
         assert_eq!(v.m.cat, vec![a_cat()], "{l:?}");
         assert!(v.m.cursor == CursorMode::Time && v.m.zoom && v.studio.view == StudioView::Floating && v.studio.panel.stats_mode == 1, "{l:?}");
         assert_eq!(v.studio.pinned, Some(vec![MeasKey::One(Meas::Vrms, WaveId::Ch(1))]), "{l:?}");
-        assert!(v.studio.search.is_none(), "{l:?}");
+        assert!(v.studio.search().is_none(), "{l:?}");
         // the text written again is the one read
         v.view_go(2);
         let again = v.setup_text_full();

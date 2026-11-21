@@ -137,7 +137,12 @@ impl Ui {
         if pa.first != 0 || pa.sub != 0 { p.push(format!("scroll={}/{}", pa.first, pa.sub)); }
         if !pa.query.is_empty() { p.push(format!("query={}", pa.query.replace(' ', "_"))); }
         if let Some(f) = s.filter { p.push(format!("filter={}", f.token())); }
-        if let Some(q) = &s.search { p.push(format!("search={}/{}/{}", q.src.token(), q.level, q.slope)); }
+        // Search 1 keeps the key it had while it was the only one; the others have their number
+        for (i, q) in s.searches.iter().enumerate().filter_map(|(i, q)| Some((i, q.as_ref()?))) {
+            let n = if i == 0 { String::new() } else { (i + 1).to_string() };
+            p.push(format!("search{n}={}/{}/{}", q.src.token(), q.level, q.slope));
+        }
+        if s.search_sel != 0 { p.push(format!("searchsel={}", s.search_sel + 1)); }
         if let Some(t) = s.sz.lane { p.push(format!("zlane={}", super::sharedzoom::trace_name(t))); }
         if !s.sz.ref_h.is_empty() {
             p.push(format!("refh={}", s.sz.ref_h.iter().map(|(i, (t, d))| format!("{}/{}/{}", i, t, d)).collect::<Vec<_>>().join(",")));
@@ -171,8 +176,9 @@ impl Ui {
         self.studio.add_menu = false;
         self.studio.ctx = None;
         self.studio.filter = None;
-        self.studio.search = None;
-        self.studio.search_at = 0;
+        self.studio.searches = Default::default();
+        self.studio.search_at = Default::default();
+        self.studio.search_sel = 0;
         self.studio.popup = None;
         self.studio.sz = Default::default();
         self.studio.badge_first = 0;
@@ -209,11 +215,13 @@ impl Ui {
                 "zoomtab" => {}
                 "query" => { self.studio.panel.query = v.replace('_', " "); self.studio.panel.searching = !self.studio.panel.query.is_empty(); }
                 "filter" => self.studio.filter = WaveId::parse(v).ok(),
-                "search" => {
+                "searchsel" => self.studio.search_sel = v.parse::<usize>().map_or(0, |n| n.clamp(1, super::addrail::SEARCH_SLOTS) - 1),
+                "search" | "search2" | "search3" => {
+                    let slot = k[6..].parse::<usize>().map_or(0, |n| n - 1);
                     let f: Vec<&str> = v.split('/').collect();
                     if let [src, level, slope] = f[..] {
                         if let (Ok(src), Ok(level), Ok(slope)) = (WaveId::parse(src), level.parse::<f32>(), slope.parse::<u8>()) {
-                            if level.is_finite() { self.studio.search = Some(super::addrail::SearchSpec { src, level, slope: slope.min(2) }); }
+                            if level.is_finite() { self.studio.searches[slot] = Some(super::addrail::SearchSpec { src, level, slope: slope.min(2) }); }
                         }
                     }
                 }
@@ -246,6 +254,7 @@ impl Ui {
                 _ => {}
             }
         }
+        self.studio.search_select(self.studio.search_sel);
     }
 
     /// The references and the bus shown, for a view's slot: `R1 R3 B`. None while a record session owns the refs.

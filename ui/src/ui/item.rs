@@ -239,6 +239,7 @@ pub(super) enum Item {
     CurLink,
     CurRemove,
     /// Studio Edge search settings (ui/addrail.rs)
+    SrchWhich,
     SrchSrc,
     SrchSlope,
     SrchLevel,

@@ -217,15 +217,15 @@ fn history_search(t: &mut T) {
     t.go(":TRIG:EDGE:SOUR CHAN1;:TRIG:EDGE:SLOP POS;:TRIG:EDGE:LEV 0");
     assert_eq!(t.go(":SEAR:EDGE:SOUR?"), "CHAN1", "without a search of its own: the trigger's");
     t.rt(":SEAR:EDGE:SOUR CHAN2", ":SEAR:EDGE:SOUR?", "CHAN2");
-    assert!(t.ui.studio.search.is_some_and(|s| s.src == WaveId::Ch(1)));
+    assert!(t.ui.studio.search().is_some_and(|s| s.src == WaveId::Ch(1)));
     t.rt(":SEAR:EDGE:SLOP NEG", ":SEAR:EDGE:SLOP?", "NEG");
     t.shows(Item::SrchSlope, "Falling");
     t.rn(":SEAR:EDGE:LEV 0.25", ":SEAR:EDGE:LEV?", 0.25);
     t.go(":SEAR:EDGE:LEV:AUTO");
-    let mid = t.ui.studio.search.unwrap().level;
+    let mid = t.ui.studio.search().unwrap().level;
     assert!(mid.is_finite());
     t.go(":SEAR:COPY:FROM TRIG");
-    assert_eq!(t.ui.studio.search.unwrap().src, WaveId::Ch(0));
+    assert_eq!(t.ui.studio.search().unwrap().src, WaveId::Ch(0));
     t.go(":TRIG:EDGE:SOUR CHAN1;:SEAR:EDGE:SOUR CHAN2;:SEAR:EDGE:LEV 0.125;:SEAR:EDGE:SLOP NEG;:SEAR:COPY:TO TRIG");
     assert_eq!((t.ui.m.trig_src, t.ui.m.trig_level, t.ui.m.slope), (1, 0.125, Slope::Fall), "Srch to trigger");
     t.no(":SEAR:COPY:TO SOMEWHERE", "-224");
@@ -240,8 +240,27 @@ fn history_search(t: &mut T) {
     }
     let _ = t.go(":SEAR:DATA?");
     t.go(":SEAR:SAVE");
+    // a number names the search; without one it is Search 1
+    t.rt(":SEAR2:EDGE:SOUR CHAN1", ":SEAR2:EDGE:SOUR?", "CHAN1");
+    t.rt(":SEAR2:EDGE:SLOP POS", ":SEAR2:EDGE:SLOP?", "POS");
+    assert_eq!(t.go(":SEAR:EDGE:SLOP?"), "NEG", "Search 1 is as it was");
+    assert_eq!(t.go(":SEAR1:EDGE:SLOP?"), "NEG");
+    assert_eq!(t.ui.studio.search_list().map(|(i, s)| (i, s.slope)).collect::<Vec<_>>(), vec![(0, 1), (1, 0)]);
+    assert_eq!(t.ui.studio.search_sel, 0, "a command for Search 2 leaves the screen on Search 1");
+    // (the count is of the search itself in Studio; elsewhere of the marked trigger events)
+    let layout = std::mem::replace(&mut t.ui.m.layout, Layout::Studio);
+    let n2: usize = t.go(":SEAR2:COUN?").parse().unwrap();
+    assert_eq!(n2, t.ui.studio_search_events_of(1).len());
+    if n2 > 0 {
+        t.rt(":SEAR2:EVEN 1", ":SEAR2:EVEN?", "1");
+        assert_eq!(t.ui.studio.search_sel, 1, "going to an event of Search 2 selects it");
+    }
+    t.no(":SEAR4:COUN?", "-224");
+    t.ui.m.layout = layout;
+    t.go(":SEAR2:REM");
+    assert_eq!(t.ui.studio.search_list().map(|(i, _)| i).collect::<Vec<_>>(), vec![0]);
     t.go(":SEAR:REM");
-    assert!(t.ui.studio.search.is_none());
+    assert!(t.ui.studio.search().is_none());
 }
 
 fn measure_channel_math(t: &mut T) {

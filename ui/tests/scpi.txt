@@ -162,6 +162,7 @@ scpi $S/scpi-answers.txt :CHANnel2:DISPlay ON;:CHANnel2:DISPlay?;:CHANnel2:COUPl
 scpi $S/scpi-answers.txt :TIMebase:SCALe 1E-3;:TIMebase:SCALe?;:TIMebase:OFFSet 2E-3;:TIMebase:OFFSet?
 scpi $S/scpi-answers.txt :TRIGger:EDGE:SLOPe NEGative;:TRIGger:EDGE:SLOPe?;:TRIGger:EDGE:LEVel 0.25;:TRIGger:EDGE:LEVel?
 scpi $S/scpi-answers.txt :ACQuire:TYPE AVERages;:ACQuire:TYPE?;:ACQuire:AVERages 16;:ACQuire:AVERages?
+scpi $S/scpi-answers.txt :SEARch:EDGE:SOURce CHANnel1;:SEARch2:EDGE:SOURce CHANnel1;:SEARch2:EDGE:SLOPe NEGative;:SEARch:EDGE:SLOPe?;:SEARch2:EDGE:SLOPe?;:SEARch2:EDGE:SOURce?;:SEARch2:REMove;:SEARch:REMove
 scpi $S/scpi-answers.txt :ACQuire:TYPE NORMal;:ACQuire:SRATe?;:ACQuire:MDEPth?
 frames 10
 # measurements on the demo signal

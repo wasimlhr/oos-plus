@@ -154,6 +154,15 @@ impl Ui {
     pub(crate) fn scpi_ext_command(&mut self, nodes: &[&str], query: bool, arg: &str) -> Option<Reply> {
         // the layout of the screen and its controls (scpi_layout.rs)
         if let Some(r) = self.scpi_layout(nodes, query, arg) { return Some(r); }
+        // :SEARch<n>: is Search n of Studio; without a number it is Search 1, as while there was one
+        if let (k, Some(n)) = suffix(nodes[0]) {
+            if kw(k, "SEARch") {
+                let rest: Vec<&str> = std::iter::once(k).chain(nodes[1..].iter().copied()).collect();
+                let (key, _) = resolve(&rest)?;
+                if !(1..=super::addrail::SEARCH_SLOTS).contains(&n) { return Some(Err(bad(nodes[0]))); }
+                return Some(self.search_cmd_of(n - 1, key, query, arg));
+            }
+        }
         let (key, idx) = resolve(nodes)?;
         let r = self.ext_trigger(key, query, arg)
             .or_else(|| self.ext_history_search(key, query, arg))
@@ -310,9 +319,21 @@ impl Ui {
                 self.key(if key.ends_with("NEXT") { 0x06 } else { 0x08 });
                 DONE
             }
-            _ if key.starts_with("SEARch:") => return Some(self.search_cmd(key, q, arg)),
+            _ if key.starts_with("SEARch:") => return Some(self.search_cmd_of(0, key, q, arg)),
             _ => return None,
         })
+    }
+
+    /// A search command for the search at `slot`: it is the selected one while the command runs. Going to an event
+    /// and adding a search leave it selected, as a tap would; everything else leaves the screen's choice alone.
+    fn search_cmd_of(&mut self, slot: usize, key: &str, q: bool, arg: &str) -> Reply {
+        let before = self.studio.search_sel;
+        let was_there = self.studio.search().is_some();
+        self.studio.search_sel = slot;
+        let r = self.search_cmd(key, q, arg);
+        let stays = !q && r.is_ok() && (key == "SEARch:EVENt" || !was_there);
+        self.studio_search_select(if stays { slot } else { before });
+        r
     }
 
     /// The Studio search of the Edge kind (source, level, slope) and the mark of the trigger events. Without a search of its
@@ -330,29 +351,29 @@ impl Ui {
             }
             "SEARch:EDGE:SOURce" => {
                 if q {
-                    return t(wave_tok(self.studio.search.map_or_else(|| self.m.trigger_wave(), |s| s.src)));
+                    return t(wave_tok(self.studio.search().map_or_else(|| self.m.trigger_wave(), |s| s.src)));
                 }
                 let Some(id) = parse_wave(arg) else { return Err(bad(arg)) };
-                match self.studio.search {
+                match self.studio.search() {
                     None => {
                         self.studio_search_add(Some(id));
-                        if self.studio.search.is_none() { return Err(conflict("no source is on")); }
+                        if self.studio.search().is_none() { return Err(conflict("no source is on")); }
                     }
                     Some(sp) => {
-                        self.studio.search = Some(super::addrail::SearchSpec { src: id, ..sp });
+                        self.studio.search_put(super::addrail::SearchSpec { src: id, ..sp });
                         self.studio_search_set_50();
                     }
                 }
                 DONE
             }
             "SEARch:EDGE:SLOPe" => {
-                let mut cur = self.studio.search.map_or(match self.m.slope { Slope::Rise => 0, Slope::Fall => 1, Slope::Either => 2 }, |s| s.slope);
+                let mut cur = self.studio.search().map_or(match self.m.slope { Slope::Rise => 0, Slope::Fall => 1, Slope::Either => 2 }, |s| s.slope);
                 if q { return pick(true, arg, &mut cur, &SL); }
                 pick(false, arg, &mut cur, &SL)?;
                 self.search_spec_mut(|sp| sp.slope = cur)
             }
             "SEARch:EDGE:LEVel" => {
-                if q { return t(en(self.studio.search.map_or(self.m.trig_level, |s| s.level) as f64)); }
+                if q { return t(en(self.studio.search().map_or(self.m.trig_level, |s| s.level) as f64)); }
                 let Some(v) = num(arg) else { return Err(bad(arg)) };
                 self.search_spec_mut(|sp| sp.level = v)
             }
@@ -372,10 +393,10 @@ impl Ui {
             "SEARch:COUNt" => if q { t(self.search_events().len().to_string()) } else { Err(undefined(key)) },
             "SEARch:EVENt" => {
                 let n = self.search_events().len();
-                if q { return t(if n == 0 { 0 } else { self.studio.search_at.min(n - 1) + 1 }.to_string()); }
+                if q { return t(if n == 0 { 0 } else { self.studio.search_at[self.studio.search_sel].min(n - 1) + 1 }.to_string()); }
                 let Some(v) = arg.trim().parse::<usize>().ok().filter(|v| (1..=n).contains(v)) else { return Err(bad(arg)) };
                 let at = self.search_events()[v - 1];
-                self.studio.search_at = v - 1;
+                self.studio.search_at[self.studio.search_sel] = v - 1;
                 self.go_to_time(at);
                 DONE
             }
@@ -389,19 +410,19 @@ impl Ui {
         }
     }
 
-    /// Search 1 exists (added on the trigger source when it did not).
+    /// The selected search exists (added on the trigger source when it did not).
     fn ensure_search(&mut self) -> Result<(), String> {
-        if self.studio.search.is_none() {
+        if self.studio.search().is_none() {
             let src = match self.m.trigger_wave() { w @ WaveId::Ch(_) => w, _ => WaveId::Ch(self.m.trig_src.min(n_ch() - 1)) };
             self.studio_search_add(Some(src));
-            if self.studio.search.is_none() { return Err(conflict("no source is on")); }
+            if self.studio.search().is_none() { return Err(conflict("no source is on")); }
         }
         Ok(())
     }
 
     fn search_spec_mut(&mut self, f: impl FnOnce(&mut super::addrail::SearchSpec)) -> Reply {
         self.ensure_search()?;
-        if let Some(mut sp) = self.studio.search { f(&mut sp); self.studio.search = Some(sp); }
+        if let Some(mut sp) = self.studio.search() { f(&mut sp); self.studio.search_put(sp); }
         DONE
     }
 }

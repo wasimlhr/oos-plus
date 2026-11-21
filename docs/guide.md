@@ -754,13 +754,19 @@ the right, and Overlay traces, every source on one graticule of the full height,
 its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
 side. A tap on a handle opens the sheet of its source.
 
-Add > Search puts an edge search of its own on a source (Search 1). The top bar then counts its events between a
-previous and a next button; a tap on the count opens the Search sheet with the source, the slope, the level and, at
-its foot, **Event list** and Remove search. Event list (also Add > Results table > Search events) opens the table of
-the events, one row an event with its time, however many there are; a tap on a row moves the view there. In the plot
-every event has a mark at the top edge and a dashed line in the colour of its source. Events nearer than a mark is
-wide are drawn as a strip at the top edge instead, so tens of thousands of events leave the trace readable; zoom in
-and each has its mark again. The search looks at the samples the scope has read. Running with a record of up to 1 Mpts
+Add > Search puts an edge search of its own on a source: Search 1, and with Add again Search 2 and Search 3, each
+with its own source, slope and level. A search keeps its number and its colour while it is there (amber, blue, green;
+no channel's colour, so two searches of one channel are told apart), and the place of a removed one is the next taken.
+One search is the selected one: the top bar counts its events between a previous and a next button, in its colour, and
+a tap on the count opens the Search sheet. The sheet's row **Search** selects another one; under it are the source,
+the slope and the level, on the second tab the copies from and to the trigger and the event the search stands on, and
+at the foot **Event list** and Remove search. Event list (also Add > Results table > Search events) opens the table of
+the selected search's events, one row an event with its time, however many there are; a tap on a row moves the view
+there, and the title names the search and its source (`Search 2 · CH1 · 10`). In the plot every search has a line of marks of its own
+at the top edge, one under the other in the order of their numbers; the selected search also draws a dashed line down
+the plot under each of its marks. Events nearer than a mark is
+wide are drawn as a strip in that line instead, so tens of thousands of events leave the trace readable; zoom in
+and each has its mark again. A view (Display > Views) and a set-up keep every search. The search looks at the samples the scope has read. Running with a record of up to 1 Mpts
 that is the whole record. A stopped record and a deeper one are read in part, the screen with a quarter of a screen
 on each side, and the count then names the part: `24000 in 300 µs` in the top bar, `24000 in 300 µs of 800 µs` in the
 title of the table; move the view to search another part. The search keeps 100000 events and writes `100000+` when

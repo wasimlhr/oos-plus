@@ -136,7 +136,7 @@ fn the_add_button_opens_a_panel_that_stays_open_for_several_adds() {
     open_kind(&mut u, AddKind::Search);
     let add = foot(&u, super::addrail::RailAct::Add);
     tap_in(&mut u, add);
-    assert!(u.studio.search.is_some());
+    assert!(u.studio.search().is_some());
     assert!(u.menu_open && u.menu == MenuId::AddPanel);
     shot(&mut u, "add-search-page");
     open_kind(&mut u, AddKind::Table);
@@ -210,7 +210,7 @@ fn the_results_table_adds_measurements_search_events_and_decode_needs_a_decoder(
     tap_in(&mut u, g.types[1].1);
     let add = foot(&u, super::addrail::RailAct::Add);
     tap_in(&mut u, add);
-    assert!(u.studio.search.is_some());
+    assert!(u.studio.search().is_some());
     assert_eq!(u.table, Some(tables::TableKind::Search));
     assert_eq!(u.table_rows(tables::TableKind::Search).len(), u.studio_search_events().len());
     assert!(!u.table_rows(tables::TableKind::Search).is_empty());
@@ -388,7 +388,7 @@ fn add_search_makes_an_edge_search_with_level_at_50_percent_and_marks() {
     open_kind(&mut u, AddKind::Search);
     let add = foot(&u, super::addrail::RailAct::Add);
     tap_in(&mut u, add);
-    let sp = u.studio.search.expect("Search 1");
+    let sp = u.studio.search().expect("Search 1");
     assert_eq!(sp.src, u.cursor_source());
     let (w, _, _) = u.deskew_samples(sp.src).unwrap();
     let (lo, hi) = w.iter().fold((f32::MAX, f32::MIN), |(l, h), &v| (l.min(v), h.max(v)));
@@ -414,7 +414,7 @@ fn search_slope_selects_the_edges_and_level_moves_them() {
     let mut u = studio();
     u.m.run = RunState::Stop;
     u.studio_search_add(Some(WaveId::Ch(0)));
-    assert_eq!(u.studio.search.unwrap().slope, 2, "every edge by default");
+    assert_eq!(u.studio.search().unwrap().slope, 2, "every edge by default");
     let either = u.studio_search_events().len();
     u.select_option(Item::SrchSlope, "Rising");
     let rising = u.studio_search_events().len();
@@ -426,8 +426,8 @@ fn search_slope_selects_the_edges_and_level_moves_them() {
     assert_eq!(u.studio_search_events().len(), either);
     assert!(either >= rising + falling - 1);
     // a level above the signal finds nothing
-    let top = u.studio.search.unwrap().level * 100.0 + 100.0;
-    u.studio.search = Some(super::addrail::SearchSpec { level: top, ..u.studio.search.unwrap() });
+    let top = u.studio.search().unwrap().level * 100.0 + 100.0;
+    u.studio.search_put(super::addrail::SearchSpec { level: top, ..u.studio.search().unwrap() });
     assert!(u.studio_search_events().is_empty());
     // Set to 50 % brings it back
     u.activate(Item::Srch50);
@@ -445,16 +445,16 @@ fn next_and_previous_event_walk_the_events() {
     assert!(next.w >= 40 && next.h >= 40);
     let d0 = u.m.delay;
     tap_in(&mut u, next);
-    assert_eq!(u.studio.search_at, 1 % ev.len());
-    assert!((u.m.delay as f64 - ev[u.studio.search_at]).abs() < 1e-6, "the view is on the event");
+    assert_eq!(u.studio.search_at[0], 1 % ev.len());
+    assert!((u.m.delay as f64 - ev[u.studio.search_at[0]]).abs() < 1e-6, "the view is on the event");
     assert!(u.m.delay != d0 || ev[0] == d0 as f64);
     let (prev, _, _, _) = u.studio_search_chip().unwrap();
     assert!(prev.w >= 40 && prev.h >= 40);
     tap_in(&mut u, prev);
-    assert_eq!(u.studio.search_at, 0);
+    assert_eq!(u.studio.search_at[0], 0);
     // the Event row steps the same way
     u.adjust(Item::SrchEvent, 1);
-    assert_eq!(u.studio.search_at, 1);
+    assert_eq!(u.studio.search_at[0], 1);
     assert!(u.value(Item::SrchEvent).starts_with("2 / "));
 }
 
@@ -468,22 +468,22 @@ fn search_copies_to_and_from_the_trigger_and_has_its_settings_page() {
     u.activate(Item::SrchToTrig);
     assert_eq!(u.m.trig_type, TrigType::Edge);
     assert_eq!(u.m.slope, Slope::Fall);
-    assert_eq!(u.m.trig_level, u.studio.search.unwrap().level);
+    assert_eq!(u.m.trig_level, u.studio.search().unwrap().level);
     // from the trigger
     u.m.trig_level = 0.25;
     u.m.slope = Slope::Rise;
     u.activate(Item::SrchFromTrig);
-    let sp = u.studio.search.unwrap();
+    let sp = u.studio.search().unwrap();
     assert_eq!((sp.level, sp.slope), (0.25, 0));
     // the page
     u.open_menu(MenuId::Search);
     assert!(u.sheet_active());
     let spec = u.sheet_spec(MenuId::Search).unwrap();
-    assert_eq!(spec.tabs.len(), 1);
-    assert!(spec.tabs[0].rows.len() <= 7 && spec.tabs[0].foot.len() <= 2);
+    assert_eq!(spec.tabs.len(), 2);
+    assert!(spec.tabs.iter().all(|t| t.rows.len() <= 7) && spec.tabs[0].foot.len() <= 2);
     shot(&mut u, "search-settings");
     u.activate(Item::SrchRemove);
-    assert!(u.studio.search.is_none() && !u.menu_open);
+    assert!(u.studio.search().is_none() && !u.menu_open);
     assert!(u.studio_search_chip().is_none());
 }
 

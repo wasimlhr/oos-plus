@@ -153,11 +153,11 @@ pub(super) struct Studio {
     pub handles: std::cell::RefCell<Vec<(super::workspace::Trace, Rect)>>,
     /// Studio was the layout at the last frame: coming into it applies the entry rules (`studio_sync`)
     pub was: bool,
-    /// Search 1 (Add > Search): its own source, level and slope
-    pub search: Option<super::addrail::SearchSpec>,
-    /// the event the next / previous buttons stand on
-    pub search_at: usize,
-    pub search_cache: std::cell::RefCell<Option<(u64, std::sync::Arc<Vec<f64>>)>>,
+    /// Search 1 to 3 (Add > Search) by their place, the selected one, the event next / previous stand on in each
+    pub searches: [Option<super::addrail::SearchSpec>; super::addrail::SEARCH_SLOTS],
+    pub search_sel: usize,
+    pub search_at: [usize; super::addrail::SEARCH_SLOTS],
+    pub search_cache: std::cell::RefCell<[Option<(u64, std::sync::Arc<Vec<f64>>)>; super::addrail::SEARCH_SLOTS]>,
     /// the cursor readouts go to the badge row, not onto the graticule
     pub cur_badge: bool,
     /// moving one cursor moves the other with it
@@ -555,7 +555,7 @@ impl Ui {
         // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
         let links_x = lx + 4 - gap;
         let room = links_x - 10 - x;
-        let search_w = if self.studio.search.is_some() {
+        let search_w = if self.studio.search().is_some() {
             let caption = self.studio_acq_need();
             let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
