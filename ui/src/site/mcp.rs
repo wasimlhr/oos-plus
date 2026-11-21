@@ -824,7 +824,7 @@ fn read_record(run: &mut Run, source: &str, memory: bool, (points, inline): (usi
     run.scpi.mcp_calls = run.scpi.mcp_calls.wrapping_add(1);
     let name: String = source.chars().filter(char::is_ascii_alphanumeric).collect();
     let name = format!("{}-{}.csv", name.to_ascii_lowercase(), run.scpi.mcp_calls);
-    let url = match run.ui.net.as_str() {
+    let url = match run.ui.net.addr.as_str() {
         "" => J::Str(format!("{WAVEFORM_DIR}{name}")),
         net => J::Str(format!("http://{net}:8080{WAVEFORM_DIR}{name}")),
     };

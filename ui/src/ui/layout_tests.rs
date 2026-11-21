@@ -601,12 +601,12 @@ fn studio_zoom_overview_window_drags_and_a_lane_badge_scales_vertically() {
     let (_, minus, plus, reset) = u.studio_yzoom_parts().unwrap();
     tap_in(&mut u, plus);
     tap_in(&mut u, plus);
-    assert_eq!(u.zoom_vfactor, 4.0);
+    assert_eq!(u.zoom_view.vfactor, 4.0);
     shot(&mut u, "17-zoom-vertical");
     tap_in(&mut u, minus);
-    assert_eq!(u.zoom_vfactor, 2.0);
+    assert_eq!(u.zoom_view.vfactor, 2.0);
     tap_in(&mut u, reset);
-    assert_eq!(u.zoom_vfactor, 1.0);
+    assert_eq!(u.zoom_view.vfactor, 1.0);
     u.tap(300, 120);
     assert!(u.studio.yzoom.is_none());
     // outside the zoom a badge opens the channel menu
