@@ -173,6 +173,7 @@ impl Ui {
             self.draw_bottom(cv);
         }
         self.draw_menu(cv);
+        self.draw_meas_cfg(cv);
         self.draw_info_card(cv);
         self.draw_toast(cv);
         self.draw_overlay(cv);

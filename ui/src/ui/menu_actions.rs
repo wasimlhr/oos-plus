@@ -602,9 +602,8 @@ impl Ui {
             Item::Layout => {
                 let i = LAYOUTS.iter().position(|&l| l == m.layout).unwrap_or(0);
                 m.layout = LAYOUTS[cycle(i, LAYOUTS.len(), d)];
-                if m.layout == Layout::Studio {
-                    self.studio.enter = true;
-                }
+                self.studio.enter |= m.layout == Layout::Studio;
+                self.meas_own.dialog = None; // a row's settings are the card in Minimal and Studio, a dialog in Default
                 // Default is the stock OOS screen: its cards and top bar, not the compact bars a Bottom bar choice left
                 if m.layout == Layout::Default {
                     m.bar_compact = false;

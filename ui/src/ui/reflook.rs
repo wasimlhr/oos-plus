@@ -65,6 +65,21 @@ impl MeasOwn {
     }
 }
 
+/// Geometry of the settings dialog. Source and reference levels are always there.
+pub(super) struct CfgGeom {
+    pub panel: Rect,
+    pub close: Rect,
+    pub source_m: Rect,
+    pub source_p: Rect,
+    pub refs: Rect,
+    pub idle_m: Option<Rect>,
+    pub idle_p: Option<Rect>,
+    pub side: Option<Rect>,
+    pub n_m: Option<Rect>,
+    pub n_p: Option<Rect>,
+    pub edges: Option<Rect>,
+}
+
 impl Ui {
     pub(super) fn set_look(&mut self, look: RefLook) {
         if self.look == look {
@@ -422,14 +437,19 @@ impl Ui {
     }
 
     /// Opens the settings card of the selected measurement `index` (single, pair or catalogue row): a page of the Studio
-    /// sheet, or a dialog in Minimal and Default.
+    /// sheet, or a dialog in Minimal; upstream's dialog in Default.
     pub(super) fn open_meas_cfg(&mut self, index: usize) {
         if index >= self.measurement_count() {
-            self.meas_own.dialog = None;
+            self.close_meas_dlg();
             return;
         }
         self.ensure_meas_own();
         self.meas_own.dialog = Some(index as u16);
+        // the Default layout has upstream's dialog over the page it was opened from (source, reference levels and the
+        // parameters of its kind); Minimal and Studio have the card
+        if self.m.layout == Layout::Default && index < self.m.meas.len() {
+            return;
+        }
         if self.measrow_plan().is_empty() {
             self.meas_own.dialog = None;
             self.toast("No settings for this measurement");
@@ -439,6 +459,124 @@ impl Ui {
             self.open_submenu(MenuId::MeasRow);
         } else {
             self.open_menu(MenuId::MeasRow);
+        }
+    }
+
+    pub(super) fn close_meas_dlg(&mut self) {
+        self.meas_own.dialog = None;
+    }
+
+    pub(super) fn cfg_geom(&self) -> Option<CfgGeom> {
+        // open while `meas_own.dialog` names a single row in Default (a pair opens the card there); a change of layout
+        // forgets `meas_own.dialog`, so a card left in Minimal or Studio does not come back as this dialog
+        if self.m.layout != Layout::Default {
+            return None;
+        }
+        let index = self.meas_own.dialog? as usize;
+        let (k, _) = *self.m.meas.get(index)?;
+        let extras = match k {
+            Meas::Rise | Meas::Fall => 1,
+            Meas::Burst => 1,
+            Meas::Outside => 1,
+            Meas::NPeriods => 2,
+            _ => 0,
+        };
+        let rows = 2 + extras;
+        let h = 52 + rows * 48 + 16;
+        let panel = Rect::new((W - 480) / 2, (H - h) / 2, 480, h);
+        let close = Rect::new(panel.x + panel.w - 48, panel.y + 8, 36, 28);
+        let row = |n: i32| Rect::new(panel.x + 168, panel.y + 48 + n * 48, 280, 36);
+        let source = row(0);
+        let refs = row(1);
+        let (idle_m, idle_p, side, n_m, n_p, edges) = match k {
+            Meas::Burst => {
+                let idle = row(2);
+                (
+                    Some(Rect::new(idle.x, idle.y, 44, idle.h)),
+                    Some(Rect::new(idle.x + idle.w - 44, idle.y, 44, idle.h)),
+                    None,
+                    None,
+                    None,
+                    None,
+                )
+            }
+            Meas::Outside => (None, None, Some(row(2)), None, None, None),
+            Meas::NPeriods => {
+                let n = row(2);
+                let edges = row(3);
+                (
+                    None,
+                    None,
+                    None,
+                    Some(Rect::new(n.x, n.y, 44, n.h)),
+                    Some(Rect::new(n.x + n.w - 44, n.y, 44, n.h)),
+                    Some(edges),
+                )
+            }
+            _ => (None, None, None, None, None, None),
+        };
+        Some(CfgGeom {
+            panel,
+            close,
+            source_m: Rect::new(source.x, source.y, 44, source.h),
+            source_p: Rect::new(source.x + source.w - 44, source.y, 44, source.h),
+            refs,
+            idle_m,
+            idle_p,
+            side,
+            n_m,
+            n_p,
+            edges,
+        })
+    }
+
+    pub(super) fn draw_meas_cfg(&self, cv: &mut Canvas) {
+        let (Some(g), Some(index)) = (self.cfg_geom(), self.meas_own.dialog.map(usize::from)) else { return };
+        let Some(&(k, id)) = self.m.meas.get(index) else { return };
+        let d = self.dlg_values(k, id);
+        let f = &self.fonts();
+        cv.framed(g.panel, 8, 2, ACCENT, 7, DLG_BG);
+        cv.text(&f.mb, g.panel.x + 16, g.panel.y + 26, &format!("{} settings", k.name()), TEXT);
+        btn(cv, g.close, BTN, BTN_BORDER);
+        cv.text_in(&f.sb, g.close, 1, "X", TEXT);
+        self.cfg_caption(cv, g.panel, 0, "Source");
+        self.cfg_caption(cv, g.panel, 1, "Reference");
+        let source = Rect::new(g.source_m.x, g.source_m.y, g.source_p.x + g.source_p.w - g.source_m.x, g.source_m.h);
+        self.draw_stepper(cv, g.source_m, g.source_p, source, &self.wave_name(id));
+        btn(cv, g.refs, BTN, BTN_BORDER);
+        let refs = if self.m.meas_lv.absolute {
+            format!("{}/{}", si_short(d.low, "V"), si_short(d.high, "V"))
+        } else {
+            format!("{:.0}/{:.0}", d.low * 100.0, d.high * 100.0)
+        };
+        cv.text_in(&f.mb, g.refs, 1, &refs, TEXT);
+        if matches!(k, Meas::Rise | Meas::Fall) {
+            self.cfg_caption(cv, g.panel, 2, "Edges used");
+            let text = self.meas_edge_coverage_caption(id, k);
+            cv.text_in(&f.s, Rect::new(g.panel.x + 168, g.panel.y + 144, 280, 36), 1, &text, DIM);
+        }
+        if let (Some(mi), Some(pl)) = (g.idle_m, g.idle_p) {
+            self.cfg_caption(cv, g.panel, 2, "Idle");
+            let idle = d.idle;
+            let text = if idle > 0.0 { si_short(idle, "s") } else { "period".into() };
+            self.draw_stepper(cv, mi, pl, Rect::new(mi.x, mi.y, pl.x + pl.w - mi.x, mi.h), &text);
+        }
+        if let Some(side) = g.side {
+            self.cfg_caption(cv, g.panel, 2, "Outside");
+            let which = d.side;
+            btn(cv, side, BTN, BTN_BORDER);
+            cv.text_in(&f.mb, side, 1, &format!("{:?}", which), TEXT);
+        }
+        if let (Some(mi), Some(pl)) = (g.n_m, g.n_p) {
+            self.cfg_caption(cv, g.panel, 2, "N periods");
+            let n = d.n;
+            self.draw_stepper(cv, mi, pl, Rect::new(mi.x, mi.y, pl.x + pl.w - mi.x, mi.h), &n.to_string());
+        }
+        if let Some(edges) = g.edges {
+            self.cfg_caption(cv, g.panel, 3, "Edges");
+            let data = d.data;
+            btn(cv, edges, BTN, BTN_BORDER);
+            cv.text_in(&f.mb, edges, 1, if data { "Data" } else { "Clock" }, TEXT);
         }
     }
 
@@ -458,6 +596,56 @@ impl Ui {
         }
     }
 
+    fn cfg_caption(&self, cv: &mut Canvas, panel: Rect, n: i32, text: &str) {
+        cv.text(&self.fonts().s, panel.x + 16, panel.y + 72 + n * 48, text, LABEL);
+    }
+
+    fn draw_stepper(&self, cv: &mut Canvas, minus: Rect, plus: Rect, full: Rect, value: &str) {
+        let f = &self.fonts();
+        btn(cv, minus, BTN, BTN_BORDER);
+        cv.text_in(&f.mb, minus, 1, "-", TEXT);
+        btn(cv, plus, BTN, BTN_BORDER);
+        cv.text_in(&f.mb, plus, 1, "+", TEXT);
+        let mid = Rect::new(minus.x + minus.w + 4, full.y, (plus.x - minus.x - minus.w - 8).max(20), full.h);
+        btn(cv, mid, BTN, BTN_BORDER);
+        cv.text_in(&f.mb, mid, 1, value, TEXT);
+    }
+
+    pub(super) fn meas_cfg_tap(&mut self, x: i32, y: i32) -> bool {
+        let Some(g) = self.cfg_geom() else { return false };
+        if !g.panel.contains(x, y) || g.close.contains(x, y) {
+            self.close_meas_dlg();
+            return true;
+        }
+        if g.source_m.contains(x, y) {
+            self.rowf_source(-1);
+        } else if g.source_p.contains(x, y) {
+            self.rowf_source(1);
+        } else if g.refs.contains(x, y) {
+            self.meas_cfg_refs();
+        } else if g.idle_m.is_some_and(|r| r.contains(x, y)) {
+            self.meas_cfg_idle(-1);
+        } else if g.idle_p.is_some_and(|r| r.contains(x, y)) {
+            self.meas_cfg_idle(1);
+        } else if g.side.is_some_and(|r| r.contains(x, y)) {
+            self.meas_cfg_side();
+        } else if g.n_m.is_some_and(|r| r.contains(x, y)) {
+            self.meas_cfg_n(-1);
+        } else if g.n_p.is_some_and(|r| r.contains(x, y)) {
+            self.meas_cfg_n(1);
+        } else if g.edges.is_some_and(|r| r.contains(x, y)) {
+            self.meas_cfg_edges();
+        }
+        true
+    }
+
+    fn cfg_entry(&mut self) -> Option<(usize, Meas, WaveId)> {
+        let index = self.meas_own.dialog? as usize;
+        let (k, id) = *self.m.meas.get(index)?;
+        self.ensure_meas_own();
+        Some((index, k, id))
+    }
+
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(crate) fn set_meas_refs(&mut self, index: usize, low: f64, high: f64) {
         if index >= self.m.meas.len() {
@@ -471,6 +659,79 @@ impl Ui {
             own.refs_set = true;
         }
         self.clear_measurement_statistics();
+    }
+
+    /// What the dialog shows for a row: its own settings (`Model::row_cfg`, the card's), else a value set by an older
+    /// version (`MeasOwn`), else the shared one of the Measure page.
+    fn dlg_values(&self, k: Meas, id: WaveId) -> MeasOwn {
+        let c = self.row_cfg_one(k, id);
+        let own = self.meas_own.rows.get(&(k, id)).copied().unwrap_or_else(|| MeasOwn::shared(&self.m));
+        let pick = |set: bool, v: f64, shared: f64| if set { v } else { shared };
+        MeasOwn {
+            low: c.lo.unwrap_or(pick(own.refs_set, own.low, self.m.meas_lpct)),
+            high: c.hi.unwrap_or(pick(own.refs_set, own.high, self.m.meas_hpct)),
+            idle: c.idle.unwrap_or(pick(own.idle_set, own.idle, self.m.meas_idle)),
+            side: match c.side {
+                Some(0) => oos_dsp::measure::Outside::Above,
+                Some(1) => oos_dsp::measure::Outside::Below,
+                Some(_) => oos_dsp::measure::Outside::Both,
+                None if own.side_set => own.side,
+                None => self.m.meas_out,
+            },
+            n: c.n.unwrap_or(if own.n_set { own.n } else { self.m.meas_n }),
+            data: match c.n_edge {
+                Some(e) => e == 2,
+                None if own.data_set => own.data,
+                None => self.m.meas_data,
+            },
+            ..own
+        }
+    }
+
+    /// Changes the row's own settings from the dialog.
+    fn dlg_edit(&mut self, f: impl FnOnce(&mut crate::model::RowCfg, MeasOwn)) {
+        let Some((_, k, id)) = self.cfg_entry() else { return };
+        let now = self.dlg_values(k, id);
+        let key = crate::model::RowKey::One(k, id);
+        let mut c = self.m.row_cfg(key).unwrap_or_default();
+        f(&mut c, now);
+        self.m.set_row_cfg(key, c);
+        self.clear_measurement_statistics();
+    }
+
+    fn meas_cfg_refs(&mut self) {
+        if self.m.meas_lv.absolute {
+            self.toast("The levels are in volts: set them on the levels page");
+            return;
+        }
+        self.dlg_edit(|c, now| {
+            let (low, high) = if now.low < 0.15 { (0.2, 0.8) } else { (0.1, 0.9) };
+            (c.lo, c.hi) = (Some(low), Some(high));
+        });
+    }
+
+    fn meas_cfg_idle(&mut self, d: i32) {
+        self.dlg_edit(|c, now| c.idle = Some(super::tools::time_step(now.idle, d)));
+    }
+
+    fn meas_cfg_side(&mut self) {
+        use oos_dsp::measure::Outside;
+        self.dlg_edit(|c, now| {
+            c.side = Some(match now.side {
+                Outside::Above => 1,
+                Outside::Below => 2,
+                Outside::Both => 0,
+            })
+        });
+    }
+
+    fn meas_cfg_n(&mut self, d: i32) {
+        self.dlg_edit(|c, now| c.n = Some((now.n as i32 + d).clamp(1, 32) as u32));
+    }
+
+    fn meas_cfg_edges(&mut self) {
+        // Clock counts the rising edges, Data both (the card's Edge type)
+        self.dlg_edit(|c, now| c.n_edge = Some(if now.data { 0 } else { 2 }));
     }
 }
 
@@ -592,6 +853,61 @@ mod tests {
     #[test]
     fn every_added_measurement_opens_its_own_settings() {
         let mut u = ui();
+        u.m.meas.clear();
+        u.meas_own.rows.clear();
+        u.activate(Item::MeasAdd(Meas::Vpp));
+        u.activate(Item::MeasAdd(Meas::Burst));
+        assert!(u.meas_own.rows.contains_key(&(Meas::Vpp, WaveId::Ch(0))));
+        assert!(u.meas_own.rows.contains_key(&(Meas::Burst, WaveId::Ch(0))));
+        u.key(key::MEASURE);
+        let vpp = u.catalog_set_rect(Meas::Vpp).expect("a place to open Vpp settings");
+        u.tap(vpp.x + vpp.w / 2, vpp.y + vpp.h / 2);
+        let g = u.cfg_geom().expect("Vpp has a settings dialog");
+        assert!(g.source_m.w > 0 && g.refs.w > 0 && g.idle_m.is_none());
+        u.meas_own.dialog = None;
+        let mut opened = false;
+        for _ in 0..12 {
+            let view = u.catalog_view();
+            if !opened {
+                // TIMING is the third group of Basic
+                if let Some(time) = u.catalog_group_rect(2) {
+                    if time.y < view.y + view.h - 4 && time.y + time.h > view.y + 4 {
+                        let y = (time.y + 4).clamp(view.y + 2, view.y + view.h - 2);
+                        u.tap(time.x + 12, y);
+                        opened = true;
+                        continue;
+                    }
+                }
+            } else if let Some(burst) = u.catalog_set_rect(Meas::Burst) {
+                let y = burst.y + burst.h / 2;
+                if view.contains(burst.x + burst.w / 2, y) {
+                    u.tap(burst.x + burst.w / 2, y);
+                    break;
+                }
+            }
+            let next = u.cat.scroll + 80;
+            u.scroll_to(super::scroll::List::Catalog, next);
+        }
+        let g = u.cfg_geom().expect("Burst has a settings dialog");
+        assert!(g.refs.w > 0 && g.idle_m.is_some(), "Burst keeps its own idle");
+        u.meas_cfg_tap(g.idle_p.unwrap().x + 4, g.idle_p.unwrap().y + 4);
+        // the dialog writes the row's own settings, which the card of Minimal and Studio shows
+        let burst = crate::model::RowKey::One(Meas::Burst, WaveId::Ch(0));
+        let burst_idle = u.m.row_cfg(burst).and_then(|c| c.idle).expect("Burst has its own idle");
+        assert!(u.m.row_cfg(crate::model::RowKey::One(Meas::Vpp, WaveId::Ch(0))).is_none(), "Vpp keeps following");
+        assert_ne!(burst_idle, u.m.meas_idle);
+        // an own idle time above the 5 s of the steps goes down to 5 s, not to off
+        let mut c = u.m.row_cfg(burst).unwrap();
+        c.idle = Some(10.0);
+        u.m.set_row_cfg(burst, c);
+        u.meas_cfg_tap(g.idle_m.unwrap().x + 4, g.idle_m.unwrap().y + 4);
+        assert_eq!(u.m.row_cfg(burst).unwrap().idle, Some(5.0));
+    }
+
+    #[test]
+    fn every_added_measurement_opens_its_own_card_in_minimal() {
+        let mut u = ui();
+        u.m.layout = Layout::Minimal;
         u.m.meas.clear();
         u.meas_own.rows.clear();
         u.activate(Item::MeasAdd(Meas::Vpp));
