@@ -14,6 +14,8 @@ oos-hal = { path = "../hal" }
 oos-dsp = { path = "../dsp" }
 oos-system = { path = "system" }
 oos-remote = { path = "remote" }
+oos-model = { path = "model" }
+oos-store = { path = "store" }
 
 # oos-plus: a desktop window for the Windows host build (src/desktop.rs); the scope build does not use it
 # (docs/fork/deps.md)
@@ -29,10 +31,12 @@ oos-hal = { path = "../hal", features = ["sim"] }
 oos-dsp = { path = "../dsp", features = ["example"] }
 oos-system = { path = "system", features = ["testkit"] }
 oos-remote = { path = "remote", features = ["testkit"] }
+oos-model = { path = "model", features = ["testkit"] }
+oos-store = { path = "store", features = ["testkit"] }
 
 # oos-ui and the crates its layers became (ADR 0064): one lock file, one target directory, one `cargo test --workspace`
 [workspace]
-members = ["remote", "system"]
+members = ["model", "remote", "store", "system"]
 # tools/compare-base.sh checks the base out below target/: its ui/ is a tree of its own, not a member
 exclude = ["target"]
 

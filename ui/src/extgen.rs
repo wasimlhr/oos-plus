@@ -15,15 +15,7 @@ use std::time::Duration;
 
 // oos-plus: the table of models lives in the model (`crate::model::bode`), where upstream keeps the Bode presets
 // a setup names by index; this module re-exports it.
-pub use crate::model::bode::{BUILTIN, FREE, GENERATORS};
-
-/// The model the Ext generator page starts with.
-pub const FIRST_EXTERNAL: usize = 1;
-
-/// Whether entry `i` is a generator OOS sends commands to.
-pub fn external(i: usize) -> bool {
-    i != BUILTIN && i != FREE && i < GENERATORS.len()
-}
+pub use crate::model::bode::{external, BUILTIN, FIRST_EXTERNAL, FREE, GENERATORS};
 
 /// The external models, in the order of the table.
 pub fn externals() -> impl Iterator<Item = usize> {

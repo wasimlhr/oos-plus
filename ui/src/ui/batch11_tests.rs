@@ -72,12 +72,12 @@ fn a_measurement_card_has_a_stats_page_with_mean_range_population_and_trend() {
 fn opening_the_trend_keeps_the_statistics() {
     let mut u = studio();
     for _ in 0..20 { u.step(0.05); }
-    let n0 = u.mstat.first().map_or(0, |s| s.n);
+    let n0 = u.results.rows.first().map_or(0, |s| s.n);
     assert!(n0 > 0);
     u.open_meas_cfg(0);
     assert!(u.measrow_activate(Item::RowF(RF::Trend)));
     u.adjust(Item::TrendSel(0), 1);
-    assert!(u.mstat.first().map_or(0, |s| s.n) >= n0, "the population restarted");
+    assert!(u.results.rows.first().map_or(0, |s| s.n) >= n0, "the population restarted");
 }
 
 #[test]
