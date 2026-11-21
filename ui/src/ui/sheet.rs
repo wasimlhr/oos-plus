@@ -372,6 +372,45 @@ impl Ui {
         matches!(menu, MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
     }
 
+    /// The pages of the Decode sheet from its three planned tabs (Decode, Settings, Levels).
+    /// What the protocol itself needs (baud rate, bits, parity, the SPI mode, the CAN rate ...) follows
+    /// its lines on the first page while that page has the room; the rest stays on Settings. They were all on
+    /// the second page: a UART was switched on and read nothing until the baud rate was found there
+    fn decode_tabs(&self, menu: MenuId, tabs: &mut Vec<SheetTab>) {
+        use Item::*;
+        // SPI: its four lines stand together on the first page (MISO was alone on Settings, where a line is
+        // not looked for). The page has seven rows, so Input, which is chosen once, ends Settings, and the
+        // Mode heads it: a bus is read in mode 0 more often than not
+        if self.m.dec_proto == Proto::SPI && tabs[0].rows.contains(&DecSrc4) {
+            if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecIn) {
+                let row = tabs[0].rows.remove(i);
+                tabs[1].rows.push(row);
+            }
+        }
+        while tabs[0].rows.len() < SHEET_MAX_ROWS {
+            let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
+            let row = tabs[1].rows.remove(i);
+            tabs[0].rows.push(row);
+        }
+        // the thresholds, and "Turn on CH1" for a line that is switched off, come to the first page when they
+        // fit it: a decoder of one line with few settings is one page then, without tabs. The rows keep the
+        // order of the menu (ADR 0031)
+        if tabs[0].rows.len() + tabs[2].rows.len() <= SHEET_MAX_ROWS {
+            let levels = std::mem::take(&mut tabs[2].rows);
+            tabs[0].rows.extend(levels);
+        }
+        if tabs[0].rows.len() < SHEET_MAX_ROWS {
+            if let Some(i) = tabs[1].rows.iter().position(|it| *it == SrcOn) {
+                let row = tabs[1].rows.remove(i);
+                tabs[0].rows.push(row);
+            }
+        }
+        let order = self.sheet_source_items(menu);
+        tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+        // (a page without a row is no tab here: which ones a decoder has changes with its protocol only)
+        tabs.retain(SheetTab::holds);
+    }
+
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
     fn sheet_max_rows(menu: MenuId) -> usize {
         if menu == MenuId::MeasPair { SHEET_MAX_ROWS + 1 } else { SHEET_MAX_ROWS }
@@ -493,42 +532,8 @@ impl Ui {
                     }
                 }
             }
-            // Decode: what the protocol itself needs (baud rate, bits, parity, the SPI mode, the CAN rate ...) follows
-            // its lines on the first page while that page has the room; the rest stays on Settings. They were all on
-            // the second page: a UART was switched on and read nothing until the baud rate was found there
             if menu == MenuId::Decode && tabs.len() == 3 {
-                use Item::*;
-                // SPI: its four lines stand together on the first page (MISO was alone on Settings, where a line is
-                // not looked for). The page has seven rows, so Input, which is chosen once, ends Settings, and the
-                // Mode heads it: a bus is read in mode 0 more often than not
-                if self.m.dec_proto == Proto::SPI && tabs[0].rows.contains(&DecSrc4) {
-                    if let Some(i) = tabs[0].rows.iter().position(|it| *it == DecIn) {
-                        let row = tabs[0].rows.remove(i);
-                        tabs[1].rows.push(row);
-                    }
-                }
-                while tabs[0].rows.len() < SHEET_MAX_ROWS {
-                    let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
-                    let row = tabs[1].rows.remove(i);
-                    tabs[0].rows.push(row);
-                }
-                // the thresholds, and "Turn on CH1" for a line that is switched off, come to the first page when they
-                // fit it: a decoder of one line with few settings is one page then, without tabs. The rows keep the
-                // order of the menu (ADR 0031)
-                if tabs[0].rows.len() + tabs[2].rows.len() <= SHEET_MAX_ROWS {
-                    let levels = std::mem::take(&mut tabs[2].rows);
-                    tabs[0].rows.extend(levels);
-                }
-                if tabs[0].rows.len() < SHEET_MAX_ROWS {
-                    if let Some(i) = tabs[1].rows.iter().position(|it| *it == SrcOn) {
-                        let row = tabs[1].rows.remove(i);
-                        tabs[0].rows.push(row);
-                    }
-                }
-                let order = self.sheet_source_items(menu);
-                tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
-                // (a page without a row is no tab here: which ones a decoder has changes with its protocol only)
-                tabs.retain(SheetTab::holds);
+                self.decode_tabs(menu, &mut tabs);
             }
             // Trigger: Sweep (Auto, Normal, Single) goes with the type and the source while that tab has the room. A
             // type with many rows of its own keeps it on Settings: an eighth row would take the sheet away
