@@ -164,6 +164,7 @@ mod logger;
 mod magnetic;
 mod meascatalog;
 mod measlabels;
+mod measure_page;
 mod measure_pairs;
 mod measurement_nav;
 mod menu_actions;

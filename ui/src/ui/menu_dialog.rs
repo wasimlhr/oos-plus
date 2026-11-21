@@ -392,7 +392,7 @@ impl Ui {
 
     /// x centre of what opened the menu, and whether that is in the top bar (the dialog hangs below it) or a card
     /// (the dialog sits above it).
-    fn menu_anchor(&self) -> (i32, bool) {
+    pub(super) fn menu_anchor(&self) -> (i32, bool) {
         if let Some(a) = pages::page(self.menu_root()).and_then(|p| p.anchor) {
             return a(self, self.menu_root());
         }
@@ -417,8 +417,8 @@ impl Ui {
         if self.menu == MenuId::Main {
             return Some(self.main_layout());
         }
-        if self.menu == MenuId::Measure && self.m.layout == Layout::Default {
-            return Some(self.measure_layout());
+        if let Some(d) = self.measure_layout() {
+            return Some(d);
         }
         let items = self.items(self.menu);
         let n = items.len() as i32;
@@ -555,83 +555,6 @@ impl Ui {
             line += n;
         }
         Dlg { r, close, back: None, rows, heads, bar: None }
-    }
-
-    /// The group of the measurement settings a row belongs to (`MEASURE_GROUPS`).
-    fn measure_group(it: Item) -> usize {
-        match it {
-            Item::MeasSrc | Item::MeasSrcB | Item::MeasCopyTo => 0,
-            Item::MeasGate | Item::MeasRefs => 1,
-            Item::MeasStats | Item::MeasLabels | Item::StripDock => 2,
-            Item::MeasIdle | Item::MeasTsetup | Item::MeasThold | Item::MeasOutside | Item::MeasN | Item::MeasEdges => {
-                3
-            }
-            _ => 4,
-        }
-    }
-
-    /// The groups of the measurement settings: name and column.
-    const MEASURE_GROUPS: [(&'static str, usize); 5] =
-        [("Sources", 0), ("Measure over", 0), ("Display", 0), ("Parameters", 1), ("More", 1)];
-
-    /// Measurement settings of the Default layout (upstream's): two columns of named groups (what is measured, over
-    /// what, how the results show; the parameters of single measurements, and the pages beside them), below the top
-    /// bar. The pages of the last group share a line.
-    fn measure_layout(&self) -> Dlg {
-        const HEAD: i32 = 24;
-        let l = self.lay();
-        let gap = 16;
-        let cw = l.dlg_col;
-        let w = 24 + 2 * cw + gap;
-        let (ax, _) = self.menu_anchor();
-        let x = (ax - w / 2).clamp(METRICS.edge, self.scr.w - METRICS.edge - w);
-        let y = self.frame().top.bottom() + 4;
-        let mut col_y = [y + DLG_HEAD - 8; 2];
-        let (mut rows, mut heads) = (Vec::new(), Vec::new());
-        let mut last = usize::MAX;
-        // the left half of a line of two pages is taken: the next page goes right of it
-        let mut half: Option<i32> = None;
-        for it in self.items(MenuId::Measure) {
-            let g = Self::measure_group(it);
-            let (name, col) = Self::MEASURE_GROUPS[g];
-            let cx = x + 12 + col as i32 * (cw + gap);
-            if g != last {
-                heads.push((Rect::new(cx, col_y[col], cw, HEAD), name));
-                col_y[col] += HEAD;
-                last = g;
-                half = None;
-            }
-            if let Item::Open(_) = it {
-                let hw = (cw - 6) / 2;
-                let ctrl = match half.take() {
-                    Some(ry) => Rect::new(cx + hw + 6, ry, cw - hw - 6, DLG_CTRL),
-                    None => {
-                        let ry = col_y[col];
-                        col_y[col] += DLG_ROW;
-                        half = Some(ry);
-                        Rect::new(cx, ry, hw, DLG_CTRL)
-                    }
-                };
-                rows.push(Row { it, label: Rect::new(ctrl.x, ctrl.y, 0, 0), ctrl, ctl: Ctl::Button });
-                continue;
-            }
-            half = None;
-            let ry = col_y[col];
-            col_y[col] += DLG_ROW;
-            let label = Rect::new(cx, ry, l.dlg_label, DLG_CTRL);
-            let lw = l.dlg_label + 4;
-            let ctrl = if Self::kind(it) == Kind::Action {
-                Rect::new(cx, ry, cw, DLG_CTRL)
-            } else {
-                Rect::new(cx + lw, ry, cw - lw, DLG_CTRL)
-            };
-            rows.push(Row { it, label, ctl: self.ctl(it, ctrl.w), ctrl });
-        }
-        let h = col_y.into_iter().max().unwrap_or(y) - y + 6;
-        let r = Rect::new(x, y, w, h);
-        let close = Rect::new(r.x + r.w - 52, r.y + 6, 44, DLG_CTRL);
-        let back = self.parent.map(|_| Rect::new(close.x - 88, close.y, 82, DLG_CTRL));
-        Dlg { r, close, back, rows, heads, bar: None }
     }
 
     /// Font and box of the text of a menu button, and whether it fits: centred in the button while it fits, else
