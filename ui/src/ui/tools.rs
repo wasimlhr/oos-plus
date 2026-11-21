@@ -209,6 +209,13 @@ impl Ui {
         self.meas_of(&self.ana[c], k)
     }
 
+    /// The last finished measurement of a channel stands in for the one being made (`computing_like_last`): a value
+    /// it has not got is then "no value", not "Computing". A line with no edges, running at 1 Mpts, said Computing
+    /// for its Frequency for as long as it ran (CH1 on a unit, 2026-11-20).
+    fn last_answer_stands_in(&self, id: WaveId) -> bool {
+        matches!(id, WaveId::Ch(c) if self.computing_like_last(c))
+    }
+
     /// Measurement `k` of a channel or a reference. A channel that is off, or a ref with no samples, is NaN.
     pub fn meas_at(&self, id: WaveId, k: Meas) -> f64 {
         if let WaveId::Ch(channel) = id {
@@ -276,7 +283,7 @@ impl Ui {
             .iter()
             .map(|&(k, id)| {
                 let val = self.meas_number(id, k);
-                MeasRow { name: super::meascatalog::meas_display_name(k).to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k), reason: String::new() }
+                MeasRow { name: super::meascatalog::meas_display_name(k).to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k) && !self.last_answer_stands_in(id), reason: String::new() }
             })
             .collect();
         for &(k, a, b) in &self.m.meas2 {

@@ -333,11 +333,11 @@ pub(super) const PAGES: [Page; 56] = [
     page!(MenuId::MeasHold, "Add", |_, _| vec![Item::AddMeas], None),
     // its catalogue is a layout of its own (`catalog_dialog`), not rows
     page!(MenuId::MeasAdd, "Add measurements", |_, _| Vec::new(), None),
-    // oos-plus pages: the full catalogue, the Add panel of Studio, the Edge search, the measurement row sheet, the
+    // oos-plus pages: the full catalogue, the Add panel of Studio, the search, the measurement row sheet, the
     // statistics and the level pages, the external generator
     page!(MenuId::MeasLegacy, "All measurements", |u, _| u.measurement_catalog(), None),
     page!(MenuId::AddPanel, "Add", |_, _| Vec::new(), None),
-    page!(MenuId::Search, "Search 1", |u, _| u.addrail_search_items(), None),
+    page!(MenuId::Search, "Search", |u, _| u.addrail_search_items(), None),
     plain(MenuId::MeasRow, |u, _| u.measrow_title(), |u, _| u.measrow_items(), None, None),
     page!(
         MenuId::MeasStat,

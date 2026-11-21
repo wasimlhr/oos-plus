@@ -35,6 +35,14 @@ mod batch7b_tests;
 #[cfg(test)]
 mod batch8_tests;
 #[cfg(test)]
+mod search_dense_tests;
+#[cfg(test)]
+mod search_several_tests;
+#[cfg(test)]
+mod search_types_tests;
+#[cfg(test)]
+mod search_zoom_tests;
+#[cfg(test)]
 mod batch9_tests;
 #[cfg(test)]
 mod batch10_tests;
@@ -619,7 +627,7 @@ pub enum MenuId {
     /// Full legacy measurement and pair catalog, including Selected.
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     MeasLegacy,
-    /// Studio: the settings of the Edge search added from the Add panel (ui/addrail.rs)
+    /// Studio: the settings of the search added from the Add panel (ui/addrail.rs)
     Search,
     MeasSelected,
 }

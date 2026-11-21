@@ -272,6 +272,21 @@ pub enum WhenKind {
     Out,
 }
 
+impl WhenKind {
+    /// The time condition with the limits `t1` and `t2` in seconds (None = Off).
+    pub fn cond(self, t1: f32, t2: f32) -> Option<oos_dsp::trigger::When> {
+        use oos_dsp::trigger::When;
+        let (a, b) = (t1 as f64, t2 as f64);
+        match self {
+            WhenKind::Off => None,
+            WhenKind::Gt => Some(When::Gt(a)),
+            WhenKind::Lt => Some(When::Lt(a)),
+            WhenKind::In => Some(When::In(a.min(b), a.max(b))),
+            WhenKind::Out => Some(When::Out(a.min(b), a.max(b))),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum WinMode {
     Enter,
@@ -319,15 +334,7 @@ impl Model {
 
     /// The time condition of the "When" setting (None = Off).
     pub fn when(&self) -> Option<oos_dsp::trigger::When> {
-        use oos_dsp::trigger::When;
-        let (a, b) = (self.trig_t1 as f64, self.trig_t2 as f64);
-        match self.trig_when {
-            WhenKind::Off => None,
-            WhenKind::Gt => Some(When::Gt(a)),
-            WhenKind::Lt => Some(When::Lt(a)),
-            WhenKind::In => Some(When::In(a.min(b), a.max(b))),
-            WhenKind::Out => Some(When::Out(a.min(b), a.max(b))),
-        }
+        self.trig_when.cond(self.trig_t1, self.trig_t2)
     }
 
     pub fn trigger_wave(&self) -> WaveId {
