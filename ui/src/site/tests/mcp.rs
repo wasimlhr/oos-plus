@@ -11,7 +11,7 @@ use crate::json::{parse, J};
 fn call(ui: &mut Ui, cv: &Canvas, scpi: &mut crate::scpi::Scpi, name: &str, args: &str) -> J {
     let body =
         format!(r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{name}","arguments":{args}}}}}"#);
-    let reply = crate::site::mcp(&body, &mut Ctx::new(ui, cv, scpi)).unwrap();
+    let reply = crate::site::mcp(&body, &mut Ctx::new(ui, cv, scpi)).unwrap().text();
     parse(&reply).unwrap().get("result").cloned().unwrap_or_else(|| panic!("no result: {reply}"))
 }
 
@@ -52,7 +52,7 @@ fn square_in_r1(ui: &mut Ui) {
 fn mcp_lists_every_tool_with_its_schema_and_annotation() {
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
     let body = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
-    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
+    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text()).unwrap();
     let tools = items(r.get("result").and_then(|x| x.get("tools")));
     let read_only = |name: &str| {
         let t = tools.iter().find(|t| t.get("name").and_then(J::str) == Some(name)).expect(name);
@@ -255,7 +255,7 @@ fn mcp_read_only_and_off() {
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
     ui.sys.remote_mcp = McpMode::Read;
     let body = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
-    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
+    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text()).unwrap();
     let tools = items(r.get("result").and_then(|x| x.get("tools")));
     let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
     assert_eq!(names, ["scpi", "screenshot", "scope_state", "measure", "waveform", "decode_results", "errors", "scpi_reference"]);
@@ -285,7 +285,7 @@ fn mcp_read_only_and_off() {
     ui.sys.remote_mcp = McpMode::Off;
     assert!(crate::site::waveform_csv(&ui, &scpi, "r1-1.csv").unwrap_err().contains("off"));
     let body = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
-    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
+    let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text()).unwrap();
     let e = r.get("error").unwrap_or_else(|| panic!("{r}"));
     assert_eq!((num(e.get("code")), r.get("id")), (-32001.0, Some(&J::Num(7.0))));
 }
@@ -323,7 +323,7 @@ fn mcp_scpi_reference_finds_a_command_instead_of_a_guess() {
 fn mcp_initialize_gives_short_rules_that_name_only_real_tools() {
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
     let ask = |ui: &mut Ui, scpi: &mut crate::scpi::Scpi, body: &str| {
-        parse(&crate::site::mcp(body, &mut Ctx::new(ui, &cv, scpi)).unwrap()).unwrap()
+        parse(&crate::site::mcp(body, &mut Ctx::new(ui, &cv, scpi)).unwrap().text()).unwrap()
     };
     let init = ask(&mut ui, &mut scpi, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#);
     let rules = init.get("result").and_then(|r| r.get("instructions")).and_then(J::str).unwrap().to_string();
