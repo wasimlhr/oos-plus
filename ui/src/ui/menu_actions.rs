@@ -749,8 +749,10 @@ impl Ui {
             }
             Item::PaneSel => {
                 self.m.pane = (self.m.pane as i32 + d).rem_euclid(tables::PANES.len() as i32) as usize;
-                // a pane chosen from the Windows page in Scope makes it Split
-                if self.m.density == Density::Scope && self.m.pane != 0 { self.m.density = Density::Split; }
+                // a pane chosen from the Windows page in Scope makes it Split (Minimal and Studio list it in Scope)
+                if self.m.layout != Layout::Default && self.m.density == Density::Scope && self.m.pane != 0 {
+                    self.m.density = Density::Split;
+                }
                 if self.m.density == Density::Split {
                     self.m.split_pane = self.m.pane;
                     let prev = self.m.win_layout;
@@ -1014,6 +1016,7 @@ impl Ui {
                 }
             }
             Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::AfgFreqEntry) => self.freq_key(k),
+            Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::NumEntry) => self.row_pad_key(k),
             // a picker its page answers for (ADR 0060)
             Item::PickOpt(k) if self.pick.is_some_and(|p| Self::page_of_pick(p.it).is_some()) => {
                 if let Some((it, page)) = self.pick.and_then(|p| Some((p.it, Self::page_of_pick(p.it)?))) {
@@ -1101,11 +1104,7 @@ impl Ui {
                     self.toast("Counter cleared");
                 }
             }
-            Item::DecTable => {
-                let on = self.events_pane_on();
-                self.set_events_pane(!on);
-                self.close_menu();
-            }
+            Item::DecTable => self.decode_table_toggle(),
             Item::DecThrMid => self.dec_threshold_to_middle(),
             Item::DecExport => self.decode_export(),
             Item::SearchTable => self.table_toggle(tables::TableKind::Search),

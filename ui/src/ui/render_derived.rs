@@ -8,6 +8,10 @@
 
 use super::*;
 
+/// Height of a decoder band in Default, upstream's: the name and one row of boxes (Minimal and Studio: `DEC_BAND` and a
+/// bit row, `decband.rs`).
+pub(super) const DEC_BAND_DEFAULT: i32 = 28;
+
 /// The mask test in software as the screen keeps it (ADR 0062); the mask unit in the FPGA is `hwmask::Unit`.
 #[derive(Default)]
 pub(super) struct MaskTest {
@@ -778,9 +782,10 @@ impl Ui {
     /// of its main line. With that channel off the decoder stays as it is set and its band comes back with the
     /// channel; a band that only said "source channel off" stood in the plot of the other channels (seen on a unit,
     /// 2026-11-19).
+    /// Default keeps upstream's band: there for every decoder that is on, whatever its channel.
     pub(super) fn dec_shown(&self, k: usize) -> bool {
-        if !self.m.dec_is_on(k) {
-            return false;
+        if !self.m.dec_is_on(k) || self.m.layout == Layout::Default {
+            return self.m.dec_is_on(k);
         }
         let m = self.m.dec_view(k);
         m.dec_on_la() || !matches!(decode_wave(m.dec_src), Some(WaveId::Ch(c)) if !self.m.ch[c].on)
@@ -788,7 +793,11 @@ impl Ui {
 
     /// Room under the lowest decoder band of the window being drawn: the time labels along the lower edge of the
     /// plot. A lane that has none (every Stacked lane but the last) has the band at its foot, clear of its trace.
+    /// Default keeps upstream's place: always above the time labels.
     pub(super) fn dec_foot(&self) -> i32 {
+        if self.m.layout == Layout::Default {
+            return 26;
+        }
         let lanes = self.stacked() && self.plot.wins.len() > 1;
         let labels = self.plot.cur_win + 1 >= self.plot.wins.len() || self.studio_lane_has_own_time();
         if lanes && !labels {
@@ -806,6 +815,9 @@ impl Ui {
         }
         if self.last[0].is_none() && !self.refs.iter().any(Option::is_some) {
             return;
+        }
+        if self.m.layout == Layout::Default {
+            return self.draw_decode_default(cv);
         }
         // bands stand on each other from the bottom; one with a bit row is taller
         let (mut stack, mut lane) = (0, 0);
@@ -837,4 +849,121 @@ impl Ui {
         }
     }
 
+    /// Default's decoder bands and rows, upstream's: bands at the bottom of the plot, or rows under the lanes for those
+    /// on LA lines.
+    fn draw_decode_default(&self, cv: &mut Canvas) {
+        let (mut band, mut lane) = (0, 0);
+        let bottom = self.plot.area.y + self.plot.area.h - 46;
+        for k in 0..DECODERS {
+            if !self.m.dec_is_on(k) {
+                continue;
+            }
+            let m = self.m.dec_view(k);
+            // rows under the lanes go with the LA's window, bands with their source's
+            let win = self.dec_band_win(k);
+            let row = if win.is_none() { self.la_dec_row_n(lane) } else { None };
+            if row.is_some() {
+                lane += 1;
+            }
+            if win.unwrap_or(self.la_win_of()) != self.plot.cur_win {
+                continue;
+            }
+            let y = match row {
+                Some(r) => r.y + 3,
+                None => {
+                    band += 1;
+                    bottom - (band - 1) * DEC_BAND_DEFAULT
+                }
+            };
+            self.draw_decoder_default(cv, &m, k, y, row);
+        }
+    }
+
+    /// One decoder's band in Default, upstream's, at height y; row = its place under the lanes: a dim name ("1 UART
+    /// CH1"), the fields as boxes and the events as tags. Minimal and Studio draw the band of `decband.rs`.
+    fn draw_decoder_default(&self, cv: &mut Canvas, m: &Model, k: usize, y: i32, row: Option<Rect>) {
+        use oos_dsp::decode::Kind;
+        let f = self.fonts();
+        let a = self.plot.area;
+        let col = if m.dec_on_la() {
+            la::line_color(m.dec_la[0].unwrap_or(0))
+        } else {
+            decode_wave(m.dec_src).map_or(DIM, |source| self.wave_color(source))
+        };
+        // rows under the lanes span all windows, like the lanes
+        let a = if row.is_some() { self.lane_area() } else { a };
+        let h = 20;
+        cv.set_clip(row.unwrap_or(a));
+        if row.is_none() {
+            cv.blend(Rect::new(a.x, y - 3, a.w, h + 6), BG, 200);
+        }
+        let name = if m.dec_on_la() {
+            format!("{} {}", k + 1, m.dec_proto.name())
+        } else {
+            format!("{} {} {}", k + 1, m.dec_proto.name(), decode_source_name(m.dec_src))
+        };
+        cv.text(&f.sb, a.x + 4, y + 15, &name, DIM);
+        let packets = match self.decode_packets_of(m) {
+            Ok(p) => p,
+            Err(e) => {
+                cv.text(&f.s, a.x + 16 + f.sb.width(&name), y + 15, e, DIM);
+                cv.no_clip();
+                return;
+            }
+        };
+        let (tdiv, delay) = self.view();
+        let ppx = a.w as f64 / HDIV as f64;
+        let xt = |t: f64| (a.x as f64 + a.w as f64 / 2.0 + (t - delay as f64) / tdiv as f64 * ppx).round() as i32;
+        let left = a.x + 10 + f.sb.width(&name);
+        let mut x_prev_end = left;
+        for p in packets.iter() {
+            let (x0, x1) = (xt(p.t0), xt(p.t1));
+            if x1 < left || x0 > a.x + a.w {
+                continue;
+            }
+            let event = matches!(p.kind, Kind::Field(l) if l.starts_with('!'));
+            if let Some(tag) = packet_tag(m, p) {
+                let r = Rect::new(x0 - f.s.width(tag) / 2 - 3, y + 3, f.s.width(tag) + 6, h - 6);
+                let bad = p.kind == Kind::Stop || ((p.kind == Kind::Ack || event) && !p.ok);
+                cv.round(r, 3, if bad { mix(BG, RED, 140) } else { mix(BG, GREEN, 140) }, 255);
+                cv.text_in(&f.s, r, 1, tag, TEXT);
+                continue;
+            }
+            let x0 = x0.max(x_prev_end + 1);
+            if x1 - x0 < 3 {
+                continue;
+            }
+            let is_addr =
+                matches!(p.kind, Kind::Addr { .. } | Kind::Id { .. } | Kind::Word { cmd: true } | Kind::Field(_));
+            let base = if is_addr { ACCENT } else { col };
+            let fill = if p.ok { scale(base, 70) } else { rgb(0x70, 0x18, 0x18) };
+            cv.fill(Rect::new(x0 + 3, y, x1 - x0 - 6, h), fill);
+            cv.line(x0, y + h / 2, x0 + 3, y, base);
+            cv.line(x0, y + h / 2, x0 + 3, y + h - 1, base);
+            cv.line(x1, y + h / 2, x1 - 3, y, base);
+            cv.line(x1, y + h / 2, x1 - 3, y + h - 1, base);
+            cv.hline(x0 + 3, x1 - 3, y, base);
+            cv.hline(x0 + 3, x1 - 3, y + h - 1, base);
+            let txt = packet_text(m, p);
+            if f.s.width(&txt) + 6 < x1 - x0 {
+                cv.text_in(&f.s, Rect::new(x0, y, x1 - x0, h), 1, &txt, TEXT);
+            }
+            x_prev_end = x1;
+        }
+        // threshold line on the source trace (LA lines have no analog level)
+        if !m.dec_on_la() && m.dec_proto != Proto::CPHY {
+            let Some(source) = decode_wave(m.dec_src) else {
+                cv.no_clip();
+                return;
+            };
+            let ty = self.y_of_wave(source, m.dec_thr);
+            cv.dashed_hline(a.x + 26, a.x + a.w - 26, ty, 2, 6, scale(col, 160));
+            if m.dec_proto.module().is_some_and(|p| p.key() == "Arinc429") {
+                // the LO level of ARINC 429
+                let ty = self.y_of_wave(source, -m.dec_thr);
+                cv.dashed_hline(a.x + 26, a.x + a.w - 26, ty, 2, 6, scale(col, 160));
+            }
+        }
+        cv.no_clip();
+    }
 }

@@ -663,7 +663,7 @@ Statistics count accepted observations. A stopped reference can have a valid cur
 | `:MATH<n>:FFT:SOURce[?]`, `:SCALe[?]` | FFT input and dB display scale; the window is below. |
 | `:MATH<n>:FILTer:TYPE[?]`, `:W1[?]`, `:W2[?]` | Supported low/high/band-pass/stop filter and valid corner frequencies. |
 | `:BUS<n>:MODE[?]`, `:DISPlay[?]`, `:FORMat[?]` | Decoder protocol, visibility, `HEX|ASCii` formatting. |
-| `:BUS<n>:EVENt[?]` | Shared decode event-table visibility. |
+| `:BUS<n>:EVENt[?]` | Shared decode event-table visibility: the Event table over the plot in the Default layout, the Events pane in Minimal and Studio. |
 | `:BUS<n>:THReshold[?]` | Decoder threshold in source units. |
 | `:BUS<n>:DATA?` | Ready event rows in an IEEE block. `BUSY` while required decoding is pending; unavailable sources return an error. |
 | `:BUS<n>:RS232:TX[?]`, `:RX[?]` | CH/ref role identities. UART decoding uses the configured primary input. |

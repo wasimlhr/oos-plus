@@ -17,6 +17,13 @@ A value with an SI unit takes its prefix (`2.00 mV`). A count reads as a whole n
 plain decimal (`0.498`), and `ppm`, `rpm` and `rpm/s` take no prefix (`1500 rpm`). Over SCPI (`:MEAS:STRIP?`)
 the values come in exponent form.
 
+With more measurements than three rows hold, the strip pages: **Prev** and **Next** stand in a row under it beside
+`Measurements 1-18 of 20` and the gate (Screen or Full record). A value that cannot be computed reads `----`, and the
+measurements of a channel that is off stay in the strip. In Minimal and Studio the strip takes the long names where
+they fit (`Positive Duty Cycle`), leaves out the measurements of a source that is off until it is on again, says in a
+few words why a value is missing (`none in window`), and is only as high as its values need, with Prev and Next in its
+last column.
+
 ### Adding a measurement
 
 1. Tap **Measure** in the top bar (or Menu > Measure; on a USB keyboard the key M). The measurement page opens.
@@ -141,7 +148,7 @@ see [[SCPI and VXI-11]].
 
 ![Trend pane](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/pane-trend.png)
 
-**Events:** what the decoders found, with time and decoder. From 0.1.6 the DCC decoder lists one command per row ("Loco 5  Fwd 50/128", "Turnout 3  Left").
+**Events:** what the decoders found, with time and decoder. From 0.1.6 the DCC decoder lists one command per row ("Loco 5  Fwd 50/128", "Turnout 3  Left"). In the Default layout this is a list of the fields, and **Decode > Event table** opens the decoder events as a table over the plot; Minimal and Studio list messages, fields or lines here, with Errors only, and Decode > Events pane opens this pane.
 
 **Bus view** (from 0.1.6): a protocol's own picture of what it decoded. The DCC decoder for model railways shows the layout it controls, collected over the records until **Clear**: locomotives with direction, speed and functions, turnouts, signals, and the track status, green while the track is live and red after an emergency stop. On a track, measure the two rails with two probes as a pair (**Decode > B line (A-B)**) with a threshold of 0 V.
 

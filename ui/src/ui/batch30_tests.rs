@@ -82,8 +82,9 @@ fn tap_segment(u: &mut Ui, it: Item, k: usize, n: usize) {
 fn views_row_options(u: &Ui) -> usize { u.options(Item::Views).len() }
 
 #[test]
-fn choosing_a_view_count_closes_the_dialog_toasts_and_the_new_view_is_a_copy_in_every_layout() {
-    for l in LAYOUTS {
+fn choosing_a_view_count_closes_the_dialog_toasts_and_the_new_view_is_a_copy_in_minimal_and_studio() {
+    // Default is upstream's (a new view starts with the plot alone): views.rs tests it
+    for l in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(l);
         u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(1))];
         u.m.zoom = true;
@@ -126,8 +127,9 @@ fn a_view_count_picked_with_the_stepper_or_by_scpi_also_says_which_view_is_shown
 }
 
 #[test]
-fn fewer_views_keep_the_content_on_screen_in_every_layout() {
-    for l in LAYOUTS {
+fn fewer_views_keep_the_content_on_screen_in_minimal_and_studio() {
+    // Default is upstream's (a new view starts with the plot alone): views.rs tests it
+    for l in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(l);
         u.views_set(4);
         u.view_go(3);
@@ -289,13 +291,16 @@ fn tapping_a_greyed_reference_row_in_the_dialog_or_the_sheet_shows_the_toast() {
         tap_rect(&mut u, plus);
         assert_eq!(toast(&u), "Store a reference first", "{l:?}: slot offset");
         assert_eq!(u.refs.iter().flatten().count(), 0, "{l:?}: nothing was made");
-        // the value of the number row does not open the pad
+        // the value of the number row does not open the pad; in Default (upstream's pad, rows with a unit only) the
+        // value of the offset of a slot opens nothing, so there is nothing to refuse
         clear_toast(&mut u);
         let (c, _) = ctrl_of(&mut u, Item::RefOffset);
         let (_, mid, _) = Ui::value_parts(c);
         tap_rect(&mut u, mid);
-        assert_eq!(toast(&u), "Store a reference first", "{l:?}: the value");
-        assert!(u.numpad.is_none(), "{l:?}");
+        if l != Layout::Default {
+            assert_eq!(toast(&u), "Store a reference first", "{l:?}: the value");
+        }
+        assert!(u.numpad.is_none() && u.pick.is_none(), "{l:?}");
         if l == Layout::Default {
             // the slot rows R1..R10 of the classic dialog
             clear_toast(&mut u);
@@ -383,8 +388,8 @@ fn copy_meas_to_says_what_it_copied_and_the_row_stops_saying_pick() {
 
 #[test]
 fn pictures_of_the_views_the_studio_bar_an_off_source_and_a_greyed_slot() {
-    // Views 2, copied: the plot with a measurement in both views
-    let mut u = fresh(Layout::Default);
+    // Views 2, copied (Minimal; Default's new view starts with the plot alone): a measurement in both views
+    let mut u = fresh(Layout::Minimal);
     u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0))];
     u.open_menu(MenuId::Display);
     let n = views_row_options(&u);

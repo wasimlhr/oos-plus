@@ -201,6 +201,12 @@ impl Ui {
                     let pitch = (row(y).right() - 2 - vx) / part.len() as i32;
                     for (i, &(k, r)) in part.iter().enumerate() {
                         let x = vx + i as i32 * pitch;
+                        if self.stock_readouts() {
+                            // the stock row (Default): the short name, then the value
+                            let x2 = cv.text(&f.s, x, y + base, &r.name, DIM) + 8;
+                            cv.text(&f.sb, x2, y + base, &r.text(), col);
+                            continue;
+                        }
                         // name and value share the cell; where the long name does not fit (the larger text sizes) the
                         // short one is taken, then it is cut, then dropped, and the value is cut last, so nothing runs
                         // over the edge of the screen
@@ -295,7 +301,8 @@ impl Ui {
             let name_w = vx - 6 - text_x;
             if name_w > 8 && !line.name.is_empty() {
                 cv.set_clip(Rect::new(text_x, bar.y, name_w, bar.h));
-                cv.text(&f.s, text_x, base, if f.s.width(&line.name) <= name_w { &line.name } else { &line.short }, DIM);
+                let fits = self.stock_readouts() || f.s.width(&line.name) <= name_w;
+                cv.text(&f.s, text_x, base, if fits { &line.name } else { &line.short }, DIM);
                 cv.set_clip(col);
             }
             y += pitch;

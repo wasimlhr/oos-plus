@@ -224,6 +224,7 @@ impl Ui {
             | Item::I2cAddrBits
             | Item::I2cBytes => return Self::serial_options(it),
             Item::AfgFreqEntry => return FREQ_KEYS.iter().map(|k| k.to_string()).collect(),
+            Item::NumEntry => return self.row_pad_keys(),
             Item::WlanNet => return self.wlan_net_options(),
             Item::WlanForgetNet => return self.wlan_forget_options(),
             Item::RefImport => return self.ref_page.files.iter().map(|p| crate::store::list_name(p)).collect(),
@@ -793,6 +794,13 @@ impl Ui {
                         self.adjust(row.it, -1);
                     } else if pl.contains(x, y) {
                         self.adjust(row.it, 1);
+                    } else if self.m.layout == Layout::Default {
+                        // upstream's: the number itself is typed on its pad (issue #22), on the rows with a unit
+                        if matches!(row.ctl, Ctl::Value) && self.row_pad_unit(row.it).is_some() {
+                            self.open_row_pad(row.it);
+                        } else if let Ctl::Pick = row.ctl {
+                            self.open_picker(row.it);
+                        }
                     } else if let Ctl::Pick = row.ctl {
                         self.open_picker(row.it);
                     } else if mid.contains(x, y) {

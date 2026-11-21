@@ -1168,6 +1168,8 @@ pub struct Ui {
     keypad: String,
     /// the numeric entry pad of the Studio sheets (ui/numpad.rs); its text is `keypad`
     numpad: Option<numpad::NumPad>,
+    /// the number pad of a value row in Default, upstream's (ui/numpad.rs); its text is `keypad`
+    row_pad: numpad::RowPad,
     /// the value a ladder stepper started from when it was between two rungs: (item, that value, the rung it went to)
     ladder_home: Option<(Item, f64, f64)>,
     /// the last press of an `Add` stepper that ran into a limit: (item, the limit, the value it came from)
@@ -1439,7 +1441,7 @@ fn fmt_count(v: f64) -> String {
 
 /// Text of one decoded field.
 fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
-    use oos_dsp::decode::Kind;
+    use oos_dsp::decode::{Kind, I2C_NAK_END};
     if let Some(t) = m.dec_proto.module().and_then(|x| x.text(p, &m.dec_opts())) {
         return t;
     }
@@ -1449,6 +1451,8 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
     // (the mark on the byte that ends an I2C read is no second value)
     let second = p.value2.filter(|_| m.dec_proto != Proto::I2C);
     let chars = p.kind == Kind::Data && second.is_none() && p.ok && decband::ascii(m);
+    // Default keeps upstream's mark on the byte a controller ends an I2C read with: not acknowledged, and no error
+    let nak_end = m.layout == Layout::Default && m.dec_proto == Proto::I2C && p.value2 == Some(I2C_NAK_END);
     match p.kind {
         Kind::Addr { read } => {
             format!("{} {}{}", hex(p.value), if read { "R" } else { "W" }, if p.ok { "" } else { " N" })
@@ -1498,6 +1502,7 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
             _ => format!("{} {:X}{}", l, p.value, if p.ok { "" } else { " !" }),
         },
         Kind::Ack => format!("ACK {}", p.value),
+        _ if nak_end => format!("{} N", hex(p.value)),
         _ if chars && p.value == 0x20 => "SP".to_string(),
         _ if chars && (0x21..0x7f).contains(&p.value) => format!("{}", p.value as u8 as char),
         _ => match second {

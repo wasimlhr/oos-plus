@@ -339,11 +339,13 @@ fn sim_usb32_gen2_uses_the_record_timebase() {
     for want in
         ["Pk-pk", "Freq", "Period", "Rise", "Fall", "+Duty", "Amp", "Overshoot", "+Width", "-Width", "+Slew", "+Edges"]
     {
-        let shown = super::meascatalog::display_of_key(want).unwrap_or(want);
+        // Default has the short names themselves, Minimal and Studio the long ones
+        let shown = if u.stock_readouts() { want } else { super::meascatalog::display_of_key(want).unwrap_or(want) };
         let row = rows.iter().find(|r| r.name == shown).unwrap_or_else(|| panic!("missing {want}"));
         assert!(!row.v.is_infinite(), "{want} {}", row.v);
     }
-    let vpp = rows.iter().find(|r| r.name == "Peak-to-Peak").unwrap().v;
+    let vpp_name = if u.stock_readouts() { "Pk-pk" } else { "Peak-to-Peak" };
+    let vpp = rows.iter().find(|r| r.name == vpp_name).unwrap().v;
     assert!(vpp > 0.5 && vpp < 1.2, "vpp {}", vpp);
     assert!(!u.m.meas_labels, "labels are opt-in so initial SIM does not hide the waveform");
     let mut cv = Canvas::new(W, H);

@@ -436,6 +436,18 @@ pub(super) type Layout = (MenuId, &'static str, fn(&mut Ui), &'static [Item]);
 /// The longest states of the pages of `PAGES`, for the layout lint.
 #[cfg(test)]
 pub(super) const LAYOUTS: &[Layout] = &[
+    // Default's number pad (upstream's picker, numpad.rs) with the longest entry, its title the longest row name of a
+    // channel
+    (
+        MenuId::Channel(0),
+        "default number pad",
+        |u| {
+            u.m.layout = crate::model::Layout::Default;
+            u.row_pad.target = Some(Item::ChOffset(0));
+            u.keypad = "-1234.5678901".into();
+        },
+        &[Item::NumEntry],
+    ),
     // the number pad (oos-plus's overlay, numpad.rs) with the longest entry, over the page of a channel
     (
         MenuId::Channel(0),

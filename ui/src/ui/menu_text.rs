@@ -38,6 +38,8 @@ impl Ui {
         let t = self.m.trig_type;
         let two_level = matches!(t, TrigType::Slope | TrigType::Runt | TrigType::Window);
         match it {
+            // Default's Windows page has upstream's density row; Minimal and Studio name it after oos-next
+            Item::WinLayout if self.m.layout == Layout::Default => "Density",
             Item::CurA if self.m.cursor == CursorMode::Xy => "X1",
             Item::CurB if self.m.cursor == CursorMode::Xy => "X2",
             Item::TrigLevel if two_level => "Upper",
@@ -63,6 +65,8 @@ impl Ui {
             Item::DecThr if self.m.dec_proto == Proto::CPHY => "Min level gap",
             Item::TrigT1 if matches!(self.m.trig_when, WhenKind::In | WhenKind::Out) => "Lower limit",
             Item::NavHist if self.history.pos.is_some() => "Live",
+            // Default keeps upstream's Event table over the plot; Minimal and Studio list the events in the pane
+            Item::DecTable if self.m.layout == Layout::Default => "Event table",
             _ => Self::label(it),
         }
     }
@@ -74,6 +78,7 @@ impl Ui {
         match menu {
             MenuId::Pick => match self.pick {
                 Some(p) if Self::hex_item(p.it) => format!("{} \u{b7} 0x{}_", self.item_label(p.it), self.keypad),
+                Some(p) if p.it == Item::NumEntry => self.row_pad_title(),
                 Some(p) if p.it == Item::AfgFreqEntry => {
                     format!("Frequency \u{b7} {}_ (max {})", self.keypad, si_short(self.m.gen_max_hz(), "Hz"))
                 }

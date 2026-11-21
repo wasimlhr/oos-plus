@@ -1488,8 +1488,12 @@ mod tests {
             }
             // the measurement row of the waveform area (Studio's badges: the panel draws them with its bottom bar);
             // Studio's waveform is in a dock whose title strip comes along
-            let studio = layout == model::Layout::Studio;
-            let want: &[&str] = if studio { &["Pk-pk", "Waveform"] } else { &["Peak-to-Peak"] };
+            // Default has upstream's short names in its strip, Minimal the long ones
+            let want: &[&str] = match layout {
+                model::Layout::Studio => &["Pk-pk", "Waveform"],
+                model::Layout::Default => &["Pk-pk"],
+                model::Layout::Minimal => &["Peak-to-Peak"],
+            };
             for w in want {
                 assert!(monitor.contains_key(*w), "{:?}: {:?} in {:?}", layout, w, monitor.keys());
             }
