@@ -209,7 +209,7 @@ fn mask_sim_and_la_pages() {
     shot(&mut u, "la-lines");
     let first = g.rows[0].it;
     let before = u.value(first);
-    tap_in(&mut u, g.rows[0].ctrl);
+    tap_in(&mut u, Ui::sheet_toggle_half(g.rows[0].ctrl, before != "On"));
     assert_ne!(u.value(first), before, "a tap changes the line");
     tab(&mut u, 3);
     let g = u.sheet_geo().unwrap();

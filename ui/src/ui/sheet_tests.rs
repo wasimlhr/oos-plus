@@ -222,7 +222,7 @@ fn rows_call_the_existing_menu_logic() {
     let inv = g.rows.iter().find(|r| r.it == Item::ChInvert(0)).unwrap();
     assert_eq!(inv.kind, RowKind::Toggle);
     let was = u.m.ch[0].invert;
-    tap_in(&mut u, inv.row);
+    tap_in(&mut u, Ui::sheet_toggle_half(inv.ctrl, !was));
     assert_ne!(u.m.ch[0].invert, was);
     // number: scale +
     let sc = g.rows.iter().find(|r| r.it == Item::ChScale(0)).unwrap();

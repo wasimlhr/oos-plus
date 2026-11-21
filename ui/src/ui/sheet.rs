@@ -638,6 +638,18 @@ impl Ui {
         }
     }
 
+    /// The button of an Off | On row that sets `on` (tests tap it).
+    #[cfg(test)]
+    pub(super) fn sheet_toggle_half(c: Rect, on: bool) -> Rect {
+        let sw = (c.w - 4) / 2;
+        Rect::new(c.x + if on { sw + 4 } else { 0 }, c.y, sw, c.h)
+    }
+
+    /// The toggle rows whose value is not "Off" or "On": one step is the switch.
+    pub(super) fn sheet_is_switch(it: Item) -> bool {
+        matches!(it, Item::RefShow(_) | Item::SimShow)
+    }
+
     /// The row type of an item, from the control the classic dialog would give it.
     pub(super) fn sheet_row_kind(&self, it: Item) -> RowKind {
         let w = SHEET_W - 2 * PAD - self.sheet_label_w(it);
@@ -801,7 +813,7 @@ impl Ui {
             let label = Rect::new(row.x, row.y, lw, row.h);
             let ctrl = match kind {
                 RowKind::Link => Rect::new(row.x, row.y + 2, row.w, SHEET_ROW - 4),
-                RowKind::Toggle => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
+                RowKind::Toggle if Self::sheet_is_switch(it) => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
                 _ => Rect::new(row.x + lw, row.y + 2, row.w - lw, SHEET_ROW - 4),
             };
             rows.push(SheetRowGeo { it, kind, row, label, ctrl });
@@ -990,6 +1002,20 @@ impl Ui {
                 btn(cv, pl, BTN, BTN_BORDER);
                 Self::draw_sign(cv, pl, true);
             }
+            RowKind::Toggle if !Self::sheet_is_switch(it) => {
+                let on = self.sheet_on(it);
+                let sw = (c.w - 4) / 2;
+                for (k, o) in ["Off", "On"].into_iter().enumerate() {
+                    let r = Rect::new(c.x + k as i32 * (sw + 4), c.y, sw, c.h);
+                    if on == (k == 1) {
+                        cv.round(r, 5, ACCENT, 255);
+                        cv.text_in(&f.sb, r, 1, o, DARK_TEXT);
+                    } else {
+                        btn(cv, r, BTN, BTN_BORDER);
+                        cv.text_in(&f.s, r, 1, o, TEXT);
+                    }
+                }
+            }
             RowKind::Toggle => {
                 let on = self.sheet_on(it);
                 cv.round(c, c.h / 2, if on { ACCENT } else { BTN_BORDER }, 255);
@@ -1160,7 +1186,12 @@ impl Ui {
                     self.adjust(it, 1);
                 } else {
                     let on = self.sheet_on(it);
-                    self.select_option(it, if on { "Off" } else { "On" });
+                    // Off | On: a button sets its own state, the one that is set stays; a tap beside the two
+                    // (the label) flips it
+                    let want = if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !on };
+                    if want != on {
+                        self.select_option(it, if on { "Off" } else { "On" });
+                    }
                 }
             }
             RowKind::Link => self.activate(it),
