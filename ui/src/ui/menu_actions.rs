@@ -834,7 +834,7 @@ impl Ui {
     }
 
     pub(super) fn clear_measurement_statistics(&mut self) {
-        self.mstat.clear();
+        self.results.rows.clear();
         // the settings of a row that is no longer selected go with it
         if !self.m.row_cfg.is_empty() {
             let keys = self.m.row_keys();
@@ -1156,7 +1156,7 @@ impl Ui {
                 self.rec_action(":SAVE:IMAGe");
                 // without the dialog on it
                 self.close_menu();
-                self.shot_request = Some(String::new());
+                self.asks.shot = Some(String::new());
             }
             Item::MathAuto => self.math_autoscale(),
             Item::MathOff => self.math_turn_off(self.m.math_sel),

@@ -384,7 +384,7 @@ pub struct Model {
     pub grid_bright: u32,
     pub grid_frame: bool,
     /// Display > Skin: the look of the screen (ui/skin.rs)
-    pub skin: crate::ui::skin::Skin,
+    pub skin: Skin,
     /// waveform windows, and the window (0-based) of each channel and math channel
     pub win_layout: WinLayout,
     /// Scope, Full, Split, Four. This is what the Windows row sets; `win_layout` is the split it asked for.

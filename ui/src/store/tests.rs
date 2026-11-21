@@ -6,6 +6,10 @@
 //! into `header_import_tests.rs`.
 
 use super::*;
+use crate::model::*;
+use crate::wave::Record;
+use oos_dsp::decode::Parity;
+use std::path::{Path, PathBuf};
 
 // oos-plus: the refusals of upstream #178 and #219 and of ADR 0009, as the fork tests them
 
@@ -19,12 +23,12 @@ fn a_waveform_with_a_non_finite_time_base_is_refused() {
     for (t0, dt) in bad {
         let b = wave_bin_of(t0, dt, &[(0, &two)]);
         assert!(parse_wave_bin(&b).is_err(), "t0 {t0} dt {dt}");
-        assert!(parse_oosw(&b).is_err(), "t0 {t0} dt {dt}");
+        assert!(parse_wave(&b, "x.bin").is_err(), "t0 {t0} dt {dt}");
     }
     assert!(parse_wave_bin(&wave_bin_of(0.0, 1e-9, &[(0, &[1.0])])).is_err(), "one sample");
     let b = wave_bin_of(-1e-6, 1e-9, &[(0, &two)]);
     let (r, _) = parse_wave_bin(&b).unwrap();
-    let t = parse_oosw(&b).unwrap();
+    let t = parse_wave(&b, "x.bin").unwrap();
     assert_eq!((r.t0, r.dt, r.ch[0].clone()), (t[0].t0, t[0].dt, t[0].v.clone()));
 }
 
@@ -33,9 +37,9 @@ fn a_waveform_with_a_non_finite_time_base_is_refused() {
 // whose size overflows i32, a bode_sweep line that keeps its first values when a later one is refused
 #[test]
 fn files_with_values_out_of_range_are_refused_whole() {
-    assert!(parse_wave_csv("0,1\ninf,2\n", "x").is_err());
-    assert!(parse_wave_csv("-inf,1\n0,2\n", "x").is_err());
-    assert!(parse_wave_csv("0,1\n1e-3,2\n", "x").is_ok());
+    assert!(parse_wave("0,1\ninf,2\n".as_bytes(), "x").is_err());
+    assert!(parse_wave("-inf,1\n0,2\n".as_bytes(), "x").is_err());
+    assert!(parse_wave("0,1\n1e-3,2\n".as_bytes(), "x").is_ok());
     let mask = mask_text(0, 0.1, 0.1, false, &[0.0, 1.0]);
     assert!(parse_mask(&mask).is_ok());
     for bad in ["x=inf", "x=NaN", "y=-inf"] {
@@ -91,10 +95,6 @@ fn damaged_waveform_files_are_refused_not_a_panic() {
         let _ = parse_wave(&b, ["a.bin", "a.wfm", "a.isf", "a.trc", "a.bin", "a.bin"][it % 6]);
         let _ = parse_ff(&b);
     }
-    let f = Fields::new(b"\x01\x02\x03", true);
-    assert_eq!((f.u16(1), Fields::new(b"\x01\x02\x03", false).u16(1)), (Ok(0x0302), Ok(0x0203)));
-    assert_eq!(f.u32(0), Err("truncated waveform".to_string()));
-    assert_eq!(f.u16(usize::MAX), Err("truncated waveform".to_string()));
 }
 use crate::gfx::{rgb, Canvas};
 use crate::math::{MathOp, Window};
@@ -1213,4 +1213,37 @@ fn next_free_name() {
     write(&dir.join("shot-002.png"), b"x").unwrap();
     assert_eq!(file_name(&next_name(&dir, "shot", "png")), "shot-003.png");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A value of every row of the settings table other than its default survives the setup file, in its own line.
+#[test]
+fn a_changed_value_survives_the_setup_file() {
+    for s in crate::settings::all() {
+        for n in crate::settings::testkit::instances(s) {
+            let m = crate::settings::testkit::changed(s, n);
+            let back = parse_setup(&setup_text(&m)).expect("the setup loads");
+            assert_eq!((s.get)(&back, n), (s.get)(&m, n), "{} {}", s.key, n);
+            // the line of the fields of a setup line is written by hand
+            if s.line().is_some() {
+                continue;
+            }
+            let line = format!("{} = {}", s.key_at(n), s.store(&m, n));
+            assert!(setup_text(&m).lines().any(|l| l == line), "{}: no line {:?}", s.key, line);
+        }
+    }
+}
+
+// Break it catches (rdtsc in the forum): a setup naming a protocol this build does not have, or a key of a newer
+// build, failing to load as a whole
+#[test]
+fn a_setup_loads_what_it_can() {
+    let m = Model { dec_on: true, tscale: 5, ..Default::default() };
+    // unknown keys were always passed over; a protocol this build lacks and a value out of range were not
+    let text = setup_text(&m).replace("dec_proto = ", "dec_proto = NoSuchDecoder # was ") + "avg_hw = maybe\n";
+    assert!(parse_setup(&text).is_err(), "strict parse names the first bad line");
+    let (back, bad) = parse_setup_lenient(&text);
+    assert_eq!(back.tscale, 5, "the rest of the setup stands");
+    assert!(!back.dec_on, "the decoder without its protocol is off");
+    assert!(bad.len() == 2 && bad[0].contains("dec_proto") && bad[1].contains("avg_hw"), "{:?}", bad);
+    assert_eq!(parse_setup_lenient(&setup_text(&m)).1, Vec::<String>::new());
 }

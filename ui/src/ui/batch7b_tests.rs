@@ -440,9 +440,9 @@ fn statistics_settings_are_a_page_with_a_reset_and_follow_the_toggles() {
     assert_eq!(u.value(Item::MeasPop), "Accumulated");
     assert_eq!((u.value(Item::MeasShowSd), u.value(Item::MeasShowMin), u.value(Item::MeasShowMax)), ("On".into(), "On".into(), "On".into()));
     // the population: Current starts a new history
-    u.mstat = vec![MStat { n: 5, sum: 5.0, ..Default::default() }];
+    u.results.rows = vec![MStat { n: 5, sum: 5.0, ..Default::default() }];
     u.adjust(Item::MeasPop, 1);
-    assert!(u.m.meas_pop_current && u.mstat.is_empty(), "the history of the other population is dropped");
+    assert!(u.m.meas_pop_current && u.results.rows.is_empty(), "the history of the other population is dropped");
     // the toggles are Toggle rows on the sheet
     let g = u.sheet_geo().unwrap();
     assert!(g.rows.iter().filter(|r| matches!(r.it, Item::MeasShowSd | Item::MeasShowMin | Item::MeasShowMax)).all(|r| r.kind == RowKind::Toggle));
@@ -450,10 +450,10 @@ fn statistics_settings_are_a_page_with_a_reset_and_follow_the_toggles() {
     tap_in(&mut u, Ui::sheet_toggle_half(sd, false));
     assert_eq!(u.m.meas_show, [false, true, true]);
     // the reset button of the footer
-    u.mstat = vec![MStat { n: 9, ..Default::default() }];
+    u.results.rows = vec![MStat { n: 9, ..Default::default() }];
     let g = u.sheet_geo().unwrap();
     tap_in(&mut u, g.foot[0].1);
-    assert!(u.mstat.is_empty());
+    assert!(u.results.rows.is_empty());
     shot(&mut u, "b7b-card-statistics");
 }
 
@@ -486,14 +486,14 @@ fn the_studio_table_and_the_results_pane_follow_the_shown_columns() {
     let mut u = card(Layout::Studio, &[(Meas::Period, r0), (Meas::Vpp, r0)], &[]);
     u.studio_set_view(StudioView::Only);
     u.studio.panel.stats = true;
-    u.mstat = vec![MStat { n: 3, sum: 3.0, sumsq: 4.0, min: 0.5, max: 2.0 }; 2];
+    u.results.rows = vec![MStat { n: 3, sum: 3.0, sumsq: 4.0, min: 0.5, max: 2.0 }; 2];
     shot(&mut u, "b7b-table-all");
     u.m.meas_show = [false, true, false];
     shot(&mut u, "b7b-table-min");
     // the results pane of Default hides the cells of columns that are off
     let mut d = card(Layout::Default, &[(Meas::Vpp, r0)], &[]);
     d.results.on = true;
-    d.mstat = vec![MStat { n: 3, sum: 3.0, sumsq: 4.0, min: 0.5, max: 2.0 }];
+    d.results.rows = vec![MStat { n: 3, sum: 3.0, sumsq: 4.0, min: 0.5, max: 2.0 }];
     let all = d.result_rows();
     assert!(all[0].cells.iter().all(|c| !c.is_empty()), "{:?}", all[0].cells);
     d.m.meas_show = [false, true, false];

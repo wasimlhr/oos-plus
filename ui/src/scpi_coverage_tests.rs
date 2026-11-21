@@ -180,8 +180,8 @@ fn trigger(t: &mut T) {
     t.rn(":TRIG:LEV 0.7", ":TRIG:LEV?", 0.7);
     t.rn(":TRIG:LEV2 -0.7", ":TRIG:LEV2?", -0.7);
     t.go(":TRIG:EDGE:SOUR CHAN1;:TRIG:EDGE:LEV 5");
-    t.ui.stats[0].valid = true;
-    (t.ui.stats[0].vmax, t.ui.stats[0].vmin, t.ui.stats[0].top, t.ui.stats[0].base) = (2.0, 0.0, 2.0, 0.0);
+    t.ui.measured.stats[0].valid = true;
+    (t.ui.measured.stats[0].vmax, t.ui.measured.stats[0].vmin, t.ui.measured.stats[0].top, t.ui.measured.stats[0].base) = (2.0, 0.0, 2.0, 0.0);
     t.go(":TRIG:LEV:AUTO");
     assert_eq!(t.ui.m.trig_level, 1.0, "level 50 % is the middle of the signal, as the Trig50 action");
     // the typed commands do not change the trigger type
@@ -512,7 +512,7 @@ fn storage_zoom(t: &mut T) {
     t.go(":SAVE:WAV");
     let ip = dir.join("image-out.png");
     t.go(&format!(":SAVE:IMAG \"{}\"", ip.display()));
-    assert_eq!(t.ui.shot_request.as_deref(), Some(ip.to_string_lossy().as_ref()));
+    assert_eq!(t.ui.asks.shot.as_deref(), Some(ip.to_string_lossy().as_ref()));
     t.go(":SAVE:IMAG");
     t.go(":SAVE:FFR");
     // callouts: placed by source and time, listed, removed

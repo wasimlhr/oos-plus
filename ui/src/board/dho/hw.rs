@@ -103,7 +103,6 @@ fn since(now: u64, t: u64) -> std::time::Duration {
 /// AFEs from the UI channel settings, else they keep the stock set-up and the UI V/div must match it).
 #[cfg(target_os = "linux")]
 pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option<String>) -> HwShared {
-    use oos_hal::dho::boot::Clock;
     use oos_hal::dho::bus::{Bar1, Bus, FPGA_VERSION};
     let shared: HwShared = Arc::new(Mutex::new(Shared::default()));
     let out = shared.clone();
@@ -112,17 +111,10 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
         // every wait and every time of the loop on one clock (ADR 0053): the system's here, a host run's in a test
         let mut clock = oos_hal::dho::boot::SysClock::default();
         let status = |s: String| report(&out, s);
-        // started with the start-up (rcS): nothing of the hardware is touched before its `end` line, written after
-        // oos-fpgad cold-boot exited (its GPIO lines are free then)
+        // started with the start-up (rcS): nothing of the hardware is touched before its `end` line
         if let Some(path) = &start_up {
-            status("waiting for the start-up".into());
-            loop {
-                let v = oos_hal::bootstatus::parse(&std::fs::read_to_string(path).unwrap_or_default());
-                match v.finished {
-                    Some(Ok(())) => break,
-                    Some(Err(e)) => return status(format!("acquisition hardware not started: {}", e)),
-                    None => clock.sleep_us(100000),
-                }
+            if !wait_start_up(&mut clock, || std::fs::read_to_string(path).unwrap_or_default(), &out) {
+                return;
             }
         }
         let mut bar = match Bar1::open() {
@@ -151,6 +143,24 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
         run(hw, app_mask, program_afe, cal_dir, out, || true);
     });
     shared
+}
+
+/// The wait for the start-up (rcS, `oos_hal::bootstatus`): its status file, given by `read`, read again every 100 ms of
+/// `clock` until its `end` line, written after oos-fpgad cold-boot exited (its GPIO lines are free then). False when
+/// the start-up stopped (`abort`): the status line says why, and the hardware is not touched.
+#[cfg(any(target_os = "linux", test))]
+fn wait_start_up(clock: &mut impl oos_hal::dho::boot::Clock, mut read: impl FnMut() -> String, out: &HwShared) -> bool {
+    report(out, "waiting for the start-up".into());
+    loop {
+        match oos_hal::bootstatus::parse(&read()).finished {
+            Some(Ok(())) => return true,
+            Some(Err(e)) => {
+                report(out, format!("acquisition hardware not started: {}", e));
+                return false;
+            }
+            None => clock.sleep_us(100000),
+        }
+    }
 }
 
 /// The acquisition loop on the unit `hw` (ADR 0053): the screen's settings to the FPGA, its records to the screen,
@@ -341,7 +351,7 @@ impl<P: port::Port> Loop<P> {
         // read with the generator request; the settings read below are as new or newer
         let stamp = stamp_now;
         let Some(req) = Request::read(&self.out, &self.guard, self.la_cal, self.program_afe) else {
-            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h);
+            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
             self.clock.sleep_us(50000);
             return;
         };
@@ -389,13 +399,13 @@ impl<P: port::Port> Loop<P> {
         self.trim.step(io!(self, stamp), &mut self.armed, self.cal_adc.as_mut(), mode, seg_recording, self.afg.on());
         self.units.slots_and_force(io!(self, stamp), &mut self.armed, mode, seg_recording);
         if mode != Slow::Off {
-            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h);
+            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
             self.slow.step(mode, &s, &p, io!(self, stamp), &mut self.config.current, &status);
             return;
         }
         self.slow.stop(&mut self.state, &mut self.bar);
         if s.segments.is_some() {
-            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h);
+            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
             if let Err(e) = seg_step(&mut self.segrun, (&s, &p), &mut self.batch.dma, io!(self, stamp)) {
                 status(format!("segments: {}", e));
                 seg_abort(&mut self.segrun, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock, &self.out);
@@ -412,7 +422,7 @@ impl<P: port::Port> Loop<P> {
     fn calibrate(&mut self, chans: &[usize], zero: bool, adc_cores: bool) {
         use oos_hal::dho::adc;
         let status = |s: String| report(&self.out, s);
-        disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h);
+        disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
         seg_abort(&mut self.segrun, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock, &self.out);
         self.slow.stop(&mut self.state, &mut self.bar);
         let res = match (self.afe_bus.as_mut(), self.cal.as_ref()) {
@@ -476,13 +486,13 @@ impl<P: port::Port> Loop<P> {
         }
         let b = batch_plan(s, p);
         if !single_wants_more(&b, self.batch.single_done, stamp) {
-            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h);
+            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
             self.clock.sleep_us(2000);
             return;
         }
         // hardware average: CLEAR, RUN or SINGLE start it over (nothing is armed ahead in this mode)
         if let Some((tr, seen, logged)) = self.config.avg.as_mut().filter(|a| a.1 != avg_clear) {
-            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h);
+            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
             if let Err(e) = execute::<P>(
                 &self.state.avg_clear_steps(),
                 &mut self.bar,
@@ -500,7 +510,7 @@ impl<P: port::Port> Loop<P> {
         // armed ahead with these settings and since the last SINGLE press: only the wait is left
         let ahead = self.armed.as_ref().is_some_and(|(a, st)| *a == b && *st == stamp);
         if !ahead {
-            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h);
+            disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
             self.batch.holdoff(&mut self.state, &mut self.bar, &b);
         }
         self.armed = None;
@@ -557,7 +567,8 @@ impl<P: port::Port> Loop<P> {
                 // and a view read in STOP as it plays; a STOP that reads nothing again (#24: a whole record) must
                 // do it here, or the next SINGLE armed a running FSM and never got its record (unit 2026-11-20)
                 if self.out.lock().is_ok_and(|g| g.hold) {
-                    if let Err(e) = seq::disarm(&mut self.state, &mut self.bar, &mut self.c2h, |_| {}) {
+                    if let Err(e) = seq::disarm(&mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock, |_| {})
+                    {
                         status(format!("disarm at STOP: {}", e));
                     }
                 }

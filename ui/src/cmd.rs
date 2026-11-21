@@ -140,7 +140,7 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
             let rest = line.trim_start()[4..].trim_start();
             return Out::Scpi(Some(w[1].to_string()), rest[w[1].len()..].trim().to_string());
         }
-        "quit" => ui.quit = true,
+        "quit" => ui.asks.quit = true,
         "replay" if w.len() > 1 => {
             ui.scpi_replay_file = Some(line.trim_start()[w[0].len()..].trim().into());
             return Out::Replay;

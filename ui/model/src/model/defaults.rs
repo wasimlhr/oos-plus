@@ -279,7 +279,7 @@ impl Default for Model {
             dpt_pct: 10.0,
             dpt_zoom: DptZoom::Both,
             bode_usb: false,
-            ext_model: crate::extgen::FIRST_EXTERNAL,
+            ext_model: super::bode::FIRST_EXTERNAL,
             ext_ch: 0,
             ext_hiz: true,
             ext_freq: 1e3,

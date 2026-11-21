@@ -541,7 +541,7 @@ impl Ui {
                 let range = self.studio.panel.stats_mode == 2;
                 let (a, b) = if range { (cell(st.map(|s| s.1)), cell(st.map(|s| s.2))) } else { (cell(st.map(|s| s.0)), cell(st.map(|s| s.3))) };
                 let line = Self::card_stats_line(&f.s, range, row.unit, &a, &b, room);
-                let n = self.mstat.get(i).map_or(0, |s| s.n);
+                let n = self.results.rows.get(i).map_or(0, |s| s.n);
                 // the source takes the place of the count when it did not fit beside the value
                 let tail = if beside { if n > 0 { format!("n {n}") } else { String::new() } } else { src.clone() };
                 let with_tail = !tail.is_empty() && f.s.width(&line) + 10 + f.sb.width(&tail) <= room;

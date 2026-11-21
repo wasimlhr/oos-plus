@@ -695,7 +695,7 @@ fn a_narrow_card_gives_its_value_the_whole_line() {
     let eye = crate::measures::all().map(|x| x.1).find(|d| d.name == "Eye Height").expect("Eye Height");
     u.m.cat.push((eye.id, WaveId::Ref(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)));
     for _ in 0..4 { frame(&mut u); }
-    u.mstat.clear();
+    u.results.rows.clear();
     u.studio.panel.stats_mode = 0;
     // no statistics yet: the card's third line says the source
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
