@@ -667,6 +667,30 @@ fn the_statistics_of_a_card_fit_the_card() {
     }
 }
 
+/// A card's value is whole: the large font where it fits beside the source, a smaller one where not; the statistics
+/// line drops its unit last. On a unit, 2026-11-20, two cards in a 210 px side panel (about 95 px each) showed
+/// "1.73 n", "91.8 M", "40.0 M" and "90.3 .. 92.7 MV,".
+#[test]
+fn a_narrow_card_shows_its_value_whole() {
+    let u = studio_with(6);
+    let f = u.fonts();
+    let card_w = 95;
+    let sw = f.sb.width("CH2");
+    let cards = [("ns", "1.73 ns"), ("V/s", "91.8 MV/s"), ("Hz", "40.0 MHz"), ("V/s", "-5.78 V/s"), ("%", "33.6 %"), ("V", "327 mV")];
+    let ft = Ui::card_value_shared(f, card_w, cards.iter().map(|(u, _)| (*u, sw)));
+    for (u, v) in cards {
+        let tag = ft.width(&Ui::card_value_widest(u)) <= Ui::card_value_beside(card_w, sw);
+        let room = if tag { Ui::card_value_beside(card_w, sw) } else { card_w - 12 };
+        assert!(ft.width(v) <= room, "{v} is {} wide in {room} (tag {tag})", ft.width(v));
+    }
+    // one font for every card, whatever the value of the moment (on a unit, 2026-11-20, "68.5 mV" stood smaller than
+    // "270 mV" beside it); the large one on cards wide enough
+    assert_eq!(Ui::card_value_shared(f, card_w, [("V", sw)].into_iter()).size, Ui::card_value_shared(f, card_w, [("V", sw), ("V", sw)].into_iter()).size);
+    assert_eq!(Ui::card_value_shared(f, 240, cards.iter().map(|(u, _)| (*u, sw))).size, f.lb.size, "the large font where it fits");
+    let line = Ui::card_stats_line(&f.s, true, "V/s", "90.3 MV/s", "92.7 MV/s", card_w - 16);
+    assert!(f.s.width(&line) <= card_w - 16, "{line:?}");
+}
+
 #[test]
 fn the_trend_page_reaches_every_measurement() {
     let mut u = studio_with(3);
