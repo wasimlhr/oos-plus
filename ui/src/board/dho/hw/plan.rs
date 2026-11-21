@@ -264,20 +264,6 @@ pub fn stop_plan(b: &Settings, p: &hz::Params, tdiv: f64, delay: f64) -> (Settin
     (r, pre / k)
 }
 
-/// STOP: the stored record read whole at every sample, for the record the memory holds when the scope stopped
-/// (`Ui::stop_whole`). For a record the live read takes that way: up to 1 M points (`batch_plan`), the same read
-/// with one frame. `stop_plan` reads a record above `LIVE_READ` through the compression when the view holds all of
-/// it: at 1 M points the answer was min/max pairs, which are not the record. None for a deeper record: its live
-/// frames are pairs or a window, and the STOP has its own read for those (`final_replay`).
-pub fn whole_plan(b: &Settings, p: &hz::Params) -> Option<(Settings, f64)> {
-    if p.memsel > 1_000_000 {
-        return None;
-    }
-    let mut r = b.clone();
-    (r.frames, r.window, r.compress) = (1, None, 1);
-    Some((r, p.pre as f64))
-}
-
 /// Whether arming ahead (`acq.prearm`) leaves the replay at STOP possible: not for a batch of the live compression or
 /// one whose newest frame the deep measurements may read raw (`deep_raw_settings`), since the next batch would write
 /// the ring under it. Prearm gains at

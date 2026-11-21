@@ -241,11 +241,13 @@ fn demo_signal(cfg: DemoCfg, ch: usize, t: f64) -> f64 {
                 2.5 * h * (-(ph - 0.5) / tau).exp()
             }
         }
-        1 if cfg.video.is_some() => oos_dsp::sim::video(cfg.video.unwrap(), t),
-        1 => {
-            let w = 2.0 * PI * 10e3 * t;
-            1.0 * w.sin() + 0.08 * (3.0 * w).sin()
-        }
+        1 => match cfg.video {
+            Some(v) => oos_dsp::sim::video(v, t),
+            None => {
+                let w = 2.0 * PI * 10e3 * t;
+                1.0 * w.sin() + 0.08 * (3.0 * w).sin()
+            }
+        },
         2 => {
             // UART 115200 8N1, 0 / 3.3 V, idle high, sending "OOS 0.1 " in a loop with one idle byte between strings
             const MSG: &[u8] = b"OOS 0.1 ";
@@ -612,11 +614,10 @@ impl Source {
 
     /// Hardware source in STOP: the view shown (time per div, delay; None: none to read for), and the frame the
     /// thread has read again from the stored record for it, if a new one came (`board::Shared::stop_view`).
-    /// `whole`: the view is the stored record as a whole, wanted at every sample (`board::Shared::stop_whole`).
-    pub fn hw_stop(&mut self, view: Option<(f64, f64)>, whole: bool) -> Option<crate::board::Frame> {
+    pub fn hw_stop(&mut self, view: Option<(f64, f64)>) -> Option<crate::board::Frame> {
         if let Source::Hw { shared, .. } = self {
             let mut g = hw(shared);
-            (g.stop_view, g.stop_whole) = (view, whole && view.is_some());
+            g.stop_view = view;
             return g.replay.take().filter(|_| view.is_some());
         }
         None
@@ -722,7 +723,7 @@ fn acquire_hw(m: &Model, shared: &crate::board::HwShared, seen: &mut u64) -> Opt
     g.deep_raw = crate::deepmeas::want(m);
     g.slow = board().slow_mode(m);
     // running: no STOP view any more, the thread acquires again
-    (g.stop_view, g.stop_whole, g.replay) = (None, false, None);
+    (g.stop_view, g.replay) = (None, None);
     g.stamp = m.hw_stamp;
     g.cores = m.cores;
     g.avg_clear = m.hw_avg_clear;
