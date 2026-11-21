@@ -53,6 +53,7 @@ impl Ui {
                 self.draw_studio_overview_axis(cv, o);
                 self.draw_studio_overview_cursors(cv, o);
             }
+            self.draw_search_overview(cv, o);
             cv.no_clip();
             for &lane in &self.wins {
                 self.draw_grid(l.under, lane);
