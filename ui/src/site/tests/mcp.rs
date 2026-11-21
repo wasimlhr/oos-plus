@@ -119,7 +119,7 @@ fn mcp_waveform_cuts_a_record_and_leaves_the_selection() {
     let _sends = sends();
     let mut h = Web::open(0);
     let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
-    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv");
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform/r1-1.csv");
     assert!(r.starts_with("HTTP/1.1 409") && r.contains("call the MCP tool waveform"), "{r}");
     square_in_r1(&mut ui);
     let q = |scpi: &mut crate::scpi::Scpi, ui: &mut Ui, c: &str| crate::ui::testkit::q(scpi, ui, &cv, c);
@@ -129,9 +129,9 @@ fn mcp_waveform_cuts_a_record_and_leaves_the_selection() {
     let d = data(&r);
     assert!(d.get("samples").is_none() && d.get("minmax").is_none(), "{d}");
     let file = d.get("file").unwrap();
-    assert_eq!(file.get("url").and_then(J::str), Some("/mcp/waveform.csv"), "no address: the path alone");
+    assert_eq!(file.get("url").and_then(J::str), Some("/mcp/waveform/r1-1.csv"), "no address: the path alone");
     assert_eq!((num(file.get("rows")), file.get("columns").and_then(J::str)), (4000.0, Some("time_s,v")));
-    let csv = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv");
+    let csv = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform/r1-1.csv");
     assert!(csv.starts_with("HTTP/1.1 200") && csv.contains("text/csv"), "{}", &csv[..200]);
     let body = |csv: &str| csv.split("\r\n\r\n").nth(1).unwrap().to_string();
     let csv = body(&csv);
@@ -142,14 +142,14 @@ fn mcp_waveform_cuts_a_record_and_leaves_the_selection() {
     assert_eq!(num(file.get("bytes")), csv.len() as f64);
     // fewer rows than samples: min/max per bucket in the file
     call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":100}"#);
-    let csv = body(&get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv"));
+    let csv = body(&get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform/r1-2.csv"));
     let rows: Vec<&str> = csv.lines().collect();
     assert_eq!((rows.len(), rows[0]), (101, "time_s,min_v,max_v"));
     ui.net = "192.168.1.9".into();
     let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":100,"inline":100}"#);
     assert_eq!(
         data(&r).get("file").and_then(|f| f.get("url")).and_then(J::str),
-        Some("http://192.168.1.9:8080/mcp/waveform.csv")
+        Some("http://192.168.1.9:8080/mcp/waveform/r1-3.csv")
     );
     assert!(!failed(&r), "{r}");
     let d = data(&r);
@@ -281,9 +281,9 @@ fn mcp_read_only_and_off() {
     // the waveform tool reads, and its file is there; while off the file is refused too
     square_in_r1(&mut ui);
     assert!(!failed(&call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory"}"#)));
-    assert!(crate::site::waveform_csv(&ui, &scpi).is_ok());
+    assert!(crate::site::waveform_csv(&ui, &scpi, "r1-1.csv").is_ok());
     ui.sys.remote_mcp = McpMode::Off;
-    assert!(crate::site::waveform_csv(&ui, &scpi).unwrap_err().contains("off"));
+    assert!(crate::site::waveform_csv(&ui, &scpi, "r1-1.csv").unwrap_err().contains("off"));
     let body = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
     let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap()).unwrap();
     let e = r.get("error").unwrap_or_else(|| panic!("{r}"));
@@ -370,12 +370,40 @@ fn mcp_waveform_file_is_deleted_after_its_time() {
     let r = call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory"}"#);
     let file = data(&r).get("file").unwrap();
     assert_eq!(num(file.get("expires_in_s")), crate::site::mcp::FILE_TTL.as_secs() as f64);
-    assert!(get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv").starts_with("HTTP/1.1 200"));
+    assert!(get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform/r1-1.csv").starts_with("HTTP/1.1 200"));
     // as if the call had been made longer ago than the file is kept
     let past = std::time::Instant::now().checked_sub(crate::site::mcp::FILE_TTL + Duration::from_secs(1));
     let Some(past) = past else { return };
-    scpi.mcp_file.as_mut().unwrap().0 = past;
-    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform.csv");
+    scpi.mcp_files[0].1 = past;
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform/r1-1.csv");
     assert!(r.starts_with("HTTP/1.1 409") && r.contains("within 2 minutes"), "{r}");
-    assert!(scpi.mcp_file.is_none(), "the web server's pass deleted it");
+    assert!(scpi.mcp_files.is_empty(), "the web server's pass deleted it");
+}
+
+// Break it catches: one file for every call, so that the file of the first of two calls (CH1, then CH2) is the second
+// call's record when it is downloaded after both; files kept without bound
+#[test]
+fn mcp_waveform_gives_each_call_its_own_file() {
+    let _sends = sends();
+    let mut h = Web::open(0);
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    square_in_r1(&mut ui);
+    let url = |r: &J| data(r).get("file").and_then(|f| f.get("url")).and_then(J::str).unwrap().to_string();
+    let first = url(&call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":10}"#));
+    let second = url(&call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":20}"#));
+    assert_ne!(first, second);
+    let rows = |r: String| r.split("\r\n\r\n").nth(1).unwrap().lines().count();
+    // both downloaded after both calls: each is its own call's record
+    assert_eq!(rows(get(&mut h, &mut ui, &cv, &mut scpi, &first)), 11);
+    assert_eq!(rows(get(&mut h, &mut ui, &cv, &mut scpi, &second)), 21);
+    // a name no call gave
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/mcp/waveform/ch1-99.csv");
+    assert!(r.starts_with("HTTP/1.1 409") && r.contains("ch1-99.csv"), "{r}");
+    // FILES_MAX calls later the first is gone, the last FILES_MAX are kept
+    for _ in 0..crate::site::mcp::FILES_MAX - 1 {
+        call(&mut ui, &cv, &mut scpi, "waveform", r#"{"source":"R1","record":"memory","points":10}"#);
+    }
+    assert_eq!(scpi.mcp_files.len(), crate::site::mcp::FILES_MAX);
+    assert!(get(&mut h, &mut ui, &cv, &mut scpi, &first).starts_with("HTTP/1.1 409"));
+    assert!(get(&mut h, &mut ui, &cv, &mut scpi, &second).starts_with("HTTP/1.1 200"));
 }
