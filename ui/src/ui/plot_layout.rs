@@ -449,6 +449,11 @@ impl Ui {
         for b in [self.full_btn().1, self.zoom_btn().1] {
             if y + 10 > b.y && y - 10 < b.bottom() && x1 + 26 > b.x - word + 34 { x1 = x1.min(b.x - word - MARK_W); }
         }
+        // the Windows button has no word, but it covers the tag just the same
+        if self.plot_btns_shown() {
+            let b = self.win_btn().1;
+            if y + 10 > b.y && y - 10 < b.bottom() && x1 + MARK_W > b.x { x1 = x1.min(b.x - MARK_W - 4); }
+        }
         // a divider handle of the dock lies over the right edge of the waveform: the tag stays left of it
         if self.dock_on() {
             for d in &self.dock_layout().dividers {

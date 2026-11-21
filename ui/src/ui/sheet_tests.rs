@@ -571,3 +571,13 @@ fn the_channels_a_line_does_not_have_are_dimmed() {
         assert!(light(ink) >= (light(BTN) + light(col)) / 2, "text {ink:06x} on {BTN:06x}");
     }
 }
+
+#[test]
+fn the_trigger_tag_keeps_clear_of_the_windows_button() {
+    let mut u = studio();
+    for _ in 0..3 { u.step(0.05); }
+    let b = u.win_btn().1;
+    let (g, y) = (u.grid, b.y + b.h / 2);
+    let x1 = u.trigger_tag_x(g.x + g.w - MARK_W, y);
+    assert!(x1 + MARK_W <= b.x, "the tag {x1} reaches the button {b:?}");
+}
