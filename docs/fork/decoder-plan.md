@@ -39,7 +39,7 @@ Per decoder:
 | FlexRay | capture: frames agree at 10 Mbit/s; 9 CRC errors that repeat with the cycle, not compared | band, columns | unit |
 | I2S | capture: samples agree with the word length set | band, columns | - |
 | SENT | capture: fast and slow channel and both values agree | band, columns | unit |
-| MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault); command and status told apart | band, columns | unit |
+| MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault); command and status told apart; unit (the plus line on CH1; a message of a command and two data words, and a data word alone): the words read as a decode by hand of the record reads them, every word with even parity and so marked; the trigger on a frame (20 of 20 and 12 of 12 records), a command word (12 of 12), a data word (12 of 12, 11 of 12) and an error (26 of 26 on a marked word); a word that is not on the bus leaves Normal waiting | band, columns | whether the source sends that parity |
 | ARINC 429 | capture: agrees, no errors | band | - |
 | USB | capture: full speed packets agree | band | - |
 | 1-Wire | capture: transactions agree | band, columns, ROM command names | - |
@@ -173,6 +173,15 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       (seen right on the unit afterwards); the start of a CAN-FD frame read "S" beside CAN's "SOF"; a narrow box
       of a USB packet read "SYNC FS..." (it begins with the packet's type now, seen on the unit). What is open
       for every one of them is the real signal.
+      LIN and MIL-STD-1553 (2026-11-21) were connected and are checked on the unit, decode and trigger; their
+      rows in the table above say what ran. With them the step ends, by the owner's word that no further bus
+      comes: SPI, UART, CAN, 10BASE-T, LIN and MIL-STD-1553 are decoded on the unit from a real signal. CAN-FD,
+      SENT, FlexRay, ARINC 429 and USB were not connected: for them the recorded captures on the host and the
+      SIM presets on the unit stand, and a real signal on the unit stays open.
+      Their captures were read again on the host with main of 2026-11-21: FlexRay (1090 fields), ARINC 429 (130)
+      and USB (1089) come out as before, field for field. SENT has the same fields, its slow channel written
+      with leading zeros. CAN-FD has the same eleven frames, their start named SOF, and now lists the fields of
+      a twelfth frame that the end of the record cuts off, up to the cut.
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
