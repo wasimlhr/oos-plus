@@ -502,7 +502,7 @@ impl Ui {
             let hint = if self.m.layout == Layout::Studio { "Touch locked \u{b7} tap the gear to unlock" } else { "Touch locked \u{b7} tap Unlock" };
             x = backed_text(cv, &f.sb, x, y, hint, AMBER) + 16;
         }
-        let seg = self.seg_view.filter(|_| self.seg_hw_on()).and_then(|v| match (v.phase, self.seg_pos) {
+        let seg = self.seg.view.filter(|_| self.seg_hw_on()).and_then(|v| match (v.phase, self.seg.pos) {
             (crate::board::SegPhase::Recording, _) => Some(format!("Recording {}/{}", v.recorded, v.total)),
             (crate::board::SegPhase::Reading, _) => Some(format!("Reading {}/{}", v.read, v.recorded)),
             (crate::board::SegPhase::Done, Some(i)) => Some(self.seg_label(i)),

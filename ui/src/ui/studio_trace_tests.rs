@@ -286,13 +286,13 @@ fn studio_has_the_zoom_row_and_the_window_of_the_default_layout() {
     assert_eq!(s.m.zscale, z0, "H- zooms out again");
     let (x, y) = mid(bar.vplus);
     s.tap(x, y);
-    assert_eq!(s.zoom_vfactor, 2.0, "V+ doubles the display scale");
+    assert_eq!(s.zoom_view.vfactor, 2.0, "V+ doubles the display scale");
     let (x, y) = mid(bar.vminus);
     s.tap(x, y);
-    assert_eq!(s.zoom_vfactor, 1.0, "V- halves it");
+    assert_eq!(s.zoom_view.vfactor, 1.0, "V- halves it");
     let (x, y) = mid(bar.boxr);
     s.tap(x, y);
-    assert!(s.zoom_arm, "Box arms the zoom box");
+    assert!(s.zoom_box.arm, "Box arms the zoom box");
     let (x, y) = mid(bar.plus);
     s.tap(x, y);
     let (x, y) = mid(bar.fit);

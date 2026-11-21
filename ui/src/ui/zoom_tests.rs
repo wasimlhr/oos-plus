@@ -59,10 +59,10 @@ fn corner_magnifier_toggles_display_and_keeps_distinct_touch_targets() {
     let (win, win_hit) = ui.win_btn();
     assert!(!overlaps(zoom, win) && !overlaps(hit, win_hit));
     tap(&mut ui, hit);
-    assert!(ui.m.zoom && !ui.zoom_arm && !ui.full);
+    assert!(ui.m.zoom && !ui.zoom_box.arm && !ui.full);
     let hit = ui.zoom_btn().1;
     tap(&mut ui, hit);
-    assert!(!ui.m.zoom && !ui.zoom_arm);
+    assert!(!ui.m.zoom && !ui.zoom_box.arm);
     ui.m.zscale = before.zscale;
     ui.m.zdelay = before.zdelay;
     assert_eq!(ui.m, before);
@@ -76,26 +76,26 @@ fn repeated_boxes_magnify_both_axes_and_tap_menu_escape_cancel_only_drawing_firs
     let source = (ui.refs[0].as_ref().unwrap().vpd, ui.refs[0].as_ref().unwrap().offset);
     let main = (ui.m.tscale, ui.m.tfine, ui.m.delay);
     control(&mut ui, "Box");
-    assert!(ui.zoom_arm);
+    assert!(ui.zoom_box.arm);
     let a = ui.wave_area();
     let old = ui.view().0;
     drag(&mut ui, (a.x + a.w / 4, a.y + a.h / 4), (a.x + a.w / 2, a.y + 3 * a.h / 4));
-    assert!(ui.m.zoom && ui.zoom_arm && ui.view().0 < old);
-    assert!((ui.zoom_vfactor - 2.0).abs() < 0.02);
-    let first = ui.zoom_vfactor;
+    assert!(ui.m.zoom && ui.zoom_box.arm && ui.view().0 < old);
+    assert!((ui.zoom_view.vfactor - 2.0).abs() < 0.02);
+    let first = ui.zoom_view.vfactor;
     let a = ui.wave_area();
     drag(&mut ui, (a.x + a.w / 4, a.y + a.h / 4), (a.x + a.w / 2, a.y + 3 * a.h / 4));
-    assert!(ui.zoom_arm && ui.zoom_vfactor > first);
+    assert!(ui.zoom_box.arm && ui.zoom_view.vfactor > first);
     let a = ui.wave_area();
     tap(&mut ui, Rect::new(a.x + 80, a.y + 80, 2, 2));
-    assert!(ui.m.zoom && !ui.zoom_arm);
+    assert!(ui.m.zoom && !ui.zoom_box.arm);
     control(&mut ui, "Box");
     ui.open_menu(MenuId::Cursor);
-    assert!(!ui.zoom_arm && ui.m.zoom);
+    assert!(!ui.zoom_box.arm && ui.m.zoom);
     ui.close_menu();
     control(&mut ui, "Box");
     ui.dismiss_context();
-    assert!(!ui.zoom_arm && ui.m.zoom);
+    assert!(!ui.zoom_box.arm && ui.m.zoom);
     ui.dismiss_context();
     assert!(!ui.m.zoom);
     assert_eq!((ui.m.tscale, ui.m.tfine, ui.m.delay), main);
@@ -111,8 +111,8 @@ fn vertical_zoom_is_shared_by_detail_lanes_and_has_exact_forward_inverse_mapping
         if stack {
             stacked(&mut ui);
         }
-        ui.zoom_vfactor = 4.0;
-        ui.zoom_vcenter = 0.75;
+        ui.zoom_view.vfactor = 4.0;
+        ui.zoom_view.vcenter = 0.75;
         let overview = ui.split_zoom(ui.grid).0;
         assert_eq!(ui.zoom_vertical_transform(overview), (1.0, 0.0));
         for area in ui.wins.iter().copied() {
@@ -128,12 +128,12 @@ fn vertical_zoom_is_shared_by_detail_lanes_and_has_exact_forward_inverse_mapping
         assert_eq!(display.ch[0].offset, ui.m.ch[0].offset - 0.75 * ui.m.ch[0].volts_per_div());
         let original = (ui.m.ch[0].vfine, ui.m.ch[0].offset);
         control(&mut ui, "V+");
-        assert_eq!(ui.zoom_vfactor, 8.0);
+        assert_eq!(ui.zoom_view.vfactor, 8.0);
         control(&mut ui, "V-");
-        assert_eq!(ui.zoom_vfactor, 4.0);
+        assert_eq!(ui.zoom_view.vfactor, 4.0);
         assert_eq!((ui.m.ch[0].vfine, ui.m.ch[0].offset), original);
         ui.reset_zoom();
-        assert_eq!((ui.zoom_vfactor, ui.zoom_vcenter), (1.0, 0.0));
+        assert_eq!((ui.zoom_view.vfactor, ui.zoom_view.vcenter), (1.0, 0.0));
     }
 }
 
@@ -155,23 +155,23 @@ fn detail_pinch_and_ctrl_wheel_keep_time_anchor_without_source_mutations() {
     let fx = (x - area.x) as f64 / area.w as f64;
     let before = ui.view();
     let anchor = before.1 as f64 + (fx - 0.5) * HDIV as f64 * before.0 as f64;
-    let vertical = (ui.zoom_vfactor, ui.zoom_vcenter);
+    let vertical = (ui.zoom_view.vfactor, ui.zoom_view.vcenter);
     ui.handle(Ev::Wheel { x, y, steps: 1, ctrl: true, shift: false, alt: false });
     let after = ui.view();
     let held = after.1 as f64 + (fx - 0.5) * HDIV as f64 * after.0 as f64;
     assert!(after.0 < before.0 && (held - anchor).abs() < before.0 as f64 * 1e-5);
-    assert_eq!((ui.zoom_vfactor, ui.zoom_vcenter), vertical);
+    assert_eq!((ui.zoom_view.vfactor, ui.zoom_view.vcenter), vertical);
     assert!((ui.zoom_divs_at(area, fy) - v).abs() < 1e-5);
     // Spread actual fingers in the same detail lane: both axes are display magnification.
     let (x0, y0) = (area.x + 200, area.y + area.h / 3);
     let (x1, y1) = (area.x + 400, area.y + 2 * area.h / 3);
-    let previous = (ui.m.zscale, ui.zoom_vfactor);
+    let previous = (ui.m.zscale, ui.zoom_view.vfactor);
     pointer(&mut ui, Phase::Down, x0, y0);
     ui.handle(Ev::Touch { id: 1, phase: Phase::Down, x: x1, y: y1 });
     ui.handle(Ev::Touch { id: 1, phase: Phase::Move, x: x1 + 100, y: y1 + 50 });
     ui.handle(Ev::Touch { id: 1, phase: Phase::Up, x: x1 + 100, y: y1 + 50 });
     pointer(&mut ui, Phase::Up, x0, y0);
-    assert!(ui.m.zscale < previous.0 && ui.zoom_vfactor > previous.1);
+    assert!(ui.m.zscale < previous.0 && ui.zoom_view.vfactor > previous.1);
     // Only the two display zoom model fields may differ.
     let z = (ui.m.zscale, ui.m.zdelay);
     let mut baseline = ui.m.clone();
@@ -226,8 +226,8 @@ fn overview_pinch_changes_main_timebase_and_close_retains_that_explicit_change()
 fn vertical_detail_phosphor_and_reference_pixels_follow_the_same_transform_as_markers() {
     let mut ui = mixed();
     ui.set_zoom(true);
-    ui.zoom_vfactor = 2.0;
-    ui.zoom_vcenter = 0.4;
+    ui.zoom_view.vfactor = 2.0;
+    ui.zoom_view.vcenter = 0.4;
     let area = ui.wave_area();
     let (scale, delay) = ui.view();
     let span = scale * HDIV;
@@ -335,10 +335,10 @@ fn desktop_modifier_events_pan_and_control_zoom_time_without_vertical_changes() 
     stacked(&mut ui);
     let a = ui.source_area(WaveId::Ch(0)).unwrap();
     let before = ui.m.ch.clone();
-    let factor = ui.zoom_vfactor;
+    let factor = ui.zoom_view.vfactor;
     let zscale = ui.m.zscale;
     ui.handle(Ev::Wheel { x: a.x + a.w / 2, y: a.y + a.h / 2, steps: 1, ctrl: true, shift: false, alt: false });
-    assert_eq!(ui.zoom_vfactor, factor);
+    assert_eq!(ui.zoom_view.vfactor, factor);
     assert_eq!(ui.m.ch, before);
     assert!(ui.m.zscale < zscale);
 }
@@ -389,8 +389,8 @@ fn mixed_demo_reference_stacked_subnanosecond_detail_has_live_channel_pixels() {
     ui.m.run = RunState::Stop;
     ui.m.ch[0].vscale = 15;
     ui.m.ch[0].offset = -20.81701;
-    ui.zoom_vfactor = 8.0;
-    ui.zoom_vcenter = 0.0;
+    ui.zoom_view.vfactor = 8.0;
+    ui.zoom_view.vcenter = 0.0;
     ui.step(0.02);
     assert!(ui.ph.map[0].iter().any(|&v| v > 0));
     assert!(ui.phz.map[0].iter().all(|&v| v == 0));
@@ -413,15 +413,15 @@ fn fit_record_recovers_selected_reference_time_and_voltage_without_changing_trig
     ui.refs[0].as_mut().unwrap().offset = 50.0;
     ui.m.delay = 123.0;
     ui.set_zoom(true);
-    ui.zoom_vfactor = 16.0;
-    ui.zoom_vcenter = 10.0;
+    ui.zoom_view.vfactor = 16.0;
+    ui.zoom_view.vcenter = 10.0;
     let record = ui.refs[0].as_ref().unwrap();
     let metadata = (record.v.as_ptr(), record.v.len(), record.dt, record.t0);
     let other = (ui.refs[1].as_ref().unwrap().vpd, ui.refs[1].as_ref().unwrap().offset);
     let trigger = ui.m.trigger();
     let channels = ui.m.ch.clone();
     assert!(ui.fit_selected_record());
-    assert!(!ui.m.zoom && !ui.zoom_arm);
+    assert!(!ui.m.zoom && !ui.zoom_box.arm);
     let record = ui.refs[0].as_ref().unwrap();
     assert_eq!((record.v.as_ptr(), record.v.len(), record.dt, record.t0), metadata);
     assert!(record.vpd < 10.0 && record.offset.abs() < 0.01);
@@ -444,7 +444,7 @@ fn fit_record_exposes_native_capture_extent_without_copying_or_reconfiguring_the
         ch: [vec![0.1; 100_000], Vec::new(), Vec::new(), Vec::new()],
         ..Default::default()
     });
-    let mut record = crate::board::to_record(&frame, &ui.m, 3600, 1e-6, -0.5e-6);
+    let mut record = crate::wave::to_record(&frame, &ui.m, 3600, 1e-6, -0.5e-6);
     let raw = record.raw.as_mut().unwrap();
     raw.t0 = 0.001 + raw.i0 as f64 * frame.dt;
     ui.last[0] = Some(record);
@@ -481,7 +481,7 @@ fn close_corner_and_escape_remain_closed_with_histogram_box_and_overlapping_summ
                 ui.m.ch[0].offset = -20.81701;
                 ui.m.delay = 819.2e-9;
                 ui.set_zoom(true);
-                ui.zoom_arm = armed;
+                ui.zoom_box.arm = armed;
                 let close = ui.zoom_close();
                 ui.stats_on = true;
                 ui.workspace.measure_float = Some((close.x - 10, close.y));
@@ -499,7 +499,7 @@ fn close_corner_and_escape_remain_closed_with_histogram_box_and_overlapping_summ
                         ui.dismiss_context();
                     }
                 }
-                assert!(!ui.m.zoom && !ui.zoom_arm, "exit{exit},armed{armed},running{running}");
+                assert!(!ui.m.zoom && !ui.zoom_box.arm, "exit{exit},armed{armed},running{running}");
                 assert_eq!((ui.records, ui.replay.captures), counters);
                 assert_eq!(ui.m.trigger(), trigger);
                 assert_eq!(ui.m.run, mode);
@@ -615,7 +615,7 @@ fn ctrl_wheel_anchors_main_detail_and_overview_for_reference_native_and_mixed_re
                 let anchor = before.1 as f64 + (fraction - 0.5) * HDIV as f64 * before.0 as f64;
                 let channels = ui.m.ch.clone();
                 let trigger = ui.m.trigger();
-                let vertical = (ui.zoom_vfactor, ui.zoom_vcenter);
+                let vertical = (ui.zoom_view.vfactor, ui.zoom_view.vcenter);
                 let ref_settings = ui.refs[0].as_ref().map(|r| (r.vpd, r.offset, r.t0, r.dt));
                 let detail_before = (ui.m.zscale, ui.m.zdelay);
                 let main_before = (ui.m.tscale, ui.m.delay);
@@ -633,7 +633,7 @@ fn ctrl_wheel_anchors_main_detail_and_overview_for_reference_native_and_mixed_re
                 if surface == 2 {
                     assert_eq!((ui.m.zscale, ui.m.zdelay), detail_before);
                 }
-                assert_eq!((ui.zoom_vfactor, ui.zoom_vcenter), vertical);
+                assert_eq!((ui.zoom_view.vfactor, ui.zoom_view.vcenter), vertical);
                 assert_eq!(ui.m.ch, channels);
                 assert_eq!(ui.m.trigger(), trigger);
                 assert_eq!(ui.refs[0].as_ref().map(|r| (r.vpd, r.offset, r.t0, r.dt)), ref_settings);
@@ -665,19 +665,19 @@ fn shift_wheel_and_vertical_controls_remain_vertical_while_ctrl_takes_time_zoom(
     let area = ui.wave_area();
     let (x, y) = (area.x + area.w / 3, area.y + area.h / 3);
     let time = ui.view();
-    let factor = ui.zoom_vfactor;
+    let factor = ui.zoom_view.vfactor;
     ui.handle(Ev::Wheel { x, y, steps: 1, ctrl: false, shift: true, alt: false });
     assert_eq!(ui.view(), time);
-    assert!(ui.zoom_vfactor > factor);
-    let vertical = (ui.zoom_vfactor, ui.zoom_vcenter);
+    assert!(ui.zoom_view.vfactor > factor);
+    let vertical = (ui.zoom_view.vfactor, ui.zoom_view.vcenter);
     let time = ui.view();
     ui.handle(Ev::Wheel { x, y, steps: 1, ctrl: true, shift: true, alt: false });
     assert!(ui.view().0 < time.0);
-    assert_eq!((ui.zoom_vfactor, ui.zoom_vcenter), vertical);
+    assert_eq!((ui.zoom_view.vfactor, ui.zoom_view.vcenter), vertical);
     let time = ui.view();
     control(&mut ui, "V+");
     assert_eq!(ui.view(), time);
-    assert!(ui.zoom_vfactor > vertical.0);
+    assert!(ui.zoom_view.vfactor > vertical.0);
 }
 
 /// The zoom window drawn in the overview with the delay far beyond the record (SCPI :TIMebase:OFFSet takes any

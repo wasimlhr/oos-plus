@@ -390,7 +390,7 @@ mod tests {
                 assert_eq!(ui.ref_sel, 1);
                 if zoom {
                     assert_eq!(ui.refs[1].as_ref().unwrap().offset, before);
-                    assert!(ui.zoom_vcenter > 0.0);
+                    assert!(ui.zoom_view.vcenter > 0.0);
                 } else {
                     assert!(ui.refs[1].as_ref().unwrap().offset < before);
                 }
@@ -1044,7 +1044,7 @@ impl Ui {
         let t = &self.touch;
         let near = (t.x - t.x0).abs() <= 12 && (t.y - t.y0).abs() <= 12;
         if t.down && !t.held && near {
-            if let Some((_, at)) = self.card_hold { return ring(t.x0, t.y0, at); }
+            if let Some((_, at)) = self.input.card { return ring(t.x0, t.y0, at); }
             if self.on_measure_btn(t.x0, t.y0) { return ring(t.x0, t.y0, t.t0); }
         }
         None
@@ -1266,23 +1266,69 @@ impl Ui {
             }
             Action::Menu(MenuId::La) => self.key(key::LA),
             Action::Menu(menu) => self.open_menu(menu),
-            Action::ZoomReset => { self.zoom_arm = false; self.zoom_path.clear(); self.reset_zoom(); }
-            Action::ZoomClose => { self.zoom_arm = false; self.zoom_path.clear(); self.set_zoom(false); }
-            Action::FitRecord => { self.fit_selected_record(); }
-            Action::Live => self.return_to_live(), Action::Single => self.key(key::SINGLE), Action::Run => self.key(key::RUNSTOP),
+            Action::ZoomReset => {
+                self.zoom_box.arm = false;
+                self.zoom_box.path.clear();
+                self.reset_zoom();
+            }
+            Action::ZoomClose => {
+                self.zoom_box.arm = false;
+                self.zoom_box.path.clear();
+                self.set_zoom(false);
+            }
+            Action::FitRecord => {
+                self.fit_selected_record();
+            }
+            Action::Single => self.key(key::SINGLE),
+            Action::Run => self.key(key::RUNSTOP),
+            Action::EyeRight => {
+                self.workspace.eye_float = None;
+                self.workspace.eye_left = false;
+                self.eye_set_place(EyePlace::Side);
+                self.relayout();
+            }
+            Action::EyeLeft => {
+                self.workspace.eye_float = None;
+                self.workspace.eye_left = true;
+                self.eye_set_place(EyePlace::Side);
+                self.relayout();
+            }
+            Action::EyeBelow => {
+                self.workspace.eye_float = None;
+                self.workspace.eye_left = false;
+                self.eye_set_place(EyePlace::Under);
+                self.relayout();
+            }
+            Action::EyeFloat => {
+                self.workspace.eye_float = Some(Rect::new(360, 100, 620, 360));
+                self.relayout();
+            }
+            Action::Live => self.return_to_live(),
             Action::Panel => self.desktop_panel = self.desktop_panel.map(|open| !open),
-            Action::EyeRight => { self.workspace.eye_float = None; self.workspace.eye_left = false; self.eye_set_place(EyePlace::Side); self.relayout(); }
-            Action::EyeLeft => { self.workspace.eye_float = None; self.workspace.eye_left = true; self.eye_set_place(EyePlace::Side); self.relayout(); }
-            Action::EyeBelow => { self.workspace.eye_float = None; self.workspace.eye_left = false; self.eye_set_place(EyePlace::Under); self.relayout(); }
-            Action::EyeFloat => { self.workspace.eye_float = Some(Rect::new(360, 100, 620, 360)); self.relayout(); }
             Action::MathOff(k) => self.math_turn_off(k),
             Action::EvView(v) => self.events_view(v),
-            Action::MathSettings(k) => { self.m.math_select(k); self.open_menu(MenuId::Math); }
+            Action::MathSettings(k) => {
+                self.m.math_select(k);
+                self.open_menu(MenuId::Math);
+            }
             Action::RefClear(i) => self.ref_clear_slot(i),
-            Action::RefHorizontal(i) => { self.select_workspace_source(WaveId::Ref(i)); self.studio.sz.pop = false; self.studio.sz.ref_pop = Some(i); }
-            Action::RefSettings(i) => { self.select_workspace_source(WaveId::Ref(i)); self.open_menu(MenuId::Ref); }
-            Action::RestoreLayout => { self.dock_exit_full(); }
-            Action::EyeClose => { self.m.view = AView::Scope; self.workspace.eye_float = None; self.relayout(); }
+            Action::RefHorizontal(i) => {
+                self.select_workspace_source(WaveId::Ref(i));
+                self.studio.sz.pop = false;
+                self.studio.sz.ref_pop = Some(i);
+            }
+            Action::RefSettings(i) => {
+                self.select_workspace_source(WaveId::Ref(i));
+                self.open_menu(MenuId::Ref);
+            }
+            Action::RestoreLayout => {
+                self.dock_exit_full();
+            }
+            Action::EyeClose => {
+                self.m.view = AView::Scope;
+                self.workspace.eye_float = None;
+                self.relayout();
+            }
             Action::MeasureFloat => {
                 self.workspace.measure_float = Some((W - RESULTS_W - 28, TOP.h + 32));
                 self.workspace.measure_docked = false;
@@ -1449,13 +1495,31 @@ impl Ui {
         }
         match phase {
             Phase::Down => {
-                if self.workspace.popup.is_some() { return false; }
-                let panel = if self.eye_open() && self.m.layout != Layout::Studio && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER).contains(x, y)
-                    && !self.eye_pane_close().contains(x, y) { Panel::Eye }
-                else if self.results_rects().is_some_and(|(header, _)| header.contains(x, y)) { Panel::Measurements }
-                else if self.grid.contains(x, y) && !self.menu_open { Panel::Plot }
-                else { return false };
-                let origin = match panel { Panel::Eye => self.eye_pane_rect(), Panel::Measurements => { let (head, body) = self.results_rects().unwrap(); Rect::new(head.x, head.y, head.w, head.h + body.h) }, Panel::Plot => self.grid };
+                if self.workspace.popup.is_some() {
+                    return false;
+                }
+                let panel = if self.eye_open()
+                    && self.m.layout != Layout::Studio
+                    && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER)
+                        .contains(x, y)
+                    && !self.eye_pane_close().contains(x, y)
+                {
+                    Panel::Eye
+                } else if self.results_rects().is_some_and(|(header, _)| header.contains(x, y)) {
+                    Panel::Measurements
+                } else if self.grid.contains(x, y) && !self.menu_open {
+                    Panel::Plot
+                } else {
+                    return false;
+                };
+                let origin = match panel {
+                    Panel::Eye => self.eye_pane_rect(),
+                    Panel::Measurements => match self.results_rects() {
+                        Some((head, body)) => Rect::new(head.x, head.y, head.w, head.h + body.h),
+                        None => return false,
+                    },
+                    Panel::Plot => self.grid,
+                };
                 self.workspace.gesture = Some(Gesture { panel, origin, x, y, at: self.now, moved: false, held: false });
                 panel != Panel::Plot
             }
@@ -1535,21 +1599,26 @@ impl Ui {
             self.cancel_load_slot();
             return;
         }
-        let was_drawing = self.zoom_arm;
-        self.workspace.popup = None; self.workspace.gesture = None;
-        self.zoom_arm = false; self.zoom_path.clear(); self.zoom_map = None;
-        self.touch.down = false; self.touch.drag = Drag::None;
-        if self.menu_open { self.close_menu(); }
-        // a view that fills the area: Escape is the way back
-        else if self.dock_exit_full() {}
-        else if self.m.zoom && !was_drawing { self.set_zoom(false); }
+        let was_drawing = self.zoom_box.arm;
+        self.workspace.popup = None;
+        self.workspace.gesture = None;
+        self.zoom_box.cancel();
+        self.touch.down = false;
+        self.touch.drag = Drag::None;
+        if self.menu_open {
+            self.close_menu();
+        } else if self.dock_exit_full() {
+            // a view that fills the area: Escape is the way back
+        } else if self.m.zoom && !was_drawing {
+            self.set_zoom(false);
+        }
     }
     pub fn cancel_pointer(&mut self) {
         self.workspace.gesture = None;
         self.touch.down = false;
         self.touch.held = false;
         self.touch.drag = Drag::None;
-        self.pinch.active = false;
+        self.input.pinch.active = false;
     }
 
     pub(super) fn fit_selected_record(&mut self) -> bool {
@@ -1570,14 +1639,16 @@ impl Ui {
             self.toast("No retained waveform to fit");
             return false;
         };
-        if let WaveId::Ref(i) = source {
-            let r = self.refs[i].as_ref().unwrap();
+        let shown = match source {
+            WaveId::Ref(i) => self.refs[i].as_mut(),
+            _ => None,
+        };
+        if let Some(r) = shown {
             let summary = crate::wave::autoset_summary(&r.v, r.dt);
             if summary.valid {
                 let want = ((summary.vmax - summary.vmin) / (VDIV * 0.8)).max(VSCALES[0]);
                 let vpd = VSCALES.iter().copied().find(|&scale| scale >= want).unwrap_or(VSCALES[VSCALES.len() - 1]);
                 let offset = -0.5 * (summary.vmax + summary.vmin);
-                let r = self.refs[i].as_mut().unwrap();
                 r.vpd = vpd;
                 r.offset = offset;
             }
@@ -1594,8 +1665,8 @@ impl Ui {
         };
         self.m.delay = center;
         self.set_zoom(false);
-        self.zoom_vfactor = 1.0;
-        self.zoom_vcenter = 0.0;
+        self.zoom_view.vfactor = 1.0;
+        self.zoom_view.vcenter = 0.0;
         self.dirty_map = true;
         self.toast("Fit record");
         true
@@ -1611,8 +1682,6 @@ impl Ui {
         self.m.pane = 0;
         self.m.win_layout = WinLayout::One;
         self.m.density = if self.full_on() { Density::Full } else { Density::Scope };
-        self.zoom_arm = false;
-        self.zoom_path.clear();
-        self.zoom_map = None;
+        self.zoom_box.cancel();
     }
 }

@@ -604,11 +604,11 @@ impl Ui {
             Item::Traces => if self.trace_stacked() { "Stacked" } else { "Overlay" }.into(),
             Item::Hdmi => format!("{:?}", m.hdmi),
             Item::TextSize => m.text_size.name().into(),
-            Item::ZoneSel => format!("Z{}", self.zone_sel + 1),
-            Item::ZoneOn => onoff(m.zones[self.zone_sel].on),
-            Item::ZoneSrc => format!("CH{}", m.zones[self.zone_sel].src + 1),
+            Item::ZoneSel => format!("Z{}", self.zone_trig.sel + 1),
+            Item::ZoneOn => onoff(m.zones[self.zone_trig.sel].on),
+            Item::ZoneSrc => format!("CH{}", m.zones[self.zone_trig.sel].src + 1),
             Item::ZoneMode => {
-                if m.zones[self.zone_sel].inside {
+                if m.zones[self.zone_trig.sel].inside {
                     "Intersect".into()
                 } else {
                     "Not intersect".into()

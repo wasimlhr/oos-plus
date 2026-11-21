@@ -176,7 +176,7 @@ impl Ui {
 
     /// One row per hardware segment read back: time since the first trigger (NaN without a stamp), number, step.
     fn segment_rows(&self) -> Vec<EventRow> {
-        let t = &self.seg_times;
+        let t = &self.seg.times;
         (0..t.len())
             .map(|k| {
                 let d = match (t[k], k.checked_sub(1).and_then(|j| t[j])) {
@@ -436,7 +436,7 @@ impl Ui {
             let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
             if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
                 self.m.delay = t as f32;
-                if let Some(saved) = self.zoom_saved.as_mut() {
+                if let Some(saved) = self.zoom_view.saved.as_mut() {
                     saved.2 = t as f32;
                 }
             }

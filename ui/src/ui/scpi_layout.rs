@@ -330,8 +330,8 @@ impl Ui {
         let mut z = 0;
         while z < self.m.tscale && scales[z] * HDIV < span * 0.999 { z += 1; }
         let on = self.m.zoom;
-        if !on { self.zoom_saved = Some((self.m.tscale, self.m.tfine, self.m.delay)); }
-        self.zoom_user_closed = false;
+        if !on { self.zoom_view.saved = Some((self.m.tscale, self.m.tfine, self.m.delay)); }
+        self.zoom_view.user_closed = false;
         self.m.zscale = z;
         self.m.zdelay = (t0 + t1) * 0.5;
         self.m.zoom = true;
