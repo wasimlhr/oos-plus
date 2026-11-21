@@ -63,7 +63,7 @@ impl Ui {
             AddRow::Reference => self.refs.iter().any(Option::is_some),
             AddRow::Bus => self.rail_kind_on_pub(AddKind::Bus),
             AddRow::Zoom => self.m.zoom,
-            AddRow::ZoomBox => self.zoom_arm,
+            AddRow::ZoomBox => self.zoom_box.arm,
         }
     }
 

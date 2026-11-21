@@ -494,9 +494,9 @@ pub(super) const LAYOUTS: &[Layout] = &[
         MenuId::Network,
         "100M",
         |u| {
-            u.eth_link = true;
-            u.eth.speed = Some(100);
-            u.net_ifs = vec![("eth0".into(), "192.168.177.164".into())]
+            u.net.eth_link = true;
+            u.net.eth.speed = Some(100);
+            u.net.ifs = vec![("eth0".into(), "192.168.177.164".into())]
         },
         &[],
     ),
@@ -506,7 +506,7 @@ pub(super) const LAYOUTS: &[Layout] = &[
         "long name",
         |u| {
             u.sys.net_name = "x".repeat(63);
-            u.net = "192.168.177.164".into()
+            u.net.addr = "192.168.177.164".into()
         },
         &[],
     ),
