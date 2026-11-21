@@ -239,6 +239,40 @@ mod tests {
         assert!(!bar.needed() || bar.top() <= bar.max());
     }
 
+    /// Default's Event table of the decoders, upstream's: the bar and a finger scroll it; a press on a row still goes
+    /// to that event.
+    #[test]
+    fn the_event_table_scrolls_by_bar_and_finger() {
+        // the demo UART on CH3, at the first time base that gives more events than the table shows
+        let mut cv = Canvas::new(PANEL_W, PANEL_H);
+        let mut ui = (0..6)
+            .map(|k| {
+                let mut ui = crate::ui::testkit::demo_ui();
+                ui.m.ch[2].on = true;
+                ui.m.dec_on = true;
+                ui.m.dec_src = 2;
+                crate::cmd::run(&mut ui, &format!("knob hscale +{k}"));
+                for _ in 0..4 {
+                    ui.step(0.04);
+                }
+                ui.activate(Item::DecTable);
+                ui.render(&mut cv);
+                ui
+            })
+            .find(|ui| ui.table_bar().is_some_and(|(b, _)| b.needed()))
+            .expect("a time base with more events than the table shows");
+        let (bar, rows) = ui.table_bar().expect("table open");
+        let th = bar.thumb();
+        press(&mut ui, th.x + 20, th.y + 5, (th.x + 20, bar.track.y + bar.track.h + 50));
+        assert_eq!(ui.table.top as i32, bar.max());
+        press(&mut ui, rows.x + 100, rows.y + rows.h - 10, (rows.x + 100, rows.y + rows.h - 10 + 3 * tables::ROW_H));
+        assert_eq!(ui.table.top as i32, bar.max() - 3, "three rows back by a finger");
+        ui.m.run = RunState::Stop;
+        let d0 = ui.m.delay;
+        press(&mut ui, rows.x + 100, rows.y + 10, (rows.x + 101, rows.y + 12));
+        assert_ne!(ui.m.delay, d0, "a press on a row goes to its event");
+    }
+
     /// The Events pane of the decoders: the bar and a finger scroll it; a press on a row still goes to that event.
     #[test]
     fn the_events_pane_scrolls_by_bar_and_finger() {
@@ -247,6 +281,8 @@ mod tests {
         let mut ui = (0..6)
             .map(|k| {
                 let mut ui = crate::ui::testkit::demo_ui();
+                // the fork's pane (Default opens upstream's Event table)
+                ui.m.layout = Layout::Minimal;
                 ui.m.ch[2].on = true;
                 ui.m.dec_on = true;
                 ui.m.dec_src = 2;

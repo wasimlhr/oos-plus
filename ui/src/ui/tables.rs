@@ -9,6 +9,9 @@ use super::*;
 /// What the table window shows.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum TableKind {
+    /// the decoder events: Default's Event table, upstream's window over the plot (Minimal and Studio list them in the
+    /// Events pane)
+    Decode,
     Search,
     /// hardware segments: trigger time since the first trigger, step from the previous one
     Segments,
@@ -181,6 +184,40 @@ impl Ui {
         }
     }
 
+    /// Whether the decoder events are listed (Decode > Event table, `:BUS<n>:EVENt`): in Default upstream's Event
+    /// table over the plot, in Minimal and Studio the Events pane.
+    pub(crate) fn decode_table_on(&self) -> bool {
+        if self.m.layout == Layout::Default {
+            self.table.kind == Some(TableKind::Decode)
+        } else {
+            self.events_pane_on()
+        }
+    }
+
+    /// Opens or closes the list of decoder events. In Default it is upstream's Event table: a search table stays up
+    /// until this opens the decoder one.
+    pub(crate) fn set_decode_table(&mut self, on: bool) {
+        if self.m.layout != Layout::Default {
+            return self.set_events_pane(on);
+        }
+        if on {
+            self.table.kind = Some(TableKind::Decode);
+            self.table.top = 0;
+        } else if self.table.kind == Some(TableKind::Decode) {
+            self.table.kind = None;
+        }
+    }
+
+    /// Decode > Event table: opens the list of decoder events, or closes it.
+    pub(super) fn decode_table_toggle(&mut self) {
+        if self.m.layout == Layout::Default {
+            return self.table_toggle(TableKind::Decode);
+        }
+        let on = self.events_pane_on();
+        self.set_events_pane(!on);
+        self.close_menu();
+    }
+
     /// One row per hardware segment read back: time since the first trigger (NaN without a stamp), number, step.
     fn segment_rows(&self) -> Vec<EventRow> {
         let t = &self.seg.times;
@@ -207,6 +244,7 @@ impl Ui {
 
     pub(super) fn table_rows(&self, k: TableKind) -> Vec<EventRow> {
         match k {
+            TableKind::Decode => self.decode_events(),
             TableKind::Search => self.search_rows(),
             TableKind::Segments => self.segment_rows(),
         }
@@ -268,6 +306,8 @@ impl Ui {
         let Some(k) = self.table.kind else { return String::new() };
         let total = self.table_total(k);
         match k {
+            TableKind::Decode if self.decode_busy() => "Decoder events - Computing".into(),
+            TableKind::Decode => format!("Decoder events \u{b7} {}", total),
             TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
                 else {
                     // the list of a search of Studio has the name the top bar and the sheet give it, then its source:
@@ -372,7 +412,8 @@ impl Ui {
         if rows.is_empty() {
             let empty = if k == TableKind::Search && self.m.trig_ref.is_some() && !self.reference_search_supported() {
                 "This condition needs physical hardware channels"
-            } else if k == TableKind::Search && self.reference_search_busy() { "Searching the full reference record…" }
+            } else if k == TableKind::Decode && self.decode_busy() { "Decoding the full reference record..." }
+            else if k == TableKind::Search && self.reference_search_busy() { "Searching the full reference record…" }
             else { "nothing found in this record" };
             cv.text(&f.s, r.x + 12, r.y + self.head_h(r) + 18, empty, DIM);
         }
@@ -458,7 +499,11 @@ impl Ui {
     }
 
     /// The rows of the Events pane (messages, fields or lines, as it lists them) as CSV into the storage directory.
+    /// Default exports upstream's Event table: a row per field.
     pub(super) fn decode_export(&mut self) {
+        if self.m.layout == Layout::Default {
+            return self.events_export(TableKind::Decode);
+        }
         let rows = self.decode_rows().into_iter();
         self.export_rows(rows.map(|e| EventRow { t: e.t, who: e.who, ok: e.errors == 0, text: e.text }).collect());
     }
@@ -514,6 +559,31 @@ impl Ui {
     /// The close button of the pane.
     pub(super) fn pane_close(r: Rect) -> Rect {
         Rect::new(r.x + r.w - 46, r.y + 2, 42, 36)
+    }
+
+    /// Default's Events pane, as upstream draws it: the decoder events in one or two columns of time, decoder and text.
+    pub(super) fn draw_pane_events_default(&self, cv: &mut Canvas, r: Rect) {
+        let f = self.fonts();
+        let rows = &self.pn.events;
+        if rows.is_empty() {
+            cv.text(&f.sb, r.x + 12, r.y + r.h / 2 + 5, "No decoder events in this record", DIM);
+            return;
+        }
+        let (cols, fit) = panes::event_grid(rows.len(), r.h);
+        let pitch = r.h / fit as i32;
+        let col_w = (r.w - 54) / cols as i32;
+        for (i, e) in rows.iter().take(fit * cols).enumerate() {
+            let (cx, y) = (r.x + (i / fit) as i32 * col_w, r.y + (i % fit) as i32 * pitch);
+            if i % fit % 2 == 1 {
+                cv.fill(Rect::new(cx, y, col_w - 4, pitch), ROW_ALT);
+            }
+            // columns at 12, 102 and 212 px with the normal text size, wider with the larger ones
+            let ty = y + (pitch + f.s.size * 3 / 4) / 2;
+            let (x1, x2) = (12 + 90 * f.s.size / 12, 12 + 200 * f.s.size / 12);
+            cv.text(&f.s, cx + 12, ty, &si(e.t, "s"), LABEL);
+            cv.text(&f.s, cx + x1, ty, &e.who, DIM);
+            cv.text(&f.sb, cx + x2, ty, &e.text, if e.ok { TEXT } else { RED });
+        }
     }
 
     pub(super) fn draw_pane_close(&self, cv: &mut Canvas) {
