@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.14",
   "version": "0.1.14",
   "edition": "November 2026",
-  "date": "19 November 2026",
+  "date": "20 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -6800,7 +6800,7 @@
    "title": "Search (mark events)",
    "intro": [
     {
-     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Only an edge search exists. The events of the decoders have their own commands in decode."
+     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. Only an edge search exists. The events of the decoders have their own commands in decode."
     },
     {
      "p": "Menu location: Decode and bus > Mark events, Search (source, slope, level, 50 %, from / to trigger, event, event list, save events, remove)."
@@ -6983,7 +6983,7 @@
     {
      "header": ":SEARch:REMove",
      "set": ":SEARch:REMove",
-     "desc": "Remove Search 1",
+     "desc": "Remove the search (Search 1 without a number)",
      "remarks": [
       "- Menu equivalent: Decode and bus > Remove.",
       "- Origin: name not verified against the DHO guide"
@@ -7014,6 +7014,12 @@
     },
     {
      "pre": ":SEARch:COPY:FROM TRIGger\n:SEARch:EDGE:SOURce?                   -> CHAN1\n:SEARch:COPY:TO TRIGger\n:SEARch:REMove"
+    },
+    {
+     "p": "A second search on the same channel, for the falling edges only."
+    },
+    {
+     "pre": ":SEARch2:EDGE:SOURce CHAN1\n:SEARch2:EDGE:SLOPe NEGative\n:SEARch2:COUNt?                        -> 1\n:SEARch2:EVENt 1\n:SEARch2:REMove"
     }
    ]
   },
