@@ -456,11 +456,13 @@ impl Ui {
     }
 
     /// `:MEASure:PENDing?`: the measurements of the record shown are still out: it waits for the background worker or
-    /// is with it, or a catalogue row computes. A value queried meanwhile answers `9.9E37` as one that does not exist.
+    /// is with it, a catalogue row computes, or a measurement of one item, a ref or a pair is still out. A value queried meanwhile answers `9.9E37` as one that does not exist.
     pub(crate) fn meas_pending_now(&self) -> bool {
         self.meas_bg.want
             || self.meas_bg.worker.as_ref().is_some_and(|w| w.busy)
             || self.meas_rows().iter().any(|r| r.computing)
+            // a query of one item, or a row that shows its old value while the new one is computed
+            || self.measurement_busy()
     }
 
     /// The background's side, every frame: takes a finished result, and gives it the record shown when it wants one.

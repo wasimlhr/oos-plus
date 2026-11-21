@@ -699,11 +699,11 @@ impl Scpi {
         }
         // the RBW the spectrum was computed with (the record length can make it coarser than `:SPECtrum:RBW`)
         if kw(n0, "SPECtrum") && nodes.len() == 3 && kw(nodes[1], "RBW") && kw(nodes[2], "ACTual") && query {
-            return Some(t(&ui.spectrum_now().map(|s| s.0).filter(|r| *r > 0.0).map_or_else(|| "9.9E37".to_string(), e)));
+            return Some(t(&ui.spectrum_rbw_now().filter(|r| *r > 0.0).map_or_else(|| "9.9E37".to_string(), e)));
         }
         // the lines of the spectrum in the order of the peak table, up to the Harmonics setting: frequency,level;...
         if kw(n0, "SPECtrum") && nodes.len() == 3 && kw(nodes[1], "PEAK") && kw(nodes[2], "LIST") && query {
-            let p = ui.spectrum_now().map(|s| s.1).unwrap_or_default();
+            let p = ui.spectrum_lines_now().unwrap_or_default();
             return Some(if p.is_empty() {
                 t("9.9E37")
             } else {

@@ -17,7 +17,7 @@ Part of the [SCPI reference](README.md).
 | `:MEASure:SOURce` | Set / Query | `<A>[,<B>]` Default Measure source(s); query returns A. Sources are `CHANn\|Rn`. | `CHAN1` | Measure > Source A | Rigol-compatible |
 | `:MEASure:CLEar` | Action | Clear standard, pair and catalog selections through the shared statistics reset. | - | Measurements > Clear all | Rigol-compatible |
 | `:MEASure:STRip` | Query | Configured standard/pair/catalog rows, then enabled DVM/counter rows. | - | Measurements > Read all measurement values | OOS extension |
-| `:MEASure:PENDing` | Query | `1` while the measurements of the record shown are still computed (in the background, or a catalogue row), else `0`. A value read meanwhile answers `9.9E37` like one that does not exist: after `:SINGle`, wait for `0`, then read. | - | Measurements > Computing | OOS extension |
+| `:MEASure:PENDing` | Query | `1` while the measurements of the record shown are still computed (in the background, a catalogue row, or a queried item, ref or pair measurement), else `0`. A value read meanwhile answers `9.9E37` like one that does not exist. `0` can still be of the previous record: after `:SINGle`, wait until `:TRIGger:STATus?` answers `STOP`, then for `0`, then read. | - | Measurements > Computing | OOS extension |
 | `:MEASure:READout` | Query | Strip rows plus Eye figures when that analysis page is active. | - | Measurements > Read all measurement values | OOS extension |
 | `:MEASure:COPY` | Action | `<source>` Copy the measurements of Source A to another source | - | Measurements > Copy to | OOS extension |
 | `:MEASure:ITEM:REMove` | Action | `<n>` Remove one row, by its number in `:MEASure:STRip?` order, or by item and source | - | Measurements > Remove | OOS extension |
