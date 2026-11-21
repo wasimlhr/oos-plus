@@ -192,7 +192,7 @@ impl Ui {
             }
             Item::DecFmt => &["Hex", "ASCII"],
             Item::XyMode => &["YT", "XY"],
-            Item::DecSel => &["D1", "D2", "D3", "D4"],
+            Item::DecSel => return (0..DECODERS).map(|k| self.dec_tag(k)).collect(),
             Item::PaneSel => &tables::PANES,
             Item::TrendSel(_) => return self.trend_options(),
             Item::DvmSrc | Item::CntSrc => return (0..n_ch()).map(|c| format!("CH{}", c + 1)).collect(),

@@ -187,7 +187,7 @@ impl Ui {
             Ok(_) => {
                 let count = self.refs.iter().flatten().filter(|r| r.label.starts_with(p.name())).count();
                 let slots = self.sim_bus_slots_text(count.clamp(1, 4));
-                self.toast(&format!("{} to {}, decoder D{} on it", name, slots, self.m.dec_sel + 1));
+                self.toast(&format!("{} to {}, decoder {} on it", name, slots, self.dec_tag(self.m.dec_sel)));
             }
             Err(e) => self.toast(&format!("SIM: {e}")),
         }
