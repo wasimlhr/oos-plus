@@ -178,6 +178,10 @@ and the decoder's path on the unit, not the decode of a real signal: the traffic
       comes: SPI, UART, CAN, 10BASE-T, LIN and MIL-STD-1553 are decoded on the unit from a real signal. CAN-FD,
       SENT, FlexRay, ARINC 429 and USB were not connected: for them the recorded captures on the host and the
       SIM presets on the unit stand, and a real signal on the unit stays open.
+      Their captures were read again on the host with main of 2026-11-21: FlexRay (1090 fields), ARINC 429 (130)
+      and USB (1089) come out as before, field for field. SENT has the same fields, its slow channel written
+      with leading zeros. CAN-FD has the same eleven frames, their start named SOF, and now lists the fields of
+      a twelfth frame that the end of the record cuts off, up to the cut.
 4. **Decoders with a capture and no live source:** I2C, I2S, 1-Wire, I3C, Manchester, C-PHY. They are checked on
    their captures and with the SIM bus presets, and say "capture" or "host", not "unit". Done here: C-PHY reads
    its capture (the levels from the record, the symbol order of the wire, the second sync word of a burst),
