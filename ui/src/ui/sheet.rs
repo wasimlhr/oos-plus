@@ -401,7 +401,8 @@ impl Ui {
             // Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
             MenuId::Display => {
                 // and Overlay or Stacked, which Studio had in the hold menu of the plot alone
-                self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar).chain([Item::Traces]).collect()
+                let rows = self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar);
+                rows.chain([Item::Traces]).collect()
             }
             m => self.items(m),
         }
