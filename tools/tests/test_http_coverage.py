@@ -19,7 +19,7 @@ HTTP_RS = r'''impl Http {
         let peer_ok = true; // the peer's address
         let (ctype, body): (&str, Vec<u8>) = match route {
             _ if foreign(&text, route, post) => ("text/plain", b"refused".to_vec()),
-            "/update" | "/mcp" | "/mcp/waveform.csv" if (post || route != "/update") && !peer_ok => ("text/plain", b"refused".to_vec()),
+            "/update" | "/mcp" if (post || route != "/update") && !peer_ok => ("text/plain", b"refused".to_vec()),
             "/" => ("text/html", PAGE.as_bytes().to_vec()),
             // the scope's state: a comment with an apostrophe and a brace { that count for nothing
             "/ui-state" if !post => ("application/json", format!("{{\"a\":{}}}", 1).into_bytes()),
@@ -188,6 +188,15 @@ class Coverage(unittest.TestCase):
         self.write(rs, HTTP_MD + "\n### `GET /version`\n\n- Mark: **experimental**\n")
         self.assertEqual(self.findings(), [])
 
+    def test_the_files_under_a_directory_are_one_route_that_needs_its_entry(self):
+        site = 'pub fn answer() { match route { _ if !post && route.starts_with("/mcp/files/") => ok(), _ => None } }\n'
+        self.write(HTTP_RS, HTTP_MD, site)
+        self.assertEqual(self.findings(), [
+            "ui/remote/src/http.rs: route GET /mcp/files/<file> has no entry `### \\`GET /mcp/files/<file>\\`` in "
+            "docs/http.md"])
+        self.write(HTTP_RS, HTTP_MD + "\n### `GET /mcp/files/<file>`\n\n- Mark: **experimental**\n", site)
+        self.assertEqual(self.findings(), [])
+
     def test_the_get_of_a_path_whose_post_is_documented_still_needs_its_own_entry(self):
         self.write(HTTP_RS, HTTP_MD.replace("### `GET /update`\n\n- Mark: **internal**\n\n", ""))
         self.assertEqual(self.findings(), [
@@ -225,11 +234,11 @@ class Coverage(unittest.TestCase):
                                            "`if peer_ok` (GUARDS)"])
 
     def test_a_path_added_to_the_arm_of_a_known_guard_is_not_passed_over(self):
-        rs = HTTP_RS.replace('"/mcp/waveform.csv" if (post', '"/mcp/waveform.csv" | "/admin" if (post')
+        rs = HTTP_RS.replace('"/mcp" if (post', '"/mcp" | "/admin" if (post')
         self.write(rs, HTTP_MD)
         self.assertEqual(self.findings(), [
-            "ui/remote/src/http.rs: arm /update | /mcp | /mcp/waveform.csv | /admin has the guard "
-            "`if (post || route != \"/update\") && !peer_ok`, which is known for /mcp | /mcp/waveform.csv | /update "
+            "ui/remote/src/http.rs: arm /update | /mcp | /admin has the guard "
+            "`if (post || route != \"/update\") && !peer_ok`, which is known for /mcp | /update "
             "only (GUARDS)"])
 
     def test_tools_need_an_entry_and_the_same_name_in_list_and_call(self):

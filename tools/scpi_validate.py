@@ -389,7 +389,7 @@ def validate(oos, result):
     result.equal("zone cleared", oos.query(":TRIGger:ZONE1:STATe?"), "0")
     oos.write(":SEARch:STATe ON")
     result.equal("search", oos.query(":SEARch:STATe?;:SEARch:MODE?"), "1;EDGE")
-    oos.write(":SEARch:MODE PULSe")
+    oos.write(":SEARch:MODE VIDeo")
     result.equal("search mode refused", oos.query(":SYSTem:ERRor?").split(",")[0], "-224")
     int(oos.query(":SEARch:COUNt?"))
     oos.write(":SEARch:STATe OFF")

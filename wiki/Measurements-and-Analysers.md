@@ -92,6 +92,11 @@ record one per record, so the count can differ from one measurement to the next 
 shows each); `Screen` or `Full record` is the gate. With more measurements than fit, **Prev** and **Next** page
 through them (`1-8 / 9`). A tap on the title folds the card to one line and opens it again.
 
+A record of more than 262144 points is measured beside the screen, and a row says `Computing` until its value is
+there. While the scope runs and records come faster than they are measured, the rows show the value of the last record
+that was measured (one measurement late) instead of `Computing`; after a change of a setting the old value is not
+shown. Maximum, Minimum and the other values without edges are there at once.
+
 ![Statistics](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/meas-stats.png)
 
 The statistics begin again when a measurement is added or removed, the gate changes, a setting of the scope changes
