@@ -120,7 +120,7 @@ fn a_view_stores_every_search_and_search_1_under_the_key_it_had() {
     assert_eq!(v.studio.search_sel, 1);
     // a view stored while there was one search
     v.view_ui_apply("search=2/1.5/1");
-    assert_eq!(v.studio.searches, [Some(SearchSpec { src: WaveId::Ch(1), level: 1.5, slope: 1 }), None, None]);
+    assert_eq!(v.studio.searches, [Some(SearchSpec::edge(WaveId::Ch(1), 1.5, 1)), None, None]);
     // the selected search of a stored view that is not there any more
     v.view_ui_apply("searchsel=3 search2=2/1.5/0");
     assert_eq!(v.studio.search_sel, 1);

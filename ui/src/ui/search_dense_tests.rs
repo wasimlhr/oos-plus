@@ -12,6 +12,22 @@ pub(super) fn dense() -> Ui {
 
 /// The same with `points` in the frame, of an acquisition `acq` (sample rate, points of the record).
 pub(super) fn dense_of(points: usize, acq: (f64, usize)) -> Ui {
+    let dt = 0.8e-9;
+    let data: Vec<f32> = (0..points)
+        .map(|i| {
+            let phase = (i as f64 * dt * 40e6).fract();
+            // edges of about 1.7 ns
+            let up = (phase / 0.07).min(1.0);
+            let down = ((phase - 0.5) / 0.07).clamp(0.0, 1.0);
+            (0.56 + 1.96 * (up - down)) as f32
+        })
+        .collect();
+    of_samples(data, dt, acq)
+}
+
+/// Studio, stopped, CH2 alone with `data` at the sample period `dt`.
+pub(super) fn of_samples(data: Vec<f32>, dt: f64, acq: (f64, usize)) -> Ui {
+    let points = data.len();
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.m.studio_detail = false;
@@ -25,16 +41,6 @@ pub(super) fn dense_of(points: usize, acq: (f64, usize)) -> Ui {
     u.m.tscale = tscales().iter().position(|&t| (t - 20e-6).abs() < 1e-12).unwrap();
     u.m.delay = -250e-6;
     u.m.run = RunState::Stop;
-    let dt = 0.8e-9;
-    let data: Vec<f32> = (0..points)
-        .map(|i| {
-            let phase = (i as f64 * dt * 40e6).fract();
-            // edges of about 1.7 ns
-            let up = (phase / 0.07).min(1.0);
-            let down = ((phase - 0.5) / 0.07).clamp(0.0, 1.0);
-            (0.56 + 1.96 * (up - down)) as f32
-        })
-        .collect();
     let frame = Arc::new(crate::board::Frame {
         seq: 3,
         dt,

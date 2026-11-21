@@ -201,9 +201,9 @@ impl Ui {
             }),
             M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
             // which search and what it looks for; then what it shares with the trigger and the event it stands on
-            M::Search => (&["Edge search", "Trigger, event"], |it| match it {
+            M::Search => (&["Search", "Time, event"], |it| match it {
                 SearchTable | SrchRemove => Slot::Foot(0),
-                SrchFromTrig | SrchToTrig | SrchEvent => Slot::Tab(1),
+                SrchWhen | SrchTime | SrchTime2 | SrchFromTrig | SrchToTrig | SrchEvent => Slot::Tab(1),
                 _ => Slot::Tab(0),
             }),
             M::Ref => (&["Reference", "Scale and files"], |it| match it {

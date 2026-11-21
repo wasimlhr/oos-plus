@@ -24,6 +24,16 @@ impl Ui {
                 "Run simulation"
             };
         }
+        // the rows of a search are named after their role in its type, as the trigger's are below
+        if let Some(sp) = self.studio.search() {
+            match it {
+                Item::SrchSlope if super::addrail::polar(sp.kind) => return "Polarity",
+                Item::SrchLevel if sp.kind.two_level() => return "Upper",
+                Item::SrchTime if sp.kind == TrigType::Timeout => return "Timeout",
+                Item::SrchTime if matches!(sp.when, WhenKind::In | WhenKind::Out) => return "Lower limit",
+                _ => {}
+            }
+        }
         let t = self.m.trig_type;
         let two_level = matches!(t, TrigType::Slope | TrigType::Runt | TrigType::Window);
         match it {

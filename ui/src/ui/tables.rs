@@ -150,11 +150,11 @@ impl Ui {
         }
     }
 
-    /// What the events of the table are of: the source and the condition. Studio's own search (Search 1) has its
-    /// source and is an edge search; the table named the trigger's source and type for it.
+    /// What the events of the table are of: the source and the condition. A search of Studio has its own
+    /// source and type; the table named the trigger's for it.
     fn search_names(&self) -> (String, &'static str) {
         match self.studio.search() {
-            Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), TrigType::Edge.name()),
+            Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), spec.kind.name()),
             _ => (self.trigger_source_label(), self.m.trig_type.name()),
         }
     }

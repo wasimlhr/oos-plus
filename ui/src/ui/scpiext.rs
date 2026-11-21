@@ -146,6 +146,10 @@ pub(super) const T1: &[&str] = &[
     "ACQuire:HISTory:ENABle", "ACQuire:HISTory:FRAMe", "ACQuire:HISTory:COUNt", "ACQuire:HISTory:NEXT", "ACQuire:HISTory:PREVious",
     // search (mark events)
     "SEARch:STATe", "SEARch:MODE", "SEARch:EDGE:SOURce", "SEARch:EDGE:SLOPe", "SEARch:EDGE:LEVel", "SEARch:EDGE:LEVel:AUTO",
+    "SEARch:PULSe:SOURce", "SEARch:PULSe:POLarity", "SEARch:PULSe:WHEN", "SEARch:PULSe:UWIDth", "SEARch:PULSe:LWIDth", "SEARch:PULSe:LEVel",
+    "SEARch:SLOPe:SOURce", "SEARch:SLOPe:SLOPe", "SEARch:SLOPe:WHEN", "SEARch:SLOPe:TUPPer", "SEARch:SLOPe:TLOWer", "SEARch:SLOPe:ALEVel", "SEARch:SLOPe:BLEVel",
+    "SEARch:TIMeout:SOURce", "SEARch:TIMeout:SLOPe", "SEARch:TIMeout:TIME", "SEARch:TIMeout:LEVel",
+    "SEARch:RUNT:SOURce", "SEARch:RUNT:POLarity", "SEARch:RUNT:WHEN", "SEARch:RUNT:WUPPer", "SEARch:RUNT:WLOWer", "SEARch:RUNT:ALEVel", "SEARch:RUNT:BLEVel",
     "SEARch:COPY:TO", "SEARch:COPY:FROM", "SEARch:COUNt", "SEARch:EVENt", "SEARch:DATA", "SEARch:SAVE", "SEARch:REMove",
 ];
 
@@ -336,46 +340,24 @@ impl Ui {
         r
     }
 
-    /// The Studio search of the Edge kind (source, level, slope) and the mark of the trigger events. Without a search of its
-    /// own the values are the trigger's; the first set of a source, level or slope adds Search 1 like the Add rail does.
+    /// The Studio search and the mark of the trigger events. Without a search of its own the values are the trigger's;
+    /// the first set of a setting adds Search 1 like the Add rail does.
     fn search_cmd(&mut self, key: &str, q: bool, arg: &str) -> Reply {
-        const SL: [(u8, &str); 3] = [(0, "POSitive"), (1, "NEGative"), (2, "RFALl")];
+        const KINDS: [(TrigType, &str); 5] = [(TrigType::Edge, "EDGE"), (TrigType::Pulse, "PULSe"), (TrigType::Slope, "SLOPe"), (TrigType::Timeout, "TIMeout"), (TrigType::Runt, "RUNT")];
         match key {
             "SEARch:STATe" => {
                 if q { return t(b01(self.search_on)); }
                 match parse_bool(arg) { Some(v) => { self.search_on = v; DONE } None => Err(bad(arg)) }
             }
             "SEARch:MODE" => {
-                if q { return t("EDGE"); }
-                if kw(arg.trim(), "EDGE") { DONE } else { Err(bad(arg)) }
-            }
-            "SEARch:EDGE:SOURce" => {
-                if q {
-                    return t(wave_tok(self.studio.search().map_or_else(|| self.m.trigger_wave(), |s| s.src)));
-                }
-                let Some(id) = parse_wave(arg) else { return Err(bad(arg)) };
-                match self.studio.search() {
-                    None => {
-                        self.studio_search_add(Some(id));
-                        if self.studio.search().is_none() { return Err(conflict("no source is on")); }
-                    }
-                    Some(sp) => {
-                        self.studio.search_put(super::addrail::SearchSpec { src: id, ..sp });
-                        self.studio_search_set_50();
-                    }
-                }
+                let mut kind = self.studio.search().map_or(TrigType::Edge, |s| s.kind);
+                if q { return pick(true, arg, &mut kind, &KINDS); }
+                pick(false, arg, &mut kind, &KINDS)?;
+                // (EDGE without a search is what there is: it adds none)
+                if self.studio.search().is_none() && kind == TrigType::Edge { return DONE; }
+                self.ensure_search()?;
+                self.studio_search_set_kind(kind);
                 DONE
-            }
-            "SEARch:EDGE:SLOPe" => {
-                let mut cur = self.studio.search().map_or(match self.m.slope { Slope::Rise => 0, Slope::Fall => 1, Slope::Either => 2 }, |s| s.slope);
-                if q { return pick(true, arg, &mut cur, &SL); }
-                pick(false, arg, &mut cur, &SL)?;
-                self.search_spec_mut(|sp| sp.slope = cur)
-            }
-            "SEARch:EDGE:LEVel" => {
-                if q { return t(en(self.studio.search().map_or(self.m.trig_level, |s| s.level) as f64)); }
-                let Some(v) = num(arg) else { return Err(bad(arg)) };
-                self.search_spec_mut(|sp| sp.level = v)
             }
             "SEARch:EDGE:LEVel:AUTO" => {
                 if q { return Err(undefined(key)); }
@@ -406,8 +388,43 @@ impl Ui {
             }
             "SEARch:SAVE" => { if q { return Err(undefined(key)); } self.activate(Item::SearchSave); DONE }
             "SEARch:REMove" => { if q { return Err(undefined(key)); } self.activate(Item::SrchRemove); DONE }
-            _ => Err(undefined(key)),
+            _ => match key.split(':').collect::<Vec<_>>()[..] {
+                ["SEARch", node, word] => match KINDS.iter().find(|(_, n)| *n == node) {
+                    Some(&(kind, _)) => self.search_type_cmd(kind, word, q, arg),
+                    None => Err(undefined(key)),
+                },
+                _ => Err(undefined(key)),
+            },
         }
+    }
+
+    /// A setting of the selected search by the name it has under its type (`:SEARch:PULSe:WHEN`). A search has one
+    /// set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the
+    /// setting whatever the type is. With one limit (`GREater`, `LESS`) the upper and the lower name are that limit.
+    fn search_type_cmd(&mut self, kind: TrigType, word: &str, q: bool, arg: &str) -> Reply {
+        const SL: [(u8, &str); 3] = [(0, "POSitive"), (1, "NEGative"), (2, "RFALl")];
+        if !q { self.ensure_search()?; }
+        let cur = self.studio.search().unwrap_or_else(|| self.search_of_trigger());
+        let mut sp = super::addrail::SearchSpec { kind, ..cur };
+        let upper = matches!(word, "UWIDth" | "TUPPer" | "WUPPer") && matches!(cur.when, WhenKind::In | WhenKind::Out);
+        let level = |v: &mut f32| if q { t(en(*v as f64)) } else { *v = num(arg).ok_or_else(|| bad(arg))?; DONE };
+        let time = |v: &mut f32| if q { t(en(*v as f64)) } else { *v = num(arg).filter(|&x| x > 0.0).ok_or_else(|| bad(arg))?; DONE };
+        let r = match word {
+            "SOURce" => if q { t(wave_tok(cur.src)) } else { sp.src = parse_wave(arg).ok_or_else(|| bad(arg))?; DONE },
+            "SLOPe" => pick(q, arg, &mut sp.slope, &SL),
+            "POLarity" => pick(q, arg, &mut sp.slope, &SL[..2]),
+            "WHEN" => pick(q, arg, &mut sp.when, if q || kind == TrigType::Runt { &WHENS_OFF[..] } else { &WHENS[..] }),
+            "LEVel" | "ALEVel" => level(&mut sp.level),
+            "BLEVel" => level(&mut sp.level2),
+            "UWIDth" | "TUPPer" | "WUPPer" if upper => time(&mut sp.t2),
+            _ => time(&mut sp.t1),
+        };
+        if q || r.is_err() { return r; }
+        // the levels follow a new source, and a type of two levels the search was not of (unless this names one)
+        let place = sp.src != cur.src || (kind.two_level() && !cur.kind.two_level() && !word.ends_with("LEVel"));
+        self.studio.search_put(sp);
+        if place { self.studio_search_set_50(); }
+        DONE
     }
 
     /// The selected search exists (added on the trigger source when it did not).
@@ -418,11 +435,5 @@ impl Ui {
             if self.studio.search().is_none() { return Err(conflict("no source is on")); }
         }
         Ok(())
-    }
-
-    fn search_spec_mut(&mut self, f: impl FnOnce(&mut super::addrail::SearchSpec)) -> Reply {
-        self.ensure_search()?;
-        if let Some(mut sp) = self.studio.search() { f(&mut sp); self.studio.search_put(sp); }
-        DONE
     }
 }

@@ -256,6 +256,44 @@ fn history_search(t: &mut T) {
         assert_eq!(t.ui.studio.search_sel, 1, "going to an event of Search 2 selects it");
     }
     t.no(":SEAR4:COUN?", "-224");
+    // the types: a set under a type makes the search of it, and the settings have the names of the trigger's
+    t.rt(":SEAR2:MODE PULS", ":SEAR2:MODE?", "PULS");
+    assert_eq!(t.go(":SEAR:MODE?"), "EDGE", "Search 1 is as it was");
+    // (Search 1 from here: the list of headers that are exercised is of the commands without a number)
+    t.rt(":SEAR:PULS:POL NEG", ":SEAR:PULS:POL?", "NEG");
+    t.rt(":SEAR:PULS:WHEN RANG", ":SEAR:PULS:WHEN?", "RANG");
+    t.rn(":SEAR:PULS:LWID 0.001", ":SEAR:PULS:LWID?", 0.001);
+    t.rn(":SEAR:PULS:UWID 0.002", ":SEAR:PULS:UWID?", 0.002);
+    t.rn(":SEAR:PULS:LEV 0.5", ":SEAR:PULS:LEV?", 0.5);
+    t.rt(":SEAR:PULS:SOUR CHAN1", ":SEAR:PULS:SOUR?", "CHAN1");
+    t.no(":SEAR:PULS:WHEN NONE", "-224");
+    t.no(":SEAR:PULS:LWID 0", "-224");
+    t.rt(":SEAR:SLOP:SLOP RFAL", ":SEAR:MODE?", "SLOP");
+    assert_eq!(t.go(":SEAR:SLOP:SLOP?"), "RFAL");
+    t.rt(":SEAR:SLOP:WHEN GRE", ":SEAR:SLOP:WHEN?", "GRE");
+    t.rn(":SEAR:SLOP:TLOW 0.0005", ":SEAR:SLOP:TUPP?", 0.0005);
+    t.rn(":SEAR:SLOP:ALEV 0.75", ":SEAR:SLOP:ALEV?", 0.75);
+    t.rn(":SEAR:SLOP:BLEV 0.25", ":SEAR:SLOP:BLEV?", 0.25);
+    t.rn(":SEAR:SLOP:BLEV 2", ":SEAR:SLOP:BLEV?", 0.75);
+    t.rt(":SEAR:SLOP:SOUR CHAN1", ":SEAR:SLOP:SOUR?", "CHAN1");
+    t.rt(":SEAR:TIM:SLOP NEG", ":SEAR:MODE?", "TIM");
+    assert_eq!(t.go(":SEAR:TIM:SLOP?"), "NEG");
+    t.rn(":SEAR:TIM:TIME 0.003", ":SEAR:TIM:TIME?", 0.003);
+    t.rn(":SEAR:TIM:LEV 0.5", ":SEAR:TIM:LEV?", 0.5);
+    t.rt(":SEAR:TIM:SOUR CHAN1", ":SEAR:TIM:SOUR?", "CHAN1");
+    t.rt(":SEAR:RUNT:POL POS", ":SEAR:MODE?", "RUNT");
+    assert_eq!(t.go(":SEAR:RUNT:POL?"), "POS");
+    t.rt(":SEAR:RUNT:WHEN NONE", ":SEAR:RUNT:WHEN?", "NONE");
+    t.rt(":SEAR:RUNT:WHEN OUT", ":SEAR:RUNT:WHEN?", "OUT");
+    t.rn(":SEAR:RUNT:WLOW 0.001", ":SEAR:RUNT:WLOW?", 0.001);
+    t.rn(":SEAR:RUNT:WUPP 0.004", ":SEAR:RUNT:WUPP?", 0.004);
+    t.rn(":SEAR:RUNT:ALEV 0.75", ":SEAR:RUNT:ALEV?", 0.75);
+    t.rn(":SEAR:RUNT:BLEV 0.25", ":SEAR:RUNT:BLEV?", 0.25);
+    t.rt(":SEAR:RUNT:SOUR CHAN1", ":SEAR:RUNT:SOUR?", "CHAN1");
+    let sp = t.ui.studio.searches[0].unwrap();
+    assert_eq!((sp.kind, sp.slope, sp.when, sp.t1, sp.t2, sp.level, sp.level2), (TrigType::Runt, 0, WhenKind::Out, 0.001, 0.004, 0.75, 0.25));
+    assert_eq!(t.go(":SEAR2:MODE?"), "PULS", "Search 2 is as it was");
+    t.no(":SEAR2:MODE VIDeo", "-224");
     t.ui.m.layout = layout;
     t.go(":SEAR2:REM");
     assert_eq!(t.ui.studio.search_list().map(|(i, _)| i).collect::<Vec<_>>(), vec![0]);

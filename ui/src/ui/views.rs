@@ -140,7 +140,9 @@ impl Ui {
         // Search 1 keeps the key it had while it was the only one; the others have their number
         for (i, q) in s.searches.iter().enumerate().filter_map(|(i, q)| Some((i, q.as_ref()?))) {
             let n = if i == 0 { String::new() } else { (i + 1).to_string() };
-            p.push(format!("search{n}={}/{}/{}", q.src.token(), q.level, q.slope));
+            // (the type and its settings follow the three an edge search has, which is all an older view names)
+            let more = if q.kind == TrigType::Edge { String::new() } else { format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.when as u8, q.t1, q.t2) };
+            p.push(format!("search{n}={}/{}/{}{more}", q.src.token(), q.level, q.slope));
         }
         if s.search_sel != 0 { p.push(format!("searchsel={}", s.search_sel + 1)); }
         if let Some(t) = s.sz.lane { p.push(format!("zlane={}", super::sharedzoom::trace_name(t))); }
@@ -219,9 +221,18 @@ impl Ui {
                 "search" | "search2" | "search3" => {
                     let slot = k[6..].parse::<usize>().map_or(0, |n| n - 1);
                     let f: Vec<&str> = v.split('/').collect();
-                    if let [src, level, slope] = f[..] {
+                    if let [src, level, slope, more @ ..] = &f[..] {
                         if let (Ok(src), Ok(level), Ok(slope)) = (WaveId::parse(src), level.parse::<f32>(), slope.parse::<u8>()) {
-                            if level.is_finite() { self.studio.searches[slot] = Some(super::addrail::SearchSpec { src, level, slope: slope.min(2) }); }
+                            let mut sp = super::addrail::SearchSpec::edge(src, level, slope.min(2));
+                            if let [kind, level2, when, t1, t2] = more {
+                                let num = |s: &str| s.parse::<f32>().ok().filter(|v| v.is_finite());
+                                let kind = super::addrail::SEARCH_TYPES.iter().find(|t| t.name() == *kind);
+                                let when = when.parse::<usize>().ok().and_then(|i| super::addrail::WHENS.get(i));
+                                if let (Some(&kind), Some(level2), Some(&when), Some(t1), Some(t2)) = (kind, num(level2), when, num(t1), num(t2)) {
+                                    sp = super::addrail::SearchSpec { kind, level2, when, t1, t2, ..sp };
+                                }
+                            }
+                            if level.is_finite() { self.studio.searches[slot] = Some(sp.fit()); }
                         }
                     }
                 }

@@ -280,7 +280,7 @@ fn three_views(l: Layout) -> Ui {
     u.m.cat.clear();
     u.m.pane = 1;
     u.studio_set_view(StudioView::Waveform);
-    u.studio.search_put(super::addrail::SearchSpec { src: WaveId::Ch(1), level: 0.5, slope: 1 });
+    u.studio.search_put(super::addrail::SearchSpec::edge(WaveId::Ch(1), 0.5, 1));
     u
 }
 
