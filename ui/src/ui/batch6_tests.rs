@@ -96,7 +96,8 @@ fn shown(u: &Ui) -> Vec<WaveId> { u.meas_rows().iter().filter(|r| !u.meas_row_hi
 
 #[test]
 fn a_measurement_of_a_channel_that_is_off_is_not_shown_and_returns_with_it() {
-    for l in LAYOUTS {
+    // Minimal and Studio; Default keeps upstream's rows (measurement_nav.rs, default_keeps_the_stock_readouts_...)
+    for l in [Layout::Minimal, Layout::Studio] {
         let mut u = layout(l);
         u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(1))];
         u.m.meas2.clear();
@@ -123,7 +124,8 @@ fn a_measurement_of_a_channel_that_is_off_is_not_shown_and_returns_with_it() {
 
 #[test]
 fn a_hidden_ref_measurement_is_not_shown() {
-    let mut u = layout(Layout::Default);
+    // Minimal: Default keeps upstream's rows, also of a ref that is not drawn
+    let mut u = layout(Layout::Minimal);
     u.refs[0] = Some(RefWave { src: 0, color: 0, label: String::new(), t0: 0.0, dt: 1e-6, v: vec![0.0; 64].into(), vpd: 0.5, offset: 0.0, on: false });
     u.m.meas = vec![(Meas::Vpp, WaveId::Ref(0)), (Meas::Vpp, WaveId::Ch(0))];
     u.m.meas2.clear();
