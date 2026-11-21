@@ -32,9 +32,9 @@ pub const ON: [Setting; 1] = [Setting {
     key: "ch<n>.on",
     scpi: Scpi::Cmd("DISPlay"),
     ty: Ty::Bool,
-    label: "Display",
+    label: "Channel",
     #[cfg(test)]
-    doc: "Shows the channel. The menu switches on only the inputs the model has.",
+    doc: "Switches the channel on or off (acquired, measured, analysed); Hide trace only hides its trace. The menu switches on only the inputs the model has.",
     accept: None,
     step: None,
     get: |m, n| Val::Bool(m.ch[n].on),

@@ -426,6 +426,12 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
     let (_, zb) = u.zoom_btn();
     let x1 = u.trigger_tag_x(u.plot.grid.right() - 26, zb.y + 10);
     assert!(x1 + 26 <= zb.x, "the tag moved left of the icons: {x1} vs {zb:?}");
+    // and of the Windows button under them (on a unit, 2026-11-20, "163 mV" ran under it)
+    if u.plot_btns_shown() {
+        let (_, wb) = u.win_btn();
+        let x1 = u.trigger_tag_x(u.plot.grid.right() - 26, wb.y + wb.h / 2);
+        assert!(x1 + 26 <= wb.x, "the tag left of the Windows button: {x1} vs {wb:?}");
+    }
     assert_eq!(u.trigger_tag_x(u.plot.grid.right() - 26, u.plot.grid.bottom() - 40), u.plot.grid.right() - 26, "low levels stay put");
 }
 
@@ -698,4 +704,25 @@ fn the_info_card_opens_from_a_tile_and_from_a_row() {
     tap(&mut u, Ui::md_menu_row(p, 8));
     assert!(u.studio.md.info.is_some(), "the card of the first row");
     shot(&mut u, "info-card-row");
+}
+
+/// The info card's text is in the medium font (the owner: it can be bigger) and ends above the Add button for every
+/// measurement the sheet offers; only a text too long for that drops to the small font.
+#[test]
+fn the_info_card_text_is_large_and_ends_above_its_button() {
+    let u = studio();
+    let f = u.fonts();
+    let card = u.info_card_rect();
+    assert!(card.bottom() <= u.scr.h - 40 && card.right() <= u.scr.w, "{card:?}");
+    let bottom = Ui::info_card_action(card).y - 6;
+    let mut small = Vec::new();
+    for e in u.sheet_add_entries() {
+        let (body, step, parts) = Ui::info_card_text(f, e.cat, card);
+        let h: i32 = parts.iter().map(|(_, l)| 16 + step * (l.len() as i32 + 1)).sum();
+        assert!(card.y + 108 + h <= bottom, "{}: the text runs into the button", super::meascatalog::cat_info(e.cat).name);
+        if body.size < f.m.size {
+            small.push(super::meascatalog::cat_info(e.cat).name);
+        }
+    }
+    assert!(small.len() * 10 <= u.sheet_add_entries().len(), "most in the medium font; small: {small:?}");
 }

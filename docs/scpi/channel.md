@@ -10,7 +10,7 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:CHANnel<n>:DISPlay` | Set / Query | Boolean. | `1` | Channel > Display | Rigol-compatible |
+| `:CHANnel<n>:DISPlay` | Set / Query | Boolean. | `1` | Channel > Channel | Rigol-compatible |
 | `:CHANnel<n>:SCALe` | Set / Query | Volts/div; setter chooses the nearest supported scale. Probe factor applies. | `1.000000E+00` | Channel > Scale | Rigol-compatible |
 | `:CHANnel<n>:OFFSet` | Set / Query | Volts. | `-1.500000E+00` | Channel > Offset | Rigol-compatible |
 | `:CHANnel<n>:COUPling` | Set / Query | `DC\|AC\|GND`; `DC50` only on a board supporting it. | `DC` | Channel > Coupling | Rigol-compatible |
