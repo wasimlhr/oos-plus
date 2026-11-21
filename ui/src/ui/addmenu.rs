@@ -58,7 +58,7 @@ impl Ui {
             AddRow::ResultsTable => self.rail_kind_on_pub(AddKind::Table),
             AddRow::Plot => self.rail_kind_on_pub(AddKind::Plot),
             AddRow::Cursors => self.m.cursor != CursorMode::Off,
-            AddRow::Search => self.studio.search.is_some(),
+            AddRow::Search => self.studio.search().is_some(),
             AddRow::Math => self.m.math != MathOp::Off,
             AddRow::Reference => self.refs.iter().any(Option::is_some),
             AddRow::Bus => self.rail_kind_on_pub(AddKind::Bus),

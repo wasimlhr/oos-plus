@@ -11,6 +11,8 @@ use super::*;
 const SEARCH_MARK_GAP: i32 = 9;
 /// The height of that strip, under the top edge of the plot.
 pub(super) const SEARCH_STRIP_H: i32 = 4;
+/// Height of the line of marks of one search: a mark and a pixel under it.
+pub(super) const SEARCH_LANE_H: i32 = 9;
 
 impl Ui {
     /// Vertical scale and the sample rate of this record. Time per division stays the one horizontal scale.
@@ -564,29 +566,60 @@ impl Ui {
         note.to_string()
     }
 
-    /// Search markers: an amber tick at the top of the plot for every event of the trigger condition.
+    /// Search markers: a tick at the top of the plot for every event. Mark events of the trigger condition has amber
+    /// ones; each search of Studio has a line of marks of its own in its colour, one line under the other, so two
+    /// searches that find the same edge both show. The selected search draws its lines down the plot.
     pub(super) fn draw_search(&self, cv: &mut Canvas) {
-        if !self.search_on && self.studio_search_marks().is_none() {
-            return;
+        if self.studio_search_marks().is_some() {
+            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) {
+                let top = self.area.y + slot as i32 * SEARCH_LANE_H;
+                let events = self.studio_search_events_of(slot);
+                // under the lines of marks of every search
+                let lines = (slot == self.studio.search_sel).then_some(self.area.y + super::addrail::SEARCH_SLOTS as i32 * SEARCH_LANE_H);
+                self.draw_search_marks(cv, &events, top, super::addrail::SEARCH_COLS[slot], lines);
+            }
+        } else if self.search_on {
+            self.draw_search_marks(cv, &self.search_events(), self.area.y, AMBER, Some(self.area.y + SEARCH_LANE_H));
         }
-        let a = self.area;
-        // the markers take the colour of the channel that is searched
-        let mark_col = match &self.studio.search { Some(spec) if self.m.layout == Layout::Studio => self.wave_color(spec.src), _ => AMBER };
-        let events = self.search_events();
-        let (scale, delay) = self.view();
+    }
+
+    /// The searches in the overview of a zoomed view: each has a line of ticks at the top, in its colour and in the
+    /// order of the numbers, over the whole of the main view. The zoomed part has the marks themselves; the overview
+    /// says where in the record the events are, which the zoom window is moved to (it had no marks at all).
+    pub(super) fn draw_search_overview(&self, cv: &mut Canvas, o: Rect) {
+        let view = (self.m.time_per_div(), self.m.delay);
+        let mut line = |slot: usize, events: &[f64], col: Rgb| {
+            let top = o.y + 1 + slot as i32 * (SEARCH_STRIP_H + 1);
+            for column in Self::search_columns(events, o.w, view) { cv.vline(o.x + column, top, top + SEARCH_STRIP_H - 1, col); }
+        };
+        if self.studio_search_marks().is_some() {
+            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) { line(slot, &self.studio_search_events_of(slot), super::addrail::SEARCH_COLS[slot]); }
+        } else if self.search_on {
+            line(0, &self.search_events(), AMBER);
+        }
+    }
+
+    /// The columns of a plot `w` wide showing `view` (time per division, delay) that have an event. At most one a
+    /// pixel, without walking the events that are off the screen.
+    fn search_columns(events: &[f64], w: i32, (scale, delay): (f32, f32)) -> Vec<i32> {
         let left = delay as f64 - scale as f64 * HDIV as f64 * 0.5;
-        let per_pixel = scale as f64 * HDIV as f64 / a.w.max(1) as f64;
+        let per_pixel = scale as f64 * HDIV as f64 / w.max(1) as f64;
         let mut first = events.partition_point(|&time| time < left);
-        // At most one marker per occupied pixel, without walking millions of
-        // off-screen events or hiding their actual count in Search results.
         let mut columns = Vec::new();
-        for column in 0..a.w {
+        for column in 0..w {
             let next = events.partition_point(|&time| time < left + (column + 1) as f64 * per_pixel);
             if next > first {
                 columns.push(column);
             }
             first = next;
         }
+        columns
+    }
+
+    /// One line of marks with its top at `top`; from `lines` down a dashed line under each mark that stands alone.
+    fn draw_search_marks(&self, cv: &mut Canvas, events: &[f64], top: i32, mark_col: Rgb, lines: Option<i32>) {
+        let a = self.area;
+        let columns = Self::search_columns(events, a.w, self.view());
         for (i, &column) in columns.iter().enumerate() {
             let x = a.x + column;
             let near = |other: Option<&i32>| other.is_some_and(|&o| (o - column).abs() < SEARCH_MARK_GAP);
@@ -594,10 +627,10 @@ impl Ui {
                 // events too close to tell apart: a strip at the top says where they are. A mark and a dashed line
                 // in every column drew the lines side by side, and their dashes made bands across the whole plot
                 // (64 000 edges of a 40 MHz square at 20 us/div, unit 2026-11-20)
-                cv.vline(x, a.y + 1, a.y + SEARCH_STRIP_H, mark_col);
+                cv.vline(x, top + 1, top + SEARCH_STRIP_H, mark_col);
             } else {
-                cv.triangle([(x - 4, a.y + 1), (x + 4, a.y + 1), (x, a.y + 8)], mark_col);
-                cv.dashed_vline(x, a.y + 9, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90));
+                cv.triangle([(x - 4, top + 1), (x + 4, top + 1), (x, top + 8)], mark_col);
+                if let Some(from) = lines { cv.dashed_vline(x, from, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90)); }
             }
         }
     }

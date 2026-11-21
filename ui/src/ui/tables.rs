@@ -138,7 +138,7 @@ impl Ui {
     /// The count in the title of the search table. Studio's own search says how much of the record it looked at
     /// when that is a part ("24000 in 300 us of 800 us") and that it ended at its limit ("100000+").
     fn search_total_text(&self, total: usize) -> String {
-        if self.m.layout != Layout::Studio || self.studio.search.is_none() {
+        if self.m.layout != Layout::Studio || self.studio.search().is_none() {
             return total.to_string();
         }
         let more = if total >= super::addrail::SEARCH_MAX { "+" } else { "" };
@@ -150,11 +150,11 @@ impl Ui {
         }
     }
 
-    /// What the events of the table are of: the source and the condition. Studio's own search (Search 1) has its
-    /// source and is an edge search; the table named the trigger's source and type for it.
+    /// What the events of the table are of: the source and the condition. A search of Studio has its own
+    /// source and type; the table named the trigger's for it.
     fn search_names(&self) -> (String, &'static str) {
-        match self.studio.search {
-            Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), TrigType::Edge.name()),
+        match self.studio.search() {
+            Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), spec.kind.name()),
             _ => (self.trigger_source_label(), self.m.trig_type.name()),
         }
     }
@@ -262,7 +262,12 @@ impl Ui {
         let total = self.table_total(k);
         match k {
             TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
-                else { format!("Search {} \u{b7} {}", self.search_names().0, self.search_total_text(total)) },
+                else {
+                    // the list of a search of Studio has the name the top bar and the sheet give it, then its source:
+                    // "Search CH2" under a sheet called "Search 1" read as another search (owner, 2026-11-20)
+                    let which = if self.studio_search_marks().is_some() { format!("{} \u{b7} ", self.studio.search_sel + 1) } else { String::new() };
+                    format!("Search {which}{} \u{b7} {}", self.search_names().0, self.search_total_text(total))
+                },
             TableKind::Segments => format!("Segments \u{b7} {}", total),
         }
     }
@@ -425,14 +430,14 @@ impl Ui {
             stopped = true;
         }
         if self.m.zoom {
-            if self.m.trig_ref.is_some() {
-                let half_main = self.m.time_per_div() * HDIV * 0.5;
-                let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
-                if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
-                    self.m.delay = t as f32;
-                    if let Some(saved) = self.zoom_saved.as_mut() {
-                        saved.2 = t as f32;
-                    }
+            // an event the zoom window cannot reach in the main view takes the main view along (it did so for a
+            // reference only: the window stopped at the edge of the overview, short of the event)
+            let half_main = self.m.time_per_div() * HDIV * 0.5;
+            let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
+            if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
+                self.m.delay = t as f32;
+                if let Some(saved) = self.zoom_saved.as_mut() {
+                    saved.2 = t as f32;
                 }
             }
             self.m.zdelay = t as f32;

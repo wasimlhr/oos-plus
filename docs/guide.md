@@ -754,13 +754,47 @@ the right, and Overlay traces, every source on one graticule of the full height,
 its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
 side. A tap on a handle opens the sheet of its source.
 
-Add > Search puts an edge search of its own on a source (Search 1). The top bar then counts its events between a
-previous and a next button; a tap on the count opens the Search sheet with the source, the slope, the level and, at
-its foot, **Event list** and Remove search. Event list (also Add > Results table > Search events) opens the table of
-the events, one row an event with its time, however many there are; a tap on a row moves the view there. In the plot
-every event has a mark at the top edge and a dashed line in the colour of its source. Events nearer than a mark is
-wide are drawn as a strip at the top edge instead, so tens of thousands of events leave the trace readable; zoom in
-and each has its mark again. The search looks at the samples the scope has read. Running with a record of up to 1 Mpts
+Add > Search puts a search of its own on a source: Search 1, and with Add again Search 2 and Search 3, each
+with its own type, source and settings. A new search looks for edges; the row **Type** of its sheet makes it one of
+six, which are the trigger's types of one source and take the trigger's settings:
+
+| Type | It marks | Its rows |
+|---|---|---|
+| Edge | every crossing of the level in the direction of the slope | Slope, Level |
+| Pulse | the closing edge of a pulse whose width meets the condition | Polarity, Level; When, Time |
+| Slope | the end of an edge whose time between the lower and the upper level meets the condition | Slope, Upper, Lower; When, Time |
+| Timeout | the moment the time has passed after an edge without another one | Slope, Level; Timeout |
+| Runt | the end of a pulse that passes one level and not the other | Polarity, Upper, Lower; When (Off: any width), Time |
+| Window | where the signal comes between the two levels (Enter), leaves them (Exit), or leaves them after a time between them that meets the condition (Inside) | Position, Upper, Lower; for Inside: When, Time |
+
+When is `>`, `<`, Equal, Not equal, Inside or Outside; the last two have a lower and an upper limit. Equal is a time
+within 5 % of the limit (no two pulses of a record are the same to the sample), Not equal every other one; the
+trigger has no Equal and gets the two limits when the search is copied to it. The times step as the trigger's do.
+**Set to 50 %** puts the level in the middle of the signal, the two levels of Slope at 10 % and 90 % and those of
+Runt and Window at 25 % and 75 %; choosing one of these types does the same. Copy to trigger makes the trigger of the search's type
+with its settings, Copy from trigger takes the trigger's (its edge, where the trigger is of a type the search has
+not). The conditions are found in the samples by the code that finds the trigger in a stored record
+(`oos_dsp::trigger`), with a hysteresis of a tenth of a division. A search keeps its number and its colour while it is there (amber, blue, green;
+no channel's colour, so two searches of one channel are told apart), and the place of a removed one is the next taken.
+Every search has a badge in the top bar, in its colour, between a previous and a next button. One search is the
+selected one: its badge is the bright one and names its type and its count (`2 Pulse · 31999`), the others say their
+number and count (`1 · 64000`); previous and next walk the events of the selected search. A tap on a badge selects its
+search and opens the Search sheet for it, a tap on the badge of the selected search closes the sheet again. The badges
+share the room the one count had: the selected badge says less (the count as a number, then no type) before the bar
+shortens the names of its buttons, and a count of a part of the record keeps saying so.
+The row **Marks** on the sheet's second tab hides the marks of a search and shows them again: a hidden search keeps
+its events, its count, its badge (dim) and its list, and previous and next go on. The sheet's row **Search** selects a search too; under it are the type, the source,
+the slope or polarity and the levels, on the second tab the time condition, the event the search stands on and the
+copies from and to the trigger, and at the foot **Event list** and Remove search. Event list (also Add > Results table > Search events) opens the table of
+the selected search's events, one row an event with its time, however many there are; a tap on a row moves the view
+there, and the title names the search and its source (`Search 2 · CH1 · 10`). In the plot every search has a line of marks of its own
+at the top edge, one under the other in the order of their numbers; the selected search also draws a dashed line down
+the plot under each of its marks. Events nearer than a mark is
+wide are drawn as a strip in that line instead, so tens of thousands of events leave the trace readable; zoom in
+and each has its mark again. With zoom on, the marks are in the zoomed part, and the overview above it has a line
+of ticks for each search at its top edge, in the search's colour, over the whole main view: they show where the
+events are and where the zoom window stands among them. Previous and next move the zoom window to the event; an
+event the window cannot reach in the main view takes the main view along. A view (Display > Views) and a set-up keep every search. The search looks at the samples the scope has read. Running with a record of up to 1 Mpts
 that is the whole record. A stopped record and a deeper one are read in part, the screen with a quarter of a screen
 on each side, and the count then names the part: `24000 in 300 µs` in the top bar, `24000 in 300 µs of 800 µs` in the
 title of the table; move the view to search another part. The search keeps 100000 events and writes `100000+` when
