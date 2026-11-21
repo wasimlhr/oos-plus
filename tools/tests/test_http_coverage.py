@@ -204,11 +204,17 @@ class Coverage(unittest.TestCase):
 
     def test_the_files_under_a_directory_are_one_route_that_needs_its_entry(self):
         site = 'pub fn answer() { match route { _ if !post && route.starts_with("/mcp/files/") => ok(), _ => None } }\n'
-        self.write(HTTP_RS, HTTP_MD, site)
+        # its arm of methods_of is read the same way
+        rs = HTTP_RS.replace('"/update" => Some(',
+                             'r if r.starts_with("/mcp/files/") => Some("GET, HEAD"),\n        "/update" => Some(')
+        self.assertEqual(cov.methods_of(rs).get("/mcp/files/<file>"), {"GET", "HEAD"})
+        self.write(rs, HTTP_MD, site)
         self.assertEqual(self.findings(), [
             "ui/remote/src/http.rs: route GET /mcp/files/<file> has no entry `### \\`GET /mcp/files/<file>\\`` in "
-            "docs/http.md"])
-        self.write(HTTP_RS, HTTP_MD + "\n### `GET /mcp/files/<file>`\n\n- Mark: **experimental**\n", site)
+            "docs/http.md",
+            "ui/remote/src/http.rs: fn methods_of lets GET through to /mcp/files/<file>, its entries in docs/http.md "
+            "name none"])
+        self.write(rs,HTTP_MD + "\n### `GET /mcp/files/<file>`\n\n- Mark: **experimental**\n", site)
         self.assertEqual(self.findings(), [])
 
     def test_methods_of_takes_the_methods_of_the_entries(self):
