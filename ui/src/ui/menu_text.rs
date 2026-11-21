@@ -63,6 +63,8 @@ impl Ui {
             Item::DecThr if self.m.dec_proto == Proto::CPHY => "Min level gap",
             Item::TrigT1 if matches!(self.m.trig_when, WhenKind::In | WhenKind::Out) => "Lower limit",
             Item::NavHist if self.history.pos.is_some() => "Live",
+            // Default keeps upstream's Event table over the plot; Minimal and Studio list the events in the pane
+            Item::DecTable if self.m.layout == Layout::Default => "Event table",
             _ => Self::label(it),
         }
     }
