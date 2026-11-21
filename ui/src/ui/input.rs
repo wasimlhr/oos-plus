@@ -166,6 +166,9 @@ impl Ui {
         // the layout is part of the set-up: a new one starts in the Default layout with the stock bars (5533112)
         let mut m = Model { meas: Self::default_meas(), ..Model::default() };
         Self::default_keeps(&self.m, &mut m);
+        // the hardware session's stamps go on: a new set-up is not a new acquisition thread (#391: SINGLE never ended
+        // after *RST)
+        m.keep_session(&self.m);
         self.m = m;
         // what hangs on the signals of the set-up that is gone: the notes, and the vertical zoom a closed zoom
         // window kept for its next opening
@@ -387,7 +390,9 @@ impl Ui {
                 }
                 0x90 => {
                     if push {
-                        self.refs[self.ref_sel].as_mut().unwrap().offset = 0.0;
+                        if let Some(r) = self.refs[self.ref_sel].as_mut() {
+                            r.offset = 0.0;
+                        }
                         self.settings_changed();
                     } else {
                         self.adjust(Item::RefOffset, dir * acc);
@@ -575,9 +580,10 @@ impl Ui {
         if id == 1 {
             match ph {
                 Phase::Down => {
-                    if !modal && self.touch.down && map.is_some_and(|(area, _, _)| area.contains(x, y)) {
+                    let on_plot = map.filter(|(area, _, _)| area.contains(x, y));
+                    if let Some((area, _, _)) = on_plot.filter(|_| !modal && self.touch.down) {
                         p.active = true;
-                        p.area = map.unwrap().0;
+                        p.area = area;
                         p.detail = self.m.zoom && p.area.y >= detail_y;
                         p.p0 = (self.touch.x, self.touch.y);
                         p.p1 = (x, y);
@@ -895,11 +901,11 @@ impl Ui {
                 Some(WaveId::Ch(c)) => Drag::Offset(c),
                 _ => Drag::Delay,
             }
-        } else if dy.abs() > dx.abs() && self.math_lane_at(tx0, ty0).is_some() {
+        } else if let Some(lane) = self.math_lane_at(tx0, ty0).filter(|_| dy.abs() > dx.abs()) {
             // a lane of a math channel: it moves like a channel's does
-            Drag::MathOffset(self.math_lane_at(tx0, ty0).unwrap())
-        } else if dy.abs() > dx.abs() && self.drag_reference().is_some() {
-            Drag::RefOffset(self.drag_reference().unwrap())
+            Drag::MathOffset(lane)
+        } else if let Some(r) = self.drag_reference().filter(|_| dy.abs() > dx.abs()) {
+            Drag::RefOffset(r)
         } else if dy.abs() > dx.abs() {
             // nearest enabled channel marker when starting at the left edge, else the active channel (in a
             // split plot: of this window)

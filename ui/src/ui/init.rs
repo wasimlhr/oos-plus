@@ -114,7 +114,6 @@ impl Ui {
             stop_ti_off: None,
             stop_raw: None,
             stop_pic: None,
-            stop_whole: None,
             loaded_record: false,
             t_fast: 0.0,
             t_fast_ab: (0.0, 0.0),
