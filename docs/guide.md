@@ -754,6 +754,18 @@ the right, and Overlay traces, every source on one graticule of the full height,
 its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
 side. A tap on a handle opens the sheet of its source.
 
+Add > Search puts an edge search of its own on a source (Search 1). The top bar then counts its events between a
+previous and a next button; a tap on the count opens the Search sheet with the source, the slope, the level and, at
+its foot, **Event list** and Remove search. Event list (also Add > Results table > Search events) opens the table of
+the events, one row an event with its time, however many there are; a tap on a row moves the view there. In the plot
+every event has a mark at the top edge and a dashed line in the colour of its source. Events nearer than a mark is
+wide are drawn as a strip at the top edge instead, so tens of thousands of events leave the trace readable; zoom in
+and each has its mark again. The search looks at the samples the scope has read. Running with a record of up to 1 Mpts
+that is the whole record. A stopped record and a deeper one are read in part, the screen with a quarter of a screen
+on each side, and the count then names the part: `24000 in 300 µs` in the top bar, `24000 in 300 µs of 800 µs` in the
+title of the table; move the view to search another part. The search keeps 100000 events and writes `100000+` when
+there are more.
+
 Zoom has the same row in every layout, between the overview and the zoomed part: the time per division, the position
 and the vertical factor at the left, then H-, H+, V-, V+, Box, Reset and Close; the window in the overview is a slim
 frame with a handle at each end. Studio adds what the row has no place for: the grip at the lower edge of the overview
