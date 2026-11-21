@@ -151,6 +151,7 @@ impl Ui {
             view_own: Default::default(),
             row_gate: std::cell::Cell::new(None),
             meas_cfg: None,
+            meas_dlg: false,
             offline_ref: 0,
             offline_hold: None,
             touch: TouchState {

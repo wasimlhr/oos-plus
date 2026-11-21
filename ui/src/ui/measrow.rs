@@ -137,7 +137,7 @@ impl Ui {
                 let mut rows = Vec::new();
                 if polarity { rows.push(it(RF::Pol)); }
                 rows.extend([it(RF::Off), it(RF::Step), it(RF::Gate)]);
-                vec![("Cycles", with(rows)), ("Levels", vec![it(RF::Hyst), it(RF::BaseTop)])]
+                vec![("Cycles", with(rows)), ("Levels", vec![it(RF::Low), it(RF::High), it(RF::Hyst), it(RF::BaseTop)])]
             }
             Group::Edges { used } => {
                 let mut rows = vec![it(RF::Low), it(RF::High), it(RF::Hyst)];
@@ -156,6 +156,11 @@ impl Ui {
                 vec![("Edges", rows)]
             }
         };
+        // every row has its own reference levels, as the dialog of the Default layout gives it (ADR 0030); Edges,
+        // Timing and Outside have them on their own pages already
+        if matches!(group, Group::Amp { .. } | Group::Level | Group::Burst | Group::NPeriods) {
+            plan.push(("Levels", vec![it(RF::Low), it(RF::High)]));
+        }
         plan.push(stats);
         plan
     }
@@ -507,7 +512,7 @@ impl Ui {
     }
 
     /// Steps the source of a single row through the channels and references, keeping its settings.
-    fn rowf_source(&mut self, d: i32) {
+    pub(super) fn rowf_source(&mut self, d: i32) {
         let Some(RowKey::One(kind, id)) = self.rowf_key() else { return };
         let Some(index) = self.meas_cfg.map(|i| i as usize) else { return };
         let mut sources: Vec<WaveId> = (0..n_ch()).map(WaveId::Ch).collect();

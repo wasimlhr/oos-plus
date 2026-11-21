@@ -346,8 +346,8 @@ fn taps_on_the_sheet_change_the_row_and_the_reset_footer_follows_shared_again() 
 }
 
 #[test]
-fn minimal_and_default_open_the_card_as_a_dialog_with_forty_pixel_controls() {
-    for l in [Layout::Minimal, Layout::Default] {
+fn minimal_opens_the_card_as_a_dialog_with_forty_pixel_controls() {
+    for l in [Layout::Minimal] {
         let r0 = WaveId::Ref(0);
         let mut u = card(l, &[(Meas::Period, r0), (Meas::Rise, r0)], &[(0, r0, WaveId::Ref(1))]);
         for i in 0..3 {
@@ -366,6 +366,37 @@ fn minimal_and_default_open_the_card_as_a_dialog_with_forty_pixel_controls() {
         tap_in(&mut u, d.close);
         assert!(!u.menu_open && u.meas_cfg.is_none());
     }
+}
+
+#[test]
+fn every_card_of_a_single_row_has_its_own_reference_levels() {
+    // the dialog of the Default layout sets the reference levels of every row; the card offers them too (ADR 0030)
+    let r0 = WaveId::Ref(0);
+    for k in [Meas::PllUi, Meas::Vpp, Meas::Vupper, Meas::Overshoot, Meas::Period, Meas::Rise, Meas::Burst, Meas::NPeriods, Meas::Outside] {
+        let mut u = card(Layout::Studio, &[(k, r0)], &[]);
+        u.open_meas_cfg(0);
+        let rows: Vec<Item> = u.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();
+        assert!(rows.contains(&Item::RowF(RF::Low)) && rows.contains(&Item::RowF(RF::High)), "{k:?}");
+        assert!(u.measrow_sheet_tabs().iter().all(|t| t.rows.len() <= SHEET_MAX_ROWS), "{k:?}");
+    }
+}
+
+#[test]
+fn default_opens_the_dialog_of_upstream_for_a_standard_row_and_the_card_for_a_pair() {
+    let r0 = WaveId::Ref(0);
+    let mut u = card(Layout::Default, &[(Meas::Period, r0), (Meas::Rise, r0)], &[(0, r0, WaveId::Ref(1))]);
+    for i in 0..2 {
+        u.open_meas_cfg(i);
+        assert!(!u.menu_open || u.menu != MenuId::MeasRow, "row {i}: no card in Default");
+        let g = u.cfg_geom().expect("upstream's dialog");
+        assert!(g.source_m.w > 0 && g.refs.w > 0);
+        tap_in(&mut u, g.close);
+        assert!(u.cfg_geom().is_none() && u.meas_cfg.is_none());
+    }
+    // upstream has no settings of a pair: the card is the only place for them
+    u.open_meas_cfg(2);
+    assert_eq!(u.menu, MenuId::MeasRow);
+    assert!(u.cfg_geom().is_none());
 }
 
 #[test]

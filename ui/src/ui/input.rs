@@ -1342,6 +1342,9 @@ impl Ui {
         if self.wlan.osk.is_some() {
             return self.osk_tap(x, y);
         }
+        if self.meas_cfg_tap(x, y) {
+            return;
+        }
         if self.dialog.is_some() {
             self.dialog = None;
             return;
