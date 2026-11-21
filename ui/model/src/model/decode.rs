@@ -85,6 +85,8 @@ pub struct DecCfg {
     pub thr: f32,
     pub thr_line: [Option<f32>; 3],
     pub ascii: bool,
+    pub label: String,
+    pub pos: Option<f32>,
     pub proto: Proto,
     pub src2: usize,
     pub cs: Option<usize>,
@@ -92,6 +94,15 @@ pub struct DecCfg {
     pub bits: u32,
     pub parity: oos_dsp::decode::Parity,
     pub opt: [u8; oos_dsp::protocols::OPTS],
+}
+
+/// The band of a decoder stands so many divisions from the middle of its window at most. At the lower end it is at
+/// the bottom, on the bands under it (`Model::dec_pos` is `None`).
+pub const DEC_POS: (f32, f32) = (-4.0, 4.0);
+
+/// A position of a band as it is kept: the lower end of `DEC_POS` and what is under it is the bottom.
+pub fn dec_pos_kept(div: f32) -> Option<f32> {
+    (div.is_finite() && div > DEC_POS.0 + 0.01).then(|| div.min(DEC_POS.1))
 }
 
 /// Decoders at once.
@@ -107,6 +118,16 @@ impl Model {
     /// The threshold of line `role` of the decoder: its own, or the decoder's.
     pub fn dec_thr_of(&self, role: usize) -> f32 {
         role.checked_sub(1).and_then(|k| self.dec_thr_line.get(k).copied().flatten()).unwrap_or(self.dec_thr)
+    }
+
+    /// The name on the band of the decoder: its label, or its protocol where it has none.
+    pub fn dec_name(&self) -> String {
+        let label = self.dec_label.trim();
+        if label.is_empty() {
+            self.dec_proto.name().to_string()
+        } else {
+            label.to_string()
+        }
     }
 
     /// The settings of the decoder the menu edits.
@@ -130,6 +151,8 @@ impl Model {
             thr: self.dec_thr,
             thr_line: self.dec_thr_line,
             ascii: self.dec_ascii,
+            label: self.dec_label.clone(),
+            pos: self.dec_pos,
             proto: self.dec_proto,
             src2: self.dec_src2,
             cs: self.dec_cs,
@@ -159,6 +182,8 @@ impl Model {
         self.dec_thr = c.thr;
         self.dec_thr_line = c.thr_line;
         self.dec_ascii = c.ascii;
+        self.dec_label = c.label.clone();
+        self.dec_pos = c.pos;
         self.dec_proto = c.proto;
         self.dec_src2 = c.src2;
         self.dec_cs = c.cs;

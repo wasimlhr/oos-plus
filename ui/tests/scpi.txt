@@ -218,6 +218,8 @@ scpi $S/scpi-answers.txt :MATH1:FILTer:W1?
 scpi $S/scpi-answers.txt :MATH1:FILTer:W2?
 scpi $S/scpi-answers.txt :BUS1:DISPlay?
 scpi $S/scpi-answers.txt :BUS1:FORMat?
+scpi $S/scpi-answers.txt :BUS1:LABel:CONTent?
+scpi $S/scpi-answers.txt :BUS1:POSition?
 scpi $S/scpi-answers.txt :BUS1:RS232:RX?
 scpi $S/scpi-answers.txt :BUS1:RS232:PARity?
 scpi $S/scpi-answers.txt :BUS1:RS232:DBITs?

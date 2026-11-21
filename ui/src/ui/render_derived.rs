@@ -838,6 +838,8 @@ impl Ui {
             }
             let y = match row {
                 Some(r) => r.y + 3,
+                // a band with a place of its own is no part of the stack
+                None if m.dec_pos.is_some() => self.dec_own_y(&m).unwrap_or(bottom),
                 None => {
                     // the boxes stand on what is under them; a bit row is above its boxes
                     let y = bottom - stack;

@@ -1,10 +1,10 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! The decoders: `:BUS<n>` (`MODE`, `DISPlay`, `FORMat`, `EVENt`, `THReshold`, `DATA?`, and the sources and settings
-//! under `RS232`, `IIC` and `SPI`) and `:DECode` (sources and roles, `PROTocol`, `STATe`, `SELect`, `THReshold`,
-//! `INPut`, `EVENts?`, `BUSY?`, `CPHY:RATE`). A new decoder command goes into `bus_cmd` or `decode_cmd` here, with
-//! its line in docs/scpi.md and its query in ui/tests/scpi.txt (AGENTS.md).
+//! The decoders: `:BUS<n>` (`MODE`, `DISPlay`, `FORMat`, `LABel:CONTent`, `POSition`, `EVENt`, `THReshold`, `DATA?`,
+//! and the sources and settings under `RS232`, `IIC` and `SPI`) and `:DECode` (sources and roles, `PROTocol`,
+//! `STATe`, `SELect`, `THReshold`, `INPut`, `EVENts?`, `BUSY?`, `CPHY:RATE`). A new decoder command goes into
+//! `bus_cmd` or `decode_cmd` here, with its line in docs/scpi.md and its query in ui/tests/scpi.txt (AGENTS.md).
 
 use super::{block, e, kw, nearest_index, num, parse_bool, parse_wave, suffix, t, wave_tok, Scpi};
 use crate::model::*;
@@ -203,6 +203,27 @@ impl Scpi {
                 return None;
             };
             with_bus(ui, k, |m| m.dec_ascii = ascii);
+            return None;
+        }
+        // the name on the band, and the place of the band: divisions from the middle of its window, or BOTTom
+        if n.len() == 2 && kw(n0, "LABel") && kw(n[1], "CONTent") {
+            if query {
+                return t(&cfg.label);
+            }
+            let label = bus_label(arg.trim().trim_matches('"'));
+            with_bus(ui, k, |m| m.dec_label = label);
+            return None;
+        }
+        if n.len() == 1 && kw(n0, "POSition") {
+            if query {
+                return t(&cfg.pos.map_or("BOTT".to_string(), |p| e(p as f64)));
+            }
+            let pos = if kw(arg, "BOTTom") { Some(None) } else { num(arg).map(|v| dec_pos_kept(v as f32)) };
+            let Some(pos) = pos else {
+                self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
+                return None;
+            };
+            with_bus(ui, k, |m| m.dec_pos = pos);
             return None;
         }
         if n.len() == 1 && kw(n0, "EVENt") {

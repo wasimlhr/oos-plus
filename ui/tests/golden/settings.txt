@@ -168,6 +168,15 @@ scpi :BUS1:IIC:SDA:SOURce "R1" -> query: CHAN3; errors: -224,"Decoder source is 
 scpi :BUS1:IIC:SDA:SOURce "R11" -> query: CHAN3; errors: -224,"Decoder source is unavailable" R11
 scpi :BUS1:IIC:SDA:SOURce "x" -> query: CHAN3; errors: -224,"Decoder source is unavailable" x
 scpi :BUS1:IIC:SDA:SOURce default -> query: CHAN3; errors: none
+scpi :BUS1:LABel:CONTent "" -> query: ""; errors: none
+scpi :BUS1:LABel:CONTent "-1" -> query: -1; errors: none
+scpi :BUS1:LABel:CONTent "1e9" -> query: 1e9; errors: none
+scpi :BUS1:LABel:CONTent "SENSOR" -> query: SENSOR; errors: none
+scpi :BUS1:LABel:CONTent "\"0123456789AB\"" -> query: 0123456789; errors: none
+scpi :BUS1:LABel:CONTent "\"SENSOR\"" -> query: SENSOR; errors: none
+scpi :BUS1:LABel:CONTent "\"\"" -> query: ""; errors: none
+scpi :BUS1:LABel:CONTent "x" -> query: x; errors: none
+scpi :BUS1:LABel:CONTent default -> query: ""; errors: none
 scpi :BUS1:MODE "" -> query: RS232; errors: -224,"Illegal parameter value"
 scpi :BUS1:MODE "-1" -> query: RS232; errors: -224,"Illegal parameter value" -1
 scpi :BUS1:MODE "1e9" -> query: RS232; errors: -224,"Illegal parameter value" 1e9
@@ -181,6 +190,17 @@ scpi :BUS1:MODE "SPI" -> query: SPI; errors: none
 scpi :BUS1:MODE "UART" -> query: RS232; errors: none
 scpi :BUS1:MODE "x" -> query: RS232; errors: -224,"Illegal parameter value" x
 scpi :BUS1:MODE default -> query: RS232; errors: none
+scpi :BUS1:POSition "" -> query: BOTT; errors: -224,"Illegal parameter value"
+scpi :BUS1:POSition "-1" -> query: -1.000000E+00; errors: none
+scpi :BUS1:POSition "-3.9" -> query: -3.900000E+00; errors: none
+scpi :BUS1:POSition "-4" -> query: BOTT; errors: none
+scpi :BUS1:POSition "1e9" -> query: 4.000000E+00; errors: none
+scpi :BUS1:POSition "2.5" -> query: 2.500000E+00; errors: none
+scpi :BUS1:POSition "4" -> query: 4.000000E+00; errors: none
+scpi :BUS1:POSition "9" -> query: 4.000000E+00; errors: none
+scpi :BUS1:POSition "BOTTom" -> query: BOTT; errors: none
+scpi :BUS1:POSition "x" -> query: BOTT; errors: -224,"Illegal parameter value" x
+scpi :BUS1:POSition default -> query: BOTT; errors: none
 scpi :BUS1:RS232:BAUD "" -> query: 115200; errors: -224,"Illegal parameter value"
 scpi :BUS1:RS232:BAUD "-1" -> query: 115200; errors: -224,"Illegal parameter value" -1
 scpi :BUS1:RS232:BAUD "100" -> query: 1200; errors: none
@@ -2677,6 +2697,14 @@ setup d2.dec_fdrate "4" -> 4
 setup d2.dec_fdrate "5" -> 1; error: line 2: d2.dec_fdrate: 5 out of range (< 5)
 setup d2.dec_fdrate "x" -> 1; error: line 2: d2.dec_fdrate: not an index: x
 setup d2.dec_fdrate default -> 1
+setup d2.dec_label "  pad  " -> pad
+setup d2.dec_label "" -> ""
+setup d2.dec_label "-1" -> -1
+setup d2.dec_label "0123456789AB" -> 0123456789
+setup d2.dec_label "1e9" -> 1e9
+setup d2.dec_label "SENSOR" -> SENSOR
+setup d2.dec_label "x" -> x
+setup d2.dec_label default -> ""
 setup d2.dec_mode "" -> 0; error: "line 2: d2.dec_mode: not an index: "
 setup d2.dec_mode "+1" -> 1
 setup d2.dec_mode "-1" -> 0; error: line 2: d2.dec_mode: not an index: -1
@@ -2744,6 +2772,24 @@ setup d2.dec_parity "Odd" -> Odd
 setup d2.dec_parity "odd" -> None; error: line 2: d2.dec_parity: unknown value: odd
 setup d2.dec_parity "x" -> None; error: line 2: d2.dec_parity: unknown value: x
 setup d2.dec_parity default -> None
+setup d2.dec_pos "" -> bottom; error: "line 2: d2.dec_pos: not a number: "
+setup d2.dec_pos "-1" -> -1
+setup d2.dec_pos "-2.25" -> -2.25
+setup d2.dec_pos "-3.9" -> -3.9
+setup d2.dec_pos "-4" -> bottom
+setup d2.dec_pos "0" -> 0
+setup d2.dec_pos "1.5" -> 1.5
+setup d2.dec_pos "1e39" -> bottom; error: line 2: d2.dec_pos: not a number: 1e39
+setup d2.dec_pos "1e9" -> 4
+setup d2.dec_pos "2.5" -> 2.5
+setup d2.dec_pos "3e38" -> 4
+setup d2.dec_pos "4" -> 4
+setup d2.dec_pos "9" -> 4
+setup d2.dec_pos "NaN" -> bottom; error: line 2: d2.dec_pos: not a number: NaN
+setup d2.dec_pos "bottom" -> bottom
+setup d2.dec_pos "inf" -> bottom; error: line 2: d2.dec_pos: not a number: inf
+setup d2.dec_pos "x" -> bottom; error: line 2: d2.dec_pos: not a number: x
+setup d2.dec_pos default -> bottom
 setup d2.dec_proto "" -> Uart; error: "line 2: d2.dec_proto: unknown protocol: "
 setup d2.dec_proto "-1" -> Uart; error: line 2: d2.dec_proto: unknown protocol: -1
 setup d2.dec_proto "1e9" -> Uart; error: line 2: d2.dec_proto: unknown protocol: 1e9
@@ -3209,6 +3255,14 @@ setup dec_la "2 1 2 3 4" -> 0 1 2 3 4
 setup dec_la "x 8 10 - -" -> 0 8 10 - -
 setup dec_la "x" -> 0 8 10 - -; error: line 2: dec_la: dec_la: "x"
 setup dec_la default -> 0 8 10 - -
+setup dec_label "  pad  " -> pad
+setup dec_label "" -> ""
+setup dec_label "-1" -> -1
+setup dec_label "0123456789AB" -> 0123456789
+setup dec_label "1e9" -> 1e9
+setup dec_label "SENSOR" -> SENSOR
+setup dec_label "x" -> x
+setup dec_label default -> ""
 setup dec_mode "" -> 0; error: "line 2: dec_mode: not an index: "
 setup dec_mode "+1" -> 1
 setup dec_mode "-1" -> 0; error: line 2: dec_mode: not an index: -1
@@ -3276,6 +3330,24 @@ setup dec_parity "Odd" -> Odd
 setup dec_parity "odd" -> None; error: line 2: dec_parity: unknown value: odd
 setup dec_parity "x" -> None; error: line 2: dec_parity: unknown value: x
 setup dec_parity default -> None
+setup dec_pos "" -> bottom; error: "line 2: dec_pos: not a number: "
+setup dec_pos "-1" -> -1
+setup dec_pos "-2.25" -> -2.25
+setup dec_pos "-3.9" -> -3.9
+setup dec_pos "-4" -> bottom
+setup dec_pos "0" -> 0
+setup dec_pos "1.5" -> 1.5
+setup dec_pos "1e39" -> bottom; error: line 2: dec_pos: not a number: 1e39
+setup dec_pos "1e9" -> 4
+setup dec_pos "2.5" -> 2.5
+setup dec_pos "3e38" -> 4
+setup dec_pos "4" -> 4
+setup dec_pos "9" -> 4
+setup dec_pos "NaN" -> bottom; error: line 2: dec_pos: not a number: NaN
+setup dec_pos "bottom" -> bottom
+setup dec_pos "inf" -> bottom; error: line 2: dec_pos: not a number: inf
+setup dec_pos "x" -> bottom; error: line 2: dec_pos: not a number: x
+setup dec_pos default -> bottom
 setup dec_proto "" -> Uart; error: "line 2: dec_proto: unknown protocol: "
 setup dec_proto "-1" -> Uart; error: line 2: dec_proto: unknown protocol: -1
 setup dec_proto "1e9" -> Uart; error: line 2: dec_proto: unknown protocol: 1e9

@@ -288,12 +288,14 @@ fn the_i2c_lane_has_its_own_sheet_and_the_gear_opens_a_short_main_sheet() {
         assert!(spec.tabs.iter().all(|t| !t.rows.is_empty()), "{}: a page without a row", proto.name());
         assert_eq!(spec.tabs[0].foot, [Item::DecTable, Item::DecExport], "{}", proto.name());
     }
-    // a decoder of one line and no settings is one page: its threshold under its source
+    // a decoder of one line and no settings of its protocol has its threshold under its source, and Settings
+    // holds the name and the place of its band
     u.m.dec_proto = crate::model::Proto::from_key("Mil1553").unwrap();
     let spec = u.sheet_spec(MenuId::Decode).unwrap();
     // (its source is switched off here: the button that turns it on is the last row, as in the menu)
     let rows = [Item::DecSel, Item::DecOn, Item::DecProto, Item::DecSrc, Item::DecThr, Item::DecThrMid, Item::SrcOn];
-    assert_eq!((spec.tabs.len(), &spec.tabs[0].rows[..]), (1, &rows[..]));
+    assert_eq!((spec.tabs.len(), &spec.tabs[0].rows[..]), (2, &rows[..]));
+    assert_eq!((spec.tabs[1].name, &spec.tabs[1].rows[..]), ("Settings", &[Item::DecLabel, Item::DecPos][..]));
     u.open_menu(MenuId::Bus);
     let g = u.sheet_geo().unwrap();
     assert!(g.rows.iter().any(|r| r.it == Item::BusOn) && !g.rows.iter().any(|r| r.it == Item::DecProto));

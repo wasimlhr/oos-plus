@@ -135,6 +135,7 @@ impl Ui {
             Item::SimHigh | Item::SimLow => Some(Range { lo: SIM_LEVEL.0, hi: SIM_LEVEL.1, step: Step::Add(0.05), unit: "V" }),
             Item::SimDeemph => Some(Range { lo: SIM_DEEMPH.0, hi: SIM_DEEMPH.1, step: Step::Add(0.5), unit: "dB" }),
             Item::BusPos => flt((BUS_POS_MIN, BUS_POS_MAX), 0.1, "div"),
+            Item::DecPos => flt(crate::model::DEC_POS, 0.1, "div"),
             Item::Intensity => int(INTENSITY, "%"),
             Item::GridBright => int(GRID_BRIGHT, "%"),
             Item::StoreSlot => int(STORE_SLOT, ""),
@@ -176,7 +177,7 @@ impl Ui {
         let mut v = vec![
             Item::TrigLevel, Item::TrigLevel2, Item::PatLevel, Item::HDelay, Item::MathOffset, Item::DecThr, Item::BusClkThr, Item::BusDataThr,
             Item::SpecRef, Item::RefOffset, Item::MathLinA, Item::MathLinB, Item::SpecMargin, Item::SimHigh, Item::SimLow, Item::SimDeemph,
-            Item::BusPos, Item::Intensity, Item::GridBright,
+            Item::BusPos, Item::DecPos, Item::Intensity, Item::GridBright,
             Item::StoreSlot, Item::MagN, Item::CntDigits, Item::NthN, Item::DecBits, Item::VidLine, Item::TrigBusVal, Item::SimSlot,
             Item::RefSel, Item::SimRate, Item::SimRise, Item::SimBw, Item::SimNoise, Item::SimSscHz, Item::SimDcd, Item::SimCorrRj,
             Item::SimCorrHz, Item::SimRj, Item::SimPj, Item::SimPjHz, Item::SpecCenter, Item::SpecSpan, Item::SpecRbw, Item::EyePll, Item::EyeRate, Item::BodeAmp,
@@ -199,6 +200,8 @@ impl Ui {
             Item::MathOffset => m.math_offset as f64,
             Item::DecThr => m.dec_thr as f64,
             Item::DecThrLine(role) => m.dec_thr_of(role) as f64,
+            // the lower end of the range is the bottom, where the bands stand on each other
+            Item::DecPos => m.dec_pos.unwrap_or(crate::model::DEC_POS.0) as f64,
             Item::BusClkThr => m.bus.clk_thr as f64,
             Item::BusDataThr => m.bus.data_thr as f64,
             Item::SpecRef => m.spec_ref as f64,
@@ -260,6 +263,7 @@ impl Ui {
                     *t = Some(x);
                 }
             }
+            Item::DecPos => m.dec_pos = crate::model::dec_pos_kept(x),
             Item::BusClkThr => m.bus.clk_thr = x,
             Item::BusDataThr => m.bus.data_thr = x,
             Item::SpecRef => m.spec_ref = x,

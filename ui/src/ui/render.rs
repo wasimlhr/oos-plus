@@ -494,11 +494,7 @@ impl Ui {
             if self.m.mask_on && self.mask_sw.mask.is_some() && self.shows(self.m.mask_src) {
                 taken.push(Rect::new(a.x, a.y + 22, a.w, 28));
             }
-            // the height of the bands of this window, their bit rows with them
-            let bands: i32 = (0..DECODERS)
-                .filter(|&k| self.dec_shown(k) && self.dec_band_win(k) == Some(self.plot.cur_win))
-                .map(|k| self.dec_band_h(&self.m.dec_view(k)))
-                .sum();
+            let bands = self.dec_stack_h();
             if bands > 0 {
                 taken.push(Rect::new(a.x, a.y + a.h - (self.dec_foot() - 4) - bands, a.w, bands));
             }

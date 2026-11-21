@@ -1124,6 +1124,7 @@ impl Ui {
             Item::MaskLoad => self.mask_load(),
             Item::ChLabel(c) => self.wlan.osk = Some(wlan::Osk::for_label(c, &self.m.ch_label[c])),
             Item::BusLabel => self.wlan.osk = Some(wlan::Osk::for_bus(&self.m.bus.label)),
+            Item::DecLabel => self.wlan.osk = Some(wlan::Osk::for_decoder(&self.m.dec_label)),
             Item::RefLabel => match &self.refs[self.ref_page.sel] {
                 Some(r) => self.wlan.osk = Some(wlan::Osk::for_ref(self.ref_page.sel, &r.label)),
                 None => self.toast("That slot is empty"),
