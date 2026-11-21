@@ -615,8 +615,8 @@ fn the_sheet_rows_have_the_names_and_the_order_of_the_default_menus() {
 }
 
 /// Every option of the Default layout's dialog of one measurement is on the card of Studio for every kind of
-/// measurement (ADR 0030): Reference as the card's Low and High, Idle, Outside, N periods, Clock/Data as the card's Edge
-/// type, and Edges used. A field the dialog gains and the card has not fails here.
+/// measurement (ADR 0030): Reference as the card's Low and High, Idle, Outside, N periods, Clock/Data as the card's
+/// Edge type, and Edges used. A field the dialog gains and the card has not fails here.
 #[test]
 fn every_option_of_the_default_measurement_dialog_is_on_the_studio_card() {
     use super::measrow::RF;

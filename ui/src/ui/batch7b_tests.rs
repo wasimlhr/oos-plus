@@ -372,7 +372,8 @@ fn minimal_opens_the_card_as_a_dialog_with_forty_pixel_controls() {
 fn every_card_of_a_single_row_has_its_own_reference_levels() {
     // the dialog of the Default layout sets the reference levels of every row; the card offers them too (ADR 0030)
     let r0 = WaveId::Ref(0);
-    for k in [Meas::PllUi, Meas::Vpp, Meas::Vupper, Meas::Overshoot, Meas::Period, Meas::Rise, Meas::Burst, Meas::NPeriods, Meas::Outside] {
+    let kinds = [Meas::PllUi, Meas::Vpp, Meas::Vupper, Meas::Overshoot, Meas::Period, Meas::Rise, Meas::Burst];
+    for k in kinds.into_iter().chain([Meas::NPeriods, Meas::Outside]) {
         let mut u = card(Layout::Studio, &[(k, r0)], &[]);
         u.open_meas_cfg(0);
         let rows: Vec<Item> = u.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();
