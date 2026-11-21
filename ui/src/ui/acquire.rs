@@ -740,8 +740,8 @@ impl Ui {
         self.meas_poll();
         if std::mem::take(&mut self.meas_bg.new) {
             let rows = self.meas_rows();
-            self.trend_update(self.mstat.is_empty(), &rows);
-            self.mstat.resize(rows.len(), MStat::default());
+            self.trend_update(self.results.rows.is_empty(), &rows);
+            self.results.rows.resize(rows.len(), MStat::default());
             self.counter_update();
             for (i, row) in rows.iter().enumerate() {
                 if row.computing {
@@ -754,7 +754,7 @@ impl Ui {
                 let v = row.v;
                 if v.is_finite() {
                     let current = self.m.meas_pop_current;
-                    self.mstat[i].push(v, current);
+                    self.results.rows[i].push(v, current);
                 }
             }
         }
@@ -971,7 +971,7 @@ impl Ui {
         let m = &self.m;
         // the statistics of every frame for the voltage measurements, once the measurements of the record have set
         // up their rows
-        let rows_ready = self.mstat.len() == m.meas.len() + m.meas2.len();
+        let rows_ready = self.results.rows.len() == m.meas.len() + m.meas2.len();
         let fold: [bool; NCH] = std::array::from_fn(|c| {
             rows_ready
                 && m.ch[c].on
@@ -998,7 +998,7 @@ impl Ui {
                         continue;
                     }
                     if let Some(v) = p.fold[c].and_then(|f| f.get(k)).filter(|v| v.is_finite()) {
-                        self.mstat[i].add(v);
+                        self.results.rows[i].add(v);
                     }
                 }
             }

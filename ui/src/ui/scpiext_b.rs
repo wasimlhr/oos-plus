@@ -369,7 +369,7 @@ impl Ui {
             }
             "SAVE:IMAGe" => {
                 if q { return Some(Err(undefined(key))); }
-                if arg.trim().is_empty() { self.file_save_auto(FileKind::Shot); } else { let p = self.out_path(arg); self.close_menu(); self.shot_request = Some(p.to_string_lossy().into_owned()); }
+                if arg.trim().is_empty() { self.file_save_auto(FileKind::Shot); } else { let p = self.out_path(arg); self.close_menu(); self.asks.shot = Some(p.to_string_lossy().into_owned()); }
                 DONE
             }
             "SAVE:FFRame" => { self.file_save_auto(FileKind::FastFrame); action(q) }

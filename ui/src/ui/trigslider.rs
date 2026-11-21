@@ -95,7 +95,7 @@ impl Ui {
 
     /// 50%: the middle of the signal (of the ref, for a ref trigger); without a measurement, zero.
     pub(super) fn trig_slider_fifty(&mut self) {
-        if self.m.trig_ref.is_none() && !self.stats[self.m.trig_src].valid {
+        if self.m.trig_ref.is_none() && !self.measured.stats[self.m.trig_src].valid {
             self.m.trig_level = 0.0;
             self.replay.reset_search();
             self.settings_changed();

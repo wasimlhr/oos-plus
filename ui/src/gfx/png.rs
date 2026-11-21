@@ -53,35 +53,8 @@ pub fn crc32(data: &[u8]) -> u32 {
     !rest.iter().fold(c, |c, &b| t[0][((c ^ b as u32) & 0xff) as usize] ^ (c >> 8))
 }
 
-/// Adler-32 (zlib). Sixteen lanes side by side (the compiler makes vector code of the lane loop): lane `k` sums the
-/// bytes at `16 j + k` (`sa`) and those sums again (`sb`), and per chunk of 5552 bytes `b` grows by `len * a`,
-/// `16 * sum(sb)` less `sum(k * sa[k])` (each byte counted `len - position` times), the same as byte by byte.
-pub fn adler32(data: &[u8]) -> u32 {
-    let (mut a, mut b) = (1u64, 0u64);
-    for chunk in data.chunks(5552) {
-        let (mut sa, mut sb) = ([0u32; 16], [0u32; 16]);
-        let (blocks, rest) = chunk.as_chunks::<16>();
-        for blk in blocks {
-            for k in 0..16 {
-                sa[k] += blk[k] as u32;
-                sb[k] += sa[k];
-            }
-        }
-        let n = (chunk.len() - rest.len()) as u64;
-        let sum_a: u64 = sa.iter().map(|&x| x as u64).sum();
-        let sum_b: u64 = sb.iter().map(|&x| x as u64).sum();
-        let weighted: u64 = sa.iter().enumerate().map(|(k, &x)| k as u64 * x as u64).sum();
-        b += n * a + 16 * sum_b - weighted;
-        a += sum_a;
-        for &x in rest {
-            a += x as u64;
-            b += a;
-        }
-        a %= 65521;
-        b %= 65521;
-    }
-    ((b << 16) | a) as u32
-}
+// oos-plus: Adler-32 and the deflate tables are the crate oos-store's, whose reader of RIGOL's DHO files inflates
+pub use oos_store::{adler32, DIST_BASE, LEN_BASE};
 
 pub(super) fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&(data.len() as u32).to_be_bytes());
@@ -92,71 +65,6 @@ pub(super) fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&crc.to_be_bytes());
 }
 
-/// Deflate length codes 257..285 (RFC 1951 3.2.5): base length and extra bits.
-pub(crate) const LEN_BASE: [(u16, u8); 29] = [
-    (3, 0),
-    (4, 0),
-    (5, 0),
-    (6, 0),
-    (7, 0),
-    (8, 0),
-    (9, 0),
-    (10, 0),
-    (11, 1),
-    (13, 1),
-    (15, 1),
-    (17, 1),
-    (19, 2),
-    (23, 2),
-    (27, 2),
-    (31, 2),
-    (35, 3),
-    (43, 3),
-    (51, 3),
-    (59, 3),
-    (67, 4),
-    (83, 4),
-    (99, 4),
-    (115, 4),
-    (131, 5),
-    (163, 5),
-    (195, 5),
-    (227, 5),
-    (258, 0),
-];
-/// Deflate distance codes 0..29: base distance and extra bits.
-pub(crate) const DIST_BASE: [(u16, u8); 30] = [
-    (1, 0),
-    (2, 0),
-    (3, 0),
-    (4, 0),
-    (5, 1),
-    (7, 1),
-    (9, 2),
-    (13, 2),
-    (17, 3),
-    (25, 3),
-    (33, 4),
-    (49, 4),
-    (65, 5),
-    (97, 5),
-    (129, 6),
-    (193, 6),
-    (257, 7),
-    (385, 7),
-    (513, 8),
-    (769, 8),
-    (1025, 9),
-    (1537, 9),
-    (2049, 10),
-    (3073, 10),
-    (4097, 11),
-    (6145, 11),
-    (8193, 12),
-    (12289, 12),
-    (16385, 13),
-    (24577, 13),
-];
 
 /// Bit writer of a deflate stream: values LSB first, Huffman codes MSB first.
 pub(super) struct BitOut {
