@@ -6,5 +6,5 @@
 3096 lines ui/src/ui/walk_tests.rs
 0 unsafe dsp
 4 unsafe fpgad
-33 unsafe hal
-98 unsafe ui
+26 unsafe hal
+88 unsafe ui
