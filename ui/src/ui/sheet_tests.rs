@@ -373,10 +373,18 @@ fn every_row_of_the_add_list_has_a_preview_and_filters_work() {
     let g = u.sheet_add_geo();
     assert!(g.rows.len() >= 5, "a screenful: {}", g.rows.len());
     for (_, r) in &g.rows { assert!(r.h >= 60); assert!(r.x >= u.sheet_rect().x && r.right() <= u.sheet_rect().right()); }
-    // categories: four chips, each with entries; Power needs sources, so it may say why
-    for (i, c) in g.groups.iter().enumerate() {
-        assert!(c.h >= 40 && c.w >= 40, "chip {i}");
-        tap_in(&mut u, *c);
+    // the categories of the Measure page, in a list the name opens; each has entries (Power needs sources, so it
+    // may say why)
+    assert_eq!(super::meascatalog::add_categories().collect::<Vec<_>>(), crate::measures::CATEGORIES.iter().map(|c| c.name).collect::<Vec<_>>());
+    for i in 0..g.cat_rows.len() {
+        let v = u.sheet_add_geo().cat_value;
+        tap_in(&mut u, v);
+        assert!(u.sheet.add_cats);
+        if i == 3 { shot(&mut u, "add-category-list"); }
+        let row = u.sheet_add_geo().cat_rows[i];
+        assert!(row.h >= 40, "row {i}");
+        tap_in(&mut u, row);
+        assert!(!u.sheet.add_cats);
         assert_eq!(u.sheet.add_group, i);
         assert!(!u.sheet_add_geo().rows.is_empty(), "category {i} has entries");
     }
@@ -399,8 +407,7 @@ fn an_unavailable_item_says_why_and_offers_the_fix_in_place() {
     // Power: voltage on CH1, current on CH2, and CH2 is off
     u.meas_src = WaveId::Ch(0);
     u.meas_src_b = WaveId::Ch(1);
-    let g = u.sheet_add_geo();
-    tap_in(&mut u, g.groups[2]);
+    u.sheet.add_group = super::meascatalog::add_categories().position(|n| n == "Power").expect("Power");
     let g = u.sheet_add_geo();
     let entries = u.sheet_add_entries();
     let (_, row) = *g.rows.iter().find(|r| super::meascatalog::Preview::Off(1) == u.add_preview(entries[r.0].cat)).expect("an item that needs CH2");

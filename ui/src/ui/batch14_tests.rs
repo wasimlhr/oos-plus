@@ -629,7 +629,7 @@ fn browsing_the_add_list_computes_nothing_and_shows_no_values() {
     let before = u.catalog_jobs_submitted();
     add_open(&mut u);
     // every group, the Jitter one full of eye analyses
-    for group in 0..4 {
+    for group in 0..crate::measures::CATEGORIES.len() {
         u.sheet.add_group = group;
         for _ in 0..4 { frame(&mut u); }
         let g = u.sheet_add_geo();

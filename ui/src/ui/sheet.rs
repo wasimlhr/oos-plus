@@ -7,7 +7,7 @@
 //! with `value`, `options`, `select_option`, `adjust` and `activate`. This file maps items to row types, splits
 //! long pages into tabs and draws them. A page that does not fit the pattern (more than seven rows in a tab, more
 //! than four tabs, keypad lists) is not converted: `sheet_spec` returns None and the classic dialog is used.
-use super::meascatalog::{AddEntry, Preview, ADD_GROUPS};
+use super::meascatalog::{AddEntry, Preview};
 use super::studio::StudioView;
 use super::*;
 
@@ -84,6 +84,8 @@ pub(super) struct SheetState {
     page_key: Option<(MenuId, Option<Item>)>,
     page: usize,
     pub add_group: usize,
+    /// the list of the categories of the add flow is open
+    pub add_cats: bool,
     pub search: String,
     /// how far the Menu page is moved up
     pub scroll: i32,
@@ -1268,6 +1270,14 @@ impl Ui {
         self.sheet.search.clear();
     }
 
+    /// The category of the add list (the categories of the Measure page).
+    fn sheet_add_category(&mut self, i: i32) {
+        self.sheet.add_group = i as usize;
+        self.sheet.search.clear();
+        self.studio.md.tile_scroll = 0;
+        self.sheet_set_page(None, 0);
+    }
+
     pub(super) fn sheet_pick_source(&mut self, id: WaveId) {
         let name = self.wave_name(id);
         self.select_option(Item::MeasSrc, &name);
@@ -1276,8 +1286,11 @@ impl Ui {
     /// The entries of the list the filter leaves: the search text, else the category chip.
     pub(super) fn sheet_add_entries(&self) -> Vec<AddEntry> {
         let q = self.sheet.search.trim().to_ascii_lowercase();
+        let mut seen: Vec<u16> = Vec::new();
         super::meascatalog::add_entries().into_iter().filter(|e| {
-            if q.is_empty() { e.group == self.sheet.add_group } else { e.name.to_ascii_lowercase().contains(&q) }
+            if q.is_empty() { return e.group == self.sheet.add_group; }
+            // a measurement that several categories list is found once
+            e.name.to_ascii_lowercase().contains(&q) && !seen.contains(&e.cat.id) && { seen.push(e.cat.id); true }
         }).collect()
     }
 
@@ -1290,10 +1303,10 @@ impl Ui {
         let n = shown.len().clamp(1, 8) as i32;
         let cw = (w - (n - 1) * 4) / n;
         let chips = shown.iter().take(8).enumerate().map(|(i, &id)| (id, Rect::new(r.x + PAD + i as i32 * (cw + 4), y0 + 2, cw, 40))).collect();
-        let gw = (w - 4 * 4) / 5;
-        let groups = (0..ADD_GROUPS.len()).map(|i| Rect::new(r.x + PAD + i as i32 * (gw + 4), y0 + 46, gw, 40)).collect();
-        let find = Rect::new(r.x + PAD + 4 * (gw + 4), y0 + 46, gw, 40);
-        let list_y = y0 + 90;
+        // the category as in a menu row: - name + (the name opens the list of them), and Find at its right
+        let find = Rect::new(r.x + PAD + w - 76, y0 + 46, 76, 44);
+        let (cat_minus, cat_value, cat_plus) = Self::value_parts(Rect::new(r.x + PAD, y0 + 46, w - 76 - 6, 44));
+        let list_y = y0 + 94;
         // a grid of tiles, two across: a picture and a name each
         let fit = Self::tile_fit(self.tiles_avail(list_y));
         let entries = self.sheet_add_entries();
@@ -1306,7 +1319,8 @@ impl Ui {
             .filter(|(_, t)| t.bottom() > list.y && t.y < list.bottom())
             .collect();
         let none = Rect::new(0, 0, 0, 0);
-        AddGeo { chips, groups, find, rows, page: 0, pages: 1, prev: none, next: none, list }
+        let cat_rows = (0..super::meascatalog::add_categories().count()).map(|i| Rect::new(list.x, list.y + i as i32 * 48, list.w, 44)).collect();
+        AddGeo { chips, cat_minus, cat_value, cat_plus, cat_rows, find, rows, page: 0, pages: 1, prev: none, next: none, list }
     }
 
     /// The button beside the close button of the quick Add panel: it opens the Measure page of every layout, with
@@ -1344,16 +1358,17 @@ impl Ui {
             cv.text_in(&f.mb, c, 1, &self.wave_name(id), if on { DARK_TEXT } else { TEXT });
         }
         let searching = !self.sheet.search.trim().is_empty();
-        for (i, c) in g.groups.iter().enumerate() {
-            let on = !searching && i == self.sheet.add_group;
-            if on {
-                cv.round(*c, 5, rgb(0x2e, 0x2e, 0x32), 255);
-                cv.round_outline(*c, 5, ACCENT);
-            } else {
-                btn(cv, *c, BTN, BTN_BORDER);
-            }
-            cv.text_in(&f.s, *c, 1, ADD_GROUPS[i], if on { TEXT } else { DIM });
-        }
+        let names: Vec<&str> = super::meascatalog::add_categories().collect();
+        btn(cv, g.cat_minus, BTN, BTN_BORDER);
+        Self::draw_sign(cv, g.cat_minus, false);
+        btn(cv, g.cat_value, BTN, BTN_BORDER);
+        let name = names[self.sheet.add_group.min(names.len() - 1)];
+        cv.set_clip(Rect::new(g.cat_value.x + 6, g.cat_value.y, g.cat_value.w - 30, g.cat_value.h));
+        cv.text_in(if searching { &f.s } else { &f.m }, Rect::new(g.cat_value.x + 10, g.cat_value.y, g.cat_value.w - 34, g.cat_value.h), 0, if searching { "Results" } else { name }, if searching { DIM } else { TEXT });
+        cv.no_clip();
+        chevron_down(cv, g.cat_value.x + g.cat_value.w - 18, g.cat_value.y + g.cat_value.h / 2 - 3, DIM);
+        btn(cv, g.cat_plus, BTN, BTN_BORDER);
+        Self::draw_sign(cv, g.cat_plus, true);
         btn(cv, g.find, if searching { ACCENT } else { BTN }, if searching { ACCENT } else { BTN_BORDER });
         let label = if searching { format!("\u{d7} {}", self.sheet.search.trim()) } else { "Find".to_string() };
         cv.set_clip(g.find);
@@ -1369,6 +1384,15 @@ impl Ui {
             self.draw_add_tile(cv, tile, entries[k].cat);
         }
         cv.no_clip();
+        if self.sheet.add_cats {
+            // the list of the categories, over the tiles
+            cv.round(g.list.inset(-2), 6, PANEL_BG, 255);
+            for (i, r) in g.cat_rows.iter().enumerate() {
+                let on = i == self.sheet.add_group;
+                if on { cv.round(*r, 5, ACCENT, 255); } else { btn(cv, *r, BTN, BTN_BORDER); }
+                cv.text_in(&f.m, Rect::new(r.x + 12, r.y, r.w - 12, r.h), 0, names[i], if on { DARK_TEXT } else { TEXT });
+            }
+        }
         // a scrollbar, since there is no pager
         let total = entries.len().div_ceil(super::addtiles::TILE_COLS as usize) as i32 * super::addtiles::TILE_H;
         if total > g.list.h {
@@ -1390,15 +1414,16 @@ impl Ui {
                 return true;
             }
         }
-        for (i, c) in g.groups.iter().enumerate() {
-            if c.contains(x, y) {
-                self.sheet.add_group = i;
-                self.sheet.search.clear();
-                self.studio.md.tile_scroll = 0;
-                self.sheet_set_page(None, 0);
-                return true;
-            }
+        let n = g.cat_rows.len() as i32;
+        if self.sheet.add_cats {
+            // the list is open: a row chooses, a tap elsewhere only closes it
+            self.sheet.add_cats = false;
+            if let Some(i) = g.cat_rows.iter().position(|r| r.contains(x, y)) { self.sheet_add_category(i as i32); }
+            return true;
         }
+        if g.cat_value.contains(x, y) { self.sheet.add_cats = true; return true; }
+        if g.cat_minus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 - 1).rem_euclid(n)); return true; }
+        if g.cat_plus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 + 1).rem_euclid(n)); return true; }
         if g.find.contains(x, y) {
             if self.sheet.search.trim().is_empty() {
                 self.wlan.osk = Some(wlan::Osk::for_search(""));
@@ -1512,7 +1537,11 @@ pub(super) struct AddGeo {
     /// the room of the tile grid
     pub list: Rect,
     pub chips: Vec<(WaveId, Rect)>,
-    pub groups: Vec<Rect>,
+    pub cat_minus: Rect,
+    pub cat_value: Rect,
+    pub cat_plus: Rect,
+    /// the rows of the list of the categories, while it is open
+    pub cat_rows: Vec<Rect>,
     pub find: Rect,
     pub rows: Vec<(usize, Rect)>,
     #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
