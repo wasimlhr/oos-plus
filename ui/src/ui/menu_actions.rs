@@ -396,11 +396,6 @@ impl Ui {
             return;
         }
         let _ = self.adjust_scope(it, d) || self.adjust_tools(it, d) || self.adjust_more(it, d);
-        // moving the strip does not change what was measured
-        if it == Item::StripDock {
-            self.relayout();
-            return;
-        }
         // nor does the pane that shows the values, or which values a trend chart shows
         if matches!(it, Item::PaneSel | Item::TrendSel(_)) {
             self.relayout();
@@ -408,9 +403,6 @@ impl Ui {
             return;
         }
         self.settings_changed();
-        if it == Item::Hdmi {
-            self.sync_full();
-        }
     }
 
     /// `adjust` of the channels, the time base, the logger and the trigger. True when `it` is one of them.
@@ -449,11 +441,6 @@ impl Ui {
                 }
             }
             Item::HFine => m.fine_t = !m.fine_t,
-            Item::HExpandI => {
-                let all = [HExpand::Center, HExpand::Left, HExpand::Right, HExpand::Trigger];
-                let i = all.iter().position(|&x| x == m.h_expand).unwrap_or(0);
-                m.h_expand = all[cycle(i, all.len(), d)];
-            }
             Item::StoreRecScpi => self.scpi_rec_want = !self.scpi_rec_want,
             Item::LogOn => {
                 if self.log.file.is_some() {
@@ -512,10 +499,6 @@ impl Ui {
                 let i = all.iter().position(|&x| x == m.trig_when).unwrap_or(0);
                 m.trig_when = all[cycle(i, all.len(), d)];
             }
-            Item::VidLine => {
-                let (lo, hi) = ranges::vid_line(m.video_std);
-                m.video_line = (m.video_line as i32 + d).clamp(lo, hi) as u32
-            }
             Item::Pat(c) => {
                 let all = if m.trig_type == TrigType::Duration {
                     &[Bit::H, Bit::L, Bit::X][..]
@@ -525,7 +508,6 @@ impl Ui {
                 let i = all.iter().position(|&x| x == m.pat[c]).unwrap_or(0);
                 m.pat[c] = all[cycle(i, all.len(), d)];
             }
-            Item::NthN => m.nth_n = (m.nth_n as i32 + d).clamp(ranges::NTH_N.0, ranges::NTH_N.1) as u32,
             _ => return false,
         }
         true
@@ -610,17 +592,6 @@ impl Ui {
                 }
                 self.dirty_map = true;
             }
-            Item::Hdmi => {
-                let i = HDMI_MODES.iter().position(|&x| x == m.hdmi).unwrap_or(0);
-                m.hdmi = HDMI_MODES[step_index(i, HDMI_MODES.len(), d)];
-                if self.m.hdmi == HdmiMode::Layout {
-                    self.toast("HDMI Layout: a second picture each monitor frame, the panel may get fewer frames");
-                }
-            }
-            Item::TextSize => {
-                let i = m.text_size.index();
-                m.text_size = TEXT_SIZES[step_index(i, TEXT_SIZES.len(), d)];
-            }
             Item::ZInput => {
                 let i = m.z_src.map_or(0, |c| c + 1);
                 let i = opt_src_step(i, d);
@@ -669,7 +640,6 @@ impl Ui {
                 m.math_scale = step_index(m.math_scale, n, d);
             }
             Item::MeasStats => self.results.on = !self.results.on,
-            Item::MeasLabels => self.m.meas_labels = !self.m.meas_labels,
             Item::StripDock => {
                 let (all, m) = (self.strip_docks(), &mut self.m);
                 let i = all.iter().position(|&s| s == m.strip_dock).unwrap_or(0);
@@ -790,7 +760,6 @@ impl Ui {
                 let on = !self.m.zoom;
                 self.set_zoom(on);
             }
-            Item::AutoRoll => self.m.auto_roll = !self.m.auto_roll,
             Item::ZScale => {
                 self.m.zscale = step_index(self.m.zscale, tscales().len(), d);
                 self.clamp_zoom();
