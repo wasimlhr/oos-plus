@@ -522,9 +522,11 @@ fn scpi_q(u: &mut Ui, cmd: &str) -> String {
 // time base), and the peak table was on the screen only (2026-11-19).
 #[test]
 fn the_rbw_in_use_and_the_peak_table_are_answered_as_the_page_shows_them() {
+    // the page never opened: the queries answer the record in hand (they answered nothing, or the page's last result)
     let mut u = fresh(Layout::Default);
-    assert_eq!(scpi_q(&mut u, ":SPECtrum:RBW:ACTual?"), "9.9E37", "no spectrum yet");
-    assert_eq!(scpi_q(&mut u, ":SPECtrum:PEAK:LIST?"), "9.9E37");
+    let rbw: f64 = scpi_q(&mut u, ":SPECtrum:RBW:ACTual?").parse().unwrap();
+    assert!(rbw > 0.0 && rbw < 9e37, "{rbw}");
+    assert_ne!(scpi_q(&mut u, ":SPECtrum:PEAK:LIST?"), "9.9E37");
     let mut u = spectrum_scope(Layout::Default);
     u.m.spec_rbw = 1.0; // finer than the record allows: the page uses a coarser one
     u.analyzer_update();

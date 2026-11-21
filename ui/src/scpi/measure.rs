@@ -210,6 +210,10 @@ impl Scpi {
             if kw(nodes[1], "STRip") {
                 return t(&meas_strip(ui));
             }
+            // 1 while the measurements of the record shown are computed, so a value of 9.9E37 is "not yet", not "none"
+            if kw(nodes[1], "PENDing") {
+                return t(if ui.meas_pending_now() { "1" } else { "0" });
+            }
             // every measurement on the screen: the strip, and the eye figures when that page is up
             if kw(nodes[1], "READout") {
                 return t(&meas_readout(ui));
