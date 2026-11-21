@@ -59,7 +59,7 @@ interpreter, so a client sees them in `tools/list` and does not guess.
 
 Limits, so that one call cannot take the scope's memory or a model's context: `waveform` puts no samples into its
 answer by default (at most 1000 when asked), but a link to a CSV of up to 100000 rows (10000 by default) that the web
-remote serves (`GET /mcp/waveform.csv`, the last call's) and a client downloads to its computer; it reads at most 1 Mi
+remote serves (`GET /mcp/waveform/<file>`, a file per call, the last 4 kept for 2 minutes) and a client downloads to its computer; it reads at most 1 Mi
 samples of a record per call, saying where the next call starts. A record in the answer fills the context of a small
 local model at once (seen with a 4B model and 500 min/max pairs);
 `decode_results` at most 2000 rows (200 by default). MCP as a whole answers only a peer in `net.allow` (ADR 0025).

@@ -12,8 +12,10 @@ ROOT is the top of a tree (default: this tree). Read from it as it is:
                  is a path.
                  A guard `if post` makes the arm a POST route, `if !post` a GET route (every method but POST is taken
                  as GET); an arm without a guard answers every method, or GET when an earlier arm of the same path
-                 took POST. Arms of `_` (the foreign check, not found) are no route. Any other guard has to be in
-                 GUARDS below with its reason, so that a new kind of arm is looked at rather than passed over;
+                 took POST. An arm `_ if !post && route.starts_with("/dir/")` (or `post && ...`) answers the files
+                 under a directory, as the path `/dir/<file>`. Other arms of `_` (the foreign check, the 403 of MCP,
+                 not found) are no route. Any other guard has to be in GUARDS below with its reason, so that a new
+                 kind of arm is looked at rather than passed over;
   the tools      the names `Some("name") =>` that the arm `"tools/call"` of `fn mcp` in ui/src/site/mcp.rs answers,
                  and the names (`"name", J::s("...")`) of the arm `"tools/list"` before it;
   the entries    the headings of docs/http.md of the form `### \\`METHOD /path\\`` and `### MCP tool \\`name\\``, each
@@ -43,10 +45,12 @@ MARKS = ("stable", "experimental", "internal")
 # route added to such an arm is not passed over with it
 GUARDS = {
     '(post || route != "/update") && !peer_ok': (
-        {"/update", "/mcp", "/mcp/waveform.csv"},
-        "the 403 of POST /update, /mcp and /mcp/waveform.csv outside net.allow (docs/http.md, Common answers)",
+        {"/update", "/mcp"},
+        "the 403 of POST /update and /mcp outside net.allow (docs/http.md, Common answers)",
     ),
 }
+# an arm of `_` that answers the files under a directory: its method and the directory
+PREFIX = re.compile(r'(!?post) && route\.starts_with\("(/[^"]*/)"\)')
 
 ENTRY = re.compile(r"^### `(GET|POST|PUT|DELETE|HEAD|PATCH|OPTIONS) (/[^`\s]*)`\s*$")
 TOOL_ENTRY = re.compile(r"^### MCP tool `([^`]+)`\s*$")
@@ -160,6 +164,9 @@ def routes(src, where=HTTP_RS, taken=None):
     taken = {} if taken is None else taken
     body = fn_tokens(src, "answer")
     for patterns, guard in match_arms(src, body, "route") if body else []:
+        prefix = PREFIX.fullmatch(guard) if patterns is None else None
+        if prefix:
+            patterns, guard = [prefix.group(2) + "<file>"], prefix.group(1)
         if patterns is None:
             continue
         if guard in GUARDS:

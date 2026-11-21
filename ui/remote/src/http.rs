@@ -313,6 +313,11 @@ fn unescape(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// MCP and its files (`/mcp/waveform/<file>`): only a peer in `net.allow` (ADR 0025).
+fn mcp_path(path: &str) -> bool {
+    path == "/mcp" || path.starts_with("/mcp/")
+}
+
 /// A browser supplies only a display name. It never selects a path on the instrument.
 fn waveform_name(query: &str) -> String {
     let decoded = query.split('&').find_map(|part| part.strip_prefix("name=")).map(unescape).unwrap_or_default();
@@ -436,7 +441,7 @@ impl<U: Send + 'static> Http<U> {
                 too_big = n > limit || req.len() > limit + e;
                 if !too_big && need.is_none() {
                     // what only `net.allow` may send is refused before its body is read, not after
-                    let mcp = upload_path == "/mcp" || upload_path == "/mcp/waveform.csv";
+                    let mcp = mcp_path(upload_path);
                     let guarded = mcp || (first.starts_with("post ") && upload_path == "/update");
                     if guarded && !self.acl.permits_peer(s.peer_addr()) {
                         early = Some("403 Forbidden");
@@ -553,7 +558,8 @@ impl<U: Send + 'static> Http<U> {
         let refused = || (FORBIDDEN, "text/plain", b"refused".to_vec());
         let (status, ctype, body): (&str, &str, Vec<u8>) = match route {
             _ if foreign(&text, route, post) => refused(),
-            "/update" | "/mcp" | "/mcp/waveform.csv" if (post || route != "/update") && !peer_ok => refused(),
+            "/update" | "/mcp" if (post || route != "/update") && !peer_ok => refused(),
+            _ if mcp_path(route) && !peer_ok => refused(),
             "/" => (OK, "text/html; charset=utf-8", PAGE.as_bytes().to_vec()),
             "/style.css" => (OK, "text/css", STYLE.as_bytes().to_vec()),
             "/waveform" if post => {

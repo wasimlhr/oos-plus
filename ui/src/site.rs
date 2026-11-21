@@ -50,6 +50,7 @@ impl oos_remote::http::Site for Ctx<'_> {
         if let Some(live) = self.live {
             live.tick(self.cv);
         }
+        mcp::expire_files(self.scpi);
     }
 
     /// The live picture answers it; 503 without one (tests that ask for no picture).
@@ -65,7 +66,7 @@ impl oos_remote::http::Site for Ctx<'_> {
         crate::cmd::remote_ok(line)
     }
 
-    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp, /mcp and /mcp/waveform.csv.
+    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp, /mcp and /mcp/waveform/<file>.
     fn answer(&mut self, route: &str, post: bool, body: &[u8]) -> Option<(&'static str, Vec<u8>, bool)> {
         let ok = |ctype: &'static str, b: Vec<u8>| Some((ctype, b, false));
         let file = |ctype: &'static str, r: Result<Vec<u8>, String>| match r {
@@ -86,7 +87,10 @@ impl oos_remote::http::Site for Ctx<'_> {
                 Err(e) => Some(("text/plain", format!("REFUSED: {}", e).into_bytes(), true)),
             },
             "/screen.bmp" => ok("image/bmp", crate::scpi::bmp(self.cv)),
-            "/mcp/waveform.csv" if !post => file("text/csv; charset=utf-8", waveform_csv(ui, self.scpi)),
+            _ if !post && route.starts_with("/mcp/waveform/") => {
+                let name = &route["/mcp/waveform/".len()..];
+                file("text/csv; charset=utf-8", waveform_csv(ui, self.scpi, name))
+            }
             "/mcp" => match mcp(&String::from_utf8_lossy(body), self) {
                 Some(r) => ok("application/json", r.into_bytes()),
                 None => ok("", Vec::new()),

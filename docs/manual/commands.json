@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.14",
   "version": "0.1.14",
   "edition": "November 2026",
-  "date": "20 November 2026",
+  "date": "21 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -6810,10 +6810,10 @@
    "title": "Search (mark events)",
    "intro": [
     {
-     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Only an edge search exists. The events of the decoders have their own commands in decode."
+     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. A search of Studio is of one of six types, `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT` and `WINDow`, with the settings the trigger has for that type under the same names (`:SEARch:PULSe:WHEN` as `:TRIGger:PULSe:WHEN`). A search has one set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the setting whatever the type is, and `:SEARch:MODE` changes the type alone. The events are found in the samples by the software trigger, with a hysteresis of a tenth of a division. The events of the decoders have their own commands in decode."
     },
     {
-     "p": "Menu location: Decode and bus > Mark events, Search (source, slope, level, 50 %, from / to trigger, event, event list, save events, remove)."
+     "p": "Menu location: Decode and bus > Mark events, Search (type, source, slope or polarity, levels, 50 %, time condition, from / to trigger, event, event list, save events, remove)."
     },
     {
      "p": "Part of the SCPI reference."
@@ -6843,19 +6843,20 @@
      "header": ":SEARch:MODE",
      "set": ":SEARch:MODE <value>",
      "query": ":SEARch:MODE?",
-     "desc": "`EDGE` (the only kind).",
+     "desc": "Sets or queries Type (menu: Search > Type).",
      "params": [
       [
        "<value>",
        "Text",
-       "`EDGE` (the only kind)",
+       "`EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow`: the type of the search. `SLOPe`, `RUNT` and `WINDow` place their two levels on the signal when the search had one level. Without a search of Studio the answer is `EDGE`",
        "EDGE"
       ]
      ],
      "remarks": [
       "- Origin: name not verified against the DHO guide"
      ],
-     "returns": "On a freshly started default model the query returns `EDGE`."
+     "returns": "On a freshly started default model the query returns `EDGE`.",
+     "example": ":SEARch:MODE RUNT"
     },
     {
      "header": ":SEARch:EDGE:SOURce",
@@ -6924,6 +6925,587 @@
      "example": ":SEARch:EDGE:LEVel:AUTO"
     },
     {
+     "header": ":SEARch:PULSe:SOURce",
+     "set": ":SEARch:PULSe:SOURce <value>",
+     "query": ":SEARch:PULSe:SOURce?",
+     "desc": "Sets or queries Source (menu: Search > Source).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Search source; the set makes the search a pulse search",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`.",
+     "example": ":SEARch:PULSe:SOURce CHAN1"
+    },
+    {
+     "header": ":SEARch:PULSe:POLarity",
+     "set": ":SEARch:PULSe:POLarity <value>",
+     "query": ":SEARch:PULSe:POLarity?",
+     "desc": "Sets or queries Polarity (menu: Search > Polarity).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{POSitive|NEGative}",
+       "POS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`.",
+     "example": ":SEARch:PULSe:POLarity POSitive"
+    },
+    {
+     "header": ":SEARch:PULSe:WHEN",
+     "set": ":SEARch:PULSe:WHEN <value>",
+     "query": ":SEARch:PULSe:WHEN?",
+     "desc": "Sets or queries When (menu: Search > When).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`GREater`, `LESS`, `EQUal` and `UNEQual` (within 5 % of the limit, or not), `RANGe` (inside the two limits), `OUTside`",
+       "LESS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `LESS`.",
+     "example": ":SEARch:PULSe:WHEN LESS"
+    },
+    {
+     "header": ":SEARch:PULSe:LWIDth",
+     "set": ":SEARch:PULSe:LWIDth <value>",
+     "query": ":SEARch:PULSe:LWIDth?",
+     "desc": "Sets or queries Time (menu: Search > Time).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The limit, or the lower one of `RANGe` and `OUTside`",
+       "2.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `2.000000E-05`."
+    },
+    {
+     "header": ":SEARch:PULSe:UWIDth",
+     "set": ":SEARch:PULSe:UWIDth <value>",
+     "query": ":SEARch:PULSe:UWIDth?",
+     "desc": "Sets or queries Upper limit (menu: Search > Upper limit).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The upper limit of `RANGe` and `OUTside`; with one limit the same as `LWIDth`",
+       "4.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `4.000000E-05`.",
+     "example": ":SEARch:PULSe:UWIDth 100E-6"
+    },
+    {
+     "header": ":SEARch:PULSe:LEVel",
+     "set": ":SEARch:PULSe:LEVel <value>",
+     "query": ":SEARch:PULSe:LEVel?",
+     "desc": "Sets or queries Level (menu: Search > Level).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts",
+       "1.500000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1.500000E+00`."
+    },
+    {
+     "header": ":SEARch:SLOPe:SOURce",
+     "set": ":SEARch:SLOPe:SOURce <value>",
+     "query": ":SEARch:SLOPe:SOURce?",
+     "desc": "Sets or queries Source (menu: Search > Source).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Search source; the set makes the search a slope search (the time of an edge between two levels)",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`."
+    },
+    {
+     "header": ":SEARch:SLOPe:SLOPe",
+     "set": ":SEARch:SLOPe:SLOPe <value>",
+     "query": ":SEARch:SLOPe:SLOPe?",
+     "desc": "Sets or queries Slope (menu: Search > Slope).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{POSitive|NEGative|RFALl}",
+       "POS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":SEARch:SLOPe:WHEN",
+     "set": ":SEARch:SLOPe:WHEN <value>",
+     "query": ":SEARch:SLOPe:WHEN?",
+     "desc": "Sets or queries When (menu: Search > When).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`GREater`, `LESS`, `EQUal` and `UNEQual` (within 5 % of the limit, or not), `RANGe` (inside the two limits), `OUTside`",
+       "LESS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `LESS`."
+    },
+    {
+     "header": ":SEARch:SLOPe:TLOWer",
+     "set": ":SEARch:SLOPe:TLOWer <value>",
+     "query": ":SEARch:SLOPe:TLOWer?",
+     "desc": "Sets or queries Time (menu: Search > Time).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The limit, or the lower one",
+       "2.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `2.000000E-05`."
+    },
+    {
+     "header": ":SEARch:SLOPe:TUPPer",
+     "set": ":SEARch:SLOPe:TUPPer <value>",
+     "query": ":SEARch:SLOPe:TUPPer?",
+     "desc": "Sets or queries Upper limit (menu: Search > Upper limit).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The upper limit; with one limit the same as `TLOWer`",
+       "4.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `4.000000E-05`."
+    },
+    {
+     "header": ":SEARch:SLOPe:ALEVel",
+     "set": ":SEARch:SLOPe:ALEVel <value>",
+     "query": ":SEARch:SLOPe:ALEVel?",
+     "desc": "Sets or queries Upper (menu: Search > Upper).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the upper level",
+       "1.500000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1.500000E+00`."
+    },
+    {
+     "header": ":SEARch:SLOPe:BLEVel",
+     "set": ":SEARch:SLOPe:BLEVel <value>",
+     "query": ":SEARch:SLOPe:BLEVel?",
+     "desc": "Sets or queries Lower (menu: Search > Lower).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the lower level; not above the upper one",
+       "5.000000E-01"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `5.000000E-01`."
+    },
+    {
+     "header": ":SEARch:TIMeout:SOURce",
+     "set": ":SEARch:TIMeout:SOURce <value>",
+     "query": ":SEARch:TIMeout:SOURce?",
+     "desc": "Sets or queries Source (menu: Search > Source).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Search source; the set makes the search a timeout search",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`."
+    },
+    {
+     "header": ":SEARch:TIMeout:SLOPe",
+     "set": ":SEARch:TIMeout:SLOPe <value>",
+     "query": ":SEARch:TIMeout:SLOPe?",
+     "desc": "Sets or queries Slope (menu: Search > Slope).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`POSitive`, `NEGative`, `RFALl`: the edges the time runs from",
+       "POS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":SEARch:TIMeout:TIME",
+     "set": ":SEARch:TIMeout:TIME <value>",
+     "query": ":SEARch:TIMeout:TIME?",
+     "desc": "Sets or queries Timeout (menu: Search > Timeout).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0, without an edge",
+       "2.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `2.000000E-05`."
+    },
+    {
+     "header": ":SEARch:TIMeout:LEVel",
+     "set": ":SEARch:TIMeout:LEVel <value>",
+     "query": ":SEARch:TIMeout:LEVel?",
+     "desc": "Sets or queries Level (menu: Search > Level).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts",
+       "1.500000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1.500000E+00`."
+    },
+    {
+     "header": ":SEARch:RUNT:SOURce",
+     "set": ":SEARch:RUNT:SOURce <value>",
+     "query": ":SEARch:RUNT:SOURce?",
+     "desc": "Sets or queries Source (menu: Search > Source).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Search source; the set makes the search a runt search",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`."
+    },
+    {
+     "header": ":SEARch:RUNT:POLarity",
+     "set": ":SEARch:RUNT:POLarity <value>",
+     "query": ":SEARch:RUNT:POLarity?",
+     "desc": "Sets or queries Polarity (menu: Search > Polarity).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{POSitive|NEGative}",
+       "POS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":SEARch:RUNT:WHEN",
+     "set": ":SEARch:RUNT:WHEN <value>",
+     "query": ":SEARch:RUNT:WHEN?",
+     "desc": "Sets or queries When (menu: Search > When).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`NONE` (any width), `GREater`, `LESS`, `EQUal` and `UNEQual` (within 5 % of the limit, or not), `RANGe` (inside the two limits), `OUTside`",
+       "LESS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `LESS`.",
+     "example": ":SEARch:RUNT:WHEN NONE"
+    },
+    {
+     "header": ":SEARch:RUNT:WLOWer",
+     "set": ":SEARch:RUNT:WLOWer <value>",
+     "query": ":SEARch:RUNT:WLOWer?",
+     "desc": "Sets or queries Time (menu: Search > Time).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The limit, or the lower one",
+       "2.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `2.000000E-05`."
+    },
+    {
+     "header": ":SEARch:RUNT:WUPPer",
+     "set": ":SEARch:RUNT:WUPPer <value>",
+     "query": ":SEARch:RUNT:WUPPer?",
+     "desc": "Sets or queries Upper limit (menu: Search > Upper limit).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The upper limit; with one limit the same as `WLOWer`",
+       "4.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `4.000000E-05`."
+    },
+    {
+     "header": ":SEARch:RUNT:ALEVel",
+     "set": ":SEARch:RUNT:ALEVel <value>",
+     "query": ":SEARch:RUNT:ALEVel?",
+     "desc": "Sets or queries Upper (menu: Search > Upper).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the upper level",
+       "1.500000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1.500000E+00`."
+    },
+    {
+     "header": ":SEARch:RUNT:BLEVel",
+     "set": ":SEARch:RUNT:BLEVel <value>",
+     "query": ":SEARch:RUNT:BLEVel?",
+     "desc": "Sets or queries Lower (menu: Search > Lower).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the lower level; not above the upper one",
+       "5.000000E-01"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `5.000000E-01`."
+    },
+    {
+     "header": ":SEARch:WINDow:SOURce",
+     "set": ":SEARch:WINDow:SOURce <value>",
+     "query": ":SEARch:WINDow:SOURce?",
+     "desc": "Sets or queries Source (menu: Search > Source).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Search source; the set makes the search a window search (the signal between two levels)",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`."
+    },
+    {
+     "header": ":SEARch:WINDow:POSition",
+     "set": ":SEARch:WINDow:POSition <value>",
+     "query": ":SEARch:WINDow:POSition?",
+     "desc": "Sets or queries Position (menu: Search > Position).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`ENTer` (the signal comes between the levels), `EXIT` (it leaves them), `TIMe` (it was between them for a time that meets `WHEN`; the mark is where it leaves)",
+       "ENT"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `ENT`."
+    },
+    {
+     "header": ":SEARch:WINDow:WHEN",
+     "set": ":SEARch:WINDow:WHEN <value>",
+     "query": ":SEARch:WINDow:WHEN?",
+     "desc": "Sets or queries When (menu: Search > When).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`GREater`, `LESS`, `EQUal`, `UNEQual`, `RANGe`, `OUTside`; a set makes the position `TIMe`",
+       "LESS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `LESS`."
+    },
+    {
+     "header": ":SEARch:WINDow:TIME",
+     "set": ":SEARch:WINDow:TIME <value>",
+     "query": ":SEARch:WINDow:TIME?",
+     "desc": "Sets or queries Time (menu: Search > Time).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The limit, or the lower one of `RANGe` and `OUTside`",
+       "2.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `2.000000E-05`."
+    },
+    {
+     "header": ":SEARch:WINDow:TUPPer",
+     "set": ":SEARch:WINDow:TUPPer <value>",
+     "query": ":SEARch:WINDow:TUPPer?",
+     "desc": "Sets or queries Upper limit (menu: Search > Upper limit).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The upper limit; with one limit the same as `TIME`",
+       "4.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `4.000000E-05`."
+    },
+    {
+     "header": ":SEARch:WINDow:ALEVel",
+     "set": ":SEARch:WINDow:ALEVel <value>",
+     "query": ":SEARch:WINDow:ALEVel?",
+     "desc": "Sets or queries Upper (menu: Search > Upper).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the upper level",
+       "1.500000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1.500000E+00`."
+    },
+    {
+     "header": ":SEARch:WINDow:BLEVel",
+     "set": ":SEARch:WINDow:BLEVel <value>",
+     "query": ":SEARch:WINDow:BLEVel?",
+     "desc": "Sets or queries Lower (menu: Search > Lower).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the lower level; not above the upper one",
+       "5.000000E-01"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `5.000000E-01`."
+    },
+    {
+     "header": ":SEARch:DISPlay",
+     "set": ":SEARch:DISPlay <value>",
+     "query": ":SEARch:DISPlay?",
+     "desc": "Sets or queries Marks (menu: Search > Marks).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The marks of the search are drawn (`1`) or hidden (`0`); a hidden search keeps its events, its count, its badge and its list",
+       "1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1`."
+    },
+    {
      "header": ":SEARch:COPY:TO",
      "set": ":SEARch:COPY:TO",
      "desc": "`TRIGger` `TRIGger`: copy the search to the trigger.",
@@ -6951,7 +7533,7 @@
       "- Origin: name not verified against the DHO guide"
      ],
      "returns": "On a freshly started default model the query returns `1`.",
-     "example": ":SEARch:COUNt?    /*The query returns 1.*/"
+     "example": ":SEARch:COUNt?    /*The query returns 1.*/\n:SEARch:COUNt?    /*The query returns 0.*/"
     },
     {
      "header": ":SEARch:EVENt",
@@ -6993,7 +7575,7 @@
     {
      "header": ":SEARch:REMove",
      "set": ":SEARch:REMove",
-     "desc": "Remove Search 1",
+     "desc": "Remove the search (Search 1 without a number)",
      "remarks": [
       "- Menu equivalent: Decode and bus > Remove.",
       "- Origin: name not verified against the DHO guide"
@@ -7024,6 +7606,18 @@
     },
     {
      "pre": ":SEARch:COPY:FROM TRIGger\n:SEARch:EDGE:SOURce?                   -> CHAN1\n:SEARch:COPY:TO TRIGger\n:SEARch:REMove"
+    },
+    {
+     "p": "Find the pulses narrower than 100 us, then the runts of any width."
+    },
+    {
+     "pre": ":SEARch:PULSe:SOURce CHAN1\n:SEARch:PULSe:POLarity POSitive\n:SEARch:PULSe:WHEN LESS\n:SEARch:PULSe:UWIDth 100E-6\n:SEARch:COUNt?                         -> 1\n:SEARch:MODE RUNT\n:SEARch:RUNT:WHEN NONE\n:SEARch:COUNt?                         -> 0\n:SEARch:REMove"
+    },
+    {
+     "p": "A second search on the same channel, for the falling edges only."
+    },
+    {
+     "pre": ":SEARch2:EDGE:SOURce CHAN1\n:SEARch2:EDGE:SLOPe NEGative\n:SEARch2:COUNt?                        -> 1\n:SEARch2:EVENt 1\n:SEARch2:REMove"
     }
    ]
   },
