@@ -15,6 +15,7 @@ use crate::json::{parse, J};
 use crate::scpi::Scpi;
 use crate::sysconf::McpMode;
 use crate::ui::Ui;
+use oos_remote::http::Body;
 
 mod reference;
 
@@ -41,8 +42,10 @@ const MESSAGES_MAX: usize = 64;
 /// The interpreter answers 9.9E37 for a value it does not have (scpi.md, Measurements): above this it is none.
 const NO_VALUE: f64 = 1e37;
 
-/// One MCP JSON-RPC message; None for notifications (answered with 202 and no body).
-pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
+/// One MCP JSON-RPC message; None for notifications (answered with 202 and no body). The answer of `screenshot` is
+/// made later (`Body::Later`, on a sender thread of the web server), from a copy of the screen taken here (#205:
+/// encoding a PNG took the frame loop's time).
+pub fn mcp(body: &str, cx: &mut Ctx) -> Option<Body> {
     let (ui, cv, scpi) = (&mut *cx.ui, cx.cv, &mut *cx.scpi);
     let err = |id: J, code: f64, msg: &str| {
         J::obj(&[
@@ -52,7 +55,8 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
         ])
         .to_string()
     };
-    let Some(req) = parse(body) else { return Some(err(J::Null, -32700.0, "parse error")) };
+    let now = |s: String| Some(Body::Now(s.into_bytes()));
+    let Some(req) = parse(body) else { return now(err(J::Null, -32700.0, "parse error")) };
     let id = req.get("id").cloned()?;
     let method = req.get("method").and_then(J::str).unwrap_or("");
     let params = req.get("params").cloned().unwrap_or(J::Null);
@@ -60,7 +64,7 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
     // Remote services > MCP (`remote.mcp`): off answers every request with an error; read only offers the tools that
     // only read, and `scpi` for queries alone
     let read = match ui.sys.remote_mcp {
-        McpMode::Off => return Some(err(id, -32001.0, OFF)),
+        McpMode::Off => return now(err(id, -32001.0, OFF)),
         McpMode::Read => true,
         McpMode::Full => false,
     };
@@ -99,14 +103,21 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
         "tools/call" => match params.get("name").and_then(J::str) {
             name if read && !reads_only(name, &args) => refuse(READ_ONLY),
             Some("scpi") => scpi_tool(&mut run, &args),
-            Some("screenshot") => J::obj(&[(
-                "content",
-                J::Arr(vec![J::obj(&[
-                    ("type", J::s("image")),
-                    ("mimeType", J::s("image/png")),
-                    ("data", J::Str(crate::base64::encode(&crate::gfx::png::png_of(cv)))),
-                ])]),
-            )]),
+            Some("screenshot") => {
+                let shot = super::snapshot(cv);
+                return Some(Body::Later(Box::new(move || {
+                    let png = crate::gfx::png::png_of(&shot);
+                    let result = J::obj(&[(
+                        "content",
+                        J::Arr(vec![J::obj(&[
+                            ("type", J::s("image")),
+                            ("mimeType", J::s("image/png")),
+                            ("data", J::Str(crate::base64::encode(&png))),
+                        ])]),
+                    )]);
+                    J::obj(&[("jsonrpc", J::s("2.0")), ("id", id), ("result", result)]).to_string().into_bytes()
+                })));
+            }
             Some("scope_state") => {
                 let state = scope_state(&mut run);
                 answer(&mut run, state)
@@ -119,11 +130,11 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<String> {
             Some("configure") => configure(&mut run, &args),
             Some("acquire") => acquire(&mut run, &args),
             Some("setup_decoder") => setup_decoder(&mut run, &args),
-            _ => return Some(err(id, -32602.0, "unknown tool")),
+            _ => return now(err(id, -32602.0, "unknown tool")),
         },
-        _ => return Some(err(id, -32601.0, "method not found")),
+        _ => return now(err(id, -32601.0, "method not found")),
     };
-    Some(J::obj(&[("jsonrpc", J::s("2.0")), ("id", id), ("result", result)]).to_string())
+    now(J::obj(&[("jsonrpc", J::s("2.0")), ("id", id), ("result", result)]).to_string())
 }
 
 /// What `initialize` tells the client's model, as short rules: a small local model follows a numbered list better than
@@ -753,7 +764,9 @@ fn read_record(run: &mut Run, source: &str, memory: bool, (points, inline): (usi
     let mut out = vec![
         ("source", J::s(source)),
         ("record", J::s(if memory { "memory" } else { "screen" })),
-        ("total_samples", J::Num(total.unwrap_or(0) as f64)),
+        // a source without a record (a channel that is off) keeps the stop that was asked, u64::MAX: no samples, and
+        // :WAV:DATA? below names why
+        ("total_samples", J::Num(total.filter(|&t| t != u64::MAX).unwrap_or(0) as f64)),
         ("start", J::Num(start as f64)),
     ];
     let Some(total) = total else { return J::obj(&out) };

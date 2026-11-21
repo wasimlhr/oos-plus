@@ -122,7 +122,6 @@ impl Ui {
             }
             // whatever the hardware still holds is not this record
             self.stop_ti_off = None;
-            self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
@@ -412,6 +411,8 @@ impl Ui {
             self.mask = None;
             self.mask_ref = None;
         }
+        // the hardware session's stamps go on (#391)
+        m.keep_session(&self.m);
         self.m = m;
         // the generator of a recalled set-up: its wave within what the generator can do, its output off. A recall
         // never switches an output on, and one that was on does not jump to another wave on a circuit

@@ -88,7 +88,10 @@ them anew in every tree) or to a node the new tree does not have refuses the kex
 `--new-dt`. Left out on purpose: the running kernel's ramdisk (`linux,initrd-*` in `/chosen` and its reservation):
 kexec-tools names the new one, and the kernel drops a ramdisk that lies in reserved memory (seen on the unit: the
 55 MB of the kexec start fell into the 13 MB the loader had reserved for its own, and the kernel found no root; the
-power-cycle brought the running build back, as it should). On the unit 33 changes of the loader carry over.
+power-cycle brought the running build back, as it should). On the unit 33 changes of the loader carry over. A
+seed for the kernel's address randomisation (`kaslr-seed` in `/chosen`) is carried over as 0: kexec-tools refuses a
+tree whose seed is not 0 and puts a fresh one into it (issue #193, found in a fork on a DHO924S whose loader wrote a
+seed; the developer's unit writes none, verified on the unit 2026-11-18: its running tree has no `kaslr-seed`).
 
 Where the segments go: above 1 GiB (`kexec --mem-min`), and above every GIC table the running kernel's log names. The
 GICv3 keeps its LPI and ITS tables across kexec (it cannot be given new ones); the started kernel takes them over and
@@ -164,7 +167,14 @@ Install on a running OOS:
 
 - browser: `http://<scope>:8080/update`, choose the file, Install; or
   `curl --data-binary @boot/out/oos-dev.oosupd http://<scope>:8080/update`
-- shell: upload the file to /tmp, `oos-update install /tmp/oos-dev.oosupd` (dry run), then `--execute`
+- shell: `oos-update install FILE` (dry run), then `oos-update install FILE --execute`. FILE is the package uploaded
+  to /tmp (SCP or SFTP, for example `/tmp/oos-dev.oosupd`), or on a USB stick in the front port, which OOS mounts at
+  `/mnt/usb` (for example `/mnt/usb/oos-dev.oosupd`).
+- From 0.1.13 or older to a package larger than its kexec restart carries (0.1.14: 47 MB), the web page's install
+  ends in a kernel panic, with nothing written (#327). There: `oos-update install FILE --no-kexec` (dry run, which
+  names the direct write it would do), then `oos-update install FILE --no-kexec --execute`, a direct install without
+  the safety net of the kexec start (below). A dry run without `--execute` never starts the kexec restart, with or
+  without `--no-kexec` (`kexec_stage` returns before it)
 
 The scope restarts into the new build by kexec, which installs itself (about a minute); System > Update shows the
 result. Then power-cycle: that start is its trial. If the screen stays dark after the restart, power-cycle too: the

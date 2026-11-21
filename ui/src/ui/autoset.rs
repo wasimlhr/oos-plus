@@ -574,9 +574,9 @@ impl Ui {
         found.extend((0..n_ch()).filter(|&c| a.want[c] && a.period[c].is_none()).map(|c| (c, stats(c), f64::NAN)));
         if found.is_empty() {
             // the stamp only counts up: records of the run must not pass as taken with the set-up restored
-            let stamp = self.m.hw_stamp;
-            self.m = *a.back;
-            self.m.hw_stamp = stamp;
+            let mut back = *a.back;
+            back.keep_session(&self.m);
+            self.m = back;
             self.toast("Auto set-up: no signal found");
         } else {
             // the others as they were: on, with their scale
@@ -628,13 +628,9 @@ impl Ui {
             return;
         }
         // Borrow the records: four 20M files must not create four extra 80MB vectors.
-        let waves: Vec<(&[f32], f64)> = shown
-            .iter()
-            .map(|&i| {
-                let r = self.refs[i].as_ref().unwrap();
-                (r.v.as_slice(), r.dt)
-            })
-            .collect();
+        // `shown` holds slots with a reference only
+        let waves: Vec<(&[f32], f64)> =
+            shown.iter().filter_map(|&i| self.refs[i].as_ref().map(|r| (r.v.as_slice(), r.dt))).collect();
         let views = autoset_shown(&mut self.m, &waves);
         let mut any = false;
         let mut fitted = Vec::new();

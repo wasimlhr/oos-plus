@@ -254,6 +254,16 @@ pub static SENDERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUs
 
 /// A large answer in the background. False when too many run already, or no thread could be started.
 pub fn send_in_background(s: &TcpStream, head: String, body: impl AsRef<[u8]> + Send + 'static) -> bool {
+    answer_in_background(s, move || (head, body))
+}
+
+/// An answer made and sent in the background, one of the `MAX_SENDERS`: `make` gives its head and body there (an
+/// answer that takes a while to make, as GET /update's state). False when too many run already, or no thread could
+/// be started; then `make` is not called.
+pub fn answer_in_background<B: AsRef<[u8]>>(
+    s: &TcpStream,
+    make: impl FnOnce() -> (String, B) + Send + 'static,
+) -> bool {
     use std::sync::atomic::Ordering::SeqCst;
     let Ok(mut c) = s.try_clone() else { return false };
     if SENDERS.fetch_add(1, SeqCst) >= MAX_SENDERS {
@@ -262,6 +272,7 @@ pub fn send_in_background(s: &TcpStream, head: String, body: impl AsRef<[u8]> + 
     }
     let t = std::thread::Builder::new().name("web-send".into()).spawn(move || {
         crate::system::lower_priority();
+        let (head, body) = make();
         let _ = c.set_write_timeout(Some(Duration::from_secs(SEND_TIMEOUT_S)));
         use std::io::Write;
         let _ = c.write_all(head.as_bytes());
@@ -280,7 +291,15 @@ pub fn busy_answer(s: &TcpStream) {
     let _ = s.set_write_timeout(Some(Duration::from_secs(1)));
     let msg = "busy, try again";
     use std::io::Write;
-    let _ = (&*s).write_all(format!("HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", msg.len(), msg).as_bytes());
+    let _ = (&*s).write_all(
+        format!(
+            "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\
+            Cache-Control: no-store\r\nConnection: close\r\n\r\n{}",
+            msg.len(),
+            msg
+        )
+        .as_bytes(),
+    );
 }
 
 #[cfg(test)]
@@ -456,5 +475,24 @@ mod tests {
         assert!(gone_at.duration_since(moved) < SEND_STALL + SEND_STALL / 4, "not given up a step after the stall");
         let mut empty = Outbox::default();
         assert_eq!(empty.flush(&s), Sent::Done);
+    }
+
+    /// The 503 has the headers of every other answer of the web server: its type, its length, `no-store`.
+    #[test]
+    fn busy_answer_is_a_whole_answer() {
+        use std::io::Read;
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut c = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (s, _) = l.accept().unwrap();
+        busy_answer(&s);
+        drop(s);
+        let mut got = String::new();
+        c.read_to_string(&mut got).unwrap();
+        let (head, body) = got.split_once("\r\n\r\n").unwrap();
+        assert!(head.starts_with("HTTP/1.1 503 Service Unavailable\r\n"), "{head}");
+        for h in ["Content-Type: text/plain", "Content-Length: 15", "Cache-Control: no-store", "Connection: close"] {
+            assert!(head.lines().any(|l| l == h), "{h} in {head}");
+        }
+        assert_eq!(body, "busy, try again");
     }
 }
