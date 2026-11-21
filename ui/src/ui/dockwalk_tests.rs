@@ -82,7 +82,7 @@ fn open(u: &mut Ui, k: VKind) {
         VKind::Pane => u.studio_apply_panel(PanelKind::Spectrum),
         VKind::Hist => u.studio_apply_panel(PanelKind::Histogram),
         VKind::Xy => u.select_option(Item::XyMode, "XY"),
-        VKind::Table => u.table = Some(tables::TableKind::Search),
+        VKind::Table => u.table.kind = Some(tables::TableKind::Search),
         VKind::Sim | VKind::View => {}
     }
     settle(u);
@@ -795,16 +795,12 @@ fn full_screen_round_trip_keeps_the_added_views() {
     let mut u = studio();
     u.select_option(Item::PaneSel, "Trend");
     u.m.hist = Hist::Vertical;
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     settle(&mut u);
-    let before = (u.m.pane, u.m.hist, u.table.is_some(), u.m.win_layout);
-    eprintln!("before {before:?} dock {:?}", KINDS.iter().filter(|k| u.dock_shown(**k)).collect::<Vec<_>>());
+    let before = (u.m.pane, u.m.hist, u.table.kind.is_some(), u.m.win_layout);
     u.toggle_expand();
     settle(&mut u);
-    eprintln!("full   {:?} {:?}", (u.m.pane, u.m.hist, u.table.is_some(), u.m.win_layout), KINDS.iter().filter(|k| u.dock_shown(**k)).collect::<Vec<_>>());
     u.toggle_expand();
     settle(&mut u);
-    let after = (u.m.pane, u.m.hist, u.table.is_some(), u.m.win_layout);
-    eprintln!("after  {after:?} dock {:?}", KINDS.iter().filter(|k| u.dock_shown(**k)).collect::<Vec<_>>());
-    assert_eq!(before, after);
+    assert_eq!(before, (u.m.pane, u.m.hist, u.table.kind.is_some(), u.m.win_layout));
 }

@@ -270,8 +270,8 @@ fn the_footer_holds_the_actions_with_the_destructive_one_on_the_right() {
     // the Ref page: one pick for the ten slots, the shown switch of the selected slot
     u.open_menu(MenuId::Ref);
     let spec = u.sheet_spec(MenuId::Ref).unwrap();
-    assert!(!spec.tabs[0].rows.iter().any(|it| matches!(it, Item::RefShow(i) if *i != u.ref_sel)));
-    assert!(spec.tabs[0].rows.contains(&Item::RefSel) && spec.tabs[0].rows.contains(&Item::RefShow(u.ref_sel)));
+    assert!(!spec.tabs[0].rows.iter().any(|it| matches!(it, Item::RefShow(i) if *i != u.ref_page.sel)));
+    assert!(spec.tabs[0].rows.contains(&Item::RefSel) && spec.tabs[0].rows.contains(&Item::RefShow(u.ref_page.sel)));
 }
 
 #[test]
@@ -345,7 +345,7 @@ fn the_add_flow_picks_the_source_first_then_one_tap_adds() {
     assert!(g.chips.iter().all(|c| c.1.h >= 40));
     // choose CH2, then add Frequency with one tap
     tap_in(&mut u, g.chips[1].1);
-    assert_eq!(u.meas_src, WaveId::Ch(1));
+    assert_eq!(u.sources.a, WaveId::Ch(1));
     let entries = u.sheet_add_entries();
     let list = |u: &Ui| u.sheet_add_geo();
     let g = list(&u);
@@ -405,8 +405,8 @@ fn an_unavailable_item_says_why_and_offers_the_fix_in_place() {
     u.open_menu(MenuId::MeasAdd);
     u.sheet_add_open();
     // Power: voltage on CH1, current on CH2, and CH2 is off
-    u.meas_src = WaveId::Ch(0);
-    u.meas_src_b = WaveId::Ch(1);
+    u.sources.a = WaveId::Ch(0);
+    u.sources.b = WaveId::Ch(1);
     u.sheet.add_group = super::meascatalog::add_categories().position(|n| n == "Power").expect("Power");
     let g = u.sheet_add_geo();
     let entries = u.sheet_add_entries();
@@ -577,7 +577,7 @@ fn the_trigger_tag_keeps_clear_of_the_windows_button() {
     let mut u = studio();
     for _ in 0..3 { u.step(0.05); }
     let b = u.win_btn().1;
-    let (g, y) = (u.grid, b.y + b.h / 2);
+    let (g, y) = (u.plot.grid, b.y + b.h / 2);
     let x1 = u.trigger_tag_x(g.x + g.w - MARK_W, y);
     assert!(x1 + MARK_W <= b.x, "the tag {x1} reaches the button {b:?}");
 }

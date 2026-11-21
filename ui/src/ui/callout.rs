@@ -24,7 +24,7 @@ pub(super) struct Callout {
 impl Ui {
     /// The time under the screen column `x` of the lane of `src`.
     fn callout_time_at(&self, src: WaveId, x: i32) -> f64 {
-        let a = self.source_area(src).unwrap_or(self.area);
+        let a = self.source_area(src).unwrap_or(self.plot.area);
         let (tdiv, delay) = self.view();
         delay as f64 + ((x - a.x) as f64 / a.w.max(1) as f64 - 0.5) * HDIV as f64 * tdiv as f64
     }

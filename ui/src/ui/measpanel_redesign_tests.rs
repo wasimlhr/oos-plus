@@ -281,7 +281,7 @@ fn the_thumbtack_toggles_the_pin_and_is_filled_when_pinned() {
     let name = Ui::detail_cell(row, cols[1].1, cols[1].2, 0);
     tap_at(&mut u, name.right() - 10, row.y + row.h / 2);
     assert_eq!(u.studio_is_pinned(key), was);
-    assert!(u.meas_cfg.is_some(), "the tap opened no settings");
+    assert!(u.meas_own.dialog.is_some(), "the tap opened no settings");
     u.close_menu();
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     cv.au_start();
@@ -354,11 +354,11 @@ fn zoom_on_with_the_panel_at_the_bottom_shows_six_rows_and_the_zoom_row() {
     assert!(full_rows(&u) >= 6, "{} rows", full_rows(&u));
     // the split stays resizable: the divider under the overview moves the zoom area
     let (hit, handle) = u.ov_divider().expect("the overview divider");
-    let before = u.studio_ov_h(u.grid);
+    let before = u.studio_ov_h(u.plot.grid);
     let (x, y) = (handle.x + handle.w / 2, hit.y + hit.h / 2);
     drag(&mut u, (x, y), (x, y + 24));
     frame(&mut u);
-    assert!(u.studio_ov_h(u.grid) > before, "dragging the divider changes the overview height");
+    assert!(u.studio_ov_h(u.plot.grid) > before, "dragging the divider changes the overview height");
     let (hit, handle) = u.ov_divider().unwrap();
     let (x, y) = (handle.x + handle.w / 2, hit.y + hit.h / 2);
     drag(&mut u, (x, y), (x, y - 24));
@@ -527,7 +527,7 @@ fn a_zoom_box_can_be_armed_from_the_bar_the_menu_and_the_add_menu_and_zooms_in()
     let bar = u.studio_zoom_bar().unwrap();
     tap(&mut u, bar.boxr);
     assert!(u.zoom_box.arm, "Box arms the drawing");
-    let z = u.split_zoom(u.grid).1;
+    let z = u.split_zoom(u.plot.grid).1;
     let (x0, y0) = (z.x + 200, z.y + 30);
     touch(&mut u, Phase::Down, x0, y0);
     touch(&mut u, Phase::Move, x0 + 100, y0 + 50);
@@ -547,13 +547,13 @@ fn a_zoom_box_can_be_armed_from_the_bar_the_menu_and_the_add_menu_and_zooms_in()
     let r = u.studio_add_rows().into_iter().find(|(k, _)| *k == super::addmenu::AddRow::ZoomBox).unwrap().1;
     tap(&mut u, r);
     assert!(u.zoom_box.arm);
-    let a = u.area;
+    let a = u.plot.area;
     let (x0, y0) = (a.x + a.w / 2 - 100, a.y + a.h / 3);
     drag(&mut u, (x0, y0), (x0 + 120, y0 + 80));
     assert!(u.m.zoom, "the box turned zoom on");
     assert!(u.zoom_box.arm, "and it stays armed for the next box");
     // a tiny drag cancels
-    let a = u.area;
+    let a = u.plot.area;
     let (x0, y0) = (a.x + 300, a.y + 50);
     drag(&mut u, (x0, y0), (x0 + 4, y0 + 3));
     assert!(!u.zoom_box.arm);

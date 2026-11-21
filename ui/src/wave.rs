@@ -7,12 +7,10 @@
 use crate::board::{board, Board};
 use crate::model::*;
 
-/// The state shared with the acquisition thread (`HwShared`, `LiveShared`), locked: the one `unwrap` for every reader
-/// and writer of it on the screen's side. A lock fails only when another holder panicked while it held it, and the
-/// state may then be half written; this panics then, as each of these lines did before.
-pub(crate) fn hw<T>(shared: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    shared.lock().unwrap()
-}
+/// A state shared with a thread of the board (`HwShared` of the acquisition thread, `LiveShared` of the read-out of
+/// `--fpga-live`), locked: the board's one lock helper (`board::lock`), which panics when another holder panicked
+/// while it held the lock.
+pub(crate) use crate::board::lock as hw;
 
 mod levels;
 mod record;
@@ -653,7 +651,7 @@ impl Source {
             let skip = n.saturating_sub(max);
             g.queue.drain(..skip);
             g.dropped += skip as u64;
-            crate::drawpipe::Counters::add(&crate::drawpipe::counters().dropped, skip as u64);
+            crate::board::pipe::Counters::add(&crate::board::pipe::counters().dropped, skip as u64);
             return g.queue.drain(..n - skip).collect();
         }
         Vec::new()
@@ -798,8 +796,8 @@ fn acquire_demo(m: &Model, t: &mut f64, dt_wall: f64, rng: &mut Rng, g: &ScreenG
 /// Where the demo signals from `start` trigger, in seconds; None when they do not.
 fn demo_trigger(m: &Model, cfg: DemoCfg, start: f64, window: f64, dt: f64) -> Option<f64> {
     let used = m.trig_channels();
-    let span = window * 1.5 + m.trig_span();
-    let mut dts = dt.min(m.trig_feature()).max(1e-9);
+    let span = window * 1.5 + crate::trig::span(m);
+    let mut dts = dt.min(crate::trig::feature(m)).max(1e-9);
     let mut ns = (span / dts).ceil() as usize;
     if ns > 400_000 {
         ns = 400_000;

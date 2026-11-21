@@ -279,7 +279,7 @@ fn a_session_keeps_the_samples_of_the_acquisition() {
     let bench = |tdiv: f64| {
         let shared: crate::board::HwShared = Default::default();
         let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
-        ui.store_dir = dir.clone();
+        ui.files.dir = dir.clone();
         ui.m.run = RunState::Run;
         for c in 1..NCH {
             ui.m.ch[c].on = false;
@@ -741,7 +741,7 @@ fn fast_path_draws_every_queued_frame() {
     ui.m.ch[0].offset = 0.0;
     assert!(ui.fast_ok());
     ui.step(0.05);
-    assert_eq!(ui.wfm_total, 10);
+    assert_eq!(ui.counts.wfm_total, 10);
     assert!(shared.lock().unwrap().queue.is_empty());
     assert_eq!(ui.m.status, TrigStatus::Triggered);
     // the zero crossing sits at the centre of the plot in every frame: the centre column is lit at the middle row
@@ -824,8 +824,8 @@ fn fast_path_on_several_cores_draws_as_one_by_one() {
         // measured, which under load (tests in parallel) is less
         let take = ui.fast_max() + 1;
         ui.step(0.05);
-        assert_eq!(ui.wfm_total, 41);
-        assert_eq!(ui.records, 1);
+        assert_eq!(ui.counts.wfm_total, 41);
+        assert_eq!(ui.counts.records, 1);
         assert!(shared.lock().unwrap().queue.is_empty());
         // the thread is told how many of a batch to decode; the record path wants them all
         assert_eq!(shared.lock().unwrap().take, take);
@@ -1161,7 +1161,7 @@ fn batch_mode_uses_every_record_at_1_ms_per_div() {
         }
         f.basic = std::array::from_fn(|c| crate::board::BasicStats::of(&f.ch[c]));
         ui.step(1.0 / 30.0);
-        let (w0, mut fed) = (ui.wfm_total, 0u64);
+        let (w0, mut fed) = (ui.counts.wfm_total, 0u64);
         for step in 0..87u64 {
             // 38 frames in 29 screens: one or two a screen
             for _ in 0..(38 * (step + 1) / 29 - 38 * step / 29) {
@@ -1171,7 +1171,7 @@ fn batch_mode_uses_every_record_at_1_ms_per_div() {
             ui.step(1.0 / 30.0);
         }
         let left = shared.lock().unwrap().queue.len() as u64;
-        assert_eq!(ui.wfm_total - w0 + left, fed, "mask {:#x}: records used", mask);
+        assert_eq!(ui.counts.wfm_total - w0 + left, fed, "mask {:#x}: records used", mask);
     }
 }
 

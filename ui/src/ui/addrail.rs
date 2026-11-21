@@ -412,7 +412,7 @@ impl Ui {
     fn rail_table_shown(&self, i: usize) -> bool {
         match i {
             0 => self.panel_shown(PanelKind::Measurements),
-            1 => self.table == Some(tables::TableKind::Search),
+            1 => self.table.kind == Some(tables::TableKind::Search),
             _ => self.events_pane_on(),
         }
     }
@@ -802,8 +802,8 @@ impl Ui {
                     let s = self.rail_source();
                     self.studio_search_add(s);
                 }
-                self.table = Some(tables::TableKind::Search);
-                self.table_top = 0;
+                self.table.kind = Some(tables::TableKind::Search);
+                self.table.top = 0;
             }
             _ => {
                 if !self.rail_kind_on(AddKind::Bus) { return self.toast("Turn a decoder on first: Add > Bus"); }
@@ -815,7 +815,7 @@ impl Ui {
     fn rail_table_remove(&mut self, i: usize) {
         match i {
             0 => self.studio_set_view(super::studio::StudioView::Waveform),
-            1 => self.table = None,
+            1 => self.table.kind = None,
             // the events of the decoders are the Events pane
             _ => self.set_events_pane(false),
         }
@@ -944,7 +944,7 @@ impl Ui {
             }
         }
         // the levels of the horizontal bars
-        let area = self.source_area(source).unwrap_or(self.area);
+        let area = self.source_area(source).unwrap_or(self.plot.area);
         let (scale, offset) = self.cursor_source_context().map_or((1.0, 0.0), |c| (c.1, c.2));
         let mut dv: Option<f64> = None;
         if matches!(mode, CursorMode::Volt | CursorMode::Xy) {
@@ -1042,7 +1042,7 @@ impl Ui {
     pub(super) fn studio_search_select(&mut self, slot: usize) {
         let before = self.studio.search_sel;
         self.studio.search_select(slot);
-        if self.studio.search_sel != before { self.table_top = 0; }
+        if self.studio.search_sel != before { self.table.top = 0; }
     }
 
     /// Removes the selected search; the first of the others is the selected one then.
@@ -1051,9 +1051,9 @@ impl Ui {
         self.studio.searches[slot] = None;
         self.studio.search_at[slot] = 0;
         self.studio.search_select(0);
-        self.table_top = 0;
+        self.table.top = 0;
         if self.studio.search().is_some() { return; }
-        if self.table == Some(tables::TableKind::Search) && !self.search_on { self.table = None; }
+        if self.table.kind == Some(tables::TableKind::Search) && !self.search_on { self.table.kind = None; }
         if self.menu_open && self.menu == MenuId::Search { self.close_menu(); }
     }
 

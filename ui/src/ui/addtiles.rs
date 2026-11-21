@@ -106,7 +106,7 @@ impl Ui {
         if let Some(c) = cat_of_key(key) {
             // the card's Add / Remove speaks of the source of the row
             let (MeasKey::One(_, id) | MeasKey::Pair(_, id, _) | MeasKey::Cat(_, id, ..)) = key;
-            self.meas_src = id;
+            self.sources.a = id;
             self.studio.md.info = Some(c);
         } else { self.toast("No description for this measurement"); }
     }

@@ -50,7 +50,7 @@ fn shot(u: &mut Ui, name: &str) {
 #[test]
 fn the_overview_box_pans_resizes_and_is_drawn_anew() {
     let mut u = zoomed(Layout::Studio);
-    let o = u.split_zoom(u.grid).0;
+    let o = u.split_zoom(u.plot.grid).0;
     let main = (u.m.tscale, u.m.tfine, u.m.delay);
     let (xa, xb) = u.zoom_window_x(o);
     let y = o.y + 30;
@@ -81,7 +81,7 @@ fn the_overview_box_pans_resizes_and_is_drawn_anew() {
 #[test]
 fn the_wheel_over_the_zoomed_view_no_longer_zooms() {
     let mut u = zoomed(Layout::Studio);
-    let z = u.split_zoom(u.grid).1;
+    let z = u.split_zoom(u.plot.grid).1;
     let (tscale, delay) = (u.m.tscale, u.m.delay);
     let x = z.x + z.w * 3 / 4;
     let y = z.y + 40;

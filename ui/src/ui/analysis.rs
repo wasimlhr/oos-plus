@@ -26,7 +26,7 @@ mod update;
 
 pub(in crate::ui) use draw::{PowerPage, SpectrumPage};
 use measure::*;
-pub(in crate::ui) use measure::RefMeasureKey;
+pub(in crate::ui) use measure::{Measured, RefMeasureKey, Sources};
 pub(in crate::ui) use menu::FREQ_TOP;
 
 #[cfg(test)]

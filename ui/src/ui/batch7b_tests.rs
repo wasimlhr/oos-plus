@@ -48,7 +48,7 @@ fn bench() -> Ui {
     u.m.run = RunState::Stop;
     u.m.meas_full_record = true;
     u.m.meas.clear(); u.m.meas2.clear(); u.m.cat.clear(); u.m.row_cfg.clear();
-    u.meas_own.clear();
+    u.meas_own.rows.clear();
     // cycles of 40, 60, 80, 100, 120 samples
     put(&mut u, 0, pulses(&[40, 60, 80, 100, 120], 0));
     put(&mut u, 1, pulses(&[40, 60, 80, 100, 120], 7));
@@ -233,7 +233,7 @@ fn card(l: Layout, rows: &[(Meas, WaveId)], pairs: &[(usize, WaveId, WaveId)]) -
     u.m.meas2 = pairs.to_vec();
     u.m.cat.clear();
     u.m.row_cfg.clear();
-    u.meas_own.clear();
+    u.meas_own.rows.clear();
     put(&mut u, 0, pulses(&[40, 60, 80, 100, 120], 0));
     put(&mut u, 1, pulses(&[40, 60, 80, 100, 120], 7));
     u.studio.panel.first = 0;
@@ -265,7 +265,7 @@ fn every_group_has_a_card_of_at_most_seven_rows_per_tab() {
             if !opts.is_empty() { assert!(opts.contains(&u.value(it)), "row {i} {it:?}: {:?} in {opts:?}", u.value(it)); }
         }
         u.close_menu();
-        assert!(u.meas_cfg.is_none());
+        assert!(u.meas_own.dialog.is_none());
     }
 }
 
@@ -364,7 +364,7 @@ fn minimal_and_default_open_the_card_as_a_dialog_with_forty_pixel_controls() {
         // the close button closes it and forgets the row
         let d = u.dlg_layout().unwrap();
         tap_in(&mut u, d.close);
-        assert!(!u.menu_open && u.meas_cfg.is_none());
+        assert!(!u.menu_open && u.meas_own.dialog.is_none());
     }
 }
 
@@ -375,7 +375,7 @@ fn the_gear_paths_open_the_card_for_every_kind_of_row() {
     u.studio_set_view(StudioView::Docked);
     assert_eq!(u.studio_keys().len(), 2);
     u.studio_configure(1);
-    assert_eq!(u.meas_cfg, Some(1));
+    assert_eq!(u.meas_own.dialog, Some(1));
     assert_eq!(u.menu, MenuId::MeasRow);
     assert_eq!(u.rowf_key(), Some(RowKey::Pair(0, r0, WaveId::Ref(1))));
     assert!(u.menu_title(MenuId::MeasRow).contains("settings"));
@@ -492,7 +492,7 @@ fn the_studio_table_and_the_results_pane_follow_the_shown_columns() {
     shot(&mut u, "b7b-table-min");
     // the results pane of Default hides the cells of columns that are off
     let mut d = card(Layout::Default, &[(Meas::Vpp, r0)], &[]);
-    d.stats_on = true;
+    d.results.on = true;
     d.mstat = vec![MStat { n: 3, sum: 3.0, sumsq: 4.0, min: 0.5, max: 2.0 }];
     let all = d.result_rows();
     assert!(all[0].cells.iter().all(|c| !c.is_empty()), "{:?}", all[0].cells);
@@ -534,7 +534,7 @@ fn eye_jitter_and_power_rows_open_a_card_of_the_settings_they_use() {
     // a row with no setting says so and opens nothing
     u.close_menu();
     u.open_meas_cfg(3);
-    assert!(!u.menu_open && u.meas_cfg.is_none());
+    assert!(!u.menu_open && u.meas_own.dialog.is_none());
     // the dialog of Minimal has them too
     let mut m = card(Layout::Minimal, &[], &[]);
     m.m.cat = vec![cat_row(Cat::Tie)];

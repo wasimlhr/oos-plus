@@ -67,6 +67,21 @@ impl Default for FastPath {
     }
 }
 
+/// The counts of the screen and the acquisition (ADR 0062), for the state line, System info, `stat` and the tests.
+#[derive(Default)]
+pub struct Counts {
+    /// frames drawn (render.rs)
+    pub frames: u64,
+    /// records taken in, for the state line
+    pub records: u64,
+    /// frames drawn per second, measured by the main loop (main.rs)
+    pub fps: f32,
+    /// acquisitions per second (smoothed)
+    pub wfm_rate: f32,
+    /// every waveform acquired since the start (Clear resets it)
+    pub wfm_total: u64,
+}
+
 /// What the step saw last (ADR 0062).
 pub(super) struct Seen {
     /// the trigger level last seen and when it changed: the level line shows for `LEVEL_LINE_S` after a change (knob,
@@ -77,12 +92,24 @@ pub(super) struct Seen {
     pub rec_t: f64,
     /// smoothed time between two records (deep hardware records arrive about once per second)
     pub rec_iv: f64,
+    /// the acquisition ran in the last frame
+    pub running: bool,
+    /// the analyser view the last frame had: a change of view analyses what is already there (a stopped record gets
+    /// no new one)
+    pub view: AView,
 }
 
 impl Default for Seen {
     fn default() -> Self {
         // NaN: the first look at the level (start-up) is no change
-        Seen { level: (f32::NAN, f32::NAN), level_changed: 0.0, rec_t: 0.0, rec_iv: 0.0 }
+        Seen {
+            level: (f32::NAN, f32::NAN),
+            level_changed: 0.0,
+            rec_t: 0.0,
+            rec_iv: 0.0,
+            running: false,
+            view: AView::Scope,
+        }
     }
 }
 
@@ -184,8 +211,8 @@ impl Ui {
             // redraw the stored record with the current scale/offset
             self.step_stopped_redraw();
         }
-        if self.analyzed_view != self.m.view {
-            self.analyzed_view = self.m.view;
+        if self.seen.view != self.m.view {
+            self.seen.view = self.m.view;
             // Studio opens the eye beside the plot: the waveform stays; Full is an explicit choice
             if self.m.view == AView::Eye && self.m.layout == Layout::Studio && self.m.eye_place == EyePlace::Full && !self.studio.eye_full {
                 self.eye_set_place(EyePlace::Side);
@@ -208,7 +235,7 @@ impl Ui {
             if !self.record_mode() {
                 self.m.status = TrigStatus::Stop;
             }
-            self.wfm_rate = 0.0;
+            self.counts.wfm_rate = 0.0;
         }
         self.step_grade();
     }
@@ -271,18 +298,18 @@ impl Ui {
         if self.m.fit_platform() {
             self.mark_changed();
         }
-        if let WaveId::Ch(c) = self.meas_src {
+        if let WaveId::Ch(c) = self.sources.a {
             if c >= n_ch() {
-                self.meas_src = WaveId::Ch(0);
+                self.sources.a = WaveId::Ch(0);
             }
         }
-        if let WaveId::Ch(c) = self.meas_src_b {
+        if let WaveId::Ch(c) = self.sources.b {
             if c >= n_ch() {
-                self.meas_src_b = WaveId::Ch(0);
+                self.sources.b = WaveId::Ch(0);
             }
         }
-        if self.ref_src >= n_ch() {
-            self.ref_src = n_ch() - 1;
+        if self.ref_page.src >= n_ch() {
+            self.ref_page.src = n_ch() - 1;
         }
         self.auto_step();
         self.sysinfo_poll();
@@ -296,16 +323,16 @@ impl Ui {
         let running = self.m.run == RunState::Run;
         let hw_seg = self.seg_hw_on();
         // RUN after STOP: the hardware average starts over (stock clears it on every state change)
-        if running && !self.was_running {
+        if running && !self.seen.running {
             self.hw_avg_restart();
             // the final-frame request of the next STOP, counted here so that a `*OPC?` taken with the STOP, before
             // this step sees it, waits for it (`OperationToken::Stop`)
             self.stop.final_req += 1;
         }
-        if running && !self.was_running && self.m.segments > 0 {
+        if running && !self.seen.running && self.m.segments > 0 {
             self.seg.n = 0;
-            self.history.clear();
-            self.hist_pos = None;
+            self.history.recs.clear();
+            self.history.pos = None;
             if hw_seg {
                 self.seg.run += 1;
                 (self.seg.pos, self.seg.view) = (None, None);
@@ -314,7 +341,7 @@ impl Ui {
         }
         // STOP of a deep record on pairs with raw deep measurements: the hardware reads the newest frame raw and
         // stops arming; until it is here the records go on (docs/fork/stop-exact.md)
-        if !running && self.was_running {
+        if !running && self.seen.running {
             if self.stop_wants_final() {
                 self.stop.final_until = Some(self.now + STOP_FINAL_WAIT);
             } else {
@@ -326,7 +353,7 @@ impl Ui {
         let final_done = self.src.hw_hold(!running && (self.last[0].is_some() || self.cleared), self.stop.final_req);
         // the protocol watch and XY read every record: no live compression for them (compress.rs)
         self.src.hw_needs_raw(self.needs_raw());
-        self.was_running = running;
+        self.seen.running = running;
         if hw_seg {
             self.seg_poll(running);
         }
@@ -538,13 +565,13 @@ impl Ui {
             self.draw_channels(&rec, detail.as_deref(), zw.as_deref(), 24);
         }
         take.td += t1.elapsed().as_secs_f32() * 1000.0;
-        if self.history.len() >= if hw_seg { HISTORY } else { HISTORY.max(self.seg_count()) } {
-            self.history.pop_front();
+        if self.history.recs.len() >= if hw_seg { HISTORY } else { HISTORY.max(self.seg_count()) } {
+            self.history.recs.pop_front();
         }
         // a deep LA record is tens of MB: the history keeps the LA of short records only
         let la = rec.la.clone().filter(|l| l.words.len() <= HISTORY_LA_WORDS);
-        self.history.push_back(Record { raw: None, la, ..rec.clone() });
-        self.hist_pos = None;
+        self.history.recs.push_back(Record { raw: None, la, ..rec.clone() });
+        self.history.pos = None;
         self.mask_test(&rec);
         if take.deep_raw && rec.raw.as_ref().is_some_and(|r| crate::deepmeas::deep_raw_frame(&r.frame)) {
             take.raw_rec = Some(rec.clone());
@@ -552,7 +579,7 @@ impl Ui {
         self.last[0] = Some(rec);
         self.cleared = false;
         take.got += 1;
-        self.records += 1;
+        self.counts.records += 1;
         if self.m.segments > 0 {
             self.seg.n += 1;
             // hardware segments end when the thread has read them all back (`seg_poll`)
@@ -633,9 +660,9 @@ impl Ui {
         self.times.acq += 0.05 * (take.ta - self.times.acq);
         self.times.draw += 0.05 * (take.td - self.times.draw);
         let rate = take.got as f32 / dt_wall.max(1e-3) as f32;
-        self.wfm_rate += 0.1 * (rate - self.wfm_rate);
-        self.wfm_total += take.got as u64;
-        crate::drawpipe::Counters::add(&crate::drawpipe::counters().used, take.got as u64);
+        self.counts.wfm_rate += 0.1 * (rate - self.counts.wfm_rate);
+        self.counts.wfm_total += take.got as u64;
+        crate::board::pipe::Counters::add(&crate::board::pipe::counters().used, take.got as u64);
     }
 
     /// The measurement of this step's record, now or in the background, and the analyser updates.
@@ -658,7 +685,7 @@ impl Ui {
                     }
                 }
             } else if self.meas_bg.worker.is_some() {
-                // the result for the last record is still good when it comes after this one: `meas_n` only
+                // the result for the last record is still good when it comes after this one: `meas_bg.n` only
                 // changes where a result out becomes wrong (a clear, measuring here at once)
                 self.meas_bg.want = true;
                 // raw deep reads: this raw record is the one to measure, even when pair records (held) follow
@@ -721,7 +748,7 @@ impl Ui {
                     if let Some(entry) =
                         i.checked_sub(self.m.meas.len() + self.m.meas2.len()).and_then(|i| self.m.cat.get(i)).copied()
                     {
-                        self.queue_catalog_statistics(entry, self.wfm_total);
+                        self.queue_catalog_statistics(entry, self.counts.wfm_total);
                     }
                 }
                 let v = row.v;
@@ -770,7 +797,7 @@ impl Ui {
             .map(|c| format!("CH{} {}/div", c + 1, si_short(m.ch[c].volts_per_div() as f64, "V")))
             .collect();
         parts.push(format!("{}/div", si_short(m.time_per_div() as f64, "s")));
-        if self.offline {
+        if self.offline.on {
             let (name, sub) = self.ref_card_lines();
             parts.push(if sub == "empty" || sub.ends_with("pts") { name } else { format!("{} {}", name, sub) });
             parts.push(self.run_caption().0.into());
@@ -787,7 +814,7 @@ impl Ui {
             };
             parts.push(st.into());
         }
-        parts.push(format!("{:.0} wfm/s", self.wfm_rate));
+        parts.push(format!("{:.0} wfm/s", self.counts.wfm_rate));
         parts.join("   \u{b7}   ")
     }
 
@@ -849,7 +876,7 @@ impl Ui {
             && board().slow_mode(&self.m) == crate::board::Slow::Off
             && !self.m.la_on()
             && self.m.segments == 0
-            && self.hist_pos.is_none()
+            && self.history.pos.is_none()
             && !self.records_refused()
             && !self.loaded_record
             && self.last[0].as_ref().is_some_and(|r| r.raw.is_some());

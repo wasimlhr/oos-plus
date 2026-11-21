@@ -319,11 +319,11 @@ fn a_file_loads_into_a_ref_while_live() {
         std::fs::write(dir.join("capture.csv"), csv).unwrap();
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = layout;
-        u.store_dir = dir.clone();
+        u.files.dir = dir.clone();
         u.relayout();
         for _ in 0..8 { u.step(0.04); }
         u.open_menu(MenuId::Ref);
-        u.ref_sel = 2;
+        u.ref_page.sel = 2;
         u.activate(Item::RefImport);
         assert_eq!(u.menu, MenuId::Pick, "{layout:?}: the files of storage as a list");
         assert_eq!(u.options(Item::RefImport), ["capture.csv"], "{layout:?}");
@@ -345,7 +345,7 @@ fn two_fingers_never_open_the_hold_menu_and_one_finger_does() {
         u.m.layout = layout;
         u.relayout();
         for _ in 0..8 { u.step(0.04); }
-        let g = u.grid;
+        let g = u.plot.grid;
         let (cx, cy) = (g.x + g.w / 2, g.y + g.h / 2);
         let menu = |u: &Ui| u.workspace_popup_open() || u.studio.ctx.is_some() || u.menu_open;
         // both fingers land and rest
@@ -490,7 +490,7 @@ fn a_one_finger_slide_never_opens_the_hold_menu() {
             u.m.layout = layout;
             u.relayout();
             for _ in 0..8 { u.step(0.04); }
-            let g = u.grid;
+            let g = u.plot.grid;
             let (x0, y) = (g.x + g.w / 2, g.y + g.h / 2);
             let menu = |u: &Ui| u.workspace_popup_open() || u.studio.ctx.is_some() || u.menu_open;
             let delay = u.m.delay;
@@ -521,15 +521,15 @@ fn studio_overlay_and_stacked_switch_the_lanes() {
     u.m.ch[1].on = true;
     u.relayout();
     for _ in 0..8 { u.step(0.04); }
-    assert_eq!(u.wins.len(), 2, "a lane each to begin with");
+    assert_eq!(u.plot.wins.len(), 2, "a lane each to begin with");
     assert!(u.trace_stacked());
     u.trace_mode(false);
     for _ in 0..4 { u.step(0.04); }
-    assert_eq!(u.wins.len(), 1, "Overlay: one graticule");
+    assert_eq!(u.plot.wins.len(), 1, "Overlay: one graticule");
     assert!(!u.trace_stacked());
     u.trace_mode(true);
     for _ in 0..4 { u.step(0.04); }
-    assert_eq!(u.wins.len(), 2, "Stacked: the lanes are back");
+    assert_eq!(u.plot.wins.len(), 2, "Stacked: the lanes are back");
     // every measurement has a badge while none is pinned by hand and there is room
     assert!(u.studio.pinned.is_none());
     assert!(u.studio_badges().len() > 3, "{} badges", u.studio_badges().len());
@@ -560,7 +560,7 @@ fn walk_pictures() {
     shot(&mut u, "1-add-menu");
     // the plot menu, then Overlay
     let mut u = studio();
-    let g = u.grid;
+    let g = u.plot.grid;
     u.context_menu(g.x + 300, g.y + 120);
     shot(&mut u, "2-plot-menu");
     u.trace_mode(false);
@@ -741,10 +741,10 @@ fn overlay_from_the_plot_menu_by_touch() {
         if setup >= 3 { u.views_set(3); }
         for _ in 0..12 { u.step(0.04); }
         u.toast = None;
-        let lanes = u.wins.len();
+        let lanes = u.plot.wins.len();
         assert!(lanes >= 2, "{name}: lanes to begin with");
         let pick = |u: &mut Ui, row: super::studioctx::CtxRow| {
-            let g = u.wins[0];
+            let g = u.plot.wins[0];
             let (x, y) = (g.x + g.w / 2, g.y + g.h / 2);
             u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
             for _ in 0..20 { u.step(0.04); }
@@ -756,10 +756,10 @@ fn overlay_from_the_plot_menu_by_touch() {
             for _ in 0..6 { u.step(0.04); }
         };
         pick(&mut u, super::studioctx::CtxRow::Overlay);
-        assert_eq!(u.wins.len(), 1, "{name}: Overlay is one graticule");
+        assert_eq!(u.plot.wins.len(), 1, "{name}: Overlay is one graticule");
         assert!(!u.trace_stacked(), "{name}");
         pick(&mut u, super::studioctx::CtxRow::Stacked);
-        assert_eq!(u.wins.len(), lanes, "{name}: Stacked brings the lanes back");
+        assert_eq!(u.plot.wins.len(), lanes, "{name}: Stacked brings the lanes back");
     }
 }
 
@@ -819,22 +819,22 @@ fn overlay_stays_with_a_reference_and_a_math_channel() {
     for i in 0..40 {
         u.step(0.04);
         assert!(!u.trace_stacked(), "frame {i}: overlay flag {} workspace.stacked {}", u.studio.overlay, u.workspace_stacked_flag());
-        assert_eq!(u.wins.len(), 1, "frame {i}: one graticule");
+        assert_eq!(u.plot.wins.len(), 1, "frame {i}: one graticule");
         let mut cv = Canvas::new(u.scr.w, u.scr.h);
         u.render(&mut cv);
-        assert_eq!(u.wins.len(), 1, "frame {i}: one graticule after the picture (overlay {} workspace.stacked {} win_layout {:?} view {:?})", u.studio.overlay, u.workspace_stacked_flag(), u.m.win_layout, u.m.view);
+        assert_eq!(u.plot.wins.len(), 1, "frame {i}: one graticule after the picture (overlay {} workspace.stacked {} win_layout {:?} view {:?})", u.studio.overlay, u.workspace_stacked_flag(), u.m.win_layout, u.m.view);
         assert!(!u.trace_stacked(), "frame {i}: after the picture");
     }
     // and with a wait for the SIM worker in between, as the picture tests do
     u.wait_sim_generation();
     u.toast = None;
     u.step(0.04);
-    assert_eq!(u.wins.len(), 1);
+    assert_eq!(u.plot.wins.len(), 1);
 }
 
 /// A finger held on the plot, then a tap on a row of its menu.
 fn pick_ctx(u: &mut Ui, row: super::studioctx::CtxRow) {
-    let g = u.wins[0];
+    let g = u.plot.wins[0];
     let (x, y) = (g.x + g.w / 3, g.y + g.h / 2);
     u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
     for _ in 0..20 { u.step(0.04); }
@@ -892,7 +892,7 @@ fn fit_all_lanes_scales_every_source_to_its_lane() {
     assert!((2.0..=6.01).contains(&((hi - lo) / r.vpd)), "R1: {} divisions", (hi - lo) / r.vpd);
     // Overlay is kept with the setup and comes back after a restart
     pick_ctx(&mut u, super::studioctx::CtxRow::Overlay);
-    assert!(u.m.studio_overlay && u.wins.len() == 1);
+    assert!(u.m.studio_overlay && u.plot.wins.len() == 1);
     shot(&mut u, "F3-overlay-after-fit");
     let text = crate::store::setup_text(&u.m);
     assert!(text.contains("studio_traces = overlay"), "the setup has the trace mode");
@@ -935,13 +935,13 @@ fn a_wandering_finger_still_taps_and_holds() {
         u.relayout();
         for _ in 0..12 { frame(&mut u); }
         // the long-press menu
-        let g = u.wins[1];
+        let g = u.plot.wins[1];
         finger_hold(&mut u, g.x + g.w / 3, g.y + g.h / 2, wander, 24);
         assert!(u.studio.ctx.is_some(), "wander {wander}: a held finger opens the plot menu");
         let rows = u.studio_ctx_rows();
         let r = rows.iter().find(|(k, _, _)| *k == super::studioctx::CtxRow::Overlay).unwrap().2;
         finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, wander.min(3));
-        assert_eq!(u.wins.len(), 1, "wander {wander}: a tap on Overlay traces overlays");
+        assert_eq!(u.plot.wins.len(), 1, "wander {wander}: a tap on Overlay traces overlays");
         // a button of the zoom row
         u.set_zoom(true);
         for _ in 0..6 { frame(&mut u); }
@@ -958,26 +958,26 @@ fn a_right_click_menu_row_acts_on_a_left_click() {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = Layout::Studio;
         u.m.ch[1].on = true;
-        if with_panel { u.desktop_panel = Some(false); }
+        if with_panel { u.workspace.desktop_panel = Some(false); }
         u.relayout();
         for _ in 0..12 { frame(&mut u); }
-        let g = u.wins[1];
+        let g = u.plot.wins[1];
         u.context_menu(g.x + g.w / 3, g.y + g.h / 2);
         for _ in 0..4 { frame(&mut u); }
         assert!(u.studio.ctx.is_some(), "panel {with_panel}: the right click opens the plot menu");
         let rows = u.studio_ctx_rows();
         let r = rows.iter().find(|(k, _, _)| *k == super::studioctx::CtxRow::Overlay).unwrap().2;
         finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, 0);
-        assert_eq!(u.wins.len(), 1, "panel {with_panel}: the left click on Overlay traces overlays");
+        assert_eq!(u.plot.wins.len(), 1, "panel {with_panel}: the left click on Overlay traces overlays");
         assert!(u.studio.ctx.is_none(), "panel {with_panel}: the menu closes");
         // Stacked again, then Fit all lanes
-        let g = u.wins[0];
+        let g = u.plot.wins[0];
         u.context_menu(g.x + g.w / 3, g.y + g.h / 2);
         for _ in 0..4 { frame(&mut u); }
         let rows = u.studio_ctx_rows();
         let r = rows.iter().find(|(k, _, _)| *k == super::studioctx::CtxRow::Stacked).unwrap().2;
         finger_tap(&mut u, r.x + r.w / 2, r.y + r.h / 2, 0);
-        assert_eq!(u.wins.len(), 2, "panel {with_panel}: Stacked traces");
+        assert_eq!(u.plot.wins.len(), 2, "panel {with_panel}: Stacked traces");
     }
 }
 
@@ -1028,7 +1028,7 @@ fn a_math_lane_drags_up_and_down() {
     u.m.math = crate::math::MathOp::Sub;
     u.relayout();
     for _ in 0..12 { frame(&mut u); }
-    let lane = *u.wins.last().unwrap();
+    let lane = *u.plot.wins.last().unwrap();
     let before = u.m.math_ch(0).offset;
     let (x, y) = (lane.x + lane.w / 2, lane.y + lane.h / 2);
     u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
@@ -1053,8 +1053,8 @@ fn meas_audit_table() {
         u.m.meas.clear();
         u.m.meas2.clear();
         u.m.cat.clear();
-        u.meas_src = WaveId::Ch(0);
-        u.meas_src_b = WaveId::Ch(1);
+        u.sources.a = WaveId::Ch(0);
+        u.sources.b = WaveId::Ch(1);
         u.cat.c = WaveId::Ch(2);
         u.cat.d = WaveId::Ch(3);
         for _ in 0..6 { u.step(0.04); }
@@ -1095,8 +1095,8 @@ fn known_value(def: &'static crate::measures::Def) -> (f64, String) {
     for (r, delay) in [(0, 0.0), (1, 100e-6)] {
         u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0: -5e-3, dt: 1e-6, v: known_pulses(delay).into(), vpd: 0.2, offset: 0.0, on: true });
     }
-    u.meas_src = WaveId::Ref(0);
-    u.meas_src_b = WaveId::Ref(1);
+    u.sources.a = WaveId::Ref(0);
+    u.sources.b = WaveId::Ref(1);
     for _ in 0..3 { u.step(0.04); }
     u.catalog_add(def);
     let end = std::time::Instant::now() + std::time::Duration::from_secs(8);
@@ -1265,7 +1265,7 @@ fn a_session_saves_and_loads_the_whole_bench() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let mut u = fresh_live(Layout::Studio);
-    u.store_dir = dir.clone();
+    u.files.dir = dir.clone();
     u.m.ch[1].on = true;
     u.m.ch[0].vscale = 5;
     u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ref(2))];
@@ -1288,7 +1288,7 @@ fn a_session_saves_and_loads_the_whole_bench() {
 
     // another bench: other settings, another reference, a slot the session does not have
     let mut v = fresh_live(Layout::Minimal);
-    v.store_dir = dir.clone();
+    v.files.dir = dir.clone();
     v.m.tscale = 8;
     v.m.ch[1].on = false;
     v.refs[0] = Some(RefWave { src: 0, color: 0, label: "left over".into(), t0: 0.0, dt: 1e-6, v: vec![0.5; 100].into(), vpd: 1.0, offset: 0.0, on: true });
@@ -1333,7 +1333,7 @@ fn a_note_is_added_from_the_hold_menu_and_stays_on_its_signal() {
     let mut u = fresh(Layout::Studio);
     let lane = u.source_area(WaveId::Ch(0)).unwrap();
     // the helper holds a finger a third into the plot, opens the hold menu there and taps the row
-    let x = u.wins[0].x + u.wins[0].w / 3;
+    let x = u.plot.wins[0].x + u.plot.wins[0].w / 3;
     pick_ctx(&mut u, super::studioctx::CtxRow::NoteHere(WaveId::Ch(0)));
     assert!(u.wlan.osk.is_some() && u.callouts.len() == 1, "a note and the keyboard for it");
     for c in "runt".chars() { u.osk_type(c); }
@@ -1642,7 +1642,7 @@ fn the_docked_event_table_has_its_count_in_the_title_and_columns_that_can_be_dra
     let after = u.table_col_x(&rows, r.w);
     // (the fitted widths were those of every row, the fixed ones are those of the rows on the screen: a few pixels)
     assert!((after[1] - before[1]).abs() <= 6 && after[2] == before[2] + 60, "the text column moved with the finger, the middle one stayed: {before:?} {after:?}");
-    assert_eq!(u.table_top, 0, "dragging a divider does not scroll the rows");
+    assert_eq!(u.table.top, 0, "dragging a divider does not scroll the rows");
     if let Ok(dir) = std::env::var("OOS_WALK") {
         u.render(&mut cv);
         let _ = crate::store::write(&std::path::Path::new(&dir).join("table.png"), &crate::store::png_of(&cv));
@@ -2031,7 +2031,7 @@ fn a_session_saved_in_the_offline_view_comes_back_in_it() {
     let dir = std::env::temp_dir().join(format!("oos-walk-offline-session-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut u = fresh_live(Layout::Minimal);
-    u.store_dir = dir.clone();
+    u.files.dir = dir.clone();
     u.set_offline(true);
     // a capture long enough for the zoom window to open, loaded as a file is
     let n = 20_000usize;
@@ -2044,7 +2044,7 @@ fn a_session_saved_in_the_offline_view_comes_back_in_it() {
     }
     u.load_waveform_auto(&file, "cap.pwwf").unwrap();
     for _ in 0..4 { u.step(0.04); }
-    assert!(u.offline && u.offline_ref == 0 && u.m.zoom, "the capture fills the screen, zoom window open");
+    assert!(u.offline.on && u.offline.slot == 0 && u.m.zoom, "the capture fills the screen, zoom window open");
     // the user moves the zoom window: that view is what the session keeps
     u.m.zdelay += 0.002;
     for _ in 0..2 { u.step(0.04); }
@@ -2059,11 +2059,11 @@ fn a_session_saved_in_the_offline_view_comes_back_in_it() {
 
     // another start, live, with its own channels on
     let mut v = fresh_live(Layout::Minimal);
-    v.store_dir = dir.clone();
-    assert!(!v.offline);
+    v.files.dir = dir.clone();
+    assert!(!v.offline.on);
     v.session_load(named.to_str().unwrap()).unwrap();
     for _ in 0..4 { v.step(0.04); }
-    assert!(v.offline && v.offline_ref == 0 && v.record_mode(), "the offline view, on the slot that was shown");
+    assert!(v.offline.on && v.offline.slot == 0 && v.record_mode(), "the offline view, on the slot that was shown");
     assert!(v.m.ch.iter().all(|c| !c.on), "the analog channels stay off");
     assert_eq!((v.m.tscale, v.m.zoom, v.m.zscale), view, "the time base and the zoom as saved");
     assert!((v.m.tfine - tfine).abs() < 1e-6 && (v.m.delay - delay).abs() < 1e-9 && (v.m.zdelay - zdelay).abs() < 1e-7, "{} {} {}", v.m.tfine, v.m.delay, v.m.zdelay);
@@ -2071,14 +2071,14 @@ fn a_session_saved_in_the_offline_view_comes_back_in_it() {
 
     // a session saved with the live channels says nothing of a view and loads as before
     let mut live = fresh_live(Layout::Minimal);
-    live.store_dir = dir.clone();
+    live.files.dir = dir.clone();
     live.refs[1] = Some(RefWave { src: 0, color: 1, label: "kept".into(), t0: 0.0, dt: 1e-6, v: vec![0.25; 200].into(), vpd: 1.0, offset: 0.0, on: true });
     let plain = dir.join("live.oss");
     live.session_save(plain.to_str().unwrap()).unwrap();
     let plain_bytes = std::fs::read(&plain).unwrap();
     assert_eq!(crate::store::parse_session(&plain_bytes, NREF).unwrap().offline_ref, None);
     v.session_load(plain.to_str().unwrap()).unwrap();
-    assert!(!v.offline, "a live session leaves the offline view");
+    assert!(!v.offline.on, "a live session leaves the offline view");
     // a view that names a slot the file does not hold is not a view
     let mut odd = plain_bytes.clone();
     odd.extend_from_slice(&crate::store::session_view(7));
@@ -2215,9 +2215,9 @@ fn clear_sweep_and_the_footers_are_where_they_are_used() {
         // two references: Clear R1 leaves R2
         let wave = |label: &str| RefWave { src: 0, color: 0, label: label.into(), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true };
         (u.refs[0], u.refs[1]) = (Some(wave("one")), Some(wave("two")));
-        u.ref_sel = 0;
+        u.ref_page.sel = 0;
         assert!(u.refs[0].is_some() && u.refs[1].is_some(), "{layout:?}: two references stored");
-        u.ref_sel = 0;
+        u.ref_page.sel = 0;
         u.open_menu(MenuId::Ref);
         u.step(0.04);
         assert_eq!(u.sheet_label(Item::RefClearOne), "Clear R1");
@@ -2312,7 +2312,7 @@ fn the_hold_menu_of_the_plot_has_rows_a_finger_high() {
     u.m.ch[1].on = true;
     u.set_zoom(true);
     for _ in 0..3 { u.step(0.04); }
-    let g = u.wins[0];
+    let g = u.plot.wins[0];
     for at in [(g.x + g.w / 3, g.y + g.h / 2), (4, 60), (u.scr.w - 4, 60), (4, u.scr.h - 60), (u.scr.w - 4, u.scr.h - 60)] {
         u.studio_ctx_open(at.0, at.1);
         let p = u.studio_ctx_rect().expect("the menu");
@@ -2939,7 +2939,7 @@ fn add_results_table_offers_the_three_tables() {
         tap(u, x, y);
         frame(u);
     };
-    let shown = |u: &Ui, i: usize| match i { 0 => u.studio_panel_shown(), 1 => u.table == Some(TableKind::Search), _ => u.events_pane_on() };
+    let shown = |u: &Ui, i: usize| match i { 0 => u.studio_panel_shown(), 1 => u.table.kind == Some(TableKind::Search), _ => u.events_pane_on() };
     let mut u = fresh(Layout::Studio);
     open(&mut u);
     assert!(u.menu_open && u.menu == MenuId::AddPanel);

@@ -14,7 +14,7 @@ fn studio() -> Ui {
     let dir = std::env::temp_dir().join(format!("oos-batch25-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -46,7 +46,7 @@ fn csv_bytes() -> Vec<u8> {
 }
 
 fn load_csv(u: &mut Ui, slot: usize, name: &str) {
-    std::fs::write(u.store_dir.join(name), csv_bytes()).unwrap();
+    std::fs::write(u.files.dir.join(name), csv_bytes()).unwrap();
     u.load_waveform_bytes_at(&csv_bytes(), name, slot).expect("the CSV loads");
 }
 
@@ -142,8 +142,8 @@ fn pills_share_the_bar_by_count_and_never_reach_the_right_controls() {
 #[test]
 fn load_file_on_the_desktop_asks_the_native_explorer_for_the_selected_slot() {
     let mut u = studio();
-    u.desktop_panel = Some(false);
-    u.ref_sel = 3;
+    u.workspace.desktop_panel = Some(false);
+    u.ref_page.sel = 3;
     u.activate(Item::RefImport);
     assert!(u.open_wave_request && u.waveform_destination() == Some(3));
     assert!(!u.menu_open);
@@ -156,7 +156,7 @@ fn load_file_on_the_desktop_asks_the_native_explorer_for_the_selected_slot() {
 #[test]
 fn the_reference_and_sim_sheets_carry_a_load_file_row() {
     let mut u = studio();
-    u.ref_sel = 1;
+    u.ref_page.sel = 1;
     u.open_menu(MenuId::Ref);
     let spec = u.sheet_spec(MenuId::Ref).expect("a sheet");
     assert!(spec.tabs[0].rows.contains(&Item::RefImport), "Load file is on the first tab of Reference");
@@ -175,10 +175,10 @@ fn the_reference_and_sim_sheets_carry_a_load_file_row() {
 #[test]
 fn load_file_on_the_scope_lists_the_storage_files_and_loads_the_tapped_one() {
     let mut u = studio();
-    assert!(u.desktop_panel.is_none());
-    for n in ["alpha.csv", "beta.csv", "gamma.csv"] { std::fs::write(u.store_dir.join(n), csv_bytes()).unwrap(); }
-    std::fs::write(u.store_dir.join("notes.txt"), b"not a waveform").unwrap();
-    u.ref_sel = 2;
+    assert!(u.workspace.desktop_panel.is_none());
+    for n in ["alpha.csv", "beta.csv", "gamma.csv"] { std::fs::write(u.files.dir.join(n), csv_bytes()).unwrap(); }
+    std::fs::write(u.files.dir.join("notes.txt"), b"not a waveform").unwrap();
+    u.ref_page.sel = 2;
     u.open_menu(MenuId::Ref);
     u.activate(Item::RefImport);
     assert!(u.menu == MenuId::Pick && u.pick.is_some_and(|p| p.it == Item::RefImport), "the list of files opens");
@@ -190,9 +190,9 @@ fn load_file_on_the_scope_lists_the_storage_files_and_loads_the_tapped_one() {
     u.activate(Item::PickOpt(k));
     assert_eq!(u.refs[2].as_ref().map(|r| r.label.as_str()), Some("beta.csv"), "loaded into the selected slot R3");
     // an empty storage says so
-    let dir = u.store_dir.join("empty");
+    let dir = u.files.dir.join("empty");
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     u.open_menu(MenuId::Ref);
     u.activate(Item::RefImport);
     assert!(u.menu != MenuId::Pick);
@@ -207,8 +207,8 @@ fn a_file_loaded_while_sim_plays_refs_joins_the_playback() {
     u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0]);
     for _ in 0..10 { frame(&mut u); }
-    std::fs::write(u.store_dir.join("second.csv"), csv_bytes()).unwrap();
-    std::fs::write(u.store_dir.join("third.csv"), csv_bytes()).unwrap();
+    std::fs::write(u.files.dir.join("second.csv"), csv_bytes()).unwrap();
+    std::fs::write(u.files.dir.join("third.csv"), csv_bytes()).unwrap();
     u.open_menu(MenuId::Sim);
     assert!(u.sim_slot_set(1));
     u.activate(Item::SimLoad);
