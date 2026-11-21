@@ -142,6 +142,12 @@ impl Ui {
         SpecBox { title, plot, sort, list: Rect::new(col_x, y, PEAK_W - 6, a.y + a.h - y) }
     }
 
+    /// What is drawn of the sort button `sort`: 26 px high, in the middle of its touch area.
+    pub(super) fn spec_sort_chip(sort: Rect) -> Rect {
+        let h = sort.h.min(26);
+        Rect::new(sort.x, sort.y + (sort.h - h) / 2, sort.w, h)
+    }
+
     /// Lines shown on the trace and in the list: the numbers must match, so no more than the list has room for.
     fn peaks_shown(&self, b: &SpecBox) -> usize {
         self.azr.peaks.len().min((b.list.h / 18).max(0) as usize)
@@ -267,14 +273,11 @@ impl Ui {
     pub(super) fn draw_peaks(&self, cv: &mut Canvas, b: &SpecBox, sp: &spectrum::Spectrum, pane: bool) {
         let f = self.fonts();
         if b.sort.w == 0 { return; }
-        btn(cv, b.sort, BTN, BTN_BORDER);
-        cv.text_in(
-            super::fit_font(&[&f.mb, &f.sb, &crate::font::Fonts::get(0).mb], b.sort.w - 8, self.sort_name()),
-            b.sort,
-            1,
-            self.sort_name(),
-            TEXT,
-        );
+        // the button is drawn 26 px high in its touch area of 36, with the text of the list's size: at the height
+        // of the touch area and in the menu font it was the largest text of the view (the owner, from the unit)
+        let chip = Self::spec_sort_chip(b.sort);
+        btn(cv, chip, BTN, BTN_BORDER);
+        cv.text_in(super::fit_font(&[&f.sb, &f.s], chip.w - 8, self.sort_name()), chip, 1, self.sort_name(), TEXT);
         let r = b.list;
         // the header row: above the list, never over a line of it
         let head = Rect::new(r.x, r.y - PEAK_HEAD, r.w, PEAK_HEAD);
