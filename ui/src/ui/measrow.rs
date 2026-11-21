@@ -13,6 +13,8 @@ use oos_dsp::measure::{BaseTop, EdgeSel, PairOpts, SearchDir, ToSel};
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum RF {
     Source,
+    /// the reference levels as upstream's dialog offers them: Shared, 10/90 or 20/80 percent (`lo` and `hi`)
+    Refs,
     BaseTop,
     OsRef,
     OsTop,
@@ -80,6 +82,9 @@ fn group_of(key: RowKey) -> Option<Group> {
     })
 }
 
+/// The reference levels of upstream's dialog of one measurement, low and high as fractions of the amplitude.
+const REFS: [(f64, f64); 2] = [(0.1, 0.9), (0.2, 0.8)];
+
 const TO_NAMES: [&str; 5] = ["Rise", "Fall", "Both", "Same", "Opposite"];
 const FROM_NAMES: [&str; 3] = ["Rise", "Fall", "Both"];
 
@@ -119,7 +124,9 @@ impl Ui {
         let cfg = self.rowf_cfg();
         let it = |f: RF| Item::RowF(f);
         let source = matches!(key, RowKey::One(..)).then_some(it(RF::Source));
-        let with = |rows: Vec<Item>| -> Vec<Item> { source.into_iter().chain(rows).collect() };
+        // the reference levels of upstream's dialog, on every single row; in the volts mode the levels are volts
+        let refs = (matches!(key, RowKey::One(..)) && !self.m.meas_lv.absolute).then_some(it(RF::Refs));
+        let with = |rows: Vec<Item>| -> Vec<Item> { source.into_iter().chain(refs).chain(rows).collect() };
         let Some(group) = group_of(key) else { return self.measrow_cat_plan(key) };
         let stats = ("Stats", vec![it(RF::StMean), it(RF::StRange), it(RF::StN), Item::MeasPop, Item::MeasStatReset, it(RF::Trend)]);
         let mut plan = match group {
@@ -140,13 +147,16 @@ impl Ui {
                 vec![("Cycles", with(rows)), ("Levels", vec![it(RF::Low), it(RF::High), it(RF::Hyst), it(RF::BaseTop)])]
             }
             Group::Edges { used } => {
-                let mut rows = vec![it(RF::Low), it(RF::High), it(RF::Hyst)];
+                let mut rows = vec![it(RF::Low), it(RF::High)];
                 if used { rows.push(it(RF::Used)); }
-                rows.extend([it(RF::BaseTop), it(RF::Gate)]);
-                vec![("Edges", with(rows))]
+                rows.push(it(RF::Gate));
+                vec![("Edges", with(rows)), ("Levels", vec![it(RF::Hyst), it(RF::BaseTop)])]
             }
             Group::Burst => vec![("Counting", with(vec![it(RF::Idle), it(RF::BurstPol), it(RF::Hyst), it(RF::Gate)]))],
-            Group::NPeriods => vec![("Counting", with(vec![it(RF::N), it(RF::NOff), it(RF::NStep), it(RF::NEdge), it(RF::Hyst), it(RF::Gate)]))],
+            Group::NPeriods => vec![
+                ("Counting", with(vec![it(RF::N), it(RF::NEdge), it(RF::NOff), it(RF::NStep), it(RF::Gate)])),
+                ("Levels", vec![it(RF::Hyst)]),
+            ],
             Group::Outside => vec![("Counting", with(vec![it(RF::Side), it(RF::OutVolts), it(RF::Low), it(RF::High), it(RF::Gate)]))],
             Group::Pair(kind) => {
                 let delay = kind == PairKind::Delay;
@@ -198,7 +208,7 @@ impl Ui {
         let Item::RowF(f) = it else { return None };
         Some(match f {
             RF::Reset => Kind::Action,
-            RF::Source | RF::BaseTop | RF::OsRef | RF::Gate | RF::Pol | RF::BurstPol | RF::NEdge | RF::Side | RF::From | RF::To | RF::Dir => Kind::Choice,
+            RF::Source | RF::Refs | RF::BaseTop | RF::OsRef | RF::Gate | RF::Pol | RF::BurstPol | RF::NEdge | RF::Side | RF::From | RF::To | RF::Dir => Kind::Choice,
             RF::Used | RF::StMean | RF::StRange | RF::StN | RF::Trend => Kind::Action,
             _ => Kind::Value,
         })
@@ -208,6 +218,7 @@ impl Ui {
         let Item::RowF(f) = it else { return None };
         Some(match f {
             RF::Source => "Source",
+            RF::Refs => "Reference",
             RF::BaseTop => "Base / top",
             RF::OsRef => "Overshoot ref",
             RF::OsTop => "Top ref",
@@ -292,6 +303,13 @@ impl Ui {
         let lv = |x: f64| if m.meas_lv.absolute { si_short(x, "V") } else { pct(x) };
         Some(match f {
             RF::Source => match self.rowf_key() { Some(RowKey::One(_, id)) => self.wave_name(id), _ => String::new() },
+            RF::Refs => match (c.lo, c.hi) {
+                (None, None) => format!("Shared ({:.0}/{:.0})", m.meas_lpct * 100.0, m.meas_hpct * 100.0),
+                (lo, hi) => {
+                    let (lo, hi) = (lo.unwrap_or(m.meas_lpct), hi.unwrap_or(m.meas_hpct));
+                    format!("{:.0}/{:.0}", lo * 100.0, hi * 100.0)
+                }
+            },
             RF::BaseTop => match c.base_top { Some(b) => b.label().into(), None => self.rowf_shared_base_top() },
             RF::OsRef => if c.os_top.is_some() || c.os_base.is_some() { "Manual".into() } else { "Auto".into() },
             RF::OsTop => si_short(c.os_top.unwrap_or(1.0), "V"),
@@ -330,6 +348,9 @@ impl Ui {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         Some(match f {
             RF::Source => self.wave_names(),
+            RF::Refs => std::iter::once(format!("Shared ({:.0}/{:.0})", self.m.meas_lpct * 100.0, self.m.meas_hpct * 100.0))
+                .chain(REFS.iter().map(|(l, h)| format!("{:.0}/{:.0}", l * 100.0, h * 100.0)))
+                .collect(),
             RF::BaseTop => std::iter::once(self.rowf_shared_base_top()).chain(BaseTop::ALL.iter().map(|b| b.label().to_string())).collect(),
             RF::OsRef => s(&["Auto", "Manual"]),
             RF::Gate => s(&["Shared", "Screen", "Full record"]),
@@ -351,6 +372,13 @@ impl Ui {
         let step = |cur: u32, d: i32, min: u32, max: u32| (cur as i64 + d as i64).clamp(min as i64, max as i64) as u32;
         match f {
             RF::Source => self.rowf_source(d),
+            RF::Refs => {
+                // Shared, 10/90, 20/80; levels of the row's own that are neither count as Shared for the step
+                let near = |a: Option<f64>, b: f64| a.is_some_and(|a| (a - b).abs() < 1e-9);
+                let cur = REFS.iter().position(|&(l, h)| near(c.lo, l) && near(c.hi, h)).map_or(0, |i| i + 1) as i32;
+                let next = (cur + d).rem_euclid(REFS.len() as i32 + 1) as usize;
+                self.rowf_edit(|c| (c.lo, c.hi) = if next == 0 { (None, None) } else { (Some(REFS[next - 1].0), Some(REFS[next - 1].1)) });
+            }
             RF::BaseTop => {
                 // Shared, then the methods
                 let all = BaseTop::ALL;

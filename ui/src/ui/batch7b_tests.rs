@@ -621,3 +621,57 @@ fn the_pll_loop_bandwidth_is_a_setting_and_reaches_the_clock_recovery() {
     assert_eq!(crate::store::parse_setup(&text).unwrap().eye_pll_bw, 2.5e6);
     assert!(!crate::store::setup_text(&Model::default()).contains("eye_pll"));
 }
+
+// Break it catches: the Studio card of a measurement without an option upstream's dialog of the same measurement has
+// (Default's Set), so a setting reachable in Default is not reachable in Studio (oos-plus ADR 0030). Upstream's dialog:
+// Source and Reference on every measurement, Edges used on Rise and Fall, Idle on Burst, Outside on Outside, N periods
+// and Clock/Data (Edge type) on N periods.
+#[test]
+fn the_studio_card_offers_every_option_of_upstreams_dialog() {
+    let r0 = WaveId::Ref(0);
+    let upstream = |k: Meas| -> Vec<RF> {
+        let mut v = vec![RF::Source, RF::Refs];
+        match k {
+            Meas::Rise | Meas::Fall => v.push(RF::Used),
+            Meas::Burst => v.push(RF::Idle),
+            Meas::Outside => v.push(RF::Side),
+            Meas::NPeriods => v.extend([RF::N, RF::NEdge]),
+            _ => {}
+        }
+        v
+    };
+    let rows: Vec<(Meas, WaveId)> = measure::ALL.iter().map(|&k| (k, r0)).collect();
+    let mut u = card(Layout::Studio, &rows, &[]);
+    let mut missing = Vec::new();
+    for (i, &(k, _)) in rows.iter().enumerate() {
+        u.open_meas_cfg(i);
+        let have = rows_of(&u);
+        missing.extend(upstream(k).into_iter().filter(|f| !have.contains(&Item::RowF(*f))).map(|f| format!("{k:?}: {f:?}")));
+        u.close_menu();
+    }
+    assert!(missing.is_empty(), "options of upstream's dialog missing from the Studio card: {missing:?}");
+}
+
+// Break it catches: the Reference of the card stepping without setting the row's levels, or a level of the row's own
+// left behind on the way back to Shared
+#[test]
+fn the_reference_of_the_card_sets_the_levels_of_the_row() {
+    let r0 = WaveId::Ref(0);
+    let mut u = card(Layout::Studio, &[(Meas::Vupper, r0)], &[]);
+    let key = RowKey::One(Meas::Vupper, r0);
+    u.open_meas_cfg(0);
+    let it = Item::RowF(RF::Refs);
+    assert_eq!(u.options(it), ["Shared (10/90)", "10/90", "20/80"]);
+    let shared = u.meas_number(r0, Meas::Vupper);
+    u.select_option(it, "20/80");
+    let c = u.m.row_cfg(key).unwrap();
+    assert_eq!((c.lo, c.hi), (Some(0.2), Some(0.8)));
+    assert_eq!(u.value(it), "20/80");
+    let own = u.meas_number(r0, Meas::Vupper);
+    assert!(own < shared, "the upper level follows the reference: {own} {shared}");
+    u.select_option(it, "Shared (10/90)");
+    assert!(u.m.row_cfg(key).is_none(), "Shared removes the row's levels");
+    // in the volts mode the levels are volts: the card has Low and High there, not the percent presets
+    u.m.meas_lv.absolute = true;
+    assert!(!rows_of(&u).contains(&it));
+}
