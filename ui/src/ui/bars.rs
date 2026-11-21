@@ -68,10 +68,6 @@ impl Ui {
     pub(super) fn single_btn(&self) -> Rect {
         if self.m.layout == Layout::Studio { return self.studio_top().single; }
         let p = self.run_pill();
-        // the Default layout has no Single button (the front-panel key), the caption follows the pill as in stock OOS
-        if !self.m.compact() {
-            return Rect::new(p.right() + 2, Self::SINGLE_BTN.y, 0, Self::SINGLE_BTN.h);
-        }
         Rect::new(p.right() + 4, Self::SINGLE_BTN.y, Self::SINGLE_BTN.w, Self::SINGLE_BTN.h)
     }
 
@@ -91,8 +87,9 @@ impl Ui {
             (TopBtn::System, "System"),
         ];
         if !self.m.compact() {
-            // stock OOS buttons; Load and SIM stay in the Sources menu and Menu > Analysis
-            all.retain(|(b, _)| !matches!(b, TopBtn::Load | TopBtn::Menu(MenuId::Sim)));
+            // the four buttons of upstream OOS (ADR 0007); Load and SIM stay in the Sources menu and Menu > Analysis,
+            // System is the first entry of the Menu's System group
+            all.retain(|(b, _)| !matches!(b, TopBtn::Load | TopBtn::Menu(MenuId::Sim) | TopBtn::System));
         }
         if self.m.compact() {
             // Measure is a key of the front panel (it opens Add measurements) and an entry of the Menu. Cursor has its

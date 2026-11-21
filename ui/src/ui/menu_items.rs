@@ -472,7 +472,7 @@ impl Ui {
             ("Analysers", ana),
             ("Instruments", ins),
             ("Display", disp),
-            ("System", vec![Open(MenuId::Storage), Shot, QuickRun, LockAct, Open(MenuId::Utility), PowerAct]),
+            ("System", vec![Open(MenuId::Utility), Open(MenuId::Storage), Shot, QuickRun, LockAct, PowerAct]),
         ];
         g.retain(|x| !x.1.is_empty());
         g
