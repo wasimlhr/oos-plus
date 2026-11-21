@@ -285,9 +285,11 @@ pub struct Scpi {
     replay: Option<Box<replay::Replay>>,
     /// The command that runs is one of that file, not a client's: `replay::file_refuses` says what it may not send.
     from_file: bool,
-    /// The CSV of the last MCP `waveform` call and when it was made, served as `GET /mcp/waveform.csv` for
-    /// `site::mcp::FILE_TTL` (site/mcp.rs).
-    pub(crate) mcp_file: Option<(std::time::Instant, Vec<u8>)>,
+    /// The CSV files of the last MCP `waveform` calls (at most `site::mcp::FILES_MAX`), each with its name and when
+    /// it was made, served as `GET /mcp/waveform/<name>` for `site::mcp::FILE_TTL` (site/mcp.rs).
+    pub(crate) mcp_files: Vec<(String, std::time::Instant, Vec<u8>)>,
+    /// The calls of `waveform` so far, the number in the name of each file.
+    pub(crate) mcp_calls: u32,
 }
 
 pub(crate) use crate::words::{e, kw, nearest_index, num, parse_bool};
@@ -392,7 +394,8 @@ impl Scpi {
             rec_last: Vec::new(),
             replay: None,
             from_file: false,
-            mcp_file: None,
+            mcp_files: Vec::new(),
+            mcp_calls: 0,
         }
     }
 

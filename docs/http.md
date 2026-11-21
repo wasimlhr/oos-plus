@@ -52,7 +52,7 @@ Every route can answer these; the body is `text/plain`.
 | Status | Body | When |
 |---|---|---|
 | 403 | `refused` | a request another site made through a browser (`foreign`, below), on every route |
-| 403 | `refused` | `POST /update`, `/mcp` and `/mcp/waveform.csv` from a peer outside `net.allow`, when the head is in (body not read) |
+| 403 | `refused` | `POST /update`, `/mcp` and `/mcp/waveform/<file>` from a peer outside `net.allow`, when the head is in (body not read) |
 | 404 | `not found` | a path that is no route, and a route asked with a method it does not take |
 | 413 | `request too large` | a body above its limit (announced or sent) |
 | 503 | `busy, try again` | a 2nd body above 1 MiB or waveform upload, a 3rd answer above 48 KiB, a 9th picture asked |
@@ -194,16 +194,18 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
   `TCPIP::<port>::SOCKET` (the SCPI socket), `TCPIP::hislip0[,<port>]::INSTR` (HiSLIP). LXI version 1.5.
 - net.allow: no.
 
-### `GET /mcp/waveform.csv`
+### `GET /mcp/waveform/<file>`
 
 - Mark: **experimental** (oos-plus, ADR 0074)
-- Request: nothing.
-- Answer: 200 `text/csv; charset=utf-8`, the file of the last call of the MCP tool `waveform` (below): a header
+- Request: nothing; `<file>` is the name in the `url` of a `waveform` answer, the source and the number of the call
+  (`ch1-7.csv`).
+- Answer: 200 `text/csv; charset=utf-8`, the file of that call of the MCP tool `waveform` (below): a header
   `time_s,v` and one row per sample, or `time_s,min_v,max_v` and one row per bucket (its first sample's time, its
   lowest and highest sample) when the record read was longer than the tool's `points`; time as `%.9e`, volts as
-  `%.6e`. It is a temporary file for one download: the next call, from any MCP client, replaces it, and 2 minutes
-  after its call (`FILE_TTL`) it is deleted, at the web server's next pass. 409 `text/plain`: before the first call,
-  after those 2 minutes, or while Remote services > MCP is Off.
+  `%.6e`. It is a temporary file for one download: each call has its own, the last 4 are kept (`FILES_MAX`, a
+  fifth call deletes the oldest), and 2 minutes after its call (`FILE_TTL`) it is deleted, at the web server's next
+  pass. 409 `text/plain`: a name no call gave, after those 2 minutes, once pushed out, or while Remote services >
+  MCP is Off.
 - net.allow: yes, as `/mcp`.
 
 ### `POST /mcp`
@@ -284,8 +286,9 @@ answers as `9.9E37` (none) is `null`.
 - Answer: `source`, `record`, `total_samples` (the record's length), `start`, `samples_read` (at most 1 Mi samples
   from `start`), `next_start` (null at the end of the record), `dt` and `t0` (s, of the first sample read), `unit`
   `V`, `clipped` (samples at the end of the WORD range), `stats` (`min`, `max`, `vpp`, `mean`, `rms`), and `file`:
-  `url` (`http://<address>:8080/mcp/waveform.csv`, the path alone while the scope has no address), `columns`, `rows`
-  `bytes` and `expires_in_s` (120) of the CSV that `GET /mcp/waveform.csv` then serves for that long, the samples read
+  `url` (`http://<address>:8080/mcp/waveform/<file>`, a name of its own per call; the path alone while the scope has
+  no address), `columns`, `rows`, `bytes` and `expires_in_s` (120) of the CSV that `GET /mcp/waveform/<file>` then
+  serves for that long, the samples read
   as `points` rows. The samples are
   not in the answer, where they would fill a model's context: a client downloads the file (`curl -o`). With `inline`
   above 0 the answer also has `samples` (every sample, when there are no more than `inline`) or `minmax` (`inline`
