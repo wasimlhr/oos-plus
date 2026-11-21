@@ -400,6 +400,20 @@ fn default_opens_the_dialog_of_upstream_for_a_standard_row_and_the_card_for_a_pa
     assert!(u.cfg_geom().is_none());
 }
 
+// Break it catches: the card of a row left in Minimal came back as the dialog after Display > Layout went to Default.
+#[test]
+fn a_card_left_in_minimal_does_not_open_the_dialog_in_default() {
+    let r0 = WaveId::Ref(0);
+    let mut u = card(Layout::Minimal, &[(Meas::Period, r0)], &[]);
+    u.open_meas_cfg(0);
+    assert_eq!(u.menu, MenuId::MeasRow);
+    u.close_menu();
+    while u.m.layout != Layout::Default {
+        u.activate(Item::Layout);
+    }
+    assert!(u.meas_cfg.is_none() && u.cfg_geom().is_none(), "no dialog without a Set in Default");
+}
+
 #[test]
 fn the_gear_paths_open_the_card_for_every_kind_of_row() {
     let r0 = WaveId::Ref(0);

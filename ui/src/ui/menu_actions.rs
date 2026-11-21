@@ -600,6 +600,8 @@ impl Ui {
                 if m.layout == Layout::Studio {
                     self.studio.enter = true;
                 }
+                // the settings of a row open as the card in Minimal and Studio and as a dialog in Default
+                self.meas_cfg = None;
                 // Default is the stock OOS screen: its cards and top bar, not the compact bars a Bottom bar choice left
                 if m.layout == Layout::Default {
                     m.bar_compact = false;

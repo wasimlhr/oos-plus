@@ -1103,8 +1103,6 @@ pub struct Ui {
     row_gate: std::cell::Cell<Option<bool>>,
     /// Settings card (Minimal, Studio) or dialog (Default) open on this index of the selected measurements.
     meas_cfg: Option<u16>,
-    /// The Default layout's dialog of `reflook.rs` is shown for `meas_cfg` (upstream's), not the card.
-    meas_dlg: bool,
     /// Reference named on the card that replaces the trigger card, and read by the DVM and the counter.
     offline_ref: usize,
     offline_hold: Option<offline::LiveHold>,

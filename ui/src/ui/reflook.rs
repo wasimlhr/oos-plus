@@ -439,10 +439,8 @@ impl Ui {
         // the Default layout has upstream's dialog over the page it was opened from (source, reference levels and the
         // parameters of its kind); Minimal and Studio have the card
         if self.m.layout == Layout::Default && index < self.m.meas.len() {
-            self.meas_dlg = true;
             return;
         }
-        self.meas_dlg = false;
         if self.measrow_plan().is_empty() {
             self.meas_cfg = None;
             self.toast("No settings for this measurement");
@@ -457,11 +455,12 @@ impl Ui {
 
     pub(super) fn close_meas_dlg(&mut self) {
         self.meas_cfg = None;
-        self.meas_dlg = false;
     }
 
     pub(super) fn cfg_geom(&self) -> Option<CfgGeom> {
-        if !self.meas_dlg || self.m.layout != Layout::Default {
+        // open while `meas_cfg` names a single row in Default (a pair opens the card there); a change of layout
+        // forgets `meas_cfg`, so a card left in Minimal or Studio does not come back as this dialog
+        if self.m.layout != Layout::Default {
             return None;
         }
         let index = self.meas_cfg? as usize;
@@ -523,8 +522,7 @@ impl Ui {
     }
 
     pub(super) fn draw_meas_cfg(&self, cv: &mut Canvas) {
-        let Some(g) = self.cfg_geom() else { return };
-        let index = self.meas_cfg.unwrap() as usize;
+        let (Some(g), Some(index)) = (self.cfg_geom(), self.meas_cfg.map(usize::from)) else { return };
         let Some(&(k, id)) = self.m.meas.get(index) else { return };
         let d = self.dlg_values(k, id);
         let f = &self.fonts();
