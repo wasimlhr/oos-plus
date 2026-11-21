@@ -3038,14 +3038,14 @@ fn the_trigger_level_follows_the_signals_mean_with_ac_coupling() {
     assert!((u.m.trig_level - place).abs() < 1e-4, "HF reject counts in volts: {} {place}", u.m.trig_level);
 }
 
-/// With the cursors on, the two multipurpose knobs move them: the first cursor A, the second cursor B, with no menu
-/// open and with the Cursor menu open. A turn opened the Menu, and in the Cursor menu it stepped through the rows, so
-/// no knob moved a cursor (reported from a unit, 2026-11-18). Without cursors a turn opens the Menu as before.
+/// Minimal and Studio, cursors on: the multipurpose knobs move them (the first A, the second B), with no menu open
+/// and with the Cursor menu open; a turn had opened the Menu or stepped its rows (reported from a unit, 2026-11-18).
+/// Without cursors a turn opens the Menu as before. Default keeps the knobs' job, as upstream OOS (batch4_tests.rs).
 #[test]
 fn the_multipurpose_knobs_move_the_cursors() {
     const A_CW: u8 = 0xba;
     const B_CW: u8 = 0xaa;
-    for layout in [Layout::Studio, Layout::Minimal, Layout::Default] {
+    for layout in [Layout::Studio, Layout::Minimal] {
         let mut u = fresh(layout);
         // no cursors: the knob opens the Menu
         u.key(A_CW);

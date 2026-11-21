@@ -457,8 +457,11 @@ fn a_long_press_of_a_channel_key_switches_ac_dc() {
     // scripts and the remote: every press at once
     ui.key(key::CH1);
     assert!(ui.m.ch[0].on);
-    // a finger held on the channel's card: its quick actions (no silent AC/DC), and lifting it opens no menu
+    // Minimal, a finger held on the channel's chip: its quick actions (no silent AC/DC), and lifting it opens no menu
+    // (Default switches AC/DC there, as upstream OOS: batch4_tests.rs)
     ui.close_menu();
+    ui.m.layout = Layout::Minimal;
+    ui.step(0.033);
     let (x, y) = mid(ui.cards().0[0]);
     ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
     ui.step(LONG_PRESS + 0.05);

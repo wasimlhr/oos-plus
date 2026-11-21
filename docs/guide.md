@@ -707,10 +707,11 @@ A channel key held for more than half a second, or a finger held on a channel's 
 AC and DC coupling. A short press switches a channel that is off on and opens its menu. With several channels on, the
 first press on one that is not selected only selects it, so the knobs act on it (its card has the coloured border);
 the next press opens its menu, and a press with its menu open switches it off. A tap on a channel's card selects and
-opens the menu the same way; a tap with the menu open closes it. A push of the horizontal SCALE knob switches the
-time base between its 1-2-5 steps and fine steps of a hundredth (Horizontal > Fine time base; the time pill of Studio
-says "fine" while it is on); the zoom is the Zoom row of Horizontal or the Zoom button of Studio, and while it is
-open the knob sets its scale and a push closes it.
+opens the menu the same way; a tap with the menu open closes it. A push of the horizontal SCALE knob opens or closes
+the zoom; a tap on the lower half of the TIME card does the same, and the right half of the trigger card steps its
+source (upper half) or its sweep (lower half). On the plot a vertical drag moves the selected channel (from the left
+edge the channel whose marker is nearest), and a held finger opens the plot's menu. This is how upstream OOS works
+the Default layout; Minimal and Studio work some of it differently (Layouts, below).
 
 **Backlight.** Display > Backlight sets the panel's brightness from 10 to 100 %, in steps that look even to the eye. It is
 a setting of the scope (`/oos/system.conf`).
@@ -741,9 +742,16 @@ double tap on any) opens its sheet, and a hold has the quick actions, Turn off f
 right is the Menu; the read-out of the sample rate, the memory depth and the mode opens Acquire, and Horizontal is
 under it; the pill of the time base opens Horizontal and names the delay or the zoom scale; the trigger pill names the
 type and the sweep and opens Trigger; Cursors in the top bar puts the cursors on, and the next tap opens the Cursor menu. In
-every layout the two multipurpose knobs move the cursors while they are on (the first cursor A, the second cursor B), with
-no menu open or with the Cursor menu; a push opens or closes that menu, or with time and level cursors together gives the
-knobs to the other pair. Add > Measurement and the Measure
+Minimal and Studio the two multipurpose knobs move the cursors while they are on (the first cursor A, the second cursor
+B), with no menu open or with the Cursor menu; a push opens or closes that menu, or with time and level cursors together
+gives the knobs to the other pair (in Default the knobs keep their usual job, and the Cursor menu's rows move the
+cursors). There a push of the horizontal SCALE knob switches the time base between its 1-2-5 steps and fine steps of a
+hundredth (Horizontal > Fine time base; the time pill of Studio says "fine" while it is on); the zoom is the Zoom row of
+Horizontal or the Zoom button of Studio, and while it is open the knob sets its scale and a push closes it. A finger
+held on a channel's chip, badge or marker opens its quick actions (coupling, invert, hide, zero offset, settings)
+instead of switching AC/DC; a tap on a trace, a lane or a channel marker selects that source, a tap on the trigger
+marker opens Trigger, a tap on a cursor tag selects that cursor, and a vertical drag moves the trace under the finger.
+Only what is drawn as a button on the bars takes a tap. Add > Measurement and the Measure
 key open a quick panel that adds measurements on one source with the plot in view; the button beside its close button
 opens the Measure page with the categories, the sources, Selected and Settings, and Menu > Measure opens that page at
 once. System, SIM and the network pages are entries of the Menu.
