@@ -149,6 +149,7 @@ pub(super) const T1: &[&str] = &[
     "SEARch:PULSe:SOURce", "SEARch:PULSe:POLarity", "SEARch:PULSe:WHEN", "SEARch:PULSe:UWIDth", "SEARch:PULSe:LWIDth", "SEARch:PULSe:LEVel",
     "SEARch:SLOPe:SOURce", "SEARch:SLOPe:SLOPe", "SEARch:SLOPe:WHEN", "SEARch:SLOPe:TUPPer", "SEARch:SLOPe:TLOWer", "SEARch:SLOPe:ALEVel", "SEARch:SLOPe:BLEVel",
     "SEARch:TIMeout:SOURce", "SEARch:TIMeout:SLOPe", "SEARch:TIMeout:TIME", "SEARch:TIMeout:LEVel",
+    "SEARch:WINDow:SOURce", "SEARch:WINDow:POSition", "SEARch:WINDow:WHEN", "SEARch:WINDow:TIME", "SEARch:WINDow:TUPPer", "SEARch:WINDow:ALEVel", "SEARch:WINDow:BLEVel", "SEARch:DISPlay",
     "SEARch:RUNT:SOURce", "SEARch:RUNT:POLarity", "SEARch:RUNT:WHEN", "SEARch:RUNT:WUPPer", "SEARch:RUNT:WLOWer", "SEARch:RUNT:ALEVel", "SEARch:RUNT:BLEVel",
     "SEARch:COPY:TO", "SEARch:COPY:FROM", "SEARch:COUNt", "SEARch:EVENt", "SEARch:DATA", "SEARch:SAVE", "SEARch:REMove",
 ];
@@ -343,7 +344,7 @@ impl Ui {
     /// The Studio search and the mark of the trigger events. Without a search of its own the values are the trigger's;
     /// the first set of a setting adds Search 1 like the Add rail does.
     fn search_cmd(&mut self, key: &str, q: bool, arg: &str) -> Reply {
-        const KINDS: [(TrigType, &str); 5] = [(TrigType::Edge, "EDGE"), (TrigType::Pulse, "PULSe"), (TrigType::Slope, "SLOPe"), (TrigType::Timeout, "TIMeout"), (TrigType::Runt, "RUNT")];
+        const KINDS: [(TrigType, &str); 6] = [(TrigType::Edge, "EDGE"), (TrigType::Pulse, "PULSe"), (TrigType::Slope, "SLOPe"), (TrigType::Timeout, "TIMeout"), (TrigType::Runt, "RUNT"), (TrigType::Window, "WINDow")];
         match key {
             "SEARch:STATe" => {
                 if q { return t(b01(self.search_on)); }
@@ -387,6 +388,14 @@ impl Ui {
                 t(self.table_rows(tables::TableKind::Search).iter().map(|r| format!("{:e},{},{},{}", r.t, r.who, r.text, if r.ok { "ok" } else { "error" })).collect::<Vec<_>>().join("\n"))
             }
             "SEARch:SAVE" => { if q { return Err(undefined(key)); } self.activate(Item::SearchSave); DONE }
+            // the marks of the search are drawn or not; the search and its events stay
+            "SEARch:DISPlay" => {
+                if q { return t(b01(!self.studio.search().is_some_and(|s| s.hidden))); }
+                let Some(on) = parse_bool(arg) else { return Err(bad(arg)) };
+                self.ensure_search()?;
+                if let Some(sp) = self.studio.search() { self.studio.search_put(super::addrail::SearchSpec { hidden: !on, ..sp }); }
+                DONE
+            }
             "SEARch:REMove" => { if q { return Err(undefined(key)); } self.activate(Item::SrchRemove); DONE }
             _ => match key.split(':').collect::<Vec<_>>()[..] {
                 ["SEARch", node, word] => match KINDS.iter().find(|(_, n)| *n == node) {
@@ -405,15 +414,27 @@ impl Ui {
         const SL: [(u8, &str); 3] = [(0, "POSitive"), (1, "NEGative"), (2, "RFALl")];
         if !q { self.ensure_search()?; }
         let cur = self.studio.search().unwrap_or_else(|| self.search_of_trigger());
-        let mut sp = super::addrail::SearchSpec { kind, ..cur };
-        let upper = matches!(word, "UWIDth" | "TUPPer" | "WUPPer") && matches!(cur.when, WhenKind::In | WhenKind::Out);
+        let mut sp = cur.of_kind(kind);
+        const CONDS: [(u8, &str); 7] = [(0, "NONE"), (1, "GREater"), (2, "LESS"), (3, "RANGe"), (4, "OUTside"), (5, "EQUal"), (6, "UNEQual")];
+        let upper = matches!(word, "UWIDth" | "TUPPer" | "WUPPer") && matches!(cur.when, WhenKind::In | WhenKind::Out) && !cur.eq;
+        let mut cond = cur.cond();
         let level = |v: &mut f32| if q { t(en(*v as f64)) } else { *v = num(arg).ok_or_else(|| bad(arg))?; DONE };
         let time = |v: &mut f32| if q { t(en(*v as f64)) } else { *v = num(arg).filter(|&x| x > 0.0).ok_or_else(|| bad(arg))?; DONE };
         let r = match word {
             "SOURce" => if q { t(wave_tok(cur.src)) } else { sp.src = parse_wave(arg).ok_or_else(|| bad(arg))?; DONE },
             "SLOPe" => pick(q, arg, &mut sp.slope, &SL),
             "POLarity" => pick(q, arg, &mut sp.slope, &SL[..2]),
-            "WHEN" => pick(q, arg, &mut sp.when, if q || kind == TrigType::Runt { &WHENS_OFF[..] } else { &WHENS[..] }),
+            "POSition" => pick(q, arg, &mut sp.slope, &[(0, "ENTer"), (1, "EXIT"), (2, "TIMe")]),
+            // (a Window search has its time condition while it marks the time inside: TIMe is set with it)
+            "WHEN" => {
+                let r = pick(q, arg, &mut cond, &CONDS);
+                if !q && r.is_ok() {
+                    if kind == TrigType::Window { sp.slope = 2; }
+                    if !sp.conds().contains(&cond) { return Err(bad(arg)); }
+                    sp = sp.with_cond(cond);
+                }
+                r
+            }
             "LEVel" | "ALEVel" => level(&mut sp.level),
             "BLEVel" => level(&mut sp.level2),
             "UWIDth" | "TUPPer" | "WUPPer" if upper => time(&mut sp.t2),

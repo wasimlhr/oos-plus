@@ -28,9 +28,10 @@ impl Ui {
         if let Some(sp) = self.studio.search() {
             match it {
                 Item::SrchSlope if super::addrail::polar(sp.kind) => return "Polarity",
+                Item::SrchSlope if sp.kind == TrigType::Window => return "Position",
                 Item::SrchLevel if sp.kind.two_level() => return "Upper",
                 Item::SrchTime if sp.kind == TrigType::Timeout => return "Timeout",
-                Item::SrchTime if matches!(sp.when, WhenKind::In | WhenKind::Out) => return "Lower limit",
+                Item::SrchTime if matches!(sp.when, WhenKind::In | WhenKind::Out) && !sp.eq => return "Lower limit",
                 _ => {}
             }
         }

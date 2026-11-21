@@ -756,7 +756,7 @@ side. A tap on a handle opens the sheet of its source.
 
 Add > Search puts a search of its own on a source: Search 1, and with Add again Search 2 and Search 3, each
 with its own type, source and settings. A new search looks for edges; the row **Type** of its sheet makes it one of
-five, which are the trigger's types of one source and take the trigger's settings:
+six, which are the trigger's types of one source and take the trigger's settings:
 
 | Type | It marks | Its rows |
 |---|---|---|
@@ -765,10 +765,13 @@ five, which are the trigger's types of one source and take the trigger's setting
 | Slope | the end of an edge whose time between the lower and the upper level meets the condition | Slope, Upper, Lower; When, Time |
 | Timeout | the moment the time has passed after an edge without another one | Slope, Level; Timeout |
 | Runt | the end of a pulse that passes one level and not the other | Polarity, Upper, Lower; When (Off: any width), Time |
+| Window | where the signal comes between the two levels (Enter), leaves them (Exit), or leaves them after a time between them that meets the condition (Inside) | Position, Upper, Lower; for Inside: When, Time |
 
-When is `>`, `<`, Inside or Outside; the last two have a lower and an upper limit. The times step as the trigger's do.
+When is `>`, `<`, Equal, Not equal, Inside or Outside; the last two have a lower and an upper limit. Equal is a time
+within 5 % of the limit (no two pulses of a record are the same to the sample), Not equal every other one; the
+trigger has no Equal and gets the two limits when the search is copied to it. The times step as the trigger's do.
 **Set to 50 %** puts the level in the middle of the signal, the two levels of Slope at 10 % and 90 % and those of
-Runt at 25 % and 75 %; choosing Slope or Runt does the same. Copy to trigger makes the trigger of the search's type
+Runt and Window at 25 % and 75 %; choosing one of these types does the same. Copy to trigger makes the trigger of the search's type
 with its settings, Copy from trigger takes the trigger's (its edge, where the trigger is of a type the search has
 not). The conditions are found in the samples by the code that finds the trigger in a stored record
 (`oos_dsp::trigger`), with a hysteresis of a tenth of a division. A search keeps its number and its colour while it is there (amber, blue, green;
@@ -779,7 +782,8 @@ number and count (`1 · 64000`); previous and next walk the events of the select
 search and opens the Search sheet for it, a tap on the badge of the selected search closes the sheet again. The badges
 share the room the one count had: the selected badge says less (the count as a number, then no type) before the bar
 shortens the names of its buttons, and a count of a part of the record keeps saying so.
-The sheet's row **Search** selects a search too; under it are the type, the source,
+The row **Marks** on the sheet's second tab hides the marks of a search and shows them again: a hidden search keeps
+its events, its count, its badge (dim) and its list, and previous and next go on. The sheet's row **Search** selects a search too; under it are the type, the source,
 the slope or polarity and the levels, on the second tab the time condition, the event the search stands on and the
 copies from and to the trigger, and at the foot **Event list** and Remove search. Event list (also Add > Results table > Search events) opens the table of
 the selected search's events, one row an event with its time, however many there are; a tap on a row moves the view

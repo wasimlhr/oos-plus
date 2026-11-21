@@ -248,6 +248,7 @@ pub(super) enum Item {
     SrchWhen,
     SrchTime,
     SrchTime2,
+    SrchShow,
     Srch50,
     SrchFromTrig,
     SrchToTrig,

@@ -6800,7 +6800,7 @@
    "title": "Search (mark events)",
    "intro": [
     {
-     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. A search of Studio is of one of five types, `EDGE`, `PULSe`, `SLOPe`, `TIMeout` and `RUNT`, with the settings the trigger has for that type under the same names (`:SEARch:PULSe:WHEN` as `:TRIGger:PULSe:WHEN`). A search has one set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the setting whatever the type is, and `:SEARch:MODE` changes the type alone. The events are found in the samples by the software trigger, with a hysteresis of a tenth of a division. The events of the decoders have their own commands in decode."
+     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. A search of Studio is of one of six types, `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT` and `WINDow`, with the settings the trigger has for that type under the same names (`:SEARch:PULSe:WHEN` as `:TRIGger:PULSe:WHEN`). A search has one set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the setting whatever the type is, and `:SEARch:MODE` changes the type alone. The events are found in the samples by the software trigger, with a hysteresis of a tenth of a division. The events of the decoders have their own commands in decode."
     },
     {
      "p": "Menu location: Decode and bus > Mark events, Search (type, source, slope or polarity, levels, 50 %, time condition, from / to trigger, event, event list, save events, remove)."
@@ -6838,7 +6838,7 @@
       [
        "<value>",
        "Text",
-       "`EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`: the type of the search. `SLOPe` and `RUNT` place their two levels on the signal when the search had one level. Without a search of Studio the answer is `EDGE`",
+       "`EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow`: the type of the search. `SLOPe`, `RUNT` and `WINDow` place their two levels on the signal when the search had one level. Without a search of Studio the answer is `EDGE`",
        "EDGE"
       ]
      ],
@@ -6961,7 +6961,7 @@
       [
        "<value>",
        "Text",
-       "`GREater`, `LESS`, `RANGe` (inside the two limits), `OUTside`",
+       "`GREater`, `LESS`, `EQUal` and `UNEQual` (within 5 % of the limit, or not), `RANGe` (inside the two limits), `OUTside`",
        "LESS"
       ]
      ],
@@ -7071,7 +7071,7 @@
       [
        "<value>",
        "Text",
-       "`GREater`, `LESS`, `RANGe` (inside the two limits), `OUTside`",
+       "`GREater`, `LESS`, `EQUal` and `UNEQual` (within 5 % of the limit, or not), `RANGe` (inside the two limits), `OUTside`",
        "LESS"
       ]
      ],
@@ -7269,7 +7269,7 @@
       [
        "<value>",
        "Text",
-       "`NONE` (any width), `GREater`, `LESS`, `RANGe` (inside the two limits), `OUTside`",
+       "`NONE` (any width), `GREater`, `LESS`, `EQUal` and `UNEQual` (within 5 % of the limit, or not), `RANGe` (inside the two limits), `OUTside`",
        "LESS"
       ]
      ],
@@ -7350,6 +7350,150 @@
       "- Origin: name not verified against the DHO guide"
      ],
      "returns": "On a freshly started default model the query returns `5.000000E-01`."
+    },
+    {
+     "header": ":SEARch:WINDow:SOURce",
+     "set": ":SEARch:WINDow:SOURce <value>",
+     "query": ":SEARch:WINDow:SOURce?",
+     "desc": "Sets or queries Source (menu: Search > Source).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Search source; the set makes the search a window search (the signal between two levels)",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`."
+    },
+    {
+     "header": ":SEARch:WINDow:POSition",
+     "set": ":SEARch:WINDow:POSition <value>",
+     "query": ":SEARch:WINDow:POSition?",
+     "desc": "Sets or queries Position (menu: Search > Position).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`ENTer` (the signal comes between the levels), `EXIT` (it leaves them), `TIMe` (it was between them for a time that meets `WHEN`; the mark is where it leaves)",
+       "ENT"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `ENT`."
+    },
+    {
+     "header": ":SEARch:WINDow:WHEN",
+     "set": ":SEARch:WINDow:WHEN <value>",
+     "query": ":SEARch:WINDow:WHEN?",
+     "desc": "Sets or queries When (menu: Search > When).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`GREater`, `LESS`, `EQUal`, `UNEQual`, `RANGe`, `OUTside`; a set makes the position `TIMe`",
+       "LESS"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `LESS`."
+    },
+    {
+     "header": ":SEARch:WINDow:TIME",
+     "set": ":SEARch:WINDow:TIME <value>",
+     "query": ":SEARch:WINDow:TIME?",
+     "desc": "Sets or queries Time (menu: Search > Time).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The limit, or the lower one of `RANGe` and `OUTside`",
+       "2.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `2.000000E-05`."
+    },
+    {
+     "header": ":SEARch:WINDow:TUPPer",
+     "set": ":SEARch:WINDow:TUPPer <value>",
+     "query": ":SEARch:WINDow:TUPPer?",
+     "desc": "Sets or queries Upper limit (menu: Search > Upper limit).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, above 0. The upper limit; with one limit the same as `TIME`",
+       "4.000000E-05"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `4.000000E-05`."
+    },
+    {
+     "header": ":SEARch:WINDow:ALEVel",
+     "set": ":SEARch:WINDow:ALEVel <value>",
+     "query": ":SEARch:WINDow:ALEVel?",
+     "desc": "Sets or queries Upper (menu: Search > Upper).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the upper level",
+       "1.500000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1.500000E+00`."
+    },
+    {
+     "header": ":SEARch:WINDow:BLEVel",
+     "set": ":SEARch:WINDow:BLEVel <value>",
+     "query": ":SEARch:WINDow:BLEVel?",
+     "desc": "Sets or queries Lower (menu: Search > Lower).",
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Volts, the lower level; not above the upper one",
+       "5.000000E-01"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `5.000000E-01`."
+    },
+    {
+     "header": ":SEARch:DISPlay",
+     "set": ":SEARch:DISPlay <value>",
+     "query": ":SEARch:DISPlay?",
+     "desc": "Sets or queries Marks (menu: Search > Marks).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The marks of the search are drawn (`1`) or hidden (`0`); a hidden search keeps its events, its count, its badge and its list",
+       "1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1`."
     },
     {
      "header": ":SEARch:COPY:TO",

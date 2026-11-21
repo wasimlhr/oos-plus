@@ -293,6 +293,24 @@ fn history_search(t: &mut T) {
     let sp = t.ui.studio.searches[0].unwrap();
     assert_eq!((sp.kind, sp.slope, sp.when, sp.t1, sp.t2, sp.level, sp.level2), (TrigType::Runt, 0, WhenKind::Out, 0.001, 0.004, 0.75, 0.25));
     assert_eq!(t.go(":SEAR2:MODE?"), "PULS", "Search 2 is as it was");
+    // Equal and Not equal, the Window type, and the marks of a search hidden
+    t.rt(":SEAR:PULS:WHEN EQU", ":SEAR:PULS:WHEN?", "EQU");
+    t.rt(":SEAR:PULS:WHEN UNEQ", ":SEAR:RUNT:WHEN?", "UNEQ");
+    assert!(t.ui.studio.searches[0].unwrap().eq);
+    t.rt(":SEAR:WIND:POS EXIT", ":SEAR:MODE?", "WIND");
+    assert_eq!(t.go(":SEAR:WIND:POS?"), "EXIT");
+    t.no(":SEAR:WIND:WHEN NONE", "-224");
+    t.rt(":SEAR:WIND:WHEN RANG", ":SEAR:WIND:POS?", "TIM");
+    assert_eq!(t.go(":SEAR:WIND:WHEN?"), "RANG");
+    t.rn(":SEAR:WIND:TIME 0.001", ":SEAR:WIND:TIME?", 0.001);
+    t.rn(":SEAR:WIND:TUPP 0.003", ":SEAR:WIND:TUPP?", 0.003);
+    t.rn(":SEAR:WIND:ALEV 0.5", ":SEAR:WIND:ALEV?", 0.5);
+    t.rn(":SEAR:WIND:BLEV 0.25", ":SEAR:WIND:BLEV?", 0.25);
+    t.rt(":SEAR:WIND:SOUR CHAN1", ":SEAR:WIND:SOUR?", "CHAN1");
+    assert_eq!(t.go(":SEAR:DISP?"), "1");
+    t.rt(":SEAR:DISP OFF", ":SEAR:DISP?", "0");
+    assert!(t.ui.studio.searches[0].unwrap().hidden && !t.ui.studio.searches[1].unwrap().hidden);
+    t.rt(":SEAR:DISP ON", ":SEAR:DISP?", "1");
     t.no(":SEAR2:MODE VIDeo", "-224");
     t.ui.m.layout = layout;
     t.go(":SEAR2:REM");

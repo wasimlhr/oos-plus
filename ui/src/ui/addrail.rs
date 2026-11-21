@@ -93,6 +93,10 @@ pub(super) struct SearchSpec {
     /// the time, or the lower limit of Inside and Outside; the upper limit
     pub t1: f32,
     pub t2: f32,
+    /// Equal (with `when` Inside) or Not equal (Outside): within `EQ_TOL` of `t1`, or not
+    pub eq: bool,
+    /// the marks are not drawn; the search, its count and its events stay
+    pub hidden: bool,
 }
 
 /// How many searches Studio has at once: Search 1 to 3. The top bar has room for three counts, and each has a colour
@@ -144,10 +148,15 @@ pub(super) struct RailGeo {
 const SLOPES: [&str; 3] = ["Rising", "Falling", "Either"];
 const POLS: [&str; 2] = ["Positive", "Negative"];
 /// What a search looks for: the trigger's types of one source that the software trigger finds in a record.
-pub(super) const SEARCH_TYPES: [TrigType; 5] = [TrigType::Edge, TrigType::Pulse, TrigType::Slope, TrigType::Timeout, TrigType::Runt];
+pub(super) const SEARCH_TYPES: [TrigType; 6] = [TrigType::Edge, TrigType::Pulse, TrigType::Slope, TrigType::Timeout, TrigType::Runt, TrigType::Window];
+/// Where a Window search marks: the signal comes between the two levels, leaves them, or was between them for a time.
+const WINS: [&str; 3] = ["Enter", "Exit", "Inside"];
+/// A time is equal to the limit within this part of it: no two pulses of a record are the same to the sample.
+pub(super) const EQ_TOL: f32 = 0.05;
 /// The time conditions by their number (`WhenKind as usize`, which a view stores), and their names in the rows.
 pub(super) const WHENS: [WhenKind; 5] = [WhenKind::Off, WhenKind::Gt, WhenKind::Lt, WhenKind::In, WhenKind::Out];
-const WHEN_NAMES: [&str; 5] = ["Off", ">", "<", "Inside", "Outside"];
+/// The names of the time conditions by their number (`SearchSpec::cond`).
+const COND_NAMES: [&str; 7] = ["Off", ">", "<", "Inside", "Outside", "Equal", "Not equal"];
 
 /// The types that look at pulses and have a polarity where the others have a slope.
 pub(super) fn polar(kind: TrigType) -> bool {
@@ -157,12 +166,44 @@ pub(super) fn polar(kind: TrigType) -> bool {
 impl SearchSpec {
     /// An edge search; the settings of the other types are the trigger's defaults.
     pub fn edge(src: WaveId, level: f32, slope: u8) -> Self {
-        SearchSpec { src, level, slope, kind: TrigType::Edge, level2: level, when: WhenKind::Lt, t1: 20e-6, t2: 40e-6 }
+        SearchSpec { src, level, slope, kind: TrigType::Edge, level2: level, when: WhenKind::Lt, t1: 20e-6, t2: 40e-6, eq: false, hidden: false }
     }
 
-    /// The names of the slope row: slopes, or the two polarities of Pulse and Runt.
+    /// The names of the slope row: slopes, the two polarities of Pulse and Runt, or where a Window search marks.
     pub fn slopes(&self) -> &'static [&'static str] {
-        if polar(self.kind) { &POLS } else { &SLOPES }
+        if self.kind == TrigType::Window { &WINS } else if polar(self.kind) { &POLS } else { &SLOPES }
+    }
+
+    /// The time condition as one number, which a view stores and the row lists: `WhenKind as u8`, 5 for Equal and
+    /// 6 for Not equal.
+    pub fn cond(&self) -> u8 {
+        match (self.eq, self.when) {
+            (true, WhenKind::In) => 5,
+            (true, WhenKind::Out) => 6,
+            _ => self.when as u8,
+        }
+    }
+
+    /// The search as one of `kind`. A Window search starts at Enter: the slope it had says nothing about a window.
+    pub fn of_kind(self, kind: TrigType) -> Self {
+        let slope = if kind == TrigType::Window && self.kind != kind { 0 } else { self.slope };
+        SearchSpec { kind, slope, ..self }
+    }
+
+    pub fn with_cond(self, cond: u8) -> Self {
+        let (when, eq) = match cond {
+            5 => (WhenKind::In, true),
+            6 => (WhenKind::Out, true),
+            c => (WHENS[(c as usize).min(4)], false),
+        };
+        SearchSpec { when, eq, ..self }
+    }
+
+    /// The conditions of the type in the order of the row: Equal and Not equal after the two of one limit.
+    pub fn conds(&self) -> Vec<u8> {
+        let mut v: Vec<u8> = self.whens().iter().map(|&w| w as u8).collect();
+        if let Some(at) = v.iter().position(|&c| c == WhenKind::Lt as u8) { v.splice(at + 1..at + 1, [5, 6]); }
+        v
     }
 
     /// The time conditions of the type: Off is Runt's alone (any runt), Timeout has its time and no condition.
@@ -170,6 +211,8 @@ impl SearchSpec {
         match self.kind {
             TrigType::Runt => &WHENS,
             TrigType::Pulse | TrigType::Slope => &WHENS[1..],
+            // (a Window search has a time only for how long the signal was inside)
+            TrigType::Window if self.slope == 2 => &WHENS[1..],
             _ => &[],
         }
     }
@@ -182,6 +225,7 @@ impl SearchSpec {
         if self.when == WhenKind::Off && self.kind != TrigType::Runt { self.when = WhenKind::Gt; }
         self.level2 = if self.kind.two_level() { self.level2.min(self.level) } else { self.level };
         if !(self.t1 > 0.0) { self.t1 = 20e-6; }
+        self.eq &= matches!(self.when, WhenKind::In | WhenKind::Out);
         self.t2 = self.t2.max(self.t1);
         self
     }
@@ -191,7 +235,7 @@ impl SearchSpec {
         use oos_dsp::trigger::{Slope as S, Trigger as T, When};
         let slope = [S::Rising, S::Falling, S::Either][self.slope.min(2) as usize];
         let pol = if self.slope == 1 { Pol::Neg } else { Pol::Pos };
-        let when = self.when.cond(self.t1, self.t2);
+        let when = if self.eq { self.when.cond(self.t1 * (1.0 - EQ_TOL), self.t1 * (1.0 + EQ_TOL)) } else { self.when.cond(self.t1, self.t2) };
         let timed = when.unwrap_or(When::Gt(0.0));
         let (src, level, lo, hi) = (0, self.level, self.level.min(self.level2), self.level.max(self.level2));
         match self.kind {
@@ -199,6 +243,10 @@ impl SearchSpec {
             TrigType::Slope => T::Slope { src, slope, lo, hi, when: timed },
             TrigType::Timeout => T::Timeout { src, slope, level, time: self.t1 as f64 },
             TrigType::Runt => T::Runt { src, pol, lo, hi, when },
+            TrigType::Window => {
+                use oos_dsp::trigger::WinWhen;
+                T::Window { src, lo, hi, when: [WinWhen::Enter, WinWhen::Exit, WinWhen::Inside(timed)][self.slope.min(2) as usize] }
+            }
             _ => T::Edge { src, slope, level },
         }
     }
@@ -938,14 +986,14 @@ impl Ui {
         // the time of the type, as the trigger menu has it: one limit, two for Inside and Outside, none for Runt's Off
         match sp {
             Some(s) if s.kind == TrigType::Timeout => v.push(Item::SrchTime),
-            Some(s) if s.kind != TrigType::Edge => {
+            Some(s) if !s.whens().is_empty() => {
                 v.push(Item::SrchWhen);
                 if s.when != WhenKind::Off { v.push(Item::SrchTime); }
-                if matches!(s.when, WhenKind::In | WhenKind::Out) { v.push(Item::SrchTime2); }
+                if matches!(s.when, WhenKind::In | WhenKind::Out) && !s.eq { v.push(Item::SrchTime2); }
             }
             _ => {}
         }
-        v.extend([Item::SrchEvent, Item::SrchFromTrig, Item::SrchToTrig, Item::SearchTable, Item::SrchRemove]);
+        v.extend([Item::SrchShow, Item::SrchEvent, Item::SrchFromTrig, Item::SrchToTrig, Item::SearchTable, Item::SrchRemove]);
         v
     }
 
@@ -986,7 +1034,7 @@ impl Ui {
     /// The selected search looks for `kind`. A type of two levels gets them from the signal when the search had one.
     pub(super) fn studio_search_set_kind(&mut self, kind: TrigType) {
         let Some(sp) = self.studio.search() else { return };
-        self.studio.search_put(SearchSpec { kind, ..sp });
+        self.studio.search_put(sp.of_kind(kind));
         if kind.two_level() && !sp.kind.two_level() { self.studio_search_set_50(); }
         self.studio.search_at[self.studio.search_sel] = 0;
     }
@@ -1000,14 +1048,14 @@ impl Ui {
     }
 
     /// The level to the middle of the source. The two levels of Slope go to 10 % and 90 % (what a rise time is
-    /// measured between), those of Runt to 25 % and 75 % (a pulse that ends between them is one).
+    /// measured between), those of Runt and Window to 25 % and 75 % (a pulse that ends between them is a runt).
     pub(super) fn studio_search_set_50(&mut self) {
         let Some(sp) = self.studio.search() else { return };
         let Some((lo, hi)) = self.studio_search_span(sp.src) else { return };
         let at = |f: f32| lo + f * (hi - lo);
         let (level, level2) = match sp.kind {
             TrigType::Slope => (at(0.9), at(0.1)),
-            TrigType::Runt => (at(0.75), at(0.25)),
+            TrigType::Runt | TrigType::Window => (at(0.75), at(0.25)),
             _ => (at(0.5), sp.level2),
         };
         self.studio.search_put(SearchSpec { level, level2, ..sp });
@@ -1099,8 +1147,9 @@ impl Ui {
         let src = match m.trigger_wave() { w @ WaveId::Ch(_) => w, _ => WaveId::Ch(m.trig_src.min(n_ch() - 1)) };
         let kind = if SEARCH_TYPES.contains(&m.trig_type) { m.trig_type } else { TrigType::Edge };
         let slope = match m.slope { Slope::Rise => 0, Slope::Fall => 1, _ => 2 };
-        let slope = if polar(kind) { (m.trig_pol == Pol::Neg) as u8 } else { slope };
-        SearchSpec { src, level: m.trig_level, slope, kind, level2: m.trig_level2, when: m.trig_when, t1: m.trig_t1, t2: m.trig_t2 }.fit()
+        let slope = if kind == TrigType::Window { m.win_mode as u8 } else if polar(kind) { (m.trig_pol == Pol::Neg) as u8 } else { slope };
+        let hidden = self.studio.search().is_some_and(|s| s.hidden);
+        SearchSpec { src, level: m.trig_level, slope, kind, level2: m.trig_level2, when: m.trig_when, t1: m.trig_t1, t2: m.trig_t2, eq: false, hidden }.fit()
     }
 
     fn studio_search_copy_from_trigger(&mut self) {
@@ -1117,7 +1166,11 @@ impl Ui {
         m.trig_level = sp.level;
         if sp.kind.two_level() { m.trig_level2 = sp.level2; }
         if sp.kind != TrigType::Edge { (m.trig_when, m.trig_t1, m.trig_t2) = (sp.when, sp.t1, sp.t2); }
-        if polar(sp.kind) {
+        // the trigger has no Equal: it gets the two limits Equal stands for
+        if sp.eq { (m.trig_t1, m.trig_t2) = (sp.t1 * (1.0 - EQ_TOL), sp.t1 * (1.0 + EQ_TOL)); }
+        if sp.kind == TrigType::Window {
+            m.win_mode = [WinMode::Enter, WinMode::Exit, WinMode::Inside][sp.slope.min(2) as usize];
+        } else if polar(sp.kind) {
             m.trig_pol = if sp.slope == 1 { Pol::Neg } else { Pol::Pos };
         } else {
             m.slope = match sp.slope { 0 => Slope::Rise, 1 => Slope::Fall, _ => Slope::Either };
@@ -1206,7 +1259,9 @@ impl Ui {
             let (r, col, on) = (shrink(r), SEARCH_COLS[slot], slot == self.studio.search_sel);
             chip(cv, r, if on { mix(BAR, col, 48) } else { BAR }, if on { col } else { mix(BAR, col, 120) });
             cv.set_clip(r.inset(2));
-            cv.text_in(&f.mb, r, 1, &text, col);
+            // (a search whose marks are hidden says so by a dim badge)
+            let hidden = self.studio.searches[slot].is_some_and(|s| s.hidden);
+            cv.text_in(&f.mb, r, 1, &text, if hidden { mix(BAR, col, 120) } else { col });
             cv.no_clip();
         }
     }
@@ -1229,7 +1284,7 @@ impl Ui {
 
     pub(super) fn addrail_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::SrchWhich | Item::SrchType | Item::SrchSrc | Item::SrchSlope | Item::SrchWhen => Kind::Choice,
+            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::SrchWhich | Item::SrchType | Item::SrchSrc | Item::SrchSlope | Item::SrchWhen | Item::SrchShow => Kind::Choice,
             Item::SrchLevel | Item::SrchLevel2 | Item::SrchTime | Item::SrchTime2 | Item::SrchEvent => Kind::Value,
             Item::CurRemove | Item::Srch50 | Item::SrchFromTrig | Item::SrchToTrig | Item::SrchRemove => Kind::Action,
             _ => return None,
@@ -1252,6 +1307,7 @@ impl Ui {
             Item::SrchWhen => "When",
             Item::SrchTime => "Time",
             Item::SrchTime2 => "Upper limit",
+            Item::SrchShow => "Marks",
             Item::Srch50 => "Set to 50 %",
             Item::SrchFromTrig => "Copy from trigger",
             Item::SrchToTrig => "Copy to trigger",
@@ -1274,7 +1330,8 @@ impl Ui {
             Item::SrchLevel | Item::SrchLevel2 => self.studio.search().map_or(String::new(), |s| {
                 si_short(if it == Item::SrchLevel { s.level } else { s.level2 } as f64, match s.src { WaveId::Ch(c) if c < n_ch() => self.m.unit(c), _ => "V" })
             }),
-            Item::SrchWhen => self.studio.search().map_or(String::new(), |s| WHEN_NAMES[s.when as usize].into()),
+            Item::SrchWhen => self.studio.search().map_or(String::new(), |s| COND_NAMES[s.cond() as usize].into()),
+            Item::SrchShow => if self.studio.search().is_some_and(|s| s.hidden) { "Hidden" } else { "Shown" }.into(),
             Item::SrchTime | Item::SrchTime2 => self.studio.search().map_or(String::new(), |s| si_short(if it == Item::SrchTime { s.t1 } else { s.t2 } as f64, "s")),
             Item::SrchEvent => {
                 let n = self.studio_search_events().len();
@@ -1294,7 +1351,8 @@ impl Ui {
             Item::SrchWhich => self.studio.search_list().map(|(i, _)| (i + 1).to_string()).collect(),
             Item::SrchType => SEARCH_TYPES.iter().map(|t| t.name().to_string()).collect(),
             Item::SrchSlope => self.studio.search().map_or(&SLOPES[..], |s| s.slopes()).iter().map(|s| s.to_string()).collect(),
-            Item::SrchWhen => self.studio.search().map_or(&[][..], |s| s.whens()).iter().map(|&w| WHEN_NAMES[w as usize].to_string()).collect(),
+            Item::SrchWhen => self.studio.search().map_or(Vec::new(), |s| s.conds()).iter().map(|&c| COND_NAMES[c as usize].to_string()).collect(),
+            Item::SrchShow => vec!["Shown".into(), "Hidden".into()],
             Item::SrchLevel | Item::SrchLevel2 | Item::SrchTime | Item::SrchTime2 | Item::SrchEvent => Vec::new(),
             _ => return None,
         })
@@ -1346,10 +1404,11 @@ impl Ui {
             },
             Item::SrchSlope => if let Some(sp) = self.studio.search() { self.studio.search_put(SearchSpec { slope: (sp.slope as i32 + d).rem_euclid(sp.slopes().len() as i32) as u8, ..sp }); },
             Item::SrchWhen => if let Some(sp) = self.studio.search() {
-                let all = sp.whens();
-                let at = all.iter().position(|&w| w == sp.when).unwrap_or(0) as i32;
-                self.studio.search_put(SearchSpec { when: all[(at + d).rem_euclid(all.len() as i32) as usize], ..sp });
+                let all = sp.conds();
+                let at = all.iter().position(|&c| c == sp.cond()).unwrap_or(0) as i32;
+                if !all.is_empty() { self.studio.search_put(sp.with_cond(all[(at + d).rem_euclid(all.len() as i32) as usize])); }
             },
+            Item::SrchShow => if let Some(sp) = self.studio.search() { if d.rem_euclid(2) != 0 { self.studio.search_put(SearchSpec { hidden: !sp.hidden, ..sp }); } },
             // the upper level takes the lower one along, the lower one stops at the upper (as the trigger's two do)
             Item::SrchLevel | Item::SrchLevel2 => if let Some(sp) = self.studio.search() {
                 let step = d as f32 * 0.1 * self.studio_search_vpd(sp.src);

@@ -571,7 +571,7 @@ impl Ui {
     /// searches that find the same edge both show. The selected search draws its lines down the plot.
     pub(super) fn draw_search(&self, cv: &mut Canvas) {
         if self.studio_search_marks().is_some() {
-            for (slot, _) in self.studio.search_list() {
+            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) {
                 let top = self.area.y + slot as i32 * SEARCH_LANE_H;
                 let events = self.studio_search_events_of(slot);
                 // under the lines of marks of every search
@@ -593,7 +593,7 @@ impl Ui {
             for column in Self::search_columns(events, o.w, view) { cv.vline(o.x + column, top, top + SEARCH_STRIP_H - 1, col); }
         };
         if self.studio_search_marks().is_some() {
-            for (slot, _) in self.studio.search_list() { line(slot, &self.studio_search_events_of(slot), super::addrail::SEARCH_COLS[slot]); }
+            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) { line(slot, &self.studio_search_events_of(slot), super::addrail::SEARCH_COLS[slot]); }
         } else if self.search_on {
             line(0, &self.search_events(), AMBER);
         }

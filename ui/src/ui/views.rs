@@ -141,10 +141,12 @@ impl Ui {
         for (i, q) in s.searches.iter().enumerate().filter_map(|(i, q)| Some((i, q.as_ref()?))) {
             let n = if i == 0 { String::new() } else { (i + 1).to_string() };
             // (the type and its settings follow the three an edge search has, which is all an older view names)
-            let more = if q.kind == TrigType::Edge { String::new() } else { format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.when as u8, q.t1, q.t2) };
+            let more = if q.kind == TrigType::Edge { String::new() } else { format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.cond(), q.t1, q.t2) };
             p.push(format!("search{n}={}/{}/{}{more}", q.src.token(), q.level, q.slope));
         }
         if s.search_sel != 0 { p.push(format!("searchsel={}", s.search_sel + 1)); }
+        let hidden: Vec<String> = s.search_list().filter(|(_, q)| q.hidden).map(|(i, _)| (i + 1).to_string()).collect();
+        if !hidden.is_empty() { p.push(format!("searchhide={}", hidden.join(","))); }
         if let Some(t) = s.sz.lane { p.push(format!("zlane={}", super::sharedzoom::trace_name(t))); }
         if !s.sz.ref_h.is_empty() {
             p.push(format!("refh={}", s.sz.ref_h.iter().map(|(i, (t, d))| format!("{}/{}/{}", i, t, d)).collect::<Vec<_>>().join(",")));
@@ -181,6 +183,7 @@ impl Ui {
         self.studio.searches = Default::default();
         self.studio.search_at = Default::default();
         self.studio.search_sel = 0;
+        let mut hide: Vec<usize> = Vec::new();
         self.studio.popup = None;
         self.studio.sz = Default::default();
         self.studio.badge_first = 0;
@@ -217,6 +220,7 @@ impl Ui {
                 "zoomtab" => {}
                 "query" => { self.studio.panel.query = v.replace('_', " "); self.studio.panel.searching = !self.studio.panel.query.is_empty(); }
                 "filter" => self.studio.filter = WaveId::parse(v).ok(),
+                "searchhide" => hide = v.split(',').filter_map(|n| n.parse::<usize>().ok()).collect(),
                 "searchsel" => self.studio.search_sel = v.parse::<usize>().map_or(0, |n| n.clamp(1, super::addrail::SEARCH_SLOTS) - 1),
                 "search" | "search2" | "search3" => {
                     let slot = k[6..].parse::<usize>().map_or(0, |n| n - 1);
@@ -227,9 +231,9 @@ impl Ui {
                             if let [kind, level2, when, t1, t2] = more {
                                 let num = |s: &str| s.parse::<f32>().ok().filter(|v| v.is_finite());
                                 let kind = super::addrail::SEARCH_TYPES.iter().find(|t| t.name() == *kind);
-                                let when = when.parse::<usize>().ok().and_then(|i| super::addrail::WHENS.get(i));
-                                if let (Some(&kind), Some(level2), Some(&when), Some(t1), Some(t2)) = (kind, num(level2), when, num(t1), num(t2)) {
-                                    sp = super::addrail::SearchSpec { kind, level2, when, t1, t2, ..sp };
+                                let cond = when.parse::<u8>().ok().filter(|&c| c <= 6);
+                                if let (Some(&kind), Some(level2), Some(cond), Some(t1), Some(t2)) = (kind, num(level2), cond, num(t1), num(t2)) {
+                                    sp = super::addrail::SearchSpec { kind, level2, t1, t2, ..sp }.with_cond(cond);
                                 }
                             }
                             if level.is_finite() { self.studio.searches[slot] = Some(sp.fit()); }
@@ -264,6 +268,9 @@ impl Ui {
                 "eleft" => self.workspace.eye_left = v == "1",
                 _ => {}
             }
+        }
+        for n in hide {
+            if let Some(sp) = self.studio.searches.get_mut(n.wrapping_sub(1)).and_then(Option::as_mut) { sp.hidden = true; }
         }
         self.studio.search_select(self.studio.search_sel);
     }

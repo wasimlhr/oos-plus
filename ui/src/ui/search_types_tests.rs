@@ -35,7 +35,7 @@ fn count(u: &mut Ui, f: impl FnOnce(&mut SearchSpec)) -> usize {
 #[test]
 fn every_type_finds_its_events() {
     let mut u = mixed();
-    assert_eq!(u.options(Item::SrchType), vec!["Edge", "Pulse", "Slope", "Timeout", "Runt"]);
+    assert_eq!(u.options(Item::SrchType), vec!["Edge", "Pulse", "Slope", "Timeout", "Runt", "Window"]);
     // 18 pulses and the narrow one, two edges each; the runt does not reach the level
     assert_eq!(u.studio_search_events().len(), 38);
     u.select_option(Item::SrchType, "Pulse");
@@ -79,12 +79,12 @@ fn the_sheet_has_the_rows_of_the_type_and_they_fit() {
     use Item::*;
     let mut u = mixed();
     let rows = |u: &Ui| u.addrail_search_items();
-    assert_eq!(rows(&u), vec![SrchWhich, SrchType, SrchSrc, SrchSlope, SrchLevel, Srch50, SrchEvent, SrchFromTrig, SrchToTrig, SearchTable, SrchRemove]);
+    assert_eq!(rows(&u), vec![SrchWhich, SrchType, SrchSrc, SrchSlope, SrchLevel, Srch50, SrchShow, SrchEvent, SrchFromTrig, SrchToTrig, SearchTable, SrchRemove]);
     assert_eq!((u.item_label(SrchSlope), u.item_label(SrchLevel)), ("Slope", "Level"));
     u.select_option(SrchType, "Pulse");
     assert!(rows(&u).contains(&SrchWhen) && rows(&u).contains(&SrchTime) && !rows(&u).contains(&SrchTime2) && !rows(&u).contains(&SrchLevel2));
     assert_eq!((u.item_label(SrchSlope), u.options(SrchSlope)), ("Polarity", vec!["Positive".to_string(), "Negative".to_string()]));
-    assert_eq!(u.options(SrchWhen), vec![">", "<", "Inside", "Outside"]);
+    assert_eq!(u.options(SrchWhen), vec![">", "<", "Equal", "Not equal", "Inside", "Outside"]);
     u.select_option(SrchWhen, "Inside");
     assert!(rows(&u).contains(&SrchTime2));
     assert_eq!((u.item_label(SrchTime), u.item_label(SrchTime2)), ("Lower limit", "Upper limit"));
@@ -147,7 +147,7 @@ fn the_trigger_gives_and_takes_every_type_of_the_search() {
     let sp = u.studio.search().unwrap();
     assert_eq!((sp.kind, sp.slope, sp.when, sp.t1, sp.level), (TrigType::Pulse, 0, WhenKind::Lt, 100e-6, 1.5));
     assert_eq!(u.studio_search_events().len(), 1);
-    u.m.trig_type = TrigType::Window;
+    u.m.trig_type = TrigType::Delay;
     u.m.slope = Slope::Fall;
     u.activate(Item::SrchFromTrig);
     assert_eq!((u.studio.search().unwrap().kind, u.studio.search().unwrap().slope), (TrigType::Edge, 1));
@@ -188,6 +188,114 @@ fn the_types_search_a_megapoint_once() {
         eprintln!("{kind:?}: {n} events in {first:?}, asked again in {again:?}");
         assert!(again < first / 20 || again < std::time::Duration::from_micros(50), "{kind:?}: {again:?} of {first:?}");
         // (a clean square has no runt)
-        assert_eq!(n, match kind { TrigType::Edge => 64_000, TrigType::Runt => 0, _ => 32_000 }, "{kind:?}");
+        assert_eq!(n, match kind { TrigType::Edge | TrigType::Window => 64_000, TrigType::Runt => 0, _ => 32_000 }, "{kind:?}");
     }
+}
+
+#[test]
+fn a_window_search_marks_where_the_signal_comes_between_the_levels_leaves_them_or_stayed() {
+    let mut u = mixed();
+    u.select_option(Item::SrchType, "Window");
+    let sp = u.studio.search().unwrap();
+    assert!((sp.level - 2.25).abs() < 0.01 && (sp.level2 - 0.75).abs() < 0.01, "25 % and 75 %: {sp:?}");
+    assert_eq!((u.item_label(Item::SrchSlope), u.options(Item::SrchSlope)), ("Position", vec!["Enter".to_string(), "Exit".to_string(), "Inside".to_string()]));
+    // every edge of the 19 pulses comes between the levels and leaves them; the runt comes in and goes back
+    assert_eq!(u.value(Item::SrchSlope), "Enter");
+    assert_eq!(u.studio_search_events().len(), 39);
+    assert!(!u.addrail_search_items().contains(&Item::SrchWhen), "a time only for Inside");
+    u.select_option(Item::SrchSlope, "Exit");
+    assert_eq!(u.studio_search_events().len(), 39);
+    // between the levels for longer than 30 us: the slow edge (50 us) and the runt (its whole width)
+    u.select_option(Item::SrchSlope, "Inside");
+    assert!(u.addrail_search_items().contains(&Item::SrchWhen) && u.addrail_search_items().contains(&Item::SrchTime));
+    assert_eq!(count(&mut u, |s| (s.when, s.t1) = (WhenKind::Gt, 30e-6)), 2);
+    assert_eq!(count(&mut u, |s| s.when = WhenKind::Lt), 37);
+    // the trigger takes it and gives it back
+    u.activate(Item::SrchToTrig);
+    assert_eq!((u.m.trig_type, u.m.win_mode, u.m.trig_when), (TrigType::Window, WinMode::Inside, WhenKind::Lt));
+    u.m.win_mode = WinMode::Exit;
+    u.activate(Item::SrchFromTrig);
+    assert_eq!((u.studio.search().unwrap().kind, u.value(Item::SrchSlope)), (TrigType::Window, "Exit".to_string()));
+    let spec = u.sheet_spec(MenuId::Search).unwrap();
+    assert!(spec.tabs.iter().all(|t| t.rows.len() <= 7));
+}
+
+#[test]
+fn equal_and_not_equal_are_within_a_twentieth_of_the_time_or_not() {
+    let mut u = mixed();
+    u.select_option(Item::SrchType, "Pulse");
+    count(&mut u, |s| (s.slope, s.t1, s.t2) = (0, 50e-6, 80e-6));
+    u.select_option(Item::SrchWhen, "Equal");
+    let sp = u.studio.search().unwrap();
+    assert_eq!((sp.cond(), sp.eq, u.value(Item::SrchWhen)), (5, true, "Equal".to_string()));
+    assert_eq!(u.studio_search_events().len(), 1, "the pulse of 50 us");
+    // one time, named Time: the upper limit is not asked for
+    assert!(!u.addrail_search_items().contains(&Item::SrchTime2));
+    assert_eq!(u.item_label(Item::SrchTime), "Time");
+    assert_eq!(count(&mut u, |s| s.t1 = 53e-6), 0, "6 % off");
+    assert_eq!(count(&mut u, |s| s.t1 = 52e-6), 1, "4 % off");
+    // (the pulse behind the slow edge is 9 % narrower at the level)
+    assert_eq!(count(&mut u, |s| s.t1 = 500e-6), 17);
+    u.select_option(Item::SrchWhen, "Not equal");
+    assert_eq!((u.studio.search().unwrap().cond(), u.studio_search_events().len()), (6, 2));
+    // the row steps through them between the conditions of one limit and those of two
+    u.adjust(Item::SrchWhen, 1);
+    assert_eq!(u.value(Item::SrchWhen), "Inside");
+    assert!(u.addrail_search_items().contains(&Item::SrchTime2) && !u.studio.search().unwrap().eq);
+    u.adjust(Item::SrchWhen, -2);
+    assert_eq!(u.value(Item::SrchWhen), "Equal");
+    // the trigger has no Equal: it gets the two limits
+    count(&mut u, |s| s.t1 = 100e-6);
+    u.activate(Item::SrchToTrig);
+    assert_eq!(u.m.trig_when, WhenKind::In);
+    assert!((u.m.trig_t1 - 95e-6).abs() < 1e-9 && (u.m.trig_t2 - 105e-6).abs() < 1e-9, "{} {}", u.m.trig_t1, u.m.trig_t2);
+    // a view keeps it
+    let text = u.view_ui_text();
+    let mut v = mixed();
+    v.view_ui_apply(&text);
+    assert_eq!(v.studio.searches, u.studio.searches);
+}
+
+#[test]
+fn a_search_whose_marks_are_hidden_keeps_its_events_its_badge_and_its_place() {
+    use super::addrail::SEARCH_COLS;
+    use super::search_dense_tests::px;
+    let mut u = mixed();
+    u.m.tscale = tscales().iter().position(|&t| (t - 1e-3).abs() < 1e-9).unwrap();
+    u.m.delay = 0.0;
+    let mut cv = Canvas::new(W, H);
+    let amber = |u: &mut Ui, cv: &mut Canvas| {
+        for _ in 0..4 { u.step(0.05); }
+        u.render(cv);
+        let a = u.area;
+        (a.x..a.right()).flat_map(|x| (a.y..a.bottom()).map(move |y| (x, y))).filter(|&(x, y)| px(cv, x, y) == SEARCH_COLS[0]).count()
+    };
+    // (the trigger's marker is amber too: the marks are what a search adds to it)
+    let shown = amber(&mut u, &mut cv);
+    assert_eq!(u.options(Item::SrchShow), vec!["Shown", "Hidden"]);
+    u.select_option(Item::SrchShow, "Hidden");
+    assert!(u.studio.search().unwrap().hidden);
+    let hidden = amber(&mut u, &mut cv);
+    assert!(hidden + 50 < shown, "no mark and no line in the plot: {hidden} of {shown}");
+    // the search is there: its events, its badge, previous and next
+    assert_eq!(u.studio_search_events().len(), 38);
+    assert_eq!(u.studio_search_badges().len(), 1);
+    u.studio_search_go(1);
+    assert_eq!(u.studio.search_at[0], 1);
+    // a second search keeps its own line under the hidden one's
+    u.studio_search_add(Some(WaveId::Ch(1)));
+    assert!(!u.studio.search().unwrap().hidden && u.studio.searches[0].unwrap().hidden);
+    // a view keeps it, and the copy from the trigger does not show the marks again
+    let text = u.view_ui_text();
+    assert!(text.split_whitespace().any(|w| w == "searchhide=1"), "{text}");
+    let mut v = mixed();
+    v.view_ui_apply(&text);
+    assert_eq!(v.studio.searches, u.studio.searches);
+    u.studio_search_select(0);
+    u.activate(Item::SrchFromTrig);
+    assert!(u.studio.search().unwrap().hidden);
+    // (the view has moved to an event by now: the marks are counted again)
+    let hidden = amber(&mut u, &mut cv);
+    u.select_option(Item::SrchShow, "Shown");
+    assert!(amber(&mut u, &mut cv) > hidden + 20);
 }
