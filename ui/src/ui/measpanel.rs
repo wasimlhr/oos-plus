@@ -545,7 +545,7 @@ impl Ui {
                 let range = self.studio.panel.stats_mode == 2;
                 let (a, b) = if range { (cell(st.map(|s| s.1)), cell(st.map(|s| s.2))) } else { (cell(st.map(|s| s.0)), cell(st.map(|s| s.3))) };
                 let line = Self::card_stats_line(&f.s, range, row.unit, &a, &b, room);
-                let n = self.mstat.get(i).map_or(0, |s| s.n);
+                let n = self.results.rows.get(i).map_or(0, |s| s.n);
                 let count = if n > 0 { format!("n {n}") } else { String::new() };
                 let with_count = !count.is_empty() && f.s.width(&line) + 10 + f.s.width(&count) <= room;
                 cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8 - if with_count { f.s.width(&count) + 8 } else { 0 }, 18));

@@ -174,9 +174,9 @@ pub fn run(mut ui: Ui, args: &[String]) {
     let mut cv = Canvas::new(ui::W, ui::H);
     let mut front_window: Option<front_window::FrontWindow> = None;
     // the layout and the Studio view come back after a restart: the setup of the unit, in the storage folder
-    let mut setup = crate::store::SetupFile::new(&ui.files.dir);
+    let mut setup = crate::store::readers::SetupFile::new(&ui.files.dir);
     match setup.restore(&mut ui) {
-        Ok(true) => eprintln!("oos-ui: settings restored from {}", ui.files.dir.join(crate::store::SetupFile::NAME).display()),
+        Ok(true) => eprintln!("oos-ui: settings restored from {}", ui.files.dir.join(crate::store::readers::SetupFile::NAME).display()),
         Ok(false) => {}
         Err(e) => eprintln!("oos-ui: {}", e),
     }
@@ -190,7 +190,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
     let mut was_right = false;
     let controls = panel::controls();
     let mut shot_n = 0u32;
-    while win.is_open() && !ui.quit {
+    while win.is_open() && !ui.asks.quit {
         if front_window.as_mut().is_some_and(|panel| !panel.poll(&mut ui)) {
             front_window = None;
             ui.workspace.desktop_panel = Some(false);
@@ -237,7 +237,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
                         if key == Key::M && !repeat { ui.workflow_command("measure"); }
                         else if key == Key::F12 && !repeat {
                             let path = crate::store::next_name(&ui.files.dir, "shot", "png");
-                            ui.shot_request = Some(path.to_string_lossy().into_owned());
+                            ui.asks.shot = Some(path.to_string_lossy().into_owned());
                         } else if !repeat || matches!(key, Key::Up | Key::Down | Key::Left | Key::Right | Key::PageUp | Key::PageDown) {
                             if let Some(command) = key_cmd(key) { cmd::run(&mut ui, command); }
                         }
@@ -313,7 +313,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
         last = Instant::now();
         ui.step(dt);
         ui.render(&mut cv);
-        if let Some(p) = ui.shot_request.take() {
+        if let Some(p) = ui.asks.shot.take() {
             crate::save_shot(&mut ui, &cv, p, &mut shot_n);
         }
         if let Err(e) = win.update_with_buffer(&cv.px, ui::W as usize, ui::H as usize) {

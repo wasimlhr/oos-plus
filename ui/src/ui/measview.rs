@@ -69,7 +69,7 @@ impl Ui {
 
     /// Mean, minimum, maximum, sigma and count of row `i`; None until it has a value.
     pub(super) fn studio_stat_values(&self, i: usize) -> Option<(f64, f64, f64, f64, u64)> {
-        let st = self.mstat.get(i).copied().filter(|s| s.n > 0)?;
+        let st = self.results.rows.get(i).copied().filter(|s| s.n > 0)?;
         let mean = st.sum / st.n as f64;
         let sd = (st.sumsq / st.n as f64 - mean * mean).max(0.0).sqrt();
         Some((mean, st.min, st.max, sd, st.n))

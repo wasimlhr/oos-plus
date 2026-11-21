@@ -456,7 +456,7 @@ impl Ui {
             .enumerate()
             .filter(|(_, r)| !self.meas_row_hidden(r))
             .map(|(i, r)| {
-                let st = self.mstat.get(i).copied().unwrap_or_default();
+                let st = self.results.rows.get(i).copied().unwrap_or_default();
                 let n = st.n.max(1) as f64;
                 let mean = st.sum / n;
                 let sd = (st.sumsq / n - mean * mean).max(0.0).sqrt();

@@ -164,7 +164,7 @@ impl Ui {
     fn rowf_stat(&self) -> Option<(MStat, tools::MeasRow)> {
         let i = self.meas_own.dialog? as usize;
         let row = self.meas_rows().into_iter().nth(i)?;
-        Some((self.mstat.get(i).copied().unwrap_or_default(), row))
+        Some((self.results.rows.get(i).copied().unwrap_or_default(), row))
     }
 
     /// Every item of the card, for the dialog of Minimal and Default.

@@ -154,9 +154,9 @@ fn ui_fields(u: &Ui) -> BTreeMap<&'static str, String> {
     v.insert("dialog", format!("{:?}", u.dialog));
     v.insert("numpad", format!("{}", u.numpad.is_some()));
     v.insert("store_slot", format!("{}", u.files.slot));
-    v.insert("shot_request", format!("{:?}", u.shot_request));
+    v.insert("shot_request", format!("{:?}", u.asks.shot));
     v.insert("power_dlg", format!("{}", u.power.open));
-    v.insert("panel_tx", format!("{}", u.panel_tx.len()));
+    v.insert("panel_tx", format!("{}", u.asks.panel.len()));
     v.insert("table", format!("{}", u.table.kind.is_some()));
     v.insert("cat", format!("{}/{}/{}", u.cat.tab, u.cat.sel, u.cat.scroll));
     v.insert("single_armed", format!("{}", u.single_armed));
@@ -1097,7 +1097,7 @@ fn utility_probe() {
                 let Some(c) = c else { println!("FC {:?} {:?}: not on the page", l, it); continue };
                 if by_tap { tap_c(&mut u, &c, "tap"); } else { u.activate(it); frame(&mut u); }
                 let t = u.toast.as_ref().map(|t| t.0.clone());
-                println!("FC {:?} {:?} tap={} rect {:?} -> menu {:?}/{} dialog {} toast {:?} shot {:?}", l, it, by_tap, c.rect, u.menu, u.menu_open, u.dialog.is_some() || u.sysinfo.rows.is_some(), t, u.shot_request);
+                println!("FC {:?} {:?} tap={} rect {:?} -> menu {:?}/{} dialog {} toast {:?} shot {:?}", l, it, by_tap, c.rect, u.menu, u.menu_open, u.dialog.is_some() || u.sysinfo.rows.is_some(), t, u.asks.shot);
             }
         }
     }
