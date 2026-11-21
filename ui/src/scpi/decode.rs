@@ -156,7 +156,8 @@ pub(super) fn parse_proto(arg: &str) -> Option<Proto> {
 }
 
 impl Scpi {
-    /// One of the four decoders. RS232 is the screen's UART. The Events pane is one list for every bus.
+    /// One of the four decoders. RS232 is the screen's UART. The Event table (Default) or the Events pane (Minimal,
+    /// Studio) is one list for every bus.
     pub(super) fn bus_cmd(&mut self, ui: &mut Ui, k: usize, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
         let n0 = n.first().copied().unwrap_or("");
         let cfg = ui.m.dec_slot(k);
@@ -206,11 +207,11 @@ impl Scpi {
         }
         if n.len() == 1 && kw(n0, "EVENt") {
             if query {
-                return t(if ui.events_pane_on() { "1" } else { "0" });
+                return t(if ui.decode_table_on() { "1" } else { "0" });
             }
             return match parse_bool(arg) {
                 Some(on) => {
-                    ui.set_events_pane(on);
+                    ui.set_decode_table(on);
                     ui.mark_changed();
                     None
                 }

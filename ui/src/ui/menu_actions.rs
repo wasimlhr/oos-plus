@@ -1132,11 +1132,7 @@ impl Ui {
                     self.toast("Counter cleared");
                 }
             }
-            Item::DecTable => {
-                let on = self.events_pane_on();
-                self.set_events_pane(!on);
-                self.close_menu();
-            }
+            Item::DecTable => self.decode_table_toggle(),
             Item::DecThrMid => self.dec_threshold_to_middle(),
             Item::DecExport => self.decode_export(),
             Item::SearchTable => self.table_toggle(tables::TableKind::Search),

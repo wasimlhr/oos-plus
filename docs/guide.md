@@ -171,13 +171,17 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
 - Four decoders at once, with a list of events you can export and that jumps to an event; DCC lists one command per row
   ("Loco 5  Fwd 50/128"). The Events pane lists the record as messages, single fields or lines of text, with the
   time, the length, the text, the bytes in hex and, where a check failed, the number of errors in red; Errors only
-  leaves the rows that failed
+  leaves the rows that failed. These are Minimal's and Studio's: the Default layout keeps upstream's, where
+  Decode > Event table opens a table over the plot (time, decoder, field; a tap on a row of a stopped scope goes to
+  it) and the Events pane is a list of the fields in one or two columns
 - A band per decoder on the plot, its name in the colour of its source: a box per field with its value, and at a
   slow time base one box per message with as much of its text as fits (a UART line set to ASCII reads as
   `Hello World\r\n`); a message with a failed check has a red edge. Zoomed in to single bits, a UART or I2C band
   has a row of its bits (start, data, parity, stop; for I2C the bits of a byte, read or write, and the
   acknowledge) and marks where each was sampled. An I2C byte that was not acknowledged is an error, except the one
-  a controller ends a read with; an address of ten bits is one field ("2A5 W")
+  a controller ends a read with; an address of ten bits is one field ("2A5 W"). The Default layout keeps upstream's
+  band: the decoder's number, protocol and source dim at its left ("1 UART CH1"), a box per field, the band there
+  while its source channel is off, and " N" on the byte that ends an I2C read
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. FlexRay is read at the
   Bit rate set (10, 5 or 2.5 Mbit/s), on either channel. A MIL-STD-1553 word says what it is: a command its
