@@ -142,7 +142,7 @@ coupling, probe, bias, deskew and label (above and below) are written by hand.
 <!-- settings:channel:begin -->
 | Command | Takes | Setup key | Channel menu | What it does |
 | --- | --- | --- | --- | --- |
-| `:CHANnel<n>:DISPlay[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `ch<n>.on` | Display | Shows the channel. The menu switches on only the inputs the model has. |
+| `:CHANnel<n>:DISPlay[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `ch<n>.on` | Channel | Switches the channel on or off (acquired, measured, analysed); Hide trace only hides its trace. The menu switches on only the inputs the model has. |
 | `:CHANnel<n>:BWLimit[?]` | `OFF|20M|AUTO` or a supported filter name | `ch<n>.bw` | Bandwidth | The channel's bandwidth limit. OOS filtering extends stock choices. |
 | `:CHANnel<n>:INVert[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `ch<n>.invert` | Invert | Inverts the channel. |
 | `:CHANnel<n>:VERNier[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `fine_v` | Fine scale | Fine vertical control, one switch for every channel: the scale steps through the rows of the calibration instead of 1-2-5. Off keeps a fine scale until the next coarse step. |

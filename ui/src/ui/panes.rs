@@ -136,7 +136,17 @@ impl Ui {
         let zoom = self.zoom_btn().1;
         let mine = zoom.y >= a.y && zoom.bottom() <= a.bottom() && zoom.x >= a.x && zoom.right() <= a.right();
         let below = if mine { (zoom.bottom() + 2).max(a.y + 46) } else { a.y + 46 };
-        let sort = if pane { Rect::new(col_x, a.y + 2, PEAK_W - 50, 36) } else { Rect::new(col_x, below, PEAK_W - 6, 36) };
+        // without those buttons the overflow button is alone at the top of the column: the sort button goes on its
+        // line, left of it (the owner: both on one line)
+        let more = self.view_btn();
+        let beside = !mine && more.y >= a.y && more.bottom() <= a.y + 46 && more.x > col_x && more.right() <= a.right();
+        let sort = if pane {
+            Rect::new(col_x, a.y + 2, PEAK_W - 50, 36)
+        } else if beside {
+            Rect::new(col_x, more.y, more.x - 6 - col_x, more.h)
+        } else {
+            Rect::new(col_x, below, PEAK_W - 6, 36)
+        };
         // a fixed header row of its own (Frequency / Level) between the button and the first line
         let y = sort.y + sort.h + 2 + PEAK_HEAD;
         SpecBox { title, plot, sort, list: Rect::new(col_x, y, PEAK_W - 6, a.y + a.h - y) }
@@ -196,12 +206,15 @@ impl Ui {
         }
         let (f0, f1) = (sp.f0, sp.freq(sp.dbv.len().saturating_sub(1)));
         // from the right, so the end of the band always has its label; one that would touch the last is left out
+        // and none under the grip of a dock divider (on a unit, 2026-11-20, "200 MHz" lay under it)
+        let grips = self.dock_handles();
         let mut free = g.x + g.w;
         for i in (0..=HDIV as i32).rev() {
             let s = si_short(f0 + (f1 - f0) * i as f64 / HDIV as f64, "Hz");
             let w = f.s.width(&s);
             let x = (g.x + i * (g.w - 1) / HDIV as i32 - w / 2).clamp(g.x - AXIS_W + 2, (g.x + g.w - w).max(g.x - AXIS_W + 2));
-            if x + w + 10 <= free || i == HDIV as i32 {
+            let under = grips.iter().any(|h| overlaps(*h, Rect::new(x, g.y + g.h + 1, w, 14)));
+            if (x + w + 10 <= free || i == HDIV as i32) && !under {
                 cv.text(&f.s, x, g.y + g.h + 13, &s, AXIS_TEXT);
                 free = x;
             }

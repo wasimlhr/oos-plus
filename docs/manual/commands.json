@@ -1405,7 +1405,7 @@
      "header": ":CHANnel<n>:DISPlay",
      "set": ":CHANnel<n>:DISPlay <value>",
      "query": ":CHANnel<n>:DISPlay?",
-     "desc": "Sets or queries Display (menu: Channel > Display).",
+     "desc": "Sets or queries Channel (menu: Channel > Channel).",
      "params": [
       [
        "<n>",

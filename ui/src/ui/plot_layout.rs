@@ -271,7 +271,26 @@ impl Ui {
         if self.m.zoom || self.view_on() || self.eye_open() {
             1
         } else {
-            self.m.win_layout.count()
+            // a split whose sources are all in one window is that window alone, not one beside an empty one (on a
+            // unit, 2026-11-20: Overlay with Windows = Rows and only CH2 on drew an empty second lane)
+            let n = self.m.win_layout.count();
+            let mut used = [false; 4];
+            for s in self.trace_sources() {
+                let w = match s {
+                    workspace::Trace::Channel(c) => self.m.ch_win[c],
+                    workspace::Trace::Reference(i) => self.m.ref_win[i],
+                    workspace::Trace::Math(k) => self.m.math_win[k],
+                };
+                used[w.min(n - 1).min(3)] = true;
+            }
+            if self.m.la_on() {
+                used[self.m.la_win.min(n - 1).min(3)] = true;
+            }
+            if n > 1 && used.iter().filter(|&&u| u).count() <= 1 {
+                1
+            } else {
+                n
+            }
         }
     }
 
@@ -513,14 +532,19 @@ impl Ui {
             if y + 10 > b.y && y - 10 < b.bottom() && x1 + MARK_W > b.x { x1 = x1.min(b.x - MARK_W - 4); }
         }
         // a divider handle of the dock lies over the right edge of the waveform: the tag stays left of it
-        if self.dock_on() {
-            for d in &self.dock_layout().dividers {
-                let (cx, cy) = (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2);
-                let h = if d.dir == dock::Dir::H { Rect::new(cx - 12, cy - 22, 24, 44) } else { Rect::new(cx - 22, cy - 12, 44, 24) };
-                if y + 10 > h.y && y - 10 < h.bottom() && x1 + MARK_W > h.x && x1 < h.right() { x1 = h.x - MARK_W - 2; }
-            }
+        for h in self.dock_handles() {
+            if y + 10 > h.y && y - 10 < h.bottom() && x1 + MARK_W > h.x && x1 < h.right() { x1 = h.x - MARK_W - 2; }
         }
         x1
+    }
+
+    /// The grips of the dock's dividers, where they lie over the views beside them; none without the dock.
+    pub(super) fn dock_handles(&self) -> Vec<Rect> {
+        if !self.dock_on() { return Vec::new(); }
+        self.dock_layout().dividers.iter().map(|d| {
+            let (cx, cy) = (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2);
+            if d.dir == dock::Dir::H { Rect::new(cx - 12, cy - 22, 24, 44) } else { Rect::new(cx - 22, cy - 12, 44, 24) }
+        }).collect()
     }
 
     pub(super) fn draw_zoom_btn(&self, cv: &mut Canvas) {

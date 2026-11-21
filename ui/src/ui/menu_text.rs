@@ -12,6 +12,9 @@ impl Ui {
         if it == Item::StoreRunScpi && self.scpi_replaying {
             return "Stop SCPI file";
         }
+        if it == Item::UpperProbe {
+            return self.upper_button();
+        }
         if it == Item::SimPlay {
             if self.sim_generating() {
                 return "Cancel generation";

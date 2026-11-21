@@ -10,8 +10,8 @@ pub(super) const TILE_H: i32 = 84;
 pub(super) const TILE_COLS: i32 = 2;
 /// Height of the heading of a group of tiles.
 const HEAD_H: i32 = 26;
-const CARD_W: i32 = 470;
-const CARD_H: i32 = 392;
+const CARD_W: i32 = 520;
+const CARD_H: i32 = 460;
 
 impl Ui {
     /// The "i" of a tile: a 40 px target in its top right corner.
@@ -111,6 +111,25 @@ impl Ui {
         } else { self.toast("No description for this measurement"); }
     }
 
+    /// The card's three parts, wrapped in the largest body font whose text ends above the action button (the owner:
+    /// the text can be bigger), with the line step and where the last line ends.
+    pub(super) fn info_card_text(f: &crate::font::Fonts, cat: Cat, card: Rect) -> (&Font, i32, Vec<(&'static str, Vec<String>)>) {
+        let info = cat_info(cat);
+        let texts = [("What it is", info.blurb.to_string()), ("How it is computed", info.how), ("Settings", info.settings)];
+        let bottom = Self::info_card_action(card).y - 6;
+        let mut out = (&f.s, f.s.size + 4, Vec::new());
+        for body in [&f.m, &f.s] {
+            let step = body.size + 5;
+            let parts: Vec<_> = texts.iter().map(|(h, t)| (*h, super::meascatalog::wrap_lines(body, t, card.w - 32))).collect();
+            let h: i32 = parts.iter().map(|(_, l)| 16 + step * (l.len() as i32 + 1)).sum();
+            out = (body, step, parts);
+            if card.y + 108 + h <= bottom {
+                break;
+            }
+        }
+        out
+    }
+
     pub(super) fn draw_info_card(&self, cv: &mut Canvas) {
         let Some(cat) = self.studio.md.info else { return };
         let f = self.fonts();
@@ -124,23 +143,23 @@ impl Ui {
         cv.round(pic.inset(1), 5, BG, 255);
         super::caticons::draw_cat_icon(cv, f, pic.inset(6), cat, TEXT, ACCENT);
         cv.text(&f.lb, pic.right() + 16, card.y + 38, info.name, TEXT);
-        cv.text(&f.s, pic.right() + 16, card.y + 62, &format!("Unit: {}", if info.unit.is_empty() { "none" } else { info.unit }), DIM);
-        cv.text(&f.s, pic.right() + 16, card.y + 80, &info.sources, DIM);
+        cv.text(&f.m, pic.right() + 16, card.y + 64, &format!("Unit: {}", if info.unit.is_empty() { "none" } else { info.unit }), DIM);
+        cv.text(&f.m, pic.right() + 16, card.y + 86, &info.sources, DIM);
         let close = Self::info_card_close(card);
         btn(cv, close.inset(4), BTN, BTN_BORDER);
         cv.line(close.x + 15, close.y + 15, close.right() - 15, close.bottom() - 15, TEXT);
         cv.line(close.x + 15, close.bottom() - 15, close.right() - 15, close.y + 15, TEXT);
-        let w = card.w - 32;
+        let (body, step, parts) = Self::info_card_text(f, cat, card);
         let mut y = card.y + 108;
-        for (head, body) in [("What it is", info.blurb.to_string()), ("How it is computed", info.how.clone()), ("Settings", info.settings.clone())] {
-            y += 8;
-            cv.text(&f.mb, card.x + 16, y, head, TEXT);
-            y += 8;
-            for l in super::meascatalog::wrap_lines(&f.s, &body, w) {
-                y += 16;
-                cv.text(&f.s, card.x + 16, y, &l, TEXT);
+        for (head, lines) in parts {
+            y += 10;
+            cv.text(&f.lb, card.x + 16, y, head, TEXT);
+            y += 6;
+            for l in lines {
+                y += step;
+                cv.text(body, card.x + 16, y, &l, TEXT);
             }
-            y += 16;
+            y += step;
         }
         let a = Self::info_card_action(card);
         let added = self.add_is_on(cat);

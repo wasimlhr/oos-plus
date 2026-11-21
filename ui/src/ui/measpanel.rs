@@ -502,18 +502,19 @@ impl Ui {
     pub(super) fn draw_panel_cards(&self, cv: &mut Canvas, g: &PanelGeo, rows: &[tools::MeasRow], keys: &[studio::MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
         let pinned = self.studio_pinned();
+        let cards = self.panel_cards_layout(first, listed.len(), g.list);
         cv.set_clip(g.list);
-        for (pos, r) in self.panel_cards_layout(first, listed.len(), g.list) {
+        for (pos, r) in cards {
             let i = listed[pos];
             let row = &rows[i];
             let is_pinned = keys.get(i).is_some_and(|k| pinned.contains(k));
             let col = self.wave_color(row.src);
             chip(cv, r, BTN, if is_pinned { mix(BTN_BORDER, AMBER, 90) } else { BTN_BORDER });
             // the name and the pin
-            cv.set_clip(Rect::new(r.x + 4, r.y, r.w - 30, 20));
+            cv.set_clip(Rect::new(r.x + 4, r.y, r.w - 24, 20));
             cv.text(&f.s, r.x + 8, r.y + 15, &self.panel_row_name(keys.get(i).copied(), &row.name), LABEL);
             cv.set_clip(g.list);
-            icon_pin(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
+            icon_pin_small(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
             // the value, and the source at the right of its line: when the value is too wide for both (a card of a
             // side panel is 148 px) it has the whole line, and the source goes to the line under it
             let src = self.wave_name(row.src);
@@ -576,14 +577,36 @@ impl Ui {
         if f.width(&short(&widest, &widest)) <= room { return short(a, b); }
         // the unit once: the first value without its unit, when both end in the same one
         let tail = |s: &str| s.rsplit_once(' ').map(|(n, u)| (n.to_string(), u.to_string()));
-        match (tail(a), tail(b)) {
+        let once = match (tail(a), tail(b)) {
             (Some((an, au)), Some((_, bu))) if au == bu => short(&an, b),
             _ => short(a, b),
+        };
+        if f.width(&short("-00.0", &widest)) <= room {
+            return once;
         }
+        // no room for the unit at all: the numbers, whose unit the value above shows
+        let num = |s: &str| tail(s).map_or(s.to_string(), |(n, _)| n);
+        short(&num(a), &num(b))
     }
 
     /// The name a row shows: for a measurement of one source, its name (pair and catalogue names are whole already).
     pub(super) fn panel_row_name(&self, _key: Option<studio::MeasKey>, long: &str) -> String {
         long.to_string()
     }
+}
+
+/// The pin of a measurement card: about two thirds of the toolbar's, so it sits on the name line (the owner, 2026-11-20:
+/// the pin was too big beside the name).
+fn icon_pin_small(cv: &mut Canvas, x: i32, cy: i32, filled: bool, c: Rgb) {
+    let (cap, barrel, rim) = (Rect::new(x + 2, cy - 6, 8, 3), Rect::new(x + 4, cy - 3, 4, 3), Rect::new(x + 2, cy, 8, 2));
+    if filled {
+        cv.fill(cap, c);
+        cv.fill(barrel, c);
+    } else {
+        cv.round_outline(cap, 1, c);
+        cv.round_outline(barrel, 1, c);
+    }
+    cv.fill(rim, c);
+    cv.vline(x + 5, cy + 2, cy + 6, c);
+    cv.vline(x + 6, cy + 2, cy + 5, c);
 }
