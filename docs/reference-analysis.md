@@ -9,7 +9,7 @@ run down the left:
 | Basic | Amplitude, Average & statistics, Timing, Edges & counts, Per cycle |
 | Two sources | Delay, Phase, Skew, Setup & hold (all 17 pair variants) |
 | Serial & PAM | Clock & unit interval, PAM levels |
-| Jitter & eye | Jitter, Eye, Amplitude, Timing |
+| Jitter & eye | Jitter, Eye, Amplitude, Timing, Clock jitter |
 | Power | Input, Amplitude, Timing, Switching, Magnetics, Output, PSRR & impedance, Power factor |
 | Motor drive | DQ0 transform, Shaft & efficiency |
 | Power rails | Rail sequencing |
@@ -40,6 +40,18 @@ cycle period, so a random NRZ pattern can show about one quarter of its bit rate
 This separates clock cycles from data UIs as described in the
 [DPOJET measurement definitions](https://download.tek.com/manual/DPOJET-OnlineHelp%3D9%3DTraditional_US_Letter_PDF%3DEN-US_077004826.pdf).
 An unrecoverable UI stays unavailable instead of falling back to cycle frequency.
+
+Clock jitter (Jitter & eye) is the jitter of a clock, not of data: no clock is
+recovered. The rising edges at the middle level (sin(x)/x interpolated between
+samples) give one period each. Period Jitter RMS and Pk-Pk are the standard
+deviation and the spread of those periods, Cycle-to-Cycle the largest change
+between two adjacent periods, Clock TIE RMS and Pk-Pk the deviation of the edges
+from the straight line through them (the record's own ideal clock, so a
+frequency offset is no TIE). All five need four rising edges and are taken over
+the whole record. They include the scope's own sample-clock jitter, its noise
+turned into time by the edge's slope, and the interpolation error: an upper
+bound of the clock's jitter. Add one with `:MEASure:CATalog:ITEM 52,CHAN2`
+(52 to 56 in the order above).
 
 SIM Rise 20-80% specifies an isolated edge before bandwidth filtering and
 de-emphasis. Rise/Fall measurements use their selected 10/90 or 20/80 global
