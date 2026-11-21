@@ -20,7 +20,6 @@
 mod board;
 mod cmd;
 mod compress;
-mod decode;
 mod deepmeas;
 mod drawpipe;
 #[cfg(windows)]
@@ -37,16 +36,12 @@ mod hid;
 #[cfg(target_os = "linux")]
 mod input;
 mod layout;
-mod logic;
-mod math;
 mod measures;
-mod model;
 #[cfg(test)]
 mod perfguard;
 mod platform;
 mod protocols;
 mod scpi;
-mod settings;
 mod shots;
 mod site;
 #[cfg(test)]
@@ -58,8 +53,6 @@ mod trignear;
 mod ui;
 mod vpu;
 mod wave;
-mod words;
-mod zone;
 
 // the system services (ADR 0064): their paths in this crate stay `crate::sysconf` and the like
 #[cfg(target_os = "linux")]
@@ -67,6 +60,8 @@ use oos_system::hostname;
 // the transports (ADR 0064), generic over the program they carry: here always `scpi::Program`
 use oos_remote::{announce, hislip, http, vxi11};
 #[cfg_attr(not(unix), allow(unused_imports))] // `system` serves the Unix start-up only
+// the model and the settings table (ADR 0064): their paths in this crate stay `crate::model` and the like
+use oos_model::{decode, logic, math, model, settings, words, zone};
 use oos_system::{
     base64, clock, ethlink, json, mdns, net, net6, netacl, placement, remote, sntp, ssh, sysconf, system, usbtmc,
 };
@@ -287,7 +282,7 @@ fn serve(mut ui: Ui, args: &[String]) {
     let (mut web, mut scpi, mut vxi, mut hislip, mut ann) = lan(false, args, &ui.acl());
     let mut cv = Canvas::new(ui.scr.w, ui.scr.h);
     let live = shots::Live::default();
-    while !ui.quit {
+    while !ui.asks.quit {
         ui.step(0.04);
         ui.render(&mut cv);
         scpi.poll(&mut ui, &cv);
@@ -532,7 +527,7 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
             }
             None => ui.render(cv),
         }
-        if let Some(p) = ui.shot_request.take() {
+        if let Some(p) = ui.asks.shot.take() {
             save_shot(ui, cv, p, shot_n);
         }
     }
@@ -618,7 +613,7 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
             }
             cmd::Out::None => {}
         }
-        if ui.quit {
+        if ui.asks.quit {
             break;
         }
     }
@@ -683,7 +678,7 @@ fn device_main(mut ui: Ui, args: &[String]) {
     power_on_picture(&mut ui, &mut disp, start_up.as_deref());
     restore_settings(&mut ui);
     let mut d = Device::new(ui, disp, inp, start_up, args);
-    while !d.ui.quit && !input::stop_requested() {
+    while !d.ui.asks.quit && !input::stop_requested() {
         d.pass();
     }
     d.close();
@@ -967,7 +962,7 @@ impl Device {
                 }
                 input::In::Cmd(line) => {
                     if let cmd::Out::Shot(p) = cmd::run(&mut self.ui, &line) {
-                        self.ui.shot_request = Some(p);
+                        self.ui.asks.shot = Some(p);
                     }
                 }
             }
@@ -1045,7 +1040,7 @@ impl Device {
         self.hislip.poll_async(&mut |program| self.scpi.poll_program(&mut self.ui, &self.cv, program));
         for c in self.web.poll(&mut site::Ctx::new(&mut self.ui, &self.cv, &mut self.scpi).with_live(&self.live)) {
             if let cmd::Out::Shot(p) = cmd::run(&mut self.ui, &c) {
-                self.ui.shot_request = Some(p);
+                self.ui.asks.shot = Some(p);
             }
         }
     }
@@ -1130,7 +1125,7 @@ impl Device {
             let r: Result<(), String> = (|| {
                 // the picture comes back only for someone who wants it: the web page, a screenshot, and twice a
                 // second for SCPI and the rest
-                let shot = self.ui.shot_request.is_some();
+                let shot = self.ui.asks.shot.is_some();
                 // and every frame for a monitor that gets the panel's picture from the CPU (its buffers could not be
                 // given to the GPU), else it would show a picture up to half a second old
                 let hdmi_cpu = self.hdmi.is_some() && self.hdmi_gpu == Some(false);
@@ -1286,10 +1281,10 @@ impl Device {
             self.led_mask = lm;
             self.led_t = Instant::now();
         }
-        if let Some(p) = self.ui.shot_request.take() {
+        if let Some(p) = self.ui.asks.shot.take() {
             save_shot(&mut self.ui, &self.cv, p, &mut self.shot_n);
         }
-        for c in self.ui.panel_tx.drain(..) {
+        for c in self.ui.asks.panel.drain(..) {
             self.inp.send(&board::board().panel_cmd(c));
         }
         if let Some(a) = self.ui.power.action.take() {

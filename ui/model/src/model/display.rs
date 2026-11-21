@@ -289,3 +289,24 @@ impl StripDock {
 /// Persistence: name, seconds (0 = minimum, <0 = infinite).
 pub const PERSIST: [(&str, f32); 7] =
     [("Min", 0.0), ("100 ms", 0.1), ("500 ms", 0.5), ("1 s", 1.0), ("5 s", 5.0), ("10 s", 10.0), ("Infinite", -1.0)];
+
+/// oos-plus: the look of the screen (Display > Skin); the palette of each is the screen's (`ui/skin.rs`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Skin {
+    /// The OOS look: no pass at all.
+    #[default]
+    Oos,
+    /// Blue-slate greys with a cyan accent.
+    Plus,
+}
+
+pub const SKINS: [Skin; 2] = [Skin::Oos, Skin::Plus];
+
+impl Skin {
+    pub fn name(self) -> &'static str {
+        match self {
+            Skin::Oos => "OOS",
+            Skin::Plus => "OOS Plus",
+        }
+    }
+}

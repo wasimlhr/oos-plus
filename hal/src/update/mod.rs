@@ -199,12 +199,8 @@ pub fn lock(state_path: &Path) -> Result<Lock, String> {
         .open(state_path.with_extension("lock"))
         .map_err(io("opening the update lock"))?;
     #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX) } != 0 {
-            return Err(format!("locking the update state: {}", std::io::Error::last_os_error()));
-        }
-    }
+    // flock(LOCK_EX)
+    f.lock().map_err(|e| format!("locking the update state: {}", e))?;
     Ok(Lock(f))
 }
 
@@ -597,11 +593,9 @@ pub fn arm_by_hand(card: &mut Card, state_path: &Path) -> Result<bool, String> {
 pub fn busy(state_path: &Path) -> bool {
     let Ok(f) = std::fs::OpenOptions::new().write(true).open(state_path.with_extension("lock")) else { return false };
     #[cfg(unix)]
-    {
-        use std::os::fd::AsRawFd;
-        if unsafe { libc::flock(f.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-            return true;
-        }
+    // flock(LOCK_EX | LOCK_NB)
+    if f.try_lock().is_err() {
+        return true;
     }
     drop(f);
     false

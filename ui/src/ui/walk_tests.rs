@@ -3009,7 +3009,7 @@ fn the_trigger_level_follows_the_signals_mean_with_ac_coupling() {
     u.m.trig_src = 2;
     u.relayout();
     for _ in 0..8 { u.step(0.1); }
-    let s = u.stats[2];
+    let s = u.measured.stats[2];
     assert!(s.valid, "the demo's line on CH3");
     let (mid, mean) = (crate::wave::mid_level(&s), s.vavg);
     assert!(mean > 1.0 && (mid - mean).abs() > 0.05, "a signal with a mean far from 0 V that is not its middle: mid {mid} mean {mean}");
@@ -3026,7 +3026,7 @@ fn the_trigger_level_follows_the_signals_mean_with_ac_coupling() {
     // the push of the knob with AC coupling: the middle, counted from the mean
     u.m.trig_level = 9.0;
     u.key(key::TLEVEL_CW + 2);
-    let s = u.stats[2];
+    let s = u.measured.stats[2];
     assert!((u.m.trig_level - (crate::wave::mid_level(&s) - s.vavg)).abs() < 0.05, "{}", u.m.trig_level);
     // on through LF reject and HF reject back to DC: in volts again
     let place = u.m.trig_level + u.trig_level_base();

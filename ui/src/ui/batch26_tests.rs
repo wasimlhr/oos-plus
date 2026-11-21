@@ -113,7 +113,7 @@ fn a_tap_on_the_trigger_tag_opens_a_slider_that_sets_the_level_live() {
     // 50%: the middle of the signal
     let t = u.trig_slider_thumb_y();
     drag(&mut u, (g.x, t), (g.x, g.top));
-    let s = u.stats[u.m.trig_src];
+    let s = u.measured.stats[u.m.trig_src];
     assert!(s.valid, "the demo signal is measured");
     tap_at(&mut u, g.fifty.x + g.fifty.w / 2, g.fifty.y + g.fifty.h / 2);
     assert!((u.m.trig_level - (s.vmax + s.vmin) / 2.0).abs() < 0.05 * (s.vmax - s.vmin).abs().max(1e-3), "level {} for {}..{}", u.m.trig_level, s.vmin, s.vmax);

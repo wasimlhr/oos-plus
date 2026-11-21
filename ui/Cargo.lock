@@ -312,6 +312,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "oos-model"
+version = "0.0.0"
+dependencies = [
+ "oos-dsp",
+ "oos-hal",
+]
+
+[[package]]
 name = "oos-remote"
 version = "0.0.0"
 dependencies = [
@@ -319,6 +327,15 @@ dependencies = [
  "oos-hal",
  "oos-system",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "oos-store"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "oos-dsp",
+ "oos-model",
 ]
 
 [[package]]
@@ -337,7 +354,9 @@ dependencies = [
  "minifb",
  "oos-dsp",
  "oos-hal",
+ "oos-model",
  "oos-remote",
+ "oos-store",
  "oos-system",
  "windows-sys 0.59.0",
 ]
