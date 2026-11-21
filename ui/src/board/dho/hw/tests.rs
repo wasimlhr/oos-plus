@@ -4,10 +4,10 @@
 //! The tests of the hardware source (`hw`): settings for the model, decodes, plans, switches and the protocol
 //! trigger, run on the host. A test of a new part of `hw` goes here.
 
-use super::decode::{decode, LIVE_READ};
+use super::decode::decode;
 use super::plan::{
     batch_plan, deep_raw_settings, edge_check, final_replay, frame0_check_wanted, frame0_left_out,
-    frame1_left_out_unseen, frame1_off_trigger, prearm_keeps_replay, stop_plan, whole_plan, zone_batch, zone_batch_from,
+    frame1_left_out_unseen, frame1_off_trigger, prearm_keeps_replay, stop_plan, zone_batch, zone_batch_from,
     Edge, FRAME0_CHECK_MAX_FRAMES, FRAME0_KEEP, FRAME1_CHECK_MAX, PREARM,
 };
 use super::serial::{i2c_of, serial_debug, serial_lines_acquired, spi_of, uart_debug, uart_of, SERIAL_HW};
@@ -15,6 +15,7 @@ use super::settings::{
     live_compress, raw_for_ui, raw_newest, screen_margin, seg_max, seg_read_plan, settings, single_wants_more,
     slow_mode, BUS_HOLDOFF_SPREAD, LIVE_DEPTH, ROLL_TDIV, SCAN_TDIV,
 };
+use super::slow::{scan_gap, scan_la_pos, scan_write};
 use super::trim::{overlay_in_use, TrimPending, CORE_OFFSET, TRIM_HOLD};
 use super::units::{
     dvm_step, hw_merge, mask_map_from, unit_key, DvmKey, DvmStep, UnitGuard, DVM_HW, HW_STATUS_OFF, MASK_HW, ZONE_HW,
@@ -708,34 +709,6 @@ fn slow_modes_follow_auto_roll() {
     // roll and scan stream with the stock Auto depth
     m.acq = AcqMode::Normal;
     assert_eq!(settings(&m, false).depth, 0);
-}
-
-/// The stored record asked for as a whole is read at every sample up to 1 M points, the depth the live read takes
-/// that way. The view of the screen that holds all of a 1 M record is read through the compression, as pairs:
-/// asked that way (before `whole_plan`) the record of a STOP at 1 M points stayed the one the screen had.
-#[test]
-fn the_stored_record_as_a_whole_is_read_at_every_sample() {
-    for (points, whole) in [(100_000, true), (1_000_000, true), (10_000_000, false)] {
-        let mut m = Model::default();
-        m.tscale = tscales().iter().position(|&t| (t as f64 - 1e-4).abs() < 1e-9).unwrap();
-        m.mdepth = mdepths().iter().position(|d| d.1 == points).unwrap();
-        let s = settings(&m, false);
-        let p = hz::prep(s.mask, oos_hal::dho::seq::tdiv_fs(s.tdiv), s.depth, oos_hal::dho::seq::tdiv_fs(s.delay));
-        let b = batch_plan(&s, &p);
-        match whole_plan(&b, &p) {
-            Some((r, ti)) => {
-                assert!(whole, "{points}");
-                assert_eq!((r.frames, r.window, r.compress, ti), (1, None, 1, p.pre as f64), "{points}");
-                // every sample of the record: the frame is as long as the record
-                assert_eq!(oos_hal::dho::seq::window(&r, &p).0, p.memsel, "{points}");
-            }
-            None => assert!(!whole, "{points}"),
-        }
-        // the view that holds the whole record, as the UI asks for it: pairs above `LIVE_READ`
-        let (n, dt) = (p.memsel as f64, 1.0 / p.rate as f64);
-        let (r, _) = stop_plan(&b, &p, n * dt / 10.0, (n / 2.0 - p.pre as f64) * dt);
-        assert_eq!(r.compress > 1, p.memsel > LIVE_READ, "{points}: {}", p.memsel);
-    }
 }
 
 /// STOP reads the stored record again for each view: zoomed in every sample of the part on screen (also far from

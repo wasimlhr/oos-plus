@@ -358,10 +358,6 @@ const LEVEL_LINE_S: f64 = 1.5;
 /// Longest wait of a STOP for the hardware's final frame (`Ui::stop_final`): a batch in progress, its read and the raw
 /// read of the newest frame.
 const STOP_FINAL_WAIT: f64 = 3.0;
-/// Longest wait of a STOP for the stored record read whole (`Ui::stop_whole`): one read of a record the live read
-/// takes whole. Assumed to be enough: the live read of such a record is one of several a second; the time of this
-/// read was not measured on a unit. After it the view shown is asked for, the record of the stop as it was.
-const STOP_WHOLE_WAIT: f64 = 1.0;
 /// LA words a history entry keeps: above this only the newest record has its LA (200 x 1 M words = 400 MB at most).
 const HISTORY_LA_WORDS: usize = 1_000_000;
 /// Segment counts of the segmented recording (0 = off); the menu offers those within the limit of the set-up
@@ -1048,11 +1044,6 @@ pub struct Ui {
     /// stays `last[0]`, the record measured and read out (`stop_replay`, docs/fork/stop-exact.md)
     stop_raw: Option<Record>,
     stop_pic: Option<Record>,
-    /// STOP: the view that holds the whole stored record, still to be asked of the hardware. The record shown at the
-    /// stop is the last one the screen took, and the memory of the hardware, which every view is read from, may hold
-    /// a later acquisition: that one is read whole first and is the record of the stop from then on (`stop_replay`).
-    /// With the time (`now`) after which it is no longer waited for
-    stop_whole: Option<((f64, f64), f64)>,
     /// STOP: the record shown was loaded from a session, with its samples. What the hardware has in its memory is
     /// another acquisition, so the STOP does not read that again in its place (`stop_replay`); RUN ends it
     loaded_record: bool,
@@ -1438,9 +1429,16 @@ impl Ui {
         }
         let s = self.stats[self.m.trig_src];
         if s.valid {
-            // the middle of the signal, counted from where the trigger counts (its mean with AC coupling: the
-            // middle in volts was a level the signal without its DC part never reached)
-            self.m.trig_level = crate::wave::mid_level(&s) - self.trig_level_base();
+            // with AC or LF-reject coupling the trigger compares the source without its mean, and its level counts from
+            // there: halfway through the signal is the middle less the mean. The middle itself sat above the whole
+            // swing of a signal that does not cross 0 V (0 to 3.3 V: 1.65 V over a mean of 1.65 V), and the trigger
+            // did not fire (#279)
+            let src = self.m.trig_src.min(NCH - 1);
+            let mean = self.last[0].as_ref().map_or(0.0, |r| match r.raw.as_ref() {
+                Some(raw) => crate::board::trig_mean(&self.m, &raw.frame.ch[src]),
+                None => crate::board::trig_mean(&self.m, &r.ch[src]),
+            });
+            self.m.trig_level = crate::wave::mid_level(&s) - mean;
             self.settings_changed();
         }
     }

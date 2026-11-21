@@ -56,6 +56,15 @@ const POLLS: [(&str, Poll); 15] = [
 ];
 
 /// The polls that are called from elsewhere on purpose, and why. The list only gets shorter (ADR 0061).
+/// Whether the raw record `r` holds the whole acquisition: samples, not min/max pairs, and every point of the memory
+/// (`Frame::acq`). A view read again from the memory then holds nothing it does not; a window of a deep record does not.
+fn raw_whole(r: &Record) -> bool {
+    r.raw.as_ref().is_some_and(|x| {
+        let len = x.frame.ch.iter().map(Vec::len).max().unwrap_or(0);
+        !x.frame.envelope && x.frame.dt > 0.0 && len > 0 && len >= x.frame.acq.1
+    })
+}
+
 #[cfg(test)]
 const POLLED_ELSEWHERE: [(&str, &str); 7] = [
     ("sim_poll", "step_polls, before relayout, and sim.rs while a SIM run is started"),
@@ -114,6 +123,11 @@ impl Ui {
         // the final frame was taken (or did not come in time): stopped
         if self.stop_final.is_some_and(|t| final_done || self.now > t) {
             self.stop_final = None;
+            // only an answered request is a STOP in place: after the time limit a `*OPC?` waiting for it is cancelled
+            // (-410), not told `1` about a record the thread did not confirm
+            if self.m.run == RunState::Stop && final_done {
+                self.scpi_finish_operation(OperationToken::Stop(self.final_req));
+            }
         }
         if self.m.run == RunState::Stop {
             if !self.record_mode() {
@@ -209,6 +223,9 @@ impl Ui {
         // RUN after STOP: the hardware average starts over (stock clears it on every state change)
         if running && !self.was_running {
             self.hw_avg_restart();
+            // the final-frame request of the next STOP, counted here so that a `*OPC?` taken with the STOP, before
+            // this step sees it, waits for it (`OperationToken::Stop`)
+            self.final_req += 1;
         }
         if running && !self.was_running && self.m.segments > 0 {
             self.seg_n = 0;
@@ -222,9 +239,12 @@ impl Ui {
         }
         // STOP of a deep record on pairs with raw deep measurements: the hardware reads the newest frame raw and
         // stops arming; until it is here the records go on (docs/fork/stop-exact.md)
-        if !running && self.was_running && self.stop_wants_final() {
-            self.final_req += 1;
-            self.stop_final = Some(self.now + STOP_FINAL_WAIT);
+        if !running && self.was_running {
+            if self.stop_wants_final() {
+                self.stop_final = Some(self.now + STOP_FINAL_WAIT);
+            } else {
+                self.scpi_finish_operation(OperationToken::Stop(self.final_req));
+            }
         }
         // held while stopped, unless the screen still waits for a first record (a source started in STOP, as the
         // record path below takes it); a Clear in STOP leaves the screen empty, not the thread free to arm
@@ -262,7 +282,6 @@ impl Ui {
     fn step_live(&mut self, dt_wall: f64, persist: f32, hw_seg: bool) {
         if self.m.run == RunState::Run {
             self.stop_ti_off = None;
-            self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
             self.loaded_record = false;
         }
@@ -760,9 +779,8 @@ impl Ui {
             && !self.loaded_record
             && self.last[0].as_ref().is_some_and(|r| r.raw.is_some());
         if !ok {
-            self.src.hw_stop(None, false);
+            self.src.hw_stop(None);
             self.stop_ti_off = None;
-            self.stop_whole = None;
             (self.stop_raw, self.stop_pic) = (None, None);
             return;
         }
@@ -776,41 +794,32 @@ impl Ui {
                 let ti = raw.i0 as f64 - raw.t0 / f.dt;
                 (ti - f.fixed_ti.unwrap_or(f.pre as f64)) * f.dt
             });
-            // that record is the last one the screen took. The hardware goes on to the end of its batch, so what its
-            // memory holds, and every view below is read from, may be a later acquisition: the screen and the
-            // measurements showed one acquisition and the memory read out (RAW) another (seen on a unit, 2026-11-18:
-            // a 2.16 V peak on the screen that was not in the memory). A whole record is so read whole once more
-            // first, with a view that holds all of it, and what comes is the record of the stop. Not after a mask
-            // that stops on a failure: the record on the screen is the one that failed, and it is the one to keep
-            // (as `stop_wants_final`)
-            let keep = self.m.mask_on && self.m.mask_stop;
-            self.stop_whole = self.stop_raw.as_ref().filter(|_| !keep).and_then(|r| r.raw.as_ref()).filter(|r| whole_frame(&r.frame)).map(|r| {
-                let (n, f) = (r.frame.acq.1 as f64, &r.frame);
-                ((n * f.dt / HDIV as f64, (n / 2.0 - f.pre as f64) * f.dt), self.now + STOP_WHOLE_WAIT)
-            });
-        }
-        // no answer (the read failed, or the hardware holds no record to read again): the views are not kept waiting
-        if self.stop_whole.is_some_and(|w| self.now > w.1) {
-            self.stop_whole = None;
         }
         let view = (self.m.time_per_div() as f64, self.m.delay as f64);
-        let Some(mut f) = self.src.hw_stop(Some(self.stop_whole.map_or(view, |w| w.0)), self.stop_whole.is_some()) else { return };
-        if let (Some(t), Some(off)) = (f.fixed_ti, self.stop_ti_off) {
-            f.fixed_ti = Some(t + off / f.dt);
-        }
-        let whole = whole_frame(&f);
-        let window = view.0 * HDIV as f64;
-        let rec = crate::board::to_record(&std::sync::Arc::new(f), &self.m, 3600, window, view.1 - window / 2.0);
-        if self.stop_whole.take().is_some() {
-            // not whole (the answer to a view asked before the stop, or a read that failed): the record of the
-            // stop stays. Either way the view shown is asked for next
-            if whole {
-                self.stop_raw = Some(rec.clone());
-                (self.last[0], self.stop_pic) = (Some(rec), None);
+        // the raw record of the STOP holds the whole acquisition: it stays the record shown, measured and read out,
+        // drawn for every view from its own samples. Read again by the thread, the view was a record of its own (another
+        // length and origin) that replaced it some 90 ms after the STOP, between two queries of a client (#24)
+        let covered = self.stop_raw.as_ref().filter(|r| raw_whole(r));
+        if let Some(rec) = covered.and_then(|r| self.captured_record_view(r, (view.0 as f32, view.1 as f32))) {
+            // nothing to read: the thread stays held (and drops a view asked for before)
+            self.src.hw_stop(None);
+            if self.last[0]
+                .as_ref()
+                .and_then(|r| r.raw.as_ref())
+                .map(|r| (std::sync::Arc::as_ptr(&r.frame), r.i0, r.i1))
+                != rec.raw.as_ref().map(|r| (std::sync::Arc::as_ptr(&r.frame), r.i0, r.i1))
+            {
+                (self.last[0], self.stop_pic) = (Some(rec.as_ref().clone()), None);
                 self.measure_last();
             }
             return;
         }
+        let Some(mut f) = self.src.hw_stop(Some(view)) else { return };
+        if let (Some(t), Some(off)) = (f.fixed_ti, self.stop_ti_off) {
+            f.fixed_ti = Some(t + off / f.dt);
+        }
+        let window = view.0 * HDIV as f64;
+        let rec = crate::board::to_record(&std::sync::Arc::new(f), &self.m, 3600, window, view.1 - window / 2.0);
         // a view read as min/max pairs (zoomed out on a record above `LIVE_READ`: the whole record compressed) after a
         // STOP on a raw record (the final frame of a deep record): the pairs are drawn, the raw record stays the one
         // measured and read out; pairs hold no Mean, RMS or Std dev (A3 of the 2026-11-16 review). A view read raw (far
