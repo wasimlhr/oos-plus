@@ -97,8 +97,10 @@ impl Ui {
     }
 
     /// A tap on the plot that is on something: the trigger marker (Trigger), a cursor tag (that cursor), a channel marker
-    /// or a trace or lane (that source). False: nothing there, the tap is the plot's.
+    /// or a trace or lane (that source). False: nothing there, the tap is the plot's. Minimal and Studio only: in
+    /// Default a tap on the plot only closes a menu, as in upstream OOS.
     pub(super) fn plot_tap(&mut self, x: i32, y: i32) -> bool {
+        if self.m.layout == Layout::Default { return false; }
         if self.full_on() || self.view_on() || self.dialog.is_some() || self.m.touch_lock { return false; }
         // Studio: the level tag opens the slider
         if self.m.layout == Layout::Studio && self.trigger_tag_hit().is_some_and(|r| r.contains(x, y)) {

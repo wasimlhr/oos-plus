@@ -40,6 +40,9 @@ pub struct MsgRow {
     pub hex: String,
     /// fields that failed their check
     pub errors: usize,
+    /// what failed, where the module says it of one field ([`crate::protocols::Protocol::field_error`]); else empty,
+    /// and the pane writes the count
+    pub why: &'static str,
     /// the columns of the protocol for this row and their cells ([`crate::protocols::Protocol::columns`]); empty for
     /// a protocol without them and for a row that is no frame (a field, a line of text)
     pub cols: &'static [(&'static str, Col)],
@@ -100,8 +103,12 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
                 let character = ascii && tag.is_none() && x.kind == DecKind::Data && text != hex(x);
                 let hex = if character { hex(x) } else { String::new() };
                 let (len, errors) = (usize::from(tag.is_none()), usize::from(!x.ok));
-                let (who, cells) = (who.to_string(), Vec::new());
-                MsgRow { dec, t: x.t0, t1: x.t1, who, len, text, hex, errors, cols: &[], cells }
+                // (a field with parts of its own: the columns of its module)
+                let module = m.dec_proto.module();
+                let cols = module.map_or(&[][..], |module| module.field_columns());
+                let cells = module.filter(|_| !cols.is_empty()).map_or_else(Vec::new, |module| module.field_cells(x));
+                let why = module.and_then(|module| module.field_error(x)).unwrap_or("");
+                MsgRow { dec, t: x.t0, t1: x.t1, who: who.to_string(), len, text, hex, errors, why, cols, cells }
             })
             .collect();
     }
@@ -121,6 +128,7 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
                 text: decband::message_text(m, pk),
                 hex: if ascii { values().map(hex).collect::<Vec<_>>().join(" ") } else { String::new() },
                 errors: pk.iter().filter(|x| !x.ok).count(),
+                why: "",
                 cols,
                 cells: cells_of(m, cols, pk),
             }
@@ -180,6 +188,8 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
             Col::Rest => decband::message_text(m, head.map_or(pk, |h| &pk[h + 1..])),
             Col::First => half(false),
             Col::Second => half(true),
+            // (a column of one field, not of a frame)
+            Col::Own => String::new(),
         })
         .collect()
 }
@@ -250,7 +260,7 @@ impl Ui {
                 Some(rows) => v.extend(rows.into_iter().map(|(t, text, ok)| {
                     let (hex, errors) = (String::new(), usize::from(!ok));
                     let (who, cells) = (who.clone(), Vec::new());
-                    MsgRow { dec: k, t, t1: t, who, len: 1, text, hex, errors, cols: &[], cells }
+                    MsgRow { dec: k, t, t1: t, who, len: 1, text, hex, errors, why: "", cols: &[], cells }
                 })),
                 None => v.extend(rows_of(&m, k, &who, &p, self.m.ev_view)),
             }
@@ -330,7 +340,8 @@ impl Ui {
 
     /// The scroll bar of the Events pane and its rows, while the pane shows them.
     pub(super) fn events_bar(&self) -> Option<(scroll::Bar, Rect)> {
-        if self.pane_h() == 0 || self.m.pane != tables::PANE_EVENTS {
+        // Default's Events pane is upstream's list, without a scroll bar
+        if self.pane_h() == 0 || self.m.pane != tables::PANE_EVENTS || self.m.layout == Layout::Default {
             return None;
         }
         let (rows, fit) = Self::events_rows(self.pane_rect());
@@ -561,7 +572,7 @@ impl Ui {
             } else if (top + i) % 2 == 1 {
                 cv.fill(line, ROW_ALT);
             }
-            let status = errors_text(e.errors);
+            let status = if e.why.is_empty() { errors_text(e.errors) } else { e.why.to_string() };
             let len = if e.len > 0 { e.len.to_string() } else { String::new() };
             let number = (top + i + 1).to_string();
             let ink = if e.errors > 0 { RED } else { TEXT };
@@ -918,6 +929,18 @@ mod tests {
             ];
             let rows = rows_of(&m, 0, "D1 1553", &p, EvView::Messages);
             assert_eq!(titles(&rows), ["RT", "T/R", "SA", "WC/MC", "Data", "Status"]);
+            // and word by word: what each is, the mode code by its name, the count as words, a failed parity said
+            let bad = Packet { ok: false, ..word(10.0, false, 0x0157, None) };
+            let q = [p[0].clone(), p[1].clone(), p[3].clone(), p[4].clone(), bad];
+            let words = rows_of(&m, 0, "D1 1553", &q, EvView::Fields);
+            assert_eq!(titles(&words), ["Type", "RT", "T/R", "SA", "Mode code / words", "Data", "Status"]);
+            assert_eq!(words[0].cells, ["Command", "17", "R", "02", "2 words", "", ""]);
+            assert_eq!(words[1].cells, ["Data", "", "", "", "", "0005", ""]);
+            assert_eq!(words[2].cells, ["Status", "17", "", "", "", "", "TF"]);
+            assert_eq!(words[3].cells, ["Command", "17", "T", "00", "Transmit last command", "", ""]);
+            assert_eq!(words[4].cells, ["Data", "", "", "", "", "0157", ""]);
+            assert_eq!(words[4].why, "Parity");
+            assert_eq!(words[0].why, "");
             assert_eq!(rows[0].cells, ["17", "R", "02", "02", "0005 0006", "17 TF"]);
             assert_eq!(rows[1].cells, ["17", "T", "00", "18", "", ""]);
         }
@@ -944,6 +967,8 @@ mod tests {
     fn an_i2c_read_is_no_error_and_a_ten_bit_address_is_one_field() {
         use oos_dsp::decode::{I2C_NAK_END, I2C_TEN_BIT};
         let mut m = Model::default();
+        // the fork's rows and texts (Default keeps upstream's " N" on the last byte of a read)
+        m.layout = Layout::Minimal;
         m.dec_proto = Proto::I2C;
         m.dec_bits = 8;
         m.dec_opt = [0; crate::protocols::OPTS];
@@ -975,6 +1000,8 @@ mod tests {
     #[test]
     fn the_events_pane_lists_messages_and_switches_by_touch() {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
+        // the fork's pane (Default's is upstream's list)
+        u.m.layout = Layout::Minimal;
         u.m.ch[2].on = true;
         u.m.dec_on = true;
         u.m.dec_src = 2;
@@ -1024,7 +1051,7 @@ mod tests {
     /// What opened the table of decoder events over the plot opens the Events pane, and takes it away again.
     #[test]
     fn the_events_pane_is_shown_and_taken_away() {
-        for layout in [Layout::Default, Layout::Studio] {
+        for layout in [Layout::Minimal, Layout::Studio] {
             let mut u = listing(layout);
             u.set_events_pane(false);
             assert!(!u.events_pane_on() && u.m.pane == 0, "{layout:?}");
@@ -1055,6 +1082,35 @@ mod tests {
         }
     }
 
+    /// Default's Events pane is upstream's: the decoder events a row per field in one or two columns, with no head of
+    /// views and no scroll bar, and a tap on it does nothing; Minimal lists the fork's rows.
+    #[test]
+    fn default_has_upstreams_events_pane() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.ch[2].on = true;
+        u.m.dec_on = true;
+        u.m.dec_src = 2;
+        u.m.pane = tables::PANE_EVENTS;
+        for _ in 0..12 {
+            u.step(0.1);
+        }
+        assert!(!u.pn.events.is_empty() && u.pn.rows.is_empty(), "upstream's rows of fields");
+        assert!(u.events_bar().is_none());
+        assert!(u.pane_want() > 0 && u.pane_want() % 24 == 0, "rows of 24 pixels");
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        cv.au_start();
+        u.render(&mut cv);
+        let texts = cv.au.take().unwrap_or_default();
+        assert!(texts.iter().any(|e| matches!(e, Au::Text { s, .. } if s == "D1 UART CH3")), "who, as upstream's");
+        assert!(!texts.iter().any(|e| matches!(e, Au::Text { s, .. } if s == "Errors only")), "no head of views");
+        let (delay, r) = (u.m.delay, u.pane_rect());
+        u.m.run = RunState::Stop;
+        u.tap(r.x + 60, r.y + 10);
+        assert_eq!(u.m.delay, delay, "a tap on the list does nothing");
+        let u = listing(Layout::Minimal);
+        assert!(!u.pn.rows.is_empty() && u.events_bar().is_some());
+    }
+
     /// A UART decoder on the demo's line with the Events pane open, after a few records.
     fn listing(layout: Layout) -> Ui {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
@@ -1074,7 +1130,7 @@ mod tests {
     /// Studio it stopped the acquisition and moved the view. A stopped scope goes to the row.
     #[test]
     fn a_row_tap_leaves_a_running_scope_running() {
-        for layout in [Layout::Default, Layout::Studio] {
+        for layout in [Layout::Minimal, Layout::Studio] {
             let mut u = listing(layout);
             let (_, rows) = u.events_bar().unwrap();
             let delay = u.m.delay;
@@ -1094,7 +1150,7 @@ mod tests {
     /// The columns are as wide for one part of the list as for another: their widths are those of the record.
     #[test]
     fn the_columns_stand_still_while_the_list_scrolls() {
-        let mut u = listing(Layout::Default);
+        let mut u = listing(Layout::Minimal);
         u.m.ev_view = EvView::Fields;
         u.pn.rows = u.decode_rows();
         let f = u.fonts();

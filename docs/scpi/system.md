@@ -18,7 +18,7 @@ Part of the [SCPI reference](README.md).
 | `:SYSTem:RECorder:DATA` | Query | The lines of the recording that runs, else of the last one, as an IEEE block: comment lines (`#`), the setup at the start as commands (`*RST` and what differs from the Default setup), then the recorded commands, each step under a comment with its time (`# +12.4 s`). A setting that has not stood still yet is not in it. Empty before the first recording. | - | - | OOS extension |
 | `:SYSTem:LOCK` | Set / Query | Touch lock on/off | `0` | - | name not verified against the DHO guide |
 | `:SESSion` | Set / Query | `LIVE`, `SIM` or `REF`; setting `LIVE` leaves SIM and offline sessions. | `LIVE` | System > Live | OOS extension |
-| `:SYSTem:INFO` | Query | The System info page in one line: each line of the page a quoted string, `"label,value"` or `"# heading"`, separated by commas | - | System > System info | OOS extension |
+| `:SYSTem:INFO` | Query | The System info page in one line (the model, its rated bandwidth, channels, software): each line of the page a quoted string, `"label,value"` or `"# heading"`, separated by commas | - | System > System info | OOS extension |
 | `:SYSTem:GRAPhics` | Set / Query | `CPU` or `GPU` drawing; the query answers what is in use (whether the GPU really draws is the `gpu` part of `:SYSTem:STATe?`). | `GPU` | System > Graphics | OOS extension |
 | `:SYSTem:QUICk` | Set / Query | The quick key action, by its option text | `SCREENSHOT` | System > Quick key | OOS extension |
 | `:IDENtify` | Query | The app's signal identification text. | - | Run control > Identify signal | OOS extension |

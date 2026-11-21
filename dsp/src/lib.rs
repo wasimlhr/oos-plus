@@ -10,6 +10,7 @@
 //! - `trigger`: software trigger types of a modern scope (edge, pulse, slope, video, pattern, duration, timeout, runt,
 //!   window, delay, setup/hold, Nth edge) with time conditions
 //! - `measure`: voltage, time and two-channel measurements
+//! - `clock`: jitter of a clock from its edges (period, cycle-to-cycle, time interval error)
 //! - `mask`: mask (pass/fail) test: envelope around a reference waveform, records tested against it
 //! - `expr`: math expressions over the channels
 //! - `math`: arithmetic, integral, derivative, filters, FFT with windows
@@ -27,6 +28,7 @@ pub const CHANNELS: usize = 4;
 
 pub mod bandwidth;
 pub mod bode;
+pub mod clock;
 pub mod cphy;
 pub mod dcc_yard;
 pub mod decode;

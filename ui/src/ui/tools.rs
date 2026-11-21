@@ -262,7 +262,11 @@ impl Ui {
 
     /// A measurement whose source is off (an analog channel, or a ref that is not drawn) is configured but not shown:
     /// it returns when the source is turned on again.
+    /// Default keeps the stock readouts: they stay with their source off.
     pub(super) fn meas_source_hidden(&self, id: WaveId) -> bool {
+        if self.stock_readouts() {
+            return false;
+        }
         match id {
             WaveId::Ch(c) => c < NCH && !self.m.ch[c].on,
             WaveId::Ref(i) => !self.record_mode() && self.ref_shown_slot(i) == Some(false),
@@ -270,6 +274,13 @@ impl Ui {
     }
 
     pub(super) fn meas_row_hidden(&self, row: &MeasRow) -> bool { self.meas_source_hidden(row.src) }
+
+    /// The readouts as stock OOS has them (Default): the short names of the scope (+Duty, Upper), "----" for a value
+    /// that cannot be computed, every row shown, and the band paged with a row of its own. Minimal and Studio keep the
+    /// long names, the reasons and the band that takes only the room its values need.
+    pub(super) fn stock_readouts(&self) -> bool {
+        self.m.layout == Layout::Default
+    }
 
     /// How many rows the readouts show (the rows of sources that are off are not counted).
     pub(super) fn meas_shown_count(&self) -> usize {
@@ -284,7 +295,8 @@ impl Ui {
             .iter()
             .map(|&(k, id)| {
                 let val = self.meas_number(id, k);
-                MeasRow { name: super::meascatalog::meas_display_name(k).to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k) && !self.last_answer_stands_in(id), reason: String::new() }
+                let name = if self.stock_readouts() { k.name() } else { super::meascatalog::meas_display_name(k) };
+                MeasRow { name: name.to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k) && !self.last_answer_stands_in(id), reason: String::new() }
             })
             .collect();
         for &(k, a, b) in &self.m.meas2 {
@@ -310,6 +322,9 @@ impl Ui {
             if let Some(row) = self.cat_row(id, a, b, c, d) {
                 v.push(row);
             }
+        }
+        if self.stock_readouts() {
+            v.iter_mut().for_each(|row| row.reason.clear());
         }
         v
     }
@@ -375,7 +390,7 @@ impl Ui {
             Item::MeasOutside => "Outside",
             Item::MeasN => "N periods",
             Item::MeasEdges => "Edges",
-            Item::MeasRefs => "Preset",
+            Item::MeasRefs => "Refs",
             Item::MeasLvType => "Level type",
             Item::MeasLow => "Low",
             Item::MeasMid => "Mid",
@@ -442,7 +457,11 @@ impl Ui {
         Some(match it {
             Item::MeasOutside => ["Above", "Below", "Both"].iter().map(|s| s.to_string()).collect(),
             Item::MeasEdges => vec!["Clock".into(), "Data".into()],
-            Item::MeasRefs => vec!["10/90".into(), "20/80".into(), "Custom".into()],
+            Item::MeasRefs => {
+                let mut v = vec!["10/90".into(), "20/80".into()];
+                if self.refs_custom_offered() { v.push("Custom".into()); }
+                v
+            }
             Item::MeasLvType => vec!["Percent".into(), "Volts".into()],
             Item::MeasBaseTop => oos_dsp::measure::BaseTop::ALL.iter().map(|b| b.label().to_string()).collect(),
             Item::MeasSepFall => vec!["Same as rise".into(), "Separate".into()],
@@ -506,7 +525,8 @@ impl Ui {
             Item::MeasRefs => {
                 if self.m.meas_lv.absolute { return true; }
                 let cur = match meas_preset_name(&self.m) { "10/90" => 0, "20/80" => 1, _ => 2 };
-                match (cur + d).rem_euclid(3) {
+                let n = if self.refs_custom_offered() { 3 } else { 2 };
+                match (cur + d).rem_euclid(n) {
                     0 => (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) = (0.1, 0.9, 0.5, false),
                     1 => (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) = (0.2, 0.8, 0.5, false),
                     _ => self.m.meas_lv.custom = true,

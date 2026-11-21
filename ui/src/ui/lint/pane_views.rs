@@ -262,6 +262,21 @@ fn the_sort_button_of_a_studio_spectrum_view_shares_the_line_of_the_overflow_but
     assert!(b.sort.right() < more.x, "left of it");
 }
 
+/// The sort button of the peak list and the overflow button of an analyser's view are drawn smaller than the area
+/// that takes the finger: at the size of that area they were the largest things of the view.
+#[test]
+fn the_buttons_of_a_spectrum_view_are_drawn_smaller_than_their_touch_areas() {
+    let mut u = crate::ui::testkit::demo_ui();
+    u.m.view = AView::Spectrum;
+    u.relayout();
+    let (hit, chip) = (u.view_btn(), u.view_btn_chip());
+    assert!(hit.w >= 40 && hit.h >= 36 && chip.w <= 30 && chip.h <= 26, "{hit:?} {chip:?}");
+    assert!(chip.x >= hit.x && chip.right() <= hit.right() && chip.y >= hit.y && chip.bottom() <= hit.bottom());
+    let sort = u.spec_box(u.plot.area, false).sort;
+    let drawn = Ui::spec_sort_chip(sort);
+    assert!(sort.h >= 36 && drawn.h <= 26 && drawn.y >= sort.y && drawn.bottom() <= sort.bottom(), "{sort:?} {drawn:?}");
+}
+
 /// Everything the panes write stays inside its pane, and in the width it was given.
 #[test]
 fn pane_text_fits() {

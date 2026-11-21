@@ -44,6 +44,8 @@
 set -u
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.cargo/bin:$PATH"
+# oos-plus: About names the commit a build was made from (ui/build.rs); left out here, so two commits' pictures compare
+export OOS_GIT_OFF=1
 root=$PWD
 tree=$root/ui/target/compare-base/tree
 

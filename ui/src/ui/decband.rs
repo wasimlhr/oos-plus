@@ -360,8 +360,11 @@ impl Ui {
         bit.is_some_and(|bit| bit / tdiv as f64 * (self.plot.area.w as f64 / HDIV as f64) >= BIT_MIN)
     }
 
-    /// Height the band of that decoder takes of the plot.
+    /// Height the band of that decoder takes of the plot. Default's is upstream's band, without a bit row.
     pub(super) fn dec_band_h(&self, m: &Model) -> i32 {
+        if self.m.layout == Layout::Default {
+            return super::render_derived::DEC_BAND_DEFAULT;
+        }
         DEC_BAND + if self.dec_bit_row(m) { DEC_BITS } else { 0 }
     }
 
@@ -702,6 +705,8 @@ mod tests {
     #[test]
     fn the_band_goes_with_its_source_channel_and_comes_back() {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
+        // the fork's band (Default's is upstream's, which stays)
+        u.m.layout = Layout::Minimal;
         u.m.ch[2].on = true;
         u.m.dec_on = true;
         u.m.dec_src = 2;
@@ -755,5 +760,50 @@ mod tests {
         assert_eq!(run_text(&m, &pk, f, 2), "");
         m.dec_ascii = false;
         assert_eq!(run_text(&m, &pk[..2], f, 1000), "48 69");
+    }
+
+    /// The texts a render of `u` draws, after a few records.
+    fn drawn(u: &mut Ui) -> Vec<String> {
+        for _ in 0..4 {
+            u.step(0.1);
+        }
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        cv.au_start();
+        u.render(&mut cv);
+        let texts = cv.au.take().unwrap_or_default();
+        texts.into_iter().filter_map(|e| if let Au::Text { s, .. } = e { Some(s) } else { None }).collect()
+    }
+
+    /// Default draws upstream's band: its number, protocol and source dim at the left ("1 UART CH3"), and it stays
+    /// while the source channel is off. Minimal draws the fork's band, named "D1 UART", which goes with its channel.
+    #[test]
+    fn default_draws_upstreams_band_and_minimal_the_forks() {
+        for layout in [Layout::Default, Layout::Minimal] {
+            let mut u = Ui::new(Source::Demo { t: 0.0 });
+            u.m.layout = layout;
+            u.m.ch[2].on = true;
+            u.m.dec_on = true;
+            u.m.dec_src = 2;
+            let t = drawn(&mut u);
+            let (up, fork) = (t.iter().any(|s| s == "1 UART CH3"), t.iter().any(|s| s == "D1 UART"));
+            assert_eq!((up, fork), (layout == Layout::Default, layout != Layout::Default), "{layout:?}");
+            u.m.ch[2].on = false;
+            let t = drawn(&mut u);
+            assert_eq!(t.iter().any(|s| s == "1 UART CH3"), layout == Layout::Default, "{layout:?}: source off");
+        }
+    }
+
+    /// The byte a controller ends an I2C read with (not acknowledged, and no error) reads " N" in Default, as
+    /// upstream's; Minimal and Studio show it as any other byte.
+    #[test]
+    fn default_marks_the_byte_that_ends_an_i2c_read() {
+        let mut m = Ui::new(Source::Demo { t: 0.0 }).m.clone();
+        m.dec_proto = Proto::I2C;
+        let end = Packet { value2: Some(oos_dsp::decode::I2C_NAK_END), ..byte(0x53) };
+        for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
+            m.layout = layout;
+            assert_eq!(packet_text(&m, &end).ends_with(" N"), layout == Layout::Default, "{layout:?}");
+            assert!(!packet_text(&m, &byte(0x53)).ends_with(" N"), "{layout:?}: an acknowledged byte");
+        }
     }
 }

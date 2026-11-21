@@ -17,6 +17,7 @@ Part of the [SCPI reference](README.md).
 | `:MEASure:SOURce` | Set / Query | `<A>[,<B>]` Default Measure source(s); query returns A. Sources are `CHANn\|Rn`. | `CHAN1` | Measure > Source A | Rigol-compatible |
 | `:MEASure:CLEar` | Action | Clear standard, pair and catalog selections through the shared statistics reset. | - | Measurements > Clear all | Rigol-compatible |
 | `:MEASure:STRip` | Query | Configured standard/pair/catalog rows, then enabled DVM/counter rows. | - | Measurements > Read all measurement values | OOS extension |
+| `:MEASure:PENDing` | Query | `1` while the measurements of the record shown are still computed (in the background, a catalogue row, or a queried item, ref or pair measurement), else `0`. A value read meanwhile answers `9.9E37` like one that does not exist. `0` can still be of the previous record: after `:SINGle`, wait until `:TRIGger:STATus?` answers `STOP`, then for `0`, then read. | - | Measurements > Computing | OOS extension |
 | `:MEASure:READout` | Query | Strip rows plus Eye figures when that analysis page is active. | - | Measurements > Read all measurement values | OOS extension |
 | `:MEASure:COPY` | Action | `<source>` Copy the measurements of Source A to another source | - | Measurements > Copy to | OOS extension |
 | `:MEASure:ITEM:REMove` | Action | `<n>` Remove one row, by its number in `:MEASure:STRip?` order, or by item and source | - | Measurements > Remove | OOS extension |
@@ -39,7 +40,7 @@ Part of the [SCPI reference](README.md).
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:MEASure:GATing` | Set / Query | `SCREEN` follows the viewport; `NONE` means Full record. This gate is an OOS extension. | `NONE` | Measure > Gate | OOS extension |
-| `:MEASure:REFS` | Set / Query | `10/90\|20/80` edge thresholds. | `10/90` | Measure levels > Preset | OOS extension |
+| `:MEASure:REFS` | Set / Query | `10/90\|20/80` edge thresholds. | `10/90` | Measure levels > Refs | OOS extension |
 | `:MEASure:TSETup` | Set / Query | Seconds, nonnegative: `SETHOLD` counts the clock edges whose setup or hold is shorter. | `0.000000E+00` | Measure > Tsetup | Rigol-compatible |
 | `:MEASure:THOLd` | Set / Query | Seconds, nonnegative: `SETHOLD` counts the clock edges whose setup or hold is shorter. | `0.000000E+00` | Measure > Thold | Rigol-compatible |
 | `:MEASure:SETup:MIN` | Set / Query | Global default low threshold in percent. Per-row overrides remain a separate UI feature. | `10` | Measurements > Low level | Rigol-style (command family of the DHO guide) |
@@ -61,7 +62,7 @@ Low, mid and high are percent or volts depending on `:MEASure:LEVel:TYPE`.
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:MEASure:LEVel:TYPE` | Set / Query | Reference levels as `PERCent` of the waveform or `VOLTs`. Query answers `PERC` or `VOLT`. | `PERC` | Measure levels > Level type | OOS extension |
-| `:MEASure:LEVel:PRESet` | Set / Query | `10/90`, `20/80` or `CUSTom` (the Reference preset row). | `10/90` | Measure levels > Preset | OOS extension |
+| `:MEASure:LEVel:PRESet` | Set / Query | `10/90`, `20/80` or `CUSTom` (the Reference preset row). | `10/90` | Measure levels > Refs | OOS extension |
 | `:MEASure:LEVel:LOW` | Set / Query | Reference level, percent or volts (by `:MEASure:LEVel:TYPE`). | `10` | Measure levels > Low | OOS extension |
 | `:MEASure:LEVel:MID` | Set / Query | Reference level, percent or volts (by `:MEASure:LEVel:TYPE`). | `50` | Measure levels > Mid | OOS extension |
 | `:MEASure:LEVel:HIGH` | Set / Query | Reference level, percent or volts (by `:MEASure:LEVel:TYPE`). | `90` | Measure levels > High | OOS extension |
@@ -79,10 +80,10 @@ Statistics count accepted observations. A stopped reference can have a valid cur
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:MEASure:STATistic:DISPlay` | Set / Query | Statistics summary visibility. Toggling it retains accumulated observations. | `0` | Statistics > Statistics | Rigol-style (command family of the DHO guide) |
-| `:MEASure:STATistic:RESet` | Action | Central statistics reset, including catalog/deferred accounting. It does not create an acquisition. | - | Measurements > Statistics | Rigol-style (command family of the DHO guide) |
+| `:MEASure:STATistic:RESet` | Action | Central statistics reset, including catalog/deferred accounting. It does not create an acquisition. `:RUN`, `:STOP` and `:SINGle` keep the statistics; a change of a setting starts them again. | - | Measurements > Statistics | Rigol-style (command family of the DHO guide) |
 | `:MEASure:STATistic:POPulation` | Set / Query | `CURRent` (the statistics of the shown acquisition run) or `ACCumulated`. A change resets the statistics. | `ACC` | Statistics > Population | OOS extension |
 | `:MEASure:STATistic:SHOW` | Set / Query | Statistics columns: any of `SDEViation`, `MINimum`, `MAXimum` comma-separated, or `NONE`. | `SDEV,MIN,MAX` | Measurements > Statistics columns | OOS extension |
-| `:MEASure:STATistic:ITEM` | Set / Query | `<item>[,source[,source]]` Set: add the readout and show statistics. Query `:MEASure:STATistic:ITEM? <field>,<item>[,source[,source]]` with field `MAXimum\|MINimum\|CURRent\|AVERages\|DEViation\|CNT` (`COUNt` alias). | - | Measurements > Statistics | Rigol-compatible |
+| `:MEASure:STATistic:ITEM` | Set / Query | `<item>[,source[,source]]` Set: add the readout and show statistics. Query `:MEASure:STATistic:ITEM? <field>,<item>[,source[,source]]` with field `MAXimum\|MINimum\|CURRent\|AVERages\|DEViation\|CNT` (`COUNt` alias). `CNT` counts frames for `VMAX`, `VMIN`, `VPP`, `VAVG`, `VRMS`, `ACRms` and `SDEViation`: they are measured on every acquired frame (not on frames shown as 3600 interpolated points, short time bases); of an envelope frame (above 1 M points, roll, scan) only `VMAX`, `VMIN` and `VPP` count. Every other item counts the records measured, a few a second, so its `CNT` is much smaller in the same run. | - | Measurements > Statistics | Rigol-compatible |
 
 ## Items
 

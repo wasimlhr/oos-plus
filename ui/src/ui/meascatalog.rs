@@ -958,14 +958,13 @@ impl Ui {
     }
 }
 
-/// The categories of the Studio add list: the six tabs of the catalogue, the last three as one.
-pub(super) const ADD_GROUPS: [&str; 4] = ["Basic", "Jitter", "Power", "Other"];
-
 /// One line of the Studio add list.
 pub(super) struct AddEntry {
     pub cat: Cat,
     pub name: &'static str,
     pub group: usize,
+    /// the heading of its group on the Measure page (AMPLITUDE, TIMING, ...)
+    pub section: &'static str,
 }
 
 /// What a row of the add list says about its measurement right now.
@@ -980,16 +979,19 @@ pub(super) enum Preview {
     Reason(String),
 }
 
-/// Every measurement of the catalogue once, in the order of its tabs, with its category.
+/// The names of the categories of the Measure page, which the Add list of Studio takes as they are.
+pub(super) fn add_categories() -> impl Iterator<Item = &'static str> {
+    CATEGORIES.iter().map(|c| c.name)
+}
+
+/// Every measurement of every category of the Measure page, in its order, with the number of its category.
 pub(super) fn add_entries() -> Vec<AddEntry> {
     let mut v: Vec<AddEntry> = Vec::new();
     for tab in 0..CATEGORIES.len() as u8 {
-        for (_, items) in tab_groups(tab) {
+        for (section, items) in tab_groups(tab) {
             for cat in items.iter() {
-                if !v.iter().any(|e| e.cat.id == cat.id) {
-                    // the Studio groups (ADD_GROUPS): Basic, Jitter, Power and the rest
-                    let group = match CATEGORIES[tab as usize].name { "Basic" => 0, "Jitter & eye" => 1, "Power" => 2, _ => 3 };
-                    v.push(AddEntry { cat, name: cat.name, group });
+                if !v.iter().any(|e| e.group == tab as usize && e.cat.id == cat.id) {
+                    v.push(AddEntry { cat, name: cat.name, group: tab as usize, section });
                 }
             }
         }
@@ -1126,9 +1128,9 @@ mod integration_tests {
         let back = ui.dlg_layout().unwrap().back.unwrap();
         tap(&mut ui, back);
         assert_eq!(ui.menu, MenuId::MeasAdd);
-        // the 83 analysis measurements of the scope build (the test build adds the example module's)
+        // the 88 analysis measurements of the scope build (the test build adds the example module's)
         let ids: HashSet<_> = listed().into_iter().filter(|c| c.kind == Kind::Module).map(|c| c.id).collect();
-        assert_eq!(ids.iter().filter(|&&id| id < 1000).count(), 83);
+        assert_eq!(ids.iter().filter(|&&id| id < 1000).count(), 88);
         for id in 0..=255 {
             assert_eq!(crate::measures::catalog_id_valid(id), ids.contains(&id), "persisted ID{id}");
         }
@@ -1291,9 +1293,10 @@ mod tests {
         ui.catalog_add(tile(measures::std_id(Meas::Vamp)));
         ui.catalog_add(tile(measures::std_id(Meas::LowTime)));
         let rows = ready_rows(&mut ui);
-        let amp = rows.iter().find(|r| r.name == meas_display_name(Meas::Vamp)).expect("amplitude");
+        // Default: the rows have upstream's short names
+        let amp = rows.iter().find(|r| r.name == Meas::Vamp.name()).expect("amplitude");
         assert!((amp.v - 2.0).abs() < 0.15, "amplitude {}", amp.v);
-        assert!(rows.iter().any(|r| r.name == meas_display_name(Meas::LowTime) && r.v.is_finite()), "low time");
+        assert!(rows.iter().any(|r| r.name == Meas::LowTime.name() && r.v.is_finite()), "low time");
         ui.catalog_add(tile(measures::serial::DATA_RATE));
         let rate = ready_rows(&mut ui).into_iter().find(|r| r.name == "NRZ Data Rate").unwrap();
         assert!(rate.v.is_finite() && rate.v > 0.0, "{}", rate.v);

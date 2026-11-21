@@ -257,6 +257,7 @@ impl Ui {
     pub(crate) fn ref_clear_slot(&mut self, i: usize) {
         if i < NREF {
             self.refs[i] = None;
+            self.ref_drop_measurements(Some(i));
         }
         self.measure_refs();
         self.analyzer_update();
@@ -266,20 +267,33 @@ impl Ui {
     /// Empties every reference slot, the same as Clear all.
     pub(crate) fn ref_clear_all(&mut self) {
         self.refs = std::array::from_fn(|_| None);
-        // readouts of the cleared slots go with them: an import adds Vpp, Freq, RMS and Rise of its first slot, and those
-        // rows stayed as "----" after the clear (unit 2026-11-16)
-        let is_ref = |w: &WaveId| matches!(w, WaveId::Ref(_));
-        self.m.meas.retain(|(_, w)| !is_ref(w));
-        self.m.meas2.retain(|(_, a, b)| !is_ref(a) && !is_ref(b));
-        if is_ref(&self.sources.a) {
-            self.sources.a = WaveId::Ch(0);
-        }
-        if is_ref(&self.sources.b) {
-            self.sources.b = WaveId::Ch(0);
-        }
-        self.ensure_meas_own();
+        self.ref_drop_measurements(None);
         self.measure_refs();
         self.analyzer_update();
+    }
+
+    /// The readouts of a cleared slot (`None`: of every slot) go with it: an import adds Vpp, Freq, RMS and Rise of its
+    /// first slot, and those rows stayed as "----" after the clear (unit 2026-11-16). The catalogue's rows too (Eye
+    /// Height, Bit High, ...), which stayed as "R1 empty", and a source that was the slot.
+    fn ref_drop_measurements(&mut self, slot: Option<usize>) {
+        let gone = |w: &WaveId| matches!(w, WaveId::Ref(i) if slot.is_none_or(|s| s == *i));
+        let before = self.m.meas.len() + self.m.meas2.len() + self.m.cat.len();
+        self.m.meas.retain(|(_, w)| !gone(w));
+        self.m.meas2.retain(|(_, a, b)| !gone(a) && !gone(b));
+        self.m.cat.retain(|&(id, a, b, c, d)| {
+            let sources = [a, b, c, d];
+            crate::ui::meascatalog::cat_from(id)
+                .is_none_or(|def| !crate::ui::meascatalog::catalog_roles(def).iter().any(|&r| gone(&sources[r])))
+        });
+        for src in [&mut self.sources.a, &mut self.sources.b] {
+            if gone(src) {
+                *src = WaveId::Ch(0);
+            }
+        }
+        if before != self.m.meas.len() + self.m.meas2.len() + self.m.cat.len() {
+            self.clear_measurement_statistics();
+        }
+        self.ensure_meas_own();
     }
 
     /// Writes the Source channel into the selected slot.

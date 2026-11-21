@@ -222,7 +222,7 @@ fn rows_call_the_existing_menu_logic() {
     let inv = g.rows.iter().find(|r| r.it == Item::ChInvert(0)).unwrap();
     assert_eq!(inv.kind, RowKind::Toggle);
     let was = u.m.ch[0].invert;
-    tap_in(&mut u, inv.row);
+    tap_in(&mut u, Ui::sheet_toggle_half(inv.ctrl, !was));
     assert_ne!(u.m.ch[0].invert, was);
     // number: scale +
     let sc = g.rows.iter().find(|r| r.it == Item::ChScale(0)).unwrap();
@@ -275,15 +275,28 @@ fn the_footer_holds_the_actions_with_the_destructive_one_on_the_right() {
 }
 
 #[test]
-fn bus_is_a_tab_of_decode_and_the_gear_opens_a_short_main_sheet() {
+fn the_i2c_lane_has_its_own_sheet_and_the_gear_opens_a_short_main_sheet() {
     let mut u = studio();
-    u.open_menu(MenuId::Decode);
+    // the Decode sheet holds the decoder alone: the lane's rows named "Bus" there read as the decoder's settings
+    for proto in (0..crate::protocols::MODULES.len()).map(|i| crate::model::Proto::Module(i as u8)) {
+        u.m.dec_proto = proto;
+        u.open_menu(MenuId::Decode);
+        let spec = u.sheet_spec(MenuId::Decode).unwrap_or_else(|| panic!("{}: no sheet", proto.name()));
+        let lane = |it: &Item| matches!(it, Item::BusOn | Item::BusPos | Item::BusClk | Item::BusData | Item::BusLabel);
+        assert!(!spec.tabs.iter().any(|t| t.rows.iter().chain(&t.foot).any(lane)), "{}", proto.name());
+        // no page without a row, and what was decoded is under the first one
+        assert!(spec.tabs.iter().all(|t| !t.rows.is_empty()), "{}: a page without a row", proto.name());
+        assert_eq!(spec.tabs[0].foot, [Item::DecTable, Item::DecExport], "{}", proto.name());
+    }
+    // a decoder of one line and no settings is one page: its threshold under its source
+    u.m.dec_proto = crate::model::Proto::from_key("Mil1553").unwrap();
     let spec = u.sheet_spec(MenuId::Decode).unwrap();
-    assert!(spec.tabs.iter().any(|t| t.name == "Bus"));
-    assert!(spec.tabs[3].rows.contains(&Item::BusOn));
+    // (its source is switched off here: the button that turns it on is the last row, as in the menu)
+    let rows = [Item::DecSel, Item::DecOn, Item::DecProto, Item::DecSrc, Item::DecThr, Item::DecThrMid, Item::SrcOn];
+    assert_eq!((spec.tabs.len(), &spec.tabs[0].rows[..]), (1, &rows[..]));
     u.open_menu(MenuId::Bus);
     let g = u.sheet_geo().unwrap();
-    assert!(g.rows.iter().any(|r| r.it == Item::BusOn), "Bus opens on its tab of the Decode sheet");
+    assert!(g.rows.iter().any(|r| r.it == Item::BusOn) && !g.rows.iter().any(|r| r.it == Item::DecProto));
     // the gear
     u.close_menu();
     let gear = u.studio_top().gear;
@@ -373,10 +386,18 @@ fn every_row_of_the_add_list_has_a_preview_and_filters_work() {
     let g = u.sheet_add_geo();
     assert!(g.rows.len() >= 5, "a screenful: {}", g.rows.len());
     for (_, r) in &g.rows { assert!(r.h >= 60); assert!(r.x >= u.sheet_rect().x && r.right() <= u.sheet_rect().right()); }
-    // categories: four chips, each with entries; Power needs sources, so it may say why
-    for (i, c) in g.groups.iter().enumerate() {
-        assert!(c.h >= 40 && c.w >= 40, "chip {i}");
-        tap_in(&mut u, *c);
+    // the categories of the Measure page, in a list the name opens; each has entries (Power needs sources, so it
+    // may say why)
+    assert_eq!(super::meascatalog::add_categories().collect::<Vec<_>>(), crate::measures::CATEGORIES.iter().map(|c| c.name).collect::<Vec<_>>());
+    for i in 0..g.cat_rows.len() {
+        let v = u.sheet_add_geo().cat_value;
+        tap_in(&mut u, v);
+        assert!(u.sheet.add_cats);
+        if i == 3 { shot(&mut u, "add-category-list"); }
+        let row = u.sheet_add_geo().cat_rows[i];
+        assert!(row.h >= 40, "row {i}");
+        tap_in(&mut u, row);
+        assert!(!u.sheet.add_cats);
         assert_eq!(u.sheet.add_group, i);
         assert!(!u.sheet_add_geo().rows.is_empty(), "category {i} has entries");
     }
@@ -399,8 +420,7 @@ fn an_unavailable_item_says_why_and_offers_the_fix_in_place() {
     // Power: voltage on CH1, current on CH2, and CH2 is off
     u.sources.a = WaveId::Ch(0);
     u.sources.b = WaveId::Ch(1);
-    let g = u.sheet_add_geo();
-    tap_in(&mut u, g.groups[2]);
+    u.sheet.add_group = super::meascatalog::add_categories().position(|n| n == "Power").expect("Power");
     let g = u.sheet_add_geo();
     let entries = u.sheet_add_entries();
     let (_, row) = *g.rows.iter().find(|r| super::meascatalog::Preview::Off(1) == u.add_preview(entries[r.0].cat)).expect("an item that needs CH2");
@@ -563,4 +583,28 @@ fn the_channels_a_line_does_not_have_are_dimmed() {
         // readable: nearer to the channel's colour than to the button it stands on
         assert!(light(ink) >= (light(BTN) + light(col)) / 2, "text {ink:06x} on {BTN:06x}");
     }
+}
+
+#[test]
+fn the_trigger_tag_keeps_clear_of_the_windows_button() {
+    let mut u = studio();
+    for _ in 0..3 { u.step(0.05); }
+    let b = u.win_btn().1;
+    let (g, y) = (u.plot.grid, b.y + b.h / 2);
+    let x1 = u.trigger_tag_x(g.x + g.w - MARK_W, y);
+    assert!(x1 + MARK_W <= b.x, "the tag {x1} reaches the button {b:?}");
+}
+
+#[test]
+fn clearing_a_reference_takes_the_measurements_that_read_it() {
+    let mut u = studio();
+    u.refs[0] = Some(RefWave::test(vec![0.0, 1.0, 0.0, 1.0], 1e-6, 0.0));
+    let eye = crate::measures::all().map(|x| x.1).find(|d| d.name == "Eye Height").expect("Eye Height");
+    u.m.cat.push((eye.id, WaveId::Ref(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)));
+    u.m.meas.push((Meas::Vpp, WaveId::Ref(0)));
+    u.m.meas.push((Meas::Vpp, WaveId::Ch(0)));
+    u.ref_clear_slot(0);
+    assert!(u.m.cat.is_empty(), "the catalogue's row went with the slot");
+    assert!(!u.m.meas.iter().any(|(_, w)| matches!(w, WaveId::Ref(_))), "the standard ones too");
+    assert!(u.m.meas.contains(&(Meas::Vpp, WaveId::Ch(0))), "a channel's stay");
 }

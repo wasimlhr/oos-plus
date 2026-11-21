@@ -244,6 +244,7 @@ pub(super) fn draw_cat_icon(cv: &mut Canvas, f: &Fonts, r: Rect, c: Cat, col: Rg
         BitRate => { g.nrz(); g.ha(0.22, 0.58, 0.88); g.tag("bps"); }
         SscDev => { g.stroke(&[(0.04, 0.5), (0.2, 0.4), (0.36, 0.5), (0.52, 0.62), (0.68, 0.5), (0.84, 0.38), (0.94, 0.5)]); g.va(0.5, 0.38, 0.62); g.tag("SSC"); }
         SscRate => { g.stroke(&[(0.04, 0.5), (0.2, 0.4), (0.36, 0.5), (0.52, 0.62), (0.68, 0.5), (0.84, 0.38), (0.94, 0.5)]); g.ha(0.2, 0.84, 0.9); g.tag("kHz"); }
+        id if crate::measures::clock::owns(id) => clock_icon(&mut g, id),
         // power
         PowerQuality => { g.sine_at(0.2, 0.5, 0.0); g.sine_at(0.12, 0.5, 0.8); g.tag("PQ"); }
         Harmonics => { g.bars(&[0.9, 0.2, 0.5, 0.15, 0.3]); g.tag("THD"); }
@@ -310,4 +311,22 @@ pub(super) fn draw_cat_icon(cv: &mut Canvas, f: &Fonts, r: Rect, c: Cat, col: Rg
         _ => g.sq(),
     }
     g.cv.restore_clip(outer);
+}
+
+/// The clock jitter tiles: the periods between rising edges (with their ticks), and the edges against an ideal clock.
+fn clock_icon(g: &mut Ic, id: u16) {
+    use crate::measures::clock::*;
+    g.sq();
+    if matches!(id, CLOCK_TIE_RMS | CLOCK_TIE_PP) {
+        g.dash_v(R1, 0.2, 0.8);
+        g.dash_v(R2, 0.2, 0.8);
+    } else {
+        g.ha(R1, R2, 0.9);
+    }
+    match id {
+        PERIOD_JITTER_RMS | PERIOD_JITTER_PP => { g.tick(R1, H, 0.9); g.tick(R2, H, 0.9); }
+        CYCLE_TO_CYCLE => g.va(R2, 0.3, 0.7),
+        _ => {}
+    }
+    g.tag(match id { PERIOD_JITTER_RMS | CLOCK_TIE_RMS => "rms", CYCLE_TO_CYCLE => "C2C", _ => "p-p" });
 }
