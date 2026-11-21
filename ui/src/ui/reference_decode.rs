@@ -148,6 +148,16 @@ pub(super) fn decode_borrowed(original: &Model, waves: &[BorrowedWave<'_>], hyst
         .collect();
     let ch: [&[f32]; NCH] =
         std::array::from_fn(|i| waves.get(i).map_or(&[][..], |w| aligned[i].as_deref().unwrap_or(w.v)));
+    // the samples of a channel taken in Peak detect are minimum and maximum in turn (`trig::decode`)
+    let means: Vec<Option<Vec<f32>>> = waves
+        .iter()
+        .enumerate()
+        .map(|(i, w)| {
+            let peak = w.source < NCH && crate::trig::peak_points(original, w.dt);
+            peak.then(|| crate::trig::pair_means(ch[i]))
+        })
+        .collect();
+    let ch: [&[f32]; NCH] = std::array::from_fn(|i| means.get(i).and_then(|m| m.as_deref()).unwrap_or(ch[i]));
     let slot = |source| waves.iter().position(|w| w.source == source);
     let mut model = original.clone();
     model.dec_src = slot(model.dec_src).unwrap_or(0);
@@ -458,6 +468,26 @@ impl Ui {
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
+
+    /// Break it catches: the decode of a channel's own samples took the points of a Peak detect record for
+    /// samples (unit 2026-11-21: LIN at 2.5 MSa/s with 100 kpts, sync not measured, bytes wrong, while `trig::decode`
+    /// already read such a record right). A reference keeps its points as they are.
+    #[test]
+    fn the_own_samples_of_a_channel_in_peak_detect_decode_like_the_signal() {
+        let (mut m, peak, dt) = crate::trig::peak_tests::lin_in_peak_detect();
+        let read = |m: &Model, source: usize| {
+            let mut m = m.clone();
+            m.dec_src = source;
+            let p = decode_borrowed(&m, &[BorrowedWave { source, v: &peak, dt, t0: 0.0 }], 0.01).unwrap();
+            let data = |x: &&oos_dsp::decode::Packet| x.kind == oos_dsp::decode::Kind::Data;
+            (p.iter().filter(data).map(|x| x.value).collect::<Vec<_>>(), p.iter().all(|x| x.ok))
+        };
+        let right = (vec![0x55, 0x10, 0x20, 0x30, 0x40], true);
+        assert_ne!(read(&m, 0), right, "as samples the record made here is wrong");
+        m.acq = AcqMode::Peak;
+        assert_eq!(read(&m, 0), right, "a channel in Peak detect");
+        assert_ne!(read(&m, DEC_REF_BASE), right, "a reference is read as it is");
+    }
 
     fn reference(v: Vec<f32>, dt: f64, t0: f64, vpd: f32) -> RefWave {
         RefWave { label: "decoder fixture".into(), vpd, ..RefWave::test(v, dt, t0) }

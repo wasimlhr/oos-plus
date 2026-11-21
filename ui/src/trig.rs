@@ -17,11 +17,17 @@ pub fn decode(m: &Model, ch: [&[f32]; NCH], dt: f64) -> Result<Vec<Packet>, &'st
     // Peak detect below the full rate: the points are minimum and maximum in turn, so an edge passes the threshold
     // three times and every bit begins with two pulses of one point (unit 2026-11-20: a LIN frame at 2.5 MSa/s,
     // its sync not measured and its bytes wrong). The mean of two neighbours has one crossing an edge.
-    if m.acq == AcqMode::Peak && 1.0 / dt < m.max_srate() * 0.999 {
+    if peak_points(m, dt) {
         let means: [Vec<f32>; NCH] = std::array::from_fn(|c| pair_means(ch[c]));
         return decode_at(m, std::array::from_fn(|c| &means[c][..]), dt, m.dec_thr, hy);
     }
     decode_at(m, ch, dt, m.dec_thr, hy)
+}
+
+/// Whether the points of a live record `dt` apart are minimum and maximum in turn: Peak detect below the full rate
+/// (at the full rate there is nothing to detect over, and the points are samples).
+pub(crate) fn peak_points(m: &Model, dt: f64) -> bool {
+    m.acq == AcqMode::Peak && 1.0 / dt < m.max_srate() * 0.999
 }
 
 /// The mean of every point and its neighbour: the line a decoder reads of points that are minimum and maximum in
@@ -234,18 +240,16 @@ pub fn find_first(m: &Model, inp: &Input, from: f64) -> Option<f64> {
 }
 
 #[cfg(test)]
-mod peak_tests {
+pub(crate) mod peak_tests {
     use super::*;
 
-    /// Break it catches: a decoder read the points of a Peak detect record as samples. They are minimum and maximum
-    /// in turn, so an edge of a few points passed the threshold three times (unit 2026-11-20: LIN at 2.5 MSa/s, the
-    /// sync of no frame measured, every byte wrong; the same line in Normal decoded).
-    #[test]
-    fn a_peak_detect_record_decodes_like_its_signal() {
+    /// A LIN frame (identifier 0x21, four bytes) as a Peak detect record gives it: points 0.4 us apart, each the
+    /// largest or the smallest of the four point times around it, in turn. With the decoder set for it, at another
+    /// rate than the bus has: the frame is read by its sync or not at all.
+    pub(crate) fn lin_in_peak_detect() -> (Model, Vec<f32>, f64) {
         let frame = (0x21u8, vec![0x10u8, 0x20, 0x30, 0x40], true);
         let mut line = oos_dsp::sim::lin_logic(&[frame], 19200.0, 0.6, 4.1);
         line.tr = 4e-6;
-        // points 0.4 us apart, each the largest or the smallest of the four point times around it, in turn
         let (dt, n) = (0.4e-6, 30_000);
         let fine = |k: i64| line.v(k as f64 * dt / 4.0 - 1e-3) as f32;
         let peak: Vec<f32> = (0..n as i64)
@@ -256,8 +260,16 @@ mod peak_tests {
             .collect();
         let mut m = Model::default();
         (m.dec_proto, m.dec_src, m.dec_thr) = (Proto::LIN, 0, 2.35);
-        // (another rate than the bus has: the frame is read by its sync or not at all)
         crate::ui::Ui::dec_apply_rows(&mut m, &[(crate::protocols::Row::Baud, 0)]);
+        (m, peak, dt)
+    }
+
+    /// Break it catches: a decoder read the points of a Peak detect record as samples. They are minimum and maximum
+    /// in turn, so an edge of a few points passed the threshold three times (unit 2026-11-20: LIN at 2.5 MSa/s, the
+    /// sync of no frame measured, every byte wrong; the same line in Normal decoded).
+    #[test]
+    fn a_peak_detect_record_decodes_like_its_signal() {
+        let (mut m, peak, dt) = lin_in_peak_detect();
         let e: [f32; 0] = [];
         let ch: [&[f32]; NCH] = std::array::from_fn(|c| if c == 0 { &peak[..] } else { &e[..] });
         let read = |m: &Model| {
