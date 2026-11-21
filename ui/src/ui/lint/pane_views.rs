@@ -247,7 +247,7 @@ fn the_buttons_of_a_spectrum_view_are_drawn_smaller_than_their_touch_areas() {
     let (hit, chip) = (u.view_btn(), u.view_btn_chip());
     assert!(hit.w >= 40 && hit.h >= 36 && chip.w <= 30 && chip.h <= 26, "{hit:?} {chip:?}");
     assert!(chip.x >= hit.x && chip.right() <= hit.right() && chip.y >= hit.y && chip.bottom() <= hit.bottom());
-    let sort = u.spec_box(u.area, false).sort;
+    let sort = u.spec_box(u.plot.area, false).sort;
     let drawn = Ui::spec_sort_chip(sort);
     assert!(sort.h >= 36 && drawn.h <= 26 && drawn.y >= sort.y && drawn.bottom() <= sort.bottom(), "{sort:?} {drawn:?}");
 }
