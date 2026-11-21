@@ -211,6 +211,8 @@ pub enum Col {
     First,
     /// their second values (SPI: MISO)
     Second,
+    /// a part of one field, which the module writes itself ([`Protocol::field_cells`])
+    Own,
 }
 
 /// The trigger of [`Setup::trig`]: an edge of `slope` on the channel of role `role` at `level` (V). With an `idle` time
@@ -299,6 +301,24 @@ pub trait Protocol: Sync {
     /// when it lists messages, is wide enough, and every decoder that is on has the same columns.
     fn columns(&self) -> &'static [(&'static str, Col)] {
         &[]
+    }
+
+    /// The columns the Events pane has for one field of the protocol in place of its text, where a field has parts
+    /// worth a column each (a word of MIL-STD-1553: its kind, terminal, direction ...). Every one is [`Col::Own`]:
+    /// the cells come from [`Protocol::field_cells`]. Empty: a field is its text.
+    fn field_columns(&self) -> &'static [(&'static str, Col)] {
+        &[]
+    }
+
+    /// The cells of the field `p` for [`Protocol::field_columns`], one a column.
+    fn field_cells(&self, _p: &Packet) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// What failed in the field `p`, for the last column of the Events pane where it lists fields ("Parity"). None:
+    /// the pane writes that one check failed.
+    fn field_error(&self, _p: &Packet) -> Option<&'static str> {
+        None
     }
 
     /// Whether `p` is a mark the module adds for the screen and not a field of the bus (the start of an SPI frame,

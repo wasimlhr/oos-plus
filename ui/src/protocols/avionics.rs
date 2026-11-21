@@ -76,6 +76,29 @@ const MIL1553_FLAGS: [(u32, &str); 8] = [
     (0x1, "TF"),
 ];
 
+/// The name of a mode code of MIL-STD-1553B (its table of assigned mode codes); None for a code the standard
+/// reserves. By the code alone: a command with the other direction bit than the table gives is named all the same.
+fn mil1553_mode_code(code: u32) -> Option<&'static str> {
+    Some(match code {
+        0 => "Dynamic bus control",
+        1 => "Synchronize",
+        2 => "Transmit status word",
+        3 => "Initiate self test",
+        4 => "Transmitter shutdown",
+        5 => "Override transmitter shutdown",
+        6 => "Inhibit terminal flag",
+        7 => "Override inhibit terminal flag",
+        8 => "Reset remote terminal",
+        16 => "Transmit vector word",
+        17 => "Synchronize with data",
+        18 => "Transmit last command",
+        19 => "Transmit BIT word",
+        20 => "Selected transmitter shutdown",
+        21 => "Override selected shutdown",
+        _ => return None,
+    })
+}
+
 impl Protocol for Mil1553 {
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::MIL1553
@@ -117,6 +140,50 @@ impl Protocol for Mil1553 {
             ("Data", Col::Data),
             ("Status", Col::Label("ST ")),
         ]
+    }
+    /// A word in the Events pane: what it is, and each part of a command or a status word in a column of its own. A
+    /// mode command says its mode code by name, another command how many data words it announces.
+    fn field_columns(&self) -> &'static [(&'static str, Col)] {
+        &[
+            ("Type", Col::Own),
+            ("RT", Col::Own),
+            ("T/R", Col::Own),
+            ("SA", Col::Own),
+            ("Mode code / words", Col::Own),
+            ("Data", Col::Own),
+            ("Status", Col::Own),
+        ]
+    }
+    fn field_cells(&self, p: &Packet) -> Vec<String> {
+        use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_COMMAND_2, MIL1553_STATUS};
+        let v = p.value;
+        let (rt, none) = (format!("{:02}", v >> 11), String::new);
+        let cells: [String; 7] = match (p.kind, p.value2) {
+            (Kind::Word { cmd: false }, _) => {
+                ["Data".into(), none(), none(), none(), none(), format!("{:04X}", v), none()]
+            }
+            (Kind::Word { cmd: true }, Some(MIL1553_COMMAND | MIL1553_COMMAND_2)) => {
+                let (transmit, sa, n) = (v >> 10 & 1 == 1, v >> 5 & 31, v & 31);
+                let what = if sa == 0 || sa == 31 {
+                    mil1553_mode_code(n).map_or_else(|| format!("Mode code {:02}", n), str::to_string)
+                } else {
+                    let words = if n == 0 { 32 } else { n };
+                    format!("{} word{}", words, if words == 1 { "" } else { "s" })
+                };
+                let dir = if transmit { "T" } else { "R" };
+                ["Command".into(), rt, dir.into(), format!("{:02}", sa), what, none(), none()]
+            }
+            (Kind::Word { cmd: true }, Some(MIL1553_STATUS)) => {
+                let set = MIL1553_FLAGS.iter().filter(|f| v & f.0 != 0).map(|f| f.1);
+                ["Status".into(), rt, none(), none(), none(), none(), set.collect::<Vec<_>>().join(" ")]
+            }
+            _ => ["Unknown".into(), none(), none(), none(), none(), none(), none()],
+        };
+        cells.into()
+    }
+    /// The one check of a word is its parity.
+    fn field_error(&self, p: &Packet) -> Option<&'static str> {
+        (!p.ok).then_some("Parity")
     }
     /// The sync of a word goes either way.
     fn start_edge(&self) -> Slope {
