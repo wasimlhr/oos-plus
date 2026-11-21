@@ -144,6 +144,14 @@ fn elsewhere(s: &Ui, menu: MenuId, it: Item) -> Place {
     match (menu, it) {
         // the sheet of a channel holds the rows of both pages, so it has no link to the second
         (M::Channel(_), Open(M::ChMore(_))) => Place::Elsewhere("the More tab of the same sheet"),
+        // a threshold of a decoder stands in the row of its line, at the right end (ADR 0034, ui-ux)
+        (M::Decode, DecThr | DecThrLine(_))
+            if [DecSrc, DecSrc2, DecCs, DecSrc4].into_iter().any(|line| {
+                s.sheet_line_thr(line) == Some(it) && s.sheet_spec(M::Decode).is_some_and(|sp| sp.tabs.iter().any(|t| t.rows.contains(&line)))
+            }) =>
+        {
+            Place::Elsewhere("the row of its line on the same sheet")
+        }
         // the sheet has the levels on a tab of its own
         (M::Measure, Open(M::MeasLevels)) if s.sheet_spec(M::Measure).is_some_and(|sp| sp.tabs.iter().any(|t| t.name == "Levels" && t.holds())) => Place::Elsewhere("the Levels tab of the same sheet"),
         // the statistics switch of the Default page is the first row of the Statistics page, which the sheet opens

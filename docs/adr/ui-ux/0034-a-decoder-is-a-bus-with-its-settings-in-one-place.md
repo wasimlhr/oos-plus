@@ -44,7 +44,9 @@ Menu > Bus opens the lane's sheet in Studio and no longer the Decode sheet. Whic
 on the protocol: one page for MIL-STD-1553, three for a UART (with step 2 the label and the position of the band are
 on Settings, so MIL-STD-1553 has two). With step 3 a decoder is called B1 to B4 on the screen of Minimal and Studio:
 "D1" is a line of the logic analyser too. The Default layout, the remote answers (`:DECode:EVENts?`, `:BUS<n>:DATA?`)
-and the commands keep their names. Steps 2 to 4 add settings (ADR 0046: a row of
+and the commands keep their names. With step 4 a line is one row of the sheet, its threshold at the right end of
+the row of its source; a polarity of each line and the formats of the band are not part of it: the model has one
+polarity, of a UART, and one format, hex or ASCII. Steps 2 to 4 add settings (ADR 0046: a row of
 `ui/src/settings/`, its menu row, its remote command) and change what the pill and the band write; stored
 identifiers (`dec_*` keys, `:DECode` and `:BUS<n>` commands) keep their names.
 
