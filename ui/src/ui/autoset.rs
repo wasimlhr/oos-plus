@@ -189,10 +189,11 @@ impl Ui {
         }
     }
     /// The auto set-up keeps the channels apart, a band each, only where they share one graticule: not in a lane each
-    /// (Stacked), and not in Studio's Overlay, where the signals lie on one another (`choose_trace_mode`). Before,
-    /// Auto in Overlay put each channel in a band of its own, and the plot looked like lanes.
+    /// (Stacked), and not in Studio's Overlay on one plot, where the signals lie on one another (`choose_trace_mode`).
+    /// Before, Auto in Overlay put each channel in a band of its own, and the plot looked like lanes. Overlay keeps a
+    /// split (`trace_mode`): channels that share a window of it keep their bands there.
     pub(super) fn auto_apart(&self) -> bool {
-        self.m.layout != Layout::Studio && !self.trace_stacked()
+        !self.trace_stacked() && (self.m.layout != Layout::Studio || self.m.win_layout != WinLayout::One)
     }
 
     pub(super) fn auto_operation(&self) -> Option<u64> {
@@ -1408,6 +1409,16 @@ mod tests {
         };
         // one graticule shared: a band each, CH1 two divisions over the centre, CH2 two under it
         let apart = auto(Layout::Default, false);
+        // Studio's Overlay keeps a split, and two channels in one window of it keep their bands there
+        let mut ui = Ui::new(Source::Demo { t: 0.0 });
+        ui.m.layout = Layout::Studio;
+        ui.m.ch[1].on = true;
+        ui.m.win_layout = WinLayout::Rows;
+        ui.m.ch_win = [0, 0, 1, 1];
+        ui.relayout();
+        ui.trace_mode(false);
+        assert_eq!(ui.m.win_layout, WinLayout::Rows, "Overlay keeps the split");
+        assert!(ui.auto_apart(), "CH1 and CH2 share the first window");
         for (layout, stacked) in [(Layout::Studio, false), (Layout::Studio, true), (Layout::Default, true)] {
             let whole = auto(layout, stacked);
             for (c, y) in [(0, 2.0), (1, -2.0)] {

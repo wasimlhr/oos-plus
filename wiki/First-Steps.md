@@ -36,7 +36,7 @@ Tap the sample rate at the top for **Acquire**. The rate itself follows the time
 
 ## Auto
 
-The Auto key sets up the channels that are on: levels, time base and trigger, and it sets the memory depth back to Auto. It searches at full bandwidth and then gives each channel its own bandwidth back. With no signal it restores your set-up. In one shared plot the channels get a band each, one above the other; with Stacked traces, or Overlay in Studio, each channel gets the whole height and the view stays as it was.
+The Auto key sets up the channels that are on: levels, time base and trigger, and it sets the memory depth back to Auto. It searches at full bandwidth and then gives each channel its own bandwidth back. With no signal it restores your set-up. In one shared plot the channels get a band each, one above the other; with Stacked traces, or Overlay in Studio on one plot, each channel gets the whole height and the view stays as it was.
 
 ![After Auto](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/auto-bar.png)
 
