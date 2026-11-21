@@ -650,6 +650,9 @@ impl Popup {
 pub(crate) struct Workspace {
     selected_source: Option<WaveId>,
     pub stacked: bool,
+    /// The lower pane that was open when the expand button took the plot to Full (which closes it): the way back
+    /// from Full opens it again. 0: none.
+    pub pane_before_full: usize,
     pub eye_float: Option<Rect>,
     pub eye_left: bool,
     pub measure_float: Option<(i32, i32)>,

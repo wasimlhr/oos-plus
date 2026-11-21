@@ -1535,11 +1535,12 @@ impl Ui {
         let dragging = matches!(self.studio.dock.drag, Some(DockDrag::Divider { .. }));
         for d in &lay.dividers {
             let (cx, cy) = (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2);
-            let h = if d.dir == Dir::H { Rect::new(cx - 12, cy - 22, 24, 44) } else { Rect::new(cx - 22, cy - 12, 44, 24) };
-            cv.round(h, 5, if dragging { ACCENT } else { BTN_BORDER }, 255);
-            cv.round(h.inset(1), 4, BTN, 255);
+            // a slim pill (it was a box of 24 x 44 px over the views on both sides); the touch area is the same
+            let h = if d.dir == Dir::H { Rect::new(cx - 5, cy - 14, 10, 28) } else { Rect::new(cx - 14, cy - 5, 28, 10) };
+            cv.round(h, 4, if dragging { ACCENT } else { BTN_BORDER }, 255);
+            cv.round(h.inset(1), 3, BTN, 255);
             for i in -1..=1 {
-                if d.dir == Dir::H { cv.fill(Rect::new(cx - 1, cy + i * 8 - 1, 2, 2), DIM); } else { cv.fill(Rect::new(cx + i * 8 - 1, cy - 1, 2, 2), DIM); }
+                if d.dir == Dir::H { cv.fill(Rect::new(cx - 1, cy + i * 6 - 1, 2, 2), DIM); } else { cv.fill(Rect::new(cx + i * 6 - 1, cy - 1, 2, 2), DIM); }
             }
         }
         let z = &self.studio.dock.z;

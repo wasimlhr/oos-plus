@@ -790,6 +790,21 @@ fn the_tree_text_of_a_group_round_trips() {
     assert!(Node::parse("G2(WE)").is_none() && Node::parse("G0(W)").is_none() && Node::parse("G0(WW)").is_none() && Node::parse("H0.500(G0(WE),E)").is_none());
 }
 
+#[test]
+fn full_screen_round_trip_keeps_the_added_views() {
+    let mut u = studio();
+    u.select_option(Item::PaneSel, "Trend");
+    u.m.hist = Hist::Vertical;
+    u.table.kind = Some(tables::TableKind::Search);
+    settle(&mut u);
+    let before = (u.m.pane, u.m.hist, u.table.kind.is_some(), u.m.win_layout);
+    u.toggle_expand();
+    settle(&mut u);
+    u.toggle_expand();
+    settle(&mut u);
+    assert_eq!(before, (u.m.pane, u.m.hist, u.table.kind.is_some(), u.m.win_layout));
+}
+
 // Break it catches: behind another tab the spectrum is not updated with new records, and the spectrum queries answered
 // its old result (a review of the change that computes them for the query when the page is closed).
 #[test]

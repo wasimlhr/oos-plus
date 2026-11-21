@@ -222,7 +222,7 @@ fn rows_call_the_existing_menu_logic() {
     let inv = g.rows.iter().find(|r| r.it == Item::ChInvert(0)).unwrap();
     assert_eq!(inv.kind, RowKind::Toggle);
     let was = u.m.ch[0].invert;
-    tap_in(&mut u, inv.row);
+    tap_in(&mut u, Ui::sheet_toggle_half(inv.ctrl, !was));
     assert_ne!(u.m.ch[0].invert, was);
     // number: scale +
     let sc = g.rows.iter().find(|r| r.it == Item::ChScale(0)).unwrap();
@@ -373,10 +373,18 @@ fn every_row_of_the_add_list_has_a_preview_and_filters_work() {
     let g = u.sheet_add_geo();
     assert!(g.rows.len() >= 5, "a screenful: {}", g.rows.len());
     for (_, r) in &g.rows { assert!(r.h >= 60); assert!(r.x >= u.sheet_rect().x && r.right() <= u.sheet_rect().right()); }
-    // categories: four chips, each with entries; Power needs sources, so it may say why
-    for (i, c) in g.groups.iter().enumerate() {
-        assert!(c.h >= 40 && c.w >= 40, "chip {i}");
-        tap_in(&mut u, *c);
+    // the categories of the Measure page, in a list the name opens; each has entries (Power needs sources, so it
+    // may say why)
+    assert_eq!(super::meascatalog::add_categories().collect::<Vec<_>>(), crate::measures::CATEGORIES.iter().map(|c| c.name).collect::<Vec<_>>());
+    for i in 0..g.cat_rows.len() {
+        let v = u.sheet_add_geo().cat_value;
+        tap_in(&mut u, v);
+        assert!(u.sheet.add_cats);
+        if i == 3 { shot(&mut u, "add-category-list"); }
+        let row = u.sheet_add_geo().cat_rows[i];
+        assert!(row.h >= 40, "row {i}");
+        tap_in(&mut u, row);
+        assert!(!u.sheet.add_cats);
         assert_eq!(u.sheet.add_group, i);
         assert!(!u.sheet_add_geo().rows.is_empty(), "category {i} has entries");
     }
@@ -399,8 +407,7 @@ fn an_unavailable_item_says_why_and_offers_the_fix_in_place() {
     // Power: voltage on CH1, current on CH2, and CH2 is off
     u.sources.a = WaveId::Ch(0);
     u.sources.b = WaveId::Ch(1);
-    let g = u.sheet_add_geo();
-    tap_in(&mut u, g.groups[2]);
+    u.sheet.add_group = super::meascatalog::add_categories().position(|n| n == "Power").expect("Power");
     let g = u.sheet_add_geo();
     let entries = u.sheet_add_entries();
     let (_, row) = *g.rows.iter().find(|r| super::meascatalog::Preview::Off(1) == u.add_preview(entries[r.0].cat)).expect("an item that needs CH2");
@@ -563,4 +570,28 @@ fn the_channels_a_line_does_not_have_are_dimmed() {
         // readable: nearer to the channel's colour than to the button it stands on
         assert!(light(ink) >= (light(BTN) + light(col)) / 2, "text {ink:06x} on {BTN:06x}");
     }
+}
+
+#[test]
+fn the_trigger_tag_keeps_clear_of_the_windows_button() {
+    let mut u = studio();
+    for _ in 0..3 { u.step(0.05); }
+    let b = u.win_btn().1;
+    let (g, y) = (u.plot.grid, b.y + b.h / 2);
+    let x1 = u.trigger_tag_x(g.x + g.w - MARK_W, y);
+    assert!(x1 + MARK_W <= b.x, "the tag {x1} reaches the button {b:?}");
+}
+
+#[test]
+fn clearing_a_reference_takes_the_measurements_that_read_it() {
+    let mut u = studio();
+    u.refs[0] = Some(RefWave::test(vec![0.0, 1.0, 0.0, 1.0], 1e-6, 0.0));
+    let eye = crate::measures::all().map(|x| x.1).find(|d| d.name == "Eye Height").expect("Eye Height");
+    u.m.cat.push((eye.id, WaveId::Ref(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)));
+    u.m.meas.push((Meas::Vpp, WaveId::Ref(0)));
+    u.m.meas.push((Meas::Vpp, WaveId::Ch(0)));
+    u.ref_clear_slot(0);
+    assert!(u.m.cat.is_empty(), "the catalogue's row went with the slot");
+    assert!(!u.m.meas.iter().any(|(_, w)| matches!(w, WaveId::Ref(_))), "the standard ones too");
+    assert!(u.m.meas.contains(&(Meas::Vpp, WaveId::Ch(0))), "a channel's stay");
 }

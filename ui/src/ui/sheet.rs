@@ -7,7 +7,7 @@
 //! with `value`, `options`, `select_option`, `adjust` and `activate`. This file maps items to row types, splits
 //! long pages into tabs and draws them. A page that does not fit the pattern (more than seven rows in a tab, more
 //! than four tabs, keypad lists) is not converted: `sheet_spec` returns None and the classic dialog is used.
-use super::meascatalog::{AddEntry, Preview, ADD_GROUPS};
+use super::meascatalog::{AddEntry, Preview};
 use super::studio::StudioView;
 use super::*;
 
@@ -84,6 +84,8 @@ pub(super) struct SheetState {
     page_key: Option<(MenuId, Option<Item>)>,
     page: usize,
     pub add_group: usize,
+    /// the list of the categories of the add flow is open
+    pub add_cats: bool,
     pub search: String,
     /// how far the Menu page is moved up
     pub scroll: i32,
@@ -642,6 +644,18 @@ impl Ui {
         }
     }
 
+    /// The button of an Off | On row that sets `on` (tests tap it).
+    #[cfg(test)]
+    pub(super) fn sheet_toggle_half(c: Rect, on: bool) -> Rect {
+        let sw = (c.w - 4) / 2;
+        Rect::new(c.x + if on { sw + 4 } else { 0 }, c.y, sw, c.h)
+    }
+
+    /// The toggle rows whose value is not "Off" or "On": one step is the switch.
+    pub(super) fn sheet_is_switch(it: Item) -> bool {
+        matches!(it, Item::SimShow)
+    }
+
     /// The row type of an item, from the control the classic dialog would give it.
     pub(super) fn sheet_row_kind(&self, it: Item) -> RowKind {
         let w = SHEET_W - 2 * PAD - self.sheet_label_w(it);
@@ -805,7 +819,7 @@ impl Ui {
             let label = Rect::new(row.x, row.y, lw, row.h);
             let ctrl = match kind {
                 RowKind::Link => Rect::new(row.x, row.y + 2, row.w, SHEET_ROW - 4),
-                RowKind::Toggle => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
+                RowKind::Toggle if Self::sheet_is_switch(it) => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
                 _ => Rect::new(row.x + lw, row.y + 2, row.w - lw, SHEET_ROW - 4),
             };
             rows.push(SheetRowGeo { it, kind, row, label, ctrl });
@@ -994,6 +1008,20 @@ impl Ui {
                 btn(cv, pl, BTN, BTN_BORDER);
                 Self::draw_sign(cv, pl, true);
             }
+            RowKind::Toggle if !Self::sheet_is_switch(it) => {
+                let on = self.sheet_on(it);
+                let sw = (c.w - 4) / 2;
+                for (k, o) in ["Off", "On"].into_iter().enumerate() {
+                    let r = Rect::new(c.x + k as i32 * (sw + 4), c.y, sw, c.h);
+                    if on == (k == 1) {
+                        cv.round(r, 5, ACCENT, 255);
+                        cv.text_in(&f.sb, r, 1, o, DARK_TEXT);
+                    } else {
+                        btn(cv, r, BTN, BTN_BORDER);
+                        cv.text_in(&f.s, r, 1, o, TEXT);
+                    }
+                }
+            }
             RowKind::Toggle => {
                 let on = self.sheet_on(it);
                 cv.round(c, c.h / 2, if on { ACCENT } else { BTN_BORDER }, 255);
@@ -1157,14 +1185,21 @@ impl Ui {
             }
             RowKind::Toggle => {
                 if let Item::RefShow(_) = it {
-                    self.activate(it);
+                    // Off | On like the others, but one activation is what flips it
+                    let want = if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !self.sheet_on(it) };
+                    if want != self.sheet_on(it) { self.activate(it); }
                 } else if it == Item::SimShow {
                     // one step is the switch: its value is the slot's name, never "On" or "Off", and selecting an
                     // option stepped it eight times, back to where it was
                     self.adjust(it, 1);
                 } else {
                     let on = self.sheet_on(it);
-                    self.select_option(it, if on { "Off" } else { "On" });
+                    // Off | On: a button sets its own state, the one that is set stays; a tap beside the two
+                    // (the label) flips it
+                    let want = if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !on };
+                    if want != on {
+                        self.select_option(it, if on { "Off" } else { "On" });
+                    }
                 }
             }
             RowKind::Link => self.activate(it),
@@ -1274,6 +1309,14 @@ impl Ui {
         self.sheet.search.clear();
     }
 
+    /// The category of the add list (the categories of the Measure page).
+    fn sheet_add_category(&mut self, i: i32) {
+        self.sheet.add_group = i as usize;
+        self.sheet.search.clear();
+        self.studio.md.tile_scroll = 0;
+        self.sheet_set_page(None, 0);
+    }
+
     pub(super) fn sheet_pick_source(&mut self, id: WaveId) {
         let name = self.wave_name(id);
         self.select_option(Item::MeasSrc, &name);
@@ -1282,8 +1325,11 @@ impl Ui {
     /// The entries of the list the filter leaves: the search text, else the category chip.
     pub(super) fn sheet_add_entries(&self) -> Vec<AddEntry> {
         let q = self.sheet.search.trim().to_ascii_lowercase();
+        let mut seen: Vec<u16> = Vec::new();
         super::meascatalog::add_entries().into_iter().filter(|e| {
-            if q.is_empty() { e.group == self.sheet.add_group } else { e.name.to_ascii_lowercase().contains(&q) }
+            if q.is_empty() { return e.group == self.sheet.add_group; }
+            // a measurement that several categories list is found once
+            e.name.to_ascii_lowercase().contains(&q) && !seen.contains(&e.cat.id) && { seen.push(e.cat.id); true }
         }).collect()
     }
 
@@ -1296,23 +1342,29 @@ impl Ui {
         let n = shown.len().clamp(1, 8) as i32;
         let cw = (w - (n - 1) * 4) / n;
         let chips = shown.iter().take(8).enumerate().map(|(i, &id)| (id, Rect::new(r.x + PAD + i as i32 * (cw + 4), y0 + 2, cw, 40))).collect();
-        let gw = (w - 4 * 4) / 5;
-        let groups = (0..ADD_GROUPS.len()).map(|i| Rect::new(r.x + PAD + i as i32 * (gw + 4), y0 + 46, gw, 40)).collect();
-        let find = Rect::new(r.x + PAD + 4 * (gw + 4), y0 + 46, gw, 40);
-        let list_y = y0 + 90;
+        // the category as in a menu row: - name + (the name opens the list of them), and Find at its right
+        let find = Rect::new(r.x + PAD + w - 76, y0 + 46, 76, 44);
+        let (cat_minus, cat_value, cat_plus) = Self::value_parts(Rect::new(r.x + PAD, y0 + 46, w - 76 - 6, 44));
+        let list_y = y0 + 94;
         // a grid of tiles, two across: a picture and a name each
-        let fit = Self::tile_fit(self.tiles_avail(list_y));
-        let entries = self.sheet_add_entries();
-        let _ = fit;
         // the grid scrolls inside its category: no pages, no pager
         let list = Rect::new(r.x + PAD, list_y, w, r.bottom() - 8 - list_y);
-        let scroll = self.studio.md.tile_scroll.clamp(0, self.tile_scroll_max_of(entries.len(), list.h));
-        let rows: Vec<(usize, Rect)> = (0..entries.len())
-            .map(|k| (k, Self::tile_rect(Rect::new(list.x, list.y - scroll, list.w, list.h), k)))
+        let (tiles, heads, total) = self.add_layout(list);
+        let scroll = self.studio.md.tile_scroll.clamp(0, self.tile_scroll_max_of(total, list.h));
+        let rows: Vec<(usize, Rect)> = tiles
+            .into_iter()
+            .enumerate()
+            .map(|(k, t)| (k, Rect::new(t.x, t.y - scroll, t.w, t.h)))
             .filter(|(_, t)| t.bottom() > list.y && t.y < list.bottom())
             .collect();
+        let heads: Vec<(Rect, &'static str)> = heads
+            .into_iter()
+            .map(|(r, n)| (Rect::new(r.x, r.y - scroll, r.w, r.h), n))
+            .filter(|(r, _)| r.bottom() > list.y && r.y < list.bottom())
+            .collect();
         let none = Rect::new(0, 0, 0, 0);
-        AddGeo { chips, groups, find, rows, page: 0, pages: 1, prev: none, next: none, list }
+        let cat_rows = (0..super::meascatalog::add_categories().count()).map(|i| Rect::new(list.x, list.y + i as i32 * 48, list.w, 44)).collect();
+        AddGeo { chips, cat_minus, cat_value, cat_plus, cat_rows, find, rows, heads, page: 0, pages: 1, prev: none, next: none, list }
     }
 
     /// The button beside the close button of the quick Add panel: it opens the Measure page of every layout, with
@@ -1350,16 +1402,17 @@ impl Ui {
             cv.text_in(&f.mb, c, 1, &self.wave_name(id), if on { DARK_TEXT } else { TEXT });
         }
         let searching = !self.sheet.search.trim().is_empty();
-        for (i, c) in g.groups.iter().enumerate() {
-            let on = !searching && i == self.sheet.add_group;
-            if on {
-                cv.round(*c, 5, rgb(0x2e, 0x2e, 0x32), 255);
-                cv.round_outline(*c, 5, ACCENT);
-            } else {
-                btn(cv, *c, BTN, BTN_BORDER);
-            }
-            cv.text_in(&f.s, *c, 1, ADD_GROUPS[i], if on { TEXT } else { DIM });
-        }
+        let names: Vec<&str> = super::meascatalog::add_categories().collect();
+        btn(cv, g.cat_minus, BTN, BTN_BORDER);
+        Self::draw_sign(cv, g.cat_minus, false);
+        btn(cv, g.cat_value, BTN, BTN_BORDER);
+        let name = names[self.sheet.add_group.min(names.len() - 1)];
+        cv.set_clip(Rect::new(g.cat_value.x + 6, g.cat_value.y, g.cat_value.w - 30, g.cat_value.h));
+        cv.text_in(if searching { &f.s } else { &f.m }, Rect::new(g.cat_value.x + 10, g.cat_value.y, g.cat_value.w - 34, g.cat_value.h), 0, if searching { "Results" } else { name }, if searching { DIM } else { TEXT });
+        cv.no_clip();
+        chevron_down(cv, g.cat_value.x + g.cat_value.w - 18, g.cat_value.y + g.cat_value.h / 2 - 3, DIM);
+        btn(cv, g.cat_plus, BTN, BTN_BORDER);
+        Self::draw_sign(cv, g.cat_plus, true);
         btn(cv, g.find, if searching { ACCENT } else { BTN }, if searching { ACCENT } else { BTN_BORDER });
         let label = if searching { format!("\u{d7} {}", self.sheet.search.trim()) } else { "Find".to_string() };
         cv.set_clip(g.find);
@@ -1374,9 +1427,21 @@ impl Ui {
         for &(k, tile) in &g.rows {
             self.draw_add_tile(cv, tile, entries[k].cat);
         }
+        for &(r, name) in &g.heads {
+            cv.text_in(&f.s, Rect::new(r.x + 4, r.y, r.w - 8, r.h), 0, name, DIM);
+        }
         cv.no_clip();
+        if self.sheet.add_cats {
+            // the list of the categories, over the tiles
+            cv.round(g.list.inset(-2), 6, PANEL_BG, 255);
+            for (i, r) in g.cat_rows.iter().enumerate() {
+                let on = i == self.sheet.add_group;
+                if on { cv.round(*r, 5, ACCENT, 255); } else { btn(cv, *r, BTN, BTN_BORDER); }
+                cv.text_in(&f.m, Rect::new(r.x + 12, r.y, r.w - 12, r.h), 0, names[i], if on { DARK_TEXT } else { TEXT });
+            }
+        }
         // a scrollbar, since there is no pager
-        let total = entries.len().div_ceil(super::addtiles::TILE_COLS as usize) as i32 * super::addtiles::TILE_H;
+        let total = self.add_layout(g.list).2;
         if total > g.list.h {
             let (x, th) = (g.list.right() - 3, (g.list.h * g.list.h / total).max(20));
             let ty = g.list.y + (g.list.h - th) * self.studio.md.tile_scroll.clamp(0, (total - g.list.h).max(1)) / (total - g.list.h).max(1);
@@ -1396,15 +1461,16 @@ impl Ui {
                 return true;
             }
         }
-        for (i, c) in g.groups.iter().enumerate() {
-            if c.contains(x, y) {
-                self.sheet.add_group = i;
-                self.sheet.search.clear();
-                self.studio.md.tile_scroll = 0;
-                self.sheet_set_page(None, 0);
-                return true;
-            }
+        let n = g.cat_rows.len() as i32;
+        if self.sheet.add_cats {
+            // the list is open: a row chooses, a tap elsewhere only closes it
+            self.sheet.add_cats = false;
+            if let Some(i) = g.cat_rows.iter().position(|r| r.contains(x, y)) { self.sheet_add_category(i as i32); }
+            return true;
         }
+        if g.cat_value.contains(x, y) { self.sheet.add_cats = true; return true; }
+        if g.cat_minus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 - 1).rem_euclid(n)); return true; }
+        if g.cat_plus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 + 1).rem_euclid(n)); return true; }
         if g.find.contains(x, y) {
             if self.sheet.search.trim().is_empty() {
                 self.wlan.osk = Some(wlan::Osk::for_search(""));
@@ -1518,9 +1584,15 @@ pub(super) struct AddGeo {
     /// the room of the tile grid
     pub list: Rect,
     pub chips: Vec<(WaveId, Rect)>,
-    pub groups: Vec<Rect>,
+    pub cat_minus: Rect,
+    pub cat_value: Rect,
+    pub cat_plus: Rect,
+    /// the rows of the list of the categories, while it is open
+    pub cat_rows: Vec<Rect>,
     pub find: Rect,
     pub rows: Vec<(usize, Rect)>,
+    /// the headings of the groups between the tiles
+    pub heads: Vec<(Rect, &'static str)>,
     #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub page: usize,
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it

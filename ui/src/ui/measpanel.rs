@@ -514,30 +514,49 @@ impl Ui {
             cv.text(&f.s, r.x + 8, r.y + 15, &self.panel_row_name(keys.get(i).copied(), &row.name), LABEL);
             cv.set_clip(g.list);
             icon_pin(cv, r.right() - 16, r.y + 12, is_pinned, if is_pinned { AMBER } else { DIM });
-            // the value, and the source at the right of its line
+            // the value, and the source at the right of its line: when the value is too wide for both (a card of a
+            // side panel is 148 px) it has the whole line, and the source goes to the line under it
             let src = self.wave_name(row.src);
             let sw = f.sb.width(&src);
-            cv.set_clip(Rect::new(r.x + 4, r.y + 18, (r.w - 8 - sw - 10).max(1), 24));
-            cv.text(&f.lb, r.x + 8, r.y + 38, &row.text(), TEXT);
-            cv.set_clip(Rect::new(r.x + 4, r.y + 18, r.w - 8, 24));
-            cv.text(&f.sb, r.right() - 8 - sw, r.y + 37, &src, col);
-            // the statistics: mean and deviation, or minimum and maximum, then the count while there is room
+            let text = row.text();
             let st = self.studio_stat_values(i);
-            if self.studio.panel.stats_mode != 0 || st.is_some() {
+            let stats = self.studio.panel.stats_mode != 0 || st.is_some();
+            // without statistics the third line says the source, and the value has the whole line
+            let beside = stats && f.lb.width(&text) + sw + 14 <= r.w - 8;
+            cv.set_clip(Rect::new(r.x + 4, r.y + 18, if beside { (r.w - 8 - sw - 10).max(1) } else { r.w - 8 }, 24));
+            cv.text(&f.lb, r.x + 8, r.y + 38, &text, TEXT);
+            if beside {
+                cv.set_clip(Rect::new(r.x + 4, r.y + 18, r.w - 8, 24));
+                cv.text(&f.sb, r.right() - 8 - sw, r.y + 37, &src, col);
+            } else if !stats {
+                // no statistics: the line under the value says where it was measured
+                cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8, 18));
+                cv.text(&f.sb, r.x + 8, r.y + 54, &src, col);
+            }
+            // the statistics: mean and deviation, or minimum and maximum, then the count while there is room
+            let mut src_said = beside || !stats;
+            if stats {
                 let cell = |v: Option<f64>| v.map_or("----".to_string(), |v| row.fmt(v));
                 let room = r.w - 16;
                 let range = self.studio.panel.stats_mode == 2;
                 let (a, b) = if range { (cell(st.map(|s| s.1)), cell(st.map(|s| s.2))) } else { (cell(st.map(|s| s.0)), cell(st.map(|s| s.3))) };
                 let line = Self::card_stats_line(&f.s, range, row.unit, &a, &b, room);
                 let n = self.results.rows.get(i).map_or(0, |s| s.n);
-                let count = if n > 0 { format!("n {n}") } else { String::new() };
-                let with_count = !count.is_empty() && f.s.width(&line) + 10 + f.s.width(&count) <= room;
-                cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8 - if with_count { f.s.width(&count) + 8 } else { 0 }, 18));
+                // the source takes the place of the count when it did not fit beside the value
+                let tail = if beside { if n > 0 { format!("n {n}") } else { String::new() } } else { src.clone() };
+                let with_tail = !tail.is_empty() && f.s.width(&line) + 10 + f.sb.width(&tail) <= room;
+                cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8 - if with_tail { f.sb.width(&tail) + 8 } else { 0 }, 18));
                 cv.text(&f.s, r.x + 8, r.y + 53, &line, DIM);
-                if with_count {
+                if with_tail {
                     cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8, 18));
-                    cv.text(&f.s, r.right() - 8 - f.s.width(&count), r.y + 53, &count, DIM);
+                    cv.text(&f.sb, r.right() - 8 - f.sb.width(&tail), r.y + 53, &tail, if beside { DIM } else { col });
+                    src_said |= !beside;
                 }
+            }
+            // no room to say the source in words: the edge of the card has its colour
+            if !src_said {
+                cv.set_clip(g.list);
+                cv.round(Rect::new(r.x, r.y + 6, 3, r.h - 12), 1, col, 255);
             }
             cv.set_clip(g.list);
         }

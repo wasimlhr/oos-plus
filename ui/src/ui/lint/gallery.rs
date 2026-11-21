@@ -68,6 +68,7 @@ fn gallery_at(dir: &std::path::Path, ts: TextSize) {
         ("menu-network", M::Network),
         ("menu-remote", M::Remote),
         ("menu-time", M::Time),
+        ("menu-windows", M::Windows),
     ];
     let shot = |u: &mut Ui, n: &str| {
         for _ in 0..24 {
