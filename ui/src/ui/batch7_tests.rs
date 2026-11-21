@@ -75,7 +75,8 @@ fn the_minimal_sheet_has_the_levels_and_default_has_upstreams_rows() {
     // Minimal and Studio have the levels on their sheet (a tab of their own)
     let u = fresh(Layout::Minimal);
     let rows = u.items(MenuId::Measure);
-    for it in [Item::MeasLvType, Item::MeasRefs, Item::MeasLow, Item::MeasMid, Item::MeasHigh, Item::MeasHyst, Item::MeasBaseTop] {
+    let levels = [Item::MeasLvType, Item::MeasRefs, Item::MeasLow, Item::MeasMid, Item::MeasHigh, Item::MeasHyst];
+    for it in levels.into_iter().chain([Item::MeasBaseTop]) {
         assert!(rows.contains(&it), "Minimal {it:?}");
     }
 }

@@ -116,7 +116,9 @@ impl Ui {
             return o;
         }
         let v: &[&str] = match it {
-            Item::StripDock => return self.strip_docks().into_iter().map(|d| self.strip_dock_label(d).to_string()).collect(),
+            Item::StripDock => {
+                return self.strip_docks().into_iter().map(|d| self.strip_dock_label(d).to_string()).collect();
+            }
             Item::ChHide(_)
             | Item::MeasStats
             | Item::MeasLabels
@@ -574,9 +576,9 @@ impl Ui {
     const MEASURE_GROUPS: [(&'static str, usize); 5] =
         [("Sources", 0), ("Measure over", 0), ("Display", 0), ("Parameters", 1), ("More", 1)];
 
-    /// Measurement settings of the Default layout (upstream's): two columns of named groups (what is measured, over what, how the results show; the
-    /// parameters of single measurements, and the pages beside them), below the top bar. The pages of the last group
-    /// share a line.
+    /// Measurement settings of the Default layout (upstream's): two columns of named groups (what is measured, over
+    /// what, how the results show; the parameters of single measurements, and the pages beside them), below the top
+    /// bar. The pages of the last group share a line.
     fn measure_layout(&self) -> Dlg {
         const HEAD: i32 = 24;
         let l = self.lay();

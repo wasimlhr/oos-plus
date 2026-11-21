@@ -147,7 +147,9 @@ fn elsewhere(s: &Ui, menu: MenuId, it: Item) -> Place {
         // the sheet has the levels on a tab of its own
         (M::Measure, Open(M::MeasLevels)) if s.sheet_spec(M::Measure).is_some_and(|sp| sp.tabs.iter().any(|t| t.name == "Levels" && t.holds())) => Place::Elsewhere("the Levels tab of the same sheet"),
         // the statistics switch of the Default page is the first row of the Statistics page, which the sheet opens
-        (M::Measure, MeasStats) if s.sheet_source_has(M::Measure, Open(M::MeasStat)) => Place::Elsewhere("the Statistics page of the same sheet"),
+        (M::Measure, MeasStats) if s.sheet_source_has(M::Measure, Open(M::MeasStat)) => {
+            Place::Elsewhere("the Statistics page of the same sheet")
+        }
         // where the strip docks: Studio has no strip, its measurements are badges and the table (View menu)
         (M::Measure, StripDock) => Place::Elsewhere("View menu: badges, docked or floating table"),
         // the skin and the choice of the bottom bar belong to the Default bars
