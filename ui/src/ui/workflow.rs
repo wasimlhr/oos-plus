@@ -228,7 +228,7 @@ mod tests {
         let second = u.meas_at(WaveId::Ref(0), Meas::Vpp);
         assert!((first - 1.0).abs() < 0.01 && (second - 2.0).abs() < 0.01, "{first} {second}");
         assert!(u.replay.captures > count);
-        assert_eq!(u.mstat[0].n, 2);
+        assert_eq!(u.results.rows[0].n, 2);
         u.key(key::RUNSTOP);
         let held = (u.replay.captures, u.view(), second);
         u.step(0.5);
@@ -594,11 +594,11 @@ stat.push(value, current);
             return;
         }
         let rows = self.meas_rows();
-        self.mstat.resize(rows.len(), MStat::default());
+        self.results.rows.resize(rows.len(), MStat::default());
         pending.rows.retain(|&index| {
             let Some(row) = rows.get(index) else { return false };
             if row.computing { return true; }
-            Self::add_capture_statistic(&mut self.mstat[index], row.v, self.m.meas_pop_current);
+            Self::add_capture_statistic(&mut self.results.rows[index], row.v, self.m.meas_pop_current);
             false
         });
         if !pending.rows.is_empty() {
@@ -1137,10 +1137,10 @@ stat.push(value, current);
         self.measure_refs();
         self.analyzer_update();
         let rows = self.meas_rows();
-        self.mstat.resize(rows.len(), MStat::default());
+        self.results.rows.resize(rows.len(), MStat::default());
         let mut pending = Vec::new();
         let current = self.m.meas_pop_current;
-        for (index, (row, stat)) in rows.iter().zip(&mut self.mstat).enumerate() {
+        for (index, (row, stat)) in rows.iter().zip(&mut self.results.rows).enumerate() {
             if row.computing { pending.push(index); }
             else { Self::add_capture_statistic(stat, row.v, current); }
         }

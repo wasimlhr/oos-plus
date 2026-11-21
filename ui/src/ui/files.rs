@@ -211,7 +211,7 @@ impl Ui {
                 self.rec_action(":SAVE:IMAGe");
                 // without the dialog on it: the screen is saved after the next frame
                 self.close_menu();
-                self.shot_request = Some(path.to_string_lossy().into_owned());
+                self.asks.shot = Some(path.to_string_lossy().into_owned());
             }
             FileKind::FastFrame => self.ff_save_to(Some(path)),
         }
@@ -387,7 +387,7 @@ mod tests {
         u.activate(Item::StorePng);
         u.wlan.osk.as_mut().unwrap().text = "front".into();
         u.osk_ok();
-        assert_eq!(u.shot_request.take(), Some(dir.join("front.png").to_string_lossy().into_owned()));
+        assert_eq!(u.asks.shot.take(), Some(dir.join("front.png").to_string_lossy().into_owned()));
         assert!(!u.menu_open, "the screenshot is taken without the menu on it");
         u.open_menu(MenuId::Storage);
         u.activate(Item::StoreSaveScpi);
@@ -561,7 +561,7 @@ mod tests {
             u.file_save_auto(FileKind::FastFrame);
             u.file_save_auto(FileKind::Shot);
             assert!(u.wlan.osk.is_none() && u.take_file_request().is_none());
-            assert!(u.shot_request.take().is_some_and(|p| p.ends_with(".png")));
+            assert!(u.asks.shot.take().is_some_and(|p| p.ends_with(".png")));
         }
         let names: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         assert_eq!(names.iter().filter(|n| n.starts_with("wave-") && n.ends_with(".csv")).count(), 2, "{names:?}");
