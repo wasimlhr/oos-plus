@@ -17,6 +17,13 @@ A value with an SI unit takes its prefix (`2.00 mV`). A count reads as a whole n
 plain decimal (`0.498`), and `ppm`, `rpm` and `rpm/s` take no prefix (`1500 rpm`). Over SCPI (`:MEAS:STRIP?`)
 the values come in exponent form.
 
+With more measurements than three rows hold, the strip pages: **Prev** and **Next** stand in a row under it beside
+`Measurements 1-18 of 20` and the gate (Screen or Full record). A value that cannot be computed reads `----`, and the
+measurements of a channel that is off stay in the strip. In Minimal and Studio the strip takes the long names where
+they fit (`Positive Duty Cycle`), leaves out the measurements of a source that is off until it is on again, says in a
+few words why a value is missing (`none in window`), and is only as high as its values need, with Prev and Next in its
+last column.
+
 ### Adding a measurement
 
 1. Tap **Measure** in the top bar (or Menu > Measure; on a USB keyboard the key M). The measurement page opens.
