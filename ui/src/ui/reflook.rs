@@ -526,7 +526,7 @@ impl Ui {
         let Some(g) = self.cfg_geom() else { return };
         let index = self.meas_cfg.unwrap() as usize;
         let Some(&(k, id)) = self.m.meas.get(index) else { return };
-        let own = self.meas_own.get(&(k, id)).copied().unwrap_or_else(|| MeasOwn::shared(&self.m));
+        let d = self.dlg_values(k, id);
         let f = &self.fonts();
         cv.framed(g.panel, 8, 2, ACCENT, 7, DLG_BG);
         cv.text(&f.mb, g.panel.x + 16, g.panel.y + 26, &format!("{} settings", k.name()), TEXT);
@@ -536,9 +536,13 @@ impl Ui {
         self.cfg_caption(cv, g.panel, 1, "Reference");
         let source = Rect::new(g.source_m.x, g.source_m.y, g.source_p.x + g.source_p.w - g.source_m.x, g.source_m.h);
         self.draw_stepper(cv, g.source_m, g.source_p, source, &self.wave_name(id));
-        let (low, high) = if own.refs_set { (own.low, own.high) } else { (self.m.meas_lpct, self.m.meas_hpct) };
         btn(cv, g.refs, BTN, BTN_BORDER);
-        cv.text_in(&f.mb, g.refs, 1, &format!("{:.0}/{:.0}", low * 100.0, high * 100.0), TEXT);
+        let refs = if self.m.meas_lv.absolute {
+            format!("{}/{}", si_short(d.low, "V"), si_short(d.high, "V"))
+        } else {
+            format!("{:.0}/{:.0}", d.low * 100.0, d.high * 100.0)
+        };
+        cv.text_in(&f.mb, g.refs, 1, &refs, TEXT);
         if matches!(k, Meas::Rise | Meas::Fall) {
             self.cfg_caption(cv, g.panel, 2, "Edges used");
             let text = self.meas_edge_coverage_caption(id, k);
@@ -546,24 +550,24 @@ impl Ui {
         }
         if let (Some(mi), Some(pl)) = (g.idle_m, g.idle_p) {
             self.cfg_caption(cv, g.panel, 2, "Idle");
-            let idle = if own.idle_set { own.idle } else { self.m.meas_idle };
+            let idle = d.idle;
             let text = if idle > 0.0 { si_short(idle, "s") } else { "period".into() };
             self.draw_stepper(cv, mi, pl, Rect::new(mi.x, mi.y, pl.x + pl.w - mi.x, mi.h), &text);
         }
         if let Some(side) = g.side {
             self.cfg_caption(cv, g.panel, 2, "Outside");
-            let which = if own.side_set { own.side } else { self.m.meas_out };
+            let which = d.side;
             btn(cv, side, BTN, BTN_BORDER);
             cv.text_in(&f.mb, side, 1, &format!("{:?}", which), TEXT);
         }
         if let (Some(mi), Some(pl)) = (g.n_m, g.n_p) {
             self.cfg_caption(cv, g.panel, 2, "N periods");
-            let n = if own.n_set { own.n } else { self.m.meas_n };
+            let n = d.n;
             self.draw_stepper(cv, mi, pl, Rect::new(mi.x, mi.y, pl.x + pl.w - mi.x, mi.h), &n.to_string());
         }
         if let Some(edges) = g.edges {
             self.cfg_caption(cv, g.panel, 3, "Edges");
-            let data = if own.data_set { own.data } else { self.m.meas_data };
+            let data = d.data;
             btn(cv, edges, BTN, BTN_BORDER);
             cv.text_in(&f.mb, edges, 1, if data { "Data" } else { "Clock" }, TEXT);
         }
@@ -650,75 +654,77 @@ impl Ui {
         self.clear_measurement_statistics();
     }
 
-    fn meas_cfg_refs(&mut self) {
-        let Some((_, k, id)) = self.cfg_entry() else { return };
-        let cur = self.meas_own.get(&(k, id)).copied().unwrap_or_else(|| MeasOwn::shared(&self.m));
-        let low = if cur.refs_set { cur.low } else { self.m.meas_lpct };
-        let (low, high) = if low < 0.15 { (0.2, 0.8) } else { (0.1, 0.9) };
-        if let Some(own) = self.meas_own.get_mut(&(k, id)) {
-            own.low = low;
-            own.high = high;
-            own.refs_set = true;
+    /// What the dialog shows for a row: its own settings (`Model::row_cfg`, the card's), else a value set by an older
+    /// version (`MeasOwn`), else the shared one of the Measure page.
+    fn dlg_values(&self, k: Meas, id: WaveId) -> MeasOwn {
+        let c = self.row_cfg_one(k, id);
+        let own = self.meas_own.get(&(k, id)).copied().unwrap_or_else(|| MeasOwn::shared(&self.m));
+        let pick = |set: bool, v: f64, shared: f64| if set { v } else { shared };
+        MeasOwn {
+            low: c.lo.unwrap_or(pick(own.refs_set, own.low, self.m.meas_lpct)),
+            high: c.hi.unwrap_or(pick(own.refs_set, own.high, self.m.meas_hpct)),
+            idle: c.idle.unwrap_or(pick(own.idle_set, own.idle, self.m.meas_idle)),
+            side: match c.side {
+                Some(0) => oos_dsp::measure::Outside::Above,
+                Some(1) => oos_dsp::measure::Outside::Below,
+                Some(_) => oos_dsp::measure::Outside::Both,
+                None if own.side_set => own.side,
+                None => self.m.meas_out,
+            },
+            n: c.n.unwrap_or(if own.n_set { own.n } else { self.m.meas_n }),
+            data: match c.n_edge {
+                Some(e) => e == 2,
+                None if own.data_set => own.data,
+                None => self.m.meas_data,
+            },
+            ..own
         }
+    }
+
+    /// Changes the row's own settings from the dialog.
+    fn dlg_edit(&mut self, f: impl FnOnce(&mut crate::model::RowCfg, MeasOwn)) {
+        let Some((_, k, id)) = self.cfg_entry() else { return };
+        let now = self.dlg_values(k, id);
+        let key = crate::model::RowKey::One(k, id);
+        let mut c = self.m.row_cfg(key).unwrap_or_default();
+        f(&mut c, now);
+        self.m.set_row_cfg(key, c);
         self.clear_measurement_statistics();
+    }
+
+    fn meas_cfg_refs(&mut self) {
+        if self.m.meas_lv.absolute {
+            self.toast("The levels are in volts: set them on the levels page");
+            return;
+        }
+        self.dlg_edit(|c, now| {
+            let (low, high) = if now.low < 0.15 { (0.2, 0.8) } else { (0.1, 0.9) };
+            (c.lo, c.hi) = (Some(low), Some(high));
+        });
     }
 
     fn meas_cfg_idle(&mut self, d: i32) {
-        let Some((_, k, id)) = self.cfg_entry() else { return };
-        let cur = self
-            .meas_own
-            .get(&(k, id))
-            .map(|o| if o.idle_set { o.idle } else { self.m.meas_idle })
-            .unwrap_or(self.m.meas_idle);
-        let v = super::tools::time_step(cur, d);
-        if let Some(own) = self.meas_own.get_mut(&(k, id)) {
-            own.idle = v;
-            own.idle_set = true;
-        }
-        self.clear_measurement_statistics();
+        self.dlg_edit(|c, now| c.idle = Some(super::tools::time_step(now.idle, d)));
     }
 
     fn meas_cfg_side(&mut self) {
-        let Some((_, k, id)) = self.cfg_entry() else { return };
-        let all = [oos_dsp::measure::Outside::Above, oos_dsp::measure::Outside::Below, oos_dsp::measure::Outside::Both];
-        let cur = self
-            .meas_own
-            .get(&(k, id))
-            .map(|o| if o.side_set { o.side } else { self.m.meas_out })
-            .unwrap_or(self.m.meas_out);
-        let i = all.iter().position(|&x| x == cur).unwrap_or(2);
-        let v = all[(i as i32 + 1).rem_euclid(all.len() as i32) as usize];
-        if let Some(own) = self.meas_own.get_mut(&(k, id)) {
-            own.side = v;
-            own.side_set = true;
-        }
-        self.clear_measurement_statistics();
+        use oos_dsp::measure::Outside;
+        self.dlg_edit(|c, now| {
+            c.side = Some(match now.side {
+                Outside::Above => 1,
+                Outside::Below => 2,
+                Outside::Both => 0,
+            })
+        });
     }
 
     fn meas_cfg_n(&mut self, d: i32) {
-        let Some((_, k, id)) = self.cfg_entry() else { return };
-        let cur =
-            self.meas_own.get(&(k, id)).map(|o| if o.n_set { o.n } else { self.m.meas_n }).unwrap_or(self.m.meas_n);
-        let v = (cur as i32 + d).clamp(1, 32) as u32;
-        if let Some(own) = self.meas_own.get_mut(&(k, id)) {
-            own.n = v;
-            own.n_set = true;
-        }
-        self.clear_measurement_statistics();
+        self.dlg_edit(|c, now| c.n = Some((now.n as i32 + d).clamp(1, 32) as u32));
     }
 
     fn meas_cfg_edges(&mut self) {
-        let Some((_, k, id)) = self.cfg_entry() else { return };
-        let cur = self
-            .meas_own
-            .get(&(k, id))
-            .map(|o| if o.data_set { o.data } else { self.m.meas_data })
-            .unwrap_or(self.m.meas_data);
-        if let Some(own) = self.meas_own.get_mut(&(k, id)) {
-            own.data = !cur;
-            own.data_set = true;
-        }
-        self.clear_measurement_statistics();
+        // Clock counts the rising edges, Data both (the card's Edge type)
+        self.dlg_edit(|c, now| c.n_edge = Some(if now.data { 0 } else { 2 }));
     }
 }
 
@@ -878,15 +884,17 @@ mod tests {
         let g = u.cfg_geom().expect("Burst has a settings dialog");
         assert!(g.refs.w > 0 && g.idle_m.is_some(), "Burst keeps its own idle");
         u.meas_cfg_tap(g.idle_p.unwrap().x + 4, g.idle_p.unwrap().y + 4);
-        let burst_idle = u.meas_own.get(&(Meas::Burst, WaveId::Ch(0))).unwrap().idle;
-        let vpp_own = u.meas_own.get(&(Meas::Vpp, WaveId::Ch(0))).unwrap();
-        assert!(!vpp_own.idle_set);
-        assert!(u.meas_own.get(&(Meas::Burst, WaveId::Ch(0))).unwrap().idle_set);
-        assert_ne!(burst_idle, vpp_own.idle);
+        // the dialog writes the row's own settings, which the card of Minimal and Studio shows
+        let burst = crate::model::RowKey::One(Meas::Burst, WaveId::Ch(0));
+        let burst_idle = u.m.row_cfg(burst).and_then(|c| c.idle).expect("Burst has its own idle");
+        assert!(u.m.row_cfg(crate::model::RowKey::One(Meas::Vpp, WaveId::Ch(0))).is_none(), "Vpp keeps following");
+        assert_ne!(burst_idle, u.m.meas_idle);
         // an own idle time above the 5 s of the steps goes down to 5 s, not to off
-        u.meas_own.get_mut(&(Meas::Burst, WaveId::Ch(0))).unwrap().idle = 10.0;
+        let mut c = u.m.row_cfg(burst).unwrap();
+        c.idle = Some(10.0);
+        u.m.set_row_cfg(burst, c);
         u.meas_cfg_tap(g.idle_m.unwrap().x + 4, g.idle_m.unwrap().y + 4);
-        assert_eq!(u.meas_own.get(&(Meas::Burst, WaveId::Ch(0))).unwrap().idle, 5.0);
+        assert_eq!(u.m.row_cfg(burst).unwrap().idle, Some(5.0));
     }
 
     #[test]

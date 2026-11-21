@@ -57,7 +57,7 @@ impl Ui {
     }
 
     /// The row settings of a single-source row, over the shared ones.
-    pub(super) fn row_cfg_one(&self, kind: Meas, owner: WaveId) -> crate::model::RowCfg {
+    pub(in crate::ui) fn row_cfg_one(&self, kind: Meas, owner: WaveId) -> crate::model::RowCfg {
         self.m.row_cfg(RowKey::One(kind, owner)).unwrap_or_default()
     }
 
