@@ -120,17 +120,17 @@ fn every_view_has_a_title_strip_with_its_name_and_a_close_x() {
 #[test]
 fn the_decode_table_and_the_sim_panel_have_strips_too() {
     let mut u = studio();
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     u.step(0.05);
     assert!(u.dock_content(VKind::Table).is_some() && u.dock_name(VKind::Table).starts_with("Search "), "the view is named by its table and count: {}", u.dock_name(VKind::Table));
     assert!(Ui::dock_strip(leaf(&u, VKind::Table)).h >= 24);
-    u.table = None;
+    u.table.kind = None;
     u.studio_set_view(StudioView::Sim);
     u.step(0.05);
     assert_eq!(u.dock_name(VKind::Sim), "SIM");
     assert!(Ui::dock_strip(leaf(&u, VKind::Sim)).h >= 24);
     // the waveform's plot sits inside its leaf, under the strip
-    let (w, g) = (leaf(&u, VKind::Wave), u.grid);
+    let (w, g) = (leaf(&u, VKind::Wave), u.plot.grid);
     assert!(g.y >= w.y + STRIP_H && g.bottom() <= w.bottom() && g.x >= w.x && g.right() <= w.right(), "{g:?} in {w:?}");
 }
 
@@ -157,7 +157,7 @@ fn dragging_a_strip_to_each_edge_of_another_view_splits_it_in_half() {
         assert_eq!((m.w * m.h + w.w * w.h) / 1000, (region.w * region.h) / 1000 - ((region.w * region.h) - (m.w * m.h + w.w * w.h)) / 1000, "no stray rooms");
         assert!(m.x >= region.x && w.right() <= region.right() && m.bottom() <= region.bottom() && w.bottom() <= region.bottom());
         // the lanes still draw inside the waveform
-        assert!(u.grid.y >= w.y + STRIP_H && u.grid.bottom() <= w.bottom() && u.grid.x >= w.x && u.grid.right() <= w.right(), "{side:?}: {:?} in {w:?}", u.grid);
+        assert!(u.plot.grid.y >= w.y + STRIP_H && u.plot.grid.bottom() <= w.bottom() && u.plot.grid.x >= w.x && u.plot.grid.right() <= w.right(), "{side:?}: {:?} in {w:?}", u.plot.grid);
     }
 }
 
@@ -338,7 +338,7 @@ fn a_tiled_two_by_two_layout() {
     let mut u = studio();
     docked(&mut u);
     u.studio_apply_panel(PanelKind::Spectrum);
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     u.step(0.05);
     for k in [VKind::Wave, VKind::Measure, VKind::Pane, VKind::Table] { assert!(u.dock_leaf(k).is_some(), "{k:?} is docked"); }
     // the waveform and the search events side by side on top, the spectrum and the measurements under them

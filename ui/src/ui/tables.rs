@@ -14,6 +14,13 @@ pub(super) enum TableKind {
     Segments,
 }
 
+/// The table window over the plot (ADR 0062): what it shows (None: no window) and the first row shown.
+#[derive(Default)]
+pub(super) struct Window {
+    pub kind: Option<TableKind>,
+    pub top: usize,
+}
+
 #[cfg(test)]
 mod reference_search_navigation_tests {
     use super::*;
@@ -37,7 +44,7 @@ mod reference_search_navigation_tests {
         ui.mstat = vec![MStat { n: 7, sum: 14.0, ..MStat::default() }];
         ui.adjust(Item::SearchOn, 1);
         ui.activate(Item::SearchTable);
-        assert_eq!(ui.table, Some(TableKind::Search));
+        assert_eq!(ui.table.kind, Some(TableKind::Search));
         let events = ui.search_events();
         assert_eq!(events.len(), 100);
         let (rect, _) = ui.table_rect(events.len());
@@ -218,8 +225,8 @@ impl Ui {
     }
 
     pub(super) fn table_toggle(&mut self, k: TableKind) {
-        self.table = if self.table == Some(k) { None } else { Some(k) };
-        self.table_top = 0;
+        self.table.kind = if self.table.kind == Some(k) { None } else { Some(k) };
+        self.table.top = 0;
         self.close_menu();
     }
 
@@ -240,12 +247,12 @@ impl Ui {
 
     /// The scroll bar of the open table and its rows.
     pub(super) fn table_bar(&self) -> Option<(scroll::Bar, Rect)> {
-        let k = self.table?;
+        let k = self.table.kind?;
         let total = self.table_total(k);
         let (r, fit) = self.table_rect(total);
         let rows = Rect::new(r.x, r.y + self.head_h(r), r.w, fit as i32 * ROW_H);
         let track = Rect::new(r.x + r.w - scroll::BAR_W - 2, rows.y, scroll::BAR_W, rows.h);
-        Some((scroll::Bar { track, total: total as i32, shown: fit as i32, pos: self.table_top as i32 }, rows))
+        Some((scroll::Bar { track, total: total as i32, shown: fit as i32, pos: self.table.top as i32 }, rows))
     }
 
     /// A docked table too narrow for the title and the controls on one row.
@@ -258,7 +265,7 @@ impl Ui {
 
     /// The title of the open table with its count. Docked it is the title of the view, so it costs no row of its own.
     pub(super) fn table_title(&self) -> String {
-        let Some(k) = self.table else { return String::new() };
+        let Some(k) = self.table.kind else { return String::new() };
         let total = self.table_total(k);
         match k {
             TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
@@ -289,10 +296,10 @@ impl Ui {
 
     /// The rows of the table that are on the screen, and its rectangle.
     pub(super) fn table_shown(&self) -> Option<(Rect, Vec<EventRow>)> {
-        let k = self.table?;
+        let k = self.table.kind?;
         let total = self.table_total(k);
         let (r, fit) = self.table_rect(total);
-        let top = self.table_top.min(total.saturating_sub(fit));
+        let top = self.table.top.min(total.saturating_sub(fit));
         let rows = if k == TableKind::Search {
             self.search_events().iter().copied().enumerate().skip(top).take(fit).map(|(i, t)| self.search_row(i, t)).collect()
         } else {
@@ -327,7 +334,7 @@ impl Ui {
     }
 
     pub(super) fn draw_table(&self, cv: &mut Canvas) {
-        let Some(k) = self.table else { return };
+        let Some(k) = self.table.kind else { return };
         let f = self.fonts();
         let (total, mut rows) = if k == TableKind::Search {
             (self.search_events().len(), Vec::new())
@@ -336,7 +343,7 @@ impl Ui {
             (rows.len(), rows)
         };
         let (r, fit) = self.table_rect(total);
-        let top = self.table_top.min(total.saturating_sub(fit));
+        let top = self.table.top.min(total.saturating_sub(fit));
         if k == TableKind::Search {
             rows = self
                 .search_events()
@@ -392,7 +399,7 @@ impl Ui {
 
     /// A tap while the table is open; true when it was on the table.
     pub(super) fn table_tap(&mut self, x: i32, y: i32) -> bool {
-        let Some(k) = self.table else { return false };
+        let Some(k) = self.table.kind else { return false };
         let events = (k == TableKind::Search).then(|| self.search_events());
         let rows = if events.is_none() { self.table_rows(k) } else { Vec::new() };
         let total = events.as_ref().map_or(rows.len(), |events| events.len());
@@ -401,14 +408,14 @@ impl Ui {
             return false;
         }
         let last = total.saturating_sub(fit);
-        self.table_top = self.table_top.min(last);
+        self.table.top = self.table.top.min(last);
         let on_bar = total > fit && x >= r.x + r.w - scroll::BAR_W - 2;
         if self.table_close(r).contains(x, y) {
-            self.table = None;
+            self.table.kind = None;
         } else if on_bar {
             // the scroll bar (moved by the finger, see ui/scroll.rs)
         } else if y >= r.y + self.head_h(r) {
-            let i = self.table_top + ((y - r.y - self.head_h(r)) / ROW_H) as usize;
+            let i = self.table.top + ((y - r.y - self.head_h(r)) / ROW_H) as usize;
             if k == TableKind::Segments && i < rows.len() {
                 self.seg_show(i);
             } else if let Some(t) =
@@ -500,7 +507,7 @@ impl Ui {
     /// The second pane: under the plot and the lanes.
     pub(super) fn pane_rect(&self) -> Rect {
         if self.dock_on() { return self.dock_content(super::dock::VKind::Pane).unwrap_or(Rect::new(0, 0, 1, 1)); }
-        let g = self.grid;
+        let g = self.plot.grid;
         Rect::new(g.x, g.y + g.h + 2 + self.eye_below() + self.la_strip_h(), g.w, self.pane_h() - 4)
     }
 

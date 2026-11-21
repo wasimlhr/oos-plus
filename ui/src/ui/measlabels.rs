@@ -136,7 +136,7 @@ impl Ui {
     /// so no two labels cover each other.
     fn place_label(&self, cx: i32, y: i32, text: &str, taken: &[Rect]) -> Rect {
         let f = self.fonts();
-        let a = self.area;
+        let a = self.plot.area;
         let w = f.s.width(text) + 10;
         let h = label_h(self);
         let at = |cx: i32, y: i32| Rect::new((cx - w / 2).clamp(a.x + 2, (a.x + a.w - w - 2).max(a.x + 2)), (y - h / 2).clamp(a.y + 2, (a.y + a.h - h - 2).max(a.y + 2)), w, h);
@@ -163,7 +163,7 @@ impl Ui {
         match id {
             WaveId::Ch(c) => self.y_of_volts(c, v),
             WaveId::Ref(i) => {
-                let a = self.area;
+                let a = self.plot.area;
                 let Some(r) = self.refs.get(i).and_then(|r| r.as_ref()) else {
                     return a.y + a.h / 2;
                 };
@@ -224,7 +224,7 @@ impl Ui {
     fn label_shows(&self, id: WaveId) -> bool {
         match id {
             WaveId::Ch(c) => self.m.ch.get(c).is_some_and(|ch| ch.on) && self.shows(c),
-            WaveId::Ref(i) => self.cur_win == 0 && self.refs.get(i).and_then(|r| r.as_ref()).is_some_and(|r| r.on),
+            WaveId::Ref(i) => self.plot.cur_win == 0 && self.refs.get(i).and_then(|r| r.as_ref()).is_some_and(|r| r.on),
         }
     }
 
@@ -234,7 +234,7 @@ impl Ui {
         if !self.m.meas_labels && chosen.is_none() {
             return;
         }
-        let a = self.area;
+        let a = self.plot.area;
         // voltage spans sit on the first on-screen peak/trough; time spans on the edges; levels across the width
         let (mut rows, mut verts, mut levels) = (0, 0, 0);
         // the labels are placed after all the lines are drawn, and drawn over them

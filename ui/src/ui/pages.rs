@@ -261,9 +261,9 @@ pub(super) const PAGES: [Page; 56] = [
     plain(
         MenuId::Ref,
         |u, _| {
-            u.refs[u.ref_sel].as_ref().map_or(format!("Reference R{} \u{b7} empty", u.ref_sel + 1), |r| {
+            u.refs[u.ref_page.sel].as_ref().map_or(format!("Reference R{} \u{b7} empty", u.ref_page.sel + 1), |r| {
                 // a name only when it is one: not empty and not the slot's own name again
-                let own = format!("R{}", u.ref_sel + 1);
+                let own = format!("R{}", u.ref_page.sel + 1);
                 if r.label.is_empty() || r.label.eq_ignore_ascii_case(&own) {
                     format!("Reference {own}")
                 } else {
@@ -302,7 +302,7 @@ pub(super) const PAGES: [Page; 56] = [
     page!(MenuId::SimAdvanced, "SIM advanced", |u, _| u.sim_advanced_items(), None),
     plain(
         MenuId::MeasPair,
-        |u, _| format!("Pairs {} to {}", u.pair_source_caption(u.meas_src), u.pair_source_caption(u.meas_src_b)),
+        |u, _| format!("Pairs {} to {}", u.pair_source_caption(u.sources.a), u.pair_source_caption(u.sources.b)),
         |_, _| (0..tools::PAIRS.len()).map(Item::MeasPair).collect(),
         None,
         None,
@@ -313,7 +313,7 @@ pub(super) const PAGES: [Page; 56] = [
         |u, _| u.dvm_items(),
         Some(|u| {
             let m = &u.m;
-            if u.offline {
+            if u.offline.on {
                 return Vec::new();
             }
             [m.dvm_on.then_some(WaveId::Ch(m.dvm_src)), m.cnt_on.then_some(WaveId::Ch(m.cnt_src))]
