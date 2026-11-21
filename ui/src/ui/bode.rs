@@ -110,7 +110,8 @@ pub fn free_plan(m: &Model, sw: &bode::Sweep) -> Result<FreePlan, String> {
         }
     }
     let Some(i) = pick(sw.time * 1.02 / 5.0) else {
-        return Err(format!("Sweep time too long: at most {}", si_short(*ts.last().unwrap() as f64 * 5.0 / 1.02, "s")));
+        let longest = ts.last().map_or(0.0, |&t| t as f64);
+        return Err(format!("Sweep time too long: at most {}", si_short(longest * 5.0 / 1.02, "s")));
     };
     (c.tscale, c.delay, c.mdepth) = (i, 0.0, 0);
     Ok(FreePlan { tscale: i, delay: 0.0, mdepth: 0, scan: board().slow_mode(&c) != crate::board::Slow::Off })
@@ -672,7 +673,7 @@ impl Ui {
 
     /// Gain (top) and phase (bottom) over log frequency.
     pub(super) fn draw_bode(&self, cv: &mut Canvas) {
-        let a = self.area;
+        let a = self.plot.area;
         let f = self.fonts();
         let (f0, f1) = (self.m.bode_start.ln(), self.m.bode_stop.ln());
         let x_of = |hz: f64| a.x + ((hz.ln() - f0) / (f1 - f0) * a.w as f64).round() as i32;

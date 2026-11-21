@@ -96,7 +96,7 @@ impl Ui {
 
     /// The key of the row the card is open for.
     pub(super) fn rowf_key(&self) -> Option<RowKey> {
-        let index = self.meas_cfg? as usize;
+        let index = self.meas_own.dialog? as usize;
         self.m.row_keys().get(index).copied()
     }
 
@@ -162,7 +162,7 @@ impl Ui {
 
     /// The statistics of the row the card is open for, with the row (for its unit).
     fn rowf_stat(&self) -> Option<(MStat, tools::MeasRow)> {
-        let i = self.meas_cfg? as usize;
+        let i = self.meas_own.dialog? as usize;
         let row = self.meas_rows().into_iter().nth(i)?;
         Some((self.mstat.get(i).copied().unwrap_or_default(), row))
     }
@@ -181,7 +181,7 @@ impl Ui {
     }
 
     pub(super) fn measrow_title(&self) -> String {
-        match self.meas_cfg {
+        match self.meas_own.dialog {
             Some(i) => format!("{} settings", self.selected_measurement_label(i as usize)),
             None => "Measurement settings".into(),
         }
@@ -509,7 +509,7 @@ impl Ui {
     /// Steps the source of a single row through the channels and references, keeping its settings.
     fn rowf_source(&mut self, d: i32) {
         let Some(RowKey::One(kind, id)) = self.rowf_key() else { return };
-        let Some(index) = self.meas_cfg.map(|i| i as usize) else { return };
+        let Some(index) = self.meas_own.dialog.map(|i| i as usize) else { return };
         let mut sources: Vec<WaveId> = (0..n_ch()).map(WaveId::Ch).collect();
         sources.extend((0..NREF).filter(|&i| self.refs[i].is_some()).map(WaveId::Ref));
         if sources.is_empty() { return; }
@@ -521,11 +521,11 @@ impl Ui {
             return;
         }
         let cfg = self.m.row_cfg(RowKey::One(kind, id));
-        let own = self.meas_own.remove(&(kind, id));
+        let own = self.meas_own.rows.remove(&(kind, id));
         self.m.meas[index].1 = next;
         self.m.set_row_cfg(RowKey::One(kind, id), RowCfg::default());
         if let Some(cfg) = cfg { self.m.set_row_cfg(RowKey::One(kind, next), cfg); }
-        if let Some(own) = own { self.meas_own.insert((kind, next), own); }
+        if let Some(own) = own { self.meas_own.rows.insert((kind, next), own); }
         self.clear_measurement_statistics();
     }
 }

@@ -8,21 +8,68 @@
 
 use super::*;
 
+/// The mask test in software as the screen keeps it (ADR 0062); the mask unit in the FPGA is `hwmask::Unit`.
+#[derive(Default)]
+pub(super) struct MaskTest {
+    /// the reference waveform (volts, screen time) the mask is built from
+    pub reference: Option<Vec<f32>>,
+    /// the mask built from it with the tolerances of the menu (`build_mask`)
+    pub mask: Option<oos_dsp::mask::Mask>,
+    /// acquisitions that passed and failed (`mask_test`)
+    pub pass: u64,
+    pub fail: u64,
+}
+
+impl MaskTest {
+    /// Drops the mask and its reference: a new source channel, a default set-up or Clear needs a new one.
+    pub fn forget(&mut self) {
+        self.mask = None;
+        self.reference = None;
+    }
+}
+
+/// The decoded lines of the records shown (ADR 0062): the packets with times in s, by a key of the record and the
+/// settings, analog and LA alike; the screen redraws ~30 times a second and decodes a record once.
+#[derive(Default)]
+pub(super) struct Decoded(std::cell::RefCell<Vec<(u64, Vec<oos_dsp::decode::Packet>)>>);
+
+impl Decoded {
+    /// The packets kept under `key`.
+    pub fn get(&self, key: u64) -> Option<Vec<oos_dsp::decode::Packet>> {
+        self.0.borrow().iter().find(|e| e.0 == key).map(|e| e.1.clone())
+    }
+
+    /// Keeps what the decoders of one record need.
+    pub fn put(&self, key: u64, p: &[oos_dsp::decode::Packet]) {
+        let mut c = self.0.borrow_mut();
+        if c.len() >= DECODERS * 2 {
+            c.remove(0);
+        }
+        c.push((key, p.to_vec()));
+    }
+
+    /// How many results are kept.
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.0.borrow().len()
+    }
+}
+
 impl Ui {
     /// Mask test of one acquisition (live records only): counts passed / failed, stops on a failure if set.
     pub(super) fn mask_test(&mut self, rec: &Record) {
         if !self.m.mask_on {
             return;
         }
-        let Some(mask) = &self.mask else { return };
+        let Some(mask) = &self.mask_sw.mask else { return };
         let v = &rec.ch[self.m.mask_src];
         if v.is_empty() {
             return;
         }
         if mask.test(v).pass {
-            self.mask_pass += 1;
+            self.mask_sw.pass += 1;
         } else {
-            self.mask_fail += 1;
+            self.mask_sw.fail += 1;
             // with the hardware test the counters decide (hwmask.rs)
             if self.m.mask_stop && self.m.run == RunState::Run && !self.mask_hw_active() {
                 self.m.run = RunState::Stop;
@@ -34,12 +81,12 @@ impl Ui {
     /// (Re)builds the mask from the reference waveform with the tolerances of the menu (X in divisions of the 10-div
     /// window, Y in divisions of the source channel's current V/div).
     pub(super) fn build_mask(&mut self) {
-        let Some(r) = &self.mask_ref else { return };
+        let Some(r) = &self.mask_sw.reference else { return };
         let tol_x = (self.m.mask_x / HDIV * r.len() as f32).round() as usize;
         let tol_y = self.m.mask_y * self.m.ch[self.m.mask_src].volts_per_div();
         let mut mask = oos_dsp::mask::build(r, tol_x, tol_y);
         mask.invert = self.m.mask_inv;
-        self.mask = Some(mask);
+        self.mask_sw.mask = Some(mask);
         self.mask_cols_update();
     }
 
@@ -49,7 +96,7 @@ impl Ui {
         let Some(v) = self.last[0].as_ref().map(|r| r.ch[c].clone()).filter(|v| !v.is_empty()) else {
             return self.toast(&format!("CH{} has no data", c + 1));
         };
-        self.mask_ref = Some(v);
+        self.mask_sw.reference = Some(v);
         self.build_mask();
         self.m.mask_on = true;
         self.mask_counts_reset();
@@ -58,12 +105,12 @@ impl Ui {
 
     /// Creates the mask from the selected reference slot.
     pub(super) fn create_mask_from_ref(&mut self) {
-        let Some(r) = self.refs[self.ref_sel].as_ref().filter(|r| r.v.len() >= 2) else {
-            return self.toast(&format!("R{} is empty", self.ref_sel + 1));
+        let Some(r) = self.refs[self.ref_page.sel].as_ref().filter(|r| r.v.len() >= 2) else {
+            return self.toast(&format!("R{} is empty", self.ref_page.sel + 1));
         };
         let src = r.src.min(NCH - 1);
         // where the reference is drawn: its own time less its deskew
-        let ref_t0 = self.source_time_origin(WaveId::Ref(self.ref_sel), r.t0);
+        let ref_t0 = self.source_time_origin(WaveId::Ref(self.ref_page.sel), r.t0);
         // A mask is compared point by point with the record on screen, and a reference keeps the samples of its whole
         // acquisition, longer and finer than the screen: the reference is read at the times of the screen's points.
         let on_screen = self.last[0].as_ref().filter(|rec| rec.dt > 0.0 && r.dt > 0.0 && !rec.ch[src].is_empty()).map(|rec| {
@@ -72,26 +119,26 @@ impl Ui {
                 if k >= 0.0 && k < r.v.len() as f64 { r.v[k as usize] } else { f32::NAN }
             }).collect::<Vec<f32>>()
         });
-        self.mask_ref = Some(on_screen.filter(|v| v.iter().any(|x| x.is_finite())).unwrap_or_else(|| r.v.as_ref().clone()));
+        self.mask_sw.reference = Some(on_screen.filter(|v| v.iter().any(|x| x.is_finite())).unwrap_or_else(|| r.v.as_ref().clone()));
         self.m.mask_src = src;
         self.build_mask();
         self.m.mask_on = true;
-        self.mask_pass = 0;
-        self.mask_fail = 0;
-        self.toast(&format!("Mask created from R{}", self.ref_sel + 1));
+        self.mask_sw.pass = 0;
+        self.mask_sw.fail = 0;
+        self.toast(&format!("Mask created from R{}", self.ref_page.sel + 1));
     }
 
     /// Off plus the operations of the selected Math category.
     pub(super) fn math_ops_in_family(&self) -> Vec<MathOp> {
         let mut v = vec![MathOp::Off];
-        v.extend_from_slice(self.math_fam.ops());
+        v.extend_from_slice(self.math.family.ops());
         v
     }
 
     /// Save fast-frame: the history to `path`, or to the next `frame-NNN.bin` of the save folder.
     pub(super) fn ff_save_to(&mut self, path: Option<std::path::PathBuf>) {
-        let recs: Vec<Record> = if !self.history.is_empty() {
-            self.history.iter().cloned().collect()
+        let recs: Vec<Record> = if !self.history.recs.is_empty() {
+            self.history.recs.iter().cloned().collect()
         } else if let Some(rec) = self.last[0].as_ref() {
             vec![rec.clone()]
         } else {
@@ -110,10 +157,10 @@ impl Ui {
         };
         match crate::store::parse_ff(&data) {
             Ok(recs) if !recs.is_empty() => {
-                self.history = recs.into();
-                let n = self.history.len();
-                self.hist_pos = Some(n - 1);
-                self.last[0] = Some(self.history[n - 1].clone());
+                self.history.recs = recs.into();
+                let n = self.history.recs.len();
+                self.history.pos = Some(n - 1);
+                self.last[0] = Some(self.history.recs[n - 1].clone());
                 self.m.run = RunState::Stop;
                 self.measure_last();
                 self.toast(&format!("Loaded {} frames from {}", n, crate::store::file_name(p)));
@@ -125,11 +172,11 @@ impl Ui {
 
     /// Forbidden region of the mask (outside the envelope) tinted red, the envelope edges a little stronger.
     pub(super) fn draw_mask(&self, cv: &mut Canvas) {
-        let (Some(mask), true, false) = (&self.mask, self.m.mask_on, self.xy) else { return };
+        let (Some(mask), true, false) = (&self.mask_sw.mask, self.m.mask_on, self.xy) else { return };
         if !self.shows(self.m.mask_src) {
             return;
         }
-        let a = self.area;
+        let a = self.plot.area;
         let ch = &self.m.ch[self.m.mask_src];
         let ppd = a.h as f32 / VDIV;
         let cy = a.y as f32 + a.h as f32 / 2.0;
@@ -162,7 +209,7 @@ impl Ui {
 
     /// "Mask CH1 · Passed n · Failed m" pill at the top left of the plot, under the status line.
     pub(super) fn draw_mask_pill(&self, cv: &mut Canvas) {
-        if !self.m.mask_on || self.mask.is_none() || !self.shows(self.m.mask_src) {
+        if !self.m.mask_on || self.mask_sw.mask.is_none() || !self.shows(self.m.mask_src) {
             return;
         }
         let f = self.fonts();
@@ -177,7 +224,7 @@ impl Ui {
             (fmt_count(fail as f64), if fail > 0 { RED } else { TEXT }),
         ];
         let w: i32 = parts.iter().map(|(s, _)| f.sb.width(s)).sum::<i32>() + 24;
-        let a = self.area;
+        let a = self.plot.area;
         let r = Rect::new(a.x + 8, a.y + 24, w, 24);
         let col = if fail > 0 { RED } else { GREEN };
         cv.round(r, 12, mix(BAR, col, 110), 255);
@@ -205,7 +252,7 @@ impl Ui {
         if let Some(c) = self.hist_ch.filter(|&c| c < n_ch() && self.m.ch[c].on) {
             return Some(c);
         }
-        if let WaveId::Ch(c) = self.meas_src {
+        if let WaveId::Ch(c) = self.sources.a {
             if c < n_ch() && self.m.ch[c].on {
                 return Some(c);
             }
@@ -248,7 +295,7 @@ impl Ui {
     pub(super) fn draw_view_tiles(&mut self, cv: &mut Canvas) {
         if !self.dock_on() { return; }
         use dock::VKind;
-        let saved = self.area;
+        let saved = self.plot.area;
         for k in [VKind::Hist, VKind::Xy, VKind::View] {
             if !self.dock_shown(k) { continue; }
             let Some(r) = self.dock_content(k) else { continue };
@@ -257,15 +304,15 @@ impl Ui {
             cv.fill(r, BG);
             match k {
                 VKind::Hist => self.draw_hist_in(cv, r, true),
-                VKind::Xy => { self.area = r; self.draw_xy(cv); self.draw_view_btn(cv); }
-                _ => { self.area = r; self.draw_analyzer(cv); self.draw_view_btn(cv); }
+                VKind::Xy => { self.plot.area = r; self.draw_xy(cv); self.draw_view_btn(cv); }
+                _ => { self.plot.area = r; self.draw_analyzer(cv); self.draw_view_btn(cv); }
             }
             cv.set_view_clip(None);
         }
-        self.area = saved;
+        self.plot.area = saved;
     }
 
-    pub(super) fn draw_hist(&self, cv: &mut Canvas) { self.draw_hist_in(cv, self.area, false) }
+    pub(super) fn draw_hist(&self, cv: &mut Canvas) { self.draw_hist_in(cv, self.plot.area, false) }
 
     /// The axes of the histogram view: volts at the left on the division lines of the lane, a count scale along the top.
     pub(super) fn draw_hist_axes(&self, cv: &mut Canvas, a: Rect, (ax, ly, lh): (i32, i32, i32), c: usize, peak: u64) {
@@ -344,7 +391,7 @@ impl Ui {
                     }
                 }
                 // pixel row -> volts
-                let (factor, center) = self.zoom_vertical_transform(self.area);
+                let (factor, center) = self.zoom_vertical_transform(self.plot.area);
                 let h = bins.len().max(1) as f64;
                 let vpp = ch.volts_per_div() as f64 * VDIV as f64 / h / factor as f64;
                 let mv = (h / 2.0 - mean) * vpp + center as f64 * ch.volts_per_div() as f64 - ch.offset as f64;
@@ -470,7 +517,7 @@ impl Ui {
     pub(super) fn draw_math(&self, cv: &mut Canvas) {
         // all traces first, then the labels on top of them
         let on: Vec<usize> = (0..NMATH)
-            .filter(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.cur_win)
+            .filter(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.plot.cur_win)
             .collect();
         let labels: Vec<Option<String>> =
             on.iter().enumerate().map(|(row, &k)| self.draw_math_ch(cv, k, row as i32)).collect();
@@ -479,13 +526,13 @@ impl Ui {
             if let Some(label) = label {
                 // top right, under the status line, one row per math channel (the results panel goes below them)
                 // (in lanes the right edge is the scale's: the label sits at the left, after the lane's badge)
-                let lanes = self.stacked() && self.wins.len() > 1;
+                let lanes = self.stacked() && self.plot.wins.len() > 1;
                 let r = if lanes {
-                    Rect::new(self.area.x + 56, self.area.y + 4 + 22 * row as i32, f.s.width(label) + 16, 20)
+                    Rect::new(self.plot.area.x + 56, self.plot.area.y + 4 + 22 * row as i32, f.s.width(label) + 16, 20)
                 } else {
                     Rect::new(
-                        self.area.x + self.area.w - 12 - f.s.width(label) - 16,
-                        self.area.y + 22 + 26 * row as i32,
+                        self.plot.area.x + self.plot.area.w - 12 - f.s.width(label) - 16,
+                        self.plot.area.y + 22 + 26 * row as i32,
                         f.s.width(label) + 16,
                         20,
                     )
@@ -502,13 +549,13 @@ impl Ui {
         let col = MATH_COLORS[k % MATH_COLORS.len()];
         let f = self.fonts();
         // the last stacked lane keeps its time labels clear: the trace is clipped above them
-        let mut lane = self.area;
-        if self.stacked() && self.cur_win + 1 == self.wins.len() {
+        let mut lane = self.plot.area;
+        if self.stacked() && self.plot.cur_win + 1 == self.plot.wins.len() {
             lane.h = (lane.h - (f.s.size + 8)).max(f.s.size);
         }
         cv.set_clip(lane);
-        let ppy = self.area.h as f32 / VDIV;
-        let cy = self.area.y as f32 + self.area.h as f32 / 2.0;
+        let ppy = self.plot.area.h as f32 / VDIV;
+        let cy = self.plot.area.y as f32 + self.plot.area.h as f32 / 2.0;
 
         let label = if c.op == MathOp::Fft {
             let Some(w) = self.math_record(k).ok().flatten() else {
@@ -527,15 +574,15 @@ impl Ui {
             let span = df * (db.len() - 1) as f64;
             let n = db.len();
             let mut prev: Option<(i32, i32)> = None;
-            for px in 0..self.area.w {
+            for px in 0..self.plot.area.w {
                 // peak of the bins that fall into this pixel column
-                let k0 = (px as usize * (n - 1)) / self.area.w as usize;
-                let k1 = (((px + 1) as usize * (n - 1)) / self.area.w as usize).max(k0 + 1).min(n);
+                let k0 = (px as usize * (n - 1)) / self.plot.area.w as usize;
+                let k1 = (((px + 1) as usize * (n - 1)) / self.plot.area.w as usize).max(k0 + 1).min(n);
                 let v = db[k0..k1].iter().copied().fold(f32::MIN, f32::max);
-                let (zoom, center) = self.zoom_vertical_transform(self.area);
+                let (zoom, center) = self.zoom_vertical_transform(self.plot.area);
                 let d = VDIV * 0.5 - (top - v) / dbdiv;
                 let y = (cy - (d - center) * zoom * ppy).round() as i32;
-                let x = self.area.x + px;
+                let x = self.plot.area.x + px;
                 if let Some((x0, y0)) = prev {
                     cv.line(x0, y0, x, y, col);
                 }
@@ -551,30 +598,34 @@ impl Ui {
             )
         } else {
             let result = self.math_record(k);
-            let rec = result.as_ref().ok().and_then(|w| w.as_ref());
-            if rec.is_none() {
+            let Some(rec) = result.as_ref().ok().and_then(|w| w.as_ref()) else {
                 cv.no_clip();
                 let status = match result {
                     Err(e) => e,
                     _ => "Computing",
                 };
-                cv.text(&f.s, self.area.x + 60, self.area.y + 40 + 18 * row, &format!("M{}: {}", k + 1, status), col);
+                cv.text(
+                    &f.s,
+                    self.plot.area.x + 60,
+                    self.plot.area.y + 40 + 18 * row,
+                    &format!("M{}: {}", k + 1, status),
+                    col,
+                );
                 return None;
-            }
-            let rec = rec.unwrap();
+            };
             let w = rec.v.as_ref();
             let sc = math_scales();
             let vpd = sc[c.scale.min(sc.len() - 1)] as f32;
             let (tdiv, vdelay) = self.view();
             let (tdiv, vdelay) = (tdiv as f64, vdelay as f64);
-            let ppx = self.area.w as f64 / HDIV as f64;
+            let ppx = self.plot.area.w as f64 / HDIV as f64;
             let mut prev: Option<(i32, i32)> = None;
             let left = vdelay - tdiv * HDIV as f64 * 0.5;
             let right = left + tdiv * HDIV as f64;
             let at = |t: f64| ((t - rec.t0) / rec.dt).floor().clamp(-1.0, w.len() as f64) as isize;
             let begin = (at(left) - 1).clamp(0, w.len() as isize) as usize;
             let end = (at(right) + 2).clamp(0, w.len() as isize) as usize;
-            let step = ((end - begin) / (self.area.w as usize * 2)).max(1);
+            let step = ((end - begin) / (self.plot.area.w as usize * 2)).max(1);
             for i in (begin..end).step_by(step) {
                 let v = w[i];
                 if !v.is_finite() {
@@ -582,8 +633,8 @@ impl Ui {
                     continue;
                 }
                 let t = rec.t0 + i as f64 * rec.dt - vdelay;
-                let x = (self.area.x as f64 + self.area.w as f64 / 2.0 + t / tdiv * ppx).round() as i32;
-                let (zoom, center) = self.zoom_vertical_transform(self.area);
+                let x = (self.plot.area.x as f64 + self.plot.area.w as f64 / 2.0 + t / tdiv * ppx).round() as i32;
+                let (zoom, center) = self.zoom_vertical_transform(self.plot.area);
                 let y = (cy - (v / vpd + c.offset - center) * zoom * ppy).clamp(-1e4, 1e4).round() as i32;
                 if let Some((x0, y0)) = prev {
                     cv.line(x0, y0, x, y, col);
@@ -608,7 +659,7 @@ impl Ui {
         match id {
             WaveId::Ch(c) => self.y_of_volts(c, v),
             WaveId::Ref(i) => {
-                let a = self.area;
+                let a = self.plot.area;
                 let Some(r) = self.refs.get(i).and_then(|x| x.as_ref()) else {
                     return a.y;
                 };
@@ -618,7 +669,7 @@ impl Ui {
     }
 
     pub(super) fn x_of_time(&self, t: f32) -> i32 {
-        let a = self.area;
+        let a = self.plot.area;
         let (tdiv, delay) = self.view();
         let ppd = a.w as f32 / HDIV;
         (a.x as f32 + a.w as f32 / 2.0 + (t - delay) / tdiv * ppd).round() as i32
@@ -651,14 +702,14 @@ impl Ui {
             return p;
         }
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        (self.wfm_total, self.hist_pos, rec.t0.to_bits(), rec.dt.to_bits()).hash(&mut h);
+        (self.counts.wfm_total, self.history.pos, rec.t0.to_bits(), rec.dt.to_bits()).hash(&mut h);
         for c in 0..NCH {
             (rec.ch[c].as_ptr() as usize, rec.ch[c].len(), m.ch[c].volts_per_div().to_bits()).hash(&mut h);
         }
         format!("{:?}", m.dec_cfg()).hash(&mut h);
         let key = h.finish();
-        if let Some(e) = self.dec_cache.borrow().iter().find(|e| e.0 == key) {
-            return Ok(std::sync::Arc::new(e.1.clone()));
+        if let Some(p) = self.decoded.get(key) {
+            return Ok(std::sync::Arc::new(p));
         }
         // (a screen record of min/max pairs is read as `trig::decode` reads a Peak detect record)
         let means: [Vec<f32>; NCH] =
@@ -669,7 +720,7 @@ impl Ui {
             x.t0 = rec.t0 + x.t0 * rec.dt;
             x.t1 = rec.t0 + x.t1 * rec.dt;
         }
-        self.dec_cache_put(key, &p);
+        self.decoded.put(key, &p);
         Ok(std::sync::Arc::new(p))
     }
 
@@ -700,14 +751,14 @@ impl Ui {
         }
         let origin = raw.t0 - raw.i0 as f64 * f.dt;
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        (std::sync::Arc::as_ptr(f) as usize, f.seq, n, origin.to_bits(), stride, self.hist_pos).hash(&mut h);
+        (std::sync::Arc::as_ptr(f) as usize, f.seq, n, origin.to_bits(), stride, self.history.pos).hash(&mut h);
         for c in 0..NCH {
             m.ch[c].volts_per_div().to_bits().hash(&mut h);
         }
         format!("{:?}", m.dec_cfg()).hash(&mut h);
         let key = h.finish();
-        if let Some(e) = self.dec_cache.borrow().iter().find(|e| e.0 == key) {
-            return Some(Ok(std::sync::Arc::new(e.1.clone())));
+        if let Some(e) = self.decoded.get(key) {
+            return Some(Ok(std::sync::Arc::new(e)));
         }
         let thin: [Vec<f32>; NCH] = std::array::from_fn(|c| if stride > 1 { f.ch[c].iter().step_by(stride).copied().collect() } else { Vec::new() });
         let ch: [&[f32]; NCH] = std::array::from_fn(|c| if stride > 1 { &thin[c][..] } else { &f.ch[c][..] });
@@ -719,17 +770,8 @@ impl Ui {
             x.t0 = origin + x.t0 * dt;
             x.t1 = origin + x.t1 * dt;
         }
-        self.dec_cache_put(key, &p);
+        self.decoded.put(key, &p);
         Some(Ok(std::sync::Arc::new(p)))
-    }
-
-    /// Keeps what the decoders of one record need.
-    pub(super) fn dec_cache_put(&self, key: u64, p: &[oos_dsp::decode::Packet]) {
-        let mut c = self.dec_cache.borrow_mut();
-        if c.len() >= DECODERS * 2 {
-            c.remove(0);
-        }
-        c.push((key, p.to_vec()));
     }
 
     /// Whether decoder `k` has its band on the plot (or its row under the LA lanes): it is on, and so is the channel
@@ -747,8 +789,8 @@ impl Ui {
     /// Room under the lowest decoder band of the window being drawn: the time labels along the lower edge of the
     /// plot. A lane that has none (every Stacked lane but the last) has the band at its foot, clear of its trace.
     pub(super) fn dec_foot(&self) -> i32 {
-        let lanes = self.stacked() && self.wins.len() > 1;
-        let labels = self.cur_win + 1 >= self.wins.len() || self.studio_lane_has_own_time();
+        let lanes = self.stacked() && self.plot.wins.len() > 1;
+        let labels = self.plot.cur_win + 1 >= self.plot.wins.len() || self.studio_lane_has_own_time();
         if lanes && !labels {
             4
         } else {
@@ -759,7 +801,7 @@ impl Ui {
     /// All decoders that are on: bands at the bottom of the plot, or rows under the lanes for those on LA lines.
     pub(super) fn draw_decode(&self, cv: &mut Canvas) {
         // the boxes a finger can find are the ones of this frame
-        if self.cur_win == 0 {
+        if self.plot.cur_win == 0 {
             self.band_hits.borrow_mut().clear();
         }
         if self.last[0].is_none() && !self.refs.iter().any(Option::is_some) {
@@ -767,7 +809,7 @@ impl Ui {
         }
         // bands stand on each other from the bottom; one with a bit row is taller
         let (mut stack, mut lane) = (0, 0);
-        let bottom = self.area.y + self.area.h - self.dec_foot() - DEC_BOX;
+        let bottom = self.plot.area.y + self.plot.area.h - self.dec_foot() - DEC_BOX;
         for k in 0..DECODERS {
             if !self.dec_shown(k) {
                 continue;
@@ -779,7 +821,7 @@ impl Ui {
             if row.is_some() {
                 lane += 1;
             }
-            if win.unwrap_or(self.la_win_of()) != self.cur_win {
+            if win.unwrap_or(self.la_win_of()) != self.plot.cur_win {
                 continue;
             }
             let y = match row {

@@ -215,7 +215,7 @@ fn main() {
             m
         ));
     }
-    ui.limits_path = limits;
+    ui.overclock.path = limits;
     if experimental {
         ui.toast("Experimental limits active (limits.conf), see System > System info");
     }
@@ -224,10 +224,10 @@ fn main() {
     if let Some(script) = arg(&args, "--script") {
         // host test runs store next to the script (build.sh: target/test-shots)
         if let Some(d) = std::path::Path::new(&script).parent().filter(|d| !d.as_os_str().is_empty()) {
-            ui.store_dir = d.to_path_buf();
+            ui.files.dir = d.to_path_buf();
         }
         if let Some(d) = arg(&args, "--store-dir") {
-            ui.store_dir = d.into();
+            ui.files.dir = d.into();
         }
         // another screen than the panel (host only: the device shows the panel it has)
         if let Some(s) = arg(&args, "--size") {
@@ -255,11 +255,11 @@ fn main() {
         return;
     }
     if let Some(d) = arg(&args, "--store-dir") {
-        ui.store_dir = d.into();
+        ui.files.dir = d.into();
     } else if cfg!(windows) {
         // no /tmp on Windows: setups, CSV and screenshots go to Documents\OOS (oos-plus desktop build)
         if let Some(home) = std::env::var_os("USERPROFILE") {
-            ui.store_dir = std::path::Path::new(&home).join("Documents").join("OOS");
+            ui.files.dir = std::path::Path::new(&home).join("Documents").join("OOS");
         }
     }
     if args.iter().any(|a| a == "--serve") {
@@ -1081,7 +1081,7 @@ impl Device {
         self.hdmi_picture(hdmi_frame, hdmi_done);
         let t3 = Instant::now();
         self.hdmi_watch();
-        self.ui.hdmi_out = self.hdmi.as_ref().map(|h| (h.width as u32, h.height as u32));
+        self.ui.hdmi.out = self.hdmi.as_ref().map(|h| (h.width as u32, h.height as u32));
         let a = 0.05;
         self.ui.times.step += a * ((t1 - t0).as_secs_f32() * 1000.0 - self.ui.times.step);
         self.ui.times.render += a * ((t2 - t1).as_secs_f32() * 1000.0 - self.ui.times.render);
@@ -1229,9 +1229,9 @@ impl Device {
             match size {
                 Some(s) => {
                     if self.hdmi_cv.as_ref().is_none_or(|c| (c.w, c.h) != (s.w, s.h)) {
-                        self.hdmi_cv = Some(Canvas::new(s.w, s.h));
+                        self.hdmi_cv = None;
                     }
-                    let hc = self.hdmi_cv.as_mut().unwrap();
+                    let hc = self.hdmi_cv.get_or_insert_with(|| Canvas::new(s.w, s.h));
                     if self.ui.m.hdmi == model::HdmiMode::Layout {
                         self.ui.render_view(hc);
                     } else {
@@ -1292,17 +1292,17 @@ impl Device {
         for c in self.ui.panel_tx.drain(..) {
             self.inp.send(&board::board().panel_cmd(c));
         }
-        if let Some(a) = self.ui.power_action.take() {
+        if let Some(a) = self.ui.power.action.take() {
             power(&mut self.inp, a);
         }
         self.save_setup();
         if self.net_t.is_none_or(|t| t.elapsed().as_secs() >= 5) {
             let ui = &mut self.ui;
             let (first, all) = ipv4_addresses();
-            (ui.net_if, ui.net) = first;
-            ui.net_ifs = all;
-            ui.net_fixed = std::path::Path::new("/tmp/oos-net.fallback").exists();
-            ui.eth_link = std::fs::read_to_string("/sys/class/net/eth0/carrier").is_ok_and(|c| c.trim() == "1");
+            (ui.net.iface, ui.net.addr) = first;
+            ui.net.ifs = all;
+            ui.net.fixed = std::path::Path::new("/tmp/oos-net.fallback").exists();
+            ui.net.eth_link = std::fs::read_to_string("/sys/class/net/eth0/carrier").is_ok_and(|c| c.trim() == "1");
             self.net_t = Some(Instant::now());
         }
         if self.eth_t.is_none_or(|t| t.elapsed().as_secs() >= 1) {
@@ -1311,7 +1311,7 @@ impl Device {
         }
         self.fps_n += 1;
         if self.fps_t.elapsed().as_secs_f64() >= 1.0 {
-            self.ui.fps = self.fps_n as f32 / self.fps_t.elapsed().as_secs_f32();
+            self.ui.counts.fps = self.fps_n as f32 / self.fps_t.elapsed().as_secs_f32();
             self.fps_n = 0;
             self.fps_t = Instant::now();
         }
@@ -1368,13 +1368,13 @@ fn hdmi_targets(g: &mut gpu::Gpu, h: &drm::Display, base: usize) -> Result<bool,
 #[cfg(target_os = "linux")]
 fn eth_watch(ui: &mut Ui, now: f64) {
     let speed = ethlink::speed();
-    match ui.eth.step(now, ethlink::carrier(), speed, ui.sys.eth_retry_10m) {
+    match ui.net.eth.step(now, ethlink::carrier(), speed, ui.sys.eth_retry_10m) {
         Some(ethlink::Act::Restart) => {
             eprintln!(
                 "oos-ui: {} up at 10 Mbit/s {}, restarting the autonegotiation ({} of {}; {})",
                 ethlink::IFACE,
                 ethlink::duplex(),
-                ui.eth.tries,
+                ui.net.eth.tries,
                 ethlink::MAX_TRIES,
                 ethlink::mii_regs()
             );
@@ -1399,26 +1399,11 @@ fn eth_watch(ui: &mut Ui, now: f64) {
 /// The address to show in the top bar, and all of them, as (interface, address).
 #[cfg(target_os = "linux")]
 fn ipv4_addresses() -> ((String, String), Vec<(String, String)>) {
-    let mut found = Vec::new();
-    unsafe {
-        let mut ifa: *mut libc::ifaddrs = std::ptr::null_mut();
-        if libc::getifaddrs(&mut ifa) != 0 {
-            return ((String::new(), String::new()), Vec::new());
-        }
-        let mut p = ifa;
-        while !p.is_null() {
-            let a = &*p;
-            let up = a.ifa_flags & (libc::IFF_UP as u32) != 0 && a.ifa_flags & (libc::IFF_LOOPBACK as u32) == 0;
-            if up && !a.ifa_addr.is_null() && (*a.ifa_addr).sa_family as i32 == libc::AF_INET {
-                let link = a.ifa_flags & (libc::IFF_RUNNING as u32) != 0;
-                let sin = &*(a.ifa_addr as *const libc::sockaddr_in);
-                let name = std::ffi::CStr::from_ptr(a.ifa_name).to_string_lossy().into_owned();
-                found.push((name, std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr)), link));
-            }
-            p = a.ifa_next;
-        }
-        libc::freeifaddrs(ifa);
-    }
+    let found = oos_system::ifaddrs::list()
+        .into_iter()
+        .filter(|e| e.has(libc::IFF_UP) && !e.has(libc::IFF_LOOPBACK))
+        .filter_map(|e| e.v4().map(|a| (e.name.clone(), a, e.has(libc::IFF_RUNNING))))
+        .collect();
     pick_addresses(found)
 }
 
@@ -1581,7 +1566,7 @@ mod open_file_tests {
         let wave = dir.join("a.pwwf");
         std::fs::write(&wave, record(&volts)).unwrap();
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
-        ui.store_dir = dir.clone();
+        ui.files.dir = dir.clone();
         open_file(&mut ui, wave.to_str().unwrap()).unwrap();
         assert_eq!(ui.ref_volts(0), volts);
         let session = dir.join("bench.oss");
@@ -1589,7 +1574,7 @@ mod open_file_tests {
 
         // another start of the program: the session, then one more waveform
         let mut other = Ui::new(Source::Demo { t: 0.0 });
-        other.store_dir = dir.clone();
+        other.files.dir = dir.clone();
         open_file(&mut other, session.to_str().unwrap()).unwrap();
         assert_eq!(other.ref_volts(0), volts);
         open_file(&mut other, wave.to_str().unwrap()).unwrap();

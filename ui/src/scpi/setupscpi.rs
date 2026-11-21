@@ -532,7 +532,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("oos-setupscpi-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        ui.store_dir = dir.clone();
+        ui.files.dir = dir.clone();
         s.exec_line(&mut ui, &cv, ":CHANnel2:DISPlay ON");
         s.exec_line(&mut ui, &cv, ":NO:SUCH:HEADer 1");
         let queued = s.queued_errors().to_vec();

@@ -301,7 +301,7 @@ pub fn can_fd(v: &[f32], dt: f64, nominal: f64, data_rate: f64, thr: f32, hyst: 
     let rec = |x: f64| -> Option<bool> { st.get(x as usize).copied().flatten().map(|b| b != invert) };
     let e = edges(v, thr, hyst);
     // the edges to dominant: the bit timing follows these alone (`can`)
-    let dominant: Vec<Edge> = e.iter().filter(|x| x.rising == invert).cloned().collect();
+    let dominant: Vec<Edge> = e.iter().filter(|x| x.rising == invert).copied().collect();
     frames(&e, invert, tn, &rec, |sof| can_fd_frame(&mut BitClock { t: sof, rec: &rec, e: &dominant }, tn, td))
 }
 

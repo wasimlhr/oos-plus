@@ -7,6 +7,13 @@
 
 use super::*;
 
+/// Search marks nearer than this many pixels (the width of a mark) are drawn as a strip, not one by one.
+const SEARCH_MARK_GAP: i32 = 9;
+/// The height of that strip, under the top edge of the plot.
+pub(super) const SEARCH_STRIP_H: i32 = 4;
+/// Height of the line of marks of one search: a mark and a pixel under it.
+pub(super) const SEARCH_LANE_H: i32 = 9;
+
 impl Ui {
     /// Vertical scale and the sample rate of this record. Time per division stays the one horizontal scale.
     pub(super) fn ref_badge_readout(r: &RefWave) -> (String, String) {
@@ -65,10 +72,10 @@ impl Ui {
 
     /// Room a ref badge keeps clear under it: the time labels along the bottom of the lowest lane.
     pub(super) fn ref_badge_pad(&self, lane: Rect) -> i32 {
-        let base = if self.stacked() && self.cur_win + 1 < self.wins.len() { 2 } else { self.fonts().s.size + 10 };
+        let base = if self.stacked() && self.plot.cur_win + 1 < self.plot.wins.len() { 2 } else { self.fonts().s.size + 10 };
         // the Fit row and the With live note sit above the time labels of the last lane: the badge stays clear of them
         // (only a lane that reaches the bottom of the plot is under them)
-        if !self.live_ref_note().is_empty() && !self.view_on() && !self.eye_open() && lane.bottom() >= self.area.bottom() - 4
+        if !self.live_ref_note().is_empty() && !self.view_on() && !self.eye_open() && lane.bottom() >= self.plot.area.bottom() - 4
         {
             base.max(52)
         } else {
@@ -77,7 +84,7 @@ impl Ui {
     }
 
     pub(super) fn draw_refs(&self, cv: &mut Canvas) {
-        self.draw_refs_at(cv, self.area, self.view(), false);
+        self.draw_refs_at(cv, self.plot.area, self.view(), false);
     }
 
     pub(super) fn draw_refs_at(&self, cv: &mut Canvas, area: Rect, view: (f32, f32), all_sources: bool) {
@@ -98,12 +105,12 @@ impl Ui {
             let t0 = self.source_time_origin(WaveId::Ref(i), r.t0);
             if !all_sources
                 && self.stacked()
-                && self.trace_sources().get(self.cur_win) != Some(&workspace::Trace::Reference(i))
+                && self.trace_sources().get(self.plot.cur_win) != Some(&workspace::Trace::Reference(i))
             {
                 continue;
             }
             // a split (not Stacked): each reference in the window its Windows row names
-            if !all_sources && !self.stacked() && self.wins.len() > 1 && self.ref_win_of(i) != self.cur_win {
+            if !all_sources && !self.stacked() && self.plot.wins.len() > 1 && self.ref_win_of(i) != self.plot.cur_win {
                 continue;
             }
             if !r.on || r.v.is_empty() || !(r.dt > 0.0) {
@@ -168,8 +175,8 @@ impl Ui {
         let (a, b) = (&rec.ch[xc], &rec.ch[yc]);
         let f = self.fonts();
         // a square that fits the area both ways: a narrow docked pane keeps its title and its left edge
-        let side = self.area.h.min(self.area.w);
-        let sq = Rect::new(self.area.x + (self.area.w - side) / 2, self.area.y + (self.area.h - side) / 2, side, side);
+        let side = self.plot.area.h.min(self.plot.area.w);
+        let sq = Rect::new(self.plot.area.x + (self.plot.area.w - side) / 2, self.plot.area.y + (self.plot.area.h - side) / 2, side, side);
         cv.fill(sq, rgb(0x04, 0x04, 0x08));
         cv.rect(sq, GRID_AXIS);
         cv.vline(sq.x + side / 2, sq.y, sq.y + side - 1, GRID_LINE);
@@ -198,7 +205,7 @@ impl Ui {
 
     pub(super) fn draw_markers(&self, cv: &mut Canvas) {
         let f = self.fonts();
-        let a = self.area;
+        let a = self.plot.area;
         // Studio: the handle of every source of this window, over the traces (`studio_handle_rects`)
         if self.m.layout == Layout::Studio {
             self.studio_draw_handles(cv);
@@ -301,7 +308,7 @@ impl Ui {
                     CH_COLORS[c],
                 );
             }
-            Drag::Delay if self.cur_win == self.touch.win.min(self.wins.len().max(1) - 1) => {
+            Drag::Delay if self.plot.cur_win == self.touch.win.min(self.plot.wins.len().max(1) - 1) => {
                 tag(cv, a.x + a.w / 2 - 60, a.y + 12, &format!("Delay {}", si(self.view().1 as f64, "s")), ACCENT)
             }
             Drag::Level
@@ -331,7 +338,7 @@ impl Ui {
             return;
         }
         let f = self.fonts();
-        let a = self.area;
+        let a = self.plot.area;
         cv.set_clip(a);
         let picked = self.workspace.cursor_sel.and_then(|k| self.cursor_tags().into_iter().find(|t| t.0 == k).map(|t| t.1));
         let tagbox = |cv: &mut Canvas, x: i32, y: i32, s: &str| {
@@ -404,7 +411,7 @@ impl Ui {
             }
             None => return Vec::new(),
         };
-        let area = self.source_area(source).unwrap_or(self.area);
+        let area = self.source_area(source).unwrap_or(self.plot.area);
         match self.m.cursor {
             CursorMode::Off => Vec::new(),
             CursorMode::Xy => {
@@ -465,7 +472,7 @@ impl Ui {
             return;
         }
         let f = self.fonts();
-        let g = self.grid;
+        let g = self.plot.grid;
         let y = g.y + 14;
         // only what makes the picture something else than a live measurement; the rates are on System info
         let record_caption = self.record_caption();
@@ -495,7 +502,7 @@ impl Ui {
             let hint = if self.m.layout == Layout::Studio { "Touch locked \u{b7} tap the gear to unlock" } else { "Touch locked \u{b7} tap Unlock" };
             x = backed_text(cv, &f.sb, x, y, hint, AMBER) + 16;
         }
-        let seg = self.seg_view.filter(|_| self.seg_hw_on()).and_then(|v| match (v.phase, self.seg_pos) {
+        let seg = self.seg.view.filter(|_| self.seg_hw_on()).and_then(|v| match (v.phase, self.seg.pos) {
             (crate::board::SegPhase::Recording, _) => Some(format!("Recording {}/{}", v.recorded, v.total)),
             (crate::board::SegPhase::Reading, _) => Some(format!("Reading {}/{}", v.read, v.recorded)),
             (crate::board::SegPhase::Done, Some(i)) => Some(self.seg_label(i)),
@@ -503,8 +510,8 @@ impl Ui {
         });
         if let Some(t) = seg {
             x = backed_text(cv, &f.sb, x, y, &t, BLUE) + 16;
-        } else if let Some(i) = self.hist_pos {
-            x = backed_text(cv, &f.sb, x, y, &format!("History {}/{}", i + 1, self.history.len()), BLUE) + 16;
+        } else if let Some(i) = self.history.pos {
+            x = backed_text(cv, &f.sb, x, y, &format!("History {}/{}", i + 1, self.history.recs.len()), BLUE) + 16;
         }
         if self.search_on {
             let events = self.search_events();
@@ -559,29 +566,72 @@ impl Ui {
         note.to_string()
     }
 
-    /// Search markers: an amber tick at the top of the plot for every event of the trigger condition.
+    /// Search markers: a tick at the top of the plot for every event. Mark events of the trigger condition has amber
+    /// ones; each search of Studio has a line of marks of its own in its colour, one line under the other, so two
+    /// searches that find the same edge both show. The selected search draws its lines down the plot.
     pub(super) fn draw_search(&self, cv: &mut Canvas) {
-        if !self.search_on && self.studio_search_marks().is_none() {
-            return;
+        if self.studio_search_marks().is_some() {
+            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) {
+                let top = self.plot.area.y + slot as i32 * SEARCH_LANE_H;
+                let events = self.studio_search_events_of(slot);
+                // under the lines of marks of every search
+                let lines = (slot == self.studio.search_sel).then_some(self.plot.area.y + super::addrail::SEARCH_SLOTS as i32 * SEARCH_LANE_H);
+                self.draw_search_marks(cv, &events, top, super::addrail::SEARCH_COLS[slot], lines);
+            }
+        } else if self.search_on {
+            self.draw_search_marks(cv, &self.search_events(), self.plot.area.y, AMBER, Some(self.plot.area.y + SEARCH_LANE_H));
         }
-        let a = self.area;
-        // the markers take the colour of the channel that is searched
-        let mark_col = match &self.studio.search { Some(spec) if self.m.layout == Layout::Studio => self.wave_color(spec.src), _ => AMBER };
-        let events = self.search_events();
-        let (scale, delay) = self.view();
+    }
+
+    /// The searches in the overview of a zoomed view: each has a line of ticks at the top, in its colour and in the
+    /// order of the numbers, over the whole of the main view. The zoomed part has the marks themselves; the overview
+    /// says where in the record the events are, which the zoom window is moved to (it had no marks at all).
+    pub(super) fn draw_search_overview(&self, cv: &mut Canvas, o: Rect) {
+        let view = (self.m.time_per_div(), self.m.delay);
+        let mut line = |slot: usize, events: &[f64], col: Rgb| {
+            let top = o.y + 1 + slot as i32 * (SEARCH_STRIP_H + 1);
+            for column in Self::search_columns(events, o.w, view) { cv.vline(o.x + column, top, top + SEARCH_STRIP_H - 1, col); }
+        };
+        if self.studio_search_marks().is_some() {
+            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) { line(slot, &self.studio_search_events_of(slot), super::addrail::SEARCH_COLS[slot]); }
+        } else if self.search_on {
+            line(0, &self.search_events(), AMBER);
+        }
+    }
+
+    /// The columns of a plot `w` wide showing `view` (time per division, delay) that have an event. At most one a
+    /// pixel, without walking the events that are off the screen.
+    fn search_columns(events: &[f64], w: i32, (scale, delay): (f32, f32)) -> Vec<i32> {
         let left = delay as f64 - scale as f64 * HDIV as f64 * 0.5;
-        let per_pixel = scale as f64 * HDIV as f64 / a.w.max(1) as f64;
+        let per_pixel = scale as f64 * HDIV as f64 / w.max(1) as f64;
         let mut first = events.partition_point(|&time| time < left);
-        // At most one marker per occupied pixel, without walking millions of
-        // off-screen events or hiding their actual count in Search results.
-        for column in 0..a.w {
+        let mut columns = Vec::new();
+        for column in 0..w {
             let next = events.partition_point(|&time| time < left + (column + 1) as f64 * per_pixel);
             if next > first {
-                let x = a.x + column;
-                cv.triangle([(x - 4, a.y + 1), (x + 4, a.y + 1), (x, a.y + 8)], mark_col);
-                cv.dashed_vline(x, a.y + 9, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90));
+                columns.push(column);
             }
             first = next;
+        }
+        columns
+    }
+
+    /// One line of marks with its top at `top`; from `lines` down a dashed line under each mark that stands alone.
+    fn draw_search_marks(&self, cv: &mut Canvas, events: &[f64], top: i32, mark_col: Rgb, lines: Option<i32>) {
+        let a = self.plot.area;
+        let columns = Self::search_columns(events, a.w, self.view());
+        for (i, &column) in columns.iter().enumerate() {
+            let x = a.x + column;
+            let near = |other: Option<&i32>| other.is_some_and(|&o| (o - column).abs() < SEARCH_MARK_GAP);
+            if near(i.checked_sub(1).and_then(|p| columns.get(p))) || near(columns.get(i + 1)) {
+                // events too close to tell apart: a strip at the top says where they are. A mark and a dashed line
+                // in every column drew the lines side by side, and their dashes made bands across the whole plot
+                // (64 000 edges of a 40 MHz square at 20 us/div, unit 2026-11-20)
+                cv.vline(x, top + 1, top + SEARCH_STRIP_H, mark_col);
+            } else {
+                cv.triangle([(x - 4, top + 1), (x + 4, top + 1), (x, top + 8)], mark_col);
+                if let Some(from) = lines { cv.dashed_vline(x, from, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90)); }
+            }
         }
     }
 }

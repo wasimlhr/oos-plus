@@ -36,10 +36,6 @@ impl Protocol for Arinc429 {
     fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
         matches!(p.kind, Kind::Id { .. }).then(|| format!("L {:03o}", p.value))
     }
-    /// A word starts with a pulse of either sign.
-    fn start_edge(&self) -> Slope {
-        Slope::Either
-    }
     /// One line against ground (+-5 V): HI / LO at +-2.5 V.
     fn setup(&self) -> Setup {
         Setup { thr: 2.5, ..Setup::default() }
@@ -185,10 +181,6 @@ impl Protocol for Mil1553 {
     fn field_error(&self, p: &Packet) -> Option<&'static str> {
         (!p.ok).then_some("Parity")
     }
-    /// The sync of a word goes either way.
-    fn start_edge(&self) -> Slope {
-        Slope::Either
-    }
     /// A bipolar bus: threshold at 0 V; the trigger on the first rising edge after 3 us of quiet bus (the command sync).
     fn setup(&self) -> Setup {
         Setup {
@@ -230,6 +222,8 @@ mod tests {
         // a word with the command sync that has no place in a message keeps the text of its kind
         assert_eq!(text(true, 0x8842, None, true), None);
     }
+
+    use crate::protocols::Decoder;
 
     // Break it catches: a setup written while ARINC 429 and 1553 were built in losing its protocol or its bit rate
     #[test]

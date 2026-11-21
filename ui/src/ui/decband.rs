@@ -357,7 +357,7 @@ impl Ui {
         let Ok(packets) = self.decode_packets_of(m) else { return false };
         let (opt, sh) = (m.dec_opts(), crate::protocols::shared(m));
         let bit = packets.iter().find_map(|x| p.bits(x, &opt, &sh)).and_then(|b| b.first().map(|b| b.t1 - b.t0));
-        bit.is_some_and(|bit| bit / tdiv as f64 * (self.area.w as f64 / HDIV as f64) >= BIT_MIN)
+        bit.is_some_and(|bit| bit / tdiv as f64 * (self.plot.area.w as f64 / HDIV as f64) >= BIT_MIN)
     }
 
     /// Height the band of that decoder takes of the plot.
@@ -424,7 +424,7 @@ impl Ui {
         let f = self.fonts();
         let col = self.dec_color(m);
         // rows under the lanes span all windows, like the lanes
-        let a = if row.is_some() { self.lane_area() } else { self.area };
+        let a = if row.is_some() { self.lane_area() } else { self.plot.area };
         let h = if row.is_some() { DEC_ROW_BOX } else { DEC_BOX };
         cv.set_clip(row.unwrap_or(a));
         // the bit row stands above the boxes

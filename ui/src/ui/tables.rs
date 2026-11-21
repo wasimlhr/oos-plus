@@ -14,6 +14,13 @@ pub(super) enum TableKind {
     Segments,
 }
 
+/// The table window over the plot (ADR 0062): what it shows (None: no window) and the first row shown.
+#[derive(Default)]
+pub(super) struct Window {
+    pub kind: Option<TableKind>,
+    pub top: usize,
+}
+
 #[cfg(test)]
 mod reference_search_navigation_tests {
     use super::*;
@@ -37,7 +44,7 @@ mod reference_search_navigation_tests {
         ui.mstat = vec![MStat { n: 7, sum: 14.0, ..MStat::default() }];
         ui.adjust(Item::SearchOn, 1);
         ui.activate(Item::SearchTable);
-        assert_eq!(ui.table, Some(TableKind::Search));
+        assert_eq!(ui.table.kind, Some(TableKind::Search));
         let events = ui.search_events();
         assert_eq!(events.len(), 100);
         let (rect, _) = ui.table_rect(events.len());
@@ -80,6 +87,17 @@ pub(super) struct EventRow {
     pub ok: bool,
 }
 
+/// The digits the times of `rows` are written with: three, and more where rows next to each other would read the
+/// same (edges 12.5 ns apart, 400 us before the trigger, were all "-400 us").
+pub(super) fn table_time_digits(rows: &[EventRow]) -> usize {
+    let far = rows.iter().map(|e| e.t.abs()).fold(0.0, f64::max);
+    let gap = rows.windows(2).map(|w| (w[1].t - w[0].t).abs()).filter(|g| *g > 0.0).fold(f64::INFINITY, f64::min);
+    if !gap.is_finite() || far <= 0.0 {
+        return 3;
+    }
+    ((far / gap).log10().ceil() as i64 + 2).clamp(3, 9) as usize
+}
+
 impl Ui {
     /// Everything the decoders found in the record, in time order.
     pub(super) fn decode_events(&self) -> Vec<EventRow> {
@@ -120,11 +138,31 @@ impl Ui {
     }
 
     fn search_row(&self, index: usize, t: f64) -> EventRow {
-        EventRow {
-            t,
-            who: format!("{} #{}", self.trigger_source_label(), index + 1),
-            text: self.m.trig_type.name().to_string(),
-            ok: true,
+        let (source, what) = self.search_names();
+        EventRow { t, who: format!("{} #{}", source, index + 1), text: what.to_string(), ok: true }
+    }
+
+    /// The count in the title of the search table. Studio's own search says how much of the record it looked at
+    /// when that is a part ("24000 in 300 us of 800 us") and that it ended at its limit ("100000+").
+    fn search_total_text(&self, total: usize) -> String {
+        if self.m.layout != Layout::Studio || self.studio.search().is_none() {
+            return total.to_string();
+        }
+        let more = if total >= super::addrail::SEARCH_MAX { "+" } else { "" };
+        match self.studio_search_part() {
+            Some((searched, record)) => {
+                format!("{total}{more} in {} of {}", si_short(searched, "s"), si_short(record, "s"))
+            }
+            None => format!("{total}{more}"),
+        }
+    }
+
+    /// What the events of the table are of: the source and the condition. A search of Studio has its own
+    /// source and type; the table named the trigger's for it.
+    fn search_names(&self) -> (String, &'static str) {
+        match self.studio.search() {
+            Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), spec.kind.name()),
+            _ => (self.trigger_source_label(), self.m.trig_type.name()),
         }
     }
 
@@ -145,7 +183,7 @@ impl Ui {
 
     /// One row per hardware segment read back: time since the first trigger (NaN without a stamp), number, step.
     fn segment_rows(&self) -> Vec<EventRow> {
-        let t = &self.seg_times;
+        let t = &self.seg.times;
         (0..t.len())
             .map(|k| {
                 let d = match (t[k], k.checked_sub(1).and_then(|j| t[j])) {
@@ -187,8 +225,8 @@ impl Ui {
     }
 
     pub(super) fn table_toggle(&mut self, k: TableKind) {
-        self.table = if self.table == Some(k) { None } else { Some(k) };
-        self.table_top = 0;
+        self.table.kind = if self.table.kind == Some(k) { None } else { Some(k) };
+        self.table.top = 0;
         self.close_menu();
     }
 
@@ -209,12 +247,12 @@ impl Ui {
 
     /// The scroll bar of the open table and its rows.
     pub(super) fn table_bar(&self) -> Option<(scroll::Bar, Rect)> {
-        let k = self.table?;
+        let k = self.table.kind?;
         let total = self.table_total(k);
         let (r, fit) = self.table_rect(total);
         let rows = Rect::new(r.x, r.y + self.head_h(r), r.w, fit as i32 * ROW_H);
         let track = Rect::new(r.x + r.w - scroll::BAR_W - 2, rows.y, scroll::BAR_W, rows.h);
-        Some((scroll::Bar { track, total: total as i32, shown: fit as i32, pos: self.table_top as i32 }, rows))
+        Some((scroll::Bar { track, total: total as i32, shown: fit as i32, pos: self.table.top as i32 }, rows))
     }
 
     /// A docked table too narrow for the title and the controls on one row.
@@ -227,11 +265,16 @@ impl Ui {
 
     /// The title of the open table with its count. Docked it is the title of the view, so it costs no row of its own.
     pub(super) fn table_title(&self) -> String {
-        let Some(k) = self.table else { return String::new() };
+        let Some(k) = self.table.kind else { return String::new() };
         let total = self.table_total(k);
         match k {
             TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
-                else { format!("Search {} \u{b7} {}", self.trigger_source_label(), total) },
+                else {
+                    // the list of a search of Studio has the name the top bar and the sheet give it, then its source:
+                    // "Search CH2" under a sheet called "Search 1" read as another search (owner, 2026-11-20)
+                    let which = if self.studio_search_marks().is_some() { format!("{} \u{b7} ", self.studio.search_sel + 1) } else { String::new() };
+                    format!("Search {which}{} \u{b7} {}", self.search_names().0, self.search_total_text(total))
+                },
             TableKind::Segments => format!("Segments \u{b7} {}", total),
         }
     }
@@ -244,18 +287,19 @@ impl Ui {
             let b = b.clamp(40, (w - 80).max(40));
             return [12, b, c.clamp(b + 30, (w - 30).max(b + 30))];
         }
-        let time = rows.iter().map(|e| f.s.width(&si(e.t, "s"))).max().unwrap_or(60);
+        let digits = table_time_digits(rows);
+        let time = rows.iter().map(|e| f.s.width(&si_digits(e.t, "s", digits))).max().unwrap_or(60);
         let who = rows.iter().map(|e| f.s.width(&e.who)).max().unwrap_or(60);
         let b = 12 + time + 18;
         [12, b, (b + who + 18).min((w - 60).max(b + 30))]
     }
 
     /// The rows of the table that are on the screen, and its rectangle.
-    fn table_shown(&self) -> Option<(Rect, Vec<EventRow>)> {
-        let k = self.table?;
+    pub(super) fn table_shown(&self) -> Option<(Rect, Vec<EventRow>)> {
+        let k = self.table.kind?;
         let total = self.table_total(k);
         let (r, fit) = self.table_rect(total);
-        let top = self.table_top.min(total.saturating_sub(fit));
+        let top = self.table.top.min(total.saturating_sub(fit));
         let rows = if k == TableKind::Search {
             self.search_events().iter().copied().enumerate().skip(top).take(fit).map(|(i, t)| self.search_row(i, t)).collect()
         } else {
@@ -290,7 +334,7 @@ impl Ui {
     }
 
     pub(super) fn draw_table(&self, cv: &mut Canvas) {
-        let Some(k) = self.table else { return };
+        let Some(k) = self.table.kind else { return };
         let f = self.fonts();
         let (total, mut rows) = if k == TableKind::Search {
             (self.search_events().len(), Vec::new())
@@ -299,7 +343,7 @@ impl Ui {
             (rows.len(), rows)
         };
         let (r, fit) = self.table_rect(total);
-        let top = self.table_top.min(total.saturating_sub(fit));
+        let top = self.table.top.min(total.saturating_sub(fit));
         if k == TableKind::Search {
             rows = self
                 .search_events()
@@ -333,12 +377,13 @@ impl Ui {
             cv.text(&f.s, r.x + 12, r.y + self.head_h(r) + 18, empty, DIM);
         }
         let cols = self.table_col_x(&rows, r.w);
+        let digits = table_time_digits(&rows);
         let end = r.right() - scroll::BAR_W - 8;
         for (i, e) in rows.iter().enumerate() {
             let y = r.y + self.head_h(r) + i as i32 * ROW_H;
             cv.hline(r.x + 8, r.x + r.w - 9, y, LINE);
             // each column is cut at the next one: a column made narrow hides the end of its text, not its neighbour
-            for (k, (font, text, color)) in [(&f.s, si(e.t, "s"), LABEL), (&f.s, e.who.clone(), DIM), (&f.sb, e.text.clone(), if e.ok { TEXT } else { RED })].into_iter().enumerate() {
+            for (k, (font, text, color)) in [(&f.s, si_digits(e.t, "s", digits), LABEL), (&f.s, e.who.clone(), DIM), (&f.sb, e.text.clone(), if e.ok { TEXT } else { RED })].into_iter().enumerate() {
                 let right = if k < 2 { r.x + cols[k + 1] - 10 } else { end };
                 cv.set_clip(Rect::new(r.x + cols[k], y, (right - r.x - cols[k]).max(1), ROW_H));
                 cv.text(font, r.x + cols[k], y + 18, &text, color);
@@ -354,7 +399,7 @@ impl Ui {
 
     /// A tap while the table is open; true when it was on the table.
     pub(super) fn table_tap(&mut self, x: i32, y: i32) -> bool {
-        let Some(k) = self.table else { return false };
+        let Some(k) = self.table.kind else { return false };
         let events = (k == TableKind::Search).then(|| self.search_events());
         let rows = if events.is_none() { self.table_rows(k) } else { Vec::new() };
         let total = events.as_ref().map_or(rows.len(), |events| events.len());
@@ -363,14 +408,14 @@ impl Ui {
             return false;
         }
         let last = total.saturating_sub(fit);
-        self.table_top = self.table_top.min(last);
+        self.table.top = self.table.top.min(last);
         let on_bar = total > fit && x >= r.x + r.w - scroll::BAR_W - 2;
         if self.table_close(r).contains(x, y) {
-            self.table = None;
+            self.table.kind = None;
         } else if on_bar {
             // the scroll bar (moved by the finger, see ui/scroll.rs)
         } else if y >= r.y + self.head_h(r) {
-            let i = self.table_top + ((y - r.y - self.head_h(r)) / ROW_H) as usize;
+            let i = self.table.top + ((y - r.y - self.head_h(r)) / ROW_H) as usize;
             if k == TableKind::Segments && i < rows.len() {
                 self.seg_show(i);
             } else if let Some(t) =
@@ -392,14 +437,14 @@ impl Ui {
             stopped = true;
         }
         if self.m.zoom {
-            if self.m.trig_ref.is_some() {
-                let half_main = self.m.time_per_div() * HDIV * 0.5;
-                let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
-                if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
-                    self.m.delay = t as f32;
-                    if let Some(saved) = self.zoom_saved.as_mut() {
-                        saved.2 = t as f32;
-                    }
+            // an event the zoom window cannot reach in the main view takes the main view along (it did so for a
+            // reference only: the window stopped at the edge of the overview, short of the event)
+            let half_main = self.m.time_per_div() * HDIV * 0.5;
+            let half_zoom = tscales()[self.m.zscale] * HDIV * 0.5;
+            if (t as f32 - self.m.delay).abs() + half_zoom > half_main {
+                self.m.delay = t as f32;
+                if let Some(saved) = self.zoom_view.saved.as_mut() {
+                    saved.2 = t as f32;
                 }
             }
             self.m.zdelay = t as f32;
@@ -462,7 +507,7 @@ impl Ui {
     /// The second pane: under the plot and the lanes.
     pub(super) fn pane_rect(&self) -> Rect {
         if self.dock_on() { return self.dock_content(super::dock::VKind::Pane).unwrap_or(Rect::new(0, 0, 1, 1)); }
-        let g = self.grid;
+        let g = self.plot.grid;
         Rect::new(g.x, g.y + g.h + 2 + self.eye_below() + self.la_strip_h(), g.w, self.pane_h() - 4)
     }
 

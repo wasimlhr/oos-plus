@@ -10,6 +10,7 @@ use super::*;
 #[path = "frozen41_helpers_tests.rs"]
 mod frozen41_helpers_tests;
 mod refs;
+pub(super) use refs::RefPage;
 #[cfg(test)]
 #[path = "scpi_helpers_tests.rs"]
 mod scpi_helpers_tests;
@@ -166,7 +167,7 @@ impl Ui {
     pub(super) fn remove_measurement(&mut self, index: usize) {
         if index < self.m.meas.len() {
             let entry = self.m.meas.remove(index);
-            self.meas_own.remove(&entry);
+            self.meas_own.rows.remove(&entry);
         } else if index < self.m.meas.len() + self.m.meas2.len() {
             self.m.meas2.remove(index - self.m.meas.len());
         } else if index < self.measurement_count() {
@@ -174,7 +175,7 @@ impl Ui {
         } else {
             return;
         }
-        self.meas_cfg = None;
+        self.meas_own.dialog = None;
         self.clear_measurement_statistics();
         self.relayout();
     }
@@ -185,7 +186,7 @@ impl Ui {
         value: f64,
         capture: u64,
     ) {
-        if capture == 0 || capture != self.wfm_total || self.record_mode() || !value.is_finite() {
+        if capture == 0 || capture != self.counts.wfm_total || self.record_mode() || !value.is_finite() {
             return;
         }
         let Some(index) = self.m.cat.iter().position(|row| *row == entry) else { return };
@@ -203,10 +204,17 @@ impl Ui {
         if !self.m.ch[c].on || !self.computing_like_last(c) || matches!(k, Meas::TVmax | Meas::TVmin) {
             return f64::NAN;
         }
-        if self.meas_env[c] && crate::framestats::needs_samples(k) {
+        if self.meas_bg.env[c] && crate::framestats::needs_samples(k) {
             return f64::NAN;
         }
-        self.meas_of(&self.ana[c], k)
+        self.meas_of(&self.measured.ch[c], k)
+    }
+
+    /// The last finished measurement of a channel stands in for the one being made (`computing_like_last`): a value
+    /// it has not got is then "no value", not "Computing". A line with no edges, running at 1 Mpts, said Computing
+    /// for its Frequency for as long as it ran (CH1 on a unit, 2026-11-20).
+    fn last_answer_stands_in(&self, id: WaveId) -> bool {
+        matches!(id, WaveId::Ch(c) if self.computing_like_last(c))
     }
 
     /// Measurement `k` of a channel or a reference. A channel that is off, or a ref with no samples, is NaN.
@@ -276,7 +284,7 @@ impl Ui {
             .iter()
             .map(|&(k, id)| {
                 let val = self.meas_number(id, k);
-                MeasRow { name: super::meascatalog::meas_display_name(k).to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k), reason: String::new() }
+                MeasRow { name: super::meascatalog::meas_display_name(k).to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k) && !self.last_answer_stands_in(id), reason: String::new() }
             })
             .collect();
         for &(k, a, b) in &self.m.meas2 {
@@ -662,7 +670,7 @@ impl Ui {
 
     /// Delay or phase `k` between the sources of the Measure page: on when it was off, off when it was on.
     pub(super) fn meas_pair_toggle(&mut self, k: usize) {
-        let e = (k, self.meas_src, self.meas_src_b);
+        let e = (k, self.sources.a, self.sources.b);
         if e.1 == e.2 {
             return self.toast("Source A and B are the same source");
         }
@@ -711,14 +719,14 @@ impl Ui {
     /// DVM and counter: a new record came in. Offline mode reads the reference directly; on the hardware the FPGA
     /// counts (`counter_poll`).
     pub(super) fn counter_update(&mut self) {
-        if self.offline || !self.m.cnt_on || self.src.is_hw() {
+        if self.offline.on || !self.m.cnt_on || self.src.is_hw() {
             return;
         }
         let c = self.m.cnt_src;
         if !self.m.ch[c].on {
             return;
         }
-        let a = &self.ana[c];
+        let a = &self.measured.ch[c];
         self.cnt.total += a.rises.len() as u64;
         let v = self.meas_at(WaveId::Ch(c), Meas::Freq);
         if v.is_finite() {
@@ -741,7 +749,7 @@ impl Ui {
         }
         if let Some(i) = self.offline_meter() {
             let v = match self.m.cnt_mode {
-                2 => self.ref_ana[i].rises.len() as f64,
+                2 => self.measured.refs[i].rises.len() as f64,
                 1 => self.meas_at(WaveId::Ref(i), Meas::Period),
                 _ => self.meas_at(WaveId::Ref(i), Meas::Freq),
             };
@@ -873,7 +881,7 @@ impl Ui {
         }
         if self.m.cnt_on {
             if let Some(i) = self.offline_meter() {
-                let a = &self.ref_ana[i];
+                let a = &self.measured.refs[i];
                 let digits = self.m.cnt_digits as usize;
                 let period = self.meas_at(WaveId::Ref(i), Meas::Period);
                 let frequency = self.meas_at(WaveId::Ref(i), Meas::Freq);
@@ -1021,7 +1029,7 @@ impl Ui {
         let Some((source, scale, offset, _)) = self.cursor_source_context() else {
             return f64::NAN;
         };
-        let area = self.source_area(source).unwrap_or(self.area);
+        let area = self.source_area(source).unwrap_or(self.plot.area);
         self.zoom_divs_at(area, frac) as f64 * scale as f64 - offset as f64
     }
 
@@ -1029,7 +1037,7 @@ impl Ui {
         let Some((source, scale, offset, _)) = self.cursor_source_context() else {
             return 0.5;
         };
-        let area = self.source_area(source).unwrap_or(self.area);
+        let area = self.source_area(source).unwrap_or(self.plot.area);
         let (factor, center) = self.zoom_vertical_transform(area);
         if !v.is_finite() || !scale.is_finite() || scale <= 0.0 {
             return 0.5;
@@ -1040,19 +1048,19 @@ impl Ui {
 
     /// The source `:MEASure:ITEM` uses when the command names none, and the second source of a pair.
     pub(crate) fn meas_source(&self) -> WaveId {
-        self.meas_src
+        self.sources.a
     }
 
     pub(crate) fn meas_source_b(&self) -> WaveId {
-        self.meas_src_b
+        self.sources.b
     }
 
     pub(crate) fn set_meas_source(&mut self, id: WaveId) {
-        self.meas_src = id;
+        self.sources.a = id;
     }
 
     pub(crate) fn set_meas_source_b(&mut self, id: WaveId) {
-        self.meas_src_b = id;
+        self.sources.b = id;
     }
 
     /// Ok(true) adds a row; Ok(false) preserves an existing row and its statistics.
@@ -1095,18 +1103,18 @@ impl Ui {
         self.m.meas.clear();
         self.m.meas2.clear();
         self.m.cat.clear();
-        self.meas_own.clear();
-        self.meas_cfg = None;
+        self.meas_own.rows.clear();
+        self.meas_own.dialog = None;
         self.mark_changed();
         true
     }
 
     pub(crate) fn stats_shown(&self) -> bool {
-        self.stats_on
+        self.results.on
     }
 
     pub(crate) fn set_stats_shown(&mut self, on: bool) {
-        self.stats_on = on;
+        self.results.on = on;
     }
 
     /// `:MEASure:STATistic:RESet`: the history, not the rows.
@@ -1225,8 +1233,9 @@ impl Ui {
                 sigma: f64::NAN,
             });
         }
-        let first = bins.iter().position(|&b| b > 0).unwrap() as f64;
-        let last = bins.iter().rposition(|&b| b > 0).unwrap() as f64;
+        // n > 0: some bin holds a count
+        let first = bins.iter().position(|&b| b > 0).unwrap_or(0) as f64;
+        let last = bins.iter().rposition(|&b| b > 0).unwrap_or(0) as f64;
         let (min_px, max_px) = if high_is_low_index { (last, first) } else { (first, last) };
         let mut peaks = 0u64;
         for i in 0..bins.len() {
@@ -1280,7 +1289,7 @@ impl Ui {
             }
             self.m.mask_y = v;
         }
-        if self.mask_ref.is_some() {
+        if self.mask_sw.reference.is_some() {
             self.build_mask();
         }
         true
@@ -1288,14 +1297,14 @@ impl Ui {
 
     /// File of a mask in the slot of the Storage page, beside the setups.
     fn mask_path(&self) -> std::path::PathBuf {
-        self.setup_path().with_file_name(format!("mask{}.txt", self.store_slot))
+        self.setup_path().with_file_name(format!("mask{}.txt", self.files.slot))
     }
 
     pub(super) fn mask_save(&mut self) { self.mask_save_to(None) }
 
     /// `mask_save` to a file of the caller (SCPI `:MASK:SAVE "path"`), or to the slot and the save folder.
     pub(super) fn mask_save_to(&mut self, path: Option<std::path::PathBuf>) {
-        let Some(r) = &self.mask_ref else { return self.toast("No mask yet: Create mask first") };
+        let Some(r) = &self.mask_sw.reference else { return self.toast("No mask yet: Create mask first") };
         let t = crate::store::mask_text(self.m.mask_src, self.m.mask_x, self.m.mask_y, self.m.mask_inv, r);
         if let Some(p) = path {
             let res = crate::store::write(&p, t.as_bytes());
@@ -1344,7 +1353,7 @@ impl Ui {
         if let Some(inv) = mf.inv {
             self.m.mask_inv = inv;
         }
-        self.mask_ref = Some(mf.v);
+        self.mask_sw.reference = Some(mf.v);
         self.build_mask();
         self.m.mask_on = true;
         self.mask_counts_reset();
@@ -1441,7 +1450,7 @@ mod ref_clear_tests {
         ui.ref_clear_all();
         assert_eq!(ui.m.meas, own, "the channel readouts stay, the reference ones go");
         assert!(ui.m.meas2.is_empty());
-        assert!(!matches!(ui.meas_src, WaveId::Ref(_)));
+        assert!(!matches!(ui.sources.a, WaveId::Ref(_)));
     }
 }
 

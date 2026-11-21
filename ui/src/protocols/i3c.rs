@@ -43,6 +43,8 @@ mod tests {
         assert_eq!(I3c.text(&ccc(0xac, true), &[0; OPTS]), None);
     }
 
+    use crate::protocols::Decoder;
+
     // Break it catches: a setup written while I3C was built in losing its protocol
     #[test]
     fn old_setups_keep_protocol() {

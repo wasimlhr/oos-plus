@@ -9,6 +9,25 @@ use super::*;
 
 pub(super) const BACKGROUND_MEASUREMENT_POINTS: usize = 262_144;
 
+/// The sources the measurements are added for (ADR 0062).
+pub(in crate::ui) struct Sources {
+    /// the source a measurement is added for
+    pub a: WaveId,
+    /// source B of delay and phase
+    pub b: WaveId,
+}
+
+/// The measurements of the last record and of the references (ADR 0062).
+#[derive(Default)]
+pub(in crate::ui) struct Measured {
+    /// per channel (oos-dsp), of the last record
+    pub ch: [Arc<oos_dsp::measure::Analysis>; NCH],
+    /// of each ref slot, from the stored samples (no front-end bandwidth)
+    pub refs: [Arc<oos_dsp::measure::Analysis>; NREF],
+    /// false when a hidden, unrequested reference skipped the capture-time scan
+    pub refs_valid: [bool; NREF],
+}
+
 /// A reference may keep the same allocation between accepted SIM captures.
 /// Include its revision as well as the physical gate and analysis settings.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -37,6 +56,23 @@ pub(in crate::ui) struct RefMeasureKey {
     /// the samples are min/max pairs (`Ui::measurement_on_pairs`): part of the key, so a cached analysis is not taken
     /// across a change of it (high res switched while stopped)
     pub(super) pairs: bool,
+}
+
+impl RefMeasureKey {
+    /// The same measurement of another record: everything is equal but the record the samples are of, and its start
+    /// time. On hardware the trigger point is found in each record as a fraction of a sample (`board::trigger_point`),
+    /// so no two records start at the same time (unit 2026-11-20: with the start time compared, no answer was ever
+    /// taken). Whether the worker measured edges or only the basic values is left to the caller.
+    fn same_settings(self, other: Self) -> bool {
+        Self {
+            samples: self.samples,
+            revision: self.revision,
+            capture: self.capture,
+            t0: self.t0,
+            basic: self.basic,
+            ..other
+        } == self
+    }
 }
 
 pub(super) struct RefMeasureCache {
@@ -358,7 +394,7 @@ impl Ui {
                 high: self.m.meas_hpct.to_bits(),
                 lv: self.m.shared_levels(),
                 epoch: self.workflow_epoch,
-                revision: record.raw.as_ref().map_or(self.wfm_total, |raw| raw.frame.seq),
+                revision: record.raw.as_ref().map_or(self.counts.wfm_total, |raw| raw.frame.seq),
                 full: self.gate_full(),
                 basic,
                 idle: self.m.meas_idle.to_bits(),
@@ -366,7 +402,7 @@ impl Ui {
                 periods: self.m.meas_n,
                 data: self.m.meas_data,
                 conditioning: (self.m.ch[channel].coupling as u8, self.m.ch[channel].invert, self.m.ch[channel].bw),
-                capture: self.wfm_total,
+                capture: self.counts.wfm_total,
                 pairs: self.measurement_on_pairs(record, channel),
             },
             t0,
@@ -481,15 +517,19 @@ impl Ui {
     pub(in crate::ui) fn measure_channel_sources(&mut self) {
         for channel in 0..NCH {
             let full = self.channel_needs_full_analysis(channel);
-            let analysis = self.channel_measurement(channel, full).map(|(analysis, _)| analysis);
+            let mut analysis = self.channel_measurement(channel, full).map(|(analysis, _)| analysis);
             // a large record measured in the background: the values of the last one stay until the worker answers (a
             // deep record measured raw once a second showed "not available" for that time, unit 2026-11-15)
-            if analysis.is_none()
-                && self.m.ch[channel].on
-                && self.computing_like_last(channel)
-                && self.ana[channel].valid
-            {
-                continue;
+            if analysis.is_none() && self.m.ch[channel].on && self.computing_like_last(channel) {
+                // the last finished one: an answer that came a record late is in the cache, not yet in `ana`
+                analysis = self.azr.ch_measure[channel]
+                    .borrow()
+                    .as_ref()
+                    .filter(|cache| !cache.key.basic)
+                    .map(|cache| Arc::clone(&cache.analysis));
+                if analysis.is_none() && self.measured.ch[channel].valid {
+                    continue;
+                }
             }
             let basic = self.native_channel_basic(channel);
             let stats = analysis.as_ref().map(|a| Stats {
@@ -517,7 +557,7 @@ impl Ui {
                     })
                 })
                 .unwrap_or_default();
-            self.ana[channel] = analysis.unwrap_or_default();
+            self.measured.ch[channel] = analysis.unwrap_or_default();
             if !self.m.ch[channel].on {
                 *self.azr.ch_measure[channel].borrow_mut() = None;
                 self.azr.ch_measure_pending[channel].set(None);
@@ -563,22 +603,24 @@ impl Ui {
         if channel >= NCH || !self.measurement_computing(WaveId::Ch(channel)) {
             return false;
         }
-        // only for the raw window of a deep record (deepmeas.rs), read once in a while: where records come faster
-        // than the worker (roll at 0.2 to 0.5 s/div) the last finished value could be from before a change of the
+        // for the raw window of a deep record (deepmeas.rs), read once in a while, and for a running acquisition whose
+        // records come faster than the worker answers: its answer for the record before is taken
+        // (`poll_reference_measurements`), so the value is one worker run old. Without that every answer was for a
+        // record already replaced, and a 1 Mpts record at 20 us/div showed "Computing" for as long as it ran (unit
+        // 2026-11-20). Not in roll and scan: there the last finished value could be from before a change of the
         // signal and stood for seconds (time_axis_at_every_channel_count on the unit, 2026-11-15)
-        if !self.last[0]
-            .as_ref()
-            .and_then(|r| r.raw.as_ref())
-            .is_some_and(|r| crate::deepmeas::deep_raw_frame(&r.frame))
-        {
+        let frame = self.last[0].as_ref().and_then(|r| r.raw.as_ref()).map(|r| &*r.frame);
+        let running = self.m.run == RunState::Run && frame.is_some_and(|f| !f.roll && !f.scan);
+        if !running && !frame.is_some_and(crate::deepmeas::deep_raw_frame) {
             return false;
         }
         let Some(pending) = self.azr.ch_measure_pending[channel].get() else { return false };
         let cache = self.azr.ch_measure[channel].borrow();
         cache.as_ref().is_some_and(|c| {
             let k = c.key;
-            (k.len, k.dt, k.t0, k.vpd, k.low, k.high, k.epoch, k.full)
-                == (
+            (running && k.same_settings(pending))
+                || (k.len, k.dt, k.t0, k.vpd, k.low, k.high, k.epoch, k.full)
+                    == (
                     pending.len,
                     pending.dt,
                     pending.t0,
@@ -648,13 +690,21 @@ impl Ui {
                     self.channel_measurement_key(channel, result.key.basic),
                 ),
             };
-            if pending.get() == Some(result.key) {
+            let current = current.map(|(current, _)| current);
+            let was_pending = pending.get() == Some(result.key);
+            if was_pending {
                 pending.set(None);
-                if current.is_some_and(|(current, _)| current == result.key) {
-                    *cache.borrow_mut() =
-                        Some(RefMeasureCache { key: result.key, analysis: result.analysis, readings: result.readings });
-                    changed = true;
-                }
+            }
+            // a running acquisition replaced the record while the worker measured it: the answer is one record late.
+            // It is kept as the last finished one (`computing_like_last`) unless the settings changed meanwhile
+            let late = matches!(result.source, WaveId::Ch(_))
+                && self.m.run == RunState::Run
+                && current.is_some_and(|current| current != result.key && current.same_settings(result.key))
+                && cache.borrow().as_ref().is_none_or(|cached| Some(cached.key) != current);
+            if (was_pending && current == Some(result.key)) || late {
+                *cache.borrow_mut() =
+                    Some(RefMeasureCache { key: result.key, analysis: result.analysis, readings: result.readings });
+                changed = true;
             }
         }
         let own_turn = self.azr.ref_measure_worker.borrow().as_ref().is_some_and(|worker| worker.own_turn);
@@ -699,8 +749,8 @@ impl Ui {
                 || self.m.meas2.iter().any(|entry| entry.1 == id || entry.2 == id)
                 || meter == Some(i);
             let analysis = requested.then(|| self.reference_measurement(i)).flatten();
-            self.ref_ana_valid[i] = analysis.is_some();
-            self.ref_ana[i] = analysis.map_or_else(Default::default, |(a, _)| a);
+            self.measured.refs_valid[i] = analysis.is_some();
+            self.measured.refs[i] = analysis.map_or_else(Default::default, |(a, _)| a);
             if self.refs[i].is_none() {
                 *self.azr.ref_measure[i].borrow_mut() = None;
             }

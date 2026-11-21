@@ -153,11 +153,11 @@ pub(super) struct Studio {
     pub handles: std::cell::RefCell<Vec<(super::workspace::Trace, Rect)>>,
     /// Studio was the layout at the last frame: coming into it applies the entry rules (`studio_sync`)
     pub was: bool,
-    /// Search 1 (Add > Search): its own source, level and slope
-    pub search: Option<super::addrail::SearchSpec>,
-    /// the event the next / previous buttons stand on
-    pub search_at: usize,
-    pub search_cache: std::cell::RefCell<Option<(u64, std::sync::Arc<Vec<f64>>)>>,
+    /// Search 1 to 3 (Add > Search) by their place, the selected one, the event next / previous stand on in each
+    pub searches: [Option<super::addrail::SearchSpec>; super::addrail::SEARCH_SLOTS],
+    pub search_sel: usize,
+    pub search_at: [usize; super::addrail::SEARCH_SLOTS],
+    pub search_cache: std::cell::RefCell<[Option<(u64, std::sync::Arc<Vec<f64>>)>; super::addrail::SEARCH_SLOTS]>,
     /// the cursor readouts go to the badge row, not onto the graticule
     pub cur_badge: bool,
     /// moving one cursor moves the other with it
@@ -447,7 +447,7 @@ impl Ui {
         if !self.record_mode() {
             self.studio.view = StudioView::Waveform;
             self.relayout();
-        } else if self.refs.iter().any(Option::is_some) && !self.m.zoom && !self.zoom_user_closed {
+        } else if self.refs.iter().any(Option::is_some) && !self.m.zoom && !self.zoom_view.user_closed {
             self.set_zoom(true);
         }
     }
@@ -549,15 +549,15 @@ impl Ui {
             b
         };
         let lan = link("LAN", true);
-        let wlan = link("WLAN", self.wlan_stick);
-        let usb = link("USB", self.usb);
+        let wlan = link("WLAN", self.net.wlan_stick);
+        let usb = link("USB", self.stick.mounted);
         // the search (Add > Search): previous, how many events, next. It has the end of the read-out's room. Its label
         // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
         let links_x = lx + 4 - gap;
         let room = links_x - 10 - x;
-        let search_w = if self.studio.search.is_some() {
+        let search_w = if self.studio.search().is_some() {
             let caption = self.studio_acq_need();
-            let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
+            let (full, least) = self.studio_search_need();
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
         } else { 0 };
         let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);
@@ -642,7 +642,7 @@ impl Ui {
         self.draw_view_box(cv);
         self.draw_studio_search_chip(cv);
         // the links: a dot (green with an address, or a mounted stick) and a name, as the USB pill of the Default bar
-        let lan_up = self.addr_of("eth0").filter(|_| self.eth_link).is_some();
+        let lan_up = self.addr_of("eth0").filter(|_| self.net.eth_link).is_some();
         let wlan_up = self.addr_of(oos_hal::wlan::IFACE).is_some();
         let net = open(MenuId::Network);
         let links = [(t.lan, "LAN", lan_up, net), (t.wlan, "WLAN", wlan_up, net), (t.usb, "USB", true, storing)];
@@ -677,7 +677,7 @@ impl Ui {
         // the hardware Panel button is gone from this bar: F6 (and the desktop window) still toggle the panel
         let panel: Option<Rect> = None;
         // the room the Panel button had goes to the time base and the trigger
-        let extra = if self.desktop_panel.is_some() { 25 } else { 0 };
+        let extra = if self.workspace.desktop_panel.is_some() { 25 } else { 0 };
         let trig_w = 196 + extra;
         let trig = Rect::new(right - trig_w, y, trig_w, h);
         let time = Rect::new(trig.x - 9 - 150 - extra, y, 150 + extra, h);
@@ -1164,7 +1164,7 @@ impl Ui {
             return;
         }
         if let Some(i) = self.shown_refs().into_iter().find(|&i| b.refs[i].contains(x, y)) {
-            let (prev, open) = (self.ref_sel, self.menu_open && self.menu == MenuId::Ref);
+            let (prev, open) = (self.ref_page.sel, self.menu_open && self.menu == MenuId::Ref);
             self.select_workspace_source(WaveId::Ref(i));
             if open && prev != i { return; }
             return self.toggle_menu(MenuId::Ref);
@@ -1216,7 +1216,7 @@ impl Ui {
         let Some(&a) = on.first() else { return };
         let b = on.get(1).copied().unwrap_or(a);
         self.m.math = MathOp::Add;
-        self.math_fam = MathOp::Add.family();
+        self.math.family = MathOp::Add.family();
         (self.m.math_a, self.m.math_b) = (a, b);
         self.m.math_offset = 0.0;
         self.math_autoscale();
@@ -1261,7 +1261,7 @@ impl Ui {
         self.studio_sync();
         // the info card is above everything, the Add panel included
         if self.info_card_tap(x, y) { return true; }
-        if self.power_dlg || self.wlan.osk.is_some() || self.dialog.is_some() || self.load_slot_ask { return false; }
+        if self.power.open || self.wlan.osk.is_some() || self.dialog.is_some() || self.load_slot_ask { return false; }
         if self.menu_open && self.menu_rect().is_some_and(|d| d.contains(x, y)) { return false; }
         if self.studio_sz_taps(x, y) { return true; }
         if self.studio_view_tap(x, y) { return true; }
@@ -1391,13 +1391,13 @@ impl Ui {
 
     /// Where a T or cursor tag centred on `x` sits: inside the scale, on its top edge.
     pub(super) fn studio_tag_rect(&self, x: i32) -> Rect {
-        let g = self.grid;
+        let g = self.plot.grid;
         Rect::new(x.clamp(g.x + 12, g.right() - 12) - 12, g.y + 1, 24, TAG_H)
     }
 
     /// Screen x of a time (relative to the trigger) in the main view of the plot.
     pub(super) fn studio_x_of_time(&self, t: f64) -> i32 {
-        let g = self.grid;
+        let g = self.plot.grid;
         let (tpd, delay) = self.view();
         g.x + ((0.5 + (t - delay as f64) / (HDIV as f64 * tpd as f64)) * g.w as f64).round() as i32
     }
@@ -1410,14 +1410,14 @@ impl Ui {
             Trace::Channel(c) => { if !self.m.ch[c].on || !self.shows(c) { return None; } self.y_of_volts(c, 0.0) }
             Trace::Reference(i) => {
                 let r = self.refs.get(i)?.as_ref().filter(|r| r.on && r.vpd > 0.0)?;
-                if self.ref_win_of(i) != self.cur_win { return None; }
-                self.zoom_y_of_divs(self.area, r.offset / r.vpd).clamp(-1e4, 1e4).round() as i32
+                if self.ref_win_of(i) != self.plot.cur_win { return None; }
+                self.zoom_y_of_divs(self.plot.area, r.offset / r.vpd).clamp(-1e4, 1e4).round() as i32
             }
             Trace::Math(k) => {
-                if !self.m.math_shown(k) || self.math_win_of(k) != self.cur_win { return None; }
+                if !self.m.math_shown(k) || self.math_win_of(k) != self.plot.cur_win { return None; }
                 let c = self.m.math_ch(k);
                 if c.op == MathOp::Fft { return None; }
-                self.zoom_y_of_divs(self.area, c.offset).clamp(-1e4, 1e4).round() as i32
+                self.zoom_y_of_divs(self.plot.area, c.offset).clamp(-1e4, 1e4).round() as i32
             }
         };
         Some(y)
@@ -1428,10 +1428,10 @@ impl Ui {
     /// edge, clear of the time labels; handles that would cover each other (sources with the same zero level in one
     /// graticule) stand side by side, so each stays on its own level.
     pub(super) fn studio_handle_rects(&self) -> Vec<(super::workspace::Trace, Rect)> {
-        let a = self.area;
+        let a = self.plot.area;
         let half = 12.min(a.h / 2);
         // the lane that carries the time labels keeps them readable, and the last one the Fit row above them
-        let last = self.cur_win + 1 >= self.wins.len();
+        let last = self.plot.cur_win + 1 >= self.plot.wins.len();
         let times = if last { self.ref_badge_pad(a).max(self.fonts().s.size + 8) } else if self.stacked() && !self.studio_lane_has_own_time() { 0 } else { self.fonts().s.size + 8 };
         let low = (a.y + a.h - times - half).max(a.y + half);
         let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
@@ -1469,7 +1469,7 @@ impl Ui {
     pub(super) fn draw_studio_overlay(&self, cv: &mut Canvas) {
         if !self.studio_tags_on() || self.view_on() || self.eye_open() { return; }
         let f = self.fonts();
-        let g = self.grid;
+        let g = self.plot.grid;
         cv.set_clip(Rect::new(g.x - 12, g.y, g.w + 24, g.h));
         // the shaded band between two time cursors
         if matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy) {
@@ -1479,7 +1479,7 @@ impl Ui {
             let (x0, x1) = (xs[0].min(xs[1]), xs[0].max(xs[1]));
             cv.set_clip(Rect::new(g.x, g.y, g.w, g.h));
             let off_same_side = (fr[0] < 0.0 && fr[1] < 0.0) || (fr[0] > 1.0 && fr[1] > 1.0);
-            for &lane in &self.wins {
+            for &lane in &self.plot.wins {
                 if !off_same_side { cv.blend(Rect::new(x0, lane.y, (x1 - x0).max(1), lane.h), BAND, 46); }
             }
             cv.set_clip(Rect::new(g.x - 12, g.y, g.w + 24, g.h));
@@ -1500,7 +1500,7 @@ impl Ui {
         cv.text_in(&f.sb, r, 1, "T", AMBER);
         if (g.x..g.right()).contains(&tx) {
             cv.triangle([(tx - 3, r.bottom()), (tx + 3, r.bottom()), (tx, r.bottom() + 3)], AMBER);
-            for &lane in &self.wins {
+            for &lane in &self.plot.wins {
                 let y0 = if lane.y <= r.bottom() { r.bottom() + 4 } else { lane.y };
                 cv.dashed_vline(tx, y0, lane.y + lane.h - 1, 4, 4, AMBER);
             }
@@ -2795,7 +2795,7 @@ impl Ui {
                 if self.studio.md.info.is_some() { return self.studio_eat(x, y); }
                 // full screen: its few buttons
                 if self.m.layout == Layout::Studio && self.full_on() && self.full_chrome_rects().is_some_and(|(a, b)| Self::hit40(a).contains(x, y) || Self::hit40(b).contains(x, y)) { return self.studio_eat(x, y); }
-                if self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() || self.m.touch_lock
+                if self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() || self.m.touch_lock
                     || self.studio.view_menu || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.studio.md.menu.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
                 // the Add measurement panel is open: only its tiles can be dragged
                 if self.menu_open { return self.md_down(x, y); }
@@ -3007,7 +3007,7 @@ impl Ui {
             cv.hline(r.x + r.w / 2 - 6, r.x + r.w / 2 + 6, r.y + r.h / 2, TEXT);
             if plus_sign { cv.vline(r.x + r.w / 2, r.y + r.h / 2 - 6, r.y + r.h / 2 + 6, TEXT); }
         }
-        cv.text_in(&f.mb, Rect::new(minus.right(), minus.y, plus.x - minus.right(), minus.h), 1, &format!("Y zoom {}", zoom_text(self.zoom_vfactor)), TEXT);
+        cv.text_in(&f.mb, Rect::new(minus.right(), minus.y, plus.x - minus.right(), minus.h), 1, &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor)), TEXT);
         chip(cv, reset, BTN, BTN_BORDER);
         cv.text_in(&f.m, reset, 1, "Reset Y", TEXT);
     }
@@ -3023,10 +3023,10 @@ impl Ui {
             cv.round(r.inset(1), 4, PANEL_BG, 255);
             cv.text_in(&f.sb, r, 1, text, TEXT);
         };
-        if (self.zoom_vfactor - 1.0).abs() > 1e-3 {
-            for &lane in self.wins.iter().filter(|l| self.studio_vzoom_covers(**l)) { lane_tag(cv, lane, &format!("Y zoom {}", zoom_text(self.zoom_vfactor))); }
+        if (self.zoom_view.vfactor - 1.0).abs() > 1e-3 {
+            for &lane in self.plot.wins.iter().filter(|l| self.studio_vzoom_covers(**l)) { lane_tag(cv, lane, &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor))); }
         }
-        if let (Some(hint), Some(&lane)) = (self.studio_zoom_samples_hint(), self.wins.last()) {
+        if let (Some(hint), Some(&lane)) = (self.studio_zoom_samples_hint(), self.plot.wins.last()) {
             let w = f.sb.width(&hint) + 16;
             let r = Rect::new(lane.x + 52, lane.bottom() - 52, w, 20);
             cv.round(r, 5, BTN_BORDER, 255);
@@ -3036,7 +3036,7 @@ impl Ui {
         // the hint of the gesture under the finger
         let lane = self.wave_area();
         let (cx, cy) = (lane.x + lane.w / 2, lane.y + lane.h / 3);
-        let hint = if self.pinch.active { Some(format!("Time zoom \u{b7} {}", zoom_text(self.studio_time_zoom()))) }
+        let hint = if self.input.pinch.active { Some(format!("Time zoom \u{b7} {}", zoom_text(self.studio_time_zoom()))) }
             else if self.touch.down && self.touch.drag == Drag::Delay { Some("Pan time".to_string()) } else { None };
         if let Some(text) = hint {
             let r = Rect::new(cx - f.m.width(&text) / 2 - 12, cy - 14, f.m.width(&text) + 24, 28);
@@ -3055,7 +3055,7 @@ impl Ui {
             ZoomRow::VMinus => self.zoom_vertical_step(-1, area, 0.5),
             ZoomRow::Fit => self.reset_zoom(),
             ZoomRow::Center => self.studio_center_trigger(),
-            ZoomRow::ResetY => { self.zoom_vfactor = 1.0; self.zoom_vcenter = 0.0; self.dirty_map = true; }
+            ZoomRow::ResetY => { self.zoom_view.vfactor = 1.0; self.zoom_view.vcenter = 0.0; self.dirty_map = true; }
             ZoomRow::Close => self.set_zoom(false),
         }
     }
@@ -3089,7 +3089,7 @@ impl Ui {
         if !self.studio_zoom_active() { return None; }
         let per_div = tscales()[self.m.zscale] as f64 / self.studio_zoom_sample_dt()?;
         // below about one sample in three pixels of a division the picture is the samples themselves
-        (per_div < (self.wins.first().map_or(self.grid.w, |w| w.w) as f64 / HDIV as f64) / 3.0)
+        (per_div < (self.plot.wins.first().map_or(self.plot.grid.w, |w| w.w) as f64 / HDIV as f64) / 3.0)
             .then(|| if per_div < 10.0 { format!("{per_div:.1} samples/div") } else { format!("{per_div:.0} samples/div") })
     }
 

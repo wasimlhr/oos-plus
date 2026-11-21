@@ -29,7 +29,7 @@ fn fresh(layout: Layout) -> Ui {
     u.m.layout = layout;
     u.m.ch[1].on = true;
     u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 128].into(), vpd: 0.5, offset: 0.0, on: true });
-    u.ref_sel = 0;
+    u.ref_page.sel = 0;
     for _ in 0..4 { u.step(0.05); }
     u
 }
@@ -456,7 +456,7 @@ fn the_cursor_source_changes_only_the_cursors() {
         let mut u = fresh(layout);
         u.m.cursor = CursorMode::Track;
         u.m.active = 0;
-        u.meas_src = WaveId::Ch(0);
+        u.sources.a = WaveId::Ch(0);
         u.select_workspace_source(WaveId::Ch(0));
         assert_eq!(u.cursor_source(), WaveId::Ch(0));
         if layout == Layout::Studio {
@@ -464,7 +464,7 @@ fn the_cursor_source_changes_only_the_cursors() {
             u.select_option(Item::CurSrc, "CH2");
             assert_eq!(u.cursor_source(), WaveId::Ch(1), "{layout:?}");
             assert_eq!(u.m.active, 0, "{layout:?}: the active channel");
-            assert_eq!(u.meas_src, WaveId::Ch(0), "{layout:?}: the measurement source");
+            assert_eq!(u.sources.a, WaveId::Ch(0), "{layout:?}: the measurement source");
             assert_eq!(u.value(Item::CurSrc), "CH2");
             // by the stepper too
             u.adjust(Item::CurSrc, -1);
@@ -474,7 +474,7 @@ fn the_cursor_source_changes_only_the_cursors() {
         // by SCPI
         scpi_line(&mut u, ":CURSor:MANual:SOURce CHAN2");
         assert_eq!(u.cursor_source(), WaveId::Ch(1));
-        assert_eq!((u.m.active, u.meas_src), (0, WaveId::Ch(0)), "{layout:?}: SCPI");
+        assert_eq!((u.m.active, u.sources.a), (0, WaveId::Ch(0)), "{layout:?}: SCPI");
         // choosing a trace anywhere else lets the cursors follow it
         u.select_workspace_source(WaveId::Ch(0));
         assert_eq!(u.cursor_source(), WaveId::Ch(0));

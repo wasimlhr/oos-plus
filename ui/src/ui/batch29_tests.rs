@@ -42,7 +42,7 @@ fn fresh(layout: Layout) -> Ui {
     u.m.layout = layout;
     u.m.ch[1].on = true;
     u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 128].into(), vpd: 0.5, offset: 0.0, on: true });
-    u.ref_sel = 0;
+    u.ref_page.sel = 0;
     for _ in 0..4 { u.step(0.05); }
     u
 }

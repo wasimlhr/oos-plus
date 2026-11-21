@@ -7,6 +7,25 @@
 
 use super::*;
 
+/// The USB stick as the screen keeps it (ADR 0062).
+#[derive(Default)]
+pub(super) struct Stick {
+    /// a USB stick is mounted (the top bar's USB box, where files go, SSH key import)
+    pub mounted: bool,
+    /// when `usb_poll` looks for the USB, WLAN and Bluetooth sticks next (`Ui::now`)
+    pub next_look: f64,
+}
+
+/// Where files are stored, as the screen keeps it (ADR 0062).
+pub struct Files {
+    /// the storage folder (setups, CSV, PNG), created when missing
+    pub dir: std::path::PathBuf,
+    /// Auto / USB stick / desktop for waveform, mask and screenshot files
+    pub(super) dest: crate::store::StoreDest,
+    /// setup slot n = file setup<n>.txt
+    pub(super) slot: u32,
+}
+
 impl Ui {
     /// The file of a session: `path` as given (relative: beside the setups), or the next `session-NNN.oss` of the save
     /// folder for an empty one.
@@ -72,8 +91,8 @@ impl Ui {
         let memory = self.session_memory();
         let mut bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), memory.as_deref(), &self.m, &refs);
         // saved in the offline view, a loaded capture fills the screen: the session comes back that way
-        if self.offline && !self.session_is_sim && self.sim_refs.is_empty() && self.refs.get(self.offline_ref).is_some_and(Option::is_some) {
-            bytes.extend_from_slice(&crate::store::session_view(self.offline_ref));
+        if self.offline.on && !self.session_is_sim && self.sim_refs.is_empty() && self.refs.get(self.offline.slot).is_some_and(Option::is_some) {
+            bytes.extend_from_slice(&crate::store::session_view(self.offline.slot));
         }
         let r = crate::store::write(&p, &bytes);
         let out = r.as_ref().map(|_| p.clone()).map_err(|e| e.to_string());
@@ -114,16 +133,15 @@ impl Ui {
             // the look of the slots (scale, offset, colour, name, shown) is in the setup text and is applied with it
             self.apply_setup_text(&session.setup)?;
             self.m.run = RunState::Stop;
-            self.history.clear();
-            self.hist_pos = None;
+            self.history.recs.clear();
+            self.history.pos = None;
             if let Some(rec) = session.record {
                 self.last[0] = Some(self.session_record(rec));
                 self.cleared = false;
             }
             // whatever the hardware still holds is not this record
-            self.stop_ti_off = None;
-            self.stop_whole = None;
-            (self.stop_raw, self.stop_pic) = (None, None);
+            self.stop.ti_off = None;
+            (self.stop.raw, self.stop.pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
             if let Some(slot) = offline_ref {
@@ -218,19 +236,19 @@ impl Ui {
 
     /// A USB stick is mounted and the storage directory was not set by hand: files go to it.
     pub fn usb_used(&self) -> bool {
-        self.usb && self.store_dir == std::path::Path::new(crate::store::DEFAULT_DIR)
+        self.stick.mounted && self.files.dir == std::path::Path::new(crate::store::DEFAULT_DIR)
     }
 
     /// Where screenshots, CSV, mask copies and fast-frame files go now.
     pub fn save_dir(&self) -> std::path::PathBuf {
-        match self.store_dest {
+        match self.files.dest {
             crate::store::StoreDest::Stick => std::path::PathBuf::from(crate::store::USB_DIR),
-            crate::store::StoreDest::Local => self.store_dir.clone(),
+            crate::store::StoreDest::Local => self.files.dir.clone(),
             crate::store::StoreDest::Auto => {
                 if self.usb_used() {
                     std::path::PathBuf::from(crate::store::USB_DIR)
                 } else {
-                    self.store_dir.clone()
+                    self.files.dir.clone()
                 }
             }
         }
@@ -238,8 +256,8 @@ impl Ui {
 
     /// For the message after saving.
     pub fn saved_where(&self) -> &'static str {
-        match self.store_dest {
-            crate::store::StoreDest::Local if self.usb => " locally, not on the stick",
+        match self.files.dest {
+            crate::store::StoreDest::Local if self.stick.mounted => " locally, not on the stick",
             crate::store::StoreDest::Stick => " on the USB stick",
             crate::store::StoreDest::Auto if self.usb_used() => " on the USB stick",
             _ => "",
@@ -255,17 +273,17 @@ impl Ui {
 
     /// From `step`: is a stick mounted (`/bin/oos-usb`); says so when that changes.
     pub(super) fn usb_poll(&mut self) {
-        if cfg!(test) || self.now < self.usb_check {
+        if cfg!(test) || self.now < self.stick.next_look {
             return;
         }
-        self.usb_check = self.now + 2.0;
-        self.wlan_stick = wlan::stick_there();
+        self.stick.next_look = self.now + 2.0;
+        self.net.wlan_stick = wlan::stick_there();
         self.bt.stick = bt::stick_there();
         self.bt.inputs = bt::inputs_connected(&bt::inputs());
         let on = std::fs::read_to_string("/proc/mounts").is_ok_and(|t| crate::store::usb_mounted(&t));
-        if on != self.usb {
-            self.usb = on;
-            if self.store_dir == std::path::Path::new(crate::store::DEFAULT_DIR) {
+        if on != self.stick.mounted {
+            self.stick.mounted = on;
+            if self.files.dir == std::path::Path::new(crate::store::DEFAULT_DIR) {
                 self.toast(if on { "USB stick ready: files are saved to it" } else { "USB stick removed" });
             }
         }
@@ -275,12 +293,12 @@ impl Ui {
     /// in RAM is not used for it when OOS's data partition is there.
     pub(super) fn setup_path(&self) -> std::path::PathBuf {
         let keep = std::path::Path::new("/oos/setups");
-        let dir = if self.store_dir == std::path::Path::new(crate::store::DEFAULT_DIR) && keep.is_dir() {
+        let dir = if self.files.dir == std::path::Path::new(crate::store::DEFAULT_DIR) && keep.is_dir() {
             keep
         } else {
-            self.store_dir.as_path()
+            self.files.dir.as_path()
         };
-        dir.join(format!("setup{}.txt", self.store_slot))
+        dir.join(format!("setup{}.txt", self.files.slot))
     }
 
     /// The setup file the Storage menu uses. An empty name is the current slot (`setupN.txt`). A number 1 to 9 selects
@@ -296,7 +314,7 @@ impl Ui {
             if !(1..=9).contains(&slot) {
                 return Err("slot".into());
             }
-            self.store_slot = slot;
+            self.files.slot = slot;
             return Ok(self.setup_path());
         }
         let named = std::path::Path::new(raw);
@@ -409,9 +427,11 @@ impl Ui {
         // the text size is a preference of this screen, not part of a set-up
         m.text_size = self.m.text_size;
         if m.mask_src != self.m.mask_src {
-            self.mask = None;
-            self.mask_ref = None;
+            self.mask_sw.mask = None;
+            self.mask_sw.reference = None;
         }
+        // the hardware session's stamps go on (#391)
+        m.keep_session(&self.m);
         self.m = m;
         // the generator of a recalled set-up: its wave within what the generator can do, its output off. A recall
         // never switches an output on, and one that was on does not jump to another wave on a circuit
@@ -422,12 +442,12 @@ impl Ui {
         if self.m.layout == Layout::Studio {
             self.studio.enter = true;
         }
-        self.math_state.borrow_mut().forget_fit();
+        self.math.state.borrow_mut().forget_fit();
         self.m.order_trigger_levels();
         self.bus_auto = None;
-        self.math_fam = if self.m.math == MathOp::Off { MathFamily::Arith } else { self.m.math.family() };
+        self.math.family = if self.m.math == MathOp::Off { MathFamily::Arith } else { self.m.math.family() };
         self.sync_full();
-        if self.mask.is_none() {
+        if self.mask_sw.mask.is_none() {
             self.m.mask_on = false;
         }
         self.build_mask();
@@ -458,7 +478,7 @@ impl Ui {
             self.scpi_replay_cancel = true;
             return;
         }
-        if self.desktop_panel.is_some() {
+        if self.workspace.desktop_panel.is_some() {
             self.close_menu();
             self.open_scpi_request = true;
             return;

@@ -137,12 +137,21 @@ impl Ui {
         if pa.first != 0 || pa.sub != 0 { p.push(format!("scroll={}/{}", pa.first, pa.sub)); }
         if !pa.query.is_empty() { p.push(format!("query={}", pa.query.replace(' ', "_"))); }
         if let Some(f) = s.filter { p.push(format!("filter={}", f.token())); }
-        if let Some(q) = &s.search { p.push(format!("search={}/{}/{}", q.src.token(), q.level, q.slope)); }
+        // Search 1 keeps the key it had while it was the only one; the others have their number
+        for (i, q) in s.searches.iter().enumerate().filter_map(|(i, q)| Some((i, q.as_ref()?))) {
+            let n = if i == 0 { String::new() } else { (i + 1).to_string() };
+            // (the type and its settings follow the three an edge search has, which is all an older view names)
+            let more = if q.kind == TrigType::Edge { String::new() } else { format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.cond(), q.t1, q.t2) };
+            p.push(format!("search{n}={}/{}/{}{more}", q.src.token(), q.level, q.slope));
+        }
+        if s.search_sel != 0 { p.push(format!("searchsel={}", s.search_sel + 1)); }
+        let hidden: Vec<String> = s.search_list().filter(|(_, q)| q.hidden).map(|(i, _)| (i + 1).to_string()).collect();
+        if !hidden.is_empty() { p.push(format!("searchhide={}", hidden.join(","))); }
         if let Some(t) = s.sz.lane { p.push(format!("zlane={}", super::sharedzoom::trace_name(t))); }
         if !s.sz.ref_h.is_empty() {
             p.push(format!("refh={}", s.sz.ref_h.iter().map(|(i, (t, d))| format!("{}/{}/{}", i, t, d)).collect::<Vec<_>>().join(",")));
         }
-        if self.zoom_vfactor != 1.0 || self.zoom_vcenter != 0.0 { p.push(format!("yzoom={}/{}", self.zoom_vfactor, self.zoom_vcenter)); }
+        if self.zoom_view.vfactor != 1.0 || self.zoom_view.vcenter != 0.0 { p.push(format!("yzoom={}/{}", self.zoom_view.vfactor, self.zoom_view.vcenter)); }
         let w = &self.workspace;
         if w.stacked { p.push("stacked=1".into()); }
         if w.measure_docked { p.push("mdock=1".into()); }
@@ -171,13 +180,15 @@ impl Ui {
         self.studio.add_menu = false;
         self.studio.ctx = None;
         self.studio.filter = None;
-        self.studio.search = None;
-        self.studio.search_at = 0;
+        self.studio.searches = Default::default();
+        self.studio.search_at = Default::default();
+        self.studio.search_sel = 0;
+        let mut hide: Vec<usize> = Vec::new();
         self.studio.popup = None;
         self.studio.sz = Default::default();
         self.studio.badge_first = 0;
-        self.zoom_vfactor = 1.0;
-        self.zoom_vcenter = 0.0;
+        self.zoom_view.vfactor = 1.0;
+        self.zoom_view.vcenter = 0.0;
         self.workspace.stacked = false;
         self.workspace.measure_docked = false;
         self.workspace.measure_float = None;
@@ -209,11 +220,23 @@ impl Ui {
                 "zoomtab" => {}
                 "query" => { self.studio.panel.query = v.replace('_', " "); self.studio.panel.searching = !self.studio.panel.query.is_empty(); }
                 "filter" => self.studio.filter = WaveId::parse(v).ok(),
-                "search" => {
+                "searchhide" => hide = v.split(',').filter_map(|n| n.parse::<usize>().ok()).collect(),
+                "searchsel" => self.studio.search_sel = v.parse::<usize>().map_or(0, |n| n.clamp(1, super::addrail::SEARCH_SLOTS) - 1),
+                "search" | "search2" | "search3" => {
+                    let slot = k[6..].parse::<usize>().map_or(0, |n| n - 1);
                     let f: Vec<&str> = v.split('/').collect();
-                    if let [src, level, slope] = f[..] {
+                    if let [src, level, slope, more @ ..] = &f[..] {
                         if let (Ok(src), Ok(level), Ok(slope)) = (WaveId::parse(src), level.parse::<f32>(), slope.parse::<u8>()) {
-                            if level.is_finite() { self.studio.search = Some(super::addrail::SearchSpec { src, level, slope: slope.min(2) }); }
+                            let mut sp = super::addrail::SearchSpec::edge(src, level, slope.min(2));
+                            if let [kind, level2, when, t1, t2] = more {
+                                let num = |s: &str| s.parse::<f32>().ok().filter(|v| v.is_finite());
+                                let kind = super::addrail::SEARCH_TYPES.iter().find(|t| t.name() == *kind);
+                                let cond = when.parse::<u8>().ok().filter(|&c| c <= 6);
+                                if let (Some(&kind), Some(level2), Some(cond), Some(t1), Some(t2)) = (kind, num(level2), cond, num(t1), num(t2)) {
+                                    sp = super::addrail::SearchSpec { kind, level2, t1, t2, ..sp }.with_cond(cond);
+                                }
+                            }
+                            if level.is_finite() { self.studio.searches[slot] = Some(sp.fit()); }
                         }
                     }
                 }
@@ -234,7 +257,7 @@ impl Ui {
                     let f: Vec<&str> = v.split('/').collect();
                     if let [a, b] = f[..] {
                         if let (Ok(a), Ok(b)) = (a.parse::<f32>(), b.parse::<f32>()) {
-                            if a.is_finite() && b.is_finite() { (self.zoom_vfactor, self.zoom_vcenter) = (a.clamp(1.0, 1024.0), b); }
+                            if a.is_finite() && b.is_finite() { (self.zoom_view.vfactor, self.zoom_view.vcenter) = (a.clamp(1.0, 1024.0), b); }
                         }
                     }
                 }
@@ -246,6 +269,10 @@ impl Ui {
                 _ => {}
             }
         }
+        for n in hide {
+            if let Some(sp) = self.studio.searches.get_mut(n.wrapping_sub(1)).and_then(Option::as_mut) { sp.hidden = true; }
+        }
+        self.studio.search_select(self.studio.search_sel);
     }
 
     /// The references and the bus shown, for a view's slot: `R1 R3 B`. None while a record session owns the refs.
@@ -323,7 +350,7 @@ impl Ui {
         let mut ui = vec![("studio_view", self.studio.view.token().to_string()), ("studio_dock", self.dock_text()), ("studio_state", self.view_ui_text())];
         if let Some(l) = self.view_lanes_text() { ui.push(("lanes", l)); }
         ui.push(("math_def", (0..NMATH).filter(|&k| self.m.math_ch(k).op != MathOp::Off).map(|k| (k + 1).to_string()).collect::<Vec<_>>().join(" ")));
-        snapshot_of(&self.m, self.xy, self.full, &ui)
+        snapshot_of(&self.m, self.xy, self.full.on, &ui)
     }
 
     /// Shows a kept view. A slot from before the views kept their own state (no `studio_state`) leaves the Ui's part as it is.
@@ -351,7 +378,7 @@ impl Ui {
             let (k, v) = (k.trim(), unesc(v.trim()));
             match k {
                 "xy" => self.xy = v == "true",
-                "full" => self.full = v == "true",
+                "full" => self.full.on = v == "true",
                 // a record session (SIM, a loaded file) has its own panel and goes with the session, not the view
                 "studio_view" => if !self.studio.view.is_record() { self.studio.view = StudioView::from_token(&v); },
                 "studio_dock" => {
@@ -388,9 +415,9 @@ impl Ui {
             self.m.zscale = self.m.tscale;
         }
         // what pointed into the list of the view that was shown
-        self.meas_cfg = None;
-        self.meas_page = 0;
-        self.meas_catalog_page = 0;
+        self.meas_own.dialog = None;
+        self.meas_pages.readouts = 0;
+        self.meas_pages.selected = 0;
         // the scroll of the panel is part of the view (`scroll=` of its state); a slot from before keeps no state: top
         if !new { self.studio.panel.scroll_top(); }
         self.studio.md = Default::default();
@@ -409,14 +436,14 @@ impl Ui {
         let cur = self.m.view_cur.min(n - 1);
         let snap = self.view_snapshot();
         self.m.view_slots[cur] = snap.clone();
-        self.view_own[cur] = std::mem::take(&mut self.meas_own);
+        self.view_own[cur] = std::mem::take(&mut self.meas_own.rows);
         let mut s = std::mem::take(&mut self.m.view_slots[j]);
         if s.is_empty() {
             // never set up (a setup from before the views): a copy of the one that was shown
             s = snap;
             self.view_own[j] = self.view_own[cur].clone();
         }
-        self.meas_own = std::mem::take(&mut self.view_own[j]);
+        self.meas_own.rows = std::mem::take(&mut self.view_own[j]);
         self.view_apply(&s);
         self.m.view_cur = j;
         self.sync_view_state();
@@ -444,7 +471,7 @@ impl Ui {
             let snap = self.view_snapshot();
             for k in old.max(1)..n {
                 self.m.view_slots[k] = snap.clone();
-                self.view_own[k] = self.meas_own.clone();
+                self.view_own[k] = self.meas_own.rows.clone();
             }
         } else if self.m.view_cur >= n {
             self.m.view_cur = n - 1;
@@ -544,7 +571,7 @@ impl Ui {
 
     /// A finger went down at x in the plot: whether it is in an edge strip where a swipe switches views.
     pub(super) fn view_edge(&self, x: i32) -> bool {
-        self.m.views >= 2 && (x < self.grid.x + EDGE || x >= self.grid.x + self.grid.w - EDGE)
+        self.m.views >= 2 && (x < self.plot.grid.x + EDGE || x >= self.plot.grid.x + self.plot.grid.w - EDGE)
     }
 
     /// The finger moved by (dx, dy) from x0 in an edge strip: Some(true) switched, Some(false) still open, None it is
@@ -556,7 +583,7 @@ impl Ui {
         if dx.abs() < SWIPE {
             return Some(false);
         }
-        let from_left = x0 < self.grid.x + EDGE;
+        let from_left = x0 < self.plot.grid.x + EDGE;
         // inwards only: from the left edge to the right shows the view before, from the right edge to the left the next
         match (from_left, dx > 0) {
             (true, true) => self.view_step(-1),
@@ -641,7 +668,7 @@ mod tests {
     #[test]
     fn edge_swipes_and_buttons_switch_views() {
         let mut u = ui();
-        let g = u.grid;
+        let g = u.plot.grid;
         let y = g.y + g.h / 2;
         // off: a swipe from the right edge moves the waveform as always
         let d0 = u.m.delay;

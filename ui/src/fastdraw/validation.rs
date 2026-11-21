@@ -2,6 +2,7 @@
 
 //! Independent bounded search oracles and an opt-in host CPU timing fixture.
 use super::*;
+use oos_dsp::edges::edge_near;
 
 fn closest(candidates: impl IntoIterator<Item = f64>, pre: usize) -> Option<f64> {
     candidates.into_iter().fold(None, |best, t| match best {
@@ -173,7 +174,7 @@ fn nearest_raw_and_smoothed_search_match_independent_oracles() {
 
 #[test]
 fn record_trigger_origin_matches_full_oracle_for_admissible_near_edges() {
-    use crate::{board::Frame, model::*, wave::Raw};
+    use crate::{board::Frame, model::*, platform::Platform, wave::Raw};
     for (pre, direction) in [(60, Slope::Rise), (50_000, Slope::Fall), (99_940, Slope::Either)] {
         let values: Vec<f32> =
             (0..100_000).map(|i| ((i as f64 - pre as f64) * std::f64::consts::TAU / 239.0).sin() as f32).collect();
@@ -197,7 +198,7 @@ fn record_trigger_origin_matches_full_oracle_for_admissible_near_edges() {
             1,
         );
         let expected = smooth_oracle(&frame.ch[0], pre, seek, fits).0;
-        let record = crate::board::to_record(&frame, &model, 3600, window, first);
+        let record = crate::wave::to_record(&frame, &model, 3600, window, first);
         assert!(record.triggered);
         let Raw { t0, i0, .. } = record.raw.unwrap();
         // With edges present but none leaving a complete screen in the near

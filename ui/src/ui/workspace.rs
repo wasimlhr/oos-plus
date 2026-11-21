@@ -82,14 +82,14 @@ mod tests {
         ui.trace_mode(true);
         assert!(ui.stacked() && ui.m.zoom);
         assert_eq!((ui.m.tscale, ui.m.delay, ui.m.zscale, ui.m.zdelay), before);
-        assert_eq!(ui.wins.len(), ui.trace_sources().len());
-        let (overview, detail) = ui.split_zoom(ui.grid);
-        for &lane in &ui.wins {
+        assert_eq!(ui.plot.wins.len(), ui.trace_sources().len());
+        let (overview, detail) = ui.split_zoom(ui.plot.grid);
+        for &lane in &ui.plot.wins {
             assert_eq!((lane.x, lane.w), (detail.x, detail.w));
             assert!(lane.y >= detail.y && lane.y + lane.h <= detail.y + detail.h);
             assert!(lane.h > 0 && lane.y >= overview.y + overview.h);
         }
-        assert_eq!((ui.phz.w, ui.phz.h), (ui.wins[0].w as usize, ui.wins[0].h as usize));
+        assert_eq!((ui.phz.w, ui.phz.h), (ui.plot.wins[0].w as usize, ui.plot.wins[0].h as usize));
         assert_ne!(ui.source_area(WaveId::Ref(0)), ui.source_area(WaveId::Ref(1)));
         let mut cv = Canvas::new(W, H);
         ui.render(&mut cv);
@@ -103,7 +103,7 @@ mod tests {
         ui.trace_mode(false);
         assert!(ui.m.zoom && !ui.stacked());
         assert_eq!((ui.m.tscale, ui.m.delay, ui.m.zscale, ui.m.zdelay), before);
-        assert_eq!(ui.wins, vec![ui.split_zoom(ui.grid).1]);
+        assert_eq!(ui.plot.wins, vec![ui.split_zoom(ui.plot.grid).1]);
         ui.render(&mut cv);
     }
 
@@ -169,18 +169,18 @@ mod tests {
         assert!(ui.results_name(0, &rows[0]).starts_with("R1 "));
         assert!(ui.results_name(73, &rows[73]).starts_with("R1-R2 "), "both pair sources precede any clipped label");
         ui.workspace_action(Action::MeasureFloat);
-        ui.meas_page = 2;
+        ui.meas_pages.readouts = 2;
         for dock in StripDock::ALL {
             ui.workspace_action(Action::MeasureDock(dock));
-            assert!(ui.stats_on && ui.results_panel());
-            assert_eq!(ui.meas_page, 2);
+            assert!(ui.results.on && ui.results_panel());
+            assert_eq!(ui.meas_pages.readouts, 2);
             let (header, body) = ui.results_rects().unwrap();
             assert!(header.x >= 0 && header.x + header.w <= W);
             assert!(header.y >= TOP.h && body.y + body.h <= BOTTOM.y);
         }
-        ui.results_min = true;
+        ui.results.folded = true;
         ui.workspace.measure_float = Some((W - 40, BOTTOM.y - 30));
-        ui.results_min = false;
+        ui.results.folded = false;
         let (header, body) = ui.results_rects().unwrap();
         assert!(header.x + header.w <= W && body.y + body.h <= BOTTOM.y);
         assert_eq!(Ui::results_pitch(73), 42, "statistics stay available for large selections");
@@ -202,7 +202,7 @@ mod tests {
         let mut ui = mixed();
         ui.set_zoom(true);
         ui.trace_mode(true);
-        let lane = ui.wins[1];
+        let lane = ui.plot.wins[1];
         let (x, y) = (lane.x + lane.w / 2, lane.y + lane.h / 2);
         let before = ui.m.zdelay;
         ui.touch_ev(Phase::Down, x, y);
@@ -210,7 +210,7 @@ mod tests {
         ui.touch_ev(Phase::Up, x + 60, y);
         assert!(ui.m.zdelay < before, "detail content follows the rightward finger");
         let before = ui.m.zdelay;
-        let overview = ui.split_zoom(ui.grid).0;
+        let overview = ui.split_zoom(ui.plot.grid).0;
         let (x, y) = (overview.x + overview.w / 2 + 100, overview.y + 45);
         ui.touch_ev(Phase::Down, x, y);
         ui.touch_ev(Phase::Move, x + 40, y);
@@ -256,12 +256,12 @@ mod tests {
     fn reference_source_pill_routes_vertical_hardware_knobs_without_changing_replay_or_trigger() {
         let mut ui = mixed();
         ui.set_offline(true);
-        ui.offline_ref = 0;
+        ui.offline.slot = 0;
         ui.m.set_trigger_wave(WaveId::Ref(0), false);
         ui.m.trig_type = TrigType::Runt;
         let (_, pill) = ui.source_pills().into_iter().find(|(id, _)| *id == WaveId::Ref(1)).unwrap();
         ui.workspace_footer_tap(pill.x + 12, pill.y + 12);
-        assert_eq!(ui.ref_sel, 1);
+        assert_eq!(ui.ref_page.sel, 1);
         let channel = (ui.m.ch[0].vscale, ui.m.ch[0].offset);
         let other = (ui.refs[0].as_ref().unwrap().vpd, ui.refs[0].as_ref().unwrap().offset);
         let scale = ui.refs[1].as_ref().unwrap().vpd;
@@ -293,8 +293,8 @@ mod tests {
         for panel in [Panel::Measurements, Panel::Eye] {
             let mut ui = mixed();
             ui.m.layout = Layout::Default; // the stock dialogs: Minimal and Studio open sheets
-            ui.stats_on = true;
-            ui.results_min = false;
+            ui.results.on = true;
+            ui.results.folded = false;
             if panel == Panel::Eye {
                 ui.m.view = AView::Eye;
             }
@@ -321,7 +321,7 @@ mod tests {
                 assert!(unreachable || header.contains(x, y), "the test must overlap the actual background header");
                 let position = (ui.workspace.measure_float, ui.workspace.eye_float);
                 pointer_tap(&mut ui, target);
-                assert!(!ui.results_min, "Back/Close must not fold the statistics panel behind the menu");
+                assert!(!ui.results.folded, "Back/Close must not fold the statistics panel behind the menu");
                 assert_eq!((ui.workspace.measure_float, ui.workspace.eye_float), position);
                 assert!(ui.workspace.gesture.is_none());
                 if back {
@@ -343,7 +343,7 @@ mod tests {
             let position = ui.workspace.measure_float;
             match modal {
                 0 => ui.dialog = Some(vec!["Modal information".into()]),
-                1 => ui.power_dlg = true,
+                1 => ui.power.open = true,
                 _ => ui.wlan.osk = Some(wlan::Osk::for_ref(0, "Reference label")),
             }
             let (x, y) = (header.x + 24, header.y + 12);
@@ -351,14 +351,14 @@ mod tests {
             ui.now += 0.7;
             ui.workspace_hold_tick();
             ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
-            assert!(!ui.results_min);
+            assert!(!ui.results.folded);
             assert_eq!(ui.workspace.measure_float, position);
             assert!(ui.workspace.gesture.is_none() && ui.workspace.popup.is_none());
             if modal == 0 {
                 assert!(ui.dialog.is_none(), "the modal receives the dismiss tap");
             }
             if modal == 1 {
-                assert!(!ui.power_dlg, "the power dialog receives its cancel tap");
+                assert!(!ui.power.open, "the power dialog receives its cancel tap");
             }
             if modal == 2 {
                 assert!(ui.wlan.osk.is_some(), "an outside keyboard tap must not reach the panel");
@@ -375,7 +375,7 @@ mod tests {
                 if !live {
                     ui.set_offline(true);
                 }
-                ui.offline_ref = 3;
+                ui.offline.slot = 3;
                 ui.m.set_trigger_wave(WaveId::Ref(0), false);
                 ui.select_workspace_source(WaveId::Ref(3));
                 ui.trace_mode(true);
@@ -387,10 +387,10 @@ mod tests {
                     ui.handle(Ev::Touch { id: 0, phase, x, y });
                 }
                 assert_eq!(ui.selected_workspace_source(), Some(WaveId::Ref(1)));
-                assert_eq!(ui.ref_sel, 1);
+                assert_eq!(ui.ref_page.sel, 1);
                 if zoom {
                     assert_eq!(ui.refs[1].as_ref().unwrap().offset, before);
-                    assert!(ui.zoom_vcenter > 0.0);
+                    assert!(ui.zoom_view.vcenter > 0.0);
                 } else {
                     assert!(ui.refs[1].as_ref().unwrap().offset < before);
                 }
@@ -399,7 +399,7 @@ mod tests {
                 ui.key(0xda);
                 assert!(ui.refs[1].as_ref().unwrap().vpd < scale);
                 assert_eq!(ui.refs[3].as_ref().unwrap().vpd, other);
-                assert_eq!(ui.offline_ref, 3);
+                assert_eq!(ui.offline.slot, 3);
                 assert_eq!(ui.m.trigger_wave(), WaveId::Ref(0));
                 assert_eq!(ui.m.run, RunState::Stop);
                 assert_eq!(ui.replay.captures, 0);
@@ -412,8 +412,8 @@ mod tests {
         let mut ui = mixed();
         ui.m.layout = Layout::Default; // the header of the stock dialog; the sheet pins the sources under its tabs
         ui.select_workspace_source(WaveId::Ref(1));
-        ui.meas_src = WaveId::Ref(1);
-        ui.meas_src_b = WaveId::Ch(1);
+        ui.sources.a = WaveId::Ref(1);
+        ui.sources.b = WaveId::Ch(1);
         ui.open_meas_list();
         ui.activate(Item::Open(MenuId::MeasPair));
         let dialog = ui.dlg_layout().unwrap();
@@ -429,8 +429,8 @@ mod tests {
             ui.close_picker();
             assert_eq!(ui.menu, MenuId::MeasPair);
         }
-        assert_eq!(ui.meas_src, WaveId::Ref(0));
-        assert_eq!(ui.meas_src_b, WaveId::Ref(2));
+        assert_eq!(ui.sources.a, WaveId::Ref(0));
+        assert_eq!(ui.sources.b, WaveId::Ref(2));
         assert_eq!(
             ui.selected_workspace_source(),
             Some(WaveId::Ref(1)),
@@ -508,13 +508,13 @@ mod tests {
                 ui.m.cur_d = 0.75;
                 let mut cv = Canvas::new(W, H);
                 cv.clear(BG);
-                for index in 0..ui.wins.len() {
-                    ui.cur_win = index;
-                    ui.area = ui.wins[index];
+                for index in 0..ui.plot.wins.len() {
+                    ui.plot.cur_win = index;
+                    ui.plot.area = ui.plot.wins[index];
                     ui.draw_cursors(&mut cv);
                 }
                 let selected = ui.source_area(WaveId::Ref(1)).unwrap();
-                for &area in &ui.wins {
+                for &area in &ui.plot.wins {
                     let marked = (area.y..area.y + area.h).any(|y| {
                         cv.px[(y * W + area.x) as usize..(y * W + area.x + area.w) as usize].contains(&CURSOR)
                     });
@@ -646,7 +646,7 @@ impl Popup {
     }
 }
 #[derive(Default)]
-pub(super) struct Workspace {
+pub(crate) struct Workspace {
     selected_source: Option<WaveId>,
     pub stacked: bool,
     pub eye_float: Option<Rect>,
@@ -662,6 +662,8 @@ pub(super) struct Workspace {
     pub(super) lift_pending: bool,
     /// the cursor a tap on its tag picked (`Ui::select_cursor`)
     pub(super) cursor_sel: Option<usize>,
+    /// the desktop's Panel button: none, or whether the panel is open
+    pub desktop_panel: Option<bool>,
 }
 
 impl Ui {
@@ -674,7 +676,7 @@ impl Ui {
         if let Some(id) = self.workspace.selected_source {
             return available(id).then_some(id);
         }
-        let id = if self.record_mode() { WaveId::Ref(self.ref_sel) } else { WaveId::Ch(self.m.active) };
+        let id = if self.record_mode() { WaveId::Ref(self.ref_page.sel) } else { WaveId::Ch(self.m.active) };
         available(id).then_some(id)
     }
     /// The trace the cursors measure: the one picked in the cursor menu, else the selected one.
@@ -690,16 +692,16 @@ impl Ui {
         self.workspace.selected_source = Some(id);
         match id {
             WaveId::Ch(c) => self.m.active = c,
-            WaveId::Ref(i) => self.ref_sel = i,
+            WaveId::Ref(i) => self.ref_page.sel = i,
         }
-        self.meas_src = id;
+        self.sources.a = id;
     }
     pub(super) fn workspace_source_visible_here(&self, id: WaveId) -> bool {
         match id {
             WaveId::Ch(c) => self.m.ch[c].on && self.shows(c),
             WaveId::Ref(i) => {
                 self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on)
-                    && (!self.stacked() || self.trace_sources().get(self.cur_win) == Some(&Trace::Reference(i)))
+                    && (!self.stacked() || self.trace_sources().get(self.plot.cur_win) == Some(&Trace::Reference(i)))
             }
         }
     }
@@ -738,7 +740,7 @@ impl Ui {
     pub(super) fn draw_pair_header(&self, cv: &mut Canvas, dialog: &Dlg) {
         cv.text(&self.fonts().mb, dialog.r.x + 14, dialog.r.y + 31, "Pairs", TEXT);
         let targets = self.pair_header_sources(dialog);
-        for ((_, rect), id) in targets.into_iter().zip([self.meas_src, self.meas_src_b]) {
+        for ((_, rect), id) in targets.into_iter().zip([self.sources.a, self.sources.b]) {
             btn(cv, rect, BTN, BTN_BORDER);
             cv.set_clip(Rect::new(rect.x + 5, rect.y, (rect.w - 27).max(1), rect.h));
             cv.text_in(
@@ -772,8 +774,8 @@ impl Ui {
     pub(super) fn source_area(&self, id: WaveId) -> Option<Rect> {
         if !self.stacked() {
             if let WaveId::Ref(i) = id {
-                if self.wins.len() > 1 {
-                    return self.wins.get(self.ref_win_of(i)).copied();
+                if self.plot.wins.len() > 1 {
+                    return self.plot.wins.get(self.ref_win_of(i)).copied();
                 }
             }
             return Some(self.wave_area());
@@ -783,11 +785,11 @@ impl Ui {
             WaveId::Ref(i) => Trace::Reference(i),
         };
         let index = self.trace_sources().iter().position(|source| *source == wanted)?;
-        self.wins.get(index).copied()
+        self.plot.wins.get(index).copied()
     }
     pub(super) fn drag_reference(&self) -> Option<usize> {
         if self.stacked() {
-            return match self.trace_sources().get(self.cur_win) {
+            return match self.trace_sources().get(self.plot.cur_win) {
                 Some(Trace::Reference(i)) => Some(*i),
                 _ => None,
             };
@@ -832,7 +834,7 @@ impl Ui {
     pub(super) fn footer_rects(&self) -> (Rect, Rect, Rect, Rect, Option<Rect>, Option<Rect>, Rect) {
         let y = BOTTOM.y + 3;
         let mut right = W - 4;
-        let panel = self.desktop_panel.map(|_| {
+        let panel = self.workspace.desktop_panel.map(|_| {
             right -= 48;
             let r = Rect::new(right, y, 46, 30);
             right -= 4;
@@ -859,7 +861,7 @@ impl Ui {
         let mut sources: Vec<_> = (0..n_ch()).filter(|&c| self.m.ch[c].on).map(WaveId::Ch).collect();
         sources.extend(
             (0..NREF)
-                .filter(|&i| self.refs[i].as_ref().is_some_and(|reference| reference.on || self.ref_sel == i))
+                .filter(|&i| self.refs[i].as_ref().is_some_and(|reference| reference.on || self.ref_page.sel == i))
                 .map(WaveId::Ref),
         );
         sources
@@ -952,7 +954,7 @@ impl Ui {
             draw(cv, r, "Live", false);
         }
         if let Some(r) = panel {
-            draw(cv, r, "Panel", self.desktop_panel == Some(true));
+            draw(cv, r, "Panel", self.workspace.desktop_panel == Some(true));
         }
     }
     pub(super) fn workspace_footer_tap(&mut self, x: i32, y: i32) -> bool {
@@ -996,7 +998,7 @@ impl Ui {
         else if stacked.contains(x, y) { self.choose_trace_mode(true); }
         else if time.contains(x, y) { self.toggle_menu(MenuId::Horizontal); }
         else if live.is_some_and(|r| r.contains(x, y)) { self.return_to_live(); }
-        else if panel.is_some_and(|r| r.contains(x, y)) { self.desktop_panel = self.desktop_panel.map(|open| !open); }
+        else if panel.is_some_and(|r| r.contains(x, y)) { self.workspace.desktop_panel = self.workspace.desktop_panel.map(|open| !open); }
         else { self.compact_trigger_tap(x, y, trigger); }
         true
     }
@@ -1044,7 +1046,7 @@ impl Ui {
         let t = &self.touch;
         let near = (t.x - t.x0).abs() <= 12 && (t.y - t.y0).abs() <= 12;
         if t.down && !t.held && near {
-            if let Some((_, at)) = self.card_hold { return ring(t.x0, t.y0, at); }
+            if let Some((_, at)) = self.input.card { return ring(t.x0, t.y0, at); }
             if self.on_measure_btn(t.x0, t.y0) { return ring(t.x0, t.y0, t.t0); }
         }
         None
@@ -1065,7 +1067,7 @@ impl Ui {
     pub(super) fn popup(&mut self, title: &str, x: i32, y: i32, rows: Vec<(String, Action)>) {
         // inside the plot, so the popup never covers the bars or runs off the screen; the popup of a pill of the
         // bottom bar has the room between the bars (`popup_area`)
-        let g = self.workspace.popup_area.take().unwrap_or(self.grid);
+        let g = self.workspace.popup_area.take().unwrap_or(self.plot.grid);
         let per_col = (((g.h - POPUP_TITLE - 10) / POPUP_ROW).max(1) as usize).min(rows.len().max(1));
         let cols = rows.len().div_ceil(per_col).max(1) as i32;
         let width = (POPUP_COL_W * cols).min(g.w - 8);
@@ -1093,7 +1095,7 @@ impl Ui {
         rows.push(("Logic analyser".into(), Action::Menu(MenuId::La)));
         rows.push(("Generator".into(), Action::Menu(MenuId::Afg)));
         // sits on the bottom of the plot, above the bar that opened it
-        self.popup("Sources", x, self.grid.bottom(), rows);
+        self.popup("Sources", x, self.plot.grid.bottom(), rows);
     }
     /// The quick actions of a math or reference chip of the Studio bottom bar: what a hold or a right-click opens.
     pub(super) fn studio_chip_popup(&mut self, chip: super::measdrag::HoldOn, x: i32, y: i32) {
@@ -1151,7 +1153,7 @@ impl Ui {
     /// The zoom overview and the zoom toolbar: where a resting finger is at work, not asking for a menu.
     pub(super) fn zoom_rest_area(&self, x: i32, y: i32) -> bool {
         if !self.m.zoom || self.xy_over() || self.view_on() { return false; }
-        let (overview, _) = self.split_zoom(self.grid);
+        let (overview, _) = self.split_zoom(self.plot.grid);
         overview.contains(x, y) || (self.m.layout == Layout::Studio && self.zoom_readout().contains(x, y))
     }
 
@@ -1266,35 +1268,81 @@ impl Ui {
             }
             Action::Menu(MenuId::La) => self.key(key::LA),
             Action::Menu(menu) => self.open_menu(menu),
-            Action::ZoomReset => { self.zoom_arm = false; self.zoom_path.clear(); self.reset_zoom(); }
-            Action::ZoomClose => { self.zoom_arm = false; self.zoom_path.clear(); self.set_zoom(false); }
-            Action::FitRecord => { self.fit_selected_record(); }
-            Action::Live => self.return_to_live(), Action::Single => self.key(key::SINGLE), Action::Run => self.key(key::RUNSTOP),
-            Action::Panel => self.desktop_panel = self.desktop_panel.map(|open| !open),
-            Action::EyeRight => { self.workspace.eye_float = None; self.workspace.eye_left = false; self.eye_set_place(EyePlace::Side); self.relayout(); }
-            Action::EyeLeft => { self.workspace.eye_float = None; self.workspace.eye_left = true; self.eye_set_place(EyePlace::Side); self.relayout(); }
-            Action::EyeBelow => { self.workspace.eye_float = None; self.workspace.eye_left = false; self.eye_set_place(EyePlace::Under); self.relayout(); }
-            Action::EyeFloat => { self.workspace.eye_float = Some(Rect::new(360, 100, 620, 360)); self.relayout(); }
+            Action::ZoomReset => {
+                self.zoom_box.arm = false;
+                self.zoom_box.path.clear();
+                self.reset_zoom();
+            }
+            Action::ZoomClose => {
+                self.zoom_box.arm = false;
+                self.zoom_box.path.clear();
+                self.set_zoom(false);
+            }
+            Action::FitRecord => {
+                self.fit_selected_record();
+            }
+            Action::Single => self.key(key::SINGLE),
+            Action::Run => self.key(key::RUNSTOP),
+            Action::EyeRight => {
+                self.workspace.eye_float = None;
+                self.workspace.eye_left = false;
+                self.eye_set_place(EyePlace::Side);
+                self.relayout();
+            }
+            Action::EyeLeft => {
+                self.workspace.eye_float = None;
+                self.workspace.eye_left = true;
+                self.eye_set_place(EyePlace::Side);
+                self.relayout();
+            }
+            Action::EyeBelow => {
+                self.workspace.eye_float = None;
+                self.workspace.eye_left = false;
+                self.eye_set_place(EyePlace::Under);
+                self.relayout();
+            }
+            Action::EyeFloat => {
+                self.workspace.eye_float = Some(Rect::new(360, 100, 620, 360));
+                self.relayout();
+            }
+            Action::Live => self.return_to_live(),
+            Action::Panel => self.workspace.desktop_panel = self.workspace.desktop_panel.map(|open| !open),
             Action::MathOff(k) => self.math_turn_off(k),
             Action::EvView(v) => self.events_view(v),
-            Action::MathSettings(k) => { self.m.math_select(k); self.open_menu(MenuId::Math); }
+            Action::MathSettings(k) => {
+                self.m.math_select(k);
+                self.open_menu(MenuId::Math);
+            }
             Action::RefClear(i) => self.ref_clear_slot(i),
-            Action::RefHorizontal(i) => { self.select_workspace_source(WaveId::Ref(i)); self.studio.sz.pop = false; self.studio.sz.ref_pop = Some(i); }
-            Action::RefSettings(i) => { self.select_workspace_source(WaveId::Ref(i)); self.open_menu(MenuId::Ref); }
-            Action::RestoreLayout => { self.dock_exit_full(); }
-            Action::EyeClose => { self.m.view = AView::Scope; self.workspace.eye_float = None; self.relayout(); }
+            Action::RefHorizontal(i) => {
+                self.select_workspace_source(WaveId::Ref(i));
+                self.studio.sz.pop = false;
+                self.studio.sz.ref_pop = Some(i);
+            }
+            Action::RefSettings(i) => {
+                self.select_workspace_source(WaveId::Ref(i));
+                self.open_menu(MenuId::Ref);
+            }
+            Action::RestoreLayout => {
+                self.dock_exit_full();
+            }
+            Action::EyeClose => {
+                self.m.view = AView::Scope;
+                self.workspace.eye_float = None;
+                self.relayout();
+            }
             Action::MeasureFloat => {
                 self.workspace.measure_float = Some((W - RESULTS_W - 28, TOP.h + 32));
                 self.workspace.measure_docked = false;
-                self.stats_on = true;
-                self.results_min = false;
+                self.results.on = true;
+                self.results.folded = false;
                 self.relayout();
             }
             Action::MeasureDock(dock) => {
                 self.workspace.measure_float = None;
                 self.workspace.measure_docked = true;
                 self.m.strip_dock = dock;
-                self.stats_on = true;
+                self.results.on = true;
                 self.relayout();
             }
             Action::ChCoupling(c) => self.toggle_ac_dc(c),
@@ -1419,7 +1467,7 @@ impl Ui {
     pub(super) fn workspace_hold_tick(&mut self) {
         let Some(mut gesture) = self.workspace.gesture else { return };
         if gesture.moved || gesture.held || self.now - gesture.at < HOLD { return; }
-        if self.menu_open || self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() || self.m.touch_lock { return; }
+        if self.menu_open || self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() || self.m.touch_lock { return; }
         // no hold there at all: the finger goes on to drag the window or to lift as a tap
         if self.zoom_rest_area(gesture.x, gesture.y) { return; }
         gesture.held = true;
@@ -1429,7 +1477,7 @@ impl Ui {
     pub(super) fn workspace_touch(&mut self, phase: Phase, x: i32, y: i32) -> bool {
         // Menus and dialogs own the pointer before anything behind them can
         // fold, drag or open a context menu on a panel header.
-        if self.load_slot_ask || self.menu_open || self.dialog.is_some() || self.power_dlg || self.wlan.osk.is_some() {
+        if self.load_slot_ask || self.menu_open || self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() {
             self.workspace.gesture = None;
             return false;
         }
@@ -1449,13 +1497,31 @@ impl Ui {
         }
         match phase {
             Phase::Down => {
-                if self.workspace.popup.is_some() { return false; }
-                let panel = if self.eye_open() && self.m.layout != Layout::Studio && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER).contains(x, y)
-                    && !self.eye_pane_close().contains(x, y) { Panel::Eye }
-                else if self.results_rects().is_some_and(|(header, _)| header.contains(x, y)) { Panel::Measurements }
-                else if self.grid.contains(x, y) && !self.menu_open { Panel::Plot }
-                else { return false };
-                let origin = match panel { Panel::Eye => self.eye_pane_rect(), Panel::Measurements => { let (head, body) = self.results_rects().unwrap(); Rect::new(head.x, head.y, head.w, head.h + body.h) }, Panel::Plot => self.grid };
+                if self.workspace.popup.is_some() {
+                    return false;
+                }
+                let panel = if self.eye_open()
+                    && self.m.layout != Layout::Studio
+                    && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER)
+                        .contains(x, y)
+                    && !self.eye_pane_close().contains(x, y)
+                {
+                    Panel::Eye
+                } else if self.results_rects().is_some_and(|(header, _)| header.contains(x, y)) {
+                    Panel::Measurements
+                } else if self.plot.grid.contains(x, y) && !self.menu_open {
+                    Panel::Plot
+                } else {
+                    return false;
+                };
+                let origin = match panel {
+                    Panel::Eye => self.eye_pane_rect(),
+                    Panel::Measurements => match self.results_rects() {
+                        Some((head, body)) => Rect::new(head.x, head.y, head.w, head.h + body.h),
+                        None => return false,
+                    },
+                    Panel::Plot => self.plot.grid,
+                };
                 self.workspace.gesture = Some(Gesture { panel, origin, x, y, at: self.now, moved: false, held: false });
                 panel != Panel::Plot
             }
@@ -1521,7 +1587,7 @@ impl Ui {
                         _ => {}
                     }
                 } else if gesture.panel == Panel::Measurements {
-                    self.results_min = !self.results_min;
+                    self.results.folded = !self.results.folded;
                 } else if gesture.panel == Panel::Eye {
                     self.eye_header_tap(x, y);
                 }
@@ -1535,21 +1601,26 @@ impl Ui {
             self.cancel_load_slot();
             return;
         }
-        let was_drawing = self.zoom_arm;
-        self.workspace.popup = None; self.workspace.gesture = None;
-        self.zoom_arm = false; self.zoom_path.clear(); self.zoom_map = None;
-        self.touch.down = false; self.touch.drag = Drag::None;
-        if self.menu_open { self.close_menu(); }
-        // a view that fills the area: Escape is the way back
-        else if self.dock_exit_full() {}
-        else if self.m.zoom && !was_drawing { self.set_zoom(false); }
+        let was_drawing = self.zoom_box.arm;
+        self.workspace.popup = None;
+        self.workspace.gesture = None;
+        self.zoom_box.cancel();
+        self.touch.down = false;
+        self.touch.drag = Drag::None;
+        if self.menu_open {
+            self.close_menu();
+        } else if self.dock_exit_full() {
+            // a view that fills the area: Escape is the way back
+        } else if self.m.zoom && !was_drawing {
+            self.set_zoom(false);
+        }
     }
     pub fn cancel_pointer(&mut self) {
         self.workspace.gesture = None;
         self.touch.down = false;
         self.touch.held = false;
         self.touch.drag = Drag::None;
-        self.pinch.active = false;
+        self.input.pinch.active = false;
     }
 
     pub(super) fn fit_selected_record(&mut self) -> bool {
@@ -1570,14 +1641,16 @@ impl Ui {
             self.toast("No retained waveform to fit");
             return false;
         };
-        if let WaveId::Ref(i) = source {
-            let r = self.refs[i].as_ref().unwrap();
+        let shown = match source {
+            WaveId::Ref(i) => self.refs[i].as_mut(),
+            _ => None,
+        };
+        if let Some(r) = shown {
             let summary = crate::wave::autoset_summary(&r.v, r.dt);
             if summary.valid {
                 let want = ((summary.vmax - summary.vmin) / (VDIV * 0.8)).max(VSCALES[0]);
                 let vpd = VSCALES.iter().copied().find(|&scale| scale >= want).unwrap_or(VSCALES[VSCALES.len() - 1]);
                 let offset = -0.5 * (summary.vmax + summary.vmin);
-                let r = self.refs[i].as_mut().unwrap();
                 r.vpd = vpd;
                 r.offset = offset;
             }
@@ -1594,8 +1667,8 @@ impl Ui {
         };
         self.m.delay = center;
         self.set_zoom(false);
-        self.zoom_vfactor = 1.0;
-        self.zoom_vcenter = 0.0;
+        self.zoom_view.vfactor = 1.0;
+        self.zoom_view.vcenter = 0.0;
         self.dirty_map = true;
         self.toast("Fit record");
         true
@@ -1607,12 +1680,10 @@ impl Ui {
         self.workspace.eye_left = false;
         self.workspace.measure_docked = false;
         self.workspace.measure_float = None;
-        self.stats_on = false;
+        self.results.on = false;
         self.m.pane = 0;
         self.m.win_layout = WinLayout::One;
         self.m.density = if self.full_on() { Density::Full } else { Density::Scope };
-        self.zoom_arm = false;
-        self.zoom_path.clear();
-        self.zoom_map = None;
+        self.zoom_box.cancel();
     }
 }

@@ -38,7 +38,7 @@ fn fixture() -> (Ui, Vec<f32>, Vec<f32>) {
         channel.on = false;
     }
     ui.m.la.on = false;
-    ui.offline = false;
+    ui.offline.on = false;
     ui.session_is_sim = true;
     ui.sim_play = true;
     ui.m.sim_slot = 0;
@@ -147,7 +147,7 @@ struct Held {
 impl Held {
     fn channel(ui: &mut Ui) -> Self {
         let (thread, input, reply) = Worker::manual();
-        ui.sim_generation = Some(Generation { thread, next: 0, active: None, run: false, queued: None, pending: None });
+        ui.sim_gen.worker = Some(Generation { thread, next: 0, active: None, run: false, queued: None, pending: None });
         Self { reply, request: None, _requests: input }
     }
     fn receive_request(&mut self) {
@@ -158,7 +158,7 @@ impl Held {
     fn submit(ui: &mut Ui) -> Self {
         let mut held = Self::channel(ui);
         let request = ui.sim_capture_request(ui.sim_lane(), 0, true, true, true);
-        ui.sim_generation.as_mut().unwrap().submit(request).unwrap();
+        ui.sim_gen.worker.as_mut().unwrap().submit(request).unwrap();
         held.receive_request();
         held
     }
@@ -555,7 +555,7 @@ fn opc_single_waits_after_a_completed_no_hit_generation_until_the_matching_retry
     before.assert_held(&ui);
     assert!(!ui.sim_generating(), "the worker request itself is finished");
     assert!(
-        ui.scpi_completed.contains(&completed_generation),
+        ui.ops.completed.contains(&completed_generation),
         "no-hit generation is a completed operation, not an accepted capture"
     );
     assert_eq!((ui.m.run, ui.m.status), (RunState::Run, TrigStatus::Wait));

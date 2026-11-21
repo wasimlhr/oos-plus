@@ -282,7 +282,7 @@ impl Ui {
 
     /// The record on the screen: a chosen row belongs to one.
     fn ev_record(&self) -> (u64, Option<usize>) {
-        (self.wfm_total, self.hist_pos)
+        (self.counts.wfm_total, self.history.pos)
     }
 
     /// The chosen row, while its record is the one shown.
@@ -1051,7 +1051,7 @@ mod tests {
             u.set_events_pane(false);
             assert!(!u.events_pane_on() && u.m.pane == 0, "{layout:?}");
             u.set_events_pane(true);
-            assert!(u.events_pane_on() && u.table.is_none(), "{layout:?}");
+            assert!(u.events_pane_on() && u.table.kind.is_none(), "{layout:?}");
             // another pane is not taken away by switching the events off
             u.m.pane = tables::PANE_TREND;
             u.set_events_pane(false);
