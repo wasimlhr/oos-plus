@@ -39,13 +39,13 @@ impl Ui {
         let leaving = self.m.density == Density::Full;
         // Full closes the lower pane (Trend, Events, ...); the way back from it opens that pane again
         if !leaving {
-            self.pane_before_full = self.m.pane;
+            self.workspace.pane_before_full = self.m.pane;
         }
         self.m.density = if leaving { Density::Scope } else { Density::Full };
         // a tap asks for the panel itself, also while the external display shows the waveform
         self.full_asked = self.m.density == Density::Full;
         self.apply_density();
-        if leaving && std::mem::take(&mut self.pane_before_full) != 0 {
+        if leaving && std::mem::take(&mut self.workspace.pane_before_full) != 0 {
             let pane = self.m.split_pane;
             if pane != 0 {
                 self.m.density = Density::Split;
