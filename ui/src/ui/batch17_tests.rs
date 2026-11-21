@@ -66,8 +66,8 @@ fn with_one_source_a_row_has_no_chip_and_the_list_has_no_header() {
     // the colour is in a thin bar at the left edge only: nothing of that colour right of it in the first row
     let row = Rect::new(g.list.x, g.list.y, g.list.w, u.studio_panel_row());
     assert!(count(&cv, Rect::new(row.x + 3, row.y + 4, 5, row.h - 8), yellow) > 20, "the colour bar");
-    // Batch 21: the second line of a row names its source in its colour (the list view of the mockups); the first line (name, value) has none
-    assert_eq!(count(&cv, Rect::new(row.x + 9, row.y, row.w - 9, 26), yellow), 0, "no chip of the source in the first line of the row");
+    // the bar is all that says the source: the row had the source's name under the measurement's, which cut both
+    assert_eq!(count(&cv, Rect::new(row.x + 9, row.y, row.w - 9, row.h), yellow), 0, "no name of the source in the row");
     // no band for a header: the first row starts with its name
     assert_eq!(u.studio_panel_row(), if u.studio.compact { 36 } else { 46 });
     shot(&mut u, "one-source");
@@ -139,4 +139,35 @@ fn a_badge_has_no_chip_a_colour_bar_and_the_short_name() {
     assert_eq!(count(&cv, Rect::new(r.x + 9, r.y, r.w - 9, r.h), col), 0, "no chip in the badge");
     assert_eq!(u.studio_badge_name(key, "Peak-to-Peak"), "Pk-pk");
     shot(&mut u, "badges");
+}
+
+/// A row of the list is the name over the value: the name has the line to itself, so it is whole in a narrow panel
+/// and in a compact row, where it was cut beside the value ("Peak-to", "Rise Tim") and the source's name under it
+/// was cut at the foot of the row.
+#[test]
+fn a_row_of_the_list_has_its_name_whole_over_the_value() {
+    for compact in [false, true] {
+        let mut u = studio();
+        one_source(&mut u);
+        u.studio.compact = compact;
+        frame(&mut u);
+        let g = u.studio_panel_geo().unwrap();
+        let rows = u.meas_rows();
+        let row = Rect::new(g.list.x, g.list.y, g.list.w, u.studio_panel_row());
+        let mut cv = Canvas::new(W, H);
+        cv.au_start();
+        u.draw_panel_row(&mut cv, row, &rows[0], false, 0);
+        let texts = cv.au.take().unwrap();
+        let line = |want: &str| texts.iter().find_map(|e| match e {
+            Au::Text { s, ink: Some(ink), clip, .. } if s == want => Some((*ink, *clip)),
+            _ => None,
+        });
+        let (name, clip) = line(&rows[0].name).expect("the name is drawn");
+        let (value, _) = line(&rows[0].text()).expect("the value is drawn");
+        // (ink and clip are left, top, right, bottom)
+        assert!(name.2 <= clip.2 && name.3 <= value.1, "compact {compact}: the name is whole and over the value: {name:?} {clip:?} {value:?}");
+        assert!(value.3 <= row.bottom(), "compact {compact}: the value is within the row: {value:?} {row:?}");
+        assert!(line(&u.wave_name(rows[0].src)).is_none(), "compact {compact}: the source is not written");
+        shot(&mut u, if compact { "row-compact" } else { "row" });
+    }
 }
