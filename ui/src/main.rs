@@ -1229,9 +1229,9 @@ impl Device {
             match size {
                 Some(s) => {
                     if self.hdmi_cv.as_ref().is_none_or(|c| (c.w, c.h) != (s.w, s.h)) {
-                        self.hdmi_cv = Some(Canvas::new(s.w, s.h));
+                        self.hdmi_cv = None;
                     }
-                    let hc = self.hdmi_cv.as_mut().unwrap();
+                    let hc = self.hdmi_cv.get_or_insert_with(|| Canvas::new(s.w, s.h));
                     if self.ui.m.hdmi == model::HdmiMode::Layout {
                         self.ui.render_view(hc);
                     } else {
@@ -1399,26 +1399,11 @@ fn eth_watch(ui: &mut Ui, now: f64) {
 /// The address to show in the top bar, and all of them, as (interface, address).
 #[cfg(target_os = "linux")]
 fn ipv4_addresses() -> ((String, String), Vec<(String, String)>) {
-    let mut found = Vec::new();
-    unsafe {
-        let mut ifa: *mut libc::ifaddrs = std::ptr::null_mut();
-        if libc::getifaddrs(&mut ifa) != 0 {
-            return ((String::new(), String::new()), Vec::new());
-        }
-        let mut p = ifa;
-        while !p.is_null() {
-            let a = &*p;
-            let up = a.ifa_flags & (libc::IFF_UP as u32) != 0 && a.ifa_flags & (libc::IFF_LOOPBACK as u32) == 0;
-            if up && !a.ifa_addr.is_null() && (*a.ifa_addr).sa_family as i32 == libc::AF_INET {
-                let link = a.ifa_flags & (libc::IFF_RUNNING as u32) != 0;
-                let sin = &*(a.ifa_addr as *const libc::sockaddr_in);
-                let name = std::ffi::CStr::from_ptr(a.ifa_name).to_string_lossy().into_owned();
-                found.push((name, std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr)), link));
-            }
-            p = a.ifa_next;
-        }
-        libc::freeifaddrs(ifa);
-    }
+    let found = oos_system::ifaddrs::list()
+        .into_iter()
+        .filter(|e| e.has(libc::IFF_UP) && !e.has(libc::IFF_LOOPBACK))
+        .filter_map(|e| e.v4().map(|a| (e.name.clone(), a, e.has(libc::IFF_RUNNING))))
+        .collect();
     pick_addresses(found)
 }
 
