@@ -238,10 +238,17 @@ pub(super) enum Item {
     CurReadout,
     CurLink,
     CurRemove,
-    /// Studio Edge search settings (ui/addrail.rs)
+    /// Studio search settings (ui/addrail.rs)
+    SrchWhich,
+    SrchType,
     SrchSrc,
     SrchSlope,
     SrchLevel,
+    SrchLevel2,
+    SrchWhen,
+    SrchTime,
+    SrchTime2,
+    SrchShow,
     Srch50,
     SrchFromTrig,
     SrchToTrig,
