@@ -60,6 +60,7 @@ impl Ui {
             wlan: Default::default(),
             keypad: String::new(),
             numpad: None,
+            row_pad: numpad::RowPad::default(),
             ladder_home: None,
             clamp_home: None,
             cursor_pin: None,

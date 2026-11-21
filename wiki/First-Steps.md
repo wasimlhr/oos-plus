@@ -119,7 +119,8 @@ A number is typed on the number pad: tap the value itself (not - or +) of a chan
 or its position, or the trigger level. Type the digits, a point and a leading minus, then tap the key with the unit
 you mean (`mV`, `V`, `µs`, `ns` ...), which sets the value and closes the pad. The value lands where a remote command
 would put it: the scale on the nearest step (with Fine on, on the next calibrated step above it). Cancel leaves it as
-it was.
+it was. This is the pad of the Default layout; Minimal and Studio have a larger pad that opens on every number row,
+with Exp, Min, Max and the prefixes from G to p, and Enter to set what was typed.
 
 ## Mouse and keyboard
 

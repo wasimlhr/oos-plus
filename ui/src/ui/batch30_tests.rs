@@ -289,13 +289,16 @@ fn tapping_a_greyed_reference_row_in_the_dialog_or_the_sheet_shows_the_toast() {
         tap_rect(&mut u, plus);
         assert_eq!(toast(&u), "Store a reference first", "{l:?}: slot offset");
         assert_eq!(u.refs.iter().flatten().count(), 0, "{l:?}: nothing was made");
-        // the value of the number row does not open the pad
+        // the value of the number row does not open the pad; in Default (upstream's pad, rows with a unit only) the
+        // value of the offset of a slot opens nothing, so there is nothing to refuse
         clear_toast(&mut u);
         let (c, _) = ctrl_of(&mut u, Item::RefOffset);
         let (_, mid, _) = Ui::value_parts(c);
         tap_rect(&mut u, mid);
-        assert_eq!(toast(&u), "Store a reference first", "{l:?}: the value");
-        assert!(u.numpad.is_none(), "{l:?}");
+        if l != Layout::Default {
+            assert_eq!(toast(&u), "Store a reference first", "{l:?}: the value");
+        }
+        assert!(u.numpad.is_none() && u.pick.is_none(), "{l:?}");
         if l == Layout::Default {
             // the slot rows R1..R10 of the classic dialog
             clear_toast(&mut u);
