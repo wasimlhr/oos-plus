@@ -24,10 +24,12 @@
 //! Not part of a view: a record session (SIM, a loaded file) with its panel stays as it is when the view changes, and
 //! the visibility of a math channel is its definition, so it is shared.
 //!
-//! A view added by raising the count starts as a copy of the view shown (Batch 30); lowering the count keeps the
-//! content of the view shown. The views are part of a setup (`views`, `view1` ... `view4`, `studio_state`); a setup
-//! from before has no slots and every other view starts as a copy of the one shown. The measurement SCPI commands
-//! act on the list of the view shown, `:DISPlay:VIEW` changes which that is.
+//! In Minimal and Studio a view added by raising the count starts as a copy of the view shown (Batch 30); lowering the
+//! count keeps the content of the view shown. In Default it is upstream's: a view not used yet starts with the plot
+//! alone, and lowering the count shows the last view that is left, as it was kept. The views are part of a setup
+//! (`views`, `view1` ... `view4`, `studio_state`); a setup from before has no slots, and every other view starts as a
+//! copy of the one shown (Minimal, Studio) or with the plot alone (Default). The measurement SCPI commands act on the
+//! list of the view shown, `:DISPlay:VIEW` changes which that is.
 //!
 //! Switching: the numbered buttons in the top bar, a swipe from the left or right edge of the plot inwards (only
 //! while there is more than one view; a vertical drag there still moves a channel or the trigger level), the Quick
@@ -57,6 +59,11 @@ pub(super) fn studio_box_w(views: usize) -> i32 {
 /// A view not set up yet: the plot alone.
 pub(super) fn plot_alone() -> String {
     snapshot_of(&Model::default(), false, false, &[])
+}
+
+/// A view not set up yet in Default (upstream's): the plot alone, the Ui's part of the view back to its defaults too.
+fn plot_alone_view() -> String {
+    snapshot_of(&Model::default(), false, false, &[("studio_state", String::new())])
 }
 
 /// `;` separates the keys of a slot, so a value that holds one (the docking text does) is written escaped.
@@ -328,7 +335,8 @@ impl Ui {
     }
 
     /// After a setup was read: the shown view's Ui state, and every other view that has no slot starts as a copy of
-    /// the shown one (a setup from before the views kept their own state).
+    /// the shown one (a setup from before the views kept their own state). Default keeps such a view empty: it starts
+    /// with the plot alone when it is shown, as upstream.
     pub(crate) fn view_state_restore(&mut self, text: &str) {
         let has = text.lines().any(|l| l.split('=').next().is_some_and(|k| k.trim() == "studio_state"));
         if has || !self.m.studio_state.is_empty() {
@@ -337,7 +345,7 @@ impl Ui {
         }
         self.view_own = Default::default();
         let n = self.m.views;
-        if n >= 2 {
+        if n >= 2 && self.m.layout != Layout::Default {
             let snap = self.view_snapshot();
             for k in 0..n {
                 if k != self.m.view_cur && self.m.view_slots[k].is_empty() { self.m.view_slots[k] = snap.clone(); }
@@ -438,7 +446,10 @@ impl Ui {
         self.m.view_slots[cur] = snap.clone();
         self.view_own[cur] = std::mem::take(&mut self.meas_own.rows);
         let mut s = std::mem::take(&mut self.m.view_slots[j]);
-        if s.is_empty() {
+        if s.is_empty() && self.m.layout == Layout::Default {
+            // upstream: a view not used yet starts with the plot alone
+            s = plot_alone_view();
+        } else if s.is_empty() {
             // never set up (a setup from before the views): a copy of the one that was shown
             s = snap;
             self.view_own[j] = self.view_own[cur].clone();
@@ -458,16 +469,30 @@ impl Ui {
         }
     }
 
-    /// Display > Views: Off, 2, 3, 4. More views: each new one starts as a copy of the shown view (its windows, analysis
-    /// views and layout), not as an empty plot. Fewer views: the shown view keeps its content, whatever number it
-    /// then has; the ones dropped are forgotten.
+    /// Display > Views: Off, 2, 3, 4. More views: in Minimal and Studio each new one starts as a copy of the shown view
+    /// (its windows, analysis views and layout), not as an empty plot. Fewer views: the shown view keeps its content,
+    /// whatever number it then has; the ones dropped are forgotten. Default is upstream's: a new view stays empty (the
+    /// plot alone when it is shown), and with fewer views the last one left is shown as it was kept.
     pub(crate) fn views_set(&mut self, n: usize) {
         let n = n.clamp(1, VIEWS_MAX);
         let old = self.m.views;
         if n == old {
             return;
         }
-        if n > old {
+        if self.m.layout == Layout::Default {
+            // a view added has nothing kept: it shows the plot alone (`view_go`)
+            for k in old.max(1)..n {
+                self.m.view_slots[k].clear();
+                self.view_own[k].clear();
+            }
+            if n < old && self.m.view_cur >= n {
+                if n >= 2 {
+                    self.view_go(n - 1);
+                } else {
+                    self.m.view_cur = 0;
+                }
+            }
+        } else if n > old {
             let snap = self.view_snapshot();
             for k in old.max(1)..n {
                 self.m.view_slots[k] = snap.clone();
@@ -607,6 +632,8 @@ mod tests {
     #[test]
     fn each_view_keeps_its_arrangement_and_shares_the_rest() {
         let mut u = ui();
+        // the fork's views (Minimal, Studio): a new view is a copy of the one shown
+        u.m.layout = Layout::Minimal;
         u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0))];
         u.m.zoom = true;
         let tdiv = u.m.tscale;
@@ -650,6 +677,7 @@ mod tests {
     #[test]
     fn fewer_views_keep_the_screen() {
         let mut u = ui();
+        u.m.layout = Layout::Minimal;
         u.views_set(3);
         u.view_go(2);
         u.m.zoom = true;
@@ -663,6 +691,79 @@ mod tests {
         // off: nothing switches
         u.view_step(1);
         assert_eq!(u.m.view_cur, 0);
+    }
+
+    /// Default is upstream's: a new view starts with the plot alone, the time base as it was (upstream's test).
+    #[test]
+    fn default_a_new_view_starts_with_the_plot_alone() {
+        let mut u = ui();
+        assert_eq!(u.m.layout, Layout::Default);
+        u.views_set(3);
+        u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0))];
+        u.m.zoom = true;
+        let tdiv = u.m.tscale;
+        u.view_go(1);
+        assert!(u.m.meas.is_empty() && !u.m.zoom && u.m.view_cur == 1 && u.m.tscale == tdiv);
+        u.m.pane = 1;
+        u.xy = true;
+        u.view_go(0);
+        assert_eq!(u.m.meas, vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0))]);
+        assert!(u.m.zoom && u.m.pane == 0 && !u.xy);
+        u.view_step(1);
+        assert!(u.m.pane == 1 && u.xy && u.m.meas.is_empty());
+        // raising the count after the measurements were set: the view added still starts empty
+        u.view_go(0);
+        u.views_set(4);
+        u.view_go(3);
+        assert!(u.m.meas.is_empty() && !u.m.zoom && !u.xy);
+        // the same in Studio: a copy of the one shown
+        let mut s = ui();
+        s.m.layout = Layout::Studio;
+        s.m.meas = vec![(Meas::Freq, WaveId::Ch(0))];
+        s.views_set(2);
+        s.view_go(1);
+        assert_eq!(s.m.meas, vec![(Meas::Freq, WaveId::Ch(0))]);
+    }
+
+    /// Default: fewer views show the last one left as it was kept (upstream's test); a setup read with a view never
+    /// used keeps it empty, so it starts with the plot alone.
+    #[test]
+    fn default_fewer_views_show_the_last_one_kept() {
+        let mut u = ui();
+        u.views_set(3);
+        u.view_go(2);
+        u.m.zoom = true;
+        u.views_set(2);
+        assert_eq!(u.m.view_cur, 1);
+        assert!(!u.m.zoom);
+        u.views_set(1);
+        assert_eq!((u.m.views, u.m.view_cur), (1, 0));
+        assert!(u.m.view_slots.iter().all(|s| s.is_empty()));
+        u.m.meas = vec![(Meas::Freq, WaveId::Ch(0))];
+        u.views_set(2);
+        u.view_state_restore("");
+        assert!(u.m.view_slots[1].is_empty());
+        u.m.layout = Layout::Minimal;
+        u.view_state_restore("");
+        assert!(u.m.view_slots[1].contains("meas=Freq:1"), "{}", u.m.view_slots[1]);
+    }
+
+    /// Default: a setup that counts views but keeps no slot for them (upstream writes none for a view never used)
+    /// shows the plot alone in them; Minimal copies the view shown.
+    #[test]
+    fn default_an_old_setup_starts_its_other_views_with_the_plot_alone() {
+        let text = "views = 3 1\nmeas = Freq:1 Vpp:1\nzoom = true\n";
+        let mut u = ui();
+        u.apply_setup_text(text).unwrap();
+        u.view_go(1);
+        assert!(u.m.meas.is_empty() && !u.m.zoom);
+        u.view_go(0);
+        assert_eq!(u.m.meas.len(), 2);
+        // (the layout is part of a setup)
+        let mut v = ui();
+        v.apply_setup_text(&format!("layout = minimal\n{text}")).unwrap();
+        v.view_go(1);
+        assert!(v.m.meas.len() == 2 && v.m.zoom);
     }
 
     #[test]

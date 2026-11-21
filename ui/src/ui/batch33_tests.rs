@@ -6,6 +6,9 @@ use super::studio::{MeasKey, StudioView};
 use super::*;
 
 const LAYOUTS: [Layout; 3] = [Layout::Minimal, Layout::Default, Layout::Studio];
+/// The layouts where a new view starts as a copy of the one shown; Default is upstream's, a new view starts with the
+/// plot alone (and so shows every math channel defined), views.rs tests it.
+const COPY_LAYOUTS: [Layout; 2] = [Layout::Minimal, Layout::Studio];
 
 fn frame(u: &mut Ui) {
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
@@ -46,7 +49,7 @@ fn a_cat() -> (u16, WaveId, WaveId, WaveId, WaveId) { (90, WaveId::Ch(0), WaveId
 
 #[test]
 fn removing_a_measurement_in_view_two_leaves_view_one_alone_in_every_layout() {
-    for l in LAYOUTS {
+    for l in COPY_LAYOUTS {
         let mut u = fresh(l);
         u.m.meas = vec![one(Meas::Freq, 0), one(Meas::Vpp, 0)];
         u.m.meas2 = vec![(0, WaveId::Ch(0), WaveId::Ch(1))];
@@ -73,7 +76,7 @@ fn removing_a_measurement_in_view_two_leaves_view_one_alone_in_every_layout() {
 
 #[test]
 fn measurements_are_added_pinned_and_set_per_view() {
-    for l in LAYOUTS {
+    for l in COPY_LAYOUTS {
         let mut u = fresh(l);
         u.m.meas = vec![one(Meas::Freq, 0), one(Meas::Vpp, 0)];
         u.views_set(2);
@@ -109,7 +112,7 @@ fn measurements_are_added_pinned_and_set_per_view() {
 
 #[test]
 fn cursors_and_zoom_are_per_view() {
-    for l in LAYOUTS {
+    for l in COPY_LAYOUTS {
         let mut u = fresh(l);
         u.m.cursor = CursorMode::Time;
         u.m.cur_a = 0.3;
@@ -286,7 +289,7 @@ fn three_views(l: Layout) -> Ui {
 
 #[test]
 fn a_setup_with_three_views_round_trips_through_save_recall_and_the_scpi_block() {
-    for l in LAYOUTS {
+    for l in COPY_LAYOUTS {
         let mut u = three_views(l);
         assert_eq!((u.m.views, u.m.view_cur), (3, 2), "{l:?}");
         let text = u.setup_text_full();
@@ -332,10 +335,13 @@ fn a_setup_with_three_views_round_trips_through_save_recall_and_the_scpi_block()
 
 #[test]
 fn an_old_setup_loads_with_every_view_a_copy_of_the_current_one() {
-    for l in LAYOUTS {
+    for l in COPY_LAYOUTS {
         // views counted but no slots (a setup from before the views kept anything)
         let mut u = fresh(l);
-        u.apply_setup_text("views = 3 1\nmeas = Freq:1 Vpp:1\nzoom = true\n").unwrap();
+        // (the layout is part of a setup: this one names the layout of the test)
+        let layout = l.name().to_ascii_lowercase();
+        let text = format!("layout = {layout}\nviews = 3 1\nmeas = Freq:1 Vpp:1\nzoom = true\n");
+        u.apply_setup_text(&text).unwrap();
         assert_eq!((u.m.views, u.m.view_cur), (3, 0), "{l:?}");
         u.view_go(1);
         assert_eq!(u.m.meas, vec![one(Meas::Freq, 0), one(Meas::Vpp, 0)], "{l:?}: a copy, not an empty plot");
@@ -425,7 +431,7 @@ fn math_lane(u: &Ui) -> bool { u.trace_sources().contains(&super::workspace::Tra
 
 #[test]
 fn a_math_channel_is_shown_per_view_and_defined_for_all() {
-    for l in LAYOUTS {
+    for l in COPY_LAYOUTS {
         let mut u = fresh(l);
         u.views_set(3);
         u.view_go(1);
@@ -496,7 +502,7 @@ fn the_generator_chip_and_the_bode_page_are_per_view_but_the_output_is_shared() 
 
 #[test]
 fn math_gen_and_analysis_pages_round_trip_with_the_setup() {
-    for l in LAYOUTS {
+    for l in COPY_LAYOUTS {
         let mut u = fresh(l);
         u.views_set(3);
         u.view_go(1);
