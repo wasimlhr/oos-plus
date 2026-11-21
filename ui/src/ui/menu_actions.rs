@@ -1045,6 +1045,7 @@ impl Ui {
                 }
             }
             Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::AfgFreqEntry) => self.freq_key(k),
+            Item::PickOpt(k) if self.pick.is_some_and(|p| p.it == Item::NumEntry) => self.row_pad_key(k),
             // a picker its page answers for (ADR 0060)
             Item::PickOpt(k) if self.pick.is_some_and(|p| Self::page_of_pick(p.it).is_some()) => {
                 if let Some((it, page)) = self.pick.and_then(|p| Some((p.it, Self::page_of_pick(p.it)?))) {

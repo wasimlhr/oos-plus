@@ -1168,6 +1168,8 @@ pub struct Ui {
     keypad: String,
     /// the numeric entry pad of the Studio sheets (ui/numpad.rs); its text is `keypad`
     numpad: Option<numpad::NumPad>,
+    /// the number pad of a value row in Default, upstream's (ui/numpad.rs); its text is `keypad`
+    row_pad: numpad::RowPad,
     /// the value a ladder stepper started from when it was between two rungs: (item, that value, the rung it went to)
     ladder_home: Option<(Item, f64, f64)>,
     /// the last press of an `Add` stepper that ran into a limit: (item, the limit, the value it came from)
