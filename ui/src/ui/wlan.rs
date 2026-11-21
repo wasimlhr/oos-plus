@@ -450,6 +450,8 @@ pub(super) enum OskFor {
     RefLabel(usize),
     /// the name drawn on the bus
     BusLabel,
+    /// the name on the band of the decoder the menu edits
+    DecLabel,
     /// the text the Studio add-measurement list is filtered by
     Search,
     /// the formula of a math channel
@@ -563,6 +565,11 @@ impl Osk {
         Osk::with_whole_text(OskFor::BusLabel, now)
     }
 
+    /// The keyboard for the name on the band of the decoder the menu edits.
+    pub(super) fn for_decoder(now: &str) -> Osk {
+        Osk::with_whole_text(OskFor::DecLabel, now)
+    }
+
     /// The keyboard for the name of reference `i`.
     pub(super) fn for_ref(i: usize, now: &str) -> Osk {
         Osk::with_whole_text(OskFor::RefLabel(i), now)
@@ -600,7 +607,7 @@ impl Osk {
         match self.what {
             OskFor::Name => wlan::SSID_MAX,
             OskFor::Pass(_) => wlan::PASS_LEN.1,
-            OskFor::Label(_) | OskFor::RefLabel(_) | OskFor::BusLabel | OskFor::Search => LABEL_MAX,
+            OskFor::Label(_) | OskFor::RefLabel(_) | OskFor::BusLabel | OskFor::DecLabel | OskFor::Search => LABEL_MAX,
             OskFor::MathExpr(_) => oos_dsp::expr::EXPR_MAX,
             OskFor::Callout(_) => super::callout::CALLOUT_LEN,
             OskFor::NtpServer => crate::sysconf::SERVER_MAX,
@@ -848,6 +855,10 @@ impl Ui {
                 self.m.bus.label = crate::model::bus_label(&o.text);
                 self.wlan.osk = None;
             }
+            OskFor::DecLabel => {
+                self.m.dec_label = crate::model::bus_label(&o.text);
+                self.wlan.osk = None;
+            }
             OskFor::Name if o.text.is_empty() => self.toast("Enter the name of the network"),
             OskFor::Name => {
                 let ssid = o.text.clone().into_bytes();
@@ -958,6 +969,7 @@ impl Ui {
             OskFor::RefLabel(i) => format!("Name of R{} (empty: R{})", i + 1, i + 1),
             OskFor::Callout(_) => "Note on the signal (empty: remove it)".to_string(),
             OskFor::BusLabel => "Name of the bus (empty: I2C)".to_string(),
+            OskFor::DecLabel => format!("Name of decoder {} (empty: {})", self.m.dec_sel + 1, self.m.dec_proto.name()),
             OskFor::Search => "Find a measurement".to_string(),
             OskFor::MathExpr(k) => format!("Formula of M{}: CH1-4, t, pi, sin cos tan sqrt abs ln log exp min max", k + 1),
             OskFor::NtpServer => "NTP server: a name or an address".to_string(),

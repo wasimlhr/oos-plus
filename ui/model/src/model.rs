@@ -497,6 +497,11 @@ pub struct Model {
     /// the line takes `dec_thr`, as every line did before
     pub dec_thr_line: [Option<f32>; 3],
     pub dec_ascii: bool,
+    /// the name of the decoder on its band, where it has one (empty: its protocol)
+    pub dec_label: String,
+    /// where the band of the decoder stands in its window, in divisions from the middle; `None`: at the bottom, on
+    /// the bands under it
+    pub dec_pos: Option<f32>,
     /// what the Events pane lists: messages, fields or lines; and only the rows with a failed
     /// check (the pane). One choice for all decoders
     pub ev_view: EvView,

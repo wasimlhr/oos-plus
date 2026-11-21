@@ -417,6 +417,27 @@ impl Ui {
     }
 
     /// The colour of the decoder `m` is the view of: that of its main line.
+    /// The height of the bands at the bottom of the window being drawn, their bit rows with them. A band with a
+    /// place of its own is not among them.
+    pub(super) fn dec_stack_h(&self) -> i32 {
+        (0..DECODERS)
+            .filter(|&k| self.dec_shown(k) && self.dec_band_win(k) == Some(self.plot.cur_win))
+            .map(|k| self.m.dec_view(k))
+            .filter(|m| m.dec_pos.is_none())
+            .map(|m| self.dec_band_h(&m))
+            .sum()
+    }
+
+    /// Where the boxes of a band with a place of its own begin, in the window being drawn: so many divisions from
+    /// its middle, and within it. `None`: the band stands at the bottom, on the bands under it.
+    pub(super) fn dec_own_y(&self, m: &Model) -> Option<i32> {
+        let pos = m.dec_pos?;
+        let a = self.plot.area;
+        let y = a.y + a.h / 2 - (pos * a.h as f32 / VDIV).round() as i32 - DEC_BOX / 2;
+        let top = a.y + 4 + self.dec_band_h(m) - DEC_BOX;
+        Some(y.clamp(top, (a.y + a.h - self.dec_foot() - DEC_BOX).max(top)))
+    }
+
     pub(super) fn dec_color(&self, m: &Model) -> Rgb {
         if m.dec_on_la() { la::line_color(m.dec_la[0].unwrap_or(0)) }
             else { decode_wave(m.dec_src).map_or(DIM, |source| self.wave_color(source)) }
@@ -444,9 +465,9 @@ impl Ui {
             let several = (0..DECODERS).filter(|&d| self.m.dec_is_on(d)).count() > 1;
             let number = if several { format!("D{} ", k + 1) } else { String::new() };
             let source = if m.dec_on_la() { String::new() } else { format!(" {}", decode_source_name(m.dec_src)) };
-            format!("{}{}{}", number, m.dec_proto.name(), source)
+            format!("{}{}{}", number, m.dec_name(), source)
         } else {
-            format!("D{} {}", k + 1, m.dec_proto.name())
+            format!("D{} {}", k + 1, m.dec_name())
         };
         // in a plot it stands right of the channel markers at the left edge (Studio: of the lane badges), which are
         // drawn after the band and would cover it
@@ -726,6 +747,58 @@ mod tests {
         assert!(u.m.dec_on && u.m.dec_src == 2, "the decoder is as it was set");
         u.m.ch[2].on = true;
         assert!(named(&mut u));
+    }
+
+    /// A decoder has a name and a place of its own: the label is on its band where the protocol was, and a band with
+    /// a position stands that many divisions from the middle of the plot, off the stack at the bottom. Both are the
+    /// decoder's: another one keeps its own.
+    #[test]
+    fn a_decoder_has_its_label_and_its_band_its_place() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = Layout::Minimal;
+        u.m.ch[2].on = true;
+        u.m.dec_on = true;
+        u.m.dec_src = 2;
+        // where the name of a band is written
+        let at = |u: &mut Ui, name: &str| {
+            for _ in 0..4 {
+                u.step(0.1);
+            }
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            cv.au_start();
+            u.render(&mut cv);
+            let texts = cv.au.take().unwrap();
+            texts.into_iter().find_map(|e| match e {
+                Au::Text { s, bound: Some(r), .. } if s == name => Some(r.y),
+                _ => None,
+            })
+        };
+        let bottom = at(&mut u, "D1 UART").expect("the band is named by its protocol");
+        assert!(u.items(MenuId::Decode).contains(&Item::DecLabel) && u.items(MenuId::Decode).contains(&Item::DecPos));
+        assert_eq!((u.value(Item::DecLabel), u.value(Item::DecPos)), ("UART".to_string(), "Bottom".to_string()));
+        u.m.dec_label = "SENSOR".into();
+        assert_eq!(at(&mut u, "D1 SENSOR"), Some(bottom), "the label takes the place of the protocol");
+        assert_eq!(at(&mut u, "D1 UART"), None);
+        // two divisions above the middle; a step down from the lowest place is the bottom again
+        assert_eq!(u.range_set(Item::DecPos, 2.0), Some(2.0));
+        assert_eq!(u.value(Item::DecPos), "+2.0 div");
+        let a = u.plot.area;
+        let own = at(&mut u, "D1 SENSOR").unwrap();
+        let line = a.y + a.h / 2 - (2.0 * a.h as f32 / VDIV) as i32;
+        assert!((own - line).abs() <= DEC_BOX && own < bottom - a.h / 4, "{own} {line} {bottom}");
+        // the second decoder stands at the bottom, where the first stood, and has no label
+        u.m.dec_select(1);
+        u.m.dec_on = true;
+        u.m.dec_src = 2;
+        assert_eq!((u.m.dec_label.as_str(), u.m.dec_pos), ("", None));
+        assert_eq!(at(&mut u, "D2 UART"), Some(bottom));
+        assert_eq!(at(&mut u, "D1 SENSOR"), Some(own));
+        u.m.dec_select(0);
+        assert_eq!(u.range_set(Item::DecPos, -4.0), Some(-4.0));
+        assert_eq!((u.m.dec_pos, u.value(Item::DecPos)), (None, "Bottom".to_string()));
+        // Default draws upstream's band and has neither row
+        u.m.layout = Layout::Default;
+        assert!(!u.items(MenuId::Decode).contains(&Item::DecLabel) && !u.items(MenuId::Decode).contains(&Item::DecPos));
     }
 
     /// A stream of several messages in one box has no start mark between them, and a message none at its head.

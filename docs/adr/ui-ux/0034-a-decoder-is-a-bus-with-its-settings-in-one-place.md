@@ -41,7 +41,8 @@ its sheet without a tab that belongs to something else. It is done in steps, eac
 ## Consequences
 
 Menu > Bus opens the lane's sheet in Studio and no longer the Decode sheet. Which tabs the Decode sheet has depends
-on the protocol: one page for MIL-STD-1553, three for a UART. Steps 2 to 4 add settings (ADR 0046: a row of
+on the protocol: one page for MIL-STD-1553, three for a UART (with step 2 the label and the position of the band are
+on Settings, so MIL-STD-1553 has two). Steps 2 to 4 add settings (ADR 0046: a row of
 `ui/src/settings/`, its menu row, its remote command) and change what the pill and the band write; stored
 identifiers (`dec_*` keys, `:DECode` and `:BUS<n>` commands) keep their names.
 

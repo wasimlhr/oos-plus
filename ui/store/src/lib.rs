@@ -85,6 +85,9 @@ fn dec_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
         kv(&format!("dec_thr{}", k + 2), t.map_or("main".into(), |t| t.to_string()));
     }
     kv("dec_ascii", m.dec_ascii.to_string());
+    kv("dec_label", m.dec_label.clone());
+    // divisions from the middle of the window, or `bottom`: on the bands under it
+    kv("dec_pos", m.dec_pos.map_or("bottom".into(), |p| p.to_string()));
     kv("dec_proto", m.dec_proto.key());
     kv("dec_opt", list(&m.dec_opt));
     kv("dec_src2", m.dec_src2.to_string());

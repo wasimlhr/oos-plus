@@ -48,6 +48,9 @@ pub(super) enum Item {
     /// the threshold of the decoder's second, third or fourth line (1..=3), where it is not the decoder's
     DecThrLine(usize),
     DecFmt,
+    /// the name of the decoder on its band, and where the band stands in its window (Minimal and Studio)
+    DecLabel,
+    DecPos,
     DecProto,
     DecSrc2,
     DecCs,

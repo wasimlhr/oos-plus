@@ -8009,6 +8009,56 @@
      "example": ":BUS1:FORMat HEX\n:BUS1:FORMat?    /*The query returns HEX.*/"
     },
     {
+     "header": ":BUS<n>:LABel:CONTent",
+     "set": ":BUS<n>:LABel:CONTent <value>",
+     "query": ":BUS<n>:LABel:CONTent?",
+     "desc": "Sets or queries Label for Bus and common parameters (menu: Decode > Label).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:BUS1:LABel:CONTent` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "The name on the band of the decoder, up to 10 characters; empty: its protocol. Minimal and Studio draw it.",
+       "(empty)"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `(empty)`.",
+     "ext": true
+    },
+    {
+     "header": ":BUS<n>:POSition",
+     "set": ":BUS<n>:POSition <value>",
+     "query": ":BUS<n>:POSition?",
+     "desc": "Sets or queries Position for Bus and common parameters (menu: Decode > Position).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:BUS1:POSition` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "Where the band stands in its window: divisions from the middle, -3.9 to 4, or `BOTTom`: at the bottom, on the bands under it. Minimal and Studio.",
+       "BOTT"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension (the unit is this firmware's own)"
+     ],
+     "returns": "The query answers the number or `BOTT`. On a freshly started default model the query returns `BOTT`.",
+     "ext": true
+    },
+    {
      "header": ":BUS<n>:EVENt",
      "set": ":BUS<n>:EVENt <value>",
      "query": ":BUS<n>:EVENt?",
@@ -16597,6 +16647,18 @@
        "selected decoder, on, protocol name, role sources (index; `none`), threshold, ASCII or hex",
        "`true`",
        "`:BUS<n>:FORMat`"
+      ],
+      [
+       "`dec_label`",
+       "the name on the band of the selected decoder (empty: its protocol)",
+       "(empty)",
+       "`:BUS<n>:LABel:CONTent`"
+      ],
+      [
+       "`dec_pos`",
+       "where the band of the selected decoder stands in its window: divisions from the middle, or `bottom`: on the bands under it",
+       "`bottom`",
+       "`:BUS<n>:POSition`"
       ],
       [
        "`ev_view`",

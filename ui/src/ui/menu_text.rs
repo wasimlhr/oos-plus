@@ -116,6 +116,7 @@ impl Ui {
             | Item::ZScale
             | Item::ZDelay
             | Item::DecThr
+            | Item::DecPos
             | Item::DecThrLine(_) => Kind::Value,
             Item::MathAuto | Item::ZoneBox | Item::ZoneShape | Item::ZoneClear => Kind::Action,
             Item::DecBits => Kind::Value,
@@ -156,6 +157,7 @@ impl Ui {
             | Item::DecTable
             | Item::DecExport
             | Item::DecThrMid
+            | Item::DecLabel
             | Item::SearchTable
             | Item::SearchSave
             | Item::StoreBin
@@ -307,6 +309,8 @@ impl Ui {
             Item::DecThrLine(2) => "Threshold 3",
             Item::DecThrLine(_) => "Threshold 4",
             Item::DecFmt => "Format",
+            Item::DecLabel => "Label",
+            Item::DecPos => "Position",
             Item::DecProto => "Protocol",
             Item::DecSrc2 => "Clock",
             Item::DecCs => "CS",
@@ -651,6 +655,8 @@ impl Ui {
             Item::DecDiff => m.dec_diff.map_or("None".into(), decode_source_name),
             Item::DecThr => si(m.dec_thr as f64, "V"),
             Item::DecThrLine(role) => si(m.dec_thr_of(role) as f64, "V"),
+            Item::DecLabel => m.dec_name(),
+            Item::DecPos => m.dec_pos.map_or("Bottom".into(), |p| format!("{:+.1} div", p)),
             Item::DecFmt => {
                 if m.dec_ascii {
                     "ASCII".into()

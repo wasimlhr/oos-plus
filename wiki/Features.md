@@ -45,6 +45,8 @@ in the README. How to use it: the guides listed on [[Home]].
 
 **Protocol decoders (29)**
 - Four decoders at once, with an event table you can export and that jumps to an event; DCC lists one command per row
+- In Minimal and Studio each decoder can have a name on its band (Decode > Label) and a place of its own on the plot
+  (Decode > Position)
   ("Loco 5  Fwd 50/128")
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes the bit rate of each

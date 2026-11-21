@@ -118,6 +118,8 @@ const DECODER: &[(&str, P)] = &[
     ("ser.bytes", Int(&["5", "6"])),
     ("dec_thr", Num(&[])),
     ("dec_ascii", Bool),
+    ("dec_label", Is(&["SENSOR", "0123456789AB", "  pad  "])),
+    ("dec_pos", Num(&["bottom", "-4", "-3.9", "2.5", "4", "9"])),
     ("dec_proto", Is(PROTOS)),
     ("dec_opt", Fields(&["1 2 3 4", "255 255 255 255", "256 0 0 0", "0 0 0 0"])),
     ("dec_src2", Is(DEC_SOURCES)),

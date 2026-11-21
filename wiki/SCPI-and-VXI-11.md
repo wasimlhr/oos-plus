@@ -351,7 +351,7 @@ These are OOS functions, not stock Rigol commands. Their limits are in [referenc
 
 **Math** (`<n>` = slot): `:MATH<n>:DISPlay[?]`, `:OPERator[?]`, `:SOURce1[?]`, `:SOURce2[?]`, `:SCALe[?]`, `:OFFSet[?]`, `:EXPRession[?]` (a formula, e.g. `CHAN1 - CHAN2` or `R1 - R2`), `:FFT:SOURce[?]`, `:FFT:WINDow[?]`, `:FFT:SCALe[?]`, `:FILTer:TYPE[?]`, `:FILTer:W1[?]`, `:FILTer:W2[?]`. A Math source can be a channel, a reference or an earlier Math slot.
 
-**Decoders, stock names** (`<n>` = slot): `:BUS<n>:MODE[?]` (protocol), `:DISPlay[?]`, `:FORMat[?] HEX|ASCii`, `:EVENt[?]`, `:THReshold[?]`, `:DATA?` (events as an IEEE block, `BUSY` while decoding), `:BUS<n>:RS232:TX[?]`, `:RX[?]`, `:BAUD[?]`, `:PARity[?]`, `:DBITs[?]`, `:BUS<n>:IIC:SCLK:SOURce[?]`, `:SDA:SOURce[?]`, `:BUS<n>:SPI:SCLK:SOURce[?]`, `:MOSI:SOURce[?]`, `:SS:SOURce[?]`, `:DBITs[?]`.
+**Decoders, stock names** (`<n>` = slot): `:BUS<n>:MODE[?]` (protocol), `:DISPlay[?]`, `:FORMat[?] HEX|ASCii`, `:LABel:CONTent[?]` (the name on its band), `:POSition[?] <div>|BOTTom` (the band's place), `:EVENt[?]`, `:THReshold[?]`, `:DATA?` (events as an IEEE block, `BUSY` while decoding), `:BUS<n>:RS232:TX[?]`, `:RX[?]`, `:BAUD[?]`, `:PARity[?]`, `:DBITs[?]`, `:BUS<n>:IIC:SCLK:SOURce[?]`, `:SDA:SOURce[?]`, `:BUS<n>:SPI:SCLK:SOURce[?]`, `:MOSI:SOURce[?]`, `:SS:SOURce[?]`, `:DBITs[?]`.
 
 **Decoders, every protocol** (works for all of them, e.g. CAN, LIN, USB, C-PHY):
 

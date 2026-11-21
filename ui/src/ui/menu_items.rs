@@ -494,6 +494,10 @@ impl Ui {
                 v.push(DecThrMid);
             }
         }
+        // its band: a name of its own, and its place. Default draws upstream's band, which has neither
+        if self.m.layout != crate::model::Layout::Default {
+            v.extend([DecLabel, DecPos]);
+        }
         // what it decoded, as a table, and as a file
         v.extend([DecTable, DecExport]);
         v

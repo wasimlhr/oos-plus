@@ -140,6 +140,8 @@ impl Default for Model {
             dec_thr: 1.65,
             dec_thr_line: [None; 3],
             dec_ascii: true,
+            dec_label: String::new(),
+            dec_pos: None,
             ev_view: EvView::Messages,
             ev_errors: false,
             dec_proto: Proto::UART,

@@ -200,6 +200,8 @@ const SETTERS: &[(&str, &[&str])] = &[
     (":BUS1:MODE", &["PARallel", "RS232", "UART", "IIC", "I2C", "LIN", "SPI", "CAN"]),
     (":BUS1:DISPlay", BOOL),
     (":BUS1:FORMat", &["HEX", "ASCii"]),
+    (":BUS1:LABel:CONTent", &["\"SENSOR\"", "SENSOR", "\"0123456789AB\"", "\"\""]),
+    (":BUS1:POSition", &["BOTTom", "-4", "-3.9", "2.5", "4", "9", "x"]),
     (":BUS1:EVENt", BOOL),
     (":BUS1:THReshold", &["1.65", "-10", "10"]),
     (":BUS1:RS232:TX", ROLES),

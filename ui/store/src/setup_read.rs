@@ -422,6 +422,8 @@ fn set_decoder(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             m.dec_thr_line[line] = if v.trim() == "main" { None } else { Some(p_f32(v)?) };
         }
         "dec_ascii" => m.dec_ascii = p_bool(v)?,
+        "dec_label" => m.dec_label = crate::model::bus_label(v),
+        "dec_pos" => m.dec_pos = if v.trim() == "bottom" { None } else { crate::model::dec_pos_kept(p_f32(v)?) },
         "dec_proto" => {
             m.dec_proto = Proto::from_key(v.trim()).ok_or_else(|| format!("unknown protocol: {}", v.trim()))?
         }
