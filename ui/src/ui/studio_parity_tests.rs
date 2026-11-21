@@ -476,7 +476,7 @@ fn the_sheets_have_the_controls_of_the_default_dialogs() {
 }
 
 /// Controls that differ on purpose, each with its reason. A line of `control_drift` that contains the text is let pass.
-const KNOWN_DRIFT: [(&str, &str); 8] = [
+const KNOWN_DRIFT: [(&str, &str); 10] = [
     ("Type is Pick in Default, Choice on the sheet", "Trigger: the three common types are buttons, the other ten are behind More"),
     ("Coupling is Choice in Default, Pick on the sheet", "Trigger: the four names do not fit the width of the sheet"),
     ("Channel is Choice in Default, Pick on the sheet", "Math: M1 to M4 beside the label do not fit the width of the sheet"),
@@ -485,6 +485,8 @@ const KNOWN_DRIFT: [(&str, &str); 8] = [
     ("R1 is Link in Default, Toggle on the sheet", "Reference: the ten Show buttons are the one switch of the selected slot"),
     ("Slot color is Number in Default, Choice on the sheet", "Reference: the five colours are swatches"),
     (": Slot ", "Reference: the ten slots are one list, the dialog steps through them"),
+    ("Windows : Density is Choice in Default, Pick on the sheet", "Windows: Default has upstream's density, the sheet oos-next's Layout"),
+    ("Windows : Density options", "Windows: Default has upstream's densities, the sheet oos-next's layouts (Full screen is a row)"),
 ];
 
 /// What the header of the Default layout opens, the Studio header opens: Cursor has its button again.
@@ -575,6 +577,7 @@ fn meant(menu: MenuId, it: Item, what: &str) -> Option<&'static str> {
         (M::Decode | M::Bus, DecSel | DecOn, "name") => "four decoders: the switch says whose it is",
         (M::Sim | M::SimAdvanced, SimSsc | SimSscCenter | SimSscDeviation | SimSscHz | SimAddRef | SimShow, "name") => "the tab is named Spread, the slot is named on its rows",
         (M::Remote, NetWeb | RemMcpInfo | RemScpiInfo | RemVxiInfo, "name") => "the addresses stand apart from their switches: each says whose it is",
+        (M::Windows, WinLayout, "name") => "Default has upstream's Density row, Minimal and Studio the Layout row of oos-next",
         // ---- order: pages the sheet sorts by hand
         (M::Remote, _, "order") => "Access: the name and who is allowed first, then the addresses",
         (M::Utility, _, "order") => "Connectivity: the pages in the order of the state lines above them",

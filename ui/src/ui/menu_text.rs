@@ -38,6 +38,8 @@ impl Ui {
         let t = self.m.trig_type;
         let two_level = matches!(t, TrigType::Slope | TrigType::Runt | TrigType::Window);
         match it {
+            // Default's Windows page has upstream's density row; Minimal and Studio name it after oos-next
+            Item::WinLayout if self.m.layout == Layout::Default => "Density",
             Item::CurA if self.m.cursor == CursorMode::Xy => "X1",
             Item::CurB if self.m.cursor == CursorMode::Xy => "X2",
             Item::TrigLevel if two_level => "Upper",

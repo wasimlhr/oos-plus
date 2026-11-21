@@ -955,6 +955,11 @@ fn parse_lines(text: &str, bad: &mut Vec<String>, r: &dyn Registries) -> Model {
             WinLayout::One if m.pane != 0 => Density::Split,
             WinLayout::One => Density::Scope,
         };
+        // two across is not a density of Default's page; there the split is two stacked traces (Minimal and Studio
+        // have Side by side)
+        if m.win_layout == WinLayout::Cols && m.layout == Layout::Default {
+            m.win_layout = WinLayout::Rows;
+        }
         if m.density == Density::Split {
             m.split_pane = m.pane;
         }
