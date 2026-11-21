@@ -392,7 +392,7 @@ fn twelve() -> Ui {
         .chain([Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::Fall, Meas::Vavg].into_iter().map(|k| (k, WaveId::Ch(1)))).collect();
     u.m.meas2.clear();
     u.m.cat.clear();
-    u.mstat.clear();
+    u.results.rows.clear();
     u.studio.pinned = None;
     u.relayout();
     u
@@ -544,9 +544,9 @@ fn studio_measurements_only_is_a_table_with_statistics_and_a_source_filter() {
     assert_eq!(u.studio.filter, None);
     // Reset statistics starts the counting again
     let (_, _, [reset, ..]) = u.studio_table_geo().unwrap();
-    assert!(u.mstat.iter().any(|s| s.n > 0));
+    assert!(u.results.rows.iter().any(|s| s.n > 0));
     tap_in(&mut u, reset);
-    assert!(u.mstat.iter().all(|s| s.n <= 1));
+    assert!(u.results.rows.iter().all(|s| s.n <= 1));
     // the table has the body: a tap on its empty part does not reach the lanes, Waveform goes back
     tap_in(&mut u, add);
     assert_eq!(u.menu, MenuId::MeasAdd);

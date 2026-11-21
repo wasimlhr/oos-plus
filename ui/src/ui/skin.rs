@@ -14,31 +14,14 @@
 
 use super::*;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Skin {
-    /// The OOS look: no pass at all.
-    #[default]
-    Oos,
-    /// Blue-slate greys with a cyan accent.
-    Plus,
-}
+// oos-plus: the skin is a setting of the model (`oos_model::model::Skin`); its palette is the screen's
+pub use crate::model::{Skin, SKINS};
 
-pub const SKINS: [Skin; 2] = [Skin::Oos, Skin::Plus];
-
-impl Skin {
-    pub fn name(self) -> &'static str {
-        match self {
-            Skin::Oos => "OOS",
-            Skin::Plus => "OOS Plus",
-        }
-    }
-
-    /// (OOS colour, skin colour). Greys go on the ramp; the others only map when they match exactly.
-    fn palette(self) -> &'static [(Rgb, Rgb)] {
-        match self {
-            Skin::Oos => &[],
-            Skin::Plus => &PLUS,
-        }
+/// (OOS colour, skin colour). Greys go on the ramp; the others only map when they match exactly.
+fn palette(skin: Skin) -> &'static [(Rgb, Rgb)] {
+    match skin {
+        Skin::Oos => &[],
+        Skin::Plus => &PLUS,
     }
 }
 
@@ -123,7 +106,7 @@ fn recolour(px: &mut [u32], pal: &[(Rgb, Rgb)], lut: &[Rgb; 256]) {
 impl Ui {
     /// The skin's pass over the finished frame (the last step of `render`).
     pub(super) fn skin_pass(&self, cv: &mut Canvas) {
-        let pal = self.m.skin.palette();
+        let pal = palette(self.m.skin);
         if pal.is_empty() {
             return;
         }

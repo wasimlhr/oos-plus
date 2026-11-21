@@ -77,6 +77,13 @@ pub const GENERATORS: [Gen; 7] = [
 
 pub const BUILTIN: usize = 0;
 pub const FREE: usize = 4;
+/// The model the Ext generator page starts with.
+pub const FIRST_EXTERNAL: usize = 1;
+
+/// Whether entry `i` is a generator OOS sends commands to.
+pub fn external(i: usize) -> bool {
+    i != BUILTIN && i != FREE && i < GENERATORS.len()
+}
 
 impl Gen {
     /// Whether the commands of this model name a channel, or the load.
