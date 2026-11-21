@@ -779,8 +779,10 @@ impl Ui {
             }
             Item::PaneSel => {
                 self.m.pane = (self.m.pane as i32 + d).rem_euclid(tables::PANES.len() as i32) as usize;
-                // a pane chosen from the Windows page in Scope makes it Split
-                if self.m.density == Density::Scope && self.m.pane != 0 { self.m.density = Density::Split; }
+                // a pane chosen from the Windows page in Scope makes it Split (Minimal and Studio list it in Scope)
+                if self.m.layout != Layout::Default && self.m.density == Density::Scope && self.m.pane != 0 {
+                    self.m.density = Density::Split;
+                }
                 if self.m.density == Density::Split {
                     self.m.split_pane = self.m.pane;
                     let prev = self.m.win_layout;
