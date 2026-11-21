@@ -53,7 +53,7 @@ fn each_search_has_its_line_of_marks_in_its_colour() {
     let mut u = three();
     let cv = frame(&mut u);
     shot(&cv, "three-searches-dense");
-    let a = u.area;
+    let a = u.plot.area;
     for slot in 0..SEARCH_SLOTS {
         let y = a.y + slot as i32 * SEARCH_LANE_H + 2;
         let n = (a.x..a.right()).filter(|&x| px(&cv, x, y) == SEARCH_COLS[slot]).count();
@@ -98,7 +98,7 @@ fn the_count_previous_next_and_the_list_are_of_the_selected_search() {
     let falling = u.studio_search_events_of(1);
     assert!((u.m.delay as f64 - falling[2]).abs() < 1e-9 && u.m.delay != first, "the view is on an event of Search 2");
     u.close_menu();
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     assert_eq!(u.table_title(), "Search 2 \u{b7} CH2 \u{b7} 32000");
     assert_eq!(u.table_bar().unwrap().0.total, 32_000);
     u.studio_search_select(0);
@@ -135,7 +135,7 @@ fn a_search_of_a_channel_that_is_off_counts_no_events_and_names_no_part() {
     assert_eq!(u.studio.search_sel, 1);
     let chip = u.studio_search_chip().unwrap().3;
     assert!(chip.contains("\u{b7} 0"), "{chip}");
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     assert_eq!(u.table_title(), "Search 2 \u{b7} CH1 \u{b7} 0");
 }
 

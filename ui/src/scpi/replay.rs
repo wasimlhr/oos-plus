@@ -200,7 +200,7 @@ mod tests {
         use crate::ui::key;
         let dir = folder("recording");
         let (mut s, mut ui, cv) = session();
-        ui.store_dir = dir.clone();
+        ui.files.dir = dir.clone();
         for _ in 0..20 { ui.step(0.05); }
         ui.scpi_rec_want = true;
         s.poll(&mut ui, &cv);
@@ -387,7 +387,7 @@ mod tests {
         ];
         std::fs::write(&file, lines.join("\r")).unwrap();
         let (mut s, mut ui, cv) = session();
-        ui.store_dir = saves.clone();
+        ui.files.dir = saves.clone();
         s.exec_line(&mut ui, &cv, ":SAVE:DESTination DESKtop");
         ui.scpi_replay_file = Some(file);
         run(&mut s, &mut ui, &cv, 30);
@@ -479,7 +479,7 @@ mod tests {
         std::fs::write(dir.join("second.scpi"), ":CHANnel3:DISPlay ON\n:SINGle\n*OPC?\n").unwrap();
         std::fs::write(dir.join("notes.txt"), "not commands\n").unwrap();
         let (mut s, mut ui, cv) = session();
-        ui.store_dir = dir.clone();
+        ui.files.dir = dir.clone();
         let ask = |s: &mut Scpi, ui: &mut Ui, c: &str| String::from_utf8(s.exec_line(ui, &cv, c)).unwrap();
         ui.script_menu("Storage").unwrap();
         ui.script_do("Run SCPI file").unwrap();

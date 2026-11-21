@@ -62,8 +62,8 @@ fn pinch(u: &mut Ui, at: (i32, i32)) {
     frame(u);
 }
 
-fn overview(u: &Ui) -> Rect { u.split_zoom(u.grid).0 }
-fn main_view(u: &Ui) -> Rect { u.wins[0] }
+fn overview(u: &Ui) -> Rect { u.split_zoom(u.plot.grid).0 }
+fn main_view(u: &Ui) -> Rect { u.plot.wins[0] }
 
 // ------------------------------------------------------------------------------------------------ the gestures
 
@@ -165,7 +165,7 @@ fn the_overview_height_drags_clamps_and_is_saved() {
     assert_eq!(overview(&u).h, 40);
     let (hit, _) = u.ov_divider().unwrap();
     drag(&mut u, (hit.x + hit.w / 2, hit.y + hit.h / 2), (hit.x + hit.w / 2, 4000));
-    assert_eq!(overview(&u).h, u.grid.h * 6 / 10);
+    assert_eq!(overview(&u).h, u.plot.grid.h * 6 / 10);
     // kept with the setup, next to the dock
     let text = crate::store::setup_text(&u.m);
     assert!(text.contains("studio_ov = "), "{}", text.lines().filter(|l| l.starts_with("studio")).collect::<Vec<_>>().join(" | "));
@@ -178,7 +178,7 @@ fn the_overview_height_drags_clamps_and_is_saved() {
     assert_eq!(overview_of(&v), 96);
 }
 
-fn overview_of(u: &Ui) -> i32 { u.split_zoom(u.grid).0.h }
+fn overview_of(u: &Ui) -> i32 { u.split_zoom(u.plot.grid).0.h }
 
 // ------------------------------------------------------------------------------------------------ cursors
 

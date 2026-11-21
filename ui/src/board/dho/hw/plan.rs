@@ -12,11 +12,27 @@ use crate::board::Frame;
 use oos_hal::dho::hz;
 use oos_hal::dho::seq::Settings;
 
+thread_local! {
+    /// tests: `prearm_on` for this thread
+    #[cfg(test)]
+    static PREARM_FORCE: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Sets `prearm_on` for the calling thread (tests: the live run, `liverun.rs`).
+#[cfg(test)]
+pub(super) fn force_prearm(on: Option<bool>) {
+    PREARM_FORCE.with(|f| f.set(on));
+}
+
 /// Arm the next batch before the decode of the current one (`seq::prearm`), so the decode is no longer dead time.
 /// `acq.prearm = on` in system.conf, or OOS_PREARM set (any value). Off by default: the stop of an acquisition armed
 /// ahead that is then not read (a settings change, the generator, self-cal, roll) is not verified on the unit yet
 ///.
 pub(super) fn prearm_on() -> bool {
+    #[cfg(test)]
+    if let Some(on) = PREARM_FORCE.with(|f| f.get()) {
+        return on;
+    }
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| std::env::var_os("OOS_PREARM").is_some() || PREARM.get())
 }
@@ -185,7 +201,7 @@ pub(super) fn edge_check(f: &Frame, s: &Settings) -> Edge {
     }
     // a fifth of a division: an edge the trigger took crosses it, noise on a flat level near the level does not
     let hyst = (0.2 * s.ch[tc].scale) as f32;
-    crate::fastdraw::edge_near(
+    oos_dsp::edges::edge_near(
         v,
         f.pre,
         s.level as f32,
@@ -280,7 +296,6 @@ pub(super) fn prearm_keeps_replay(
 /// before, when that frame was read as pairs and not already raw and nothing was armed ahead (`ahead`: the ring is
 /// being written again): the whole frame for the live compression, the screen window for a deep record when the deep
 /// measurements want samples.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(super) fn final_replay(
     b: &Settings,
     p: &hz::Params,
@@ -301,7 +316,6 @@ pub(super) fn final_replay(
 /// The raw read of a deep record's screen window for the measurements (deepmeas.rs): the batch `b` read the whole
 /// record through the compression (`batch_plan`, above 1 M points), Normal acquisition, no LA; the window of
 /// `screen_window` with the record's edge allowed, at most `policy::deep::MAX_BYTES`. Settings for `seq::read_raw_again`.
-#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(super) fn deep_raw_settings(b: &Settings, p: &hz::Params) -> Option<Settings> {
     if b.compress < 2
         || b.window.is_some()

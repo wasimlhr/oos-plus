@@ -36,10 +36,10 @@ impl Ui {
                 let index = if let Ok(n) = first.parse::<usize>() {
                     (1..=self.measurement_count()).contains(&n).then(|| n - 1)
                 } else if let Some(k) = crate::scpi::meas_kind(first) {
-                    let src = a.unwrap_or(self.meas_src);
+                    let src = a.unwrap_or(self.sources.a);
                     self.m.meas.iter().position(|&e| e == (k, src))
                 } else if let Some(k) = crate::scpi::pair_kind(first) {
-                    let (a, b) = (a.unwrap_or(self.meas_src), b.unwrap_or(self.meas_src_b));
+                    let (a, b) = (a.unwrap_or(self.sources.a), b.unwrap_or(self.sources.b));
                     self.m.meas2.iter().position(|&e| e == (k, a, b)).map(|i| self.m.meas.len() + i)
                 } else { None };
                 match index {

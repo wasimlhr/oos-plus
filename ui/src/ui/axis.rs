@@ -58,27 +58,27 @@ impl Ui {
 
     /// The time strip: the bottom of the lowest lane, where the time labels are.
     pub(super) fn axis_time_strip(&self) -> Option<Rect> {
-        let l = *self.wins.last()?;
+        let l = *self.plot.wins.last()?;
         Some(Rect::new(l.x, l.bottom() - STRIP, l.w, STRIP))
     }
 
     /// The volts strip of a lane, without the bottom strip and clear of the ground marker of its channel.
     pub(super) fn axis_volts_strip(&self, lane: usize) -> Option<Rect> {
-        let l = *self.wins.get(lane)?;
-        let last = lane + 1 == self.wins.len();
+        let l = *self.plot.wins.get(lane)?;
+        let last = lane + 1 == self.plot.wins.len();
         Some(Rect::new(l.x, l.y, VOLTS_W, l.h - if last { STRIP } else { 0 }))
     }
 
     /// The strip under a point, when the gesture may start there.
     pub(super) fn axis_at(&self, x: i32, y: i32) -> Option<Axis> {
-        if self.m.layout != Layout::Studio || self.full_on() || self.menu_open || self.dialog.is_some() || self.m.touch_lock || self.view_on() || self.wins.is_empty() { return None; }
+        if self.m.layout != Layout::Studio || self.full_on() || self.menu_open || self.dialog.is_some() || self.m.touch_lock || self.view_on() || self.plot.wins.is_empty() { return None; }
         if let Some(t) = self.axis_time_strip().filter(|t| t.contains(x, y)) {
             // a time cursor within reach of the finger is the cursor's
             let near_cursor = matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy)
                 && [self.m.cur_a, self.m.cur_b].iter().any(|f| (t.x + (*f * t.w as f32) as i32 - x).abs() < 24);
             return (!near_cursor).then_some(Axis::Time);
         }
-        let lane = self.wins.iter().position(|l| l.contains(x, y))?;
+        let lane = self.plot.wins.iter().position(|l| l.contains(x, y))?;
         let v = self.axis_volts_strip(lane)?;
         if !v.contains(x, y) { return None; }
         let c = self.axis_lane_channel(lane)?;
@@ -91,7 +91,7 @@ impl Ui {
     fn axis_rect(&self, a: Axis) -> Option<Rect> {
         match a {
             Axis::Time => self.axis_time_strip(),
-            Axis::Volts(c) => (0..self.wins.len()).find(|&l| self.axis_lane_channel(l) == Some(c)).and_then(|l| self.axis_volts_strip(l)),
+            Axis::Volts(c) => (0..self.plot.wins.len()).find(|&l| self.axis_lane_channel(l) == Some(c)).and_then(|l| self.axis_volts_strip(l)),
         }
     }
 

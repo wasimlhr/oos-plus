@@ -81,7 +81,7 @@ fn the_remaining_studio_menus_are_sheets_and_every_setting_stays_reachable() {
     u.m.la.preset = [la::USER, la::USER];
     all_reachable(&u, MenuId::La);
     assert!(u.items(MenuId::La).contains(&Item::LaUser(1)));
-    u.offline = true;
+    u.offline.on = true;
     assert!(u.items(MenuId::Sim).contains(&Item::SimLive));
     all_reachable(&u, MenuId::Sim);
 }
