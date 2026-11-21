@@ -472,7 +472,7 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
         // the Add menu adds things: showing the strip is the chip above and View > Show pinned badges
         let t = u.studio_top();
         tap(&mut u, t.add);
-        assert_eq!(u.studio_add_rows().len(), 10, "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box");
+        assert_eq!(u.studio_add_rows().len(), 17, "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box");
         u.studio.add_menu = false;
     }
     // without any pinned measurement the restore chip is there all the same
@@ -665,4 +665,19 @@ fn the_statistics_of_a_card_fit_the_card() {
             assert!(forms.windows(2).all(|w| w[0] == w[1]), "the form changes with the value: {unit} {forms:?}");
         }
     }
+}
+
+#[test]
+fn the_trend_page_reaches_every_measurement() {
+    let mut u = studio_with(3);
+    u.open_menu(MenuId::AddPanel);
+    u.sheet.add.kind = Some(super::addrail::AddKind::Plot);
+    u.sheet.add.plot = 4;
+    frame(&mut u);
+    let g = u.rail_geo();
+    let (_, more) = *g.meas.last().expect("a More chip");
+    tap(&mut u, more);
+    assert!(u.menu_open && u.menu == MenuId::Pick, "{:?}", u.menu);
+    assert_eq!(u.m.pane, super::tables::PANE_TREND);
+    shotb(&mut u, "trend-more");
 }

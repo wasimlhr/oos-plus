@@ -45,6 +45,7 @@ impl Ui {
             full: false,
             cursor_view: None,
             full_asked: false,
+            pane_before_full: 0,
             vmaxz: [1; NCH],
             trace_bus: Default::default(),
             rng: Rng::new(0x9e3779b97f4a7c15),

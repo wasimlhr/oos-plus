@@ -23,7 +23,22 @@ pub(super) enum AddRow {
     Bus,
     Zoom,
     ZoomBox,
+    // the Windows column: what Windows > Lower and the plots of Default offer
+    Spectrum,
+    Trend,
+    Histogram,
+    Xy,
+    Eye,
+    Events,
+    BusView,
 }
+
+/// The second column of the menu, under its caption: the lower panes of the Default layout (Spectrum, Results, Events,
+/// Trend, Bus view) and the plots drawn in the waveform. A tap puts one on the screen, the next takes it off.
+pub(super) const ADD_WINDOWS: [AddRow; 7] =
+    [AddRow::Spectrum, AddRow::Trend, AddRow::Histogram, AddRow::Xy, AddRow::Eye, AddRow::Events, AddRow::BusView];
+/// The caption of the second column.
+const CAP: i32 = 26;
 
 /// The rows in their groups; a `None` is a separator.
 /// Only what adds something to the screen: the zoom bar style is on the Zoom tab of Horizontal, the measurement
@@ -48,6 +63,13 @@ impl Ui {
             AddRow::Bus => "Bus",
             AddRow::Zoom => "Zoom",
             AddRow::ZoomBox => "Zoom box",
+            AddRow::Spectrum => "Spectrum",
+            AddRow::Trend => "Trend",
+            AddRow::Histogram => "Histogram",
+            AddRow::Xy => "XY",
+            AddRow::Eye => "Eye",
+            AddRow::Events => "Events",
+            AddRow::BusView => "Bus view",
         }
     }
 
@@ -64,6 +86,13 @@ impl Ui {
             AddRow::Bus => self.rail_kind_on_pub(AddKind::Bus),
             AddRow::Zoom => self.m.zoom,
             AddRow::ZoomBox => self.zoom_arm,
+            AddRow::Spectrum => self.rail_plot_on(3),
+            AddRow::Trend => self.rail_plot_on(4),
+            AddRow::Histogram => self.rail_plot_on(2),
+            AddRow::Xy => self.rail_plot_on(0),
+            AddRow::Eye => self.rail_plot_on(1),
+            AddRow::Events => self.rail_table_on(2),
+            AddRow::BusView => self.m.pane == tables::PANE_BUS,
         }
     }
 
@@ -72,8 +101,9 @@ impl Ui {
         let top = self.frame().top;
         let btn = self.studio_top().add;
         let h = 8 + ADD_MENU.iter().map(|r| if r.is_some() { ROW } else { SEP }).sum::<i32>();
-        let x = (btn.right() - MENU_W).clamp(4, self.scr.w - MENU_W - 4);
-        Rect::new(x, top.bottom() + 6, MENU_W, h.min(self.scr.h - top.bottom() - 12))
+        let w = MENU_W * 2;
+        let x = (btn.right() - w).clamp(4, self.scr.w - w - 4);
+        Rect::new(x, top.bottom() + 6, w, h.min(self.scr.h - top.bottom() - 12))
     }
 
     /// The rows with their rectangles.
@@ -83,9 +113,12 @@ impl Ui {
         let mut out = Vec::new();
         for r in ADD_MENU {
             match r {
-                Some(row) => { out.push((row, Rect::new(p.x + 4, y, p.w - 8, ROW))); y += ROW; }
+                Some(row) => { out.push((row, Rect::new(p.x + 4, y, MENU_W - 8, ROW))); y += ROW; }
                 None => y += SEP,
             }
+        }
+        for (k, row) in ADD_WINDOWS.into_iter().enumerate() {
+            out.push((row, Rect::new(p.x + MENU_W + 4, p.y + 4 + CAP + k as i32 * ROW, MENU_W - 8, ROW)));
         }
         out
     }
@@ -109,6 +142,13 @@ impl Ui {
             AddRow::Reference => cv.text_in(&f.sb, Rect::new(cx - 10, cy - 9, 20, 18), 1, "R", c),
             AddRow::Bus => { for dy in [-5, 0, 5] { cv.hline(cx - 7, cx + 7, cy + dy, c); } cv.vline(cx - 3, cy - 7, cy + 7, c); cv.vline(cx + 3, cy - 7, cy + 7, c); }
             AddRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
+            AddRow::Spectrum => { for (i, h) in [4, 10, 6, 12, 3].into_iter().enumerate() { cv.vline(cx - 8 + i as i32 * 4, cy + 6 - h, cy + 6, c); } }
+            AddRow::Trend => { cv.line(cx - 7, cy + 4, cx - 2, cy - 1, c); cv.line(cx - 2, cy - 1, cx + 1, cy + 2, c); cv.line(cx + 1, cy + 2, cx + 7, cy - 5, c); }
+            AddRow::Histogram => { for (i, h) in [4, 8, 12, 7].into_iter().enumerate() { cv.fill(Rect::new(cx - 8 + i as i32 * 4, cy + 6 - h, 3, h), c); } }
+            AddRow::Xy => { cv.vline(cx - 6, cy - 6, cy + 6, c); cv.hline(cx - 6, cx + 6, cy + 6, c); cv.line(cx - 4, cy + 4, cx + 5, cy - 5, c); }
+            AddRow::Eye => { cv.circle(cx, cy, 6, c); cv.circle(cx, cy, 4, PANEL_BG); cv.circle(cx, cy, 2, c); }
+            AddRow::Events => { for dy in [-5, 0, 5] { cv.hline(cx - 7, cx + 7, cy + dy, c); } cv.fill(Rect::new(cx - 7, cy - 6, 3, 3), c); }
+            AddRow::BusView => { cv.hline(cx - 7, cx + 7, cy - 3, c); cv.hline(cx - 7, cx + 7, cy + 3, c); cv.vline(cx - 2, cy - 6, cy + 6, c); }
             AddRow::Zoom => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, PANEL_BG); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); cv.hline(cx - 4, cx, cy - 2, c); cv.vline(cx - 2, cy - 4, cy, c); }
         }
     }
@@ -127,9 +167,11 @@ impl Ui {
         for r in ADD_MENU {
             match r {
                 Some(_) => sep_y += ROW,
-                None => { cv.hline(p.x + 10, p.right() - 11, sep_y + SEP / 2, LINE); sep_y += SEP; }
+                None => { cv.hline(p.x + 10, p.x + MENU_W - 11, sep_y + SEP / 2, LINE); sep_y += SEP; }
             }
         }
+        cv.vline(p.x + MENU_W, p.y + 10, p.bottom() - 10, LINE);
+        cv.text_in(&f.sb, Rect::new(p.x + MENU_W + 16, p.y + 4, MENU_W - 24, CAP), 0, "Windows", DIM);
         for (row, r) in self.studio_add_rows() {
             let on = self.add_row_on(row);
             self.add_row_icon(cv, row, r.x + 18, r.y + r.h / 2, if on { ACCENT } else { TEXT });
@@ -162,6 +204,16 @@ impl Ui {
             AddRow::Bus => self.add_open_kind(AddKind::Bus),
             AddRow::Zoom => { let on = !self.m.zoom; self.set_zoom(on); }
             AddRow::ZoomBox => self.arm_zoom_area(),
+            AddRow::Spectrum => self.rail_plot_toggle(3),
+            AddRow::Trend => self.rail_plot_toggle(4),
+            AddRow::Histogram => self.rail_plot_toggle(2),
+            AddRow::Xy => self.rail_plot_toggle(0),
+            AddRow::Eye => self.rail_plot_toggle(1),
+            AddRow::Events => self.rail_table_toggle(2),
+            AddRow::BusView => {
+                let on = self.m.pane == tables::PANE_BUS;
+                self.select_option(Item::PaneSel, if on { "Traces" } else { "Bus view" });
+            }
         }
         true
     }

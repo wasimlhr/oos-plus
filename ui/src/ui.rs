@@ -957,6 +957,9 @@ pub struct Ui {
     /// Full came from a tap on the expand button: the panel enlarges its plot even while the external display shows
     /// the waveform. Full chosen under Density, a display plugged in, or leaving Full clears it.
     full_asked: bool,
+    /// The lower pane that was open when the expand button took the plot to Full (which closes it): the way back
+    /// from Full opens it again. 0: none.
+    pane_before_full: usize,
     vmaxz: [u32; NCH],
     rng: Rng,
     trace_bus: std::cell::RefCell<bus::Cache>,

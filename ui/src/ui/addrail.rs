@@ -214,9 +214,10 @@ impl Ui {
             }
         }
         if self.rail_has_meas_chips(kind) {
-            let n = Self::TREND_MEAS.len() as i32;
+            // the four usual ones, and "More": the list of every measurement of Display > Trend chart
+            let n = Self::TREND_MEAS.len() as i32 + 1;
             let cw = (w - (n - 1) * 4) / n;
-            g.meas = (0..Self::TREND_MEAS.len()).map(|i| (i, Rect::new(x + i as i32 * (cw + 4), y, cw, 40))).collect();
+            g.meas = (0..=Self::TREND_MEAS.len()).map(|i| (i, Rect::new(x + i as i32 * (cw + 4), y, cw, 40))).collect();
             y += 44;
         }
         g.note = Rect::new(x, y + 2, w, 44);
@@ -353,8 +354,12 @@ impl Ui {
         }
         let mchosen = self.sheet.add.meas.min(Self::TREND_MEAS.len() - 1);
         for &(i, r) in &g.meas {
-            let on = i == mchosen;
+            let on = i == mchosen && i < Self::TREND_MEAS.len();
             if on { cv.round(r, 5, rgb(0x2e, 0x2e, 0x32), 255); cv.round_outline(r, 5, ACCENT); } else { btn(cv, r, BTN, BTN_BORDER); }
+            if i == Self::TREND_MEAS.len() {
+                cv.text_in(&f.sb, r, 1, "More...", TEXT);
+                continue;
+            }
             cv.text_in(&f.sb, r, 1, Self::TREND_MEAS[i].name(), if on { TEXT } else { DIM });
         }
         if self.rail_has_sources(kind) && g.srcs.is_empty() {
@@ -551,6 +556,13 @@ impl Ui {
             return true;
         }
         if let Some(&(i, _)) = g.meas.iter().find(|(_, r)| r.contains(x, y)) {
+            if i == Self::TREND_MEAS.len() {
+                // every measurement on every source: the picker of Display > Trend chart 1
+                self.rail_plot_apply_sources(self.sheet.add.plot);
+                self.rail_plot_add(self.sheet.add.plot);
+                self.open_picker(Item::TrendSel(0));
+                return true;
+            }
             self.sheet.add.meas = i;
             self.rail_plot_live(kind);
             return true;
@@ -654,6 +666,20 @@ impl Ui {
             // the events of the decoders are the Events pane
             _ => self.set_events_pane(false),
         }
+    }
+
+    /// A row of the Windows column of the Add menu: the plot (an index of `PLOTS`) is on the screen, or it is put on /
+    /// taken off by one tap.
+    pub(super) fn rail_plot_on(&self, i: usize) -> bool { self.rail_plot_shown(i) }
+    pub(super) fn rail_plot_toggle(&mut self, i: usize) {
+        if self.rail_plot_shown(i) { self.rail_plot_remove(i) } else { self.rail_plot_add(i) }
+        self.relayout();
+    }
+    /// The same for the events of the decoders (an index of `TABLES`).
+    pub(super) fn rail_table_on(&self, i: usize) -> bool { self.rail_table_shown(i) }
+    pub(super) fn rail_table_toggle(&mut self, i: usize) {
+        if self.rail_table_shown(i) { self.rail_table_remove(i) } else { self.rail_table_add(i) }
+        self.relayout();
     }
 
     fn rail_plot_add(&mut self, i: usize) {

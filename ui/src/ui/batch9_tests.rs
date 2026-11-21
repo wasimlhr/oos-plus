@@ -280,7 +280,7 @@ fn histogram_eye_spectrum_and_trend_pick_their_source() {
     // trend: a source and a measurement; the first chart follows the measurement that is made
     open_plot(&mut u, 4);
     let g = u.rail_geo();
-    assert_eq!((g.srcs.len(), g.meas.len()), (3, 4));
+    assert_eq!((g.srcs.len(), g.meas.len()), (3, 5));
     for (_, r) in g.meas.iter() { assert!(r.h >= 40 && r.w >= 40); }
     tap_in(&mut u, g.srcs[1].1);
     tap_in(&mut u, g.meas[1].1);
