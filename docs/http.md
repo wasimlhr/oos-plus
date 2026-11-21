@@ -16,19 +16,25 @@ marks below are its first ones, and the interface has no version query yet):
 
 The text of an error message is not part of the interface; its status code is. `tools/http-coverage.py` (layer
 `ratchet` of `tools/check.sh`) fails when a route of the two or an MCP tool has no entry here, when an entry
-has no mark, or when an entry names a route the code does not answer.
+has no mark, when an entry names a route the code does not answer, or when a route has no arm in `methods_of` with
+the methods of its entries.
 
 ## Requests
 
 - HTTP/1.1, one request per connection: every answer says `Connection: close`. A body is read by its
   `Content-Length` (none: no body); chunked bodies are not read.
-- Only `POST` is told apart. Every other method (`GET`, `HEAD`, `PUT`, ...) is taken as `GET`, and a `HEAD` gets the
-  body too. A route without a method of its own below answers every method alike, `POST` included.
+- Each route takes the methods in its heading below (`methods_of`): a `GET` route takes `HEAD` too, except `/cmd`,
+  whose `GET` does something, and the live pictures `/screen.png` and `/screen.jpg`, whose status, type and length
+  are known only once a picture is made; `/update` takes `GET` and `POST`. A `HEAD` gets the head of the `GET` with
+  its `Content-Length` and no body, also when it is refused early (403, 413, 503). Another method gets 405 with an
+  `Allow` header naming the ones the route takes. Before 0.1.15 only `POST`
+  was told apart, every other method was taken as `GET` and a `HEAD` got the body too.
 - The route is the path before `?`, as sent (no percent-decoding). Of the query parameters, `name` of
   `POST /waveform` and `c` of `/cmd` are percent-decoded (`+` is a space); `slot` is read as sent, so `slot=%31` is
   refused.
-- Answers carry `Content-Type` and `Content-Length` (not a 304) and `Cache-Control: no-store` (not a 413, nor a 503 of
-  `net::busy_answer`). An answer above 48 KiB is sent from a thread of its own on the slow cores, at most two at once. A
+- Answers carry `Content-Type` (not one without a body: the 202 of an MCP notification, a 304), `Content-Length` (not
+  a 304, whose length would be that of the picture it stands for) and `Cache-Control: no-store`. Before 0.1.15 a 413
+  and a 503 had no `Cache-Control`, and the 202 an empty `Content-Type`. An answer above 48 KiB is sent from a thread of its own on the slow cores, at most two at once. A
   smaller one, a 403 or 413 and the result of an upload go out as the client takes them, from an outbox that the frame
   loop writes from on every pass without waiting (ADR 0066). The connection closes when a client takes nothing for 2 s
   or has not taken the whole answer after 30 s; while eight answers wait, a ninth closes unanswered.
@@ -52,8 +58,9 @@ Every route can answer these; the body is `text/plain`.
 | Status | Body | When |
 |---|---|---|
 | 403 | `refused` | a request another site made through a browser (`foreign`, below), on every route |
-| 403 | `refused` | `POST /update`, `/mcp` and `/mcp/waveform.csv` from a peer outside `net.allow`, when the head is in (body not read) |
-| 404 | `not found` | a path that is no route, and a route asked with a method it does not take |
+| 403 | `refused` | `POST /update`, `/mcp` and `/mcp/waveform/<file>` from a peer outside `net.allow`, when the head is in (body not read) |
+| 404 | `not found` | a path that is no route, whatever the method |
+| 405 | `method not allowed` | a route asked with a method it does not take; `Allow` names the ones it takes |
 | 413 | `request too large` | a body above its limit (announced or sent) |
 | 503 | `busy, try again` | a 2nd body above 1 MiB or waveform upload, a 3rd answer above 48 KiB, a 9th picture asked |
 
@@ -113,7 +120,9 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - Mark: **stable**
 - Request: nothing.
 - Answer: 200 `image/bmp`, the screen as a 24-bit BMP (1.8 MB), made at the request (`bmp` in
-  `ui/src/scpi/display.rs`, the picture of `:DISPlay:DATA?`). No `ETag`. 503 while two large answers are being sent.
+  `ui/src/scpi/display.rs`, the picture of `:DISPlay:DATA?`): the screen is copied in the frame loop and encoded
+  and sent on one of the two sender threads of the large answers (before 0.1.15 it was encoded in the frame loop).
+  No `ETag`. 503 while two large answers are being sent.
 - net.allow: no.
 
 ### `GET /wave.csv`
@@ -194,16 +203,18 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
   `TCPIP::<port>::SOCKET` (the SCPI socket), `TCPIP::hislip0[,<port>]::INSTR` (HiSLIP). LXI version 1.5.
 - net.allow: no.
 
-### `GET /mcp/waveform.csv`
+### `GET /mcp/waveform/<file>`
 
 - Mark: **experimental** (oos-plus, ADR 0074)
-- Request: nothing.
-- Answer: 200 `text/csv; charset=utf-8`, the file of the last call of the MCP tool `waveform` (below): a header
+- Request: nothing; `<file>` is the name in the `url` of a `waveform` answer, the source and the number of the call
+  (`ch1-7.csv`).
+- Answer: 200 `text/csv; charset=utf-8`, the file of that call of the MCP tool `waveform` (below): a header
   `time_s,v` and one row per sample, or `time_s,min_v,max_v` and one row per bucket (its first sample's time, its
   lowest and highest sample) when the record read was longer than the tool's `points`; time as `%.9e`, volts as
-  `%.6e`. It is a temporary file for one download: the next call, from any MCP client, replaces it, and 2 minutes
-  after its call (`FILE_TTL`) it is deleted, at the web server's next pass. 409 `text/plain`: before the first call,
-  after those 2 minutes, or while Remote services > MCP is Off.
+  `%.6e`. It is a temporary file for one download: each call has its own, the last 4 are kept (`FILES_MAX`, a
+  fifth call deletes the oldest), and 2 minutes after its call (`FILE_TTL`) it is deleted, at the web server's next
+  pass. 409 `text/plain`: a name no call gave, after those 2 minutes, once pushed out, or while Remote services >
+  MCP is Off.
 - net.allow: yes, as `/mcp`.
 
 ### `POST /mcp`
@@ -214,10 +225,10 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
   capability `tools`, `serverInfo` `oos-ui` and its version, and `instructions`: numbered rules for the client's
   model, under 1000 characters, that name only tools of `tools/list`), `ping`, `tools/list`, `tools/call` with the
   tools below.
-  Any method of HTTP is taken alike; a `GET` has no body and gets the parse error.
+  `POST` only: another method gets 405 (before 0.1.15 any method was taken alike, and a `GET` got the parse error).
 - Answer: 200 `application/json`, the JSON-RPC answer; errors as JSON-RPC errors with status 200: -32700 parse error,
   -32601 method not found, -32602 unknown tool. A message without `id` (a notification) gets 202 with no body
-  and an empty `Content-Type`.
+  and no `Content-Type`.
 - Limits: 1 MiB.
 - net.allow: yes, as soon as the head is in, for every method.
 - Mode (oos-plus, Remote services > MCP, `remote.mcp`, [network.md](network.md) 4), read at each request: **Full**
@@ -284,8 +295,9 @@ answers as `9.9E37` (none) is `null`.
 - Answer: `source`, `record`, `total_samples` (the record's length), `start`, `samples_read` (at most 1 Mi samples
   from `start`), `next_start` (null at the end of the record), `dt` and `t0` (s, of the first sample read), `unit`
   `V`, `clipped` (samples at the end of the WORD range), `stats` (`min`, `max`, `vpp`, `mean`, `rms`), and `file`:
-  `url` (`http://<address>:8080/mcp/waveform.csv`, the path alone while the scope has no address), `columns`, `rows`
-  `bytes` and `expires_in_s` (120) of the CSV that `GET /mcp/waveform.csv` then serves for that long, the samples read
+  `url` (`http://<address>:8080/mcp/waveform/<file>`, a name of its own per call; the path alone while the scope has
+  no address), `columns`, `rows`, `bytes` and `expires_in_s` (120) of the CSV that `GET /mcp/waveform/<file>` then
+  serves for that long, the samples read
   as `points` rows. The samples are
   not in the answer, where they would fill a model's context: a client downloads the file (`curl -o`). With `inline`
   above 0 the answer also has `samples` (every sample, when there are no more than `inline`) or `minmax` (`inline`
@@ -356,15 +368,20 @@ answers as `9.9E37` (none) is `null`.
 - Mark: **stable**
 - Request: no arguments.
 - Answer: one `image` content item, `mimeType` `image/png`, `data` the screen as PNG in base64 (`gfx::png::png_of`,
-  made at the call).
+  made at the call): the screen is copied in the frame loop, and the PNG and the answer are made and sent on one of
+  the two sender threads of the large answers, 503 while both are busy (before 0.1.15 the PNG was encoded in the
+  frame loop, which stood still meanwhile).
 
 ### `GET /update`
 
 - Mark: **internal**
 - Request: nothing.
 - Answer: 200 `text/html; charset=utf-8`, the update page: the state that `oos-update status --quick` prints, the
-  result of the last job (`Ui::update_state`, `ui/src/ui/update.rs`), and the upload form (`update_page`,
-  `ui/remote/src/http.rs`).
+  result of the last job (`Ui::update_status`, `Ui::update_last`, `ui/src/ui/update.rs`), and the upload form
+  (`update_page`, `ui/remote/src/http.rs`). The page is made and sent on one of the two sender threads of the large
+  answers, since the state comes from a program that takes a while; 503 while both are busy. A program that has
+  not answered after 10 s is stopped, and the page says so in place of the state. Before 0.1.15 it was
+  made in the frame loop, and the screen stood still while `oos-update` ran.
 - net.allow: no.
 
 ### `POST /update`

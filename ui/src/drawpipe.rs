@@ -29,14 +29,14 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, sync_channel, Receiver, Sender, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, OnceLock};
 
-/// Trigger statistics of the fast path (`Ui::fast_edges`, `Ui::fast_off`).
+/// Trigger statistics of the fast path (`FastPath::edges`, `FastPath::off`).
 pub struct Stats<'a> {
     pub edges: &'a mut [u64; 4],
     pub off: &'a mut (f64, f64),
 }
 
 /// One frame of the fast path into `ph`; false if its trigger edge was not found near the hardware trigger point.
-/// Sparse frames (fewer than 2 samples per column) take the record path (`sparse::draw`, else `board::to_record`).
+/// Sparse frames (fewer than 2 samples per column) take the record path (`sparse::draw`, else `wave::to_record`).
 pub fn draw_frame(ph: &mut Phosphor, m: &Model, f: &Frame, stats: Option<Stats>) -> bool {
     let (w, h) = (ph.w, ph.h);
     let tdiv = m.time_per_div() as f64;
@@ -49,7 +49,7 @@ pub fn draw_frame(ph: &mut Phosphor, m: &Model, f: &Frame, stats: Option<Stats>)
         }
         let fr = std::sync::Arc::new(f.clone());
         let window = tdiv * HDIV as f64;
-        let rec = crate::board::to_record(&fr, m, 3600, window, m.delay as f64 - window / 2.0);
+        let rec = crate::wave::to_record(&fr, m, 3600, window, m.delay as f64 - window / 2.0);
         for c in 0..NCH {
             if m.ch_drawn(c) && !rec.ch[c].is_empty() {
                 ph.draw_ex(c, m, (m.time_per_div(), m.delay), rec.t0, rec.dt, &rec.ch[c], 24, None, rec.pairs);
@@ -119,7 +119,7 @@ fn dense(
 pub struct Trigger {
     /// the trigger's sample: the refined edge, else the hardware trigger point
     pub ti: f64,
-    /// for the trigger statistics (`Ui::fast_edges`, `Ui::fast_off`): 0 the edge at the hardware point, 1 an edge of
+    /// for the trigger statistics (`FastPath::edges`, `FastPath::off`): 0 the edge at the hardware point, 1 an edge of
     /// the other slope, 2 one elsewhere (with its distance in samples), 3 none; None with an LA line as the source
     pub class: Option<(usize, f64)>,
     pub triggered: bool,
@@ -145,7 +145,7 @@ pub fn refine_edge(
     let (edge, class) = if on_la {
         (None, None)
     } else {
-        let (e, any) = refine(EdgeSeek::new(crate::board::sw_trig_level(m, f), hyst, rising, either, half, col));
+        let (e, any) = refine(EdgeSeek::new(crate::wave::sw_trig_level(m, f), hyst, rising, either, half, col));
         let class = match (e, any) {
             (None, _) => (3, 0.0),
             (Some(t), _) if (t - f.pre as f64).abs() <= (col + 16) as f64 => (0, 0.0),
@@ -621,7 +621,7 @@ impl Pipe {
     /// claim, decoded with `decode` or, without per-frame measurements, drawn from their words with `codes`
     /// (`draw_frame_codes`). The buffer comes back through `take_buffer` when the batch is done. Frames nobody claims
     /// are counted as dropped. Returns the batch (tests hold it to let the helper alone draw it).
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // the parts of one batch, each from a different place of the board loop
     pub fn feed_codes(
         &self,
         raw: Box<dyn RawBatch>,

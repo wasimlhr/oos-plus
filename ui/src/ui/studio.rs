@@ -153,11 +153,11 @@ pub(super) struct Studio {
     pub handles: std::cell::RefCell<Vec<(super::workspace::Trace, Rect)>>,
     /// Studio was the layout at the last frame: coming into it applies the entry rules (`studio_sync`)
     pub was: bool,
-    /// Search 1 (Add > Search): its own source, level and slope
-    pub search: Option<super::addrail::SearchSpec>,
-    /// the event the next / previous buttons stand on
-    pub search_at: usize,
-    pub search_cache: std::cell::RefCell<Option<(u64, std::sync::Arc<Vec<f64>>)>>,
+    /// Search 1 to 3 (Add > Search) by their place, the selected one, the event next / previous stand on in each
+    pub searches: [Option<super::addrail::SearchSpec>; super::addrail::SEARCH_SLOTS],
+    pub search_sel: usize,
+    pub search_at: [usize; super::addrail::SEARCH_SLOTS],
+    pub search_cache: std::cell::RefCell<[Option<(u64, std::sync::Arc<Vec<f64>>)>; super::addrail::SEARCH_SLOTS]>,
     /// the cursor readouts go to the badge row, not onto the graticule
     pub cur_badge: bool,
     /// moving one cursor moves the other with it
@@ -447,7 +447,7 @@ impl Ui {
         if !self.record_mode() {
             self.studio.view = StudioView::Waveform;
             self.relayout();
-        } else if self.refs.iter().any(Option::is_some) && !self.m.zoom && !self.zoom_user_closed {
+        } else if self.refs.iter().any(Option::is_some) && !self.m.zoom && !self.zoom_view.user_closed {
             self.set_zoom(true);
         }
     }
@@ -549,15 +549,15 @@ impl Ui {
             b
         };
         let lan = link("LAN", true);
-        let wlan = link("WLAN", self.wlan_stick);
+        let wlan = link("WLAN", self.net.wlan_stick);
         let usb = link("USB", self.usb);
         // the search (Add > Search): previous, how many events, next. It has the end of the read-out's room. Its label
         // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
         let links_x = lx + 4 - gap;
         let room = links_x - 10 - x;
-        let search_w = if self.studio.search.is_some() {
+        let search_w = if self.studio.search().is_some() {
             let caption = self.studio_acq_need();
-            let (full, least) = (f.mb.width("Search 1 \u{b7} 000 events") + 24, f.mb.width("000 events") + 24);
+            let (full, least) = self.studio_search_need();
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
         } else { 0 };
         let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);
@@ -642,7 +642,7 @@ impl Ui {
         self.draw_view_box(cv);
         self.draw_studio_search_chip(cv);
         // the links: a dot (green with an address, or a mounted stick) and a name, as the USB pill of the Default bar
-        let lan_up = self.addr_of("eth0").filter(|_| self.eth_link).is_some();
+        let lan_up = self.addr_of("eth0").filter(|_| self.net.eth_link).is_some();
         let wlan_up = self.addr_of(oos_hal::wlan::IFACE).is_some();
         let net = open(MenuId::Network);
         let links = [(t.lan, "LAN", lan_up, net), (t.wlan, "WLAN", wlan_up, net), (t.usb, "USB", true, storing)];
@@ -3007,7 +3007,7 @@ impl Ui {
             cv.hline(r.x + r.w / 2 - 6, r.x + r.w / 2 + 6, r.y + r.h / 2, TEXT);
             if plus_sign { cv.vline(r.x + r.w / 2, r.y + r.h / 2 - 6, r.y + r.h / 2 + 6, TEXT); }
         }
-        cv.text_in(&f.mb, Rect::new(minus.right(), minus.y, plus.x - minus.right(), minus.h), 1, &format!("Y zoom {}", zoom_text(self.zoom_vfactor)), TEXT);
+        cv.text_in(&f.mb, Rect::new(minus.right(), minus.y, plus.x - minus.right(), minus.h), 1, &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor)), TEXT);
         chip(cv, reset, BTN, BTN_BORDER);
         cv.text_in(&f.m, reset, 1, "Reset Y", TEXT);
     }
@@ -3023,8 +3023,8 @@ impl Ui {
             cv.round(r.inset(1), 4, PANEL_BG, 255);
             cv.text_in(&f.sb, r, 1, text, TEXT);
         };
-        if (self.zoom_vfactor - 1.0).abs() > 1e-3 {
-            for &lane in self.wins.iter().filter(|l| self.studio_vzoom_covers(**l)) { lane_tag(cv, lane, &format!("Y zoom {}", zoom_text(self.zoom_vfactor))); }
+        if (self.zoom_view.vfactor - 1.0).abs() > 1e-3 {
+            for &lane in self.wins.iter().filter(|l| self.studio_vzoom_covers(**l)) { lane_tag(cv, lane, &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor))); }
         }
         if let (Some(hint), Some(&lane)) = (self.studio_zoom_samples_hint(), self.wins.last()) {
             let w = f.sb.width(&hint) + 16;
@@ -3036,7 +3036,7 @@ impl Ui {
         // the hint of the gesture under the finger
         let lane = self.wave_area();
         let (cx, cy) = (lane.x + lane.w / 2, lane.y + lane.h / 3);
-        let hint = if self.pinch.active { Some(format!("Time zoom \u{b7} {}", zoom_text(self.studio_time_zoom()))) }
+        let hint = if self.input.pinch.active { Some(format!("Time zoom \u{b7} {}", zoom_text(self.studio_time_zoom()))) }
             else if self.touch.down && self.touch.drag == Drag::Delay { Some("Pan time".to_string()) } else { None };
         if let Some(text) = hint {
             let r = Rect::new(cx - f.m.width(&text) / 2 - 12, cy - 14, f.m.width(&text) + 24, 28);
@@ -3055,7 +3055,7 @@ impl Ui {
             ZoomRow::VMinus => self.zoom_vertical_step(-1, area, 0.5),
             ZoomRow::Fit => self.reset_zoom(),
             ZoomRow::Center => self.studio_center_trigger(),
-            ZoomRow::ResetY => { self.zoom_vfactor = 1.0; self.zoom_vcenter = 0.0; self.dirty_map = true; }
+            ZoomRow::ResetY => { self.zoom_view.vfactor = 1.0; self.zoom_view.vcenter = 0.0; self.dirty_map = true; }
             ZoomRow::Close => self.set_zoom(false),
         }
     }

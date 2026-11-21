@@ -8,6 +8,43 @@
 
 use super::*;
 
+/// The zoom box (ADR 0062): the tool armed to draw boxes (persistent, independent of the corner zoom-display toggle),
+/// the screen corners of the box being drawn (`path`) and the waveform rectangle and time base it started in (`map`:
+/// rect, s/div, delay).
+#[derive(Default)]
+pub(super) struct ZoomBox {
+    pub arm: bool,
+    pub path: Vec<(i32, i32)>,
+    pub map: Option<(Rect, f32, f32)>,
+}
+
+/// The zoom window's display (ADR 0062).
+pub(super) struct ZoomView {
+    /// whether the windows were laid out with the zoom window open
+    laid_out: bool,
+    /// Entry context used by event navigation; closing zoom never rolls back main controls.
+    pub saved: Option<(usize, f32, f32)>,
+    /// Display magnification only: original graticule divisions at detail centre.
+    pub vfactor: f32,
+    pub vcenter: f32,
+    /// the user closed the zoom window: a long record opened offline does not open it again
+    pub user_closed: bool,
+}
+
+impl Default for ZoomView {
+    fn default() -> Self {
+        ZoomView { laid_out: false, saved: None, vfactor: 1.0, vcenter: 0.0, user_closed: false }
+    }
+}
+
+impl ZoomBox {
+    /// Disarmed, and no box drawn.
+    pub fn cancel(&mut self) {
+        (self.arm, self.map) = (false, None);
+        self.path.clear();
+    }
+}
+
 impl Ui {
     /// Measurement results in a panel on the right instead of the strip under the grid.
     pub(super) fn results_panel(&self) -> bool {
@@ -494,15 +531,15 @@ impl Ui {
 
     /// The box while a zoom-area drag is in progress.
     pub(super) fn draw_zoom_box(&self, cv: &mut Canvas) {
-        if self.touch.drag != Drag::ZoomBox || self.zoom_path.len() != 2 {
+        if self.touch.drag != Drag::ZoomBox || self.zoom_box.path.len() != 2 {
             return;
         }
-        let ((x0, y0), (x1, y1)) = (self.zoom_path[0], self.zoom_path[1]);
+        let ((x0, y0), (x1, y1)) = (self.zoom_box.path[0], self.zoom_box.path[1]);
         let (w, h) = ((x1 - x0).abs(), (y1 - y0).abs());
         if w < 2 && h < 2 {
             return;
         }
-        cv.set_clip(self.zoom_map.map_or(self.grid, |map| map.0));
+        cv.set_clip(self.zoom_box.map.map_or(self.grid, |map| map.0));
         cv.rect(Rect::new(x0.min(x1), y0.min(y1), w.max(1), h.max(1)), ACCENT);
         cv.no_clip();
     }
@@ -536,9 +573,9 @@ impl Ui {
             self.toast("Not on this view");
             return;
         }
-        self.zoom_arm = !self.zoom_arm;
-        if self.zoom_arm {
-            self.zone_arm = None;
+        self.zoom_box.arm = !self.zoom_box.arm;
+        if self.zoom_box.arm {
+            self.zone_trig.arm = None;
             self.toast("Drag a box to zoom");
         }
     }
@@ -546,7 +583,7 @@ impl Ui {
     pub(super) fn zoom_vertical_transform(&self, area: Rect) -> (f32, f32) {
         let detail = self.split_zoom(self.grid).1;
         if self.m.zoom && !self.view_on() && area.y >= detail.y && area.y < detail.y + detail.h && self.studio_vzoom_covers(area) {
-            (self.zoom_vfactor, self.zoom_vcenter)
+            (self.zoom_view.vfactor, self.zoom_view.vcenter)
         } else {
             (1.0, 0.0)
         }
@@ -566,16 +603,16 @@ impl Ui {
         let mut display = self.m.clone();
         for channel in &mut display.ch {
             let vpd = channel.volts_per_div();
-            channel.vfine /= self.zoom_vfactor;
-            channel.offset -= self.zoom_vcenter * vpd;
+            channel.vfine /= self.zoom_view.vfactor;
+            channel.offset -= self.zoom_view.vcenter * vpd;
         }
         display
     }
 
     pub(super) fn zoom_vertical_step(&mut self, direction: i32, area: Rect, fraction: f32) {
         let anchor = self.zoom_divs_at(area, fraction);
-        self.zoom_vfactor = (self.zoom_vfactor * 2.0f32.powi(direction)).clamp(1.0, 1024.0);
-        self.zoom_vcenter = anchor - (0.5 - fraction) * VDIV / self.zoom_vfactor;
+        self.zoom_view.vfactor = (self.zoom_view.vfactor * 2.0f32.powi(direction)).clamp(1.0, 1024.0);
+        self.zoom_view.vcenter = anchor - (0.5 - fraction) * VDIV / self.zoom_view.vfactor;
         self.dirty_map = true;
     }
 
@@ -636,7 +673,9 @@ impl Ui {
             return true;
         }
         let lane = self.wins.iter().position(|area| area.contains(x, y));
-        let detail = self.m.zoom && lane.is_some();
+        // the lane of the zoomed window the wheel is over
+        let detail_lane = lane.filter(|_| self.m.zoom);
+        let detail = detail_lane.is_some();
         // Studio: the wheel over the overview changes the width of the zoom box about the pointer; over the zoomed
         // waveform it leaves the zoom alone (the zoom is the box's business: drag the box or the content)
         if self.m.layout == Layout::Studio && self.m.zoom && !vertical {
@@ -662,8 +701,8 @@ impl Ui {
         }
         let steps = steps.clamp(-32, 32);
         if zoom_time {
-            let area = if detail {
-                self.wins[lane.unwrap()]
+            let area = if let Some(l) = detail_lane {
+                self.wins[l]
             } else if self.m.zoom {
                 self.split_zoom(self.grid).0
             } else {
@@ -678,8 +717,8 @@ impl Ui {
                 }
             }
         } else if vertical {
-            if detail {
-                let area = self.wins[lane.unwrap()];
+            if let Some(l) = detail_lane {
+                let area = self.wins[l];
                 let fraction = (y - area.y) as f32 / area.h.max(1) as f32;
                 for _ in 0..steps.unsigned_abs() {
                     self.zoom_vertical_step(steps.signum(), area, fraction);
@@ -777,9 +816,9 @@ impl Ui {
         if self.view_pass {
             // the second picture (HDMI layout): rectangles of its own, the maps of the panel
             self.grid = g;
-        } else if g != self.grid || self.layout_zoom != self.m.zoom || self.wins.first() != Some(&w0) {
+        } else if g != self.grid || self.zoom_view.laid_out != self.m.zoom || self.wins.first() != Some(&w0) {
             self.grid = g;
-            self.layout_zoom = self.m.zoom;
+            self.zoom_view.laid_out = self.m.zoom;
             if self.m.zoom {
                 let (o, _) = self.split_zoom(g);
                 self.ph = Phosphor::new(o.w as usize, o.h as usize);
@@ -846,29 +885,27 @@ impl Ui {
     }
 
     pub(super) fn set_zoom(&mut self, on: bool) {
-        self.zoom_user_closed = !on;
+        self.zoom_view.user_closed = !on;
         if on == self.m.zoom {
             self.relayout();
             return;
         }
         if on {
-            self.zoom_saved = Some((self.m.tscale, self.m.tfine, self.m.delay));
+            self.zoom_view.saved = Some((self.m.tscale, self.m.tfine, self.m.delay));
             self.m.zscale = self.m.tscale.saturating_sub(3);
             self.m.zdelay = self.m.delay;
-            self.zoom_vfactor = 1.0;
-            self.zoom_vcenter = 0.0;
+            self.zoom_view.vfactor = 1.0;
+            self.zoom_view.vcenter = 0.0;
         } else {
-            self.zoom_saved = None;
+            self.zoom_view.saved = None;
         }
         self.m.zoom = on;
-        self.zoom_arm = false;
-        self.zoom_path.clear();
-        self.zoom_map = None;
+        self.zoom_box.cancel();
         self.relayout();
     }
 
     pub(super) fn set_record_zoom(&mut self, on: bool) {
-        if !self.zoom_user_closed {
+        if !self.zoom_view.user_closed {
             self.set_zoom(on);
         }
     }
@@ -882,7 +919,7 @@ impl Ui {
             "Zoom \u{b7} {}/div \u{b7} {} \u{b7} V {:.2}x",
             si_short(tz as f64, "s"),
             si(dz as f64, "s"),
-            self.zoom_vfactor
+            self.zoom_view.vfactor
         );
         let reset = Rect::new(close.x - 76, close.y, 70, close.h);
         let controls = self.zoom_controls();
@@ -895,8 +932,8 @@ impl Ui {
         btn(cv, reset, BTN, BTN_BORDER);
         cv.text_in(&f.sb, reset, 1, "Reset", TEXT);
         for (rect, text) in controls {
-            btn(cv, rect, if text == "Box" && self.zoom_arm { ACCENT } else { BTN }, BTN_BORDER);
-            cv.text_in(&f.sb, rect, 1, text, if text == "Box" && self.zoom_arm { DARK_TEXT } else { TEXT });
+            btn(cv, rect, if text == "Box" && self.zoom_box.arm { ACCENT } else { BTN }, BTN_BORDER);
+            cv.text_in(&f.sb, rect, 1, text, if text == "Box" && self.zoom_box.arm { DARK_TEXT } else { TEXT });
         }
     }
 
@@ -936,9 +973,9 @@ impl Ui {
         }
         self.m.zscale = self.m.tscale;
         self.m.zdelay = self.m.delay;
-        self.zoom_vfactor = 1.0;
-        self.zoom_vcenter = 0.0;
-        self.zoom_arm = false;
+        self.zoom_view.vfactor = 1.0;
+        self.zoom_view.vcenter = 0.0;
+        self.zoom_box.arm = false;
         self.clamp_zoom();
         self.settings_changed();
     }

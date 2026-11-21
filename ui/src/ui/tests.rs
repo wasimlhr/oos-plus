@@ -3,8 +3,8 @@
 
 //! Tests of the screen that are not about the acquisition or the menu dialog: measurements in the menus, decoders and
 //! the bus trigger, math, mask, histogram, analysers and views, Bode, storage, the trigger level line, SCPI of the
-//! acquisition and the axis labels. A test of acquisition goes into `acquisition_tests.rs`, one of the menus and keys
-//! into `menu_tests.rs`.
+//! acquisition and the axis labels. A test of acquisition goes into `acquisition_tests.rs` (of STOP and SINGLE into
+//! `stop_tests.rs`), one of the menus and keys into `menu_tests.rs`.
 
 use super::axis_label;
 
@@ -346,7 +346,7 @@ fn zone_drawn_by_touch_filters_records() {
     ui.relayout();
     ui.open_menu(MenuId::Zone);
     ui.activate(Item::ZoneBox);
-    assert_eq!(ui.zone_arm, Some((0, false)));
+    assert_eq!(ui.zone_trig.arm, Some((0, false)));
     // a box in the top left corner of the plot (far above the demo signal)
     let a = ui.area;
     let (x0, y0, x1, y1) = (a.x + 60, a.y + 20, a.x + 160, a.y + 60);
@@ -361,7 +361,7 @@ fn zone_drawn_by_touch_filters_records() {
     for _ in 0..5 {
         ui.step(0.02);
     }
-    assert!(ui.zone_drops > 0 && ui.last[0].is_none());
+    assert!(ui.zone_trig.drops > 0 && ui.last[0].is_none());
     // "must not intersect": records pass again
     ui.m.zones[0].inside = false;
     ui.step(0.02);
@@ -427,11 +427,11 @@ fn segmented_recording_stops_after_n_records() {
     for _ in 0..20 {
         ui.step(0.02);
     }
-    assert_eq!((ui.m.run, ui.seg_n, ui.history.len()), (RunState::Stop, 10, 10));
+    assert_eq!((ui.m.run, ui.seg.n, ui.history.len()), (RunState::Stop, 10, 10));
     // RUN again: a new set
     ui.key(key::RUNSTOP);
     ui.step(0.02);
-    assert!(ui.seg_n <= 6 && ui.history.len() == ui.seg_n);
+    assert!(ui.seg.n <= 6 && ui.history.len() == ui.seg.n);
 }
 
 #[test]
@@ -692,7 +692,7 @@ fn a_decoder_reads_the_kept_samples_at_a_slow_time_base() {
     }
     let frame = std::sync::Arc::new(crate::board::Frame { seq: 7, dt, pre: n / 2, ch: [v, Vec::new(), Vec::new(), Vec::new()],
         roll: false, scan: false, partial: false, envelope: false, acq: (0.0, 0), stamp: 0, basic: Default::default(), la: None, fixed_ti: None, hw_avg: false });
-    ui.last[0] = Some(crate::board::to_record(&frame, &ui.m, 3600, 0.2, -0.1));
+    ui.last[0] = Some(crate::wave::to_record(&frame, &ui.m, 3600, 0.2, -0.1));
     let read = |ui: &Ui| -> (String, f64) {
         let p = ui.decode_packets().unwrap();
         let data: Vec<_> = p.iter().filter(|p| p.kind == oos_dsp::decode::Kind::Data && p.ok).collect();
@@ -957,7 +957,7 @@ fn colour_grade_renders() {
         let a = ui.area;
         let ph = if zoom { &ui.phz } else { &ui.ph };
         let mut direct = Canvas::new(W, H);
-        ui.draw_graded(&mut direct, a, ph, if zoom { ui.vmaxz_cg } else { ui.vmax_cg }, false);
+        ui.draw_graded(&mut direct, a, ph, if zoom { ui.grade.vmaxz_cg } else { ui.grade.vmax_cg }, false);
         let mut active = 0;
         for y in 0..ph.h {
             for x in 0..ph.w {
@@ -1251,4 +1251,39 @@ fn axis_labels() {
     assert_eq!(axis_label(1.545455, 1.0, 1.454545, 4.454545, "V"), "1.545 V");
     // 1 us/div at a delay of 1 s
     assert_eq!(axis_label(1.000002, 1e-6, 1.0, 1.000005, "s"), "1.000002 s");
+}
+
+// Break it catches (#279): level 50 % with AC trigger coupling set the middle of the signal in volts, while the trigger
+// compares the source without its mean and counts its level from there: on a signal that does not cross 0 V the level
+// lay above the whole swing and the trigger did not fire
+#[test]
+fn level_50_with_ac_trigger_coupling_counts_from_the_mean() {
+    use super::*;
+    let mut ui = crate::ui::testkit::demo_ui();
+    ui.m.run = RunState::Stop;
+    ui.m.trig_src = 0;
+    ui.m.trig_type = TrigType::Edge;
+    // 0 to 3.3 V, high a quarter of the time: middle 1.65 V, mean 0.825 V
+    let dt = 1e-6;
+    let v: Vec<f32> = (0..4000).map(|k| if k % 400 < 100 { 3.3 } else { 0.0 }).collect();
+    let rec = crate::wave::Record {
+        t0: -2e-3,
+        dt,
+        ch: [v.clone(), Vec::new(), Vec::new(), Vec::new()],
+        triggered: true,
+        partial: false,
+        raw: None,
+        la: None,
+        pairs: false,
+    };
+    ui.last[0] = Some(rec);
+    ui.stats[0] = crate::wave::stats(&v, dt);
+    ui.m.trig_coup = TrigCoup::Dc;
+    ui.activate(Item::Trig50);
+    assert!((ui.m.trig_level - 1.65).abs() < 0.02, "DC: the middle, {}", ui.m.trig_level);
+    for coup in [TrigCoup::Ac, TrigCoup::LfReject] {
+        ui.m.trig_coup = coup;
+        ui.activate(Item::Trig50);
+        assert!((ui.m.trig_level - 0.825).abs() < 0.02, "{:?}: the middle less the mean, {}", coup, ui.m.trig_level);
+    }
 }

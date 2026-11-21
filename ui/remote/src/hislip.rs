@@ -74,6 +74,11 @@ pub fn encode(typ: u8, control: u8, param: u32, data: &[u8]) -> Vec<u8> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BadHeader;
 
+/// The big-endian number in `b` (at most 8 bytes: the fields of a HiSLIP header).
+fn be(b: &[u8]) -> u64 {
+    b.iter().fold(0, |n, &x| n << 8 | u64::from(x))
+}
+
 /// Takes one message from `buf`. `Err` is a header that cannot be a message (the connection should close).
 pub fn take_message(buf: &mut Vec<u8>) -> Result<Option<Message>, BadHeader> {
     if buf.len() < HEADER {
@@ -82,19 +87,15 @@ pub fn take_message(buf: &mut Vec<u8>) -> Result<Option<Message>, BadHeader> {
     if &buf[..2] != b"HS" {
         return Err(BadHeader);
     }
-    let n = u64::from_be_bytes(buf[8..16].try_into().unwrap()) as usize;
+    let n = be(&buf[8..16]) as usize;
     if n > MAX_PAYLOAD {
         return Err(BadHeader);
     }
     if buf.len() < HEADER + n {
         return Ok(None);
     }
-    let msg = Message {
-        typ: buf[2],
-        control: buf[3],
-        param: u32::from_be_bytes(buf[4..8].try_into().unwrap()),
-        data: buf[HEADER..HEADER + n].to_vec(),
-    };
+    let msg =
+        Message { typ: buf[2], control: buf[3], param: be(&buf[4..8]) as u32, data: buf[HEADER..HEADER + n].to_vec() };
     buf.drain(..HEADER + n);
     Ok(Some(msg))
 }
@@ -232,7 +233,7 @@ fn on_program_message<P: crate::Program>(
             Out { msgs: Vec::new(), reply: Some(reply), close: false }
         }
         ASYNC_MAXIMUM_MESSAGE_SIZE if peer.role != Role::New => {
-            let n = msg.data.get(..8).map(|b| u64::from_be_bytes(b.try_into().unwrap())).unwrap_or(0);
+            let n = msg.data.get(..8).map_or(0, be);
             // the size covers the header; an empty value keeps the default, a small one gives MIN_PAYLOAD
             let payload = match n.checked_sub(HEADER as u64) {
                 Some(p) if p > 0 => (p.min(MAX_PAYLOAD as u64) as usize).max(MIN_PAYLOAD),
@@ -404,15 +405,17 @@ impl<P: crate::Program> Server<P> {
         let recheck = self.acl.changed(&mut self.acl_seen);
         let mut i = 0;
         while i < self.conns.len() {
-            let mut closed = recheck && !self.acl.permits_peer(self.conns[i].s.peer_addr());
-            // what is still to be written goes first, as much as the socket takes now (#192)
-            closed |= self.conns[i].flush() == oos_system::net::Sent::Gone;
-            let mut eof = self.conns[i].closing;
-            if !closed && !eof {
-                let c = &mut self.conns[i];
-                let end = oos_system::net::read_some(&c.s, &mut c.buf, MAX_PAYLOAD + HEADER, 8192, 65536);
-                (eof, closed) = (end.eof, end.closed);
-            }
+            let left_out = recheck && !self.acl.permits_peer(self.conns[i].s.peer_addr());
+            let c = &mut self.conns[i];
+            let end = oos_system::net::flush_and_read(
+                &c.s,
+                &mut c.out,
+                &mut c.buf,
+                c.closing,
+                left_out,
+                MAX_PAYLOAD + HEADER,
+            );
+            let (eof, mut closed) = (end.eof, end.closed);
             let clearing =
                 self.conns[i].buf.get(2).is_some_and(|typ| matches!(*typ, DEVICE_CLEAR_COMPLETE | ASYNC_DEVICE_CLEAR));
             // the messages of a connection are taken once the replies before them are out, also those a client sent

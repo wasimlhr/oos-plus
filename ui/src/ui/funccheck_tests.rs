@@ -147,7 +147,7 @@ fn ui_fields(u: &Ui) -> BTreeMap<&'static str, String> {
     v.insert("ref_src", format!("{}", u.ref_src));
     v.insert("hist_ch", format!("{:?}", u.hist_ch));
     v.insert("hist_pos", format!("{:?}", u.hist_pos));
-    v.insert("zone_sel", format!("{}", u.zone_sel));
+    v.insert("zone_sel", format!("{}", u.zone_trig.sel));
     v.insert("offline", format!("{}", u.offline));
     v.insert("sim_play", format!("{}", u.sim_play));
     v.insert("search_on", format!("{}", u.search_on));
@@ -831,7 +831,7 @@ impl Walker {
         u.numpad = None;
         u.dialog = None;
         u.power_dlg = false;
-        u.sysinfo = None;
+        u.sysinfo.rows = None;
         u.wlan.osk = None;
         if u.m.layout != self.ctx.layout { u.m.layout = self.ctx.layout; }
         reopen(u, &self.ctx, tab);
@@ -1097,7 +1097,7 @@ fn utility_probe() {
                 let Some(c) = c else { println!("FC {:?} {:?}: not on the page", l, it); continue };
                 if by_tap { tap_c(&mut u, &c, "tap"); } else { u.activate(it); frame(&mut u); }
                 let t = u.toast.as_ref().map(|t| t.0.clone());
-                println!("FC {:?} {:?} tap={} rect {:?} -> menu {:?}/{} dialog {} toast {:?} shot {:?}", l, it, by_tap, c.rect, u.menu, u.menu_open, u.dialog.is_some() || u.sysinfo.is_some(), t, u.shot_request);
+                println!("FC {:?} {:?} tap={} rect {:?} -> menu {:?}/{} dialog {} toast {:?} shot {:?}", l, it, by_tap, c.rect, u.menu, u.menu_open, u.dialog.is_some() || u.sysinfo.rows.is_some(), t, u.shot_request);
             }
         }
     }

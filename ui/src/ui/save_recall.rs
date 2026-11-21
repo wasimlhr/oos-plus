@@ -121,9 +121,8 @@ impl Ui {
                 self.cleared = false;
             }
             // whatever the hardware still holds is not this record
-            self.stop_ti_off = None;
-            self.stop_whole = None;
-            (self.stop_raw, self.stop_pic) = (None, None);
+            self.stop.ti_off = None;
+            (self.stop.raw, self.stop.pic) = (None, None);
             self.loaded_record = true;
             self.invalidate_reference_eye();
             if let Some(slot) = offline_ref {
@@ -259,7 +258,7 @@ impl Ui {
             return;
         }
         self.usb_check = self.now + 2.0;
-        self.wlan_stick = wlan::stick_there();
+        self.net.wlan_stick = wlan::stick_there();
         self.bt.stick = bt::stick_there();
         self.bt.inputs = bt::inputs_connected(&bt::inputs());
         let on = std::fs::read_to_string("/proc/mounts").is_ok_and(|t| crate::store::usb_mounted(&t));
@@ -412,6 +411,8 @@ impl Ui {
             self.mask = None;
             self.mask_ref = None;
         }
+        // the hardware session's stamps go on (#391)
+        m.keep_session(&self.m);
         self.m = m;
         // the generator of a recalled set-up: its wave within what the generator can do, its output off. A recall
         // never switches an output on, and one that was on does not jump to another wave on a circuit

@@ -39,12 +39,16 @@ own. **From 0.1.8** the live picture can be a JPEG made by the scope's video enc
 to PNG): about 75 KB a picture against 115 KB, at under a third of the processor time of a PNG; text is a little less
 sharp, and screenshots stay PNG.
 
+**From 0.1.15** the BMP picture, the screenshot of the MCP tool `screenshot` and the update page are made off the
+frame loop as well. While two large answers are being sent at once, the next one gets "busy, try again" (503); the
+page asks again by itself, a script of your own should too.
+
 ## MCP
 
 An AI assistant that speaks the Model Context Protocol drives the scope through `http://<scope>:8080/mcp` (streamable
 HTTP). Tools that only read: `scope_state` (the whole set-up at once), `measure` (items of the measurement list as
 numbers), `waveform` (a record's statistics and a link to a CSV of it, up to 100000 rows, which the assistant
-downloads instead of reading it into the conversation), `decode_results` (the decoders' events
+downloads instead of reading it into the conversation; each call has its own file, kept for 2 minutes), `decode_results` (the decoders' events
 as rows), `errors`, `screenshot` and `scpi_reference`, which finds a command of the SCPI reference by what it
 does, so that the assistant does not guess its name. Tools that change the scope: `configure` (channels, timebase, trigger and
 acquisition from one object, read back after), `acquire` (run, stop, single, force, autoset, clear),

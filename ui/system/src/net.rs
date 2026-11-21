@@ -137,6 +137,26 @@ pub fn read_some(s: &TcpStream, buf: &mut Vec<u8>, cap: usize, chunk: usize, bud
     end
 }
 
+/// The start of a client's turn in the frame loop of a server that keeps its connections (HiSLIP, VXI-11): what is
+/// still to be written in `out` goes first, as much as `s` takes now (#192); the connection is to be closed when it is
+/// gone, or when `left_out` (net.allow changed and leaves its peer out). Else, unless the client closed its side
+/// before (`closing`: `eof` again), what has arrived is read into `buf` (`read_some`, at most `cap` bytes).
+pub fn flush_and_read(
+    s: &TcpStream,
+    out: &mut Outbox,
+    buf: &mut Vec<u8>,
+    closing: bool,
+    left_out: bool,
+    cap: usize,
+) -> ReadEnd {
+    let gone = out.flush(s) == Sent::Gone;
+    let end = ReadEnd { eof: closing, closed: left_out || gone };
+    if end.eof || end.closed {
+        return end;
+    }
+    read_some(s, buf, cap, 8192, 65536)
+}
+
 /// Writes what `s` takes of `buf` now, without waiting: `WouldBlock` when it takes nothing. The socket does not block
 /// for this one write and blocks again after it (MSG_DONTWAIT, as `read_now` uses it, is taken on a receive only on
 /// macOS). A peer that is gone gives an error, not a signal: Rust's runtime ignores SIGPIPE.
@@ -254,6 +274,16 @@ pub static SENDERS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUs
 
 /// A large answer in the background. False when too many run already, or no thread could be started.
 pub fn send_in_background(s: &TcpStream, head: String, body: impl AsRef<[u8]> + Send + 'static) -> bool {
+    answer_in_background(s, move || (head, body))
+}
+
+/// An answer made and sent in the background, one of the `MAX_SENDERS`: `make` gives its head and body there (an
+/// answer that takes a while to make, as GET /update's state). False when too many run already, or no thread could
+/// be started; then `make` is not called.
+pub fn answer_in_background<B: AsRef<[u8]>>(
+    s: &TcpStream,
+    make: impl FnOnce() -> (String, B) + Send + 'static,
+) -> bool {
     use std::sync::atomic::Ordering::SeqCst;
     let Ok(mut c) = s.try_clone() else { return false };
     if SENDERS.fetch_add(1, SeqCst) >= MAX_SENDERS {
@@ -262,6 +292,7 @@ pub fn send_in_background(s: &TcpStream, head: String, body: impl AsRef<[u8]> + 
     }
     let t = std::thread::Builder::new().name("web-send".into()).spawn(move || {
         crate::system::lower_priority();
+        let (head, body) = make();
         let _ = c.set_write_timeout(Some(Duration::from_secs(SEND_TIMEOUT_S)));
         use std::io::Write;
         let _ = c.write_all(head.as_bytes());
@@ -280,7 +311,15 @@ pub fn busy_answer(s: &TcpStream) {
     let _ = s.set_write_timeout(Some(Duration::from_secs(1)));
     let msg = "busy, try again";
     use std::io::Write;
-    let _ = (&*s).write_all(format!("HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", msg.len(), msg).as_bytes());
+    let _ = (&*s).write_all(
+        format!(
+            "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\
+            Cache-Control: no-store\r\nConnection: close\r\n\r\n{}",
+            msg.len(),
+            msg
+        )
+        .as_bytes(),
+    );
 }
 
 #[cfg(test)]
@@ -456,5 +495,24 @@ mod tests {
         assert!(gone_at.duration_since(moved) < SEND_STALL + SEND_STALL / 4, "not given up a step after the stall");
         let mut empty = Outbox::default();
         assert_eq!(empty.flush(&s), Sent::Done);
+    }
+
+    /// The 503 has the headers of every other answer of the web server: its type, its length, `no-store`.
+    #[test]
+    fn busy_answer_is_a_whole_answer() {
+        use std::io::Read;
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let mut c = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (s, _) = l.accept().unwrap();
+        busy_answer(&s);
+        drop(s);
+        let mut got = String::new();
+        c.read_to_string(&mut got).unwrap();
+        let (head, body) = got.split_once("\r\n\r\n").unwrap();
+        assert!(head.starts_with("HTTP/1.1 503 Service Unavailable\r\n"), "{head}");
+        for h in ["Content-Type: text/plain", "Content-Length: 15", "Cache-Control: no-store", "Connection: close"] {
+            assert!(head.lines().any(|l| l == h), "{h} in {head}");
+        }
+        assert_eq!(body, "busy, try again");
     }
 }

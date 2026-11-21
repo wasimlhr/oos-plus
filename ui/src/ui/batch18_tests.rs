@@ -214,14 +214,14 @@ fn a_hold_on_a_channel_chip_starts_with_turn_off() {
 }
 
 #[test]
-fn the_zoom_bar_stays_and_search_markers_take_the_colour_of_the_searched_channel() {
+fn the_zoom_bar_stays_with_a_search() {
     let mut u = studio();
     u.set_zoom(true);
     for _ in 0..4 { frame(&mut u); }
     shot(&mut u, "zoom-bar");
     assert!(u.studio_zoom_bar().is_some());
     u.studio_search_add(Some(WaveId::Ch(1)));
-    assert_eq!(u.studio.search.as_ref().map(|s| s.src), Some(WaveId::Ch(1)));
+    assert_eq!(u.studio.search().map(|s| s.src), Some(WaveId::Ch(1)));
 }
 
 #[test]

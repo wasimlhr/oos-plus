@@ -35,6 +35,14 @@ mod batch7b_tests;
 #[cfg(test)]
 mod batch8_tests;
 #[cfg(test)]
+mod search_dense_tests;
+#[cfg(test)]
+mod search_several_tests;
+#[cfg(test)]
+mod search_types_tests;
+#[cfg(test)]
+mod search_zoom_tests;
+#[cfg(test)]
 mod batch9_tests;
 #[cfg(test)]
 mod batch10_tests;
@@ -355,13 +363,9 @@ const DEC_NATIVE_STOP: usize = 4 << 20;
 const SESSION_SCREEN_MAX: usize = 7200;
 /// Seconds the trigger level line stays after the level changed.
 const LEVEL_LINE_S: f64 = 1.5;
-/// Longest wait of a STOP for the hardware's final frame (`Ui::stop_final`): a batch in progress, its read and the raw
-/// read of the newest frame.
+/// Longest wait of a STOP for the hardware's final frame (`Stop::final_until`): a batch in progress, its read and the
+/// raw read of the newest frame.
 const STOP_FINAL_WAIT: f64 = 3.0;
-/// Longest wait of a STOP for the stored record read whole (`Ui::stop_whole`): one read of a record the live read
-/// takes whole. Assumed to be enough: the live read of such a record is one of several a second; the time of this
-/// read was not measured on a unit. After it the view shown is asked for, the record of the stop as it was.
-const STOP_WHOLE_WAIT: f64 = 1.0;
 /// LA words a history entry keeps: above this only the newest record has its LA (200 x 1 M words = 400 MB at most).
 const HISTORY_LA_WORDS: usize = 1_000_000;
 /// Segment counts of the segmented recording (0 = off); the menu offers those within the limit of the set-up
@@ -621,7 +625,7 @@ pub enum MenuId {
     /// Full legacy measurement and pair catalog, including Selected.
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     MeasLegacy,
-    /// Studio: the settings of the Edge search added from the Add panel (ui/addrail.rs)
+    /// Studio: the settings of the search added from the Add panel (ui/addrail.rs)
     Search,
     MeasSelected,
 }
@@ -750,16 +754,6 @@ enum Drag {
     Scroll(scroll::List, scroll::Grip),
     /// a divider between two columns of the event table (ui/tables.rs)
     TableCol(usize),
-}
-
-struct Pinch {
-    active: bool,
-    p0: (i32, i32),
-    p1: (i32, i32),
-    ref_dx: i32,
-    ref_dy: i32,
-    area: Rect,
-    detail: bool,
 }
 
 struct TouchState {
@@ -936,13 +930,8 @@ pub struct Ui {
     area: Rect,
     /// plot rectangle (10 x 8 div) of the current layout
     grid: Rect,
-    layout_zoom: bool,
-    /// Entry context used by event navigation; closing zoom never rolls back main controls.
-    zoom_saved: Option<(usize, f32, f32)>,
-    // Display magnification only: original graticule divisions at detail centre.
-    zoom_vfactor: f32,
-    zoom_vcenter: f32,
-    zoom_user_closed: bool,
+    /// the zoom window: its vertical magnification, the time base it opened on, how it was closed (plot_layout.rs)
+    zoom_view: plot_layout::ZoomView,
     /// The last Measure > Copy meas. to: from, to, how many (the row shows the result instead of "Pick").
     meas_copied: Option<(WaveId, WaveId, usize)>,
     /// the waveform windows in the plot (one: the plot itself); `area` is the first while nothing else is drawn
@@ -957,7 +946,6 @@ pub struct Ui {
     /// Full came from a tap on the expand button: the panel enlarges its plot even while the external display shows
     /// the waveform. Full chosen under Density, a display plugged in, or leaving Full clears it.
     full_asked: bool,
-    vmaxz: [u32; NCH],
     rng: Rng,
     trace_bus: std::cell::RefCell<bus::Cache>,
     menu: MenuId,
@@ -984,93 +972,40 @@ pub struct Ui {
     ref_ana: [std::sync::Arc<oos_dsp::measure::Analysis>; NREF],
     /// False when a hidden, unrequested reference skipped the capture-time scan.
     ref_ana_valid: [bool; NREF],
-    /// the measurements in the background (`measure_in_background`); `meas_want`: the record shown is still to be
-    /// measured; `meas_n`: counts what makes a result still out wrong (a clear, a measurement made here at once), a
-    /// result sent before is dropped; a new record does not count (in Run one comes nearly every frame, and every
-    /// result would be dropped); `meas_new`: new results for the statistics, the trend and the counter
-    meas_bg: Option<MeasWorker>,
-    meas_want: bool,
+    /// the measurements in the background (records.rs)
+    meas_bg: records::MeasBackground,
+    /// counts what makes a background result still out wrong (a clear, a measurement made here at once), a result
+    /// sent before is dropped; a new record does not count (in Run one comes nearly every frame, and every result
+    /// would be dropped). The setup files and SCPI count it too
     meas_n: u64,
-    meas_new: bool,
-    /// per channel: the measurement sent (`meas_env_sent`) and the one shown (`meas_env`) ran on min/max pairs
-    /// (`framestats::needs_samples` are then not available)
-    meas_env_sent: [bool; NCH],
-    meas_env: [bool; NCH],
-    /// the record a background measurement is wanted of (`meas_want`), when it must not be the newest at the time the
-    /// worker is free: with raw deep reads (deepmeas.rs) the newest is then often a pair record, held
-    meas_pending: Option<Record>,
     /// what choosing the Bus trigger switched on by itself (`set_trig_type`): the channels and whether the decoder; leaving
     /// Bus switches exactly those off again, what the user had on stays
     bus_auto: Option<([bool; NCH], bool)>,
-    /// STOP waiting for the hardware's final frame (docs/fork/stop-exact.md): the request number and until when
-    final_req: u64,
-    stop_final: Option<f64>,
+    /// STOP: the request for the hardware's final frame, and the records shown at the stop (docs/fork/stop-exact.md)
+    stop: acquire::Stop,
     toast: Option<(String, f64)>,
     pub(crate) dialog: Option<Vec<String>>,
-    /// System info page (sysinfo.rs): its rows while open (shown instead of the dialog lines), last refresh
-    sysinfo: Option<[Vec<sysinfo::Row>; 3]>,
-    sysinfo_t: f64,
+    /// System info page (sysinfo.rs)
+    sysinfo: sysinfo::Page,
     touch: TouchState,
-    /// zone being edited in the Zone menu; a "draw" action arms the next drag in the plot (zone, shape)
-    zone_sel: usize,
-    zone_arm: Option<(usize, bool)>,
-    /// screen path of the zone being drawn
-    zone_path: Vec<(i32, i32)>,
-    /// Persistent draw-a-box tool; independent of the corner zoom-display toggle.
-    zoom_arm: bool,
+    /// what the input keeps between two events: keys and fingers held, knob times, the zone path, the pinch (input.rs)
+    input: input::State,
+    /// the zoom box: armed, and the one being drawn (plot_layout.rs)
+    zoom_box: plot_layout::ZoomBox,
+    /// the zone trigger: the zone the menu edits, the drawing armed, the records dropped, the zone unit (hwzone.rs)
+    zone_trig: hwzone::ZoneTrig,
+    /// the fast path for the queued hardware frames: its trigger statistics, its share of a screen and its times
+    pub(crate) fast: acquire::FastPath,
+    /// segmented recording, in software and in the hardware (records.rs)
+    seg: records::Segments,
     /// XY cursors: the multipurpose knobs move the level pair (C, D), not the time pair (`cursor_knob`)
     cur_knob_level: bool,
-    /// screen corners of the zoom box being drawn
-    zoom_path: Vec<(i32, i32)>,
-    /// waveform rectangle and time base the zoom box started in: (rect, s/div, delay)
-    zoom_map: Option<(Rect, f32, f32)>,
-    /// records dropped by the zone condition
-    zone_drops: u64,
     /// the record the software zone filter refused last, as text for `:SYSTem:DEBug:ZONE?`
     pub(crate) zone_last: String,
-    /// the zone unit (hwzone.rs): latest reading, and a number raised to clear its counter
-    zone_hw: Option<crate::board::ZoneRead>,
-    zone_hw_clear: u64,
-    /// fast path frames by where the edge of the set direction was: at the hardware trigger point; further away with
-    /// an edge of the other direction at the point (the hardware fired on the wrong edge); further away with no edge at
-    /// the point (the point is off); none found. And the offsets of the last kind in samples: sum, largest
-    /// (`stat`, trigger.md 8)
-    pub fast_edges: [u64; 4],
-    pub fast_off: (f64, f64),
-    /// frames the fast path takes in one screen (`fast_max`), its time in the last screens (ms, smoothed) and that of
-    /// its two phases (placing, drawing; `:SYSTem:STATe?`)
-    pub fast_take: f32,
-    /// STOP: the software trigger of the record shown at the stop (s from the hardware trigger point), kept for the
-    /// records read again (`stop_replay`)
-    stop_ti_off: Option<f64>,
-    /// STOP: the raw record shown at the stop (the final frame of a deep or live-compressed record), and the min/max
-    /// pair record the thread read again for the view when that came as pairs. The pairs are drawn; the raw record
-    /// stays `last[0]`, the record measured and read out (`stop_replay`, docs/fork/stop-exact.md)
-    stop_raw: Option<Record>,
-    stop_pic: Option<Record>,
-    /// STOP: the view that holds the whole stored record, still to be asked of the hardware. The record shown at the
-    /// stop is the last one the screen took, and the memory of the hardware, which every view is read from, may hold
-    /// a later acquisition: that one is read whole first and is the record of the stop from then on (`stop_replay`).
-    /// With the time (`now`) after which it is no longer waited for
-    stop_whole: Option<((f64, f64), f64)>,
     /// STOP: the record shown was loaded from a session, with its samples. What the hardware has in its memory is
     /// another acquisition, so the STOP does not read that again in its place (`stop_replay`); RUN ends it
     loaded_record: bool,
-    pub t_fast: f32,
-    pub t_fast_ab: (f32, f32),
-    /// of the drawing: adding the collected frames to the maps (ms), frames a call (smoothed)
-    pub t_fast_fold: f32,
-    pub fast_n: f32,
-    /// the fast path's collected differences per channel (`fastdraw::diff_span`), zero between screens
-    acc_t: [Vec<u16>; NCH],
-    /// segmented recording: records since the acquisition started, and whether it ran in the last frame
-    seg_n: usize,
-    /// hardware segments: recording number told to the thread, its state, the segment shown (browsing), the trigger
-    /// times read back
-    seg_run: u64,
-    seg_view: Option<crate::wave::SegView>,
-    seg_pos: Option<usize>,
-    seg_times: Vec<Option<f64>>,
+    /// the acquisition ran in the last frame
     was_running: bool,
     /// analysers (analysis.rs)
     azr: analysis::State,
@@ -1107,20 +1042,17 @@ pub struct Ui {
     /// Reference named on the card that replaces the trigger card, and read by the DVM and the counter.
     offline_ref: usize,
     offline_hold: Option<offline::LiveHold>,
-    /// An external display is attached. Only then does "waveform on the external display" keep the panel bars in Full.
-    hdmi_present: bool,
+    /// the external display: whether one is attached and its size (windows.rs)
+    pub hdmi: windows::Hdmi,
     /// `render_waveform` is drawing the monitor's waveform area (Display > HDMI = Waveform): the frame has no bottom
     /// bar, and the drawing stops before the bars and menus
     wave_pass: bool,
-    /// the monitor's size while one is driven (main.rs), for `:SYSTem:STATe?`
-    pub hdmi_out: Option<(u32, u32)>,
     /// start-up screen (startup.rs) and the last start-up's result (About)
     pub start_up: Option<startup::StartScreen>,
     start_up_last: Option<oos_hal::bootstatus::View>,
     /// signed updates (update.rs): running oos-update job, watcher notice
     upd: update::UpdateUi,
     wlan: wlan::WlanUi,
-    pinch: Pinch,
     mstat: Vec<MStat>,
     /// past values of each measurement row
     trend: Vec<panes::Trend>,
@@ -1131,12 +1063,8 @@ pub struct Ui {
     stats_on: bool,
     /// measurement results overlay folded to its header
     results_min: bool,
-    /// Eye page: the right column slides from `eye_from` to `eye_to` (0 hidden, 1 shown), starting at `eye_t`.
-    eye_from: f32,
-    eye_to: f32,
-    eye_t: f64,
-    /// Which of the four eye-page plots fills the chart area.
-    eye_big: Option<u8>,
+    /// Eye page: its right column, sliding, and the plot that fills the chart area (eyepage.rs)
+    eye_col: eyepage::Column,
     /// Clear pressed: the screen stays empty (also in STOP) until the next record
     cleared: bool,
     refs: [Option<RefWave>; NREF],
@@ -1172,20 +1100,16 @@ pub struct Ui {
     xy_src: [usize; 2],
     /// the histogram's own channel (the Add panel sets it; None follows the measurement source)
     hist_ch: Option<usize>,
-    knob_t: [f64; 16],
     pub now: f64,
-    /// the trigger level last seen and when it changed: the level line shows for `LEVEL_LINE_S` after a change (knob,
-    /// touch, remote), so the level can be followed while it moves
-    level_seen: (f32, f32),
-    level_changed: f64,
+    /// what the step saw last: the trigger level and its change, the last record and the usual interval (acquire.rs)
+    seen: acquire::Seen,
     pub frames: u64,
     /// records taken in, for the state line
     pub records: u64,
     /// auto set-up under way on the hardware (autoset.rs)
     auto: Option<autoset::AutoRun>,
-    operation_serial: u64,
-    scpi_completed: std::collections::VecDeque<OperationToken>,
-    single_operation: u64,
+    /// the jobs a remote command can wait for: their numbers and the receipts of the finished ones (scpi_operations.rs)
+    ops: scpi_operations::Ledger,
     /// when the bar of views after an auto set-up came up (ui/autoset.rs)
     auto_bar: Option<f64>,
     /// request number of the last `:DEBug:SLOTs?`
@@ -1195,16 +1119,8 @@ pub struct Ui {
     pub wfm_rate: f32,
     /// every waveform acquired since the start (Clear resets it)
     pub wfm_total: u64,
-    /// IPv4 address shown in the top bar ("" = no network)
-    pub net: String,
-    /// its interface (eth0, wlan0)
-    pub net_if: String,
-    /// all interfaces with an address: name, address
-    pub net_ifs: Vec<(String, String)>,
-    /// no DHCP answer at the start: the fixed address of rcS
-    pub net_fixed: bool,
-    /// a WLAN stick is plugged in (its interface exists)
-    wlan_stick: bool,
+    /// the network as the main loop last read it: the addresses, the LAN link, the WLAN stick (wlan.rs)
+    pub net: wlan::Network,
     /// a mouse and a keyboard (USB or Bluetooth): the pointer and the modifier keys (ui/pointer.rs)
     pub mouse: pointer::Mouse,
     /// the desktop build: what its loopback services say (desktop/lan.rs), shown in Network > Ports
@@ -1216,10 +1132,6 @@ pub struct Ui {
     /// System > Overclock: limits.conf and the ADC clock of the next start (overclock.rs)
     pub limits_path: String,
     clock_next: f64,
-    /// a cable in the LAN port with a link
-    pub eth_link: bool,
-    /// one more autonegotiation for a link at 10 Mbit/s; the main loop drives it (ethlink.rs)
-    pub eth: crate::ethlink::Retry,
     /// settings of the scope itself (sysconf.rs); written to `sys_path` (none in tests: nothing written)
     pub sys: crate::sysconf::SysConf,
     pub sys_path: Option<std::path::PathBuf>,
@@ -1233,16 +1145,8 @@ pub struct Ui {
     pub(crate) times: acquire::FrameTimes,
     pub info: String,
     pub dirty_map: bool,
-    vmax: [u32; NCH],
-    /// brightest pixel of the merged maps (colour grade), main / zoom view
-    vmax_cg: u32,
-    vmaxz_cg: u32,
-    /// minimum persistence: frames in the picture on screen, and the brightest pixel per frame behind `vmax`, `vmaxz`,
-    /// `vmax_cg`, `vmaxz_cg` (`picture_ref`)
-    pic_frames: u32,
-    per_frame: [u32; NCH],
-    per_framez: [u32; NCH],
-    per_frame_cg: [u32; 2],
+    /// the counts the traces are graded against (render.rs)
+    grade: render::Grade,
     /// storage directory (setups, CSV, PNG), created when missing
     pub store_dir: std::path::PathBuf,
     /// Auto / USB stick / desktop for waveform, mask and screenshot files
@@ -1257,11 +1161,6 @@ pub struct Ui {
     view_pass: bool,
     /// a USB stick is mounted
     usb: bool,
-    /// a channel key held on the front panel: channel, since when, and whether it was long enough for AC/DC already
-    /// (`panel_key`)
-    ch_hold: Option<(usize, f64, bool)>,
-    /// a finger on the card of a channel that is on, since when (a long touch: AC/DC, as the key)
-    card_hold: Option<(usize, f64)>,
     /// LA probe detect: None = not known (no hardware, not read yet)
     la_probe: Option<bool>,
     usb_check: f64,
@@ -1297,10 +1196,6 @@ pub struct Ui {
     /// power dialog open (power key)
     pub power_dlg: bool,
     pub power_action: Option<PowerAction>,
-    /// time of the last record (UI clock), for the WAIT status
-    last_rec_t: f64,
-    /// smoothed time between two records (deep hardware records arrive about once per second)
-    rec_iv: f64,
     /// hex entry of the keypad picker (protocol trigger value)
     keypad: String,
     /// the numeric entry pad of the Studio sheets (ui/numpad.rs); its text is `keypad`
@@ -1370,18 +1265,18 @@ impl Ui {
         self.bus_views_clear();
         self.ph.clear();
         self.phz.clear();
-        (self.vmax, self.vmaxz, self.vmax_cg, self.vmaxz_cg) = ([1; NCH], [1; NCH], 1, 1);
+        (self.grade.vmax, self.grade.vmaxz, self.grade.vmax_cg, self.grade.vmaxz_cg) = ([1; NCH], [1; NCH], 1, 1);
         // without a last record there is nothing to redraw in STOP, average with, compute math / decode / search on
         self.last[0] = None;
         self.hist_pos = None;
         self.cleared = true;
         self.stats = [Stats::default(); NCH];
         // a measurement still out, or a record waiting for the worker, belongs to what was cleared away
-        (self.meas_n, self.meas_want, self.meas_pending) = (self.meas_n + 1, false, None);
+        (self.meas_n, self.meas_bg.want, self.meas_bg.pending) = (self.meas_n + 1, false, None);
         self.ana = Default::default();
         self.clear_measurement_statistics();
         self.mask_counts_reset();
-        (self.zone_drops, self.zone_hw_clear) = (0, self.zone_hw_clear + 1);
+        (self.zone_trig.drops, self.zone_trig.clear) = (0, self.zone_trig.clear + 1);
         self.hw_avg_restart();
         self.toast("Display cleared");
     }
@@ -1438,9 +1333,16 @@ impl Ui {
         }
         let s = self.stats[self.m.trig_src];
         if s.valid {
-            // the middle of the signal, counted from where the trigger counts (its mean with AC coupling: the
-            // middle in volts was a level the signal without its DC part never reached)
-            self.m.trig_level = crate::wave::mid_level(&s) - self.trig_level_base();
+            // with AC or LF-reject coupling the trigger compares the source without its mean, and its level counts from
+            // there: halfway through the signal is the middle less the mean. The middle itself sat above the whole
+            // swing of a signal that does not cross 0 V (0 to 3.3 V: 1.65 V over a mean of 1.65 V), and the trigger
+            // did not fire (#279)
+            let src = self.m.trig_src.min(NCH - 1);
+            let mean = self.last[0].as_ref().map_or(0.0, |r| match r.raw.as_ref() {
+                Some(raw) => crate::wave::trig_mean(&self.m, &raw.frame.ch[src]),
+                None => crate::wave::trig_mean(&self.m, &r.ch[src]),
+            });
+            self.m.trig_level = crate::wave::mid_level(&s) - mean;
             self.settings_changed();
         }
     }
@@ -1735,6 +1637,8 @@ fn chevron(cv: &mut Canvas, x: i32, y: i32, dir: i32, col: Rgb) {
 mod acquisition_tests;
 #[cfg(test)]
 mod menu_tests;
+#[cfg(test)]
+mod stop_tests;
 #[cfg(test)]
 mod tests;
 

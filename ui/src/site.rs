@@ -11,6 +11,7 @@ use crate::gfx::Canvas;
 use crate::scpi::Scpi;
 use crate::shots::Live;
 use crate::ui::Ui;
+use oos_remote::http::Body;
 use std::net::TcpStream;
 
 /// What an answer of the web server may use: the screen, its last picture, the SCPI interpreter and the live picture,
@@ -50,7 +51,7 @@ impl oos_remote::http::Site for Ctx<'_> {
         if let Some(live) = self.live {
             live.tick(self.cv);
         }
-        mcp::expire_file(self.scpi);
+        mcp::expire_files(self.scpi);
     }
 
     /// The live picture answers it; 503 without one (tests that ask for no picture).
@@ -66,12 +67,12 @@ impl oos_remote::http::Site for Ctx<'_> {
         crate::cmd::remote_ok(line)
     }
 
-    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp, /mcp and /mcp/waveform.csv.
-    fn answer(&mut self, route: &str, post: bool, body: &[u8]) -> Option<(&'static str, Vec<u8>, bool)> {
-        let ok = |ctype: &'static str, b: Vec<u8>| Some((ctype, b, false));
+    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp, /mcp and /mcp/waveform/<file>.
+    fn answer(&mut self, route: &str, post: bool, body: &[u8]) -> Option<(&'static str, Body, bool)> {
+        let ok = |ctype: &'static str, b: Vec<u8>| Some((ctype, Body::Now(b), false));
         let file = |ctype: &'static str, r: Result<Vec<u8>, String>| match r {
-            Ok(b) => Some((ctype, b, false)),
-            Err(e) => Some(("text/plain", e.into_bytes(), true)),
+            Ok(b) => Some((ctype, Body::Now(b), false)),
+            Err(e) => Some(("text/plain", Body::Now(e.into_bytes()), true)),
         };
         let ui = &mut *self.ui;
         match route {
@@ -84,22 +85,28 @@ impl oos_remote::http::Site for Ctx<'_> {
             "/update" if post => match ui.update_upload(body) {
                 Ok(m) => ok("text/plain", m.into_bytes()),
                 // refused: the body says why (409, #205)
-                Err(e) => Some(("text/plain", format!("REFUSED: {}", e).into_bytes(), true)),
+                Err(e) => Some(("text/plain", Body::Now(format!("REFUSED: {}", e).into_bytes()), true)),
             },
-            "/screen.bmp" => ok("image/bmp", crate::scpi::bmp(self.cv)),
-            "/mcp/waveform.csv" if !post => file("text/csv; charset=utf-8", waveform_csv(ui, self.scpi)),
+            // the screen copied here, encoded on a sender thread
+            "/screen.bmp" => {
+                let shot = snapshot(self.cv);
+                Some(("image/bmp", Body::Later(Box::new(move || crate::scpi::bmp(&shot))), false))
+            }
+            _ if !post && route.starts_with("/mcp/waveform/") => {
+                let name = &route["/mcp/waveform/".len()..];
+                file("text/csv; charset=utf-8", waveform_csv(ui, self.scpi, name))
+            }
             "/mcp" => match mcp(&String::from_utf8_lossy(body), self) {
-                Some(r) => ok("application/json", r.into_bytes()),
+                Some(b) => Some(("application/json", b, false)),
                 None => ok("", Vec::new()),
             },
             _ => None,
         }
     }
 
-    /// The state as `oos-update status --quick` gives it, and the result of the last upload.
-    fn update_state(&mut self) -> (String, String) {
-        let (status, last) = self.ui.update_state();
-        (status, last.to_string())
+    /// `Ui::update_status` (run by the server on a thread of its own), and the result of the last upload.
+    fn update_state(&mut self) -> (fn() -> String, String) {
+        (Ui::update_status, self.ui.update_last().to_string())
     }
 
     /// `Ui::waveform_epoch`.
@@ -134,6 +141,13 @@ impl oos_remote::http::Site for Ctx<'_> {
             }
         }
     }
+}
+
+/// A copy of the screen's pixels, to be encoded off the frame loop.
+fn snapshot(cv: &Canvas) -> Canvas {
+    let mut shot = Canvas::new(cv.w, cv.h);
+    shot.px.copy_from_slice(&cv.px);
+    shot
 }
 
 mod mcp;

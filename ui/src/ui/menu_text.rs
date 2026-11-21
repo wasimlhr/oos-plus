@@ -24,6 +24,17 @@ impl Ui {
                 "Run simulation"
             };
         }
+        // the rows of a search are named after their role in its type, as the trigger's are below
+        if let Some(sp) = self.studio.search() {
+            match it {
+                Item::SrchSlope if super::addrail::polar(sp.kind) => return "Polarity",
+                Item::SrchSlope if sp.kind == TrigType::Window => return "Position",
+                Item::SrchLevel if sp.kind.two_level() => return "Upper",
+                Item::SrchTime if sp.kind == TrigType::Timeout => return "Timeout",
+                Item::SrchTime if matches!(sp.when, WhenKind::In | WhenKind::Out) && !sp.eq => return "Lower limit",
+                _ => {}
+            }
+        }
         let t = self.m.trig_type;
         let two_level = matches!(t, TrigType::Slope | TrigType::Runt | TrigType::Window);
         match it {
@@ -593,11 +604,11 @@ impl Ui {
             Item::Traces => if self.trace_stacked() { "Stacked" } else { "Overlay" }.into(),
             Item::Hdmi => format!("{:?}", m.hdmi),
             Item::TextSize => m.text_size.name().into(),
-            Item::ZoneSel => format!("Z{}", self.zone_sel + 1),
-            Item::ZoneOn => onoff(m.zones[self.zone_sel].on),
-            Item::ZoneSrc => format!("CH{}", m.zones[self.zone_sel].src + 1),
+            Item::ZoneSel => format!("Z{}", self.zone_trig.sel + 1),
+            Item::ZoneOn => onoff(m.zones[self.zone_trig.sel].on),
+            Item::ZoneSrc => format!("CH{}", m.zones[self.zone_trig.sel].src + 1),
             Item::ZoneMode => {
-                if m.zones[self.zone_sel].inside {
+                if m.zones[self.zone_trig.sel].inside {
                     "Intersect".into()
                 } else {
                     "Not intersect".into()

@@ -285,12 +285,19 @@ pub struct Scpi {
     replay: Option<Box<replay::Replay>>,
     /// The command that runs is one of that file, not a client's: `replay::file_refuses` says what it may not send.
     from_file: bool,
-    /// The CSV of the last MCP `waveform` call and when it was made, served as `GET /mcp/waveform.csv` for
-    /// `site::mcp::FILE_TTL` (site/mcp.rs).
-    pub(crate) mcp_file: Option<(std::time::Instant, Vec<u8>)>,
+    /// The CSV files of the last MCP `waveform` calls (at most `site::mcp::FILES_MAX`), each with its name and when
+    /// it was made, served as `GET /mcp/waveform/<name>` for `site::mcp::FILE_TTL` (site/mcp.rs).
+    pub(crate) mcp_files: Vec<(String, std::time::Instant, Vec<u8>)>,
+    /// The calls of `waveform` so far, the number in the name of each file.
+    pub(crate) mcp_calls: u32,
 }
 
 pub(crate) use crate::words::{e, kw, nearest_index, num, parse_bool};
+
+/// The answer of a query that is the text `s`, as the subsystems return it.
+fn t(s: &str) -> Option<Vec<u8>> {
+    Some(s.as_bytes().to_vec())
+}
 
 /// Splits a keyword with a numeric suffix: "CHAN2" -> ("CHAN", 2).
 pub(crate) fn suffix(tok: &str) -> (&str, Option<usize>) {
@@ -392,28 +399,15 @@ impl Scpi {
             rec_last: Vec::new(),
             replay: None,
             from_file: false,
-            mcp_file: None,
+            mcp_files: Vec::new(),
+            mcp_calls: 0,
         }
     }
 
     fn bind(port: u16) -> Option<TcpListener> {
-        let l = Self::bind_quietly(port);
+        let l = crate::net6::tcp_service(port, "SCPI");
         if l.is_none() {
             eprintln!("oos-ui: SCPI port {} not available", port);
-        }
-        l
-    }
-
-    /// `bind` without the message when the port is taken.
-    fn bind_quietly(port: u16) -> Option<TcpListener> {
-        let l = crate::net6::tcp(port);
-        if let Some(l) = &l {
-            let _ = l.set_nonblocking(true);
-            eprintln!(
-                "oos-ui: SCPI on port {}{}",
-                port,
-                if l.local_addr().is_ok_and(|a| a.is_ipv6()) { " (IPv4 and IPv6)" } else { "" }
-            );
         }
         l
     }
@@ -424,7 +418,7 @@ impl Scpi {
         if self.l.is_some() {
             return false;
         }
-        self.l = Self::bind_quietly(port);
+        self.l = crate::net6::tcp_service(port, "SCPI");
         self.l.is_some()
     }
 
@@ -547,7 +541,8 @@ impl Scpi {
                     let line: Vec<u8> = self.clients[i].buf.drain(..=p).collect();
                     self.clients[i].program = Some(Program::new(&String::from_utf8_lossy(&line)));
                 }
-                let mut program = self.clients[i].program.take().unwrap();
+                // there is one: kept from before, or made from the line just taken
+                let Some(mut program) = self.clients[i].program.take() else { break };
                 let Some(mut response) = self.poll_program(ui, cv, &mut program) else {
                     // after the end of the input a program that would have to wait is dropped, and no later line runs
                     if eof {

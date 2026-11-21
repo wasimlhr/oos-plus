@@ -14,10 +14,7 @@
 //! a module next to `dho`, implements `Board` for it, and gives `Active` and `board()` a line for its name.
 
 pub mod dho;
-mod record;
-
-pub use record::resample as resample_record;
-pub use record::{sw_trig_level, to_record, trigger_point};
+pub mod policy;
 
 use crate::model::{Coupling, GenCh, Model, NCH, NGEN};
 use std::sync::{Arc, Mutex};
@@ -370,6 +367,9 @@ pub struct MaskRead {
     pub chans: u32,
 }
 
+/// What the UI wants of raw reads of deep records for the measurements (`Shared::deep_raw`; None: off).
+pub type DeepWant = Option<policy::deep::Want>;
+
 /// Shared between UI and the acquisition thread: the settings the UI wants, the latest frame, a status line.
 #[derive(Default)]
 pub struct Shared {
@@ -385,9 +385,6 @@ pub struct Shared {
     /// STOP: the view the UI shows (time per div, delay); the thread acquires nothing and reads the last record again
     /// for it when it changes, into `replay` (`hw::stop_window`)
     pub stop_view: Option<(f64, f64)>,
-    /// STOP: the view asked for is the stored record as a whole, wanted at every sample (`hw::whole_plan`), not as
-    /// the view of the screen that happens to hold all of it
-    pub stop_whole: bool,
     pub replay: Option<Frame>,
     /// frames decoded, and those dropped from the queue unseen because the screen fell behind (`:SYSTem:STATe?`)
     pub decoded: u64,
@@ -437,7 +434,7 @@ pub struct Shared {
     /// the UI reads records the model does not tell the board about (protocol watch, XY): no live compression
     pub needs_raw: bool,
     /// raw reads of deep records for the measurements, as the UI wants them (deepmeas.rs; None: off)
-    pub deep_raw: Option<crate::deepmeas::Want>,
+    pub deep_raw: DeepWant,
     /// the FPGA's mask unit: wanted by the UI (None: off), the latest reading
     pub mask_want: Option<MaskWant>,
     pub mask: Option<MaskRead>,
