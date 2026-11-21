@@ -963,6 +963,8 @@ pub(super) struct AddEntry {
     pub cat: Cat,
     pub name: &'static str,
     pub group: usize,
+    /// the heading of its group on the Measure page (AMPLITUDE, TIMING, ...)
+    pub section: &'static str,
 }
 
 /// What a row of the add list says about its measurement right now.
@@ -986,10 +988,10 @@ pub(super) fn add_categories() -> impl Iterator<Item = &'static str> {
 pub(super) fn add_entries() -> Vec<AddEntry> {
     let mut v: Vec<AddEntry> = Vec::new();
     for tab in 0..CATEGORIES.len() as u8 {
-        for (_, items) in tab_groups(tab) {
+        for (section, items) in tab_groups(tab) {
             for cat in items.iter() {
                 if !v.iter().any(|e| e.group == tab as usize && e.cat.id == cat.id) {
-                    v.push(AddEntry { cat, name: cat.name, group: tab as usize });
+                    v.push(AddEntry { cat, name: cat.name, group: tab as usize, section });
                 }
             }
         }

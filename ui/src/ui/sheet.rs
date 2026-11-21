@@ -1339,19 +1339,24 @@ impl Ui {
         let (cat_minus, cat_value, cat_plus) = Self::value_parts(Rect::new(r.x + PAD, y0 + 46, w - 76 - 6, 44));
         let list_y = y0 + 94;
         // a grid of tiles, two across: a picture and a name each
-        let fit = Self::tile_fit(self.tiles_avail(list_y));
-        let entries = self.sheet_add_entries();
-        let _ = fit;
         // the grid scrolls inside its category: no pages, no pager
         let list = Rect::new(r.x + PAD, list_y, w, r.bottom() - 8 - list_y);
-        let scroll = self.studio.md.tile_scroll.clamp(0, self.tile_scroll_max_of(entries.len(), list.h));
-        let rows: Vec<(usize, Rect)> = (0..entries.len())
-            .map(|k| (k, Self::tile_rect(Rect::new(list.x, list.y - scroll, list.w, list.h), k)))
+        let (tiles, heads, total) = self.add_layout(list);
+        let scroll = self.studio.md.tile_scroll.clamp(0, self.tile_scroll_max_of(total, list.h));
+        let rows: Vec<(usize, Rect)> = tiles
+            .into_iter()
+            .enumerate()
+            .map(|(k, t)| (k, Rect::new(t.x, t.y - scroll, t.w, t.h)))
             .filter(|(_, t)| t.bottom() > list.y && t.y < list.bottom())
+            .collect();
+        let heads: Vec<(Rect, &'static str)> = heads
+            .into_iter()
+            .map(|(r, n)| (Rect::new(r.x, r.y - scroll, r.w, r.h), n))
+            .filter(|(r, _)| r.bottom() > list.y && r.y < list.bottom())
             .collect();
         let none = Rect::new(0, 0, 0, 0);
         let cat_rows = (0..super::meascatalog::add_categories().count()).map(|i| Rect::new(list.x, list.y + i as i32 * 48, list.w, 44)).collect();
-        AddGeo { chips, cat_minus, cat_value, cat_plus, cat_rows, find, rows, page: 0, pages: 1, prev: none, next: none, list }
+        AddGeo { chips, cat_minus, cat_value, cat_plus, cat_rows, find, rows, heads, page: 0, pages: 1, prev: none, next: none, list }
     }
 
     /// The button beside the close button of the quick Add panel: it opens the Measure page of every layout, with
@@ -1414,6 +1419,9 @@ impl Ui {
         for &(k, tile) in &g.rows {
             self.draw_add_tile(cv, tile, entries[k].cat);
         }
+        for &(r, name) in &g.heads {
+            cv.text_in(&f.s, Rect::new(r.x + 4, r.y, r.w - 8, r.h), 0, name, DIM);
+        }
         cv.no_clip();
         if self.sheet.add_cats {
             // the list of the categories, over the tiles
@@ -1425,7 +1433,7 @@ impl Ui {
             }
         }
         // a scrollbar, since there is no pager
-        let total = entries.len().div_ceil(super::addtiles::TILE_COLS as usize) as i32 * super::addtiles::TILE_H;
+        let total = self.add_layout(g.list).2;
         if total > g.list.h {
             let (x, th) = (g.list.right() - 3, (g.list.h * g.list.h / total).max(20));
             let ty = g.list.y + (g.list.h - th) * self.studio.md.tile_scroll.clamp(0, (total - g.list.h).max(1)) / (total - g.list.h).max(1);
@@ -1575,6 +1583,8 @@ pub(super) struct AddGeo {
     pub cat_rows: Vec<Rect>,
     pub find: Rect,
     pub rows: Vec<(usize, Rect)>,
+    /// the headings of the groups between the tiles
+    pub heads: Vec<(Rect, &'static str)>,
     #[allow(dead_code)] // the page geometry is complete; touches use only `pages` so far
     pub page: usize,
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
