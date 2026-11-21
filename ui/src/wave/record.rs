@@ -6,6 +6,7 @@
 
 use crate::board::Frame;
 use crate::model::*;
+use crate::platform::Platform;
 use std::sync::Arc;
 
 /// The level the software trigger looks for on the samples of the source: the set level, and with AC or LF-reject
@@ -50,7 +51,7 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
     // the hardware trigger already put the event near `pre`: look a tenth of a screen around it, plus the time the
     // trigger condition needs before its decision (pulse widths, timeouts, Nth-edge idle time)
     let near = (screen / 10).max(2000);
-    let span = (m.trig_span() / f.dt).ceil().max(0.0) as usize;
+    let span = (crate::trig::span(m) / f.dt).ceil().max(0.0) as usize;
     // the protocol trigger reads frames: one whose field stands near the hardware point is read to its end, a frame
     // further. A decoder gives nothing of a frame that is cut off (CAN: seen on a unit, an identifier at the trigger
     // point was found only in frames that ended within a tenth of a screen after it)
@@ -404,7 +405,7 @@ mod tests {
             // (its baud rate, bits ...: the traffic is made for them)
             crate::ui::Ui::dec_apply_rows(&mut m, p.setup().rows);
             // 50 samples a bit and 400 000 of them or more: the search region is 2000 samples each way
-            let dt = m.bus_bit() / 50.0;
+            let dt = crate::protocols::Decoder::bus_bit(&m) / 50.0;
             let n = ((3.0 * d.period / dt) as usize).clamp(400_000, 3_000_000);
             let ch: [Vec<f32>; NCH] = std::array::from_fn(|k| match &d.lines[k] {
                 Some(f) => (0..n).map(|j| f((j as f64 * dt).rem_euclid(d.period)) as f32).collect(),
@@ -412,7 +413,7 @@ mod tests {
             });
             let lines: [&[f32]; NCH] = std::array::from_fn(|k| &ch[k][..]);
             let pk = crate::trig::decode(&m, lines, dt).unwrap_or_else(|e| panic!("{}: {e}", p.name()));
-            let (window, span) = (20_000.0 * dt, m.trig_span() / dt);
+            let (window, span) = (20_000.0 * dt, crate::trig::span(&m) / dt);
             let inside = |t: f64| t > 60_000.0 && t < n as f64 - 60_000.0 - span;
             let found = |m: &Model, t: f64| {
                 let f = Arc::new(Frame { seq: 1, dt, pre: t.round() as usize, ch: ch.clone(), ..Default::default() });
@@ -700,7 +701,7 @@ mod bench {
             for _ in 0..n {
                 let t0 = std::time::Instant::now();
                 let ti =
-                    crate::fastdraw::edge_near(&fr.ch[0], fr.pre, 0.0, 0.0, true, false, 16).unwrap_or(fr.pre as f64);
+                    oos_dsp::edges::edge_near(&fr.ch[0], fr.pre, 0.0, 0.0, true, false, 16).unwrap_or(fr.pre as f64);
                 let xm = crate::fastdraw::Map {
                     ti,
                     x_per_sample: dt / window * 970.0,

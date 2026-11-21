@@ -64,7 +64,7 @@ impl Ui {
     /// The row's own analysis settings (levels, base / top, outside level, gate), if it has any.
     pub(in crate::ui) fn own_params(&self, kind: Meas, owner: WaveId) -> Option<MeasOwn> {
         let cfg = self.row_cfg_one(kind, owner);
-        let legacy = self.meas_own.get(&(kind, owner)).copied().filter(|own| {
+        let legacy = self.meas_own.rows.get(&(kind, owner)).copied().filter(|own| {
             own.refs_set
                 || (kind == Meas::Burst && own.idle_set)
                 || (kind == Meas::Outside && own.side_set)
@@ -104,7 +104,7 @@ impl Ui {
         if !applies {
             return None;
         }
-        let shared = self.meas_own.get(&(kind, owner)).copied().unwrap_or_else(|| MeasOwn::shared(&self.m));
+        let shared = self.meas_own.rows.get(&(kind, owner)).copied().unwrap_or_else(|| MeasOwn::shared(&self.m));
         let (idle, side, n, data) = (
             if shared.idle_set { shared.idle } else { self.m.meas_idle },
             if shared.side_set { shared.side } else { self.m.meas_out },
@@ -441,7 +441,7 @@ mod tests {
     fn custom(ui: &mut Ui, kind: Meas, low: f64, high: f64) {
         let id = WaveId::Ref(0);
         ui.m.meas.push((kind, id));
-        ui.meas_own.insert((kind, id), MeasOwn { refs_set: true, low, high, ..MeasOwn::shared(&ui.m) });
+        ui.meas_own.rows.insert((kind, id), MeasOwn { refs_set: true, low, high, ..MeasOwn::shared(&ui.m) });
     }
 
     fn wait(ui: &mut Ui, kinds: &[Meas]) -> Vec<f64> {
@@ -468,7 +468,7 @@ mod tests {
         assert_eq!(ui.meas_rows()[0].v, time);
         assert_eq!(ui.set_cell(Meas::TVmax, 0), time);
         assert!(!ui.meas_rows()[0].computing);
-        assert_eq!((ui.records, ui.wfm_total), (0, 0));
+        assert_eq!((ui.counts.records, ui.counts.wfm_total), (0, 0));
     }
 
     #[test]
@@ -492,7 +492,7 @@ mod tests {
         }
         assert_eq!(ui.azr.ref_measure_worker.borrow().as_ref().unwrap().submitted, submitted);
         assert_eq!(ui.azr.own_measure.borrow().cached.len(), 2);
-        assert_eq!((ui.m.run, ui.records, ui.wfm_total), (RunState::Stop, 0, 0));
+        assert_eq!((ui.m.run, ui.counts.records, ui.counts.wfm_total), (RunState::Stop, 0, 0));
     }
 
     #[test]
@@ -504,8 +504,8 @@ mod tests {
         ui.m.meas_full_record = false;
         ui.m.tscale = tscales().iter().position(|&v| (v - 50e-6).abs() < 1e-10).unwrap();
         ui.m.delay = 0.0013;
-        ui.meas_own.get_mut(&(Meas::Rise, WaveId::Ref(0))).unwrap().low = 0.2;
-        ui.meas_own.get_mut(&(Meas::Rise, WaveId::Ref(0))).unwrap().high = 0.8;
+        ui.meas_own.rows.get_mut(&(Meas::Rise, WaveId::Ref(0))).unwrap().low = 0.2;
+        ui.meas_own.rows.get_mut(&(Meas::Rise, WaveId::Ref(0))).unwrap().high = 0.8;
         let original = ui.refs[0].as_ref().unwrap().v.clone();
         ui.refs[0].as_mut().unwrap().v = original;
         ui.workflow_epoch = ui.workflow_epoch.wrapping_add(1);

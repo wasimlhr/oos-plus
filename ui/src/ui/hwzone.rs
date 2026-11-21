@@ -31,7 +31,7 @@ impl Ui {
             && self.src.is_hw()
             && self.zone_hw_src().is_some_and(|c| self.m.ch[c].on)
             && !self.mask_hw_active()
-            && self.unit_blocked.is_none()
+            && self.mask_unit.blocked.is_none()
     }
 
     /// The one source channel of the usable zones; None without usable zones or with zones on different channels.
@@ -56,8 +56,9 @@ impl Ui {
     /// Fork, `:SYSTem:DEBug:ZONE?`: the zone unit's raw status and counter next to the software filter and the frame
     /// counters of the pipeline (docs/fork/hwzone.md).
     pub fn zone_debug_text(&self) -> String {
-        let (acq, used, _) = crate::drawpipe::counters().read();
-        let sw = format!("sw_drops={},acquired={},used={},records={},last_drop=[{}]", self.zone_trig.drops, acq, used, self.records, self.zone_last);
+        let (acq, used, _) = crate::board::pipe::counters().read();
+        let sw =
+            format!("sw_drops={},acquired={},used={},records={},last_drop=[{}]", self.zone_trig.drops, acq, used, self.counts.records, self.zone_last);
         let Some(r) = self.zone_trig.unit else {
             return format!("off,enabled={},active={},{}", board().zone_hw() as u8, self.zone_hw_active() as u8, sw);
         };

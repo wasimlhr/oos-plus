@@ -20,7 +20,7 @@ fn read(refs: &[(Vec<f32>, f64)], id: u16, prep: &dyn Fn(&mut Ui)) -> (f64, Stri
         let t0 = -0.5 * v.len() as f64 * dt;
         u.refs[r] = Some(RefWave { src: 0, color: r, label: String::new(), t0, dt: *dt, v: v.clone().into(), vpd: 1.0, offset: 0.0, on: true });
     }
-    (u.meas_src, u.meas_src_b, u.cat.c, u.cat.d) = (WaveId::Ref(0), WaveId::Ref(1), WaveId::Ref(2), WaveId::Ref(3));
+    (u.sources.a, u.sources.b, u.cat.c, u.cat.d) = (WaveId::Ref(0), WaveId::Ref(1), WaveId::Ref(2), WaveId::Ref(3));
     prep(&mut u);
     for _ in 0..3 { u.step(0.04); }
     let def = crate::measures::all().map(|(_, d)| d).find(|d| d.id == id).unwrap();

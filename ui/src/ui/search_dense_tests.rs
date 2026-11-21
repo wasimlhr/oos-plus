@@ -98,7 +98,7 @@ fn events_too_close_to_tell_apart_are_a_strip_at_the_top_and_leave_the_plot_alon
     let (before, cv) = with_search(&mut u);
     assert_eq!(u.studio_search_events().len(), 64_000, "every edge of the record");
     shot(&cv, "dense-search");
-    let a = u.area;
+    let a = u.plot.area;
     // (in the colour of Search 1, which is no channel's: two searches of one channel are told apart)
     let col = super::addrail::SEARCH_COLS[0];
     // the strip: every column of the plot holds events
@@ -121,7 +121,7 @@ fn events_far_enough_apart_keep_their_mark_and_line() {
     for _ in 0..4 { u.step(0.05); }
     let (before, cv) = with_search(&mut u);
     shot(&cv, "sparse-search");
-    let a = u.area;
+    let a = u.plot.area;
     // 50 ns on the screen: an edge every 12.5 ns, a quarter of the width apart
     let lines: Vec<i32> = (a.x..a.right())
         .filter(|&x| (a.y + 20..a.bottom()).filter(|&y| px(&cv, x, y) != before[(y * W + x) as usize]).count() > 20)
@@ -139,7 +139,7 @@ fn the_search_sheet_opens_the_list_of_events_and_the_list_names_the_search() {
     assert_eq!(spec.tabs[0].foot, vec![Item::SearchTable, Item::SrchRemove]);
     assert!(spec.tabs[0].rows.len() <= 7);
     u.activate(Item::SearchTable);
-    assert_eq!(u.table, Some(tables::TableKind::Search));
+    assert_eq!(u.table.kind, Some(tables::TableKind::Search));
     assert!(!u.menu_open, "the sheet makes room for the list");
     for _ in 0..4 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
@@ -158,10 +158,10 @@ fn the_search_sheet_opens_the_list_of_events_and_the_list_names_the_search() {
     u.m.trig_src = 0;
     assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 64000");
     // the last rows are reached
-    u.table_top = 63_990;
+    u.table.top = 63_990;
     u.render(&mut cv);
     u.activate(Item::SearchTable);
-    assert_eq!(u.table, None, "the same button closes it");
+    assert_eq!(u.table.kind, None, "the same button closes it");
 }
 
 #[test]
@@ -176,13 +176,13 @@ fn the_count_says_when_the_search_is_of_a_part_of_the_record_or_ended_at_its_lim
     let mut u = dense_of(375_000, (1.25e9, 1_000_000));
     u.studio_search_add(Some(WaveId::Ch(1)));
     assert!(text(&u).ends_with("24000 in 300 \u{b5}s"), "{}", text(&u));
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 24000 in 300 \u{b5}s of 800 \u{b5}s");
     // more events than the search keeps
     let mut u = dense_of(2_000_000, (0.0, 0));
     u.studio_search_add(Some(WaveId::Ch(1)));
     assert_eq!(u.studio_search_events().len(), super::addrail::SEARCH_MAX);
     assert!(text(&u).contains("\u{b7} 100000+"), "{}", text(&u));
-    u.table = Some(tables::TableKind::Search);
+    u.table.kind = Some(tables::TableKind::Search);
     assert_eq!(u.table_title(), "Search 1 \u{b7} CH2 \u{b7} 100000+");
 }

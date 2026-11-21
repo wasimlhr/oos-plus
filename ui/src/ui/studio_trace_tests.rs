@@ -62,13 +62,13 @@ fn overlay_is_one_graticule_of_the_full_height_and_stacked_a_lane_per_source() {
     assert_eq!(sources, vec![Trace::Channel(0), Trace::Channel(1), Trace::Reference(0), Trace::Math(0)]);
     u.trace_mode(true);
     picture(&mut u, "stacked");
-    assert_eq!(u.wins.len(), sources.len(), "a lane per source");
-    let (top, bottom) = (u.wins[0].y, u.wins.last().unwrap().bottom());
-    for pair in u.wins.windows(2) { assert!(pair[0].bottom() <= pair[1].y && pair[0].h == pair[1].h, "{pair:?}"); }
+    assert_eq!(u.plot.wins.len(), sources.len(), "a lane per source");
+    let (top, bottom) = (u.plot.wins[0].y, u.plot.wins.last().unwrap().bottom());
+    for pair in u.plot.wins.windows(2) { assert!(pair[0].bottom() <= pair[1].y && pair[0].h == pair[1].h, "{pair:?}"); }
     u.trace_mode(false);
     picture(&mut u, "overlay");
-    assert_eq!(u.wins.len(), 1, "one graticule");
-    let g = u.wins[0];
+    assert_eq!(u.plot.wins.len(), 1, "one graticule");
+    let g = u.plot.wins[0];
     assert_eq!(g.y, top, "from the top of the plot");
     assert!((g.bottom() - bottom).abs() <= sources.len() as i32, "to its bottom: {} against {bottom}", g.bottom());
 }
@@ -85,7 +85,7 @@ fn every_source_has_a_handle_on_its_zero_level_in_both_trace_modes() {
         let hs = handles(&u);
         assert_eq!(hs.len(), sources.len(), "stacked {stacked}: a handle per source, {hs:?}");
         for (i, source) in sources.iter().enumerate() {
-            let lane = if stacked { u.wins[i] } else { u.wins[0] };
+            let lane = if stacked { u.plot.wins[i] } else { u.plot.wins[0] };
             let r = hs.iter().find(|(s, _)| s == source).unwrap_or_else(|| panic!("stacked {stacked}: {source:?} has a handle")).1;
             let zero = lane.y as f32 + lane.h as f32 / 2.0 - zero_divs(&u, *source) * lane.h as f32 / VDIV;
             // on the zero level, or pinned to the edge of the lane the level is beyond
@@ -130,9 +130,9 @@ fn a_handle_stays_in_the_plot_and_clear_of_the_time_labels() {
         u.m.ch[1].offset = 40.0;
         u.trace_mode(stacked);
         picture(&mut u, if stacked { "handles-pinned-stacked" } else { "handles-pinned-overlay" });
-        let plot_bottom = u.wins.last().unwrap().bottom();
+        let plot_bottom = u.plot.wins.last().unwrap().bottom();
         for (source, r) in handles(&u) {
-            let lane = if stacked { u.wins[u.trace_sources().iter().position(|s| *s == source).unwrap()] } else { u.wins[0] };
+            let lane = if stacked { u.plot.wins[u.trace_sources().iter().position(|s| *s == source).unwrap()] } else { u.plot.wins[0] };
             assert!(r.y >= lane.y && r.bottom() <= lane.bottom(), "stacked {stacked}: {source:?} {r:?} in {lane:?}");
             if lane.bottom() == plot_bottom { assert!(r.bottom() <= plot_bottom - u.fonts().s.size - 8, "stacked {stacked}: {source:?} {r:?} over the time labels"); }
         }
@@ -183,7 +183,7 @@ fn set_level_here_is_the_level_under_the_finger() {
         u.trace_mode(stacked);
         picture(&mut u, "level");
         for c in 0..2 {
-            let lane = if stacked { u.wins[c] } else { u.wins[0] };
+            let lane = if stacked { u.plot.wins[c] } else { u.plot.wins[0] };
             for at in [lane.h / 5, lane.h / 2, lane.h * 3 / 4] {
                 let (x, y) = (lane.x + lane.w / 2, lane.y + at);
                 // in Overlay the menu is for the selected channel: the one the level is set on
@@ -257,9 +257,9 @@ fn studio_has_the_zoom_row_and_the_window_of_the_default_layout() {
     let (cd, cs) = (picture(&mut d, "zoom-default"), picture(&mut s, "zoom-studio"));
     let (rd, rs) = (d.zoom_readout(), s.zoom_readout());
     assert_eq!((rd.w, rd.h), (rs.w, rs.h), "the row has the size of the Default row: {rd:?} {rs:?}");
-    let (od, os) = (d.split_zoom(d.grid).0, s.split_zoom(s.grid).0);
+    let (od, os) = (d.split_zoom(d.plot.grid).0, s.split_zoom(s.plot.grid).0);
     assert_eq!(rs.y, os.bottom(), "under the overview");
-    assert_eq!(rs.bottom(), s.wins[0].y, "over the zoomed lanes");
+    assert_eq!(rs.bottom(), s.plot.wins[0].y, "over the zoomed lanes");
     // the row: the same pixels (the text, H-, H+, V-, V+, Box, Reset, Close)
     let px = |cv: &Canvas, x: i32, y: i32| cv.px[(y * cv.w + x) as usize];
     // (but for the frame of the Waveform view, a pixel column at each end)
@@ -353,7 +353,7 @@ fn the_plot_menu_centres_the_trigger_in_the_zoom_window() {
     u.clamp_zoom();
     u.relayout();
     assert!(u.m.zdelay != 0.0, "the zoom window starts off the trigger");
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let at = format!("{},{}", lane.x + lane.w / 3, lane.y + lane.h / 2);
     cmd(&mut u, ":UI:CONText", &at);
     u.step(0.04);
@@ -366,13 +366,13 @@ fn the_plot_menu_centres_the_trigger_in_the_zoom_window() {
     cmd(&mut u, ":UI:MENU:SELect", "\"Center trigger\"");
     for _ in 0..3 { u.step(0.04); }
     assert_eq!(u.m.zdelay, 0.0, "the zoom window is on the trigger");
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     assert!((u.studio_x_of_time(0.0) - (lane.x + lane.w / 2)).abs() <= 1, "T at {} of a lane from {} to {}", u.studio_x_of_time(0.0), lane.x, lane.right());
     assert!(u.studio.ctx.is_none(), "the menu closes");
     // without zoom there is nothing to centre: no row
     u.set_zoom(false);
     for _ in 0..3 { u.step(0.04); }
-    let lane = u.wins[0];
+    let lane = u.plot.wins[0];
     let at = format!("{},{}", lane.x + lane.w / 3, lane.y + lane.h / 2);
     cmd(&mut u, ":UI:CONText", &at);
     u.step(0.04);

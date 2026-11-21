@@ -215,7 +215,7 @@ fn main() {
             m
         ));
     }
-    ui.limits_path = limits;
+    ui.overclock.path = limits;
     if experimental {
         ui.toast("Experimental limits active (limits.conf), see System > System info");
     }
@@ -224,10 +224,10 @@ fn main() {
     if let Some(script) = arg(&args, "--script") {
         // host test runs store next to the script (build.sh: target/test-shots)
         if let Some(d) = std::path::Path::new(&script).parent().filter(|d| !d.as_os_str().is_empty()) {
-            ui.store_dir = d.to_path_buf();
+            ui.files.dir = d.to_path_buf();
         }
         if let Some(d) = arg(&args, "--store-dir") {
-            ui.store_dir = d.into();
+            ui.files.dir = d.into();
         }
         // another screen than the panel (host only: the device shows the panel it has)
         if let Some(s) = arg(&args, "--size") {
@@ -255,11 +255,11 @@ fn main() {
         return;
     }
     if let Some(d) = arg(&args, "--store-dir") {
-        ui.store_dir = d.into();
+        ui.files.dir = d.into();
     } else if cfg!(windows) {
         // no /tmp on Windows: setups, CSV and screenshots go to Documents\OOS (oos-plus desktop build)
         if let Some(home) = std::env::var_os("USERPROFILE") {
-            ui.store_dir = std::path::Path::new(&home).join("Documents").join("OOS");
+            ui.files.dir = std::path::Path::new(&home).join("Documents").join("OOS");
         }
     }
     if args.iter().any(|a| a == "--serve") {
@@ -1292,7 +1292,7 @@ impl Device {
         for c in self.ui.panel_tx.drain(..) {
             self.inp.send(&board::board().panel_cmd(c));
         }
-        if let Some(a) = self.ui.power_action.take() {
+        if let Some(a) = self.ui.power.action.take() {
             power(&mut self.inp, a);
         }
         self.save_setup();
@@ -1311,7 +1311,7 @@ impl Device {
         }
         self.fps_n += 1;
         if self.fps_t.elapsed().as_secs_f64() >= 1.0 {
-            self.ui.fps = self.fps_n as f32 / self.fps_t.elapsed().as_secs_f32();
+            self.ui.counts.fps = self.fps_n as f32 / self.fps_t.elapsed().as_secs_f32();
             self.fps_n = 0;
             self.fps_t = Instant::now();
         }
@@ -1566,7 +1566,7 @@ mod open_file_tests {
         let wave = dir.join("a.pwwf");
         std::fs::write(&wave, record(&volts)).unwrap();
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
-        ui.store_dir = dir.clone();
+        ui.files.dir = dir.clone();
         open_file(&mut ui, wave.to_str().unwrap()).unwrap();
         assert_eq!(ui.ref_volts(0), volts);
         let session = dir.join("bench.oss");
@@ -1574,7 +1574,7 @@ mod open_file_tests {
 
         // another start of the program: the session, then one more waveform
         let mut other = Ui::new(Source::Demo { t: 0.0 });
-        other.store_dir = dir.clone();
+        other.files.dir = dir.clone();
         open_file(&mut other, session.to_str().unwrap()).unwrap();
         assert_eq!(other.ref_volts(0), volts);
         open_file(&mut other, wave.to_str().unwrap()).unwrap();

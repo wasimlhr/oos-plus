@@ -229,7 +229,7 @@ impl Ui {
                             let kept = state.small.iter().find(|(id, p, capture, generation, _)| {
                                 *id == WaveId::Ch(c)
                                     && *p == pointer
-                                    && *capture == self.wfm_total
+                                    && *capture == self.counts.wfm_total
                                     && *generation == state.stats_epoch
                             });
                             let small = match kept {
@@ -240,7 +240,7 @@ impl Ui {
                                     state.small.push((
                                         WaveId::Ch(c),
                                         pointer,
-                                        self.wfm_total,
+                                        self.counts.wfm_total,
                                         state.stats_epoch,
                                         Arc::clone(&copy),
                                     ));
@@ -252,8 +252,8 @@ impl Ui {
                         values.len(),
                         self.source_time_origin(id, record.t0),
                         record.dt,
-                        Owner::Small(values.as_ptr() as usize, self.wfm_total, state.stats_epoch),
-                        self.wfm_total,
+                        Owner::Small(values.as_ptr() as usize, self.counts.wfm_total, state.stats_epoch),
+                        self.counts.wfm_total,
                         conditioning,
                     )
                 }
@@ -335,7 +335,8 @@ impl Ui {
         let state = &mut *state;
         let worker = state.worker.get_or_insert_with(open_worker);
         if !worker.busy() {
-            let job = Job { key, row: tuple, inputs, model: self.m.clone(), capture: self.wfm_total, stats_epoch };
+            let job =
+                Job { key, row: tuple, inputs, model: self.m.clone(), capture: self.counts.wfm_total, stats_epoch };
             if worker.submit(job).is_ok() {
                 state.submitted += 1;
             }
@@ -405,7 +406,7 @@ impl Ui {
                         for (row, capture, key, epoch) in &state.stats {
                             if *key == answer.key
                                 && *capture == answer.capture
-                                && *capture == self.wfm_total
+                                && *capture == self.counts.wfm_total
                                 && *epoch == answer.stats_epoch
                                 && *epoch == state.stats_epoch
                             {
@@ -415,7 +416,7 @@ impl Ui {
                             }
                         }
                     }
-                    state.stats.retain(|(_, capture, key, _)| *capture == self.wfm_total && *key != answer.key);
+                    state.stats.retain(|(_, capture, key, _)| *capture == self.counts.wfm_total && *key != answer.key);
                     state.put(answer);
                     changed = true;
                 }
@@ -629,7 +630,7 @@ mod tests {
         assert!(height.quality.contains("NRZ"));
         assert!(wait(&mut ui, tile(measures::jitter::TIE)).value.is_finite());
         assert_eq!(ui.azr.catalog_measurements.borrow().submitted, 1);
-        assert_eq!((ui.wfm_total, ui.replay.captures, ui.m.run), (0, 0, RunState::Stop));
+        assert_eq!((ui.counts.wfm_total, ui.replay.captures, ui.m.run), (0, 0, RunState::Stop));
         assert!(ui.measurement_statistics_snapshot_for_test().iter().all(|(n, _)| *n == 0));
         ui.m.delay = 100.;
         assert!(
@@ -684,7 +685,7 @@ mod tests {
             .0;
         assert_ne!(newest, new);
         assert_eq!(wait(&mut ui, tile(measures::power::RIPPLE)).value, 9.);
-        assert_eq!(ui.wfm_total, 0);
+        assert_eq!(ui.counts.wfm_total, 0);
     }
     #[test]
     fn screen_pan_changes_physical_key_full_pan_and_unused_roles_do_not() {
@@ -758,7 +759,7 @@ mod tests {
         let mut ui = fixture();
         put(&mut ui, 0, (0..400_000).map(|i| if i % 20 < 10 { 0.0 } else { 2.0 }).collect(), 0., 1e-9);
         ui.m.cat = vec![row(tile(measures::power::RIPPLE))];
-        ui.wfm_total = 1;
+        ui.counts.wfm_total = 1;
         let ids = [WaveId::Ref(0), WaveId::Ref(1), WaveId::Ref(2), WaveId::Ref(3)];
         assert!(ui.catalog_reading(tile(measures::power::RIPPLE), ids).computing);
         ui.queue_catalog_statistics(row(tile(measures::power::RIPPLE)), 1);
@@ -793,7 +794,7 @@ mod tests {
         let mut ui = fixture();
         put(&mut ui, 0, (0..400_000).map(|i| if i % 20 < 10 { 0.0 } else { 2.0 }).collect(), 0., 1e-9);
         ui.m.cat = vec![row(tile(measures::power::RIPPLE))];
-        ui.wfm_total = 1;
+        ui.counts.wfm_total = 1;
         let ids = [WaveId::Ref(0), WaveId::Ref(1), WaveId::Ref(2), WaveId::Ref(3)];
         let _ = ui.catalog_reading(tile(measures::power::RIPPLE), ids);
         ui.queue_catalog_statistics(row(tile(measures::power::RIPPLE)), 1);
@@ -801,7 +802,7 @@ mod tests {
         let answer =
             ui.azr.catalog_measurements.borrow_mut().worker.as_mut().unwrap().wait(Duration::from_secs(20)).unwrap();
         ui.clear_display();
-        ui.wfm_total = 1;
+        ui.counts.wfm_total = 1;
         ui.queue_catalog_statistics(row(tile(measures::power::RIPPLE)), 1);
         let (worker, _jobs, send) = Worker::manual();
         ui.azr.catalog_measurements.borrow_mut().worker = Some(worker);
@@ -818,7 +819,7 @@ mod tests {
     fn processed_channel_reused_buffer_and_capture_after_clear_cannot_reuse_old_samples() {
         let mut ui = fixture();
         ui.m.ch[0].on = true;
-        ui.wfm_total = 1;
+        ui.counts.wfm_total = 1;
         ui.last[0] = Some(Record {
             t0: 0.0,
             dt: 1e-9,
@@ -848,7 +849,7 @@ mod tests {
         // Clear's reset generation changes while the accepted sequence is reused.
         // Mutate the same allocation to make allocator reuse deterministic.
         ui.reset_catalog_statistics();
-        ui.wfm_total = 1;
+        ui.counts.wfm_total = 1;
         ui.last[0].as_mut().unwrap().ch[0][1] = 9.0;
         assert_eq!(ui.last[0].as_ref().unwrap().ch[0].as_ptr(), pointer);
         assert_eq!(read(&mut ui), 9.0, "pre-clear processed snapshot must not survive reused pointer/capture");
@@ -879,7 +880,7 @@ mod tests {
         ];
         ui.relayout();
         let owner = Arc::clone(&ui.refs[0].as_ref().unwrap().v);
-        let counters = (ui.wfm_total, ui.records, ui.replay.captures);
+        let counters = (ui.counts.wfm_total, ui.counts.records, ui.replay.captures);
         let ideal = oos_dsp::hss::ssc_edge_times(
             owner.len() / 8 + 4096,
             lane.bits_per_s,
@@ -953,7 +954,7 @@ mod tests {
         assert!((panned_clock.value - oracle).abs() / oracle < 0.001);
         assert!((panned.value - rate.value).abs() > 1e6, "SSC rate follows the stopped physical gate");
         assert!(Arc::ptr_eq(&owner, &ui.refs[0].as_ref().unwrap().v));
-        assert_eq!((ui.wfm_total, ui.records, ui.replay.captures), counters);
+        assert_eq!((ui.counts.wfm_total, ui.counts.records, ui.replay.captures), counters);
         assert_eq!(ui.m.run, RunState::Stop);
     }
 

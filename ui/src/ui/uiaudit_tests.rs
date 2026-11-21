@@ -131,7 +131,7 @@ fn fresh(cfg: Cfg, n: usize) -> Ui {
     let dir = std::env::temp_dir().join(format!("oos-uiaudit-{}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    u.store_dir = dir;
+    u.files.dir = dir;
     for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);

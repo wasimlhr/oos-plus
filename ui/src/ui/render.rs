@@ -31,7 +31,7 @@ impl Ui {
         }
         l.under.no_clip();
         l.under.clear(BG);
-        let g = self.grid;
+        let g = self.plot.grid;
         if self.m.zoom && !self.xy_over() {
             let (o, _) = self.split_zoom(g);
             self.draw_grid(l.under, o);
@@ -55,12 +55,12 @@ impl Ui {
             }
             self.draw_search_overview(cv, o);
             cv.no_clip();
-            for &lane in &self.wins {
+            for &lane in &self.plot.wins {
                 self.draw_grid(l.under, lane);
             }
             self.draw_lane_chrome(l.under);
         } else {
-            for &w in &self.wins {
+            for &w in &self.plot.wins {
                 self.draw_grid(l.under, w);
             }
             self.draw_lane_chrome(l.under);
@@ -76,21 +76,21 @@ impl Ui {
         } else {
             // Every detail lane draws its own sources. The shared zoom overview
             // was drawn above; detail maps use the same lane dimensions.
-            for i in 0..self.wins.len() {
-                self.cur_win = i;
-                self.area = self.wins[i];
+            for i in 0..self.plot.wins.len() {
+                self.plot.cur_win = i;
+                self.plot.area = self.plot.wins[i];
                 if !self.m.zoom {
                     self.draw_mask(l.under);
-                    self.traces(l, self.area, false, false);
+                    self.traces(l, self.plot.area, false, false);
                 } else {
-                    self.traces(l, self.area, true, false);
+                    self.traces(l, self.plot.area, true, false);
                 }
                 let cv = l.over();
                 if !self.dock_on() { self.draw_hist(cv); }
                 self.draw_zones(cv);
-                if self.wins.len() > 1 || i == 0 || self.stacked() {
+                if self.plot.wins.len() > 1 || i == 0 || self.stacked() {
                     if self.waves_on() {
-                        self.draw_refs_at(cv, self.waves_plot(self.area), self.view(), false);
+                        self.draw_refs_at(cv, self.waves_plot(self.plot.area), self.view(), false);
                     } else {
                         self.draw_refs(cv);
                     }
@@ -117,8 +117,8 @@ impl Ui {
                     self.draw_waves_board(cv);
                 }
             }
-            self.cur_win = 0;
-            self.area = self.wave_area();
+            self.plot.cur_win = 0;
+            self.plot.area = self.wave_area();
         }
         let cv = l.over();
         if self.m.zoom && !self.xy_over() && !self.view_on() {
@@ -185,7 +185,7 @@ impl Ui {
         // the skin recolours the finished frame (ui/skin.rs); the OOS skin leaves it as drawn
         self.skin_pass(cv);
         self.draw_pointer(cv);
-        self.frames += 1;
+        self.counts.frames += 1;
     }
 
     /// The traces of a plot window: drawn now on one canvas, a job for the GPU with layers. `zoom`: the zoom
@@ -242,7 +242,7 @@ impl Ui {
 
     /// `render_view_layers` of the view in place.
     fn render_view_layers_as_is(&mut self, l: &mut Layers) {
-        let keep = (self.scr, self.grid, std::mem::take(&mut self.wins), self.area, self.cur_win, self.frames);
+        let keep = (self.scr, self.plot.grid, std::mem::take(&mut self.plot.wins), self.plot.area, self.plot.cur_win, self.counts.frames);
         // what Studio keeps of a frame (`studio_frame_start`): the lines of its badge row, counted for the width of
         // the pass, and where it drew badges and labels, for the touch. The panel's stay the panel's. With the
         // monitor's count of lines the plot of the panel changed its height from one frame to the next, and its
@@ -254,10 +254,10 @@ impl Ui {
             std::mem::take(self.studio.dec_labels.get_mut()),
         );
         self.scr = Screen { w: l.under.w, h: l.under.h };
-        self.view_pass = true;
+        self.plot.view_pass = true;
         self.render_layers(l);
-        self.view_pass = false;
-        (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames) = keep;
+        self.plot.view_pass = false;
+        (self.scr, self.plot.grid, self.plot.wins, self.plot.area, self.plot.cur_win, self.counts.frames) = keep;
         self.studio.badge_wrap = studio.0;
         (*self.studio.lane_badges.get_mut(), *self.studio.dec_labels.get_mut()) = (studio.1, studio.2);
     }
@@ -282,11 +282,11 @@ impl Ui {
     /// Runs `f` with the Ui laid out as the monitor's waveform area of `w` x `h`, then puts the panel's layout back,
     /// with the touch targets the panel's last frame left (the pass draws its own at the monitor's places).
     pub(crate) fn with_waveform_pass<R>(&mut self, w: i32, h: i32, f: impl FnOnce(&mut Ui) -> R) -> R {
-        let wins = std::mem::take(&mut self.wins);
+        let wins = std::mem::take(&mut self.plot.wins);
         // Studio's badge row is counted again for the pass's width (`studio_frame_start`): the panel's count comes
         // back, else the panel's next step lays out a row of another height and its maps are cleared
         let wrap = self.studio.badge_wrap;
-        let keep = (self.scr, self.grid, wins, self.area, self.cur_win, self.frames, self.full, wrap);
+        let keep = (self.scr, self.plot.grid, wins, self.plot.area, self.plot.cur_win, self.counts.frames, self.full.on, wrap);
         let hits = (
             self.studio.lane_badges.take(),
             self.studio.dec_labels.take(),
@@ -296,11 +296,11 @@ impl Ui {
         );
         self.scr = Screen { w, h };
         // the panel's full screen is the panel's: the monitor shows the waveform area as it is with the bars
-        (self.view_pass, self.wave_pass, self.full) = (true, true, false);
+        (self.plot.view_pass, self.wave_pass, self.full.on) = (true, true, false);
         let r = f(self);
-        (self.view_pass, self.wave_pass) = (false, false);
+        (self.plot.view_pass, self.wave_pass) = (false, false);
         let wrap;
-        (self.scr, self.grid, self.wins, self.area, self.cur_win, self.frames, self.full, wrap) = keep;
+        (self.scr, self.plot.grid, self.plot.wins, self.plot.area, self.plot.cur_win, self.counts.frames, self.full.on, wrap) = keep;
         self.studio.badge_wrap = wrap;
         self.studio.lane_badges.replace(hits.0);
         self.studio.dec_labels.replace(hits.1);
@@ -407,9 +407,9 @@ impl Ui {
     /// Stacked lanes: where one ends and the next begins, and whose it is. A bar in the source's colour runs down
     /// the left edge of each lane, and a solid line fills the gap between two lanes.
     fn draw_lane_chrome(&self, cv: &mut Canvas) {
-        if !self.stacked() || self.wins.len() < 2 { return; }
+        if !self.stacked() || self.plot.wins.len() < 2 { return; }
         let sources = self.trace_sources();
-        for (i, lane) in self.wins.iter().enumerate() {
+        for (i, lane) in self.plot.wins.iter().enumerate() {
             let col = match sources.get(i) {
                 Some(workspace::Trace::Channel(c)) => CH_COLORS[*c],
                 Some(workspace::Trace::Reference(r)) => self.wave_color(WaveId::Ref(*r)),
@@ -417,7 +417,7 @@ impl Ui {
                 None => continue,
             };
             cv.fill(Rect::new(lane.x, lane.y, 3, lane.h), mix(BG, col, 190));
-            if let Some(next) = self.wins.get(i + 1) {
+            if let Some(next) = self.plot.wins.get(i + 1) {
                 let gap = (next.y - lane.bottom()).max(1);
                 cv.fill(Rect::new(lane.x, lane.bottom(), lane.w, gap), mix(BG, TEXT, 90));
             }
@@ -433,7 +433,7 @@ impl Ui {
     pub fn channel_clipping(&self, c: usize) -> bool {
         let Some(ch) = self.m.ch.get(c).filter(|ch| ch.on) else { return false };
         if self.record_mode() { return false; }
-        let a = &self.ana[c];
+        let a = &self.measured.ch[c];
         if !a.valid { return false; }
         let vpd = ch.volts_per_div().max(1e-12) as f64;
         let (top, bottom) = ((a.vmax + ch.offset as f64) / vpd, (a.vmin + ch.offset as f64) / vpd);
@@ -448,13 +448,13 @@ impl Ui {
     /// The math channel whose lane holds the point (stacked lanes only).
     pub(crate) fn math_lane_at(&self, x: i32, y: i32) -> Option<usize> {
         if !self.stacked() { return None; }
-        let lane = self.wins.iter().position(|w| w.contains(x, y))?;
+        let lane = self.plot.wins.iter().position(|w| w.contains(x, y))?;
         match self.trace_sources().get(lane) { Some(workspace::Trace::Math(k)) if self.m.math_ch(*k).op != MathOp::Fft => Some(*k), _ => None }
     }
 
     /// The scale of the math channel drawn in this lane: volts per division, offset in volts, unit, colour.
     fn math_axis_source(&self) -> Option<(f32, f32, &'static str, Rgb)> {
-        let k = (0..NMATH).find(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.cur_win)?;
+        let k = (0..NMATH).find(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.plot.cur_win)?;
         let c = self.m.math_ch(k);
         if c.op == MathOp::Fft { return None; }
         let vpd = *math_scales().get(c.scale)? as f32;
@@ -467,7 +467,7 @@ impl Ui {
     /// keeps clear of the channel markers at the left edge.
     fn draw_axes(&self, cv: &mut Canvas) {
         let f = self.fonts();
-        let a = self.area;
+        let a = self.plot.area;
         let c = if self.m.ch[self.m.active].on && self.shows(self.m.active) {
             Some(self.m.active)
         } else {
@@ -483,22 +483,22 @@ impl Ui {
         };
         // a lane is one source with its own scale: its labels are not given up for a status line or time labels
         // that are not in it, and its top and bottom values are always there
-        let lanes = self.stacked() && self.wins.len() > 1;
-        let last_lane = self.cur_win + 1 >= self.wins.len() || self.studio_lane_has_own_time();
+        let lanes = self.stacked() && self.plot.wins.len() > 1;
+        let last_lane = self.plot.cur_win + 1 >= self.plot.wins.len() || self.studio_lane_has_own_time();
         if let Some((base_vpd, base_offset, unit, color)) = axis {
             let (factor, center) = self.zoom_vertical_transform(a);
             let vpd = base_vpd / factor;
             let offset = base_offset - center * base_vpd;
             let span = (VDIV / 2.0 * vpd).abs() + offset.abs();
             let mut taken: Vec<Rect> = Vec::new();
-            if !lanes || (self.cur_win == 0 && self.m.layout != Layout::Studio) { taken.push(Rect::new(a.x, a.y, a.w, 20)); }
+            if !lanes || (self.plot.cur_win == 0 && self.m.layout != Layout::Studio) { taken.push(Rect::new(a.x, a.y, a.w, 20)); }
             if !lanes || last_lane { taken.push(Rect::new(a.x, a.y + a.h - 22, a.w, 22)); }
-            if self.m.mask_on && self.mask.is_some() && self.shows(self.m.mask_src) {
+            if self.m.mask_on && self.mask_sw.mask.is_some() && self.shows(self.m.mask_src) {
                 taken.push(Rect::new(a.x, a.y + 22, a.w, 28));
             }
             // the height of the bands of this window, their bit rows with them
             let bands: i32 = (0..DECODERS)
-                .filter(|&k| self.dec_shown(k) && self.dec_band_win(k) == Some(self.cur_win))
+                .filter(|&k| self.dec_shown(k) && self.dec_band_win(k) == Some(self.plot.cur_win))
                 .map(|k| self.dec_band_h(&self.m.dec_view(k)))
                 .sum();
             if bands > 0 {
@@ -569,7 +569,7 @@ impl Ui {
                 backed_text(cv, &f.s, x, y + 4, &s, scale(color, 210));
             }
         }
-        if self.stacked() && self.cur_win + 1 < self.wins.len() && !self.studio_lane_has_own_time() {
+        if self.stacked() && self.plot.cur_win + 1 < self.plot.wins.len() && !self.studio_lane_has_own_time() {
             return;
         }
         let (tdiv, delay) = self.view();
