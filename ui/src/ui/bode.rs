@@ -13,6 +13,7 @@
 //! OOS sets the time base and memory for one sweep, triggers once on the sync edge and reads gain (and phase, with
 //! an input channel and plain samples) over the whole sweep from that one record (`oos_dsp::bode::sweep_response`).
 
+use super::menu_text::on_off;
 use super::*;
 pub use crate::extgen::{BUILTIN, FREE, GENERATORS};
 use oos_dsp::bode;
@@ -184,13 +185,7 @@ impl Ui {
     pub(super) fn bode_value(&self, it: Item) -> Option<String> {
         let m = &self.m;
         Some(match it {
-            Item::BodeOn => {
-                if m.view == AView::Bode {
-                    "On".into()
-                } else {
-                    "Off".into()
-                }
-            }
+            Item::BodeOn => on_off(m.view == AView::Bode),
             Item::BodeRun => String::new(),
             Item::BodeIn if self.bode_gen() == FREE => match m.bode_sw_in {
                 0 => "Off".into(),
@@ -235,7 +230,7 @@ impl Ui {
             [BUILTIN, self.ext_model(), FREE][(self.bode_source() as i32 + d).rem_euclid(SOURCES.len() as i32) as usize];
         let m = &mut self.m;
         match it {
-            Item::BodeOn => m.view = if m.view == AView::Bode { AView::Scope } else { AView::Bode },
+            Item::BodeOn => super::analysers::toggle_view(m, AView::Bode),
             Item::BodeIn if free => m.bode_sw_in = opt_src_step(m.bode_sw_in, d),
             Item::BodeSync => m.bode_sync = src_step(m.bode_sync, NCH, d),
             Item::BodeGen => m.bode_gen = next_gen,

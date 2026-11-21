@@ -1,8 +1,9 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! `:TIMebase`: `[:MAIN]:SCALe|OFFSet|POSition`, `DELay` (zoom), `VERNier`, `HREFerence`, `MODE`, `ROLL` and `XY`.
-//! A new `:TIMebase` command goes into `timebase_cmd` here, with its line in docs/scpi.md and its query in
+//! `:TIMebase`: `[:MAIN]:SCALe|OFFSet|POSition`, `DELay` (zoom), `VERNier`, `MODE` and `XY` here; `HREFerence:MODE`
+//! and `ROLL` are rows of settings/timebase.rs. A new `:TIMebase` setting of a setup file is a row of that table,
+//! another command goes into `timebase_cmd` here, with its line in docs/scpi.md; either with its query in
 //! ui/tests/scpi.txt (AGENTS.md).
 
 use super::{e, kw, nearest, num, parse_bool, parse_ch, t, Scpi};
@@ -81,43 +82,19 @@ impl Scpi {
             if query {
                 return t(if ui.m.fine_t { "1" } else { "0" });
             }
-            return match parse_bool(arg) {
-                Some(on) => {
-                    ui.m.fine_t = on;
-                    if !on {
-                        ui.m.tfine = 1.0;
-                    }
-                    ui.mark_changed();
-                    None
+            return self.set_arg(ui, arg, parse_bool(arg), |ui, on| {
+                ui.m.fine_t = on;
+                if !on {
+                    ui.m.tfine = 1.0;
                 }
-                None => {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    None
-                }
-            };
+            });
         }
-        if n.len() == 2 && kw(n0, "HREFerence") && kw(n[1], "MODE") {
-            return self.timebase_href(ui, query, arg);
+        // the rows of the table (settings/timebase.rs): `HREFerence:MODE` and `ROLL`
+        if let Some(row) = crate::settings::command(&crate::settings::timebase::SLICES, n) {
+            return self.setting_cmd(ui, row, query, arg);
         }
         if n.len() == 2 && kw(n0, "DELay") {
             return self.timebase_delay(ui, n, query, arg);
-        }
-        if n.len() == 1 && kw(n0, "ROLL") {
-            // Auto roll: the screen enters roll at 50 ms/div while this is on.
-            if query {
-                return t(if ui.m.auto_roll { "1" } else { "0" });
-            }
-            return match parse_bool(arg) {
-                Some(on) => {
-                    ui.m.auto_roll = on;
-                    ui.mark_changed();
-                    None
-                }
-                None => {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    None
-                }
-            };
         }
         if n.len() == 1 && kw(n0, "MODE") {
             return self.timebase_mode(ui, query, arg);
@@ -129,50 +106,13 @@ impl Scpi {
         None
     }
 
-    /// `:TIMebase:HREFerence:MODE`: the point the scale expands around.
-    fn timebase_href(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
-        if query {
-            return t(match ui.m.h_expand {
-                HExpand::Center => "CENT",
-                HExpand::Left => "LB",
-                HExpand::Right => "RB",
-                HExpand::Trigger => "TRIG",
-            });
-        }
-        let a = arg.trim();
-        ui.m.h_expand = if kw(a, "CENTer") {
-            HExpand::Center
-        } else if a.eq_ignore_ascii_case("LB") || kw(a, "LEFT") {
-            HExpand::Left
-        } else if a.eq_ignore_ascii_case("RB") || kw(a, "RIGHt") {
-            HExpand::Right
-        } else if kw(a, "TRIGger") {
-            HExpand::Trigger
-        } else {
-            self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-            return None;
-        };
-        ui.mark_changed();
-        None
-    }
-
     /// `:TIMebase:DELay:ENABle|SCALe|OFFSet|POSition`: the zoom window (`n` without the root).
     fn timebase_delay(&mut self, ui: &mut Ui, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
         if kw(n[1], "ENABle") {
             if query {
                 return t(if ui.m.zoom { "1" } else { "0" });
             }
-            return match parse_bool(arg) {
-                Some(on) => {
-                    ui.zoom_set_remote(on);
-                    ui.mark_changed();
-                    None
-                }
-                None => {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    None
-                }
-            };
+            return self.set_arg(ui, arg, parse_bool(arg), |ui, on| ui.zoom_set_remote(on));
         }
         if kw(n[1], "SCALe") {
             if query {
@@ -234,17 +174,7 @@ impl Scpi {
             if query {
                 return t(if ui.xy_on() { "1" } else { "0" });
             }
-            return match parse_bool(arg) {
-                Some(on) => {
-                    ui.xy_set(on);
-                    ui.mark_changed();
-                    None
-                }
-                None => {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    None
-                }
-            };
+            return self.set_arg(ui, arg, parse_bool(arg), |ui, on| ui.xy_set(on));
         }
         if kw(n[1], "X") || kw(n[1], "Y") {
             // The plot is CH1 against CH2. Those sources are not selectable.

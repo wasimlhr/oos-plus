@@ -66,4 +66,57 @@ Sine at 20 / 40 / 50 / 60 / 65 / 70 / 75 MHz. Spectrum: level of the fundamental
 
 | Date | Channel | V/div | Test | -3 dB | Rise 10-90 | Overshoot | Note |
 |---|---|---|---|---|---|---|---|
-| | | | | | | | |
+| 2026-11-21 | CH1 | 0.5 mV | A | about 310 MHz (Full) | | | first figure, see below |
+
+### Test A, 2026-11-21 (DHO924S, CH1 open, 0.5 mV/div, 1.25 GSa/s)
+
+Verified on the unit, as a first figure. Six records of 32768 raw samples per setting (`:WAV:MODE RAW`, Run then
+`:STOP;*OPC?`), Welch spectrum (1024-point Hann segments, half overlap), each bandwidth limit divided by Full at the
+same frequency. Behind the filter the ADC and its driver add their own noise, about 20 dB under the front end's at
+0.5 mV/div (8 dB at 2 mV/div); that floor (the level every limit reaches at 500 to 600 MHz) is taken off both before
+the ratio. Full itself is read against its own level from 50 to 150 MHz.
+
+| limit (filter code c) | -3 dB | at 156.25 MHz | at 312.5 MHz |
+|---|---|---|---|
+| 20 MHz (5) | (33 MHz here; 23.7 MHz with the sine below) | -13 dB | -17 dB |
+| 50 MHz (10) | about 62 MHz | -8 dB | -14 dB |
+| 75 MHz (15) | about 93 MHz | -6 dB | -11 dB |
+| 100 MHz (20) | about 111 MHz | -5 dB | -10 dB |
+| 150 MHz (30) | about 147 MHz | -3 dB | -7 dB |
+| 200 MHz (40) | about 161 MHz | -3 dB | -7 dB |
+| 300 MHz (60) | about 219 MHz | -2 dB | -5 dB |
+| Full | about 310 MHz (-2 dB at 300, -6 dB at 325 MHz) | | -21 dB at 600 MHz |
+
+- The limits fall about as one pole (the 20 MHz limit loses 10 dB from its corner to 156 MHz, a single pole 11 dB).
+  Up to code 20 the corners lie 10 to 30 % above 5c MHz; from code 40 the front end's own roll-off takes over.
+- For Auto (afe-settings.md 5.1): with four channels (312.5 MSa/s, code 15) the corner is about 93 MHz, fs / 3.4,
+  and the filter takes only about 6 dB off at Nyquist (156 MHz); with two (625 MSa/s, code 31) about 7 dB at 312.5 MHz.
+  A signal just above Nyquist folds back at about half its amplitude (0.5 at -6 dB, 0.45 at -7 dB).
+- Limits of the method: it sees only the stages after the noise source (not the input divider and relays), and below
+  about 15 MHz the noise is not flat, so the low corners are the least sure: the 20 MHz limit read 33 MHz here and
+  23.7 MHz with the sine below.
+
+### Sine through each limit, 2026-11-21 (DHO924S, CH1, built-in generator)
+
+Verified on the unit. Sine of 1.6 Vpp at 0.25 V/div, 1 to 60 MHz (the generator's limit), one channel at 1.25 GSa/s;
+per frequency and limit two records (Run, then `:STOP;*OPC?`), the amplitude by a sine fit at the known frequency on
+16384 raw samples, divided by the amplitude with Full at the same frequency, so the generator's own response falls out.
+
+| limit (code c) | nominal 5c MHz | -3 dB | at 60 MHz |
+|---|---|---|---|
+| 5 MHz (1) | 5 | 3.9 MHz | -20.4 dB |
+| 10 MHz (2) | 10 | 9.0 MHz | -13.9 dB |
+| 15 MHz (3) | 15 | 13.9 MHz | -10.6 dB |
+| 20 MHz and 25 MHz (5) | 25 | 23.7 MHz | -6.8 dB |
+| 30 MHz (6) | 30 | 36.1 MHz | -5.5 dB |
+| 35 MHz (7) | 35 | 42.8 MHz | -4.6 dB |
+| 40 MHz (8) | 40 | 49.3 MHz | -3.9 dB |
+| 50 MHz (10) | 50 | about 62 MHz | -2.9 dB |
+| 60 / 75 MHz (12 / 15) | 60 / 75 | above 60 MHz | -2.2 / -1.6 dB |
+
+- The 20 MHz limit is code 5, the same filter as 25 MHz (afe-settings.md 5.1): both read the same to 0.01 dB.
+- Up to code 5 the corner lies a little below 5c MHz (0.78 to 0.95 of it), from code 6 about 1.2 times above; the
+  step between code 5 and 6 is larger than one code. The noise figures above (code 15 about 93 MHz, 1.24 times)
+  continue the second group.
+- Far above the corner the limits fall less steeply than one pole (code 1: -20.4 dB at 15 times its corner, where
+  one pole gives -23.8 dB), as if a small part of the signal went around the filter.
