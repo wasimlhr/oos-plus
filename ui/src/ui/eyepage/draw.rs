@@ -118,10 +118,10 @@ impl Ui {
         if l.charts[0].x < a.x + a.w {
             cv.set_clip(a);
             // One workspace header owns source/rate and docking; charts need no duplicate title.
-            let (charts, plots) = charts_shown(&l, self.eye_big);
+            let (charts, plots) = charts_shown(&l, self.eye_col.big);
             let col = self.wave_color(self.m.eye_src);
             for k in 0..4 {
-                if self.eye_big.is_some_and(|b| b as usize != k) {
+                if self.eye_col.big.is_some_and(|b| b as usize != k) {
                     continue;
                 }
                 if charts[k].w < 40 || charts[k].h < 36 {

@@ -335,7 +335,7 @@ impl Ui {
                     if matches!(part, ZPart::XPlus | ZPart::YPlus) { cv.vline(cx, cy - 6, cy + 6, TEXT); }
                     let label = match part {
                         ZPart::XMinus => Some(format!("X zoom {}", zoom_text_of(self.studio_sz_xfactor()))),
-                        ZPart::YMinus => Some(format!("Y zoom {}", zoom_text_of(self.zoom_vfactor))),
+                        ZPart::YMinus => Some(format!("Y zoom {}", zoom_text_of(self.zoom_view.vfactor))),
                         _ => None,
                     };
                     if let Some(label) = label {

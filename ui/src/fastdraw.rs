@@ -3,7 +3,7 @@
 
 //! Fast display path for the hardware source: a frame's raw samples go straight into the phosphor map, one vertical
 //! span per screen column (min..max of the column's samples, joined to the previous column's last sample), instead
-//! of the screen record of `board::to_record` (software trigger over a tenth of a screen, then 3600 interpolated or
+//! of the screen record of `wave::to_record` (software trigger over a tenth of a screen, then 3600 interpolated or
 //! peak-detected points) for every frame. Used for dense views (at least one sample per column) with a plain edge
 //! trigger; the hardware already put the edge at `pre` to within a sample or two, so the crossing is only refined
 //! (sub-sample, by linear interpolation) near it.
@@ -244,7 +244,8 @@ pub fn par_each<T: Send>(helpers: usize, items: Vec<T>, f: impl Fn(T) + Sync) {
     }
     let q = std::sync::Mutex::new(items.into_iter());
     together(n, || loop {
-        let Some(x) = q.lock().unwrap().next() else { return };
+        // poisoned only when `next` panicked on another worker, whose panic the scope passes on
+        let Some(x) = q.lock().ok().and_then(|mut q| q.next()) else { return };
         f(x);
     });
 }
