@@ -39,7 +39,7 @@ Per decoder:
 | FlexRay | capture: frames agree at 10 Mbit/s; 9 CRC errors that repeat with the cycle, not compared | band, columns | unit |
 | I2S | capture: samples agree with the word length set | band, columns | - |
 | SENT | capture: fast and slow channel and both values agree | band, columns | unit |
-| MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault); command and status told apart | band, columns | unit |
+| MIL-STD-1553 | capture: 71 words agree (2 marked: the capture's own fault); command and status told apart; unit (the plus line on CH1, one message of a command and two data words a burst): the words read as a decode by hand of the record reads them, every word with even parity and so marked; the trigger on a frame (20 of 20 records) and on a data word (12 of 12, 11 of 12) | band, columns | whether the source sends that parity; the trigger on an error and on a command word, on the unit |
 | ARINC 429 | capture: agrees, no errors | band | - |
 | USB | capture: full speed packets agree | band | - |
 | 1-Wire | capture: transactions agree | band, columns, ROM command names | - |
