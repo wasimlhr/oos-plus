@@ -65,7 +65,8 @@ impl Ui {
         let dock = self.studio_dock_w();
         match self.m.strip_dock {
             StripDock::Left => (body.x + side, body.w - side - dock),
-            StripDock::Right => (body.x, body.w - side - dock),
+            // a sheet covers the right of the body, the column of the strip with it: the plot ends at the sheet
+            StripDock::Right => (body.x, body.w - side.max(dock)),
             _ => (body.x, body.w - dock),
         }
     }
