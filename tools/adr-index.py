@@ -32,6 +32,7 @@ FORK_RECORDS = {
     "ui-ux/0032-studio-has-the-zoom-row-of-the-default-layout.md",
     "ui-ux/0034-a-decoder-is-a-bus-with-its-settings-in-one-place.md",
     "code/0074-mcp-tools-are-typed-wrappers-over-the-one-interpreter.md",
+    "ui-ux/0035-the-studio-bar-has-a-sim-button-while-a-sim-can-be-played.md",
 }
 TITLE = re.compile(r"# ADR (\d{4}): (.+)$")
 REF = re.compile(r"ADR (\d{4})")
