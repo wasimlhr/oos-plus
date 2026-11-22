@@ -1222,6 +1222,7 @@ impl Ui {
                 self.asks.shot = Some(String::new());
             }
             Item::MathAuto => self.math_autoscale(),
+            Item::MathAddFilter => self.math_add_filter(),
             Item::MathOff => self.math_turn_off(self.m.math_sel),
             Item::ZoneBox | Item::ZoneShape => {
                 self.zone_trig.arm = Some((self.zone_trig.sel, it == Item::ZoneShape));

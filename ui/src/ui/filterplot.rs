@@ -168,4 +168,32 @@ mod tests {
         u.m.math = MathOp::Off;
         assert!(u.filter_plot_spec().is_none());
     }
+
+    /// Add filter on an empty math channel makes a low-pass of the active channel with its gain plot, and the sheet of
+    /// the empty channel offers it. `OOS_SHOTS=dir` keeps the pictures of Studio before and after.
+    #[test]
+    fn add_filter_makes_a_filter_with_its_plot() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = Layout::Studio;
+        u.studio.enter = true;
+        for _ in 0..10 {
+            u.step(0.05);
+        }
+        u.open_menu(MenuId::Math);
+        assert_eq!(u.m.math, MathOp::Off);
+        assert!(u.items(MenuId::Math).contains(&Item::MathAddFilter));
+        let shot = |u: &mut Ui, name: &str| {
+            let png = picture(u);
+            if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+                let _ = std::fs::create_dir_all(&dir);
+                std::fs::write(std::path::Path::new(&dir).join(name), png).unwrap();
+            }
+        };
+        shot(&mut u, "addfilter-before.png");
+        u.activate(Item::MathAddFilter);
+        assert_eq!((u.m.math, u.math.plot), (MathOp::Lpf, FiltPlot::Gain));
+        assert!(u.m.math_shown(u.m.math_sel));
+        assert!(!u.items(MenuId::Math).contains(&Item::MathAddFilter));
+        shot(&mut u, "addfilter-after.png");
+    }
 }

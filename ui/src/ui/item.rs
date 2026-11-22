@@ -112,6 +112,8 @@ pub(super) enum Item {
     MathFiltDelay,
     /// the plot of the designed filter's response over the waveform (Off, Gain, Phase, Impulse, Step)
     MathFiltPlot,
+    /// a Butterworth low-pass of the active channel, shown with its gain plot, from a math channel that is off
+    MathAddFilter,
     Open(MenuId),
     ChOn(usize),
     ChCoupling(usize),

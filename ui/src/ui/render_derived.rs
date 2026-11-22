@@ -490,6 +490,23 @@ impl Ui {
         self.relayout();
     }
 
+    /// The Add filter row of an empty math channel: a Butterworth low-pass of the active channel with its cut-off at
+    /// two periods a division and its gain plot, so that a filter is one tap away.
+    pub(super) fn math_add_filter(&mut self) {
+        let k = self.m.math_sel;
+        self.math.family = MathFamily::Filter;
+        self.m.math = MathOp::Lpf;
+        self.m.math_a = self.m.active.min(NCH - 1);
+        self.m.math_filt.resp = crate::math::FiltResp::Butterworth;
+        self.m.math_fc = (2.0 / self.m.time_per_div() as f64) as f32;
+        self.m.math_offset = 0.0;
+        self.math.plot = FiltPlot::Gain;
+        self.math_set_shown(k, true);
+        self.math_autoscale();
+        self.settings_changed();
+        self.relayout();
+    }
+
     /// Picks the math scale so that the waveform spans about 6 divisions.
     pub(crate) fn math_autoscale(&mut self) {
         self.math_fit(self.m.math_sel);

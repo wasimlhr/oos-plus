@@ -357,7 +357,7 @@ impl Ui {
     /// The math menu, with the rows of the operation.
     pub(super) fn math_items(&self) -> Vec<Item> {
         if self.m.math == MathOp::Off {
-            vec![Item::MathSel, Item::MathFam, Item::MathOpI]
+            vec![Item::MathSel, Item::MathFam, Item::MathOpI, Item::MathAddFilter]
         } else if self.m.math == MathOp::Expr {
             self.with_math_off(vec![
                 Item::MathSel,
