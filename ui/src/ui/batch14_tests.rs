@@ -357,6 +357,22 @@ fn the_histogram_view_has_a_volts_axis_and_a_count_scale() {
     shot(&mut u, "histogram-axis");
 }
 
+#[test]
+fn the_histogram_view_is_drawn_for_a_source_in_the_second_lane() {
+    let mut u = studio();
+    u.m.ch[1].on = true;
+    u.m.hist = Hist::Vertical;
+    u.hist_ch = Some(1);
+    for _ in 0..8 { frame(&mut u); }
+    assert_eq!(u.hist_src(), Some(1));
+    let r = u.dock_content(VKind::Hist).expect("the histogram view");
+    let mut cv = Canvas::new(W, H);
+    u.draw_view_tiles(&mut cv);
+    let bg = cv.px[(r.y * W + r.x + 1) as usize];
+    let ink = (r.y..r.bottom()).flat_map(|y| (r.x..r.right()).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] != bg).count();
+    assert!(ink > 60, "the view of the second lane's histogram was empty: {ink}");
+}
+
 // 15 ----------------------------------------------------------------------------------------------- add panel
 
 #[test]
