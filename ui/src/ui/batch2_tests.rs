@@ -428,3 +428,53 @@ fn default_layout_in_a_record_mode_has_no_channel_la_or_generator_cards() {
     u.offline.on = false;
     assert!(u.card_layout().ch[0].w > 0);
 }
+
+/// The Switching page is a table of figures with their statistics and a plot of the voltage against the current: a
+/// record whose voltage stands at -0.6 V while the switch conducts (a zero offset of the probe) gives no negative
+/// conduction energy, the losses are the energies times the switching frequency, and the page draws at the size of the
+/// panel and at Full HD.
+#[test]
+fn the_switching_page_is_a_table_with_statistics_and_a_trajectory() {
+    let mut u = fresh(Layout::Default);
+    for c in 0..NCH {
+        u.m.ch[c].on = false;
+    }
+    let (n, dt, period) = (60_000usize, 1e-9, 10_000.0f64);
+    let at = |k: usize| (k as f64 % period) * dt;
+    let v: Vec<f32> = (0..n)
+        .map(|k| {
+            let t = at(k);
+            if t < 1e-6 || t >= 6.1e-6 { 10.0 } else if t < 1.15e-6 { -0.6 } else if t < 6.0e-6 { -0.6 } else { 10.0 }
+        })
+        .collect();
+    let i: Vec<f32> = (0..n).map(|k| if (1.05e-6..6.05e-6).contains(&at(k)) { 0.4 } else { 0.0 }).collect();
+    u.refs[0] = Some(RefWave { vpd: 2.0, ..RefWave::test(v, dt, 0.0) });
+    u.refs[1] = Some(RefWave { vpd: 0.1, ..RefWave::test(i, dt, 0.0) });
+    u.m.view = AView::Power;
+    u.m.pw_mode = PowerMode::Switching;
+    (u.m.pw_v, u.m.pw_i) = (WaveId::Ref(0), WaveId::Ref(1));
+    for _ in 0..3 {
+        u.step(0.05);
+    }
+    u.analyzer_update();
+    let rows = &u.azr.power_table;
+    let names: Vec<&str> = rows.iter().map(|r| r[0].as_str()).collect();
+    for want in ["Turn-on energy", "Turn-off loss", "Conduction energy", "Total energy", "Total loss", "Switching frequency"] {
+        assert!(names.contains(&want), "{want} in {names:?}");
+    }
+    let cell = |name: &str, c: usize| rows.iter().find(|r| r[0] == name).map(|r| r[c].clone()).unwrap();
+    assert!(!cell("Conduction energy", 1).starts_with('-'), "conduction energy {}", cell("Conduction energy", 1));
+    assert!(!cell("RDS(on)", 1).starts_with('-') || cell("RDS(on)", 1) == "-", "RDS(on) {}", cell("RDS(on)", 1));
+    assert!(cell("Switching frequency", 1).contains("kHz"), "{}", cell("Switching frequency", 1));
+    assert!(cell("Turn-on energy", 5).parse::<usize>().unwrap() >= 4, "count {}", cell("Turn-on energy", 5));
+    let kinds: Vec<u8> = u.azr.power_traj.iter().map(|p| p.2).collect();
+    assert!(kinds.contains(&1) && kinds.contains(&2) && kinds.contains(&0), "the trajectory has all three kinds");
+    for (w, h) in [(1024, 600), (1920, 1080)] {
+        u.set_screen(Screen { w, h });
+        for _ in 0..2 {
+            u.step(0.05);
+            let mut c = Canvas::new(w, h);
+            u.render(&mut c);
+        }
+    }
+}

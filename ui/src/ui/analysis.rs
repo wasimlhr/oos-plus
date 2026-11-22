@@ -75,6 +75,10 @@ pub struct State {
     pub eye_res: Option<(eye::EyeMeas, eye::Jitter, f64)>,
     pub page: super::eyepage::Page,
     pub power: Vec<String>,
+    /// the Switching page's figures as a table (a row of cells each: name, mean, min, max, standard deviation, count)
+    /// and the plot of the voltage against the current: (V, I, kind), the kind 1 in a turn-on, 2 in a turn-off, else 0
+    pub power_table: Vec<[String; 6]>,
+    pub power_traj: Vec<(f32, f32, u8)>,
     pub mag: Option<oos_dsp::magnetic::Magnetic>,
     pub mag_note: String,
     pub dq: Option<oos_dsp::motor::Dq0>,

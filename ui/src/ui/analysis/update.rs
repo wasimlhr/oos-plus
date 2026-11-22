@@ -449,6 +449,8 @@ impl Ui {
 
     /// Power analysis of the record: the rows of the page for its mode.
     pub(super) fn power_update(&mut self, rec: &Record) {
+        self.azr.power_table.clear();
+        self.azr.power_traj.clear();
         let mode = self.m.pw_mode;
         let (v_id, i_id) = (self.m.pw_v, self.m.pw_i);
         let (fline, fsw, reference) = (self.m.line_hz(), self.m.switch_hz(), self.m.pw_ref);
@@ -508,14 +510,14 @@ impl Ui {
             }
             PowerMode::Switching => {
                 let s = power::switching(&v, &i, dt, 10.0);
-                vec![
-                    format!("E on {}   E off {}", si(s.e_on, "J"), si(s.e_off, "J")),
-                    format!("E cond {}   P avg {}", si(s.e_cond, "J"), si(s.p_avg, "W")),
-                    format!("dv/dt {} / {}", si(s.dvdt_rise, "V/s"), si(s.dvdt_fall, "V/s")),
-                    format!("di/dt {} / {}", si(s.didt_rise, "A/s"), si(s.didt_fall, "A/s")),
-                    format!("RDS(on) {}", si(s.rds_on, "\u{3a9}")),
-                    format!("{} transitions", s.transitions.len()),
-                ]
+                self.azr.power_table = switching_rows(&s);
+                self.azr.power_traj = switching_trajectory(&v, &i, dt, &s);
+                vec![format!(
+                    "{} transitions in {}   switching frequency {}",
+                    s.transitions.len(),
+                    si(v.len() as f64 * dt, "s"),
+                    si(s.f_sw, "Hz")
+                )]
             }
             PowerMode::Ripple => {
                 let (pp, ac) = power::ripple(&v);
@@ -565,4 +567,70 @@ impl Ui {
             }
         };
     }
+}
+
+/// The figures of the Switching page as the cells of a table: the energies of a cycle and the losses they make at the
+/// switching frequency (energy times frequency), each with its mean, extremes, standard deviation and count; then the
+/// single figures of the record.
+fn switching_rows(s: &power::Switching) -> Vec<[String; 6]> {
+    let dash = || "-".to_string();
+    let stat = |name: &str, x: power::Stat, unit: &str| -> [String; 6] {
+        if x.n == 0 {
+            return [name.to_string(), dash(), dash(), dash(), dash(), "0".into()];
+        }
+        [name.to_string(), si(x.mean, unit), si(x.min, unit), si(x.max, unit), si(x.sd, unit), x.n.to_string()]
+    };
+    let one = |name: &str, v: f64, unit: &str| -> [String; 6] {
+        let v = if v.is_finite() { si(v, unit) } else { dash() };
+        [name.to_string(), v, dash(), dash(), dash(), dash()]
+    };
+    let loss = |name: &str, x: power::Stat| {
+        stat(name, if s.f_sw.is_finite() { x.times(s.f_sw) } else { power::Stat::default() }, "W")
+    };
+    vec![
+        stat("Turn-on energy", s.on, "J"),
+        loss("Turn-on loss", s.on),
+        stat("Turn-off energy", s.off, "J"),
+        loss("Turn-off loss", s.off),
+        stat("Conduction energy", s.cond, "J"),
+        loss("Conduction loss", s.cond),
+        stat("Total energy", s.total, "J"),
+        loss("Total loss", s.total),
+        one("Switching frequency", s.f_sw, "Hz"),
+        one("Mean of V x I", s.p_avg, "W"),
+        one("dv/dt rising", s.dvdt_rise, "V/s"),
+        one("dv/dt falling", s.dvdt_fall, "V/s"),
+        one("di/dt rising", s.didt_rise, "A/s"),
+        one("di/dt falling", s.didt_fall, "A/s"),
+        one("RDS(on)", s.rds_on, "\u{3a9}"),
+    ]
+}
+
+/// The voltage against the current of the record, at most about 6000 points, each with the kind of the transition it
+/// lies in (1 turn-on, 2 turn-off, 0 between): the trajectory of the switch through its safe operating area.
+fn switching_trajectory(v: &[f32], i: &[f32], dt: f64, s: &power::Switching) -> Vec<(f32, f32, u8)> {
+    let n = v.len().min(i.len());
+    let step = (n / 6000).max(1);
+    let mut windows = s.transitions.iter().peekable();
+    let mut out = Vec::with_capacity(n / step + 1);
+    for k in (0..n).step_by(step) {
+        let t = k as f64 * dt;
+        while windows.peek().is_some_and(|w| w.t1 < t) {
+            windows.next();
+        }
+        let kind = match windows.peek() {
+            Some(w) if w.t0 <= t && t <= w.t1 => {
+                if w.on {
+                    1
+                } else {
+                    2
+                }
+            }
+            _ => 0,
+        };
+        if v[k].is_finite() && i[k].is_finite() {
+            out.push((v[k], i[k], kind));
+        }
+    }
+    out
 }
