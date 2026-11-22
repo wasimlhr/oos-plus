@@ -353,7 +353,9 @@ impl Ui {
     /// As a view of its own (`tile`) it fills `a`.
     pub(super) fn draw_hist_in(&self, cv: &mut Canvas, a: Rect, tile: bool) {
         let Some((bins, mean, sd)) = self.hist_bins() else { return };
-        let Some(c) = self.hist_src().filter(|&c| self.shows(c)) else { return };
+        // over the waveform it belongs to the lane of its source; as a view of its own it is drawn once, after the
+        // lanes, and has only to ask whether the source is hidden (with the second lane as its source it stayed empty)
+        let Some(c) = self.hist_src().filter(|&c| if tile { !self.m.ch_hidden[c] } else { self.shows(c) }) else { return };
         let col = CH_COLORS[c];
         let peak = bins.iter().copied().max().unwrap_or(0).max(1) as f64;
         // as a view of its own: a volts axis at the left, on the lines of the lane it reads, and a count scale
