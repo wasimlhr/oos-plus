@@ -88,8 +88,8 @@ fn sources_that_do_not_fit_sit_behind_a_plus_pill_that_opens_the_popup() {
     let shown = u.source_pills();
     assert_eq!(shown.len() + hidden, 4 + NREF);
     assert!(shown.iter().all(|(_, r)| r.x + r.w <= pill.x), "pills do not overlap the +N pill");
-    let (overlay, ..) = u.footer_rects();
-    assert!(pill.x + pill.w <= overlay.x, "the +N pill stays left of Overlay");
+    let (_, _, time, ..) = u.footer_rects();
+    assert!(pill.x + pill.w <= time.x, "the +N pill stays left of the time base");
     tap(&mut u, pill.x + 5, pill.y + 5);
     let popup = u.workspace.popup.as_ref().expect("Sources popup");
     assert!(popup.rows.len() >= 4 + NREF, "every source is in the popup");
@@ -237,4 +237,45 @@ pub(super) fn row_xy(u: &Ui, label: &str) -> (i32, i32) {
     let i = p.rows.iter().position(|(l, _)| l.starts_with(label)).expect("row in popup");
     let r = p.row_rect(i);
     (r.x + 30, r.y + r.h / 2)
+}
+
+/// The compact bottom bar has the pills of Studio on one line: a source that is on says its scale beside its tag, a
+/// decoder that is on has a pill that opens its menu, a channel that is off is a dim pill that switches it on, and the
+/// plus after them lists the sources. Overlay and Stacked have no button there (they are Display > Traces).
+#[test]
+fn the_compact_bar_has_a_pill_for_each_source_and_decoder() {
+    use super::workspace::FootPill;
+    let mut u = two_channels();
+    u.m.dec_on = true;
+    u.relayout();
+    let pills = u.footer_pills();
+    let kinds: Vec<FootPill> = pills.iter().map(|p| p.0).collect();
+    let want = [FootPill::Wave(WaveId::Ch(0)), FootPill::Wave(WaveId::Ch(1)), FootPill::Dec(0), FootPill::Off(2), FootPill::Off(3)];
+    assert_eq!(kinds, want);
+    let (overlay, stacked, time, trigger, ..) = u.footer_rects();
+    assert_eq!((overlay.w, stacked.w), (0, 0), "no Overlay and Stacked on the bar");
+    let plus = u.footer_plus();
+    let mut all: Vec<Rect> = pills.iter().map(|p| p.1).chain([plus, time, trigger, Ui::MENU_BTN]).collect();
+    all.sort_by_key(|r| r.x);
+    assert!(all.iter().all(|r| r.w >= 38 && r.h >= 30) && all.windows(2).all(|w| w[0].right() <= w[1].x), "{all:?}");
+    // what the pills say
+    let mut cv = Canvas::new(u.scr.w, u.scr.h);
+    cv.au_start();
+    u.render(&mut cv);
+    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+    let scale = format!("{}/div", si_short(u.m.ch[0].volts_per_div() as f64, "V"));
+    for t in ["CH1", scale.as_str(), "B1", "UART", "CH3", "+"] {
+        assert!(texts.iter().any(|s| s == t), "{t:?} is on the bar: {texts:?}");
+    }
+    assert!(!texts.iter().any(|s| s == "Overlay" || s == "Stacked" || s == "Sources"));
+    // the pill of the decoder opens its menu, and closes it again
+    let dec = pills[2].1;
+    tap(&mut u, dec.x + dec.w / 2, dec.y + dec.h / 2);
+    assert!(u.menu_open && u.menu_root() == MenuId::Decode && u.m.dec_sel == 0);
+    tap(&mut u, dec.x + dec.w / 2, dec.y + dec.h / 2);
+    assert!(!u.menu_open);
+    // the pill of a channel that is off switches it on, and it has a pill with its scale then
+    let off = pills[3].1;
+    tap(&mut u, off.x + off.w / 2, off.y + off.h / 2);
+    assert!(u.m.ch[2].on && u.footer_pills().iter().any(|p| p.0 == FootPill::Wave(WaveId::Ch(2))));
 }
