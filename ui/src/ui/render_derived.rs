@@ -496,7 +496,9 @@ impl Ui {
         let k = self.m.math_sel;
         self.math.family = MathFamily::Filter;
         self.m.math = MathOp::Lpf;
-        self.m.math_a = self.m.active.min(NCH - 1);
+        // the active channel when it is on, else the first channel that is
+        let active = self.m.active.min(NCH - 1);
+        self.m.math_a = if self.m.ch[active].on { active } else { (0..NCH).find(|&c| self.m.ch[c].on).unwrap_or(active) };
         self.m.math_filt.resp = crate::math::FiltResp::Butterworth;
         self.m.math_fc = (2.0 / self.m.time_per_div() as f64) as f32;
         self.m.math_offset = 0.0;

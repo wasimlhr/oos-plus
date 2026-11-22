@@ -48,7 +48,7 @@ impl Ui {
         if w < 160 || h < 100 {
             return;
         }
-        let r = Rect::new(a.x + a.w - w - 8, a.y + a.h - h - 8, w, h);
+        let r = Rect::new(a.x + a.w - w - 8, a.y + a.h - h - 30, w, h);
         let f = self.fonts();
         cv.round(r, 6, PANEL_BG, 235);
         let g = Rect::new(r.x + 52, r.y + 26, r.w - 64, r.h - 46);
@@ -67,7 +67,10 @@ impl Ui {
                 while d <= hi {
                     let x = x_of(d);
                     cv.vline(x, g.y, g.bottom(), LINE);
-                    cv.text(&f.s, x + 2, r.bottom() - 6, &si_short(d, "Hz"), DIM);
+                    let label = si_short(d, "Hz");
+                    if x + 2 + f.s.width(&label) <= r.right() - 4 {
+                        cv.text(&f.s, x + 2, r.bottom() - 6, &label, DIM);
+                    }
                     d *= 10.0;
                 }
                 let ticks: &[f64] = if kind == FiltPlot::Gain {
