@@ -747,7 +747,11 @@ left or right edge of the plot inwards (a vertical drag there still moves a chan
 key set to Next view, or SCPI `:DISPlay:VIEW <n>` (`:DISPlay:VIEW:COUNt <1..4>`). The views are saved with a setup.
 
 **Layouts.** Display > Layout arranges the screen (`:DISPlay:LAYout`). Default is the screen this guide describes.
-Minimal has quieter bars and opens every menu as a sheet at the right of the plot. Studio has views that dock, tab and
+Minimal has quieter bars and opens every menu as a sheet at the right of the plot. Its bottom bar, which the Default
+layout takes with Display > Bottom bar > Compact, has Menu, then a pill for each source that is on (its tag in its
+colour and its scale; a tap opens its menu), a pill for each decoder that is on, dim pills for the channels that are
+off (a tap switches one on), a plus that lists the sources, the time base and the trigger. Overlay and Stacked are
+Display > Traces. Studio has views that dock, tab and
 float, and pills in its bottom bar: a tap on the pill of a channel selects the channel, a tap on the selected pill (or a
 double tap on any) opens its sheet, and a hold has the quick actions, Turn off first. Studio offers every menu that Default offers, in these places: the gear at the top
 right is the Menu; the read-out of the sample rate, the memory depth and the mode opens Acquire, and Horizontal is

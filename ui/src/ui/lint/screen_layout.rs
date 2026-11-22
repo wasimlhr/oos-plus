@@ -341,12 +341,14 @@ fn sources_menu_opens_la_and_generator_without_starting_generator_output() {
     u.m.layout = crate::model::Layout::Minimal;
     u.relayout();
     u.m.bar_compact = true;
-    u.tap(80, BOTTOM.y + 15);
+    let plus = u.footer_plus();
+    u.tap(plus.x + plus.w / 2, plus.y + plus.h / 2);
     let (x, y) = fix_tests::row_xy(&u, "Logic analyser");
     u.tap(x, y); // Sources: Logic analyser, immediately above Generator.
     assert!(u.m.la.on && u.menu_open && u.menu == MenuId::La);
     u.close_menu();
-    u.tap(80, BOTTOM.y + 15);
+    let plus = u.footer_plus();
+    u.tap(plus.x + plus.w / 2, plus.y + plus.h / 2);
     let (x, y) = fix_tests::row_xy(&u, "Generator");
     u.tap(x, y);
     assert!(u.menu_open && u.menu == MenuId::Afg);

@@ -670,6 +670,17 @@ pub(crate) struct Workspace {
     pub desktop_panel: Option<bool>,
 }
 
+/// A pill of the compact bottom bar.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum FootPill {
+    /// a channel or a reference that is on
+    Wave(WaveId),
+    /// a decoder that is on
+    Dec(usize),
+    /// a channel that is off
+    Off(usize),
+}
+
 impl Ui {
     /// Display/knob focus is independent of acquisition and measurement A/B.
     pub(super) fn selected_workspace_source(&self) -> Option<WaveId> {
@@ -855,10 +866,45 @@ impl Ui {
         let trigger = Rect::new(right, y, 222, 30);
         right -= 128;
         let time = Rect::new(right, y, 124, 30);
-        right -= 124;
-        let overlay = Rect::new(right, y, 58, 30);
-        let stacked = Rect::new(right + 62, y, 58, 30);
-        (overlay, stacked, time, trigger, live, panel, Rect::new(126, y, (right - 132).max(0), 30))
+        // Overlay and Stacked are a row of Display (Traces); they have no button on the bar any more, and their room
+        // goes to the pills of the sources, which say their scale as the pills of Studio do
+        let none = Rect::new(right, y, 0, 30);
+        (none, none, time, trigger, live, panel, Rect::new(56, y, (right - 62).max(0), 30))
+    }
+    /// The chip after the pills that opens the list of sources: it adds one, and holds those that have no pill.
+    const PLUS_W: i32 = 40;
+    /// The pills of the bar, in order: the sources that are on, the decoders that are on, then the channels that are
+    /// off while there is room for them (a tap switches one on).
+    pub(super) fn footer_pills(&self) -> Vec<(FootPill, Rect)> {
+        let r = self.footer_rects().6;
+        let room = (r.w - Self::PLUS_W - 4).max(0);
+        let mut on: Vec<FootPill> = self.pill_sources().into_iter().map(FootPill::Wave).collect();
+        let active = self.selected_workspace_source();
+        on.extend((0..DECODERS).filter(|&k| self.m.dec_is_on(k)).map(FootPill::Dec));
+        // every pill at least as wide as its tag; what does not fit is behind the plus, the selected source first
+        let fit = (room / 44).max(1) as usize;
+        if on.len() > fit {
+            if let Some(i) = on.iter().position(|p| matches!(p, FootPill::Wave(id) if Some(*id) == active)) {
+                if i >= fit { on.swap(i, fit - 1); }
+            }
+            on.truncate(fit);
+        }
+        let width = (room / on.len().max(1) as i32).clamp(44, 150);
+        let mut pills: Vec<(FootPill, Rect)> =
+            on.into_iter().enumerate().map(|(i, p)| (p, Rect::new(r.x + i as i32 * width, r.y, width - 4, r.h))).collect();
+        let mut x = r.x + pills.len() as i32 * width;
+        for c in (0..n_ch()).filter(|&c| !self.m.ch[c].on) {
+            if x + 48 > r.x + room { break; }
+            pills.push((FootPill::Off(c), Rect::new(x, r.y, 44, r.h)));
+            x += 48;
+        }
+        pills
+    }
+    /// The plus after the last pill.
+    pub(super) fn footer_plus(&self) -> Rect {
+        let r = self.footer_rects().6;
+        let x = self.footer_pills().last().map_or(r.x, |(_, p)| p.right() + 4);
+        Rect::new(x, r.y, Self::PLUS_W, r.h)
     }
     /// Sources that get a pill: every live channel and every loaded or selected reference.
     fn pill_sources(&self) -> Vec<WaveId> {
@@ -870,43 +916,14 @@ impl Ui {
         );
         sources
     }
-    /// How many pills fit, and whether the rest goes behind a "+N" pill.
-    fn pill_count(&self, total: usize) -> (usize, bool) {
-        let fit = (self.footer_rects().6.w / 42).max(1) as usize;
-        if total > fit && fit > 1 {
-            (fit - 1, true)
-        } else {
-            (total.min(fit), false)
-        }
-    }
+    /// The pills of the sources that are on.
     pub(super) fn source_pills(&self) -> Vec<(WaveId, Rect)> {
-        let r = self.footer_rects().6;
-        let mut sources = self.pill_sources();
-        let (count, more) = self.pill_count(sources.len());
-        let active = self.selected_workspace_source();
-        if let Some(index) = sources.iter().position(|id| Some(*id) == active) {
-            if index >= count && count > 0 {
-                sources.swap(index, count - 1);
-            }
-        }
-        let width = (r.w / (count + more as usize).max(1) as i32).clamp(38, 78);
-        sources
-            .into_iter()
-            .take(count)
-            .enumerate()
-            .map(|(i, id)| (id, Rect::new(r.x + i as i32 * width, r.y, width - 4, r.h)))
-            .collect()
+        self.footer_pills().into_iter().filter_map(|(p, r)| if let FootPill::Wave(id) = p { Some((id, r)) } else { None }).collect()
     }
-    /// The "+N" pill after the last source pill that opens the Sources popup, when not every source has a pill.
+    /// How many sources that are on have no pill, and the plus that lists them, when not every source has one.
     pub(super) fn source_overflow(&self) -> Option<(usize, Rect)> {
-        let r = self.footer_rects().6;
-        let total = self.pill_sources().len();
-        let (count, more) = self.pill_count(total);
-        if !more {
-            return None;
-        }
-        let width = (r.w / (count + 1) as i32).clamp(38, 78);
-        Some((total - count, Rect::new(r.x + count as i32 * width, r.y, width - 4, r.h)))
+        let hidden = self.pill_sources().len().saturating_sub(self.source_pills().len());
+        (hidden > 0).then(|| (hidden, self.footer_plus()))
     }
     pub(super) fn compact_cards(&self) -> Cards {
         let mut ch = [Rect::new(0, BOTTOM.y, 0, 30); NCH];
@@ -926,33 +943,44 @@ impl Ui {
             cv.text_in(&self.fonts().s, r, 1, label, if on { ACCENT } else { TEXT });
         };
         draw(cv, Self::MENU_BTN, if self.m.touch_lock { "Unlock" } else { "Menu" }, false);
-        draw(cv, Rect::new(56, BOTTOM.y + 3, 64, 30), "Sources", false);
-        for (id, rect) in self.source_pills() {
-            let (label, selected) = match id {
-                WaveId::Ch(c) => (format!("CH{}", c + 1), self.selected_workspace_source() == Some(id)),
-                WaveId::Ref(i) => (format!("R{}", i + 1), self.selected_workspace_source() == Some(id)),
+        // the pills of Studio on one line: the tag of the source in its colour, then what it stands at (the scale of a
+        // channel or a reference, the protocol or the label of a decoder). The selected source has the accent's edge
+        let f = self.fonts();
+        for (pill, rect) in self.footer_pills() {
+            let (tag, text, color, selected) = match pill {
+                FootPill::Wave(id) => {
+                    let scale = match id {
+                        WaveId::Ch(c) => self.m.ch[c].volts_per_div(),
+                        WaveId::Ref(i) => self.refs[i].as_ref().map_or(0.0, |r| r.vpd),
+                    };
+                    (self.wave_name(id), format!("{}/div", si_short(scale as f64, "V")), self.wave_color(id), self.selected_workspace_source() == Some(id))
+                }
+                FootPill::Dec(k) => {
+                    let m = self.m.dec_view(k);
+                    (self.dec_tag(k), m.dec_name(), self.dec_color(&m), self.menu_open && self.menu_root() == MenuId::Decode && self.m.dec_sel == k)
+                }
+                FootPill::Off(c) => {
+                    // a channel that is off: its name, dim; a tap switches it on
+                    btn(cv, rect, BAR, BTN_BORDER);
+                    cv.text_in(&f.s, rect, 1, &format!("CH{}", c + 1), DIM);
+                    continue;
+                }
             };
-            let color = self.wave_color(id);
-            // the active source is filled in its colour, the others only carry it in their label
-            btn(cv, rect, if selected { color } else { BAR }, if selected { color } else { BTN_BORDER });
-            cv.text_in(&self.fonts().sb, rect, 1, &label, if selected { BAR } else { color });
+            btn(cv, rect, BTN, if selected { ACCENT } else { color });
+            let tw = f.sb.width(&tag) + 10;
+            let badge = Rect::new(rect.x + 4, rect.y + 6, tw.min(rect.w - 8), rect.h - 12);
+            cv.round(badge, 4, color, 255);
+            cv.text_in(&f.sb, badge, 1, &tag, DARK_TEXT);
+            // what it stands at, while the pill has the room for it whole (its "/div" goes first)
+            let room = rect.right() - 6 - (badge.right() + 6);
+            let text = if f.s.width(&text) > room { text.trim_end_matches("/div").to_string() } else { text };
+            if f.s.width(&text) <= room { cv.text_in(&f.s, Rect::new(badge.right() + 6, rect.y, room, rect.h), 0, &text, TEXT); }
         }
-        if let Some((n, rect)) = self.source_overflow() {
-            draw(cv, rect, &format!("+{n}"), false);
-        }
-        let (overlay, stacked, time, trigger, live, panel, _) = self.footer_rects();
-        if self.view_on() || self.m.view == AView::Eye {
-            // an analyser has the plot: the two trace modes have nothing to arrange, so they are shown as unavailable
-            for (r, label) in [(overlay, "Overlay"), (stacked, "Stacked")] {
-                btn(cv, r, BAR, LINE);
-                cv.text_in(&self.fonts().s, r, 1, label, DIM);
-            }
-        } else {
-            draw(cv, overlay, "Overlay", !self.workspace.stacked);
-            draw(cv, stacked, "Stacked", self.workspace.stacked);
-        }
+        let plus = self.footer_plus();
+        draw(cv, plus, &self.source_overflow().map_or("+".to_string(), |(n, _)| format!("+{n}")), false);
+        let (_, _, time, trigger, live, panel, _) = self.footer_rects();
         let (scale, _) = self.view();
-        draw(cv, time, &format!("Time {}/div", si_short(scale as f64, "s")), false);
+        draw(cv, time, &format!("{}/div", si_short(scale as f64, "s")), self.menu_open && self.menu_root() == MenuId::Horizontal);
         self.draw_compact_trigger(cv, trigger);
         if let Some(r) = live {
             draw(cv, r, "Live", false);
@@ -973,34 +1001,40 @@ impl Ui {
             }
             return true;
         }
-        if Rect::new(56, BOTTOM.y + 3, 64, 30).contains(x, y) {
-            self.open_sources(x, BOTTOM.y);
-            return true;
-        }
-        for (id, rect) in self.source_pills() {
+        for (pill, rect) in self.footer_pills() {
             if !rect.contains(x, y) {
                 continue;
             }
-            self.select_workspace_source(id);
-            match id {
-                WaveId::Ch(c) => self.toggle_menu(MenuId::Channel(c)),
-                WaveId::Ref(_) => self.toggle_menu(MenuId::Ref),
+            match pill {
+                FootPill::Wave(id) => {
+                    self.select_workspace_source(id);
+                    match id {
+                        WaveId::Ch(c) => self.toggle_menu(MenuId::Channel(c)),
+                        WaveId::Ref(_) => self.toggle_menu(MenuId::Ref),
+                    }
+                }
+                // the decoder of the pill, and its menu; a second tap closes it
+                FootPill::Dec(k) => {
+                    let open = self.menu_open && self.menu_root() == MenuId::Decode && self.m.dec_sel == k;
+                    self.m.dec_select(k);
+                    if open { self.close_menu(); } else { self.open_menu(MenuId::Decode); }
+                }
+                FootPill::Off(c) => {
+                    self.m.ch[c].on = true;
+                    self.select_workspace_source(WaveId::Ch(c));
+                    self.settings_changed();
+                    self.relayout();
+                }
             }
             return true;
         }
-        if let Some((_, rect)) = self.source_overflow() {
-            if rect.contains(x, y) {
-                self.open_sources(rect.x, BOTTOM.y);
-                return true;
-            }
+        let plus = self.footer_plus();
+        if plus.contains(x, y) {
+            self.open_sources(plus.x, BOTTOM.y);
+            return true;
         }
-        let (overlay, stacked, time, trigger, live, panel, _) = self.footer_rects();
-        if (overlay.contains(x, y) || stacked.contains(x, y)) && (self.view_on() || self.m.view == AView::Eye) {
-            self.toast("Overlay and Stacked arrange the waveform view");
-        }
-        else if overlay.contains(x, y) { self.choose_trace_mode(false); }
-        else if stacked.contains(x, y) { self.choose_trace_mode(true); }
-        else if time.contains(x, y) { self.toggle_menu(MenuId::Horizontal); }
+        let (_, _, time, trigger, live, panel, _) = self.footer_rects();
+        if time.contains(x, y) { self.toggle_menu(MenuId::Horizontal); }
         else if live.is_some_and(|r| r.contains(x, y)) { self.return_to_live(); }
         else if panel.is_some_and(|r| r.contains(x, y)) { self.workspace.desktop_panel = self.workspace.desktop_panel.map(|open| !open); }
         else { self.compact_trigger_tap(x, y, trigger); }

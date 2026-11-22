@@ -171,16 +171,19 @@ impl Ui {
         btn(cv, rect, BAR, if self.menu_open && self.menu_root() == MenuId::Trigger { ACCENT } else { CARD_BORDER });
         let outer = cv.save_clip();
         cv.clip_within(rect.inset(3));
-        // the caption gives up its last part (the mode) before it is cut, and ends in "..." as a last resort
+        // one line, as the trigger pill of Studio reads: the source and the level in the source's place, then the type
+        // (it gives way first, then the level is cut)
         let room = rect.w - 14;
-        let full = format!("{} · {} · {:?}", self.trigger_source_label(), self.m.trig_type.name(), self.m.trig_mode);
-        let short = format!("{} · {}", self.trigger_source_label(), self.m.trig_type.name());
-        let caption = if self.fonts().sb.width(&full) <= room { full } else { short };
-        cv.text_fit(&self.fonts().sb, Rect::new(rect.x + 7, rect.y, room, 15), 0, &caption, ACCENT);
+        let f = self.fonts();
         let levels = if matches!(self.m.trig_type, TrigType::Runt | TrigType::Slope | TrigType::Window) {
             format!("{} … {}", si_short(self.m.trig_level2 as f64, "V"), si_short(self.m.trig_level as f64, "V"))
         } else { si_short(self.trig_level_shown() as f64, "V") };
-        cv.text_fit(&self.fonts().s, Rect::new(rect.x + 7, rect.y + 14, room, 14), 0, &levels, TEXT);
+        let head = format!("{} {}", self.trigger_source_label(), levels);
+        let x = rect.x + 7 + f.sb.width(&head).min(room) + 8;
+        cv.text_fit(&f.sb, Rect::new(rect.x + 7, rect.y, room, rect.h), 0, &head, ACCENT);
+        let kind = format!("{} · {:?}", self.m.trig_type.name(), self.m.trig_mode);
+        let kind = if f.s.width(&kind) <= rect.right() - 7 - x { kind } else { self.m.trig_type.name().to_string() };
+        if f.s.width(&kind) <= rect.right() - 7 - x { cv.text_in(&f.s, Rect::new(x, rect.y, rect.right() - 7 - x, rect.h), 0, &kind, DIM); }
         cv.restore_clip(outer);
     }
 
