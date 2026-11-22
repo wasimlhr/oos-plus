@@ -1882,7 +1882,7 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
             let (x, y) = mid(chip(&u, k));
             tap(&mut u, x, y);
             assert_eq!(u.m.dec_sel, k, "{layout:?}: a tap on D{}", k + 1);
-            assert_eq!(u.sheet_label(Item::DecOn), format!("Decoder D{}", k + 1), "{layout:?}");
+            assert_eq!(u.sheet_label(Item::DecOn), format!("Decoder B{}", k + 1), "{layout:?}");
             assert!(!u.m.dec_on, "{layout:?}: D{} starts off", k + 1);
             let (x, y) = mid(ctrl(&u, Item::DecOn));
             tap(&mut u, x, y);
@@ -1918,9 +1918,9 @@ fn four_decoders_of_four_protocols_run_side_by_side() {
         u.render(&mut cv);
         let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
         for (k, name) in ["UART", "I2C", "SPI", "CAN"].iter().enumerate() {
-            // Studio names several decoders with their source ("D1 UART CH1"; one alone has no number); the other
-            // layouts have the decoder's number and protocol, and the colour of the name says the source
-            let want = if layout == Layout::Studio { format!("D{} {} CH{}", k + 1, name, k + 1) } else { format!("D{} {}", k + 1, name) };
+            // the bus first, its number and protocol; Studio writes its input after them ("B1 UART CH1"), in the
+            // other layout the colour of the name says the source
+            let want = if layout == Layout::Studio { format!("B{} {} CH{}", k + 1, name, k + 1) } else { format!("B{} {}", k + 1, name) };
             assert!(texts.iter().any(|t| *t == want), "{layout:?}: no bus named {want:?} on the plot");
         }
     }
@@ -2809,10 +2809,10 @@ fn a_decoder_has_a_pill_in_the_bottom_bar_that_opens_its_sheet() {
     for _ in 0..3 { u.step(0.03); frame(&mut u); }
     assert!(u.studio_bottom().dec.iter().all(|r| r.w == 0), "no decoder is on");
     // decoder 2: SPI
-    u.select_option(Item::DecSel, "D2");
+    u.select_option(Item::DecSel, "B2");
     u.m.dec_on = true;
     u.select_option(Item::DecProto, "SPI");
-    u.select_option(Item::DecSel, "D1");
+    u.select_option(Item::DecSel, "B1");
     for _ in 0..3 { u.step(0.03); frame(&mut u); }
     let b = u.studio_bottom();
     assert!(b.dec[0].w == 0 && b.dec[1].w >= 40 && b.dec[1].h >= 36, "{:?}", b.dec);
@@ -2823,7 +2823,7 @@ fn a_decoder_has_a_pill_in_the_bottom_bar_that_opens_its_sheet() {
     cv.au_start();
     u.render(&mut cv);
     let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
-    assert!(texts.iter().any(|t| t == "D2") && texts.iter().any(|t| t == "SPI"), "the pill says which decoder and what it reads");
+    assert!(texts.iter().any(|t| t == "B2") && texts.iter().any(|t| t == "SPI"), "the pill says which decoder and what it reads");
     let (x, y) = mid(b.dec[1]);
     tap(&mut u, x, y);
     assert!(u.menu_open && u.menu == MenuId::Decode && u.m.dec_sel == 1, "the Decode sheet of decoder 2");

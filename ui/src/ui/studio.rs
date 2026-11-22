@@ -888,7 +888,7 @@ impl Ui {
             chip(cv, r, BTN, if sel { ACCENT } else { col });
             // the dot is dim while the channel of its line is off: the decoder is on and has nothing to read
             cv.circle(r.x + 5, r.y + 5, 3, if self.dec_shown(k) { GREEN } else { DIM });
-            self.studio_source_pill(cv, r, &format!("D{}", k + 1), m.dec_proto.name(), &decband::dec_lines_text(&m), col);
+            self.studio_source_pill(cv, r, &self.dec_tag(k), &m.dec_name(), &decband::dec_lines_text(&m), col);
         }
         if b.add.w > 0 {
             chip(cv, b.add, BTN, if self.studio.ch_picker { ACCENT } else { BTN_BORDER });
@@ -1126,7 +1126,7 @@ impl Ui {
         if let Some(k) = (0..DECODERS).find(|&k| b.dec[k].w > 0 && Self::hit40(b.dec[k]).contains(x, y)) {
             // like a math pill: that decoder and its Decode sheet; a second tap closes it
             let (prev, open) = (self.m.dec_sel, self.menu_open && self.menu == MenuId::Decode);
-            if prev != k { self.select_option(Item::DecSel, &format!("D{}", k + 1)); }
+            if prev != k { self.select_option(Item::DecSel, &self.dec_tag(k)); }
             if open && prev != k { return; }
             return self.toggle_menu(MenuId::Decode);
         }
@@ -3125,7 +3125,7 @@ impl Ui {
         // nothing to tap; the way to the menu was Add > Bus or the Menu
         let decoder = self.studio.dec_labels.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(k, _)| k);
         if let Some(k) = decoder {
-            if self.m.dec_sel != k { self.select_option(Item::DecSel, &format!("D{}", k + 1)); }
+            if self.m.dec_sel != k { self.select_option(Item::DecSel, &self.dec_tag(k)); }
             self.toggle_menu(MenuId::Decode);
             return true;
         }

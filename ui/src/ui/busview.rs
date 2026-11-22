@@ -47,7 +47,7 @@ impl Ui {
                 slot.rec = Some(rec);
             }
             if let Some(view) = &self.pn.view_slots[k].view {
-                v.push((format!("D{} {}", k + 1, p.name()), view.clone()));
+                v.push((format!("{} {}", self.dec_tag(k), p.name()), view.clone()));
             }
         }
         v

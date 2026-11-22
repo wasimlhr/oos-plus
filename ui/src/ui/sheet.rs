@@ -25,6 +25,10 @@ pub(super) const SHEET_FOOT: i32 = 56;
 const PAD: i32 = 12;
 /// Width of the label column of a row.
 const LABEL_W: i32 = 132;
+/// A line of a decoder is one row (ADR 0034, ui-ux): its name, its source, its threshold. The name has this width,
+/// the threshold that one.
+const LINE_LABEL_W: i32 = 60;
+const LINE_THR_W: i32 = 92;
 
 /// The five kinds of row a sheet has.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -98,6 +102,8 @@ pub(super) struct SheetRowGeo {
     pub row: Rect,
     pub label: Rect,
     pub ctrl: Rect,
+    /// a second value at the right end of the row, and its place: the threshold of a decoder's line
+    pub aux: Option<(Item, Rect)>,
 }
 
 pub(super) struct SheetGeo {
@@ -385,6 +391,11 @@ impl Ui {
     /// the second page: a UART was switched on and read nothing until the baud rate was found there
     fn decode_tabs(&self, menu: MenuId, tabs: &mut Vec<SheetTab>) {
         use Item::*;
+        // a threshold stands in the row of its line (`sheet_line_thr`), so it is no row of its own
+        let in_line: Vec<Item> = [DecSrc, DecSrc2, DecCs, DecSrc4].into_iter().filter_map(|it| self.sheet_line_thr(it)).collect();
+        for t in tabs.iter_mut() {
+            t.rows.retain(|it| !in_line.contains(it));
+        }
         // SPI: its four lines stand together on the first page (MISO was alone on Settings, where a line is
         // not looked for). The page has seven rows, so Input, which is chosen once, ends Settings, and the
         // Mode heads it: a bus is read in mode 0 more often than not
@@ -399,12 +410,23 @@ impl Ui {
             let row = tabs[1].rows.remove(i);
             tabs[0].rows.push(row);
         }
+        // the name and the place of the band are settings; where the protocol fills that page they have their own
+        if tabs[1].rows.len() > SHEET_MAX_ROWS {
+            let (band, rest) = std::mem::take(&mut tabs[1].rows).into_iter().partition(|it| matches!(it, DecLabel | DecPos));
+            tabs[1].rows = rest;
+            tabs.push(SheetTab { name: "Band", rows: band, foot: Vec::new() });
+        }
         // the thresholds, and "Turn on CH1" for a line that is switched off, come to the first page when they
         // fit it: a decoder of one line with few settings is one page then, without tabs. The rows keep the
         // order of the menu (ADR 0031)
         if tabs[0].rows.len() + tabs[2].rows.len() <= SHEET_MAX_ROWS {
             let levels = std::mem::take(&mut tabs[2].rows);
             tabs[0].rows.extend(levels);
+        } else if tabs[1].rows.len() + tabs[2].rows.len() <= SHEET_MAX_ROWS {
+            // what is left of the levels (Threshold to middle, the gap of C-PHY) is no page of one row: it goes
+            // with the settings
+            let levels = std::mem::take(&mut tabs[2].rows);
+            tabs[1].rows.extend(levels);
         }
         if tabs[0].rows.len() < SHEET_MAX_ROWS {
             if let Some(i) = tabs[1].rows.iter().position(|it| *it == SrcOn) {
@@ -419,7 +441,9 @@ impl Ui {
             tabs.push(SheetTab { name: "Band", rows: band, foot: Vec::new() });
         }
         let order = self.sheet_source_items(menu);
-        tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+        for t in tabs.iter_mut().take(2) {
+            t.rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+        }
         // (a page without a row is no tab here: which ones a decoder has changes with its protocol only)
         tabs.retain(SheetTab::holds);
     }
@@ -665,6 +689,9 @@ impl Ui {
     /// the cursor mode); in the fixed column it became a list, one tap more for every change.
     pub(super) fn sheet_label_w(&self, it: Item) -> i32 {
         let row = SHEET_W - 2 * PAD;
+        if self.sheet_line_thr(it).is_some() {
+            return LINE_LABEL_W;
+        }
         if it == Item::TrigType || it == Item::RefColor || Self::kind(it) != Kind::Choice || !matches!(self.ctl(it, row - LABEL_W), Ctl::Pick) {
             return LABEL_W;
         }
@@ -673,6 +700,30 @@ impl Ui {
             Ctl::Seg(o, _) if need < LABEL_W && o.len() <= SHEET_MAX_SEGS => need,
             _ => LABEL_W,
         }
+    }
+
+    /// The threshold that stands in the row of a decoder's line `it`: the line's own, or the decoder's for its main
+    /// line. None where the line has no threshold of that kind: no source, the lines of the logic analyser (the
+    /// probe's comparators set their levels), and C-PHY, which has a level gap.
+    pub(super) fn sheet_line_thr(&self, it: Item) -> Option<Item> {
+        let role = match it {
+            Item::DecSrc => 0,
+            Item::DecSrc2 => 1,
+            Item::DecCs => 2,
+            Item::DecSrc4 => 3,
+            _ => return None,
+        };
+        if self.m.dec_on_la() || self.m.dec_proto == Proto::CPHY {
+            return None;
+        }
+        self.m.dec_role_src(role)?;
+        Some(if role == 0 { Item::DecThr } else { Item::DecThrLine(role) })
+    }
+
+    /// The width the control of row `it` has: the row without its label, and without the threshold of a line.
+    fn sheet_ctrl_w(&self, it: Item) -> i32 {
+        let aux = if self.sheet_line_thr(it).is_some() { LINE_THR_W + 6 } else { 0 };
+        SHEET_W - 2 * PAD - self.sheet_label_w(it) - aux
     }
 
     /// The button of an Off | On row that sets `on` (tests tap it).
@@ -689,7 +740,7 @@ impl Ui {
 
     /// The row type of an item, from the control the classic dialog would give it.
     pub(super) fn sheet_row_kind(&self, it: Item) -> RowKind {
-        let w = SHEET_W - 2 * PAD - self.sheet_label_w(it);
+        let w = self.sheet_ctrl_w(it);
         if it == Item::TrigType || it == Item::RefColor {
             return RowKind::Choice;
         }
@@ -797,7 +848,7 @@ impl Ui {
             Item::RefClearOne => format!("Clear R{}", self.ref_page.sel + 1),
             // the rows below are those of one decoder of four: the switch says whose it is
             Item::DecSel => "Decoders".into(),
-            Item::DecOn => format!("Decoder D{}", self.m.dec_sel + 1),
+            Item::DecOn => format!("Decoder {}", self.dec_tag(self.m.dec_sel)),
             // a line is named by what it is in the protocol (Clock, Data, CS), where the protocol says so
             Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 => {
                 let role = match it { Item::DecSrc => 0, Item::DecSrc2 => 1, Item::DecCs => 2, _ => 3 };
@@ -851,9 +902,10 @@ impl Ui {
             let ctrl = match kind {
                 RowKind::Link => Rect::new(row.x, row.y + 2, row.w, SHEET_ROW - 4),
                 RowKind::Toggle if Self::sheet_is_switch(it) => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
-                _ => Rect::new(row.x + lw, row.y + 2, row.w - lw, SHEET_ROW - 4),
+                _ => Rect::new(row.x + lw, row.y + 2, self.sheet_ctrl_w(it), SHEET_ROW - 4),
             };
-            rows.push(SheetRowGeo { it, kind, row, label, ctrl });
+            let aux = self.sheet_line_thr(it).map(|thr| (thr, Rect::new(row.right() - LINE_THR_W, row.y + 2, LINE_THR_W, SHEET_ROW - 4)));
+            rows.push(SheetRowGeo { it, kind, row, label, ctrl, aux });
         }
         let foot = self.sheet_foot_rects(r, &t.foot);
         Some(SheetGeo { r, back, close, tabs, rows, foot })
@@ -1100,6 +1152,14 @@ impl Ui {
         if self.item_blocked(it).is_some() {
             Self::draw_blocked_veil(cv, if row.kind == RowKind::Link { Rect::new(0, 0, 0, 0) } else { row.label }, c);
         }
+        // the threshold of a decoder's line: what it is in small, its value under it; a tap opens the number pad
+        if let Some((thr, r)) = row.aux {
+            btn(cv, r, BTN, BTN_BORDER);
+            cv.set_clip(r);
+            cv.text_in(&f.s, Rect::new(r.x, r.y + 3, r.w, r.h / 2 - 3), 1, "Threshold", DIM);
+            cv.text_in(&f.sb, Rect::new(r.x, r.y + r.h / 2 - 2, r.w, r.h / 2), 1, &self.value(thr), TEXT);
+            cv.no_clip();
+        }
     }
 
     // ------------------------------------------------------------------------------------------------ tapping
@@ -1177,6 +1237,12 @@ impl Ui {
 
     fn sheet_row_tap(&mut self, row: &SheetRowGeo, x: i32, y: i32) {
         let it = row.it;
+        if let Some((thr, r)) = row.aux {
+            if r.contains(x, y) {
+                self.open_numpad(thr);
+                return;
+            }
+        }
         match row.kind {
             RowKind::Choice => {
                 if !row.ctrl.contains(x, y) {

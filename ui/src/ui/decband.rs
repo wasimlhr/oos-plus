@@ -417,6 +417,12 @@ impl Ui {
     }
 
     /// The colour of the decoder `m` is the view of: that of its main line.
+    /// What decoder `k` is called on the screen: a bus of its own, "B1" to "B4" (ADR 0034, ui-ux). "D1" is a line
+    /// of the logic analyser as well, and the Default layout keeps it: its screen is upstream's.
+    pub(crate) fn dec_tag(&self, k: usize) -> String {
+        format!("{}{}", if self.m.layout == Layout::Default { 'D' } else { 'B' }, k + 1)
+    }
+
     /// The height of the bands at the bottom of the window being drawn, their bit rows with them. A band with a
     /// place of its own is not among them.
     pub(super) fn dec_stack_h(&self) -> i32 {
@@ -457,17 +463,13 @@ impl Ui {
             let top = if bit_row { y - DEC_BITS } else { y };
             cv.blend(Rect::new(a.x, top - 3, a.w, y + h + 3 - (top - 3)), BG, 200);
         }
-        // the name in the source's colour, which says the source. Studio writes the source too, and the number only
-        // where several decoders are on ("UART CH1", "D2 SPI CH2"); a tap on the name opens the Decode menu of this
-        // decoder there (`studio.dec_labels`)
+        // the bus first: its number and its name ("B1 UART"), in the source's colour. Studio writes its input after
+        // them ("B2 SPI CH2"); a tap on the name opens the Decode menu of this decoder there (`studio.dec_labels`)
         let studio = self.m.layout == Layout::Studio;
-        let name = if studio {
-            let several = (0..DECODERS).filter(|&d| self.m.dec_is_on(d)).count() > 1;
-            let number = if several { format!("D{} ", k + 1) } else { String::new() };
-            let source = if m.dec_on_la() { String::new() } else { format!(" {}", decode_source_name(m.dec_src)) };
-            format!("{}{}{}", number, m.dec_name(), source)
+        let name = if studio && !m.dec_on_la() {
+            format!("{} {} {}", self.dec_tag(k), m.dec_name(), decode_source_name(m.dec_src))
         } else {
-            format!("D{} {}", k + 1, m.dec_name())
+            format!("{} {}", self.dec_tag(k), m.dec_name())
         };
         // in a plot it stands right of the channel markers at the left edge (Studio: of the lane badges), which are
         // drawn after the band and would cover it
@@ -739,7 +741,7 @@ mod tests {
             cv.au_start();
             u.render(&mut cv);
             let texts = cv.au.take().unwrap();
-            texts.into_iter().any(|e| matches!(e, Au::Text { s, .. } if s == "D1 UART" || s == "source channel off"))
+            texts.into_iter().any(|e| matches!(e, Au::Text { s, .. } if s == "B1 UART" || s == "source channel off"))
         };
         assert!(named(&mut u), "the band of a decoder on a channel that is on");
         u.m.ch[2].on = false;
@@ -773,17 +775,17 @@ mod tests {
                 _ => None,
             })
         };
-        let bottom = at(&mut u, "D1 UART").expect("the band is named by its protocol");
+        let bottom = at(&mut u, "B1 UART").expect("the band is named by its protocol");
         assert!(u.items(MenuId::Decode).contains(&Item::DecLabel) && u.items(MenuId::Decode).contains(&Item::DecPos));
         assert_eq!((u.value(Item::DecLabel), u.value(Item::DecPos)), ("UART".to_string(), "Bottom".to_string()));
         u.m.dec_label = "SENSOR".into();
-        assert_eq!(at(&mut u, "D1 SENSOR"), Some(bottom), "the label takes the place of the protocol");
-        assert_eq!(at(&mut u, "D1 UART"), None);
+        assert_eq!(at(&mut u, "B1 SENSOR"), Some(bottom), "the label takes the place of the protocol");
+        assert_eq!(at(&mut u, "B1 UART"), None);
         // two divisions above the middle; a step down from the lowest place is the bottom again
         assert_eq!(u.range_set(Item::DecPos, 2.0), Some(2.0));
         assert_eq!(u.value(Item::DecPos), "+2.0 div");
         let a = u.plot.area;
-        let own = at(&mut u, "D1 SENSOR").unwrap();
+        let own = at(&mut u, "B1 SENSOR").unwrap();
         let line = a.y + a.h / 2 - (2.0 * a.h as f32 / VDIV) as i32;
         assert!((own - line).abs() <= DEC_BOX && own < bottom - a.h / 4, "{own} {line} {bottom}");
         // the second decoder stands at the bottom, where the first stood, and has no label
@@ -791,8 +793,8 @@ mod tests {
         u.m.dec_on = true;
         u.m.dec_src = 2;
         assert_eq!((u.m.dec_label.as_str(), u.m.dec_pos), ("", None));
-        assert_eq!(at(&mut u, "D2 UART"), Some(bottom));
-        assert_eq!(at(&mut u, "D1 SENSOR"), Some(own));
+        assert_eq!(at(&mut u, "B2 UART"), Some(bottom));
+        assert_eq!(at(&mut u, "B1 SENSOR"), Some(own));
         u.m.dec_select(0);
         assert_eq!(u.range_set(Item::DecPos, -4.0), Some(-4.0));
         assert_eq!((u.m.dec_pos, u.value(Item::DecPos)), (None, "Bottom".to_string()));
@@ -848,7 +850,7 @@ mod tests {
     }
 
     /// Default draws upstream's band: its number, protocol and source dim at the left ("1 UART CH3"), and it stays
-    /// while the source channel is off. Minimal draws the fork's band, named "D1 UART", which goes with its channel.
+    /// while the source channel is off. Minimal draws the fork's band, named "B1 UART", which goes with its channel.
     #[test]
     fn default_draws_upstreams_band_and_minimal_the_forks() {
         for layout in [Layout::Default, Layout::Minimal] {
@@ -858,7 +860,7 @@ mod tests {
             u.m.dec_on = true;
             u.m.dec_src = 2;
             let t = drawn(&mut u);
-            let (up, fork) = (t.iter().any(|s| s == "1 UART CH3"), t.iter().any(|s| s == "D1 UART"));
+            let (up, fork) = (t.iter().any(|s| s == "1 UART CH3"), t.iter().any(|s| s == "B1 UART"));
             assert_eq!((up, fork), (layout == Layout::Default, layout != Layout::Default), "{layout:?}");
             u.m.ch[2].on = false;
             let t = drawn(&mut u);
