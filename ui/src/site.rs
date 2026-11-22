@@ -87,6 +87,18 @@ impl oos_remote::http::Site for Ctx<'_> {
                 // refused: the body says why (409, #205)
                 Err(e) => Some(("text/plain", Body::Now(format!("REFUSED: {}", e).into_bytes()), true)),
             },
+            // what a monitor on the HDMI port gets: the frame loop copies its next picture for this request and a thread
+            // encodes it; the sender thread waits for it. 409 while no monitor is driven
+            "/monitor.png" if !post => match (self.live, ui.hdmi.out) {
+                (Some(live), Some(_)) => {
+                    let (monitor, since) = (std::sync::Arc::clone(&live.monitor), live.monitor.ask());
+                    let make = move || {
+                        monitor.wait(since, crate::shots::MONITOR_WAIT).map(|png| png.to_vec()).unwrap_or_default()
+                    };
+                    Some(("image/png", Body::Later(Box::new(make)), false))
+                }
+                _ => Some(("text/plain", Body::Now(b"No monitor is connected".to_vec()), true)),
+            },
             // the screen copied here, encoded on a sender thread
             "/screen.bmp" => {
                 let shot = snapshot(self.cv);

@@ -125,6 +125,19 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
   No `ETag`. 503 while two large answers are being sent.
 - net.allow: no.
 
+### `GET /monitor.png`
+
+- Mark: **experimental**
+- Request: nothing.
+- Answer: 200 `image/png`, the picture the monitor on the HDMI port gets (Display > HDMI), at the monitor's size
+  (Layout and Waveform: at most 1920 x 1080 as `:DISPlay:HDMI` lays it out; Mirror: the panel's picture). It is made
+  at the request: the frame loop copies the monitor's next picture (the GPU reads it back when System > Graphics is
+  GPU), a thread encodes it, and the answer comes at the monitor's next frame, no `ETag`. An empty body
+  when the monitor went away within 5 s. 409 `text/plain`: `No monitor is connected`. 503 while two large answers are
+  being sent.
+- Limits: one picture is encoded at a time (`MonitorShot`, `ui/src/shots.rs`).
+- net.allow: no.
+
 ### `GET /wave.csv`
 
 - Mark: **stable**

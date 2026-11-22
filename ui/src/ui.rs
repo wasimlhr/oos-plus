@@ -153,6 +153,8 @@ mod callout;
 #[cfg(test)]
 mod meas_known_tests;
 #[cfg(test)]
+mod hdmi_tests;
+#[cfg(test)]
 mod layout_tests;
 #[cfg(test)]
 mod fix_tests;

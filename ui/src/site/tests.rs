@@ -1092,3 +1092,52 @@ fn each_route_takes_its_methods_and_a_head_gets_no_body() {
     let (head, body) = parts(&request(&mut h, &mut ui, &cv, &mut scpi, too_big("GET")));
     assert!(head.starts_with("HTTP/1.1 413") && body == "request too large", "{head} / {body}");
 }
+
+/// `GET /monitor.png` is the picture the frame loop copies for the request: 409 while no monitor is driven, else a PNG
+/// that is made after the request and sent when the frame loop has copied the monitor's next picture.
+#[test]
+fn the_monitor_picture_is_answered_when_the_frame_loop_has_copied_it() {
+    let _s = sends();
+    let mut h = Web::open(0);
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let live = Live::default();
+    let port = h.port().unwrap();
+    let ask = move || {
+        std::thread::spawn(move || {
+            let mut c = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            c.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+            let _ = c.write_all(b"GET /monitor.png HTTP/1.1\r\nHost: x\r\n\r\n");
+            let mut out = Vec::new();
+            let _ = c.read_to_end(&mut out);
+            out
+        })
+    };
+    // no monitor: 409 with the reason, and nobody asked for a picture
+    let t = ask();
+    while !t.is_finished() {
+        h.poll(&mut Ctx::new(&mut ui, &cv, &mut scpi).with_live(&live));
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let reply = String::from_utf8_lossy(&t.join().unwrap()).into_owned();
+    assert!(reply.starts_with("HTTP/1.1 409") && reply.contains("No monitor is connected"), "{reply}");
+    assert!(!live.monitor_wanted());
+    // a monitor of 8 x 4: the frame loop copies its picture once it is asked
+    ui.hdmi.out = Some((8, 4));
+    let t = ask();
+    let end = Instant::now() + Duration::from_secs(20);
+    while !t.is_finished() {
+        h.poll(&mut Ctx::new(&mut ui, &cv, &mut scpi).with_live(&live));
+        if live.monitor_wanted() {
+            let mut monitor = Canvas::new(8, 4);
+            monitor.px.fill(0xff00_8000);
+            live.monitor_give(&monitor);
+        }
+        assert!(Instant::now() < end, "no answer");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let reply = t.join().unwrap();
+    let split = reply.windows(4).position(|w| w == b"\r\n\r\n").expect("a head") + 4;
+    let head = String::from_utf8_lossy(&reply[..split]).into_owned();
+    assert!(head.starts_with("HTTP/1.1 200") && head.contains("Content-Type: image/png"), "{head}");
+    assert!(reply[split..].starts_with(&[0x89, b'P', b'N', b'G']));
+}

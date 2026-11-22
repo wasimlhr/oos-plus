@@ -428,6 +428,25 @@ impl GpuLayers {
     }
 }
 
+/// Collects a frame of the monitor. When its picture was read back (`GET /monitor.png` asked for it) it goes to the
+/// one that waits, from a canvas that is kept at the monitor's size.
+fn collect_monitor(
+    g: &mut gpu::Gpu,
+    ticket: gpu::Ticket,
+    cap: &mut Option<Canvas>,
+    size: Option<(i32, i32)>,
+    live: &shots::Live,
+) -> Result<(), String> {
+    let Some((w, h)) = size.filter(|_| ticket.reads()) else { return g.collect(ticket, None) };
+    if cap.as_ref().is_none_or(|c| (c.w, c.h) != (w, h)) {
+        *cap = Some(Canvas::new(w, h));
+    }
+    let c = cap.as_mut().expect("just made");
+    g.collect(ticket, Some(c))?;
+    live.monitor_give(c);
+    Ok(())
+}
+
 /// The monitor's picture on the GPU (Display > HDMI with Graphics = GPU), right after the panel's: Mirror takes the
 /// panel's layers again without a new upload (quad 0); Layout and Waveform draw the monitor's own layers at its size.
 /// The monitor is `mw` x `mh`; the picture goes to `target`, read back with `read` (as `Gpu::submit`).
@@ -767,6 +786,8 @@ struct Device {
     frame_n: u64,
     hdmi_t: Option<std::time::Instant>,
     hdmi_cv: Option<Canvas>,
+    /// the monitor's picture read back from the GPU, for `GET /monitor.png`
+    hdmi_cap: Option<Canvas>,
     hdmi: Option<drm::Display>,
     hdmi_on: bool,
     mdns_t: Option<std::time::Instant>,
@@ -883,6 +904,7 @@ impl Device {
             frame_n,
             hdmi_t,
             hdmi_cv,
+            hdmi_cap: None,
             hdmi,
             hdmi_on,
             mdns_t,
@@ -1145,7 +1167,8 @@ impl Device {
                     wait += g.times.wait;
                     self.disp.flip(bp);
                     if let Some((t2, b2)) = th {
-                        g.collect(t2, None)?;
+                        let size = self.hdmi.as_ref().map(|h| (h.width, h.height));
+                        collect_monitor(g, t2, &mut self.hdmi_cap, size, &self.live)?;
                         if let Some(h) = self.hdmi.as_mut() {
                             h.flip_scaled(b2);
                         }
@@ -1162,6 +1185,8 @@ impl Device {
                 let full = gfx::Rect::new(0, 0, self.cv.w, self.cv.h);
                 let tp = g.submit(b, None, &[self.gl.quad(&self.ui, full, full, false, false)], read)?;
                 let copy = g.times.copy;
+                // the monitor's picture comes back too while `GET /monitor.png` waits for one
+                let monitor_read = self.live.monitor_wanted();
                 let th = match (self.hdmi.as_ref(), self.hdmi_gpu, hdmi_frame) {
                     (Some(h), Some(true), true) => {
                         let b2 = h.free();
@@ -1172,7 +1197,7 @@ impl Device {
                                 &self.gl,
                                 &mut self.gl_view,
                                 (h.width, h.height),
-                                (self.hdmi_base + b2, false),
+                                (self.hdmi_base + b2, monitor_read),
                             )?,
                             b2,
                         ))
@@ -1185,7 +1210,8 @@ impl Device {
                     self.live.picture_read_back(&self.cv);
                     self.disp.flip(b);
                     if let Some((t2, b2)) = th {
-                        g.collect(t2, None)?;
+                        let size = self.hdmi.as_ref().map(|h| (h.width, h.height));
+                        collect_monitor(g, t2, &mut self.hdmi_cap, size, &self.live)?;
                         if let Some(h) = self.hdmi.as_mut() {
                             h.flip_scaled(b2);
                         }
@@ -1233,8 +1259,17 @@ impl Device {
                         self.ui.render_waveform(hc);
                     }
                     h.present_scaled(hc);
+                    if self.live.monitor_wanted() {
+                        self.live.monitor_give(hc);
+                    }
                 }
-                None => h.present_scaled(&self.cv),
+                None => {
+                    h.present_scaled(&self.cv);
+                    // Mirror: the monitor shows the panel's picture
+                    if self.live.monitor_wanted() {
+                        self.live.monitor_give(&self.cv);
+                    }
+                }
             }
         }
     }
@@ -1249,6 +1284,7 @@ impl Device {
                     eprintln!("oos-ui: HDMI disconnected");
                     h.close();
                     self.hdmi_cv = None;
+                    self.hdmi_cap = None;
                     // a frame of it still in work is collected, not shown
                     self.hdmi_gpu = None;
                 }

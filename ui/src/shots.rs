@@ -336,14 +336,98 @@ fn answer_shot(s: &TcpStream, have: Option<&str>, png: Arc<[u8]>, tag: &str) {
     }
 }
 
+/// After a request for the monitor's picture the frame loop makes one for this long.
+const MONITOR_ASK: Duration = Duration::from_secs(3);
+/// The web server waits this long for the monitor's picture (the frame loop makes one at the next frame of the
+/// monitor: 15 a second on the CPU, half the frames on the GPU).
+pub(crate) const MONITOR_WAIT: Duration = Duration::from_secs(5);
+
+/// The picture a monitor on the HDMI port gets, for `GET /monitor.png`. The web server asks for it and waits on a
+/// thread of its own; the frame loop, which makes that picture for the monitor, copies it when it was asked for
+/// (`wanted`, `give`) and a thread encodes the copy, so the frame loop never waits for the PNG.
+#[derive(Default)]
+pub struct MonitorShot {
+    st: Mutex<MonitorState>,
+    done: Condvar,
+}
+
+#[derive(Default)]
+struct MonitorState {
+    /// the last request
+    asked: Option<Instant>,
+    /// the newest picture, as PNG, and when it was copied
+    png: Option<(Instant, Arc<Vec<u8>>)>,
+    /// a copy is being encoded
+    encoding: bool,
+}
+
+impl MonitorShot {
+    /// A request: the frame loop makes the next picture of the monitor for it. Returns the time to wait from.
+    pub fn ask(&self) -> Instant {
+        let now = Instant::now();
+        self.st.lock().unwrap_or_else(|e| e.into_inner()).asked = Some(now);
+        now
+    }
+
+    /// The frame loop should copy the monitor's next picture: someone asked a moment ago, and no picture made since
+    /// is there yet or on its way.
+    pub fn wanted(&self) -> bool {
+        let st = self.st.lock().unwrap_or_else(|e| e.into_inner());
+        !st.encoding
+            && st.asked.is_some_and(|a| a.elapsed() < MONITOR_ASK && st.png.as_ref().is_none_or(|(t, _)| *t < a))
+    }
+
+    /// The monitor's picture of this frame: copied here, encoded on a thread of its own.
+    pub fn give(self: &Arc<Self>, cv: &Canvas) {
+        let copied = Instant::now();
+        {
+            let mut st = self.st.lock().unwrap_or_else(|e| e.into_inner());
+            if st.encoding {
+                return;
+            }
+            st.encoding = true;
+        }
+        let mut copy = Canvas::new(cv.w, cv.h);
+        copy.px.copy_from_slice(&cv.px);
+        let me = Arc::clone(self);
+        let spawned = std::thread::Builder::new().name("monitor-png".into()).spawn(move || {
+            crate::system::lower_priority();
+            let png = Arc::new(crate::gfx::png::png_of(&copy));
+            let mut st = me.st.lock().unwrap_or_else(|e| e.into_inner());
+            st.png = Some((copied, png));
+            st.encoding = false;
+            me.done.notify_all();
+        });
+        if spawned.is_err() {
+            self.st.lock().unwrap_or_else(|e| e.into_inner()).encoding = false;
+        }
+    }
+
+    /// The first picture copied after `since`, as PNG; None when there is none within `timeout` (the monitor went
+    /// away, or the frame loop stopped).
+    pub fn wait(&self, since: Instant, timeout: Duration) -> Option<Arc<Vec<u8>>> {
+        let end = Instant::now() + timeout;
+        let mut st = self.st.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            if let Some((_, png)) = st.png.as_ref().filter(|(t, _)| *t >= since) {
+                return Some(Arc::clone(png));
+            }
+            let left = end.checked_duration_since(Instant::now())?;
+            st = self.done.wait_timeout(st, left).unwrap_or_else(|e| e.into_inner()).0;
+        }
+    }
+}
+
 /// The live picture as the frame loop owns it; the encoder thread ends with it.
 pub struct Live {
     pub(crate) shots: Arc<Shots>,
+    /// the monitor's picture (`GET /monitor.png`)
+    pub(crate) monitor: Arc<MonitorShot>,
 }
 
 impl Default for Live {
     fn default() -> Live {
-        Live { shots: Shots::new() }
+        Live { shots: Shots::new(), monitor: Arc::default() }
     }
 }
 
@@ -391,6 +475,16 @@ impl Live {
         }
     }
 
+    /// The monitor's picture is asked for (`MonitorShot::wanted`): the frame loop reads it back or copies it.
+    pub fn monitor_wanted(&self) -> bool {
+        self.monitor.wanted()
+    }
+
+    /// The monitor's picture of this frame, for the one who asked (`MonitorShot::give`).
+    pub fn monitor_give(&self, cv: &Canvas) {
+        self.monitor.give(cv);
+    }
+
     /// The live picture would take the next screen (System > Graphics = GPU: read it back for it).
     pub fn picture_wanted(&self) -> bool {
         let st = self.shots.lock();
@@ -402,6 +496,26 @@ impl Live {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A request for the monitor's picture makes the frame loop copy one; it is encoded after the copy and handed to
+    /// the one that waits, and a picture made before the request is not the answer.
+    #[test]
+    fn the_monitor_picture_comes_after_the_request() {
+        let m = Arc::new(MonitorShot::default());
+        assert!(!m.wanted(), "nobody asked");
+        let t = m.ask();
+        assert!(m.wanted());
+        let mut cv = Canvas::new(8, 4);
+        cv.px.fill(0xff12_3456);
+        m.give(&cv);
+        let png = m.wait(t, Duration::from_secs(5)).expect("a picture");
+        assert!(png.starts_with(&[0x89, b'P', b'N', b'G']));
+        assert!(!m.wanted(), "the picture is there");
+        // a later request wants a newer one, and the old one is not its answer
+        let t2 = m.ask();
+        assert!(m.wanted());
+        assert!(m.wait(t2, Duration::from_millis(30)).is_none());
+    }
 
     /// A screenshot asked for as PNG never gets JPEG bytes, a JPEG viewer gets PNG only once the VPU failed.
     #[test]
