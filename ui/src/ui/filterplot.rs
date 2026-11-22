@@ -13,16 +13,21 @@ use oos_dsp::filter::{Filter, Response};
 const POINTS: usize = 512;
 
 impl Ui {
+    /// The design the plot shows: None while the plot is off, the waveform is not on, or the selected math channel is
+    /// not a designed filter.
+    fn filter_plot_spec(&self) -> Option<oos_dsp::filter::Spec> {
+        let filter = matches!(self.m.math, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf);
+        if self.math.plot == FiltPlot::Off || self.view_on() || !filter {
+            return None;
+        }
+        crate::math::filter_spec(self.m.math, self.m.math_fc as f64, self.m.math_bw as f64, &self.m.math_filt)
+    }
+
     /// The panel of the response plot, bottom right of the waveform: nothing while the plot is off, the waveform is
     /// not on, or the selected math channel is not a designed filter.
     pub(super) fn draw_filter_plot(&self, cv: &mut Canvas) {
         let kind = self.math.plot;
-        if kind == FiltPlot::Off || self.view_on() {
-            return;
-        }
-        let Some(spec) =
-            crate::math::filter_spec(self.m.math, self.m.math_fc as f64, self.m.math_bw as f64, &self.m.math_filt)
-        else {
+        let Some(spec) = self.filter_plot_spec() else {
             return;
         };
         // the frequency the picture is built round: the cut-off, the centre of a band, the symbol rate, the delay
@@ -157,5 +162,10 @@ mod tests {
         assert!(!u.items(MenuId::Math).contains(&Item::MathFiltPlot));
         u.m.math_filt.resp = FiltResp::Bessel;
         assert!(u.items(MenuId::Math).contains(&Item::MathFiltPlot));
+        // a math channel that is not a filter draws no plot, whatever the response and the plot say
+        u.math.plot = FiltPlot::Gain;
+        assert!(u.filter_plot_spec().is_some());
+        u.m.math = MathOp::Off;
+        assert!(u.filter_plot_spec().is_none());
     }
 }
