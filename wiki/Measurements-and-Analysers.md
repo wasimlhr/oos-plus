@@ -38,6 +38,14 @@ its title strip choose the view:
 - The **cards**: name, value and statistics of each, and at the top right the pin that puts the measurement on the
   waveform or takes it off.
 
+The button with the two arrows left of the X does what it does for every view: the views become tabs of one group
+that fills the area, with the measurements in front, so the strip reads **Waveform | Measurements** and a tap on
+**Waveform** shows the waveform. The same button, Escape or a double tap on the strip brings back the arrangement
+before. While the panel is in front of such a group its controls (source, gate, search, pin, statistics, add) are a
+line of their own under the strip, so the tabs keep their names. The button showed a table of all measurements
+in place of the waveform before, with buttons of its own; a set-up that was stored with that table open loads with the
+panel docked.
+
 A tap on a cell, a row or a card opens the [settings of that measurement](#settings-of-one-measurement), and a drag up
 or down scrolls. **Remove** under those settings takes the measurement away (it asks first); the table removes by
 a swipe as well, the menu of a badge has **Remove measurement**, and the rest is under

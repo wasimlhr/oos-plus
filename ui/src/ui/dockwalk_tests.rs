@@ -98,7 +98,6 @@ fn check(u: &Ui) -> Result<(), String> {
     let lay = u.dock_layout();
     let region = u.dock_region();
     let scr = screen(u);
-    let only = u.studio.view == StudioView::Only;
     // every view at most once
     let mut seen: Vec<VKind> = Vec::new();
     for (k, r) in lay.leaves.iter() {
@@ -131,44 +130,35 @@ fn check(u: &Ui) -> Result<(), String> {
         }
     }
     // every view that is on is somewhere
-    if !only {
-        for k in KINDS {
-            if !u.dock_shown(k) { continue; }
-            let in_group = lay.tabs.iter().any(|g| g.kinds.contains(&k));
-            if !seen.contains(&k) && !in_group { return Err(format!("{k:?} is on and nowhere")); }
-        }
+    for k in KINDS {
+        if !u.dock_shown(k) { continue; }
+        let in_group = lay.tabs.iter().any(|g| g.kinds.contains(&k));
+        if !seen.contains(&k) && !in_group { return Err(format!("{k:?} is on and nowhere")); }
     }
     if lay.leaves.is_empty() { return Err("nothing is docked".into()); }
     // the waveform can be reached
-    if only {
-        let m = u.dock_leaf(VKind::Measure).ok_or("measurements only without a view")?;
-        if u.dock_extra_kind(VKind::Measure) != Some(Extra::RestoreOnly) { return Err("measurements only has no restore".into()); }
-        let e = u.dock_extra_rect(VKind::Measure, m).ok_or("no restore rectangle")?;
-        if !inside(e, scr) || e.w < 24 || e.h < 24 { return Err(format!("restore {e:?} is off the screen or small")); }
-    } else {
-        if !u.dock_shown(VKind::Wave) { return Err("the waveform is gone".into()); }
-        let direct = seen.contains(&VKind::Wave);
-        let tab = lay.tabs.iter().find(|g| g.kinds.contains(&VKind::Wave)).is_some_and(|g| {
-            let front = g.kinds[g.active];
-            u.dock_tab_rects(front, g.rect).iter().any(|(k, t)| *k == VKind::Wave && inside(*t, scr)) || u.dock_tab_more(front, g.rect).is_some_and(|m| inside(m, scr))
-        });
-        if !direct && !tab { return Err("the waveform is neither on the screen nor a tab".into()); }
-    }
+    if !u.dock_shown(VKind::Wave) { return Err("the waveform is gone".into()); }
+    let direct = seen.contains(&VKind::Wave);
+    let tab = lay.tabs.iter().find(|g| g.kinds.contains(&VKind::Wave)).is_some_and(|g| {
+        let front = g.kinds[g.active];
+        u.dock_tab_rects(front, g.rect).iter().any(|(k, t)| *k == VKind::Wave && inside(*t, scr)) || u.dock_tab_more(front, g.rect).is_some_and(|m| inside(m, scr))
+    });
+    if !direct && !tab { return Err("the waveform is neither on the screen nor a tab".into()); }
     // a full state shows its way out
-    if !only && u.dock_tabs_root() {
+    if u.dock_tabs_root() {
         let (k, r) = lay.leaves[0];
         if u.dock_extra_kind(k) != Some(Extra::RestoreTabs) { return Err(format!("tabs fill the area but {k:?} has {:?}", u.dock_extra_kind(k))); }
         let e = u.dock_extra_rect(k, r).ok_or("no restore rectangle")?;
         if !inside(e, scr) || e.w < 24 || e.h < 24 { return Err(format!("restore {e:?} is off the screen or small")); }
     }
-    if !only && u.eye_open() && u.m.eye_place == EyePlace::Full {
+    if u.eye_open() && u.m.eye_place == EyePlace::Full {
         // (the waveform's place can be a tab behind another: the group's own exit is there)
         if let Some(r) = u.dock_rect(VKind::Wave) {
             if !u.dock_tabs_root() && u.dock_extra_kind(VKind::Wave) != Some(Extra::RestoreEye) { return Err("eye on the whole plot has no restore".into()); }
             if u.dock_extra_rect(VKind::Wave, r).is_none() { return Err("eye on the whole plot: no restore rectangle".into()); }
         }
     }
-    if u.dock_full_state() && !u.dock_tabs_root() && !only && !(u.eye_open() && u.m.eye_place == EyePlace::Full) { return Err("a full state without a known exit".into()); }
+    if u.dock_full_state() && !u.dock_tabs_root() && !(u.eye_open() && u.m.eye_place == EyePlace::Full) { return Err("a full state without a known exit".into()); }
     // the title bars
     for (k, r, floating) in visible(u) {
         let s = Ui::dock_strip(r);
@@ -193,14 +183,12 @@ fn check(u: &Ui) -> Result<(), String> {
     Ok(())
 }
 
-/// The arrangement as a text, to compare a view that was left and came back.
-fn state_text(u: &Ui) -> String {
-    let region = u.dock_region();
-    let floating: Vec<VKind> = KINDS.into_iter().filter(|k| u.dock_shown(*k) && u.dock_floating(*k)).collect();
-    // the tree the dock keeps (a view that is off or on in the meantime, like the search table, is no part of it)
-    let _ = region;
-    let _ = floating;
-    format!("{}|{:?}", u.dock_text(), u.studio.view)
+/// The arrangement as a text, to compare a view that was left and came back, and the views that are on. A numbered
+/// view keeps the tree and which views float, not which views are on: the search table closed in view 2 is closed in
+/// view 1 too, and a waveform that floated over it there is then the last view and goes back into the dock
+/// (`dock_forced`). So the text is compared only when the same views are on as when the view was left.
+fn state_text(u: &Ui) -> (String, Vec<VKind>) {
+    (format!("{}|{:?}", u.dock_text(), u.studio.view), KINDS.into_iter().filter(|k| u.dock_shown(*k)).collect())
 }
 
 // ------------------------------------------------------------------------------------------------ the steps
@@ -272,7 +260,7 @@ fn aim(r: Rect, side: u32) -> (i32, i32) {
 /// Which view a walk has on the other numbered view (Views 1 and 2).
 struct Walk {
     u: Ui,
-    snap: [Option<String>; 2],
+    snap: [Option<(String, Vec<VKind>)>; 2],
     log: Vec<String>,
 }
 
@@ -329,7 +317,7 @@ impl Walk {
                 format!("{k:?}{}", if floating { " by its title" } else { " to the ring" })
             }
             Act::Maximise => {
-                let with: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|(k, r, _)| u.dock_extra_kind(*k).is_some_and(|e| matches!(e, Extra::Maximise | Extra::Expand)) && u.dock_extra_rect(*k, *r).is_some()).collect();
+                let with: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|(k, r, _)| u.dock_extra_kind(*k) == Some(Extra::Maximise) && u.dock_extra_rect(*k, *r).is_some()).collect();
                 if with.is_empty() { return "none".into(); }
                 let (k, r, _) = with[pick(with.len(), s.a)];
                 let e = u.dock_extra_rect(k, r).unwrap();
@@ -337,7 +325,7 @@ impl Walk {
                 format!("{k:?} button")
             }
             Act::Restore => {
-                let with: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|(k, _, _)| matches!(u.dock_extra_kind(*k), Some(Extra::RestoreOnly | Extra::RestoreTabs | Extra::RestoreEye))).collect();
+                let with: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|(k, _, _)| matches!(u.dock_extra_kind(*k), Some(Extra::RestoreTabs | Extra::RestoreEye))).collect();
                 if with.is_empty() { return "none".into(); }
                 let (k, r, _) = with[pick(with.len(), s.a)];
                 let e = u.dock_extra_rect(k, r).unwrap();
@@ -401,7 +389,7 @@ impl Walk {
                 settle(u);
                 if let Some(before) = self.snap[1 - cur].clone() {
                     let now = state_text(u);
-                    if before != now { return format!("MISMATCH view {} came back as {now} not {before}", 2 - cur); }
+                    if before.1 == now.1 && before.0 != now.0 { return format!("MISMATCH view {} came back as {} not {}", 2 - cur, now.0, before.0); }
                 }
                 format!("to view {}", 2 - cur)
             }
@@ -719,18 +707,18 @@ fn every_full_state_has_an_exit_on_the_button_escape_double_tap_and_the_menu() {
     let c = centre(row.2);
     tap(&mut u, c.0, c.1);
     assert!(!u.dock_full_state(), "the menu");
-    // measurements only
+    // the measurements: their button is the one of every view, the panel stays the docked panel in a tab
     open(&mut u, VKind::Measure);
     extra_tap(&mut u, VKind::Measure);
-    assert_eq!(u.studio.view, StudioView::Only);
+    assert!(u.dock_tabs_root() && u.studio.view == StudioView::Docked);
     check(&u).unwrap();
     u.dismiss_context();
-    assert_eq!(u.studio.view, StudioView::Docked, "Esc leaves measurements only");
+    assert!(!u.dock_full_state() && u.studio.view == StudioView::Docked, "Esc leaves the tabs");
     extra_tap(&mut u, VKind::Measure);
     let r = u.dock_rect(VKind::Measure).unwrap();
     tap(&mut u, r.x + 60, r.y + 13);
     tap(&mut u, r.x + 60, r.y + 13);
-    assert_ne!(u.studio.view, StudioView::Only, "a double tap on the title");
+    assert!(!u.dock_full_state(), "a double tap on the title");
     // the eye on the whole plot
     u.select_option(Item::EyePlace, "Full");
     settle(&mut u);

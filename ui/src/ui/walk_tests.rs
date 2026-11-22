@@ -612,8 +612,6 @@ fn walk_table_pictures() {
         u
     };
     use super::studio::StudioView as V;
-    shot(&mut studio(V::Only, true, false), "t1-only");
-    shot(&mut studio(V::Only, true, true), "t2-only-stats");
     shot(&mut studio(V::Docked, true, true), "t3-docked-detail");
     shot(&mut studio(V::Docked, false, false), "t4-docked-list");
     // the cards in a panel docked above the waveform, as wide as the screen
@@ -2394,7 +2392,7 @@ fn the_measurement_panel_and_the_badge_buttons_are_a_finger_high() {
     u.studio_set_view(StudioView::Docked);
     for _ in 0..3 { frame(&mut u); }
     let panel = u.studio_panel_rect().expect("the docked panel");
-    assert!(!Ui::panel_bar_wide(panel), "a narrow panel has its toolbar under the title: {panel:?}");
+    assert!(!u.panel_bar_wide(panel), "a narrow panel has its toolbar under the title: {panel:?}");
     let bar = u.panel_bar(panel);
     assert!(bar.slots.len() >= 4, "{} buttons", bar.slots.len());
     for slot in bar.slots.iter().chain(bar.more.iter()) {

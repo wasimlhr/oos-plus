@@ -5459,7 +5459,7 @@ setup studio_view "1e9" -> waveform; error: line 2: studio_view: bad studio view
 setup studio_view "Docked" -> waveform; error: line 2: studio_view: bad studio view Docked
 setup studio_view "docked" -> docked
 setup studio_view "floating" -> floating
-setup studio_view "only" -> only
+setup studio_view "only" -> docked
 setup studio_view "waveform" -> waveform
 setup studio_view "x" -> waveform; error: line 2: studio_view: bad studio view x
 setup studio_view default -> waveform

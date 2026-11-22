@@ -279,8 +279,8 @@ mod tests {
         assert!(u.studio.view == StudioView::Waveform && !u.record_mode());
     }
 
-    /// What the View menu chose besides: the measurement panel docks from Add, its expand button shows the
-    /// measurements alone, the same button leads back, and its close button leaves the waveform alone.
+    /// What the View menu chose besides: the measurement panel docks from Add, its expand button puts it in a tab
+    /// in front of the waveform, the same button leads back, and its close button leaves the waveform alone.
     #[test]
     fn the_measurement_panel_is_added_expanded_and_closed_without_a_menu_of_views() {
         use super::super::dock::VKind;
@@ -297,11 +297,13 @@ mod tests {
         let strip = u.dock_leaf(VKind::Measure).expect("the docked panel");
         let expand = u.dock_extra_rect(VKind::Measure, strip).expect("the expand button");
         press(&mut u, expand);
-        assert_eq!(u.studio.view, StudioView::Only);
+        assert!(u.dock_tabs_root() && u.studio.view == StudioView::Docked);
         let strip = u.dock_leaf(VKind::Measure).expect("the measurements fill the area");
+        assert_eq!(strip, u.dock_region());
         let back = u.dock_extra_rect(VKind::Measure, strip).expect("the way back");
         press(&mut u, back);
-        assert_eq!(u.studio.view, StudioView::Docked);
+        assert!(!u.dock_full_state() && u.studio.view == StudioView::Docked);
+        assert!(u.dock_leaf(VKind::Wave).is_some(), "the waveform is beside the panel again");
         let strip = u.dock_leaf(VKind::Measure).unwrap();
         press(&mut u, Ui::dock_close_rect(strip));
         assert_eq!(u.studio.view, StudioView::Waveform);

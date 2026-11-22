@@ -18,12 +18,14 @@ const DECAY: f64 = 4.0;
 const FLICK_WINDOW: f64 = 0.12;
 
 impl Ui {
-    /// Pixels one scroll step is high: a row of the table, a line of cells of the strip, or a row of two cards.
+    /// Pixels one scroll step is high: a row of the table, a line of cells of the strip, or a row of cards.
     fn panel_unit(&self) -> i32 { self.studio_panel_row().max(1) }
 
+    /// The measurements in one scroll step: the columns the strip or the cards are drawn in (`panel_cell_geo`; a
+    /// wide panel has more than two columns of cards), one for the table.
     pub(super) fn panel_cols(&self) -> usize {
-        if self.panel_is_strip() { return self.studio_panel_rect().map_or(1, |p| self.panel_cell_geo(p.w - 8).0 as usize); }
-        if self.panel_is_cards() { 2 } else { 1 }
+        if !self.panel_cells() { return 1; }
+        self.studio_panel_rect().map_or(1, |p| self.panel_cell_geo(p.w - 8).0 as usize)
     }
 
     /// Where the list is scrolled to, in pixels from the top.
@@ -50,7 +52,7 @@ impl Ui {
         px == 0 || px == max
     }
 
-    /// The list and its geometry when the docked panel (not the SIM list or the table of the whole body) is up.
+    /// The list and its geometry when the measurements panel (not the SIM list) is up.
     fn panel_scroll_ctx(&self) -> Option<(PanelGeo, usize)> {
         if self.m.layout != Layout::Studio || self.studio.view == StudioView::Sim { return None; }
         let g = self.studio_panel_geo()?;

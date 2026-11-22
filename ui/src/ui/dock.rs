@@ -282,12 +282,8 @@ impl Node {
 /// What the button left of the X of a strip does.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(super) enum Extra {
-    /// the measurements alone fill the area
-    Expand,
     /// every view in tabs of one group, this one in front
     Maximise,
-    /// back from the measurements alone
-    RestoreOnly,
     /// back from one group of tabs
     RestoreTabs,
     /// the eye leaves the whole plot for a pane beside it
@@ -513,15 +509,15 @@ impl Ui {
     pub(super) fn dock_shown(&self, k: VKind) -> bool {
         let v = self.studio.view;
         match k {
-            VKind::Wave => v != StudioView::Only,
-            VKind::Measure => matches!(v, StudioView::Docked | StudioView::Floating | StudioView::Only | StudioView::Offline),
+            VKind::Wave => true,
+            VKind::Measure => matches!(v, StudioView::Docked | StudioView::Floating | StudioView::Offline),
             VKind::Sim => v == StudioView::Sim,
-            VKind::Eye => v != StudioView::Only && self.eye_open() && self.m.eye_place != EyePlace::Full,
-            VKind::Pane => v != StudioView::Only && self.m.pane != 0 && matches!(self.m.view, AView::Scope | AView::Eye),
-            VKind::Hist => v != StudioView::Only && self.m.hist != Hist::Off,
-            VKind::Xy => v != StudioView::Only && self.xy,
-            VKind::View => v != StudioView::Only && !self.xy_over() && !matches!(self.m.view, AView::Scope | AView::Eye),
-            VKind::Table => v != StudioView::Only && self.table.kind.is_some(),
+            VKind::Eye => self.eye_open() && self.m.eye_place != EyePlace::Full,
+            VKind::Pane => self.m.pane != 0 && matches!(self.m.view, AView::Scope | AView::Eye),
+            VKind::Hist => self.m.hist != Hist::Off,
+            VKind::Xy => self.xy,
+            VKind::View => !self.xy_over() && !matches!(self.m.view, AView::Scope | AView::Eye),
+            VKind::Table => self.table.kind.is_some(),
         }
     }
 
@@ -537,7 +533,6 @@ impl Ui {
     /// The view that is docked although it floats: when every view on the screen floats the dock would be an empty
     /// frame with a copy of the waveform over it. The waveform (else the first view) goes back in the dock.
     pub(super) fn dock_forced(&self) -> Option<VKind> {
-        if self.studio.view == StudioView::Only { return None; }
         let mut shown = KINDS.into_iter().filter(|k| self.dock_shown(*k)).peekable();
         shown.peek()?;
         let all: Vec<VKind> = shown.collect();
@@ -550,7 +545,6 @@ impl Ui {
 
     /// May this view float: not when it is the last one docked, so the tree is never empty.
     pub(super) fn dock_can_float(&self, k: VKind) -> bool {
-        if self.studio.view == StudioView::Only { return false; }
         if k == VKind::Measure && !matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline) { return false; }
         self.dock_floating(k) || self.dock_docked_count() > 1
     }
@@ -572,8 +566,7 @@ impl Ui {
     /// when it has no place for them, the others left out.
     pub(super) fn dock_effective(&self, region: Rect) -> Node {
         let mut t = self.studio.dock.tree.clone().unwrap_or(Node::Leaf(VKind::Wave));
-        let docked: Vec<VKind> = if self.studio.view == StudioView::Only { vec![VKind::Measure] }
-            else { KINDS.into_iter().filter(|k| self.dock_docked(*k)).collect() };
+        let docked: Vec<VKind> = KINDS.into_iter().filter(|k| self.dock_docked(*k)).collect();
         // the waveform first, then the others in the order they appear in `KINDS`
         for k in docked.iter().copied() {
             if !t.contains(k) { t = insert_default(t, k, region, self.studio_panel_w(), self.dock_under()); }
@@ -678,7 +671,7 @@ impl Ui {
         Some(Rect::new(r.x, r.y + STRIP_H, r.w, (r.h - STRIP_H).max(1)))
     }
 
-    /// The waveform's rectangle, strip included. The table of the measurements alone has none: the whole room.
+    /// The waveform's rectangle, strip included.
     pub(super) fn dock_wave_rect(&self) -> Rect {
         let region = self.dock_region();
         // a tab behind another: the waveform is not on the screen, its place is beside it (nothing there takes a touch)
@@ -688,12 +681,12 @@ impl Ui {
 
     /// A docked view that is a tab behind another one of its group.
     pub(super) fn dock_tabbed_out(&self, k: VKind) -> bool {
-        self.dock_docked(k) && self.studio.view != StudioView::Only && self.dock_layout().tabs.iter().any(|g| g.kinds.contains(&k) && g.kinds[g.active] != k)
+        self.dock_docked(k) && self.dock_layout().tabs.iter().any(|g| g.kinds.contains(&k) && g.kinds[g.active] != k)
     }
 
     /// The group of tabs a view is in.
     pub(super) fn dock_tab_group(&self, k: VKind) -> Option<TabGroup> {
-        if self.studio.view == StudioView::Only || !self.dock_docked(k) { return None; }
+        if !self.dock_docked(k) { return None; }
         self.dock_layout().tabs.iter().find(|g| g.kinds.contains(&k)).cloned()
     }
 
@@ -702,10 +695,8 @@ impl Ui {
     /// The button left of the X: what it does depends on the view and the arrangement.
     pub(super) fn dock_extra_kind(&self, k: VKind) -> Option<Extra> {
         if !self.dock_on() { return None; }
-        if self.studio.view == StudioView::Only { return (k == VKind::Measure).then_some(Extra::RestoreOnly); }
         if !self.dock_floating(k) && self.dock_tabs_root() { return Some(Extra::RestoreTabs); }
         if k == VKind::Wave && self.eye_open() && self.m.eye_place == EyePlace::Full { return Some(Extra::RestoreEye); }
-        if k == VKind::Measure && self.studio.view != StudioView::Offline { return Some(Extra::Expand); }
         (KINDS.into_iter().filter(|v| self.dock_shown(*v)).count() > 1).then_some(Extra::Maximise)
     }
 
@@ -715,20 +706,19 @@ impl Ui {
 
     /// One group of tabs holds every view that is docked: it fills the area.
     pub(super) fn dock_tabs_root(&self) -> bool {
-        self.dock_on() && self.studio.view != StudioView::Only && { let l = self.dock_layout(); l.tabs.len() == 1 && l.leaves.len() == 1 }
+        self.dock_on() && { let l = self.dock_layout(); l.tabs.len() == 1 && l.leaves.len() == 1 }
     }
 
-    /// A way back out of a full state is on the screen: a view that fills the area (measurements only, the eye on the
-    /// whole plot, everything in one group of tabs).
+    /// A way back out of a full state is on the screen: a view that fills the area (the eye on the whole plot,
+    /// everything in one group of tabs).
     pub(super) fn dock_full_state(&self) -> bool {
-        self.dock_on() && (self.studio.view == StudioView::Only || self.dock_tabs_root() || (self.eye_open() && self.m.eye_place == EyePlace::Full))
+        self.dock_on() && (self.dock_tabs_root() || (self.eye_open() && self.m.eye_place == EyePlace::Full))
     }
 
     /// Leaves a full state: the way back every exit (the button, Escape, the double tap, the menu) takes. False when
     /// there was none.
     pub(super) fn dock_exit_full(&mut self) -> bool {
         if !self.dock_on() { return false; }
-        if self.studio.view == StudioView::Only { self.studio_set_view(StudioView::Docked); self.dock_changed(); return true; }
         if self.dock_tabs_root() { self.dock_restore_layout(); return true; }
         if self.eye_open() && self.m.eye_place == EyePlace::Full {
             self.eye_set_place(EyePlace::Side);
@@ -814,7 +804,7 @@ impl Ui {
     /// The views of a group as they are, put in tabs with `k` in front: floating views too, so no window floats over
     /// the one that fills the area. Where they were is kept for the way back.
     pub(super) fn dock_maximise(&mut self, k: VKind) {
-        if self.studio.view == StudioView::Only || !self.dock_shown(k) { return; }
+        if !self.dock_shown(k) { return; }
         let region = self.dock_region();
         let tree = self.dock_effective(region);
         let mut kinds = Vec::new();
@@ -917,7 +907,7 @@ impl Ui {
     fn dock_bar_content(&self, k: VKind, r: Rect) -> Option<Rect> {
         if k != VKind::Measure || self.m.layout != Layout::Studio || !matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline) { return None; }
         let p = Rect::new(r.x, r.y + STRIP_H, r.w, (r.h - STRIP_H).max(1));
-        Self::panel_bar_wide(p).then_some(p)
+        self.panel_bar_wide(p).then_some(p)
     }
     /// A point on a control of that bar: its hit area reaches 14 px down over the head row of the table.
     fn dock_bar_at(&self, k: VKind, r: Rect, x: i32, y: i32) -> bool {
@@ -1019,7 +1009,7 @@ impl Ui {
 
     /// The divider under the overview strip: its 44 px hit area and the handle in the middle of it.
     pub(super) fn ov_divider(&self) -> Option<(Rect, Rect)> {
-        if !self.dock_on() || !self.m.zoom || self.view_on() || self.studio.view == StudioView::Only || self.dock_floating(VKind::Wave) { return None; }
+        if !self.dock_on() || !self.m.zoom || self.view_on() || self.dock_floating(VKind::Wave) { return None; }
         let o = self.split_zoom(self.plot.grid).0;
         let y = o.bottom();
         // the grip stays clear of the buttons of the zoom bar under it
@@ -1088,7 +1078,7 @@ impl Ui {
         };
         let can_float = self.dock_can_float(kind);
         let leaf_at = lay.leaves.iter().find(|(_, r)| r.contains(x, y)).copied();
-        let Some((tk, tr)) = leaf_at.filter(|_| self.studio.view != StudioView::Only) else {
+        let Some((tk, tr)) = leaf_at else {
             return if can_float { let r = float_at(); (Drop::Float(r), r) } else { (Drop::Stay, own) };
         };
         let group = self.dock_tab_group(tk);
@@ -1130,7 +1120,6 @@ impl Ui {
 
     /// May `kind` join the tabs of `target`: a group holds seven views at most.
     fn dock_can_tab(&self, kind: VKind, target: VKind) -> bool {
-        if self.studio.view == StudioView::Only { return false; }
         if kind == VKind::Measure && !matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline) { return false; }
         self.dock_tab_group(target).map_or(1, |g| g.kinds.len()) < 7
     }
@@ -1236,11 +1225,6 @@ impl Ui {
         if let Some(front) = self.studio.dock.tab_list.take() {
             if let Some((v, _)) = self.dock_tab_list_rows(front).into_iter().find(|(_, r)| r.contains(x, y)) { self.dock_activate(v); return true; }
         }
-        if self.studio.view == StudioView::Only {
-            // one view only: its strip closes it, nothing moves
-            if let Some(r) = self.dock_leaf(VKind::Measure) { return self.dock_down_strip(VKind::Measure, r, x, y, false); }
-            return false;
-        }
         // floating views first, the one on top first
         let z = &self.studio.dock.z;
         let mut order: Vec<VKind> = KINDS.into_iter().filter(|k| !z.contains(k)).collect();
@@ -1311,7 +1295,7 @@ impl Ui {
     pub(super) fn dock_move(&mut self, x: i32, y: i32) -> bool {
         if let Some(Press::Strip { kind, x0, y0, t0, grab, free, .. }) = self.studio.dock.press {
             self.studio.dock.press = Some(Press::Strip { kind, x0, y0, x, y, t0, grab, free });
-            if (x - x0).abs().max((y - y0).abs()) > DRAG_PX && self.studio.view != StudioView::Only {
+            if (x - x0).abs().max((y - y0).abs()) > DRAG_PX {
                 self.dock_begin_drag(kind, x, y, grab, free);
             }
             return true;
@@ -1400,9 +1384,8 @@ impl Ui {
     /// The button left of the X.
     fn dock_extra_do(&mut self, k: VKind) {
         match self.dock_extra_kind(k) {
-            Some(Extra::Expand) => self.studio_set_view(StudioView::Only),
             Some(Extra::Maximise) => self.dock_maximise(k),
-            Some(Extra::RestoreOnly | Extra::RestoreTabs | Extra::RestoreEye) => { self.dock_exit_full(); }
+            Some(Extra::RestoreTabs | Extra::RestoreEye) => { self.dock_exit_full(); }
             None => {}
         }
     }
@@ -1425,7 +1408,7 @@ impl Ui {
         self.dock_normalize();
         self.dock_sync_setup();
         if let Some(Press::Strip { kind, x0, y0, x, y, t0, grab, free }) = self.studio.dock.press {
-            if self.now - t0 >= LONG_PRESS && (x - x0).abs().max((y - y0).abs()) <= DRAG_PX && self.studio.view != StudioView::Only {
+            if self.now - t0 >= LONG_PRESS && (x - x0).abs().max((y - y0).abs()) <= DRAG_PX {
                 self.dock_begin_drag(kind, x, y, grab, free);
             }
         }
@@ -1494,7 +1477,7 @@ impl Ui {
             let (cx, cy) = (e.x + e.w / 2, s.y + s.h / 2);
             match self.dock_extra_kind(k) {
                 // two squares, one behind the other: back to where the views were
-                Some(Extra::RestoreOnly | Extra::RestoreTabs | Extra::RestoreEye) => {
+                Some(Extra::RestoreTabs | Extra::RestoreEye) => {
                     cv.rect(Rect::new(cx - 6, cy - 2, 8, 8), TEXT);
                     cv.rect(Rect::new(cx - 2, cy - 6, 8, 8), TEXT);
                 }

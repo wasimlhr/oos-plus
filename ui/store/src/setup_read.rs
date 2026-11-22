@@ -481,7 +481,9 @@ fn set_zoom_views(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             if !["waveform", "docked", "floating", "only"].contains(&v) {
                 return Err(format!("bad studio view {v}"));
             }
-            m.studio_view = v.to_string();
+            // "only" was the table of all measurements in place of the waveform. That view is gone: a file that
+            // names it loads with the panel docked beside the waveform
+            m.studio_view = if v == "only" { "docked" } else { v }.to_string();
         }
         "studio_dock" => m.studio_dock = v.to_string(),
         "studio_zoom_controls" => {
