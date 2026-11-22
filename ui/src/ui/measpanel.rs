@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! Studio: the controls, the cards view and the dropdowns of the docked measurements panel. The controls (source, gate,
 //! search, Pinned only, Add, statistics) are one bar: in the title strip when the panel is wide, in one slim toolbar
-//! under it when it is narrow, with what does not fit behind a ... button. The views are Table, List and Cards
-//! (measview.rs); there is no footer and no paging: the list scrolls by swipe (measscroll.rs).
+//! under it when it is narrow, with what does not fit behind a ... button. The views are the strip of cells, the
+//! table (measview.rs) and the cards; there is no footer and no paging: the list scrolls by swipe (measscroll.rs).
 use super::dock::{VKind, STRIP_H};
 use super::studio::{chip, icon_pin, PanelGeo, StudioView};
 use super::*;
@@ -516,7 +516,8 @@ impl Ui {
 
     /// The strip view: a cell is one line, the source in its colour, the name of the measurement, and the value at
     /// the right in the colour of the source, as the strip of the Default layout writes them. A pinned one has an
-    /// amber edge. A tap on a cell opens the settings of its measurement.
+    /// amber edge. A tap on a cell opens the settings of its measurement; a cell has no pin and no Remove of its own
+    /// (the cards have the pin, a row of the table is swiped away, a badge has both in its menu).
     pub(super) fn draw_panel_strip(&self, cv: &mut Canvas, g: &PanelGeo, rows: &[tools::MeasRow], keys: &[studio::MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
         let pinned = self.studio_pinned();

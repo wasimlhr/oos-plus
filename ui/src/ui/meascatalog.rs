@@ -260,18 +260,7 @@ pub(super) fn cat_info(c: Cat) -> CatInfo {
     };
     let sources = match m.roles.len() { 1 => "Reads one source".to_string(), 2 => "Reads two sources: A and B".to_string(), n => format!("Reads {n} sources") };
     CatInfo { name: m.name, blurb: m.blurb, mark: m.mark, unit: m.unit, how,
-        settings: "Gate (screen or whole record), levels and edge options are on the settings card of the measurement: its row menu, Settings.".into(), sources }
-}
-
-/// The catalogue entry of a measurement of the list.
-pub(super) fn cat_of_key(key: super::studio::MeasKey) -> Option<Cat> {
-    use super::studio::MeasKey;
-    listed().into_iter().find(|&c| match (key, c.kind) {
-        (MeasKey::One(k, _), Kind::Standard(m)) => k == m,
-        (MeasKey::Pair(k, _, _), Kind::Pair(m)) => k == m,
-        (MeasKey::Cat(id, ..), Kind::Module) => id == c.id,
-        _ => false,
-    })
+        settings: "Gate (screen or whole record), levels and edge options are on the settings card of the measurement: a tap on it in the measurements panel.".into(), sources }
 }
 
 /// Every measurement, in the order of the modules.

@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! Studio: how the measurements panel scrolls. There is no pager: a finger dragged up or down moves the list, and a flick
-//! keeps it moving (it slows down by itself); the mouse wheel moves it too. The table moves by pixels, the list and
-//! the cards by whole rows (the position is kept in pixels all the same, so a slow flick still moves them).
+//! keeps it moving (it slows down by itself); the mouse wheel moves it too. The table moves by pixels, the strip and
+//! the cards by whole lines (the position is kept in pixels all the same, so a slow flick still moves them).
 //!
-//! The gesture on a row: a press that moves is a scroll when it goes mostly up or down, and a swipe (the row slides
-//! left over a red Remove) when it goes mostly left past `SWIPE_START` first; once it has gone vertical it stays a scroll.
-//! A press held without moving picks a list row up (reorder). A badge or a pill dragged down off the screen is removed
-//! as before: that is the one swipe down.
+//! The gesture on a row of the table: a press that moves is a scroll when it goes mostly up or down, and a swipe (the
+//! row slides left over a red Remove) when it goes mostly left past `SWIPE_START` first; once it has gone vertical it
+//! stays a scroll. A badge or a pill dragged down off the screen is removed as before: that is the one swipe down.
 use super::studio::{PanelGeo, StudioView};
 use super::*;
 
@@ -19,7 +18,7 @@ const DECAY: f64 = 4.0;
 const FLICK_WINDOW: f64 = 0.12;
 
 impl Ui {
-    /// Pixels one scroll step is high: a row of the table, of the list, or a row of two cards.
+    /// Pixels one scroll step is high: a row of the table, a line of cells of the strip, or a row of two cards.
     fn panel_unit(&self) -> i32 { self.studio_panel_row().max(1) }
 
     pub(super) fn panel_cols(&self) -> usize {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Studio: gestures of the measurements list. A row swiped left is removed (with an Undo bar for a few seconds); a row
-//! held for half a second can be dragged to reorder the list, or onto the badge strip to pin it; a badge held and
-//! dragged off the strip unpins it; a tile of the Add measurement panel dragged onto a channel adds it for that
-//! channel. Every gesture has a tap equivalent: the row's menu (Settings, Pin, Move up, Move down, Remove).
+//! Studio: gestures of the measurements. A row of the table swiped left is removed (with an Undo bar for a few
+//! seconds); a badge held and dragged off the strip unpins it, and swiped down off the screen it is removed; a tile of
+//! the Add measurement panel dragged onto a channel adds it for that channel. A cell of the strip and a card have no
+//! gesture of their own: a drag scrolls them, a tap opens the settings of the measurement.
 use super::meascatalog::Preview;
 use super::studio::{MeasKey, StudioDrag, StudioView};
 use super::workspace::Action;
@@ -14,14 +14,11 @@ pub(super) const SWIPE_START: i32 = 16;
 pub(super) const UNDO_S: f64 = 6.0;
 /// A finger that moves more than this cancels a hold.
 const HOLD_SLOP: i32 = 12;
-/// Height of the Undo bar and of the rows of the row menu.
+/// Height of the Undo bar.
 const BAR_H: i32 = 44;
-const MENU_ROW: i32 = 42;
-const MENU_W: i32 = 210;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum HoldOn {
-    Row(MeasKey),
     Badge(MeasKey),
     /// a math or reference chip of the bottom bar: a hold opens its quick actions
     Math(usize),
@@ -62,7 +59,7 @@ pub(super) struct Undo {
 #[derive(Default)]
 pub(super) struct Md {
     pub hold: Option<Hold>,
-    /// the row a finger went down on: it may become a swipe
+    /// the row of the table a finger went down on: it may become a swipe
     pub cand: Option<(MeasKey, i32, i32)>,
     /// the row that is being swiped and how far (<= 0)
     pub swipe: Option<(MeasKey, i32)>,
@@ -73,10 +70,6 @@ pub(super) struct Md {
     pub src_undo: Option<SrcUndo>,
     /// a finger went down on a badge or a bottom-bar pill: where, for the swipe down
     pub dn: Option<(HoldOn, i32, i32)>,
-    /// the row menu (the tap equivalent of the gestures)
-    pub menu: Option<MeasKey>,
-    /// rows that show their statistics although the Statistics switch is off
-    pub stats_rows: Vec<MeasKey>,
     /// a finger down on the detailed table: where, and how far it was scrolled
     pub hdown: Option<(i32, i32, i32)>,
     /// the badges were just hidden: a small bar with Undo, since when
@@ -93,53 +86,19 @@ pub(super) struct Md {
     pub tile_scrolled: bool,
 }
 
-/// Rows of the row menu.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(super) enum RowAct {
-    Settings,
-    Pin,
-    Up,
-    Down,
-    Remove,
-    Stats,
-    StatsAll,
-    /// Measure > Labels on trace: the levels and spans drawn on the waveform
-    Labels,
-    /// the info card of the measurement
-    About,
-}
-const ROW_ACTS: [RowAct; 9] = [RowAct::Settings, RowAct::Pin, RowAct::Up, RowAct::Down, RowAct::Remove, RowAct::Stats, RowAct::StatsAll, RowAct::Labels, RowAct::About];
-
 impl Ui {
     // ------------------------------------------------------------------------------------------------ geometry
 
-    /// The row of the docked list under a point: the measurement and the rectangle of the row.
-    pub(super) fn md_row_at(&self, x: i32, y: i32) -> Option<(MeasKey, Rect)> {
+    /// The row of the table under a point: the measurement and the rectangle of the row.
+    fn md_row_at(&self, x: i32, y: i32) -> Option<(MeasKey, Rect)> {
         let g = self.studio_panel_geo()?;
-        if !g.list.contains(x, y) || self.panel_cells() { return None; }
+        if !g.list.contains(x, y) || !self.studio_detailed() { return None; }
         let rows = self.meas_rows();
         let listed = self.studio_listed(&rows);
-        let keys = self.studio_keys();
         let first = self.studio_first(listed.len(), g.page);
-        let lay = if self.studio_detailed() { self.detail_layout(&g, listed.len(), first) } else { self.panel_layout(&rows, &listed, first, g.list) };
-        let (pos, r) = lay.into_iter().find(|(_, r)| r.contains(x, y))?;
-        let key = *keys.get(listed[pos])?;
+        let (pos, r) = self.detail_layout(&g, listed.len(), first).into_iter().find(|(_, r)| r.contains(x, y))?;
+        let key = *self.studio_keys().get(listed[pos])?;
         Some((key, r))
-    }
-
-    /// The rectangle of a measurement's row in the docked list, when it is on the page.
-    pub(super) fn md_row_rect(&self, key: MeasKey) -> Option<Rect> {
-        let g = self.studio_panel_geo()?;
-        let rows = self.meas_rows();
-        let listed = self.studio_listed(&rows);
-        let keys = self.studio_keys();
-        let first = self.studio_first(listed.len(), g.page);
-        self.panel_layout(&rows, &listed, first, g.list).into_iter().find(|(pos, _)| keys.get(listed[*pos]) == Some(&key)).map(|(_, r)| r)
-    }
-
-    /// The pin and the menu button of a row: two targets of 44 px at its right end.
-    pub(super) fn md_row_buttons(r: Rect) -> (Rect, Rect) {
-        (Rect::new(r.right() - 88, r.y, 44, r.h), Rect::new(r.right() - 44, r.y, 44, r.h))
     }
 
     /// The Undo bar: the bottom of the list.
@@ -166,12 +125,7 @@ impl Ui {
         self.shown_refs().into_iter().find(|&i| b.refs[i].w > 0 && Self::hit40(b.refs[i]).contains(x, y)).map(HoldOn::Ref)
     }
 
-    /// The badge strip is the target of a pin: the row under the lanes.
-    fn md_strip(&self) -> Option<Rect> {
-        self.studio_badges_visible().then(|| self.studio_row())
-    }
-
-    // ------------------------------------------------------------------------------------------------ remove, undo, move
+    // ------------------------------------------------------------------------------------------------ remove, undo
 
     /// Removes a measurement and keeps what is needed to bring it back at the same place.
     pub(super) fn md_remove(&mut self, key: MeasKey) {
@@ -181,7 +135,6 @@ impl Ui {
         self.studio.md.undo = Some(Undo { key, index, pinned, own, at: self.now });
         self.studio_set_pin(key, false);
         self.remove_measurement(index);
-        self.studio.md.menu = None;
     }
 
     /// Brings the removed measurement back: the same place in the list, pinned again when it was.
@@ -207,32 +160,9 @@ impl Ui {
         self.relayout();
     }
 
-    /// Moves `key` before `before` (None: to the end). The list keeps its three kinds in their order, so a row moves
-    /// among those of its own kind.
-    pub(super) fn md_reorder(&mut self, key: MeasKey, before: Option<MeasKey>) {
-        let mut keys = self.studio_keys();
-        let Some(from) = keys.iter().position(|k| *k == key) else { return };
-        if before == Some(key) { return; }
-        keys.remove(from);
-        let to = before.and_then(|b| keys.iter().position(|k| *k == b)).unwrap_or(keys.len());
-        keys.insert(to, key);
-        self.m.meas = keys.iter().filter_map(|k| if let MeasKey::One(m, id) = k { Some((*m, *id)) } else { None }).collect();
-        self.m.meas2 = keys.iter().filter_map(|k| if let MeasKey::Pair(m, a, b) = k { Some((*m, *a, *b)) } else { None }).collect();
-        self.m.cat = keys.iter().filter_map(|k| if let MeasKey::Cat(i, a, b, c, d) = k { Some((*i, *a, *b, *c, *d)) } else { None }).collect();
-        self.clear_measurement_statistics();
-        self.relayout();
-    }
-
-    /// One place up or down in the list.
-    pub(super) fn md_step(&mut self, key: MeasKey, down: bool) {
-        let keys = self.studio_keys();
-        let Some(i) = keys.iter().position(|k| *k == key) else { return };
-        if down { self.md_reorder(key, keys.get(i + 2).copied()); } else if i > 0 { self.md_reorder(key, Some(keys[i - 1])); }
-    }
-
     // ------------------------------------------------------------------------------------------------ per frame
 
-    /// Every frame: the Undo bar times out, a short swipe springs back, a held finger picks the row or badge up.
+    /// Every frame: the Undo bar times out, a short swipe springs back, a held finger picks the badge up.
     pub(super) fn md_tick(&mut self) {
         if self.studio.md.undo.is_some_and(|u| self.now - u.at > UNDO_S) { self.studio.md.undo = None; }
         if self.studio.md.src_undo.is_some_and(|u| self.now - u.at > UNDO_S) { self.studio.md.src_undo = None; }
@@ -246,7 +176,6 @@ impl Ui {
         self.studio.md.hold = None;
         self.studio.md.cand = None;
         self.studio.drag = match h.on {
-            HoldOn::Row(key) => Some(StudioDrag::Reorder { key, x: h.x, y: h.y }),
             HoldOn::Badge(key) => Some(StudioDrag::BadgeDrag { key, x: h.x, y: h.y }),
             chip => {
                 // the quick actions: the lift of this finger is no tap
@@ -257,7 +186,7 @@ impl Ui {
         };
     }
 
-    /// The ring that fills under a finger held on a row or a badge.
+    /// The ring that fills under a finger held on a badge or a pill.
     pub(super) fn md_ring(&self) -> Option<(i32, i32, f32)> {
         let h = self.studio.md.hold?;
         let f = ((self.now - h.at) / LONG_PRESS) as f32;
@@ -266,7 +195,7 @@ impl Ui {
 
     // ------------------------------------------------------------------------------------------------ touch
 
-    /// A finger went down. True when a gesture of the list, the badges or the Add measurement panel takes it.
+    /// A finger went down. True when a gesture of the badges, the pills or the Add measurement panel takes it.
     pub(super) fn md_down(&mut self, x: i32, y: i32) -> bool {
         self.studio.md.hold = None;
         self.studio.md.cand = None;
@@ -312,28 +241,13 @@ impl Ui {
             self.studio.md.dn = Some((chip, x, y));
             return self.studio_eat(x, y);
         }
-        // the cards: a drag scrolls, a tap acts
-        if self.panel_cells() { return false; }
-        // the detailed table: a sideways drag scrolls it
+        // the table: a sideways drag scrolls it. (The strip and the cards: a drag scrolls, a tap acts.)
         if self.studio_detailed() {
             if let Some(g) = self.studio_panel_geo().filter(|g| g.list.contains(x, y)) {
                 // the columns fit, so there is no sideways scroll: a clear drag to the left swipes the row away instead
                 let hmax = self.detail_hmax(g.list.w);
                 if hmax > 0 { self.studio.md.hdown = Some((x, y, self.studio.panel.hx.clamp(0, hmax))); }
                 else if let Some((key, _)) = self.md_row_at(x, y) { self.studio.md.cand = Some((key, x, y)); }
-            }
-            return false;
-        }
-        // a row of the list: a drag scrolls, a clear sideways drag swipes it, a hold picks it up
-        if let Some((key, _)) = self.md_row_at(x, y) {
-            if let Some(g) = self.studio_panel_geo() {
-                let rows = self.meas_rows();
-                let first0 = self.studio_first(self.studio_listed(&rows).len(), g.page);
-                self.studio.drag = Some(StudioDrag::Scroll { y0: y, first0, moved: false });
-                self.studio.md.cand = Some((key, x, y));
-                self.panel_scroll_begin();
-                self.studio.md.hold = Some(Hold { on: HoldOn::Row(key), x0: x, y0: y, x, y, at: self.now });
-                return true;
             }
         }
         false
@@ -376,7 +290,6 @@ impl Ui {
                 self.studio.md.swipe = Some((key, (x - x0).min(0)));
                 true
             }
-            Some(StudioDrag::Reorder { key, .. }) => { self.studio.drag = Some(StudioDrag::Reorder { key, x, y }); true }
             Some(StudioDrag::BadgeDrag { key, .. }) => { self.studio.drag = Some(StudioDrag::BadgeDrag { key, x, y }); true }
             Some(StudioDrag::Tile { k, x0, y0, moved, .. }) => {
                 // a mostly vertical drag scrolls the tiles; a sideways one carries the tile to a trace
@@ -423,7 +336,6 @@ impl Ui {
                 if -dx >= (w * 2 / 5).max(80) { self.md_remove(key); } else { self.studio.md.spring = Some((key, dx as f32)); }
                 true
             }
-            StudioDrag::Reorder { key, .. } => { self.md_drop_row(key, x, y); true }
             StudioDrag::BadgeDrag { key, .. } => {
                 // off the strip: unpinned
                 if !self.studio_row().contains(x, y) { self.studio_set_pin(key, false); }
@@ -470,7 +382,6 @@ impl Ui {
                 self.math_turn_off(k);
                 self.md_src_undo(on, Some(op));
             }
-            HoldOn::Row(_) => {}
         }
     }
 
@@ -506,29 +417,6 @@ impl Ui {
             HoldOn::Math(k) => format!("M{}", k + 1),
             _ => String::new(),
         }
-    }
-
-    /// A row dropped: on the badge strip it is pinned, on the list it moves there.
-    fn md_drop_row(&mut self, key: MeasKey, x: i32, y: i32) {
-        if self.md_strip().is_some_and(|s| s.contains(x, y)) {
-            self.studio_set_pin(key, true);
-            return;
-        }
-        if let Some(before) = self.md_insert_at(x, y) { self.md_reorder(key, before); }
-    }
-
-    /// Where a row dropped at a point would go: before which row (None: at the end); None when not over the list.
-    pub(super) fn md_insert_at(&self, x: i32, y: i32) -> Option<Option<MeasKey>> {
-        let g = self.studio_panel_geo()?;
-        if !g.list.contains(x, y) { return None; }
-        let rows = self.meas_rows();
-        let listed = self.studio_listed(&rows);
-        let keys = self.studio_keys();
-        let first = self.studio_first(listed.len(), g.page);
-        // before the row whose middle is below the finger
-        let layout = self.panel_layout(&rows, &listed, first, g.list);
-        let at = layout.iter().find(|(_, r)| y < r.y + r.h / 2).map(|(pos, _)| listed[*pos]);
-        Some(at.and_then(|i| keys.get(i)).copied())
     }
 
     // ------------------------------------------------------------------------------------------------ tiles
@@ -569,42 +457,6 @@ impl Ui {
         }
     }
 
-    // ------------------------------------------------------------------------------------------------ the row menu
-
-    pub(super) fn md_menu_rect(&self) -> Option<Rect> {
-        let key = self.studio.md.menu?;
-        let row = self.md_row_rect(key)?;
-        let g = self.studio_panel_geo()?;
-        let h = ROW_ACTS.len() as i32 * MENU_ROW + 8;
-        let x = (g.p.x - MENU_W - 6).max(4);
-        Some(Rect::new(x, row.y.min(self.scr.h - h - 4).max(4), MENU_W, h))
-    }
-
-    pub(super) fn md_menu_row(p: Rect, i: usize) -> Rect { Rect::new(p.x + 4, p.y + 4 + i as i32 * MENU_ROW, p.w - 8, MENU_ROW) }
-
-    /// A tap while the row menu is open: one of its actions, or it closes. Always taken.
-    pub(super) fn md_menu_tap(&mut self, x: i32, y: i32) -> bool {
-        let Some(key) = self.studio.md.menu else { return false };
-        let Some(p) = self.md_menu_rect() else { self.studio.md.menu = None; return false };
-        self.studio.md.menu = None;
-        let Some(act) = ROW_ACTS.iter().enumerate().find(|(i, _)| Self::md_menu_row(p, *i).contains(x, y)).map(|(_, a)| *a) else { return true };
-        match act {
-            RowAct::Settings => if let Some(i) = self.studio_index(key) { self.studio_configure(i); },
-            RowAct::Pin => { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
-            RowAct::Up => self.md_step(key, false),
-            RowAct::Down => self.md_step(key, true),
-            RowAct::Remove => self.md_remove(key),
-            RowAct::Stats => {
-                if let Some(p) = self.studio.md.stats_rows.iter().position(|k| *k == key) { self.studio.md.stats_rows.remove(p); } else { self.studio.md.stats_rows.push(key); }
-                self.relayout();
-            }
-            RowAct::StatsAll => { self.studio.panel.stats = !self.studio.panel.stats; self.relayout(); }
-            RowAct::Labels => { self.m.meas_labels = !self.m.meas_labels; self.dirty_map = true; }
-            RowAct::About => self.md_about(key),
-        }
-        true
-    }
-
     /// The bar that follows hiding the badges: where it is, and its Undo button.
     pub(super) fn md_hide_bar(&self) -> Option<(Rect, Rect)> {
         self.studio.md.hide_undo?;
@@ -635,7 +487,7 @@ impl Ui {
 
     // ------------------------------------------------------------------------------------------------ drawing
 
-    /// The Undo bar, the row menu, and what follows a finger that drags a row, a badge or a tile.
+    /// The Undo bars, and what follows a finger that drags a badge or a tile.
     pub(super) fn draw_md_overlays(&self, cv: &mut Canvas) {
         if self.m.layout != Layout::Studio { return; }
         let f = self.fonts();
@@ -659,54 +511,7 @@ impl Ui {
             btn(cv, button.inset(4), BTN, ACCENT);
             cv.text_in(&f.mb, button, 1, "Undo", ACCENT);
         }
-        if let (Some(key), Some(p)) = (self.studio.md.menu, self.md_menu_rect()) {
-            cv.round(p, 8, BTN_BORDER, 255);
-            cv.round(p.inset(1), 7, PANEL_BG, 255);
-            for (i, act) in ROW_ACTS.iter().enumerate() {
-                let r = Self::md_menu_row(p, i);
-                let (label, col) = match act {
-                    RowAct::Settings => ("Settings...", TEXT),
-                    RowAct::Pin => (if self.studio_is_pinned(key) { "Unpin from waveform" } else { "Pin to waveform" }, TEXT),
-                    RowAct::Up => ("Move up", TEXT),
-                    RowAct::Down => ("Move down", TEXT),
-                    RowAct::Remove => ("Remove", RED),
-                    RowAct::Stats => (if self.studio.md.stats_rows.contains(&key) { "Hide statistics (row)" } else { "Show statistics (row)" }, TEXT),
-                    RowAct::StatsAll => (if self.studio.panel.stats { "Hide statistics (all)" } else { "Show statistics (all)" }, TEXT),
-                    RowAct::Labels => (if self.m.meas_labels { "Labels on trace: on" } else { "Labels on trace: off" }, TEXT),
-                    RowAct::About => ("About this measurement", TEXT),
-                };
-                if *act == RowAct::Remove { cv.hline(p.x + 8, p.right() - 9, r.y - 1, LINE); }
-                cv.text_in(&f.m, Rect::new(r.x + 12, r.y, r.w - 14, r.h), 0, label, col);
-            }
-        }
         match self.studio.drag {
-            Some(StudioDrag::Reorder { key, x, y }) => {
-                let strip = self.md_strip().filter(|s| s.contains(x, y));
-                if let Some(s) = strip {
-                    cv.blend(s, ACCENT, 60);
-                    cv.rect(s, ACCENT);
-                    cv.text_in(&f.lb, s, 1, "Pin", TEXT);
-                } else if let (Some(g), Some(before)) = (self.studio_panel_geo(), self.md_insert_at(x, y)) {
-                    // the drop line: between the rows
-                    let rows = self.meas_rows();
-                    let listed = self.studio_listed(&rows);
-                    let keys = self.studio_keys();
-                    let first = self.studio_first(listed.len(), g.page);
-                    let layout = self.panel_layout(&rows, &listed, first, g.list);
-                    let ly = before.and_then(|b| layout.iter().find(|(pos, _)| keys.get(listed[*pos]) == Some(&b)).map(|(_, r)| r.y))
-                        .unwrap_or_else(|| layout.last().map_or(g.list.y, |(_, r)| r.bottom()));
-                    cv.fill(Rect::new(g.list.x + 4, ly - 1, g.list.w - 8, 3), ACCENT);
-                }
-                // the row follows the finger
-                let rows = self.meas_rows();
-                if let Some(row) = self.studio_index(key).and_then(|i| rows.get(i)) {
-                    let w = self.studio_panel_geo().map_or(240, |g| g.list.w);
-                    let r = Rect::new(x - w / 2, y - self.studio_panel_row() / 2, w, self.studio_panel_row());
-                    cv.round(r, 6, ACCENT, 255);
-                    cv.round(r.inset(1), 5, PANEL_BG, 235);
-                    self.draw_panel_row(cv, r, row, self.studio_is_pinned(key), 0);
-                }
-            }
             Some(StudioDrag::BadgeDrag { key, x, y }) => {
                 let off = !self.studio_row().contains(x, y);
                 let label = self.md_key_label(key);
