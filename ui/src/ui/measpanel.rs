@@ -152,15 +152,19 @@ impl Ui {
         v
     }
 
-    /// The panel `p` (under its title strip) has its controls in the strip.
-    pub(super) fn panel_bar_wide(p: Rect) -> bool { p.w >= WIDE_BAR_FROM }
+    /// The panel `p` (under its title strip) has its controls in the strip: a wide one that is not in a group of
+    /// tabs. In front of a group the strip belongs to the tabs, and the controls are a line of the content as in a
+    /// narrow panel: in the strip they pushed the names of the tabs into the list behind the arrow (the owner on
+    /// his unit).
+    pub(super) fn panel_bar_wide(&self, p: Rect) -> bool { p.w >= WIDE_BAR_FROM && self.dock_tab_group(VKind::Measure).is_none() }
 
-    /// Height the controls take from the content: the slim toolbar of a narrow panel, nothing for a wide one.
-    pub(super) fn panel_tool_h(p: Rect) -> i32 { if Self::panel_bar_wide(p) { 0 } else { TOOL_H } }
+    /// Height the controls take from the content: the toolbar of a narrow panel or of one in front of a group of
+    /// tabs, nothing for a wide one that has them in its strip.
+    pub(super) fn panel_tool_h(&self, p: Rect) -> i32 { if self.panel_bar_wide(p) { 0 } else { TOOL_H } }
 
     /// The controls of the panel `p`: as many as fit, whole; the others are behind the ... button.
     pub(super) fn panel_bar(&self, p: Rect) -> PanelBar {
-        let wide = Self::panel_bar_wide(p);
+        let wide = self.panel_bar_wide(p);
         // the row of the bar: the title strip, or the toolbar
         let (y, h) = if wide { (p.y - STRIP_H + 2, STRIP_H - 4) } else { (p.y + 2, TOOL_H - 4) };
         let (hit_y, hit_h) = if wide { (p.y - STRIP_H, 40) } else { (p.y, TOOL_H) };
@@ -366,7 +370,7 @@ impl Ui {
 
     /// A tap on the toolbar of a narrow panel. False: not on it. (The bar in the title strip is taken by the dock.)
     pub(super) fn panel_head_tap(&mut self, g: &PanelGeo, x: i32, y: i32) -> bool {
-        if Self::panel_bar_wide(g.p) { return false; }
+        if self.panel_bar_wide(g.p) { return false; }
         let Some(hit) = self.panel_bar_hit(g.p, x, y) else { return false };
         self.panel_bar_tap_item(hit);
         true
@@ -464,7 +468,7 @@ impl Ui {
 
     /// The toolbar of a narrow panel: its row under the title strip.
     pub(super) fn draw_panel_toolbar(&self, cv: &mut Canvas, g: &PanelGeo) {
-        if Self::panel_bar_wide(g.p) { return; }
+        if self.panel_bar_wide(g.p) { return; }
         let bar = self.panel_bar(g.p);
         self.draw_panel_bar(cv, &bar);
         cv.hline(g.p.x + 4, g.p.right() - 5, g.p.y + TOOL_H - 1, LINE);

@@ -24,8 +24,6 @@ pub(super) enum StudioView {
     Docked,
     /// the panel over the lanes
     Floating,
-    /// the table of all measurements instead of the lanes
-    Only,
     /// analysing a loaded file: the record navigator on top, the references in lanes, the measurements docked
     Offline,
     /// the SIM panel docked at the right of the lanes
@@ -38,15 +36,16 @@ impl StudioView {
         match self {
             StudioView::Docked => "docked",
             StudioView::Floating => "floating",
-            StudioView::Only => "only",
             _ => "waveform",
         }
     }
+    /// "only" was the table of all measurements in place of the lanes. That view is gone (the panel in a tab beside
+    /// the waveform took its place, an arrangement of the dock): a set-up or a stored view that names it loads with
+    /// the panel docked.
     pub(super) fn from_token(s: &str) -> StudioView {
         match s {
-            "docked" => StudioView::Docked,
+            "docked" | "only" => StudioView::Docked,
             "floating" => StudioView::Floating,
-            "only" => StudioView::Only,
             _ => StudioView::Waveform,
         }
     }
@@ -56,7 +55,7 @@ impl StudioView {
     pub(super) fn is_docked(self) -> bool { matches!(self, StudioView::Docked | StudioView::Offline | StudioView::Sim) }
 }
 
-/// The measurements panel (docked at the right, floating or maximized).
+/// The measurements panel (docked, in a tab or floating).
 #[derive(Default)]
 pub(super) struct StudioPanel {
     /// first row of the page shown
@@ -299,13 +298,6 @@ pub(super) fn icon_play(cv: &mut Canvas, x: i32, cy: i32, c: Rgb) {
 
 pub(super) fn icon_stop(cv: &mut Canvas, x: i32, cy: i32, c: Rgb) {
     cv.fill(Rect::new(x, cy - 5, 10, 10), c);
-}
-
-/// Three bars of different height.
-fn icon_bars(cv: &mut Canvas, x: i32, cy: i32, c: Rgb) {
-    for (i, h) in [7, 13, 10].into_iter().enumerate() {
-        cv.fill(Rect::new(x + i as i32 * 5, cy + 6 - h, 3, h), c);
-    }
 }
 
 /// Two cursor lines.
@@ -1096,7 +1088,7 @@ impl Ui {
 
     /// The badges are hidden and there are some to show: the bottom bar keeps a button for them.
     pub(super) fn studio_badges_hidden(&self) -> bool {
-        self.m.layout == Layout::Studio && self.studio.hide_badges && self.studio.view != StudioView::Only
+        self.m.layout == Layout::Studio && self.studio.hide_badges
     }
 
     fn studio_bottom_tap(&mut self, x: i32, y: i32) {
@@ -1629,7 +1621,7 @@ impl Ui {
     /// Whether the row under the lanes is there: pinned measurements to show and the panel closed, unless hidden. The cursor
     /// read-out is never in it (the plot has its own).
     pub(super) fn studio_badges_visible(&self) -> bool {
-        self.m.layout == Layout::Studio && !self.studio.hide_badges && self.studio.view != StudioView::Only
+        self.m.layout == Layout::Studio && !self.studio.hide_badges
             && !self.studio_pinned().is_empty() && !self.studio_panel_shown()
     }
 
@@ -1971,21 +1963,6 @@ impl Ui {
     }
 }
 
-/// A small square wave: the lanes, on the button that leads back to them.
-fn icon_wave(cv: &mut Canvas, r: Rect, c: Rgb) {
-    let (lo, hi) = (r.bottom() - 4, r.y + 4);
-    let mut x = r.x + 2;
-    let mut y = lo;
-    for step in [5, 5, 5, 5, 5, 5] {
-        cv.hline(x, x + step, y, c);
-        x += step;
-        let next = if y == lo { hi } else { lo };
-        cv.vline(x, y.min(next), y.max(next), c);
-        y = next;
-        if x >= r.right() - 6 { break; }
-    }
-}
-
 impl Ui {
     /// Chooses how the measurements share the screen.
     pub(super) fn studio_set_view(&mut self, view: StudioView) {
@@ -2014,15 +1991,12 @@ impl Ui {
 pub(super) const NARROW_PANEL_W: i32 = 250;
 /// Width of the measurement panel, docked or floating.
 const MEAS_PANEL_W_FULL: i32 = 270;
-/// Rows of the table that has the whole body.
-const TABLE_ROW: i32 = 44;
-
-/// A touch that the panel or the table owns, from its first point to its last.
+/// A touch that a panel owns, from its first point to its last.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(super) enum StudioDrag {
     /// the list moves with the finger
     Scroll { y0: i32, first0: usize, moved: bool },
-    /// a touch on a panel or the table that scrolls nothing: it ends in a tap
+    /// a touch on a panel that scrolls nothing: it ends in a tap
     Eat { x0: i32, y0: i32 },
     /// the Menu page moves with the finger
     MenuScroll { y0: i32, s0: i32, moved: bool },
@@ -2039,7 +2013,6 @@ pub(super) enum StudioDrag {
 /// The parts of the docked panel.
 pub(super) struct PanelGeo {
     pub p: Rect,
-    pub maximize: Rect,
     pub collapse: Rect,
     pub list: Rect,
     pub page: usize,
@@ -2108,12 +2081,6 @@ impl Ui {
         }
     }
 
-    /// The table of all measurements: the whole body.
-    pub(super) fn studio_table_rect(&self) -> Option<Rect> {
-        if self.studio.view != StudioView::Only { return None; }
-        self.dock_content(super::dock::VKind::Measure)
-    }
-
     /// Plot width less the docked panel: `plot_span` calls this.
     pub(super) fn studio_dock_w(&self) -> i32 {
         if self.dock_on() { return 0; }
@@ -2130,7 +2097,7 @@ impl Ui {
     /// heads of the table, and the list with all the rest of the room. There is no footer and no pager.
     pub(super) fn studio_panel_geo_in(&self, p: Rect) -> PanelGeo {
         let detailed = self.studio_detailed();
-        let list_y = p.y + Self::panel_tool_h(p) + if detailed { super::measview::COL_HEAD } else { 0 };
+        let list_y = p.y + self.panel_tool_h(p) + if detailed { super::measview::COL_HEAD } else { 0 };
         let unit = self.studio_panel_row();
         let rows_h = (p.bottom() - 2 - list_y).max(unit);
         let page = if self.panel_cells() { self.panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
@@ -2139,7 +2106,7 @@ impl Ui {
         let bar = self.panel_bar(p);
         let at = |it: super::measpanel::BarItem| bar.slots.iter().find(|s| s.item == it).map_or(Rect::new(0, 0, 0, 0), |s| s.r);
         let none = Rect::new(0, 0, 0, 0);
-        PanelGeo { p, maximize: none, collapse: none, list, page, up: none, down: none, add: at(super::measpanel::BarItem::Add), stats: at(super::measpanel::BarItem::Stats), short: false }
+        PanelGeo { p, collapse: none, list, page, up: none, down: none, add: at(super::measpanel::BarItem::Add), stats: at(super::measpanel::BarItem::Stats), short: false }
     }
 
     pub(super) fn draw_scrollbar(cv: &mut Canvas, list: Rect, first: usize, page: usize, total: usize) {
@@ -2170,10 +2137,9 @@ impl Ui {
 
     pub(super) fn draw_studio_panel(&self, cv: &mut Canvas) {
         if self.m.layout != Layout::Studio { return; }
-        // an analysis view fills the plot area: the docked panel stays beside it, a floating panel and the table do not
+        // an analysis view fills the plot area: the docked panel stays beside it, a floating panel does not
         if self.view_on() && !self.studio.view.is_docked() { return; }
         self.draw_studio_offline(cv);
-        if self.studio_table_rect().is_some() { return self.draw_studio_table(cv); }
         if self.studio.view == StudioView::Sim { return self.draw_studio_sim(cv); }
         let Some(p) = self.studio_panel_rect() else { return };
         let rows = self.meas_rows();
@@ -2211,146 +2177,6 @@ impl Ui {
         chevron(cv, r.right() - 12, r.y + r.h / 2, 1, TEXT);
     }
 
-    // ------------------------------------------------------------------------------------------------ the table
-
-    /// The controls of the table view: Waveform, the source filter, Statistics and Add.
-    pub(super) fn studio_table_parts(&self) -> Option<[Rect; 4]> {
-        let t = self.studio_table_rect()?;
-        let y = t.y + 8;
-        let add = Rect::new(t.right() - 100, y, 92, 32);
-        let stats = Rect::new(add.x - 8 - 126, y, 126, 32);
-        let filter = Rect::new(stats.x - 8 - 150, y, 150, 32);
-        let back = Rect::new(filter.x - 8 - 120, y, 120, 32);
-        Some([back, filter, stats, add])
-    }
-
-    /// The table as blocks side by side. Without the statistics a row is short (pin, source, name, value): a wide
-    /// table shows two blocks of rows instead of one with an empty right half. With them it is one block.
-    pub(super) fn studio_table_blocks(&self, list_w: i32) -> i32 {
-        if !self.studio.panel.stats && list_w >= 760 { 2 } else { 1 }
-    }
-
-    /// The columns of a block `w` wide, sized to what they hold: (x, width, head). The source and the name are as
-    /// wide as their widest entry, and the value columns share the rest evenly, so nothing is left empty at the
-    /// right and no name column is wider than its names.
-    fn studio_table_cols(&self, rows: &[tools::MeasRow], listed: &[usize], w: i32) -> Vec<(i32, i32, &'static str)> {
-        let f = self.fonts();
-        let src_w = listed.iter().map(|&i| f.sb.width(&self.wave_name(rows[i].src))).max().unwrap_or(0).max(f.sb.width("CH4")).max(f.mb.width("Source") - 12) + 12 + 22;
-        let name_w = (listed.iter().map(|&i| f.m.width(&rows[i].name)).max().unwrap_or(0).max(f.mb.width("Measurement")) + 28).min(w * 2 / 5);
-        let mut heads = vec!["Current"];
-        if self.studio.panel.stats {
-            heads.push("Mean");
-            for (name, i) in [("Min", 1usize), ("Max", 2), ("\u{3c3}", 0)] { if self.m.meas_show[i] { heads.push(name); } }
-        }
-        let x0 = 52;
-        let rest = (w - x0 - src_w - name_w - 12).max(heads.len() as i32 * 60);
-        let vw = rest / heads.len() as i32;
-        let mut v = vec![(x0, src_w, "Source"), (x0 + src_w, name_w, "Measurement")];
-        for (k, h) in heads.into_iter().enumerate() { v.push((x0 + src_w + name_w + k as i32 * vw, vw, h)); }
-        v
-    }
-
-    /// Rows of the table, the page, and the footer buttons (Reset statistics, up, down).
-    pub(super) fn studio_table_geo(&self) -> Option<(Rect, usize, [Rect; 3])> {
-        let t = self.studio_table_rect()?;
-        let list = Rect::new(t.x + 6, t.y + 48 + 28, t.w - 12, t.h - 48 - 28 - 44);
-        let page = (list.h / TABLE_ROW).max(1) as usize * self.studio_table_blocks(list.w) as usize;
-        let y = t.bottom() - 38;
-        let reset = Rect::new(t.right() - 168, y, 160, 32);
-        Some((list, page, [reset, Rect::new(reset.x - 44 - 44, y, 38, 32), Rect::new(reset.x - 44, y, 38, 32)]))
-    }
-
-    /// The source filter in the order the sources first measure something.
-    fn studio_filter_next(&self) -> Option<WaveId> {
-        let rows = self.meas_rows();
-        let mut sources: Vec<WaveId> = Vec::new();
-        for r in rows.iter().filter(|r| !self.meas_row_hidden(r)) { if !sources.contains(&r.src) { sources.push(r.src); } }
-        match self.studio.filter {
-            None => sources.first().copied(),
-            Some(id) => sources.iter().position(|&s| s == id).and_then(|i| sources.get(i + 1)).copied(),
-        }
-    }
-
-    fn draw_studio_table(&self, cv: &mut Canvas) {
-        let (Some(t), Some([back, filter, stats, add]), Some((list, page, [reset, up, down]))) =
-            (self.studio_table_rect(), self.studio_table_parts(), self.studio_table_geo()) else { return };
-        let f = self.fonts();
-        let rows = self.meas_rows();
-        let keys = self.studio_keys();
-        let listed = self.studio_listed(&rows);
-        cv.fill(t, BG);
-        cv.text(&f.s, t.x + 12, t.y + 30, &format!("{} total \u{b7} {} pinned", self.meas_shown_count(), self.studio_pinned().len()), DIM);
-        chip(cv, back, BTN, BTN_BORDER);
-        icon_wave(cv, Rect::new(back.x + 6, back.y + 8, 26, 16), TEXT);
-        cv.text_in(&f.m, Rect::new(back.x + 36, back.y, back.w - 38, back.h), 0, "Waveform", TEXT);
-        chip(cv, filter, BTN, BTN_BORDER);
-        let label = self.studio.filter.map_or("All channels".to_string(), |id| self.wave_name(id));
-        cv.text_in(&f.m, Rect::new(filter.x + 10, filter.y, filter.w - 30, filter.h), 0, &label, TEXT);
-        chevron_down(cv, filter.right() - 20, filter.y + 14, DIM);
-        let on = self.studio.panel.stats;
-        chip(cv, stats, if on { mix(BTN, ACCENT, 30) } else { BTN }, if on { ACCENT } else { BTN_BORDER });
-        icon_bars(cv, stats.x + 10, stats.y + 16, TEXT);
-        cv.text_in(&f.m, Rect::new(stats.x + 30, stats.y, stats.w - 32, stats.h), 0, "Statistics", TEXT);
-        chip(cv, add, BTN, BTN_BORDER);
-        cv.text_in(&f.m, add, 1, "+ Add", TEXT);
-        // columns sized to their content; two blocks of rows side by side while the statistics are off
-        let show = self.m.meas_show;
-        let blocks = self.studio_table_blocks(list.w);
-        let bw = list.w / blocks;
-        let per = (page / blocks as usize).max(1);
-        let cols = self.studio_table_cols(&rows, &listed, bw - if blocks > 1 { 8 } else { 0 });
-        let head = Rect::new(t.x + 6, t.y + 48, t.w - 12, 28);
-        cv.fill(head, BAR);
-        for b in 0..blocks {
-            for (x, w, name) in &cols { cv.text_in(&f.mb, Rect::new(head.x + b * bw + x, head.y, w - 6, head.h), 0, name, LABEL); }
-        }
-        let first = self.studio_first(listed.len(), page);
-        cv.set_clip(list);
-        for (k, &i) in listed.iter().skip(first).take(page).enumerate() {
-            let (b, line) = ((k / per) as i32, (k % per) as i32);
-            let r = Rect::new(list.x + b * bw, list.y + line * TABLE_ROW, bw - if blocks > 1 && b + 1 < blocks { 8 } else { 0 }, TABLE_ROW);
-            let row = &rows[i];
-            let cy = r.y + r.h / 2;
-            let pinned = keys.get(i).is_some_and(|key| self.studio_is_pinned(*key));
-            icon_pin(cv, r.x + 14, cy + 1, pinned, if pinned { AMBER } else { DIM });
-            let tag = Rect::new(r.x + cols[0].0, r.y + 10, (f.sb.width(&self.wave_name(row.src)) + 12).max(f.sb.width("CH4") + 12), 24);
-            cv.round(tag, 5, self.wave_color(row.src), 255);
-            cv.text_in(&f.sb, tag, 1, &self.wave_name(row.src), DARK_TEXT);
-            let outer = cv.save_clip();
-            cv.clip_within(Rect::new(r.x + cols[1].0, r.y, cols[1].1 - 8, r.h));
-            cv.text_in(&f.m, Rect::new(r.x + cols[1].0, r.y, cols[1].1 - 8, r.h), 0, &row.name, TEXT);
-            cv.restore_clip(outer);
-            cv.text_in(&f.mb, Rect::new(r.x + cols[2].0, r.y, cols[2].1 - 6, r.h), 0, &row.text(), TEXT);
-            if on {
-                let st = self.results.rows.get(i).copied().unwrap_or_default();
-                let cell = |v: f64| if st.n == 0 { "----".to_string() } else { row.fmt4(v) };
-                let mean = st.sum / st.n.max(1) as f64;
-                let sd = (st.sumsq / st.n.max(1) as f64 - mean * mean).max(0.0).sqrt();
-                let mut values = vec![mean];
-                for (v, i) in [(st.min, 1usize), (st.max, 2), (sd, 0)] {
-                    if show[i] { values.push(v); }
-                }
-                for (k, v) in values.into_iter().enumerate() {
-                    let Some(col) = cols.get(3 + k) else { break };
-                    cv.text_in(&f.m, Rect::new(r.x + col.0, r.y, col.1 - 6, r.h), 0, &cell(v), TEXT);
-                }
-            }
-            cv.hline(r.x, r.right() - 1, r.bottom() - 1, LINE);
-        }
-        // the line between the two blocks
-        for b in 1..blocks { cv.vline(list.x + b * bw - 4, list.y, list.bottom() - 1, LINE); }
-        cv.no_clip();
-        Self::draw_scrollbar(cv, list, first, page, listed.len());
-        let end = (first + page).min(listed.len());
-        cv.text(&f.m, t.x + 14, t.bottom() - 16, &if listed.is_empty() { "0 of 0".to_string() } else { format!("{}-{} of {}", first + 1, end, listed.len()) }, DIM);
-        for (r, is_up) in [(up, true), (down, false)] {
-            chip(cv, r, BTN, BTN_BORDER);
-            icon_arrow(cv, r.x + r.w / 2, r.y + r.h / 2, is_up, TEXT);
-        }
-        chip(cv, reset, BTN, BTN_BORDER);
-        cv.text_in(&f.m, reset, 1, "Reset statistics", TEXT);
-    }
-
     // ------------------------------------------------------------------------------------------------ taps
 
     /// Opens the settings of measurement `index`: its own page, or the measure menu for the kinds without one.
@@ -2364,7 +2190,7 @@ impl Ui {
         self.studio.panel.first = if down { (first + page).min(total.saturating_sub(page)) } else { first.saturating_sub(page) };
     }
 
-    /// A tap on the panel or the table. False: it is not on them.
+    /// A tap on the panel. False: it is not on it.
     pub(super) fn studio_panel_tap(&mut self, x: i32, y: i32) -> bool {
         if self.studio_offline_tap(x, y) { return true; }
         if self.studio.view == StudioView::Sim { return self.studio_sim_tap(x, y); }
@@ -2376,8 +2202,7 @@ impl Ui {
             if self.panel_drop_tap(x, y) { return true; }
             if self.md_undo_tap(x, y) { return true; }
             if self.panel_head_tap(&g, x, y) { return true; }
-            if g.maximize.contains(x, y) { self.studio_set_view(StudioView::Only); }
-            else if g.collapse.contains(x, y) { self.studio_set_view(StudioView::Waveform); }
+            if g.collapse.contains(x, y) { self.studio_set_view(StudioView::Waveform); }
             else if g.add.contains(x, y) { self.open_meas_list(); }
             else if g.list.contains(x, y) {
                 let first = self.studio_first(listed.len(), g.page);
@@ -2391,31 +2216,6 @@ impl Ui {
                     // a card and a cell have their pin; the rest, and a row of the table, open the settings (with Remove)
                     let pin = if self.panel_is_strip() { Self::panel_cell_pin(cell) } else { Self::panel_card_pin(cell) };
                     if self.panel_cells() && pin.contains(x, y) {
-                        if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
-                    } else { self.studio_configure(i); }
-                }
-            }
-            return true;
-        }
-        if let (Some(t), Some([back, filter, stats, add]), Some((list, page, [reset, up, down]))) =
-            (self.studio_table_rect(), self.studio_table_parts(), self.studio_table_geo()) {
-            if !t.contains(x, y) { return false; }
-            if back.contains(x, y) { self.studio_set_view(StudioView::Waveform); }
-            else if filter.contains(x, y) { self.studio.filter = self.studio_filter_next(); self.studio.panel.scroll_top(); }
-            else if stats.contains(x, y) { self.studio.panel.stats = !self.studio.panel.stats; }
-            else if add.contains(x, y) { self.open_meas_list(); }
-            else if reset.contains(x, y) { self.clear_measurement_statistics(); }
-            else if up.contains(x, y) || down.contains(x, y) { self.studio_page(listed.len(), page, down.contains(x, y)); }
-            else if list.contains(x, y) {
-                let first = self.studio_first(listed.len(), page);
-                // the block the tap is in, then the row in it
-                let blocks = self.studio_table_blocks(list.w);
-                let (bw, per) = (list.w / blocks, (page / blocks as usize).max(1));
-                let b = ((x - list.x) / bw).clamp(0, blocks - 1);
-                let line = ((y - list.y) / TABLE_ROW) as usize;
-                let k = if line < per { b as usize * per + line } else { usize::MAX / 2 };
-                if let Some(&i) = listed.get(first + k) {
-                    if x < list.x + b * bw + 52 {
                         if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
                     } else { self.studio_configure(i); }
                 }
@@ -2474,13 +2274,6 @@ impl Ui {
                     return self.dock_float_at(x, y).is_some() && self.studio_eat(x, y);
                 }
                 if self.dock_float_at(x, y).is_some() { return self.studio_eat(x, y); }
-                if let (Some(t), Some((list, page, _))) = (self.studio_table_rect(), self.studio_table_geo()) {
-                    if list.contains(x, y) {
-                        self.studio.drag = Some(StudioDrag::Scroll { y0: y, first0: self.studio_first(self.studio_listed(&rows).len(), page), moved: false });
-                        return true;
-                    }
-                    return t.contains(x, y) && self.studio_eat(x, y);
-                }
                 false
             }
             Phase::Move => {
@@ -2493,16 +2286,13 @@ impl Ui {
                 let Some(drag) = self.studio.drag else { return false };
                 match drag {
                     StudioDrag::Scroll { y0, first0, moved } => {
-                        let rows = self.meas_rows();
+                        // the list of the SIM panel moves by whole rows, the measurements panel by pixels
                         let sim = self.studio_sim_list().filter(|_| self.studio.view == StudioView::Sim);
-                        let total = sim.map_or_else(|| self.studio_listed(&rows).len(), |l| l.3);
-                        let (h, page) = if let Some((_, h, page, _)) = sim { (h, page) } else if let Some(g) = self.studio_panel_geo() { (self.studio_panel_row(), g.page) } else { (TABLE_ROW, self.studio_table_geo().map_or(1, |g| g.1)) };
                         let moved = moved || (y - y0).abs() > 8;
-                        if moved && sim.is_none() && self.studio_panel_geo().is_some() {
-                            self.panel_scroll_drag(y0, first0, y);
+                        if let (true, Some((_, h, page, total))) = (moved, sim) {
+                            self.studio.panel.first = (first0 as i32 + (y0 - y) / h).clamp(0, total.saturating_sub(page) as i32) as usize;
                         } else if moved {
-                            let delta = (y0 - y) / h * self.panel_cols() as i32;
-                            self.studio.panel.first = (first0 as i32 + delta).clamp(0, total.saturating_sub(page) as i32) as usize;
+                            self.panel_scroll_drag(y0, first0, y);
                         }
                         self.studio.drag = Some(StudioDrag::Scroll { y0, first0, moved });
                     }
@@ -2543,7 +2333,7 @@ impl Ui {
         }
     }
 
-    /// A touch on the table or a floating panel that does nothing by itself: the plot behind must not take it.
+    /// A touch on a panel that does nothing by itself: the plot behind must not take it.
     /// The gesture ends in a tap (`Phase::Up` of the owner below).
     pub(super) fn studio_eat(&mut self, x: i32, y: i32) -> bool {
         self.studio.drag = Some(StudioDrag::Eat { x0: x, y0: y });
@@ -2594,7 +2384,7 @@ fn zoom_text(n: f32) -> String {
 impl Ui {
     /// Studio shows the zoom row while its plot is zoomed.
     pub(super) fn studio_zoom_active(&self) -> bool {
-        self.m.layout == Layout::Studio && self.m.zoom && !self.xy_over() && !self.view_on() && self.studio.view != StudioView::Only
+        self.m.layout == Layout::Studio && self.m.zoom && !self.xy_over() && !self.view_on()
     }
 
     /// How many times the detail view magnifies time against the main view.

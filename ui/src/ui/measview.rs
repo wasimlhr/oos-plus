@@ -26,7 +26,7 @@ const DETAIL_TALL_FROM: i32 = 380;
 pub(super) const COL_HEAD: i32 = 24;
 
 impl Ui {
-    /// The panel shows the table: the mode is set, and a panel (not the SIM list or the full-body table) is there.
+    /// The panel shows the table: the mode is set, and a panel (not the SIM list) is there.
     pub(super) fn studio_detailed(&self) -> bool {
         self.m.layout == Layout::Studio && self.m.studio_detail && matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline)
     }

@@ -1636,7 +1636,7 @@ impl Ui {
     /// Whether the panel of a tile is on the screen.
     pub(super) fn panel_shown(&self, k: PanelKind) -> bool {
         match k {
-            PanelKind::Measurements => matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Only),
+            PanelKind::Measurements => matches!(self.studio.view, StudioView::Docked | StudioView::Floating),
             PanelKind::Decode => self.events_pane_on(),
             PanelKind::Spectrum => self.m.pane == tables::PANE_SPECTRUM || self.m.view == AView::Spectrum,
             PanelKind::Eye => self.m.view == AView::Eye,

@@ -384,7 +384,7 @@ fn studio_docked_panel_lists_and_hands_back_the_width() {
     tap_in(&mut u, g.add);
     assert_eq!(u.menu, MenuId::MeasAdd);
     u.close_menu();
-    // the strip's X goes back to the lanes, its maximize button to the table
+    // the strip's X goes back to the lanes, its maximize button puts the panel in a tab in front of them
     let strip = |u: &mut Ui, r: Rect| { u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + 20); u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + 20); };
     let leaf = u.dock_leaf(super::dock::VKind::Measure).unwrap();
     strip(&mut u, Ui::dock_close_rect(leaf));
@@ -393,7 +393,7 @@ fn studio_docked_panel_lists_and_hands_back_the_width() {
     u.studio_set_view(StudioView::Docked);
     let leaf = u.dock_leaf(super::dock::VKind::Measure).unwrap();
     strip(&mut u, Rect::new(leaf.right() - 96, leaf.y, 48, 40));
-    assert_eq!(u.studio.view, StudioView::Only);
+    assert!(u.dock_tabs_root() && !u.dock_tabbed_out(super::dock::VKind::Measure) && u.studio.view == StudioView::Docked);
 }
 
 #[test]
@@ -455,13 +455,14 @@ fn studio_floating_panel_lists_the_measurements_moves_docks_and_opens_the_table(
     u.touch_ev(Phase::Move, lx + 50, ly);
     u.touch_ev(Phase::Up, lx + 50, ly);
     assert_ne!(u.m.delay, delay, "the lanes still pan");
-    // the strip's maximize button: the table
+    // the strip's maximize button: the floating panel is a tab in front of the lanes, and floats again after
     let r = u.dock_float_rect(super::dock::VKind::Measure).unwrap();
     let max = Rect::new(r.right() - 96, r.y, 48, 40);
     u.touch_ev(Phase::Down, max.x + 24, max.y + 20);
     u.touch_ev(Phase::Up, max.x + 24, max.y + 20);
-    assert_eq!(u.studio.view, StudioView::Only);
-    u.studio_set_view(StudioView::Floating);
+    assert!(u.dock_tabs_root() && u.studio.view == StudioView::Docked);
+    assert!(u.dock_exit_full());
+    assert_eq!(u.studio.view, StudioView::Floating);
     let r = u.dock_float_rect(super::dock::VKind::Measure).unwrap();
     let close = Ui::dock_close_rect(r);
     u.touch_ev(Phase::Down, close.x + 24, close.y + 20);
@@ -470,47 +471,205 @@ fn studio_floating_panel_lists_the_measurements_moves_docks_and_opens_the_table(
 }
 
 #[test]
-fn studio_measurements_only_is_a_table_with_statistics_and_a_source_filter() {
+fn expanding_the_measurements_puts_them_in_a_tab_in_front_of_the_waveform() {
+    use super::dock::{Extra, VKind};
+    use super::measpanel::{BarItem, PanelView};
+    // a finger down and up on a button or a tab of a title strip
+    let press = |u: &mut Ui, r: Rect| { u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + r.h / 2); u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + r.h / 2); };
     let mut u = twelve();
-    u.studio_set_view(StudioView::Only);
+    u.studio_set_view(StudioView::Docked);
     for _ in 0..6 { u.step(0.05); }
-    assert_eq!(u.studio_row_h(), 0, "the table needs no badge row");
-    shot(&mut u, "10-table");
-    let [back, filter, stats, add] = u.studio_table_parts().unwrap();
-    for (i, a) in [back, filter, stats, add].iter().enumerate() {
-        assert!(a.x >= 0 && a.right() <= W, "control {i} on the screen");
+    let (wave0, meas0) = (u.dock_leaf(VKind::Wave).unwrap(), u.dock_leaf(VKind::Measure).unwrap());
+    // the button left of the X is the one every view has
+    assert_eq!(u.dock_extra_kind(VKind::Measure), Some(Extra::Maximise));
+    let expand = u.dock_extra_rect(VKind::Measure, meas0).unwrap();
+    press(&mut u, expand);
+    for _ in 0..6 { u.step(0.05); }
+    // one group of tabs fills the area: the waveform and the measurements, the measurements in front
+    let lay = u.dock_layout();
+    assert_eq!(lay.tabs.len(), 1);
+    assert_eq!(lay.tabs[0].kinds, vec![VKind::Wave, VKind::Measure]);
+    assert_eq!(lay.tabs[0].kinds[lay.tabs[0].active], VKind::Measure);
+    assert!(u.dock_tabs_root() && u.studio.view == StudioView::Docked);
+    let r = u.dock_leaf(VKind::Measure).unwrap();
+    assert_eq!(r, u.dock_region());
+    let tabs = u.dock_tab_rects(VKind::Measure, r);
+    assert_eq!(tabs.iter().map(|(k, _)| *k).collect::<Vec<_>>(), vec![VKind::Wave, VKind::Measure], "Waveform | Measurements");
+    assert_eq!(u.dock_extra_kind(VKind::Measure), Some(Extra::RestoreTabs));
+    // it is the panel, with its bar on a line under the tabs: the strip of cells in six columns
+    let g = u.studio_panel_geo().expect("the panel, not a view of its own");
+    assert_eq!(g.p, u.dock_content(VKind::Measure).unwrap());
+    let bar = u.panel_bar(g.p);
+    assert!(!bar.wide && bar.hidden.is_empty(), "the bar is whole, on its line under the tabs");
+    assert!(bar.slots.iter().any(|s| s.item == BarItem::Stats) && bar.slots.iter().any(|s| s.item == BarItem::Source));
+    assert!(u.panel_is_strip());
+    assert_eq!(u.panel_cols(), 6);
+    shot(&mut u, "10-expanded-strip");
+    // the table has all its columns: the statistics are there
+    u.panel_set_view(PanelView::Detailed);
+    let g = u.studio_panel_geo().unwrap();
+    assert_eq!(Ui::detail_cols(g.list.w).0.len(), super::measview::DETAIL_COLS.len());
+    shot(&mut u, "12-expanded-table");
+    // the cards are in as many columns as fit, and the list scrolls by a line of them
+    u.panel_set_view(PanelView::Cards);
+    let g = u.studio_panel_geo().unwrap();
+    let cols = Ui::panel_card_cols(g.list.w) as usize;
+    assert!(cols > 2, "{cols} columns of cards in {} px", g.list.w);
+    assert_eq!(u.panel_cols(), cols);
+    shot(&mut u, "12-expanded-cards");
+    // a tap on the Waveform tab shows the waveform
+    let tab = tabs.iter().find(|(k, _)| *k == VKind::Wave).unwrap().1;
+    press(&mut u, tab);
+    for _ in 0..6 { u.step(0.05); }
+    assert_eq!(u.dock_leaf(VKind::Wave), Some(u.dock_region()));
+    assert!(u.dock_tabbed_out(VKind::Measure) && !u.dock_tabbed_out(VKind::Wave) && u.dock_leaf(VKind::Measure).is_none());
+    assert!(u.plot.grid.w > wave0.w, "the lanes have the whole width: {:?}", u.plot.grid);
+    shot(&mut u, "12-expanded-waveform-tab");
+    // the restore button (it is on the waveform's strip now) brings the docked arrangement back
+    let r = u.dock_leaf(VKind::Wave).unwrap();
+    assert_eq!(u.dock_extra_kind(VKind::Wave), Some(Extra::RestoreTabs));
+    let restore = u.dock_extra_rect(VKind::Wave, r).unwrap();
+    press(&mut u, restore);
+    for _ in 0..6 { u.step(0.05); }
+    assert!(!u.dock_full_state() && u.studio.view == StudioView::Docked);
+    assert_eq!((u.dock_leaf(VKind::Wave), u.dock_leaf(VKind::Measure)), (Some(wave0), Some(meas0)));
+    // the list button of the badge row (it carries the count; the Meas tab is gone) brings a closed panel back
+    u.studio_set_view(StudioView::Waveform);
+    assert!(u.studio_tab().is_none());
+    let chip = u.studio_list_chip();
+    tap_in(&mut u, chip);
+    assert_eq!(u.studio.view, StudioView::Docked);
+}
+
+/// The owner on his unit: with the measurements in front of a group of tabs the strip held the panel's controls
+/// (source, gate, search, pin, statistics, add) beside the view switch, restore and X, and the names of the tabs
+/// went into the list behind the arrow. The tabs have the strip, the controls a line of their own under it.
+#[test]
+fn the_tabs_keep_the_strip_and_the_controls_of_the_panel_have_a_line_under_it() {
+    use super::dock::VKind;
+    use super::measpanel::{BarItem, PanelDrop, PanelView};
+    let press = |u: &mut Ui, r: Rect| {
+        u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + r.h / 2);
+        u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + r.h / 2);
+        for _ in 0..2 { u.step(0.05); }
+    };
+    let mut u = twelve();
+    u.studio_set_view(StudioView::Docked);
+    for _ in 0..6 { u.step(0.05); }
+    // the narrow panel beside the waveform, not in a group: its toolbar, as before
+    let narrow = u.studio_panel_geo().unwrap();
+    assert!(!u.panel_bar_wide(narrow.p) && u.dock_tab_group(VKind::Measure).is_none());
+    u.dock_maximise(VKind::Measure);
+    for _ in 0..6 { u.step(0.05); }
+    let r = u.dock_leaf(VKind::Measure).unwrap();
+    assert_eq!((r, r.w), (u.dock_region(), W), "the group fills the screen's width");
+    // both tabs by name, no arrow
+    let tabs = u.dock_tab_rects(VKind::Measure, r);
+    assert_eq!(tabs.iter().map(|(k, _)| *k).collect::<Vec<_>>(), vec![VKind::Wave, VKind::Measure]);
+    assert!(u.dock_tab_more(VKind::Measure, r).is_none(), "no list of tabs behind an arrow");
+    let f = u.fonts();
+    for (k, t) in &tabs { assert!(t.w >= f.mb.width(&u.dock_name(*k)) + 20, "{k:?} has its whole name: {t:?}"); }
+    // the view switch, restore and X stay in the strip, right of the tabs
+    let sw = u.dock_view_rect(VKind::Measure, r).unwrap();
+    assert!(tabs.iter().all(|(_, t)| t.right() <= sw.x));
+    // the controls: all six on one line of the content, between the strip and the list, none behind "..."
+    let strip = Ui::dock_strip(r);
+    let g = u.studio_panel_geo().unwrap();
+    let bar = u.panel_bar(g.p);
+    assert!(!bar.wide && bar.more.is_none() && bar.hidden.is_empty() && bar.slots.len() == 6);
+    for s in &bar.slots {
+        assert!(s.r.y >= strip.bottom() && s.r.bottom() <= g.list.y, "{:?} {:?} under the strip {strip:?}, over the list {:?}", s.item, s.r, g.list);
+        assert!(s.r.h >= 36 && s.hit.h >= 40 && s.r.w >= 34, "{:?}: {:?} touch {:?}", s.item, s.r, s.hit);
+        // the same rectangle is drawn and tapped
+        assert_eq!(u.panel_bar_hit(g.p, s.r.x + s.r.w / 2, s.r.y + s.r.h / 2), Some(Some(s.item)));
+        assert_eq!(u.panel_bar_hit(g.p, s.r.x + 1, s.r.y + 1), Some(Some(s.item)));
+        assert_eq!(u.panel_bar_hit(g.p, s.r.right() - 2, s.r.bottom() - 2), Some(Some(s.item)));
     }
-    // statistics add the mean, min and max columns
-    assert!(!u.studio.panel.stats);
-    tap_in(&mut u, stats);
-    assert!(u.studio.panel.stats);
-    for _ in 0..6 { u.step(0.05); }
-    shot(&mut u, "12-table-statistics");
-    // the filter walks through the sources and back to all
-    tap_in(&mut u, filter);
-    assert_eq!(u.studio.filter, Some(WaveId::Ch(0)));
-    let rows = u.meas_rows();
-    assert_eq!(u.studio_listed(&rows).len(), 6);
-    tap_in(&mut u, filter);
-    assert_eq!(u.studio.filter, Some(WaveId::Ch(1)));
-    tap_in(&mut u, filter);
-    assert_eq!(u.studio.filter, None);
-    // Reset statistics starts the counting again
-    let (_, _, [reset, ..]) = u.studio_table_geo().unwrap();
-    assert!(u.results.rows.iter().any(|s| s.n > 0));
-    tap_in(&mut u, reset);
-    assert!(u.results.rows.iter().all(|s| s.n <= 1));
-    // the table has the body: a tap on its empty part does not reach the lanes, Waveform goes back
-    tap_in(&mut u, add);
+    shot(&mut u, "12-expanded-controls-line");
+    // a finger on each control where it is drawn does what the control says
+    let at = |it: BarItem| bar.slots.iter().find(|s| s.item == it).unwrap().r;
+    press(&mut u, at(BarItem::Pinned));
+    assert!(u.studio.panel.pinned_only);
+    press(&mut u, at(BarItem::Pinned));
+    assert!(!u.studio.panel.pinned_only);
+    assert_eq!(u.studio.panel.stats_mode, 0);
+    press(&mut u, at(BarItem::Stats));
+    assert_eq!(u.studio.panel.stats_mode, 1);
+    press(&mut u, at(BarItem::Source));
+    assert_eq!(u.studio.panel.drop, Some(PanelDrop::Source));
+    u.studio.panel.drop = None;
+    press(&mut u, at(BarItem::Gate));
+    assert_eq!(u.studio.panel.drop, Some(PanelDrop::Gate));
+    u.studio.panel.drop = None;
+    press(&mut u, at(BarItem::Add));
     assert_eq!(u.menu, MenuId::MeasAdd);
     u.close_menu();
-    tap_in(&mut u, back);
-    assert_eq!(u.studio.view, StudioView::Waveform);
-    // the list button of the badge row (it carries the count; the Meas tab is gone) brings the panel back
-    assert!(u.studio_tab().is_none());
-    let tab = u.studio_list_chip();
-    tap_in(&mut u, tab);
-    assert_eq!(u.studio.view, StudioView::Docked);
+    // the view switch in the strip chooses the view
+    let cells = Ui::view_switch_cells(sw);
+    press(&mut u, Rect::new(cells[1].x, r.y, cells[1].w, 26));
+    assert_eq!(u.panel_view(), PanelView::Detailed);
+    // the search: its field is on the controls' line, and the tabs stay in the strip
+    let search = at(BarItem::Search);
+    press(&mut u, search);
+    assert!(u.studio.panel.searching);
+    let (field, _) = u.panel_bar(g.p).field.expect("the search field");
+    assert!(field.y >= strip.bottom());
+    assert_eq!(u.dock_tab_rects(VKind::Measure, r).len(), 2);
+}
+
+#[test]
+fn the_cards_of_a_wide_panel_scroll_by_the_columns_they_are_drawn_in() {
+    use super::dock::VKind;
+    let mut u = studio();
+    for c in 2..4 { u.m.ch[c].on = true; }
+    let kinds = [Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::PDuty, Meas::Vavg, Meas::Fall, Meas::Vmax, Meas::Vmin, Meas::Period, Meas::NDuty, Meas::Vamp];
+    u.m.meas = (0..4).flat_map(|c| kinds.into_iter().map(move |k| (k, WaveId::Ch(c)))).collect();
+    u.m.meas2.clear();
+    u.m.cat.clear();
+    u.results.rows.clear();
+    u.studio_set_view(StudioView::Docked);
+    u.panel_set_view(super::measpanel::PanelView::Cards);
+    for _ in 0..6 { u.step(0.05); }
+    u.dock_maximise(VKind::Measure);
+    for _ in 0..6 { u.step(0.05); }
+    let g = u.studio_panel_geo().unwrap();
+    let cols = u.panel_cell_geo(g.list.w).0 as usize;
+    let total = { let rows = u.meas_rows(); u.studio_listed(&rows).len() };
+    assert!(cols > 2 && total > g.page, "{cols} columns, {total} cards, {} a page", g.page);
+    // one step of the wheel: the list moves by whole lines of cards, so a card stays in its column
+    assert!(u.panel_wheel(g.list.x + 40, g.list.y + 40, -1));
+    let first = u.studio.panel.first;
+    assert!(first > 0 && first % cols == 0, "first {first} of {cols} columns");
+    let cards = u.panel_cards_layout(u.studio_first(total, g.page), total, g.list);
+    assert_eq!(cards[0].0 % cols, 0, "the card at the left is the first of its line");
+    // the end of the list is reached, and the last card is on it
+    u.panel_scroll_set(i32::MAX / 2, total, &g);
+    let cards = u.panel_cards_layout(u.studio_first(total, g.page), total, g.list);
+    assert_eq!(cards.last().unwrap().0, total - 1);
+    shot(&mut u, "12-expanded-cards-scrolled");
+}
+
+#[test]
+fn a_stored_measurements_only_view_loads_as_the_docked_panel() {
+    use super::dock::VKind;
+    // the word of the view that is gone, in a set-up file and in a stored view
+    assert_eq!(StudioView::from_token("only"), StudioView::Docked);
+    let u = studio();
+    let text = crate::store::setup_text(&u.m);
+    assert!(text.contains("studio_view = waveform
+"));
+    let old = text.replace("studio_view = waveform
+", "studio_view = only
+");
+    let m = crate::store::parse_setup(&old).expect("a set-up with the old word loads");
+    assert_eq!(m.studio_view, "docked");
+    let mut v = Ui::new(Source::Demo { t: 0.0 });
+    v.m = m;
+    v.restore_view_state();
+    for _ in 0..10 { v.step(0.05); }
+    assert_eq!(v.studio.view, StudioView::Docked);
+    assert!(v.dock_leaf(VKind::Wave).is_some() && v.dock_leaf(VKind::Measure).is_some(), "the panel beside the waveform");
+    assert!(!crate::store::setup_text(&v.m).contains("only\n"), "the old word is not written again");
 }
 
 /// Studio zoomed in on the trigger, five times.

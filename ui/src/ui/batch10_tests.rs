@@ -428,21 +428,19 @@ fn the_measurement_arrangements_map_onto_the_tree() {
     u.step(0.05);
     assert!(u.dock_leaf(VKind::Measure).is_none() && u.dock_float_rect(VKind::Measure).is_some());
     assert_eq!(leaf(&u, VKind::Wave), u.dock_region());
-    // Only: the measurements alone fill the body (no waveform leaf; the strip has no move and no maximize)
-    u.studio_set_view(StudioView::Only);
-    u.step(0.05);
-    assert_eq!(leaf(&u, VKind::Measure), u.dock_region());
-    assert_eq!(u.studio_table_rect(), u.dock_content(VKind::Measure));
-    assert!(u.dock_leaf(VKind::Wave).is_none());
     // back to the arrangement
     docked(&mut u);
     assert!(u.dock_leaf(VKind::Wave).is_some() && u.dock_leaf(VKind::Measure).is_some());
-    // the maximize button of the strip is Only
+    // the maximize button of the strip: the panel in a tab that fills the body, the waveform a tab behind it
     let r = leaf(&u, VKind::Measure);
     let b = Rect::new(r.right() - 96, r.y, 48, STRIP_H);
     touch(&mut u, Phase::Down, b.x + 24, b.y + 20);
     touch(&mut u, Phase::Up, b.x + 24, b.y + 20);
-    assert_eq!(u.studio.view, StudioView::Only);
+    u.step(0.05);
+    assert_eq!(u.studio.view, StudioView::Docked);
+    assert_eq!(leaf(&u, VKind::Measure), u.dock_region());
+    assert_eq!(u.studio_panel_rect(), u.dock_content(VKind::Measure));
+    assert!(u.dock_leaf(VKind::Wave).is_none() && u.dock_tabbed_out(VKind::Wave));
 }
 
 // ------------------------------------------------------------------------------------------------ item 5

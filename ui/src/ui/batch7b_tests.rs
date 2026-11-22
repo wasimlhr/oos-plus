@@ -527,15 +527,8 @@ fn statistics_settings_are_saved_and_have_scpi() {
 }
 
 #[test]
-fn the_studio_table_and_the_results_pane_follow_the_shown_columns() {
+fn the_results_pane_follows_the_shown_columns() {
     let r0 = WaveId::Ref(0);
-    let mut u = card(Layout::Studio, &[(Meas::Period, r0), (Meas::Vpp, r0)], &[]);
-    u.studio_set_view(StudioView::Only);
-    u.studio.panel.stats = true;
-    u.results.rows = vec![MStat { n: 3, sum: 3.0, sumsq: 4.0, min: 0.5, max: 2.0 }; 2];
-    shot(&mut u, "b7b-table-all");
-    u.m.meas_show = [false, true, false];
-    shot(&mut u, "b7b-table-min");
     // the results pane of Default hides the cells of columns that are off
     let mut d = card(Layout::Default, &[(Meas::Vpp, r0)], &[]);
     d.results.on = true;
