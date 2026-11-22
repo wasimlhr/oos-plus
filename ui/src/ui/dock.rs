@@ -610,7 +610,7 @@ impl Ui {
         Rect::new(r.x, r.y, r.w, (r.h - self.studio_row_h()).max(FLOAT_MIN_H))
     }
 
-    /// A floating view's rectangle, kept inside the body and clear of the zoom bar and the corner buttons.
+    /// A floating view's rectangle, kept inside the body and clear of the corner buttons (it may lie over the zoom bar).
     pub(super) fn dock_float_rect(&self, k: VKind) -> Option<Rect> {
         if !self.dock_shown(k) || !self.dock_floating(k) { return None; }
         let reg = self.dock_float_region();
@@ -629,9 +629,9 @@ impl Ui {
     pub(super) fn dock_fit_float(&self, k: VKind, r: Rect, reg: Rect) -> Rect {
         let (mw, mh) = k.float_min();
         let w = r.w.clamp(mw, reg.w.max(mw));
-        let mut h = r.h.clamp(mh, reg.h.max(mh));
+        let h = r.h.clamp(mh, reg.h.max(mh));
         let x = r.x.clamp(reg.x, (reg.right() - w).max(reg.x));
-        let mut y = r.y.clamp(reg.y, (reg.bottom() - h).max(reg.y));
+        let y = r.y.clamp(reg.y, (reg.bottom() - h).max(reg.y));
         // never over the corner buttons of the plot: beside them
         let mut x = x;
         // the waveform's own buttons are in it, not under it
@@ -639,16 +639,6 @@ impl Ui {
             for b in [self.full_btn().0, self.zoom_btn().0] {
                 let b = Rect::new(b.x - 4, b.y - 4, b.w + 8, b.h + 8);
                 if x + w > b.x && x < b.right() && y < b.bottom() && y + h > b.y { x = (b.x - w).max(reg.x); }
-            }
-        }
-        // never over the zoom bar: under it
-        if k != VKind::Wave && self.studio_zoom_active() && !self.view_on() {
-            let bar = self.zoom_readout();
-            if x < bar.right() && x + w > bar.x && y < bar.bottom() + 2 && y + h > bar.y {
-                // under it, and no higher than what is left there (the open toolbar is a finger high)
-                y = bar.bottom() + 2;
-                h = h.min((reg.bottom() - y).max(mh));
-                y = y.min((reg.bottom() - h).max(reg.y));
             }
         }
         Rect::new(x, y, w, h)
@@ -940,6 +930,7 @@ impl Ui {
                 tables::PANE_RESULTS => "Results",
                 tables::PANE_EVENTS => "Events",
                 tables::PANE_BUS => "Bus",
+                tables::PANE_FILTER => "Filter",
                 _ => "Pane",
             }.to_string(),
             VKind::Table => { let t = self.table_title(); if t.is_empty() { "Table".to_string() } else { t } }

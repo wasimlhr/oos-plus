@@ -4978,7 +4978,7 @@ setup pane "0" -> 0
 setup pane "1" -> 1; also: density = Split, split_pane = 1
 setup pane "1e9" -> 0; error: line 2: pane: not an index: 1e9
 setup pane "5" -> 5; also: density = Split, split_pane = 5
-setup pane "6" -> 0; error: line 2: pane: 6 out of range (< 6)
+setup pane "6" -> 6; also: density = Split, split_pane = 6
 setup pane "x" -> 0; error: line 2: pane: not an index: x
 setup pane default -> 0
 setup pat "" -> H X X H; error: line 2: pat: 0 values, want 4
@@ -5550,7 +5550,7 @@ setup split_pane "0" -> 0
 setup split_pane "1" -> 1
 setup split_pane "1e9" -> 0; error: line 2: split_pane: not an index: 1e9
 setup split_pane "5" -> 5
-setup split_pane "6" -> 0; error: line 2: split_pane: 6 out of range (< 6)
+setup split_pane "6" -> 6
 setup split_pane "x" -> 0; error: line 2: split_pane: not an index: x
 setup split_pane default -> 0
 setup strip "" -> Below; error: "line 2: strip: unknown value: "

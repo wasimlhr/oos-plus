@@ -200,7 +200,6 @@ impl Ui {
             Item::BootMode => &["One-shot", "Persist"],
             // long lists: shown as a picker (see `ctl`)
             Item::MathOpI => return self.math_ops_in_family().iter().map(|o| o.name().to_string()).collect(),
-            Item::MathFiltPlot => return FiltPlot::ALL.iter().map(|p| p.name().to_string()).collect(),
             Item::MathFam => return MathFamily::ALL.iter().map(|f| f.name().to_string()).collect(),
             Item::StoreDest => return crate::store::StoreDest::ALL.iter().map(|d| d.name().to_string()).collect(),
             Item::TrigType => return TRIG_TYPES.iter().map(|t| t.name().to_string()).collect(),

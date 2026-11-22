@@ -473,7 +473,7 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
         // the Add menu adds things: showing the strip is the chip above and View > Show pinned badges
         let t = u.studio_top();
         tap(&mut u, t.add);
-        assert_eq!(u.studio_add_rows().len(), 17, "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box");
+        assert_eq!(u.studio_add_rows().len(), 18, "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box, the windows");
         u.studio.add_menu = false;
     }
     // without any pinned measurement the restore chip is there all the same

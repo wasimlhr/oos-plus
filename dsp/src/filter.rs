@@ -433,7 +433,50 @@ fn run_sos(s: &[Sos], x: &[f32]) -> Vec<f64> {
     y
 }
 
+/// The taps below which the direct sum is cheaper than the transform.
+const FFT_TAPS: usize = 48;
+
+/// Output `i` takes input `i + c - j` for each tap `j`, the edges repeat the end samples. Long filters (a raised cosine
+/// or a delay at a fast sample rate has thousands of taps) go by overlap-save with the FFT, in blocks of a few times
+/// their length, so the work is that of a few transforms a sample and the memory does not grow with the record.
 fn run_fir(t: &[f64], c: usize, x: &[f32]) -> Vec<f64> {
+    if t.len() <= FFT_TAPS || x.len() < 4 * t.len() {
+        return run_fir_direct(t, c, x);
+    }
+    let (n, l) = (x.len(), t.len());
+    let nfft = (4 * l).next_power_of_two().max(1024);
+    let step = nfft - (l - 1);
+    let (mut hr, mut hi) = (vec![0.0; nfft], vec![0.0; nfft]);
+    hr[..l].copy_from_slice(t);
+    crate::math::fft(&mut hr, &mut hi);
+    let u = |m: isize| x[m.clamp(0, n as isize - 1) as usize] as f64;
+    let mut out = Vec::with_capacity(n);
+    let (mut re, mut im) = (vec![0.0; nfft], vec![0.0; nfft]);
+    for s in (0..n).step_by(step) {
+        // the block of the extended input that starts l - 1 before the first output of this step
+        let a = s as isize + c as isize - (l as isize - 1);
+        for k in 0..nfft {
+            re[k] = u(a + k as isize);
+            im[k] = 0.0;
+        }
+        crate::math::fft(&mut re, &mut im);
+        for k in 0..nfft {
+            let (r, i) = (re[k] * hr[k] - im[k] * hi[k], re[k] * hi[k] + im[k] * hr[k]);
+            // the inverse transform by conjugating on the way in and out
+            (re[k], im[k]) = (r, -i);
+        }
+        crate::math::fft(&mut re, &mut im);
+        for k in (l - 1)..nfft {
+            if out.len() == n {
+                break;
+            }
+            out.push(re[k] / nfft as f64);
+        }
+    }
+    out
+}
+
+fn run_fir_direct(t: &[f64], c: usize, x: &[f32]) -> Vec<f64> {
     let n = x.len();
     (0..n)
         .map(|i| {
@@ -547,5 +590,19 @@ mod tests {
         // the pulse centre moves by 25 samples
         let centre = |v: &[f32]| v.iter().enumerate().map(|(i, a)| i as f32 * a).sum::<f32>() / v.iter().sum::<f32>();
         assert!(((centre(&y) - centre(&x)) - 25.0).abs() < 0.5, "{}", centre(&y) - centre(&x));
+    }
+
+    /// The transform and the direct sum give the same output, for taps and records of different lengths and a centre
+    /// anywhere in the taps.
+    #[test]
+    fn the_fft_convolution_matches_the_direct_sum() {
+        for (taps, n, c) in [(49usize, 900usize, 24usize), (301, 5000, 150), (1025, 4400, 0), (700, 3000, 699)] {
+            let t: Vec<f64> = (0..taps).map(|i| ((i * 7 % 13) as f64 - 6.0) / (taps as f64)).collect();
+            let x: Vec<f32> = (0..n).map(|i| ((i * 31 % 17) as f32 - 8.0) * 0.1 + (i as f32 * 0.01).sin()).collect();
+            let (a, b) = (run_fir(&t, c, &x), run_fir_direct(&t, c, &x));
+            assert_eq!(a.len(), n);
+            let worst = a.iter().zip(&b).map(|(p, q)| (p - q).abs()).fold(0.0, f64::max);
+            assert!(worst < 1e-9, "{taps} taps {n} samples centre {c}: worst difference {worst}");
+        }
     }
 }

@@ -222,7 +222,6 @@ mod graphics;
 mod interplay_tests;
 mod filterplot;
 mod mathwave;
-use mathwave::FiltPlot;
 mod monitor;
 mod reference_decode;
 mod reference_search;

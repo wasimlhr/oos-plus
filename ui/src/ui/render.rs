@@ -140,7 +140,6 @@ impl Ui {
             self.draw_eye_pane(cv);
         }
         self.draw_cal_banner(cv);
-        self.draw_filter_plot(cv);
         self.draw_info(cv);
         self.draw_studio_overlay(cv);
         self.draw_studio_zoom_overlay(cv);

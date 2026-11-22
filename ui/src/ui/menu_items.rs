@@ -399,9 +399,6 @@ impl Ui {
                     R::Delay => v.push(Item::MathFiltDelay),
                     _ => {}
                 }
-                if resp != R::Simple {
-                    v.push(Item::MathFiltPlot);
-                }
             }
             v.extend([Item::MathScale, Item::MathOffset]);
             if self.m.math == MathOp::Fft {

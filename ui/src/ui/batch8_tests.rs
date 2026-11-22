@@ -529,7 +529,7 @@ fn the_search_badge_does_not_push_the_measurement_badges_out_of_the_row() {
 // ------------------------------------------------------------------------------------------------ item 5
 
 #[test]
-fn a_floating_panel_stays_off_the_zoom_bar_and_the_docked_panel_closes_with_an_x() {
+fn a_floating_panel_may_lie_over_the_zoom_bar_and_the_docked_panel_closes_with_an_x() {
     let mut u = studio();
     u.m.run = RunState::Stop;
     u.set_zoom(true);
@@ -539,8 +539,8 @@ fn a_floating_panel_stays_off_the_zoom_bar_and_the_docked_panel_closes_with_an_x
         u.studio.panel.at = Some(at);
         u.relayout();
         let p = u.studio_panel_rect().expect("floating panel");
-        let bar = u.zoom_readout();
-        assert!(p.right() <= bar.x || p.x >= bar.right() || p.bottom() <= bar.y || p.y >= bar.bottom(), "{at:?}: {p:?} covers the zoom bar {bar:?}");
+        // it may lie over the zoom bar, and stays on the screen
+        assert!(p.x >= 0 && p.y >= 0 && p.right() <= W && p.bottom() <= H, "{at:?}: {p:?} on the screen");
     }
     shot(&mut u, "floating-clear-of-zoom-bar");
     u.studio_set_view(super::studio::StudioView::Docked);

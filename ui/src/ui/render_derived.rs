@@ -502,7 +502,7 @@ impl Ui {
         self.m.math_filt.resp = crate::math::FiltResp::Butterworth;
         self.m.math_fc = (2.0 / self.m.time_per_div() as f64) as f32;
         self.m.math_offset = 0.0;
-        self.math.plot = FiltPlot::Gain;
+        self.m.pane = tables::PANE_FILTER;
         self.math_set_shown(k, true);
         self.math_autoscale();
         self.settings_changed();
