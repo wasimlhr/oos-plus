@@ -6,52 +6,8 @@
 
 use super::*;
 
-/// CRC-32 tables for eight bytes per step ("slicing by 8"): `T[0]` is the usual byte table, `T[k][n]` the CRC of byte
-/// `n` followed by `k` zero bytes.
-pub(super) const CRC_T: [[u32; 256]; 8] = {
-    let mut t = [[0u32; 256]; 8];
-    let mut n = 0;
-    while n < 256 {
-        let mut c = n as u32;
-        let mut k = 0;
-        while k < 8 {
-            c = if c & 1 != 0 { 0xedb8_8320 ^ (c >> 1) } else { c >> 1 };
-            k += 1;
-        }
-        t[0][n] = c;
-        n += 1;
-    }
-    let mut k = 1;
-    while k < 8 {
-        let mut n = 0;
-        while n < 256 {
-            let c = t[k - 1][n];
-            t[k][n] = t[0][(c & 0xff) as usize] ^ (c >> 8);
-            n += 1;
-        }
-        k += 1;
-    }
-    t
-};
-
-/// CRC-32 (ISO 3309 / PNG / zip).
-pub fn crc32(data: &[u8]) -> u32 {
-    let t = &CRC_T;
-    let mut c = !0u32;
-    let (blocks, rest) = data.as_chunks::<8>();
-    for b in blocks {
-        let lo = c ^ u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-        c = t[7][(lo & 0xff) as usize]
-            ^ t[6][(lo >> 8 & 0xff) as usize]
-            ^ t[5][(lo >> 16 & 0xff) as usize]
-            ^ t[4][(lo >> 24) as usize]
-            ^ t[3][b[4] as usize]
-            ^ t[2][b[5] as usize]
-            ^ t[1][b[6] as usize]
-            ^ t[0][b[7] as usize];
-    }
-    !rest.iter().fold(c, |c, &b| t[0][((c ^ b as u32) & 0xff) as usize] ^ (c >> 8))
-}
+// CRC-32 is the crate oos-dsp's, where the decoders and the zip reader of oos-store reach it too
+pub use oos_dsp::decode::crc32;
 
 // oos-plus: Adler-32 and the deflate tables are the crate oos-store's, whose reader of RIGOL's DHO files inflates
 pub use oos_store::{adler32, DIST_BASE, LEN_BASE};

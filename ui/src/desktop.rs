@@ -264,7 +264,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
         setup.save(&ui, false);
         if let Some((slot, result)) = loader.poll(ui.waveform_epoch()) {
             match result {
-                Ok((traces, name)) => if let Err(error) = ui.commit_waveform_traces_at(traces, &name, slot) { ui.toast(&error); },
+                Ok((traces, name, left_out)) => match ui.commit_waveform_traces_at(traces, &name, slot) { Ok(()) => ui.toast_left_out(&left_out), Err(error) => ui.toast(&error) },
                 Err(error) => ui.toast(&error),
             }
         }

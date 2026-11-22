@@ -124,7 +124,8 @@ channels off for stored waveforms; `--web-port`, `--scpi-port` and `--hislip-por
 `--store-dir` the folder for setups, CSV and screenshots. There is no native Windows build
 ([ADR 0033](https://github.com/dekajoule/oos/blob/main/docs/adr/process/0033-development-on-linux-macos-and-wsl.md)).
 
-The web remote accepts CSV, OOS BIN and WFM files by file selection and drag-and-drop. Loaded sources appear as
+The web remote accepts CSV, OOS BIN and WFM files, and a Tektronix session file (`.tss`) for its waveforms, by file
+selection and drag-and-drop. Loaded sources appear as
 **R1–R10** cards. **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger
 settings control its acquisitions. **Live** restores the live session. Measurements follow each captured window and
 recompute when a stopped reference is panned. **Measure** opens categorized choices with Source, Settings, and

@@ -590,25 +590,25 @@ pub(super) fn parse_rs(xml: &str, data: &[u8]) -> Result<Vec<WaveTrace>, String>
 
 /// A waveform file read where it lies, so that a format of two files finds its other file beside it. A
 /// Rohde & Schwarz description (`name.bin`) is read with `name.Wfm.bin`; that data file opened by itself is read
-/// with its description. Every other file is `parse_wave` of its bytes.
-pub fn parse_wave_at(bytes: &[u8], path: &Path) -> Result<Vec<WaveTrace>, String> {
+/// with its description. Every other file is `parse_wave_noted` of its bytes, with what it left out.
+pub fn parse_wave_at(bytes: &[u8], path: &Path) -> Result<(Vec<WaveTrace>, String), String> {
     let name = file_name(path);
     if looks_rs_description(bytes) {
         let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let data = ["Wfm.bin", "wfm.bin", "WFM.BIN", "Wfm.BIN"].iter().map(|end| path.with_file_name(format!("{stem}.{end}"))).find(|p| p.is_file())
             .ok_or_else(|| format!("{name} describes a Rohde & Schwarz waveform; its data file {stem}.Wfm.bin is not beside it"))?;
-        return parse_rs(&String::from_utf8_lossy(bytes), &read_waveform_file(&data)?);
+        return parse_rs(&String::from_utf8_lossy(bytes), &read_waveform_file(&data)?).map(all_read);
     }
     if looks_rs_data(bytes, &name) {
         // the name ends with the eight ASCII characters of .wfm.bin, whatever their case
         let stem = &name[..name.len() - 8];
         let description = path.with_file_name(format!("{stem}.bin"));
         return match read_waveform_file(&description) {
-            Ok(xml) if looks_rs_description(&xml) => parse_rs(&String::from_utf8_lossy(&xml), bytes),
+            Ok(xml) if looks_rs_description(&xml) => parse_rs(&String::from_utf8_lossy(&xml), bytes).map(all_read),
             _ => Err(format!("{name} is the data of a Rohde & Schwarz waveform; its description {stem}.bin is not beside it")),
         };
     }
-    parse_wave(bytes, &name)
+    parse_wave_noted(bytes, &name)
 }
 
 #[cfg(test)]
@@ -759,7 +759,7 @@ mod rohde_schwarz_file_tests {
 
         std::fs::write(&second, &body).unwrap();
         for (bytes, path) in [(xml.as_bytes(), &first), (body.as_slice(), &second)] {
-            let traces = parse_wave_at(bytes, path).unwrap();
+            let traces = parse_wave_at(bytes, path).unwrap().0;
             assert_eq!((traces.len(), traces[0].v.as_slice(), traces[0].label.as_str()), (1, &[0.75f32, -1.25, -0.25, 1.75][..], "CH2"));
         }
 
@@ -771,7 +771,7 @@ mod rohde_schwarz_file_tests {
         // every other file is read as before
         let csv = dir.join("plain.csv");
         std::fs::write(&csv, "t,v\n0,1\n1e-3,2\n2e-3,3\n").unwrap();
-        assert_eq!(parse_wave_at(&std::fs::read(&csv).unwrap(), &csv).unwrap()[0].v, [1.0, 2.0, 3.0]);
+        assert_eq!(parse_wave_at(&std::fs::read(&csv).unwrap(), &csv).unwrap().0[0].v, [1.0, 2.0, 3.0]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

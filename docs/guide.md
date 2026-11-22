@@ -334,8 +334,11 @@ Of the files of other scopes (read from built files and public captures on the h
 a RIGOL `.wfm` file of a DHO800, DHO900, DHO1000 or DS1000E is read, its channels labelled CH1 onwards (the file is
 not known to say which channels it holds, so a file of CH2 alone is shown as CH1); a Siglent binary file comes with
 its math traces as F1 to F4; a RIGOL CSV file that counts samples takes its time from the `Start` and `Increment`
-columns of its header, found by name; and a CSV file with a time column takes its sample interval from the longest
-run of lines whose time does not go back, so a file of several sweeps keeps the interval of one.
+columns of its header, found by name; a CSV file with a time column takes its sample interval from the longest
+run of lines whose time does not go back, so a file of several sweeps keeps the interval of one; and a Tektronix
+session file (`.tss`) gives its analog waveforms, the records of the channels first and then its references, each
+under the name the session gives it, and the message of the load says what was not read (logic waveforms, the
+`_iq` files of a spectrum view; [tss.md](tss.md)).
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Run simulation mode** plays the signal the SIM knobs describe; **Play references** plays the references that are shown
 (loaded files, signals added to a slot) as the acquisition instead.
