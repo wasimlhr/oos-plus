@@ -171,3 +171,32 @@ fn a_row_of_the_list_has_its_name_whole_over_the_value() {
         shot(&mut u, if compact { "row-compact" } else { "row" });
     }
 }
+
+/// The three buttons of the view switch take the touch where they are drawn: each is lit inside its own segment, and
+/// a tap in the middle of a segment chooses its view. They were drawn at the left of the switch, a third narrower
+/// than the segments that took the touch, so Cards answered only right of its box.
+#[test]
+fn the_view_switch_is_drawn_where_it_is_tapped() {
+    use super::measpanel::PanelView;
+    let mut u = studio();
+    one_source(&mut u);
+    let r = u.dock_rect(super::dock::VKind::Measure).expect("the panel is docked");
+    for (k, view) in [PanelView::Detailed, PanelView::List, PanelView::Cards].into_iter().enumerate() {
+        let e = u.dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap_or(r)).expect("the switch");
+        let cell = Ui::view_switch_cells(e)[k];
+        assert!(cell.w >= 24, "{cell:?}");
+        let (x, y) = (cell.x + cell.w / 2, cell.y + cell.h / 2);
+        u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
+        u.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
+        frame(&mut u);
+        assert_eq!(u.panel_view(), view, "a tap in segment {k}");
+        // the lit segment is inside the one that was tapped
+        let e = u.dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap()).unwrap();
+        let cell = Ui::view_switch_cells(e)[k];
+        let mut cv = Canvas::new(W, H);
+        cv.au_start();
+        u.draw_view_switch(&mut cv, e);
+        let lit = cv.au.take().unwrap().into_iter().find_map(|a| match a { Au::Round { r, c, .. } if c == ACCENT => Some(r), _ => None }).expect("one segment is lit");
+        assert!(lit.x >= cell.x && lit.right() <= cell.right(), "segment {k}: lit {lit:?} in {cell:?}");
+    }
+}

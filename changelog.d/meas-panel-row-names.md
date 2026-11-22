@@ -5,3 +5,6 @@ Fixed:
   foot of a compact row. The name has the line to itself now and the value is under it; the source is the bar of
   its colour at the left edge and the header of its group, and is no longer written in each row (host; not yet
   seen on a unit).
+- Studio: the three buttons that choose the view of the measurements (table, list, cards) take the touch where
+  they are drawn. They were drawn narrower than the segments that took it, at the left of the switch, so Cards
+  answered only right of its box (host; not yet seen on a unit).
