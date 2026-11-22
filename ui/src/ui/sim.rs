@@ -236,6 +236,12 @@ impl Ui {
         cv.no_clip();
     }
 
+    /// SIM mode plays reference `i`: one of the shown references it was started on, or the slot of the signal of the
+    /// knobs.
+    pub(super) fn sim_plays_ref(&self, i: usize) -> bool {
+        self.sim_mode() && (self.sim_refs.contains(&i) || (self.session_is_sim && i == self.m.sim_slot))
+    }
+
     /// The Studio bar has a SIM button: live, with a reference shown that SIM mode can play (ADR 0035).
     pub(super) fn sim_return_button(&self) -> bool {
         self.m.layout == Layout::Studio && self.sim_can_play_refs()

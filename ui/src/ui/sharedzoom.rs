@@ -95,7 +95,7 @@ impl Ui {
         if self.m.layout != Layout::Studio || (self.studio.sz.lane.is_none() && self.studio.sz.ref_h.is_empty()) { return base; }
         let Some(t) = self.studio_cur_trace() else { return base };
         if let Trace::Reference(i) = t {
-            if let Some(&own) = self.studio.sz.ref_h.get(&i) { return own; }
+            if let Some(own) = self.studio_ref_own(i) { return own; }
         }
         if self.m.zoom {
             if let Some(z) = self.studio_zoom_lane() {
@@ -105,15 +105,18 @@ impl Ui {
         base
     }
 
-    /// The own horizontal scale of reference `i` (s/div, delay), if it has one.
+    /// The own horizontal scale of reference `i` (s/div, delay), if it has one and it applies. While SIM mode plays
+    /// the reference it moves with the main time base: the replay scrolls its window and the Horizontal controls set
+    /// it, whatever scale of its own the lane had (a lane with its own scale stood still in Stacked traces, and
+    /// Horizontal did nothing to it); the own scale is there again in Live.
     pub(super) fn studio_ref_own(&self, i: usize) -> Option<(f32, f32)> {
-        if self.m.layout != Layout::Studio { return None; }
+        if self.m.layout != Layout::Studio || self.sim_plays_ref(i) { return None; }
         self.studio.sz.ref_h.get(&i).copied()
     }
 
     /// The lane being drawn is a reference with its own time scale: its labels show it.
     pub(super) fn studio_lane_has_own_time(&self) -> bool {
-        matches!(self.studio_cur_trace(), Some(Trace::Reference(i)) if self.studio.sz.ref_h.contains_key(&i))
+        matches!(self.studio_cur_trace(), Some(Trace::Reference(i)) if self.studio_ref_own(i).is_some())
     }
 
     /// The vertical zoom applies to this lane rectangle (every detail lane, or the chosen one).

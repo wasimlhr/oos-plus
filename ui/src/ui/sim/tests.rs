@@ -786,3 +786,37 @@ fn the_studio_bar_has_a_sim_button_in_live_with_a_reference_shown() {
     for r in u.refs.iter_mut().flatten() { r.on = false; }
     assert_eq!(u.studio_top().sim.w, 0);
 }
+
+/// Studio, Stacked traces: a reference with a horizontal scale of its own (Fit record, hold the R pill) stood still
+/// while SIM mode played it, and Horizontal did nothing to its lane. SIM mode moves the reference with the main time
+/// base; in Live the scale of its own is there again.
+#[test]
+fn a_reference_with_its_own_scale_follows_the_replay_and_the_horizontal_controls() {
+    let mut u = ui();
+    u.m.layout = Layout::Studio;
+    u.studio.enter = true;
+    u.workspace.stacked = true;
+    for _ in 0..5 { u.step(0.05); }
+    let csv: String = std::iter::once("Time (s),Volts\n".to_string())
+        .chain((0..20_000).map(|i| format!("{:.12e},{}\n", i as f64 * 1e-9, ((i / 7) % 2) as f64 * 0.5)))
+        .collect();
+    u.load_waveform_auto(csv.as_bytes(), "bits.csv").unwrap();
+    // the reference has its own window of 2 us a division, as Fit record gives it
+    u.studio.sz.ref_h.insert(0, (2e-6, 0.0));
+    u.step(0.05);
+    assert_eq!(u.studio_ref_own(0), Some((2e-6, 0.0)), "live: its own scale");
+    u.activate(Item::SimPlayRefs);
+    u.m.tscale = nearest_tscale(1e-7);
+    u.m.tfine = 1.0;
+    for _ in 0..5 { u.step(0.05); }
+    assert!(u.sim_plays_ref(0));
+    assert_eq!(u.studio_ref_own(0), None, "played: it follows the main time base");
+    // the window moves with the replay, and the lane is drawn from it
+    let (d0, tdiv) = (u.m.delay, u.m.time_per_div());
+    for _ in 0..30 { u.step(0.05); let mut c = Canvas::new(1024, 600); u.render(&mut c); }
+    assert!(u.m.delay != d0 && tdiv == u.m.time_per_div(), "the replay scrolls: {d0} -> {}", u.m.delay);
+    assert_eq!(u.studio_lane_view((u.m.time_per_div(), u.m.delay)), (u.m.time_per_div(), u.m.delay));
+    u.activate(Item::SimLive);
+    u.step(0.05);
+    assert_eq!(u.studio_ref_own(0), Some((2e-6, 0.0)), "live again: its own scale is back");
+}
