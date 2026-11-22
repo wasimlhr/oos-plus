@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Studio > View > Offline waveform analysis and SIM: the two views that run on a record session.
+//! Studio's Offline waveform analysis (Storage > Files) and its SIM panel (the SIM chip of the top bar while a SIM
+//! plays): the two views that run on a record session.
 //! Offline shows a loaded file with the zoom overview as its navigator, the references in lanes and the measurements
 //! docked. SIM docks a panel at the right of the lanes; its rows call the items of the SIM menu (`adjust`, `activate`,
 //! `select_option`), so nothing about generating is decided here.
@@ -303,13 +304,15 @@ mod tests {
         }
     }
 
-    /// Chooses a view in the View menu with taps, as the user does.
+    /// Brings a view up the way a user does: Offline is the action under the Files tab of Storage, the measurement
+    /// panel is what Add > Results table > Measurements shows. The SIM panel opens from the SIM chip of the top bar
+    /// while a SIM plays (`batch3a_tests.rs` taps it); nothing plays here yet, so it is set.
     fn choose(u: &mut Ui, view: StudioView) {
-        let chip = u.studio_top().view;
-        tap_in(u, chip);
-        let i = super::super::studio::STUDIO_VIEWS.iter().position(|(v, _)| *v == view).unwrap();
-        let row = u.studio_view_row(i);
-        tap_in(u, row);
+        match view {
+            StudioView::Offline => { u.tap_sheet_item(MenuId::Storage, Item::StudioOffline); }
+            StudioView::Sim => u.studio_set_view(StudioView::Sim),
+            _ => u.studio_apply_panel(super::super::sheet::PanelKind::Measurements),
+        }
     }
 
     /// A square wave of `n` samples, as a record file would have it.
@@ -317,23 +320,6 @@ mod tests {
         let v: Vec<f32> = (0..n).map(|i| if (i / 50) % 2 == 0 { 1.0 } else { -1.0 }).collect();
         let traces = vec![crate::store::WaveTrace { label: name.into(), t0: 0.0, dt: 1e-9, v }];
         u.commit_waveform_traces_at(traces, name, slot).unwrap();
-    }
-
-    #[test]
-    fn the_view_menu_lists_the_record_views() {
-        let mut u = studio();
-        let t = u.studio_top().view;
-        tap_in(&mut u, t);
-        let p = u.studio_view_rect();
-        assert!(p.x >= 0 && p.right() <= W && p.bottom() < u.frame().bottom.y, "the menu fits the screen");
-        let labels: Vec<&str> = super::super::studio::STUDIO_VIEWS.iter().map(|v| v.1).collect();
-        assert!(labels.contains(&"Offline waveform analysis") && labels.contains(&"SIM"));
-        for i in 0..=super::super::studio::VIEW_RESET {
-            let r = u.studio_view_row(i);
-            assert!(p.contains(r.x + 2, r.y + 2) && p.contains(r.right() - 2, r.bottom() - 2), "row {i} inside the menu");
-            for j in 0..i { assert!(!overlaps(r, u.studio_view_row(j)), "rows {i} and {j} apart"); }
-        }
-        shot(&mut u, "19-view-menu-views");
     }
 
     fn overlaps(a: Rect, b: Rect) -> bool { a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom() }
@@ -405,13 +391,10 @@ mod tests {
         choose(&mut u, StudioView::Docked);
         assert_eq!(u.studio.view, StudioView::Docked);
         assert!(!u.record_mode(), "another view is live again");
-        // Reset layout from the SIM view
+        // Reset layout from the Offline view
         choose(&mut u, StudioView::Offline);
         assert!(u.record_mode());
-        let chip = u.studio_top().view;
-        tap_in(&mut u, chip);
-        let row = u.studio_view_row(super::super::studio::VIEW_RESET);
-        tap_in(&mut u, row);
+        u.tap_sheet_item(MenuId::Display, Item::StudioReset);
         assert_eq!(u.studio.view, StudioView::Waveform);
         assert!(!u.record_mode());
     }

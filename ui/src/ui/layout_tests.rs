@@ -122,7 +122,7 @@ fn studio_top_bar_has_a_lan_pill_and_a_usb_pill_while_a_stick_is_in() {
     u.stick.mounted = true;
     let t = u.studio_top();
     assert!(t.usb.w > 0 && t.usb.right() <= t.lan.x && t.acq.w < acq, "{:?}", (t.usb, t.lan, t.acq));
-    let all = [t.run, t.acq, t.usb, t.lan, t.add, t.cursors, t.display, t.storage, t.view, t.gear];
+    let all = [t.run, t.acq, t.usb, t.lan, t.add, t.cursors, t.display, t.storage, t.gear];
     for (i, a) in all.iter().enumerate() {
         assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
         for b in &all[i + 1..] { assert!(!overlaps(*a, *b), "chips {i} do not overlap: {a:?} {b:?}"); }
@@ -141,7 +141,7 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     let mut u = studio();
     shot(&mut u, "01-top");
     let t = u.studio_top();
-    let all = [t.run, t.acq, t.add, t.view, t.gear];
+    let all = [t.run, t.acq, t.add, t.storage, t.gear];
     assert_eq!(t.single.w, 0, "Single is the key of the front panel");
     for (i, a) in all.iter().enumerate() {
         assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
@@ -342,47 +342,6 @@ fn studio_pins_survive_other_measurements_coming_and_going() {
     u.m.meas.push((Meas::Vmax, WaveId::Ch(0)));
     assert!(u.studio_is_pinned(MeasKey::One(Meas::Vmax, WaveId::Ch(0))), "the new one is pinned");
     assert!(!u.studio_is_pinned(MeasKey::One(Meas::Vpp, WaveId::Ch(0))), "the one taken off stays off");
-}
-
-#[test]
-fn studio_view_menu_chooses_the_arrangement_the_badges_and_resets() {
-    let mut u = badges();
-    let view = u.studio_top().view;
-    tap_in(&mut u, view);
-    assert!(u.studio.view_menu);
-    shot(&mut u, "07-view-menu");
-    let p = u.studio_view_rect();
-    assert!(p.x >= 0 && p.right() <= W && p.bottom() < u.frame().bottom.y);
-    for i in 0..8 { assert!(p.contains(u.studio_view_row(i).x + 2, u.studio_view_row(i).y + 2), "row {i} inside the menu"); }
-    // the chip that opened it closes it
-    tap_in(&mut u, view);
-    assert!(!u.studio.view_menu);
-    // each arrangement, one at a time; a tap closes the menu
-    tap_in(&mut u, view);
-    for (i, (v, _)) in studio::STUDIO_VIEWS.into_iter().enumerate() {
-        if !u.studio.view_menu { tap_in(&mut u, view); }
-        let row = u.studio_view_row(i);
-        tap_in(&mut u, row);
-        assert_eq!(u.studio.view, v);
-        assert!(!u.studio.view_menu);
-    }
-    // the badge switch keeps the menu open
-    tap_in(&mut u, view);
-    u.studio.view = StudioView::Docked;
-    let row = u.studio_view_row(studio::VIEW_BADGES);
-    tap_in(&mut u, row);
-    assert!(u.studio.hide_badges && u.studio.view_menu);
-    tap_in(&mut u, row);
-    assert!(!u.studio.hide_badges);
-    // Reset layout: the focus view, the badges, the default pins
-    u.studio.pinned = Some(Vec::new());
-    let row = u.studio_view_row(studio::VIEW_RESET);
-    tap_in(&mut u, row);
-    assert_eq!((u.studio.view, u.studio.hide_badges, u.studio.pinned.is_none(), u.studio.view_menu), (StudioView::Waveform, false, true, false));
-    // a tap outside only closes the menu
-    tap_in(&mut u, view);
-    u.tap(20, 300);
-    assert!(!u.studio.view_menu && !u.menu_open);
 }
 
 /// Twelve measurements on CH1 and CH2, three of them pinned, as in the mocks.

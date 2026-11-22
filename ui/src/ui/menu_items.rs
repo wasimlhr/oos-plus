@@ -167,7 +167,8 @@ impl Ui {
         }
     }
 
-    /// The display menu; the trend selectors while the trend pane is shown.
+    /// The display menu; the trend selectors while the trend pane is shown, and in Studio the rows about its own
+    /// arrangement.
     pub(super) fn display_items(&self) -> Vec<Item> {
         let mut v = vec![
             Item::Open(MenuId::Windows),
@@ -193,12 +194,13 @@ impl Ui {
         if self.m.pane == tables::PANE_TREND {
             v.splice(1..1, [Item::TrendSel(0), Item::TrendSel(1)]);
         }
+        v.extend(self.studio_display_rows());
         v
     }
 
-    /// The storage menu.
+    /// The storage menu; in Studio the way into the view that analyses the loaded files is its last row.
     pub(super) fn storage_items(&self) -> Vec<Item> {
-        vec![
+        let mut v = vec![
             Item::StoreDest,
             Item::StoreSlot,
             Item::StoreSaveSetup,
@@ -215,7 +217,9 @@ impl Ui {
             Item::StoreSaveScpi,
             Item::StoreRecScpi,
             Item::StoreRunScpi,
-        ]
+        ];
+        v.extend(self.studio_storage_rows());
+        v
     }
 
     /// The spectrum menu.

@@ -58,7 +58,6 @@ impl Ui {
 
     pub(super) fn studio_ctx_open(&mut self, x: i32, y: i32) {
         if self.menu_open { self.close_menu(); }
-        self.studio.view_menu = false;
         self.studio.add_menu = false;
         self.studio.popup = None;
         let lane = self.ctx_lane(x, y);

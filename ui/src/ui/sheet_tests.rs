@@ -445,12 +445,12 @@ fn an_unavailable_item_says_why_and_offers_the_fix_in_place() {
 #[test]
 fn the_hub_of_the_add_panel_lists_every_kind() {
     let mut u = studio();
-    // the hub is the page Back leads to; the View menu had a row that opened it
+    // the hub is the page Back leads to
     u.open_menu(MenuId::AddPanel);
     u.sheet.add.kind = None;
     u.step(0.05);
     assert_eq!(u.menu, MenuId::AddPanel);
-    assert!(u.sheet_active() && !u.studio.view_menu);
+    assert!(u.sheet_active());
     let g = u.rail_geo();
     let names: Vec<&str> = super::addrail::ADD_KINDS.iter().map(|p| p.1).collect();
     assert_eq!(names, ["Cursors", "Measure", "Search", "Results table", "Plot"]);

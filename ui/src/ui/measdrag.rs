@@ -460,9 +460,9 @@ impl Ui {
     /// The bar that follows hiding the badges: where it is, and its Undo button.
     pub(super) fn md_hide_bar(&self) -> Option<(Rect, Rect)> {
         self.studio.md.hide_undo?;
-        // not while the View menu is open: its switch, under the finger, is the undo, and the bar lay partly under
-        // the menu, where the first tap on Undo only closed the menu. It shows when the menu has closed
-        if self.studio.view_menu { return None; }
+        // not while the Display sheet is open: its switch, under the finger, is the undo. The bar shows when the sheet
+        // has closed
+        if self.menu_open && self.menu == MenuId::Display { return None; }
         let w = 300;
         let top = self.frame().top.bottom() + 6;
         let bar = Rect::new((self.scr.w - w) / 2, top, w, BAR_H);

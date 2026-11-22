@@ -1938,7 +1938,9 @@ fn the_display_sheet_has_no_bottom_bar() {
         let rows: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().chain(&t.foot).copied()).collect();
         assert!(!rows.contains(&Item::BottomBar), "{layout:?}: {rows:?}");
         let screen = spec.tabs.iter().find(|t| t.name == "Screen").expect("the Screen tab");
-        assert_eq!(screen.rows, [Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize], "{layout:?}");
+        // (Studio has the two switches of its own arrangement after them, `studiolayout.rs`)
+        let own: &[Item] = if layout == Layout::Studio { &[Item::StudioBadges, Item::StudioCompact] } else { &[] };
+        assert_eq!(screen.rows, [&[Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize], own].concat(), "{layout:?}");
         // what Bottom bar chooses is the same either way: the bars are the compact ones, and nothing moves
         u.close_menu();
         let places = |u: &Ui| (u.m.compact(), u.plot_rect(), u.frame().bottom, u.studio_bottom().ch, u.source_pills());
@@ -2189,7 +2191,8 @@ fn clear_sweep_and_the_footers_are_where_they_are_used() {
         };
         let t = tab(MenuId::Display, "Waveform");
         assert!(t.rows.contains(&Item::Persist) && t.foot == [Item::ClearDisp], "{layout:?}: {:?}", t.foot);
-        assert!(tab(MenuId::Display, "Screen").foot.is_empty(), "{layout:?}");
+        // (Reset layout is Studio's, under the switches of its arrangement)
+        assert_eq!(tab(MenuId::Display, "Screen").foot, if layout == Layout::Studio { vec![Item::StudioReset] } else { Vec::new() }, "{layout:?}");
         assert_eq!(tab(MenuId::Measure, "Settings").foot, [Item::Open(MenuId::MeasAdd), Item::MeasClear], "{layout:?}");
         assert_eq!(tab(MenuId::Ref, "Reference").foot, [Item::RefSave, Item::RefClearOne], "{layout:?}");
         assert_eq!(tab(MenuId::Ref, "Scale and files").foot, [Item::RefClear], "{layout:?}");
@@ -2453,28 +2456,12 @@ fn the_classic_strip_is_the_badge_style_of_a_new_setup() {
     assert!(u.studio_classic());
 }
 
-/// The View menu arranges the screen and ends with Reset layout. It had an "Add panel" row under it: a longer way to
-/// five of the ten rows that the Add button of the top bar opens. Each of the five is a row of the Add menu, two taps
-/// from the plot.
+/// Adding is the Add button of the top bar: each of the five kinds an "Add panel" row once led to is a row of the Add
+/// menu, two taps from the plot.
 #[test]
-fn the_view_menu_ends_with_reset_layout_and_adding_is_the_button_of_the_top_bar() {
+fn adding_is_the_button_of_the_top_bar() {
     use super::addmenu::{AddRow, ADD_MENU};
-    use super::studio::VIEW_RESET;
     let mut u = fresh(Layout::Studio);
-    let (x, y) = mid(u.studio_top().view);
-    tap(&mut u, x, y);
-    assert!(u.studio.view_menu);
-    let (p, last) = (u.studio_view_rect(), u.studio_view_row(VIEW_RESET));
-    assert!(p.bottom() >= last.bottom() && p.bottom() - last.bottom() <= 12, "no empty row under Reset layout: {p:?} {last:?}");
-    let mut cv = Canvas::new(u.scr.w, u.scr.h);
-    cv.au_start();
-    u.render(&mut cv);
-    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
-    assert!(texts.iter().any(|s| s == "Reset layout") && !texts.iter().any(|s| s == "Add panel"), "{texts:?}");
-    // a tap under the menu closes it and opens nothing
-    tap(&mut u, p.x + p.w / 2, p.bottom() + 20);
-    assert!(!u.studio.view_menu && !u.menu_open);
-    // what the row led to: one tap on Add, one on a row
     for want in [AddRow::Cursors, AddRow::Measurement, AddRow::Search, AddRow::ResultsTable, AddRow::Plot] {
         assert!(ADD_MENU.contains(&Some(want)), "{want:?}");
     }

@@ -202,9 +202,10 @@ fn set_level_here_is_the_level_under_the_finger() {
     }
 }
 
-/// The View menu and the popup of Add source are menus like the others: read and pressed by name over SCPI.
+/// Studio's rows of the Display sheet and the popup of Add source are read and pressed by name over SCPI, like the
+/// rows of any menu.
 #[test]
-fn the_view_menu_and_add_source_are_read_and_pressed_by_name() {
+fn the_studio_rows_of_display_and_add_source_are_read_and_pressed_by_name() {
     let mut u = bench();
     let cmd = |u: &mut Ui, h: &str, arg: &str| -> String {
         let q = h.ends_with('?');
@@ -212,16 +213,19 @@ fn the_view_menu_and_add_source_are_read_and_pressed_by_name() {
         let reply = u.scpi_ext_command(&nodes, q, arg).expect("a header of the layout commands").expect("no error");
         reply.map(|b| String::from_utf8(b).unwrap()).unwrap_or_default()
     };
-    let view = u.studio_top().view;
-    u.tap(view.x + view.w / 2, view.y + view.h / 2);
+    let display = u.studio_top().display;
+    u.tap(display.x + display.w / 2, display.y + display.h / 2);
     u.step(0.04);
     let menu = cmd(&mut u, ":UI:MENU?", "");
-    assert!(menu.starts_with("\"View\",\"Waveform focus\",\"Docked measurements\"") && menu.contains("\"Reset layout\""), "{menu}");
-    cmd(&mut u, ":UI:MENU:SELect", "\"Docked measurements\"");
+    assert!(menu.starts_with("\"Display\"") && menu.contains("\"Pinned badges = On\"") && menu.contains("\"Compact view = Off\"") && menu.contains("\"Reset layout\""), "{menu}");
+    cmd(&mut u, ":UI:MENU:SELect", "\"Pinned badges\"");
+    assert!(u.studio.hide_badges && u.menu_open, "a switch leaves the sheet open");
+    assert!(cmd(&mut u, ":UI:MENU?", "").contains("\"Pinned badges = Off\""));
+    u.studio_set_view(super::studio::StudioView::Docked);
+    cmd(&mut u, ":UI:MENU:SELect", "\"Reset layout\"");
     for _ in 0..3 { u.step(0.04); }
-    assert_eq!(u.studio.view, super::studio::StudioView::Docked);
+    assert!(u.studio.view == super::studio::StudioView::Waveform && !u.studio.hide_badges && !u.menu_open);
     cmd(&mut u, ":UI:MENU:CLOSe", "");
-    assert!(!u.studio.view_menu);
     let add = u.studio_bottom().add;
     u.tap(add.x + add.w / 2, add.y + add.h / 2);
     u.step(0.04);

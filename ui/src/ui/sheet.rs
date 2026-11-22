@@ -192,6 +192,8 @@ impl Ui {
                 Open(M::Windows) | Views | GridStyle | GridBright | GridFrame | Layout | Traces => Slot::Tab(1),
                 // Clear wipes what persistence has drawn: under the tab that holds Persistence
                 ClearDisp => Slot::Foot(0),
+                // Studio's own: the two switches are rows of Screen, Reset layout is pinned under them
+                StudioReset => Slot::Foot(2),
                 _ => Slot::Tab(2),
             }),
             // the first tab is the top of the Default dialog in its order: mode, averaging, memory, segments, aliasing.
@@ -281,6 +283,8 @@ impl Ui {
                 // third
                 StoreDest | StoreSlot | StoreSaveSetup | StoreRecall | StoreSetupSave | StoreSetupLoad => Slot::Tab(0),
                 StoreSaveScpi | StoreRecScpi | StoreRunScpi => Slot::Tab(2),
+                // Studio's own: the view that analyses the loaded files, pinned under the files
+                StudioOffline => Slot::Foot(1),
                 _ => Slot::Tab(1),
             }),
             M::Mask => (&["Test", "Build"], |it| match it {

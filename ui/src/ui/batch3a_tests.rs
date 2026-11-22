@@ -180,7 +180,7 @@ fn studio_eye_opens_beside_the_plot_and_full_is_an_explicit_choice() {
 }
 
 #[test]
-fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_and_the_row() {
+fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_display_sheet() {
     let mut u = studio();
     u.studio_set_pin_all_for_test();
     u.studio_set_view(StudioView::Docked);
@@ -188,26 +188,21 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
     let (gap0, row0, panel0) = (u.plot.wins[1].y - u.plot.wins[0].bottom(), u.studio_row_px(), u.studio_panel_w());
     let plot0 = u.plot.wins[0].w;
     shot(&mut u, "compact-off");
-    // the View menu has the row
-    u.studio.view_menu = true;
-    let row = u.studio_view_row(super::studio::VIEW_COMPACT);
-    assert!(u.studio_view_rect().contains(row.x, row.y) && u.studio_view_rect().contains(row.right() - 1, row.bottom() - 1));
-    tap_in(&mut u, row);
+    // Display > Screen has the switch
+    u.tap_sheet_item(MenuId::Display, Item::StudioCompact);
     assert!(u.studio.compact);
+    u.close_menu();
     for _ in 0..3 { u.step(0.05); }
     assert!(u.plot.wins[1].y - u.plot.wins[0].bottom() < gap0, "smaller lane gap");
     assert!(u.studio_row_px() < row0, "smaller badge row");
     assert!(u.studio_panel_w() < panel0, "narrower panel");
     assert!(u.plot.wins[0].w > plot0, "the lanes get the room");
     shot(&mut u, "compact-on");
-    // the small toggle in the badge row turns it off again
-    u.studio.view_menu = false;
-    // batch 22: with the panel open there is no row; the View menu has the switch
+    // batch 22: with the panel open there is no badge row; the switch of the sheet turns it off again
     assert_eq!(u.studio_row_h(), 0);
-    u.studio.view_menu = true;
-    let c = u.studio_view_row(super::studio::VIEW_COMPACT);
-    tap_in(&mut u, c);
+    u.tap_sheet_item(MenuId::Display, Item::StudioCompact);
     assert!(!u.studio.compact);
+    u.close_menu();
     // Default is not touched by the flag
     let mut d = Ui::new(Source::Demo { t: 0.0 });
     d.studio.compact = true;

@@ -129,6 +129,7 @@ pub(crate) mod facts;
 mod studio;
 mod dock;
 mod studio_views;
+mod studiolayout;
 mod sheet;
 mod addrail;
 mod addmenu;

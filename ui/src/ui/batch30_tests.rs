@@ -177,7 +177,7 @@ fn the_studio_view_switcher_fits_the_top_bar_beside_the_other_buttons() {
         assert!(t.vbox.right() < t.add.x && t.acq.right() < t.vbox.x, "{n} views: {t_v:?} {t_a:?}", t_v = t.vbox, t_a = t.add);
         assert!(t.acq.w >= 40, "{n} views: the caption keeps a little room");
         assert!(t.vbox.x > t.force.right(), "{n} views: not over Autoset, Clear, Force");
-        for r in [t.add, t.measure, t.cursors, t.display, t.storage, t.view, t.gear] {
+        for r in [t.add, t.measure, t.cursors, t.display, t.storage, t.gear] {
             assert!(r.x >= t.vbox.right() || r.right() <= t.vbox.x, "{n} views: no overlap {r:?}");
         }
     }

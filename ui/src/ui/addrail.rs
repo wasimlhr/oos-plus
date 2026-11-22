@@ -1272,6 +1272,14 @@ impl Ui {
         (w("1 Timeout \u{b7} 00000 events", &full), w("1 \u{b7} 0000", &least))
     }
 
+    /// The width the search controls need for the selected badge to name its type (`studio_search_badges`); 0 without
+    /// a search.
+    pub(super) fn studio_search_typed_w(&self) -> i32 {
+        if self.studio.search().is_none() { return 0; }
+        let typed = self.fonts().mb.width(&self.studio_search_badge_text(self.studio.search_sel, 1)) + 16;
+        2 * super::studio::SEARCH_ARROW_W + 4 + self.studio_search_others_w() + typed
+    }
+
     /// The width of the badges of the searches that are not selected, each with its gap.
     fn studio_search_others_w(&self) -> i32 {
         let sel = self.studio.search_sel;

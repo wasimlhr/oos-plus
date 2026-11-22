@@ -615,6 +615,14 @@ pub(super) enum Item {
     SimLoad,
     /// the number pad of a value row in Default (`numpad.rs`, upstream's)
     NumEntry,
+    /// Studio, Display sheet: the row of measurement badges is shown (`studiolayout.rs`)
+    StudioBadges,
+    /// Studio, Display sheet: smaller lane gaps, badge row and measurement panel
+    StudioCompact,
+    /// Studio, Display sheet: back to the arrangement the layout starts with
+    StudioReset,
+    /// Studio, Storage sheet: the view that analyses the loaded files
+    StudioOffline,
 }
 
 /// The choices of an item, for its picker.
@@ -639,8 +647,18 @@ const NO_PART: Part =
 
 /// The parts of the menus, asked by `kind`, `label`, `value`, `adjust`, `activate`, `options` and `ctl` before the
 /// items `ui.rs` keeps itself. `remote` answers for `ssh` too, except the actions.
-pub(super) const PARTS: [Part; 29] = [
-    // oos-plus parts: the Add rail of Studio, the per-row measurement sheet, the external generator
+pub(super) const PARTS: [Part; 30] = [
+    // oos-plus parts: Studio's rows about its arrangement, the Add rail of Studio, the per-row measurement sheet,
+    // the external generator
+    Part {
+        kind: Some(Ui::studiolayout_kind),
+        label: Some(Ui::studiolayout_label),
+        value: Some(Ui::studiolayout_value),
+        adjust: Some(Ui::studiolayout_adjust),
+        activate: Some(Ui::studiolayout_activate),
+        options: Some(Ui::studiolayout_options),
+        ..NO_PART
+    },
     Part {
         kind: Some(Ui::addrail_kind),
         label: Some(Ui::addrail_label),

@@ -158,8 +158,9 @@ fn elsewhere(s: &Ui, menu: MenuId, it: Item) -> Place {
         (M::Measure, MeasStats) if s.sheet_source_has(M::Measure, Open(M::MeasStat)) => {
             Place::Elsewhere("the Statistics page of the same sheet")
         }
-        // where the strip docks: Studio has no strip, its measurements are badges and the table (View menu)
-        (M::Measure, StripDock) => Place::Elsewhere("View menu: badges, docked or floating table"),
+        // where the strip docks: Studio has no strip, its measurements are badges and the panel that Add > Results
+        // table docks
+        (M::Measure, StripDock) => Place::Elsewhere("badges, and the docked or floating panel of Add > Results table"),
         // the choice of the bottom bar belongs to the Default bars
         (M::Display, BottomBar) => Place::Elsewhere("Default only: Studio has its own bars"),
         // the SIM sheet holds the rows of the Advanced page on its own tabs
