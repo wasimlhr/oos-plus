@@ -752,7 +752,8 @@ float, and pills in its bottom bar: a tap on the pill of a channel selects the c
 double tap on any) opens its sheet, and a hold has the quick actions, Turn off first. Studio offers every menu that Default offers, in these places: the gear at the top
 right is the Menu; the read-out of the sample rate, the memory depth and the mode opens Acquire, and Horizontal is
 under it; the pill of the time base opens Horizontal and names the delay or the zoom scale; the trigger pill names the
-type and the sweep and opens Trigger; Cursors in the top bar puts the cursors on, and the next tap opens the Cursor menu. In
+type and the sweep and opens Trigger; Cursors in the top bar puts the cursors on, and the next tap opens the Cursor menu.
+Add > Cursors has the kinds of cursors to choose from (Track on a trace, Time, Volt), their source, and Settings. In
 Minimal and Studio the two multipurpose knobs move the cursors while they are on (the first cursor A, the second cursor
 B), with no menu open or with the Cursor menu; a push opens or closes that menu, or with time and level cursors together
 gives the knobs to the other pair (in Default the knobs keep their usual job, and the Cursor menu's rows move the
