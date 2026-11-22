@@ -10442,7 +10442,7 @@
       [
        "<item>[,V,I]",
        "Text",
-       "`VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND`, `RDSON`; single-source ripple items also exist.",
+       "`VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND` (not negative: a voltage under 0 V while the switch conducts counts as 0 V), `ETOT` (total energy of a cycle), `PLOSS` (total loss, `ETOT` times `FSW`), `FSW` (switching frequency), `RDSON`; single-source ripple items also exist.",
        "—"
       ]
      ],
