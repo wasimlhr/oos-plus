@@ -121,3 +121,31 @@ fn the_monitor_gets_a_picture_in_every_scene() {
         }
     }
 }
+
+/// The desktop window draws at the size it has: after `set_screen` the picture is laid out and drawn at that size, and
+/// the touch targets of that layout answer (a tap on the Menu button opens the menu), at a few shapes of window.
+#[test]
+fn a_ui_laid_out_for_a_window_answers_at_its_size() {
+    for (w, h) in [(1280, 720), (1500, 900), (1920, 1080), (1728, 1080)] {
+        let mut u = start(Layout::Studio);
+        u.set_screen(Screen { w, h });
+        for _ in 0..4 { u.step(0.03); let mut c = Canvas::new(w, h); u.render(&mut c); }
+        let mut c = Canvas::new(w, h);
+        u.render(&mut c);
+        assert_eq!((u.scr.w, u.scr.h), (w, h));
+        // the bars span the picture: ink along the whole top edge, and in the last columns
+        let top = |x: i32| (0..40).any(|y| c.px[(y * w + x) as usize] != c.px[(50 * w + x) as usize]);
+        assert!(top(w - 30), "{w}x{h}: the top bar reaches the right edge");
+        // the menu button of the layout opens the menu
+        let menu = u.menu_btn();
+        assert!(menu.y > h * 3 / 4 && menu.bottom() <= h, "{w}x{h}: the Menu button is in the bottom bar: {menu:?}");
+        u.tap(menu.x + menu.w / 2, menu.y + menu.h / 2);
+        assert!(u.menu_open, "{w}x{h}: a tap on the Menu button opens the menu");
+        if let Some(d) = std::env::var_os("OOS_SHOTS") {
+            let mut c = Canvas::new(w, h);
+            u.step(0.03);
+            u.render(&mut c);
+            std::fs::write(std::path::Path::new(&d).join(format!("window-{w}x{h}.png")), crate::store::png_of(&c)).unwrap();
+        }
+    }
+}

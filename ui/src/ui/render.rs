@@ -9,6 +9,16 @@
 use super::*;
 
 impl Ui {
+    /// The picture is laid out for another size (the window of the desktop build was resized): the layout is made
+    /// again for it. The next `render` draws at that size. Only the desktop build resizes its screen.
+    #[cfg(any(windows, test))]
+    pub fn set_screen(&mut self, scr: Screen) {
+        if self.scr != scr {
+            self.scr = scr;
+            self.relayout();
+        }
+    }
+
     pub fn render(&mut self, cv: &mut Canvas) {
         self.render_layers(&mut Layers { under: cv, over: None, jobs: Vec::new() });
     }

@@ -21,7 +21,7 @@ oos-store = { path = "store" }
 # (docs/fork/deps.md)
 [target.'cfg(windows)'.dependencies]
 minifb = "0.27"
-windows-sys = { version = "0.59", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_Controls_Dialogs"] }
+windows-sys = { version = "0.59", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_UI_Controls_Dialogs", "Win32_UI_WindowsAndMessaging"] }
 
 # the tests use the helpers of oos-system's tests too (a scratch directory, the test switches); the program does not
 [dev-dependencies]
