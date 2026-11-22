@@ -634,6 +634,7 @@ fn the_plot_reaches_the_sheet_where_the_strip_is_docked_under_it() {
         }
         assert!(w < w0);
     }
+}
 
 /// A line of a decoder is one row of the Decode sheet: its name, its source and its threshold (ADR 0034, ui-ux).
 /// The threshold is no row of its own then, its place is a finger wide and high, and a tap opens the number pad of
