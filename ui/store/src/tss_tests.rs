@@ -157,15 +157,10 @@ fn a_session_archive_without_a_waveform_to_read_or_without_a_session_says_so() {
     assert!(refuse(&zip(&[ZipFile::stored("x.set", SETUP.as_bytes())])).contains("holds no session"));
     let deep = zip(&[ZipFile::stored("x.set", &zip(&[ZipFile::stored("x.set", &plain)]))]);
     assert!(refuse(&deep).contains("an archive in an archive in an archive"));
-    // a reference that is no waveform file, and one that is cut
+    // a reference that is no waveform file; one that is a text of values, which is read; a record that is cut
     let junk = refuse(&tss(SETUP, &[(1, "a.wfm", b"not a waveform".to_vec())], &[]));
     assert_eq!(junk, "the session holds no waveform that is read (not read: 1 other waveform)");
-    let text = b"Model,X
-Time,Volts
-0,1
-1e-3,2
-2e-3,3
-".to_vec();
+    let text = b"Model,X\nTime,Volts\n0,1\n1e-3,2\n2e-3,3\n".to_vec();
     assert_eq!(parse_wave(&tss(SETUP, &[(1, "saved.csv", text)], &[]), "x.tss").unwrap()[0].v, [1.0, 2.0, 3.0]);
     let short = wfm([0.0; 4]);
     assert_eq!(refuse(&tss(SETUP, &[], &[("ch1.wfm", short[..400].to_vec())])), "ch1.wfm: truncated WFM");

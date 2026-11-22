@@ -460,7 +460,7 @@ the sources (above) are written by hand.
 | Command | Meaning |
 | --- | --- |
 | `:REFerence:SLOT[?] R1..R10` | Choose the destination/working slot. |
-| `:REFerence:LOAD "path"` | Load into that slot. Absolute paths refer to the server PC/scope; relative paths are beside setups. A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read. |
+| `:REFerence:LOAD "path"` | Load into that slot; the session file of another instrument (`.tss`) gives its analog waveforms to the slots from that one on ([tss.md](tss.md)). Absolute paths refer to the server PC/scope; relative paths are beside setups. A file under `/proc`, `/sys` or `/dev` (where the path resolves to) and a file over 128 MiB are refused (-224) before it is read. |
 | `:REFerence:IMPort ["path"]` | Load named file (as LOAD), or the selected `refN` file beside setups. |
 | `:REFerence:SAVE` | Copy the selected acquired channel record into the selected reference slot. Does not write a waveform file. |
 | `:REFerence:SHOW[?] [<slot>,]ON|OFF` | Visibility of one slot; DISPlay aliases SHOW. Query accepts a slot number. |
