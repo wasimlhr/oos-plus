@@ -13707,7 +13707,7 @@
      "header": ":DOCK:SHOW",
      "set": ":DOCK:SHOW <view>",
      "query": ":DOCK:SHOW? <view>",
-     "desc": "Sets or queries View menu for Docking.",
+     "desc": "Sets or queries Add the measurement table; tap the SIM chip for Docking.",
      "params": [
       [
        "<view>",
@@ -14036,7 +14036,7 @@
     {
      "header": ":UI:MENU",
      "query": ":UI:MENU?",
-     "desc": "The menu or popup that is open (the View menu of the Studio bar, and the popup of Add source in the bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. Studio's View menu lists its views, its two switches as `\"Show pinned badges = On\"` and `\"Compact view = Off\"`, and `\"Reset layout\"`. `\"\"` when none is open.",
+     "desc": "The menu or popup that is open (the popup of Add source in Studio's bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `\"<label> = <value>\"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. In Studio the Display menu lists the rows of its own arrangement too, the two switches as `\"Pinned badges = On\"` and `\"Compact view = Off\"`, and `\"Reset layout\"`; the Storage menu ends with `\"Offline waveform analysis\"`. `\"\"` when none is open.",
      "remarks": [
       "- Origin: OOS extension"
      ],
