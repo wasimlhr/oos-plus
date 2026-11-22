@@ -22,6 +22,8 @@ pub(super) enum TableKind {
 pub(super) struct Window {
     pub kind: Option<TableKind>,
     pub top: usize,
+    /// the event of the search list that was tapped (or stepped to): its row and its mark on the plot are raised
+    pub picked: Option<usize>,
 }
 
 #[cfg(test)]
@@ -89,6 +91,19 @@ mod reference_search_navigation_tests {
             let texts = cv.au.take().unwrap();
             let said = texts.into_iter().any(|e| matches!(e, crate::gfx::Au::Text { s, .. } if s.starts_with("after ")));
             assert_eq!(said, layout != Layout::Default, "{layout:?}");
+            // the names of the columns, the number of the event, and the row that was tapped
+            let (rect, _) = ui.table_rect(ui.search_events().len());
+            assert_eq!(ui.search_list_own(), layout != Layout::Default);
+            let mut cv = Canvas::new(ui.scr.w, ui.scr.h);
+            cv.au_start();
+            ui.render(&mut cv);
+            let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { crate::gfx::Au::Text { s, .. } => Some(s), _ => None }).collect();
+            let has = |t: &str| texts.iter().any(|s| s == t);
+            assert_eq!(has("Time") && has("#") && has("2"), layout != Layout::Default, "{layout:?}: {texts:?}");
+            ui.m.run = RunState::Stop;
+            ui.tap(rect.x + 16, rect.y + ui.head_h(rect) + ROW_H + 8);
+            assert_eq!(ui.table.picked, Some(1), "{layout:?}: the second row was tapped");
+            assert_eq!(ui.search_picked(&ui.search_events()), ui.search_events().get(1).copied());
         }
     }
 }
@@ -103,6 +118,8 @@ pub(super) const PANE_TREND: usize = 4;
 pub(super) const PANE_BUS: usize = 5;
 
 pub(super) const ROW_H: i32 = 26;
+/// The line with the names of the columns of the search list.
+const COLS_H: i32 = 18;
 const HEAD_H: i32 = 40;
 /// Below this width a docked table puts its controls under the title.
 #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
@@ -347,7 +364,20 @@ impl Ui {
 
     /// Height of the head of the table: the title. The rows scroll by the scroll bar, so a narrow view needs no row of
     /// Up / Dn controls under it.
-    pub(super) fn head_h(&self, _r: Rect) -> i32 { if self.dock_on() { 6 } else { HEAD_H } }
+    pub(super) fn head_h(&self, _r: Rect) -> i32 {
+        (if self.dock_on() { 6 } else { HEAD_H }) + if self.search_list_own() { COLS_H } else { 0 }
+    }
+
+    /// The search list as Minimal and Studio draw it: with the names of its columns, the number of each event, what
+    /// the event is and how long after the one before. The Default table is upstream's.
+    pub(super) fn search_list_own(&self) -> bool {
+        self.table.kind == Some(TableKind::Search) && self.m.layout != Layout::Default
+    }
+
+    /// The event of the search list that is raised, where it is one of `events`.
+    pub(super) fn search_picked(&self, events: &[f64]) -> Option<f64> {
+        self.table.picked.filter(|_| self.table.kind == Some(TableKind::Search)).and_then(|i| events.get(i).copied())
+    }
 
     /// The title of the open table with its count. Docked it is the title of the view, so it costs no row of its own.
     pub(super) fn table_title(&self) -> String {
@@ -389,7 +419,14 @@ impl Ui {
         let (r, fit) = self.table_rect(total);
         let top = self.table.top.min(total.saturating_sub(fit));
         let rows = if k == TableKind::Search {
-            self.search_events().iter().copied().enumerate().skip(top).take(fit).map(|(i, t)| self.search_row(i, t)).collect()
+            let own = self.search_list_own();
+            let row = |(i, t): (usize, f64)| {
+                let mut row = self.search_row(i, t);
+                // (the list of Minimal and Studio has the number alone in that column)
+                if own { row.who = format!("{}", i + 1); }
+                row
+            };
+            self.search_events().iter().copied().enumerate().skip(top).take(fit).map(row).collect()
         } else {
             self.table_rows(k).into_iter().skip(top).take(fit).collect()
         };
@@ -468,16 +505,30 @@ impl Ui {
         let cols = self.table_col_x(&rows, r.w);
         let digits = table_time_digits(&rows);
         let end = r.right() - scroll::BAR_W - 8;
-        // Minimal and Studio say more of a search event than its type (the Default table is upstream's)
-        let search = (k == TableKind::Search && self.m.layout != Layout::Default).then(|| (self.search_what(), self.search_events()));
+        // Minimal and Studio say more of a search event than its type (the Default table is upstream's): its
+        // number in the column of its own (the source is in the title), and the names of the columns over them
+        let search = self.search_list_own().then(|| (self.search_what(), self.search_events()));
         if let Some((what, _)) = &search {
-            for e in rows.iter_mut() {
-                e.text = what.clone();
+            for (i, e) in rows.iter_mut().enumerate() {
+                (e.who, e.text) = (format!("{}", top + i + 1), what.clone());
+            }
+        }
+        let cols = if search.is_some() { self.table_col_x(&rows, r.w) } else { cols };
+        if search.is_some() && !rows.is_empty() {
+            for (k, name) in ["Time", "#", "Event, and how long after the one before"].into_iter().enumerate() {
+                let right = if k < 2 { r.x + cols[k + 1] - 10 } else { end };
+                cv.set_clip(Rect::new(r.x + cols[k], r.y, (right - r.x - cols[k]).max(1), self.head_h(r)));
+                cv.text(&f.s, r.x + cols[k], r.y + self.head_h(r) - 5, name, DIM);
+                cv.no_clip();
             }
         }
         for (i, e) in rows.iter().enumerate() {
             let y = r.y + self.head_h(r) + i as i32 * ROW_H;
             cv.hline(r.x + 8, r.x + r.w - 9, y, LINE);
+            // the event that was tapped: its row is raised, as its mark on the plot is
+            if search.is_some() && self.table.picked == Some(top + i) {
+                cv.round(Rect::new(r.x + 4, y + 1, r.w - scroll::BAR_W - 10, ROW_H - 2), 4, mix(BAR, ACCENT, 60), 255);
+            }
             // each column is cut at the next one: a column made narrow hides the end of its text, not its neighbour
             for (k, (font, text, color)) in [(&f.s, si_digits(e.t, "s", digits), LABEL), (&f.s, e.who.clone(), DIM), (&f.sb, e.text.clone(), if e.ok { TEXT } else { RED })].into_iter().enumerate() {
                 let right = if k < 2 { r.x + cols[k + 1] - 10 } else { end };
@@ -523,6 +574,13 @@ impl Ui {
             } else if let Some(t) =
                 events.as_ref().and_then(|events| events.get(i).copied()).or_else(|| rows.get(i).map(|event| event.t))
             {
+                if events.is_some() {
+                    // the event is the one the list and the plot raise, and the one Previous and Next go on from
+                    self.table.picked = Some(i);
+                    if self.m.layout == Layout::Studio && self.studio.search().is_some() {
+                        self.studio.search_at[self.studio.search_sel] = i;
+                    }
+                }
                 self.go_to_time(t);
             }
         }

@@ -1164,6 +1164,7 @@ impl Ui {
         let n = ev.len() as i32;
         let at = (self.studio.search_at[self.studio.search_sel] as i32 + d).rem_euclid(n) as usize;
         self.studio.search_at[self.studio.search_sel] = at;
+        self.table.picked = Some(at);
         self.go_to_time(ev[at]);
     }
 
