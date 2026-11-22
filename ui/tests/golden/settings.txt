@@ -3784,6 +3784,78 @@ setup fft_win "Rect" -> Rect
 setup fft_win "hann" -> Hann; error: line 2: fft_win: unknown value: hann
 setup fft_win "x" -> Hann; error: line 2: fft_win: unknown value: x
 setup fft_win default -> Hann
+setup filt_delay "" -> 0.000001; error: "line 2: filt_delay: not a number: "
+setup filt_delay "-1" -> -1
+setup filt_delay "-2.25" -> -2.25
+setup filt_delay "0" -> 0
+setup filt_delay "1.5" -> 1.5
+setup filt_delay "1e39" -> 0.000001; error: line 2: filt_delay: not a number: 1e39
+setup filt_delay "1e9" -> 1000000000
+setup filt_delay "3e38" -> 300000000000000000000000000000000000000
+setup filt_delay "NaN" -> 0.000001; error: line 2: filt_delay: not a number: NaN
+setup filt_delay "inf" -> 0.000001; error: line 2: filt_delay: not a number: inf
+setup filt_delay "x" -> 0.000001; error: line 2: filt_delay: not a number: x
+setup filt_delay default -> 0.000001
+setup filt_order "" -> 4; error: "line 2: filt_order: not an integer: "
+setup filt_order "+1" -> 1
+setup filt_order "-1" -> 4; error: line 2: filt_order: not an integer: -1
+setup filt_order "0" -> 1
+setup filt_order "1" -> 1
+setup filt_order "16" -> 16
+setup filt_order "17" -> 16
+setup filt_order "1e9" -> 4; error: line 2: filt_order: not an integer: 1e9
+setup filt_order "x" -> 4; error: line 2: filt_order: not an integer: x
+setup filt_order default -> 4
+setup filt_resp "" -> Simple; error: "line 2: filt_resp: unknown value: "
+setup filt_resp "-1" -> Simple; error: line 2: filt_resp: unknown value: -1
+setup filt_resp "1e9" -> Simple; error: line 2: filt_resp: unknown value: 1e9
+setup filt_resp "Bessel" -> Bessel
+setup filt_resp "Butterworth" -> Butterworth
+setup filt_resp "Chebyshev" -> Chebyshev
+setup filt_resp "Delay" -> Delay
+setup filt_resp "Gaussian" -> Gaussian
+setup filt_resp "RaisedCosine" -> RaisedCosine
+setup filt_resp "RootRaisedCosine" -> RootRaisedCosine
+setup filt_resp "Simple" -> Simple
+setup filt_resp "bessel" -> Simple; error: line 2: filt_resp: unknown value: bessel
+setup filt_resp "x" -> Simple; error: line 2: filt_resp: unknown value: x
+setup filt_resp default -> Simple
+setup filt_ripple "" -> 1; error: "line 2: filt_ripple: not a number: "
+setup filt_ripple "-1" -> 0.01
+setup filt_ripple "-2.25" -> 0.01
+setup filt_ripple "0" -> 0.01
+setup filt_ripple "1.5" -> 1.5
+setup filt_ripple "1e39" -> 1; error: line 2: filt_ripple: not a number: 1e39
+setup filt_ripple "1e9" -> 6
+setup filt_ripple "3e38" -> 6
+setup filt_ripple "NaN" -> 1; error: line 2: filt_ripple: not a number: NaN
+setup filt_ripple "inf" -> 1; error: line 2: filt_ripple: not a number: inf
+setup filt_ripple "x" -> 1; error: line 2: filt_ripple: not a number: x
+setup filt_ripple default -> 1
+setup filt_rolloff "" -> 0.35; error: "line 2: filt_rolloff: not a number: "
+setup filt_rolloff "-1" -> 0
+setup filt_rolloff "-2.25" -> 0
+setup filt_rolloff "0" -> 0
+setup filt_rolloff "1.5" -> 1
+setup filt_rolloff "1e39" -> 0.35; error: line 2: filt_rolloff: not a number: 1e39
+setup filt_rolloff "1e9" -> 1
+setup filt_rolloff "3e38" -> 1
+setup filt_rolloff "NaN" -> 0.35; error: line 2: filt_rolloff: not a number: NaN
+setup filt_rolloff "inf" -> 0.35; error: line 2: filt_rolloff: not a number: inf
+setup filt_rolloff "x" -> 0.35; error: line 2: filt_rolloff: not a number: x
+setup filt_rolloff default -> 0.35
+setup filt_symbol "" -> 0.000001; error: "line 2: filt_symbol: not a number: "
+setup filt_symbol "-1" -> -1
+setup filt_symbol "-2.25" -> -2.25
+setup filt_symbol "0" -> 0
+setup filt_symbol "1.5" -> 1.5
+setup filt_symbol "1e39" -> 0.000001; error: line 2: filt_symbol: not a number: 1e39
+setup filt_symbol "1e9" -> 1000000000
+setup filt_symbol "3e38" -> 300000000000000000000000000000000000000
+setup filt_symbol "NaN" -> 0.000001; error: line 2: filt_symbol: not a number: NaN
+setup filt_symbol "inf" -> 0.000001; error: line 2: filt_symbol: not a number: inf
+setup filt_symbol "x" -> 0.000001; error: line 2: filt_symbol: not a number: x
+setup filt_symbol default -> 0.000001
 setup fine_t "" -> false; error: "line 2: fine_t: not a boolean: "
 setup fine_t "-1" -> false; error: line 2: fine_t: not a boolean: -1
 setup fine_t "0" -> false
@@ -4211,6 +4283,34 @@ setup m2.fc "NaN" -> 10000; error: line 2: m2.fc: not a number: NaN
 setup m2.fc "inf" -> 10000; error: line 2: m2.fc: not a number: inf
 setup m2.fc "x" -> 10000; error: line 2: m2.fc: not a number: x
 setup m2.fc default -> 10000
+setup m2.filt "" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: filt: six values
+setup m2.filt "-1 4 1 0.000001 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: unknown value: -1
+setup m2.filt "-1" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: filt: six values
+setup m2.filt "1e9 4 1 0.000001 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: unknown value: 1e9
+setup m2.filt "1e9" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: filt: six values
+setup m2.filt "Bessel 99 0.5 2e-6 0.2 3e-6" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: 99 out of range (< 17)
+setup m2.filt "Chebyshev 6 0.5 2e-6 0.2 3e-6" -> Chebyshev 6 0.5 0.000002 0.2 0.000003
+setup m2.filt "Nope 6 0.5 2e-6 0.2 3e-6" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: unknown value: Nope
+setup m2.filt "Simple -1 1 0.000001 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: not an index: -1
+setup m2.filt "Simple 1e9 1 0.000001 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: not an index: 1e9
+setup m2.filt "Simple 4 -1 0.000001 0.35 0.000001" -> Simple 4 -1 0.000001 0.35 0.000001
+setup m2.filt "Simple 4 1 -1 0.35 0.000001" -> Simple 4 1 -1 0.35 0.000001
+setup m2.filt "Simple 4 1 0.000001 -1 0.000001" -> Simple 4 1 0.000001 -1 0.000001
+setup m2.filt "Simple 4 1 0.000001 0.35 -1" -> Simple 4 1 0.000001 0.35 -1
+setup m2.filt "Simple 4 1 0.000001 0.35 0.000001 0" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: filt: six values
+setup m2.filt "Simple 4 1 0.000001 0.35 1e9" -> Simple 4 1 0.000001 0.35 1000000000
+setup m2.filt "Simple 4 1 0.000001 0.35 x" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: not a number: x
+setup m2.filt "Simple 4 1 0.000001 0.35" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: filt: six values
+setup m2.filt "Simple 4 1 0.000001 1e9 0.000001" -> Simple 4 1 0.000001 1000000000 0.000001
+setup m2.filt "Simple 4 1 0.000001 x 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: not a number: x
+setup m2.filt "Simple 4 1 1e9 0.35 0.000001" -> Simple 4 1 1000000000 0.35 0.000001
+setup m2.filt "Simple 4 1 x 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: not a number: x
+setup m2.filt "Simple 4 1e9 0.000001 0.35 0.000001" -> Simple 4 1000000000 0.000001 0.35 0.000001
+setup m2.filt "Simple 4 x 0.000001 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: not a number: x
+setup m2.filt "Simple x 1 0.000001 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: not an index: x
+setup m2.filt "x 4 1 0.000001 0.35 0.000001" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: unknown value: x
+setup m2.filt "x" -> Simple 4 1 0.000001 0.35 0.000001; error: line 2: m2.filt: filt: six values
+setup m2.filt default -> Simple 4 1 0.000001 0.35 0.000001
 setup m2.lin "" -> 1 0; error: line 2: m2.lin: lin: two numbers
 setup m2.lin "-1 0" -> -1 0
 setup m2.lin "-1" -> 1 0; error: line 2: m2.lin: lin: two numbers
@@ -4585,12 +4685,12 @@ setup math_scale "57" -> 3; error: line 2: math_scale: 57 out of range (< 57)
 setup math_scale "x" -> 3; error: line 2: math_scale: not an index: x
 setup math_scale default -> 3
 setup math_sel "" -> 0; error: "line 2: math_sel: not an index: "
-setup math_sel "+1" -> 1; also: m1.op = Off, m1.a = 0, m1.b = 1, m1.scale = 3, m1.fc = 10000, m1.bw = 2000, m1.offset = 0, m1.win = Hann, m1.lin = 1 0, m2.a (absent), m2.b (absent), m2.bw (absent), m2.fc (absent), m2.lin (absent), m2.offset (absent), m2.op (absent), m2.scale (absent), m2.win (absent)
+setup math_sel "+1" -> 1; also: m1.op = Off, m1.a = 0, m1.b = 1, m1.scale = 3, m1.fc = 10000, m1.bw = 2000, m1.offset = 0, m1.win = Hann, m1.filt = Simple 4 1 0.000001 0.35 0.000001, m1.lin = 1 0, m2.a (absent), m2.b (absent), m2.bw (absent), m2.fc (absent), m2.filt (absent), m2.lin (absent), m2.offset (absent), m2.op (absent), m2.scale (absent), m2.win (absent)
 setup math_sel "-1" -> 0; error: line 2: math_sel: not an index: -1
 setup math_sel "0" -> 0
-setup math_sel "1" -> 1; also: m1.op = Off, m1.a = 0, m1.b = 1, m1.scale = 3, m1.fc = 10000, m1.bw = 2000, m1.offset = 0, m1.win = Hann, m1.lin = 1 0, m2.a (absent), m2.b (absent), m2.bw (absent), m2.fc (absent), m2.lin (absent), m2.offset (absent), m2.op (absent), m2.scale (absent), m2.win (absent)
+setup math_sel "1" -> 1; also: m1.op = Off, m1.a = 0, m1.b = 1, m1.scale = 3, m1.fc = 10000, m1.bw = 2000, m1.offset = 0, m1.win = Hann, m1.filt = Simple 4 1 0.000001 0.35 0.000001, m1.lin = 1 0, m2.a (absent), m2.b (absent), m2.bw (absent), m2.fc (absent), m2.filt (absent), m2.lin (absent), m2.offset (absent), m2.op (absent), m2.scale (absent), m2.win (absent)
 setup math_sel "1e9" -> 0; error: line 2: math_sel: not an index: 1e9
-setup math_sel "7" -> 7; also: m1.op = Off, m1.a = 0, m1.b = 1, m1.scale = 3, m1.fc = 10000, m1.bw = 2000, m1.offset = 0, m1.win = Hann, m1.lin = 1 0, m8.a (absent), m8.b (absent), m8.bw (absent), m8.fc (absent), m8.lin (absent), m8.offset (absent), m8.op (absent), m8.scale (absent), m8.win (absent)
+setup math_sel "7" -> 7; also: m1.op = Off, m1.a = 0, m1.b = 1, m1.scale = 3, m1.fc = 10000, m1.bw = 2000, m1.offset = 0, m1.win = Hann, m1.filt = Simple 4 1 0.000001 0.35 0.000001, m1.lin = 1 0, m8.a (absent), m8.b (absent), m8.bw (absent), m8.fc (absent), m8.filt (absent), m8.lin (absent), m8.offset (absent), m8.op (absent), m8.scale (absent), m8.win (absent)
 setup math_sel "8" -> 0; error: line 2: math_sel: 8 out of range (< 8)
 setup math_sel "x" -> 0; error: line 2: math_sel: not an index: x
 setup math_sel default -> 0

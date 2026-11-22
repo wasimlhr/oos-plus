@@ -16459,8 +16459,44 @@
        "-"
       ],
       [
-       "`math_sel`",
+       "`filt_resp`",
+       "the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay)",
+       "`Simple`",
+       "-"
+      ],
+      [
+       "`filt_order`",
        "as above",
+       "`4`",
+       "-"
+      ],
+      [
+       "`filt_ripple`",
+       "as above",
+       "`1`",
+       "-"
+      ],
+      [
+       "`filt_symbol`",
+       "as above",
+       "`0.000001`",
+       "-"
+      ],
+      [
+       "`filt_rolloff`",
+       "as above",
+       "`0.35`",
+       "-"
+      ],
+      [
+       "`filt_delay`",
+       "as above",
+       "`0.000001`",
+       "-"
+      ],
+      [
+       "`math_sel`",
+       "the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth",
        "`0`",
        "-"
       ],
@@ -16513,8 +16549,14 @@
        "-"
       ],
       [
+       "`m<n>.filt`",
+       "the same for math channels 2 to 8: the designer's settings as `<response> <order> <ripple> <symbol> <roll-off> <delay>`",
+       "`Simple 4 1 0.000001 0.35 0.000001`",
+       "-"
+      ],
+      [
        "`m<n>.lin`",
-       "as above",
+       "the same for math channels 2 to 8 (the selected one is written as `math*`)",
        "`1 0`",
        "-"
       ],

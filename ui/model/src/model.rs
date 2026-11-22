@@ -445,6 +445,8 @@ pub struct Model {
     pub fft_win: Window,
     /// bandwidth of the math band-pass/band-stop (Hz)
     pub math_bw: f32,
+    /// the designer's settings of the selected math channel
+    pub math_filt: crate::math::FiltCfg,
     /// the math channel the fields above edit (0..NMATH); the others are kept in `maths`
     pub math_sel: usize,
     pub maths: [crate::math::MathCh; crate::math::NMATH],

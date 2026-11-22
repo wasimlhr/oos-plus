@@ -8,7 +8,7 @@ use super::*;
 use crate::settings::Setting;
 
 /// The items the table answers for, by setup key.
-const ITEMS: [(Item, &str); 80] = [
+const ITEMS: [(Item, &str); 86] = [
     (Item::Persist, "persist"),
     (Item::Intensity, "intensity"),
     (Item::GridStyle, "grid"),
@@ -45,6 +45,12 @@ const ITEMS: [(Item, &str); 80] = [
     (Item::FftWin, "fft_win"),
     (Item::MathFc, "math_fc"),
     (Item::MathBw, "math_bw"),
+    (Item::MathFiltResp, "filt_resp"),
+    (Item::MathFiltOrder, "filt_order"),
+    (Item::MathFiltRipple, "filt_ripple"),
+    (Item::MathFiltSymbol, "filt_symbol"),
+    (Item::MathFiltRolloff, "filt_rolloff"),
+    (Item::MathFiltDelay, "filt_delay"),
     (Item::DvmOn, "dvm on"),
     (Item::DvmMode, "dvm mode"),
     (Item::CntOn, "counter on"),
@@ -290,6 +296,14 @@ mod tests {
         }
         if crate::math::MATH_OPS.iter().any(|&op| {
             u.m.math = op;
+            u.items(MenuId::Math).contains(&it)
+        }) {
+            return true;
+        }
+        // the designer's rows, by response
+        u.m.math = crate::math::MathOp::Lpf;
+        if crate::math::FILT_RESPS.iter().any(|&r| {
+            u.m.math_filt.resp = r;
             u.items(MenuId::Math).contains(&it)
         }) {
             return true;

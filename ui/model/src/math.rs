@@ -234,6 +234,103 @@ impl MathOp {
     }
 }
 
+/// The response of a filter of the Filter category: `Simple` is the plain filter of the operator (first-order
+/// low- and high-pass, zero-phase band filters); the others are those of the designer (`oos_dsp::filter`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FiltResp {
+    Simple,
+    Butterworth,
+    Chebyshev,
+    Bessel,
+    Gaussian,
+    RaisedCosine,
+    RootRaisedCosine,
+    /// a delay
+    Delay,
+}
+
+pub const FILT_RESPS: [FiltResp; 8] = [
+    FiltResp::Simple,
+    FiltResp::Butterworth,
+    FiltResp::Chebyshev,
+    FiltResp::Bessel,
+    FiltResp::Gaussian,
+    FiltResp::RaisedCosine,
+    FiltResp::RootRaisedCosine,
+    FiltResp::Delay,
+];
+
+impl FiltResp {
+    /// The designer's response, None for `Simple`.
+    fn designed(self) -> Option<oos_dsp::filter::Response> {
+        use oos_dsp::filter::Response as R;
+        Some(match self {
+            FiltResp::Simple => return None,
+            FiltResp::Butterworth => R::Butterworth,
+            FiltResp::Chebyshev => R::Chebyshev,
+            FiltResp::Bessel => R::Bessel,
+            FiltResp::Gaussian => R::Gaussian,
+            FiltResp::RaisedCosine => R::RaisedCosine,
+            FiltResp::RootRaisedCosine => R::RootRaisedCosine,
+            FiltResp::Delay => R::Allpass,
+        })
+    }
+    /// Needs the order (the IIR responses).
+    pub fn has_order(self) -> bool {
+        matches!(self, FiltResp::Butterworth | FiltResp::Chebyshev | FiltResp::Bessel)
+    }
+    /// Takes the cut-off frequency (the others are set by symbol or delay).
+    pub fn has_cutoff(self) -> bool {
+        !matches!(self, FiltResp::RaisedCosine | FiltResp::RootRaisedCosine | FiltResp::Delay)
+    }
+}
+
+/// What the designer needs besides the cut-off frequencies; the defaults are those of a Butterworth of order 4.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct FiltCfg {
+    pub resp: FiltResp,
+    pub order: u32,
+    /// Chebyshev ripple, dB
+    pub ripple: f32,
+    /// raised cosine symbol time, s
+    pub symbol: f32,
+    pub rolloff: f32,
+    /// the delay of `FiltResp::Delay`, s
+    pub delay: f32,
+}
+
+impl Default for FiltCfg {
+    fn default() -> FiltCfg {
+        FiltCfg { resp: FiltResp::Simple, order: 4, ripple: 1.0, symbol: 1e-6, rolloff: 0.35, delay: 1e-6 }
+    }
+}
+
+/// The filter `filt` makes of a record for the filter operator `op` (`Lpf`, `Hpf`, `Bpf` or `Bsf` give its kind): None
+/// for the `Simple` response, which the operator computes itself.
+fn designed(op: MathOp, a: &[f32], dt: f64, fc: f64, bw: f64, filt: &FiltCfg) -> Option<Vec<f32>> {
+    use oos_dsp::filter::{Filter, Kind, Spec};
+    let response = filt.resp.designed()?;
+    let kind = match op {
+        MathOp::Hpf => Kind::Highpass,
+        MathOp::Bpf => Kind::Bandpass,
+        MathOp::Bsf => Kind::Bandstop,
+        _ => Kind::Lowpass,
+    };
+    let half = if matches!(kind, Kind::Bandpass | Kind::Bandstop) { bw / 2.0 } else { 0.0 };
+    let spec = Spec {
+        kind,
+        response,
+        order: filt.order as usize,
+        f1: (fc - half).max(1.0),
+        f2: fc + half,
+        ripple_db: filt.ripple as f64,
+        symbol: filt.symbol as f64,
+        rolloff: filt.rolloff as f64,
+        delay: filt.delay as f64,
+    };
+    Some(Filter::design(&spec, dt).apply(a))
+}
+
 /// One math channel's settings.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct MathCh {
@@ -247,6 +344,7 @@ pub struct MathCh {
     pub win: Window,
     /// A and B of Ax+B
     pub lin: (f32, f32),
+    pub filt: FiltCfg,
 }
 
 impl Default for MathCh {
@@ -261,12 +359,18 @@ impl Default for MathCh {
             offset: 0.0,
             win: Window::Hann,
             lin: (1.0, 0.0),
+            filt: FiltCfg::default(),
         }
     }
 }
 
 /// The math waveform (not for FFT/Off); `fc` = filter corner/centre frequency, `bw` = band filter bandwidth.
-pub fn compute(op: MathOp, a: &[f32], b: &[f32], dt: f64, fc: f64, bw: f64) -> Vec<f32> {
+pub fn compute(op: MathOp, a: &[f32], b: &[f32], dt: f64, fc: f64, bw: f64, filt: &FiltCfg) -> Vec<f32> {
+    if matches!(op, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf) {
+        if let Some(v) = designed(op, a, dt, fc, bw, filt) {
+            return v;
+        }
+    }
     match op {
         MathOp::Add => binary(Op2::Add, a, b),
         MathOp::Sub => binary(Op2::Sub, a, b),
@@ -316,6 +420,25 @@ pub fn math_scales() -> Vec<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A response other than Simple makes the filter of the designer: a Butterworth of order 4 passes a tone well below
+    /// its cut-off and blocks one well above it, which the Simple first-order filter does not; the Simple response
+    /// is the filter the operator always was.
+    #[test]
+    fn a_designed_response_replaces_the_simple_filter() {
+        let dt = 1e-8;
+        let tone = |f: f64| -> Vec<f32> { (0..20000).map(|k| (std::f64::consts::TAU * f * k as f64 * dt).sin() as f32).collect() };
+        let amp = |v: &[f32]| v[10000..].iter().fold(0.0f32, |m, x| m.max(x.abs()));
+        let mut cfg = FiltCfg::default();
+        let simple = compute(MathOp::Lpf, &tone(1e6), &[], dt, 1e5, 0.0, &cfg);
+        cfg.resp = FiltResp::Butterworth;
+        let designed = compute(MathOp::Lpf, &tone(1e6), &[], dt, 1e5, 0.0, &cfg);
+        assert!(amp(&designed) < 0.01 && amp(&simple) > 0.05, "designed {} simple {}", amp(&designed), amp(&simple));
+        let low = compute(MathOp::Lpf, &tone(1e4), &[], dt, 1e5, 0.0, &cfg);
+        assert!(amp(&low) > 0.98, "{}", amp(&low));
+        let hp = compute(MathOp::Hpf, &tone(1e4), &[], dt, 1e5, 0.0, &cfg);
+        assert!(amp(&hp) < 0.01, "{}", amp(&hp));
+    }
 
     #[test]
     fn every_op_has_a_category() {

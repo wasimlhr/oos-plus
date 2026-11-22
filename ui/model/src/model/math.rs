@@ -33,6 +33,7 @@ impl Model {
                 bw: self.math_bw,
                 offset: self.math_offset,
                 win: self.fft_win,
+                filt: self.math_filt,
             }
         } else {
             self.maths[k]
@@ -54,6 +55,7 @@ impl Model {
             self.math_bw,
             self.math_offset,
             self.fft_win,
-        ) = (c.op, c.a, c.b, c.scale, c.fc, c.bw, c.offset, c.win);
+            self.math_filt,
+        ) = (c.op, c.a, c.b, c.scale, c.fc, c.bw, c.offset, c.win, c.filt);
     }
 }

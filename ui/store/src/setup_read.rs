@@ -61,6 +61,22 @@ fn p_decode_optional_one_based(v: &str) -> Result<Option<usize>, String> {
     decode_wave(source).map(|_| Some(source)).ok_or_else(|| "invalid decoder source".into())
 }
 
+/// The value `filt_text` writes.
+fn read_filt(v: &str) -> Result<oos_model::math::FiltCfg, String> {
+    let w: Vec<&str> = v.split_whitespace().collect();
+    let [resp, order, ripple, symbol, rolloff, delay] = w[..] else {
+        return Err("filt: six values".into());
+    };
+    Ok(oos_model::math::FiltCfg {
+        resp: p_enum(resp, &oos_model::math::FILT_RESPS)?,
+        order: p_idx(order, 17)?.max(1) as u32,
+        ripple: p_f32(ripple)?,
+        symbol: p_f32(symbol)?,
+        rolloff: p_f32(rolloff)?,
+        delay: p_f32(delay)?,
+    })
+}
+
 fn p_enum<T: Debug + Copy>(v: &str, all: &[T]) -> Result<T, String> {
     all.iter().copied().find(|x| format!("{:?}", x) == v).ok_or_else(|| format!("unknown value: {}", v))
 }
@@ -143,6 +159,7 @@ fn set_numbered(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<b
                 "bw" => c.bw = p_f32(v)?,
                 "offset" => c.offset = p_f32(v)?,
                 "win" => c.win = p_enum(v, &WINDOWS)?,
+                "filt" => c.filt = read_filt(v)?,
                 "lin" => {
                     let (a, b) = v.split_once(' ').ok_or("lin: two numbers")?;
                     c.lin = (p_f32(a)?, p_f32(b)?);

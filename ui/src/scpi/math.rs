@@ -32,6 +32,7 @@ fn put_math(ui: &mut Ui, k: usize, c: MathCh) {
         ui.m.math_bw = c.bw;
         ui.m.math_offset = c.offset;
         ui.m.fft_win = c.win;
+        ui.m.math_filt = c.filt;
     }
     ui.m.maths[k] = c;
     ui.mark_changed();

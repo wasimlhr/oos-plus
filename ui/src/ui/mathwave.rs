@@ -136,7 +136,7 @@ fn compute_job(job: &Job) -> Result<Signal, &'static str> {
             });
         }
         let b = aligned.get(1).map_or(&[][..], |x| x.1.as_slice());
-        let mut v = compute(c.op, a, b, dt, c.fc as f64, c.bw as f64);
+        let mut v = compute(c.op, a, b, dt, c.fc as f64, c.bw as f64, &c.filt);
         if c.op == MathOp::Lin {
             for v in &mut v {
                 *v = c.lin.0 * *v + c.lin.1;
@@ -239,6 +239,7 @@ impl Ui {
             c.fc.to_bits(),
             c.bw.to_bits(),
             format!("{:?}", c.win),
+            format!("{:?}", c.filt),
             c.lin.0.to_bits(),
             c.lin.1.to_bits(),
             &self.m.math_expr[k],

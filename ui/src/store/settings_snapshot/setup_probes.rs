@@ -41,6 +41,8 @@ const DEC_OPTIONAL: &[&str] = &["none", "0", "1", "4", "5", "20", "21", "30", "3
 const TDIV: &[&str] = &["5e-11", "1000", "2000", "1e-11", "0.0002", "0.0002001", "0.0002003", "3e-4", "1"];
 const SLOPES: &[&str] = &["Rise", "Fall", "Either", "rise"];
 const RELS: &[&str] = &["Eq", "Ne", "Gt", "Lt", "In", "Out", "eq"];
+const FILT_RESPS: &[&str] =
+    &["Simple", "Butterworth", "Chebyshev", "Bessel", "Gaussian", "RaisedCosine", "RootRaisedCosine", "Delay", "bessel"];
 const WINDOWS: &[&str] = &["Rect", "Hann", "Hamming", "Blackman", "Flattop", "hann"];
 const MATH_OPS: &[&str] = &[
     "Off", "Add", "Sub", "Mul", "Div", "Conv", "Intg", "Diff", "Abs", "Sqrt", "Lg", "Ln", "Exp", "Lin", "Expr", "Lpf",
@@ -265,6 +267,12 @@ const KEYS: &[(&str, P)] = &[
     ("math_offset", Num(&[])),
     ("fft_win", Is(WINDOWS)),
     ("math_bw", Num(&[])),
+    ("filt_resp", Is(FILT_RESPS)),
+    ("filt_order", Idx(17)),
+    ("filt_ripple", Num(&[])),
+    ("filt_symbol", Num(&[])),
+    ("filt_rolloff", Num(&[])),
+    ("filt_delay", Num(&[])),
     ("math_sel", Idx(8)),
     ("m2.op", Is(MATH_OPS)),
     ("m2.a", Idx(22)),
@@ -274,6 +282,7 @@ const KEYS: &[(&str, P)] = &[
     ("m2.bw", Num(&[])),
     ("m2.offset", Num(&[])),
     ("m2.win", Is(WINDOWS)),
+    ("m2.filt", Fields(&["Chebyshev 6 0.5 2e-6 0.2 3e-6", "Nope 6 0.5 2e-6 0.2 3e-6", "Bessel 99 0.5 2e-6 0.2 3e-6"])),
     ("m2.lin", Fields(&["2 -1", "1", "1  2", "1 2 3"])),
     ("m8.op", Is(&["Add"])),
     ("m1.op", Is(&["Add"])),

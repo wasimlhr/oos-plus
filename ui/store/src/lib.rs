@@ -50,6 +50,11 @@ fn name<T: Debug>(x: T) -> String {
     format!("{:?}", x)
 }
 
+/// The designer's settings of another math channel as one value: response, order, ripple, symbol time, roll-off, delay.
+fn filt_text(f: &oos_model::math::FiltCfg) -> String {
+    format!("{} {} {} {} {} {}", name(f.resp), f.order, f.ripple, f.symbol, f.rolloff, f.delay)
+}
+
 fn list<T: ToString>(v: &[T]) -> String {
     v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ")
 }
@@ -277,6 +282,7 @@ fn math_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     crate::settings::write(&crate::settings::spectrum::MARGIN, m, 0, kv);
     kv("math_offset", m.math_offset.to_string());
     crate::settings::write(&crate::settings::math::WINDOW_BW, m, 0, kv);
+    crate::settings::write(&crate::settings::math::FILT, m, 0, kv);
     // the "math*" keys are the selected math channel; the others as mN.* (N = 1..8)
     kv("math_sel", m.math_sel.to_string());
     for (k, c) in m.maths.iter().enumerate().filter(|(k, _)| *k != m.math_sel) {
@@ -289,6 +295,7 @@ fn math_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
         kv(&p("bw"), c.bw.to_string());
         kv(&p("offset"), c.offset.to_string());
         kv(&p("win"), name(c.win));
+        kv(&p("filt"), filt_text(&c.filt));
         kv(&p("lin"), format!("{} {}", c.lin.0, c.lin.1));
     }
 }

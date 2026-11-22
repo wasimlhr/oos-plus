@@ -222,6 +222,12 @@ Commands: [math.md](math.md).
 | `math_offset` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `0` | `:MATH<n>:OFFSet` |
 | `fft_win` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `Hann` | `:MATH<n>:FFT:WINDow` |
 | `math_bw` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `2000` | - |
+| `filt_resp` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `Simple` | - |
+| `filt_order` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `4` | - |
+| `filt_ripple` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `1` | - |
+| `filt_symbol` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | - |
+| `filt_rolloff` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.35` | - |
+| `filt_delay` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | - |
 | `math_sel` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `0` | - |
 | `m<n>.op` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `Off` | - |
 | `m<n>.a` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `0` | - |
@@ -231,6 +237,7 @@ Commands: [math.md](math.md).
 | `m<n>.bw` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `2000` | - |
 | `m<n>.offset` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `0` | - |
 | `m<n>.win` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `Hann` | - |
+| `m<n>.filt` | the same for math channels 2 to 8: the designer's settings as `<response> <order> <ripple> <symbol> <roll-off> <delay>` | `Simple 4 1 0.000001 0.35 0.000001` | - |
 | `m<n>.lin` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `1 0` | - |
 | `math_expr<n>` | optional: the formula text of channel n | - | `:MATH<n>:EXPRession` |
 

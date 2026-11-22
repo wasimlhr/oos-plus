@@ -105,6 +105,7 @@ impl Default for Model {
             math_offset: 0.0,
             fft_win: Window::Hann,
             math_bw: 2e3,
+            math_filt: crate::math::FiltCfg::default(),
             math_sel: 0,
             maths: [crate::math::MathCh::default(); crate::math::NMATH],
             math_fc: 10e3,

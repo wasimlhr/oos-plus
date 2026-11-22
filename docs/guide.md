@@ -164,7 +164,8 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   and zoom; a swipe from the edge of the plot or the numbers in the top bar switch
 - Data logger: measurements as CSV at an interval from 1 s to 1 h, to the stick or the card
 - 8 math channels, also on each other, with free formulas (`sqrt(CH1^2+CH2^2)`): add, subtract, multiply, divide, integrate, differentiate, abs, sqrt, log, ln, exp, Ax+B,
-  low/high/band-pass and band-stop filters, FFT
+  low/high/band-pass and band-stop filters (Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised cosine,
+  delay), FFT
 - Reference waveforms with scale, offset, colour, name and CSV export and import, mask test
 
 **Protocol decoders (26)**

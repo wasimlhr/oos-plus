@@ -377,11 +377,28 @@ impl Ui {
             if self.m.math == MathOp::Lin {
                 v.extend([Item::MathLinA, Item::MathLinB]);
             }
-            if self.m.math.has_fc() {
+            let designer = matches!(self.m.math, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf);
+            let resp = self.m.math_filt.resp;
+            if designer {
+                v.push(Item::MathFiltResp);
+            }
+            if self.m.math.has_fc() && (!designer || resp.has_cutoff()) {
                 v.push(Item::MathFc);
             }
-            if self.m.math.has_bw() {
+            if self.m.math.has_bw() && (!designer || resp.has_cutoff()) {
                 v.push(Item::MathBw);
+            }
+            if designer {
+                use crate::math::FiltResp as R;
+                if resp.has_order() {
+                    v.push(Item::MathFiltOrder);
+                }
+                match resp {
+                    R::Chebyshev => v.push(Item::MathFiltRipple),
+                    R::RaisedCosine | R::RootRaisedCosine => v.extend([Item::MathFiltSymbol, Item::MathFiltRolloff]),
+                    R::Delay => v.push(Item::MathFiltDelay),
+                    _ => {}
+                }
             }
             v.extend([Item::MathScale, Item::MathOffset]);
             if self.m.math == MathOp::Fft {

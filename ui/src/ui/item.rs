@@ -103,6 +103,13 @@ pub(super) enum Item {
     /// Studio: turns the selected math channel off (the first row of its menu)
     MathOff,
     MathBw,
+    /// the designer's response, order, ripple, symbol time, roll-off and delay of a filter
+    MathFiltResp,
+    MathFiltOrder,
+    MathFiltRipple,
+    MathFiltSymbol,
+    MathFiltRolloff,
+    MathFiltDelay,
     Open(MenuId),
     ChOn(usize),
     ChCoupling(usize),
