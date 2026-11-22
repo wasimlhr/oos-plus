@@ -96,7 +96,8 @@ impl Commands {
 pub(super) struct LeftOut {
     /// waveform files of logic lines
     digital: usize,
-    /// `ch<n>_iq.wfm`: the baseband of a spectrum view
+    /// `ch<n>_iq.wfm`: the baseband of a spectrum view, when the settings give no centre frequency or the record cannot
+    /// be made a real signal
     iq: usize,
     /// waveform files that are neither the record of a channel nor a reference the archive names
     other: usize,
@@ -135,6 +136,9 @@ pub(super) struct Tss {
     pub channels: Vec<(usize, WaveTrace)>,
     /// the references, in the order of their numbers
     pub refs: Vec<(usize, WaveTrace)>,
+    /// the I/Q records of the spectrum views (`ch<n>_iq.wfm`) with a centre frequency in the settings, as the real
+    /// signal they stand for (`oos_dsp::iq::iq_to_real`), in the order of their channels
+    pub iq: Vec<(usize, WaveTrace)>,
     pub left: LeftOut,
 }
 
@@ -239,10 +243,15 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
 
     // the records of the channels, beside the settings archive
     let mut files: BTreeMap<usize, &ZipEntry> = BTreeMap::new();
+    let mut iq_files: BTreeMap<usize, &ZipEntry> = BTreeMap::new();
     for e in outer.entries.iter().filter(|e| has_suffix(&e.name, ".wfm")) {
         match channel_file(&e.name) {
             Some((n, true)) if !files.contains_key(&n) => {
                 files.insert(n, e);
+            }
+            // the I/Q record of a spectrum view: read where the settings give its centre
+            Some((n, false)) if commands.number(IQ_CENTER, n).is_some() && !iq_files.contains_key(&n) => {
+                iq_files.insert(n, e);
             }
             Some((_, false)) => left.iq += 1,
             _ => left.other += 1,
@@ -253,7 +262,33 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
         let label = commands.text(&format!(":CH{number}:LABEL:NAME"));
         channels.extend(wave(&outer, e, label, &mut budget, &mut left)?.map(|trace| (number, trace)));
     }
-    Ok(Tss { commands, channels, refs, left })
+    let mut iq = Vec::new();
+    for (&number, e) in &iq_files {
+        let fc = commands.number(IQ_CENTER, number).unwrap_or(0.0);
+        let label = commands.text(&format!(":CH{number}:LABEL:NAME"));
+        match iq_wave(&outer, e, number, fc, label, &mut budget) {
+            Some(trace) => iq.push((number, trace)),
+            None => left.iq += 1,
+        }
+    }
+    Ok(Tss { commands, channels, refs, iq, left })
+}
+
+/// The centre frequency of the spectrum view of channel `{n}`, Hz.
+const IQ_CENTER: &[&str] = &[":CH{n}:SV:CENTERFREQUENCY"];
+
+/// The I/Q record of channel `n` as a real signal around `fc`: the file is a WFM file whose samples are I and Q one
+/// after the other (assumed: I first, as the record of a spectrum view seen has the length of its time span at half
+/// the sample rate of the file), so a pair is two steps of the file. None when the file cannot be read or made a
+/// signal (`oos_dsp::iq::iq_to_real`), or the archive's budget of samples is used up.
+fn iq_wave(zip: &Zip, e: &ZipEntry, n: usize, fc: f64, label: Option<String>, budget: &mut usize) -> Option<WaveTrace> {
+    let bytes = zip.read(e, MAX_WAVEFORM_BYTES).ok()?;
+    let trace = parse_wfm(&bytes).ok()?;
+    let (v, dt) = oos_dsp::iq::iq_to_real(&trace.v, 2.0 * trace.dt, fc, *budget)
+        .ok()?;
+    *budget = budget.checked_sub(v.len())?;
+    let label = label.unwrap_or_else(|| format!("ch{n} I/Q {} MHz", fc / 1e6));
+    Some(WaveTrace { t0: trace.t0, dt, v, label })
 }
 
 /// The analog waveforms of a session archive for the reference slots: the records of the channels in the order of
@@ -261,7 +296,8 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
 pub(super) fn tss_waves(bytes: &[u8]) -> Result<(Vec<WaveTrace>, String), String> {
     let tss = tss_parts(bytes)?;
     let note = tss.left.words();
-    let traces: Vec<WaveTrace> = tss.channels.into_iter().chain(tss.refs).map(|(_, trace)| trace).collect();
+    let traces: Vec<WaveTrace> =
+        tss.channels.into_iter().chain(tss.iq).chain(tss.refs).map(|(_, trace)| trace).collect();
     if traces.is_empty() {
         return Err(no_waveform(&note));
     }
@@ -356,7 +392,10 @@ pub fn parse_tss<R: Samples>(bytes: &[u8], slots: usize) -> Result<Session<R>, S
     if bytes.len() > MAX_WAVEFORM_BYTES {
         return Err("the session exceeds the 128 MiB import limit".into());
     }
-    let Tss { commands, channels, refs, mut left } = tss_parts(bytes)?;
+    let Tss { commands, channels, mut refs, iq, mut left } = tss_parts(bytes)?;
+    // the I/Q records are references too: the slots after those the archive names
+    let named = refs.iter().map(|r| r.0).max().unwrap_or(0);
+    refs.extend(iq.into_iter().enumerate().map(|(k, (_, trace))| (named + 1 + k, trace)));
     let mut m = Model::default();
     m.ch.iter_mut().for_each(|ch| ch.on = false);
     let mut record: Option<(f64, f64, usize, [Vec<f32>; NCH])> = None;

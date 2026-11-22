@@ -60,7 +60,11 @@ offset of the samples, the time between samples and the time of the first one, t
   entries with 6, each one a reference the settings call digital, or a channel file without a vertical scale in the
   settings; 251 with 2). How its samples hold the lines is not known.
 - The `_iq` files have 1 in the field that says how the samples are stored, where the others have 0 (seen: 13 of
-  13). What they hold is not known beyond their name.
+  13). What they hold: in the one session of a spectrum view that was looked at, `ch1_iq.wfm` has 254748 values a
+  step of 40 ns and starts at the time the settings call `:SV:IQXZERO`, and `:SV:IQTIMESPAN` (10.19 ms) is 127374
+  pairs of 80 ns: so a pair is two steps of the file, I and Q one after the other (assumed: I first; which of the two
+  is I was not verified), the complex baseband around `:CH1:SV:CENTERFREQUENCY` (98 MHz there) at 12.5 million pairs a
+  second for the 10 MHz span (`:SV:SPAN`). Seen in that one file only.
 - A file can hold many acquisitions, one after the other (seen: 3 entries, of about 100 each). `parse_wfm` reads
   the first.
 
@@ -127,8 +131,14 @@ slots from the chosen one on: the records of the channels first, in the order of
 references in the order of their numbers, each named as the settings name it, else after its file. Nothing of
 the setup changes.
 
+**The I/Q record of a spectrum view** (`ch<n>_iq.wfm`) is read where the settings give `:CH<n>:SV:CENTERFREQUENCY`: it
+is interpolated to a rate of 2.2 times the highest frequency of the record (the centre plus half the I/Q rate) and
+mixed up to the centre, so it becomes the real signal around that frequency (a spectrum of it from 93 to 103 MHz shows
+the signal of a view centred on 98 MHz). It goes after the records of the channels, as a reference in a session. A
+record whose centre would need more samples than the import allows, or that cannot be read, is left out.
+
 **Left out either way**, and said in the message ("not read: 2 digital and 1 IQ waveforms"): logic waveforms, the
-`_iq` files, a waveform file that is neither the record of a channel nor a reference the list names ("other"), a
+`_iq` files without a centre frequency in the settings, a waveform file that is neither the record of a channel nor a reference the list names ("other"), a
 reference whose file is not in the archive ("missing"); as a session also a channel record on another time axis
 ("differently timed") and a channel above 4 or a reference above 10 ("surplus"). A reference that is a text of
 values is read as the waveform files of that kind are. Of a file with many acquisitions the first is read.
