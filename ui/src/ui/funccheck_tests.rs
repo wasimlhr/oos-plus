@@ -145,7 +145,7 @@ fn ui_fields(u: &Ui) -> BTreeMap<&'static str, String> {
     v.insert("meas_src_b", format!("{:?}", u.sources.b));
     v.insert("ref_sel", format!("{}", u.ref_page.sel));
     v.insert("ref_src", format!("{}", u.ref_page.src));
-    v.insert("hist_ch", format!("{:?}", u.hist_ch));
+    v.insert("hist_ch", format!("{:?}", u.m.hist_src));
     v.insert("hist_pos", format!("{:?}", u.history.pos));
     v.insert("zone_sel", format!("{}", u.zone_trig.sel));
     v.insert("offline", format!("{}", u.offline.on));

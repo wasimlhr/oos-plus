@@ -252,6 +252,7 @@ pub(super) fn custom() -> Model {
     m.dots = true;
     m.z_src = Some(3);
     m.hist = Hist::Horizontal;
+    m.hist_src = Some(1);
     (m.view, m.spec_src, m.spec_center, m.spec_span, m.spec_rbw, m.spec_trace, m.spec_ref, m.spec_wf, m.spec_dist) =
         (AView::Spectrum, WaveId::Ch(2), 1.5e6, 2e5, 1e3, 2, -12.5, true, true);
     (m.spec_sort, m.spec_harm, m.trend_sel) = (1, 4, [3, 1]);

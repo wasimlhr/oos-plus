@@ -304,6 +304,10 @@ impl Model {
             self.z_src = None;
             changed = true;
         }
+        if self.hist_src.is_some_and(|c| c >= n) {
+            self.hist_src = None;
+            changed = true;
+        }
         changed
     }
 }

@@ -1100,8 +1100,6 @@ pub struct Ui {
     xy: bool,
     /// the XY plot's X and Y channels (the Add panel sets them; the default is CH1 against CH2)
     xy_src: [usize; 2],
-    /// the histogram's own channel (the Add panel sets it; None follows the measurement source)
-    hist_ch: Option<usize>,
     pub now: f64,
     /// what the step saw last: the trigger level and its change, the last record and the usual interval (acquire.rs)
     seen: acquire::Seen,

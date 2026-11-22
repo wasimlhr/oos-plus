@@ -374,6 +374,7 @@ const KEYS: &[(&str, P)] = &[
     ("zone2", Is(&["true 4 false 0:0"])),
     ("z_src", Is(&["off", "0", "1", "4", "5"])),
     ("hist", Is(&["Off", "Vertical", "Horizontal", "off"])),
+    ("hist_src", Is(&["auto", "0", "1", "4", "5"])),
     ("mask_on", Bool),
     ("mask_src", Idx(4)),
     ("mask_x", Num(&[])),

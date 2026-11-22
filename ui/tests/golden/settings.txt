@@ -3964,6 +3964,16 @@ setup hist "Vertical" -> Vertical
 setup hist "off" -> Off; error: line 2: hist: unknown value: off
 setup hist "x" -> Off; error: line 2: hist: unknown value: x
 setup hist default -> Off
+setup hist_src "" -> auto; error: "line 2: hist_src: not an index: "
+setup hist_src "-1" -> auto; error: line 2: hist_src: not an index: -1
+setup hist_src "0" -> 1
+setup hist_src "1" -> 1
+setup hist_src "1e9" -> auto; error: line 2: hist_src: not an index: 1e9
+setup hist_src "4" -> 4
+setup hist_src "5" -> auto; error: line 2: hist_src: 5 out of range (< 5)
+setup hist_src "auto" -> auto
+setup hist_src "x" -> auto; error: line 2: hist_src: not an index: x
+setup hist_src default -> auto
 setup hold "" -> 0.000001; error: "line 2: hold: not a number: "
 setup hold "-1" -> -1
 setup hold "-2.25" -> -2.25

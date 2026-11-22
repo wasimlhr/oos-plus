@@ -362,7 +362,7 @@ fn the_histogram_view_is_drawn_for_a_source_in_the_second_lane() {
     let mut u = studio();
     u.m.ch[1].on = true;
     u.m.hist = Hist::Vertical;
-    u.hist_ch = Some(1);
+    u.m.hist_src = Some(1);
     for _ in 0..8 { frame(&mut u); }
     assert_eq!(u.hist_src(), Some(1));
     let r = u.dock_content(VKind::Hist).expect("the histogram view");

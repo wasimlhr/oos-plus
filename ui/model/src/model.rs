@@ -573,6 +573,9 @@ pub struct Model {
     pub gen_hidden: bool,
     /// Z input: this channel sets the brightness of the other traces (low edge of the screen = dark)
     pub z_src: Option<usize>,
+    /// the histogram's own channel (the Add panel of Studio and `:HISTogram:SOURce` set it); None follows the
+    /// measurement source
+    pub hist_src: Option<usize>,
     /// histogram of the active channel from the phosphor map
     pub hist: Hist,
     pub view: AView,
