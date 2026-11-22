@@ -35,6 +35,8 @@ impl Scpi {
             }
             return self.set_arg(ui, arg, parse_ch(arg), |ui, c| {
                 ui.m.ch[c].on = true;
+                // the histogram's own source, which the set-up keeps; the Measure source goes with it as before
+                ui.m.hist_src = Some(c);
                 ui.set_meas_source(WaveId::Ch(c));
             });
         }

@@ -35,7 +35,7 @@ Part of the [SCPI reference](README.md).
 | --- | --- | --- | --- | --- | --- |
 | `:HISTogram:ENABle` | Set / Query | Boolean; ON selects the vertical histogram when it was off. | `0` | Display > Histogram | Rigol-style (command family of the DHO guide) |
 | `:HISTogram:TYPE` | Set / Query | `HORizontal\|VERTical`; the query answers `HOR` or `VERT`. | `VERT` | Mask, zones, histogram > Histogram | Rigol-style (command family of the DHO guide) |
-| `:HISTogram:SOURce` | Set / Query | `<channel>` CH roles only; turns the channel on and makes it the Measure source. | `CHAN1` | Mask, zones, histogram > Histogram | Rigol-style (command family of the DHO guide) |
+| `:HISTogram:SOURce` | Set / Query | `<channel>` CH roles only; turns the channel on and makes it the histogram's source, which a setup keeps (`hist_src`), and the Measure source. | `CHAN1` | Mask, zones, histogram > Histogram | Rigol-style (command family of the DHO guide) |
 | `:HISTogram:STATistics:RESult` | Query | `Sum,Peaks,Max,Min,Pk_Pk,Mean,Median,Mode,Bin width,Sigma` as `name:value` pairs; `9.9E37` where no figure exists. Describes the rendered display-density distribution, not the full native record. | - | Mask, zones, histogram > Histogram | Rigol-style (command family of the DHO guide) |
 
 ### Zones

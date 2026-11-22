@@ -798,7 +798,7 @@ impl Ui {
                 if let (Some(WaveId::Ch(x)), Some(WaveId::Ch(y))) = (a, b) { self.xy_src = [x, y]; }
             }
             1 => if let Some(id) = a { if id != self.m.eye_src { let n = self.wave_name(id); self.select_option(Item::EyeSrc, &n); } },
-            2 => if let Some(WaveId::Ch(c)) = a { self.hist_ch = Some(c); },
+            2 => if let Some(WaveId::Ch(c)) = a { self.m.hist_src = Some(c); },
             3 => if let Some(id) = a { if id != self.m.spec_src { let n = self.wave_name(id); self.select_option(Item::SpecSrc, &n); } },
             _ => if let Some(src) = a {
                 let k = Self::TREND_MEAS[self.sheet.add.meas.min(Self::TREND_MEAS.len() - 1)];

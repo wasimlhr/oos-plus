@@ -251,9 +251,10 @@ impl Ui {
         Some(v.iter().map(|&x| (((x + ch.offset) / vpd + VDIV / 2.0) / VDIV).clamp(0.0, 1.0)).collect())
     }
 
-    /// Histogram source: the measurement source if it is on, else the first channel on.
+    /// Histogram source: its own channel (kept in the set-up) if it is on, else the measurement source if it is on,
+    /// else the first channel on.
     pub(super) fn hist_src(&self) -> Option<usize> {
-        if let Some(c) = self.hist_ch.filter(|&c| c < n_ch() && self.m.ch[c].on) {
+        if let Some(c) = self.m.hist_src.filter(|&c| c < n_ch() && self.m.ch[c].on) {
             return Some(c);
         }
         if let WaveId::Ch(c) = self.sources.a {

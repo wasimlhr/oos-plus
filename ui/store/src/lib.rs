@@ -570,6 +570,7 @@ fn zone_mask_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     }
     kv("z_src", m.z_src.map_or("off".to_string(), |c| (c + 1).to_string()));
     crate::settings::write(&crate::settings::histogram::HIST, m, 0, kv);
+    kv("hist_src", m.hist_src.map_or("auto".to_string(), |c| (c + 1).to_string()));
     crate::settings::write(&crate::settings::mask::ON, m, 0, kv);
     kv("mask_src", m.mask_src.to_string());
     kv("mask_x", m.mask_x.to_string());

@@ -9405,7 +9405,7 @@
       [
        "<channel>",
        "Discrete",
-       "CH roles only; turns the channel on and makes it the Measure source.",
+       "CH roles only; turns the channel on and makes it the histogram's source, which a setup keeps (`hist_src`), and the Measure source.",
        "CHAN1"
       ]
      ],

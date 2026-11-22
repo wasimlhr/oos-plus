@@ -179,6 +179,7 @@ impl Default for Model {
             ch_hidden: [false; NCH],
             gen_hidden: false,
             z_src: None,
+            hist_src: None,
             hist: Hist::Off,
             view: AView::Scope,
             spec_src: WaveId::Ch(0),

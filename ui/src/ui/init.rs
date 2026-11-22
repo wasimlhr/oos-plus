@@ -134,7 +134,6 @@ impl Ui {
             open_scpi_request: false,
             xy: false,
             xy_src: [0, 1],
-            hist_ch: None,
             now: 0.0,
             seen: acquire::Seen::default(),
             counts: Default::default(),
