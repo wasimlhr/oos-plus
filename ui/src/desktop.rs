@@ -117,7 +117,7 @@ struct PointerState {
 
 impl PointerState {
     fn apply(&mut self, ui: &mut Ui, phase: input::Pointer, at: Option<(i32, i32)>, panel_open: bool, controls: &[panel::Control]) {
-        let on_screen = at.filter(|&(x, _)| x < ui::W);
+        let on_screen = at.filter(|&(x, _)| x < ui.scr.w);
         match phase {
             input::Pointer::Down => {
                 self.panel_pressed = if panel_open { at.and_then(|(x, y)| controls.iter().position(|c| c.rect.contains(x, y))) } else { None };
@@ -158,6 +158,10 @@ impl PointerState {
 }
 
 pub fn run(mut ui: Ui, args: &[String]) {
+    // The window is drawn at the pixels it has. A program that does not say it knows the display's scale is drawn at
+    // 96 dpi and scaled up by Windows, soft on a display set above 100 % (the owner's, 2026-11-22).
+    // SAFETY: no argument, no pointer; made before the first window is.
+    unsafe { windows_sys::Win32::UI::WindowsAndMessaging::SetProcessDPIAware() };
     ui.workspace.desktop_panel = Some(true);
     let opts = WindowOptions { resize: true, scale: Scale::X1, scale_mode: ScaleMode::AspectRatioStretch, ..WindowOptions::default() };
     let mut win = match Window::new("OOS — F6: Hardware controls", ui::W as usize, ui::H as usize, opts) {
@@ -197,7 +201,13 @@ pub fn run(mut ui: Ui, args: &[String]) {
         }
         // mouse = finger 0; a drag that leaves the picture ends where it left
         let down = win.get_mouse_down(MouseButton::Left);
-        let geometry = shell::Geometry { panel_open: false };
+        // the picture is laid out at the size of the window (up to Full HD) and drawn at it, so it is sharp
+        let screen = shell::window_screen(win.get_size());
+        if screen != ui.scr {
+            ui.set_screen(screen);
+            cv = Canvas::new(screen.w, screen.h);
+        }
+        let geometry = shell::Geometry { panel_open: false, screen };
         let at = win.get_unscaled_mouse_pos(MouseMode::Pass).and_then(|(x, y)| geometry.pointer(win.get_size(), x, y));
         let right = win.get_mouse_down(MouseButton::Right);
         if !input.mouse_captured() {
@@ -316,7 +326,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
         if let Some(p) = ui.asks.shot.take() {
             crate::save_shot(&mut ui, &cv, p, &mut shot_n);
         }
-        if let Err(e) = win.update_with_buffer(&cv.px, ui::W as usize, ui::H as usize) {
+        if let Err(e) = win.update_with_buffer(&cv.px, cv.w as usize, cv.h as usize) {
             eprintln!("oos-ui: window: {}", e);
             break;
         }

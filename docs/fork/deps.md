@@ -38,7 +38,7 @@ build that only runs on a computer may use its platform's crates, behind its `cf
 | Crate | Build | For | Versions |
 |---|---|---|---|
 | `minifb` | Windows desktop (`cfg(windows)`) | the window and its keyboard and mouse input (`ui/src/desktop.rs`) | `ui/Cargo.toml`, `ui/Cargo.lock` |
-| `windows-sys` | Windows desktop (`cfg(windows)`) | network interfaces, sockets, file dialogs (`ui/remote/src/announce/windows.rs`, `ui/src/desktop/`) | `ui/Cargo.toml`, `ui/Cargo.lock` |
+| `windows-sys` | Windows desktop (`cfg(windows)`) | network interfaces, sockets, file dialogs, the DPI awareness of the window (`ui/remote/src/announce/windows.rs`, `ui/src/desktop/`, `ui/src/desktop.rs`) | `ui/Cargo.toml`, `ui/Cargo.lock` |
 
 ## The Rust tool chain and the base images
 

@@ -314,7 +314,9 @@ On Windows, with Rust installed, build and open the desktop window from PowerShe
 .\build-windows.ps1 -Run
 ```
 
-The app is `ui\target\release\oos-ui.exe`. Mouse clicks and drags act as touch; Space toggles Run/Stop.
+The app is `ui\target\release\oos-ui.exe`. The window draws at the size it has: the picture is laid out for the
+window, up to Full HD in the shape of the window (a window of the panel's size or smaller shows the 1024 x 600 panel),
+and F12 and the web picture have that size. Mouse clicks and drags act as touch; Space toggles Run/Stop.
 Plain mouse wheel pans horizontally, and Ctrl+wheel zooms the time scale around the pointer.
 F12 saves a PNG in `Documents\OOS`. Use `--offline` to start
 with the analog channels off for stored waveforms. `--open FILE` starts that way with the file already loaded:

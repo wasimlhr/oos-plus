@@ -1143,7 +1143,8 @@ pub struct Ui {
     /// the math channels: the menu's category, the results and their worker, the scales to refit (mathwave.rs)
     math: mathwave::Math,
     capture_views: std::cell::RefCell<capture_memory::State>,
-    /// the screen the layout is made for: the panel, or another size in host test runs (`--size`)
+    /// the screen the layout is made for: the panel, another size in host test runs (`--size`), or the window of
+    /// the desktop build (`set_screen`)
     pub scr: Screen,
     /// the USB stick: whether one is mounted, and when the sticks are looked for next (save_recall.rs)
     stick: save_recall::Stick,
