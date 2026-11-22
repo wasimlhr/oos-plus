@@ -633,5 +633,15 @@ impl Ui {
                 if let Some(from) = lines { cv.dashed_vline(x, from, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90)); }
             }
         }
+        // the event raised in the list (tapped there, or stepped to): a larger mark in the colour of the text and a
+        // line down the plot, over the others
+        let (scale, delay) = self.view();
+        let Some(t) = lines.and(self.search_picked(events)) else { return };
+        let column = ((t - (delay as f64 - scale as f64 * HDIV as f64 * 0.5)) / (scale as f64 * HDIV as f64) * a.w as f64).floor();
+        if (0.0..a.w as f64).contains(&column) {
+            let x = a.x + column as i32;
+            cv.triangle([(x - 7, top), (x + 7, top), (x, top + 12)], TEXT);
+            cv.vline(x, top + 12, a.y + a.h - 1, mix(BG, TEXT, 140));
+        }
     }
 }

@@ -151,7 +151,8 @@ fn the_search_sheet_opens_the_list_of_events_and_the_list_names_the_search() {
     let digits = tables::table_time_digits(&rows);
     let times: Vec<String> = rows.iter().map(|e| si_digits(e.t, "s", digits)).collect();
     assert!(times.len() >= 4 && times.windows(2).all(|w| w[0] != w[1]), "{times:?}");
-    assert_eq!(rows[0].who, "CH2 #1");
+    // (the source is in the title; the column has the number of the event)
+    assert_eq!(rows[0].who, "1");
     let (bar, _) = u.table_bar().unwrap();
     assert_eq!(bar.total, 64_000);
     // the trigger is on another channel: the list still names the search's source
