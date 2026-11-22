@@ -334,3 +334,39 @@ fn the_session_archives_of_a_local_folder_load_or_say_why() {
         println!("  {n} x {reason}");
     }
 }
+
+/// The I/Q record of a spectrum view (`ch<n>_iq.wfm`) with a centre frequency in the settings is read as the real signal
+/// around that frequency: a tone 1 MHz above the centre is a sine at 99 MHz, at the rate that holds it; without a
+/// centre it is counted as not read, as before.
+#[test]
+fn the_iq_record_of_a_spectrum_view_is_read_around_its_centre() {
+    let (dt, pairs) = (40e-9, 3000usize);
+    // one step of the file is half a pair: I, Q, I, Q ...
+    let tone: Vec<f32> = (0..pairs)
+        .flat_map(|k| {
+            let ph = std::f64::consts::TAU * 1e6 * (2 * k) as f64 * dt;
+            [ph.cos() as f32, ph.sin() as f32]
+        })
+        .collect();
+    let iq = wfm_f32(b":WFM#003", -1.395e-3, dt, &tone, "");
+    let real = wfm([0.5; 4]);
+    let setup = "*RST\n:CH1:SV:CENTERFREQUENCY 98.0000E+6\n";
+    let beside = [("ch1.wfm", real.clone()), ("ch1_iq.wfm", iq.clone())];
+    let (traces, left_out) = parse_wave_noted(&tss(setup, &[], &beside), "bench.tss").unwrap();
+    assert_eq!(left_out, "", "nothing is left out");
+    assert_eq!(traces.len(), 2);
+    let signal = &traces[1];
+    assert_eq!(signal.label, "ch1 I/Q 98 MHz");
+    assert_eq!(signal.t0, -1.395e-3);
+    // the rate holds 98 MHz plus half the I/Q rate (104.25 MHz) 2.2 times over: 19 steps a pair of 80 ns
+    assert!((signal.dt - 80e-9 / 19.0).abs() < 1e-15 && signal.v.len() == (pairs - 1) * 19 + 1, "{} {}", signal.dt, signal.v.len());
+    // zero crossings in the middle of the record: 99 MHz is 198 a microsecond
+    let (from, to) = (signal.v.len() / 4, 3 * signal.v.len() / 4);
+    let crossings = (from..to).filter(|&k| signal.v[k - 1] < 0.0 && signal.v[k] >= 0.0).count() as f64;
+    let seconds = (to - from) as f64 * signal.dt;
+    let mhz = crossings / seconds / 1e6;
+    assert!((mhz - 99.0).abs() < 0.2, "the tone is at {mhz} MHz");
+    // without a centre in the settings the record is left out and counted
+    let (traces, left_out) = parse_wave_noted(&tss("*RST\n", &[], &beside), "bench.tss").unwrap();
+    assert_eq!((traces.len(), left_out.as_str()), (1, "not read: 1 IQ waveform"));
+}

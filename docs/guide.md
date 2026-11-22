@@ -339,8 +339,9 @@ its math traces as F1 to F4; a RIGOL CSV file that counts samples takes its time
 columns of its header, found by name; a CSV file with a time column takes its sample interval from the longest
 run of lines whose time does not go back, so a file of several sweeps keeps the interval of one; and a Tektronix
 session file (`.tss`) gives its analog waveforms, the records of the channels first and then its references, each
-under the name the session gives it, and the message of the load says what was not read (logic waveforms, the
-`_iq` files of a spectrum view; [tss.md](tss.md)). The same file loads as a session under Storage > Load session,
+under the name the session gives it, and the message of the load says what was not read (logic waveforms, an
+`_iq` file without a centre frequency; [tss.md](tss.md)). The I/Q record of a spectrum view comes as the real signal
+around its centre frequency, so its spectrum shows the span of the view. The same file loads as a session under Storage > Load session,
 `:LOAD:SESSion`, `--open` or dropped on the window: its channel records become the record on CH1 to CH4 at full
 length with their scales and the time base, its references go into the slots of their numbers, and the scope
 stops on it; its trigger, buses, measurements and maths are not read, and the message says so.

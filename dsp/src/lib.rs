@@ -42,6 +42,7 @@ pub mod hss;
 pub mod identify;
 pub mod interleave;
 pub mod interp;
+pub mod iq;
 pub mod levels;
 pub mod linecode;
 pub mod magnetic;
