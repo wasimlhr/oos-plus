@@ -724,10 +724,11 @@ mod decode_tests {
         // demo signals: no probe to ask for
         assert!(ui.la_probe_ok());
         ui.la_probe_set(Some(false));
-        // through the compact bar's Sources (Display > Bottom bar = Compact)
+        // through the plus of the compact bar, the list of the sources (Display > Bottom bar = Compact)
         ui.m.bar_compact = true;
         ui.relayout();
-        ui.tap(80, BOTTOM.y + 15);
+        let plus = ui.footer_plus();
+        ui.tap(plus.x + plus.w / 2, plus.y + plus.h / 2);
         let (x, y) = fix_tests::row_xy(&ui, "Logic analyser");
         ui.tap(x, y); // Sources > Logic analyser.
         assert!(!ui.m.la.on && !ui.menu_open);
