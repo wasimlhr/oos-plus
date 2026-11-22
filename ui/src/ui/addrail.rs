@@ -45,6 +45,14 @@ pub(super) const TABLES: [(&str, &str); 3] = [
     ("Decoder events", "What the decoders read, one row an event, under the waveform."),
 ];
 
+/// The kinds of cursors of the Cursors page, as the Cursor menu of the Default layout names its modes: the name, what
+/// it reads, the mode.
+pub(super) const CURSORS: [(&str, &str, CursorMode); 3] = [
+    ("Track", "Two cursors on the chosen trace: time and level at each and the differences.", CursorMode::Track),
+    ("Time", "Two vertical cursors: the time at each, the time between them and its rate.", CursorMode::Time),
+    ("Volt", "Two horizontal cursors: the level at each and the difference between them.", CursorMode::Volt),
+];
+
 /// Plot types of the Plot page.
 pub(super) const PLOTS: [(&str, &str, PanelKind); 5] = [
     ("XY", "One channel against another: pick X and Y.", PanelKind::Cursor),
@@ -60,6 +68,8 @@ pub(super) struct AddUi {
     pub kind: Option<AddKind>,
     pub table: usize,
     pub plot: usize,
+    /// the kind of cursors chosen on the Cursors page while they are off (`CURSORS`)
+    pub cursor: usize,
     pub src: Option<WaveId>,
     /// the second source of a page: the Y of XY
     pub src_b: Option<WaveId>,
@@ -263,8 +273,14 @@ impl Ui {
         match kind {
             AddKind::Table => (TABLES.iter().map(|t| t.0).collect(), self.sheet.add.table.min(TABLES.len() - 1)),
             AddKind::Plot => (PLOTS.iter().map(|t| t.0).collect(), self.sheet.add.plot.min(PLOTS.len() - 1)),
+            AddKind::Cursors => (CURSORS.iter().map(|t| t.0).collect(), self.rail_cursor_kind()),
             _ => (Vec::new(), 0),
         }
+    }
+
+    /// The kind of cursors the Cursors page stands at: the one on the screen, else the one chosen on the page.
+    pub(super) fn rail_cursor_kind(&self) -> usize {
+        CURSORS.iter().position(|c| c.2 == self.m.cursor).unwrap_or(self.sheet.add.cursor.min(CURSORS.len() - 1))
     }
 
     /// The source chosen on the Cursors and Search pages: the one tapped, else the selected waveform.
@@ -435,7 +451,7 @@ impl Ui {
         match kind {
             AddKind::Cursors => match self.m.cursor {
                 CursorMode::Off => "Cursors are off".to_string(),
-                _ => format!("Cursors on {}", self.wave_name(self.cursor_source())),
+                _ => format!("{} cursors on {}", CURSORS[self.rail_cursor_kind()].0, self.wave_name(self.cursor_source())),
             },
             AddKind::Search => match self.studio.search() {
                 Some(sp) => format!("Search {} on {}: {}", self.studio.search_sel + 1, self.wave_name(sp.src), self.studio_search_count()),
@@ -550,7 +566,7 @@ impl Ui {
 
     fn rail_preview_id(&self, kind: AddKind) -> &'static str {
         match kind {
-            AddKind::Cursors => "cursors",
+            AddKind::Cursors => ["cursors", "cursors_time", "cursors_volt"][self.rail_cursor_kind()],
             AddKind::Search => "search",
             AddKind::Table => ["table_meas", "table_search", "table_decode"][self.sheet.add.table.min(2)],
             AddKind::Plot => ["xy", "eye", "hist", "spectrum", "trend"][self.sheet.add.plot.min(4)],
@@ -563,7 +579,7 @@ impl Ui {
 
     fn rail_desc(&self, kind: AddKind) -> String {
         match kind {
-            AddKind::Cursors => "Two waveform cursors on the chosen trace, with a reading at each and the difference between them.".into(),
+            AddKind::Cursors => CURSORS[self.rail_cursor_kind()].1.into(),
             AddKind::Search => "Marks every edge of the source on the waveform and counts them. Level and slope are set to the signal.".into(),
             AddKind::Table => TABLES[self.sheet.add.table.min(TABLES.len() - 1)].1.into(),
             AddKind::Plot => PLOTS[self.sheet.add.plot.min(PLOTS.len() - 1)].1.into(),
@@ -598,7 +614,21 @@ impl Ui {
         let square = |t: f32| if ((t * 4.0 + 0.125) % 1.0) < 0.5 { 0.8 } else { -0.8 };
         let yellow = CH_COLORS[0];
         match id {
-            "cursors" => {
+            "cursors_volt" => {
+                curve(cv, yellow, &sine);
+                for (v, name) in [(0.3f32, "A"), (0.7f32, "B")] {
+                    let y = i.y + (i.h as f32 * v) as i32;
+                    let mut x = i.x + 2;
+                    while x < i.right() - 3 { cv.hline(x, (x + 3).min(i.right() - 3), y, CURSOR); x += 7; }
+                    let b = Rect::new(i.x + 6, y - 16, 40, 14);
+                    cv.round(b, 2, CURSOR, 255);
+                    cv.text_in(&f.s, b, 1, name, DARK_TEXT);
+                }
+                let b = Rect::new(i.right() - 60, i.y + i.h / 2 - 8, 54, 16);
+                cv.round(b, 2, BAR, 255);
+                cv.text_in(&f.s, b, 1, "\u{394}v", TEXT);
+            }
+            "cursors" | "cursors_time" => {
                 curve(cv, yellow, &sine);
                 for (t, name) in [(0.3f32, "A"), (0.7f32, "B")] {
                     let x = at(t);
@@ -609,7 +639,7 @@ impl Ui {
                 }
                 let b = Rect::new(i.x + i.w / 2 - 42, i.bottom() - 22, 84, 16);
                 cv.round(b, 2, BAR, 255);
-                cv.text_in(&f.s, b, 1, "\u{394}t  \u{394}v", TEXT);
+                cv.text_in(&f.s, b, 1, if id == "cursors" { "\u{394}t  \u{394}v" } else { "\u{394}t  1/\u{394}t" }, TEXT);
             }
             "search" => {
                 curve(cv, yellow, &square);
@@ -692,7 +722,11 @@ impl Ui {
             return true;
         };
         if let Some(&(i, _)) = g.types.iter().find(|(_, r)| r.contains(x, y)) {
-            if kind == AddKind::Table { self.sheet.add.table = i; } else {
+            if kind == AddKind::Cursors {
+                // cursors that are on change their kind at once; else it is the kind Add puts on
+                self.sheet.add.cursor = i;
+                if self.m.cursor != CursorMode::Off { self.select_option(Item::CurMode, CURSORS[i].0); }
+            } else if kind == AddKind::Table { self.sheet.add.table = i; } else {
                 if self.sheet.add.plot != i { (self.sheet.add.src, self.sheet.add.src_b) = (None, None); }
                 self.sheet.add.plot = i;
             }
@@ -777,7 +811,12 @@ impl Ui {
 
     fn rail_do(&mut self, kind: AddKind, act: RailAct) {
         match (kind, act) {
-            (AddKind::Cursors, RailAct::Add) => { let s = self.rail_source(); self.studio_cursors_add(s); }
+            (AddKind::Cursors, RailAct::Add) => {
+                let (s, kind) = (self.rail_source(), self.sheet.add.cursor.min(CURSORS.len() - 1));
+                self.studio_cursors_add(s);
+                // (the cursors come on the trace; the kind chosen on the page is set through the row of the menu)
+                if CURSORS[kind].2 != self.m.cursor { self.select_option(Item::CurMode, CURSORS[kind].0); }
+            }
             (AddKind::Cursors, RailAct::Settings) => self.open_submenu(MenuId::Cursor),
             (AddKind::Cursors, RailAct::Remove) => self.studio_cursors_remove(),
             (AddKind::Search, RailAct::Add) => { let s = self.rail_source(); self.studio_search_add(s); }
