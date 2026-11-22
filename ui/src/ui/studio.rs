@@ -1712,6 +1712,7 @@ impl Ui {
     pub(super) fn studio_panel_row(&self) -> i32 {
         if self.studio_detailed() { return self.detail_row_h(); }
         if self.panel_is_cards() { return super::measpanel::CARD_H + 4; }
+        if self.panel_is_strip() { return super::measpanel::CELL_H + 2; }
         // the tallest a row gets: its body and the band of a header (the paging is by this)
         self.studio_row_body() + if self.studio_multi_source() && self.studio.view != StudioView::Sim { GROUP_BAND } else { 0 }
     }
@@ -2368,8 +2369,8 @@ impl Ui {
         let list_y = p.y + Self::panel_tool_h(p) + if detailed { super::measview::COL_HEAD } else { 0 };
         let unit = self.studio_panel_row();
         let rows_h = (p.bottom() - 2 - list_y).max(unit);
-        let page = if self.panel_is_cards() { Self::panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
-        let shown_h = if self.panel_is_cards() { (page as i32 / Self::panel_card_cols(p.w - 8)) * (super::measpanel::CARD_H + 4) } else { rows_h };
+        let page = if self.panel_cells() { self.panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
+        let shown_h = if self.panel_cells() { (page as i32 / self.panel_cell_geo(p.w - 8).0) * unit } else { rows_h };
         let list = Rect::new(p.x + 4, list_y, p.w - 8, shown_h);
         let bar = self.panel_bar(p);
         let at = |it: super::measpanel::BarItem| bar.slots.iter().find(|s| s.item == it).map_or(Rect::new(0, 0, 0, 0), |s| s.r);
@@ -2456,8 +2457,9 @@ impl Ui {
             let first = self.studio_first(listed.len(), g.page);
             if detailed { self.draw_panel_detail(cv, &g, &rows, &keys, &listed, first); }
             cv.set_clip(g.list);
-            let cards = self.panel_is_cards();
-            if cards { self.draw_panel_cards(cv, &g, &rows, &keys, &listed, first); }
+            let cards = self.panel_cells();
+            if self.panel_is_strip() { self.draw_panel_strip(cv, &g, &rows, &keys, &listed, first); cv.set_clip(g.list); }
+            else if cards { self.draw_panel_cards(cv, &g, &rows, &keys, &listed, first); }
             let layout = if detailed || cards { Vec::new() } else { self.panel_layout(&rows, &listed, first, g.list) };
             for &(pos, r) in &layout {
                 let i = listed[pos];
@@ -2701,7 +2703,7 @@ impl Ui {
             else if g.add.contains(x, y) { self.open_meas_list(); }
             else if g.list.contains(x, y) {
                 let first = self.studio_first(listed.len(), g.page);
-                let hit = if self.panel_is_cards() {
+                let hit = if self.panel_cells() {
                     self.panel_cards_layout(first, listed.len(), g.list).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
                 } else if self.studio_detailed() {
                     self.detail_layout(&g, listed.len(), first).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
@@ -2711,7 +2713,10 @@ impl Ui {
                 if rows.is_empty() && Self::panel_empty_button(g.list).contains(x, y) { self.open_meas_list(); return true; }
                 if let Some((i, row)) = hit {
                     let (pin, menu) = Self::md_row_buttons(row);
-                    if self.panel_is_cards() {
+                    if self.panel_is_strip() {
+                        // a cell of the strip: its settings, where its pin and Remove are
+                        self.studio_configure(i);
+                    } else if self.panel_is_cards() {
                         let key = keys.get(i).copied();
                         if Self::panel_card_pin(row).contains(x, y) { if let Some(key) = key { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); } } else { self.studio_configure(i); }
                     } else if self.studio_detailed() {
@@ -2857,7 +2862,7 @@ impl Ui {
                         if moved && sim.is_none() && self.studio_panel_geo().is_some() {
                             self.panel_scroll_drag(y0, first0, y);
                         } else if moved {
-                            let delta = (y0 - y) / h * if self.panel_is_cards() { 2 } else { 1 };
+                            let delta = (y0 - y) / h * self.panel_cols() as i32;
                             self.studio.panel.first = (first0 as i32 + delta).clamp(0, total.saturating_sub(page) as i32) as usize;
                         }
                         self.studio.drag = Some(StudioDrag::Scroll { y0, first0, moved });

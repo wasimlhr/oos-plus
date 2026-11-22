@@ -116,7 +116,7 @@ impl Ui {
     /// The row of the docked list under a point: the measurement and the rectangle of the row.
     pub(super) fn md_row_at(&self, x: i32, y: i32) -> Option<(MeasKey, Rect)> {
         let g = self.studio_panel_geo()?;
-        if !g.list.contains(x, y) || self.panel_is_cards() { return None; }
+        if !g.list.contains(x, y) || self.panel_cells() { return None; }
         let rows = self.meas_rows();
         let listed = self.studio_listed(&rows);
         let keys = self.studio_keys();
@@ -313,7 +313,7 @@ impl Ui {
             return self.studio_eat(x, y);
         }
         // the cards: a drag scrolls, a tap acts
-        if self.panel_is_cards() { return false; }
+        if self.panel_cells() { return false; }
         // the detailed table: a sideways drag scrolls it
         if self.studio_detailed() {
             if let Some(g) = self.studio_panel_geo().filter(|g| g.list.contains(x, y)) {

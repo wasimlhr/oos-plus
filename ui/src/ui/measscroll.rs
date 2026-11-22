@@ -22,7 +22,10 @@ impl Ui {
     /// Pixels one scroll step is high: a row of the table, of the list, or a row of two cards.
     fn panel_unit(&self) -> i32 { self.studio_panel_row().max(1) }
 
-    fn panel_cols(&self) -> usize { if self.panel_is_cards() { 2 } else { 1 } }
+    pub(super) fn panel_cols(&self) -> usize {
+        if self.panel_is_strip() { return self.studio_panel_rect().map_or(1, |p| self.panel_cell_geo(p.w - 8).0 as usize); }
+        if self.panel_is_cards() { 2 } else { 1 }
+    }
 
     /// Where the list is scrolled to, in pixels from the top.
     pub(super) fn panel_scroll_px(&self) -> i32 {

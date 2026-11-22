@@ -1387,7 +1387,7 @@ impl Ui {
                 if let Some(e) = self.dock_rect(kind).and_then(|r| self.dock_view_rect(kind, r)).filter(|e| e.contains(x, y)) {
                     // three segments: Table, List, Cards
                     let k = Self::view_switch_cells(e).iter().position(|c| c.contains(x, y)).unwrap_or(if x < e.x + e.w / 2 { 0 } else { 2 });
-                    self.panel_set_view([super::measpanel::PanelView::Detailed, super::measpanel::PanelView::List, super::measpanel::PanelView::Cards][k]);
+                    self.panel_set_view([super::measpanel::PanelView::List, super::measpanel::PanelView::Detailed, super::measpanel::PanelView::Cards][k]);
                 }
                 true
             }

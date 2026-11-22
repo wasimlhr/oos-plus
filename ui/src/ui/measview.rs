@@ -254,7 +254,8 @@ impl Ui {
         let [t, l, k] = Self::view_switch_cells(e).map(|c| Rect::new(c.x + 1, e.y + 4, c.w - 2, 18));
         chip(cv, Rect::new(t.x - 2, e.y + 2, k.right() - t.x + 4, 22), BTN, BTN_BORDER);
         let view = self.panel_view();
-        let at = match view { super::measpanel::PanelView::Detailed => t, super::measpanel::PanelView::List => l, super::measpanel::PanelView::Cards => k };
+        // the strip of cells is the first view, the table of rows the second
+        let at = match view { super::measpanel::PanelView::List => t, super::measpanel::PanelView::Detailed => l, super::measpanel::PanelView::Cards => k };
         cv.round(at, 4, ACCENT, 255);
         let ink = |on: bool| if on { DARK_TEXT } else { TEXT };
         let (cl, ck, ct) = (ink(at == l), ink(at == k), ink(at == t));
