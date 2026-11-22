@@ -757,3 +757,32 @@ fn picture(u: &mut Ui) -> crate::gfx::Canvas {
     u.render(&mut cv);
     cv
 }
+
+/// Studio, live, with a reference shown: the bar has a SIM button that plays it, and Live brings the button back
+/// (ADR 0035). Without a reference shown there is none.
+#[test]
+fn the_studio_bar_has_a_sim_button_in_live_with_a_reference_shown() {
+    let mut u = ui();
+    u.m.layout = Layout::Studio;
+    u.studio.enter = true;
+    for _ in 0..5 { u.step(0.05); }
+    assert!(!u.record_mode() && u.studio_top().sim.w == 0, "nothing to play: no button");
+    let csv: String = std::iter::once("Time (s),Volts\n".to_string())
+        .chain((0..400).map(|i| format!("{:.12e},{}\n", i as f64 * 1e-9, ((i / 5) % 2) as f64 * 0.5)))
+        .collect();
+    u.load_waveform_auto(csv.as_bytes(), "bits.csv").unwrap();
+    u.step(0.05);
+    let sim = u.studio_top().sim;
+    assert!(!u.record_mode() && sim.w >= 40, "live with R1 shown: a button {sim:?}");
+    u.tap(sim.x + sim.w / 2, sim.y + sim.h / 2);
+    u.wait_sim_generation();
+    for _ in 0..5 { u.step(0.05); }
+    assert!(u.sim_mode() && u.record_mode(), "a tap plays the reference");
+    assert!(u.studio_top().badge.w > 0, "and the bar has Live");
+    u.activate(Item::SimLive);
+    u.step(0.05);
+    assert!(!u.record_mode() && u.studio_top().sim.w >= 40, "Live brings the SIM button back");
+    // a reference that is not shown takes the button away
+    for r in u.refs.iter_mut().flatten() { r.on = false; }
+    assert_eq!(u.studio_top().sim.w, 0);
+}
