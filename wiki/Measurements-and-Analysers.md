@@ -24,6 +24,25 @@ they fit (`Positive Duty Cycle`), leaves out the measurements of a source that i
 few words why a value is missing (`none in window`), and is only as high as its values need, with Prev and Next in its
 last column.
 
+### The measurements panel of Studio
+
+In Studio the measurements also stand in a panel beside or under the plot, or floating over it. The three buttons in
+its title strip choose the view:
+
+- The **strip**: one cell of one line for each measurement, with the source in its colour, the name and the value
+  (`CH1 Pk-pk 633 mV`), in as many columns as the panel is wide. A low panel under the plot shows a dozen
+  measurements that way, a narrow one at the side has one column. A pinned measurement has an amber edge.
+- The **table**: one row for each, with mean, minimum, maximum, deviation and count as far as the panel is wide. A
+  row swiped to the left is removed, and **Undo** at the foot of the panel brings it back for a few seconds.
+- The **cards**: name, value and statistics of each, and at the top right the pin that puts the measurement on the
+  waveform or takes it off.
+
+A tap on a cell, a row or a card opens the [settings of that measurement](#settings-of-one-measurement), and a drag up
+or down scrolls. The strip has no pin and no Remove of its own, and the settings have neither: pin a measurement on
+its card, and remove it by a swipe in the table, with **Remove measurement** in the menu of its badge, or as under
+[Removing measurements](#removing-measurements). The strip was a list of one measurement a row, with a swipe to
+remove, a drag to reorder and a menu on each row; these went with the list.
+
 ### Adding a measurement
 
 1. Tap **Measure** in the top bar (or Menu > Measure; on a USB keyboard the key M). The measurement page opens.
