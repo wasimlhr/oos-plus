@@ -95,18 +95,15 @@ fn move_to_floating_moves_only_that_measurement_and_keeps_the_view() {
     u.tap(r.x + r.w / 2, r.y + r.h / 2);
     assert_eq!(u.studio.view, StudioView::Docked, "the mode stays");
     assert!(!u.studio_is_pinned(key));
-    assert!(u.studio_float_keys().contains(&key), "the floating panel lists it");
-    assert!(u.studio_float_keys().contains(&MeasKey::One(Meas::Vpp, WaveId::Ch(0))), "the others stay where they were");
+    assert!(u.studio.floated.contains(&key), "it is marked as moved to the floating panel");
+    assert!(u.studio_is_pinned(MeasKey::One(Meas::Vpp, WaveId::Ch(0))), "the others stay where they were");
 }
 
 #[test]
-fn the_floating_panel_lists_what_was_moved_to_it() {
+fn the_floating_view_has_its_panel() {
     let mut u = studio();
-    let key = MeasKey::One(Meas::Rise, WaveId::Ch(0));
-    u.studio.floated.push(key);
     u.studio.view = StudioView::Floating;
     u.relayout();
-    assert_eq!(u.studio_float_keys().len(), 3);
     shot(&mut u, "b1-studio-floating");
     let p = u.studio_panel_rect().unwrap();
     assert!(p.h >= 64 + 3 * 46, "three rows fit");

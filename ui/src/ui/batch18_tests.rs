@@ -48,29 +48,6 @@ fn tap(u: &mut Ui, r: Rect) {
     frame(u);
 }
 
-fn two_sources(u: &mut Ui) {
-    u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(1)), (Meas::Freq, WaveId::Ch(1))];
-    u.ensure_meas_own();
-    for _ in 0..4 { frame(u); }
-}
-
-#[test]
-fn only_the_first_row_of_a_group_has_the_header_band_and_every_row_is_reachable() {
-    let mut u = studio();
-    two_sources(&mut u);
-    let g = u.studio_panel_geo().unwrap();
-    let rows = u.meas_rows();
-    let listed = u.studio_listed(&rows);
-    let layout = u.panel_layout(&rows, &listed, 0, g.list);
-    let body = u.studio_row_body();
-    assert_eq!(layout.iter().map(|(_, r)| r.h).collect::<Vec<_>>(), [body + 14, body, body + 14, body], "no gap after the first row");
-    for w in layout.windows(2) { assert_eq!(w[0].1.bottom(), w[1].1.y); }
-    for (pos, r) in &layout {
-        let hit = u.md_row_at(r.x + 50, r.y + r.h / 2).expect("a row");
-        assert_eq!(hit.0, u.studio_keys()[listed[*pos]]);
-    }
-}
-
 #[test]
 fn the_side_sheet_floats_over_the_docks_and_the_waveform_keeps_its_size() {
     let mut u = studio();

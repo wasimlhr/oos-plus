@@ -92,19 +92,20 @@ fn item_rect(u: &Ui, it: super::measpanel::BarItem) -> Rect {
 // ---------------------------------------------------------------------------------------------------- tests
 
 #[test]
-fn the_table_is_the_first_and_default_view_and_the_switch_reads_table_list_cards() {
+fn the_table_is_the_default_view_and_the_switch_reads_strip_table_cards() {
     let mut u = studio_with(6);
     assert_eq!(u.panel_view(), PanelView::Detailed);
     assert!(u.studio_detailed());
     let r = u.dock_rect(VKind::Measure).and_then(|r| u.dock_view_rect(VKind::Measure, r)).expect("the view switch");
     let seg = |k: i32| (r.x + (2 * k + 1) * r.w / 6, r.y + r.h / 2);
-    let (x, y) = seg(1);
+    let (x, y) = seg(0);
     tap_at(&mut u, x, y);
     assert_eq!(u.panel_view(), PanelView::List);
+    assert!(u.panel_is_strip(), "the first segment is the strip of cells");
     let (x, y) = seg(2);
     tap_at(&mut u, x, y);
     assert_eq!(u.panel_view(), PanelView::Cards);
-    let (x, y) = seg(0);
+    let (x, y) = seg(1);
     tap_at(&mut u, x, y);
     assert_eq!(u.panel_view(), PanelView::Detailed);
 }

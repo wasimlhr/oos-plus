@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Batch 12: gestures of the Studio measurements list. A row swiped left is removed with an Undo bar; a held row is
-//! dragged to reorder or onto the badge strip to pin; a held badge dragged off the strip unpins; a tile of the Add
-//! measurement panel dragged onto a channel adds the measurement for it. Every gesture has a tap equivalent.
+//! Batch 12: gestures of the Studio measurements. A row of the table swiped left is removed with an Undo bar; a held
+//! badge dragged off the strip unpins; a tile of the Add measurement panel dragged onto a channel adds the
+//! measurement for it. (The list of one measurement a row, with its drag to reorder and its row menu, is gone: the
+//! first view is the strip of cells, batch 17.)
 //! OOS_SHOTS=<dir> writes pictures (b12-*).
 use super::measdrag::{UNDO_S};
 use super::studio::{MeasKey, StudioView};
@@ -18,6 +19,14 @@ fn studio() -> Ui {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
+    frame(&mut u);
+    u
+}
+
+/// The panel with the table: the view whose rows are swiped.
+fn table() -> Ui {
+    let mut u = studio();
+    u.studio_set_detailed(true);
     frame(&mut u);
     u
 }
@@ -59,7 +68,7 @@ fn tap(u: &mut Ui, x: i32, y: i32) {
     frame(u);
 }
 
-/// The middle of the left part of row `k` of the page (clear of the pin and the menu button).
+/// The middle of the left part of row `k` of the page.
 fn row_pt(u: &Ui, k: usize) -> (i32, i32) {
     let g = u.studio_panel_geo().expect("the docked list");
     (g.list.x + 70, g.list.y + k as i32 * u.studio_panel_row() + u.studio_panel_row() / 2)
@@ -78,7 +87,7 @@ fn hold_to(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
 
 #[test]
 fn a_row_swiped_left_is_removed_and_the_undo_bar_brings_it_back_in_place() {
-    let mut u = studio();
+    let mut u = table();
     let before = keys(&u);
     assert!(before.len() >= 4, "{before:?}");
     let pinned = u.studio_pinned();
@@ -100,7 +109,7 @@ fn a_row_swiped_left_is_removed_and_the_undo_bar_brings_it_back_in_place() {
 
 #[test]
 fn the_undo_bar_goes_after_about_four_seconds() {
-    let mut u = studio();
+    let mut u = table();
     let n = keys(&u).len();
     let a = row_pt(&u, 0);
     drag(&mut u, (a.0 + 100, a.1), (a.0 - 60, a.1));
@@ -114,7 +123,7 @@ fn the_undo_bar_goes_after_about_four_seconds() {
 
 #[test]
 fn a_short_swipe_springs_back_and_removes_nothing() {
-    let mut u = studio();
+    let mut u = table();
     let before = keys(&u);
     let a = row_pt(&u, 2);
     touch(&mut u, Phase::Down, a.0 + 100, a.1);
@@ -147,10 +156,10 @@ fn a_tap_on_a_row_opens_its_settings_and_does_not_swipe() {
 
 #[test]
 fn a_vertical_drag_scrolls_the_list_and_never_swipes() {
-    let mut u = studio();
+    let mut u = table();
     // a list longer than its page
-    for k in [Meas::Vmax, Meas::Vmin, Meas::Vamp, Meas::Vrms, Meas::Vavg, Meas::Period, Meas::Area] {
-        let _ = u.meas_add(k, WaveId::Ch(1));
+    for k in [Meas::Vmax, Meas::Vmin, Meas::Vamp, Meas::Vrms, Meas::Vavg, Meas::Period, Meas::Area, Meas::Rise, Meas::Fall, Meas::PWidth, Meas::NWidth] {
+        for c in 0..2 { let _ = u.meas_add(k, WaveId::Ch(c)); }
     }
     frame(&mut u);
     let g = u.studio_panel_geo().unwrap();
@@ -169,32 +178,7 @@ fn a_vertical_drag_scrolls_the_list_and_never_swipes() {
     assert!(u.studio.panel.first > first, "scrolled: {} -> {}", first, u.studio.panel.first);
 }
 
-// ------------------------------------------------------------------------------------------------ reorder, pin, unpin
-
-#[test]
-fn a_held_row_is_dragged_to_reorder_with_a_drop_line() {
-    let mut u = studio();
-    let before = keys(&u);
-    let a = row_pt(&u, 0);
-    // the ring fills while the finger rests
-    touch(&mut u, Phase::Down, a.0, a.1);
-    u.step(0.35);
-    assert!(u.press_ring().is_some(), "the ring");
-    u.step(0.3);
-    let p3 = row_pt(&u, 3);
-    moves(&mut u, a, p3);
-    assert!(matches!(u.studio.drag, Some(super::studio::StudioDrag::Reorder { .. })), "picked up");
-    assert!(u.md_insert_at(row_pt(&u, 3).0, row_pt(&u, 3).1 + 5).is_some(), "a drop line over the list");
-    shot(&mut u, "drag-ghost");
-    let p = row_pt(&u, 3);
-    touch(&mut u, Phase::Up, p.0, p.1 + 8);
-    frame(&mut u);
-    let after = keys(&u);
-    assert_ne!(after, before, "reordered");
-    assert_eq!(after.len(), before.len());
-    assert_eq!(after[0], before[1], "the others moved up");
-    assert!(after.contains(&before[0]));
-}
+// ------------------------------------------------------------------------------------------------ pin, unpin
 
 #[test]
 fn a_held_row_dropped_on_the_badge_strip_is_pinned() {
@@ -286,49 +270,6 @@ fn a_tap_on_a_tile_still_adds_it() {
     let n = keys(&u).len();
     tap(&mut u, row.x + 40, row.y + row.h / 2);
     assert_eq!(keys(&u).len(), n + 1);
-}
-
-// ------------------------------------------------------------------------------------------------ the tap equivalents
-
-#[test]
-fn the_row_menu_has_remove_pin_and_move() {
-    let mut u = studio();
-    let before = keys(&u);
-    let g = u.studio_panel_geo().unwrap();
-    let row = Rect::new(g.list.x, g.list.y, g.list.w, u.studio_panel_row());
-    let (pin, menu) = Ui::md_row_buttons(row);
-    assert!(pin.w >= 40 && pin.h >= 40 && menu.w >= 40 && menu.h >= 40, "40 px targets");
-    let pick = |u: &mut Ui, i: usize| {
-        let p = u.md_menu_rect().expect("the menu");
-        let r = Ui::md_menu_row(p, i);
-        assert!(r.h >= 40);
-        tap(u, r.x + r.w / 2, r.y + r.h / 2);
-    };
-    // Move down
-    tap(&mut u, menu.x + menu.w / 2, menu.y + menu.h / 2);
-    assert_eq!(u.studio.md.menu, Some(before[0]));
-    pick(&mut u, 3);
-    assert_eq!(keys(&u)[1], before[0], "moved down one place");
-    // Move up again: the row is the second now
-    let rh = u.studio_panel_row();
-    tap(&mut u, menu.x + 22, menu.y + rh + 22);
-    pick(&mut u, 2);
-    assert_eq!(keys(&u), before);
-    // Pin / Unpin
-    let was = u.studio_is_pinned(before[0]);
-    tap(&mut u, menu.x + 22, menu.y + 22);
-    pick(&mut u, 1);
-    assert_eq!(u.studio_is_pinned(before[0]), !was);
-    // Remove, and Undo
-    tap(&mut u, menu.x + 22, menu.y + 22);
-    pick(&mut u, 4);
-    assert_eq!(keys(&u).len(), before.len() - 1);
-    u.md_undo();
-    assert_eq!(keys(&u).len(), before.len());
-    // the pin button of the row still pins
-    let was = u.studio_is_pinned(keys(&u)[0]);
-    tap(&mut u, pin.x + pin.w / 2, pin.y + pin.h / 2);
-    assert_eq!(u.studio_is_pinned(keys(&u)[0]), !was);
 }
 
 // ------------------------------------------------------------------------------------------------ narrow views

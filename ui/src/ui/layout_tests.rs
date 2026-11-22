@@ -399,7 +399,7 @@ fn twelve() -> Ui {
 }
 
 #[test]
-fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
+fn studio_docked_panel_lists_and_hands_back_the_width() {
     let mut u = twelve();
     let full = u.plot.grid.w;
     u.studio_set_view(StudioView::Docked);
@@ -412,25 +412,12 @@ fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
     assert!(g.page >= 5, "about six rows to a page, like the mock");
     // the badges sit under the lanes only, the panel keeps its column
     assert_eq!(u.studio_row().right(), u.plot.grid.right());
-    // there is no pager: the list scrolls by pixels and stops at both ends
-    let total = 12;
-    let max = u.panel_scroll_max(total, &g);
-    assert!(max > 0);
-    u.panel_scroll_set(max + 500, total, &g);
-    assert_eq!(u.panel_scroll_px(), max);
-    shot(&mut u, "11-scroll");
-    u.panel_scroll_set(-50, total, &g);
-    assert_eq!(u.panel_scroll_px(), 0);
-    u.studio.panel.first = 0;
-    // the pin left of the row menu pins and unpins it
-    let all = u.studio_pinned().len();
-    assert_eq!(all, u.studio_keys().len(), "every measurement is pinned until it is taken off");
-    let row = Rect::new(g.list.right() - 76, g.list.y + 3 * u.studio_panel_row() + 5, 20, 30);
-    tap_in(&mut u, row);
-    assert_eq!(u.studio_pinned().len(), all - 1);
-    tap_in(&mut u, row);
-    assert_eq!(u.studio_pinned().len(), all);
-    // a tap on the name opens the settings of the measurement
+    // the strip of cells has the twelve on one page (the list of a row each had six and scrolled), so there is
+    // nothing to scroll; there is no pager (the strip that scrolls: batch 17)
+    assert!(g.page >= 12, "{} cells on a page", g.page);
+    assert_eq!(u.panel_scroll_max(12, &g), 0);
+    assert_eq!(u.studio_pinned().len(), u.studio_keys().len(), "every measurement is pinned until it is taken off");
+    // a tap on a cell opens the settings of the measurement
     tap_in(&mut u, Rect::new(g.list.x + 80, g.list.y + 5, 40, 30));
     assert_eq!(u.meas_own.dialog, Some(0));
     u.close_menu();
@@ -453,14 +440,21 @@ fn studio_docked_panel_lists_pages_pins_and_hands_back_the_width() {
 #[test]
 fn studio_list_scrolls_with_the_finger() {
     let mut u = twelve();
+    // more cells than the strip has on a page
+    for k in [Meas::Vmax, Meas::Vmin, Meas::Vamp, Meas::Period, Meas::PWidth, Meas::NWidth, Meas::NDuty, Meas::Vtop, Meas::Vbase] {
+        for c in 0..2 { u.m.meas.push((k, WaveId::Ch(c))); }
+    }
+    u.relayout();
     u.studio_set_view(StudioView::Docked);
     let g = u.studio_panel_geo().unwrap();
+    assert!(u.m.meas.len() >= g.page + 6, "{} cells, {} on a page", u.m.meas.len(), g.page);
+    let unit = u.studio_panel_row();
     let (x, y) = (g.list.x + 60, g.list.y + g.list.h - 10);
     u.touch_ev(Phase::Down, x, y);
     u.touch_ev(Phase::Move, x, y - 70);
     u.touch_ev(Phase::Move, x, y - 130);
     u.touch_ev(Phase::Up, x, y - 130);
-    assert_eq!(u.studio.panel.first, 2, "the list follows an upward finger by rows");
+    assert_eq!(u.studio.panel.first, (130 / unit) as usize, "the list follows an upward finger by rows");
     assert!(u.meas_own.dialog.is_none(), "a scroll is not a tap");
     // a drag the other way brings it back
     u.touch_ev(Phase::Down, x, y - 100);

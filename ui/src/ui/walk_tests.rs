@@ -2398,11 +2398,11 @@ fn the_measurement_panel_and_the_badge_buttons_are_a_finger_high() {
         assert!(slot.r.h >= 36 && slot.hit.h >= 40 && slot.r.w >= 34, "{:?}: {:?} touch {:?}", slot.item, slot.r, slot.hit);
         assert!(slot.r.x >= panel.x && slot.r.right() <= panel.right(), "{:?} inside the panel", slot.item);
     }
-    // the switch between table, list and cards: three segments of 32 px, each of which picks its view
+    // the switch between strip, table and cards: three segments of 32 px, each of which picks its view
     let strip = u.dock_rect(VKind::Measure).expect("the panel's place");
     let sw = u.dock_view_rect(VKind::Measure, strip).expect("the view switch");
     assert!(sw.w / 3 >= 32 && sw.h >= 26, "{sw:?}");
-    for (k, view) in [PanelView::Detailed, PanelView::List, PanelView::Cards].into_iter().enumerate() {
+    for (k, view) in [PanelView::List, PanelView::Detailed, PanelView::Cards].into_iter().enumerate() {
         tap(&mut u, sw.x + (2 * k as i32 + 1) * sw.w / 6, sw.y + sw.h / 2);
         for _ in 0..2 { frame(&mut u); }
         assert_eq!(u.panel_view(), view, "segment {k}");

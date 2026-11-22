@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Batch 17: colour carries the source. One small header per source in the list (none with one source), a thin colour
-//! bar on the rows, the table names the source only in the first row of a group, badges have no chip.
+//! Batch 17: colour carries the source. The table names the source in every row beside its colour bar, badges have
+//! no chip. And the strip view of the measurements panel: cells of one line in columns, the first of the three views.
 //! OOS_SHOTS=<dir> writes pictures (b17-*).
+use super::dock::{Drop, Side, VKind};
 use super::studio::StudioView;
 use super::*;
 
@@ -55,51 +56,6 @@ fn count(cv: &Canvas, r: Rect, col: Rgb) -> usize {
 }
 
 #[test]
-fn with_one_source_a_row_has_no_chip_and_the_list_has_no_header() {
-    let mut u = studio();
-    one_source(&mut u);
-    assert!(!u.studio_multi_source(), "one source");
-    let g = u.studio_panel_geo().unwrap();
-    let mut cv = Canvas::new(W, H);
-    u.render(&mut cv);
-    let yellow = u.wave_color(WaveId::Ch(0));
-    // the colour is in a thin bar at the left edge only: nothing of that colour right of it in the first row
-    let row = Rect::new(g.list.x, g.list.y, g.list.w, u.studio_panel_row());
-    assert!(count(&cv, Rect::new(row.x + 3, row.y + 4, 5, row.h - 8), yellow) > 20, "the colour bar");
-    // the bar is all that says the source: the row had the source's name under the measurement's, which cut both
-    assert_eq!(count(&cv, Rect::new(row.x + 9, row.y, row.w - 9, row.h), yellow), 0, "no name of the source in the row");
-    // no band for a header: the first row starts with its name
-    assert_eq!(u.studio_panel_row(), if u.studio.compact { 36 } else { 46 });
-    shot(&mut u, "one-source");
-}
-
-#[test]
-fn with_several_sources_each_has_one_header_and_the_rows_are_grouped() {
-    let mut u = studio();
-    two_sources(&mut u);
-    assert!(u.studio_multi_source());
-    let rows = u.meas_rows();
-    let listed = u.studio_listed(&rows);
-    let srcs: Vec<WaveId> = listed.iter().map(|&i| rows[i].src).collect();
-    assert_eq!(srcs, [WaveId::Ch(0), WaveId::Ch(0), WaveId::Ch(1), WaveId::Ch(1)], "grouped");
-    let g = u.studio_panel_geo().unwrap();
-    let mut cv = Canvas::new(W, H);
-    u.render(&mut cv);
-    let layout = u.panel_layout(&rows, &listed, 0, g.list);
-    assert_eq!(layout.len(), 4);
-    // only the first row of a group has the band
-    let body = u.studio_row_body();
-    assert_eq!(layout.iter().map(|(_, r)| r.h).collect::<Vec<_>>(), [body + 14, body, body + 14, body]);
-    let band = |k: usize| Rect::new(layout[k].1.x + 8, layout[k].1.y, 60, 14);
-    let (c0, c1) = (u.wave_color(WaveId::Ch(0)), u.wave_color(WaveId::Ch(1)));
-    assert!(count(&cv, band(0), c0) > 5, "the header CH1 over the first group");
-    assert_eq!(count(&cv, band(1), c0), 0, "no second header in the same group");
-    assert!(count(&cv, band(2), c1) > 5, "the header CH2 over the second group");
-    assert_eq!(count(&cv, band(3), c1), 0);
-    shot(&mut u, "two-sources");
-}
-
-#[test]
 fn the_detailed_table_names_the_source_in_every_row_beside_its_colour_bar() {
     let mut u = studio();
     two_sources(&mut u);
@@ -141,37 +97,6 @@ fn a_badge_has_no_chip_a_colour_bar_and_the_short_name() {
     shot(&mut u, "badges");
 }
 
-/// A row of the list is the name over the value: the name has the line to itself, so it is whole in a narrow panel
-/// and in a compact row, where it was cut beside the value ("Peak-to", "Rise Tim") and the source's name under it
-/// was cut at the foot of the row.
-#[test]
-fn a_row_of_the_list_has_its_name_whole_over_the_value() {
-    for compact in [false, true] {
-        let mut u = studio();
-        one_source(&mut u);
-        u.studio.compact = compact;
-        frame(&mut u);
-        let g = u.studio_panel_geo().unwrap();
-        let rows = u.meas_rows();
-        let row = Rect::new(g.list.x, g.list.y, g.list.w, u.studio_panel_row());
-        let mut cv = Canvas::new(W, H);
-        cv.au_start();
-        u.draw_panel_row(&mut cv, row, &rows[0], false, 0);
-        let texts = cv.au.take().unwrap();
-        let line = |want: &str| texts.iter().find_map(|e| match e {
-            Au::Text { s, ink: Some(ink), clip, .. } if s == want => Some((*ink, *clip)),
-            _ => None,
-        });
-        let (name, clip) = line(&rows[0].name).expect("the name is drawn");
-        let (value, _) = line(&rows[0].text()).expect("the value is drawn");
-        // (ink and clip are left, top, right, bottom)
-        assert!(name.2 <= clip.2 && name.3 <= value.1, "compact {compact}: the name is whole and over the value: {name:?} {clip:?} {value:?}");
-        assert!(value.3 <= row.bottom(), "compact {compact}: the value is within the row: {value:?} {row:?}");
-        assert!(line(&u.wave_name(rows[0].src)).is_none(), "compact {compact}: the source is not written");
-        shot(&mut u, if compact { "row-compact" } else { "row" });
-    }
-}
-
 /// The three buttons of the view switch take the touch where they are drawn: each is lit inside its own segment, and
 /// a tap in the middle of a segment chooses its view. They were drawn at the left of the switch, a third narrower
 /// than the segments that took the touch, so Cards answered only right of its box.
@@ -181,7 +106,7 @@ fn the_view_switch_is_drawn_where_it_is_tapped() {
     let mut u = studio();
     one_source(&mut u);
     let r = u.dock_rect(super::dock::VKind::Measure).expect("the panel is docked");
-    for (k, view) in [PanelView::Detailed, PanelView::List, PanelView::Cards].into_iter().enumerate() {
+    for (k, view) in [PanelView::List, PanelView::Detailed, PanelView::Cards].into_iter().enumerate() {
         let e = u.dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap_or(r)).expect("the switch");
         let cell = Ui::view_switch_cells(e)[k];
         assert!(cell.w >= 24, "{cell:?}");
@@ -190,6 +115,8 @@ fn the_view_switch_is_drawn_where_it_is_tapped() {
         u.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
         frame(&mut u);
         assert_eq!(u.panel_view(), view, "a tap in segment {k}");
+        // the first segment is the strip of cells, the second the table, the third the cards
+        assert_eq!((u.panel_is_strip(), u.studio_detailed(), u.panel_is_cards()), (k == 0, k == 1, k == 2), "segment {k}");
         // the lit segment is inside the one that was tapped
         let e = u.dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap()).unwrap();
         let cell = Ui::view_switch_cells(e)[k];
@@ -199,4 +126,144 @@ fn the_view_switch_is_drawn_where_it_is_tapped() {
         let lit = cv.au.take().unwrap().into_iter().find_map(|a| match a { Au::Round { r, c, .. } if c == ACCENT => Some(r), _ => None }).expect("one segment is lit");
         assert!(lit.x >= cell.x && lit.right() <= cell.right(), "segment {k}: lit {lit:?} in {cell:?}");
     }
+}
+
+// ------------------------------------------------------------------------------------------------ the strip view
+
+/// The panel in its first view, the strip, with `n` measurements a channel on CH1 and CH2; under the plot when
+/// `bottom`, else in its place at the side.
+fn strip(n: usize, bottom: bool) -> Ui {
+    let mut u = studio();
+    let kinds = [Meas::Vpp, Meas::Freq, Meas::Vamp, Meas::Vrms, Meas::Vmax, Meas::Vmin, Meas::Vavg, Meas::Period, Meas::Rise, Meas::Fall, Meas::PWidth,
+        Meas::NWidth, Meas::PDuty, Meas::NDuty, Meas::Vtop, Meas::Vbase];
+    u.m.meas = (0..2).flat_map(|c| kinds.iter().take(n).map(move |&k| (k, WaveId::Ch(c)))).collect();
+    u.ensure_meas_own();
+    if bottom { u.dock_apply(VKind::Measure, Drop::Split(VKind::Wave, Side::Bottom)); }
+    for _ in 0..6 { frame(&mut u); }
+    assert!(u.panel_is_strip() && u.panel_view() == super::measpanel::PanelView::List, "the strip is the view");
+    u
+}
+
+/// The cells on the page: the index of each in the rows, and its rectangle.
+fn cells(u: &Ui) -> Vec<(usize, Rect)> {
+    let g = u.studio_panel_geo().expect("the panel");
+    let listed = u.studio_listed(&u.meas_rows());
+    let first = u.studio_first(listed.len(), g.page);
+    u.panel_cards_layout(first, listed.len(), g.list).into_iter().map(|(pos, r)| (listed[pos], r)).collect()
+}
+
+fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
+    u.handle(Ev::Touch { id: 0, phase, x, y });
+    u.step(0.01);
+}
+
+/// A wide low panel under the plot has its cells in several columns, so it shows many measurements where a row
+/// each showed two; the narrow panel at the side has them in one column.
+#[test]
+fn the_strip_has_columns_in_a_wide_low_panel_and_one_column_at_the_side() {
+    let mut u = strip(6, true);
+    let g = u.studio_panel_geo().unwrap();
+    assert!(g.list.w >= 900 && g.list.h <= 260, "wide and low: {:?}", g.list);
+    let c = cells(&u);
+    assert_eq!(c.len(), 12, "all twelve show in {:?}", g.list);
+    let cols = c.iter().filter(|(_, r)| r.y == c[0].1.y).count();
+    assert!(cols >= 4, "{cols} columns in {} px", g.list.w);
+    for (k, (_, r)) in c.iter().enumerate() {
+        assert_eq!(r.h, super::measpanel::CELL_H, "a cell is one line high");
+        assert!(r.w >= 150, "a cell has the room of a source, a name and a value: {r:?}");
+        assert!(r.x >= g.list.x && r.right() <= g.list.right() && r.y >= g.list.y && r.bottom() <= g.list.bottom(), "{r:?} in {:?}", g.list);
+        // they run along the line, then on the next
+        assert_eq!((r.x, r.y), (c[k % cols].1.x, c[0].1.y + (k / cols) as i32 * (c[cols].1.y - c[0].1.y)), "cell {k}");
+        if k % cols > 0 { assert!(c[k - 1].1.right() < r.x, "cells beside each other do not touch"); }
+    }
+    shot(&mut u, "strip-bottom");
+    let mut u = strip(6, false);
+    let g = u.studio_panel_geo().unwrap();
+    assert!(g.list.w < 300, "the side panel: {:?}", g.list);
+    let c = cells(&u);
+    assert_eq!(c.len(), 12);
+    for w in c.windows(2) { assert!(w[0].1.x == w[1].1.x && w[0].1.bottom() < w[1].1.y, "one column: {:?} {:?}", w[0].1, w[1].1); }
+    shot(&mut u, "strip-side");
+}
+
+/// A cell is one line: the source, the name of the measurement and the value, in that order, each whole in the cell.
+#[test]
+fn a_cell_of_the_strip_is_one_line_with_the_source_the_name_and_the_value() {
+    for bottom in [true, false] {
+        let u = strip(6, bottom);
+        let g = u.studio_panel_geo().unwrap();
+        let rows = u.meas_rows();
+        let keys = u.studio_keys();
+        let listed = u.studio_listed(&rows);
+        let mut cv = Canvas::new(W, H);
+        cv.au_start();
+        u.draw_panel_strip(&mut cv, &g, &rows, &keys, &listed, 0);
+        let texts = cv.au.take().unwrap();
+        for (i, r) in cells(&u) {
+            let row = &rows[i];
+            // (ink and clip are left, top, right, bottom)
+            let inside = |ink: &(i32, i32, i32, i32)| ink.0 >= r.x && ink.2 <= r.right() && ink.1 >= r.y && ink.3 <= r.bottom();
+            let find = |want: &str| texts.iter().find_map(|e| match e {
+                Au::Text { s, ink: Some(ink), clip, .. } if s == want && inside(ink) => Some((*ink, *clip)),
+                _ => None,
+            });
+            let (src, _) = find(&u.wave_name(row.src)).unwrap_or_else(|| panic!("bottom {bottom}: the source of {} in {r:?}", row.name));
+            let (value, _) = find(&row.text()).unwrap_or_else(|| panic!("bottom {bottom}: the value of {} in {r:?}", row.name));
+            // the long name where it fits, else the short one of the badges
+            let (name, clip) = find(&row.name).or_else(|| find(&u.studio_badge_name(keys[i], &row.name)))
+                .unwrap_or_else(|| panic!("bottom {bottom}: the name of {} in {r:?}", row.name));
+            assert!(src.2 < name.0 && name.2 < value.0, "bottom {bottom}: source, name, value along the line: {src:?} {name:?} {value:?}");
+            assert!(name.2 <= clip.2, "bottom {bottom}: the name {} is whole: {name:?} in {clip:?}", row.name);
+        }
+    }
+}
+
+/// A tap on a cell opens the settings of its measurement, and changes nothing else.
+#[test]
+fn a_tap_on_a_cell_of_the_strip_opens_the_settings_of_its_measurement() {
+    for bottom in [true, false] {
+        let mut u = strip(6, bottom);
+        let (keys, pinned) = (u.studio_keys(), u.studio_pinned());
+        let (i, r) = cells(&u)[7];
+        let (x, y) = (r.x + r.w / 2, r.y + r.h / 2);
+        touch(&mut u, Phase::Down, x, y);
+        touch(&mut u, Phase::Up, x, y);
+        frame(&mut u);
+        assert_eq!(u.meas_own.dialog, Some(i as u16), "bottom {bottom}: the settings of the measurement of the cell");
+        assert!(u.menu_open && u.menu == MenuId::MeasRow, "bottom {bottom}: its settings are open");
+        assert_eq!((u.studio_keys(), u.studio_pinned()), (keys, pinned), "nothing removed, nothing pinned");
+    }
+}
+
+/// More cells than the panel holds: the strip scrolls with the finger, by whole lines, and a drag is no tap.
+#[test]
+fn the_strip_scrolls_when_there_are_more_cells_than_fit() {
+    let mut u = strip(16, false);
+    let g = u.studio_panel_geo().unwrap();
+    let total = u.studio_listed(&u.meas_rows()).len();
+    assert!(total > g.page, "{total} cells, {} on a page", g.page);
+    assert!(u.panel_scroll_max(total, &g) > 0, "there is something to scroll to");
+    let before = cells(&u);
+    assert_eq!(before.len(), g.page, "a full page");
+    let (x, y) = (g.list.x + 60, g.list.bottom() - 10);
+    let step = before[1].1.y - before[0].1.y;
+    touch(&mut u, Phase::Down, x, y);
+    for k in 1..=6 { touch(&mut u, Phase::Move, x, y - k * step / 2); }
+    touch(&mut u, Phase::Up, x, y - 3 * step);
+    frame(&mut u);
+    assert!(u.meas_own.dialog.is_none() && !u.menu_open, "a drag opens no settings");
+    let first = u.studio.panel.first;
+    assert!(first > 0 && first % u.panel_cols() == 0, "scrolled by whole lines: {first}");
+    assert_ne!(cells(&u)[0].0, before[0].0, "other cells are on the page");
+    shot(&mut u, "strip-scrolled");
+    // to the end, and no further
+    u.panel_scroll_set(i32::MAX / 2, total, &g);
+    assert_eq!(u.panel_scroll_px(), u.panel_scroll_max(total, &g));
+    assert_eq!(cells(&u).last().map(|c| c.0), u.studio_listed(&u.meas_rows()).last().copied(), "the last cell shows at the end");
+    // and back
+    touch(&mut u, Phase::Down, x, g.list.y + 10);
+    for k in 1..=8 { touch(&mut u, Phase::Move, x, g.list.y + 10 + k * 200); }
+    touch(&mut u, Phase::Up, x, g.list.y + 10 + 1600);
+    frame(&mut u);
+    assert_eq!(u.studio.panel.first, 0, "back at the top");
 }
