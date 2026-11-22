@@ -34,17 +34,43 @@ struct Answer {
 /// A math channel's last result and the key it was computed for.
 type Cached = Option<(u64, Result<Arc<Signal>, &'static str>)>;
 
+/// What the response plot of a designed filter shows (`filterplot.rs`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum FiltPlot {
+    Off,
+    Gain,
+    Phase,
+    Impulse,
+    Step,
+}
+
+impl FiltPlot {
+    pub(super) const ALL: [FiltPlot; 5] = [FiltPlot::Off, FiltPlot::Gain, FiltPlot::Phase, FiltPlot::Impulse, FiltPlot::Step];
+
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            FiltPlot::Off => "Off",
+            FiltPlot::Gain => "Gain",
+            FiltPlot::Phase => "Phase",
+            FiltPlot::Impulse => "Impulse",
+            FiltPlot::Step => "Step",
+        }
+    }
+}
+
 /// The math channels as the screen keeps them (ADR 0062).
 pub(super) struct Math {
     /// the Math menu's category, kept when the operation is Off
     pub family: MathFamily,
+    /// the plot of the designed filter's response over the waveform; not stored
+    pub plot: FiltPlot,
     /// the results, their worker and the scales to refit; drawing reads it through `&self`
     pub state: std::cell::RefCell<State>,
 }
 
 impl Default for Math {
     fn default() -> Math {
-        Math { family: MathFamily::Arith, state: Default::default() }
+        Math { family: MathFamily::Arith, plot: FiltPlot::Off, state: Default::default() }
     }
 }
 

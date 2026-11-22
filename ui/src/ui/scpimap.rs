@@ -173,6 +173,12 @@ pub(super) fn map() -> Vec<Row> {
         r(":MATH<n>:SCALe", Item::MathScale, "Math"),
         r(":MATH<n>:OFFSet", Item::MathOffset, "Math"),
         r(":MATH<n>:FFT:WINDow", Item::FftWin, "Math"),
+        r(":MATH<n>:FILTer:RESPonse", Item::MathFiltResp, "Math"),
+        r(":MATH<n>:FILTer:ORDer", Item::MathFiltOrder, "Math"),
+        r(":MATH<n>:FILTer:PRIPple", Item::MathFiltRipple, "Math"),
+        r(":MATH<n>:FILTer:SDURation", Item::MathFiltSymbol, "Math"),
+        r(":MATH<n>:FILTer:ROFactor", Item::MathFiltRolloff, "Math"),
+        r(":MATH<n>:FILTer:DELay", Item::MathFiltDelay, "Math"),
         r(":MATH<n>:LINear:A", Item::MathLinA, "Math"),
         r(":MATH<n>:LINear:B", Item::MathLinB, "Math"),
         // ---- references

@@ -691,12 +691,12 @@ command does not take is refused with `-224`.
 | `:MATH<n>:FFT:WINDow[?]` | `RECTangle`, `HANNing`, `HAMMing`, `BLACkman`, `FLATtop` | `fft_win` | Window | The window the FFT multiplies the record with before the transform. |
 | none | set through `:MATH<n>:FILTer:W1` and `:W2`, the corner frequencies (below) | `math_bw` | Bandwidth | The width of the band of the band-pass and band-stop filters. The menu steps 1-2-5 in periods. |
 | none | set through `:MATH<n>:FILTer:W1` and `:W2`, the corner frequencies (below) | `math_fc` | Frequency | The cut-off frequency of the low- and high-pass filters, the centre of the band filters. The menu steps 1-2-5 in periods. |
-| none | the designer's settings are set from the menu and a setup only | `filt_resp` | Response | The response of the filter: Simple (the plain filter of the operator) or one the designer makes:               Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised cosine, or a delay. |
-| none | the designer's settings are set from the menu and a setup only | `filt_order` | Order | The order of a Butterworth, Chebyshev or Bessel filter (of each pass of a band filter). |
-| none | the designer's settings are set from the menu and a setup only | `filt_ripple` | Ripple | The pass band ripple of a Chebyshev filter. The menu steps by 0.25 dB. |
-| none | the designer's settings are set from the menu and a setup only | `filt_symbol` | Symbol time | The symbol duration of a raised cosine or root raised cosine filter. The menu steps 1-2-5. |
-| none | the designer's settings are set from the menu and a setup only | `filt_rolloff` | Roll-off | The roll-off factor of a raised cosine or root raised cosine filter, 0 to 1. The menu steps by 0.05. |
-| none | the designer's settings are set from the menu and a setup only | `filt_delay` | Delay | The delay of the Delay response. The menu steps 1-2-5. |
+| `:MATH<n>:FILTer:RESPonse[?]` | `SIMPle`, `BUTTerworth`, `CHEBychev`, `BESSel`, `GAUSsian`, `RCOSine`, `RRCosine`, `DELay` | `filt_resp` | Response | The response of the filter: Simple (the plain filter of the operator) or one the designer makes:               Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised cosine, or a delay. |
+| `:MATH<n>:FILTer:ORDer[?]` | a whole number from 1 to 16 | `filt_order` | Order | The order of a Butterworth, Chebyshev or Bessel filter (of each pass of a band filter). |
+| `:MATH<n>:FILTer:PRIPple[?]` | a number | `filt_ripple` | Ripple | The pass band ripple of a Chebyshev filter. The menu steps by 0.25 dB. |
+| `:MATH<n>:FILTer:SDURation[?]` | seconds | `filt_symbol` | Symbol time | The symbol duration of a raised cosine or root raised cosine filter. The menu steps 1-2-5. |
+| `:MATH<n>:FILTer:ROFactor[?]` | a number | `filt_rolloff` | Roll-off | The roll-off factor of a raised cosine or root raised cosine filter, 0 to 1. The menu steps by 0.05. |
+| `:MATH<n>:FILTer:DELay[?]` | seconds | `filt_delay` | Delay | The delay of the Delay response. The menu steps 1-2-5. |
 <!-- settings:math:end -->
 
 ### Track cursors, mask and histogram

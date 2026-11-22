@@ -110,6 +110,8 @@ pub(super) enum Item {
     MathFiltSymbol,
     MathFiltRolloff,
     MathFiltDelay,
+    /// the plot of the designed filter's response over the waveform (Off, Gain, Phase, Impulse, Step)
+    MathFiltPlot,
     Open(MenuId),
     ChOn(usize),
     ChCoupling(usize),

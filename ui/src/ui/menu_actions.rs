@@ -701,6 +701,10 @@ impl Ui {
                 m.math_offset = 0.0;
                 self.math_autoscale();
             }
+            Item::MathFiltPlot => {
+                let i = FiltPlot::ALL.iter().position(|&p| p == self.math.plot).unwrap_or(0);
+                self.math.plot = FiltPlot::ALL[cycle(i, FiltPlot::ALL.len(), d)];
+            }
             Item::MathFam => {
                 let i = MathFamily::ALL.iter().position(|&f| f == self.math.family).unwrap_or(0);
                 self.math.family = MathFamily::ALL[cycle(i, MathFamily::ALL.len(), d)];

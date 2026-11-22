@@ -305,10 +305,10 @@ impl Default for FiltCfg {
     }
 }
 
-/// The filter `filt` makes of a record for the filter operator `op` (`Lpf`, `Hpf`, `Bpf` or `Bsf` give its kind): None
-/// for the `Simple` response, which the operator computes itself.
-fn designed(op: MathOp, a: &[f32], dt: f64, fc: f64, bw: f64, filt: &FiltCfg) -> Option<Vec<f32>> {
-    use oos_dsp::filter::{Filter, Kind, Spec};
+/// The designer's specification of the filter operator `op` (`Lpf`, `Hpf`, `Bpf` or `Bsf` give its kind) with the centre
+/// `fc` and width `bw` of its band: None for the `Simple` response, which the operator computes itself.
+pub fn filter_spec(op: MathOp, fc: f64, bw: f64, filt: &FiltCfg) -> Option<oos_dsp::filter::Spec> {
+    use oos_dsp::filter::{Kind, Spec};
     let response = filt.resp.designed()?;
     let kind = match op {
         MathOp::Hpf => Kind::Highpass,
@@ -317,7 +317,7 @@ fn designed(op: MathOp, a: &[f32], dt: f64, fc: f64, bw: f64, filt: &FiltCfg) ->
         _ => Kind::Lowpass,
     };
     let half = if matches!(kind, Kind::Bandpass | Kind::Bandstop) { bw / 2.0 } else { 0.0 };
-    let spec = Spec {
+    Some(Spec {
         kind,
         response,
         order: filt.order as usize,
@@ -327,8 +327,13 @@ fn designed(op: MathOp, a: &[f32], dt: f64, fc: f64, bw: f64, filt: &FiltCfg) ->
         symbol: filt.symbol as f64,
         rolloff: filt.rolloff as f64,
         delay: filt.delay as f64,
-    };
-    Some(Filter::design(&spec, dt).apply(a))
+    })
+}
+
+/// The filter `filt` makes of a record for the filter operator `op`: None for the `Simple` response.
+fn designed(op: MathOp, a: &[f32], dt: f64, fc: f64, bw: f64, filt: &FiltCfg) -> Option<Vec<f32>> {
+    let spec = filter_spec(op, fc, bw, filt)?;
+    Some(oos_dsp::filter::Filter::design(&spec, dt).apply(a))
 }
 
 /// One math channel's settings.

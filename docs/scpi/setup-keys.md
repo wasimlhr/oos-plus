@@ -222,12 +222,12 @@ Commands: [math.md](math.md).
 | `math_offset` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `0` | `:MATH<n>:OFFSet` |
 | `fft_win` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `Hann` | `:MATH<n>:FFT:WINDow` |
 | `math_bw` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `2000` | - |
-| `filt_resp` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `Simple` | - |
-| `filt_order` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `4` | - |
-| `filt_ripple` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `1` | - |
-| `filt_symbol` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | - |
-| `filt_rolloff` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.35` | - |
-| `filt_delay` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | - |
+| `filt_resp` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `Simple` | `:MATH<n>:FILTer:RESPonse` |
+| `filt_order` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `4` | `:MATH<n>:FILTer:ORDer` |
+| `filt_ripple` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `1` | `:MATH<n>:FILTer:PRIPple` |
+| `filt_symbol` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | `:MATH<n>:FILTer:SDURation` |
+| `filt_rolloff` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.35` | `:MATH<n>:FILTer:ROFactor` |
+| `filt_delay` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | `:MATH<n>:FILTer:DELay` |
 | `math_sel` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `0` | - |
 | `m<n>.op` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `Off` | - |
 | `m<n>.a` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `0` | - |

@@ -1051,6 +1051,64 @@ scpi :MATH1:FFT:WINDow "HANNing" -> query: HANN; errors: none
 scpi :MATH1:FFT:WINDow "RECTangle" -> query: RECT; errors: none
 scpi :MATH1:FFT:WINDow "x" -> query: HANN; errors: -224,"Illegal parameter value" x
 scpi :MATH1:FFT:WINDow default -> query: HANN; errors: none
+scpi :MATH1:FILTer:DELay "" -> query: 1.000000E-06; errors: -224,"Illegal parameter value"
+scpi :MATH1:FILTer:DELay "-1" -> query: -1.000000E+00; errors: none
+scpi :MATH1:FILTer:DELay "0" -> query: 0.000000E+00; errors: none
+scpi :MATH1:FILTer:DELay "1e-3" -> query: 1.000000E-03; errors: none
+scpi :MATH1:FILTer:DELay "1e-6" -> query: 1.000000E-06; errors: none
+scpi :MATH1:FILTer:DELay "1e9" -> query: 1.000000E+09; errors: none
+scpi :MATH1:FILTer:DELay "x" -> query: 1.000000E-06; errors: -224,"Illegal parameter value" x
+scpi :MATH1:FILTer:DELay default -> query: 1.000000E-06; errors: none
+scpi :MATH1:FILTer:ORDer "" -> query: 4; errors: -224,"Illegal parameter value"
+scpi :MATH1:FILTer:ORDer "-1" -> query: 4; errors: -224,"Illegal parameter value" -1
+scpi :MATH1:FILTer:ORDer "0" -> query: 4; errors: -224,"Illegal parameter value" 0
+scpi :MATH1:FILTer:ORDer "1" -> query: 1; errors: none
+scpi :MATH1:FILTer:ORDer "16" -> query: 16; errors: none
+scpi :MATH1:FILTer:ORDer "17" -> query: 4; errors: -224,"Illegal parameter value" 17
+scpi :MATH1:FILTer:ORDer "1e9" -> query: 4; errors: -224,"Illegal parameter value" 1e9
+scpi :MATH1:FILTer:ORDer "4" -> query: 4; errors: none
+scpi :MATH1:FILTer:ORDer "x" -> query: 4; errors: -224,"Illegal parameter value" x
+scpi :MATH1:FILTer:ORDer default -> query: 4; errors: none
+scpi :MATH1:FILTer:PRIPple "" -> query: 1.000000E+00; errors: -224,"Illegal parameter value"
+scpi :MATH1:FILTer:PRIPple "-1" -> query: 1.000000E-02; errors: none
+scpi :MATH1:FILTer:PRIPple "0" -> query: 1.000000E-02; errors: none
+scpi :MATH1:FILTer:PRIPple "0.01" -> query: 1.000000E-02; errors: none
+scpi :MATH1:FILTer:PRIPple "1" -> query: 1.000000E+00; errors: none
+scpi :MATH1:FILTer:PRIPple "1e9" -> query: 6.000000E+00; errors: none
+scpi :MATH1:FILTer:PRIPple "6" -> query: 6.000000E+00; errors: none
+scpi :MATH1:FILTer:PRIPple "7" -> query: 6.000000E+00; errors: none
+scpi :MATH1:FILTer:PRIPple "x" -> query: 1.000000E+00; errors: -224,"Illegal parameter value" x
+scpi :MATH1:FILTer:PRIPple default -> query: 1.000000E+00; errors: none
+scpi :MATH1:FILTer:RESPonse "" -> query: SIMP; errors: -224,"Illegal parameter value"
+scpi :MATH1:FILTer:RESPonse "-1" -> query: SIMP; errors: -224,"Illegal parameter value" -1
+scpi :MATH1:FILTer:RESPonse "1e9" -> query: SIMP; errors: -224,"Illegal parameter value" 1e9
+scpi :MATH1:FILTer:RESPonse "BESSel" -> query: BESS; errors: none
+scpi :MATH1:FILTer:RESPonse "BUTTerworth" -> query: BUTT; errors: none
+scpi :MATH1:FILTer:RESPonse "CHEBychev" -> query: CHEB; errors: none
+scpi :MATH1:FILTer:RESPonse "DELay" -> query: DEL; errors: none
+scpi :MATH1:FILTer:RESPonse "GAUSsian" -> query: GAUS; errors: none
+scpi :MATH1:FILTer:RESPonse "RCOSine" -> query: RCOS; errors: none
+scpi :MATH1:FILTer:RESPonse "RRCosine" -> query: RRC; errors: none
+scpi :MATH1:FILTer:RESPonse "SIMPle" -> query: SIMP; errors: none
+scpi :MATH1:FILTer:RESPonse "x" -> query: SIMP; errors: -224,"Illegal parameter value" x
+scpi :MATH1:FILTer:RESPonse default -> query: SIMP; errors: none
+scpi :MATH1:FILTer:ROFactor "" -> query: 3.500000E-01; errors: -224,"Illegal parameter value"
+scpi :MATH1:FILTer:ROFactor "-1" -> query: 0.000000E+00; errors: none
+scpi :MATH1:FILTer:ROFactor "0" -> query: 0.000000E+00; errors: none
+scpi :MATH1:FILTer:ROFactor "0.35" -> query: 3.500000E-01; errors: none
+scpi :MATH1:FILTer:ROFactor "1" -> query: 1.000000E+00; errors: none
+scpi :MATH1:FILTer:ROFactor "1e9" -> query: 1.000000E+00; errors: none
+scpi :MATH1:FILTer:ROFactor "2" -> query: 1.000000E+00; errors: none
+scpi :MATH1:FILTer:ROFactor "x" -> query: 3.500000E-01; errors: -224,"Illegal parameter value" x
+scpi :MATH1:FILTer:ROFactor default -> query: 3.500000E-01; errors: none
+scpi :MATH1:FILTer:SDURation "" -> query: 1.000000E-06; errors: -224,"Illegal parameter value"
+scpi :MATH1:FILTer:SDURation "-1" -> query: -1.000000E+00; errors: none
+scpi :MATH1:FILTer:SDURation "1e-3" -> query: 1.000000E-03; errors: none
+scpi :MATH1:FILTer:SDURation "1e-6" -> query: 1.000000E-06; errors: none
+scpi :MATH1:FILTer:SDURation "1e-9" -> query: 1.000000E-09; errors: none
+scpi :MATH1:FILTer:SDURation "1e9" -> query: 1.000000E+09; errors: none
+scpi :MATH1:FILTer:SDURation "x" -> query: 1.000000E-06; errors: -224,"Illegal parameter value" x
+scpi :MATH1:FILTer:SDURation default -> query: 1.000000E-06; errors: none
 scpi :MATH1:FILTer:TYPE "" -> query: LPAS; errors: -224,"Illegal parameter value"
 scpi :MATH1:FILTer:TYPE "-1" -> query: LPAS; errors: -224,"Illegal parameter value" -1
 scpi :MATH1:FILTer:TYPE "1e9" -> query: LPAS; errors: -224,"Illegal parameter value" 1e9

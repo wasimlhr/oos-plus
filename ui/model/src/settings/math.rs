@@ -86,10 +86,6 @@ pub const FC: [Setting; 1] = [Setting {
     put: |m, _, v| m.math_fc = v.secs(),
 }];
 
-/// Why the designer's settings have no command of their own.
-#[cfg(test)]
-const DESIGNER: &str = "the designer's settings are set from the menu and a setup only";
-
 /// The responses of `FILT_RESPS` by their place.
 pub const FILT_CHOICES: [Choice; 8] = [
     Choice { store: "Simple", scpi: "SIMPle", label: "Simple" },
@@ -114,10 +110,7 @@ fn db(x: f64) -> String {
 pub const FILT: [Setting; 6] = [
     Setting {
         key: "filt_resp",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: DESIGNER,
-        },
+        scpi: Scpi::Cmd("FILTer:RESPonse"),
         ty: Ty::Choice(&FILT_CHOICES, Unknown::Value, Arg::Keyword),
         label: "Response",
         #[cfg(test)]
@@ -129,10 +122,7 @@ pub const FILT: [Setting; 6] = [
     },
     Setting {
         key: "filt_order",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: DESIGNER,
-        },
+        scpi: Scpi::Cmd("FILTer:ORDer"),
         ty: Ty::U32 { min: 1, max: 16, step: 1, unit: "" },
         label: "Order",
         #[cfg(test)]
@@ -144,10 +134,7 @@ pub const FILT: [Setting; 6] = [
     },
     Setting {
         key: "filt_ripple",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: DESIGNER,
-        },
+        scpi: Scpi::Cmd("FILTer:PRIPple"),
         ty: Ty::Real { range: Some((0.01, 6.0)), shown: db },
         label: "Ripple",
         #[cfg(test)]
@@ -159,10 +146,7 @@ pub const FILT: [Setting; 6] = [
     },
     Setting {
         key: "filt_symbol",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: DESIGNER,
-        },
+        scpi: Scpi::Cmd("FILTer:SDURation"),
         ty: Ty::Seconds { ladder: symbol_step, zero: None },
         label: "Symbol time",
         #[cfg(test)]
@@ -174,10 +158,7 @@ pub const FILT: [Setting; 6] = [
     },
     Setting {
         key: "filt_rolloff",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: DESIGNER,
-        },
+        scpi: Scpi::Cmd("FILTer:ROFactor"),
         ty: Ty::Real { range: Some((0.0, 1.0)), shown: one_decimal },
         label: "Roll-off",
         #[cfg(test)]
@@ -189,10 +170,7 @@ pub const FILT: [Setting; 6] = [
     },
     Setting {
         key: "filt_delay",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: DESIGNER,
-        },
+        scpi: Scpi::Cmd("FILTer:DELay"),
         ty: Ty::Seconds { ladder: symbol_step, zero: Some("0") },
         label: "Delay",
         #[cfg(test)]
