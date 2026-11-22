@@ -254,7 +254,7 @@ fn every_group_has_a_card_of_at_most_seven_rows_per_tab() {
         u.open_meas_cfg(i);
         assert_eq!(u.menu, MenuId::MeasRow);
         let spec = u.sheet_spec(MenuId::MeasRow).unwrap_or_else(|| panic!("row {i} has a card"));
-        assert!(spec.tabs.len() <= 4 && spec.tabs.iter().all(|t| !t.rows.is_empty() && t.rows.len() <= SHEET_MAX_ROWS && t.foot == [Item::RowF(RF::Reset)]), "row {i}");
+        assert!(spec.tabs.len() <= 4 && spec.tabs.iter().all(|t| !t.rows.is_empty() && t.rows.len() <= SHEET_MAX_ROWS && t.foot == [Item::RowF(RF::Reset), Item::MeasRemove(i as u16)]), "row {i}");
         assert!(u.sheet_active());
         let g = u.sheet_geo().unwrap();
         assert!(g.rows.iter().all(|r| r.row.h == SHEET_ROW));
@@ -329,7 +329,7 @@ fn taps_on_the_sheet_change_the_row_and_the_reset_footer_follows_shared_again() 
     shot(&mut u, "b7b-test-period");
     // Follow shared in the footer
     let g = u.sheet_geo().unwrap();
-    assert_eq!(g.foot.len(), 1);
+    assert_eq!(g.foot.iter().map(|f| f.0).collect::<Vec<_>>(), [Item::RowF(RF::Reset), Item::MeasRemove(0)]);
     tap_in(&mut u, g.foot[0].1);
     assert!(u.m.row_cfg.is_empty());
     assert!((u.meas_number(r0, Meas::Period) - 80e-9).abs() < 1e-10);
@@ -564,7 +564,7 @@ fn eye_jitter_and_power_rows_open_a_card_of_the_settings_they_use() {
     assert_eq!(rows_of(&u), [Item::EyeRate, Item::EyeBer, Item::EyePll, Item::EyePnLo, Item::EyePnHi, Item::EyeNotch, Item::EyeHp]);
     let spec = u.sheet_spec(MenuId::MeasRow).unwrap();
     assert_eq!(spec.tabs.len(), 1);
-    assert!(spec.tabs[0].rows.len() <= SHEET_MAX_ROWS && spec.tabs[0].foot.is_empty(), "the card edits the shared settings: no Follow shared");
+    assert!(spec.tabs[0].rows.len() <= SHEET_MAX_ROWS && spec.tabs[0].foot == [Item::MeasRemove(0)], "the card edits the shared settings: no Follow shared");
     shot(&mut u, "b7b-card-jitter");
     // a change on the card is the change of the Eye page
     let before = u.m.eye_ber;
@@ -674,4 +674,22 @@ fn the_reference_of_the_card_sets_the_levels_of_the_row() {
     // in the volts mode the levels are volts: the card has Low and High there, not the percent presets
     u.m.meas_lv.absolute = true;
     assert!(!rows_of(&u).contains(&it));
+}
+
+/// Remove under the card of a measurement takes that measurement away, and its card with it. It asks first, as the
+/// other buttons that take something away: the first tap arms it. (A cell of the strip view opens this card; the
+/// list it replaced had Remove in the menu of its row.)
+#[test]
+fn remove_under_the_card_takes_the_measurement_away() {
+    let r0 = WaveId::Ref(0);
+    let mut u = card(Layout::Studio, &[(Meas::Period, r0), (Meas::Freq, r0)], &[]);
+    u.open_meas_cfg(1);
+    assert_eq!(u.menu, MenuId::MeasRow);
+    let foot = u.sheet_geo().unwrap().foot;
+    assert_eq!(foot.iter().map(|f| f.0).collect::<Vec<_>>(), [Item::RowF(RF::Reset), Item::MeasRemove(1)]);
+    tap_in(&mut u, foot[1].1);
+    assert_eq!(u.measurement_count(), 2, "the first tap arms the button");
+    tap_in(&mut u, foot[1].1);
+    assert_eq!(u.m.meas, [(Meas::Period, r0)], "the measurement of the card is the one that went");
+    assert!(!(u.menu_open && u.menu == MenuId::MeasRow), "the card closes with its measurement");
 }

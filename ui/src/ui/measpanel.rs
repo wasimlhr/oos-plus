@@ -527,16 +527,20 @@ impl Ui {
             let col = self.wave_color(row.src);
             cv.set_clip(g.list);
             cv.round(r, 4, BTN, 255);
-            if keys.get(i).is_some_and(|k| pinned.contains(k)) { cv.round(Rect::new(r.x, r.y + 4, 3, r.h - 8), 1, AMBER, 255); }
+            // the pin at the right end of the cell: a tap there pins the measurement as a badge, or takes the badge
+            // away (the left end of a panel at the side is where its divider is taken)
+            let is_pinned = keys.get(i).is_some_and(|k| pinned.contains(k));
+            let pin = Self::panel_cell_pin(r);
+            icon_pin_small(cv, pin.x + pin.w / 2, r.y + r.h / 2, is_pinned, if is_pinned { AMBER } else { DIM });
             let src = self.wave_name(row.src);
             let value = row.text();
             let outer = cv.save_clip();
             cv.clip_within(r);
             let x = cv.text(&f.sb, r.x + 8, r.y + 18, &src, col) + 6;
             let vw = f.sb.width(&value);
-            cv.text(&f.sb, r.right() - 8 - vw, r.y + 18, &value, col);
+            cv.text(&f.sb, pin.x - 4 - vw, r.y + 18, &value, col);
             // the long name where it fits beside the value, else the short one of the badges
-            let room = r.right() - 8 - vw - 8 - x;
+            let room = pin.x - 4 - vw - 8 - x;
             let short = |long: &str| keys.get(i).map_or_else(|| long.to_string(), |&k| self.studio_badge_name(k, long));
             let name = if f.s.width(&row.name) <= room { row.name.clone() } else { short(&row.name) };
             cv.clip_within(Rect::new(x, r.y, room.max(1), r.h));
@@ -544,6 +548,11 @@ impl Ui {
             cv.restore_clip(outer);
         }
         cv.no_clip();
+    }
+
+    /// The pin of a cell of the strip: its right end.
+    pub(super) fn panel_cell_pin(r: Rect) -> Rect {
+        Rect::new(r.right() - 28, r.y, 28, r.h)
     }
 
     /// The pin of a card: top right.

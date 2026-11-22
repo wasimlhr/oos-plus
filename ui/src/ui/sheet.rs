@@ -139,7 +139,7 @@ fn keypad_pick(it: Item) -> bool {
 }
 
 fn destructive(it: Item) -> bool {
-    matches!(it, Item::SpecLimitClear | Item::EyeClear | Item::MaskClear | Item::SimDefaults | Item::CurRemove | Item::SrchRemove | Item::RefClear | Item::RefClearOne | Item::MeasClear | Item::UpdateRollback | Item::Stock | Item::PowerAct | Item::DefaultAct | Item::ZoneClear)
+    matches!(it, Item::SpecLimitClear | Item::EyeClear | Item::MaskClear | Item::SimDefaults | Item::CurRemove | Item::SrchRemove | Item::RefClear | Item::RefClearOne | Item::MeasClear | Item::UpdateRollback | Item::Stock | Item::PowerAct | Item::DefaultAct | Item::ZoneClear | Item::MeasRemove(_))
 }
 
 /// The colours of a channel among the choices of a decoder's line: fill, edge and text. The chosen one is filled with

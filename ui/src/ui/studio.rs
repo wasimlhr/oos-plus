@@ -2590,9 +2590,9 @@ impl Ui {
                 };
                 if rows.is_empty() && Self::panel_empty_button(g.list).contains(x, y) { self.open_meas_list(); return true; }
                 if let Some((i, cell)) = hit {
-                    // a card has its pin; the rest of it, a cell of the strip and a row of the table open the settings
-                    // of the measurement
-                    if self.panel_is_cards() && Self::panel_card_pin(cell).contains(x, y) {
+                    // a card and a cell have their pin; the rest, and a row of the table, open the settings (with Remove)
+                    let pin = if self.panel_is_strip() { Self::panel_cell_pin(cell) } else { Self::panel_card_pin(cell) };
+                    if self.panel_cells() && pin.contains(x, y) {
                         if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
                     } else { self.studio_configure(i); }
                 }

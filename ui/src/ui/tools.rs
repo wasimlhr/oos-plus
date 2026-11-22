@@ -176,6 +176,8 @@ impl Ui {
             return;
         }
         self.meas_own.dialog = None;
+        // the card of the measurement that is gone closes with it
+        if self.menu_open && self.menu == MenuId::MeasRow { self.close_menu(); }
         self.clear_measurement_statistics();
         self.relayout();
     }

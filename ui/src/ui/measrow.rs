@@ -192,7 +192,11 @@ impl Ui {
     /// The card as a page of the Studio sheet.
     pub(super) fn measrow_sheet_tabs(&self) -> Vec<SheetTab> {
         let cat = matches!(self.rowf_key(), Some(RowKey::Cat(..)));
-        self.measrow_plan().into_iter().map(|(name, rows)| SheetTab { name, rows, foot: if cat { Vec::new() } else { vec![Item::RowF(RF::Reset)] } }).collect()
+        // under every page: Reset, and Remove for the measurement the card is of (it asks first, as the other
+        // buttons that take something away)
+        let remove = self.meas_own.dialog.map(Item::MeasRemove);
+        let foot: Vec<Item> = (!cat).then_some(Item::RowF(RF::Reset)).into_iter().chain(remove).collect();
+        self.measrow_plan().into_iter().map(|(name, rows)| SheetTab { name, rows, foot: foot.clone() }).collect()
     }
 
     pub(super) fn measrow_title(&self) -> String {

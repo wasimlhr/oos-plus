@@ -232,6 +232,31 @@ fn a_tap_on_a_cell_of_the_strip_opens_the_settings_of_its_measurement() {
         assert_eq!(u.meas_own.dialog, Some(i as u16), "bottom {bottom}: the settings of the measurement of the cell");
         assert!(u.menu_open && u.menu == MenuId::MeasRow, "bottom {bottom}: its settings are open");
         assert_eq!((u.studio_keys(), u.studio_pinned()), (keys, pinned), "nothing removed, nothing pinned");
+        // Remove is under the settings
+        assert!(u.sheet_geo().unwrap().foot.iter().any(|f| f.0 == Item::MeasRemove(i as u16)));
+    }
+}
+
+/// The right end of a cell is its pin: a tap there pins the measurement as a badge or takes the badge away, and
+/// opens nothing.
+#[test]
+fn the_right_end_of_a_cell_of_the_strip_is_its_pin() {
+    let mut u = strip(6, false);
+    let (i, r) = cells(&u)[2];
+    let key = u.studio_keys()[i];
+    let was = u.studio_is_pinned(key);
+    let pin = Ui::panel_cell_pin(r);
+    assert!(pin.w >= 24 && pin.right() == r.right() && pin.h == r.h, "{pin:?} {r:?}");
+    for want in [!was, was] {
+        // (the cell of that measurement, wherever it stands now)
+        let r = cells(&u).into_iter().find(|&(j, _)| u.studio_keys().get(j) == Some(&key)).expect("its cell").1;
+        let pin = Ui::panel_cell_pin(r);
+        let (x, y) = (pin.x + pin.w / 2, pin.y + pin.h / 2);
+        touch(&mut u, Phase::Down, x, y);
+        touch(&mut u, Phase::Up, x, y);
+        frame(&mut u);
+        assert_eq!(u.studio_is_pinned(key), want);
+        assert!(!(u.menu_open && u.menu == MenuId::MeasRow), "the pin opens no settings");
     }
 }
 
