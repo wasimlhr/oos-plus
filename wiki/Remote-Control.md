@@ -32,6 +32,10 @@ scope's frame loop, only of a changed screen, up to 20 a second (about 13 reach 
 each new picture as soon as it is made, and while the screen stands still it gets "not modified" instead. The scope's
 own screen does not slow down for it. Pause stops the pictures, and a tab in the background stops them too.
 
+**Monitor picture.** `http://<scope>:8080/monitor.png` is the picture a monitor on the HDMI port gets (Display > HDMI:
+Mirror, Waveform or Layout), at the monitor's size, as it is at the moment of the request. It is for looking at what the
+monitor shows without standing in front of it; it answers 409 while no monitor is connected.
+
 **From 0.1.6** the web remote, SCPI and VXI-11 no longer slow the scope down: on a DHO924S its screen stays at 30 frames a second with two browsers open (0.1.5: 16 with one), and the browser gets about 13 new pictures a second over Ethernet instead of 4 to 5. A script that keeps an SCPI connection open costs no frames either.
 
 **From 0.1.7** **System > Network > Remote services** switches the web remote, SCPI and VXI-11 on or off, each on its

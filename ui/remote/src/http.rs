@@ -735,7 +735,7 @@ fn methods_of(route: &str) -> Option<&'static str> {
         // the CSV files of MCP `waveform`, one per call (oos-plus)
         r if r.starts_with("/mcp/waveform/") => Some("GET, HEAD"),
         "/update" => Some("GET, HEAD, POST"),
-        "/cmd" | "/screen.png" | "/screen.jpg" => Some("GET"),
+        "/cmd" | "/screen.png" | "/screen.jpg" | "/monitor.png" => Some("GET"),
         "/"
         | "/style.css"
         | "/screen.bmp"
