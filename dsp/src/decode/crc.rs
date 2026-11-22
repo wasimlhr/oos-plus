@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! The CRCs of the protocol decoders: one bit-serial engine, MSB first or reflected, and the parameter sets of the
-//! protocols.
+//! protocols; and CRC-32 by table (`crc32`), which the PNG writer of oos-ui and the zip reader of oos-store use too.
 
 /// A CRC of `width` bits (at most 32). MSB first: the register shifts left and `poly` is in normal form (an x^width
 /// term is ignored). Reflected: the register shifts right, bits enter LSB first, and `poly` and `init` are in
@@ -109,9 +109,58 @@ pub fn usb_crc16(data: &[u8]) -> u16 {
     Crc::reflected(16, 0xa001, 0xffff, 0xffff).bytes(data) as u16
 }
 
-/// CRC-32 of USB PD (IEEE 802.3: reflected polynomial 0xEDB88320, init and final XOR 0xFFFFFFFF).
+/// CRC-32 tables for eight bytes per step ("slicing by 8"): `T[0]` is the usual byte table, `T[k][n]` the CRC of byte
+/// `n` followed by `k` zero bytes.
+const CRC_T: [[u32; 256]; 8] = {
+    let mut t = [[0u32; 256]; 8];
+    let mut n = 0;
+    while n < 256 {
+        let mut c = n as u32;
+        let mut k = 0;
+        while k < 8 {
+            c = if c & 1 != 0 { 0xedb8_8320 ^ (c >> 1) } else { c >> 1 };
+            k += 1;
+        }
+        t[0][n] = c;
+        n += 1;
+    }
+    let mut k = 1;
+    while k < 8 {
+        let mut n = 0;
+        while n < 256 {
+            let c = t[k - 1][n];
+            t[k][n] = t[0][(c & 0xff) as usize] ^ (c >> 8);
+            n += 1;
+        }
+        k += 1;
+    }
+    t
+};
+
+/// CRC-32 (ISO 3309 / IEEE 802.3 / PNG / zip: reflected polynomial 0xEDB88320, init and final XOR 0xFFFFFFFF), by
+/// table: the pictures and the archives oos-ui and oos-store check with it are megabytes, a frame of a decoder a
+/// few bytes.
+pub fn crc32(data: &[u8]) -> u32 {
+    let t = &CRC_T;
+    let mut c = !0u32;
+    let (blocks, rest) = data.as_chunks::<8>();
+    for b in blocks {
+        let lo = c ^ u32::from_le_bytes([b[0], b[1], b[2], b[3]]);
+        c = t[7][(lo & 0xff) as usize]
+            ^ t[6][(lo >> 8 & 0xff) as usize]
+            ^ t[5][(lo >> 16 & 0xff) as usize]
+            ^ t[4][(lo >> 24) as usize]
+            ^ t[3][b[4] as usize]
+            ^ t[2][b[5] as usize]
+            ^ t[1][b[6] as usize]
+            ^ t[0][b[7] as usize];
+    }
+    !rest.iter().fold(c, |c, &b| t[0][((c ^ b as u32) & 0xff) as usize] ^ (c >> 8))
+}
+
+/// CRC-32 of USB PD: `crc32`.
 pub fn usbpd_crc32(data: &[u8]) -> u32 {
-    Crc::reflected(32, 0xedb8_8320, 0xffff_ffff, 0xffff_ffff).bytes(data)
+    crc32(data)
 }
 
 /// SENT CRC-4 (SAE J2716): polynomial x^4 + x^3 + x^2 + 1, seed 0101, over the data nibbles (not the status

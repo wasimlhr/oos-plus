@@ -36,8 +36,9 @@ impl<'a> Ctx<'a> {
     }
 }
 
-/// The waveform files `POST /waveform` takes, read on the web server's thread.
-pub type Upload = Vec<crate::store::WaveTrace>;
+/// The waveform files `POST /waveform` takes, read on the web server's thread: the traces of one, and what of it was
+/// not read (`store::parse_wave_noted`).
+pub type Upload = (Vec<crate::store::WaveTrace>, String);
 
 /// The web server of oos-ui: the transport of oos-remote with the screen's uploads.
 pub type Web = oos_remote::http::Http<Upload>;
@@ -127,7 +128,7 @@ impl oos_remote::http::Site for Ctx<'_> {
     }
 
     fn parse_upload(file: &[u8], name: &str) -> Result<Upload, String> {
-        crate::store::parse_wave(file, name)
+        crate::store::parse_wave_noted(file, name)
     }
 
     fn take_upload(&mut self, parsed: Result<Upload, String>, name: &str, slot: usize, epoch: u64) -> (bool, String) {
@@ -136,16 +137,18 @@ impl oos_remote::http::Site for Ctx<'_> {
         let result = if ui.waveform_epoch() != epoch {
             Err("The session changed while the file was read; load it again.".to_string())
         } else {
-            parsed.and_then(|traces| ui.commit_waveform_traces_at(traces, name, slot))
+            parsed.and_then(|(traces, left_out)| ui.commit_waveform_traces_at(traces, name, slot).map(|()| left_out))
         };
         match result {
-            Ok(()) => {
+            Ok(left_out) => {
+                ui.toast_left_out(&left_out);
                 let hint = if ui.record_mode() {
                     "Use Run/Stop or Single to acquire from this record; Return to live restores the live source."
                 } else {
                     "It is on with the live channels. Fit shows its full record; Take over enters stored acquisition."
                 };
-                (true, format!("Loaded {} into R{}. {}", name, ui.ref_slot() + 1, hint))
+                let left_out = if left_out.is_empty() { String::new() } else { format!(" ({left_out})") };
+                (true, format!("Loaded {} into R{}{}. {}", name, ui.ref_slot() + 1, left_out, hint))
             }
             Err(error) => {
                 ui.ref_slot_set(previous);

@@ -38,8 +38,8 @@ pub use automotive::*;
 pub use avionics::*;
 pub use can::*;
 pub use crc::{
-    can_crc15, can_fd_crc, flexray_frame_crc, flexray_header_crc, modbus_crc, ow_crc8, sent_crc, usb_crc16, usb_crc5,
-    usbpd_crc32,
+    can_crc15, can_fd_crc, crc32, flexray_frame_crc, flexray_header_crc, modbus_crc, ow_crc8, sent_crc, usb_crc16,
+    usb_crc5, usbpd_crc32,
 };
 pub use dcc::*;
 pub use debug::*;

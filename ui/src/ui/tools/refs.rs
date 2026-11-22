@@ -129,8 +129,11 @@ impl Ui {
     }
 
     pub(in crate::ui) fn ref_load_path(&mut self, path: &std::path::Path) {
-        match self.ref_load_file(path) {
-            Ok(()) => self.toast(&format!("R{} loaded from {}", self.ref_page.sel + 1, crate::store::file_name(path))),
+        match self.ref_load_quiet(path) {
+            Ok(left_out) => {
+                self.toast(&format!("R{} loaded from {}", self.ref_page.sel + 1, crate::store::file_name(path)));
+                self.toast_left_out(&left_out);
+            }
             Err(error) => self.toast(&error),
         }
     }
@@ -376,10 +379,19 @@ impl Ui {
         self.ref_load_file(&p)
     }
 
+    /// Loads the file `p` into the selected slot; its message names what of the file was not read.
     fn ref_load_file(&mut self, p: &std::path::Path) -> Result<(), String> {
+        let left_out = self.ref_load_quiet(p)?;
+        self.toast_left_out(&left_out);
+        Ok(())
+    }
+
+    /// `ref_load_file` for a caller with a message of its own: what was not read (`store::parse_wave_noted`).
+    fn ref_load_quiet(&mut self, p: &std::path::Path) -> Result<String, String> {
         let bytes = crate::store::read_waveform_file(p)?;
         // read where it lies: a waveform kept in two files finds its other file beside it
-        let traces = crate::store::parse_wave_at(&bytes, p)?;
-        self.commit_waveform_traces(traces, &crate::store::file_name(p), false)
+        let (traces, left_out) = crate::store::parse_wave_at(&bytes, p)?;
+        self.commit_waveform_traces(traces, &crate::store::file_name(p), false)?;
+        Ok(left_out)
     }
 }

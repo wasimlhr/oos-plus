@@ -9,7 +9,8 @@ use std::io::Read;
 use std::sync::mpsc::{self, Receiver, Sender};
 use windows_sys::Win32::UI::Controls::Dialogs::*;
 
-type Parsed = Result<(Vec<crate::store::WaveTrace>, String), String>;
+/// The traces of a file, its name, and what of it was not read (`store::parse_wave_noted`).
+type Parsed = Result<(Vec<crate::store::WaveTrace>, String, String), String>;
 
 struct Job { id: u64, epoch: u64, slot: usize, path: PathBuf }
 struct Worker { requests: Sender<Job>, results: Receiver<(Job, Parsed)> }
@@ -87,8 +88,8 @@ fn read_waveform(path: &std::path::Path) -> Parsed {
     let mut bytes = Vec::with_capacity(size as usize);
     file.take(maximum as u64 + 1).read_to_end(&mut bytes).map_err(|e| format!("Cannot read {name}: {e}"))?;
     if bytes.len() > maximum { return Err(format!("{name} exceeds the {} MiB waveform limit", maximum >> 20)); }
-    let traces = crate::store::parse_wave_at(&bytes, path)?;
-    Ok((traces, name))
+    let (traces, left_out) = crate::store::parse_wave_at(&bytes, path)?;
+    Ok((traces, name, left_out))
 }
 
 /// One question of a file dialog: Open, or Save As.
@@ -162,7 +163,7 @@ pub fn commands(owner: *mut std::ffi::c_void) -> Result<Option<PathBuf>, String>
 }
 
 pub fn waveform(owner: *mut std::ffi::c_void, slot: usize) -> Result<Option<PathBuf>, String> {
-    let patterns = "*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf";
+    let patterns = "*.csv;*.bin;*.wfm;*.trc;*.isf;*.tr0;*.wfmx;*.pwwf;*.tkwf;*.tss";
     dialog(owner, &Ask { title: format!("Open waveform into R{}", slot + 1), filter: filter(&[("Waveforms", patterns)]), dir: None, name: "", ext: "", save: false })
 }
 
@@ -207,7 +208,7 @@ mod tests {
         loader.submit(path.clone(), 1, 0).unwrap();
         loader.submit(path.clone(), 2, 8).unwrap();
         let until = Instant::now() + Duration::from_secs(5);
-        let (traces, name) = loop {
+        let (traces, name, _) = loop {
             if let Some((slot, result)) = loader.poll(2) { assert_eq!(slot, 8); break result.unwrap(); }
             assert!(Instant::now() < until);
             std::thread::sleep(Duration::from_millis(2));
@@ -257,7 +258,7 @@ mod tests {
         let paths = std::env::var("OOS_NATIVE_WAVEFORMS").expect("set OOS_NATIVE_WAVEFORMS to semicolon-separated capture paths");
         for path in paths.split(';') {
             let start = Instant::now();
-            let (traces, name) = read_waveform(std::path::Path::new(path)).unwrap();
+            let (traces, name, _) = read_waveform(std::path::Path::new(path)).unwrap();
             assert!(!traces.is_empty());
             for trace in traces {
                 assert!(trace.v.len() >= 2 && trace.dt.is_finite() && trace.dt > 0.0 && trace.t0.is_finite());

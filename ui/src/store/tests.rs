@@ -9,6 +9,7 @@ use super::*;
 use crate::model::*;
 use crate::wave::Record;
 use oos_dsp::decode::Parity;
+use oos_store::testkit::wfm_f32;
 use std::path::{Path, PathBuf};
 
 // oos-plus: the refusals of upstream #178 and #219 and of ADR 0009, as the fork tests them
@@ -653,32 +654,6 @@ fn oos_bin_and_wfm_round_trip() {
     assert_eq!(parse_wave(&old, "old.wfm").unwrap()[0].v, v);
     let two = wfm_f32(b":WFM#002", 0.0, 2e-9, &v, "two");
     assert_eq!(parse_wave(&two, "two.wfm").unwrap()[0].label, "two");
-}
-
-/// A short Tek WFM curve of f32 samples, little endian.
-pub(super) fn wfm_f32(magic: &[u8; 8], t0: f64, dt: f64, v: &[f32], label: &str) -> Vec<u8> {
-    let (explicit, implicit, specification, curve) =
-        if magic == b":WFM#001" { (166, 478, 790, 820) } else { (168, 488, 808, 838) };
-    let mut b = vec![0u8; curve + v.len() * 4 + 8];
-    b[0..2].copy_from_slice(&0x0F0Fu16.to_le_bytes());
-    b[2..10].copy_from_slice(magic);
-    b[15] = 4;
-    b[16..20].copy_from_slice(&(curve as i32).to_le_bytes());
-    let lab = label.as_bytes();
-    b[40..40 + lab.len()].copy_from_slice(lab);
-    let put_f64 = |b: &mut [u8], o: usize, x: f64| b[o..o + 8].copy_from_slice(&x.to_le_bytes());
-    let put_u32 = |b: &mut [u8], o: usize, x: u32| b[o..o + 4].copy_from_slice(&x.to_le_bytes());
-    put_f64(&mut b, explicit, 1.0);
-    put_f64(&mut b, explicit + 8, 0.0);
-    put_u32(&mut b, explicit + 72, 4);
-    put_f64(&mut b, implicit, dt);
-    put_f64(&mut b, implicit + 8, t0);
-    put_u32(&mut b, specification + 14, 0);
-    put_u32(&mut b, specification + 18, (v.len() * 4) as u32);
-    for (k, &x) in v.iter().enumerate() {
-        b[curve + k * 4..curve + k * 4 + 4].copy_from_slice(&x.to_le_bytes());
-    }
-    b
 }
 
 #[test]

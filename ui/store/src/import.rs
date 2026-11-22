@@ -10,8 +10,27 @@ use super::*;
 /// `OOSW`; `PWWF0001` or `TKWF0001`; `:WFM#001`, `:WFM#002` or `:WFM#003`; `:WFMPRE:`; `WAVEDESC`; cookie `AG` or `RG`;
 /// a `$&%#` block (`9601`, `9007`, or `2001`) or a `Title:` / `Plotname:` transient (`Binary:` or `Values:`);
 /// XML `WaveformInternal` or `WaveformPatternInternal`; a Siglent header of version 2, 3, 4 or 6; the first bytes of a RIGOL
+/// file; a zip archive that is the session of another instrument (`tss.rs`), for its analog waveforms.
 /// Anything else is refused.
 pub fn parse_wave(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
+    parse_wave_noted(bytes, name).map(|(traces, _)| traces)
+}
+
+/// `parse_wave`, and with the traces what the file holds that was not read, in words for the message of the load
+/// ("not read: 2 digital waveforms"; empty when all of it was). Only a session archive has such parts so far.
+pub fn parse_wave_noted(bytes: &[u8], name: &str) -> Result<(Vec<WaveTrace>, String), String> {
+    if bytes.len() <= MAX_WAVEFORM_BYTES && crate::zip::looks_zip(bytes) {
+        return crate::tss::tss_waves(bytes);
+    }
+    one_wave_file(bytes, name).map(all_read)
+}
+
+/// The traces of a file all of which was read, for a reader that tells what it left out.
+pub(super) fn all_read(traces: Vec<WaveTrace>) -> (Vec<WaveTrace>, String) {
+    (traces, String::new())
+}
+
+pub(super) fn one_wave_file(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, String> {
     if bytes.len() > MAX_WAVEFORM_BYTES {
         return Err("waveform exceeds the 128 MiB import limit".into());
     }

@@ -313,25 +313,5 @@ fn waveform_word_is_little_endian_and_page_metadata_has_the_page_origin() {
 }
 
 fn wfm_bytes() -> Vec<u8> {
-    const CURVE: usize = 838;
-    let v = [0.0_f32, 0.5, 1.0, -0.25];
-    let mut b = vec![0u8; CURVE + v.len() * 4 + 8];
-    b[0..2].copy_from_slice(&0x0F0Fu16.to_le_bytes());
-    b[2..10].copy_from_slice(b":WFM#002");
-    b[15] = 4;
-    b[16..20].copy_from_slice(&(CURVE as i32).to_le_bytes());
-    b[40..44].copy_from_slice(b"lane");
-    let put_f64 = |b: &mut [u8], o: usize, x: f64| b[o..o + 8].copy_from_slice(&x.to_le_bytes());
-    let put_u32 = |b: &mut [u8], o: usize, x: u32| b[o..o + 4].copy_from_slice(&x.to_le_bytes());
-    put_f64(&mut b, 168, 1.0);
-    put_f64(&mut b, 176, 0.0);
-    put_u32(&mut b, 240, 4);
-    put_f64(&mut b, 488, 1e-9);
-    put_f64(&mut b, 496, 0.0);
-    put_u32(&mut b, 822, 0);
-    put_u32(&mut b, 826, (v.len() * 4) as u32);
-    for (k, &x) in v.iter().enumerate() {
-        b[CURVE + k * 4..CURVE + k * 4 + 4].copy_from_slice(&x.to_le_bytes());
-    }
-    b
+    oos_store::testkit::wfm_f32(b":WFM#002", 0.0, 1e-9, &[0.0, 0.5, 1.0, -0.25], "lane")
 }

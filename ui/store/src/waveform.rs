@@ -158,7 +158,7 @@ pub fn read_waveform_file(p: &Path) -> Result<Vec<u8>, String> {
 /// Extensions shown by native and browser waveform import. The header chooses the parser.
 /// `.txt` is not one of them though a Keysight Y-values file has it: the setups are `.txt` too, and a list of
 /// waveforms would show them. Such a file is opened by name, from All files, or by dropping it.
-pub const WAVE_EXTS: &[&str] = &["wfm", "bin", "csv", "trc", "isf", "tr0", "wfmx", "pwwf", "tkwf"];
+pub const WAVE_EXTS: &[&str] = &["wfm", "bin", "csv", "trc", "isf", "tr0", "wfmx", "pwwf", "tkwf", "tss"];
 
 /// The time base and length every reader of an OOSW record asks for: two samples or more, a finite start and a finite
 /// step above zero. Indexing, cursors and measurements divide by the step and add to the start.

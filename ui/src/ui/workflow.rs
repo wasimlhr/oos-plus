@@ -74,6 +74,41 @@ mod slot_loading_tests {
         assert_eq!(ui.m.run, RunState::Stop);
     }
 
+    /// The session archive of another instrument loaded as a waveform file (`store::parse_wave`, docs/tss.md): its
+    /// analog waveforms go into the slots from the chosen one on, the record of a channel first, each named as the
+    /// settings name it, and the message says what was not read. The record is deflated here with the fixed codes
+    /// and the matches of the PNG writer; the archive inside it with dynamic codes.
+    #[test]
+    fn a_session_archive_gives_its_waveforms_to_the_slots_and_says_what_it_left_out() {
+        use oos_store::testkit::{tss_set, wfm_f32, zip, ZipFile};
+        let dir = crate::ui::testkit::Scratch::new("tss-waves");
+        std::fs::create_dir_all(&*dir).unwrap();
+        let steps: Vec<f32> = (0..3000).map(|k| (k / 250) as f32 * 0.25).collect();
+        let ch2 = wfm_f32(b":WFM#003", -1.5e-6, 1e-9, &steps, "");
+        let mut bits = wfm_f32(b":WFM#003", 0.0, 1e-9, &[0.0, 1.0, 1.0, 0.0], "");
+        bits[122] = 6;
+        let edge = wfm_f32(b":WFM#003", -2e-9, 1e-9, &[0.0, 0.5, 1.0, 1.0], "");
+        let set = tss_set(":CH2:LABEL:NAME \"Rail\"\n", &[(4, "edge.wfm", edge), (5, "bits.wfm", bits)]);
+        let packed = crate::gfx::png::deflate_rows(&ch2, 64);
+        assert!(packed.len() < ch2.len() / 4, "matches, not literals: {} of {}", packed.len(), ch2.len());
+        let record = ZipFile { name: "ch2.wfm", data: &ch2, deflated: Some(packed), late: true };
+        let file = dir.join("bench.tss");
+        std::fs::write(&file, zip(&[ZipFile::stored("bench.set", &set), record])).unwrap();
+
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.ref_page.sel = 2;
+        ui.ref_load_named(file.to_str().unwrap()).unwrap();
+        let (rail, edge) = (ui.refs[2].as_ref().unwrap(), ui.refs[3].as_ref().unwrap());
+        assert_eq!((rail.label.as_str(), rail.v.len(), rail.dt, rail.t0), ("Rail", 3000, 1e-9, -1.5e-6));
+        assert_eq!(rail.v[..], steps[..]);
+        assert_eq!((edge.label.as_str(), &edge.v[..]), ("edge", &[0.0, 0.5, 1.0, 1.0][..]));
+        assert!(ui.refs[4].is_none(), "the logic waveform is no trace");
+        assert_eq!(ui.toast.as_ref().unwrap().0, "Loaded bench.tss into R3 (not read: 1 digital waveform)");
+        // the Reference menu's Load file says it in its own words
+        ui.ref_load_path(&file);
+        assert_eq!(ui.toast.as_ref().unwrap().0, "R3 loaded from bench.tss (not read: 1 digital waveform)");
+    }
+
     #[test]
     fn live_overlay_fit_reuses_bounded_selected_record_fit_and_keeps_adc_acquisition() {
         let mut ui = crate::ui::testkit::demo_ui();
@@ -791,6 +826,13 @@ stat.push(value, current);
     pub fn load_waveform_auto(&mut self, data: &[u8], name: &str) -> Result<(), String> {
         let traces = crate::store::parse_wave(data, name)?;
         self.commit_waveform_traces(traces, name, true)
+    }
+
+    /// Adds what a file holds that its load did not read (`store::parse_wave_noted`) to the message of the load.
+    pub fn toast_left_out(&mut self, left_out: &str) {
+        if let (false, Some((text, _))) = (left_out.is_empty(), self.toast.as_mut()) {
+            *text = format!("{text} ({left_out})");
+        }
     }
 
     /// Main-thread commit for a native file parsed by the import worker. Validate

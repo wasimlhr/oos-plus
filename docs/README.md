@@ -27,6 +27,8 @@ and in our own words. The code of OOS is written to them
 - [models.md](models.md): model identity, capabilities, limits, overclocking, `/oos/limits.conf` and unit profiles.
 - [scpi.md](scpi.md): the SCPI reference: transports, syntax, every command OOS answers.
 - [http.md](http.md): the HTTP reference: every route of the web remote and the MCP tools, with their marks.
+- [tss.md](tss.md): the session files of another instrument (`.tss`): what the file looks like, how that is known,
+  and what OOS reads of it.
 - [reference-analysis.md](reference-analysis.md): loaded waveforms, zoom, the measurement page and automatic analysis
   (eye, jitter, serial decoding of references).
 - [protocol-modules.md](protocol-modules.md): adding a protocol decoder as a module: one file, one registration.

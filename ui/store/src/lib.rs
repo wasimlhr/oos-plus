@@ -24,14 +24,18 @@ use std::path::{Path, PathBuf};
 
 #[cfg(test)]
 mod header_import_tests;
+#[cfg(test)]
+mod tss_tests;
 mod import;
 mod paths;
 mod readers;
 mod setup_read;
+mod tss;
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkit;
 pub mod views;
 mod waveform;
+mod zip;
 pub use import::*;
 pub use paths::*;
 pub use readers::*;

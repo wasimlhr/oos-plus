@@ -5,13 +5,13 @@
 //! files, mask files, setup files and the power-on picture. Each test states the contract it holds the reader to;
 //! the generator and the list of findings that still stand are in `crate::hostile`.
 
-use super::tests::{custom, wfm_f32};
+use super::tests::custom;
 use super::*;
 use crate::gfx::Canvas;
 use crate::hostile::run;
 use crate::model::*;
 use crate::wave::Record;
-use oos_store::testkit::{ag_f32, isf_i16, raw_f64, tr0_f32, wavedesc_i16, wfmx_f32};
+use oos_store::testkit::{ag_f32, isf_i16, raw_f64, tr0_f32, tss, tss_set, wavedesc_i16, wfm_f32, wfmx_f32, zip, ZipFile};
 
 /// A record of two channels, as a capture stores it.
 fn record() -> (Record, Model) {
@@ -96,6 +96,63 @@ fn hostile_waveform_files() {
         Err(e) if e.is_empty() => Err("refused without a message".into()),
         Err(_) => Ok(()),
     });
+}
+
+/// A session archive of another instrument (docs/tss.md) with the record of a channel and a reference, and the
+/// place of its list of entries and of its end record.
+fn session_archive() -> (Vec<u8>, usize, usize) {
+    let v = [0.0_f32, 1.0, -0.5, 0.25, 0.75, -1.0];
+    let wfm = |t0: f64| wfm_f32(b":WFM#003", t0, 1e-9, &v, "");
+    let b = tss(":CH1:LABEL:NAME \"clock\"\n", &[(1, "edge.wfm", wfm(-2e-9))], &[("ch1.wfm", wfm(-3e-9))]);
+    let end = b.len() - 22;
+    let list = u32::from_le_bytes([b[end + 16], b[end + 17], b[end + 18], b[end + 19]]) as usize;
+    (b, list, end)
+}
+
+/// `parse_wave` of a session archive (a zip with a zip in it, `store::zip`): returns for any bytes; what it accepts
+/// is traces as of every other file; what it refuses has a message.
+#[test]
+fn hostile_session_archives() {
+    let (deflated, _, _) = session_archive();
+    let stored = zip(&[ZipFile::stored("s.set", &tss_set("", &[])), ZipFile::stored("ch2.wfm", &wfm_f32(b":WFM#003", 0.0, 1e-9, &[1.0; 8], ""))]);
+    run("store::parse_wave (archive)", &[&deflated, &stored], 1, |b| match parse_wave(b, "hostile.tss") {
+        Ok(traces) if traces.is_empty() => Err("accepted an archive without a trace".into()),
+        Ok(traces) => traces.iter().try_for_each(trace_ok),
+        Err(e) if e.is_empty() => Err("refused without a message".into()),
+        Err(_) => Ok(()),
+    });
+}
+
+// Break it catches: an archive whose list of entries is believed (sizes, places, kinds) before it is checked
+#[test]
+fn hostile_archive_is_refused_with_its_reason() {
+    let (good, list, end) = session_archive();
+    assert_eq!(parse_wave(&good, "a.tss").unwrap().len(), 2);
+    let refused = |at: usize, patch: &[u8]| {
+        let mut b = good.clone();
+        b[at..at + patch.len()].copy_from_slice(patch);
+        parse_wave(&b, "a.tss").unwrap_err()
+    };
+    // the entries of the list: the picture, the settings archive, the record of the channel
+    let set = list + 46 + "shot.png".len();
+    let ch1 = set + 46 + "bench.set".len();
+    for cut in [0, 3, 4, 100, list - 1, list, list + 40, end, end + 21] {
+        assert!(!parse_wave(&good[..cut], "a.tss").unwrap_err().is_empty(), "cut at {cut}");
+    }
+    assert!(refused(list - 20, &[0xFF]).contains("check sum"), "a byte of the record changed");
+    assert!(refused(set + 16, &[0xFF]).contains("check sum"), "the check sum of the settings archive changed");
+    assert!(refused(ch1 + 24, &[0, 0, 0, 0x10]).contains("import limit"), "a record of 256 MiB");
+    assert_eq!(refused(ch1 + 24, &[0xFF; 4]), "zip64 archives are not read");
+    assert_eq!(refused(end + 8, &[0xFF; 4]), "zip64 archives are not read");
+    assert!(refused(set + 8, &[1]).contains("encrypted"));
+    assert!(refused(ch1 + 10, &[9]).contains("method 9"));
+    assert!(refused(ch1 + 42, &[0xFF, 0xFF, 0xFF, 0x7F]).contains("cut short"), "a record that begins past the file");
+    assert!(refused(ch1 + 46, b"../").contains("leaves the archive"));
+    // more entries than are read, and an archive three deep
+    let many: Vec<ZipFile> = (0..300).map(|_| ZipFile::stored("x.wfm", b"")).collect();
+    assert!(parse_wave(&zip(&many), "a.tss").unwrap_err().contains("300 entries"));
+    let deep = zip(&[ZipFile::stored("a.set", &zip(&[ZipFile::stored("b.set", &good)]))]);
+    assert!(parse_wave(&deep, "a.tss").unwrap_err().contains("an archive in an archive in an archive"));
 }
 
 // Break it catches: a CSV time base taken without the check of the binary readers (#181)
