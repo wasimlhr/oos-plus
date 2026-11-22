@@ -632,7 +632,7 @@ mod tests {
         let k = u.options(Item::StoreFile).iter().position(|n| n == "faster scope.tss").unwrap();
         u.activate(Item::PickOpt(k));
         let said = u.toast.as_ref().unwrap().0.clone();
-        assert_eq!(said, "Loaded faster scope.tss: waveforms, scales and time base, without its trigger, buses, measurements and maths; not read: 1 digital waveform");
+        assert_eq!(said, "Loaded faster scope.tss: waveforms, scales, time base and filters, without its trigger, buses, measurements, other maths; not read: 1 digital waveform");
         assert!(u.fonts().mb.width(&said) + 44 <= W, "the message fits the screen");
 
         // the record: both channels, every sample, on the time axis of the files

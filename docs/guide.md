@@ -345,7 +345,7 @@ under the name the session gives it, and the message of the load says what was n
 around its centre frequency, so its spectrum shows the span of the view. The same file loads as a session under Storage > Load session,
 `:LOAD:SESSion`, `--open` or dropped on the window: its channel records become the record on CH1 to CH4 at full
 length with their scales and the time base, its references go into the slots of their numbers, and the scope
-stops on it; its trigger, buses, measurements and maths are not read, and the message says so.
+stops on it; its trigger, buses, measurements and maths other than filters are not read, and the message says so.
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Run simulation mode** plays the signal the SIM knobs describe; **Play references** plays the references that are shown
 (loaded files, signals added to a slot) as the acquisition instead.
