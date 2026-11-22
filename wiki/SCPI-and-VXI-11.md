@@ -321,7 +321,7 @@ Values are in base units, phase in degrees, duty and overshoot in percent. `*OPC
 | `:SPECtrum:ITEM? <item>[,src]` | `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`; `F1` to `ENOB` are `9.9E37` when there is only noise |
 | `:SPECtrum:RBW:ACTual?` | the resolution bandwidth the spectrum uses (a short time base makes it coarser than the one set), also with the Spectrum page closed |
 | `:SPECtrum:PEAK:LIST?` | the spectrum's lines: `frequency,level;...` in Hz and dBV, the lines above the noise in the page's span, up to the Harmonics row, also with the Spectrum page closed |
-| `:POWer:ITEM? <item>[,V,I]` | `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND`, `RDSON`, ripple items |
+| `:POWer:ITEM? <item>[,V,I]` | `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND`, `ETOT`, `PLOSS`, `FSW`, `RDSON`, ripple items |
 | `:POWer:HARMonics? [src]` | harmonic number and amplitude pairs, `;`-separated |
 | `:MAGnetic:ITEM? <item>[,V,I]` | `L`, `B`, `H`, `MUR`, `LOSS` (needs the core geometry) |
 | `:INVerter:ITEM? <item>[,src...]` | the inverter page's results |

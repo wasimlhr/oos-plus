@@ -183,14 +183,64 @@ pub struct Transition {
     pub energy: f64,
 }
 
+/// The mean, the extremes, the standard deviation and the count of a list of values; NaN and 0 for an empty list.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Stat {
+    pub mean: f64,
+    pub min: f64,
+    pub max: f64,
+    pub sd: f64,
+    pub n: usize,
+}
+
+impl Default for Stat {
+    fn default() -> Stat {
+        Stat { mean: f64::NAN, min: f64::NAN, max: f64::NAN, sd: f64::NAN, n: 0 }
+    }
+}
+
+impl Stat {
+    /// The statistics of the finite values of `x`.
+    pub fn of(x: &[f64]) -> Stat {
+        let x: Vec<f64> = x.iter().copied().filter(|v| v.is_finite()).collect();
+        if x.is_empty() {
+            return Stat::default();
+        }
+        let n = x.len() as f64;
+        let mean = x.iter().sum::<f64>() / n;
+        let sd = (x.iter().map(|v| (v - mean) * (v - mean)).sum::<f64>() / n).sqrt();
+        Stat {
+            mean,
+            min: x.iter().copied().fold(f64::INFINITY, f64::min),
+            max: x.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+            sd,
+            n: x.len(),
+        }
+    }
+
+    /// Every value times `k`, as a loss in W from an energy in J at a switching frequency of `k` Hz.
+    pub fn times(self, k: f64) -> Stat {
+        Stat { mean: self.mean * k, min: self.min * k, max: self.max * k, sd: self.sd * k.abs(), n: self.n }
+    }
+}
+
 /// Switching loss summary.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Switching {
     /// mean turn-on / turn-off energy per transition, J
     pub e_on: f64,
     pub e_off: f64,
-    /// mean conduction energy per on interval (end of turn-on .. start of turn-off), J
+    /// mean conduction energy per on interval (end of turn-on .. start of turn-off), J. A voltage under 0 V while the
+    /// switch conducts (a zero offset of the probe) dissipates nothing and counts as 0 V.
     pub e_cond: f64,
+    /// the energies of each event, with their statistics; `total` is the sum of the turn-on, the turn-off and the
+    /// conduction energy of each cycle
+    pub on: Stat,
+    pub off: Stat,
+    pub cond: Stat,
+    pub total: Stat,
+    /// switching frequency, Hz: the turn-ons per second of the record; NaN with fewer than two
+    pub f_sw: f64,
     /// mean of v·i over the record, W
     pub p_avg: f64,
     /// least-squares slope of Vds between the 10 % and 90 % levels, rising and falling edges, V/s
@@ -261,6 +311,7 @@ pub fn switching(vds: &[f32], id: &[f32], dt: f64, thr_pct: f64) -> Switching {
         didt_rise: f64::NAN,
         didt_fall: f64::NAN,
         rds_on: f64::NAN,
+        f_sw: f64::NAN,
         ..Switching::default()
     };
     if n < 4 || !(dt > 0.0) {
@@ -286,6 +337,10 @@ pub fn switching(vds: &[f32], id: &[f32], dt: f64, thr_pct: f64) -> Switching {
     let ev = edges(vds, (vb + 0.5 * va) as f32, (0.1 * va) as f32);
     let mut on_end: Option<f64> = None;
     let (mut e_on, mut e_off, mut e_cond, mut rds) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    // the conduction interval is read with the voltage that can dissipate: under 0 V counts as 0 V
+    let vc: Vec<f32> = vds.iter().map(|&v| if v < 0.0 { 0.0 } else { v }).collect();
+    let pc: Vec<f64> = p.iter().zip(vds).map(|(&p, &v)| if v < 0.0 { 0.0 } else { p }).collect();
+    let mut on_starts: Vec<f64> = Vec::new();
     for (k, e) in ev.iter().enumerate() {
         let ra = if k == 0 { 0 } else { ((ev[k - 1].t + e.t) / 2.0) as usize };
         let rb = if k + 1 < ev.len() { ((e.t + ev[k + 1].t) / 2.0) as usize + 1 } else { n };
@@ -306,11 +361,12 @@ pub fn switching(vds: &[f32], id: &[f32], dt: f64, thr_pct: f64) -> Switching {
         if turn_on {
             e_on.push(en);
             on_end = Some(end);
+            on_starts.push(start);
         } else {
             e_off.push(en);
             if let Some(s) = on_end.take() {
-                e_cond.push(integrate(&p, s, start, dt));
-                if let Some(r) = conduction_r(&vds[..n], &id[..n], s, start, ia) {
+                e_cond.push(integrate(&pc, s, start, dt));
+                if let Some(r) = conduction_r(&vc[..n], &id[..n], s, start, ia) {
                     rds.push(r);
                 }
             }
@@ -321,6 +377,16 @@ pub fn switching(vds: &[f32], id: &[f32], dt: f64, thr_pct: f64) -> Switching {
     out.e_off = mean(&e_off);
     out.e_cond = mean(&e_cond);
     out.rds_on = mean(&rds);
+    (out.on, out.off, out.cond) = (Stat::of(&e_on), Stat::of(&e_off), Stat::of(&e_cond));
+    // a cycle is a turn-on, the conduction after it and the turn-off that ends it: the lists are in the order of the
+    // record, so the k-th of each belongs to one cycle where the record starts with a turn-on
+    let cycles = e_on.len().min(e_off.len()).min(e_cond.len());
+    let total: Vec<f64> = (0..cycles).map(|k| e_on[k] + e_off[k] + e_cond[k]).collect();
+    out.total = Stat::of(&total);
+    out.f_sw = match (on_starts.first(), on_starts.last()) {
+        (Some(&a), Some(&b)) if on_starts.len() >= 2 && b > a => (on_starts.len() - 1) as f64 / ((b - a) * dt),
+        _ => f64::NAN,
+    };
     out.dvdt_rise = edge_slope(vds, dt, &av, true);
     out.dvdt_fall = edge_slope(vds, dt, &av, false);
     out.didt_rise = edge_slope(id, dt, &ai, true);

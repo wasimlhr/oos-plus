@@ -149,3 +149,25 @@ fn ripple_on_a_dc_rail_leaves_the_dc_out_over_part_cycles() {
     let s = power::switching_ripple(&v, dt, 1e6);
     assert!(close(s.pp, 0.02, 4e-4), "{s:?}");
 }
+
+/// A voltage that stands under 0 V while the switch conducts (a zero offset of the probe, as a capture of another
+/// instrument has it) dissipates nothing: the conduction energy and RDS(on) are not negative; the energies of the
+/// transitions, their statistics and the switching frequency are read from the same record.
+#[test]
+fn a_negative_on_state_voltage_gives_no_negative_conduction_energy() {
+    let (t_i, t_v) = (50e-9, 100e-9);
+    let on = 1e-6;
+    let von = -0.6;
+    let vp = [(on, 10.0), (on + t_i, 10.0), (on + t_i + t_v, von), (on + 5e-6, von), (on + 5e-6 + t_v, 10.0)];
+    let ip = [(on, 0.0), (on + t_i, 0.4), (on + 5e-6 + t_v, 0.4), (on + 5e-6 + t_v + t_i, 0.0)];
+    let dt = 1e-9;
+    let vds = sample(|t| pwl(&vp, t % 10e-6), 0.0, dt, 60_000);
+    let id = sample(|t| pwl(&ip, t % 10e-6), 0.0, dt, 60_000);
+    let s = power::switching(&vds, &id, dt, 10.0);
+    assert!(s.e_cond >= 0.0 && s.e_cond < 1e-9, "conduction energy {}", s.e_cond);
+    assert!(s.rds_on >= 0.0 && s.rds_on < 0.1, "RDS(on) {}", s.rds_on);
+    assert!(s.e_on > 0.0 && s.e_off > 0.0, "{} {}", s.e_on, s.e_off);
+    assert!(s.on.n >= 5 && s.off.n >= 5 && s.on.min <= s.on.mean && s.on.mean <= s.on.max, "{:?}", s.on);
+    assert!(close(s.f_sw, 100e3, 2e3), "switching frequency {}", s.f_sw);
+    assert!(close(s.total.mean, s.e_on + s.e_off + s.e_cond, 0.05 * s.total.mean), "{:?} {} {}", s.total, s.e_on, s.e_off);
+}

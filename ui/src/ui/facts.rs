@@ -94,7 +94,7 @@ impl Ui {
                     _ => miss,
                 }
             }
-            "EON" | "EOFF" | "ECOND" | "PAVG" | "DVDTR" | "DVDTF" | "DIDTR" | "DIDTF" | "RDSON" => {
+            "EON" | "EOFF" | "ECOND" | "ETOT" | "PLOSS" | "FSW" | "PAVG" | "DVDTR" | "DVDTF" | "DIDTR" | "DIDTF" | "RDSON" => {
                 let (v, i) = Self::two_id(over, self.m.pw_v, self.m.pw_i)?;
                 let Some((_, dt, w, _)) = self.grid(&[v, i], &[]) else { return Ok(miss) };
                 let s = power::switching(&w[0], &w[1], dt, 10.0);
@@ -102,6 +102,9 @@ impl Ui {
                     "EON" => s.e_on,
                     "EOFF" => s.e_off,
                     "ECOND" => s.e_cond,
+                    "ETOT" => s.total.mean,
+                    "PLOSS" => s.total.mean * s.f_sw,
+                    "FSW" => s.f_sw,
                     "PAVG" => s.p_avg,
                     "DVDTR" => s.dvdt_rise,
                     "DVDTF" => s.dvdt_fall,

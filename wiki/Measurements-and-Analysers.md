@@ -253,6 +253,16 @@ GitHub issue.
 
 Harmonics in the Spectrum menu sets how far the view follows the signal, All shows the whole band. For exact amplitudes choose the Flattop window. The default Blackman window resolves more.
 
+### Power analysis, Switching
+
+Power analysis > Page > Switching reads the voltage across the switch (V) and the current through it (I) and lists
+the energies of every cycle: turn-on, turn-off and conduction, and their total. Each figure has its mean, minimum,
+maximum, standard deviation and the number of cycles, and each energy has the loss it makes at the switching
+frequency (the energy times the frequency). Under the table the voltage is plotted against the current, green in a
+turn-on, red in a turn-off. A voltage under 0 V while the switch conducts (a zero offset of the probe, as a capture of
+another instrument can have) dissipates nothing and counts as 0 V, so the conduction energy and RDS(on) are never
+negative. `:POWer:ITEM?` answers the same figures (`EON`, `EOFF`, `ECOND`, `ETOT`, `PLOSS`, `FSW`).
+
 ### Eye and jitter
 
 ![Eye](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/eye.png)

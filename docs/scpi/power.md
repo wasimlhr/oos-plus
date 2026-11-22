@@ -20,7 +20,7 @@ Part of the [SCPI reference](README.md).
 | `:POWer:FLINe` | Set / Query | Hz. Range 0.0 to 1e9. | `0.000000E+00` | Power > Line f | name not verified against the DHO guide |
 | `:POWer:FSWitch` | Set / Query | Hz. Range 0.0 to 1e9. | `0.000000E+00` | Power > Switch f | name not verified against the DHO guide |
 | `:POWer:REFerence` | Set / Query | Volts; 0 means none. | `0.000000E+00` | Power > Reference | name not verified against the DHO guide |
-| `:POWer:ITEM` | Query | `<item>[,V,I]` `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND`, `RDSON`; single-source ripple items also exist. | - | Power > Read power figures and harmonics | OOS extension |
+| `:POWer:ITEM` | Query | `<item>[,V,I]` `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND` (not negative: a voltage under 0 V while the switch conducts counts as 0 V), `ETOT` (total energy of a cycle), `PLOSS` (total loss, `ETOT` times `FSW`), `FSW` (switching frequency), `RDSON`; single-source ripple items also exist. | - | Power > Read power figures and harmonics | OOS extension |
 | `:POWer:HARMonics` | Query | `[source]` Semicolon-separated `index,amplitude` pairs; `9.9E37` when none. | `9.9E37` | Power > Read power figures and harmonics | OOS extension |
 
 ### Magnetic

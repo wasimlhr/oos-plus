@@ -107,6 +107,73 @@ impl Ui {
         )];
         l.extend(self.azr.power.iter().cloned());
         self.panel(cv, a.x + 20, a.y + 30, &l, TEXT);
+        if !self.azr.power_table.is_empty() {
+            let below = a.y + 30 + l.len() as i32 * 18 + 16;
+            let end = self.draw_power_table(cv, Rect::new(a.x + 20, below, a.w - 40, a.bottom() - below));
+            self.draw_power_trajectory(cv, Rect::new(a.x + 20, end + 10, a.w - 40, a.bottom() - end - 14));
+        }
+    }
+
+    /// The figures of the Switching page as a table in `r`: a header, a row for each figure with its mean, extremes,
+    /// standard deviation and count. Returns the bottom of the table.
+    fn draw_power_table(&self, cv: &mut Canvas, r: Rect) -> i32 {
+        let f = self.fonts();
+        const HEAD: [&str; 6] = ["Measurement", "Mean", "Min", "Max", "Std dev", "Count"];
+        let row_h = 20;
+        let name_w = (r.w * 26 / 100).max(150);
+        let cell_w = ((r.w - name_w) / 5).max(60);
+        let x_of = |c: usize| if c == 0 { r.x } else { r.x + name_w + (c as i32 - 1) * cell_w };
+        let fits = ((r.h / row_h) as usize).saturating_sub(1);
+        cv.round(Rect::new(r.x, r.y, r.w, row_h), 3, BTN, 255);
+        for (c, h) in HEAD.iter().enumerate() {
+            cv.text(&f.s, x_of(c) + 6, r.y + 15, h, DIM);
+        }
+        let mut y = r.y + row_h;
+        for (k, row) in self.azr.power_table.iter().take(fits.max(1)).enumerate() {
+            if k % 2 == 1 {
+                cv.round(Rect::new(r.x, y, r.w, row_h), 2, PANEL_BG, 120);
+            }
+            for (c, cell) in row.iter().enumerate() {
+                cv.text(&f.s, x_of(c) + 6, y + 15, cell, if cell == "-" { DIM } else { TEXT });
+            }
+            y += row_h;
+        }
+        y
+    }
+
+    /// The voltage against the current of the record in `r` (the Switching page): green in a turn-on, red in a
+    /// turn-off, the rest dim, with the range of each axis at its end.
+    fn draw_power_trajectory(&self, cv: &mut Canvas, r: Rect) {
+        if r.h < 90 || r.w < 160 || self.azr.power_traj.is_empty() {
+            return;
+        }
+        let f = self.fonts();
+        let g = Rect::new(r.x + 64, r.y + 6, r.w - 72, r.h - 28);
+        cv.round(g, 3, PANEL_BG, 200);
+        let pts = &self.azr.power_traj;
+        let range = |sel: fn(&(f32, f32, u8)) -> f32| {
+            let lo = pts.iter().map(sel).fold(f32::INFINITY, f32::min);
+            let hi = pts.iter().map(sel).fold(f32::NEG_INFINITY, f32::max);
+            (lo, if hi > lo { hi } else { lo + 1.0 })
+        };
+        let ((vl, vh), (il, ih)) = (range(|p| p.0), range(|p| p.1));
+        let (gw, gh) = ((g.w - 8) as f32, (g.h - 8) as f32);
+        for kind in [0u8, 1, 2] {
+            let col = match kind {
+                1 => GREEN,
+                2 => RED,
+                _ => DIM,
+            };
+            for &(v, i, k) in pts.iter().filter(|p| p.2 == kind) {
+                let (x, y) = (g.x + 4 + ((v - vl) / (vh - vl) * gw) as i32, g.bottom() - 4 - ((i - il) / (ih - il) * gh) as i32);
+                cv.blend(Rect::new(x, y, 2, 2), col, if k == 0 { 140 } else { 220 });
+            }
+        }
+        cv.text(&f.s, r.x, g.bottom() - 2, &si(il as f64, "A"), DIM);
+        cv.text(&f.s, r.x, g.y + 12, &si(ih as f64, "A"), DIM);
+        cv.text(&f.s, g.x, r.bottom() - 2, &si(vl as f64, "V"), DIM);
+        let top = format!("{}   V against I", si(vh as f64, "V"));
+        cv.text(&f.s, g.right() - f.s.width(&top), r.bottom() - 2, &top, DIM);
     }
 }
 
