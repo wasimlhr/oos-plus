@@ -85,7 +85,8 @@ fn files_to_open(args: &[String]) -> Vec<String> {
     files
 }
 
-/// Opens one file named on the command line. A session (`session-NNN.oss`) is loaded as Storage > Load session
+/// Opens one file named on the command line. A session (`session-NNN.oss`, or the session archive `.tss` of another
+/// instrument, by the first bytes of the file) is loaded as Storage > Load session
 /// does, replacing the setup, the record and every reference slot; a waveform goes into the first empty reference
 /// slots. The path is taken from where the program was started, not from the folder of the setups.
 pub(crate) fn open_file(ui: &mut Ui, file: &str) -> Result<(), String> {
@@ -96,7 +97,7 @@ pub(crate) fn open_file(ui: &mut Ui, file: &str) -> Result<(), String> {
         std::env::current_dir().map(|d| d.join(named)).unwrap_or_else(|_| named.to_path_buf())
     };
     let bytes = store::read_waveform_file(&path)?;
-    if store::looks_session(&bytes) {
+    if store::looks_session(&bytes) || store::looks_zip(&bytes) {
         return ui.session_load(&path.to_string_lossy());
     }
     // read where it lies: a waveform kept in two files finds its other file beside it

@@ -40,7 +40,9 @@ pub use import::*;
 pub use paths::*;
 pub use readers::*;
 pub use setup_read::*;
+pub use tss::parse_tss;
 pub use waveform::*;
+pub use zip::looks_zip;
 
 // ---------------------------------------------------------------------------------------------- setup files
 

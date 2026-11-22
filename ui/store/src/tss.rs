@@ -4,8 +4,10 @@
 //! oos-plus: the session archive of the PC program of another instrument (`.tss`; docs/tss.md says what is known of
 //! it and how, oos-plus ADR 0075 why it is read). A zip that holds a `.set` which is a zip itself, with the settings
 //! as a text of commands and the reference waveforms; the record of each channel lies beside the `.set` as
-//! `ch<n>.wfm`. Every waveform is a `:WFM#003` file (`parse_wfm`). Here: what an archive holds (`tss_parts`), and its
-//! analog waveforms as traces for the reference slots (`tss_waves`, a branch of `parse_wave`).
+//! `ch<n>.wfm`. Every waveform is a `:WFM#003` file (`parse_wfm`). Here: what an archive holds (`tss_parts`), its
+//! analog waveforms as traces for the reference slots (`tss_waves`, a branch of `parse_wave`), and the archive as a
+//! session of OOS (`parse_tss`): the records of the channels as the record, the references in their slots, and a
+//! setup text of OOS made from the few settings that are mapped.
 
 use super::*;
 use crate::zip::{base_name, looks_zip, Zip, ZipEntry};
@@ -70,6 +72,23 @@ impl Commands {
         let text: String = String::from_utf8_lossy(&out).chars().filter(|c| !c.is_control()).collect();
         Some(text.trim().to_string()).filter(|t| !t.is_empty())
     }
+
+    /// The argument of the first of `headers` that is there, as a number: None when none is, or it is no finite
+    /// number. A header has `{n}` where the number of the channel or the reference stands.
+    fn number(&self, headers: &[&str], n: usize) -> Option<f64> {
+        let raw = headers.iter().find_map(|h| self.0.get(&h.replace("{n}", &n.to_string())))?;
+        raw.trim().parse::<f64>().ok().filter(|x| x.is_finite())
+    }
+
+    /// The argument of the first of `headers` that is there, as a switch: `1` or `ON`, `0` or `OFF`.
+    fn on(&self, headers: &[&str], n: usize) -> Option<bool> {
+        let raw = headers.iter().find_map(|h| self.0.get(&h.replace("{n}", &n.to_string())))?;
+        match raw.trim().to_ascii_uppercase().as_str() {
+            "1" | "ON" => Some(true),
+            "0" | "OFF" => Some(false),
+            _ => None,
+        }
+    }
 }
 
 /// What of an archive was not read, counted: for the one line that tells the user.
@@ -83,12 +102,23 @@ pub(super) struct LeftOut {
     other: usize,
     /// references the archive names without their file
     missing: usize,
+    /// as a session: records of channels that are not on the time axis of the first, which a record of OOS needs
+    apart: usize,
+    /// as a session: records of channels and references with a number OOS has no channel or slot for
+    beyond: usize,
 }
 
 impl LeftOut {
     /// "not read: 2 digital and 1 IQ waveform", or nothing when all was read.
     pub(super) fn words(&self) -> String {
-        let kinds = [(self.digital, "digital"), (self.iq, "IQ"), (self.other, "other"), (self.missing, "missing")];
+        let kinds = [
+            (self.digital, "digital"),
+            (self.iq, "IQ"),
+            (self.other, "other"),
+            (self.missing, "missing"),
+            (self.apart, "differently timed"),
+            (self.beyond, "surplus"),
+        ];
         let parts: Vec<String> = kinds.iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
         let Some((last, first)) = parts.split_last() else { return String::new() };
         let list = if first.is_empty() { last.clone() } else { format!("{} and {last}", first.join(", ")) };
@@ -96,13 +126,15 @@ impl LeftOut {
     }
 }
 
-/// The analog waveforms of an archive. The label of a trace is the name the settings give it (`LABEL:NAME`), else
-/// the name of its file without the suffix.
+/// The settings and the analog waveforms of an archive, each waveform with the number of its channel or reference
+/// (from 1). The label of a trace is the name the settings give it (`LABEL:NAME`), else the name of its file without
+/// the suffix.
 pub(super) struct Tss {
+    commands: Commands,
     /// the records of the channels, in the order of their numbers
-    pub channels: Vec<WaveTrace>,
+    pub channels: Vec<(usize, WaveTrace)>,
     /// the references, in the order of their numbers
-    pub refs: Vec<WaveTrace>,
+    pub refs: Vec<(usize, WaveTrace)>,
     pub left: LeftOut,
 }
 
@@ -200,7 +232,7 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
             continue;
         };
         let label = commands.text(&format!(":REF:REF{number}:LABEL:NAME"));
-        refs.extend(wave(&inner, e, label, &mut budget, &mut left)?);
+        refs.extend(wave(&inner, e, label, &mut budget, &mut left)?.map(|trace| (number, trace)));
     }
     drop(inner);
     drop(set);
@@ -219,9 +251,9 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
     let mut channels = Vec::new();
     for (&number, e) in &files {
         let label = commands.text(&format!(":CH{number}:LABEL:NAME"));
-        channels.extend(wave(&outer, e, label, &mut budget, &mut left)?);
+        channels.extend(wave(&outer, e, label, &mut budget, &mut left)?.map(|trace| (number, trace)));
     }
-    Ok(Tss { channels, refs, left })
+    Ok(Tss { commands, channels, refs, left })
 }
 
 /// The analog waveforms of a session archive for the reference slots: the records of the channels in the order of
@@ -229,10 +261,160 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
 pub(super) fn tss_waves(bytes: &[u8]) -> Result<(Vec<WaveTrace>, String), String> {
     let tss = tss_parts(bytes)?;
     let note = tss.left.words();
-    let traces: Vec<WaveTrace> = tss.channels.into_iter().chain(tss.refs).collect();
-    match (traces.is_empty(), note.is_empty()) {
-        (false, _) => Ok((traces, note)),
-        (true, true) => Err("the session holds no waveform".into()),
-        (true, false) => Err(format!("the session holds no waveform that is read ({note})")),
+    let traces: Vec<WaveTrace> = tss.channels.into_iter().chain(tss.refs).map(|(_, trace)| trace).collect();
+    if traces.is_empty() {
+        return Err(no_waveform(&note));
     }
+    Ok((traces, note))
+}
+
+fn no_waveform(left_out: &str) -> String {
+    match left_out {
+        "" => "the session holds no waveform".into(),
+        _ => format!("the session holds no waveform that is read ({left_out})"),
+    }
+}
+
+// --------------------------------------------------------------------------------- the archive as a session
+
+// The settings that are mapped (docs/tss.md), by their headers: the first that is there counts, and `{n}` is the
+// number of the channel or the reference.
+const CH_SHOWN: &[&str] = &[":DISPLAY:GLOBAL:CH{n}:STATE", ":SELECT:CH{n}"];
+const CH_SCALE: &[&str] = &[":CH{n}:SCALE", ":DISPLAY:WAVEVIEW1:CH{n}:VERTICAL:SCALE"];
+const CH_POSITION: &[&str] = &[":CH{n}:POSITION", ":DISPLAY:WAVEVIEW1:CH{n}:VERTICAL:POSITION"];
+const CH_OFFSET: &[&str] = &[":CH{n}:OFFSET"];
+const REF_SHOWN: &[&str] = &[":DISPLAY:GLOBAL:REF{n}:STATE"];
+const REF_SCALE: &[&str] = &[":DISPLAY:WAVEVIEW1:REF:REF{n}:VERTICAL:SCALE"];
+const REF_POSITION: &[&str] = &[":DISPLAY:WAVEVIEW1:REF:REF{n}:VERTICAL:POSITION"];
+
+/// Volts a division and the volts added before display, for a waveform. From the settings when they give the scale:
+/// there a sample `v` stands `(v - offset) / scale + position` divisions above the middle, on OOS
+/// `(v + added) / scale`. Without a scale from the samples: they take at most six of the eight divisions, around a
+/// level that is a whole number of divisions, as a waveform loaded into a slot is fitted.
+fn vertical(scale: Option<f64>, position: Option<f64>, offset: Option<f64>, v: &[f32]) -> (f64, f64) {
+    if let Some(scale) = scale.filter(|s| *s > 0.0) {
+        return (scale, position.unwrap_or(0.0) * scale - offset.unwrap_or(0.0));
+    }
+    let ends = (f32::INFINITY, f32::NEG_INFINITY);
+    let (lo, hi) = v.iter().filter(|x| x.is_finite()).fold(ends, |(lo, hi), &x| (lo.min(x), hi.max(x)));
+    if !(lo <= hi) {
+        return (1.0, 0.0);
+    }
+    let want = ((hi - lo) as f64 / 6.0).max(1e-6);
+    let step = VSCALES.iter().map(|&s| s as f64).find(|&s| s >= want * 0.999).unwrap_or(want);
+    (step, -step * ((hi + lo) as f64 / 2.0 / step).round())
+}
+
+/// `value` as a step of `ladder` and a factor on it between `low` and `high` (1 on the step itself): the last step
+/// at or under the value for a factor from 1 up (volts a division), the first at or over it for one up to 1 (time).
+fn step_and_fine(ladder: &[f32], value: f64, low: f32, high: f32) -> (usize, f32) {
+    let step = if low < 1.0 {
+        ladder.iter().position(|&s| s as f64 >= value * 0.999).unwrap_or(ladder.len() - 1)
+    } else {
+        ladder.iter().rposition(|&s| s as f64 <= value * 1.001).unwrap_or(0)
+    };
+    let fine = (value / ladder[step] as f64) as f32;
+    (step, if (fine - 1.0).abs() < 1e-3 { 1.0 } else { fine.clamp(low, high) })
+}
+
+/// The window of the screen the settings give: the time a division and the time in its middle, the trigger at 0.
+/// Ten divisions of `:HORIZONTAL:SCALE` with the trigger at `:HORIZONTAL:POSITION` percent of them; with the delay
+/// on (`:HORIZONTAL:DELAY:MODE`, assumed: no session seen has it on) the middle is `:HORIZONTAL:DELAY:TIME` after
+/// the trigger.
+fn window(c: &Commands) -> Option<(f64, f64)> {
+    let per_div = c.number(&[":HORIZONTAL:SCALE"], 0).filter(|s| *s > 0.0)?;
+    let middle = match c.on(&[":HORIZONTAL:DELAY:MODE"], 0) {
+        Some(true) => c.number(&[":HORIZONTAL:DELAY:TIME"], 0)?,
+        _ => (50.0 - c.number(&[":HORIZONTAL:POSITION"], 0)?) / 100.0 * HDIV as f64 * per_div,
+    };
+    Some((per_div, middle))
+}
+
+/// Sets the time base for `n` samples from `t0` on: `window` when it lies in them, else all of them on the screen.
+fn time_base(m: &mut Model, window: Option<(f64, f64)>, t0: f64, dt: f64, n: usize) {
+    let span = n as f64 * dt;
+    let inside = |&(per_div, middle): &(f64, f64)| {
+        let half = per_div * HDIV as f64 / 2.0;
+        middle - half >= t0 - 0.02 * half && middle + half <= t0 + span + 0.02 * half
+    };
+    let (per_div, middle) = window.filter(inside).unwrap_or((span / HDIV as f64, t0 + span / 2.0));
+    (m.tscale, m.tfine) = step_and_fine(&tscales(), per_div, 0.1, 1.0);
+    m.delay = middle as f32;
+}
+
+/// What a load as a session says it took and left, in front of the waveforms it did not read.
+const TSS_MAPPED: &str = "waveforms, scales and time base, without its trigger, buses, measurements and maths";
+
+/// A session archive as a session of OOS (`Session`, what `parse_session` gives of OOS's own file), so that the
+/// load of a session applies it down its one path. The records of the channels 1 to 4 become the record, at their
+/// full length: those on the time axis of the first (same start, step and length), the others are left out and
+/// counted. The references go into the slots of their numbers. The setup is the default one with what is mapped
+/// (docs/tss.md): which channels are shown, their volts a division, offset and name, the time base, and the look of
+/// each reference; a value the settings do not give is taken from the samples (`vertical`, `time_base`). A session
+/// without a record fills the screen with its first reference (`offline_ref`).
+pub fn parse_tss<R: Samples>(bytes: &[u8], slots: usize) -> Result<Session<R>, String> {
+    if bytes.len() > MAX_WAVEFORM_BYTES {
+        return Err("the session exceeds the 128 MiB import limit".into());
+    }
+    let Tss { commands, channels, refs, mut left } = tss_parts(bytes)?;
+    let mut m = Model::default();
+    m.ch.iter_mut().for_each(|ch| ch.on = false);
+    let mut record: Option<(f64, f64, usize, [Vec<f32>; NCH])> = None;
+    for (n, trace) in channels {
+        let axis = (trace.t0, trace.dt, trace.v.len());
+        if n > NCH {
+            left.beyond += 1;
+            continue;
+        }
+        if record.as_ref().is_some_and(|(t0, dt, len, _)| axis != (*t0, *dt, *len)) {
+            left.apart += 1;
+            continue;
+        }
+        let (scale, position) = (commands.number(CH_SCALE, n), commands.number(CH_POSITION, n));
+        let (vdiv, added) = vertical(scale, position, commands.number(CH_OFFSET, n), &trace.v);
+        let ch = &mut m.ch[n - 1];
+        ch.on = commands.on(CH_SHOWN, n) != Some(false);
+        (ch.vscale, ch.vfine) = step_and_fine(&VSCALES, vdiv, 1.0, 2.5);
+        (ch.offset, ch.probe) = (added as f32, 1.0);
+        // (the name of the trace is that of its file when the settings give none: no name of a channel)
+        let name = commands.text(&format!(":CH{n}:LABEL:NAME")).unwrap_or_default();
+        m.ch_label[n - 1] = name.chars().take(10).collect();
+        record.get_or_insert_with(|| (axis.0, axis.1, axis.2, Default::default())).3[n - 1] = trace.v;
+    }
+    let mut looks: Vec<Option<RefLook>> = vec![None; slots];
+    let mut held = Vec::new();
+    for (n, trace) in refs {
+        if n > slots {
+            left.beyond += 1;
+            continue;
+        }
+        let (vdiv, added) = vertical(commands.number(REF_SCALE, n), commands.number(REF_POSITION, n), None, &trace.v);
+        let (on, vdiv, offset) = (Some(commands.on(REF_SHOWN, n) != Some(false)), Some(vdiv as f32), Some(added as f32));
+        looks[n - 1] = Some(RefLook { on, vdiv, offset, color: None, label: Some(trace.label) });
+        held.push(SessionRef { slot: n - 1, src: 0, t0: trace.t0, dt: trace.dt, v: trace.v });
+    }
+    let words = left.words();
+    // the time base: of the record; without one of the first reference, which then fills the screen
+    let offline_ref = match (&record, held.first()) {
+        (Some((t0, dt, n, _)), _) => {
+            time_base(&mut m, window(&commands), *t0, *dt, *n);
+            None
+        }
+        (None, Some(first)) => {
+            time_base(&mut m, None, first.t0, first.dt, first.v.len());
+            Some(first.slot)
+        }
+        (None, None) => return Err(no_waveform(&words)),
+    };
+    // the knobs and the trigger on a channel that is shown, when there is one
+    if let Some(first) = (0..NCH).find(|&c| m.ch[c].on) {
+        (m.active, m.trig_src) = (first, first);
+    }
+    Ok(Session {
+        setup: setup_text(&m) + &ref_setup_text(&looks),
+        record: record.map(|(t0, dt, _, ch)| R::from_file(t0, dt, ch)),
+        refs: held,
+        offline_ref,
+        note: if words.is_empty() { TSS_MAPPED.into() } else { format!("{TSS_MAPPED}; {words}") },
+    })
 }

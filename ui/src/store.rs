@@ -20,7 +20,7 @@ mod tests;
 // the picture files (PNG, PPM) are base (gfx::png); a setup or a screenshot saved by store writes them
 pub use crate::gfx::png::*;
 // in place of the readers of oos-store that take what modules.rs passes in
-pub use modules::{parse_ff, parse_session, parse_setup, parse_setup_lenient, set};
+pub use modules::{parse_ff, parse_session, parse_setup, parse_setup_lenient, parse_tss, set};
 #[cfg(test)]
 pub use modules::parse_wave_bin;
 pub use oos_store::*;

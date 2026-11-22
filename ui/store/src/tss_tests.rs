@@ -166,6 +166,124 @@ fn a_session_archive_without_a_waveform_to_read_or_without_a_session_says_so() {
     assert_eq!(refuse(&tss(SETUP, &[], &[("ch1.wfm", short[..400].to_vec())])), "ch1.wfm: truncated WFM");
 }
 
+/// A record as a session gives it.
+struct Rec {
+    t0: f64,
+    dt: f64,
+    ch: [Vec<f32>; NCH],
+}
+
+impl Samples for Rec {
+    fn t0(&self) -> f64 {
+        self.t0
+    }
+    fn dt(&self) -> f64 {
+        self.dt
+    }
+    fn ch(&self) -> &[Vec<f32>; NCH] {
+        &self.ch
+    }
+    fn from_file(t0: f64, dt: f64, ch: [Vec<f32>; NCH]) -> Self {
+        Rec { t0, dt, ch }
+    }
+}
+
+/// The value of `key` in a setup text of OOS, as a number (`true` is 1); None when the key is not there.
+fn set(session: &Session<Rec>, key: &str) -> Option<f64> {
+    let line = session.setup.lines().find_map(|l| l.strip_prefix(key).and_then(|rest| rest.strip_prefix(" = ")))?;
+    Some(line.parse().unwrap_or(if line == "true" { 1.0 } else { 0.0 }))
+}
+
+/// The value of `key` is `want`, to the six digits a setup text keeps of a 32-bit number.
+fn near(session: &Session<Rec>, key: &str, want: f64) {
+    let got = set(session, key).unwrap_or(f64::NAN);
+    assert!((got - want).abs() <= 1e-6 * want.abs().max(1e-12), "{key} = {got}, not {want}\n{}", session.setup);
+}
+
+#[test]
+fn a_session_archive_becomes_a_session_with_the_settings_that_are_mapped() {
+    // CH1 with its settings; CH2 with none, shown off; CH3 on another time axis; a channel and a reference OOS has
+    // no place for
+    let setup = ":CH1:SCALE 320.0000E-3\n:CH1:POSITION -3.7400\n:CH1:OFFSET 500.0000E-3\n:CH1:LABEL:NAME \"a%20long%20name%20here\"\n\
+        :DISPLAY:GLOBAL:CH1:STATE 1\n:DISPLAY:GLOBAL:CH2:STATE 0\n:SELECT:CH2 1\n:CH5:SCALE 1.0\n\
+        :HORIZONTAL:SCALE 200.0000E-12\n:HORIZONTAL:POSITION 25.0000\n:HORIZONTAL:DELAY:MODE 0\n:HORIZONTAL:DELAY:TIME 1.0\n\
+        :DISPLAY:WAVEVIEW1:REF:REF2:VERTICAL:SCALE 6.0000\n:DISPLAY:WAVEVIEW1:REF:REF2:VERTICAL:POSITION -1.5000\n\
+        :DISPLAY:GLOBAL:REF2:STATE 0\n:REF:REF2:LABEL:NAME \"Hall = A\"\n";
+    let other_axis = wfm_f32(b":WFM#003", -4e-9, 1e-9, &[0.0; 4], "");
+    let beside = [
+        ("ch1.wfm", wfm([0.1; 4])),
+        ("ch2.wfm", wfm([-1.0, 5.0, 2.0, 2.0])),
+        ("ch3.wfm", other_axis),
+        ("ch5.wfm", wfm([0.5; 4])),
+    ];
+    let refs = [(2, "hall.wfm", wfm([3.0; 4])), (7, "fit.wfm", wfm([0.0, 0.3, 0.3, 0.0])), (11, "far.wfm", wfm([0.0; 4]))];
+    let s: Session<Rec> = parse_tss(&tss(setup, &refs, &beside), 10).unwrap();
+    let rec = s.record.as_ref().unwrap();
+    assert_eq!((rec.t0, rec.dt), (-4e-9, 2e-9));
+    assert_eq!(rec.ch.each_ref().map(Vec::len), [4, 4, 0, 0], "CH1 and CH2 at their length, CH3 not on their axis");
+    assert_eq!(rec.ch[1], [-1.0, 5.0, 2.0, 2.0]);
+    let ending = "; not read: 1 differently timed and 2 surplus waveforms";
+    assert!(s.note.starts_with("waveforms, scales and time base, without") && s.note.ends_with(ending), "{}", s.note);
+    // 320 mV a division is the step of 200 mV times 1.6; the trace 3.74 divisions down after 0.5 V are taken off
+    for (key, want) in [("ch1.on", 1.0), ("ch1.vdiv", 0.2), ("ch1.vfine", 1.6), ("ch1.offset", -3.74 * 0.32 - 0.5), ("ch1.probe", 1.0)] {
+        near(&s, key, want);
+    }
+    assert!(s.setup.contains("\nch1.label = a long nam\n"), "ten characters of the name");
+    // no scale in the settings: 6 V of samples in six divisions of 1 V, around 2 V; shown off as the settings say
+    for (key, want) in [("ch2.on", 0.0), ("ch2.vdiv", 1.0), ("ch2.offset", -2.0), ("ch3.on", 0.0), ("ch4.on", 0.0)] {
+        near(&s, key, want);
+    }
+    assert_eq!(set(&s, "ch2.vfine"), None);
+    // the window of the settings lies in the record: 200 ps a division, the trigger a quarter in
+    for (key, want) in [("tdiv", 2e-10), ("delay", 5e-10), ("active", 0.0), ("trig_src", 0.0)] {
+        near(&s, key, want);
+    }
+    // the references: in the slots of their numbers, with the look of the settings or one fitted to the samples
+    let slots: Vec<(usize, usize, f64)> = s.refs.iter().map(|r| (r.slot, r.v.len(), r.dt)).collect();
+    assert_eq!((slots, s.offline_ref), (vec![(1, 4, 2e-9), (6, 4, 2e-9)], None));
+    for (key, want) in [("ref2.on", 0.0), ("ref2.vdiv", 6.0), ("ref2.offset", -9.0), ("ref7.on", 1.0), ("ref7.vdiv", 0.05), ("ref7.offset", -0.15)] {
+        near(&s, key, want);
+    }
+    assert!(s.setup.contains("\nref2.name = Hall = A\n") && s.setup.contains("\nref7.name = fit\n"));
+
+    // a window that is not in the record (the settings of another acquisition), and none: the whole record
+    for horizontal in [":HORIZONTAL:SCALE 4.0000E-3\n:HORIZONTAL:POSITION 50.0000\n", ""] {
+        let s: Session<Rec> = parse_tss(&tss(horizontal, &[], &[("ch4.wfm", wfm([0.0, 1.0, 0.0, 1.0]))]), 10).unwrap();
+        // 8 ns in ten divisions: the step of 1 ns times 0.8
+        for (key, want) in [("tdiv", 1e-9), ("tfine", 0.8), ("delay", 0.0)] {
+            near(&s, key, want);
+        }
+        assert_eq!((set(&s, "ch4.on"), set(&s, "ch1.on"), set(&s, "active"), s.note.contains("not read")), (Some(1.0), Some(0.0), Some(3.0), false));
+    }
+    // the delay switched on: the middle of the screen is that long after the trigger
+    let delayed = ":HORIZONTAL:SCALE 200.0000E-12\n:HORIZONTAL:POSITION 10.0\n:HORIZONTAL:DELAY:MODE ON\n:HORIZONTAL:DELAY:TIME -1.0E-9\n";
+    let s: Session<Rec> = parse_tss(&tss(delayed, &[], &[("ch1.wfm", wfm([0.0; 4]))]), 10).unwrap();
+    for (key, want) in [("tdiv", 2e-10), ("delay", -1e-9)] {
+        near(&s, key, want);
+    }
+}
+
+#[test]
+fn a_session_archive_of_references_only_shows_the_first_and_one_without_a_waveform_is_refused() {
+    let long = wfm_f32(b":WFM#003", -1e-3, 1e-6, &[0.5; 4000], "");
+    let refs = [(4, "b.wfm", wfm([0.0; 4])), (3, "a.wfm", long)];
+    let s: Session<Rec> = parse_tss(&tss(":HORIZONTAL:SCALE 1.0E-9\n:HORIZONTAL:POSITION 50.0\n", &refs, &[]), 10).unwrap();
+    assert!(s.record.is_none());
+    assert_eq!((s.offline_ref, s.refs.len(), s.refs[0].slot, s.refs[0].v.len()), (Some(2), 2, 2, 4000));
+    // the time base of that reference: 4 ms in ten divisions is the step of 500 us times 0.8, around 1 ms
+    for (key, want) in [("tdiv", 5e-4), ("tfine", 0.8), ("delay", 1e-3)] {
+        near(&s, key, want);
+    }
+    assert!((1..=NCH).all(|c| set(&s, &format!("ch{c}.on")) == Some(0.0)));
+
+    let refuse = |b: &[u8]| parse_tss::<Rec>(b, 10).err().unwrap();
+    assert_eq!(refuse(&tss(SETUP, &[], &[])), "the session holds no waveform");
+    assert_eq!(refuse(&tss(SETUP, &[], &[("ch1_iq.wfm", wfm([0.0; 4]))])), "the session holds no waveform that is read (not read: 1 IQ waveform)");
+    assert_eq!(refuse(&tss(SETUP, &[(12, "far.wfm", wfm([0.0; 4]))], &[])), "the session holds no waveform that is read (not read: 1 surplus waveform)");
+    assert!(refuse(&zip(&[ZipFile::stored("notes.txt", b"hello")])).contains("holds no session"));
+    assert!(refuse(b"PK\x03\x04").contains("cut short"));
+}
+
 /// The local check: every session archive under the folder `OOS_TSS_DIR` loads or is refused with a reason, and the
 /// counts are printed (`cargo test -p oos-store local_folder -- --nocapture`). Skipped when the variable is not
 /// set: the archives of an instrument are not part of the tree.

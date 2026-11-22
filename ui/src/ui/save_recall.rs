@@ -113,14 +113,18 @@ impl Ui {
         }
     }
 
-    /// Load session from the file `p`.
+    /// Load session from the file `p`: a session of OOS (`session-NNN.oss`), or by its first bytes the session archive
+    /// of another instrument (`.tss`, docs/tss.md), which comes as the same parts and says in the message what of it
+    /// was taken.
     pub(super) fn session_read(&mut self, p: std::path::PathBuf) -> Result<(), String> {
         let done = (|| {
             let data = crate::store::read_waveform_file(&p)?;
-            let session = crate::store::parse_session(&data, NREF)?;
+            let foreign = crate::store::looks_zip(&data);
+            let session = if foreign { crate::store::parse_tss(&data, NREF)? } else { crate::store::parse_session(&data, NREF)? };
+            drop(data);
             // checked before anything is changed: a file with a setup this build cannot read leaves the bench as it is
             crate::store::parse_setup(&session.setup)?;
-            let offline_ref = session.offline_ref;
+            let (offline_ref, note) = (session.offline_ref, session.note);
             if self.record_mode() {
                 self.leave_session();
             }
@@ -149,11 +153,16 @@ impl Ui {
             }
             self.measure_last();
             self.measure_refs();
-            Ok(p)
+            Ok((p, note))
         })();
         match done {
-            Ok(p) => {
+            Ok((p, note)) if note.is_empty() => {
                 self.toast(&format!("Loaded {}", crate::store::file_name(&p)));
+                Ok(())
+            }
+            Ok((p, note)) => {
+                // a long line, and one to read: it stays as long as three plain ones
+                self.toast = Some((format!("Loaded {}: {note}", crate::store::file_name(&p)), self.now + 7.5));
                 Ok(())
             }
             Err(e) => {

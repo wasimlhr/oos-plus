@@ -24,8 +24,8 @@ Part of the [SCPI reference](README.md).
 | `:SAVE:IMAGe` | Action | `["path"]` Screenshot as PNG, written after the next frame | - | Storage > Save screenshot | Rigol-compatible |
 | `:SAVE:FFRame` | Action | Save the fast-frame history (the next `frame-NNN.bin` in the save folder; the menu row asks for the name). | - | Storage > Save fast-frame | OOS extension |
 | `:LOAD:FFRame` | Action | Load the fast-frame history (the newest `frame-NNN.bin` of the save folder; the menu row lists the files). | - | Storage > Load fast-frame | OOS extension |
-| `:SAVE:SESSion` | Action | `["path"]` The setup, the record (every sample the acquisition kept, up to 1 M points; else the points of the screen) and the loaded reference slots as one file (`session-NNN.oss` in the save folder, or `"path"`) | - | Storage > Save session | OOS extension |
-| `:LOAD:SESSion` | Action | `["path"]` Load a session (the newest `session-NNN.oss`, or `"path"`): the scope stops and shows it; reference slots the file does not hold are emptied | - | Storage > Load session | OOS extension |
+| `:SAVE:SESSion` | Action | `["path"]` The setup, the record (every sample the acquisition kept, up to 1 M points; else the points of the screen) and the loaded reference slots as one file (`session-NNN.oss` in the save folder, or `"path"`). Always OOS's own file, also after a session of another instrument was loaded. | - | Storage > Save session | OOS extension |
+| `:LOAD:SESSion` | Action | `["path"]` Load a session (the newest `session-NNN.oss`, or `"path"`): the scope stops and shows it; reference slots the file does not hold are emptied. A path can name the session file of another instrument (`.tss`, known by its first bytes): its channel records become the record, its references go into their slots, and of its settings the scales and the time base are taken ([tss.md](../tss.md)). A file that cannot be read is -224 and changes nothing. | - | Storage > Load session | OOS extension |
 
 ## Examples
 

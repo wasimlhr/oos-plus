@@ -1,8 +1,9 @@
 # Session files of another instrument (`.tss`)
 
 TekScope, the PC program of Tektronix for its scopes, saves its state as a session, one file with the suffix `.tss`.
-OOS reads the analog waveforms of such a file. This page says what the file looks like from outside, how each fact is
-known, and what OOS reads of it and what not. It is written from looking at files, not from a manual: no command
+OOS loads such a file as a session, for its analog waveforms and a few settings, so that a capture of a faster scope
+can be analysed on OOS. This page says what the file looks like from outside, how each fact is known, and what OOS
+reads of it and what not. It is written from looking at files, not from a manual: no command
 table and no text of the vendor is here, and no session file is in the tree (the tests build their own).
 
 **How the facts are known.** "Seen" means counted over 109 session files of one PC scope program, all demo captures
@@ -63,31 +64,92 @@ offset of the samples, the time between samples and the time of the first one, t
 - A file can hold many acquisitions, one after the other (seen: 3 entries, of about 100 each). `parse_wfm` reads
   the first.
 
+## The settings OOS uses
+
+Of the settings text OOS uses the lines below and no other. `<n>` is the number of the channel or the reference.
+What a line means is taken from its name and from comparing its value with the waveform files; none was tried on
+the program.
+
+| Line | Used as | How it is known |
+|---|---|---|
+| `:DISPLAY:GLOBAL:CH<n>:STATE`, else `:SELECT:CH<n>` | the channel is shown (`1`) or not (`0`) | seen: 1 for all 66 channel files, 0 for the 254 channels without a file |
+| `:CH<n>:SCALE`, else `:DISPLAY:WAVEVIEW1:CH<n>:VERTICAL:SCALE` | volts a division | seen: there for all 64 analog channel files; the two lines agree in all 266 channels that have both |
+| `:CH<n>:POSITION`, else `:DISPLAY:WAVEVIEW1:CH<n>:VERTICAL:POSITION` | where 0 V of the trace lies, in divisions above the middle | seen, see below; the two lines agree in all 262 channels that have both |
+| `:CH<n>:OFFSET` | volts taken off the signal before it is drawn | seen, see below; not zero in 9 of 64 |
+| `:CH<n>:LABEL:NAME`, `:REF:REF<n>:LABEL:NAME` | the name | seen: a name in 8 channels and 57 references, empty in the others |
+| `:DISPLAY:WAVEVIEW1:REF:REF<n>:VERTICAL:SCALE` and `...:POSITION` | volts a division and position of a reference | seen: there for 176 of 181 references, missing for the digital ones |
+| `:DISPLAY:GLOBAL:REF<n>:STATE` | the reference is shown or not | seen: there for all 181 |
+| `:HORIZONTAL:SCALE` | time a division, of a screen ten divisions wide | seen: ten times the scale is the length of the record in 39 of the 41 files with a scale and an analog channel record |
+| `:HORIZONTAL:POSITION` | where the trigger lies on the screen, in percent from the left | seen: with it the middle of the screen is the middle of the record in 37 of 40 |
+| `:HORIZONTAL:DELAY:MODE`, `:HORIZONTAL:DELAY:TIME` | with the mode on, the middle of the screen is that time after the trigger | assumed: the mode is 0 in 99 files and missing in 10 |
+
+A line can be missing (two channel files have no vertical lines: the digital ones; one file has no horizontal
+scale). OOS then takes the value from the waveform itself and invents none.
+
+The vertical lines were tried against the samples: a sample of `v` volts is taken to stand
+`(v - offset) / scale + position` divisions above the middle of the screen. Seen: of the 100 waveforms with a
+position or an offset other than 0 (13 channel records, 87 references; records up to 3 million points) every one
+then lies within ten divisions of height and 80 within eight. With the position counted downwards 46 of the 87
+references leave ten divisions, with the offset added 3 of the 8 channel records that have one do. So the other
+screen is taken to have ten divisions of height (assumed) where OOS has eight: a trace that used the outer two
+reaches past the grid of OOS until its volts a division are changed.
+
 ## What OOS reads
 
-A `.tss` file is taken wherever a waveform file is: **Reference > Load file**, `:REFerence:LOAD`, the upload of
-the web page, `--open` and a file dropped on the window of the desktop build. Its analog waveforms go into reference
-slots, from the chosen slot on (or the first empty ones): the records of the channels first, in the order of the
-channels, then the references in the order of their numbers. A waveform is named as the settings name it (the
-argument of `:CH<n>:LABEL:NAME` or `:REF:REF<n>:LABEL:NAME`), else after its file. A reference that is a text of
-values is read as the waveform files of that kind are.
+**As a session.** A `.tss` file is listed under **Storage > Load session** beside the sessions of OOS
+(`session-NNN.oss`), in the dialog of the Default layout and on the sheet of Studio and Minimal; on a stick it is
+found wherever it lies, three folders deep. `:LOAD:SESSion "name.tss"`, `--open` and a file dropped on the window
+of the desktop build load it the same way: the file is known by its first bytes, not by its name. A session is
+the whole bench, so the setup and every reference slot are replaced.
 
-Not read, and said in the message of the load ("not read: 2 digital and 1 IQ waveforms"): logic waveforms, the `_iq`
-files, a waveform file that is neither the record of a channel nor a reference the list names, and a reference whose
-file is not in the archive. Everything else of the settings text is not used by this load. Of a file with many
-acquisitions the first is read.
+- The records of channels 1 to 4 become **the record on CH1 to CH4, at full length** and with their time step,
+  and the scope stops on it, as after loading a session of OOS. The channels of a record of OOS share one time
+  axis: a channel file whose start, step or length differs from the first one's is left out and counted (not seen
+  in the 16 files with two or more analog channel files).
+- A channel is on when the settings show it, with their volts a division, and with the trace where the settings
+  put it: OOS adds `position * scale - offset` volts before it draws. A scale that is no step of OOS's ladder is
+  the step under it and a fine factor. The probe factor is 1: the samples are volts or amperes at the probe tip
+  already. The name becomes the label of the channel (ten characters).
+- The time base is the window of the settings when the record covers it, else the whole record on the screen.
+- A reference goes into the slot of its number (R1 to R10) with its scale, position, name and whether it is
+  shown. A session without a channel record opens in the offline view with its first reference filling the
+  screen, on the time base of that reference: the horizontal settings are those of the acquisition, and fit the
+  references in only 20 of the 65 such files.
+- Everything else is the default setup of OOS. **Not read: the trigger, the buses and their decoders, the
+  measurements, maths, cursors, zoom, the unit and the invert switch of a channel, the logic channels, spectrum
+  views and everything of the analysis options.** The message of the load says so in one line: "Loaded name.tss:
+  waveforms, scales and time base, without its trigger, buses, measurements and maths".
+- Save session writes OOS's own file. There is no way back into a `.tss`.
+
+**As waveforms.** Where a waveform file is taken and no session is meant, a `.tss` gives its analog waveforms to
+reference slots: **Reference > Load file**, `:REFerence:LOAD` and the upload of the web page. They go into the
+slots from the chosen one on: the records of the channels first, in the order of the channels, then the
+references in the order of their numbers, each named as the settings name it, else after its file. Nothing of
+the setup changes.
+
+**Left out either way**, and said in the message ("not read: 2 digital and 1 IQ waveforms"): logic waveforms, the
+`_iq` files, a waveform file that is neither the record of a channel nor a reference the list names ("other"), a
+reference whose file is not in the archive ("missing"); as a session also a channel record on another time axis
+("differently timed") and a channel above 4 or a reference above 10 ("surplus"). A reference that is a text of
+values is read as the waveform files of that kind are. Of a file with many acquisitions the first is read.
 
 Limits, each refused with its reason: the file and every entry at most 128 MiB, a waveform at most 32 million
 samples, all waveforms of one file together at most 128 million samples, at most 256 entries in an archive, and
-the refusals of the zip reader below. Over the 109 files: 108 load, 14 of them with a part left out; one holds an
-`_iq` file and nothing else and is refused with that reason. The longest record has 12.5 million points; the largest
-file (45 MB) loads in 0.7 s on a desktop PC (host; not measured on a scope).
+the refusals of the zip reader below. A file that cannot be read leaves the bench as it was.
+
+Over the 109 files (host, 2026-11-22; not run on a scope): 108 load as a session, 42 with a record of channels and
+66 with references only, 14 of them with a waveform left out; one holds an `_iq` file and nothing else and is
+refused with that reason. The longest record has 12.5 million points a channel; the largest file (45 MB, three
+such channels) loads in about a second on a desktop PC. On a scope that time is not measured, and neither is the
+memory: three channels of 12.5 million points are 150 MB as samples, beside the 45 MB of the file while it is
+read.
 
 ## The zip reader
 
 OOS has its own small reader (`ui/store/src/zip.rs`,
-[ADR 0075](adr/code/0075-a-foreign-session-archive-is-read-with-an-own-zip-reader.md)): it finds the end record, reads the list of entries, and gives the bytes of one entry, stored or inflated, after
-checking their CRC-32. It unpacks nothing to a file and writes nothing. It refuses: zip64, an archive in several
-parts, an encrypted entry, a method other than stored and deflate, more than 256 entries, an entry larger than the
-limit, a name that is absolute or has a `..` step, and every length or offset the bytes of the file do not hold.
-The archive in the archive is opened once; what should be the settings text and is an archive again is refused.
+[ADR 0075](adr/code/0075-a-foreign-session-archive-is-read-with-an-own-zip-reader.md)): it finds the end record,
+reads the list of entries, and gives the bytes of one entry, stored or inflated, after checking their CRC-32. It
+unpacks nothing to a file and writes nothing. It refuses: zip64, an archive in several parts, an encrypted entry,
+a method other than stored and deflate, more than 256 entries, an entry larger than the limit, a name that is
+absolute or has a `..` step, and every length or offset the bytes of the file do not hold. The archive in the
+archive is opened once; what should be the settings text and is an archive again is refused.

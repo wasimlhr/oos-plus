@@ -83,6 +83,11 @@ pub fn parse_session(b: &[u8], slots: usize) -> Result<oos_store::Session<Record
     oos_store::parse_session(b, slots)
 }
 
+/// The session archive of another instrument read as a session, with the record of the screen (`oos_store::parse_tss`).
+pub fn parse_tss(b: &[u8], slots: usize) -> Result<oos_store::Session<Record>, String> {
+    oos_store::parse_tss(b, slots)
+}
+
 /// The records of a fast-frame file (`oos_store::parse_ff`).
 pub fn parse_ff(b: &[u8]) -> Result<Vec<Record>, String> {
     oos_store::parse_ff(b)
