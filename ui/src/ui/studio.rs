@@ -504,10 +504,13 @@ impl Ui {
         // Live: the way back from a loaded file or a SIM, as in the Default bar
         let badge = if self.record_mode() { Rect::new(x, CHIP_Y, btn_w("Live"), CHIP_H) } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
         if badge.w > 0 { x = badge.right() + gap; }
-        // SIM has no button here: it is an entry of the Menu (Analysis), as in the Default layout (ADR 0007)
-        // while the SIM is the source: the preset, a tap opens the SIM panel
+        // SIM is an entry of the Menu (Analysis), as in the Default layout (ADR 0007), except
+        // - while the SIM is the source: the preset, a tap opens the SIM panel
+        // - while live with a reference shown: a button that plays it, the twin of Live (ADR 0035)
         let sim = if self.session_is_sim && self.record_mode() {
             Rect::new(x, CHIP_Y, (f.mb.width(self.sim_preset_name()) + 56).min(if tier == 0 { 220 } else { 170 }), CHIP_H)
+        } else if self.sim_return_button() {
+            Rect::new(x, CHIP_Y, btn_w("SIM"), CHIP_H)
         } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
         if sim.w > 0 { x = sim.right() + gap; }
         // Autoset, Clear, Force are keys of the front panel (and entries of the Menu): the bar does not repeat them,
@@ -598,14 +601,7 @@ impl Ui {
             btn(cv, t.badge, mix(BAR, ACCENT, 50), ACCENT);
             cv.text_in(&f.mb, t.badge, 1, "Live", ACCENT);
         }
-        if t.sim.w > 0 {
-            let on = self.studio.view == StudioView::Sim;
-            btn(cv, t.sim, BTN, if on { ACCENT } else { BTN_BORDER });
-            cv.set_clip(t.sim.inset(2));
-            cv.text_in(&f.sb, Rect::new(t.sim.x + 8, t.sim.y, 30, t.sim.h), 0, "SIM", if on { ACCENT } else { DIM });
-            cv.text_in(&f.mb, Rect::new(t.sim.x + 40, t.sim.y, (t.sim.w - 44).max(1), t.sim.h), 0, self.sim_preset_name(), if on { ACCENT } else { TEXT });
-            cv.no_clip();
-        }
+        if t.sim.w > 0 { self.draw_studio_sim_chip(cv, t.sim); }
         // sample rate, depth and mode (or the source and its record): a tap opens the page that sets them
         let caption = self.studio_acq_caption();
         let acq_open = self.menu_open && root == if self.record_mode() { MenuId::Ref } else { MenuId::Acquire };
@@ -1340,7 +1336,8 @@ impl Ui {
             self.key(key::FORCE);
         } else if t.sim.w > 0 && hit(t.sim) {
             if self.menu_open { self.close_menu(); }
-            self.studio_set_view(StudioView::Sim);
+            // live with a reference shown: the button plays it; in SIM the chip opens the SIM panel
+            if self.sim_return_button() { self.sim_panel_play(); } else { self.studio_set_view(StudioView::Sim); }
         } else if hit(t.lan) || (t.wlan.w > 0 && hit(t.wlan)) {
             // the address and the services are on the Network page
             self.toggle_menu(MenuId::Network);

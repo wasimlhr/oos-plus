@@ -342,7 +342,8 @@ under the name the session gives it, and the message of the load says what was n
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Run simulation mode** plays the signal the SIM knobs describe; **Play references** plays the references that are shown
 (loaded files, signals added to a slot) as the acquisition instead.
-**Live** restores the live session. Measurements follow each captured window and recompute when a stopped
+**Live** restores the live session. In the Studio layout, back in Live with a reference shown, the bar has a **SIM**
+button that plays the shown references again, the twin of Live. Measurements follow each captured window and recompute when a stopped
 reference is panned. **Measure** opens categorized choices with Source, Settings, and Selected; large readout
 lists have page controls. The Windows app announces its actual SCPI and HiSLIP listeners over mDNS.
 

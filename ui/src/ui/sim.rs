@@ -219,6 +219,28 @@ impl Ui {
         !self.record_mode() && !self.sim_generating() && !self.sim_shown_refs().is_empty()
     }
 
+    /// The SIM chip of the Studio bar in `r`: the button that plays the shown references while live (ADR 0035), else the
+    /// preset's name while SIM is the source (a tap opens the SIM panel).
+    pub(super) fn draw_studio_sim_chip(&self, cv: &mut Canvas, r: Rect) {
+        let f = self.fonts();
+        if self.sim_return_button() {
+            btn(cv, r, BTN, BTN_BORDER);
+            cv.text_in(&f.mb, r, 1, "SIM", TEXT);
+            return;
+        }
+        let on = self.studio.view == studio::StudioView::Sim;
+        btn(cv, r, BTN, if on { ACCENT } else { BTN_BORDER });
+        cv.set_clip(r.inset(2));
+        cv.text_in(&f.sb, Rect::new(r.x + 8, r.y, 30, r.h), 0, "SIM", if on { ACCENT } else { DIM });
+        cv.text_in(&f.mb, Rect::new(r.x + 40, r.y, (r.w - 44).max(1), r.h), 0, self.sim_preset_name(), if on { ACCENT } else { TEXT });
+        cv.no_clip();
+    }
+
+    /// The Studio bar has a SIM button: live, with a reference shown that SIM mode can play (ADR 0035).
+    pub(super) fn sim_return_button(&self) -> bool {
+        self.m.layout == Layout::Studio && self.sim_can_play_refs()
+    }
+
     /// Play of the Studio SIM panel, where Add puts several signals side by side: the shown references together when
     /// there are any, else the signal of the knobs.
     pub(super) fn sim_panel_play(&mut self) {
