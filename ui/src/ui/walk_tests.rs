@@ -1628,9 +1628,7 @@ fn the_docked_event_table_has_its_count_in_the_title_and_columns_that_can_be_dra
     u.render(&mut cv);
     let title = u.table_title();
     assert!(title.starts_with("Search ") && title.contains(" \u{b7} ") && !title.ends_with(" 0"), "{title}");
-    // (the rows as the list shows them: the number of the event in the middle column)
     let (r, rows) = (u.dock_content(super::dock::VKind::Table).expect("the table is a view"), u.table_shown().expect("rows").1);
-    // (the names of the columns are a line of their own; the title is in the strip of the view)
     assert!(u.head_h(r) < 30, "no title row inside the docked table");
     let before = u.table_col_x(&rows, r.w);
     assert!(before[0] < before[1] && before[1] < before[2] && before[2] < r.w - 30, "{before:?}");
