@@ -2384,24 +2384,23 @@ impl Ui {
             Rect::new(p.x + 8, p.bottom() - 46, p.w / 2 - 12, 38), Rect::new(p.x + p.w / 2 + 4, p.bottom() - 46, p.w / 2 - 12, 38)))
     }
 
-    /// One row of the docked and floating panel: CH badge, the name over the value, the pin.
+    /// One row of the docked and floating panel: the source as a bar of its colour, the name over the value, the pin.
     pub(super) fn draw_panel_row(&self, cv: &mut Canvas, r: Rect, row: &tools::MeasRow, pinned: bool, band: i32) {
         let f = self.fonts();
-        // the source is a thin bar of its colour at the left edge; its name is in the header of the group
+        // the source is a thin bar of its colour at the left edge; its name is in the header of the group. It was
+        // written under the name as well, which took the line the name needs: beside the value a name was cut
+        // ("Peak-to", "Rise Tim"), and in a compact row the source was cut at the foot
         let y0 = r.y + band;
         cv.round(Rect::new(r.x + 3, y0 + 5, 4, (r.bottom() - y0 - 12).max(8)), 2, self.wave_color(row.src), 255);
         let x = r.x + 16;
-        // the name at the left, the value big and right-aligned; under the name the source in its colour
+        // the name has the line to itself, the value is under it
         let right = r.right() - 92;
-        let value = row.text();
-        let vw = f.mb.width(&value);
+        let compact = self.studio.compact && self.studio.view != StudioView::Sim;
+        let (name_y, value_y) = if compact { (y0 + 13, y0 + 30) } else { (y0 + 17, y0 + 37) };
         let outer = cv.save_clip();
-        cv.clip_within(Rect::new(x, r.y, (right - vw - 6 - x).max(1), r.h));
-        cv.text(&f.s, x, y0 + 18, &row.name, LABEL);
-        cv.restore_clip(outer);
         cv.clip_within(Rect::new(x, r.y, (right - x).max(1), r.h));
-        cv.text(&f.mb, (right - vw).max(x), y0 + 20, &value, TEXT);
-        cv.text(&f.sb, x, y0 + 38, &self.wave_name(row.src), self.wave_color(row.src));
+        cv.text(&f.s, x, name_y, &row.name, LABEL);
+        cv.text(&f.mb, x, value_y, &row.text(), TEXT);
         cv.restore_clip(outer);
         let (pin, menu) = Self::md_row_buttons(r);
         icon_pin(cv, pin.x + pin.w / 2 - 6, r.y + r.h / 2 + 1, pinned, if pinned { AMBER } else { DIM });

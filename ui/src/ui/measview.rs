@@ -249,20 +249,29 @@ impl Ui {
 
     /// The little switch in the strip of the measurements panel: Table, List, Cards, the one that is on lit.
     pub(super) fn draw_view_switch(&self, cv: &mut Canvas, e: Rect) {
-        let b = Rect::new(e.x + 4, e.y + 2, 68, 22);
-        chip(cv, b, BTN, BTN_BORDER);
-        let (t, l, k) = (Rect::new(b.x + 2, b.y + 2, 21, 18), Rect::new(b.x + 23, b.y + 2, 21, 18), Rect::new(b.x + 44, b.y + 2, 21, 18));
+        // the three segments are drawn where they are tapped (`view_switch_cells`). They were drawn 21 px wide at
+        // the left of a switch whose thirds took the touch, so Cards answered right of its box only
+        let [t, l, k] = Self::view_switch_cells(e).map(|c| Rect::new(c.x + 1, e.y + 4, c.w - 2, 18));
+        chip(cv, Rect::new(t.x - 2, e.y + 2, k.right() - t.x + 4, 22), BTN, BTN_BORDER);
         let view = self.panel_view();
         let at = match view { super::measpanel::PanelView::Detailed => t, super::measpanel::PanelView::List => l, super::measpanel::PanelView::Cards => k };
         cv.round(at, 4, ACCENT, 255);
         let ink = |on: bool| if on { DARK_TEXT } else { TEXT };
         let (cl, ck, ct) = (ink(at == l), ink(at == k), ink(at == t));
         // table: a grid; list: three lines; cards: four squares
-        cv.rect(Rect::new(t.x + 4, t.y + 3, 12, 12), ct);
-        cv.hline(t.x + 4, t.x + 15, t.y + 9, ct);
-        cv.vline(t.x + 10, t.y + 3, t.y + 14, ct);
-        for i in 0..3 { cv.hline(l.x + 4, l.right() - 5, l.y + 4 + i * 5, cl); }
-        for (dx, dy) in [(0, 0), (7, 0), (0, 7), (7, 7)] { cv.rect(Rect::new(k.x + 4 + dx, k.y + 3 + dy, 6, 6), ck); }
+        let (tx, lx, kx) = (t.x + t.w / 2 - 6, l.x + l.w / 2 - 6, k.x + k.w / 2 - 6);
+        cv.rect(Rect::new(tx, t.y + 3, 12, 12), ct);
+        cv.hline(tx, tx + 11, t.y + 9, ct);
+        cv.vline(tx + 6, t.y + 3, t.y + 14, ct);
+        for i in 0..3 { cv.hline(lx, lx + 12, l.y + 4 + i * 5, cl); }
+        for (dx, dy) in [(0, 0), (7, 0), (0, 7), (7, 7)] { cv.rect(Rect::new(kx + dx, k.y + 3 + dy, 6, 6), ck); }
+    }
+
+    /// The three segments of the view switch `e`, the height of its strip: Table, List, Cards. They take the touch
+    /// and are drawn in the same place.
+    pub(super) fn view_switch_cells(e: Rect) -> [Rect; 3] {
+        let w = (e.w - 6) / 3;
+        [0, 1, 2].map(|i| Rect::new(e.x + 3 + i * w, e.y, w, e.h))
     }
 }
 
