@@ -525,15 +525,13 @@ fn hiding_the_badges_leaves_a_button_and_an_undo_and_showing_them_needs_no_menu(
     u.studio_set_view(StudioView::Waveform);
     frame(&mut u);
     assert!(u.studio_badges_visible() && !u.studio_badges().is_empty());
-    // View > Show pinned badges (the row has no eye any more)
-    u.studio.view_menu = true;
-    let row = u.studio_view_row(super::studio::VIEW_BADGES);
-    tap(&mut u, row);
-    // the menu stays open, and its switch is the undo: no bar under the menu, where a tap on it closed the menu
-    assert!(u.studio.view_menu && u.md_hide_bar().is_none());
-    let outside = u.studio_view_rect();
-    tap(&mut u, Rect::new(outside.x - 60, outside.bottom() + 40, 2, 2));
-    assert!(!u.studio.view_menu, "a tap beside the menu closes it");
+    // Display > Screen > Pinned badges (the row has no eye any more)
+    u.tap_sheet_item(MenuId::Display, Item::StudioBadges);
+    // the sheet stays open, and its switch is the undo: no bar while it is open
+    assert!(u.menu_open && u.menu == MenuId::Display && u.md_hide_bar().is_none());
+    let close = u.sheet_geo().unwrap().close;
+    tap(&mut u, close);
+    assert!(!u.menu_open, "the sheet is closed");
     assert!(!u.studio_badges_visible(), "hidden");
     let show = u.studio_bottom().show.expect("a button in the bottom bar");
     assert!(show.w >= 40 && show.h >= 36, "{show:?}");
@@ -547,7 +545,7 @@ fn hiding_the_badges_leaves_a_button_and_an_undo_and_showing_them_needs_no_menu(
     assert!(!u.studio_badges_visible());
     let show = u.studio_bottom().show.unwrap();
     tap(&mut u, show);
-    assert!(u.studio_badges_visible(), "shown again without the View menu");
+    assert!(u.studio_badges_visible(), "shown again without a menu");
     assert!(u.studio_bottom().show.is_none());
     // Reset layout and a stored view bring the row back too, and the Undo bar of the hiding goes with it
     u.studio_hide_badges();

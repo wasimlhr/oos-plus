@@ -416,7 +416,7 @@ fn the_arrangement_is_kept_in_the_setup_and_old_setups_load_the_default() {
 // ------------------------------------------------------------------------------------------------ item 4: the old choices
 
 #[test]
-fn the_measurement_choices_of_the_view_menu_still_work_and_map_onto_the_tree() {
+fn the_measurement_arrangements_map_onto_the_tree() {
     let mut u = studio();
     // Waveform focus: the waveform has the body
     assert_eq!(leaf(&u, VKind::Wave), u.dock_region());
@@ -448,7 +448,7 @@ fn the_measurement_choices_of_the_view_menu_still_work_and_map_onto_the_tree() {
 // ------------------------------------------------------------------------------------------------ item 5
 
 #[test]
-fn reset_layout_in_the_view_menu_brings_the_default_back() {
+fn reset_layout_brings_the_default_back() {
     let mut u = studio();
     docked(&mut u);
     let default = leaf(&u, VKind::Wave);
@@ -459,15 +459,11 @@ fn reset_layout_in_the_view_menu_brings_the_default_back() {
     drag_view(&mut u, VKind::Eye, (w.x + w.w * 31 / 100, w.y + w.h / 2));
     assert!(u.studio.dock.tree.is_some() && u.dock_floating(VKind::Eye));
     assert_ne!(leaf(&u, VKind::Wave), default);
-    // the View chip, then the Reset layout row, as the user taps them
-    let chip = u.studio_top().view;
-    u.tap(chip.x + chip.w / 2, chip.y + chip.h / 2);
-    assert!(u.studio.view_menu);
-    let row = u.studio_view_row(super::studio::VIEW_RESET);
-    assert!(row.h >= 40);
-    u.tap(row.x + row.w / 2, row.y + row.h / 2);
+    // Display, its Screen tab, then Reset layout under it, as the user taps them
+    let button = u.tap_sheet_item(MenuId::Display, Item::StudioReset);
+    assert!(button.h >= 40);
     for _ in 0..3 { u.step(0.05); }
-    assert!(!u.studio.view_menu);
+    assert!(!u.menu_open);
     assert!(u.studio.dock.tree.is_none() && !u.dock_floating(VKind::Eye) && u.studio.dock.float_rect.iter().all(Option::is_none));
     assert!(u.m.studio_dock.is_empty(), "the setup forgets it too: {:?}", u.m.studio_dock);
     assert_eq!(u.studio.view, StudioView::Waveform);

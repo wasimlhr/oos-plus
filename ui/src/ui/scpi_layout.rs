@@ -400,7 +400,7 @@ impl Ui {
                 ("Views".to_string(), top.vbox), (l[3].to_string(), top.add), ("Live".to_string(), top.badge),
                 (run.to_string(), top.run), ("Single".to_string(), top.single), ("SIM control".to_string(), top.sim), ("Acquire".to_string(), top.acq),
                 ("Measure".to_string(), top.measure), (l[5].to_string(), top.cursors), (l[6].to_string(), top.display), (l[7].to_string(), top.storage),
-                (l[8].to_string(), top.view), ("Settings".to_string(), top.gear), (l[0].to_string(), top.autoset), (l[1].to_string(), top.clear), (l[2].to_string(), top.force),
+                ("Settings".to_string(), top.gear), (l[0].to_string(), top.autoset), (l[1].to_string(), top.clear), (l[2].to_string(), top.force),
             ] { push("TOP", label, r); }
             let b = self.studio_bottom();
             for c in 0..n_ch() { push("BOTTOM", format!("CH{}", c + 1), b.ch[c]); }
@@ -473,17 +473,7 @@ impl Ui {
         if self.studio.ctx.is_some() { return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect(); }
         if let Some(p) = &self.workspace.popup { return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect(); }
         if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
-        // the View menu of the Studio bar (its views, its two switches with what they stand at, Reset layout),
-        // and the popup of Add source in the bottom bar
-        if self.studio.view_menu {
-            use super::studio::{STUDIO_VIEWS, VIEW_BADGES, VIEW_COMPACT, VIEW_RESET};
-            let on = |v: bool| if v { "On" } else { "Off" };
-            let mut rows: Vec<(String, Rect)> = STUDIO_VIEWS.iter().enumerate().map(|(i, (_, label))| (label.to_string(), self.studio_view_row(i))).collect();
-            rows.push((format!("Show pinned badges = {}", on(!self.studio.hide_badges)), self.studio_view_row(VIEW_BADGES)));
-            rows.push((format!("Compact view = {}", on(self.studio.compact)), self.studio_view_row(VIEW_COMPACT)));
-            rows.push(("Reset layout".to_string(), self.studio_view_row(VIEW_RESET)));
-            return rows;
-        }
+        // the popup of Add source in the bottom bar
         if let Some((channels, extras)) = self.studio_picker_rows() {
             return channels.into_iter().map(|(c, r)| (format!("CH{}", c + 1), r)).chain(extras.into_iter().map(|(k, r)| (k.label().to_string(), r))).collect();
         }
@@ -500,7 +490,6 @@ impl Ui {
             else if self.studio.ctx.is_some() { "Context".to_string() }
             else if let Some(p) = &self.workspace.popup { p.title.clone() }
             else if self.studio.add_menu { "Add".to_string() }
-            else if self.studio.view_menu { "View".to_string() }
             else if self.studio.ch_picker { "Add source".to_string() }
             else if self.menu_open { self.menu_title(self.menu).to_string() }
             else { return "\"\"".to_string(); };
@@ -540,7 +529,6 @@ impl Ui {
         self.studio.ctx = None;
         self.workspace.popup = None;
         self.studio.add_menu = false;
-        self.studio.view_menu = false;
         self.studio.ch_picker = false;
         if self.menu_open { self.close_menu(); }
         self.relayout();
@@ -695,26 +683,6 @@ mod tests {
         cmd(&mut u, ":UI:MENU:SELect", "\"X zoom out\"").unwrap();
         assert_eq!(u.m.zscale, wide);
         cmd(&mut u, ":UI:MENU:CLOSe", "").unwrap();
-        assert_eq!(text(cmd(&mut u, ":UI:MENU?", "")), "\"\"");
-    }
-
-    /// Studio's View menu is a menu for `:UI:MENU?` too: its views, its switches with what they stand at, Reset
-    /// layout; a row is taken by its name, and the menu is closed like any other. It answered `""` while the menu
-    /// was open on the screen (seen on a unit, 2026-11-18).
-    #[test]
-    fn the_view_menu_of_studio_is_listed_and_taken_by_name() {
-        let mut u = studio();
-        u.studio.view_menu = true;
-        let m = text(cmd(&mut u, ":UI:MENU?", ""));
-        assert!(m.starts_with("\"View\",\"Waveform focus\",\"Docked measurements\"") && m.contains("\"Show pinned badges = On\"") && m.ends_with("\"Reset layout\""), "{m}");
-        cmd(&mut u, ":UI:MENU:SELect", "\"Show pinned badges\"").unwrap();
-        assert!(u.studio.hide_badges && u.studio.view_menu);
-        assert!(text(cmd(&mut u, ":UI:MENU?", "")).contains("\"Show pinned badges = Off\""));
-        cmd(&mut u, ":UI:MENU:SELect", "\"Docked measurements\"").unwrap();
-        assert!(u.studio.view == StudioView::Docked && !u.studio.view_menu);
-        u.studio.view_menu = true;
-        cmd(&mut u, ":UI:MENU:CLOSe", "").unwrap();
-        assert!(!u.studio.view_menu);
         assert_eq!(text(cmd(&mut u, ":UI:MENU?", "")), "\"\"");
     }
 

@@ -276,7 +276,7 @@ fn a_short_top_bar_shortens_labels_instead_of_dropping_buttons() {
     let u = studio();
     let t = u.studio_top();
     // Cursors has a button of its own again, between Add and Display (through Add the cursors were three taps away)
-    assert!(t.cursors.w >= 40 && t.view.w > 0 && t.add.w > 0, "Add, Cursors, Display, Storage, View");
+    assert!(t.cursors.w >= 40 && t.display.w > 0 && t.storage.w > 0 && t.add.w > 0, "Add, Cursors, Display, Storage");
     assert!(t.acq.w >= 120 || t.add.w < u.fonts().mb.width("Add") + 20);
     assert!(t.add.right() < t.cursors.x && t.cursors.right() < t.display.x);
 }

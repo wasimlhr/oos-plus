@@ -14,7 +14,7 @@ pub(super) enum MeasKey {
     Cat(u16, WaveId, WaveId, WaveId, WaveId),
 }
 
-/// How the measurements share the screen (View menu).
+/// How the measurements share the screen.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub(super) enum StudioView {
     /// the lanes and the pinned badges only
@@ -111,7 +111,7 @@ pub(super) struct Studio {
     pub unpinned: Vec<MeasKey>,
     /// measurements moved to the floating panel from a badge popup: listed there beside the pinned ones
     pub floated: Vec<MeasKey>,
-    /// the badge row is hidden (View > Show pinned badges)
+    /// the badge row is hidden (Display > Screen > Pinned badges)
     pub hide_badges: bool,
     /// the badge whose action popup is open
     pub popup: Option<MeasKey>,
@@ -121,8 +121,6 @@ pub(super) struct Studio {
     /// the menu of the marked badge was opened: the mark goes when it closes
     pub mark_menu: bool,
     pub view: StudioView,
-    /// the View menu is open
-    pub view_menu: bool,
     /// the Add menu under the top bar is open
     pub add_menu: bool,
     /// Measure is open as the page of every layout (categories, Selected, Settings), not as the quick Add panel
@@ -226,7 +224,6 @@ pub(super) struct StudioTop {
     pub cursors: Rect,
     pub display: Rect,
     pub storage: Rect,
-    pub view: Rect,
     pub gear: Rect,
     /// Autoset, Clear and Force
     pub autoset: Rect,
@@ -237,11 +234,11 @@ pub(super) struct StudioTop {
 }
 
 const TOP_TIERS: usize = 3;
-/// The labels of the top bar per tier: Autoset, Clear, Force, + Add, Measure, Cursors, Display, Storage, View.
-pub(super) const TOP_LABELS: [[&str; 9]; TOP_TIERS] = [
-    ["Autoset", "Clear", "Force", "Add", "", "Cursors", "Display", "Storage", "View"],
-    ["Auto", "Clear", "Force", "Add", "", "Cur", "Disp", "Store", "View"],
-    ["Auto", "Clr", "Force", "Add", "", "Cur", "Disp", "Store", "View"],
+/// The labels of the top bar per tier: Autoset, Clear, Force, + Add, Measure, Cursors, Display, Storage.
+pub(super) const TOP_LABELS: [[&str; 8]; TOP_TIERS] = [
+    ["Autoset", "Clear", "Force", "Add", "", "Cursors", "Display", "Storage"],
+    ["Auto", "Clear", "Force", "Add", "", "Cur", "Disp", "Store"],
+    ["Auto", "Clr", "Force", "Add", "", "Cur", "Disp", "Store"],
 ];
 
 /// The rectangles of the Studio bottom bar.
@@ -491,6 +488,12 @@ impl Ui {
             let n = self.studio_top_tier(tier);
             if n.acq.w > best || n.acq.w >= need { best = n.acq.w; t = n; }
         }
+        // the selected search names its type where shorter names of the buttons leave the room for it beside the
+        // caption (without the View button the full names fit a bar on which the search had its count alone)
+        let typed = self.studio_search_typed_w();
+        if t.acq.w >= need && t.search.w < typed {
+            if let Some(n) = (t.tier + 1..TOP_TIERS).map(|i| self.studio_top_tier(i)).find(|n| n.acq.w >= need && n.search.w >= typed) { t = n; }
+        }
         t
     }
 
@@ -519,12 +522,11 @@ impl Ui {
         // its room goes to the acquisition read-out
         let autoset = Rect::new(x, CHIP_Y, 0, CHIP_H);
         let (clear, force) = (autoset, autoset);
-        // the right group is laid out from the edge: gear, View, Storage, Display, Cursors, Measure, + Add
+        // the right group is laid out from the edge: gear, Storage, Display, Cursors, Measure, + Add
         let mut r = top.right() - 8;
         let gear = Rect::new(r - 40, CHIP_Y, 40, CHIP_H);
         r = gear.x - gap;
         let mut place = |label: &str| { let b = Rect::new(r - btn_w(label), CHIP_Y, btn_w(label), CHIP_H); r = b.x - gap; b };
-        let view = place(labels[8]);
         let storage = place(labels[7]);
         let display = place(labels[6]);
         // Cursors: a tap puts them on, the next one opens their sheet (Add has them too, three taps deep)
@@ -550,7 +552,7 @@ impl Ui {
         let wlan = link("WLAN", self.net.wlan_stick);
         let usb = link("USB", self.stick.mounted);
         // the search (Add > Search): previous, how many events, next. It has the end of the read-out's room. Its label
-        // gives way to the read-out (down to the count alone) before the buttons of the bar shorten their names
+        // gives way to the read-out, down to the count alone (`studio_top` shortens buttons where that names its type)
         let links_x = lx + 4 - gap;
         let room = links_x - 10 - x;
         let search_w = if self.studio.search().is_some() {
@@ -563,7 +565,7 @@ impl Ui {
         let run = pill;
         StudioTop {
             vbox, add, badge, run, single, sim, acq, search, lan, wlan, usb, measure, cursors, display, storage,
-            view, gear, autoset, clear, force, tier,
+            gear, autoset, clear, force, tier,
         }
     }
 
@@ -627,13 +629,13 @@ impl Ui {
             }
             None => cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT }),
         }
-        // Measure, Cursors, View, settings: the Default button style
+        // Add, Cursors, Display, Storage: the Default button style
         let cursors = open(MenuId::Cursor) || self.m.cursor != CursorMode::Off;
         let adding = self.studio_add_chip_on();
         let displaying = open(MenuId::Display);
         let storing = open(MenuId::Storage);
         let labels = &TOP_LABELS[t.tier];
-        for (r, label, on) in [(t.add, labels[3], adding), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing), (t.view, labels[8], self.studio.view_menu)].into_iter().filter(|(r, ..)| r.w > 0) {
+        for (r, label, on) in [(t.add, labels[3], adding), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing)].into_iter().filter(|(r, ..)| r.w > 0) {
             btn(cv, r, BTN, if on { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.mb, r, 1, label, if on { ACCENT } else { TEXT });
         }
@@ -1262,7 +1264,6 @@ impl Ui {
         if self.power.open || self.wlan.osk.is_some() || self.dialog.is_some() || self.load_slot_ask { return false; }
         if self.menu_open && self.menu_rect().is_some_and(|d| d.contains(x, y)) { return false; }
         if self.studio_sz_taps(x, y) { return true; }
-        if self.studio_view_tap(x, y) { return true; }
         if self.studio_add_tap(x, y) { return true; }
         if self.studio_ctx_tap(x, y) { return true; }
         if self.studio.ch_picker {
@@ -1365,10 +1366,6 @@ impl Ui {
             self.toggle_menu(MenuId::Display);
         } else if hit(t.storage) {
             self.toggle_menu(MenuId::Storage);
-        } else if hit(t.view) {
-            if self.menu_open { self.close_menu(); }
-            self.studio.popup = None;
-            self.studio.view_menu = true;
         } else if hit(t.gear) {
             if self.m.touch_lock { self.key(key::TOUCHLOCK); } else { self.toggle_menu(MenuId::Main); }
         }
@@ -1731,7 +1728,7 @@ impl Ui {
         self.relayout();
     }
 
-    /// Hides the row of badges (View > Show pinned badges). The Undo bar and the chip of the bottom bar bring it back.
+    /// Hides the row of badges (Display > Screen > Pinned badges). The Undo bar and the chip of the bottom bar bring it back.
     pub(super) fn studio_hide_badges(&mut self) {
         self.studio.hide_badges = true;
         self.studio.md.hide_undo = Some(self.now);
@@ -1974,27 +1971,7 @@ impl Ui {
     }
 }
 
-/// The View menu: its width and the height of a row.
-const VIEW_W: i32 = 340;
-/// (Nine rows, a head and the gaps between the groups end over the bottom bar at 46 px a row; `MENU_ROW` would not.)
-const VIEW_ROW: i32 = 46;
-
-/// What the View menu offers, in order.
-pub(super) const STUDIO_VIEWS: [(StudioView, &str); 6] = [
-    (StudioView::Waveform, "Waveform focus"),
-    (StudioView::Docked, "Docked measurements"),
-    (StudioView::Floating, "Floating measurements"),
-    (StudioView::Only, "Measurements only"),
-    (StudioView::Offline, "Offline waveform analysis"),
-    (StudioView::Sim, "SIM"),
-];
-
-/// Rows of the View menu after the arrangements: the badges switch and Reset layout.
-pub(super) const VIEW_BADGES: usize = STUDIO_VIEWS.len();
-pub(super) const VIEW_RESET: usize = STUDIO_VIEWS.len() + 1;
-pub(super) const VIEW_COMPACT: usize = STUDIO_VIEWS.len() + 2;
-
-/// A small square wave, the lanes in the pictures of the View menu.
+/// A small square wave: the lanes, on the button that leads back to them.
 fn icon_wave(cv: &mut Canvas, r: Rect, c: Rgb) {
     let (lo, hi) = (r.bottom() - 4, r.y + 4);
     let mut x = r.x + 2;
@@ -2009,186 +1986,7 @@ fn icon_wave(cv: &mut Canvas, r: Rect, c: Rgb) {
     }
 }
 
-fn icon_view_mode(cv: &mut Canvas, r: Rect, view: StudioView, c: Rgb) {
-    cv.round_outline(r, 3, c);
-    match view {
-        StudioView::Waveform => icon_wave(cv, r.inset(2), c),
-        StudioView::Docked => {
-            icon_wave(cv, Rect::new(r.x + 2, r.y + 2, r.w - 14, r.h - 4), c);
-            cv.vline(r.right() - 11, r.y, r.bottom() - 1, c);
-            for k in 0..3 { cv.hline(r.right() - 9, r.right() - 4, r.y + 5 + k * 5, c); }
-        }
-        StudioView::Floating => {
-            icon_wave(cv, r.inset(2), c);
-            cv.round_outline(Rect::new(r.right() - 16, r.bottom() - 12, 13, 9), 1, c);
-        }
-        StudioView::Only => {
-            for k in 0..3 { cv.hline(r.x + 4, r.right() - 5, r.y + 5 + k * 6, c); }
-        }
-        StudioView::Offline => {
-            // the navigator over the record with its window, the lanes under it
-            cv.hline(r.x + 3, r.right() - 4, r.y + 8, c);
-            cv.round_outline(Rect::new(r.x + 14, r.y + 3, 14, 10), 1, c);
-            icon_wave(cv, Rect::new(r.x + 2, r.y + 12, r.w - 4, r.h - 14), c);
-        }
-        StudioView::Sim => {
-            icon_wave(cv, Rect::new(r.x + 2, r.y + 2, r.w - 14, r.h - 4), c);
-            cv.vline(r.right() - 11, r.y, r.bottom() - 1, c);
-            cv.triangle([(r.right() - 9, r.y + r.h / 2 - 5), (r.right() - 9, r.y + r.h / 2 + 5), (r.right() - 3, r.y + r.h / 2)], c);
-        }
-    }
-}
-
 impl Ui {
-    /// The View menu, under the View chip.
-    pub(super) fn studio_view_rect(&self) -> Rect {
-        let anchor = self.studio_top().view;
-        let h = 40 + 9 * VIEW_ROW + 40;
-        Rect::new((anchor.right() - VIEW_W).max(4), self.frame().top.bottom() + 4, VIEW_W, h)
-    }
-
-    /// Row `i` of the View menu: 0 to 3 the measurement arrangements, 4 and 5 the record views (a line above them),
-    /// `VIEW_BADGES` the badges switch, `VIEW_COMPACT` the compact view, `VIEW_RESET` Reset layout, the last row. (An
-    /// "Add panel" row followed it: the Add button of the top bar opens the same pages and more, in one tap less.)
-    pub(super) fn studio_view_row(&self, i: usize) -> Rect {
-        let p = self.studio_view_rect();
-        let y = match i {
-            0..=3 => p.y + 40 + i as i32 * VIEW_ROW,
-            4..=5 => p.y + 40 + i as i32 * VIEW_ROW + 8,
-            VIEW_BADGES => p.y + 40 + 6 * VIEW_ROW + 16,
-            VIEW_COMPACT => p.y + 40 + 7 * VIEW_ROW + 24,
-            _ => p.y + 40 + 8 * VIEW_ROW + 32,
-        };
-        Rect::new(p.x + 6, y, p.w - 12, VIEW_ROW)
-    }
-
-    pub(super) fn studio_view_close(&self) -> Rect {
-        let p = self.studio_view_rect();
-        Rect::new(p.right() - 44, p.y + 4, 38, 32)
-    }
-
-    /// Compact view on or off: smaller lane gaps, badge row and measurement panel.
-    pub(super) fn studio_set_compact(&mut self, on: bool) {
-        self.studio.compact = on;
-        self.studio.panel.scroll_top();
-        self.relayout();
-    }
-
-    /// Back to the arrangement the layout starts with.
-    pub(super) fn studio_reset_layout(&mut self) {
-        self.studio_set_view(StudioView::Waveform);
-        self.dock_reset();
-        self.studio.hide_badges = false;
-        // the row is back: no Undo bar for hiding it
-        self.studio.md.hide_undo = None;
-        self.studio.pinned = None;
-        self.studio.unpinned.clear();
-        self.studio.popup = None;
-        self.studio.panel = Default::default();
-        self.studio.compact = false;
-        self.set_zoom(false);
-        self.relayout();
-    }
-
-    pub(super) fn draw_studio_view_menu(&self, cv: &mut Canvas) {
-        if !self.studio.view_menu { return; }
-        let f = self.fonts();
-        let p = self.studio_view_rect();
-        cv.round(p, 8, BTN_BORDER, 255);
-        cv.round(p.inset(1), 7, PANEL_BG, 255);
-        let top = self.studio_top().view;
-        let x = top.x + top.w / 2;
-        cv.triangle([(x - 7, p.y + 1), (x + 7, p.y + 1), (x, p.y - 6)], BTN_BORDER);
-        cv.triangle([(x - 6, p.y + 2), (x + 6, p.y + 2), (x, p.y - 4)], PANEL_BG);
-        cv.text(&f.lb, p.x + 16, p.y + 28, "View", TEXT);
-        let c = self.studio_view_close();
-        let (cx, cy) = (c.x + c.w / 2, c.y + c.h / 2);
-        cv.line(cx - 6, cy - 6, cx + 6, cy + 6, TEXT);
-        cv.line(cx - 6, cy + 6, cx + 6, cy - 6, TEXT);
-        cv.hline(p.x + 8, p.right() - 9, p.y + 38, LINE);
-        for (i, (view, label)) in STUDIO_VIEWS.into_iter().enumerate() {
-            let r = self.studio_view_row(i);
-            let on = self.studio.view == view;
-            if on {
-                cv.round(r, 6, ACCENT, 255);
-                cv.round(r.inset(1), 5, mix(PANEL_BG, ACCENT, 28), 255);
-            }
-            icon_view_mode(cv, Rect::new(r.x + 8, r.y + 8, 42, 24), view, TEXT);
-            cv.text_in(&f.m, Rect::new(r.x + 62, r.y, r.w - 100, r.h), 0, label, TEXT);
-            if on {
-                let (kx, ky) = (r.right() - 24, r.y + r.h / 2);
-                cv.line(kx, ky, kx + 4, ky + 4, ACCENT);
-                cv.line(kx + 4, ky + 4, kx + 11, ky - 5, ACCENT);
-                cv.line(kx, ky + 1, kx + 4, ky + 5, ACCENT);
-                cv.line(kx + 4, ky + 5, kx + 11, ky - 4, ACCENT);
-            }
-        }
-        cv.hline(p.x + 8, p.right() - 9, self.studio_view_row(4).y - 4, LINE);
-        cv.hline(p.x + 8, p.right() - 9, self.studio_view_row(VIEW_BADGES).y - 4, LINE);
-        let r = self.studio_view_row(VIEW_BADGES);
-        cv.text_in(&f.m, Rect::new(r.x + 8, r.y, r.w - 70, r.h), 0, "Show pinned badges", TEXT);
-        let on = !self.studio.hide_badges;
-        let sw = Rect::new(r.right() - 52, r.y + 9, 44, 22);
-        cv.round(sw, 11, if on { ACCENT } else { BTN_BORDER }, 255);
-        cv.circle(if on { sw.right() - 11 } else { sw.x + 11 }, sw.y + 11, 8, if on { DARK_TEXT } else { DIM });
-        let r = self.studio_view_row(VIEW_COMPACT);
-        cv.text_in(&f.m, Rect::new(r.x + 8, r.y, r.w - 70, r.h), 0, "Compact view", TEXT);
-        let sw = Rect::new(r.right() - 52, r.y + 9, 44, 22);
-        cv.round(sw, 11, if self.studio.compact { ACCENT } else { BTN_BORDER }, 255);
-        cv.circle(if self.studio.compact { sw.right() - 11 } else { sw.x + 11 }, sw.y + 11, 8, if self.studio.compact { DARK_TEXT } else { DIM });
-        cv.hline(p.x + 8, p.right() - 9, self.studio_view_row(VIEW_RESET).y - 4, LINE);
-        let r = self.studio_view_row(VIEW_RESET);
-        let (ix, iy) = (r.x + 24, r.y + r.h / 2);
-        cv.circle(ix, iy, 8, TEXT);
-        cv.circle(ix, iy, 6, PANEL_BG);
-        cv.fill(Rect::new(ix - 2, iy - 10, 6, 4), PANEL_BG);
-        cv.triangle([(ix - 1, iy - 12), (ix - 1, iy - 5), (ix + 5, iy - 9)], TEXT);
-        cv.text_in(&f.m, Rect::new(r.x + 48, r.y, r.w - 50, r.h), 0, "Reset layout", TEXT);
-    }
-
-    /// A tap while the View menu is open: a row does its action, a tap outside closes it. Always taken.
-    pub(super) fn studio_view_tap(&mut self, x: i32, y: i32) -> bool {
-        if !self.studio.view_menu { return false; }
-        let p = self.studio_view_rect();
-        let chip = self.top_hit(self.studio_top().view);
-        if chip.contains(x, y) {
-            // the chip that opened it closes it again
-            self.studio.view_menu = false;
-            return true;
-        }
-        if !p.contains(x, y) {
-            self.studio.view_menu = false;
-            return true;
-        }
-        if self.studio_view_close().contains(x, y) {
-            self.studio.view_menu = false;
-            return true;
-        }
-        for (i, (view, _)) in STUDIO_VIEWS.into_iter().enumerate() {
-            if self.studio_view_row(i).contains(x, y) {
-                self.studio_set_view(view);
-                self.studio.view_menu = false;
-                return true;
-            }
-        }
-        if self.studio_view_row(VIEW_BADGES).contains(x, y) {
-            if self.studio.hide_badges {
-                self.studio.hide_badges = false;
-                self.studio.md.hide_undo = None;
-                self.relayout();
-            } else {
-                // with the Undo bar the eye of the row had
-                self.studio_hide_badges();
-            }
-        } else if self.studio_view_row(VIEW_COMPACT).contains(x, y) {
-            self.studio_set_compact(!self.studio.compact);
-        } else if self.studio_view_row(VIEW_RESET).contains(x, y) {
-            self.studio_reset_layout();
-            self.studio.view_menu = false;
-        }
-        true
-    }
-
     /// Chooses how the measurements share the screen.
     pub(super) fn studio_set_view(&mut self, view: StudioView) {
         let was = self.studio.view;
@@ -2649,7 +2447,7 @@ impl Ui {
                 // full screen: its few buttons
                 if self.m.layout == Layout::Studio && self.full_on() && self.full_chrome_rects().is_some_and(|(a, b)| Self::hit40(a).contains(x, y) || Self::hit40(b).contains(x, y)) { return self.studio_eat(x, y); }
                 if self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() || self.m.touch_lock
-                    || self.studio.view_menu || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
+                    || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
                 // the Add measurement panel is open: only its tiles can be dragged
                 if self.menu_open { return self.md_down(x, y); }
                 // the bars with an Undo are above the strips of the views

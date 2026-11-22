@@ -64,7 +64,7 @@ fn toast_text(u: &Ui) -> String { u.toast.as_ref().map(|t| t.0.clone()).unwrap_o
 fn top_rects(u: &Ui) -> Vec<(&'static str, Rect)> {
     let t = u.studio_top();
     let mut v = vec![("run", t.run), ("single", t.single), ("live", t.badge), ("preset", t.sim), ("autoset", t.autoset), ("clear", t.clear), ("force", t.force),
-        ("add", t.add), ("measure", t.measure), ("cursors", t.cursors), ("display", t.display), ("storage", t.storage), ("view", t.view), ("gear", t.gear)];
+        ("add", t.add), ("measure", t.measure), ("cursors", t.cursors), ("display", t.display), ("storage", t.storage), ("gear", t.gear)];
     v.retain(|(_, r)| r.w > 0);
     v
 }
@@ -78,7 +78,7 @@ fn check_top(u: &Ui) {
     for (name, r) in &rects { assert!(r.x >= top.x && r.right() <= top.right() && r.y >= top.y && r.bottom() <= top.bottom(), "{name} {r:?} in {top:?}"); }
     for p in rects.windows(2) { assert!(p[0].1.right() <= p[1].1.x, "{} {:?} overlaps {} {:?}", p[0].0, p[0].1, p[1].0, p[1].1); }
     let labels = &super::studio::TOP_LABELS[t.tier];
-    for (r, label) in [(t.add, labels[3]), (t.display, labels[6]), (t.storage, labels[7]), (t.view, labels[8])] {
+    for (r, label) in [(t.add, labels[3]), (t.display, labels[6]), (t.storage, labels[7])] {
         assert!(r.w > 0 && f.mb.width(label) <= r.w - 4, "{label:?} in {r:?}");
     }
     assert!(t.acq.right() <= t.add.x, "the caption stays left of the buttons");
@@ -117,7 +117,7 @@ fn autoset_clear_and_force_are_front_panel_keys_and_not_in_the_top_bar() {
 fn display_and_storage_open_their_sheets() {
     let mut u = studio();
     let t = u.studio_top();
-    assert!(t.display.w > 0 && t.storage.w > 0 && t.cursors.right() <= t.display.x && t.display.right() <= t.storage.x && t.storage.right() <= t.view.x);
+    assert!(t.display.w > 0 && t.storage.w > 0 && t.cursors.right() <= t.display.x && t.display.right() <= t.storage.x && t.storage.right() <= t.gear.x);
     tap(&mut u, t.display);
     for _ in 0..3 { frame(&mut u); }
     assert!(u.menu_open && u.menu == MenuId::Display && u.sheet_active());

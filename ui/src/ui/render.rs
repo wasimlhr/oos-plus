@@ -179,7 +179,6 @@ impl Ui {
         self.draw_overlay(cv);
         self.workspace_draw(cv);
         self.draw_studio_floating(cv);
-        self.draw_studio_view_menu(cv);
         self.draw_studio_add_menu(cv);
         self.draw_studio_ctx(cv);
         self.draw_pointer(cv);

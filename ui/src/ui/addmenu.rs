@@ -125,7 +125,6 @@ impl Ui {
 
     pub(super) fn studio_add_open(&mut self) {
         if self.menu_open { self.close_menu(); }
-        self.studio.view_menu = false;
         self.studio.popup = None;
         self.studio.add_menu = true;
     }

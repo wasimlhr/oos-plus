@@ -87,6 +87,12 @@ on the plot draws a box, and that box is the zoom window. A tap does not zoom.
 **Windows:** the button with four small windows under the magnifier opens the Windows menu (density, HDMI output and
 the window layout); a second tap closes it. While zoom is on it sits under the zoom bar.
 
+**Studio layout:** the Screen tab of its Display menu has two switches and an action of its own. **Pinned badges**
+shows or hides the row of measurement badges, **Compact view** makes the gaps between the lanes, the badge row and
+the measurement panel smaller, and **Reset layout** brings back the arrangement the layout starts with. Storage >
+Files has **Offline waveform analysis** under the files: a view of the loaded waveform files with their
+measurements; **Live** in the top bar leads back to the acquisition.
+
 ## Views
 
 **From 0.1.12.** Instead of one screen with everything on it, **Display > Views** (2, 3 or 4) gives screens to switch between. Each view keeps what is shown and where: the windows, the second pane, the measurements and their bar, DVM and counter, the cursors, the zoom, the histogram, the analyser page, XY and full screen. The channels, the time base, the trigger and the acquisition are the same in all of them. What you change while a view is shown stays with it; a view not used yet starts with the plot alone. In the Minimal and Studio layouts a view added by raising the count starts as a copy of the view shown, and lowering the count keeps what is on screen.

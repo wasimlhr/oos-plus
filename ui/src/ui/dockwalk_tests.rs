@@ -290,7 +290,6 @@ impl Walk {
         if u.menu_open { u.close_menu(); }
         u.studio.ctx = None;
         u.studio.add_menu = false;
-        u.studio.view_menu = false;
         u.studio.popup = None;
         u.workspace.popup = None;
         u.dialog = None;

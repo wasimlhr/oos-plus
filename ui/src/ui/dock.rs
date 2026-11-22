@@ -335,7 +335,7 @@ pub(super) struct Dock {
     pub tree: Option<Node>,
     /// where each floating view is (kept while it is docked)
     pub float_rect: [Option<Rect>; NK],
-    /// which views float (the measurements follow the View menu: `StudioView::Floating`)
+    /// which views float (the measurements have `StudioView::Floating` for it)
     pub float_on: [bool; NK],
     /// the floating views, the one on top last
     pub z: Vec<VKind>,
@@ -360,7 +360,7 @@ pub(super) struct Dock {
 pub(super) struct Saved {
     pub tree: Option<Node>,
     pub floats: [bool; NK],
-    /// the measurements were floating (they follow the View menu)
+    /// the measurements were floating (`StudioView::Floating`)
     pub meas_floating: bool,
 }
 
@@ -1185,7 +1185,7 @@ impl Ui {
         self.dock_changed();
     }
 
-    /// Floats or docks a view; the measurements follow the View menu setting.
+    /// Floats or docks a view; for the measurements that is their `StudioView`.
     pub(super) fn dock_set_float(&mut self, k: VKind, on: bool) {
         if k == VKind::Measure {
             if on && self.studio.view == StudioView::Docked { self.studio.view = StudioView::Floating; }
@@ -1196,7 +1196,7 @@ impl Ui {
         }
     }
 
-    /// The view menu set the measurements to Floating or Docked: the dock follows.
+    /// The `StudioView` changed (the measurements came, went, float or dock): the dock follows.
     pub(super) fn dock_view_changed(&mut self) {
         self.studio.dock.ver = self.studio.dock.ver.wrapping_add(1);
     }
