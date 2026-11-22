@@ -129,10 +129,30 @@ fn the_add_button_opens_a_panel_that_stays_open_for_several_adds() {
     open_kind(&mut u, AddKind::Cursors);
     assert_eq!(u.sheet.add.kind, Some(AddKind::Cursors));
     shot(&mut u, "add-cursors-page");
+    // the page offers the kinds of cursors, as the Cursor menu of the Default layout names its modes: Add puts on the
+    // one chosen (Track where none was), and a tap on another kind changes the cursors that are on
+    let g = u.rail_geo();
+    assert_eq!(g.types.len(), 3, "Track, Time, Volt");
+    assert!(g.types.iter().all(|(_, r)| r.w >= 40 && r.h >= 40));
     let add = foot(&u, super::addrail::RailAct::Add);
     tap_in(&mut u, add);
     assert_eq!(u.m.cursor, CursorMode::Track);
     assert!(u.menu_open && u.menu == MenuId::AddPanel, "stays open");
+    let volt = u.rail_geo().types[2].1;
+    tap_in(&mut u, volt);
+    assert_eq!(u.m.cursor, CursorMode::Volt, "the horizontal cursors are a kind of their own");
+    shot(&mut u, "add-cursors-volt");
+    let time = u.rail_geo().types[1].1;
+    tap_in(&mut u, time);
+    assert_eq!((u.m.cursor, u.rail_cursor_kind()), (CursorMode::Time, 1));
+    // off, the page keeps the kind that was chosen, and Add puts that one on
+    u.studio_cursors_remove();
+    let volt = u.rail_geo().types[2].1;
+    tap_in(&mut u, volt);
+    assert_eq!(u.m.cursor, CursorMode::Off, "choosing a kind does not put the cursors on");
+    let add = foot(&u, super::addrail::RailAct::Add);
+    tap_in(&mut u, add);
+    assert_eq!(u.m.cursor, CursorMode::Volt);
     open_kind(&mut u, AddKind::Search);
     let add = foot(&u, super::addrail::RailAct::Add);
     tap_in(&mut u, add);
