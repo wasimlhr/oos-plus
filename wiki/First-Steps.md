@@ -158,6 +158,15 @@ channel its number (u32) and the samples (f32, volts). Both hold the record on t
 than two samples per channel, a t0 that is not a finite number, or a dt that is not a finite number above zero is
 refused when it is loaded.
 
+**A capture of another scope.** Storage > Load session also lists the session files of Tektronix's PC program
+(`.tss`), on a stick wherever they lie. Loading one puts its channel records on CH1 to CH4 at their full length,
+with their scales and the time base, and its references into R1 to R10; the scope stops on it, and the decoders,
+measurements and analysers of OOS work on it as on a capture of its own. Its trigger, buses, measurements and
+maths are not read; the message of the load says so, and names waveforms it left out (logic channels, spectrum
+data). Reference > Load file takes the same file when only its waveforms are wanted, in reference slots. What is
+known of the file and what is read is in
+[docs/tss.md](https://github.com/wasimlhr/oos-plus/blob/main/docs/tss.md).
+
 ## Date and time
 
 **From 0.1.6.** The scope has no clock battery and starts in 2013. **System > Date and time**:

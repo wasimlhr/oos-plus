@@ -74,10 +74,15 @@ pub fn file_name(p: &Path) -> String {
 /// How many waveform files of a stick the lists of files to open take (`wave_files_under`).
 pub const STICK_FILES: usize = 40;
 
-/// The waveform files (`WAVE_EXTS`) under `root`, down to `depth` folders below it, at most `max`: the files of a
+/// The waveform files (`WAVE_EXTS`) under `root`: `files_under`.
+pub fn wave_files_under(root: &Path, depth: usize, max: usize) -> Vec<PathBuf> {
+    files_under(root, WAVE_EXTS, depth, max)
+}
+
+/// The files with a suffix of `exts` under `root`, down to `depth` folders below it, at most `max`: the files of a
 /// folder in the order of their names, then its folders. For a stick, whose files lie where their owner put them.
 /// A link is not followed and a name that begins with a dot is left out (a stick is foreign data, `check_target`).
-pub fn wave_files_under(root: &Path, depth: usize, max: usize) -> Vec<PathBuf> {
+pub fn files_under(root: &Path, exts: &[&str], depth: usize, max: usize) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut dirs = vec![(root.to_path_buf(), 0usize)];
     while let Some((dir, level)) = dirs.pop() {
@@ -94,7 +99,7 @@ pub fn wave_files_under(root: &Path, depth: usize, max: usize) -> Vec<PathBuf> {
             let path = e.path();
             if kind.is_file() {
                 let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("").to_ascii_lowercase();
-                if WAVE_EXTS.contains(&ext.as_str()) {
+                if exts.contains(&ext.as_str()) {
                     out.push(path);
                     if out.len() >= max {
                         return out;

@@ -338,7 +338,10 @@ columns of its header, found by name; a CSV file with a time column takes its sa
 run of lines whose time does not go back, so a file of several sweeps keeps the interval of one; and a Tektronix
 session file (`.tss`) gives its analog waveforms, the records of the channels first and then its references, each
 under the name the session gives it, and the message of the load says what was not read (logic waveforms, the
-`_iq` files of a spectrum view; [tss.md](tss.md)).
+`_iq` files of a spectrum view; [tss.md](tss.md)). The same file loads as a session under Storage > Load session,
+`:LOAD:SESSion`, `--open` or dropped on the window: its channel records become the record on CH1 to CH4 at full
+length with their scales and the time base, its references go into the slots of their numbers, and the scope
+stops on it; its trigger, buses, measurements and maths are not read, and the message says so.
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Run simulation mode** plays the signal the SIM knobs describe; **Play references** plays the references that are shown
 (loaded files, signals added to a slot) as the acquisition instead.
@@ -958,7 +961,9 @@ setup to a file, the setup as SCPI) opens the keyboard with the next free name i
 which takes its place (an arrow first keeps the name, to add to it).
 The suffix is added. A name that is taken is said to be taken, and OK once more replaces that file. Save to chooses the
 place: the stick or the local folder. A row that loads (a session, the fast-frame history, a setup from a file) shows
-the files of that kind in the folder, the newest first; tap one. The list scrolls by its bar and by the finger. Setup
+the files of that kind in the folder, the newest first; tap one. Load session lists the session files of another
+instrument (`.tss`, [tss.md](tss.md)) beside OOS's own, and finds them on a stick wherever they lie, three folders
+deep. The list scrolls by its bar and by the finger. Setup
 slot, Save setup and Recall setup are the quick way and do not ask; a setup saved by name lies beside the slots, or on
 the stick when files go there. The Quick key saves under the next free name without a question. The desktop build
 asks with the Save As and Open dialogs of Windows, which choose the folder too.

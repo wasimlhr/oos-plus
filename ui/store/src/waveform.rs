@@ -185,6 +185,9 @@ pub struct Session<R> {
     pub refs: Vec<SessionRef>,
     /// the reference slot that filled the screen when the session was saved in the offline view (`session_view`)
     pub offline_ref: Option<usize>,
+    /// for the message of the load: what a session of another instrument gave and what of it was not read
+    /// (`parse_tss`); empty for a session of OOS, which is read whole
+    pub note: String,
 }
 
 /// The end of a session saved in the offline view, after the reference slots: "VIEW", u32 1 (the offline view) and
@@ -298,7 +301,7 @@ pub fn parse_session<R: Samples>(b: &[u8], slots: usize) -> Result<Session<R>, S
     let offline_ref = b.get(at..at + 12).filter(|end| &end[..4] == b"VIEW" && end[4..8] == 1u32.to_le_bytes())
         .map(|end| u32::from_le_bytes(end[8..12].try_into().unwrap()) as usize)
         .filter(|slot| refs.iter().any(|r| r.slot == *slot));
-    Ok(Session { setup, record, refs, offline_ref })
+    Ok(Session { setup, record, refs, offline_ref, note: String::new() })
 }
 
 /// One OOSW blob: the record and the number of bytes consumed.

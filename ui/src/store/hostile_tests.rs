@@ -121,6 +121,31 @@ fn hostile_session_archives() {
         Err(e) if e.is_empty() => Err("refused without a message".into()),
         Err(_) => Ok(()),
     });
+    // `parse_tss` (the same archive as a session, Storage > Load session): a session it accepts has a waveform, a
+    // record as of a capture file, references in slots that are there with a time base that is one, and a setup
+    // text the reader of setups takes whole
+    run("store::parse_tss", &[&deflated, &stored], 1, |b| match parse_tss(b, NREF) {
+        Ok(s) => {
+            if s.record.is_none() && s.refs.is_empty() {
+                return Err("accepted a session without a waveform".into());
+            }
+            s.record.as_ref().map_or(Ok(()), record_ok)?;
+            let odd = |r: &SessionRef| r.slot >= NREF || r.v.len() < 2 || !(r.dt.is_finite() && r.dt > 0.0) || !r.t0.is_finite();
+            if s.refs.iter().any(odd) || s.offline_ref.is_some_and(|slot| !s.refs.iter().any(|r| r.slot == slot)) {
+                return Err("accepted a reference that is not valid, or shows one it does not hold".into());
+            }
+            parse_setup(&s.setup).map(|_| ()).map_err(|e| format!("made a setup the reader refuses: {e}"))
+        }
+        Err(e) if e.is_empty() => Err("refused without a message".into()),
+        Err(_) => Ok(()),
+    });
+}
+
+/// Why both entries refuse an archive: as waveforms (`parse_wave`) and as a session (`parse_tss`), with one reason.
+fn refused_both(b: &[u8]) -> String {
+    let as_waves = parse_wave(b, "a.tss").unwrap_err();
+    assert_eq!(parse_tss(b, NREF).err(), Some(as_waves.clone()));
+    as_waves
 }
 
 // Break it catches: an archive whose list of entries is believed (sizes, places, kinds) before it is checked
@@ -128,16 +153,19 @@ fn hostile_session_archives() {
 fn hostile_archive_is_refused_with_its_reason() {
     let (good, list, end) = session_archive();
     assert_eq!(parse_wave(&good, "a.tss").unwrap().len(), 2);
+    assert_eq!(parse_tss(&good, NREF).map(|s| (s.record.is_some(), s.refs.len())), Ok((true, 1)));
     let refused = |at: usize, patch: &[u8]| {
         let mut b = good.clone();
         b[at..at + patch.len()].copy_from_slice(patch);
-        parse_wave(&b, "a.tss").unwrap_err()
+        refused_both(&b)
     };
     // the entries of the list: the picture, the settings archive, the record of the channel
     let set = list + 46 + "shot.png".len();
     let ch1 = set + 46 + "bench.set".len();
-    for cut in [0, 3, 4, 100, list - 1, list, list + 40, end, end + 21] {
-        assert!(!parse_wave(&good[..cut], "a.tss").unwrap_err().is_empty(), "cut at {cut}");
+    // (under four bytes it is no archive to the reader of waveforms, and to the reader of sessions a cut one)
+    assert!(parse_wave(&good[..3], "a.tss").is_err() && parse_tss(&good[..3], NREF).is_err_and(|e| e.contains("cut short")));
+    for cut in [4, 100, list - 1, list, list + 40, end, end + 21] {
+        assert!(!refused_both(&good[..cut]).is_empty(), "cut at {cut}");
     }
     assert!(refused(list - 20, &[0xFF]).contains("check sum"), "a byte of the record changed");
     assert!(refused(set + 16, &[0xFF]).contains("check sum"), "the check sum of the settings archive changed");
@@ -150,9 +178,9 @@ fn hostile_archive_is_refused_with_its_reason() {
     assert!(refused(ch1 + 46, b"../").contains("leaves the archive"));
     // more entries than are read, and an archive three deep
     let many: Vec<ZipFile> = (0..300).map(|_| ZipFile::stored("x.wfm", b"")).collect();
-    assert!(parse_wave(&zip(&many), "a.tss").unwrap_err().contains("300 entries"));
+    assert!(refused_both(&zip(&many)).contains("300 entries"));
     let deep = zip(&[ZipFile::stored("a.set", &zip(&[ZipFile::stored("b.set", &good)]))]);
-    assert!(parse_wave(&deep, "a.tss").unwrap_err().contains("an archive in an archive in an archive"));
+    assert!(refused_both(&deep).contains("an archive in an archive in an archive"));
 }
 
 // Break it catches: a CSV time base taken without the check of the binary readers (#181)

@@ -173,6 +173,8 @@ fn storage_texts(kind: crate::ui::FileKind, save: bool) -> (String, String) {
     let (what, kinds): (&str, &[(&str, &str)]) = match kind {
         Setup => ("setup", &[("Setups", "*.txt;*.stp")]),
         SetupScpi => ("setup as SCPI", &[("SCPI commands", "*.scpi;*.txt")]),
+        // a load also takes the session archive of another instrument (docs/tss.md); a save writes OOS's own
+        Session if !save => ("session", &[("Sessions", "*.oss;*.tss")]),
         Session => ("session", &[("Sessions", "*.oss")]),
         WaveCsv => ("waveform (CSV)", &[("CSV", "*.csv")]),
         WaveBin => ("waveform (binary)", &[("OOS waveforms", "*.bin")]),

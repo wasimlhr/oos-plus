@@ -538,6 +538,14 @@ fn storage_zoom(t: &mut T) {
     t.go(&format!(":LOAD:SESS \"{}\"", sess.display()));
     assert_eq!(t.raw(":TIM:SCAL?"), before, "the session brings its time base back");
     t.no(":LOAD:SESS \"no-such-file.oss\"", "-224");
+    // the session archive of another instrument (docs/tss.md), by what the file holds: its record on CH2
+    let foreign = t.ui.files.dir.join("faster.tss");
+    let record = oos_store::testkit::wfm_f32(b":WFM#003", -1e-6, 1e-9, &[0.25; 2000], "");
+    std::fs::write(&foreign, oos_store::testkit::tss(":CH2:SCALE 500.0000E-3\n", &[], &[("ch2.wfm", record)])).unwrap();
+    t.go(&format!(":LOAD:SESS \"{}\"", foreign.display()));
+    assert_eq!(t.raw(":CHAN2:DISP?;:CHAN1:DISP?;:CHAN2:SCAL?;:TIM:SCAL?"), "1;0;5.000000E-01;2.000000E-07");
+    std::fs::write(&foreign, b"PK\x03\x04 and no more").unwrap();
+    t.no(&format!(":LOAD:SESS \"{}\"", foreign.display()), "-224");
     t.no(":SAVE:SESS?", "-113");
     t.go(":LOAD:FFR");
     // Studio zoom

@@ -114,6 +114,16 @@ fn starts_with(path: &Path, magic: &[u8]) -> bool {
     std::fs::File::open(path).and_then(|mut f| f.read_exact(&mut head[..n])).is_ok() && head[..n] == magic[..n]
 }
 
+/// The suffix of the session archive of another instrument (docs/tss.md), which Load session lists and loads beside
+/// the sessions of OOS. Save session writes OOS's own file only.
+const FOREIGN_SESSION: &str = "tss";
+
+/// Whether `path` is such an archive, for a list of sessions: by its suffix and its first bytes, those of a zip.
+fn foreign_session(kind: FileKind, path: &Path) -> bool {
+    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+    kind == FileKind::Session && ext.eq_ignore_ascii_case(FOREIGN_SESSION) && starts_with(path, b"PK\x03\x04")
+}
+
 impl Ui {
     /// The desktop build asks with the dialogs of its system; the scope has none.
     fn native_files(&self) -> bool {
@@ -241,8 +251,17 @@ impl Ui {
             // a setup of the stock naming (`:SAVE:SETup "name.stp"`) is a setup too
             let fits = ext == kind.ext() || (kind == FileKind::Setup && ext == "stp");
             let meta = e.metadata().ok().filter(|m| m.is_file())?;
-            (fits && starts_with(&p, kind.magic())).then(|| (meta.modified().unwrap_or(std::time::UNIX_EPOCH), p))
+            (fits && starts_with(&p, kind.magic()) || foreign_session(kind, &p)).then(|| (meta.modified().unwrap_or(std::time::UNIX_EPOCH), p))
         }).collect();
+        // on a stick, the session archives of another instrument wherever they lie, as its waveform files are found
+        // (`ref_wave_candidates`): they were copied there on a PC, not saved into the folder of OOS
+        if let (FileKind::Session, true, Some(stick)) = (kind, self.stick.mounted, Path::new(crate::store::USB_DIR).parent()) {
+            for p in crate::store::files_under(stick, &[FOREIGN_SESSION], 3, crate::store::STICK_FILES) {
+                if foreign_session(kind, &p) && !v.iter().any(|(_, q)| *q == p) {
+                    v.push((p.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH), p));
+                }
+            }
+        }
         // files of the same second (a stick keeps two seconds): the later name first
         v.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
         v.truncate(LIST_MAX);
@@ -570,6 +589,181 @@ mod tests {
         u.file_load_latest(FileKind::FastFrame);
         assert!(!u.history.recs.is_empty(), "{:?}", u.toast);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A ramp of `n` samples, 1 ns apart from `t0` on, as a `:WFM#003` file.
+    fn ramp(n: usize, t0: f64, top: f32) -> Vec<u8> {
+        let v: Vec<f32> = (0..n).map(|k| top * k as f32 / n as f32).collect();
+        oos_store::testkit::wfm_f32(b":WFM#003", t0, 1e-9, &v, "")
+    }
+
+    /// The settings of a session of another instrument (docs/tss.md): two channels and two references.
+    const FOREIGN: &str = "*RST;:PARAMBATCHING 0;:ACQUIRE:STATE 0\n:CH1:SCALE 200.0000E-3\n:CH1:POSITION -2.0000\n\
+        :CH1:OFFSET 0.0E+0\n:CH1:LABEL:NAME \"Rail%203V3\"\n:CH3:SCALE 25.0000E-3\n:CH3:POSITION 0.0E+0\n\
+        :DISPLAY:GLOBAL:CH1:STATE 1\n:DISPLAY:GLOBAL:CH3:STATE 1\n:HORIZONTAL:SCALE 1.0000E-6\n\
+        :HORIZONTAL:POSITION 50.0000\n:HORIZONTAL:DELAY:MODE 0\n:TRIGGER:A:EDGE:SOURCE CH3\n:BUS:B1:TYPE I2C\n\
+        :DISPLAY:WAVEVIEW1:REF:REF2:VERTICAL:SCALE 2.0000\n:DISPLAY:WAVEVIEW1:REF:REF2:VERTICAL:POSITION 1.5000\n\
+        :DISPLAY:GLOBAL:REF2:STATE 1\n:REF:REF2:LABEL:NAME \"Hall A\"\n:DISPLAY:GLOBAL:REF5:STATE 0\n";
+
+    /// The session archive of another instrument loads as a session, down the path of OOS's own: its channel records
+    /// are the record, at full length and with their time step, the references are in the slots of their numbers
+    /// under their names, the scope is stopped on the loaded record, and the message says what was taken and what
+    /// not. Load session lists the file beside the sessions of OOS, in the dialog of Default and on the sheet of
+    /// Studio, and `:LOAD:SESSion` and a file named at the start take it too.
+    #[test]
+    fn a_session_of_another_instrument_loads_as_a_session() {
+        use oos_store::testkit::tss;
+        let (mut u, dir) = bench("tss");
+        let mut bits = ramp(100, 0.0, 1.0);
+        bits[122] = 6;
+        let refs = [(2, "hall.wfm", ramp(4000, -2e-6, 3.0)), (5, "edge.wfm", ramp(300, 0.0, 1.0)), (6, "bits.wfm", bits)];
+        let beside = [("ch1.wfm", ramp(10_000, -5e-6, 0.8)), ("ch3.wfm", ramp(10_000, -5e-6, 0.1))];
+        let file = dir.join("faster scope.tss");
+        std::fs::write(&file, tss(FOREIGN, &refs, &beside)).unwrap();
+        std::fs::write(dir.join("notes.tss"), b"not an archive").unwrap();
+        u.file_save(FileKind::Session, dir.join("own.oss"));
+        u.refs[8] = Some(RefWave { src: 0, color: 0, label: "old".into(), t0: 0.0, dt: 1e-9, v: vec![0.0; 16].into(), vpd: 1.0, offset: 0.0, on: true });
+
+        u.open_menu(MenuId::Storage);
+        u.activate(Item::StoreSessLoad);
+        let mut names = u.options(Item::StoreFile);
+        names.sort();
+        assert_eq!(names, ["faster scope.tss", "own.oss"], "the sessions of both kinds, by what they hold");
+        let k = u.options(Item::StoreFile).iter().position(|n| n == "faster scope.tss").unwrap();
+        u.activate(Item::PickOpt(k));
+        let said = u.toast.as_ref().unwrap().0.clone();
+        assert_eq!(said, "Loaded faster scope.tss: waveforms, scales and time base, without its trigger, buses, measurements and maths; not read: 1 digital waveform");
+        assert!(u.fonts().mb.width(&said) + 44 <= W, "the message fits the screen");
+
+        // the record: both channels, every sample, on the time axis of the files
+        for (c, top) in [(0, 0.8f32), (2, 0.1)] {
+            let (v, dt, t0) = u.channel_view(c, true).unwrap();
+            assert_eq!((v.len(), dt, t0), (10_000, 1e-9, -5e-6), "CH{}", c + 1);
+            assert_eq!(v[5000], top * 0.5);
+        }
+        assert!(u.channel_view(1, true).is_none() && u.channel_view(3, true).is_none());
+        let on: Vec<bool> = u.m.ch.iter().map(|ch| ch.on).collect();
+        assert_eq!(on, [true, false, true, false]);
+        assert_eq!((u.m.ch[0].volts_per_div(), u.m.ch[0].offset, u.m.ch_label[0].as_str()), (0.2, -0.4, "Rail 3V3"));
+        assert_eq!((VSCALES[u.m.ch[2].vscale], u.m.ch[2].vfine, u.m.ch[2].offset), (0.02, 1.25, 0.0));
+        // the window of the settings: 1 us a division around the trigger, which is the whole record
+        assert_eq!((u.m.time_per_div(), u.m.delay), (1e-6, 0.0));
+        // stopped on the loaded record, as after a session of OOS; the references beside it, not in its place
+        assert!(u.m.run == RunState::Stop && u.loaded_record && !u.record_mode());
+        let hall = u.refs[1].as_ref().unwrap();
+        assert_eq!((hall.label.as_str(), hall.v.len(), hall.dt, hall.t0, hall.vpd, hall.offset, hall.on), ("Hall A", 4000, 1e-9, -2e-6, 2.0, 3.0, true));
+        let edge = u.refs[4].as_ref().unwrap();
+        assert_eq!((edge.label.as_str(), edge.v.len(), edge.on), ("edge", 300, false));
+        assert!(edge.vpd > 0.0 && u.refs[5].is_none() && u.refs[8].is_none(), "a session is the whole bench");
+        // what is not mapped is the default, not a guess: the trigger of the settings was on CH3
+        assert_eq!((u.m.trig_src, u.m.trig_type, u.m.dec_on), (0, Model::default().trig_type, Model::default().dec_on));
+
+        // by SCPI, and named at the start of the program
+        u.m.ch[0].on = false;
+        u.session_load(file.to_str().unwrap()).unwrap();
+        assert!(u.m.ch[0].on && u.refs[1].is_some());
+        let mut other = Ui::new(Source::Demo { t: 0.0 });
+        crate::open_file(&mut other, file.to_str().unwrap()).unwrap();
+        assert_eq!(other.channel_view(2, true).unwrap().0.len(), 10_000);
+        assert!(other.refs[1].is_some() && other.loaded_record);
+        // Save session writes OOS's own file, which holds what was loaded
+        other.files.dir = dir.clone();
+        let saved = other.session_save("").unwrap();
+        assert!(saved.extension().unwrap() == "oss" && crate::store::looks_session(&std::fs::read(&saved).unwrap()));
+
+        // the sheet of Studio lists it too
+        u.m.layout = Layout::Studio;
+        u.studio.enter = true;
+        for _ in 0..8 {
+            u.step(0.05);
+        }
+        u.open_menu(MenuId::Storage);
+        u.activate(Item::StoreSessLoad);
+        assert!(u.sheet_active());
+        assert_eq!(u.sheet_pick_cells().0.len(), 3, "own.oss, the one just saved and the archive");
+        assert!(u.file_list.contains(&file));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A session archive with references only fills the screen with its first reference, in the offline view, on the
+    /// time base of that record; one without a waveform, a damaged one and one that is no session leave the bench as
+    /// it is and say why.
+    #[test]
+    fn a_session_of_another_instrument_with_references_only_and_one_that_cannot_be_read() {
+        use oos_store::testkit::{tss, zip, ZipFile};
+        let (mut u, dir) = bench("tss-refs");
+        let file = dir.join("refs.tss");
+        let refs = [(3, "late.wfm", ramp(500, 0.0, 1.0)), (2, "first.wfm", ramp(20_000, -4e-6, 2.5))];
+        std::fs::write(&file, tss(":HORIZONTAL:SCALE 4.0000E-3\n:HORIZONTAL:POSITION 50.0000\n", &refs, &[])).unwrap();
+        u.session_read(file.clone()).unwrap();
+        assert!(u.record_mode() && u.offline.on && u.offline.slot == 1, "the offline view on R2");
+        assert!(u.m.ch.iter().all(|ch| !ch.on) && u.m.run == RunState::Stop);
+        let first = u.refs[1].as_ref().unwrap();
+        assert_eq!((first.label.as_str(), first.v.len(), first.on), ("first", 20_000, true));
+        assert_eq!((first.vpd, first.offset), (0.5, -1.0), "fitted to the samples: no scale in the settings");
+        assert_eq!(u.refs[2].as_ref().unwrap().v.len(), 500);
+        // the record of R2 on the screen (20 us from -4 us), not the 40 ms of the settings, which are the acquisition's
+        assert_eq!((u.m.time_per_div(), u.m.delay), (2e-6, 6e-6));
+
+        let before = (u.m.clone(), u.refs[1].as_ref().map(|r| r.v.len()));
+        let mut refused = |name: &str, bytes: Vec<u8>| {
+            let p = dir.join(name);
+            std::fs::write(&p, bytes).unwrap();
+            let e = u.session_read(p).unwrap_err();
+            assert_eq!(u.toast.as_ref().unwrap().0, format!("Load failed: {e}"));
+            assert_eq!((u.m.clone(), u.refs[1].as_ref().map(|r| r.v.len())), before, "{name}: the bench is as it was");
+            e
+        };
+        assert_eq!(refused("empty.tss", tss("", &[], &[])), "the session holds no waveform");
+        let good = tss("", &refs, &[]);
+        assert_eq!(refused("cut.tss", good[..good.len() - 30].to_vec()), "the archive is cut short or damaged");
+        assert!(refused("plain.tss", zip(&[ZipFile::stored("a.txt", b"hello")])).contains("holds no session"));
+        assert_eq!(refused("text.tss", b"OOSW and no more".to_vec()), "not an OOS session file");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The local check: every session archive under the folder `OOS_TSS_DIR` loads as a session or is refused with a
+    /// reason, and the counts are printed (`cargo test local_folder_load_as -- --nocapture`). Skipped when the
+    /// variable is not set: the archives of an instrument are not part of the tree.
+    #[test]
+    fn the_session_archives_of_a_local_folder_load_as_sessions_or_say_why() {
+        let Ok(folder) = std::env::var("OOS_TSS_DIR") else { return };
+        let files = crate::store::files_under(Path::new(&folder), &[FOREIGN_SESSION], 4, 10_000);
+        let (mut with_record, mut references_only, mut left_out, mut longest, mut slowest) = (0, 0, 0, 0, (0.0, 0, 0));
+        let mut refused: std::collections::BTreeMap<String, usize> = Default::default();
+        for (k, p) in files.iter().enumerate() {
+            let mut u = Ui::new(Source::Demo { t: 0.0 });
+            let start = std::time::Instant::now();
+            match u.session_read(p.clone()) {
+                Ok(()) => {
+                    let took = start.elapsed().as_secs_f64();
+                    let record = (0..NCH).filter_map(|c| u.channel_view(c, true)).map(|(v, _, _)| v.len()).max();
+                    let slots = u.refs.iter().flatten().count();
+                    assert!(u.m.run == RunState::Stop && u.loaded_record, "file {k}");
+                    assert!(record.is_some() != u.offline.on && (record.is_some() || slots > 0), "file {k}");
+                    assert!(u.m.time_per_div() > 0.0 && u.m.delay.is_finite(), "file {k}");
+                    with_record += record.is_some() as usize;
+                    references_only += record.is_none() as usize;
+                    left_out += u.toast.as_ref().is_some_and(|t| t.0.contains("not read:")) as usize;
+                    longest = longest.max(record.unwrap_or(0));
+                    if took > slowest.0 {
+                        slowest = (took, std::fs::metadata(p).map_or(0, |m| m.len()), record.unwrap_or(0));
+                    }
+                }
+                Err(e) => {
+                    assert!(!e.is_empty() && u.toast.as_ref().is_some_and(|t| t.0.starts_with("Load failed: ")), "file {k}");
+                    *refused.entry(e).or_default() += 1;
+                }
+            }
+        }
+        let loaded = with_record + references_only;
+        println!("{} archives: {loaded} load as a session, {} are refused", files.len(), files.len() - loaded);
+        println!("{with_record} with a record of channels, {references_only} with references only, {left_out} with waveforms left out");
+        println!("the longest record has {longest} samples a channel");
+        println!("the slowest load took {:.2} s: {} bytes, a record of {} samples a channel", slowest.0, slowest.1, slowest.2);
+        for (reason, n) in &refused {
+            println!("  {n} x {reason}");
+        }
     }
 
     /// Studio and Minimal show a menu as a sheet: the keyboard is the same one, and the list is the sheet's own list
