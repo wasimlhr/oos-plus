@@ -275,8 +275,6 @@ const OFF_PILL_W: i32 = 60;
 const OFF_PILL_MAX_W: i32 = 96;
 /// Width of the chip at the end of the badge row: a number and the arrow that says it opens something.
 pub(super) const LIST_W: i32 = 58;
-/// Height a list row gets for the header of its source.
-pub(super) const GROUP_BAND: i32 = 14;
 
 /// The chip that adds a source, and the short form of the generator's pill (its name alone).
 const ADD_W: i32 = 62;
@@ -1285,7 +1283,6 @@ impl Ui {
             // a tap on the chip that opened it only closes it; any other tap closes it and goes on
             if self.studio_bottom().add.contains(x, y) { return true; }
         }
-        if self.md_menu_tap(x, y) { return true; }
         if self.md_hide_bar().is_some_and(|(bar, _)| bar.contains(x, y)) && self.md_undo_tap(x, y) { return true; }
         if self.md_undo_bar().is_some_and(|(bar, _)| bar.contains(x, y)) && self.md_undo_tap(x, y) { return true; }
         if self.studio_popup_tap(x, y) { return true; }
@@ -1604,12 +1601,6 @@ impl Ui {
         self.relayout();
     }
 
-    /// The measurements of the floating panel: the pinned ones and those moved there from a badge.
-    pub(super) fn studio_float_keys(&self) -> Vec<MeasKey> {
-        let pinned = self.studio_pinned();
-        self.studio_keys().into_iter().filter(|k| pinned.contains(k) || self.studio.floated.contains(k)).collect()
-    }
-
     pub(super) fn studio_is_pinned(&self, key: MeasKey) -> bool {
         self.studio_pinned().contains(&key)
     }
@@ -1711,16 +1702,7 @@ impl Ui {
     }
     pub(super) fn studio_panel_row(&self) -> i32 {
         if self.studio_detailed() { return self.detail_row_h(); }
-        if self.panel_is_cards() { return super::measpanel::CARD_H + 4; }
-        // the tallest a row gets: its body and the band of a header (the paging is by this)
-        self.studio_row_body() + if self.studio_multi_source() && self.studio.view != StudioView::Sim { GROUP_BAND } else { 0 }
-    }
-
-    /// The height of a row without the band of a header.
-    pub(super) fn studio_row_body(&self) -> i32 {
-        let base = if self.studio.compact && self.studio.view != StudioView::Sim { 36 } else { PANEL_ROW_FULL };
-        // a row with statistics has a small line more
-        if self.studio_stats_any() && self.studio.view != StudioView::Sim { base + super::measview::STATS_LINE } else { base }
+        if self.panel_is_cards() { super::measpanel::CARD_H + 4 } else { super::measpanel::CELL_H + 2 }
     }
     /// The one chip at the right end of the row: how many measurements there are, or "+N" when N pinned ones have no
     /// place on the row, and an arrow. It opens the table of the measurements. It is as small as a badge: the row had
@@ -2232,9 +2214,8 @@ impl Ui {
 /// Below this width the footer of the panel stacks its two buttons narrower, with shorter labels.
 #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
 pub(super) const NARROW_PANEL_W: i32 = 250;
-/// Width of the measurement panel, docked or floating, and the height of a row in it.
+/// Width of the measurement panel, docked or floating.
 const MEAS_PANEL_W_FULL: i32 = 270;
-const PANEL_ROW_FULL: i32 = 46;
 /// Rows of the table that has the whole body.
 const TABLE_ROW: i32 = 44;
 
@@ -2245,14 +2226,10 @@ pub(super) enum StudioDrag {
     Scroll { y0: i32, first0: usize, moved: bool },
     /// a touch on a panel or the table that scrolls nothing: it ends in a tap
     Eat { x0: i32, y0: i32 },
-    /// the floating panel moves with the finger
-    Move { x0: i32, y0: i32, at0: (i32, i32), moved: bool },
     /// the Menu page moves with the finger
     MenuScroll { y0: i32, s0: i32, moved: bool },
-    /// a row swiped sideways
+    /// a row of the table swiped sideways
     Swipe { key: MeasKey, x0: i32, y0: i32 },
-    /// a row held and dragged to reorder or pin
-    Reorder { key: MeasKey, x: i32, y: i32 },
     /// a badge held and dragged
     BadgeDrag { key: MeasKey, x: i32, y: i32 },
     /// the detailed table dragged sideways
@@ -2324,16 +2301,6 @@ impl Ui {
         v
     }
 
-    /// Several sources measure something: the list shows a header per source and the table names it in the first row.
-    pub(super) fn studio_multi_source(&self) -> bool {
-        let mut seen: Vec<WaveId> = Vec::new();
-        for key in self.studio_keys() {
-            let s = Self::studio_key_source(key);
-            if self.studio_source_live(s) && !seen.contains(&s) { seen.push(s); }
-        }
-        seen.len() > 1 && self.studio.filter.is_none()
-    }
-
     /// The measurement panel (docked or floating) and the SIM panel: the room under their title strip, in the dock.
     pub(super) fn studio_panel_rect(&self) -> Option<Rect> {
         match self.studio.view {
@@ -2368,45 +2335,13 @@ impl Ui {
         let list_y = p.y + Self::panel_tool_h(p) + if detailed { super::measview::COL_HEAD } else { 0 };
         let unit = self.studio_panel_row();
         let rows_h = (p.bottom() - 2 - list_y).max(unit);
-        let page = if self.panel_is_cards() { Self::panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
-        let shown_h = if self.panel_is_cards() { (page as i32 / Self::panel_card_cols(p.w - 8)) * (super::measpanel::CARD_H + 4) } else { rows_h };
+        let page = if self.panel_cells() { self.panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
+        let shown_h = if self.panel_cells() { (page as i32 / self.panel_cell_geo(p.w - 8).0) * unit } else { rows_h };
         let list = Rect::new(p.x + 4, list_y, p.w - 8, shown_h);
         let bar = self.panel_bar(p);
         let at = |it: super::measpanel::BarItem| bar.slots.iter().find(|s| s.item == it).map_or(Rect::new(0, 0, 0, 0), |s| s.r);
         let none = Rect::new(0, 0, 0, 0);
         PanelGeo { p, maximize: none, collapse: none, list, page, up: none, down: none, add: at(super::measpanel::BarItem::Add), stats: at(super::measpanel::BarItem::Stats), short: false }
-    }
-
-    /// Floating panel: its title bar, close, the Dock and View all buttons.
-    pub(super) fn studio_float_parts(&self) -> Option<(Rect, Rect, Rect, Rect)> {
-        let p = self.studio_panel_rect().filter(|_| false)?;
-        Some((Rect::new(p.x, p.y, p.w - 44, 40), Rect::new(p.right() - 42, p.y + 5, 36, 30),
-            Rect::new(p.x + 8, p.bottom() - 46, p.w / 2 - 12, 38), Rect::new(p.x + p.w / 2 + 4, p.bottom() - 46, p.w / 2 - 12, 38)))
-    }
-
-    /// One row of the docked and floating panel: the source as a bar of its colour, the name over the value, the pin.
-    pub(super) fn draw_panel_row(&self, cv: &mut Canvas, r: Rect, row: &tools::MeasRow, pinned: bool, band: i32) {
-        let f = self.fonts();
-        // the source is a thin bar of its colour at the left edge; its name is in the header of the group. It was
-        // written under the name as well, which took the line the name needs: beside the value a name was cut
-        // ("Peak-to", "Rise Tim"), and in a compact row the source was cut at the foot
-        let y0 = r.y + band;
-        cv.round(Rect::new(r.x + 3, y0 + 5, 4, (r.bottom() - y0 - 12).max(8)), 2, self.wave_color(row.src), 255);
-        let x = r.x + 16;
-        // the name has the line to itself, the value is under it
-        let right = r.right() - 92;
-        let compact = self.studio.compact && self.studio.view != StudioView::Sim;
-        let (name_y, value_y) = if compact { (y0 + 13, y0 + 30) } else { (y0 + 17, y0 + 37) };
-        let outer = cv.save_clip();
-        cv.clip_within(Rect::new(x, r.y, (right - x).max(1), r.h));
-        cv.text(&f.s, x, name_y, &row.name, LABEL);
-        cv.text(&f.mb, x, value_y, &row.text(), TEXT);
-        cv.restore_clip(outer);
-        let (pin, menu) = Self::md_row_buttons(r);
-        icon_pin(cv, pin.x + pin.w / 2 - 6, r.y + r.h / 2 + 1, pinned, if pinned { AMBER } else { DIM });
-        // the row's menu: three dots
-        for k in -1..=1 { cv.circle(menu.x + menu.w / 2, r.y + r.h / 2 + 7 * k, 2, DIM); }
-        cv.hline(r.x + 6, r.right() - 7, r.bottom() - 1, LINE);
     }
 
     pub(super) fn draw_scrollbar(cv: &mut Canvas, list: Rect, first: usize, page: usize, total: usize) {
@@ -2443,11 +2378,9 @@ impl Ui {
         if self.studio_table_rect().is_some() { return self.draw_studio_table(cv); }
         if self.studio.view == StudioView::Sim { return self.draw_studio_sim(cv); }
         let Some(p) = self.studio_panel_rect() else { return };
-        let f = self.fonts();
         let rows = self.meas_rows();
         let keys = self.studio_keys();
         let listed = self.studio_listed(&rows);
-        let pinned = self.studio_pinned();
         cv.round(p, 8, if self.studio.view == StudioView::Floating { BTN_BORDER } else { CARD_BORDER }, 255);
         cv.round(p.inset(1), 7, PANEL_BG, 255);
         if let Some(g) = self.studio_panel_geo() {
@@ -2456,64 +2389,13 @@ impl Ui {
             let first = self.studio_first(listed.len(), g.page);
             if detailed { self.draw_panel_detail(cv, &g, &rows, &keys, &listed, first); }
             cv.set_clip(g.list);
-            let cards = self.panel_is_cards();
-            if cards { self.draw_panel_cards(cv, &g, &rows, &keys, &listed, first); }
-            let layout = if detailed || cards { Vec::new() } else { self.panel_layout(&rows, &listed, first, g.list) };
-            for &(pos, r) in &layout {
-                let i = listed[pos];
-                // a row that is swiped or springs back slides left over a red Remove
-                let md = &self.studio.md;
-                let off = match (keys.get(i), md.swipe, md.spring) {
-                    (Some(a), Some((b, dx)), _) if *a == b => dx,
-                    (Some(a), _, Some((b, dx))) if *a == b => dx as i32,
-                    _ => 0,
-                };
-                if off < 0 {
-                    let rev = Rect::new((r.right() + off).max(r.x), r.y, (-off).min(r.w), r.h);
-                    cv.fill(rev, mix(PANEL_BG, RED, 150));
-                    cv.text_in(&f.mb, rev, 1, "Remove", TEXT);
-                }
-                // the first row of a source: its header, the one place the name is written
-                let band = if self.studio_multi_source() && r.h > self.studio_row_body() { GROUP_BAND } else { 0 };
-                if band > 0 {
-                    let n = listed.iter().filter(|&&j| rows[j].src == rows[i].src).count();
-                    cv.text(&f.sb, r.x + 8, r.y + 11, &format!("{} \u{b7} {}", self.wave_name(rows[i].src), n), self.wave_color(rows[i].src));
-                }
-                self.draw_panel_row(cv, Rect::new(r.x + off, r.y, r.w, r.h), &rows[i], keys.get(i).is_some_and(|k| pinned.contains(k)), band);
-                if keys.get(i).is_some_and(|k| self.studio_stats_on(*k)) { self.draw_panel_stats_line(cv, Rect::new(r.x + off, r.y, r.w, r.h), i, &rows[i]); }
-            }
+            if self.panel_is_strip() { self.draw_panel_strip(cv, &g, &rows, &keys, &listed, first); cv.set_clip(g.list); }
+            else if !detailed { self.draw_panel_cards(cv, &g, &rows, &keys, &listed, first); }
             if rows.is_empty() { self.draw_panel_empty(cv, g.list); }
             cv.no_clip();
             // the thin mark that shows where the list is (there is no pager)
             Self::draw_scroll_mark(cv, g.list, self.panel_scroll_px(), self.panel_scroll_max(listed.len(), &g) + g.list.h);
             self.draw_panel_drop(cv);
-        } else if let Some((title, close, dock, all)) = self.studio_float_parts() {
-            // the dotted handle shows that the panel can be moved
-            for (dx, dy) in [(0, 0), (6, 0), (12, 0), (0, 6), (6, 6), (12, 6), (0, 12), (6, 12), (12, 12)] {
-                cv.fill(Rect::new(p.x + 14 + dx, p.y + 13 + dy, 2, 2), DIM);
-            }
-            cv.text(&f.lb, p.x + 44, title.y + 27, "Measurements", TEXT);
-            chip(cv, close, BTN, BTN_BORDER);
-            let (cx, cy) = (close.x + close.w / 2, close.y + close.h / 2);
-            cv.line(cx - 5, cy - 5, cx + 5, cy + 5, TEXT);
-            cv.line(cx - 5, cy + 5, cx + 5, cy - 5, TEXT);
-            let shown = self.studio_float_keys();
-            cv.text(&f.s, p.x + 14, p.y + 56, &format!("{} shown \u{b7} {} total", shown.len(), rows.len()), DIM);
-            let mut k = 0;
-            for key in &shown {
-                let Some(i) = self.studio_index(*key).filter(|&i| i < rows.len()) else { continue };
-                if k >= 5 { break; }
-                self.draw_panel_row(cv, Rect::new(p.x + 4, p.y + 64 + k * self.studio_panel_row(), p.w - 8, self.studio_panel_row()), &rows[i], true, 0);
-                k += 1;
-            }
-            if k == 0 { cv.text(&f.s, p.x + 14, p.y + 64 + 28, "Nothing shown yet", DIM); }
-            chip(cv, dock, BTN, BTN_BORDER);
-            cv.round_outline(Rect::new(dock.x + 12, dock.y + 12, 16, 12), 2, TEXT);
-            cv.vline(dock.x + 23, dock.y + 12, dock.y + 23, TEXT);
-            cv.text_in(&f.m, Rect::new(dock.x + 34, dock.y, dock.w - 34, dock.h), 0, "Dock", TEXT);
-            chip(cv, all, BTN, BTN_BORDER);
-            cv.text_in(&f.m, Rect::new(all.x + 8, all.y, all.w - 22, all.h), 1, &format!("View all {}", rows.len()), TEXT);
-            chevron(cv, all.right() - 14, all.y + all.h / 2, 1, TEXT);
         }
     }
 
@@ -2701,46 +2583,18 @@ impl Ui {
             else if g.add.contains(x, y) { self.open_meas_list(); }
             else if g.list.contains(x, y) {
                 let first = self.studio_first(listed.len(), g.page);
-                let hit = if self.panel_is_cards() {
-                    self.panel_cards_layout(first, listed.len(), g.list).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
-                } else if self.studio_detailed() {
+                let hit = if self.studio_detailed() {
                     self.detail_layout(&g, listed.len(), first).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
                 } else {
-                    self.panel_layout(&rows, &listed, first, g.list).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
+                    self.panel_cards_layout(first, listed.len(), g.list).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
                 };
                 if rows.is_empty() && Self::panel_empty_button(g.list).contains(x, y) { self.open_meas_list(); return true; }
-                if let Some((i, row)) = hit {
-                    let (pin, menu) = Self::md_row_buttons(row);
-                    if self.panel_is_cards() {
-                        let key = keys.get(i).copied();
-                        if Self::panel_card_pin(row).contains(x, y) { if let Some(key) = key { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); } } else { self.studio_configure(i); }
-                    } else if self.studio_detailed() {
-                        // the table: the whole row opens its settings (the pin is on the cards and in the list)
-                        self.studio_configure(i);
-                    }
-                    else if menu.contains(x, y) {
-                        if let Some(&key) = keys.get(i) { self.studio.md.menu = Some(key); }
-                    } else if pin.contains(x, y) {
+                if let Some((i, cell)) = hit {
+                    // a card and a cell have their pin; the rest, and a row of the table, open the settings (with Remove)
+                    let pin = if self.panel_is_strip() { Self::panel_cell_pin(cell) } else { Self::panel_card_pin(cell) };
+                    if self.panel_cells() && pin.contains(x, y) {
                         if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
                     } else { self.studio_configure(i); }
-                }
-            }
-            return true;
-        }
-        if let Some((title, close, dock, all)) = self.studio_float_parts() {
-            let p = self.studio_panel_rect().unwrap();
-            if !p.contains(x, y) { return false; }
-            if close.contains(x, y) { self.studio_set_view(StudioView::Waveform); }
-            else if dock.contains(x, y) { self.studio_set_view(StudioView::Docked); }
-            else if all.contains(x, y) { self.studio_set_view(StudioView::Only); }
-            else if !title.contains(x, y) && y >= p.y + 64 {
-                let shown = self.studio_float_keys();
-                let k = ((y - p.y - 64) / self.studio_panel_row()) as usize;
-                if let Some(index) = shown.get(k).and_then(|&key| self.studio_index(key)) {
-                    if x >= p.right() - 52 {
-                        if let Some(&key) = keys.get(index) { self.studio.floated.retain(|f| *f != key); self.studio_set_pin(key, false); }
-                    }
-                    else { self.studio_configure(index); }
                 }
             }
             return true;
@@ -2795,7 +2649,7 @@ impl Ui {
                 // full screen: its few buttons
                 if self.m.layout == Layout::Studio && self.full_on() && self.full_chrome_rects().is_some_and(|(a, b)| Self::hit40(a).contains(x, y) || Self::hit40(b).contains(x, y)) { return self.studio_eat(x, y); }
                 if self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() || self.m.touch_lock
-                    || self.studio.view_menu || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.studio.md.menu.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
+                    || self.studio.view_menu || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
                 // the Add measurement panel is open: only its tiles can be dragged
                 if self.menu_open { return self.md_down(x, y); }
                 // the bars with an Undo are above the strips of the views
@@ -2822,14 +2676,6 @@ impl Ui {
                     return self.dock_float_at(x, y).is_some() && self.studio_eat(x, y);
                 }
                 if self.dock_float_at(x, y).is_some() { return self.studio_eat(x, y); }
-                if let Some((title, ..)) = self.studio_float_parts() {
-                    if title.contains(x, y) {
-                        let p = self.studio_panel_rect().unwrap();
-                        self.studio.drag = Some(StudioDrag::Move { x0: x, y0: y, at0: (p.x, p.y), moved: false });
-                        return true;
-                    }
-                    return self.studio_panel_rect().is_some_and(|p| p.contains(x, y)) && self.studio_eat(x, y);
-                }
                 if let (Some(t), Some((list, page, _))) = (self.studio_table_rect(), self.studio_table_geo()) {
                     if list.contains(x, y) {
                         self.studio.drag = Some(StudioDrag::Scroll { y0: y, first0: self.studio_first(self.studio_listed(&rows).len(), page), moved: false });
@@ -2857,7 +2703,7 @@ impl Ui {
                         if moved && sim.is_none() && self.studio_panel_geo().is_some() {
                             self.panel_scroll_drag(y0, first0, y);
                         } else if moved {
-                            let delta = (y0 - y) / h * if self.panel_is_cards() { 2 } else { 1 };
+                            let delta = (y0 - y) / h * self.panel_cols() as i32;
                             self.studio.panel.first = (first0 as i32 + delta).clamp(0, total.saturating_sub(page) as i32) as usize;
                         }
                         self.studio.drag = Some(StudioDrag::Scroll { y0, first0, moved });
@@ -2868,12 +2714,7 @@ impl Ui {
                         self.studio.drag = Some(StudioDrag::MenuScroll { y0, s0, moved });
                     }
                     StudioDrag::Eat { .. } => {}
-                    StudioDrag::Swipe { .. } | StudioDrag::Reorder { .. } | StudioDrag::BadgeDrag { .. } | StudioDrag::Tile { .. } | StudioDrag::HScroll { .. } => {}
-                    StudioDrag::Move { x0, y0, at0, moved } => {
-                        let moved = moved || (x - x0).abs().max((y - y0).abs()) > 8;
-                        if moved { self.studio.panel.at = Some((at0.0 + x - x0, at0.1 + y - y0)); }
-                        self.studio.drag = Some(StudioDrag::Move { x0, y0, at0, moved });
-                    }
+                    StudioDrag::Swipe { .. } | StudioDrag::BadgeDrag { .. } | StudioDrag::Tile { .. } | StudioDrag::HScroll { .. } => {}
                 }
                 true
             }
@@ -2893,9 +2734,9 @@ impl Ui {
                 if matches!(drag, StudioDrag::Scroll { moved: true, .. }) { self.panel_scroll_end(); }
                 if self.md_up(drag, x, y) { return true; }
                 let moved = match drag {
-                    StudioDrag::Swipe { .. } | StudioDrag::Reorder { .. } | StudioDrag::BadgeDrag { .. } | StudioDrag::HScroll { .. } => true,
+                    StudioDrag::Swipe { .. } | StudioDrag::BadgeDrag { .. } | StudioDrag::HScroll { .. } => true,
                     StudioDrag::Tile { moved, .. } => moved,
-                    StudioDrag::Scroll { moved, .. } | StudioDrag::Move { moved, .. } | StudioDrag::MenuScroll { moved, .. } => moved,
+                    StudioDrag::Scroll { moved, .. } | StudioDrag::MenuScroll { moved, .. } => moved,
                     StudioDrag::Eat { x0, y0 } => (x - x0).abs().max((y - y0).abs()) > 8,
                 };
                 if !moved { self.tap(x, y); }

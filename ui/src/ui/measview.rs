@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Studio: the two ways the measurements panel shows its rows. List: compact rows, with a small line of statistics
-//! under the value when they are on. Detailed: a table (source, name, value, mean, min, max, sigma, count) that drops
-//! sigma and count when the panel is narrow and scrolls sideways when what is left does not fit.
+//! Studio: the table of the measurements panel (source, name, value, mean, min, max, sigma, count), which drops the
+//! columns that do not fit a narrow panel, and the switch that chooses the view: the strip of cells, this table, or
+//! the cards (measpanel.rs).
 use super::*;
 use super::studio::{chip, MeasKey, StudioView};
 
@@ -11,7 +11,7 @@ pub(super) const DETAIL_NARROW_W: [i32; 8] = [44, 54, 76, 74, 74, 74, 62, 52];
 /// Below this width the source is a colour bar only (no name).
 pub(super) const DETAIL_BAR_ONLY_BELOW: i32 = 240;
 /// The widest the Name column grows: a long name ("Positive Duty Cycle"). The table has no thumbtack: it stood at
-/// the end of every name, a column of its own in a panel 320 px wide, and the cards and the list have it.
+/// the end of every name, a column of its own in a panel 320 px wide, and the cards have it.
 pub(super) const DETAIL_NAME_MAX: i32 = 152;
 /// Below this width the table uses them.
 pub(super) const DETAIL_NARROW_BELOW: i32 = 330;
@@ -24,8 +24,6 @@ pub(super) const DETAIL_ROW_TALL: i32 = 36;
 const DETAIL_TALL_FROM: i32 = 380;
 /// Height of the column heads of the table.
 pub(super) const COL_HEAD: i32 = 24;
-/// Extra height of a list row for the line of statistics.
-pub(super) const STATS_LINE: i32 = 16;
 
 impl Ui {
     /// The panel shows the table: the mode is set, and a panel (not the SIM list or the full-body table) is there.
@@ -37,34 +35,7 @@ impl Ui {
         self.m.studio_detail = on;
         self.studio.panel.scroll_top();
         self.studio.panel.hx = 0;
-        self.studio.md.menu = None;
         self.relayout();
-    }
-
-    /// The rows of the list that are on the page, each with its rectangle. A row that starts the group of a source (or the
-    /// page) has a band for the header; the others are as high as their body. `pos` indexes `listed`.
-    pub(super) fn panel_layout(&self, rows: &[tools::MeasRow], listed: &[usize], first: usize, list: Rect) -> Vec<(usize, Rect)> {
-        let body = self.studio_row_body();
-        let multi = self.studio_multi_source();
-        let mut y = list.y;
-        let mut out = Vec::new();
-        for pos in first..listed.len() {
-            let group_first = multi && (pos == first || rows[listed[pos - 1]].src != rows[listed[pos]].src);
-            let h = if self.studio_detailed() { self.detail_row_h() } else { body + if group_first { super::studio::GROUP_BAND } else { 0 } };
-            if y + h > list.bottom() { break; }
-            out.push((pos, Rect::new(list.x, y, list.w, h)));
-            y += h;
-        }
-        out
-    }
-
-    /// Statistics are on for all rows (the Statistics switch) or for some.
-    pub(super) fn studio_stats_any(&self) -> bool {
-        self.studio.panel.stats || !self.studio.md.stats_rows.is_empty()
-    }
-
-    pub(super) fn studio_stats_on(&self, key: MeasKey) -> bool {
-        self.studio.panel.stats || self.studio.md.stats_rows.contains(&key)
     }
 
     /// Mean, minimum, maximum, sigma and count of row `i`; None until it has a value.
@@ -137,26 +108,6 @@ impl Ui {
     /// How far the table can scroll sideways.
     pub(super) fn detail_hmax(&self, list_w: i32) -> i32 {
         (Self::detail_cols(list_w).1 - list_w).max(0)
-    }
-
-    /// The small line under a row's value: mean, minimum, maximum and sigma, as many as fit.
-    pub(super) fn draw_panel_stats_line(&self, cv: &mut Canvas, r: Rect, i: usize, row: &tools::MeasRow) {
-        let f = self.fonts();
-        let base = r.h - STATS_LINE;
-        let y = r.y + base + 4;
-        let avail = r.w - 16;
-        let Some((mean, min, max, sd, _)) = self.studio_stat_values(i) else {
-            cv.text(&f.s, r.x + 8, y + 9, "statistics: waiting for values", DIM);
-            return;
-        };
-        let mut parts = match self.studio.panel.stats_mode {
-            2 => vec![format!("min {}", row.fmt(min)), format!("max {}", row.fmt(max))],
-            _ => vec![format!("\u{b5} {}", row.fmt(mean)), format!("\u{3c3} {}", row.fmt(sd)), format!("min {}", row.fmt(min)), format!("max {}", row.fmt(max))],
-        };
-        while parts.len() > 1 && f.s.width(&parts.join("  ")) > avail { parts.pop(); }
-        cv.set_clip(Rect::new(r.x + 4, r.y, r.w - 8, r.h));
-        cv.text(&f.s, r.x + 8, y + 9, &parts.join("  "), DIM);
-        cv.no_clip();
     }
 
     /// The rows of the table that are on the page, partly visible ones too: (index in `listed`, rectangle). The rows move by
@@ -247,18 +198,20 @@ impl Ui {
         }
     }
 
-    /// The little switch in the strip of the measurements panel: Table, List, Cards, the one that is on lit.
+    /// The little switch in the title strip of the measurements panel: the strip of cells, the table, the cards, the
+    /// one that is on lit.
     pub(super) fn draw_view_switch(&self, cv: &mut Canvas, e: Rect) {
         // the three segments are drawn where they are tapped (`view_switch_cells`). They were drawn 21 px wide at
         // the left of a switch whose thirds took the touch, so Cards answered right of its box only
         let [t, l, k] = Self::view_switch_cells(e).map(|c| Rect::new(c.x + 1, e.y + 4, c.w - 2, 18));
         chip(cv, Rect::new(t.x - 2, e.y + 2, k.right() - t.x + 4, 22), BTN, BTN_BORDER);
         let view = self.panel_view();
-        let at = match view { super::measpanel::PanelView::Detailed => t, super::measpanel::PanelView::List => l, super::measpanel::PanelView::Cards => k };
+        // the strip of cells is the first view, the table of rows the second
+        let at = match view { super::measpanel::PanelView::List => t, super::measpanel::PanelView::Detailed => l, super::measpanel::PanelView::Cards => k };
         cv.round(at, 4, ACCENT, 255);
         let ink = |on: bool| if on { DARK_TEXT } else { TEXT };
         let (cl, ck, ct) = (ink(at == l), ink(at == k), ink(at == t));
-        // table: a grid; list: three lines; cards: four squares
+        // the first segment a grid, the second three lines, the third four squares
         let (tx, lx, kx) = (t.x + t.w / 2 - 6, l.x + l.w / 2 - 6, k.x + k.w / 2 - 6);
         cv.rect(Rect::new(tx, t.y + 3, 12, 12), ct);
         cv.hline(tx, tx + 11, t.y + 9, ct);
@@ -267,8 +220,8 @@ impl Ui {
         for (dx, dy) in [(0, 0), (7, 0), (0, 7), (7, 7)] { cv.rect(Rect::new(kx + dx, k.y + 3 + dy, 6, 6), ck); }
     }
 
-    /// The three segments of the view switch `e`, the height of its strip: Table, List, Cards. They take the touch
-    /// and are drawn in the same place.
+    /// The three segments of the view switch `e`, the height of its strip: the strip of cells, the table, the cards.
+    /// They take the touch and are drawn in the same place.
     pub(super) fn view_switch_cells(e: Rect) -> [Rect; 3] {
         let w = (e.w - 6) / 3;
         [0, 1, 2].map(|i| Rect::new(e.x + 3 + i * w, e.y, w, e.h))

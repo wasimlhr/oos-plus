@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! Studio: the controls, the cards view and the dropdowns of the docked measurements panel. The controls (source, gate,
 //! search, Pinned only, Add, statistics) are one bar: in the title strip when the panel is wide, in one slim toolbar
-//! under it when it is narrow, with what does not fit behind a ... button. The views are Table, List and Cards
-//! (measview.rs); there is no footer and no paging: the list scrolls by swipe (measscroll.rs).
+//! under it when it is narrow, with what does not fit behind a ... button. The views are the strip of cells, the
+//! table (measview.rs) and the cards; there is no footer and no paging: the list scrolls by swipe (measscroll.rs).
 use super::dock::{VKind, STRIP_H};
 use super::studio::{chip, icon_pin, PanelGeo, StudioView};
 use super::*;
@@ -14,6 +14,11 @@ pub(super) const WIDE_BAR_FROM: i32 = 760;
 /// A card of the cards view and the space between cards.
 pub(super) const CARD_H: i32 = 60;
 const CARD_GAP: i32 = 4;
+/// A cell of the strip view: one line, as the measurement strip of the Default layout has them. So many pixels
+/// wide at least, and so high (a finger finds it with the cell beside it as its margin).
+const CELL_W: i32 = 160;
+pub(super) const CELL_H: i32 = 26;
+const CELL_GAP: i32 = 2;
 
 /// The dropdown that is open.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -83,6 +88,22 @@ impl Ui {
     pub(super) fn panel_is_cards(&self) -> bool {
         self.m.layout == Layout::Studio && self.studio.panel.cards && !self.m.studio_detail
             && matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline)
+    }
+
+    /// The strip view: the measurements as cells of one line each, in as many columns as the panel is wide. It is the
+    /// first of the three views. It was a list of one measurement a row, which showed two of them in a low panel
+    /// under the plot (the owner on the unit).
+    pub(super) fn panel_is_strip(&self) -> bool {
+        self.m.layout == Layout::Studio && !self.studio.panel.cards && !self.m.studio_detail
+            && matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline)
+    }
+
+    /// The panel lays its measurements out in cells: the cards, or the strip.
+    pub(super) fn panel_cells(&self) -> bool { self.panel_is_cards() || self.panel_is_strip() }
+
+    /// The cells of a list `w` wide: columns, the height of a cell, the space between two.
+    pub(super) fn panel_cell_geo(&self, w: i32) -> (i32, i32, i32) {
+        if self.panel_is_strip() { ((w / CELL_W).clamp(1, 6), CELL_H, CELL_GAP) } else { (Self::panel_card_cols(w), CARD_H, CARD_GAP) }
     }
 
     pub(super) fn panel_view(&self) -> PanelView {
@@ -478,18 +499,60 @@ impl Ui {
 
     /// The cards that are on the page, in columns. `pos` indexes `listed`.
     pub(super) fn panel_cards_layout(&self, first: usize, total: usize, list: Rect) -> Vec<(usize, Rect)> {
-        let cols = Self::panel_card_cols(list.w);
-        let cw = (list.w - 10 - (cols - 1) * CARD_GAP) / cols;
-        let page = Self::panel_cards_page(list.w, list.h);
+        let (cols, h, gap) = self.panel_cell_geo(list.w);
+        let cw = (list.w - 10 - (cols - 1) * gap) / cols;
+        let page = self.panel_cards_page(list.w, list.h);
         (first..total.min(first + page)).map(|pos| {
             let k = (pos - first) as i32;
-            (pos, Rect::new(list.x + 2 + (k % cols) * (cw + CARD_GAP), list.y + (k / cols) * (CARD_H + CARD_GAP), cw, CARD_H))
+            (pos, Rect::new(list.x + 2 + (k % cols) * (cw + gap), list.y + (k / cols) * (h + gap), cw, h))
         }).collect()
     }
 
     /// How many cards a page of the list holds.
-    pub(super) fn panel_cards_page(list_w: i32, list_h: i32) -> usize {
-        (((list_h + CARD_GAP) / (CARD_H + CARD_GAP)).max(1) * Self::panel_card_cols(list_w)) as usize
+    pub(super) fn panel_cards_page(&self, list_w: i32, list_h: i32) -> usize {
+        let (cols, h, gap) = self.panel_cell_geo(list_w);
+        (((list_h + gap) / (h + gap)).max(1) * cols) as usize
+    }
+
+    /// The strip view: a cell is one line, the source in its colour, the name of the measurement, and the value at
+    /// the right in the colour of the source, as the strip of the Default layout writes them. A pinned one has an
+    /// amber edge. A tap on a cell opens the settings of its measurement; a cell has no pin and no Remove of its own
+    /// (the cards have the pin, a row of the table is swiped away, a badge has both in its menu).
+    pub(super) fn draw_panel_strip(&self, cv: &mut Canvas, g: &PanelGeo, rows: &[tools::MeasRow], keys: &[studio::MeasKey], listed: &[usize], first: usize) {
+        let f = self.fonts();
+        let pinned = self.studio_pinned();
+        for (pos, r) in self.panel_cards_layout(first, listed.len(), g.list) {
+            let i = listed[pos];
+            let row = &rows[i];
+            let col = self.wave_color(row.src);
+            cv.set_clip(g.list);
+            cv.round(r, 4, BTN, 255);
+            // the pin at the right end of the cell: a tap there pins the measurement as a badge, or takes the badge
+            // away (the left end of a panel at the side is where its divider is taken)
+            let is_pinned = keys.get(i).is_some_and(|k| pinned.contains(k));
+            let pin = Self::panel_cell_pin(r);
+            icon_pin_small(cv, pin.x + pin.w / 2, r.y + r.h / 2, is_pinned, if is_pinned { AMBER } else { DIM });
+            let src = self.wave_name(row.src);
+            let value = row.text();
+            let outer = cv.save_clip();
+            cv.clip_within(r);
+            let x = cv.text(&f.sb, r.x + 8, r.y + 18, &src, col) + 6;
+            let vw = f.sb.width(&value);
+            cv.text(&f.sb, pin.x - 4 - vw, r.y + 18, &value, col);
+            // the long name where it fits beside the value, else the short one of the badges
+            let room = pin.x - 4 - vw - 8 - x;
+            let short = |long: &str| keys.get(i).map_or_else(|| long.to_string(), |&k| self.studio_badge_name(k, long));
+            let name = if f.s.width(&row.name) <= room { row.name.clone() } else { short(&row.name) };
+            cv.clip_within(Rect::new(x, r.y, room.max(1), r.h));
+            cv.text(&f.s, x, r.y + 18, &name, LABEL);
+            cv.restore_clip(outer);
+        }
+        cv.no_clip();
+    }
+
+    /// The pin of a cell of the strip: its right end.
+    pub(super) fn panel_cell_pin(r: Rect) -> Rect {
+        Rect::new(r.right() - 28, r.y, 28, r.h)
     }
 
     /// The pin of a card: top right.

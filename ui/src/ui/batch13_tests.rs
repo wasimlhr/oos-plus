@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-//! Batch 13: the Studio measurements panel in two modes (list with an optional line of statistics, and a detailed
-//! table that collapses when narrow), and rows that have no value say why. OOS_SHOTS=<dir> writes pictures (b13-*).
+//! Batch 13: the Studio measurements panel and its detailed table that collapses when narrow, and rows that have no
+//! value say why. OOS_SHOTS=<dir> writes pictures (b13-*).
 use super::dock::{Dir, VKind};
 use super::meascatalog::cat as Cat;
-use super::measview::{DETAIL_COLS, STATS_LINE};
+use super::measview::DETAIL_COLS;
 use super::studio::StudioView;
 use super::*;
 
@@ -149,50 +149,6 @@ fn a_narrow_table_drops_sigma_and_count_and_scrolls_sideways() {
     assert!(u.meas_own.dialog.is_some() || u.menu_open);
     u.close_menu();
     shot(&mut u, "detailed-narrow");
-}
-
-// ------------------------------------------------------------------------------------------------ statistics in the list
-
-#[test]
-fn the_list_shows_a_small_line_of_statistics_only_when_they_are_on() {
-    let mut u = studio();
-    u.m.run = RunState::Run;
-    for _ in 0..30 { frame(&mut u); }
-    let off_h = u.studio_panel_row();
-    let g = u.studio_panel_geo().unwrap();
-    let row0 = Rect::new(g.list.x, g.list.y, g.list.w, off_h);
-    // off: nothing more than today
-    let mut before = Canvas::new(W, H);
-    u.render(&mut before);
-    assert!(!u.studio_stats_any());
-    // on for all rows: rows grow by the line
-    u.studio.panel.stats = true;
-    frame(&mut u);
-    assert_eq!(u.studio_panel_row(), off_h + STATS_LINE);
-    let key = u.studio_keys()[0];
-    assert!(u.studio_stats_on(key));
-    let mut after = Canvas::new(W, H);
-    u.render(&mut after);
-    // the new line is drawn in the lower part of the first row
-    let line = Rect::new(row0.x + 8, row0.y + off_h, row0.w - 16, STATS_LINE);
-    let differs = (line.y..line.bottom()).any(|y| (line.x..line.right()).any(|x| after.px[(y * W + x) as usize] != before.px[(y * W + x) as usize]));
-    assert!(differs, "a line of statistics under the value");
-    shot(&mut u, "list-stats");
-    // off again
-    u.studio.panel.stats = false;
-    frame(&mut u);
-    assert_eq!(u.studio_panel_row(), off_h);
-    // for one row, from its settings menu
-    let g = u.studio_panel_geo().unwrap();
-    let (_, menu) = Ui::md_row_buttons(Rect::new(g.list.x, g.list.y, g.list.w, off_h));
-    tap(&mut u, menu);
-    let p = u.md_menu_rect().expect("the row menu");
-    let rows = 7;
-    assert!(rows >= 7);
-    tap(&mut u, Ui::md_menu_row(p, 5));
-    assert!(u.studio_stats_on(key) && u.studio_stats_any());
-    assert!(!u.studio_stats_on(u.studio_keys()[1]), "only that row");
-    assert_eq!(u.studio_panel_row(), off_h + STATS_LINE);
 }
 
 // ------------------------------------------------------------------------------------------------ jitter
@@ -435,7 +391,7 @@ fn a_pinch_on_the_waveform_itself_does_nothing_and_ctrl_wheel_is_as_it_was() {
 
 /// Segment `k` (0 List, 1 Cards, 2 Detailed) of the three-way switch.
 fn seg(s: Rect, k: i32) -> Rect {
-    // the switch reads Table, List, Cards now: the old index (List, Cards, Detailed) moves one place
-    let k = (k + 1) % 3;
+    // the switch reads strip (List), table (Detailed), cards
+    let k = [0, 2, 1][k as usize];
     Rect::new(s.x + (2 * k + 1) * s.w / 6 - 2, s.y, 4, s.h)
 }

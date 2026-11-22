@@ -185,7 +185,7 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
     u.studio_set_pin_all_for_test();
     u.studio_set_view(StudioView::Docked);
     for _ in 0..3 { u.step(0.05); }
-    let (gap0, row0, panel0, prow0) = (u.plot.wins[1].y - u.plot.wins[0].bottom(), u.studio_row_px(), u.studio_panel_w(), u.studio_panel_row());
+    let (gap0, row0, panel0) = (u.plot.wins[1].y - u.plot.wins[0].bottom(), u.studio_row_px(), u.studio_panel_w());
     let plot0 = u.plot.wins[0].w;
     shot(&mut u, "compact-off");
     // the View menu has the row
@@ -197,7 +197,7 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_view_menu_an
     for _ in 0..3 { u.step(0.05); }
     assert!(u.plot.wins[1].y - u.plot.wins[0].bottom() < gap0, "smaller lane gap");
     assert!(u.studio_row_px() < row0, "smaller badge row");
-    assert!(u.studio_panel_w() < panel0 && u.studio_panel_row() < prow0, "narrower panel");
+    assert!(u.studio_panel_w() < panel0, "narrower panel");
     assert!(u.plot.wins[0].w > plot0, "the lanes get the room");
     shot(&mut u, "compact-on");
     // the small toggle in the badge row turns it off again

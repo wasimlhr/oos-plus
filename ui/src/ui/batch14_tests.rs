@@ -313,7 +313,8 @@ fn the_detailed_table_keeps_name_value_and_mean_in_a_narrow_panel_and_the_pin_af
     // the pin sits in the name column, at its right end
     let mut u = studio();
     let s = u.dock_rect(VKind::Measure).and_then(|r| u.dock_view_rect(VKind::Measure, r)).unwrap();
-    tap(&mut u, Rect::new(s.x + s.w / 6 - 2, s.y, 4, s.h));
+    // the table is the second segment of the switch
+    tap(&mut u, Rect::new(s.x + s.w / 2 - 2, s.y, 4, s.h));
     assert!(u.studio_detailed());
     shot(&mut u, "detailed");
 }
@@ -438,7 +439,7 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
 // labels on trace -------------------------------------------------------------------------------- Studio
 
 #[test]
-fn labels_on_trace_draw_in_the_waveform_lane_of_their_channel_and_can_be_switched_from_the_row_menu() {
+fn labels_on_trace_draw_in_the_waveform_lane_of_their_channel() {
     let mut u = studio();
     u.m.run = RunState::Stop;
     u.m.meas = vec![(Meas::Vtop, WaveId::Ch(0)), (Meas::Vbase, WaveId::Ch(0)), (Meas::PWidth, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0)), (Meas::Vavg, WaveId::Ch(0))];
@@ -446,13 +447,8 @@ fn labels_on_trace_draw_in_the_waveform_lane_of_their_channel_and_can_be_switche
     for _ in 0..6 { frame(&mut u); }
     let mut off = Canvas::new(W, H);
     u.render(&mut off);
-    // the switch is in the row menu
-    let g = u.studio_panel_geo().unwrap();
-    let (_, menu) = Ui::md_row_buttons(Rect::new(g.list.x, g.list.y, g.list.w, u.studio_panel_row()));
-    tap(&mut u, menu);
-    let p = u.md_menu_rect().expect("the row menu");
-    let n = 8;
-    tap(&mut u, Ui::md_menu_row(p, n - 1));
+    // the switch is Measure > Labels on trace (the row menu of the list, which had it too, is gone)
+    u.select_option(Item::MeasLabels, "On");
     assert!(u.m.meas_labels, "Labels on trace is on");
     let mut on = Canvas::new(W, H);
     u.render(&mut on);
@@ -681,7 +677,7 @@ fn the_add_list_is_a_grid_of_tiles_with_an_info_button_and_a_tap_adds() {
 }
 
 #[test]
-fn the_info_card_opens_from_a_tile_and_from_a_row() {
+fn the_info_card_opens_from_a_tile() {
     let mut u = studio();
     add_open(&mut u);
     let g = u.sheet_add_geo();
@@ -694,16 +690,6 @@ fn the_info_card_opens_from_a_tile_and_from_a_row() {
     let card = u.info_card_rect();
     tap(&mut u, super::Ui::info_card_close(card));
     assert!(u.studio.md.info.is_none());
-    // from a row of the measurements: About this measurement
-    u.close_menu();
-    for _ in 0..3 { frame(&mut u); }
-    let g = u.studio_panel_geo().unwrap();
-    let (_, menu) = Ui::md_row_buttons(Rect::new(g.list.x, g.list.y, g.list.w, u.studio_panel_row()));
-    tap(&mut u, menu);
-    let p = u.md_menu_rect().expect("the row menu");
-    tap(&mut u, Ui::md_menu_row(p, 8));
-    assert!(u.studio.md.info.is_some(), "the card of the first row");
-    shot(&mut u, "info-card-row");
 }
 
 /// The info card's text is in the medium font (the owner: it can be bigger) and ends above the Add button for every

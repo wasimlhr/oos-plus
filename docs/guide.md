@@ -766,7 +766,12 @@ marker opens Trigger, a tap on a cursor tag selects that cursor, and a vertical 
 Only what is drawn as a button on the bars takes a tap. Add > Measurement and the Measure
 key open a quick panel that adds measurements on one source with the plot in view; the button beside its close button
 opens the Measure page with the categories, the sources, Selected and Settings, and Menu > Measure opens that page at
-once. System, SIM and the network pages are entries of the Menu.
+once. The measurements panel of Studio has three views, chosen in its title strip: a strip of cells of one line
+(source, name, value) in as many columns as the panel is wide, a table with the statistics, and cards. A tap on a
+measurement in any of them opens its settings, which have Remove under them; the pin is at the right end of a cell
+and on a card, a row of the table is removed by a swipe to the left (with Undo), and the menu of a badge unpins or
+removes. System, SIM and the network pages are entries of the
+Menu.
 
 In Studio the plot's right-click (long press) menu has Stacked traces, a lane for every source with its own scale at
 the right, and Overlay traces, every source on one graticule of the full height, each with its own position and scale

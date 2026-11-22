@@ -307,7 +307,7 @@ fn tap_xy(u: &mut Ui, x: i32, y: i32) {
 
 fn view_seg(u: &Ui, k: i32) -> (i32, i32) {
     let r = u.dock_rect(super::dock::VKind::Measure).and_then(|r| u.dock_view_rect(super::dock::VKind::Measure, r)).expect("the view switch");
-    let k = (k + 1) % 3; // Table, List, Cards
+    let k = [0, 2, 1][k as usize]; // the switch reads strip (List), table (Detailed), cards
     (r.x + (2 * k + 1) * r.w / 6, r.y + r.h / 2)
 }
 

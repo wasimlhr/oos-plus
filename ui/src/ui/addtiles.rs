@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! Studio: the Add measurement panel as a grid of tiles (a picture and a name each, nothing computed while browsing),
 //! and the info card of a measurement: the picture, what it is, how it is computed, its sources and its unit.
-use super::meascatalog::{cat_info, cat_of_key, Cat};
-use super::studio::MeasKey;
+use super::meascatalog::{cat_info, Cat};
 use super::*;
 
 /// Height of a tile, and the two columns of the grid.
@@ -100,16 +99,6 @@ impl Ui {
 
     pub(super) fn info_card_close(card: Rect) -> Rect { Rect::new(card.right() - 48, card.y + 4, 44, 44) }
     pub(super) fn info_card_action(card: Rect) -> Rect { Rect::new(card.right() - 150, card.bottom() - 54, 138, 44) }
-
-    /// The info card of a measurement of the list ("About this measurement" in the row menu).
-    pub(super) fn md_about(&mut self, key: MeasKey) {
-        if let Some(c) = cat_of_key(key) {
-            // the card's Add / Remove speaks of the source of the row
-            let (MeasKey::One(_, id) | MeasKey::Pair(_, id, _) | MeasKey::Cat(_, id, ..)) = key;
-            self.sources.a = id;
-            self.studio.md.info = Some(c);
-        } else { self.toast("No description for this measurement"); }
-    }
 
     /// The card's three parts, wrapped in the largest body font whose text ends above the action button (the owner:
     /// the text can be bigger), with the line step and where the last line ends.
