@@ -901,8 +901,10 @@ it; a running one is left running. A tap on a box of the band marks its row from
 the time and the text. Decode > Threshold to middle
 puts a decoder's threshold half way between the levels of its signal, for each of its lines by itself: a line can
 have a threshold of its own (Clock threshold, CS threshold), for buses whose lines have different levels; in Studio
-the thresholds are on the first page of the Decode sheet where they fit it, else on its Levels page. The sheet holds
-the decoder alone: the I2C lane of the plot (Menu > Bus) has a sheet of its own. In Minimal and Studio a decoder has
+a line of the decoder is one row of the Decode sheet: its name, its source and, at the right end, its threshold,
+which a tap sets on the number pad (the lines of the logic analyser have none, and C-PHY keeps the row of its level
+gap). Threshold to middle is on the first page where it fits, else with the settings. The sheet holds the decoder
+alone: the I2C lane of the plot (Menu > Bus) has a sheet of its own. In Minimal and Studio a decoder has
 a name and a place of its own: Decode > Label writes a name on its band where the protocol stood (empty: the
 protocol), and Decode > Position puts the band so many divisions from the middle of its window, up to four either
 way; at the lower end it reads Bottom, where the bands stand on each other as before. In Studio both are on the

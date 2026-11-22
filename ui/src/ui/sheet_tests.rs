@@ -288,12 +288,13 @@ fn the_i2c_lane_has_its_own_sheet_and_the_gear_opens_a_short_main_sheet() {
         assert!(spec.tabs.iter().all(|t| !t.rows.is_empty()), "{}: a page without a row", proto.name());
         assert_eq!(spec.tabs[0].foot, [Item::DecTable, Item::DecExport], "{}", proto.name());
     }
-    // a decoder of one line and no settings of its protocol has its threshold under its source, and Settings
-    // holds the name and the place of its band
+    // a decoder of one line and no settings of its protocol: its threshold stands in the row of its source, and
+    // Settings holds the name and the place of its band
     u.m.dec_proto = crate::model::Proto::from_key("Mil1553").unwrap();
     let spec = u.sheet_spec(MenuId::Decode).unwrap();
     // (its source is switched off here: the button that turns it on is the last row, as in the menu)
-    let rows = [Item::DecSel, Item::DecOn, Item::DecProto, Item::DecSrc, Item::DecThr, Item::DecThrMid, Item::SrcOn];
+    let rows = [Item::DecSel, Item::DecOn, Item::DecProto, Item::DecSrc, Item::DecThrMid, Item::SrcOn];
+    assert_eq!(u.sheet_line_thr(Item::DecSrc), Some(Item::DecThr));
     assert_eq!((spec.tabs.len(), &spec.tabs[0].rows[..]), (2, &rows[..]));
     assert_eq!((spec.tabs[1].name, &spec.tabs[1].rows[..]), ("Settings", &[Item::DecLabel, Item::DecPos][..]));
     u.open_menu(MenuId::Bus);
@@ -633,4 +634,40 @@ fn the_plot_reaches_the_sheet_where_the_strip_is_docked_under_it() {
         }
         assert!(w < w0);
     }
+
+/// A line of a decoder is one row of the Decode sheet: its name, its source and its threshold (ADR 0034, ui-ux).
+/// The threshold is no row of its own then, its place is a finger wide and high, and a tap opens the number pad of
+/// that line's threshold. C-PHY has a level gap and keeps its row.
+#[test]
+fn a_line_of_a_decoder_has_its_source_and_its_threshold_in_one_row() {
+    let mut u = studio();
+    u.m.dec_proto = crate::model::Proto::SPI;
+    u.open_menu(MenuId::Decode);
+    let spec = u.sheet_spec(MenuId::Decode).unwrap();
+    let thresholds = |it: &Item| matches!(it, Item::DecThr | Item::DecThrLine(_));
+    assert!(!spec.tabs.iter().any(|t| t.rows.iter().any(thresholds)), "{:?}", spec.tabs);
+    let g = u.sheet_geo().unwrap();
+    let lines: Vec<&SheetRowGeo> = g.rows.iter().filter(|r| r.aux.is_some()).collect();
+    assert!(lines.len() >= 3, "clock, data and select: {}", lines.len());
+    for row in &lines {
+        let (thr, r) = row.aux.unwrap();
+        assert_eq!(u.sheet_line_thr(row.it), Some(thr));
+        assert!(r.w >= 40 && r.h >= 36 && r.x >= row.ctrl.right() && r.right() <= row.row.right(), "{:?} {:?}", row.ctrl, r);
+        assert!(row.label.right() <= row.ctrl.x && row.ctrl.w >= 4 * 40, "{:?} {:?}", row.label, row.ctrl);
+    }
+    // the threshold of the clock: the second line has its own
+    let clock = lines.iter().find(|r| r.it == Item::DecSrc2).expect("SPI has a clock");
+    let (thr, r) = clock.aux.unwrap();
+    assert_eq!(thr, Item::DecThrLine(1));
+    tap_in(&mut u, r);
+    assert_eq!(u.numpad.as_ref().map(|n| n.it), Some(Item::DecThrLine(1)));
+    u.numpad = None;
+    // a tap on a source chip still chooses the source
+    let was = u.m.dec_src2;
+    let chip = Rect::new(clock.ctrl.x + 2, clock.ctrl.y, 30, clock.ctrl.h);
+    tap_in(&mut u, chip);
+    assert!(u.numpad.is_none() && (u.m.dec_src2 == 0 || was == 0), "{} {}", was, u.m.dec_src2);
+    u.m.dec_proto = crate::model::Proto::CPHY;
+    let spec = u.sheet_spec(MenuId::Decode).unwrap();
+    assert!(spec.tabs.iter().any(|t| t.rows.contains(&Item::DecThr)) && u.sheet_line_thr(Item::DecSrc).is_none());
 }
