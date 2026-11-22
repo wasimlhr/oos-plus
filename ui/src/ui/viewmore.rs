@@ -37,6 +37,9 @@ impl Ui {
     }
 
     pub(super) fn view_btn(&self) -> Rect {
+        // a docked view (Studio) has its close button in its strip: a menu that holds Exit alone (XY) says the same
+        // again, so that view has no button
+        if self.dock_on() && self.view_more_items() == [Item::ViewExit] { return Rect::new(0, 0, 0, 0); }
         if let Some(t) = self.view_tile_rect() { return Rect::new(t.right() - 48, t.y + 6, 42, 36); }
         Rect::new(self.plot.area.x + self.plot.area.w - 48, self.plot.area.y + 6, 42, 36)
     }
@@ -49,6 +52,9 @@ impl Ui {
     }
 
     pub(super) fn draw_view_btn(&self, cv: &mut Canvas) {
+        if self.view_btn().w == 0 {
+            return self.draw_view_fix(cv);
+        }
         let r = self.view_btn_chip();
         cv.round(r, 6, PANEL_BG, 235);
         cv.round_outline(r, 6, BTN_BORDER);
@@ -210,8 +216,25 @@ mod tests {
         let mut ui = at(AView::Scope);
         ui.xy = true;
         assert_eq!(ui.view_more_items(), vec![Item::ViewExit]);
+        assert!(ui.view_btn().w > 0, "the menu is the way out of XY where it fills the plot");
         ui.activate(Item::ViewExit);
         assert!(!ui.xy);
+    }
+
+    /// Studio docks XY as a view with a close button in its strip: the menu that held Exit alone is gone there.
+    #[test]
+    fn a_docked_xy_view_has_no_menu_of_exit_alone() {
+        let mut ui = at(AView::Scope);
+        ui.m.layout = crate::model::Layout::Studio;
+        ui.xy = true;
+        ui.relayout();
+        assert!(ui.dock_on() && ui.view_more_items() == [Item::ViewExit]);
+        assert_eq!(ui.view_btn().w, 0);
+        // an analyser has more than Exit and keeps its button
+        ui.xy = false;
+        ui.m.view = AView::Spectrum;
+        ui.relayout();
+        assert!(ui.view_btn().w > 0);
     }
 
     #[test]
