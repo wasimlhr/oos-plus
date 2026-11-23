@@ -71,7 +71,7 @@ mod analysis;
 mod counter;
 mod cursor;
 mod decode;
-mod dispatch;
+pub(crate) mod dispatch;
 mod display;
 mod dvm;
 mod histogram;
