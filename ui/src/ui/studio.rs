@@ -1038,12 +1038,6 @@ impl Ui {
         self.refs.get(i).and_then(Option::as_ref).map(|r| r.label.clone()).unwrap_or_default()
     }
 
-    /// The text of a ref or math pill: its name, and under it a small line (the signal, the operation) when it fits.
-    /// A narrow pill drops that line, and a narrower one the letter of its name ("R10" becomes "10").
-    fn studio_pill_text(&self, cv: &mut Canvas, r: Rect, name: &str, detail: &str, col: Rgb) {
-        self.studio_source_pill(cv, r, name, detail, "", col);
-    }
-
     /// A ref or math pill drawn as a channel pill is: the filled badge with its name, beside it what it shows (the
     /// scale, the operation) and under that a small line (the signal), then the chevron. A narrow pill keeps the
     /// badge alone, and a narrower one drops the letter of its name ("R10" becomes "10").
