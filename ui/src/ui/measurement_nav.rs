@@ -542,7 +542,8 @@ mod tests {
                     }
                 }
             }
-            for dock in StripDock::ALL {
+            // oos-plus: a hidden strip has no readouts to tap
+            for dock in StripDock::ALL.into_iter().filter(|d| *d != StripDock::Hidden) {
                 ui.m.strip_dock = dock;
                 ui.relayout();
                 ui.step(0.02);

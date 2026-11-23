@@ -321,7 +321,7 @@ impl Ui {
             "ACQuire:HISTory:NEXT" | "ACQuire:HISTory:PREVious" => {
                 if q { return Some(Err(undefined(key))); }
                 if self.history.recs.is_empty() { return Some(Err(conflict("history empty"))); }
-                self.key(if key.ends_with("NEXT") { 0x06 } else { 0x08 });
+                self.key(if key.ends_with("NEXT") { key::NAV_FWD } else { key::NAV_BACK });
                 DONE
             }
             _ if key.starts_with("SEARch:") => return Some(self.search_cmd_of(0, key, q, arg)),
