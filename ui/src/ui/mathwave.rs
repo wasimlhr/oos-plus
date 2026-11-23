@@ -81,7 +81,7 @@ pub(super) struct State {
     worker: Option<Worker<Job, Answer>>,
     /// (operation, source A, source B, scale) of each channel at the last tick, and which channels wait to be refitted
     sig: [Option<(String, usize, usize, usize)>; NMATH],
-    fit_pending: [bool; NMATH],
+    pub(super) fit_pending: [bool; NMATH],
 }
 impl State {
     /// After a recall: the setup's own scales stand, the next tick starts tracking again.

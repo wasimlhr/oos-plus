@@ -692,19 +692,30 @@ impl Ui {
         (KINDS.into_iter().filter(|v| self.dock_shown(*v)).count() > 1).then_some(Extra::Maximise)
     }
 
-    /// The settings button, left of the expand button: the Spectrum and Filter windows have one, which opens the menu
-    /// that sets them (the spectrum analyser, the math channel of the filter).
+    /// The settings button, left of the expand button: the Spectrum, Filter, Histogram, XY and Eye windows have one,
+    /// which opens the menu that sets them (the spectrum analyser, the math channel of the filter, Display, the eye).
     pub(super) fn dock_gear_rect(&self, k: VKind, r: Rect) -> Option<Rect> {
-        let has = k == VKind::Pane && self.dock_on() && matches!(self.m.pane, tables::PANE_SPECTRUM | tables::PANE_FILTER);
+        let has = self.dock_on()
+            && match k {
+                VKind::Pane => matches!(self.m.pane, tables::PANE_SPECTRUM | tables::PANE_FILTER),
+                VKind::Hist | VKind::Xy | VKind::Eye => true,
+                _ => false,
+            };
         has.then(|| {
             let base = self.dock_extra_rect(k, r).map_or(Self::dock_close_rect(r).x, |e| e.x);
             Rect::new(base - 48, r.y, 48, STRIP_HIT.min(r.h))
         })
     }
 
-    /// The menu a gear button opens.
-    pub(super) fn dock_gear_do(&mut self) {
-        let menu = if self.m.pane == tables::PANE_FILTER { MenuId::Math } else { MenuId::Spectrum };
+    /// The menu a gear button opens: the one that sets what the window shows (the histogram and the XY picture are rows
+    /// of Display).
+    pub(super) fn dock_gear_do(&mut self, k: VKind) {
+        let menu = match k {
+            VKind::Eye => MenuId::Eye,
+            VKind::Hist | VKind::Xy => MenuId::Display,
+            _ if self.m.pane == tables::PANE_FILTER => MenuId::Math,
+            _ => MenuId::Spectrum,
+        };
         self.open_menu(menu);
     }
 
@@ -1383,7 +1394,7 @@ impl Ui {
             }
             (Some(Press::Gear { kind }), None) => {
                 if self.dock_rect(kind).and_then(|r| self.dock_gear_rect(kind, r)).is_some_and(|g| g.contains(x, y)) {
-                    self.dock_gear_do();
+                    self.dock_gear_do(kind);
                 }
                 true
             }
@@ -1508,10 +1519,14 @@ impl Ui {
         if let Some(g) = self.dock_gear_rect(k, r) {
             chip(cv, Rect::new(g.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);
             let (cx, cy) = (g.x + g.w / 2, s.y + s.h / 2);
+            // a gear: a ring with its hole and eight teeth
             cv.circle(cx, cy, 5, TEXT);
             cv.circle(cx, cy, 2, TEXT);
-            for (dx, dy) in [(0, -8), (0, 8), (-8, 0), (8, 0)] {
-                cv.line(cx + dx * 5 / 8, cy + dy * 5 / 8, cx + dx, cy + dy, TEXT);
+            for (dx, dy) in [(0, -1), (0, 1), (-1, 0), (1, 0)] {
+                cv.fill(Rect::new(cx + dx * 7 - 1, cy + dy * 7 - 1, 3, 3), TEXT);
+            }
+            for (dx, dy) in [(-1, -1), (1, -1), (-1, 1), (1, 1)] {
+                cv.fill(Rect::new(cx + dx * 5 - 1, cy + dy * 5 - 1, 3, 3), TEXT);
             }
         }
         let dim = k == VKind::Wave && !self.view_on() && !(self.eye_open() && self.m.eye_place == EyePlace::Full);

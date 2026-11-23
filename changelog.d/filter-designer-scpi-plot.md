@@ -19,3 +19,5 @@ Added:
   waveform file, loaded with Reference > Load file) from the reference chosen as Source B, at the step of the file.
   Save to reference on the Math sheet keeps the result of a math channel as a reference, to measure and compare. The
   custom filters of a Tektronix session archive load with their taps.
+- The Histogram, XY and Eye windows have a settings button too. The selected chip of the bottom bar has a thick border.
+  Auto scale of a math channel waits for its result when it has none yet, so one press fits it.

@@ -297,7 +297,7 @@ mod tests {
         let gear = u.dock_gear_rect(VKind::Pane, r).expect("the Filter window has one");
         let extra = u.dock_extra_rect(VKind::Pane, r).expect("the expand button");
         assert!(gear.right() <= extra.x + 1 && gear.x < extra.x, "{gear:?} left of {extra:?}");
-        u.dock_gear_do();
+        u.dock_gear_do(VKind::Pane);
         assert_eq!(u.menu, MenuId::Math, "the math channel of the filter");
         u.close_menu();
         u.select_option(Item::PaneSel, "Spectrum");
@@ -306,8 +306,19 @@ mod tests {
         }
         let r = u.dock_rect(VKind::Pane).unwrap();
         assert!(u.dock_gear_rect(VKind::Pane, r).is_some());
-        u.dock_gear_do();
+        u.dock_gear_do(VKind::Pane);
         assert_eq!(u.menu, MenuId::Spectrum);
+        u.close_menu();
+        u.dock_gear_do(VKind::Hist);
+        assert_eq!(u.menu, MenuId::Display, "the histogram is a row of Display");
+        u.close_menu();
+        u.rail_plot_toggle(2);
+        for _ in 0..6 {
+            u.step(0.05);
+        }
+        let r = u.dock_rect(VKind::Hist).expect("the Histogram window");
+        assert!(u.dock_gear_rect(VKind::Hist, r).is_some(), "the Histogram window has a settings button");
+        keep(&pane_picture(&mut u), "histogram-gear.png");
         u.close_menu();
         u.select_option(Item::PaneSel, "Trend");
         for _ in 0..4 {
@@ -367,6 +378,24 @@ mod tests {
         let job_taps = oos_dsp::filter::Filter::from_taps(&[0.25f32; 4], dt, dt).unwrap();
         let out = job_taps.apply(&ramp);
         assert!((out[1000] - 1000.0).abs() < 1.0, "a ramp through a symmetric average stays: {}", out[1000]);
+    }
+
+    /// Auto scale with no result yet waits for it and fits then, instead of fitting to nothing: one press is enough.
+    #[test]
+    fn auto_scale_waits_for_the_result_of_the_math_channel() {
+        let mut u = studio_with_filter();
+        let k = u.m.math_sel;
+        for _ in 0..60 {
+            u.step(0.05);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            if !u.math.state.borrow().fit_pending[k] && u.math_record(k).ok().flatten().is_some() {
+                break;
+            }
+        }
+        let w = u.math_wave_of(k);
+        let (mn, mx) = w.iter().fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
+        let scale = crate::math::math_scales()[u.m.math_ch(k).scale];
+        assert!(mx > mn && scale >= ((mx - mn) as f64 / 6.0) * 0.99 && scale <= ((mx - mn) as f64 / 6.0) * 2.6, "{scale} for {mn}..{mx}");
     }
 }
 

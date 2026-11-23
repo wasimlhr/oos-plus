@@ -325,10 +325,10 @@ pub(super) fn icon_menu(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
     }
 }
 
-/// A chip: the rounded body with a 1 px border.
+/// A chip: the rounded body with a 1 px border; in the accent (the selected one) the border is 3 px.
 pub(super) fn chip(cv: &mut Canvas, r: Rect, fill: Rgb, border: Rgb) {
     cv.round(r, 6, border, 255);
-    cv.round(r.inset(1), 5, fill, 255);
+    cv.round(r.inset(if border == ACCENT { 3 } else { 1 }), 5, fill, 255);
 }
 
 impl Ui {

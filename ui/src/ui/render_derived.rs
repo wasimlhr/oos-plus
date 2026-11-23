@@ -577,7 +577,9 @@ impl Ui {
                 w.iter().filter(|x| x.is_finite()).fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
             let sc = math_scales();
             if mx < mn {
-                c.scale = sc.iter().position(|&x| x >= 1.0).unwrap_or(0);
+                // no result yet (the worker is busy with the last record): fit when it arrives, not to a guess now
+                self.math.state.borrow_mut().fit_pending[k] = true;
+                return;
             } else {
                 let floor = if c.op.unit() == "V" { self.math_source_vpd(k) as f64 / 100.0 } else { 0.0 };
                 let want = ((mx - mn) as f64 / 6.0).max(1e-9).max(floor);
