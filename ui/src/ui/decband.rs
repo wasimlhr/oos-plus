@@ -881,4 +881,21 @@ mod tests {
             assert!(!packet_text(&m, &byte(0x53)).ends_with(" N"), "{layout:?}: an acknowledged byte");
         }
     }
+
+    /// A FlexRay CRC with a leading zero keeps its digit: the frame CRC is 24 bits (six digits), the header CRC 11
+    /// (three). On the unit a bad CRC of 0x02F5A6 read "CRC 2F5A6 !" and looked like a 20-bit value.
+    #[test]
+    fn flexray_crcs_keep_their_leading_zeros() {
+        use oos_dsp::decode::Kind;
+        let mut m = Ui::new(Source::Demo { t: 0.0 }).m.clone();
+        m.dec_proto = Proto::from_key("FlexRay").expect("FlexRay is a decoder");
+        let crc = |kind, value, ok| Packet { t0: 0.0, t1: 1.0, kind, value, value2: None, ok };
+        assert_eq!(packet_text(&m, &crc(Kind::Crc, 0x02F5A6, false)), "CRC 02F5A6 !");
+        assert_eq!(packet_text(&m, &crc(Kind::Crc, 0xD58BF6, true)), "CRC D58BF6");
+        assert_eq!(packet_text(&m, &crc(Kind::Field("HCRC"), 0x041, true)), "HCRC 041");
+        assert_eq!(packet_text(&m, &crc(Kind::Field("HCRC"), 0x511, false)), "HCRC 511 !");
+        // the other buses keep their text
+        m.dec_proto = Proto::CAN;
+        assert_eq!(packet_text(&m, &crc(Kind::Crc, 0x123, true)), "CRC 123");
+    }
 }

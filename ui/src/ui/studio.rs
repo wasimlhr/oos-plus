@@ -804,8 +804,16 @@ impl Ui {
             cv.circle(r.x + 5, r.y + 5, 3, if ch.on { GREEN } else { DIM });
             cv.set_clip(r);
             // a narrow pill keeps the badge alone (CH1, then 1), a wider one adds the scale, the coupling line and the chevron
-            let label = format!("CH{}", c + 1);
-            let bw = if r.w >= 70 { 42 } else { (f.sb.width(&label) + 8).min(r.w - 4).max(8) };
+            // a name the user gave the channel (`:CHANnel<n>:LABel:CONTent`) takes the badge's place where the pill is wide
+            let named = !self.m.ch_label[c].is_empty() && r.w >= 130;
+            let label = if named { self.ch_name(c) } else { format!("CH{}", c + 1) };
+            let bw = if named {
+                (f.sb.width(&label) + 12).clamp(42, 90)
+            } else if r.w >= 70 {
+                42
+            } else {
+                (f.sb.width(&label) + 8).min(r.w - 4).max(8)
+            };
             let (label, bw) = if f.sb.width(&label) + 4 <= bw { (label, bw) } else { ((c + 1).to_string(), bw) };
             let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
             let by = r.y + BAR_DY;
@@ -1409,7 +1417,7 @@ impl Ui {
         use super::workspace::Trace;
         for (source, r) in self.studio_handle_rects() {
             let (name, col) = match source {
-                Trace::Channel(c) => (format!("CH{}", c + 1), CH_COLORS[c]),
+                Trace::Channel(c) => (self.ch_name(c), CH_COLORS[c]),
                 Trace::Reference(i) => (format!("R{}", i + 1), self.wave_color(WaveId::Ref(i))),
                 Trace::Math(k) => (format!("M{}", k + 1), MATH_COLORS[k % MATH_COLORS.len()]),
             };

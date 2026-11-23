@@ -139,6 +139,21 @@ fn a_handle_stays_in_the_plot_and_clear_of_the_time_labels() {
     }
 }
 
+/// A channel the user named (`:CHANnel<n>:LABel:CONTent`) shows its name on its handle, and the handle grows to hold it.
+#[test]
+fn a_named_channel_has_its_name_on_its_handle() {
+    let mut u = bench();
+    picture(&mut u, "handle-unnamed-channel");
+    let plain = handles(&u).iter().find(|(s, _)| *s == Trace::Channel(0)).map(|(_, r)| *r).unwrap_or_default();
+    assert_eq!(plain.w, 44, "an unnamed channel keeps the narrow handle");
+    u.m.ch_label[0] = "FR_TXRX".into();
+    picture(&mut u, "handle-named-channel");
+    let named = handles(&u).iter().find(|(s, _)| *s == Trace::Channel(0)).map(|(_, r)| *r).unwrap();
+    assert!(named.w > 44, "the handle holds \"FR_TXRX\": {named:?}");
+    assert!(named.right() <= u.plot.area.right(), "and stays inside the plot: {named:?}");
+    assert_eq!(u.ch_name(0), "FR_TXRX");
+}
+
 /// A tap on the handle of a reference or of a math channel opens its sheet, as a channel's handle opens the channel.
 #[test]
 fn a_tap_on_a_handle_opens_the_sheet_of_its_source() {

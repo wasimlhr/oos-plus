@@ -34,7 +34,14 @@ impl Ui {
         let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
         for source in self.trace_sources() {
             let Some(zero) = self.studio_zero_y(source) else { continue };
-            let mut r = Rect::new(a.x + a.w - 3 - 44, zero.clamp(a.y + half, low) - 12, 44, 24);
+            // a channel the user named (`:CHANnel<n>:LABel:CONTent`) has its name on the handle, so a longer one is wider
+            let w = match source {
+                super::workspace::Trace::Channel(c) if !self.m.ch_label[c].is_empty() => {
+                    (self.fonts().sb.width(&self.ch_name(c)) + 14).max(44)
+                }
+                _ => 44,
+            };
+            let mut r = Rect::new(a.x + a.w - 3 - w, zero.clamp(a.y + half, low) - 12, w, 24);
             while r.x > a.x + 60 && (avoid.iter().any(|b| overlaps(*b, r)) || out.iter().any(|(_, b)| overlaps(*b, r))) { r.x -= r.w + 2; }
             out.push((source, r));
         }

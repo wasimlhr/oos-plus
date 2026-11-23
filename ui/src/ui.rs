@@ -1486,6 +1486,11 @@ fn packet_text(m: &Model, p: &oos_dsp::decode::Packet) -> String {
         Kind::Word { cmd } => {
             format!("{} {:04X}{}", if cmd { "C/S" } else { "D" }, p.value, if p.ok { "" } else { " !P" })
         }
+        // the frame CRC of FlexRay is 24 bits, its header CRC 11: all their digits, so a leading zero is no lost digit
+        Kind::Crc if m.dec_proto.module().is_some_and(|x| x.key() == "FlexRay") => {
+            format!("CRC {:06X}{}", p.value, if p.ok { "" } else { " !" })
+        }
+        Kind::Field("HCRC") => format!("HCRC {:03X}{}", p.value, if p.ok { "" } else { " !" }),
         Kind::Crc => format!(
             "{} {:X}{}",
             if m.dec_proto == Proto::LIN { "CS" } else { "CRC" },
