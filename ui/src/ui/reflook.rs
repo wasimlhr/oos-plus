@@ -63,6 +63,20 @@ impl MeasOwn {
             cfg: crate::model::RowCfg::default(),
         }
     }
+
+    /// The settings in force: its own where set, the shared measure menu's otherwise.
+    pub(super) fn effective(self, m: &Model) -> Self {
+        let shared = Self::shared(m);
+        Self {
+            low: if self.refs_set { self.low } else { shared.low },
+            high: if self.refs_set { self.high } else { shared.high },
+            idle: if self.idle_set { self.idle } else { shared.idle },
+            side: if self.side_set { self.side } else { shared.side },
+            n: if self.n_set { self.n } else { shared.n },
+            data: if self.data_set { self.data } else { shared.data },
+            ..self
+        }
+    }
 }
 
 /// Geometry of the settings dialog. Source and reference levels are always there.

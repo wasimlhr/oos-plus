@@ -13,16 +13,12 @@
 //! shows what the last spectrum used when they are on Auto), the harmonics of the pane and the order of the peaks
 //! (`spec_peaks`; the menu's names come from the pane).
 
-use super::{math, Arg, Choice, Scpi, Setting, Ty, Unknown, Val};
+use super::{math, Arg, Choice, Scpi, Setting, Ty, Unknown, Val, NO_COMMAND_YET};
 use crate::math::WINDOWS;
 use crate::model::{decades, ladder_step, si_short};
 
 /// The slices, in the order of the docs table.
 pub const SLICES: [&[Setting]; 3] = [&SPEC, &ACPR, &MARGIN];
-
-/// Why the rows have no command.
-#[cfg(test)]
-const NONE: &str = "none yet: the page is set in its menu and by a setup file";
 
 /// One step of a frequency on the 1-2-5 ladder from 1 Hz to 5 GHz with 0 in front (full span, Auto RBW); a value on
 /// no step starts from 0.
@@ -38,10 +34,7 @@ fn hz(f: f64) -> String {
 pub const SPEC: [Setting; 6] = [
     Setting {
         key: "spec center",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: hz },
         label: "Centre",
         #[cfg(test)]
@@ -54,10 +47,7 @@ pub const SPEC: [Setting; 6] = [
     },
     Setting {
         key: "spec win",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Choice(&math::WINDOWS_CHOICES, Unknown::Value, Arg::Keyword),
         label: "Window",
         #[cfg(test)]
@@ -69,10 +59,7 @@ pub const SPEC: [Setting; 6] = [
     },
     Setting {
         key: "spec trace",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         // the line keeps the number of the choice; no command takes them yet
         ty: Ty::Choice(
             &[
@@ -95,10 +82,7 @@ pub const SPEC: [Setting; 6] = [
     },
     Setting {
         key: "spec ref",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: |x| format!("{:.0} dBV", x) },
         label: "Ref level",
         #[cfg(test)]
@@ -110,10 +94,7 @@ pub const SPEC: [Setting; 6] = [
     },
     Setting {
         key: "spec wf",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Bool,
         label: "Waterfall",
         #[cfg(test)]
@@ -125,10 +106,7 @@ pub const SPEC: [Setting; 6] = [
     },
     Setting {
         key: "spec dist",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Bool,
         label: "THD / SNR",
         #[cfg(test)]
@@ -149,10 +127,7 @@ fn acpr_step(f: f64, d: i32) -> f64 {
 pub const ACPR: [Setting; 2] = [
     Setting {
         key: "spec_acpr width",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: hz },
         label: "Ch width",
         #[cfg(test)]
@@ -166,10 +141,7 @@ pub const ACPR: [Setting; 2] = [
     },
     Setting {
         key: "spec_acpr spacing",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: hz },
         label: "Ch space",
         #[cfg(test)]
@@ -185,10 +157,7 @@ pub const ACPR: [Setting; 2] = [
 /// Written after `log_ivl`.
 pub const MARGIN: [Setting; 1] = [Setting {
     key: "spec_margin",
-    scpi: Scpi::None {
-        #[cfg(test)]
-        why: NONE,
-    },
+    scpi: Scpi::none(NO_COMMAND_YET),
     ty: Ty::Real { range: Some((0.0, 60.0)), shown: |x| format!("{:.0} dB", x) },
     label: "Limit margin",
     #[cfg(test)]

@@ -16,9 +16,10 @@ pub const STAMP_WORDS: u32 = 128;
 pub const STAMP_BYTES: usize = 16 + 2 * STAMP_WORDS as usize;
 
 /// Frames of a hardware segmented recording: `Segments::n`, at least 1, at most `hz::max_record_frames`; 0 without
-/// segments.
+/// segments, and 0 when no segment of that size fits below the reserved top (100 M and 125 M points).
 pub fn record_frames(s: &Settings, p: &hz::Params) -> u32 {
-    s.segments.map_or(0, |g| g.n.clamp(1, hz::max_record_frames(p.seg)))
+    let max = hz::max_record_frames(p.seg);
+    s.segments.filter(|_| max > 0).map_or(0, |g| g.n.clamp(1, max))
 }
 
 /// Frames of one batch: `Settings::frames`, at least 1, at most the frame ring (`max_frames`); 1 for play-last.

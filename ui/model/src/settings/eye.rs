@@ -13,15 +13,11 @@
 //! bit rate, whose menu value says whether it was measured from the record, and a step clears that), the rail and
 //! the clock (optional waves, `-` for none).
 
-use super::{spectrum::freq_step, Arg, Choice, Scpi, Setting, Ty, Unknown, Val};
+use super::{spectrum::freq_step, Arg, Choice, Scpi, Setting, Ty, Unknown, Val, NO_COMMAND_YET};
 use crate::model::{si_short, step_index, EyePlace};
 
 /// The slices, in the order of the docs table.
 pub const SLICES: [&[Setting]; 2] = [&PLACE, &MORE];
-
-/// Why the rows have no command.
-#[cfg(test)]
-const NONE: &str = "none yet: the page is set in its menu and by a setup file";
 
 /// The places by their place in the menu.
 const PLACES: [EyePlace; 3] = [EyePlace::Full, EyePlace::Side, EyePlace::Under];
@@ -29,10 +25,7 @@ const PLACES: [EyePlace; 3] = [EyePlace::Full, EyePlace::Side, EyePlace::Under];
 /// Written after `eye`.
 pub const PLACE: [Setting; 1] = [Setting {
     key: "eye_place",
-    scpi: Scpi::None {
-        #[cfg(test)]
-        why: NONE,
-    },
+    scpi: Scpi::none(NO_COMMAND_YET),
     ty: Ty::Choice(
         &[
             Choice { store: "Full", scpi: "", label: "Full" },
@@ -64,10 +57,7 @@ fn band_step(f: f64, d: i32) -> f64 {
 pub const MORE: [Setting; 6] = [
     Setting {
         key: "eye_more ber",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: |x| format!("{:.0e}", x) },
         label: "BER",
         #[cfg(test)]
@@ -83,10 +73,7 @@ pub const MORE: [Setting; 6] = [
     },
     Setting {
         key: "eye_more pn_lo",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: |x| si_short(x, "Hz") },
         label: "Pn low",
         #[cfg(test)]
@@ -98,10 +85,7 @@ pub const MORE: [Setting; 6] = [
     },
     Setting {
         key: "eye_more pn_hi",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: |x| si_short(x, "Hz") },
         label: "Pn high",
         #[cfg(test)]
@@ -113,10 +97,7 @@ pub const MORE: [Setting; 6] = [
     },
     Setting {
         key: "eye_more npj",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Bool,
         label: "NPJ",
         #[cfg(test)]
@@ -128,10 +109,7 @@ pub const MORE: [Setting; 6] = [
     },
     Setting {
         key: "eye_more notch",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: |x| if x > 0.0 { si_short(x, "Hz") } else { "off".into() } },
         label: "Notch",
         #[cfg(test)]
@@ -144,10 +122,7 @@ pub const MORE: [Setting; 6] = [
     },
     Setting {
         key: "eye_more hp",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Bool,
         label: "Highpass",
         #[cfg(test)]

@@ -36,6 +36,11 @@ pub fn num(s: &str) -> Option<f32> {
     s.trim().parse::<f32>().ok().filter(|v| v.is_finite())
 }
 
+/// A finite number as an f64, read as `num` reads it (an f32 rounds more and overflows to "inf" sooner).
+pub fn num64(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
 /// Rigol number format: 7 significant digits, two-digit exponent ("2.000000E-04").
 pub fn e(v: f64) -> String {
     if !v.is_finite() {

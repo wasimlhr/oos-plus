@@ -289,6 +289,7 @@ fn controls(u: &Ui, tab: usize) -> Vec<C> {
         for r in &d.rows {
             let (ck, opts, sel) = match &r.ctl {
                 Ctl::Seg(o, s) => (CK::Seg, o.clone(), *s),
+                Ctl::Switch(on) => (CK::Seg, vec!["Off".to_string(), "On".to_string()], Some(*on as usize)),
                 Ctl::Value => (CK::Num, vec![], None),
                 Ctl::Pick => (CK::Pick, u.options(r.it), None),
                 Ctl::Button => (CK::Link, vec![], None),
@@ -704,7 +705,7 @@ impl Walker {
                 } else if opened_menu {
                     ev = format!("navigates to {:?}", to);
                 } else if !o.observable() { v = "DEAD"; ev = "nothing changed (no field, no toast, no picture)".into(); }
-                else if !target_fits(&item, &label, &o.mf) && !o.mf.is_empty() && !matches!(c.it, Item::AddMeas | Item::DefaultAct | Item::AutosetAct | Item::ClearDisp | Item::RunStop | Item::SingleAct | Item::ForceAct | Item::SlopeAct) { v = "WRONG-TARGET"; ev = "changed fields do not match the label".into(); }
+                else if !target_fits(&item, &label, &o.mf) && !o.mf.is_empty() && !matches!(c.it, Item::DefaultAct | Item::AutosetAct | Item::ClearDisp | Item::RunStop | Item::SingleAct | Item::ForceAct | Item::SlopeAct) { v = "WRONG-TARGET"; ev = "changed fields do not match the label".into(); }
                 if ev.is_empty() { ev = format!("changed {} fields, {} ui fields", o.mf.len(), o.uf.len()); }
                 if !scpi_cmds.is_empty() { let q1 = self.scpi_state(u, &scpi_cmds); r.scpi = format!("{} {:?} -> {:?}", scpi_cmds.join(","), q0, q1); }
                 o.mf.truncate(8);
@@ -926,7 +927,7 @@ fn walk_bars(w: &mut Walker) {
 
 fn plan(l: Layout) -> Vec<(MenuId, String, Vec<(Item, usize)>)> {
     let mut v: Vec<(MenuId, String, Vec<(Item, usize)>)> = Vec::new();
-    let base = [MenuId::Main, MenuId::Horizontal, MenuId::Trigger, MenuId::Acquire, MenuId::Measure, MenuId::MeasAdd, MenuId::MeasHold, MenuId::MeasPair, MenuId::MeasStat,
+    let base = [MenuId::Main, MenuId::Horizontal, MenuId::Trigger, MenuId::Acquire, MenuId::Measure, MenuId::MeasAdd, MenuId::MeasPair, MenuId::MeasStat,
         MenuId::MeasLevels, MenuId::MeasFall, MenuId::Dvm, MenuId::Cursor, MenuId::Display, MenuId::Utility, MenuId::Math, MenuId::Ref, MenuId::Decode, MenuId::Bus,
         MenuId::Storage, MenuId::Mask, MenuId::Zone, MenuId::Spectrum, MenuId::Eye, MenuId::Power, MenuId::Magnetic, MenuId::Inverter, MenuId::Dpt, MenuId::Identify,
         MenuId::SelfCal, MenuId::Network, MenuId::Remote, MenuId::Time, MenuId::Bode, MenuId::Sim, MenuId::SimAdvanced, MenuId::Afg, MenuId::BwTest, MenuId::ViewMore,

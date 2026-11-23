@@ -82,12 +82,10 @@ impl Ui {
 
     pub(super) fn magnetic_adjust(&mut self, it: Item, d: i32) -> bool {
         if matches!(it, Item::MagV | Item::MagI) {
-            let cur = if it == Item::MagV { self.m.mag_v } else { self.m.mag_i };
-            let next = self.step_wave(cur, d);
             if it == Item::MagV {
-                self.m.mag_v = next;
+                self.m.mag_v = self.step_wave(self.m.mag_v, d);
             } else {
-                self.m.mag_i = next;
+                self.m.mag_i = self.step_wave(self.m.mag_i, d);
             }
             self.analyzer_update();
             return true;

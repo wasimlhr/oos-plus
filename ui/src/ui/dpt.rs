@@ -83,18 +83,11 @@ impl Ui {
 
     pub(super) fn dpt_adjust(&mut self, it: Item, d: i32) -> bool {
         if matches!(it, Item::DptV | Item::DptI | Item::DptG | Item::Dpt4) {
-            let cur = match it {
-                Item::DptV => self.m.dpt_v,
-                Item::DptI => self.m.dpt_i,
-                Item::DptG => self.m.dpt_g,
-                _ => self.m.dpt_4ch,
-            };
-            let next = self.step_wave(cur, d);
             match it {
-                Item::DptV => self.m.dpt_v = next,
-                Item::DptI => self.m.dpt_i = next,
-                Item::DptG => self.m.dpt_g = next,
-                _ => self.m.dpt_4ch = next,
+                Item::DptV => self.m.dpt_v = self.step_wave(self.m.dpt_v, d),
+                Item::DptI => self.m.dpt_i = self.step_wave(self.m.dpt_i, d),
+                Item::DptG => self.m.dpt_g = self.step_wave(self.m.dpt_g, d),
+                _ => self.m.dpt_4ch = self.step_wave(self.m.dpt_4ch, d),
             }
             self.analyzer_update();
             return true;

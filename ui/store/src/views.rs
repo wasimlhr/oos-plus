@@ -63,10 +63,16 @@ fn known(k: &str) -> bool {
     KEYS.contains(&k) || UI_KEYS.contains(&k)
 }
 
+/// The pairs of a view as kept, `key=value; key=value ...`, key and value trimmed; `Err(part)` for a part without `=`.
+pub fn pairs(v: &str) -> impl Iterator<Item = Result<(&str, &str), &str>> {
+    let parts = v.split(';').map(str::trim).filter(|p| !p.is_empty());
+    parts.map(|p| p.split_once('=').map(|(k, v)| (k.trim(), v.trim())).ok_or(p))
+}
+
 /// A view as kept in a setup: `key=value; key=value ...` of its keys only.
 pub fn slot_checked(v: &str) -> Result<String, String> {
-    for part in v.split(';').map(str::trim).filter(|p| !p.is_empty()) {
-        let k = part.split_once('=').map(|(k, _)| k.trim()).ok_or_else(|| format!("not key=value: {}", part))?;
+    for p in pairs(v) {
+        let (k, _) = p.map_err(|part| format!("not key=value: {}", part))?;
         if !known(k) {
             return Err(format!("not part of a view: {}", k));
         }

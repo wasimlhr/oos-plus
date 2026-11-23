@@ -35,7 +35,7 @@ groups, each entry 140 x 40 px:
 |---|---|
 | Acquisition | Run/Stop (orange while running), Single, Autoset, Clear, Default, Acquire > |
 | Trigger | Trigger >, Slope (steps like the key, the menu stays open), Force |
-| Analysis | Measure > (the measurement page, as the Measure button and key open it), Cursor > (turns the cursors on like the key), Math >, Reference > (with Load file), SIM >, Decode >, Mask > |
+| Analysis | Measure > (the measurement page, as the Measure key opens it), Cursor > (turns the cursors on like the key), Math >, Reference > (with Load file), SIM >, Decode >, Mask > |
 | Display | Display >, Horizontal >, History (Navigate key; "Live" while a stored record is shown, then Older / Newer appear) |
 | System | System > (with About and the Quick key setting), Storage >, Screenshot, Quick · <action> (runs the Quick key action), Touch lock, Power (the power dialog) |
 
@@ -73,9 +73,8 @@ Before the 16-bit counts saturate (long / infinite persistence) the maps are hal
   Video). Two-level types show a second level marker.
 - Acquire: Normal/Peak/Average (2..1024)/High res, memory depth Auto..50M (shown; the demo source ignores it).
 - Measure (`../dsp` measure): 35 items (voltage, time, edges, overshoot/preshoot, area, slew rate, pulse/edge counts,
-  ...), up to 6 at a time, **statistics** (mean, ±σ, n) in the results panel. A tap on Measure opens the measurement
-  list. A press and hold opens a short menu; releasing on Measure runs **Add meas**, the next usual measurement.
-  Source, statistics and the rest of the Measure page are unchanged (Measure key, or Menu > Measure).
+  ...), up to 6 at a time, **statistics** (mean, ±σ, n) in the results panel. The Measure key opens the measurement
+  list (or Menu > Measure); held on the front panel it adds the next usual measurement at once.
 - Cursor: time (dT, 1/dT) or voltage (dV), drag the lines.
 - **Math** (`../dsp` math): A+B, A-B, AxB, A/B, integral, derivative, abs, sqrt, lg, exp, low-/high-pass (corner
   frequency), **FFT** (dBV rms, Rect/Hann/Hamming/Blackman/Flattop, dB/div, offset, span 0..fs/2), auto scale.

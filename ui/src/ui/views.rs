@@ -381,9 +381,8 @@ impl Ui {
             self.m.math_hidden = [false; NMATH];
             self.m.gen_hidden = false;
         }
-        for part in slot.split(';').map(str::trim).filter(|p| !p.is_empty()) {
-            let Some((k, v)) = part.split_once('=') else { continue };
-            let (k, v) = (k.trim(), unesc(v.trim()));
+        for (k, v) in store::views::pairs(slot).flatten() {
+            let v = unesc(v);
             match k {
                 "xy" => self.xy = v == "true",
                 "full" => self.full.on = v == "true",

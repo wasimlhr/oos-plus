@@ -13,15 +13,11 @@
 //! the clock (optional waves, `-` for none) and the reference of the rail (an optional value, `-` for the top of the
 //! record, which the menu shows as Top).
 
-use super::{spectrum::freq_step, Arg, Choice, Scpi, Setting, Ty, Unknown, Val};
+use super::{spectrum::freq_step, Arg, Choice, Scpi, Setting, Ty, Unknown, Val, NO_COMMAND_YET};
 use crate::model::{si_short, PowerMode};
 
 /// The slice, for the docs table.
 pub const SLICES: [&[Setting]; 1] = [&POWER];
-
-/// Why the rows have no command.
-#[cfg(test)]
-const NONE: &str = "none yet: the page is set in its menu and by a setup file";
 
 /// The pages by their place in the menu; a setup names them as here.
 pub const MODES: [PowerMode; 6] = [
@@ -46,10 +42,7 @@ fn auto_hz(f: f64) -> String {
 pub const POWER: [Setting; 3] = [
     Setting {
         key: "power mode",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Choice(
             &[
                 Choice { store: "Quality", scpi: "", label: "Quality" },
@@ -73,10 +66,7 @@ pub const POWER: [Setting; 3] = [
     },
     Setting {
         key: "power_more fline",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: auto_hz },
         label: "Line f",
         #[cfg(test)]
@@ -89,10 +79,7 @@ pub const POWER: [Setting; 3] = [
     },
     Setting {
         key: "power_more fsw",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NONE,
-        },
+        scpi: Scpi::none(NO_COMMAND_YET),
         ty: Ty::Real { range: None, shown: auto_hz },
         label: "Switch f",
         #[cfg(test)]

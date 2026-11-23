@@ -77,16 +77,12 @@ pub struct ImageInfo {
     pub id: [u8; 20],
 }
 
-fn le32(b: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]])
-}
-
 /// Header fields only (first 2 KiB): length and name, no id check.
 pub fn image_header(b: &[u8]) -> Result<ImageInfo, String> {
     if b.len() < 608 || &b[..8] != b"ANDROID!" {
         return Err("no Android boot image (magic ANDROID!)".into());
     }
-    let (ks, rs, ss, page) = (le32(b, 8) as usize, le32(b, 16) as usize, le32(b, 24) as usize, le32(b, 36) as usize);
+    let [ks, rs, ss, page] = [8, 16, 24, 36].map(|o| u32::from_le_bytes(crate::bytes_at(b, o)) as usize);
     if page != 2048 {
         return Err(format!("page size {} (the loader takes 2048)", page));
     }
@@ -108,7 +104,7 @@ pub fn check_image(b: &[u8]) -> Result<ImageInfo, String> {
     if b.len() < info.len {
         return Err(format!("image is {} bytes, its header needs {}", b.len(), info.len));
     }
-    let (ks, rs, ss) = (le32(b, 8) as usize, le32(b, 16) as usize, le32(b, 24) as usize);
+    let [ks, rs, ss] = [8, 16, 24].map(|o| u32::from_le_bytes(crate::bytes_at(b, o)) as usize);
     for (n, s) in [("kernel", ks), ("ramdisk", rs), ("second", ss)] {
         if s % 4 != 0 {
             return Err(format!("{} length {} is not a multiple of 4 (the loader's hash engine refuses it)", n, s));
@@ -139,7 +135,7 @@ pub fn check_image(b: &[u8]) -> Result<ImageInfo, String> {
     }
     // where the loader puts the parts (docs/boot.md): the kernel at 0x280000 below 0x3a00000, ramdisk and second at
     // 0x4bf0000 together below 0x3000000 bytes
-    let (kaddr, raddr) = (le32(b, 12), le32(b, 20));
+    let [kaddr, raddr] = [12, 20].map(|o| u32::from_le_bytes(crate::bytes_at(b, o)));
     if kaddr != 0x0028_0000 || raddr != 0x04bf_0000 {
         return Err(format!(
             "load addresses kernel {:#x}, ramdisk {:#x} (the loader uses 0x280000 and 0x4bf0000)",

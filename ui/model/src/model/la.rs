@@ -83,13 +83,7 @@ impl LaSet {
         };
         let idx =
             |s: &str, n: usize| s.parse::<usize>().ok().filter(|&i| i < n).ok_or_else(|| format!("bad index {}", s));
-        let volt = |s: &str| {
-            s.parse::<f32>()
-                .ok()
-                .filter(|x| x.is_finite())
-                .map(|x| x.clamp(-THR_MAX, THR_MAX))
-                .ok_or_else(|| format!("not a number: {}", s))
-        };
+        let volt = |s: &str| crate::words::p_f32(s).map(|x| x.clamp(-THR_MAX, THR_MAX));
         Ok(LaSet {
             on: b(w[0])?,
             show: u16::from_str_radix(w[1], 16).map_err(|e| e.to_string())?,

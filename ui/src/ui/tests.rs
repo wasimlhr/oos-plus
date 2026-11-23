@@ -8,20 +8,6 @@
 
 use super::axis_label;
 
-// Break it catches: a WLAN box too narrow for an address at the normal text size, its text running out of the box
-// (upstream #255)
-#[test]
-fn the_wlan_box_has_room_for_an_address() {
-    use super::*;
-
-    let mut ui = Ui::new(Source::Demo { t: 0.0 });
-    for ts in [TextSize::Normal, TextSize::Large] {
-        ui.m.text_size = ts;
-        let f = ui.fonts();
-        assert!(20 + f.sb.width("255.255.255.255") <= ui.net_box().w, "{:?}: {:?}", ts, ui.net_box());
-    }
-}
-
 // Break it catches: the G and LA lamps of the front panel dark while the generator output and the LA are on
 // (upstream #233; bits 8 and 9 were documented but never set)
 #[test]

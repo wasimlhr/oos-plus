@@ -677,7 +677,7 @@ fn power(inp: &mut input::Inputs, a: ui::PowerAction) {
     use board::Board;
     eprintln!("oos-ui: power {:?}", a);
     inp.set_leds(0);
-    unsafe { libc::sync() };
+    store::sync_disks();
     match a {
         ui::PowerAction::Off => {
             inp.send(&board::board().panel_cmd(board::PanelCmd::PowerOff));
@@ -1362,7 +1362,7 @@ impl Device {
                 let tmp = format!("{}.new", SETUP_FILE);
                 if std::fs::write(&tmp, &t).and_then(|_| std::fs::rename(&tmp, setup_path)).is_ok() {
                     // and across power cycles on OOS's own data partition (rcS copies it back to /tmp at boot)
-                    if std::path::Path::new("/oos/setups").is_dir() {
+                    if sysconf::data_partition() {
                         let _ = std::fs::write("/oos/oos-ui.setup.new", &t)
                             .and_then(|_| std::fs::rename("/oos/oos-ui.setup.new", "/oos/oos-ui.setup"));
                     }
@@ -1381,6 +1381,10 @@ impl Device {
             h.close();
         }
         self.disp.restore();
+        // the panel's DRM file and the inputs' descriptors are closed by the kernel when the process ends, after the
+        // other parts are dropped
+        self.disp.keep_open();
+        self.inp.keep_open();
     }
 }
 

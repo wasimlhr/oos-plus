@@ -812,24 +812,7 @@ pub fn si(v: f64, unit: &str) -> String {
     si_digits(v, unit, 3)
 }
 
-/// SI prefixes from tera to pico, the largest first.
-pub const SI_PREFIXES: [(f64, &str); 9] = [
-    (1e12, "T"),
-    (1e9, "G"),
-    (1e6, "M"),
-    (1e3, "k"),
-    (1.0, ""),
-    (1e-3, "m"),
-    (1e-6, "\u{b5}"),
-    (1e-9, "n"),
-    (1e-12, "p"),
-];
-
-/// The prefix of `SI_PREFIXES[from..]` for the magnitude `a`: the largest it reaches (half a per mille short counts),
-/// pico below them all.
-pub fn si_prefix(a: f64, from: usize) -> (f64, &'static str) {
-    SI_PREFIXES[from..].iter().copied().find(|(m, _)| a >= *m * 0.9995).unwrap_or((1e-12, "p"))
-}
+pub use oos_dsp::{si_prefix, SI_PREFIXES};
 
 pub fn si_digits(v: f64, unit: &str, digits: usize) -> String {
     if !v.is_finite() {
@@ -853,15 +836,16 @@ pub fn si_digits(v: f64, unit: &str, digits: usize) -> String {
 
 /// Compact scale label: "200 µs", "1 V", "500 mV" (no trailing zeros).
 pub fn si_short(v: f64, unit: &str) -> String {
-    let s = si_digits(v, unit, 3);
-    // "1.00 V" -> "1 V", "2.50 V" -> "2.5 V"
-    if let Some((num, rest)) = s.split_once(' ') {
-        if num.contains('.') {
-            let t = num.trim_end_matches('0').trim_end_matches('.');
-            return format!("{} {}", t, rest);
-        }
+    si_trimmed(v, unit, 3)
+}
+
+/// `si_digits` without trailing zeros: "1.00 V" -> "1 V", "312.50 MSa/s" -> "312.5 MSa/s".
+pub fn si_trimmed(v: f64, unit: &str, digits: usize) -> String {
+    let s = si_digits(v, unit, digits);
+    match s.split_once(' ') {
+        Some((num, rest)) => format!("{} {}", oos_dsp::trim_zeros(num), rest),
+        None => s,
     }
-    s
 }
 
 #[cfg(test)]

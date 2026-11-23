@@ -753,6 +753,7 @@ impl Ui {
         }
         match self.ctl(it, w) {
             Ctl::Seg(o, _) if o.len() == 2 && o[0] == "Off" && o[1] == "On" => RowKind::Toggle,
+            Ctl::Switch(_) => RowKind::Toggle,
             Ctl::Seg(o, _) if o.len() <= SHEET_MAX_SEGS => RowKind::Choice,
             Ctl::Seg(..) | Ctl::Pick => RowKind::Pick,
             Ctl::Value => RowKind::Number,

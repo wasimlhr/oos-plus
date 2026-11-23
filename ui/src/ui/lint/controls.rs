@@ -391,7 +391,7 @@ fn binary_waveform_can_be_read_back() {
 
 #[test]
 fn second_pane_fits_with_everything_else() {
-    for (pane, la, ts, scr) in (1..tables::PANES.len()).flat_map(|p| {
+    for (pane, la, ts, scr) in (1..crate::model::PANES_N).flat_map(|p| {
         [false, true]
             .into_iter()
             .flat_map(move |l| TEXT_SIZES.into_iter().flat_map(move |t| SCREENS.map(|s| (p, l, t, s))))

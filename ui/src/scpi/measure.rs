@@ -8,7 +8,7 @@
 //! either with its query in ui/tests/scpi.txt (AGENTS.md).
 
 use super::math::math_index;
-use super::{e, kw, parse_bool, parse_wave, shown, t, wave_tok, Scpi};
+use super::{e, kw, num64, parse_bool, parse_wave, shown, t, wave_tok, Scpi};
 use crate::model::*;
 use crate::ui::Ui;
 
@@ -224,7 +224,7 @@ impl Scpi {
             if query {
                 return t(&e(ui.m.meas_idle));
             }
-            match arg.trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0) {
+            match num64(arg).filter(|v| *v >= 0.0) {
                 Some(v) => {
                     ui.m.meas_idle = v;
                     ui.measure_last();
@@ -374,7 +374,7 @@ impl Scpi {
         if query {
             return t(&e(if setup { ui.m.meas_tsetup } else { ui.m.meas_thold }));
         }
-        match arg.trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0) {
+        match num64(arg).filter(|v| *v >= 0.0) {
             Some(v) => {
                 if setup {
                     ui.m.meas_tsetup = v;
@@ -432,7 +432,7 @@ impl Scpi {
             let pct = if high { ui.m.meas_hpct } else { ui.m.meas_lpct };
             return Some(format!("{}", (pct * 100.0).round() as i32).into_bytes());
         }
-        let Some(pct) = arg.trim().parse::<f64>().ok().filter(|v| (0.0..=100.0).contains(v)) else {
+        let Some(pct) = num64(arg).filter(|v| (0.0..=100.0).contains(v)) else {
             self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
             return None;
         };

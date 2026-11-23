@@ -26,6 +26,34 @@
 /// Analog channels the triggers and the expressions take. A board with more needs them extended here.
 pub const CHANNELS: usize = 4;
 
+/// SI prefixes from tera to pico, the largest first.
+pub const SI_PREFIXES: [(f64, &str); 9] = [
+    (1e12, "T"),
+    (1e9, "G"),
+    (1e6, "M"),
+    (1e3, "k"),
+    (1.0, ""),
+    (1e-3, "m"),
+    (1e-6, "\u{b5}"),
+    (1e-9, "n"),
+    (1e-12, "p"),
+];
+
+/// The prefix of `SI_PREFIXES[from..]` for the magnitude `a`: the largest it reaches (half a per mille short counts),
+/// pico below them all.
+pub fn si_prefix(a: f64, from: usize) -> (f64, &'static str) {
+    SI_PREFIXES[from..].iter().copied().find(|(m, _)| a >= *m * 0.9995).unwrap_or((1e-12, "p"))
+}
+
+/// A decimal number without the trailing zeros of its fraction nor a bare point ("1.250" -> "1.25", "2.00" -> "2").
+pub fn trim_zeros(s: &str) -> &str {
+    if s.contains('.') {
+        s.trim_end_matches('0').trim_end_matches('.')
+    } else {
+        s
+    }
+}
+
 pub mod bandwidth;
 pub mod bode;
 pub mod clock;

@@ -27,9 +27,9 @@ impl<'a> Xdr<'a> {
         Xdr { b, p: 0 }
     }
     pub fn u32(&mut self) -> Option<u32> {
-        let v = self.b.get(self.p..self.p + 4)?;
+        let v = oos_hal::try_bytes_at(self.b, self.p)?;
         self.p += 4;
-        Some(u32::from_be_bytes([v[0], v[1], v[2], v[3]]))
+        Some(u32::from_be_bytes(v))
     }
     pub fn opaque(&mut self) -> Option<&'a [u8]> {
         let n = self.u32()? as usize;

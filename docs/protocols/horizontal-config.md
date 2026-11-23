@@ -181,78 +181,24 @@ neither the samples nor their spread. A signal above half the rate folds down at
 every sample of the full rate) shows what lies between the kept samples. OOS notes it in Acquire while the rate
 is below the ADC's.
 
-### 1.8 Frame memory above 256 MiB
+### 1.8 Frame memory above 256 MiB: not usable
 
-The acquisition memory holds 512 MiB, 33,554,432 bursts. The stock layout and the memory size of 1.4/1.5 use only the
-lower half, so nothing the stock system does shows the upper half. **It was found by observation and measurement on
-the unit**, with test builds that recorded hardware segments past the stock limit:
-- a record that went on above 256 MiB showed the effect of 240..256 MiB below;
-- a record placed above 256 MiB left the frames below intact.
-OOS uses the upper half because of these measurements, only on a unit where its probe found it and while it is
-switched on (below), and checks each segment size before it relies on it. System info shows whether it is in use ("Optional memory").
+Frames the FPGA records above 256 MiB (16,777,216 bursts, the memory size of 1.4/1.5) land on the lower 256 MiB.
+**Assumed**: the FPGA logic addresses only 256 MiB, whatever the memory chip holds. OOS records hardware segments
+below 256 MiB only, like the stock system.
 
-- **Verified on the unit** (DHO924S, 2026-11-21, hardware segments over SCPI with a test build, segments of 1 M points
-  = 131,072 bursts = 2 MiB):
-  1. frames 0..111 recorded (0..224 MiB), their stamps read;
-  2. a record arm from frame 128 (0x4010/0x4014 = 128, 0x4018 = 239; 256..480 MiB) recorded 112 more;
-  3. frames 0..111 read again: their latch and header stamps were unchanged, and frames 128..239 read back their own.
-  A memory of 256 MiB would have put the second record on the first.
-- **Verified on the unit**: a record that writes into 240..256 MiB, the top 1 M bursts of the lower half that 1.4 keeps
-  free, spoils the read-back of every frame recorded before it in that record. Their stamps come back as noise
-  (4 segments of 64 MiB: frames 0..2; 240 segments of 2 MiB: frames 0..119). The frames recorded after it are
-  fine. **Assumed**: the FPGA keeps something of its own there. A record must not reach it.
-- So a segmented record has two parts of the same size:
-  - below 256 MiB: frames 0 .. `hz::max_record_frames(seg)` - 1;
-  - from burst 16,777,216: ring index `hz::upper_first_frame(seg)` on, the same number of frames, with the top 1 M
-    bursts of 512 MiB kept free as well. That they need it is **assumed**; 480..512 MiB was not tried.
-  - A segment of 16,777,216 bursts (100 M and 125 M points) fits in neither part: OOS records no hardware segments of
-    that size (the menu offers none).
-- The upper part is a second record arm (`scu::record_arm_at`, `State::record_steps_at`) once the lower part is
-  complete. **Verified on the unit**: the arm starts the first-trigger stamp (0x40c0) again even without its clear, so
-  OOS reads it when the lower part is complete and the segment times count from there. The few ms of the poll and the
-  arm between the two parts are a gap in the segment times.
-- **Verified on the unit**: in a series of stamp plays (`seg::stamps`) the first one returns the header of an earlier
-  play; its latch (0x40b0) is its own. The times use the latch only.
-- OOS uses the upper part only while it is switched on, and only for a segment size the unit has shown to hold there
-  (`seg::probe_upper`):
-  - **System > Opt. memory** (Off/On, `mem.upper` in `/oos/system.conf`) switches it; off by default (ADR 0010). Off,
-    recordings use the lower 256 MiB only, with no probe, as before the upper half was found.
-  - **System > Probe optional memory** probes it. The acquisition thread takes the request (`Shared::upper_want`) like
-    a self-calibration: nothing armed, no segments recorded, no stream. Then for each segment size the Acquire menu's
-    memory depths give the model's channels (`Board::upper_plan`; a size whose part below 256 MiB holds fewer than the
-    probe's three frames is left out, so 100 M and 125 M points are), it configures that set-up with three hardware
-    segments and probes. It then configures the UI's settings again. The probe writes frames: a record kept in STOP
-    is not read again.
-  - The answer goes into `/oos/system.conf` as `mem.upper.found = yes|no` and switches the memory on (every size held)
-    or off (one did not). An error of the probe (a configuration the unit refused) changes nothing.
-  - The user may switch it off at any time and on again. On where the last probe on this unit found it
-    (`mem.upper.found = yes`) takes effect at once; on without that runs the probe first, and only its yes switches
-    it on.
-    `mem.upper = on` without `mem.upper.found = yes` (an image's default, a line by hand) counts as off. Off chosen
-    while a probe runs wins: its yes is kept as `found = yes` and the memory stays off.
-  - A probe is refused while hardware segments are set up and kept; switched off (also in STOP) it goes ahead, the
-    kept segments are dropped anyway at the next configuration.
-  - Switched on, a recording uses the upper part for a size the probe of this run said yes for, and probes a size it
-    has not seen in this run before its first recording that needs it (once per segment size and run of oos-ui).
-  - System info, "Optional memory": 256 MiB, in use / present, off / not present / off, not probed.
-  - The switch and the button are **not yet verified on hardware**; the host run of the acquisition loop presses the
-    button against the simulated unit and records with the memory switched off (`liverun.rs`, cases
-    `optional-memory-probed-then-live` and `segments-8-optional-memory-off`).
-  The probe of one size:
-  - three frames from index 0, then three from `upper_first_frame`, back to back (without the recording's interval) and
-    each forced when no trigger comes;
-  - then the headers of frames 1 and 2 again: they must differ from each other (the play reads the frame asked for)
-    and be unchanged by the upper frames.
-  This also covers a frame index the FPGA might not hold.
-- **Verified on the unit** with OOS itself (DHO924S, 2026-11-21, Auto trigger without a signal):
-  - the probe said yes for segments of 256, 131,072, 1,048,576 and 4,194,304 bursts; for 256 bursts the upper part
-    starts at ring index 65,536;
-  - 6 segments of 25 M points (3 below, 3 above), 20 of 10 M points (15 and 5) and 200 of 1 M points (120 and 80)
-    were recorded and read back;
-  - every segment time was valid and rising, from 0 s.
-
-- **A single record stays at most 2^27 = 134,217,728 points deep**, also with the upper half. **Verified on the unit**
-  (DHO924S, 2026-11-21, `oos-fpgad run --depth D --n 50000000 --at ...` windows of single records):
+- 0.1.15 recorded a second part of hardware segments from burst 16,777,216 on. **Verified on the unit** (DHO924S,
+  2026-11-22) that these frames land on the lower part: with a 37.3 Hz sine and segments of 1 M points (60 below, 60
+  above), segment *k* above read back the waveform of segment *k* - 60 below, within the noise, although their trigger
+  times put them 0.81 periods of the sine apart. The same was found on a DHO804, and at 10 M points.
+- The trigger time stamps and frame headers of the upper frames looked right and left the lower ones unchanged
+  (**verified on the unit**, 2026-11-21). They do not live in the memory the samples are written to, so a check of
+  stamps alone cannot show where the samples went. A check of memory compares sample data.
+- **Verified on the unit**: a record that writes into 240..256 MiB, the top 1 M bursts that 1.4 keeps free, spoils
+  the read-back of the frames recorded before it in that record. **Assumed**: the FPGA keeps something of its own
+  there. A record must not reach it.
+- **A single record stays at most 2^27 = 134,217,728 points deep**. **Verified on the unit** (DHO924S,
+  2026-11-21, `oos-fpgad run --depth D --n 50000000 --at ...` windows of single records):
   - Setup: the generator at 2 Hz on CH1, so that a record is shorter than half a period and any jump in time shows
     as a step in the codes.
   - 125 M points: no step over the whole record.
@@ -262,7 +208,7 @@ switched on (below), and checks each segment size before it relies on it. System
     same points in every run and at 20 and 50 ms/div.
   - The parts between the steps are clean, but they do not join up in time.
   - The compressed read-out of the whole 250 M-point record (k = 400) timed out on the C2H stream; windows read fine.
-  - So the upper half gives more hardware segments (above), not deeper single records. OOS keeps the depths of 1.1.
+  - OOS keeps the depths of 1.1.
   - **Assumed** for every DHO800/DHO900 unit, since they all load the same FPGA image (fpga-image.md); measured on
     one DHO924S only.
 

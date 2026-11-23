@@ -54,7 +54,8 @@ remove, a drag to reorder and a menu on each row; these went with the list.
 
 ### Adding a measurement
 
-1. Tap **Measure** in the top bar (or Menu > Measure; on a USB keyboard the key M). The measurement page opens.
+1. Press the **Measure** key (or Menu > Measure; on a USB keyboard the key M). The measurement page opens. Held, the
+   Measure key adds the next usual measurement at once: Vpp, Freq, Period, Vrms, Vavg, Rise, then the rest.
 2. On the left pick the category: **Basic**, **Two sources**, **Serial & PAM**, **Jitter & eye**, **Power**,
    **Motor drive**, **Power rails** or **Double pulse**.
 3. At the top pick the **Source**: a channel or a reference. Categories that compare signals have two to four sources
@@ -194,6 +195,13 @@ at the top right, which lead to **Exit**, **Settings** and what fits the view.
 
 If the source of an analyser is switched off, choose another one in its Settings. From 0.1.1 on it takes the first channel that is on by itself.
 
+The Bode plot shows the gain above and the phase below over the frequency. Both axes carry their values at round
+steps (dB, or V/V for an impedance sweep, and degrees); the title line of each half names its whole range. Once a
+sweep has points, **Save CSV** in the Bode menu writes them where **Storage > Save to** points, as `bode-....csv`:
+frequency in Hz, gain in dB (or Vout/Vin) and phase in degrees, one line a point. Over SCPI `:BODE:DATA?` returns the
+same points. With the menu closed, the **Multipurpose 2** knob moves the cursor from point to point, so the menu
+does not cover the plot while you read it.
+
 ### Bode with an external generator
 
 In **Analysers > Bode** pick the Generator preset by the commands the generator takes: **APPL** (Rigol DG, `:APPL`),
@@ -206,7 +214,8 @@ Then **Connection**:
   without one the sweep stops with the reason (no USB device, a device that is not USBTMC, no permission). Rigol DG
   and Siglent SDG generators are USBTMC instruments as well. So far this is tested with a simulated device only.
 
-The scope sets channel 1 of the generator to a sine of **Amplitude** (Vpp) without offset, switches its output on and
+The scope sets channel 1 of the generator to a sine of **Amplitude** (Vpp; - and + step 1-2-5, a tap on the value
+opens the number pad for any value from 10 mVpp to 20 Vpp) without offset, switches its output on and
 steps through the frequencies. Over SCPI, `:BODE:GENerator "usb"` selects USB and
 `:BODE:GENerator "192.168.1.20:5025"` the LAN again.
 

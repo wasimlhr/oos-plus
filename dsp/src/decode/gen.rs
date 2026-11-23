@@ -102,12 +102,7 @@ pub fn modbus_ascii_frame(addr: u8, pdu: &[u8]) -> Vec<u8> {
     let mut b = vec![addr];
     b.extend_from_slice(pdu);
     b.push(modbus_lrc(&b));
-    let mut s = vec![b':'];
-    for x in b {
-        s.extend(format!("{:02X}", x).bytes());
-    }
-    s.extend(b"\r\n");
-    s
+    format!(":{}\r\n", crate::decode::hex(&b, "")).into_bytes()
 }
 
 /// 1-Wire master/slave activity for `onewire_logic`.

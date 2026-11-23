@@ -1,10 +1,10 @@
 0 allow dsp
 5 allow fpgad
 1 allow hal
-72 allow ui
+71 allow ui
 2581 lines ui/src/ui/studio.rs
 3081 lines ui/src/ui/walk_tests.rs
 0 unsafe dsp
 4 unsafe fpgad
 26 unsafe hal
-89 unsafe ui
+76 unsafe ui

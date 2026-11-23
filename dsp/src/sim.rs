@@ -10,12 +10,9 @@ pub fn sample(f: impl Fn(f64) -> f64, t0: f64, dt: f64, n: usize) -> Vec<f32> {
 
 /// Deterministic small noise (xorshift), amplitude `a` volts peak.
 pub fn add_noise(v: &mut [f32], a: f32, seed: u64) {
-    let mut s = seed | 1;
+    let mut r = crate::hss::Rng::new(seed);
     for x in v.iter_mut() {
-        s ^= s << 13;
-        s ^= s >> 7;
-        s ^= s << 17;
-        *x += a * ((s >> 40) as f32 / (1u64 << 24) as f32 * 2.0 - 1.0);
+        *x += a * ((r.next_u64() >> 40) as f32 / (1u64 << 24) as f32 * 2.0 - 1.0);
     }
 }
 
@@ -173,6 +170,14 @@ pub fn video_line_time(std: VideoStd, field: u32, n: u32) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn add_noise_keeps_its_sequence() {
+        // amplitude 1 on zeros gives back (state >> 40) of xorshift64 (13, 7, 17), worked out apart from the code
+        let mut v = [0f32; 4];
+        add_noise(&mut v, 1.0, 0x9e37_79b9_7f4a_7c15);
+        assert_eq!(v.map(|x| ((x + 1.0) * (1 << 23) as f32) as u32), [14424951, 6615278, 8062926, 3170053]);
+    }
 
     #[test]
     fn pulse_train_with_runt() {

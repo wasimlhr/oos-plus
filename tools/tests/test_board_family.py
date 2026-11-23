@@ -13,10 +13,12 @@ ROOT = Path(__file__).resolve().parents[2]
 LIB = ROOT / "tools/lib/board.sh"
 
 
-def sh(script, root, board=None):
+def sh(script, root, board=None, locale=None):
     env = {k: v for k, v in os.environ.items() if k != "OOS_BOARD"}
     if board is not None:
         env["OOS_BOARD"] = board
+    if locale is not None:
+        env["LC_ALL"] = locale
     return subprocess.run(["sh", "-euc", f'. "$0"; {script} "$1"', str(LIB), str(root)], env=env,
                           capture_output=True, text=True)
 
@@ -37,11 +39,13 @@ class Family(unittest.TestCase):
         self.assertEqual((r.returncode, r.stdout), (0, "dho\n"), r.stderr)
 
     def test_no_family_is_refused(self):
-        for board in ("nope", "../dho", "-x", "DHO", "a b"):
-            r = sh("oos_board", ROOT, board)
-            self.assertNotEqual(r.returncode, 0, board)
-            self.assertEqual(r.stdout, "", board)
-            self.assertIn(f"OOS_BOARD='{board}'", r.stderr)
+        # in a UTF-8 locale a range such as a-z can take capitals (#468); the C locale alone would not show it
+        for locale in ("C", "en_US.UTF-8", "C.UTF-8"):
+            for board in ("nope", "../dho", "-x", "DHO", "a b"):
+                r = sh("oos_board", ROOT, board, locale)
+                self.assertNotEqual(r.returncode, 0, (board, locale))
+                self.assertEqual(r.stdout, "", (board, locale))
+                self.assertIn(f"OOS_BOARD='{board}'", r.stderr)
         self.assertIn("(has: dho", sh("oos_board", ROOT, "nope").stderr, "names the families there are")
 
     def test_the_families_dho_first(self):

@@ -556,13 +556,14 @@ fn filtfilt(k: [f64; 5], x: &mut [f64]) {
     x.reverse();
 }
 
-struct Rng(u64);
+/// xorshift64 (13, 7, 17), `seed` with its lowest bit set: the same sequence for the same seed (`sim::add_noise`).
+pub(crate) struct Rng(u64);
 
 impl Rng {
-    fn new(seed: u64) -> Rng {
+    pub(crate) fn new(seed: u64) -> Rng {
         Rng(seed | 1)
     }
-    fn next_u64(&mut self) -> u64 {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 7;
         self.0 ^= self.0 << 17;

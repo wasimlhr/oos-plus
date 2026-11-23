@@ -48,6 +48,18 @@ fn check(ui: &Ui, ctx: &str, out: &mut BTreeSet<String>) {
                     }
                 }
             }
+            Ctl::Switch(_) => {
+                let (txt, track) = Ui::switch_parts(c);
+                if f.mb.width("Off") > txt.w || track.x < c.x + 14 {
+                    bad(format!(
+                        "{} switch: state {} in {}, track at {}",
+                        name,
+                        f.mb.width("Off"),
+                        txt.w,
+                        track.x - c.x
+                    ));
+                }
+            }
             Ctl::Value | Ctl::Pick => {
                 let (_, mid, _) = Ui::value_parts(c);
                 let v = ui.value(row.it);

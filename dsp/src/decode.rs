@@ -174,3 +174,8 @@ fn msb(bits: &[(f64, bool)]) -> u64 {
 fn edge_times(v: &[f32], thr: f32, hyst: f32) -> Vec<f64> {
     edges(v, thr, hyst).into_iter().map(|e| e.t).collect()
 }
+
+/// Bytes as upper-case hex, two digits each, `sep` between them ("01 A2" with a space).
+pub fn hex(b: &[u8], sep: &str) -> String {
+    b.iter().map(|x| format!("{:02X}", x)).collect::<Vec<_>>().join(sep)
+}

@@ -92,6 +92,9 @@ pub(super) struct Seen {
     pub rec_t: f64,
     /// smoothed time between two records (deep hardware records arrive about once per second)
     pub rec_iv: f64,
+    /// timed persistence: the time since the picture last aged. It ages when the next record goes into it, by this
+    /// time, not while it waits for one (#441)
+    pub unaged: f64,
     /// the acquisition ran in the last frame
     pub running: bool,
     /// the analyser view the last frame had: a change of view analyses what is already there (a stopped record gets
@@ -107,6 +110,7 @@ impl Default for Seen {
             level_changed: 0.0,
             rec_t: 0.0,
             rec_iv: 0.0,
+            unaged: 0.0,
             running: false,
             view: AView::Scope,
         }
@@ -137,7 +141,7 @@ type Poll = fn(&mut Ui);
 /// What the frame loop takes on each frame from the services and the hardware probes, after the clock has moved, in
 /// this order (the order of the calls the list replaced). A new `*_poll` goes here, or into `POLLED_ELSEWHERE` with
 /// the place it is called from; `every_poll_is_in_polls` names one that is in neither.
-const POLLS: [(&str, Poll); 16] = [
+const POLLS: [(&str, Poll); 15] = [
     ("update_poll", Ui::update_poll),
     ("wlan_poll", Ui::wlan_poll),
     ("ntp_poll", Ui::ntp_poll),
@@ -153,7 +157,6 @@ const POLLS: [(&str, Poll); 16] = [
     ("mask_hw_poll", Ui::mask_hw_poll),
     ("zone_hw_poll", Ui::zone_hw_poll),
     ("la_probe_poll", Ui::la_probe_poll),
-    ("upper_poll", Ui::upper_poll),
 ];
 
 /// The polls that are called from elsewhere on purpose, and why. The list only gets shorter (ADR 0061).
@@ -177,12 +180,13 @@ const POLLED_ELSEWHERE: [(&str, &str); 7] = [
     ("seg_poll", "step_run_state, with whether the acquisition runs"),
 ];
 
-/// What the acquisition of one step took: records, times, the pending clear and the newest raw deep record.
+/// What the acquisition of one step took: records, times, what the picture needs before the first of them (`Keep`
+/// once done) and the newest raw deep record.
 struct StepTake {
     got: usize,
     ta: f32,
     td: f32,
-    clear_pending: bool,
+    renew: Renew,
     deep_raw: bool,
     raw_rec: Option<Record>,
 }
@@ -254,7 +258,6 @@ impl Ui {
         self.eye_auto_poll();
         self.relayout();
         self.now += dt_wall;
-        self.meas_hold_tick();
         self.studio_hold_tick();
         self.meas_mark_tick();
         self.workspace_hold_tick();
@@ -398,13 +401,18 @@ impl Ui {
             self.dirty_map = false;
         }
         // minimum persistence: replace the picture when a new record arrives, not every frame (at large depths
-        // the hardware delivers fewer records than frames, and clearing each frame made the trace flicker)
-        let clear_pending = persist == 0.0 || deferred;
-        if persist > 0.0 {
-            let f = (-dt_wall / persist as f64).exp() as f32;
-            self.ph.decay(f);
-            self.phz.decay(f);
-        }
+        // the hardware delivers fewer records than frames, and clearing each frame made the trace flicker). Timed
+        // persistence the same way: the picture ages when a record arrives, by the time since the last one. Aged
+        // every frame, the newest record faded out before the next came, and the trace pulsed at slow time bases
+        // and deep memory (#441); with a record every frame it is the same
+        self.seen.unaged += dt_wall;
+        let renew = if persist == 0.0 || deferred {
+            Renew::Clear
+        } else if persist > 0.0 {
+            Renew::Decay((-self.seen.unaged / persist as f64).exp() as f32)
+        } else {
+            Renew::Keep
+        };
         let fast = self.fast_ok();
         if !fast {
             self.src.hw_take_all();
@@ -426,7 +434,7 @@ impl Ui {
             got: 0,
             ta: 0.0,
             td: 0.0,
-            clear_pending,
+            renew,
             deep_raw: crate::deepmeas::want(&self.m).is_some(),
             raw_rec: None,
         };
@@ -440,7 +448,10 @@ impl Ui {
             self.step_fast_frames(&mut take);
         }
         self.step_records(&mut take, k, dt_wall, hw_seg);
-        if deferred && !take.clear_pending {
+        if take.renew == Renew::Keep {
+            self.seen.unaged = 0.0;
+        }
+        if deferred && take.renew == Renew::Keep {
             // the first record after the change was drawn on a cleared picture (`step_commit` clears the zoom picture
             // too; the fast path does not run with zoom)
             self.dirty_map = false;
@@ -453,9 +464,8 @@ impl Ui {
     fn step_fast_frames(&mut self, take: &mut StepTake) {
         let t0 = std::time::Instant::now();
         let frames = self.src.drain_newest(self.fast_max());
-        if !frames.is_empty() && take.clear_pending {
-            self.ph.clear();
-            take.clear_pending = false;
+        if !frames.is_empty() {
+            self.ph.renew(std::mem::replace(&mut take.renew, Renew::Keep));
         }
         let n = frames.len();
         if let Some(f) = frames.iter().rev().find(|f| take.deep_raw && crate::deepmeas::deep_raw_frame(f)) {
@@ -479,7 +489,7 @@ impl Ui {
         if let Some(p) = crate::drawpipe::pipe() {
             let t1 = std::time::Instant::now();
             p.set_view(Some(&self.m), self.ph.w, self.ph.h);
-            let d = p.merge(&mut self.ph, &mut take.clear_pending, &mut self.fast.edges, &mut self.fast.off);
+            let d = p.merge(&mut self.ph, &mut take.renew, &mut self.fast.edges, &mut self.fast.off);
             if d.triggered > 0 {
                 self.m.status = TrigStatus::Triggered;
             }
@@ -541,13 +551,11 @@ impl Ui {
         self.bus_candidate_committed();
         self.m.status = if rec.triggered { TrigStatus::Triggered } else { TrigStatus::Auto };
         self.condition_record(&mut rec);
-        // minimum persistence: the picture of this step is every frame of it (the fast path's and this
-        // record), cleared once before the first of them
-        if take.clear_pending {
-            self.ph.clear();
-            self.phz.clear();
-            take.clear_pending = false;
-        }
+        // the picture of this step is every frame of it (the fast path's and this record), cleared or aged once
+        // before the first of them
+        let renew = std::mem::replace(&mut take.renew, Renew::Keep);
+        self.ph.renew(renew);
+        self.phz.renew(renew);
         let zv = (tscales()[self.m.zscale], self.m.zdelay);
         let detail = self.captured_record_view(&rec, zv);
         let sparse = self.zoom_sparse(detail.as_deref().map_or(rec.dt, |d| d.dt));

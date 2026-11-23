@@ -130,6 +130,22 @@ impl Drop for Fake {
 
 const RUN: InstallOpt = InstallOpt { execute: true, downgrade: false, force: false };
 
+/// The header fields of a boot image read through `bytes_at` as the old `le32` did, at every offset of a whole image
+/// and of short ones: the same value, and a panic past the end at the same places.
+#[test]
+fn image_header_reader_matches_the_old_one() {
+    let old = |b: &[u8], at: usize| u32::from_le_bytes([b[at], b[at + 1], b[at + 2], b[at + 3]]);
+    let img = bootimg(3);
+    for n in [0, 3, 4, 5, 607, 608, 2048, img.len()] {
+        let b = &img[..n];
+        for at in 0..n + 6 {
+            let new = std::panic::catch_unwind(|| u32::from_le_bytes(crate::bytes_at(b, at))).ok();
+            assert_eq!(new, std::panic::catch_unwind(|| old(b, at)).ok(), "at {} of {}", at, n);
+            assert_eq!(new.is_some(), at + 4 <= n);
+        }
+    }
+}
+
 #[test]
 fn image_check_matches_the_python_packer() {
     let img = bootimg(1);

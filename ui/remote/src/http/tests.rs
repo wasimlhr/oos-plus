@@ -221,6 +221,8 @@ fn unescape_survives_any_bytes() {
     assert_eq!(unescape("a%é1"), "a1");
     assert_eq!(unescape("%€"), String::from_utf8_lossy(&[0xac]));
     assert_eq!(unescape("x%4"), "x%4");
+    // both cases; a % with two other bytes goes with them, blanks too
+    assert_eq!(unescape("%2f%2F%zz%  %4 %+1x%"), "//x%");
 }
 
 /// ADR 0066: an answer the client does not take yet waits in `sending`, the frame loop goes on, and it goes out whole

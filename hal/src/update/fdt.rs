@@ -64,9 +64,7 @@ const FINISH: u32 = 9;
 pub(crate) const DEPTH_MAX: usize = 64;
 
 fn be32(b: &[u8], at: usize) -> Result<u32, String> {
-    b.get(at..at + 4)
-        .map(|x| u32::from_be_bytes([x[0], x[1], x[2], x[3]]))
-        .ok_or_else(|| "device tree cut short".to_string())
+    crate::try_bytes_at(b, at).map(u32::from_be_bytes).ok_or_else(|| "device tree cut short".to_string())
 }
 
 fn cstr(b: &[u8], at: usize) -> Result<&str, String> {
@@ -235,7 +233,7 @@ pub fn rsce_file<'a>(blob: &'a [u8], name: &str) -> Result<&'a [u8], String> {
 }
 
 fn be32_le(b: &[u8], at: usize) -> Result<u32, String> {
-    b.get(at..at + 4).map(|x| u32::from_le_bytes([x[0], x[1], x[2], x[3]])).ok_or_else(|| "RSCE cut short".to_string())
+    crate::try_bytes_at(b, at).map(u32::from_le_bytes).ok_or_else(|| "RSCE cut short".to_string())
 }
 
 /// The tree file in an image's device tree section.
@@ -287,8 +285,8 @@ fn node_at<'a>(root: &'a mut Node, path: &str) -> Option<&'a mut Node> {
 fn ramdisk(root: &Node) -> Option<(u64, u64)> {
     let c = root.kid("chosen")?;
     let num = |v: &[u8]| match v.len() {
-        4 => Some(u32::from_be_bytes([v[0], v[1], v[2], v[3]]) as u64),
-        8 => Some(u64::from_be_bytes([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]])),
+        4 => Some(u32::from_be_bytes(crate::bytes_at(v, 0)) as u64),
+        8 => Some(u64::from_be_bytes(crate::bytes_at(v, 0))),
         _ => None,
     };
     Some((num(c.prop("linux,initrd-start")?)?, num(c.prop("linux,initrd-end")?)?))
@@ -380,6 +378,41 @@ mod tests {
 
     fn tree(root: Node, rsv: Vec<(u64, u64)>) -> Vec<u8> {
         Fdt { rsv, boot_cpu: 0, root }.to_bytes()
+    }
+
+    /// `be32`, `be32_le` and the numbers of /chosen read through `try_bytes_at`/`bytes_at` as the old readers did, at
+    /// every offset of a real tree and RSCE container and of short ones: the same value, the same error text.
+    #[test]
+    fn readers_match_the_old_ones() {
+        let old_be = |b: &[u8], at: usize| {
+            b.get(at..at + 4)
+                .map(|x| u32::from_be_bytes([x[0], x[1], x[2], x[3]]))
+                .ok_or_else(|| "device tree cut short".to_string())
+        };
+        let old_le = |b: &[u8], at: usize| {
+            b.get(at..at + 4)
+                .map(|x| u32::from_le_bytes([x[0], x[1], x[2], x[3]]))
+                .ok_or_else(|| "RSCE cut short".to_string())
+        };
+        let dtb = tree(node("", &[("compatible", b"rigol,dho900\0")], vec![node("chosen", &[], vec![])]), vec![(1, 2)]);
+        let rsce: Vec<u8> = (0..3 * 512).map(|i| (i * 61 + 3) as u8).collect();
+        for b in [&dtb[..], &rsce[..], &dtb[..3], &dtb[..4], &dtb[..5], &[][..]] {
+            for at in 0..b.len() + 6 {
+                assert_eq!(be32(b, at), old_be(b, at), "be32 at {} of {}", at, b.len());
+                assert_eq!(be32_le(b, at), old_le(b, at), "be32_le at {} of {}", at, b.len());
+            }
+        }
+        let old_num = |v: &[u8]| match v.len() {
+            4 => Some(u32::from_be_bytes([v[0], v[1], v[2], v[3]]) as u64),
+            8 => Some(u64::from_be_bytes([v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]])),
+            _ => None,
+        };
+        for n in 0..=9u32 {
+            let v: Vec<u8> = (0..n).map(|i| (0x81 + 0x11 * i) as u8).collect();
+            let root =
+                node("", &[], vec![node("chosen", &[("linux,initrd-start", &v), ("linux,initrd-end", &v)], vec![])]);
+            assert_eq!(ramdisk(&root), old_num(&v).map(|x| (x, x)), "{} bytes", n);
+        }
     }
 
     #[test]

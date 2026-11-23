@@ -69,7 +69,7 @@ there. These instructions are the same for every agent and every person; the rea
   comes with a new ADR ([template](docs/adr/template.md)); a change of direction supersedes a record, it does not
   edit it.
 - Keep the look: neutral colours, white accent, round shapes, no empty areas; colours come from the named constants,
-  not literals in drawing code; the top bar keeps its four entries (ADR 0007, ADR 0008), and its status boxes come
+  not literals in drawing code; the top bar keeps its entries (ADR 0007, ADR 0076, ADR 0008), and its status boxes come
   from one list (ADR 0063). A second UI or a new layout of the screen needs a decision record first.
 - A row added to a menu gets its place on the Studio sheet of that menu (`sheet_plan`), so Studio offers what Default
   offers (oos-plus ADR 0030, `docs/adr/ui-ux/0030-studio-offers-what-default-offers.md`).

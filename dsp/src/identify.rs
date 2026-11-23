@@ -209,8 +209,8 @@ fn si(x: f64, unit: &str) -> String {
     if x.abs() < 1e-12 {
         return format!("0 {}", unit);
     }
-    let p = [(1e9, "G"), (1e6, "M"), (1e3, "k"), (1.0, ""), (1e-3, "m"), (1e-6, "µ"), (1e-9, "n"), (1e-12, "p")];
-    let (s, pre) = p.iter().copied().find(|(s, _)| x.abs() >= *s * 0.9995).unwrap_or((1e-12, "p"));
+    // giga to pico: tera is left out
+    let (s, pre) = crate::si_prefix(x.abs(), 1);
     let y = x / s;
     let dec = if y.abs() >= 100.0 {
         1

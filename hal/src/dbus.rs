@@ -248,10 +248,10 @@ impl Reader<'_> {
         Ok(s)
     }
 
-    fn u32(&mut self) -> Result<u32, String> {
-        self.align(4);
-        let s = self.take(4)?;
-        Ok(u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
+    /// A number of `N` bytes, aligned to `N`, for `from_le_bytes`.
+    fn fixed<const N: usize>(&mut self) -> Result<[u8; N], String> {
+        self.align(N);
+        Ok(crate::bytes_at(self.take(N)?, 0))
     }
 
     /// A string, a path or a signature: UTF-8 as it is (no replacement), and the NUL the specification puts after it.
@@ -276,32 +276,25 @@ impl Reader<'_> {
     }
 
     fn one(&mut self, sig: &[u8]) -> Result<Value, String> {
-        let eight = |r: &mut Reader| -> Result<[u8; 8], String> {
-            r.align(8);
-            let s = r.take(8)?;
-            Ok([s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7]])
-        };
         let Some(&first) = sig.first() else { return Err("empty signature".into()) };
         Ok(match first {
             b'y' => Value::Byte(self.take(1)?[0]),
-            b'b' => Value::Bool(self.u32()? != 0),
+            b'b' => Value::Bool(u32::from_le_bytes(self.fixed()?) != 0),
             b'n' | b'q' => {
-                self.align(2);
-                let s = self.take(2)?;
-                let v = [s[0], s[1]];
+                let v = self.fixed()?;
                 if first == b'n' {
                     Value::I16(i16::from_le_bytes(v))
                 } else {
                     Value::U16(u16::from_le_bytes(v))
                 }
             }
-            b'i' => Value::I32(self.u32()? as i32),
-            b'u' | b'h' => Value::U32(self.u32()?),
-            b'x' => Value::I64(i64::from_le_bytes(eight(self)?)),
-            b't' => Value::U64(u64::from_le_bytes(eight(self)?)),
-            b'd' => Value::Double(f64::from_le_bytes(eight(self)?)),
+            b'i' => Value::I32(i32::from_le_bytes(self.fixed()?)),
+            b'u' | b'h' => Value::U32(u32::from_le_bytes(self.fixed()?)),
+            b'x' => Value::I64(i64::from_le_bytes(self.fixed()?)),
+            b't' => Value::U64(u64::from_le_bytes(self.fixed()?)),
+            b'd' => Value::Double(f64::from_le_bytes(self.fixed()?)),
             b's' | b'o' => {
-                let n = self.u32()? as usize;
+                let n = u32::from_le_bytes(self.fixed()?) as usize;
                 let s = self.string(n)?;
                 if first == b's' {
                     Value::Str(s)
@@ -324,7 +317,7 @@ impl Reader<'_> {
             }
             b'a' => {
                 let e = &sig[1..1 + one_type(&sig[1..])?];
-                let n = self.u32()? as usize;
+                let n = u32::from_le_bytes(self.fixed()?) as usize;
                 if n > ARRAY_MAX {
                     return Err("array longer than the specification allows".into());
                 }
@@ -497,7 +490,7 @@ impl Message {
         let mut m = Message {
             kind: b[1],
             flags: b[2],
-            serial: u32::from_le_bytes([b[8], b[9], b[10], b[11]]),
+            serial: u32::from_le_bytes(crate::bytes_at(b, 8)),
             ..Message::default()
         };
         let mut sig = String::new();
@@ -529,8 +522,8 @@ pub const MAX_LEN: usize = 1 << 20;
 
 /// The length of the whole message from its first 16 bytes; an error above `MAX_LEN`.
 pub fn total_len(head: &[u8; 16]) -> Result<usize, String> {
-    let body = u32::from_le_bytes([head[4], head[5], head[6], head[7]]) as usize;
-    let fields = u32::from_le_bytes([head[12], head[13], head[14], head[15]]) as usize;
+    let body = u32::from_le_bytes(crate::bytes_at(head, 4)) as usize;
+    let fields = u32::from_le_bytes(crate::bytes_at(head, 12)) as usize;
     let n = (16 + fields).div_ceil(8) * 8 + body;
     if n > MAX_LEN {
         return Err(format!("bus: a message of {} bytes", n));
@@ -573,7 +566,7 @@ impl Conn {
             &std::fs::metadata("/proc/self").map_err(|e| format!("/proc/self: {}", e))?,
         )
         .to_string();
-        let hex: String = uid.bytes().map(|b| format!("{:02x}", b)).collect();
+        let hex = crate::update::hash::hex(uid.as_bytes());
         c.s.write_all(format!("\0AUTH EXTERNAL {}\r\n", hex).as_bytes()).map_err(|e| e.to_string())?;
         let mut line = Vec::new();
         let mut one = [0u8; 1];
@@ -679,6 +672,15 @@ impl Conn {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The user id of SASL EXTERNAL goes out as `hash::hex` writes it, two lower-case digits a byte, as before.
+    #[test]
+    fn the_auth_id_is_hex_as_before() {
+        let all: Vec<u8> = (0..=255).collect();
+        for b in [&b"0"[..], b"1000", b"4294967295", &all] {
+            assert_eq!(crate::update::hash::hex(b), b.iter().map(|b| format!("{:02x}", b)).collect::<String>());
+        }
+    }
 
     #[test]
     fn a_call_encodes_as_the_specification_says() {

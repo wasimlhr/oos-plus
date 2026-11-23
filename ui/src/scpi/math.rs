@@ -7,7 +7,7 @@
 //! `math_cmd` here; either with its query in ui/tests/scpi.txt, docs/scpi.md gets the row's line from the table, the
 //! other's by hand (AGENTS.md).
 
-use super::{e, kw, nearest_index, parse_bool, parse_wave, suffix, t, Scpi};
+use super::{e, kw, nearest_index, num64, parse_bool, parse_wave, suffix, t, Scpi};
 use crate::math::{math_scales, MathCh, MathOp, MATH_REF_BASE, NMATH};
 use crate::model::*;
 use crate::ui::Ui;
@@ -189,7 +189,7 @@ impl Scpi {
             if query {
                 return t(&e(ui.m.math_ch(k).offset as f64));
             }
-            let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite()) else {
+            let Some(v) = num64(arg) else {
                 self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
                 return None;
             };
@@ -306,7 +306,7 @@ impl Scpi {
             };
             return t(&e(v));
         }
-        let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0) else {
+        let Some(v) = num64(arg).filter(|v| *v > 0.0) else {
             self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
             return None;
         };
@@ -346,7 +346,7 @@ impl Scpi {
             let c = ui.m.math_ch(k);
             return t(&e(FFT_DB[c.scale.min(FFT_DB.len() - 1)] as f64));
         }
-        let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0) else {
+        let Some(v) = num64(arg).filter(|v| *v > 0.0) else {
             self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
             return None;
         };
@@ -401,7 +401,7 @@ impl Scpi {
         if query {
             return t(&e(if high { hi } else { lo } as f64));
         }
-        let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite() && *v > 0.0) else {
+        let Some(v) = num64(arg).filter(|v| *v > 0.0) else {
             self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
             return None;
         };

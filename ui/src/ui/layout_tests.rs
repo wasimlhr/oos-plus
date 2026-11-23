@@ -26,10 +26,10 @@ fn default_layout_has_the_stock_bars_and_minimal_the_compact_ones() {
     assert_eq!(d.frame(), Frame::of(d.scr));
     assert!(m.frame().bottom.h < d.frame().bottom.h, "the compact bar gives the plot more room");
     assert!(m.plot_rect().h > d.plot_rect().h);
-    // the top bar of upstream OOS: Single beside the run pill, and the four buttons of ADR 0007
+    // the top bar of upstream OOS: Single beside the run pill, and the two buttons of ADR 0076
     assert!(d.single_btn().w > 0);
     let names = |u: &Ui| u.top_buttons().into_iter().map(|b| b.1).collect::<Vec<_>>();
-    assert_eq!(names(&d), ["Measure", "Cursor", "Display", "Storage"]);
+    assert_eq!(names(&d), ["Display", "Storage"]);
     assert!(names(&m).iter().any(|n| *n == "SIM"));
     assert!(m.single_btn().w > 0);
 }

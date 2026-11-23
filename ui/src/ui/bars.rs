@@ -29,7 +29,8 @@ impl Ui {
     /// sizes).
     pub(super) fn net_box(&self) -> Rect {
         let k = self.m.text_size.index() as i32;
-        let w = 122.max(28 + self.fonts().sb.width("255.255.255.255"));
+        let (l1, addr) = self.lan_box_lines();
+        let w = self.link_width(l1, addr);
         let top = self.frame().top;
         Rect::new(top.right() - METRICS.edge - w, top.y + 5 - 2 * k, w, 30 + 4 * k)
     }
@@ -77,24 +78,20 @@ impl Ui {
     pub(super) fn top_buttons(&self) -> Vec<(TopBtn, &'static str, Rect)> {
         if self.m.layout == Layout::Studio { return self.studio_top_buttons(); }
         let f = self.fonts();
-        let mut all = vec![
-            (TopBtn::Load, "Load file"),
-            (TopBtn::Menu(MenuId::Sim), "SIM"),
-            (TopBtn::Menu(MenuId::Measure), "Measure"),
-            (TopBtn::Menu(MenuId::Cursor), "Cursor"),
-            (TopBtn::Menu(MenuId::Display), "Display"),
-            (TopBtn::Menu(MenuId::Storage), "Storage"),
-            (TopBtn::System, "System"),
-        ];
-        if !self.m.compact() {
-            // the four buttons of upstream OOS (ADR 0007); Load and SIM stay in the Sources menu and Menu > Analysis,
-            // System is the first entry of the Menu's System group
-            all.retain(|(b, _)| !matches!(b, TopBtn::Load | TopBtn::Menu(MenuId::Sim) | TopBtn::System));
-        }
+        // The bar holds what has no key of the front panel: Display and Storage (ADR 0076). Measure and Cursor are keys
+        // and entries of the start menu; System and SIM are in the start menu, Load file a row of the Reference menu.
+        let mut all = vec![(TopBtn::Menu(MenuId::Display), "Display"), (TopBtn::Menu(MenuId::Storage), "Storage")];
         if self.m.compact() {
-            // Measure is a key of the front panel (it opens Add measurements) and an entry of the Menu. Cursor has its
-            // button: without it the cursors were four taps away, through the Menu
-            all.retain(|(b, _)| !matches!(b, TopBtn::Menu(MenuId::Measure)));
+            // oos-plus, Minimal: File loading, simulation and System are direct actions beside the usual tools, and
+            // Cursor has its button: without it the cursors were four taps away, through the Menu
+            all = vec![
+                (TopBtn::Load, "Load file"),
+                (TopBtn::Menu(MenuId::Sim), "SIM"),
+                (TopBtn::Menu(MenuId::Cursor), "Cursor"),
+                (TopBtn::Menu(MenuId::Display), "Display"),
+                (TopBtn::Menu(MenuId::Storage), "Storage"),
+                (TopBtn::System, "System"),
+            ];
         }
         all.retain(|(b, _)| match b {
             TopBtn::Menu(m) => !self.menu_left_out(*m),
@@ -182,14 +179,63 @@ impl Ui {
         cv.text(&self.fonts().sb, r.x + 16, r.y + 20, name, TEXT);
     }
 
-    /// A box of the top bar with a state dot and two lines.
+    /// A box of the top bar with a state dot and two lines; one line, its name beside the green dot, while it has an
+    /// address that is not shown.
     fn draw_link(&self, cv: &mut Canvas, r: Rect, l1: &str, addr: Option<&str>) {
         let f = self.fonts();
+        let line = self.link_line(addr);
+        if line.is_empty() {
+            let y = r.y + r.h / 2;
+            cv.circle(r.x + 11, y, 3, GREEN);
+            cv.text(&f.sb, r.x + 20, y + f.sb.size * 36 / 100, l1, TEXT);
+            return;
+        }
         // first line under the top edge, the second on the bottom edge
         let (cap, y1) = (f.s.size * 72 / 100, r.y + 5 + f.s.size * 72 / 100);
         cv.circle(r.x + 11, y1 - cap / 2 + 1, 3, if addr.is_some() { GREEN } else { DIM });
         cv.text(&f.s, r.x + 20, y1, l1, DIM);
-        cv.text(&f.sb, r.x + 20, r.y + r.h - 4, addr.unwrap_or("not connected"), TEXT);
+        cv.text(&f.sb, r.x + 20, r.y + r.h - 4, line, TEXT);
+    }
+
+    /// The second line of a link box: the address only where System > Network > Show address is on, since
+    /// pictures and photos of the screen are passed on; else none while the link has one (the green dot says it), a
+    /// dash where it has none.
+    pub(super) fn link_line<'a>(&self, addr: Option<&'a str>) -> &'a str {
+        match addr {
+            Some(a) if self.sys.show_addr => a,
+            Some(_) => "",
+            None => "-",
+        }
+    }
+
+    /// The width of a link box: as wide as its lines, so it is narrow without an address shown and as wide as an
+    /// address only while one is (ADR 0063).
+    pub(super) fn link_width(&self, l1: &str, addr: Option<&str>) -> i32 {
+        let f = self.fonts();
+        let line = self.link_line(addr);
+        if line.is_empty() {
+            return 20 + f.sb.width(l1) + 8;
+        }
+        20 + f.s.width(l1).max(f.sb.width(line)) + 8
+    }
+
+    /// The two lines of the LAN box: how the address came, and the address; an address without a cable is only the
+    /// fallback waiting for one.
+    pub(super) fn lan_box_lines(&self) -> (&'static str, Option<&str>) {
+        let lan = self.addr_of("eth0").filter(|_| self.net.eth_link);
+        let l1 = if lan.is_none() {
+            "LAN"
+        } else if self.net.fixed {
+            "LAN \u{b7} local"
+        } else {
+            "LAN \u{b7} DHCP"
+        };
+        (l1, lan)
+    }
+
+    /// The two lines of the WLAN box.
+    pub(super) fn wlan_box_lines(&self) -> (&'static str, Option<&str>) {
+        ("WLAN", self.addr_of(oos_hal::wlan::IFACE))
     }
 
     /// The address of an interface, if it has one.
@@ -380,7 +426,7 @@ impl Ui {
             (MenuId::Pick, Some(p)) => p.menu,
             (m, _) => m,
         };
-        if matches!(m, MenuId::MeasAdd | MenuId::MeasHold | MenuId::MeasSelected) {
+        if matches!(m, MenuId::MeasAdd | MenuId::MeasSelected) {
             MenuId::Measure
         } else if m == MenuId::SimAdvanced {
             MenuId::Sim
@@ -827,16 +873,8 @@ pub(super) const STATUS_BOXES: [StatusBox; 4] = [
         shown: |_| true,
         width: |u| u.net_box().w,
         chip: false,
-        // an address without a cable is only the fallback waiting for one
         draw: |u, cv, r, _| {
-            let lan = u.addr_of("eth0").filter(|_| u.net.eth_link);
-            let l1 = if lan.is_none() {
-                "LAN"
-            } else if u.net.fixed {
-                "LAN \u{b7} local"
-            } else {
-                "LAN \u{b7} DHCP"
-            };
+            let (l1, lan) = u.lan_box_lines();
             u.draw_link(cv, r, l1, lan)
         },
         page: MenuId::Network,
@@ -844,10 +882,16 @@ pub(super) const STATUS_BOXES: [StatusBox; 4] = [
     StatusBox {
         label: "WLAN",
         shown: |u| u.net.wlan_stick,
-        // as wide as LAN: room for an address (issue #23: at the normal text size 104 px were too narrow)
-        width: |u| u.net_box().w,
+        // as wide as its lines, as LAN: room for an address while one is shown (issue #23)
+        width: |u| {
+            let (l1, addr) = u.wlan_box_lines();
+            u.link_width(l1, addr)
+        },
         chip: false,
-        draw: |u, cv, r, label| u.draw_link(cv, r, label, u.addr_of(oos_hal::wlan::IFACE)),
+        draw: |u, cv, r, _| {
+            let (l1, addr) = u.wlan_box_lines();
+            u.draw_link(cv, r, l1, addr)
+        },
         page: MenuId::Network,
     },
     // green while a mouse or keyboard is connected through the stick
@@ -871,6 +915,31 @@ pub(super) const STATUS_BOXES: [StatusBox; 4] = [
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// The LAN and WLAN boxes show no address by default, only whether there is one; System > Network > Address in
+    /// top bar shows it, and the setting is kept with the system settings.
+    #[test]
+    fn the_top_bar_shows_an_address_only_when_switched_on() {
+        let mut ui = crate::ui::testkit::demo_ui();
+        assert_eq!(ui.link_line(None), "-");
+        let dash = ui.net_box().w;
+        ui.net.ifs = vec![("eth0".into(), "203.0.113.255".into())];
+        ui.net.eth_link = true;
+        let addr = ui.addr_of("eth0");
+        assert!(!ui.sys.show_addr);
+        assert_eq!(ui.link_line(addr), "", "no address and no word by default: the green dot says it");
+        let hidden = ui.net_box().w;
+        assert!(ui.network_items().contains(&Item::NetShowAddr));
+        ui.select_option(Item::NetShowAddr, "On");
+        assert!(ui.sys.show_addr && ui.sys.text().contains("net.show_addr = on"));
+        let addr = ui.addr_of("eth0");
+        assert_eq!(ui.link_line(addr), "203.0.113.255");
+        assert_eq!(ui.link_line(None), "-");
+        // the box is as wide as what it shows: narrow with the dash, wide for an address only while one is shown
+        assert!(dash <= hidden && hidden < ui.net_box().w, "{} {} {}", dash, hidden, ui.net_box().w);
+    }
+
     #[test]
     fn generator_and_la_light_their_front_panel_leds() {
         let mut ui = crate::ui::testkit::demo_ui();

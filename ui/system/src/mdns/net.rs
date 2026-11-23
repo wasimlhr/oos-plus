@@ -6,27 +6,10 @@
 //! (`Net`). `Mdns`'s thread in `mdns.rs` uses it; a new socket option or address family goes here.
 
 use super::*;
+use crate::system::set_socket_option as opt;
 use std::io;
 use std::net::UdpSocket;
 use std::os::fd::{AsRawFd, FromRawFd};
-
-fn opt(fd: i32, level: i32, name: i32, v: i32) -> io::Result<()> {
-    // SAFETY: a pointer to an int of the size given, for the duration of the call
-    let r = unsafe {
-        libc::setsockopt(
-            fd,
-            level,
-            name,
-            &v as *const i32 as *const libc::c_void,
-            std::mem::size_of::<i32>() as libc::socklen_t,
-        )
-    };
-    if r == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
-}
 
 /// A UDP socket on port 5353 that the system's own responder (a host with one) may share: SO_REUSEADDR and
 /// SO_REUSEPORT before the bind, the receiving interface with each packet (PKTINFO).
@@ -39,36 +22,28 @@ fn open(v6: bool) -> io::Result<UdpSocket> {
             return Err(io::Error::last_os_error());
         }
         let s = UdpSocket::from_raw_fd(fd);
-        opt(fd, libc::SOL_SOCKET, libc::SO_REUSEADDR, 1)?;
-        opt(fd, libc::SOL_SOCKET, libc::SO_REUSEPORT, 1)?;
+        opt(&s, libc::SOL_SOCKET, libc::SO_REUSEADDR, 1)?;
+        opt(&s, libc::SOL_SOCKET, libc::SO_REUSEPORT, 1)?;
         let r = if v6 {
-            opt(fd, libc::IPPROTO_IPV6, libc::IPV6_V6ONLY, 1)?;
-            opt(fd, libc::IPPROTO_IPV6, libc::IPV6_RECVPKTINFO, 1)?;
+            opt(&s, libc::IPPROTO_IPV6, libc::IPV6_V6ONLY, 1)?;
+            opt(&s, libc::IPPROTO_IPV6, libc::IPV6_RECVPKTINFO, 1)?;
             let mut a: libc::sockaddr_in6 = std::mem::zeroed();
             a.sin6_family = libc::AF_INET6 as libc::sa_family_t;
             a.sin6_port = PORT.to_be();
-            libc::bind(
-                fd,
-                &a as *const _ as *const libc::sockaddr,
-                std::mem::size_of::<libc::sockaddr_in6>() as libc::socklen_t,
-            )
+            libc::bind(fd, &a as *const _ as *const libc::sockaddr, std::mem::size_of_val(&a) as libc::socklen_t)
         } else {
-            opt(fd, libc::IPPROTO_IP, libc::IP_PKTINFO, 1)?;
+            opt(&s, libc::IPPROTO_IP, libc::IP_PKTINFO, 1)?;
             let mut a: libc::sockaddr_in = std::mem::zeroed();
             a.sin_family = libc::AF_INET as libc::sa_family_t;
             a.sin_port = PORT.to_be();
-            libc::bind(
-                fd,
-                &a as *const _ as *const libc::sockaddr,
-                std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
-            )
+            libc::bind(fd, &a as *const _ as *const libc::sockaddr, std::mem::size_of_val(&a) as libc::socklen_t)
         };
         if r != 0 {
             return Err(io::Error::last_os_error());
         }
         if v6 {
             s.set_multicast_loop_v6(true)?;
-            opt(fd, libc::IPPROTO_IPV6, libc::IPV6_MULTICAST_HOPS, 255)?;
+            opt(&s, libc::IPPROTO_IPV6, libc::IPV6_MULTICAST_HOPS, 255)?;
         } else {
             s.set_multicast_loop_v4(true)?;
             s.set_multicast_ttl_v4(255)?;
@@ -197,22 +172,13 @@ impl Net {
         let r = match &o.dest {
             Dest::Group4 => {
                 let Some((a, _)) = ifc.v4 else { return };
-                let ia = libc::in_addr { s_addr: u32::from(a).to_be() };
-                // SAFETY: a pointer to an in_addr of the size given
-                unsafe {
-                    libc::setsockopt(
-                        self.s4.as_raw_fd(),
-                        libc::IPPROTO_IP,
-                        libc::IP_MULTICAST_IF,
-                        &ia as *const _ as *const libc::c_void,
-                        std::mem::size_of::<libc::in_addr>() as libc::socklen_t,
-                    )
-                };
+                // the in_addr's four bytes, in network order
+                let _ = opt(&self.s4, libc::IPPROTO_IP, libc::IP_MULTICAST_IF, i32::from_ne_bytes(a.octets()));
                 self.s4.send_to(&o.pkt, (GROUP4, PORT))
             }
             Dest::Group6 => {
                 let Some(s6) = &self.s6 else { return };
-                let _ = opt(s6.as_raw_fd(), libc::IPPROTO_IPV6, libc::IPV6_MULTICAST_IF, o.iface as i32);
+                let _ = opt(s6, libc::IPPROTO_IPV6, libc::IPV6_MULTICAST_IF, o.iface as i32);
                 s6.send_to(&o.pkt, std::net::SocketAddrV6::new(GROUP6, PORT, 0, o.iface))
             }
             Dest::To(a @ SocketAddr::V4(_)) => self.s4.send_to(&o.pkt, a),

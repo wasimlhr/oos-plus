@@ -17,10 +17,6 @@ use crate::model::AcqMode;
 /// Both slices, in the order of the docs table.
 pub const SLICES: [&[Setting]; 2] = [&MODE, &SEG_HW];
 
-/// The rows whose command refuses a value it does not take with `-224,"Illegal parameter value"`; a value the other
-/// rows do not take falls through to the later branches of `exec_cmd`, which answer `-113`, as before the table.
-pub const REFUSES: [&str; 2] = ["acq", "avg_count"];
-
 /// Written after `hold`.
 pub const MODE: [Setting; 4] = [
     Setting {

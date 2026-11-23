@@ -25,7 +25,6 @@ use crate::model::{step_index, time_ladder};
 pub const SLICES: [&[Setting]; 3] = [&WINDOW_BW, &FC, &FILT];
 
 /// Why the filters' frequencies have no command of their own.
-#[cfg(test)]
 const CORNERS: &str = "set through `:MATH<n>:FILTer:W1` and `:W2`, the corner frequencies (below)";
 
 /// The windows of `WINDOWS` by their place: their word in a setup, their keyword of `:FFT:WINDow`, their name.
@@ -53,10 +52,7 @@ pub const WINDOW_BW: [Setting; 2] = [
     },
     Setting {
         key: "math_bw",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: CORNERS,
-        },
+        scpi: Scpi::none(CORNERS),
         ty: Ty::Hertz { ladder: freq_step },
         label: "Bandwidth",
         #[cfg(test)]
@@ -71,10 +67,7 @@ pub const WINDOW_BW: [Setting; 2] = [
 /// Written after `math_scale`.
 pub const FC: [Setting; 1] = [Setting {
     key: "math_fc",
-    scpi: Scpi::None {
-        #[cfg(test)]
-        why: CORNERS,
-    },
+    scpi: Scpi::none(CORNERS),
     ty: Ty::Hertz { ladder: freq_step },
     label: "Frequency",
     #[cfg(test)]

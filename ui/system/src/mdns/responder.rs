@@ -103,7 +103,8 @@ pub struct Responder {
     pub(super) phase: Phase,
     /// times of the last conflicts (RFC 6762 §8.1: 15 in 10 s and it waits 5 s)
     conflicts: Vec<f64>,
-    seed: u64,
+    /// spreads the first probe of several units over 250 ms
+    rng: oos_hal::Rng,
     /// last multicast of a record per interface: (interface, name in lower case, type), time
     sent: Vec<((u32, String, u16), f64)>,
     /// fingerprints of the packets sent in the last seconds, and when (`note`)
@@ -121,19 +122,11 @@ impl Responder {
             inst_n: 1,
             phase: Phase::Off,
             conflicts: Vec::new(),
-            seed: seed | 1,
+            rng: oos_hal::Rng::new(seed),
             sent: Vec::new(),
             mine: Vec::new(),
             log: Vec::new(),
         }
-    }
-
-    fn rand(&mut self) -> f64 {
-        // xorshift64: enough to spread the first probe of several units over 250 ms
-        self.seed ^= self.seed << 13;
-        self.seed ^= self.seed >> 7;
-        self.seed ^= self.seed << 17;
-        (self.seed >> 11) as f64 / (1u64 << 53) as f64
     }
 
     /// The host label in use: the name, after conflicts with `-2`, `-3` ...
@@ -238,7 +231,7 @@ impl Responder {
             return;
         }
         self.conflicts.retain(|t| now - t < 10.0);
-        let wait = if self.conflicts.len() >= 15 { 5.0 } else { delay + self.rand() * PROBE_GAP };
+        let wait = if self.conflicts.len() >= 15 { 5.0 } else { delay + self.rng.uniform() * PROBE_GAP };
         self.phase = Phase::Probe { sent: 0, at: now + wait };
     }
 

@@ -243,7 +243,7 @@ pub enum Density {
 impl Density {
     pub const ALL: [Density; 4] = [Density::Scope, Density::Full, Density::Split, Density::Four];
 
-    #[allow(dead_code)] // the names of the densities, kept with the type for menus and messages
+    /// The name of the density, for the Windows page and messages.
     pub fn label(self) -> &'static str {
         match self {
             Density::Scope => "Scope",

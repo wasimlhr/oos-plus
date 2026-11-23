@@ -42,6 +42,23 @@ impl Model {
         tscales()[self.tscale] * self.tfine
     }
 
+    /// After the time base changed from `old` s/div: the zoom stays inside it, and the delay, the time in the middle of
+    /// the screen, moves so the expand point (`h_expand`) keeps its place. The knob, the number pad and
+    /// `:TIMebase:SCALe` call it.
+    pub fn keep_expand_point(&mut self, old: f32) {
+        if self.zscale > self.tscale {
+            self.zscale = self.tscale;
+        }
+        let new = self.time_per_div();
+        let half = HDIV / 2.0;
+        match self.h_expand {
+            HExpand::Center => {}
+            HExpand::Left => self.delay -= half * (old - new),
+            HExpand::Right => self.delay += half * (old - new),
+            HExpand::Trigger => self.delay *= new / old,
+        }
+    }
+
     /// The time base the acquisition runs at: the step, which covers at least the screen. Display scales below
     /// 1 ns/div stay on the plot; the ADC still takes a 1 ns/div window.
     pub fn hw_time_per_div(&self) -> f32 {

@@ -98,10 +98,10 @@ The synchronous command/HTTP adapter cannot retain a pending `*OPC?` and reports
 | Command | Parameters / reply |
 | --- | --- |
 | `:CHANnel<n>:SCALe[?]` | Volts/div; setter chooses the nearest supported scale. Probe factor applies. |
-| `:CHANnel<n>:OFFSet[?]` | Volts. |
+| `:CHANnel<n>:OFFSet[?]` | Volts; kept within what the vertical scale can reach (2, 12, 56 or 550 V at the BNC, by scale), also when `:SCALe` gets smaller. |
 | `:CHANnel<n>:COUPling[?]` | `DC|AC|GND`; `DC50` only on a board supporting it. |
 | `:CHANnel<n>:PROBe[?]` | Positive attenuation factor. |
-| `:TIMebase[:MAIN]:SCALe[?]` | Seconds/div; nearest supported timebase. |
+| `:TIMebase[:MAIN]:SCALe[?]` | Seconds/div; nearest supported timebase. As the knob, the delay moves so the expand point of `:TIMebase:HREFerence:MODE` keeps its place, and the zoom stays inside the new time base. |
 | `:TIMebase[:MAIN]:OFFSet[?]` | Horizontal delay in seconds; `POSition` is an alias. |
 | `:ACQuire:SRATe?` | ADC/model sample rate, not a loaded reference's native rate. |
 | `:ACQuire:MDEPth[?]` | Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M`. Query returns the numeric configured/effective acquisition depth. |
@@ -135,9 +135,9 @@ Choose a level inside the actual waveform range. Use `*OPC?` only when willing t
 The settings of the Channel menu, their `:CHANnel<n>` commands and their keys in a setup file. They are declared once,
 in `ui/model/src/settings/channel.rs`; this table is written from there
 (`OOS_BLESS=1 cargo test --locked -q settings::tests` in `ui/model/`), and a test fails when the two differ. A command sets
-channel `<n>`, a key `ch<n>.*` channel n; `fine_v` and `v_expand_gnd` hold for every channel. A value `:UNITs`,
-`:VERNier` or `:EXPand` does not take is refused with `-224`, one of the others with `-113`. The scale, offset,
-coupling, probe, bias, deskew and label (above and below) are written by hand.
+channel `<n>`, a key `ch<n>.*` channel n; `fine_v` and `v_expand_gnd` hold for every channel. A value a command
+does not take is refused with `-224`. The scale, offset, coupling, probe, bias, deskew and label (above and below) are
+written by hand.
 
 <!-- settings:channel:begin -->
 | Command | Takes | Setup key | Channel menu | What it does |
@@ -170,7 +170,7 @@ command does not take is refused with `-224`. The scale, the delay, the fine swi
 The values of the Trigger menu, their `:TRIGger` commands and their keys in a setup file. They are declared once, in
 `ui/model/src/settings/trigger.rs`; this table is written from there
 (`OOS_BLESS=1 cargo test --locked -q settings::tests` in `ui/model/`), and a test fails when the two differ. A value a
-command does not take is refused with `-113`.
+command does not take is refused with `-224`.
 
 <!-- settings:trigger:begin -->
 | Command | Takes | Setup key | Trigger menu | What it does |
@@ -200,7 +200,7 @@ command does not take is refused with `-113`.
 The settings of the Acquire menu, their `:ACQuire` commands and their keys in a setup file. They are declared once,
 in `ui/model/src/settings/acquisition.rs`; this table is written from there
 (`OOS_BLESS=1 cargo test --locked -q settings::tests` in `ui/model/`), and a test fails when the two differ. A value
-`:TYPE` or `:AVERages` does not take is refused with `-224`, one of the others with `-113`. The memory depth
+a command does not take is refused with `-224`. The memory depth
 (`:ACQuire:MDEPth`, above) and the segment count (`:ACQuire:ULTRa:MAXFrame`, below) are written by hand.
 
 <!-- settings:acquisition:begin -->
@@ -361,7 +361,7 @@ input, the output, the generator with its address and `:BODE:GENerator`, and the
 | none | none yet: the page is set in its menu and by a setup file | `bode` (start) | Start freq | The first frequency of the sweep. The menu steps 1-2-5 and keeps it at or below half the stop. |
 | none | none yet: the page is set in its menu and by a setup file | `bode` (stop) | Stop freq | The last frequency of the sweep. The menu steps 1-2-5 and keeps it at or above twice the start. |
 | none | none yet: the page is set in its menu and by a setup file | `bode` (points) | Points | The number of frequencies of the sweep, logarithmically spaced. The menu steps by 5 from 5 to 200; a setup line keeps 2 to 1000. |
-| none | none yet: the page is set in its menu and by a setup file | `bode` (amp) | Amplitude | The amplitude the generator puts out, peak to peak. The menu steps 1-2-5 from 10 mVpp to 20 Vpp. |
+| none | none yet: the page is set in its menu and by a setup file | `bode` (amp) | Amplitude | The amplitude the generator puts out, peak to peak. The menu steps 1-2-5 from 10 mVpp to 20 Vpp; a tap on the value opens the number pad for any value in that range. |
 | none | set with the address by `:BODE:GENerator` | `bode_link` | Connection | How an external generator is reached: on the network at its address, or on the USB-A port. The menu changes it on an odd step. |
 | none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (time) | Sweep time | How long the generator takes for one sweep. The menu steps 1-2-5 from 1 ms to 500 s. |
 | none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (log) | Sweep | Whether the generator sweeps the frequency linearly or logarithmically over the sweep time. The menu changes it on an odd step. |
@@ -550,7 +550,7 @@ sessions on a unit. Their answers are no stable interface. On a computer, withou
 
 ## Errors and compatibility limits
 
-Read `:SYSTem:ERRor?` until `0,"No error"`. Each read removes one queued error. The queue holds at most 20 bounded messages; overflow is -350. Errors latch their event bit once; draining old errors does not relatch it. Unsupported or failed queries reply with specific error text as well as queuing it, even when full. Legitimate pending `*OPC?` keeps its deferred response. Typical errors include -113 undefined header, -224 invalid parameter, -230 unavailable analysis, -241 missing hardware, -256 missing file, and -350 queue overflow. Action queries such as `:RUN?`, `:STOP?`, `:SING?`, `*CLS?` and `*RST?` are unsupported and do not execute the action.
+Read `:SYSTem:ERRor?` until `0,"No error"`. Each read removes one queued error. The queue holds at most 20 bounded messages; overflow is -350. Errors latch their event bit once; draining old errors does not relatch it. Unsupported or failed queries reply with specific error text as well as queuing it, even when full. Legitimate pending `*OPC?` keeps its deferred response. Typical errors include -113 undefined header (the header is not known), -224 invalid parameter (a known header with a value it does not take, the value in the message), -230 unavailable analysis, -241 missing hardware, -256 missing file, and -350 queue overflow. Action queries such as `:RUN?`, `:STOP?`, `:SING?`, `*CLS?` and `*RST?` are unsupported and do not execute the action.
 
 A Rigol script commonly needs adjustments when it assumes stock `*IDN?`, big-endian WORD assumptions, vendor-specific setup files, a full status/SRQ system, arbitrary trigger-specific subtrees, or references as physical ADC inputs. Check errors and actual readbacks after configuration. TekScope's `REMOTE:RUNStop`, `REMOTE:ACQMethod`, DATA/WFMOutpre/CURVe dialect is not implemented by these Rigol-style headers.
 
@@ -587,7 +587,7 @@ These commands are implemented by the same model and acquisition router above. T
 | `:CHANnel<n>:BIAS[?]` | Software channel zero-bias correction. This is not a calibration procedure. |
 | `:CHANnel<n>:LABel:SHOW[?]`, `:LABel:CONTent[?]` | Label visibility and text. |
 | `:ACQuire:ULTRa:MAXFrame[?]` | Supported segmented frame count. This does not claim the stock UltraAcquire capture rate. |
-| `:ACQuire:SEGMents[?] <n>|OFF` | Segmented recording (OOS): the segment count, without the menu's steps; the interpreter sets a larger one than 100000 to 100000, `OFF` or `0` switches it off, another value is refused with `-113`. The query answers the count, `0` when off. Where segments are recorded is `:ACQuire:SEGMents:HARDware` (acquisition settings above). |
+| `:ACQuire:SEGMents[?] <n>|OFF` | Segmented recording (OOS): the segment count, without the menu's steps; the interpreter sets a larger one than 100000 to 100000, `OFF` or `0` switches it off, another value is refused with `-224`. The query answers the count, `0` when off. Where segments are recorded is `:ACQuire:SEGMents:HARDware` (acquisition settings above). |
 | `:ACQuire:SEGMents:INTerval[?] <s>` | Hardware segments: the pause after each segment in seconds; the interpreter keeps it within 0 to 10. Not yet verified on hardware ([upstream-audit.md](fork/upstream-audit.md)). |
 | `:ACQuire:SEGMents:TIMes?` | Hardware segments: the trigger time of each recorded segment since the first one, comma-separated seconds, `9.9E37` for a segment without a time stamp; empty before segments are recorded. Not yet verified on hardware ([upstream-audit.md](fork/upstream-audit.md)). |
 | `:DISPlay:VIEW[?] <n>` | Display > Views (OOS): show view n, 1 through the view count; the query answers the view shown. |
@@ -615,6 +615,8 @@ in `ui/model/src/settings/display.rs`; this table is written from there
 | `:DISPlay:GRID[?]` | `FULL`, `HALF`, `NONE` | `grid` | Grid | The graticule: every division line, a lighter one, or none. |
 | `:DISPlay:GBRightness[?]` | a whole number from 0 to 100, set within 10 to 100 % | `grid_bright` | Grid bright. | Brightness of the graticule; a value below 10 sets 10. |
 | `:DISPlay:RULers[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `grid_frame` | Grid frame | A frame around the graticule with ticks every fifth of a division; none with the grid off. |
+| none | a choice of the screen's layout, not of the measurement | `density` | Density | On the Windows page: what the screen shows around the plot, the bars and cards, the plot alone, the plot over a lower pane or two stacked traces, or four panes; a change sets the windows and the lower pane up again. A setup without it takes it from its windows and pane. |
+| none | a choice of the screen's layout, not of the measurement | `pane` | Lower | On the Windows page with Split: what shows under the plot, two stacked traces or a pane of the spectrum, the results, the events, the trend or the bus view. |
 | `:DISPlay:COLor[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `color_grade` | Colour grade | Colours the persistence by how often a point was hit. |
 | `:DISPlay:HDMI:LINes[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `hdmi_lines` | HDMI lines | The live channels on the monitor of the HDMI Layout are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges). |
 | `:DISPlay:TYPE[?]` | `DOTS`, `VECTors`; the query answers `DOTS` or `VECT` | `dots` | Dots | Draws every sample as a dot instead of joining them with lines. |
@@ -622,6 +624,20 @@ in `ui/model/src/settings/display.rs`; this table is written from there
 | none | a choice of the screen's layout, not of the measurement | `hdmi` | HDMI | What a monitor on the HDMI port shows: the panel, the waveform alone, or a layout of its own; the menu steps to the end of the list and stops. |
 | none | a choice of the screen's layout, not of the measurement | `text_size` | Text size | The size of the text on the screen; the menu steps to the end of the list and stops. |
 <!-- settings:display:end -->
+
+### The bus on the plot
+
+The bus drawn on the plot (the Bus menu) has no remote commands. Its settings and their keys in a setup file are
+declared once, in `ui/model/src/settings/bus.rs`; this table is written from there
+(`OOS_BLESS=1 cargo test --locked -q settings::tests` in `ui/model/`), and a test fails when the two differ.
+
+<!-- settings:bus:begin -->
+| Command | Takes | Setup key | Bus menu | What it does |
+| --- | --- | --- | --- | --- |
+| none | a trace of the screen, not of the decoders | `bus_on` | Bus | Draws the bus on the plot: the words of I2C from a clock and a data line, in hex. |
+| none | a trace of the screen, not of the decoders | `bus_pos` | Position | Where the bus is drawn, in divisions above the centre; the menu steps by a tenth of a division. |
+| none | a trace of the screen, not of the decoders | `bus_rw` | R/W bit | Whether the address byte shows the read/write bit or only the seven bits of the address. |
+<!-- settings:bus:end -->
 
 ### Measurement settings and statistics
 

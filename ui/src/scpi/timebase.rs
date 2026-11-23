@@ -36,18 +36,7 @@ pub(super) fn set_time_scale(m: &mut Model, want: f32) {
     };
     m.tscale = scale;
     m.tfine = fine;
-    if m.zscale > m.tscale {
-        m.zscale = m.tscale;
-    }
-    // The delay is the time in the middle. Keep the expand point where the screen keeps it.
-    let new = m.time_per_div();
-    let half = HDIV / 2.0;
-    match m.h_expand {
-        HExpand::Center => {}
-        HExpand::Left => m.delay -= half * (old - new),
-        HExpand::Right => m.delay += half * (old - new),
-        HExpand::Trigger => m.delay *= new / old,
-    }
+    m.keep_expand_point(old);
 }
 
 impl Scpi {
@@ -62,20 +51,12 @@ impl Scpi {
                 if query {
                     return t(&e(ui.m.time_per_div() as f64));
                 }
-                if let Some(v) = num(arg) {
-                    set_time_scale(&mut ui.m, v);
-                    ui.mark_changed();
-                    return None;
-                }
+                return self.set_arg(ui, arg, num(arg), |ui, v| set_time_scale(&mut ui.m, v));
             } else if kw(last, "OFFSet") || kw(last, "POSition") {
                 if query {
                     return t(&e(ui.m.delay as f64));
                 }
-                if let Some(v) = num(arg) {
-                    ui.m.delay = v;
-                    ui.mark_changed();
-                    return None;
-                }
+                return self.set_arg(ui, arg, num(arg), |ui, v| ui.m.delay = v);
             }
         }
         if n.len() == 1 && kw(n0, "VERNier") {
