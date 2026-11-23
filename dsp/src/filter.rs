@@ -363,6 +363,41 @@ impl Filter {
         Some(Filter { branches: vec![Branch::Fir(taps, n / 2)], dt })
     }
 
+    /// The record `x` (sampled every `dt` s) filtered by taps of a file (`h` sampled every `dt_taps` s). When the taps
+    /// at the step of the record would be too many (a filter made for a slow record, a fast record), the record is
+    /// brought to the step of the filter by averaging, filtered there, and read back at its own step by linear
+    /// interpolation: what the filter passes lies far below the record's rate. None when the steps are no numbers or
+    /// the taps are fewer than two.
+    pub fn apply_taps(x: &[f32], dt: f64, h: &[f32], dt_taps: f64) -> Option<Vec<f32>> {
+        if let Some(f) = Filter::from_taps(h, dt_taps, dt) {
+            return Some(f.apply(x));
+        }
+        if !(dt > 0.0 && dt < dt_taps && dt.is_finite() && dt_taps.is_finite()) || x.len() < 2 {
+            return None;
+        }
+        let ratio = dt_taps / dt;
+        let n = ((x.len() as f64 / ratio).ceil() as usize).max(2);
+        // the averages of `ratio` samples: sample i of the slow record is the mean of those around (i + 0.5) * ratio
+        let slow: Vec<f32> = (0..n)
+            .map(|i| {
+                let (a, b) = ((i as f64 * ratio) as usize, (((i + 1) as f64 * ratio) as usize).min(x.len()));
+                let part = &x[a.min(x.len() - 1)..b.max(a + 1).min(x.len())];
+                part.iter().sum::<f32>() / part.len().max(1) as f32
+            })
+            .collect();
+        let y = Filter::from_taps(h, dt_taps, dt_taps)?.apply(&slow);
+        Some(
+            (0..x.len())
+                .map(|j| {
+                    let pos = (j as f64 / ratio - 0.5).clamp(0.0, (n - 1) as f64);
+                    let k = (pos.floor() as usize).min(n - 1);
+                    let f = (pos - k as f64) as f32;
+                    y[k] + (y[(k + 1).min(n - 1)] - y[k]) * f
+                })
+                .collect(),
+        )
+    }
+
     /// The length of the longest FIR branch in taps, 0 for an IIR filter.
     pub fn taps(&self) -> usize {
         self.branches.iter().map(|b| if let Branch::Fir(t, _) = b { t.len() } else { 0 }).max().unwrap_or(0)
@@ -657,5 +692,28 @@ mod tests {
         }
         assert!(Filter::from_taps(&taps, 1e-3, 1e-12).is_none(), "too many taps");
         assert!(Filter::from_taps(&taps[..1], dt1, dt1).is_none());
+    }
+
+    /// A filter of a file made for a slow record, applied to a record a hundred times faster, filters at the step of
+    /// the filter: a tone far below its cut-off passes, one far above is gone, and the record's length stays.
+    #[test]
+    fn taps_for_a_slow_record_filter_a_fast_one() {
+        let spec = Spec { response: Response::Gaussian, f1: 1e5, ..Spec::default() };
+        let dt_taps = 1e-6;
+        let Filter { branches, .. } = Filter::design(&spec, dt_taps);
+        let Branch::Fir(t, _) = &branches[0] else { panic!("a FIR") };
+        let taps: Vec<f32> = t.iter().map(|&v| v as f32).collect();
+        let dt = dt_taps / 100.0;
+        let tone = |f: f64| -> Vec<f32> { (0..20000).map(|i| (2.0 * PI * f * i as f64 * dt).sin() as f32).collect() };
+        assert!(Filter::from_taps(&taps, dt_taps, dt).is_some() == (taps.len() * 100 <= MAX_CUSTOM_TAPS));
+        for (f, low) in [(1e4, true), (2e6, false)] {
+            let x = tone(f);
+            let y = Filter::apply_taps(&x, dt, &taps, dt_taps).expect("a filter");
+            assert_eq!(y.len(), x.len());
+            let mid = &y[8000..12000];
+            let amp = mid.iter().fold(0f32, |a, &v| a.max(v.abs()));
+            assert!(if low { amp > 0.9 } else { amp < 0.1 }, "{f} Hz comes out with {amp}");
+        }
+        assert!(Filter::apply_taps(&tone(1e4), dt_taps * 2.0, &taps[..1], dt_taps).is_none());
     }
 }

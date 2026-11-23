@@ -125,8 +125,8 @@ fn compute_job(job: &Job) -> Result<Signal, &'static str> {
     if job.config.uses_taps() {
         // the filter's taps are an impulse response at their own step, not a signal to put on the grid of the record
         let [(_, a), (_, taps)] = job.inputs.as_slice() else { return Err("A filter file needs its taps in Source B") };
-        let filter = oos_dsp::filter::Filter::from_taps(&taps.v, taps.dt, a.dt).ok_or("The filter has too many taps for this sample rate")?;
-        return Ok(Signal { t0: a.t0, dt: a.dt, v: Arc::new(filter.apply(&a.v)) });
+        let v = oos_dsp::filter::Filter::apply_taps(&a.v, a.dt, &taps.v, taps.dt).ok_or("The filter file has no usable taps")?;
+        return Ok(Signal { t0: a.t0, dt: a.dt, v: Arc::new(v) });
     }
     let start = job.inputs.iter().map(|(_, w)| w.t0).fold(f64::NEG_INFINITY, f64::max);
     let end =
