@@ -785,6 +785,54 @@ fn net_allow_follows_a_change_without_a_restart() {
 }
 
 #[test]
+fn saved_files_are_listed_and_downloaded_from_the_save_folder_only() {
+    let mut h = Web::open(0);
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let store = crate::ui::testkit::Scratch::new("http-files");
+    ui.files.dir = store.clone();
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(store.join("scr-001.png"), [0x89, b'P', b'N', b'G']).unwrap();
+    std::fs::write(store.join("note.html"), "<script>1</script>").unwrap();
+    // beside the folder, where a traversal would lead
+    std::fs::write(store.with_extension("secret"), "secret").unwrap();
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/files");
+    assert!(r.starts_with("HTTP/1.1 200") && r.contains("Content-Type: application/json"), "{r}");
+    assert!(r.contains("\"name\":\"scr-001.png\",\"size\":4"), "{r}");
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/files/scr-001.png");
+    assert!(r.starts_with("HTTP/1.1 200") && r.contains("Content-Type: image/png") && r.ends_with("PNG"), "{r}");
+    let r = get(&mut h, &mut ui, &cv, &mut scpi, "/files/note.html");
+    assert!(r.contains("Content-Type: application/octet-stream"), "never a page: {r}");
+    let secret = store.with_extension("secret");
+    let secret = secret.file_name().unwrap().to_string_lossy().into_owned();
+    for bad in [
+        format!("/files/../{secret}"),
+        format!("/files/..%2f{secret}"),
+        format!("/files/%2e%2e/{secret}"),
+        format!("/files/..%5c{secret}"),
+        "/files//etc/passwd".to_string(),
+        "/files/%2fetc%2fpasswd".to_string(),
+        "/files/C:%5cWindows%5cwin.ini".to_string(),
+        "/files/".to_string(),
+        "/files/nothing.png".to_string(),
+    ] {
+        let r = get(&mut h, &mut ui, &cv, &mut scpi, &bad);
+        assert!(r.starts_with("HTTP/1.1 409") && !r.contains("secret\n") && !r.ends_with("secret"), "{bad}: {r}");
+    }
+    // read only: no other method
+    let post = b"POST /files/x.png HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n".to_vec();
+    let r = request(&mut h, &mut ui, &cv, &mut scpi, post);
+    assert!(r.starts_with("HTTP/1.1 405") && r.contains("Allow: GET, HEAD"), "{r}");
+    // outside net.allow: refused, as MCP is
+    h.acl.set(crate::netacl::Acl::parse("192.0.2.0/24").0);
+    h.acl.peers_as(Some("198.51.100.7".parse().unwrap()));
+    for path in ["/files", "/files/scr-001.png"] {
+        let r = get(&mut h, &mut ui, &cv, &mut scpi, path);
+        assert!(r.starts_with("HTTP/1.1 403") && r.ends_with("refused"), "{path}: {r}");
+    }
+    let _ = std::fs::remove_file(store.with_extension("secret"));
+}
+
+#[test]
 fn identification_names_the_listeners() {
     let mut h = Web::open(0);
     h.offer(Offer { scpi_port: Some(5555), vxi11: false, hislip_port: Some(crate::hislip::PORT) });

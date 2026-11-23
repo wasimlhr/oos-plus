@@ -18,7 +18,8 @@
 //!   GET /update       update state and upload form; POST /update with a signed package (.oosupd) installs it
 //!                     (ui/update.rs: the signature is checked before anything is written)
 //! Unauthenticated: bench LAN only (an update must carry a trusted signature, but the community key is public).
-//! `net.allow` (`netacl`, docs/network.md 6) limits `POST /update` and `/mcp` to the listed address prefixes.
+//! `net.allow` (`netacl`, docs/network.md 6) limits `POST /update`, `/mcp` and the saved files (`/files`) to the listed
+//! address prefixes.
 
 use oos_hal::update::hash::unhex;
 use std::net::{TcpListener, TcpStream};
@@ -341,9 +342,10 @@ fn unescape(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-/// MCP and its files (`/mcp/waveform/<file>`): only a peer in `net.allow` (ADR 0025).
-fn mcp_path(path: &str) -> bool {
-    path == "/mcp" || path.starts_with("/mcp/")
+/// MCP and its files (`/mcp/waveform/<file>`), and the files the scope saved (`/files`, `/files/<file>`): only a peer
+/// in `net.allow` (ADR 0025).
+fn net_allow_only(path: &str) -> bool {
+    path == "/mcp" || path.starts_with("/mcp/") || path == "/files" || path.starts_with("/files/")
 }
 
 /// A browser supplies only a display name. It never selects a path on the instrument.
@@ -455,8 +457,8 @@ impl<U: Send + 'static> Http<U> {
                 too_big = n > limit || req.len() > limit + e;
                 if !too_big && need.is_none() {
                     // what only `net.allow` may send is refused before its body is read, not after
-                    let mcp = mcp_path(upload_path);
-                    let guarded = mcp || (first.starts_with("post ") && upload_path == "/update");
+                    let guarded = net_allow_only(upload_path)
+                        || (first.starts_with("post ") && upload_path == "/update");
                     if guarded && !self.acl.permits_peer(s.peer_addr()) {
                         early = Some("403 Forbidden");
                         return false;
@@ -572,7 +574,7 @@ impl<U: Send + 'static> Http<U> {
         let (status, ctype, body): (&str, &str, Vec<u8>) = match route {
             _ if foreign(&text, route, post) => refused(),
             "/update" | "/mcp" if (post || route == "/mcp") && !peer_ok => refused(),
-            _ if mcp_path(route) && !peer_ok => refused(),
+            _ if net_allow_only(route) && !peer_ok => refused(),
             // a route asked with a method it does not take: 405 with the ones it takes (#205)
             _ if allow.is_some_and(|a| !a.split(", ").any(|m| m == method)) => {
                 ("405 Method Not Allowed", "text/plain", b"method not allowed".to_vec())
@@ -732,6 +734,9 @@ fn methods_of(route: &str) -> Option<&'static str> {
         "/waveform" | "/mcp" => Some("POST"),
         // the CSV files of MCP `waveform`, one per call (oos-plus)
         r if r.starts_with("/mcp/waveform/") => Some("GET, HEAD"),
+        // the files the scope saved, read only (oos-plus)
+        "/files" => Some("GET, HEAD"),
+        r if r.starts_with("/files/") => Some("GET, HEAD"),
         "/update" => Some("GET, HEAD, POST"),
         "/cmd" | "/screen.png" | "/screen.jpg" | "/monitor.png" => Some("GET"),
         "/"
