@@ -374,6 +374,7 @@ These are OOS functions, not stock Rigol commands. Their limits are in [referenc
 | `:TRIGger:RS232:POLarity`, `:STOP`, `:PARity`, `:WIDTh`, `:BAUD`, `:DATA` | `POSitive\|NEGative`, `1\|1.5\|2`, `NONE\|EVEN\|ODD`, 5..8, baud, value |
 | `:TRIGger:SPI:WHEN` | `CS\|TIMeout`; `:TIMeout <s>`, `:SLOPe`, `:MODE HIGH\|LOW`, `:WIDTh 4..32`, `:DATA` |
 | `:TRIGger:IIC:WHEN` | `STARt\|ADDRess\|DATA\|NACKnowledge`; `:AWIDth 7\|10`, `:ADDRess`, `:DIRection READ\|WRITe\|RWRite`, `:DBYTes 0..5`, `:DATA` |
+| `:TRIGger:BUS:WHEN`, `:VALue` | OOS, every decoder: `FRAMe\|ID\|DATA\|ERRor`, value. `FRAMe` is the start of a frame; for FlexRay the transmission start sequence (TSS) |
 | `:TRIGger:<bus>:RELation`, `:DMAX`, `:MASK` | OOS: `EQ\|NE\|GT\|LT\|IN\|OUT`, upper limit, mask |
 | `:TRIGger:IIC:ARELation`, `:AMAX` | OOS: relation and upper limit of the address |
 

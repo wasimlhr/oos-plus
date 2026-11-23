@@ -172,7 +172,7 @@ Bus trigger uses the configured decoder protocol, roles and match settings; auxi
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:TRIGger:BUS:WHEN` | Set / Query | `FRAMe`, `ID`, `DATA`, `ERRor` | `ID` | Trigger > Match | OOS extension |
+| `:TRIGger:BUS:WHEN` | Set / Query | `FRAMe`, `ID`, `DATA`, `ERRor` | `ID` | Trigger > Match | OOS extension. `FRAMe` triggers at the start of each frame the decoder finds, at the end of its first field; for FlexRay that is the transmission start sequence (TSS), at its rising edge into the frame start sequence, so there is no separate TSS match |
 | `:TRIGger:BUS:VALue` | Set / Query | Value, decimal or `0x` hexadecimal; the query answers `0x..` | `0x123` | Trigger > Value | OOS extension |
 
 ## Examples

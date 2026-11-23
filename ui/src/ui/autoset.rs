@@ -6,7 +6,8 @@
 //! fast to slow until each channel shows a steady period with most of its height (fast first: a coarse time base can
 //! fold a fast signal into a period that is not there). A channel with a signal but no steady period keeps the fitted
 //! scale and level, at the time base that showed most of its height; one without a signal keeps its settings, one that
-//! is off stays off. With no signal on any channel the set-up stays as it was.
+//! is off stays off. With no signal on any channel the set-up stays as it was. Every shown math channel but the FFT is
+//! then refitted to its result, as its Autoscale does, from the first record taken after the set-up.
 //! The hardware Auto action only targets live ADC channels. Stored/SIM records
 //! use the separate Fit record action; its bounded helper is retained below.
 
@@ -183,6 +184,7 @@ impl Ui {
         } else {
             let apart = self.auto_apart();
             autoset(&mut self.m, &self.src, apart);
+            self.math_refit_after_autoset();
             self.dirty_map = true;
             self.settings_changed();
             self.toast("Auto set-up");
@@ -610,6 +612,7 @@ impl Ui {
             }
             let apart = self.auto_apart();
             place(&mut self.m, &found, apart);
+            self.math_refit_after_autoset();
             if self.m.auto_nrej {
                 self.auto_noise_reject();
             }
@@ -739,6 +742,122 @@ mod tests {
             unit: None,
         });
         assert_eq!(ui.m.mdepth, 1);
+    }
+
+    /// A demo UI with CH1 and CH2 on and a few records taken; Math1 = CH1 - CH2 (selected), Math2 = |CH1| and Math3 =
+    /// CH1 + CH2 hidden, Math4 the FFT of CH1, every one of them at a scale and offset that put the trace off screen.
+    fn math_off_screen() -> Ui {
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.ch[1].on = true;
+        ui.m.run = RunState::Run;
+        for _ in 0..5 {
+            ui.step(0.05);
+        }
+        let far = |op, a, b| crate::math::MathCh { op, a, b, scale: math_scales().len() - 1, offset: 40.0, ..Default::default() };
+        ui.m.maths[1] = far(MathOp::Abs, 0, 0);
+        ui.m.maths[2] = far(MathOp::Add, 0, 1);
+        ui.m.math_hidden[2] = true;
+        ui.m.maths[3] = far(MathOp::Fft, 0, 0);
+        (ui.m.math, ui.m.math_a, ui.m.math_b, ui.m.math_scale, ui.m.math_offset) =
+            (MathOp::Sub, 0, 1, math_scales().len() - 1, 40.0);
+        for _ in 0..3 {
+            ui.step(0.05);
+        }
+        ui
+    }
+
+    /// The scale and offset Autoscale gives math channel `k` now.
+    fn fitted(ui: &mut Ui, k: usize) -> (usize, f32) {
+        let keep = ui.m.math_ch(k);
+        ui.math_fit(k);
+        let c = ui.m.math_ch(k);
+        if k == ui.m.math_sel {
+            (ui.m.math_scale, ui.m.math_offset) = (keep.scale, keep.offset);
+        } else {
+            ui.m.maths[k] = keep;
+        }
+        (c.scale, c.offset)
+    }
+
+    #[test]
+    fn auto_refits_every_shown_math_channel_once_a_new_record_has_come() {
+        let mut ui = math_off_screen();
+        let (hidden, fft) = (ui.m.maths[2], ui.m.maths[3]);
+        ui.autoset_live_only();
+        // not to the record from before the new set-up
+        let still = (ui.m.math_scale, ui.m.math_offset);
+        assert_eq!(still, (math_scales().len() - 1, 40.0));
+        for _ in 0..4 {
+            ui.step(0.05);
+        }
+        for k in [0, 1] {
+            let c = ui.m.math_ch(k);
+            assert!(c.scale < math_scales().len() - 1 && c.offset.abs() < 5.0, "Math{}: {:?}", k + 1, (c.scale, c.offset));
+            let want = fitted(&mut ui, k);
+            // the demo signal moves a little between records: within one step of the 1-2-5 ladder
+            assert!(c.scale.abs_diff(want.0) <= 1, "Math{}: {} against {}", k + 1, c.scale, want.0);
+        }
+        assert_eq!(ui.m.maths[2], hidden, "a hidden math channel keeps its scale");
+        assert_eq!(ui.m.maths[3], fft, "the FFT keeps its dB scale");
+    }
+
+    #[test]
+    fn hardware_auto_end_refits_the_math_channels_too() {
+        let mut ui = math_off_screen();
+        let back = Box::new(ui.m.clone());
+        ui.auto_end(AutoRun {
+            id: 0,
+            back,
+            stage: Stage::Search(0),
+            records: 0,
+            since: 0.0,
+            fits: true,
+            lv: [(-1.0, 1.0); NCH],
+            want: [true; NCH],
+            period: [Some(1e-3), Some(1e-3), None, None],
+            full: [2.0; NCH],
+            swing: [2.0; NCH],
+            st: [Stats::default(); NCH],
+            best: [None; NCH],
+            stamp: 0,
+            plan: Vec::new(),
+            deep: false,
+            unit: None,
+        });
+        for _ in 0..4 {
+            ui.step(0.05);
+        }
+        assert!(ui.m.math_scale < math_scales().len() - 1 && ui.m.math_offset.abs() < 5.0);
+        assert!(ui.m.maths[1].scale < math_scales().len() - 1);
+    }
+
+    #[test]
+    fn auto_with_no_signal_leaves_the_math_scale_alone() {
+        let mut ui = math_off_screen();
+        let back = Box::new(ui.m.clone());
+        ui.auto_end(AutoRun {
+            id: 0,
+            back,
+            stage: Stage::Search(0),
+            records: 0,
+            since: 0.0,
+            fits: true,
+            lv: [(0.0, 0.0); NCH],
+            want: [false; NCH],
+            period: [None; NCH],
+            full: [0.0; NCH],
+            swing: [0.0; NCH],
+            st: [Stats::default(); NCH],
+            best: [None; NCH],
+            stamp: 0,
+            plan: Vec::new(),
+            deep: false,
+            unit: None,
+        });
+        for _ in 0..4 {
+            ui.step(0.05);
+        }
+        assert_eq!((ui.m.math_scale, ui.m.math_offset), (math_scales().len() - 1, 40.0));
     }
 
     #[test]
