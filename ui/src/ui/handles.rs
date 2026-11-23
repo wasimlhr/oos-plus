@@ -7,6 +7,20 @@
 use super::*;
 
 impl Ui {
+    /// The text and the width of the badge on the bottom bar pill of channel `c`, `w` wide: CHn, or the name the user gave
+    /// the channel (`:CHANnel<n>:LABel:CONTent`) where the pill is wide; a narrow pill keeps the badge alone.
+    pub(super) fn studio_pill_badge(&self, c: usize, w: i32) -> (String, i32) {
+        let sb = &self.fonts().sb;
+        if !self.m.ch_label[c].is_empty() && w >= 130 {
+            let name = self.ch_name(c);
+            let bw = (sb.width(&name) + 12).clamp(42, 90);
+            return (name, bw);
+        }
+        let label = format!("CH{}", c + 1);
+        let bw = if w >= 70 { 42 } else { (sb.width(&label) + 8).min(w - 4).max(8) };
+        (label, bw)
+    }
+
     /// Where the handles of the window that is being drawn sit, in the order of the sources (channels, references,
     /// math). A handle is on its source's zero level at the right edge. A zero level outside the plot pins it to that
     /// edge, clear of the time labels; a handle that would cover another one, a corner button with its word, the
