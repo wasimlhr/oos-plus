@@ -361,13 +361,13 @@ impl Ui {
             key::REF => self.toggle_menu(MenuId::Ref),
             key::ANALYSE => self.toggle_menu(MenuId::Decode),
             // history: back / forward step through the stored records (stops the acquisition), play-stop = live
-            0x08 => {
+            key::NAV_BACK => {
                 self.history_step(-1);
             }
-            0x06 => {
+            key::NAV_FWD => {
                 self.history_step(1);
             }
-            0x07 | key::NAVIGATE => {
+            key::NAV_PLAY | key::NAVIGATE => {
                 if self.history.pos.is_some() {
                     self.history.pos = None;
                     self.m.run = RunState::Run;
@@ -1463,7 +1463,7 @@ impl Ui {
                 return;
             }
         }
-        if !self.menu_open && self.measurement_navigation_tap(x, y) {
+        if !self.menu_open && (self.measurement_navigation_tap(x, y) || self.strip_tap(x, y)) {
             return;
         }
         if self.auto_bar_tap(x, y) {

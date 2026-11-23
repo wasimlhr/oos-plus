@@ -360,6 +360,8 @@ pub const LAYS: [Lay; 3] = [
 const DLG_HEAD: i32 = 50;
 const DLG_ROW: i32 = 44;
 const DLG_CTRL: i32 = 40;
+/// The field with the entry above the keys of an entry pad (ADR 0077).
+const PAD_ENTRY_H: i32 = 62;
 /// records kept for history playback
 const HISTORY: usize = 200;
 /// Points per line a decoder reads from the kept samples of a record while running (`Ui::decode_native`): 73 times
@@ -398,6 +400,8 @@ const LABEL: Rgb = rgb(0xc8, 0xc8, 0xc8);
 const DIM: Rgb = rgb(0x90, 0x90, 0x92);
 const AXIS_TEXT: Rgb = rgb(0xa4, 0xa4, 0xa6);
 const DARK_TEXT: Rgb = rgb(0x0a, 0x0a, 0x0b);
+/// What dims the screen behind a dialog that takes the input (the power dialog, an entry pad).
+const SHADE: Rgb = rgb(0, 0, 0);
 const ACCENT: Rgb = rgb(0xf4, 0xf4, 0xf4);
 const GREEN: Rgb = rgb(0x3f, 0xb9, 0x50);
 const RED: Rgb = rgb(0xf8, 0x51, 0x49);
@@ -435,6 +439,10 @@ pub mod key {
     pub const GI: u8 = 0x03;
     pub const HMENU: u8 = 0x04;
     pub const NAVIGATE: u8 = 0x05;
+    /// History keys: `<` steps back to older records, `>` forward to newer ones, play-stop goes live.
+    pub const NAV_BACK: u8 = 0x06;
+    pub const NAV_PLAY: u8 = 0x07;
+    pub const NAV_FWD: u8 = 0x08;
     pub const CLEAR: u8 = 0x0b;
     pub const SLOPE: u8 = 0x09;
     pub const FORCE: u8 = 0x0a;
@@ -543,9 +551,9 @@ const KEYPAD: [&str; 19] =
 pub const LONG_PRESS: f64 = 0.5;
 
 pub const KEY_NAMES: [(&str, u8); 30] = [
-    ("navfwd", 0x06),
-    ("navplay", 0x07),
-    ("navback", 0x08),
+    ("navback", key::NAV_BACK),
+    ("navplay", key::NAV_PLAY),
+    ("navfwd", key::NAV_FWD),
     ("ref", 0x01),
     ("la", 0x02),
     ("gi", 0x03),

@@ -196,14 +196,16 @@ impl Ui {
     }
 
     /// The samples a `:WAVeform` read uses. `memory` is RAW, or MAXimum while stopped: the deep record when the
-    /// acquisition kept one, otherwise the screen record.
+    /// acquisition kept one, otherwise the screen record. The screen record after a STOP is the picture drawn: a view
+    /// read again as pairs while the raw frame of the STOP stays the record measured (`stop_picture`). NORMal gave the
+    /// raw window of the STOP there, 4 of the 40 ms a zoomed-out 50 M record shows (#552).
     pub(crate) fn channel_view(&self, c: usize, memory: bool) -> Option<(&[f32], f64, f64)> {
         if memory {
             if let Some(view) = self.native_view(c) {
                 return Some(view);
             }
         }
-        let rec = self.last[0].as_ref()?;
+        let rec = if memory { None } else { self.stop_picture() }.or(self.last[0].as_ref())?;
         let v = rec.ch.get(c)?;
         (!v.is_empty()).then_some((v.as_slice(), rec.dt, rec.t0))
     }
@@ -437,6 +439,7 @@ impl Ui {
             raw: None,
             la: None,
             pairs: false,
+            peak: false,
         }
     }
 
@@ -558,7 +561,12 @@ impl Ui {
         if !self.m.trig_channels().iter().enumerate().all(|(c, &u)| !u || !rec.ch[c].is_empty()) {
             return std::sync::Arc::new(Vec::new());
         }
-        let refs: [&[f32]; NCH] = std::array::from_fn(|c| &rec.ch[c][..]);
+        // a protocol trigger decodes the record: points in turn are read by the means of neighbours, as the decoder
+        // reads them (`Record::alternates`)
+        let means: [Option<Vec<f32>>; NCH] = std::array::from_fn(|c| {
+            (self.m.trig_type == TrigType::Bus && rec.alternates()).then(|| crate::trig::pair_means(&rec.ch[c]))
+        });
+        let refs: [&[f32]; NCH] = std::array::from_fn(|c| means[c].as_deref().unwrap_or(&rec.ch[c]));
         let hyst: [f32; NCH] = std::array::from_fn(|c| 0.1 * self.m.ch[c].volts_per_div());
         let inp = oos_dsp::trigger::Input { ch: refs, dt: rec.dt, hyst };
         let t0 = self.source_time_origin(self.m.trigger_wave(), rec.t0);

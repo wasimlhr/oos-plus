@@ -61,6 +61,7 @@ impl Default for Model {
             nth_n: 1,
             setup: 1e-6,
             hold: 1e-6,
+            trig_kept: TrigKept::default(),
             run: RunState::Run,
             status: TrigStatus::Wait,
             acq: AcqMode::Normal,
@@ -230,6 +231,8 @@ impl Default for Model {
             auto_fast: false,
             bode_addr: "192.168.1.100:5555".into(),
             bode_mode: oos_dsp::bode::Mode::Loop,
+            bode_vv: false,
+            bode_rms: false,
             // upstream OOS: time outside on both sides, N = 2 periods, measured on the screen. The burst idle stays
             // 50 us: oos-dsp reads an idle of 0 as 50 us, where upstream reads it as one period
             meas_idle: oos_dsp::measure::BURST_IDLE,

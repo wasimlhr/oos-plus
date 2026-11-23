@@ -448,10 +448,9 @@ impl Scpi {
                 // not as a key press: a notice on the screen takes a key for its own, and the reset was lost
                 ui.sim_cancel_generation();
                 ui.default_setup();
-                // the read-out of this interpreter is part of what a reset puts back: CH1, NORMal, BYTE, the whole
-                // record
-                (self.wav_src, self.wav_math, self.wav_fmt, self.wav_mode, self.wav_start, self.wav_stop) =
-                    (WaveId::Ch(0), None, 0, 0, 1, 0);
+                // the waveform transfer too: a page or source left by an earlier read would cut or redirect the next
+                (self.wav_src, self.wav_fmt, self.wav_mode, self.wav_start, self.wav_stop) = super::WAV_DEFAULT;
+                self.wav_math = None;
                 return Some(None);
             }
             _ => {}

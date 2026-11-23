@@ -1261,6 +1261,7 @@ fn level_50_with_ac_trigger_coupling_counts_from_the_mean() {
         raw: None,
         la: None,
         pairs: false,
+        peak: false,
     };
     ui.last[0] = Some(rec);
     ui.measured.stats[0] = crate::wave::stats(&v, dt);

@@ -356,7 +356,9 @@ impl Model {
         self.trig_ref2.map_or(WaveId::Ch(self.trig_src2), WaveId::Ref)
     }
 
+    /// Sets the source, or the second source; the trigger level goes with the source (`trig_level_to_source`).
     pub fn set_trigger_wave(&mut self, source: WaveId, secondary: bool) {
+        let before = self.trigger_wave();
         let (channel, reference) = if secondary {
             (&mut self.trig_src2, &mut self.trig_ref2)
         } else {
@@ -373,6 +375,7 @@ impl Model {
         }
         if !secondary {
             self.trig_la = None;
+            self.trig_level_to_source(before);
         }
     }
 

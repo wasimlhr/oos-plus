@@ -139,6 +139,7 @@ fn stop_measures_the_final_raw_frame_while_the_views_are_drawn_from_pairs() {
     };
     // a square of a quarter duty, 2 V high: mean 0.5, RMS 1, std dev and AC RMS sqrt(0.75)
     let raw: Vec<f32> = (0..n).map(|i| if (i / 50) % 4 == 0 { 2.0 } else { 0.0 }).collect();
+    let raw_head = raw[..200].to_vec();
     let pairs: Vec<f32> = (0..n).map(|i| if i % 2 == 0 { 0.0 } else { 2.0 }).collect();
     let steps = |ui: &mut Ui, k: usize| {
         for _ in 0..k {
@@ -177,6 +178,14 @@ fn stop_measures_the_final_raw_frame_while_the_views_are_drawn_from_pairs() {
     let drawn = |ui: &Ui| ui.stop_picture().and_then(|r| r.raw.as_ref()).map(|r| (r.frame.seq, r.frame.envelope));
     assert_eq!(measured(&ui), Some(2));
     assert_eq!(drawn(&ui), Some((3, true)), "the pairs read for the view are drawn");
+    // `:WAVeform` NORMal reads that picture, RAW the raw frame of the STOP (#552: NORMal gave the raw window)
+    let pic = ui.stop_picture().map(|r| r.ch[0].clone()).unwrap();
+    let norm = ui.channel_page(0, false, 1, 0).map(|(v, _, _)| v).unwrap();
+    let finite = |v: &[f32]| v.iter().map(|x| if x.is_finite() { *x } else { 0.0 }).collect::<Vec<_>>();
+    assert_eq!(norm, finite(&pic), "NORMal reads the picture drawn, not the record measured");
+    let raw = ui.channel_page(0, true, 1, 0).map(|(v, _, _)| v).unwrap();
+    assert_eq!(raw.len(), n, "RAW reads the raw frame of the STOP");
+    assert_eq!(raw[..200], raw_head[..], "RAW: its samples");
     // zoomed in and out (a new time base clears the statistics, as any setting): the screen part of the raw frame
     for d in [-1, 1] {
         ui.adjust(Item::HScale, d);

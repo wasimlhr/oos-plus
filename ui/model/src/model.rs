@@ -22,6 +22,7 @@ pub mod la;
 mod limits;
 mod math;
 mod trigger;
+mod trigger_kept;
 
 pub use acquisition::*;
 pub use analysers::*;
@@ -32,6 +33,7 @@ pub use generator::*;
 pub use limits::*;
 pub use math::*;
 pub use trigger::*;
+pub use trigger_kept::*;
 
 /// Channel slots of the UI state: the largest model of the board (smaller models use the first `n_ch()`). The board
 /// of the build has as many (`platform.rs` holds it to that at compile time).
@@ -360,6 +362,8 @@ pub struct Model {
     pub nth_n: u32,
     pub setup: f32,
     pub hold: f32,
+    /// what each trigger type and each channel as the source kept while another was chosen (#49); not part of a setup
+    pub trig_kept: TrigKept,
     pub run: RunState,
     pub status: TrigStatus,
     pub acq: AcqMode,
@@ -648,6 +652,10 @@ pub struct Model {
     pub bode_addr: String,
     /// loop gain, PSRR, or the linear Vout/Vin ratio
     pub bode_mode: oos_dsp::bode::Mode,
+    /// the gain axis, the cursor and the title in V/V instead of dB (#51); the points keep what the mode measures
+    pub bode_vv: bool,
+    /// the menu shows and the pad takes the amplitude in Vrms instead of Vpp (#52); `bode_amp` stays Vpp
+    pub bode_rms: bool,
     /// burst idle (0 = the default, `BURST_IDLE`), which side Time Outside counts, and Duration N
     pub meas_idle: f64,
     pub meas_out: oos_dsp::measure::Outside,
@@ -725,7 +733,7 @@ pub struct Model {
     pub ext_freq: f64,
     pub ext_ampl: f64,
     /// Bode with a generator that sweeps on its own (`model::bode::FREE`, same start/stop): sweep time (s), logarithmic
-    /// (else linear), sync channel, its edge and level (V), input channel (0 = none, k = CHk: then the gain is against
+    /// (else linear; for every generator also the spacing of the frequencies and the frequency axis, #51), sync channel, its edge and level (V), input channel (0 = none, k = CHk: then the gain is against
     /// `bode_ref` dBV)
     pub bode_sw_time: f64,
     pub bode_sw_log: bool,

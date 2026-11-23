@@ -47,7 +47,7 @@ impl Samples for Record {
         &self.ch
     }
     fn from_file(t0: f64, dt: f64, ch: [Vec<f32>; NCH]) -> Record {
-        Record { t0, dt, ch, triggered: true, partial: false, raw: None, la: None, pairs: false }
+        Record { t0, dt, ch, triggered: true, partial: false, raw: None, la: None, pairs: false, peak: false }
     }
 }
 

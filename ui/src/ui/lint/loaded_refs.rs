@@ -178,6 +178,7 @@ fn a_loaded_ref_feeds_the_analysers_at_the_files_interval() {
         }),
         la: None,
         pairs: false,
+        peak: false,
     });
     let rec = u.last[0].as_ref().unwrap();
     let samp = u.wave_samples(rec, WaveId::Ref(0)).unwrap();
@@ -303,6 +304,7 @@ fn a_loaded_ref_feeds_the_analysers_at_the_files_interval() {
                 raw: None,
                 la: None,
                 pairs: false,
+                peak: false,
             }),
             &[WaveId::Ref(0), WaveId::Ref(1)],
             &[],
@@ -822,6 +824,14 @@ fn measurement_queries_read_a_channel_or_a_ref() {
     assert_eq!(ask(&mut s, &mut u, ":BODE:MODE?"), "PSRR");
     ask(&mut s, &mut u, ":BODE:MODE IMP");
     assert_eq!(ask(&mut s, &mut u, ":BODE:MODE?"), "IMP");
+    ask(&mut s, &mut u, ":BODE:UNIT RAT");
+    assert_eq!(ask(&mut s, &mut u, ":BODE:UNIT?"), "RAT");
+    ask(&mut s, &mut u, ":BODE:UNIT DB");
+    assert_eq!(ask(&mut s, &mut u, ":BODE:UNIT?"), "DB");
+    ask(&mut s, &mut u, ":BODE:AMPLitude 0.35");
+    assert_eq!(u.m.bode_amp, 0.35);
+    ask(&mut s, &mut u, ":BODE:AMPL 50");
+    assert_eq!(u.m.bode_amp, 0.35, "50 Vpp is refused");
 
     let mut sq = Vec::new();
     for k in 0..8000 {

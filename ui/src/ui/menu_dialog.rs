@@ -368,7 +368,12 @@ impl Ui {
         let grid = items.iter().all(|&it| Self::kind(it) == Kind::Action);
         let wide = self.pick.is_some_and(|p| Self::wide_pick(p.it));
         let l = self.lay();
-        let (cols, cw, rh, gap) = if wide {
+        // an entry pad: larger keys under a field with the entry, centred on the dimmed screen (ADR 0077)
+        let pad = self.pad_entry().is_some();
+        let (kh, top_extra) = if pad { (DLG_CTRL + 14, PAD_ENTRY_H) } else { (DLG_CTRL, 0) };
+        let (cols, cw, rh, gap) = if pad {
+            (4, l.grid_col + 36, DLG_ROW + 16, 10)
+        } else if wide {
             (2, l.dlg_col, DLG_ROW + 2, 8)
         } else if self.menu == MenuId::ViewMore {
             (1, l.grid_col + 40, DLG_ROW + 2, 8)
@@ -406,15 +411,20 @@ impl Ui {
         let scrolls = shown < nrows;
         let lines_w = cols * cw + (cols - 1) * gap;
         let w = 24 + lines_w + if scrolls { scroll::BAR_W + 4 } else { 0 };
-        let h = DLG_HEAD + shown * rh + 6;
+        let h = DLG_HEAD + top_extra + shown * rh + 6;
         let (ax, top) = self.menu_anchor();
-        let x = (ax - w / 2).clamp(METRICS.edge, self.scr.w - METRICS.edge - w);
-        let y = if top { fr.top.bottom() + 4 } else { (fr.bottom.y - 4 - h).max(fr.top.bottom() + 4) };
+        let (above, below) = (fr.top.bottom() + 4, fr.bottom.y - 4);
+        let (x, y) = if pad {
+            (((self.scr.w - w) / 2).max(METRICS.edge), (above + (below - above - h) / 2).max(above))
+        } else {
+            let x = (ax - w / 2).clamp(METRICS.edge, self.scr.w - METRICS.edge - w);
+            (x, if top { above } else { (below - h).max(above) })
+        };
         let r = Rect::new(x, y, w, h);
         let close = Rect::new(r.x + r.w - 52, r.y + 6, 44, DLG_CTRL);
         let back = self.parent.map(|_| Rect::new(close.x - 88, close.y, 82, DLG_CTRL));
         let bar = scrolls.then(|| {
-            let area = Rect::new(r.x + 12, r.y + DLG_HEAD, lines_w, shown * rh - (rh - DLG_CTRL));
+            let area = Rect::new(r.x + 12, r.y + DLG_HEAD + top_extra, lines_w, shown * rh - (rh - kh));
             let track = Rect::new(area.right() + 4, area.y, scroll::BAR_W, area.h);
             (scroll::Bar { track, total: nrows, shown, pos: first }, area)
         });
@@ -425,7 +435,7 @@ impl Ui {
                 let (col, row) = (i % cols, i / cols);
                 // a line scrolled out of the window has no place: it is neither drawn nor hit
                 let ctrl = if (first..first + shown).contains(&row) {
-                    Rect::new(r.x + 12 + col * (cw + gap), r.y + DLG_HEAD + (row - first) * rh, cw, DLG_CTRL)
+                    Rect::new(r.x + 12 + col * (cw + gap), r.y + DLG_HEAD + top_extra + (row - first) * rh, cw, kh)
                 } else {
                     Rect::new(r.x, r.y, 0, 0)
                 };
@@ -453,7 +463,8 @@ impl Ui {
         let Some(p) = self.pick else { return (lines, 0) };
         let fr = self.frame();
         let room = fr.bottom.y - 4 - (fr.top.bottom() + 4);
-        let fit = ((room - DLG_HEAD - 6) / rh).max(1);
+        let entry = if self.pad_entry().is_some() { PAD_ENTRY_H } else { 0 };
+        let fit = ((room - DLG_HEAD - entry - 6) / rh).max(1);
         if lines <= fit {
             return (lines, 0);
         }
@@ -525,16 +536,21 @@ impl Ui {
         (Rect::new(c.x + 14, c.y, track.x - c.x - 22, c.h), track)
     }
 
-    /// A switch in its control `c`: one field, the state on the left, the switch on the right; on, the track is the
-    /// accent and the knob stands right.
+    /// A switch in its control `c`: one field, the state on the left, the switch on the right. On, the field is the
+    /// accent like a chosen segment or an active button, and the switch inverts on it: a dark track, the knob in the
+    /// accent on the right. Off, a dark field, a grey track, the knob on the left.
     fn draw_switch(&self, cv: &mut Canvas, c: Rect, on: bool) {
-        btn(cv, c, BTN, BTN_BORDER);
+        if on {
+            cv.round(c, 5, ACCENT, 255);
+        } else {
+            btn(cv, c, BTN, BTN_BORDER);
+        }
         let (txt, track) = Self::switch_parts(c);
-        cv.text_in(&self.fonts().mb, txt, 0, if on { "On" } else { "Off" }, if on { TEXT } else { DIM });
+        cv.text_in(&self.fonts().mb, txt, 0, if on { "On" } else { "Off" }, if on { DARK_TEXT } else { DIM });
         let r = track.h / 2;
         if on {
-            cv.round(track, r, ACCENT, 255);
-            cv.circle(track.x + track.w - r, track.y + r, r - 3, DARK_TEXT);
+            cv.round(track, r, DARK_TEXT, 255);
+            cv.circle(track.x + track.w - r, track.y + r, r - 3, ACCENT);
         } else {
             cv.round(track, r, BTN_BORDER, 255);
             cv.circle(track.x + r, track.y + r, r - 3, DIM);
@@ -543,6 +559,25 @@ impl Ui {
 
     pub(super) fn value_parts(c: Rect) -> (Rect, Rect, Rect) {
         (Rect::new(c.x, c.y, 44, c.h), Rect::new(c.x + 48, c.y, c.w - 96, c.h), Rect::new(c.x + c.w - 44, c.y, 44, c.h))
+    }
+
+    /// An entry pad (ADR 0077): the dimmed screen, the dialog's frame, and the entry so far large in a field above the
+    /// keys (the row's value dim until something is typed). Any other dialog: its frame.
+    fn draw_pad_entry(&self, cv: &mut Canvas, d: &Dlg) {
+        let entry = self.pad_entry();
+        if entry.is_some() {
+            cv.blend(self.scr.rect(), SHADE, 160);
+        }
+        cv.framed(d.r, 8, 2, ACCENT, 7, DLG_BG);
+        let Some((_, value)) = entry else { return };
+        let field = Rect::new(d.r.x + 12, d.r.y + DLG_HEAD, d.r.w - 24, PAD_ENTRY_H - 10);
+        btn(cv, field, BTN, ACCENT);
+        let inner = Rect::new(field.x + 16, field.y, field.w - 32, field.h);
+        let xl = &self.fonts().xl;
+        match self.pad_now() {
+            Some(now) => cv.text_in(xl, inner, 2, &now, DIM),
+            None => cv.text_in(xl, inner, 2, &value, TEXT),
+        }
     }
 
     pub(super) fn draw_menu(&self, cv: &mut Canvas) {
@@ -559,7 +594,7 @@ impl Ui {
         }
         let Some(d) = self.dlg_layout() else { return };
         let f = self.fonts();
-        cv.framed(d.r, 8, 2, ACCENT, 7, DLG_BG);
+        self.draw_pad_entry(cv, &d);
         let tcol = match self.menu_root() {
             MenuId::Channel(c) => CH_COLORS[c],
             _ => TEXT,
@@ -822,7 +857,7 @@ impl Ui {
         self.draw_trig_slider(cv);
         self.draw_numpad(cv);
         if self.power.open {
-            cv.blend(self.scr.rect(), rgb(0, 0, 0), 160);
+            cv.blend(self.scr.rect(), SHADE, 160);
             let (r, [off, restart, cancel]) = self.pwr_layout();
             cv.framed(r, 8, 2, ACCENT, 7, DLG_BG);
             cv.text_in(&f.lb, Rect::new(r.x, r.y + 18, r.w, 28), 1, "Power", ACCENT);

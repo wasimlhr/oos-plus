@@ -50,25 +50,12 @@ pub fn decode(m: &Model, ch: [&[f32]; NCH], dt: f64) -> Result<Vec<Packet>, &'st
     if m.dec_src >= NCH {
         return Err("stored decoder inputs need the reference adapter");
     }
-    let hy = 0.1 * m.ch[m.dec_src].volts_per_div();
-    // Peak detect below the full rate: the points are minimum and maximum in turn, so an edge passes the threshold
-    // three times and every bit begins with two pulses of one point (unit 2026-11-20: a LIN frame at 2.5 MSa/s,
-    // its sync not measured and its bytes wrong). The mean of two neighbours has one crossing an edge.
-    if peak_points(m, dt) {
-        let means: [Vec<f32>; NCH] = std::array::from_fn(|c| pair_means(ch[c]));
-        return decode_at(m, std::array::from_fn(|c| &means[c][..]), dt, m.dec_thr, hy);
-    }
-    decode_at(m, ch, dt, m.dec_thr, hy)
-}
-
-/// Whether the points of a live record `dt` apart are minimum and maximum in turn: Peak detect below the full rate
-/// (at the full rate there is nothing to detect over, and the points are samples).
-pub(crate) fn peak_points(m: &Model, dt: f64) -> bool {
-    m.acq == AcqMode::Peak && 1.0 / dt < m.max_srate() * 0.999
+    decode_at(m, ch, dt, m.dec_thr, 0.1 * m.ch[m.dec_src].volts_per_div())
 }
 
 /// The mean of every point and its neighbour: the line a decoder reads of points that are minimum and maximum in
-/// turn (Peak detect, the pairs of a screen record). Same length; an edge crosses a level once.
+/// turn (`Record::alternates`: Peak detect, the pairs of a screen record). Same length; an edge crosses a level once,
+/// where the points themselves pass it three times and every bit begins with two pulses of one point.
 pub(crate) fn pair_means(v: &[f32]) -> Vec<f32> {
     (0..v.len()).map(|i| (v[i] + v[(i + 1).min(v.len() - 1)]) / 2.0).collect()
 }
@@ -292,35 +279,40 @@ pub(crate) mod peak_tests {
         let peak: Vec<f32> = (0..n as i64)
             .map(|i| {
                 let span = (4 * (i - 2)..4 * (i + 2)).map(fine);
-                if i % 2 == 0 { span.fold(f32::MIN, f32::max) } else { span.fold(f32::MAX, f32::min) }
+                if i % 2 == 0 {
+                    span.fold(f32::MIN, f32::max)
+                } else {
+                    span.fold(f32::MAX, f32::min)
+                }
             })
             .collect();
         let mut m = Model::default();
         (m.dec_proto, m.dec_src, m.dec_thr) = (Proto::LIN, 0, 2.35);
-        crate::ui::Ui::dec_apply_rows(&mut m, &[(crate::protocols::Row::Baud, 0)]);
+        m.dec_baud = 0;
         (m, peak, dt)
     }
 
+    /// The data bytes of the packets of `v`, and whether every packet is good.
+    pub(crate) fn lin_read(m: &Model, v: &[f32], dt: f64) -> (Vec<u32>, bool) {
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if c == 0 { v } else { &[][..] });
+        let p = decode(m, ch, dt).unwrap();
+        (p.iter().filter(|x| x.kind == Kind::Data).map(|x| x.value).collect(), p.iter().all(|x| x.ok))
+    }
+
+    /// The bytes of the frame of `lin_in_peak_detect`, with its sync, all good.
+    pub(crate) fn lin_right() -> (Vec<u32>, bool) {
+        (vec![0x55, 0x10, 0x20, 0x30, 0x40], true)
+    }
+
     /// Break it catches: a decoder read the points of a Peak detect record as samples. They are minimum and maximum
-    /// in turn, so an edge of a few points passed the threshold three times (unit 2026-11-20: LIN at 2.5 MSa/s, the
-    /// sync of no frame measured, every byte wrong; the same line in Normal decoded).
+    /// in turn, so an edge of a few points passed the threshold three times (LIN at 2.5 MSa/s: the sync of no frame
+    /// measured, every byte wrong; the same line in Normal decoded). The means of neighbours read like the line.
     #[test]
     fn a_peak_detect_record_decodes_like_its_signal() {
-        let (mut m, peak, dt) = lin_in_peak_detect();
-        let e: [f32; 0] = [];
-        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if c == 0 { &peak[..] } else { &e[..] });
-        let read = |m: &Model| {
-            let p = decode(m, ch, dt).unwrap();
-            (p.iter().filter(|x| x.kind == Kind::Data).map(|x| x.value).collect::<Vec<_>>(), p.iter().all(|x| x.ok))
-        };
-        // as samples: the edges are no edges of the line
-        assert_ne!(read(&m), (vec![0x55, 0x10, 0x20, 0x30, 0x40], true), "the record made here has no doubled edges");
-        m.acq = AcqMode::Peak;
-        assert_eq!(read(&m), (vec![0x55, 0x10, 0x20, 0x30, 0x40], true));
-        // at the full rate Peak is Normal: the points are samples
-        let full = 1.0 / m.max_srate();
+        let (m, peak, dt) = lin_in_peak_detect();
+        assert_ne!(lin_read(&m, &peak, dt), lin_right(), "the record made here has doubled edges");
+        assert_eq!(lin_read(&m, &pair_means(&peak), dt), lin_right());
         assert_eq!(pair_means(&[0.0, 2.0, 2.0]), [1.0, 2.0, 2.0]);
-        assert!(decode(&m, ch, full).is_ok());
     }
 }
 

@@ -515,6 +515,7 @@ mod tests {
             raw: None,
             la: None,
             pairs: false,
+            peak: false,
         });
         u.refs[3] = Some(RefWave { color: 1, vpd: 0.2, ..RefWave::test(square(80), 1e-9, 0.0) });
         u.refs[4] = Some(RefWave { color: 2, vpd: 0.2, on: false, ..RefWave::test(square(200), 1e-9, 0.0) });

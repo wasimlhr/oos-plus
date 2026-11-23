@@ -115,10 +115,9 @@ pub fn recover_clock(v: &[f32], dt: f64, thr: f32, hyst: f32, nominal_rate: Opti
     let first_rising = found.first().is_some_and(|x| x.rising);
     let e: Vec<f64> = found.iter().map(|x| x.t * dt).collect();
     // a unit interval shorter than half a sample is no clock of this record (a signal that changes at every sample
-    // has one of a sample): a nominal rate from a fast time base, kept
-    // at a slow one, gave a clock with hundreds of millions of unit intervals between two edges, and what holds a
-    // value per unit interval (`recover_clock_pll`, `tie_trend`, the eye itself) took all the memory there is
-    // (seen on a unit, 2026-11-18: 3.7 GB, and the program was killed)
+    // has one of a sample): a nominal rate from a fast time base, kept at a slow one, gave a clock with hundreds of
+    // millions of unit intervals between two edges, and what holds a value per unit interval (`recover_clock_pll`,
+    // `tie_trend`, the eye itself) took all the memory there is (seen on a unit: 3.7 GB, and the program was killed)
     clock_from_edges(e, nominal_rate).filter(|c| c.period >= 0.5 * dt).map(|c| Clock { first_rising, ..c })
 }
 
@@ -272,6 +271,12 @@ pub fn recover_clock_pll(
 ) -> Option<Clock> {
     let c = recover_clock(v, dt, thr, hyst, nominal_rate)?;
     let end = v.len() as f64 * dt;
+    // a tick per unit interval over the whole record, the period up to 10 % shorter: no more ticks than the record
+    // has samples. A clock of about a sample a bit is none of the record, and the measurements call this directly,
+    // without the eye page's two samples a bit: at half a sample a bit a deep record would take gigabytes of ticks
+    if end / (0.9 * c.period) + 2.0 > v.len() as f64 {
+        return None;
+    }
     let (first, last) = (c.edges[0], c.edges[c.edges.len() - 1]);
     let uis = ((last - first) / c.period).round().max(1.0);
     let density = (c.edges.len() as f64 / uis).clamp(0.01, 1.0);

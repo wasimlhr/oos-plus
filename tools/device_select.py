@@ -29,6 +29,9 @@ AREAS = {
     "acq": (r"^depth_and_rate_matrix$", r"^every_time_base_runs$", r"^gnd_is_flat$", r"^time_axis_at_every",
             r"^fine_time_base", r"^delay_moves_the_record$", r"^single_takes_one_new_record$", r"^deep_memory",
             r"^peak_detect", r"^high_res", r"^rates_for_the_record$", r"^two_channels_agree$", r"^deskew"),
+    # the data of a deep record: filled over its length, the raw window of a STOP whole, the export what the screen
+    # shows (not for roll: a deep record is a short time base, roll starts at 200 ms/div)
+    "deep": (r"^deep_memory", r"^deep_record_", r"^raw_window_", r"^norm_export_"),
     "frontend": (r"^zero_of_every_scale$", r"^gnd_is_flat$", r"^every_scale_reads_true$", r"^fine_scale",
                  r"^offset_", r"^probe_ratio", r"^ac_coupling", r"^invert_", r"^bandwidth_limit", r"^response_over",
                  r"^two_channels_agree$", r"^auto_"),
@@ -61,19 +64,20 @@ RULES = (
     (r"^hal/src/dho/roll", ("roll", "acq", "registers")),
     (r"^hal/src/dho/la", ("la", "registers")),
     (r"^hal/src/dho/(tpu|trig|mask|zone|auxout)", ("trigger", "registers")),
-    (r"^hal/src/dho/(afe|adc|cal|levels|lmx|pll|relay|vga|offset)", ("frontend", "acq", "registers")),
+    (r"^hal/src/dho/(afe|adc|cal|levels|lmx|pll|relay|vga|offset)", ("frontend", "acq", "deep", "registers")),
     (r"^hal/src/dho/(afg|gen)", ("generator", "registers")),
     (r"^hal/src/dho/boot/", ALL),
-    (r"^hal/src/dho/", ("acq", "registers")),
-    (r"^hal/", ("acq", "registers")),
+    (r"^hal/src/dho/", ("acq", "deep", "registers")),
+    (r"^hal/", ("acq", "deep", "registers")),
     (r"^fpgad/", ("registers",)),
     # the board runs every acquisition: what it sets up and what it reads back
-    (r"^ui/src/board/", ("acq", "roll", "trigger", "frontend", "registers")),
+    (r"^ui/src/board/", ("acq", "deep", "roll", "trigger", "frontend", "registers")),
     # the measurement code: nearly every test of a1 reads its answer through a measurement (#118 was found by the
     # time axis test, through FREQ)
     (r"^dsp/src/measure\.rs$|^ui/src/ui/analysis/\w+\.rs$"
      r"|^ui/src/(framestats|ui/(analysis|measure_own|measure_pairs|records|acquire|tools|facts))\.rs$",
-     ("measure", "acq", "roll", "frontend", "generator", "trigger")),
+     ("measure", "acq", "deep", "roll", "frontend", "generator", "trigger")),
+    (r"^ui/src/deepmeas\.rs$", ("deep", "acq", "measure")),
     (r"^ui/src/(scpi|vxi|hislip|http|mcp|net|mdns|announce|ssh|web)", ("remote",)),
     (r"^ui/src/(store|compress|logger)", ("store",)),
     (r"^ui/src/(measures|meas)", ("measure",)),

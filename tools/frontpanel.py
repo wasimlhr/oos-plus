@@ -18,7 +18,8 @@ DEV = "/dev/ttyS0"
 # Source: DHO900 user guide 4.4.1; "?" = not yet confirmed on the unit.
 KEYS = {
     0x01: "Ref", 0x02: "LA", 0x03: "GI (AFG)", 0x04: "Horizontal Menu", 0x05: "Navigate",
-    0x06: "Nav forward", 0x07: "Nav play/stop", 0x08: "Nav back", 0x09: "Trigger Slope", 0x0a: "Trigger Force",
+    0x06: "History back <", 0x07: "History play/stop", 0x08: "History forward >", 0x09: "Trigger Slope",
+    0x0a: "Trigger Force",
     0x0b: "Clear", 0x0c: "Run/Stop", 0x0d: "Auto", 0x0e: "Single", 0x0f: "Measure", 0x10: "Cursor", 0x11: "Default",
     0x12: "Analyse", 0x13: "Touch Lock", 0x14: "Quick", 0x15: "CH1", 0x16: "CH2", 0x17: "CH3", 0x18: "CH4",
     0x19: "Math", 0x1a: "Trigger Menu", 0x1b: "Power",

@@ -311,6 +311,10 @@ mod arb_tests {
         assert!(ui.m.afg_freq < f && ui.menu == MenuId::Afg);
         ui.tap(mid.x + mid.w / 2, mid.y + mid.h / 2);
         assert!(ui.menu == MenuId::Pick && ui.pick.unwrap().it == Item::AfgFreqEntry);
+        // the field shows the frequency now, dim, until a key is typed (ADR 0077)
+        assert_eq!(ui.pad_now(), Some(ui.value(Item::AfgFreq)));
+        ui.activate(Item::PickOpt(FREQ_KEYS.iter().position(|&k| k == "1").unwrap()));
+        assert_eq!(ui.pad_now(), None);
     }
 
     #[test]

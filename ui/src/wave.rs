@@ -37,6 +37,18 @@ pub struct Record {
     pub la: Option<crate::logic::LaRec>,
     /// the points are min/max pairs (`to_record` peak detect: point 2j the minimum, 2j+1 the maximum of one span)
     pub pairs: bool,
+    /// the acquisition's own samples are minimum and maximum in turn: taken in Peak detect below the full rate (at the
+    /// full rate there is nothing to detect over). Kept with the record, so a later change of the mode does not
+    /// change how it is read.
+    pub peak: bool,
+}
+
+impl Record {
+    /// Whether the points of `ch` are minimum and maximum in turn (`pairs`, or the samples of `peak`): what reads levels
+    /// in time (the decoders) takes the mean of each point and its neighbour (`trig::pair_means`).
+    pub fn alternates(&self) -> bool {
+        self.pairs || self.peak
+    }
 }
 
 #[derive(Clone)]
@@ -769,7 +781,7 @@ fn acquire_demo(m: &Model, t: &mut f64, dt_wall: f64, rng: &mut Rng, g: &ScreenG
         let words = (0..nl).map(|k| demo_la(ttrig + jitter + t_first + k as f64 * dl)).collect();
         crate::logic::LaRec { words: std::sync::Arc::new(words), t0: t_first, dt: dl }
     });
-    Some(Record { t0: t_first, dt, ch: chs, triggered, partial: false, raw: None, la, pairs: false })
+    Some(Record { t0: t_first, dt, ch: chs, triggered, partial: false, raw: None, la, pairs: false, peak: false })
 }
 
 /// Where the demo signals from `start` trigger, in seconds; None when they do not.
@@ -915,7 +927,7 @@ fn acquire_replay(
         hw_avg: false,
     });
     let raw = Some(Raw { frame, i0: 0, i1: native_len, t0: -ti * xinc, conditioned: true });
-    Some(Record { t0: t_first, dt, ch: chs, triggered, partial: false, raw, la: None, pairs: false })
+    Some(Record { t0: t_first, dt, ch: chs, triggered, partial: false, raw, la: None, pairs: false, peak: false })
 }
 
 /// Applies coupling, bandwidth limit and inversion to a record channel (display path).

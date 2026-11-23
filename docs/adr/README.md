@@ -108,6 +108,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0075](code/0075-a-foreign-session-archive-is-read-with-an-own-zip-reader.md) | code | the session archive of another instrument is read with an own small zip reader | proposed |
 | [0075](ui-ux/0075-an-on-off-setting-is-one-switch.md) | ui-ux | A setting that is only off or on is one switch in the menus | proposed |
 | [0076](ui-ux/0076-the-top-bar-holds-display-and-storage.md) | ui-ux | The top bar holds Display and Storage; Measure and Cursor are keys and start-menu entries | proposed |
+| [0077](ui-ux/0077-a-menu-opens-at-what-opened-it-an-entry-pad-in-the-centre.md) | ui-ux | a menu opens at what opened it; an entry pad opens in the centre, large | proposed |
 | [0077](ui-ux/0077-the-handles-of-the-studio-sources-stand-at-the-right-edge.md) | ui-ux | the handles of the Studio sources stand at the right edge | proposed |
 <!-- end of the index -->
 
@@ -119,9 +120,9 @@ the change: ADR 0009, 0010, 0013, 0015, 0021 and 0030 for anything near the hard
 SCPI, VXI-11, HiSLIP and the other network services, ADR 0026 and 0031 for how a change enters main. The records are
 short on purpose; reading the ones that apply costs minutes and saves a review round.
 
-oos-plus: the numbers 0027, 0029, 0030, 0031, 0032 and 0033 each name a record of the fork (`code/0027`,
-`ui-ux/0029`, `ui-ux/0030`, `ui-ux/0031`, `ui-ux/0032`, `system/0033`) and one of upstream; the fork's references to them mean its own unless they name the
-file. A new record of the fork takes a number upstream has not used.
+oos-plus: the numbers 0027, 0029, 0030, 0031, 0032, 0033 and 0077 each name a record of the fork (`code/0027`,
+`ui-ux/0029`, `ui-ux/0030`, `ui-ux/0031`, `ui-ux/0032`, `system/0033`, `ui-ux/0077` the handles of the Studio sources)
+and one of upstream; the fork's references to them mean its own unless they name the file or say "upstream's". A new record of the fork takes a number upstream has not used.
 
 ## Writing one
 

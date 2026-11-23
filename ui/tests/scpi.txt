@@ -250,6 +250,8 @@ scpi $S/scpi-answers.txt :INVerter:ITEM? FREQ,CHANnel1,CHANnel2,CHANnel3
 scpi $S/scpi-answers.txt :DPT:ITEM? VPEAK,CHANnel1,CHANnel2
 scpi $S/scpi-answers.txt :BANDwidth:ITEM? RISE,CHANnel1
 scpi $S/scpi-answers.txt :BODE:MODE?
+scpi $S/scpi-answers.txt :BODE:UNIT?
+scpi $S/scpi-answers.txt :BODE:AMPLitude?
 scpi $S/scpi-answers.txt :BODE:DATA?
 scpi $S/scpi-answers.txt :BODE:GENerator?
 scpi $S/scpi-answers.txt :LA:STATe?

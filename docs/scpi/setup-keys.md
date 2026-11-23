@@ -344,6 +344,8 @@ Commands: [bode.md](bode.md).
 | `bode_link` | `lan`/`usb` | `lan` | `:BODE:GENerator` |
 | `extgen` | external generator ([extgen.md](extgen.md)): model index (1 APPL, 2 BSWV, 3 SCPI, 5 CHANnel, 6 OWON DGE), channel (1-based), load (`hiz`/`50`), frequency Hz and amplitude Vpp of the page's output | `1 1 hiz 1000 1` | `:EXTGen:MODel ...` |
 | `bode_mode` | `Loop`/`Psrr`/`Impedance` | `Loop` | `:BODE:MODE` |
+| `bode_unit` | gain in `dB` or as the ratio `V/V` (Gain unit) | `dB` | `:BODE:UNIT` |
+| `bode_amp_unit` | the menu's amplitude in `Vpp` or `Vrms` (Amp unit); the setup's amplitude stays Vpp | `Vpp` | none |
 | `bode_sweep` | free sweep: time s, log true/false, sync channel (1-based), sync edge (`Rise`/`Fall`), sync level V, input channel (0 = none), reference dBV | `1 true 4 Rise 1 1 0` | `:BODE:SWEep:TIME ...` |
 
 ## SIM

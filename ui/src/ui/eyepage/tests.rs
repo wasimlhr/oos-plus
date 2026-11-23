@@ -70,7 +70,7 @@ fn record(s: Sig, n: &mut Noise) -> Record {
     }
     let mut ch: [Vec<f32>; NCH] = Default::default();
     ch[0] = v;
-    Record { t0: 0.0, dt, ch, triggered: true, partial: false, raw: None, la: None, pairs: false }
+    Record { t0: 0.0, dt, ch, triggered: true, partial: false, raw: None, la: None, pairs: false, peak: false }
 }
 
 fn page(s: Sig, records: usize) -> Ui {
@@ -723,4 +723,78 @@ fn eye_page_shots() {
     open.now += REFRESH;
     open.analyzer_update();
     save(&mut open, "eye-plot-expanded");
+}
+
+/// A bit rate kept from a faster time base is under two samples a bit of this record: a rate that was set stays and
+/// the page says that it needs a faster time base, without an eye; a rate found from a record is dropped and the
+/// clock comes from this one. Recovered with it, the clock had a bit far below a sample and the page took the memory of the scope.
+#[test]
+fn a_rate_the_record_cannot_hold_is_found_again_or_said() {
+    for from_record in [false, true] {
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.step(0.05);
+        ui.m.run = RunState::Stop;
+        ui.m.view = AView::Eye;
+        ui.relayout();
+        ui.azr.eye = None;
+        ui.azr.page = Page::default();
+        // 10 Mbit/s at 125 samples a bit (0.8 ns a sample): 2 Gbit/s has 0.6 samples a bit
+        (ui.m.eye_from_record, ui.m.eye_rate) = (from_record, 2e9);
+        let mut n = Noise(0x2545_f491_4f6c_dd1d);
+        for _ in 0..3 {
+            ui.last[0] = Some(record(CLEAN, &mut n));
+            ui.measure_last();
+            ui.analyzer_update();
+            ui.now += REFRESH;
+        }
+        if from_record {
+            // dropped: 0, the clock comes from each record
+            assert!(ui.m.eye_rate < 2e9, "dropped: {}", ui.m.eye_rate);
+            assert!(ui.azr.eye_res.is_some(), "an eye of the record's own clock: {:?}", ui.azr.page.status);
+        } else {
+            assert_eq!(ui.m.eye_rate, 2e9, "a rate that was set is kept");
+            assert!(ui.azr.eye_res.is_none(), "no eye of a clock the record cannot hold");
+            assert!(ui.azr.page.status[0].contains("faster time base"), "{:?}", ui.azr.page.status);
+        }
+    }
+}
+
+/// A rate found from a faster record is dropped at the first record of a slower one, and the eye made from that
+/// record is of the rate in force: the next record adds to it instead of starting it again.
+#[test]
+fn an_eye_after_a_dropped_rate_is_kept_by_the_next_record() {
+    let mut ui = crate::ui::testkit::demo_ui();
+    ui.step(0.05);
+    ui.m.run = RunState::Stop;
+    ui.m.view = AView::Eye;
+    ui.relayout();
+    ui.azr.eye = None;
+    ui.azr.page = Page::default();
+    (ui.m.eye_from_record, ui.m.eye_rate) = (true, 2e9);
+    let mut n = Noise(0x2545_f491_4f6c_dd1d);
+    let mut records = Vec::new();
+    for _ in 0..2 {
+        ui.last[0] = Some(record(CLEAN, &mut n));
+        ui.measure_last();
+        ui.analyzer_update();
+        ui.now += REFRESH;
+        records.push(ui.azr.eye.as_ref().map_or(0, |e| e.records));
+    }
+    assert_eq!(records, [1, 2], "the second record adds to the eye of the first");
+}
+
+/// A rate found from a faster record is dropped with the eye of that record, also when the new record has no clock to
+/// make another: no eye and no results of the old one stay on the page.
+#[test]
+fn a_dropped_rate_takes_its_eye_along_when_no_clock_follows() {
+    let mut ui = page(CLEAN, 1);
+    assert!(ui.azr.eye.is_some() && ui.azr.eye_res.is_some(), "an eye to start with");
+    (ui.m.eye_from_record, ui.m.eye_rate) = (true, 2e9);
+    let mut flat = record(CLEAN, &mut Noise(7));
+    flat.ch[0].iter_mut().for_each(|x| *x = -1.0);
+    ui.last[0] = Some(flat);
+    ui.measure_last();
+    ui.analyzer_update();
+    assert_eq!(ui.m.eye_rate, 0.0);
+    assert!(ui.azr.eye.is_none() && ui.azr.eye_res.is_none(), "{:?}", ui.azr.page.status);
 }

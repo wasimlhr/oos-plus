@@ -1401,7 +1401,7 @@ mod tests {
                 ui.wlan.busy = None;
             }
             match next() % 5 {
-                0 => ui.key([0xba, 0xbb, 0xbc, 0xaa, 0xab, 0xac, 0x0f, 0x08][next() as usize % 8]),
+                0 => ui.key([0xba, 0xbb, 0xbc, 0xaa, 0xab, 0xac, 0x0f, key::NAV_FWD][next() as usize % 8]),
                 _ => ui.tap((next() % PANEL_W as u64) as i32, (next() % PANEL_H as u64) as i32),
             }
             ui.dialog = None;

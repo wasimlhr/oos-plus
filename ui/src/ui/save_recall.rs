@@ -72,7 +72,7 @@ impl Ui {
         let pre = (-t0 / dt).round().clamp(0.0, (n - 1) as f64) as usize;
         let frame = std::sync::Arc::new(crate::board::Frame { seq: 1, dt, pre, ch, acq: (1.0 / dt, n), basic, ..Default::default() });
         let raw = Raw { frame, i0: 0, i1: n, t0, conditioned: true };
-        let whole = Record { t0, dt, ch: Default::default(), triggered, partial: false, raw: Some(raw), la: None, pairs: false };
+        let whole = Record { t0, dt, ch: Default::default(), triggered, partial: false, raw: Some(raw), la: None, pairs: false, peak: false };
         let view = (self.m.time_per_div(), self.m.delay);
         self.captured_record_view(&whole, view).map(|r| r.as_ref().clone()).unwrap_or(whole)
     }

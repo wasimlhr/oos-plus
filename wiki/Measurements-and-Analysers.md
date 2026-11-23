@@ -10,6 +10,8 @@ delay from one channel to another. The pictures on this page come from a host ru
 
 The values stand in the strip under the plot, one line per source, with the source's name in its colour. A default
 set-up shows six measurements of CH1: Pk-pk, Freq, Mean, RMS, Rise and +Duty. They are measured again on every record.
+A tap on a value opens **Selected** (below) with that measurement in focus, to remove it or open its settings; a tap on
+the strip beside the values opens the same list.
 
 ![Measurement strip](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/meas-strip.png)
 
@@ -139,8 +141,11 @@ through them (`1-8 / 9`). A tap on the title folds the card to one line and open
 
 A record of more than 262144 points is measured beside the screen, and a row says `Computing` until its value is
 there. While the scope runs and records come faster than they are measured, the rows show the value of the last record
-that was measured (one measurement late) instead of `Computing`; after a change of a setting the old value is not
-shown. Maximum, Minimum and the other values without edges are there at once.
+that was measured (one measurement late) instead of `Computing`, not in roll and scan. After a change of the time
+base, of the channel (scale, coupling, invert, bandwidth) or of the measurement settings the old value is not shown; a
+change of the trigger picks other records, and their value follows one measurement later as always. With the gate
+`Full record`, Maximum, Minimum and the other values without edges are there at once; with `Screen` they are measured
+with the others.
 
 ![Statistics](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/meas-stats.png)
 
@@ -195,8 +200,11 @@ at the top right, which lead to **Exit**, **Settings** and what fits the view.
 
 If the source of an analyser is switched off, choose another one in its Settings. From 0.1.1 on it takes the first channel that is on by itself.
 
-The Bode plot shows the gain above and the phase below over the frequency. Both axes carry their values at round
-steps (dB, or V/V for an impedance sweep, and degrees); the title line of each half names its whole range. Once a
+The Bode plot shows the gain above and the phase below over the frequency. **Sweep** (Lin or Log) spaces the
+frequencies of the sweep in equal steps or at an equal ratio, and the frequency axis follows it: linear with lines at
+round steps, or logarithmic with a line per decade. **Gain unit** shows the gain in dB or as the linear ratio V/V,
+whatever the mode measures; the phase is always in degrees. An output of 0 has no value in dB and is left out of the
+curve. Both axes carry their values at round steps; the title line of each half names its whole range. Once a
 sweep has points, **Save CSV** in the Bode menu writes them where **Storage > Save to** points, as `bode-....csv`:
 frequency in Hz, gain in dB (or Vout/Vin) and phase in degrees, one line a point. Over SCPI `:BODE:DATA?` returns the
 same points. With the menu closed, the **Multipurpose 2** knob moves the cursor from point to point, so the menu
@@ -214,9 +222,10 @@ Then **Connection**:
   without one the sweep stops with the reason (no USB device, a device that is not USBTMC, no permission). Rigol DG
   and Siglent SDG generators are USBTMC instruments as well. So far this is tested with a simulated device only.
 
-The scope sets channel 1 of the generator to a sine of **Amplitude** (Vpp; - and + step 1-2-5, a tap on the value
-opens the number pad for any value from 10 mVpp to 20 Vpp) without offset, switches its output on and
-steps through the frequencies. Over SCPI, `:BODE:GENerator "usb"` selects USB and
+The scope sets channel 1 of the generator to a sine of **Amplitude** without offset, switches its output on and
+steps through the frequencies. - and + step the amplitude by 10 mV up to 100 mV and by 50 mV above, up to 20 Vpp; a
+tap on the value opens the number pad for any value from 10 mVpp to 20 Vpp. **Amp unit** shows and takes it peak to
+peak (Vpp) or as RMS of the sine (Vrms = Vpp / 2.83); the generator always gets Vpp, as `:BODE:AMPLitude` does. Over SCPI, `:BODE:GENerator "usb"` selects USB and
 `:BODE:GENerator "192.168.1.20:5025"` the LAN again.
 
 The **CHANnel** preset sends `:CHANnel1:MODe CONTINUE`, `:CHANnel1:BASE:WAVe SINe`, `:CHANnel1:AMPLitude:UNIT VPP`,
@@ -277,7 +286,9 @@ negative. `:POWer:ITEM?` answers the same figures (`EON`, `EOFF`, `ECOND`, `ETOT
 ![Eye](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/eye.png)
 
 White figures are measured, amber ones come from a model. Where data is missing the page says what it needs. Edges are
-timed at the middle of the source's Top and Base, the same levels the Top and Base measurements show.
+timed at the middle of the source's Top and Base, the same levels the Top and Base measurements show. A bit rate that
+the record holds under two samples a bit for (one kept from a faster time base) is found again from the record when it
+came from one; a rate that was set stays, and the page asks for a faster time base.
 
 ## High resolution
 

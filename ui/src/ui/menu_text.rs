@@ -77,11 +77,8 @@ impl Ui {
         }
         match menu {
             MenuId::Pick => match self.pick {
-                Some(p) if Self::hex_item(p.it) => format!("{} \u{b7} 0x{}_", self.item_label(p.it), self.keypad),
-                Some(p) if p.it == Item::NumEntry => self.row_pad_title(),
-                Some(p) if p.it == Item::AfgFreqEntry => {
-                    format!("Frequency \u{b7} {}_ (max {})", self.keypad, si_short(self.m.gen_max_hz(), "Hz"))
-                }
+                // an entry pad: its title; the entry shows large above the keys
+                _ if self.pad_entry().is_some() => self.pad_entry().map(|e| e.0).unwrap_or_default(),
                 Some(p) if p.it == Item::StoreFile => self.file_list_title(),
                 Some(p) if p.it == Item::RefImport && self.sheets_on() => format!("Load file into R{}", self.ref_page.sel + 1),
                 Some(p) => format!("{} \u{b7} {}", self.menu_title(p.menu), self.item_label(p.it)),

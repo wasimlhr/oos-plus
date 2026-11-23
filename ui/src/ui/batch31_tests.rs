@@ -399,16 +399,17 @@ fn bode_start_and_amplitude_show_what_they_hold_after_every_tap() {
 
 #[test]
 fn the_bode_amplitude_steps_below_one_volt_down_to_ten_millivolts() {
+    // upstream #545: 50 mV steps above 100 mV, 10 mV below
     let mut u = fresh(Layout::Default);
     u.m.bode_amp = 1.0;
     let mut seen = vec![u.m.bode_amp];
-    for _ in 0..8 {
+    for _ in 0..40 {
         u.adjust(Item::BodeAmp, -1);
         seen.push(u.m.bode_amp);
     }
-    assert_eq!(seen[..4], [1.0, 0.5, 0.2, 0.1]);
+    assert_eq!(seen[..4], [1.0, 0.95, 0.9, 0.85]);
     assert_eq!(*seen.last().unwrap(), 0.01);
-    for _ in 0..40 { u.adjust(Item::BodeAmp, 1); }
+    for _ in 0..500 { u.adjust(Item::BodeAmp, 1); }
     assert_eq!(u.m.bode_amp, 20.0);
 }
 

@@ -163,7 +163,8 @@ impl Ui {
             Some(WaveId::Ch(c)) => (1, c),
             Some(WaveId::Ref(i)) => (2, i),
         };
-        let key = (tag.0, tag.1, ctag.0, ctag.1, vpd.to_bits(), offset.to_bits(), self.m.eye_rate.to_bits(), pw, ph);
+        let mut key =
+            (tag.0, tag.1, ctag.0, ctag.1, vpd.to_bits(), offset.to_bits(), self.m.eye_rate.to_bits(), pw, ph);
         let fp = self.eye_reference_fingerprint(id, clk_id);
         if fp.is_some() && fp == self.azr.eye_ref && self.azr.eye.is_some() && self.azr.eye_key == key {
             return;
@@ -197,24 +198,9 @@ impl Ui {
         // A strobe idles near one rail between bursts; histogram top/base sit on that rail and the
         // comparator chatters. Peak-to-peak with a wide hysteresis keeps the burst edges.
         let (thr, hyst) = self.eye_threshold(recov, &st, clk_id, clk_vpd);
-        let mut rate = (self.m.eye_rate > 0.0).then_some(self.m.eye_rate);
-        // the rate is of the record it was set or found on. At a slower time base its bit is shorter than two
-        // samples: a rate found from a record is found again from this one, a rate that was set is said to need
-        // a faster record (as `automatic::infer` says it). Recovered with it, the clock had a bit far below a
-        // sample, and the page took the memory of the scope (seen on a unit, 2026-11-18)
-        if rate.is_some_and(|r| 1.0 / r < 2.0 * dt) {
-            if self.m.eye_from_record {
-                self.m.eye_rate = 0.0;
-                rate = None;
-            } else {
-                // the eye of the faster time base goes: on the scope the page has no head for the status, and the
-                // plot says its first line when it has no picture (the old eye stayed, with nothing said)
-                self.azr.eye = None; self.azr.eye_res = None;
-                self.azr.page = Page::default();
-                self.azr.page.status = [format!("{} needs a faster time base", si_short(self.m.eye_rate, "b/s")), "Under 2 samples a bit in this record".into()];
-                return;
-            }
-        }
+        let Some(rate) = self.eye_rate_of_record(dt) else { return };
+        // a found rate that was dropped: the eye of the old rate goes, not only at the next record
+        key.6 = self.m.eye_rate.to_bits();
         // An idle live bus keeps its accumulated eye. A replacement reference
         // without edges must not display the previous reference's results.
         let recovered = if self.azr.eye_auto.enabled && clk_id.is_none() {
@@ -266,6 +252,33 @@ impl Ui {
             self.azr.page.t = self.now;
             self.eye_refresh(&clk, &tie, (&v, dt, t0), &lay, rec);
         }
+    }
+
+    /// The rate the eye takes for a record of one sample every `dt`. The rate is of the record it was set or found on;
+    /// at a slower time base its bit is shorter than two samples. A rate found from a record is dropped (0: the clock
+    /// comes from each record, or the automatic setup finds the rate again); a rate that was set clears the page, which says it needs a faster record (None then).
+    /// Recovered with such a rate, the clock had a bit far below a sample, and the page took the memory of the scope
+    /// (seen on a unit). The page itself and its worker for a large record (`eye_auto_update`) both ask here.
+    pub(super) fn eye_rate_of_record(&mut self, dt: f64) -> Option<Option<f64>> {
+        let rate = (self.m.eye_rate > 0.0).then_some(self.m.eye_rate);
+        if !rate.is_some_and(|r| 1.0 / r < 2.0 * dt) {
+            return Some(rate);
+        }
+        // the eye of the faster time base goes, also when this record has no clock of its own to replace it
+        self.azr.eye = None;
+        self.azr.eye_res = None;
+        self.azr.eye_auto.summary = None;
+        self.azr.page = Page::default();
+        if self.m.eye_from_record {
+            self.m.eye_rate = 0.0;
+            return Some(None);
+        }
+        // a rate that was set: the page says why there is no eye (the old eye stayed, with nothing said)
+        self.azr.page.status = [
+            format!("{} needs a faster time base", si_short(self.m.eye_rate, "b/s")),
+            "Under 2 samples a bit in this record".into(),
+        ];
+        None
     }
 
     /// An input the eye cannot read (native HiRes, envelope): the page is cleared and says why; true then.

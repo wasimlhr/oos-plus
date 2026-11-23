@@ -68,7 +68,7 @@ Waveform names are `CHAN1` through `CHAN4` as available on the model, and `R1` t
 | Command | Meaning |
 | --- | --- |
 | `*IDN?` | `OOS,<model>,<serial>,oos-ui <version>`. On a computer the serial can be `0`. |
-| `*RST` | Restore the app's default configuration. This changes the acquisition workspace. |
+| `*RST` | Restore the app's default configuration. This changes the acquisition workspace. The waveform transfer starts again too: `:WAV:SOURce CHAN1`, `:MODE NORMal`, `:FORMat BYTE`, `:STARt 1`, `:STOP` through the last point. |
 | `*CLS` | Clear the SCPI error/status state and pending operation-complete event registrations. Does not clear waveform memory. |
 | `*OPC?` | Wait for the defined finite operations below, then return `1`. |
 | `*OPC` | Register completion of those finite operations in standard-event bit 0. |
@@ -105,9 +105,9 @@ The synchronous command/HTTP adapter cannot retain a pending `*OPC?` and reports
 | `:TIMebase[:MAIN]:OFFSet[?]` | Horizontal delay in seconds; `POSition` is an alias. |
 | `:ACQuire:SRATe?` | ADC/model sample rate, not a loaded reference's native rate. |
 | `:ACQuire:MDEPth[?]` | Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M`. Query returns the numeric configured/effective acquisition depth. |
-| `:TRIGger:MODE[?]` | Actual trigger type. Same OOS handler as `:TRIGger:TYPe[?]`. |
+| `:TRIGger:MODE[?]` | Actual trigger type. Same OOS handler as `:TRIGger:TYPe[?]`. As in the menu, a type chosen again gets back the values it was left with, and the source stays. |
 | `:TRIGger:STATus?` | `STOP|TD|AUTO|WAIT`. A completed Single reports STOP. |
-| `:TRIGger:EDGE:SOURce[?]` | `CHANn|Rn`; available LA inputs can use `D0` through `D15`. |
+| `:TRIGger:EDGE:SOURce[?]` | `CHANn|Rn`; available LA inputs can use `D0` through `D15`. As in the menu, a channel chosen again gets back the level it was left with. |
 | `:TRIGger:EDGE:LEVel[?]` | Volts. |
 | `:TRIGger:RUNT:UPPer[?]` / `:LOWer[?]` | Absolute high/low thresholds; aliases `:TRIGger:RUNT:ALEVel` / `:BLEVel`. A threshold past the other one is refused with `-224`, as `:MEASure:SETup:MAX` / `MIN`. |
 | `:TRIGger:SOURce2[?]` | Secondary CH/ref source for applicable OOS trigger types. |
@@ -226,7 +226,7 @@ a command does not take is refused with `-224`. The memory depth
 | `:WAVeform:DATA?` | IEEE definite-length binary block; ASCII format also uses a block. |
 | `:DISPlay:DATA? [BMP|PNG]` | IEEE block containing a screenshot; default 24-bit BMP. |
 
-For CH inputs, NORM reads the interpolated display record; RAW uses retained native acquisition memory when available, including points outside the screen. If no native record exists, it falls back to the available processed record. References use their native arrays in all three modes, restricted by the chosen transfer page. Do not assume `:ACQ:SRAT?` describes a reference: read its preamble. RAW is permitted while running in OOS; stock Rigol stop-only transfer assumptions differ. Multiple queries while running can observe different accepted captures; Stop first when metadata and data must match.
+For CH inputs, NORM reads the interpolated display record, after a STOP also when the view of a deep record is drawn from the stored record read again while the raw frame of the STOP stays the record measured; RAW uses retained native acquisition memory when available, including points outside the screen. If no native record exists, it falls back to the available processed record. References use their native arrays in all three modes, restricted by the chosen transfer page. Do not assume `:ACQ:SRAT?` describes a reference: read its preamble. RAW is permitted while running in OOS; stock Rigol stop-only transfer assumptions differ. Multiple queries while running can observe different accepted captures; Stop first when metadata and data must match.
 
 Preamble fields:
 
@@ -339,12 +339,12 @@ Additional OOS families accept item names defined by their analysis page/source 
 | --- | --- |
 | Power | `:POWer:ITEM? <item>[,V,I]`: `VRMS`, `IRMS`, `REAL`, `APP`, `REAC`, `PF`, `PHAS`, `FREQ`, `EON`, `EOFF`, `ECOND` (not negative: a voltage under 0 V while the switch conducts counts as 0 V), `ETOT`, `PLOSS` (total energy times the switching frequency), `FSW`, `RDSON`. Single-source ripple items also exist. |
 | Harmonics | `:POWer:HARMonics? [source]`: semicolon-separated harmonic-index/amplitude pairs. |
-| Spectrum | `:SPECtrum:ITEM? <item>[,source]`: `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`; `F1` to `ENOB` are `9.9E37` without a fundamental (noise alone). `:SPECtrum:RBW:ACTual?` is the RBW in use, `:SPECtrum:PEAK:LIST?` the peak table as `frequency,level;...`. |
+| Spectrum | `:SPECtrum:ITEM? <item>[,source]`: `F1`, `THD`, `THDPCT`, `THDN`, `SNR`, `SINAD`, `SFDR`, `ENOB`, `ACPR`, `ACPRLO`, `ACPRHI`, `FLOOR`; `F1` to `ENOB` are `9.9E37` without a fundamental (noise alone: no line stands 20 dB above the median of the bins around it). `:SPECtrum:RBW:ACTual?` is the RBW in use, `:SPECtrum:PEAK:LIST?` the peak table as `frequency,level;...`. |
 | Magnetic | `:MAGnetic:ITEM? <item>[,V,I]`: `L`, `B`, `H`, `MUR`, `LOSS`. Requires the configured geometry/calibration. |
 | Inverter | `:INVerter:ITEM? <item>[,sources...]`: configured inverter result, numeric or text. |
 | Double pulse | `:DPT:ITEM? <item>[,V,I[,G]]`: e.g. `VPEAK`, `IPEAK`, `EON`, `EOFF`, `TDON`, `TR`, `TDOFF`, `TF`, `QRR`. |
 | Bandwidth | `:BANDwidth:ITEM? <item>[,source]`: `RISE`, `BW`, `OVER`. Estimator limits apply. |
-| Bode | `:BODE:MODE[?] LOOP|PSRR|IMPedance`, `:BODE:RUN ON|OFF`, `:BODE:DATA?`, `:BODE:GENerator[?] "ip:port"`. RUN can control the configured generator/acquisition. |
+| Bode | `:BODE:MODE[?] LOOP|PSRR|IMPedance`, `:BODE:UNIT[?] DB|RATio`, `:BODE:AMPLitude[?] <Vpp>`, `:BODE:RUN ON|OFF`, `:BODE:DATA?`, `:BODE:GENerator[?] "ip:port"`. RUN can control the configured generator/acquisition. |
 
 See [reference analysis](reference-analysis.md) for sampling, model-derived jitter, physical alignment and C-PHY limits. These extensions are not stock Rigol/DPOJET compatibility claims.
 
@@ -358,13 +358,15 @@ input, the output, the generator with its address and `:BODE:GENerator`, and the
 | Command | Takes | Setup key | Bode menu | What it does |
 | --- | --- | --- | --- | --- |
 | `:BODE:MODE[?]` | `LOOP`, `PSRR`, `IMPedance` | `bode_mode` | Mode | What a sweep stores in the middle field of each point: the gain of a control loop in dB, the power-supply rejection (the negated gain) in dB, or for an impedance the linear ratio of output to input, not ohms. A free sweep always measures the gain. |
+| `:BODE:UNIT[?]` | `DB`, `RATio` | `bode_unit` | Gain unit | How the plot, the cursor and the title show the gain: in dB, 20 log10(Vout/Vin), or as the linear ratio Vout/Vin (for PSRR Vin/Vout), whatever the mode measures. The CSV file and `:BODE:DATA?` keep what the mode stores. The menu changes it on an odd step. |
+| none | a choice of the menu: `:BODE:AMPLitude` is always Vpp | `bode_amp_unit` | Amp unit | Whether the menu shows and the number pad takes the amplitude peak to peak or as RMS, Vrms = Vpp / (2 sqrt 2) for the sine of the sweep. The generator gets Vpp either way. The menu changes it on an odd step. |
 | none | none yet: the page is set in its menu and by a setup file | `bode` (start) | Start freq | The first frequency of the sweep. The menu steps 1-2-5 and keeps it at or below half the stop. |
 | none | none yet: the page is set in its menu and by a setup file | `bode` (stop) | Stop freq | The last frequency of the sweep. The menu steps 1-2-5 and keeps it at or above twice the start. |
-| none | none yet: the page is set in its menu and by a setup file | `bode` (points) | Points | The number of frequencies of the sweep, logarithmically spaced. The menu steps by 5 from 5 to 200; a setup line keeps 2 to 1000. |
-| none | none yet: the page is set in its menu and by a setup file | `bode` (amp) | Amplitude | The amplitude the generator puts out, peak to peak. The menu steps 1-2-5 from 10 mVpp to 20 Vpp; a tap on the value opens the number pad for any value in that range. |
+| none | none yet: the page is set in its menu and by a setup file | `bode` (points) | Points | The number of frequencies of the sweep, spaced as Sweep sets: logarithmically or linearly. The menu steps by 5 from 5 to 200; a setup line keeps 2 to 1000. |
+| `:BODE:AMPLitude[?]` | a number from 0.01 to 20 | `bode` (amp) | Amplitude | The amplitude the generator puts out, peak to peak, 10 mVpp to 20 Vpp. The menu shows it in Vpp or Vrms (Amp unit) and steps by 10 mV up to 100 mV and by 50 mV above; a tap on the value opens the number pad for any value in that range. The command takes and answers Vpp. |
 | none | set with the address by `:BODE:GENerator` | `bode_link` | Connection | How an external generator is reached: on the network at its address, or on the USB-A port. The menu changes it on an odd step. |
 | none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (time) | Sweep time | How long the generator takes for one sweep. The menu steps 1-2-5 from 1 ms to 500 s. |
-| none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (log) | Sweep | Whether the generator sweeps the frequency linearly or logarithmically over the sweep time. The menu changes it on an odd step. |
+| none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (log) | Sweep | Whether the frequencies of the sweep are spaced linearly (equal steps) or logarithmically (equal ratio), and the frequency axis of the plot with them; with the free sweep also how the generator sweeps over the sweep time. The menu changes it on an odd step. |
 | none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (edge) | Sync edge | The edge of the sync channel that marks the start of a sweep. The menu changes it on an odd step. |
 | none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (level) | Sync level | The level of the sync edge. The menu steps by 0.1 V from -20 V to 20 V. |
 | none | none yet: the page is set in its menu and by a setup file | `bode_sweep` (ref) | Ref level | The level the gain is measured against when the free sweep has no input channel, in dBV. The menu steps by 1 dB from -80 to 40 dBV. |

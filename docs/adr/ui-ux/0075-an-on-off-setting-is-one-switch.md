@@ -17,8 +17,9 @@ does nothing.
 ## Decision
 
 **A choice whose options are exactly Off and On is drawn as one switch (`Ctl::Switch`):** a field the width of the
-control with the state as text on the left and a slide switch on the right, its track in the accent with the knob on
-the right when on, grey with the knob on the left when off. A tap anywhere on the field switches the setting; the
+control with the state as text on the left and a slide switch on the right. On, the whole field is white like a chosen
+segment or an active button, the text dark, the track dark with a white knob on the right; off, the field stays dark,
+the track grey with the knob on the left. A tap anywhere on the field switches the setting; the
 knobs and keys step it as before. Every other choice keeps its buttons or its picker.
 
 - The field fills the control as the buttons did, so the rows, the columns and the menu layouts stay as they are

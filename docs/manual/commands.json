@@ -11561,12 +11561,12 @@
       [
        "<value>",
        "Real",
-       "Volts. Range 0.01 to 20.0.",
+       "Volts peak to peak. Range 0.01 to 20.0.",
        "1.000000E+00"
       ]
      ],
      "remarks": [
-      "- Origin: OOS extension"
+      "- Origin: OOS extension. The menu steps by 10 mV up to 100 mV and by 50 mV above, and shows it in Vpp or Vrms (Amp unit); the command takes and answers Vpp."
      ],
      "returns": "On a freshly started default model the query returns `1.000000E+00`.",
      "ext": true,
@@ -11741,6 +11741,26 @@
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":BODE:UNIT",
+     "set": ":BODE:UNIT <value>",
+     "query": ":BODE:UNIT?",
+     "desc": "Sets or queries Gain unit for Bode (menu: Bode > Gain unit).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{DB|RATio}",
+       "DB"
+      ]
+     ],
+     "remarks": [
+      "- : the gain of the plot, the cursor and the title in dB or as Vout/Vin; `:BODE:DATA?` and the CSV keep what the mode stores.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `DB`.",
      "ext": true
     },
     {
@@ -17185,6 +17205,18 @@
        "`Loop`/`Psrr`/`Impedance`",
        "`Loop`",
        "`:BODE:MODE`"
+      ],
+      [
+       "`bode_unit`",
+       "gain in `dB` or as the ratio `V/V` (Gain unit)",
+       "`dB`",
+       "`:BODE:UNIT`"
+      ],
+      [
+       "`bode_amp_unit`",
+       "the menu's amplitude in `Vpp` or `Vrms` (Amp unit); the setup's amplitude stays Vpp",
+       "`Vpp`",
+       "none"
       ],
       [
        "`bode_sweep`",

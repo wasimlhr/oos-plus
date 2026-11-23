@@ -100,6 +100,9 @@ pub(super) struct Seen {
     /// the analyser view the last frame had: a change of view analyses what is already there (a stopped record gets
     /// no new one)
     pub view: AView,
+    /// the horizontal view the running picture was drawn at: time per division, delay, zoom on, zoom scale and zoom
+    /// delay (`redraw_held`, #548)
+    pub drawn: (f32, f32, bool, usize, f32),
 }
 
 impl Default for Seen {
@@ -113,6 +116,7 @@ impl Default for Seen {
             unaged: 0.0,
             running: false,
             view: AView::Scope,
+            drawn: (f32::NAN, 0.0, false, 0, 0.0),
         }
     }
 }
@@ -448,6 +452,7 @@ impl Ui {
             self.step_fast_frames(&mut take);
         }
         self.step_records(&mut take, k, dt_wall, hw_seg);
+        self.redraw_held(take.got);
         if take.renew == Renew::Keep {
             self.seen.unaged = 0.0;
         }
@@ -458,6 +463,31 @@ impl Ui {
         }
         self.step_rates(&take, dt_wall, persist);
         self.step_measure(&mut take);
+    }
+
+    /// A new time base, delay or zoom while running and no record came: the held record is drawn again at its own
+    /// times, as after a STOP. The picture of the old view stayed, and a 2 ms record taken at 0.2 ms/div filled the
+    /// whole screen at 10 ms/div while the scope waited for a trigger (#548). Any horizontal change counts, also a
+    /// zoom switched without `dirty_map`; a changed trigger level keeps the picture as it is (#280).
+    fn redraw_held(&mut self, got: usize) {
+        let m = &self.m;
+        let view = (m.time_per_div(), m.delay, m.zoom, m.zscale, m.zdelay);
+        if got > 0 || self.seen.drawn.0.is_nan() {
+            self.seen.drawn = view;
+            return;
+        }
+        if self.m.run != RunState::Run || view == self.seen.drawn {
+            return;
+        }
+        self.seen.drawn = view;
+        self.ph.clear();
+        self.phz.clear();
+        if let Some(rec) = self.last[0].clone() {
+            // the zoom pane from the stored samples at its own window, as `step_commit` and the STOP redraw do
+            let detail = self.captured_record_view(&rec, (tscales()[self.m.zscale], self.m.zdelay));
+            let zw = self.z_weights(&rec);
+            self.draw_channels(&rec, detail.as_deref(), zw.as_deref(), 24 * 6);
+        }
     }
 
     /// Fast display path: the queued frames straight into the phosphor map, and the batch pipeline's merge.
@@ -809,20 +839,13 @@ impl Ui {
         if self.offline.on {
             let (name, sub) = self.ref_card_lines();
             parts.push(if sub == "empty" || sub.ends_with("pts") { name } else { format!("{} {}", name, sub) });
-            parts.push(self.run_caption().0.into());
         } else {
             parts.push(match m.trig_line() {
                 Some(n) => format!("Trig D{}", n),
                 None => format!("Trig {} {}", self.trigger_source_label(), si_short(self.trig_level_shown() as f64, "V")),
             });
-            let st = match m.status {
-                TrigStatus::Triggered => "TRIG'D",
-                TrigStatus::Auto => "AUTO",
-                TrigStatus::Wait => "WAIT",
-                TrigStatus::Stop => "STOP",
-            };
-            parts.push(st.into());
         }
+        parts.push(self.run_caption().0.into());
         parts.push(format!("{:.0} wfm/s", self.counts.wfm_rate));
         parts.join("   \u{b7}   ")
     }

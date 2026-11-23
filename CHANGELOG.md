@@ -1231,6 +1231,42 @@ Fixed:
 - Tests no longer depend on the speed of the computer (wall-time limits replaced), and the SSH key tests run in a
   checkout without `local/`.
 
+### From upstream OOS 6cd8028f..67fac1b2 (upstream #542 to #522, merged 2026-11-23)
+
+Upstream's changes after the sync of #165, not yet in an upstream release; their files in `changelog.d/` came along.
+Host-tested in oos-plus; nothing of this merge ran on a unit.
+
+Added:
+
+- Bode: **Sweep** Lin / Log spaces the frequencies of every sweep and sets the frequency axis; **Gain unit** shows the
+  gain in dB or V/V (`:BODE:UNIT`).
+- A tap on a value in the measurement strip opens Measure > Selected with that measurement in focus.
+
+Changed:
+
+- Bode: - and + step the generator amplitude by 10 mV up to 100 mV and by 50 mV above; **Amp unit** shows and takes
+  it in Vpp or Vrms; `:BODE:AMPLitude` sets it in Vpp.
+- The number pad, the generator's frequency pad and the hex pad of a bus trigger open large in the middle of the
+  screen, the value in a field above the keys; the cursor menu opens under the top bar (upstream ADR 0077).
+- An on/off switch that is on fills its field white with dark text, its slide switch dark with a white knob.
+- A trigger type keeps its own values (width, pattern, times, lower level) and gets them back when chosen again; each
+  channel keeps its own trigger level as the source.
+
+Fixed:
+
+- The front panel's history keys step the right way: `<` back to older records, `>` forward.
+- In roll mode the state box says ROLL instead of TRIG'D.
+- A new time base while waiting for a trigger draws the held record at its own times.
+- After a STOP of a deep record, `:WAVeform:MODE NORMal` returns the picture drawn, not the raw window of the STOP.
+- `*RST` also sets the waveform transfer back (`:WAV:SOURce`, `:MODE`, `:FORMat`, `:STARt`, `:STOP`).
+- Upstream's versions of fixes oos-plus had made first, which replace the fork's own: the decoders, the protocol
+  trigger and the Search table read a Peak detect record by the mean of neighbouring points (also on its own grid
+  before sources are aligned); the spectrum finds no fundamental in noise, now also in noise that falls with
+  frequency; SPI says "Frames shorter than a word" also for a record that starts inside a frame; the eye page finds a
+  rate again or asks for a faster time base when a rate is under two samples a bit; a running record larger than the
+  measurement worker is fast shows the last value, also when the trigger moves the record by a few samples, and not
+  in roll and scan.
+
 ### From upstream OOS after 0.1.14
 
 Not yet in an upstream release; upstream keeps such entries as files in `changelog.d/` (ADR 0065), which
