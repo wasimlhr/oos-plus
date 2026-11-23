@@ -7839,14 +7839,14 @@
       [
        "<name>",
        "Text",
-       "Protocol UI name; comparison ignores case and punctuation, for example I2C, SPI, C-PHY. `PARallel` is the parallel bus.",
+       "Decoder protocol UI name: UART, I2C, SPI, CAN, CAN-FD, LIN, FlexRay and the rest of the list, matched without case, spaces or punctuation (`CAN-FD`, `canfd` and `CAN FD` are the same). The 29 names are UART, I2C, SPI, CAN, LIN, Parallel, C-PHY, DMX512, S/PDIF, USB PD, DCC, Manchester, MLT-3, UART 9-bit, Modbus RTU, Modbus ASCII, 1-Wire, DS2482, SWD, JTAG, Quad-SPI, I3C, CAN-FD, FlexRay, SENT, ARINC 429, 1553, I2S, USB.",
        "UART"
       ]
      ],
      "remarks": [
       "- Origin: OOS extension"
      ],
-     "returns": "On a freshly started default model the query returns `UART`.",
+     "returns": "The query answers the UI name as written here. On a freshly started default model the query returns `UART`.",
      "ext": true,
      "example": ":DECode:PROTocol UART\n:DECode:PROTocol?    /*The query returns UART.*/\n:DECode:PROTocol I2C"
     },
@@ -8122,15 +8122,18 @@
       ],
       [
        "<value>",
-       "Text",
-       "Decoder protocol: `RS232` (alias `UART`), `IIC` (`I2C`), `SPI`, `CAN`, `LIN`, `PARallel`, or another protocol by its UI name without punctuation.",
+       "Discrete",
+       "{RS232|UART|IIC|I2C|SPI|CAN|LIN|PARallel|CPHY|DMX512|SPDIF|USBPD|DCC|MANCHESTER|MLT3|UART9BIT|MODBUSRTU|MODBUSASCII|1WIRE|DS2482|SWD|JTAG|QUADSPI|I3C|CANFD|FLEXRAY|SENT|ARINC429|1553|I2S|USB}",
        "RS232"
       ]
      ],
      "remarks": [
+      "- Decoder protocol token (RS232, IIC, SPI, CAN, LIN, CANFD, FLEXRAY and the rest of the list), matched without case.",
+      "- UART is the name of RS232, I2C of IIC, PAR of PARallel.",
+      "- The remaining tokens are the UI name without spaces and punctuation (CAN-FD is CANFD, 1-Wire is 1WIRE, FlexRay is FLEXRAY, Quad-SPI is QUADSPI).",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
-     "returns": "The query answers `RS232`, `IIC`, `PAR`, ... On a freshly started default model the query returns `RS232`."
+     "returns": "The query answers PAR, RS232, IIC, SPI, CAN, LIN and the tokens as written here. On a freshly started default model the query returns `RS232`."
     },
     {
      "header": ":BUS<n>:DISPlay",
@@ -8790,7 +8793,7 @@
       [
        "<value>",
        "Text",
-       "Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option.",
+       "Option of the protocol module, in the order of the menu rows (FlexRay: its only option row, Bit rate, 10 Mbit/s, 5 Mbit/s or 2.5 Mbit/s, default 10 Mbit/s; FlexRay has no header of its own); -224 when the protocol has no such option.",
        "empty"
       ]
      ],
