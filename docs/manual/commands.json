@@ -7839,7 +7839,7 @@
       [
        "<name>",
        "Text",
-       "Protocol UI name, matched without case, spaces or punctuation (`CAN-FD`, `canfd` and `CAN FD` are the same). The 29 names are UART, I2C, SPI, CAN, LIN, Parallel, C-PHY, DMX512, S/PDIF, USB PD, DCC, Manchester, MLT-3, UART 9-bit, Modbus RTU, Modbus ASCII, 1-Wire, DS2482, SWD, JTAG, Quad-SPI, I3C, CAN-FD, FlexRay, SENT, ARINC 429, 1553, I2S, USB.",
+       "Decoder protocol UI name: UART, I2C, SPI, CAN, CAN-FD, LIN, FlexRay and the rest of the list, matched without case, spaces or punctuation (`CAN-FD`, `canfd` and `CAN FD` are the same). The 29 names are UART, I2C, SPI, CAN, LIN, Parallel, C-PHY, DMX512, S/PDIF, USB PD, DCC, Manchester, MLT-3, UART 9-bit, Modbus RTU, Modbus ASCII, 1-Wire, DS2482, SWD, JTAG, Quad-SPI, I3C, CAN-FD, FlexRay, SENT, ARINC 429, 1553, I2S, USB.",
        "UART"
       ]
      ],
@@ -8128,7 +8128,7 @@
       ]
      ],
      "remarks": [
-      "- Decoder protocol token, matched without case.",
+      "- Decoder protocol token (RS232, IIC, SPI, CAN, LIN, CANFD, FLEXRAY and the rest of the list), matched without case.",
       "- UART is the name of RS232, I2C of IIC, PAR of PARallel.",
       "- The remaining tokens are the UI name without spaces and punctuation (CAN-FD is CANFD, 1-Wire is 1WIRE, FlexRay is FLEXRAY, Quad-SPI is QUADSPI).",
       "- Origin: Rigol-style (command family of the DHO guide)"
@@ -8793,7 +8793,7 @@
       [
        "<value>",
        "Text",
-       "Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. FlexRay has one option row (Bit rate: 10 Mbit/s, 5 Mbit/s, 2.5 Mbit/s; default 10 Mbit/s) and no FlexRay header of its own, so its rate is :BUS<n>:OPTion1.",
+       "Option of the protocol module, in the order of the menu rows (FlexRay: its only option row, Bit rate, 10 Mbit/s, 5 Mbit/s or 2.5 Mbit/s, default 10 Mbit/s; FlexRay has no header of its own); -224 when the protocol has no such option.",
        "empty"
       ]
      ],
