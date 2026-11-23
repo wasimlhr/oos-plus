@@ -108,6 +108,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0075](code/0075-a-foreign-session-archive-is-read-with-an-own-zip-reader.md) | code | the session archive of another instrument is read with an own small zip reader | proposed |
 | [0075](ui-ux/0075-an-on-off-setting-is-one-switch.md) | ui-ux | A setting that is only off or on is one switch in the menus | proposed |
 | [0076](ui-ux/0076-the-top-bar-holds-display-and-storage.md) | ui-ux | The top bar holds Display and Storage; Measure and Cursor are keys and start-menu entries | proposed |
+| [0077](ui-ux/0077-the-handles-of-the-studio-sources-stand-at-the-right-edge.md) | ui-ux | the handles of the Studio sources stand at the right edge | proposed |
 <!-- end of the index -->
 
 ## Reading order for agents

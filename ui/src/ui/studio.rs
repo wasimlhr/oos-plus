@@ -1402,27 +1402,6 @@ impl Ui {
         Some(y)
     }
 
-    /// Where the handles of the window that is being drawn sit, in the order of the sources (channels, references,
-    /// math). A handle is on its source's zero level at the left edge. A zero level outside the plot pins it to that
-    /// edge, clear of the time labels; handles that would cover each other (sources with the same zero level in one
-    /// graticule) stand side by side, so each stays on its own level.
-    pub(super) fn studio_handle_rects(&self) -> Vec<(super::workspace::Trace, Rect)> {
-        let a = self.plot.area;
-        let half = 12.min(a.h / 2);
-        // the lane that carries the time labels keeps them readable, and the last one the Fit row above them
-        let last = self.plot.cur_win + 1 >= self.plot.wins.len();
-        let times = if last { self.ref_badge_pad(a).max(self.fonts().s.size + 8) } else if self.stacked() && !self.studio_lane_has_own_time() { 0 } else { self.fonts().s.size + 8 };
-        let low = (a.y + a.h - times - half).max(a.y + half);
-        let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
-        for source in self.trace_sources() {
-            let Some(zero) = self.studio_zero_y(source) else { continue };
-            let mut r = Rect::new(a.x + 3, zero.clamp(a.y + half, low) - 12, 44, 24);
-            while r.right() + 2 < a.x + a.w && out.iter().any(|(_, b)| overlaps(*b, r)) { r.x += r.w + 2; }
-            out.push((source, r));
-        }
-        out
-    }
-
     /// Draws the handles of the window that is being drawn: an outlined badge with the name of each source on its
     /// zero level (`studio_handle_rects`). Channels, references and math channels have the same one, in Stacked and
     /// in Overlay; they are drawn after every trace, so none runs through a name.

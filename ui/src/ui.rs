@@ -222,6 +222,7 @@ mod interplay_tests;
 mod filterplot;
 mod livelines;
 mod mathwave;
+mod handles;
 mod measchip;
 use mathwave::FILT_PRESETS;
 mod monitor;

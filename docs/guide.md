@@ -790,9 +790,9 @@ Menu.
 
 In Studio the plot's right-click (long press) menu has Stacked traces, a lane for every source with its own scale at
 the right, and Overlay traces, every source on one graticule of the full height, each with its own position and scale
-(`:VIEW:TRACes`). In both, every channel, reference and math channel has a handle with its name at the left edge, on
+(`:VIEW:TRACes`). In both, every channel, reference and math channel has a handle with its name at the right edge, on
 its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
-side. A tap on a handle opens the sheet of its source.
+side, the first at the edge. A tap on a handle opens the sheet of its source.
 
 Add > Search puts a search of its own on a source: Search 1, and with Add again Search 2 and Search 3, each
 with its own type, source and settings. A new search looks for edges; the row **Type** of its sheet makes it one of
