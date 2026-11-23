@@ -519,12 +519,6 @@ impl Ui {
                     taken.push(Rect::new(a.x, y - 9, MARK_W + 2, 18));
                 }
             }
-            // Studio: every source has a handle there, the references and the math channels too
-            if self.m.layout == Layout::Studio {
-                for (_, r) in self.studio_handle_rects() {
-                    taken.push(Rect::new(a.x, r.y, r.right() - a.x + 2, r.h));
-                }
-            }
             // what a lane has at its right edge: the corner buttons with their words, and the trigger tag with its value
             let mut right_obstacles: Vec<Rect> = Vec::new();
             // the trigger tag with its value: a scale label at its height would say the level a second time beside it

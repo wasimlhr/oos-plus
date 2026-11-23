@@ -666,11 +666,6 @@ impl Ui {
         let right = bottom.right() - 4;
         // the hardware Panel button is gone from this bar: F6 (and the desktop window) still toggle the panel
         let panel: Option<Rect> = None;
-        // the room the Panel button had goes to the time base and the trigger
-        let extra = if self.workspace.desktop_panel.is_some() { 25 } else { 0 };
-        let trig_w = 196 + extra;
-        let trig = Rect::new(right - trig_w, y, trig_w, h);
-        let time = Rect::new(trig.x - 9 - 150 - extra, y, 150 + extra, h);
         // the sources that are on get a pill; the channels that are off share one "+ CH" chip
         let shown = self.shown_refs();
         let maths: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k)).collect();
@@ -687,6 +682,11 @@ impl Ui {
         let decs: Vec<usize> = (0..DECODERS).filter(|&k| self.m.dec_is_on(k)).collect();
         // the source pills (channels, refs, math, decoders) share what the fixed chips leave, by count
         let count = (chans.len() + shown.len() + maths.len() + decs.len()) as i32;
+        // the Panel button's room goes to the time base and trigger; from the 4th source pill on they give some back
+        let extra = if self.workspace.desktop_panel.is_some() { 25 } else { 0 };
+        let give = (count - 3).clamp(0, 3) * 14;
+        let trig = Rect::new(right - (196 + extra - give), y, 196 + extra - give, h);
+        let time = Rect::new(trig.x - 9 - (150 + extra - give / 2), y, 150 + extra - give / 2, h);
         // the generator's pill takes its short form ("GEN") before a source pill is too narrow for its scale: with four
         // channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
         let aux = |gen_w: i32| [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
@@ -1400,27 +1400,6 @@ impl Ui {
             }
         };
         Some(y)
-    }
-
-    /// Where the handles of the window that is being drawn sit, in the order of the sources (channels, references,
-    /// math). A handle is on its source's zero level at the left edge. A zero level outside the plot pins it to that
-    /// edge, clear of the time labels; handles that would cover each other (sources with the same zero level in one
-    /// graticule) stand side by side, so each stays on its own level.
-    pub(super) fn studio_handle_rects(&self) -> Vec<(super::workspace::Trace, Rect)> {
-        let a = self.plot.area;
-        let half = 12.min(a.h / 2);
-        // the lane that carries the time labels keeps them readable, and the last one the Fit row above them
-        let last = self.plot.cur_win + 1 >= self.plot.wins.len();
-        let times = if last { self.ref_badge_pad(a).max(self.fonts().s.size + 8) } else if self.stacked() && !self.studio_lane_has_own_time() { 0 } else { self.fonts().s.size + 8 };
-        let low = (a.y + a.h - times - half).max(a.y + half);
-        let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
-        for source in self.trace_sources() {
-            let Some(zero) = self.studio_zero_y(source) else { continue };
-            let mut r = Rect::new(a.x + 3, zero.clamp(a.y + half, low) - 12, 44, 24);
-            while r.right() + 2 < a.x + a.w && out.iter().any(|(_, b)| overlaps(*b, r)) { r.x += r.w + 2; }
-            out.push((source, r));
-        }
-        out
     }
 
     /// Draws the handles of the window that is being drawn: an outlined badge with the name of each source on its

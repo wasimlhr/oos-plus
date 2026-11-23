@@ -96,7 +96,7 @@ fn every_source_has_a_handle_on_its_zero_level_in_both_trace_modes() {
                 assert!(pinned, "stacked {stacked}: {source:?} handle at {centre}, zero level at {zero}, lane {lane:?}");
             }
             assert!(r.y >= lane.y && r.bottom() <= lane.bottom(), "stacked {stacked}: {source:?} {r:?} in its lane {lane:?}");
-            assert!(r.x >= lane.x && r.x < lane.x + 200, "stacked {stacked}: {source:?} at the left edge, {r:?}");
+            assert!(r.right() <= lane.right() && r.x > lane.x + lane.w / 2, "stacked {stacked}: {source:?} at the right edge, {r:?}");
             assert!(r.w >= 40 && r.h >= 24);
         }
         for (i, a) in hs.iter().enumerate() {
@@ -106,7 +106,7 @@ fn every_source_has_a_handle_on_its_zero_level_in_both_trace_modes() {
 }
 
 /// Sources with the same zero level in one graticule: their handles stand side by side on that level, in the order
-/// of the sources, instead of on top of each other.
+/// of the sources from the right edge in, instead of on top of each other.
 #[test]
 fn handles_on_the_same_level_stand_side_by_side() {
     let mut u = bench();
@@ -118,7 +118,7 @@ fn handles_on_the_same_level_stand_side_by_side() {
     let of = |s: Trace| hs.iter().find(|(k, _)| *k == s).unwrap().1;
     let (a, b, r) = (of(Trace::Channel(0)), of(Trace::Channel(1)), of(Trace::Reference(0)));
     assert!(a.y == b.y && b.y == r.y, "one level: {a:?} {b:?} {r:?}");
-    assert!(a.x < b.x && b.x < r.x && a.right() <= b.x && b.right() <= r.x, "side by side in source order: {a:?} {b:?} {r:?}");
+    assert!(a.x > b.x && b.x > r.x && b.right() <= a.x && r.right() <= b.x, "side by side in source order, from the edge in: {a:?} {b:?} {r:?}");
 }
 
 /// A zero level far outside the plot pins the handle inside it, above the time labels.
