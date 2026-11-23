@@ -87,7 +87,7 @@ pub const FC: [Setting; 1] = [Setting {
 }];
 
 /// The responses of `FILT_RESPS` by their place.
-pub const FILT_CHOICES: [Choice; 8] = [
+pub const FILT_CHOICES: [Choice; 9] = [
     Choice { store: "Simple", scpi: "SIMPle", label: "Simple" },
     Choice { store: "Butterworth", scpi: "BUTTerworth", label: "Butterworth" },
     Choice { store: "Chebyshev", scpi: "CHEBychev", label: "Chebyshev" },
@@ -96,6 +96,7 @@ pub const FILT_CHOICES: [Choice; 8] = [
     Choice { store: "RaisedCosine", scpi: "RCOSine", label: "Raised cosine" },
     Choice { store: "RootRaisedCosine", scpi: "RRCosine", label: "Root raised cosine" },
     Choice { store: "Delay", scpi: "DELay", label: "Delay" },
+    Choice { store: "Custom", scpi: "CUSTom", label: "Custom file" },
 ];
 
 fn one_decimal(x: f64) -> String {
@@ -114,7 +115,7 @@ pub const FILT: [Setting; 6] = [
         ty: Ty::Choice(&FILT_CHOICES, Unknown::Value, Arg::Keyword),
         label: "Response",
         #[cfg(test)]
-        doc: "The response of the filter: Simple (the plain filter of the operator) or one the designer makes:               Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised cosine, or a delay.",
+        doc: "The response of the filter: Simple (the plain filter of the operator) or one the designer makes:               Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised cosine, a delay, or Custom: the taps of a filter file, loaded as a reference and chosen as Source B.",
         accept: None,
         step: None,
         get: |m, _| Val::Index(FILT_RESPS.iter().position(|&r| r == m.math_filt.resp).unwrap_or(0)),

@@ -490,6 +490,32 @@ impl Ui {
         self.relayout();
     }
 
+    /// The result of the selected math channel into the next free reference slot (the last one when all are used), with
+    /// its time step and scale: a snapshot that can be measured, saved and compared like any reference.
+    pub(super) fn math_to_ref(&mut self) {
+        let k = self.m.math_sel;
+        let Some(sig) = self.math_record(k).ok().flatten().filter(|s| s.v.len() >= 2) else {
+            self.toast("The math channel has no result to save");
+            return;
+        };
+        let c = self.m.math_ch(k);
+        let slot = self.refs.iter().position(|r| r.is_none()).unwrap_or(NREF - 1);
+        let sc = math_scales();
+        let w = RefWave {
+            src: if c.a < NCH { c.a } else { 0 },
+            color: 0,
+            label: format!("M{}", k + 1),
+            t0: sig.t0,
+            dt: sig.dt,
+            v: sig.v.clone(),
+            vpd: sc[c.scale.min(sc.len() - 1)] as f32,
+            offset: 0.0,
+            on: true,
+        };
+        self.toast(&format!("M{} saved to R{}", k + 1, slot + 1));
+        self.ref_put(slot, w);
+    }
+
     /// A ready filter on the selected math channel: its operation, response, order and a cut-off that goes with the
     /// time base or the sample rate, then the scale fitted to what comes out.
     pub(super) fn math_apply_preset(&mut self, i: usize) {

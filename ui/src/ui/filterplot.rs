@@ -43,26 +43,49 @@ impl Ui {
         crate::math::filter_spec(self.m.math, self.m.math_fc as f64, self.m.math_bw as f64, &self.m.math_filt)
     }
 
+    /// The taps of a Custom filter: the reference chosen as Source B, and the step they are sampled at.
+    fn filter_pane_taps(&self) -> Option<(Vec<f32>, f64)> {
+        let c = self.m.math_ch(self.m.math_sel);
+        if !c.uses_taps() || c.b < crate::math::MATH_REF_BASE {
+            return None;
+        }
+        let w = self.refs.get(c.b - crate::math::MATH_REF_BASE)?.as_ref()?;
+        (w.v.len() >= 2 && w.dt > 0.0).then(|| (w.v.to_vec(), w.dt))
+    }
+
+    /// Whether the pane has a filter to draw (a design, or the taps of a file).
+    pub(super) fn filter_pane_ready(&self) -> bool {
+        self.filter_pane_spec().is_some() || self.filter_pane_taps().is_some()
+    }
+
     /// The Filter pane in `r`: the four plots side by side, or two by two when the pane is narrow, with a hint while
     /// the selected math channel is no designed filter.
     pub(super) fn draw_pane_filter(&self, cv: &mut Canvas, r: Rect) {
         let f = self.fonts();
-        let Some(spec) = self.filter_pane_spec() else {
-            cv.text(&f.s, r.x + 20, r.y + 24, "Filter: choose a low-, high-, band-pass or band-stop with a response in Math", DIM);
+        let (filter, f_ref, dt) = if let Some(spec) = self.filter_pane_spec() {
+            // the frequency the picture is built round: the cut-off, the centre of a band, the symbol rate, the delay
+            let f_ref = match spec.response {
+                Response::RaisedCosine | Response::RootRaisedCosine => 1.0 / spec.symbol.max(1e-12),
+                Response::Allpass => 0.5 / spec.delay.max(1e-12),
+                _ if spec.f2 > spec.f1 && matches!(self.m.math, MathOp::Bpf | MathOp::Bsf) => (spec.f1 * spec.f2).sqrt(),
+                _ => spec.f1,
+            };
+            if !f_ref.is_finite() || f_ref <= 0.0 {
+                return;
+            }
+            let dt = 1.0 / (64.0 * f_ref);
+            (Filter::design(&spec, dt), f_ref, dt)
+        } else if let Some((taps, dt)) = self.filter_pane_taps() {
+            // a filter file at its own step: the picture spans a thousandth of its rate to 0.4 of it
+            match Filter::from_taps(&taps, dt, dt) {
+                Some(filter) => (filter, 0.04 / dt, dt),
+                None => return,
+            }
+        } else {
+            let hint = "Filter: choose a low-, high-, band-pass or band-stop with a response, or a Custom file with its taps in Source B";
+            cv.text(&f.s, r.x + 20, r.y + 24, hint, DIM);
             return;
         };
-        // the frequency the picture is built round: the cut-off, the centre of a band, the symbol rate, the delay
-        let f_ref = match spec.response {
-            Response::RaisedCosine | Response::RootRaisedCosine => 1.0 / spec.symbol.max(1e-12),
-            Response::Allpass => 0.5 / spec.delay.max(1e-12),
-            _ if spec.f2 > spec.f1 && matches!(self.m.math, MathOp::Bpf | MathOp::Bsf) => (spec.f1 * spec.f2).sqrt(),
-            _ => spec.f1,
-        };
-        if !f_ref.is_finite() || f_ref <= 0.0 {
-            return;
-        }
-        let dt = 1.0 / (64.0 * f_ref);
-        let filter = Filter::design(&spec, dt);
         let wide = r.w >= 880 || r.h < 260;
         let (cols, rows) = if wide { (4, 1) } else { (2, 2) };
         let (tw, th) = (r.w / cols, r.h / rows);
@@ -120,23 +143,24 @@ impl Ui {
                 }
             }
             Plot::Impulse | Plot::Step => {
-                let v = if plot == Plot::Impulse { filter.impulse(POINTS) } else { filter.step(POINTS) };
+                let points = filter.taps().max(POINTS).min(4096);
+                let v = if plot == Plot::Impulse { filter.impulse(points) } else { filter.step(points) };
                 let (mn, mx) = v.iter().fold((0f32, 0f32), |(a, b), &x| (a.min(x), b.max(x)));
                 let (mn, mx) = if plot == Plot::Step { (mn.min(0.0), mx.max(1.0)) } else { (mn, mx) };
                 let span = (mx - mn).max(1e-9);
                 let (lo, hi) = (mn - span * 0.08, mx + span * 0.08);
                 let y_of = |x: f32| g.bottom() - ((x - lo) / (hi - lo) * g.h as f32).round() as i32;
-                let x_of = |i: usize| g.x + (i as f64 / (POINTS - 1) as f64 * g.w as f64).round() as i32;
+                let x_of = |i: usize| g.x + (i as f64 / (points - 1) as f64 * g.w as f64).round() as i32;
                 cv.hline(g.x, g.right(), y_of(0.0), LINE);
                 if plot == Plot::Step {
                     cv.hline(g.x, g.right(), y_of(1.0), LINE);
                 }
                 cv.text(&f.s, r.x + 6, y_of(mx) + 4, &format!("{mx:.2}"), DIM);
                 cv.text(&f.s, r.x + 6, y_of(mn) + 4, &format!("{mn:.2}"), DIM);
-                for i in 1..POINTS {
+                for i in 1..points {
                     cv.line(x_of(i - 1), y_of(v[i - 1]), x_of(i), y_of(v[i]), ACCENT);
                 }
-                let span_t = si_short(POINTS as f64 * dt, "s");
+                let span_t = si_short(points as f64 * dt, "s");
                 cv.text(&f.s, g.x, r.bottom() - 6, "0", DIM);
                 cv.text(&f.s, g.right() - f.s.width(&span_t), r.bottom() - 6, &span_t, DIM);
             }
@@ -184,7 +208,7 @@ mod tests {
         let mut u = studio_with_filter();
         assert_eq!((u.m.math, u.m.pane), (MathOp::Lpf, tables::PANE_FILTER));
         let mut seen = Vec::new();
-        for resp in FILT_RESPS.into_iter().filter(|&r| r != FiltResp::Simple) {
+        for resp in FILT_RESPS.into_iter().filter(|&r| !matches!(r, FiltResp::Simple | FiltResp::Custom)) {
             u.m.math_filt.resp = resp;
             let png = pane_picture(&mut u);
             assert!(!seen.contains(&png), "{resp:?} looks like an earlier response");
@@ -292,4 +316,57 @@ mod tests {
         let r = u.dock_rect(VKind::Pane).unwrap();
         assert!(u.dock_gear_rect(VKind::Pane, r).is_none(), "no settings button on the Trend window");
     }
+
+    /// Save to reference puts the result of a math channel into a reference slot, where it can be measured.
+    #[test]
+    fn a_math_result_is_saved_to_a_reference() {
+        let mut u = studio_with_filter();
+        for _ in 0..40 {
+            u.step(0.05);
+            if u.math_record(u.m.math_sel).ok().flatten().is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(u.items(MenuId::Math).contains(&Item::MathToRef));
+        u.math_to_ref();
+        let w = u.refs[0].as_ref().expect("saved into R1");
+        assert_eq!(w.label, "M1");
+        assert!(w.v.len() > 100 && w.dt > 0.0);
+    }
+
+    /// A Custom filter takes its taps from the reference of Source B: four taps of a quarter are a moving average over
+    /// four samples at the step of the record, and the Filter window draws them.
+    #[test]
+    fn a_custom_filter_uses_the_taps_of_a_reference() {
+        let mut u = studio_with_filter();
+        let (dt, n) = (1e-6, 2000usize);
+        let taps = RefWave {
+            src: 0,
+            color: 0,
+            label: "taps".into(),
+            t0: 0.0,
+            dt,
+            v: std::sync::Arc::new(vec![0.25; 4]),
+            vpd: 1.0,
+            offset: 0.0,
+            on: true,
+        };
+        u.ref_put(0, taps);
+        u.m.math_filt.resp = FiltResp::Custom;
+        u.m.math_b = crate::math::MATH_REF_BASE;
+        let k = u.m.math_sel;
+        u.m.maths[k] = u.m.math_ch(k);
+        assert!(u.m.math_ch(k).uses_taps() && u.filter_pane_ready());
+        assert!(u.items(MenuId::Math).contains(&Item::MathB), "the taps are chosen as Source B");
+        // the Filter window shows the four plots of the taps
+        let png = pane_picture(&mut u);
+        keep(&png, "filterpane-custom.png");
+        // the same filter by the job: the moving average of a ramp
+        let ramp: Vec<f32> = (0..n).map(|i| i as f32).collect();
+        let job_taps = oos_dsp::filter::Filter::from_taps(&[0.25f32; 4], dt, dt).unwrap();
+        let out = job_taps.apply(&ramp);
+        assert!((out[1000] - 1000.0).abs() < 1.0, "a ramp through a symmetric average stays: {}", out[1000]);
+    }
 }
+

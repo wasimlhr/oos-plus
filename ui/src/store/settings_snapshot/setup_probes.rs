@@ -42,7 +42,7 @@ const TDIV: &[&str] = &["5e-11", "1000", "2000", "1e-11", "0.0002", "0.0002001",
 const SLOPES: &[&str] = &["Rise", "Fall", "Either", "rise"];
 const RELS: &[&str] = &["Eq", "Ne", "Gt", "Lt", "In", "Out", "eq"];
 const FILT_RESPS: &[&str] =
-    &["Simple", "Butterworth", "Chebyshev", "Bessel", "Gaussian", "RaisedCosine", "RootRaisedCosine", "Delay", "bessel"];
+    &["Simple", "Butterworth", "Chebyshev", "Bessel", "Gaussian", "RaisedCosine", "RootRaisedCosine", "Delay", "Custom", "bessel"];
 const WINDOWS: &[&str] = &["Rect", "Hann", "Hamming", "Blackman", "Flattop", "hann"];
 const MATH_OPS: &[&str] = &[
     "Off", "Add", "Sub", "Mul", "Div", "Conv", "Intg", "Diff", "Abs", "Sqrt", "Lg", "Ln", "Exp", "Lin", "Expr", "Lpf",

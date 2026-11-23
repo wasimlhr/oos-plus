@@ -104,9 +104,12 @@ kinds and responses not in it are assumed.
 | `:DISPLAY:WAVEVIEW1:MATH:MATH<n>:VERTICAL:SCALE`, `...:POSITION`, `...:STATE` | volts a division, position in divisions, shown or not | seen; the position is taken as the offset of the lane in divisions (assumed) |
 | `:DISPLAY:SELECT:MATH` | the math channel the Math menu shows | seen |
 
-The coefficient files that go with a custom filter (`filterCoeff*_math<n>.flt`, a text with a comment line of
-parameters and the taps) are not read: a custom filter becomes a Butterworth over the same band, and the message of
-the load says so. The other keys of a filter (the saved response, the attenuation, the standard deviation) are not
+The coefficient file of a custom filter (`filterCoeff<k>_math<n>.flt` beside the settings: comment lines of parameters
+behind `//` and a line `<sample rate>;<tap>,<tap>,...`, seen in two of the six filters of the archive, a lowpass with
+3001 taps and a custom band-pass with 5087) is read as the taps of the filter: they become a reference, which is
+Source B of the math channel, whose response is Custom. The taps are read at their own step and the filter keeps its
+gain at the step of the record. A custom filter without its file becomes a Butterworth over the same band, and the
+message of the load says so. The other keys of a filter (the saved response, the attenuation, the standard deviation) are not
 used.
 
 A line can be missing (two channel files have no vertical lines: the digital ones; one file has no horizontal

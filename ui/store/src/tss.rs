@@ -139,6 +139,9 @@ pub(super) struct Tss {
     /// the I/Q records of the spectrum views (`ch<n>_iq.wfm`) with a centre frequency in the settings, as the real
     /// signal they stand for (`oos_dsp::iq::iq_to_real`), in the order of their channels
     pub iq: Vec<(usize, WaveTrace)>,
+    /// the taps of the custom filters (`filterCoeff<k>_math<n>.flt` beside the settings), with the number of their math
+    /// channel, in the order of the channels
+    pub taps: Vec<(usize, WaveTrace)>,
     pub left: LeftOut,
 }
 
@@ -241,6 +244,23 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
         let label = commands.text(&format!(":REF:REF{number}:LABEL:NAME"));
         refs.extend(wave(&inner, e, label, &mut budget, &mut left)?.map(|trace| (number, trace)));
     }
+    // the taps of the custom filters of the math channels: `filterCoeff<k>_math<n>.flt`, read as a waveform at the step of
+    // the filter (`parse_filter_taps`)
+    let mut taps = Vec::new();
+    for n in 1..=crate::math::NMATH {
+        if commands.text(&format!(":MATH:MATH{n}:FILTER:RESPONSE")).is_none_or(|r| !r.eq_ignore_ascii_case("CUSTOM")) {
+            continue;
+        }
+        let tail = format!("_math{n}.flt");
+        let Some(e) = inner.entries.iter().find(|e| base_name(&e.name).to_ascii_lowercase().ends_with(&tail)) else {
+            continue;
+        };
+        let Ok(bytes) = inner.read(e, TSS_TEXT_BYTES) else { continue };
+        let label = format!("filter M{n}");
+        if let Some(t) = std::str::from_utf8(&bytes).ok().and_then(|text| parse_filter_taps(text, &label)) {
+            taps.push((n, t));
+        }
+    }
     drop(inner);
     drop(set);
 
@@ -274,7 +294,7 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
             None => left.iq += 1,
         }
     }
-    Ok(Tss { commands, channels, refs, iq, left })
+    Ok(Tss { commands, channels, refs, iq, taps, left })
 }
 
 /// The centre frequency of the spectrum view of channel `{n}`, Hz.
@@ -396,7 +416,7 @@ struct Filters {
     selected: Option<usize>,
 }
 
-fn filter_maths(c: &Commands) -> Filters {
+fn filter_maths(c: &Commands, tap_slot: &std::collections::HashMap<usize, usize>) -> Filters {
     use crate::math::{math_scales, FiltResp, MathCh, MathOp, MATH_REF_BASE, NMATH};
     let mut out = Filters { channels: Vec::new(), custom: 0, unmapped: 0, selected: None };
     for n in 1..=NMATH {
@@ -427,6 +447,8 @@ fn filter_maths(c: &Commands) -> Filters {
                     "BUTTERWORTH" => FiltResp::Butterworth,
                     "BESSEL" => FiltResp::Bessel,
                     "GAUSSIAN" => FiltResp::Gaussian,
+                    // a custom filter has its taps in a file: they are a reference, Source B
+                    "CUSTOM" if tap_slot.contains_key(&n) => FiltResp::Custom,
                     _ => {
                         custom = true;
                         FiltResp::Butterworth
@@ -483,7 +505,8 @@ fn filter_maths(c: &Commands) -> Filters {
         let offset = view("VERTICAL:POSITION").unwrap_or(0.0) as f32;
         let shown = c.on(&[format!(":DISPLAY:WAVEVIEW1:MATH:MATH{n}:STATE").as_str()], 0) != Some(false);
         out.custom += custom as usize;
-        out.channels.push((n - 1, MathCh { op, a, scale, fc, bw, offset, filt, ..MathCh::default() }, shown));
+        let b = tap_slot.get(&n).filter(|_| filt.resp == FiltResp::Custom).map_or(MathCh::default().b, |slot| MATH_REF_BASE + slot - 1);
+        out.channels.push((n - 1, MathCh { op, a, b, scale, fc, bw, offset, filt, ..MathCh::default() }, shown));
     }
     out.selected = c
         .text(":DISPLAY:SELECT:MATH")
@@ -517,10 +540,17 @@ pub fn parse_tss<R: Samples>(bytes: &[u8], slots: usize) -> Result<Session<R>, S
     if bytes.len() > MAX_WAVEFORM_BYTES {
         return Err("the session exceeds the 128 MiB import limit".into());
     }
-    let Tss { commands, channels, mut refs, iq, mut left } = tss_parts(bytes)?;
+    let Tss { commands, channels, mut refs, iq, taps, mut left } = tss_parts(bytes)?;
     // the I/Q records are references too: the slots after those the archive names
     let named = refs.iter().map(|r| r.0).max().unwrap_or(0);
     refs.extend(iq.into_iter().enumerate().map(|(k, (_, trace))| (named + 1 + k, trace)));
+    // and the taps of custom filters after them: the reference of a math channel's taps
+    let mut tap_slot = std::collections::HashMap::new();
+    for (n, trace) in taps {
+        let slot = refs.iter().map(|r| r.0).max().unwrap_or(0) + 1;
+        tap_slot.insert(n, slot);
+        refs.push((slot, trace));
+    }
     let mut m = Model::default();
     m.ch.iter_mut().for_each(|ch| ch.on = false);
     let mut record: Option<(f64, f64, usize, [Vec<f32>; NCH])> = None;
@@ -560,7 +590,7 @@ pub fn parse_tss<R: Samples>(bytes: &[u8], slots: usize) -> Result<Session<R>, S
     }
     let words = left.words();
     // the filters of the math channels; the one the archive selects, else the first, is the one the Math menu shows
-    let filters = filter_maths(&commands);
+    let filters = filter_maths(&commands, &tap_slot);
     for &(k, c, shown) in &filters.channels {
         m.maths[k] = c;
         m.math_hidden[k] = !shown;

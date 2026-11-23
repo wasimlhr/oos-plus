@@ -394,6 +394,9 @@ impl Ui {
                 if resp.has_order() {
                     v.push(Item::MathFiltOrder);
                 }
+                if resp == R::Custom {
+                    v.push(Item::MathB);
+                }
                 match resp {
                     R::Chebyshev => v.push(Item::MathFiltRipple),
                     R::RaisedCosine | R::RootRaisedCosine => v.extend([Item::MathFiltSymbol, Item::MathFiltRolloff]),
@@ -407,6 +410,7 @@ impl Ui {
             }
             if self.m.math != MathOp::Off {
                 v.push(Item::MathAuto);
+                v.push(Item::MathToRef);
             }
             self.with_math_off(v)
         }

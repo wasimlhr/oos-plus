@@ -247,9 +247,11 @@ pub enum FiltResp {
     RootRaisedCosine,
     /// a delay
     Delay,
+    /// the taps of a filter file, a reference (Source B): `oos_dsp::filter::Filter::from_taps`
+    Custom,
 }
 
-pub const FILT_RESPS: [FiltResp; 8] = [
+pub const FILT_RESPS: [FiltResp; 9] = [
     FiltResp::Simple,
     FiltResp::Butterworth,
     FiltResp::Chebyshev,
@@ -258,6 +260,7 @@ pub const FILT_RESPS: [FiltResp; 8] = [
     FiltResp::RaisedCosine,
     FiltResp::RootRaisedCosine,
     FiltResp::Delay,
+    FiltResp::Custom,
 ];
 
 impl FiltResp {
@@ -265,7 +268,7 @@ impl FiltResp {
     fn designed(self) -> Option<oos_dsp::filter::Response> {
         use oos_dsp::filter::Response as R;
         Some(match self {
-            FiltResp::Simple => return None,
+            FiltResp::Simple | FiltResp::Custom => return None,
             FiltResp::Butterworth => R::Butterworth,
             FiltResp::Chebyshev => R::Chebyshev,
             FiltResp::Bessel => R::Bessel,
@@ -281,7 +284,7 @@ impl FiltResp {
     }
     /// Takes the cut-off frequency (the others are set by symbol or delay).
     pub fn has_cutoff(self) -> bool {
-        !matches!(self, FiltResp::RaisedCosine | FiltResp::RootRaisedCosine | FiltResp::Delay)
+        !matches!(self, FiltResp::RaisedCosine | FiltResp::RootRaisedCosine | FiltResp::Delay | FiltResp::Custom)
     }
 }
 
@@ -350,6 +353,13 @@ pub struct MathCh {
     /// A and B of Ax+B
     pub lin: (f32, f32),
     pub filt: FiltCfg,
+}
+
+impl MathCh {
+    /// A filter whose taps are the reference of Source B (`FiltResp::Custom`).
+    pub fn uses_taps(&self) -> bool {
+        matches!(self.op, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf | MathOp::Fir) && self.filt.resp == FiltResp::Custom
+    }
 }
 
 impl Default for MathCh {

@@ -442,7 +442,7 @@ impl Ui {
             tables::PANE_BUS if self.pn.views.is_empty() => HINT_H,
             tables::PANE_BUS => self.bus_view_h(),
             tables::PANE_TREND if n == 0 => HINT_H,
-            tables::PANE_FILTER if self.filter_pane_spec().is_none() => HINT_H,
+            tables::PANE_FILTER if !self.filter_pane_ready() => HINT_H,
             tables::PANE_SPECTRUM if !self.wave_ready(self.m.spec_src) => HINT_H,
             _ => i32::MAX / 2,
         }

@@ -121,7 +121,7 @@ impl Ui {
             | Item::DecThr
             | Item::DecPos
             | Item::DecThrLine(_) => Kind::Value,
-            Item::MathAuto | Item::MathAddFilter | Item::ZoneBox | Item::ZoneShape | Item::ZoneClear => Kind::Action,
+            Item::MathAuto | Item::MathAddFilter | Item::MathToRef | Item::ZoneBox | Item::ZoneShape | Item::ZoneClear => Kind::Action,
             Item::DecBits => Kind::Value,
             Item::TrigLevel2 | Item::PatLevel => Kind::Value,
             Item::ChScale(_)
@@ -340,6 +340,7 @@ impl Ui {
             Item::MathOff => "Turn off",
             Item::MathAuto => "Auto scale",
             Item::MathAddFilter => "Add filter",
+            Item::MathToRef => "Save to reference",
             Item::MathFiltPreset => "Preset",
             Item::Open(MenuId::MeasSelected) => "Selected",
             Item::Open(_) => "",

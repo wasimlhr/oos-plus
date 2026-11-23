@@ -6328,7 +6328,7 @@
       [
        "<value>",
        "Text",
-       "`SIMPle`, `BUTTerworth`, `CHEBychev`, `BESSel`, `GAUSsian`, `RCOSine`, `RRCosine`, `DELay`; the query answers `SIMP`, `BUTT`, `CHEB`, `BESS`, `GAUS`, `RCOS`, `RRC`, `DEL`. SIMPle is the plain filter of the operator.",
+       "`SIMPle`, `BUTTerworth`, `CHEBychev`, `BESSel`, `GAUSsian`, `RCOSine`, `RRCosine`, `DELay`, `CUSTom`; the query answers `SIMP`, `BUTT`, `CHEB`, `BESS`, `GAUS`, `RCOS`, `RRC`, `DEL`, `CUST`. SIMPle is the plain filter of the operator; CUSTom takes the taps of a filter file loaded as a reference, chosen with `:SOURce2`.",
        "SIMP"
       ]
      ],

@@ -338,6 +338,36 @@ impl Filter {
         Filter { branches, dt }
     }
 
+    /// A filter of taps of its own, `h` sampled every `dt_taps` s (a filter file), for a record sampled every `dt` s: the
+    /// impulse response is read at the new step by linear interpolation and scaled by `dt / dt_taps`, so the gain of
+    /// the filter stays. Its centre is the middle tap, so a symmetric filter keeps the record in place. None when the
+    /// steps are no numbers, `h` has fewer than two taps, or it would have more than `MAX_CUSTOM_TAPS` at `dt`.
+    pub fn from_taps(h: &[f32], dt_taps: f64, dt: f64) -> Option<Filter> {
+        if h.len() < 2 || !(dt_taps.is_finite() && dt_taps > 0.0 && dt.is_finite() && dt > 0.0) {
+            return None;
+        }
+        let ratio = dt / dt_taps;
+        let n = (((h.len() - 1) as f64 / ratio).ceil() as usize).saturating_add(1);
+        if n > MAX_CUSTOM_TAPS {
+            return None;
+        }
+        let taps: Vec<f64> = (0..n)
+            .map(|i| {
+                let x = i as f64 * ratio;
+                let k = (x.floor() as usize).min(h.len() - 1);
+                let f = x - k as f64;
+                let next = h.get(k + 1).copied().unwrap_or(h[k]) as f64;
+                ((1.0 - f) * h[k] as f64 + f * next) * ratio
+            })
+            .collect();
+        Some(Filter { branches: vec![Branch::Fir(taps, n / 2)], dt })
+    }
+
+    /// The length of the longest FIR branch in taps, 0 for an IIR filter.
+    pub fn taps(&self) -> usize {
+        self.branches.iter().map(|b| if let Branch::Fir(t, _) = b { t.len() } else { 0 }).max().unwrap_or(0)
+    }
+
     /// The filtered record. A FIR filter is aligned with its input (its group delay is taken out), an IIR one is
     /// causal; the start is primed with the first sample so a level does not start a step.
     pub fn apply(&self, x: &[f32]) -> Vec<f32> {
@@ -432,6 +462,9 @@ fn run_sos(s: &[Sos], x: &[f32]) -> Vec<f64> {
     }
     y
 }
+
+/// The most taps a filter of a file may have at the sample step of the record it is applied to.
+pub const MAX_CUSTOM_TAPS: usize = 1 << 17;
 
 /// The taps below which the direct sum is cheaper than the transform.
 const FFT_TAPS: usize = 48;
@@ -604,5 +637,25 @@ mod tests {
             let worst = a.iter().zip(&b).map(|(p, q)| (p - q).abs()).fold(0.0, f64::max);
             assert!(worst < 1e-9, "{taps} taps {n} samples centre {c}: worst difference {worst}");
         }
+    }
+
+    /// The taps of a filter read at another step make the same filter: a Gaussian designed at one step, its taps
+    /// given at that step and used for a record three times as fast, has the same gain at the cut-off; a filter that
+    /// would need too many taps is refused.
+    #[test]
+    fn a_filter_of_its_own_taps_keeps_its_gain_at_another_step() {
+        let spec = Spec { response: Response::Gaussian, f1: 1e5, ..Spec::default() };
+        let dt1 = 1e-6;
+        let Filter { branches, .. } = Filter::design(&spec, dt1);
+        let Branch::Fir(t, _) = &branches[0] else { panic!("a FIR") };
+        let taps: Vec<f32> = t.iter().map(|&v| v as f32).collect();
+        for dt2 in [dt1 / 3.0, dt1, dt1 * 2.0] {
+            let own = Filter::from_taps(&taps, dt1, dt2).expect("taps");
+            let (own_db, want) = (db_at(&own, 1e5), db_at(&Filter::design(&spec, dt1), 1e5));
+            assert!((own_db - want).abs() < 0.5, "dt {dt2}: {own_db} dB against {want} dB");
+            assert!(db_at(&own, 1e3).abs() < 0.1, "unit gain at low frequency");
+        }
+        assert!(Filter::from_taps(&taps, 1e-3, 1e-12).is_none(), "too many taps");
+        assert!(Filter::from_taps(&taps[..1], dt1, dt1).is_none());
     }
 }

@@ -3870,6 +3870,7 @@ setup filt_resp "1e9" -> Simple; error: line 2: filt_resp: unknown value: 1e9
 setup filt_resp "Bessel" -> Bessel
 setup filt_resp "Butterworth" -> Butterworth
 setup filt_resp "Chebyshev" -> Chebyshev
+setup filt_resp "Custom" -> Custom
 setup filt_resp "Delay" -> Delay
 setup filt_resp "Gaussian" -> Gaussian
 setup filt_resp "RaisedCosine" -> RaisedCosine

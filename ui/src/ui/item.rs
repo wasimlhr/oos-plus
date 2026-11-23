@@ -114,6 +114,8 @@ pub(super) enum Item {
     MathFiltPreset,
     /// a Butterworth low-pass of the active channel, shown with its gain plot, from a math channel that is off
     MathAddFilter,
+    /// the result of the math channel as a reference, so it can be measured, kept and compared
+    MathToRef,
     Open(MenuId),
     ChOn(usize),
     ChCoupling(usize),

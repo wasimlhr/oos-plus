@@ -122,6 +122,12 @@ fn compute_job(job: &Job) -> Result<Signal, &'static str> {
     if job.inputs.is_empty() {
         return Err("No source data");
     }
+    if job.config.uses_taps() {
+        // the filter's taps are an impulse response at their own step, not a signal to put on the grid of the record
+        let [(_, a), (_, taps)] = job.inputs.as_slice() else { return Err("A filter file needs its taps in Source B") };
+        let filter = oos_dsp::filter::Filter::from_taps(&taps.v, taps.dt, a.dt).ok_or("The filter has too many taps for this sample rate")?;
+        return Ok(Signal { t0: a.t0, dt: a.dt, v: Arc::new(filter.apply(&a.v)) });
+    }
     let start = job.inputs.iter().map(|(_, w)| w.t0).fold(f64::NEG_INFINITY, f64::max);
     let end =
         job.inputs.iter().map(|(_, w)| w.t0 + w.v.len().saturating_sub(1) as f64 * w.dt).fold(f64::INFINITY, f64::min);
@@ -249,7 +255,7 @@ impl Ui {
             // A constant/time expression follows the selected source or last record.
             return Ok(vec![if self.record_mode() { MATH_REF_BASE + self.active_reference() } else { 0 }]);
         }
-        Ok(if c.op.two_sources() { vec![c.a, c.b] } else { vec![c.a] })
+        Ok(if c.op.two_sources() || c.uses_taps() { vec![c.a, c.b] } else { vec![c.a] })
     }
 
     fn math_key(&self, k: usize) -> Result<u64, &'static str> {
