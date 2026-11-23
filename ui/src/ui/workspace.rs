@@ -1078,14 +1078,13 @@ impl Ui {
     /// Where a finger that is being held stands and how far its ring has filled (0 to 1), when a hold would act.
     pub(super) fn press_ring(&self) -> Option<(i32, i32, f32)> {
         if let Some(r) = self.md_ring() { return Some(r); }
-        if self.m.touch_lock || self.workspace.popup.is_some() || self.menu_open && self.menu != MenuId::MeasHold && self.workspace.gesture.is_none() { return None; }
+        if self.m.touch_lock || self.workspace.popup.is_some() || self.menu_open && self.workspace.gesture.is_none() { return None; }
         let ring = |x, y, at: f64| { let f = ((self.now - at) / LONG_PRESS) as f32; (f > 0.2 && f < 1.0).then_some((x, y, f)) };
         if let Some(g) = self.workspace.gesture.filter(|g| !g.moved && !g.held) { return ring(g.x, g.y, g.at); }
         let t = &self.touch;
         let near = (t.x - t.x0).abs() <= 12 && (t.y - t.y0).abs() <= 12;
         if t.down && !t.held && near {
             if let Some((_, at)) = self.input.card { return ring(t.x0, t.y0, at); }
-            if self.on_measure_btn(t.x0, t.y0) { return ring(t.x0, t.y0, t.t0); }
         }
         None
     }

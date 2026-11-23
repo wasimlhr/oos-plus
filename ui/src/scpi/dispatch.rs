@@ -15,7 +15,7 @@ use super::display::bmp;
 use super::math::{math_index, unquote};
 use super::replay;
 use super::ser;
-use super::{arg_item, arg_rest, block, e, kw, num, parse_bool, parse_ch, parse_wave, suffix, t, Scpi};
+use super::{arg_item, arg_rest, block, e, kw, num, num64, parse_bool, parse_ch, parse_wave, suffix, t, Scpi};
 use crate::board::{board, Board};
 use crate::gfx::Canvas;
 use crate::model::*;
@@ -106,11 +106,13 @@ impl Scpi {
         }
         // read before the settings are borrowed for writing: which channels clip now (:CHANnel<n>:CLIPping?)
         let clipping: Vec<bool> = (0..NCH).map(|c| ui.channel_clipping(c)).collect();
+        // a value `model_cmd` refused queued its error and set nothing, so nothing is marked changed
+        let errors = self.error_serial;
         let r = self.model_cmd(&mut ui.m, &ui.src, &clipping, &nodes, query, arg);
         if let Some(resp) = r {
             if !query && run_state(&nodes) {
                 ui.mark_run_state();
-            } else if !query {
+            } else if !query && self.error_serial == errors {
                 ui.mark_changed();
             }
             return resp;
@@ -580,8 +582,9 @@ impl Scpi {
                     ui.mark_changed();
                     return Some(None);
                 }
-                // Leave D0..D15 to the existing LA source handler.
-                if !arg.trim().to_ascii_uppercase().starts_with('D') {
+                // Leave D0..D15 of :TRIGger:EDGE:SOURce to the existing LA source handler; no other source takes one.
+                let edge = nodes.len() == 3 && kw(nodes[1], "EDGE");
+                if !edge || !arg.trim().to_ascii_uppercase().starts_with('D') {
                     self.push_err("-224,\"Invalid trigger source\"".into());
                     return Some(None);
                 }
@@ -999,8 +1002,17 @@ impl Scpi {
         None
     }
 
+    /// A value a known header does not take: -224 with the value, and the command counts as answered (`exec_cmd` sees
+    /// the error and marks nothing changed). A branch of `model_cmd` that answered None instead would read as an
+    /// unknown header to `exec_cmd`, which ends in -113.
+    fn refused(&mut self, arg: &str) -> Option<Option<Vec<u8>>> {
+        self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
+        Some(None)
+    }
+
     /// The commands that set or read the model alone: `:RUN`, `:STOP`, `:SINGle`, the channels, the trigger and the
-    /// acquisition. None when `nodes` is none of them (the next branch of `exec_cmd` gets it), else its answer.
+    /// acquisition. None when `nodes` is none of them (the next branch of `exec_cmd` gets it), else its answer; a
+    /// value a known header does not take is `refused`, never None.
     fn model_cmd(
         &mut self,
         m: &mut Model,
@@ -1030,17 +1042,13 @@ impl Scpi {
         }
         if kw(k0, "CHANnel") && (nodes.len() == 2 || nodes.len() == 3) {
             let c = sfx?.checked_sub(1).filter(|&c| c < NCH)?;
-            // the channel settings of the table (settings/channel.rs), of channel c; a value a row does not take
-            // is refused with -224 or falls through to the later branches (-113), each as before the table
+            // the channel settings of the table (settings/channel.rs), of channel c
             if let Some(row) = crate::settings::command(&crate::settings::channel::SLICES, &nodes[1..]) {
                 if query {
                     return Some(t(&row.query(m, c)));
                 }
                 if !row.take(m, c, arg) {
-                    if !crate::settings::channel::REFUSES.contains(&row.key) {
-                        return None;
-                    }
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
+                    return self.refused(arg);
                 }
                 return Some(None);
             }
@@ -1068,10 +1076,7 @@ impl Scpi {
                         }
                         Some(None)
                     }
-                    None => {
-                        self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                        Some(None)
-                    }
+                    None => self.refused(arg),
                 };
             }
             if nodes.len() != 2 {
@@ -1102,7 +1107,10 @@ impl Scpi {
                     return Some(t(&e(ch.volts_per_div() as f64)));
                 }
                 let old = ch.volts_per_div();
-                let want = num(arg).filter(|&v| v > 0.0)? / ch.probe;
+                let Some(v) = num(arg).filter(|&v| v > 0.0) else {
+                    return self.refused(arg);
+                };
+                let want = v / ch.probe;
                 (ch.vscale, ch.vfine) = Ui::vscale_for(want, fine);
                 if expand_gnd && old > 0.0 {
                     ch.offset *= ch.volts_per_div() / old;
@@ -1111,7 +1119,10 @@ impl Scpi {
                 if query {
                     return Some(t(&e(ch.offset as f64)));
                 }
-                ch.offset = num(arg)?;
+                let Some(v) = num(arg) else {
+                    return self.refused(arg);
+                };
+                ch.offset = v;
             } else if kw(n1, "COUPling") {
                 if query {
                     return Some(t(ch.coupling.name()));
@@ -1121,13 +1132,16 @@ impl Scpi {
                     "AC" => Coupling::Ac,
                     "GND" => Coupling::Gnd,
                     "DC50" if board().couplings().contains(&Coupling::Dc50) => Coupling::Dc50,
-                    _ => return None,
+                    _ => return self.refused(arg),
                 };
             } else if kw(n1, "PROBe") {
                 if query {
                     return Some(t(&e(ch.probe as f64)));
                 }
-                ch.probe = num(arg).filter(|&p| p > 0.0)?;
+                let Some(p) = num(arg).filter(|&p| p > 0.0) else {
+                    return self.refused(arg);
+                };
+                ch.probe = p;
             } else if kw(n1, "BIAS") {
                 // The screen's zero correction, subtracted from the channel reading.
                 // The DHO programmer manual has no header for it.
@@ -1135,8 +1149,7 @@ impl Scpi {
                     return Some(t(&e(ch.bias as f64)));
                 }
                 let Some(v) = num(arg) else {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    return Some(None);
+                    return self.refused(arg);
                 };
                 ch.bias = v;
             } else if kw(n1, "TCALibrate") {
@@ -1149,19 +1162,23 @@ impl Scpi {
                     return Some(None);
                 }
                 let Some(v) = num(arg).filter(|v| v.abs() <= SKEW_MAX) else {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    return Some(None);
+                    return self.refused(arg);
                 };
                 ch.skew = v;
             } else {
                 return None;
             }
+            // the offset within what the scale can reach now, as the next frame would leave it: the result of a
+            // line of commands does not depend on whether a frame ran between them, and a query answers the offset
+            // in force
+            m.clamp_offsets();
             return Some(None);
         }
         self.trigger_acquire_cmd(m, src, nodes, query, arg)
     }
 
-    /// `model_cmd` of the trigger and the acquisition: None when `nodes` is neither, else its answer.
+    /// `model_cmd` of the trigger, then of the acquisition (`acquire_cmd`): None when `nodes` is neither, else its
+    /// answer.
     fn trigger_acquire_cmd(
         &mut self,
         m: &mut Model,
@@ -1172,7 +1189,12 @@ impl Scpi {
     ) -> Option<Option<Vec<u8>>> {
         let n0 = nodes.first().copied().unwrap_or("");
         if kw(n0, "TRIGger") && nodes.len() == 3 && ["RS232", "SPI", "IIC"].iter().any(|b| kw(nodes[1], b)) {
-            return ser::trig(m, nodes[1], nodes[2], arg, query);
+            // `ser::trig` answers None for a value it does not take as for a key it does not know; every key it
+            // knows has a query, so a key whose query answers is known and its value is refused
+            return match ser::trig(m, nodes[1], nodes[2], arg, query) {
+                None if !query && ser::trig(m, nodes[1], nodes[2], "", true).is_some() => self.refused(arg),
+                r => r,
+            };
         }
         if kw(n0, "TRIGger") {
             let last = *nodes.last()?;
@@ -1186,13 +1208,15 @@ impl Scpi {
                 };
                 return Some(t(s));
             }
-            // the trigger values of the settings table (settings/trigger.rs); a value a row does not take falls
-            // through to the later branches, which answer -113, as before the table
+            // the trigger values of the settings table (settings/trigger.rs)
             if let Some(row) = crate::settings::command(&crate::settings::trigger::SLICES, &nodes[1..]) {
                 if query {
                     return Some(t(&row.query(m, 0)));
                 }
-                return row.take(m, 0, arg).then_some(None);
+                if !row.take(m, 0, arg) {
+                    return self.refused(arg);
+                }
+                return Some(None);
             }
             if nodes.len() == 3 && kw(nodes[1], "EDGE") {
                 if kw(last, "SOURce") {
@@ -1210,13 +1234,19 @@ impl Scpi {
                         .filter(|&n| n < 16 && m.trig_la_ok())
                     {
                         Some(n) => m.trig_la = Some(n),
-                        None => (m.trig_src, m.trig_la) = (parse_ch(arg)?, None),
+                        None => match parse_ch(arg) {
+                            Some(c) => (m.trig_src, m.trig_la) = (c, None),
+                            None => return self.refused(arg),
+                        },
                     }
                 } else if kw(last, "LEVel") {
                     if query {
                         return Some(t(&e(m.trig_level as f64)));
                     }
-                    m.trig_level = num(arg)?;
+                    let Some(v) = num(arg) else {
+                        return self.refused(arg);
+                    };
+                    m.trig_level = v;
                 } else {
                     return None;
                 }
@@ -1224,13 +1254,25 @@ impl Scpi {
             }
             return None;
         }
+        self.acquire_cmd(m, src, nodes, query, arg)
+    }
+
+    /// `model_cmd` of the acquisition: None when `nodes` is none of its commands, else its answer.
+    fn acquire_cmd(
+        &mut self,
+        m: &mut Model,
+        src: &crate::wave::Source,
+        nodes: &[&str],
+        query: bool,
+        arg: &str,
+    ) -> Option<Option<Vec<u8>>> {
+        let n0 = nodes.first().copied().unwrap_or("");
         if kw(n0, "ACQuire") && nodes.len() == 3 && kw(nodes[1], "ULTRa") && kw(nodes[2], "MAXFrame") {
             if query {
                 return Some(t(&m.segments.to_string()));
             }
             let Some(n) = arg.trim().parse::<usize>().ok() else {
-                self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                return Some(None);
+                return self.refused(arg);
             };
             let steps = crate::ui::SEGMENTS;
             m.segments = *steps.iter().min_by_key(|s| s.abs_diff(n)).unwrap_or(&0);
@@ -1239,52 +1281,53 @@ impl Scpi {
         if kw(n0, "ACQuire") && nodes.len() == 2 && !query && kw(nodes[1], "MDEPth") {
             // AUTO or one of the depths of the Acquire menu (`mdepths`), e.g. 1000000 or 1M
             let a = arg.trim().to_ascii_uppercase();
-            let want = if a.starts_with("AUTO") {
-                0
-            } else {
-                let (v, mul) = match a.chars().last() {
-                    Some('K') => (&a[..a.len() - 1], 1e3),
-                    Some('M') => (&a[..a.len() - 1], 1e6),
-                    _ => (&a[..], 1.0),
-                };
-                let Some(x) = v.parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0) else {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    return Some(None);
-                };
-                (x * mul).round() as u64
+            if a.starts_with("AUTO") {
+                m.mdepth = 0;
+                return Some(None);
+            }
+            let (v, mul) = match a.chars().last() {
+                Some('K') => (&a[..a.len() - 1], 1e3),
+                Some('M') => (&a[..a.len() - 1], 1e6),
+                _ => (&a[..], 1.0),
             };
-            if a.starts_with("AUTO") { m.mdepth = 0; return Some(None); }
+            let Some(x) = num64(v).filter(|x| *x >= 0.0) else {
+                return self.refused(arg);
+            };
+            let want = (x * mul).round() as u64;
             // the query answers the depth the scope works with (a menu depth is cut to the memory it has), so what
             // it answered is taken back: the setting that gives that depth, the one it has first
             let keep = m.mdepth;
-            let effective: Vec<u64> = (0..mdepths().len()).map(|i| { m.mdepth = i; m.srate_depth().1 as u64 }).collect();
+            let effective: Vec<u64> = (0..mdepths().len())
+                .map(|i| {
+                    m.mdepth = i;
+                    m.srate_depth().1 as u64
+                })
+                .collect();
             m.mdepth = keep;
-            let pick = if effective[keep] == want { Some(keep) }
-                else if let Some(i) = (1..mdepths().len()).find(|&i| mdepths()[i].1 == want) { Some(i) }
-                else if effective[0] == want { Some(0) }
-                else { (1..mdepths().len()).find(|&i| effective[i] == want) };
+            let pick = if effective[keep] == want {
+                Some(keep)
+            } else if let Some(i) = (1..mdepths().len()).find(|&i| mdepths()[i].1 == want) {
+                Some(i)
+            } else if effective[0] == want {
+                Some(0)
+            } else {
+                (1..mdepths().len()).find(|&i| effective[i] == want)
+            };
             match pick {
                 Some(i) => m.mdepth = i,
-                None => {
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-                    return Some(None);
-                }
+                None => return self.refused(arg),
             }
             return Some(None);
         }
         // the acquisition settings of the table (settings/acquisition.rs), where :CORes was, before :SEGMents,
-        // :AVERages:HARDware, :TYPE and :AVERages; a value a row does not take is refused with -224 or falls
-        // through to the later branches (-113), each as before the table
+        // :AVERages:HARDware, :TYPE and :AVERages
         if kw(n0, "ACQuire") {
             if let Some(row) = crate::settings::command(&crate::settings::acquisition::SLICES, &nodes[1..]) {
                 if query {
                     return Some(t(&row.query(m, 0)));
                 }
                 if !row.take(m, 0, arg) {
-                    if !crate::settings::acquisition::REFUSES.contains(&row.key) {
-                        return None;
-                    }
-                    self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
+                    return self.refused(arg);
                 }
                 return Some(None);
             }
@@ -1297,11 +1340,17 @@ impl Scpi {
                     m.segments = if parse_bool(arg) == Some(false) {
                         0
                     } else {
-                        (arg.trim().parse::<usize>().ok()?).min(crate::ui::SEG_HW_MAX)
+                        let Ok(n) = arg.trim().parse::<usize>() else {
+                            return self.refused(arg);
+                        };
+                        n.min(crate::ui::SEG_HW_MAX)
                     }
                 }
                 (Some(x), true) if kw(x, "INTerval") => return Some(t(&e(m.seg_ivl as f64))),
-                (Some(x), false) if kw(x, "INTerval") => m.seg_ivl = num(arg)?.clamp(0.0, crate::ui::SEG_IVL_MAX),
+                (Some(x), false) if kw(x, "INTerval") => match num(arg) {
+                    Some(v) => m.seg_ivl = v.clamp(0.0, crate::ui::SEG_IVL_MAX),
+                    None => return self.refused(arg),
+                },
                 _ => return None,
             }
             return Some(None);
@@ -1353,7 +1402,7 @@ impl Scpi {
         }
         let has = |k: &str| nodes[1..].iter().any(|n| kw(suffix(n).0, k));
         let m = &ui.m;
-        let x = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite());
+        let x = num64(arg);
         if has("OUTPut") {
             if query {
                 return Some(t(if m.afg_on { "1" } else { "0" }));
@@ -1442,7 +1491,7 @@ impl Scpi {
     fn source_mod_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Option<Vec<u8>>> {
         let has = |k: &str| nodes[1..].iter().any(|n| kw(suffix(n).0, k));
         let m = &ui.m;
-        let x = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite());
+        let x = num64(arg);
         const SHAPES: [&str; 6] = ["SINusoid", "SQUare", "TRIangle", "RAMP", "NRAMp", "NOISe"];
         let a = arg.trim();
         if has("INTernal") && has("FUNCtion") {

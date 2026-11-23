@@ -20,6 +20,7 @@
 //! Unauthenticated: bench LAN only (an update must carry a trusted signature, but the community key is public).
 //! `net.allow` (`netacl`, docs/network.md 6) limits `POST /update` and `/mcp` to the listed address prefixes.
 
+use oos_hal::update::hash::unhex;
 use std::net::{TcpListener, TcpStream};
 use std::time::Instant;
 
@@ -329,11 +330,8 @@ fn unescape(s: &str) -> String {
         match b[i] {
             b'+' => out.push(b' '),
             b'%' if i + 2 < b.len() => {
-                // on the bytes: the two characters after % need not be ASCII
-                let hex = |c: u8| (c as char).to_digit(16);
-                if let (Some(h), Some(l)) = (hex(b[i + 1]), hex(b[i + 2])) {
-                    out.push((h * 16 + l) as u8);
-                }
+                // on the bytes: the two after % need not be ASCII; other than two hex digits, the three are dropped
+                out.extend(std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(unhex).unwrap_or_default());
                 i += 2;
             }
             c => out.push(c),

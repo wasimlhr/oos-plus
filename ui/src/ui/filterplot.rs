@@ -269,7 +269,7 @@ mod tests {
         use crate::ui::dock::VKind;
         for pane in [tables::PANE_SPECTRUM, tables::PANE_FILTER] {
             let mut u = studio_with_filter();
-            u.select_option(Item::PaneSel, tables::PANES[pane]);
+            u.select_option(Item::PaneSel, crate::model::PANES[pane]);
             for _ in 0..4 {
                 u.step(0.05);
             }

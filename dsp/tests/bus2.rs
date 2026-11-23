@@ -122,7 +122,7 @@ fn mil1553_follows_a_bus_off_its_rate() {
     let mut v = sample(|t| l.v(t), 0.0, dt, 50 * 180);
     add_noise(&mut v, 0.1, 5);
     let want: Vec<(bool, u32, bool)> = words.iter().map(|&(cmd, w)| (cmd, w as u32, true)).collect();
-    // the same samples with a sample interval 4 % shorter and longer: a bus 4 % slow and 4 % fast
+    // the same samples with a sample interval 4 and 5 % shorter and longer: a bus that much slow and fast
     for off in [1.0, 0.96, 1.04, 0.95, 1.05] {
         let p = mil1553(&v, dt * off, 0.0, 0.3);
         let word = |x: &oos_dsp::decode::Packet| match x.kind {
@@ -132,6 +132,26 @@ fn mil1553_follows_a_bus_off_its_rate() {
         let got: Vec<(bool, u32, bool)> = p.iter().filter_map(word).collect();
         assert_eq!(got, want, "sample interval times {off}");
     }
+}
+
+/// A bit without its edge in the middle is read from its first half, and the word is not ok: here the second half
+/// of data bit 5 is made the same as its first.
+#[test]
+fn mil1553_a_bit_without_its_middle_edge_is_an_error() {
+    let l = mil1553_wave(&[(false, 0x1234)], 7.0, 4.0);
+    let dt = 1e-6 / 50.0;
+    let mut v = sample(|t| l.v(t), 0.0, dt, 50 * 30);
+    // data bit 5 starts 4 + 3 + 5 us after t = 0
+    let t = 4.0 + 3.0 + 5.0;
+    let (a, m, b) = ((t * 50.0) as usize, ((t + 0.5) * 50.0) as usize, ((t + 1.0) * 50.0) as usize);
+    let first = v[a + 5];
+    for x in &mut v[m..b] {
+        *x = first;
+    }
+    let p = mil1553(&v, dt, 0.0, 1.0);
+    assert_eq!(p.len(), 1);
+    // bit 5 of 0x1234 is a zero, and its first half (negative) still reads as a zero
+    assert_eq!((p[0].value, p[0].ok), (0x1234, false));
 }
 
 #[test]

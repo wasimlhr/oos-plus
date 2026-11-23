@@ -35,10 +35,7 @@ pub const VIEW: [Setting; 2] = [
         // oos-plus: the key and names of the fork (and of oos-next), `strip`; upstream's `strip_dock` with Under is read
         // by hand (store/setup_read.rs)
         key: "strip",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: "a choice of the screen's layout, not of the measurement",
-        },
+        scpi: Scpi::none("a choice of the screen's layout, not of the measurement"),
         ty: Ty::Choice(
             &[
                 Choice { store: "Below", scpi: "", label: "Below" },

@@ -6,22 +6,16 @@
 //! another command goes into `mask_cmd` here, with its line in docs/scpi.md; either with its query in
 //! ui/tests/scpi.txt (AGENTS.md).
 
-use super::{e, kw, num, parse_ch, t, Scpi};
+use super::{e, kw, num, t, Scpi};
 use crate::model::*;
 use crate::ui::Ui;
 
 impl Scpi {
     pub(super) fn mask_cmd(&mut self, ui: &mut Ui, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
-        if let Some(row) = crate::settings::command(&crate::settings::mask::SLICES, n) {
-            return self.setting_cmd(ui, row, query, arg);
+        if let Some(r) = self.meter_cmd(ui, &crate::settings::mask::SLICES, n, query, arg, |m| &mut m.mask_src) {
+            return r;
         }
         let n0 = n.first().copied().unwrap_or("");
-        if n.len() == 1 && kw(n0, "SOURce") {
-            if query {
-                return t(&format!("CHAN{}", ui.m.mask_src.min(n_ch() - 1) + 1));
-            }
-            return self.set_arg(ui, arg, parse_ch(arg), |ui, c| ui.m.mask_src = c);
-        }
         if n.len() == 1 && (kw(n0, "X") || kw(n0, "Y")) {
             let horizontal = kw(n0, "X");
             if query {

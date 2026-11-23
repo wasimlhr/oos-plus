@@ -1,7 +1,7 @@
 # Loaded waveforms, zoom and automatic analysis
 
-Measure (the Measure button, the MEASURE key, or Analysis > Measure in the start
-menu) opens one measurement page with every measurement OOS has. Its categories
+Measure (the MEASURE key, or Analysis > Measure in the start menu) opens one
+measurement page with every measurement OOS has. Its categories
 run down the left:
 
 | Category | Groups |

@@ -33,12 +33,14 @@ fn timebase_measure_and_system_roots_answer_as_before() {
     line(&mut s, &mut ui, &cv, ":TIM:OFFS 2e-4");
     assert_eq!(line(&mut s, &mut ui, &cv, ":TIM:POS?"), "2.000000E-04");
     assert!(err(&mut s, &mut ui).starts_with("0,"));
-    for bad in [":TIM:SCAL abc", ":TIM:FOO 1", ":TIM", ":MEAS:FOO 1", ":MEAS:SET:FOO?", ":SYST:DEB:FOO?", ":SYST:FOO 1"]
-    {
+    for bad in [":TIM:FOO 1", ":TIM", ":MEAS:FOO 1", ":MEAS:SET:FOO?", ":SYST:DEB:FOO?", ":SYST:FOO 1"] {
         line(&mut s, &mut ui, &cv, bad);
         let got = err(&mut s, &mut ui);
         assert!(got.starts_with("-113,"), "{}: {}", bad, got);
     }
+    // a known header with a bad number is a bad value, not an unknown header
+    line(&mut s, &mut ui, &cv, ":TIM:SCAL abc");
+    assert_eq!(err(&mut s, &mut ui), "-224,\"Illegal parameter value\" abc");
     assert_eq!(line(&mut s, &mut ui, &cv, ":TIM:SCAL?"), "1.000000E-03");
     line(&mut s, &mut ui, &cv, ":MEAS:BURS:IDLE 2e-3");
     assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:BURS:IDLE?"), "2.000000E-03");
@@ -49,6 +51,24 @@ fn timebase_measure_and_system_roots_answer_as_before() {
     line(&mut s, &mut ui, &cv, ":SYST:DEB:DVM:LANE 9");
     assert!(err(&mut s, &mut ui).starts_with("-224,"));
     assert!(err(&mut s, &mut ui).starts_with("0,"));
+}
+
+// Break it catches: :TIMebase:SCALe kept the delay as it was, so a script moved the point that :TIMebase:HREFerence:
+// MODE and the knob keep in place, and left the zoom wider than the new time base (OOS Plus, W4R)
+#[test]
+fn a_time_scale_from_a_script_keeps_the_expand_point() {
+    // from 1 ms/div at a delay of 2 ms to 2 ms/div: what each expand point gives the delay
+    for (mode, delay) in [("CENT", 2e-3), ("LB", 7e-3), ("RB", -3e-3), ("TRIG", 4e-3)] {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, &format!(":TIM:SCAL 1e-3;:TIM:OFFS 2e-3;:TIM:HREF:MODE {mode}"));
+        line(&mut s, &mut ui, &cv, ":TIM:SCAL 2e-3");
+        let got: f32 = line(&mut s, &mut ui, &cv, ":TIM:OFFS?").parse().unwrap();
+        assert!((got - delay).abs() < 1e-7, "{mode}: delay {got}, not {delay}");
+    }
+    // the zoom stays inside a smaller time base
+    let (mut s, mut ui, cv) = session();
+    line(&mut s, &mut ui, &cv, ":TIM:SCAL 1e-3;:TIM:DEL:ENAB 1;:TIM:DEL:SCAL 1e-3;:TIM:SCAL 1e-4");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":TIM:DEL:SCAL?"), "1.000000E-04");
 }
 
 #[test]

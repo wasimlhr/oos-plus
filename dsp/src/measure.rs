@@ -285,7 +285,7 @@ pub struct Analysis {
     pub hi_falls: Vec<f64>,
     pub lo_rises: Vec<f64>,
     pub lo_falls: Vec<f64>,
-    /// Mean, over rising-mid cycles, of that cycle's histogram top, base, amplitude, peak-to-peak, maximum, minimum.
+    /// Mean, over rising-mid cycles (falling-mid ones with fewer than two rises), of that cycle's histogram top, base, amplitude, peak-to-peak, maximum, minimum.
     pub cyc_top: f64,
     pub cyc_base: f64,
     pub cyc_amp: f64,
@@ -1040,11 +1040,11 @@ fn pair_widths(open: &[f64], close: &[f64]) -> Vec<f64> {
 }
 
 /// Mean of the per-cycle histogram top and base, their difference, and the sample max, min and peak-to-peak.
-/// Cycles run from one rising mid crossing to the next. A record with fewer than two rising edges has no result.
-fn cycle_levels(v: &[f32], dt: f64, rises: &[f64]) -> (f64, f64, f64, f64, f64, f64) {
+/// Cycles run from one mid crossing of `edges` (all of one direction) to the next. Fewer than two edges give no result.
+fn cycle_levels(v: &[f32], dt: f64, edges: &[f64]) -> (f64, f64, f64, f64, f64, f64) {
     let (mut top, mut base, mut amp, mut pp, mut mx, mut mn) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
-    for w in rises.windows(2) {
+    for w in edges.windows(2) {
         let s = (w[0] / dt).ceil() as usize;
         let e = ((w[1] / dt).floor() as usize).min(v.len().saturating_sub(1));
         if e <= s {

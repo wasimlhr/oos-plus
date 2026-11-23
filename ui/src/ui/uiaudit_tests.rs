@@ -561,7 +561,7 @@ fn interleave(lists: Vec<Vec<(Vec<Act>, String)>>) -> Vec<(Vec<Act>, String)> {
 
 fn seeds(cfg: Cfg) -> Vec<(Vec<Act>, String)> {
     let mut v: Vec<(Vec<Act>, String)> = vec![(vec![], "base".into())];
-    let mut menus = vec![MenuId::Main, MenuId::Horizontal, MenuId::Trigger, MenuId::Acquire, MenuId::Measure, MenuId::MeasAdd, MenuId::MeasHold,
+    let mut menus = vec![MenuId::Main, MenuId::Horizontal, MenuId::Trigger, MenuId::Acquire, MenuId::Measure, MenuId::MeasAdd,
         MenuId::MeasPair, MenuId::MeasStat, MenuId::MeasLevels, MenuId::MeasFall, MenuId::Dvm, MenuId::Cursor, MenuId::Display, MenuId::Utility,
         MenuId::Math, MenuId::Ref, MenuId::Decode, MenuId::Bus, MenuId::Storage, MenuId::Mask, MenuId::Zone, MenuId::Spectrum, MenuId::Eye,
         MenuId::Power, MenuId::Magnetic, MenuId::Inverter, MenuId::Dpt, MenuId::Identify, MenuId::SelfCal, MenuId::Network, MenuId::Remote,

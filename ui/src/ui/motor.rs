@@ -224,22 +224,10 @@ impl Ui {
                     self.m.inv_ang = InvAngle::Phase;
                 }
             }
-            Item::InvA => {
-                let cur = self.m.inv_a;
-                self.m.inv_a = self.step_wave(cur, d);
-            }
-            Item::InvB => {
-                let cur = self.m.inv_b;
-                self.m.inv_b = self.step_wave(cur, d);
-            }
-            Item::InvC => {
-                let cur = self.m.inv_c;
-                self.m.inv_c = self.step_wave(cur, d);
-            }
-            Item::InvAn => {
-                let cur = self.m.inv_an;
-                self.m.inv_an = self.step_wave(cur, d);
-            }
+            Item::InvA => self.m.inv_a = self.step_wave(self.m.inv_a, d),
+            Item::InvB => self.m.inv_b = self.step_wave(self.m.inv_b, d),
+            Item::InvC => self.m.inv_c = self.step_wave(self.m.inv_c, d),
+            Item::InvAn => self.m.inv_an = self.step_wave(self.m.inv_an, d),
             Item::InvAng => {
                 let cur = self.ang_name();
                 let name = pick(&cur, opts.as_deref().unwrap_or(&[]));
@@ -247,18 +235,9 @@ impl Ui {
             }
             Item::InvPoles => self.m.inv_poles = (self.m.inv_poles as i32 + d).clamp(1, 32) as u32,
             Item::InvQty => self.m.inv_volt = !self.m.inv_volt,
-            Item::InvTq => {
-                let cur = self.m.inv_tq;
-                self.m.inv_tq = self.step_wave_opt(cur, d);
-            }
-            Item::InvEv => {
-                let cur = self.m.inv_ev;
-                self.m.inv_ev = self.step_wave_opt(cur, d);
-            }
-            Item::InvEi => {
-                let cur = self.m.inv_ei;
-                self.m.inv_ei = self.step_wave_opt(cur, d);
-            }
+            Item::InvTq => self.m.inv_tq = self.step_wave_opt(self.m.inv_tq, d),
+            Item::InvEv => self.m.inv_ev = self.step_wave_opt(self.m.inv_ev, d),
+            Item::InvEi => self.m.inv_ei = self.step_wave_opt(self.m.inv_ei, d),
             Item::InvScale => self.m.inv_scale = eng_ladder(self.m.inv_scale, d, 1e-3, 1e3, false),
             Item::InvDeg => self.m.inv_degv = eng_ladder(self.m.inv_degv, d, 1e-3, 1e4, false),
             Item::InvOff => self.m.inv_off = (self.m.inv_off + d as f64).clamp(-3600.0, 3600.0),

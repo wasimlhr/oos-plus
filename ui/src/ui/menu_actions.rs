@@ -393,12 +393,10 @@ impl Ui {
 
     fn adjust_item(&mut self, it: Item, d: i32) {
         if matches!(it, Item::CatSourceC | Item::CatSourceD) {
-            let current = if it == Item::CatSourceC { self.cat.c } else { self.cat.d };
-            let next = self.step_wave(current, d);
             if it == Item::CatSourceC {
-                self.cat.c = next;
+                self.cat.c = self.step_wave(self.cat.c, d);
             } else {
-                self.cat.d = next;
+                self.cat.d = self.step_wave(self.cat.d, d);
             }
             return;
         }
@@ -481,8 +479,8 @@ impl Ui {
             return;
         }
         let _ = self.adjust_scope(it, d) || self.adjust_tools(it, d) || self.adjust_more(it, d);
-        // nor does the pane that shows the values, or which values a trend chart shows
-        if matches!(it, Item::PaneSel | Item::TrendSel(_)) {
+        // nor does which values a trend chart shows
+        if matches!(it, Item::TrendSel(_)) {
             self.relayout();
             if self.m.run == RunState::Run { self.dirty_map = true; }
             return;
@@ -550,7 +548,7 @@ impl Ui {
                 // Studio: the zoom keeps its factor and its place in the overview when the main time base changes
                 let keep = (m.layout == Layout::Studio && m.zoom)
                     .then(|| (old / tscales()[m.zscale], (m.zdelay - m.delay) / (old * HDIV)));
-                keep_expand_point(m, old);
+                m.keep_expand_point(old);
                 let new = m.time_per_div();
                 if let Some((factor, place)) = keep {
                     let want = new / factor;
@@ -592,6 +590,10 @@ impl Ui {
                 };
                 let i = all.iter().position(|&x| x == m.pat[c]).unwrap_or(0);
                 m.pat[c] = all[cycle(i, all.len(), d)];
+            }
+            Item::PatLevel => {
+                let c = m.trig_src;
+                m.pat_levels[c] += d as f32 * m.ch[c].volts_per_div() / 25.0;
             }
             _ => return false,
         }
@@ -750,26 +752,6 @@ impl Ui {
             Item::DecSel => {
                 let k = (self.m.dec_sel as i32 + d).rem_euclid(DECODERS as i32) as usize;
                 self.m.dec_select(k);
-            }
-            Item::PaneSel => {
-                self.m.pane = (self.m.pane as i32 + d).rem_euclid(tables::PANES.len() as i32) as usize;
-                // a pane chosen from the Windows page in Scope makes it Split (Minimal and Studio list it in Scope)
-                if self.m.layout != Layout::Default && self.m.density == Density::Scope && self.m.pane != 0 {
-                    self.m.density = Density::Split;
-                }
-                if self.m.density == Density::Split {
-                    self.m.split_pane = self.m.pane;
-                    let prev = self.m.win_layout;
-                    self.m.win_layout = if self.m.pane == 0 { WinLayout::Rows } else { WinLayout::One };
-                    if self.m.win_layout != prev && self.m.win_layout != WinLayout::One {
-                        self.spread_wins();
-                        if self.m.zoom {
-                            self.toast("Windows show while zoom is off");
-                        }
-                    }
-                } else if self.m.pane != 0 && self.pane_h() == 0 {
-                    self.toast("No room for a second pane here: fewer LA lanes or the scope view");
-                }
             }
             Item::TrendSel(k) => {
                 let n = self.trend_options().len() as i32;
@@ -1064,11 +1046,6 @@ impl Ui {
     /// `activate` of an action: the measurements, math, references. True when `it` is one of them.
     fn activate_measure(&mut self, it: Item) -> bool {
         match it {
-            Item::AddMeas => {
-                if let Some(k) = self.next_usual_meas() {
-                    self.activate(Item::MeasAdd(k));
-                }
-            }
             Item::MeasCfg(i) => self.open_meas_cfg(i as usize),
             Item::MeasAdd(k) => {
                 let e = (k, self.sources.a);
@@ -1323,20 +1300,4 @@ fn fine_time(now: f32, d: i32) -> (usize, f32) {
     }
     let f = want / ts[i];
     (i, if (f - 1.0).abs() < 1e-5 { 1.0 } else { f })
-}
-
-/// After the time base changed from `old` s/div: the zoom stays inside it, and the delay, the time in the middle of
-/// the screen, moves so the expand point keeps its place (the knob and the number pad).
-pub(super) fn keep_expand_point(m: &mut Model, old: f32) {
-    if m.zscale > m.tscale {
-        m.zscale = m.tscale;
-    }
-    let new = m.time_per_div();
-    let half = HDIV / 2.0;
-    match m.h_expand {
-        HExpand::Center => {}
-        HExpand::Left => m.delay -= half * (old - new),
-        HExpand::Right => m.delay += half * (old - new),
-        HExpand::Trigger => m.delay *= new / old,
-    }
 }

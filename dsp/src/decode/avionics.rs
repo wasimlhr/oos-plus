@@ -156,8 +156,9 @@ pub fn mil1553(v: &[f32], dt: f64, thr: f32, hyst: f32) -> Vec<Packet> {
                 }
                 // no edge where a bit has its middle: the halves as they are read on the grid, and an error
                 None => match (level(want - 0.25 * bit), level(want + 0.25 * bit)) {
-                    (Some(h1), Some(h2)) => {
-                        ok &= h1 != h2;
+                    // a bit has its edge in the middle; halves that differ without one there are not a bit either
+                    (Some(h1), Some(_)) => {
+                        ok = false;
                         last = want;
                         h1
                     }

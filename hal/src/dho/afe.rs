@@ -55,10 +55,6 @@ pub fn vertical_stride(len: usize) -> usize {
     }
 }
 
-fn i32_at(b: &[u8], o: usize) -> i32 {
-    i32::from_le_bytes(crate::bytes_at(b, o))
-}
-
 impl Cal {
     pub fn from_bytes(lsb: &[u8], zero: &[u8], bw: &[u8], vertical: Vec<u8>) -> Cal {
         let mut c = Cal { lsb: [0.0; 16], zero: [0; 80], bw: [0; 80], vertical, keys: Vec::new() };
@@ -66,8 +62,8 @@ impl Cal {
             c.lsb[i] = f64::from_le_bytes(crate::bytes_at(lsb, HDR + 8 * i));
         }
         for i in 0..80 {
-            c.zero[i] = i32_at(zero, HDR + 4 * i);
-            c.bw[i] = i32_at(bw, HDR + 4 * i);
+            c.zero[i] = i32::from_le_bytes(crate::bytes_at(zero, HDR + 4 * i));
+            c.bw[i] = i32::from_le_bytes(crate::bytes_at(bw, HDR + 4 * i));
         }
         // fixed values that replace these entries of the file
         for ch in 0..4 {
@@ -131,14 +127,14 @@ impl Cal {
         let b = &self.vertical[o..o + 56];
         let mut g = [0; 8];
         for (k, x) in g.iter_mut().enumerate() {
-            *x = i32_at(b, 8 + 4 * k);
+            *x = i32::from_le_bytes(crate::bytes_at(b, 8 + 4 * k));
         }
         Rec {
             key: i64::from_le_bytes(crate::bytes_at(b, 0)),
             g,
             gain: f64::from_le_bytes(crate::bytes_at(b, 40)),
-            zero: i32_at(b, 48),
-            last: i32_at(b, 52),
+            zero: i32::from_le_bytes(crate::bytes_at(b, 48)),
+            last: i32::from_le_bytes(crate::bytes_at(b, 52)),
         }
     }
 
@@ -982,8 +978,7 @@ mod tests {
             v.extend_from_slice(&crate::dho::selfcal::rec_bytes(&rec(0, i / 801, i % 801)));
             v.extend([0xee; 8]);
         }
-        let keys56: Vec<i64> =
-            (0..801).map(|i| i64::from_le_bytes(v[HDR + 56 * i..HDR + 56 * i + 8].try_into().unwrap())).collect();
+        let keys56: Vec<i64> = (0..801).map(|i| i64::from_le_bytes(crate::bytes_at(&v, HDR + 56 * i))).collect();
         assert!(!(keys56[0] > 0 && keys56.windows(2).all(|w| w[0] <= w[1])), "read at 56, the keys are garbage");
         assert_eq!(vertical_stride(v.len() - HDR), 64);
         assert_eq!(vertical_stride(4 * GROUP_RECS * 56), 56);

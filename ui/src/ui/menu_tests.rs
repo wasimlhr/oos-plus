@@ -243,10 +243,10 @@ fn clear_empties_the_display_in_stop() {
     assert_eq!(lit(&ui), 0);
 }
 
-/// A tap on Measure opens the measurement list. A press-and-hold opens a short menu and Add meas,
-/// released on the button, adds the next usual measurement. The rest of the Measure page is unchanged.
+/// The Measure key opens the measurement list and closes it again. Held on the front panel it adds the next usual
+/// measurement instead, at once, and its release does nothing more. The rest of the Measure page is unchanged.
 #[test]
-fn measure_tap_lists_and_hold_adds() {
+fn measure_key_lists_and_its_long_press_adds() {
     use super::*;
     let mut ui = crate::ui::testkit::demo_ui();
     ui.m.layout = Layout::Default; // the stock top bar with its Measure button
@@ -279,42 +279,32 @@ fn measure_tap_lists_and_hold_adds() {
         assert_ne!(ui.item_label(it), "Add item");
     }
     ui.close_menu();
-    let r = ui.measure_btn().unwrap();
-    let (x, y) = mid(r);
-    ui.tap(x, y);
+    ui.key(key::MEASURE);
     assert!(ui.menu_open && ui.menu == MenuId::MeasAdd);
-    assert!(!ui.m.meas.iter().any(|e| e.0 == Meas::Period));
-    ui.tap(x, y);
+    ui.key(key::MEASURE);
     assert!(!ui.menu_open);
-    // a short press is still a tap
-    ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
+    // a short press on the front panel is the key
+    ui.panel_key(key::MEASURE);
     ui.step(0.2);
     assert!(!ui.menu_open);
-    ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
+    ui.panel_key(0);
     assert!(ui.menu_open && ui.menu == MenuId::MeasAdd);
     ui.close_menu();
-    // press and hold: the short menu, then the shortcut on release
-    ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
-    ui.step(LONG_PRESS + 0.05);
-    assert!(ui.menu_open && ui.menu == MenuId::MeasHold);
-    assert_eq!(ui.items(MenuId::MeasHold), vec![Item::AddMeas]);
-    assert_eq!(ui.item_label(Item::AddMeas), "Add meas");
+    // held: the next usual measurement, then nothing on the release
+    ui.m.meas.retain(|e| e.0 != Meas::Period);
     let n = ui.m.meas.len();
-    ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
-    assert!(ui.m.meas.contains(&(Meas::Period, WaveId::Ch(0))));
+    ui.panel_key(key::MEASURE);
+    ui.step(LONG_PRESS + 0.05);
     assert_eq!(ui.m.meas.len(), n + 1);
     assert!(!ui.menu_open);
-    // a lift away from the button leaves the menu and adds nothing further
-    ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
-    ui.step(0.5);
-    let n = ui.m.meas.len();
-    ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x: 8, y: 300 });
-    assert!(ui.menu_open && ui.menu == MenuId::MeasHold);
-    assert_eq!(ui.m.meas.len(), n);
-    let (bx, by) = mid(row_of(&ui, Item::AddMeas).ctrl);
-    ui.tap(bx, by);
-    assert!(ui.m.meas.len() > n);
-    assert_eq!(ui.menu, MenuId::MeasHold);
+    ui.panel_key(0);
+    assert!(!ui.menu_open, "the release after a long press opens nothing");
+    assert_eq!(ui.m.meas.len(), n + 1);
+    // again: the next one that is not on yet
+    ui.panel_key(key::MEASURE);
+    ui.step(LONG_PRESS + 0.05);
+    ui.panel_key(0);
+    assert_eq!(ui.m.meas.len(), n + 2);
 }
 
 /// QUICK key and the Quick button run the action set in System > Quick key; Default keeps the setting.
@@ -423,6 +413,49 @@ fn a_channel_key_first_selects_when_several_are_on() {
     let (x, y) = card(&ui, 1);
     ui.tap(x, y);
     assert!(ui.m.active == 1 && !ui.menu_open, "CH1's menu closes when CH2 is selected");
+}
+
+/// A channel switched off with its menu's On, not with its key, gives the vertical knobs to a channel still on
+/// (#523): CH1 on, CH2 on with its key, CH2 off in its menu, menu closed; V/div then turns CH1's scale.
+#[test]
+fn a_channel_switched_off_in_its_menu_gives_the_knobs_to_one_still_on() {
+    use super::*;
+    let mut ui = crate::ui::testkit::demo_ui();
+    ui.step(0.033);
+    assert!(ui.m.ch[0].on && ui.m.n_on() == 1 && ui.m.active == 0);
+    ui.key(key::CH1 + 1);
+    assert!(ui.m.ch[1].on && ui.m.active == 1 && ui.menu == MenuId::Channel(1));
+    ui.adjust(Item::ChOn(1), 1);
+    assert!(!ui.m.ch[1].on, "the menu's On switched CH2 off");
+    assert_eq!(ui.m.active, 0, "CH1, the channel still on, is selected");
+    ui.close_menu();
+    let (ch1, ch2) = (ui.m.ch[0].vscale, ui.m.ch[1].vscale);
+    ui.knob_turn(key::VSCALE_CW, 1);
+    assert_ne!(ui.m.ch[0].vscale, ch1, "V/div turns CH1");
+    assert_eq!(ui.m.ch[1].vscale, ch2, "CH2, off, stays");
+}
+
+/// A setting whose options are just Off and On is one switch (#55, ADR 0075): a tap anywhere on it switches, both
+/// ways; a choice of other options stays a row of buttons.
+#[test]
+fn an_on_off_setting_is_a_switch_a_tap_switches() {
+    use super::*;
+    let mut ui = crate::ui::testkit::demo_ui();
+    ui.step(0.033);
+    ui.open_menu(MenuId::Channel(0));
+    let row = |ui: &Ui, it: Item| {
+        let d = ui.dlg_layout().expect("the channel menu is open");
+        let r = d.rows.iter().find(|r| r.it == it).expect("the row is in the menu");
+        (r.ctrl, matches!(r.ctl, Ctl::Switch(_)), matches!(r.ctl, Ctl::Switch(true)))
+    };
+    let (c, switch, on) = row(&ui, Item::ChInvert(0));
+    assert!(switch && !on && !ui.m.ch[0].invert, "Invert is a switch, off");
+    // the left end, where the On button of the pair was not
+    ui.tap(c.x + 4, c.y + c.h / 2);
+    assert!(ui.m.ch[0].invert && row(&ui, Item::ChInvert(0)).2, "a tap switched it on");
+    ui.tap(c.x + c.w - 4, c.y + c.h / 2);
+    assert!(!ui.m.ch[0].invert, "a tap switched it off again");
+    assert!(!row(&ui, Item::ChCoupling(0)).1, "coupling (DC, AC, GND) stays a row of buttons");
 }
 
 /// A channel key held on the front panel: AC/DC, nothing else; a short press does what the key does, when it is

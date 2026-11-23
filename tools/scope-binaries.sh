@@ -79,9 +79,13 @@ sums() { # sums NAME: build the programs, print their sums
 	# the flags are added to the crate's own target flags (.cargo/config.toml), not put in their place
 	(cd fpgad && RUSTC_BOOTSTRAP=1 cargo build --release --locked --quiet --target "$target" \
 		--config "target.$target.rustflags=[$flags]") || return 1
-	shasum -a 256 "ui/target/$target/release/oos-ui" "fpgad/target/$target/release/oos-fpgad" \
-		"fpgad/target/$target/release/oos-update" |
-		awk -v n="$1" '{ sub(".*/", "", $2); print n, $2, $1 }'
+	u="ui/target/$target/release" f="fpgad/target/$target/release"
+	# shasum where Perl brings it (macOS, most Linux), else sha256sum of coreutils (#67)
+	if command -v shasum >/dev/null 2>&1; then
+		shasum -a 256 "$u/oos-ui" "$f/oos-fpgad" "$f/oos-update"
+	else
+		sha256sum "$u/oos-ui" "$f/oos-fpgad" "$f/oos-update"
+	fi | awk -v n="$1" '{ sub(".*/", "", $2); print n, $2, $1 }'
 }
 work=$(mktemp -d)
 trap 'git checkout -q "$back" 2>/dev/null; rm -rf "$work"' EXIT

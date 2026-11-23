@@ -5,7 +5,7 @@
 //! additions for what the stock commands leave out (relations, limits, masks):
 //! `:RELation EQ|NE|GT|LT|IN|OUT`, `:DMAX <n>`, `:MASK <n>`, `:ARELation`, `:AMAX` (docs/fork/serial-ui.md).
 
-use super::kw;
+use super::{kw, num, num64};
 use crate::model::*;
 
 /// A number, decimal or 0x hex.
@@ -13,32 +13,34 @@ fn int(s: &str) -> Option<u64> {
     let s = s.trim();
     match s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
         Some(h) => u64::from_str_radix(h, 16).ok(),
-        None => s.parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0).map(|x| x as u64),
+        None => num64(s).filter(|x| *x >= 0.0).map(|x| x as u64),
     }
 }
 
-fn rel_of(s: &str) -> Option<Rel> {
-    Some(match s.trim().to_ascii_uppercase().as_str() {
-        "EQ" | "EQUAL" => Rel::Eq,
-        "NE" | "NEQUAL" => Rel::Ne,
-        "GT" | "GREATER" => Rel::Gt,
-        "LT" | "LESS" => Rel::Lt,
-        "IN" => Rel::In,
-        "OUT" => Rel::Out,
-        _ => return None,
-    })
+/// A setting of keywords: each row is the word the query answers, the long form a command takes too, and the value.
+/// The query answers the word of `cur`; a command (`a` in capitals) sets the value of the row that names it, None for
+/// a word in no row.
+fn keyword<T: Copy + PartialEq>(
+    cur: &mut T,
+    rows: &[(&str, &str, T)],
+    a: &str,
+    query: bool,
+) -> Option<Option<Vec<u8>>> {
+    if query {
+        return rows.iter().find(|r| r.2 == *cur).map(|r| Some(r.0.as_bytes().to_vec()));
+    }
+    *cur = rows.iter().find(|r| a == r.0 || a == r.1)?.2;
+    Some(None)
 }
 
-fn rel_name(r: Rel) -> &'static str {
-    match r {
-        Rel::Eq => "EQ",
-        Rel::Ne => "NE",
-        Rel::Gt => "GT",
-        Rel::Lt => "LT",
-        Rel::In => "IN",
-        Rel::Out => "OUT",
-    }
-}
+const RELS: [(&str, &str, Rel); 6] = [
+    ("EQ", "EQUAL", Rel::Eq),
+    ("NE", "NEQUAL", Rel::Ne),
+    ("GT", "GREATER", Rel::Gt),
+    ("LT", "LESS", Rel::Lt),
+    ("IN", "IN", Rel::In),
+    ("OUT", "OUT", Rel::Out),
+];
 
 /// One `:TRIGger:<bus>:<key>` command or query on `m`: `Some(Some(answer))` for a query, `Some(None)` for a setting
 /// taken, None for an unknown key or a bad value.
@@ -54,17 +56,8 @@ pub fn trig(m: &mut Model, bus: &str, key: &str, arg: &str, query: bool) -> Opti
         return Some(None);
     }
     if kw(key, "RELation") || kw(key, "ARELation") {
-        let addr = kw(key, "ARELation");
-        if query {
-            return t(rel_name(if addr { m.ser.addr_rel } else { m.ser.rel }).into());
-        }
-        let r = rel_of(arg)?;
-        if addr {
-            m.ser.addr_rel = r
-        } else {
-            m.ser.rel = r
-        }
-        return Some(None);
+        let rel = if kw(key, "ARELation") { &mut m.ser.addr_rel } else { &mut m.ser.rel };
+        return keyword(rel, &RELS, &a, query);
     }
     if kw(key, "DMAX") || kw(key, "AMAX") {
         if kw(key, "AMAX") {
@@ -122,45 +115,14 @@ fn rs232(m: &mut Model, key: &str, arg: &str, a: &str, query: bool) -> Option<Op
             _ => return None,
         };
     } else if kw(key, "POLarity") {
-        if query {
-            return t(if m.ser.uart_inv { "NEG" } else { "POS" }.into());
-        }
-        m.ser.uart_inv = match a {
-            "POS" | "POSITIVE" => false,
-            "NEG" | "NEGATIVE" => true,
-            _ => return None,
-        };
+        return keyword(&mut m.ser.uart_inv, &[("POS", "POSITIVE", false), ("NEG", "NEGATIVE", true)], a, query);
     } else if kw(key, "STOP") {
-        if query {
-            return t(match m.ser.uart_stop {
-                StopBits::One => "1",
-                StopBits::OneHalf => "1.5",
-                StopBits::Two => "2",
-            }
-            .into());
-        }
-        m.ser.uart_stop = match a {
-            "1" => StopBits::One,
-            "1.5" => StopBits::OneHalf,
-            "2" => StopBits::Two,
-            _ => return None,
-        };
+        let rows = [("1", "1", StopBits::One), ("1.5", "1.5", StopBits::OneHalf), ("2", "2", StopBits::Two)];
+        return keyword(&mut m.ser.uart_stop, &rows, a, query);
     } else if kw(key, "PARity") {
         use oos_dsp::decode::Parity;
-        if query {
-            return t(match m.dec_parity {
-                Parity::None => "NONE",
-                Parity::Even => "EVEN",
-                Parity::Odd => "ODD",
-            }
-            .into());
-        }
-        m.dec_parity = match a {
-            "NONE" => Parity::None,
-            "EVEN" => Parity::Even,
-            "ODD" => Parity::Odd,
-            _ => return None,
-        };
+        let rows = [("NONE", "NONE", Parity::None), ("EVEN", "EVEN", Parity::Even), ("ODD", "ODD", Parity::Odd)];
+        return keyword(&mut m.dec_parity, &rows, a, query);
     } else if kw(key, "WIDTh") {
         if query {
             return t(m.dec_bits.to_string());
@@ -201,7 +163,7 @@ fn spi(m: &mut Model, key: &str, arg: &str, a: &str, query: bool) -> Option<Opti
         if query {
             return t(format!("{:e}", m.ser.spi_timeout));
         }
-        m.ser.spi_timeout = arg.trim().parse::<f32>().ok().filter(|x| x.is_finite() && *x >= 0.0 && *x <= 1.0)?;
+        m.ser.spi_timeout = num(arg).filter(|x| *x >= 0.0 && *x <= 1.0)?;
     } else if kw(key, "SLOPe") {
         if query {
             return t(if matches!(m.dec_mode, 0 | 3) { "POS" } else { "NEG" }.into());
@@ -212,14 +174,7 @@ fn spi(m: &mut Model, key: &str, arg: &str, a: &str, query: bool) -> Option<Opti
             _ => return None,
         };
     } else if kw(key, "MODE") {
-        if query {
-            return t(if m.ser.spi_cs_high { "HIGH" } else { "LOW" }.into());
-        }
-        m.ser.spi_cs_high = match a {
-            "HIGH" => true,
-            "LOW" => false,
-            _ => return None,
-        };
+        return keyword(&mut m.ser.spi_cs_high, &[("HIGH", "HIGH", true), ("LOW", "LOW", false)], a, query);
     } else if kw(key, "WIDTh") {
         if query {
             return t(m.dec_bits.to_string());
@@ -235,47 +190,20 @@ fn spi(m: &mut Model, key: &str, arg: &str, a: &str, query: bool) -> Option<Opti
 fn iic(m: &mut Model, key: &str, arg: &str, a: &str, query: bool) -> Option<Option<Vec<u8>>> {
     let t = |s: String| Some(Some(s.into_bytes()));
     if kw(key, "WHEN") {
-        if query {
-            return t(match m.trig_bus {
-                BusWhat::Id => "ADDR",
-                BusWhat::Data => "DATA",
-                BusWhat::Error => "NACK",
-                BusWhat::Frame => "STAR",
-            }
-            .into());
-        }
         // repeated start, stop and address + data have no menu condition yet
-        m.trig_bus = match a {
-            "STAR" | "START" => BusWhat::Frame,
-            "ADDR" | "ADDRESS" => BusWhat::Id,
-            "DATA" => BusWhat::Data,
-            "NACK" | "NACKNOWLEDGE" => BusWhat::Error,
-            _ => return None,
-        };
+        let rows = [
+            ("STAR", "START", BusWhat::Frame),
+            ("ADDR", "ADDRESS", BusWhat::Id),
+            ("DATA", "DATA", BusWhat::Data),
+            ("NACK", "NACKNOWLEDGE", BusWhat::Error),
+        ];
+        return keyword(&mut m.trig_bus, &rows, a, query);
     } else if kw(key, "AWIDth") {
-        if query {
-            return t(if m.ser.ten_bit { "10" } else { "7" }.into());
-        }
-        m.ser.ten_bit = match a {
-            "7" => false,
-            "10" => true,
-            _ => return None,
-        };
+        return keyword(&mut m.ser.ten_bit, &[("7", "7", false), ("10", "10", true)], a, query);
     } else if kw(key, "DIRection") {
-        if query {
-            return t(match m.ser.dir {
-                I2cDir::Read => "READ",
-                I2cDir::Write => "WRIT",
-                I2cDir::Either => "RWR",
-            }
-            .into());
-        }
-        m.ser.dir = match a {
-            "READ" => I2cDir::Read,
-            "WRIT" | "WRITE" => I2cDir::Write,
-            "RWR" | "RWRITE" => I2cDir::Either,
-            _ => return None,
-        };
+        let rows =
+            [("READ", "READ", I2cDir::Read), ("WRIT", "WRITE", I2cDir::Write), ("RWR", "RWRITE", I2cDir::Either)];
+        return keyword(&mut m.ser.dir, &rows, a, query);
     } else if kw(key, "DBYTes") {
         if query {
             return t(m.ser.bytes.to_string());

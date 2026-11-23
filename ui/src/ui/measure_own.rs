@@ -73,18 +73,8 @@ impl Ui {
         if legacy.is_none() && !cfg.changes_analysis() {
             return None;
         }
-        let shared = MeasOwn::shared(&self.m);
-        let own = legacy.unwrap_or(shared);
-        Some(MeasOwn {
-            low: if own.refs_set { own.low } else { shared.low },
-            high: if own.refs_set { own.high } else { shared.high },
-            idle: if own.idle_set { own.idle } else { shared.idle },
-            side: if own.side_set { own.side } else { shared.side },
-            n: if own.n_set { own.n } else { shared.n },
-            data: if own.data_set { own.data } else { shared.data },
-            cfg,
-            ..own
-        })
+        let own = legacy.unwrap_or_else(|| MeasOwn::shared(&self.m));
+        Some(MeasOwn { cfg, ..own.effective(&self.m) })
     }
 
     /// The settings of a reading that are taken from the analysis afterwards (cycle edges, overshoot reference, burst

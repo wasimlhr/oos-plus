@@ -301,12 +301,12 @@ impl Ui {
     /// File of the current setup slot: a setup is small and has to survive a power cycle, so the default storage directory
     /// in RAM is not used for it when OOS's data partition is there.
     pub(super) fn setup_path(&self) -> std::path::PathBuf {
-        let keep = std::path::Path::new("/oos/setups");
-        let dir = if self.files.dir == std::path::Path::new(crate::store::DEFAULT_DIR) && keep.is_dir() {
-            keep
-        } else {
-            self.files.dir.as_path()
-        };
+        let dir =
+            if self.files.dir == std::path::Path::new(crate::store::DEFAULT_DIR) && crate::sysconf::data_partition() {
+                std::path::Path::new(crate::sysconf::SETUPS_DIR)
+            } else {
+                self.files.dir.as_path()
+            };
         dir.join(format!("setup{}.txt", self.files.slot))
     }
 

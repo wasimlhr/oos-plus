@@ -23,10 +23,6 @@ use crate::model::{AmpUnit, BWS, BW_20M, BW_FULL};
 /// The slices, in the order of the docs table.
 pub const SLICES: [&[Setting]; 6] = [&ON, &BW, &INVERT, &FINE, &UNIT, &EXPAND];
 
-/// The rows whose command refuses a value it does not take with `-224,"Illegal parameter value"`; a value the other
-/// rows do not take falls through to `-113`, as before the table.
-pub const REFUSES: [&str; 3] = ["ch<n>.unit", "fine_v", "v_expand_gnd"];
-
 /// Written first of a channel.
 pub const ON: [Setting; 1] = [Setting {
     key: "ch<n>.on",
@@ -123,15 +119,7 @@ pub const EXPAND: [Setting; 1] = [Setting {
 }];
 
 /// The menu's labels of the bandwidth limits.
-const BW_LABELS: [&str; BWS.len()] = {
-    let mut l = [""; BWS.len()];
-    let mut i = 0;
-    while i < l.len() {
-        l[i] = BWS[i].0;
-        i += 1;
-    }
-    l
-};
+const BW_LABELS: [&str; BWS.len()] = super::names(&BWS);
 
 /// Its name in BWS in a setup; over SCPI `OFF` or `FULL`, `AUTO`, `GND`, `20M` or `20MHZ`, or a filter as the name
 /// without spaces, with or without `HZ` (`100M`, `1GHZ`), in any case; the query answers `OFF`, `AUTO`, `20M` or the
@@ -172,15 +160,7 @@ const EXPAND_IO: CustomIo = CustomIo {
     store: |v| (v.index() != 0).to_string(),
     load: |t| crate::words::p_bool(t).map(Val::Bool),
     query: |v| if v.index() != 0 { "GND" } else { "CENT" }.to_string(),
-    take: |a| {
-        if crate::words::kw(a, "GND") {
-            Some(Val::Bool(true))
-        } else if crate::words::kw(a, "CENTer") {
-            Some(Val::Bool(false))
-        } else {
-            None
-        }
-    },
+    take: |a| super::switch_word(a, "CENTer", "GND"),
     labels: &["Center", "Ground"],
     #[cfg(test)]
     values: "`GND`, `CENTer`; the query answers `GND` or `CENT`",

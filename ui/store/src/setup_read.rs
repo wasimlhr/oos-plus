@@ -7,7 +7,7 @@
 //! registries of the measurements and the decoders it asks through `Registries`.
 
 use super::*;
-pub(crate) use crate::words::{p_bool, p_f32, p_f64, p_idx, p_u32};
+pub(crate) use crate::words::{num64, p_bool, p_f32, p_f64, p_idx, p_u32};
 
 const COUPLINGS: [Coupling; 4] = [Coupling::Dc, Coupling::Ac, Coupling::Gnd, Coupling::Dc50];
 const WHENS: [WhenKind; 5] = [WhenKind::Off, WhenKind::Gt, WhenKind::Lt, WhenKind::In, WhenKind::Out];
@@ -99,8 +99,20 @@ fn p_list<T>(v: &str, n: usize, f: impl Fn(&str) -> Result<T, String>) -> Result
 type SetGroup<'a> = &'a dyn Fn(&mut Model, &str, &str) -> Result<bool, String>;
 
 /// Takes one `key = value` line of a setup into the model: each group of keys below is asked in turn, the first
-/// that knows the key reads the value. A key no group knows (one of a newer version) is ignored.
+/// that knows the key reads the value. A key no group knows (one of a newer version) is ignored. A line it refuses
+/// leaves the model as it was: the fields of a line read before the one that fails are not kept (#120).
 pub fn set(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<(), String> {
+    // a Model is settings only (a few kB, a handful of short strings and lists), and a setup has a few hundred lines
+    let before = m.clone();
+    let taken = set_fields(m, k, v, r);
+    if taken.is_err() {
+        *m = before;
+    }
+    taken
+}
+
+/// `set` without putting the model back on a refused line.
+fn set_fields(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<(), String> {
     let groups: [SetGroup; 9] = [
         &|m, k, v| set_numbered(m, k, v, r),
         &set_table,
@@ -132,8 +144,7 @@ fn set_numbered(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<b
             .and_then(|i| i.checked_sub(1))
             .filter(|&i| i < values.len())
             .ok_or("invalid deskew source")?;
-        let value =
-            v.parse::<f64>().ok().filter(|x| x.is_finite() && x.abs() <= 1000.0).ok_or("invalid deskew seconds")?;
+        let value = num64(v).filter(|x| x.abs() <= 1000.0).ok_or("invalid deskew seconds")?;
         values[index] = value;
         return Ok(true);
     }
@@ -142,7 +153,7 @@ fn set_numbered(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<b
         if let Ok(n) = n.parse::<usize>() {
             let n = n.checked_sub(1).filter(|&n| n < DECODERS).ok_or("unknown decoder")?;
             let mut t = m.dec_view(n);
-            set(&mut t, field, v, r)?;
+            set_fields(&mut t, field, v, r)?;
             m.dec_store(n, t.dec_cfg());
             return Ok(true);
         }
@@ -257,7 +268,6 @@ fn set_time_trigger(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
         "seg_interval" => m.seg_ivl = p_f32(v)?.clamp(0.0, crate::model::SEG_IVL_MAX),
         "mdepth" => m.mdepth = p_idx(v, mdepths().len())?,
         "windows" => m.win_layout = p_enum(v, &WinLayout::ALL)?,
-        "density" => m.density = p_enum(v, &Density::ALL)?,
         "split_pane" => m.split_pane = p_idx(v, crate::model::PANES_N)?,
         "ch_window" => {
             let w = p_list(v, NCH, |x| p_idx(x, 5)?.checked_sub(1).ok_or_else(|| "window 0".to_string()))?;
@@ -345,7 +355,6 @@ fn set_meas_math(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<
             m.cnt_digits = p_idx(d, 8)?.max(3) as u32;
         }
         "dec_sel" => m.dec_sel = p_idx(v, DECODERS)?,
-        "pane" => m.pane = p_idx(v, crate::model::PANES_N)?,
         "ev_view" => m.ev_view = EvView::parse(v.trim()).ok_or_else(|| format!("bad ev_view {v}"))?,
         "ev_errors" => m.ev_errors = p_bool(v)?,
         "sim_bus" => {
@@ -658,7 +667,7 @@ fn set_bode_spec_power(m: &mut Model, k: &str, v: &str) -> Result<bool, String> 
         "eye" => {
             let w: Vec<&str> = v.split_whitespace().collect();
             m.eye_src = WaveId::parse(w.first().ok_or("eye: source")?)?;
-            m.eye_rate = w.get(1).ok_or("eye: rate")?.parse::<f64>().map_err(|e| e.to_string())?;
+            m.eye_rate = p_f64(w.get(1).ok_or("eye: rate")?)?;
             // older files have no third field: the rate was entered, not measured
             m.eye_from_record = w.get(2).is_some_and(|s| *s != "0");
         }
@@ -677,13 +686,12 @@ fn set_bode_spec_power(m: &mut Model, k: &str, v: &str) -> Result<bool, String> 
             if w.len() != 8 {
                 return Err("magnetic: want 8 values".into());
             }
-            let f = |s: &str| s.parse::<f64>().map_err(|e| e.to_string());
             m.mag_v = WaveId::parse(w[0])?;
             m.mag_i = WaveId::parse(w[1])?;
-            m.mag_n = f(w[2])?.clamp(1.0, 10_000.0);
-            m.mag_ae = f(w[3])?.max(0.0);
-            m.mag_le = f(w[4])?.max(0.0);
-            m.mag_rcu = f(w[5])?.max(0.0);
+            m.mag_n = p_f64(w[2])?.clamp(1.0, 10_000.0);
+            m.mag_ae = p_f64(w[3])?.max(0.0);
+            m.mag_le = p_f64(w[4])?.max(0.0);
+            m.mag_rcu = p_f64(w[5])?.max(0.0);
             m.mag_plot = p_enum(w[6], &[MagPlot::IPsi, MagPlot::BH])?;
             m.mag_cur = w[7].parse::<usize>().map_err(|e| e.to_string())?;
         }
@@ -700,7 +708,6 @@ fn set_inverter_zones(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             if w.len() != 23 {
                 return Err("inverter: want 23 values".into());
             }
-            let f = |s: &str| s.parse::<f64>().map_err(|e| e.to_string());
             let ch = |s: &str| WaveId::parse(s);
             let opt = |s: &str| -> Result<Option<WaveId>, String> {
                 if s == "off" {
@@ -725,11 +732,11 @@ fn set_inverter_zones(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             m.inv_an = ch(w[6])?;
             m.inv_volt = p_bool(w[7])?;
             (m.inv_tq, m.inv_ev, m.inv_ei) = (opt(w[8])?, opt(w[9])?, opt(w[10])?);
-            (m.inv_scale, m.inv_degv, m.inv_off) = (f(w[11])?, f(w[12])?, f(w[13])?);
+            (m.inv_scale, m.inv_degv, m.inv_off) = (p_f64(w[11])?, p_f64(w[12])?, p_f64(w[13])?);
             m.inv_elec = p_bool(w[14])?;
             (m.inv_qa, m.inv_qb) = (bit(w[15])?, bit(w[16])?);
             m.inv_qi = if w[17] == "off" { None } else { Some(bit(w[17])?) };
-            m.inv_cpr = f(w[18])?.clamp(1.0, 100_000.0);
+            m.inv_cpr = p_f64(w[18])?.clamp(1.0, 100_000.0);
             m.inv_swap = p_bool(w[19])?;
             (m.inv_ha, m.inv_hb, m.inv_hc) = (bit(w[20])?, bit(w[21])?, bit(w[22])?);
         }
@@ -743,7 +750,7 @@ fn set_inverter_zones(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             m.dpt_g = WaveId::parse(w[2])?;
             m.dpt_4th = p_enum(w[3], &[DptFourth::Off, DptFourth::Gate, DptFourth::DiodeV, DptFourth::DiodeI])?;
             m.dpt_4ch = WaveId::parse(w[4])?;
-            m.dpt_pct = w[5].parse::<f64>().map_err(|e| e.to_string())?.clamp(1.0, 49.0);
+            m.dpt_pct = p_f64(w[5])?.clamp(1.0, 49.0);
             m.dpt_zoom = p_enum(w[6], &[DptZoom::Both, DptZoom::TurnOn, DptZoom::TurnOff])?;
         }
         "zone1" | "zone2" => {
@@ -759,7 +766,7 @@ fn set_inverter_zones(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
                 .iter()
                 .map(|p| {
                     let (t, v) = p.split_once(':').ok_or("zone point: want t:v")?;
-                    Ok((t.parse::<f64>().map_err(|e| e.to_string())?, v.parse::<f64>().map_err(|e| e.to_string())?))
+                    Ok((p_f64(t)?, p_f64(v)?))
                 })
                 .collect::<Result<_, String>>()?;
         }
@@ -822,7 +829,7 @@ fn set_more(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             if w.len() != 4 && w.len() != 8 {
                 return Err("meas_cfg: idle outside n data [lpct hpct tsetup thold]".into());
             }
-            m.meas_idle = w[0].parse::<f64>().map_err(|e| e.to_string())?;
+            m.meas_idle = p_f64(w[0])?;
             m.meas_out = p_enum(
                 w[1],
                 &[oos_dsp::measure::Outside::Above, oos_dsp::measure::Outside::Below, oos_dsp::measure::Outside::Both],
@@ -830,10 +837,10 @@ fn set_more(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             m.meas_n = p_u32(w[2])?.clamp(1, 32);
             m.meas_data = p_bool(w[3])?;
             if w.len() == 8 {
-                m.meas_lpct = w[4].parse::<f64>().map_err(|e| e.to_string())?;
-                m.meas_hpct = w[5].parse::<f64>().map_err(|e| e.to_string())?;
-                m.meas_tsetup = w[6].parse::<f64>().map_err(|e| e.to_string())?;
-                m.meas_thold = w[7].parse::<f64>().map_err(|e| e.to_string())?;
+                m.meas_lpct = p_f64(w[4])?;
+                m.meas_hpct = p_f64(w[5])?;
+                m.meas_tsetup = p_f64(w[6])?;
+                m.meas_thold = p_f64(w[7])?;
             }
         }
         "spec_acpr" => {
@@ -851,19 +858,18 @@ fn set_more(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             m.sim_slot = p_idx(w[1], NREF)?;
             m.apply_sim_preset();
             if w.len() >= 14 {
-                let f = |s: &str| s.parse::<f64>().map_err(|e| e.to_string());
-                m.sim_rate = f(w[2])?;
+                m.sim_rate = p_f64(w[2])?;
                 m.sim_prbs = w[3].parse::<u8>().map_err(|e| e.to_string())?;
-                m.sim_vhigh = f(w[4])?;
-                m.sim_vlow = f(w[5])?;
-                m.sim_rise = f(w[6])?;
-                m.sim_noise = f(w[7])?;
-                m.sim_bw = f(w[8])?;
-                m.sim_deemph = f(w[9])?;
+                m.sim_vhigh = p_f64(w[4])?;
+                m.sim_vlow = p_f64(w[5])?;
+                m.sim_rise = p_f64(w[6])?;
+                m.sim_noise = p_f64(w[7])?;
+                m.sim_bw = p_f64(w[8])?;
+                m.sim_deemph = p_f64(w[9])?;
                 m.sim_ssc = p_bool(w[10])?;
-                m.sim_rj = f(w[11])?;
-                m.sim_pj = f(w[12])?;
-                m.sim_pjhz = f(w[13])?;
+                m.sim_rj = p_f64(w[11])?;
+                m.sim_pj = p_f64(w[12])?;
+                m.sim_pjhz = p_f64(w[13])?;
             }
         }
         "sim_extra" => {
@@ -872,9 +878,8 @@ fn set_more(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
                 return Err("sim_extra: center deviation frequency DCD correlated-RJ corner".into());
             };
             let bounded = |s: &str, low: f64, high: f64| -> Result<f64, String> {
-                s.parse::<f64>()
-                    .ok()
-                    .filter(|value| value.is_finite() && *value >= low && *value <= high)
+                num64(s)
+                    .filter(|value| *value >= low && *value <= high)
                     .ok_or_else(|| format!("{s} must be between {low} and {high}"))
             };
             m.sim_ssc_center = p_bool(center)?;
@@ -897,15 +902,12 @@ fn set_more(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             m.eye_b = opt(b)?;
             m.eye_hp = p_bool(hp)?;
         }
-        "bus_on" => m.bus.on = p_bool(v)?,
         "bus_label" => m.bus.label = crate::model::bus_label(v),
-        "bus_pos" => m.bus.pos = p_f32(v)?.clamp(BUS_POS_MIN, BUS_POS_MAX),
         "bus_kind" => m.bus.kind = p_enum(v, &[BusKind::I2c])?,
         "bus_clk" => m.bus.clk = WaveId::parse(v)?,
         "bus_data" => m.bus.data = WaveId::parse(v)?,
         "bus_clk_thr" => m.bus.clk_thr = p_f32(v)?.clamp(-40.0, 40.0),
         "bus_data_thr" => m.bus.data_thr = p_f32(v)?.clamp(-40.0, 40.0),
-        "bus_rw" => m.bus.addr_rw = p_bool(v)?,
         "power_more" => {
             let w: Vec<&str> = v.split_whitespace().collect();
             let [fline, fsw, vin, reference, clk] = w[..] else { return Err("power_more".into()) };
@@ -913,7 +915,7 @@ fn set_more(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             m.pw_fline = p_f64(fline)?;
             m.pw_fsw = p_f64(fsw)?;
             m.pw_vin = opt(vin)?;
-            m.pw_ref = if reference == "-" { None } else { Some(reference.parse::<f64>().map_err(|e| e.to_string())?) };
+            m.pw_ref = if reference == "-" { None } else { Some(p_f64(reference)?) };
             m.pw_clk = opt(clk)?;
         }
         _ => return Ok(false),
@@ -937,16 +939,15 @@ fn parse_lines(text: &str, bad: &mut Vec<String>, r: &dyn Registries) -> Model {
     m.meas_full_record = false;
     let mut proto_missing = false;
     for (ln, line) in text.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let Some((k, v)) = line.split_once('=') else {
-            bad.push(format!("line {}: no '='", ln + 1));
-            continue;
+        let (k, v) = match key_value(line) {
+            None => continue,
+            Some(Ok(kv)) => kv,
+            Some(Err(_)) => {
+                bad.push(format!("line {}: no '='", ln + 1));
+                continue;
+            }
         };
-        let k = k.trim();
-        if let Err(e) = set(&mut m, k, v.trim(), r) {
+        if let Err(e) = set(&mut m, k, v, r) {
             proto_missing |= k == "dec_proto";
             bad.push(format!("line {}: {}: {}", ln + 1, k, e));
         }

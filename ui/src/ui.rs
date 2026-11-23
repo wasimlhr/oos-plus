@@ -204,7 +204,6 @@ mod tables;
 mod tools;
 mod trigger_controls;
 mod update;
-mod upper;
 mod viewmore;
 mod windows;
 mod wlan;
@@ -598,8 +597,6 @@ pub enum MenuId {
     Acquire,
     Measure,
     MeasAdd,
-    /// short menu from a press-and-hold on Measure; Add meas is its shortcut
-    MeasHold,
     /// delay and phase between two channels
     MeasPair,
     /// statistics: on or off, population, columns, reset
@@ -804,9 +801,7 @@ struct TouchState {
     y0: i32,
     x: i32,
     y: i32,
-    /// `Ui::now` when the finger went down
-    t0: f64,
-    /// a press-and-hold already opened its menu; the lift is not a tap
+    /// a press-and-hold already acted (the Zoom button's popover, a chip's menu); the lift is not a tap
     held: bool,
     drag: Drag,
     start_offset: f32,
@@ -1012,8 +1007,6 @@ pub struct Ui {
     pub(crate) dialog: Option<Vec<String>>,
     /// System info page (sysinfo.rs)
     sysinfo: sysinfo::Page,
-    /// System > Probe optional memory: the request to the thread (upper.rs)
-    upper: upper::State,
     touch: TouchState,
     /// what the input keeps between two events: keys and fingers held, knob times, the zone path, the pinch (input.rs)
     input: input::State,
@@ -1334,6 +1327,8 @@ impl Ui {
 enum Ctl {
     /// segmented buttons: options, selected
     Seg(Vec<String>, Option<usize>),
+    /// an on/off setting: one field with its state and a slide switch, a tap anywhere on it switches (ADR 0075)
+    Switch(bool),
     /// - value +
     Value,
     /// - value +, the value opens the list of all options (MenuId::Pick)

@@ -12,9 +12,6 @@ impl Ui {
         if it == Item::StoreRunScpi && self.scpi_replaying {
             return "Stop SCPI file";
         }
-        if it == Item::UpperProbe {
-            return self.upper_button();
-        }
         if it == Item::SimPlay {
             if self.sim_generating() {
                 return "Cancel generation";
@@ -176,7 +173,6 @@ impl Ui {
             | Item::HZero
             | Item::Trig50
             | Item::MeasAdd(_)
-            | Item::AddMeas
             | Item::MeasCfg(_)
             | Item::MeasRemove(_)
             | Item::MeasClear
@@ -220,7 +216,6 @@ impl Ui {
             Item::Open(MenuId::Horizontal) => "Horizontal",
             Item::Open(MenuId::ChMore(_)) => "More",
             Item::Open(MenuId::Measure) => "Measure",
-            Item::AddMeas => "Add meas",
             Item::Open(MenuId::Cursor) => "Cursor",
             Item::Open(MenuId::Display) => "Display",
             Item::Open(MenuId::Utility) => "System",
@@ -280,7 +275,6 @@ impl Ui {
             Item::SearchTable => "Event list",
             Item::SearchSave => "Save events",
             Item::StoreBin => "Save waveform (binary)",
-            Item::PaneSel => "Lower",
             Item::TrendSel(0) => "Trend chart 1",
             Item::TrendSel(_) => "Trend chart 2",
             Item::DecSrc => "Source",
@@ -625,13 +619,12 @@ impl Ui {
         })
     }
 
-    /// Values of the decoder, pane, trend, bus trigger, zoom and XY rows.
+    /// Values of the decoder, trend, bus trigger, zoom and XY rows.
     fn value_decode(&self, it: Item) -> Option<String> {
         let m = &self.m;
         Some(match it {
             Item::DecOn => on_off(m.dec_on),
             Item::DecSel => self.dec_tag(m.dec_sel),
-            Item::PaneSel => tables::PANES[m.pane.min(tables::PANES.len() - 1)].into(),
             Item::TrendSel(k) => self.trend_options().get(m.trend_sel[k]).cloned().unwrap_or_else(|| "Auto".into()),
             Item::DecSrc => decode_source_name(m.dec_src),
             Item::DecBaud => format!("{}", crate::decode::BAUDS[m.dec_baud]),

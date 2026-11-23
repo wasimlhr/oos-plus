@@ -127,12 +127,7 @@ pub fn log_sweep(start: f64, stop: f64, n: usize) -> Vec<f64> {
 /// A frequency with 6 significant digits, no trailing zeros (for generator commands).
 pub fn fmt_hz(f: f64) -> String {
     let dec = (5 - f.abs().max(1e-9).log10().floor() as i32).max(0) as usize;
-    let s = format!("{:.*}", dec, f);
-    if s.contains('.') {
-        s.trim_end_matches('0').trim_end_matches('.').to_string()
-    } else {
-        s
-    }
+    crate::trim_zeros(&format!("{:.*}", dec, f)).to_string()
 }
 
 /// Time per division that shows about `periods` periods of `f` on 10 divisions.

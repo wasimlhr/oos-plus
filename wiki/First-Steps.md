@@ -23,6 +23,9 @@ starts OOS once more at the next power-on. When OOS works for you, set **System 
 
 Front-panel keys and knobs work as labelled. The Menu button at the bottom left reaches every function.
 
+In the menus a setting that is only off or on is a switch: a tap anywhere on it switches it. Settings with more
+choices are a row of buttons, or `-` value `+` where the choices do not fit.
+
 **Channel keys and cards.** A short press switches a channel that is off on and opens its menu. With several channels
 on, the first press on one that is not selected only selects it, so the knobs act on it (its card has the coloured
 border); the next press opens its menu, and a press with its menu open switches it off. A tap on a channel's card
@@ -183,23 +186,3 @@ settings are in `/oos/system.conf`, see [docs/network.md](https://github.com/dek
 **System > Self-cal.** Warm the scope up for 30 minutes and disconnect all inputs. It takes about 5 minutes per
 channel and pass, with 4 passes. Results go to `/oos/cal` and are preferred over the factory files, which are never
 changed.
-
-## Optional memory
-
-The acquisition memory holds 512 MiB (verified on the unit, a DHO924S, on 2026-11-21:
-[horizontal-config.md 1.8](https://github.com/dekajoule/oos/blob/main/docs/protocols/horizontal-config.md#18-frame-memory-above-256-mib));
-the stock software uses 256 MiB of it. Hardware segments (Acquire > Segments,
-Hardware) can use the other half for twice as many segments of a size, where the unit has it. It is off by default.
-
-- **System > Probe optional memory** checks your unit: the acquisition pauses for a moment while each segment size of
-  the Acquire menu's memory depths is probed (the button reads "Probing memory ..."), then goes on with your settings.
-  The record kept in STOP is overwritten by the probe. A toast tells the result: when every size held, the memory is
-  switched on; when one did not, it stays off.
-- **System > Opt. memory** (Off/On) switches its use. Off, recordings use the lower 256 MiB only, as before. On takes
-  effect at once once a probe found the memory on this unit; otherwise it runs the probe first and is on only after
-  its yes.
-- Both are kept in `/oos/system.conf` (`mem.upper`, `mem.upper.found`). **System > System info** shows the state
-  ("Optional memory": in use, present but off, not present, off and not probed).
-- Switched on, a segment size the button did not probe since the start is probed once more before its first
-  recording. Switch hardware segments off before a probe if a recording is kept: the probe would write over it
-  ([docs](https://github.com/dekajoule/oos/blob/main/docs/protocols/horizontal-config.md#18-frame-memory-above-256-mib)).

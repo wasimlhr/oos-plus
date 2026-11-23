@@ -119,55 +119,18 @@ fn value(b: &[u8], p: &mut usize, depth: usize) -> Option<J> {
     }
     ws(b, p);
     match *b.get(*p)? {
-        b'{' => {
-            *p += 1;
-            let mut v = Vec::new();
+        b'{' => items(b, p, b'}', |p| {
             ws(b, p);
-            if b.get(*p) == Some(&b'}') {
-                *p += 1;
-                return Some(J::Obj(v));
-            }
-            loop {
-                ws(b, p);
-                let J::Str(k) = string(b, p)? else { return None };
-                ws(b, p);
-                if b.get(*p) != Some(&b':') {
-                    return None;
-                }
-                *p += 1;
-                v.push((k, value(b, p, depth + 1)?));
-                ws(b, p);
-                match b.get(*p)? {
-                    b',' => *p += 1,
-                    b'}' => {
-                        *p += 1;
-                        return Some(J::Obj(v));
-                    }
-                    _ => return None,
-                }
-            }
-        }
-        b'[' => {
-            *p += 1;
-            let mut v = Vec::new();
+            let J::Str(k) = string(b, p)? else { return None };
             ws(b, p);
-            if b.get(*p) == Some(&b']') {
-                *p += 1;
-                return Some(J::Arr(v));
+            if b.get(*p) != Some(&b':') {
+                return None;
             }
-            loop {
-                v.push(value(b, p, depth + 1)?);
-                ws(b, p);
-                match b.get(*p)? {
-                    b',' => *p += 1,
-                    b']' => {
-                        *p += 1;
-                        return Some(J::Arr(v));
-                    }
-                    _ => return None,
-                }
-            }
-        }
+            *p += 1;
+            Some((k, value(b, p, depth + 1)?))
+        })
+        .map(J::Obj),
+        b'[' => items(b, p, b']', |p| value(b, p, depth + 1)).map(J::Arr),
         b'"' => string(b, p),
         b't' if b[*p..].starts_with(b"true") => {
             *p += 4;
@@ -187,6 +150,29 @@ fn value(b: &[u8], p: &mut usize, depth: usize) -> Option<J> {
                 *p += 1;
             }
             std::str::from_utf8(&b[st..*p]).ok()?.parse().ok().map(J::Num)
+        }
+    }
+}
+
+/// The items of an array or an object, from its opening bracket at `p` to `close`, separated by commas.
+fn items<T>(b: &[u8], p: &mut usize, close: u8, mut item: impl FnMut(&mut usize) -> Option<T>) -> Option<Vec<T>> {
+    *p += 1;
+    let mut v = Vec::new();
+    ws(b, p);
+    if b.get(*p) == Some(&close) {
+        *p += 1;
+        return Some(v);
+    }
+    loop {
+        v.push(item(p)?);
+        ws(b, p);
+        match *b.get(*p)? {
+            b',' => *p += 1,
+            c if c == close => {
+                *p += 1;
+                return Some(v);
+            }
+            _ => return None,
         }
     }
 }

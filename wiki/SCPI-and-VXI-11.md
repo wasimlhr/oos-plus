@@ -1,6 +1,6 @@
 # SCPI and VXI-11
 
-How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.1.14.
+How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.1.15.
 
 > **No authentication.** Anyone who can reach the scope can control it. Keep it on a trusted bench network, never on the internet. `net.allow` (below) limits who may connect.
 
@@ -55,7 +55,7 @@ All of them end in the same SCPI interpreter, so a command behaves the same whic
 
 ```sh
 printf '*IDN?\n' | nc dho924s-123456.local 5555
-# OOS,DHO924S,<serial>,oos-ui 0.1.14
+# OOS,DHO924S,<serial>,oos-ui 0.1.15
 ```
 
 **Python with pyvisa, raw socket:**
@@ -127,7 +127,7 @@ print(scope.query('*IDN?'))
 |---|---|
 | `:CHANnel<n>:DISPlay[?]` | on/off |
 | `:CHANnel<n>:SCALe[?]` | V/div; the nearest scale the scope has; the probe factor applies |
-| `:CHANnel<n>:OFFSet[?]` | volts |
+| `:CHANnel<n>:OFFSet[?]` | volts, within the range of the scale |
 | `:CHANnel<n>:POSition[?]` | divisions |
 | `:CHANnel<n>:COUPling[?]` | `DC\|AC\|GND` (`DC50` only where the board has 50 Ω) |
 | `:CHANnel<n>:BWLimit[?]` | `OFF\|20M\|AUTO` or another filter of the menu |
@@ -143,7 +143,7 @@ print(scope.query('*IDN?'))
 
 | Command | Values |
 |---|---|
-| `:TIMebase[:MAIN]:SCALe[?]` | s/div, nearest step |
+| `:TIMebase[:MAIN]:SCALe[?]` | s/div, nearest step; the expansion reference keeps its place, as with the knob |
 | `:TIMebase[:MAIN]:OFFSet[?]` | delay in seconds (`POSition` is the same) |
 | `:TIMebase:DELay:ENABle[?]`, `:DELay:SCALe[?]`, `:DELay:OFFSet[?]` | zoom window on/off, s/div, centre time |
 | `:TIMebase:VERNier[?]` | fine steps on/off |
@@ -451,7 +451,7 @@ Read `:SYSTem:ERRor?` until it answers `0,"No error"`. Each read takes one error
 | -113 | undefined header (the command does not exist) |
 | -221 | settings conflict (e.g. `*OPC?` through MCP) |
 | -223 | too much data (a waveform page above 64 MiB) |
-| -224 | illegal parameter value |
+| -224 | illegal parameter value (the command exists, the value is not one it takes) |
 | -230 | data not available (analysis without a result) |
 | -241 | hardware missing (e.g. generator on a model without it) |
 | -256 | file not found |

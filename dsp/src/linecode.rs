@@ -269,6 +269,7 @@ fn bits_to_bytes(bits: &[(f64, bool)]) -> Vec<(f64, f64, u8)> {
     out
 }
 
+/// The fields of an Ethernet frame in `bytes`, appended to `out`.
 fn ethernet_fields(bytes: &[(f64, f64, u8)], out: &mut Vec<Packet>) {
     // look for SFD 0xD5 after 0x55s
     let sfd = bytes.iter().position(|b| b.2 == 0xd5);
@@ -465,6 +466,11 @@ pub fn manchester(v: &[f32], dt: f64, bitrate: f64, thr: f32, hyst: f32) -> Vec<
     if let [bits] = &packets[..] {
         let mut out = bytes_of(bits);
         ethernet_fields(&bits_to_bytes(bits), &mut out);
+        // the frame check of a frame, where the record has the quiet line behind it
+        if let Some(last) = bits.last() {
+            let whole = last.0 + 4.0 * half < v.len() as f64 - 1.0;
+            out.extend(ethernet_frame(bits, half, whole).into_iter().flatten().filter(|p| p.kind == Kind::Crc));
+        }
         return out;
     }
     let mut out = Vec::new();
@@ -592,6 +598,7 @@ pub fn mlt3(v: &[f32], dt: f64, bitrate: f64, _thr: f32, hyst: f32) -> Vec<Packe
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::decode::usbpd_crc32;
 
     #[test]
     fn pam_quartile_representatives_stay_inside_sample_extrema() {
@@ -655,6 +662,44 @@ mod tests {
         let b = prbs11(40);
         assert!(b.iter().any(|&x| x) && b.iter().any(|&x| !x));
         assert_eq!(b.len(), 40);
+    }
+
+    /// An Ethernet frame of 10BASE-T has its frame check: marked where the CRC-32 of the frame is another, and none
+    /// where the record has no quiet line behind the frame or the frame is shorter than one can be.
+    #[test]
+    fn an_ethernet_frame_in_manchester_has_its_check() {
+        // (addresses of the kind a station gives itself, none of a real one)
+        let mut frame: Vec<u8> = vec![0x02, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x02];
+        frame.extend([0x08, 0x00]);
+        frame.extend((0..46u8).map(|i| i.wrapping_mul(7)));
+        let fcs = usbpd_crc32(&frame);
+        frame.extend(fcs.to_le_bytes());
+        let mut changed = frame.clone();
+        changed[14] ^= 0x02;
+        // a record of one frame: 16 samples a bit, a one rising in the middle, the first bit of a byte the least
+        // significant, quiet line before and `tail` samples after it
+        let checks = |f: &[u8], tail: usize| -> Vec<(u32, bool)> {
+            let mut v = vec![0.0f32; 64];
+            let bytes = [0x55u8; 7].iter().chain([0xd5u8].iter()).chain(f.iter());
+            for one in bytes.flat_map(|b| (0..8).map(move |k| b >> k & 1 == 1)) {
+                v.extend(std::iter::repeat_n(if one { 0.0 } else { 1.0 }, 8));
+                v.extend(std::iter::repeat_n(if one { 1.0 } else { 0.0 }, 8));
+            }
+            v.extend(std::iter::repeat_n(0.0, tail));
+            let p = manchester(&v, 1.0, 1.0 / 16.0, 0.5, 0.05);
+            p.iter().filter(|x| x.kind == Kind::Crc).map(|x| (x.value, x.ok)).collect()
+        };
+        assert_eq!(checks(&frame, 64), [(fcs, true)]);
+        assert_eq!(checks(&changed, 64), [(fcs, false)]);
+        // the record ends with the frame: the check is not known to be its last four bytes
+        assert_eq!(checks(&frame, 0), []);
+        // shorter than a frame can be
+        assert_eq!(checks(&frame[..40], 64), []);
+        // a frame of the same bytes with no check asked for (MLT-3's) has none
+        let bytes: Vec<(f64, f64, u8)> = (0..80).map(|k| (k as f64 * 16.0, k as f64 * 16.0 + 7.0, 0u8)).collect();
+        let mut out = Vec::new();
+        ethernet_fields(&bytes, &mut out);
+        assert!(out.iter().all(|x| x.kind != Kind::Crc));
     }
 
     #[test]

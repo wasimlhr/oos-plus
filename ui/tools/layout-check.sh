@@ -46,7 +46,9 @@ for ts in normal large larger; do
 		fi
 	done
 done
-(cd "$out" && find . -type f | sort | xargs shasum) > "$out.sums"
+# shasum where Perl brings it (macOS, most Linux), else sha1sum of coreutils: the same sums, the same lines (#67)
+(cd "$out" && find . -type f | sort | if command -v shasum >/dev/null 2>&1; then xargs shasum; else xargs sha1sum; fi) \
+	>"$out.sums"
 n=$(grep -c '\.ppm$' "$out.sums")
 m=$(grep -vc '\.ppm$' "$out.sums" || true)
 if [ "$mode" = record ]; then

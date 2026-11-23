@@ -115,7 +115,7 @@ impl Ui {
                 }
             }
             if answer.is_none() && !worker.thread.busy() {
-                let job = DemoJob { key, model: self.m.clone(), time, elapsed, seed: self.rng.next() };
+                let job = DemoJob { key, model: self.m.clone(), time, elapsed, seed: self.rng.next_u64() };
                 if worker.thread.submit(job).is_ok() {
                     worker.cancelled = false;
                 }
@@ -388,7 +388,7 @@ mod tests {
             ui.m.ch[0].bw = bw;
             ui.m.meas_full_record = true;
             ui.rng = Rng::new(17);
-            let seed = Rng::new(17).next();
+            let seed = Rng::new(17).next_u64();
             let mut source = Source::Demo { t: 0.0 };
             let mut expected = source.acquire_full_demo(&ui.m, 0.02, &mut Rng::new(seed)).unwrap();
             condition(&ui.m, 0, &mut expected.ch[0], expected.dt);

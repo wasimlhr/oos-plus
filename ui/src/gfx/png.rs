@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! PNG screenshots with an own encoder: one fixed-Huffman deflate block with matches against the pixel to the left and
-//! above, CRC32, Adler32; and PPM pictures read back into a canvas.
+//! above, CRC32 (`oos_hal::crc32`), Adler32; and PPM pictures read back into a canvas.
 
 use super::*;
 

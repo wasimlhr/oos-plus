@@ -174,8 +174,6 @@ pub(super) enum Item {
     /// copies every measurement on Source A to the picked source
     MeasCopyTo,
     MeasAdd(Meas),
-    /// shortcut on the press-and-hold menu: the next usual measurement
-    AddMeas,
     /// settings of one added measurement, index into `m.meas`
     MeasCfg(u16),
     /// a field of the measurement settings card
@@ -381,6 +379,8 @@ pub(super) enum Item {
     AfgModShape,
     BodeOn,
     BodeRun,
+    /// the points of the last sweep to a CSV file on the storage (#53)
+    BodeSave,
     BodeStart,
     BodeStop,
     BodePoints,
@@ -422,10 +422,6 @@ pub(super) enum Item {
     ZoneClear,
     About,
     SysInfo,
-    /// System > Probe optional memory (ui/upper.rs): the frame memory above 256 MiB probed, `mem.upper` from its answer
-    UpperProbe,
-    /// System > Opt. memory (ui/upper.rs): the memory above 256 MiB used or not, `mem.upper`
-    UpperUse,
     Shot,
     AuxOut,
     Stock,
@@ -492,6 +488,7 @@ pub(super) enum Item {
     WlanForgetNet,
     /// one more autonegotiation for a link at 10 Mbit/s (ethlink.rs)
     NetRetry10,
+    NetShowAddr,
     /// System > Date and time (ui/time.rs)
     TimeNow,
     NtpOn,
@@ -661,7 +658,7 @@ const NO_PART: Part =
 
 /// The parts of the menus, asked by `kind`, `label`, `value`, `adjust`, `activate`, `options` and `ctl` before the
 /// items `ui.rs` keeps itself. `remote` answers for `ssh` too, except the actions.
-pub(super) const PARTS: [Part; 30] = [
+pub(super) const PARTS: [Part; 29] = [
     // oos-plus parts: Studio's rows about its arrangement, the Add rail of Studio, the per-row measurement sheet,
     // the external generator
     Part {
@@ -873,15 +870,6 @@ pub(super) const PARTS: [Part; 30] = [
     },
     Part { activate: Some(Ui::ssh_activate), ..NO_PART },
     Part {
-        kind: Some(Ui::upper_kind),
-        label: Some(Ui::upper_label),
-        value: Some(Ui::upper_value),
-        adjust: Some(Ui::upper_adjust),
-        activate: Some(Ui::upper_activate),
-        options: Some(Ui::upper_options),
-        ..NO_PART
-    },
-    Part {
         kind: Some(Ui::bt_kind),
         label: Some(Ui::bt_label),
         value: Some(Ui::bt_value),
@@ -922,7 +910,6 @@ mod part_tests {
             Acquire,
             Measure,
             MeasAdd,
-            MeasHold,
             MeasPair,
             Dvm,
             Cursor,

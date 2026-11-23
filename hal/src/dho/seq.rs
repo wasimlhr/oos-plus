@@ -108,21 +108,14 @@ fn record_params(s: &Settings, st: &mut Vec<Step>) -> Result<hz::Params, String>
 }
 
 impl State {
-    /// State after a warm hand-over: the stock values, ADC in the mode of `app_mask`.
-    pub fn handover(app_mask: u32, cal_adc: Option<&adc::CalAdc>) -> State {
-        let mode = adc::mode_of_mask(app_mask).unwrap_or(0);
-        let mut a = adc::Adc::default();
-        if let Some(c) = cal_adc {
-            a.parameter(c, 0);
-            if mode != 0 {
-                a.channel_mode(c, mode);
-            }
-        }
+    /// State from the shadows of the SCU, the AFEs, the ADC and its mode; the TPU shadows are the stock edge values, and
+    /// nothing else has been written by OOS yet.
+    pub fn new(sh: scu::Shadows, afe: [afe::Afe; 4], adc: adc::Adc, mode: usize) -> State {
         State {
-            sh: scu::Shadows::HANDOVER,
+            sh,
             ts: tpu::Shadows::APP,
-            afe: [0, 1, 2, 3].map(afe::Afe::new),
-            adc: a,
+            afe,
+            adc,
             mode,
             gain: [1.0; 4],
             la_was_on: false,
@@ -134,6 +127,19 @@ impl State {
             zone_tabs: [None, None],
             zone_run: None,
         }
+    }
+
+    /// State after a warm hand-over: the stock values, ADC in the mode of `app_mask`.
+    pub fn handover(app_mask: u32, cal_adc: Option<&adc::CalAdc>) -> State {
+        let mode = adc::mode_of_mask(app_mask).unwrap_or(0);
+        let mut a = adc::Adc::default();
+        if let Some(c) = cal_adc {
+            a.parameter(c, 0);
+            if mode != 0 {
+                a.channel_mode(c, mode);
+            }
+        }
+        State::new(scu::Shadows::HANDOVER, [0, 1, 2, 3].map(afe::Afe::new), a, mode)
     }
 
     /// Configuration steps for `s` (ADC mode if the channel set changed, AFEs, trigger, acquisition registers).
@@ -673,23 +679,11 @@ impl State {
     /// Start of a hardware segmented recording: clear the first-trigger stamp, then the record arm of
     /// `record_frames(s, p)` frames with the interval of `s.segments`. Poll the progress with `seg::status`.
     pub fn record_steps(&mut self, s: &Settings, p: &hz::Params) -> Vec<Step> {
-        self.record_steps_at(s, 0, record_frames(s, p))
-    }
-
-    /// `record_steps` of `n` frames from ring index `first`. A record from index 0 clears the first-trigger stamp; one
-    /// in the upper frame memory continues a record and does not. The arm starts the stamp again anyway (verified on the
-    /// unit), so the caller reads it after the lower part (horizontal-config.md 1.8).
-    pub fn record_steps_at(&mut self, s: &Settings, first: u32, n: u32) -> Vec<Step> {
+        let n = record_frames(s, p);
         let iv = s.segments.map_or(0, |g| scu::interval_ticks(time_fs(g.interval)));
-        let mut st = vec![Step::Note(if first == 0 {
-            format!("segmented record: {} frames, interval {} x 6.4 ns", n, iv)
-        } else {
-            format!("segmented record: {} frames from frame {}, interval {} x 6.4 ns", n, first, iv)
-        })];
-        if first == 0 {
-            st.extend(scu::ts_first_clear(&mut self.sh).into_iter().map(Step::Wr));
-        }
-        st.extend(scu::record_arm_at(s.mask, &mut self.sh, first, n, iv).into_iter().map(Step::Wr));
+        let mut st = vec![Step::Note(format!("segmented record: {} frames, interval {} x 6.4 ns", n, iv))];
+        st.extend(scu::ts_first_clear(&mut self.sh).into_iter().map(Step::Wr));
+        st.extend(scu::record_arm(s.mask, &mut self.sh, n, iv).into_iter().map(Step::Wr));
         st
     }
 

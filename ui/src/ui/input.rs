@@ -29,9 +29,9 @@ pub struct Asks {
 
 /// What the input keeps between two events (ADR 0062).
 pub(super) struct State {
-    /// a channel key held on the front panel: channel, since when, and whether it was long enough for AC/DC already
-    /// (`panel_key`)
-    pub ch: Option<(usize, f64, bool)>,
+    /// a key held on the front panel that has a long press (a channel key, Measure): the key, since when, and whether
+    /// it was held long enough for its long press already (`panel_key`)
+    pub held: Option<(u8, f64, bool)>,
     /// a finger on the card of a channel that is on, since when (a long touch: AC/DC, as the key)
     pub card: Option<(usize, f64)>,
     /// when each knob turned last, for its acceleration (`knob_accel`)
@@ -45,7 +45,7 @@ pub(super) struct State {
 impl Default for State {
     fn default() -> State {
         State {
-            ch: None,
+            held: None,
             card: None,
             knob_t: [0.0; 16],
             zone_path: Vec::new(),
@@ -148,19 +148,19 @@ impl Ui {
     }
 
     /// A key of the front panel (the panel sends a key's code when it is pressed and 0 when it is let go): as `key`,
-    /// but a channel key acts when it is let go, and held for `LONG_PRESS` it switches the channel between AC and DC
-    /// coupling instead (at once, while still held). Scripts, the control FIFO and the web remote press keys through
-    /// `key`, as before.
+    /// but a key with a long press acts when it is let go, and held for `LONG_PRESS` it does its long press instead (at
+    /// once, while still held): a channel key switches the channel between AC and DC coupling, Measure adds the next
+    /// usual measurement. Scripts, the control FIFO and the web remote press keys through `key`, as before.
     pub fn panel_key(&mut self, k: u8) {
         let c = k.wrapping_sub(key::CH1) as usize;
-        if c < 4 && c < n_ch() {
-            // a second channel key while one is held: the held one counts as a short press
-            self.ch_release();
-            self.input.ch = Some((c, self.now, false));
+        if (c < 4 && c < n_ch()) || k == key::MEASURE {
+            // a second such key while one is held: the held one counts as a short press
+            self.held_release();
+            self.input.held = Some((k, self.now, false));
             return;
         }
-        if k == 0 || self.input.ch.is_some() {
-            self.ch_release();
+        if k == 0 || self.input.held.is_some() {
+            self.held_release();
         }
         self.key(k);
     }
@@ -172,18 +172,18 @@ impl Ui {
         self.toast(if self.m.fine_t { "Time base: fine steps" } else { "Time base: 1-2-5 steps" });
     }
 
-    /// A held channel key let go: its own action, unless it was held long enough for AC/DC.
-    fn ch_release(&mut self) {
-        if let Some((c, _, long)) = self.input.ch.take() {
+    /// A held key let go: its own action, unless it was held long enough for its long press.
+    fn held_release(&mut self) {
+        if let Some((k, _, long)) = self.input.held.take() {
             if !long {
-                self.key(key::CH1 + c as u8);
+                self.key(k);
             }
         }
     }
 
-    /// A channel key held for `LONG_PRESS`: AC/DC once; letting it go then does nothing more. A finger held on a
-    /// channel's card: in Default AC/DC as the key, as upstream OOS; in Minimal and Studio that channel's quick
-    /// actions (never a silent AC/DC). Either way the lift is no tap.
+    /// A key held for `LONG_PRESS`: its long press once (AC/DC for a channel key, a measurement for Measure); letting
+    /// it go then does nothing more. A finger held on a channel's card: in Default AC/DC as the key, as upstream OOS;
+    /// in Minimal and Studio that channel's quick actions (never a silent AC/DC). Either way the lift is no tap.
     pub(super) fn ch_hold_poll(&mut self) {
         if let Some((c, t)) = self.input.card {
             let still = self.touch.down
@@ -203,10 +203,14 @@ impl Ui {
                 }
             }
         }
-        if let Some((c, t, false)) = self.input.ch {
+        if let Some((k, t, false)) = self.input.held {
             if self.now - t >= LONG_PRESS {
-                self.input.ch = Some((c, t, true));
-                self.toggle_ac_dc(c);
+                self.input.held = Some((k, t, true));
+                if k == key::MEASURE {
+                    self.add_usual_meas();
+                } else {
+                    self.toggle_ac_dc(k.wrapping_sub(key::CH1) as usize);
+                }
             }
         }
     }
@@ -252,8 +256,7 @@ impl Ui {
         self.ensure_meas_own();
         self.results.on = false;
         self.xy = false;
-        self.mask_sw.mask = None;
-        self.mask_sw.reference = None;
+        self.mask_sw.forget();
         self.close_menu();
         self.dirty_map = true;
         self.toast("Default set-up");
@@ -412,15 +415,24 @@ impl Ui {
         } else if self.menu_open && self.menu == MenuId::Channel(c) {
             m.ch[c].on = false;
             self.menu_open = false;
-            if let Some(o) = (0..NCH).find(|&i| self.m.ch[i].on) {
-                self.m.active = o;
-            }
+            self.select_a_channel_that_is_on(c);
         } else {
             m.active = c;
             self.open_menu(MenuId::Channel(c));
         }
         self.select_workspace_source(WaveId::Ch(if self.m.ch[c].on { c } else { self.m.active }));
         self.settings_changed();
+    }
+
+    /// After channel `c` went off: when it was the selected one, the first channel still on is selected, so the
+    /// vertical knobs act on a channel that is shown (#523). The key and the menu's On both come here.
+    pub(super) fn select_a_channel_that_is_on(&mut self, c: usize) {
+        if self.m.active != c || self.m.ch[c].on {
+            return;
+        }
+        if let Some(o) = (0..NCH).find(|&i| self.m.ch[i].on) {
+            self.select_workspace_source(WaveId::Ch(o));
+        }
     }
 
     /// The LA and generator keys: their page, or a note when the scope has no such port.
@@ -545,6 +557,10 @@ impl Ui {
                 }
                 let items = self.items(self.menu);
                 if !self.menu_open {
+                    // multi 2 turned over a Bode plot moves its cursor, so the menu need not cover it (#50)
+                    if base == 0xa0 && !push && self.bode_cursor_step(dir * acc) {
+                        return;
+                    }
                     self.open_menu(MenuId::Main);
                     return;
                 }
@@ -611,7 +627,6 @@ impl Ui {
     fn second_finger_down(&mut self) {
         if self.workspace_cancel_hold() {
             self.studio.ctx = None;
-            if self.menu_open && self.menu == MenuId::MeasHold { self.close_menu(); }
         }
         self.studio.md.hold = None;
         self.studio.sz.press = None;
@@ -816,7 +831,6 @@ impl Ui {
             y0: y,
             x,
             y,
-            t0: self.now,
             held: false,
             drag: Drag::None,
             start_offset: 0.0,
@@ -1213,9 +1227,8 @@ impl Ui {
         if !was.0 {
             return;
         }
-        // the short menu is already open; this lift runs its shortcut instead of a tap
+        // a hold already acted: this lift is no tap
         if was.4 {
-            self.meas_hold_up(x, y);
             return;
         }
         if let Drag::Zone(k) = was.1 {
@@ -1553,8 +1566,6 @@ impl Ui {
         for (b, _, r) in self.top_buttons() {
             if self.top_hit(r).contains(x, y) {
                 return match b {
-                    // a tap opens the measurement list; a press-and-hold opens the short menu (meas_hold_tick)
-                    TopBtn::Menu(MenuId::Measure) => self.open_meas_list(),
                     // as the CURSOR key: the cursors come on with their sheet
                     TopBtn::Menu(MenuId::Cursor) if self.m.compact() => self.key(key::CURSOR),
                     TopBtn::Menu(id) => self.toggle_menu(id),

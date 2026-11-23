@@ -186,9 +186,6 @@ impl Ui {
             eprintln!("oos-ui: {}: decoders.off leaves out every decoder, {} stays", path.display(), name);
         }
         self.sys_path = Some(path);
-        // the optional memory: the switch and the last probe's answer on this unit (`mem.upper`, `mem.upper.found`,
-        // upper.rs); the board uses it only with both, `mem.upper = on` alone (an image's default) is off
-        crate::board::Board::set_upper_mem(crate::board::board(), self.sys.mem_upper, self.sys.mem_upper_found);
         self.net_name_init();
         self.clock_known = std::path::Path::new(CLOCK_SET).exists();
         self.apply_tz();
@@ -393,9 +390,13 @@ impl Ui {
     pub(super) fn time_kind(it: Item) -> Option<Kind> {
         match it {
             Item::NtpSync | Item::TimeSet => Some(Kind::Action),
-            Item::TimeNow | Item::NtpStatus | Item::NtpOn | Item::NtpServer | Item::TimeZone | Item::NetRetry10 => {
-                Some(Kind::Choice)
-            }
+            Item::TimeNow
+            | Item::NtpStatus
+            | Item::NtpOn
+            | Item::NtpServer
+            | Item::TimeZone
+            | Item::NetRetry10
+            | Item::NetShowAddr => Some(Kind::Choice),
             _ => None,
         }
     }
@@ -416,6 +417,7 @@ impl Ui {
             Item::TimeZone => "Time zone",
             Item::TimeSet => "Set the clock",
             Item::NetRetry10 => "10 Mbit retry",
+            Item::NetShowAddr => "Show address",
             _ => return None,
         })
     }
@@ -437,6 +439,7 @@ impl Ui {
             Item::NtpStatus => self.ntp_status(),
             Item::TimeZone => self.zone_label(),
             Item::NetRetry10 => on_off(self.sys.eth_retry_10m),
+            Item::NetShowAddr => on_off(self.sys.show_addr),
             _ => return None,
         })
     }
@@ -480,7 +483,7 @@ impl Ui {
 
     pub(super) fn time_options(&self, it: Item) -> Option<Vec<String>> {
         Some(match it {
-            Item::NtpOn | Item::NetRetry10 => vec!["Off".into(), "On".into()],
+            Item::NtpOn | Item::NetRetry10 | Item::NetShowAddr => vec!["Off".into(), "On".into()],
             Item::NtpServer => self.server_options(),
             Item::TimeZone => self.zone_options(),
             Item::TimeNow | Item::NtpStatus => Vec::new(),
@@ -519,6 +522,10 @@ impl Ui {
             }
             Item::NetRetry10 => {
                 self.sys.eth_retry_10m = !self.sys.eth_retry_10m;
+                self.sys_save();
+            }
+            Item::NetShowAddr => {
+                self.sys.show_addr = !self.sys.show_addr;
                 self.sys_save();
             }
             Item::NtpServer => {

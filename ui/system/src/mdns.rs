@@ -403,6 +403,8 @@ mod tests {
         assert_eq!(m.qs[0].name, dname(&["a", "local"]));
         assert_eq!(m.an[0].name, dname(&["b", "local"]));
         assert_eq!(m.an[0].canon, vec![10, 0, 0, 1]);
+        assert_eq!((m.id, m.flags, m.qs[0].qtype, m.an[0].rtype, m.an[0].ttl), (1, 0, 1, 1, 120));
+        assert!((0..b.len()).all(|n| parse(&b[..n]).is_none()));
         // a pointer to itself, one forward, two pointing at each other
         let head = vec![0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0];
         for name in [vec![0xc0, 12], vec![0xc0, 14, 0], vec![1, b'x', 0xc0, 12], vec![0xc0, 14, 0xc0, 12]] {

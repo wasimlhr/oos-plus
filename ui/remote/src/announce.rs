@@ -12,6 +12,8 @@
 #[cfg(unix)]
 use std::net::SocketAddrV4;
 use std::net::{Ipv4Addr, UdpSocket};
+#[cfg(unix)]
+use std::os::fd::FromRawFd;
 use std::time::{Duration, Instant};
 
 // the Windows desktop build of oos-plus: its own sockets and interface list
@@ -19,6 +21,8 @@ use std::time::{Duration, Instant};
 mod windows;
 #[cfg(windows)]
 use windows::{addresses, host_label, join, mcast_socket, send_mcast};
+#[cfg(unix)]
+use oos_system::system::set_socket_option;
 
 const MDNS_PORT: u16 = 5353;
 const GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
@@ -354,17 +358,21 @@ fn prefer_primary(addresses: Vec<[u8; 4]>, primary: Option<[u8; 4]>) -> Vec<[u8;
 }
 
 #[cfg(unix)]
+/// Port 5353, shared with a responder of the system: close-on-exec, SO_REUSEADDR and SO_REUSEPORT before the bind;
+/// then multicast TTL 255, loop on, non-blocking. An option that fails is left as it is.
 fn mcast_socket() -> Option<UdpSocket> {
-    unsafe {
+    // SAFETY: the descriptor is owned by the UdpSocket from its creation on (dropped: closed); the address structure is
+    // fully initialised and lives through the bind
+    let sock = unsafe {
         let fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
         if fd < 0 {
             return None;
         }
         // close-on-exec as SOCK_CLOEXEC would set it (Linux only; the host build runs on macOS too)
         libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
-        let one: libc::c_int = 1;
+        let sock = UdpSocket::from_raw_fd(fd);
         for opt in [libc::SO_REUSEADDR, libc::SO_REUSEPORT] {
-            libc::setsockopt(fd, libc::SOL_SOCKET, opt, &one as *const _ as *const _, 4);
+            let _ = set_socket_option(&sock, libc::SOL_SOCKET, opt, 1);
         }
         // zeroed first: macOS has a `sin_len` field Linux lacks
         let mut addr: libc::sockaddr_in = std::mem::zeroed();
@@ -373,17 +381,14 @@ fn mcast_socket() -> Option<UdpSocket> {
         if libc::bind(fd, &addr as *const _ as *const libc::sockaddr, std::mem::size_of_val(&addr) as libc::socklen_t)
             != 0
         {
-            libc::close(fd);
             return None;
         }
-        let ttl: libc::c_int = 255;
-        libc::setsockopt(fd, libc::IPPROTO_IP, libc::IP_MULTICAST_TTL, &ttl as *const _ as *const _, 4);
-        libc::setsockopt(fd, libc::IPPROTO_IP, libc::IP_MULTICAST_LOOP, &one as *const _ as *const _, 4);
-        let flags = libc::fcntl(fd, libc::F_GETFL);
-        libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-        use std::os::fd::FromRawFd;
-        Some(UdpSocket::from_raw_fd(fd))
-    }
+        sock
+    };
+    let _ = sock.set_multicast_ttl_v4(255);
+    let _ = sock.set_multicast_loop_v4(true);
+    let _ = sock.set_nonblocking(true);
+    Some(sock)
 }
 
 #[cfg(unix)]
@@ -395,10 +400,8 @@ fn join(sock: &UdpSocket, addr: [u8; 4]) {
 #[cfg(unix)]
 fn send_mcast(sock: &UdpSocket, pkt: &[u8], iface: Option<[u8; 4]>) {
     if let Some(a) = iface {
-        let ip = libc::in_addr { s_addr: u32::from(Ipv4Addr::from(a)).to_be() };
-        unsafe {
-            libc::setsockopt(sock.as_raw_fd(), libc::IPPROTO_IP, libc::IP_MULTICAST_IF, &ip as *const _ as *const _, 4);
-        }
+        // IP_MULTICAST_IF with the in_addr's four bytes, in network order
+        let _ = set_socket_option(sock, libc::IPPROTO_IP, libc::IP_MULTICAST_IF, i32::from_ne_bytes(a));
     }
     let _ = sock.send_to(pkt, SocketAddrV4::new(GROUP, MDNS_PORT));
 }
@@ -551,9 +554,6 @@ impl Drop for Announcer {
         }
     }
 }
-
-#[cfg(unix)]
-use std::os::fd::AsRawFd;
 
 #[cfg(test)]
 mod tests {

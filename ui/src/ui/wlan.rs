@@ -1309,7 +1309,9 @@ mod tests {
     #[test]
     fn network_page_says_what_is_there() {
         let mut ui = crate::ui::testkit::demo_ui();
-        ui.tap(950, 20);
+        // the box is as wide as what it shows: its middle, not a fixed place
+        let n = ui.net_box();
+        ui.tap(n.x + n.w / 2, n.y + n.h / 2);
         assert!(ui.menu_open && ui.menu == MenuId::Network);
         assert_eq!(ui.value(Item::NetWeb), "not connected");
         assert_eq!(ui.net_value(Item::NetWlan), "no stick");
@@ -1325,8 +1327,9 @@ mod tests {
         let d = ui.dlg_layout().unwrap();
         let row = d.rows.iter().find(|r| r.it == Item::NetWlan).unwrap();
         assert!(ui.fonts().m.width(&ui.net_value(Item::NetWlan)) <= row.ctrl.w, "{}", ui.net_value(Item::NetWlan));
-        ui.tap(950, 20);
-        assert!(!ui.menu_open);
+        let n = ui.net_box();
+        ui.tap(n.x + n.w / 2, n.y + n.h / 2);
+        assert!(!ui.menu_open, "a second tap on the box closes its page");
     }
 
     #[cfg(windows)]

@@ -34,9 +34,9 @@ const TYPES: [(&str, &str); 7] = [
     ("sk-ecdsa-sha2-nistp256@openssh.com", "ecdsa-sk"),
 ];
 
-/// The SSH folder: on the data partition when it is there (it has `/oos/setups`, like `sysconf::default_path`).
+/// The SSH folder: on the data partition when it is there (`sysconf::data_partition`).
 pub fn dir() -> PathBuf {
-    if Path::new("/oos/setups").is_dir() {
+    if crate::sysconf::data_partition() {
         "/oos/ssh".into()
     } else {
         "/tmp/oos-ssh".into()

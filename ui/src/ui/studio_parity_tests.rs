@@ -417,6 +417,7 @@ fn default_kind(d: &Ui, menu: MenuId, it: Item) -> Option<RowKind> {
     let _ = menu;
     Some(match &row.ctl {
         Ctl::Seg(o, _) if o.len() == 2 && o[0] == "Off" && o[1] == "On" => RowKind::Toggle,
+        Ctl::Switch(_) => RowKind::Toggle,
         Ctl::Seg(..) => RowKind::Choice,
         Ctl::Pick => RowKind::Pick,
         Ctl::Value => RowKind::Number,

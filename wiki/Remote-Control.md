@@ -65,7 +65,7 @@ Every tool with its arguments: [docs/http.md](https://github.com/wasimlhr/oos-pl
 
 ## Ethernet
 
-Tap the network box at the top right: it shows the addresses of Ethernet and WLAN and the address of the web remote.
+Tap the network box at the top right: it shows the addresses of Ethernet and WLAN and the address of the web remote. The box itself shows only its name and a green dot (or a dash without a link) by default, so a picture of the screen does not pass the address on; **System > Network > Show address** shows the address in the box.
 
 **From 0.1.12 the scope has a name:** `http://dho924s-123456.local:8080` (model and serial number) reaches it on any computer that speaks mDNS (macOS, Linux with Avahi, Windows 10 and later), also when it only has a link-local address on a cable straight to the computer. Computers that browse find the web remote, SCPI and VXI-11 (DNS-SD). **System > Network > Remote services** switches mDNS off and changes the Name, which is also the host name the scope sends to DHCP, so a router lists it. When another device has the name already, the scope takes `<name>-2`.
 

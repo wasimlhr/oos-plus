@@ -8,7 +8,7 @@
 //! Only the hexadecimal forms reach wpa_supplicant (SSID bytes, the 256-bit key derived here), so no name or password
 //! can break out of a command or of the saved file, and the password itself is never stored.
 
-use crate::update::hash::sha1;
+use crate::update::hash::{sha1, unhex};
 use std::io;
 #[cfg(unix)]
 use std::os::unix::net::UnixDatagram;
@@ -153,14 +153,12 @@ pub fn unescape(s: &str) -> Vec<u8> {
             b't' => out.push(b'\t'),
             b'e' => out.push(0x1b),
             b'x' => {
-                let d: Vec<u8> =
-                    b[i..].iter().take(2).map_while(|c| (*c as char).to_digit(16).map(|v| v as u8)).collect();
-                match d[..] {
-                    [h, l] => out.push(h << 4 | l),
-                    [l] => out.push(l),
+                let d = b[i..].iter().take(2).take_while(|c| c.is_ascii_hexdigit()).count();
+                match unhex(&format!("{:0>2}", &s[i..i + d])) {
+                    Some(v) if d > 0 => out.extend(v),
                     _ => out.push(b'x'),
                 }
-                i += d.len();
+                i += d;
             }
             c => out.push(c),
         }
@@ -212,8 +210,8 @@ pub fn parse_networks(t: &str) -> Vec<Saved> {
 /// STATUS (`key=value` lines).
 pub fn parse_status(t: &str) -> Status {
     let mut s = Status::default();
-    for l in t.lines() {
-        match l.split_once('=') {
+    for (_, _, kv) in crate::key_value_lines(t, |l| l) {
+        match kv {
             Some(("wpa_state", v)) => s.state = v.into(),
             Some(("ssid", v)) => s.ssid = unescape(v),
             Some(("ip_address", v)) => s.ip = v.into(),
@@ -432,7 +430,7 @@ mod tests {
         // cut off by a broken peer: no panic, nothing invented
         assert_eq!(unescape("a\\"), b"a\\");
         assert_eq!(unescape(r"\xg"), b"xg");
-        assert_eq!(unescape(r"\x4"), b"\x04");
+        assert_eq!(unescape(r"\xC3\xa4\x4g\x\x4"), b"\xc3\xa4\x04gx\x04");
         assert_eq!(name(b"a\xff\n"), "a\u{fffd}?");
     }
 
@@ -451,6 +449,8 @@ mod tests {
         assert!(s.connected());
         assert_eq!((s.ssid.as_slice(), s.ip.as_str(), s.freq), (&b"Labor"[..], "192.168.1.5", 2437));
         assert!(!parse_status("wpa_state=SCANNING\n").connected());
+        // nothing trimmed (an SSID may start or end with a blank), the last of a repeated key, `#` in a value
+        assert_eq!(parse_status("ssid=a\n ssid=b\nssid =c\n#ssid=d\nssid= e#f \n").ssid, b" e#f ");
         assert_eq!(parse_signal("RSSI=-54\nLINKSPEED=65\n"), Some(-54));
         assert_eq!(parse_signal("FAIL\n"), None);
     }

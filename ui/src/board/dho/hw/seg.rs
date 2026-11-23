@@ -17,135 +17,6 @@ use oos_hal::dho::hz;
 #[cfg(any(target_os = "linux", test))]
 use oos_hal::dho::seq::Settings;
 
-thread_local! {
-    #[cfg(test)]
-    static LOW_FORCE: std::cell::Cell<Option<u32>> = const { std::cell::Cell::new(None) };
-}
-
-/// Sets the frames `low_frames` allows for the calling thread (tests: the live run's recording into the upper frame
-/// memory with small segments, `liverun.rs`).
-#[cfg(test)]
-pub(super) fn force_low_frames(n: Option<u32>) {
-    LOW_FORCE.with(|f| f.set(n));
-}
-
-/// Frames a recording of segments of `seg` bursts keeps below 256 MiB: `hz::max_record_frames`.
-pub(super) fn low_frames(seg: u32) -> u32 {
-    #[cfg(test)]
-    if let Some(n) = LOW_FORCE.with(|f| f.get()) {
-        return n.min(oos_hal::dho::hz::max_record_frames(seg));
-    }
-    oos_hal::dho::hz::max_record_frames(seg)
-}
-
-/// The frame memory above 256 MiB per segment size, as `seg::probe_upper` found it: kept for the run of the program
-/// (horizontal-config.md 1.8). System > Probe optional memory fills it for every size of its plan; a recording probes a
-/// size that is not in it first.
-static UPPER: std::sync::Mutex<Vec<(u32, bool)>> = std::sync::Mutex::new(Vec::new());
-
-/// The keys of system.conf as the screen gave them (`set_upper_key`): `mem.upper` (the optional memory in use) and
-/// `mem.upper.found` (the last probe's answer on this unit, None: never probed). One per test thread in tests, so a test
-/// that switches them does not reach the others.
-type Key = (bool, Option<bool>);
-#[cfg(not(test))]
-static KEY: std::sync::Mutex<Key> = std::sync::Mutex::new((false, None));
-thread_local! {
-    #[cfg(test)]
-    static KEY: std::cell::Cell<Key> = const { std::cell::Cell::new((false, None)) };
-}
-
-/// Sets the keys (`Board::set_upper_mem`): read at each recording, by `seg_max` and by System info.
-#[cfg(not(test))]
-pub fn set_upper_key(on: bool, found: Option<bool>) {
-    *crate::board::lock(&KEY) = (on, found);
-}
-
-/// Sets the keys for the calling thread (`Board::set_upper_mem`).
-#[cfg(test)]
-pub fn set_upper_key(on: bool, found: Option<bool>) {
-    KEY.with(|k| k.set((on, found)));
-}
-
-/// The keys (`set_upper_key`).
-#[cfg(not(test))]
-fn upper_key() -> Key {
-    *crate::board::lock(&KEY)
-}
-
-/// The keys of the calling thread (`set_upper_key`).
-#[cfg(test)]
-fn upper_key() -> Key {
-    KEY.with(|k| k.get())
-}
-
-/// The optional memory for System info: in use with the switch on (missing once every probe of this run said no);
-/// off, with what the last probe found.
-pub fn upper_mem() -> crate::board::UpperMem {
-    upper_state(upper_key(), &crate::board::lock(&UPPER))
-}
-
-/// `upper_mem` for the keys `key` and the probes `probed` of this run. On counts only with a probe's yes on this unit
-/// (`mem.upper = on` alone, from an image's defaults or by hand, is not in use).
-fn upper_state(key: Key, probed: &[(u32, bool)]) -> crate::board::UpperMem {
-    use crate::board::UpperMem;
-    match key {
-        (true, Some(true)) if probed.is_empty() || probed.iter().any(|e| e.1) => UpperMem::InUse,
-        (true, Some(true)) | (_, Some(false)) => UpperMem::Missing,
-        (false, Some(true)) => UpperMem::Off,
-        (_, None) => UpperMem::NotProbed,
-    }
-}
-
-/// Whether segments of `seg` bursts fit above 256 MiB, once probed.
-pub(super) fn upper_known(seg: u32) -> Option<bool> {
-    crate::board::lock(&UPPER).iter().find(|e| e.0 == seg).map(|e| e.1)
-}
-
-/// Whether a recording of segments of `seg` bursts may go above 256 MiB: the switch on after a probe's yes on this
-/// unit, and no probe of this run said no for the size (a size not probed yet is probed before the recording,
-/// `upper_probed`). Off, or on without that yes: the lower 256 MiB only, and no probe.
-pub(super) fn upper_allowed(seg: u32) -> bool {
-    upper_key() == (true, Some(true)) && upper_known(seg) != Some(false)
-}
-
-/// Keeps a probe's answer for segments of `seg` bursts, in place of an earlier one.
-#[cfg(any(target_os = "linux", test))]
-fn remember(seg: u32, v: bool) {
-    eprintln!("oos-ui hw: segments of {} bursts above 256 MiB: {}", seg, if v { "yes" } else { "no" });
-    let mut u = crate::board::lock(&UPPER);
-    u.retain(|e| e.0 != seg);
-    u.push((seg, v));
-}
-
-/// The segments of a recording of `want` that `low` frames below 256 MiB allow (`up`: and as many above it): all of
-/// them and those of the lower part. None, (0, 0), where not one segment fits below the top 1 M bursts that a record
-/// must not reach (segments of 100 M and 125 M points, horizontal-config.md 1.8).
-fn parts(want: u32, low: u32, up: bool) -> (u32, u32) {
-    if low == 0 {
-        return (0, 0);
-    }
-    let total = want.max(1).min(if up { 2 * low } else { low });
-    (total, total.min(low))
-}
-
-/// The probe of the upper frame memory for the segments of `p`, once per segment size: the check before the first
-/// recording of a size that System > Probe optional memory has not probed in this run.
-#[cfg(any(target_os = "linux", test))]
-fn upper_probed<B: oos_hal::dho::bus::Bus, R: std::io::Read, C: oos_hal::dho::boot::Clock>(
-    (s, p): (&Settings, &hz::Params),
-    state: &mut oos_hal::dho::seq::State,
-    bar: &mut B,
-    c2h: &mut R,
-    clock: &mut C,
-) -> Result<bool, String> {
-    if let Some(v) = upper_known(p.seg) {
-        return Ok(v);
-    }
-    let v = oos_hal::dho::seg::probe_upper(state, &seg_read_plan(s, p), p, bar, c2h, clock)?;
-    remember(p.seg, v);
-    Ok(v)
-}
-
 /// A hardware segmented recording.
 #[cfg(any(target_os = "linux", test))]
 pub(super) struct SegRun {
@@ -159,20 +30,6 @@ pub(super) struct SegRun {
     /// read the frames into the queue too (the recording ended by itself, not by STOP)
     deliver: bool,
     tl: oos_hal::dho::seg::Timeline,
-    /// segment size and the segments of the lower part; the rest goes above 256 MiB once the lower part is full
-    seg: u32,
-    low: u32,
-    upper: bool,
-    /// the first-trigger stamp of the lower part: an arm starts the stamp again (horizontal-config.md 1.8)
-    tag: Option<u64>,
-}
-
-#[cfg(any(target_os = "linux", test))]
-impl SegRun {
-    /// Ring index of segment `i` (`hz::record_frame`).
-    fn frame(&self, i: u32) -> u32 {
-        hz::record_frame(self.seg, self.low, i)
-    }
 }
 
 /// Ends a recording that is still in the FPGA before anything else writes it, and forgets the segments (their settings
@@ -219,35 +76,22 @@ pub(super) fn seg_step<B: oos_hal::dho::bus::Bus, R: std::io::Read, C: oos_hal::
         if run.as_ref().is_some_and(|r| r.recording) {
             seg::stop(state, bar, c2h, clock)?;
         }
-        // below 256 MiB first; more segments than fit there go above it where the unit has that memory
-        let want = s.segments.map_or(0, |g| g.n);
-        let low = low_frames(p.seg);
-        let up = want > low && low >= 2 && upper_allowed(p.seg) && upper_probed((s, p), state, bar, c2h, clock)?;
-        let (total, low) = parts(want, low, up);
-        if total == 0 {
-            eprintln!("oos-ui hw: segments of {} bursts do not fit below the reserved top: none recorded", p.seg);
-        } else {
-            seg::start_at(state, s, bar, c2h, clock, 0, low)?;
-        }
+        let total = seg::start(state, s, p, bar, c2h, clock)?;
         *run = Some(SegRun {
             run: cmd,
             n: total,
-            recording: total > 0,
+            recording: true,
             count: 0,
             next: 0,
             deliver: true,
             tl: seg::Timeline::new(None),
-            seg: p.seg,
-            low,
-            upper: false,
-            tag: None,
         });
         let mut g = lock(out);
         g.seg = crate::board::HwSeg {
             run: g.seg.run,
             running: g.seg.running,
             done_run: cmd,
-            phase: if total > 0 { SegPhase::Recording } else { SegPhase::Done },
+            phase: SegPhase::Recording,
             total,
             ..Default::default()
         };
@@ -258,27 +102,18 @@ pub(super) fn seg_step<B: oos_hal::dho::bus::Bus, R: std::io::Read, C: oos_hal::
         return Ok(());
     };
     if r.recording {
-        let part = if r.upper { r.n - r.low } else { r.low };
-        let x = seg::status(bar, part);
-        let recorded = x.recorded + if r.upper { r.low } else { 0 };
-        lock(out).seg.recorded = recorded;
-        if !x.complete(part) && running {
+        let x = seg::status(bar, r.n);
+        lock(out).seg.recorded = x.recorded;
+        if !x.complete(r.n) && running {
             clock.sleep_us(10000);
             return Ok(());
         }
-        if !r.upper && r.n > r.low && running {
-            // the lower part is full: the rest above 256 MiB; the times count from the lower part's first trigger
-            r.tag = seg::first_trigger(bar);
-            seg::start_at(state, s, bar, c2h, clock, hz::upper_first_frame(r.seg), r.n - r.low)?;
-            r.upper = true;
-            return Ok(());
-        }
-        let tag = if r.upper { r.tag } else { seg::first_trigger(bar) };
+        let tag = seg::first_trigger(bar);
         seg::stop(state, bar, c2h, clock)?;
-        (r.recording, r.count, r.next, r.deliver, r.tl) = (false, recorded, 0, running, seg::Timeline::new(tag));
+        (r.recording, r.count, r.next, r.deliver, r.tl) = (false, x.recorded, 0, running, seg::Timeline::new(tag));
         eprintln!(
-            "oos-ui hw: segments: {} of {} recorded ({} below 256 MiB), 0x4034 {:#x}, first-trigger stamp {:?}",
-            recorded, r.n, r.low, x.fsm, tag
+            "oos-ui hw: segments: {} of {} recorded, 0x4034 {:#x}, first-trigger stamp {:?}",
+            x.recorded, r.n, x.fsm, tag
         );
         lock(out).seg.phase = if r.count == 0 { SegPhase::Done } else { SegPhase::Reading };
         return Ok(());
@@ -287,16 +122,13 @@ pub(super) fn seg_step<B: oos_hal::dho::bus::Bus, R: std::io::Read, C: oos_hal::
     let fb = oos_hal::dho::seq::frame_bytes(&rs, p);
     if r.next < r.count {
         r.deliver &= running;
-        // a batch stays on one side of 256 MiB: its frames are consecutive in the ring
         let cnt = rs.frames.min(r.count - r.next);
-        let cnt = if r.next < r.low { cnt.min(r.low - r.next) } else { cnt };
-        let k0 = r.frame(r.next);
         if r.deliver && lock(out).queue.len() + cnt as usize > crate::board::QUEUE_MAX {
             // the screen has not taken the last batch yet
             clock.sleep_us(5000);
             return Ok(());
         }
-        let st = seg::stamps(state, &rs, p, bar, c2h, clock, k0, cnt)?;
+        let st = seg::stamps(state, &rs, p, bar, c2h, clock, r.next, cnt)?;
         if r.next == 0 {
             // hardware check 5.3: header words 5..7 against the latch, frame by frame
             for (k, x) in st.iter().take(8).enumerate() {
@@ -306,7 +138,7 @@ pub(super) fn seg_step<B: oos_hal::dho::bus::Bus, R: std::io::Read, C: oos_hal::
         let times: Vec<Option<f64>> = st.iter().map(|x| r.tl.push(*x)).collect();
         let mut frames = Vec::new();
         if r.deliver {
-            seg::read(state, &rs, p, bar, c2h, dma, clock, k0, cnt)?;
+            seg::read(state, &rs, p, bar, c2h, dma, clock, r.next, cnt)?;
             frames = dma
                 .data()
                 .chunks_exact(fb)
@@ -335,7 +167,7 @@ pub(super) fn seg_step<B: oos_hal::dho::bus::Bus, R: std::io::Read, C: oos_hal::
         Some(k) if k < r.count => {
             lock(out).seg.want = None;
             let one = oos_hal::dho::seg::read_settings(&rs, 1);
-            seg::read(state, &one, p, bar, c2h, dma, clock, r.frame(k), 1)?;
+            seg::read(state, &one, p, bar, c2h, dma, clock, k, 1)?;
             *n += 1;
             let f = Frame { stamp, ..decode(&dma.data()[..fb.min(dma.data().len())], &one, p, *n) };
             lock(out).seg.shown = Some((k, f));
@@ -344,105 +176,4 @@ pub(super) fn seg_step<B: oos_hal::dho::bus::Bus, R: std::io::Read, C: oos_hal::
         None => clock.sleep_us(10000),
     }
     Ok(())
-}
-
-#[cfg(any(target_os = "linux", test))]
-impl<P: super::port::Port> super::Loop<P> {
-    /// System > Probe optional memory (`Shared::upper_want`): the probe of each set-up of `plan`, one segment size after
-    /// the other, as before a recording: nothing armed, no segments recorded, no stream. The answer to request `n` goes
-    /// to `Shared::upper_probed`, and the next pass configures the UI's settings again. The probe writes frames: the
-    /// record of a STOP is not read again after it.
-    pub(super) fn probe_upper(&mut self, n: u64, plan: &[Settings]) {
-        super::plan::disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
-        seg_abort(&mut self.segrun, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock, &self.out);
-        self.slow.stop(&mut self.state, &mut self.bar);
-        self.stop.last_batch = None;
-        let got: Result<Vec<(u32, bool)>, String> = plan.iter().map(|s| self.probe_one(s)).collect();
-        self.config.current = None;
-        super::report(
-            &self.out,
-            match &got {
-                Ok(v) => {
-                    format!("optional memory: {} of {} segment sizes held", v.iter().filter(|e| e.1).count(), v.len())
-                }
-                Err(e) => format!("optional memory: probe stopped: {}", e),
-            },
-        );
-        lock(&self.out).upper_probed = Some((n, got));
-    }
-
-    /// The probe for the segment size of the set-up `s` (`plan`'s): configured, then probed; its size and answer.
-    fn probe_one(&mut self, s: &Settings) -> Result<(u32, bool), String> {
-        let s = &Settings { afe: self.program_afe, ..s.clone() };
-        let (steps, p) = self.state.configure(s, self.cal.as_ref(), self.cal_adc.as_ref())?;
-        super::execute::<P>(
-            &steps,
-            &mut self.bar,
-            self.afe_bus.as_mut(),
-            &mut self.c2h,
-            &mut self.lines,
-            &mut self.clock,
-        )?;
-        let v = oos_hal::dho::seg::probe_upper(
-            &mut self.state,
-            &seg_read_plan(s, &p),
-            &p,
-            &mut self.bar,
-            &mut self.c2h,
-            &mut self.clock,
-        )?;
-        remember(p.seg, v);
-        Ok((p.seg, v))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::parts;
-
-    // Break it catches: a segment that does not fit below the reserved top recorded anyway (it would reach the top
-    // 1 M bursts), the upper part used without the probe's yes, more segments than both parts hold.
-    #[test]
-    fn parts_of_a_recording() {
-        assert_eq!(parts(1000, 0, true), (0, 0), "100 M / 125 M points: nothing");
-        assert_eq!(parts(6, 3, false), (3, 3));
-        assert_eq!(parts(6, 3, true), (6, 3));
-        assert_eq!(parts(10, 3, true), (6, 3));
-        assert_eq!(parts(2, 3, true), (2, 2));
-        assert_eq!(parts(0, 3, false), (1, 1), "at least one");
-    }
-
-    // Break it catches: the optional memory used or shown in use with the switch off (ADR 0010: off by default; the
-    // user switches it off), a size that a probe of this run said no for used anyway, System info that says "in use"
-    // when every probe said no, or that forgets a found memory switched off; `mem.upper = on` without a probe's yes
-    // (an image's default) used or shown in use.
-    #[test]
-    fn the_switch_decides_and_a_no_of_this_run_holds() {
-        use super::{set_upper_key, upper_allowed, upper_state};
-        use crate::board::UpperMem;
-        assert_eq!(upper_state((false, None), &[]), UpperMem::NotProbed);
-        assert_eq!(upper_state((false, None), &[(256, true)]), UpperMem::NotProbed);
-        assert_eq!(upper_state((false, Some(true)), &[(256, true)]), UpperMem::Off, "present, switched off");
-        assert_eq!(upper_state((false, Some(false)), &[]), UpperMem::Missing);
-        assert_eq!(upper_state((true, Some(true)), &[]), UpperMem::InUse, "on: sizes probed at their first recording");
-        assert_eq!(upper_state((true, Some(true)), &[(256, false), (2048, true)]), UpperMem::InUse);
-        assert_eq!(upper_state((true, Some(true)), &[(256, false)]), UpperMem::Missing);
-        // on without a probe's yes (an image's default, a line by hand): not in use
-        assert_eq!(upper_state((true, None), &[]), UpperMem::NotProbed);
-        assert_eq!(upper_state((true, Some(false)), &[]), UpperMem::Missing);
-        // a size no probe of this run has seen (the table is the program's): allowed with the switch on only, whatever
-        // the last probe found
-        let seg = 1 << 30;
-        for (on, found, want) in [
-            (false, None, false),
-            (false, Some(true), false),
-            (true, None, false),
-            (true, Some(false), false),
-            (true, Some(true), true),
-        ] {
-            set_upper_key(on, found);
-            assert_eq!(upper_allowed(seg), want, "switch {} found {:?}", on, found);
-        }
-        set_upper_key(false, None);
-    }
 }

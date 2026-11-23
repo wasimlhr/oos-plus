@@ -5,7 +5,7 @@
 //! BYValue`), the deltas (`XDELta|IXDelta|YDELta`) and `MEASure:INDicator`. A new `:CURSor` command goes into
 //! `cursor_cmd` here, with its line in docs/scpi.md and its query in ui/tests/scpi.txt (AGENTS.md).
 
-use super::{e, kw, parse_wave, shown, t, wave_tok, Scpi};
+use super::{e, kw, num64, parse_wave, shown, t, wave_tok, Scpi};
 use crate::model::*;
 use crate::ui::Ui;
 
@@ -227,7 +227,7 @@ impl Scpi {
             let v = if x { ui.cursor_time_at(frac) } else { ui.cursor_volt_at(frac) };
             return Some(e(v).into_bytes());
         }
-        let Some(v) = arg.trim().parse::<f64>().ok().filter(|v| v.is_finite()) else {
+        let Some(v) = num64(arg) else {
             self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
             return None;
         };

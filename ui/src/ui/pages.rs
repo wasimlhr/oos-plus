@@ -105,7 +105,7 @@ macro_rules! page {
     };
 }
 
-pub(super) const PAGES: [Page; 56] = [
+pub(super) const PAGES: [Page; 55] = [
     Page {
         id: MenuId::Network,
         title: |_, _| "Network".into(),
@@ -330,7 +330,6 @@ pub(super) const PAGES: [Page; 56] = [
         None,
     ),
     page!(MenuId::Measure, "Measure settings", |u, _| u.measure_items(), None),
-    page!(MenuId::MeasHold, "Add", |_, _| vec![Item::AddMeas], None),
     // its catalogue is a layout of its own (`catalog_dialog`), not rows
     page!(MenuId::MeasAdd, "Add measurement", |_, _| Vec::new(), None),
     // oos-plus pages: the full catalogue, the Add panel of Studio, the search, the measurement row sheet, the
@@ -549,7 +548,6 @@ pub(super) fn every_kind() -> Vec<MenuId> {
         Acquire,
         Measure,
         MeasAdd,
-        MeasHold,
         MeasPair,
         Dvm,
         Cursor,
@@ -599,8 +597,8 @@ pub(super) fn every_kind() -> Vec<MenuId> {
     ];
     for m in &all {
         match m {
-            Main | Channel(_) | ChMore(_) | Logger | Horizontal | Trigger | Acquire | Measure | MeasAdd | MeasHold
-            | MeasPair | Dvm | Cursor | Display | Utility | Math | Ref | Decode | Bus | Storage | Mask | Zone
+            Main | Channel(_) | ChMore(_) | Logger | Horizontal | Trigger | Acquire | Measure | MeasAdd | MeasPair
+            | Dvm | Cursor | Display | Utility | Math | Ref | Decode | Bus | Storage | Mask | Zone
             | Spectrum | Eye | Power | Magnetic | Inverter | Dpt | Identify | SelfCal | Network | Features
             | Decoders(_) | Remote | Ssh | Bluetooth | Time | Bode | Sim | SimAdvanced | Afg | BwTest | ViewMore
             | La | LaLines | LaPat | Windows | MeasSelected => {}

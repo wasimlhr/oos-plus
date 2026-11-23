@@ -122,6 +122,52 @@ fn a_save_does_not_follow_links_or_write_to_devices() {
     let _ = std::fs::remove_dir_all(&d);
 }
 
+// Break it catches: a setup line that is reported as refused but keeps the fields it read before the one it refused
+// (#120): `spec` kept the window of a line whose trace was out of range, `magnetic` the core of a line with an unknown
+// mode, `zone1` the switch of a line with a bad point. A refused line leaves the setup as it was, whichever field fails.
+#[test]
+fn a_refused_setup_line_leaves_the_setup_as_it_was() {
+    let (empty, none) = parse_setup_lenient("");
+    assert!(none.is_empty(), "{none:?}");
+    let mut changed = Vec::new();
+    for line in [
+        "bode_sweep = -1 false 2 Fall 1 2 3",
+        "bode_sweep = inf false 2 Fall 1 2 3",
+        "bode = 5 6 40 7 1 x 0 10.1.2.3:5555",
+        "spec = 2 1 2 3 Hann 4 0 true true",
+        "eye = 2",
+        "magnetic = R1 R2 5 1 1 1 Bh 0",
+        "inverter = Dq0 1 2 3 Phase 33 4 true off off off 1 1 0 false 0 1 16 0 false 0 1 2",
+        "zone1 = true 1 true 0.1",
+        "zone1 = true 4 true x:1",
+        "zone2 = true 5 true",
+        "dec_la = 1 a - - -",
+        "sim = 0 10",
+    ] {
+        let (m, bad) = parse_setup_lenient(&format!("{line}\n"));
+        assert_eq!(bad.len(), 1, "{line}: refused with one error: {bad:?}");
+        if m != empty {
+            changed.push(line);
+        }
+    }
+    assert!(changed.is_empty(), "refused, yet they changed the setup: {changed:#?}");
+    // the same lines with every field good are taken whole, as before
+    for (line, taken) in [
+        ("bode_sweep = 2 false 2 Fall 1 2 3", &|m: &Model| m.bode_sw_time == 2.0 && m.bode_ref == 3.0),
+        ("bode = 5 6 40 7 1 2 0 10.1.2.3:5555", &|m: &Model| m.bode_start == 5.0 && m.bode_addr == "10.1.2.3:5555"),
+        ("spec = 2 1 2 3 Hann 3 0 true true", &|m: &Model| m.spec_win == crate::math::WINDOWS[1] && m.spec_trace == 3),
+        ("eye = 2 1e6", &|m: &Model| m.eye_rate == 1e6),
+        ("magnetic = R1 R2 5 1 1 1 IPsi 0", &|m: &Model| m.mag_n == 5.0 && m.mag_ae == 1.0),
+        ("zone1 = true 4 true 0:1 1:1", &|m: &Model| m.zones[0].on && m.zones[0].pts.len() == 2),
+        ("dec_la = 1 0 15 16 -", &|m: &Model| m.dec_la[0] == Some(0)),
+        ("sim = 0 1", &|m: &Model| m.sim_preset == 0 && m.sim_slot == 1),
+    ] as [(&str, &dyn Fn(&Model) -> bool); 8]
+    {
+        let (m, bad) = parse_setup_lenient(&format!("{line}\n"));
+        assert!(bad.is_empty() && taken(&m), "{line}: a good line is taken whole: {bad:?}");
+    }
+}
+
 // Break it catches: the hardware average switch lost in a setup or on by default, the count not stored with it.
 #[test]
 fn average_settings_round_trip() {

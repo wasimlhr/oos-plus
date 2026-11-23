@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! Safe wrappers for the OS calls of oos-ui that need `unsafe`: thread placement (`sched_setaffinity`, and
-//! `SCHED_IDLE` with a nice fallback for the threads of the web remote), file-system statistics (`statvfs`) and setting
-//! the clock (`clock_settime`). Each wrapper holds its `unsafe` once, so its callers stay safe; each makes the same call
-//! with the same arguments the callers made before and leaves the choice to ignore, log or pass on an error to them. A
-//! new OS call goes here as a function of its own, behind the `cfg` its callers need, with a test where the host can
-//! run it.
+//! `SCHED_IDLE` with a nice fallback for the threads of the web remote), file-system statistics (`statvfs`), setting
+//! the clock (`clock_settime`) and the socket options std has no method for (`setsockopt`). Each wrapper holds its
+//! `unsafe` once, so its callers stay safe; each makes the same call with the same arguments the callers made before
+//! and leaves the choice to ignore, log or pass on an error to them. A new OS call goes here as a function of its own,
+//! behind the `cfg` its callers need, with a test where the host can run it.
 
 use std::io;
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
 
 /// The calling thread, and the threads and processes it starts after this, onto `cores`; nothing when it is empty.
 #[cfg(target_os = "linux")]
@@ -86,6 +88,22 @@ fn realtime_spec(unix: f64) -> libc::timespec {
     libc::timespec { tv_sec: unix.floor() as _, tv_nsec: ((unix - unix.floor()) * 1e9) as _ }
 }
 
+/// Socket option `name` of `level` to the int `value` (setsockopt with a pointer to it and its size). An option that
+/// takes an `in_addr` (IP_MULTICAST_IF) takes its four bytes as `i32::from_ne_bytes(address.octets())`.
+#[cfg(unix)]
+pub fn set_socket_option(s: &impl AsRawFd, level: libc::c_int, name: libc::c_int, value: i32) -> io::Result<()> {
+    // SAFETY: a pointer to an int of the size given, for the duration of the call
+    status(unsafe {
+        libc::setsockopt(
+            s.as_raw_fd(),
+            level,
+            name,
+            &value as *const i32 as *const libc::c_void,
+            std::mem::size_of::<i32>() as libc::socklen_t,
+        )
+    })
+}
+
 /// 0: Ok; otherwise the error the call left in errno.
 fn status(rc: libc::c_int) -> io::Result<()> {
     if rc == 0 {
@@ -139,6 +157,17 @@ mod tests {
         assert!(available <= total);
         assert_eq!(fs_stats(".\0").unwrap_err().kind(), io::ErrorKind::InvalidInput);
         assert!(fs_stats(&format!("{}/Cargo.toml/child", root)).is_err());
+    }
+
+    // Break it catches: a value or size the kernel does not get as given, an error not passed on.
+    #[cfg(unix)]
+    #[test]
+    fn socket_options_reach_the_socket_and_errors_come_back() {
+        let s = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        set_socket_option(&s, libc::IPPROTO_IP, libc::IP_MULTICAST_TTL, 255).unwrap();
+        assert_eq!(s.multicast_ttl_v4().unwrap(), 255);
+        set_socket_option(&s, libc::IPPROTO_IP, libc::IP_MULTICAST_IF, i32::from_ne_bytes([127, 0, 0, 1])).unwrap();
+        assert!(set_socket_option(&s, libc::IPPROTO_IP, -1, 1).is_err());
     }
 
     /// The CPUs the calling thread may run on, as the kernel lists them (`0-3,5`).

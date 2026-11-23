@@ -6,11 +6,10 @@
 //! (ui/setting_items.rs). The slices are the places of `store::setup_text` that write them, so the keys of a setup
 //! file keep their order.
 //!
-//! An SCPI value a row does not take falls through to the later branches of `exec_cmd`, which answer
-//! `-113,"Undefined header"`, as before the table. `video_line` and `nth_n` take any whole number from a setup; their
-//! menu limits are row steps (docs/adr/code/0044). Still written out by hand: `trig_when` (its menu offers Off only for
-//! Runt, and a row offers the same choices whatever the model holds), and the sources, levels and patterns, which are
-//! not one value each.
+//! An SCPI value a row does not take is refused with `-224,"Illegal parameter value"`. `video_line` and `nth_n` take
+//! any whole number from a setup; their menu limits are row steps (docs/adr/code/0044). Still written out by hand:
+//! `trig_when` (its menu offers Off only for Runt, and a row offers the same choices whatever the model holds), and
+//! the sources, levels and patterns, which are not one value each.
 
 use super::{Arg, Choice, Scpi, Setting, Ty, Unknown, Val};
 use crate::model::{step_index, time_ladder, Pol, Slope, TrigMode, VSync, VideoStd, WinMode, TRIG_COUPS};
@@ -19,7 +18,6 @@ use crate::model::{step_index, time_ladder, Pol, Slope, TrigMode, VSync, VideoSt
 pub const SLICES: [&[Setting]; 6] = [&EDGE, &REJECT, &SECOND, &TIMES, &WINDOW, &SETUP_HOLD];
 
 /// Why the rows of a trigger type's own values have no command.
-#[cfg(test)]
 const NO_SUBTREE: &str = "OOS has no `:TRIGger` subtree of this trigger type yet";
 
 /// Written after `trig_level`.
@@ -87,10 +85,7 @@ pub const REJECT: [Setting; 3] = [
     },
     Setting {
         key: "auto_nrej",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: "a choice of the auto set-up, not of the trigger",
-        },
+        scpi: Scpi::none("a choice of the auto set-up, not of the trigger"),
         ty: Ty::Bool,
         label: "Auto noise rej.",
         #[cfg(test)]
@@ -128,10 +123,7 @@ pub const REJECT: [Setting; 3] = [
 pub const SECOND: [Setting; 2] = [
     Setting {
         key: "trig_slope2",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Choice(&SLOPE_CHOICES, Unknown::Value, Arg::Keyword),
         label: "Slope B",
         #[cfg(test)]
@@ -143,10 +135,7 @@ pub const SECOND: [Setting; 2] = [
     },
     Setting {
         key: "trig_pol",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Choice(
             &[
                 Choice { store: "Pos", scpi: "", label: "Positive" },
@@ -169,10 +158,7 @@ pub const SECOND: [Setting; 2] = [
 pub const TIMES: [Setting; 5] = [
     Setting {
         key: "trig_t1",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Seconds { ladder: time_ladder_step, zero: None },
         label: "Time",
         #[cfg(test)]
@@ -185,10 +171,7 @@ pub const TIMES: [Setting; 5] = [
     },
     Setting {
         key: "trig_t2",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Seconds { ladder: time_ladder_step, zero: None },
         label: "Upper limit",
         #[cfg(test)]
@@ -200,10 +183,7 @@ pub const TIMES: [Setting; 5] = [
     },
     Setting {
         key: "video_std",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Choice(
             &[Choice { store: "Pal", scpi: "", label: "PAL" }, Choice { store: "Ntsc", scpi: "", label: "NTSC" }],
             Unknown::Value,
@@ -219,10 +199,7 @@ pub const TIMES: [Setting; 5] = [
     },
     Setting {
         key: "video_sync",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Choice(
             &[
                 Choice { store: "AllLines", scpi: "", label: "Lines" },
@@ -244,10 +221,7 @@ pub const TIMES: [Setting; 5] = [
     },
     Setting {
         key: "video_line",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::U32 { min: 0, max: u32::MAX, step: 1, unit: "" },
         label: "Line",
         #[cfg(test)]
@@ -263,10 +237,7 @@ pub const TIMES: [Setting; 5] = [
 pub const WINDOW: [Setting; 3] = [
     Setting {
         key: "win_mode",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Choice(
             &[
                 Choice { store: "Enter", scpi: "", label: "Enter" },
@@ -286,10 +257,7 @@ pub const WINDOW: [Setting; 3] = [
     },
     Setting {
         key: "nth_idle",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Seconds { ladder: time_ladder_step, zero: None },
         label: "Idle time",
         #[cfg(test)]
@@ -301,10 +269,7 @@ pub const WINDOW: [Setting; 3] = [
     },
     Setting {
         key: "nth_n",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::U32 { min: 0, max: u32::MAX, step: 1, unit: "" },
         label: "Edge no.",
         #[cfg(test)]
@@ -320,10 +285,7 @@ pub const WINDOW: [Setting; 3] = [
 pub const SETUP_HOLD: [Setting; 2] = [
     Setting {
         key: "setup",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Seconds { ladder: time_ladder_step, zero: None },
         label: "Setup",
         #[cfg(test)]
@@ -335,10 +297,7 @@ pub const SETUP_HOLD: [Setting; 2] = [
     },
     Setting {
         key: "hold",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: NO_SUBTREE,
-        },
+        scpi: Scpi::none(NO_SUBTREE),
         ty: Ty::Seconds { ladder: time_ladder_step, zero: None },
         label: "Hold",
         #[cfg(test)]

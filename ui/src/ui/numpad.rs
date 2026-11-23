@@ -13,7 +13,6 @@
 //! that prefix; Min and Max set the limits of the item; Enter parses and sets the value, Cancel closes with no change.
 //! The text is `Ui::keypad`, as for the other keypads. The value goes in through the stepper's own path (`adjust`), or
 //! straight into the setting where the stepper's grid is coarser than what can be typed (the trigger level).
-use super::menu_actions::keep_expand_point;
 use super::*;
 
 /// Default's pad (upstream's): the row it enters into, while it is open.
@@ -27,16 +26,15 @@ pub(super) struct RowPad {
 const ROW_PAD_KEYS: [&str; 20] =
     ["7", "8", "9", "n", "4", "5", "6", "u", "1", "2", "3", "m", "0", ".", "-", "1x", "Del", "Clear", "Cancel", "k"];
 
-/// The factor and the shown prefix of a prefix key of Default's pad.
+/// The factor and the shown prefix of a prefix key of Default's pad, from `SI_PREFIXES`.
 fn row_pad_prefix(key: &str) -> Option<(f64, &'static str)> {
-    Some(match key {
-        "n" => (1e-9, "n"),
-        "u" => (1e-6, "\u{b5}"),
-        "m" => (1e-3, "m"),
-        "1x" => (1.0, ""),
-        "k" => (1e3, "k"),
+    let shown = match key {
+        "n" | "m" | "k" => key,
+        "u" => "\u{b5}",
+        "1x" => "",
         _ => return None,
-    })
+    };
+    SI_PREFIXES.iter().copied().find(|&(_, p)| p == shown)
 }
 
 /// Longest entry of Default's pad, in characters.
@@ -361,6 +359,8 @@ impl Ui {
             Item::ChScale(c) | Item::ChOffset(c) if c < NCH => Some(m.unit(c)),
             Item::HScale | Item::HDelay => Some("s"),
             Item::TrigLevel if m.trig_src < NCH => Some(m.unit(m.trig_src)),
+            // any amplitude of the sweep, not only the knob's 1-2-5 steps (#52)
+            Item::BodeAmp => Some("Vpp"),
             _ => None,
         }
     }
@@ -394,7 +394,7 @@ impl Ui {
     pub(super) fn row_pad_key(&mut self, k: usize) {
         let Some(&key) = ROW_PAD_KEYS.get(k) else { return };
         if let Some((factor, _)) = row_pad_prefix(key) {
-            let typed = self.keypad.parse::<f64>().ok().filter(|v| v.is_finite());
+            let typed = crate::words::num64(&self.keypad);
             let target = self.row_pad.target.take();
             self.close_picker();
             if let (Some(v), Some(it)) = (typed, target) {
@@ -420,6 +420,15 @@ impl Ui {
 
     /// Sets row `it` to `v` (in its unit), as SCPI would.
     fn row_pad_set(&mut self, it: Item, v: f64) {
+        // the amplitude is kept as f64, not rounded to f32 as the rows below, in the range of the knob's steps
+        if it == Item::BodeAmp {
+            if !(0.01..=20.0).contains(&v) {
+                return self.toast("The amplitude must be 10 mVpp to 20 Vpp");
+            }
+            // as - and + of the Bode rows: no settings_changed (setting_items.rs), the statistics and the acquisition stay
+            self.m.bode_amp = v;
+            return;
+        }
         let m = &mut self.m;
         let v = v as f32;
         match it {
@@ -442,7 +451,7 @@ impl Ui {
                 }
                 let old = m.time_per_div();
                 (m.tscale, m.tfine) = (nearest_step(&tscales(), v), 1.0);
-                keep_expand_point(m, old);
+                m.keep_expand_point(old);
             }
             Item::HDelay => m.delay = v,
             Item::TrigLevel => m.trig_level = v,

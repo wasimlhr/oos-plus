@@ -742,6 +742,10 @@ fn record_steps_clear_the_stamp_and_arm_n_frames() {
     assert_eq!(record_frames(&seg(1_000_000, 0.0), &p), 61_440);
     assert_eq!(record_frames(&seg(0, 0.0), &p), 1);
     assert_eq!(record_frames(&Settings::default(), &p), 0);
+    // a segment larger than the memory below the reserved top (100 M points: 16,777,216 bursts): none, no panic
+    let big = hz::Params { seg: 1 << 24, ..p };
+    assert_eq!(hz::max_record_frames(big.seg), 0);
+    assert_eq!(record_frames(&seg(10, 0.0), &big), 0);
     // the live plan does not change with segments set
     let live = |s: &Settings| writes(&plan(&mut State::handover(1, None), s, None, None).unwrap().0);
     assert_eq!(live(&seg(100, 1e-3)), live(&Settings { segments: None, ..seg(100, 1e-3) }));

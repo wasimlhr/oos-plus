@@ -59,6 +59,16 @@ fn list<T: ToString>(v: &[T]) -> String {
     v.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(" ")
 }
 
+/// One line of a setup or mask file: `None` for a blank line or a comment (a line that starts with `#`), else the key
+/// and the value around the first `=`, both trimmed, or `Err` with the trimmed line when it has no `=`.
+fn key_value(line: &str) -> Option<Result<(&str, &str), &str>> {
+    let line = line.trim();
+    if line.is_empty() || line.starts_with('#') {
+        return None;
+    }
+    Some(line.split_once('=').map(|(k, v)| (k.trim(), v.trim())).ok_or(line))
+}
+
 /// The keys of one decoder.
 fn dec_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     kv("dec_on", m.dec_on.to_string());
@@ -111,15 +121,15 @@ fn dec_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
 /// The one bus on the plot.
 fn bus_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     let b = &m.bus;
-    kv("bus_on", b.on.to_string());
+    crate::settings::write(&crate::settings::bus::ON, m, 0, kv);
     kv("bus_label", b.label.clone());
-    kv("bus_pos", b.pos.to_string());
+    crate::settings::write(&crate::settings::bus::POS, m, 0, kv);
     kv("bus_kind", name(b.kind));
     kv("bus_clk", b.clk.token());
     kv("bus_data", b.data.token());
     kv("bus_clk_thr", b.clk_thr.to_string());
     kv("bus_data_thr", b.data_thr.to_string());
-    kv("bus_rw", b.addr_rw.to_string());
+    crate::settings::write(&crate::settings::bus::RW, m, 0, kv);
 }
 
 /// The deskew of the channels and the ref slots that have one.
@@ -209,7 +219,7 @@ fn acquire_window_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     kv("mdepth", m.mdepth.to_string());
     crate::settings::write(&crate::settings::display::VIEW, m, 0, kv);
     kv("windows", name(m.win_layout));
-    kv("density", name(m.density));
+    crate::settings::write(&crate::settings::display::DENSITY, m, 0, kv);
     kv("split_pane", m.split_pane.to_string());
     kv("ch_window", m.ch_win.iter().map(|w| (w + 1).to_string()).collect::<Vec<_>>().join(" "));
     kv("math_window", m.math_win.iter().map(|w| (w + 1).to_string()).collect::<Vec<_>>().join(" "));
@@ -302,7 +312,7 @@ fn math_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
 
 /// The panes, zoom, the drawing, HDMI and the views.
 fn view_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
-    kv("pane", m.pane.to_string());
+    crate::settings::write(&crate::settings::display::PANE, m, 0, kv);
     kv("ev_view", m.ev_view.name().to_ascii_lowercase());
     kv("ev_errors", m.ev_errors.to_string());
     crate::settings::write(&crate::settings::measure::VIEW, m, 0, kv);
@@ -669,16 +679,15 @@ pub fn ref_setup_text(looks: &[Option<RefLook>]) -> String {
 pub fn parse_ref_looks(text: &str, n: usize) -> Vec<Option<RefLook>> {
     let mut out: Vec<Option<RefLook>> = vec![None; n];
     for line in text.lines() {
-        let Some((k, v)) = line.trim().split_once('=') else { continue };
-        let Some(rest) = k.trim().strip_prefix("ref") else { continue };
+        let Some(Ok((k, v))) = key_value(line) else { continue };
+        let Some(rest) = k.strip_prefix("ref") else { continue };
         let Some((idx, key)) = rest.split_once('.') else { continue };
         let Some(i) = idx.parse::<usize>().ok().and_then(|i| i.checked_sub(1)).filter(|&i| i < n) else { continue };
-        let v = v.trim();
         let l = out[i].get_or_insert_with(RefLook::default);
         match key {
             "on" => l.on = v.parse().ok(),
-            "vdiv" => l.vdiv = v.parse().ok().filter(|x: &f32| x.is_finite() && *x > 0.0),
-            "offset" => l.offset = v.parse().ok().filter(|x: &f32| x.is_finite()),
+            "vdiv" => l.vdiv = words::num(v).filter(|x| *x > 0.0),
+            "offset" => l.offset = words::num(v),
             "color" => l.color = v.parse().ok(),
             "name" => l.label = Some(v.to_string()),
             _ => {}

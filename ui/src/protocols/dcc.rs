@@ -12,8 +12,7 @@
 
 use super::*;
 use oos_dsp::dcc_yard::{functions_text, TrackStatus, Yard};
-use oos_dsp::decode;
-use oos_dsp::decode::Kind;
+use oos_dsp::decode::{self, hex, Kind};
 
 pub struct Dcc;
 
@@ -138,17 +137,7 @@ impl Protocol for Dcc {
         if !yard.advanced.is_empty() {
             sections.push(Section {
                 title: "Advanced".into(),
-                rows: yard
-                    .advanced
-                    .iter()
-                    .map(|a| {
-                        format!(
-                            "{}  {}",
-                            a.kind,
-                            a.data.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
-                        )
-                    })
-                    .collect(),
+                rows: yard.advanced.iter().map(|a| format!("{}  {}", a.kind, hex(&a.data, " "))).collect(),
             });
         }
         Some(View { status: Some((status, tone)), sections })
@@ -171,11 +160,11 @@ fn describe(addr: u8, data: &[u8]) -> String {
             } else if let Some(s) = y.signals.first() {
                 format!("Signal {}  {}", s.addr, s.aspect_text())
             } else {
-                format!("Accessory {:02X}  {}", addr, hex(data))
+                format!("Accessory {:02X}  {}", addr, hex(data, " "))
             }
         }
-        253 | 254 => format!("Advanced {}  {}", addr, hex(data)),
-        _ => format!("Addr {:02X}  {}", addr, hex(data)),
+        253 | 254 => format!("Advanced {}  {}", addr, hex(data, " ")),
+        _ => format!("Addr {:02X}  {}", addr, hex(data, " ")),
     }
 }
 
@@ -197,22 +186,18 @@ fn instruction(data: &[u8]) -> String {
     };
     match b >> 5 {
         0b001 if b & 0x1f == 0x1f => l
-            .map_or_else(|| hex(data), |l| format!("{} {}", l.dir_text(), l.speed_text()))
+            .map_or_else(|| hex(data, " "), |l| format!("{} {}", l.dir_text(), l.speed_text()))
             .replace("E-Stop E-Stop", "E-Stop"),
         0b010 | 0b011 => l
-            .map_or_else(|| hex(data), |l| format!("{} {}", l.dir_text(), l.speed_text()))
+            .map_or_else(|| hex(data, " "), |l| format!("{} {}", l.dir_text(), l.speed_text()))
             .replace("E-Stop E-Stop", "E-Stop"),
         0b100 => fns(0, 4),
         0b101 if b & 0x10 != 0 => fns(5, 8),
         0b101 => fns(9, 12),
         0b110 if b == 0xde => fns(13, 20),
         0b110 if b == 0xdf => fns(21, 28),
-        _ => hex(data),
+        _ => hex(data, " "),
     }
-}
-
-fn hex(d: &[u8]) -> String {
-    d.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ")
 }
 
 /// Applies the complete packets (address, data ..., XOR that matches) in time order; broken packets are left out.

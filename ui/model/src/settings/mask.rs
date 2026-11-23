@@ -35,10 +35,7 @@ pub const ON: [Setting; 1] = [Setting {
 pub const TEST: [Setting; 2] = [
     Setting {
         key: "mask_stop",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: "a choice of the Mask menu that no remote command sets",
-        },
+        scpi: Scpi::none("a choice of the Mask menu that no remote command sets"),
         ty: Ty::Custom(&STOP_IO),
         label: "On fail",
         #[cfg(test)]
@@ -50,10 +47,7 @@ pub const TEST: [Setting; 2] = [
     },
     Setting {
         key: "mask_inv",
-        scpi: Scpi::None {
-            #[cfg(test)]
-            why: "a choice of the Mask menu that no remote command sets",
-        },
+        scpi: Scpi::none("a choice of the Mask menu that no remote command sets"),
         ty: Ty::Bool,
         label: "Invert",
         #[cfg(test)]

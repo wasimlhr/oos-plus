@@ -25,13 +25,12 @@ pub enum Error {
 /// Time stamp of the header: (year, month, day, hour, minute, second).
 pub type Stamp = (u32, u32, u32, u32, u32, u32);
 
-fn u32_at(d: &[u8], o: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(d.get(o..o + 4)?.try_into().ok()?))
-}
-
 /// The payload of a container, both CRCs and the length checked.
 pub fn parse(d: &[u8]) -> Result<&[u8], Error> {
-    let (hcrc, hsize) = (u32_at(d, 0).ok_or(Error::Short)?, u32_at(d, 4).ok_or(Error::Short)?);
+    let (hcrc, hsize) = (
+        u32::from_le_bytes(crate::try_bytes_at(d, 0).ok_or(Error::Short)?),
+        u32::from_le_bytes(crate::try_bytes_at(d, 4).ok_or(Error::Short)?),
+    );
     if hsize != 0x14 {
         return Err(Error::HeaderSize);
     }
@@ -39,9 +38,9 @@ pub fn parse(d: &[u8]) -> Result<&[u8], Error> {
     if crc32(h) != hcrc {
         return Err(Error::HeaderCrc);
     }
-    let len = u32_at(d, 20).ok_or(Error::Short)? as usize;
+    let len = u32::from_le_bytes(crate::try_bytes_at(d, 20).ok_or(Error::Short)?) as usize;
     let p = d.get(28..28 + len).ok_or(Error::Length)?;
-    if crc32(p) != u32_at(d, 24).ok_or(Error::Short)? {
+    if crc32(p) != u32::from_le_bytes(crate::try_bytes_at(d, 24).ok_or(Error::Short)?) {
         return Err(Error::PayloadCrc);
     }
     Ok(p)
@@ -49,7 +48,7 @@ pub fn parse(d: &[u8]) -> Result<&[u8], Error> {
 
 /// The header stamp of a container.
 pub fn stamp(d: &[u8]) -> Option<Stamp> {
-    let (t, dt) = (u32_at(d, 12)?, u32_at(d, 16)?);
+    let (t, dt) = (u32::from_le_bytes(crate::try_bytes_at(d, 12)?), u32::from_le_bytes(crate::try_bytes_at(d, 16)?));
     Some((dt >> 8, dt & 0xff, t >> 24, (t >> 16) & 0xff, (t >> 8) & 0xff, t & 0xff))
 }
 
@@ -139,6 +138,21 @@ pub fn load_first(name: &str, dirs: &[&str]) -> Option<(Vec<u8>, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The header fields read through `try_bytes_at` as the old `u32_at` did, at every offset of a real-sized container
+    /// (cal_adc.hex) and of short ones: the same value, `None` at the same places.
+    #[test]
+    fn header_reader_matches_the_old_one() {
+        let old = |d: &[u8], o: usize| -> Option<u32> { Some(u32::from_le_bytes(d.get(o..o + 4)?.try_into().ok()?)) };
+        for n in [0, 1, 3, 4, 7, 8, 27, 28, 29, 0x738 + 28] {
+            let d: Vec<u8> = (0..n).map(|i| (i * 89 + 5) as u8).collect();
+            for o in 0..n + 6 {
+                let new = crate::try_bytes_at(&d, o).map(u32::from_le_bytes);
+                assert_eq!(new, old(&d, o), "at {} of {}", o, n);
+                assert_eq!(new.is_some(), o + 4 <= n);
+            }
+        }
+    }
 
     #[test]
     fn data_partition_mounted() {

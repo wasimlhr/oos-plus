@@ -85,17 +85,6 @@ fn cpu_hz(n: usize) -> Option<f64> {
         .map(|khz| khz * 1e3)
 }
 
-/// SI value with up to 5 digits and no trailing zeros ("312.5 MSa/s", "31.25 Mpts", "1.25 GSa/s").
-fn exact(v: f64, unit: &str) -> String {
-    let s = si_digits(v, unit, 5);
-    match s.split_once(' ') {
-        Some((num, rest)) if num.contains('.') => {
-            format!("{} {}", num.trim_end_matches('0').trim_end_matches('.'), rest)
-        }
-        _ => s,
-    }
-}
-
 fn bytes(b: u64) -> String {
     si_short(b as f64, "B")
 }
@@ -172,16 +161,6 @@ impl Ui {
         a.push(kv("Logic analyser", yes_no(c.la)));
         a.push(kv("Generator", yes_no(c.has_gen())));
         a.push(kv("EXT trigger", yes_no(c.ext_trig)));
-        if self.src.is_hw() {
-            // the acquisition memory above 256 MiB, found by measuring on a unit (horizontal-config.md 1.8); System >
-            // Optional memory and Probe optional memory (upper.rs)
-            a.push(match board().upper_mem() {
-                crate::board::UpperMem::InUse => kv("Optional memory", "256 MiB, in use"),
-                crate::board::UpperMem::Off => kvc("Optional memory", "present, off", DIM),
-                crate::board::UpperMem::Missing => kvc("Optional memory", "not present", DIM),
-                crate::board::UpperMem::NotProbed => kvc("Optional memory", "off, not probed", DIM),
-            });
-        }
         a.push(match p.source {
             oos_hal::model::Source::Vendor => kvc("Identified", "vendor.bin", GREEN),
             oos_hal::model::Source::Forced => kvc("Identified", "forced (--model / limits.conf)", AMBER),
@@ -228,17 +207,17 @@ impl Ui {
             let same = l.max_srate[i] == base.max_srate[i] && l.max_mem[i] == base.max_mem[i];
             d.push(kvc(
                 name,
-                format!("{}  {}", exact(l.max_srate[i], "Sa/s"), exact(l.max_mem[i] as f64, "pts")),
+                format!("{}  {}", si_trimmed(l.max_srate[i], "Sa/s", 5), si_trimmed(l.max_mem[i] as f64, "pts", 5)),
                 mark(same),
             ));
         }
         if c.la {
-            let la = l.max_mem_la.iter().map(|&x| exact(x as f64, "")).collect::<Vec<_>>().join("/");
+            let la = l.max_mem_la.iter().map(|&x| si_trimmed(x as f64, "", 5)).collect::<Vec<_>>().join("/");
             d.push(kvc("With LA", format!("{} pts", la.replace(' ', "")), mark(l.max_mem_la == base.max_mem_la)));
         }
         if c.has_gen() {
             let (g, n) = (l.afg_max_hz, base.afg_max_hz);
-            d.push(kvc("Generator sine", exact(g.sine, "Hz"), mark(g.sine == n.sine)));
+            d.push(kvc("Generator sine", si_trimmed(g.sine, "Hz", 5), mark(g.sine == n.sine)));
             d.push(kvc(
                 "square / pulse",
                 format!("{} / {}", si_short(g.square, "Hz"), si_short(g.pulse, "Hz")),
@@ -246,12 +225,12 @@ impl Ui {
             ));
             d.push(kvc("ramp", si_short(g.ramp, "Hz"), mark(g.ramp == n.ramp)));
         }
-        d.push(kv("ADC clock", exact(l.adc_clock_hz, "Hz")));
+        d.push(kv("ADC clock", si_trimmed(l.adc_clock_hz, "Hz", 5)));
         if self.overclock.hz != l.adc_clock_hz {
-            d.push(kvc("after power off and on", exact(self.overclock.hz, "Hz"), AMBER));
+            d.push(kvc("after power off and on", si_trimmed(self.overclock.hz, "Hz", 5), AMBER));
         }
         if c.has_gen() {
-            d.push(kv("Generator clock", exact(l.afg_clock_hz, "Hz")));
+            d.push(kv("Generator clock", si_trimmed(l.afg_clock_hz, "Hz", 5)));
         }
         d.push(Row::Head("Acquisition now".into()));
         d.push(kv("Channels on", format!("{} of {}", self.m.n_on(), n_ch())));
@@ -437,10 +416,10 @@ mod tests {
     }
 
     #[test]
-    fn exact_values() {
-        assert_eq!(exact(312.5e6, "Sa/s"), "312.5 MSa/s");
-        assert_eq!(exact(1.25e9, "Hz"), "1.25 GHz");
-        assert_eq!(exact(156.25e6, "Hz"), "156.25 MHz");
-        assert_eq!(exact(125e6, "pts"), "125 Mpts");
+    fn trimmed_values() {
+        assert_eq!(si_trimmed(312.5e6, "Sa/s", 5), "312.5 MSa/s");
+        assert_eq!(si_trimmed(1.25e9, "Hz", 5), "1.25 GHz");
+        assert_eq!(si_trimmed(156.25e6, "Hz", 5), "156.25 MHz");
+        assert_eq!(si_trimmed(125e6, "pts", 5), "125 Mpts");
     }
 }

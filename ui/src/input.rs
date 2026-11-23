@@ -6,6 +6,10 @@
 
 use crate::ui::{Ev, Phase};
 use std::ffi::CString;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::os::fd::{AsRawFd, IntoRawFd};
+use std::os::unix::fs::OpenOptionsExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static STOP: AtomicBool = AtomicBool::new(false);
@@ -62,7 +66,7 @@ fn grab(fd: i32) -> std::io::Result<()> {
 
 /// An open mouse or keyboard.
 struct HidDev {
-    fd: i32,
+    fd: File,
     event: String,
     /// its buttons and modifiers that are down, released when it goes
     held: crate::hid::Held,
@@ -82,7 +86,7 @@ struct Slot {
 }
 
 struct Touch {
-    fd: i32,
+    fd: File,
     slot: i32,
     s: [Slot; 2],
     swap: bool,
@@ -94,9 +98,9 @@ struct Touch {
 
 pub struct Inputs {
     touch: Option<Touch>,
-    panel: i32,
+    panel: Option<File>,
     panel_buf: Vec<u8>,
-    ctl: i32,
+    ctl: Option<File>,
     ctl_buf: Vec<u8>,
     hid: Vec<HidDev>,
     hid_scan: Option<std::time::Instant>,
@@ -104,30 +108,17 @@ pub struct Inputs {
     refused: Vec<String>,
 }
 
-/// A read of a non-blocking descriptor into `buf`: the bytes read, or -1 with errno (EAGAIN when nothing waits).
-fn read_fd(fd: i32, buf: &mut [u8]) -> isize {
-    unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) }
-}
-
 /// Appends to `to` all a non-blocking descriptor has to read now, `N` bytes a read.
-fn drain_fd<const N: usize>(fd: i32, to: &mut Vec<u8>) {
+fn drain_fd<const N: usize>(mut fd: &File, to: &mut Vec<u8>) {
     let mut buf = [0u8; N];
-    loop {
-        let n = read_fd(fd, &mut buf);
-        if n <= 0 {
-            break;
-        }
-        to.extend_from_slice(&buf[..n as usize]);
+    while let Ok(n @ 1..) = fd.read(&mut buf) {
+        to.extend_from_slice(&buf[..n]);
     }
 }
 
-fn close_fd(fd: i32) {
-    unsafe { libc::close(fd) };
-}
-
-fn open_nb(path: &str, flags: i32) -> i32 {
-    let Ok(c) = CString::new(path) else { return -1 };
-    unsafe { libc::open(c.as_ptr(), flags | libc::O_NONBLOCK | libc::O_CLOEXEC) }
+/// Opens `path` non-blocking: `O_RDONLY`, or `O_RDWR` with `write`, and `O_NONBLOCK | O_CLOEXEC | extra`.
+fn open_nb(path: &str, write: bool, extra: i32) -> std::io::Result<File> {
+    File::options().read(true).write(write).custom_flags(libc::O_NONBLOCK | extra).open(path)
 }
 
 /// Finds the touch screen's event device in /proc/bus/input/devices (FocalTech / edt-ft5x06).
@@ -148,8 +139,8 @@ fn find_touch() -> Option<String> {
     None
 }
 
-fn open_panel(path: &str, baud: u32) -> i32 {
-    let fd = open_nb(path, libc::O_RDWR | libc::O_NOCTTY);
+fn open_panel(path: &str, baud: u32) -> Option<File> {
+    let f = open_nb(path, true, libc::O_NOCTTY).ok();
     let speed = match baud {
         1_500_000 => libc::B1500000,
         921_600 => libc::B921600,
@@ -157,9 +148,7 @@ fn open_panel(path: &str, baud: u32) -> i32 {
         230_400 => libc::B230400,
         _ => libc::B115200,
     };
-    if fd < 0 {
-        return fd;
-    }
+    let fd = f.as_ref()?.as_raw_fd();
     unsafe {
         let mut t: libc::termios = std::mem::zeroed();
         libc::tcgetattr(fd, &mut t);
@@ -171,7 +160,7 @@ fn open_panel(path: &str, baud: u32) -> i32 {
         libc::tcsetattr(fd, libc::TCSANOW, &t);
         libc::tcflush(fd, libc::TCIFLUSH);
     }
-    fd
+    f
 }
 
 impl Inputs {
@@ -179,17 +168,19 @@ impl Inputs {
         let has = |f: &str| args.iter().any(|a| a == f);
         let arg = |n: &str| args.iter().position(|a| a == n).and_then(|i| args.get(i + 1).cloned());
         let touch = arg("--touch").or_else(find_touch).and_then(|p| {
-            let fd = open_nb(&p, libc::O_RDONLY);
-            if fd < 0 {
-                eprintln!("oos-ui: touch {}: {}", p, std::io::Error::last_os_error());
-                return None;
-            }
+            let fd = match open_nb(&p, false, 0) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("oos-ui: touch {}: {}", p, e);
+                    return None;
+                }
+            };
             eprintln!("oos-ui: touch {}", p);
             let absmax = |code: u32| -> i32 {
                 // EVIOCGABS(code) = _IOR('E', 0x40 + code, struct input_absinfo[6 x s32])
                 let mut info = [0i32; 6];
                 let req = ((2u32 << 30) | (24u32 << 16) | ((b'E' as u32) << 8) | (0x40 + code)) as libc::c_ulong;
-                let r = unsafe { libc::ioctl(fd, req as _, info.as_mut_ptr()) };
+                let r = unsafe { libc::ioctl(fd.as_raw_fd(), req as _, info.as_mut_ptr()) };
                 if r == 0 {
                     info[2]
                 } else {
@@ -217,8 +208,8 @@ impl Inputs {
             crate::board::board().panel_port()
         };
         let panel =
-            if has("--no-panel") { -1 } else { open_panel(&arg("--panel").unwrap_or_else(|| port.into()), baud) };
-        if panel < 0 {
+            if has("--no-panel") { None } else { open_panel(&arg("--panel").unwrap_or_else(|| port.into()), baud) };
+        if panel.is_none() {
             eprintln!("oos-ui: no front panel");
         }
         let c = CString::new(CTL).unwrap_or_default();
@@ -226,7 +217,7 @@ impl Inputs {
             libc::unlink(c.as_ptr());
             libc::mkfifo(c.as_ptr(), 0o666);
         }
-        let ctl = open_nb(CTL, libc::O_RDWR);
+        let ctl = open_nb(CTL, true, 0).ok();
         Inputs {
             touch,
             panel,
@@ -242,19 +233,18 @@ impl Inputs {
     /// Sets the front-panel LEDs. `mask` is in panel LED order (see `Ui::leds`); it is translated to the MCU's
     /// hardware bits and sent as three frames cmd 1/2/3 with the bitmasks of hardware LEDs 0-7, 8-15, 16-18.
     pub fn set_leds(&mut self, mask: u32) {
-        if self.panel < 0 {
-            return;
-        }
+        let Some(mut panel) = self.panel.as_ref() else { return };
         use crate::board::Board;
         for f in crate::board::board().panel_leds(mask) {
-            unsafe { libc::write(self.panel, f.as_ptr() as *const libc::c_void, f.len()) };
+            // one write(2) a frame, its result not looked at
+            let _ = panel.write(&f);
         }
     }
 
     /// Sends one MCU frame (`FA cmd data crc AF`).
     pub fn send(&mut self, f: &[u8]) {
-        if self.panel >= 0 {
-            unsafe { libc::write(self.panel, f.as_ptr() as *const libc::c_void, f.len()) };
+        if let Some(mut panel) = self.panel.as_ref() {
+            let _ = panel.write(f);
         }
     }
 
@@ -262,17 +252,17 @@ impl Inputs {
     pub fn poll(&mut self, timeout_ms: i32) -> Vec<In> {
         let mut fds = Vec::new();
         if let Some(t) = &self.touch {
-            fds.push(libc::pollfd { fd: t.fd, events: libc::POLLIN, revents: 0 });
+            fds.push(libc::pollfd { fd: t.fd.as_raw_fd(), events: libc::POLLIN, revents: 0 });
         }
-        if self.panel >= 0 {
-            fds.push(libc::pollfd { fd: self.panel, events: libc::POLLIN, revents: 0 });
+        if let Some(p) = &self.panel {
+            fds.push(libc::pollfd { fd: p.as_raw_fd(), events: libc::POLLIN, revents: 0 });
         }
-        if self.ctl >= 0 {
-            fds.push(libc::pollfd { fd: self.ctl, events: libc::POLLIN, revents: 0 });
+        if let Some(c) = &self.ctl {
+            fds.push(libc::pollfd { fd: c.as_raw_fd(), events: libc::POLLIN, revents: 0 });
         }
         self.hid_rescan();
         for d in &self.hid {
-            fds.push(libc::pollfd { fd: d.fd, events: libc::POLLIN, revents: 0 });
+            fds.push(libc::pollfd { fd: d.fd.as_raw_fd(), events: libc::POLLIN, revents: 0 });
         }
         unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout_ms) };
         let mut out = Vec::new();
@@ -305,18 +295,15 @@ impl Inputs {
             let Some(d) = crate::hid::classify(&event, &read("name"), &caps("ev"), &caps("rel"), &caps("key")) else {
                 continue;
             };
-            let fd = open_nb(&format!("/dev/input/{}", d.event), libc::O_RDONLY);
-            if fd < 0 {
-                continue;
-            }
+            let Ok(fd) = open_nb(&format!("/dev/input/{}", d.event), false, 0) else { continue };
             let what = match (d.mouse, d.keyboard) {
                 (true, true) => "mouse and keyboard",
                 (true, false) => "mouse",
                 _ => "keyboard",
             };
-            if let Err(err) = grab(fd) {
+            if let Err(err) = grab(fd.as_raw_fd()) {
                 eprintln!("oos-ui: {} {} ({}) not taken: not grabbed ({})", what, d.event, d.name, err);
-                close_fd(fd);
+                drop(fd);
                 self.refused.push(d.event);
                 continue;
             }
@@ -329,18 +316,19 @@ impl Inputs {
         let mut buf = [0u8; 24 * 64];
         let mut gone = Vec::new();
         self.hid.retain_mut(|d| loop {
-            let n = read_fd(d.fd, &mut buf);
-            if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::ENODEV) || n == 0 {
-                // unplugged, or the Bluetooth link went: its node is gone, and what it held is let go
-                eprintln!("oos-ui: input {} gone", d.event);
-                close_fd(d.fd);
-                gone.push(std::mem::take(&mut d.held));
-                break false;
-            }
-            if n < 0 {
-                break true;
-            }
-            for ev in buf[..n as usize].as_chunks::<24>().0 {
+            let n = match (&d.fd).read(&mut buf) {
+                Ok(n) if n > 0 => n,
+                // nothing waiting (EAGAIN) or another error: it stays
+                Err(e) if e.raw_os_error() != Some(libc::ENODEV) => break true,
+                // unplugged, or the Bluetooth link went: its node is gone, and what it held is let go; `retain_mut`
+                // drops it, and so closes its descriptor, right after
+                _ => {
+                    eprintln!("oos-ui: input {} gone", d.event);
+                    gone.push(std::mem::take(&mut d.held));
+                    break false;
+                }
+            };
+            for ev in buf[..n].as_chunks::<24>().0 {
                 let ty = u16::from_ne_bytes([ev[16], ev[17]]);
                 let code = u16::from_ne_bytes([ev[18], ev[19]]);
                 let value = i32::from_ne_bytes([ev[20], ev[21], ev[22], ev[23]]);
@@ -360,12 +348,8 @@ impl Inputs {
     fn read_touch(&mut self, out: &mut Vec<In>) {
         let Some(t) = &mut self.touch else { return };
         let mut buf = [0u8; 24 * 64];
-        loop {
-            let n = read_fd(t.fd, &mut buf);
-            if n <= 0 {
-                break;
-            }
-            for ev in buf[..n as usize].as_chunks::<24>().0 {
+        while let Ok(n @ 1..) = (&t.fd).read(&mut buf) {
+            for ev in buf[..n].as_chunks::<24>().0 {
                 let typ = u16::from_ne_bytes([ev[16], ev[17]]);
                 let code = u16::from_ne_bytes([ev[18], ev[19]]);
                 let val = i32::from_ne_bytes([ev[20], ev[21], ev[22], ev[23]]);
@@ -433,10 +417,8 @@ impl Inputs {
     }
 
     fn read_panel(&mut self, out: &mut Vec<In>) {
-        if self.panel < 0 {
-            return;
-        }
-        drain_fd::<256>(self.panel, &mut self.panel_buf);
+        let Some(panel) = &self.panel else { return };
+        drain_fd::<256>(panel, &mut self.panel_buf);
         use crate::board::Board;
         for k in crate::board::board().panel_keys(&mut self.panel_buf) {
             out.push(In::Ev(Ev::Key(k)));
@@ -444,13 +426,20 @@ impl Inputs {
     }
 
     fn read_ctl(&mut self, out: &mut Vec<In>) {
-        if self.ctl < 0 {
-            return;
-        }
-        drain_fd::<1024>(self.ctl, &mut self.ctl_buf);
+        let Some(ctl) = &self.ctl else { return };
+        drain_fd::<1024>(ctl, &mut self.ctl_buf);
         while let Some(p) = self.ctl_buf.iter().position(|&c| c == b'\n') {
             let line: Vec<u8> = self.ctl_buf.drain(..=p).collect();
             out.push(In::Cmd(String::from_utf8_lossy(&line).trim().to_string()));
+        }
+    }
+
+    /// oos-ui ending: the descriptors stay open until the process ends, as they always did (a mouse or keyboard
+    /// stays grabbed until then), and the rest is freed.
+    pub fn keep_open(self) {
+        let files = self.touch.map(|t| t.fd).into_iter().chain(self.panel).chain(self.ctl);
+        for f in files.chain(self.hid.into_iter().map(|d| d.fd)) {
+            let _ = f.into_raw_fd();
         }
     }
 }

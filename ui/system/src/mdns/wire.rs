@@ -6,6 +6,7 @@
 //! record type gets its `T_` constant in `mdns.rs`, a `Data` variant here and its case in `Wr::rec` and `read_rdata`.
 
 use super::*;
+use oos_hal::{bytes_at, try_bytes_at};
 
 // ------------------------------------------------------------------------------------------------ names on the wire
 
@@ -210,14 +211,6 @@ impl Msg {
     }
 }
 
-fn u16_at(b: &[u8], p: usize) -> Option<u16> {
-    Some(u16::from_be_bytes([*b.get(p)?, *b.get(p + 1)?]))
-}
-
-fn u32_at(b: &[u8], p: usize) -> Option<u32> {
-    Some(u32::from_be_bytes(b.get(p..p + 4)?.try_into().ok()?))
-}
-
 /// The name at `start` and where the bytes after it begin (`read_labels`).
 fn read_name(b: &[u8], start: usize) -> Option<(Name, usize)> {
     let (labels, end) = read_labels(b, start)?;
@@ -301,9 +294,9 @@ pub fn parse(b: &[u8]) -> Option<Msg> {
 
 /// `parse`, with where the questions end and where the last record ends (bytes after it are not looked at).
 pub fn parse_ends(b: &[u8]) -> Option<(Msg, usize, usize)> {
-    let counts = [u16_at(b, 4)?, u16_at(b, 6)?, u16_at(b, 8)?, u16_at(b, 10)?];
-    let mut m =
-        Msg { id: u16_at(b, 0)?, flags: u16_at(b, 2)?, qs: Vec::new(), an: Vec::new(), ns: Vec::new(), ar: Vec::new() };
+    let head: [u8; 12] = try_bytes_at(b, 0)?;
+    let [id, flags, counts @ ..] = [0, 2, 4, 6, 8, 10].map(|o| u16::from_be_bytes(bytes_at(&head, o)));
+    let mut m = Msg { id, flags, qs: Vec::new(), an: Vec::new(), ns: Vec::new(), ar: Vec::new() };
     let mut p = 12;
     for _ in 0..counts[0] {
         let (labels, e) = read_labels(b, p)?;
@@ -314,7 +307,8 @@ pub fn parse_ends(b: &[u8]) -> Option<(Msg, usize, usize)> {
             wire.extend(*l);
         }
         wire.push(0);
-        let (qtype, class) = (u16_at(b, e)?, u16_at(b, e + 2)?);
+        let tail: [u8; 4] = try_bytes_at(b, e)?;
+        let [qtype, class] = [0, 2].map(|o| u16::from_be_bytes(bytes_at(&tail, o)));
         m.qs.push(Q { name, wire, qtype, qclass: class & !TOP, qu: class & TOP != 0 });
         p = e + 4;
     }
@@ -322,8 +316,9 @@ pub fn parse_ends(b: &[u8]) -> Option<(Msg, usize, usize)> {
     for (sec, &n) in counts[1..].iter().enumerate() {
         for _ in 0..n {
             let (name, e) = read_name(b, p)?;
-            let (rtype, class, ttl, len) =
-                (u16_at(b, e)?, u16_at(b, e + 2)?, u32_at(b, e + 4)?, u16_at(b, e + 8)? as usize);
+            let tail: [u8; 10] = try_bytes_at(b, e)?;
+            let [rtype, class, len] = [0, 2, 8].map(|o| u16::from_be_bytes(bytes_at(&tail, o)));
+            let (ttl, len) = (u32::from_be_bytes(bytes_at(&tail, 4)), len as usize);
             let canon = read_rdata(b, e + 10, len, rtype)?;
             let r = Rr { name, rtype, class: class & !TOP, flush: class & TOP != 0, ttl, canon };
             [&mut m.an, &mut m.ns, &mut m.ar][sec].push(r);

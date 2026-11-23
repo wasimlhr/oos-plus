@@ -36,7 +36,6 @@ fn popup_rows(u: &Ui) -> Vec<String> { u.workspace.popup.as_ref().map(|p| p.rows
 
 #[test]
 fn there_is_one_long_press_time() {
-    assert_eq!(Ui::MEAS_HOLD_S, LONG_PRESS);
     assert_eq!(workspace::HOLD, LONG_PRESS);
     assert_eq!(LONG_PRESS, 0.5);
 }

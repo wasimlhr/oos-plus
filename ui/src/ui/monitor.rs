@@ -27,9 +27,7 @@ impl Ui {
         let (mut xy, mut full) = (false, false);
         let empty = views::plot_alone();
         let slot = if self.m.view_slots[j].trim().is_empty() { &empty } else { &self.m.view_slots[j] };
-        for part in slot.split(';').map(str::trim).filter(|p| !p.is_empty()) {
-            let Some((k, v)) = part.split_once('=') else { continue };
-            let (k, v) = (k.trim(), v.trim());
+        for (k, v) in crate::store::views::pairs(slot).flatten() {
             match k {
                 "xy" => xy = v == "true",
                 "full" => full = v == "true",

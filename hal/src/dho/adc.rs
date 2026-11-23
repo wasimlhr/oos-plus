@@ -44,7 +44,7 @@ const FINE: usize = 0x478;
 
 /// Payload of a /rigol/data cal_*.hex container (20-byte header, u32 length, u32 crc32, payload), length checked.
 pub fn container(d: &[u8]) -> Option<&[u8]> {
-    let ln = u32::from_le_bytes(d.get(20..24)?.try_into().ok()?) as usize;
+    let ln = u32::from_le_bytes(crate::try_bytes_at(d, 20)?) as usize;
     d.get(28..28 + ln)
 }
 
@@ -108,10 +108,7 @@ impl CalAdc {
     }
 
     fn s16(&self, o: usize) -> i32 {
-        i16::from_le_bytes([self.p[o], self.p[o + 1]]) as i32
-    }
-    fn i32(&self, o: usize) -> i32 {
-        i32::from_le_bytes(crate::bytes_at(&self.p, o))
+        i16::from_le_bytes(crate::bytes_at(&self.p, o)) as i32
     }
     fn gain_src(&self, mode: usize, core: usize) -> usize {
         let ch = if mode <= 3 {
@@ -134,9 +131,11 @@ impl CalAdc {
     fn fine(&self, mode: usize) -> u32 {
         let buf: Vec<i32> = if mode < 10 {
             let (i, j) = FINE_PAIR[mode];
-            (0..16).map(|k| self.i32(FINE + 64 * if k < 8 { i } else { j } + 4 * k)).collect()
+            (0..16)
+                .map(|k| i32::from_le_bytes(crate::bytes_at(&self.p, FINE + 64 * if k < 8 { i } else { j } + 4 * k)))
+                .collect()
         } else {
-            (0..16).map(|k| self.i32(FINE + 64 * (k / 4) + 4 * k)).collect()
+            (0..16).map(|k| i32::from_le_bytes(crate::bytes_at(&self.p, FINE + 64 * (k / 4) + 4 * k))).collect()
         };
         buf.iter().enumerate().fold(0, |v, (k, &f)| v | ((f as u32 & 3) << (2 * k)))
     }
@@ -337,6 +336,32 @@ pub fn measure(bus: &mut dyn crate::dho::bus::Bus, sleep_ms: &mut dyn FnMut(u32)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The container length and `s16` read through `try_bytes_at`/`bytes_at` as the old readers did, at every offset of
+    /// a real-sized payload and of short ones: the same value, `None` and a panic at the same places.
+    #[test]
+    fn readers_match_the_old_ones() {
+        fn old_container(d: &[u8]) -> Option<&[u8]> {
+            let ln = u32::from_le_bytes(d.get(20..24)?.try_into().ok()?) as usize;
+            d.get(28..28 + ln)
+        }
+        let old_s16 = |p: &[u8], o: usize| i16::from_le_bytes([p[o], p[o + 1]]) as i32;
+        for n in [0usize, 1, 2, 3, 20, 23, 24, 28, 0x738 - 1, 0x738, 0x738 + 28] {
+            let mut p: Vec<u8> = (0..n).map(|i| (i * 167 + 13) as u8).collect();
+            if n >= 24 {
+                p[20..24].copy_from_slice(&(n.saturating_sub(28) as u32).to_le_bytes());
+            }
+            for k in 0..=p.len() {
+                assert_eq!(container(&p[..k]), old_container(&p[..k]), "container of {} bytes", k);
+            }
+            let c = CalAdc { p: p.clone() };
+            for o in 0..n + 3 {
+                let new = std::panic::catch_unwind(|| c.s16(o)).ok();
+                assert_eq!(new, std::panic::catch_unwind(|| old_s16(&p, o)).ok(), "s16 at {} of {}", o, n);
+                assert_eq!(new.is_some(), o + 2 <= n);
+            }
+        }
+    }
 
     #[test]
     fn core_offset_words() {

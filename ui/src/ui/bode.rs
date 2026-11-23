@@ -132,7 +132,7 @@ impl Ui {
             }
             v.extend([BodeOut, BodeGen, BodeSync, BodeSyncEdge, BodeSyncLvl]);
             if !self.bode.points.is_empty() {
-                v.push(BodeCur);
+                v.extend([BodeCur, BodeSave]);
             }
             return v;
         }
@@ -148,9 +148,9 @@ impl Ui {
             Item::BodeOut,
             Item::BodeGen,
         ];
-        // a cursor once there is something to read
+        // a cursor, and saving, once there is something to read
         if !self.bode.points.is_empty() {
-            v.push(Item::BodeCur);
+            v.extend([Item::BodeCur, Item::BodeSave]);
         }
         // the generator itself (model, connection, address) has a page of its own
         if self.bode_gen() != BUILTIN {
@@ -162,7 +162,7 @@ impl Ui {
     pub(super) fn bode_kind(it: Item) -> Option<Kind> {
         Some(match it {
             Item::BodeCur => Kind::Value,
-            Item::BodeRun => Kind::Action,
+            Item::BodeRun | Item::BodeSave => Kind::Action,
             Item::BodeOn | Item::BodeIn | Item::BodeOut | Item::BodeGen | Item::BodeSync => Kind::Choice,
             _ => return None,
         })
@@ -173,6 +173,7 @@ impl Ui {
             Item::Open(MenuId::Bode) => "Bode",
             Item::BodeOn => "View",
             Item::BodeRun => "Start / stop sweep",
+            Item::BodeSave => "Save CSV",
             Item::BodeIn => "Input (ref)",
             Item::BodeOut => "Output",
             Item::BodeGen => "Generator",
@@ -216,24 +217,31 @@ impl Ui {
         let free = self.bode_gen() == FREE;
         // the free sweep's input is an optional channel (`bode_sw_in`); otherwise both are any wave, a ref too
         if it == Item::BodeOut || (it == Item::BodeIn && !free) {
-            let cur = if it == Item::BodeIn { self.m.bode_in } else { self.m.bode_out };
-            let next = self.step_wave(cur, d);
             if it == Item::BodeIn {
-                self.m.bode_in = next;
+                self.m.bode_in = self.step_wave(self.m.bode_in, d);
             } else {
-                self.m.bode_out = next;
+                self.m.bode_out = self.step_wave(self.m.bode_out, d);
             }
             return true;
         }
-        // the external generator is the model of its page
-        let next_gen =
-            [BUILTIN, self.ext_model(), FREE][(self.bode_source() as i32 + d).rem_euclid(SOURCES.len() as i32) as usize];
+        // a generator that measures in another mode (the free sweep always in dB): the points of the last sweep are of
+        // the mode before, so they go, as with a change of the mode itself (setting_items.rs)
+        if it == Item::BodeGen {
+            let before = self.bode_mode();
+            // the external generator is the model of its page
+            let next = (self.bode_source() as i32 + d).rem_euclid(SOURCES.len() as i32) as usize;
+            self.m.bode_gen = [BUILTIN, self.ext_model(), FREE][next];
+            if self.bode_mode() != before {
+                self.bode.points.clear();
+                self.bode.cursor = 0;
+            }
+            return true;
+        }
         let m = &mut self.m;
         match it {
             Item::BodeOn => super::analysers::toggle_view(m, AView::Bode),
             Item::BodeIn if free => m.bode_sw_in = opt_src_step(m.bode_sw_in, d),
             Item::BodeSync => m.bode_sync = src_step(m.bode_sync, NCH, d),
-            Item::BodeGen => m.bode_gen = next_gen,
             Item::BodeCur => {
                 let n = self.bode.points.len() as i32;
                 self.bode.cursor = (self.bode.cursor as i32 + d).clamp(0, (n - 1).max(0)) as usize;
@@ -243,7 +251,22 @@ impl Ui {
         true
     }
 
+    /// Multi 2 with the menu closed: moves the cursor of a Bode plot that has points; false where there is none.
+    pub(super) fn bode_cursor_step(&mut self, d: i32) -> bool {
+        if self.m.view != AView::Bode || self.bode.points.is_empty() {
+            return false;
+        }
+        self.adjust(Item::BodeCur, d);
+        true
+    }
+
     pub(super) fn bode_activate(&mut self, it: Item) -> bool {
+        if it == Item::BodeSave {
+            let p = self.new_file(&self.save_dir(), "bode", "csv");
+            let r = crate::store::write(&p, self.bode_csv().as_bytes());
+            self.toast_saved(&p, r);
+            return true;
+        }
         if it != Item::BodeRun {
             return false;
         }
@@ -645,6 +668,18 @@ impl Ui {
             self.bode_activate(Item::BodeRun);
         }
     }
+    /// The points as a CSV file (#53): a header, then frequency, gain and phase per line; the gain in dB, or the
+    /// linear Vout/Vin ratio of an impedance sweep, and no phase where there is none.
+    pub(super) fn bode_csv(&self) -> String {
+        let gain = if self.bode_mode() == oos_dsp::bode::Mode::Z { "Vout/Vin" } else { "Gain (dB)" };
+        let mut s = format!("Frequency (Hz),{},Phase (deg)\n", gain);
+        for &(hz, g, p) in &self.bode.points {
+            let p = if p.is_nan() { String::new() } else { format!("{:.2}", p) };
+            s.push_str(&format!("{},{:.3},{}\n", hz, g, p));
+        }
+        s
+    }
+
     pub fn bode_text(&self) -> String {
         self.bode
             .points
@@ -688,8 +723,7 @@ impl Ui {
             }
             d *= 10.0;
         }
-        cv.hline(a.x, a.x + a.w, py(0.0), LINE);
-        cv.hline(a.x, a.x + a.w, gy(0.0).clamp(gt, gb), LINE);
+        self.draw_bode_values(cv, (gt, gb, gmin, gmax), (pt, pb));
         let col_g = self.wave_color(self.m.bode_out);
         let mut prev: Option<((i32, i32), (i32, i32))> = None;
         for &(hz, g, p) in &self.bode.points {
@@ -721,9 +755,10 @@ impl Ui {
         };
         let mode = self.bode_mode();
         let (what, span) = match mode {
-            oos_dsp::bode::Mode::Psrr => ("PSRR", format!("{:.0} .. {:.0} dB", gmin, gmax)),
-            oos_dsp::bode::Mode::Z => ("Vout/Vin", format!("{:.3} .. {:.3}", gmin, gmax)),
-            oos_dsp::bode::Mode::Loop => ("Gain", format!("{:.0} .. {:.0} dB", gmin, gmax)),
+            // + 0.0: a range that ends at -0 reads 0
+            oos_dsp::bode::Mode::Psrr => ("PSRR", format!("{:.0} .. {:.0} dB", gmin + 0.0, gmax + 0.0)),
+            oos_dsp::bode::Mode::Z => ("Vout/Vin", format!("{:.3} .. {:.3}", gmin + 0.0, gmax + 0.0)),
+            oos_dsp::bode::Mode::Loop => ("Gain", format!("{:.0} .. {:.0} dB", gmin + 0.0, gmax + 0.0)),
         };
         cv.text(
             &f.s,
@@ -760,6 +795,37 @@ impl Ui {
         cv.set_clip(r);
         cv.text_in(&f.s, r, 1, &status, TEXT);
         cv.no_clip();
+    }
+
+    /// The values of both axes (#387): a line at every round step of the gain (dB, or V/V for impedance) and of the
+    /// phase, each labelled at the left edge, above its line or below it where a title stands, else left out.
+    fn draw_bode_values(&self, cv: &mut Canvas, gain: (i32, i32, f64, f64), phase: (i32, i32)) {
+        let a = self.plot.area;
+        let f = self.fonts();
+        let (gt, gb, gmin, gmax) = gain;
+        let (pt, pb) = phase;
+        let mid = a.y + a.h / 2;
+        // the rows the titles, the cursor's text and the margins take
+        let taken = [(gt, gt + 16), (mid - 12, mid + 4), (pt, pt + 16), (pt + 18, pt + 32)];
+        let free = |top: i32| top >= a.y && !taken.iter().any(|&(t, b)| top < b && top + 14 > t);
+        let label = |cv: &mut Canvas, y: i32, text: &str, col| {
+            if free(y - 15) {
+                cv.text(&f.s, a.x + 6, y - 3, text, col);
+            } else if free(y + 1) {
+                cv.text(&f.s, a.x + 6, y + 13, text, col);
+            }
+        };
+        let z = self.bode_mode() == oos_dsp::bode::Mode::Z;
+        for (g, text) in gain_values(gmin, gmax, z) {
+            let y = gb - ((g - gmin) / (gmax - gmin) * (gb - gt) as f64).round() as i32;
+            cv.hline(a.x, a.x + a.w, y, LINE);
+            label(cv, y, &text, DIM);
+        }
+        for (p, text) in PHASE_VALUES {
+            let y = pb - ((p + 180.0) / 360.0 * (pb - pt) as f64).round() as i32;
+            cv.hline(a.x, a.x + a.w, y, LINE);
+            label(cv, y, text, DIM);
+        }
     }
 
     /// The ends of the gain axis for the points measured so far.
@@ -866,6 +932,32 @@ impl super::analysers::Analyser for BodePage {
     fn draw(&self, ui: &Ui, cv: &mut Canvas) {
         ui.draw_bode(cv);
     }
+}
+
+/// The values of the phase axis and their labels, every 90 degrees.
+const PHASE_VALUES: [(f64, &str); 5] =
+    [(-180.0, "-180\u{b0}"), (-90.0, "-90\u{b0}"), (0.0, "0\u{b0}"), (90.0, "90\u{b0}"), (180.0, "180\u{b0}")];
+
+/// The values of the gain axis from `gmin` to `gmax` at a round step, with their labels: dB, or the linear ratio
+/// of an impedance sweep (`z`) in V/V with as many decimals as the step needs. A value of -0 reads 0.
+fn gain_values(gmin: f64, gmax: f64, z: bool) -> Vec<(f64, String)> {
+    let step = axis_step(gmax - gmin, 5);
+    let digits = if z { (-step.log10().floor()).max(0.0) as usize } else { 0 };
+    let first = (gmin / step).ceil() as i64;
+    let last = (gmax / step + 1e-6).floor() as i64;
+    (first..=last)
+        .map(|k| {
+            let g = k as f64 * step + 0.0;
+            (g, if z { format!("{:.*} V/V", digits, g) } else { format!("{:.0} dB", g) })
+        })
+        .collect()
+}
+
+/// A round step (1, 2 or 5 times a power of ten) that divides `span` into at most `lines` parts.
+fn axis_step(span: f64, lines: usize) -> f64 {
+    let raw = (span / lines as f64).max(f64::MIN_POSITIVE);
+    let p = 10f64.powf(raw.log10().floor());
+    [1.0, 2.0, 5.0, 10.0].into_iter().map(|k| k * p).find(|&s| s >= raw).unwrap_or(10.0 * p)
 }
 
 #[cfg(test)]
@@ -1015,6 +1107,133 @@ mod tests {
             ui.render(&mut cv);
         }
         assert!(ui.bode.running || (ui.m.tscale == ts0 && ui.m.trig_mode == TrigMode::Auto), "{:?}", ui.toast);
+    }
+
+    /// The axes show their values (#387): round steps of the gain and the phase, labelled where no title stands.
+    #[test]
+    fn the_axes_show_their_values() {
+        assert_eq!(
+            [axis_step(50.0, 5), axis_step(60.0, 5), axis_step(0.3, 5), axis_step(2.2, 5)],
+            [10.0, 20.0, 0.1, 0.5]
+        );
+        let texts = |v: Vec<(f64, String)>| v.into_iter().map(|(_, t)| t).collect::<Vec<_>>();
+        assert_eq!(texts(gain_values(-60.0, -0.0, false)), ["-60 dB", "-40 dB", "-20 dB", "0 dB"]);
+        assert_eq!(texts(gain_values(-20.0, 10.0, false)), ["-20 dB", "-10 dB", "0 dB", "10 dB"]);
+        // impedance: the linear ratio, with its unit and the decimals of its step
+        assert_eq!(texts(gain_values(0.18, 1.12, true)), ["0.2 V/V", "0.4 V/V", "0.6 V/V", "0.8 V/V", "1.0 V/V"]);
+        assert_eq!(texts(gain_values(0.0, 2.0, true)), ["0.0 V/V", "0.5 V/V", "1.0 V/V", "1.5 V/V", "2.0 V/V"]);
+        assert_eq!(PHASE_VALUES.map(|p| p.1), ["-180\u{b0}", "-90\u{b0}", "0\u{b0}", "90\u{b0}", "180\u{b0}"]);
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.view = AView::Bode;
+        // a first-order low pass at 10 kHz, 1 kHz .. 1 MHz
+        ui.bode.points = (0..=30)
+            .map(|i| {
+                let hz = 1e3 * 1e3f64.powf(i as f64 / 30.0);
+                let x = hz / 1e4;
+                (hz, -10.0 * (1.0 + x * x).log10(), -x.atan().to_degrees())
+            })
+            .collect();
+        ui.bode.cursor = 10;
+        let mut cv = Canvas::new(crate::ui::W, crate::ui::H);
+        ui.render(&mut cv);
+        if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+            std::fs::write(std::path::Path::new(&dir).join("bode-axes.png"), crate::store::png_of(&cv)).unwrap();
+        }
+        let (gmin, gmax) = ui.bode_gain_range();
+        assert_eq!((gmin, gmax), (-60.0, 0.0));
+    }
+
+    /// The points of a sweep go to a CSV file on the storage (#53): a header, one line a point, no phase where there
+    /// is none; the row is there only once there are points.
+    #[test]
+    fn the_points_are_saved_as_csv() {
+        let dir = crate::ui::testkit::Scratch::new("bode-csv");
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.files.dir = dir.to_path_buf();
+        assert!(!ui.bode_items().contains(&Item::BodeSave), "nothing to save yet");
+        ui.bode.points = vec![(1e3, -0.043, -5.71), (1e4, -3.010, -45.0), (1e5, -20.043, f64::NAN)];
+        assert!(ui.bode_items().contains(&Item::BodeSave));
+        ui.activate(Item::BodeSave);
+        let files: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).collect();
+        assert_eq!(files.len(), 1, "{files:?}");
+        assert!(files[0].file_name().unwrap().to_string_lossy().starts_with("bode"), "{files:?}");
+        assert_eq!(
+            std::fs::read_to_string(&files[0]).unwrap(),
+            "Frequency (Hz),Gain (dB),Phase (deg)\n1000,-0.043,-5.71\n10000,-3.010,-45.00\n100000,-20.043,\n"
+        );
+    }
+
+    /// A generator that measures in another mode drops the points of the last sweep, so neither the plot nor the CSV
+    /// shows linear ratios as dB; one in the same mode keeps them.
+    #[test]
+    fn a_generator_of_another_mode_drops_the_points() {
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.bode_mode = oos_dsp::bode::Mode::Z;
+        ui.m.bode_gen = BUILTIN;
+        ui.bode.points = vec![(1e3, 0.5, 10.0)];
+        assert!(ui.bode_csv().starts_with("Frequency (Hz),Vout/Vin,"));
+        // to the generator after the built-in one: an external one, still in impedance mode
+        let next = (BUILTIN + 1) % GENERATORS.len();
+        if next != FREE {
+            ui.adjust(Item::BodeGen, 1);
+            assert_eq!(ui.bode.points.len(), 1, "same mode: the points stay");
+        }
+        while ui.bode_gen() != FREE {
+            ui.adjust(Item::BodeGen, 1);
+        }
+        assert!(ui.bode.points.is_empty(), "the free sweep measures in dB: the impedance points go");
+        assert!(!ui.bode_items().contains(&Item::BodeSave));
+    }
+
+    /// With the menu closed, multi 2 moves the cursor of a Bode plot that has points (#50); without points, or with
+    /// multi 1, the knob opens the menu as before.
+    #[test]
+    fn multi_2_moves_the_cursor_with_the_menu_closed() {
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.view = AView::Bode;
+        ui.close_menu();
+        ui.knob_turn(key::MULTI2_CW, 1);
+        assert!(ui.menu_open, "no points: the menu opens");
+        ui.close_menu();
+        ui.bode.points = (0..10).map(|i| (1e3 * (i + 1) as f64, -(i as f64), -10.0 * i as f64)).collect();
+        ui.knob_turn(key::MULTI2_CW, 3);
+        assert!(!ui.menu_open && ui.bode.cursor == 3, "cursor {}", ui.bode.cursor);
+        ui.knob_turn(key::MULTI2_CW, -1);
+        assert_eq!(ui.bode.cursor, 2);
+        ui.knob_turn(key::MULTI2_CW, 50);
+        assert_eq!(ui.bode.cursor, 9, "the last point");
+        ui.knob_turn(key::MULTI1_CW, 1);
+        assert!(ui.menu_open, "multi 1 opens the menu as before");
+    }
+
+    /// The amplitude takes any value from the number pad, as a tap on it opens (#52): 350 mVpp, 1.25 Vpp; outside
+    /// 10 mVpp to 20 Vpp it is refused.
+    #[test]
+    fn the_amplitude_takes_any_value_from_the_pad() {
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.view = AView::Bode;
+        ui.open_menu(MenuId::Bode);
+        let typed = |ui: &mut Ui, keys: &[&str]| {
+            ui.open_row_pad(Item::BodeAmp);
+            for k in keys {
+                let i = ui.row_pad_keys().iter().position(|x| x == k).unwrap_or_else(|| panic!("no key {k}"));
+                ui.row_pad_key(i);
+            }
+        };
+        typed(&mut ui, &["3", "5", "0", "mVpp"]);
+        assert!((ui.m.bode_amp - 0.35).abs() < 1e-12 && ui.value(Item::BodeAmp) == "350 mVpp", "{}", ui.m.bode_amp);
+        typed(&mut ui, &["1", ".", "2", "5", "Vpp"]);
+        assert_eq!((ui.m.bode_amp, ui.value(Item::BodeAmp)), (1.25, "1.25 Vpp".into()));
+        typed(&mut ui, &["5", "0", "Vpp"]);
+        assert_eq!(ui.m.bode_amp, 1.25, "50 Vpp is refused");
+        // the knob still steps 1-2-5 from there: up to the next step, down to the one below, whatever lies between
+        ui.adjust(Item::BodeAmp, 1);
+        assert_eq!(ui.m.bode_amp, 2.0);
+        for (x, d, want) in [(1.999, 1, 2.0), (1.0005, 1, 2.0), (1.25, -1, 1.0), (1.999, -1, 1.0), (2.0, 1, 5.0)] {
+            ui.m.bode_amp = x;
+            ui.adjust(Item::BodeAmp, d);
+            assert_eq!(ui.m.bode_amp, want, "{x} by {d}");
+        }
     }
 
     #[test]

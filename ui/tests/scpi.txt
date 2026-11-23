@@ -334,3 +334,9 @@ scpi $S/scpi-answers.txt :SYSTem:ERRor?
 # a reference's scale and offset without a slot go to the selected slot (docs/scpi.md: [<slot>,]<V/div>)
 scpi $S/scpi-answers.txt :REFerence:SLOT R1;:REFerence:SAVE;:REFerence:VSCale 2;:REFerence:VSCale?
 scpi $S/scpi-answers.txt :REFerence:VOFFset 0.1;:REFerence:VOFFset?;:SYSTem:ERRor?
+# a bad value of a known header is -224 with the value, an unknown header -113 (#120); none of them changes a setting
+scpi $S/scpi-answers.txt :TRIGger:HOLDoff 11;:SYSTem:ERRor?;:TRIGger:HOLDoff?
+scpi $S/scpi-answers.txt :CHANnel1:OFFSet 1e39;:SYSTem:ERRor?;:CHANnel1:PROBe 0;:SYSTem:ERRor?
+scpi $S/scpi-answers.txt :ACQuire:MDEPth 200M;:SYSTem:ERRor?;:ACQuire:MDEPth 7;:SYSTem:ERRor?
+scpi $S/scpi-answers.txt :TRIGger:EDGE:SOURce D0;:SYSTem:ERRor?;:CHANnel1:COUPling DC50;:SYSTem:ERRor?
+scpi $S/scpi-answers.txt :TIMebase:SCALe x;:SYSTem:ERRor?;:TRIGger:HOLDover 1;:SYSTem:ERRor?

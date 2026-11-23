@@ -411,7 +411,7 @@ pub fn mask_text(src: usize, x: f32, y: f32, inv: bool, v: &[f32]) -> String {
 
 pub fn parse_mask(text: &str) -> Result<MaskFile, String> {
     // a tolerance is a number: inf or NaN would become the margin of the mask in the model
-    let tolerance = |v: &str| match v.trim().parse::<f32>() {
+    let tolerance = |v: &str| match v.parse::<f32>() {
         Ok(t) if t.is_finite() => Ok(t),
         Ok(t) => Err(format!("mask tolerance {}", t)),
         Err(e) => Err(e.to_string()),
@@ -424,19 +424,15 @@ pub fn parse_mask(text: &str) -> Result<MaskFile, String> {
     if lines.peek().is_some_and(|l| l.starts_with("# OOS mask")) {
         lines.next();
         for line in lines.by_ref() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            if line == "---" {
-                break;
-            }
-            let Some((k, v)) = line.split_once('=') else {
-                return Err(format!("mask header: {}", line));
+            let (k, v) = match key_value(line) {
+                None => continue,
+                Some(Ok(kv)) => kv,
+                Some(Err("---")) => break,
+                Some(Err(line)) => return Err(format!("mask header: {}", line)),
             };
-            match k.trim() {
+            match k {
                 "src" => {
-                    let n: usize = v.trim().parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+                    let n: usize = v.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
                     if !(1..=NCH).contains(&n) {
                         return Err(format!("mask src {}", n));
                     }
@@ -444,7 +440,7 @@ pub fn parse_mask(text: &str) -> Result<MaskFile, String> {
                 }
                 "x" => x = Some(tolerance(v)?),
                 "y" => y = Some(tolerance(v)?),
-                "inv" => inv = Some(matches!(v.trim(), "1" | "true" | "on")),
+                "inv" => inv = Some(matches!(v, "1" | "true" | "on")),
                 _ => {}
             }
         }
