@@ -57,6 +57,8 @@ pub struct PaneState {
     events_t: f64,
     /// the first row the Events pane shows, and the row chosen by a tap
     pub ev_top: usize,
+    /// when the list of the Events pane was last scrolled: its bar shows for a moment after that, else it is not drawn
+    pub ev_bar_t: Option<f64>,
     pub ev_sel: Option<super::decrows::EvSel>,
     /// rows the Events pane is high enough for, and when the list last needed them
     event_rows: usize,
