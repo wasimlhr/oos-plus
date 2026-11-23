@@ -77,8 +77,9 @@ pub(super) fn one_wave_file(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, 
     }
     if let Ok(text) = std::str::from_utf8(bytes) {
         // the coefficients of a filter: its taps are a waveform at the sample step of the filter
-        if let Some(taps) = parse_filter_taps(text, name) {
-            return Ok(vec![taps]);
+        let taps = parse_filter_taps(text, name);
+        if !taps.is_empty() {
+            return Ok(taps);
         }
         if keysight_text_kind(text) == Some("WaveformYValues") {
             return parse_keysight_y(text, name).map(|t| vec![t]);
@@ -109,20 +110,41 @@ pub(super) fn one_wave_file(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, 
     Err("that file is not a waveform".into())
 }
 
-/// The taps of a filter file (`.flt`): a text with comment lines (`//`), and a line `fs;c0,c1,c2,...`, the sample rate
-/// of the filter (the sign `@` may stand before it) and its coefficients. The trace is the taps at the sample step
-/// `1 / fs`; its label is the file's name. None when no line has that form (a filter that is a pure delay has none).
-pub(super) fn parse_filter_taps(text: &str, name: &str) -> Option<WaveTrace> {
+/// The taps of a filter file (`.flt`): a text with comment lines (`//`), and lines `fs;c0,c1,c2,...`, each the sample
+/// rate of a set of taps (the sign `@` may stand before it) and its coefficients. A file made for several sample rates
+/// has a line for each (seen: six sets of 101 taps, from 625 kS/s to 5 MS/s). Each set is a trace at the sample step
+/// `1 / fs`; with more than one, the label has the rate. Empty when no line has that form (a filter that is a pure
+/// delay has none).
+pub(super) fn parse_filter_taps(text: &str, name: &str) -> Vec<WaveTrace> {
+    let stem: String = name.rsplit_once('.').map_or(name, |(stem, _)| stem).chars().take(10).collect();
+    let mut sets = Vec::new();
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with("//")) {
         let Some((rate, taps)) = line.trim_start_matches('@').split_once(';') else { continue };
         let Ok(fs) = rate.trim().parse::<f64>() else { continue };
-        let v: Vec<f32> = taps.split(',').filter_map(|c| c.trim().parse::<f32>().ok()).filter(|c| c.is_finite()).collect();
-        if fs.is_finite() && fs > 0.0 && v.len() >= 2 && v.len() >= taps.split(',').filter(|c| !c.trim().is_empty()).count() {
-            let label = name.rsplit_once('.').map_or(name, |(stem, _)| stem).chars().take(10).collect();
-            return Some(WaveTrace { t0: 0.0, dt: 1.0 / fs, v, label });
+        let cells: Vec<&str> = taps.split(',').filter(|c| !c.trim().is_empty()).collect();
+        let v: Vec<f32> = cells.iter().filter_map(|c| c.trim().parse::<f32>().ok()).filter(|c| c.is_finite()).collect();
+        if fs.is_finite() && fs > 0.0 && v.len() >= 2 && v.len() == cells.len() {
+            sets.push((fs, v));
         }
     }
-    None
+    let several = sets.len() > 1;
+    sets.into_iter()
+        .map(|(fs, v)| WaveTrace {
+            t0: 0.0,
+            dt: 1.0 / fs,
+            v,
+            label: if several { format!("{} {}", stem.chars().take(6).collect::<String>(), si_short_rate(fs)) } else { stem.clone() },
+        })
+        .collect()
+}
+
+/// A sample rate as a short label: `5M`, `625k`.
+fn si_short_rate(fs: f64) -> String {
+    if fs >= 1e6 {
+        format!("{}M", fs / 1e6)
+    } else {
+        format!("{}k", fs / 1e3)
+    }
 }
 
 /// What the first lines of a RIGOL CSV file say: the channel of each column and, in a file whose first column

@@ -16,7 +16,8 @@ Added:
   is taken from the samples the scope took when the screen record is interpolated, so its band ends at half the sample
   rate and not at 3.6 GHz. The math chips of the bottom bar show their scale a division like the channels.
 - A filter can be your own: the Custom response takes the taps of a filter file (`.flt` of a Tektronix session, or any
-  waveform file, loaded with Reference > Load file) from the reference chosen as Source B, at the step of the file.
+  waveform file, loaded with Reference > Load file, a set of taps for each sample rate of the file) from the reference
+  chosen as Source B, at the step of the file.
   Save to reference on the Math sheet keeps the result of a math channel as a reference, to measure and compare. The
   custom filters of a Tektronix session archive load with their taps.
 - The Histogram, XY and Eye windows have a settings button too. The selected chip of the bottom bar has a thick border.

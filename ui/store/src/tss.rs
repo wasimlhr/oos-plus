@@ -257,7 +257,7 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
         };
         let Ok(bytes) = inner.read(e, TSS_TEXT_BYTES) else { continue };
         let label = format!("filter M{n}");
-        if let Some(t) = std::str::from_utf8(&bytes).ok().and_then(|text| parse_filter_taps(text, &label)) {
+        if let Some(t) = std::str::from_utf8(&bytes).ok().and_then(|text| parse_filter_taps(text, &label).into_iter().next()) {
             taps.push((n, t));
         }
     }
