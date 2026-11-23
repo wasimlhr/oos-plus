@@ -241,6 +241,7 @@ Commands: [math.md](math.md).
 | `m<n>.filt` | the same for math channels 2 to 8: the designer's settings as `<response> <order> <ripple> <symbol> <roll-off> <delay>` | `Simple 4 1 0.000001 0.35 0.000001` | - |
 | `m<n>.lin` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `1 0` | - |
 | `math_expr<n>` | optional: the formula text of channel n | - | `:MATH<n>:EXPRession` |
+| `math_label<n>` | optional: the name of math trace n, up to 10 characters | - | `:MATH<n>:LABel:CONTent` |
 
 ## Spectrum
 

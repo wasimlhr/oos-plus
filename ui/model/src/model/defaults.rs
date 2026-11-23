@@ -111,6 +111,7 @@ impl Default for Model {
             math_fc: 10e3,
             math_lin: (1.0, 0.0),
             math_expr: Default::default(),
+            math_label: Default::default(),
             log_ivl: 0,
             spec_margin: 10.0,
             decs: Default::default(),

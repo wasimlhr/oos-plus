@@ -396,6 +396,11 @@ fn set_meas_math(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<
             let e = m.math_expr.get_mut(n.wrapping_sub(1)).ok_or("unknown math channel")?;
             *e = v.trim().chars().take(oos_dsp::expr::EXPR_MAX).collect();
         }
+        k if k.starts_with("math_label") => {
+            let n = k[10..].parse::<usize>().map_err(|_| "math_label: no number")?;
+            let l = m.math_label.get_mut(n.wrapping_sub(1)).ok_or("unknown math channel")?;
+            *l = v.trim().chars().take(10).collect();
+        }
         "math_lin" => {
             let (a, b) = v.split_once(' ').ok_or("math_lin: two numbers")?;
             m.math_lin = (p_f32(a)?, p_f32(b)?);

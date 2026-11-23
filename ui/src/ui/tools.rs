@@ -1413,6 +1413,11 @@ impl Ui {
         }
     }
 
+    /// Name of a math trace: its label, or Mn.
+    pub(super) fn math_name(&self, k: usize) -> String {
+        if self.m.math_label[k].is_empty() { format!("M{}", k + 1) } else { self.m.math_label[k].clone() }
+    }
+
 }
 
 /// One knob step of a measurement time (burst idle, setup, hold): off, then 1-2-5 from 1 ns to 5 s. A longer time

@@ -262,6 +262,7 @@ const KEYS: &[(&str, P)] = &[
         ]),
     ),
     ("math_expr8", Is(&["CH1"])),
+    ("math_label1", Is(&["Vdiff", "  padded  ", "0123456789X", "a=b", "#hash"])),
     ("log_ivl", Idx(10)),
     ("spec_margin", Num(&["60", "61", "-1"])),
     ("math_offset", Num(&[])),
@@ -452,6 +453,9 @@ const KEYS: &[(&str, P)] = &[
     ("m0.op", Is(&["Add"])),
     ("m9.op", Is(&["Add"])),
     ("m2.nope", Is(&["1"])),
+    ("math_label0", Is(&["x"])),
+    ("math_label9", Is(&["x"])),
+    ("math_labelx", Is(&["x"])),
     ("math_expr0", Is(&["CH1"])),
     ("math_expr9", Is(&["CH1"])),
     ("math_exprx", Is(&["CH1"])),
@@ -567,7 +571,7 @@ fn family(k: &str) -> String {
             }
         }
     }
-    for prefix in ["deskew_ch", "deskew_ref", "math_expr", "view", "zone"] {
+    for prefix in ["deskew_ch", "deskew_ref", "math_expr", "math_label", "view", "zone"] {
         if k.strip_prefix(prefix).is_some_and(number) {
             return format!("{}1", prefix);
         }
@@ -631,6 +635,7 @@ fn full_setup_text() -> String {
     }
     lines.extend((1..=NREF).map(|r| format!("deskew_ref{} = 1e-9", r)));
     lines.extend((1..=crate::math::NMATH).map(|k| format!("math_expr{} = CH1", k)));
+    lines.extend((1..=crate::math::NMATH).map(|k| format!("math_label{} = x", k)));
     lines.extend((1..=crate::ui::VIEWS_MAX).map(|k| format!("view{} = zoom=true", k)));
     lines.extend((2..=DECODERS).map(|k| format!("d{}.dec_on = true", k)));
     let m = crate::store::parse_setup(&lines.join("\n")).expect("the full setup loads");

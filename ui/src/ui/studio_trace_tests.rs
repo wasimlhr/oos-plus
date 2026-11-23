@@ -139,6 +139,45 @@ fn a_handle_stays_in_the_plot_and_clear_of_the_time_labels() {
     }
 }
 
+/// A channel the user named (`:CHANnel<n>:LABel:CONTent`) shows its name on its handle, and the handle grows to hold it.
+#[test]
+fn a_named_channel_has_its_name_on_its_handle() {
+    let mut u = bench();
+    picture(&mut u, "handle-unnamed-channel");
+    let plain = handles(&u).iter().find(|(s, _)| *s == Trace::Channel(0)).map(|(_, r)| *r).unwrap_or_default();
+    assert_eq!(plain.w, 44, "an unnamed channel keeps the narrow handle");
+    u.m.ch_label[0] = "FR_TXRX".into();
+    picture(&mut u, "handle-named-channel");
+    let named = handles(&u).iter().find(|(s, _)| *s == Trace::Channel(0)).map(|(_, r)| *r).unwrap();
+    assert!(named.w > 44, "the handle holds \"FR_TXRX\": {named:?}");
+    assert!(named.right() <= u.plot.area.right(), "and stays inside the plot: {named:?}");
+    assert_eq!(u.ch_name(0), "FR_TXRX");
+}
+
+/// A math trace takes its name the same way, and a name too long for a narrow pill is cut with a dot behind it, not
+/// replaced by CHn; a scale label moves clear of a handle.
+#[test]
+fn a_named_math_trace_and_a_narrow_pill_keep_their_names() {
+    let mut u = bench();
+    u.m.math_label[0] = "Vdiff_FRBP".into();
+    picture(&mut u, "handle-named-math");
+    let math = handles(&u).iter().find(|(s, _)| *s == Trace::Math(0)).map(|(_, r)| *r).expect("math handle");
+    assert!(math.w > 44, "the handle holds \"Vdiff_FRBP\": {math:?}");
+    assert_eq!(u.math_name(0), "Vdiff_FRBP");
+    assert_eq!(u.math_name(1), "M2");
+    // a pill 100 px wide has half its width for the name; a 60 px one has nearly all
+    u.m.ch_label[0] = "FR_TXRX_LONG".into();
+    let (text, bw) = u.pill_name(&u.ch_name(0), 100);
+    assert!(text.ends_with('.') && text.starts_with("FR_"), "cut with a dot: {text}");
+    assert!(bw <= 50, "inside half the pill: {bw}");
+    let (text, bw) = u.pill_name("Vcc", 60);
+    assert_eq!(text, "Vcc");
+    assert!(bw <= 56, "{bw}");
+    // an unnamed one stays as it was
+    assert_eq!(u.studio_pill_badge(1, 100).0, "CH2");
+    assert_eq!(u.studio_pill_badge(1, 100).1, 42);
+}
+
 /// A tap on the handle of a reference or of a math channel opens its sheet, as a channel's handle opens the channel.
 #[test]
 fn a_tap_on_a_handle_opens_the_sheet_of_its_source() {
