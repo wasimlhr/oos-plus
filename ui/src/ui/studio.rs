@@ -55,9 +55,6 @@ impl StudioView {
     pub(super) fn is_docked(self) -> bool { matches!(self, StudioView::Docked | StudioView::Offline | StudioView::Sim) }
 }
 
-/// Seconds the measurement chip stays out after a tap on its arrow.
-const MEAS_OUT_S: f64 = 3.0;
-
 /// The measurements panel (docked, in a tab or floating).
 #[derive(Default)]
 pub(super) struct StudioPanel {
@@ -1636,22 +1633,6 @@ impl Ui {
         Some(Rect::new(w.right() - 8 - wide, w.bottom() - 26 - 34, wide, 34))
     }
 
-    /// How far the measurement chip has slid out, 0 (just its arrow) to 1 (its count too): out in a fifth of a second
-    /// after a tap on the arrow, and back after `MEAS_OUT_S`.
-    pub(super) fn studio_meas_slide(&self) -> f64 {
-        let Some(t0) = self.studio.meas_out else { return 0.0 };
-        let dt = self.now - t0;
-        if dt < 0.0 || dt > MEAS_OUT_S + 0.2 {
-            0.0
-        } else if dt < 0.2 {
-            dt / 0.2
-        } else if dt > MEAS_OUT_S {
-            1.0 - (dt - MEAS_OUT_S) / 0.2
-        } else {
-            1.0
-        }
-    }
-
     /// Height the badge row takes from the lanes.
     pub(super) fn studio_row_h(&self) -> i32 {
         if self.studio_badges_visible() { self.studio_row_px() } else { 0 }
@@ -1824,16 +1805,7 @@ impl Ui {
     }
 
     pub(super) fn draw_studio_badges(&self, cv: &mut Canvas) {
-        if let Some(r) = self.studio_meas_chip() {
-            let f = self.fonts();
-            chip(cv, r, BTN, BTN_BORDER);
-            let out = self.studio_meas_slide() > 0.9;
-            if out {
-                cv.text_in(&f.sb, Rect::new(r.x + 8, r.y, r.w - 30, r.h), 0, &format!("Meas \u{b7} {}", self.measurement_count()), TEXT);
-            }
-            // the arrow points left while the chip is closed (it slides out), right once it is out (it opens the list)
-            chevron(cv, r.right() - 12, r.y + r.h / 2, if out { 1 } else { -1 }, TEXT);
-        }
+        self.draw_studio_meas_chip(cv);
         if !self.studio_badges_visible() { return; }
         let f = self.fonts();
         let row = self.studio_row();
@@ -1947,16 +1919,7 @@ impl Ui {
 
     /// A tap in the badge row: the eye hides it, a badge opens its popup.
     fn studio_badge_tap(&mut self, x: i32, y: i32) -> bool {
-        if let Some(r) = self.studio_meas_chip().filter(|r| Self::hit40(*r).contains(x, y)) {
-            if self.studio_meas_slide() > 0.9 {
-                // out: the count opens the list, the arrow takes the chip in
-                self.studio.meas_out = None;
-                if x < r.right() - 30 {
-                    self.studio_set_view(StudioView::Docked);
-                }
-            } else {
-                self.studio.meas_out = Some(self.now);
-            }
+        if self.studio_meas_chip_tap(x, y) {
             return true;
         }
         if !self.studio_badges_visible() || !self.studio_row().contains(x, y) { return false; }

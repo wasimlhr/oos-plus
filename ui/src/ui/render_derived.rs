@@ -491,14 +491,18 @@ impl Ui {
     }
 
     /// A ready filter on the selected math channel: its operation, response, order and a cut-off that goes with the
-    /// time base, then the scale fitted to what comes out.
+    /// time base or the sample rate, then the scale fitted to what comes out.
     pub(super) fn math_apply_preset(&mut self, i: usize) {
-        let (_, op, resp, order, per_div) = super::mathwave::FILT_PRESETS[i];
+        use super::mathwave::Cut;
+        let (_, op, resp, order, cut) = super::mathwave::FILT_PRESETS[i];
         self.math.family = MathFamily::Filter;
         self.m.math = op;
         self.m.math_filt.resp = resp;
         self.m.math_filt.order = order;
-        self.m.math_fc = (per_div / self.m.time_per_div() as f64) as f32;
+        self.m.math_fc = match cut {
+            Cut::PerDiv(n) => n / self.m.time_per_div() as f64,
+            Cut::OfRate(f) => self.m.srate_depth().0 * f,
+        } as f32;
         self.m.math_offset = 0.0;
         self.math.preset = Some(i);
         self.math_autoscale();

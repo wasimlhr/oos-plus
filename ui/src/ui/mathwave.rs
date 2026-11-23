@@ -34,12 +34,20 @@ struct Answer {
 /// A math channel's last result and the key it was computed for.
 type Cached = Option<(u64, Result<Arc<Signal>, &'static str>)>;
 
-/// The ready filters of the Preset row: name, operation, response, order, and the cut-off in periods of a division (a
-/// frequency of `1 / (n * time a division)`: the filter follows the time base the signal is looked at on).
-pub(super) const FILT_PRESETS: [(&str, MathOp, crate::math::FiltResp, u32, f64); 3] = [
-    ("Remove noise", MathOp::Lpf, crate::math::FiltResp::Butterworth, 4, 5.0),
-    ("Remove ringing", MathOp::Lpf, crate::math::FiltResp::Bessel, 4, 2.0),
-    ("Remove drift", MathOp::Hpf, crate::math::FiltResp::Butterworth, 2, 0.05),
+/// Where a preset puts its cut-off.
+#[derive(Clone, Copy)]
+pub(super) enum Cut {
+    /// the frequency of `1 / (n * time a division)`: it follows the time base the signal is looked at on
+    PerDiv(f64),
+    /// a fraction of the sample rate: what the samples can show (noise and ringing are as fast as the samples)
+    OfRate(f64),
+}
+
+/// The ready filters of the Preset row: name, operation, response, order and cut-off.
+pub(super) const FILT_PRESETS: [(&str, MathOp, crate::math::FiltResp, u32, Cut); 3] = [
+    ("Remove noise", MathOp::Lpf, crate::math::FiltResp::Butterworth, 4, Cut::OfRate(1.0 / 25.0)),
+    ("Remove ringing", MathOp::Lpf, crate::math::FiltResp::Bessel, 4, Cut::OfRate(1.0 / 30.0)),
+    ("Remove drift", MathOp::Hpf, crate::math::FiltResp::Butterworth, 2, Cut::PerDiv(0.05)),
 ];
 
 /// The math channels as the screen keeps them (ADR 0062).
