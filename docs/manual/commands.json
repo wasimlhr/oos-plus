@@ -8133,7 +8133,7 @@
       "- The remaining tokens are the UI name without spaces and punctuation (CAN-FD is CANFD, 1-Wire is 1WIRE, FlexRay is FLEXRAY, Quad-SPI is QUADSPI).",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
-     "returns": "The query answers PAR, RS232, IIC, SPI, CAN, LIN, or the token as written here. On a freshly started default model the query returns `RS232`."
+     "returns": "The query answers PAR, RS232, IIC, SPI, CAN, LIN and the tokens as written here. On a freshly started default model the query returns `RS232`."
     },
     {
      "header": ":BUS<n>:DISPlay",
