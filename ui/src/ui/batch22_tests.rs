@@ -453,8 +453,14 @@ fn the_badge_row_is_there_only_for_pinned_badges_with_the_panel_closed_and_never
     let chip = u.studio_meas_chip().expect("a way to the panel");
     let w = u.dock_wave_rect();
     assert!(chip.right() <= w.right() && chip.bottom() <= w.bottom());
+    // the chip is an arrow: a tap slides it out, a tap on its count opens the panel
     tap(&mut u, chip);
-    assert_eq!(u.studio.view, StudioView::Docked, "the chip opens the panel");
+    assert_ne!(u.studio.view, StudioView::Docked, "the arrow only slides the chip out");
+    for _ in 0..14 { frame(&mut u); }
+    let out = u.studio_meas_chip().expect("the chip is out");
+    assert!(out.w > chip.w, "{out:?} wider than {chip:?}");
+    tap(&mut u, Rect::new(out.x, out.y, out.w - 34, out.h));
+    assert_eq!(u.studio.view, StudioView::Docked, "the count opens the panel");
     // pinned and the panel open: no row
     for k in u.studio_keys() { u.studio_set_pin(k, true); }
     for _ in 0..4 { frame(&mut u); }

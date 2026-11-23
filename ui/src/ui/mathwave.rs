@@ -34,17 +34,27 @@ struct Answer {
 /// A math channel's last result and the key it was computed for.
 type Cached = Option<(u64, Result<Arc<Signal>, &'static str>)>;
 
+/// The ready filters of the Preset row: name, operation, response, order, and the cut-off in periods of a division (a
+/// frequency of `1 / (n * time a division)`: the filter follows the time base the signal is looked at on).
+pub(super) const FILT_PRESETS: [(&str, MathOp, crate::math::FiltResp, u32, f64); 3] = [
+    ("Remove noise", MathOp::Lpf, crate::math::FiltResp::Butterworth, 4, 5.0),
+    ("Remove ringing", MathOp::Lpf, crate::math::FiltResp::Bessel, 4, 2.0),
+    ("Remove drift", MathOp::Hpf, crate::math::FiltResp::Butterworth, 2, 0.05),
+];
+
 /// The math channels as the screen keeps them (ADR 0062).
 pub(super) struct Math {
     /// the Math menu's category, kept when the operation is Off
     pub family: MathFamily,
+    /// the clean-up preset last applied to the selected channel (`FILT_PRESETS`); not stored
+    pub preset: Option<usize>,
     /// the results, their worker and the scales to refit; drawing reads it through `&self`
     pub state: std::cell::RefCell<State>,
 }
 
 impl Default for Math {
     fn default() -> Math {
-        Math { family: MathFamily::Arith, state: Default::default() }
+        Math { family: MathFamily::Arith, preset: None, state: Default::default() }
     }
 }
 

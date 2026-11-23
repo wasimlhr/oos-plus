@@ -490,9 +490,30 @@ impl Ui {
         self.relayout();
     }
 
-    /// The Add filter row of an empty math channel: a Butterworth low-pass of the active channel with its cut-off at
+    /// A ready filter on the selected math channel: its operation, response, order and a cut-off that goes with the
+    /// time base, then the scale fitted to what comes out.
+    pub(super) fn math_apply_preset(&mut self, i: usize) {
+        let (_, op, resp, order, per_div) = super::mathwave::FILT_PRESETS[i];
+        self.math.family = MathFamily::Filter;
+        self.m.math = op;
+        self.m.math_filt.resp = resp;
+        self.m.math_filt.order = order;
+        self.m.math_fc = (per_div / self.m.time_per_div() as f64) as f32;
+        self.m.math_offset = 0.0;
+        self.math.preset = Some(i);
+        self.math_autoscale();
+        self.settings_changed();
+    }
+
+    /// The Add filter row, and Add > Filter when no filter is on: a Butterworth low-pass of the active channel with its cut-off at
     /// two periods a division and its gain plot, so that a filter is one tap away.
     pub(super) fn math_add_filter(&mut self) {
+        // a math channel that is free (the selected one when none is)
+        if let Some(free) = (0..NMATH).find(|&k| self.m.math_ch(k).op == MathOp::Off) {
+            if free != self.m.math_sel {
+                self.m.math_select(free);
+            }
+        }
         let k = self.m.math_sel;
         self.math.family = MathFamily::Filter;
         self.m.math = MathOp::Lpf;

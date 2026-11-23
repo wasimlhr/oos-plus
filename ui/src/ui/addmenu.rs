@@ -226,8 +226,14 @@ impl Ui {
                 self.select_option(Item::PaneSel, if on { "Traces" } else { "Bus view" });
             }
             AddRow::Filter => {
-                let on = self.m.pane == tables::PANE_FILTER;
-                self.select_option(Item::PaneSel, if on { "Traces" } else { "Filter" });
+                if self.m.pane == tables::PANE_FILTER {
+                    self.select_option(Item::PaneSel, "Traces");
+                } else if self.filter_pane_spec().is_none() {
+                    // no designed filter to show: make one, on a math channel that is free, and show its window
+                    self.math_add_filter();
+                } else {
+                    self.select_option(Item::PaneSel, "Filter");
+                }
             }
         }
         true

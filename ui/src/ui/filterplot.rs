@@ -148,6 +148,7 @@ impl Ui {
 mod tests {
     use super::*;
     use crate::math::{FiltResp, FILT_RESPS};
+    use crate::ui::addmenu::AddRow;
 
     fn pane_picture(u: &mut Ui) -> Vec<u8> {
         let mut cv = Canvas::new(W, H);
@@ -216,5 +217,46 @@ mod tests {
         assert_eq!((u.m.math, u.m.pane), (MathOp::Lpf, tables::PANE_FILTER));
         assert!(u.m.math_shown(u.m.math_sel));
         assert!(!u.items(MenuId::Math).contains(&Item::MathAddFilter));
+    }
+
+    /// Add > Filter with no filter on makes one on a free math channel, and a second one lands on the next free one
+    /// while the first stays as it was.
+    #[test]
+    fn add_filter_takes_a_free_math_channel() {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.m.layout = Layout::Studio;
+        u.studio.enter = true;
+        for _ in 0..10 {
+            u.step(0.05);
+        }
+        u.math_set_shown(0, true);
+        assert_eq!(u.m.math_ch(0).op, MathOp::Add);
+        u.studio.add_menu = true;
+        let (_, r) = u.studio_add_rows().into_iter().find(|(row, _)| *row == AddRow::Filter).expect("the row");
+        assert!(u.studio_add_tap(r.x + r.w / 2, r.y + r.h / 2));
+        assert_eq!(u.m.math_sel, 1, "M1 is in use, so the filter is M2");
+        assert_eq!((u.m.math, u.m.pane), (MathOp::Lpf, tables::PANE_FILTER));
+        assert_eq!(u.m.math_ch(0).op, MathOp::Add, "M1 is as it was");
+    }
+
+    /// The expand arrow of the Spectrum and Filter windows takes the window over the area; the way back restores it.
+    #[test]
+    fn the_spectrum_and_filter_windows_can_be_maximised() {
+        use crate::ui::dock::VKind;
+        for pane in [tables::PANE_SPECTRUM, tables::PANE_FILTER] {
+            let mut u = studio_with_filter();
+            u.select_option(Item::PaneSel, tables::PANES[pane]);
+            for _ in 0..4 {
+                u.step(0.05);
+            }
+            assert!(u.dock_shown(VKind::Pane), "pane {pane} shown");
+            let before = u.dock_rect(VKind::Pane).unwrap();
+            u.dock_maximise(VKind::Pane);
+            for _ in 0..4 {
+                u.step(0.05);
+            }
+            let after = u.dock_rect(VKind::Pane).unwrap();
+            assert!(after.w * after.h > before.w * before.h, "pane {pane}: {before:?} -> {after:?}");
+        }
     }
 }

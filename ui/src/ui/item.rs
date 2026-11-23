@@ -110,6 +110,8 @@ pub(super) enum Item {
     MathFiltSymbol,
     MathFiltRolloff,
     MathFiltDelay,
+    /// a ready filter for a common clean-up (`math_preset`)
+    MathFiltPreset,
     /// a Butterworth low-pass of the active channel, shown with its gain plot, from a math channel that is off
     MathAddFilter,
     Open(MenuId),

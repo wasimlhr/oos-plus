@@ -380,6 +380,7 @@ impl Ui {
             let designer = matches!(self.m.math, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf);
             let resp = self.m.math_filt.resp;
             if designer {
+                v.push(Item::MathFiltPreset);
                 v.push(Item::MathFiltResp);
             }
             if self.m.math.has_fc() && (!designer || resp.has_cutoff()) {
