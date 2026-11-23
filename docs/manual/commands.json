@@ -191,11 +191,11 @@
     {
      "header": "*OPT",
      "query": "*OPT?",
-     "desc": "`0`: no options are reported.",
+     "desc": "The options of this unit, comma separated: `LA`, `AFG`, `EXT`; `0` for none.",
      "remarks": [
       "- Origin: IEEE 488.2"
      ],
-     "returns": "On a freshly started default model the query returns `0`."
+     "returns": "On a freshly started default model the query returns `per unit`."
     },
     {
      "header": "*WAI",
@@ -469,6 +469,16 @@
       "- Origin: Rigol-compatible"
      ],
      "example": ":SYSTem:ERRor?    /*The query returns -221,\"Settings conflict\" Switching SCPI off needs the argument CONFIRM.*/\n:SYSTem:ERRor?    /*The query returns -221,\"Settings conflict\" Power off needs the argument CONFIRM.*/"
+    },
+    {
+     "header": ":SYSTem:OPTion:INSTalled",
+     "query": ":SYSTem:OPTion:INSTalled?",
+     "desc": "The same answer as `*OPT?`.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `per unit`.",
+     "ext": true
     },
     {
      "header": ":SYSTem:VERSion",
