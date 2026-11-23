@@ -125,7 +125,7 @@ impl Ui {
     pub(super) fn bode_items(&self) -> Vec<Item> {
         if self.bode_gen() == FREE {
             use Item::*;
-            let mut v = vec![BodeOn, BodeRun, BodeStart, BodeStop, BodeSwTime, BodeSwLog, BodePoints, BodeIn];
+            let mut v = vec![BodeOn, BodeRun, BodeStart, BodeStop, BodeSwTime, BodeSwLog, BodePoints, BodeUnit, BodeIn];
             // no input channel: the gain is against a level
             if self.m.bode_sw_in == 0 {
                 v.push(BodeRef);
@@ -142,8 +142,11 @@ impl Ui {
             Item::BodeRun,
             Item::BodeStart,
             Item::BodeStop,
+            Item::BodeSwLog,
             Item::BodePoints,
+            Item::BodeUnit,
             Item::BodeAmp,
+            Item::BodeAmpUnit,
             Item::BodeIn,
             Item::BodeOut,
             Item::BodeGen,
@@ -329,7 +332,8 @@ impl Ui {
             return self.toast(&format!("No built-in generator on the {}: choose an external one", name));
         }
         self.m.view = AView::Bode;
-        self.bode.freqs = bode::log_sweep(self.m.bode_start, self.m.bode_stop, self.m.bode_points);
+        self.bode.freqs =
+            bode::sweep_freqs(self.m.bode_start, self.m.bode_stop, self.m.bode_points, self.m.bode_sw_log);
         self.bode.points.clear();
         self.bode.idx = 0;
         // two stored records: the sweep is the sine fit of those samples, with no generator and no front end
@@ -627,7 +631,7 @@ impl Ui {
                 };
                 (p.f, g, p.phase.unwrap_or(f64::NAN))
             })
-            .filter(|p| p.1.is_finite())
+            .filter(|p| has_gain(p.1))
             .collect();
         self.bode.cursor = 0;
         self.bode.no_phase = if inp.is_none() {
@@ -689,57 +693,69 @@ impl Ui {
             .join(";")
     }
 
-    /// The point under the cursor: frequency, gain, phase.
+    /// The point under the cursor: frequency, gain in the unit of the plot, phase.
     fn bode_cursor_text(&self) -> String {
-        let z = self.bode_mode() == oos_dsp::bode::Mode::Z;
-        match self.bode.points.get(self.bode.cursor) {
-            Some(&(hz, g, p)) if z && p.is_nan() => format!("{} {:.3}", si_short(hz, "Hz"), g),
-            Some(&(hz, g, p)) if z => format!("{} {:.3} {:.0}\u{b0}", si_short(hz, "Hz"), g, p),
-            Some(&(hz, g, p)) if p.is_nan() => format!("{} {:.1} dB", si_short(hz, "Hz"), g),
-            Some(&(hz, g, p)) => format!("{} {:.1} dB {:.0}\u{b0}", si_short(hz, "Hz"), g, p),
+        let Some(&(hz, g, p)) = self.bode.points.get(self.bode.cursor) else { return "-".into() };
+        let gain = match self.bode_shown(g) {
+            Some(v) if self.m.bode_vv => format!("{:.3} V/V", v),
+            Some(v) => format!("{:.1} dB", v),
             None => "-".into(),
-        }
+        };
+        let phase = if p.is_nan() { String::new() } else { format!(" {:.0}\u{b0}", p) };
+        format!("{} {}{}", si_short(hz, "Hz"), gain, phase)
     }
 
-    /// Gain (top) and phase (bottom) over log frequency.
+    /// The gain of a point in the unit of the plot (#51): what the mode stores (dB, or the linear Vout/Vin of an
+    /// impedance sweep) in dB or V/V. None where it has no finite value, as an output of 0 in dB.
+    fn bode_shown(&self, g: f64) -> Option<f64> {
+        shown_gain(g, self.bode_mode() == oos_dsp::bode::Mode::Z, self.m.bode_vv)
+    }
+
+    /// Gain (top) and phase (bottom) over frequency, on a log or a linear axis as the sweep is spaced (#51).
     pub(super) fn draw_bode(&self, cv: &mut Canvas) {
         let a = self.plot.area;
         let f = self.fonts();
-        let (f0, f1) = (self.m.bode_start.ln(), self.m.bode_stop.ln());
-        let x_of = |hz: f64| a.x + ((hz.ln() - f0) / (f1 - f0) * a.w as f64).round() as i32;
+        let (start, stop, log) = (self.m.bode_start, self.m.bode_stop, self.m.bode_sw_log);
+        let x_of = |hz: f64| a.x + (freq_frac(hz, start, stop, log) * a.w as f64).round() as i32;
         let (gt, gb) = (a.y + 8, a.y + a.h / 2 - 8);
         let (pt, pb) = (a.y + a.h / 2 + 8, a.y + a.h - 24);
         let (gmin, gmax) = self.bode_gain_range();
         let gy = |g: f64| gb - ((g - gmin) / (gmax - gmin) * (gb - gt) as f64).round() as i32;
         let py = |p: f64| pb - ((p + 180.0) / 360.0 * (pb - pt) as f64).round() as i32;
-        // decade lines
-        let mut d = 10f64.powf(self.m.bode_start.log10().floor());
-        while d <= self.m.bode_stop * 1.001 {
-            if d >= self.m.bode_start * 0.999 {
-                let x = x_of(d);
-                cv.vline(x, gt, gb, LINE);
-                cv.vline(x, pt, pb, LINE);
-                cv.text(&f.s, x + 2, a.y + a.h - 6, &si_short(d, "Hz"), DIM);
+        // decade lines, or round steps on a linear axis; a label that would run past the plot is left out
+        for d in freq_lines(start, stop, log) {
+            let x = x_of(d);
+            cv.vline(x, gt, gb, LINE);
+            cv.vline(x, pt, pb, LINE);
+            let text = si_short(d, "Hz");
+            if x + 2 + f.s.width(&text) <= a.x + a.w {
+                cv.text(&f.s, x + 2, a.y + a.h - 6, &text, DIM);
             }
-            d *= 10.0;
         }
         self.draw_bode_values(cv, (gt, gb, gmin, gmax), (pt, pb));
         let col_g = self.wave_color(self.m.bode_out);
-        let mut prev: Option<((i32, i32), (i32, i32))> = None;
+        // a point without a gain (an output of 0 in dB) or a phase breaks that curve
+        let (mut prev_g, mut prev_p) = (None::<(i32, i32)>, None::<(i32, i32)>);
         for &(hz, g, p) in &self.bode.points {
-            let (x, yg, yp) = (x_of(hz), gy(g), py(p));
-            if let Some(((x0, g0), (_, p0))) = prev {
-                cv.line(x0, g0, x, yg, col_g);
-                if !p.is_nan() && p0 != i32::MIN && (yp - p0).abs() < (pb - pt) / 2 {
-                    cv.line(x0, p0, x, yp, ACCENT);
+            let x = x_of(hz);
+            let yg = self.bode_shown(g).map(gy);
+            if let (Some((x0, y0)), Some(y)) = (prev_g, yg) {
+                cv.line(x0, y0, x, y, col_g);
+            }
+            if let Some(y) = yg {
+                cv.fill(Rect::new(x - 1, y - 1, 3, 3), col_g);
+            }
+            prev_g = yg.map(|y| (x, y));
+            let yp = (!p.is_nan()).then(|| py(p));
+            if let (Some((x0, y0)), Some(y)) = (prev_p, yp) {
+                if (y - y0).abs() < (pb - pt) / 2 {
+                    cv.line(x0, y0, x, y, ACCENT);
                 }
             }
-            cv.fill(Rect::new(x - 1, yg - 1, 3, 3), col_g);
-            let yp = if p.is_nan() { i32::MIN } else { yp };
-            if !p.is_nan() {
-                cv.fill(Rect::new(x - 1, yp - 1, 3, 3), ACCENT);
+            if let Some(y) = yp {
+                cv.fill(Rect::new(x - 1, y - 1, 3, 3), ACCENT);
             }
-            prev = Some(((x, yg), (x, yp)));
+            prev_p = yp.map(|y| (x, y));
         }
         if let Some(&(hz, ..)) = self.bode.points.get(self.bode.cursor) {
             let x = x_of(hz);
@@ -754,11 +770,16 @@ impl Ui {
             _ => self.wave_name(self.m.bode_in),
         };
         let mode = self.bode_mode();
-        let (what, span) = match mode {
-            // + 0.0: a range that ends at -0 reads 0
-            oos_dsp::bode::Mode::Psrr => ("PSRR", format!("{:.0} .. {:.0} dB", gmin + 0.0, gmax + 0.0)),
-            oos_dsp::bode::Mode::Z => ("Vout/Vin", format!("{:.3} .. {:.3}", gmin + 0.0, gmax + 0.0)),
-            oos_dsp::bode::Mode::Loop => ("Gain", format!("{:.0} .. {:.0} dB", gmin + 0.0, gmax + 0.0)),
+        let what = match mode {
+            oos_dsp::bode::Mode::Psrr => "PSRR",
+            oos_dsp::bode::Mode::Z => "Vout/Vin",
+            oos_dsp::bode::Mode::Loop => "Gain",
+        };
+        // + 0.0: a range that ends at -0 reads 0
+        let span = if self.m.bode_vv {
+            format!("{:.3} .. {:.3} V/V", gmin + 0.0, gmax + 0.0)
+        } else {
+            format!("{:.0} .. {:.0} dB", gmin + 0.0, gmax + 0.0)
         };
         cv.text(
             &f.s,
@@ -797,7 +818,7 @@ impl Ui {
         cv.no_clip();
     }
 
-    /// The values of both axes (#387): a line at every round step of the gain (dB, or V/V for impedance) and of the
+    /// The values of both axes (#387): a line at every round step of the gain (dB or V/V, #51) and of the
     /// phase, each labelled at the left edge, above its line or below it where a title stands, else left out.
     fn draw_bode_values(&self, cv: &mut Canvas, gain: (i32, i32, f64, f64), phase: (i32, i32)) {
         let a = self.plot.area;
@@ -815,8 +836,7 @@ impl Ui {
                 cv.text(&f.s, a.x + 6, y + 13, text, col);
             }
         };
-        let z = self.bode_mode() == oos_dsp::bode::Mode::Z;
-        for (g, text) in gain_values(gmin, gmax, z) {
+        for (g, text) in gain_values(gmin, gmax, self.m.bode_vv) {
             let y = gb - ((g - gmin) / (gmax - gmin) * (gb - gt) as f64).round() as i32;
             cv.hline(a.x, a.x + a.w, y, LINE);
             label(cv, y, &text, DIM);
@@ -828,12 +848,12 @@ impl Ui {
         }
     }
 
-    /// The ends of the gain axis for the points measured so far.
+    /// The ends of the gain axis for the points measured so far, in the unit of the plot.
     fn bode_gain_range(&self) -> (f64, f64) {
-        // loop and PSRR: the measured range rounded to 10 dB. Impedance is a linear ratio, padded by about 10 %.
-        let z = self.bode_mode() == oos_dsp::bode::Mode::Z;
-        let (gmin, gmax) = self.bode.points.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
-        if z {
+        // dB: the shown range rounded to 10 dB. V/V is a linear ratio, padded by about 10 %.
+        let (gmin, gmax) = (self.bode.points.iter().filter_map(|p| self.bode_shown(p.1)))
+            .fold((f64::MAX, f64::MIN), |(a, b), g| (a.min(g), b.max(g)));
+        if self.m.bode_vv {
             if gmin > gmax {
                 (0.0, 2.0)
             } else {
@@ -938,17 +958,65 @@ impl super::analysers::Analyser for BodePage {
 const PHASE_VALUES: [(f64, &str); 5] =
     [(-180.0, "-180\u{b0}"), (-90.0, "-90\u{b0}"), (0.0, "0\u{b0}"), (90.0, "90\u{b0}"), (180.0, "180\u{b0}")];
 
+/// A gain as the plot shows it: `g` as the mode stores it (dB, or the linear ratio of an impedance sweep, `z`) in V/V
+/// (`vv`) or dB. None where it has no finite value: an output of 0 is -inf dB, and a ratio is never below 0.
+fn shown_gain(g: f64, z: bool, vv: bool) -> Option<f64> {
+    let v = match (z, vv) {
+        (true, false) if g > 0.0 => 20.0 * g.log10(),
+        (true, false) => return None,
+        (false, true) => 10f64.powf(g / 20.0),
+        _ => g,
+    };
+    v.is_finite().then_some(v)
+}
+
+/// Whether a gain in dB of a free sweep is kept as a point: an output of 0 is -inf dB and stays (0 V/V, with its
+/// phase); an input of 0 gives no ratio (+inf or NaN) and is left out.
+fn has_gain(db: f64) -> bool {
+    db.is_finite() || db == f64::NEG_INFINITY
+}
+
+/// Where `hz` lies between `start` (0) and `stop` (1) on a log or a linear frequency axis.
+fn freq_frac(hz: f64, start: f64, stop: f64, log: bool) -> f64 {
+    if log {
+        (hz.ln() - start.ln()) / (stop.ln() - start.ln())
+    } else {
+        (hz - start) / (stop - start)
+    }
+}
+
+/// The frequencies of the vertical lines from `start` to `stop`: every decade on a log axis, a round step (1-2-5)
+/// that gives at most 5 parts on a linear one.
+fn freq_lines(start: f64, stop: f64, log: bool) -> Vec<f64> {
+    let mut v = Vec::new();
+    if log {
+        let mut d = 10f64.powf(start.log10().floor());
+        while d <= stop * 1.001 {
+            if d >= start * 0.999 {
+                v.push(d);
+            }
+            d *= 10.0;
+        }
+    } else if stop > start {
+        let step = axis_step(stop - start, 5);
+        let first = (start / step - 1e-6).ceil() as i64;
+        let last = (stop / step + 1e-6).floor() as i64;
+        v.extend((first..=last).map(|k| k as f64 * step));
+    }
+    v
+}
+
 /// The values of the gain axis from `gmin` to `gmax` at a round step, with their labels: dB, or the linear ratio
-/// of an impedance sweep (`z`) in V/V with as many decimals as the step needs. A value of -0 reads 0.
-fn gain_values(gmin: f64, gmax: f64, z: bool) -> Vec<(f64, String)> {
+/// (`z`, V/V) with as many decimals as the step needs. A value of -0 reads 0.
+fn gain_values(gmin: f64, gmax: f64, vv: bool) -> Vec<(f64, String)> {
     let step = axis_step(gmax - gmin, 5);
-    let digits = if z { (-step.log10().floor()).max(0.0) as usize } else { 0 };
+    let digits = if vv { (-step.log10().floor()).max(0.0) as usize } else { 0 };
     let first = (gmin / step).ceil() as i64;
     let last = (gmax / step + 1e-6).floor() as i64;
     (first..=last)
         .map(|k| {
             let g = k as f64 * step + 0.0;
-            (g, if z { format!("{:.*} V/V", digits, g) } else { format!("{:.0} dB", g) })
+            (g, if vv { format!("{:.*} V/V", digits, g) } else { format!("{:.0} dB", g) })
         })
         .collect()
 }
@@ -1026,6 +1094,7 @@ mod tests {
             raw: None,
             la: None,
             pairs: false,
+            peak: false,
         });
         ui.m.run = RunState::Stop;
         ui.bode_update();
@@ -1119,7 +1188,7 @@ mod tests {
         let texts = |v: Vec<(f64, String)>| v.into_iter().map(|(_, t)| t).collect::<Vec<_>>();
         assert_eq!(texts(gain_values(-60.0, -0.0, false)), ["-60 dB", "-40 dB", "-20 dB", "0 dB"]);
         assert_eq!(texts(gain_values(-20.0, 10.0, false)), ["-20 dB", "-10 dB", "0 dB", "10 dB"]);
-        // impedance: the linear ratio, with its unit and the decimals of its step
+        // V/V: the linear ratio, with its unit and the decimals of its step
         assert_eq!(texts(gain_values(0.18, 1.12, true)), ["0.2 V/V", "0.4 V/V", "0.6 V/V", "0.8 V/V", "1.0 V/V"]);
         assert_eq!(texts(gain_values(0.0, 2.0, true)), ["0.0 V/V", "0.5 V/V", "1.0 V/V", "1.5 V/V", "2.0 V/V"]);
         assert_eq!(PHASE_VALUES.map(|p| p.1), ["-180\u{b0}", "-90\u{b0}", "0\u{b0}", "90\u{b0}", "180\u{b0}"]);
@@ -1141,6 +1210,50 @@ mod tests {
         }
         let (gmin, gmax) = ui.bode_gain_range();
         assert_eq!((gmin, gmax), (-60.0, 0.0));
+    }
+
+    /// Lin / Log spaces the frequencies of the stepped sweep too, and the frequency axis with them; the gain unit
+    /// shows the same points in dB or in V/V, and an output of 0 has no dB, so it is not drawn (#51).
+    #[test]
+    fn the_sweep_and_its_axes_follow_lin_log_and_the_gain_unit() {
+        assert_eq!(freq_lines(1e3, 1e6, true), [1e3, 1e4, 1e5, 1e6]);
+        assert_eq!(freq_lines(1e3, 1e4, false), [2e3, 4e3, 6e3, 8e3, 1e4]);
+        let near = |a: Option<f64>, b: f64| a.is_some_and(|a| (a - b).abs() < 1e-9);
+        assert!(near(Some(freq_frac(1e4, 1e3, 1e5, true)), 0.5) && freq_frac(5.5e3, 1e3, 1e4, false) == 0.5);
+        assert!(near(shown_gain(-20.0, false, true), 0.1) && near(shown_gain(0.1, true, false), -20.0));
+        assert_eq!((shown_gain(f64::NEG_INFINITY, false, true), shown_gain(0.5, true, true)), (Some(0.0), Some(0.5)));
+        assert_eq!((shown_gain(f64::NEG_INFINITY, false, false), shown_gain(0.0, true, false)), (None, None));
+        let kept = [-3.0, f64::NEG_INFINITY, f64::INFINITY, f64::NAN].map(has_gain);
+        assert_eq!(kept, [true, true, false, false], "a free sweep keeps an output of 0, not an input of 0");
+        let mut ui = crate::ui::testkit::demo_ui();
+        assert!(ui.bode_items().contains(&Item::BodeSwLog) && ui.bode_items().contains(&Item::BodeUnit));
+        // two empty refs: the sweep plans its frequencies and reads nothing
+        (ui.m.bode_in, ui.m.bode_out, ui.m.bode_gen) = (WaveId::Ref(0), WaveId::Ref(1), BUILTIN);
+        (ui.m.bode_start, ui.m.bode_stop, ui.m.bode_points, ui.m.bode_sw_log) = (1e3, 2e3, 5, false);
+        ui.activate(Item::BodeRun);
+        assert_eq!(ui.bode.freqs, [1e3, 1250.0, 1500.0, 1750.0, 2e3]);
+        ui.adjust(Item::BodeSwLog, 1);
+        ui.activate(Item::BodeRun);
+        assert!(ui.m.bode_sw_log && (ui.bode.freqs[2] - 2e3f64.sqrt() * 1e3f64.sqrt()).abs() < 1e-6);
+        // 0 dB, -6 dB and an output of 0: the last has no dB and no dot, but its phase
+        ui.bode.points = vec![(1e3, 0.0, 0.0), (1.5e3, -20.0 * 2f64.log10(), -30.0), (2e3, f64::NEG_INFINITY, -60.0)];
+        assert_eq!(ui.bode_gain_range(), (-20.0, 0.0));
+        ui.bode.cursor = 2;
+        assert!(ui.bode_cursor_text().ends_with(" - -60\u{b0}"), "{}", ui.bode_cursor_text());
+        let mut cv = Canvas::new(crate::ui::W, crate::ui::H);
+        ui.render(&mut cv);
+        // V/V on a linear axis: the same points as ratios, the output of 0 is 0
+        ui.adjust(Item::BodeSwLog, 1);
+        ui.adjust(Item::BodeUnit, 1);
+        assert!(ui.m.bode_vv);
+        ui.bode.cursor = 1;
+        assert!(ui.bode_cursor_text().contains(" 0.500 V/V -30\u{b0}"), "{}", ui.bode_cursor_text());
+        let (gmin, gmax) = ui.bode_gain_range();
+        assert!((gmin + 0.1).abs() < 1e-9 && (gmax - 1.1).abs() < 1e-9, "{} {}", gmin, gmax);
+        ui.render(&mut cv);
+        if let Some(dir) = std::env::var_os("OOS_SHOTS") {
+            std::fs::write(std::path::Path::new(&dir).join("bode-lin-vv.png"), crate::store::png_of(&cv)).unwrap();
+        }
     }
 
     /// The points of a sweep go to a CSV file on the storage (#53): a header, one line a point, no phase where there
@@ -1226,10 +1339,10 @@ mod tests {
         assert_eq!((ui.m.bode_amp, ui.value(Item::BodeAmp)), (1.25, "1.25 Vpp".into()));
         typed(&mut ui, &["5", "0", "Vpp"]);
         assert_eq!(ui.m.bode_amp, 1.25, "50 Vpp is refused");
-        // the knob still steps 1-2-5 from there: up to the next step, down to the one below, whatever lies between
+        // the knob steps from there: up to the next step, down to the one below, whatever lies between
         ui.adjust(Item::BodeAmp, 1);
-        assert_eq!(ui.m.bode_amp, 2.0);
-        for (x, d, want) in [(1.999, 1, 2.0), (1.0005, 1, 2.0), (1.25, -1, 1.0), (1.999, -1, 1.0), (2.0, 1, 5.0)] {
+        assert_eq!(ui.m.bode_amp, 1.3);
+        for (x, d, want) in [(1.999, 1, 2.0), (1.0005, 1, 1.05), (1.26, -1, 1.25), (1.999, -1, 1.95), (2.0, 1, 2.05)] {
             ui.m.bode_amp = x;
             ui.adjust(Item::BodeAmp, d);
             assert_eq!(ui.m.bode_amp, want, "{x} by {d}");
@@ -1262,21 +1375,75 @@ mod tests {
     }
 
     // Break it catches: an amplitude knob that starts its ladder at 1 V and so never goes below it, although
-    // 10 mVpp .. 20 Vpp are allowed.
+    // 10 mVpp .. 20 Vpp are allowed; and one that steps 1-2-5, so 350 mVpp needs the pad (#52).
     #[test]
     fn the_amplitude_knob_covers_10_mv_to_20_v() {
         let mut ui = crate::ui::testkit::demo_ui();
         assert_eq!(ui.m.bode_amp, 1.0);
         ui.adjust(Item::BodeAmp, -1);
-        assert_eq!((ui.m.bode_amp, ui.value(Item::BodeAmp)), (0.5, "500 mVpp".into()));
-        ui.adjust(Item::BodeAmp, -100);
+        assert_eq!((ui.m.bode_amp, ui.value(Item::BodeAmp)), (0.95, "950 mVpp".into()));
+        ui.adjust(Item::BodeAmp, -12);
+        assert_eq!((ui.m.bode_amp, ui.value(Item::BodeAmp)), (0.35, "350 mVpp".into()));
+        // 50 mV steps down to 100 mV, then 10 mV steps
+        ui.adjust(Item::BodeAmp, -5);
+        assert_eq!(ui.m.bode_amp, 0.1);
+        ui.adjust(Item::BodeAmp, -1);
+        assert_eq!(ui.m.bode_amp, 0.09);
+        ui.adjust(Item::BodeAmp, -1000);
         assert_eq!(ui.m.bode_amp, 0.01);
         ui.adjust(Item::BodeAmp, 1);
         assert_eq!(ui.m.bode_amp, 0.02);
-        ui.adjust(Item::BodeAmp, 100);
+        ui.adjust(Item::BodeAmp, 9);
+        assert_eq!(ui.m.bode_amp, 0.15);
+        ui.adjust(Item::BodeAmp, 1000);
         assert_eq!(ui.m.bode_amp, 20.0);
         ui.adjust(Item::BodeAmp, -1);
-        assert_eq!(ui.m.bode_amp, 10.0);
+        assert_eq!(ui.m.bode_amp, 19.95);
+    }
+
+    /// Vrms instead of Vpp (#52): the menu shows, the knob steps and the pad takes the amplitude in Vrms of the sine,
+    /// Vpp / (2 sqrt 2); the generator still gets Vpp.
+    #[test]
+    fn the_amplitude_in_vrms() {
+        use crate::settings::bode::VPP_PER_VRMS;
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.view = AView::Bode;
+        ui.open_menu(MenuId::Bode);
+        assert!(ui.bode_items().contains(&Item::BodeAmpUnit));
+        assert_eq!((ui.value(Item::BodeAmpUnit), ui.value(Item::BodeAmp)), ("Vpp".into(), "1 Vpp".into()));
+        ui.adjust(Item::BodeAmpUnit, 1);
+        assert!(ui.m.bode_rms && ui.m.bode_amp == 1.0, "only how it is shown changes");
+        assert_eq!(ui.value(Item::BodeAmp), "354 mVrms");
+        // 353.6 mVrms lies between steps: up to 400 mVrms, then 50 mV steps
+        ui.adjust(Item::BodeAmp, 1);
+        assert!((ui.m.bode_amp - 0.4 * VPP_PER_VRMS).abs() < 1e-12 && ui.value(Item::BodeAmp) == "400 mVrms");
+        ui.adjust(Item::BodeAmp, 1);
+        assert_eq!(ui.value(Item::BodeAmp), "450 mVrms");
+        // the pad in Vrms: 1 Vrms is 2.83 Vpp; 10 Vrms is above 20 Vpp and refused, with the range in Vrms
+        assert_eq!(ui.row_pad_unit(Item::BodeAmp), Some("Vrms"));
+        ui.open_row_pad(Item::BodeAmp);
+        for k in ["1", "Vrms"] {
+            let i = ui.row_pad_keys().iter().position(|x| x == k).unwrap_or_else(|| panic!("no key {k}"));
+            ui.row_pad_key(i);
+        }
+        assert!((ui.m.bode_amp - VPP_PER_VRMS).abs() < 1e-12 && ui.value(Item::BodeAmp) == "1 Vrms");
+        ui.open_row_pad(Item::BodeAmp);
+        for k in ["1", "0", "Vrms"] {
+            let i = ui.row_pad_keys().iter().position(|x| x == k).unwrap();
+            ui.row_pad_key(i);
+        }
+        assert!((ui.m.bode_amp - VPP_PER_VRMS).abs() < 1e-12);
+        assert!(ui.toast.as_ref().unwrap().0.contains("3.54 mVrms to 7.07 Vrms"), "{:?}", ui.toast);
+        // just above the top is refused too, not taken as 20 Vpp
+        ui.open_row_pad(Item::BodeAmp);
+        for k in ["7", ".", "0", "8", "Vrms"] {
+            let i = ui.row_pad_keys().iter().position(|x| x == k).unwrap();
+            ui.row_pad_key(i);
+        }
+        assert!((ui.m.bode_amp - VPP_PER_VRMS).abs() < 1e-12, "7.08 Vrms is above 20 Vpp");
+        // the top: 7.07 Vrms is 20 Vpp, no further
+        ui.adjust(Item::BodeAmp, 1000);
+        assert_eq!(ui.m.bode_amp, 20.0);
     }
 
     #[test]

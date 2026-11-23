@@ -236,6 +236,8 @@ impl Ui {
             -origin / raw.frame.dt,
             rec.triggered,
         );
+        // the samples are the same acquisition's: taken in Peak detect or not, whatever the mode is now
+        display.peak = rec.peak;
         if !self.src.is_hw() && !raw.conditioned {
             for c in 0..NCH {
                 condition(&self.m, c, &mut display.ch[c], display.dt);

@@ -597,6 +597,11 @@ fn start_menu_and_keys_reach_everything() {
     let (x, y) = mid(row_of(&ui, Item::NavBack).ctrl);
     ui.tap(x, y);
     assert_eq!(ui.history.pos, Some(i - 1));
+    // the panel keys as the unit sends them: `<` (0x06) steps back to older records, `>` (0x08) forward
+    ui.panel_key(0x06);
+    assert_eq!(ui.history.pos, Some(i - 2));
+    ui.panel_key(0x08);
+    assert_eq!(ui.history.pos, Some(i - 1));
     // power: the dialog, without the MCU frame of a key press
     let (x, y) = mid(row_of(&ui, Item::PowerAct).ctrl);
     ui.tap(x, y);

@@ -259,6 +259,7 @@ mod tests {
             partial: false,
             triggered: true,
             pairs: false,
+            peak: false,
         };
         ui.last[0] = Some(record);
         ui.m.meas_full_record = true;
@@ -290,6 +291,7 @@ mod tests {
             partial: false,
             triggered: true,
             pairs: false,
+            peak: false,
         });
         ui.m.deskew_ch[2] = 9e-9;
         ui.select_workspace_source(WaveId::Ch(0));

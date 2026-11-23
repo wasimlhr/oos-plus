@@ -26,6 +26,7 @@ fn record() -> (Record, Model) {
         raw: None,
         la: None,
         pairs: false,
+        peak: false,
     };
     rec.ch[0] = vec![0.5, 1.25, -0.75, 0.0, 2.5, f32::NAN];
     rec.ch[2] = vec![-1.0, 0.0, 3.3, 3.3, 0.1, -0.1];

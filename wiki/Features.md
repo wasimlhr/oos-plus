@@ -6,7 +6,7 @@ in the README. How to use it: the guides listed on [[Home]].
 **Acquisition**
 - Normal, peak detect, average and high-resolution modes (high resolution in software, it needs more samples than screen
   points); Auto or fixed memory depth up to 125 M points
-- Time base from 1 ns/div; roll mode from 200 ms/div, scan mode at slow time bases
+- Time base from 1 ns/div; roll mode from 200 ms/div (the state box says ROLL), scan mode at slow time bases
 - Zoom window, pinch and drag on the touch screen
 - Auto set-up, then a bar with four views of the signal: a few periods, many periods, the rising or the falling edge
 - Channel bandwidth Auto (follows the sample rate, the default), Full, 20 MHz or a limit in 5 MHz steps

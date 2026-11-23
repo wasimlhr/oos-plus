@@ -699,13 +699,27 @@ const BH7: (&[f64], f64) = (
     ],
     9.0,
 );
-/// How far (power ratio, 20 dB) the fundamental's strongest bin must stand above the median bin for `distortion` to
-/// call it a line. The largest of N bins of white noise is about ln N / ln 2 times the median (12 dB at 65 536 bins),
-/// so noise alone does not pass; on a unit, CH2 with only noise on it gave THD, SNR and ENOB of a "fundamental" at
-/// 97.6 MHz before this test (2026-11-19).
-const LINE_OVER_MEDIAN: f64 = 100.0;
 const BH4: (&[f64], f64) = (&[0.358_75, 0.488_29, 0.141_28, 0.011_68], 5.0);
 const HANN: (&[f64], f64) = (&[0.5, 0.5], 3.0);
+
+/// How far (power ratio, 20 dB) the fundamental's strongest bin must stand above the median of the bins around it
+/// for `distortion` to call it a line. The largest of N bins of noise is about ln N / ln 2 times the median of its
+/// neighbours (12 dB at 65 536 bins), so noise alone does not pass; the neighbours, not the whole spectrum, so noise
+/// whose spectrum falls with frequency (the bandwidth limit, a low-pass in front) does not pass either. Without this
+/// test a channel with only noise on it had a "fundamental" with THD, SNR and ENOB (seen on a unit: 97.6 MHz, SNR
+/// -8.7 dB, ENOB -1.5 bit).
+const LINE_OVER_MEDIAN: f64 = 100.0;
+/// The bins on each side of the fundamental's lobe whose median `LINE_OVER_MEDIAN` compares with.
+const LINE_NEIGHBOURS: usize = 48;
+
+/// The median of the bins of `p` around `k1` outside its lobe (`hw` bins either side), above the bins left to DC.
+fn median_around(p: &[f64], k1: usize, hw: usize) -> Option<f64> {
+    let (lo, hi) =
+        ((hw + 1).max(k1.saturating_sub(hw + LINE_NEIGHBOURS)), (k1 + hw + LINE_NEIGHBOURS).min(p.len() - 1));
+    let mut bins: Vec<f64> = (lo..=hi).filter(|k| k.abs_diff(k1) > hw).map(|k| p[k]).collect();
+    let mid = bins.len() / 2;
+    (!bins.is_empty()).then(|| *bins.select_nth_unstable_by(mid, |a, b| a.total_cmp(b)).1)
+}
 
 fn cos_sum(a: &[f64], i: usize, m: usize) -> f64 {
     let x = 2.0 * PI * i as f64 / m as f64;
@@ -721,8 +735,10 @@ fn cos_sum(a: &[f64], i: usize, m: usize) -> f64 {
 /// harmonics are excluded from the noise; the noise of the excluded bins is replaced by the mean noise per bin.
 /// Harmonics are searched at their aliased frequency. The window follows the number of periods in the record (`BH7`):
 /// with the widest one on a record of five periods the lobe of the fundamental held the third harmonic, and a 10 kHz
-/// square read 16.2 kHz (seen on a unit, 2026-11-18). Returns `None` for records shorter than 64 samples or without a
-/// fundamental. A record needs four periods or more: below that the fundamental lies in the bins left to DC.
+/// square read 16.2 kHz (verified on the unit, a DHO924S). Returns `None` for records shorter than 64 samples or without a
+/// fundamental: without `fundamental`, the strongest line must stand out of the bins around it (`LINE_OVER_MEDIAN`),
+/// so noise alone has none; a frequency given is taken as it is. A record needs four periods or more: below that the
+/// fundamental lies in the bins left to DC.
 pub fn distortion(v: &[f32], dt: f64, fundamental: Option<f64>, harmonics: usize) -> Option<Distortion> {
     let x: Vec<f64> = v.iter().filter(|x| x.is_finite()).map(|&x| x as f64).collect();
     if x.len() < 64 || !(dt > 0.0) {
@@ -781,15 +797,15 @@ fn distortion_with(
             let c = (f / df).round() as usize;
             (c.saturating_sub(hw).max(hw + 1)..=(c + hw).min(nb - 1)).max_by(|&a, &b| p[a].total_cmp(&p[b]))?
         }
-        _ => (hw + 1..nb).max_by(|&a, &b| p[a].total_cmp(&p[b]))?,
+        _ => {
+            let k1 = (hw + 1..nb).max_by(|&a, &b| p[a].total_cmp(&p[b]))?;
+            // a fundamental searched for, not given: noise alone has none (`LINE_OVER_MEDIAN`)
+            if !(p[k1] >= LINE_OVER_MEDIAN * median_around(&p, k1, hw)?) {
+                return None;
+            }
+            k1
+        }
     };
-    // noise alone has no fundamental (`LINE_OVER_MEDIAN`)
-    let mut bins = p[hw + 1..].to_vec();
-    let mid = bins.len() / 2;
-    let median = *bins.select_nth_unstable_by(mid, |a, b| a.total_cmp(b)).1;
-    if !(p[k1] >= LINE_OVER_MEDIAN * median) {
-        return None;
-    }
     let lobe = |c: usize| c.saturating_sub(hw)..=(c + hw).min(nb - 1);
     let (sp, swp) = lobe(k1).fold((0.0, 0.0), |(a, b), k| (a + p[k], b + p[k] * k as f64));
     if !(sp > 0.0) {

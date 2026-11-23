@@ -581,6 +581,7 @@ fn csv_of_a_record() {
         raw: None,
         la: None,
         pairs: false,
+        peak: false,
     };
     rec.ch[0] = vec![0.5, 1.25, f32::NAN];
     rec.ch[2] = vec![-1.0, 0.0, 3.3];
@@ -688,6 +689,7 @@ fn oos_bin_and_wfm_round_trip() {
         raw: None,
         la: None,
         pairs: false,
+        peak: false,
     };
     let bin = wave_bin(&rec, &m);
     let t = &parse_wave(&bin, "wave.bin").unwrap()[0];
@@ -776,6 +778,7 @@ fn wave_and_fast_frame_round_trip() {
         raw: None,
         la: None,
         pairs: false,
+        peak: false,
     };
     rec.ch[0] = vec![0.5, 1.25];
     rec.ch[2] = vec![-1.0, 0.0];
@@ -845,6 +848,7 @@ fn waveform_file_time_base_is_finite() {
         raw: None,
         la: None,
         pairs: false,
+        peak: false,
     };
     rec.ch[1] = vec![0.25, -0.5, 1.0];
     let good = wave_bin(&rec, &m);

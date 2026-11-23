@@ -34,6 +34,7 @@ FORK_RECORDS = {
     "code/0074-mcp-tools-are-typed-wrappers-over-the-one-interpreter.md",
     "code/0075-a-foreign-session-archive-is-read-with-an-own-zip-reader.md",
     "ui-ux/0035-the-studio-bar-has-a-sim-button-while-a-sim-can-be-played.md",
+    "ui-ux/0077-the-handles-of-the-studio-sources-stand-at-the-right-edge.md",
 }
 TITLE = re.compile(r"# ADR (\d{4}): (.+)$")
 REF = re.compile(r"ADR (\d{4})")

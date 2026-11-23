@@ -829,6 +829,7 @@ mod tests {
             raw: None,
             la: None,
             pairs: false,
+            peak: false,
         });
         let ids = [WaveId::Ch(0), WaveId::Ref(1), WaveId::Ref(2), WaveId::Ref(3)];
         ui.m.cat = vec![(measures::power::RIPPLE, ids[0], ids[1], ids[2], ids[3])];

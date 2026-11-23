@@ -150,6 +150,7 @@ fn load_and_import_csv_bin_and_wfm() {
             raw: None,
             la: None,
             pairs: false,
+            peak: false,
         };
         crate::store::wave_bin(&rec, &m)
     };

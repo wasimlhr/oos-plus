@@ -34,7 +34,8 @@ The MCU sends keys without any initialisation from the host.
 **Key code = the DATA byte** of the frame, for keys and knobs alike. Apart from the special value 6, the `cmd` byte is
 ignored (it varies per press, meaning unknown). A key sends its code on press and `data 0x00` on release; a knob sends
 one frame per detent.
-Verified on the unit: Run/Stop, Single, Auto, GI, Horizontal Menu, Navigate, H-Position CW, H-Scale CW/CCW, V-Scale CW.
+Verified on the unit: Run/Stop, Single, Auto, GI, Horizontal Menu, Navigate, H-Position CW, H-Scale CW/CCW, V-Scale CW,
+history `<` / `>` (0x06 / 0x08, DHO924S; an MHO934 owner reports the same order, #505).
 The other codes are not yet verified on hardware.
 
 | Code | Element | | Code | Element |
@@ -44,7 +45,7 @@ The other codes are not yet verified on hardware.
 | 0x03 | GI (generator, AFG) | | 0x13 | Touch Lock |
 | 0x04 | Horizontal Menu | | 0x14 | Quick |
 | 0x05 | Navigate | | 0x15-0x18 | CH1-CH4 |
-| 0x06 / 0x07 / 0x08 | navigation forward / play / back | | 0x19 | Math |
+| 0x06 / 0x07 / 0x08 | history back `<` / play-stop / forward `>` | | 0x19 | Math |
 | 0x09 | Trigger Slope | | 0x1a | Trigger Menu |
 | 0x0a | Trigger Force | | 0x1b | Power |
 | 0x0b | Clear | | 0xf1-0xf4 | CH1-CH4 input overload: not sent by the MCU, never occur on the DHO924S (`board.md` 6) |

@@ -82,18 +82,20 @@ the build on the unit, the kernel log, and where the generator reaches.
 | `hal/src/dho/roll*` | roll, acquisition, register sequences |
 | `hal/src/dho/la*` | logic analyser, register sequences |
 | trigger, mask, zone, AUX OUT in `hal/src/dho/` | trigger, register sequences |
-| AFE, ADC, calibration, PLL in `hal/src/dho/` | front end, acquisition, register sequences |
-| `ui/src/board/` | acquisition, roll, trigger, front end, register sequences |
+| AFE, ADC, calibration, PLL in `hal/src/dho/` | front end, acquisition, deep record, register sequences |
+| other parts of `hal/src/dho/`, `hal/` | acquisition, deep record, register sequences |
+| `ui/src/board/` | acquisition, deep record, roll, trigger, front end, register sequences |
 | `fpgad/` | register sequences |
 | SCPI, web, VXI-11, MCP | remote |
 | storing, the logger | store |
 | `dsp/`, measurements, decoders | measure, decode |
-| the measurement code (`dsp/src/measure.rs`, the measurement paths of `ui/`) | measure, acquisition, roll, front end, generator, trigger |
+| the measurement code (`dsp/src/measure.rs`, the measurement paths of `ui/`) | measure, acquisition, deep record, roll, front end, generator, trigger |
+| `ui/src/deepmeas.rs` | deep record, acquisition, measure |
 | other parts of `ui/`, `gpu/` | screen, remote |
 | `boot/`, `kernel/`, `rootfs/`, `hal/src/update/`, the cold boot, `Cargo.toml`/`Cargo.lock`, the test tools themselves, a file no rule knows | everything |
 
 `--list` prints the files with their areas and the tests that would run, and stops. The changes of the last pull
-requests chose between 6 tests (documents, CI) and 13 to 23 (one part of the hardware); all 85 run only when the
+requests chose between 6 tests (documents, CI) and 13 to 23 (one part of the hardware); all 89 run only when the
 image, the update path, the build or the tests themselves change.
 
 ## Noise and failures that were there before

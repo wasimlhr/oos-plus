@@ -110,6 +110,8 @@ A channel's bandwidth is **Auto** unless you choose another: the limit follows t
 
 **Trigger > Coupling** (edge trigger, from 0.1.11): DC, AC, LF reject or HF reject, a filter in the trigger path only; the trace is not filtered. With AC and LF reject the DC is taken out, so a level of 0 V is the zero crossing of the signal whatever its offset. LF reject also weakens slow signals (a 10 kHz sine is already small), HF reject keeps the DC and suppresses fast signals (1 MHz no longer triggers). SCPI: `:TRIGger:COUPling DC|AC|LFR|HFR`.
 
+**Trigger > Type** keeps what you set per type: the width of Pulse, the pattern, the times, the lower level and the second source of a type come back when you choose that type again, even when another type changed the same value in between. The source stays when the type changes (in the demo signals each type starts on the channel that shows it). Each channel keeps its own trigger level as the source: choose CH2, then CH1 again, and CH1's level is back. A saved set-up holds the values of the type and source it was saved with.
+
 ## Text size
 
 **From 0.1.6.** **Display > Text size**: Normal, Large or Larger. Normal is the original look; Large and Larger use
@@ -135,7 +137,8 @@ with the other preferences and across restarts; Default set-up and Recall keep i
 Names of channels and references, math formulas and WLAN passwords are typed on the on-screen keyboard. The arrows either side of Space move the insertion point one character, and a tap into the entry puts it where you tap. Typing and Delete work at the insertion point, so a wrong character in a long password is fixed without typing the rest again. Show / Hide shows the password.
 
 A number is typed on the number pad: tap the value itself (not - or +) of a channel's scale or offset, the time base
-or its position, or the trigger level. Type the digits, a point and a leading minus, then tap the key with the unit
+or its position, or the trigger level. The pad opens large in the middle of the screen; its field shows the value
+now until you type, then what you type. Type the digits, a point and a leading minus, then tap the key with the unit
 you mean (`mV`, `V`, `µs`, `ns` ...), which sets the value and closes the pad. The value lands where a remote command
 would put it: the scale on the nearest step (with Fine on, on the next calibrated step above it). Cancel leaves it as
 it was. This is the pad of the Default layout; Minimal and Studio have a larger pad that opens on every number row,

@@ -21,7 +21,7 @@
 //! :MATH<n>:DISPlay|OPERator|SOURce1|SOURce2|SCALe|OFFSet|EXPRession|RESet, :MATH<n>:FFT:SOURce|WINDow|SCALe, :MATH<n>:FILTer:TYPE|W1|W2,
 //! :BUS<n>:MODE|DISPlay|FORMat|EVENt|THReshold|DATA?, :BUS<n>:RS232:TX|RX|BAUD|PARity|DBITs, :BUS<n>:IIC:SCLK:SOURce|SDA:SOURce, :BUS<n>:SPI:SCLK:SOURce|MOSI:SOURce|SS:SOURce|DBITs,
 //! :POWer:ITEM? <item>[,src...], :POWer:HARMonics? [src], :SPECtrum:ITEM? <item>[,src], :SPECtrum:RBW:ACTual?, :SPECtrum:PEAK:LIST?,
-//! :BODE:MODE LOOP|PSRR|IMPedance,
+//! :BODE:MODE LOOP|PSRR|IMPedance, :BODE:UNIT DB|RATio, :BODE:AMPLitude <Vpp>,
 //! :MAGnetic:ITEM? <item>[,V,I], :INVerter:ITEM? <item>[,src...], :DPT:ITEM? <item>[,V,I[,G]], :BANDwidth:ITEM? <item>[,src],
 //! :WAVeform:SOURce CHANn|Rn|MODE NORM/MAX/RAW|FORMat BYTE/WORD/ASC|STARt|STOP|POINts|DATA?|PREamble?,
 //! :SAVE:WAVeform <file.csv|file.bin> (the Storage menu's screen waveform; an empty path is the CSV button),
@@ -366,6 +366,9 @@ pub(crate) fn shown(v: f64) -> String {
     e(v)
 }
 
+/// What `:WAVeform` reads until a command sets another, and again after `*RST`: CH1, BYTE, NORMal, the whole page.
+const WAV_DEFAULT: (WaveId, u8, u8, u64, u64) = (WaveId::Ch(0), 0, 0, 1, 0);
+
 impl Scpi {
     pub fn open(port: u16) -> Scpi {
         Scpi { l: Self::bind(port), ..Self::detached() }
@@ -378,12 +381,12 @@ impl Scpi {
             l: None,
             clients: Vec::new(),
             send_limits: Default::default(),
-            wav_src: WaveId::Ch(0),
+            wav_src: WAV_DEFAULT.0,
             wav_math: None,
-            wav_fmt: 0,
-            wav_mode: 0,
-            wav_start: 1,
-            wav_stop: 0,
+            wav_fmt: WAV_DEFAULT.1,
+            wav_mode: WAV_DEFAULT.2,
+            wav_start: WAV_DEFAULT.3,
+            wav_stop: WAV_DEFAULT.4,
             err: Vec::new(),
             search_at: 0,
             event_status: 0,

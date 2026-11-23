@@ -103,6 +103,17 @@ scpi :ACQuire:ULTRa:MAXFrame "100001" -> query: 50000; errors: none
 scpi :ACQuire:ULTRa:MAXFrame "1e9" -> query: 0; errors: -224,"Illegal parameter value" 1e9
 scpi :ACQuire:ULTRa:MAXFrame "x" -> query: 0; errors: -224,"Illegal parameter value" x
 scpi :ACQuire:ULTRa:MAXFrame default -> query: 0; errors: none
+scpi :BODE:AMPLitude "" -> query: 1.000000E+00; errors: -224,"Illegal parameter value"
+scpi :BODE:AMPLitude "-1" -> query: 1.000000E+00; errors: -224,"Illegal parameter value" -1
+scpi :BODE:AMPLitude "0.005" -> query: 1.000000E+00; errors: -224,"Illegal parameter value" 0.005
+scpi :BODE:AMPLitude "0.01" -> query: 1.000000E-02; errors: none
+scpi :BODE:AMPLitude "0.35" -> query: 3.500000E-01; errors: none
+scpi :BODE:AMPLitude "1.25" -> query: 1.250000E+00; errors: none
+scpi :BODE:AMPLitude "1e9" -> query: 1.000000E+00; errors: -224,"Illegal parameter value" 1e9
+scpi :BODE:AMPLitude "20" -> query: 2.000000E+01; errors: none
+scpi :BODE:AMPLitude "21" -> query: 1.000000E+00; errors: -224,"Illegal parameter value" 21
+scpi :BODE:AMPLitude "x" -> query: 1.000000E+00; errors: -224,"Illegal parameter value" x
+scpi :BODE:AMPLitude default -> query: 1.000000E+00; errors: none
 scpi :BODE:GENerator "" -> query: ""; errors: none
 scpi :BODE:GENerator "-1" -> query: -1; errors: none
 scpi :BODE:GENerator "10.1.2.3:5555" -> query: 10.1.2.3:5555; errors: none
@@ -119,6 +130,13 @@ scpi :BODE:MODE "LOOP" -> query: LOOP; errors: none
 scpi :BODE:MODE "PSRR" -> query: PSRR; errors: none
 scpi :BODE:MODE "x" -> query: LOOP; errors: -224,"Illegal parameter value" x
 scpi :BODE:MODE default -> query: LOOP; errors: none
+scpi :BODE:UNIT "" -> query: DB; errors: -224,"Illegal parameter value"
+scpi :BODE:UNIT "-1" -> query: DB; errors: -224,"Illegal parameter value" -1
+scpi :BODE:UNIT "1e9" -> query: DB; errors: -224,"Illegal parameter value" 1e9
+scpi :BODE:UNIT "DB" -> query: DB; errors: none
+scpi :BODE:UNIT "RATio" -> query: RAT; errors: none
+scpi :BODE:UNIT "x" -> query: DB; errors: -224,"Illegal parameter value" x
+scpi :BODE:UNIT default -> query: DB; errors: none
 scpi :BUS1:DISPlay "" -> query: 0; errors: -224,"Illegal parameter value"
 scpi :BUS1:DISPlay "-1" -> query: 0; errors: -224,"Illegal parameter value" -1
 scpi :BUS1:DISPlay "0" -> query: 0; errors: none
@@ -2029,6 +2047,14 @@ setup bode "1e9" -> 100 1000000 40 1 1 2 0 192.168.1.100:5555; error: line 2: bo
 setup bode "x 1000000 40 1 1 2 0 192.168.1.100:5555" -> 100 1000000 40 1 1 2 0 192.168.1.100:5555; error: line 2: bode: invalid float literal
 setup bode "x" -> 100 1000000 40 1 1 2 0 192.168.1.100:5555; error: line 2: bode: bode: want 8 values
 setup bode default -> 100 1000000 40 1 1 2 0 192.168.1.100:5555
+setup bode_amp_unit "" -> Vpp; error: "line 2: bode_amp_unit: unknown value: "
+setup bode_amp_unit "-1" -> Vpp; error: line 2: bode_amp_unit: unknown value: -1
+setup bode_amp_unit "1e9" -> Vpp; error: line 2: bode_amp_unit: unknown value: 1e9
+setup bode_amp_unit "Vpp" -> Vpp
+setup bode_amp_unit "Vrms" -> Vrms
+setup bode_amp_unit "vrms" -> Vpp; error: line 2: bode_amp_unit: unknown value: vrms
+setup bode_amp_unit "x" -> Vpp; error: line 2: bode_amp_unit: unknown value: x
+setup bode_amp_unit default -> Vpp
 setup bode_link "" -> lan; error: "line 2: bode_link: not lan or usb: "
 setup bode_link "-1" -> lan; error: line 2: bode_link: not lan or usb: -1
 setup bode_link "1e9" -> lan; error: line 2: bode_link: not lan or usb: 1e9
@@ -2081,6 +2107,14 @@ setup bode_sweep "inf true 1 Rise 1 1 0" -> 1 true 4 Rise 1 1 0; error: line 2: 
 setup bode_sweep "x true 4 Rise 1 1 0" -> 1 true 4 Rise 1 1 0; error: line 2: bode_sweep: invalid float literal
 setup bode_sweep "x" -> 1 true 4 Rise 1 1 0; error: line 2: bode_sweep: bode_sweep: want 7 values
 setup bode_sweep default -> 1 true 4 Rise 1 1 0
+setup bode_unit "" -> dB; error: "line 2: bode_unit: unknown value: "
+setup bode_unit "-1" -> dB; error: line 2: bode_unit: unknown value: -1
+setup bode_unit "1e9" -> dB; error: line 2: bode_unit: unknown value: 1e9
+setup bode_unit "V/V" -> V/V
+setup bode_unit "dB" -> dB
+setup bode_unit "db" -> dB; error: line 2: bode_unit: unknown value: db
+setup bode_unit "x" -> dB; error: line 2: bode_unit: unknown value: x
+setup bode_unit default -> dB
 setup bus_clk "" -> 1; error: "line 2: bus_clk: not a source: "
 setup bus_clk "-1" -> 1; error: line 2: bus_clk: not a source: -1
 setup bus_clk "0" -> 1

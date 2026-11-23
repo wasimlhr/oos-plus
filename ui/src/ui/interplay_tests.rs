@@ -107,6 +107,63 @@ fn a_trigger_type_keeps_the_values_it_shares_away_from_the_demo() {
     assert_eq!((u.m.trig_level, u.m.trig_level2), (2.0, 0.5), "demo: the runt preset");
 }
 
+/// #49: a type left keeps its own values and gets them back when it is chosen again, also where two types use the same
+/// field (the time of Pulse and of Slope); choosing a type leaves the source as it is.
+#[test]
+fn a_trigger_type_chosen_again_gets_its_own_values_back() {
+    let mut u = ui();
+    assert!(u.set_trigger_source(WaveId::Ch(1), false));
+    u.set_trig_type(TrigType::Pulse);
+    (u.m.trig_t1, u.m.trig_when, u.m.trig_pol) = (5e-6, WhenKind::Gt, Pol::Neg);
+    u.set_trig_type(TrigType::Slope);
+    (u.m.trig_t1, u.m.trig_when, u.m.trig_level2) = (2e-6, WhenKind::Lt, -0.5);
+    u.set_trig_type(TrigType::Window);
+    u.m.trig_level2 = -1.0;
+    u.set_trig_type(TrigType::Pulse);
+    assert_eq!((u.m.trig_t1, u.m.trig_when, u.m.trig_pol), (5e-6, WhenKind::Gt, Pol::Neg), "Pulse's own");
+    u.set_trig_type(TrigType::Slope);
+    assert_eq!((u.m.trig_t1, u.m.trig_when, u.m.trig_level2), (2e-6, WhenKind::Lt, -0.5), "Slope's own");
+    u.set_trig_type(TrigType::Window);
+    assert_eq!(u.m.trig_level2, -1.0, "Window's own lower level");
+    assert_eq!(u.m.trigger_wave(), WaveId::Ch(1), "the source stays");
+    // the same over SCPI's :TRIGger:MODE
+    let (mut s, cv) = (crate::scpi::Scpi::open(0), Canvas::new(crate::ui::W, crate::ui::H));
+    crate::ui::testkit::q(&mut s, &mut u, &cv, ":TRIG:MODE PULS");
+    assert_eq!(u.m.trig_t1, 5e-6, ":TRIG:MODE");
+}
+
+/// #49: a channel left as the trigger source keeps its level, and gets it back when it is the source again.
+#[test]
+fn a_trigger_source_chosen_again_gets_its_level_back() {
+    let mut u = ui();
+    assert!(u.set_trigger_source(WaveId::Ch(0), false));
+    u.m.trig_level = 1.5;
+    assert!(u.set_trigger_source(WaveId::Ch(1), false));
+    assert_eq!(u.m.trig_level, 1.5, "nothing kept for CH2 yet");
+    u.m.trig_level = -0.25;
+    assert!(u.set_trigger_source(WaveId::Ch(0), false));
+    assert_eq!(u.m.trig_level, 1.5, "CH1's level");
+    assert!(u.set_trigger_source(WaveId::Ch(1), false));
+    assert_eq!(u.m.trig_level, -0.25, "CH2's level");
+}
+
+/// #49: what is kept is not part of a setup. A setup of a build before it loads as before, and a loaded setup (a
+/// recall, the Default key) starts with nothing kept.
+#[test]
+fn a_setup_keeps_no_trigger_memory() {
+    let old = "trig_type = Pulse\ntrig_src = 1\ntrig_level = 0.5\ntrig_t1 = 0.000005\ntrig_when = Gt\n";
+    let m = crate::store::parse_setup(old).unwrap();
+    assert_eq!((m.trig_type, m.trig_src, m.trig_level, m.trig_t1), (TrigType::Pulse, 1, 0.5, 5e-6));
+    assert_eq!(m.trig_kept, TrigKept::default());
+    let mut u = ui();
+    u.set_trig_type(TrigType::Pulse);
+    u.set_trig_type(TrigType::Edge);
+    assert!(u.set_trigger_source(WaveId::Ch(1), false));
+    assert_ne!(u.m.trig_kept, TrigKept::default());
+    let back = crate::store::parse_setup(&crate::store::setup_text(&u.m)).unwrap();
+    assert_eq!(back.trig_kept, TrigKept::default());
+}
+
 #[test]
 fn the_lower_trigger_level_never_ends_above_the_upper() {
     let mut u = ui();

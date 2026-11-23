@@ -8,7 +8,7 @@ use super::*;
 use crate::settings::Setting;
 
 /// The items the table answers for, by setup key.
-const ITEMS: [(Item, &str); 91] = [
+const ITEMS: [(Item, &str); 93] = [
     (Item::Persist, "persist"),
     (Item::Intensity, "intensity"),
     (Item::GridStyle, "grid"),
@@ -71,6 +71,8 @@ const ITEMS: [(Item, &str); 91] = [
     (Item::BodeAmp, "bode amp"),
     (Item::BodeSwTime, "bode_sweep time"),
     (Item::BodeSwLog, "bode_sweep log"),
+    (Item::BodeUnit, "bode_unit"),
+    (Item::BodeAmpUnit, "bode_amp_unit"),
     (Item::BodeSyncEdge, "bode_sweep edge"),
     (Item::BodeSyncLvl, "bode_sweep level"),
     (Item::BodeRef, "bode_sweep ref"),
@@ -130,6 +132,10 @@ impl Ui {
     }
 
     pub(super) fn setting_value(&self, it: Item) -> Option<String> {
+        // the Bode amplitude is kept in Vpp and shown in the unit its menu has (#52)
+        if it == Item::BodeAmp && self.m.bode_rms {
+            return Some(si_short(self.m.bode_amp / crate::settings::bode::VPP_PER_VRMS, "Vrms"));
+        }
         row(it).map(|(s, n)| s.shown(&self.m, n))
     }
 
@@ -265,6 +271,8 @@ impl Ui {
             | Item::BodeAmp
             | Item::BodeSwTime
             | Item::BodeSwLog
+            | Item::BodeUnit
+            | Item::BodeAmpUnit
             | Item::BodeSyncEdge
             | Item::BodeSyncLvl
             | Item::BodeRef => return true,

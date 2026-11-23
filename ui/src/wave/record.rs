@@ -67,6 +67,12 @@ pub fn trigger_point(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) 
     // the hysteresis of the hardware comparators (0.3 div, trigger.md 2.3): with less, noise on an edge of the other
     // direction counts as an edge, and a slow noisy sine is drawn now on one, now on the other edge
     let hyst: [f32; NCH] = std::array::from_fn(|c| m.trig_hyst_div() * m.ch[c].volts_per_div());
+    // the protocol trigger decodes the frame: samples in turn (Peak detect) are read by the means of neighbours, as the
+    // decoder reads the record (`Record::alternates`)
+    let means: [Option<Vec<f32>>; NCH] = std::array::from_fn(|c| {
+        (m.trig_type == TrigType::Bus && frame_peak(f, m)).then(|| crate::trig::pair_means(refs[c]))
+    });
+    let refs: [&[f32]; NCH] = std::array::from_fn(|c| means[c].as_deref().unwrap_or(refs[c]));
     let inp = oos_dsp::trigger::Input { ch: refs, dt: f.dt, hyst };
     let usable = m.trig_channels().iter().enumerate().all(|(c, &u)| !u || !refs[c].is_empty());
     // plain edge trigger on a channel
@@ -166,6 +172,12 @@ pub fn edge_near(f: &Frame, m: &Model, n: usize, window: f64, t_first: f64) -> O
     // a filtered trigger path (coupling) can fire where the samples show no crossing of that level: the hardware
     // point stands
     found.or((m.trig_coupling() != TrigCoup::Dc).then_some(f.pre as f64))
+}
+
+/// Whether the samples of frame `f` are minimum and maximum in turn: taken in Peak detect below the full rate (at the
+/// full rate there is nothing to detect over). A frame is turned into a record with the mode it was taken in.
+pub fn frame_peak(f: &Frame, m: &Model) -> bool {
+    m.acq == AcqMode::Peak && 1.0 / f.dt < m.max_srate() * 0.999
 }
 
 /// Turns the latest frame into a screen record: software trigger (oos-dsp) closest to the hardware trigger point,
@@ -283,12 +295,50 @@ pub fn resample(
     });
     // LA: the same shift as the analog record (software trigger at `ti` instead of the hardware point `pre`)
     let la = f.la.as_ref().map(|l| crate::logic::LaRec { t0: l.t0 - (ti - f.pre as f64) * f.dt, ..l.clone() });
-    crate::wave::Record { t0: t_first, dt, ch, triggered, partial: f.partial, raw, la, pairs }
+    crate::wave::Record { t0: t_first, dt, ch, triggered, partial: f.partial, raw, la, pairs, peak: frame_peak(f, m) }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Break it catches: the protocol trigger decoded the samples of a Peak detect frame as samples. They are minimum
+    /// and maximum in turn, so no byte of a LIN frame was read and the record did not move to the field; read by the
+    /// means of neighbours, as the decoder reads the record, the field is found.
+    #[test]
+    fn a_bus_trigger_reads_a_peak_detect_frame_by_its_means() {
+        let (mut m, peak, dt) = crate::trig::peak_tests::lin_in_peak_detect();
+        (m.trig_type, m.trig_src, m.trig_bus, m.trig_bus_val) = (TrigType::Bus, 0, BusWhat::Data, 0x30);
+        let n = peak.len();
+        let f = Frame {
+            seq: 1,
+            dt,
+            pre: n - 3001,
+            ch: [peak, Vec::new(), Vec::new(), Vec::new()],
+            roll: false,
+            envelope: false,
+            scan: false,
+            partial: false,
+            acq: (0.0, 0),
+            stamp: 0,
+            la: None,
+            fixed_ti: None,
+            hw_avg: false,
+            basic: Default::default(),
+        };
+        let window = n as f64 * dt;
+        let at = |m: &Model| trigger_point(&f, m, 3600, window, -((n - 3001) as f64) * dt);
+        assert_eq!(at(&m), None, "as samples, no byte of the frame is read");
+        m.acq = AcqMode::Peak;
+        assert!(frame_peak(&f, &m));
+        let t = at(&m).expect("the data byte 0x30 is found");
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if c == 0 { &f.ch[0][..] } else { &[][..] });
+        let means = crate::trig::pair_means(ch[0]);
+        let p =
+            crate::trig::decode(&m, std::array::from_fn(|c| if c == 0 { &means[..] } else { &[][..] }), dt).unwrap();
+        let want = crate::trig::points(&m, &p);
+        assert!(want.iter().any(|w| (w - t).abs() < 1.0), "at the field: {t} of {want:?}");
+    }
 
     #[test]
     fn high_res_averages_where_the_record_has_more_samples_than_the_screen() {

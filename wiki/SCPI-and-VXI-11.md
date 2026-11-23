@@ -103,7 +103,7 @@ print(scope.query('*IDN?'))
 | Command | What it does |
 |---|---|
 | `*IDN?` | `OOS,<model>,<serial>,oos-ui <version>` |
-| `*RST` | the default settings (as the Default key) |
+| `*RST` | the default settings (as the Default key), and the waveform transfer from the start: CH1, NORMal, BYTE, the whole record |
 | `*CLS` | clears the error queue, the event register and pending `*OPC` registrations |
 | `*OPC?` / `*OPC` / `*ESR?` | see [Synchronisation](#synchronisation-opc-esr) |
 | `:RUN`, `:STOP`, `:SINGle` | Run (on the live acquisition, after a Single with the sweep before it, Auto or Normal; a stored replay and SIM go to Normal), Stop, one acquisition then Stop |
@@ -193,7 +193,7 @@ Example, a single acquisition on a rising edge at 1.5 V:
 | `:WAVeform:PREamble?` | 10 values, below |
 | `:WAVeform:DATA?` | the samples as an IEEE block |
 
-**Modes.** NORM reads the record on screen. RAW reads the samples in memory, also outside the screen; OOS allows RAW while running (the stock firmware only when stopped). MAX is the screen record while running and the memory when stopped. A reference gives its own samples in every mode. While running, two queries can see two different acquisitions: send `:STOP` first when preamble and data must belong together.
+**Modes.** NORM reads the record on screen, also after a STOP of a deep record zoomed out, when the measurements keep the window of the STOP. RAW reads the samples in memory, also outside the screen; OOS allows RAW while running (the stock firmware only when stopped). MAX is the screen record while running and the memory when stopped. A reference gives its own samples in every mode. While running, two queries can see two different acquisitions: send `:STOP` first when preamble and data must belong together.
 
 **Preamble:** `format,type,points,count,xincrement,xorigin,xreference,yincrement,yorigin,yreference`. `format` 0 BYTE, 1 WORD, 2 ASCII; `type` 0 NORM, 1 MAX, 2 RAW; `count` is 1.
 
@@ -327,7 +327,7 @@ Values are in base units, phase in degrees, duty and overshoot in percent. `*OPC
 | `:INVerter:ITEM? <item>[,src...]` | the inverter page's results |
 | `:DPT:ITEM? <item>[,V,I[,G]]` | double pulse: `VPEAK`, `IPEAK`, `EON`, `EOFF`, `TDON`, `TR`, `TDOFF`, `TF`, `QRR` |
 | `:BANDwidth:ITEM? <item>[,src]` | `RISE`, `BW`, `OVER` |
-| `:BODE:MODE[?] LOOP\|PSRR\|IMPedance`, `:BODE:RUN ON\|OFF`, `:BODE:DATA?`, `:BODE:GENerator[?] "ip:port"` | Bode plot; RUN drives the generator |
+| `:BODE:MODE[?] LOOP\|PSRR\|IMPedance`, `:BODE:UNIT[?] DB\|RATio`, `:BODE:AMPLitude[?] <Vpp>`, `:BODE:RUN ON\|OFF`, `:BODE:DATA?`, `:BODE:GENerator[?] "ip:port"` | Bode plot; RUN drives the generator |
 | `:IDENtify?` | what Identify recognises in the signal |
 
 These are OOS functions, not stock Rigol commands. Their limits are in [reference analysis](https://github.com/dekajoule/oos/blob/main/docs/reference-analysis.md).

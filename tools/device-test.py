@@ -182,8 +182,11 @@ class Scope:
         return statistics.median(v) if v else math.nan
 
     def wave(self, c=1):
-        """(t0, dt, volts) of the record on the screen."""
+        """(t0, dt, volts) of the record on the screen: NORMal and the whole page, whatever a test before left set."""
         self.w(f":WAV:SOUR CHAN{c}")
+        self.w(":WAV:MODE NORM")
+        self.w(":WAV:STAR 1")
+        self.w(":WAV:STOP 1000000000")
         self.w(":WAV:FORM WORD")
         p = self.q(":WAV:PRE?").split(",")
         pts, dt, t0, yinc, yorg, yref = int(p[2]), float(p[4]), float(p[5]), float(p[7]), float(p[8]), float(p[9])
@@ -1373,6 +1376,156 @@ def deep_memory(s, o):
         near(f"RMS as Vpp at {d}", rms * 2 * 2**0.5, 2.0, rel=0.08)
     s.w(":ACQ:MDEP AUTO")
     s.w(":MEAS:CLE ALL")
+    return "; ".join(rows)
+
+
+def screen_swing(s, c, bins=50):
+    """The record on the screen (`:WAV:MODE NORM`, the whole page): its start, the screen width and, per bin of the
+    screen, the swing in volts. A deep record zoomed out is drawn from the stored record, as the user sees it."""
+    t0, dt, v = s.wave(c)
+    n = len(v)
+    sw = [max(v[k * n // bins:(k + 1) * n // bins] or [0]) - min(v[k * n // bins:(k + 1) * n // bins] or [0])
+          for k in range(bins)]
+    return t0, dt * n, sw
+
+
+def raw_window(s, c, wait=60):
+    """After a STOP, the raw record the scope keeps (`:WAV:MODE RAW`): its preamble fields once the point count has
+    settled, the transfer page reset first (a page left by an earlier read would cut the count)."""
+    s.w(f":WAV:SOUR CHAN{c}")
+    s.w(":WAV:MODE RAW")
+    s.w(":WAV:FORM BYTE")
+    end, last = time.time() + wait, -1
+    while True:
+        s.w(":WAV:STAR 1")
+        s.w(":WAV:STOP 1000000000")
+        p = s.q(":WAV:PRE?").split(",")
+        pts = int(float(p[2]))
+        if pts == last or time.time() > end:
+            return pts, float(p[4]), float(p[7]), float(p[8]), float(p[9])
+        last = pts
+        time.sleep(2)
+
+
+def rising_edges(b, lo, hi):
+    """Sample indices where the bytes `b` rise through `hi` after having been below `lo` (hysteresis)."""
+    out, armed = [], False
+    for k, x in enumerate(b):
+        if x < lo:
+            armed = True
+        elif x > hi and armed:
+            out.append(k)
+            armed = False
+    return out
+
+
+def zoomed_out(s, o, c, d, how, meas):
+    """A record of depth `d` at 0.2 ms/div with a 100 kHz sine, ended by `how` (STOP while running, or SING), then the
+    smallest 1-2-5 time base whose screen holds it and a quarter more. `meas` False clears the measurement list (no
+    raw deep reads, docs/fork/deep-meas.md). The covered time on the screen record, its centre, the record's length."""
+    s.base()
+    s.gen("SIN", 1e5, 2.0)
+    if not meas:
+        s.w(":MEAS:CLE ALL")
+    s.w(f":ACQ:MDEP {d}")
+    s.settle(2, extra=2)
+    rate = s.num(":ACQ:SRAT?")
+    s.w(f":{how}")
+    end = time.time() + 30
+    while s.stat()["run"].upper() not in ("STOP", "STOPPED") and time.time() < end:
+        time.sleep(0.3)
+    time.sleep(2)
+    span = int(d) / rate
+    tb = next(x * 10.0 ** e for e in range(-6, 1) for x in (1, 2, 5) if x * 10.0 ** e * 10 >= span * 1.25)
+    s.w(f":TIM:SCAL {tb}")
+    # the zoomed-out view is read from the stored record: wait until the covered part stops changing
+    cover, end = -1, time.time() + 30
+    while time.time() < end:
+        t0, width, sw = screen_swing(s, c)
+        on = [k for k, x in enumerate(sw) if x > 1.0]
+        if len(on) == cover:
+            break
+        cover = len(on)
+        time.sleep(1.5)
+    s.shot(f"zoomed-{int(d) // 1000000}M-{how.lower()}-{'meas' if meas else 'nomeas'}", o.out)
+    name = f"{int(d) // 1000000} M {how}"
+    assert on, f"{name}: no signal on the zoomed-out screen"
+    bw = width / len(sw)
+    got = (on[-1] - on[0] + 1) * bw
+    mid = t0 + (on[0] + on[-1] + 1) / 2 * bw
+    assert len(on) == on[-1] - on[0] + 1, f"{name}: gaps in the record ({len(on)} of {on[-1] - on[0] + 1} bins)"
+    return name, got, mid, span, bw
+
+
+@test("a1", need=(1,))
+def deep_record_fills_the_zoomed_out_screen(s, o):
+    """A deep record, stopped while running and taken with Single, holds the signal over its whole length: zoomed out,
+    the trace covers depth / rate around the trigger, no shorter (#47: a DHO804 showed about 7 ms of 50 M at
+    1.25 GSa/s) and no longer. Without measurements, so the screen record is the stored record read again."""
+    c = s.loop[0]
+    rows = []
+    for d, how in (("10000000", "STOP"), ("50000000", "STOP"), ("125000000", "STOP"), ("50000000", "SING")):
+        name, got, mid, span, bw = zoomed_out(s, o, c, d, how, meas=False)
+        rows.append(f"{name}: {got * 1e3:.1f} of {span * 1e3:.1f} ms, centre {mid * 1e3:+.1f} ms")
+        near(f"{name}: covered time", got, span, rel=0.05, ab=2 * bw)
+        near(f"{name}: centre on the trigger", mid, 0.0, ab=1.5 * bw)
+    s.w(":ACQ:MDEP AUTO")
+    return "; ".join(rows)
+
+
+@test("a1", need=(1,))
+def norm_export_is_the_screen_after_a_stop(s, o):
+    """`:WAV:MODE NORM` reads the record the screen shows (docs/scpi.md), also when a shown measurement needs samples
+    and the scope keeps a raw window of the STOP for it (Mean and RMS are on after *RST): zoomed out on a stopped
+    50 M record, the export covers the 40 ms the screen draws, not the window of the STOP."""
+    c = s.loop[0]
+    name, got, mid, span, bw = zoomed_out(s, o, c, "50000000", "STOP", meas=True)
+    s.w(":ACQ:MDEP AUTO")
+    near(f"{name}: NORM covers", got, span, rel=0.05, ab=2 * bw)
+    return f"{name}: NORM covers {got * 1e3:.1f} of {span * 1e3:.1f} ms"
+
+
+@test("a1", need=(1,))
+def raw_window_is_one_unbroken_signal(s, o):
+    """The raw record kept after a STOP (`:WAV:MODE RAW`, docs/fork/deep-meas.md) is the screen and a margin of one
+    piece of signal: at least the screen's samples, every period of a 100 kHz sine as long as the next (a missing,
+    doubled or misplaced piece shows as a period off), and the amplitude of the generator."""
+    c = s.loop[0]
+    rows = []
+    for d in ("1000000", "10000000", "50000000", "125000000"):
+        s.base()
+        s.gen("SIN", 1e5, 2.0)
+        s.w(f":ACQ:MDEP {d}")
+        s.settle(2, extra=2)
+        rate, tdiv = s.num(":ACQ:SRAT?"), s.tdiv()
+        s.w(":STOP")
+        time.sleep(2)
+        pts, xinc, yinc, yor, yref = raw_window(s, c)
+        screen = int(round(10 * tdiv * rate))
+        rows.append(f"{int(d) // 1000000} M: {pts} points at {1 / xinc / 1e6:.0f} MSa/s")
+        assert pts >= min(screen, int(d)) * 0.98, f"{rows[-1]}: fewer than the screen's {min(screen, int(d))}"
+        near(f"{int(d) // 1000000} M: raw sample rate", 1 / xinc, rate, rel=0.001)
+        # the whole window, in pages of 1 M points
+        b, k = bytearray(), 1
+        while k <= pts:
+            s.w(f":WAV:STAR {k}")
+            s.w(f":WAV:STOP {min(pts, k + 999999)}")
+            b += s.block(":WAV:DATA?", timeout=120)
+            k += 1000000
+        assert len(b) == pts, f"{rows[-1]}: read {len(b)} bytes"
+        lo, hi = min(b), max(b)
+        vpp = (hi - lo) * yinc
+        mid, q = (hi + lo) / 2, (hi - lo) / 4
+        e = rising_edges(b, mid - q, mid + q)
+        per = [y - x for x, y in zip(e, e[1:])]
+        want = 1 / 1e5 / xinc
+        bad = [(i, p) for i, p in enumerate(per) if abs(p - want) > want * 0.02]
+        rows[-1] += f", {len(per)} periods, {vpp:.2f} Vpp"
+        assert len(per) >= pts / want * 0.9 - 2, f"{rows[-1]}: expected about {pts / want:.0f} periods"
+        assert not bad, f"{rows[-1]}: periods off at {bad[:4]} (want {want:.0f} samples)"
+        near(f"{int(d) // 1000000} M: Vpp", vpp, 2.0, rel=0.12)
+    s.w(":RUN")
+    s.w(":ACQ:MDEP AUTO")
     return "; ".join(rows)
 
 

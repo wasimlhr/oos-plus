@@ -793,10 +793,13 @@ impl Ui {
         if let Some(p) = self.decoded.get(key) {
             return Ok(std::sync::Arc::new(p));
         }
-        // (a screen record of min/max pairs is read as `trig::decode` reads a Peak detect record)
-        let means: [Vec<f32>; NCH] =
-            std::array::from_fn(|c| if rec.pairs { crate::trig::pair_means(&rec.ch[c]) } else { Vec::new() });
-        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if rec.pairs { &means[c][..] } else { &rec.ch[c][..] });
+        // points that are minimum and maximum in turn (Peak detect, min/max pairs) are read by the means of
+        // neighbours, once, and only on the channels the decoder reads
+        let used = super::reference_decode::sources(m)?;
+        let means: [Option<Vec<f32>>; NCH] = std::array::from_fn(|c| {
+            (rec.alternates() && used.contains(&c)).then(|| crate::trig::pair_means(&rec.ch[c]))
+        });
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| means[c].as_deref().unwrap_or(&rec.ch[c]));
         let mut p = crate::trig::decode(m, ch, rec.dt)?;
         for x in p.iter_mut() {
             x.t0 = rec.t0 + x.t0 * rec.dt;

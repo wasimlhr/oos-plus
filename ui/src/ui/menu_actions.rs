@@ -215,8 +215,23 @@ impl Ui {
         }
     }
 
-    /// Switches the trigger type and sets starting values that trigger on the demo signals.
+    /// Switches the trigger type. The type left keeps its values, a type chosen again gets them back (#49,
+    /// `Model::keep_trig_type`); on a scope and a record the source stays. The demo is the exception: there a type
+    /// starts on the channel that shows its signal, with values that trigger on it (`switch_trig_type`), and its own
+    /// kept values go over them.
     pub(super) fn set_trig_type(&mut self, t: TrigType) {
+        self.m.keep_trig_type();
+        self.switch_trig_type(t);
+        if self.m.take_kept_trig_type() {
+            // a reference kept as the second source that is no longer loaded: the channel instead
+            if self.m.trig_ref2.is_some_and(|i| i >= NREF || self.refs[i].is_none()) {
+                self.m.trig_ref2 = None;
+            }
+            self.dirty_map = true;
+        }
+    }
+
+    fn switch_trig_type(&mut self, t: TrigType) {
         let was_bus = self.m.trig_type == TrigType::Bus;
         // leaving Bus: off again what entering it switched on (the decoder kept the live picture raw, its demo sources
         // stayed on); a type set elsewhere since leaves nothing to undo
@@ -963,8 +978,8 @@ impl Ui {
             }
             Item::SlopeAct => self.key(key::SLOPE),
             Item::NavHist => self.key(key::NAVIGATE),
-            Item::NavBack => self.key(0x08),
-            Item::NavFwd => self.key(0x06),
+            Item::NavBack => self.key(key::NAV_BACK),
+            Item::NavFwd => self.key(key::NAV_FWD),
             Item::QuickRun => {
                 self.close_menu();
                 self.quick();

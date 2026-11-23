@@ -722,6 +722,18 @@ fn write_only_actions_without_query_suffix_still_execute() {
     assert!(s.err.is_empty());
 }
 
+/// `*RST` puts the waveform transfer back as well: source, mode, format and page.
+#[test]
+fn reset_restores_the_waveform_transfer() {
+    let (mut s, mut ui, cv) = reference_session();
+    let ask = "*IDN?;:WAV:SOUR?;:WAV:MODE?;:WAV:FORM?;:WAV:STAR?;:WAV:STOP?";
+    let before = line(&mut s, &mut ui, &cv, ask);
+    line(&mut s, &mut ui, &cv, ":WAV:SOUR CHAN2;:WAV:MODE RAW;:WAV:FORM WORD;:WAV:STAR 1000;:WAV:STOP 2000");
+    assert_ne!(line(&mut s, &mut ui, &cv, ask), before);
+    line(&mut s, &mut ui, &cv, "*RST");
+    assert_eq!(line(&mut s, &mut ui, &cv, ask), before);
+}
+
 #[test]
 fn raw_tcp_compound_queries_share_one_response_message() {
     let (mut s, mut ui, cv) = session();

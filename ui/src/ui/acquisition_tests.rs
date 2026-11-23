@@ -1234,6 +1234,56 @@ fn a_setting_changed_while_running_keeps_the_picture_until_the_next_record() {
     }
 }
 
+// Break it catches (#548, a DHO924S on 0.1.15): a new time base while running and waiting for a trigger kept the picture
+// of the old one. A record that filled the screen at 0.2 ms/div still filled it at 10 ms/div, a 1 kHz sine looked like
+// 20 Hz. The held record is drawn again at its own times: it takes the middle fiftieth of the screen.
+#[test]
+fn a_new_time_base_while_waiting_draws_the_held_record_at_its_own_times() {
+    use super::*;
+    let shared: crate::board::HwShared = Default::default();
+    let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+    ui.m.run = RunState::Run;
+    for c in 1..NCH {
+        ui.m.ch[c].on = false;
+    }
+    ui.m.meas.clear();
+    ui.m.meas2.clear();
+    let at = |t: f32| tscales().iter().position(|&x| x >= t * 0.999).unwrap();
+    (ui.m.tscale, ui.m.tfine) = (at(2e-4), 1.0);
+    ui.step(0.033);
+    let window = ui.m.time_per_div() as f64 * HDIV as f64;
+    let n = 100_000usize;
+    let v: Vec<f32> = (0..n).map(|k| if (k / 500) % 2 == 1 { 0.3 } else { 0.0 }).collect();
+    shared.lock().unwrap().queue.push_back(crate::board::Frame {
+        seq: 1,
+        stamp: ui.m.hw_stamp,
+        dt: window / n as f64,
+        pre: n / 2,
+        ch: [v, Vec::new(), Vec::new(), Vec::new()],
+        ..Default::default()
+    });
+    ui.step(0.033);
+    let (w, h) = (ui.ph.w, ui.ph.h);
+    let columns = |ui: &Ui| (0..w).filter(|&x| (0..h).any(|y| ui.ph.map[0][y * w + x] != 0)).collect::<Vec<_>>();
+    let wide = columns(&ui);
+    assert!(wide.len() > w * 9 / 10, "the record fills the screen at 0.2 ms/div: {} of {w}", wide.len());
+    ui.m.tscale = at(1e-2);
+    ui.settings_changed();
+    for _ in 0..3 {
+        ui.step(0.033);
+    }
+    let narrow = columns(&ui);
+    let (lo, hi) = (*narrow.first().unwrap(), *narrow.last().unwrap());
+    assert!(hi - lo <= w / 25, "the record takes the middle fiftieth at 10 ms/div: columns {lo}..{hi} of {w}");
+    assert!(lo > w * 2 / 5 && hi < w * 3 / 5, "in the middle: columns {lo}..{hi} of {w}");
+    // the zoom switched on while waiting (no setting marked changed): its pane gets the held record too
+    ui.set_zoom(true);
+    for _ in 0..3 {
+        ui.step(0.033);
+    }
+    assert!(ui.phz.map[0].iter().any(|&c| c != 0), "the zoom pane shows the held record");
+}
+
 // Break it catches (#441, a DHO802 on 0.1.14, 100 ms persistence): the picture aged every screen step whether a record
 // had come or not. With records slower than the persistence time (slow time bases, deep memory) the newest record
 // faded out before the next one, and the trace pulsed. It ages when the next record comes, by the time since the last

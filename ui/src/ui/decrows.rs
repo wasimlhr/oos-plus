@@ -729,7 +729,7 @@ mod tests {
         (u.m.dec_proto, u.m.dec_src, u.m.dec_src2, u.m.dec_cs) = (m.dec_proto, m.dec_src, m.dec_src2, m.dec_cs);
         (u.m.dec_bits, u.m.dec_mode, u.m.dec_on) = (8, 0, true);
         let (triggered, partial, pairs) = (true, false, false);
-        u.last[0] = Some(Record { t0: 0.0, dt, ch: ch.clone(), triggered, partial, raw: None, la: None, pairs });
+        u.last[0] = Some(Record { t0: 0.0, dt, ch: ch.clone(), triggered, partial, raw: None, la: None, pairs, peak: false });
         let items = u.decode_items();
         let lines: Vec<usize> = (1..4).filter(|&r| items.contains(&Item::DecThrLine(r))).collect();
         assert_eq!(lines, [1, 2], "a threshold for the clock and the chip select, none for a fourth line");

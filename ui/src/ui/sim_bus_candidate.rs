@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! Fresh SIM bus records are decoded before they become an accepted reference.
-use super::super::reference_decode::{decode_borrowed, sources, BorrowedWave};
+use super::super::reference_decode::{channel_alternates, decode_borrowed, native_of, sources, BorrowedWave};
 use super::*;
 use oos_dsp::decode::Packet;
 
@@ -22,6 +22,8 @@ struct Role {
     data: Data,
     t0: f64,
     dt: f64,
+    /// the points are minimum and maximum in turn (`channel_alternates`)
+    pairs: bool,
 }
 pub(super) struct Plan {
     model: Model,
@@ -40,7 +42,7 @@ impl Plan {
                     Data::Reference(v) | Data::Small(v) => (v.as_slice(), role.dt),
                     Data::Native(frame, c) => (frame.ch[*c].as_slice(), role.dt),
                 };
-                BorrowedWave { source: role.source, v, t0: role.t0, dt: step }
+                BorrowedWave { source: role.source, v, t0: role.t0, dt: step, pairs: role.pairs }
             })
             .collect::<Vec<_>>();
         let packets = decode_borrowed(&self.model, &waves, self.hysteresis)?;
@@ -68,6 +70,10 @@ impl Ui {
         let mut primary_vpd = generated_vpd;
         for source in sources(model)? {
             let id = decode_wave(source).ok_or("Invalid SIM Bus role")?;
+            let pairs = match id {
+                WaveId::Ch(c) => self.last[0].as_ref().is_some_and(|r| channel_alternates(r, c)),
+                WaveId::Ref(_) => false,
+            };
             let (data, t0, dt, vpd) = match id {
                 WaveId::Ref(i) if i == slot => (Data::Generated, self.source_time_origin(id, 0.0), 1.0, generated_vpd),
                 WaveId::Ref(i) => {
@@ -79,9 +85,7 @@ impl Ui {
                         return Err("SIM Bus auxiliary channel is off");
                     }
                     let record = self.last[0].as_ref().ok_or("SIM Bus auxiliary channel has no accepted record")?;
-                    if let Some(raw) =
-                        record.raw.as_ref().filter(|raw| !raw.frame.envelope && raw.frame.ch[c].len() >= 2)
-                    {
+                    if let Some(raw) = native_of(record, c) {
                         (
                             Data::Native(Arc::clone(&raw.frame), c),
                             self.source_time_origin(id, raw.t0 - raw.i0 as f64 * raw.frame.dt),
@@ -104,7 +108,7 @@ impl Ui {
             if source == model.dec_src {
                 primary_vpd = vpd;
             }
-            roles.push(Role { source, data, t0, dt });
+            roles.push(Role { source, data, t0, dt, pairs });
         }
         Ok(Plan {
             model: model.clone(),

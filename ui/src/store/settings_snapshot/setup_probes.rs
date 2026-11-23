@@ -343,6 +343,8 @@ const KEYS: &[(&str, P)] = &[
     ("meas_full_record", Bool),
     ("spec_acpr", Fields(&["0 0", "1e3 1e3"])),
     ("bode_mode", Is(&["Loop", "Psrr", "Z", "loop"])),
+    ("bode_unit", Is(&["dB", "V/V", "db"])),
+    ("bode_amp_unit", Is(&["Vpp", "Vrms", "vrms"])),
     ("eye_more", Fields(&["0.001 1 2 1 1 3 2 0", "1e-12 1000 1000000 0 R1 0 R2 1"])),
     ("power_more", Fields(&["50 100000 1 3.3 2", "60 0 R1 - R2"])),
     ("magnetic", Fields(&["1 2 0 1 1 1 BH 1", "1 2 20000 -1 -1 -1 IPsi 0", "R1 R2 5 1 1 1 Bh 0"])),

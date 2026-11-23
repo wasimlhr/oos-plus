@@ -92,6 +92,40 @@ impl Ui {
         Rect::new(x, y, STRIP_SIDE, h)
     }
 
+    /// Line `k` of `n` in the side column, a strip row each or closer; none from the first that does not fit.
+    pub(super) fn side_line(&self, col: Rect, k: usize, n: usize) -> Option<Rect> {
+        let (strip_row, n) = (self.lay().strip_row, n as i32);
+        let room = (col.h - 4).max(strip_row);
+        let pitch = if n * strip_row <= room { strip_row } else { (room / n).max(12) };
+        let y = col.y + 2 + k as i32 * pitch;
+        (k == 0 || y + 12 <= col.y + col.h).then(|| Rect::new(col.x + 4, y, col.w - 8, (pitch - 2).max(12)))
+    }
+
+    /// Line `row` of a page of measurements in the side column, under the page's two header lines.
+    pub(super) fn paged_side_line(col: Rect, row: usize) -> Rect {
+        Rect::new(col.x + 4, col.y + 44 + row as i32 * 20, col.w - 8, 18)
+    }
+
+    /// Readout `k` of a page of measurements across the screen, `tools::STRIP_PER_ROW` a row from `y0`. oos-plus: with
+    /// page controls in the band the last column of rows two and three is theirs (`band_cell`).
+    pub(super) fn paged_band_cell(&self, y0: i32, k: usize) -> Rect {
+        let pitch = (W - 12) / tools::STRIP_PER_ROW as i32;
+        let (row, column) = self.band_cell(k);
+        Rect::new(6 + column * pitch, y0 + row * STRIP_ROW, pitch - 4, 16)
+    }
+
+    /// The left of the values of a row across the screen, right of the source pill.
+    pub(super) fn band_vx(&self) -> i32 {
+        8 + 42.max(self.fonts().sb.width("CH4").max(self.fonts().sb.width("R10")) + 18) + 8
+    }
+
+    /// The cells of `n` values in a row across the screen at `y`, right of the source pill.
+    pub(super) fn band_cells(&self, y: i32, n: usize) -> impl Iterator<Item = Rect> {
+        let vx = self.band_vx();
+        let (pitch, h) = ((self.scr.w - METRICS.edge - 2 - vx) / n.max(1) as i32, self.lay().strip_row - 2);
+        (0..n as i32).map(move |k| Rect::new(vx + k * pitch, y, pitch, h))
+    }
+
     /// Where the strip is drawn. None when it has nothing to show.
     #[cfg(test)]
     pub(super) fn strip_rect(&self) -> Option<Rect> {
@@ -179,8 +213,8 @@ impl Ui {
         // bar height and text baseline of a row; the source pill and the values right of it
         let bh = self.lay().strip_row - 2;
         let base = (bh + f.s.size * 72 / 100) / 2;
-        let pw = 42.max(f.sb.width("CH4").max(f.sb.width("R10")) + 18);
-        let vx = 8 + pw + 8;
+        let vx = self.band_vx();
+        let pw = vx - 16;
         // a row: the width of the screen less the edges
         let row = |y: i32| Rect::new(METRICS.edge, y, self.scr.w - 2 * METRICS.edge, bh);
         let pill = |cv: &mut Canvas, y: i32, label: &str, col: Rgb| {
@@ -199,9 +233,8 @@ impl Ui {
                     cv.fill(row(y), BAR);
                     pill(cv, y, &label, col);
                     // the row's width shared out, whatever the number of values
-                    let pitch = (row(y).right() - 2 - vx) / part.len() as i32;
-                    for (i, &(k, r)) in part.iter().enumerate() {
-                        let x = vx + i as i32 * pitch;
+                    for (cell, &(k, r)) in self.band_cells(y, part.len()).zip(part) {
+                        let (x, pitch) = (cell.x, cell.w);
                         if self.stock_readouts() {
                             // the stock row (Default): the short name, then the value
                             let x2 = cv.text(&f.s, x, y + base, &r.name, DIM) + 8;
@@ -269,15 +302,10 @@ impl Ui {
             return;
         }
         let col = self.strip_column();
-        let n = lines.len() as i32;
-        let strip_row = self.lay().strip_row;
-        let room = (col.h - 4).max(strip_row);
-        let pitch = if n * strip_row <= room { strip_row } else { (room / n).max(12) };
         let f = self.fonts();
         cv.set_clip(col);
-        let mut y = col.y + 2;
-        for line in &lines {
-            let bar = Rect::new(col.x + 4, y, col.w - 8, (pitch - 2).max(12));
+        for (k, line) in lines.iter().enumerate() {
+            let Some(bar) = self.side_line(col, k, lines.len()) else { break };
             cv.fill(bar, BAR);
             let mut text_x = bar.x + 6;
             if let Some((label, pill_col)) = &line.pill {
@@ -305,10 +333,6 @@ impl Ui {
                 let fits = self.stock_readouts() || f.s.width(&line.name) <= name_w;
                 cv.text(&f.s, text_x, base, if fits { &line.name } else { &line.short }, DIM);
                 cv.set_clip(col);
-            }
-            y += pitch;
-            if y + 12 > col.y + col.h {
-                break;
             }
         }
         cv.no_clip();

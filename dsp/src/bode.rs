@@ -124,6 +124,26 @@ pub fn log_sweep(start: f64, stop: f64, n: usize) -> Vec<f64> {
     v
 }
 
+/// `n` linearly spaced frequencies from `start` to `stop` (both included): equal steps of (stop - start) / (n - 1).
+/// A start of 0 or below gives no plan, as for `log_sweep`.
+pub fn lin_sweep(start: f64, stop: f64, n: usize) -> Vec<f64> {
+    if n < 2 || start <= 0.0 || stop <= start {
+        return vec![start.max(stop)];
+    }
+    let mut v: Vec<f64> = (0..n).map(|k| start + (stop - start) * k as f64 / (n - 1) as f64).collect();
+    v[n - 1] = stop;
+    v
+}
+
+/// The frequencies of a sweep: logarithmically spaced (equal ratio) or linearly (equal steps).
+pub fn sweep_freqs(start: f64, stop: f64, n: usize, log: bool) -> Vec<f64> {
+    if log {
+        log_sweep(start, stop, n)
+    } else {
+        lin_sweep(start, stop, n)
+    }
+}
+
 /// A frequency with 6 significant digits, no trailing zeros (for generator commands).
 pub fn fmt_hz(f: f64) -> String {
     let dec = (5 - f.abs().max(1e-9).log10().floor() as i32).max(0) as usize;
@@ -289,8 +309,8 @@ pub fn sync_start(v: &[f32], dt: f64, t0: f64, level: f32, hyst: f32, rising: bo
     ts.iter().filter(|&&t| t + time <= end + dt).min_by(near).or_else(|| ts.iter().min_by(near)).copied()
 }
 
-/// Amplitude and phase over frequency from one record of a free sweep, at `n` frequencies spaced logarithmically from
-/// start to stop.
+/// Amplitude and phase over frequency from one record of a free sweep, at `n` frequencies from start to stop, spaced
+/// as the sweep runs: logarithmically for a log sweep, linearly for a linear one.
 ///
 /// Each frequency f has a window around the time the sweep passes it: `SWEEP_PERIODS` periods long, shorter where the
 /// frequency changes by more than `SWEEP_RATIO` within it, moved inwards at the ends of the sweep. Plain samples:
@@ -305,7 +325,7 @@ pub fn sweep_response(sw: &Sweep, rec: &SweepRecord, n: usize) -> SweepResult {
         return r;
     }
     let (rec_a, rec_b) = (rec.t0, rec.t0 + (len - 1) as f64 * rec.dt);
-    for fc in log_sweep(sw.start, sw.stop, n) {
+    for fc in sweep_freqs(sw.start, sw.stop, n, sw.log) {
         let tc = sw.time_of(fc);
         let mut h = SWEEP_PERIODS / (2.0 * fc);
         if rec.envelope {
@@ -494,6 +514,13 @@ mod tests {
         for (k, want) in [10.0, 100.0, 1e3, 1e4, 1e5, 1e6].iter().enumerate() {
             assert!((f[k] / want - 1.0).abs() < 1e-9);
         }
+        // linear: equal steps, both ends included
+        let f = sweep_freqs(1e3, 2e3, 5, false);
+        assert_eq!(f, vec![1e3, 1250.0, 1500.0, 1750.0, 2e3]);
+        assert_eq!(sweep_freqs(10.0, 1e6, 6, true), log_sweep(10.0, 1e6, 6));
+        assert_eq!((lin_sweep(5.0, 5.0, 4), lin_sweep(1.0, 2.0, 1)), (vec![5.0], vec![2.0]));
+        // a start of 0 or below (a setup line may hold one): one frequency, the stop, as the log plan gives
+        assert_eq!((lin_sweep(0.0, 1e3, 5), lin_sweep(-1.0, 1e3, 5)), (vec![1e3], vec![1e3]));
         assert!((tdiv_for(1e3, 5.0) - 5e-4).abs() < 1e-12);
         assert_eq!(
             (fmt_hz(999.9999999999998), fmt_hz(3162.2776601683804), fmt_hz(1e5), fmt_hz(12.5)),
@@ -617,8 +644,11 @@ mod tests {
             ep,
             r.too_fast
         );
-        // a linear sweep passes the low frequencies in a few periods: they are left out, the rest is right
-        assert!(r.too_fast > 0 && r.points[0].f > 50.0 && r.points[0].f < 200.0, "{:?}", r.points[0]);
+        // equal steps of about 339 Hz: the linear sweep passes 20 Hz in a few periods, so that one is left out and the
+        // first point is the next step; the rest is right
+        assert!(r.too_fast == 1 && (r.points[0].f - 358.6).abs() < 5.0, "{:?}", r.points[0]);
+        let steps: Vec<f64> = r.points.windows(2).map(|w| w[1].f - w[0].f).collect();
+        assert!(steps.iter().all(|d| (d - 338.6).abs() < 20.0), "{:?}", steps);
         assert!(r.points.len() + r.too_fast >= 58);
         assert!(eg < 0.5 && ep < 3.0, "{} {}", eg, ep);
     }

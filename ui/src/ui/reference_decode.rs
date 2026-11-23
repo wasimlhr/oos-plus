@@ -17,6 +17,8 @@ struct Wave {
     v: Vec<f32>,
     dt: f64,
     t0: f64,
+    /// the points are minimum and maximum in turn (`channel_alternates`)
+    pairs: bool,
 }
 struct Job {
     key: String,
@@ -99,6 +101,23 @@ pub(super) struct BorrowedWave<'a> {
     pub v: &'a [f32],
     pub dt: f64,
     pub t0: f64,
+    /// the points are minimum and maximum in turn (`channel_alternates`): read by the means of neighbours
+    pub pairs: bool,
+}
+
+/// The acquisition's own samples of channel `c` behind `rec`, where it keeps them (not a frame of min/max pairs).
+pub(super) fn native_of(rec: &Record, c: usize) -> Option<&crate::wave::Raw> {
+    rec.raw.as_ref().filter(|raw| !raw.frame.envelope && raw.frame.ch[c].len() >= 2)
+}
+
+/// Whether the points a decoder reads of channel `c` of `rec` are minimum and maximum in turn: its own samples
+/// (`native_of`) taken in Peak detect, else the points of the screen record (`Record::alternates`).
+pub(super) fn channel_alternates(rec: &Record, c: usize) -> bool {
+    if native_of(rec, c).is_some() {
+        rec.peak
+    } else {
+        rec.alternates()
+    }
 }
 pub(super) fn decode_borrowed(original: &Model, waves: &[BorrowedWave<'_>], hysteresis: f32) -> Packets {
     if waves.is_empty()
@@ -122,42 +141,36 @@ pub(super) fn decode_borrowed(original: &Model, waves: &[BorrowedWave<'_>], hyst
         return Err("Decoder aligned record exceeds 32M samples");
     }
     let t0 = finest.t0 + first * dt;
+    // points that are minimum and maximum in turn are read by the means of neighbours, on their own grid: aligned to
+    // a finer one, neighbours are no longer minimum and maximum
+    let own: Vec<std::borrow::Cow<[f32]>> =
+        waves.iter().map(|w| if w.pairs { crate::trig::pair_means(w.v).into() } else { w.v.into() }).collect();
     let aligned: Vec<Option<Vec<f32>>> = waves
         .iter()
-        .map(|w| {
-            if w.dt == dt && w.t0 == t0 && w.v.len() == count {
+        .zip(&own)
+        .map(|(w, v)| {
+            if w.dt == dt && w.t0 == t0 && v.len() == count {
                 return None;
             }
             Some(
                 (0..count)
                     .map(|i| {
                         let index = snap((t0 + i as f64 * dt - w.t0) / w.dt);
-                        if index < 0.0 || index > (w.v.len() - 1) as f64 {
+                        if index < 0.0 || index > (v.len() - 1) as f64 {
                             return f32::NAN;
                         }
                         let k = index.floor() as usize;
-                        if k + 1 == w.v.len() {
-                            w.v[k]
+                        if k + 1 == v.len() {
+                            v[k]
                         } else {
-                            w.v[k] + index.fract() as f32 * (w.v[k + 1] - w.v[k])
+                            v[k] + index.fract() as f32 * (v[k + 1] - v[k])
                         }
                     })
                     .collect(),
             )
         })
         .collect();
-    let ch: [&[f32]; NCH] =
-        std::array::from_fn(|i| waves.get(i).map_or(&[][..], |w| aligned[i].as_deref().unwrap_or(w.v)));
-    // the samples of a channel taken in Peak detect are minimum and maximum in turn (`trig::decode`)
-    let means: Vec<Option<Vec<f32>>> = waves
-        .iter()
-        .enumerate()
-        .map(|(i, w)| {
-            let peak = w.source < NCH && crate::trig::peak_points(original, w.dt);
-            peak.then(|| crate::trig::pair_means(ch[i]))
-        })
-        .collect();
-    let ch: [&[f32]; NCH] = std::array::from_fn(|i| means.get(i).and_then(|m| m.as_deref()).unwrap_or(ch[i]));
+    let ch: [&[f32]; NCH] = std::array::from_fn(|i| own.get(i).map_or(&[][..], |v| aligned[i].as_deref().unwrap_or(v)));
     let slot = |source| waves.iter().position(|w| w.source == source);
     let mut model = original.clone();
     model.dec_src = slot(model.dec_src).unwrap_or(0);
@@ -184,7 +197,7 @@ impl Job {
         let waves = self
             .waves
             .iter()
-            .map(|w| BorrowedWave { source: w.source, v: &w.v, dt: w.dt, t0: w.t0 })
+            .map(|w| BorrowedWave { source: w.source, v: &w.v, dt: w.dt, t0: w.t0, pairs: w.pairs })
             .collect::<Vec<_>>();
         decode_borrowed(&self.model, &waves, self.hysteresis)
     }
@@ -219,7 +232,7 @@ impl Ui {
             }
             WaveId::Ch(c) => {
                 let r = candidate.or(self.last[0].as_ref()).ok_or("Live decoder source has no record")?;
-                if let Some(raw) = r.raw.as_ref().filter(|raw| !raw.frame.envelope && raw.frame.ch[c].len() >= 2) {
+                if let Some(raw) = native_of(r, c) {
                     if !raw.frame.dt.is_finite() || raw.frame.dt <= 0.0 || !raw.t0.is_finite() {
                         return Err("Invalid decoder record");
                     }
@@ -328,7 +341,8 @@ impl Ui {
             // must not create another full-size live-data allocation.
             let lo = (((left - t0) / dt).floor().max(0.0) as usize).min(v.len() - 1);
             let hi = ((((right - t0) / dt).ceil().max(0.0) as usize).saturating_add(1)).min(v.len());
-            waves.push(Wave { source: id, v: v[lo..hi].to_vec(), dt, t0: t0 + lo as f64 * dt });
+            let pairs = id < NCH && candidate.or(self.last[0].as_ref()).is_some_and(|r| channel_alternates(r, id));
+            waves.push(Wave { source: id, v: v[lo..hi].to_vec(), dt, t0: t0 + lo as f64 * dt, pairs });
         }
         let (_, _, _, vpd) = self.decoder_samples_at(m.dec_src, candidate)?;
         let large = waves.iter().any(|wave| wave.v.len() > BACKGROUND_POINTS);
@@ -471,23 +485,86 @@ mod tests {
     use std::time::{Duration, Instant};
 
     /// Break it catches: the decode of a channel's own samples took the points of a Peak detect record for
-    /// samples (unit 2026-11-21: LIN at 2.5 MSa/s with 100 kpts, sync not measured, bytes wrong, while `trig::decode`
-    /// already read such a record right). A reference keeps its points as they are.
+    /// samples (LIN at 2.5 MSa/s with 100 kpts, sync not measured, bytes wrong). A wave marked `pairs` is read by the
+    /// means of neighbours on its own grid, also where another source is finer and the channel is aligned to it: the
+    /// means of neighbours of the finer grid are still minimum and maximum in turn.
     #[test]
-    fn the_own_samples_of_a_channel_in_peak_detect_decode_like_the_signal() {
-        let (mut m, peak, dt) = crate::trig::peak_tests::lin_in_peak_detect();
-        let read = |m: &Model, source: usize| {
-            let mut m = m.clone();
-            m.dec_src = source;
-            let p = decode_borrowed(&m, &[BorrowedWave { source, v: &peak, dt, t0: 0.0 }], 0.01).unwrap();
+    fn points_in_turn_are_read_by_their_means_before_the_alignment() {
+        use crate::trig::peak_tests::{lin_in_peak_detect, lin_right};
+        let (m, peak, dt) = lin_in_peak_detect();
+        let finer = vec![0.0; peak.len() * 4];
+        let read = |pairs: bool, aligned: bool| {
+            let mut waves = vec![BorrowedWave { source: 0, v: &peak, dt, t0: 0.0, pairs }];
+            if aligned {
+                waves.push(BorrowedWave { source: 1, v: &finer, dt: dt / 4.0, t0: 0.0, pairs: false });
+            }
+            let p = decode_borrowed(&m, &waves, 0.01).unwrap();
             let data = |x: &&oos_dsp::decode::Packet| x.kind == oos_dsp::decode::Kind::Data;
             (p.iter().filter(data).map(|x| x.value).collect::<Vec<_>>(), p.iter().all(|x| x.ok))
         };
-        let right = (vec![0x55, 0x10, 0x20, 0x30, 0x40], true);
-        assert_ne!(read(&m, 0), right, "as samples the record made here is wrong");
-        m.acq = AcqMode::Peak;
-        assert_eq!(read(&m, 0), right, "a channel in Peak detect");
-        assert_ne!(read(&m, DEC_REF_BASE), right, "a reference is read as it is");
+        assert_ne!(read(false, false), lin_right(), "as samples the record made here is wrong");
+        assert_eq!(read(true, false), lin_right(), "the points in turn");
+        assert_eq!(read(true, true), lin_right(), "the points in turn, aligned to a finer source");
+    }
+
+    /// The live record (`decode_packets_of`) is read by the mode it was taken in (`Record::peak`), not the mode in
+    /// force now, and a record of min/max pairs that is also Peak detect is averaged once.
+    #[test]
+    fn a_record_is_read_by_the_mode_it_was_taken_in() {
+        use crate::trig::peak_tests::{lin_in_peak_detect, lin_right};
+        let (m, peak, dt) = lin_in_peak_detect();
+        let mut ui = crate::ui::testkit::demo_ui();
+        let mut read = |pairs: bool, rec_peak: bool, now: AcqMode| {
+            let ch: [Vec<f32>; NCH] = std::array::from_fn(|c| if c == 0 { peak.clone() } else { Vec::new() });
+            let (t0, triggered) = (0.0, true);
+            ui.last[0] =
+                Some(Record { t0, dt, ch, triggered, partial: false, raw: None, la: None, pairs, peak: rec_peak });
+            ui.counts.wfm_total += 1;
+            let mut m = m.clone();
+            m.acq = now;
+            let p = ui.decode_packets_of(&m).unwrap();
+            let data = |x: &&oos_dsp::decode::Packet| x.kind == oos_dsp::decode::Kind::Data;
+            (
+                p.iter().filter(data).map(|x| x.value).collect::<Vec<_>>(),
+                p.iter().all(|x| x.ok),
+                p.first().map(|x| x.t0),
+            )
+        };
+        let right = |r: (Vec<u32>, bool, Option<f64>)| (r.0, r.1) == lin_right();
+        assert!(right(read(false, true, AcqMode::Normal)), "taken in Peak detect, Normal now");
+        assert!(!right(read(false, false, AcqMode::Peak)), "taken in Normal, Peak now: read as samples");
+        // pairs and Peak detect: the means once, so the packets start where they start for pairs alone
+        let once = read(true, false, AcqMode::Normal);
+        assert!(right(once.clone()));
+        assert_eq!(read(true, true, AcqMode::Peak).2, once.2, "averaged once");
+    }
+
+    /// The search of a protocol trigger in the live record (`search_events`) reads points in turn as the decoder
+    /// does: a Peak detect record finds the field, read as samples it finds none.
+    #[test]
+    fn the_search_reads_a_peak_detect_record_like_the_decoder() {
+        let (m, peak, dt) = crate::trig::peak_tests::lin_in_peak_detect();
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m = m;
+        (ui.m.trig_type, ui.m.trig_src, ui.m.trig_bus, ui.m.trig_bus_val) = (TrigType::Bus, 0, BusWhat::Data, 0x30);
+        let mut hits = |rec_peak: bool| {
+            let ch: [Vec<f32>; NCH] = std::array::from_fn(|c| if c == 0 { peak.clone() } else { Vec::new() });
+            let (t0, triggered) = (0.0, true);
+            ui.last[0] = Some(Record {
+                t0,
+                dt,
+                ch,
+                triggered,
+                partial: false,
+                raw: None,
+                la: None,
+                pairs: false,
+                peak: rec_peak,
+            });
+            ui.search_events().len()
+        };
+        assert_eq!(hits(false), 0, "as samples no byte is read");
+        assert_eq!(hits(true), 1, "the data byte 0x30");
     }
 
     fn reference(v: Vec<f32>, dt: f64, t0: f64, vpd: f32) -> RefWave {
@@ -635,6 +712,7 @@ mod tests {
             raw: None,
             la: None,
             pairs: false,
+            peak: false,
         };
         rec.ch[1] = clock.v.as_ref().clone();
         rec.dt = clock.dt;
@@ -697,6 +775,7 @@ mod tests {
             raw: raw.map(|frame| crate::wave::Raw { frame, i0: 0, i1: 40, t0: 0.0, conditioned: true }),
             la: None,
             pairs: false,
+            peak: false,
         };
         ui.m.dec_src = 0;
         ui.last[0] = Some(record(None));
