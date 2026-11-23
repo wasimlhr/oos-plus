@@ -13422,6 +13422,25 @@
      "ext": true
     },
     {
+     "header": ":DISPlay:HDMI:LINes",
+     "set": ":DISPlay:HDMI:LINes <value>",
+     "query": ":DISPlay:HDMI:LINes?",
+     "desc": "Sets or queries HDMI lines for Display and layout (menu: Display > HDMI lines).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`1`: the live channels on the monitor of the HDMI Layout are lines at its resolution; `0`: the stretched phosphor of the panel.",
+       "1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `1`.",
+     "ext": true
+    },
+    {
      "header": ":DISPlay:TEXTsize",
      "set": ":DISPlay:TEXTsize <value>",
      "query": ":DISPlay:TEXTsize?",
@@ -16197,6 +16216,12 @@
        "HDMI mode",
        "`Waveform`",
        "`:DISPlay:HDMI`"
+      ],
+      [
+       "`hdmi_lines`",
+       "Display > HDMI lines: the live channels on the HDMI monitor are lines (`true`) or the stretched phosphor",
+       "`true`",
+       "`:DISPlay:HDMI:LINes`"
       ],
       [
        "`hdmi_view`",

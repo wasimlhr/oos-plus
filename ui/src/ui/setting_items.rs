@@ -8,7 +8,7 @@ use super::*;
 use crate::settings::Setting;
 
 /// The items the table answers for, by setup key.
-const ITEMS: [(Item, &str); 86] = [
+const ITEMS: [(Item, &str); 87] = [
     (Item::Persist, "persist"),
     (Item::Intensity, "intensity"),
     (Item::GridStyle, "grid"),
@@ -16,6 +16,7 @@ const ITEMS: [(Item, &str); 86] = [
     (Item::GridFrame, "grid_frame"),
     (Item::ColorGrade, "color_grade"),
     (Item::Dots, "dots"),
+    (Item::HdmiLines, "hdmi_lines"),
     (Item::BottomBar, "bar"),
     (Item::TextSize, "text_size"),
     (Item::Hdmi, "hdmi"),
@@ -298,6 +299,11 @@ mod tests {
             u.m.math = op;
             u.items(MenuId::Math).contains(&it)
         }) {
+            return true;
+        }
+        // the monitor's rows, with HDMI set to its own layout
+        u.m.hdmi = HdmiMode::Layout;
+        if u.items(MenuId::Display).contains(&it) {
             return true;
         }
         // the designer's rows, by response

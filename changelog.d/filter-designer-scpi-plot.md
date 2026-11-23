@@ -21,3 +21,6 @@ Added:
   custom filters of a Tektronix session archive load with their taps.
 - The Histogram, XY and Eye windows have a settings button too. The selected chip of the bottom bar has a thick border.
   Auto scale of a math channel waits for its result when it has none yet, so one press fits it.
+- The live channels on the external display (HDMI Layout) are drawn as lines at its resolution, like the math and
+  reference traces, instead of the panel's phosphor stretched to it (blocky edges). With HDMI set to Layout, Display >
+  Screen > HDMI lines turns it off to get the persistence and colour grade back.

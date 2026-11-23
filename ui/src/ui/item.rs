@@ -291,6 +291,7 @@ pub(super) enum Item {
     FeatDec(usize),
     /// Display > Monitor view (ui/monitor.rs)
     HdmiView,
+    HdmiLines,
     Hdmi,
     TextSize,
     ZInput,

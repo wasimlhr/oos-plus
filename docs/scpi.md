@@ -616,6 +616,7 @@ in `ui/model/src/settings/display.rs`; this table is written from there
 | `:DISPlay:GBRightness[?]` | a whole number from 0 to 100, set within 10 to 100 % | `grid_bright` | Grid bright. | Brightness of the graticule; a value below 10 sets 10. |
 | `:DISPlay:RULers[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `grid_frame` | Grid frame | A frame around the graticule with ticks every fifth of a division; none with the grid off. |
 | `:DISPlay:COLor[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `color_grade` | Colour grade | Colours the persistence by how often a point was hit. |
+| `:DISPlay:HDMI:LINes[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `hdmi_lines` | HDMI lines | The live channels on the monitor of the HDMI Layout are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges). |
 | `:DISPlay:TYPE[?]` | `DOTS`, `VECTors`; the query answers `DOTS` or `VECT` | `dots` | Dots | Draws every sample as a dot instead of joining them with lines. |
 | none | a choice of the screen's layout, not of the measurement | `bar` | Bottom bar | The bottom bar as cards or as one compact line. |
 | none | a choice of the screen's layout, not of the measurement | `hdmi` | HDMI | What a monitor on the HDMI port shows: the panel, the waveform alone, or a layout of its own; the menu steps to the end of the list and stops. |

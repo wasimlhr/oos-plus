@@ -194,6 +194,10 @@ impl Ui {
         if self.m.pane == tables::PANE_TREND {
             v.splice(1..1, [Item::TrendSel(0), Item::TrendSel(1)]);
         }
+        // the lines are a choice of the monitor's own layout
+        if self.m.hdmi == HdmiMode::Layout {
+            v.insert(v.iter().position(|i| *i == Item::HdmiView).map_or(v.len(), |p| p + 1), Item::HdmiLines);
+        }
         v.extend(self.studio_display_rows());
         v
     }

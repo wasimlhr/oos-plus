@@ -133,6 +133,7 @@ Commands: [display.md](display.md).
 | --- | --- | --- | --- |
 | `text_size` | text size | `Normal` | `:DISPlay:TEXTsize` |
 | `hdmi` | HDMI mode | `Waveform` | `:DISPlay:HDMI` |
+| `hdmi_lines` | Display > HDMI lines: the live channels on the HDMI monitor are lines (`true`) or the stretched phosphor | `true` | `:DISPlay:HDMI:LINes` |
 | `hdmi_view` | Display > Monitor view: the view an HDMI monitor shows (0: the panel's) | `0` | `:DISPlay:VIEW:MONitor` |
 | `bar` | Display > Bottom bar: `cards` or `compact` | `cards` | - |
 | `persist` | display settings | `0` | `:DISPlay:GRADing:TIME` |

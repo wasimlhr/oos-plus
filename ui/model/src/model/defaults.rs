@@ -158,6 +158,7 @@ impl Default for Model {
             zscale: 0,
             zdelay: 0.0,
             color_grade: false,
+            hdmi_lines: true,
             // samples as dots by default, as upstream OOS
             dots: true,
             layout: Layout::Default,

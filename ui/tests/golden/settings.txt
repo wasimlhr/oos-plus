@@ -816,6 +816,16 @@ scpi :DISPlay:GRID "HALF" -> query: HALF; errors: none
 scpi :DISPlay:GRID "NONE" -> query: NONE; errors: none
 scpi :DISPlay:GRID "x" -> query: FULL; errors: -224,"Illegal parameter value" x
 scpi :DISPlay:GRID default -> query: FULL; errors: none
+scpi :DISPlay:HDMI:LINes "" -> query: 1; errors: -224,"Illegal parameter value"
+scpi :DISPlay:HDMI:LINes "-1" -> query: 1; errors: -224,"Illegal parameter value" -1
+scpi :DISPlay:HDMI:LINes "0" -> query: 0; errors: none
+scpi :DISPlay:HDMI:LINes "1" -> query: 1; errors: none
+scpi :DISPlay:HDMI:LINes "1e9" -> query: 1; errors: -224,"Illegal parameter value" 1e9
+scpi :DISPlay:HDMI:LINes "OFF" -> query: 0; errors: none
+scpi :DISPlay:HDMI:LINes "ON" -> query: 1; errors: none
+scpi :DISPlay:HDMI:LINes "on" -> query: 1; errors: none
+scpi :DISPlay:HDMI:LINes "x" -> query: 1; errors: -224,"Illegal parameter value" x
+scpi :DISPlay:HDMI:LINes default -> query: 1; errors: none
 scpi :DISPlay:RULers "" -> query: 1; errors: -224,"Illegal parameter value"
 scpi :DISPlay:RULers "-1" -> query: 1; errors: -224,"Illegal parameter value" -1
 scpi :DISPlay:RULers "0" -> query: 0; errors: none
@@ -4063,6 +4073,19 @@ setup hdmi "Waveform" -> Waveform
 setup hdmi "mirror" -> Waveform; error: line 2: hdmi: unknown value: mirror
 setup hdmi "x" -> Waveform; error: line 2: hdmi: unknown value: x
 setup hdmi default -> Waveform
+setup hdmi_lines "" -> true; error: "line 2: hdmi_lines: not a boolean: "
+setup hdmi_lines "-1" -> true; error: line 2: hdmi_lines: not a boolean: -1
+setup hdmi_lines "0" -> false
+setup hdmi_lines "1" -> true
+setup hdmi_lines "1e9" -> true; error: line 2: hdmi_lines: not a boolean: 1e9
+setup hdmi_lines "TRUE" -> true; error: line 2: hdmi_lines: not a boolean: TRUE
+setup hdmi_lines "false" -> false
+setup hdmi_lines "off" -> false
+setup hdmi_lines "on" -> true
+setup hdmi_lines "true" -> true
+setup hdmi_lines "x" -> true; error: line 2: hdmi_lines: not a boolean: x
+setup hdmi_lines "yes" -> true; error: line 2: hdmi_lines: not a boolean: yes
+setup hdmi_lines default -> true
 setup hdmi_view "" -> 0; error: line 2: hdmi_view: cannot parse integer from empty string
 setup hdmi_view "+1" -> 1
 setup hdmi_view "-1" -> 0; error: line 2: hdmi_view: invalid digit found in string

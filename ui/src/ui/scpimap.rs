@@ -129,6 +129,7 @@ pub(super) fn map() -> Vec<Row> {
         // ---- display
         r(":DISPlay:GRADing:TIME", Item::Persist, "Display"),
         r(":DISPlay:TYPE", Item::Dots, "Display"),
+        r(":DISPlay:HDMI:LINes", Item::HdmiLines, "Display"),
         r(":DISPlay:WBRightness", Item::Intensity, "Display"),
         r(":DISPlay:GBRightness", Item::GridBright, "Display"),
         r(":DISPlay:GRID", Item::GridStyle, "Display"),

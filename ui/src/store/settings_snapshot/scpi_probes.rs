@@ -180,6 +180,7 @@ const SETTERS: &[(&str, &[&str])] = &[
     (":DISPlay:GRID", &["FULL", "HALF", "NONE"]),
     (":DISPlay:RULers", BOOL),
     (":DISPlay:COLor", BOOL),
+    (":DISPlay:HDMI:LINes", BOOL),
     (":DISPlay:VIEW", &["1", "2", "0"]),
     (":DISPlay:VIEW:COUNt", &["1", "2", "4", "5", "0"]),
     (":DISPlay:VIEW:MONitor", &["0", "1", "2"]),
