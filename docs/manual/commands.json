@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.15",
   "version": "0.1.15",
   "edition": "November 2026",
-  "date": "22 November 2026",
+  "date": "23 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -6166,6 +6166,31 @@
      ],
      "returns": "On a freshly started default model the query returns `empty`.",
      "example": ":MATH3:EXPRession \"CH1 - CH2\"\n:MATH3:EXPRession?    /*The query returns CH1 - CH2.*/"
+    },
+    {
+     "header": ":MATH<n>:LABel:CONTent",
+     "set": ":MATH<n>:LABel:CONTent <value>",
+     "query": ":MATH<n>:LABel:CONTent?",
+     "desc": "The name of the trace, up to 10 characters, shown on its handle and pill in Studio; empty gives Mn.",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:LABel:CONTent` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "The name of the trace, up to 10 characters, shown on its handle and pill in Studio; empty gives Mn.",
+       "empty"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension (as `:CHANnel<n>:LABel:CONTent`)"
+     ],
+     "returns": "On a freshly started default model the query returns `empty`.",
+     "ext": true
     },
     {
      "header": ":MATH<n>:FFT:SOURce",
@@ -16740,6 +16765,12 @@
        "optional: the formula text of channel n",
        "-",
        "`:MATH<n>:EXPRession`"
+      ],
+      [
+       "`math_label<n>`",
+       "optional: the name of math trace n, up to 10 characters",
+       "-",
+       "`:MATH<n>:LABel:CONTent`"
       ]
      ]
     },
