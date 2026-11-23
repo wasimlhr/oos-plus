@@ -259,4 +259,37 @@ mod tests {
             assert!(after.w * after.h > before.w * before.h, "pane {pane}: {before:?} -> {after:?}");
         }
     }
+
+    /// The Spectrum and Filter windows have a settings button left of the expand button, which opens the menu that
+    /// sets them; other windows have none.
+    #[test]
+    fn the_spectrum_and_filter_windows_have_a_settings_button() {
+        use crate::ui::dock::VKind;
+        let mut u = studio_with_filter();
+        for _ in 0..4 {
+            u.step(0.05);
+        }
+        let r = u.dock_rect(VKind::Pane).unwrap();
+        let gear = u.dock_gear_rect(VKind::Pane, r).expect("the Filter window has one");
+        let extra = u.dock_extra_rect(VKind::Pane, r).expect("the expand button");
+        assert!(gear.right() <= extra.x + 1 && gear.x < extra.x, "{gear:?} left of {extra:?}");
+        u.dock_gear_do();
+        assert_eq!(u.menu, MenuId::Math, "the math channel of the filter");
+        u.close_menu();
+        u.select_option(Item::PaneSel, "Spectrum");
+        for _ in 0..4 {
+            u.step(0.05);
+        }
+        let r = u.dock_rect(VKind::Pane).unwrap();
+        assert!(u.dock_gear_rect(VKind::Pane, r).is_some());
+        u.dock_gear_do();
+        assert_eq!(u.menu, MenuId::Spectrum);
+        u.close_menu();
+        u.select_option(Item::PaneSel, "Trend");
+        for _ in 0..4 {
+            u.step(0.05);
+        }
+        let r = u.dock_rect(VKind::Pane).unwrap();
+        assert!(u.dock_gear_rect(VKind::Pane, r).is_none(), "no settings button on the Trend window");
+    }
 }

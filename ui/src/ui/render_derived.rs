@@ -442,7 +442,7 @@ impl Ui {
         Self::math_scale_text_of(&self.m.math_ch(self.m.math_sel))
     }
 
-    fn math_scale_text_of(c: &MathCh) -> String {
+    pub(super) fn math_scale_text_of(c: &MathCh) -> String {
         if c.op == MathOp::Fft {
             format!("{} dB", FFT_DB[c.scale.min(FFT_DB.len() - 1)])
         } else {

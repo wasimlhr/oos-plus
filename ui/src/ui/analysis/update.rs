@@ -166,6 +166,16 @@ impl Ui {
         oos_dsp::measure::analyze_min(&s.v, s.dt, 0.4 * self.wave_vpd(id)).get(Meas::Freq)
     }
 
+    /// The samples of channel `id` as the hardware took them, in the window of the screen record, when they are fewer
+    /// than the screen record's (which is then interpolated): the spectrum is of these and reaches half their rate.
+    fn spectrum_acquired(&self, rec: &Record, id: WaveId) -> Option<(Vec<f32>, f64)> {
+        let WaveId::Ch(c) = id else { return None };
+        let r = rec.raw.as_ref().filter(|_| self.m.acq != AcqMode::HiRes)?;
+        let taken = r.frame.ch.get(c)?;
+        (r.i1 <= taken.len() && r.i1 > r.i0 + 16 && r.frame.dt > 1.5 * rec.dt)
+            .then(|| (taken[r.i0..r.i1].to_vec(), r.frame.dt))
+    }
+
     /// The spectrum of the source from the record: the view, or `pane` beside the waveform.
     pub(super) fn spectrum_update(&mut self, rec: &Record, pane: bool) {
         let id = self.m.spec_src;
@@ -174,7 +184,9 @@ impl Ui {
             self.azr.peaks.clear();
             return;
         };
-        let (v, dt) = (s.v, s.dt);
+        // the samples the scope took when the screen record has more of them than it did (it is drawn interpolated):
+        // above half their rate the spectrum of the interpolated record shows nothing the signal had
+        let (v, dt) = self.spectrum_acquired(rec, id).unwrap_or((s.v, s.dt));
         let f1 = self.wave_freq(rec, id);
         let (mut center, mut span) = (self.m.spec_center, self.m.spec_span);
         if self.spec_follows() {

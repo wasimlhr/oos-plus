@@ -60,6 +60,15 @@ pub(super) struct Math {
     pub state: std::cell::RefCell<State>,
 }
 
+impl Ui {
+    /// The chip of math channel `k` in the bottom bar: its scale a division, as the channels have, and its operation.
+    pub(super) fn studio_math_pill(&self, cv: &mut Canvas, r: Rect, k: usize, col: Rgb) {
+        let c = self.m.math_ch(k);
+        let scale = format!("{}/div", Self::math_scale_text_of(&c));
+        self.studio_source_pill(cv, r, &format!("M{}", k + 1), &scale, c.op.name(), col);
+    }
+}
+
 impl Default for Math {
     fn default() -> Math {
         Math { family: MathFamily::Arith, preset: None, state: Default::default() }

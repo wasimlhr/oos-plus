@@ -299,6 +299,8 @@ pub(super) enum Press {
     Button { kind: VKind, close: bool },
     /// the List / Detailed switch of the measurements panel
     View { kind: VKind },
+    /// the settings button of a window (Spectrum, Filter): its menu opens on the lift
+    Gear { kind: VKind },
     /// a control of the measurements bar in the strip (source, gate, search, pinned, add, statistics)
     Bar,
 }
@@ -690,6 +692,22 @@ impl Ui {
         (KINDS.into_iter().filter(|v| self.dock_shown(*v)).count() > 1).then_some(Extra::Maximise)
     }
 
+    /// The settings button, left of the expand button: the Spectrum and Filter windows have one, which opens the menu
+    /// that sets them (the spectrum analyser, the math channel of the filter).
+    pub(super) fn dock_gear_rect(&self, k: VKind, r: Rect) -> Option<Rect> {
+        let has = k == VKind::Pane && self.dock_on() && matches!(self.m.pane, tables::PANE_SPECTRUM | tables::PANE_FILTER);
+        has.then(|| {
+            let base = self.dock_extra_rect(k, r).map_or(Self::dock_close_rect(r).x, |e| e.x);
+            Rect::new(base - 48, r.y, 48, STRIP_HIT.min(r.h))
+        })
+    }
+
+    /// The menu a gear button opens.
+    pub(super) fn dock_gear_do(&mut self) {
+        let menu = if self.m.pane == tables::PANE_FILTER { MenuId::Math } else { MenuId::Spectrum };
+        self.open_menu(menu);
+    }
+
     pub(super) fn dock_extra_rect(&self, k: VKind, r: Rect) -> Option<Rect> {
         self.dock_extra_kind(k).map(|_| Rect::new(r.right() - 96, r.y, 48, STRIP_HIT.min(r.h)))
     }
@@ -727,6 +745,7 @@ impl Ui {
         let extra = self.dock_extra_rect(k, r);
         let view = self.dock_view_rect(k, r);
         let right = view.map_or(extra.map_or(close.x, |e| e.x), |v| v.x);
+        let right = self.dock_gear_rect(k, r).map_or(right, |g| g.x.min(right));
         let bar = self.dock_bar_content(k, r).map(|p| self.panel_bar(p));
         let right_title = bar.as_ref().map_or(right, |b| b.left - 6);
         ((right_title - s.x - 30).max(1), bar.as_ref().is_some_and(|b| b.field.is_some()))
@@ -1257,6 +1276,10 @@ impl Ui {
             self.studio.dock.press = Some(Press::Button { kind: k, close: false });
             return true;
         }
+        if self.dock_gear_rect(k, r).is_some_and(|e| e.contains(x, y)) {
+            self.studio.dock.press = Some(Press::Gear { kind: k });
+            return true;
+        }
         if self.dock_view_rect(k, r).is_some_and(|e| e.contains(x, y)) {
             self.studio.dock.press = Some(Press::View { kind: k });
             return true;
@@ -1358,6 +1381,12 @@ impl Ui {
                 }
                 true
             }
+            (Some(Press::Gear { kind }), None) => {
+                if self.dock_rect(kind).and_then(|r| self.dock_gear_rect(kind, r)).is_some_and(|g| g.contains(x, y)) {
+                    self.dock_gear_do();
+                }
+                true
+            }
             (Some(Press::View { kind }), None) => {
                 if let Some(e) = self.dock_rect(kind).and_then(|r| self.dock_view_rect(kind, r)).filter(|e| e.contains(x, y)) {
                     // three segments: the strip of cells, the table, the cards
@@ -1422,6 +1451,7 @@ impl Ui {
         let extra = self.dock_extra_rect(k, r);
         let view = self.dock_view_rect(k, r);
         let right = view.map_or(extra.map_or(close.x, |e| e.x), |v| v.x);
+        let right = self.dock_gear_rect(k, r).map_or(right, |g| g.x.min(right));
         // the controls of the measurements panel sit in the strip when it is wide: they take the room left of the switch
         let bar = self.dock_bar_content(k, r).map(|p| self.panel_bar(p));
         let right_title = bar.as_ref().map_or(right, |b| b.left - 6);
@@ -1473,6 +1503,15 @@ impl Ui {
                     cv.rect(Rect::new(cx - 2, cy - 6, 8, 8), TEXT);
                 }
                 _ => super::studio::icon_expand(cv, cx, cy, TEXT),
+            }
+        }
+        if let Some(g) = self.dock_gear_rect(k, r) {
+            chip(cv, Rect::new(g.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);
+            let (cx, cy) = (g.x + g.w / 2, s.y + s.h / 2);
+            cv.circle(cx, cy, 5, TEXT);
+            cv.circle(cx, cy, 2, TEXT);
+            for (dx, dy) in [(0, -8), (0, 8), (-8, 0), (8, 0)] {
+                cv.line(cx + dx * 5 / 8, cy + dy * 5 / 8, cx + dx, cy + dy, TEXT);
             }
         }
         let dim = k == VKind::Wave && !self.view_on() && !(self.eye_open() && self.m.eye_place == EyePlace::Full);

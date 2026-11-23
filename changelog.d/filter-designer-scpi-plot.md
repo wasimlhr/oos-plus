@@ -12,3 +12,6 @@ Added:
   follows the sample rate and the time base.
   Add > Filter makes a filter on a free math channel. The measurement chip is an arrow that slides out to "Meas . N".
   The external display is set on Display > Screen only. The web page sends a long press (`down` and `up` commands).
+- The Spectrum and Filter windows have a settings button (a gear) left of the expand button. The Spectrum of a channel
+  is taken from the samples the scope took when the screen record is interpolated, so its band ends at half the sample
+  rate and not at 3.6 GHz. The math chips of the bottom bar show their scale a division like the channels.

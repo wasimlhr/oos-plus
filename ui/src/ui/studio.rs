@@ -866,7 +866,7 @@ impl Ui {
             let col = MATH_COLORS[k % MATH_COLORS.len()];
             chip(cv, r, BTN, if self.m.math_sel == k && self.selected_workspace_source().is_none() { ACCENT } else { col });
             cv.circle(r.x + 5, r.y + 5, 3, GREEN);
-            self.studio_pill_text(cv, r, &format!("M{}", k + 1), self.m.math_ch(k).op.name(), col);
+            self.studio_math_pill(cv, r, k, col);
         }
         // a decoder: its number in the colour of its source, its protocol, and its lines in the order of their roles
         for k in 0..DECODERS {
@@ -1047,7 +1047,7 @@ impl Ui {
     /// A ref or math pill drawn as a channel pill is: the filled badge with its name, beside it what it shows (the
     /// scale, the operation) and under that a small line (the signal), then the chevron. A narrow pill keeps the
     /// badge alone, and a narrower one drops the letter of its name ("R10" becomes "10").
-    fn studio_source_pill(&self, cv: &mut Canvas, r: Rect, name: &str, main: &str, detail: &str, col: Rgb) {
+    pub(super) fn studio_source_pill(&self, cv: &mut Canvas, r: Rect, name: &str, main: &str, detail: &str, col: Rgb) {
         let f = self.fonts();
         cv.set_clip(r.inset(1));
         if r.w < 70 {
