@@ -13,7 +13,7 @@ Part of the [SCPI reference](README.md).
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:DECode:SELect` | Set / Query | One-based decoder slot. | `1` | Decode and bus > Decoder slot select | OOS extension |
-| `:DECode:PROTocol` | Set / Query | `<name>` Protocol UI name; comparison ignores case and punctuation, for example I2C, SPI, C-PHY. `PARallel` is the parallel bus. | `UART` | Decode > Protocol | OOS extension |
+| `:DECode:PROTocol` | Set / Query | `<name>` Protocol UI name, matched without case, spaces or punctuation (`CAN-FD`, `canfd` and `CAN FD` are the same). The 29 names are UART, I2C, SPI, CAN, LIN, Parallel, C-PHY, DMX512, S/PDIF, USB PD, DCC, Manchester, MLT-3, UART 9-bit, Modbus RTU, Modbus ASCII, 1-Wire, DS2482, SWD, JTAG, Quad-SPI, I3C, CAN-FD, FlexRay, SENT, ARINC 429, 1553, I2S, USB. The query answers the UI name as written here. | `UART` | Decode > Protocol | OOS extension |
 | `:DECode:STATe` | Set / Query | Boolean. | `0` | Decode > Decoder | OOS extension |
 | `:DECode:INPut` | Set / Query | `WAVEFORM\|LA`; `ANALOG` aliases waveform. LA requires available/enabled logic inputs. | `WAVEFORM` | Decode and bus > Input | OOS extension |
 | `:DECode:SOURce` | Set / Query | Main data role; `CHANn\|Rn`. | `CHAN3` | Decode > Source | OOS extension |
@@ -33,7 +33,7 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:BUS<n>:MODE` | Set / Query | Decoder protocol: `RS232` (alias `UART`), `IIC` (`I2C`), `SPI`, `CAN`, `LIN`, `PARallel`, or another protocol by its UI name without punctuation. The query answers `RS232`, `IIC`, `PAR`, ... | `RS232` | Decode > Protocol | Rigol-style (command family of the DHO guide) |
+| `:BUS<n>:MODE` | Set / Query | `RS232\|UART\|IIC\|I2C\|SPI\|CAN\|LIN\|PARallel\|CPHY\|DMX512\|SPDIF\|USBPD\|DCC\|MANCHESTER\|MLT3\|UART9BIT\|MODBUSRTU\|MODBUSASCII\|1WIRE\|DS2482\|SWD\|JTAG\|QUADSPI\|I3C\|CANFD\|FLEXRAY\|SENT\|ARINC429\|1553\|I2S\|USB` Decoder protocol token, matched without case. UART is the name of RS232, I2C of IIC, PAR of PARallel. The remaining tokens are the UI name without spaces and punctuation (CAN-FD is CANFD, 1-Wire is 1WIRE, FlexRay is FLEXRAY, Quad-SPI is QUADSPI). The query answers PAR, RS232, IIC, SPI, CAN, LIN, or the token as written here. | `RS232` | Decode > Protocol | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:DISPlay` | Set / Query | Boolean decoder visibility. | `0` | Decode > Decoder | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:FORMat` | Set / Query | `HEX\|ASCii`. | `ASC` | Decode > Format | Rigol-style (command family of the DHO guide) |
 | `:BUS<n>:LABel:CONTent` | Set / Query | The name on the band of the decoder, up to 10 characters; empty: its protocol. Minimal and Studio draw it. | (empty) | Decode > Label | OOS extension |
@@ -70,7 +70,7 @@ Part of the [SCPI reference](README.md).
 | `:BUS<n>:SENT:TICK` | Set / Query | SENT tick, option text of the menu row. | `3_µS` | Decode and bus > Tick | OOS extension |
 | `:BUS<n>:SENT:NIBBles` | Set / Query | Nibbles, 1 to 6. | `6` | Decode and bus > Nibbles | OOS extension |
 | `:BUS<n>:USB:SPEed` | Set / Query | USB speed, option text of the menu row (a USB decoder only). | `AUTO` | Decode and bus > Speed | OOS extension |
-| `:BUS<n>:OPTion1` | Set / Query | Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. | empty | Decode and bus > Option | OOS extension |
+| `:BUS<n>:OPTion1` | Set / Query | Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. FlexRay has one option row (Bit rate: 10 Mbit/s, 5 Mbit/s, 2.5 Mbit/s; default 10 Mbit/s) and no FlexRay header of its own, so its rate is :BUS<n>:OPTion1. | empty | Decode and bus > Option | OOS extension |
 | `:BUS<n>:OPTion2` | Set / Query | Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. | empty | Decode and bus > Option | OOS extension |
 | `:BUS<n>:OPTion3` | Set / Query | Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. | empty | Decode and bus > Option | OOS extension |
 | `:BUS<n>:OPTion4` | Set / Query | Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. | empty | Decode and bus > Option | OOS extension |
