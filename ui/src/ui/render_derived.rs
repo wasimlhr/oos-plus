@@ -609,8 +609,11 @@ impl Ui {
                 let r = if lanes {
                     Rect::new(self.plot.area.x + 56, self.plot.area.y + 4 + 22 * row as i32, f.s.width(label) + 16, 20)
                 } else {
+                    // left of the corner buttons (and of the word "Full" that Studio writes beside the first), so no
+                    // caption is hidden behind them
+                    let edge = self.full_btn().0.x - 10 - if self.m.layout == Layout::Studio { f.s.width("Full") + 8 } else { 0 };
                     Rect::new(
-                        self.plot.area.x + self.plot.area.w - 12 - f.s.width(label) - 16,
+                        edge - f.s.width(label) - 16,
                         self.plot.area.y + 22 + 26 * row as i32,
                         f.s.width(label) + 16,
                         20,

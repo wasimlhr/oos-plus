@@ -666,11 +666,6 @@ impl Ui {
         let right = bottom.right() - 4;
         // the hardware Panel button is gone from this bar: F6 (and the desktop window) still toggle the panel
         let panel: Option<Rect> = None;
-        // the room the Panel button had goes to the time base and the trigger
-        let extra = if self.workspace.desktop_panel.is_some() { 25 } else { 0 };
-        let trig_w = 196 + extra;
-        let trig = Rect::new(right - trig_w, y, trig_w, h);
-        let time = Rect::new(trig.x - 9 - 150 - extra, y, 150 + extra, h);
         // the sources that are on get a pill; the channels that are off share one "+ CH" chip
         let shown = self.shown_refs();
         let maths: Vec<usize> = (0..NMATH).filter(|&k| self.m.math_shown(k)).collect();
@@ -687,6 +682,11 @@ impl Ui {
         let decs: Vec<usize> = (0..DECODERS).filter(|&k| self.m.dec_is_on(k)).collect();
         // the source pills (channels, refs, math, decoders) share what the fixed chips leave, by count
         let count = (chans.len() + shown.len() + maths.len() + decs.len()) as i32;
+        // the Panel button's room goes to the time base and trigger; from the 4th source pill on they give some back
+        let extra = if self.workspace.desktop_panel.is_some() { 25 } else { 0 };
+        let give = (count - 3).clamp(0, 3) * 14;
+        let trig = Rect::new(right - (196 + extra - give), y, 196 + extra - give, h);
+        let time = Rect::new(trig.x - 9 - (150 + extra - give / 2), y, 150 + extra - give / 2, h);
         // the generator's pill takes its short form ("GEN") before a source pill is too narrow for its scale: with four
         // channels and the generator on, the pills kept their badge and lost every scale longer than "1 V"
         let aux = |gen_w: i32| [la_w, gen_w].iter().filter(|w| **w > 0).map(|w| w + 5).sum::<i32>();
