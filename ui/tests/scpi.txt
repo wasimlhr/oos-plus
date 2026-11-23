@@ -146,6 +146,7 @@ scpi $S/scpi-answers.txt :BUS1:IIC:SCLK:SOURce?
 scpi $S/scpi-answers.txt :BUS1:SPI:SCLK:SOURce?
 scpi $S/scpi-answers.txt :BUS1:SPI:DBITs?
 scpi $S/scpi-answers.txt :MATH1:EXPRession?
+scpi $S/scpi-answers.txt :MATH1:LABel:CONTent?
 scpi $S/scpi-answers.txt :SYSTem:PIPeline?
 scpi $S/scpi-answers.txt :SYSTem:GRAPhics?
 scpi $S/scpi-answers.txt :SYSTem:AOUTput?

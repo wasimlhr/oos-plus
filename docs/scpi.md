@@ -678,6 +678,7 @@ Statistics count accepted observations. A stopped reference can have a valid cur
 | `:MATH<n>:SOURce1[?]`, `:SOURce2[?]` | CH/ref/earlier-Math identity, preserving native physical timing. |
 | `:MATH<n>:SCALe[?]`, `:OFFSet[?]` | Math display scale and offset. FFT scale uses its dB ladder. |
 | `:MATH<n>:EXPRession[?]` | Root formula parser, including loaded reference names such as `R1 - R2`. |
+| `:MATH<n>:LABel:CONTent[?]` | The name of the trace (up to 10 characters) on its handle and pill; empty gives Mn. |
 | `:MATH<n>:FFT:SOURce[?]`, `:SCALe[?]` | FFT input and dB display scale; the window is below. |
 | `:MATH<n>:FILTer:TYPE[?]`, `:W1[?]`, `:W2[?]` | Supported low/high/band-pass/stop filter and valid corner frequencies. |
 | `:BUS<n>:MODE[?]`, `:DISPlay[?]`, `:FORMat[?]` | Decoder protocol, visibility, `HEX|ASCii` formatting. |

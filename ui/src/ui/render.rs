@@ -526,6 +526,9 @@ impl Ui {
             if lanes {
                 if self.m.layout == Layout::Studio {
                     for b in [self.full_btn().0, self.zoom_btn().0] { right_obstacles.push(Rect::new(b.x - 62, b.y - 2, b.w + 66, b.h + 4)); }
+                    // the handles of the sources stand at the right edge: a scale label moves left of one, so a named
+                    // (wider) handle does not cover the "0 V" of its lane
+                    right_obstacles.extend(self.studio_handle_rects().into_iter().map(|(_, h)| Rect::new(h.x - 2, h.y - 2, h.w + 6, h.h + 4)));
                 }
                 let ts = self.m.trig_src;
                 if self.m.trig_ref.is_none() && self.m.ch[ts].on && self.shows(ts) {

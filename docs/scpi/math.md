@@ -17,6 +17,7 @@ Part of the [SCPI reference](README.md).
 | `:MATH<n>:SCALe` | Set / Query | Math display scale; an FFT uses its dB ladder. | `1.000000E-08` | Math > Scale | Rigol-style (command family of the DHO guide) |
 | `:MATH<n>:OFFSet` | Set / Query | Math display offset. | `0.000000E+00` | Math > Offset | Rigol-style (command family of the DHO guide) |
 | `:MATH<n>:EXPRession` | Set / Query | Root formula parser, including loaded reference names such as `R1 - R2`. | empty | Math > Formula | Rigol-style (command family of the DHO guide) |
+| `:MATH<n>:LABel:CONTent` | Set / Query | The name of the trace, up to 10 characters, shown on its handle and pill in Studio; empty gives Mn. | empty | - | OOS extension (as `:CHANnel<n>:LABel:CONTent`) |
 | `:MATH<n>:FFT:SOURce` | Set / Query | FFT input source; selecting it makes the operator FFT. | `CHAN1` | Math > FFT source / dB scale | Rigol-style (command family of the DHO guide) |
 | `:MATH<n>:FFT:WINDow` | Set / Query | `RECTangle`, `BLACkman`, `HANNing`, `HAMMing`, `FLATtop`; the query answers `RECT`, `BLAC`, `HANN`, `HAMM`, `FLAT`. | `HANN` | Math > Window | Rigol-style (command family of the DHO guide) |
 | `:MATH<n>:FFT:SCALe` | Set / Query | FFT dB display scale. | `1.000000E+01` | Math > FFT source / dB scale | Rigol-style (command family of the DHO guide) |

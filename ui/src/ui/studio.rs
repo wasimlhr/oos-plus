@@ -1044,17 +1044,17 @@ impl Ui {
         let f = self.fonts();
         cv.set_clip(r.inset(1));
         if r.w < 70 {
-            let name = if f.sb.width(name) + 12 <= r.w { name } else { &name[1..] };
-            let bw = (f.sb.width(name) + 8).min(r.w - 4).max(8);
+            let (name, _) = self.pill_name(name, r.w);
+            let bw = (f.sb.width(&name) + 8).min(r.w - 4).max(8);
             let badge = Rect::new(r.x + (r.w - bw) / 2, r.y + 8 + BAR_DY, bw, 18);
             cv.round(badge, 4, col, 255);
-            cv.text_in(&f.sb, badge, 1, name, DARK_TEXT);
+            cv.text_in(&f.sb, badge, 1, &name, DARK_TEXT);
             cv.no_clip();
             return;
         }
-        let badge = Rect::new(r.x + 8, r.y + 5 + BAR_DY, 42, 20);
+        let (name, bw) = self.pill_name(name, r.w); let badge = Rect::new(r.x + 8, r.y + 5 + BAR_DY, bw, 20);
         cv.round(badge, 4, col, 255);
-        cv.text_in(&f.sb, badge, 1, name, DARK_TEXT);
+        cv.text_in(&f.sb, badge, 1, &name, DARK_TEXT);
         let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
         let (tx, tw) = (badge.right() + 8, (r.right() - if chev { 20 } else { 4 } - badge.right() - 8).max(1));
         cv.set_clip(Rect::new(badge.right() + 2, r.y, (tw + 6).min(r.right() - badge.right() - 2).max(1), r.h));
@@ -1407,11 +1407,11 @@ impl Ui {
     pub(super) fn studio_draw_handles(&self, cv: &mut Canvas) {
         use super::workspace::Trace;
         for (source, r) in self.studio_handle_rects() {
-            let (name, col) = match source {
-                Trace::Channel(c) => (self.ch_name(c), CH_COLORS[c]),
-                Trace::Reference(i) => (format!("R{}", i + 1), self.wave_color(WaveId::Ref(i))),
-                Trace::Math(k) => (format!("M{}", k + 1), MATH_COLORS[k % MATH_COLORS.len()]),
-            };
+            let (name, col) = (self.studio_handle_name(source), match source {
+                Trace::Channel(c) => CH_COLORS[c],
+                Trace::Reference(i) => self.wave_color(WaveId::Ref(i)),
+                Trace::Math(k) => MATH_COLORS[k % MATH_COLORS.len()],
+            });
             match source {
                 Trace::Channel(c) => self.studio.lane_badges.borrow_mut().push((c, r)),
                 _ => self.studio.handles.borrow_mut().push((source, r)),

@@ -192,6 +192,7 @@ const SETTERS: &[(&str, &[&str])] = &[
     (":MATH1:SCALe", &["1", "0.001", "1000"]),
     (":MATH1:OFFSet", &["1", "-100"]),
     (":MATH1:EXPRession", &["\"CH1+CH2\"", "\"R1 - R2\"", "\"(((\""]),
+    (":MATH1:LABel:CONTent", &["\"Vdiff\"", "\"  padded  \"", "\"0123456789X\""]),
     (":MATH1:FFT:SOURce", &["CHAN1", "CHAN2", "R1"]),
     (":MATH1:FFT:WINDow", &["RECTangle", "BLACkman", "HANNing", "HAMMing", "FLATtop"]),
     (":MATH1:FFT:SCALe", &["10", "1", "100"]),

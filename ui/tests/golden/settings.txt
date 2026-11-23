@@ -1144,6 +1144,14 @@ scpi :MATH1:FILTer:W2 "1e3" -> query: 9.9E37; errors: -221,"Settings conflict"
 scpi :MATH1:FILTer:W2 "1e9" -> query: 9.9E37; errors: -221,"Settings conflict"
 scpi :MATH1:FILTer:W2 "x" -> query: 9.9E37; errors: -221,"Settings conflict"
 scpi :MATH1:FILTer:W2 default -> query: 9.9E37; errors: none
+scpi :MATH1:LABel:CONTent "" -> query: ""; errors: none
+scpi :MATH1:LABel:CONTent "-1" -> query: -1; errors: none
+scpi :MATH1:LABel:CONTent "1e9" -> query: 1e9; errors: none
+scpi :MATH1:LABel:CONTent "\"  padded  \"" -> query: padded; errors: none
+scpi :MATH1:LABel:CONTent "\"0123456789X\"" -> query: 0123456789; errors: none
+scpi :MATH1:LABel:CONTent "\"Vdiff\"" -> query: Vdiff; errors: none
+scpi :MATH1:LABel:CONTent "x" -> query: x; errors: none
+scpi :MATH1:LABel:CONTent default -> query: ""; errors: none
 scpi :MATH1:OFFSet "" -> query: 0.000000E+00; errors: -224,"Illegal parameter value"
 scpi :MATH1:OFFSet "-1" -> query: -1.000000E+00; errors: none
 scpi :MATH1:OFFSet "-100" -> query: -1.000000E+02; errors: none
@@ -4728,6 +4736,31 @@ setup math_hidden "1e9" -> (absent); error: line 2: math_hidden: not an index: 1
 setup math_hidden "9" -> (absent); error: line 2: math_hidden: 9 out of range (< 9)
 setup math_hidden "x" -> (absent); error: line 2: math_hidden: not an index: x
 setup math_hidden default -> (absent)
+setup math_label0 "" -> (absent); error: line 2: math_label0: unknown math channel
+setup math_label0 "-1" -> (absent); error: line 2: math_label0: unknown math channel
+setup math_label0 "1e9" -> (absent); error: line 2: math_label0: unknown math channel
+setup math_label0 "x" -> (absent); error: line 2: math_label0: unknown math channel
+setup math_label0 default -> (absent)
+setup math_label1 "  padded  " -> padded
+setup math_label1 "" -> (absent)
+setup math_label1 "#hash" -> #hash
+setup math_label1 "-1" -> -1
+setup math_label1 "0123456789X" -> 0123456789
+setup math_label1 "1e9" -> 1e9
+setup math_label1 "Vdiff" -> Vdiff
+setup math_label1 "a=b" -> a=b
+setup math_label1 "x" -> x
+setup math_label1 default -> (absent)
+setup math_label9 "" -> (absent); error: line 2: math_label9: unknown math channel
+setup math_label9 "-1" -> (absent); error: line 2: math_label9: unknown math channel
+setup math_label9 "1e9" -> (absent); error: line 2: math_label9: unknown math channel
+setup math_label9 "x" -> (absent); error: line 2: math_label9: unknown math channel
+setup math_label9 default -> (absent)
+setup math_labelx "" -> (absent); error: line 2: math_labelx: math_label: no number
+setup math_labelx "-1" -> (absent); error: line 2: math_labelx: math_label: no number
+setup math_labelx "1e9" -> (absent); error: line 2: math_labelx: math_label: no number
+setup math_labelx "x" -> (absent); error: line 2: math_labelx: math_label: no number
+setup math_labelx default -> (absent)
 setup math_lin "" -> 1 0; error: line 2: math_lin: math_lin: two numbers
 setup math_lin "-1 0" -> -1 0
 setup math_lin "-1" -> 1 0; error: line 2: math_lin: math_lin: two numbers

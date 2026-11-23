@@ -288,6 +288,9 @@ fn math_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     for (k, e) in m.math_expr.iter().enumerate().filter(|(_, e)| !e.is_empty()) {
         kv(&format!("math_expr{}", k + 1), e.clone());
     }
+    for (k, l) in m.math_label.iter().enumerate().filter(|(_, l)| !l.is_empty()) {
+        kv(&format!("math_label{}", k + 1), l.clone());
+    }
     kv("log_ivl", m.log_ivl.to_string());
     crate::settings::write(&crate::settings::spectrum::MARGIN, m, 0, kv);
     kv("math_offset", m.math_offset.to_string());

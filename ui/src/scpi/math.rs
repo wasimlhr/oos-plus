@@ -163,6 +163,15 @@ impl Scpi {
             put_math(ui, k, m.math_ch(k));
             return None;
         }
+        // :MATH<n>:LABel:CONTent: the name of the trace on its handle and pill (like :CHANnel<n>:LABel:CONTent)
+        if n.len() == 2 && kw(n0, "LABel") && kw(n[1], "CONTent") {
+            if query {
+                return t(&ui.m.math_label[k]);
+            }
+            ui.m.math_label[k] = unquote(arg).trim().chars().take(10).collect();
+            ui.mark_changed();
+            return None;
+        }
         if n.len() == 1 && kw(n0, "DISPlay") {
             return self.math_display(ui, k, query, arg);
         }

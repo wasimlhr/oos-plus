@@ -437,6 +437,8 @@ pub struct Model {
     pub math_lin: (f32, f32),
     /// the formula of each math channel
     pub math_expr: [String; crate::math::NMATH],
+    /// The name the user gave each math trace (`:MATH<n>:LABel:CONTent`, up to 10 characters); empty: Mn.
+    pub math_label: [String; crate::math::NMATH],
     /// data logger interval, index into `LOG_STEPS`
     pub log_ivl: usize,
     /// spectrum limit from a trace: dB above it

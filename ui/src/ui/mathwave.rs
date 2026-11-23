@@ -65,7 +65,7 @@ impl Ui {
     pub(super) fn studio_math_pill(&self, cv: &mut Canvas, r: Rect, k: usize, col: Rgb) {
         let c = self.m.math_ch(k);
         let scale = format!("{}/div", Self::math_scale_text_of(&c));
-        self.studio_source_pill(cv, r, &format!("M{}", k + 1), &scale, c.op.name(), col);
+        self.studio_source_pill(cv, r, &self.math_name(k), &scale, c.op.name(), col);
     }
 }
 

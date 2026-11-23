@@ -11,14 +11,40 @@ impl Ui {
     /// the channel (`:CHANnel<n>:LABel:CONTent`) where the pill is wide; a narrow pill keeps the badge alone.
     pub(super) fn studio_pill_badge(&self, c: usize, w: i32) -> (String, i32) {
         let sb = &self.fonts().sb;
-        if !self.m.ch_label[c].is_empty() && w >= 130 {
-            let name = self.ch_name(c);
-            let bw = (sb.width(&name) + 12).clamp(42, 90);
-            return (name, bw);
+        if !self.m.ch_label[c].is_empty() {
+            return self.pill_name(&self.ch_name(c), w);
         }
         let label = format!("CH{}", c + 1);
         let bw = if w >= 70 { 42 } else { (sb.width(&label) + 8).min(w - 4).max(8) };
         (label, bw)
+    }
+
+    /// The name of a source on its pill `w` wide, and the width of the badge that carries it: a wide pill gives the name up
+    /// to 90 px, a narrower one half its width (under 70 px all of it but the margins), and a longer name is cut with a dot
+    /// behind it instead of falling back to CHn.
+    pub(super) fn pill_name(&self, name: &str, w: i32) -> (String, i32) {
+        let sb = &self.fonts().sb;
+        let (least, room) = if w >= 130 { (42, 90) } else if w >= 70 { (42, (w / 2).max(42)) } else { (8, (w - 4).max(8)) };
+        let total = name.chars().count();
+        let mut n = total;
+        loop {
+            let text = if n == total { name.to_string() } else { format!("{}.", name.chars().take(n).collect::<String>()) };
+            let bw = (sb.width(&text) + 12).max(least);
+            if bw <= room || n <= 1 {
+                return (text, bw.min(room));
+            }
+            n -= 1;
+        }
+    }
+
+    /// The name on the handle of a source: the name a channel or a math trace was given, else CHn, Rn or Mn.
+    pub(super) fn studio_handle_name(&self, source: super::workspace::Trace) -> String {
+        use super::workspace::Trace;
+        match source {
+            Trace::Channel(c) => self.ch_name(c),
+            Trace::Reference(i) => format!("R{}", i + 1),
+            Trace::Math(k) => self.math_name(k),
+        }
     }
 
     /// Where the handles of the window that is being drawn sit, in the order of the sources (channels, references,
@@ -48,13 +74,9 @@ impl Ui {
         let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
         for source in self.trace_sources() {
             let Some(zero) = self.studio_zero_y(source) else { continue };
-            // a channel the user named (`:CHANnel<n>:LABel:CONTent`) has its name on the handle, so a longer one is wider
-            let w = match source {
-                super::workspace::Trace::Channel(c) if !self.m.ch_label[c].is_empty() => {
-                    (self.fonts().sb.width(&self.ch_name(c)) + 14).max(44)
-                }
-                _ => 44,
-            };
+            // a source the user named (`:CHANnel<n>:LABel:CONTent`, `:MATH<n>:LABel:CONTent`) has its name on the handle, so
+            // a longer one is wider
+            let w = (self.fonts().sb.width(&self.studio_handle_name(source)) + 14).max(44);
             let mut r = Rect::new(a.x + a.w - 3 - w, zero.clamp(a.y + half, low) - 12, w, 24);
             while r.x > a.x + 60 && (avoid.iter().any(|b| overlaps(*b, r)) || out.iter().any(|(_, b)| overlaps(*b, r))) { r.x -= r.w + 2; }
             out.push((source, r));
