@@ -243,9 +243,9 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Math => (&["Function", "Scale"], |it| match it {
-                MathSel | MathFam | MathOpI | MathA | MathB | MathExprEdit | FftWin => Slot::Tab(0),
+                MathSel | MathFam | MathOpI | MathA | MathB | MathExprEdit | FftWin | MathFiltResp | MathFiltPreset => Slot::Tab(0),
                 // Turn off is pinned under the rows: as their first one it moved every row when a function was chosen
-                MathOff => Slot::Foot(0),
+                MathOff | MathAddFilter => Slot::Foot(0),
                 MathExprI => Slot::Skip,
                 MathAuto => Slot::Foot(1),
                 _ => Slot::Tab(1),

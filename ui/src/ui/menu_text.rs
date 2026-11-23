@@ -121,7 +121,7 @@ impl Ui {
             | Item::DecThr
             | Item::DecPos
             | Item::DecThrLine(_) => Kind::Value,
-            Item::MathAuto | Item::ZoneBox | Item::ZoneShape | Item::ZoneClear => Kind::Action,
+            Item::MathAuto | Item::MathAddFilter | Item::MathToRef | Item::ZoneBox | Item::ZoneShape | Item::ZoneClear => Kind::Action,
             Item::DecBits => Kind::Value,
             Item::TrigLevel2 | Item::PatLevel => Kind::Value,
             Item::ChScale(_)
@@ -339,6 +339,9 @@ impl Ui {
             Item::MathSel => "Channel",
             Item::MathOff => "Turn off",
             Item::MathAuto => "Auto scale",
+            Item::MathAddFilter => "Add filter",
+            Item::MathToRef => "Save to reference",
+            Item::MathFiltPreset => "Preset",
             Item::Open(MenuId::MeasSelected) => "Selected",
             Item::Open(_) => "",
             _ => return None,
@@ -613,6 +616,7 @@ impl Ui {
             Item::AuxOut => m.aux_out.name().into(),
             Item::MathOpI => m.math.name().into(),
             Item::MathFam => self.math.family.name().into(),
+            Item::MathFiltPreset => self.math.preset.map_or("Pick one", |i| FILT_PRESETS[i].0).into(),
             Item::StoreDest => self.files.dest.name().into(),
             Item::MeasStats => on_off(self.results.on),
             Item::StripDock => self.strip_dock_label(self.m.strip_dock).into(),

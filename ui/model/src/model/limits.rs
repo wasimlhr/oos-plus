@@ -21,7 +21,7 @@ pub const CNT_MODES: [&str; 3] = ["Frequency", "Period", "Totalize"];
 /// Kinds of delay and phase measurement and of second panes, for the setups (`measures::pairs::PAIRS`).
 pub const PAIRS_N: usize = 20;
 /// The second panes (`ui::tables::PANES`).
-pub const PANES_N: usize = 6;
+pub const PANES_N: usize = 7;
 /// The intervals of the logger (`ui::logger::LOG_STEPS`).
 pub const LOG_STEPS_N: usize = 10;
 /// Harmonics of the measured frequency the span of the pane covers; 0 = the whole band.

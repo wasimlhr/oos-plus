@@ -164,7 +164,8 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   and zoom; a swipe from the edge of the plot or the numbers in the top bar switch
 - Data logger: measurements as CSV at an interval from 1 s to 1 h, to the stick or the card
 - 8 math channels, also on each other, with free formulas (`sqrt(CH1^2+CH2^2)`): add, subtract, multiply, divide, integrate, differentiate, abs, sqrt, log, ln, exp, Ax+B,
-  low/high/band-pass and band-stop filters, FFT
+  low/high/band-pass and band-stop filters (Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised cosine,
+  delay), FFT
 - Reference waveforms with scale, offset, colour, name and CSV export and import, mask test
 
 **Protocol decoders (26)**
@@ -344,7 +345,7 @@ under the name the session gives it, and the message of the load says what was n
 around its centre frequency, so its spectrum shows the span of the view. The same file loads as a session under Storage > Load session,
 `:LOAD:SESSion`, `--open` or dropped on the window: its channel records become the record on CH1 to CH4 at full
 length with their scales and the time base, its references go into the slots of their numbers, and the scope
-stops on it; its trigger, buses, measurements and maths are not read, and the message says so.
+stops on it; its trigger, buses, measurements and maths other than filters are not read, and the message says so.
 **SIM** (start menu, Analysis) starts a simulated reference; **Run/Stop**, **Single**, and trigger settings control its acquisitions.
 **Run simulation mode** plays the signal the SIM knobs describe; **Play references** plays the references that are shown
 (loaded files, signals added to a slot) as the acquisition instead.

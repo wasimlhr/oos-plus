@@ -38,15 +38,15 @@ const REF_NAMES: [&str; NREF] = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8",
 const MATH_NAMES: [&str; 8] = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"];
 
 impl Ui {
-    /// The Windows page. Default: the density, the external display, and while Split what is under the plot.
-    /// Minimal and Studio: the layout, full screen, the strip, the external display, and in Scope and Split what is
+    /// The Windows page (the external display is on Display > Screen). Default: the density, and while Split what is under the plot.
+    /// Minimal and Studio: the layout, full screen, the strip, and in Scope and Split what is
     /// under the plot. Then, while the plot has more than one window, the window of every channel and math channel
     /// that is on.
     pub(super) fn win_items(&self) -> Vec<Item> {
         let mut v = if self.m.layout == Layout::Default {
-            vec![Item::WinLayout, Item::Hdmi]
+            vec![Item::WinLayout]
         } else {
-            vec![Item::WinLayout, Item::FullScreen, Item::StripPos, Item::Hdmi]
+            vec![Item::WinLayout, Item::FullScreen, Item::StripPos]
         };
         let pane = if self.m.layout == Layout::Default {
             self.m.density == Density::Split
@@ -378,12 +378,12 @@ mod tests {
     #[test]
     fn page_lists_the_signals_only_while_split() {
         let mut u = ui();
-        assert_eq!(u.win_items(), vec![Item::WinLayout, Item::Hdmi]);
+        assert_eq!(u.win_items(), vec![Item::WinLayout]);
         u.select_option(Item::WinLayout, "Split");
         let v = u.win_items();
         assert!(v.contains(&Item::PaneSel));
         assert!(v.contains(&Item::WinCh(0)) && !v.iter().any(|i| matches!(i, Item::WinMath(_))));
-        for it in [Item::WinLayout, Item::WinCh(0), Item::Hdmi, Item::PaneSel] {
+        for it in [Item::WinLayout, Item::WinCh(0), Item::PaneSel] {
             let opts = u.options(it);
             for o in opts.iter().rev().chain(opts.iter()) {
                 u.select_option(it, o);
@@ -395,12 +395,12 @@ mod tests {
     #[test]
     fn the_oos_next_page_lists_the_lower_pane_in_scope_too() {
         let mut u = next_ui();
-        assert_eq!(u.win_items(), vec![Item::WinLayout, Item::FullScreen, Item::StripPos, Item::Hdmi, Item::PaneSel]);
+        assert_eq!(u.win_items(), vec![Item::WinLayout, Item::FullScreen, Item::StripPos, Item::PaneSel]);
         u.select_option(Item::WinLayout, "Stacked");
         let v = u.win_items();
         assert!(v.contains(&Item::PaneSel));
         assert!(v.contains(&Item::WinCh(0)) && !v.iter().any(|i| matches!(i, Item::WinMath(_))));
-        for it in [Item::WinLayout, Item::FullScreen, Item::StripPos, Item::WinCh(0), Item::Hdmi, Item::PaneSel] {
+        for it in [Item::WinLayout, Item::FullScreen, Item::StripPos, Item::WinCh(0), Item::PaneSel] {
             let opts = u.options(it);
             for o in opts.iter().rev().chain(opts.iter()) {
                 u.select_option(it, o);
@@ -655,7 +655,8 @@ mod tests {
     #[test]
     fn waveform_keeps_the_panel_bars_and_the_densities_change_the_plot() {
         let mut u = ui();
-        assert!(u.win_items().contains(&Item::Hdmi));
+        // the external display is a row of Display > Screen only
+        assert!(!u.win_items().contains(&Item::Hdmi));
         assert_eq!(u.value(Item::Hdmi), "Waveform");
         u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0))];
         u.results.on = true;
@@ -793,7 +794,7 @@ mod tests {
     fn the_page_has_the_rows_and_labels_of_oos_next() {
         let mut u = next_ui();
         let v = u.win_items();
-        assert_eq!(&v[..4], &[Item::WinLayout, Item::FullScreen, Item::StripPos, Item::Hdmi]);
+        assert_eq!(&v[..3], &[Item::WinLayout, Item::FullScreen, Item::StripPos]);
         assert_eq!((Ui::label(Item::WinLayout), Ui::label(Item::FullScreen), Ui::label(Item::StripPos)), ("Layout", "Full screen", "Strip"));
         assert_eq!(u.options(Item::WinLayout), ["One", "Side by side", "Stacked", "Four"]);
         assert_eq!(u.options(Item::FullScreen), ["Off", "On"]);
@@ -826,7 +827,7 @@ mod tests {
             u.open_menu(MenuId::Windows);
             let rows = u.items(MenuId::Windows);
             if layout == Layout::Default {
-                assert_eq!(rows, [Item::WinLayout, Item::Hdmi]);
+                assert_eq!(rows, [Item::WinLayout]);
                 assert_eq!(u.item_label(Item::WinLayout), "Density");
                 assert_eq!(u.options(Item::WinLayout), ["Scope", "Full", "Split", "Four"]);
                 assert_eq!(u.value(Item::WinLayout), "Scope");
@@ -840,8 +841,8 @@ mod tests {
                 u.select_option(Item::PaneSel, "Trend");
                 assert_eq!((u.m.density, u.m.pane), (Density::Scope, tables::PANE_TREND));
             } else {
-                let next = [Item::WinLayout, Item::FullScreen, Item::StripPos, Item::Hdmi, Item::PaneSel];
-                assert_eq!(&rows[..5], &next, "{layout:?}");
+                let next = [Item::WinLayout, Item::FullScreen, Item::StripPos, Item::PaneSel];
+                assert_eq!(&rows[..4], &next, "{layout:?}");
                 assert_eq!(u.item_label(Item::WinLayout), "Layout", "{layout:?}");
                 assert_eq!(u.options(Item::WinLayout), ["One", "Side by side", "Stacked", "Four"], "{layout:?}");
                 u.select_option(Item::WinLayout, "Side by side");

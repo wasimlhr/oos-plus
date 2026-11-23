@@ -40,7 +40,8 @@ in the README. How to use it: the guides listed on [[Home]].
   zoom; a swipe from the edge of the plot or the numbers in the top bar switch
 - Data logger: measurements as CSV at an interval from 1 s to 1 h, to the stick or the card
 - 8 math channels, also on each other, with free formulas (`sqrt(CH1^2+CH2^2)`): add, subtract, multiply, divide,
-  integrate, differentiate, abs, sqrt, log, ln, exp, Ax+B, low/high/band-pass and band-stop filters, FFT
+  integrate, differentiate, abs, sqrt, log, ln, exp, Ax+B, low/high/band-pass and band-stop filters (Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised
+  cosine, delay; a Filter window with the response: gain, phase, impulse and step), FFT
 - Reference waveforms with scale, offset, colour, name and CSV export and import, mask test
 
 **Protocol decoders (29)**

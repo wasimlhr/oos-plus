@@ -220,7 +220,11 @@ mod features;
 mod graphics;
 #[cfg(test)]
 mod interplay_tests;
+mod filterplot;
+mod livelines;
 mod mathwave;
+mod measchip;
+use mathwave::FILT_PRESETS;
 mod monitor;
 mod reference_decode;
 mod reference_search;

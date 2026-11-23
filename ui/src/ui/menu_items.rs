@@ -194,6 +194,10 @@ impl Ui {
         if self.m.pane == tables::PANE_TREND {
             v.splice(1..1, [Item::TrendSel(0), Item::TrendSel(1)]);
         }
+        // the lines are a choice of the monitor's own layout
+        if self.m.hdmi == HdmiMode::Layout {
+            v.insert(v.iter().position(|i| *i == Item::HdmiView).map_or(v.len(), |p| p + 1), Item::HdmiLines);
+        }
         v.extend(self.studio_display_rows());
         v
     }
@@ -357,7 +361,7 @@ impl Ui {
     /// The math menu, with the rows of the operation.
     pub(super) fn math_items(&self) -> Vec<Item> {
         if self.m.math == MathOp::Off {
-            vec![Item::MathSel, Item::MathFam, Item::MathOpI]
+            vec![Item::MathSel, Item::MathFam, Item::MathOpI, Item::MathAddFilter]
         } else if self.m.math == MathOp::Expr {
             self.with_math_off(vec![
                 Item::MathSel,
@@ -377,11 +381,32 @@ impl Ui {
             if self.m.math == MathOp::Lin {
                 v.extend([Item::MathLinA, Item::MathLinB]);
             }
-            if self.m.math.has_fc() {
+            let designer = matches!(self.m.math, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf);
+            let resp = self.m.math_filt.resp;
+            if designer {
+                v.push(Item::MathFiltPreset);
+                v.push(Item::MathFiltResp);
+            }
+            if self.m.math.has_fc() && (!designer || resp.has_cutoff()) {
                 v.push(Item::MathFc);
             }
-            if self.m.math.has_bw() {
+            if self.m.math.has_bw() && (!designer || resp.has_cutoff()) {
                 v.push(Item::MathBw);
+            }
+            if designer {
+                use crate::math::FiltResp as R;
+                if resp.has_order() {
+                    v.push(Item::MathFiltOrder);
+                }
+                if resp == R::Custom {
+                    v.push(Item::MathB);
+                }
+                match resp {
+                    R::Chebyshev => v.push(Item::MathFiltRipple),
+                    R::RaisedCosine | R::RootRaisedCosine => v.extend([Item::MathFiltSymbol, Item::MathFiltRolloff]),
+                    R::Delay => v.push(Item::MathFiltDelay),
+                    _ => {}
+                }
             }
             v.extend([Item::MathScale, Item::MathOffset]);
             if self.m.math == MathOp::Fft {
@@ -389,6 +414,7 @@ impl Ui {
             }
             if self.m.math != MathOp::Off {
                 v.push(Item::MathAuto);
+                v.push(Item::MathToRef);
             }
             self.with_math_off(v)
         }

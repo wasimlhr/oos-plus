@@ -31,12 +31,21 @@ pub(super) enum AddRow {
     Eye,
     Events,
     BusView,
+    Filter,
 }
 
 /// The second column of the menu, under its caption: the lower panes of the Default layout (Spectrum, Results, Events,
 /// Trend, Bus view) and the plots drawn in the waveform. A tap puts one on the screen, the next takes it off.
-pub(super) const ADD_WINDOWS: [AddRow; 7] =
-    [AddRow::Spectrum, AddRow::Trend, AddRow::Histogram, AddRow::Xy, AddRow::Eye, AddRow::Events, AddRow::BusView];
+pub(super) const ADD_WINDOWS: [AddRow; 8] = [
+    AddRow::Spectrum,
+    AddRow::Trend,
+    AddRow::Histogram,
+    AddRow::Xy,
+    AddRow::Eye,
+    AddRow::Events,
+    AddRow::BusView,
+    AddRow::Filter,
+];
 /// The caption of the second column.
 const CAP: i32 = 26;
 
@@ -70,6 +79,7 @@ impl Ui {
             AddRow::Eye => "Eye",
             AddRow::Events => "Events",
             AddRow::BusView => "Bus view",
+            AddRow::Filter => "Filter",
         }
     }
 
@@ -93,6 +103,7 @@ impl Ui {
             AddRow::Eye => self.rail_plot_on(1),
             AddRow::Events => self.rail_table_on(2),
             AddRow::BusView => self.m.pane == tables::PANE_BUS,
+            AddRow::Filter => self.m.pane == tables::PANE_FILTER,
         }
     }
 
@@ -148,6 +159,7 @@ impl Ui {
             AddRow::Eye => { cv.circle(cx, cy, 6, c); cv.circle(cx, cy, 4, PANEL_BG); cv.circle(cx, cy, 2, c); }
             AddRow::Events => { for dy in [-5, 0, 5] { cv.hline(cx - 7, cx + 7, cy + dy, c); } cv.fill(Rect::new(cx - 7, cy - 6, 3, 3), c); }
             AddRow::BusView => { cv.hline(cx - 7, cx + 7, cy - 3, c); cv.hline(cx - 7, cx + 7, cy + 3, c); cv.vline(cx - 2, cy - 6, cy + 6, c); }
+            AddRow::Filter => { cv.hline(cx - 7, cx - 1, cy - 4, c); cv.line(cx - 1, cy - 4, cx + 6, cy + 5, c); }
             AddRow::Zoom => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, PANEL_BG); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); cv.hline(cx - 4, cx, cy - 2, c); cv.vline(cx - 2, cy - 4, cy, c); }
         }
     }
@@ -212,6 +224,16 @@ impl Ui {
             AddRow::BusView => {
                 let on = self.m.pane == tables::PANE_BUS;
                 self.select_option(Item::PaneSel, if on { "Traces" } else { "Bus view" });
+            }
+            AddRow::Filter => {
+                if self.m.pane == tables::PANE_FILTER {
+                    self.select_option(Item::PaneSel, "Traces");
+                } else if self.filter_pane_spec().is_none() {
+                    // no designed filter to show: make one, on a math channel that is free, and show its window
+                    self.math_add_filter();
+                } else {
+                    self.select_option(Item::PaneSel, "Filter");
+                }
             }
         }
         true

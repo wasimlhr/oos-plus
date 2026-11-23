@@ -34,17 +34,44 @@ struct Answer {
 /// A math channel's last result and the key it was computed for.
 type Cached = Option<(u64, Result<Arc<Signal>, &'static str>)>;
 
+/// Where a preset puts its cut-off.
+#[derive(Clone, Copy)]
+pub(super) enum Cut {
+    /// the frequency of `1 / (n * time a division)`: it follows the time base the signal is looked at on
+    PerDiv(f64),
+    /// a fraction of the sample rate: what the samples can show (noise and ringing are as fast as the samples)
+    OfRate(f64),
+}
+
+/// The ready filters of the Preset row: name, operation, response, order and cut-off.
+pub(super) const FILT_PRESETS: [(&str, MathOp, crate::math::FiltResp, u32, Cut); 3] = [
+    ("Remove noise", MathOp::Lpf, crate::math::FiltResp::Butterworth, 4, Cut::OfRate(1.0 / 25.0)),
+    ("Remove ringing", MathOp::Lpf, crate::math::FiltResp::Bessel, 4, Cut::OfRate(1.0 / 30.0)),
+    ("Remove drift", MathOp::Hpf, crate::math::FiltResp::Butterworth, 2, Cut::PerDiv(0.05)),
+];
+
 /// The math channels as the screen keeps them (ADR 0062).
 pub(super) struct Math {
     /// the Math menu's category, kept when the operation is Off
     pub family: MathFamily,
+    /// the clean-up preset last applied to the selected channel (`FILT_PRESETS`); not stored
+    pub preset: Option<usize>,
     /// the results, their worker and the scales to refit; drawing reads it through `&self`
     pub state: std::cell::RefCell<State>,
 }
 
+impl Ui {
+    /// The chip of math channel `k` in the bottom bar: its scale a division, as the channels have, and its operation.
+    pub(super) fn studio_math_pill(&self, cv: &mut Canvas, r: Rect, k: usize, col: Rgb) {
+        let c = self.m.math_ch(k);
+        let scale = format!("{}/div", Self::math_scale_text_of(&c));
+        self.studio_source_pill(cv, r, &format!("M{}", k + 1), &scale, c.op.name(), col);
+    }
+}
+
 impl Default for Math {
     fn default() -> Math {
-        Math { family: MathFamily::Arith, state: Default::default() }
+        Math { family: MathFamily::Arith, preset: None, state: Default::default() }
     }
 }
 
@@ -54,7 +81,7 @@ pub(super) struct State {
     worker: Option<Worker<Job, Answer>>,
     /// (operation, source A, source B, scale) of each channel at the last tick, and which channels wait to be refitted
     sig: [Option<(String, usize, usize, usize)>; NMATH],
-    fit_pending: [bool; NMATH],
+    pub(super) fit_pending: [bool; NMATH],
 }
 impl State {
     /// After a recall: the setup's own scales stand, the next tick starts tracking again.
@@ -94,6 +121,12 @@ fn sample(w: &Signal, time: f64) -> f32 {
 fn compute_job(job: &Job) -> Result<Signal, &'static str> {
     if job.inputs.is_empty() {
         return Err("No source data");
+    }
+    if job.config.uses_taps() {
+        // the filter's taps are an impulse response at their own step, not a signal to put on the grid of the record
+        let [(_, a), (_, taps)] = job.inputs.as_slice() else { return Err("A filter file needs its taps in Source B") };
+        let v = oos_dsp::filter::Filter::apply_taps(&a.v, a.dt, &taps.v, taps.dt).ok_or("The filter file has no usable taps")?;
+        return Ok(Signal { t0: a.t0, dt: a.dt, v: Arc::new(v) });
     }
     let start = job.inputs.iter().map(|(_, w)| w.t0).fold(f64::NEG_INFINITY, f64::max);
     let end =
@@ -136,7 +169,7 @@ fn compute_job(job: &Job) -> Result<Signal, &'static str> {
             });
         }
         let b = aligned.get(1).map_or(&[][..], |x| x.1.as_slice());
-        let mut v = compute(c.op, a, b, dt, c.fc as f64, c.bw as f64);
+        let mut v = compute(c.op, a, b, dt, c.fc as f64, c.bw as f64, &c.filt);
         if c.op == MathOp::Lin {
             for v in &mut v {
                 *v = c.lin.0 * *v + c.lin.1;
@@ -222,7 +255,7 @@ impl Ui {
             // A constant/time expression follows the selected source or last record.
             return Ok(vec![if self.record_mode() { MATH_REF_BASE + self.active_reference() } else { 0 }]);
         }
-        Ok(if c.op.two_sources() { vec![c.a, c.b] } else { vec![c.a] })
+        Ok(if c.op.two_sources() || c.uses_taps() { vec![c.a, c.b] } else { vec![c.a] })
     }
 
     fn math_key(&self, k: usize) -> Result<u64, &'static str> {
@@ -239,6 +272,7 @@ impl Ui {
             c.fc.to_bits(),
             c.bw.to_bits(),
             format!("{:?}", c.win),
+            format!("{:?}", c.filt),
             c.lin.0.to_bits(),
             c.lin.1.to_bits(),
             &self.m.math_expr[k],

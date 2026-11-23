@@ -76,7 +76,10 @@ fn a_damaged_or_unusual_archive_is_refused_with_its_reason() {
     assert!(refused(&with(list + 8, &[1]), 4096).contains("encrypted"));
     assert!(refused(&with(list + 10, &[12]), 4096).contains("method 12"));
     assert!(refused(&with(end + 4, &[1]), 4096).contains("several parts"));
-    assert!(refused(&with(list + 42, &[0xF0, 0xFF, 0, 0]), 4096).contains("cut short"), "an entry that begins past the list");
+    assert!(
+        refused(&with(list + 42, &[0xF0, 0xFF, 0, 0]), 4096).contains("cut short"),
+        "an entry that begins past the list"
+    );
     assert!(refused(&with(list + 20, &[0xFF, 0xFF, 0, 0]), 4096).contains("cut short"), "more bytes than there are");
     assert!(refused(&with(list + 24, &[0x59, 2, 0, 0]), 4096).contains("cut short"), "stored, with two sizes");
     // sizes that ask for more than the stream gives, or less
@@ -216,16 +219,23 @@ fn a_session_archive_becomes_a_session_with_the_settings_that_are_mapped() {
         ("ch3.wfm", other_axis),
         ("ch5.wfm", wfm([0.5; 4])),
     ];
-    let refs = [(2, "hall.wfm", wfm([3.0; 4])), (7, "fit.wfm", wfm([0.0, 0.3, 0.3, 0.0])), (11, "far.wfm", wfm([0.0; 4]))];
+    let refs =
+        [(2, "hall.wfm", wfm([3.0; 4])), (7, "fit.wfm", wfm([0.0, 0.3, 0.3, 0.0])), (11, "far.wfm", wfm([0.0; 4]))];
     let s: Session<Rec> = parse_tss(&tss(setup, &refs, &beside), 10).unwrap();
     let rec = s.record.as_ref().unwrap();
     assert_eq!((rec.t0, rec.dt), (-4e-9, 2e-9));
     assert_eq!(rec.ch.each_ref().map(Vec::len), [4, 4, 0, 0], "CH1 and CH2 at their length, CH3 not on their axis");
     assert_eq!(rec.ch[1], [-1.0, 5.0, 2.0, 2.0]);
     let ending = "; not read: 1 differently timed and 2 surplus waveforms";
-    assert!(s.note.starts_with("waveforms, scales and time base, without") && s.note.ends_with(ending), "{}", s.note);
+    assert!(
+        s.note.starts_with("waveforms, scales, time base and filters, without") && s.note.ends_with(ending),
+        "{}",
+        s.note
+    );
     // 320 mV a division is the step of 200 mV times 1.6; the trace 3.74 divisions down after 0.5 V are taken off
-    for (key, want) in [("ch1.on", 1.0), ("ch1.vdiv", 0.2), ("ch1.vfine", 1.6), ("ch1.offset", -3.74 * 0.32 - 0.5), ("ch1.probe", 1.0)] {
+    for (key, want) in
+        [("ch1.on", 1.0), ("ch1.vdiv", 0.2), ("ch1.vfine", 1.6), ("ch1.offset", -3.74 * 0.32 - 0.5), ("ch1.probe", 1.0)]
+    {
         near(&s, key, want);
     }
     assert!(s.setup.contains("\nch1.label = a long nam\n"), "ten characters of the name");
@@ -241,7 +251,14 @@ fn a_session_archive_becomes_a_session_with_the_settings_that_are_mapped() {
     // the references: in the slots of their numbers, with the look of the settings or one fitted to the samples
     let slots: Vec<(usize, usize, f64)> = s.refs.iter().map(|r| (r.slot, r.v.len(), r.dt)).collect();
     assert_eq!((slots, s.offline_ref), (vec![(1, 4, 2e-9), (6, 4, 2e-9)], None));
-    for (key, want) in [("ref2.on", 0.0), ("ref2.vdiv", 6.0), ("ref2.offset", -9.0), ("ref7.on", 1.0), ("ref7.vdiv", 0.05), ("ref7.offset", -0.15)] {
+    for (key, want) in [
+        ("ref2.on", 0.0),
+        ("ref2.vdiv", 6.0),
+        ("ref2.offset", -9.0),
+        ("ref7.on", 1.0),
+        ("ref7.vdiv", 0.05),
+        ("ref7.offset", -0.15),
+    ] {
         near(&s, key, want);
     }
     assert!(s.setup.contains("\nref2.name = Hall = A\n") && s.setup.contains("\nref7.name = fit\n"));
@@ -253,7 +270,10 @@ fn a_session_archive_becomes_a_session_with_the_settings_that_are_mapped() {
         for (key, want) in [("tdiv", 1e-9), ("tfine", 0.8), ("delay", 0.0)] {
             near(&s, key, want);
         }
-        assert_eq!((set(&s, "ch4.on"), set(&s, "ch1.on"), set(&s, "active"), s.note.contains("not read")), (Some(1.0), Some(0.0), Some(3.0), false));
+        assert_eq!(
+            (set(&s, "ch4.on"), set(&s, "ch1.on"), set(&s, "active"), s.note.contains("not read")),
+            (Some(1.0), Some(0.0), Some(3.0), false)
+        );
     }
     // the delay switched on: the middle of the screen is that long after the trigger
     let delayed = ":HORIZONTAL:SCALE 200.0000E-12\n:HORIZONTAL:POSITION 10.0\n:HORIZONTAL:DELAY:MODE ON\n:HORIZONTAL:DELAY:TIME -1.0E-9\n";
@@ -267,7 +287,8 @@ fn a_session_archive_becomes_a_session_with_the_settings_that_are_mapped() {
 fn a_session_archive_of_references_only_shows_the_first_and_one_without_a_waveform_is_refused() {
     let long = wfm_f32(b":WFM#003", -1e-3, 1e-6, &[0.5; 4000], "");
     let refs = [(4, "b.wfm", wfm([0.0; 4])), (3, "a.wfm", long)];
-    let s: Session<Rec> = parse_tss(&tss(":HORIZONTAL:SCALE 1.0E-9\n:HORIZONTAL:POSITION 50.0\n", &refs, &[]), 10).unwrap();
+    let s: Session<Rec> =
+        parse_tss(&tss(":HORIZONTAL:SCALE 1.0E-9\n:HORIZONTAL:POSITION 50.0\n", &refs, &[]), 10).unwrap();
     assert!(s.record.is_none());
     assert_eq!((s.offline_ref, s.refs.len(), s.refs[0].slot, s.refs[0].v.len()), (Some(2), 2, 2, 4000));
     // the time base of that reference: 4 ms in ten divisions is the step of 500 us times 0.8, around 1 ms
@@ -278,8 +299,14 @@ fn a_session_archive_of_references_only_shows_the_first_and_one_without_a_wavefo
 
     let refuse = |b: &[u8]| parse_tss::<Rec>(b, 10).err().unwrap();
     assert_eq!(refuse(&tss(SETUP, &[], &[])), "the session holds no waveform");
-    assert_eq!(refuse(&tss(SETUP, &[], &[("ch1_iq.wfm", wfm([0.0; 4]))])), "the session holds no waveform that is read (not read: 1 IQ waveform)");
-    assert_eq!(refuse(&tss(SETUP, &[(12, "far.wfm", wfm([0.0; 4]))], &[])), "the session holds no waveform that is read (not read: 1 surplus waveform)");
+    assert_eq!(
+        refuse(&tss(SETUP, &[], &[("ch1_iq.wfm", wfm([0.0; 4]))])),
+        "the session holds no waveform that is read (not read: 1 IQ waveform)"
+    );
+    assert_eq!(
+        refuse(&tss(SETUP, &[(12, "far.wfm", wfm([0.0; 4]))], &[])),
+        "the session holds no waveform that is read (not read: 1 surplus waveform)"
+    );
     assert!(refuse(&zip(&[ZipFile::stored("notes.txt", b"hello")])).contains("holds no session"));
     assert!(refuse(b"PK\x03\x04").contains("cut short"));
 }
@@ -312,7 +339,10 @@ fn the_session_archives_of_a_local_folder_load_or_say_why() {
             Ok((traces, left_out)) => {
                 assert!(!traces.is_empty(), "file {k}");
                 for t in &traces {
-                    assert!(t.v.len() >= 2 && t.dt > 0.0 && t.dt.is_finite() && t.t0.is_finite() && !t.label.is_empty(), "file {k}");
+                    assert!(
+                        t.v.len() >= 2 && t.dt > 0.0 && t.dt.is_finite() && t.t0.is_finite() && !t.label.is_empty(),
+                        "file {k}"
+                    );
                 }
                 loaded += 1;
                 noted += !left_out.is_empty() as usize;
@@ -329,7 +359,10 @@ fn the_session_archives_of_a_local_folder_load_or_say_why() {
         }
     }
     println!("{} archives: {loaded} load ({noted} with parts left out), {} refused", files.len(), files.len() - loaded);
-    println!("the longest trace has {longest} samples; the slowest load took {:.2} s for {} bytes", slowest.0, slowest.1);
+    println!(
+        "the longest trace has {longest} samples; the slowest load took {:.2} s for {} bytes",
+        slowest.0, slowest.1
+    );
     for (reason, n) in &refused {
         println!("  {n} x {reason}");
     }
@@ -359,7 +392,12 @@ fn the_iq_record_of_a_spectrum_view_is_read_around_its_centre() {
     assert_eq!(signal.label, "ch1 I/Q 98 MHz");
     assert_eq!(signal.t0, -1.395e-3);
     // the rate holds 98 MHz plus half the I/Q rate (104.25 MHz) 2.2 times over: 19 steps a pair of 80 ns
-    assert!((signal.dt - 80e-9 / 19.0).abs() < 1e-15 && signal.v.len() == (pairs - 1) * 19 + 1, "{} {}", signal.dt, signal.v.len());
+    assert!(
+        (signal.dt - 80e-9 / 19.0).abs() < 1e-15 && signal.v.len() == (pairs - 1) * 19 + 1,
+        "{} {}",
+        signal.dt,
+        signal.v.len()
+    );
     // zero crossings in the middle of the record: 99 MHz is 198 a microsecond
     let (from, to) = (signal.v.len() / 4, 3 * signal.v.len() / 4);
     let crossings = (from..to).filter(|&k| signal.v[k - 1] < 0.0 && signal.v[k] >= 0.0).count() as f64;
@@ -370,3 +408,134 @@ fn the_iq_record_of_a_spectrum_view_is_read_around_its_centre() {
     let (traces, left_out) = parse_wave_noted(&tss("*RST\n", &[], &beside), "bench.tss").unwrap();
     assert_eq!((traces.len(), left_out.as_str()), (1, "not read: 1 IQ waveform"));
 }
+
+/// The filters of the math channels become math channels of OOS: the response, order, cut-off or band, the source, the
+/// scale and position of the lane, and whether it is shown; a custom one stands in as a Butterworth and is said so.
+#[test]
+fn the_filters_of_the_math_channels_are_mapped_to_the_designer() {
+    let mut setup = String::new();
+    let filters = [
+        // (type, response, extra lines)
+        (
+            "LPASS",
+            "BUTTERWORTH",
+            ":MATH:MATH1:FILTER:CFREQ 156.2500E+3
+:MATH:MATH1:FILTER:ORDER 5
+",
+        ),
+        (
+            "LPASS",
+            "BESSEL",
+            ":MATH:MATH2:FILTER:CFREQ 450.0000E+3
+:MATH:MATH2:FILTER:ORDER 5
+",
+        ),
+        (
+            "LPASS",
+            "GAUSSIAN",
+            ":MATH:MATH3:FILTER:CFREQ 250.0000E+3
+",
+        ),
+        (
+            "APASS",
+            "BUTTERWORTH",
+            ":MATH:MATH4:FILTER:DELAY 1.6000E-3
+",
+        ),
+        (
+            "RC",
+            "BUTTERWORTH",
+            ":MATH:MATH5:FILTER:SDURATION 5.0000E-6
+:MATH:MATH5:FILTER:ROFACTOR 300.0000E-3
+",
+        ),
+        (
+            "BPASS",
+            "CUSTOM",
+            ":MATH:MATH6:FILTER:LCFREQ 80.0000E+3
+:MATH:MATH6:FILTER:HCFREQ 400.0000E+3
+:MATH:MATH6:FILTER:ORDER 5087
+",
+        ),
+    ];
+    for (k, (kind, response, more)) in filters.iter().enumerate() {
+        let n = k + 1;
+        setup += &format!(
+            ":MATH:MATH{n}:TYPE FILTER
+:MATH:MATH{n}:FILTER:TYPE {kind}
+:MATH:MATH{n}:FILTER:RESPONSE {response}
+             :MATH:MATH{n}:FILTER:SOURCE REF1
+{more}:DISPLAY:WAVEVIEW1:MATH:MATH{n}:STATE {}
+",
+            (n != 2) as u8
+        );
+    }
+    setup += ":DISPLAY:WAVEVIEW1:MATH:MATH1:VERTICAL:SCALE 80.0000E-3
+:DISPLAY:WAVEVIEW1:MATH:MATH1:VERTICAL:POSITION 20.0000E-3
+              :DISPLAY:SELECT:MATH MATH5
+:MATH:MATH7:TYPE FILTER
+:MATH:MATH7:FILTER:TYPE NOTCHY
+";
+    let refs = [(1, "demo.wfm", wfm([0.0, 1.0, 0.0, -1.0]))];
+    let s: Session<Rec> = parse_tss(&tss(&setup, &refs, &[]), 10).unwrap();
+    let lines: Vec<&str> = s.setup.lines().collect();
+    let has = |l: &str| lines.contains(&l);
+    // the selected channel (M5) is at the main keys, the others under their numbers
+    assert!(has("math_sel = 4") && has("filt_resp = RaisedCosine"), "{}", s.setup);
+    assert!(has("m1.op = Lpf") && has("m2.op = Lpf") && has("m4.op = Lpf") && has("m6.op = Bpf"), "{}", s.setup);
+    // the source is R1, which is the 17th source (4 channels, 8 math channels)
+    assert!(has("m1.a = 12") && has("m6.a = 12"), "{}", s.setup);
+    assert!(lines.iter().any(|l| l.starts_with("m1.filt = Butterworth 5 ")), "{}", s.setup);
+    assert!(lines.iter().any(|l| l.starts_with("m2.filt = Bessel 5 ")), "{}", s.setup);
+    assert!(lines.iter().any(|l| l.starts_with("m3.filt = Gaussian ")), "{}", s.setup);
+    assert!(lines.iter().any(|l| l.starts_with("m4.filt = Delay ") && l.ends_with(" 0.0016")), "{}", s.setup);
+    assert!(lines.iter().any(|l| l.starts_with("filt_symbol = 0.000005")), "{}", s.setup);
+    assert!(has("filt_rolloff = 0.3"), "{}", s.setup);
+    // a band of 80 to 400 kHz: its centre and width
+    near(&s, "m6.fc", 240e3);
+    near(&s, "m6.bw", 320e3);
+    near(&s, "m1.fc", 156.25e3);
+    assert!(
+        s.note.contains("1 custom filter file not read") && s.note.contains("1 filter of a kind not mapped"),
+        "{}",
+        s.note
+    );
+}
+
+/// A filter file (the taps of a filter and its sample rate) is a waveform at the step of the filter, and a custom filter
+/// of a session archive takes its taps from the file beside the settings: they come as a reference, Source B.
+#[test]
+fn the_taps_of_a_custom_filter_are_a_reference_and_its_source_b() {
+    let flt = "// Do not edit. Generated by a filter editor.
+// {filter_type: lowPass}
+
+5000000.0;0.25,0.25,0.25,0.25
+";
+    let t = parse_wave(flt.as_bytes(), "my taps.flt").unwrap();
+    assert_eq!((t.len(), t[0].v.clone(), t[0].dt, t[0].label.as_str()), (1, vec![0.25; 4], 2e-7, "my taps"));
+    let two = parse_wave(b"// two sets
+5000000.0;1,2,3
+625000.0;4,5,6
+", "bank.flt").unwrap();
+    assert_eq!(two.iter().map(|t| (t.dt, t.label.clone())).collect::<Vec<_>>(), [(2e-7, "bank 5M".to_string()), (1.6e-6, "bank 625k".to_string())]);
+    assert!(parse_wave(b"// only a comment
+@1000.0;1.0
+", "d.flt").is_err(), "one tap is no filter");
+    let setup = ":MATH:MATH1:TYPE FILTER
+:MATH:MATH1:FILTER:TYPE BPASS
+:MATH:MATH1:FILTER:RESPONSE CUSTOM
+        :MATH:MATH1:FILTER:SOURCE CH1
+:MATH:MATH1:FILTER:LCFREQ 1.0
+:MATH:MATH1:FILTER:HCFREQ 2.0
+";
+    let inner = zip(&[ZipFile::deflated("bench.set", setup.as_bytes()), ZipFile::deflated("filterCoeff1_math1.flt", flt.as_bytes())]);
+    let outer = zip(&[ZipFile::stored("shot.png", b"a picture"), ZipFile::deflated("bench.set", &inner), ZipFile::stored("ch1.wfm", &wfm([0.0, 1.0, 0.0, -1.0]))]);
+    let s: Session<Rec> = parse_tss(&outer, 10).unwrap();
+    let lines: Vec<&str> = s.setup.lines().collect();
+    assert!(lines.iter().any(|l| l.starts_with("filt_resp = Custom")), "{}", s.setup);
+    // the taps are the first free slot after the references: R1; Source B of M1 is the source after CH1-4 and M1-8
+    assert_eq!(s.refs.len(), 1);
+    assert!(lines.contains(&"math_b = 12"), "{}", s.setup);
+    assert!(!s.note.contains("custom filter file"), "{}", s.note);
+}
+

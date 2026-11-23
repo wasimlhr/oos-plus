@@ -616,6 +616,7 @@ in `ui/model/src/settings/display.rs`; this table is written from there
 | `:DISPlay:GBRightness[?]` | a whole number from 0 to 100, set within 10 to 100 % | `grid_bright` | Grid bright. | Brightness of the graticule; a value below 10 sets 10. |
 | `:DISPlay:RULers[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `grid_frame` | Grid frame | A frame around the graticule with ticks every fifth of a division; none with the grid off. |
 | `:DISPlay:COLor[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `color_grade` | Colour grade | Colours the persistence by how often a point was hit. |
+| `:DISPlay:HDMI:LINes[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `hdmi_lines` | HDMI lines | The live channels on the monitor of the HDMI Layout are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges). |
 | `:DISPlay:TYPE[?]` | `DOTS`, `VECTors`; the query answers `DOTS` or `VECT` | `dots` | Dots | Draws every sample as a dot instead of joining them with lines. |
 | none | a choice of the screen's layout, not of the measurement | `bar` | Bottom bar | The bottom bar as cards or as one compact line. |
 | none | a choice of the screen's layout, not of the measurement | `hdmi` | HDMI | What a monitor on the HDMI port shows: the panel, the waveform alone, or a layout of its own; the menu steps to the end of the list and stops. |
@@ -691,6 +692,12 @@ command does not take is refused with `-224`.
 | `:MATH<n>:FFT:WINDow[?]` | `RECTangle`, `HANNing`, `HAMMing`, `BLACkman`, `FLATtop` | `fft_win` | Window | The window the FFT multiplies the record with before the transform. |
 | none | set through `:MATH<n>:FILTer:W1` and `:W2`, the corner frequencies (below) | `math_bw` | Bandwidth | The width of the band of the band-pass and band-stop filters. The menu steps 1-2-5 in periods. |
 | none | set through `:MATH<n>:FILTer:W1` and `:W2`, the corner frequencies (below) | `math_fc` | Frequency | The cut-off frequency of the low- and high-pass filters, the centre of the band filters. The menu steps 1-2-5 in periods. |
+| `:MATH<n>:FILTer:RESPonse[?]` | `SIMPle`, `BUTTerworth`, `CHEBychev`, `BESSel`, `GAUSsian`, `RCOSine`, `RRCosine`, `DELay`, `CUSTom` | `filt_resp` | Response | The response of the filter: Simple (the plain filter of the operator) or one the designer makes:               Butterworth, Chebyshev, Bessel, Gaussian, raised cosine, root raised cosine, a delay, or Custom: the taps of a filter file, loaded as a reference and chosen as Source B. |
+| `:MATH<n>:FILTer:ORDer[?]` | a whole number from 1 to 16 | `filt_order` | Order | The order of a Butterworth, Chebyshev or Bessel filter (of each pass of a band filter). |
+| `:MATH<n>:FILTer:PRIPple[?]` | a number | `filt_ripple` | Ripple | The pass band ripple of a Chebyshev filter. The menu steps by 0.25 dB. |
+| `:MATH<n>:FILTer:SDURation[?]` | seconds | `filt_symbol` | Symbol time | The symbol duration of a raised cosine or root raised cosine filter. The menu steps 1-2-5. |
+| `:MATH<n>:FILTer:ROFactor[?]` | a number | `filt_rolloff` | Roll-off | The roll-off factor of a raised cosine or root raised cosine filter, 0 to 1. The menu steps by 0.05. |
+| `:MATH<n>:FILTer:DELay[?]` | seconds | `filt_delay` | Delay | The delay of the Delay response. The menu steps 1-2-5. |
 <!-- settings:math:end -->
 
 ### Track cursors, mask and histogram

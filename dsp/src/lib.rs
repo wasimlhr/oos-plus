@@ -36,6 +36,7 @@ pub mod dpt;
 pub mod edges;
 pub mod expr;
 pub mod eye;
+pub mod filter;
 #[cfg(test)]
 mod hostile;
 pub mod hss;

@@ -109,13 +109,15 @@ mod reference_search_navigation_tests {
 }
 
 /// What Split puts under the plot. 0 is traces: two stacked windows, and this pane is not drawn.
-pub const PANES: [&str; PANES_N] = ["Traces", "Spectrum", "Results", "Events", "Trend", "Bus view"];
+pub const PANES: [&str; PANES_N] = ["Traces", "Spectrum", "Results", "Events", "Trend", "Bus view", "Filter"];
 pub(super) const PANE_SPECTRUM: usize = 1;
 pub(super) const PANE_RESULTS: usize = 2;
 pub(super) const PANE_EVENTS: usize = 3;
 pub(super) const PANE_TREND: usize = 4;
 /// what a protocol module makes of its packets (`busview.rs`)
 pub(super) const PANE_BUS: usize = 5;
+/// the response of the designed filter of the selected math channel (`filterplot.rs`)
+pub(super) const PANE_FILTER: usize = 6;
 
 pub(super) const ROW_H: i32 = 26;
 /// The line with the names of the columns of the search list.

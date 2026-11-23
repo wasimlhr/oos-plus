@@ -133,6 +133,7 @@ Commands: [display.md](display.md).
 | --- | --- | --- | --- |
 | `text_size` | text size | `Normal` | `:DISPlay:TEXTsize` |
 | `hdmi` | HDMI mode | `Waveform` | `:DISPlay:HDMI` |
+| `hdmi_lines` | Display > HDMI lines: the live channels on the HDMI monitor are lines (`true`) or the stretched phosphor | `true` | `:DISPlay:HDMI:LINes` |
 | `hdmi_view` | Display > Monitor view: the view an HDMI monitor shows (0: the panel's) | `0` | `:DISPlay:VIEW:MONitor` |
 | `bar` | Display > Bottom bar: `cards` or `compact` | `cards` | - |
 | `persist` | display settings | `0` | `:DISPlay:GRADing:TIME` |
@@ -222,6 +223,12 @@ Commands: [math.md](math.md).
 | `math_offset` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `0` | `:MATH<n>:OFFSet` |
 | `fft_win` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `Hann` | `:MATH<n>:FFT:WINDow` |
 | `math_bw` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `2000` | - |
+| `filt_resp` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `Simple` | `:MATH<n>:FILTer:RESPonse` |
+| `filt_order` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `4` | `:MATH<n>:FILTer:ORDer` |
+| `filt_ripple` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `1` | `:MATH<n>:FILTer:PRIPple` |
+| `filt_symbol` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | `:MATH<n>:FILTer:SDURation` |
+| `filt_rolloff` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.35` | `:MATH<n>:FILTer:ROFactor` |
+| `filt_delay` | the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay) | `0.000001` | `:MATH<n>:FILTer:DELay` |
 | `math_sel` | the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth | `0` | - |
 | `m<n>.op` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `Off` | - |
 | `m<n>.a` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `0` | - |
@@ -231,6 +238,7 @@ Commands: [math.md](math.md).
 | `m<n>.bw` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `2000` | - |
 | `m<n>.offset` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `0` | - |
 | `m<n>.win` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `Hann` | - |
+| `m<n>.filt` | the same for math channels 2 to 8: the designer's settings as `<response> <order> <ripple> <symbol> <roll-off> <delay>` | `Simple 4 1 0.000001 0.35 0.000001` | - |
 | `m<n>.lin` | the same for math channels 2 to 8 (the selected one is written as `math*`) | `1 0` | - |
 | `math_expr<n>` | optional: the formula text of channel n | - | `:MATH<n>:EXPRession` |
 

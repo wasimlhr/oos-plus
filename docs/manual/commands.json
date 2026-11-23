@@ -6314,6 +6314,156 @@
      "returns": "On a freshly started default model the query returns `9.9E37`."
     },
     {
+     "header": ":MATH<n>:FILTer:RESPonse",
+     "set": ":MATH<n>:FILTer:RESPonse <value>",
+     "query": ":MATH<n>:FILTer:RESPonse?",
+     "desc": "Sets or queries Response (menu: Math > Response).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:FILTer:RESPonse` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "`SIMPle`, `BUTTerworth`, `CHEBychev`, `BESSel`, `GAUSsian`, `RCOSine`, `RRCosine`, `DELay`, `CUSTom`; the query answers `SIMP`, `BUTT`, `CHEB`, `BESS`, `GAUS`, `RCOS`, `RRC`, `DEL`, `CUST`. SIMPle is the plain filter of the operator; CUSTom takes the taps of a filter file loaded as a reference, chosen with `:SOURce2`.",
+       "SIMP"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `SIMP`.",
+     "ext": true
+    },
+    {
+     "header": ":MATH<n>:FILTer:ORDer",
+     "set": ":MATH<n>:FILTer:ORDer <value>",
+     "query": ":MATH<n>:FILTer:ORDer?",
+     "desc": "Sets or queries Order (menu: Math > Order).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:FILTer:ORDer` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "Order 1 to 16 of a Butterworth, Chebyshev or Bessel filter (of each pass of a band filter).",
+       "4"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `4`.",
+     "ext": true
+    },
+    {
+     "header": ":MATH<n>:FILTer:PRIPple",
+     "set": ":MATH<n>:FILTer:PRIPple <value>",
+     "query": ":MATH<n>:FILTer:PRIPple?",
+     "desc": "Sets or queries Ripple (menu: Math > Ripple).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:FILTer:PRIPple` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "Pass band ripple in dB of a Chebyshev filter, 0.01 to 6.",
+       "1.000000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `1.000000E+00`.",
+     "ext": true
+    },
+    {
+     "header": ":MATH<n>:FILTer:SDURation",
+     "set": ":MATH<n>:FILTer:SDURation <value>",
+     "query": ":MATH<n>:FILTer:SDURation?",
+     "desc": "Sets or queries Symbol time (menu: Math > Symbol time).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:FILTer:SDURation` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "Symbol duration in s of a raised cosine or root raised cosine filter.",
+       "1.000000E-06"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `1.000000E-06`.",
+     "ext": true
+    },
+    {
+     "header": ":MATH<n>:FILTer:ROFactor",
+     "set": ":MATH<n>:FILTer:ROFactor <value>",
+     "query": ":MATH<n>:FILTer:ROFactor?",
+     "desc": "Sets or queries Roll-off (menu: Math > Roll-off).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:FILTer:ROFactor` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "Roll-off factor 0 to 1 of a raised cosine or root raised cosine filter.",
+       "3.500000E-01"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `3.500000E-01`.",
+     "ext": true
+    },
+    {
+     "header": ":MATH<n>:FILTer:DELay",
+     "set": ":MATH<n>:FILTer:DELay <value>",
+     "query": ":MATH<n>:FILTer:DELay?",
+     "desc": "Sets or queries Delay (menu: Math > Delay).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MATH1:FILTer:DELay` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "Delay in s of the DELay response (an all-pass).",
+       "1.000000E-06"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `1.000000E-06`.",
+     "ext": true
+    },
+    {
      "header": ":MATH<n>:AUTO",
      "set": ":MATH<n>:AUTO",
      "desc": "Fit scale and offset to the result",
@@ -13272,6 +13422,25 @@
      "ext": true
     },
     {
+     "header": ":DISPlay:HDMI:LINes",
+     "set": ":DISPlay:HDMI:LINes <value>",
+     "query": ":DISPlay:HDMI:LINes?",
+     "desc": "Sets or queries HDMI lines for Display and layout (menu: Display > HDMI lines).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`1`: the live channels on the monitor of the HDMI Layout are lines at its resolution; `0`: the stretched phosphor of the panel.",
+       "1"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `1`.",
+     "ext": true
+    },
+    {
      "header": ":DISPlay:TEXTsize",
      "set": ":DISPlay:TEXTsize <value>",
      "query": ":DISPlay:TEXTsize?",
@@ -16049,6 +16218,12 @@
        "`:DISPlay:HDMI`"
       ],
       [
+       "`hdmi_lines`",
+       "Display > HDMI lines: the live channels on the HDMI monitor are lines (`true`) or the stretched phosphor",
+       "`true`",
+       "`:DISPlay:HDMI:LINes`"
+      ],
+      [
        "`hdmi_view`",
        "Display > Monitor view: the view an HDMI monitor shows (0: the panel's)",
        "`0`",
@@ -16459,8 +16634,44 @@
        "-"
       ],
       [
-       "`math_sel`",
+       "`filt_resp`",
+       "the selected math channel (`math_sel`, 0-based): the designer's settings of a filter (response, order, Chebyshev ripple, symbol time, roll-off, delay)",
+       "`Simple`",
+       "`:MATH<n>:FILTer:RESPonse`"
+      ],
+      [
+       "`filt_order`",
        "as above",
+       "`4`",
+       "`:MATH<n>:FILTer:ORDer`"
+      ],
+      [
+       "`filt_ripple`",
+       "as above",
+       "`1`",
+       "`:MATH<n>:FILTer:PRIPple`"
+      ],
+      [
+       "`filt_symbol`",
+       "as above",
+       "`0.000001`",
+       "`:MATH<n>:FILTer:SDURation`"
+      ],
+      [
+       "`filt_rolloff`",
+       "as above",
+       "`0.35`",
+       "`:MATH<n>:FILTer:ROFactor`"
+      ],
+      [
+       "`filt_delay`",
+       "as above",
+       "`0.000001`",
+       "`:MATH<n>:FILTer:DELay`"
+      ],
+      [
+       "`math_sel`",
+       "the selected math channel (`math_sel`, 0-based): operator, sources, scale index, corner, `<A> <B>` of A x + B, offset, FFT window, bandwidth",
        "`0`",
        "-"
       ],
@@ -16513,8 +16724,14 @@
        "-"
       ],
       [
+       "`m<n>.filt`",
+       "the same for math channels 2 to 8: the designer's settings as `<response> <order> <ripple> <symbol> <roll-off> <delay>`",
+       "`Simple 4 1 0.000001 0.35 0.000001`",
+       "-"
+      ],
+      [
        "`m<n>.lin`",
-       "as above",
+       "the same for math channels 2 to 8 (the selected one is written as `math*`)",
        "`1 0`",
        "-"
       ],

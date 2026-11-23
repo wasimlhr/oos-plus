@@ -7,6 +7,7 @@
 //!   zoom                     the zoom window on or off (the Zoom row of Horizontal)
 //!   tap <x> <y>              touch tap
 //!   drag <x0> <y0> <x1> <y1> touch drag (8 steps)
+//!   down <x> <y>             a finger down and held; up <x> <y> lifts it (the web page: a long press)
 //!   workflow <live|sim|load|measure|settings> direct source and measurement actions
 //!   shot <path>              screenshot (PPM)
 //!   scpi <path> <message>    host scripts only: a program message through the SCPI interpreter; the message and
@@ -45,7 +46,7 @@ pub enum Out {
 /// they stay with the local control FIFO and the host scripts.
 pub fn remote_ok(line: &str) -> bool {
     let words: Vec<&str> = line.split_whitespace().collect();
-    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag"))
+    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag" | "down" | "up"))
         || words == ["zoom"]
         || (words.len() == 2
             && words[0] == "workflow"
@@ -84,6 +85,9 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
             ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
             ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
         }
+        // a finger put down and lifted later: the time between is a long press to the screen
+        "down" if w.len() > 2 => ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x: num(w[1]), y: num(w[2]) }),
+        "up" if w.len() > 2 => ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x: num(w[1]), y: num(w[2]) }),
         "drag" if w.len() > 4 => {
             let (x0, y0, x1, y1) = (num(w[1]), num(w[2]), num(w[3]), num(w[4]));
             ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x: x0, y: y0 });

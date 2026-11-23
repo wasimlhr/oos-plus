@@ -139,6 +139,9 @@ pub(super) struct Tss {
     /// the I/Q records of the spectrum views (`ch<n>_iq.wfm`) with a centre frequency in the settings, as the real
     /// signal they stand for (`oos_dsp::iq::iq_to_real`), in the order of their channels
     pub iq: Vec<(usize, WaveTrace)>,
+    /// the taps of the custom filters (`filterCoeff<k>_math<n>.flt` beside the settings), with the number of their math
+    /// channel, in the order of the channels
+    pub taps: Vec<(usize, WaveTrace)>,
     pub left: LeftOut,
 }
 
@@ -206,7 +209,8 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
         return Err(no_session());
     }
     let inner = Zip::open(&set)?;
-    let text = inner.entries.iter().find(|e| has_suffix(&e.name, ".set")).ok_or("the session holds no settings text")?;
+    let text =
+        inner.entries.iter().find(|e| has_suffix(&e.name, ".set")).ok_or("the session holds no settings text")?;
     let text = inner.read(text, TSS_TEXT_BYTES)?;
     if looks_zip(&text) {
         return Err("the session is an archive in an archive in an archive: that deep nothing is read".into());
@@ -221,14 +225,16 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
         for line in String::from_utf8_lossy(&list).lines() {
             let Some((key, file)) = line.split_once('=') else { continue };
             let key = key.trim().to_ascii_lowercase();
-            let number = key.strip_prefix("recallsubsystem\\refmgr\\ref").and_then(|k| k.strip_suffix("\\sourcefilename"));
+            let number =
+                key.strip_prefix("recallsubsystem\\refmgr\\ref").and_then(|k| k.strip_suffix("\\sourcefilename"));
             if let Some(n) = number.and_then(|n| n.parse().ok()).filter(|n| (1..=99).contains(n)) {
                 named.entry(n).or_insert_with(|| base_name(file.trim().trim_matches('"')).to_ascii_lowercase());
             }
         }
     }
     let waves: Vec<&ZipEntry> = inner.entries.iter().filter(|e| has_suffix(&e.name, ".wfm")).collect();
-    left.other += waves.iter().filter(|e| !named.values().any(|file| *file == base_name(&e.name).to_ascii_lowercase())).count();
+    left.other +=
+        waves.iter().filter(|e| !named.values().any(|file| *file == base_name(&e.name).to_ascii_lowercase())).count();
     let mut refs = Vec::new();
     for (&number, file) in &named {
         let Some(e) = inner.entries.iter().find(|e| base_name(&e.name).to_ascii_lowercase() == *file) else {
@@ -237,6 +243,23 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
         };
         let label = commands.text(&format!(":REF:REF{number}:LABEL:NAME"));
         refs.extend(wave(&inner, e, label, &mut budget, &mut left)?.map(|trace| (number, trace)));
+    }
+    // the taps of the custom filters of the math channels: `filterCoeff<k>_math<n>.flt`, read as a waveform at the step of
+    // the filter (`parse_filter_taps`)
+    let mut taps = Vec::new();
+    for n in 1..=crate::math::NMATH {
+        if commands.text(&format!(":MATH:MATH{n}:FILTER:RESPONSE")).is_none_or(|r| !r.eq_ignore_ascii_case("CUSTOM")) {
+            continue;
+        }
+        let tail = format!("_math{n}.flt");
+        let Some(e) = inner.entries.iter().find(|e| base_name(&e.name).to_ascii_lowercase().ends_with(&tail)) else {
+            continue;
+        };
+        let Ok(bytes) = inner.read(e, TSS_TEXT_BYTES) else { continue };
+        let label = format!("filter M{n}");
+        if let Some(t) = std::str::from_utf8(&bytes).ok().and_then(|text| parse_filter_taps(text, &label).into_iter().next()) {
+            taps.push((n, t));
+        }
     }
     drop(inner);
     drop(set);
@@ -271,7 +294,7 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
             None => left.iq += 1,
         }
     }
-    Ok(Tss { commands, channels, refs, iq, left })
+    Ok(Tss { commands, channels, refs, iq, taps, left })
 }
 
 /// The centre frequency of the spectrum view of channel `{n}`, Hz.
@@ -284,8 +307,7 @@ const IQ_CENTER: &[&str] = &[":CH{n}:SV:CENTERFREQUENCY"];
 fn iq_wave(zip: &Zip, e: &ZipEntry, n: usize, fc: f64, label: Option<String>, budget: &mut usize) -> Option<WaveTrace> {
     let bytes = zip.read(e, MAX_WAVEFORM_BYTES).ok()?;
     let trace = parse_wfm(&bytes).ok()?;
-    let (v, dt) = oos_dsp::iq::iq_to_real(&trace.v, 2.0 * trace.dt, fc, *budget)
-        .ok()?;
+    let (v, dt) = oos_dsp::iq::iq_to_real(&trace.v, 2.0 * trace.dt, fc, *budget).ok()?;
     *budget = budget.checked_sub(v.len())?;
     let label = label.unwrap_or_else(|| format!("ch{n} I/Q {} MHz", fc / 1e6));
     Some(WaveTrace { t0: trace.t0, dt, v, label })
@@ -379,7 +401,133 @@ fn time_base(m: &mut Model, window: Option<(f64, f64)>, t0: f64, dt: f64, n: usi
 }
 
 /// What a load as a session says it took and left, in front of the waveforms it did not read.
-const TSS_MAPPED: &str = "waveforms, scales and time base, without its trigger, buses, measurements and maths";
+const TSS_MAPPED: &str =
+    "waveforms, scales, time base and filters, without its trigger, buses, measurements, other maths";
+
+/// The math channels of an archive that are filters (`:MATH:MATH<n>:TYPE FILTER`) as math channels of OOS (the
+/// designer of `oos_dsp::filter`, docs/tss.md): the number of the channel from 0, its settings, and whether it is
+/// shown. A filter of a kind that is not mapped is counted in `unmapped`; a custom one, whose coefficients are in a
+/// file that is not read, in `custom`: a Butterworth over the same band stands in for it.
+struct Filters {
+    channels: Vec<(usize, math::MathCh, bool)>,
+    custom: usize,
+    unmapped: usize,
+    /// the channel the archive selects in the Math menu, when it is one of those mapped
+    selected: Option<usize>,
+}
+
+fn filter_maths(c: &Commands, tap_slot: &std::collections::HashMap<usize, usize>) -> Filters {
+    use crate::math::{math_scales, FiltResp, MathCh, MathOp, MATH_REF_BASE, NMATH};
+    let mut out = Filters { channels: Vec::new(), custom: 0, unmapped: 0, selected: None };
+    for n in 1..=NMATH {
+        let h = |tail: &str| format!(":MATH:MATH{n}:{tail}");
+        let word = |tail: &str| c.text(&h(tail)).map(|t| t.to_ascii_uppercase()).unwrap_or_default();
+        let num = |tail: &str| c.number(&[h(tail).as_str()], 0);
+        if word("TYPE") != "FILTER" {
+            continue;
+        }
+        let mut filt = math::FiltCfg::default();
+        let (kind, resp) = (word("FILTER:TYPE"), word("FILTER:RESPONSE"));
+        let mut custom = false;
+        let (mut fc, mut bw) = (MathCh::default().fc, MathCh::default().bw);
+        let op = match kind.as_str() {
+            "APASS" => {
+                filt.resp = FiltResp::Delay;
+                filt.delay = num("FILTER:DELAY").unwrap_or(0.0).max(0.0) as f32;
+                MathOp::Lpf
+            }
+            "RC" => {
+                filt.resp = FiltResp::RaisedCosine;
+                filt.symbol = num("FILTER:SDURATION").filter(|s| *s > 0.0).unwrap_or(1e-6) as f32;
+                filt.rolloff = num("FILTER:ROFACTOR").unwrap_or(0.35).clamp(0.0, 1.0) as f32;
+                MathOp::Lpf
+            }
+            "LPASS" | "HPASS" | "BPASS" | "BSTOP" => {
+                filt.resp = match resp.as_str() {
+                    "BUTTERWORTH" => FiltResp::Butterworth,
+                    "BESSEL" => FiltResp::Bessel,
+                    "GAUSSIAN" => FiltResp::Gaussian,
+                    // a custom filter has its taps in a file: they are a reference, Source B
+                    "CUSTOM" if tap_slot.contains_key(&n) => FiltResp::Custom,
+                    _ => {
+                        custom = true;
+                        FiltResp::Butterworth
+                    }
+                };
+                if filt.resp.has_order() && !custom {
+                    filt.order = num("FILTER:ORDER").map_or(4, |o| (o as u32).clamp(1, 16));
+                }
+                if matches!(kind.as_str(), "BPASS" | "BSTOP") {
+                    match (num("FILTER:LCFREQ"), num("FILTER:HCFREQ")) {
+                        (Some(lo), Some(hi)) if lo > 0.0 && hi > lo => {
+                            (fc, bw) = (((lo + hi) / 2.0) as f32, (hi - lo) as f32)
+                        }
+                        _ => {
+                            out.unmapped += 1;
+                            continue;
+                        }
+                    }
+                } else {
+                    match num("FILTER:CFREQ") {
+                        Some(f) if f > 0.0 => fc = f as f32,
+                        _ => {
+                            out.unmapped += 1;
+                            continue;
+                        }
+                    }
+                }
+                match kind.as_str() {
+                    "HPASS" => MathOp::Hpf,
+                    "BPASS" => MathOp::Bpf,
+                    "BSTOP" => MathOp::Bsf,
+                    _ => MathOp::Lpf,
+                }
+            }
+            _ => {
+                out.unmapped += 1;
+                continue;
+            }
+        };
+        // the source of the filter: a channel, a reference or an earlier math channel
+        let digits = |prefix: &str, w: &str| w.strip_prefix(prefix).and_then(|d| d.parse::<usize>().ok());
+        let source = word("FILTER:SOURCE");
+        let a = match (digits("CH", &source), digits("REF", &source), digits("MATH", &source)) {
+            (Some(k), ..) if (1..=NCH).contains(&k) => k - 1,
+            (_, Some(k), _) if (1..=NREF).contains(&k) => MATH_REF_BASE + k - 1,
+            (.., Some(k)) if (1..n).contains(&k) => NCH + k - 1,
+            _ => 0,
+        };
+        let view = |tail: &str| c.number(&[format!(":DISPLAY:WAVEVIEW1:MATH:MATH{n}:{tail}").as_str()], 0);
+        let scales = math_scales();
+        let scale = view("VERTICAL:SCALE").filter(|s| *s > 0.0).map_or(MathCh::default().scale, |s| {
+            scales.iter().position(|&x| x >= s * 0.999).unwrap_or(scales.len() - 1)
+        });
+        let offset = view("VERTICAL:POSITION").unwrap_or(0.0) as f32;
+        let shown = c.on(&[format!(":DISPLAY:WAVEVIEW1:MATH:MATH{n}:STATE").as_str()], 0) != Some(false);
+        out.custom += custom as usize;
+        let b = tap_slot.get(&n).filter(|_| filt.resp == FiltResp::Custom).map_or(MathCh::default().b, |slot| MATH_REF_BASE + slot - 1);
+        out.channels.push((n - 1, MathCh { op, a, b, scale, fc, bw, offset, filt, ..MathCh::default() }, shown));
+    }
+    out.selected = c
+        .text(":DISPLAY:SELECT:MATH")
+        .and_then(|t| t.to_ascii_uppercase().strip_prefix("MATH").and_then(|d| d.parse::<usize>().ok()))
+        .and_then(|k| k.checked_sub(1))
+        .filter(|k| out.channels.iter().any(|(c, ..)| c == k));
+    out
+}
+
+/// What the filters left out, in words, to follow the note of a load.
+fn filters_note(f: &Filters) -> String {
+    let mut parts = Vec::new();
+    if f.custom > 0 {
+        let s = if f.custom == 1 { "" } else { "s" };
+        parts.push(format!("{} custom filter file{s} not read (a Butterworth over the same band stands in)", f.custom));
+    }
+    if f.unmapped > 0 {
+        parts.push(format!("{} filter{} of a kind not mapped", f.unmapped, if f.unmapped == 1 { "" } else { "s" }));
+    }
+    parts.join("; ")
+}
 
 /// A session archive as a session of OOS (`Session`, what `parse_session` gives of OOS's own file), so that the
 /// load of a session applies it down its one path. The records of the channels 1 to 4 become the record, at their
@@ -392,10 +540,17 @@ pub fn parse_tss<R: Samples>(bytes: &[u8], slots: usize) -> Result<Session<R>, S
     if bytes.len() > MAX_WAVEFORM_BYTES {
         return Err("the session exceeds the 128 MiB import limit".into());
     }
-    let Tss { commands, channels, mut refs, iq, mut left } = tss_parts(bytes)?;
+    let Tss { commands, channels, mut refs, iq, taps, mut left } = tss_parts(bytes)?;
     // the I/Q records are references too: the slots after those the archive names
     let named = refs.iter().map(|r| r.0).max().unwrap_or(0);
     refs.extend(iq.into_iter().enumerate().map(|(k, (_, trace))| (named + 1 + k, trace)));
+    // and the taps of custom filters after them: the reference of a math channel's taps
+    let mut tap_slot = std::collections::HashMap::new();
+    for (n, trace) in taps {
+        let slot = refs.iter().map(|r| r.0).max().unwrap_or(0) + 1;
+        tap_slot.insert(n, slot);
+        refs.push((slot, trace));
+    }
     let mut m = Model::default();
     m.ch.iter_mut().for_each(|ch| ch.on = false);
     let mut record: Option<(f64, f64, usize, [Vec<f32>; NCH])> = None;
@@ -428,11 +583,25 @@ pub fn parse_tss<R: Samples>(bytes: &[u8], slots: usize) -> Result<Session<R>, S
             continue;
         }
         let (vdiv, added) = vertical(commands.number(REF_SCALE, n), commands.number(REF_POSITION, n), None, &trace.v);
-        let (on, vdiv, offset) = (Some(commands.on(REF_SHOWN, n) != Some(false)), Some(vdiv as f32), Some(added as f32));
+        let (on, vdiv, offset) =
+            (Some(commands.on(REF_SHOWN, n) != Some(false)), Some(vdiv as f32), Some(added as f32));
         looks[n - 1] = Some(RefLook { on, vdiv, offset, color: None, label: Some(trace.label) });
         held.push(SessionRef { slot: n - 1, src: 0, t0: trace.t0, dt: trace.dt, v: trace.v });
     }
     let words = left.words();
+    // the filters of the math channels; the one the archive selects, else the first, is the one the Math menu shows
+    let filters = filter_maths(&commands, &tap_slot);
+    for &(k, c, shown) in &filters.channels {
+        m.maths[k] = c;
+        m.math_hidden[k] = !shown;
+    }
+    if let Some(sel) = filters.selected.or(filters.channels.first().map(|c| c.0)) {
+        let c = m.maths[sel];
+        m.math_sel = sel;
+        (m.math, m.math_a, m.math_b, m.math_scale) = (c.op, c.a, c.b, c.scale);
+        (m.math_fc, m.math_bw, m.math_offset, m.math_lin, m.fft_win, m.math_filt) =
+            (c.fc, c.bw, c.offset, c.lin, c.win, c.filt);
+    }
     // the time base: of the record; without one of the first reference, which then fills the screen
     let offline_ref = match (&record, held.first()) {
         (Some((t0, dt, n, _)), _) => {
@@ -454,6 +623,10 @@ pub fn parse_tss<R: Samples>(bytes: &[u8], slots: usize) -> Result<Session<R>, S
         record: record.map(|(t0, dt, _, ch)| R::from_file(t0, dt, ch)),
         refs: held,
         offline_ref,
-        note: if words.is_empty() { TSS_MAPPED.into() } else { format!("{TSS_MAPPED}; {words}") },
+        note: [TSS_MAPPED.to_string(), words, filters_note(&filters)]
+            .into_iter()
+            .filter(|p| !p.is_empty())
+            .collect::<Vec<_>>()
+            .join("; "),
     })
 }

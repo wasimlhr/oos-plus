@@ -129,6 +129,7 @@ pub(super) fn map() -> Vec<Row> {
         // ---- display
         r(":DISPlay:GRADing:TIME", Item::Persist, "Display"),
         r(":DISPlay:TYPE", Item::Dots, "Display"),
+        r(":DISPlay:HDMI:LINes", Item::HdmiLines, "Display"),
         r(":DISPlay:WBRightness", Item::Intensity, "Display"),
         r(":DISPlay:GBRightness", Item::GridBright, "Display"),
         r(":DISPlay:GRID", Item::GridStyle, "Display"),
@@ -173,6 +174,12 @@ pub(super) fn map() -> Vec<Row> {
         r(":MATH<n>:SCALe", Item::MathScale, "Math"),
         r(":MATH<n>:OFFSet", Item::MathOffset, "Math"),
         r(":MATH<n>:FFT:WINDow", Item::FftWin, "Math"),
+        r(":MATH<n>:FILTer:RESPonse", Item::MathFiltResp, "Math"),
+        r(":MATH<n>:FILTer:ORDer", Item::MathFiltOrder, "Math"),
+        r(":MATH<n>:FILTer:PRIPple", Item::MathFiltRipple, "Math"),
+        r(":MATH<n>:FILTer:SDURation", Item::MathFiltSymbol, "Math"),
+        r(":MATH<n>:FILTer:ROFactor", Item::MathFiltRolloff, "Math"),
+        r(":MATH<n>:FILTer:DELay", Item::MathFiltDelay, "Math"),
         r(":MATH<n>:LINear:A", Item::MathLinA, "Math"),
         r(":MATH<n>:LINear:B", Item::MathLinB, "Math"),
         // ---- references

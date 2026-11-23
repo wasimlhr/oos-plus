@@ -87,6 +87,31 @@ the program.
 | `:HORIZONTAL:POSITION` | where the trigger lies on the screen, in percent from the left | seen: with it the middle of the screen is the middle of the record in 37 of 40 |
 | `:HORIZONTAL:DELAY:MODE`, `:HORIZONTAL:DELAY:TIME` | with the mode on, the middle of the screen is that time after the trigger | assumed: the mode is 0 in 99 files and missing in 10 |
 
+The math channels that are filters (`:MATH:MATH<n>:TYPE FILTER`, `<n>` the number of the math channel) are read from
+the lines below. One archive of filters was looked at (six filters, one of each kind it offers); the names of the
+kinds and responses not in it are assumed.
+
+| Line | Used as | How it is known |
+|---|---|---|
+| `:MATH:MATH<n>:FILTER:TYPE` | `LPASS`, `HPASS`, `BPASS`, `BSTOP`: low-pass, high-pass, band-pass, band-stop; `APASS`: a delay; `RC`: a raised cosine | seen: `LPASS`, `APASS`, `RC`, `BPASS`; assumed: `HPASS`, `BSTOP` |
+| `:MATH:MATH<n>:FILTER:RESPONSE` | `BUTTERWORTH`, `BESSEL`, `GAUSSIAN` the response of the designer; `CUSTOM` has its coefficients in a file | seen |
+| `:MATH:MATH<n>:FILTER:ORDER` | the order of Butterworth and Bessel (1 to 16); that of a custom filter is its number of taps | seen: 5 for both in the archive |
+| `:MATH:MATH<n>:FILTER:CFREQ` | the cut-off of a low-pass or high-pass | seen; whether it is the -3 dB point of a Gaussian is assumed |
+| `:MATH:MATH<n>:FILTER:LCFREQ`, `...:HCFREQ` | the band edges of a band filter | seen |
+| `:MATH:MATH<n>:FILTER:DELAY` | the delay of `APASS` | seen: 1.6 ms |
+| `:MATH:MATH<n>:FILTER:SDURATION`, `...:ROFACTOR` | the symbol time and roll-off of `RC` | seen: 5 us and 0.3 |
+| `:MATH:MATH<n>:FILTER:SOURCE` | what is filtered: `CH<n>`, `REF<n>`, `MATH<n>` | seen: `REF1` in all six |
+| `:DISPLAY:WAVEVIEW1:MATH:MATH<n>:VERTICAL:SCALE`, `...:POSITION`, `...:STATE` | volts a division, position in divisions, shown or not | seen; the position is taken as the offset of the lane in divisions (assumed) |
+| `:DISPLAY:SELECT:MATH` | the math channel the Math menu shows | seen |
+
+The coefficient file of a custom filter (`filterCoeff<k>_math<n>.flt` beside the settings: comment lines of parameters
+behind `//` and a line `<sample rate>;<tap>,<tap>,...`, seen in two of the six filters of the archive, a lowpass with
+3001 taps and a custom band-pass with 5087) is read as the taps of the filter: they become a reference, which is
+Source B of the math channel, whose response is Custom. The taps are read at their own step and the filter keeps its
+gain at the step of the record. A custom filter without its file becomes a Butterworth over the same band, and the
+message of the load says so. The other keys of a filter (the saved response, the attenuation, the standard deviation) are not
+used.
+
 A line can be missing (two channel files have no vertical lines: the digital ones; one file has no horizontal
 scale). OOS then takes the value from the waveform itself and invents none.
 
@@ -119,10 +144,13 @@ the whole bench, so the setup and every reference slot are replaced.
   shown. A session without a channel record opens in the offline view with its first reference filling the
   screen, on the time base of that reference: the horizontal settings are those of the acquisition, and fit the
   references in only 20 of the 65 such files.
+- The filters of the math channels become the same math channels of OOS (Response, Order, cut-off or band, source,
+  scale, whether shown), as the lines above say; the one the archive selects is the one the Math menu shows.
 - Everything else is the default setup of OOS. **Not read: the trigger, the buses and their decoders, the
-  measurements, maths, cursors, zoom, the unit and the invert switch of a channel, the logic channels, spectrum
-  views and everything of the analysis options.** The message of the load says so in one line: "Loaded name.tss:
-  waveforms, scales and time base, without its trigger, buses, measurements and maths".
+  measurements, maths other than filters, cursors, zoom, the unit and the invert switch of a channel, the logic
+  channels, spectrum views and everything of the analysis options.** The message of the load says so in one line:
+  "Loaded name.tss: waveforms, scales, time base and filters, without its trigger, buses,
+  measurements, other maths".
 - Save session writes OOS's own file. There is no way back into a `.tss`.
 
 **As waveforms.** Where a waveform file is taken and no session is meant, a `.tss` gives its analog waveforms to

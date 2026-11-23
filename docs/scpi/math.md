@@ -23,6 +23,12 @@ Part of the [SCPI reference](README.md).
 | `:MATH<n>:FILTer:TYPE` | Set / Query | `LPASs`, `HPASs`, `BPASs`, `BSTop`; the query answers `LPAS`, `HPAS`, `BPAS`, `BST`. | `LPAS` | Math > Filter frequency / bandwidth | Rigol-style (command family of the DHO guide) |
 | `:MATH<n>:FILTer:W1` | Set / Query | Corner frequency in Hz (low corner of a band filter). -221 when the operator is not a filter. | `9.9E37` | Math > Filter frequency / bandwidth | Rigol-style (command family of the DHO guide) |
 | `:MATH<n>:FILTer:W2` | Set / Query | High corner in Hz of a band-pass or band-stop filter, else -221. | `9.9E37` | Math > Filter frequency / bandwidth | Rigol-style (command family of the DHO guide) |
+| `:MATH<n>:FILTer:RESPonse` | Set / Query | `SIMPle`, `BUTTerworth`, `CHEBychev`, `BESSel`, `GAUSsian`, `RCOSine`, `RRCosine`, `DELay`, `CUSTom`; the query answers `SIMP`, `BUTT`, `CHEB`, `BESS`, `GAUS`, `RCOS`, `RRC`, `DEL`, `CUST`. SIMPle is the plain filter of the operator; CUSTom takes the taps of a filter file loaded as a reference, chosen with `:SOURce2`. | `SIMP` | Math > Response | OOS extension |
+| `:MATH<n>:FILTer:ORDer` | Set / Query | Order 1 to 16 of a Butterworth, Chebyshev or Bessel filter (of each pass of a band filter). | `4` | Math > Order | OOS extension |
+| `:MATH<n>:FILTer:PRIPple` | Set / Query | Pass band ripple in dB of a Chebyshev filter, 0.01 to 6. | `1.000000E+00` | Math > Ripple | OOS extension |
+| `:MATH<n>:FILTer:SDURation` | Set / Query | Symbol duration in s of a raised cosine or root raised cosine filter. | `1.000000E-06` | Math > Symbol time | OOS extension |
+| `:MATH<n>:FILTer:ROFactor` | Set / Query | Roll-off factor 0 to 1 of a raised cosine or root raised cosine filter. | `3.500000E-01` | Math > Roll-off | OOS extension |
+| `:MATH<n>:FILTer:DELay` | Set / Query | Delay in s of the DELay response (an all-pass). | `1.000000E-06` | Math > Delay | OOS extension |
 | `:MATH<n>:AUTO` | Action | Fit scale and offset to the result | - | Math > Auto scale | OOS extension |
 | `:MATH<n>:LINear:A` | Set / Query | A of the linear `A x + B`. | `1.000000E+00` | Math > A | OOS extension |
 | `:MATH<n>:LINear:B` | Set / Query | B of the linear `A x + B`. | `0.000000E+00` | Math > B | OOS extension |

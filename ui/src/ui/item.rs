@@ -103,6 +103,19 @@ pub(super) enum Item {
     /// Studio: turns the selected math channel off (the first row of its menu)
     MathOff,
     MathBw,
+    /// the designer's response, order, ripple, symbol time, roll-off and delay of a filter
+    MathFiltResp,
+    MathFiltOrder,
+    MathFiltRipple,
+    MathFiltSymbol,
+    MathFiltRolloff,
+    MathFiltDelay,
+    /// a ready filter for a common clean-up (`math_preset`)
+    MathFiltPreset,
+    /// a Butterworth low-pass of the active channel, shown with its gain plot, from a math channel that is off
+    MathAddFilter,
+    /// the result of the math channel as a reference, so it can be measured, kept and compared
+    MathToRef,
     Open(MenuId),
     ChOn(usize),
     ChCoupling(usize),
@@ -278,6 +291,7 @@ pub(super) enum Item {
     FeatDec(usize),
     /// Display > Monitor view (ui/monitor.rs)
     HdmiView,
+    HdmiLines,
     Hdmi,
     TextSize,
     ZInput,

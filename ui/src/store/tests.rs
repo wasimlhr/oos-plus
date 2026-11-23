@@ -246,8 +246,17 @@ pub(super) fn custom() -> Model {
         offset: -1.5,
         win: Window::Blackman,
         lin: (1.0, 0.0),
+        filt: crate::math::FiltCfg {
+            resp: crate::math::FiltResp::Chebyshev,
+            order: 6,
+            ripple: 0.5,
+            symbol: 2.5e-6,
+            rolloff: 0.2,
+            delay: 3e-6,
+        },
     };
     m.math_bw = 777.0;
+    m.math_filt.resp = crate::math::FiltResp::Bessel;
     m.zones[1] =
         crate::zone::Zone { on: true, src: 2, inside: false, pts: vec![(-1e-4, 0.5), (2.5e-5, 1.25), (3e-5, -0.75)] };
     m.dots = true;

@@ -442,7 +442,7 @@ impl Ui {
         Self::math_scale_text_of(&self.m.math_ch(self.m.math_sel))
     }
 
-    fn math_scale_text_of(c: &MathCh) -> String {
+    pub(super) fn math_scale_text_of(c: &MathCh) -> String {
         if c.op == MathOp::Fft {
             format!("{} dB", FFT_DB[c.scale.min(FFT_DB.len() - 1)])
         } else {
@@ -490,6 +490,76 @@ impl Ui {
         self.relayout();
     }
 
+    /// The result of the selected math channel into the next free reference slot (the last one when all are used), with
+    /// its time step and scale: a snapshot that can be measured, saved and compared like any reference.
+    pub(super) fn math_to_ref(&mut self) {
+        let k = self.m.math_sel;
+        let Some(sig) = self.math_record(k).ok().flatten().filter(|s| s.v.len() >= 2) else {
+            self.toast("The math channel has no result to save");
+            return;
+        };
+        let c = self.m.math_ch(k);
+        let slot = self.refs.iter().position(|r| r.is_none()).unwrap_or(NREF - 1);
+        let sc = math_scales();
+        let w = RefWave {
+            src: if c.a < NCH { c.a } else { 0 },
+            color: 0,
+            label: format!("M{}", k + 1),
+            t0: sig.t0,
+            dt: sig.dt,
+            v: sig.v.clone(),
+            vpd: sc[c.scale.min(sc.len() - 1)] as f32,
+            offset: 0.0,
+            on: true,
+        };
+        self.toast(&format!("M{} saved to R{}", k + 1, slot + 1));
+        self.ref_put(slot, w);
+    }
+
+    /// A ready filter on the selected math channel: its operation, response, order and a cut-off that goes with the
+    /// time base or the sample rate, then the scale fitted to what comes out.
+    pub(super) fn math_apply_preset(&mut self, i: usize) {
+        use super::mathwave::Cut;
+        let (_, op, resp, order, cut) = super::mathwave::FILT_PRESETS[i];
+        self.math.family = MathFamily::Filter;
+        self.m.math = op;
+        self.m.math_filt.resp = resp;
+        self.m.math_filt.order = order;
+        self.m.math_fc = match cut {
+            Cut::PerDiv(n) => n / self.m.time_per_div() as f64,
+            Cut::OfRate(f) => self.m.srate_depth().0 * f,
+        } as f32;
+        self.m.math_offset = 0.0;
+        self.math.preset = Some(i);
+        self.math_autoscale();
+        self.settings_changed();
+    }
+
+    /// The Add filter row, and Add > Filter when no filter is on: a Butterworth low-pass of the active channel with its cut-off at
+    /// two periods a division and its gain plot, so that a filter is one tap away.
+    pub(super) fn math_add_filter(&mut self) {
+        // a math channel that is free (the selected one when none is)
+        if let Some(free) = (0..NMATH).find(|&k| self.m.math_ch(k).op == MathOp::Off) {
+            if free != self.m.math_sel {
+                self.m.math_select(free);
+            }
+        }
+        let k = self.m.math_sel;
+        self.math.family = MathFamily::Filter;
+        self.m.math = MathOp::Lpf;
+        // the active channel when it is on, else the first channel that is
+        let active = self.m.active.min(NCH - 1);
+        self.m.math_a = if self.m.ch[active].on { active } else { (0..NCH).find(|&c| self.m.ch[c].on).unwrap_or(active) };
+        self.m.math_filt.resp = crate::math::FiltResp::Butterworth;
+        self.m.math_fc = (2.0 / self.m.time_per_div() as f64) as f32;
+        self.m.math_offset = 0.0;
+        self.m.pane = tables::PANE_FILTER;
+        self.math_set_shown(k, true);
+        self.math_autoscale();
+        self.settings_changed();
+        self.relayout();
+    }
+
     /// Picks the math scale so that the waveform spans about 6 divisions.
     pub(crate) fn math_autoscale(&mut self) {
         self.math_fit(self.m.math_sel);
@@ -507,7 +577,9 @@ impl Ui {
                 w.iter().filter(|x| x.is_finite()).fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
             let sc = math_scales();
             if mx < mn {
-                c.scale = sc.iter().position(|&x| x >= 1.0).unwrap_or(0);
+                // no result yet (the worker is busy with the last record): fit when it arrives, not to a guess now
+                self.math.state.borrow_mut().fit_pending[k] = true;
+                return;
             } else {
                 let floor = if c.op.unit() == "V" { self.math_source_vpd(k) as f64 / 100.0 } else { 0.0 };
                 let want = ((mx - mn) as f64 / 6.0).max(1e-9).max(floor);

@@ -204,6 +204,10 @@ impl Ui {
         } else {
             (&self.ph, &self.grade.vmax, self.grade.vmax_cg)
         };
+        // the monitor of the HDMI Layout: the live channels as lines at its resolution (`draw_live_lines`)
+        if self.plot.view_pass && self.m.hdmi_lines && area == self.plot.area {
+            return self.draw_live_lines(l.over(), area, all_sources);
+        }
         if l.over.is_none() {
             return self.draw_traces(l.under, area, ph, vmax, vmax_cg, all_sources);
         }

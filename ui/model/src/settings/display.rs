@@ -87,7 +87,7 @@ pub const VIEW: [Setting; 5] = [
 ];
 
 /// Written after `zdelay`.
-pub const DRAW: [Setting; 4] = [
+pub const DRAW: [Setting; 5] = [
     Setting {
         key: "color_grade",
         scpi: Scpi::Cmd("COLor"),
@@ -99,6 +99,18 @@ pub const DRAW: [Setting; 4] = [
         step: None,
         get: |m, _| Val::Bool(m.color_grade),
         put: |m, _, v| m.color_grade = v.index() != 0,
+    },
+    Setting {
+        key: "hdmi_lines",
+        scpi: Scpi::Cmd("HDMI:LINes"),
+        ty: Ty::Bool,
+        label: "HDMI lines",
+        #[cfg(test)]
+        doc: "The live channels on the monitor of the HDMI Layout are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges).",
+        accept: None,
+        step: None,
+        get: |m, _| Val::Bool(m.hdmi_lines),
+        put: |m, _, v| m.hdmi_lines = v.index() != 0,
     },
     Setting {
         key: "dots",

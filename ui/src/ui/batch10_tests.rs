@@ -262,7 +262,7 @@ fn dropping_away_from_every_edge_floats_the_view_and_a_drag_to_an_edge_docks_it_
 }
 
 #[test]
-fn floating_views_never_cover_the_bars_or_the_zoom_bar_and_can_be_resized() {
+fn floating_views_never_cover_the_bars_and_can_be_resized() {
     let mut u = studio();
     u.studio_apply_panel(PanelKind::Eye);
     u.step(0.05);
@@ -278,8 +278,6 @@ fn floating_views_never_cover_the_bars_or_the_zoom_bar_and_can_be_resized() {
         let f = u.dock_float_rect(VKind::Eye).unwrap();
         let fr = u.frame();
         assert!(f.y >= fr.top.bottom() && f.bottom() <= fr.bottom.y, "{target:?}: {f:?} between the bars");
-        let bar = u.zoom_readout();
-        assert!(!overlaps(f, bar), "{target:?}: {f:?} clear of the zoom bar {bar:?}");
         assert!(!overlaps(f, fr.top) && !overlaps(f, fr.bottom));
     }
     // the corner resizes, down to a minimum

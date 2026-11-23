@@ -94,6 +94,15 @@ impl Ui {
                 }
             }
             cv.hline(wr.x, wr.x + wr.w, wr.y, DIM);
+            // the axes: frequency is that of the trace above, the rows are the records one after the other with the
+            // newest on top, the colour is the level of the trace (its colour scale ends at the top line)
+            let margin = (g.x - a.x - 4).max(0);
+            if margin >= f.s.width("older") {
+                cv.text(&f.s, a.x + 4, wr.y + 13, "now", DIM);
+                if wr.h >= 44 {
+                    cv.text(&f.s, a.x + 4, wr.y + wr.h - 4, "older", DIM);
+                }
+            }
         }
     }
 

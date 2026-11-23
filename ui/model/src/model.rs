@@ -445,6 +445,8 @@ pub struct Model {
     pub fft_win: Window,
     /// bandwidth of the math band-pass/band-stop (Hz)
     pub math_bw: f32,
+    /// the designer's settings of the selected math channel
+    pub math_filt: crate::math::FiltCfg,
     /// the math channel the fields above edit (0..NMATH); the others are kept in `maths`
     pub math_sel: usize,
     pub maths: [crate::math::MathCh; crate::math::NMATH],
@@ -526,6 +528,9 @@ pub struct Model {
     pub zdelay: f32,   // centre of the zoom window relative to the trigger
     /// colour-graded persistence: trace pixels coloured by hit density (temperature map)
     pub color_grade: bool,
+    /// the live channels on the monitor of the HDMI Layout are lines at the monitor's resolution, not the phosphor of
+    /// the panel stretched to it
+    pub hdmi_lines: bool,
     /// draw the samples as dots instead of connected lines (pseudo dot mode)
     pub dots: bool,
     /// Display > Layout: the stock OOS bars (Default), the compact OOS-plus bars (Minimal) or Studio (lanes, pinned

@@ -101,6 +101,8 @@ impl StudioPanel {
 
 #[derive(Default)]
 pub(super) struct Studio {
+    /// the time the measurement chip slid out (a tap on its arrow); it slides back by itself after `MEAS_OUT_S`
+    pub meas_out: Option<f64>,
     /// the layout was just chosen: the lanes are stacked at the next frame (`studio_sync`)
     pub enter: bool,
     /// the measurements shown as badges; None until one is pinned or unpinned: the first three
@@ -323,10 +325,10 @@ pub(super) fn icon_menu(cv: &mut Canvas, cx: i32, cy: i32, c: Rgb) {
     }
 }
 
-/// A chip: the rounded body with a 1 px border.
+/// A chip: the rounded body with a 1 px border; in the accent (the selected one) the border is 3 px.
 pub(super) fn chip(cv: &mut Canvas, r: Rect, fill: Rgb, border: Rgb) {
     cv.round(r, 6, border, 255);
-    cv.round(r.inset(1), 5, fill, 255);
+    cv.round(r.inset(if border == ACCENT { 3 } else { 1 }), 5, fill, 255);
 }
 
 impl Ui {
@@ -864,7 +866,7 @@ impl Ui {
             let col = MATH_COLORS[k % MATH_COLORS.len()];
             chip(cv, r, BTN, if self.m.math_sel == k && self.selected_workspace_source().is_none() { ACCENT } else { col });
             cv.circle(r.x + 5, r.y + 5, 3, GREEN);
-            self.studio_pill_text(cv, r, &format!("M{}", k + 1), self.m.math_ch(k).op.name(), col);
+            self.studio_math_pill(cv, r, k, col);
         }
         // a decoder: its number in the colour of its source, its protocol, and its lines in the order of their roles
         for k in 0..DECODERS {
@@ -1036,16 +1038,10 @@ impl Ui {
         self.refs.get(i).and_then(Option::as_ref).map(|r| r.label.clone()).unwrap_or_default()
     }
 
-    /// The text of a ref or math pill: its name, and under it a small line (the signal, the operation) when it fits.
-    /// A narrow pill drops that line, and a narrower one the letter of its name ("R10" becomes "10").
-    fn studio_pill_text(&self, cv: &mut Canvas, r: Rect, name: &str, detail: &str, col: Rgb) {
-        self.studio_source_pill(cv, r, name, detail, "", col);
-    }
-
     /// A ref or math pill drawn as a channel pill is: the filled badge with its name, beside it what it shows (the
     /// scale, the operation) and under that a small line (the signal), then the chevron. A narrow pill keeps the
     /// badge alone, and a narrower one drops the letter of its name ("R10" becomes "10").
-    fn studio_source_pill(&self, cv: &mut Canvas, r: Rect, name: &str, main: &str, detail: &str, col: Rgb) {
+    pub(super) fn studio_source_pill(&self, cv: &mut Canvas, r: Rect, name: &str, main: &str, detail: &str, col: Rgb) {
         let f = self.fonts();
         cv.set_clip(r.inset(1));
         if r.w < 70 {
@@ -1627,7 +1623,8 @@ impl Ui {
         if self.m.layout != Layout::Studio || self.studio.view != StudioView::Waveform || self.studio_badges_visible() || self.full_on()
             || self.measurement_count() == 0 { return None; }
         let w = self.dock_wave_rect();
-        Some(Rect::new(w.right() - 8 - 102, w.bottom() - 26 - 34, 102, 34))
+        let wide = 28 + (74.0 * self.studio_meas_slide()) as i32;
+        Some(Rect::new(w.right() - 8 - wide, w.bottom() - 26 - 34, wide, 34))
     }
 
     /// Height the badge row takes from the lanes.
@@ -1802,12 +1799,7 @@ impl Ui {
     }
 
     pub(super) fn draw_studio_badges(&self, cv: &mut Canvas) {
-        if let Some(r) = self.studio_meas_chip() {
-            let f = self.fonts();
-            chip(cv, r, BTN, BTN_BORDER);
-            cv.text_in(&f.sb, Rect::new(r.x + 8, r.y, r.w - 22, r.h), 0, &format!("Meas \u{b7} {}", self.measurement_count()), TEXT);
-            chevron(cv, r.right() - 12, r.y + r.h / 2, 1, TEXT);
-        }
+        self.draw_studio_meas_chip(cv);
         if !self.studio_badges_visible() { return; }
         let f = self.fonts();
         let row = self.studio_row();
@@ -1921,8 +1913,7 @@ impl Ui {
 
     /// A tap in the badge row: the eye hides it, a badge opens its popup.
     fn studio_badge_tap(&mut self, x: i32, y: i32) -> bool {
-        if self.studio_meas_chip().is_some_and(|r| Self::hit40(r).contains(x, y)) {
-            self.studio_set_view(StudioView::Docked);
+        if self.studio_meas_chip_tap(x, y) {
             return true;
         }
         if !self.studio_badges_visible() || !self.studio_row().contains(x, y) { return false; }
