@@ -3642,10 +3642,8 @@ setup delay default -> 0
 setup density "" -> Scope; error: "line 2: density: unknown value: "
 setup density "-1" -> Scope; error: line 2: density: unknown value: -1
 setup density "1e9" -> Scope; error: line 2: density: unknown value: 1e9
-setup density "Four" -> Four
 setup density "Full" -> Full
 setup density "Scope" -> Scope
-setup density "Split" -> Split
 setup density "scope" -> Scope; error: line 2: density: unknown value: scope
 setup density "x" -> Scope; error: line 2: density: unknown value: x
 setup density default -> Scope
@@ -5082,13 +5080,13 @@ setup nth_n "7" -> 7
 setup nth_n "x" -> 1; error: line 2: nth_n: not an integer: x
 setup nth_n default -> 1
 setup pane "" -> 0; error: "line 2: pane: not an index: "
-setup pane "+1" -> 1; also: density = Split, split_pane = 1
+setup pane "+1" -> 1; also: split_pane = 1
 setup pane "-1" -> 0; error: line 2: pane: not an index: -1
 setup pane "0" -> 0
-setup pane "1" -> 1; also: density = Split, split_pane = 1
+setup pane "1" -> 1; also: split_pane = 1
 setup pane "1e9" -> 0; error: line 2: pane: not an index: 1e9
-setup pane "5" -> 5; also: density = Split, split_pane = 5
-setup pane "6" -> 6; also: density = Split, split_pane = 6
+setup pane "5" -> 5; also: split_pane = 5
+setup pane "6" -> 6; also: split_pane = 6
 setup pane "x" -> 0; error: line 2: pane: not an index: x
 setup pane default -> 0
 setup pat "" -> H X X H; error: line 2: pat: 0 values, want 4
@@ -6152,10 +6150,8 @@ setup win_mode default -> Enter
 setup windows "" -> One; error: "line 2: windows: unknown value: "
 setup windows "-1" -> One; error: line 2: windows: unknown value: -1
 setup windows "1e9" -> One; error: line 2: windows: unknown value: 1e9
-setup windows "Cols" -> Rows; also: density = Split
 setup windows "One" -> One
-setup windows "Quad" -> Quad; also: density = Four
-setup windows "Rows" -> Rows; also: density = Split
+setup windows "Quad" -> Quad
 setup windows "one" -> One; error: line 2: windows: unknown value: one
 setup windows "x" -> One; error: line 2: windows: unknown value: x
 setup windows default -> One

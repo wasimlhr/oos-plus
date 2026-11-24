@@ -432,9 +432,10 @@ impl Scpi {
                 }
                 return Some(None);
             }
-            // no self test and no options to report: the answers IEEE 488.2 gives for "passed" and "none"
+            // no self test: the answer IEEE 488.2 gives for "passed"; the options are the unit's (`Platform::options`),
+            // 0 where it has none
             "*TST" if query => return Some(t("0")),
-            "*OPT" if query => return Some(t("0")),
+            "*OPT" if query => return Some(t(&options_text())),
             // every command is finished when the next one is read; an armed Single is waited for with *OPC?
             "*WAI" if !query => return Some(None),
             "*TRG" if !query => {
@@ -1591,4 +1592,10 @@ mod vernier_tests {
         let b = crate::store::parse_setup(&crate::store::setup_text(&ui.m)).unwrap();
         assert_eq!(b.ch[0].volts_per_div(), ui.m.ch[0].volts_per_div());
     }
+}
+
+/// What `*OPT?` and `:SYSTem:OPTion:INSTalled?` answer: the options of this unit separated by commas, `0` for none.
+pub(crate) fn options_text() -> String {
+    let o = oos_hal::model::platform().options();
+    if o.is_empty() { "0".to_string() } else { o.join(",") }
 }

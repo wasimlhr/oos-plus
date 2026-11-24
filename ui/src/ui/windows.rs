@@ -1,17 +1,37 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! View densities on the Windows row: Scope, Full, Split and Four, shared by the 1024×600 panel and a scaled window
-//! of it. Split is a number pane under the plot, or two stacked traces. Four is the existing four-up. The expand
-//! button moves between Scope and Full. The external display's existing choice sits on this row: mirror copies the
-//! panel, waveform puts the plot on the display and leaves the panel for controls. The same four densities apply to
-//! that plot. The layout itself is in `Ui::split_wins`, the drawing goes window by window in `Ui::render`.
+//! The Windows page and the three arrangements of the traces, the same in every layout.
 //!
-//! That is the page of the Default layout, as upstream has it. Minimal and Studio have the page of oos-next instead:
-//! Layout (One, Side by side, Stacked, Four), Full screen and Strip, which choose the same density underneath; Split
-//! there can also be two traces side by side.
+//! Traces: **Overlay** puts every source on one graticule, **Stacked** gives each its lane in one plot, **Windows**
+//! splits the plot into four separate waveform views, numbered 1 to 4, each source standing in the window its number
+//! row names. The page lists the numbers only while Windows is the arrangement. Full screen and Strip are the page's
+//! other display rows; Lower is the pane under the plot (Results, Trend, Events, Spectrum, ...), which the
+//! arrangement does not touch. Every other plot and table is a view that takes the whole plot (the view button of the
+//! plot, `AView`), whichever arrangement is chosen. The external display's choice (mirror, waveform, layout) is on
+//! Display > Screen; the density of its plot is Full screen here.
 
 use super::*;
+
+/// How the traces share the plot (the Traces row of Display and of the Windows page, the plot's menu).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum Arrangement {
+    Overlay,
+    Stacked,
+    Windows,
+}
+
+impl Arrangement {
+    pub(super) const ALL: [Arrangement; 3] = [Arrangement::Overlay, Arrangement::Stacked, Arrangement::Windows];
+
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            Arrangement::Overlay => "Overlay",
+            Arrangement::Stacked => "Stacked",
+            Arrangement::Windows => "Windows",
+        }
+    }
+}
 
 /// The external display (ADR 0062).
 #[derive(Default)]
@@ -29,7 +49,7 @@ pub(super) struct Full {
     /// panel keeps the controls, unless the expand button asked for it (`asked`).
     pub on: bool,
     /// Full came from a tap on the expand button: the panel enlarges its plot even while the external display shows
-    /// the waveform. Full chosen under Density, a display plugged in, or leaving Full clears it.
+    /// the waveform. Full chosen on the Windows page, a display plugged in, or leaving Full clears it.
     pub asked: bool,
 }
 
@@ -38,25 +58,11 @@ const REF_NAMES: [&str; NREF] = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8",
 const MATH_NAMES: [&str; 8] = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"];
 
 impl Ui {
-    /// The Windows page (the external display is on Display > Screen). Default: the density, and while Split what is under the plot.
-    /// Minimal and Studio: the layout, full screen, the strip, and in Scope and Split what is
-    /// under the plot. Then, while the plot has more than one window, the window of every channel and math channel
-    /// that is on.
+    /// The Windows page, the same in every layout: Traces, Full screen, Strip and the lower pane; then, while the
+    /// arrangement is Windows, the window number of every channel, math channel, reference and the LA that is on.
     pub(super) fn win_items(&self) -> Vec<Item> {
-        let mut v = if self.m.layout == Layout::Default {
-            vec![Item::WinLayout]
-        } else {
-            vec![Item::WinLayout, Item::FullScreen, Item::StripPos]
-        };
-        let pane = if self.m.layout == Layout::Default {
-            self.m.density == Density::Split
-        } else {
-            matches!(self.m.density, Density::Scope | Density::Split)
-        };
-        if pane {
-            v.push(Item::PaneSel);
-        }
-        if self.m.win_layout != WinLayout::One {
+        let mut v = vec![Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel];
+        if self.arrangement() == Arrangement::Windows {
             v.extend((0..n_ch()).filter(|&c| self.m.ch[c].on).map(Item::WinCh));
             v.extend((0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on)).map(Item::WinRef));
             v.extend((0..NMATH).filter(|&k| self.m.math_shown(k)).map(Item::WinMath));
@@ -67,91 +73,71 @@ impl Ui {
         v
     }
 
-    /// Expand button and the Full density: Scope goes to Full, Full goes back to Scope, Split and Four go to Full.
-    pub(super) fn toggle_expand(&mut self) {
-        let leaving = self.m.density == Density::Full;
-        // Full closes the lower pane (Trend, Events, ...); the way back from it opens that pane again
-        if !leaving {
-            self.workspace.pane_before_full = self.m.pane;
-        }
-        self.m.density = if leaving { Density::Scope } else { Density::Full };
-        // a tap asks for the panel itself, also while the external display shows the waveform
-        self.full.asked = self.m.density == Density::Full;
-        self.apply_density();
-        if leaving && std::mem::take(&mut self.workspace.pane_before_full) != 0 {
-            let pane = self.m.split_pane;
-            if pane != 0 {
-                self.m.density = Density::Split;
-                self.apply_density();
-            }
+    /// The arrangement in force: four windows, else lanes, else one graticule.
+    pub(super) fn arrangement(&self) -> Arrangement {
+        if self.m.win_layout == WinLayout::Quad {
+            Arrangement::Windows
+        } else if self.trace_stacked() {
+            Arrangement::Stacked
+        } else {
+            Arrangement::Overlay
         }
     }
 
-    /// Makes the windows, the lower pane and the panel bars follow the density.
-    /// Waveform on the external display keeps the bars: the density changes the plot, the panel stays the controls
-    /// (the expand button overrides that, `sync_full`).
-    pub(super) fn apply_density(&mut self) {
-        let prev = self.m.win_layout;
-        match self.m.density {
-            Density::Scope | Density::Full => {
-                if self.m.pane != 0 {
-                    self.m.split_pane = self.m.pane;
+    /// Chooses the arrangement. Windows spreads the sources over the four windows in channel order; leaving it puts
+    /// everything on one plot again. The lower pane and Full screen are left as they are.
+    pub(super) fn set_arrangement(&mut self, a: Arrangement) {
+        match a {
+            Arrangement::Windows => {
+                if self.arrangement() == a {
+                    return;
                 }
-                self.m.pane = 0;
-                self.m.win_layout = WinLayout::One;
-            }
-            Density::Four => {
-                if self.m.pane != 0 {
-                    self.m.split_pane = self.m.pane;
+                self.workspace.popup = None;
+                self.workspace.stacked = false;
+                if self.m.layout == Layout::Studio {
+                    self.studio.overlay = true;
+                    self.m.studio_overlay = true;
                 }
-                self.m.pane = 0;
                 self.m.win_layout = WinLayout::Quad;
+                self.spread_wins();
+                if self.m.zoom {
+                    self.toast("Windows show while zoom is off");
+                }
+                self.relayout();
+                self.dirty_map = true;
             }
-            Density::Split => {
-                self.m.pane = self.m.split_pane;
-                // side by side is a choice of the oos-next page; Default's Split is two stacked traces
-                let cols = prev == WinLayout::Cols && self.m.layout != Layout::Default;
-                self.m.win_layout = if self.m.pane != 0 {
-                    WinLayout::One
-                } else if cols {
-                    WinLayout::Cols
-                } else {
-                    WinLayout::Rows
-                };
-            }
-        }
-        if self.m.win_layout != WinLayout::One {
-            self.workspace.stacked = false;
-        }
-        self.sync_full();
-        if self.m.win_layout != prev && self.m.win_layout != WinLayout::One {
-            self.spread_wins();
-            if self.m.zoom {
-                self.toast("Windows show while zoom is off");
+            Arrangement::Overlay | Arrangement::Stacked => {
+                self.m.win_layout = WinLayout::One;
+                self.choose_trace_mode(a == Arrangement::Stacked);
             }
         }
     }
 
-    /// The Layout row. One leaves Full and an open number pane as they are; the others are Split (two windows) and Four.
-    fn set_layout(&mut self, l: WinLayout) {
-        match l {
-            WinLayout::One => {
-                if self.m.density == Density::Four || (self.m.density == Density::Split && self.m.pane == 0) {
-                    self.m.density = Density::Scope;
+    /// Full screen on or off: the plot alone with the strip, or the bars and cards back. Full takes the lower pane
+    /// away and leaving it brings it back (`split_pane` keeps it in between, also across a restart). `asked`: the
+    /// expand button of the plot did it, so the panel enlarges its plot even while an external display shows the
+    /// waveform.
+    pub(super) fn set_full(&mut self, on: bool, asked: bool) {
+        if on != (self.m.density == Density::Full) {
+            if on {
+                self.m.split_pane = self.m.pane;
+                self.m.pane = 0;
+            } else {
+                let kept = std::mem::take(&mut self.m.split_pane);
+                // a pane chosen meanwhile stays
+                if kept != 0 && self.m.pane == 0 {
+                    self.m.pane = kept;
                 }
             }
-            WinLayout::Cols | WinLayout::Rows => {
-                self.m.density = Density::Split;
-                self.m.split_pane = 0;
-            }
-            WinLayout::Quad => self.m.density = Density::Four,
+            self.m.density = if on { Density::Full } else { Density::Scope };
         }
-        self.full.asked = false;
-        self.apply_density();
-        // the two windows are spread already; across or one above the other is the choice made here
-        if matches!(l, WinLayout::Cols | WinLayout::Rows) && self.m.win_layout != WinLayout::One {
-            self.m.win_layout = l;
-        }
+        self.full.asked = on && asked;
+        self.sync_full();
+    }
+
+    /// Expand button of the plot: Full screen on or off.
+    pub(super) fn toggle_expand(&mut self) {
+        self.set_full(self.m.density != Density::Full, true);
     }
 
     /// Panel bars hide for Full while the external display copies the panel, or when the expand button asked for it.
@@ -179,7 +165,7 @@ impl Ui {
 
     pub(super) fn win_kind(it: Item) -> Option<Kind> {
         match it {
-            Item::WinLayout | Item::FullScreen | Item::StripPos | Item::WinCh(_) | Item::WinRef(_) | Item::WinMath(_) | Item::WinLa => Some(Kind::Choice),
+            Item::FullScreen | Item::StripPos | Item::WinCh(_) | Item::WinRef(_) | Item::WinMath(_) | Item::WinLa => Some(Kind::Choice),
             _ => None,
         }
     }
@@ -187,7 +173,6 @@ impl Ui {
     pub(super) fn win_label(it: Item) -> Option<&'static str> {
         Some(match it {
             Item::Open(MenuId::Windows) => "Windows",
-            Item::WinLayout => "Layout",
             Item::FullScreen => "Full screen",
             Item::StripPos => "Strip",
             Item::WinCh(c) => CH_NAMES.get(c).copied().unwrap_or("CH"),
@@ -199,52 +184,34 @@ impl Ui {
     }
 
     pub(super) fn win_value(&self, it: Item) -> Option<String> {
+        let n = WinLayout::Quad.count();
         Some(match it {
-            Item::WinLayout if self.m.layout == Layout::Default => self.m.density.label().to_string(),
-            Item::WinLayout => self.m.win_layout.label().to_string(),
             Item::FullScreen => if self.m.density == Density::Full { "On" } else { "Off" }.to_string(),
             Item::StripPos => self.m.strip_dock.label().to_string(),
-            Item::WinCh(c) => (self.m.ch_win[c].min(self.m.win_layout.count() - 1) + 1).to_string(),
-            Item::WinRef(i) => (self.m.ref_win[i].min(self.m.win_layout.count() - 1) + 1).to_string(),
-            Item::WinMath(k) => (self.m.math_win[k].min(self.m.win_layout.count() - 1) + 1).to_string(),
-            Item::WinLa => (self.m.la_win.min(self.m.win_layout.count() - 1) + 1).to_string(),
+            Item::WinCh(c) => (self.m.ch_win[c].min(n - 1) + 1).to_string(),
+            Item::WinRef(i) => (self.m.ref_win[i].min(n - 1) + 1).to_string(),
+            Item::WinMath(k) => (self.m.math_win[k].min(n - 1) + 1).to_string(),
+            Item::WinLa => (self.m.la_win.min(n - 1) + 1).to_string(),
             _ => return None,
         })
     }
 
     pub(super) fn win_options(&self, it: Item) -> Option<Vec<String>> {
         Some(match it {
-            Item::WinLayout if self.m.layout == Layout::Default => {
-                Density::ALL.iter().map(|d| d.label().to_string()).collect()
-            }
-            Item::WinLayout => WinLayout::ALL.iter().map(|l| l.label().to_string()).collect(),
             Item::FullScreen => vec!["Off".into(), "On".into()],
             Item::StripPos => StripDock::ALL.iter().map(|p| p.label().to_string()).collect(),
-            Item::WinCh(_) | Item::WinRef(_) | Item::WinMath(_) | Item::WinLa => (1..=self.m.win_layout.count()).map(|i| i.to_string()).collect(),
+            Item::WinCh(_) | Item::WinRef(_) | Item::WinMath(_) | Item::WinLa => {
+                (1..=WinLayout::Quad.count()).map(|i| i.to_string()).collect()
+            }
             _ => return None,
         })
     }
 
     pub(super) fn win_adjust(&mut self, it: Item, d: i32) -> bool {
-        let n = self.m.win_layout.count();
+        let n = WinLayout::Quad.count();
         match it {
-            Item::WinLayout if self.m.layout == Layout::Default => {
-                let all = Density::ALL;
-                let i = all.iter().position(|&l| l == self.m.density).unwrap_or(0);
-                self.m.density = all[cycle(i, all.len(), d)];
-                self.full.asked = false;
-                self.apply_density();
-            }
-            Item::WinLayout => {
-                let all = WinLayout::ALL;
-                let i = all.iter().position(|&l| l == self.m.win_layout).unwrap_or(0);
-                self.set_layout(all[cycle(i, all.len(), d)]);
-            }
-            // the menu row is the density; only the expand button asks for the panel itself (`full_asked`)
-            Item::FullScreen => {
-                self.m.density = if self.m.density == Density::Full { Density::Scope } else { Density::Full };
-                self.apply_density();
-            }
+            // the menu row; only the expand button asks for the panel itself (`full.asked`)
+            Item::FullScreen => self.set_full(self.m.density != Density::Full, false),
             Item::StripPos => {
                 let all = StripDock::ALL;
                 let i = all.iter().position(|&p| p == self.m.strip_dock).unwrap_or(0);
@@ -276,10 +243,9 @@ mod tests {
         u
     }
 
-    /// The page of oos-next is the one of Minimal and Studio; Default has upstream's density row.
-    fn next_ui() -> Ui {
+    fn in_layout(layout: Layout) -> Ui {
         let mut u = ui();
-        u.m.layout = Layout::Minimal;
+        u.m.layout = layout;
         u
     }
 
@@ -289,84 +255,121 @@ mod tests {
         cv
     }
 
+    /// The three arrangements, one row, the same page in every layout.
     #[test]
-    fn layouts_split_the_plot_into_equal_windows() {
-        let mut u = ui();
-        for l in WinLayout::ALL {
-            u.m.win_layout = l;
-            u.spread_wins();
-            render(&mut u);
-            assert_eq!(u.plot.wins.len(), l.count(), "{:?}", l);
-            let g = u.plot.grid;
-            for (i, a) in u.plot.wins.iter().enumerate() {
-                assert_eq!((a.w, a.h), (u.plot.wins[0].w, u.plot.wins[0].h), "{:?}", l);
-                assert!(
-                    a.x >= g.x && a.y >= g.y && a.x + a.w <= g.x + g.w && a.y + a.h <= g.y + g.h,
-                    "{:?} {:?}",
-                    l,
-                    a
-                );
-                assert_eq!(a.h % 8, 0, "{:?}", l);
-                for b in &u.plot.wins[i + 1..] {
-                    assert!(!overlaps(*a, *b), "{:?}", l);
+    fn the_page_is_the_same_in_every_layout_and_lists_the_window_numbers_only_for_windows() {
+        for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
+            let mut u = in_layout(layout);
+            u.open_menu(MenuId::Windows);
+            let rows = u.items(MenuId::Windows);
+            assert_eq!(rows, [Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel], "{layout:?}");
+            assert_eq!(u.options(Item::Traces), ["Overlay", "Stacked", "Windows"], "{layout:?}");
+            assert_eq!(u.options(Item::FullScreen), ["Off", "On"]);
+            assert_eq!(u.options(Item::StripPos), ["Below plot", "Left", "Right", "Above plot", "Hidden"]);
+            assert_eq!((Ui::label(Item::FullScreen), Ui::label(Item::StripPos)), ("Full screen", "Strip"));
+            // the number rows come with Windows and go with it
+            u.select_option(Item::Traces, "Windows");
+            let v = u.win_items();
+            assert!(v.contains(&Item::WinCh(0)) && v.contains(&Item::WinCh(3)), "{layout:?} {v:?}");
+            assert_eq!(u.options(Item::WinCh(0)), ["1", "2", "3", "4"]);
+            u.select_option(Item::Traces, "Stacked");
+            assert_eq!(u.win_items(), [Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel], "{layout:?}");
+            // every row of the page takes every one of its options and reads it back
+            u.select_option(Item::Traces, "Windows");
+            for it in u.win_items() {
+                let opts = u.options(it);
+                for o in opts.iter().rev().chain(opts.iter()) {
+                    u.select_option(it, o);
+                    assert_eq!(&u.value(it), o, "{layout:?} {it:?} {o}");
                 }
             }
-            // one phosphor map per channel at the size of a window
-            assert_eq!((u.ph.w, u.ph.h), (u.plot.wins[0].w as usize, u.plot.wins[0].h as usize));
+        }
+    }
+
+    /// The Traces row is on the page of every layout and on the Display sheet of the compact ones.
+    #[test]
+    fn traces_is_a_row_of_the_page_and_of_the_display_sheet() {
+        for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
+            let mut u = in_layout(layout);
+            assert!(u.items(MenuId::Windows).contains(&Item::Traces), "{layout:?}");
+            if layout != Layout::Default {
+                let spec = u.sheet_spec(MenuId::Display).expect("the Display sheet");
+                assert!(spec.tabs.iter().any(|t| t.rows.contains(&Item::Traces)), "{layout:?}");
+            }
+            for a in ["Windows", "Stacked", "Overlay"] {
+                u.select_option(Item::Traces, a);
+                assert_eq!(u.value(Item::Traces), a, "{layout:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn windows_make_four_views_each_source_in_the_one_its_number_names() {
+        for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
+            let mut u = in_layout(layout);
+            u.select_option(Item::Traces, "Windows");
+            assert_eq!((u.m.win_layout, u.arrangement()), (WinLayout::Quad, Arrangement::Windows), "{layout:?}");
+            // the sources spread over the windows in channel order
+            assert_eq!(&u.m.ch_win[..n_ch()], &(0..n_ch()).map(|c| c % 4).collect::<Vec<_>>()[..], "{layout:?}");
+            render(&mut u);
+            assert_eq!(u.plot.wins.len(), 4, "{layout:?}");
+            let g = u.plot.grid;
+            for (i, a) in u.plot.wins.iter().enumerate() {
+                assert_eq!((a.w, a.h), (u.plot.wins[0].w, u.plot.wins[0].h), "{layout:?}");
+                assert!(a.x >= g.x && a.y >= g.y && a.x + a.w <= g.x + g.w && a.y + a.h <= g.y + g.h, "{layout:?} {a:?}");
+                for b in &u.plot.wins[i + 1..] {
+                    assert!(!overlaps(*a, *b), "{layout:?}");
+                }
+            }
+            for c in 0..n_ch() {
+                assert_eq!(u.ch_area(c), u.plot.wins[c], "{layout:?}: CH{} in window {}", c + 1, c + 1);
+            }
+            // CH1 moved to window 4 by its number
+            u.select_option(Item::WinCh(0), "4");
+            render(&mut u);
+            assert_eq!(u.ch_area(0), u.plot.wins[3], "{layout:?}");
+            let y = u.y_of_volts(0, 0.0);
+            let w = u.plot.wins[3];
+            assert!(y >= w.y && y < w.y + w.h, "{layout:?}");
+            // Stacked and Overlay put everything on one plot again, Windows does not outlive them
+            for a in ["Stacked", "Overlay"] {
+                u.select_option(Item::Traces, a);
+                render(&mut u);
+                assert_ne!(u.m.win_layout, WinLayout::Quad, "{layout:?} {a}");
+                assert_eq!(u.value(Item::Traces), a, "{layout:?}");
+                if a == "Overlay" {
+                    assert_eq!(u.plot.wins.len(), 1, "{layout:?}");
+                    assert!((0..n_ch()).all(|c| u.ch_area(c) == u.plot.area), "{layout:?}");
+                } else {
+                    assert_eq!(u.plot.wins.len(), n_ch(), "{layout:?}: a lane each");
+                }
+            }
         }
     }
 
     // Break it catches: an empty window beside the one that holds every source. On a unit, 2026-11-20: Overlay with
-    // Windows = Rows and only CH2 on drew a second, empty lane under it
+    // two windows and only CH2 on drew a second, empty lane under it
     #[test]
-    fn a_split_with_every_source_in_one_window_is_that_window_alone() {
+    fn windows_with_every_source_in_one_are_that_window_alone() {
         let mut u = crate::ui::testkit::demo_ui();
         for c in 0..n_ch() {
             u.m.ch[c].on = c == 1;
         }
-        u.m.win_layout = WinLayout::Rows;
+        u.m.win_layout = WinLayout::Quad;
         u.m.ch_win = [1; NCH];
         render(&mut u);
         assert_eq!(u.plot.wins.len(), 1, "one source, one window");
         assert_eq!(u.ch_area(1), u.plot.wins[0]);
-        // a second source in the other window: two windows again
         u.m.ch[0].on = true;
         u.m.ch_win[0] = 0;
         render(&mut u);
-        assert_eq!(u.plot.wins.len(), 2);
-    }
-
-    #[test]
-    fn a_new_layout_spreads_the_channels_and_each_draws_in_its_window() {
-        let mut u = ui();
-        u.select_option(Item::WinLayout, "Split");
-        assert_eq!(u.m.density, Density::Split);
-        assert_eq!(u.m.win_layout, WinLayout::Rows);
-        assert_eq!(&u.m.ch_win[..n_ch()], &(0..n_ch()).map(|c| c % 2).collect::<Vec<_>>()[..]);
-        render(&mut u);
-        // a channel's volts map into its own window; Split stacks them
-        let (a, b) = (u.plot.wins[0], u.plot.wins[1]);
-        assert!(b.y >= a.y + a.h);
-        assert_eq!(u.ch_area(0), a);
-        assert_eq!(u.ch_area(1), b);
-        let y = u.y_of_volts(1, 0.0);
-        assert!(y >= b.y && y < b.y + b.h);
-        // moved by the page: the value reads back
-        u.adjust(Item::WinCh(1), 1);
-        assert_eq!(u.value(Item::WinCh(1)), "1");
-        assert_eq!(u.ch_area(1), a);
-        // back to one window: everything in it, whatever the per-channel choice says
-        u.select_option(Item::WinLayout, "Scope");
-        render(&mut u);
-        assert_eq!(u.plot.wins.len(), 1);
-        assert!((0..n_ch()).all(|c| u.ch_area(c) == u.plot.area));
+        assert_eq!(u.plot.wins.len(), 4, "a second window in use: the four views");
     }
 
     #[test]
     fn zoom_and_views_keep_one_window() {
         let mut u = ui();
-        u.m.win_layout = WinLayout::Quad;
-        u.spread_wins();
+        u.set_arrangement(Arrangement::Windows);
         u.m.zoom = true;
         render(&mut u);
         assert_eq!(u.plot.wins.len(), 1);
@@ -375,38 +378,64 @@ mod tests {
         assert_eq!(u.plot.wins.len(), 4);
     }
 
+    // Break it catches: something taken away after Add. The Windows (and Stacked) arrangement stood in the way of the
+    // lower pane: a pane chosen, or Add > Plot > Spectrum / Add > Table > decoder events, turned the windows into one
+    // plot, and Stacked closed the pane.
     #[test]
-    fn page_lists_the_signals_only_while_split() {
-        let mut u = ui();
-        assert_eq!(u.win_items(), vec![Item::WinLayout]);
-        u.select_option(Item::WinLayout, "Split");
-        let v = u.win_items();
-        assert!(v.contains(&Item::PaneSel));
-        assert!(v.contains(&Item::WinCh(0)) && !v.iter().any(|i| matches!(i, Item::WinMath(_))));
-        for it in [Item::WinLayout, Item::WinCh(0), Item::PaneSel] {
-            let opts = u.options(it);
-            for o in opts.iter().rev().chain(opts.iter()) {
-                u.select_option(it, o);
-                assert_eq!(&u.value(it), o, "{:?} {}", it, o);
+    fn a_lower_pane_and_the_arrangement_do_not_remove_each_other() {
+        for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
+            for a in [Arrangement::Windows, Arrangement::Stacked, Arrangement::Overlay] {
+                let mut u = in_layout(layout);
+                u.set_arrangement(a);
+                for pane in ["Results", "Spectrum", "Trend", "Events"] {
+                    u.select_option(Item::PaneSel, pane);
+                    render(&mut u);
+                    assert_eq!(u.arrangement(), a, "{layout:?} {a:?} {pane}");
+                    assert_ne!(u.m.pane, 0, "{layout:?} {a:?} {pane}");
+                }
+                // and the other way round: the pane stays through every arrangement
+                for b in Arrangement::ALL {
+                    u.set_arrangement(b);
+                    render(&mut u);
+                    assert_ne!(u.m.pane, 0, "{layout:?} {a:?} -> {b:?}");
+                    assert_eq!(u.arrangement(), b);
+                }
             }
         }
     }
 
     #[test]
-    fn the_oos_next_page_lists_the_lower_pane_in_scope_too() {
-        let mut u = next_ui();
-        assert_eq!(u.win_items(), vec![Item::WinLayout, Item::FullScreen, Item::StripPos, Item::PaneSel]);
-        u.select_option(Item::WinLayout, "Stacked");
-        let v = u.win_items();
-        assert!(v.contains(&Item::PaneSel));
-        assert!(v.contains(&Item::WinCh(0)) && !v.iter().any(|i| matches!(i, Item::WinMath(_))));
-        for it in [Item::WinLayout, Item::FullScreen, Item::StripPos, Item::WinCh(0), Item::PaneSel] {
-            let opts = u.options(it);
-            for o in opts.iter().rev().chain(opts.iter()) {
-                u.select_option(it, o);
-                assert_eq!(&u.value(it), o, "{:?} {}", it, o);
-            }
+    fn add_plot_and_table_leave_the_windows_alone() {
+        use super::super::sheet::PanelKind;
+        let mut u = in_layout(Layout::Studio);
+        u.set_arrangement(Arrangement::Windows);
+        render(&mut u);
+        for k in [PanelKind::Spectrum, PanelKind::Trend, PanelKind::Measurements, PanelKind::Histogram] {
+            u.studio_apply_panel(k);
+            render(&mut u);
+            assert_eq!(u.arrangement(), Arrangement::Windows, "{k:?}");
+            assert_eq!(u.plot.wins.len(), 4, "{k:?}: the four windows stay");
         }
+    }
+
+    #[test]
+    fn full_screen_takes_the_lower_pane_away_and_gives_it_back() {
+        let mut u = ui();
+        u.select_option(Item::PaneSel, "Trend");
+        let pane = u.m.pane;
+        u.select_option(Item::FullScreen, "On");
+        assert_eq!((u.m.density, u.m.pane, u.m.split_pane), (Density::Full, 0, pane));
+        u.select_option(Item::FullScreen, "Off");
+        assert_eq!((u.m.density, u.m.pane, u.m.split_pane), (Density::Scope, pane, 0));
+        // a pane chosen while Full is kept
+        u.select_option(Item::FullScreen, "On");
+        u.select_option(Item::PaneSel, "Results");
+        assert_eq!((u.m.density, u.m.pane), (Density::Scope, tables::PANE_RESULTS));
+        // the pane's own close button forgets it
+        u.m.pane = 0;
+        u.select_option(Item::FullScreen, "On");
+        u.select_option(Item::FullScreen, "Off");
+        assert_eq!(u.m.pane, 0);
     }
 
     #[test]
@@ -493,12 +522,12 @@ mod tests {
             );
             tap(&mut u);
             assert_eq!((u.m.density, u.full.on, u.plot.grid), (Density::Scope, false, normal), "{mode}");
-            // Full chosen under Density keeps the panel's bars: the external display has the waveform
-            u.select_option(Item::WinLayout, "Full");
+            // Full screen chosen on the page keeps the panel's bars: the external display has the waveform
+            u.select_option(Item::FullScreen, "On");
             render(&mut u);
             assert!(u.m.density == Density::Full && !u.full.on && u.plot.grid == normal, "{mode}");
             // and a display plugged in after a tap takes the waveform back
-            u.select_option(Item::WinLayout, "Scope");
+            u.select_option(Item::FullScreen, "Off");
             tap(&mut u);
             assert!(u.full.on, "{mode}");
             u.set_hdmi_present(false);
@@ -512,7 +541,7 @@ mod tests {
     fn a_loaded_reference_gets_a_window_row_and_draws_there() {
         let mut u = ui();
         u.refs[0] = Some(RefWave::test(vec![0.0f32; 400], 1e-9, 0.0));
-        u.select_option(Item::WinLayout, "Four");
+        u.select_option(Item::Traces, "Windows");
         render(&mut u);
         assert!(u.win_items().contains(&Item::WinRef(0)), "{:?}", u.win_items());
         assert!(!u.win_items().contains(&Item::WinRef(1)), "only loaded references are listed");
@@ -565,95 +594,7 @@ mod tests {
     }
 
     #[test]
-    fn densities_are_scope_full_split_and_four() {
-        let mut u = ui();
-        u.select_option(Item::Hdmi, "Mirror");
-        assert_eq!(u.options(Item::WinLayout), vec!["Scope", "Full", "Split", "Four"]);
-        u.select_option(Item::WinLayout, "Full");
-        render(&mut u);
-        assert!(u.full.on && u.plot.wins.len() == 1 && u.plot.grid.y == 0);
-        u.select_option(Item::WinLayout, "Split");
-        render(&mut u);
-        assert!(
-            !u.full.on
-                && u.plot.wins.len() == 2
-                && u.plot.wins[1].y > u.plot.wins[0].y
-                && u.plot.wins[0].x == u.plot.wins[1].x
-        );
-        assert_eq!(u.value(Item::PaneSel), "Traces");
-        u.select_option(Item::PaneSel, "Results");
-        render(&mut u);
-        assert_eq!(
-            (u.plot.wins.len(), u.m.win_layout, u.m.pane, u.m.split_pane, u.m.density),
-            (1, WinLayout::One, tables::PANE_RESULTS, tables::PANE_RESULTS, Density::Split)
-        );
-        assert!(u.pane_h() > 0);
-        u.select_option(Item::PaneSel, "Spectrum");
-        assert_eq!(u.m.pane, tables::PANE_SPECTRUM);
-        u.select_option(Item::PaneSel, "Trend");
-        assert_eq!(u.m.pane, tables::PANE_TREND);
-        u.select_option(Item::WinLayout, "Four");
-        render(&mut u);
-        assert_eq!(u.plot.wins.len(), 4);
-        assert_eq!(u.pane_h(), 0);
-        u.select_option(Item::WinLayout, "Scope");
-        render(&mut u);
-        assert_eq!((u.plot.wins.len(), u.pane_h()), (1, 0));
-        // Split comes back to the lower pane it had
-        u.select_option(Item::WinLayout, "Split");
-        render(&mut u);
-        assert_eq!(u.value(Item::PaneSel), "Trend");
-        assert_eq!(u.plot.wins.len(), 1);
-        assert!(u.pane_h() > 0);
-    }
-
-    #[test]
-    fn the_oos_next_layouts_and_full_screen_choose_the_densities() {
-        let mut u = next_ui();
-        u.select_option(Item::Hdmi, "Mirror");
-        assert_eq!(u.options(Item::WinLayout), vec!["One", "Side by side", "Stacked", "Four"]);
-        u.select_option(Item::FullScreen, "On");
-        render(&mut u);
-        assert!(u.full.on && u.plot.wins.len() == 1 && u.plot.grid.y == 0);
-        u.select_option(Item::WinLayout, "Stacked");
-        render(&mut u);
-        assert!(
-            !u.full.on
-                && u.plot.wins.len() == 2
-                && u.plot.wins[1].y > u.plot.wins[0].y
-                && u.plot.wins[0].x == u.plot.wins[1].x
-        );
-        assert_eq!(u.value(Item::PaneSel), "Traces");
-        u.select_option(Item::PaneSel, "Results");
-        render(&mut u);
-        assert_eq!(
-            (u.plot.wins.len(), u.m.win_layout, u.m.pane, u.m.split_pane, u.m.density),
-            (1, WinLayout::One, tables::PANE_RESULTS, tables::PANE_RESULTS, Density::Split)
-        );
-        assert!(u.pane_h() > 0);
-        u.select_option(Item::PaneSel, "Spectrum");
-        assert_eq!(u.m.pane, tables::PANE_SPECTRUM);
-        u.select_option(Item::PaneSel, "Trend");
-        assert_eq!(u.m.pane, tables::PANE_TREND);
-        u.select_option(Item::WinLayout, "Four");
-        render(&mut u);
-        assert_eq!(u.plot.wins.len(), 4);
-        assert_eq!(u.pane_h(), 0);
-        u.select_option(Item::WinLayout, "One");
-        render(&mut u);
-        assert_eq!((u.plot.wins.len(), u.pane_h()), (1, 0));
-        // the pane row in Scope opens a lower pane again, and Stacked leaves it for two traces
-        u.select_option(Item::PaneSel, "Trend");
-        render(&mut u);
-        assert_eq!((u.value(Item::WinLayout), u.m.density, u.plot.wins.len()), ("One".to_string(), Density::Split, 1));
-        assert!(u.pane_h() > 0);
-        u.select_option(Item::WinLayout, "Stacked");
-        render(&mut u);
-        assert_eq!((u.m.pane, u.plot.wins.len(), u.pane_h()), (0, 2, 0));
-    }
-
-    #[test]
-    fn waveform_keeps_the_panel_bars_and_the_densities_change_the_plot() {
+    fn waveform_keeps_the_panel_bars_and_full_screen_changes_the_plot() {
         let mut u = ui();
         // the external display is a row of Display > Screen only
         assert!(!u.win_items().contains(&Item::Hdmi));
@@ -663,7 +604,7 @@ mod tests {
         render(&mut u);
         let normal = u.plot.grid;
         u.set_hdmi_present(true);
-        u.select_option(Item::WinLayout, "Full");
+        u.select_option(Item::FullScreen, "On");
         let mut cv = Canvas::new(W, H);
         u.render(&mut cv);
         assert_eq!(u.m.density, Density::Full);
@@ -678,7 +619,7 @@ mod tests {
         let (mw, mh) = (1920, 1080);
         let mut full_pic = Canvas::new(mw, mh);
         u.render_waveform(&mut full_pic);
-        u.select_option(Item::WinLayout, "Scope");
+        u.select_option(Item::FullScreen, "Off");
         u.render(&mut cv);
         let mut scope_pic = Canvas::new(mw, mh);
         u.render_waveform(&mut scope_pic);
@@ -690,15 +631,14 @@ mod tests {
         let at = (head.y * mw + head.x + 8) as usize;
         assert_ne!(full_pic.px[at], scope_pic.px[at], "Full leaves the statistics card off the external plot");
         assert!(u.plot.grid == normal && u.scr == Screen::PANEL, "the panel's layout is as it was");
-        u.select_option(Item::WinLayout, "Four");
+        u.select_option(Item::Traces, "Windows");
         u.render(&mut cv);
         assert_eq!(u.plot.wins.len(), 4);
         assert!(u.plot.wins.iter().all(|w| w.y >= TOP.h && w.y + w.h <= u.frame().bottom.y));
         assert!(!u.full.on);
-        u.select_option(Item::WinLayout, "Split");
         u.select_option(Item::PaneSel, "Results");
         u.render(&mut cv);
-        assert!(u.pane_h() > 0 && u.plot.wins.len() == 1 && !u.full.on);
+        assert!(u.pane_h() > 0 && u.plot.wins.len() == 4 && !u.full.on, "the pane stands under the four windows");
         let pane = u.pane_rect();
         assert!(pane.y >= TOP.h && pane.y + pane.h <= u.frame().bottom.y);
     }
@@ -743,12 +683,12 @@ mod tests {
     #[test]
     fn a_drag_in_the_second_window_moves_a_channel_of_that_window() {
         let mut u = ui();
-        u.m.win_layout = WinLayout::Cols;
+        u.m.win_layout = WinLayout::Quad;
         u.spread_wins();
         u.m.active = 0;
         render(&mut u);
         let b = u.plot.wins[1];
-        // CH2's marker at the left edge of the right window
+        // CH2's marker at the left edge of the second window
         let y = u.y_of_volts(1, 0.0);
         let x = b.x + 10;
         let before = u.m.ch[1].offset;
@@ -761,10 +701,9 @@ mod tests {
     }
 
     #[test]
-    fn setup_keeps_the_windows() {
+    fn setup_keeps_the_windows_and_reads_the_older_densities() {
         let mut u = ui();
-        u.m.density = Density::Four;
-        u.m.win_layout = WinLayout::Quad;
+        u.set_arrangement(Arrangement::Windows);
         u.m.ch_win = std::array::from_fn(|c| (3 - c) % 4);
         u.m.math_win[2] = 3;
         u.m.split_pane = 2;
@@ -778,85 +717,21 @@ mod tests {
             (back.win_layout, back.density, back.split_pane, back.ch_win, back.math_win),
             (u.m.win_layout, u.m.density, u.m.split_pane, u.m.ch_win, u.m.math_win)
         );
-        // a setup written before the density row: Default's Split is two stacked traces, Minimal and Studio keep the
-        // two across
-        let old = crate::store::parse_setup("windows = Cols\npane = 0\n").unwrap();
-        assert_eq!((old.density, old.win_layout), (Density::Split, WinLayout::Rows));
-        let old = crate::store::parse_setup("layout = minimal\nwindows = Cols\npane = 0\n").unwrap();
-        assert_eq!((old.density, old.win_layout), (Density::Split, WinLayout::Cols));
-        let quad = crate::store::parse_setup("windows = Quad\n").unwrap();
-        assert_eq!((quad.density, quad.win_layout), (Density::Four, WinLayout::Quad));
-        let pane = crate::store::parse_setup("pane = 2\n").unwrap();
-        assert_eq!((pane.density, pane.pane, pane.split_pane), (Density::Split, 2, 2));
-    }
-
-    #[test]
-    fn the_page_has_the_rows_and_labels_of_oos_next() {
-        let mut u = next_ui();
-        let v = u.win_items();
-        assert_eq!(&v[..3], &[Item::WinLayout, Item::FullScreen, Item::StripPos]);
-        assert_eq!((Ui::label(Item::WinLayout), Ui::label(Item::FullScreen), Ui::label(Item::StripPos)), ("Layout", "Full screen", "Strip"));
-        assert_eq!(u.options(Item::WinLayout), ["One", "Side by side", "Stacked", "Four"]);
-        assert_eq!(u.options(Item::FullScreen), ["Off", "On"]);
-        assert_eq!(u.options(Item::StripPos), ["Below plot", "Left", "Right", "Above plot", "Hidden"]);
-        // side by side is a layout of its own: two windows across, in the density Split
-        u.select_option(Item::WinLayout, "Side by side");
-        render(&mut u);
-        assert_eq!((u.m.win_layout, u.m.density, u.plot.wins.len()), (WinLayout::Cols, Density::Split, 2));
-        assert!(u.plot.wins[1].x > u.plot.wins[0].x && u.plot.wins[0].y == u.plot.wins[1].y);
-        // Stacked and back keep the two windows; One returns to Scope
-        u.select_option(Item::WinLayout, "Stacked");
-        assert_eq!((u.m.win_layout, u.m.density), (WinLayout::Rows, Density::Split));
-        u.select_option(Item::WinLayout, "One");
-        assert_eq!((u.m.win_layout, u.m.density), (WinLayout::One, Density::Scope));
-        // full screen is the Full density
-        assert_eq!(u.value(Item::FullScreen), "Off");
-        u.select_option(Item::FullScreen, "On");
-        render(&mut u);
-        assert_eq!((u.m.density, u.value(Item::FullScreen)), (Density::Full, "On".to_string()));
-        assert!(u.full.on && u.plot.grid.y == 0);
-        u.select_option(Item::FullScreen, "Off");
-        assert_eq!((u.m.density, u.full.on), (Density::Scope, false));
-    }
-
-    #[test]
-    fn default_has_upstream_s_density_row_and_minimal_and_studio_the_rows_of_oos_next() {
-        for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
-            let mut u = ui();
-            u.m.layout = layout;
-            u.open_menu(MenuId::Windows);
-            let rows = u.items(MenuId::Windows);
-            if layout == Layout::Default {
-                assert_eq!(rows, [Item::WinLayout]);
-                assert_eq!(u.item_label(Item::WinLayout), "Density");
-                assert_eq!(u.options(Item::WinLayout), ["Scope", "Full", "Split", "Four"]);
-                assert_eq!(u.value(Item::WinLayout), "Scope");
-                // Split is two stacked traces, also after the windows were side by side
-                u.m.win_layout = WinLayout::Cols;
-                u.select_option(Item::WinLayout, "Split");
-                assert_eq!((u.m.density, u.m.win_layout), (Density::Split, WinLayout::Rows));
-                assert_eq!(u.value(Item::WinLayout), "Split");
-                // a lower pane chosen elsewhere in Scope does not make it Split
-                u.select_option(Item::WinLayout, "Scope");
-                u.select_option(Item::PaneSel, "Trend");
-                assert_eq!((u.m.density, u.m.pane), (Density::Scope, tables::PANE_TREND));
-            } else {
-                let next = [Item::WinLayout, Item::FullScreen, Item::StripPos, Item::PaneSel];
-                assert_eq!(&rows[..4], &next, "{layout:?}");
-                assert_eq!(u.item_label(Item::WinLayout), "Layout", "{layout:?}");
-                assert_eq!(u.options(Item::WinLayout), ["One", "Side by side", "Stacked", "Four"], "{layout:?}");
-                u.select_option(Item::WinLayout, "Side by side");
-                assert_eq!((u.m.density, u.m.win_layout), (Density::Split, WinLayout::Cols), "{layout:?}");
-                u.select_option(Item::WinLayout, "One");
-                u.select_option(Item::PaneSel, "Trend");
-                assert_eq!((u.m.density, u.m.pane), (Density::Split, tables::PANE_TREND), "{layout:?}");
-            }
+        // a setup written with two windows (Cols, Rows) or the densities Split and Four reads as the four windows
+        // and Scope; the lower pane it had stays
+        for old in ["windows = Cols\n", "windows = Rows\ndensity = Split\n", "windows = Quad\ndensity = Four\n"] {
+            let m = crate::store::parse_setup(old).unwrap();
+            assert_eq!((m.win_layout, m.density), (WinLayout::Quad, Density::Scope), "{old:?}");
         }
+        let pane = crate::store::parse_setup("pane = 2\ndensity = Split\n").unwrap();
+        assert_eq!((pane.density, pane.pane), (Density::Scope, 2));
+        let old = crate::store::parse_setup("pane = 2\n").unwrap();
+        assert_eq!((old.density, old.pane, old.split_pane), (Density::Scope, 2, 2));
     }
 
     #[test]
     fn one_strip_setting_with_a_hidden_position() {
-        let mut u = next_ui();
+        let mut u = in_layout(Layout::Minimal);
         u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0))];
         u.m.cursor = CursorMode::Off;
         u.relayout();
@@ -896,10 +771,10 @@ mod tests {
         }
         // an oos-next file: the names are the same
         let n = crate::store::parse_setup("windows = Quad\nstrip = Hidden\n").unwrap();
-        assert_eq!((n.win_layout, n.density, n.strip_dock), (WinLayout::Quad, Density::Four, StripDock::Hidden));
+        assert_eq!((n.win_layout, n.density, n.strip_dock), (WinLayout::Quad, Density::Scope, StripDock::Hidden));
         // an OOS-plus setup from before: its own key, and Under for Below
         let o = crate::store::parse_setup("density = Split\nwindows = Cols\nstrip_dock = Under\n").unwrap();
-        assert_eq!((o.density, o.win_layout, o.strip_dock), (Density::Split, WinLayout::Cols, StripDock::Below));
+        assert_eq!((o.density, o.win_layout, o.strip_dock), (Density::Scope, WinLayout::Quad, StripDock::Below));
         let o = crate::store::parse_setup("density = Full\nstrip_dock = Right\n").unwrap();
         assert_eq!((o.density, o.strip_dock), (Density::Full, StripDock::Right));
         assert!(crate::store::parse_setup("strip = Under").is_err());
@@ -910,7 +785,7 @@ mod tests {
     fn windows_page_and_strip_pictures() {
         let Ok(dir) = std::env::var("OOS_SHOT_DIR") else { return };
         let dir = std::path::PathBuf::from(dir);
-        let mut u = next_ui();
+        let mut u = in_layout(Layout::Minimal);
         u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vrms, WaveId::Ch(1))];
         u.m.cursor = CursorMode::Time;
         let shot = |u: &mut Ui, name: &str| {
@@ -920,17 +795,13 @@ mod tests {
         };
         u.open_menu(MenuId::Windows);
         shot(&mut u, "windows-page.png");
-        u.select_option(Item::WinLayout, "Side by side");
-        shot(&mut u, "windows-page-cols.png");
-        u.select_option(Item::WinLayout, "One");
+        u.select_option(Item::Traces, "Windows");
+        shot(&mut u, "windows-page-windows.png");
+        u.select_option(Item::Traces, "Stacked");
+        shot(&mut u, "windows-page-stacked.png");
+        u.select_option(Item::Traces, "Overlay");
         u.close_menu();
         for (p, name) in [(StripDock::Below, "strip-below"), (StripDock::Left, "strip-left"), (StripDock::Right, "strip-right"), (StripDock::Above, "strip-above"), (StripDock::Hidden, "strip-hidden")] {
-            u.m.strip_dock = p;
-            u.relayout();
-            shot(&mut u, &format!("{name}.png"));
-        }
-        u.m.layout = Layout::Minimal;
-        for (p, name) in [(StripDock::Below, "minimal-below"), (StripDock::Hidden, "minimal-hidden")] {
             u.m.strip_dock = p;
             u.relayout();
             shot(&mut u, &format!("{name}.png"));
@@ -940,7 +811,7 @@ mod tests {
     #[test]
     fn auto_set_up_places_the_channels_per_window() {
         use crate::wave::{place, Stats};
-        let mut m = Model { win_layout: WinLayout::Rows, ch_win: [0, 1, 1, 0], ..Default::default() };
+        let mut m = Model { win_layout: WinLayout::Quad, ch_win: [0, 1, 1, 0], ..Default::default() };
         let s = Stats { vmin: -1.0, vmax: 1.0, ..Stats::default() };
         place(&mut m, &[(0, s, 1e-3), (1, s, 1e-3), (2, s, 1e-3)], true);
         // CH1 alone in window 1: its 2 Vpp fill about 80 % of 8 div, centred
@@ -999,66 +870,17 @@ mod tests {
         assert!(band.h > w.h * 3 / 4 && band.y >= w.y, "{:?} {:?}", band, w);
     }
 
-    /// Pictures of the layouts for a look by eye: OOS_SHOT_DIR=dir cargo test windows -- --ignored
+    /// The plot's menu has the third arrangement too, and its mark follows the one in force.
     #[test]
-    #[ignore]
-    fn shots() {
-        let Ok(d) = std::env::var("OOS_SHOT_DIR") else { return };
-        let mut u = ui();
-        for _ in 0..30 {
-            u.step(0.05);
-        }
-        for (name, l, full) in [
-            ("win-one", WinLayout::One, false),
-            ("win-cols", WinLayout::Cols, false),
-            ("win-rows", WinLayout::Rows, false),
-            ("win-quad", WinLayout::Quad, true),
-            ("win-full", WinLayout::One, true),
+    fn the_plot_menu_and_scpi_choose_the_same_three_arrangements() {
+        let mut u = in_layout(Layout::Minimal);
+        for (action, want) in [
+            (workspace::Action::Windows, Arrangement::Windows),
+            (workspace::Action::Stacked, Arrangement::Stacked),
+            (workspace::Action::Overlay, Arrangement::Overlay),
         ] {
-            u.m.win_layout = l;
-            u.spread_wins();
-            u.full.on = full;
-            for _ in 0..10 {
-                u.step(0.05);
-            }
-            let cv = render(&mut u);
-            std::fs::write(format!("{}/{}.png", d, name), crate::store::png_of(&cv)).unwrap();
+            u.workspace_action(action);
+            assert_eq!(u.arrangement(), want);
         }
-        // the LA in a window of its own
-        u.m.la.on = true;
-        u.m.ch[3].on = false;
-        u.m.win_layout = WinLayout::Quad;
-        u.spread_wins();
-        u.full.on = false;
-        for _ in 0..10 {
-            u.step(0.05);
-        }
-        let cv = render(&mut u);
-        std::fs::write(format!("{}/win-la.png", d), crate::store::png_of(&cv)).unwrap();
-        u.m.la.on = false;
-        u.m.ch[3].on = true;
-        u.m.win_layout = WinLayout::Cols;
-        u.spread_wins();
-        u.open_menu(MenuId::Windows);
-        let cv = render(&mut u);
-        std::fs::write(format!("{}/win-menu.png", d), crate::store::png_of(&cv)).unwrap();
-        // the small corner control vs the same plot with the bars gone
-        u.close_menu();
-        u.m.win_layout = WinLayout::One;
-        u.spread_wins();
-        u.results.on = true;
-        u.full.on = false;
-        for _ in 0..12 {
-            u.step(0.05);
-        }
-        let cv = render(&mut u);
-        std::fs::write(format!("{}/fullscreen-btn.png", d), crate::store::png_of(&cv)).unwrap();
-        let (_, hit) = u.full_btn();
-        u.tap(hit.x + hit.w / 2, hit.y + hit.h / 2);
-        for _ in 0..8 {
-            u.step(0.05);
-        }
-        let cv = render(&mut u);
-        std::fs::write(format!("{}/fullscreen-expanded.png", d), crate::store::png_of(&cv)).unwrap();
     }
 }

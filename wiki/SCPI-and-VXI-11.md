@@ -421,6 +421,7 @@ A reference can be a trigger, measurement, cursor, Math or decoder source like a
 | Command | What it does |
 |---|---|
 | `:SYSTem:ERRor?` | the next error, see [Errors](#errors) |
+| `:SYSTem:OPTion:INSTalled?`, `*OPT?` | the options of this scope: `LA`, `AFG`, `EXT` (comma separated), `0` for none |
 | `:SYSTem:STATe?` | diagnostic state of the application (also whether the GPU draws) |
 | `:SYSTem:GET? <key>`, `:SYSTem:SET <key> = <value>` | any setting by its setup key, also those without a command of their own (keys in [lib.rs of oos-store](https://github.com/dekajoule/oos/blob/main/ui/store/src/lib.rs)) |
 | `:SYSTem:GRAPhics[?] CPU\|GPU` | System > Graphics |

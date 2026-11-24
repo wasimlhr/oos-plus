@@ -9,6 +9,7 @@
 //! button that goes through the views. A tap on a row moves the view to it and chooses it: the row, its box in the
 //! band and its time span on the plot are marked, and a tap on a box of the band chooses its row.
 
+use super::dock::{VKind, STRIP_H};
 use super::*;
 use crate::protocols::Col;
 use oos_dsp::decode::{Kind as DecKind, Packet};
@@ -16,6 +17,9 @@ use oos_dsp::decode::{Kind as DecKind, Packet};
 /// Height of the pane's head and of its column titles. The buttons of the head are a finger tall (`TOUCH_MIN`).
 const HEAD: i32 = workspace::TOUCH_MIN + 4;
 const TITLES: i32 = 20;
+/// The touch area of the list's bar at the right edge of its rows, and how long the bar shows after a scroll.
+const BAR_AREA: i32 = 24;
+const BAR_SHOWN_S: f64 = 1.5;
 /// Height of a pane with its head and one line of text.
 const EMPTY_H: i32 = HEAD + 22;
 /// Below this width the pane has no columns for the decoder, the length and the hex bytes.
@@ -68,6 +72,8 @@ struct EvHead {
     errors: Option<Rect>,
     /// where the buttons end
     right: i32,
+    /// the buttons are in the title strip of the docked panel, not in a row of their own
+    strip: bool,
 }
 
 /// The lines of a character stream: each ends with its line feed, the rest of the record is the last one.
@@ -299,43 +305,93 @@ impl Ui {
     /// button that says the view and opens the list of them, and Errors while there is room.
     fn events_head(&self, r: Rect) -> EvHead {
         let f = self.fonts();
-        let h = HEAD - 4;
-        // a pane under the plot has its close button at the right end of the head; a docked one has it in its title
-        let limit = r.right() - if self.dock_on() { 8 } else { 54 };
+        // in the title strip of a docked panel the buttons stand right of the title and left of its own buttons, and
+        // the pane under the strip is all rows; else they have a row of their own
+        let strip = self.events_strip();
+        let (x0, y, h, limit) = match strip {
+            Some(s) => {
+                let dr = Rect::new(s.x, s.y, s.w, r.h + STRIP_H);
+                let stop = self.dock_extra_rect(VKind::Pane, dr).map_or(Self::dock_close_rect(dr).x, |e| e.x);
+                (s.x + 26 + f.mb.width("Events") + 16, s.y + 1, s.h - 2, stop + 8)
+            }
+            // a pane under the plot has its close button at the right end of the head; a docked one (tabbed) has it in
+            // its title
+            None => (r.x + 8, r.y + 2, HEAD - 4, r.right() - if self.dock_on() { 8 } else { 54 }),
+        };
+        let strip = strip.is_some();
         let seg = |v: EvView| f.sb.width(v.name()) + 24;
         let all = f.sb.width("Errors only") + 24;
-        let mut x = r.x + 8;
+        let mut x = x0;
         if x + EV_VIEWS.iter().map(|&v| seg(v)).sum::<i32>() + 10 + all <= limit {
             let views = EV_VIEWS
                 .iter()
                 .map(|&v| {
-                    let b = Rect::new(x, r.y + 2, seg(v), h);
+                    let b = Rect::new(x, y, seg(v), h);
                     x += b.w;
                     (b, v)
                 })
                 .collect();
-            let errors = Rect::new(x + 10, r.y + 2, all, h);
-            return EvHead { views, cycle: false, errors: Some(errors), right: errors.right() };
+            let errors = Rect::new(x + 10, y, all, h);
+            return EvHead { views, cycle: false, errors: Some(errors), right: errors.right(), strip };
         }
         // room for the longest name and the mark that there is more
         let w = EV_VIEWS.iter().map(|&v| seg(v)).max().unwrap_or(0) + 14;
-        let one = Rect::new(x, r.y + 2, w.min((limit - x).max(44)), h);
-        let e = Rect::new(one.right() + 6, r.y + 2, f.sb.width("Errors") + 20, h);
+        let one = Rect::new(x, y, w.min((limit - x).max(44)), h);
+        let e = Rect::new(one.right() + 6, y, f.sb.width("Errors") + 20, h);
         let errors = (e.right() <= limit).then_some(e);
         let right = errors.map_or(one.right(), |e| e.right());
-        EvHead { views: vec![(one, self.m.ev_view)], cycle: true, errors, right }
+        EvHead { views: vec![(one, self.m.ev_view)], cycle: true, errors, right, strip }
+    }
+
+    /// The title strip of the docked Events panel, when the buttons of its head live in it: a docked or floating panel
+    /// that is not one tab of a group (the tabs fill the strip). Else the buttons have a row under the title.
+    fn events_strip(&self) -> Option<Rect> {
+        if !self.dock_on() || self.m.pane != tables::PANE_EVENTS || self.m.layout == Layout::Default {
+            return None;
+        }
+        let r = self.dock_rect(VKind::Pane)?;
+        self.dock_tab_rects(VKind::Pane, r).is_empty().then(|| Self::dock_strip(r))
+    }
+
+    /// The height of the row of buttons in the pane: none while they are in the strip.
+    fn events_head_h(&self) -> i32 {
+        if self.events_strip().is_some() { 0 } else { HEAD }
     }
 
     /// Where the rows are, and how many fit.
-    fn events_rows(r: Rect) -> (Rect, usize) {
-        let fit = ((r.h - HEAD - TITLES) / tables::ROW_H).max(0);
-        (Rect::new(r.x, r.y + HEAD + TITLES, r.w, fit * tables::ROW_H), fit as usize)
+    fn events_rows(&self, r: Rect) -> (Rect, usize) {
+        let top = self.events_head_h() + TITLES;
+        let fit = ((r.h - top) / tables::ROW_H).max(0);
+        (Rect::new(r.x, r.y + top, r.w, fit * tables::ROW_H), fit as usize)
+    }
+
+    /// Whether a touch at (x, y) is on a button of the head in the strip: the strip is the touch area, the buttons
+    /// are drawn smaller.
+    pub(super) fn events_strip_hit(&self, x: i32, y: i32) -> bool {
+        let Some(s) = self.events_strip() else { return false };
+        let head = self.events_head(self.pane_rect());
+        s.contains(x, y)
+            && (head.views.iter().any(|(b, _)| x >= b.x && x < b.right())
+                || head.errors.is_some_and(|b| x >= b.x && x < b.right()))
+    }
+
+    /// The lift of a touch that began on a button of the strip.
+    pub(super) fn events_strip_tap(&mut self, x: i32, y: i32) {
+        let head = self.events_head(self.pane_rect());
+        self.events_head_tap(&head, x, y);
     }
 
     /// The scroll bar beside the rows `area`, of which `fit` are on the screen.
     fn events_scroll(&self, area: Rect, fit: usize) -> scroll::Bar {
-        let track = Rect::new(area.x + area.w - scroll::BAR_W - 2, area.y, scroll::BAR_W, area.h);
+        // at the edge of the rows, over them: no room is kept for it
+        let track = Rect::new(area.right() - BAR_AREA, area.y, BAR_AREA, area.h);
         scroll::Bar { track, total: self.events_count() as i32, shown: fit as i32, pos: self.pn.ev_top as i32 }
+    }
+
+    /// Whether the bar is on the screen: for a moment after the list was scrolled. A list that stands still shows
+    /// none, and the right edge of its rows is for them.
+    pub(super) fn events_bar_shown(&self) -> bool {
+        self.pn.ev_bar_t.is_some_and(|t| self.now - t < BAR_SHOWN_S)
     }
 
     /// The scroll bar of the Events pane and its rows, while the pane shows them.
@@ -344,7 +400,7 @@ impl Ui {
         if self.pane_h() == 0 || self.m.pane != tables::PANE_EVENTS || self.m.layout == Layout::Default {
             return None;
         }
-        let (rows, fit) = Self::events_rows(self.pane_rect());
+        let (rows, fit) = self.events_rows(self.pane_rect());
         Some((self.events_scroll(rows, fit), rows))
     }
 
@@ -356,7 +412,7 @@ impl Ui {
             return;
         }
         let Some((bar, rows)) = self.events_bar() else { return };
-        if !rows.contains(x, y) || (bar.needed() && bar.track.contains(x, y)) {
+        if !rows.contains(x, y) || (bar.needed() && self.events_bar_shown() && bar.track.contains(x, y)) {
             return;
         }
         let i = bar.top() as usize + ((y - rows.y) / tables::ROW_H) as usize;
@@ -380,7 +436,9 @@ impl Ui {
 
     /// A tap on the buttons `head` of the pane: a view, the list of the views, or Errors only. Whether it was one.
     fn events_head_tap(&mut self, head: &EvHead, x: i32, y: i32) -> bool {
-        if let Some(&(b, v)) = head.views.iter().find(|(b, _)| b.contains(x, y)) {
+        // in the strip the whole height of the strip is the touch area
+        let hit = |b: Rect| if head.strip { Rect::new(b.x, b.y - 1, b.w, b.h + 2) } else { b };
+        if let Some(&(b, v)) = head.views.iter().find(|(b, _)| hit(*b).contains(x, y)) {
             if head.cycle {
                 // the one button of a narrow pane lists the views: stepping through them blind showed two wrong
                 // lists on the way to the third
@@ -389,7 +447,7 @@ impl Ui {
             } else {
                 self.events_view(v);
             }
-        } else if head.errors.is_some_and(|b| b.contains(x, y)) {
+        } else if head.errors.is_some_and(|b| hit(b).contains(x, y)) {
             self.m.ev_errors = !self.m.ev_errors;
             self.events_relist();
         } else {
@@ -472,9 +530,22 @@ impl Ui {
         true
     }
 
-    pub(super) fn draw_pane_events(&self, cv: &mut Canvas, r: Rect) {
+    /// The buttons of the head and what the record holds, in the strip of the docked panel (`r` is the pane under it).
+    pub(super) fn draw_events_strip(&self, cv: &mut Canvas, r: Rect) {
+        if self.events_strip().is_some() {
+            self.draw_events_head(cv, r);
+        }
+    }
+
+    /// The buttons of the head, and right of them what the record holds, where there is room.
+    fn draw_events_head(&self, cv: &mut Canvas, r: Rect) {
         let f = self.fonts();
         let head = self.events_head(r);
+        // the row of the text beside the buttons: the head row of the pane, or the strip
+        let (text_y, text_h) = match self.events_strip() {
+            Some(s) => (s.y, s.h),
+            None => (r.y, HEAD),
+        };
         for &(b, v) in &head.views {
             let on = !head.cycle && v == self.m.ev_view;
             btn(cv, b, if on { ACCENT } else { BTN }, if on { ACCENT } else { BTN_BORDER });
@@ -495,18 +566,33 @@ impl Ui {
         // what the record holds, right of the buttons, where there is room
         let total = self.pn.rows.len();
         let failed = self.pn.rows.iter().filter(|e| e.errors > 0).count();
-        let limit = r.right() - if self.dock_on() { 8 } else { 54 };
+        let limit = match self.events_strip() {
+            // left of the buttons of the strip itself
+            Some(s) => s.right() - 100 - 8,
+            None => r.right() - if self.dock_on() { 8 } else { 54 },
+        };
         let x = head.right + 14;
         let rows_txt = if total == 1 { "1 row".to_string() } else { format!("{} rows", total) };
         let failed_txt = if failed == 1 { "1 with an error".to_string() } else { format!("{} with errors", failed) };
         if x + f.s.width(&rows_txt) <= limit {
-            cv.text_in(&f.s, Rect::new(x, r.y, f.s.width(&rows_txt), HEAD), 0, &rows_txt, DIM);
+            cv.text_in(&f.s, Rect::new(x, text_y, f.s.width(&rows_txt), text_h), 0, &rows_txt, DIM);
             let x = x + f.s.width(&rows_txt) + 14;
             if failed > 0 && x + f.s.width(&failed_txt) <= limit {
-                cv.text_in(&f.s, Rect::new(x, r.y, f.s.width(&failed_txt), HEAD), 0, &failed_txt, RED);
+                cv.text_in(&f.s, Rect::new(x, text_y, f.s.width(&failed_txt), text_h), 0, &failed_txt, RED);
             }
         }
-        let (area, fit) = Self::events_rows(r);
+    }
+
+    pub(super) fn draw_pane_events(&self, cv: &mut Canvas, r: Rect) {
+        let f = self.fonts();
+        // (in the strip of the docked panel the buttons are drawn with the strip)
+        if self.events_strip().is_none() {
+            self.draw_events_head(cv, r);
+        }
+        let total = self.pn.rows.len();
+        let failed = self.pn.rows.iter().filter(|e| e.errors > 0).count();
+        let head_h = self.events_head_h();
+        let (area, fit) = self.events_rows(r);
         let n = self.events_count();
         if n == 0 || fit == 0 {
             let note = if total > 0 {
@@ -517,7 +603,7 @@ impl Ui {
                 "No decoder events in this record"
             };
             let note = startup::fit_text(&f.sb, note, r.w - 20);
-            cv.text(&f.sb, r.x + 12, r.y + HEAD + 15, &note, DIM);
+            cv.text(&f.sb, r.x + 12, r.y + head_h + 15, &note, DIM);
             return;
         }
         let bar = self.events_scroll(area, fit);
@@ -537,8 +623,8 @@ impl Ui {
         let w_len = if wide { f.s.width("Len").max(f.s.width("9999")) + pad } else { 0 };
         let w_status = if errors_column(r.w, failed) { f.s.width("999 errors") + pad } else { 0 };
         let left = r.x + if small { 8 } else { 12 };
-        // the bar is drawn narrow in the middle of its touch area: a small pane lets the text come close to it
-        let end = area.right() - if !bar.needed() { 8 } else if small { 28 } else { scroll::BAR_W + 4 };
+        // the bar shows over the right edge of the rows for a moment after a scroll, and no room is kept for it
+        let end = area.right() - if small { 12 } else { 20 };
         // the columns of the protocol (a wide pane that lists the frames of one protocol) take the place of the
         // length, the text and the hex bytes
         let own = self.events_columns().filter(|_| wide);
@@ -557,14 +643,15 @@ impl Ui {
         let mut x = left;
         for &(title, w) in &cols {
             if w > 0 {
-                cell(cv, &f.s, (x, r.y + HEAD - 3), w, title, DIM);
+                cell(cv, &f.s, (x, r.y + head_h - 3), w, title, DIM);
             }
             x += w;
         }
         cv.hline(r.x + 8, end, area.y - 1, LINE);
         for (i, e) in shown.iter().enumerate() {
             let y = area.y + i as i32 * tables::ROW_H;
-            let line = Rect::new(r.x + 4, y, end - r.x - 4, tables::ROW_H);
+            // (the stripes run to the edge: no empty strip beside the list)
+            let line = Rect::new(r.x + 4, y, area.right() - 4 - r.x - 4, tables::ROW_H);
             if self.ev_is_selected(e) {
                 // the chosen row: its box in the band and its span on the plot are marked like it
                 cv.fill(line, mix(BG, ACCENT, 46));
@@ -590,7 +677,9 @@ impl Ui {
                 x += w;
             }
         }
-        bar.draw(cv);
+        if self.events_bar_shown() {
+            bar.draw(cv);
+        }
     }
 }
 
@@ -1167,7 +1256,9 @@ mod tests {
     /// The one button of a narrow pane opens the list of the views, and a row of the list chooses it.
     #[test]
     fn a_narrow_pane_lists_its_views() {
-        let mut u = listing(Layout::Studio);
+        // (a pane under the plot: its buttons have a row of their own, where the width of the pane is the limit; in
+        // the strip of the docked panel it is the strip's)
+        let mut u = listing(Layout::Minimal);
         let messages = u.pn.rows.len();
         let head = u.events_head(Rect::new(100, 100, 220, 200));
         assert!(head.cycle && head.views.len() == 1);

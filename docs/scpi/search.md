@@ -1,6 +1,6 @@
 # Search (mark events)
 
-Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. A search of Studio is of one of six types, `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT` and `WINDow`, with the settings the trigger has for that type under the same names (`:SEARch:PULSe:WHEN` as `:TRIGger:PULSe:WHEN`). A search has one set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the setting whatever the type is, and `:SEARch:MODE` changes the type alone. The events are found in the samples by the software trigger, with a hysteresis of a tenth of a division. The events of the decoders have their own commands in [decode](decode.md).
+Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. A search of Studio is of one of seven types, `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow` and `BUS`, with the settings the trigger has for that type under the same names (`:SEARch:PULSe:WHEN` as `:TRIGger:PULSe:WHEN`). A `BUS` search has no source and no levels: it marks the packets of the active decoder (the one the Decode menu edits, which must be on) that the bus trigger's condition accepts, at the end of each packet, found by the decoder's own `ModuleInfo::trigger_match` (a frame, an ID or address, data, an error); `:SEARch:BUS:WHEN` and `:SEARch:BUS:VALue` are `:TRIGger:BUS:WHEN` and `:TRIGger:BUS:VALue`. A search has one set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the setting whatever the type is, and `:SEARch:MODE` changes the type alone. The events are found in the samples by the software trigger, with a hysteresis of a tenth of a division. The events of the decoders have their own commands in [decode](decode.md).
 
 Menu location: Decode and bus > Mark events, Search (type, source, slope or polarity, levels, 50 %, time condition, from / to trigger, event, event list, save events, remove).
 
@@ -11,7 +11,7 @@ Part of the [SCPI reference](README.md).
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:SEARch:STATe` | Set / Query | Mark the events of the trigger condition | `0` | Trigger > Mark events | name not verified against the DHO guide |
-| `:SEARch:MODE` | Set / Query | `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow`: the type of the search. `SLOPe`, `RUNT` and `WINDow` place their two levels on the signal when the search had one level. Without a search of Studio the answer is `EDGE` | `EDGE` | Search > Type | name not verified against the DHO guide |
+| `:SEARch:MODE` | Set / Query | `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow`, `BUS`: the type of the search. `SLOPe`, `RUNT` and `WINDow` place their two levels on the signal when the search had one level. Without a search of Studio the answer is `EDGE` | `EDGE` | Search > Type | name not verified against the DHO guide |
 | `:SEARch:EDGE:SOURce` | Set / Query | Search source; without a search of its own the trigger's. The first set of a source, level or slope adds Search 1 like the Add rail does | `CHAN1` | Decode and bus > Search source | name not verified against the DHO guide |
 | `:SEARch:EDGE:SLOPe` | Set / Query | `POSitive`, `NEGative`, `RFALl` | `POS` | Decode and bus > Search slope | name not verified against the DHO guide |
 | `:SEARch:EDGE:LEVel` | Set / Query | Volts | `1.500000E+00` | Decode and bus > Search level | name not verified against the DHO guide |
@@ -47,6 +47,8 @@ Part of the [SCPI reference](README.md).
 | `:SEARch:WINDow:TUPPer` | Set / Query | Seconds, above 0. The upper limit; with one limit the same as `TIME` | `4.000000E-05` | Search > Upper limit | name not verified against the DHO guide |
 | `:SEARch:WINDow:ALEVel` | Set / Query | Volts, the upper level | `1.500000E+00` | Search > Upper | name not verified against the DHO guide |
 | `:SEARch:WINDow:BLEVel` | Set / Query | Volts, the lower level; not above the upper one | `5.000000E-01` | Search > Lower | name not verified against the DHO guide |
+| `:SEARch:BUS:WHEN` | Set / Query | `FRAMe` (every packet of the decoder), `ID` (an identifier or address), `DATA`, `ERRor`: what the search marks; the set makes the search a bus search | `FRAM` | Search > Match | fork command; name not verified against the DHO guide |
+| `:SEARch:BUS:VALue` | Set / Query | The identifier, address or data the match is compared with, decimal or `0x` hex (`ID` and `DATA` use it; UART and SPI data also the trigger's relation, I2C the frame around an address) | `0x0` | Search > Value | fork command; name not verified against the DHO guide |
 | `:SEARch:DISPlay` | Set / Query | The marks of the search are drawn (`1`) or hidden (`0`); a hidden search keeps its events, its count, its badge and its list | `1` | Search > Marks | name not verified against the DHO guide |
 | `:SEARch:COPY:TO` | Action | `TRIGger` `TRIGger`: copy the search to the trigger. | - | Decode and bus > To trigger | name not verified against the DHO guide |
 | `:SEARch:COPY:FROM` | Action | `TRIGger` `TRIGger`: copy the trigger to the search. | - | Decode and bus > From trigger | name not verified against the DHO guide |
@@ -91,6 +93,20 @@ Find the pulses narrower than 100 us, then the runts of any width.
 :SEARch:COUNt?                         -> 1
 :SEARch:MODE RUNT
 :SEARch:RUNT:WHEN NONE
+:SEARch:COUNt?                         -> 0
+:SEARch:REMove
+```
+
+Mark the data bytes 0x55 that the active decoder (UART, on) read, and go to the second.
+
+```text
+:DECode:STATe ON
+:SEARch:BUS:WHEN DATA
+:SEARch:BUS:VALue 0x55
+:SEARch:MODE?                          -> BUS
+:SEARch:COUNt?                         -> 2
+:SEARch:EVENt 2
+:SEARch:BUS:WHEN ERRor
 :SEARch:COUNt?                         -> 0
 :SEARch:REMove
 ```

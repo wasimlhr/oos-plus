@@ -431,8 +431,9 @@ impl Ui {
             return;
         }
         if it == Item::Traces {
-            let stacked = !self.trace_stacked();
-            self.choose_trace_mode(stacked);
+            let all = windows::Arrangement::ALL;
+            let i = all.iter().position(|&a| a == self.arrangement()).unwrap_or(0);
+            self.set_arrangement(all[(i as i32 + d).rem_euclid(all.len() as i32) as usize]);
             return;
         }
         // oos-plus: the trigger times step on the 1-2-5 ladder; a value between two rungs (30 us) goes to the nearest

@@ -229,7 +229,7 @@ fn run_after_single_keeps_the_sweep_and_the_ieee_status_commands_answer() {
     assert_eq!((ui.m.run, ui.m.trig_mode), (RunState::Run, TrigMode::Normal));
 
     line(&mut s, &mut ui, &cv, "*CLS");
-    assert_eq!(line(&mut s, &mut ui, &cv, "*STB?;*ESE?;*SRE?;*PSC?;*TST?;*OPT?"), "0;0;0;1;0;0");
+    assert_eq!(line(&mut s, &mut ui, &cv, "*STB?;*ESE?;*SRE?;*PSC?;*TST?;*OPT?"), format!("0;0;0;1;0;{}", crate::scpi::dispatch::options_text()));
     line(&mut s, &mut ui, &cv, "*ESE 32;*SRE 36;*PSC 0;*WAI");
     assert_eq!(line(&mut s, &mut ui, &cv, "*ESE?;*SRE?;*PSC?"), "32;36;0");
     line(&mut s, &mut ui, &cv, ":NOSUCH:HEADER 1");

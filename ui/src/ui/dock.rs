@@ -303,6 +303,8 @@ pub(super) enum Press {
     Gear { kind: VKind },
     /// a control of the measurements bar in the strip (source, gate, search, pinned, add, statistics)
     Bar,
+    /// a view button or Errors only of the Events panel, in its strip: acts on the lift
+    Events,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1291,6 +1293,10 @@ impl Ui {
             self.studio.dock.press = Some(Press::Gear { kind: k });
             return true;
         }
+        if k == VKind::Pane && self.events_strip_hit(x, y) {
+            self.studio.dock.press = Some(Press::Events);
+            return true;
+        }
         if self.dock_view_rect(k, r).is_some_and(|e| e.contains(x, y)) {
             self.studio.dock.press = Some(Press::View { kind: k });
             return true;
@@ -1325,7 +1331,7 @@ impl Ui {
             }
             return true;
         }
-        if matches!(self.studio.dock.press, Some(Press::Button { .. } | Press::View { .. } | Press::Bar)) { return true; }
+        if matches!(self.studio.dock.press, Some(Press::Button { .. } | Press::View { .. } | Press::Bar | Press::Events)) { return true; }
         let Some(d) = self.studio.dock.drag.clone() else { return false };
         match d {
             DockDrag::Move { kind, grab, free, .. } => {
@@ -1407,6 +1413,7 @@ impl Ui {
                 true
             }
             (Some(Press::Bar), None) => { self.panel_strip_tap(x, y); true }
+            (Some(Press::Events), None) => { self.events_strip_tap(x, y); true }
             (Some(Press::Strip { kind, .. }), None) => { self.dock_strip_tap(kind); true }
             (None, None) => false,
         }
@@ -1504,6 +1511,10 @@ impl Ui {
         }
         if let Some(b) = &bar { self.draw_panel_bar(cv, b); }
         if let Some(v) = view { self.draw_view_switch(cv, v); }
+        // the views of the Events panel and Errors only, in the strip: the pane under it is all rows
+        if k == VKind::Pane {
+            self.draw_events_strip(cv, Rect::new(r.x, r.y + STRIP_H, r.w, (r.h - STRIP_H).max(1)));
+        }
         if let Some(e) = extra {
             chip(cv, Rect::new(e.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);
             let (cx, cy) = (e.x + e.w / 2, s.y + s.h / 2);

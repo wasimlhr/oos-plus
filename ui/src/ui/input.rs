@@ -233,11 +233,25 @@ impl Ui {
         (to.quick, to.text_size) = (from.quick, from.text_size);
     }
 
+    /// The Default key and the Default button of the Menu: the reset of `default_setup`, in the layout the person
+    /// chose. The screen they work in is not a setting of the signal, and Default in Studio took them back to the
+    /// Default layout (the owner, from the unit). `*RST` from a script still starts a new set-up in the Default layout
+    /// with the stock bars, and a recording of the key writes the layout line that brings a second scope here.
+    pub(crate) fn default_key(&mut self) {
+        let layout = self.m.layout;
+        self.default_setup();
+        if layout != self.m.layout {
+            self.m.layout = layout;
+            self.relayout();
+        }
+    }
+
     /// The Default key and `*RST`: a new set-up. `*RST` calls this itself, so that a notice or a menu on the screen,
     /// which takes a key press for its own, does not swallow a reset from a script.
     pub(crate) fn default_setup(&mut self) {
         self.rec_action("*RST");
-        // the layout is part of the set-up: a new one starts in the Default layout with the stock bars (5533112)
+        // the layout is part of the set-up: a new one starts in the Default layout with the stock bars (5533112);
+        // the Default key puts the person's layout back (`default_key`)
         let mut m = Model { meas: Self::default_meas(), ..Model::default() };
         Self::default_keeps(&self.m, &mut m);
         // the hardware session's stamps go on: a new set-up is not a new acquisition thread (#391: SINGLE never ended
@@ -336,7 +350,7 @@ impl Ui {
                 self.autoset_live_only();
             }
             key::CLEAR => self.clear_display(),
-            key::DEFAULT => self.default_setup(),
+            key::DEFAULT => self.default_key(),
             key::SLOPE => self.adjust(Item::TrigSlope, 1),
             key::FORCE => {
                 self.force_trigger();

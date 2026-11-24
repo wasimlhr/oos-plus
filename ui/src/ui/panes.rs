@@ -57,6 +57,8 @@ pub struct PaneState {
     events_t: f64,
     /// the first row the Events pane shows, and the row chosen by a tap
     pub ev_top: usize,
+    /// when the list of the Events pane was last scrolled: its bar shows for a moment after that, else it is not drawn
+    pub ev_bar_t: Option<f64>,
     pub ev_sel: Option<super::decrows::EvSel>,
     /// rows the Events pane is high enough for, and when the list last needed them
     event_rows: usize,
@@ -1098,11 +1100,7 @@ impl Ui {
         if !self.dock_on() && Self::pane_close(r).contains(x, y) {
             self.m.pane = 0;
             self.m.split_pane = 0;
-            // Split with no number pane is the two stacked traces
-            if self.m.density == Density::Split && self.m.win_layout == WinLayout::One {
-                self.m.win_layout = WinLayout::Rows;
-                self.spread_wins();
-            }
+            self.relayout();
             return true;
         }
         if !r.contains(x, y) {

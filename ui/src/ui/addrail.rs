@@ -107,6 +107,9 @@ pub(super) struct SearchSpec {
     pub eq: bool,
     /// the marks are not drawn; the search, its count and its events stay
     pub hidden: bool,
+    /// Bus: what of the active decoder's packets it marks, and the value an ID or data is compared with
+    pub bus: BusWhat,
+    pub val: u64,
 }
 
 /// How many searches Studio has at once: Search 1 to 3. The top bar has room for three counts, and each has a colour
@@ -158,7 +161,7 @@ pub(super) struct RailGeo {
 const SLOPES: [&str; 3] = ["Rising", "Falling", "Either"];
 const POLS: [&str; 2] = ["Positive", "Negative"];
 /// What a search looks for: the trigger's types of one source that the software trigger finds in a record.
-pub(super) const SEARCH_TYPES: [TrigType; 6] = [TrigType::Edge, TrigType::Pulse, TrigType::Slope, TrigType::Timeout, TrigType::Runt, TrigType::Window];
+pub(super) const SEARCH_TYPES: [TrigType; 7] = [TrigType::Edge, TrigType::Pulse, TrigType::Slope, TrigType::Timeout, TrigType::Runt, TrigType::Window, TrigType::Bus];
 /// Where a Window search marks: the signal comes between the two levels, leaves them, or was between them for a time.
 const WINS: [&str; 3] = ["Enter", "Exit", "Inside"];
 /// A time is equal to the limit within this part of it: no two pulses of a record are the same to the sample.
@@ -176,7 +179,7 @@ pub(super) fn polar(kind: TrigType) -> bool {
 impl SearchSpec {
     /// An edge search; the settings of the other types are the trigger's defaults.
     pub fn edge(src: WaveId, level: f32, slope: u8) -> Self {
-        SearchSpec { src, level, slope, kind: TrigType::Edge, level2: level, when: WhenKind::Lt, t1: 20e-6, t2: 40e-6, eq: false, hidden: false }
+        SearchSpec { src, level, slope, kind: TrigType::Edge, level2: level, when: WhenKind::Lt, t1: 20e-6, t2: 40e-6, eq: false, hidden: false, bus: BusWhat::Frame, val: 0 }
     }
 
     /// The names of the slope row: slopes, the two polarities of Pulse and Runt, or where a Window search marks.
@@ -230,6 +233,7 @@ impl SearchSpec {
     /// The settings as the type takes them: a polarity is not Either, only Runt is without a time condition, the
     /// lower level and the lower limit are not above the upper ones (a type of one level has no lower one).
     pub fn fit(mut self) -> Self {
+        self.val = self.val.min(BUS_VAL_MAX);
         if !SEARCH_TYPES.contains(&self.kind) { self.kind = TrigType::Edge; }
         if self.slope as usize >= self.slopes().len() { self.slope = 0; }
         if self.when == WhenKind::Off && self.kind != TrigType::Runt { self.when = WhenKind::Gt; }
@@ -1045,8 +1049,15 @@ impl Ui {
     // ------------------------------------------------------------------------------------------------ search
 
     pub(super) fn addrail_search_items(&self) -> Vec<Item> {
-        let mut v = vec![Item::SrchWhich, Item::SrchType, Item::SrchSrc, Item::SrchSlope, Item::SrchLevel];
         let sp = self.studio.search();
+        // a bus search has no source of its own: it marks what the active decoder decoded
+        if let Some(s) = sp.filter(|s| s.kind == TrigType::Bus) {
+            let mut v = vec![Item::SrchWhich, Item::SrchType, Item::SrchBusWhat];
+            if matches!(s.bus, BusWhat::Id | BusWhat::Data) { v.push(Item::SrchBusVal); }
+            v.extend([Item::SrchShow, Item::SrchEvent, Item::SrchFromTrig, Item::SrchToTrig, Item::SearchTable, Item::SrchRemove]);
+            return v;
+        }
+        let mut v = vec![Item::SrchWhich, Item::SrchType, Item::SrchSrc, Item::SrchSlope, Item::SrchLevel];
         if sp.is_some_and(|s| s.kind.two_level()) { v.push(Item::SrchLevel2); }
         v.push(Item::Srch50);
         // the time of the type, as the trigger menu has it: one limit, two for Inside and Outside, none for Runt's Off
@@ -1117,6 +1128,7 @@ impl Ui {
     /// measured between), those of Runt and Window to 25 % and 75 % (a pulse that ends between them is a runt).
     pub(super) fn studio_search_set_50(&mut self) {
         let Some(sp) = self.studio.search() else { return };
+        if sp.kind == TrigType::Bus { return; }
         let Some((lo, hi)) = self.studio_search_span(sp.src) else { return };
         let at = |f: f32| lo + f * (hi - lo);
         let (level, level2) = match sp.kind {
@@ -1145,6 +1157,7 @@ impl Ui {
     pub(super) fn studio_search_events_of(&self, slot: usize) -> Arc<Vec<f64>> {
         let none = || Arc::new(Vec::new());
         let Some(sp) = self.studio.searches.get(slot).copied().flatten() else { return none() };
+        if sp.kind == TrigType::Bus { return self.studio_bus_search_events(slot, sp); }
         let Some((w, dt, t0)) = self.deskew_samples(sp.src) else { return none() };
         if w.len() < 2 || !(dt > 0.0) { return none(); }
         use std::hash::{Hash, Hasher};
@@ -1164,12 +1177,38 @@ impl Ui {
         ev
     }
 
+    /// The events of a bus search: the packets of the active decoder (the one the Decode menu edits) that satisfy
+    /// `ModuleInfo::trigger_match(what, value, packet)`, the condition the bus trigger has, at the end of each packet
+    /// (UART and SPI data take the relation of the trigger's serial settings, I2C the frame around an address).
+    /// No decoder, or one that is off, or a record that is not decoded yet, has none. Cached for the packets, each
+    /// search by itself.
+    fn studio_bus_search_events(&self, slot: usize, sp: SearchSpec) -> Arc<Vec<f64>> {
+        let none = || Arc::new(Vec::new());
+        if !self.m.dec_on { return none(); }
+        let Ok(packets) = self.decode_packets_of(&self.m) else { return none() };
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        (packets.len(), packets.first().map(|p| p.t0.to_bits()), packets.last().map(|p| p.t1.to_bits())).hash(&mut h);
+        format!("{:?}|{:?}|{:?}|{:?}", self.m.dec_cfg(), sp.bus, sp.val, self.m.ser).hash(&mut h);
+        let key = h.finish();
+        if let Some((k, ev)) = &self.studio.search_cache.borrow()[slot] { if *k == key { return ev.clone(); } }
+        let mut m = self.m.clone();
+        (m.trig_bus, m.trig_bus_val) = (sp.bus, sp.val);
+        let mut out = crate::trig::points(&m, &packets);
+        out.sort_by(f64::total_cmp);
+        out.truncate(SEARCH_MAX);
+        let ev = Arc::new(out);
+        self.studio.search_cache.borrow_mut()[slot] = Some((key, ev.clone()));
+        ev
+    }
+
     /// What the selected search looked at when that is not the whole record, in seconds: (searched, record). The scope reads a
     /// stopped record and a deep one in part, the screen with a margin (`stop_plan`, `screen_window` of the board), so
     /// 64 000 events of a running 1 Mpts record were 24 000 after Stop with nothing to say why (unit 2026-11-20).
     /// None for the whole record, and where the frame does not say how long its record is.
     pub(super) fn studio_search_part(&self) -> Option<(f64, f64)> {
         let sp = self.studio.search()?;
+        if sp.kind == TrigType::Bus { return None; }
         let WaveId::Ch(_) = sp.src else { return None };
         let (w, dt, _) = self.deskew_samples(sp.src)?;
         let (rate, points) = self.last[0].as_ref()?.raw.as_ref()?.frame.acq;
@@ -1216,7 +1255,8 @@ impl Ui {
         let slope = match m.slope { Slope::Rise => 0, Slope::Fall => 1, _ => 2 };
         let slope = if kind == TrigType::Window { m.win_mode as u8 } else if polar(kind) { (m.trig_pol == Pol::Neg) as u8 } else { slope };
         let hidden = self.studio.search().is_some_and(|s| s.hidden);
-        SearchSpec { src, level: m.trig_level, slope, kind, level2: m.trig_level2, when: m.trig_when, t1: m.trig_t1, t2: m.trig_t2, eq: false, hidden }.fit()
+        let (bus, val) = if m.trig_type == TrigType::Bus { (m.trig_bus, m.trig_bus_val) } else { (BusWhat::Frame, 0) };
+        SearchSpec { src, level: m.trig_level, slope, kind, level2: m.trig_level2, when: m.trig_when, t1: m.trig_t1, t2: m.trig_t2, eq: false, hidden, bus, val }.fit()
     }
 
     fn studio_search_copy_from_trigger(&mut self) {
@@ -1225,6 +1265,10 @@ impl Ui {
 
     fn studio_search_copy_to_trigger(&mut self) {
         let Some(sp) = self.studio.search() else { return };
+        if sp.kind == TrigType::Bus {
+            (self.m.trig_type, self.m.trig_bus, self.m.trig_bus_val) = (TrigType::Bus, sp.bus, sp.val);
+            return self.settings_changed();
+        }
         let WaveId::Ch(c) = sp.src else { return self.toast("The trigger takes a channel") };
         let m = &mut self.m;
         m.trig_type = sp.kind;
@@ -1359,8 +1403,8 @@ impl Ui {
 
     pub(super) fn addrail_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::CurSnap | Item::SrchWhich | Item::SrchType | Item::SrchSrc | Item::SrchSlope | Item::SrchWhen | Item::SrchShow => Kind::Choice,
-            Item::SrchLevel | Item::SrchLevel2 | Item::SrchTime | Item::SrchTime2 | Item::SrchEvent => Kind::Value,
+            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::CurSnap | Item::SrchWhich | Item::SrchType | Item::SrchSrc | Item::SrchSlope | Item::SrchWhen | Item::SrchShow | Item::SrchBusWhat => Kind::Choice,
+            Item::SrchLevel | Item::SrchLevel2 | Item::SrchTime | Item::SrchTime2 | Item::SrchEvent | Item::SrchBusVal => Kind::Value,
             Item::CurRemove | Item::CurSnapNow | Item::Srch50 | Item::SrchFromTrig | Item::SrchToTrig | Item::SrchRemove => Kind::Action,
             _ => return None,
         })
@@ -1389,6 +1433,8 @@ impl Ui {
             Item::SrchFromTrig => "Copy from trigger",
             Item::SrchToTrig => "Copy to trigger",
             Item::SrchEvent => "Event",
+            Item::SrchBusWhat => "Match",
+            Item::SrchBusVal => "Value",
             Item::SrchRemove => "Remove search",
             _ => return None,
         })
@@ -1410,6 +1456,8 @@ impl Ui {
             }),
             Item::SrchWhen => self.studio.search().map_or(String::new(), |s| COND_NAMES[s.cond() as usize].into()),
             Item::SrchShow => if self.studio.search().is_some_and(|s| s.hidden) { "Hidden" } else { "Shown" }.into(),
+            Item::SrchBusWhat => self.studio.search().map_or(String::new(), |s| bus_what_name(s.bus).into()),
+            Item::SrchBusVal => self.studio.search().map_or(String::new(), |s| format!("0x{:X}", s.val)),
             Item::SrchTime | Item::SrchTime2 => self.studio.search().map_or(String::new(), |s| si_short(if it == Item::SrchTime { s.t1 } else { s.t2 } as f64, "s")),
             Item::SrchEvent => {
                 let n = self.studio_search_events().len();
@@ -1432,6 +1480,8 @@ impl Ui {
             Item::SrchSlope => self.studio.search().map_or(&SLOPES[..], |s| s.slopes()).iter().map(|s| s.to_string()).collect(),
             Item::SrchWhen => self.studio.search().map_or(Vec::new(), |s| s.conds()).iter().map(|&c| COND_NAMES[c as usize].to_string()).collect(),
             Item::SrchShow => vec!["Shown".into(), "Hidden".into()],
+            Item::SrchBusWhat => BUS_WHATS.iter().map(|&w| bus_what_name(w).to_string()).collect(),
+            Item::SrchBusVal => KEYPAD.iter().map(|k| k.to_string()).collect(),
             Item::SrchLevel | Item::SrchLevel2 | Item::SrchTime | Item::SrchTime2 | Item::SrchEvent => Vec::new(),
             _ => return None,
         })
@@ -1490,6 +1540,13 @@ impl Ui {
                 let all = sp.conds();
                 let at = all.iter().position(|&c| c == sp.cond()).unwrap_or(0) as i32;
                 if !all.is_empty() { self.studio.search_put(sp.with_cond(all[(at + d).rem_euclid(all.len() as i32) as usize])); }
+            },
+            Item::SrchBusWhat => if let Some(sp) = self.studio.search() {
+                let at = BUS_WHATS.iter().position(|&w| w == sp.bus).unwrap_or(0) as i32;
+                self.studio.search_put(SearchSpec { bus: BUS_WHATS[(at + d).rem_euclid(BUS_WHATS.len() as i32) as usize], ..sp });
+            },
+            Item::SrchBusVal => if let Some(sp) = self.studio.search() {
+                self.studio.search_put(SearchSpec { val: (sp.val as i64 + d as i64).clamp(0, BUS_VAL_MAX as i64) as u64, ..sp });
             },
             Item::SrchShow => if let Some(sp) = self.studio.search() { if d.rem_euclid(2) != 0 { self.studio.search_put(SearchSpec { hidden: !sp.hidden, ..sp }); } },
             // the upper level takes the lower one along, the lower one stops at the upper (as the trigger's two do)

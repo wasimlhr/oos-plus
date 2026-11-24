@@ -32,6 +32,11 @@ scope's frame loop, only of a changed screen, up to 20 a second (about 13 reach 
 each new picture as soon as it is made, and while the screen stands still it gets "not modified" instead. The scope's
 own screen does not slow down for it. Pause stops the pictures, and a tab in the background stops them too.
 
+**Saved files.** `http://<scope>:8080/files` lists the files the scope saved (screenshots, waveforms, setups) in its save
+folder as JSON, and `http://<scope>:8080/files/<file>` downloads one, for a script or a backup. It only reads: nothing
+can be written, deleted or fetched from outside that folder. When **Allowed** is set (System > Network > Remote
+services), it answers only the addresses it lists.
+
 **Monitor picture.** `http://<scope>:8080/monitor.png` is the picture a monitor on the HDMI port gets (Display > HDMI:
 Mirror, Waveform or Layout), at the monitor's size, as it is at the moment of the request. It is for looking at what the
 monitor shows without standing in front of it; it answers 409 while no monitor is connected.

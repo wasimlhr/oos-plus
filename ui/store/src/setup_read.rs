@@ -267,7 +267,8 @@ fn set_time_trigger(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
         "segments" => m.segments = (p_u32(v)? as usize).min(crate::model::SEG_HW_MAX),
         "seg_interval" => m.seg_ivl = p_f32(v)?.clamp(0.0, crate::model::SEG_IVL_MAX),
         "mdepth" => m.mdepth = p_idx(v, mdepths().len())?,
-        "windows" => m.win_layout = p_enum(v, &WinLayout::ALL)?,
+        // two windows (`Cols`, `Rows`) were a layout before the four windows were the one split
+        "windows" => m.win_layout = if matches!(v, "Cols" | "Rows") { WinLayout::Quad } else { p_enum(v, &WinLayout::ALL)? },
         "split_pane" => m.split_pane = p_idx(v, crate::model::PANES_N)?,
         "ch_window" => {
             let w = p_list(v, NCH, |x| p_idx(x, 5)?.checked_sub(1).ok_or_else(|| "window 0".to_string()))?;
@@ -953,6 +954,8 @@ fn parse_lines(text: &str, bad: &mut Vec<String>, r: &dyn Registries) -> Model {
                 continue;
             }
         };
+        // the densities Split and Four became the windows and the lower pane, chosen apart
+        let v = if k == "density" && matches!(v, "Split" | "Four") { "Scope" } else { v };
         if let Err(e) = set(&mut m, k, v, r) {
             proto_missing |= k == "dec_proto";
             bad.push(format!("line {}: {}: {}", ln + 1, k, e));
@@ -969,22 +972,10 @@ fn parse_lines(text: &str, bad: &mut Vec<String>, r: &dyn Registries) -> Model {
             m.dec_opt = o;
         }
     }
-    // a setup from before the density row: the windows and the pane already say which of the four it was
-    if !text.lines().any(|l| l.split('=').next().is_some_and(|k| k.trim() == "density")) {
-        m.density = match m.win_layout {
-            WinLayout::Quad => Density::Four,
-            WinLayout::Cols | WinLayout::Rows => Density::Split,
-            WinLayout::One if m.pane != 0 => Density::Split,
-            WinLayout::One => Density::Scope,
-        };
-        // two across is not a density of Default's page; there the split is two stacked traces (Minimal and Studio
-        // have Side by side)
-        if m.win_layout == WinLayout::Cols && m.layout == Layout::Default {
-            m.win_layout = WinLayout::Rows;
-        }
-        if m.density == Density::Split {
-            m.split_pane = m.pane;
-        }
+    // a setup from before the density row: the lower pane it had is the one Full gives back
+    let has = |key: &str| text.lines().any(|l| l.split('=').next().is_some_and(|k| k.trim() == key));
+    if !has("density") && !has("split_pane") {
+        m.split_pane = m.pane;
     }
     if m.zscale > m.tscale {
         m.zscale = m.tscale;

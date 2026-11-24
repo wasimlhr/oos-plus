@@ -135,7 +135,7 @@ pub(super) enum PanelKind {
 
 /// Items whose list is a keypad or a file list with its own handling: the classic picker keeps them.
 fn keypad_pick(it: Item) -> bool {
-    matches!(it, Item::TrigBusVal | Item::AfgFreqEntry | Item::WlanNet | Item::WlanForgetNet | Item::NtpServer | Item::TimeZone | Item::RemName | Item::MeasCopyTo)
+    matches!(it, Item::TrigBusVal | Item::SrchBusVal | Item::AfgFreqEntry | Item::WlanNet | Item::WlanForgetNet | Item::NtpServer | Item::TimeZone | Item::RemName | Item::MeasCopyTo)
 }
 
 fn destructive(it: Item) -> bool {
@@ -168,7 +168,8 @@ impl Ui {
                 Open(M::Zone) => Slot::Skip,
                 _ => Slot::Tab(1),
             }),
-            M::Channel(_) | M::ChMore(_) => (&["Vertical", "More"], |it| match it {
+            M::Channel(_) | M::ChMore(_) => (&["Vertical", "More", "Info"], |it| match it {
+                ChInfo(..) => Slot::Tab(2),
                 ChOn(_) | ChScale(_) | ChOffset(_) | ChCoupling(_) | ChProbe(_) | ChBw(_) | ChInvert(_) => Slot::Tab(0),
                 Open(M::ChMore(_)) => Slot::Skip,
                 ChBiasZero(_) | AutoDeskew => Slot::Foot(1),
@@ -386,7 +387,7 @@ impl Ui {
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
+        matches!(menu, MenuId::Channel(_) | MenuId::ChMore(_) | MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
     }
 
     /// The pages of the Decode sheet from its three planned tabs (Decode, Settings, Levels).
@@ -460,7 +461,8 @@ impl Ui {
     /// The items a sheet of `menu` draws from: the menus it merges.
     fn sheet_source_items(&self, menu: MenuId) -> Vec<Item> {
         match menu {
-            MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c))).collect(),
+            MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c)))
+                .chain((0..super::chinfo::CH_INFO_LINES).map(|k| Item::ChInfo(c, k))).collect(),
             MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
             // Measure: its footer leads to the list of measurements to add
             MenuId::Measure => [Item::Open(MenuId::MeasAdd)].into_iter().chain(self.items(MenuId::Measure)).collect(),
@@ -479,7 +481,7 @@ impl Ui {
             // Display: the choice of the bottom bar is a row of the Default layout's menu. A sheet is up only in
             // Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
             MenuId::Display => {
-                // and Overlay or Stacked, which Studio had in the hold menu of the plot alone
+                // and the Traces row, which the Windows page has too (the dialog of Default reaches it there)
                 let rows = self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar);
                 rows.chain([Item::Traces]).collect()
             }

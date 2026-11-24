@@ -61,10 +61,10 @@ fn audit_b() {
         let mut u = fresh(); chs(&mut u, n); u.trace_mode(true); u.set_zoom(true); save(&mut u, &format!("08_stacked_zoom_{n}ch"));
     }
     let mut u = fresh(); chs(&mut u, 2); u.set_zoom(true); save(&mut u, "08_overlay_zoom_2ch");
-    let mut u = fresh(); chs(&mut u, 2); u.m.density = Density::Split; u.apply_density(); u.relayout(); save(&mut u, "09_split2");
-    let mut u = fresh(); chs(&mut u, 4); u.m.density = Density::Four; u.apply_density(); u.relayout(); save(&mut u, "09_split4");
-    let mut u = fresh(); chs(&mut u, 2); u.m.density = Density::Split; u.apply_density(); u.relayout(); u.set_zoom(true); save(&mut u, "09_split2_zoom");
-    let mut u = fresh(); chs(&mut u, 2); u.m.density = Density::Split; u.apply_density(); u.relayout(); u.m.density = Density::Scope; u.apply_density(); u.relayout(); save(&mut u, "09_split_restored");
+    let mut u = fresh(); chs(&mut u, 2); u.set_arrangement(super::super::windows::Arrangement::Windows); u.relayout(); save(&mut u, "09_split2");
+    let mut u = fresh(); chs(&mut u, 4); u.set_arrangement(super::super::windows::Arrangement::Windows); u.relayout(); save(&mut u, "09_split4");
+    let mut u = fresh(); chs(&mut u, 2); u.set_arrangement(super::super::windows::Arrangement::Windows); u.relayout(); u.set_zoom(true); save(&mut u, "09_split2_zoom");
+    let mut u = fresh(); chs(&mut u, 2); u.set_arrangement(super::super::windows::Arrangement::Windows); u.relayout(); u.relayout(); save(&mut u, "09_split_restored");
 }
 
 #[test]
@@ -94,17 +94,17 @@ fn audit_c() {
 #[test]
 fn audit_d() {
     // split then Overlay tap
-    let mut u = fresh(); chs(&mut u, 2); u.m.density = Density::Split; u.apply_density(); u.relayout();
+    let mut u = fresh(); chs(&mut u, 2); u.set_arrangement(super::super::windows::Arrangement::Windows); u.relayout();
     let (ov, _, _, _, _, _, _) = u.footer_rects(); tap(&mut u, ov.x + 5, ov.y + 5);
     println!("AUDIT split->overlay: density={:?} win_layout={:?}", u.m.density, u.m.win_layout);
     save(&mut u, "20_split_then_overlay");
     // 4 split then stacked
-    let mut u = fresh(); chs(&mut u, 4); u.m.density = Density::Four; u.apply_density(); u.relayout();
+    let mut u = fresh(); chs(&mut u, 4); u.set_arrangement(super::super::windows::Arrangement::Windows); u.relayout();
     let (_, st, _, _, _, _, _) = u.footer_rects(); tap(&mut u, st.x + 5, st.y + 5);
     println!("AUDIT four->stacked: density={:?} win_layout={:?} stacked={}", u.m.density, u.m.win_layout, u.workspace.stacked);
     save(&mut u, "20_four_then_stacked");
     // Four -> back to Scope while stacked
-    u.m.density = Density::Scope; u.apply_density(); u.relayout(); save(&mut u, "20_four_stacked_scope");
+    u.relayout(); save(&mut u, "20_four_stacked_scope");
     // last channel off via Sources popup
     let mut u = fresh(); tap(&mut u, 80, BOTTOM.y + 10);
     // the Minimal bar moved; without the popup the tap below lands where it was and the picture shows that

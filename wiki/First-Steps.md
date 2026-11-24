@@ -33,6 +33,8 @@ selects and opens the menu the same way; a tap with the menu open closes it. **F
 more than half a second, or a finger held on a channel's card, switches that channel between AC and DC coupling;
 channel keys act when they are let go.
 
+**Channel info (Minimal and Studio).** The channel menu has a third tab, **Info**, with seven lines of what the channel is set to: vertical scale and offset, input (coupling, probe, inverted), bandwidth, the sample rate and memory depth in force, deskew and name. Bandwidth names the limit and, where the front end leaves less, the bandwidth in force: Full is the model's rated bandwidth, a limit above it is capped to it, Auto follows the sample rate (about a quarter of it, assumed, not measured on a unit). The tab only shows; change a value on Vertical or More.
+
 ## Sample rate
 
 Tap the sample rate at the top for **Acquire**. The rate itself follows the time base and the memory depth: slower time base or less memory, lower rate. The top rate is 1.25 GSa/s with one channel, 625 MSa/s with two, 312.5 MSa/s with three or four.
@@ -56,39 +58,36 @@ The x or a tap anywhere else closes the bar; otherwise it goes after 30 seconds.
 
 ## Windows and full screen
 
-**Display > Windows** splits the plot. In the Default layout its first row is **Density**:
+**Display > Traces** (also the first row of **Display > Windows**, in every layout) chooses how the traces share the
+plot:
 
-| Density | Plot |
+| Traces | Plot |
 |---|---|
-| Scope | the whole plot, with the bars |
-| Full | the whole plot without the top bar and the cards (full screen) |
-| Split | two windows, one above the other, or with **Lower** a second pane under the plot |
-| Four | four windows, two by two |
+| Overlay | every source on one graticule |
+| Stacked | one plot, a lane for every source, one under the other |
+| Windows | four separate waveform views, numbered 1 to 4, two by two |
 
-The Minimal and Studio layouts have **Layout**, **Full screen** (Off, On) and **Strip** (where the measurement strip
-stands, or Hidden) instead:
+With **Windows** the page lists every channel, math channel, reference and the logic analyser that is on, and its
+number row (1 2 3 4) puts that source in a window. Choosing Windows spreads the sources that are on, one per window, in
+channel order; you can move them afterwards. All windows share the time base, and each has its own channel markers,
+volt labels and time axis. A drag in a window moves a channel of that window. The logic analyser lanes stand at the
+bottom of their window; with no channel in that window they fill it. Zoom, XY and the analysers use the whole plot.
+Overlay or Stacked puts everything on one plot again. The arrangement is saved with the setup.
 
-| Layout | Windows |
-|---|---|
-| One | the whole plot |
-| Side by side | two, left and right |
-| Stacked | two, one above the other |
-| Four | two by two |
-
-On the same page each channel, each math channel that is on and the logic analyser get a window. A new layout spreads the channels that are on, one per window, and you can move them afterwards. All windows share the time base. Each window has its own channel markers, volt labels and time axis. A drag in a window moves a channel of that window. The logic analyser lanes stand at the bottom of their window; with no channel in that window they fill it. Zoom, XY and the analysers use one window. The layout is saved with the setup.
+The rest of the Windows page: **Full screen** (Off, On), **Strip** (where the measurement strip stands, or Hidden)
+and **Lower**, the pane under the plot (Results, Trend, Events, Spectrum, ...). The pane belongs to no arrangement:
+Overlay, Stacked and Windows all keep it, and adding a plot or a table from the Add menu changes neither.
 
 ![Full screen](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/full-screen.png)
 
 **Full screen:** the button with four corners at the top right of the plot hides the top bar and the cards. The same
-button, now with the corners pointing inwards, brings them back. Also Display > Windows > Density Full (in Minimal and
-Studio: Full screen). While the touch lock is on there is no full screen, because the Menu button is the way out of
+button, now with the corners pointing inwards, brings them back. Also Display > Windows > Full screen. Full screen puts the lower pane away and gives it back. While the touch lock is on there is no full screen, because the Menu button is the way out of
 the lock. The button stays where it is: a drag that starts on it moves neither the button nor the trace.
 
 **Zoom:** the magnifier under it opens and closes the zoom view. **Box** in the zoom bar arms one drag: the next drag
 on the plot draws a box, and that box is the zoom window. A tap does not zoom.
 
-**Windows:** the button with four small windows under the magnifier opens the Windows menu (density, HDMI output and
-the window layout); a second tap closes it. While zoom is on it sits under the zoom bar.
+**Windows:** the button with four small windows under the magnifier opens the Windows menu (traces, full screen, strip and the lower pane); a second tap closes it. While zoom is on it sits under the zoom bar.
 
 **Studio layout:** the Screen tab of its Display menu has two switches and an action of its own. **Pinned badges**
 shows or hides the row of measurement badges, **Compact view** makes the gaps between the lanes, the badge row and

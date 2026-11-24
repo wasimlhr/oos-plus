@@ -265,6 +265,8 @@ pub(super) enum Item {
     SrchWhen,
     SrchTime,
     SrchTime2,
+    SrchBusWhat,
+    SrchBusVal,
     SrchShow,
     Srch50,
     SrchFromTrig,
@@ -274,8 +276,6 @@ pub(super) enum Item {
     Persist,
     Intensity,
     GridStyle,
-    /// view density (ui/windows.rs): Scope, Full, Split, Four
-    WinLayout,
     WinCh(usize),
     /// window of reference R<n+1> in a split
     WinRef(usize),
@@ -639,6 +639,8 @@ pub(super) enum Item {
     StudioReset,
     /// Studio, Storage sheet: the view that analyses the loaded files
     StudioOffline,
+    /// Channel sheet, Info tab: one line of what channel `.0` is set to (`chinfo.rs`), line `.1`
+    ChInfo(usize, u8),
 }
 
 /// The choices of an item, for its picker.
@@ -663,7 +665,7 @@ const NO_PART: Part =
 
 /// The parts of the menus, asked by `kind`, `label`, `value`, `adjust`, `activate`, `options` and `ctl` before the
 /// items `ui.rs` keeps itself. `remote` answers for `ssh` too, except the actions.
-pub(super) const PARTS: [Part; 29] = [
+pub(super) const PARTS: [Part; 30] = [
     // oos-plus parts: Studio's rows about its arrangement, the Add rail of Studio, the per-row measurement sheet,
     // the external generator
     Part {
@@ -883,6 +885,7 @@ pub(super) const PARTS: [Part; 29] = [
         text: Some(Ui::bt_text),
         ..NO_PART
     },
+    Part { label: Some(Ui::chinfo_label), value: Some(Ui::chinfo_value), text: Some(Ui::chinfo_text), ..NO_PART },
     Part { kind: Some(Ui::row_pad_kind), label: Some(Ui::row_pad_label), ..NO_PART },
     Part {
         kind: Some(Ui::setting_kind),
