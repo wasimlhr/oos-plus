@@ -295,6 +295,61 @@ fn a_math_channel_is_read_and_measured() {
     assert!(line(&mut s, &mut ui, &cv, ":WAV:DATA?").starts_with("-221,"));
 }
 
+/// The bench report of a FlexRay run: a 100 kpt memory read in pages of 25 kpts, in every mode and format, running and
+/// stopped. NORMal and MAXimum (running) answer the screen record, RAW the whole memory; no combination stays silent.
+/// The body runs on its own thread and the test waits a fixed time for it, so a hang fails instead of stalling the
+/// suite, and a slow machine does not change the result.
+#[test]
+fn a_paged_read_of_a_100_kpt_memory_answers_in_every_mode_and_format() {
+    let (done, wait) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let (mut s, mut ui, cv) = session();
+        line(&mut s, &mut ui, &cv, ":CHAN1:DISP ON;:ACQ:MDEP 100k");
+        let mut seen = Vec::new();
+        for state in [":RUN", ":STOP"] {
+            line(&mut s, &mut ui, &cv, state);
+            // the record of the 100 kpt memory comes after a few steps; counted in steps, not in time
+            line(&mut s, &mut ui, &cv, ":WAV:SOUR CHAN1;:WAV:MODE RAW;:WAV:STAR 1;:WAV:STOP 100000");
+            let mut steps = 0;
+            while line(&mut s, &mut ui, &cv, ":WAV:POIN?") != "100000" && steps < 2000 {
+                ui.step(0.05);
+                std::thread::sleep(Duration::from_millis(1));
+                steps += 1;
+            }
+            for mode in ["NORM", "MAX", "RAW"] {
+                for (format, width) in [("BYTE", 1), ("WORD", 2), ("ASC", 0)] {
+                    line(&mut s, &mut ui, &cv, &format!("*CLS;:WAV:SOUR CHAN1;:WAV:MODE {mode};:WAV:FORM {format}"));
+                    line(&mut s, &mut ui, &cv, ":WAV:STAR 1;:WAV:STOP 100000");
+                    let points: usize = line(&mut s, &mut ui, &cv, ":WAV:POIN?").parse().unwrap();
+                    let (mut total, mut start) = (0, 1);
+                    while start <= points {
+                        let stop = (start + 24_999).min(points);
+                        line(&mut s, &mut ui, &cv, &format!(":WAV:STAR {start};:WAV:STOP {stop}"));
+                        let block = s.exec_line(&mut ui, &cv, ":WAV:DATA?");
+                        assert!(block.starts_with(b"#9"), "{state} {mode} {format}: {:?}", String::from_utf8_lossy(&block));
+                        let length: usize = std::str::from_utf8(&block[2..11]).unwrap().parse().unwrap();
+                        assert_eq!(block.len(), 11 + length, "{state} {mode} {format}");
+                        total += if width == 0 { block[11..].split(|&b| b == b',').count() } else { length / width };
+                        start = stop + 1;
+                    }
+                    assert_eq!(total, points, "{state} {mode} {format}");
+                    assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"", "{state} {mode} {format}");
+                    seen.push((state, mode, points));
+                }
+            }
+        }
+        let _ = done.send(seen);
+    });
+    let seen = wait.recv_timeout(Duration::from_secs(120)).expect("a paged read did not answer");
+    for (state, mode, points) in seen {
+        if mode == "RAW" || (mode == "MAX" && state == ":STOP") {
+            assert_eq!(points, 100_000, "{state} {mode}: the memory");
+        } else {
+            assert!(points < 100_000, "{state} {mode}: the screen record");
+        }
+    }
+}
+
 #[test]
 fn saved_files_are_listed_fetched_and_deleted_and_the_memory_is_saved() {
     let dir = std::env::temp_dir().join(format!("oos-mmem-{}", std::process::id()));
