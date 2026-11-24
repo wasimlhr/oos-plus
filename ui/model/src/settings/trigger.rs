@@ -19,6 +19,10 @@ pub const SLICES: [&[Setting]; 6] = [&EDGE, &REJECT, &SECOND, &TIMES, &WINDOW, &
 
 /// Why the rows of a trigger type's own values have no command.
 const NO_SUBTREE: &str = "OOS has no `:TRIGger` subtree of this trigger type yet";
+/// Answered by hand, in the pulse trigger's own commands (docs/scpi.md, "Pulse trigger").
+const BY_HAND_POL: &str = "answered by hand in the polarity commands of the pulse and runt triggers (docs/scpi/trigger.md)";
+const BY_HAND_T1: &str = "answered by hand in the width and time commands of the typed triggers (docs/scpi/trigger.md)";
+const BY_HAND_T2: &str = "answered by hand in the upper-limit commands of the typed triggers (docs/scpi/trigger.md)";
 
 /// Written after `trig_level`.
 pub const EDGE: [Setting; 3] = [
@@ -135,7 +139,7 @@ pub const SECOND: [Setting; 2] = [
     },
     Setting {
         key: "trig_pol",
-        scpi: Scpi::none(NO_SUBTREE),
+        scpi: Scpi::none(BY_HAND_POL),
         ty: Ty::Choice(
             &[
                 Choice { store: "Pos", scpi: "", label: "Positive" },
@@ -158,7 +162,7 @@ pub const SECOND: [Setting; 2] = [
 pub const TIMES: [Setting; 5] = [
     Setting {
         key: "trig_t1",
-        scpi: Scpi::none(NO_SUBTREE),
+        scpi: Scpi::none(BY_HAND_T1),
         ty: Ty::Seconds { ladder: time_ladder_step, zero: None },
         label: "Time",
         #[cfg(test)]
@@ -171,7 +175,7 @@ pub const TIMES: [Setting; 5] = [
     },
     Setting {
         key: "trig_t2",
-        scpi: Scpi::none(NO_SUBTREE),
+        scpi: Scpi::none(BY_HAND_T2),
         ty: Ty::Seconds { ladder: time_ladder_step, zero: None },
         label: "Upper limit",
         #[cfg(test)]

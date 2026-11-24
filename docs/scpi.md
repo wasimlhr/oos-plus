@@ -183,9 +183,9 @@ command does not take is refused with `-224`.
 | none | a choice of the auto set-up, not of the trigger | `auto_nrej` | Auto noise rej. | The auto set-up sets noise reject from the noise on the flat levels of the trigger signal. |
 | `:TRIGger:COUPling[?]` | `DC`, `AC`, `LFReject`, `HFReject` | `trig_coup` | Coupling | A filter in the trigger path of the edge trigger; the trace keeps the channel's coupling (docs/protocols/trigger.md 2.5). |
 | none | OOS has no `:TRIGger` subtree of this trigger type yet | `trig_slope2` | Slope B | The edge of B (delay trigger) or of the clock (setup/hold trigger). |
-| none | OOS has no `:TRIGger` subtree of this trigger type yet | `trig_pol` | Polarity | The polarity of the pulse (pulse and runt triggers). |
-| none | OOS has no `:TRIGger` subtree of this trigger type yet | `trig_t1` | Time | The time the condition compares with, the lower limit of Inside and Outside; the timeout of the timeout trigger. |
-| none | OOS has no `:TRIGger` subtree of this trigger type yet | `trig_t2` | Upper limit | The upper time limit of Inside and Outside. |
+| none | answered by hand in the polarity commands of the pulse and runt triggers (docs/scpi/trigger.md) | `trig_pol` | Polarity | The polarity of the pulse (pulse and runt triggers). |
+| none | answered by hand in the width and time commands of the typed triggers (docs/scpi/trigger.md) | `trig_t1` | Time | The time the condition compares with, the lower limit of Inside and Outside; the timeout of the timeout trigger. |
+| none | answered by hand in the upper-limit commands of the typed triggers (docs/scpi/trigger.md) | `trig_t2` | Upper limit | The upper time limit of Inside and Outside. |
 | none | OOS has no `:TRIGger` subtree of this trigger type yet | `video_std` | Standard | The video standard of the video trigger. |
 | none | OOS has no `:TRIGger` subtree of this trigger type yet | `video_sync` | Sync | What the video trigger fires on: every line, line n, odd or even fields, every field. |
 | none | OOS has no `:TRIGger` subtree of this trigger type yet | `video_line` | Line | The line Line n fires on; the menu keeps it from 1 to 10 below half the lines of the standard. |

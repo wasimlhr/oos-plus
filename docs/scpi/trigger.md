@@ -60,6 +60,7 @@ Pulse-width conditions share the lower and upper time fields described above.
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
+| `:TRIGger:PULSe:SOURce` | Set / Query | `CHANn\|Rn`; available LA inputs can use `D0` through `D15` (a logic line is refused while the logic analyser is off). The set leaves the trigger type alone, as the other typed commands do; the line also answers `:TRIGger:SOURce?`. | `CHAN1` | Trigger > Source | Rigol-compatible |
 | `:TRIGger:PULSe:POLarity` | Set / Query | `POSitive`, `NEGative` | `POS` | Trigger > Polarity | Rigol-compatible |
 | `:TRIGger:PULSe:WHEN` | Set / Query | `GREater`, `LESS`, `RANGe`, `OUTside`; or `PGReater`, `PLESs`, `PGLess`, `NGReater`, `NLESs`, `NGLess` (polarity and condition together) | `LESS` | Trigger > When | Rigol-compatible |
 | `:TRIGger:PULSe:WIDTh` | Set / Query | Seconds, 1 ns to 10 s. The lower time limit, the menu's Time. | `2.000000E-05` | Trigger > Time | Rigol-compatible |

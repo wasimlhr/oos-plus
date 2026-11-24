@@ -582,8 +582,9 @@ impl Scpi {
                     ui.mark_changed();
                     return Some(None);
                 }
-                // Leave D0..D15 of :TRIGger:EDGE:SOURce to the existing LA source handler; no other source takes one.
-                let edge = nodes.len() == 3 && kw(nodes[1], "EDGE");
+                // Leave D0..D15 of :TRIGger:EDGE:SOURce and :TRIGger:PULSe:SOURce to the LA source handlers; no other
+                // source takes one.
+                let edge = nodes.len() == 3 && (kw(nodes[1], "EDGE") || kw(nodes[1], "PULSe"));
                 if !edge || !arg.trim().to_ascii_uppercase().starts_with('D') {
                     self.push_err("-224,\"Invalid trigger source\"".into());
                     return Some(None);

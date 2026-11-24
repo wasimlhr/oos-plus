@@ -20,6 +20,7 @@ mod measure;
 mod reference;
 mod settings;
 mod transports;
+mod trigger_pulse;
 mod trigger_types;
 
 // Break it catches: a root moved out of exec_cmd that answers, changes or reports an error otherwise than before
