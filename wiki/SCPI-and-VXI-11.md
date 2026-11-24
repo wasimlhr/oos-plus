@@ -361,7 +361,7 @@ These are OOS functions, not stock Rigol commands. Their limits are in [referenc
 | `:DECode:PROTocol[?] <name>` | the menu's name, case and punctuation ignored (`I2C`, `SPI`, `CAN FD`, `C-PHY`, ...) |
 | `:DECode:STATe[?]` | on/off |
 | `:DECode:INPut[?]` | `WAVEFORM` (or `ANALOG`) or `LA` |
-| `:DECode:SOURce[?]`, `:SOURce2[?]`, `:CS[?]`, `:SOURce4[?]`, `:DIFFerential[?]` | the protocol's lines, `CHANn\|Rn\|NONE` |
+| `:DECode:SOURce[?]`, `:SOURce2[?]`, `:CS[?]`, `:SOURce4[?]`, `:DIFFerential[?]` | the protocol's lines, `CHANn\|Rn\|MATHn\|NONE` (a Math trace that is on decodes a differential pair) |
 | `:DECode:THReshold[?]` | threshold |
 | `:DECode:CPHY:RATE[?]` | `AUTO` or symbols/s |
 | `:DECode:BUSY?`, `:DECode:EVENts?` | still decoding? / the events with their times |

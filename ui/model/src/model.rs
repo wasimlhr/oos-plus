@@ -43,12 +43,25 @@ pub const NREF: usize = 10;
 /// Decoder namespace: CH0..3 and reserved legacy LA4..19 stay unchanged.
 /// LA decoding still uses dec_la_in/dec_la; stored roles append R1..R10.
 pub const DEC_REF_BASE: usize = NCH + 16;
-pub const DEC_SOURCE_COUNT: usize = DEC_REF_BASE + NREF;
+/// Math traces M1..M8 follow the references: a decoder can read the result of a math channel (CH1 - CH2).
+pub const DEC_MATH_BASE: usize = DEC_REF_BASE + NREF;
+pub const DEC_SOURCE_COUNT: usize = DEC_MATH_BASE + crate::math::NMATH;
 
+/// The math channel a decoder source names (`None` for a channel, a reference or an unknown id).
+pub fn decode_math(source: usize) -> Option<usize> {
+    (DEC_MATH_BASE..DEC_SOURCE_COUNT).contains(&source).then(|| source - DEC_MATH_BASE)
+}
+
+/// Whether `source` names a channel, a reference or a math channel.
+pub fn decode_valid(source: usize) -> bool {
+    decode_wave(source).is_some() || decode_math(source).is_some()
+}
+
+/// A channel or a reference; a math source (`decode_math`) has no `WaveId`.
 pub fn decode_wave(source: usize) -> Option<WaveId> {
     if source < NCH {
         Some(WaveId::Ch(source))
-    } else if (DEC_REF_BASE..DEC_SOURCE_COUNT).contains(&source) {
+    } else if (DEC_REF_BASE..DEC_MATH_BASE).contains(&source) {
         Some(WaveId::Ref(source - DEC_REF_BASE))
     } else {
         None
@@ -59,7 +72,7 @@ pub fn decode_source_name(source: usize) -> String {
     match decode_wave(source) {
         Some(WaveId::Ch(c)) => format!("CH{}", c + 1),
         Some(WaveId::Ref(i)) => format!("R{}", i + 1),
-        None => "Unavailable".into(),
+        None => decode_math(source).map_or("Unavailable".into(), |k| format!("M{}", k + 1)),
     }
 }
 const _: () = assert!(NCH == oos_dsp::CHANNELS, "triggers and expressions in dsp take oos_dsp::CHANNELS channels");

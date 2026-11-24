@@ -224,3 +224,19 @@ fn frozen_bus_scpi_preserves_reference_roles_and_inactive_slot_acquisition() {
     assert_eq!(ui.m.dec_slot(1).src, old.src);
     assert!(line(&mut scpi, &mut ui, &canvas, ":SYST:ERR?").starts_with("-224,"));
 }
+
+#[test]
+fn decoder_scpi_takes_a_math_channel_as_a_source() {
+    let (mut s, mut ui, cv) = session();
+    decoded_reference_fixture(&mut ui, 1000);
+    // M1 is off: no source yet
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:PROTO UART;:DEC:SOUR MATH1;:DEC:SOUR?"), "CHAN3");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
+    ui.m.math = crate::math::MathOp::Sub;
+    ui.m.math_a = crate::math::MATH_REF_BASE;
+    ui.m.math_b = crate::math::MATH_REF_BASE;
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:SOUR MATH1;:DEC:SOUR?"), "MATH1");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:SOUR2 M1;:DEC:SOUR2?"), "MATH1");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:SOUR MATH9;:DEC:SOUR?"), "MATH1");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
+}
