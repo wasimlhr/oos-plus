@@ -1184,8 +1184,26 @@ impl Ui {
         self.set_trig_type(TrigType::Bus);
     }
 
+    /// `:TIMebase:DELay:ENABle`. A scale or delay a remote command set while the zoom was off stays in effect, as when
+    /// the zoom was on already; otherwise the zoom opens at its default (three steps below the time base).
     pub(crate) fn zoom_set_remote(&mut self, on: bool) {
+        let asked = on && !self.m.zoom && std::mem::take(&mut self.zoom_view.remote_asked);
+        let (zscale, zdelay) = (self.m.zscale, self.m.zdelay);
         self.set_zoom(on);
+        if asked {
+            (self.m.zscale, self.m.zdelay) = (zscale, zdelay);
+            self.clamp_zoom();
+        }
+        if !on {
+            self.zoom_view.remote_asked = false;
+        }
+    }
+
+    /// A remote command set the zoom scale or delay (`:TIMebase:DELay:SCALe|OFFSet`): note it for the enable.
+    pub(crate) fn zoom_remote_note(&mut self) {
+        if !self.m.zoom {
+            self.zoom_view.remote_asked = true;
+        }
     }
 
     pub(crate) fn zoom_clamp(&mut self) {

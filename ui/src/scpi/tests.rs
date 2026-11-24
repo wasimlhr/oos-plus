@@ -21,6 +21,7 @@ mod reference;
 mod settings;
 mod transports;
 mod trigger_types;
+mod zoom_scale;
 
 // Break it catches: a root moved out of exec_cmd that answers, changes or reports an error otherwise than before
 // (scale and position set on the model, a bad number, an unknown node, the debug nodes)

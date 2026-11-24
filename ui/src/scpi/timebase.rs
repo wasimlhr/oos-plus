@@ -109,6 +109,7 @@ impl Scpi {
                 i = ui.m.tscale;
             }
             ui.m.zscale = i;
+            ui.zoom_remote_note();
             ui.zoom_clamp();
             ui.mark_changed();
             return None;
@@ -122,6 +123,7 @@ impl Scpi {
                 return None;
             };
             ui.m.zdelay = v;
+            ui.zoom_remote_note();
             ui.zoom_clamp();
             ui.mark_changed();
             return None;

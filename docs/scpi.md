@@ -595,7 +595,7 @@ These commands are implemented by the same model and acquisition router above. T
 | `:DISPlay:VIEW[?] <n>` | Display > Views (OOS): show view n, 1 through the view count; the query answers the view shown. |
 | `:DISPlay:VIEW:COUNt[?] 1..4` | How many views there are. |
 | `:DISPlay:VIEW:MONitor[?] <n>` | The view an HDMI monitor shows in the Layout, 0 the panel's own; another than 0 needs at least two views. A value past the view count is refused with `-224`. |
-| `:TIMebase:DELay:ENABle[?]`, `:SCALe[?]`, `:OFFSet[?]` | Zoom enable, seconds/div and physical center time. |
+| `:TIMebase:DELay:ENABle[?]`, `:SCALe[?]`, `:OFFSet[?]` | Zoom enable, seconds/div and physical center time. `:SCALe` takes a step of the 1-2-5 ladder of the main time base, the nearest one (2.5 us and 3 us give 2 us, 4 us and 5 us give 5 us), never slower than the main time base; the query answers that step, and the screen shows the same. A `:SCALe` or `:OFFSet` sent while the zoom is off stays in effect when `:ENABle 1` follows; without one, the zoom opens three steps below the main time base. |
 | `:TIMebase:VERNier[?]` | Boolean fine horizontal control. |
 | `:TIMebase:MODE[?]` | Main/zoom/XY mode supported by the model. |
 | `:TIMebase:XY:ENABle[?]`, `:X[?]`, `:Y[?]`, `:Z[?]` | XY display and channel roles; `NONE` disables the optional Z input. |
