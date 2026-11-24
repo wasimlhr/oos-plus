@@ -3896,7 +3896,7 @@
       ]
      ],
      "remarks": [
-      "- Origin: OOS extension"
+      "- Origin: OOS extension. `FRAMe` triggers at the start of each frame the decoder finds, at the end of its first field; for FlexRay that is the transmission start sequence (TSS), at its rising edge into the frame start sequence, so there is no separate TSS match"
      ],
      "returns": "On a freshly started default model the query returns `ID`.",
      "ext": true

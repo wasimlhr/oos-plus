@@ -190,7 +190,8 @@ For how the hardware works, see the [hardware overview](https://dekajoule.github
   while its source channel is off, and " N" on the byte that ends an I2C read
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. FlexRay is read at the
-  Bit rate set (10, 5 or 2.5 Mbit/s), on either channel. A MIL-STD-1553 word says what it is: a command its
+  Bit rate set (10, 5 or 2.5 Mbit/s), on either channel; Trigger > Match Frame triggers on each transmission start
+  sequence (TSS), at its end. A MIL-STD-1553 word says what it is: a command its
   terminal, direction, subaddress and count ("RT 17 R SA 02 WC 02"), a status word its terminal and flags. LIN
   takes its bit rate from the sync field of each frame, so a bus at any rate is read; Decode > Checksum chooses
   what a frame is

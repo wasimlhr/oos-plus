@@ -82,12 +82,16 @@ pub(super) struct State {
     /// (operation, source A, source B, scale) of each channel at the last tick, and which channels wait to be refitted
     sig: [Option<(String, usize, usize, usize)>; NMATH],
     pub(super) fit_pending: [bool; NMATH],
+    /// a refit asked for by the auto set-up waits for a record taken after it: the count of records (`Counts::records`)
+    /// when it was asked
+    fit_after: [Option<u64>; NMATH],
 }
 impl State {
     /// After a recall: the setup's own scales stand, the next tick starts tracking again.
     pub(super) fn forget_fit(&mut self) {
         self.sig = Default::default();
         self.fit_pending = [false; NMATH];
+        self.fit_after = [None; NMATH];
     }
 }
 
@@ -202,13 +206,30 @@ impl Ui {
                     continue;
                 }
             }
+            if self.math.state.borrow().fit_after[k].is_some_and(|n| self.counts.records <= n) {
+                continue;
+            }
             if matches!(self.math_record(k), Ok(Some(_))) {
                 self.math_fit(k);
                 let (scale, mut st) = (self.m.math_ch(k).scale, self.math.state.borrow_mut());
                 st.fit_pending[k] = false;
+                st.fit_after[k] = None;
                 if let Some(s) = st.sig[k].as_mut() {
                     s.3 = scale;
                 }
+            }
+        }
+    }
+
+    /// After an auto set-up: every shown math channel (any operation but the FFT, whose scale is in dB and stays) is
+    /// refitted to its result, as Autoscale does, once a record taken with the new set-up has come. Before, Math1 =
+    /// CH1 - CH2 kept the scale and offset it had before Auto, and its trace left the screen.
+    pub(super) fn math_refit_after_autoset(&mut self) {
+        let mut st = self.math.state.borrow_mut();
+        for k in 0..NMATH {
+            if self.m.math_shown(k) && !matches!(self.m.math_ch(k).op, MathOp::Off | MathOp::Fft) {
+                st.fit_pending[k] = true;
+                st.fit_after[k] = Some(self.counts.records);
             }
         }
     }

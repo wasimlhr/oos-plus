@@ -224,6 +224,59 @@ mod tests {
         assert!(ids(5e6, 0).iter().all(|x| x.0 != 0x2a));
     }
 
+    /// The FlexRay protocol trigger on Frame (`:TRIGger:BUS:WHEN FRAMe`) is the trigger on the transmission start
+    /// sequence: of the decoded fields only the TSS of each frame matches, and the trigger point is the end of the TSS,
+    /// the rising edge into the frame start sequence. Two frames, two points, none on the header, payload or CRC.
+    #[test]
+    fn flexray_frame_trigger_is_the_transmission_start_sequence() {
+        let frame = |id: u16, tss: usize| {
+            let fr = decode::gen::FrFrame {
+                ppi: false,
+                nf: true,
+                sync: false,
+                startup: false,
+                id,
+                cycle: 5,
+                payload: vec![0x11, 0x22, 0x33, 0x44],
+                channel_b: false,
+            };
+            decode::gen::flexray_bits(&fr, tss)
+        };
+        let mut bits = frame(0x2a, 11);
+        bits.extend(std::iter::repeat_n(true, 30));
+        bits.extend(frame(0x51, 5));
+        let (rate, spb) = (10e6, 20usize);
+        let l = oos_dsp::sim::bits_logic(&bits, 1.0 / rate, spb, 0.0, 3.3);
+        let dt = 1.0 / rate / spb as f64;
+        let v = oos_dsp::sim::sample(|t| l.v(t), 0.0, dt, spb * (bits.len() + 60));
+        let mut m = crate::store::parse_setup("dec_on = true
+dec_proto = FlexRay
+").unwrap();
+        let sh = shared(&m);
+        let lines = Lines {
+            lines: [Some(&v[..]), None, None, None],
+            dt,
+            thr: 1.65,
+            hy: 0.2,
+            opt: [0; OPTS],
+            sh,
+            chans: [None; 4],
+            src: [None; 4],
+        };
+        let p = FlexRay.info().decode(&lines).unwrap();
+        let tss: Vec<&Packet> = p.iter().filter(|x| x.kind == Kind::Field("TSS")).collect();
+        assert_eq!(tss.iter().map(|x| (x.value, x.ok)).collect::<Vec<_>>(), [(11, true), (5, true)]);
+        m.trig_bus = oos_dsp::protocols::BusWhat::Frame;
+        let points = crate::trig::points(&m, &p);
+        assert_eq!(points, tss.iter().map(|x| x.t1).collect::<Vec<_>>(), "Frame matches the TSS fields only");
+        for (x, n) in tss.iter().zip([11.0, 5.0]) {
+            // the TSS is n bits low (packet times count samples); its end is the rising edge, half a bit either way
+            assert!(((x.t1 - x.t0) / spb as f64 - n).abs() < 0.5, "TSS of {n} bits: {} samples", x.t1 - x.t0);
+            let i = x.t1.round() as usize;
+            assert!(v[i - spb / 2] < 1.65 && v[i + spb / 2] > 1.65, "the point sits on the rising edge");
+        }
+    }
+
     // Break it catches: a setup written while CAN FD, FlexRay and SENT were built in losing its protocol or rates
     #[test]
     fn old_setups_keep_protocol_and_options() {
