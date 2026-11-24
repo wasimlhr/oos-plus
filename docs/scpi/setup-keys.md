@@ -196,6 +196,7 @@ Commands: [cursor.md](cursor.md).
 | `cur_b` | cursor mode, positions (fractions of the screen), second cursor source (optional) | `0.7` | - |
 | `cur_c` | cursor mode, positions (fractions of the screen), second cursor source (optional) | `0.3` | - |
 | `cur_d` | cursor mode, positions (fractions of the screen), second cursor source (optional) | `0.7` | - |
+| `cur_snap` | cursor mode, positions (fractions of the screen), second cursor source (optional) | `Off` | `:CURSor:SNAP:EDGE` |
 | `cur_b_source` | cursor mode, positions (fractions of the screen), second cursor source (optional) | - | - |
 | `dvm` | `<on> <source> <mode>` | `false 0 0` | `:DVM:ENABle`, `:DVM:SOURce`, `:DVM:MODE` |
 | `counter` | `<on> <source> <mode> <digits>` | `false 0 0 5` | `:COUNter:ENABle`, `:COUNter:SOURce`, `:COUNter:MODE`, `:COUNter:NDIGits` |

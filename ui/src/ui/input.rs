@@ -1231,6 +1231,9 @@ impl Ui {
         if was.4 {
             return;
         }
+        if matches!(was.1, Drag::CursorA | Drag::CursorB) && self.m.cursor != CursorMode::Volt {
+            self.cursor_snap_one(was.1 == Drag::CursorA, self.m.cur_snap);
+        }
         if let Drag::Zone(k) = was.1 {
             self.finish_zone(k);
             return;

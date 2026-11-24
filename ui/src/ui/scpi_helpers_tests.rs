@@ -247,3 +247,40 @@ fn rejected_reference_edits_do_not_change_the_selected_slot_or_loaded_data() {
     assert_eq!(ui.ref_page.sel, 0);
     assert!(Arc::ptr_eq(&owner, &ui.refs[0].as_ref().unwrap().v));
 }
+
+#[test]
+fn time_cursors_snap_to_the_nearest_edge_of_the_source_mid_level() {
+    let mut ui = crate::ui::testkit::demo_ui();
+    ui.m.run = RunState::Stop;
+    ui.m.zoom = false;
+    ui.m.tscale = tscales().iter().position(|&t| (t - 20e-9).abs() < 1e-15).unwrap();
+    ui.m.delay = 0.0;
+    // low for 80 samples, high for 60, low again: a rising edge at 79.5 and a falling one at 139.5 (1 ns a sample)
+    let v: Vec<f32> = (0..200).map(|i| if (80..140).contains(&i) { 1.0 } else { 0.0 }).collect();
+    ui.refs[0] = Some(reference(v, 1e-9, -100e-9));
+    assert!(ui.set_cursor_source(WaveId::Ref(0)));
+    ui.m.cursor = CursorMode::Time;
+    let near = |ui: &Ui, t: f64| (ui.cursor_time_at(ui.m.cur_a) - t).abs() < 1e-10;
+    // Off: the cursor stays where it was put
+    ui.m.cur_a = ui.cursor_frac_time(-18e-9);
+    assert!(!ui.cursor_snap_one(true, CursorSnap::Off));
+    assert!(!near(&ui, -20.5e-9));
+    // Rising and Either find the rising edge, Falling the falling one
+    assert!(ui.cursor_snap_one(true, CursorSnap::Rising));
+    assert!(near(&ui, -20.5e-9), "{}", ui.cursor_time_at(ui.m.cur_a));
+    ui.m.cur_a = ui.cursor_frac_time(-18e-9);
+    assert!(ui.cursor_snap_one(true, CursorSnap::Either));
+    assert!(near(&ui, -20.5e-9));
+    ui.m.cur_b = ui.cursor_frac_time(38e-9);
+    assert!(ui.cursor_snap_one(false, CursorSnap::Falling));
+    assert!((ui.cursor_time_at(ui.m.cur_b) - 39.5e-9).abs() < 1e-10);
+    // the action moves both and the delta follows
+    ui.m.cur_a = ui.cursor_frac_time(-18e-9);
+    ui.m.cur_b = ui.cursor_frac_time(36e-9);
+    ui.m.cur_snap = CursorSnap::Off;
+    assert!(ui.cursor_snap_now());
+    assert!(((ui.cursor_time_at(ui.m.cur_b) - ui.cursor_time_at(ui.m.cur_a)) - 60e-9).abs() < 1e-10);
+    // voltage cursors have no edges
+    ui.m.cursor = CursorMode::Volt;
+    assert!(!ui.cursor_snap_one(true, CursorSnap::Either));
+}

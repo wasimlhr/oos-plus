@@ -942,6 +942,7 @@ impl Ui {
         if self.m.cursor == CursorMode::Off { return vec![Item::CurMode, Item::CurSrc]; }
         let mut v = vec![Item::CurMode, Item::CurSrc, Item::CurSecond, Item::CurReadout, Item::CurLink, Item::CurA, Item::CurB];
         if self.m.cursor == CursorMode::Xy { v.extend([Item::CurC, Item::CurD]); }
+        if self.m.cursor != CursorMode::Volt { v.extend([Item::CurSnap, Item::CurSnapNow]); }
         v.push(Item::CurRemove);
         v
     }
@@ -1358,9 +1359,9 @@ impl Ui {
 
     pub(super) fn addrail_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::SrchWhich | Item::SrchType | Item::SrchSrc | Item::SrchSlope | Item::SrchWhen | Item::SrchShow => Kind::Choice,
+            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::CurSnap | Item::SrchWhich | Item::SrchType | Item::SrchSrc | Item::SrchSlope | Item::SrchWhen | Item::SrchShow => Kind::Choice,
             Item::SrchLevel | Item::SrchLevel2 | Item::SrchTime | Item::SrchTime2 | Item::SrchEvent => Kind::Value,
-            Item::CurRemove | Item::Srch50 | Item::SrchFromTrig | Item::SrchToTrig | Item::SrchRemove => Kind::Action,
+            Item::CurRemove | Item::CurSnapNow | Item::Srch50 | Item::SrchFromTrig | Item::SrchToTrig | Item::SrchRemove => Kind::Action,
             _ => return None,
         })
     }
@@ -1371,6 +1372,8 @@ impl Ui {
             Item::CurSecond => "Second source",
             Item::CurReadout => "Readout",
             Item::CurLink => "Move",
+            Item::CurSnap => "Snap to edge",
+            Item::CurSnapNow => "Snap cursors now",
             Item::CurRemove => "Remove cursors",
             Item::SrchWhich => "Search",
             Item::SrchType => "Type",
@@ -1397,6 +1400,7 @@ impl Ui {
             Item::CurSecond => self.m.cur_b_source.map_or("Same".into(), |s| self.wave_name(s)),
             Item::CurReadout => if self.studio.cur_badge { "Badge" } else { "Graticule" }.into(),
             Item::CurLink => if self.studio.cur_linked { "Linked" } else { "Independent" }.into(),
+            Item::CurSnap => format!("{:?}", self.m.cur_snap),
             Item::SrchWhich => (self.studio.search_sel + 1).to_string(),
             Item::SrchSrc => self.studio.search().map_or(String::new(), |s| self.wave_name(s.src)),
             Item::SrchType => self.studio.search().map_or(String::new(), |s| s.kind.name().into()),
@@ -1422,6 +1426,7 @@ impl Ui {
             Item::CurSecond => std::iter::once("Same".to_string()).chain(names()).collect(),
             Item::CurReadout => vec!["Graticule".into(), "Badge".into()],
             Item::CurLink => vec!["Independent".into(), "Linked".into()],
+            Item::CurSnap => CursorSnap::ALL.iter().map(|s| format!("{s:?}")).collect(),
             Item::SrchWhich => self.studio.search_list().map(|(i, _)| (i + 1).to_string()).collect(),
             Item::SrchType => SEARCH_TYPES.iter().map(|t| t.name().to_string()).collect(),
             Item::SrchSlope => self.studio.search().map_or(&SLOPES[..], |s| s.slopes()).iter().map(|s| s.to_string()).collect(),
@@ -1465,6 +1470,10 @@ impl Ui {
             }
             Item::CurReadout => if d.rem_euclid(2) != 0 { self.studio.cur_badge = !self.studio.cur_badge; },
             Item::CurLink => if d.rem_euclid(2) != 0 { self.studio.cur_linked = !self.studio.cur_linked; },
+            Item::CurSnap => {
+                let at = CursorSnap::ALL.iter().position(|&s| s == self.m.cur_snap).unwrap_or(0) as i32;
+                self.m.cur_snap = CursorSnap::ALL[(at + d).rem_euclid(CursorSnap::ALL.len() as i32) as usize];
+            }
             // the next of the searches that are there
             Item::SrchWhich => {
                 let there: Vec<usize> = self.studio.search_list().map(|(i, _)| i).collect();
@@ -1503,6 +1512,11 @@ impl Ui {
 
     pub(super) fn addrail_activate(&mut self, it: Item) -> bool {
         match it {
+            Item::CurSnapNow => {
+                if self.cursor_snap_now() {
+                    self.settings_changed();
+                }
+            }
             Item::CurRemove => self.studio_cursors_remove(),
             Item::Srch50 => self.studio_search_set_50(),
             Item::SrchFromTrig => self.studio_search_copy_from_trigger(),

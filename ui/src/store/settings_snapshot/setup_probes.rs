@@ -240,6 +240,7 @@ const KEYS: &[(&str, P)] = &[
     ("cur_b", Num(&["1", "-0.5", "1.5"])),
     ("cur_c", Num(&["1", "-0.5", "1.5"])),
     ("cur_d", Num(&["1", "-0.5", "1.5"])),
+    ("cur_snap", Is(&["Off", "Rising", "Falling", "Either", "off"])),
     ("touch_lock", Bool),
     ("aux_out", Is(&["TrigOut", "Off", "PassFail", "off"])),
     ("fine_v", Bool),

@@ -5219,7 +5219,7 @@
      ],
      "remarks": [
       "- ; MAN keeps the selected time/amplitude type.",
-      "- Origin: Rigol-compatible"
+      "- Origin: Rigol-compatible; XY is time and voltage cursor pairs together"
      ],
      "returns": "On a freshly started default model the query returns `OFF`.",
      "example": ":CURSor:MODE MANual\n:CURSor:MODE OFF"
@@ -5243,6 +5243,34 @@
      ],
      "returns": "On a freshly started default model the query returns `TIME`.",
      "example": ":CURSor:MANual:TYPE TIME"
+    },
+    {
+     "header": ":CURSor:SNAP:EDGE",
+     "set": ":CURSor:SNAP:EDGE <value>",
+     "query": ":CURSor:SNAP:EDGE?",
+     "desc": "Sets or queries Snap to edge for Cursors (menu: Cursor > Snap to edge).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{OFF|RISing|FALLing|EITHer}",
+       "OFF"
+      ]
+     ],
+     "remarks": [
+      "- .",
+      "- When time cursors (Time, Track or XY) are dropped on the screen, they jump to the nearest crossing of the mid-level of their source (halfway between its lowest and highest sample) in that direction, within a quarter of the screen; the delta time and 1/delta readouts follow.",
+      "- Origin: oos-plus"
+     ],
+     "returns": "On a freshly started default model the query returns `OFF`."
+    },
+    {
+     "header": ":CURSor:SNAP:EXECute",
+     "set": ":CURSor:SNAP:EXECute",
+     "desc": "Puts A and B on the nearest edge now (any direction while `EDGE` is `OFF`). Error -221 when no time cursors are on or no edge is near.",
+     "remarks": [
+      "- Origin: oos-plus"
+     ]
     },
     {
      "header": ":CURSor:MANual:SOURce",
@@ -16580,6 +16608,12 @@
        "as above",
        "`0.7`",
        "-"
+      ],
+      [
+       "`cur_snap`",
+       "as above",
+       "`Off`",
+       "`:CURSor:SNAP:EDGE`"
       ],
       [
        "`cur_b_source`",

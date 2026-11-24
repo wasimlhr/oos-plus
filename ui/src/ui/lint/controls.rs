@@ -523,20 +523,24 @@ fn xy_cursors_show_both_axes() {
     u.m.cursor = CursorMode::Xy;
     let v = u.cursor_values();
     assert_eq!(v.iter().map(|x| x.0.as_str()).collect::<Vec<_>>(), ["X1", "X2", "Y1", "Y2", "\u{394}X", "\u{394}Y"]);
-    assert_eq!(u.items(MenuId::Cursor).len(), 5);
+    // the four positions, the mode, and the Snap row and action of the time cursors
+    assert_eq!(u.items(MenuId::Cursor).len(), 7);
     assert!(u.value(Item::CurC).ends_with('V'));
     u.adjust(Item::CurD, 20);
     let mut cv = Canvas::new(PANEL_W, PANEL_H);
     u.render(&mut cv);
+    u.adjust(Item::CurSnap, 1);
+    assert_eq!(u.m.cur_snap, CursorSnap::Rising);
+    assert_eq!(u.value(Item::CurSnap), "Rising");
     let b = crate::store::parse_setup(&crate::store::setup_text(&u.m)).unwrap();
-    assert_eq!((b.cursor, b.cur_d), (CursorMode::Xy, u.m.cur_d));
+    assert_eq!((b.cursor, b.cur_d, b.cur_snap), (CursorMode::Xy, u.m.cur_d, CursorSnap::Rising));
 }
 
 #[test]
 fn track_cursor_b_follows_its_own_source() {
     let mut u = with_two_channels();
     u.m.cursor = CursorMode::Track;
-    assert_eq!(u.items(MenuId::Cursor).len(), 4);
+    assert_eq!(u.items(MenuId::Cursor).len(), 6);
     assert_eq!(u.value(Item::CurSrcB), "CH1", "follows cursor A's source until set");
     u.adjust(Item::CurSrcB, 1);
     assert_eq!((u.m.cur_b_source, u.value(Item::CurSrcB).as_str()), (Some(WaveId::Ch(1)), "CH2"));

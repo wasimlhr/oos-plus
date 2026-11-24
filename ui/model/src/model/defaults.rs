@@ -92,6 +92,7 @@ impl Default for Model {
             cur_b: 0.7,
             cur_c: 0.3,
             cur_d: 0.7,
+            cur_snap: CursorSnap::Off,
             touch_lock: false,
             aux_out: AuxOut::TrigOut,
             fine_v: false,

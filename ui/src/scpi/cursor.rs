@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! `:CURSor`: `MODE`, the manual and track cursors (`MANual:TYPE`, `CAX|CBX|CAY|CBY`, `AXValue|AYValue|BXValue|
-//! BYValue`), the deltas (`XDELta|IXDelta|YDELta`) and `MEASure:INDicator`. A new `:CURSor` command goes into
+//! BYValue`), the snap of the time cursors (`SNAP:EDGE`, `SNAP:EXECute`), the deltas (`XDELta|IXDelta|YDELta`) and `MEASure:INDicator`. A new `:CURSor` command goes into
 //! `cursor_cmd` here, with its line in docs/scpi.md and its query in ui/tests/scpi.txt (AGENTS.md).
 
 use super::{e, kw, num64, parse_wave, shown, t, wave_tok, Scpi};
@@ -21,6 +21,17 @@ impl Scpi {
         }
         if n.len() == 2 && kw(n0, "MEASure") && kw(n[1], "INDicator") {
             return self.meas_indicator(ui, query, arg);
+        }
+        if n.len() == 2 && kw(n0, "SNAP") && kw(n[1], "EDGE") {
+            return self.cursor_snap_edge(ui, query, arg);
+        }
+        if n.len() == 2 && kw(n0, "SNAP") && kw(n[1], "EXECute") {
+            if query {
+                self.push_err("-113,\"Undefined header\" :CURSor:SNAP:EXECute?".into());
+            } else if !ui.cursor_snap_now() {
+                self.push_err("-221,\"Settings conflict\" no time cursors on, or no edge near them".into());
+            }
+            return None;
         }
         if n.len() == 2 && kw(n0, "MANual") && kw(n[1], "TYPE") {
             return self.cursor_type(ui, query, arg);
@@ -100,6 +111,32 @@ impl Scpi {
             CursorMode::Track
         } else if a.eq_ignore_ascii_case("XY") {
             CursorMode::Xy
+        } else {
+            self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
+            return None;
+        };
+        None
+    }
+
+    /// `:CURSor:SNAP:EDGE`: OFF, RISing, FALLing or EITHer, the edges the time cursors snap to when dropped.
+    fn cursor_snap_edge(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
+        if query {
+            return t(match ui.m.cur_snap {
+                CursorSnap::Off => "OFF",
+                CursorSnap::Rising => "RIS",
+                CursorSnap::Falling => "FALL",
+                CursorSnap::Either => "EITH",
+            });
+        }
+        let a = arg.trim();
+        ui.m.cur_snap = if kw(a, "OFF") {
+            CursorSnap::Off
+        } else if kw(a, "RISing") {
+            CursorSnap::Rising
+        } else if kw(a, "FALLing") {
+            CursorSnap::Falling
+        } else if kw(a, "EITHer") {
+            CursorSnap::Either
         } else {
             self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
             return None;

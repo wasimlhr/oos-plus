@@ -209,7 +209,7 @@ impl Ui {
                 AutoDeskew | ClearDeskew => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
-            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
+            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurSnap => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
             // which search and what it looks for; then what it shares with the trigger and the event it stands on
             M::Search => (&["Search", "Time, event"], |it| match it {
                 SearchTable | SrchRemove => Slot::Foot(0),

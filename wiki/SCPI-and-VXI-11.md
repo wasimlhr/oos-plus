@@ -338,6 +338,8 @@ These are OOS functions, not stock Rigol commands. Their limits are in [referenc
 |---|---|
 | `:CURSor:MODE[?]` | `OFF\|MANual\|TRACk\|XY` |
 | `:CURSor:MANual:TYPE[?]` | `TIME\|AMPLitude` |
+| `:CURSor:SNAP:EDGE[?]` | `OFF\|RISing\|FALLing\|EITHer`: the time cursors snap to the nearest edge of their source when dropped |
+| `:CURSor:SNAP:EXECute` | snap time cursors A and B to the nearest edge now |
 | `:CURSor:{MANual\|TRACk}:SOURce[?]` | `CHANn\|Rn` |
 | `:CURSor:TRACk:SOURce1[?]`, `:SOURce2[?]` | Track: cursor A and B each on their own source (B follows A when unset) |
 | `:CURSor:{MANual\|TRACk}:CAX[?]`, `:CBX[?]` | A/B time in seconds |

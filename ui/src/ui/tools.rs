@@ -1019,6 +1019,54 @@ impl Ui {
         }
     }
 
+    /// The screen fraction of the edge of `source` nearest to the cursor at `frac`: a crossing of the source's mid-level
+    /// (halfway between its lowest and highest sample) in the direction `snap` names, within a quarter of the screen
+    /// either side. None when there is no such edge, no record or `snap` is Off.
+    pub(crate) fn cursor_snap_frac(&self, frac: f32, source: WaveId, snap: CursorSnap) -> Option<f32> {
+        if snap == CursorSnap::Off || matches!(source, WaveId::Ch(c) if c >= n_ch() || !self.m.ch[c].on) {
+            return None;
+        }
+        let (w, dt, t0) = self.deskew_samples(source)?;
+        if w.len() < 4 || !dt.is_finite() || dt <= 0.0 {
+            return None;
+        }
+        let (lo, hi) = w.iter().filter(|v| v.is_finite()).fold((f32::MAX, f32::MIN), |(a, b), &v| (a.min(v), b.max(v)));
+        if !(hi > lo) {
+            return None;
+        }
+        let level = (lo + hi) / 2.0;
+        let at = (self.cursor_time_at(frac) - t0) / dt;
+        if !at.is_finite() || at < 0.0 || at > (w.len() - 1) as f64 {
+            return None;
+        }
+        let (tpd, _) = self.view();
+        let span = ((HDIV as f64 * tpd as f64 / 4.0 / dt) as usize).clamp(2, 1 << 22);
+        let rising = snap != CursorSnap::Falling;
+        let k = oos_dsp::edges::edge_near(w, at as usize, level, (hi - lo) * 0.05, rising, snap == CursorSnap::Either, span)?;
+        Some(self.cursor_frac_time(t0 + k * dt))
+    }
+
+    /// Puts time cursor A (`a`) or B on the nearest edge of its source. True when it moved.
+    pub(crate) fn cursor_snap_one(&mut self, a: bool, snap: CursorSnap) -> bool {
+        if !matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy) {
+            return false;
+        }
+        let (frac, source) = if a { (self.m.cur_a, self.cursor_source()) } else { (self.m.cur_b, self.cursor_b_source()) };
+        let Some(to) = self.cursor_snap_frac(frac, source, snap) else { return false };
+        if a { self.m.cur_a = to } else { self.m.cur_b = to }
+        true
+    }
+
+    /// The Snap action: both time cursors to the nearest edge (any direction while the Snap row is Off).
+    pub(crate) fn cursor_snap_now(&mut self) -> bool {
+        let snap = if self.m.cur_snap == CursorSnap::Off { CursorSnap::Either } else { self.m.cur_snap };
+        let (a, b) = (self.cursor_snap_one(true, snap), self.cursor_snap_one(false, snap));
+        if !(a || b) {
+            self.toast("No edge near the cursors");
+        }
+        a || b
+    }
+
     /// Screen fraction for a time, kept on the graticule.
     pub(crate) fn cursor_frac_time(&self, t: f64) -> f32 {
         let (tpd, delay) = self.view();

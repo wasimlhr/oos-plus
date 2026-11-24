@@ -120,6 +120,7 @@ const SETTERS: &[(&str, &[&str])] = &[
     (":BODE:GENerator", &["\"10.1.2.3:5555\"", "10.1.2.3:5555", "\"\""]),
     (":CURSor:MODE", &["OFF", "MANual", "TRACk", "XY"]),
     (":CURSor:MANual:TYPE", &["TIME", "AMPLitude"]),
+    (":CURSor:SNAP:EDGE", &["OFF", "RISing", "FALLing", "EITHer"]),
     (":CURSor:MANual:SOURce", SOURCES),
     (":CURSor:MANual:CAX", CURSOR_X),
     (":CURSor:MANual:CBX", CURSOR_X),

@@ -679,3 +679,21 @@ fn pending_says_when_the_measurements_of_a_single_are_done() {
     let v = line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,CHAN1").parse::<f64>().unwrap();
     assert!(v.abs() < 1e30, "at 0 the value is there: {v}");
 }
+
+#[test]
+fn cursor_snap_edge_is_set_and_queried_and_the_action_needs_time_cursors_and_an_edge() {
+    let (mut s, mut ui, cv) = session();
+    assert_eq!(line(&mut s, &mut ui, &cv, ":CURS:SNAP:EDGE?"), "OFF");
+    for (set, answer) in [("RISing", "RIS"), ("FALL", "FALL"), ("EITHer", "EITH"), ("off", "OFF")] {
+        line(&mut s, &mut ui, &cv, &format!(":CURS:SNAP:EDGE {set}"));
+        assert_eq!(line(&mut s, &mut ui, &cv, ":CURS:SNAP:EDGE?"), answer);
+    }
+    line(&mut s, &mut ui, &cv, ":CURS:SNAP:EDGE SIDEways");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224"));
+    // no time cursors on: the action is refused
+    line(&mut s, &mut ui, &cv, ":CURS:MODE OFF;:CURS:SNAP:EXEC");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-221"));
+    // a query form of the action does not exist
+    line(&mut s, &mut ui, &cv, ":CURS:SNAP:EXEC?");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-113"));
+}

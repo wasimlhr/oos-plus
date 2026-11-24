@@ -118,6 +118,7 @@ pub(super) fn map() -> Vec<Row> {
         p(":TRIGger:NEDGe:EDGE", Item::NthN, "Trigger", |u| trig(TrigType::NthEdge, u)),
         // ---- cursors, DVM and counter
         r(":CURSor:MODE", Item::CurMode, "Cursor"),
+        r(":CURSor:SNAP:EDGE", Item::CurSnap, "Cursor"),
         r(":CURSor:MEASure:INDicator", Item::MeasLabels, "Measure"),
         r(":DVM:ENABle", Item::DvmOn, "DVM and counter"),
         r(":DVM:SOURce", Item::DvmSrc, "DVM and counter"),

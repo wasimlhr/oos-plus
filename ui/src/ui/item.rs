@@ -251,6 +251,9 @@ pub(super) enum Item {
     CurSecond,
     CurReadout,
     CurLink,
+    /// time cursors: snap to the nearest edge when dropped (ui/addrail.rs), and the action that snaps them now
+    CurSnap,
+    CurSnapNow,
     CurRemove,
     /// Studio search settings (ui/addrail.rs)
     SrchWhich,
