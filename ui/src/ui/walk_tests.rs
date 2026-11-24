@@ -2267,10 +2267,8 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
         assert_eq!(u.value(Item::Traces), if was { "Stacked" } else { "Overlay" }, "{layout:?}");
         // a third of the row each: Overlay, Stacked, Windows
         for (i, want) in [(1, "Stacked"), (2, "Windows"), (0, "Overlay")] {
-            let (x, y) = (row.x + row.w * (2 * i + 1) / 6, row.y + row.h / 2);
-            tap(&mut u, x, y);
-            assert_eq!(u.value(Item::Traces), want, "{layout:?}: a tap on the {want} choice");
-            assert_eq!(u.trace_stacked(), want == "Stacked", "{layout:?}: {want}");
+            tap(&mut u, row.x + row.w * (2 * i + 1) / 6, row.y + row.h / 2);
+            assert_eq!((u.value(Item::Traces), u.trace_stacked()), (want.to_string(), want == "Stacked"), "{layout:?}: {want}");
         }
         u.close_menu();
         // the cursors: off at the start, on after the button
