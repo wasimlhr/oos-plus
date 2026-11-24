@@ -490,7 +490,7 @@ the sources (above) are written by hand.
 | `:DECode:PROTocol[?] <name>` | Protocol UI name; comparison ignores case/punctuation, e.g. I2C, SPI, C-PHY. |
 | `:DECode:STATe[?]` | Boolean. |
 | `:DECode:INPut[?]` | `WAVEFORM|LA`; `ANALOG` aliases waveform. LA requires available/enabled logic inputs. |
-| `:DECode:SOURce[?]` / `:SOURce2[?]` | Main data/clock roles; CHANn or Rn. |
+| `:DECode:SOURce[?]` / `:SOURce2[?]` | Main data/clock roles; CHANn, Rn or MATHn (a math channel that is on and not an FFT; `MATH1` for CH1 - CH2 decodes a differential pair). |
 | `:DECode:CS[?]` / `:SOURce4[?]` / `:DIFFerential[?]` | Additional roles; optional roles can use NONE. Roles depend on protocol. |
 | `:DECode:THReshold[?]` | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. |
 | `:DECode:CPHY:RATE[?]` | `AUTO` or known symbols/second; aliases CPHY:SRATe and DECode:SRATe. |

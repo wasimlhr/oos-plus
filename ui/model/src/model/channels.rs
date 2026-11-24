@@ -289,13 +289,13 @@ impl Model {
             }
         }
         for s in [&mut self.dec_src, &mut self.dec_src2] {
-            if decode_wave(*s).is_none() || (*s < NCH && *s >= n) {
+            if !decode_valid(*s) || (*s < NCH && *s >= n) {
                 *s = 0;
                 changed = true;
             }
         }
         for s in [&mut self.dec_src4, &mut self.dec_diff, &mut self.dec_cs] {
-            if s.is_some_and(|c| decode_wave(c).is_none() || (c < NCH && c >= n)) {
+            if s.is_some_and(|c| !decode_valid(c) || (c < NCH && c >= n)) {
                 *s = None;
                 changed = true;
             }

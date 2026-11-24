@@ -2793,8 +2793,8 @@ setup d2.dec_cs "0" -> 0
 setup d2.dec_cs "1e9" -> 1; error: line 2: d2.dec_cs: not an index: 1e9
 setup d2.dec_cs "29" -> 29
 setup d2.dec_cs "3" -> 3
-setup d2.dec_cs "30" -> 1; error: line 2: d2.dec_cs: 30 out of range (< 30)
-setup d2.dec_cs "4" -> 1; error: line 2: d2.dec_cs: decoder source must be CH or R; LA uses dec_la
+setup d2.dec_cs "30" -> 30
+setup d2.dec_cs "4" -> 1; error: line 2: d2.dec_cs: decoder source must be CH, R or M; LA uses dec_la
 setup d2.dec_cs "R1" -> 20
 setup d2.dec_cs "R11" -> 1; error: line 2: d2.dec_cs: R11 out of range
 setup d2.dec_cs "none" -> none
@@ -2808,7 +2808,7 @@ setup d2.dec_diff "1e9" -> none; error: line 2: d2.dec_diff: not an index: 1e9
 setup d2.dec_diff "20" -> none; error: line 2: d2.dec_diff: invalid decoder source
 setup d2.dec_diff "21" -> 21
 setup d2.dec_diff "30" -> 30
-setup d2.dec_diff "31" -> none; error: line 2: d2.dec_diff: 31 out of range (< 31)
+setup d2.dec_diff "31" -> 31
 setup d2.dec_diff "4" -> 4
 setup d2.dec_diff "5" -> none; error: line 2: d2.dec_diff: invalid decoder source
 setup d2.dec_diff "R1" -> 21
@@ -2959,13 +2959,13 @@ setup d2.dec_proto default -> Uart
 setup d2.dec_src "" -> 2; error: "line 2: d2.dec_src: not an index: "
 setup d2.dec_src "-1" -> 2; error: line 2: d2.dec_src: not an index: -1
 setup d2.dec_src "0" -> 0
-setup d2.dec_src "19" -> 2; error: line 2: d2.dec_src: decoder source must be CH or R; LA uses dec_la
+setup d2.dec_src "19" -> 2; error: line 2: d2.dec_src: decoder source must be CH, R or M; LA uses dec_la
 setup d2.dec_src "1e9" -> 2; error: line 2: d2.dec_src: not an index: 1e9
 setup d2.dec_src "20" -> 20
 setup d2.dec_src "29" -> 29
 setup d2.dec_src "3" -> 3
-setup d2.dec_src "30" -> 2; error: line 2: d2.dec_src: 30 out of range (< 30)
-setup d2.dec_src "4" -> 2; error: line 2: d2.dec_src: decoder source must be CH or R; LA uses dec_la
+setup d2.dec_src "30" -> 30
+setup d2.dec_src "4" -> 2; error: line 2: d2.dec_src: decoder source must be CH, R or M; LA uses dec_la
 setup d2.dec_src "R1" -> 20
 setup d2.dec_src "R10" -> 29
 setup d2.dec_src "R11" -> 2; error: line 2: d2.dec_src: R11 out of range
@@ -2975,13 +2975,13 @@ setup d2.dec_src default -> 2
 setup d2.dec_src2 "" -> 3; error: "line 2: d2.dec_src2: not an index: "
 setup d2.dec_src2 "-1" -> 3; error: line 2: d2.dec_src2: not an index: -1
 setup d2.dec_src2 "0" -> 0
-setup d2.dec_src2 "19" -> 3; error: line 2: d2.dec_src2: decoder source must be CH or R; LA uses dec_la
+setup d2.dec_src2 "19" -> 3; error: line 2: d2.dec_src2: decoder source must be CH, R or M; LA uses dec_la
 setup d2.dec_src2 "1e9" -> 3; error: line 2: d2.dec_src2: not an index: 1e9
 setup d2.dec_src2 "20" -> 20
 setup d2.dec_src2 "29" -> 29
 setup d2.dec_src2 "3" -> 3
-setup d2.dec_src2 "30" -> 3; error: line 2: d2.dec_src2: 30 out of range (< 30)
-setup d2.dec_src2 "4" -> 3; error: line 2: d2.dec_src2: decoder source must be CH or R; LA uses dec_la
+setup d2.dec_src2 "30" -> 30
+setup d2.dec_src2 "4" -> 3; error: line 2: d2.dec_src2: decoder source must be CH, R or M; LA uses dec_la
 setup d2.dec_src2 "R1" -> 20
 setup d2.dec_src2 "R10" -> 29
 setup d2.dec_src2 "R11" -> 3; error: line 2: d2.dec_src2: R11 out of range
@@ -2996,7 +2996,7 @@ setup d2.dec_src4 "1e9" -> none; error: line 2: d2.dec_src4: not an index: 1e9
 setup d2.dec_src4 "20" -> none; error: line 2: d2.dec_src4: invalid decoder source
 setup d2.dec_src4 "21" -> 21
 setup d2.dec_src4 "30" -> 30
-setup d2.dec_src4 "31" -> none; error: line 2: d2.dec_src4: 31 out of range (< 31)
+setup d2.dec_src4 "31" -> 31
 setup d2.dec_src4 "4" -> 4
 setup d2.dec_src4 "5" -> none; error: line 2: d2.dec_src4: invalid decoder source
 setup d2.dec_src4 "R1" -> 21
@@ -3325,8 +3325,8 @@ setup dec_cs "0" -> 0
 setup dec_cs "1e9" -> 1; error: line 2: dec_cs: not an index: 1e9
 setup dec_cs "29" -> 29
 setup dec_cs "3" -> 3
-setup dec_cs "30" -> 1; error: line 2: dec_cs: 30 out of range (< 30)
-setup dec_cs "4" -> 1; error: line 2: dec_cs: decoder source must be CH or R; LA uses dec_la
+setup dec_cs "30" -> 30
+setup dec_cs "4" -> 1; error: line 2: dec_cs: decoder source must be CH, R or M; LA uses dec_la
 setup dec_cs "R1" -> 20
 setup dec_cs "R11" -> 1; error: line 2: dec_cs: R11 out of range
 setup dec_cs "none" -> none
@@ -3340,7 +3340,7 @@ setup dec_diff "1e9" -> none; error: line 2: dec_diff: not an index: 1e9
 setup dec_diff "20" -> none; error: line 2: dec_diff: invalid decoder source
 setup dec_diff "21" -> 21
 setup dec_diff "30" -> 30
-setup dec_diff "31" -> none; error: line 2: dec_diff: 31 out of range (< 31)
+setup dec_diff "31" -> 31
 setup dec_diff "4" -> 4
 setup dec_diff "5" -> none; error: line 2: dec_diff: invalid decoder source
 setup dec_diff "R1" -> 21
@@ -3527,13 +3527,13 @@ setup dec_sel default -> 0
 setup dec_src "" -> 2; error: "line 2: dec_src: not an index: "
 setup dec_src "-1" -> 2; error: line 2: dec_src: not an index: -1
 setup dec_src "0" -> 0
-setup dec_src "19" -> 2; error: line 2: dec_src: decoder source must be CH or R; LA uses dec_la
+setup dec_src "19" -> 2; error: line 2: dec_src: decoder source must be CH, R or M; LA uses dec_la
 setup dec_src "1e9" -> 2; error: line 2: dec_src: not an index: 1e9
 setup dec_src "20" -> 20
 setup dec_src "29" -> 29
 setup dec_src "3" -> 3
-setup dec_src "30" -> 2; error: line 2: dec_src: 30 out of range (< 30)
-setup dec_src "4" -> 2; error: line 2: dec_src: decoder source must be CH or R; LA uses dec_la
+setup dec_src "30" -> 30
+setup dec_src "4" -> 2; error: line 2: dec_src: decoder source must be CH, R or M; LA uses dec_la
 setup dec_src "R1" -> 20
 setup dec_src "R10" -> 29
 setup dec_src "R11" -> 2; error: line 2: dec_src: R11 out of range
@@ -3543,13 +3543,13 @@ setup dec_src default -> 2
 setup dec_src2 "" -> 3; error: "line 2: dec_src2: not an index: "
 setup dec_src2 "-1" -> 3; error: line 2: dec_src2: not an index: -1
 setup dec_src2 "0" -> 0
-setup dec_src2 "19" -> 3; error: line 2: dec_src2: decoder source must be CH or R; LA uses dec_la
+setup dec_src2 "19" -> 3; error: line 2: dec_src2: decoder source must be CH, R or M; LA uses dec_la
 setup dec_src2 "1e9" -> 3; error: line 2: dec_src2: not an index: 1e9
 setup dec_src2 "20" -> 20
 setup dec_src2 "29" -> 29
 setup dec_src2 "3" -> 3
-setup dec_src2 "30" -> 3; error: line 2: dec_src2: 30 out of range (< 30)
-setup dec_src2 "4" -> 3; error: line 2: dec_src2: decoder source must be CH or R; LA uses dec_la
+setup dec_src2 "30" -> 30
+setup dec_src2 "4" -> 3; error: line 2: dec_src2: decoder source must be CH, R or M; LA uses dec_la
 setup dec_src2 "R1" -> 20
 setup dec_src2 "R10" -> 29
 setup dec_src2 "R11" -> 3; error: line 2: dec_src2: R11 out of range
@@ -3564,7 +3564,7 @@ setup dec_src4 "1e9" -> none; error: line 2: dec_src4: not an index: 1e9
 setup dec_src4 "20" -> none; error: line 2: dec_src4: invalid decoder source
 setup dec_src4 "21" -> 21
 setup dec_src4 "30" -> 30
-setup dec_src4 "31" -> none; error: line 2: dec_src4: 31 out of range (< 31)
+setup dec_src4 "31" -> 31
 setup dec_src4 "4" -> 4
 setup dec_src4 "5" -> none; error: line 2: dec_src4: invalid decoder source
 setup dec_src4 "R1" -> 21

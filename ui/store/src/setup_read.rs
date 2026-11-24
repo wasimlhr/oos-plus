@@ -47,7 +47,7 @@ fn p_decode_source(v: &str) -> Result<usize, String> {
     } else {
         p_idx(v, DEC_SOURCE_COUNT)?
     };
-    decode_wave(source).map(|_| source).ok_or_else(|| "decoder source must be CH or R; LA uses dec_la".into())
+    decode_valid(source).then_some(source).ok_or_else(|| "decoder source must be CH, R or M; LA uses dec_la".into())
 }
 
 fn p_decode_optional_one_based(v: &str) -> Result<Option<usize>, String> {
@@ -58,7 +58,7 @@ fn p_decode_optional_one_based(v: &str) -> Result<Option<usize>, String> {
         return p_decode_source(v).map(Some);
     }
     let source = p_idx(v, DEC_SOURCE_COUNT + 1)?.max(1) - 1;
-    decode_wave(source).map(|_| Some(source)).ok_or_else(|| "invalid decoder source".into())
+    decode_valid(source).then_some(Some(source)).ok_or_else(|| "invalid decoder source".into())
 }
 
 /// The value `filt_text` writes.

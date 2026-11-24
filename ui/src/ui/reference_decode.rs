@@ -55,11 +55,33 @@ impl Cache {
     }
 }
 
+/// The samples of a decoder source: borrowed from a record, or shared with the math cache.
+pub(super) enum Samples<'a> {
+    Slice(&'a [f32]),
+    Shared(Arc<Vec<f32>>),
+}
+
+impl std::ops::Deref for Samples<'_> {
+    type Target = [f32];
+    fn deref(&self) -> &[f32] {
+        match self {
+            Samples::Slice(v) => v,
+            Samples::Shared(v) => v,
+        }
+    }
+}
+
 /// The required analogue roles, including the implicit Parallel data bank.
 pub(super) fn sources(m: &Model) -> Result<Vec<usize>, &'static str> {
     let mut ids = vec![m.dec_src];
     if m.dec_proto == Proto::PARALLEL {
-        let (base, count) = if m.dec_src >= DEC_REF_BASE { (DEC_REF_BASE, NREF) } else { (0, NCH) };
+        let (base, count) = if m.dec_src >= DEC_MATH_BASE {
+            (DEC_MATH_BASE, NMATH)
+        } else if m.dec_src >= DEC_REF_BASE {
+            (DEC_REF_BASE, NREF)
+        } else {
+            (0, NCH)
+        };
         ids = (0..count)
             .map(|i| base + (m.dec_src - base + i) % count)
             .filter(|id| Some(*id) != m.dec_cs)
@@ -82,7 +104,7 @@ pub(super) fn sources(m: &Model) -> Result<Vec<usize>, &'static str> {
     }
     let mut unique = Vec::new();
     for id in ids {
-        if decode_wave(id).is_none() {
+        if !decode_valid(id) {
             return Err("Invalid decoder source");
         }
         if !unique.contains(&id) {
@@ -217,14 +239,31 @@ impl Ui {
             && sources(m)
                 .is_ok_and(|ids| ids.iter().any(|&id| id < NCH && raw.frame.ch.get(id).is_some_and(|v| v.len() >= 2)))
     }
-    fn decoder_samples(&self, id: usize) -> Result<(&[f32], f64, f64, f32), &'static str> {
+    fn decoder_samples(&self, id: usize) -> Result<(Samples<'_>, f64, f64, f32), &'static str> {
         self.decoder_samples_at(id, None)
     }
     fn decoder_samples_at<'a>(
         &'a self,
         id: usize,
         candidate: Option<&'a Record>,
-    ) -> Result<(&'a [f32], f64, f64, f32), &'static str> {
+    ) -> Result<(Samples<'a>, f64, f64, f32), &'static str> {
+        if let Some(k) = decode_math(id) {
+            // the result of a math channel: its own record, at its own step (a pending job is "computing")
+            let c = self.m.math_ch(k);
+            if matches!(c.op, MathOp::Off) {
+                return Err("Math source is off");
+            }
+            if matches!(c.op, MathOp::Fft) {
+                return Err("FFT is a frequency-domain source");
+            }
+            let sig = self.math_record(k)?.ok_or(COMPUTING)?;
+            if sig.v.len() < 2 || !sig.dt.is_finite() || sig.dt <= 0.0 || !sig.t0.is_finite() {
+                return Err("Invalid decoder record");
+            }
+            let scales = math_scales();
+            let vpd = scales[c.scale.min(scales.len() - 1)] as f32;
+            return Ok((Samples::Shared(Arc::clone(&sig.v)), sig.dt, sig.t0, vpd));
+        }
         let (v, dt, t0, vpd) = match decode_wave(id).ok_or("Invalid decoder source")? {
             WaveId::Ref(i) => {
                 let r = self.refs[i].as_ref().ok_or("Reference source empty")?;
@@ -237,7 +276,7 @@ impl Ui {
                         return Err("Invalid decoder record");
                     }
                     return Ok((
-                        &raw.frame.ch[c],
+                        Samples::Slice(&raw.frame.ch[c]),
                         raw.frame.dt,
                         self.source_time_origin(WaveId::Ch(c), raw.t0 - raw.i0 as f64 * raw.frame.dt),
                         self.m.ch[c].volts_per_div(),
@@ -246,6 +285,7 @@ impl Ui {
                 (r.ch[c].as_slice(), r.dt, self.source_time_origin(WaveId::Ch(c), r.t0), self.m.ch[c].volts_per_div())
             }
         };
+        let v = Samples::Slice(v);
         if v.len() < 2 || !dt.is_finite() || dt <= 0.0 || !t0.is_finite() {
             return Err("Invalid decoder record");
         }
@@ -411,14 +451,23 @@ impl Ui {
         Ok(self.events_text())
     }
     pub(super) fn decoder_sources(&self) -> Vec<usize> {
-        (0..n_ch()).chain((0..NREF).filter(|&i| self.refs[i].is_some()).map(|i| DEC_REF_BASE + i)).collect()
+        (0..n_ch())
+            .chain((0..NREF).filter(|&i| self.refs[i].is_some()).map(|i| DEC_REF_BASE + i))
+            .chain(
+                (0..NMATH)
+                    .filter(|&k| !matches!(self.m.math_ch(k).op, MathOp::Off | MathOp::Fft))
+                    .map(|k| DEC_MATH_BASE + k),
+            )
+            .collect()
     }
     /// The names a line's row of the Decode menu lists: the channels and the references that hold a waveform, and
     /// the line's own source when that is a reference that is empty now. A decoder left on "R1" after the reference
     /// was cleared, or after a restart, had a row of channels with none of them chosen and no word of R1.
     pub(super) fn decoder_source_names(&self, own: Option<usize>) -> Vec<String> {
         let mut sources = self.decoder_sources();
-        if let Some(own) = own.filter(|s| !sources.contains(s) && matches!(decode_wave(*s), Some(WaveId::Ref(_)))) {
+        if let Some(own) = own.filter(|s| {
+            !sources.contains(s) && (matches!(decode_wave(*s), Some(WaveId::Ref(_))) || decode_math(*s).is_some())
+        }) {
             sources.push(own);
             sources.sort_unstable();
         }
@@ -606,6 +655,35 @@ mod tests {
                 Err(error) => panic!("{error}"),
             }
         }
+    }
+
+    /// A math trace is a decoder source: the decode of M1 = R1 - R2 gives the packets of the differential option
+    /// (R1 with R2 as its second line), and the id round-trips through a setup text.
+    #[test]
+    fn a_math_difference_decodes_like_the_differential_option() {
+        let mut ui = uart_ui(1000);
+        let (v, dt) = uart(0xa5, 1000);
+        let plus: Vec<f32> = v.iter().map(|x| 1.0 + x / 2.0).collect();
+        let minus: Vec<f32> = v.iter().map(|x| 1.0 - x / 2.0).collect();
+        ui.refs[0] = Some(reference(plus, dt, -0.005, 0.5));
+        ui.refs[1] = Some(reference(minus, dt, -0.005, 0.5));
+        ui.m.dec_diff = Some(DEC_REF_BASE + 1);
+        let differential = wait(&ui);
+        assert!(differential.iter().any(|p| p.kind == oos_dsp::decode::Kind::Data && p.value == 0xa5));
+        ui.m.dec_diff = None;
+        ui.m.math = MathOp::Sub;
+        ui.m.math_a = MATH_REF_BASE;
+        ui.m.math_b = MATH_REF_BASE + 1;
+        assert!(ui.decoder_sources().contains(&DEC_MATH_BASE), "M1 is on offer");
+        assert!(ui.options(Item::DecSrc).contains(&"M1".into()), "the menu lists M1");
+        ui.select_option(Item::DecSrc, "M1");
+        assert_eq!(ui.m.dec_src, DEC_MATH_BASE);
+        assert_eq!(decode_source_name(ui.m.dec_src), "M1");
+        let over_math = wait(&ui);
+        assert_eq!(over_math.as_ref(), differential.as_ref());
+        let restored = crate::store::parse_setup(&crate::store::setup_text(&ui.m)).unwrap();
+        assert_eq!(restored.dec_src, DEC_MATH_BASE);
+        assert!(!ui.configure_decoder_source(0, Some(DEC_MATH_BASE + 1)), "M2 is off");
     }
 
     #[test]

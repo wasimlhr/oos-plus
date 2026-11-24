@@ -35,7 +35,8 @@ fn with_bus(ui: &mut Ui, k: usize, f: impl FnOnce(&mut Model)) {
 }
 
 fn parse_bus_wave(ui: &Ui, text: &str) -> Option<usize> {
-    match parse_wave(text)? {
+    let Some(wave) = parse_wave(text) else { return parse_math_source(text) };
+    match wave {
         WaveId::Ch(c) if c < n_ch() => Some(c),
         WaveId::Ref(i) if ui.ref_info(i).is_some() => Some(DEC_REF_BASE + i),
         _ => None,
@@ -46,7 +47,26 @@ fn bus_source_name(source: usize) -> String {
     match decode_wave(source) {
         Some(WaveId::Ch(c)) => format!("CHAN{}", c + 1),
         Some(WaveId::Ref(i)) => format!("R{}", i + 1),
-        None => "Unavailable".into(),
+        None => decode_math(source).map_or("Unavailable".into(), |k| format!("MATH{}", k + 1)),
+    }
+}
+
+/// `MATH1`..`MATH8` (or `M1`): the decoder source of a math channel, as `DECoder:...:SOURce` takes it.
+fn parse_math_source(text: &str) -> Option<usize> {
+    let (k, n) = suffix(text.trim());
+    (kw(k, "MATH") || k.eq_ignore_ascii_case("M"))
+        .then_some(n)
+        .flatten()
+        .filter(|&n| (1..=crate::math::NMATH).contains(&n))
+        .map(|n| DEC_MATH_BASE + n - 1)
+}
+
+/// A decoder source named as a channel, a reference or a math channel.
+fn parse_dec_source(text: &str) -> Option<usize> {
+    match parse_wave(text) {
+        Some(WaveId::Ch(c)) => Some(c),
+        Some(WaveId::Ref(i)) => Some(DEC_REF_BASE + i),
+        None => parse_math_source(text),
     }
 }
 
@@ -504,7 +524,10 @@ impl Scpi {
                     _ => ui.m.dec_diff,
                 };
                 // as the other queries name a source (CHAN3, R1), which the setter takes back
-                return text(source.and_then(decode_wave).map_or("NONE".into(), wave_tok));
+                return text(source.filter(|&s| decode_valid(s)).map_or("NONE".into(), |s| match decode_wave(s) {
+                    Some(wave) => wave_tok(wave),
+                    None => bus_source_name(s),
+                }));
             }
             if ui.m.dec_on_la() && role < 4 {
                 let source = arg
@@ -522,9 +545,8 @@ impl Scpi {
             let source = if arg.eq_ignore_ascii_case("NONE") {
                 None
             } else {
-                match parse_wave(arg) {
-                    Some(WaveId::Ch(c)) => Some(c),
-                    Some(WaveId::Ref(i)) => Some(DEC_REF_BASE + i),
+                match parse_dec_source(arg) {
+                    Some(source) => Some(source),
                     None => return illegal(self),
                 }
             };
