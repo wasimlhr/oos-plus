@@ -271,10 +271,10 @@ impl Ui {
             return;
         }
         if it == Item::Views {
-            // a count is chosen: the new views exist, the dialog gets out of the way of the plot, the toast says which
+            // a count is chosen: the new views exist and the toast says which is shown; the dialog stays, as for every
+            // other row, so the next row (the windows, the grid) can be set without opening it again
             let n = if want == "Off" { 1 } else { want.parse().unwrap_or(self.m.views) };
             self.views_set(n);
-            self.close_menu();
             return;
         }
         if it == Item::MeasCopyTo {
