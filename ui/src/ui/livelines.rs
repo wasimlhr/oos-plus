@@ -61,7 +61,7 @@ impl Ui {
 
     /// The samples of the acquisition behind the record, in the window `(t_left, t_right)`, as (values, time of the
     /// first, step): windowed sinc between them when they lie more than two pixels apart, as the record does at fast
-    /// time bases. `None` when the record is not a plain resampling (peak detect, averaging, roll, scan, pairs) or
+    /// time bases. `None` when the record is not a plain resampling (peak detect, averaging, roll, scan) or
     /// when the record's own points are already dense enough.
     fn own_samples(
         &self,
@@ -74,7 +74,7 @@ impl Ui {
         let raw = rec.raw.as_ref()?;
         let f = &raw.frame;
         let v = &f.ch[c];
-        let plain = !(rec.pairs || rec.peak || f.envelope || f.roll || f.scan) && self.m.acq == AcqMode::Normal;
+        let plain = !(rec.peak || f.envelope || f.roll || f.scan) && self.m.acq == AcqMode::Normal;
         if !plain || v.len() < 2 || !(f.dt > 0.0) || rec.dt <= f.dt * 1.5 {
             return None;
         }
@@ -124,7 +124,8 @@ mod tests {
         let frame = std::sync::Arc::new(crate::board::Frame { dt: 25e-9, ch, ..Default::default() });
         let mut rec = u.last[0].clone().expect("a record");
         rec.dt = 390e-9;
-        (rec.pairs, rec.peak) = (false, false);
+        // the overview record of 390 ns per point is made of min/max pairs: still a resampling of the samples
+        (rec.pairs, rec.peak) = (true, false);
         rec.raw = Some(crate::wave::Raw { frame, i0: 0, i1: 40_000, t0: rec.t0, conditioned: true });
         u.m.acq = AcqMode::Normal;
         // a window of 7 us: 280 samples over 1920 pixels
