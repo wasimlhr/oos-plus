@@ -68,7 +68,8 @@ impl oos_remote::http::Site for Ctx<'_> {
         crate::cmd::remote_ok(line)
     }
 
-    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp, /mcp and /mcp/waveform/<file>.
+    /// /ui-state, /stamp, /wave.csv, /la.csv, /wave.bin, POST /update, /screen.bmp, /files, /files/<file>, /mcp and
+    /// /mcp/waveform/<file>.
     fn answer(&mut self, route: &str, post: bool, body: &[u8]) -> Option<(&'static str, Body, bool)> {
         let ok = |ctype: &'static str, b: Vec<u8>| Some((ctype, Body::Now(b), false));
         let file = |ctype: &'static str, r: Result<Vec<u8>, String>| match r {
@@ -104,6 +105,11 @@ impl oos_remote::http::Site for Ctx<'_> {
             "/screen.bmp" => {
                 let shot = snapshot(self.cv);
                 Some(("image/bmp", Body::Later(Box::new(move || crate::scpi::bmp(&shot))), false))
+            }
+            // the files the scope saved, read only (oos-plus)
+            "/files" if !post => ok("application/json", files::list(&ui.save_dir()).into_bytes()),
+            _ if !post && route.starts_with("/files/") => {
+                Some(files::download(&ui.save_dir(), &route["/files/".len()..]))
             }
             _ if !post && route.starts_with("/mcp/waveform/") => {
                 let name = &route["/mcp/waveform/".len()..];
@@ -165,6 +171,7 @@ fn snapshot(cv: &Canvas) -> Canvas {
     shot
 }
 
+mod files;
 mod mcp;
 pub use mcp::{mcp, waveform_csv};
 

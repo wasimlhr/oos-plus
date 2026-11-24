@@ -330,6 +330,13 @@ impl Platform {
         format!("{}  SN {}{}", self.caps.name, self.serial.as_deref().unwrap_or("-"), src)
     }
 
+    /// The options this unit has, as the tokens `*OPT?` answers: `LA` (logic analyser port), `AFG` (built-in generators)
+    /// and `EXT` (EXT trigger input). Empty: none.
+    pub fn options(&self) -> Vec<&'static str> {
+        let c = &self.caps;
+        [(c.la, "LA"), (c.has_gen(), "AFG"), (c.ext_trig, "EXT")].into_iter().filter(|(on, _)| *on).map(|(_, n)| n).collect()
+    }
+
     /// Capability line, e.g. "250 MHz rated, 4 ch, LA, generator".
     pub fn caps_line(&self) -> String {
         let c = &self.caps;

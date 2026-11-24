@@ -54,6 +54,17 @@ fn timebase_measure_and_system_roots_answer_as_before() {
     assert!(err(&mut s, &mut ui).starts_with("0,"));
 }
 
+// Break it catches: *OPT? answered 0 on every unit; it lists the options the unit has, and so does the system query
+#[test]
+fn opt_reports_the_options_of_the_unit() {
+    let (mut s, mut ui, cv) = session();
+    let want = oos_hal::model::platform().options();
+    let want = if want.is_empty() { "0".to_string() } else { want.join(",") };
+    assert_eq!(line(&mut s, &mut ui, &cv, "*OPT?"), want);
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SYSTem:OPTion:INSTalled?"), want);
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("0,"));
+}
+
 // Break it catches: :TIMebase:SCALe kept the delay as it was, so a script moved the point that :TIMebase:HREFerence:
 // MODE and the knob keep in place, and left the zoom wider than the new time base (OOS Plus, W4R)
 #[test]

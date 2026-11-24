@@ -191,11 +191,11 @@
     {
      "header": "*OPT",
      "query": "*OPT?",
-     "desc": "`0`: no options are reported.",
+     "desc": "The options of this unit, comma separated: `LA`, `AFG`, `EXT`; `0` for none.",
      "remarks": [
       "- Origin: IEEE 488.2"
      ],
-     "returns": "On a freshly started default model the query returns `0`."
+     "returns": "On a freshly started default model the query returns `per unit`."
     },
     {
      "header": "*WAI",
@@ -469,6 +469,16 @@
       "- Origin: Rigol-compatible"
      ],
      "example": ":SYSTem:ERRor?    /*The query returns -221,\"Settings conflict\" Switching SCPI off needs the argument CONFIRM.*/\n:SYSTem:ERRor?    /*The query returns -221,\"Settings conflict\" Power off needs the argument CONFIRM.*/"
+    },
+    {
+     "header": ":SYSTem:OPTion:INSTalled",
+     "query": ":SYSTem:OPTion:INSTalled?",
+     "desc": "The same answer as `*OPT?`.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `per unit`.",
+     "ext": true
     },
     {
      "header": ":SYSTem:VERSion",
@@ -7005,7 +7015,7 @@
    "title": "Search (mark events)",
    "intro": [
     {
-     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. A search of Studio is of one of six types, `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT` and `WINDow`, with the settings the trigger has for that type under the same names (`:SEARch:PULSe:WHEN` as `:TRIGger:PULSe:WHEN`). A search has one set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the setting whatever the type is, and `:SEARch:MODE` changes the type alone. The events are found in the samples by the software trigger, with a hysteresis of a tenth of a division. The events of the decoders have their own commands in decode."
+     "p": "Mark the events of a trigger-like condition and walk through them. The first set of a source, level or slope adds Search 1 like the Add rail does. Studio has up to three searches: `:SEARch<n>:...` with `<n>` 1 to 3 is Search n, and without a number the command is of Search 1 (`STATe` and `MODE` are the same with any number; `VALue` takes none). The first set of `:SEARch2:EDGE:SOURce` adds Search 2; `:SEARch2:EVENt` goes to an event of Search 2 and makes it the selected search of the screen, the other commands leave the screen's choice alone. A search of Studio is of one of seven types, `EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow` and `BUS`, with the settings the trigger has for that type under the same names (`:SEARch:PULSe:WHEN` as `:TRIGger:PULSe:WHEN`). A `BUS` search has no source and no levels: it marks the packets of the active decoder (the one the Decode menu edits, which must be on) that the bus trigger's condition accepts, at the end of each packet, found by the decoder's own `ModuleInfo::trigger_match` (a frame, an ID or address, data, an error); `:SEARch:BUS:WHEN` and `:SEARch:BUS:VALue` are `:TRIGger:BUS:WHEN` and `:TRIGger:BUS:VALue`. A search has one set of settings, as the trigger has: a set under a type makes the search of that type, a query answers the setting whatever the type is, and `:SEARch:MODE` changes the type alone. The events are found in the samples by the software trigger, with a hysteresis of a tenth of a division. The events of the decoders have their own commands in decode."
     },
     {
      "p": "Menu location: Decode and bus > Mark events, Search (type, source, slope or polarity, levels, 50 %, time condition, from / to trigger, event, event list, save events, remove)."
@@ -7043,7 +7053,7 @@
       [
        "<value>",
        "Text",
-       "`EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow`: the type of the search. `SLOPe`, `RUNT` and `WINDow` place their two levels on the signal when the search had one level. Without a search of Studio the answer is `EDGE`",
+       "`EDGE`, `PULSe`, `SLOPe`, `TIMeout`, `RUNT`, `WINDow`, `BUS`: the type of the search. `SLOPe`, `RUNT` and `WINDow` place their two levels on the signal when the search had one level. Without a search of Studio the answer is `EDGE`",
        "EDGE"
       ]
      ],
@@ -7051,7 +7061,7 @@
       "- Origin: name not verified against the DHO guide"
      ],
      "returns": "On a freshly started default model the query returns `EDGE`.",
-     "example": ":SEARch:MODE RUNT"
+     "example": ":SEARch:MODE RUNT\n:SEARch:MODE?    /*The query returns BUS.*/"
     },
     {
      "header": ":SEARch:EDGE:SOURce",
@@ -7683,6 +7693,44 @@
      "returns": "On a freshly started default model the query returns `5.000000E-01`."
     },
     {
+     "header": ":SEARch:BUS:WHEN",
+     "set": ":SEARch:BUS:WHEN <value>",
+     "query": ":SEARch:BUS:WHEN?",
+     "desc": "Sets or queries Match (menu: Search > Match).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "`FRAMe` (every packet of the decoder), `ID` (an identifier or address), `DATA`, `ERRor`: what the search marks; the set makes the search a bus search",
+       "FRAM"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `FRAM`.",
+     "example": ":SEARch:BUS:WHEN DATA\n:SEARch:BUS:WHEN ERRor"
+    },
+    {
+     "header": ":SEARch:BUS:VALue",
+     "set": ":SEARch:BUS:VALue <value>",
+     "query": ":SEARch:BUS:VALue?",
+     "desc": "Sets or queries Value (menu: Search > Value).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "The identifier, address or data the match is compared with, decimal or `0x` hex (`ID` and `DATA` use it; UART and SPI data also the trigger's relation, I2C the frame around an address)",
+       "0x0"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `0x0`.",
+     "example": ":SEARch:BUS:VALue 0x55"
+    },
+    {
      "header": ":SEARch:DISPlay",
      "set": ":SEARch:DISPlay <value>",
      "query": ":SEARch:DISPlay?",
@@ -7728,7 +7776,7 @@
       "- Origin: name not verified against the DHO guide"
      ],
      "returns": "On a freshly started default model the query returns `1`.",
-     "example": ":SEARch:COUNt?    /*The query returns 1.*/\n:SEARch:COUNt?    /*The query returns 0.*/"
+     "example": ":SEARch:COUNt?    /*The query returns 1.*/\n:SEARch:COUNt?    /*The query returns 0.*/\n:SEARch:COUNt?    /*The query returns 2.*/"
     },
     {
      "header": ":SEARch:EVENt",
@@ -7747,7 +7795,7 @@
       "- Origin: name not verified against the DHO guide"
      ],
      "returns": "On a freshly started default model the query returns `1`.",
-     "example": ":SEARch:EVENt 1\n:SEARch:EVENt?    /*The query returns 1.*/"
+     "example": ":SEARch:EVENt 1\n:SEARch:EVENt?    /*The query returns 1.*/\n:SEARch:EVENt 2"
     },
     {
      "header": ":SEARch:DATA",
@@ -7809,6 +7857,12 @@
      "pre": ":SEARch:PULSe:SOURce CHAN1\n:SEARch:PULSe:POLarity POSitive\n:SEARch:PULSe:WHEN LESS\n:SEARch:PULSe:UWIDth 100E-6\n:SEARch:COUNt?                         -> 1\n:SEARch:MODE RUNT\n:SEARch:RUNT:WHEN NONE\n:SEARch:COUNt?                         -> 0\n:SEARch:REMove"
     },
     {
+     "p": "Mark the data bytes 0x55 that the active decoder (UART, on) read, and go to the second."
+    },
+    {
+     "pre": ":DECode:STATe ON\n:SEARch:BUS:WHEN DATA\n:SEARch:BUS:VALue 0x55\n:SEARch:MODE?                          -> BUS\n:SEARch:COUNt?                         -> 2\n:SEARch:EVENt 2\n:SEARch:BUS:WHEN ERRor\n:SEARch:COUNt?                         -> 0\n:SEARch:REMove"
+    },
+    {
      "p": "A second search on the same channel, for the falling edges only."
     },
     {
@@ -7820,7 +7874,7 @@
    "title": "Decoders and bus: Decoder slot",
    "intro": [
     {
-     "p": "Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. A decoder on channels reads the samples the acquisition kept when those are finer than the screen record (up to 262144 points per line while running, 4 M when stopped), so `:DECode:EVENts?` and `:BUS<n>:DATA?` can list events of the whole record, also outside the screen. A UART character the record starts inside is not listed, nor the ones behind it until its bits can be read in one way only; in peak detect, roll and above 1 M points it reads the 3600 points of the screen. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference."
+     "p": "Protocol decoders: the `:DECode:` subtree edits the selected decoder slot, `:BUS<n>:` addresses decoder n directly (the decoder the menu edits stays the same afterwards), and `:BUS:LANE:` is the plot bus (I2C lane). Protocol-specific rows exist only for their protocol: an option the protocol does not have is -224. Decoder parameters take the option text of the menu row, and the query answers it in capitals. A decoder on channels reads the samples the acquisition kept when those are finer than the screen record (up to 262144 points per line while running, 4 M when stopped), so `:DECode:EVENts?` and `:BUS<n>:DATA?` can list events of the whole record, also outside the screen. A UART character the record starts inside is not listed, nor the ones behind it until its bits can be read in one way only; in peak detect, roll and above 1 M points it reads the 3600 points of the screen. The events of a decoder can also be searched by the type `BUS` of search. Reference sources may be used as roles if their native intervals overlap in physical time; no synthetic LA input is invented for a reference."
     },
     {
      "p": "Menu location: Decode and bus (Protocol, Source / clock / CS, Threshold, Format, Events pane, protocol parameters, Plot bus, Save events)."
@@ -14075,17 +14129,17 @@
      "header": ":VIEW:TRACes",
      "set": ":VIEW:TRACes <value>",
      "query": ":VIEW:TRACes?",
-     "desc": "Sets or queries Overlay traces, Stacked traces for Right-click menu of the plot (menu: Right-click > Overlay traces, Stacked traces).",
+     "desc": "Sets or queries Traces for Right-click menu of the plot (menu: Right-click > Overlay traces, Stacked traces, Four windows; Display > Traces).",
      "params": [
       [
        "<value>",
        "Discrete",
-       "{OVERlay|STACked}",
+       "{OVERlay|STACked|WINDows}",
        "OVER"
       ]
      ],
      "remarks": [
-      "- : all traces in one plot, or one lane each.",
+      "- : all traces on one graticule, one lane each in one plot, or four separate waveform views (the window of each source is set on Display > Windows).",
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `OVER`.",

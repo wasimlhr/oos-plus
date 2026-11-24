@@ -161,25 +161,15 @@ impl Ui {
             self.m.trig_level += b - self.trig_level_base();
         }
         match it {
-            // Split takes the new pane as the one it keeps, with two stacked traces for none; the pane that shows the
-            // values does not change what was measured (no `settings_changed`)
+            // the lower pane is its own choice: the arrangement of the traces and Full screen stay as they are; the pane
+            // that shows the values does not change what was measured (no `settings_changed`)
             Item::PaneSel => {
-                // oos-plus: a pane chosen from the Windows page in Scope makes it Split (Minimal and Studio list it in
-                // Scope)
-                if self.m.layout != Layout::Default && self.m.density == Density::Scope && self.m.pane != 0 {
-                    self.m.density = Density::Split;
+                if self.m.pane != 0 && self.m.density == Density::Full {
+                    self.m.density = Density::Scope;
+                    self.m.split_pane = 0;
+                    self.sync_full();
                 }
-                if self.m.density == Density::Split {
-                    self.m.split_pane = self.m.pane;
-                    let prev = self.m.win_layout;
-                    self.m.win_layout = if self.m.pane == 0 { WinLayout::Rows } else { WinLayout::One };
-                    if self.m.win_layout != prev && self.m.win_layout != WinLayout::One {
-                        self.spread_wins();
-                        if self.m.zoom {
-                            self.toast("Windows show while zoom is off");
-                        }
-                    }
-                } else if self.m.pane != 0 && self.pane_h() == 0 {
+                if self.m.pane != 0 && self.pane_h() == 0 {
                     self.toast("No room for a second pane here: fewer LA lanes or the scope view");
                 }
                 self.relayout();
@@ -294,7 +284,7 @@ impl Ui {
 mod tests {
     use super::*;
 
-    /// The item is in the Display menu, in its Windows page (with the Split density, so the lower pane shows), in the
+    /// The item is in the Display menu, in its Windows page, in the
     /// Horizontal menu, in the Measure settings, in the DVM menu, in the Mask menu, in the LA menu, in the Bus menu, in
     /// a menu of an analyser page, in the Acquire menu (in Average mode with segments, so their rows show; HW average
     /// shows only with a hardware source, which the demo is not), in a Channel menu or its More page, in the Bode menu
@@ -302,7 +292,7 @@ mod tests {
     /// both limits show, and the video trigger on line n, so its line shows).
     fn in_a_menu(it: Item) -> bool {
         let mut u = crate::ui::testkit::demo_ui();
-        (u.m.acq, u.m.segments, u.m.density) = (AcqMode::Average, 10, Density::Split);
+        (u.m.acq, u.m.segments, u.m.density) = (AcqMode::Average, 10, Density::Scope);
         let channels = (0..NCH).flat_map(|c| [MenuId::Channel(c), MenuId::ChMore(c)]);
         if it == Item::AcqAvgHw
             || [
@@ -379,8 +369,8 @@ mod tests {
             if s.key == "strip" {
                 continue;
             }
-            // oos-plus: the Windows page's first row is the fork's own (`WinLayout`: the density in Default, the layout of
-            // the windows in Minimal and Studio); the setup and the table use the density row
+            // oos-plus: the density is the Windows page's Full screen row (On or Off), not a row of choices named
+            // after it; the setup and the table use the density row
             if s.key == "density" {
                 continue;
             }

@@ -303,12 +303,10 @@ impl Ui {
             let h = ((g.h - (n - 1) * gap) / n).max(1);
             return (0..n).map(|row| Rect::new(g.x, g.y + row * (h + gap), g.w, h)).collect();
         }
-        let (cols, rows) = match (self.n_wins(), self.m.win_layout) {
-            (1, _) => return vec![g],
-            (_, WinLayout::Cols) => (2, 1),
-            (_, WinLayout::Rows) => (1, 2),
-            _ => (2, 2),
-        };
+        if self.n_wins() == 1 {
+            return vec![g];
+        }
+        let (cols, rows) = (2, 2);
         let w = (g.w - (cols - 1) * GAP) / cols;
         // a whole number of pixels per division keeps the graticule even
         let h = ((g.h - (rows - 1) * GAP) / rows / 8 * 8).max(64);

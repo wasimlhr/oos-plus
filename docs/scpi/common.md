@@ -22,7 +22,7 @@ Part of the [SCPI reference](README.md).
 | `*STB` | Query | Status byte: bit 2 an error is queued, bit 5 an enabled `*ESR` bit is set, bit 6 an enabled bit of this byte is set. Not cleared by reading. There is no message-available bit. | `0` | - | IEEE 488.2 |
 | `*PSC` | Set / Query | Power-on status clear flag, `0` or `1`. The enable registers start at 0 either way; the flag is kept for drivers that set it. | `1` | - | IEEE 488.2 |
 | `*TST` | Query | `0`: there is no self test to fail. | `0` | - | IEEE 488.2 |
-| `*OPT` | Query | `0`: no options are reported. | `0` | - | IEEE 488.2 |
+| `*OPT` | Query | The options of this unit, comma separated: `LA`, `AFG`, `EXT`; `0` for none. | per unit | - | IEEE 488.2 |
 | `*WAI` | Action | Accepted and does nothing: a command is finished when the next one is read. Wait for an armed Single with `*OPC?`. | - | - | IEEE 488.2 |
 | `*TRG` | Action | Force a trigger, as `:TFORce`. | - | Run control > Force | IEEE 488.2 |
 

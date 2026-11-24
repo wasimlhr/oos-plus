@@ -209,14 +209,9 @@ fn menus_fit_at(scr: Screen, ts: TextSize, all: &mut BTreeSet<String>) {
         u.m.meas2 = vec![(0, WaveId::Ch(0), WaveId::Ch(1))];
     };
     walk(&|| open(Display, &trend), "Display Trend", &mut out);
-    walk(&|| open(Windows, &|u| u.select_option(Item::WinLayout, "Stacked")), "Windows split", &mut out);
-    walk(&|| open(Windows, &|u| u.select_option(Item::WinLayout, "Four")), "Windows four", &mut out);
-    // Default's page: upstream's density row
-    let default_split = |u: &mut Ui| {
-        u.m.layout = crate::model::Layout::Default;
-        u.select_option(Item::WinLayout, "Split");
-    };
-    walk(&|| open(Windows, &default_split), "Windows Default split", &mut out);
+    walk(&|| open(Windows, &|u| u.select_option(Item::Traces, "Stacked")), "Windows stacked", &mut out);
+    walk(&|| open(Windows, &|u| u.select_option(Item::Traces, "Windows")), "Windows four", &mut out);
+    walk(&|| open(Windows, &|u| u.select_option(Item::PaneSel, "Trend")), "Windows lower pane", &mut out);
     walk(&|| open(Bode, &|u| u.m.bode_gen = crate::model::bode::FREE), "Bode free sweep", &mut out);
     walk(
         &|| {

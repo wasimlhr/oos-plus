@@ -58,7 +58,7 @@ Every route can answer these; the body is `text/plain`.
 | Status | Body | When |
 |---|---|---|
 | 403 | `refused` | a request another site made through a browser (`foreign`, below), on every route |
-| 403 | `refused` | `POST /update`, `/mcp` and `/mcp/waveform/<file>` from a peer outside `net.allow`, when the head is in (body not read) |
+| 403 | `refused` | `POST /update`, `/mcp`, `/mcp/waveform/<file>`, `/files` and `/files/<file>` from a peer outside `net.allow`, when the head is in (body not read) |
 | 404 | `not found` | a path that is no route, whatever the method |
 | 405 | `method not allowed` | a route asked with a method it does not take; `Allow` names the ones it takes |
 | 413 | `request too large` | a body above its limit (announced or sent) |
@@ -71,8 +71,8 @@ port differ from `Host`; or when `Sec-Fetch-Site` is `cross-site` or `same-site`
 `Sec-Fetch-Site` (curl, a script) is never foreign.
 
 **net.allow** ([network.md](network.md) 6, `ui/system/src/netacl.rs`): without a list everyone is allowed; loopback
-always is. Each request is checked, so a change of Allowed counts from the next one. Only `POST /update` and `/mcp` look
-at it; the firewall of the scope applies to every port.
+always is. Each request is checked, so a change of Allowed counts from the next one. Only `POST /update`, `/mcp` and
+the saved files (`/files`) look at it; the firewall of the scope applies to every port.
 
 ## Routes
 
@@ -216,6 +216,32 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
   firmware `oos-ui <version>`, and an instrument address per service offered: `TCPIP::INSTR` (VXI-11),
   `TCPIP::<port>::SOCKET` (the SCPI socket), `TCPIP::hislip0[,<port>]::INSTR` (HiSLIP). LXI version 1.5.
 - net.allow: no.
+
+### `GET /files`
+
+- Mark: **experimental** (oos-plus)
+- Request: nothing.
+- Answer: 200 `application/json`, `{"files":[{"name":"scr-001.png","size":91234,"modified":1763900000}]}`: the files
+  the scope saved (screenshots, waveforms, setups) in its save folder (Storage > save destination: the USB stick when
+  it is used, else the storage folder, `--store-dir` on a computer), by name, at most 1000. Only regular files directly
+  in the folder: no folder, no link, no hidden file (a name with a leading dot), none whose name `GET /files/<file>`
+  would refuse. `modified` is in seconds since 1970 (0 where the file system gives none). A folder that is not there
+  lists none.
+- net.allow: yes, as `/mcp`. It has no switch of its own: it is read only and is answered while the web remote is on
+  (Remote services > Web).
+
+### `GET /files/<file>`
+
+- Mark: **experimental** (oos-plus)
+- Request: nothing; `<file>` is a `name` of `GET /files`, `%XX` taken (`my%20file.csv`).
+- Answer: 200, the file as it is on the disk, read on a sender thread (as `/screen.bmp`: 503 while two large answers
+  are being sent). The `Content-Type` is by the extension: `png`, `bmp`, `jpg`, `csv`, `txt`/`setup`/`oss`/`log`
+  (`text/plain`) and `json`; every other, `html` and `svg` too, is `application/octet-stream`. 409 `text/plain`: `Not a
+  file name of the save folder` for a name that is one path part no longer (a `/` or `\`, also as `%2f` or `%5c`,
+  `..`, a leading dot, a `:`, a control character, over 255 bytes, a bad `%XX`), `No such file in the save folder` for
+  a name that is no regular file there (a folder, a link, none), `The file is too large to download` above 128 MiB.
+  The path is checked as text before the disk is asked; the server never follows a link or leaves the folder.
+- net.allow: yes, as `/mcp`.
 
 ### `GET /mcp/waveform/<file>`
 

@@ -112,8 +112,7 @@ fn the_floating_view_has_its_panel() {
 #[test]
 fn entering_studio_shows_its_bars_even_from_full_screen() {
     let mut u = fresh();
-    u.m.density = Density::Full;
-    u.apply_density();
+    u.set_full(true, false);
     assert!(u.full_on());
     u.select_option(Item::Layout, "Studio");
     let mut cv = Canvas::new(W, H);

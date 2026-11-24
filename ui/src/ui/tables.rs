@@ -187,7 +187,11 @@ impl Ui {
 
     fn search_row(&self, index: usize, t: f64) -> EventRow {
         let (source, what) = self.search_names();
-        EventRow { t, who: format!("{} #{}", source, index + 1), text: what.to_string(), ok: true }
+        let what = match self.studio.search() {
+            Some(spec) if self.m.layout == Layout::Studio && spec.kind == TrigType::Bus => self.bus_search_what(spec),
+            _ => what.to_string(),
+        };
+        EventRow { t, who: format!("{} #{}", source, index + 1), text: what, ok: true }
     }
 
     /// The count in the title of the search table. Studio's own search says how much of the record it looked at
@@ -228,8 +232,16 @@ impl Ui {
         (dt > 0.0).then(|| format!("after {}, {}", si(dt, "s"), si(1.0 / dt, "Hz")))
     }
 
+    /// What an event of a bus search is: the match, with its value where it has one ("ID/Addr 0x123").
+    pub(super) fn bus_search_what(&self, spec: super::addrail::SearchSpec) -> String {
+        let name = bus_what_name(spec.bus);
+        if matches!(spec.bus, BusWhat::Id | BusWhat::Data) { format!("{name} 0x{:X}", spec.val) } else { name.to_string() }
+    }
+
     fn search_names(&self) -> (String, &'static str) {
         match self.studio.search() {
+            // (a bus search is of the active decoder, which has its own name in the list of decoders)
+            Some(spec) if self.m.layout == Layout::Studio && spec.kind == TrigType::Bus => (self.dec_tag(self.m.dec_sel), spec.kind.name()),
             Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), spec.kind.name()),
             _ => (self.trigger_source_label(), self.m.trig_type.name()),
         }
