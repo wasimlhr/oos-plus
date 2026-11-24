@@ -2782,6 +2782,26 @@
    "intro": [],
    "commands": [
     {
+     "header": ":TRIGger:PULSe:SOURce",
+     "set": ":TRIGger:PULSe:SOURce <value>",
+     "query": ":TRIGger:PULSe:SOURce?",
+     "desc": "Sets or queries Source for Pulse width (menu: Trigger > Source).",
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{CHANn|Rn}",
+       "CHAN1"
+      ]
+     ],
+     "remarks": [
+      "- ; available LA inputs can use `D0` through `D15` (a logic line is refused while the logic analyser is off).",
+      "- The set leaves the trigger type alone, as the other typed commands do; the line also answers `:TRIGger:SOURce?`.",
+      "- Origin: Rigol-compatible"
+     ],
+     "returns": "On a freshly started default model the query returns `CHAN1`."
+    },
+    {
      "header": ":TRIGger:PULSe:POLarity",
      "set": ":TRIGger:PULSe:POLarity <value>",
      "query": ":TRIGger:PULSe:POLarity?",

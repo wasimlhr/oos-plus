@@ -164,6 +164,11 @@ print(scope.query('*IDN?'))
 | `:TRIGger:EDGE:SOURce[?]` | `CHANn`, `Rn`, `D0`..`D15` |
 | `:TRIGger:EDGE:LEVel[?]` | volts |
 | `:TRIGger:EDGE:SLOPe[?]` | `POSitive\|NEGative\|RFALl` |
+| `:TRIGger:PULSe:SOURce[?]` | `CHANn`, `Rn`, `D0`..`D15`; the pulse trigger's source, the type stays as it is |
+| `:TRIGger:PULSe:POLarity[?]` | `POSitive\|NEGative` |
+| `:TRIGger:PULSe:WHEN[?]` | `GREater`, `LESS`, `RANGe`, `OUTside`, or `PGReater`, `PLESs`, `PGLess`, `NGReater`, `NLESs`, `NGLess` (with the polarity) |
+| `:TRIGger:PULSe:WIDTh[?]`, `:LWIDth[?]`, `:UWIDth[?]` | seconds, 1 ns to 10 s: the width (lower limit) and the upper limit |
+| `:TRIGger:PULSe:LEVel[?]` | volts |
 | `:TRIGger:RUNT:UPPer[?]`, `:LOWer[?]` | runt thresholds (`ALEVel`/`BLEVel` too) |
 | `:TRIGger:SOURce2[?]` | second source of the types that have one |
 
