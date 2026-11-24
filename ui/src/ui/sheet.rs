@@ -135,7 +135,7 @@ pub(super) enum PanelKind {
 
 /// Items whose list is a keypad or a file list with its own handling: the classic picker keeps them.
 fn keypad_pick(it: Item) -> bool {
-    matches!(it, Item::TrigBusVal | Item::AfgFreqEntry | Item::WlanNet | Item::WlanForgetNet | Item::NtpServer | Item::TimeZone | Item::RemName | Item::MeasCopyTo)
+    matches!(it, Item::TrigBusVal | Item::SrchBusVal | Item::AfgFreqEntry | Item::WlanNet | Item::WlanForgetNet | Item::NtpServer | Item::TimeZone | Item::RemName | Item::MeasCopyTo)
 }
 
 fn destructive(it: Item) -> bool {

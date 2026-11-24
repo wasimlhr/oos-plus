@@ -35,7 +35,7 @@ fn count(u: &mut Ui, f: impl FnOnce(&mut SearchSpec)) -> usize {
 #[test]
 fn every_type_finds_its_events() {
     let mut u = mixed();
-    assert_eq!(u.options(Item::SrchType), vec!["Edge", "Pulse", "Slope", "Timeout", "Runt", "Window"]);
+    assert_eq!(u.options(Item::SrchType), vec!["Edge", "Pulse", "Slope", "Timeout", "Runt", "Window", "Bus"]);
     // 18 pulses and the narrow one, two edges each; the runt does not reach the level
     assert_eq!(u.studio_search_events().len(), 38);
     u.select_option(Item::SrchType, "Pulse");
@@ -175,7 +175,8 @@ fn a_view_stores_the_type_and_its_settings() {
 fn the_types_search_a_megapoint_once() {
     let mut u = dense();
     u.studio_search_add(Some(WaveId::Ch(1)));
-    for kind in super::addrail::SEARCH_TYPES {
+    // (a bus search reads the packets of a decoder, which this record has none of: `search_bus_tests`)
+    for kind in super::addrail::SEARCH_TYPES.into_iter().filter(|&k| k != TrigType::Bus) {
         u.studio_search_set_kind(kind);
         let sp = u.studio.search().unwrap();
         u.studio.search_put(SearchSpec { when: WhenKind::Gt, t1: 1e-9, ..sp });

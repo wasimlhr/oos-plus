@@ -150,6 +150,7 @@ pub(super) const T1: &[&str] = &[
     "SEARch:SLOPe:SOURce", "SEARch:SLOPe:SLOPe", "SEARch:SLOPe:WHEN", "SEARch:SLOPe:TUPPer", "SEARch:SLOPe:TLOWer", "SEARch:SLOPe:ALEVel", "SEARch:SLOPe:BLEVel",
     "SEARch:TIMeout:SOURce", "SEARch:TIMeout:SLOPe", "SEARch:TIMeout:TIME", "SEARch:TIMeout:LEVel",
     "SEARch:WINDow:SOURce", "SEARch:WINDow:POSition", "SEARch:WINDow:WHEN", "SEARch:WINDow:TIME", "SEARch:WINDow:TUPPer", "SEARch:WINDow:ALEVel", "SEARch:WINDow:BLEVel", "SEARch:DISPlay",
+    "SEARch:BUS:WHEN", "SEARch:BUS:VALue",
     "SEARch:RUNT:SOURce", "SEARch:RUNT:POLarity", "SEARch:RUNT:WHEN", "SEARch:RUNT:WUPPer", "SEARch:RUNT:WLOWer", "SEARch:RUNT:ALEVel", "SEARch:RUNT:BLEVel",
     "SEARch:COPY:TO", "SEARch:COPY:FROM", "SEARch:COUNt", "SEARch:EVENt", "SEARch:DATA", "SEARch:SAVE", "SEARch:REMove",
 ];
@@ -344,7 +345,7 @@ impl Ui {
     /// The Studio search and the mark of the trigger events. Without a search of its own the values are the trigger's;
     /// the first set of a setting adds Search 1 like the Add rail does.
     fn search_cmd(&mut self, key: &str, q: bool, arg: &str) -> Reply {
-        const KINDS: [(TrigType, &str); 6] = [(TrigType::Edge, "EDGE"), (TrigType::Pulse, "PULSe"), (TrigType::Slope, "SLOPe"), (TrigType::Timeout, "TIMeout"), (TrigType::Runt, "RUNT"), (TrigType::Window, "WINDow")];
+        const KINDS: [(TrigType, &str); 7] = [(TrigType::Edge, "EDGE"), (TrigType::Pulse, "PULSe"), (TrigType::Slope, "SLOPe"), (TrigType::Timeout, "TIMeout"), (TrigType::Runt, "RUNT"), (TrigType::Window, "WINDow"), (TrigType::Bus, "BUS")];
         match key {
             "SEARch:STATe" => {
                 if q { return t(b01(self.search_on)); }
@@ -415,6 +416,16 @@ impl Ui {
         if !q { self.ensure_search()?; }
         let cur = self.studio.search().unwrap_or_else(|| self.search_of_trigger());
         let mut sp = cur.of_kind(kind);
+        // a bus search marks what the active decoder decoded: what it matches and the value of an ID or of data
+        if kind == TrigType::Bus {
+            let r = match word {
+                "WHEN" => pick(q, arg, &mut sp.bus, &[(BusWhat::Frame, "FRAMe"), (BusWhat::Id, "ID"), (BusWhat::Data, "DATA"), (BusWhat::Error, "ERRor")]),
+                _ if q => t(format!("0x{:X}", cur.val)),
+                _ => { sp.val = parse_int(arg).filter(|&v| v <= 0x1fff_ffff).ok_or_else(|| bad(arg))? as u64; DONE }
+            };
+            if !q && r.is_ok() { self.studio.search_put(sp); }
+            return r;
+        }
         const CONDS: [(u8, &str); 7] = [(0, "NONE"), (1, "GREater"), (2, "LESS"), (3, "RANGe"), (4, "OUTside"), (5, "EQUal"), (6, "UNEQual")];
         let upper = matches!(word, "UWIDth" | "TUPPer" | "WUPPer") && matches!(cur.when, WhenKind::In | WhenKind::Out) && !cur.eq;
         let mut cond = cur.cond();

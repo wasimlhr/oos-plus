@@ -148,7 +148,8 @@ impl Ui {
         for (i, q) in s.searches.iter().enumerate().filter_map(|(i, q)| Some((i, q.as_ref()?))) {
             let n = if i == 0 { String::new() } else { (i + 1).to_string() };
             // (the type and its settings follow the three an edge search has, which is all an older view names)
-            let more = if q.kind == TrigType::Edge { String::new() } else { format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.cond(), q.t1, q.t2) };
+            let mut more = if q.kind == TrigType::Edge { String::new() } else { format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.cond(), q.t1, q.t2) };
+            if q.kind == TrigType::Bus { more.push_str(&format!("/{}/{}", BUS_WHATS.iter().position(|&w| w == q.bus).unwrap_or(0), q.val)); }
             p.push(format!("search{n}={}/{}/{}{more}", q.src.token(), q.level, q.slope));
         }
         if s.search_sel != 0 { p.push(format!("searchsel={}", s.search_sel + 1)); }
@@ -235,12 +236,17 @@ impl Ui {
                     if let [src, level, slope, more @ ..] = &f[..] {
                         if let (Ok(src), Ok(level), Ok(slope)) = (WaveId::parse(src), level.parse::<f32>(), slope.parse::<u8>()) {
                             let mut sp = super::addrail::SearchSpec::edge(src, level, slope.min(2));
-                            if let [kind, level2, when, t1, t2] = more {
+                            if let [kind, level2, when, t1, t2, bus @ ..] = more {
                                 let num = |s: &str| s.parse::<f32>().ok().filter(|v| v.is_finite());
                                 let kind = super::addrail::SEARCH_TYPES.iter().find(|t| t.name() == *kind);
                                 let cond = when.parse::<u8>().ok().filter(|&c| c <= 6);
                                 if let (Some(&kind), Some(level2), Some(cond), Some(t1), Some(t2)) = (kind, num(level2), cond, num(t1), num(t2)) {
                                     sp = super::addrail::SearchSpec { kind, level2, t1, t2, ..sp }.with_cond(cond);
+                                    if let [what, val] = bus {
+                                        if let (Some(&what), Ok(val)) = (what.parse::<usize>().ok().and_then(|i| BUS_WHATS.get(i)), val.parse::<u64>()) {
+                                            sp = super::addrail::SearchSpec { bus: what, val, ..sp };
+                                        }
+                                    }
                                 }
                             }
                             if level.is_finite() { self.studio.searches[slot] = Some(sp.fit()); }
