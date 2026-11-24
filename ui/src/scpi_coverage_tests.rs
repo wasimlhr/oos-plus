@@ -229,6 +229,11 @@ fn history_search(t: &mut T) {
     t.go(":TRIG:EDGE:SOUR CHAN1;:SEAR:EDGE:SOUR CHAN2;:SEAR:EDGE:LEV 0.125;:SEAR:EDGE:SLOP NEG;:SEAR:COPY:TO TRIG");
     assert_eq!((t.ui.m.trig_src, t.ui.m.trig_level, t.ui.m.slope), (1, 0.125, Slope::Fall), "Srch to trigger");
     t.no(":SEAR:COPY:TO SOMEWHERE", "-224");
+    // a bus search: what it matches and the value of an ID or data
+    t.rt(":SEAR:BUS:WHEN DATA", ":SEAR:BUS:WHEN?", "DATA");
+    t.rt(":SEAR:BUS:VAL 0xA5", ":SEAR:BUS:VAL?", "0xA5");
+    t.rt(":SEAR:MODE BUS", ":SEAR:MODE?", "BUS");
+    t.go(":SEAR:MODE EDGE");
     let n: usize = t.go(":SEAR:COUN?").parse().unwrap();
     assert_eq!(n, t.ui.search_events().len());
     if n > 0 {

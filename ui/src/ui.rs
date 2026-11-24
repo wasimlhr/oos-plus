@@ -37,6 +37,8 @@ mod batch7b_tests;
 #[cfg(test)]
 mod batch8_tests;
 #[cfg(test)]
+mod search_bus_tests;
+#[cfg(test)]
 mod search_dense_tests;
 #[cfg(test)]
 mod search_several_tests;

@@ -262,6 +262,8 @@ pub(super) enum Item {
     SrchWhen,
     SrchTime,
     SrchTime2,
+    SrchBusWhat,
+    SrchBusVal,
     SrchShow,
     Srch50,
     SrchFromTrig,

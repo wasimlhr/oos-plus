@@ -163,7 +163,7 @@ impl Ui {
             }
             Item::DecCanRate => return crate::decode::CAN_RATES.iter().map(|&b| si(b, "bit/s")).collect(),
             // the value picker is a hex keypad
-            Item::TrigBusVal | Item::SerMax | Item::SerMask => return KEYPAD.iter().map(|k| k.to_string()).collect(),
+            Item::TrigBusVal | Item::SrchBusVal | Item::SerMax | Item::SerMask => return KEYPAD.iter().map(|k| k.to_string()).collect(),
             Item::SerRel
             | Item::UartPol
             | Item::UartStop

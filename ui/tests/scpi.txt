@@ -168,6 +168,7 @@ scpi $S/scpi-answers.txt :TRIGger:EDGE:SLOPe NEGative;:TRIGger:EDGE:SLOPe?;:TRIG
 scpi $S/scpi-answers.txt :ACQuire:TYPE AVERages;:ACQuire:TYPE?;:ACQuire:AVERages 16;:ACQuire:AVERages?
 scpi $S/scpi-answers.txt :SEARch:EDGE:SOURce CHANnel1;:SEARch2:EDGE:SOURce CHANnel1;:SEARch2:EDGE:SLOPe NEGative;:SEARch:EDGE:SLOPe?;:SEARch2:EDGE:SLOPe?;:SEARch2:EDGE:SOURce?;:SEARch2:REMove;:SEARch:REMove
 scpi $S/scpi-answers.txt :SEARch:PULSe:SOURce CHANnel1;:SEARch:PULSe:WHEN RANGe;:SEARch:PULSe:LWIDth 1E-4;:SEARch:PULSe:UWIDth 2E-4;:SEARch:MODE?;:SEARch:PULSe:WHEN?;:SEARch:PULSe:UWIDth?;:SEARch:MODE RUNT;:SEARch:RUNT:WHEN NONE;:SEARch:RUNT:WHEN?;:SEARch:MODE TIMeout;:SEARch:TIMeout:TIME?;:SEARch:WINDow:POSition EXIT;:SEARch:WINDow:POSition?;:SEARch:WINDow:WHEN EQUal;:SEARch:WINDow:WHEN?;:SEARch:WINDow:POSition?;:SEARch:DISPlay OFF;:SEARch:DISPlay?;:SEARch:REMove
+scpi $S/scpi-answers.txt :SEARch:BUS:WHEN DATA;:SEARch:BUS:VALue 0x55;:SEARch:MODE?;:SEARch:BUS:WHEN?;:SEARch:BUS:VALue?;:SEARch:COUNt?;:SEARch:BUS:WHEN ERRor;:SEARch:BUS:WHEN?;:SEARch:REMove
 scpi $S/scpi-answers.txt :ACQuire:TYPE NORMal;:ACQuire:SRATe?;:ACQuire:MDEPth?
 frames 10
 # measurements on the demo signal

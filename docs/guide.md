@@ -796,7 +796,7 @@ side, the first at the edge. A tap on a handle opens the sheet of its source.
 
 Add > Search puts a search of its own on a source: Search 1, and with Add again Search 2 and Search 3, each
 with its own type, source and settings. A new search looks for edges; the row **Type** of its sheet makes it one of
-six, which are the trigger's types of one source and take the trigger's settings:
+seven: six are the trigger's types of one source and take the trigger's settings, the seventh looks at a bus:
 
 | Type | It marks | Its rows |
 |---|---|---|
@@ -806,8 +806,11 @@ six, which are the trigger's types of one source and take the trigger's settings
 | Timeout | the moment the time has passed after an edge without another one | Slope, Level; Timeout |
 | Runt | the end of a pulse that passes one level and not the other | Polarity, Upper, Lower; When (Off: any width), Time |
 | Window | where the signal comes between the two levels (Enter), leaves them (Exit), or leaves them after a time between them that meets the condition (Inside) | Position, Upper, Lower; for Inside: When, Time |
+| Bus | the end of each packet of the active decoder (the one the Decode menu edits, on) that the bus trigger's condition accepts: a frame, an ID or address, data, an error | Match; for ID and Data: Value (hex keypad) |
 
-When is `>`, `<`, Equal, Not equal, Inside or Outside; the last two have a lower and an upper limit. Equal is a time
+A Bus search has no source and no levels: it reads the packets the decoder already made (so it marks the record the
+decoder decoded), with the condition `ModuleInfo::trigger_match` has for the bus trigger, and its list names the match
+("Data 0x55"). When is `>`, `<`, Equal, Not equal, Inside or Outside; the last two have a lower and an upper limit. Equal is a time
 within 5 % of the limit (no two pulses of a record are the same to the sample), Not equal every other one; the
 trigger has no Equal and gets the two limits when the search is copied to it. The times step as the trigger's do.
 **Set to 50 %** puts the level in the middle of the signal, the two levels of Slope at 10 % and 90 % and those of

@@ -175,7 +175,7 @@ impl Ui {
 
     /// Items edited on the hex keypad.
     pub(super) fn hex_item(it: Item) -> bool {
-        matches!(it, Item::TrigBusVal | Item::SerMax | Item::SerMask)
+        matches!(it, Item::TrigBusVal | Item::SrchBusVal | Item::SerMax | Item::SerMask)
     }
 
     /// The value a hex item shows: the condition value, the upper limit (the address's for an I2C address), the mask.
@@ -185,6 +185,7 @@ impl Ui {
             Item::SerMax if self.m.dec_proto == Proto::I2C && self.m.trig_bus == BusWhat::Id => s.addr_max as u64,
             Item::SerMax => s.max,
             Item::SerMask => s.mask & BUS_VAL_MAX,
+            Item::SrchBusVal => self.studio.search().map_or(0, |s| s.val),
             _ => self.m.trig_bus_val,
         }
     }
@@ -198,6 +199,9 @@ impl Ui {
             Item::SerMax => s.max = v,
             // all bits of the entry count, above it every bit
             Item::SerMask => s.mask = if v == BUS_VAL_MAX { u64::MAX } else { v },
+            Item::SrchBusVal => {
+                if let Some(sp) = self.studio.search() { self.studio.search_put(super::addrail::SearchSpec { val: v, ..sp }) }
+            }
             _ => self.m.trig_bus_val = v,
         }
     }
