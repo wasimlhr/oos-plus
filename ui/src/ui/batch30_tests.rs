@@ -82,7 +82,7 @@ fn tap_segment(u: &mut Ui, it: Item, k: usize, n: usize) {
 fn views_row_options(u: &Ui) -> usize { u.options(Item::Views).len() }
 
 #[test]
-fn choosing_a_view_count_closes_the_dialog_toasts_and_the_new_view_is_a_copy_in_minimal_and_studio() {
+fn choosing_a_view_count_keeps_the_dialog_toasts_and_the_new_view_is_a_copy_in_minimal_and_studio() {
     // Default is upstream's (a new view starts with the plot alone): views.rs tests it
     for l in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(l);
@@ -93,7 +93,7 @@ fn choosing_a_view_count_closes_the_dialog_toasts_and_the_new_view_is_a_copy_in_
         let n = views_row_options(&u);
         tap_segment(&mut u, Item::Views, 2, n);
         assert_eq!(u.m.views, 3, "{l:?}");
-        assert!(!u.menu_open, "{l:?}: the Display dialog closes");
+        assert!(u.menu_open, "{l:?}: the Display dialog stays");
         assert_eq!(toast(&u), "View 1 of 3", "{l:?}");
         // the shown view stays; the new ones are copies of it
         assert_eq!(u.m.meas.len(), 2, "{l:?}");

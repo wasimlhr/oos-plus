@@ -210,8 +210,9 @@ impl Ui {
     pub(super) fn win_adjust(&mut self, it: Item, d: i32) -> bool {
         let n = WinLayout::Quad.count();
         match it {
-            // the menu row; only the expand button asks for the panel itself (`full.asked`)
-            Item::FullScreen => self.set_full(self.m.density != Density::Full, false),
+            // the menu row asks for the panel itself as the expand button does (`full.asked`): with an external display
+            // it hid nothing on the panel, the row said On and the bars stayed
+            Item::FullScreen => self.set_full(self.m.density != Density::Full, true),
             Item::StripPos => {
                 let all = StripDock::ALL;
                 let i = all.iter().position(|&p| p == self.m.strip_dock).unwrap_or(0);
@@ -522,10 +523,10 @@ mod tests {
             );
             tap(&mut u);
             assert_eq!((u.m.density, u.full.on, u.plot.grid), (Density::Scope, false, normal), "{mode}");
-            // Full screen chosen on the page keeps the panel's bars: the external display has the waveform
+            // Full screen chosen on the page hides the panel's bars too, as the button does
             u.select_option(Item::FullScreen, "On");
             render(&mut u);
-            assert!(u.m.density == Density::Full && !u.full.on && u.plot.grid == normal, "{mode}");
+            assert!(u.m.density == Density::Full && u.full.on && u.plot.grid.h > normal.h, "{mode}");
             // and a display plugged in after a tap takes the waveform back
             u.select_option(Item::FullScreen, "Off");
             tap(&mut u);
@@ -608,13 +609,13 @@ mod tests {
         let mut cv = Canvas::new(W, H);
         u.render(&mut cv);
         assert_eq!(u.m.density, Density::Full);
-        assert!(!u.full.on && u.plot.grid == normal, "the panel stays the controls");
+        assert!(u.full.on && u.plot.grid.y == 0, "the row hides the panel's bars as the button does");
         u.select_option(Item::Hdmi, "Mirror");
         u.render(&mut cv);
         assert!(u.full.on && u.plot.grid.y == 0, "mirror shows Full on the panel");
         u.select_option(Item::Hdmi, "Waveform");
         u.render(&mut cv);
-        assert!(!u.full.on && u.plot.grid == normal, "waveform gives the panel its bars back");
+        assert!(u.full.on && u.plot.grid.y == 0, "waveform keeps what the row asked for");
         // the monitor's waveform area: in Full without the statistics card, in Scope with it
         let (mw, mh) = (1920, 1080);
         let mut full_pic = Canvas::new(mw, mh);
