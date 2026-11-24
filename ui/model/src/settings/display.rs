@@ -96,17 +96,15 @@ pub const DENSITY: [Setting; 1] = [Setting {
         &[
             Choice { store: "Scope", scpi: "", label: "Scope" },
             Choice { store: "Full", scpi: "", label: "Full" },
-            Choice { store: "Split", scpi: "", label: "Split" },
-            Choice { store: "Four", scpi: "", label: "Four" },
         ],
         Unknown::Value,
         Arg::Keyword,
     ),
     label: "Density",
     #[cfg(test)]
-    doc: "On the Windows page: what the screen shows around the plot, the bars and cards, the plot alone, the plot \
-          over a lower pane or two stacked traces, or four panes; a change sets the windows and the lower pane up \
-          again. A setup without it takes it from its windows and pane.",
+    doc: "On the Windows page (Full screen): what the screen shows around the plot, the bars and cards, or the plot \
+          alone. A setup that says Split or Four reads as Scope: the windows and the lower pane are their own \
+          settings now.",
     accept: None,
     step: None,
     get: |m, _| Val::Index(Density::ALL.iter().position(|&d| d == m.density).unwrap_or(0)),

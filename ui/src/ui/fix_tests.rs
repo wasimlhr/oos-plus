@@ -32,27 +32,21 @@ fn two_channels() -> Ui {
 }
 
 #[test]
-fn overlay_keeps_a_split_and_stacked_leaves_a_consistent_density() {
-    for density in [Density::Split, Density::Four] {
-        let mut u = two_channels();
-        u.m.density = density;
-        u.apply_density();
-        u.relayout();
-        let layout = u.m.win_layout;
-        assert_ne!(layout, WinLayout::One);
-        u.trace_mode(false);
-        assert_eq!(
-            (u.m.density, u.m.win_layout, u.workspace.stacked),
-            (density, layout, false),
-            "Overlay keeps the split"
-        );
-        u.trace_mode(true);
-        assert!(u.workspace.stacked && u.m.win_layout == WinLayout::One && u.m.density == Density::Scope);
-        // choosing a split again drops Stacked, so the highlighted pill is the one in force
-        u.m.density = density;
-        u.apply_density();
-        assert!(!u.workspace.stacked && u.m.win_layout != WinLayout::One);
-    }
+fn overlay_keeps_windows_and_the_arrangement_row_says_which_one_is_in_force() {
+    use super::windows::Arrangement;
+    let mut u = two_channels();
+    u.set_arrangement(Arrangement::Windows);
+    assert_eq!((u.arrangement(), u.m.win_layout, u.workspace.stacked), (Arrangement::Windows, WinLayout::Quad, false));
+    // the stored mode (a set-up, a view) applied while the windows stand keeps them
+    u.trace_mode(false);
+    assert_eq!((u.arrangement(), u.m.win_layout), (Arrangement::Windows, WinLayout::Quad), "applying Overlay keeps them");
+    // the user's choice leaves them
+    u.set_arrangement(Arrangement::Stacked);
+    assert_eq!((u.arrangement(), u.m.win_layout, u.workspace.stacked), (Arrangement::Stacked, WinLayout::One, true));
+    u.set_arrangement(Arrangement::Windows);
+    assert_eq!((u.arrangement(), u.workspace.stacked), (Arrangement::Windows, false), "windows drop Stacked");
+    u.set_arrangement(Arrangement::Overlay);
+    assert_eq!((u.arrangement(), u.m.win_layout), (Arrangement::Overlay, WinLayout::One));
 }
 
 fn with_refs(u: &mut Ui, n: usize) {

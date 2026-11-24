@@ -2265,11 +2265,13 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
         let row = u.sheet_geo().unwrap().rows.iter().find(|r| r.it == Item::Traces).map(|r| r.ctrl).unwrap_or_else(|| panic!("{layout:?}: no Traces row"));
         let was = u.trace_stacked();
         assert_eq!(u.value(Item::Traces), if was { "Stacked" } else { "Overlay" }, "{layout:?}");
-        // the other half of the row
-        let (x, y) = (if was { row.x + row.w / 4 } else { row.x + row.w * 3 / 4 }, row.y + row.h / 2);
-        tap(&mut u, x, y);
-        assert_eq!(u.trace_stacked(), !was, "{layout:?}: a tap on the other choice");
-        assert_eq!(u.value(Item::Traces), if was { "Overlay" } else { "Stacked" }, "{layout:?}");
+        // a third of the row each: Overlay, Stacked, Windows
+        for (i, want) in [(1, "Stacked"), (2, "Windows"), (0, "Overlay")] {
+            let (x, y) = (row.x + row.w * (2 * i + 1) / 6, row.y + row.h / 2);
+            tap(&mut u, x, y);
+            assert_eq!(u.value(Item::Traces), want, "{layout:?}: a tap on the {want} choice");
+            assert_eq!(u.trace_stacked(), want == "Stacked", "{layout:?}: {want}");
+        }
         u.close_menu();
         // the cursors: off at the start, on after the button
         assert_eq!(u.m.cursor, CursorMode::Off, "{layout:?}");

@@ -39,7 +39,6 @@ impl Ui {
         let two_level = matches!(t, TrigType::Slope | TrigType::Runt | TrigType::Window);
         match it {
             // Default's Windows page has upstream's density row; Minimal and Studio name it after oos-next
-            Item::WinLayout if self.m.layout == Layout::Default => "Density",
             Item::CurA if self.m.cursor == CursorMode::Xy => "X1",
             Item::CurB if self.m.cursor == CursorMode::Xy => "X2",
             Item::TrigLevel if two_level => "Upper",
@@ -592,7 +591,7 @@ impl Ui {
                 .get(if m.cursor == CursorMode::Track { 2 } else { 1 })
                 .map_or(format!("{:.0} %", m.cur_b * 100.0), |v| v.1.clone()),
             Item::Layout => m.layout.name().into(),
-            Item::Traces => if self.trace_stacked() { "Stacked" } else { "Overlay" }.into(),
+            Item::Traces => self.arrangement().label().into(),
             Item::ZoneSel => format!("Z{}", self.zone_trig.sel + 1),
             Item::ZoneOn => on_off(m.zones[self.zone_trig.sel].on),
             Item::ZoneSrc => format!("CH{}", m.zones[self.zone_trig.sel].src + 1),

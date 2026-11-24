@@ -1098,11 +1098,7 @@ impl Ui {
         if !self.dock_on() && Self::pane_close(r).contains(x, y) {
             self.m.pane = 0;
             self.m.split_pane = 0;
-            // Split with no number pane is the two stacked traces
-            if self.m.density == Density::Split && self.m.win_layout == WinLayout::One {
-                self.m.win_layout = WinLayout::Rows;
-                self.spread_wins();
-            }
+            self.relayout();
             return true;
         }
         if !r.contains(x, y) {

@@ -18,6 +18,7 @@ const CTX_HEAD: i32 = 30;
 pub(super) enum CtxRow {
     Overlay,
     Stacked,
+    Windows,
     FitLanes,
     Fit,
     ZoomHere,
@@ -67,7 +68,7 @@ impl Ui {
     /// The two columns of rows: the view, and what acts on the lane under the press (which the rows name).
     fn ctx_columns(&self, lane: Option<WaveId>) -> [Vec<(CtxRow, String)>; 2] {
         let name = |id: WaveId| self.wave_name(id);
-        let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()),
+        let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()), (CtxRow::Windows, "Four windows".to_string()),
             (CtxRow::FitLanes, "Fit all lanes".to_string()), (CtxRow::Fit, "Fit record".to_string()),
             (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
         if self.m.zoom {
@@ -120,6 +121,7 @@ impl Ui {
         let f = self.fonts();
         match row {
             CtxRow::Overlay => { cv.line(cx - 7, cy + 3, cx, cy - 4, c); cv.line(cx, cy - 4, cx + 7, cy + 3, c); cv.line(cx - 7, cy - 1, cx, cy + 5, c); }
+            CtxRow::Windows => { for (dx, dy) in [(-7, -5), (1, -5), (-7, 1), (1, 1)] { cv.round_outline(Rect::new(cx + dx, cy + dy, 6, 4), 1, c); } }
             CtxRow::Stacked => { cv.hline(cx - 7, cx + 7, cy - 4, c); cv.hline(cx - 7, cx + 7, cy, c); cv.hline(cx - 7, cx + 7, cy + 4, c); }
             CtxRow::Fit => icon_expand(cv, cx, cy, c),
             CtxRow::FitLanes => { cv.vline(cx, cy - 7, cy + 7, c); for d in [-1, 1] { cv.line(cx, cy + 7 * d, cx - 4, cy + 3 * d, c); cv.line(cx, cy + 7 * d, cx + 4, cy + 3 * d, c); } }
@@ -151,12 +153,18 @@ impl Ui {
         cv.vline(p.x + 4 + CTX_COL + 1, p.y + CTX_HEAD + 4, p.bottom() - 8, LINE);
         let rows = self.studio_ctx_rows();
         for (row, label, r) in rows.iter() {
-            let on = match row { CtxRow::Overlay => !self.trace_stacked(), CtxRow::Stacked => self.trace_stacked(), CtxRow::ZoomHere => self.m.zoom, _ => false };
+            let on = match row {
+                CtxRow::Overlay => self.arrangement() == windows::Arrangement::Overlay,
+                CtxRow::Stacked => self.arrangement() == windows::Arrangement::Stacked,
+                CtxRow::Windows => self.arrangement() == windows::Arrangement::Windows,
+                CtxRow::ZoomHere => self.m.zoom,
+                _ => false,
+            };
             self.ctx_icon(cv, *row, r.x + 16, r.y + r.h / 2, if on { ACCENT } else { TEXT });
             cv.set_clip(Rect::new(r.x + 32, r.y, r.w - 62, r.h));
             cv.text_in(&f.m, Rect::new(r.x + 34, r.y, r.w - 62, r.h), 0, label, TEXT);
             cv.no_clip();
-            if matches!(row, CtxRow::Overlay | CtxRow::Stacked) && on {
+            if matches!(row, CtxRow::Overlay | CtxRow::Stacked | CtxRow::Windows) && on {
                 // the check of the mode in force
                 let (cx, cy) = (r.right() - 16, r.y + r.h / 2);
                 cv.line(cx - 5, cy, cx - 2, cy + 4, ACCENT);
@@ -183,6 +191,7 @@ impl Ui {
         match row {
             CtxRow::Overlay => self.workspace_action(Action::Overlay),
             CtxRow::Stacked => self.workspace_action(Action::Stacked),
+            CtxRow::Windows => self.workspace_action(Action::Windows),
             CtxRow::Fit => self.workspace_action(Action::FitRecord),
             CtxRow::FitLanes => self.fit_all_lanes(),
             CtxRow::ZoomHere => {

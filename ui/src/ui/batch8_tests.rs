@@ -71,8 +71,7 @@ fn entering_studio_by_any_road_shows_its_bars() {
     // 1. the layout set straight on the model while the screen is full
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Default;
-    u.m.density = Density::Full;
-    u.apply_density();
+    u.set_full(true, false);
     for _ in 0..3 { u.step(0.05); }
     assert!(u.full_on());
     u.m.layout = Layout::Studio;
@@ -88,8 +87,7 @@ fn entering_studio_by_any_road_shows_its_bars() {
     v.m.studio_zoom_tab = false;
     v.studio.enter = true;
     for _ in 0..3 { v.step(0.05); }
-    v.m.density = Density::Full;
-    v.apply_density();
+    v.set_full(true, false);
     let text = crate::store::setup_text(&v.m);
     let dir = std::env::temp_dir().join("oos-b8-recall");
     let _ = std::fs::create_dir_all(&dir);

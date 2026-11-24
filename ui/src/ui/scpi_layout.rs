@@ -107,11 +107,12 @@ impl Ui {
                 self.workspace_action(Action::FitRecord);
                 DONE
             } else if q {
-                t(if self.workspace.stacked { "STAC" } else { "OVER" })
+                t(match self.arrangement() { windows::Arrangement::Windows => "WIND", windows::Arrangement::Stacked => "STAC", windows::Arrangement::Overlay => "OVER" })
             } else {
                 let a = text_arg(arg);
                 if kw(&a, "STACked") { self.workspace_action(Action::Stacked); DONE }
                 else if kw(&a, "OVERlay") { self.workspace_action(Action::Overlay); DONE }
+                else if kw(&a, "WINDows") { self.workspace_action(Action::Windows); DONE }
                 else { Err(bad(arg)) }
             }
         } else if kw(n0, "ZOOM") && rest.len() == 1 {

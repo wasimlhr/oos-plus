@@ -14055,17 +14055,17 @@
      "header": ":VIEW:TRACes",
      "set": ":VIEW:TRACes <value>",
      "query": ":VIEW:TRACes?",
-     "desc": "Sets or queries Overlay traces, Stacked traces for Right-click menu of the plot (menu: Right-click > Overlay traces, Stacked traces).",
+     "desc": "Sets or queries Traces for Right-click menu of the plot (menu: Right-click > Overlay traces, Stacked traces, Four windows; Display > Traces).",
      "params": [
       [
        "<value>",
        "Discrete",
-       "{OVERlay|STACked}",
+       "{OVERlay|STACked|WINDows}",
        "OVER"
       ]
      ],
      "remarks": [
-      "- : all traces in one plot, or one lane each.",
+      "- : all traces on one graticule, one lane each in one plot, or four separate waveform views (the window of each source is set on Display > Windows).",
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `OVER`.",

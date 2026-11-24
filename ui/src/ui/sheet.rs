@@ -479,7 +479,7 @@ impl Ui {
             // Display: the choice of the bottom bar is a row of the Default layout's menu. A sheet is up only in
             // Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
             MenuId::Display => {
-                // and Overlay or Stacked, which Studio had in the hold menu of the plot alone
+                // and the Traces row, which the Windows page has too (the dialog of Default reaches it there)
                 let rows = self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar);
                 rows.chain([Item::Traces]).collect()
             }

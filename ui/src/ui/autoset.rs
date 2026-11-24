@@ -1415,11 +1415,11 @@ mod tests {
         ui.m.ch[1].on = true;
         // CH3 in the second window: a split with every source in one window is that window alone
         ui.m.ch[2].on = true;
-        ui.m.win_layout = WinLayout::Rows;
+        ui.m.win_layout = WinLayout::Quad;
         ui.m.ch_win = [0, 0, 1, 1];
         ui.relayout();
         ui.trace_mode(false);
-        assert_eq!(ui.m.win_layout, WinLayout::Rows, "Overlay keeps the split");
+        assert_eq!(ui.m.win_layout, WinLayout::Quad, "Overlay keeps the windows");
         assert!(ui.auto_apart(), "CH1 and CH2 share the first window");
         // Zoom shows one window of a split: the whole plot is shared again
         ui.m.zoom = true;

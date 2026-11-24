@@ -31,7 +31,7 @@ struct Gesture {
 #[derive(Clone)]
 #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 pub(super) enum Action {
-    Overlay, Stacked, Sources, Source(WaveId), Trigger(WaveId), Menu(MenuId),
+    Overlay, Stacked, Windows, Sources, Source(WaveId), Trigger(WaveId), Menu(MenuId),
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     ZoomReset, ZoomClose, FitRecord, Live, Single, Run, Panel,
     EyeRight, EyeLeft, EyeBelow, EyeFloat, EyeClose, RestoreLayout,
@@ -650,9 +650,6 @@ impl Popup {
 pub(crate) struct Workspace {
     selected_source: Option<WaveId>,
     pub stacked: bool,
-    /// The lower pane that was open when the expand button took the plot to Full (which closes it): the way back
-    /// from Full opens it again. 0: none.
-    pub pane_before_full: usize,
     pub eye_float: Option<Rect>,
     pub eye_left: bool,
     pub measure_float: Option<(i32, i32)>,
@@ -838,10 +835,6 @@ impl Ui {
             return;
         }
         self.workspace.stacked = stacked;
-        if stacked && matches!(self.m.density, Density::Split | Density::Four) {
-            self.m.density = Density::Scope;
-            self.apply_density();
-        }
         self.m.win_layout = WinLayout::One;
         self.relayout();
         self.dirty_map = true;
@@ -1226,6 +1219,7 @@ impl Ui {
             let mut rows = vec![
                 ("Overlay traces".into(), Action::Overlay),
                 ("Stacked traces".into(), Action::Stacked),
+                ("Four windows".into(), Action::Windows),
                 ("Fit record".into(), Action::FitRecord),
                 ("Reset zoom".into(), Action::ZoomReset), ("Close zoom".into(), Action::ZoomClose),
                 ("Single acquisition".into(), Action::Single), ("Run / Stop".into(), Action::Run), ("Autoset".into(), Action::Autoset),
@@ -1267,7 +1261,9 @@ impl Ui {
     }
     pub(super) fn workspace_action(&mut self, action: Action) {
         match action {
-            Action::Overlay => self.choose_trace_mode(false), Action::Stacked => self.choose_trace_mode(true),
+            Action::Overlay => self.set_arrangement(windows::Arrangement::Overlay),
+            Action::Stacked => self.set_arrangement(windows::Arrangement::Stacked),
+            Action::Windows => self.set_arrangement(windows::Arrangement::Windows),
             Action::Sources => self.open_sources(56, BOTTOM.y),
             Action::Source(WaveId::Ch(c)) => {
                 if self.m.ch[c].on && self.trace_sources().len() <= 1 {
@@ -1410,7 +1406,12 @@ impl Ui {
             for (index, (label, action)) in popup.rows.iter().enumerate() {
                 let r = popup.row_rect(index);
                 cv.set_clip(r); cv.text_in(&self.fonts().m, Rect::new(r.x + 7, r.y, r.w - 34, r.h), 0, label, TEXT); cv.no_clip();
-                let current = match action { Action::Overlay => !self.trace_stacked(), Action::Stacked => self.trace_stacked(), _ => false };
+                let current = match action {
+                    Action::Overlay => self.arrangement() == windows::Arrangement::Overlay,
+                    Action::Stacked => self.arrangement() == windows::Arrangement::Stacked,
+                    Action::Windows => self.arrangement() == windows::Arrangement::Windows,
+                    _ => false,
+                };
                 if current {
                     // a check at the right end marks the mode in force
                     let (cx, cy) = (r.x + r.w - 40, r.y + r.h / 2);
@@ -1721,6 +1722,7 @@ impl Ui {
         self.results.on = false;
         self.m.pane = 0;
         self.m.win_layout = WinLayout::One;
+        self.m.split_pane = 0;
         self.m.density = if self.full_on() { Density::Full } else { Density::Scope };
         self.zoom_box.cancel();
     }
