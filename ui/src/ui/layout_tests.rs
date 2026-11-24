@@ -746,3 +746,29 @@ fn picking_default_brings_back_the_stock_bars() {
     u.select_option(Item::BottomBar, "Compact");
     assert!(u.m.compact(), "Bottom bar still chooses the compact one");
 }
+
+// Break it catches (the owner, from the unit): the Default key in Studio took the screen back to the Default layout.
+// The key resets the set-up and keeps the layout the person works in; `*RST` of a script still starts in Default.
+#[test]
+fn the_default_key_keeps_the_layout() {
+    for layout in [Layout::Studio, Layout::Minimal, Layout::Default] {
+        let mut u = Ui::new(Source::Demo { t: 0.0 });
+        u.select_option(Item::Layout, lname(layout));
+        u.m.ch[1].on = true;
+        u.key(key::DEFAULT);
+        assert!(u.m.layout == layout, "{layout:?}: Default leaves the layout");
+        assert!(!u.m.ch[1].on, "{layout:?}: the rest is reset");
+    }
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    u.select_option(Item::Layout, "Studio");
+    u.default_setup();
+    assert!(u.m.layout == Layout::Default, "a reset by command is a new set-up in the Default layout");
+}
+
+fn lname(l: Layout) -> &'static str {
+    match l {
+        Layout::Default => "Default",
+        Layout::Minimal => "Minimal",
+        Layout::Studio => "Studio",
+    }
+}
