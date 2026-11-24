@@ -118,8 +118,9 @@ pub const PANE: [Setting; 1] = [Setting {
     ty: Ty::Custom(&PANE_IO),
     label: "Lower",
     #[cfg(test)]
-    doc: "On the Windows page with Split: what shows under the plot, two stacked traces or a pane of the spectrum, \
-          the results, the events, the trend or the bus view.",
+    doc: "On the Windows page: what shows under the plot, a pane of the spectrum, the results, the events, the trend \
+          or the bus view, or nothing. It does not depend on the arrangement of the traces or on Full screen (which \
+          takes it away and gives it back).",
     accept: None,
     step: None,
     get: |m, _| Val::Index(m.pane),
