@@ -114,6 +114,10 @@ impl Scpi {
                 return None;
             }
         }
+        // the options of this unit, as `*OPT?` answers them
+        if nodes.len() == 3 && kw(nodes[1], "OPTion") && kw(nodes[2], "INSTalled") && query {
+            return t(&super::dispatch::options_text());
+        }
         if nodes.len() == 2 && kw(nodes[1], "VERSion") && query {
             // the SCPI version the syntax follows
             return t("1999.0");

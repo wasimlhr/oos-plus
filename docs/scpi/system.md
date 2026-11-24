@@ -26,6 +26,7 @@ Part of the [SCPI reference](README.md).
 | `:SYSTem:GET` | Query | `<key>` Value of a key of the setup schema, empty when the key is unknown. See [setup keys](setup-keys.md). | - | - | OOS extension |
 | `:SYSTem:SET` | Set | `<key> = <value>` Write a key of the setup file on the live settings. Unknown keys fail with -224 after the fact. See [setup keys](setup-keys.md). | - | - | OOS extension. `:SYSTem:SETup` (long form) is a different command. |
 | `:SYSTem:ERRor` | Query | Remove and return the oldest error as `code,"message"`; `0,"No error"` when empty. `:SYSTem:ERRor:NEXT?` is the same query. | - | - | Rigol-compatible |
+| `:SYSTem:OPTion:INSTalled` | Query | The same answer as `*OPT?`. | per unit | - | OOS extension |
 | `:SYSTem:VERSion` | Query | The SCPI version the syntax follows. | `1999.0` | - | SCPI-99 |
 
 ### Name, date, time and NTP

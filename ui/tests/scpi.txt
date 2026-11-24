@@ -5,6 +5,8 @@
 frames 5
 scpi $S/scpi-answers.txt *IDN?
 scpi $S/scpi-answers.txt *ESR?
+scpi $S/scpi-answers.txt *OPT?
+scpi $S/scpi-answers.txt :SYSTem:OPTion:INSTalled?
 scpi $S/scpi-answers.txt :CHANnel1:DISPlay?
 scpi $S/scpi-answers.txt :CHANnel1:SCALe?
 scpi $S/scpi-answers.txt :CHANnel1:OFFSet?
