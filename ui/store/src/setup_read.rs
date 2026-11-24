@@ -381,6 +381,7 @@ fn set_meas_math(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<
         "cur_b" => m.cur_b = p_f32(v)?,
         "cur_c" => m.cur_c = p_f32(v)?,
         "cur_d" => m.cur_d = p_f32(v)?,
+        "cur_snap" => m.cur_snap = p_enum(v, &CursorSnap::ALL)?,
         "touch_lock" => m.touch_lock = p_bool(v)?,
         "aux_out" => m.aux_out = p_enum(v, &AUX_OUTS)?,
         "fine_t" => m.fine_t = p_bool(v)?,

@@ -571,6 +571,15 @@ scpi :CURSor:MODE "TRACk" -> query: TRAC; errors: none
 scpi :CURSor:MODE "XY" -> query: XY; errors: none
 scpi :CURSor:MODE "x" -> query: OFF; errors: -224,"Illegal parameter value" x
 scpi :CURSor:MODE default -> query: OFF; errors: none
+scpi :CURSor:SNAP:EDGE "" -> query: OFF; errors: -224,"Illegal parameter value"
+scpi :CURSor:SNAP:EDGE "-1" -> query: OFF; errors: -224,"Illegal parameter value" -1
+scpi :CURSor:SNAP:EDGE "1e9" -> query: OFF; errors: -224,"Illegal parameter value" 1e9
+scpi :CURSor:SNAP:EDGE "EITHer" -> query: EITH; errors: none
+scpi :CURSor:SNAP:EDGE "FALLing" -> query: FALL; errors: none
+scpi :CURSor:SNAP:EDGE "OFF" -> query: OFF; errors: none
+scpi :CURSor:SNAP:EDGE "RISing" -> query: RIS; errors: none
+scpi :CURSor:SNAP:EDGE "x" -> query: OFF; errors: -224,"Illegal parameter value" x
+scpi :CURSor:SNAP:EDGE default -> query: OFF; errors: none
 scpi :CURSor:TRACk:CAX "" -> query: 9.9E37; errors: -224,"Illegal parameter value"
 scpi :CURSor:TRACk:CAX "-1" -> query: -1.000000E-03; errors: none
 scpi :CURSor:TRACk:CAX "-1e-3" -> query: -1.000000E-03; errors: none
@@ -2663,6 +2672,16 @@ setup cur_d "NaN" -> 0.7; error: line 2: cur_d: not a number: NaN
 setup cur_d "inf" -> 0.7; error: line 2: cur_d: not a number: inf
 setup cur_d "x" -> 0.7; error: line 2: cur_d: not a number: x
 setup cur_d default -> 0.7
+setup cur_snap "" -> Off; error: "line 2: cur_snap: unknown value: "
+setup cur_snap "-1" -> Off; error: line 2: cur_snap: unknown value: -1
+setup cur_snap "1e9" -> Off; error: line 2: cur_snap: unknown value: 1e9
+setup cur_snap "Either" -> Either
+setup cur_snap "Falling" -> Falling
+setup cur_snap "Off" -> Off
+setup cur_snap "Rising" -> Rising
+setup cur_snap "off" -> Off; error: line 2: cur_snap: unknown value: off
+setup cur_snap "x" -> Off; error: line 2: cur_snap: unknown value: x
+setup cur_snap default -> Off
 setup cursor "" -> Off; error: "line 2: cursor: unknown value: "
 setup cursor "-1" -> Off; error: line 2: cursor: unknown value: -1
 setup cursor "1e9" -> Off; error: line 2: cursor: unknown value: 1e9

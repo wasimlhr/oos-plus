@@ -12,8 +12,10 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `:CURSor:MODE` | Set / Query | `OFF\|MANual\|TRACk\|XY`; MAN keeps the selected time/amplitude type. | `OFF` | Cursor > Mode | Rigol-compatible |
+| `:CURSor:MODE` | Set / Query | `OFF\|MANual\|TRACk\|XY`; MAN keeps the selected time/amplitude type. | `OFF` | Cursor > Mode | Rigol-compatible; XY is time and voltage cursor pairs together |
 | `:CURSor:MANual:TYPE` | Set / Query | `TIME\|AMPLitude`. | `TIME` | Cursors > Type | Rigol-compatible |
+| `:CURSor:SNAP:EDGE` | Set / Query | `OFF\|RISing\|FALLing\|EITHer`. When time cursors (Time, Track or XY) are dropped on the screen, they jump to the nearest crossing of the mid-level of their source (halfway between its lowest and highest sample) in that direction, within a quarter of the screen; the delta time and 1/delta readouts follow. | `OFF` | Cursor > Snap to edge | oos-plus |
+| `:CURSor:SNAP:EXECute` | Action | Puts A and B on the nearest edge now (any direction while `EDGE` is `OFF`). Error -221 when no time cursors are on or no edge is near. | - | - | oos-plus |
 | `:CURSor:MANual:SOURce` | Set / Query | `<wave>` Selected `CHANn\|Rn`, without changing acquisition. SOURce1 aliases it; a different SOURce2 is unsupported. | `CHAN1` | Cursors > Source | Rigol-compatible |
 | `:CURSor:MANual:CAX` | Set / Query | `seconds` Cursor A physical time; clips to the visible span. | `9.9E37` | Cursors > Cursor A position | Rigol-compatible |
 | `:CURSor:MANual:CBX` | Set / Query | `seconds` Cursor B physical time; clips to the visible span. | `9.9E37` | Cursors > Cursor B position | Rigol-compatible |

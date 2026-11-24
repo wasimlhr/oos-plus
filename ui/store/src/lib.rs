@@ -266,6 +266,7 @@ fn label_cursor_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     kv("cur_b", m.cur_b.to_string());
     kv("cur_c", m.cur_c.to_string());
     kv("cur_d", m.cur_d.to_string());
+    kv("cur_snap", name(m.cur_snap));
     kv("touch_lock", m.touch_lock.to_string());
     kv("aux_out", name(m.aux_out));
     crate::settings::write(&crate::settings::channel::FINE, m, 0, kv);

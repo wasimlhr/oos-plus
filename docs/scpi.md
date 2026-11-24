@@ -423,6 +423,8 @@ sets them yet. The voltage, the current, the input, the clock and the reference 
 | --- | --- |
 | `:CURSor:MODE[?]` | `OFF|MANual|TRACk|XY`; MAN keeps the selected time/amplitude type. |
 | `:CURSor:MANual:TYPE[?]` | `TIME|AMPLitude`. |
+| `:CURSor:SNAP:EDGE[?]` | `OFF|RISing|FALLing|EITHer`: time cursors A and B jump to the nearest crossing of the source's mid-level, of that direction, within a quarter of the screen, when they are dropped. |
+| `:CURSor:SNAP:EXECute` | Event: A and B jump to the nearest edge now (any direction while the edge is OFF). Error -221 with no time cursors on or no edge near. |
 | `:CURSor:{MANual|TRACk}:SOURce[?]` | Selected `CHANn|Rn`, without changing acquisition. SOURce1 aliases it; a different SOURce2 is unsupported. |
 | `:CURSor:{MANual|TRACk}:CAX[?]` / `:CBX[?]` | A/B physical time in seconds; clips to the current visible span. |
 | `:CURSor:{MANual|TRACk}:CAY[?]` / `:CBY[?]` | A/B volts in the selected source's displayed lane, including display zoom. |

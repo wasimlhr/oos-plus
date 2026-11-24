@@ -419,6 +419,8 @@ pub struct Model {
     /// voltage cursors of the XY mode
     pub cur_c: f32,
     pub cur_d: f32,
+    /// the time cursors snap to the nearest edge of the source when dropped
+    pub cur_snap: CursorSnap,
     pub touch_lock: bool,
     pub aux_out: AuxOut,
     /// fine V/div: the scale knob walks the rows of the calibration table (`Board::vscale_steps_nv`), SCPI

@@ -159,9 +159,11 @@ impl Ui {
         if self.m.cursor == CursorMode::Off {
             vec![Item::CurMode]
         } else if self.m.cursor == CursorMode::Xy {
-            vec![Item::CurMode, Item::CurA, Item::CurB, Item::CurC, Item::CurD]
+            vec![Item::CurMode, Item::CurA, Item::CurB, Item::CurC, Item::CurD, Item::CurSnap, Item::CurSnapNow]
         } else if self.m.cursor == CursorMode::Track {
-            vec![Item::CurMode, Item::CurA, Item::CurB, Item::CurSrcB]
+            vec![Item::CurMode, Item::CurA, Item::CurB, Item::CurSrcB, Item::CurSnap, Item::CurSnapNow]
+        } else if self.m.cursor == CursorMode::Time {
+            vec![Item::CurMode, Item::CurA, Item::CurB, Item::CurSnap, Item::CurSnapNow]
         } else {
             vec![Item::CurMode, Item::CurA, Item::CurB]
         }

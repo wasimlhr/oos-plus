@@ -5,7 +5,7 @@
 //! keeps it (`view1` ...).
 
 /// Keys of a setup that belong to a view, besides the keys of the Ui (`UI_KEYS`).
-pub const KEYS: [&str; 42] = [
+pub const KEYS: [&str; 43] = [
     "windows",
     "density",
     "split_pane",
@@ -26,6 +26,7 @@ pub const KEYS: [&str; 42] = [
     "cur_b",
     "cur_c",
     "cur_d",
+    "cur_snap",
     "cur_b_source",
     "pane",
     "meas_labels",

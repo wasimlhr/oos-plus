@@ -191,6 +191,20 @@ pub enum CursorMode {
     Xy,
 }
 
+/// What the time cursors do when they are dropped (and what the Snap row does): go to the nearest crossing of the
+/// source's mid-level, of the edge direction given, or stay where they were put.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CursorSnap {
+    Off,
+    Rising,
+    Falling,
+    Either,
+}
+
+impl CursorSnap {
+    pub const ALL: [CursorSnap; 4] = [CursorSnap::Off, CursorSnap::Rising, CursorSnap::Falling, CursorSnap::Either];
+}
+
 /// How the plot is split into waveform windows. One: a single plot (Overlay or Stacked traces). Quad: the Windows
 /// arrangement, four separate waveform views numbered 1 to 4, each source standing in one of them. An older setup that
 /// held two windows (`Cols`, `Rows`) reads as Quad.

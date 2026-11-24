@@ -55,6 +55,9 @@ scpi $S/scpi-answers.txt :CURSor:TRACk:CBY?
 scpi $S/scpi-answers.txt :CURSor:XY:AX?
 scpi $S/scpi-answers.txt :CURSor:MANual:AXValue?
 scpi $S/scpi-answers.txt :CURSor:TRACk:IXDelta?
+# the snap of the time cursors: the setting, and the action with no edge near them (no time cursors on: an error)
+scpi $S/scpi-answers.txt :CURSor:SNAP:EDGE?
+scpi $S/scpi-answers.txt :CURSor:SNAP:EDGE EITHer;:CURSor:SNAP:EDGE?;:CURSor:SNAP:EXECute;:SYSTem:ERRor?;:CURSor:SNAP:EDGE OFF
 scpi $S/scpi-answers.txt :DVM:SOURce?
 scpi $S/scpi-answers.txt :COUNter:SOURce?
 scpi $S/scpi-answers.txt :DVM:CURRent?
