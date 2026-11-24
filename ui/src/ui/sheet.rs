@@ -168,7 +168,8 @@ impl Ui {
                 Open(M::Zone) => Slot::Skip,
                 _ => Slot::Tab(1),
             }),
-            M::Channel(_) | M::ChMore(_) => (&["Vertical", "More"], |it| match it {
+            M::Channel(_) | M::ChMore(_) => (&["Vertical", "More", "Info"], |it| match it {
+                ChInfo(..) => Slot::Tab(2),
                 ChOn(_) | ChScale(_) | ChOffset(_) | ChCoupling(_) | ChProbe(_) | ChBw(_) | ChInvert(_) => Slot::Tab(0),
                 Open(M::ChMore(_)) => Slot::Skip,
                 ChBiasZero(_) | AutoDeskew => Slot::Foot(1),
@@ -386,7 +387,7 @@ impl Ui {
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
+        matches!(menu, MenuId::Channel(_) | MenuId::ChMore(_) | MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
     }
 
     /// The pages of the Decode sheet from its three planned tabs (Decode, Settings, Levels).
@@ -460,7 +461,8 @@ impl Ui {
     /// The items a sheet of `menu` draws from: the menus it merges.
     fn sheet_source_items(&self, menu: MenuId) -> Vec<Item> {
         match menu {
-            MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c))).collect(),
+            MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c)))
+                .chain((0..super::chinfo::CH_INFO_LINES).map(|k| Item::ChInfo(c, k))).collect(),
             MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
             // Measure: its footer leads to the list of measurements to add
             MenuId::Measure => [Item::Open(MenuId::MeasAdd)].into_iter().chain(self.items(MenuId::Measure)).collect(),

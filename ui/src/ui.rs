@@ -243,6 +243,7 @@ use item::{Item, PARTS};
 #[cfg(test)]
 mod backend_followup_tests;
 mod bwtest;
+mod chinfo;
 pub mod la;
 #[cfg(test)]
 mod lint;
