@@ -114,7 +114,10 @@ impl Ui {
             List::Catalog => self.cat.scroll = p,
             List::Results => self.pn.top = p as usize,
             List::Table => self.table.top = p as usize,
-            List::Events => self.pn.ev_top = p as usize,
+            List::Events => {
+                self.pn.ev_top = p as usize;
+                self.pn.ev_bar_t = Some(self.now);
+            }
             List::Pick => self.pick_scroll_to(bar, p),
         }
     }
@@ -129,7 +132,8 @@ impl Ui {
             if !bar.needed() {
                 continue;
             }
-            if bar.track.contains(x, y) {
+            // the bar of the Events pane is touched only while it shows: before that the list takes the finger
+            if bar.track.contains(x, y) && (l != List::Events || self.events_bar_shown()) {
                 let th = bar.thumb();
                 if th.contains(x, y) {
                     return Some((l, Grip::Thumb { grab: y - th.y }));
@@ -302,6 +306,9 @@ mod tests {
             .find(|ui| ui.events_bar().is_some_and(|(b, _)| b.needed()))
             .expect("a time base with more events than the pane shows");
         let (bar, rows) = ui.events_bar().expect("the pane is open");
+        // the bar is there for a moment after a scroll, and the list takes a finger before that
+        assert!(!ui.events_bar_shown());
+        ui.pn.ev_bar_t = Some(ui.now);
         let th = bar.thumb();
         press(&mut ui, th.x + 20, th.y + 5, (th.x + 20, bar.track.y + bar.track.h + 50));
         assert_eq!(ui.pn.ev_top as i32, bar.max());
