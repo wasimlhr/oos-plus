@@ -588,7 +588,6 @@ fn meant(menu: MenuId, it: Item, what: &str) -> Option<&'static str> {
         (M::Decode | M::Bus, DecSel | DecOn, "name") => "four decoders: the switch says whose it is",
         (M::Sim | M::SimAdvanced, SimSsc | SimSscCenter | SimSscDeviation | SimSscHz | SimAddRef | SimShow, "name") => "the tab is named Spread, the slot is named on its rows",
         (M::Remote, NetWeb | RemMcpInfo | RemScpiInfo | RemVxiInfo, "name") => "the addresses stand apart from their switches: each says whose it is",
-        (M::Windows, WinLayout, "name") => "Default has upstream's Density row, Minimal and Studio the Layout row of oos-next",
         // ---- order: pages the sheet sorts by hand
         (M::Remote, _, "order") => "Access: the name and who is allowed first, then the addresses",
         (M::Utility, _, "order") => "Connectivity: the pages in the order of the state lines above them",

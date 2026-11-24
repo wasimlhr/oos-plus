@@ -191,26 +191,23 @@ pub enum CursorMode {
     Xy,
 }
 
-/// How the plot is split into waveform windows; every channel and math channel stands in one of them.
+/// How the plot is split into waveform windows. One: a single plot (Overlay or Stacked traces). Quad: the Windows
+/// arrangement, four separate waveform views numbered 1 to 4, each source standing in one of them. An older setup that
+/// held two windows (`Cols`, `Rows`) reads as Quad.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum WinLayout {
     #[default]
     One,
-    /// two side by side
-    Cols,
-    /// two one above the other
-    Rows,
     /// two by two
     Quad,
 }
 
 impl WinLayout {
-    pub const ALL: [WinLayout; 4] = [WinLayout::One, WinLayout::Cols, WinLayout::Rows, WinLayout::Quad];
+    pub const ALL: [WinLayout; 2] = [WinLayout::One, WinLayout::Quad];
 
     pub fn count(self) -> usize {
         match self {
             WinLayout::One => 1,
-            WinLayout::Cols | WinLayout::Rows => 2,
             WinLayout::Quad => 4,
         }
     }
@@ -218,15 +215,14 @@ impl WinLayout {
     pub fn label(self) -> &'static str {
         match self {
             WinLayout::One => "One",
-            WinLayout::Cols => "Side by side",
-            WinLayout::Rows => "Stacked",
             WinLayout::Quad => "Four",
         }
     }
 }
 
-/// How much of the 1024×600 picture the plot takes. The same four apply to the panel and to a scaled window of it,
-/// and to the waveform on the external display.
+/// How much of the 1024×600 picture the plot takes. The same two apply to the panel and to a scaled window of it,
+/// and to the waveform on the external display. (Older setups also knew Split and Four; they read as Scope, the
+/// windows and the lower pane are chosen on their own now.)
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Density {
     /// top bar, plot, measurement strip, cards
@@ -234,22 +230,16 @@ pub enum Density {
     Scope,
     /// plot and measurement strip
     Full,
-    /// plot, and under it a pane of numbers or two stacked traces
-    Split,
-    /// four equal panes
-    Four,
 }
 
 impl Density {
-    pub const ALL: [Density; 4] = [Density::Scope, Density::Full, Density::Split, Density::Four];
+    pub const ALL: [Density; 2] = [Density::Scope, Density::Full];
 
     /// The name of the density, for the Windows page and messages.
     pub fn label(self) -> &'static str {
         match self {
             Density::Scope => "Scope",
             Density::Full => "Full",
-            Density::Split => "Split",
-            Density::Four => "Four",
         }
     }
 }

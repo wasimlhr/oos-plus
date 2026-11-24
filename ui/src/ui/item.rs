@@ -273,8 +273,6 @@ pub(super) enum Item {
     Persist,
     Intensity,
     GridStyle,
-    /// view density (ui/windows.rs): Scope, Full, Split, Four
-    WinLayout,
     WinCh(usize),
     /// window of reference R<n+1> in a split
     WinRef(usize),

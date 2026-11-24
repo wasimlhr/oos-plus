@@ -788,9 +788,10 @@ and on a card, a row of the table is removed by a swipe to the left (with Undo),
 removes. System, SIM and the network pages are entries of the
 Menu.
 
-In Studio the plot's right-click (long press) menu has Stacked traces, a lane for every source with its own scale at
-the right, and Overlay traces, every source on one graticule of the full height, each with its own position and scale
-(`:VIEW:TRACes`). In both, every channel, reference and math channel has a handle with its name at the right edge, on
+In every layout Display > Traces (also the plot's right-click or long-press menu and `:VIEW:TRACes`) chooses how the
+traces share the plot: Stacked, a lane for every source with its own scale at the right; Overlay, every source on one
+graticule of the full height, each with its own position and scale; Windows, four separate waveform views numbered 1
+to 4 (Display > Windows names the window of every source). In both, every channel, reference and math channel has a handle with its name at the right edge, on
 its own zero level; a level outside the plot pins the handle to that edge, and handles on one level stand side by
 side, the first at the edge. A tap on a handle opens the sheet of its source.
 

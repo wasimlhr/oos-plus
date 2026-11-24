@@ -128,7 +128,7 @@ impl Ui {
             Item::CurMode => &["Off", "Time", "Volt", "Track", "XY"],
             Item::ZoneOn => &["Off", "On"],
             Item::Layout => &["Default", "Minimal", "Studio"],
-            Item::Traces => &["Overlay", "Stacked"],
+            Item::Traces => &["Overlay", "Stacked", "Windows"],
             Item::ZoneSel => &["Z1", "Z2"],
             Item::ZoneSrc => return ch_names(),
             Item::ZoneMode => &["Intersect", "Not intersect"],

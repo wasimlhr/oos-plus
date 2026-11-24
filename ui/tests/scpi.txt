@@ -120,6 +120,10 @@ scpi $S/scpi-answers.txt :DISPlay:GRADing:TIME?
 scpi $S/scpi-answers.txt :DISPlay:WBRightness?
 scpi $S/scpi-answers.txt :DISPlay:GRID?
 scpi $S/scpi-answers.txt :DISPlay:GBRightness?
+scpi $S/scpi-answers.txt :VIEW:TRACes?
+scpi $S/scpi-answers.txt :VIEW:TRACes WINDows
+scpi $S/scpi-answers.txt :VIEW:TRACes?
+scpi $S/scpi-answers.txt :VIEW:TRACes OVERlay
 scpi $S/scpi-answers.txt :DISPlay:RULers?
 scpi $S/scpi-answers.txt :DISPlay:COLor?
 scpi $S/scpi-answers.txt :DISPlay:HDMI:LINes?
