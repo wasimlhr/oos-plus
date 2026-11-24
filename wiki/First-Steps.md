@@ -33,6 +33,8 @@ selects and opens the menu the same way; a tap with the menu open closes it. **F
 more than half a second, or a finger held on a channel's card, switches that channel between AC and DC coupling;
 channel keys act when they are let go.
 
+**Channel info (Minimal and Studio).** The channel menu has a third tab, **Info**, with seven lines of what the channel is set to: vertical scale and offset, input (coupling, probe, inverted), bandwidth, the sample rate and memory depth in force, deskew and name. Bandwidth names the limit and, where the front end leaves less, the bandwidth in force: Full is the model's rated bandwidth, a limit above it is capped to it, Auto follows the sample rate (about a quarter of it, assumed, not measured on a unit). The tab only shows; change a value on Vertical or More.
+
 ## Sample rate
 
 Tap the sample rate at the top for **Acquire**. The rate itself follows the time base and the memory depth: slower time base or less memory, lower rate. The top rate is 1.25 GSa/s with one channel, 625 MSa/s with two, 312.5 MSa/s with three or four.
