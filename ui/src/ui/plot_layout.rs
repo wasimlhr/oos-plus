@@ -50,11 +50,13 @@ pub(super) struct ZoomView {
     pub vcenter: f32,
     /// the user closed the zoom window: a long record opened offline does not open it again
     pub user_closed: bool,
+    /// a remote command set the zoom scale or delay while the zoom was off: `:TIMebase:DELay:ENABle` keeps them
+    pub remote_asked: bool,
 }
 
 impl Default for ZoomView {
     fn default() -> Self {
-        ZoomView { laid_out: false, saved: None, vfactor: 1.0, vcenter: 0.0, user_closed: false }
+        ZoomView { laid_out: false, saved: None, vfactor: 1.0, vcenter: 0.0, user_closed: false, remote_asked: false }
     }
 }
 
