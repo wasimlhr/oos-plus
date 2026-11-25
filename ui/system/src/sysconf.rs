@@ -11,7 +11,7 @@
 //! tz.fallback = UTC0        # with tz = dhcp, while no lease names a valid zone
 //! eth.retry_10m = on        # System > Network > 10 Mbit retry
 //! net.show_addr = off       # System > Network > Show address: the address in the LAN and WLAN boxes of the top bar
-//! remote.web = on           # System > Network > Remote services (also remote.scpi, remote.vxi11, remote.ssh,
+//! remote.web = on           # System > Network > Remote services (also remote.scpi, remote.vxi11, remote.vnc, remote.ssh,
 //!                           # remote.mdns; remote.telnet of an older version is read and dropped: no telnet, ADR 0054)
 //! ssh.password = on         # System > Network > Remote services > SSH settings > Password login
 //! net.name = dho924s-123456 # the scope's name on the network (host name, <name>.local); written at the first start
@@ -64,6 +64,8 @@ pub struct SysConf {
     pub remote_web: bool,
     pub remote_scpi: bool,
     pub remote_vxi11: bool,
+    /// the port for desktop VNC viewers (5900): the screen, touch and keys without the web page; off by default
+    pub remote_vnc: bool,
     pub remote_ssh: bool,
     /// SSH login with the generated password as well as with a trusted key (`/bin/oos-ssh`)
     pub ssh_password: bool,
@@ -102,6 +104,7 @@ impl Default for SysConf {
             remote_web: true,
             remote_scpi: true,
             remote_vxi11: true,
+            remote_vnc: false,
             remote_ssh: false,
             ssh_password: true,
             remote_mdns: true,
@@ -250,6 +253,7 @@ impl SysConf {
                 "remote.web" => on_off(v).map(|b| c.remote_web = b).is_some(),
                 "remote.scpi" => on_off(v).map(|b| c.remote_scpi = b).is_some(),
                 "remote.vxi11" => on_off(v).map(|b| c.remote_vxi11 = b).is_some(),
+                "remote.vnc" => on_off(v).map(|b| c.remote_vnc = b).is_some(),
                 // the telnet shell of earlier versions (ADR 0054): taken with any value and dropped, so an older file
                 // loads without a refused line and the key is not written again
                 "remote.telnet" => true,
@@ -307,6 +311,7 @@ impl SysConf {
         s.push_str(&format!("remote.web = {}\n", word(self.remote_web)));
         s.push_str(&format!("remote.scpi = {}\n", word(self.remote_scpi)));
         s.push_str(&format!("remote.vxi11 = {}\n", word(self.remote_vxi11)));
+        s.push_str(&format!("remote.vnc = {}\n", word(self.remote_vnc)));
         s.push_str(&format!("remote.ssh = {}\n", word(self.remote_ssh)));
         s.push_str(&format!("ssh.password = {}\n", word(self.ssh_password)));
         s.push_str(&format!("remote.mdns = {}\n", word(self.remote_mdns)));

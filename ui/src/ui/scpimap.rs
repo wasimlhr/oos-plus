@@ -329,6 +329,7 @@ pub(super) fn map() -> Vec<Row> {
         r(":SYSTem:COMMunicate:LAN:RETRy10", Item::NetRetry10, "Network"),
         r(":SYSTem:REMote:SERVice:WEB", Item::RemWeb, "Remote services"),
         r(":SYSTem:REMote:SERVice:VXI11", Item::RemVxi, "Remote services"),
+        r(":SYSTem:REMote:SERVice:VNC", Item::RemVnc, "Remote services"),
         r(":SYSTem:REMote:SERVice:MDNS", Item::RemMdns, "Remote services"),
         r(":SYSTem:REMote:SERVice:MCP", Item::RemMcp, "Remote services"),
     ]

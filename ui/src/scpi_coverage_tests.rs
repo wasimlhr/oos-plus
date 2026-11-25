@@ -780,6 +780,8 @@ fn system(t: &mut T) {
     assert!(!t.ui.sys.remote_web);
     t.shows(Item::RemWeb, "Off");
     t.rt(":SYST:REM:SERV:VXI11 OFF", ":SYST:REM:SERV:VXI11?", "0");
+    t.rt(":SYST:REM:SERV:VNC ON", ":SYST:REM:SERV:VNC?", "1");
+    t.rt(":SYST:REM:SERV:VNC OFF", ":SYST:REM:SERV:VNC?", "0");
     t.rt(":SYST:REM:SERV:MDNS OFF", ":SYST:REM:SERV:MDNS?", "0");
     t.rt(":SYST:REM:SERV:MCP READ_ONLY", ":SYST:REM:SERV:MCP?", "READ_ONLY");
     t.shows(Item::RemMcp, "Read only");

@@ -332,6 +332,7 @@ fn lan_servers(
     let mut scpi = scpi::Scpi::open(lan_port(args, "--scpi-port", 5555));
     let mut vxi = if scope { vxi11::Server::open() } else { vxi11::Server::closed() };
     let hislip_port = lan_port(args, "--hislip-port", hislip::PORT);
+    vnc::set_configured_port(lan_port(args, "--vnc-port", vnc::PORT));
     let mut hislip = if scope { hislip::Server::closed() } else { hislip::Server::open(hislip_port) };
     (web.acl, scpi.acl, vxi.acl, hislip.acl) = (acl.clone(), acl.clone(), acl.clone(), acl.clone());
     web.offer(http::Offer { scpi_port: scpi.port(), vxi11: vxi.service_port().is_some(), hislip_port: hislip.port() });

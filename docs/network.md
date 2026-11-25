@@ -149,8 +149,8 @@ rules, the schedule, the settings file, the page.
 ## 4. Remote services
 
 System > Network > Remote services has a switch for each service, next to where it is reached. In Minimal and
-Studio it is a sheet: the switches are on its Services tab, the name, the allowed addresses and the ports on its
-Access tab, and it also opens from System > Connectivity, which shows the Ethernet and WLAN state, the web
+Studio it is a sheet: the switches are on its Services tab, mDNS, the name and the allowed addresses on its
+Access tab, the addresses and ports on its Addresses tab, and it also opens from System > Connectivity, which shows the Ethernet and WLAN state, the web
 address and the clock above the pages that set them.
 
 | service | port | what goes with it |
@@ -159,11 +159,12 @@ address and the clock above the pages that set them.
 | MCP | 8080 (`/mcp`) | **Off**, **Read only** or **Full** (the default): the tools for AI assistants ([http.md](http.md)); read only offers the tools that only read and `scpi` for queries alone |
 | SCPI | 5555 (TCP) | the SCPI commands |
 | VXI-11 | 111 (portmapper, TCP and UDP) and 9009 | SCPI through VISA (LXI instruments) |
+| VNC | 5900 | the screen, touch, keys and the wheel for a desktop VNC viewer (RFB 3.8, no password); the VNC page of the web remote needs no port of its own ([http.md](http.md)) |
 | SSH | 22 | a root shell with the scope's own password or a trusted key (section 7); **SSH settings** next to it |
 
 Every route of the web remote, with what it answers and its mark, is in [http.md](http.md).
 
-Web remote, SCPI and VXI-11 are on by default, SSH is off unless the image or the user switches it on. A service
+Web remote, SCPI and VXI-11 are on by default, VNC is off, SSH is off unless the image or the user switches it on. A service
 switched off closes its port at once, with the connections on it. Switching off the web remote also takes away the
 update page: an update then comes from a USB stick. SSH is the only shell on the network: `rcS` starts it at power-on
 (`/bin/oos-ssh`, which reads `remote.ssh` from `/oos/system.conf`), and oos-ui starts or stops it when its switch
@@ -205,6 +206,7 @@ stick.
 | `_http._tcp.local` | PTR, SRV, TXT | web remote: port 8080, `path=/` |
 | `_scpi-raw._tcp.local` | PTR, SRV, TXT | SCPI: port 5555 |
 | `_vxi-11._tcp.local` | PTR, SRV, TXT | VXI-11: port 111 |
+| `_rfb._tcp.local` | PTR, SRV, TXT | VNC: port 5900 |
 | `_ssh._tcp.local` | PTR, SRV, TXT | SSH (section 7): port 22, only while oos-ssh listens (`remote.ssh = on`, `net.allow` set, firewall loaded; looked at once a second, so it follows a change of Allowed) |
 
 The instance name a computer lists is `Rigol DHO924S OOS (123456)` (with a name of its own: `Rigol DHO924S OOS
@@ -268,6 +270,7 @@ net.show_addr = off           # System > Network > Show address: the LAN and WLA
 remote.web = on
 remote.scpi = on
 remote.vxi11 = on
+remote.vnc = off              # the port for desktop VNC viewers (4)
 remote.ssh = off
 ssh.password = on
 remote.mdns = on              # mDNS and DNS-SD (4.1)

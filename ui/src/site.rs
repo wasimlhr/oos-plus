@@ -51,6 +51,8 @@ impl oos_remote::http::Site for Ctx<'_> {
     fn pass(&mut self) {
         if let Some(live) = self.live {
             live.tick(self.cv);
+            // Remote services > VNC: the port for desktop viewers follows its switch
+            live.vnc.serve(self.ui.sys.remote_vnc.then(crate::vnc::configured_port));
         }
         mcp::expire_files(self.scpi);
     }

@@ -15,11 +15,16 @@
 //! (-260: fill and PNG rectangles) for a viewer that takes it and has 8 bits a colour, else Raw in the viewer's pixel
 //! format; DesktopSize (-223) when the screen changes its size. The left mouse button is a finger on the screen
 //! (`down`, `move`, `up`, `cmd.rs`), its wheel the wheel of a mouse on the scope (`wheel`), and the keys are those of
-//! a keyboard on the scope (`keysym`, `ui/pointer.rs`). Not yet: a plain TCP port (5900) for desktop viewers.
+//! a keyboard on the scope (`keysym`, `ui/pointer.rs`). The right button is the
+//! touch-hold context menu (`context`).
+//!
+//! Desktop viewers connect to a port of its own (`PORT`; Remote services > VNC, off by default): the same protocol
+//! without the WebSocket around it.
 
 use crate::gfx::Canvas;
 use std::io::Write;
-use std::net::TcpStream;
+use std::net::{TcpListener, TcpStream};
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -43,6 +48,19 @@ const SILENT: Duration = Duration::from_secs(60);
 const SEND_TIMEOUT: Duration = Duration::from_secs(30);
 /// Commands waiting for the frame loop at most (`queue`).
 const MAX_CMDS: usize = 64;
+/// The port for desktop viewers: the one registered for the protocol; `--vnc-port` gives another on a computer.
+pub const PORT: u16 = 5900;
+static CONFIGURED: AtomicU16 = AtomicU16::new(PORT);
+
+/// The port Remote services > VNC opens (`Vnc::serve`).
+pub fn configured_port() -> u16 {
+    CONFIGURED.load(Ordering::Relaxed)
+}
+
+pub fn set_configured_port(port: u16) {
+    CONFIGURED.store(port, Ordering::Relaxed);
+}
+
 /// Keys a viewer holds at once at most; a key beyond is not taken.
 const MAX_KEYS: usize = 16;
 const WS_GUID: &[u8] = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -71,8 +89,11 @@ struct State {
     frames: bool,
     /// touch commands for the frame loop
     cmds: Vec<String>,
-    /// raised by `close`: the viewers of before end
-    epoch: u64,
+    /// raised to end the viewers of before: [those of the port, those of the web page] (`Session::ws`)
+    epoch: [u64; 2],
+    /// the port for desktop viewers while Remote services > VNC is on, and when opening it was last tried
+    listener: Option<TcpListener>,
+    tried: Option<Instant>,
 }
 
 struct Shared {
@@ -121,12 +142,25 @@ impl Vnc {
         self.sh.wake.notify_all();
     }
 
-    /// Every frame: a copy of the screen when a viewer waits for one and the frame loop hands none over.
+    /// Every frame: a copy of the screen when a viewer waits for one and the frame loop hands none over, and the
+    /// desktop viewers that connected to the port.
     pub fn tick(&self, cv: &Canvas) {
         let mut st = self.sh.lock();
         let now = Instant::now();
         if !st.frames && Self::wanted(&st, now) {
             self.copy(&mut st, cv, now);
+        }
+        let mut new = Vec::new();
+        if let Some(l) = &st.listener {
+            while let Ok((s, _)) = l.accept() {
+                new.push(s);
+            }
+        }
+        drop(st);
+        for s in new {
+            // the server speaks first: nothing is read here. A viewer too many is dropped, which closes it
+            let _ = s.set_nonblocking(false);
+            self.start(s, None, &[], (cv.w as usize, cv.h as usize));
         }
     }
 
@@ -175,9 +209,9 @@ impl Vnc {
         self.sh.lock().viewers
     }
 
-    /// The web remote was switched off, or ends: every viewer goes.
+    /// The web remote was switched off: the viewers of its page go.
     pub fn close(&self) {
-        self.sh.lock().epoch += 1;
+        self.sh.lock().epoch[1] += 1;
         self.sh.wake.notify_all();
     }
 
@@ -185,16 +219,30 @@ impl Vnc {
     /// sub-protocol; `early`: what it sent after the request head). The answer and all the rest come from a thread of
     /// its own. False when there are `MAX_VIEWERS` already or no thread could be started (nothing was answered).
     pub fn adopt(&self, s: TcpStream, key: &str, binary: bool, early: &[u8], size: (usize, usize)) -> bool {
+        let head = format!(
+            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n{}\r\n",
+            ws_accept(key),
+            if binary { "Sec-WebSocket-Protocol: binary\r\n" } else { "" }
+        );
+        self.start(s, Some(head), early, size)
+    }
+
+    /// A viewer on `s`, on a thread of its own. `head`: the answer to its WebSocket request, and the protocol is in
+    /// WebSocket frames from there on; none for a desktop viewer, whose connection carries the protocol as it is.
+    /// False when there are `MAX_VIEWERS` already or no thread could be started (nothing was answered).
+    fn start(&self, s: TcpStream, head: Option<String>, early: &[u8], size: (usize, usize)) -> bool {
         let mut st = self.sh.lock();
         if st.viewers >= MAX_VIEWERS {
             return false;
         }
         st.viewers += 1;
         let now = Instant::now();
+        let ws = head.is_some();
         let sess = Session {
             sh: self.sh.clone(),
             s,
-            epoch: st.epoch,
+            epoch: st.epoch[ws as usize],
+            ws,
             ws_in: early.to_vec(),
             rfb: Rfb::new(size),
             shadow: None,
@@ -209,19 +257,46 @@ impl Vnc {
         };
         eprintln!("oos-ui: VNC viewer {} of {}", st.viewers, MAX_VIEWERS);
         drop(st);
-        let head = format!(
-            "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {}\r\n{}\r\n",
-            ws_accept(key),
-            if binary { "Sec-WebSocket-Protocol: binary\r\n" } else { "" }
-        );
         // a thread that could not be started drops the session, which takes the viewer off the count again
-        std::thread::Builder::new().name("web-vnc".into()).spawn(move || sess.run(head)).is_ok()
+        std::thread::Builder::new().name("web-vnc".into()).spawn(move || sess.run(head.unwrap_or_default())).is_ok()
+    }
+
+    /// Remote services > VNC: the port desktop viewers connect to, open on `port` or closed, which ends its viewers.
+    /// A port that is taken is tried again a second later, as the other listeners are (#212).
+    pub fn serve(&self, port: Option<u16>) {
+        let mut st = self.sh.lock();
+        match port {
+            None => {
+                st.tried = None;
+                if st.listener.take().is_some() {
+                    st.epoch[0] += 1;
+                    drop(st);
+                    self.sh.wake.notify_all();
+                    eprintln!("oos-ui: VNC port off");
+                }
+            }
+            Some(p) if st.listener.is_none() && st.tried.is_none_or(|t| t.elapsed() >= Duration::from_secs(1)) => {
+                st.tried = Some(Instant::now());
+                st.listener = crate::net6::tcp_service(p, "VNC");
+            }
+            Some(_) => {}
+        }
+    }
+
+    /// The port desktop viewers connect to, while it is open.
+    #[cfg(test)]
+    pub fn port(&self) -> Option<u16> {
+        self.sh.lock().listener.as_ref().and_then(|l| l.local_addr().ok()).map(|a| a.port())
     }
 }
 
 impl Drop for Vnc {
     fn drop(&mut self) {
-        self.close();
+        let mut st = self.sh.lock();
+        st.listener = None;
+        st.epoch = [st.epoch[0] + 1, st.epoch[1] + 1];
+        drop(st);
+        self.sh.wake.notify_all();
     }
 }
 
@@ -593,13 +668,16 @@ impl Rfb {
     }
 
     /// The left button is a finger on the screen; a step of the wheel is a press of button 4 (away from the hand) or
-    /// 5, with the modifier keys held.
+    /// 5, with the modifier keys held; the right button, while no finger is down, is the touch-hold context menu.
     fn pointer(&mut self, mask: u8, x: i32, y: i32, cmds: &mut Vec<String>) {
         let (x, y) = (x.clamp(0, self.size.0 as i32 - 1), y.clamp(0, self.size.1 as i32 - 1));
         for (bit, steps) in [(8u8, 1), (16, -1)] {
             if mask & bit != 0 && self.buttons & bit == 0 {
                 queue(cmds, format!("wheel {} {} {} {}", x, y, steps, self.modifiers()));
             }
+        }
+        if mask & 4 != 0 && self.buttons & 4 == 0 && (mask | self.buttons) & 1 == 0 {
+            queue(cmds, format!("context {} {}", x, y));
         }
         match (self.buttons & 1 != 0, mask & 1 != 0) {
             (false, true) => queue(cmds, format!("down {} {}", x, y)),
@@ -723,6 +801,8 @@ struct Session {
     sh: Arc<Shared>,
     s: TcpStream,
     epoch: u64,
+    /// the protocol comes in WebSocket frames (the web page); else the connection carries it as it is (the port)
+    ws: bool,
     /// from the connection, not yet a whole WebSocket frame
     ws_in: Vec<u8>,
     rfb: Rfb,
@@ -767,8 +847,12 @@ impl Drop for Session {
 }
 
 impl Session {
-    /// One binary WebSocket message.
+    /// Bytes of the protocol to the viewer: one binary WebSocket message, or as they are.
     fn send(&mut self, payload: &[u8]) -> std::io::Result<()> {
+        if !self.ws {
+            self.bytes += payload.len() as u64;
+            return self.s.write_all(payload);
+        }
         let mut m = ws_head(2, payload.len());
         self.bytes += (m.len() + payload.len()) as u64;
         if payload.len() <= 4096 {
@@ -782,6 +866,10 @@ impl Session {
 
     /// The whole frames that have arrived: protocol, answers, touch commands. False: the viewer is gone or wrong.
     fn pump(&mut self) -> bool {
+        if !self.ws {
+            let data = std::mem::take(&mut self.ws_in);
+            return data.is_empty() || self.feed(&data);
+        }
         loop {
             let (op, data) = match ws_take(&mut self.ws_in) {
                 Ok(Some(f)) => f,
@@ -791,13 +879,8 @@ impl Session {
             match op {
                 // RFB is a stream of bytes: the bounds of the frames and their kind mean nothing
                 0..=2 => {
-                    let (mut out, mut cmds) = (Vec::new(), Vec::new());
-                    if !self.rfb.feed(&data, &mut out, &mut cmds) || (!out.is_empty() && self.send(&out).is_err()) {
+                    if !self.feed(&data) {
                         return false;
-                    }
-                    if !cmds.is_empty() {
-                        let mut st = self.sh.lock();
-                        cmds.into_iter().for_each(|c| queue(&mut st.cmds, c));
                     }
                 }
                 8 => {
@@ -814,6 +897,20 @@ impl Session {
                 _ => {}
             }
         }
+    }
+
+    /// Bytes of the protocol from the viewer: the answers go back, the commands to the frame loop. False: not the
+    /// protocol, or the viewer is gone.
+    fn feed(&mut self, data: &[u8]) -> bool {
+        let (mut out, mut cmds) = (Vec::new(), Vec::new());
+        if !self.rfb.feed(data, &mut out, &mut cmds) || (!out.is_empty() && self.send(&out).is_err()) {
+            return false;
+        }
+        if !cmds.is_empty() {
+            let mut st = self.sh.lock();
+            cmds.into_iter().for_each(|c| queue(&mut st.cmds, c));
+        }
+        true
     }
 
     /// A screen newer than the viewer's: what changed goes out. `Err`: the viewer is gone.
@@ -874,12 +971,21 @@ impl Session {
             }
             if self.last_ping.elapsed() > PING {
                 self.last_ping = Instant::now();
-                if self.s.write_all(&ws_head(9, 0)).is_err() {
+                // is the viewer still there? The web page answers a ping. The protocol itself has none: a desktop
+                // viewer whose request is open gets an update of nothing, which it answers with its next request
+                let sent = if self.ws {
+                    self.s.write_all(&ws_head(9, 0))
+                } else if std::mem::take(&mut self.rfb.requested) {
+                    self.send(&[0, 0, 0, 0])
+                } else {
+                    Ok(())
+                };
+                if sent.is_err() {
                     return;
                 }
             }
             let mut st = self.sh.lock();
-            if st.epoch != self.epoch {
+            if st.epoch[self.ws as usize] != self.epoch {
                 return;
             }
             let newer = |st: &State, seen: u64| st.frame.clone().filter(|f| f.seq > seen);
@@ -1199,6 +1305,60 @@ mod tests {
                 return d;
             }
         }
+    }
+
+    /// A desktop viewer on the port: the protocol without the WebSocket, the first screen, the right button, an
+    /// update of nothing while the screen is still, and the port switched off ends the viewer.
+    #[test]
+    fn a_desktop_viewer_on_the_port() {
+        let vnc = Vnc::new();
+        let cv = Canvas::new(64, 32);
+        vnc.serve(Some(0));
+        let port = vnc.port().expect("the port is open");
+        let mut c = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        c.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        let until = |what: &str, done: &mut dyn FnMut() -> bool| {
+            let t = Instant::now();
+            while !done() {
+                assert!(t.elapsed() < Duration::from_secs(10), "{}", what);
+                vnc.tick(&cv);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        };
+        until("the frame loop takes the connection", &mut || vnc.viewers() == 1);
+        let take = |c: &mut TcpStream, n: usize| {
+            let mut b = vec![0u8; n];
+            c.read_exact(&mut b).unwrap();
+            b
+        };
+        assert_eq!(take(&mut c, 12), b"RFB 003.008\n");
+        c.write_all(b"RFB 003.008\n").unwrap();
+        assert_eq!(take(&mut c, 2), [1, 1]);
+        c.write_all(&[1]).unwrap();
+        assert_eq!(take(&mut c, 4), [0, 0, 0, 0]);
+        c.write_all(&[1]).unwrap();
+        let init = take(&mut c, 24);
+        assert_eq!(init[..4], [0, 64, 0, 32]);
+        take(&mut c, u32::from_be_bytes([init[20], init[21], init[22], init[23]]) as usize);
+        // no encodings named: the first screen comes Raw in the server's format; the right button with it
+        c.write_all(&[3, 0, 0, 0, 0, 0, 0, 64, 0, 32]).unwrap();
+        c.write_all(&[5, 4, 0, 10, 0, 12, 5, 0, 0, 10, 0, 12]).unwrap();
+        c.set_nonblocking(true).unwrap();
+        until("the first screen", &mut || c.peek(&mut [0u8; 1]).is_ok());
+        c.set_nonblocking(false).unwrap();
+        let m = take(&mut c, 16 + 64 * 32 * 4);
+        assert_eq!(m[..16], [0, 0, 0, 1, 0, 0, 0, 0, 0, 64, 0, 32, 0, 0, 0, 0], "all of the screen, Raw");
+        let mut cmds = Vec::new();
+        until("the right button", &mut || {
+            cmds.extend(vnc.take_cmds());
+            !cmds.is_empty()
+        });
+        assert_eq!(cmds, ["context 10 12"]);
+        assert!(crate::cmd::remote_ok(&cmds[0]));
+        // Remote services > VNC off: the port closes and its viewer ends
+        vnc.serve(None);
+        assert!(vnc.port().is_none());
+        until("the viewer goes", &mut || vnc.viewers() == 0);
     }
 
     /// Over a real connection: the WebSocket answer, the handshake, the first screen whole, then only what changed,
