@@ -127,7 +127,7 @@ impl Ui {
             Item::DecParity => &["None", "Even", "Odd"],
             Item::CurMode => &["Off", "Time", "Volt", "Track", "XY"],
             Item::ZoneOn => &["Off", "On"],
-            Item::Layout => &["Default", "Minimal", "Studio"],
+            Item::Layout => &["Default", "Studio"],
             Item::Traces => &["Overlay", "Stacked", "Windows"],
             Item::ZoneSel => &["Z1", "Z2"],
             Item::ZoneSrc => return ch_names(),

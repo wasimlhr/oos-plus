@@ -13804,14 +13804,14 @@
       [
        "<value>",
        "Text",
-       "Option text of the menu row.",
-       "MINIMAL"
+       "Option text of the menu row: `DEFAULT` or `STUDIO`. `MINIMAL` (a layout that is gone) is accepted and means Studio.",
+       "DEFAULT"
       ]
      ],
      "remarks": [
       "- Origin: OOS extension"
      ],
-     "returns": "On a freshly started default model the query returns `MINIMAL`.",
+     "returns": "On a freshly started default model the query returns `DEFAULT`.",
      "ext": true
     },
     {
@@ -16707,13 +16707,13 @@
       ],
       [
        "`layout`",
-       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
-       "`minimal`",
+       "`default` or `studio`; a stored `minimal` (a layout that is gone) opens as Studio, with every source on one graticule unless `studio_traces` says otherwise; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
+       "`default`",
        "`:DISPlay:LAYout`"
       ],
       [
        "`studio_view`",
-       "as above",
+       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
        "`waveform`",
        "-"
       ],

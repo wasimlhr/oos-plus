@@ -113,7 +113,11 @@ impl Ui {
             }
             "DISPlay:HDMI" => return Some(self.sel(Item::Hdmi, q, arg)),
             "DISPlay:TEXTsize" => return Some(self.sel(Item::TextSize, q, arg)),
-            "DISPlay:LAYout" => return Some(self.sel(Item::Layout, q, arg)),
+            // MINimal is a layout that is gone: it means Studio, which a stored `minimal` also opens as
+            "DISPlay:LAYout" => {
+                let arg = if kw(arg.trim(), "MINimal") { "Studio" } else { arg };
+                return Some(self.sel(Item::Layout, q, arg));
+            }
             "SYSTem:LOCK" => boolf(q, arg, &mut self.m.touch_lock),
             "SESSion" => {
                 if q { return Some(t(if self.session_is_sim { "SIM" } else if self.offline.on { "REF" } else { "LIVE" })); }
