@@ -69,3 +69,43 @@ fn autoset_with_zoom_on_draws() {
         frame(&mut u);
     }
 }
+
+/// Display is one list in the same order in every layout, in three tabs of at most seven rows.
+#[test]
+fn display_is_three_tabs_in_one_order() {
+    for hdmi in [HdmiMode::Mirror, HdmiMode::Waveform, HdmiMode::Layout] {
+        for arrangement in [windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows] {
+            let mut u = studio();
+            u.m.hdmi = hdmi;
+            u.set_arrangement(arrangement);
+            u.open_menu(MenuId::Display);
+            u.step(0.04);
+            let spec = u.sheet_spec(MenuId::Display).expect("Display is a sheet");
+            let names: Vec<_> = spec.tabs.iter().map(|t| t.name).collect();
+            assert_eq!(names, ["Traces", "Look", "Screen"], "{hdmi:?} {arrangement:?}");
+            assert_eq!(spec.tabs[0].rows, [Item::Layout, Item::Traces, Item::Views, Item::XyMode, Item::ZInput, Item::Histogram], "{hdmi:?} {arrangement:?}");
+            assert_eq!(spec.tabs[0].foot, [Item::Open(MenuId::Windows)]);
+            assert_eq!(spec.tabs[1].rows, [Item::Persist, Item::Intensity, Item::ColorGrade, Item::Dots, Item::GridStyle, Item::GridBright, Item::GridFrame]);
+            assert_eq!(spec.tabs[1].foot, [Item::ClearDisp]);
+            for t in &spec.tabs {
+                assert!(t.rows.len() <= 7, "{}: {} rows", t.name, t.rows.len());
+            }
+            // what :UI:MENU? lists is what the sheet has
+            let listed = u.script_labels().into_iter().map(|(it, _)| it).collect::<Vec<_>>();
+            let drawn: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().chain(&t.foot).copied()).collect();
+            assert!(listed.iter().all(|it| drawn.contains(it)), "{hdmi:?} {arrangement:?}: {listed:?} vs {drawn:?}");
+        }
+    }
+}
+
+/// The Default layout's dialog shows the same rows in the same order as the sheet (plus the Bottom bar row it has).
+#[test]
+fn the_default_dialog_has_the_rows_of_the_sheet_in_its_order() {
+    let mut a = Ui::new(Source::Demo { t: 0.0 });
+    a.m.layout = Layout::Default;
+    let dialog: Vec<Item> = a.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar).collect();
+    let mut s = studio();
+    s.m.hdmi = a.m.hdmi;
+    let studio_rows: Vec<Item> = s.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::StudioBadges | Item::StudioCompact | Item::StudioReset | Item::BottomBar)).collect();
+    assert_eq!(dialog, studio_rows);
+}
