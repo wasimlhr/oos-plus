@@ -177,10 +177,10 @@ impl Ui {
             Item::Layout,
             Item::Traces,
             Item::Views,
-            Item::PaneSel,
             Item::XyMode,
             Item::ZInput,
             Item::Histogram,
+            Item::PaneSel,
             Item::Persist,
             Item::Intensity,
             Item::ColorGrade,
@@ -191,12 +191,11 @@ impl Ui {
             Item::ClearDisp,
             Item::BottomBar,
             Item::Hdmi,
-            Item::HdmiView,
             Item::Backlight,
             Item::TextSize,
         ];
         if self.m.pane == tables::PANE_TREND {
-            v.splice(4..4, [Item::TrendSel(0), Item::TrendSel(1)]);
+            v.splice(7..7, [Item::TrendSel(0), Item::TrendSel(1)]);
         }
         // which source stands in which window: only while the traces are in four windows
         if self.arrangement() == windows::Arrangement::Windows {
@@ -206,10 +205,17 @@ impl Ui {
         if self.m.layout == Layout::Default {
             v.push(Item::StripPos);
         }
-        // the lines are a choice of both pictures that are drawn for the monitor (Waveform and Layout)
-        if self.m.hdmi != HdmiMode::Mirror {
-            v.insert(v.iter().position(|i| *i == Item::HdmiView).map_or(v.len(), |p| p + 1), Item::HdmiLines);
+        // the lines are a choice of both pictures that are drawn for the monitor (Waveform and Layout); another view
+        // on the monitor needs the Layout picture and a second view to show
+        let after_hdmi = v.iter().position(|i| *i == Item::Hdmi).map_or(v.len(), |p| p + 1);
+        let mut monitor = Vec::new();
+        if self.m.hdmi == HdmiMode::Layout && self.m.views >= 2 {
+            monitor.push(Item::HdmiView);
         }
+        if self.m.hdmi != HdmiMode::Mirror {
+            monitor.push(Item::HdmiLines);
+        }
+        v.splice(after_hdmi..after_hdmi, monitor);
         v.extend(self.studio_display_rows());
         v
     }

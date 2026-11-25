@@ -338,7 +338,8 @@ fn cursors_read_at_the_top_left_of_the_lane_and_hide_when_both_are_off_screen() 
     u.m.cur_b = 0.7;
     for _ in 0..4 { frame(&mut u); }
     let lane = u.plot.wins[0];
-    let box_top = Rect::new(lane.x + 52, lane.y + 6, 60, 3);
+    // (under the tags and the value boxes of the time cursors, which stand in the first 44 px of the lane)
+    let box_top = Rect::new(lane.x + 52, lane.y + 48, 60, 3);
     let mut on = Canvas::new(W, H);
     u.render(&mut on);
     let ink = |cv: &Canvas| (box_top.y..box_top.bottom()).flat_map(|y| (box_top.x..box_top.right()).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] == CURSOR).count();

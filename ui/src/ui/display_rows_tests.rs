@@ -76,8 +76,9 @@ fn display_is_three_tabs_in_one_order() {
             u.step(0.04);
             let spec = u.sheet_spec(MenuId::Display).expect("Display is a sheet");
             let names: Vec<_> = spec.tabs.iter().map(|t| t.name).collect();
-            assert_eq!(names, ["Traces", "Look", "Screen"], "{hdmi:?} {arrangement:?}");
-            assert_eq!(spec.tabs[0].rows, [Item::Layout, Item::Traces, Item::Views, Item::PaneSel, Item::XyMode, Item::ZInput, Item::Histogram], "{hdmi:?} {arrangement:?}");
+            assert_eq!(names, ["Traces", "Look", "Screen", "Lower"], "{hdmi:?} {arrangement:?}");
+            assert_eq!(spec.tabs[0].rows, [Item::Layout, Item::Traces, Item::Views, Item::XyMode, Item::ZInput, Item::Histogram], "{hdmi:?} {arrangement:?}");
+            assert_eq!(spec.tabs[3].rows, [Item::PaneSel], "{hdmi:?} {arrangement:?}");
             // the page of the window numbers is under Traces while the traces are in windows, and not before
             let link = if arrangement == windows::Arrangement::Windows { vec![Item::Open(MenuId::Windows)] } else { Vec::new() };
             assert_eq!(spec.tabs[0].foot, link, "{hdmi:?} {arrangement:?}");
@@ -167,4 +168,25 @@ fn every_row_of_the_plot_menu_does_what_its_label_says() {
     assert!(lines.len() > 60, "the menu was pressed: {} rows", lines.len());
     let bad: Vec<&String> = lines.iter().filter(|l| l.split('\t').nth(5) != Some("OK")).collect();
     assert!(bad.is_empty(), "rows that do not do what they say:\n{}", bad.iter().map(|l| l.as_str()).collect::<Vec<_>>().join("\n"));
+}
+
+/// With the trend pane open Display is still a sheet (the two charts are on the Lower tab); Monitor view is a row
+/// only where it can be used.
+#[test]
+fn display_stays_a_sheet_with_the_trend_pane_and_monitor_view_has_its_conditions() {
+    let mut u = studio();
+    u.select_option(Item::PaneSel, "Trend");
+    u.open_menu(MenuId::Display);
+    u.step(0.04);
+    let spec = u.sheet_spec(MenuId::Display).expect("Display is a sheet with the trend pane open");
+    let lower = spec.tabs.iter().find(|t| t.name == "Lower").expect("the Lower tab");
+    assert_eq!(lower.rows, [Item::PaneSel, Item::TrendSel(0), Item::TrendSel(1)]);
+    assert!(spec.tabs.iter().all(|t| t.rows.len() <= 7));
+    u.close_menu();
+    for (hdmi, views, offered) in [(HdmiMode::Mirror, 4, false), (HdmiMode::Waveform, 4, false), (HdmiMode::Layout, 1, false), (HdmiMode::Layout, 2, true)] {
+        let mut u = studio();
+        u.m.hdmi = hdmi;
+        u.views_set(views);
+        assert_eq!(u.items(MenuId::Display).contains(&Item::HdmiView), offered, "{hdmi:?} with {views} views");
+    }
 }
