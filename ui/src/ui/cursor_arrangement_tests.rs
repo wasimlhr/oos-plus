@@ -85,3 +85,33 @@ fn a_cursor_line_drags_by_the_pixels_over_its_window() {
         }
     }
 }
+
+/// In Windows the cursors stay in the window of their source: moving them changes nothing in the other windows.
+#[test]
+fn the_cursors_stay_in_their_window_in_windows() {
+    for layout in [Layout::Default, Layout::Studio] {
+        let mut u = setup(layout, windows::Arrangement::Windows, CursorMode::Time);
+        let mut a = Canvas::new(u.scr.w, u.scr.h);
+        u.render(&mut a);
+        (u.m.cur_a, u.m.cur_b) = (0.40, 0.60);
+        let mut b = Canvas::new(u.scr.w, u.scr.h);
+        u.render(&mut b);
+        let wins = u.plot.wins.clone();
+        assert_eq!(wins.len(), 4, "{layout:?}: four windows");
+        let own = u.ch_area(2);
+        let diff = |w: &Rect| {
+            let mut n = 0;
+            for y in w.y + 2..w.bottom() - 2 {
+                for x in w.x + 2..w.right() - 2 {
+                    let i = (y * u.scr.w + x) as usize;
+                    n += usize::from(a.px[i] != b.px[i]);
+                }
+            }
+            n
+        };
+        assert!(diff(&own) > 0, "{layout:?}: the cursors are drawn in the window of their source");
+        for w in wins.iter().filter(|w| **w != own) {
+            assert_eq!(diff(w), 0, "{layout:?}: the cursors reach the window {w:?} of another source");
+        }
+    }
+}
