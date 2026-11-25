@@ -24,10 +24,7 @@ pub(super) enum CtxRow {
     ZoomHere,
     ZoomBox,
     ZoomReset,
-    /// the trigger in the middle of the zoom window
-    ZoomCenter,
     ZoomClose,
-    Autoset,
     TrigOn(WaveId),
     LevelHere(WaveId),
     MeasOn(WaveId),
@@ -68,12 +65,11 @@ impl Ui {
     /// The two columns of rows: the view, and what acts on the lane under the press (which the rows name).
     fn ctx_columns(&self, lane: Option<WaveId>) -> [Vec<(CtxRow, String)>; 2] {
         let name = |id: WaveId| self.wave_name(id);
-        let mut view = vec![(CtxRow::Overlay, "Overlay traces".to_string()), (CtxRow::Stacked, "Stacked traces".to_string()), (CtxRow::Windows, "Four windows".to_string()),
+        let mut view = vec![(CtxRow::Overlay, "Overlay".to_string()), (CtxRow::Stacked, "Stacked".to_string()), (CtxRow::Windows, "Windows".to_string()),
             (CtxRow::FitLanes, "Fit all lanes".to_string()), (CtxRow::Fit, "Fit record".to_string()),
             (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
         if self.m.zoom {
             view.push((CtxRow::ZoomReset, "Reset zoom".to_string()));
-            view.push((CtxRow::ZoomCenter, "Center trigger".to_string()));
             view.push((CtxRow::ZoomClose, "Close zoom".to_string()));
         }
         let mut here = Vec::new();
@@ -84,7 +80,6 @@ impl Ui {
         }
         here.push((CtxRow::CursorHere, "Cursor here".to_string()));
         if let Some(id) = lane { here.push((CtxRow::NoteHere(id), "Add note here".to_string())); }
-        here.push((CtxRow::Autoset, "Autoset".to_string()));
         // Maximise is offered when another view shares the screen with the waveform: alone it would do nothing
         if self.dock_full_state() || self.dock_can_maximise() {
             here.push((CtxRow::Layout, if self.dock_full_state() { "Restore layout" } else { "Maximise view" }.to_string()));
@@ -121,7 +116,6 @@ impl Ui {
     }
 
     fn ctx_icon(&self, cv: &mut Canvas, row: CtxRow, cx: i32, cy: i32, c: Rgb) {
-        let f = self.fonts();
         match row {
             CtxRow::Overlay => { cv.line(cx - 7, cy + 3, cx, cy - 4, c); cv.line(cx, cy - 4, cx + 7, cy + 3, c); cv.line(cx - 7, cy - 1, cx, cy + 5, c); }
             CtxRow::Windows => { for (dx, dy) in [(-7, -5), (1, -5), (-7, 1), (1, 1)] { cv.round_outline(Rect::new(cx + dx, cy + dy, 6, 4), 1, c); } }
@@ -130,10 +124,7 @@ impl Ui {
             CtxRow::FitLanes => { cv.vline(cx, cy - 7, cy + 7, c); for d in [-1, 1] { cv.line(cx, cy + 7 * d, cx - 4, cy + 3 * d, c); cv.line(cx, cy + 7 * d, cx + 4, cy + 3 * d, c); } }
             CtxRow::ZoomHere | CtxRow::ZoomReset => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, BAR); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); }
             CtxRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
-            // the trigger mark between the two edges of the window
-            CtxRow::ZoomCenter => { cv.vline(cx - 7, cy - 5, cy + 5, c); cv.vline(cx + 7, cy - 5, cy + 5, c); cv.vline(cx, cy - 1, cy + 6, c); cv.triangle([(cx - 4, cy - 6), (cx + 4, cy - 6), (cx, cy - 1)], c); }
             CtxRow::ZoomClose => { cv.line(cx - 5, cy - 5, cx + 5, cy + 5, c); cv.line(cx - 5, cy + 5, cx + 5, cy - 5, c); }
-            CtxRow::Autoset => cv.text_in(&f.sb, Rect::new(cx - 10, cy - 9, 20, 18), 1, "A", c),
             CtxRow::TrigOn(_) => { cv.hline(cx - 7, cx - 2, cy + 4, c); cv.vline(cx - 2, cy - 4, cy + 4, c); cv.hline(cx - 2, cx + 7, cy - 4, c); }
             CtxRow::LevelHere(_) => { cv.hline(cx - 8, cx + 8, cy, c); cv.triangle([(cx - 4, cy - 5), (cx + 4, cy - 5), (cx, cy - 1)], c); }
             CtxRow::MeasOn(_) => { for (i, h) in [6, 11, 8].into_iter().enumerate() { cv.fill(Rect::new(cx - 7 + i as i32 * 5, cy + 6 - h, 3, h), c); } }
@@ -209,9 +200,7 @@ impl Ui {
             }
             CtxRow::ZoomBox => self.arm_zoom_area(),
             CtxRow::ZoomReset => self.workspace_action(Action::ZoomReset),
-            CtxRow::ZoomCenter => { self.studio_center_trigger(); self.relayout(); }
             CtxRow::ZoomClose => self.workspace_action(Action::ZoomClose),
-            CtxRow::Autoset => self.workspace_action(Action::Autoset),
             CtxRow::TrigOn(id) => self.workspace_action(Action::Trigger(id)),
             CtxRow::LevelHere(id) => {
                 if let WaveId::Ch(c) = id {
@@ -223,7 +212,16 @@ impl Ui {
                 }
             }
             CtxRow::MeasOn(id) => { self.sources.a = id; self.open_meas_list(); }
-            CtxRow::CursorHere => self.studio_cursors_add(None),
+            // two cursors on the lane that was pressed, the first at the press
+            CtxRow::CursorHere => {
+                if let Some(id) = at.lane { if self.set_cursor_source(id) { self.select_workspace_source(id); } }
+                let w = self.cursor_window();
+                let a = ((at.x - w.x) as f32 / w.w.max(1) as f32).clamp(0.02, 0.8);
+                (self.m.cur_b_source, self.m.cursor, self.m.cur_a, self.m.cur_b) = (None, CursorMode::Track, a, a + 0.2);
+                self.cursor_view = None;
+                self.settings_changed();
+                self.relayout();
+            }
             CtxRow::NoteHere(id) => self.callout_add(id, at.x),
             CtxRow::Layout => { if !self.dock_exit_full() { self.dock_maximise(super::dock::VKind::Wave); } }
         }

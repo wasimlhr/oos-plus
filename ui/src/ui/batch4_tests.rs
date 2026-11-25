@@ -130,7 +130,7 @@ fn the_plot_hold_popup_has_a_title_and_fits_with_rows_of_40_px() {
         assert_eq!(p.title, "Plot");
         assert!(p.rect.y >= g.y && p.rect.bottom() <= g.bottom() && p.rect.x >= g.x && p.rect.right() <= g.right(), "{l:?} {:?} in {g:?}", p.rect);
         for i in 0..p.rows.len() { assert!(p.row_rect(i).h >= 40 && p.rect.contains(p.row_rect(i).x + 1, p.row_rect(i).y + 1), "{l:?} row {i}"); }
-        assert!(p.rows.iter().any(|r| r.0 == "Autoset"), "Autoset is in the plot's hold popup");
+        assert!(p.rows.iter().any(|r| r.0 == "Windows"), "the three arrangements are in the plot's hold popup");
     }
 }
 
@@ -309,16 +309,7 @@ fn run_is_the_same_in_every_layout() {
 #[test]
 fn autoset_is_two_taps_away_in_every_layout() {
     for l in LAYOUTS {
-        // hold on the plot, then Autoset
-        let mut u = layout(l);
-        let g = u.plot.grid;
-        u.context_menu(g.x + g.w / 2, g.y + g.h / 2);
-        let (x, y) = if l == Layout::Studio {
-            centre(u.studio_ctx_rows().into_iter().find(|r| r.0 == super::studioctx::CtxRow::Autoset).unwrap().2)
-        } else { centre({ let p = u.workspace.popup.as_ref().unwrap(); p.row_rect(p.rows.iter().position(|r| r.0 == "Autoset").unwrap()) }) };
-        u.tap(x, y);
-        assert_eq!(toast_text(&u), "Auto set-up", "{l:?}: hold popup");
-        // or Menu, then Autoset
+        // Menu, then Autoset (the plot's menu has no Autoset: the Auto key and the Menu have it)
         let mut u = layout(l);
         let (x, y) = if l == Layout::Studio { centre(u.studio_top().gear) } else if l == Layout::Minimal { centre(Ui::MENU_BTN) } else { centre(u.menu_btn()) };
         u.tap(x, y);

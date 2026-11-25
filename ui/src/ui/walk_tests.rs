@@ -2326,7 +2326,7 @@ fn the_hold_menu_of_the_plot_has_rows_a_finger_high() {
         }
         let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
         for gone in ["Run", "Stop", "Single", "Trigger settings", "Sources"] { assert!(!labels.contains(&gone), "{gone} is on the bars: {labels:?}"); }
-        for kept in ["Overlay traces", "Stacked traces", "Fit all lanes", "Fit record", "Zoom here", "Zoom box", "Reset zoom", "Close zoom", "Cursor here", "Autoset"] {
+        for kept in ["Overlay", "Stacked", "Fit all lanes", "Fit record", "Zoom here", "Zoom box", "Reset zoom", "Close zoom", "Cursor here"] {
             assert!(labels.contains(&kept), "{kept}: {labels:?}");
         }
         u.studio.ctx = None;

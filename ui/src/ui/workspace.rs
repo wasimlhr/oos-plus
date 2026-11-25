@@ -1233,35 +1233,22 @@ impl Ui {
                  ("Dock below".into(), Action::MeasureDock(StripDock::Below)), ("Dock left".into(), Action::MeasureDock(StripDock::Left)),
                  ("Add measurements".into(), Action::Menu(MenuId::MeasAdd))]
         } else {
+            // the plot's menu has the same rows in every layout (Studio's popover has them in two columns)
             let mut rows = vec![
-                ("Overlay traces".into(), Action::Overlay),
-                ("Stacked traces".into(), Action::Stacked),
-                ("Four windows".into(), Action::Windows),
+                ("Overlay".into(), Action::Overlay),
+                ("Stacked".into(), Action::Stacked),
+                ("Windows".into(), Action::Windows),
                 ("Fit record".into(), Action::FitRecord),
-                ("Reset zoom".into(), Action::ZoomReset), ("Close zoom".into(), Action::ZoomClose),
-                ("Single acquisition".into(), Action::Single), ("Run / Stop".into(), Action::Run), ("Autoset".into(), Action::Autoset),
-                ("Float measurements".into(), Action::MeasureFloat)];
-            for source in self.trace_sources().into_iter().take(5) {
-                let id = match source {
-                    Trace::Channel(c) => WaveId::Ch(c),
-                    Trace::Reference(i) => WaveId::Ref(i),
-                    Trace::Math(_) => continue,
-                };
-                rows.push((
-                    format!(
-                        "Trigger on {}",
-                        match id {
-                            WaveId::Ch(c) => format!("CH{}", c + 1),
-                            WaveId::Ref(i) => format!("R{}", i + 1),
-                        }
-                    ),
-                    Action::Trigger(id),
-                ));
+            ];
+            if self.m.zoom {
+                rows.push(("Reset zoom".into(), Action::ZoomReset));
+                rows.push(("Close zoom".into(), Action::ZoomClose));
             }
-            rows.push(("Trigger settings".into(), Action::Menu(MenuId::Trigger)));
-            // a note at the time under the finger: on the lane under it, or on the selected source
-            if let Some(id) = self.ctx_lane(x, y) { rows.push(("Add note here".into(), Action::Note(id, x))); }
-            rows.push(("Sources".into(), Action::Sources));
+            // on the lane under the press (a note at the time under the finger, the trigger on that source)
+            if let Some(id) = self.ctx_lane(x, y) {
+                rows.push((format!("Trigger on {}", self.wave_name(id)), Action::Trigger(id)));
+                rows.push(("Add note here".into(), Action::Note(id, x)));
+            }
             rows
         };
         let mut rows = rows;

@@ -402,16 +402,19 @@ fn the_plot_menu_centres_the_trigger_in_the_zoom_window() {
     u.step(0.04);
     picture(&mut u, "plot-menu-center-trigger");
     let menu = cmd(&mut u, ":UI:MENU?", "");
-    assert!(menu.contains("\"Reset zoom\",\"Center trigger\",\"Close zoom\""), "{menu}");
+    assert!(menu.contains("\"Reset zoom\",\"Close zoom\""), "{menu}");
     let (p, rows) = (u.studio_ctx_rect().expect("the menu"), u.studio_ctx_rows());
     assert!(p.y >= 0 && p.bottom() <= u.scr.h, "the menu is on the screen: {p:?}");
     assert!(rows.iter().all(|(_, _, r)| r.h >= 24 && r.bottom() <= p.bottom()), "every row is inside it and can be pressed");
-    cmd(&mut u, ":UI:MENU:SELect", "\"Center trigger\"");
+    // the zoom row's Center puts the window on the trigger (the plot's menu has no row for it)
+    cmd(&mut u, ":UI:MENU:CLOSe", "");
+    u.studio_center_trigger();
+    u.relayout();
     for _ in 0..3 { u.step(0.04); }
     assert_eq!(u.m.zdelay, 0.0, "the zoom window is on the trigger");
     let lane = u.plot.wins[0];
     assert!((u.studio_x_of_time(0.0) - (lane.x + lane.w / 2)).abs() <= 1, "T at {} of a lane from {} to {}", u.studio_x_of_time(0.0), lane.x, lane.right());
-    assert!(u.studio.ctx.is_none(), "the menu closes");
+    assert!(u.studio.ctx.is_none(), "the menu is closed");
     // without zoom there is nothing to centre: no row
     u.set_zoom(false);
     for _ in 0..3 { u.step(0.04); }
