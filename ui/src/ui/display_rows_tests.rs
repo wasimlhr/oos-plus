@@ -150,3 +150,21 @@ fn the_plot_menu_names_the_arrangements_alike_in_every_layout() {
         assert!(!default.iter().any(|l| l == gone) && !studio_rows.iter().any(|l| l == gone), "{gone} is not in the plot's menu");
     }
 }
+
+/// Every row of the plot's menu does what its label says, in each layout, each arrangement and with zoom off and on
+/// (the full table, with the monitor, is `funccheck_tests::plot_menu_audit`). A row that is already in force changes
+/// nothing and is fine; a row that does nothing, does something else, or panics is a failure.
+#[test]
+fn every_row_of_the_plot_menu_does_what_its_label_says() {
+    use super::funccheck_tests::{plot_menu_lines, PlotStates};
+    let st = PlotStates {
+        layouts: &[Layout::Default, Layout::Studio],
+        arrangements: &[windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows],
+        hdmi: &[HdmiMode::Waveform],
+        zoom: &[false, true],
+    };
+    let lines = plot_menu_lines(&st);
+    assert!(lines.len() > 60, "the menu was pressed: {} rows", lines.len());
+    let bad: Vec<&String> = lines.iter().filter(|l| l.split('\t').nth(5) != Some("OK")).collect();
+    assert!(bad.is_empty(), "rows that do not do what they say:\n{}", bad.iter().map(|l| l.as_str()).collect::<Vec<_>>().join("\n"));
+}
