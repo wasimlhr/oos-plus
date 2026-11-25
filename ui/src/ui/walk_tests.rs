@@ -2187,7 +2187,7 @@ fn clear_sweep_and_the_footers_are_where_they_are_used() {
             let spec = u.sheet_spec(menu).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has a sheet"));
             spec.tabs.into_iter().find(|t| t.name == name).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has the tab {name}"))
         };
-        let t = tab(MenuId::Display, "Waveform");
+        let t = tab(MenuId::Display, "Look");
         assert!(t.rows.contains(&Item::Persist) && t.foot == [Item::ClearDisp], "{layout:?}: {:?}", t.foot);
         // (Reset layout is Studio's, under the switches of its arrangement)
         assert_eq!(tab(MenuId::Display, "Screen").foot, if layout == Layout::Studio { vec![Item::StudioReset] } else { Vec::new() }, "{layout:?}");
@@ -2209,6 +2209,8 @@ fn clear_sweep_and_the_footers_are_where_they_are_used() {
         let mut u = fresh(layout);
         u.open_menu(MenuId::Display);
         u.step(0.04);
+        let (tx, ty) = mid(u.sheet_geo().unwrap().tabs[1]);
+        tap(&mut u, tx, ty);
         let (x, y) = mid(foot(&u, Item::ClearDisp));
         tap(&mut u, x, y);
         assert!(u.studio.md.armed.is_none(), "{layout:?}: Clear does not ask twice");
@@ -2260,8 +2262,6 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
         u.m.ch[1].on = true;
         u.open_menu(MenuId::Display);
         u.step(0.04);
-        let (x, y) = mid(u.sheet_geo().unwrap().tabs[1]);
-        tap(&mut u, x, y);
         let row = u.sheet_geo().unwrap().rows.iter().find(|r| r.it == Item::Traces).map(|r| r.ctrl).unwrap_or_else(|| panic!("{layout:?}: no Traces row"));
         let was = u.trace_stacked();
         assert_eq!(u.value(Item::Traces), if was { "Stacked" } else { "Overlay" }, "{layout:?}");

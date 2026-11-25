@@ -172,29 +172,31 @@ impl Ui {
     /// The display menu; the trend selectors while the trend pane is shown, and in Studio the rows about its own
     /// arrangement.
     pub(super) fn display_items(&self) -> Vec<Item> {
+        // Traces (Layout, Traces, Views, Format ...), Look (the picture), Screen (the monitor, the panel)
         let mut v = vec![
-            Item::Open(MenuId::Windows),
             Item::Layout,
+            Item::Traces,
             Item::Views,
+            Item::XyMode,
+            Item::ZInput,
+            Item::Histogram,
+            Item::Open(MenuId::Windows),
             Item::Persist,
-            Item::ColorGrade,
             Item::Intensity,
+            Item::ColorGrade,
+            Item::Dots,
             Item::GridStyle,
             Item::GridBright,
             Item::GridFrame,
-            Item::Dots,
+            Item::ClearDisp,
             Item::BottomBar,
-            Item::ZInput,
-            Item::Histogram,
-            Item::XyMode,
             Item::Hdmi,
             Item::HdmiView,
             Item::Backlight,
             Item::TextSize,
-            Item::ClearDisp,
         ];
         if self.m.pane == tables::PANE_TREND {
-            v.splice(1..1, [Item::TrendSel(0), Item::TrendSel(1)]);
+            v.splice(6..6, [Item::TrendSel(0), Item::TrendSel(1)]);
         }
         // the lines are a choice of the monitor's own layout
         if self.m.hdmi == HdmiMode::Layout {

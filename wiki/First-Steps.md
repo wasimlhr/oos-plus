@@ -58,7 +58,7 @@ The x or a tap anywhere else closes the bar; otherwise it goes after 30 seconds.
 
 ## Windows and full screen
 
-**Display > Traces** (also the first row of **Display > Windows**, in every layout) chooses how the traces share the
+**Display > Traces** (on the first tab of Display, also the first row of **Display > Windows**, in every layout) chooses how the traces share the
 plot:
 
 | Traces | Plot |
@@ -121,6 +121,11 @@ the next smaller size, and the dense figure tables of the eye / jitter view keep
 with the other preferences and across restarts; Default set-up and Recall keep it.
 
 ## Display settings
+
+The Display menu has the same rows in the same order in every layout. In Studio they are three tabs: **Traces** (Layout,
+Traces, Views, Format, Z input, Histogram, and the Windows page under them), **Look** (Persistence, Intensity, Colour
+grade, Dots, Grid, Grid bright., Grid frame, and Clear) and **Screen** (HDMI, Monitor view, HDMI lines, Backlight, Text
+size, and Studio's switches).
 
 - **Display > Backlight** (from 0.1.9): the panel's brightness, 10 to 100 %, in steps that look even. It is a
   setting of the scope (`/oos/system.conf`).

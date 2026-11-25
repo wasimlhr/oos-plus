@@ -188,11 +188,13 @@ impl Ui {
             }),
             M::MeasFall => (&["Fall levels"], |_| Slot::Tab(0)),
             M::MeasStat => (&["Statistics"], |it| match it { MeasStatReset => Slot::Foot(0), _ => Slot::Tab(0) }),
-            M::Display => (&["Waveform", "Grid and views", "Screen"], |it| match it {
-                Persist | ColorGrade | Intensity | Dots | Histogram | XyMode | ZInput | TrendSel(_) => Slot::Tab(0),
-                Open(M::Windows) | Views | GridStyle | GridBright | GridFrame | Layout | Traces => Slot::Tab(1),
+            M::Display => (&["Traces", "Look", "Screen"], |it| match it {
+                Layout | Traces | Views | XyMode | ZInput | Histogram | TrendSel(_) => Slot::Tab(0),
+                // the page that says which source stands in which window: pinned under Traces
+                Open(M::Windows) => Slot::Foot(0),
+                Persist | Intensity | ColorGrade | Dots | GridStyle | GridBright | GridFrame => Slot::Tab(1),
                 // Clear wipes what persistence has drawn: under the tab that holds Persistence
-                ClearDisp => Slot::Foot(0),
+                ClearDisp => Slot::Foot(1),
                 // Studio's own: the two switches are rows of Screen, Reset layout is pinned under them
                 StudioReset => Slot::Foot(2),
                 _ => Slot::Tab(2),
@@ -482,11 +484,7 @@ impl Ui {
                 .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
             // Display: the choice of the bottom bar is a row of the Default layout's menu. A sheet is up only in
             // Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
-            MenuId::Display => {
-                // and the Traces row, which the Windows page has too (the dialog of Default reaches it there)
-                let rows = self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar);
-                rows.chain([Item::Traces]).collect()
-            }
+            MenuId::Display => self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar).collect(),
             m => self.items(m),
         }
     }
