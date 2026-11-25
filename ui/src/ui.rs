@@ -1679,3 +1679,5 @@ mod zoom_tests;
 mod funccheck_tests;
 #[cfg(test)]
 mod display_rows_tests;
+#[cfg(test)]
+mod cursor_arrangement_tests;

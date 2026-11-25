@@ -717,6 +717,17 @@ impl Ui {
             }
         }
     }
+    /// A source that has a window or a lane on the screen, whichever window is being drawn.
+    pub(super) fn workspace_source_drawn(&self, id: WaveId) -> bool {
+        match id {
+            WaveId::Ch(c) => self.m.ch[c].on && !self.m.ch_hidden[c],
+            WaveId::Ref(i) => self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on),
+        }
+    }
+    /// The window the time cursors are drawn in: the one of their source.
+    pub(super) fn cursor_window(&self) -> Rect {
+        self.source_area(self.cursor_source()).unwrap_or(self.plot.area)
+    }
     pub(super) fn cursor_badge(&self) -> Option<(String, Rgb)> {
         self.cursor_wave().map(|id| (self.wave_name(id), self.wave_color(id)))
     }
@@ -788,6 +799,12 @@ impl Ui {
             if let WaveId::Ref(i) = id {
                 if self.plot.wins.len() > 1 {
                     return self.plot.wins.get(self.ref_win_of(i)).copied();
+                }
+            }
+            // a channel in one of several windows is drawn in its own
+            if let WaveId::Ch(c) = id {
+                if self.plot.wins.len() > 1 {
+                    return Some(self.ch_area(c));
                 }
             }
             return Some(self.wave_area());
