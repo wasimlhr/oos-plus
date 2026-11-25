@@ -1089,7 +1089,7 @@ fn fat_dots(map: &mut [u16], pw: usize, ph: usize, t: &Trace) {
         let x = ((((t.rec_t0 + k as f64 * t.dt - vdelay) / tdiv) * ppd_x + wd as f64 / 2.0) as f32).floor() as i32;
         let y = (cy - (val + ch.offset) / vpd * ppd_y).round() as i32;
         for (dx, dy) in [(-1, -1), (0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (-1, 1), (0, 1), (1, 1)] {
-            let (px, py) = (x + dx, y + dy);
+            let (px, py) = (x.saturating_add(dx), y.saturating_add(dy));
             if (0..wi).contains(&px) && (0..hi).contains(&py) {
                 let idx = (py * wi + px) as usize;
                 map[idx] = map[idx].saturating_add(w);

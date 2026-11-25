@@ -857,7 +857,7 @@ impl Ui {
                 self.m.zdelay += d as f32 * tscales()[self.m.zscale] / 25.0;
                 self.clamp_zoom();
             }
-            Item::XyMode => self.xy = !self.xy_over(),
+            Item::XyMode => self.xy = !self.xy,
             Item::BootMode => self.boot_mode_toggle(),
             Item::Overclock => self.overclock_step(d),
             Item::StoreSlot => self.files.slot = (self.files.slot as i32 + d).clamp(ranges::STORE_SLOT.0, ranges::STORE_SLOT.1) as u32,

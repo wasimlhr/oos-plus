@@ -85,7 +85,10 @@ impl Ui {
         here.push((CtxRow::CursorHere, "Cursor here".to_string()));
         if let Some(id) = lane { here.push((CtxRow::NoteHere(id), "Add note here".to_string())); }
         here.push((CtxRow::Autoset, "Autoset".to_string()));
-        here.push((CtxRow::Layout, if self.dock_full_state() { "Restore layout" } else { "Maximise view" }.to_string()));
+        // Maximise is offered when another view shares the screen with the waveform: alone it would do nothing
+        if self.dock_full_state() || self.dock_can_maximise() {
+            here.push((CtxRow::Layout, if self.dock_full_state() { "Restore layout" } else { "Maximise view" }.to_string()));
+        }
         [view, here]
     }
 
