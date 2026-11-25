@@ -1020,8 +1020,9 @@ impl Ui {
         // both time cursors outside the view: nothing to read here
         let off = |fr: f32| !(0.0..=1.0).contains(&fr);
         if vertical && off(self.m.cur_a) && off(self.m.cur_b) { return; }
-        // at the top left of the lane (right of its volts labels), with the colour of its channel
-        let r = Rect::new(a.x + 50, a.y + 6, w + 8, h);
+        // at the top left of the lane (right of its volts labels), with the colour of its channel; with time cursors
+        // under the tags and the two value boxes of the cursors (which stand in the first 44 px of the lane)
+        let r = Rect::new(a.x + 50, a.y + if vertical { 48 } else { 6 }, w + 8, h);
         cv.round(r, 4, CURSOR, 255);
         cv.round(r.inset(1), 3, BAR, 255);
         cv.fill(Rect::new(r.x + 3, r.y + 4, 4, r.h - 8), self.wave_color(source));

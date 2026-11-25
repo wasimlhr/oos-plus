@@ -115,3 +115,16 @@ fn the_cursors_stay_in_their_window_in_windows() {
         }
     }
 }
+
+/// The readout box of the cursors stands under the tags and the value boxes of the time cursors, not over them.
+#[test]
+fn the_readout_box_clears_the_cursor_tags() {
+    for a in [windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows] {
+        let u = setup(Layout::Studio, a, CursorMode::Track);
+        let lane = u.source_area(WaveId::Ch(2)).unwrap();
+        // (the tags on the top edge of the lane; the plain X1 / X2 tags at its foot are not in the way)
+        for (k, r) in u.cursor_tags().into_iter().filter(|(_, r)| r.y < lane.y + 30) {
+            assert!(r.bottom() <= lane.y + 48, "{a:?}: tag {k} {r:?} reaches into the box at {}", lane.y + 48);
+        }
+    }
+}

@@ -122,10 +122,11 @@ with the other preferences and across restarts; Default set-up and Recall keep i
 
 ## Display settings
 
-The Display menu has the same rows in the same order in every layout. In Studio they are three tabs: **Traces** (Layout,
+The Display menu has the same rows in the same order in every layout. In Studio they are four tabs: **Traces** (Layout,
 Traces, Views, Format, Z input, Histogram, and the Windows page under them), **Look** (Persistence, Intensity, Colour
-grade, Dots, Grid, Grid bright., Grid frame, and Clear) and **Screen** (HDMI, Monitor view, HDMI lines, Backlight, Text
-size, and Studio's switches).
+grade, Dots, Grid, Grid bright., Grid frame, and Clear), **Screen** (HDMI, HDMI lines, Monitor view, Backlight, Text
+size, and Studio's switches) and **Lower** (the pane under the plot and, while it is Trend, its two charts). Monitor
+view is there only with HDMI = Layout and two or more views.
 
 - **Display > Backlight** (from 0.1.9): the panel's brightness, 10 to 100 %, in steps that look even. It is a
   setting of the scope (`/oos/system.conf`).
