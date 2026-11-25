@@ -1432,7 +1432,7 @@ impl Ui {
             cv.set_clip(grid);
             let off_same_side = (fr[0] < 0.0 && fr[1] < 0.0) || (fr[0] > 1.0 && fr[1] > 1.0);
             for &lane in &self.plot.wins {
-                if !off_same_side { self.studio_band(cv, lane, g, (x0, x1)); }
+                if !off_same_side && (self.stacked() || self.plot.wins.len() < 2 || lane == g) { self.studio_band(cv, lane, g, (x0, x1)); }
             }
             cv.set_clip(Rect::new(grid.x - 12, grid.y, grid.w + 24, grid.h));
             for (k, (x, name)) in [(xs[0], "X1"), (xs[1], "X2")].into_iter().enumerate() {
