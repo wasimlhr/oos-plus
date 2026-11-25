@@ -172,9 +172,20 @@ impl Scpi {
         if query {
             return t(&wave_tok(if second && track { ui.cursor_b_source() } else { ui.cursor_source() }));
         }
-        let Some(source) = parse_wave(arg) else {
-            self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
-            return None;
+        let math = super::decode::parse_math_source(arg).and_then(crate::model::decode_math);
+        let source = match (parse_wave(arg), math) {
+            (Some(source), _) => source,
+            (None, Some(k)) => match ui.ref_math_slot(k) {
+                Ok(slot) => WaveId::Ref(slot),
+                Err(m) => {
+                    self.push_err(format!("-221,\"Settings conflict; {m}\""));
+                    return None;
+                }
+            },
+            (None, None) => {
+                self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
+                return None;
+            }
         };
         let ok = if second && track {
             ui.set_cursor_b_source(source)

@@ -270,3 +270,30 @@ fn a_reference_save_copies_the_result_of_a_math_channel() {
     // a channel as the source again
     assert_eq!(line(&mut s, &mut ui, &cv, ":REFerence:SOURce 3,CHAN2;:REFerence:SOURce? 3"), "CHAN2");
 }
+
+/// `:CURSor:MANual:SOURce MATH1` puts the cursors on a copy of the math result in the first free reference slot, so a
+/// differential can be measured with cursors; the query answers that reference.
+#[test]
+fn a_cursor_can_read_the_result_of_a_math_channel() {
+    let (mut s, mut ui, cv) = session();
+    decoded_reference_fixture(&mut ui, 1000);
+    // M1 is off: refused
+    line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce MATH1");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-221,"));
+    ui.m.math = crate::math::MathOp::Sub;
+    ui.m.math_a = crate::math::MATH_REF_BASE;
+    ui.m.math_b = crate::math::MATH_REF_BASE;
+    for _ in 0..200 {
+        if ui.math_view(0).is_some() {
+            break;
+        }
+        ui.step(0.05);
+    }
+    line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce MATH1");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with('0'), "M1 is accepted as a cursor source");
+    let want = line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce?");
+    assert!(want.starts_with('R'), "the cursors read a reference copy: {want}");
+    // asking again reuses the slot
+    line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce MATH1");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce?"), want);
+}

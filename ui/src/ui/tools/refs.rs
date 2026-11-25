@@ -366,6 +366,21 @@ impl Ui {
         Ok(())
     }
 
+    /// Math channel `k`'s result as a reference a cursor can read: the slot that already holds a copy of it, else the
+    /// first free one, filled the way Save does (`ref_save_math`). Err when the result is not ready or every slot is
+    /// taken by something else.
+    pub(crate) fn ref_math_slot(&mut self, k: usize) -> Result<usize, String> {
+        let label = format!("M{}", k + 1);
+        let held = self.refs.iter().position(|r| r.as_ref().is_some_and(|w| w.label == label && w.src == 0));
+        let Some(slot) = held.or_else(|| self.refs.iter().position(Option::is_none)) else {
+            return Err("every reference slot is in use".into());
+        };
+        let keep = std::mem::replace(&mut self.ref_page.sel, slot);
+        let done = self.ref_save_math(k);
+        self.ref_page.sel = keep;
+        done.map(|()| slot)
+    }
+
     /// The reference of channel `c` of record `r`: its samples `v` at interval `dt` (`meas_wave`), starting where the
     /// record or, for a raw read longer than the screen's, the raw record starts; the channel's scale and offset.
     pub(in crate::ui) fn ref_of_channel(&self, r: &Record, c: usize, v: Vec<f32>, dt: f64) -> RefWave {

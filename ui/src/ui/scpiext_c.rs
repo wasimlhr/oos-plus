@@ -19,7 +19,7 @@ pub(super) const T3: &[&str] = &[
     "SYSTem:BOOT", "SYSTem:OVERclock", "SYSTem:STOCk",
 ];
 pub(super) const T3B: &[&str] = &[
-    "BUS<n>:SPI:MODE", "BUS<n>:CAN:BAUD", "BUS<n>:CAN:SIGNal", "BUS<n>:CAN:FD:BAUD", "BUS<n>:CAN:FD:ABAUd", "BUS<n>:SENT:TICK", "BUS<n>:SENT:NIBBles",
+    "BUS<n>:SPI:MODE", "BUS<n>:CAN:BAUD", "BUS<n>:CAN:SIGNal", "BUS<n>:CAN:FD:BAUD", "BUS<n>:CAN:FD:ABAUd", "BUS<n>:SENT:TICK", "BUS<n>:SENT:NIBBles", "BUS<n>:FLEXray:BAUD",
     "BUS<n>:USB:SPEed", "BUS<n>:OPTion1", "BUS<n>:OPTion2", "BUS<n>:OPTion3", "BUS<n>:OPTion4",
     "BUS:LANE:STATe", "BUS:LANE:LABel", "BUS:LANE:POSition", "BUS:LANE:CLOCk:SOURce", "BUS:LANE:CLOCk:THReshold", "BUS:LANE:DATA:SOURce",
     "BUS:LANE:DATA:THReshold", "BUS:LANE:RW", "DECode:SAVE",
@@ -182,13 +182,13 @@ impl Ui {
         let action = |q: bool| if q { Err(undefined(key)) } else { DONE };
         Some(match key {
             // ---- the parameters of decoder n: the items of the Decode menu, the decoder made the selected one for the moment
-            "BUS<n>:SPI:MODE" | "BUS<n>:CAN:BAUD" | "BUS<n>:CAN:SIGNal" | "BUS<n>:CAN:FD:BAUD" | "BUS<n>:CAN:FD:ABAUd" | "BUS<n>:SENT:TICK" | "BUS<n>:SENT:NIBBles"
+            "BUS<n>:SPI:MODE" | "BUS<n>:CAN:BAUD" | "BUS<n>:CAN:SIGNal" | "BUS<n>:CAN:FD:BAUD" | "BUS<n>:CAN:FD:ABAUd" | "BUS<n>:SENT:TICK" | "BUS<n>:SENT:NIBBles" | "BUS<n>:FLEXray:BAUD"
             | "BUS<n>:USB:SPEed" | "BUS<n>:OPTion1" | "BUS<n>:OPTion2" | "BUS<n>:OPTion3" | "BUS<n>:OPTion4" => {
                 let k = idx.and_then(|n| n.checked_sub(1)).filter(|&k| k < DECODERS)?;
                 let it = match key {
                     "BUS<n>:SPI:MODE" => Item::DecMode, "BUS<n>:CAN:BAUD" => Item::DecCanRate, "BUS<n>:CAN:SIGNal" => Item::DecCanH,
                     "BUS<n>:CAN:FD:BAUD" => Item::DecOpt(1), "BUS<n>:CAN:FD:ABAUd" => Item::DecOpt(0), "BUS<n>:SENT:TICK" => Item::DecOpt(0),
-                    "BUS<n>:SENT:NIBBles" => Item::DecOpt(1), "BUS<n>:USB:SPEed" => Item::DecUsbSpeed,
+                    "BUS<n>:SENT:NIBBles" => Item::DecOpt(1), "BUS<n>:FLEXray:BAUD" => Item::DecOpt(0), "BUS<n>:USB:SPEed" => Item::DecUsbSpeed,
                     "BUS<n>:OPTion1" => Item::DecOpt(0), "BUS<n>:OPTion2" => Item::DecOpt(1), "BUS<n>:OPTion3" => Item::DecOpt(2), _ => Item::DecOpt(3),
                 };
                 let prev = self.m.dec_sel;

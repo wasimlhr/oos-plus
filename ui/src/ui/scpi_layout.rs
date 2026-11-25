@@ -370,6 +370,10 @@ impl Ui {
             1 if is(0, "MENU") && q => t(self.ui_menu_list()),
             2 if is(0, "MENU") && is(1, "SELect") && !q => self.ui_menu_select(&text_arg(arg)),
             2 if is(0, "MENU") && is(1, "CLOSe") && !q => { self.ui_menu_close(); DONE }
+            // the notice that covers the screen (an update, a refused action): read what it says, then close it
+            1 if is(0, "DIALog") && q => t(self.dialog.as_ref().map(|d| d.join("
+")).unwrap_or_default()),
+            2 if is(0, "DIALog") && is(1, "CLOSe") && !q => { self.dialog = None; DONE }
             _ => return None,
         })
     }

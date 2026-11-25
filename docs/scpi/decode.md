@@ -64,6 +64,7 @@ Part of the [SCPI reference](README.md).
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `:BUS<n>:CAN:BAUD` | Set / Query | Bit rate, option text of the menu row (a CAN decoder only). | `500_KBIT/S` | Decode > Bit rate | Rigol-compatible |
+| `:BUS<n>:FLEXray:BAUD` | Set / Query | FlexRay bit rate: `10`, `5` or `2.5` Mbit/s (option text of the menu row, `10 Mbit/s`; the same as `:BUS<n>:OPTion1`; a FlexRay decoder only, -224 otherwise). A deploy or `*RST` puts the decoder back to 10 Mbit/s, so set it again after one. | `10 Mbit/s` | Decode > Bit rate | OOS extension |
 | `:BUS<n>:CAN:SIGNal` | Set / Query | `RX/TX` or `CAN_H` (a CAN decoder only). | `RX/TX` | Decode and bus > Signal | Rigol-compatible |
 | `:BUS<n>:CAN:FD:BAUD` | Set / Query | FD data rate, option text of the menu row. | `2_M` | Decode and bus > FD data rate | Rigol-compatible |
 | `:BUS<n>:CAN:FD:ABAUd` | Set / Query | FD arbitration rate, option text of the menu row. | `AUTO` | Decode and bus > Arbitration rate | Rigol-compatible |
