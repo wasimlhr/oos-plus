@@ -227,7 +227,7 @@ impl Ui {
         for k in 0..NMATH {
             let c = self.m.math_ch(k);
             if !self.m.math_shown(k) || c.op == MathOp::Fft { continue; }
-            let Ok(Some(rec)) = self.math_record(k) else { continue };
+            let Ok(Some(rec)) = self.math_record_shown(k) else { continue };
             let w = rec.v.as_ref();
             if w.is_empty() || !(rec.dt > 0.0) { continue; }
             let col = MATH_COLORS[k % MATH_COLORS.len()];

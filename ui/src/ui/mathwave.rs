@@ -397,6 +397,19 @@ impl Ui {
         self.meas_of_at(&oos_dsp::measure::analyze(&v, dt), kind, t0)
     }
 
+    /// For drawing: the result for the record now, and while a running acquisition has outrun the computation, the last
+    /// one that was finished (a record old, drawn at its own times) instead of "Computing" for ever. A large record
+    /// takes longer to compute than the next one takes to arrive, so the exact result alone is never there to draw.
+    pub(super) fn math_record_shown(&self, k: usize) -> Result<Option<Arc<Signal>>, &'static str> {
+        match self.math_record(k)? {
+            Some(w) => Ok(Some(w)),
+            None if self.m.run == RunState::Run => {
+                Ok(self.math.state.borrow().cache[k].as_ref().and_then(|(_, signal)| signal.clone().ok()))
+            }
+            None => Ok(None),
+        }
+    }
+
     pub(super) fn math_record(&self, k: usize) -> Result<Option<Arc<Signal>>, &'static str> {
         let key = self.math_key(k)?;
         {
@@ -503,6 +516,32 @@ mod tests {
         ui.refs[1].as_mut().unwrap().t0 = 100.0;
         assert_eq!(ui.math_record(0).err(), Some("Sources do not overlap"));
         assert_eq!(first.v[0], 0.5);
+    }
+    /// A running acquisition outruns a large computation: the drawing keeps the last finished result, the exact one
+    /// stays "computing" (a stopped scope shows no older one).
+    #[test]
+    fn a_running_scope_draws_the_last_finished_math_result_while_a_newer_one_is_computed() {
+        let mut ui = refs();
+        ui.refs[0].as_mut().unwrap().v = vec![2.0; BACKGROUND + 1].into();
+        ui.m.math = MathOp::Lin;
+        ui.m.math_lin = (2.0, 1.0);
+        assert!(ui.math_record(0).unwrap().is_none());
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let first = loop {
+            if let Some(w) = ui.math_record(0).unwrap() {
+                break w;
+            }
+            assert!(std::time::Instant::now() < deadline, "the background job finishes");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
+        // the next record: a new key, a new job
+        ui.refs[0].as_mut().unwrap().v = vec![3.0; BACKGROUND + 1].into();
+        assert!(ui.math_record(0).unwrap().is_none(), "the exact result is computing");
+        ui.m.run = RunState::Stop;
+        assert!(ui.math_record_shown(0).unwrap().is_none(), "stopped: no older result");
+        ui.m.run = RunState::Run;
+        let shown = ui.math_record_shown(0).unwrap().expect("running: the last finished result");
+        assert!(Arc::ptr_eq(&shown, &first));
     }
     #[test]
     fn large_reference_math_is_background_cached_and_rejects_stale_settings() {
