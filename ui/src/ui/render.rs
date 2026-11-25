@@ -96,6 +96,7 @@ impl Ui {
                     self.traces(l, self.plot.area, true, false);
                 }
                 let cv = l.over();
+                self.draw_no_data(cv);
                 if !self.dock_on() { self.draw_hist(cv); }
                 self.draw_zones(cv);
                 if self.plot.wins.len() > 1 || i == 0 || self.stacked() {
