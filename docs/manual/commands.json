@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.15",
   "version": "0.1.15",
   "edition": "November 2026",
-  "date": "23 November 2026",
+  "date": "24 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -10499,6 +10499,26 @@
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `1`.",
+     "ext": true
+    },
+    {
+     "header": ":EYE:STATe",
+     "set": ":EYE:STATe <value>",
+     "query": ":EYE:STATe?",
+     "desc": "Sets or queries Select analyser view (menu: Run control > Select analyser view).",
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Boolean. 1 shows the Eye / Jitter analyser, 0 the scope (as `:VIEW EYE` and `:VIEW SCOPe`).",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
      "ext": true
     },
     {
