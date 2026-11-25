@@ -223,6 +223,7 @@ mod graphics;
 mod interplay_tests;
 mod filterplot;
 mod livelines;
+mod nodata;
 mod mathwave;
 mod handles;
 mod measchip;
