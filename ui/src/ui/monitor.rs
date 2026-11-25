@@ -18,19 +18,21 @@ use super::*;
 impl Ui {
     /// The view the monitor shows in place of the panel's, as a model and the Ui's XY and full screen; None: the
     /// panel's (not HDMI Layout, no other view chosen, or the panel shows that view).
-    pub(super) fn monitor_view(&self) -> Option<(Model, bool, bool)> {
+    pub(super) fn monitor_view(&self) -> Option<(Model, bool, bool, Option<bool>)> {
         let j = self.m.hdmi_view.checked_sub(1)?;
         if self.m.hdmi != HdmiMode::Layout || self.m.views < 2 || j >= self.m.views || j == self.m.view_cur {
             return None;
         }
         let mut m = self.m.clone();
-        let (mut xy, mut full) = (false, false);
+        let (mut xy, mut full, mut overlay) = (false, false, None);
         let empty = views::plot_alone();
         let slot = if self.m.view_slots[j].trim().is_empty() { &empty } else { &self.m.view_slots[j] };
         for (k, v) in crate::store::views::pairs(slot).flatten() {
             match k {
                 "xy" => xy = v == "true",
                 "full" => full = v == "true",
+                // the view's own Overlay or Stacked: Studio keeps it in the Ui, not in the model
+                "studio_state" => overlay = Some(views::unesc(v).split_whitespace().any(|w| w == "overlay=1")),
                 _ if crate::store::views::is_view_key(k) => {
                     let _ = crate::store::set(&mut m, k, v);
                 }
@@ -44,19 +46,24 @@ impl Ui {
         if m.zoom && !(self.m.zoom && m.zscale == self.m.zscale && m.zdelay == self.m.zdelay) {
             m.zoom = false;
         }
-        Some((m, xy, full))
+        Some((m, xy, full, overlay))
     }
 
     /// Runs `f` with the monitor's view in place of the panel's, then puts the panel's back; None when the monitor
     /// shows the panel's view.
     pub(super) fn with_monitor_view<R>(&mut self, f: impl FnOnce(&mut Ui) -> R) -> Option<R> {
-        let (m, xy, full) = self.monitor_view()?;
+        let (m, xy, full, overlay) = self.monitor_view()?;
         let stats = self.results.on && m.meas == self.m.meas && m.meas2 == self.m.meas2;
         let j = self.m.hdmi_view - 1;
         let panel = std::mem::replace(&mut self.m, m);
         // the monitor's top bar marks its own view; the panel's notes stay on the panel
         self.m.view_cur = j;
         let toast = self.toast.take();
+        // what is open on the panel (a menu, a popover, a number pad, a dialog) is the panel's, not the other view's
+        let open = (self.menu_open, self.workspace.popup.take(), self.studio.ctx.take(), self.studio.popup.take(), self.dialog.take(), self.numpad.take(), self.studio.add_menu);
+        (self.menu_open, self.studio.add_menu) = (false, false);
+        let overlay_was = self.studio.overlay;
+        if let Some(o) = overlay { self.studio.overlay = o; }
         let keep = (self.xy, self.full.on, self.results.on);
         (self.xy, self.full.on, self.results.on) = (xy, full, stats);
         self.azr.swap_monitor();
@@ -64,6 +71,8 @@ impl Ui {
         self.azr.swap_monitor();
         self.m = panel;
         (self.xy, self.full.on, self.results.on) = keep;
+        self.studio.overlay = overlay_was;
+        (self.menu_open, self.workspace.popup, self.studio.ctx, self.studio.popup, self.dialog, self.numpad, self.studio.add_menu) = open;
         self.toast = toast;
         Some(r)
     }
@@ -133,7 +142,7 @@ mod tests {
         u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0))];
         assert!(u.monitor_view().is_none(), "Panel's by default");
         u.m.hdmi_view = 2;
-        let (m, _, _) = u.monitor_view().expect("view 2 on the monitor");
+        let (m, _, _, _) = u.monitor_view().expect("view 2 on the monitor");
         assert_eq!((m.view, m.meas.clone()), (AView::Spectrum, vec![(Meas::Freq, WaveId::Ch(0))]));
         // the panel's model stays as it was after a monitor frame
         let before = crate::store::setup_text(&u.m);
