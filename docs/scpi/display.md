@@ -22,7 +22,7 @@ Part of the [SCPI reference](README.md).
 | `:DISPlay:COLor` | Set / Query | Color grading on/off. | `0` | Display > Colour grade | Rigol-style (command family of the DHO guide) |
 | `:DISPlay:BACKlight` | Set / Query | Percent, 10 to 100 | `100` | Display > Backlight | name not verified against the DHO guide |
 | `:DISPlay:HDMI` | Set / Query | Option text of the menu row. | `WAVEFORM` | Display > HDMI | OOS extension |
-| `:DISPlay:HDMI:LINes` | Set / Query | `1`: the live channels on the monitor of the HDMI Layout are lines at its resolution; `0`: the stretched phosphor of the panel. | `1` | Display > HDMI lines | OOS extension |
+| `:DISPlay:HDMI:LINes` | Set / Query | `1`: the live channels on the monitor (HDMI Waveform or Layout) are lines at its resolution; `0`: the stretched phosphor of the panel. | `1` | Display > HDMI lines | OOS extension |
 | `:DISPlay:TEXTsize` | Set / Query | Option text of the menu row. | `NORMAL` | Display > Text size | OOS extension |
 | `:DISPlay:LAYout` | Set / Query | Option text of the menu row: `DEFAULT` or `STUDIO`. `MINIMAL` (a layout that is gone) is accepted and means Studio. | `DEFAULT` | Display > Layout | OOS extension |
 | `:DISPlay:LOWer` | Set / Query | Option text of the menu row (lower pane; content of the trend chart). | `TRACES` | Display and layout > Lower, Trend chart | OOS extension |

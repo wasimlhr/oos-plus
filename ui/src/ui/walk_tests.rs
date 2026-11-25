@@ -1938,7 +1938,7 @@ fn the_display_sheet_has_no_bottom_bar() {
         let screen = spec.tabs.iter().find(|t| t.name == "Screen").expect("the Screen tab");
         // (Studio has the two switches of its own arrangement after them, `studiolayout.rs`)
         let own: &[Item] = if layout == Layout::Studio { &[Item::StudioBadges, Item::StudioCompact] } else { &[] };
-        assert_eq!(screen.rows, [&[Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize], own].concat(), "{layout:?}");
+        assert_eq!(screen.rows, [&[Item::Hdmi, Item::HdmiView, Item::HdmiLines, Item::Backlight, Item::TextSize], own].concat(), "{layout:?}");
         // what Bottom bar chooses is the same either way: the bars are the compact ones, and nothing moves
         u.close_menu();
         let places = |u: &Ui| (u.m.compact(), u.plot_rect(), u.frame().bottom, u.studio_bottom().ch, u.source_pills());
