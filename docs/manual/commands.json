@@ -14564,7 +14564,7 @@
       "- Origin: OOS extension"
      ],
      "ext": true,
-     "example": ":UI:MENU:SELect \"Stacked traces\""
+     "example": ":UI:MENU:SELect \"Stacked\""
     },
     {
      "header": ":UI:MENU:CLOSe",
@@ -14654,7 +14654,7 @@
      "p": "Right-click the plot and pick a row by its label, as a person would:"
     },
     {
-     "pre": ":UI:CONText 600,300\n:UI:MENU?\n\"Context\",\"Overlay traces\",\"Stacked traces\",\"Fit record\",\"Zoom here\",\"Zoom box\",\"Stop\",\"Single\",\"Autoset\",\"Trigger on CH2\",\"Set level here\",\"Trigger settings\",\"Measurement on CH2\",\"Cursor here\",\"Sources\",\"Maximise view\"\n:UI:MENU:SELect \"Stacked traces\""
+     "pre": ":UI:CONText 600,300\n:UI:MENU?\n\"Context\",\"Overlay\",\"Stacked\",\"Windows\",\"Fit all lanes\",\"Fit record\",\"Zoom here\",\"Zoom box\",\"Trigger on CH2\",\"Set level here\",\"Measurement on CH2\",\"Cursor here\",\"Add note here\",\"Maximise view\"\n:UI:MENU:SELect \"Stacked\""
     },
     {
      "p": "Check that every source sits on its own zero level in Overlay. CH1 at 1 V/div with an offset of 1 V is one division (55 px here) above the middle of the graticule, CH2 with -1 V one below, and R1 with -2 V two below:"
