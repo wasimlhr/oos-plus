@@ -451,6 +451,9 @@ pub(super) enum Item {
     RemSsh,
     RemScpiInfo,
     RemVxiInfo,
+    /// the port for desktop VNC viewers (vnc.rs; `remote.vnc`, off by default), and its number
+    RemVnc,
+    RemVncInfo,
     /// what MCP of the web remote offers (Off, Read only, Full; `remote.mcp`), and where it is reached
     RemMcp,
     RemMcpInfo,

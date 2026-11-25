@@ -139,6 +139,7 @@ Every transport feeds the same interpreter, on the scope and in the desktop app.
 | Raw socket SCPI | TCP 5555 | recommended for scripts: `TCPIP0::<address>::5555::SOCKET` |
 | HiSLIP | TCP 4880 | the desktop app and `--serve`: `TCPIP0::<address>::hislip0::INSTR` |
 | VXI-11 | 111, 9009 | on the scope: `TCPIP0::<address>::INSTR` |
+| VNC | TCP 5900 | a desktop VNC viewer on the live screen; off until Remote services > VNC is on |
 | HTTP | 8080 | web remote with the live screen; `POST /mcp` gives AI assistants the tools `scpi` and `screenshot` |
 
 A measurement in Python, with nothing but the standard library:

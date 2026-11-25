@@ -125,6 +125,40 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
   No `ETag`. 503 while two large answers are being sent.
 - net.allow: no.
 
+### `GET /vnc`
+
+- Mark: **experimental**
+- Request: nothing.
+- Answer: 200 `text/html; charset=utf-8`, the page that shows the screen through noVNC (`vnc::PAGE`). Its script
+  loads `/novnc.js` and opens the WebSocket `/websockify`; the mouse is a finger on the screen.
+- net.allow: no.
+
+### `GET /novnc.js`
+
+- Mark: **internal**
+- Request: nothing.
+- Answer: 200 `text/javascript` with `Content-Encoding: gzip` and `Cache-Control: max-age=3600`: noVNC 1.7.0 as one
+  module, as it lies in the program (`ui/web/novnc/`). Sent from a thread of the senders; 503 while two large
+  answers are being sent. 404 where the program has no live picture.
+- net.allow: no.
+
+### `GET /websockify`
+
+- Mark: **experimental**
+- Request: a WebSocket upgrade (`Upgrade: websocket`, `Sec-WebSocket-Key`), from the scope's own page: 403 for
+  another site's (`foreign`). Without the upgrade: 404.
+- Answer: 101, then the connection stays and carries RFB 3.8 (VNC) in binary frames, security type None: the
+  screen as rectangles of what changed (TightPNG, or Raw for a viewer that does not take it), at most 20 updates a
+  second and only while the viewer asks. The left mouse button is a finger: `down`, `move` and `up` of `/cmd`.
+  The wheel and the keys act as those of a mouse and a keyboard on the scope (`wheel`, `keysym`): the wheel pans,
+  with Shift the V/div, with Ctrl the zoom, with Alt the trigger level; the keys stand for the front panel and
+  type into the on-screen keyboard while it is open. The right button is the touch-hold context menu (`context`).
+  503 while two viewers are connected. A desktop VNC viewer gets the same protocol without the WebSocket on a port
+  of its own, 5900, while Remote services > VNC is on ([network.md](network.md) 4); it shares the two places.
+- Limits: two viewers, each on a thread of its own on the slow cores (`vnc.rs`); a viewer that sends nothing for
+  60 s is dropped. Remote services > Web off ends them.
+- net.allow: no (the screen, keys and knobs, ADR 0025).
+
 ### `GET /monitor.png`
 
 - Mark: **experimental**
@@ -200,7 +234,9 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - Mark: **experimental** (`tap` and `drag` name points of a screen whose layout changes)
 - Request: query `c`, once or more, each a front-panel command of `ui/src/cmd.rs` that `cmd::remote_ok` lets
   through: `key <name|0xNN>`, `knob <name> <+n|-n|push>`, `tap <x> <y>`, `down <x> <y>` and `up <x> <y>` (a finger held on the screen: the page sends them for a press of 0.45 s
-  or more), `drag <x0> <y0> <x1> <y1> [hold]`,
+  or more), `move <x> <y>` (the held finger goes there), `wheel <x> <y> <n> [csa]` (n steps of a mouse wheel at a
+  point, with Ctrl, Shift or Alt held), `keysym <down|repeat|up> <hex>` (a key of a keyboard by its X11 keysym), `context <x> <y>` (the touch-hold context
+  menu at a point), `drag <x0> <y0> <x1> <y1> [hold]`,
   `workflow live|sim|load|measure|settings`.
 - Answer: 200 `text/plain` `ok`; 403 `refused` when one `c` is another command, and then none of them runs (before
   0.1.15 the ones let through ran anyway). The commands of an `ok` run in the frame loop after the answer; `ok` says

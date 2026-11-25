@@ -375,10 +375,12 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Windows => (&["Windows"], |_| Slot::Tab(0)),
-            // the switches of the services, then who may reach them and where they are
-            M::Remote => (&["Services", "Access"], |it| match it {
-                RemWeb | RemMcp | RemScpi | RemVxi | RemSsh | RemMdns | Open(M::Ssh) => Slot::Tab(0),
-                _ => Slot::Tab(1),
+            // the switches of the services, then who may reach them and by which name, then where they are: with
+            // VNC the switches and the addresses are more than seven rows each
+            M::Remote => (&["Services", "Access", "Addresses"], |it| match it {
+                RemWeb | RemMcp | RemScpi | RemVxi | RemVnc | RemSsh | Open(M::Ssh) => Slot::Tab(0),
+                RemMdns | RemName | RemAllow | RemFirewall => Slot::Tab(1),
+                _ => Slot::Tab(2),
             }),
             M::Ssh => (&["SSH"], |it| match it { SshImport | SshRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
             _ => return None,
@@ -551,9 +553,10 @@ impl Ui {
                 let order = [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow, Item::Open(MenuId::Network), Item::Open(MenuId::Remote), Item::Open(MenuId::Time)];
                 tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
             }
-            // Remote services: the name and who is allowed first, then the addresses
+            // Remote services: the name and who is allowed, and the addresses in the order of their switches
             if menu == MenuId::Remote {
                 let order = [
+                    Item::RemMdns,
                     Item::RemName,
                     Item::RemAllow,
                     Item::RemFirewall,
@@ -561,8 +564,11 @@ impl Ui {
                     Item::RemMcpInfo,
                     Item::RemScpiInfo,
                     Item::RemVxiInfo,
+                    Item::RemVncInfo,
                 ];
-                tabs[1].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+                for t in tabs.iter_mut().skip(1) {
+                    t.rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
+                }
             }
             // DVM and counter, the logic analyser and the double pulse had two tabs of two to five rows each: they are
             // one page while all of it fits one (seven rows, two actions in the footer)
@@ -831,12 +837,13 @@ impl Ui {
             }
             Item::SimAddRef => format!("Add to R{}", self.m.sim_slot + 1),
             Item::SimLoad => format!("Load file into R{}…", self.m.sim_slot + 1),
-            // on the Access tab of Remote services the addresses stand apart from their switches: they say whose they are
+            // on the Addresses tab of Remote services the addresses stand apart from their switches: they say whose they are
             Item::NetWeb if matches!(self.menu_root(), MenuId::Remote | MenuId::Utility) => "Web address".into(),
             Item::TimeNow if self.menu_root() == MenuId::Utility => "Clock".into(),
             Item::RemMcpInfo => "MCP address".into(),
             Item::RemScpiInfo => "SCPI port".into(),
             Item::RemVxiInfo => "VXI-11 ports".into(),
+            Item::RemVncInfo => "VNC port".into(),
             Item::SimShow => format!("Show R{}", self.m.sim_slot + 1),
             Item::SimLive => "Back to live".into(),
             Item::SimPlayRefs => {

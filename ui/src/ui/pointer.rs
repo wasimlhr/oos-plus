@@ -140,6 +140,21 @@ impl Ui {
         self.mouse.until = self.now + POINTER_S;
     }
 
+    /// A key of a keyboard that is not on the scope (a VNC viewer's), named by its keysym (`hid::keysym`): it acts
+    /// as the key of a keyboard on the scope does. A key with a character acts with the Shift its character needs
+    /// here, whatever the viewer held for it on its own layout.
+    pub fn remote_key(&mut self, sym: u32, down: bool, repeat: bool) -> Option<&'static str> {
+        match hid::keysym(sym)? {
+            (code, None) => self.hid_key(code, down, repeat),
+            (code, Some(shift)) => {
+                let held = std::mem::replace(&mut self.mouse.shift, shift);
+                let command = self.hid_act(code, down, repeat);
+                self.mouse.shift = held;
+                command
+            }
+        }
+    }
+
     fn hid_key(&mut self, code: u16, down: bool, repeat: bool) -> Option<&'static str> {
         match code {
             hid::KEY_LEFTSHIFT | hid::KEY_RIGHTSHIFT => self.mouse.shift = down,
@@ -300,6 +315,44 @@ mod tests {
         assert_eq!(u.wlan.osk.as_ref().unwrap().text, "Hi");
         key(&mut u, hid::KEY_ESC);
         assert!(u.wlan.osk.is_none(), "Escape cancels the keyboard");
+    }
+
+    /// A VNC viewer's keys, by keysym, through the command the viewer's thread queues (`keysym`): the front panel,
+    /// and the on-screen keyboard with the characters the viewer meant, whatever its Shift is.
+    #[test]
+    fn a_remote_keyboard_acts_as_one_on_the_scope() {
+        let mut u = ui();
+        let key = |u: &mut Ui, sym: u32| {
+            crate::cmd::run(u, &format!("keysym down {:x}", sym));
+            crate::cmd::run(u, &format!("keysym up {:x}", sym));
+        };
+        key(&mut u, '2' as u32);
+        assert!(u.m.ch[1].on, "2: CH2");
+        key(&mut u, 0xff1b);
+        assert!(!u.menu_open, "Escape closes the menu");
+        // a held key that does not repeat acts once
+        let run = u.m.run;
+        for phase in ["down", "repeat", "repeat", "up"] {
+            crate::cmd::run(&mut u, &format!("keysym {} 20", phase));
+        }
+        assert_ne!(u.m.run, run, "Space: Run/Stop once");
+        // a capital and a ? come with the viewer's Shift held, a / of a layout that has it on Shift too: each is
+        // the character it names; the digit of the number block is a digit
+        u.wlan_open_osk_for_test();
+        crate::cmd::run(&mut u, "keysym down ffe1");
+        for c in ['H', '?', '/'] {
+            key(&mut u, c as u32);
+        }
+        crate::cmd::run(&mut u, "keysym up ffe1");
+        assert!(!u.mouse.shift);
+        for sym in ['i' as u32, 0xffb7, '1' as u32, 0xff08] {
+            key(&mut u, sym);
+        }
+        assert_eq!(u.wlan.osk.as_ref().unwrap().text, "H?/i7");
+        key(&mut u, 0xff1b);
+        assert!(u.wlan.osk.is_none(), "Escape cancels the keyboard");
+        // a keysym the scope has no key for does nothing
+        key(&mut u, 0xffff);
     }
 
     /// A device that goes with Ctrl or the left button down (input.rs sends `hid::Held::release`) leaves nothing held.

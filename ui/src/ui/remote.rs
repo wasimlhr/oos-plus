@@ -79,6 +79,7 @@ impl Ui {
             Item::RemMcp,
             Item::RemScpi,
             Item::RemVxi,
+            Item::RemVnc,
             Item::RemSsh,
             Item::RemMdns,
             Item::RemAllow,
@@ -86,6 +87,7 @@ impl Ui {
             Item::RemMcpInfo,
             Item::RemScpiInfo,
             Item::RemVxiInfo,
+            Item::RemVncInfo,
             Item::Open(MenuId::Ssh),
             Item::RemName,
             Item::RemFirewall,
@@ -98,6 +100,7 @@ impl Ui {
             | Item::RemMcp
             | Item::RemScpi
             | Item::RemVxi
+            | Item::RemVnc
             | Item::RemSsh
             | Item::RemMdns
             | Item::RemName
@@ -149,6 +152,7 @@ impl Ui {
         add(s.remote_web, "_http._tcp", web_port, &["path=/"]);
         add(s.remote_scpi, "_scpi-raw._tcp", scpi_port, &[]);
         add(s.remote_vxi11, "_vxi-11._tcp", 111, &[]);
+        add(s.remote_vnc, "_rfb._tcp", crate::vnc::configured_port(), &[]);
         // SSH (docs/network.md 7): announced only while oos-ssh would listen (it needs `net.allow` as well)
         add(s.remote_ssh && crate::ssh::listens(), "_ssh._tcp", 22, &[]);
         mdns::Config {
@@ -434,7 +438,7 @@ impl Ui {
 
     /// Rows that are only text.
     pub(super) fn remote_text(it: Item) -> bool {
-        matches!(it, Item::NetWeb | Item::RemMcpInfo | Item::RemScpiInfo | Item::RemVxiInfo | Item::RemFirewall)
+        matches!(it, Item::NetWeb | Item::RemMcpInfo | Item::RemScpiInfo | Item::RemVxiInfo | Item::RemVncInfo | Item::RemFirewall)
             || Self::ssh_text(it)
     }
 
@@ -445,13 +449,14 @@ impl Ui {
             Item::RemMcp => "MCP",
             Item::RemScpi => "SCPI",
             Item::RemVxi => "VXI-11",
+            Item::RemVnc => "VNC",
             Item::RemSsh => "SSH",
             Item::RemMdns => "mDNS",
             Item::RemName => "Name",
             Item::RemAllow => "Allowed",
             Item::RemFirewall => "Firewall",
             Item::NetWeb | Item::RemMcpInfo => "Address",
-            Item::RemScpiInfo | Item::RemVxiInfo => "Port",
+            Item::RemScpiInfo | Item::RemVxiInfo | Item::RemVncInfo => "Port",
             _ => return Self::ssh_label(it),
         })
     }
@@ -464,6 +469,7 @@ impl Ui {
             Item::RemMcp => mcp_label(s.remote_mcp).into(),
             Item::RemScpi => on_off(s.remote_scpi),
             Item::RemVxi => on_off(s.remote_vxi11),
+            Item::RemVnc => on_off(s.remote_vnc),
             Item::RemSsh => on_off(s.remote_ssh),
             Item::RemMdns => on_off(s.remote_mdns),
             Item::RemName => self.name_value(),
@@ -477,6 +483,7 @@ impl Ui {
             Item::RemMcpInfo => format!("http://{}:8080/mcp", self.net.addr),
             Item::RemScpiInfo => port(s.remote_scpi, "5555 (TCP)".into()),
             Item::RemVxiInfo => port(s.remote_vxi11, format!("111 and {} (LXI)", crate::net::VXI11_CORE_PORT)),
+            Item::RemVncInfo => port(s.remote_vnc, format!("{} (TCP)", crate::vnc::configured_port())),
             _ => return self.ssh_value(it),
         })
     }
@@ -520,6 +527,7 @@ impl Ui {
             Item::RemWeb => (&mut s.remote_web, "Web remote"),
             Item::RemScpi => (&mut s.remote_scpi, "SCPI"),
             Item::RemVxi => (&mut s.remote_vxi11, "VXI-11"),
+            Item::RemVnc => (&mut s.remote_vnc, "VNC"),
             Item::RemSsh => (&mut s.remote_ssh, "SSH"),
             Item::RemMdns => (&mut s.remote_mdns, "mDNS"),
             // the name and the address list change in their pickers only
@@ -556,6 +564,7 @@ mod tests {
             (Item::RemMcp, Item::RemMcpInfo),
             (Item::RemScpi, Item::RemScpiInfo),
             (Item::RemVxi, Item::RemVxiInfo),
+            (Item::RemVnc, Item::RemVncInfo),
             (Item::RemSsh, Item::Open(MenuId::Ssh)),
             (Item::RemMdns, Item::RemName),
             (Item::RemAllow, Item::RemFirewall),

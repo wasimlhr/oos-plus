@@ -84,7 +84,7 @@ OWN_FOLDER = ("main", "lib", "mod")  # files that are the module of their folder
 # what it passes to the readers; its row is that module's.
 UI_LAYERS = (
     ("base", "ui-base-up", "",
-     "base64 clock drm ethlink font gfx hid hostname json layout mdns net net6 netacl placement remote shots sntp ssh sysconf"
+     "base64 clock drm ethlink font gfx hid hostname json layout mdns net net6 netacl placement remote shots sntp ssh sysconf vnc"
      " system usbtmc vpu"),
     ("model", "ui-model-up", "base", "decode logic math model words zone"),
     ("settings", "ui-settings-up", "base model", "settings"),

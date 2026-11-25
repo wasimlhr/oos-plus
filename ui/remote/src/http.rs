@@ -38,6 +38,15 @@ pub trait Site {
     /// `GET /screen.png` or `/screen.jpg` on `s` (`have`: the ETag of If-None-Match): the program answers it, now or
     /// later.
     fn picture(&mut self, s: &TcpStream, have: Option<String>, jpeg: bool);
+    /// A request the program answers on the connection itself, with a head of its own or as a connection that stays
+    /// (a WebSocket): `head` is the request's head, `rest` what came after it. True when it took the connection.
+    fn take(&mut self, _route: &str, _head: &str, _rest: &[u8], _s: &TcpStream) -> bool {
+        false
+    }
+    /// Text commands from connections the program keeps (the pointer of a VNC viewer), run like those of `/cmd`.
+    fn commands(&mut self) -> Vec<String> {
+        Vec::new()
+    }
     /// Whether `GET /cmd` may run the text command `line`.
     fn remote_ok(&self, line: &str) -> bool;
     /// The answer of a route of the program: (content type, body, whether the body is the reason it failed and not
@@ -236,7 +245,7 @@ pub const PAGE: &str = r#"<!DOCTYPE html><html lang="en"><head><meta charset="ut
 <style>img{display:block;width:100%;height:auto;border:1px solid #3a424d;border-radius:6px;cursor:crosshair;touch-action:none;user-select:none;-webkit-user-select:none}
 .g{display:flex;flex-wrap:wrap;gap:12px 22px;margin-top:12px}.k span{display:block;font-size:12px;color:#9aa4af;margin-bottom:3px}.k div{display:flex;flex-wrap:wrap;gap:4px}
 .workflow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 8px}.workflow label{display:flex;align-items:center;gap:6px;color:#b8c0ca;font-size:13px}.workflow .primary{border-color:#f0a93b;color:#f0a93b}.session{margin-left:auto;color:#b8c0ca;font-size:13px;font-variant-numeric:tabular-nums}.file-hint{min-height:20px;margin:0 0 8px;color:#b8c0ca;font-size:13px}.file-hint.bad{color:#ffab91}header{flex-wrap:wrap}@media(max-width:620px){.session{margin-left:0;flex-basis:100%}.workflow{gap:6px}button{min-height:40px}}</style></head>
-<body><header><b>OOS remote</b><span id="st">connecting ...</span><nav><a href="/update">Update</a></nav></header>
+<body><header><b>OOS remote</b><span id="st">connecting ...</span><nav><a href="/vnc">VNC</a><a href="/update">Update</a></nav></header>
 <div class="workflow" aria-label="Waveform and source actions">
 <button id="load-wave" class="primary" onclick="askFile()">Load waveform</button>
 <input id="wave-file" type="file" accept=".csv,.bin,.wfm,.trc,.isf,.tr0,.wfmx,.pwwf,.tkwf,.tss" hidden>
@@ -416,7 +425,7 @@ impl<U: Send + 'static> Http<U> {
 
     /// Accepts connections, answers complete requests; text commands are returned for the caller to run.
     pub fn poll<S: Site<Upload = U>>(&mut self, site: &mut S) -> Vec<String> {
-        let mut cmds = Vec::new();
+        let mut cmds = site.commands();
         self.sending.retain_mut(|(s, out)| out.flush(s) == oos_system::net::Sent::Later);
         site.pass();
         self.finish_wave(site);
@@ -628,6 +637,14 @@ impl<U: Send + 'static> Http<U> {
                 true => (OK, "text/plain", b"ok".to_vec()),
                 false => refused(),
             },
+            // routes the program answers on the connection itself (`Site::take`): noVNC's script and its WebSocket
+            "/novnc.js" | "/websockify" => {
+                if site.take(route, &text, req_body, s) {
+                    self.pending.remove(i);
+                    return false;
+                }
+                ("404 Not Found", "text/plain", b"not found".to_vec())
+            }
             _ => match site.answer(route, post, req_body) {
                 // made on a sender thread, 503 when they are all busy (#205)
                 Some((ctype, Body::Later(make), failed)) => {
@@ -738,8 +755,9 @@ fn methods_of(route: &str) -> Option<&'static str> {
         "/files" => Some("GET, HEAD"),
         r if r.starts_with("/files/") => Some("GET, HEAD"),
         "/update" => Some("GET, HEAD, POST"),
-        "/cmd" | "/screen.png" | "/screen.jpg" | "/monitor.png" => Some("GET"),
+        "/cmd" | "/screen.png" | "/screen.jpg" | "/monitor.png" | "/novnc.js" | "/websockify" => Some("GET"),
         "/"
+        | "/vnc"
         | "/style.css"
         | "/screen.bmp"
         | "/wave.csv"
@@ -841,7 +859,7 @@ fn foreign(head: &str, route: &str, post: bool) -> bool {
             return true;
         }
     }
-    let page = !post && matches!(route, "/" | "/style.css" | "/update" | "/lxi/identification");
+    let page = !post && matches!(route, "/" | "/vnc" | "/style.css" | "/update" | "/lxi/identification");
     !page && matches!(header("sec-fetch-site").as_deref(), Some("cross-site" | "same-site"))
 }
 

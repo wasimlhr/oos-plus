@@ -56,6 +56,7 @@ also holds the parts listed here. Each keeps its own licence.
 | musl | the one of Alpine 3.22 (C programs) and of Rust's musl target (Rust programs) | MIT | linked into `e2fsck`, `kexec`, `wpa_supplicant`, `wpa_cli`, `nft`, `dropbearmulti`, `sftp-server`, `dbus-daemon`, `bluetoothd`, `btmon`, `oos-ui`, `oos-fpgad`, `oos-update` | `musl.txt` | not required |
 | Rust standard library | the toolchain of the build | MIT OR Apache-2.0; parts under other permissive licences | linked into `oos-ui`, `oos-fpgad`, `oos-update` | `rust.txt`, `Apache-2.0.txt` | not required |
 | `libc` crate | as in `ui/Cargo.lock` | MIT OR Apache-2.0 | linked into `oos-ui`, `oos-fpgad`, `oos-update` | `rust.txt`, `Apache-2.0.txt` | not required |
+| noVNC (`core/rfb.js` and what it imports, one minified module) | 1.7.0 | MPL-2.0; parts under BSD and MIT licences, as its notice says | inside `oos-ui`, sent to the browser as `/novnc.js` of the web remote, unchanged | [ui/web/novnc/LICENSE.txt](ui/web/novnc/LICENSE.txt) | `@novnc/novnc` 1.7.0 on npm; [ui/web/novnc/README.md](ui/web/novnc/README.md) makes the file again |
 | Roboto (roboto-classic) | as in `ui/tools/fonts/` | Apache-2.0 | its glyphs, drawn into `oos-ui` | `Apache-2.0.txt` ([ui/tools/fonts/LICENSE-Roboto.txt](ui/tools/fonts/LICENSE-Roboto.txt)) | not required |
 
 The versions are those of release 0.1.15. `rootfs/deps.lock` pins the archives the image builds from, with their

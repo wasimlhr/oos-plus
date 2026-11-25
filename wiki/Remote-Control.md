@@ -8,6 +8,7 @@
 | Web remote | 8080 | live screen, keys, knobs, touch in the browser; saves screenshots and CSV to your computer |
 | SCPI over TCP | 5555 | [[SCPI and VXI-11]]: the DHO800/DHO900 subset and OOS extensions; RAW reads retained native CH memory, and references retain their own native timing |
 | VXI-11 | 111, 9009 | on the scope, where port 111 is free: VISA `TCPIP::<ip>::INSTR` |
+| VNC | 5900 | a desktop VNC viewer on the live screen, with touch, keys and wheel; off until Remote services > VNC is on. The web remote has the same as its VNC page |
 | HiSLIP | 4880 | on a computer only: the same SCPI interpreter, `TCPIP::<ip>::hislip0::INSTR` |
 | LXI identification | 8080 | `/lxi/identification` |
 | MCP | 8080 | `POST /mcp`: tools for AI assistants ([below](#mcp)) |

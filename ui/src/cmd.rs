@@ -8,6 +8,10 @@
 //!   tap <x> <y>              touch tap
 //!   drag <x0> <y0> <x1> <y1> touch drag (8 steps)
 //!   down <x> <y>             a finger down and held; up <x> <y> lifts it (the web page: a long press)
+//!   move <x> <y>             the held finger goes there (the VNC page: a drag with the mouse)
+//!   context <x> <y>          the touch-hold context menu at a point (the right mouse button)
+//!   wheel <x> <y> <n> [csa]  n steps of a mouse wheel at a point, with Ctrl, Shift, Alt held (c, s, a)
+//!   keysym <down|repeat|up> <hex>  a key of a keyboard, by its X11 keysym (the VNC page; ui/pointer.rs)
 //!   workflow <live|sim|load|measure|settings> direct source and measurement actions
 //!   shot <path>              screenshot (PPM)
 //!   scpi <path> <message>    host scripts only: a program message through the SCPI interpreter; the message and
@@ -46,7 +50,7 @@ pub enum Out {
 /// they stay with the local control FIFO and the host scripts.
 pub fn remote_ok(line: &str) -> bool {
     let words: Vec<&str> = line.split_whitespace().collect();
-    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag" | "down" | "up"))
+    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag" | "down" | "move" | "up" | "wheel" | "keysym" | "context"))
         || words == ["zoom"]
         || (words.len() == 2
             && words[0] == "workflow"
@@ -87,7 +91,23 @@ pub fn run(ui: &mut Ui, line: &str) -> Out {
         }
         // a finger put down and lifted later: the time between is a long press to the screen
         "down" if w.len() > 2 => ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x: num(w[1]), y: num(w[2]) }),
+        // the held finger goes somewhere else: the mouse of a VNC viewer drags with it (vnc.rs)
+        "move" if w.len() > 2 => ui.handle(Ev::Touch { id: 0, phase: Phase::Move, x: num(w[1]), y: num(w[2]) }),
         "up" if w.len() > 2 => ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x: num(w[1]), y: num(w[2]) }),
+        // the wheel and the keys of a VNC viewer: those of a mouse and a keyboard on the scope (ui/pointer.rs)
+        "context" if w.len() > 2 => ui.context_menu(num(w[1]), num(w[2])),
+        "wheel" if w.len() > 3 => {
+            let held = |c| w.get(4).is_some_and(|m| m.contains(c));
+            let steps = num(w[3]).clamp(-8, 8);
+            let (ctrl, shift, alt) = (held('c'), held('s'), held('a'));
+            ui.handle(Ev::Wheel { x: num(w[1]), y: num(w[2]), steps, ctrl, shift, alt });
+        }
+        "keysym" if w.len() > 2 => {
+            let sym = u32::from_str_radix(w[2], 16).unwrap_or(0);
+            if let Some(command) = ui.remote_key(sym, w[1] != "up", w[1] == "repeat") {
+                return run(ui, command);
+            }
+        }
         "drag" if w.len() > 4 => {
             let (x0, y0, x1, y1) = (num(w[1]), num(w[2]), num(w[3]), num(w[4]));
             ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x: x0, y: y0 });

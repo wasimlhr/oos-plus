@@ -801,6 +801,28 @@
      "confirm": true
     },
     {
+     "header": ":SYSTem:REMote:SERVice:VNC",
+     "set": ":SYSTem:REMote:SERVice:VNC <value>",
+     "query": ":SYSTem:REMote:SERVice:VNC?",
+     "desc": "Sets or queries VNC for Remote services (menu: Remote services > VNC).",
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Boolean switch of the Remote services page; `SCPI OFF` needs `,CONFIRM`.",
+      "- Needs the literal `CONFIRM` argument; without it the command fails with -221 and does nothing. Ask the user before sending it.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true,
+     "confirm": true
+    },
+    {
      "header": ":SYSTem:REMote:SERVice:WEB",
      "set": ":SYSTem:REMote:SERVice:WEB <value>",
      "query": ":SYSTem:REMote:SERVice:WEB?",
