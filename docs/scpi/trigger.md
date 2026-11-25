@@ -157,6 +157,8 @@ Pulse-width conditions share the lower and upper time fields described above.
 | `:TRIGger:SHOLd:DSOurce` | Set / Query | Data source `CHANn\|Rn`. | `CHAN1` | Trigger > Source | name not verified against the DHO guide |
 | `:TRIGger:SHOLd:CSOurce` | Set / Query | Clock source `CHANn\|Rn`. | `CHAN4` | Trigger > Source B | name not verified against the DHO guide |
 | `:TRIGger:SHOLd:SLOPe` | Set / Query | Clock edge: `POSitive`, `NEGative`, `RFALl`. | `POS` | Trigger > Slope B | Rigol-compatible |
+| `:TRIGger:SHOLd:DLEVel` | Set / Query | Threshold of the data source, volts. | `1.500000E+00` | Trigger > Level | fork command; name not verified against the DHO guide |
+| `:TRIGger:SHOLd:CLEVel` | Set / Query | Threshold of the clock source, volts. | `5.000000E-01` | Trigger > Level 2 | fork command; name not verified against the DHO guide |
 
 ### Nth edge
 
