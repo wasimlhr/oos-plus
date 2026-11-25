@@ -3795,6 +3795,42 @@
       "- Origin: Rigol-compatible"
      ],
      "returns": "On a freshly started default model the query returns `POS`."
+    },
+    {
+     "header": ":TRIGger:SHOLd:DLEVel",
+     "set": ":TRIGger:SHOLd:DLEVel <value>",
+     "query": ":TRIGger:SHOLd:DLEVel?",
+     "desc": "Sets or queries Level for Setup and hold (menu: Trigger > Level).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Threshold of the data source, volts.",
+       "1.500000E+00"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `1.500000E+00`."
+    },
+    {
+     "header": ":TRIGger:SHOLd:CLEVel",
+     "set": ":TRIGger:SHOLd:CLEVel <value>",
+     "query": ":TRIGger:SHOLd:CLEVel?",
+     "desc": "Sets or queries Level 2 for Setup and hold (menu: Trigger > Level 2).",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Threshold of the clock source, volts.",
+       "5.000000E-01"
+      ]
+     ],
+     "remarks": [
+      "- Origin: fork command; name not verified against the DHO guide"
+     ],
+     "returns": "On a freshly started default model the query returns `5.000000E-01`."
     }
    ],
    "after": []
@@ -6728,7 +6764,7 @@
     {
      "header": ":REFerence:SAVE",
      "set": ":REFerence:SAVE",
-     "desc": "Copy the selected acquired channel record into the selected reference slot. Does not write a waveform file.",
+     "desc": "Copy the selected acquired channel record, or the selected math channel result (`:REFerence:SOURce MATHn`), into the selected reference slot; -224 while the math result is not ready. Does not write a waveform file.",
      "remarks": [
       "- Menu equivalent: Reference > Save to slot.",
       "- Origin: OOS extension"
@@ -6757,14 +6793,14 @@
     },
     {
      "header": ":REFerence:SOURce",
-     "set": ":REFerence:SOURce [<slot>,]CHANn",
+     "set": ":REFerence:SOURce [<slot>,]CHANn|MATHn",
      "query": ":REFerence:SOURce?",
      "desc": "Sets or queries Save from (source) for Slots and files (menu: Reference > Save from (source)).",
      "params": [
       [
-       "[<slot>,]CHANn",
+       "[<slot>,]CHANn|MATHn",
        "Text",
-       "Acquired-channel source used when saving a reference.",
+       "Acquired-channel source used when saving a reference. `MATHn` (or `Mn`) makes a save copy the result of a math channel as it is now (not an FFT), so the Eye or a decoder can read a differential `CH1 - CH2` from the slot; the copy does not follow the next acquisition, save again after one. -224 when that math channel is off or an FFT.",
        "CHAN1"
       ]
      ],

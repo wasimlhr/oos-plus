@@ -13,6 +13,9 @@ pub(in crate::ui) struct RefPage {
     pub sel: usize,
     /// the channel Save copies into the slot while the slot is empty (Item::RefSrc, `:REFerence:SOURce`)
     pub src: usize,
+    /// the math channel Save copies instead of a channel (`:REFerence:SOURce MATH1`): its result as it is now, a
+    /// record to give to the Eye or a decoder
+    pub math: Option<usize>,
     /// the files the Import slot picker is showing
     pub files: Vec<std::path::PathBuf>,
 }
@@ -185,11 +188,27 @@ impl Ui {
         })
     }
 
+    /// The math channel the selected slot saves, when its source is one (`ref_math_set`).
+    pub(crate) fn ref_math_of(&self, slot: usize) -> Option<usize> {
+        self.ref_page.math.filter(|_| slot == self.ref_page.sel)
+    }
+
+    /// A save of `slot` copies the result of math channel `k` (not an FFT, which is no record in time).
+    pub(crate) fn ref_math_set(&mut self, slot: usize, k: usize) -> bool {
+        if slot >= NREF || k >= NMATH || matches!(self.m.math_ch(k).op, MathOp::Off | MathOp::Fft) {
+            return false;
+        }
+        self.ref_page.sel = slot;
+        self.ref_page.math = Some(k);
+        true
+    }
+
     pub(crate) fn ref_source_set(&mut self, slot: usize, ch: usize) -> bool {
         if slot >= NREF || ch >= n_ch() {
             return false;
         }
         self.ref_page.sel = slot;
+        self.ref_page.math = None;
         self.ref_page.src = ch;
         if let Some(r) = self.refs.get_mut(slot).and_then(|r| r.as_mut()) {
             r.src = ch;
@@ -301,6 +320,9 @@ impl Ui {
 
     /// Writes the Source channel into the selected slot.
     pub(crate) fn ref_save_slot(&mut self) -> Result<(), String> {
+        if let Some(k) = self.ref_page.math {
+            return self.ref_save_math(k);
+        }
         let c = self.ref_page.src;
         let rec = self.last[0].clone();
         let Some(r) = rec.as_ref().filter(|r| c < r.ch.len() && !r.ch[c].is_empty()) else {
@@ -312,6 +334,35 @@ impl Ui {
         }
         let w = self.ref_of_channel(r, c, v, dt);
         self.ref_put(self.ref_page.sel, w);
+        Ok(())
+    }
+
+    /// The result of math channel `k` into the selected slot, at the math record's own interval, with the channel's
+    /// scale and offset. A reference is a stored record, so what the Eye or a decoder reads from it does not follow the
+    /// next acquisition: save again after one.
+    fn ref_save_math(&mut self, k: usize) -> Result<(), String> {
+        let Some((v, dt, t0)) = self.math_view(k) else {
+            return Err("math result is not ready (off, an FFT, or still computing)".into());
+        };
+        if v.len() < 2 || !(dt > 0.0) {
+            return Err("math result has no data".into());
+        }
+        let c = self.m.math_ch(k);
+        let scales = math_scales();
+        let w = RefWave {
+            src: 0,
+            color: 0,
+            label: format!("M{}", k + 1),
+            t0,
+            dt,
+            v,
+            vpd: scales[c.scale.min(scales.len() - 1)] as f32,
+            offset: c.offset,
+            on: true,
+        };
+        let slot = self.ref_page.sel;
+        self.ref_put(slot, w);
+        self.m.deskew_ref[slot] = 0.0; // a math result carries the deskew of its sources already
         Ok(())
     }
 

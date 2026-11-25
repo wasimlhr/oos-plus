@@ -146,7 +146,18 @@ impl Scpi {
         let (slot, rest) = self.ref_pair(ui, arg, !query);
         let slot = slot?;
         if query {
+            if let Some(k) = ui.ref_math_of(slot) {
+                return t(&format!("MATH{}", k + 1));
+            }
             return t(&format!("CHAN{}", ui.ref_source_of(slot) + 1));
+        }
+        if let Some(k) = super::decode::parse_math_source(&rest).and_then(crate::model::decode_math) {
+            if ui.ref_math_set(slot, k) {
+                ui.mark_changed();
+            } else {
+                self.push_err(format!("-224,\"Illegal parameter value\" {} (that math channel is off or an FFT)", arg));
+            }
+            return None;
         }
         match parse_ch(&rest) {
             Some(c) if ui.ref_source_set(slot, c) => {

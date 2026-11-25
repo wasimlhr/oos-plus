@@ -355,3 +355,57 @@ scpi $S/scpi-answers.txt :CHANnel1:OFFSet 1e39;:SYSTem:ERRor?;:CHANnel1:PROBe 0;
 scpi $S/scpi-answers.txt :ACQuire:MDEPth 200M;:SYSTem:ERRor?;:ACQuire:MDEPth 7;:SYSTem:ERRor?
 scpi $S/scpi-answers.txt :TRIGger:EDGE:SOURce D0;:SYSTem:ERRor?;:CHANnel1:COUPling DC50;:SYSTem:ERRor?
 scpi $S/scpi-answers.txt :TIMebase:SCALe x;:SYSTem:ERRor?;:TRIGger:HOLDover 1;:SYSTem:ERRor?
+scpi $S/scpi-answers.txt *STB?
+scpi $S/scpi-answers.txt *TST?
+scpi $S/scpi-answers.txt :SYSTem:SETup:SCPI?
+scpi $S/scpi-answers.txt :SYSTem:REMote:SERVice:SCPI?
+scpi $S/scpi-answers.txt :SYSTem:RECorder:STATe?
+scpi $S/scpi-answers.txt :SYSTem:RECorder:DATA?
+scpi $S/scpi-answers.txt :SYSTem:VERSion?
+scpi $S/scpi-answers.txt :TRIGger:VIDeo:POLarity?
+scpi $S/scpi-answers.txt :TRIGger:VIDeo:STANdard?
+scpi $S/scpi-answers.txt :TRIGger:DURation:TYPE?
+scpi $S/scpi-answers.txt :TRIGger:DURation:PATTern?
+scpi $S/scpi-answers.txt :TRIGger:SHOLd:DSRC?
+scpi $S/scpi-answers.txt :TRIGger:SHOLd:CSRC?
+scpi $S/scpi-answers.txt :TRIGger:SHOLd:STIMe?
+scpi $S/scpi-answers.txt :TRIGger:SHOLd:HTIMe?
+scpi $S/scpi-answers.txt :TRIGger:NEDGe:SLOPe?
+scpi $S/scpi-answers.txt :TRIGger:NEDGe:IDLE?
+scpi $S/scpi-answers.txt :TRIGger:SLOPe:TLOWer?
+scpi $S/scpi-answers.txt :TRIGger:RUNT:WUPPer?
+scpi $S/scpi-answers.txt :TRIGger:RUNT:WLOWer?
+scpi $S/scpi-answers.txt :TRIGger:DELay:SA?
+scpi $S/scpi-answers.txt :TRIGger:DELay:SB?
+scpi $S/scpi-answers.txt :TRIGger:ZONE1:PLACement?
+scpi $S/scpi-answers.txt :TRIGger:SOURce?
+scpi $S/scpi-answers.txt :SEARch:SLOPe:TUPPer?
+scpi $S/scpi-answers.txt :SEARch:SLOPe:TLOWer?
+scpi $S/scpi-answers.txt :SEARch:RUNT:WUPPer?
+scpi $S/scpi-answers.txt :SEARch:RUNT:WLOWer?
+scpi $S/scpi-answers.txt :ACQuire:HISTory:FRAMe?
+scpi $S/scpi-answers.txt :MEASure:AMP:TYPE?
+scpi $S/scpi-answers.txt :MEASure:SETup:MID?
+scpi $S/scpi-answers.txt :MEASure:LEVel:MID?
+scpi $S/scpi-answers.txt :MEASure:AREA?
+scpi $S/scpi-answers.txt :MEASure:STATistic:POPulation?
+scpi $S/scpi-answers.txt :DECode:EVENts:ERRors?
+scpi $S/scpi-answers.txt :CHANnel1:HIDE?
+scpi $S/scpi-answers.txt :CHANnel1:CLIPping?
+scpi $S/scpi-answers.txt :INVerter:HALL1:LINE?
+scpi $S/scpi-answers.txt :MAGnetic:AREA?
+scpi $S/scpi-answers.txt :CURSor:TRACk:AYValue?
+scpi $S/scpi-answers.txt :WAVeform:XINCrement?
+scpi $S/scpi-answers.txt :WAVeform:PREamble?
+scpi $S/scpi-answers.txt :TRIGger:SHOLd:DLEVel?
+scpi $S/scpi-answers.txt :TRIGger:SHOLd:CLEVel?
+scpi $S/scpi-answers.txt :RECord:CURRent?
+scpi $S/scpi-answers.txt :RECord:WREPlay:FCURrent?
+scpi $S/scpi-answers.txt :RECord:WREPlay:FMAX?
+scpi $S/scpi-answers.txt :SYSTem:SETup?
+scpi $S/scpi-answers.txt :MEASure:CATalog:ITEM? 1
+scpi $S/scpi-answers.txt :SYSTem:ERRor:NEXT?
+scpi $S/scpi-answers.txt :DISPlay:LAYout STUDio
+scpi $S/scpi-answers.txt :DOCK:SIZE? MEAS
+scpi $S/scpi-answers.txt :DOCK:FLOAT? MEAS
+scpi $S/scpi-answers.txt :DOCK:SHOW? MEAS

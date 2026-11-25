@@ -52,7 +52,7 @@ fn bus_source_name(source: usize) -> String {
 }
 
 /// `MATH1`..`MATH8` (or `M1`): the decoder source of a math channel, as `DECoder:...:SOURce` takes it.
-fn parse_math_source(text: &str) -> Option<usize> {
+pub(super) fn parse_math_source(text: &str) -> Option<usize> {
     let (k, n) = suffix(text.trim());
     (kw(k, "MATH") || k.eq_ignore_ascii_case("M"))
         .then_some(n)

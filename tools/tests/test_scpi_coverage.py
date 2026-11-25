@@ -200,7 +200,7 @@ class Coverage(unittest.TestCase):
 
     def test_the_list_of_this_tree_is_true(self):
         # every query of the tool's own list is documented in this tree and has a reason
-        queries = cov.documented_queries((ROOT / cov.SCPI_MD).read_text())
+        queries = cov.documented_queries(cov.read_reference(str(ROOT)))
         for q, why in REAL_NOT_ASKED.items():
             self.assertIn(q, queries)
             self.assertTrue(why)

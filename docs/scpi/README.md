@@ -163,7 +163,7 @@ See [waveform](waveform.md) for the preamble and the formats.
 | [Calibration and deskew](calibration.md) | 6 | Self-calibration and analysis deskew |
 | [Setup keys](setup-keys.md) | - | The `:SYSTem:SET` key list and the packed-key formats |
 
-Cross-links: `:TFORce` is in [acquire](acquire.md) and `:TRIGger:FORCe` in [trigger](trigger.md); `*SAV` / `*RCL` are in [common](common.md) and the save and load headers in [storage](storage.md); the Studio zoom headers `:TIMebase:DELay:SOURce` and siblings are in [display](display.md#studio-zoom); `:EYE:ITEM?` is in [eye](eye.md) and `:MEASure:ITEM` in [measure](measure.md); the logger headers `:SYSTem:LOG...` are in [logger](logger.md) although they share the `:SYSTem:` subtree.
+Cross-links: `:TFORce` is in [acquire](acquire.md) and `:TRIGger:FORCe` in [trigger](trigger.md); `*SAV` / `*RCL` are in [common](common.md) and the save and load headers in [storage](storage.md); `:EYE:ITEM?` is in [eye](eye.md), `:MEASure:ITEM` in [measure](measure.md) and the Studio zoom headers `:TIMebase:DELay:SOURce` and siblings are in [display](display.md#studio-zoom); the logger headers `:SYSTem:LOG...` are in [logger](logger.md) although they share the `:SYSTem:` subtree.
 
 ## Operation completion
 

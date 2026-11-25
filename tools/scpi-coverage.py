@@ -63,6 +63,10 @@ NOT_ASKED = {
     ":LA:PREamble?": "an LA record exists only on the hardware source; the demo source answers -230",
     ":LA:DATA?": "an LA record exists only on the hardware source; the demo source answers -230",
     ":SYSTem:STATe?": "its answer holds times measured on the computer, which differ from run to run",
+    ":UI:SCReen?": "a picture as bytes: the pictures of the script are what tools/compare-base.sh compares",
+    ":MMEMory:DATA?": "it reads a file by its path from the computer that runs the script",
+    ":ITEM?": "the pattern of the item queries of the analysers, each asked under its own name (:EYE:ITEM?, ...)",
+    ":<page>:ITEM?": "the pattern of the item queries of the analysers, each asked under its own name (:EYE:ITEM?, ...)",
 }
 
 # The expressions scpi.rs passes to kw() that hold a node of the header. Not counted: `a`, `arg`, `s`, `item`, `first`,
@@ -79,6 +83,16 @@ SETTING_CMD = re.compile(r'Scpi::Cmd\("([A-Za-z0-9:]+)"\)')
 def read(root, rel):
     with open(os.path.join(root, rel), encoding="utf-8", errors="replace") as f:
         return f.read()
+
+
+def read_reference(root):
+    """docs/scpi.md and the pages of docs/scpi/ (one per command group), as one text: the reference is the folder."""
+    text = read(root, SCPI_MD)
+    folder = os.path.join(root, "docs", "scpi")
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if name.endswith(".md"):
+            text += chr(10) + read(root, "docs/scpi/" + name)
+    return text
 
 
 def read_interpreter(root):
@@ -286,7 +300,7 @@ def settings_rows(root):
 def counts(root):
     """The four gaps as (key, what, missing, total); missing is a list of names. The keys name the gaps in the
     summary and in tools/scpi-coverage.txt."""
-    scpi_rs, scpi_md, scpi_txt = read_interpreter(root), read(root, SCPI_MD), read(root, SCPI_TXT)
+    scpi_rs, scpi_md, scpi_txt = read_interpreter(root), read_reference(root), read(root, SCPI_TXT)
     rows = settings_rows(root)
     words = command_words(scpi_rs)
     for cmd, _ in rows:
