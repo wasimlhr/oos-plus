@@ -171,6 +171,40 @@ pub fn char_of(code: u16, shift: bool) -> Option<char> {
     (c >= ' ').then_some(c)
 }
 
+/// The key of an X11 keysym, which is how a VNC viewer names a key: its code and, for a key with a character, whether
+/// Shift gives that character here (`char_of`). The keysym says the character and not the key, so a viewer with
+/// another layout types what it shows. None for a key the UI has no use for.
+pub fn keysym(sym: u32) -> Option<(u16, Option<bool>)> {
+    let other = |code| Some((code, None));
+    match sym {
+        // the digits of the number block are digits
+        0xffb0..=0xffb9 => keysym(sym - 0xffb0 + '0' as u32),
+        0x20..=0x7e => {
+            let c = char::from_u32(sym)?;
+            let key = |shift| (2..=57).find(|&code| char_of(code, shift) == Some(c)).map(|code| (code, Some(shift)));
+            key(false).or_else(|| key(true))
+        }
+        0xff08 => other(KEY_BACKSPACE),
+        0xff0d => other(KEY_ENTER),
+        0xff8d => other(KEY_KPENTER),
+        0xff1b => other(KEY_ESC),
+        0xff51 => other(KEY_LEFT),
+        0xff52 => other(KEY_UP),
+        0xff53 => other(KEY_RIGHT),
+        0xff54 => other(KEY_DOWN),
+        0xff55 => other(KEY_PAGEUP),
+        0xff56 => other(KEY_PAGEDOWN),
+        0xffc9 => other(KEY_F12),
+        0xffe1 => other(KEY_LEFTSHIFT),
+        0xffe2 => other(KEY_RIGHTSHIFT),
+        0xffe3 => other(KEY_LEFTCTRL),
+        0xffe4 => other(KEY_RIGHTCTRL),
+        0xffe9 => other(KEY_LEFTALT),
+        0xffea => other(KEY_RIGHTALT),
+        _ => None,
+    }
+}
+
 /// What one device holds down: its mouse buttons and modifier keys. A device that goes while one is down (unplugged,
 /// the Bluetooth link lost) sends no release, so the UI would keep a finger on the screen or Ctrl held; `release`
 /// gives the events that let them go.
@@ -289,5 +323,22 @@ mod tests {
         let mut other = Held::default();
         other.track(&Event::Key { code: KEY_LEFTCTRL, down: true, repeat: false });
         assert_eq!(h.release(&[&other]), vec![left_up]);
+    }
+
+    /// A keysym names its key, and for a character whether Shift gives it; every character a key has comes back.
+    #[test]
+    fn a_keysym_is_a_key_and_its_shift() {
+        assert_eq!(keysym('a' as u32), Some((30, Some(false))));
+        assert_eq!(keysym('A' as u32), Some((30, Some(true))));
+        assert_eq!(keysym(' ' as u32), Some((57, Some(false))));
+        assert_eq!(keysym('?' as u32), Some((53, Some(true))));
+        assert_eq!(keysym(0xffb5), keysym('5' as u32));
+        assert_eq!(keysym(0xff0d), Some((KEY_ENTER, None)));
+        assert_eq!(keysym(0xffe2), Some((KEY_RIGHTSHIFT, None)));
+        assert_eq!(keysym(0xff09), None, "Tab");
+        for sym in 0x20..=0x7eu32 {
+            let (code, shift) = keysym(sym).unwrap_or_else(|| panic!("no key for {:#x}", sym));
+            assert_eq!(char_of(code, shift.unwrap()), char::from_u32(sym));
+        }
     }
 }

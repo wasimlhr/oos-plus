@@ -14,7 +14,8 @@
 //! Protocol: RFB 3.3, 3.7 and 3.8, security type None (as the web remote: bench LAN only). Encodings: Tight with PNG
 //! (-260: fill and PNG rectangles) for a viewer that takes it and has 8 bits a colour, else Raw in the viewer's pixel
 //! format; DesktopSize (-223) when the screen changes its size. The left mouse button is a finger on the screen
-//! (`down`, `move`, `up`, `cmd.rs`). Not yet: keys, the wheel, a plain TCP port (5900) for desktop viewers.
+//! (`down`, `move`, `up`, `cmd.rs`), its wheel the wheel of a mouse on the scope (`wheel`), and the keys are those of
+//! a keyboard on the scope (`keysym`, `ui/pointer.rs`). Not yet: a plain TCP port (5900) for desktop viewers.
 
 use crate::gfx::Canvas;
 use std::io::Write;
@@ -40,8 +41,10 @@ const WAIT: Duration = Duration::from_millis(10);
 const PING: Duration = Duration::from_secs(20);
 const SILENT: Duration = Duration::from_secs(60);
 const SEND_TIMEOUT: Duration = Duration::from_secs(30);
-/// Touch commands waiting for the frame loop at most (moves beyond are dropped, never a down or an up).
+/// Commands waiting for the frame loop at most (`queue`).
 const MAX_CMDS: usize = 64;
+/// Keys a viewer holds at once at most; a key beyond is not taken.
+const MAX_KEYS: usize = 16;
 const WS_GUID: &[u8] = b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 /// One screen handed over by the frame loop.
@@ -382,14 +385,17 @@ struct Rfb {
     full: bool,
     buttons: u8,
     pos: (i32, i32),
+    /// the keys the viewer holds, by keysym: a second down of one is the key repeating
+    keys: Vec<u32>,
 }
 
-/// A touch command for the frame loop. A move replaces a move that has not run yet.
+/// A command for the frame loop. A move replaces a move that has not run yet. A full queue takes only what ends
+/// something (a finger or a key up), and four times as full nothing: a viewer cannot fill the memory with commands.
 fn queue(q: &mut Vec<String>, c: String) {
-    let mv = c.starts_with("move ");
-    if mv && q.last().is_some_and(|l| l.starts_with("move ")) {
+    let ends = c.starts_with("up ") || c.starts_with("keysym up ");
+    if c.starts_with("move ") && q.last().is_some_and(|l| l.starts_with("move ")) {
         q.pop();
-    } else if mv && q.len() >= MAX_CMDS {
+    } else if q.len() >= if ends { 4 * MAX_CMDS } else { MAX_CMDS } {
         return;
     }
     q.push(c);
@@ -409,6 +415,7 @@ impl Rfb {
             full: true,
             buttons: 0,
             pos: (0, 0),
+            keys: Vec::new(),
         }
     }
 
@@ -520,8 +527,15 @@ impl Rfb {
                 self.full |= self.inb[1] == 0;
                 Ok(10)
             }
-            // KeyEvent: no keys yet
-            4 => Ok(if n < 8 { 0 } else { 8 }),
+            // KeyEvent
+            4 => {
+                if n < 8 {
+                    return Ok(0);
+                }
+                let sym = u32::from_be_bytes([self.inb[4], self.inb[5], self.inb[6], self.inb[7]]);
+                self.key(self.inb[1] != 0, sym, cmds);
+                Ok(8)
+            }
             // PointerEvent
             5 => {
                 if n < 6 {
@@ -546,9 +560,47 @@ impl Rfb {
         }
     }
 
-    /// The left button is a finger on the screen.
+    /// A key, by its keysym: down, down again while it is held (the key repeats), or up.
+    fn key(&mut self, down: bool, sym: u32, cmds: &mut Vec<String>) {
+        let phase = match (down, self.keys.contains(&sym)) {
+            (true, true) => "repeat",
+            (true, false) if self.keys.len() < MAX_KEYS => {
+                self.keys.push(sym);
+                "down"
+            }
+            (false, true) => {
+                self.keys.retain(|k| *k != sym);
+                "up"
+            }
+            _ => return,
+        };
+        queue(cmds, format!("keysym {} {:x}", phase, sym));
+    }
+
+    /// Ctrl, Shift and Alt as held, as the `wheel` command names them (`c`, `s`, `a`; `-` for none).
+    fn modifiers(&self) -> String {
+        let held = |m: &(u32, u32, char)| self.keys.iter().any(|k| *k == m.0 || *k == m.1);
+        let m: String = [(0xffe3, 0xffe4, 'c'), (0xffe1, 0xffe2, 's'), (0xffe9, 0xffea, 'a')]
+            .iter()
+            .filter(|m| held(m))
+            .map(|m| m.2)
+            .collect();
+        if m.is_empty() {
+            "-".into()
+        } else {
+            m
+        }
+    }
+
+    /// The left button is a finger on the screen; a step of the wheel is a press of button 4 (away from the hand) or
+    /// 5, with the modifier keys held.
     fn pointer(&mut self, mask: u8, x: i32, y: i32, cmds: &mut Vec<String>) {
         let (x, y) = (x.clamp(0, self.size.0 as i32 - 1), y.clamp(0, self.size.1 as i32 - 1));
+        for (bit, steps) in [(8u8, 1), (16, -1)] {
+            if mask & bit != 0 && self.buttons & bit == 0 {
+                queue(cmds, format!("wheel {} {} {} {}", x, y, steps, self.modifiers()));
+            }
+        }
         match (self.buttons & 1 != 0, mask & 1 != 0) {
             (false, true) => queue(cmds, format!("down {} {}", x, y)),
             (true, true) if (x, y) != self.pos => queue(cmds, format!("move {} {}", x, y)),
@@ -694,6 +746,10 @@ impl Drop for Session {
         if self.rfb.buttons & 1 != 0 {
             // the finger does not stay on the screen
             queue(&mut st.cmds, format!("up {} {}", self.rfb.pos.0, self.rfb.pos.1));
+        }
+        // nor do its keys stay down: the screen keeps Shift, Ctrl and Alt as held
+        for k in std::mem::take(&mut self.rfb.keys) {
+            queue(&mut st.cmds, format!("keysym up {:x}", k));
         }
         if st.viewers == 0 {
             (st.frame, st.spare, st.need) = (None, Vec::new(), false);
@@ -860,7 +916,7 @@ function say(m,bad){st.textContent=m;st.className=bad?'bad':'';}
 function go(){
 const rfb=new RFB(v,(location.protocol=='https:'?'wss://':'ws://')+location.host+'/websockify');
 rfb.scaleViewport=true;
-rfb.addEventListener('connect',()=>{tries=0;say('connected');});
+rfb.addEventListener('connect',()=>{tries=0;say('connected');rfb.focus();});
 rfb.addEventListener('disconnect',e=>{say(e.detail.clean?'disconnected':'no connection',true);setTimeout(go,Math.min(5000,500<<tries++));});
 }
 go();
@@ -981,13 +1037,66 @@ mod tests {
             m.extend_from_slice(&p);
         }
         assert!(r.feed(&m, &mut out, &mut cmds));
-        assert_eq!(cmds, ["down 100 200", "move 130 210", "up 1023 599"]);
+        assert_eq!(cmds, ["down 100 200", "move 130 210", "up 1023 599", "wheel 5 5 1 -"]);
         assert!(cmds.iter().all(|c| crate::cmd::remote_ok(c)));
         // a queue that is full drops moves, never the up
         let mut q: Vec<String> = (0..MAX_CMDS).map(|i| format!("down {} 0", i)).collect();
         queue(&mut q, "move 1 1".into());
         assert_eq!(q.len(), MAX_CMDS);
         queue(&mut q, "up 1 1".into());
+        assert_eq!(q.len(), MAX_CMDS + 1);
+    }
+
+    /// Keys go on by their keysym, a key held repeats, and the wheel carries the modifiers held with it.
+    #[test]
+    fn keys_repeat_and_the_wheel_takes_the_modifiers() {
+        let mut r = Rfb::new((1024, 600));
+        let (mut out, mut cmds) = (Vec::new(), Vec::new());
+        assert!(r.feed(b"RFB 003.008\n\x01\x01", &mut out, &mut cmds));
+        let key = |down: u8, sym: u32| [&[4, down, 0, 0][..], &sym.to_be_bytes()[..]].concat();
+        let ptr = |mask: u8| vec![5, mask, 0, 50, 0, 60];
+        // a, held and repeating, up; an up of a key that never went down; Ctrl and Shift held for two wheel steps
+        let m = [
+            key(1, 0x61),
+            key(1, 0x61),
+            key(0, 0x61),
+            key(0, 0x62),
+            key(1, 0xffe3),
+            key(1, 0xffe2),
+            ptr(16),
+            ptr(0),
+            ptr(16),
+            key(0, 0xffe3),
+            ptr(0),
+            ptr(8),
+        ]
+        .concat();
+        assert!(r.feed(&m, &mut out, &mut cmds));
+        let want = [
+            "keysym down 61",
+            "keysym repeat 61",
+            "keysym up 61",
+            "keysym down ffe3",
+            "keysym down ffe2",
+            "wheel 50 60 -1 cs",
+            "wheel 50 60 -1 cs",
+            "keysym up ffe3",
+            "wheel 50 60 1 s",
+        ];
+        assert_eq!(cmds, want);
+        assert!(cmds.iter().all(|c| crate::cmd::remote_ok(c)));
+        assert_eq!(r.keys, [0xffe2]);
+        // no more keys held than MAX_KEYS, and a full queue takes ups only
+        let mut cmds = Vec::new();
+        for sym in 0x100..0x100 + 2 * MAX_KEYS as u32 {
+            r.key(true, sym, &mut cmds);
+        }
+        assert_eq!(r.keys.len(), MAX_KEYS);
+        let mut q: Vec<String> = (0..MAX_CMDS).map(|i| format!("down {} 0", i)).collect();
+        queue(&mut q, "keysym repeat 61".into());
+        queue(&mut q, "wheel 1 1 1 -".into());
+        assert_eq!(q.len(), MAX_CMDS);
+        queue(&mut q, "keysym up 61".into());
         assert_eq!(q.len(), MAX_CMDS + 1);
     }
 

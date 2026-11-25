@@ -876,7 +876,7 @@ fn cmd_takes_keys_knobs_and_touch_only() {
     let (r, cmds) = handed(get("key%20runstop&c=knob%20vscale%20%2B1"), &mut ui, &mut scpi);
     assert!(r.starts_with("HTTP/1.1 200"), "{}", r);
     assert_eq!(cmds, ["key runstop", "knob vscale +1"]);
-    for c in ["key runstop", "knob vscale +1", "tap 100 200", "drag 1 2 3 4", "down 1 2", "move 3 4", "up 3 4"] {
+    for c in ["key runstop", "knob vscale +1", "tap 100 200", "drag 1 2 3 4", "down 1 2", "move 3 4", "up 3 4", "wheel 1 2 -1 c", "keysym down 61"] {
         assert!(crate::cmd::remote_ok(c), "{}", c);
     }
 }
