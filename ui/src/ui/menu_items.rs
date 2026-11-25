@@ -177,10 +177,10 @@ impl Ui {
             Item::Layout,
             Item::Traces,
             Item::Views,
+            Item::PaneSel,
             Item::XyMode,
             Item::ZInput,
             Item::Histogram,
-            Item::Open(MenuId::Windows),
             Item::Persist,
             Item::Intensity,
             Item::ColorGrade,
@@ -196,7 +196,15 @@ impl Ui {
             Item::TextSize,
         ];
         if self.m.pane == tables::PANE_TREND {
-            v.splice(6..6, [Item::TrendSel(0), Item::TrendSel(1)]);
+            v.splice(4..4, [Item::TrendSel(0), Item::TrendSel(1)]);
+        }
+        // which source stands in which window: only while the traces are in four windows
+        if self.arrangement() == windows::Arrangement::Windows {
+            v.insert(v.iter().position(|i| *i == Item::Histogram).map_or(v.len(), |p| p + 1), Item::Open(MenuId::Windows));
+        }
+        // the Default layout has a strip of its own (Studio has none, its measurements are a panel)
+        if self.m.layout == Layout::Default {
+            v.push(Item::StripPos);
         }
         // the lines are a choice of both pictures that are drawn for the monitor (Waveform and Layout)
         if self.m.hdmi != HdmiMode::Mirror {
