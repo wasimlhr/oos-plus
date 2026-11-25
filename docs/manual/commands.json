@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.15",
   "version": "0.1.15",
   "edition": "November 2026",
-  "date": "24 November 2026",
+  "date": "25 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -1437,7 +1437,10 @@
      "header": ":CHANnel<n>:DISPlay",
      "set": ":CHANnel<n>:DISPlay <value>",
      "query": ":CHANnel<n>:DISPlay?",
-     "desc": "Sets or queries Channel (menu: Channel > Channel).",
+     "desc": "Switches the analogue input on or off. An input that is off is not acquired, and what is computed from it (measurements, decoders, math) goes with it.",
+     "related": [
+      ":CHANnel<n>:HIDE"
+     ],
      "params": [
       [
        "<n>",
@@ -1453,6 +1456,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Channel.",
       "- Origin: Rigol-compatible"
      ],
      "returns": "On a freshly started default model the query returns `1`.",
@@ -1462,7 +1466,13 @@
      "header": ":CHANnel<n>:SCALe",
      "set": ":CHANnel<n>:SCALe <value>",
      "query": ":CHANnel<n>:SCALe?",
-     "desc": "Sets or queries Scale (menu: Channel > Scale).",
+     "desc": "Sets the vertical scale of the input in volts per division at the probe tip. The scope takes the nearest scale it has, so read the value back.",
+     "related": [
+      ":CHANnel<n>:OFFSet",
+      ":CHANnel<n>:PROBe",
+      ":CHANnel<n>:VERNier",
+      ":CHANnel<n>:EXPand"
+     ],
      "params": [
       [
        "<n>",
@@ -1478,6 +1488,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Scale.",
       "- Origin: Rigol-compatible"
      ],
      "returns": "On a freshly started default model the query returns `1.000000E+00`.",
@@ -1487,7 +1498,12 @@
      "header": ":CHANnel<n>:OFFSet",
      "set": ":CHANnel<n>:OFFSet <value>",
      "query": ":CHANnel<n>:OFFSet?",
-     "desc": "Sets or queries Offset (menu: Channel > Offset).",
+     "desc": "Sets the vertical offset of the input in volts.",
+     "related": [
+      ":CHANnel<n>:SCALe",
+      ":CHANnel<n>:POSition",
+      ":CHANnel<n>:BIAS"
+     ],
      "params": [
       [
        "<n>",
@@ -1503,6 +1519,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Offset.",
       "- Origin: Rigol-compatible"
      ],
      "returns": "On a freshly started default model the query returns `-1.500000E+00`.",
@@ -1512,7 +1529,10 @@
      "header": ":CHANnel<n>:COUPling",
      "set": ":CHANnel<n>:COUPling <value>",
      "query": ":CHANnel<n>:COUPling?",
-     "desc": "Sets or queries Coupling (menu: Channel > Coupling).",
+     "desc": "Sets the input coupling: DC, AC or ground, and DC at 50 ohms on a board that has it.",
+     "related": [
+      ":CHANnel<n>:BWLimit"
+     ],
      "params": [
       [
        "<n>",
@@ -1528,6 +1548,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Coupling.",
       "- ; `DC50` only on a board supporting it.",
       "- Origin: Rigol-compatible"
      ],
@@ -1538,7 +1559,10 @@
      "header": ":CHANnel<n>:BWLimit",
      "set": ":CHANnel<n>:BWLimit <value>",
      "query": ":CHANnel<n>:BWLimit?",
-     "desc": "Sets or queries Bandwidth (menu: Channel > Bandwidth).",
+     "desc": "Sets the bandwidth limit of the input, the filter after the ADC: off, 20 MHz, automatic, or a filter by its name.",
+     "related": [
+      ":CHANnel<n>:COUPling"
+     ],
      "params": [
       [
        "<n>",
@@ -1554,6 +1578,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Bandwidth.",
       "- or a supported filter name.",
       "- OOS filtering extends stock choices.",
       "- Origin: Rigol-compatible"
@@ -1564,7 +1589,11 @@
      "header": ":CHANnel<n>:PROBe",
      "set": ":CHANnel<n>:PROBe <value>",
      "query": ":CHANnel<n>:PROBe?",
-     "desc": "Sets or queries Probe (menu: Channel > Probe).",
+     "desc": "Sets the attenuation factor of the probe on the input (10 for a 10x probe). The scale is then in volts at the probe tip.",
+     "related": [
+      ":CHANnel<n>:SCALe",
+      ":CHANnel<n>:UNITs"
+     ],
      "params": [
       [
        "<n>",
@@ -1580,6 +1609,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Probe.",
       "- Origin: Rigol-compatible"
      ],
      "returns": "On a freshly started default model the query returns `1.000000E+00`.",
@@ -1589,7 +1619,7 @@
      "header": ":CHANnel<n>:INVert",
      "set": ":CHANnel<n>:INVert <value>",
      "query": ":CHANnel<n>:INVert?",
-     "desc": "Sets or queries Invert (menu: Channel > Invert).",
+     "desc": "Inverts the trace of the input, or shows it as it is.",
      "params": [
       [
        "<n>",
@@ -1605,6 +1635,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Invert.",
       "- Origin: Rigol-compatible"
      ],
      "returns": "On a freshly started default model the query returns `0`."
@@ -1613,7 +1644,10 @@
      "header": ":CHANnel<n>:HIDE",
      "set": ":CHANnel<n>:HIDE <value>",
      "query": ":CHANnel<n>:HIDE?",
-     "desc": "Sets or queries Hide trace (menu: Channel > Hide trace).",
+     "desc": "Hides the trace of an input that stays on: it is still acquired, measured, decoded and usable as the input of a math trace.",
+     "related": [
+      ":CHANnel<n>:DISPlay"
+     ],
      "params": [
       [
        "<n>",
@@ -1629,6 +1663,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Hide trace.",
       "- The channel stays on without its trace: it is acquired, measured, decoded and the input of a math trace as before, and has no trace, lane or ground mark.",
       "- `:CHANnel<n>:DISPlay OFF` switches the channel off, and what is computed from it goes with it.",
       "- Origin: OOS extension"
@@ -1639,7 +1674,11 @@
     {
      "header": ":CHANnel<n>:CLIPping?",
      "query": ":CHANnel<n>:CLIPping?",
-     "desc": "`1` while the record on screen reaches the end of the ADC range on this channel (4.35 divisions above or below the middle of the screen), else `0`. `0` for a channel that is off.",
+     "desc": "Asks whether the record on screen reaches the end of the ADC range on this input: `1` when it clips, else `0`.",
+     "related": [
+      ":CHANnel<n>:SCALe",
+      ":CHANnel<n>:OFFSet"
+     ],
      "params": [
       [
        "<n>",
@@ -1650,6 +1689,8 @@
      ],
      "remarks": [
       "- Menu equivalent: the red Clipping note in the plot.",
+      "- `1` while the record on screen reaches the end of the ADC range on this channel (4.35 divisions above or below the middle of the screen), else `0`.",
+      "- `0` for a channel that is off.",
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `0`.",
@@ -1659,7 +1700,10 @@
      "header": ":CHANnel<n>:POSition",
      "set": ":CHANnel<n>:POSition <value>",
      "query": ":CHANnel<n>:POSition?",
-     "desc": "Sets or queries Offset (menu: Channel > Offset).",
+     "desc": "Sets the vertical offset of the input in volts: the same setting as `:CHANnel<n>:OFFSet` under its second name.",
+     "related": [
+      ":CHANnel<n>:OFFSet"
+     ],
      "params": [
       [
        "<n>",
@@ -1675,6 +1719,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Offset.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `-1.500000E+00`."
@@ -1683,7 +1728,10 @@
      "header": ":CHANnel<n>:UNITs",
      "set": ":CHANnel<n>:UNITs <value>",
      "query": ":CHANnel<n>:UNITs?",
-     "desc": "Sets or queries Unit (menu: Channel more > Unit).",
+     "desc": "Sets the unit the values of the input are shown and answered in: `VOLTage`, `AMPere`, `WATT` or `UNKNown`.",
+     "related": [
+      ":CHANnel<n>:PROBe"
+     ],
      "params": [
       [
        "<n>",
@@ -1699,6 +1747,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel more > Unit.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `VOLT`.",
@@ -1708,7 +1757,10 @@
      "header": ":CHANnel<n>:VERNier",
      "set": ":CHANnel<n>:VERNier <value>",
      "query": ":CHANnel<n>:VERNier?",
-     "desc": "Sets or queries Fine scale (menu: Channel > Fine scale).",
+     "desc": "Switches the fine vertical scale on or off, for every input at once. With it on, `:CHANnel<n>:SCALe` takes the first calibrated scale at or above the value instead of the nearest step of the 1-2-5 ladder.",
+     "related": [
+      ":CHANnel<n>:SCALe"
+     ],
      "params": [
       [
        "<n>",
@@ -1724,6 +1776,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel > Fine scale.",
       "- Boolean fine vertical control.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
@@ -1733,7 +1786,7 @@
      "header": ":CHANnel<n>:TCALibrate",
      "set": ":CHANnel<n>:TCALibrate <value>",
      "query": ":CHANnel<n>:TCALibrate?",
-     "desc": "Sets or queries Deskew (menu: Channel more > Deskew).",
+     "desc": "Sets the deskew of the input in seconds, to line up probes of different delay. A change is refused with -224 on a time base slower than 10 us/div.",
      "params": [
       [
        "<n>",
@@ -1749,6 +1802,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel more > Deskew.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `0.000000E+00`."
@@ -1757,7 +1811,12 @@
      "header": ":CHANnel<n>:BIAS",
      "set": ":CHANnel<n>:BIAS <value>",
      "query": ":CHANnel<n>:BIAS?",
-     "desc": "Sets or queries Zero bias (menu: Channel more > Zero bias).",
+     "desc": "Sets the zero correction of the input in volts, which is subtracted from what the input reads.",
+     "related": [
+      ":CHANnel<n>:BIAS:ZERO",
+      ":CHANnel<n>:ZERO",
+      ":CHANnel<n>:OFFSet"
+     ],
      "params": [
       [
        "<n>",
@@ -1773,6 +1832,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel more > Zero bias.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `0.000000E+00`."
@@ -1781,7 +1841,10 @@
      "header": ":CHANnel<n>:EXPand",
      "set": ":CHANnel<n>:EXPand <value>",
      "query": ":CHANnel<n>:EXPand?",
-     "desc": "Sets or queries Expand around (menu: Channel more > Expand around).",
+     "desc": "Chooses what stays in place when the vertical scale changes, the ground line (`GND`) or the centre of the screen (`CENTer`): one switch for every input.",
+     "related": [
+      ":CHANnel<n>:SCALe"
+     ],
      "params": [
       [
        "<n>",
@@ -1797,6 +1860,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channel more > Expand around.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `CENT`."
@@ -1805,7 +1869,10 @@
      "header": ":CHANnel<n>:LABel:SHOW",
      "set": ":CHANnel<n>:LABel:SHOW <value>",
      "query": ":CHANnel<n>:LABel:SHOW?",
-     "desc": "Sets or queries Name (label) (menu: Channels > Name (label)).",
+     "desc": "Shows or hides the name label of the input on the screen.",
+     "related": [
+      ":CHANnel<n>:LABel:CONTent"
+     ],
      "params": [
       [
        "<n>",
@@ -1821,6 +1888,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channels > Name (label).",
       "- Boolean label visibility.",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
@@ -1831,7 +1899,10 @@
      "header": ":CHANnel<n>:LABel:CONTent",
      "set": ":CHANnel<n>:LABel:CONTent <value>",
      "query": ":CHANnel<n>:LABel:CONTent?",
-     "desc": "Sets or queries Name (label) (menu: Channels > Name (label)).",
+     "desc": "Sets the text of the name label of the input.",
+     "related": [
+      ":CHANnel<n>:LABel:SHOW"
+     ],
      "params": [
       [
        "<n>",
@@ -1847,6 +1918,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channels > Name (label).",
       "- Origin: Rigol-style (command family of the DHO guide)"
      ],
      "returns": "On a freshly started default model the query returns `empty`.",
@@ -1855,7 +1927,11 @@
     {
      "header": ":CHANnel<n>:BIAS:ZERO",
      "set": ":CHANnel<n>:BIAS:ZERO",
-     "desc": "The mean of the last record becomes part of the zero bias",
+     "desc": "Takes the mean of the last record into the zero bias of the input, so that the level it sees now reads zero.",
+     "related": [
+      ":CHANnel<n>:BIAS",
+      ":CHANnel<n>:ZERO"
+     ],
      "params": [
       [
        "<n>",
@@ -1866,6 +1942,7 @@
      ],
      "remarks": [
       "- Menu equivalent: Channels > Zero this input.",
+      "- The mean of the last record becomes part of the zero bias",
       "- Origin: OOS extension"
      ],
      "ext": true
@@ -1874,7 +1951,7 @@
      "header": ":CHANnel:ACTive",
      "set": ":CHANnel:ACTive <value>",
      "query": ":CHANnel:ACTive?",
-     "desc": "Sets or queries active channel (menu: Channels > active channel).",
+     "desc": "Selects the input the channel controls of the screen act on, by its number.",
      "params": [
       [
        "<value>",
@@ -1884,6 +1961,7 @@
       ]
      ],
      "remarks": [
+      "- Menu equivalent: Channels > active channel.",
       "- Origin: OOS extension"
      ],
      "returns": "On a freshly started default model the query returns `1`.",
@@ -1893,7 +1971,11 @@
     {
      "header": ":CHANnel<n>:ZERO",
      "set": ":CHANnel<n>:ZERO",
-     "desc": "The mean of the record shown becomes the zero correction of the channel; refused without a waveform",
+     "desc": "Makes the mean of the record shown the zero correction of the input. Refused when there is no waveform.",
+     "related": [
+      ":CHANnel<n>:BIAS",
+      ":CHANnel<n>:BIAS:ZERO"
+     ],
      "params": [
       [
        "<n>",
@@ -1904,6 +1986,7 @@
      ],
      "remarks": [
       "- Menu equivalent: Channel > Zero.",
+      "- The mean of the record shown becomes the zero correction of the channel; refused without a waveform",
       "- Origin: fork command; name not verified against the DHO guide"
      ]
     }

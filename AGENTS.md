@@ -53,6 +53,9 @@ there. These instructions are the same for every agent and every person; the rea
 - A remote command goes into the one SCPI interpreter (`ui/src/scpi.rs`, a subsystem in its file of `ui/src/scpi/`),
   never into a transport; it takes the stock name where the stock firmware has one, [docs/scpi.md](docs/scpi.md) lists
   it, and its query is in `ui/tests/scpi.txt`, so a change of its answer shows in the comparison (ADR 0022, ADR 0023).
+  Its row in the group page of `docs/scpi/` says what it does and names the commands used with it (the cells What it
+  does and See also, [docs/scpi/README.md](docs/scpi/README.md#how-to-read-the-tables)): a new row without them
+  raises `rows-action` of `tools/scpi-coverage.py`, and the layer `ratchet` fails.
   A new network service gets its switch under Remote services and the `net.allow` check when it can change the scope
   (ADR 0025).
 - New decoders, measurements and analyser pages come as modules behind their registry (ADR 0002). Identifiers that

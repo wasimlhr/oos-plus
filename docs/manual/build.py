@@ -75,6 +75,8 @@ def command(c, sid):
         rows.append(('Return format', para(c['returns'])))
     if c.get('example'):
         rows.append(('Example', f'<pre>{html.escape(c["example"])}</pre>'))
+    if c.get('related'):
+        rows.append(('See also', ', '.join(f'<code>{html.escape(h)}</code>' for h in c['related'])))
     dl = ''.join(f'<dt>{k}</dt><dd>{v}</dd>' for k, v in rows)
     long = ' long' if len(c.get('params') or []) > 6 or len(c.get('example', '')) > 600 else ''
     return f'<div class="cmd{long}"><h3 id="{cid}">{html.escape(c["header"])}{ext}</h3><dl>{dl}</dl></div>'
