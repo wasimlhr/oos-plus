@@ -401,15 +401,34 @@ answers as `9.9E37` (none) is `null`.
 
 - Mark: **experimental**
 - Request: one of `header` (a command as a client sends it, short or long form, number suffixes and `?` as sent:
-  `:CHAN1:SCAL?`), `search` (words, each of which the header, the syntax, the description or the subsystem's title
-  holds; those in the header count first) or `subsystem` (part of a subsystem's title), each a text of 1 to 200
-  characters; `max_results` 1 to 50 (20) for `search` and `subsystem`. Without any: the subsystems.
+  `:CHAN1:SCAL?`), `appendix` (part of an appendix's title), `search` (what the command should do, in the client's
+  own words) or `subsystem` (part of a subsystem's title), each a text of 1 to 200 characters; `search` and
+  `subsystem` may stand together. `max_results` 1 to 50 (20) and `offset` (0) page the commands of `search` and
+  `subsystem` and the rows of `appendix`. Without any: the subsystems and the appendices.
+- A search ranks, it does not filter: a word counts most in a command's header (either form of a node), less in
+  its description and its subsystem's title, least in its parameters, remarks and what its query returns. A word
+  fits the same word, the same word with another ending (`averaging`, `averages`) and a word that starts with it
+  (`measure`, `measurement`); words of two or three letters fit only whole. A command need not hold every word:
+  the answer is the commands whose score is at least three quarters of the best one's, the best first and then in
+  the manual's order. Before that, what a client says for a word of the reference counts as that word: phrases
+  (`volts per division` is `channel scale`, `record length` is `memory depth`) and single words (`vertical` also
+  fits `channel`, `glitch` also `pulse`, `i2c` also `iic`), and words that say nothing (`the`, `set`, `scope`) are
+  left out. The lists are `PHRASES`, `ALSO` and `STOP` of `ui/src/site/mcp/reference.rs`; a test there keeps a
+  list of such searches finding their command among the first five.
 - Answer: for `header`, `found` and `commands`, each whole: `header`, `set`, `query`, `desc`, `subsystem`, `params`
   (`name`, `type`, `description`, `range`), `returns`, `example`, `remarks`, `oos_extension`; with none found a
-  `hint`. For `search` and `subsystem`, `total` and up to `max_results` `commands` with `header`, `set`, `query`,
-  `desc` and `subsystem`, and a `hint` when more match. Without arguments, `subsystems`, each `title` and its number
-  of `commands`. The data is the command chapter of the SCPI Programming Manual, `docs/manual/commands.json`, built
-  into oos-ui; it is read the first time the tool is called.
+  `hint`. For `search` and `subsystem`, `total` and up to `max_results` `commands` from `offset` with `header`,
+  `set`, `query`, `desc` and `subsystem`; `next_offset` and a `hint` when the list goes on. A `search` adds `items`
+  when rows of the appendices hold every word of it (the setup keys left out), at most 8 rows: per appendix its
+  title `appendix`, `about` (what the manual says of its use, which names the command that takes the item) and
+  `rows`, so `peak to peak` answers the item `VPP` of `:MEASure:ITEM?`; with no command and no item a `hint`. A
+  `subsystem` alone that names one subsystem adds `about` (the manual's text before its commands) and `examples`
+  (its worked examples). For `appendix`, when one title holds the text: `appendix`, `about`, `total` and `rows`,
+  each an object of the table's columns (and `table` where the appendix has several), `next_offset` when it goes
+  on; else a `hint` and `appendices`. Without arguments, `subsystems`, each `title` and its number of `commands`,
+  and `appendices`, each `title` and its number of `rows`. The data is the command chapter and the appendices of
+  the SCPI Programming Manual, `docs/manual/commands.json`, built into oos-ui; it is read the first time the tool
+  is called.
 - Any tool whose command was answered -113 (undefined header), `scpi` among them, adds to its answer a text that
   names `scpi_reference`, so that a client looks the command up instead of guessing another name.
 

@@ -310,11 +310,48 @@ fn mcp_scpi_reference_finds_a_command_instead_of_a_guess() {
     let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"header":":CHAN1:VDIV"}"#);
     assert_eq!(num(data(&r).get("found")), 0.0);
     let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", "{}");
-    assert!(items(data(&r).get("subsystems")).len() > 50, "{r}");
-    let r = call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"subsystem":"timebase","max_results":3}"#);
-    assert_eq!(items(data(&r).get("commands")).len(), 3, "{r}");
+    assert!(items(data(&r).get("subsystems")).len() > 50 && items(data(&r).get("appendices")).len() > 4, "{r}");
     assert!(failed(&call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"search":""}"#)));
     assert!(failed(&call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"max_results":51}"#)));
+    assert!(failed(&call(&mut ui, &cv, &mut scpi, "scpi_reference", r#"{"search":"scale","offset":-1}"#)));
+}
+
+// Break it catches: a search in an assistant's own words answered with nothing, a measurement item that only the
+// manual's appendix names not found, a long list cut at 50 with no way on, an appendix or a subsystem's
+// introduction and examples that only the PDF has
+#[test]
+fn mcp_scpi_reference_answers_own_words_items_pages_and_appendices() {
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let mut ask = |args: &str| call(&mut ui, &cv, &mut scpi, "scpi_reference", args);
+    let first = |r: &J| items(data(r).get("commands"))[0].get("header").and_then(J::str).map(str::to_string);
+    assert_eq!(first(&ask(r#"{"search":"volts per division"}"#)).as_deref(), Some(":CHANnel<n>:SCALe"));
+    let r = ask(r#"{"search":"peak to peak"}"#);
+    let found = &items(data(&r).get("items"))[0];
+    assert_eq!(found.get("appendix").and_then(J::str), Some("Standard Measurement Items"), "{r}");
+    assert!(found.to_string().contains("`VPP`") && found.to_string().contains(":MEASure:ITEM"), "{found}");
+    let r = ask(r#"{"search":"xyzzy"}"#);
+    let d = data(&r);
+    assert!(!failed(&r) && num(d.get("total")) == 0.0 && d.get("hint").is_some() && d.get("items").is_none(), "{r}");
+    // A list goes on from `next_offset`, and its last page names none
+    let r = ask(r#"{"subsystem":"timebase","max_results":3}"#);
+    let d = data(&r);
+    assert_eq!((items(d.get("commands")).len(), num(d.get("next_offset"))), (3, 3.0), "{r}");
+    assert!(d.get("about").and_then(J::str).is_some_and(|a| a.contains("main time base")), "{r}");
+    assert!(d.get("examples").and_then(J::str).is_some_and(|e| e.contains(":TIMebase:")), "{r}");
+    let (total, start) = (num(d.get("total")) as usize, first(&r));
+    let r = ask(&format!(r#"{{"subsystem":"timebase","max_results":50,"offset":3}}"#));
+    let d = data(&r);
+    assert!(items(d.get("commands")).len() == total - 3 && d.get("next_offset").is_none() && first(&r) != start, "{r}");
+    // Several subsystems hold "trigger": their commands, but no one introduction
+    assert!(data(&ask(r#"{"subsystem":"trigger"}"#)).get("about").is_none());
+    let r = ask(r#"{"appendix":"error","max_results":5}"#);
+    let d = data(&r);
+    assert_eq!(d.get("appendix").and_then(J::str), Some("Error Codes"), "{r}");
+    assert!(items(d.get("rows")).len() == 5 && num(d.get("next_offset")) == 5.0 && d.get("about").is_some(), "{r}");
+    assert!(items(d.get("rows"))[1].get("Code").and_then(J::str) == Some("-113"), "{r}");
+    let r = ask(r#"{"appendix":"items"}"#);
+    let d = data(&r);
+    assert!(d.get("hint").is_some() && items(d.get("appendices")).len() > 4 && d.get("rows").is_none(), "{d}");
 }
 
 // Break it catches: the rules of `initialize` grown into a text a small model skips, or naming a tool that was
