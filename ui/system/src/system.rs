@@ -131,6 +131,22 @@ pub fn lower_priority() {
     }
 }
 
+/// The thread of a VNC viewer: on the slower cores as the other web threads (`lower_priority`), but in the normal
+/// scheduling class at nice `WEB_NICE`. At `SCHED_IDLE` it got a core only while nothing else wanted one, and with
+/// the scope running, a viewer of a DHO924S got one or two screens a second where the scope draws 24 to 30.
+pub fn viewer_priority() {
+    #[cfg(target_os = "linux")]
+    if !cfg!(any(test, feature = "testkit")) {
+        // SAFETY: gettid takes no pointer, and setpriority takes the thread's id and a number.
+        let tid = unsafe {
+            let tid = libc::syscall(libc::SYS_gettid) as libc::pid_t;
+            libc::setpriority(libc::PRIO_PROCESS, tid as libc::id_t, WEB_NICE);
+            tid
+        };
+        let _ = crate::system::pin_thread(tid, &crate::placement::little_cores());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -148,8 +148,10 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - Request: a WebSocket upgrade (`Upgrade: websocket`, `Sec-WebSocket-Key`), from the scope's own page: 403 for
   another site's (`foreign`). Without the upgrade: 404.
 - Answer: 101, then the connection stays and carries RFB 3.8 (VNC) in binary frames, security type None: the
-  screen as rectangles of what changed (TightPNG, or Raw for a viewer that does not take it), at most 20 updates a
-  second and only while the viewer asks. The left mouse button is a finger: `down`, `move` and `up` of `/cmd`.
+  screen as rectangles of what changed (TightPNG; Tight with zlib for a viewer that takes that and not TightPNG,
+  as desktop viewers do; else Raw), every screen the scope draws, at most 40 a second, and only while a viewer
+  takes them. A viewer that knows ContinuousUpdates and Fence (noVNC, TigerVNC) is offered them and then gets the
+  screens without asking for each. The left mouse button is a finger: `down`, `move` and `up` of `/cmd`.
   The wheel and the keys act as those of a mouse and a keyboard on the scope (`wheel`, `keysym`): the wheel pans,
   with Shift the V/div, with Ctrl the zoom, with Alt the trigger level; the keys stand for the front panel and
   type into the on-screen keyboard while it is open. The right button is the touch-hold context menu (`context`).
