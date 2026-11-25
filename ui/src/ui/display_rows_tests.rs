@@ -83,8 +83,10 @@ fn display_is_three_tabs_in_one_order() {
             let spec = u.sheet_spec(MenuId::Display).expect("Display is a sheet");
             let names: Vec<_> = spec.tabs.iter().map(|t| t.name).collect();
             assert_eq!(names, ["Traces", "Look", "Screen"], "{hdmi:?} {arrangement:?}");
-            assert_eq!(spec.tabs[0].rows, [Item::Layout, Item::Traces, Item::Views, Item::XyMode, Item::ZInput, Item::Histogram], "{hdmi:?} {arrangement:?}");
-            assert_eq!(spec.tabs[0].foot, [Item::Open(MenuId::Windows)]);
+            assert_eq!(spec.tabs[0].rows, [Item::Layout, Item::Traces, Item::Views, Item::PaneSel, Item::XyMode, Item::ZInput, Item::Histogram], "{hdmi:?} {arrangement:?}");
+            // the page of the window numbers is under Traces while the traces are in windows, and not before
+            let link = if arrangement == windows::Arrangement::Windows { vec![Item::Open(MenuId::Windows)] } else { Vec::new() };
+            assert_eq!(spec.tabs[0].foot, link, "{hdmi:?} {arrangement:?}");
             assert_eq!(spec.tabs[1].rows, [Item::Persist, Item::Intensity, Item::ColorGrade, Item::Dots, Item::GridStyle, Item::GridBright, Item::GridFrame]);
             assert_eq!(spec.tabs[1].foot, [Item::ClearDisp]);
             for t in &spec.tabs {
@@ -103,7 +105,7 @@ fn display_is_three_tabs_in_one_order() {
 fn the_default_dialog_has_the_rows_of_the_sheet_in_its_order() {
     let mut a = Ui::new(Source::Demo { t: 0.0 });
     a.m.layout = Layout::Default;
-    let dialog: Vec<Item> = a.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar).collect();
+    let dialog: Vec<Item> = a.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::BottomBar | Item::StripPos)).collect();
     let mut s = studio();
     s.m.hdmi = a.m.hdmi;
     let studio_rows: Vec<Item> = s.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::StudioBadges | Item::StudioCompact | Item::StudioReset | Item::BottomBar)).collect();

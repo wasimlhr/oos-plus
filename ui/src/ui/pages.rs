@@ -626,7 +626,9 @@ mod tests {
     /// a title and rows (ADR 0060).
     #[test]
     fn every_page_is_complete() {
-        let ui = crate::ui::testkit::demo_ui();
+        let mut ui = crate::ui::testkit::demo_ui();
+        // the Windows page lists the window numbers, which the traces have only while they are in four windows
+        ui.set_arrangement(crate::ui::windows::Arrangement::Windows);
         let mut missing = Vec::new();
         for m in every_kind() {
             let listed = PAGES.iter().filter(|p| same(p.id, m)).count();

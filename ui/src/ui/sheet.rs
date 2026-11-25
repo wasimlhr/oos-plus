@@ -189,7 +189,7 @@ impl Ui {
             M::MeasFall => (&["Fall levels"], |_| Slot::Tab(0)),
             M::MeasStat => (&["Statistics"], |it| match it { MeasStatReset => Slot::Foot(0), _ => Slot::Tab(0) }),
             M::Display => (&["Traces", "Look", "Screen"], |it| match it {
-                Layout | Traces | Views | XyMode | ZInput | Histogram | TrendSel(_) => Slot::Tab(0),
+                Layout | Traces | Views | PaneSel | XyMode | ZInput | Histogram | TrendSel(_) => Slot::Tab(0),
                 // the page that says which source stands in which window: pinned under Traces
                 Open(M::Windows) => Slot::Foot(0),
                 Persist | Intensity | ColorGrade | Dots | GridStyle | GridBright | GridFrame => Slot::Tab(1),

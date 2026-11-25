@@ -58,10 +58,10 @@ const REF_NAMES: [&str; NREF] = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8",
 const MATH_NAMES: [&str; 8] = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"];
 
 impl Ui {
-    /// The Windows page, the same in every layout: Traces, Full screen, Strip and the lower pane; then, while the
-    /// arrangement is Windows, the window number of every channel, math channel, reference and the LA that is on.
+    /// The Windows page, the same in every layout: while the arrangement is Windows, the window number of every
+    /// channel, math channel, reference and the LA that is on. (Traces, Lower and Strip are rows of Display.)
     pub(super) fn win_items(&self) -> Vec<Item> {
-        let mut v = vec![Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel];
+        let mut v = Vec::new();
         if self.arrangement() == Arrangement::Windows {
             v.extend((0..n_ch()).filter(|&c| self.m.ch[c].on).map(Item::WinCh));
             v.extend((0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on)).map(Item::WinRef));
@@ -263,7 +263,7 @@ mod tests {
             let mut u = in_layout(layout);
             u.open_menu(MenuId::Windows);
             let rows = u.items(MenuId::Windows);
-            assert_eq!(rows, [Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel], "{layout:?}");
+            assert!(rows.is_empty(), "{layout:?}: the window numbers come with Windows only: {rows:?}");
             assert_eq!(u.options(Item::Traces), ["Overlay", "Stacked", "Windows"], "{layout:?}");
             assert_eq!(u.options(Item::FullScreen), ["Off", "On"]);
             assert_eq!(u.options(Item::StripPos), ["Below plot", "Left", "Right", "Above plot", "Hidden"]);
@@ -274,7 +274,7 @@ mod tests {
             assert!(v.contains(&Item::WinCh(0)) && v.contains(&Item::WinCh(3)), "{layout:?} {v:?}");
             assert_eq!(u.options(Item::WinCh(0)), ["1", "2", "3", "4"]);
             u.select_option(Item::Traces, "Stacked");
-            assert_eq!(u.win_items(), [Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel], "{layout:?}");
+            assert!(u.win_items().is_empty(), "{layout:?}");
             // every row of the page takes every one of its options and reads it back
             u.select_option(Item::Traces, "Windows");
             for it in u.win_items() {
@@ -292,7 +292,7 @@ mod tests {
     fn traces_is_a_row_of_the_page_and_of_the_display_sheet() {
         for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
             let mut u = in_layout(layout);
-            assert!(u.items(MenuId::Windows).contains(&Item::Traces), "{layout:?}");
+            assert!(u.items(MenuId::Display).contains(&Item::Traces), "{layout:?}");
             if layout != Layout::Default {
                 let spec = u.sheet_spec(MenuId::Display).expect("the Display sheet");
                 assert!(spec.tabs.iter().any(|t| t.rows.contains(&Item::Traces)), "{layout:?}");
