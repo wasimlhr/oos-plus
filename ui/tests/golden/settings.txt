@@ -863,13 +863,13 @@ scpi :DISPlay:RULers "ON" -> query: 1; errors: none
 scpi :DISPlay:RULers "on" -> query: 1; errors: none
 scpi :DISPlay:RULers "x" -> query: 1; errors: -224,"Illegal parameter value" x
 scpi :DISPlay:RULers default -> query: 1; errors: none
-scpi :DISPlay:TYPE "" -> query: DOTS; errors: -224,"Illegal parameter value"
-scpi :DISPlay:TYPE "-1" -> query: DOTS; errors: -224,"Illegal parameter value" -1
-scpi :DISPlay:TYPE "1e9" -> query: DOTS; errors: -224,"Illegal parameter value" 1e9
+scpi :DISPlay:TYPE "" -> query: VECT; errors: -224,"Illegal parameter value"
+scpi :DISPlay:TYPE "-1" -> query: VECT; errors: -224,"Illegal parameter value" -1
+scpi :DISPlay:TYPE "1e9" -> query: VECT; errors: -224,"Illegal parameter value" 1e9
 scpi :DISPlay:TYPE "DOTS" -> query: DOTS; errors: none
 scpi :DISPlay:TYPE "VECTors" -> query: VECT; errors: none
-scpi :DISPlay:TYPE "x" -> query: DOTS; errors: -224,"Illegal parameter value" x
-scpi :DISPlay:TYPE default -> query: DOTS; errors: none
+scpi :DISPlay:TYPE "x" -> query: VECT; errors: -224,"Illegal parameter value" x
+scpi :DISPlay:TYPE default -> query: VECT; errors: none
 scpi :DISPlay:VIEW "" -> query: 1; errors: -224,"Illegal parameter value"
 scpi :DISPlay:VIEW "-1" -> query: 1; errors: -224,"Illegal parameter value" -1
 scpi :DISPlay:VIEW "0" -> query: 1; errors: -224,"Illegal parameter value" 0
@@ -3716,19 +3716,19 @@ setup deskew_ref11 "1e-9" -> (absent); error: line 2: deskew_ref11: invalid desk
 setup deskew_ref11 "1e9" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 "x" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 default -> (absent)
-setup dots "" -> true; error: "line 2: dots: not a boolean: "
-setup dots "-1" -> true; error: line 2: dots: not a boolean: -1
+setup dots "" -> false; error: "line 2: dots: not a boolean: "
+setup dots "-1" -> false; error: line 2: dots: not a boolean: -1
 setup dots "0" -> false
 setup dots "1" -> true
-setup dots "1e9" -> true; error: line 2: dots: not a boolean: 1e9
-setup dots "TRUE" -> true; error: line 2: dots: not a boolean: TRUE
+setup dots "1e9" -> false; error: line 2: dots: not a boolean: 1e9
+setup dots "TRUE" -> false; error: line 2: dots: not a boolean: TRUE
 setup dots "false" -> false
 setup dots "off" -> false
 setup dots "on" -> true
 setup dots "true" -> true
-setup dots "x" -> true; error: line 2: dots: not a boolean: x
-setup dots "yes" -> true; error: line 2: dots: not a boolean: yes
-setup dots default -> true
+setup dots "x" -> false; error: line 2: dots: not a boolean: x
+setup dots "yes" -> false; error: line 2: dots: not a boolean: yes
+setup dots default -> false
 setup dpt "" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values
 setup dpt "-1 2 3 Off 4 10 Both" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: not a source: -1
 setup dpt "-1" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values

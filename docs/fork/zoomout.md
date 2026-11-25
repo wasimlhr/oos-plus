@@ -28,7 +28,7 @@ The data is fine. The NORM screen record holds min/max pairs, and a column with 
 
 ## Root cause
 
-Display "Dots" is on (`Model::dots`, default `true` upstream, saved in the settings).
+Display "Dots" is on (`Model::dots`, default `false`, saved in the settings).
 
 1. The newest frame of each step takes the record path (`Source::acquire` -> `wave::to_record` -> `draw_ex`); the
    fast path only draws the older queued frames and the deposit workers' batches. At Min persistence a new record
@@ -58,8 +58,8 @@ vertical span over the columns it covers, from its minimum to its maximum.
 - Test `board::record::dots::dots_draw_min_max_pairs_as_spans`: a 1 kHz square with 3 us edges at 2 and 50 ms/div,
   every edge lit from low to high level; the old two-dot drawing lights none.
 
-The `dots: true` default stays (upstream's choice; the saved setting overrides it anyway). Display > Dots off was the
-workaround.
+The default is `dots: false` (samples joined as lines); the saved setting overrides it. Display > Dots off was the
+workaround while the default was dots.
 
 ## SCPI rate and depth
 
