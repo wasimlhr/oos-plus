@@ -3954,7 +3954,7 @@
       ]
      ],
      "remarks": [
-      "- Origin: OOS extension. `FRAMe` triggers at the start of each frame the decoder finds, at the end of its first field; for FlexRay that is the transmission start sequence (TSS), at its rising edge into the frame start sequence, so there is no separate TSS match"
+      "- Origin: OOS extension. `FRAMe` triggers at the start of each frame the decoder finds, at the end of its first field; for FlexRay that is the transmission start sequence (TSS), at its rising edge into the frame start sequence, so there is no separate TSS match; `TSS` is accepted as another name of `FRAMe`, and a trigger at the start of the TSS does not exist"
      ],
      "returns": "On a freshly started default model the query returns `ID`.",
      "ext": true
@@ -5369,7 +5369,7 @@
       [
        "<wave>",
        "Discrete",
-       "Selected `CHANn|Rn`, without changing acquisition. SOURce1 aliases it; a different SOURce2 is unsupported.",
+       "Selected `CHANn|Rn|MATHn`, without changing acquisition. `MATHn` puts the cursors on a copy of the math result in a reference slot (the one that holds a copy already, else the first free one), so the query answers `Rn`; -221 when the result is not ready or every slot is used. SOURce1 aliases it; a different SOURce2 is unsupported.",
        "CHAN1"
       ]
      ],
@@ -8790,6 +8790,31 @@
       "- Origin: Rigol-compatible"
      ],
      "returns": "On a freshly started default model the query returns `500_KBIT/S`."
+    },
+    {
+     "header": ":BUS<n>:FLEXray:BAUD",
+     "set": ":BUS<n>:FLEXray:BAUD <value>",
+     "query": ":BUS<n>:FLEXray:BAUD?",
+     "desc": "Sets or queries Bit rate for CAN, SENT, USB and protocol options (menu: Decode > Bit rate).",
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:BUS1:FLEXray:BAUD` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "FlexRay bit rate: `10`, `5` or `2.5` Mbit/s (option text of the menu row, `10 Mbit/s`; the same as `:BUS<n>:OPTion1`; a FlexRay decoder only, -224 otherwise). A deploy or `*RST` puts the decoder back to 10 Mbit/s, so set it again after one.",
+       "10 Mbit/s"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `10 Mbit/s`.",
+     "ext": true
     },
     {
      "header": ":BUS<n>:CAN:SIGNal",
@@ -14467,6 +14492,32 @@
        "<value>",
        "Text",
        "Closes whatever menu or popup is open.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":UI:DIALog",
+     "query": ":UI:DIALog?",
+     "desc": "The text of the notice that covers the screen (an update, a refused action), its lines joined by newlines; empty when there is none.",
+     "remarks": [
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":UI:DIALog:CLOSe",
+     "set": ":UI:DIALog:CLOSe <value>",
+     "desc": "Sets Tap the notice for Screen controls.",
+     "params": [
+      [
+       "<value>",
+       "Text",
+       "Closes that notice, as a tap on it does. `*RST` leaves it for the person it is for; this does not.",
        "—"
       ]
      ],

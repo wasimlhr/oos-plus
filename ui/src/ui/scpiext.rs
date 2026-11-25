@@ -228,7 +228,8 @@ impl Ui {
                     _ => Err(bad(arg)),
                 }
             }
-            "TRIGger:BUS:WHEN" => pick(q, arg, &mut self.m.trig_bus, &[(BusWhat::Frame, "FRAMe"), (BusWhat::Id, "ID"), (BusWhat::Data, "DATA"), (BusWhat::Error, "ERRor")]),
+            // `TSS` is the FlexRay name of `FRAMe`: the trigger fires where the transmission start sequence ends
+            "TRIGger:BUS:WHEN" => pick(q, if arg.trim().eq_ignore_ascii_case("TSS") { "FRAMe" } else { arg }, &mut self.m.trig_bus, &[(BusWhat::Frame, "FRAMe"), (BusWhat::Id, "ID"), (BusWhat::Data, "DATA"), (BusWhat::Error, "ERRor")]),
             "TRIGger:BUS:VALue" => {
                 if q { return Some(t(format!("0x{:X}", self.m.trig_bus_val))); }
                 match parse_int(arg).filter(|&v| v <= 0x1fff_ffff) {

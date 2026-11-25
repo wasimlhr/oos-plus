@@ -411,3 +411,8 @@ scpi $S/scpi-answers.txt :DOCK:FLOAT? MEAS
 scpi $S/scpi-answers.txt :DOCK:SHOW? MEAS
 scpi $S/scpi-answers.txt :TRIGger:BUS:WHEN?
 scpi $S/scpi-answers.txt :TRIGger:BUS:VALue?
+scpi $S/scpi-answers.txt :TRIGger:BUS:WHEN TSS;:TRIGger:BUS:WHEN?
+scpi $S/scpi-answers.txt :UI:DIALog?
+scpi $S/scpi-answers.txt :UI:DIALog:CLOSe
+scpi $S/scpi-answers.txt :BUS1:MODE FLEXRAY;:BUS1:FLEXray:BAUD 5_MBIT/S;:BUS1:FLEXray:BAUD?;:BUS1:OPTion1?;:BUS1:FLEXray:BAUD "10 Mbit/s";:BUS1:FLEXray:BAUD?
+scpi $S/scpi-answers.txt :CURSor:MANual:SOURce MATH1;:SYSTem:ERRor:NEXT?

@@ -69,6 +69,8 @@ The other rows of that menu have their commands already: Stop / Run `:STOP`, `:R
 | `:UI:MENU` | Query | The menu or popup that is open (the popup of Add source in Studio's bottom bar included): its title, then each row, as quoted strings separated by commas. A side menu lists its items as `"<label> = <value>"`; an open picker (the grid of the options of an item, a list of files) lists its options, and `:UI:MENU:SELect` takes one by its whole text. In Studio the Display menu lists the rows of its own arrangement too, the two switches as `"Pinned badges = On"` and `"Compact view = Off"`, and `"Reset layout"`; the Storage menu ends with `"Offline waveform analysis"`. `""` when none is open. | - | - | OOS extension |
 | `:UI:MENU:SELect` | Set | `"<label>"`: presses the row of the open menu with that label (case does not matter; a unique beginning is enough). | - | Tap a menu row | OOS extension |
 | `:UI:MENU:CLOSe` | Set | Closes whatever menu or popup is open. | - | Tap outside | OOS extension |
+| `:UI:DIALog` | Query | The text of the notice that covers the screen (an update, a refused action), its lines joined by newlines; empty when there is none. | - | - | OOS extension |
+| `:UI:DIALog:CLOSe` | Set | Closes that notice, as a tap on it does. `*RST` leaves it for the person it is for; this does not. | - | Tap the notice | OOS extension |
 
 ## Examples
 

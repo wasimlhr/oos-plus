@@ -878,9 +878,11 @@ fn extras(t: &mut T) {
         t.rt(&format!(":BUS4:SENT:TICK \"{tick}\""), ":BUS4:SENT:TICK?", &norm(&tick));
         t.rt(":BUS4:SENT:NIBB 3", ":BUS4:SENT:NIBB?", "3");
         assert_eq!(t.ui.m.dec_view(3).dec_opt[1], 2);
+        let fr = module_opt(t, 0, "FlexRay", 0, 2);
+        t.rt(&format!(":BUS1:FLEX:BAUD \"{fr}\""), ":BUS1:FLEX:BAUD?", &norm(&fr));
     } else {
         // without the modules the headers still answer: asked, not set
-        for h in [":BUS3:CAN:FD:BAUD?", ":BUS3:CAN:FD:ABAU?", ":BUS4:SENT:TICK?", ":BUS4:SENT:NIBB?"] {
+        for h in [":BUS3:CAN:FD:BAUD?", ":BUS3:CAN:FD:ABAU?", ":BUS4:SENT:TICK?", ":BUS4:SENT:NIBB?", ":BUS1:FLEX:BAUD?"] {
             let _ = t.raw(h);
         }
     }
