@@ -935,6 +935,17 @@ impl Scpi {
             }
             return Some(None);
         }
+        // :EYE:STATe, the Eye/Jitter analyser on or off (the same as :VIEW EYE and :VIEW SCOPe)
+        if kw(n0, "EYE") && nodes.len() == 2 && kw(nodes[1], "STATe") {
+            if query {
+                return Some(t(if ui.m.view == AView::Eye { "1" } else { "0" }));
+            }
+            match parse_bool(arg) {
+                Some(on) => ui.set_analysis_view(if on { AView::Eye } else { AView::Scope }),
+                None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+            }
+            return Some(None);
+        }
         // OOS extensions: analyser view, Identify, self-calibration, Bode
         if kw(n0, "VIEW") && nodes.len() == 1 {
             // the analysers' own keywords, and the fork's bandwidth test (BWTest), which the registry keeps off :VIEW

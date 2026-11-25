@@ -24,6 +24,7 @@ Part of the [SCPI reference](README.md).
 | `:EYE:PLL:BWIDth` | Set / Query | Hz. Range 0.0 to 1e12. | `0.000000E+00` | Eye > PLL bandwidth | OOS extension |
 | `:EYE:NPJ` | Set / Query | Boolean. | `0` | Eye > NPJ | OOS extension |
 | `:EYE:HPASs` | Set / Query | Boolean. | `1` | Eye > Highpass | OOS extension |
+| `:EYE:STATe` | Set / Query | Boolean. 1 shows the Eye / Jitter analyser, 0 the scope (as `:VIEW EYE` and `:VIEW SCOPe`). | `0` | Run control > Select analyser view | OOS extension |
 | `:EYE:PLACe` | Set / Query | `FULL`, `SIDE`, `UNDER` | `FULL` | Eye > Place | OOS extension |
 
 ## Eye figures
