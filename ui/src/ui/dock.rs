@@ -818,6 +818,15 @@ impl Ui {
         hidden.into_iter().enumerate().map(|(i, v)| (v, Rect::new(x, r.y + STRIP_H + 2 + i as i32 * 36, w, 36))).collect()
     }
 
+    /// With the eye on the whole plot the Waveform has no window of its own; its tab stays in the strip, left of the
+    /// eye's title, and a tap on it gives the plot back to the waveform (the eye goes beside it).
+    pub(super) fn dock_waveform_back_tab(&self, k: VKind, r: Rect) -> Option<Rect> {
+        if k != VKind::Wave || !self.dock_on() || !self.eye_open() || self.m.eye_place != EyePlace::Full { return None; }
+        let s = Self::dock_strip(r);
+        let w = (self.fonts().mb.width("Waveform") + 20).clamp(TAB_W - 2, 200);
+        Some(Rect::new(s.x + 26, s.y, w, s.h))
+    }
+
     /// The view whose tab is under a point of a strip.
     fn dock_tab_at(&self, k: VKind, r: Rect, x: i32, y: i32) -> Option<VKind> {
         self.dock_tab_rects(k, r).into_iter().find(|(_, t)| t.contains(x, y)).map(|(v, _)| v)
@@ -1316,6 +1325,11 @@ impl Ui {
             self.studio.dock.press = None;
             return true;
         }
+        if !floating && self.dock_waveform_back_tab(k, r).is_some_and(|t| t.contains(x, y)) {
+            self.studio.dock.press = None;
+            self.dock_exit_full();
+            return true;
+        }
         // a tab of a group is the view it names
         let kind = if floating { k } else { self.dock_tab_at(k, r, x, y).unwrap_or(k) };
         self.studio.dock.press = Some(Press::Strip { kind, x0: x, y0: y, x, y, t0: self.now, grab: (x - r.x, y - r.y), free: floating && !Self::dock_handle_rect(r).contains(x, y) });
@@ -1497,9 +1511,23 @@ impl Ui {
                 cv.line(cx, cy + 3, cx + 5, cy - 2, TEXT);
             }
         } else {
-            let name = self.dock_title_fit(k, &name, avail);
-            cv.set_clip(Rect::new(s.x + 26, s.y, avail, s.h));
-            cv.text_in(&f.mb, Rect::new(s.x + 26, s.y, avail, s.h), 0, &name, TEXT);
+            // the Waveform's own tab beside the eye's title when the eye fills the plot
+            let back = if floating { None } else { self.dock_waveform_back_tab(k, r) };
+            let (x0, avail) = match back {
+                Some(t) => (t.right() + 2, (avail - t.w - 2).max(1)),
+                None => (s.x + 26, avail),
+            };
+            if let Some(t) = back {
+                let box_ = Rect::new(t.x, t.y + 2, t.w, t.h - 4);
+                chip(cv, box_, BAR, BTN_BORDER);
+                cv.text_in(&f.mb, Rect::new(box_.x + 8, box_.y, box_.w - 8, box_.h), 0, "Waveform", DIM);
+                let on = Rect::new(x0, t.y + 2, (f.mb.width(&name) + 20).min(avail), t.h - 4);
+                chip(cv, on, mix(BTN, ACCENT, 70), ACCENT);
+            }
+            let name = self.dock_title_fit(k, &name, avail - if back.is_some() { 16 } else { 0 });
+            let x0 = if back.is_some() { x0 + 8 } else { x0 };
+            cv.set_clip(Rect::new(x0, s.y, avail, s.h));
+            cv.text_in(&f.mb, Rect::new(x0, s.y, avail, s.h), 0, &name, TEXT);
             // a small caption while something filters the list
             let used = f.mb.width(&name) + 12;
             if let Some(cap) = bar.as_ref().and_then(|_| self.panel_caption()) {

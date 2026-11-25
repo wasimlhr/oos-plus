@@ -814,3 +814,17 @@ fn the_spectrum_queries_compute_from_the_record_when_the_spectrum_is_behind_a_ta
     assert_eq!(u.spectrum_lines_now().map(|l| l.len()), Some(fresh.1.len()));
     assert!(!fresh.1.is_empty());
 }
+
+/// With the eye on the whole plot the Waveform keeps a tab in the strip; a tap on it gives the plot back.
+#[test]
+fn the_waveform_keeps_a_tab_while_the_eye_fills_the_plot() {
+    let mut u = eye_beside_waveform();
+    u.select_option(Item::EyePlace, "Full");
+    settle(&mut u);
+    let r = u.dock_leaf(VKind::Wave).unwrap();
+    let t = u.dock_waveform_back_tab(VKind::Wave, r).expect("a Waveform tab beside the eye's title");
+    tap(&mut u, t.x + t.w / 2, t.y + t.h / 2);
+    settle(&mut u);
+    assert!(!u.dock_full_state() && u.dock_leaf(VKind::Wave).is_some() && u.dock_leaf(VKind::Eye).is_some());
+    assert!(u.dock_waveform_back_tab(VKind::Wave, u.dock_leaf(VKind::Wave).unwrap()).is_none());
+}
