@@ -860,6 +860,18 @@ impl Scpi {
         None
     }
 
+    /// `:EYE:STATe`, the Eye/Jitter analyser on or off (the same as `:VIEW EYE` and `:VIEW SCOPe`).
+    fn eye_state(&mut self, ui: &mut Ui, query: bool, arg: &str) -> Option<Vec<u8>> {
+        if query {
+            return t(if ui.m.view == AView::Eye { "1" } else { "0" });
+        }
+        match parse_bool(arg) {
+            Some(on) => ui.set_analysis_view(if on { AView::Eye } else { AView::Scope }),
+            None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+        }
+        None
+    }
+
     /// `:REFerence`, `:SIM`, `:DISPlay`, `:VIEW`, `:IDENtify?`, `:CALibrate` and `:BODE`. None when no branch takes the
     /// nodes (`exec_cmd` goes on), else the answer.
     fn view_cmd(
@@ -935,16 +947,8 @@ impl Scpi {
             }
             return Some(None);
         }
-        // :EYE:STATe, the Eye/Jitter analyser on or off (the same as :VIEW EYE and :VIEW SCOPe)
         if kw(n0, "EYE") && nodes.len() == 2 && kw(nodes[1], "STATe") {
-            if query {
-                return Some(t(if ui.m.view == AView::Eye { "1" } else { "0" }));
-            }
-            match parse_bool(arg) {
-                Some(on) => ui.set_analysis_view(if on { AView::Eye } else { AView::Scope }),
-                None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
-            }
-            return Some(None);
+            return Some(self.eye_state(ui, query, arg));
         }
         // OOS extensions: analyser view, Identify, self-calibration, Bode
         if kw(n0, "VIEW") && nodes.len() == 1 {
