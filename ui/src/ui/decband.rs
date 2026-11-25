@@ -483,7 +483,7 @@ impl Ui {
         cv.text_in(&f.sb, pill, 1, &name, DARK_TEXT);
         let left = pill.x + pill.w + 6;
         let right = a.x + a.w;
-        let packets = match self.decode_packets_of(m) {
+        let packets = match self.decode_packets_shown(m) {
             Ok(p) => p,
             Err(e) => {
                 cv.text_in(&f.s, Rect::new(left + 2, y, f.s.width(e), h), 0, e, DIM);

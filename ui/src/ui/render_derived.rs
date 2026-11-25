@@ -640,7 +640,7 @@ impl Ui {
         let cy = self.plot.area.y as f32 + self.plot.area.h as f32 / 2.0;
 
         let label = if c.op == MathOp::Fft {
-            let Some(w) = self.math_record(k).ok().flatten() else {
+            let Some(w) = self.math_record_shown(k).ok().flatten() else {
                 cv.no_clip();
                 return None;
             };
@@ -679,7 +679,7 @@ impl Ui {
                 si_short(span / HDIV as f64, "Hz")
             )
         } else {
-            let result = self.math_record(k);
+            let result = self.math_record_shown(k);
             let Some(rec) = result.as_ref().ok().and_then(|w| w.as_ref()) else {
                 cv.no_clip();
                 let status = match result {
@@ -986,7 +986,7 @@ impl Ui {
             format!("{} {} {}", k + 1, m.dec_proto.name(), decode_source_name(m.dec_src))
         };
         cv.text(&f.sb, a.x + 4, y + 15, &name, DIM);
-        let packets = match self.decode_packets_of(m) {
+        let packets = match self.decode_packets_shown(m) {
             Ok(p) => p,
             Err(e) => {
                 cv.text(&f.s, a.x + 16 + f.sb.width(&name), y + 15, e, DIM);

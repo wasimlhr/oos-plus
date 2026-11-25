@@ -322,6 +322,20 @@ impl Ui {
     pub(super) fn reference_decode_packets(&self, m: &Model) -> Packets {
         self.reference_decode_packets_at(m, None)
     }
+    /// For drawing: the packets for the record now, and while a running acquisition has outrun the decoder (a large
+    /// record takes longer to decode than the next one takes to arrive) the last ones that were finished with the same
+    /// settings, a record old, instead of "Decode computing" for ever. Remote answers and the event table keep the
+    /// exact result (`decode_packets_of`).
+    pub(super) fn decode_packets_shown(&self, m: &Model) -> Packets {
+        match self.decode_packets_of(m) {
+            Err(COMPUTING) if self.m.run == RunState::Run => {
+                let prefix = format!("{:?}|{}|", m.dec_cfg(), self.workflow_epoch);
+                let cache = self.azr.reference_decode.borrow();
+                cache.entries.iter().rev().find(|e| e.key.starts_with(&prefix)).map_or(Err(COMPUTING), |e| e.packets.clone())
+            }
+            other => other,
+        }
+    }
     pub(super) fn decoder_candidate_key(&self, m: &Model, record: &Record) -> Result<String, &'static str> {
         Ok(format!("candidate:{}|{}", self.bus_candidate.epoch, self.decoder_key_at(m, Some(record))?))
     }
