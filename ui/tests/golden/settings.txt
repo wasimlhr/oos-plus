@@ -4354,7 +4354,7 @@ setup layout "1e9" -> default; error: line 2: layout: bad layout 1e9
 setup layout "Studio" -> studio
 setup layout "classic" -> default; error: line 2: layout: bad layout classic
 setup layout "default" -> default
-setup layout "minimal" -> minimal
+setup layout "minimal" -> studio; also: studio_traces = overlay
 setup layout "studio" -> studio
 setup layout "x" -> default; error: line 2: layout: bad layout x
 setup layout default -> default

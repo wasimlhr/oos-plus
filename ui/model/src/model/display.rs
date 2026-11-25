@@ -83,7 +83,8 @@ pub enum Layout {
     Studio,
 }
 
-pub const LAYOUTS: [Layout; 3] = [Layout::Default, Layout::Minimal, Layout::Studio];
+/// The layouts a person can choose. Minimal is gone from the menu: a stored `minimal` opens as Studio.
+pub const LAYOUTS: [Layout; 2] = [Layout::Default, Layout::Studio];
 
 /// What a row of the decoder results is (the Events pane).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -134,8 +135,11 @@ impl Layout {
         }
     }
 
-    /// A setup value, `default`, `minimal` or `studio`.
+    /// A setup value, `default` or `studio`; `minimal` (a layout that is gone) opens as Studio.
     pub fn parse(s: &str) -> Option<Layout> {
+        if s.eq_ignore_ascii_case("minimal") {
+            return Some(Layout::Studio);
+        }
         LAYOUTS.into_iter().find(|l| l.name().eq_ignore_ascii_case(s))
     }
 }

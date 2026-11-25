@@ -509,7 +509,14 @@ fn set_zoom_views(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
         "hdmi_wave" => m.hdmi = if p_bool(v)? { HdmiMode::Waveform } else { HdmiMode::Mirror },
         "view" => m.view = p_enum(v, &AView::STORED)?,
         // oos-plus: the layout, the Studio view and what is hidden in it, and the generator's wave
-        "layout" => m.layout = Layout::parse(v).ok_or_else(|| format!("bad layout {v}"))?,
+        "layout" => {
+            m.layout = Layout::parse(v).ok_or_else(|| format!("bad layout {v}"))?;
+            // Minimal drew every source on one graticule: its file opens in Studio as Overlay (a later
+            // `studio_traces` line of the file still decides)
+            if v.eq_ignore_ascii_case("minimal") {
+                m.studio_overlay = true;
+            }
+        }
         "studio_view" => {
             if !["waveform", "docked", "floating", "only"].contains(&v) {
                 return Err(format!("bad studio view {v}"));

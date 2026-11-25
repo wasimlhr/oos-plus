@@ -60,18 +60,34 @@ fn layout_is_a_display_setting_kept_in_the_setup() {
         assert!(text.contains(&format!("layout = {}", layout.name().to_ascii_lowercase())));
         assert_eq!(crate::store::parse_setup(&text).unwrap().layout, layout);
     }
-    // setups from before Studio hold `default` or `minimal`
+    // setups from before Studio hold `default` or `minimal`; Minimal is gone and opens as Studio, as Overlay
+    u.m.layout = Layout::Studio;
     let old = crate::store::setup_text(&u.m).replace("layout = studio", "layout = minimal");
-    assert_eq!(crate::store::parse_setup(&old).unwrap().layout, Layout::Minimal);
+    let loaded = crate::store::parse_setup(&old).unwrap();
+    assert_eq!((loaded.layout, loaded.studio_overlay), (Layout::Studio, true));
+    assert!(crate::store::setup_text(&loaded).contains("layout = studio"), "written back as studio");
     assert!(crate::store::parse_setup(&old.replace("layout = minimal", "layout = wide")).is_err());
 }
 
 #[test]
-fn the_display_menu_steps_through_the_three_layouts() {
+fn a_stored_minimal_setup_keeps_its_own_traces_line() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
-    let seen: Vec<_> = (0..3).map(|_| { u.adjust(Item::Layout, 1); u.m.layout }).collect();
-    assert_eq!(seen, [Layout::Minimal, Layout::Studio, Layout::Default]);
-    assert_eq!(u.options(Item::Layout), ["Default", "Minimal", "Studio"]);
+    u.m.layout = Layout::Studio;
+    u.m.studio_overlay = false;
+    let text = crate::store::setup_text(&u.m).replace("layout = studio", "layout = minimal");
+    assert!(!text.contains("studio_traces"), "a Stacked set-up writes no traces line");
+    assert!(crate::store::parse_setup(&text).unwrap().studio_overlay, "no line: Minimal's one graticule");
+    let text = format!("{text}studio_traces = stacked
+");
+    assert!(!crate::store::parse_setup(&text).unwrap().studio_overlay, "an explicit line wins");
+}
+
+#[test]
+fn the_display_menu_steps_through_the_two_layouts() {
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    let seen: Vec<_> = (0..2).map(|_| { u.adjust(Item::Layout, 1); u.m.layout }).collect();
+    assert_eq!(seen, [Layout::Studio, Layout::Default]);
+    assert_eq!(u.options(Item::Layout), ["Default", "Studio"]);
     u.select_option(Item::Layout, "Studio");
     assert_eq!(u.m.layout, Layout::Studio);
     assert_eq!(u.value(Item::Layout), "Studio");
@@ -751,7 +767,7 @@ fn picking_default_brings_back_the_stock_bars() {
 // The key resets the set-up and keeps the layout the person works in; `*RST` of a script still starts in Default.
 #[test]
 fn the_default_key_keeps_the_layout() {
-    for layout in [Layout::Studio, Layout::Minimal, Layout::Default] {
+    for layout in [Layout::Studio, Layout::Default] {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.select_option(Item::Layout, lname(layout));
         u.m.ch[1].on = true;
