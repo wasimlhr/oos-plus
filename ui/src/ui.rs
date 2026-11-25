@@ -1677,3 +1677,5 @@ mod aux_out_tests {
 mod zoom_tests;
 #[cfg(test)]
 mod funccheck_tests;
+#[cfg(test)]
+mod display_rows_tests;

@@ -834,13 +834,22 @@ impl Ui {
 
     /// The views of a group as they are, put in tabs with `k` in front: floating views too, so no window floats over
     /// the one that fills the area. Where they were is kept for the way back.
-    pub(super) fn dock_maximise(&mut self, k: VKind) {
-        if !self.dock_shown(k) { return; }
+    /// The views on the screen, docked or floating, in the order of the dock.
+    fn dock_kinds_shown(&self) -> Vec<VKind> {
         let region = self.dock_region();
         let tree = self.dock_effective(region);
         let mut kinds = Vec::new();
         tree.leaves(&mut kinds);
         for v in KINDS { if self.dock_shown(v) && !kinds.contains(&v) { kinds.push(v); } }
+        kinds
+    }
+
+    /// Whether Maximise has anything to do: with the waveform alone on the screen it does not.
+    pub(super) fn dock_can_maximise(&self) -> bool { self.dock_kinds_shown().len() >= 2 }
+
+    pub(super) fn dock_maximise(&mut self, k: VKind) {
+        if !self.dock_shown(k) { return; }
+        let kinds = self.dock_kinds_shown();
         if kinds.len() < 2 { return; }
         if self.dock_tabs_root() { self.dock_activate(k); return; }
         let saved = Saved { tree: self.studio.dock.tree.clone(), floats: self.studio.dock.float_on, meas_floating: self.studio.view == StudioView::Floating };
