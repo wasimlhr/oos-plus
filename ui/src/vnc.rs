@@ -1021,7 +1021,7 @@ const st=document.getElementById('st'),v=document.getElementById('v');let tries=
 function say(m,bad){st.textContent=m;st.className=bad?'bad':'';}
 function go(){
 const rfb=new RFB(v,(location.protocol=='https:'?'wss://':'ws://')+location.host+'/websockify');
-rfb.scaleViewport=true;
+rfb.scaleViewport=true;rfb.showDotCursor=true;
 rfb.addEventListener('connect',()=>{tries=0;say('connected');rfb.focus();});
 rfb.addEventListener('disconnect',e=>{say(e.detail.clean?'disconnected':'no connection',true);setTimeout(go,Math.min(5000,500<<tries++));});
 }
