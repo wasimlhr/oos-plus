@@ -1184,17 +1184,23 @@ fn plot_promise(label: &str, u: &Ui, a: &Snap, b: &Snap) -> Option<String> {
     None
 }
 
-#[test]
-#[ignore = "an audit run by hand: OOS_AUDIT_DIR=<dir> cargo test -j 2 plot_menu_audit -- --ignored --nocapture"]
-fn plot_menu_audit() {
-    let dir = out_dir();
-    let _ = std::fs::create_dir_all(&dir);
-    let mut tsv = String::from("layout\ttraces\thdmi\tzoom\tlabel\tverdict\tchanged\tpanel px\tmonitor px\tnote\n");
+/// The states the plot's menu is pressed in: layouts, arrangements, HDMI modes, zoom off and on.
+pub(super) struct PlotStates<'a> {
+    pub layouts: &'a [Layout],
+    pub arrangements: &'a [windows::Arrangement],
+    pub hdmi: &'a [HdmiMode],
+    pub zoom: &'a [bool],
+}
+
+/// Every row of the plot's menu pressed in every state: the lines of the table (tab separated, the verdict is the
+/// sixth field).
+pub(super) fn plot_menu_lines(st: &PlotStates) -> Vec<String> {
+    let mut lines = Vec::new();
     let mut n = 0;
-    for l in [Layout::Default, Layout::Studio] {
-        for a in [windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows] {
-            for hdmi in [HdmiMode::Mirror, HdmiMode::Waveform, HdmiMode::Layout] {
-                for zoom in [false, true] {
+    for &l in st.layouts {
+        for &a in st.arrangements {
+            for &hdmi in st.hdmi {
+                for &zoom in st.zoom {
                     let mut u = plot_audit_ui(l, a, hdmi, zoom, n);
                     let area = u.plot.area;
                     u.context_menu(area.x + area.w / 2, area.y + area.h / 2);
@@ -1238,13 +1244,33 @@ fn plot_menu_audit() {
                             Err(_) => ("ERROR".to_string(), String::new(), 0, String::new(), "panic".to_string()),
                         };
                         let line = format!("{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", lname(l), a, hdmi, zoom, label, verdict, changed, ppx, monitor, note);
-                        if verdict != "OK" { println!("FC plot {line}"); }
-                        tsv.push_str(&line.replace('\r', " "));
-                        tsv.push('\n');
+                        lines.push(line.replace('\r', " "));
                     }
                 }
             }
         }
+    }
+    lines
+}
+
+#[test]
+#[ignore = "an audit run by hand: OOS_AUDIT_DIR=<dir> cargo test -j 2 plot_menu_audit -- --ignored --nocapture"]
+fn plot_menu_audit() {
+    let dir = out_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let st = PlotStates {
+        layouts: &[Layout::Default, Layout::Studio],
+        arrangements: &[windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows],
+        hdmi: &[HdmiMode::Mirror, HdmiMode::Waveform, HdmiMode::Layout],
+        zoom: &[false, true],
+    };
+    let mut tsv = String::from("layout\ttraces\thdmi\tzoom\tlabel\tverdict\tchanged\tpanel px\tmonitor px\tnote\n");
+    for line in plot_menu_lines(&st) {
+        if line.split('\t').nth(5) != Some("OK") {
+            println!("FC plot {line}");
+        }
+        tsv.push_str(&line);
+        tsv.push('\n');
     }
     std::fs::write(std::path::Path::new(&dir).join("plot-menus.tsv"), tsv).unwrap();
 }
