@@ -197,13 +197,13 @@ impl Shots {
     /// the encoder by swapping buffers, no copy. A copy of 2.4 MB in the frame loop pushed everything else of the frame
     /// out of the fast core's cache and made the whole frame about 10 % slower. `whole`: the next render draws every
     /// pixel (not the start-up screen); else nothing is swapped and `tick` copies.
-    fn hand_over(&self, cv: &mut Canvas, whole: bool) {
+    fn hand_over(&self, cv: &mut Canvas, whole: bool) -> bool {
         let mut st = self.lock();
         st.frames = whole;
         let now = Instant::now();
         let watched = st.asked.is_some_and(|t| t.elapsed() < SHOT_AHEAD);
         if !whole || !Self::wanted(&st, now, watched) {
-            return;
+            return false;
         }
         let mut px = std::mem::take(&mut st.spare);
         px.resize(cv.px.len(), 0);
@@ -211,6 +211,7 @@ impl Shots {
         st.next = Some((cv.w as u32, cv.h as u32, px));
         st.at = Some(now);
         self.wake.notify_one();
+        true
     }
 
     fn encoder(&self) {
@@ -423,11 +424,13 @@ pub struct Live {
     pub(crate) shots: Arc<Shots>,
     /// the monitor's picture (`GET /monitor.png`)
     pub(crate) monitor: Arc<MonitorShot>,
+    /// the viewers of the VNC page (`vnc.rs`)
+    pub(crate) vnc: crate::vnc::Vnc,
 }
 
 impl Default for Live {
     fn default() -> Live {
-        Live { shots: Shots::new(), monitor: Arc::default() }
+        Live { shots: Shots::new(), monitor: Arc::default(), vnc: crate::vnc::Vnc::new() }
     }
 }
 
@@ -435,6 +438,7 @@ impl Drop for Live {
     fn drop(&mut self) {
         self.shots.lock().quit = true;
         self.shots.wake.notify_all();
+        self.vnc.close();
     }
 }
 
@@ -449,12 +453,14 @@ impl Live {
     /// too long (`Shots::tick`).
     pub fn tick(&self, cv: &Canvas) {
         self.shots.tick(cv);
+        self.vnc.tick(cv);
     }
 
     /// Call right before rendering the next screen: hands the shown one to the live picture (`Shots::hand_over`).
     /// `whole`: the render draws every pixel.
     pub fn before_render(&self, cv: &mut Canvas, whole: bool) {
-        self.shots.hand_over(cv, whole);
+        let taken = self.shots.hand_over(cv, whole);
+        self.vnc.hand_over(cv, whole, taken);
     }
 
     /// System > Graphics = GPU: the frame loop hands over the pictures that come back from the GPU
@@ -462,6 +468,7 @@ impl Live {
     /// one drawn every frame: a buffer swapped out of it would stay in it, an older picture, until the next read.
     pub fn before_gpu_frame(&self) {
         self.shots.lock().frames = true;
+        self.vnc.gpu_frames();
     }
 
     /// System > Graphics = GPU: `cv` was just read back whole; a copy goes to the encoder when it wants one.
@@ -473,6 +480,8 @@ impl Live {
             Shots::give_copy(&mut st, cv, now);
             self.shots.wake.notify_one();
         }
+        drop(st);
+        self.vnc.read_back(cv);
     }
 
     /// The monitor's picture is asked for (`MonitorShot::wanted`): the frame loop reads it back or copies it.
@@ -489,7 +498,7 @@ impl Live {
     pub fn picture_wanted(&self) -> bool {
         let st = self.shots.lock();
         let watched = st.asked.is_some_and(|t| t.elapsed() < SHOT_AHEAD);
-        Shots::wanted(&st, Instant::now(), watched)
+        Shots::wanted(&st, Instant::now(), watched) || self.vnc.picture_wanted()
     }
 }
 

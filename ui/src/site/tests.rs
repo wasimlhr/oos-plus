@@ -876,7 +876,7 @@ fn cmd_takes_keys_knobs_and_touch_only() {
     let (r, cmds) = handed(get("key%20runstop&c=knob%20vscale%20%2B1"), &mut ui, &mut scpi);
     assert!(r.starts_with("HTTP/1.1 200"), "{}", r);
     assert_eq!(cmds, ["key runstop", "knob vscale +1"]);
-    for c in ["key runstop", "knob vscale +1", "tap 100 200", "drag 1 2 3 4"] {
+    for c in ["key runstop", "knob vscale +1", "tap 100 200", "drag 1 2 3 4", "down 1 2", "move 3 4", "up 3 4"] {
         assert!(crate::cmd::remote_ok(c), "{}", c);
     }
 }
@@ -1188,4 +1188,74 @@ fn the_monitor_picture_is_answered_when_the_frame_loop_has_copied_it() {
     let head = String::from_utf8_lossy(&reply[..split]).into_owned();
     assert!(head.starts_with("HTTP/1.1 200") && head.contains("Content-Type: image/png"), "{head}");
     assert!(reply[split..].starts_with(&[0x89, b'P', b'N', b'G']));
+}
+
+/// The VNC page, noVNC as it lies in the program, and the WebSocket: a plain GET and a foreign site get no viewer, the
+/// scope's own page gets one, and it goes when the viewers are closed.
+#[test]
+fn vnc_page_script_and_socket() {
+    let _one = sends();
+    let mut h = Web::open(0);
+    let mut ui = Ui::new(crate::wave::Source::Demo { t: 0.0 });
+    let cv = Canvas::new(crate::ui::PANEL_W, crate::ui::PANEL_H);
+    let mut scpi = crate::scpi::Scpi::open(0);
+    let live = Live::default();
+    let port = h.port().unwrap();
+    // one request; `done`: what ends the read (the whole answer, or the first bytes of a connection that stays)
+    let mut ask = |req: Vec<u8>, until: &'static [u8]| {
+        let t = std::thread::spawn(move || {
+            let mut c = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            c.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
+            c.write_all(&req).unwrap();
+            let (mut got, mut b) = (Vec::new(), [0u8; 1]);
+            while (until.is_empty() || !got.ends_with(until)) && c.read_exact(&mut b).is_ok() {
+                got.push(b[0]);
+            }
+            (c, got)
+        });
+        while !t.is_finished() {
+            h.poll(&mut Ctx::new(&mut ui, &cv, &mut scpi).with_live(&live));
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        t.join().unwrap()
+    };
+    let get = |path: &str| format!("GET {} HTTP/1.1\r\nHost: x\r\n\r\n", path).into_bytes();
+    let r = String::from_utf8_lossy(&ask(get("/vnc"), b"").1).into_owned();
+    assert!(r.starts_with("HTTP/1.1 200") && r.contains("import RFB from '/novnc.js'"), "{}", &r[..200]);
+    assert!(r.contains("'/websockify'"));
+    assert!(PAGE.contains(r#"<a href="/vnc">VNC</a>"#));
+    let r = ask(get("/novnc.js"), b"").1;
+    let at = r.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+    let head = String::from_utf8_lossy(&r[..at]).into_owned();
+    assert!(head.starts_with("HTTP/1.1 200") && head.contains("Content-Encoding: gzip"), "{}", head);
+    let gz = crate::vnc::NOVNC_GZ;
+    assert!(r[at..] == *gz && gz[..2] == [0x1f, 0x8b], "{} of {} bytes", r.len() - at, gz.len());
+    assert!(gz.len() < 64 << 10, "noVNC grew: {} bytes", gz.len());
+    // no upgrade: not a page
+    assert!(ask(get("/websockify"), b"").1.starts_with(b"HTTP/1.1 404"));
+    let ws = |extra: &str| {
+        format!(
+            "GET /websockify HTTP/1.1\r\nHost: 192.0.2.5:8080\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\
+             Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n{}\r\n",
+            extra
+        )
+        .into_bytes()
+    };
+    // another site's page may not watch or touch the screen
+    assert!(ask(ws("Origin: https://evil.example\r\n"), b"").1.starts_with(b"HTTP/1.1 403"));
+    assert_eq!(live.vnc.viewers(), 0);
+    // the scope's own page: the WebSocket answer, then the server's first word in a frame of its own
+    let (c, got) = ask(ws("Origin: http://192.0.2.5:8080\r\n"), b"RFB 003.008\n");
+    let got = String::from_utf8_lossy(&got).into_owned();
+    assert!(got.starts_with("HTTP/1.1 101 "), "{}", got);
+    assert!(got.contains("Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n"), "{}", got);
+    assert_eq!(live.vnc.viewers(), 1);
+    // Remote services > Web off closes the viewers (`Lan::remote_services`)
+    live.vnc.close();
+    let t0 = Instant::now();
+    while live.vnc.viewers() > 0 {
+        assert!(t0.elapsed() < Duration::from_secs(10), "the viewer stays");
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    drop(c);
 }

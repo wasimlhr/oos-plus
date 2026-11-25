@@ -51,6 +51,7 @@ mod store;
 mod trig;
 mod trignear;
 mod ui;
+mod vnc;
 mod vpu;
 mod wave;
 
@@ -1011,6 +1012,9 @@ impl Device {
             let was = self.remote_now.unwrap_or([true, true, true, want[3], want[4]]);
             if want[0] != was[0] {
                 self.web.set_open(want[0].then_some(self.web_port));
+                if !want[0] {
+                    self.live.vnc.close();
+                }
             }
             if want[1] != was[1] {
                 self.scpi.set_open(want[1].then_some(self.scpi_port));

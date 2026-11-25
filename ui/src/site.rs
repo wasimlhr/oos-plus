@@ -63,6 +63,49 @@ impl oos_remote::http::Site for Ctx<'_> {
         }
     }
 
+    /// The pointer of the VNC viewers, as text commands (`vnc.rs`).
+    fn commands(&mut self) -> Vec<String> {
+        self.live.map(|l| l.vnc.take_cmds()).unwrap_or_default()
+    }
+
+    /// noVNC as it lies in the program (gzip, which every browser takes), and the VNC page's WebSocket: from there on a
+    /// viewer's thread has the connection (`vnc.rs`).
+    fn take(&mut self, route: &str, head: &str, rest: &[u8], s: &TcpStream) -> bool {
+        let header = |name: &str| {
+            head.lines().skip(1).find_map(|l| {
+                let (k, v) = l.split_once(':')?;
+                k.trim().eq_ignore_ascii_case(name).then(|| v.trim())
+            })
+        };
+        let Some(live) = self.live else { return false };
+        match route {
+            "/novnc.js" => {
+                let gz = crate::vnc::NOVNC_GZ;
+                let head = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/javascript\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nCache-Control: max-age=3600\r\nConnection: close\r\n\r\n",
+                    gz.len()
+                );
+                if !crate::net::send_in_background(s, head, gz) {
+                    crate::net::busy_answer(s);
+                }
+                true
+            }
+            "/websockify" if header("upgrade").is_some_and(|u| u.eq_ignore_ascii_case("websocket")) => {
+                let binary = header("sec-websocket-protocol").is_some_and(|p| p.split(',').any(|p| p.trim() == "binary"));
+                let size = (self.cv.w as usize, self.cv.h as usize);
+                let adopted = match (header("sec-websocket-key"), s.try_clone()) {
+                    (Some(key), Ok(c)) => live.vnc.adopt(c, key, binary, rest, size),
+                    _ => false,
+                };
+                if !adopted {
+                    crate::net::busy_answer(s);
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Keys, knobs and taps (`cmd::remote_ok`).
     fn remote_ok(&self, line: &str) -> bool {
         crate::cmd::remote_ok(line)
@@ -79,6 +122,8 @@ impl oos_remote::http::Site for Ctx<'_> {
         let ui = &mut *self.ui;
         match route {
             "/ui-state" if !post => ok("application/json", ui.workflow_state().into_bytes()),
+            // the screen through noVNC (`vnc.rs`)
+            "/vnc" if !post => ok("text/html; charset=utf-8", crate::vnc::PAGE.as_bytes().to_vec()),
             // the scope's local time for the names of the page's downloads; empty while its clock is not set
             "/stamp" => ok("text/plain", ui.file_stamp().unwrap_or_default().into_bytes()),
             "/wave.csv" => file("text/csv; charset=utf-8", ui.web_wave_csv().map(String::into_bytes)),
