@@ -189,7 +189,7 @@ is no longer written and read back, so the A53 (512 kB L2) should gain more; not
 channels (each channel's deposit reads every group: 0.95 on the host) keep the decode.
 
 Not changed, for the next step:
-- Dots (`deposit_dots`, the default display), branch perf/dots: one add per sample is a chain of read-modify-writes on
+- Dots (`deposit_dots`, the display with Dots on), branch perf/dots: one add per sample is a chain of read-modify-writes on
   one pixel wherever samples repeat the row before (flat tops, slow edges), each waiting for the last (230 us at 100 k
   points flat on the host, 80 us for noise). Now a column whose predecessor had more than half its first 32 samples
   repeating adds each run at once (`run x wgt`, saturating like the single adds); other columns stay one add per
