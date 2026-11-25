@@ -240,3 +240,33 @@ fn decoder_scpi_takes_a_math_channel_as_a_source() {
     assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:SOUR MATH9;:DEC:SOUR?"), "MATH1");
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
 }
+
+/// `:REFerence:SOURce MATH1` makes a save copy the result of a math channel, so the Eye or a decoder can read a
+/// differential (CH1 - CH2) from a reference slot.
+#[test]
+fn a_reference_save_copies_the_result_of_a_math_channel() {
+    let (mut s, mut ui, cv) = session();
+    decoded_reference_fixture(&mut ui, 1000);
+    line(&mut s, &mut ui, &cv, ":REFerence:SLOT R3");
+    // M1 is off: refused, the source stays a channel
+    assert_eq!(line(&mut s, &mut ui, &cv, ":REFerence:SOURce MATH1;:REFerence:SOURce?"), "CHAN1");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
+    ui.m.math = crate::math::MathOp::Sub;
+    ui.m.math_a = crate::math::MATH_REF_BASE;
+    ui.m.math_b = crate::math::MATH_REF_BASE;
+    assert_eq!(line(&mut s, &mut ui, &cv, ":REFerence:SOURce 3,MATH1;:REFerence:SOURce? 3"), "MATH1");
+    for _ in 0..200 {
+        if ui.math_view(0).is_some() {
+            break;
+        }
+        ui.step(0.05);
+    }
+    assert!(ui.math_view(0).is_some(), "the math result is ready");
+    line(&mut s, &mut ui, &cv, ":REFerence:SAVE");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with('0'));
+    let (n, dt_saved, _, _, _) = ui.ref_info(2).expect("slot R3 holds the math result");
+    let (v, dt, _) = ui.math_view(0).unwrap();
+    assert_eq!((dt_saved, n), (dt, v.len()));
+    // a channel as the source again
+    assert_eq!(line(&mut s, &mut ui, &cv, ":REFerence:SOURce 3,CHAN2;:REFerence:SOURce? 3"), "CHAN2");
+}

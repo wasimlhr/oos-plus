@@ -3,7 +3,7 @@
   "software": "oos-ui 0.1.15",
   "version": "0.1.15",
   "edition": "November 2026",
-  "date": "23 November 2026",
+  "date": "24 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -6728,7 +6728,7 @@
     {
      "header": ":REFerence:SAVE",
      "set": ":REFerence:SAVE",
-     "desc": "Copy the selected acquired channel record into the selected reference slot. Does not write a waveform file.",
+     "desc": "Copy the selected acquired channel record, or the selected math channel result (`:REFerence:SOURce MATHn`), into the selected reference slot; -224 while the math result is not ready. Does not write a waveform file.",
      "remarks": [
       "- Menu equivalent: Reference > Save to slot.",
       "- Origin: OOS extension"
@@ -6757,14 +6757,14 @@
     },
     {
      "header": ":REFerence:SOURce",
-     "set": ":REFerence:SOURce [<slot>,]CHANn",
+     "set": ":REFerence:SOURce [<slot>,]CHANn|MATHn",
      "query": ":REFerence:SOURce?",
      "desc": "Sets or queries Save from (source) for Slots and files (menu: Reference > Save from (source)).",
      "params": [
       [
-       "[<slot>,]CHANn",
+       "[<slot>,]CHANn|MATHn",
        "Text",
-       "Acquired-channel source used when saving a reference.",
+       "Acquired-channel source used when saving a reference. `MATHn` (or `Mn`) makes a save copy the result of a math channel as it is now (not an FFT), so the Eye or a decoder can read a differential `CH1 - CH2` from the slot; the copy does not follow the next acquisition, save again after one. -224 when that math channel is off or an FFT.",
        "CHAN1"
       ]
      ],
