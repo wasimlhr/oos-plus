@@ -240,12 +240,27 @@ class Coverage(unittest.TestCase):
         self.assertEqual(self.result()["words-docs"], (["SOURce", "SECRet", "GRID", "STYLe"], 10))
         self.assertEqual(self.result()["fields-scpi"], (["bus", "bar"], 5))
 
+    def test_rows_that_do_not_say_what_the_command_does(self):
+        page = self.root / cov.PAGES_DIR / "group.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        head = ("| Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes | What it does | "
+                "See also |")
+        page.write_text("# Group\n\n" + head + "\n| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                        "| `:TIMebase:SCALe` | Set / Query | `A\\|B` or seconds. | `1` | Horizontal > Scale | - | "
+                        "Sets the time per division. | `:TIMebase:OFFSet` |\n"
+                        "| `:TIMebase:OFFSet` | Set / Query | Seconds. | `0` | Horizontal > Delay | - | - | - |\n"
+                        "| `*IDN?` | Query | The identity. | - | - | - |\n| not a command | x | x | x | x | x |\n")
+        # the index and the setup keys are no group pages: their rows are not counted
+        (page.parent / "README.md").write_text("| `:TIMebase:MODE` | Set / Query | x | x | x | x |\n")
+        (page.parent / "setup-keys.md").write_text("| `:SYSTem:SET` | Set | x | x | x | x |\n")
+        self.assertEqual(self.result()["rows-action"], ([":TIMebase:OFFSet", "*IDN?"], 3))
+
     def test_prints_and_exits_0(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(cov.main([str(self.root)]), 0)
         self.assertEqual(out.getvalue(), "scpi-coverage: words-docs 2/8, words-tests 4/8, queries-tests 3/8, "
-                                         "fields-scpi 2/4 missing (--list names them)\n")
+                                         "fields-scpi 2/4, rows-action 0/0 missing (--list names them)\n")
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(cov.main(["--list", str(self.root)]), 0)
@@ -266,14 +281,14 @@ class Coverage(unittest.TestCase):
             code = cov.main(list(opts) + [str(self.root)])
         return code, out.getvalue()
 
-    # the made-up tree counts words-docs 2, words-tests 4, queries-tests 3, fields-scpi 2
-    AS_IS = "2 fields-scpi\n3 queries-tests\n2 words-docs\n4 words-tests\n"
+    # the made-up tree counts words-docs 2, words-tests 4, queries-tests 3, fields-scpi 2, and has no group page
+    AS_IS = "2 fields-scpi\n3 queries-tests\n0 rows-action\n2 words-docs\n4 words-tests\n"
 
     def test_enforce_passes_when_every_count_is_its_number(self):
         self.numbers(self.AS_IS)
         code, out = self.enforce("--enforce")
         self.assertEqual(code, 0)
-        self.assertIn("scpi-coverage: 4 numbers as recorded in tools/scpi-coverage.txt\n", out)
+        self.assertIn("scpi-coverage: 5 numbers as recorded in tools/scpi-coverage.txt\n", out)
 
     def test_enforce_fails_on_a_count_above_its_number(self):
         # a command word the docs do not name, one more than the file allows
@@ -292,14 +307,14 @@ class Coverage(unittest.TestCase):
                          "--enforce writes nothing")
 
     def test_lower_writes_what_went_down_and_never_raises(self):
-        self.numbers("2 fields-scpi\n7 queries-tests\n1 words-docs\n4 words-tests\n")
+        self.numbers("2 fields-scpi\n7 queries-tests\n0 rows-action\n1 words-docs\n4 words-tests\n")
         code, out = self.enforce("--lower")
         self.assertEqual(code, 1, "words-docs went up: --lower does not make that pass")
         self.assertIn("lowered: queries-tests 7 -> 3\n", out)
         self.assertIn("up: words-docs 1 -> 2", out)
-        self.assertEqual(self.numbers(), "2 fields-scpi\n3 queries-tests\n1 words-docs\n4 words-tests\n")
+        self.assertEqual(self.numbers(), "2 fields-scpi\n3 queries-tests\n0 rows-action\n1 words-docs\n4 words-tests\n")
         # once the rise is gone (here: the number raised by hand), --lower and --enforce pass
-        self.numbers("2 fields-scpi\n7 queries-tests\n2 words-docs\n4 words-tests\n")
+        self.numbers("2 fields-scpi\n7 queries-tests\n0 rows-action\n2 words-docs\n4 words-tests\n")
         self.assertEqual(self.enforce("--lower")[0], 0)
         self.assertEqual(self.numbers(), self.AS_IS)
         self.assertEqual(self.enforce("--enforce")[0], 0)

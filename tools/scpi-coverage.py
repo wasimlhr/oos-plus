@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """scpi-coverage.py: what a remote command or a setting lacks of the parts it should have (AGENTS.md, ADR 0022/0023).
 
-    tools/scpi-coverage.py [ROOT]            one line: the four counts, missing/total
+    tools/scpi-coverage.py [ROOT]            one line: the five counts, missing/total
     tools/scpi-coverage.py --list [ROOT]     each count with the names behind it
     tools/scpi-coverage.py --enforce [ROOT]  the counts against tools/scpi-coverage.txt; exit 1 when one differs
     tools/scpi-coverage.py --lower [ROOT]    write the counts that went down into tools/scpi-coverage.txt
@@ -24,7 +24,11 @@ ROOT is the top of a tree (default: this tree). Read from it as it is:
                  and in the functions it hands `m` to, and the fields of the rows of the settings table) that the
                  interpreter never names as `.field` and no row with a command reaches. An upper bound:
                  a field can be set by a command under another name, and some fields are no setting a remote
-                 command should have.
+                 command should have;
+  rows-action    the command rows of the group pages of docs/scpi/ (every page but README.md and setup-keys.md; a
+                 row starts with a header in backticks, `:` or `*` first) that do not say what the command does:
+                 no seventh cell, What it does, or a dash in it (docs/scpi/README.md, "How to read the tables").
+                 The manual and the MCP tool scpi_reference then describe the command by its menu label only.
 
 Without an option a report: it exits 0 whatever it counts. With --enforce the counts are numbers that only go down
 (ADR 0037), kept in tools/scpi-coverage.txt, one `<count> <key>` per line as in tools/ratchet.txt: a count above its
@@ -49,6 +53,8 @@ STORE_RS = "ui/store/src/lib.rs"  # the setup writer of the crate oos-store
 # the settings tables: rows with a key, a command or none, and the fields they reach
 SETTINGS_DIR = "ui/model/src/settings"
 NUMBERS = "tools/scpi-coverage.txt"  # the counts that may only go down, `<count> <key>` per line
+PAGES_DIR = "docs/scpi"  # the group pages of the reference, one table row per header
+NOT_GROUPS = ("README.md", "setup-keys.md")  # its pages that are no command group
 
 # the file of the numbers that only go down, loaded by its path: `python3 -I` puts no folder of the tools on the path
 _spec = importlib.util.spec_from_file_location("ratchet_numbers", os.path.join(TOOLS, "ratchet_numbers.py"))
@@ -297,8 +303,21 @@ def settings_rows(root):
     return rows
 
 
+def command_rows(root):
+    """The command rows of the group pages as (header, cells): a row's first cell is a header in backticks."""
+    folder = os.path.join(root, PAGES_DIR)
+    rows = []
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if name.endswith(".md") and name not in NOT_GROUPS:
+            for line in read(root, PAGES_DIR + "/" + name).splitlines():
+                if line.startswith(("| `:", "| `*")):
+                    row = [c.strip("| ") for c in cells(line)]  # `cells` leaves the bars of a row on its pieces
+                    rows.append((row[0].strip("`"), row))
+    return rows
+
+
 def counts(root):
-    """The four gaps as (key, what, missing, total); missing is a list of names. The keys name the gaps in the
+    """The five gaps as (key, what, missing, total); missing is a list of names. The keys name the gaps in the
     summary and in tools/scpi-coverage.txt."""
     scpi_rs, scpi_md, scpi_txt = read_interpreter(root), read_reference(root), read(root, SCPI_TXT)
     rows = settings_rows(root)
@@ -320,6 +339,7 @@ def counts(root):
             unasked.append(q)
     unasked += ["%s (in NOT_ASKED, but not in %s: remove it from the list)" % (q, SCPI_MD)
                 for q in NOT_ASKED if q not in queries]
+    table = command_rows(root)
     return [
         ("words-docs", "command words of %s not in %s" % (SCPI_RS, SCPI_MD),
          [w for w in words if not named(w, scpi_md)], len(words)),
@@ -328,6 +348,8 @@ def counts(root):
         ("queries-tests", "queries of %s not asked in %s" % (SCPI_MD, SCPI_TXT), unasked, len(queries)),
         ("fields-scpi", "setup fields of %s not named in %s (an upper bound)" % (STORE_RS, SCPI_RS),
          [f for f in fields if f not in reached and not re.search(r"\." + f + r"\b", scpi_rs)], len(fields)),
+        ("rows-action", "command rows of %s/ that do not say what the command does" % PAGES_DIR,
+         [h for h, row in table if len(row) < 7 or row[6] in ("", "-")], len(table)),
     ]
 
 

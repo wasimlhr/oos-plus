@@ -416,8 +416,10 @@ answers as `9.9E37` (none) is `null`.
   left out. The lists are `PHRASES`, `ALSO` and `STOP` of `ui/src/site/mcp/reference.rs`; a test there keeps a
   list of such searches finding their command among the first five.
 - Answer: for `header`, `found` and `commands`, each whole: `header`, `set`, `query`, `desc`, `subsystem`, `params`
-  (`name`, `type`, `description`, `range`), `returns`, `example`, `remarks`, `oos_extension`; with none found a
-  `hint`. For `search` and `subsystem`, `total` and up to `max_results` `commands` from `offset` with `header`,
+  (`name`, `type`, `description`, `range`), `returns`, `example`, `related` (the headers of the commands its row of
+  the reference names under See also, where it names any), `remarks`, `oos_extension`; with none found a `hint`.
+  `desc` is the row's own sentence where the reference has one (What it does), else a summary made from the menu
+  label. For `search` and `subsystem`, `total` and up to `max_results` `commands` from `offset` with `header`,
   `set`, `query`, `desc` and `subsystem`; `next_offset` and a `hint` when the list goes on. A `search` adds `items`
   when rows of the appendices hold every word of it (the setup keys left out), at most 8 rows: per appendix its
   title `appendix`, `about` (what the manual says of its use, which names the command that takes the item) and

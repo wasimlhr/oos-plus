@@ -401,7 +401,8 @@ pub fn brief((s, c, _): &(usize, J, Vec<Node>)) -> J {
     J::obj(&out)
 }
 
-/// A command whole: also its parameters, what its query returns, an example and the remarks of the manual.
+/// A command whole: also its parameters, what its query returns, an example, the headers of related commands (where
+/// its row of the reference names them) and the remarks of the manual.
 pub fn full(entry: &(usize, J, Vec<Node>)) -> J {
     let J::Obj(mut out) = brief(entry) else { return J::Null };
     let c = &entry.1;
@@ -413,7 +414,7 @@ pub fn full(entry: &(usize, J, Vec<Node>)) -> J {
         };
         out.push(("params".into(), J::Arr(params.iter().map(param).collect())));
     }
-    for k in ["returns", "example"] {
+    for k in ["returns", "example", "related"] {
         if let Some(v) = c.get(k) {
             out.push((k.into(), v.clone()));
         }
@@ -510,6 +511,27 @@ mod tests {
         assert!(search("trigger level", None).len() < 40, "{}", search("trigger level", None).len());
         let full = full(lookup(":CHAN1:SCAL")[0]);
         assert!(full.get("params").is_some() && full.get("query").is_some(), "{full}");
+    }
+
+    // Break it catches: a related command that is no command (a header renamed, a typing error in a See also cell: an
+    // assistant then sends it), a command that names itself, the related commands left out of the whole answer
+    #[test]
+    fn a_related_command_is_a_command_of_the_reference() {
+        let mut named = 0;
+        for (_, c, _) in &reference().commands {
+            let header = c.get("header").and_then(J::str).unwrap();
+            let Some(J::Arr(related)) = c.get("related") else { continue };
+            for other in related.iter().filter_map(J::str) {
+                let found = headers(lookup(&other.replace("<n>", "1")));
+                assert_eq!(found, [other], "{header} names {other}");
+                assert_ne!(other, header);
+                named += 1;
+            }
+        }
+        assert!(named > 20, "{named} related commands in the reference");
+        let scale = full(lookup(":CHAN1:SCAL")[0]);
+        assert!(scale.to_string().contains(r#""related":[":CHANnel<n>:OFFSet""#), "{scale}");
+        assert!(scale.get("desc").and_then(J::str).is_some_and(|d| d.contains("volts per division")), "{scale}");
     }
 
     // Break it catches: the item a command takes not found by what it measures (an assistant then guesses `PKPK`),

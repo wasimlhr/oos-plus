@@ -14,8 +14,11 @@ tools/tests/test_manual_commands.py runs it with the host checks, so the file ca
 
 Brace forms in a Command cell are expanded into the concrete headers (`:CURSor:{MANual|TRACk|XY}:{AXValue|...}` is
 21 headers). `<n>` stays a numeric suffix (`:CHANnel<n>:SCALe` is `:CHANnel1:SCALe` ... `:CHANnel4:SCALe`), as in every
-programming manual. Facts only come from the reference; the descriptions are one-line summaries built from the
-Menu equivalent column.
+programming manual. Facts only come from the reference. A row may have two more cells, What it does and See also
+(docs/scpi/README.md, "How to read the tables"): the first is the command's description as written, the second the
+headers of related commands, each of which must be a header of the reference. A row without them gets a one-line
+summary built from the Menu equivalent column; tools/scpi-coverage.py counts those rows (`rows-action`), and the
+count only goes down.
 """
 import argparse
 import datetime
@@ -257,8 +260,10 @@ def convert_example(line):
     return line.strip()
 
 
-def record(header, kind, params, default, menu, note, page_examples, version, ctx=''):
+def record(header, kind, params, default, menu, note, page_examples, version, ctx='', does='', also=''):
     base = header.rstrip('?')
+    does = plain_links(does).strip()
+    does = '' if does == '-' else does
     params, note, menu = plain_links(params), plain_links(note), plain_links(menu)
     lead, rest = lead_of(params)
     lk = classify_lead(lead)
@@ -309,15 +314,24 @@ def record(header, kind, params, default, menu, note, page_examples, version, ct
     if has_menu and '>' in where:
         desc += f' (menu: {where})'
     desc += '.'
-    if kind in ('Action', 'Query') and lk != 'form' and body:
-        # an action or query without a typed argument: its parameter text is the description
+    if not does and kind in ('Action', 'Query') and lk != 'form' and body:
+        # an action or query without a typed argument and without a sentence of its own: its parameter text is the
+        # description
         desc = ' '.join(body)
         if has_menu:
             menu_remark = f'- Menu equivalent: {where}.'
         body = []
     elif not has_menu and body:
         desc = body[0] if body[0].endswith(('.', '!', '?')) else body[0] + '.'
+    if does:
+        # the row says what the command does: that is its description, and the menu item a remark
+        desc = does
+        if has_menu and not menu_remark:
+            menu_remark = f'- Menu equivalent: {where}.'
     rec['desc'] = desc
+    related = [h for h in CODE.findall(also) if h.startswith((':', '*'))]
+    if related:
+        rec['related'] = related
 
     prm = []
     if suffix or '[<n>]' in base:
@@ -405,18 +419,31 @@ def build_subsystems(version):
             title = page['title'] if not multi or not sec['title'] else f"{page['title']}: {sec['title']}"
             cmds = []
             for row in sec['rows']:
-                if len(row) != 6:
-                    raise SystemExit(f'{name}: expected 6 cells, got {len(row)}: {row}')
-                raw, kind, params, default, menu, note = row
-                for h in header_forms(unquote(raw)):
+                if len(row) not in (6, 8):
+                    raise SystemExit(f'{name}: expected 6 or 8 cells, got {len(row)}: {row}')
+                raw, kind, params, default, menu, note = row[:6]
+                does, also = row[6:] or ('', '')
+                forms = header_forms(unquote(raw))
+                if len(forms) > 1 and does not in ('', '-'):
+                    raise SystemExit(f'{name}: {raw} is {len(forms)} headers with one sentence: give each its row')
+                for h in forms:
                     if h.upper() in seen:
                         raise SystemExit(f'duplicate header {h} ({name} and {seen[h.upper()]})')
                     seen[h.upper()] = name
-                    cmds.append(record(h, kind, params, default, menu, note, examples, version, f' for {sec["title"]}' if multi and sec['title'] else ''))
+                    ctx = f' for {sec["title"]}' if multi and sec['title'] else ''
+                    cmds.append(record(h, kind, params, default, menu, note, examples, version, ctx, does, also))
             subs.append({'title': title, 'page': name, 'intro': page['intro'] if first else [], 'commands': cmds, 'after': []})
             first = False
         if subs and subs[-1]['page'] == name:
             subs[-1]['after'] = page['after']
+    # a See also cell names headers of the reference as their rows write them, nothing else
+    for s in subs:
+        for c in s['commands']:
+            for h in c.get('related', []):
+                if h.upper() not in seen:
+                    raise SystemExit(f"{s['page']}: {c['header']} names {h} in See also: no header of the reference")
+                if h.upper() == c['header'].upper():
+                    raise SystemExit(f"{s['page']}: {c['header']} names itself in See also")
     return subs
 
 
