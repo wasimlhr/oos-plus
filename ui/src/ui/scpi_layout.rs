@@ -667,12 +667,12 @@ mod tests {
         let a = u.plot.area;
         cmd(&mut u, ":UI:CONText", &format!("{},{}", a.x + a.w / 2, a.y + a.h / 2)).unwrap();
         let m = text(cmd(&mut u, ":UI:MENU?", ""));
-        assert!(m.starts_with("\"Context\"") && m.contains("\"Stacked traces\""), "{m}");
-        assert!(text(cmd(&mut u, ":UI:ELEMents?", "MENU")).contains("MENU,\"Stacked traces\","));
-        cmd(&mut u, ":UI:MENU:SELect", "\"Stacked traces\"").unwrap();
+        assert!(m.starts_with("\"Context\"") && m.contains("\"Stacked\""), "{m}");
+        assert!(text(cmd(&mut u, ":UI:ELEMents?", "MENU")).contains("MENU,\"Stacked\","));
+        cmd(&mut u, ":UI:MENU:SELect", "\"Stacked\"").unwrap();
         assert!(u.workspace.stacked);
         assert!(u.studio.ctx.is_none());
-        assert!(cmd(&mut u, ":UI:MENU:SELect", "\"Stacked traces\"").is_err(), "no menu open");
+        assert!(cmd(&mut u, ":UI:MENU:SELect", "\"Stacked\"").is_err(), "no menu open");
         // a hold on the Zoom button opens its popover, whose rows are pressed by name (seen on a unit: the hold opened
         // the menu of the plot behind the button, and the button was not among the elements)
         let plot = text(cmd(&mut u, ":UI:ELEMents?", "PLOT"));

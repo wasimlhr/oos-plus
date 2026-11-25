@@ -497,7 +497,7 @@ fn the_plot_context_menu_is_a_clamped_grouped_popover_with_the_lane_and_the_mode
     assert!(rows.iter().all(|(_, _, r)| r.h >= 40 && r.x >= p.x && r.right() <= p.right() && r.bottom() <= p.bottom()));
     let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
     // (Run, Single, Trigger settings and Sources are on the bars and not repeated here)
-    for want in ["Overlay traces", "Stacked traces", "Fit record", "Zoom here", "Zoom box", "Autoset", "Cursor here"] {
+    for want in ["Overlay", "Stacked", "Fit record", "Zoom here", "Zoom box", "Cursor here"] {
         assert!(labels.iter().any(|l| l == &want), "{want} in {labels:?}");
     }
     assert!(labels.iter().any(|l| l.starts_with("Trigger on ")) && labels.iter().any(|l| l.starts_with("Measurement on ")), "{labels:?}");

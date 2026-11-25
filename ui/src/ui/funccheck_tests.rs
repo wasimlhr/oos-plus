@@ -1223,10 +1223,10 @@ fn plot_menu_audit() {
                             let low = label.to_lowercase();
                             let already = (low.starts_with("overlay") && was.0 == windows::Arrangement::Overlay)
                                 || (low.starts_with("stacked") && was.0 == windows::Arrangement::Stacked)
-                                || (low == "four windows" && was.0 == windows::Arrangement::Windows)
+                                || (low == "windows" && was.0 == windows::Arrangement::Windows)
                                 || (low.starts_with("trigger on ch") && low.ends_with(&format!("ch{}", was.1 + 1)))
                                 || (low == "zoom here" && was.2)
-                                || (low == "center trigger" && was.3 == 0.0);
+                                || (low == "center trigger" && was.3 == 0.0); // (the row is gone from the menu)
                             let verdict = if promise.is_some() { "WRONG" } else if !alive && already { "OK" } else if !alive { "DEAD" } else { "OK" };
                             let monitor = if hdmi == HdmiMode::Mirror { "mirror".to_string() } else if ppx > 0 && mpx == 0 { "monitor did not follow".to_string() } else { format!("{mpx}") };
                             let changed = keys.iter().chain(ukeys.iter()).take(6).cloned().collect::<Vec<_>>().join(",");
