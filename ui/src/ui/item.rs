@@ -16,7 +16,6 @@ pub(super) enum Item {
     SearchSave,
     StoreBin,
     PaneSel,
-    FullScreen,
     StripPos,
     DecOn,
     DecSrc,
