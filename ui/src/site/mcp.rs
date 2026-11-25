@@ -185,10 +185,16 @@ const DECODE_RESULTS: &str = "The events of the decoders that are on, as rows (t
     `max_rows` from `offset`. `pending` while the decoders are still computing: ask again.";
 const ERRORS: &str = "Empty the SCPI error queue and answer its entries, oldest first.";
 const SCPI_REFERENCE: &str = "OOS's SCPI reference (the command chapter of its programming manual), to find a command \
-    instead of guessing it: `search`, words of what it does (\"trigger level\", \"channel scale\"), answers matching \
-    commands with their syntax; `header`, a command as it is sent (:CHAN1:SCAL, :TRIG:EDGE:LEV?), answers it whole: \
-    parameters with their ranges, what the query returns, an example; `subsystem`, part of a subsystem's title, lists \
-    its commands. Without arguments: the subsystems. A header that is not here is not a command of this scope.";
+    instead of guessing it: `search`, what it should do in your own words (\"volts per division\", \"trigger \
+    level\", \"measure rise time\"), answers the commands that fit best, best first, with their syntax, and as \
+    `items` the measurement items, eye figures or error codes that fit; `header`, a command as it is sent \
+    (:CHAN1:SCAL, :TRIG:EDGE:LEV?), answers it whole: parameters with their ranges, what the query returns, an \
+    example; `subsystem`, part of a subsystem's title, lists its commands, and for one subsystem what the manual \
+    says about it and its examples; `appendix`, part of an appendix's title, lists its rows (the items `:MEAS:ITEM` \
+    takes, the error codes). `offset` goes on in a long list. Without arguments: the subsystems and the appendices. \
+    A header that is not here is not a command of this scope.";
+/// What a search adds when no command and no item fits any of its words.
+const NOTHING_FITS: &str = "No command fits these words: say what it should do in other words, or list a subsystem.";
 /// What an answer adds when a command was not known (-113): the way to the right one.
 const UNDEFINED: &str = "Undefined header: the command is not in OOS's SCPI reference. Find the right one with the \
     tool scpi_reference (search: what it should do) instead of guessing another name.";
@@ -307,10 +313,12 @@ fn choice(words: &[&str], description: &str) -> J {
 fn scpi_reference_schema() -> J {
     schema(
         &[
-            ("search", string("Words of what the command does; every word must match.")),
+            ("search", string("What the command should do, in your own words; the commands that fit best come first.")),
             ("header", string("A command as it is sent, short or long form, e.g. :CHAN1:SCAL or :TRIGger:EDGE:LEVel?.")),
             ("subsystem", string("Part of a subsystem's title, e.g. Channels, Trigger, Measure.")),
-            ("max_results", integer("Commands in the answer, 1 to 50; default 20.")),
+            ("appendix", string("Part of an appendix's title, e.g. Measurement Items, Eye Figures, Error Codes.")),
+            ("max_results", integer("Commands or rows in the answer, 1 to 50; default 20.")),
+            ("offset", integer("Commands or rows to skip: the next_offset of the answer before; default 0.")),
         ],
         &[],
     )
@@ -887,22 +895,30 @@ fn block_payload(b: &[u8]) -> Option<&[u8]> {
     b.get(at + 2 + n..at + 2 + n + len)
 }
 
-/// `scpi_reference`: a header looked up whole, a search, a subsystem's commands, or the subsystems.
+/// `scpi_reference`: a header looked up whole, an appendix, a search, a subsystem's commands, or what there is.
 fn scpi_reference(run: &mut Run, args: &J) -> J {
-    let max = match count(args, "max_results", reference::RESULTS_DEFAULT, 1, reference::RESULTS_MAX) {
-        Ok(n) => n,
-        Err(e) => return refuse(&e),
+    let page = count(args, "max_results", reference::RESULTS_DEFAULT, 1, reference::RESULTS_MAX);
+    let (max, offset) = match (page, count(args, "offset", 0, 0, usize::MAX)) {
+        (Ok(max), Ok(offset)) => (max, offset),
+        (Err(e), _) | (_, Err(e)) => return refuse(&e),
     };
-    let mut text = [None; 3];
-    for (k, key) in ["header", "search", "subsystem"].into_iter().enumerate() {
+    let mut text = [None; 4];
+    for (k, key) in ["header", "appendix", "search", "subsystem"].into_iter().enumerate() {
         match args.get(key) {
             None => {}
             Some(J::Str(s)) if !s.trim().is_empty() && s.len() <= 200 => text[k] = Some(s.as_str()),
             Some(_) => return refuse(&format!("{key}: a text of 1 to 200 characters")),
         }
     }
+    let r = reference::reference();
+    // What a list that goes on adds: where the next call starts.
+    let more = |total: usize| (offset + max < total).then(|| ("next_offset", J::Num((offset + max) as f64)));
+    let appendices = || {
+        let one = |a: &reference::Appendix| J::obj(&[("title", J::s(&a.title)), ("rows", J::Num(a.rows.len() as f64))]);
+        J::Arr(r.appendices.iter().map(one).collect())
+    };
     let data = match text {
-        [Some(header), _, _] => {
+        [Some(header), ..] => {
             let found: Vec<J> = reference::lookup(header).into_iter().map(reference::full).collect();
             let mut out = vec![("header", J::s(header)), ("found", J::Num(found.len() as f64))];
             if found.is_empty() {
@@ -911,19 +927,42 @@ fn scpi_reference(run: &mut Run, args: &J) -> J {
             out.push(("commands", J::Arr(found)));
             J::obj(&out)
         }
-        [None, None, None] => {
-            let r = reference::reference();
+        [None, Some(title), ..] => match reference::appendices(title)[..] {
+            [a] => {
+                let rows: Vec<J> = a.rows.iter().skip(offset).take(max).map(|(row, _)| row.clone()).collect();
+                let total = J::Num(a.rows.len() as f64);
+                let mut out = vec![("appendix", J::s(&a.title)), ("about", J::s(&a.about)), ("total", total)];
+                out.push(("rows", J::Arr(rows)));
+                out.extend(more(a.rows.len()));
+                J::obj(&out)
+            }
+            _ => J::obj(&[("hint", J::s("Name one appendix by a part of its title.")), ("appendices", appendices())]),
+        },
+        [None, None, None, None] => {
             let n = |k: usize| r.commands.iter().filter(|(s, _, _)| *s == k).count() as f64;
             let titles = r.titles.iter().enumerate();
             let list = titles.map(|(k, t)| J::obj(&[("title", J::s(t)), ("commands", J::Num(n(k)))])).collect();
-            J::obj(&[("subsystems", J::Arr(list))])
+            J::obj(&[("subsystems", J::Arr(list)), ("appendices", appendices())])
         }
-        [None, words, subsystem] => {
+        [None, None, words, subsystem] => {
             let found = reference::search(words.unwrap_or(""), subsystem);
-            let list: Vec<J> = found.iter().take(max).map(|e| reference::brief(e)).collect();
+            let list: Vec<J> = found.iter().skip(offset).take(max).map(|e| reference::brief(e)).collect();
             let mut out = vec![("total", J::Num(found.len() as f64)), ("commands", J::Arr(list))];
-            if found.len() > max {
-                out.push(("hint", J::s("More commands match: add words, or name the subsystem.")));
+            let items = words.map(reference::items).unwrap_or_default();
+            match (words, found.first()) {
+                // The item a command takes (a measurement, an eye figure, an error code), with the appendix's text.
+                (Some(_), _) if !items.is_empty() => out.push(("items", J::Arr(items))),
+                (Some(_), None) => out.push(("hint", J::s(NOTHING_FITS))),
+                // One subsystem listed: what the manual says before its commands, and its examples.
+                (None, Some((s, _, _))) if found.iter().all(|(other, _, _)| other == s) => {
+                    out.push(("about", J::s(&r.about[*s][0])));
+                    out.push(("examples", J::s(&r.about[*s][1])));
+                }
+                _ => {}
+            }
+            if let Some(next) = more(found.len()) {
+                out.push(next);
+                out.push(("hint", J::s("More commands fit: ask again with offset = next_offset, or add words.")));
             }
             J::obj(&out)
         }
