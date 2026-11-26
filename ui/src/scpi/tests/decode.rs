@@ -272,7 +272,7 @@ fn a_reference_save_copies_the_result_of_a_math_channel() {
 }
 
 /// `:CURSor:MANual:SOURce MATH1` puts the cursors on a copy of the math result in the first free reference slot, so a
-/// differential can be measured with cursors; the query answers that reference.
+/// differential can be measured with cursors; the query answers MATH1, not the slot.
 #[test]
 fn a_cursor_can_read_the_result_of_a_math_channel() {
     let (mut s, mut ui, cv) = session();
@@ -292,7 +292,7 @@ fn a_cursor_can_read_the_result_of_a_math_channel() {
     line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce MATH1");
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with('0'), "M1 is accepted as a cursor source");
     let want = line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce?");
-    assert!(want.starts_with('R'), "the cursors read a reference copy: {want}");
+    assert_eq!(want, "MATH1", "the cursors read a copy of the math result, and say so, not the slot's R<n>");
     // asking again reuses the slot
     line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce MATH1");
     assert_eq!(line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce?"), want);

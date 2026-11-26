@@ -258,6 +258,23 @@ fn a_reference_colour_by_name_and_a_track_cursor_y() {
     assert_ne!(y, "9.9E37");
 }
 
+/// `:MEASure:ITEM <item>,MATH1` adds a row of the table like any other (the query form already read MATH1): the row
+/// reads the reference slot that holds a copy of the math result, and `:MEASure:STRip?` lists it with a value.
+#[test]
+fn a_measurement_can_be_added_on_a_math_channel() {
+    let (mut s, mut ui, cv) = session();
+    line(&mut s, &mut ui, &cv, ":CHAN1:DISP ON;:CHAN2:DISP ON");
+    ui.step(0.05);
+    line(&mut s, &mut ui, &cv, ":STOP;*CLS;:MATH1:DISP ON;:MATH1:OPER ADD;:MATH1:SOUR1 CHAN1;:MATH1:SOUR2 CHAN1");
+    line(&mut s, &mut ui, &cv, ":MEAS:CLEar;:MEAS:ITEM VPP,MATH1");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    let strip = line(&mut s, &mut ui, &cv, ":MEAS:STRip?");
+    assert!(strip.contains("VPP"), "the row is in the table: {strip}");
+    // an operator that is off has no result to copy: refused with a reason
+    line(&mut s, &mut ui, &cv, ":MATH1:DISP OFF;*CLS;:MEAS:ITEM VRMS,MATH1");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-221,"));
+}
+
 #[test]
 fn a_math_channel_is_read_and_measured() {
     let (mut s, mut ui, cv) = session();

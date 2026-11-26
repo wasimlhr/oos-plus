@@ -578,14 +578,9 @@ impl Scpi {
             self.push_err("-224,\"Illegal parameter value\"".into());
             return None;
         }
-        let source = |s: &mut Self, word: Option<&str>, fallback: WaveId| -> Option<WaveId> {
-            match word.map(str::trim).filter(|s| !s.is_empty()) {
-                None => Some(fallback),
-                Some(word) => s.named_source(word),
-            }
-        };
         if let Some(k) = meas_kind(item) {
-            let src = source(self, parts.next(), ui.meas_source())?;
+            let (word, fallback) = (parts.next(), ui.meas_source());
+            let src = self.source_of(ui, word, fallback)?;
             if parts.next().is_some() {
                 self.push_err("-224,\"Too many measurement sources\"".into());
                 return None;
@@ -596,8 +591,10 @@ impl Scpi {
             return None;
         }
         if let Some(k) = pair_kind(item) {
-            let a = source(self, parts.next(), ui.meas_source())?;
-            let b = source(self, parts.next(), ui.meas_source_b())?;
+            let (word, fallback) = (parts.next(), ui.meas_source());
+            let a = self.source_of(ui, word, fallback)?;
+            let (word, fallback) = (parts.next(), ui.meas_source_b());
+            let b = self.source_of(ui, word, fallback)?;
             if parts.next().is_some() {
                 self.push_err("-224,\"Too many measurement sources\"".into());
                 return None;
@@ -724,6 +721,23 @@ impl Scpi {
         }
         self.push_err("-224,\"Illegal parameter value\"".into());
         t("9.9E37")
+    }
+
+    /// The source of a row that is added (`:MEASure:ITEM <item>,<source>`): `fallback` without a word, a channel or
+    /// reference, or a math trace, which the row reads from the reference slot that holds a copy of it (the way a
+    /// cursor reads one), so it is a row of the table like any other.
+    fn source_of(&mut self, ui: &mut Ui, word: Option<&str>, fallback: WaveId) -> Option<WaveId> {
+        let Some(word) = word.map(str::trim).filter(|w| !w.is_empty()) else { return Some(fallback) };
+        if let Some(k) = math_index(word) {
+            return match ui.ref_math_slot(k) {
+                Ok(slot) => Some(WaveId::Ref(slot)),
+                Err(m) => {
+                    self.push_err(format!("-221,\"Settings conflict; {m}\""));
+                    None
+                }
+            };
+        }
+        self.named_source(word)
     }
 
     fn named_source(&mut self, s: &str) -> Option<WaveId> {

@@ -4515,7 +4515,7 @@
       [
        "<item>[,<A>[,<B>]]",
        "Text",
-       "Set: add a standard or pair readout (duplicates keep statistics and Single). Items: see Measure.",
+       "Set: add a standard or pair readout (duplicates keep statistics and Single); a source may be `MATH<n>`, which the row reads from a copy of the math result in a reference slot (-221 when the result is not ready). Items: see Measure.",
        "—"
       ]
      ],
@@ -5452,7 +5452,7 @@
       [
        "<wave>",
        "Discrete",
-       "Selected `CHANn|Rn|MATHn`, without changing acquisition. `MATHn` puts the cursors on a copy of the math result in a reference slot (the one that holds a copy already, else the first free one), so the query answers `Rn`; -221 when the result is not ready or every slot is used. SOURce1 aliases it; a different SOURce2 is unsupported.",
+       "Selected `CHANn|Rn|MATHn`, without changing acquisition. `MATHn` puts the cursors on a copy of the math result in a reference slot (the one that holds a copy already, else the first free one), so the query answers `MATHn` (a copy: save again after a new acquisition); -221 when the result is not ready or every slot is used. SOURce1 aliases it; a different SOURce2 is unsupported.",
        "CHAN1"
       ]
      ],
@@ -8284,7 +8284,7 @@
     {
      "header": ":DECode:EVENts",
      "query": ":DECode:EVENts?",
-     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
+     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. While the scope runs the rows are those of the record on the screen and change with the next acquisition; stop it first (`:STOP`, `:SINGle`) and ask again until the answer is not `BUSY` for a complete list. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
      "remarks": [
       "- Menu equivalent: Decode and bus > Read decoded events.",
       "- Origin: OOS extension"
