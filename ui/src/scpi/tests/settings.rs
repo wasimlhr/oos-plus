@@ -394,7 +394,9 @@ fn a_bad_value_of_a_known_header_is_224_and_an_unknown_header_113() {
         let before = line(&mut s, &mut ui, &cv, query);
         line(&mut s, &mut ui, &cv, &format!("{header} {value}"));
         let want = format!("-224,\"Illegal parameter value\" {value}");
-        assert_eq!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?"), want, "{header} {value}");
+        // the depth of the memory also names the depths the unit takes after the value
+        let got = line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?");
+        assert!(got == want || (header == ":ACQuire:MDEPth" && got.starts_with(&format!("{want}; the depths are "))), "{header} {value}: {got}");
         assert_eq!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?"), "0,\"No error\"", "{header} {value}");
         assert_eq!(line(&mut s, &mut ui, &cv, query), before, "{header} {value} changed the setting");
     }
@@ -419,4 +421,21 @@ fn a_bad_value_of_a_known_header_is_224_and_an_unknown_header_113() {
         let got = line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?");
         assert!(got.starts_with("-113,\"Undefined header\""), "{unknown}: {got}");
     }
+}
+
+// Break it catches: a memory depth that is none of the menu's (`5M`) refused with -224 and no word on what is taken,
+// so a client that guessed has nothing to pick from (an assistant stayed at 100 kpts and missed the packets)
+#[test]
+fn a_memory_depth_that_is_not_one_names_the_depths_the_unit_takes() {
+    let (mut sc, mut ui, cv) = session();
+    line(&mut sc, &mut ui, &cv, "*CLS");
+    line(&mut sc, &mut ui, &cv, ":ACQuire:MDEPth 5M");
+    let err = line(&mut sc, &mut ui, &cv, ":SYSTem:ERRor?");
+    assert!(err.starts_with("-224,"), "{err}");
+    for depth in ["AUTO", "1k", "10k", "100k", "1M", "10M"] {
+        assert!(err.contains(depth), "{depth} is named: {err}");
+    }
+    // a depth of the list is taken
+    line(&mut sc, &mut ui, &cv, ":ACQuire:MDEPth 10M");
+    assert_eq!(line(&mut sc, &mut ui, &cv, ":SYSTem:ERRor?"), "0,\"No error\"");
 }
