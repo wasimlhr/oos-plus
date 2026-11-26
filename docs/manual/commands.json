@@ -1253,7 +1253,7 @@
       [
        "<value>",
        "Text",
-       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M`.",
+       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M` (1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M; what the unit has is cut to its memory). A value that is none of them is -224, and the error names the depths this unit takes (`5M` is none of them).",
        "5.000000E+05"
       ]
      ],
