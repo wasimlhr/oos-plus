@@ -231,7 +231,8 @@ impl Ui {
         let (fold, data) = if let Some(strobe) = &strobe_fold {
             Self::eye_strobe_fold(&v, dt, strobe, range)
         } else {
-            (clk.clone(), v.clone())
+            // a bus that talks in bursts folds without the idle line between them
+            (clk.clone(), eye::gate_bursts(&v, dt, &clk).unwrap_or_else(|| v.clone()))
         };
         if sim_capture && self.azr.eye_sim_revision == Some((self.m.sim_slot, self.replay.sim_revision)) {
             let tie = eye::tie(&clk.edges, &clk);

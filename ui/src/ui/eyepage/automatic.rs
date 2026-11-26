@@ -224,6 +224,10 @@ fn compute(mut job: Job) -> Result<Computed, String> {
     let accumulated = if clock_wave.is_some() {
         gated = eye::gate_around_clock(&data, dt, &clock, 1.5);
         &gated[..]
+    } else if let Some(bursts) = eye::gate_bursts(&data, dt, &clock) {
+        // a bus that talks in bursts folds without the idle line between them
+        gated = bursts;
+        &gated[..]
     } else {
         &data[..]
     };
