@@ -180,6 +180,14 @@ pub fn frame_peak(f: &Frame, m: &Model) -> bool {
     m.acq == AcqMode::Peak && 1.0 / f.dt < m.max_srate() * 0.999
 }
 
+/// Whether the fast display path draws frame `f` from its screen record (`to_record`) rather than from its samples:
+/// in High res each point is the mean of the samples behind it, and a Peak detect frame below the full rate holds
+/// minimum and maximum in turn (`frame_peak`), which are drawn as the record's pairs. Peak at the full rate holds plain
+/// samples.
+pub fn drawn_as_record(f: &Frame, m: &Model) -> bool {
+    m.acq == AcqMode::HiRes || frame_peak(f, m)
+}
+
 /// Turns the latest frame into a screen record: software trigger (oos-dsp) closest to the hardware trigger point,
 /// then the screen window (`n` points over `window` s from `t_first` relative to the trigger) by linear interpolation.
 pub fn to_record(f: &Arc<Frame>, m: &Model, n: usize, window: f64, t_first: f64) -> crate::wave::Record {

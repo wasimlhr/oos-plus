@@ -38,7 +38,7 @@ known first: docs/ssh.md; OOS_SSH_IDENTITY, OOS_SSH_PORT). shell() refuses every
 the calibration or the boot partitions, so a typo here cannot.
 """
 
-import argparse, base64, json, math, os, random, re, signal, socket, statistics, struct, subprocess, sys, time, traceback, urllib.error, urllib.request
+import argparse, base64, collections, json, math, os, random, re, signal, socket, statistics, struct, subprocess, sys, time, traceback, urllib.error, urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from oosclient import Link, LinkError, NoBlock  # noqa: E402
@@ -181,10 +181,11 @@ class Scope:
             time.sleep(0.06)
         return statistics.median(v) if v else math.nan
 
-    def wave(self, c=1):
-        """(t0, dt, volts) of the record on the screen: NORMal and the whole page, whatever a test before left set."""
+    def wave(self, c=1, mode="NORM"):
+        """(t0, dt, volts) of the record on the screen, or with `mode` RAW of every sample: the whole page, whatever a
+        test before left set."""
         self.w(f":WAV:SOUR CHAN{c}")
-        self.w(":WAV:MODE NORM")
+        self.w(f":WAV:MODE {mode}")
         self.w(":WAV:STAR 1")
         self.w(":WAV:STOP 1000000000")
         self.w(":WAV:FORM WORD")
@@ -1268,13 +1269,15 @@ def generator_modulation(s, o):
     s.w(f":TRIG:EDGE:SOUR CHAN{c}")
     s.w(":TIM:SCAL 0.001")
     s.w(":ACQ:MDEP 100000")
-    s.w(":WAV:MODE RAW")
     s.gen("SIN", fc, 2.0)
     res = {}
 
     def record():
         s.settle(n=2, extra=1.5)
-        t0, dt, v = s.wave(c)
+        t0, dt, v = s.wave(c, "RAW")
+        # every sample of the depth: the screen's record has too few per period for the zero crossings, and FM and PM
+        # read wrong from it while AM still reads right
+        assert len(v) >= 100000 * 0.98, f"RAW read {len(v)} points of 100000"
         return [t0 + k * dt for k in range(len(v))], v
 
     def zeros(t, v, h=0.2):
@@ -1407,6 +1410,16 @@ def raw_window(s, c, wait=60):
         time.sleep(2)
 
 
+def quantile(b, q):
+    """The byte value below which the fraction `q` of the samples `b` lies; the largest one for `q` 1."""
+    counts, k = collections.Counter(b), 0
+    for v in sorted(counts):
+        k += counts[v]
+        if k > q * len(b):
+            return v
+    return max(counts)
+
+
 def rising_edges(b, lo, hi):
     """Sample indices where the bytes `b` rise through `hi` after having been below `lo` (hysteresis)."""
     out, armed = [], False
@@ -1513,7 +1526,9 @@ def raw_window_is_one_unbroken_signal(s, o):
             b += s.block(":WAV:DATA?", timeout=120)
             k += 1000000
         assert len(b) == pts, f"{rows[-1]}: read {len(b)} bytes"
-        lo, hi = min(b), max(b)
+        # the levels the sine spends its time at, not the extremes: over millions of samples min and max catch noise
+        # peaks (2.24 Vpp of a 2 Vpp sine); a sine is within 0.001 % of its peak at its 0.1 % and 99.9 % points
+        lo, hi = quantile(b, 0.001), quantile(b, 0.999)
         vpp = (hi - lo) * yinc
         mid, q = (hi + lo) / 2, (hi - lo) / 4
         e = rising_edges(b, mid - q, mid + q)
@@ -1527,6 +1542,84 @@ def raw_window_is_one_unbroken_signal(s, o):
     s.w(":RUN")
     s.w(":ACQ:MDEP AUTO")
     return "; ".join(rows)
+
+
+@test("a1", need=(1,))
+def hardware_segments_hold_their_own_samples(s, o):
+    """Hardware segments (`:ACQuire:SEGMents:HARDware`) each hold their own samples: a slow sine with forced triggers
+    on a channel without a signal, so every segment starts at another phase; each one stepped to with the history
+    keys, its raw samples read and compared with every other. A segment that reads back another's samples
+    shows as two equal windows (#530: the frames above 256 MiB landed on the lower ones, with right time stamps).
+    As many segments as the scope records (it stops at the limit of its memory), so the last ones reach the top of the
+    256 MiB records use. The trigger times rise from segment to segment."""
+    c = s.loop[0]
+    # a channel the generator does not reach, not one of the loop's: a signal there would lock every segment to the
+    # same phase
+    other = next((x for x in CH if x not in s.loop), None)
+    if other is None:
+        raise Skip("every channel carries the generator: no channel without a signal to force the triggers on")
+    # as many as the scope records: it takes any count and stops at the limit of its memory for the segment size
+    # the whole segment: assumed 1 M points over the 20 ms of the screen (50 MSa/s), three quarters of a period, so the
+    # spread of each is at least 1.7 times the amplitude; verified on the unit only in that whole segments of 60 passed
+    # the check twice, while windows of 200 000 points near a peak spread less than it (18 and 19 codes)
+    ask, win = 100000, 1_000_000
+    s.w(":STOP")
+    s.w(":ACQ:SEGM OFF")
+    s.gen("SIN", 37.3, 2.0)
+    s.w(f":CHAN{c}:SCAL 0.5")
+    s.w(":TIM:SCAL 0.002")
+    s.w(":TRIG:SWE AUTO")
+    # nothing on that channel: the triggers are forced, at any phase of the sine
+    s.w(f":TRIG:EDGE:SOUR CHAN{other}")
+    s.w(":ACQ:SEGM:HARD ON")
+    s.w(f":ACQ:SEGM {ask}")
+    s.w(":ACQ:MDEP 1000000")
+    time.sleep(1)
+    s.w(":RUN")
+    # recorded once the count of time stamps has stood still for 5 s
+    end, times, still = time.time() + 180, [], 0
+    while time.time() < end and still < 5:
+        time.sleep(1)
+        now = [float(x) for x in s.q(":ACQ:SEGM:TIM?").split(",") if x]
+        still = still + 1 if now and len(now) == len(times) else 0
+        times = now
+    n = len(times)
+    row = f"{n} segments of 1 M"
+    try:
+        assert still >= 5, f"{row}, still recording after 180 s"
+        assert n >= 20, f"{row}: fewer than 20, the memory holds more"
+        assert all(t < 9e37 for t in times), f"{row}: a segment without a time stamp: {times}"
+        assert all(a < b for a, b in zip(times, times[1:])), f"{row}: the trigger times do not rise: {times}"
+        s.w(f":WAV:SOUR CHAN{c}")
+        s.w(":WAV:MODE RAW")
+        s.w(":WAV:FORM BYTE")
+        # the newest first, then back one by one; a step shows when the window read changes, so two equal segments
+        # in a row read the same window after the wait
+        seen, prev = [None] * n, None
+        s.cmd("key navplay")
+        for i in range(n - 1, -1, -1):
+            if i != n - 1:
+                s.cmd("key navback")
+            for _ in range(20):
+                time.sleep(0.4)
+                s.w(":WAV:STAR 1")
+                s.w(f":WAV:STOP {win}")
+                d = bytes(s.block(":WAV:DATA?"))
+                if d != prev:
+                    break
+            prev = seen[i] = d
+        s.shot("hardware-segments-first", o.out)
+        flat = [(i, len(d), max(d, default=0) - min(d, default=0)) for i, d in enumerate(seen)]
+        flat = [f"{i} ({k} bytes, spread {r})" for i, k, r in flat if k < win * 0.98 or r < 40]
+        assert not flat, f"{row}: segments without the signal or short: {flat}"
+        same = [(a, b) for a in range(n) for b in range(a + 1, n) if seen[a] == seen[b]]
+        assert not same, f"{row}: segments that read back the same samples: {same[:6]}"
+        return f"{row}, the samples of each its own, the second {times[1] * 1e3:.1f} ms after the first, the last {times[-1]:.2f} s"
+    finally:
+        s.w(":ACQ:SEGM OFF")
+        s.w(":ACQ:SEGM:HARD OFF")
+        s.w(":ACQ:MDEP AUTO")
+        s.w(":RUN")
 
 
 @test("a1", need=(1,))

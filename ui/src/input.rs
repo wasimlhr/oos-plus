@@ -8,7 +8,7 @@ use crate::ui::{Ev, Phase};
 use std::ffi::CString;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::os::fd::{AsRawFd, IntoRawFd};
+use std::os::fd::{AsRawFd, IntoRawFd, RawFd};
 use std::os::unix::fs::OpenOptionsExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -163,6 +163,12 @@ fn open_panel(path: &str, baud: u32) -> Option<File> {
     f
 }
 
+/// Waits up to `timeout_ms` (-1: without end) until one of `fds` has what it asks for; their `revents` say which.
+pub(crate) fn wait(fds: &mut [libc::pollfd], timeout_ms: i32) -> i32 {
+    // SAFETY: `fds` is a valid slice of `fds.len()` pollfd entries for the whole call
+    unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout_ms) }
+}
+
 impl Inputs {
     pub fn open(args: &[String]) -> Inputs {
         let has = |f: &str| args.iter().any(|a| a == f);
@@ -248,9 +254,12 @@ impl Inputs {
         }
     }
 
-    /// Waits up to `timeout_ms` for input and returns everything that arrived.
-    pub fn poll(&mut self, timeout_ms: i32) -> Vec<In> {
-        let mut fds = Vec::new();
+    /// Waits up to `timeout_ms` for input and returns everything that arrived. A readable socket of `wake` (the
+    /// remote services, `Device::inputs` in main.rs) ends the wait too, so a remote command is answered at once, not at
+    /// the next frame; its bytes are left to its server.
+    pub fn poll(&mut self, timeout_ms: i32, wake: &[RawFd]) -> Vec<In> {
+        let mut fds: Vec<libc::pollfd> =
+            wake.iter().map(|&fd| libc::pollfd { fd, events: libc::POLLIN, revents: 0 }).collect();
         if let Some(t) = &self.touch {
             fds.push(libc::pollfd { fd: t.fd.as_raw_fd(), events: libc::POLLIN, revents: 0 });
         }
@@ -264,7 +273,7 @@ impl Inputs {
         for d in &self.hid {
             fds.push(libc::pollfd { fd: d.fd.as_raw_fd(), events: libc::POLLIN, revents: 0 });
         }
-        unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, timeout_ms) };
+        wait(&mut fds, timeout_ms);
         let mut out = Vec::new();
         self.read_touch(&mut out);
         self.read_panel(&mut out);
@@ -446,6 +455,22 @@ impl Inputs {
 
 #[cfg(test)]
 mod tests {
+    /// A socket of the remote services ends the frame loop's wait as soon as it has input (`Inputs::poll`).
+    #[test]
+    fn a_readable_socket_ends_the_wait() {
+        use std::io::Write;
+        use std::os::fd::AsRawFd;
+        let l = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let mut c = std::net::TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (s, _) = l.accept().unwrap();
+        let mut fds = [libc::pollfd { fd: s.as_raw_fd(), events: libc::POLLIN, revents: 0 }];
+        assert_eq!(super::wait(&mut fds, 0), 0, "nothing came yet");
+        c.write_all(b"*IDN?\n").unwrap();
+        // the limit only catches a hang; the wait ends when the bytes come, however loaded the computer (ADR 0020)
+        assert_eq!(super::wait(&mut fds, 300_000), 1, "the bytes never ended the wait");
+        assert!(fds[0].revents & libc::POLLIN != 0);
+    }
+
     #[test]
     #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
     fn the_grab_has_the_number_of_linux_input_h() {

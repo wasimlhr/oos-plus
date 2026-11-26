@@ -414,7 +414,13 @@ word 3 [13:0] = TX time count; word 4 = frame number in the batch; words 5..7 a 
 trigger position.
 
 The UI does not trust `pre` for the edge trigger: the fast path and `to_record` take the edge of the set
-direction nearest `pre` (up to half a screen) on the smoothed signal. `OOS_FRAME_HEADER=1` makes oos-ui read the header and
+direction nearest `pre` (up to half a screen) on the smoothed signal. On a slow, noisy signal the comparator now and
+then fires on the other slope (seen on the unit, #581), and hundreds of samples from the level crossing (#580). With
+no edge of the set direction within half a screen but one of the other direction, the fast path draws no picture of
+that frame in Normal and Single, where every frame was triggered (`drawpipe::Trigger::wrong`); at `pre` it would show
+the mirrored slope. In Auto only such an edge at `pre` counts, as a frame of the timeout has no edge of its own; a
+frame without any edge is drawn as before.
+`OOS_FRAME_HEADER=1` makes oos-ui read the header and
 log it per frame with the edge offsets to `/tmp/oos-hdr.log`; `:SYSTem:STATe?` ends with the fast-path counts
 `edges <at pre> <other direction nearest> <further away> <none> off <sum> <max>`.
 

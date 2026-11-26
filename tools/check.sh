@@ -201,6 +201,8 @@ layer_text() {
     python3 -I tools/changelog.py --check || fail "text: a file in changelog.d/ (changelog.d/README.md)"
     # every relative link and every named file of the documents exists
     python3 -I tools/link-check.py || fail "text: a document names something that is not there (tools/link-check.py)"
+    # every busybox applet the image's scripts and programs call is in the image's busybox (ADR 0078)
+    python3 -I tools/busybox-applets.py || fail "text: a call of an applet rootfs/busybox.config leaves out"
     # blocks of code in two or more places (issue 120): counted, not yet enforced
     python3 -I tools/duplicates.py || true
     # ideas implemented in more than one place (goal C1 of issue 120): counted, not yet enforced

@@ -1,0 +1,302 @@
+#!/bin/sh
+# Copyright (C) 2026 dekajoule
+# SPDX-License-Identifier: GPL-2.0-or-later
+# oos-gadget: the rear USB port (the device side of the OTG controller) as a USB device for one computer, built in
+# configfs (docs/usb-device.md). It has two things to offer, each with its switch:
+# - the network over the cable (ADR 0079): RNDIS in configuration 1 for Windows (with Microsoft OS descriptors, so
+#   Windows binds its own driver), CDC ECM in configuration 2 for macOS and Linux. The scope has one fixed address on
+#   both interfaces and hands the computer an address by DHCP (busybox udhcpd, only on these interfaces, no router, no
+#   DNS): nothing is routed anywhere.
+# - a USBTMC instrument for VISA (ADR 0080): a FunctionFS function in both configurations, whose user-space side is
+#   oos-ui (oos_remote::usbtmc_device). FunctionFS is mounted at /dev/usbtmc-ffs; the gadget can only be bound once
+#   oos-ui has written the function's descriptors there, so `start` binds it when they are there already and else
+#   leaves the bind to oos-ui, which runs `oos-gadget bind` after writing them (also after oos-ui started again:
+#   closing the function's files lets the kernel unbind the gadget).
+#
+#   oos-gadget start    rcS, in the background: the gadget for what is switched on (nothing with everything off)
+#   oos-gadget stop     the gadget taken down: DHCP stopped, the computer sees the device go
+#   oos-gadget apply    oos-ui after a change of `usb.net` or `usb.tmc`: stop, then start
+#   oos-gadget bind     oos-ui once the USBTMC descriptors are written: the gadget built but not bound is bound
+#   oos-gadget status   the state line
+#   oos-gadget prefix   the /29 in force (oos-firewall lets it in on the USB interfaces)
+#
+# Keys (oos-conf): `usb.net` and `usb.tmc` (off by default, not yet verified on hardware), `usb.net.prefix` (a /29
+# network, 192.168.235.0/29 by default: the scope .1, the computer .2 over RNDIS or .3 over ECM). One line of state for
+# System > Network > Remote services in /tmp/oos-gadget.state, the prefix in /tmp/oos-gadget.net while the network is
+# up (oos-ui lets it in like loopback, netacl.rs). Log: /tmp/oos-gadget.log (rcS, oos-ui). One run at a time (a lock
+# folder, /tmp/oos-gadget.lock): rcS's start and oos-ui's apply and bind can come at once.
+#
+# The functions of the gadget come from one list (`functions`): another one is one more line there, its set-up before
+# the bind in `make_<type>` and what runs once it is bound in `up_<type>`.
+bin=$(dirname "$0")
+cfs=${OOS_CONFIGFS:-/sys/kernel/config}
+g=$cfs/usb_gadget/oos
+run=${OOS_GADGET_RUN:-/tmp/oos-gadget}
+state_file=${OOS_GADGET_STATE:-/tmp/oos-gadget.state}
+net_file=${OOS_GADGET_NET:-/tmp/oos-gadget.net}
+udc_dir=${OOS_UDC_DIR:-/sys/class/udc}
+ffs_dir=${OOS_USBTMC_FFS:-/dev/usbtmc-ffs}
+lock=${OOS_GADGET_LOCK:-/tmp/oos-gadget.lock}
+default_prefix=192.168.235.0/29
+# The IDs while the USBTMC function is part of the gadget: pid.codes' vendor ID for open source projects with its
+# test product ID 0x0001, which is for private testing only. A product ID of its own is to be asked of pid.codes before
+# a release carries this function (ADR 0080); it goes here, the one place it is written.
+usbtmc_vid=0x1209
+usbtmc_pid=0x0001
+log() { echo "oos-gadget: $*" >&2; }
+state() { echo "$*" > "$state_file"; log "$*"; }
+conf() { "$bin/oos-conf" "$@"; }
+is_on() { case "$(conf "$1" off)" in on|true|1) return 0;; esac; return 1; }
+
+# usb.net.prefix as `a.b.c.d/29` with d a multiple of 8, else the default (logged); sets $net (a.b.c.) and $d
+prefix() {
+	p=$(conf usb.net.prefix $default_prefix)
+	a=${p%/*}; n=29
+	case "$p" in */*) n=${p#*/};; esac
+	IFS=. read -r o1 o2 o3 o4 rest <<-X
+	$a
+	X
+	good=1
+	for o in "$o1" "$o2" "$o3" "$o4"; do
+		case "$o" in ''|*[!0-9]*) good=;; *) [ "$o" -le 255 ] || good=;; esac
+	done
+	if [ -z "$good" ] || [ -n "$rest" ] || [ "$n" != 29 ] || [ $((o4 % 8)) -ne 0 ]; then
+		log "usb.net.prefix = $p is not a /29 network (a.b.c.d/29, d a multiple of 8): $default_prefix instead"
+		p=$default_prefix o1=192 o2=168 o3=235 o4=0
+	fi
+	net=$o1.$o2.$o3. d=$o4
+	echo "$o1.$o2.$o3.$o4/29"
+}
+
+# The gadget's functions, one per line: the function's folder in configfs and the configurations it is part of.
+# Configuration 1 is the one Windows takes (it is linked under os_desc), configuration 2 the one for the others; the
+# USBTMC function is in both, so it is there whichever configuration a computer takes.
+functions() {
+	if is_on usb.net; then
+		echo "rndis.usb0 c.1"
+		echo "ecm.usb0 c.2"
+		is_on usb.tmc && echo "ffs.usbtmc c.1 c.2"
+	elif is_on usb.tmc; then
+		echo "ffs.usbtmc c.1"
+	fi
+}
+
+# One run at a time: a lock folder with the pid of its run; one left by a run that ended without removing it is
+# taken over. Removed when the run ends.
+take_lock() {
+	n=0
+	until mkdir "$lock" 2>/dev/null; do
+		p=$(cat "$lock/pid" 2>/dev/null)
+		if [ -n "$p" ] && [ ! -d "/proc/$p" ]; then
+			rm -rf "$lock"
+			continue
+		fi
+		n=$((n + 1))
+		[ $n -le 60 ] || { log "another run holds $lock (pid $p)"; return 1; }
+		sleep 1
+	done
+	echo $$ > "$lock/pid"
+	trap 'rm -rf "$lock"' EXIT
+}
+
+# the MAC addresses of the network functions: fixed per SD card, from the card's CID as eth0's (oos-mac with its
+# default `cid`), with another first byte for each side; none without a CID (the kernel picks random ones)
+mac() {
+	m=$(OOS_CONF_FILES=/dev/null "$bin/oos-mac" 2>/dev/null)
+	[ -n "$m" ] && echo "$1:${m#*:}"
+}
+# the scope's side ($2) and the computer's ($3) of the function in $1
+macs() {
+	if m=$(mac "$2"); then echo "$m" > "$1/dev_addr" && mac "$3" > "$1/host_addr"; fi
+	return 0
+}
+
+# set-up of a function before the gadget is bound: $1 its folder
+make_rndis() {
+	macs "$1" 06 0a
+	# Windows reads this and binds its own RNDIS driver, no .inf needed
+	echo RNDIS > "$1/os_desc/interface.rndis/compatible_id"
+	echo 5162001 > "$1/os_desc/interface.rndis/sub_compatible_id"
+}
+make_ecm() {
+	macs "$1" 0e 12
+}
+# FunctionFS: the function's files at $ffs_dir, where oos-ui writes the descriptors and serves the endpoints
+make_ffs() {
+	mkdir -p "$ffs_dir" && mount -t functionfs "${1##*.}" "$ffs_dir"
+}
+# FunctionFS is ready once its program wrote the descriptors: the files of the endpoints are there then
+ready_ffs() {
+	[ -e "$ffs_dir/ep1" ]
+}
+
+# after the bind: the interface of a network function with the scope's address (the same on each, /32) and a route
+# to the one address the computer gets on it, then a DHCP server on that interface alone. $1 the folder, $2 the
+# computer's address.
+up_net() {
+	i=$(cat "$1/ifname" 2>/dev/null)
+	case "$i" in usb*) ;; *) log "${1##*/}: no interface ($i)"; return 1;; esac
+	ip link set "$i" up || return 1
+	# `replace`: a bind after oos-ui started again finds the interface as it was left
+	ip addr replace "${net}$((d + 1))/32" dev "$i" || return 1
+	ip route replace "$2/32" dev "$i" src "${net}$((d + 1))" || return 1
+	[ "$(cat /proc/"$(cat "$run/$i.pid" 2>/dev/null)"/comm 2>/dev/null)" = udhcpd ] && return 0
+	cat > "$run/$i.conf" <<-C
+	interface $i
+	start $2
+	end $2
+	max_leases 1
+	auto_time 0
+	lease_file $run/$i.leases
+	option subnet 255.255.255.248
+	option lease 86400
+	C
+	: > "$run/$i.leases"
+	setsid udhcpd -f "$run/$i.conf" < /dev/null >> /tmp/oos-gadget.log 2>&1 &
+	echo $! > "$run/$i.pid"
+	log "$i (${1##*/}): ${net}$((d + 1)), the computer gets $2"
+}
+up_rndis() { up_net "$1" "${net}$((d + 2))"; }
+up_ecm() { up_net "$1" "${net}$((d + 3))"; }
+up_ffs() { :; }
+
+# what a computer lists for a configuration: with the network one for each, else the one there is
+config_name() {
+	if ! is_on usb.net; then echo "USBTMC"; return; fi
+	case $1 in c.1) echo "Windows";; *) echo "macOS and Linux";; esac
+}
+
+udc() { ls "$udc_dir" 2>/dev/null | head -n 1; }
+
+start() {
+	if [ -n "$(cat "$g/UDC" 2>/dev/null)" ]; then log "already up"; return 0; fi
+	# built and waiting for the USBTMC descriptors: only the bind is left
+	if [ -f "$run/built" ] && [ -d "$g" ]; then bind; return; fi
+	list=$(functions)
+	[ -n "$list" ] || { state "off"; return 0; }
+	prefix > /dev/null
+	[ -d "$cfs/usb_gadget" ] || mount -t configfs none "$cfs" 2>/dev/null
+	[ -d "$cfs/usb_gadget" ] || { state "off: no USB gadget support in the kernel"; return 1; }
+	# the device controller is there once the OTG port is in device mode, a moment after the kernel started
+	n=0
+	until [ -n "$(udc)" ]; do
+		n=$((n + 1))
+		[ $n -le 10 ] || { state "off: no USB device port"; return 1; }
+		sleep 1
+	done
+	mkdir -p "$run" "$g" || { state "off: failed, see /tmp/oos-gadget.log"; return 1; }
+	# the IDs: with the USBTMC function pid.codes' (above), bcdDevice 0x0101 alone and 0x0102 with the network (a
+	# computer that keeps what it read of a device by its IDs sees another device when the functions change); for
+	# the network alone the Linux Foundation's composite gadget
+	if is_on usb.tmc; then
+		echo $usbtmc_vid > "$g/idVendor"; echo $usbtmc_pid > "$g/idProduct"
+		if is_on usb.net; then echo 0x0102 > "$g/bcdDevice"; else echo 0x0101 > "$g/bcdDevice"; fi
+	else
+		echo 0x1d6b > "$g/idVendor"; echo 0x0104 > "$g/idProduct"; echo 0x0100 > "$g/bcdDevice"
+	fi
+	echo 0x0200 > "$g/bcdUSB"
+	# class "miscellaneous, interface association" for the functions that come in an interface association (RNDIS,
+	# ECM); the USBTMC function alone is one interface, its class in the interface
+	if is_on usb.net; then
+		echo 0xef > "$g/bDeviceClass"; echo 0x02 > "$g/bDeviceSubClass"; echo 0x01 > "$g/bDeviceProtocol"
+	else
+		echo 0 > "$g/bDeviceClass"; echo 0 > "$g/bDeviceSubClass"; echo 0 > "$g/bDeviceProtocol"
+	fi
+	mkdir -p "$g/strings/0x409"
+	echo OOS > "$g/strings/0x409/manufacturer"
+	echo "OOS oscilloscope ($(cat /proc/sys/kernel/hostname))" > "$g/strings/0x409/product"
+	s=$(OOS_CONF_FILES=/dev/null "$bin/oos-mac" 2>/dev/null | tr -d ':')
+	echo "${s:-oos}" > "$g/strings/0x409/serialnumber"
+	# Microsoft OS descriptors: Windows asks with vendor request 0xcd and takes the configuration linked here
+	echo 1 > "$g/os_desc/use"; echo 0xcd > "$g/os_desc/b_vendor_code"; echo MSFT100 > "$g/os_desc/qw_sign"
+	echo "$list" | while read -r f cs; do
+		mkdir -p "$g/functions/$f" && "make_${f%%.*}" "$g/functions/$f" || { log "$f: not made"; exit 1; }
+		for c in $cs; do
+			if [ ! -d "$g/configs/$c" ]; then
+				mkdir -p "$g/configs/$c/strings/0x409" || exit 1
+				config_name "$c" > "$g/configs/$c/strings/0x409/configuration"
+				# self-powered: the scope draws nothing from the computer
+				echo 0xc0 > "$g/configs/$c/bmAttributes"
+			fi
+			ln -s "$g/functions/$f" "$g/configs/$c/" || exit 1
+		done
+	done || { teardown; state "off: failed, see /tmp/oos-gadget.log"; return 1; }
+	[ -d "$g/configs/c.1" ] && ln -s "$g/configs/c.1" "$g/os_desc/"
+	: > "$run/built"
+	if ! ready; then
+		state "waiting for oos-ui (USB instrument)"
+		return 0
+	fi
+	bind_up
+}
+
+# whether every FunctionFS function of the gadget has its descriptors
+ready() {
+	for f in "$g"/functions/ffs.*; do
+		[ -d "$f" ] || continue
+		ready_ffs "$f" || return 1
+	done
+	return 0
+}
+
+# the gadget bound to the device controller, then what each function needs once it is bound
+bind_up() {
+	list=$(functions)
+	prefix > /dev/null
+	u=$(udc)
+	echo "$u" > "$g/UDC" || { teardown; state "off: failed to bind $u, see /tmp/oos-gadget.log"; return 1; }
+	echo "$list" | while read -r f cs; do "up_${f%%.*}" "$g/functions/$f" || exit 1; done ||
+		{ teardown; state "off: failed, see /tmp/oos-gadget.log"; return 1; }
+	if is_on usb.net; then
+		prefix > "$net_file"
+		state "on: ${net}$((d + 1))"
+	else
+		state "on: USB instrument"
+	fi
+}
+
+# oos-ui wrote the USBTMC descriptors: the gadget start built is bound now (nothing when it is bound, not built, or
+# a function still waits)
+bind() {
+	[ -f "$run/built" ] && [ -d "$g" ] || { log "bind: no gadget built"; return 0; }
+	[ -z "$(cat "$g/UDC" 2>/dev/null)" ] || return 0
+	ready || { log "bind: a function has no descriptors yet"; return 0; }
+	bind_up
+}
+
+# everything start made, in the reverse order (Documentation/usb/gadget_configfs.rst, "Cleaning up"); what is not
+# there is skipped, so it also clears a start that stopped half way
+teardown() {
+	rm -f "$net_file"
+	for p in "$run"/*.pid; do
+		[ -f "$p" ] || continue
+		k=$(cat "$p"); [ "$(cat /proc/"$k"/comm 2>/dev/null)" = udhcpd ] && kill "$k"
+		rm -f "$p"
+	done
+	rm -f "$run/built"
+	[ -d "$g" ] || return 0
+	[ -n "$(cat "$g/UDC" 2>/dev/null)" ] && echo "" > "$g/UDC"
+	rm -f "$g"/os_desc/c.* "$g"/configs/c.*/*.* 2>/dev/null
+	# FunctionFS: unmounted once its program closed its files (oos-ui does when the unbind ends its transfers)
+	if grep -q " $ffs_dir functionfs " /proc/mounts 2>/dev/null; then
+		n=0
+		until umount "$ffs_dir" 2>/dev/null; do
+			n=$((n + 1))
+			[ $n -le 10 ] || { log "$ffs_dir still in use"; break; }
+			sleep 1
+		done
+	fi
+	for c in "$g"/configs/c.*; do [ -d "$c" ] && rmdir "$c/strings/0x409" "$c"; done
+	for f in "$g"/functions/*.*; do [ -d "$f" ] && rmdir "$f"; done
+	rmdir "$g/strings/0x409" "$g"
+}
+
+case "${1:-}" in
+start) take_lock && start;;
+stop) take_lock && { teardown; state "off"; };;
+apply) take_lock && { teardown; start; };;
+bind) take_lock && bind;;
+status) cat "$state_file" 2>/dev/null || echo "not started";;
+prefix) prefix;;
+*) echo "usage: oos-gadget start|stop|apply|bind|status|prefix" >&2; exit 2;;
+esac

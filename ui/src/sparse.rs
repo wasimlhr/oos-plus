@@ -20,8 +20,14 @@ use std::cell::RefCell;
 /// Points of the screen record, as in `Source::acquire` and the fast path (`drawpipe::draw_frame`).
 pub const POINTS: usize = 3600;
 
+/// What the kept places of `PLACES` were worked out for: `t_first`, `dt` and `f.dt` as bits, and the number of points.
+type PlacesKey = (u64, u64, u64, usize);
+
 thread_local! {
     static BUF: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
+    /// `(t_first + k * dt) / f.dt` for k < n, and what it was worked out for (`t_first`, `dt`, `f.dt`, n as bits): the
+    /// points' places in samples before the trigger is added, the same for every frame of a view
+    static PLACES: RefCell<(PlacesKey, Vec<f64>)> = const { RefCell::new(((0, 0, 0, 0), Vec::new())) };
 }
 
 /// Draws a sparse frame into `ph` like `to_record` + `draw_ex` with weight `wgt`: Some(triggered), or None when the
@@ -37,13 +43,38 @@ pub fn draw_with(ph: &mut Phosphor, m: &Model, f: &Frame, wgt: u16, mode: Interp
     let t_first = m.delay as f64 - window / 2.0;
     let n = POINTS;
     let dt = window / n as f64;
-    let ti = trigger(f, m, n, window, t_first)?;
-    // the interpolated branch of `to_record` only: peak detect, high res and min/max pairs go there
+    // the interpolated branch of `to_record` only: peak detect, high res and min/max pairs go there, and look for
+    // their trigger there themselves (before the search here, each such frame was searched twice)
     let per = dt / f.dt;
     if f.envelope || per >= 2.0 || m.acq == AcqMode::HiRes {
         return None;
     }
+    let ti = trigger(f, m, n, window, t_first)?;
     let sparse = f.dt > 2.0 * dt;
+    PLACES.with(|pl| {
+        let mut pl = pl.borrow_mut();
+        let key = (t_first.to_bits(), dt.to_bits(), f.dt.to_bits(), n);
+        if pl.0 != key || pl.1.len() != n {
+            pl.1.clear();
+            pl.1.extend((0..n).map(|k| (t_first + k as f64 * dt) / f.dt));
+            pl.0 = key;
+        }
+        draw_points(ph, m, f, wgt, mode, (ti, t_first, dt, n, sparse), &pl.1);
+    });
+    Some(true)
+}
+
+/// The points of `draw_with` from their places `u` in samples (`PLACES`): the point k at `ti + u[k]`, the same value as
+/// `ti + (t_first + k * dt) / f.dt` worked out for each frame.
+fn draw_points(
+    ph: &mut Phosphor,
+    m: &Model,
+    f: &Frame,
+    wgt: u16,
+    mode: Interp,
+    (ti, t_first, dt, n, sparse): (f64, f64, f64, usize, bool),
+    u: &[f64],
+) {
     BUF.with(|b| {
         let mut out = b.borrow_mut();
         for c in 0..NCH {
@@ -52,7 +83,7 @@ pub fn draw_with(ph: &mut Phosphor, m: &Model, f: &Frame, wgt: u16, mode: Interp
                 continue;
             }
             out.clear();
-            let xs = (0..n).map(|k| ti + (t_first + k as f64 * dt) / f.dt);
+            let xs = u.iter().map(|&u| ti + u);
             if sparse && mode == Interp::Fast {
                 fast_many(v, ti + t_first / f.dt, dt / f.dt, n, &mut out);
             } else if sparse {
@@ -63,7 +94,6 @@ pub fn draw_with(ph: &mut Phosphor, m: &Model, f: &Frame, wgt: u16, mode: Interp
             ph.draw_ex(c, m, (m.time_per_div(), m.delay), t_first, dt, &out, wgt, None, false);
         }
     });
-    Some(true)
 }
 
 /// `oos_dsp::interp::lanczos8(v, x).unwrap_or(NAN)` for every x, appended to `out`. Its weights are normalised per

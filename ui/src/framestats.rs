@@ -200,8 +200,9 @@ pub fn fold_frame(f: &Frame, m: &Model, folds: &mut Folds) -> bool {
     let window = m.time_per_div() as f64 * HDIV as f64;
     let t_first = m.delay as f64 - window / 2.0;
     // the record's trigger point and screen window (`wave::to_record`; roll and scan do not take the fast path)
-    // min/max pairs of the live compression are no samples (compress.rs): the raw newest frame of the batch counts
-    if f.roll || f.scan || crate::compress::live(f) {
+    // min/max pairs of the live compression are no samples (compress.rs): the raw newest frame of the batch counts;
+    // High res and Peak below the full rate measure their records (`wave::drawn_as_record`), which the record path does
+    if f.roll || f.scan || crate::compress::live(f) || crate::wave::drawn_as_record(f, m) {
         return false;
     }
     let ti = crate::wave::trigger_point(f, m, n, window, t_first).unwrap_or(f.pre as f64);

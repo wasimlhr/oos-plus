@@ -313,6 +313,34 @@ A-D only use 0x1000, 0x4004, 0x4008, 0x400c, 0x4010-0x4018, 0x4068, 0x406c, 0x40
 - So one batch costs ~10 ms plus the time the triggers need: about 800 records/s with the probe-comp signal instead
   of ~30 with single frames. `frames` is capped by `max_frames` = 7 340 032 / segment size.
 
+## Write spacing of the batch sequences
+
+Verified on the unit (DHO924S, 2026-11-25: device-test of acquisition, deep record and register sequences, 21 pass; 1 to
+4 channels at 5 to 200 ns/div). OOS waits `Bar1::gap_us` (10 us, a sleep that lasts longer on the unit) after every BAR1
+write; the read-out verified in "Second frame under OOS" (`adc-spu-init.md`) ran that way. The sequences of the batch
+loop run without it and wait once after each group of writes instead, before the next register read, before the C2H read
+and at the end of the sequence (`bus::Grouped`, `seq::acquire_batch_on`):
+
+| sequence | writes | waits before | waits now |
+|---|---|---|---|
+| batch: arm (table A) and type-4 read-out of its frames | 29 + 46 | 75 | 2 (before the done poll, before the read-out's peek) |
+| prearm (the arm alone) | 29 | 29 | 1 |
+| disarm (the stop sequence) | 17 | 17 | 1 |
+| raw read of the newest frame again | 46 | 46 | 1 |
+| LA read | 39 | 39 | 2 (before the stream read, after the restore) |
+
+Nothing in this page asks for a wait between two writes of these sequences: the pulses (0x1000 bit0, the TX reset, the
+0x4080 info clear, the 0x4004 set_stop triples) are a set and a clear of a register, and the waits it names are polls
+of 0x4034 and 0x4080, which stay. The order and the values of the writes are the same (host test
+`batch_sequences_settle_once_after_each_group_of_their_writes`, register sequences of `tools/compare-base.sh`). The
+configuration, the start, the AFE, ADC and PLL buses, the calibration, roll and scan, segmented records and the
+generator keep the wait after every write. The host model (`sim`) still counts 10 us for every write.
+
+To check on the unit: the batches of `oos-fpgad run --frames 30 --execute` give the same frames as before, and the time
+between its log lines `read-out: ...` and the peek after it (`0x4034 = ..., 0x4080 = ...`) is the read-out's writes,
+46 waits before; at a fast time base with many triggers the hardware frames a second (the change of `hw frames` in
+`:SYSTem:STATe?` over a few seconds) are compared with the build before.
+
 ## Frames 0 and 1 of a batch (issue #5)
 
 Verified on the unit (DHO924S, 2026-11-16): the built-in generator gives a 1 kHz square of 2 Vpp on CH1, at 10 us/div
@@ -348,6 +376,15 @@ and 1 kpts (6.25 MSa/s). The trigger is an edge on CH1, rising at 0 V, in Normal
   - Other trigger types keep their frame 1, since they cannot be checked this way.
   - The log line `frame 1 of a batch without its edge at the trigger point, left out` counts these (logged at 1, 2,
     4, 8, ... frames).
+  - A slow edge crosses the level far from `pre`: the comparator does not fire exactly at the level. Verified on the
+    unit (DHO924S, 2026-11-25, the generator's sine of 2 Vpp on CH1, 0.5 V/div, edge rising at 0 V): a 50 Hz sine at
+    1 ms/div was at about −50 mV at the trigger point (a tenth of a division) and crossed the level 100 to 800 samples
+    after it, at 6.25 MSa/s. With the 32-sample window every batch of two at 0.5 and 1 ms/div was left out: 0.2
+    records a second of 33 taken (50 Hz), 0.4 of 35 (250 Hz), while a square of 250 Hz kept all 35. A crossing up to
+    16,384 samples away therefore counts too when the signal stays within 1.5 times the hysteresis of the level from
+    the trigger point to it (`hw::plan::edge_check`); the frames of issue #5 have a full step there. With that, at
+    1 ms/div 33 to 34 of 35 records a second reached the picture at 250 Hz and 17 to 31 of 30 to 33 at 50 Hz (two
+    runs each, Auto and Normal); the square and noise stayed as they were.
   - On the unit, every frame found was frame 1, and each was left out:
     - standard path (the frames path, removed since: ADR 0059): 22 in 270,000 frames;
     - batch path: 85 in 300,000 frames, none of them reaching a deposit worker.

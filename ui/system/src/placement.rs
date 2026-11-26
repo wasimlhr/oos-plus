@@ -99,6 +99,23 @@ pub fn place(r: Role) {
     let _ = r;
 }
 
+/// `perf.fifo = off` in system.conf, or OOS_FIFO=0: the acquisition thread at normal priority (`realtime`).
+#[cfg(any(target_os = "linux", test))]
+const FIFO_OFF: crate::sysconf::Flag = crate::sysconf::Flag { key: "perf.fifo", env: Some("OOS_FIFO"), on: "off" };
+
+/// The calling thread (the acquisition thread, `board::dho::hw`) at `SCHED_FIFO` priority 1, unless `perf.fifo = off`:
+/// no normal thread on its core delays a read-out any more; the threads it starts run at normal priority. Where the
+/// kernel refuses, it stays at normal priority, said once. On by default, verified on the unit (DHO924S, 2026-11-25;
+/// ADR 0010).
+pub fn realtime() {
+    #[cfg(target_os = "linux")]
+    if !FIFO_OFF.get() {
+        if let Err(e) = crate::system::fifo_current_thread(1) {
+            eprintln!("oos-ui: SCHED_FIFO for the acquisition thread: {}; normal priority", e);
+        }
+    }
+}
+
 /// The cores with less than the largest `cpu_capacity` (empty on a SoC whose cores are all alike, or without the
 /// file): where the background threads go.
 #[cfg(target_os = "linux")]
@@ -165,6 +182,7 @@ mod tests {
     #[test]
     fn the_switch_reads_both_files() {
         FLAG.check_both_files();
+        FIFO_OFF.check_both_files();
     }
 
     fn fake_sysfs(cap: &[(usize, u32)]) -> std::path::PathBuf {

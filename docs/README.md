@@ -21,6 +21,7 @@ and in our own words. The code of OOS is written to them
 - [wlan.md](wlan.md): WLAN through a USB stick.
 - [network.md](network.md): Ethernet and a link at 10 Mbit/s, date and time from NTP, time zones, `/oos/system.conf`.
 - [ssh.md](ssh.md): SSH access, trusted keys and how to provision them.
+- [usb-device.md](usb-device.md): the rear USB port as a network link to one computer (RNDIS and ECM, DHCP) and as a USBTMC instrument for VISA.
 - [device-testing.md](device-testing.md): testing on a unit: only the tests a change reaches, retries, known failures.
 - [board-on-a-host.md](board-on-a-host.md): the board code on a host against a simulated unit (ADR 0053): what it
   touches outside the program, the model, the seam, the stages and how far they are.

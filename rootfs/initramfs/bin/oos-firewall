@@ -2,11 +2,11 @@
 # Copyright (C) 2026 OOS contributors
 # SPDX-License-Identifier: GPL-2.0-or-later
 # oos-firewall: inbound only from the prefixes of `net.allow` (oos-conf, docs/network.md 6), before any service of
-# the image listens. Loopback, answers to what the scope sent (DHCP, DNS, NTP) and IPv6 neighbour discovery always
-# pass; everything else that comes in is dropped. Outbound is not limited. No `net.allow` or an empty one: no firewall,
-# as before (a table loaded before is removed). A list of which nothing parses closes everything but loopback rather
-# than opening it, and so does a ruleset nft refuses (an entry the checks here let through): a typo in the list must
-# not open the scope.
+# the image listens. Loopback, the computer on the rear USB port (oos-gadget), answers to what the scope sent (DHCP,
+# DNS, NTP) and IPv6 neighbour discovery always pass; everything else that comes in is dropped. Outbound is not
+# limited. No `net.allow` or an empty one: no firewall, as before (a table loaded before is removed). A list of which
+# nothing parses closes everything but loopback (and the USB port) rather than opening it, and so does a ruleset nft
+# refuses (an entry the checks here let through): a typo in the list must not open the scope.
 # The word `onlink6` in the list admits the IPv6 prefixes on the link: the routes without a gateway the kernel made
 # from the router's advertisements, /48 to /128, not fe80::/64 (a shorter one, `2000::/3` from a rogue router, would
 # open the scope to the internet). They change with the provider: `watch` checks them every 10 s, puts them in the
@@ -20,6 +20,7 @@
 #                            `ip -6 route show`)
 #   oos-firewall --prefixes  print the prefixes on the link only
 allow=$("$(dirname "$0")/oos-conf" net.allow)
+usb=$("$(dirname "$0")/oos-gadget" prefix 2>/dev/null)
 log() { echo "oos-firewall: $*" >&2; [ ! -w /dev/kmsg ] || echo "oos-firewall: $*" > /dev/kmsg; }
 PFX=/tmp/oos-net6.prefixes
 WPID=/tmp/oos-firewall-watch.pid
@@ -105,6 +106,10 @@ rules() {
 	echo "		icmpv6 type { nd-neighbor-solicit, nd-neighbor-advert, nd-router-advert } ip6 hoplimit 255 accept"
 	# the DHCP client before it has an address (udhcpc reads on a raw socket, this is for its later renewals)
 	echo "		udp sport 67 udp dport 68 accept"
+	# the computer on the rear USB port (oos-gadget, docs/usb-device.md): a cable to one computer, in like loopback, its DHCP
+	# request (from 0.0.0.0) and then its address in the USB prefix, only through the gadget's interfaces
+	echo "		iifname \"usb*\" udp sport 68 udp dport 67 accept"
+	echo "		iifname \"usb*\" ip saddr $usb accept"
 	[ -n "$v4" ] && echo "		ip saddr { $v4 } accept"
 	[ -n "$v6" ] && echo "		ip6 saddr { $v6 } accept"
 	[ -n "$on6" ] && echo "		ip6 saddr @onlink6 accept"

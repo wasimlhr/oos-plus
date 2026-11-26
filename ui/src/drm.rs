@@ -152,6 +152,19 @@ const CREATE_DUMB: libc::c_ulong = iowr(0xB2, std::mem::size_of::<CreateDumb>())
 const MAP_DUMB: libc::c_ulong = iowr(0xB3, std::mem::size_of::<MapDumb>());
 const DESTROY_DUMB: libc::c_ulong = iowr(0xB4, 4);
 const PAGE_FLIP_EVENT: u32 = 0x01;
+const CRTC_QUEUE_SEQUENCE: libc::c_ulong = iowr(0x3C, std::mem::size_of::<QueueSequence>());
+/// `QueueSequence::sequence` counts from the vblank now (else it is a vblank's number)
+const SEQUENCE_RELATIVE: u32 = 0x01;
+
+/// An event at a vblank of the CRTC (`DRM_IOCTL_CRTC_QUEUE_SEQUENCE`): `DRM_EVENT_CRTC_SEQUENCE` with the vblank's
+/// number, at once when that vblank has passed.
+#[repr(C)]
+struct QueueSequence {
+    crtc_id: u32,
+    flags: u32,
+    sequence: u64,
+    user_data: u64,
+}
 
 #[repr(C)]
 #[derive(Default)]
@@ -203,6 +216,12 @@ pub struct Display {
     /// how often a flip event came later than `wait_flip` waited (said on stderr at 1, 2, 4, ...)
     flips_late: u32,
     use_flip: bool,
+    /// the vblank event asked for (`ask_vblank`) and not read yet: when it was asked for
+    vblank_asked: Option<std::time::Instant>,
+    /// the number of the last vblank event read and not taken yet (`take_vblank`)
+    vblank: Option<u64>,
+    /// vblank events can be asked for: false after the kernel refused one
+    vblank_ok: bool,
     /// scaled output (HDMI): the map from the canvas, built for the first canvas size
     fit: Option<crate::gfx::Fit>,
 }
@@ -210,22 +229,6 @@ pub struct Display {
 /// DRM connector types (drm_mode.h).
 const CONNECTOR_HDMIA: u32 = 11;
 const CONNECTOR_DSI: u32 = 16;
-
-/// The number of flip-complete events (`DRM_EVENT_FLIP_COMPLETE`) in what a read of the DRM file gave: events are
-/// a type and a length (u32 each) and their data.
-fn flip_events(buf: &[u8]) -> u32 {
-    let (mut at, mut n) = (0, 0);
-    while let Some(h) = buf.get(at..at + 8) {
-        let typ = u32::from_ne_bytes([h[0], h[1], h[2], h[3]]);
-        let len = u32::from_ne_bytes([h[4], h[5], h[6], h[7]]) as usize;
-        if len < 8 {
-            break;
-        }
-        n += (typ == 2) as u32;
-        at += len;
-    }
-    n
-}
 
 impl Display {
     /// The panel's output. On an error the DRM file stays open until the process ends, as it always did: oos-ui ends
@@ -275,6 +278,9 @@ impl Display {
             flips_out: 0,
             flips_late: 0,
             use_flip: true,
+            vblank_asked: None,
+            vblank: None,
+            vblank_ok: true,
             fit: None,
         };
         // on any error the buffers made so far are freed again (the HDMI search retries)
@@ -447,21 +453,75 @@ impl Display {
     /// the next time, so it never passes for the flip after it.
     fn wait_flip(&mut self) {
         while self.flips_out > 0 {
-            let mut p = libc::pollfd { fd: self.fd.as_raw_fd(), events: libc::POLLIN, revents: 0 };
-            if unsafe { libc::poll(&mut p, 1, 100) } <= 0 {
+            if !self.read_events(100) {
                 self.flips_late += 1;
                 if self.flips_late.is_power_of_two() {
                     eprintln!("oos-ui: page flip event late ({} times)", self.flips_late);
                 }
                 return;
             }
-            let mut buf = [0u8; 256];
-            let n = match (&self.fd).read(&mut buf) {
-                Ok(n) if n > 0 => n,
-                _ => return,
-            };
-            self.flips_out = self.flips_out.saturating_sub(flip_events(&buf[..n]));
         }
+    }
+
+    /// Reads the events of the DRM file, waiting up to `ms` for one: the flips' and the vblank's
+    /// (`pacing::drm_events`). False when none came.
+    pub fn read_events(&mut self, ms: i32) -> bool {
+        let mut p = libc::pollfd { fd: self.fd.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+        if unsafe { libc::poll(&mut p, 1, ms) } <= 0 {
+            return false;
+        }
+        let mut buf = [0u8; 256];
+        let n = match (&self.fd).read(&mut buf) {
+            Ok(n) if n > 0 => n,
+            _ => return false,
+        };
+        let (flips, vblank) = crate::pacing::drm_events(&buf[..n]);
+        self.flips_out = self.flips_out.saturating_sub(flips);
+        if vblank.is_some() {
+            (self.vblank, self.vblank_asked) = (vblank, None);
+        }
+        true
+    }
+
+    /// Asks for an event at vblank `at` (None: the next one), unless one is asked for and not answered yet: one request
+    /// at a time, also while the frame clock is on its timer (a CRTC without vblanks for a while would otherwise
+    /// collect requests and answer them in a burst). A vblank `at` that has passed is answered at once by the kernel
+    /// (`drm_crtc_queue_sequence` without `NEXT_ON_MISS`), so a late event does not stop the asking; turning the CRTC
+    /// off answers the request too. A CRTC that refuses stops the asking: the frame clock stays on its timer.
+    pub fn ask_vblank(&mut self, at: Option<u64>, now: std::time::Instant) {
+        if !self.vblank_ok || self.vblank_asked.is_some() {
+            return;
+        }
+        let (flags, sequence) = at.map_or((SEQUENCE_RELATIVE, 1), |s| (0, s));
+        let mut q = QueueSequence { crtc_id: self.crtc_id, flags, sequence, user_data: 0 };
+        match ioc(&self.fd, CRTC_QUEUE_SEQUENCE, &mut q) {
+            Ok(()) => self.vblank_asked = Some(now),
+            Err(e) => {
+                eprintln!("oos-ui: vblank events refused ({}): the frames on the timer", e);
+                self.vblank_ok = false;
+            }
+        }
+    }
+
+    /// The number of the last vblank event read since the last call.
+    pub fn take_vblank(&mut self) -> Option<u64> {
+        self.vblank.take()
+    }
+
+    /// A page flip whose event has not come yet: the panel takes no new picture before it.
+    pub fn flip_pending(&self) -> bool {
+        self.flips_out > 0
+    }
+
+    /// The DRM file, readable when an event came (the frame loop's wait).
+    pub fn fd(&self) -> i32 {
+        self.fd.as_raw_fd()
+    }
+
+    /// The refresh of the mode in Hz: the pixel clock over the pixels of a frame, blanking included.
+    pub fn refresh_hz(&self) -> f64 {
+        let m = &self.mode;
+        m.clock as f64 * 1000.0 / (m.htotal as f64 * m.vtotal as f64).max(1.0)
     }
 
     /// Copies the canvas into the back buffer and shows it at the next vblank.

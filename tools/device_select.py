@@ -30,8 +30,9 @@ AREAS = {
             r"^fine_time_base", r"^delay_moves_the_record$", r"^single_takes_one_new_record$", r"^deep_memory",
             r"^peak_detect", r"^high_res", r"^rates_for_the_record$", r"^two_channels_agree$", r"^deskew"),
     # the data of a deep record: filled over its length, the raw window of a STOP whole, the export what the screen
-    # shows (not for roll: a deep record is a short time base, roll starts at 200 ms/div)
-    "deep": (r"^deep_memory", r"^deep_record_", r"^raw_window_", r"^norm_export_"),
+    # shows, each hardware segment with its own samples (not for roll: a deep record is a short time base, roll starts
+    # at 200 ms/div)
+    "deep": (r"^deep_memory", r"^deep_record_", r"^raw_window_", r"^norm_export_", r"^hardware_segments_"),
     "frontend": (r"^zero_of_every_scale$", r"^gnd_is_flat$", r"^every_scale_reads_true$", r"^fine_scale",
                  r"^offset_", r"^probe_ratio", r"^ac_coupling", r"^invert_", r"^bandwidth_limit", r"^response_over",
                  r"^two_channels_agree$", r"^auto_"),

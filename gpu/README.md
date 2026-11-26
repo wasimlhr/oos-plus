@@ -69,7 +69,9 @@ panel 8 to 10 ms, the monitor 12 to 15 ms. Before the traces' two steps
   its blocks in its half of the arena; of the maps only rows that changed since the last frame are copied and
   uploaded. The commands, images and new glyphs lie at the top of the half.
 - **Pipelined**: while the GPU puts frame N together, the CPU draws frame N+1; frame N is shown when it is done
-  (three scan-out buffers per output). A screenshot waits for its own frame.
+  (three scan-out buffers per output). A screenshot waits for its own frame. The protocol has no message for the
+  panel's vblank: oos-ui reads it from its own DRM file and only asks whether the helper answered (`Gpu::answered`)
+  before a step the frame clock holds (`ui/src/pacing.rs`).
 - **Clock**: the Mali's load governor only sees the short work of each frame and stays at 200 MHz (an 8 ms frame);
   while the helper runs, its lowest step is 400 MHz, which runs at the same voltage.
 - **Fallback**: no Panfrost render node, a helper that does not start, or any failed frame: oos-ui says so and draws

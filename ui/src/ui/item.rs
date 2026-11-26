@@ -482,6 +482,12 @@ pub(super) enum Item {
     /// who may reach the scope (`net.allow`, a picker with Other on the keyboard), and whether that is in force
     RemAllow,
     RemFirewall,
+    /// the rear USB port as a network link to one computer (`usb.net`, oos-gadget), and the scope's address on it
+    RemUsb,
+    RemUsbAddr,
+    /// the rear USB port as a USBTMC instrument for VISA (`usb.tmc`, ADR 0080), and where its function is
+    RemTmc,
+    RemTmcState,
     /// System > Graphics: CPU or GPU (ui/graphics.rs)
     Graphics,
     /// Display > Views (ui/views.rs)

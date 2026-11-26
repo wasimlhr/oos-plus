@@ -859,3 +859,123 @@ fn auto_bandwidth_follows_the_rate_of_one_channel() {
         assert_eq!(*codes.last().unwrap(), 1, "mask {:#x}: {:?}", mask, codes);
     }
 }
+
+/// What a bus saw, in order: a write, the gap `wr` makes after it, the settle after a group of `wr_unsettled` writes, a
+/// register read, a read of the stream.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Ev {
+    Wr(u32, u32),
+    Gap,
+    Settle,
+    Rd,
+    Stream,
+}
+
+/// A bus that waits as `Bar1` does and logs it: the FPGA stopped, its batch done and `last` the last frame recorded.
+struct Spaced {
+    log: std::rc::Rc<std::cell::RefCell<Vec<Ev>>>,
+    last: u32,
+    unsettled: bool,
+}
+
+impl crate::dho::bus::Bus for Spaced {
+    fn wr(&mut self, off: u32, v: u32) {
+        self.log.borrow_mut().extend([Ev::Wr(off, v), Ev::Gap]);
+    }
+    fn wr_unsettled(&mut self, off: u32, v: u32) {
+        self.log.borrow_mut().push(Ev::Wr(off, v));
+        self.unsettled = true;
+    }
+    fn settle(&mut self) {
+        if std::mem::take(&mut self.unsettled) {
+            self.log.borrow_mut().push(Ev::Settle);
+        }
+    }
+    fn rd(&mut self, off: u32) -> u32 {
+        self.log.borrow_mut().push(Ev::Rd);
+        match off {
+            0x4034 => scu::status::STOPPED,
+            0x4080 => scu::PLAYINFO_DONE,
+            0x4010 => self.last,
+            _ => 0,
+        }
+    }
+}
+
+/// The C2H stream of `Spaced`: zeros, every read logged.
+struct SpacedStream(std::rc::Rc<std::cell::RefCell<Vec<Ev>>>);
+
+impl std::io::Read for SpacedStream {
+    fn read(&mut self, b: &mut [u8]) -> std::io::Result<usize> {
+        self.0.borrow_mut().push(Ev::Stream);
+        b.fill(0);
+        Ok(b.len())
+    }
+}
+
+/// The writes of `steps`, in order.
+fn writes_of(steps: &[Step]) -> Vec<Ev> {
+    steps.iter().filter_map(|s| if let Step::Wr((o, v)) = s { Some(Ev::Wr(*o, *v)) } else { None }).collect()
+}
+
+// Break it catches: a batch sequence that waits after every write again (about 60 us each on the unit), one that
+// writes other registers, values or another order than its step lists, or one that reads the FPGA or the stream before
+// the settle of the writes just made (acquisition-start.md, "Write spacing of the batch sequences"); and a
+// configuration that lost the gap after every write
+#[test]
+fn batch_sequences_settle_once_after_each_group_of_their_writes() {
+    use crate::dho::bus::DmaBuf;
+    let s = Settings { tdiv: 10e-9, frames: 3, window: None, ..Settings::default() };
+    let configured = || {
+        let mut st = State::handover(s.mask, None);
+        let p = st.configure(&s, None, None).unwrap().1;
+        (st, p)
+    };
+    let (mut st, p) = configured();
+    // the same sequences from the step lists, of a state configured the same way
+    let (mut want, _) = configured();
+    let log = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let mut bar = Spaced { log: log.clone(), last: frames(&s, &p) - 1, unsettled: false };
+    let mut c2h = SpacedStream(log.clone());
+    let take = || std::mem::take(&mut *log.borrow_mut());
+    let mut dma = DmaBuf::new();
+    // a batch: the arm, its wait, the read-out of all frames
+    assert_eq!(acquire_batch(&mut st, &s, &p, &mut bar, &mut c2h, &mut dma, false, 0, |_| {}), Ok(3));
+    let batch = take();
+    // armed ahead, its batch read, then armed ahead once more and disarmed
+    prearm(&mut st, &s, &p, &mut bar, &mut c2h, &mut crate::dho::boot::SysClock::default(), |_| {}).unwrap();
+    let ahead = take();
+    disarm(&mut st, &mut bar, &mut c2h, &mut crate::dho::boot::SysClock::default(), |_| {}).unwrap();
+    let off = take();
+    read_raw_again(&mut st, &s, &p, &mut bar, &mut c2h, &mut dma, 2, |_| {}).unwrap();
+    let again = take();
+    // the LA read of the same record: its writes straight before the stream is read
+    let sl = Settings { la: Some(la::Set::default()), ..s.clone() };
+    acquire_la(&mut st, &sl, &p, &mut bar, &mut c2h, |_| {}).unwrap();
+    let la_read = take();
+    let w: Vec<Ev> =
+        writes_of(&want.arm_steps(&s, &p)).into_iter().chain(writes_of(&want.read_steps(&s, &p, 3))).collect();
+    let cases = [
+        ("batch", batch, w, 2),
+        ("prearm", ahead, writes_of(&want.arm_only_steps(&s, &p)), 1),
+        ("disarm", off, writes_of(&want.disarm_steps()), 1),
+        ("raw read", again, writes_of(&want.read_steps_at(&raw_settings(&s), &p, 2, 1)), 1),
+        ("LA read", la_read, writes_of(&want.la_read_steps(&sl, &p)), 2),
+    ];
+    for (what, ev, w, groups) in cases {
+        let got: Vec<Ev> = ev.iter().copied().filter(|e| matches!(e, Ev::Wr(..))).collect();
+        assert!(!got.is_empty(), "{}: no writes", what);
+        assert_eq!(got, w, "{}: the writes of its step lists, in their order", what);
+        let n = |k: Ev| ev.iter().filter(|e| **e == k).count();
+        assert_eq!((n(Ev::Gap), n(Ev::Settle)), (0, groups), "{}: gaps and settles in {:?}", what, ev);
+        // nothing is read right after a write: the settle comes between
+        for x in ev.windows(2) {
+            assert!(!matches!(x, [Ev::Wr(..), Ev::Rd | Ev::Stream]), "{}: read before the settle in {:?}", what, ev);
+        }
+        assert!(!matches!(ev.last(), Some(Ev::Wr(..))), "{}: ends without its settle", what);
+    }
+    // the same writes outside a batch sequence (configuration, start, calibration): the gap after every one
+    execute_bus(&want.arm_only_steps(&s, &p), &mut bar, &mut c2h, &mut dma, |_| {}).unwrap();
+    let plain = take();
+    assert!(plain.len() > 2 && plain.chunks(2).all(|x| matches!(x, [Ev::Wr(..), Ev::Gap])), "{:?}", plain);
+}

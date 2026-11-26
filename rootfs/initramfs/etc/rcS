@@ -76,6 +76,10 @@ ip link set eth0 up 2>/dev/null
 #    after the firewall, in the background: the first start makes the password and the host keys in /oos/ssh. There
 #    is no telnet (ADR 0054); `remote.telnet` in an old /oos/system.conf is ignored
 (setsid sh -c '/bin/oos-ssh start >> /tmp/oos-ssh.log 2>&1' < /dev/null > /dev/null 2>&1 &)
+# 3b) the rear USB port as a device for one computer (oos-gadget, docs/usb-device.md; off unless usb.net or usb.tmc
+#     is on), after the firewall, in the background: it waits for the port's device controller (and for oos-ui's
+#     USBTMC descriptors, which oos-ui follows with `oos-gadget bind`)
+(setsid sh -c '/bin/oos-gadget start >> /tmp/oos-gadget.log 2>&1' < /dev/null > /dev/null 2>&1 &)
 # 4) banner on the panel and the serial console
 /bin/oos-info | tee /dev/tty1 > /dev/kmsg
 # 4b) what the data partition (0b) keeps for the screen

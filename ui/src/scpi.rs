@@ -503,6 +503,12 @@ impl Scpi {
         }
     }
 
+    /// Whether the error queue holds an error (`:SYSTem:ERRor?` has one to read): the status byte's EAV bit, which the
+    /// USBTMC transport answers READ_STATUS_BYTE with.
+    pub fn has_errors(&self) -> bool {
+        !self.err.is_empty()
+    }
+
     pub fn port(&self) -> Option<u16> {
         self.l.as_ref().and_then(|l| l.local_addr().ok()).map(|a| a.port())
     }
@@ -519,6 +525,16 @@ impl Scpi {
                 self.clients.clear();
             }
         }
+    }
+
+    /// The sockets whose input `poll` waits for (`input::Inputs::poll`): the listener and every client that still
+    /// reads. A client at the end of its input is left out: its socket stays readable and would end every wait.
+    // oos-plus: file descriptors are a Unix's; the Windows desktop build has no frame loop that waits on them
+    #[cfg(unix)]
+    pub fn wake_fds(&self, out: &mut Vec<std::os::fd::RawFd>) {
+        use std::os::fd::AsRawFd;
+        out.extend(self.l.iter().map(|l| l.as_raw_fd()));
+        out.extend(self.clients.iter().filter(|c| !c.closing).map(|c| c.s.as_raw_fd()));
     }
 
     pub fn poll(&mut self, ui: &mut Ui, cv: &Canvas) {

@@ -7,6 +7,9 @@ the network: there is no telnet (ADR 0054); the serial console keeps its shell. 
 **Allowed** (network.md section 6); it applies at once: with SSH switched on, a list set starts the server, and a list
 removed stops it with its sessions.
 
+Over a USB cable to the rear port ([usb-device.md](usb-device.md), not yet verified on hardware) SSH is the same
+server at `root@192.168.235.1`; the port has no serial console of its own.
+
 This page is about the first login and about getting trusted keys onto a scope without the password.
 
 ## The first login

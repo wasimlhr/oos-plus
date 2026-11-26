@@ -655,3 +655,39 @@ fn nested_menu_back_restores_each_parent_and_its_focus_after_a_picker() {
     assert!(ui.parent.is_none() && ui.menu_history.is_empty());
     assert!(ui.dlg_layout().unwrap().back.is_none(), "a direct toolbar action starts a fresh route");
 }
+
+/// + on a cursor raises its value: a time cursor moves right, a voltage cursor up (its place counts from the top).
+#[test]
+fn plus_raises_every_cursor() {
+    use super::{CursorMode, Item};
+    for (mode, items) in [
+        (CursorMode::Time, [Item::CurA, Item::CurB]),
+        (CursorMode::Volt, [Item::CurA, Item::CurB]),
+        (CursorMode::Xy, [Item::CurC, Item::CurD]),
+    ] {
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.cursor = mode;
+        (ui.m.cur_a, ui.m.cur_b, ui.m.cur_c, ui.m.cur_d) = (0.3, 0.7, 0.3, 0.7);
+        for it in items {
+            let value = |ui: &super::Ui| {
+                let place = match it {
+                    Item::CurA => ui.m.cur_a,
+                    Item::CurB => ui.m.cur_b,
+                    Item::CurC => ui.m.cur_c,
+                    _ => ui.m.cur_d,
+                };
+                if mode == CursorMode::Time {
+                    ui.cursor_time_at(place)
+                } else {
+                    ui.cursor_volt_at(place)
+                }
+            };
+            let before = value(&ui);
+            ui.adjust(it, 1);
+            let after = value(&ui);
+            assert!(after > before, "{mode:?} {it:?}: + took {before} to {after}");
+            ui.adjust(it, -1);
+            assert!((value(&ui) - before).abs() < 1e-9, "{mode:?} {it:?}: - undoes +");
+        }
+    }
+}

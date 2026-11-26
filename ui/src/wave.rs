@@ -17,7 +17,7 @@ mod record;
 
 pub use levels::*;
 pub use record::resample as resample_record;
-pub use record::{edge_near, sw_trig_level, to_record, trig_mean, trigger_point};
+pub use record::{drawn_as_record, edge_near, sw_trig_level, to_record, trig_mean, trigger_point};
 
 pub use oos_hal::Rng;
 
@@ -1133,6 +1133,20 @@ pub fn draw_trace(band: &mut [u16], pw: usize, ph: usize, r_lo: usize, t: &Trace
     });
 }
 
+/// What the point columns of `trace_columns` depend on: the record's time grid, the view and the width.
+#[derive(Clone, Copy, PartialEq)]
+struct XKey {
+    t0: u64,
+    dt: u64,
+    view: (u32, u32),
+    pw: usize,
+    n: usize,
+}
+
+thread_local! {
+    static XS: std::cell::RefCell<(Option<XKey>, Vec<f32>)> = const { std::cell::RefCell::new((None, Vec::new())) };
+}
+
 /// The pixels of a trace on a `pw` x `ph` map, column by column: `put(column, first row, last row, weight)` for every
 /// vertical span (rows within the map, first <= last), only for the columns `cols.0 .. cols.1`. Line segments from
 /// point to point, or one pixel a point with `Model::dots`; `z` scales the weight per point (Z input). With `pairs`
@@ -1181,6 +1195,32 @@ pub fn trace_columns(pw: usize, ph: usize, t: &Trace, cols: (i32, i32), mut put:
         }
         return;
     }
+    // the columns of the points: the same for every record of a view (the fast path draws hundreds a screen), so
+    // they are worked out once per time grid and view, with the same expression (`x_of`), and kept per thread
+    let key =
+        XKey { t0: rec_t0.to_bits(), dt: dt.to_bits(), view: (view.0.to_bits(), view.1.to_bits()), pw, n: v.len() };
+    XS.with(|xs| {
+        let mut xs = xs.borrow_mut();
+        if xs.0 != Some(key) {
+            xs.1.clear();
+            xs.1.extend((0..v.len()).map(x_of));
+            xs.0 = Some(key);
+        }
+        trace_points(&xs.1, t, (c_lo, c_hi), hi, y_of, wt, &mut put);
+    });
+}
+
+/// The points of `trace_columns` (lines or dots, no pairs) at the columns `xs`.
+fn trace_points(
+    xs: &[f32],
+    t: &Trace,
+    (c_lo, c_hi): (i32, i32),
+    hi: i32,
+    y_of: impl Fn(f32) -> f32,
+    wt: impl Fn(usize) -> u16,
+    put: &mut impl FnMut(i32, i32, i32, u16),
+) {
+    let (m, v) = (t.m, t.v);
     let mut prev: Option<(f32, f32)> = None;
     for (k, &val) in v.iter().enumerate() {
         if !val.is_finite() {
@@ -1188,7 +1228,7 @@ pub fn trace_columns(pw: usize, ph: usize, t: &Trace, cols: (i32, i32), mut put:
             continue;
         }
         let w = wt(k);
-        let p = (x_of(k), y_of(val));
+        let p = (xs[k], y_of(val));
         if m.dots {
             let (x, y) = (p.0.floor() as i32, p.1.round() as i32);
             if (c_lo..c_hi).contains(&x) && (0..hi).contains(&y) {
@@ -1225,6 +1265,39 @@ pub fn trace_columns(pw: usize, ph: usize, t: &Trace, cols: (i32, i32), mut put:
 
 #[cfg(test)]
 mod tests {
+    /// The point columns kept per thread (`XS`) give the spans of a thread that never drew before, also after a record
+    /// of another time grid, view or width changed them in between.
+    #[test]
+    fn kept_point_columns_give_the_spans_of_a_fresh_thread() {
+        use crate::model::Model;
+        let m = Model::default();
+        let v: Vec<f32> = (0..3600).map(|k| 0.9 * (k as f32 / 97.0).sin()).collect();
+        let spans = |pw: usize, t0: f64, dt: f64, view: (f32, f32)| {
+            let t = super::Trace { c: 0, m: &m, view, rec_t0: t0, dt, v: &v, w: 24, z: None, pairs: false };
+            let mut out = Vec::new();
+            super::trace_columns(pw, 448, &t, (0, pw as i32), |x, a, b, w| out.push((x, a, b, w)));
+            out
+        };
+        let cases = [
+            (970, -25e-9, 50e-9 / 3600.0, (5e-9, 0.0)),
+            (970, -25e-9 + 1e-12, 50e-9 / 3600.0, (5e-9, 0.0)),
+            (970, -25e-9, 50e-9 / 3600.0, (5e-9, 1e-9)),
+            (1024, -25e-9, 50e-9 / 3600.0, (5e-9, 0.0)),
+            (970, -1e-6, 2e-6 / 3600.0, (2e-7, 0.0)),
+        ];
+        let fresh: Vec<_> = cases
+            .iter()
+            .map(|&(pw, t0, dt, view)| std::thread::scope(|s| s.spawn(|| spans(pw, t0, dt, view)).join().unwrap()))
+            .collect();
+        // here one after the other on one thread, twice, so each case finds the columns of another one kept
+        for _ in 0..2 {
+            for (&(pw, t0, dt, view), want) in cases.iter().zip(&fresh) {
+                assert!(!want.is_empty());
+                assert_eq!(&spans(pw, t0, dt, view), want, "width {pw}, t0 {t0}, view {view:?}");
+            }
+        }
+    }
+
     #[test]
     fn autoset_summary_handles_native_fast_edges_and_slow_signal_with_fast_noise() {
         let count = 1_000_000;

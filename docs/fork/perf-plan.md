@@ -230,6 +230,19 @@ frames per batch, decode + draw 117 -> 12.9 us per frame. Unit procedure in comp
   there is no xdma interrupt: the completions run in xdma's own per-CPU kernel threads, which the script cannot move
   (they are bound per CPU); the IRQ step matters with `xdma.params = poll_mode=0` (item 5). Unit check: `top -H -d 1`
   per core, `/proc/interrupts`, UI frame time with and without the setting.
+- Acquisition priority and clock floors (idea from fumingcaps' fork, release v0.2.1), default on, verified on the unit
+  (DHO924S, 2026-11-25: 62 device tests pass, one thread at FIFO, 1416 MHz and 600 MHz in RUN, back at STOP, 39 °C;
+  shown waveforms a second +2 to +7 % at 5 to 200 ns/div):
+  the hw thread runs at `SCHED_FIFO` 1 with `SCHED_RESET_ON_FORK` (`placement::realtime`; `perf.fifo = off` or
+  OOS_FIFO=0 turns it off; a refusal is logged once and the thread stays at normal priority). While the hardware
+  acquisition runs, `clockfloor` raises the first big core's cpufreq `scaling_min_freq` to the step at or above
+  1416000 kHz and the `*.gpu` devfreq `min_freq` to the step at or above 600 MHz, never lowering a higher minimum; STOP
+  and the end of oos-ui write back the values from before (`perf.clocks = off` or OOS_CLOCKS=0 turns it off); a
+  minimum found at one of the floors that this run did not set (oos-ui ended while running) goes to the lowest step.
+  The GPU helper's 400 MHz floor goes through the same module. Thermal limits still win (the kernel caps a minimum at
+  the cooling's maximum). Guard: plan and apply against a fake sysfs tree. Unit check: `chrt -p` of the hw thread (or
+  `policy` in `/proc/<pid>/task/<tid>/sched`), `scaling_min_freq` of `cpu4` and `min_freq` of the GPU in RUN and after
+  STOP, wfm/s and UI frame time with and without the switches.
 - 4 done, default on, bit-identical: `sparse::draw` replaces `Frame::clone` + `to_record` + `draw_ex` for sparse
   frames with an edge trigger found on a channel (else `to_record` as before). Most of the cost is `lanczos8`
   (30 of 40 us per channel at 3600 points), not the clone (5 %). `sparse::lanczos8_many` sums eight points at a time,
@@ -285,6 +298,13 @@ frames per batch, decode + draw 117 -> 12.9 us per frame. Unit procedure in comp
   dropped` only, and acquired - used - dropped grew with them. Drops for want of a buffer (the workers behind the
   acquisition) are counted in the pipeline's counters only; at short time bases they are the limit of batch mode: 4
   A53 draw about 3 k frames/s at 10 us/div (estimate above), fewer than the acquisition delivers.
+  Admission (ADR 0081, verified on the unit 2026-11-25; from fumingcaps' fork, release v0.2.1): the workers measure their time per frame (a moving average per
+  batch and mapping, folds included) and grant the frames they draw in 33 ms; a batch planned with more than 4 frames
+  arms at most that many (at least 5), and before it arms the thread waits, drawing with the workers, while they hold
+  the buffers it needs (at most 200 ms, then as before). Unit 2026-11-25 before it, 1 channel at 5 ns/div: about
+  53,000 frames/s delivered, 6,400 in the picture, the four workers 96 % busy. With it `dropped` loses the batches
+  without a buffer (expected near 0) and `acquired` (frames read) falls towards `used`; to measure on the unit:
+  acquired / used / dropped a second and screens a second at 5 ns, 100 ns, 10 us and 1 ms/div, 1 and 4 channels.
   Unit (verified on the unit, 2026-11-18) with the parking: 28.7-29.4 screens a second at 10 us/div; frames a second
   in the picture against the build before the shared mailbox: 1 channel +4-8 %, 2 channels equal, 4 channels -9 to
   -14 % at 1 and 10 us/div. There the batches are fewer than the screens, so every drawer of a batch hands its maps on

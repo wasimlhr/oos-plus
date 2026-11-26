@@ -38,6 +38,7 @@ All of them end in the same SCPI interpreter, so a command behaves the same whic
 | **VXI-11** | 111 (portmapper, TCP and UDP), core channel 9009 | `TCPIP::<scope>::INSTR` | VISA programs that expect an LXI instrument (NI-VISA, Keysight IO, pyvisa) |
 | **MCP** | 8080, `POST /mcp` | (none) | AI agents: JSON-RPC 2.0, tools `scpi` and `screenshot` |
 | **HiSLIP** | 4880 | `TCPIP::<host>::hislip0::INSTR` | only the desktop build on a computer, not on the scope |
+| **USBTMC** | rear USB-B port, no network | `USB::0x1209::0x0001::<serial>::INSTR` | a USB cable instead of a network; off by default, System > Network > Remote services > USB instrument ([[Remote Control]]) |
 
 `<scope>` is the scope's address or its name, e.g. `dho924s-123456.local` ([[Remote Control]] explains the name). Computers that browse for instruments find SCPI as `_scpi-raw._tcp` and VXI-11 as `_vxi-11._tcp`.
 

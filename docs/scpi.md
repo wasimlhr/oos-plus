@@ -45,6 +45,7 @@ This reference describes the repository implementation. Primary Rigol syntax was
 | Raw TCP SCPI | TCP 5555 | Recommended for scripts. Newline-terminated program messages; newline-terminated replies. |
 | HiSLIP | TCP 4880 | Same interpreter, with HiSLIP framing. Basic sessions; full locking/overlap semantics are not implemented. A reply is split into messages of the client's maximum message size, but of at least 4 KiB of data. |
 | VXI-11 | Linux scope service | Same interpreter, partial RPC transport. Pending operation reads have the limitation described below. Not offered on a computer (`--serve`). |
+| USBTMC (USB488) | rear USB-B port, `usb.tmc`, off | Same interpreter, VISA `USB::0x1209::0x0001::<serial>::INSTR`, no network needed. A DEV_DEP_MSG_OUT message up to its EOM is one program message; its reply, newline-terminated, is returned in transfers of at most the requested TransferSize (and 1 MiB). No TermChar, no REN/GTL/LLO, no TRIGGER; READ_STATUS_BYTE gives MAV and EAV. A waiting `*OPC?` is kept like raw TCP. See [usb-device.md](usb-device.md). Not offered on a computer. |
 | HTTP/MCP adapter | HTTP web port | `POST /mcp`, JSON-RPC `tools/call` with tool name `scpi`. This is not a VISA interface. `/cmd` uses a separate front-panel command language. |
 
 On a computer, `oos-ui --serve` offers the same interpreter without a scope, and can use other ports. For example:
