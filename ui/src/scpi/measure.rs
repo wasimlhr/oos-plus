@@ -10,6 +10,7 @@
 use super::math::math_index;
 use super::{e, kw, num64, parse_bool, parse_wave, shown, t, wave_tok, Scpi};
 use crate::model::*;
+use crate::ui::slots::SLOTS;
 use crate::ui::Ui;
 
 /// Single-channel items the strip can show. The first spelling of a measurement is the one `STRip` and `READout` print.
@@ -129,6 +130,35 @@ pub(crate) fn measurement_items() -> Vec<(&'static str, bool)> {
     v
 }
 
+/// `SLOT<n>` of a header: Some(Some(n)) for a slot number, Some(None) for `SLOT` alone, None for another node.
+fn slot_node(node: &str) -> Option<Option<u8>> {
+    let (k, n) = super::suffix(node);
+    if !kw(k, "SLOT") {
+        return None;
+    }
+    if n.is_none() && !node.eq_ignore_ascii_case(k) {
+        return None;
+    }
+    Some(n.filter(|n| (1..=SLOTS as usize).contains(n)).map(|n| n as u8))
+}
+
+/// What a row measures as `STRip?` writes it, without the value: `VPP,CHAN1`, `RRDELAY,CHAN1,CHAN2`.
+fn slot_item(key: RowKey) -> String {
+    match key {
+        RowKey::One(k, id) => format!("{},{}", meas_token(k), wave_tok(id)),
+        RowKey::Pair(k, a, b) => format!("{},{},{}", pair_token(k), wave_tok(a), wave_tok(b)),
+        RowKey::Cat(id, ..) => format!("CAT{id}"),
+    }
+}
+
+/// The slots in use, `n,ITEM,source[,source],value` each, separated by semicolons.
+fn slot_list(ui: &Ui) -> String {
+    if ui.m.meas_slots.is_empty() {
+        return String::new();
+    }
+    ui.slots_in_use().into_iter().map(|(n, key)| format!("{n},{},{}", slot_item(key), e(ui.slot_value(key)))).collect::<Vec<_>>().join(";")
+}
+
 pub(crate) fn meas_kind(item: &str) -> Option<Meas> {
     MEAS_ITEMS.iter().find(|it| kw(item, it.0)).map(|it| it.2)
 }
@@ -219,6 +249,9 @@ impl Scpi {
             if kw(nodes[1], "READout") {
                 return t(&meas_readout(ui));
             }
+        }
+        if (2..=3).contains(&nodes.len()) && slot_node(nodes[1]).is_some() {
+            return self.meas_slot_cmd(ui, nodes, query, arg);
         }
         if nodes.len() == 3 && kw(nodes[1], "BURSt") && kw(nodes[2], "IDLE") {
             if query {
@@ -323,6 +356,51 @@ impl Scpi {
             }
         }
         self.push_err(format!("-113,\"Undefined header\" {}", cmd));
+        None
+    }
+
+    /// `:MEASure:SLOT[<n>][:ITEM|:CLEar]` (ui/slots.rs): `SLOT<n> <item>[,A[,B]]` adds the row and gives it the number,
+    /// `SLOT<n>?` reads it, `SLOT<n>:ITEM?` says what it measures, `SLOT<n>:CLEar` empties it, `SLOT:LIST?` lists them. A
+    /// slot that is empty is an error, never 9.9E37, which is "not computed yet".
+    fn meas_slot_cmd(&mut self, ui: &mut Ui, nodes: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
+        let n = match slot_node(nodes[1]) {
+            Some(Some(n)) => n,
+            _ => {
+                if nodes.len() == 3 && query && kw(nodes[2], "LIST") {
+                    return t(&slot_list(ui));
+                }
+                self.push_err(format!("-224,\"Illegal parameter value; a slot is MEAS1 to MEAS{SLOTS}: :MEASure:SLOT<n>\""));
+                return None;
+            }
+        };
+        let empty = |s: &mut Self| {
+            s.push_err(format!(
+                "-221,\"Settings conflict; MEAS{n} is empty: add a measurement with :MEASure:SLOT{n} <item>,<source>\""
+            ));
+            None
+        };
+        if nodes.len() == 2 {
+            if !query {
+                let Some(key) = self.meas_place_row(ui, arg) else { return None };
+                ui.slot_assign(n, key);
+                return None;
+            }
+            return match ui.slot_row(n) {
+                Some(key) => t(&e(ui.slot_value(key))),
+                None => empty(self),
+            };
+        }
+        if kw(nodes[2], "ITEM") && query {
+            return match ui.slot_row(n) {
+                Some(key) => t(&slot_item(key)),
+                None => empty(self),
+            };
+        }
+        if kw(nodes[2], "CLEar") && !query {
+            ui.slot_clear(n);
+            return None;
+        }
+        self.push_err(format!("-113,\"Undefined header\" :MEASure:{}:{}", nodes[1], nodes[2]));
         None
     }
 
@@ -572,6 +650,13 @@ impl Scpi {
 
     /// Put a measurement on the readout. The query form stays in `meas_item`.
     fn meas_place(&mut self, ui: &mut Ui, arg: &str) -> Option<Vec<u8>> {
+        self.meas_place_row(ui, arg);
+        None
+    }
+
+    /// `meas_place`, answering the row that is on the readout afterwards (added, or there already); None after an
+    /// error, which is queued.
+    fn meas_place_row(&mut self, ui: &mut Ui, arg: &str) -> Option<RowKey> {
         let mut parts = arg.split(',');
         let item = parts.next().unwrap_or("").trim();
         if item.is_empty() {
@@ -587,8 +672,9 @@ impl Scpi {
             }
             if let Err(reason) = ui.meas_add(k, src) {
                 self.push_err(format!("-223,\"{}\"", reason));
+                return None;
             }
-            return None;
+            return Some(RowKey::One(k, src));
         }
         if let Some(k) = pair_kind(item) {
             let (word, fallback) = (parts.next(), ui.meas_source());
@@ -601,8 +687,9 @@ impl Scpi {
             }
             if let Err(reason) = ui.meas_add_pair(k, a, b) {
                 self.push_err(format!("-224,\"{}\"", reason));
+                return None;
             }
-            return None;
+            return Some(RowKey::Pair(k, a, b));
         }
         self.push_err(format!("-224,\"Illegal parameter value\" {}", item));
         None

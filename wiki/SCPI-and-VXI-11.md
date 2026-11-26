@@ -284,6 +284,9 @@ Without SCPI: `http://<scope>:8080/screen.png` (or `.bmp`) gives the same pictur
 | `:MEASure:ITEM? <item>[,<source>]` | one value; without a source the one selected in Measure |
 | `:MEASure:ITEM? <pair>,<A>,<B>` | a value between two sources (delay, phase, skew, setup/hold) |
 | `:MEASure:ITEM <item>[,<A>[,<B>]]` | adds the measurement to the strip on screen |
+| `:MEASure:SLOT<n> <item>[,<A>[,<B>]]` | puts a measurement in the numbered slot MEAS<n> (1 to 99): it is a row of the table on screen with the badge M<n>. OOS |
+| `:MEASure:SLOT<n>?`, `:MEASure:SLOT<n>:ITEM?` | reads that slot back by its number: the value, or what it measures. An empty slot is an error, not 9.9E37 |
+| `:MEASure:SLOT<n>:CLEar`, `:MEASure:SLOT:LIST?` | empties a slot and removes its row; lists the slots in use |
 | `:MEASure:SOURce[?] <A>[,<B>]` | default sources |
 | `:MEASure:CLEar` | removes all measurements and resets statistics |
 | `:MEASure:GATing[?]` | `SCREEN` (what is shown) or `NONE` (the whole record). OOS |

@@ -417,6 +417,9 @@ pub struct Model {
     pub cat: Vec<(u16, WaveId, WaveId, WaveId, WaveId)>,
     /// Per-row measurement settings; a row without an entry follows the shared Measure settings.
     pub row_cfg: Vec<(RowKey, RowCfg)>,
+    /// Numbered measurement slots `MEAS<n>` (n = 1..=99): the slot number of a row, by what the row measures. A row
+    /// keeps its number while other rows come and go; a slot whose row is gone is empty (`Ui::slot_row`).
+    pub meas_slots: Vec<(u8, RowKey)>,
     pub dvm_on: bool,
     pub dvm_src: usize,
     pub dvm_mode: usize,

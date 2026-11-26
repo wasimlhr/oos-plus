@@ -903,6 +903,10 @@ impl Ui {
             let keys = self.m.row_keys();
             self.m.row_cfg.retain(|(k, _)| keys.contains(k));
         }
+        if !self.m.meas_slots.is_empty() {
+            let keys = self.m.row_keys();
+            self.m.meas_slots.retain(|(_, k)| keys.contains(k));
+        }
         self.replay.clear_deferred_statistics();
         self.reset_catalog_statistics();
     }
