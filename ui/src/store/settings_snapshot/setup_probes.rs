@@ -428,6 +428,7 @@ const KEYS: &[(&str, P)] = &[
     ("meas_levels", Fields(&[])),
     ("meas_stat", Is(&["true 1 true true", "false 0 false false", "true 1 true"])),
     ("row_cfg", Is(&["m|Vpp|1|pol=1", "x|y", "m|Vpp|1|nope=1"])),
+    ("meas_slots", Is(&["1|m:Vpp:1", "99|p:0:1:2", "0|m:Vpp:1", "100|m:Vpp:1", "1|m:Vpp:1 1|m:Vmax:1", "x"])),
     ("sim_bus", Is(&["none", "I2c", "Lin", "i2c", "Nope"])),
     ("studio_view", Is(&["waveform", "docked", "floating", "only", "Docked"])),
     ("studio_dock", Is(&["right", "bottom"])),

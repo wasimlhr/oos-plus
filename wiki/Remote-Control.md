@@ -72,7 +72,9 @@ does, so that the assistant does not guess its name. The assistant asks in its o
 code that fits comes with them, and the same tool reads a subsystem's introduction and examples and the appendices
 of the manual. Tools that change the scope: `configure` (channels, timebase, trigger and
 acquisition from one object, read back after), `acquire` (run, stop, single, force, autoset, clear),
-`setup_decoder`, and `scpi` for any command of [[SCPI and VXI-11]]. Each answers JSON and names the errors of its
+`setup_decoder`, `measure_slot` (puts a measurement in a numbered slot, MEAS1 to MEAS99, so that it is a row of the
+measurement table on the screen with the badge M<n>, and reads it back by the number; `measure` alone shows nothing on
+the screen), and `scpi` for any command of [[SCPI and VXI-11]]. Each answers JSON and names the errors of its
 commands. When **Allowed** is set (System > Network > Remote services), MCP answers only the addresses it lists.
 **MCP** on the same page says what it offers: **Full** (every tool, the default), **Read only** (the tools that only
 read, and `scpi` for queries alone: an assistant can look at the scope but change nothing) or **Off**. Its address,

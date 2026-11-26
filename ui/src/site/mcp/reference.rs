@@ -193,6 +193,11 @@ pub const TASKS: &[(&str, &[&str], &str)] = &[
         &["Reference waveforms", "Math"],
         ":REFerence<n>..., :MATH<n>:...",
     ),
+    (
+        "Measure a value and keep it on the screen as a row of the measurement table, read back by a slot number MEAS1..MEAS99",
+        &["Measurements: Readouts"],
+        "measure_slot (slot, item, source), or :MEASure:SLOT1 <item>,<source> then :MEASure:SLOT1?; :MEASure:SLOT:LIST? lists the slots",
+    ),
     ("Decode a bus (UART, I2C, SPI, CAN, 1553 ...) and read its events", &["Decoders and bus"], "setup_decoder, decode_results"),
     ("Mark and find events in the record", &["Search"], ":SEARch:..."),
     ("Logic analyser lines", &["Logic analyser"], ":LA:STATe"),

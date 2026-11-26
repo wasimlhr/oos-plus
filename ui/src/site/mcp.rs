@@ -91,6 +91,7 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<Body> {
                 tool(("name", J::s("screenshot")), SCREENSHOT, schema(&[], &[]), READS),
                 tool(("name", J::s("scope_state")), SCOPE_STATE, schema(&[], &[]), READS),
                 tool(("name", J::s("measure")), MEASURE, measure_schema(), READS),
+                tool(("name", J::s("measure_slot")), MEASURE_SLOT, measure_slot_schema(), WRITES),
                 tool(("name", J::s("waveform")), WAVEFORM, waveform_schema(), READS),
                 tool(("name", J::s("decode_results")), DECODE_RESULTS, decode_results_schema(), READS),
                 tool(("name", J::s("errors")), ERRORS, schema(&[], &[]), READS),
@@ -123,6 +124,7 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<Body> {
                 answer(&mut run, state)
             }
             Some("measure") => measure(&mut run, &args),
+            Some("measure_slot") => measure_slot(&mut run, &args),
             Some("waveform") => waveform(&mut run, &args),
             Some("decode_results") => decode_results(&mut run, &args),
             Some("errors") => errors(&mut run),
@@ -154,6 +156,7 @@ minutes); never ask for the samples inline.
 opens plots and analysers, presses menus. Before you say something cannot be done, call scpi_reference with no
 arguments: it lists what the scope can do by task.
 9. After a change to the screen, check it with screenshot.
+10. A value for the screen: measure_slot adds it to the measurement table; measure shows nothing.
 Values in base units: V, s, Hz.";
 
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
@@ -180,7 +183,8 @@ const SCOPE_STATE: &str = "The whole set-up in one answer: every channel (displa
     whether a single shot stopped.";
 const MEASURE: &str = "Measure items of the measurement list on a source, as numbers in base units (V, s, Hz, %, \
     degrees); null where the scope has no value (no edge on screen, still computing). Pair items (delay, phase, skew, \
-    setup, hold) take `source` and `source2`. Does not add rows to the screen's measurement strip.";
+    setup, hold) take `source` and `source2`. Does not add rows to the screen's measurement strip: for a number that     is to be on the screen use `measure_slot`.";
+const MEASURE_SLOT: &str = "Numbered measurement slots MEAS1..MEAS99: a slot holds one measurement that is a row of     the screen's measurement table (with the badge M<n>) and is read back by its number. With `item` (and `source`,     for a pair `source2`): add it to slot `slot`, then answer what it measures and its value (null while it is     computing). Without `item`: read the slot; an empty slot is an error that says so. `clear`: empty the slot and     take its row off the table. Adding to a slot that is in use replaces its measurement. A source is CHAN1..CHAN4,     R1..R10 or MATH1..MATH4. Use this, not `measure`, for a value the user is to see on the screen.";
 const WAVEFORM: &str = "A record of a source: its statistics (min, max, mean, rms, peak-to-peak in volts, clipped \
     samples) and a link to a CSV file of it, `points` rows (the samples, or min/max per bucket when the record is \
     longer). The samples are not in the answer: download the file to the computer (curl -o wave.csv <url>) and work \
@@ -267,7 +271,7 @@ fn reads_only(name: Option<&str>, args: &J) -> bool {
             && message.split(';').all(|c| c.split_whitespace().next().is_some_and(|h| h.ends_with('?')))
     };
     match name {
-        Some("configure" | "acquire" | "setup_decoder") => false,
+        Some("configure" | "acquire" | "setup_decoder" | "measure_slot") => false,
         Some("scpi") => match (args.get("command"), args.get("commands")) {
             (Some(J::Str(m)), None) => query(m),
             (None, Some(J::Arr(ms))) => ms.iter().all(|m| m.str().is_some_and(query)),
@@ -363,6 +367,20 @@ fn measure_schema() -> J {
             ("source2", string("The second source of a pair item.")),
         ],
         &["items"],
+    )
+}
+
+fn measure_slot_schema() -> J {
+    let items: Vec<&str> = crate::scpi::measurement_items().into_iter().map(|(t, _)| t).collect();
+    schema(
+        &[
+            ("slot", integer("The slot, 1 to 99.")),
+            ("item", choice(&items, "The measurement to add to the slot; leave out to read the slot.")),
+            ("source", string("CHAN1..CHAN4, R1..R10 or MATH1..MATH4; default: the source of the Measure menu.")),
+            ("source2", string("The second source of a pair item.")),
+            ("clear", boolean()),
+        ],
+        &["slot"],
     )
 }
 
@@ -734,6 +752,49 @@ fn measure(run: &mut Run, args: &J) -> J {
     }
     let source = sources[0].map_or(J::Null, J::s);
     answer(run, J::obj(&[("source", source), ("results", J::Arr(results))]))
+}
+
+/// `measure_slot`: add to a slot, read it, or clear it (`:MEASure:SLOT<n>`, ui/slots.rs).
+fn measure_slot(run: &mut Run, args: &J) -> J {
+    let n = match count(args, "slot", 0, 1, crate::ui::slots::SLOTS as usize) {
+        Ok(0) => return refuse("slot: a whole number from 1 to 99"),
+        Ok(n) => n,
+        Err(e) => return refuse(&e),
+    };
+    let clear = matches!(args.get("clear"), Some(J::Bool(true)));
+    if clear && args.get("item").is_some() {
+        return refuse("clear: not with item");
+    }
+    let known = crate::scpi::measurement_items();
+    let mut command = None;
+    if let Some(item) = args.get("item") {
+        let Some(&(token, pair)) = item.str().and_then(|i| known.iter().find(|(t, _)| t.eq_ignore_ascii_case(i))) else {
+            return refuse(&format!("item: not a measurement item: {item}"));
+        };
+        let mut c = format!(":MEAS:SLOT{n} {token}");
+        for (key, used) in [("source", true), ("source2", pair)] {
+            match args.get(key).map(|j| j.str().and_then(word)) {
+                None => break,
+                Some(Some(s)) if used => {
+                    c.push(',');
+                    c.push_str(s);
+                }
+                Some(Some(_)) => return refuse("source2: only for a pair item"),
+                Some(None) => return refuse(&format!("{key}: a source such as CHAN1, R1 or MATH1")),
+            }
+        }
+        command = Some(c);
+    }
+    if clear {
+        run.w(&format!(":MEAS:SLOT{n}:CLE"));
+        return answer(run, J::obj(&[("slot", J::Num(n as f64)), ("cleared", J::Bool(true))]));
+    }
+    if command.is_some_and(|c| !run.w(&c)) {
+        return answer(run, J::obj(&[("slot", J::Num(n as f64))]));
+    }
+    let item = run.q(&format!(":MEAS:SLOT{n}:ITEM?"));
+    let v = value(run.q(&format!(":MEAS:SLOT{n}?")));
+    answer(run, J::obj(&[("slot", J::Num(n as f64)), ("item", item.map_or(J::Null, J::Str)), ("value", v)]))
 }
 
 fn waveform(run: &mut Run, args: &J) -> J {
