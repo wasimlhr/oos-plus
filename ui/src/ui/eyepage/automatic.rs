@@ -158,13 +158,39 @@ pub(in crate::ui) fn infer(
     Ok((Summary { rate: clock.rate(), threshold, hysteresis, samples_per_ui, recovery, warning }, clock))
 }
 
+/// The first and the last sample that is away from the idle level (the median) by a fifth of the span of the record
+/// (the whole record when nothing is).
+fn active_span(v: &[f32]) -> (usize, usize) {
+    let finite = || v.iter().copied().filter(|x| x.is_finite());
+    let (lo, hi) = finite().fold((f32::MAX, f32::MIN), |(a, b), x| (a.min(x), b.max(x)));
+    let mut sorted: Vec<f32> = finite().step_by(v.len() / 4096 + 1).collect();
+    sorted.sort_by(f32::total_cmp);
+    let Some(&idle) = sorted.get(sorted.len() / 2) else { return (0, v.len()) };
+    let away = 0.2 * (hi - lo);
+    let on = |x: &f32| (x - idle).abs() > away;
+    match (v.iter().position(on), v.iter().rposition(on)) {
+        (Some(a), Some(b)) if b > a => (a, b + 1),
+        _ => (0, v.len()),
+    }
+}
+
 pub(super) fn probe_rate(v: &[f32], dt: f64) -> Option<f64> {
     let count = v.len().min(PROBE_POINTS);
     if count < 8 {
         return None;
     }
     let mut rates = Vec::new();
-    for start in [0, v.len().saturating_sub(count) / 2, v.len().saturating_sub(count)] {
+    // a bus that talks in bursts (one word in a long idle record): the windows lie where the signal is, not where the
+    // record happens to start, middle and end
+    let (first, last) = active_span(v);
+    let busy = last - first;
+    let room = v.len() - count;
+    let starts = if busy < v.len() / 2 {
+        [first.min(room), (first + busy.saturating_sub(count) / 2).min(room), last.saturating_sub(count).min(room)]
+    } else {
+        [0, v.len().saturating_sub(count) / 2, v.len().saturating_sub(count)]
+    };
+    for start in starts {
         if let Ok((summary, _)) = infer(&v[start..start + count], dt, None, false, 0.0) {
             rates.push(summary.rate);
         }
@@ -223,6 +249,10 @@ fn compute(mut job: Job) -> Result<Computed, String> {
     let gated;
     let accumulated = if clock_wave.is_some() {
         gated = eye::gate_around_clock(&data, dt, &clock, 1.5);
+        &gated[..]
+    } else if let Some(bursts) = eye::gate_bursts(&data, dt, &clock) {
+        // a bus that talks in bursts folds without the idle line between them
+        gated = bursts;
         &gated[..]
     } else {
         &data[..]

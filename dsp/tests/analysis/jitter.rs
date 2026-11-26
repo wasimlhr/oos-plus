@@ -92,6 +92,38 @@ fn eye_folds_data_on_a_strobe_clock() {
     assert!(eye::gate_around_clock(&[], dt, &clk, 1.5).is_empty());
 }
 
+/// A bus that talks in bursts (MIL-STD-1553 words: plus and minus levels, idle line at 0 V between the words, every
+/// word at a phase of its own). The idle line is not a level of the eye, and the clock takes each word's phase at once.
+#[test]
+fn eye_of_bursts_has_no_idle_line_and_each_burst_locks() {
+    let (rate, spu) = (1e6, 32usize);
+    let (bits, ui) = (prbs7(160), 1.0 / rate);
+    let (burst, dt) = nrz(&bits, rate, spu, 0.2, &mut |_, _| 0.0);
+    let burst: Vec<f32> = burst.iter().map(|x| 2.0 * x - 1.0).collect();
+    let mut v = vec![0.0f32; 40 * spu];
+    // four words, each starting at a phase of its own (0.37, 0.71 and 0.13 UI off the grid of the first)
+    for extra in [0.0, 0.37, 0.71, 0.13] {
+        v.extend(&burst);
+        v.extend(vec![0.0f32; 60 * spu + (extra * spu as f64) as usize]);
+    }
+    v.extend(vec![0.0f32; 40 * spu]);
+    let (summary, clk) = eye::infer(&v, dt, Some(rate), false).unwrap();
+    assert!(close(summary.rate, rate, rate * 0.01), "{}", summary.rate);
+    // every edge of every word is within a tenth of a UI of its tick
+    let tie = eye::tie(&clk.edges, &clk);
+    let worst = tie.iter().fold(0.0f64, |a, t| a.max(t.abs()));
+    assert!(worst < 0.1 * ui, "worst TIE {worst}");
+    let gated = eye::gate_bursts(&v, dt, &clk).expect("idle before, between and after the words");
+    let mut e = Eye::new(128, 64, 2, -1.5, 1.5);
+    e.accumulate(&gated, dt, &clk);
+    let m = e.measure(clk.period);
+    assert!(close(m.one, 1.0, 0.1) && close(m.zero, -1.0, 0.1), "{:?}", m);
+    // a signal with no idle is folded whole
+    let (cont, dt2) = nrz(&bits, rate, spu, 0.2, &mut |_, _| 0.0);
+    let (_, c2) = eye::infer(&cont, dt2, Some(rate), false).unwrap();
+    assert!(eye::gate_bursts(&cont, dt2, &c2).is_none());
+}
+
 #[test]
 fn jitter_gaussian_edge_jitter_gives_rj() {
     let rate = 1e6;

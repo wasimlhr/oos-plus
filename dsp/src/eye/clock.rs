@@ -138,6 +138,7 @@ pub fn clock_from_edges(e: Vec<f64>, nominal_rate: Option<f64>) -> Option<Clock>
     for i in 1..e.len() {
         n[i] = n[i - 1] + ((e[i] - e[i - 1]) / u0).round();
     }
+    let own = n.clone(); // numbered within each burst only: the numbers the fit below renumbers on one grid
     let (mut phase, mut period) = line_fit(&n, &e)?;
     for _ in 0..2 {
         if !is_positive(period) {
@@ -149,7 +150,53 @@ pub fn clock_from_edges(e: Vec<f64>, nominal_rate: Option<f64>) -> Option<Clock>
     if !is_positive(period) {
         return None;
     }
+    // bursts at phases of their own (MIL-STD-1553 words) have no common edge numbering, which shows as edges off the
+    // one grid: a period from all the bursts, a phase from the first (with a single edge in every burst there is no
+    // slope within one, and the fit over all edges stays)
+    let off = (e.iter().zip(&n).map(|(t, k)| (t - phase - k * period).powi(2)).sum::<f64>() / e.len() as f64).sqrt();
+    if off > 0.1 * period && d.iter().any(|&x| x > BURST_GAP * period) {
+        if let Some((p0, p, _)) = burst_fit(&own, &e, BURST_GAP * period).filter(|f| f.2 < 0.5 * off) {
+            return Some(Clock { period: p, phase: p0, edges: e, ticks: Vec::new(), first_rising: false });
+        }
+    }
     Some(Clock { period, phase, edges: e, ticks: Vec::new(), first_rising: false })
+}
+
+/// The period shared by bursts (edges `e` split where a gap is longer than `gap`, `n` their edge numbers within a
+/// burst),
+/// the phase of the first burst, and how far the edges are from the lines (rms, s): a least-squares line through each
+/// burst with one slope for all.
+fn burst_fit(n: &[f64], e: &[f64], gap: f64) -> Option<(f64, f64, f64)> {
+    let mut cuts = vec![0];
+    cuts.extend((1..e.len()).filter(|&i| e[i] - e[i - 1] > gap));
+    cuts.push(e.len());
+    let means: Vec<(f64, f64)> = cuts
+        .windows(2)
+        .map(|w| {
+            let k = (w[1] - w[0]) as f64;
+            (n[w[0]..w[1]].iter().sum::<f64>() / k, e[w[0]..w[1]].iter().sum::<f64>() / k)
+        })
+        .collect();
+    let (mut sxy, mut sxx) = (0.0, 0.0);
+    for (w, (mn, mt)) in cuts.windows(2).zip(&means) {
+        for i in w[0]..w[1] {
+            sxy += (n[i] - mn) * (e[i] - mt);
+            sxx += (n[i] - mn) * (n[i] - mn);
+        }
+    }
+    let period = sxy / sxx;
+    if !is_positive(sxx) || !is_positive(period) {
+        return None;
+    }
+    let mut sq = 0.0;
+    for (w, (mn, mt)) in cuts.windows(2).zip(&means) {
+        for i in w[0]..w[1] {
+            sq += (e[i] - mt - (n[i] - mn) * period).powi(2);
+        }
+    }
+    let first = cuts[1];
+    let phase = e[..first].iter().zip(&n[..first]).map(|(t, k)| t - k * period).sum::<f64>() / first as f64;
+    Some((phase, period, (sq / e.len() as f64).sqrt()))
 }
 
 /// Samples more than `uis` unit intervals from every clock edge become NaN, so idle time between strobe
@@ -168,6 +215,17 @@ pub fn gate_around_clock(v: &[f32], dt: f64, c: &Clock, uis: f64) -> Vec<f32> {
         keep[a..=b].fill(true);
     }
     v.iter().zip(keep).map(|(&x, k)| if k { x } else { f32::NAN }).collect()
+}
+
+/// The record of a bus that talks in bursts (MIL-STD-1553 words, packets) for folding: samples more than 1.5 unit
+/// intervals from every edge are dropped, so the idle line between the bursts is not a level of the eye (it was the
+/// brightest line of the picture and the One / Zero the eye measured). `None` when no gap between two edges is longer
+/// than `BURST_GAP` unit intervals, also before the first edge and after the last: a continuous signal is folded whole.
+pub fn gate_bursts(v: &[f32], dt: f64, c: &Clock) -> Option<Vec<f32>> {
+    let (Some(&first), Some(&last)) = (c.edges.first(), c.edges.last()) else { return None };
+    let long = BURST_GAP * c.period;
+    let idle = first > long || v.len() as f64 * dt - last > long || c.edges.windows(2).any(|w| w[1] - w[0] > long);
+    idle.then(|| gate_around_clock(v, dt, c, 1.5))
 }
 
 /// Ticks for a strobe that runs in bursts (DDR DQS): within a burst, `tick(burst)` gives its ticks; every gap of more
@@ -254,6 +312,9 @@ pub fn center_strobe(c: &Clock) -> Clock {
     o
 }
 
+/// Silence, in unit intervals, after which the next edge starts a burst with a phase of its own.
+const BURST_GAP: f64 = 8.0;
+
 /// PLL clock: starts locked on the constant-rate fit, then a digital PLL corrects the tick nearest to every data edge
 /// by the phase error. `loop_bw` = closed-loop bandwidth in Hz (0 = rate / 1667, the common "golden PLL"); 1st order
 /// (phase only) or 2nd order (phase and frequency, damping 0.707). The gains account for the edge density (edges per
@@ -288,14 +349,22 @@ pub fn recover_clock_pll(
     let mut period = c.period;
     let mut next = c.phase - (c.phase / period).ceil() * period; // first tick at or before t = 0
     let mut ticks = Vec::with_capacity((end / period) as usize + 2);
+    let mut prev = f64::NEG_INFINITY;
     for &te in &c.edges {
         while next + period / 2.0 < te {
             ticks.push(next);
             next += period;
         }
         let err = te - next;
-        next += kp * err;
-        period = (period + ki * err).clamp(0.9 * c.period, 1.1 * c.period);
+        // a burst after a long silence (MIL-STD-1553 words, a packet, a UART character) starts at its own phase: the
+        // loop takes that phase at once, as a receiver does from a preamble, and does not walk to it over the burst
+        if te - prev > BURST_GAP * c.period && err.abs() > 0.1 * c.period {
+            next += err;
+        } else {
+            next += kp * err;
+            period = (period + ki * err).clamp(0.9 * c.period, 1.1 * c.period);
+        }
+        prev = te;
     }
     while next <= end + period {
         ticks.push(next);

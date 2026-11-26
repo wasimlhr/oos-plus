@@ -18,7 +18,7 @@ mod signal;
 mod tails;
 
 pub use clock::{
-    center_strobe, clock_from_edges, gate_around_clock, recover_clock, recover_clock_pll, strobe_clock, strobe_ideal,
+    center_strobe, clock_from_edges, gate_around_clock, gate_bursts, recover_clock, recover_clock_pll, strobe_clock, strobe_ideal,
     unit_interval, Clock,
 };
 pub use diagram::{Eye, EyeMeas};
