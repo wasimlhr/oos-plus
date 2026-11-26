@@ -1063,6 +1063,22 @@ impl Scpi {
         Some(None)
     }
 
+    /// `:ACQuire:MDEPth` with a value that is no depth of the Acquire menu: -224 that names the depths this unit takes,
+    /// so a client (an assistant, a script) can pick one instead of guessing (`5M` is none of them).
+    fn refused_depth(&mut self, m: &mut Model, arg: &str) -> Option<Option<Vec<u8>>> {
+        let keep = m.mdepth;
+        let mut taken = vec!["AUTO".to_string()];
+        for (i, (name, nominal)) in mdepths().iter().enumerate().skip(1) {
+            m.mdepth = i;
+            if m.srate_depth().1 as u64 == *nominal {
+                taken.push(name.to_string());
+            }
+        }
+        m.mdepth = keep;
+        self.push_err(format!("-224,\"Illegal parameter value\" {}; the depths are {}", arg, taken.join(", ")));
+        Some(None)
+    }
+
     /// The commands that set or read the model alone: `:RUN`, `:STOP`, `:SINGle`, the channels, the trigger and the
     /// acquisition. None when `nodes` is none of them (the next branch of `exec_cmd` gets it), else its answer; a
     /// value a known header does not take is `refused`, never None.
@@ -1344,7 +1360,7 @@ impl Scpi {
                 _ => (&a[..], 1.0),
             };
             let Some(x) = num64(v).filter(|x| *x >= 0.0) else {
-                return self.refused(arg);
+                return self.refused_depth(m, arg);
             };
             let want = (x * mul).round() as u64;
             // the query answers the depth the scope works with (a menu depth is cut to the memory it has), so what
@@ -1368,7 +1384,7 @@ impl Scpi {
             };
             match pick {
                 Some(i) => m.mdepth = i,
-                None => return self.refused(arg),
+                None => return self.refused_depth(m, arg),
             }
             return Some(None);
         }

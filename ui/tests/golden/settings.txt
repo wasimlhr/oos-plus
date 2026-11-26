@@ -38,19 +38,19 @@ scpi :ACQuire:CORes "ON" -> query: MATC; errors: none
 scpi :ACQuire:CORes "RAW" -> query: RAW; errors: none
 scpi :ACQuire:CORes "x" -> query: MATC; errors: -224,"Illegal parameter value" x
 scpi :ACQuire:CORes default -> query: MATC; errors: none
-scpi :ACQuire:MDEPth "" -> query: 5.000000E+05; errors: -224,"Illegal parameter value"
-scpi :ACQuire:MDEPth "-1" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" -1
+scpi :ACQuire:MDEPth "" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" ; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
+scpi :ACQuire:MDEPth "-1" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" -1; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth "1000" -> query: 1.000000E+03; errors: none
 scpi :ACQuire:MDEPth "1000000" -> query: 1.000000E+06; errors: none
 scpi :ACQuire:MDEPth "10k" -> query: 1.000000E+04; errors: none
 scpi :ACQuire:MDEPth "125M" -> query: 1.250000E+08; errors: none
 scpi :ACQuire:MDEPth "1M" -> query: 1.000000E+06; errors: none
-scpi :ACQuire:MDEPth "1e9" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 1e9
+scpi :ACQuire:MDEPth "1e9" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 1e9; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth "1k" -> query: 1.000000E+03; errors: none
-scpi :ACQuire:MDEPth "200M" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 200M
-scpi :ACQuire:MDEPth "7" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 7
+scpi :ACQuire:MDEPth "200M" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 200M; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
+scpi :ACQuire:MDEPth "7" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 7; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth "AUTO" -> query: 5.000000E+05; errors: none
-scpi :ACQuire:MDEPth "x" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" x
+scpi :ACQuire:MDEPth "x" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" x; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth default -> query: 5.000000E+05; errors: none
 scpi :ACQuire:SEGMents "" -> query: 0; errors: -224,"Illegal parameter value"
 scpi :ACQuire:SEGMents "-1" -> query: 0; errors: -224,"Illegal parameter value" -1
