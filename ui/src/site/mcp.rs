@@ -150,6 +150,10 @@ minutes); never ask for the samples inline.
 5. acquire does not wait: after single, ask scope_state until trigger.status is STOP.
 6. After an error, read its hint. Do not resend the same command.
 7. If a tool says MCP is read only, do not try to change the scope.
+8. The scope does more than the typed tools: it arranges its screen (dock, float, move views), simulates signals,
+opens plots and analysers, presses menus. Before you say something cannot be done, call scpi_reference with no
+arguments: it lists what the scope can do by task.
+9. After a change to the screen, check it with screenshot.
 Values in base units: V, s, Hz.";
 
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
@@ -162,6 +166,10 @@ const SCPI_QUERIES: &str = "Run SCPI queries on the oscilloscope (MCP is read on
     program message whose every command is a query (its header ends in '?', commands separated by ';'), or \
     `commands`, a list of such messages. The queries are those of OOS's SCPI reference (:TIM:SCAL?, \
     :MEAS:ITEM? VPP,CHAN1).";
+/// What the answer of `scpi_reference` without arguments says about its list of tasks.
+const TASKS_HINT: &str = "what_the_scope_can_do: pick the task, then list its subsystem (scpi_reference with     `subsystem`) or search by what it should do. A task is not a typed tool: send its commands with scpi.";
+/// What `decode_results` adds while the decoders compute.
+const DECODE_PENDING: &str = "The decoders are still computing: ask again in a moment. While the scope runs, the rows     are those of the record on the screen and change with the next acquisition: stop it (acquire stop, or single)     first for a stable, complete list.";
 const OFF: &str = "MCP is off on this scope (System > Network > Remote services > MCP)";
 const READ_ONLY: &str = "MCP is read only on this scope (System > Network > Remote services > MCP): this tool, or \
     a command that is not a query, is refused";
@@ -942,7 +950,19 @@ fn scpi_reference(run: &mut Run, args: &J) -> J {
             let n = |k: usize| r.commands.iter().filter(|(s, _, _)| *s == k).count() as f64;
             let titles = r.titles.iter().enumerate();
             let list = titles.map(|(k, t)| J::obj(&[("title", J::s(t)), ("commands", J::Num(n(k)))])).collect();
-            J::obj(&[("subsystems", J::Arr(list)), ("appendices", appendices())])
+            let task = |(what, parts, start): &(&str, &[&str], &str)| {
+                J::obj(&[
+                    ("task", J::s(what)),
+                    ("subsystems", J::Arr(parts.iter().map(|p| J::s(p)).collect())),
+                    ("start", J::s(start)),
+                ])
+            };
+            J::obj(&[
+                ("what_the_scope_can_do", J::Arr(reference::TASKS.iter().map(task).collect())),
+                ("hint", J::s(TASKS_HINT)),
+                ("subsystems", J::Arr(list)),
+                ("appendices", appendices()),
+            ])
         }
         [None, None, words, subsystem] => {
             let found = reference::search(words.unwrap_or(""), subsystem);
@@ -982,7 +1002,10 @@ fn decode_results(run: &mut Run, args: &J) -> J {
     let events = run.q(":DEC:EVEN?");
     let mut out = Vec::new();
     match events.as_deref() {
-        Some("BUSY") => out.push(("pending", J::Bool(true))),
+        Some("BUSY") => {
+            out.push(("pending", J::Bool(true)));
+            out.push(("hint", J::s(DECODE_PENDING)));
+        }
         Some(text) => {
             let all: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
             let shown: Vec<J> = all.iter().skip(offset).take(rows).map(|line| event_row(line)).collect();
