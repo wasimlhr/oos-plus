@@ -358,7 +358,8 @@ pub struct MathCh {
 impl MathCh {
     /// A filter whose taps are the reference of Source B (`FiltResp::Custom`).
     pub fn uses_taps(&self) -> bool {
-        matches!(self.op, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf | MathOp::Fir) && self.filt.resp == FiltResp::Custom
+        matches!(self.op, MathOp::Lpf | MathOp::Hpf | MathOp::Bpf | MathOp::Bsf | MathOp::Fir)
+            && self.filt.resp == FiltResp::Custom
     }
 }
 
@@ -442,7 +443,9 @@ mod tests {
     #[test]
     fn a_designed_response_replaces_the_simple_filter() {
         let dt = 1e-8;
-        let tone = |f: f64| -> Vec<f32> { (0..20000).map(|k| (std::f64::consts::TAU * f * k as f64 * dt).sin() as f32).collect() };
+        let tone = |f: f64| -> Vec<f32> {
+            (0..20000).map(|k| (std::f64::consts::TAU * f * k as f64 * dt).sin() as f32).collect()
+        };
         let amp = |v: &[f32]| v[10000..].iter().fold(0.0f32, |m, x| m.max(x.abs()));
         let mut cfg = FiltCfg::default();
         let simple = compute(MathOp::Lpf, &tone(1e6), &[], dt, 1e5, 0.0, &cfg);

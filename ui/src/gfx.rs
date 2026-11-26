@@ -141,14 +141,25 @@ pub fn scale(c: Rgb, t: u32) -> Rgb {
 
 impl Canvas {
     pub fn new(w: i32, h: i32) -> Canvas {
-        Canvas { px: vec![0; (w * h) as usize], w, h, clip: (0, 0, w, h), base: (0, 0, w, h), layer: false, rec: None, #[cfg(test)] au: None, #[cfg(test)] au_bound: None }
+        Canvas {
+            px: vec![0; (w * h) as usize],
+            w,
+            h,
+            clip: (0, 0, w, h),
+            base: (0, 0, w, h),
+            layer: false,
+            rec: None,
+            #[cfg(test)]
+            au: None,
+            #[cfg(test)]
+            au_bound: None,
+        }
     }
 
     /// From now on the canvas records what is drawn (`rec`), starting empty; or (`on` false) draws pixels again.
     pub fn record(&mut self, on: bool) {
         self.rec = on.then(Box::default);
     }
-
 
     /// A command covering `(x0, y0, x1, y1)`, already clipped, with its source `(ax, ay, aw)` (`Cmd`).
     #[inline]
@@ -654,7 +665,9 @@ impl Canvas {
             _ => r.x + r.w - tw,
         };
         #[cfg(test)]
-        { self.au_bound = Some(r); }
+        {
+            self.au_bound = Some(r);
+        }
         let cap = f.size * 72 / 100;
         self.text(f, tx, r.y + (r.h + cap) / 2, s, c);
     }
@@ -877,9 +890,29 @@ mod tests {
 #[derive(Clone, Debug)]
 #[allow(dead_code)] // the fields are read through Debug, in the message of a failing test
 pub enum Au {
-    Text { s: String, ink: Option<(i32, i32, i32, i32)>, adv: (i32, i32), bound: Option<Rect>, clip: (i32, i32, i32, i32), size: i32, c: Rgb, missing: Vec<char> },
-    Fill { r: Rect, opaque: bool, c: Rgb, clip: (i32, i32, i32, i32) },
-    Round { r: Rect, rad: i32, c: Rgb, a: u32, clip: (i32, i32, i32, i32) },
+    Text {
+        s: String,
+        ink: Option<(i32, i32, i32, i32)>,
+        adv: (i32, i32),
+        bound: Option<Rect>,
+        clip: (i32, i32, i32, i32),
+        size: i32,
+        c: Rgb,
+        missing: Vec<char>,
+    },
+    Fill {
+        r: Rect,
+        opaque: bool,
+        c: Rgb,
+        clip: (i32, i32, i32, i32),
+    },
+    Round {
+        r: Rect,
+        rad: i32,
+        c: Rgb,
+        a: u32,
+        clip: (i32, i32, i32, i32),
+    },
 }
 
 #[cfg(test)]
@@ -912,12 +945,24 @@ impl Canvas {
             if g.w > 0 && g.h > 0 {
                 let (gx, gy) = (px + g.x0, y + g.y0);
                 let b = (gx, gy, gx + g.w, gy + g.h);
-                ink = Some(match ink { None => b, Some(a) => (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)) });
+                ink = Some(match ink {
+                    None => b,
+                    Some(a) => (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)),
+                });
             }
             px += g.adv;
         }
         let bound = self.au_bound.take();
         let clip = self.clip;
-        self.au.as_mut().unwrap().push(Au::Text { s: s.to_string(), ink, adv: (x, px), bound, clip, size: f.size, c, missing });
+        self.au.as_mut().unwrap().push(Au::Text {
+            s: s.to_string(),
+            ink,
+            adv: (x, px),
+            bound,
+            clip,
+            size: f.size,
+            c,
+            missing,
+        });
     }
 }

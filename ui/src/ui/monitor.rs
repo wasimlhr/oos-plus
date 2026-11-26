@@ -60,10 +60,20 @@ impl Ui {
         self.m.view_cur = j;
         let toast = self.toast.take();
         // what is open on the panel (a menu, a popover, a number pad, a dialog) is the panel's, not the other view's
-        let open = (self.menu_open, self.workspace.popup.take(), self.studio.ctx.take(), self.studio.popup.take(), self.dialog.take(), self.numpad.take(), self.studio.add_menu);
+        let open = (
+            self.menu_open,
+            self.workspace.popup.take(),
+            self.studio.ctx.take(),
+            self.studio.popup.take(),
+            self.dialog.take(),
+            self.numpad.take(),
+            self.studio.add_menu,
+        );
         (self.menu_open, self.studio.add_menu) = (false, false);
         let overlay_was = self.studio.overlay;
-        if let Some(o) = overlay { self.studio.overlay = o; }
+        if let Some(o) = overlay {
+            self.studio.overlay = o;
+        }
         let keep = (self.xy, self.full.on, self.results.on);
         (self.xy, self.full.on, self.results.on) = (xy, full, stats);
         self.azr.swap_monitor();
@@ -72,7 +82,15 @@ impl Ui {
         self.m = panel;
         (self.xy, self.full.on, self.results.on) = keep;
         self.studio.overlay = overlay_was;
-        (self.menu_open, self.workspace.popup, self.studio.ctx, self.studio.popup, self.dialog, self.numpad, self.studio.add_menu) = open;
+        (
+            self.menu_open,
+            self.workspace.popup,
+            self.studio.ctx,
+            self.studio.popup,
+            self.dialog,
+            self.numpad,
+            self.studio.add_menu,
+        ) = open;
         self.toast = toast;
         Some(r)
     }

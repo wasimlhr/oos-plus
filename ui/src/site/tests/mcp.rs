@@ -58,13 +58,15 @@ fn mcp_lists_every_tool_with_its_schema_and_annotation() {
         let t = tools.iter().find(|t| t.get("name").and_then(J::str) == Some(name)).expect(name);
         t.get("annotations").and_then(|a| a.get("readOnlyHint")) == Some(&J::Bool(true))
     };
-    for name in ["screenshot", "scope_state", "measure", "waveform", "decode_results", "errors", "scpi_reference"] {
+    for name in
+        ["screenshot", "scope_state", "measure", "waveform", "decode_results", "table", "errors", "scpi_reference"]
+    {
         assert!(read_only(name), "{name} only reads");
     }
     for name in ["scpi", "configure", "acquire", "setup_decoder", "measure_slot"] {
         assert!(!read_only(name), "{name} can change the scope");
     }
-    assert_eq!(tools.len(), 12);
+    assert_eq!(tools.len(), 13);
     let s = r.to_string();
     assert!(s.contains("\"VPP\"") && s.contains("\"RRDELAY\""), "the measurement items are an enum");
     let protocol = crate::protocols::PROTOS[0].name();
@@ -283,6 +285,26 @@ fn mcp_decoder_set_up_and_its_rows() {
     assert!(!failed(&r), "{r}");
     assert_eq!(data(&r).get("pending"), Some(&J::Bool(false)), "{r}");
     assert!(failed(&call(&mut ui, &cv, &mut scpi, "decode_results", r#"{"max_rows":0}"#)));
+    // the decode table says where it is on the screen, and its rows begin with the Index
+    assert!(data(&r).get("table_hint").and_then(J::str).is_some_and(|h| h.contains(":DISPlay:LOWer EVENTS")), "{r}");
+    assert_eq!(data(&r).get("columns").map(|c| items(Some(c))[0].str()), Some(Some("Index")), "{r}");
+}
+
+// Break it catches: a table that cannot be listed or read by name through MCP, a row without its Index
+#[test]
+fn mcp_reads_every_table_by_name() {
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    let r = call(&mut ui, &cv, &mut scpi, "table", "{}");
+    assert!(!failed(&r), "{r}");
+    let names: Vec<&str> =
+        items(data(&r).get("tables")).iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
+    assert_eq!(names, ["EVENTS", "FIELDS", "SEARCH", "SEGMENTS", "PEAKS", "MEASURE"]);
+    for name in names {
+        let r = call(&mut ui, &cv, &mut scpi, "table", &format!(r#"{{"name":"{name}"}}"#));
+        assert!(!failed(&r), "{name}: {r}");
+        assert_eq!(data(&r).get("columns").map(|c| items(Some(c))[0].str()), Some(Some("Index")), "{name}: {r}");
+    }
+    assert!(failed(&call(&mut ui, &cv, &mut scpi, "table", r#"{"name":"NOSUCH"}"#)));
 }
 
 // Break it catches: a tool that changes the scope still offered or still run while MCP is read only, a setter hidden
@@ -296,7 +318,20 @@ fn mcp_read_only_and_off() {
     let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text()).unwrap();
     let tools = items(r.get("result").and_then(|x| x.get("tools")));
     let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
-    assert_eq!(names, ["scpi", "screenshot", "scope_state", "measure", "waveform", "decode_results", "errors", "scpi_reference"]);
+    assert_eq!(
+        names,
+        [
+            "scpi",
+            "screenshot",
+            "scope_state",
+            "measure",
+            "waveform",
+            "decode_results",
+            "table",
+            "errors",
+            "scpi_reference"
+        ]
+    );
     assert!(tools.iter().all(|t| t.get("annotations").and_then(|a| a.get("readOnlyHint")) == Some(&J::Bool(true))));
     let scale = ui.m.time_per_div();
     for (name, args) in [
@@ -403,14 +438,20 @@ fn mcp_initialize_gives_short_rules_that_name_only_real_tools() {
     let init = ask(&mut ui, &mut scpi, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#);
     let rules = init.get("result").and_then(|r| r.get("instructions")).and_then(J::str).unwrap().to_string();
     assert!(rules.len() < 1300, "{} characters", rules.len());
-    assert!(rules.contains("scpi_reference with no
-arguments") || rules.contains("scpi_reference with no "), "the rules point to the task list");
+    assert!(
+        rules.contains(
+            "scpi_reference with no
+arguments"
+        ) || rules.contains("scpi_reference with no "),
+        "the rules point to the task list"
+    );
     assert!(rules.lines().filter(|l| l.starts_with(|c: char| c.is_ascii_digit())).count() >= 5, "{rules}");
     let list = ask(&mut ui, &mut scpi, r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
     let tools = items(list.get("result").and_then(|r| r.get("tools")));
     let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
     let words = rules.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'));
-    for word in words.filter(|w| w.contains('_') || ["configure", "acquire", "measure", "waveform", "scpi"].contains(w)) {
+    for word in words.filter(|w| w.contains('_') || ["configure", "acquire", "measure", "waveform", "scpi"].contains(w))
+    {
         assert!(names.contains(&word), "the rules name `{word}`, which is no tool");
     }
 }

@@ -22,15 +22,56 @@ pub fn owns(id: u16) -> bool {
 const G: &[(u8, &str)] = &[(JITTER, "CLOCK JITTER")];
 
 static DEFS: [Def; 5] = [
-    module(PERIOD_JITTER_RMS, "Period Jitter RMS", "s", Slope, &[0], G, "Standard deviation of the periods between rising edges over the record."),
-    module(PERIOD_JITTER_PP, "Period Jitter Pk-Pk", "s", Slope, &[0], G, "Longest period minus the shortest over the record."),
-    module(CYCLE_TO_CYCLE, "Cycle-to-Cycle", "s", Slope, &[0], G, "Largest change between two adjacent periods, in magnitude."),
-    module(CLOCK_TIE_RMS, "Clock TIE RMS", "s", Slope, &[0], G, "RMS deviation of the rising edges from the straight line through them."),
-    module(CLOCK_TIE_PP, "Clock TIE Pk-Pk", "s", Slope, &[0], G, "Peak-to-peak deviation of the rising edges from that line."),
+    module(
+        PERIOD_JITTER_RMS,
+        "Period Jitter RMS",
+        "s",
+        Slope,
+        &[0],
+        G,
+        "Standard deviation of the periods between rising edges over the record.",
+    ),
+    module(
+        PERIOD_JITTER_PP,
+        "Period Jitter Pk-Pk",
+        "s",
+        Slope,
+        &[0],
+        G,
+        "Longest period minus the shortest over the record.",
+    ),
+    module(
+        CYCLE_TO_CYCLE,
+        "Cycle-to-Cycle",
+        "s",
+        Slope,
+        &[0],
+        G,
+        "Largest change between two adjacent periods, in magnitude.",
+    ),
+    module(
+        CLOCK_TIE_RMS,
+        "Clock TIE RMS",
+        "s",
+        Slope,
+        &[0],
+        G,
+        "RMS deviation of the rising edges from the straight line through them.",
+    ),
+    module(
+        CLOCK_TIE_PP,
+        "Clock TIE Pk-Pk",
+        "s",
+        Slope,
+        &[0],
+        G,
+        "Peak-to-peak deviation of the rising edges from that line.",
+    ),
 ];
 
 /// What every value includes: the record's own timing and noise.
-const QUALITY: &str = "Rising edges at the middle level; includes the scope's own timing jitter, noise and interpolation";
+const QUALITY: &str =
+    "Rising edges at the middle level; includes the scope's own timing jitter, noise and interpolation";
 
 pub struct Clock;
 
@@ -44,9 +85,7 @@ impl MeasModule for Clock {
     }
 
     fn compute(&self, x: &Ctx, ids: &[u16]) -> Values {
-        let j = x
-            .wave(x.row[0])
-            .and_then(|v| oos_dsp::clock::clock_jitter(&oos_dsp::measure::analyze(v, x.dt).rises));
+        let j = x.wave(x.row[0]).and_then(|v| oos_dsp::clock::clock_jitter(&oos_dsp::measure::analyze(v, x.dt).rises));
         let values = ids
             .iter()
             .map(|&id| {

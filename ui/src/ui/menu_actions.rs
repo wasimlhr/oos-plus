@@ -179,7 +179,9 @@ impl Ui {
     fn upstream_demo_source(m: &mut Model, t: TrigType) {
         let on = |c: usize, m: &mut Model| m.ch[c].on = true;
         match t {
-            TrigType::Edge | TrigType::Slope | TrigType::Duration | TrigType::Timeout | TrigType::Runt => m.trig_src = 0,
+            TrigType::Edge | TrigType::Slope | TrigType::Duration | TrigType::Timeout | TrigType::Runt => {
+                m.trig_src = 0
+            }
             TrigType::Pulse => {
                 on(3, m);
                 m.trig_src = 3;
@@ -498,7 +500,9 @@ impl Ui {
         // nor does which values a trend chart shows
         if matches!(it, Item::TrendSel(_)) {
             self.relayout();
-            if self.m.run == RunState::Run { self.dirty_map = true; }
+            if self.m.run == RunState::Run {
+                self.dirty_map = true;
+            }
             return;
         }
         self.settings_changed();
@@ -557,7 +561,13 @@ impl Ui {
                     // from a value between two steps (the fine time base left it there, or a pinch): the step
                     // beside it comes first. `tscale` is the step above a factor under 1 and the one below a
                     // factor over 1, so one step towards it is that step itself: 26 us went to 100 us, past 50
-                    let d = if m.tfine < 1.0 && d > 0 { d - 1 } else if m.tfine > 1.0 && d < 0 { d + 1 } else { d };
+                    let d = if m.tfine < 1.0 && d > 0 {
+                        d - 1
+                    } else if m.tfine > 1.0 && d < 0 {
+                        d + 1
+                    } else {
+                        d
+                    };
                     m.tscale = step_index(m.tscale, tscales().len(), d);
                     m.tfine = 1.0;
                 }
@@ -568,7 +578,12 @@ impl Ui {
                 let new = m.time_per_div();
                 if let Some((factor, place)) = keep {
                     let want = new / factor;
-                    m.zscale = tscales().iter().enumerate().min_by(|a, b| (a.1 / want).ln().abs().total_cmp(&(b.1 / want).ln().abs())).map_or(0, |(i, _)| i).min(m.tscale);
+                    m.zscale = tscales()
+                        .iter()
+                        .enumerate()
+                        .min_by(|a, b| (a.1 / want).ln().abs().total_cmp(&(b.1 / want).ln().abs()))
+                        .map_or(0, |(i, _)| i)
+                        .min(m.tscale);
                     m.zdelay = m.delay + place * new * HDIV;
                 }
             }
@@ -695,7 +710,7 @@ impl Ui {
                 m.layout = LAYOUTS[cycle(i, LAYOUTS.len(), d)];
                 self.studio.enter |= m.layout == Layout::Studio;
                 self.meas_own.dialog = None; // a row's settings are the card in Minimal and Studio, a dialog in Default
-                // Default is the stock OOS screen: its cards and top bar, not the compact bars a Bottom bar choice left
+                                             // Default is the stock OOS screen: its cards and top bar, not the compact bars a Bottom bar choice left
                 if m.layout == Layout::Default {
                     m.bar_compact = false;
                 }
@@ -866,7 +881,9 @@ impl Ui {
             Item::XyMode => self.xy = !self.xy,
             Item::BootMode => self.boot_mode_toggle(),
             Item::Overclock => self.overclock_step(d),
-            Item::StoreSlot => self.files.slot = (self.files.slot as i32 + d).clamp(ranges::STORE_SLOT.0, ranges::STORE_SLOT.1) as u32,
+            Item::StoreSlot => {
+                self.files.slot = (self.files.slot as i32 + d).clamp(ranges::STORE_SLOT.0, ranges::STORE_SLOT.1) as u32
+            }
             Item::StoreDest => {
                 let i = crate::store::StoreDest::ALL.iter().position(|&x| x == self.files.dest).unwrap_or(0);
                 self.files.dest = crate::store::StoreDest::ALL[cycle(i, crate::store::StoreDest::ALL.len(), d)];
@@ -966,7 +983,9 @@ impl Ui {
             Item::Open(MenuId::MeasAdd) => {
                 self.ensure_meas_own();
                 self.open_submenu(MenuId::MeasAdd);
-                if self.m.layout == Layout::Studio { self.sheet_add_open(); }
+                if self.m.layout == Layout::Studio {
+                    self.sheet_add_open();
+                }
             }
             Item::Open(id) => {
                 if id == MenuId::Cursor && self.m.cursor == CursorMode::Off {
@@ -1265,7 +1284,12 @@ impl Ui {
             Item::MaskCreate => self.create_mask(),
             Item::MaskFromRef => self.create_mask_from_ref(),
             Item::MaskClear => {
-                if self.mask_sw.mask.is_none() && self.mask_sw.reference.is_none() && !self.m.mask_on && self.mask_sw.pass == 0 && self.mask_sw.fail == 0 {
+                if self.mask_sw.mask.is_none()
+                    && self.mask_sw.reference.is_none()
+                    && !self.m.mask_on
+                    && self.mask_sw.pass == 0
+                    && self.mask_sw.fail == 0
+                {
                     self.toast(NOTHING_TO_CLEAR);
                 } else {
                     self.mask_sw.mask = None;

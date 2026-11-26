@@ -630,7 +630,10 @@ mod tests {
     fn what_mcp_offers_from_the_row_and_over_scpi() {
         let mut u = crate::ui::testkit::demo_ui();
         u.net.addr = "192.168.1.9".into();
-        assert_eq!((u.value(Item::RemMcp), u.value(Item::RemMcpInfo)), ("Full".into(), "http://192.168.1.9:8080/mcp".into()));
+        assert_eq!(
+            (u.value(Item::RemMcp), u.value(Item::RemMcpInfo)),
+            ("Full".into(), "http://192.168.1.9:8080/mcp".into())
+        );
         assert_eq!(u.options(Item::RemMcp), vec!["Off", "Read only", "Full"]);
         u.select_option(Item::RemMcp, "Read only");
         assert_eq!(u.sys.remote_mcp, McpMode::Read);

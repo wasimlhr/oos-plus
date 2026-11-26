@@ -50,9 +50,13 @@ impl StudioView {
         }
     }
     /// The views that run on a record session (a loaded file or a SIM): leaving them returns to live.
-    pub(super) fn is_record(self) -> bool { matches!(self, StudioView::Offline | StudioView::Sim) }
+    pub(super) fn is_record(self) -> bool {
+        matches!(self, StudioView::Offline | StudioView::Sim)
+    }
     /// The views with a panel docked at the right of the lanes.
-    pub(super) fn is_docked(self) -> bool { matches!(self, StudioView::Docked | StudioView::Offline | StudioView::Sim) }
+    pub(super) fn is_docked(self) -> bool {
+        matches!(self, StudioView::Docked | StudioView::Offline | StudioView::Sim)
+    }
 }
 
 /// The measurements panel (docked, in a tab or floating).
@@ -196,7 +200,11 @@ pub(super) enum PickAdd {
 pub(super) const PICK_ADDS: [PickAdd; 3] = [PickAdd::Math, PickAdd::Ref, PickAdd::Bus];
 impl PickAdd {
     pub(super) fn label(self) -> &'static str {
-        match self { PickAdd::Math => "Add math", PickAdd::Ref => "Add ref", PickAdd::Bus => "Add bus" }
+        match self {
+            PickAdd::Math => "Add math",
+            PickAdd::Ref => "Add ref",
+            PickAdd::Bus => "Add bus",
+        }
     }
 }
 
@@ -351,12 +359,18 @@ impl Ui {
         self.sync_view_state();
         // coming into Studio by any road (menu, recalled setup, restart) applies its entry rules: its bars show
         let is = self.m.layout == Layout::Studio;
-        if is && !self.studio.was { self.studio.enter = true; }
+        if is && !self.studio.was {
+            self.studio.enter = true;
+        }
         self.studio.was = is;
         // the view is kept with the setup like the layout; a record view is not (it needs its session)
         let token = self.studio.view.token();
-        if self.m.studio_view != token { self.m.studio_view = token.to_string(); }
-        if self.m.layout == Layout::Studio { self.studio_prune_ref_rows(); }
+        if self.m.studio_view != token {
+            self.m.studio_view = token.to_string();
+        }
+        if self.m.layout == Layout::Studio {
+            self.studio_prune_ref_rows();
+        }
         self.studio.badge_wrap = self.studio_badge_wrap_now();
         self.dock_sync_setup();
         self.studio_sync();
@@ -365,7 +379,9 @@ impl Ui {
     /// Applies a layout change made in the Display menu: Studio always draws its sources as lanes.
     pub(super) fn studio_sync(&mut self) {
         self.studio_sync_views();
-        if !std::mem::take(&mut self.studio.enter) { return; }
+        if !std::mem::take(&mut self.studio.enter) {
+            return;
+        }
         if self.m.layout == Layout::Studio {
             // lanes, unless Overlay traces was chosen (it is kept with the setup)
             let overlay = self.studio.overlay;
@@ -380,7 +396,9 @@ impl Ui {
     /// What the badge at the left of the top bar says about the source of the waveforms.
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_source(&self) -> (&'static str, Rgb) {
-        if self.record_mode() { return (if self.sim_mode() { "SIM" } else { "REF" }, ACCENT); }
+        if self.record_mode() {
+            return (if self.sim_mode() { "SIM" } else { "REF" }, ACCENT);
+        }
         match self.src {
             Source::Demo { .. } => ("DEMO", ACCENT),
             Source::Replay { .. } => ("REPLAY", ACCENT),
@@ -395,7 +413,11 @@ impl Ui {
 
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_badge_label(&self) -> &'static str {
-        if self.studio_back_badge() { "Live" } else { self.studio_source().0 }
+        if self.studio_back_badge() {
+            "Live"
+        } else {
+            self.studio_source().0
+        }
     }
 
     /// The chip of the acquisition: the sample rate and depth, or while analysing a file its name first.
@@ -403,15 +425,25 @@ impl Ui {
         let (caption, _) = self.acq_caption();
         // the source is part of the caption: DEMO and REPLAY here, SIM and REF come with the record caption
         if !self.record_mode() && !matches!(self.src, Source::Hw { .. } | Source::Live { .. }) {
-            let name = match self.src { Source::Demo { .. } => "DEMO", _ => "REPLAY" };
+            let name = match self.src {
+                Source::Demo { .. } => "DEMO",
+                _ => "REPLAY",
+            };
             return format!("{name} \u{b7} {caption}");
         }
         // the SIM chip of the bar already names the SIM
-        let caption = if self.session_is_sim && self.record_mode() { caption.trim_start_matches("SIM {b7} ").to_string() } else { caption };
-        if !self.studio_back_badge() { return caption; }
+        let caption = if self.session_is_sim && self.record_mode() {
+            caption.trim_start_matches("SIM {b7} ").to_string()
+        } else {
+            caption
+        };
+        if !self.studio_back_badge() {
+            return caption;
+        }
         match self.refs.get(self.active_reference()).and_then(|r| r.as_ref()) {
             Some(r) => {
-                let name = if r.label.is_empty() { format!("R{}", self.active_reference() + 1) } else { r.label.clone() };
+                let name =
+                    if r.label.is_empty() { format!("R{}", self.active_reference() + 1) } else { r.label.clone() };
                 format!("{name} \u{b7} {}", caption.trim_start_matches("REF \u{b7} "))
             }
             None => "No file loaded".to_string(),
@@ -427,7 +459,9 @@ impl Ui {
     /// Keeps the record views consistent with the session: Offline ends with the record session, and shows
     /// the navigator (the zoom overview) for a loaded file until the user closes it.
     pub(super) fn studio_sync_views(&mut self) {
-        if self.m.layout != Layout::Studio || self.studio.view != StudioView::Offline { return; }
+        if self.m.layout != Layout::Studio || self.studio.view != StudioView::Offline {
+            return;
+        }
         if !self.record_mode() {
             self.studio.view = StudioView::Waveform;
             self.relayout();
@@ -450,10 +484,17 @@ impl Ui {
     /// file or the SIM is analysed (the caption names the record then). Column widths hold the longest value of each,
     /// so the bar does not move while the numbers change.
     pub(super) fn studio_acq_cols(&self) -> Option<Vec<(&'static str, String, i32)>> {
-        if self.record_mode() || self.studio_back_badge() { return None; }
+        if self.record_mode() || self.studio_back_badge() {
+            return None;
+        }
         let f = self.fonts();
         let (sr, depth) = self.live_rate_depth();
-        let mode = match self.m.acq { AcqMode::Normal => "Normal".to_string(), AcqMode::Peak => "Peak".into(), AcqMode::Average => format!("Avg {}", self.m.avg_count), AcqMode::HiRes => "High res".into() };
+        let mode = match self.m.acq {
+            AcqMode::Normal => "Normal".to_string(),
+            AcqMode::Peak => "Peak".into(),
+            AcqMode::Average => format!("Avg {}", self.m.avg_count),
+            AcqMode::HiRes => "High res".into(),
+        };
         let w = |label: &str, widest: &str| f.s.width(label).max(f.mb.width(widest)) + 14;
         Some(vec![
             ("Sample rate", si_digits(sr, "Sa/s", 3), w("Sample rate", "888 MSa/s")),
@@ -473,15 +514,25 @@ impl Ui {
         let mut t = self.studio_top_tier(0);
         let mut best = t.acq.w;
         for tier in 1..TOP_TIERS {
-            if t.acq.w >= need { break; }
+            if t.acq.w >= need {
+                break;
+            }
             let n = self.studio_top_tier(tier);
-            if n.acq.w > best || n.acq.w >= need { best = n.acq.w; t = n; }
+            if n.acq.w > best || n.acq.w >= need {
+                best = n.acq.w;
+                t = n;
+            }
         }
         // the selected search names its type where shorter names of the buttons leave the room for it beside the
         // caption (without the View button the full names fit a bar on which the search had its count alone)
         let typed = self.studio_search_typed_w();
         if t.acq.w >= need && t.search.w < typed {
-            if let Some(n) = (t.tier + 1..TOP_TIERS).map(|i| self.studio_top_tier(i)).find(|n| n.acq.w >= need && n.search.w >= typed) { t = n; }
+            if let Some(n) = (t.tier + 1..TOP_TIERS)
+                .map(|i| self.studio_top_tier(i))
+                .find(|n| n.acq.w >= need && n.search.w >= typed)
+            {
+                t = n;
+            }
         }
         t
     }
@@ -499,17 +550,32 @@ impl Ui {
         let single = Rect::new(pill.right(), CHIP_Y, 0, CHIP_H);
         let mut x = single.right() + gap;
         // Live: the way back from a loaded file or a SIM, as in the Default bar
-        let badge = if self.record_mode() { Rect::new(x, CHIP_Y, btn_w("Live"), CHIP_H) } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
-        if badge.w > 0 { x = badge.right() + gap; }
+        let badge = if self.record_mode() {
+            Rect::new(x, CHIP_Y, btn_w("Live"), CHIP_H)
+        } else {
+            Rect::new(x, CHIP_Y, 0, CHIP_H)
+        };
+        if badge.w > 0 {
+            x = badge.right() + gap;
+        }
         // SIM is an entry of the Menu (Analysis), as in the Default layout (ADR 0007), except
         // - while the SIM is the source: the preset, a tap opens the SIM panel
         // - while live with a reference shown: a button that plays it, the twin of Live (ADR 0035)
         let sim = if self.session_is_sim && self.record_mode() {
-            Rect::new(x, CHIP_Y, (f.mb.width(self.sim_preset_name()) + 56).min(if tier == 0 { 220 } else { 170 }), CHIP_H)
+            Rect::new(
+                x,
+                CHIP_Y,
+                (f.mb.width(self.sim_preset_name()) + 56).min(if tier == 0 { 220 } else { 170 }),
+                CHIP_H,
+            )
         } else if self.sim_return_button() {
             Rect::new(x, CHIP_Y, btn_w("SIM"), CHIP_H)
-        } else { Rect::new(x, CHIP_Y, 0, CHIP_H) };
-        if sim.w > 0 { x = sim.right() + gap; }
+        } else {
+            Rect::new(x, CHIP_Y, 0, CHIP_H)
+        };
+        if sim.w > 0 {
+            x = sim.right() + gap;
+        }
         // Autoset, Clear, Force are keys of the front panel (and entries of the Menu): the bar does not repeat them,
         // its room goes to the acquisition read-out
         let autoset = Rect::new(x, CHIP_Y, 0, CHIP_H);
@@ -518,7 +584,11 @@ impl Ui {
         let mut r = top.right() - 8;
         let gear = Rect::new(r - 40, CHIP_Y, 40, CHIP_H);
         r = gear.x - gap;
-        let mut place = |label: &str| { let b = Rect::new(r - btn_w(label), CHIP_Y, btn_w(label), CHIP_H); r = b.x - gap; b };
+        let mut place = |label: &str| {
+            let b = Rect::new(r - btn_w(label), CHIP_Y, btn_w(label), CHIP_H);
+            r = b.x - gap;
+            b
+        };
         let storage = place(labels[7]);
         let display = place(labels[6]);
         // Cursors: a tap puts them on, the next one opens their sheet (Add has them too, three taps deep)
@@ -551,20 +621,43 @@ impl Ui {
             let caption = self.studio_acq_need();
             let (full, least) = self.studio_search_need();
             2 * SEARCH_ARROW_W + 4 + full.min(room - 8 - caption - 2 * SEARCH_ARROW_W - 4).max(least)
-        } else { 0 };
+        } else {
+            0
+        };
         let acq = Rect::new(x, CHIP_Y, (room - if search_w > 0 { search_w + 8 } else { 0 }).max(40), CHIP_H);
         let search = Rect::new(links_x - 10 - search_w, CHIP_Y, search_w, CHIP_H);
         let run = pill;
         StudioTop {
-            vbox, add, badge, run, single, sim, acq, search, lan, wlan, usb, measure, cursors, display, storage,
-            gear, autoset, clear, force, tier,
+            vbox,
+            add,
+            badge,
+            run,
+            single,
+            sim,
+            acq,
+            search,
+            lan,
+            wlan,
+            usb,
+            measure,
+            cursors,
+            display,
+            storage,
+            gear,
+            autoset,
+            clear,
+            force,
+            tier,
         }
     }
 
     /// Measure and Cursors as the top-bar buttons (`top_buttons`); the others are Studio's own.
     pub(super) fn studio_top_buttons(&self) -> Vec<(TopBtn, &'static str, Rect)> {
         let t = self.studio_top();
-        vec![(TopBtn::Menu(MenuId::Display), "Display", t.display), (TopBtn::Menu(MenuId::Storage), "Storage", t.storage)]
+        vec![
+            (TopBtn::Menu(MenuId::Display), "Display", t.display),
+            (TopBtn::Menu(MenuId::Storage), "Storage", t.storage),
+        ]
     }
 
     pub(super) fn draw_studio_top(&self, cv: &mut Canvas) {
@@ -598,7 +691,9 @@ impl Ui {
             btn(cv, t.badge, mix(BAR, ACCENT, 50), ACCENT);
             cv.text_in(&f.mb, t.badge, 1, "Live", ACCENT);
         }
-        if t.sim.w > 0 { self.draw_studio_sim_chip(cv, t.sim); }
+        if t.sim.w > 0 {
+            self.draw_studio_sim_chip(cv, t.sim);
+        }
         // sample rate, depth and mode (or the source and its record): a tap opens the page that sets them
         let caption = self.studio_acq_caption();
         let acq_open = self.menu_open && root == if self.record_mode() { MenuId::Ref } else { MenuId::Acquire };
@@ -612,7 +707,13 @@ impl Ui {
                     x += w;
                 }
             }
-            None => cv.text_fit(&f.mb, Rect::new(t.acq.x, 11, t.acq.w, 18), 0, &caption, if acq_open { ACCENT } else { TEXT }),
+            None => cv.text_fit(
+                &f.mb,
+                Rect::new(t.acq.x, 11, t.acq.w, 18),
+                0,
+                &caption,
+                if acq_open { ACCENT } else { TEXT },
+            ),
         }
         // Add, Cursors, Display, Storage: the Default button style
         let cursors = open(MenuId::Cursor) || self.m.cursor != CursorMode::Off;
@@ -620,7 +721,15 @@ impl Ui {
         let displaying = open(MenuId::Display);
         let storing = open(MenuId::Storage);
         let labels = &TOP_LABELS[t.tier];
-        for (r, label, on) in [(t.add, labels[3], adding), (t.cursors, labels[5], cursors), (t.display, labels[6], displaying), (t.storage, labels[7], storing)].into_iter().filter(|(r, ..)| r.w > 0) {
+        for (r, label, on) in [
+            (t.add, labels[3], adding),
+            (t.cursors, labels[5], cursors),
+            (t.display, labels[6], displaying),
+            (t.storage, labels[7], storing),
+        ]
+        .into_iter()
+        .filter(|(r, ..)| r.w > 0)
+        {
             btn(cv, r, BTN, if on { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.mb, r, 1, label, if on { ACCENT } else { TEXT });
         }
@@ -642,7 +751,10 @@ impl Ui {
         }
         // Autoset, Clear, Force: Force is dimmed while no trigger is waiting, and still works
         let waiting = !self.record_mode() && self.m.run == RunState::Run && self.m.status == TrigStatus::Wait;
-        for (r, label, lit) in [(t.autoset, labels[0], true), (t.clear, labels[1], true), (t.force, labels[2], waiting)].into_iter().filter(|(r, ..)| r.w > 0) {
+        for (r, label, lit) in [(t.autoset, labels[0], true), (t.clear, labels[1], true), (t.force, labels[2], waiting)]
+            .into_iter()
+            .filter(|(r, ..)| r.w > 0)
+        {
             let pressed = self.touch.down && self.top_hit(r).contains(self.touch.x0, self.touch.y0);
             btn(cv, r, if pressed { mix(BTN, ACCENT, 60) } else { BTN }, if pressed { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.mb, r, 1, label, if lit { TEXT } else { DIM });
@@ -667,11 +779,20 @@ impl Ui {
         // the chip that adds a source: a channel that is off, math, a reference or a bus. One name, whatever is off
         let mut add_w = ADD_W;
         // SIM plays refs, not the live channels: their pills are not on the bar then (Live brings them back)
-        let chans: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
+        let chans: Vec<usize> =
+            if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| self.m.ch[c].on).collect() };
         let mut show_w = if self.studio_badges_hidden() { SHOW_W } else { 0 };
         let caps = &oos_hal::model::platform().caps;
         let la_w = if caps.la { 52 } else { 0 };
-        let gen_w = if caps.has_gen() && !self.m.gen_hidden { if self.m.afg_on { 124 } else { GEN_W } } else { 0 };
+        let gen_w = if caps.has_gen() && !self.m.gen_hidden {
+            if self.m.afg_on {
+                124
+            } else {
+                GEN_W
+            }
+        } else {
+            0
+        };
         // a decoder that is on has its pill too, whether its lines are on or not: its band goes with its channel,
         // its pill stays and leads to its settings
         let decs: Vec<usize> = (0..DECODERS).filter(|&k| self.m.dec_is_on(k)).collect();
@@ -691,17 +812,29 @@ impl Ui {
         // its plus alone
         if show_w > 0 && count > 0 {
             let need = self.studio_ch_pill_scale_min();
-            let pill = |add_w: i32, show_w: i32| Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w.min(GEN_W))), count);
-            if pill(add_w, show_w) < need { show_w = SHOW_ICON_W; }
-            if pill(add_w, show_w) < need { add_w = ADD_SHORT_W; }
+            let pill = |add_w: i32, show_w: i32| {
+                Self::studio_pill_width(
+                    time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w.min(GEN_W))),
+                    count,
+                )
+            };
+            if pill(add_w, show_w) < need {
+                show_w = SHOW_ICON_W;
+            }
+            if pill(add_w, show_w) < need {
+                add_w = ADD_SHORT_W;
+            }
         }
-        let tight = count > 0 && Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w)), count) < self.studio_ch_pill_need();
+        let tight = count > 0
+            && Self::studio_pill_width(time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux(gen_w)), count)
+                < self.studio_ch_pill_need();
         let gen_w = if tight { gen_w.min(GEN_W) } else { gen_w };
         let aux_w = aux(gen_w);
         let room = time.x - 9 - (bottom.x + 4) - (add_w + 5 + show_w + aux_w);
         // a channel that is off has a small dim pill in its place: a tap switches it on. They give way when the
         // sources that are on need the room (and in SIM, which has no channel pills at all)
-        let offs: Vec<usize> = if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| !self.m.ch[c].on).collect() };
+        let offs: Vec<usize> =
+            if self.studio_ch_pills_hidden() { Vec::new() } else { (0..n).filter(|&c| !self.m.ch[c].on).collect() };
         let off_room = offs.len() as i32 * (OFF_PILL_W + 5);
         let show_off = !offs.is_empty() && room - off_room >= count * 96 + (count - 1).max(0) * 5;
         let room = if show_off { room - off_room } else { room };
@@ -710,7 +843,8 @@ impl Ui {
         let cw = pw.min(self.studio_ch_pill_need());
         // what the sources leave of their room goes to the pills of the channels that are off, in equal parts
         let spare = room - chans.len() as i32 * (cw + 5) - (count - chans.len() as i32) * (pw + 5);
-        let ow = if show_off { (OFF_PILL_W + spare.max(0) / offs.len() as i32).min(OFF_PILL_MAX_W) } else { OFF_PILL_W };
+        let ow =
+            if show_off { (OFF_PILL_W + spare.max(0) / offs.len() as i32).min(OFF_PILL_MAX_W) } else { OFF_PILL_W };
         let mut ch = [Rect::new(0, y, 0, ph); NCH];
         let mut x = bottom.x + 4;
         for c in 0..n {
@@ -739,8 +873,16 @@ impl Ui {
         }
         let add = Rect::new(x, y, add_w, h);
         let mut ax = add.right() + 5;
-        let la = (la_w > 0).then(|| { let r = Rect::new(ax, y, la_w, h); ax += la_w + 5; r });
-        let gen = (gen_w > 0).then(|| { let r = Rect::new(ax, y, gen_w, h); ax += gen_w + 5; r });
+        let la = (la_w > 0).then(|| {
+            let r = Rect::new(ax, y, la_w, h);
+            ax += la_w + 5;
+            r
+        });
+        let gen = (gen_w > 0).then(|| {
+            let r = Rect::new(ax, y, gen_w, h);
+            ax += gen_w + 5;
+            r
+        });
         let show = (show_w > 0).then(|| Rect::new(ax + 1, bottom.y, show_w - 6, bottom.h));
         StudioBottom { ch, refs, math, dec, add, show, la, gen, time, trig, panel }
     }
@@ -770,7 +912,9 @@ impl Ui {
     /// The width of a source pill: `count` pills (5 px apart) share `room`, none wider than a channel pill was and none
     /// narrower than the smallest that still carries its name, so many pills shrink and a few stay roomy.
     pub(super) fn studio_pill_width(room: i32, count: i32) -> i32 {
-        if count <= 0 { return PILL_MAX_W; }
+        if count <= 0 {
+            return PILL_MAX_W;
+        }
         ((room - (count - 1) * 5) / count).clamp(PILL_MIN_W, PILL_MAX_W)
     }
 
@@ -789,11 +933,21 @@ impl Ui {
         let root = if self.menu_open { Some(self.menu_root()) } else { None };
         for c in 0..n_ch() {
             let r = b.ch[c];
-            if r.w == 0 { continue; }
+            if r.w == 0 {
+                continue;
+            }
             let (col, ch) = (CH_COLORS[c], &self.m.ch[c]);
             let sel = root == Some(MenuId::Channel(c));
             let clip = self.channel_clipping(c);
-            let border = if clip { RED } else if sel { ACCENT } else if ch.on { col } else { BTN_BORDER };
+            let border = if clip {
+                RED
+            } else if sel {
+                ACCENT
+            } else if ch.on {
+                col
+            } else {
+                BTN_BORDER
+            };
             chip(cv, r, if ch.on { BTN } else { BAR }, border);
             // the channel badge: filled while the channel is on; on / off: a dot in the corner
             cv.circle(r.x + 5, r.y + 5, 3, if ch.on { GREEN } else { DIM });
@@ -803,14 +957,36 @@ impl Ui {
             let (label, bw) = if f.sb.width(&label) + 4 <= bw { (label, bw) } else { ((c + 1).to_string(), bw) };
             let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
             let by = r.y + BAR_DY;
-            let badge = if r.w >= 70 { Rect::new(r.x + 8, by + 5, bw, 20) } else { Rect::new(r.x + (r.w - bw) / 2, by + 8, bw, 18) };
+            let badge = if r.w >= 70 {
+                Rect::new(r.x + 8, by + 5, bw, 20)
+            } else {
+                Rect::new(r.x + (r.w - bw) / 2, by + 8, bw, 18)
+            };
             // on without its trace (Hide trace): the badge as an outline, and the second line says so
             let hidden = ch.on && self.m.ch_hidden[c];
             cv.round(badge, 4, if ch.on { col } else { mix(BAR, col, 70) }, 255);
-            if hidden { cv.round(badge.inset(1), 3, BTN, 255); }
-            cv.text_in(&f.sb, badge, 1, &label, if hidden { col } else if ch.on { DARK_TEXT } else { mix(BAR, col, 200) });
+            if hidden {
+                cv.round(badge.inset(1), 3, BTN, 255);
+            }
+            cv.text_in(
+                &f.sb,
+                badge,
+                1,
+                &label,
+                if hidden {
+                    col
+                } else if ch.on {
+                    DARK_TEXT
+                } else {
+                    mix(BAR, col, 200)
+                },
+            );
             if r.w >= 70 {
-                let full = if ch.on { format!("{}/div", si_short(ch.volts_per_div() as f64, ch.unit.name())) } else { "Off".into() };
+                let full = if ch.on {
+                    format!("{}/div", si_short(ch.volts_per_div() as f64, ch.unit.name()))
+                } else {
+                    "Off".into()
+                };
                 let short = if ch.on { si_short(ch.volts_per_div() as f64, ch.unit.name()) } else { "Off".into() };
                 let (tx, tw) = (badge.right() + 8, (r.right() - if chev { 20 } else { 4 } - badge.right() - 8).max(1));
                 cv.set_clip(Rect::new(badge.right() + 2, r.y, (tw + 6).min(r.right() - badge.right() - 2).max(1), r.h));
@@ -838,12 +1014,16 @@ impl Ui {
                             cv.text(&f.mb, tx, r.y + 13 + BAR_DY, &text, TEXT);
                             cv.text(&f.s, tx, r.y + 25 + BAR_DY, &d, mix(BAR, col, 170));
                         }
-                        None => cv.text_in(&f.mb, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM }),
+                        None => {
+                            cv.text_in(&f.mb, Rect::new(tx, r.y, tw, r.h), 0, &text, if ch.on { TEXT } else { DIM })
+                        }
                     }
                 }
             }
             cv.no_clip();
-            if chev { chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM); }
+            if chev {
+                chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
+            }
         }
         for i in self.shown_refs() {
             let r = b.refs[i];
@@ -856,16 +1036,25 @@ impl Ui {
         }
         for k in 0..NMATH {
             let r = b.math[k];
-            if r.w == 0 { continue; }
+            if r.w == 0 {
+                continue;
+            }
             let col = MATH_COLORS[k % MATH_COLORS.len()];
-            chip(cv, r, BTN, if self.m.math_sel == k && self.selected_workspace_source().is_none() { ACCENT } else { col });
+            chip(
+                cv,
+                r,
+                BTN,
+                if self.m.math_sel == k && self.selected_workspace_source().is_none() { ACCENT } else { col },
+            );
             cv.circle(r.x + 5, r.y + 5, 3, GREEN);
             self.studio_math_pill(cv, r, k, col);
         }
         // a decoder: its number in the colour of its source, its protocol, and its lines in the order of their roles
         for k in 0..DECODERS {
             let r = b.dec[k];
-            if r.w == 0 { continue; }
+            if r.w == 0 {
+                continue;
+            }
             let m = self.m.dec_view(k);
             let col = self.dec_color(&m);
             let sel = root == Some(MenuId::Decode) && self.m.dec_sel == k;
@@ -885,13 +1074,35 @@ impl Ui {
         if let Some(r) = b.la {
             let (on, sel) = (self.m.la.on, aux_on(&[MenuId::La, MenuId::LaLines, MenuId::LaPat]));
             let col = la::line_color(0);
-            chip(cv, r, if on { BTN } else { BAR }, if sel { ACCENT } else if on { col } else { BTN_BORDER });
+            chip(
+                cv,
+                r,
+                if on { BTN } else { BAR },
+                if sel {
+                    ACCENT
+                } else if on {
+                    col
+                } else {
+                    BTN_BORDER
+                },
+            );
             cv.circle(r.x + 5, r.y + 5, 3, if on { GREEN } else { DIM });
             cv.text_in(&f.sb, r, 1, "LA", if on { col } else { DIM });
         }
         if let Some(r) = b.gen {
             let (on, sel) = (self.m.afg_on, aux_on(&[MenuId::Afg]));
-            chip(cv, r, if on { BTN } else { BAR }, if sel { ACCENT } else if on { GEN_COLOR } else { BTN_BORDER });
+            chip(
+                cv,
+                r,
+                if on { BTN } else { BAR },
+                if sel {
+                    ACCENT
+                } else if on {
+                    GEN_COLOR
+                } else {
+                    BTN_BORDER
+                },
+            );
             cv.circle(r.x + 5, r.y + 5, 3, if on { GREEN } else { DIM });
             if on && r.w > GEN_W {
                 let text = format!("{} {}", self.value(Item::AfgWave), self.value(Item::AfgFreq));
@@ -909,7 +1120,9 @@ impl Ui {
             let named = r.w >= SHOW_W - 6;
             icon_eye(cv, if named { r.x + 15 } else { r.x + r.w / 2 }, r.y + r.h / 2, TEXT);
             // (it said "Meas", as the chip on the plot that opens the list does)
-            if named { cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Badges", TEXT); }
+            if named {
+                cv.text_in(&f.sb, Rect::new(r.x + 26, r.y, r.w - 28, r.h), 1, "Badges", TEXT);
+            }
         }
         // the sections of the row are told apart by a line
         for x in [b.time.x - 5, b.trig.x - 5] {
@@ -926,11 +1139,21 @@ impl Ui {
         cv.line(r.x + 24, cy, r.x + 20, cy - 3, TEXT);
         cv.line(r.x + 24, cy, r.x + 20, cy + 3, TEXT);
         let scale = format!("{}/div", si_short(self.m.time_per_div() as f64, "s"));
-        let label = if self.m.zoom && f.mb.width(&format!("Main {scale}")) <= r.w - 52 { format!("Main {scale}") } else { scale };
+        let label = if self.m.zoom && f.mb.width(&format!("Main {scale}")) <= r.w - 52 {
+            format!("Main {scale}")
+        } else {
+            scale
+        };
         let detail = self.studio_time_detail();
         if two && f.mb.width(&label) <= r.w - 52 && f.s.width(&detail) <= r.w - 52 {
             cv.text(&f.mb, r.x + 32, r.y + 13 + BAR_DY, &label, TEXT);
-            cv.text(&f.s, r.x + 32, r.y + 25 + BAR_DY, &detail, if self.m.zoom || self.m.fine_t { ACCENT } else { DIM });
+            cv.text(
+                &f.s,
+                r.x + 32,
+                r.y + 25 + BAR_DY,
+                &detail,
+                if self.m.zoom || self.m.fine_t { ACCENT } else { DIM },
+            );
         } else {
             cv.text_fit(&f.mb, Rect::new(r.x + 32, r.y, r.w - 52, r.h), 0, &label, TEXT);
         }
@@ -941,10 +1164,15 @@ impl Ui {
         chip(cv, r, BTN, if root == Some(MenuId::Trigger) { ACCENT } else { BTN_BORDER });
         let source = self.m.trigger_wave();
         let col = self.wave_color(source);
-        let edge = matches!(self.m.trig_type, TrigType::Edge | TrigType::Slope | TrigType::Timeout | TrigType::NthEdge | TrigType::Delay);
+        let edge = matches!(
+            self.m.trig_type,
+            TrigType::Edge | TrigType::Slope | TrigType::Timeout | TrigType::NthEdge | TrigType::Delay
+        );
         let levels = if matches!(self.m.trig_type, TrigType::Runt | TrigType::Slope | TrigType::Window) {
             format!("{} / {}", si_short(self.m.trig_level2 as f64, "V"), si_short(self.m.trig_level as f64, "V"))
-        } else { si_short(self.trig_level_shown() as f64, "V") };
+        } else {
+            si_short(self.trig_level_shown() as f64, "V")
+        };
         let src = self.trigger_source_label();
         // the base line of the main text: higher when the type and the sweep stand under it
         let base = r.y + BAR_DY + if two { 13 } else { 20 };
@@ -952,10 +1180,16 @@ impl Ui {
         let room = r.w - 9 - 20;
         let rest = if edge { 20 } else { 0 } + f.mb.width(&src) + 6 + f.mb.width(&levels);
         // one line: the type stands in front, and is cut short before the level is
-        let kind = if two { String::new() } else { Self::studio_cut(&f.sb, &self.m.trig_type.name().to_uppercase(), room - rest - 6) };
+        let kind = if two {
+            String::new()
+        } else {
+            Self::studio_cut(&f.sb, &self.m.trig_type.name().to_uppercase(), room - rest - 6)
+        };
         let mut x = r.x + 9;
         cv.set_clip(Rect::new(r.x + 2, r.y + 2, r.w - 2 - 20, r.h - 4));
-        if !kind.is_empty() { x = cv.text(&f.sb, x, base, &kind, LABEL) + 6; }
+        if !kind.is_empty() {
+            x = cv.text(&f.sb, x, base, &kind, LABEL) + 6;
+        }
         if edge {
             draw_slope(cv, x, base - 13, self.m.slope, col);
             x += 20;
@@ -967,13 +1201,19 @@ impl Ui {
             // the type and the sweep, each a text of its own
             let (mut x, y) = (r.x + 9, r.y + 25 + BAR_DY);
             for (i, part) in self.studio_trig_detail().split(" \u{b7} ").enumerate() {
-                if i > 0 { x = cv.text(&f.s, x, y, " \u{b7} ", LABEL); }
+                if i > 0 {
+                    x = cv.text(&f.s, x, y, " \u{b7} ", LABEL);
+                }
                 x = cv.text(&f.s, x, y, part, LABEL);
             }
         } else {
             // one line: the sweep at the right, where it has the room. Auto, Normal or Single decide whether the
             // picture moves at all
-            let sweep = match self.m.trig_mode { TrigMode::Auto => "Auto", TrigMode::Normal => "Normal", TrigMode::Single => "Single" };
+            let sweep = match self.m.trig_mode {
+                TrigMode::Auto => "Auto",
+                TrigMode::Normal => "Normal",
+                TrigMode::Single => "Single",
+            };
             if x + f.s.width(sweep) <= r.right() - 24 {
                 cv.text(&f.s, r.right() - 24 - f.s.width(sweep), base, sweep, DIM);
             }
@@ -991,10 +1231,18 @@ impl Ui {
 
     /// `s` as it fits `room` in the font `f`: whole, or cut with three dots, or nothing when not even two letters fit.
     pub(super) fn studio_cut(f: &Font, s: &str, room: i32) -> String {
-        if f.width(s) <= room { return s.to_string(); }
+        if f.width(s) <= room {
+            return s.to_string();
+        }
         let mut t: String = s.to_string();
-        while t.chars().count() > 2 && f.width(&format!("{t}...")) > room { t.pop(); }
-        if f.width(&format!("{t}...")) <= room { format!("{}...", t.trim_end()) } else { String::new() }
+        while t.chars().count() > 2 && f.width(&format!("{t}...")) > room {
+            t.pop();
+        }
+        if f.width(&format!("{t}...")) <= room {
+            format!("{}...", t.trim_end())
+        } else {
+            String::new()
+        }
     }
 
     /// The second line of the time pill, as the TIME card of the Default layout has it: the zoom scale while the zoom
@@ -1022,9 +1270,15 @@ impl Ui {
         let f = self.fonts();
         let probe = format!("{}×", ch.probe);
         let full = format!("{} · {} · {}", ch.coupling.name(), probe, si_short(ch.offset as f64, self.m.unit(c)));
-        if f.s.width(&full) <= room { return full; }
+        if f.s.width(&full) <= room {
+            return full;
+        }
         let two = format!("{} · {}", ch.coupling.name(), probe);
-        if f.s.width(&two) <= room { two } else { ch.coupling.name().to_string() }
+        if f.s.width(&two) <= room {
+            two
+        } else {
+            ch.coupling.name().to_string()
+        }
     }
 
     /// What a ref pill says under its name: the signal or file name.
@@ -1047,7 +1301,8 @@ impl Ui {
             cv.no_clip();
             return;
         }
-        let (name, bw) = self.pill_name(name, r.w); let badge = Rect::new(r.x + 8, r.y + 5 + BAR_DY, bw, 20);
+        let (name, bw) = self.pill_name(name, r.w);
+        let badge = Rect::new(r.x + 8, r.y + 5 + BAR_DY, bw, 20);
         cv.round(badge, 4, col, 255);
         cv.text_in(&f.sb, badge, 1, &name, DARK_TEXT);
         let chev = r.w >= 130; // a narrower pill gives the chevron's room to its scale
@@ -1069,7 +1324,9 @@ impl Ui {
             cv.text_in(&f.s, Rect::new(tx, r.y, tw, r.h), 0, main, TEXT);
         }
         cv.no_clip();
-        if chev { chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM); }
+        if chev {
+            chevron_down(cv, r.right() - 16, r.y + r.h / 2 - 2, DIM);
+        }
     }
 
     /// The badges are hidden and there are some to show: the bottom bar keeps a button for them.
@@ -1098,21 +1355,31 @@ impl Ui {
             // like a channel pill: select it and open its sheet; a second tap closes it
             let (prev, open) = (self.m.math_sel, self.menu_open && self.menu == MenuId::Math);
             self.m.math_select(k);
-            if open && prev != k { return; }
+            if open && prev != k {
+                return;
+            }
             return self.toggle_menu(MenuId::Math);
         }
         if let Some(k) = (0..DECODERS).find(|&k| b.dec[k].w > 0 && Self::hit40(b.dec[k]).contains(x, y)) {
             // like a math pill: that decoder and its Decode sheet; a second tap closes it
             let (prev, open) = (self.m.dec_sel, self.menu_open && self.menu == MenuId::Decode);
-            if prev != k { self.select_option(Item::DecSel, &self.dec_tag(k)); }
-            if open && prev != k { return; }
+            if prev != k {
+                self.select_option(Item::DecSel, &self.dec_tag(k));
+            }
+            if open && prev != k {
+                return;
+            }
             return self.toggle_menu(MenuId::Decode);
         }
         for c in 0..n_ch() {
-            if !b.ch[c].contains(x, y) { continue; }
+            if !b.ch[c].contains(x, y) {
+                continue;
+            }
             if !self.m.ch[c].on {
                 // the pill of a channel that is off: on and selected, no sheet
-                if self.menu_open { self.close_menu(); }
+                if self.menu_open {
+                    self.close_menu();
+                }
                 self.m.ch[c].on = true;
                 self.settings_changed();
                 self.relayout();
@@ -1134,7 +1401,9 @@ impl Ui {
             self.select_workspace_source(WaveId::Ch(c));
             if own {
                 // the second tap of a double tap does not close what the first one opened
-                if !again { self.close_menu(); }
+                if !again {
+                    self.close_menu();
+                }
             } else if sheet || selected {
                 // (the sheet of another channel that is open goes to this one)
                 self.open_menu(MenuId::Channel(c));
@@ -1144,7 +1413,9 @@ impl Ui {
         if let Some(i) = self.shown_refs().into_iter().find(|&i| b.refs[i].contains(x, y)) {
             let (prev, open) = (self.ref_page.sel, self.menu_open && self.menu == MenuId::Ref);
             self.select_workspace_source(WaveId::Ref(i));
-            if open && prev != i { return; }
+            if open && prev != i {
+                return;
+            }
             return self.toggle_menu(MenuId::Ref);
         }
         if b.time.contains(x, y) {
@@ -1164,32 +1435,50 @@ impl Ui {
     /// The popup of the "+ CH" chip: the channels that are off, then (set apart by a line) Add math, Add ref and
     /// Add bus. Rows 44 px high, the panel over the chip.
     pub(super) fn studio_picker_rows(&self) -> Option<(Vec<(usize, Rect)>, Vec<(PickAdd, Rect)>)> {
-        if !self.studio.ch_picker { return None; }
+        if !self.studio.ch_picker {
+            return None;
+        }
         let b = self.studio_bottom();
         // the channels that are off; with every channel on, all of them (to turn off)
         let mut off: Vec<usize> = (0..n_ch()).filter(|&c| !self.m.ch[c].on).collect();
-        if off.is_empty() { off = (0..n_ch()).collect(); }
+        if off.is_empty() {
+            off = (0..n_ch()).collect();
+        }
         let (w, row) = (170, 44);
         let sep = if off.is_empty() { 0 } else { 10 };
         let total = (off.len() + PICK_ADDS.len()) as i32 * row + sep;
         let top = self.frame().bottom.y - 8 - total - 8;
         let x = b.add.x.min(self.scr.w - w - 4);
-        let chans = off.iter().enumerate().map(|(i, &c)| (c, Rect::new(x + 4, top + 4 + i as i32 * row, w - 8, row))).collect();
+        let chans =
+            off.iter().enumerate().map(|(i, &c)| (c, Rect::new(x + 4, top + 4 + i as i32 * row, w - 8, row))).collect();
         let y0 = top + 4 + off.len() as i32 * row + sep;
-        let extras = PICK_ADDS.iter().enumerate().map(|(i, &k)| (k, Rect::new(x + 4, y0 + i as i32 * row, w - 8, row))).collect();
+        let extras = PICK_ADDS
+            .iter()
+            .enumerate()
+            .map(|(i, &k)| (k, Rect::new(x + 4, y0 + i as i32 * row, w - 8, row)))
+            .collect();
         Some((chans, extras))
     }
 
     /// A new math channel starts useful: the first free one, an addition of the first channel that is on and the next
     /// one (or the same, for one), so its trace is on the screen at once.
     pub(super) fn studio_math_start(&mut self) {
-        let free = if self.m.math == MathOp::Off { Some(self.m.math_sel) } else { (0..NMATH).find(|&k| self.m.math_ch(k).op == MathOp::Off) };
+        let free = if self.m.math == MathOp::Off {
+            Some(self.m.math_sel)
+        } else {
+            (0..NMATH).find(|&k| self.m.math_ch(k).op == MathOp::Off)
+        };
         // every channel is defined: one hidden in this view comes back
         let Some(k) = free else {
-            if let Some(k) = (0..NMATH).find(|&k| self.m.math_ch(k).op != MathOp::Off && self.m.math_hidden[k]) { self.m.math_hidden[k] = false; self.relayout(); }
+            if let Some(k) = (0..NMATH).find(|&k| self.m.math_ch(k).op != MathOp::Off && self.m.math_hidden[k]) {
+                self.m.math_hidden[k] = false;
+                self.relayout();
+            }
             return;
         };
-        if k != self.m.math_sel { self.m.math_select(k); }
+        if k != self.m.math_sel {
+            self.m.math_select(k);
+        }
         let on: Vec<usize> = (0..n_ch()).filter(|&c| self.m.ch[c].on).collect();
         let Some(&a) = on.first() else { return };
         let b = on.get(1).copied().unwrap_or(a);
@@ -1205,7 +1494,10 @@ impl Ui {
     /// What a row of the popup's second group opens: the flows of the + Add panel and the analysis menus.
     fn studio_pick_add(&mut self, k: PickAdd) {
         match k {
-            PickAdd::Math => { self.studio_math_start(); self.open_submenu(MenuId::Math); }
+            PickAdd::Math => {
+                self.studio_math_start();
+                self.open_submenu(MenuId::Math);
+            }
             PickAdd::Ref => self.open_submenu(MenuId::Ref),
             PickAdd::Bus => self.open_submenu(MenuId::Decode),
         }
@@ -1216,12 +1508,23 @@ impl Ui {
         let f = self.fonts();
         let first = rows.first().map_or(extras[0].1, |r| r.1);
         let last = extras[extras.len() - 1].1;
-        let p = Rect::new(first.x - 4, first.y - 4, first.w + 8, last.bottom() - first.y + 8 + if rows.is_empty() { 0 } else { 0 });
+        let p = Rect::new(
+            first.x - 4,
+            first.y - 4,
+            first.w + 8,
+            last.bottom() - first.y + 8 + if rows.is_empty() { 0 } else { 0 },
+        );
         cv.round(p, 8, BTN_BORDER, 255);
         cv.round(p.inset(1), 7, PANEL_BG, 255);
-        if !rows.is_empty() { cv.hline(extras[0].1.x + 6, extras[0].1.right() - 6, extras[0].1.y - 5, LINE); }
+        if !rows.is_empty() {
+            cv.hline(extras[0].1.x + 6, extras[0].1.right() - 6, extras[0].1.y - 5, LINE);
+        }
         for (k, r) in &extras {
-            let col = match k { PickAdd::Math => MATH_COLORS[0], PickAdd::Ref => REF_COLORS[0].1, PickAdd::Bus => super::bus::BUS };
+            let col = match k {
+                PickAdd::Math => MATH_COLORS[0],
+                PickAdd::Ref => REF_COLORS[0].1,
+                PickAdd::Bus => super::bus::BUS,
+            };
             let badge = Rect::new(r.x + 8, r.y + 10, 6, 24);
             cv.round(badge, 3, col, 255);
             cv.text_in(&f.m, Rect::new(badge.right() + 10, r.y, r.w - 30, r.h), 0, k.label(), TEXT);
@@ -1230,7 +1533,13 @@ impl Ui {
             let badge = Rect::new(r.x + 8, r.y + 10, 42, 24);
             cv.round(badge, 4, mix(BAR, CH_COLORS[c], 200), 255);
             cv.text_in(&f.sb, badge, 1, &format!("CH{}", c + 1), DARK_TEXT);
-            cv.text_in(&f.m, Rect::new(badge.right() + 10, r.y, r.w - 64, r.h), 0, if self.m.ch[c].on { "Turn off" } else { "Turn on" }, TEXT);
+            cv.text_in(
+                &f.m,
+                Rect::new(badge.right() + 10, r.y, r.w - 64, r.h),
+                0,
+                if self.m.ch[c].on { "Turn off" } else { "Turn on" },
+                TEXT,
+            );
         }
     }
 
@@ -1238,12 +1547,24 @@ impl Ui {
     pub(super) fn studio_tap(&mut self, x: i32, y: i32) -> bool {
         self.studio_sync();
         // the info card is above everything, the Add panel included
-        if self.info_card_tap(x, y) { return true; }
-        if self.power.open || self.wlan.osk.is_some() || self.dialog.is_some() || self.load_slot_ask { return false; }
-        if self.menu_open && self.menu_rect().is_some_and(|d| d.contains(x, y)) { return false; }
-        if self.studio_sz_taps(x, y) { return true; }
-        if self.studio_add_tap(x, y) { return true; }
-        if self.studio_ctx_tap(x, y) { return true; }
+        if self.info_card_tap(x, y) {
+            return true;
+        }
+        if self.power.open || self.wlan.osk.is_some() || self.dialog.is_some() || self.load_slot_ask {
+            return false;
+        }
+        if self.menu_open && self.menu_rect().is_some_and(|d| d.contains(x, y)) {
+            return false;
+        }
+        if self.studio_sz_taps(x, y) {
+            return true;
+        }
+        if self.studio_add_tap(x, y) {
+            return true;
+        }
+        if self.studio_ctx_tap(x, y) {
+            return true;
+        }
         if self.studio.ch_picker {
             let (rows, extras) = self.studio_picker_rows().unzip();
             self.studio.ch_picker = false;
@@ -1256,19 +1577,37 @@ impl Ui {
                 self.m.ch[c].on = on;
                 self.settings_changed();
                 self.relayout();
-                if on { self.select_workspace_source(WaveId::Ch(c)); }
+                if on {
+                    self.select_workspace_source(WaveId::Ch(c));
+                }
                 return true;
             }
             // a tap on the chip that opened it only closes it; any other tap closes it and goes on
-            if self.studio_bottom().add.contains(x, y) { return true; }
+            if self.studio_bottom().add.contains(x, y) {
+                return true;
+            }
         }
-        if self.md_hide_bar().is_some_and(|(bar, _)| bar.contains(x, y)) && self.md_undo_tap(x, y) { return true; }
-        if self.md_undo_bar().is_some_and(|(bar, _)| bar.contains(x, y)) && self.md_undo_tap(x, y) { return true; }
-        if self.studio_popup_tap(x, y) { return true; }
-        if let Some(k) = self.dock_float_at(x, y) { return self.dock_float_tap(k, x, y); }
-        if self.studio_zoom_tap(x, y) { return true; }
-        if self.studio_badge_tap(x, y) { return true; }
-        if self.studio_panel_tap(x, y) { return true; }
+        if self.md_hide_bar().is_some_and(|(bar, _)| bar.contains(x, y)) && self.md_undo_tap(x, y) {
+            return true;
+        }
+        if self.md_undo_bar().is_some_and(|(bar, _)| bar.contains(x, y)) && self.md_undo_tap(x, y) {
+            return true;
+        }
+        if self.studio_popup_tap(x, y) {
+            return true;
+        }
+        if let Some(k) = self.dock_float_at(x, y) {
+            return self.dock_float_tap(k, x, y);
+        }
+        if self.studio_zoom_tap(x, y) {
+            return true;
+        }
+        if self.studio_badge_tap(x, y) {
+            return true;
+        }
+        if self.studio_panel_tap(x, y) {
+            return true;
+        }
         if y >= self.frame().bottom.y - 2 {
             self.studio_bottom_tap(x, self.bar_y(y));
             return true;
@@ -1289,14 +1628,18 @@ impl Ui {
     /// The status pill: Run / Stop as in every layout. While the SIM panel is open and nothing plays yet, Run plays
     /// the SIM source (the same action as the panel's Play).
     pub(super) fn studio_run_stop(&mut self) {
-        if self.studio.view == StudioView::Sim && !self.record_mode() { return self.sim_activate_play(); }
+        if self.studio.view == StudioView::Sim && !self.record_mode() {
+            return self.sim_activate_play();
+        }
         self.key(key::RUNSTOP);
     }
 
     /// Single: one acquisition, or one SIM frame that is then held.
     pub(super) fn studio_single(&mut self) {
         if self.studio.view == StudioView::Sim && !self.record_mode() {
-            if self.sim_generating() { return; }
+            if self.sim_generating() {
+                return;
+            }
             return self.sim_request_ui(false);
         }
         self.key(key::SINGLE);
@@ -1307,7 +1650,9 @@ impl Ui {
     }
 
     fn studio_top_tap(&mut self, x: i32, y: i32) {
-        if self.studio_search_chip_tap(x, y) { return; }
+        if self.studio_search_chip_tap(x, y) {
+            return;
+        }
         let t = self.studio_top();
         let hit = |r: Rect| self.top_hit(r).contains(x, y);
         if t.badge.w > 0 && hit(t.badge) {
@@ -1325,9 +1670,15 @@ impl Ui {
         } else if t.force.w > 0 && hit(t.force) {
             self.key(key::FORCE);
         } else if t.sim.w > 0 && hit(t.sim) {
-            if self.menu_open { self.close_menu(); }
+            if self.menu_open {
+                self.close_menu();
+            }
             // live with a reference shown: the button plays it; in SIM the chip opens the SIM panel
-            if self.sim_return_button() { self.sim_panel_play(); } else { self.studio_set_view(StudioView::Sim); }
+            if self.sim_return_button() {
+                self.sim_panel_play();
+            } else {
+                self.studio_set_view(StudioView::Sim);
+            }
         } else if hit(t.lan) || (t.wlan.w > 0 && hit(t.wlan)) {
             // the address and the services are on the Network page
             self.toggle_menu(MenuId::Network);
@@ -1336,7 +1687,11 @@ impl Ui {
         } else if hit(t.acq) {
             self.toggle_menu(if self.record_mode() { MenuId::Ref } else { MenuId::Acquire });
         } else if hit(t.add) {
-            if self.studio.add_menu { self.studio.add_menu = false; } else { self.studio_add_open(); }
+            if self.studio.add_menu {
+                self.studio.add_menu = false;
+            } else {
+                self.studio_add_open();
+            }
         } else if hit(t.measure) {
             self.open_meas_list();
         } else if t.cursors.w > 0 && hit(t.cursors) {
@@ -1346,7 +1701,11 @@ impl Ui {
         } else if hit(t.storage) {
             self.toggle_menu(MenuId::Storage);
         } else if hit(t.gear) {
-            if self.m.touch_lock { self.key(key::TOUCHLOCK); } else { self.toggle_menu(MenuId::Main); }
+            if self.m.touch_lock {
+                self.key(key::TOUCHLOCK);
+            } else {
+                self.toggle_menu(MenuId::Main);
+            }
         }
     }
 }
@@ -1380,16 +1739,27 @@ impl Ui {
     pub(super) fn studio_zero_y(&self, source: super::workspace::Trace) -> Option<i32> {
         use super::workspace::Trace;
         let y = match source {
-            Trace::Channel(c) => { if !self.m.ch[c].on || !self.shows(c) { return None; } self.y_of_volts(c, 0.0) }
+            Trace::Channel(c) => {
+                if !self.m.ch[c].on || !self.shows(c) {
+                    return None;
+                }
+                self.y_of_volts(c, 0.0)
+            }
             Trace::Reference(i) => {
                 let r = self.refs.get(i)?.as_ref().filter(|r| r.on && r.vpd > 0.0)?;
-                if self.ref_win_of(i) != self.plot.cur_win { return None; }
+                if self.ref_win_of(i) != self.plot.cur_win {
+                    return None;
+                }
                 self.zoom_y_of_divs(self.plot.area, r.offset / r.vpd).clamp(-1e4, 1e4).round() as i32
             }
             Trace::Math(k) => {
-                if !self.m.math_shown(k) || self.math_win_of(k) != self.plot.cur_win { return None; }
+                if !self.m.math_shown(k) || self.math_win_of(k) != self.plot.cur_win {
+                    return None;
+                }
                 let c = self.m.math_ch(k);
-                if c.op == MathOp::Fft { return None; }
+                if c.op == MathOp::Fft {
+                    return None;
+                }
                 self.zoom_y_of_divs(self.plot.area, c.offset).clamp(-1e4, 1e4).round() as i32
             }
         };
@@ -1402,11 +1772,14 @@ impl Ui {
     pub(super) fn studio_draw_handles(&self, cv: &mut Canvas) {
         use super::workspace::Trace;
         for (source, r) in self.studio_handle_rects() {
-            let (name, col) = (self.studio_handle_name(source), match source {
-                Trace::Channel(c) => CH_COLORS[c],
-                Trace::Reference(i) => self.wave_color(WaveId::Ref(i)),
-                Trace::Math(k) => MATH_COLORS[k % MATH_COLORS.len()],
-            });
+            let (name, col) = (
+                self.studio_handle_name(source),
+                match source {
+                    Trace::Channel(c) => CH_COLORS[c],
+                    Trace::Reference(i) => self.wave_color(WaveId::Ref(i)),
+                    Trace::Math(k) => MATH_COLORS[k % MATH_COLORS.len()],
+                },
+            );
             match source {
                 Trace::Channel(c) => self.studio.lane_badges.borrow_mut().push((c, r)),
                 _ => self.studio.handles.borrow_mut().push((source, r)),
@@ -1419,7 +1792,9 @@ impl Ui {
 
     /// The T marker over the lanes, the cursor tags and the shaded band between the cursors.
     pub(super) fn draw_studio_overlay(&self, cv: &mut Canvas) {
-        if !self.studio_tags_on() || self.view_on() || self.eye_open() { return; }
+        if !self.studio_tags_on() || self.view_on() || self.eye_open() {
+            return;
+        }
         let f = self.fonts();
         let (g, grid) = (self.studio_tag_area(), self.plot.grid);
         cv.set_clip(Rect::new(grid.x - 12, grid.y, grid.w + 24, grid.h));
@@ -1432,15 +1807,21 @@ impl Ui {
             cv.set_clip(grid);
             let off_same_side = (fr[0] < 0.0 && fr[1] < 0.0) || (fr[0] > 1.0 && fr[1] > 1.0);
             for &lane in &self.plot.wins {
-                if !off_same_side && (self.stacked() || self.plot.wins.len() < 2 || lane == g) { self.studio_band(cv, lane, g, (x0, x1)); }
+                if !off_same_side && (self.stacked() || self.plot.wins.len() < 2 || lane == g) {
+                    self.studio_band(cv, lane, g, (x0, x1));
+                }
             }
             cv.set_clip(Rect::new(grid.x - 12, grid.y, grid.w + 24, grid.h));
             for (k, (x, name)) in [(xs[0], "X1"), (xs[1], "X2")].into_iter().enumerate() {
-                if !(0.0..=1.0).contains(&fr[k]) { continue; }
+                if !(0.0..=1.0).contains(&fr[k]) {
+                    continue;
+                }
                 let r = self.studio_tag_rect(x);
                 cv.round(r, 3, BAND, 255);
                 cv.text_in(&f.sb, r, 1, name, DARK_TEXT);
-                if self.workspace.cursor_sel == Some(k) { cv.round_outline(Rect::new(r.x - 2, r.y - 2, r.w + 4, r.h + 4), 3, ACCENT); }
+                if self.workspace.cursor_sel == Some(k) {
+                    cv.round_outline(Rect::new(r.x - 2, r.y - 2, r.w + 4, r.h + 4), 3, ACCENT);
+                }
                 cv.vline(x, r.bottom(), r.bottom() + 3, BAND);
             }
         }
@@ -1459,7 +1840,10 @@ impl Ui {
         } else if tx < g.x {
             cv.triangle([(r.x - 1, r.y + r.h / 2), (r.x + 4, r.y + 2), (r.x + 4, r.bottom() - 2)], AMBER);
         } else {
-            cv.triangle([(r.right() + 1, r.y + r.h / 2), (r.right() - 4, r.y + 2), (r.right() - 4, r.bottom() - 2)], AMBER);
+            cv.triangle(
+                [(r.right() + 1, r.y + r.h / 2), (r.right() - 4, r.y + 2), (r.right() - 4, r.bottom() - 2)],
+                AMBER,
+            );
         }
         cv.no_clip();
     }
@@ -1481,7 +1865,8 @@ const PILL_AGAIN: f64 = 0.45;
 /// A thumbtack: a flat cap, a barrel, a rim and a needle. Filled when pinned, outline when not. `x` is the left edge of the
 /// 12 px wide glyph and `cy` its middle (it is 17 px high).
 pub(super) fn icon_pin(cv: &mut Canvas, x: i32, cy: i32, filled: bool, c: Rgb) {
-    let (cap, barrel, rim) = (Rect::new(x + 1, cy - 8, 10, 4), Rect::new(x + 3, cy - 4, 6, 5), Rect::new(x + 1, cy + 1, 10, 2));
+    let (cap, barrel, rim) =
+        (Rect::new(x + 1, cy - 8, 10, 4), Rect::new(x + 3, cy - 4, 6, 5), Rect::new(x + 1, cy + 1, 10, 2));
     if filled {
         cv.fill(cap, c);
         cv.fill(barrel, c);
@@ -1504,7 +1889,9 @@ impl Ui {
     /// The measurements in the order of the list: single, pair, catalogue.
     pub(super) fn studio_keys(&self) -> Vec<MeasKey> {
         let m = &self.m;
-        m.meas.iter().map(|&(k, id)| MeasKey::One(k, id))
+        m.meas
+            .iter()
+            .map(|&(k, id)| MeasKey::One(k, id))
             .chain(m.meas2.iter().map(|&(k, a, b)| MeasKey::Pair(k, a, b)))
             .chain(m.cat.iter().map(|&(i, a, b, c, d)| MeasKey::Cat(i, a, b, c, d)))
             .collect()
@@ -1522,7 +1909,9 @@ impl Ui {
 
     /// The source a measurement reads first.
     pub(super) fn studio_key_source(key: MeasKey) -> WaveId {
-        match key { MeasKey::One(_, id) | MeasKey::Pair(_, id, _) | MeasKey::Cat(_, id, _, _, _) => id }
+        match key {
+            MeasKey::One(_, id) | MeasKey::Pair(_, id, _) | MeasKey::Cat(_, id, _, _, _) => id,
+        }
     }
 
     /// The measurements of the badge row: the pinned ones (the row shows as many as fit, a "+N" chip counts the rest).
@@ -1533,7 +1922,8 @@ impl Ui {
     /// The measurements that are pinned: every one the user has not unpinned, so a measurement is pinned from the
     /// moment it is added. Only those of a source that is live: no "CH1 ----" while CH1 is off and a ref is the signal.
     pub(super) fn studio_pinned(&self) -> Vec<MeasKey> {
-        let keys: Vec<MeasKey> = self.studio_keys().into_iter().filter(|k| self.studio_source_live(Self::studio_key_source(*k))).collect();
+        let keys: Vec<MeasKey> =
+            self.studio_keys().into_iter().filter(|k| self.studio_source_live(Self::studio_key_source(*k))).collect();
         match &self.studio.pinned {
             Some(pinned) => keys.into_iter().filter(|k| pinned.contains(k)).collect(),
             None => keys.into_iter().filter(|k| !self.studio.unpinned.contains(k)).collect(),
@@ -1543,12 +1933,18 @@ impl Ui {
     /// Measurements of a ref that was hidden or removed leave the list with it.
     pub(super) fn studio_prune_ref_rows(&mut self) {
         let gone = |s: &Ui, id: WaveId| matches!(id, WaveId::Ref(_)) && !s.studio_source_live(id);
-        if !(self.m.meas.iter().any(|&(_, id)| gone(self, id)) || self.m.meas2.iter().any(|&(_, a, b)| gone(self, a) || gone(self, b))) { return; }
+        if !(self.m.meas.iter().any(|&(_, id)| gone(self, id))
+            || self.m.meas2.iter().any(|&(_, a, b)| gone(self, a) || gone(self, b)))
+        {
+            return;
+        }
         let (meas, meas2) = (self.m.meas.clone(), self.m.meas2.clone());
         self.m.meas = meas.into_iter().filter(|&(_, id)| !gone(self, id)).collect();
         self.m.meas2 = meas2.into_iter().filter(|&(_, a, b)| !gone(self, a) && !gone(self, b)).collect();
         let keys = self.studio_keys();
-        if let Some(p) = &mut self.studio.pinned { p.retain(|k| keys.contains(k)); }
+        if let Some(p) = &mut self.studio.pinned {
+            p.retain(|k| keys.contains(k));
+        }
         self.studio.unpinned.retain(|k| keys.contains(k));
         self.studio.floated.retain(|k| keys.contains(k));
         self.studio.popup = None;
@@ -1566,7 +1962,9 @@ impl Ui {
             self.studio.unpinned = self.studio_keys().into_iter().filter(|k| !pinned.contains(k)).collect();
         }
         self.studio.unpinned.retain(|k| *k != key);
-        if !on { self.studio.unpinned.push(key); }
+        if !on {
+            self.studio.unpinned.push(key);
+        }
         self.relayout();
     }
 
@@ -1587,14 +1985,22 @@ impl Ui {
     /// Whether the row under the lanes is there: pinned measurements to show and the panel closed, unless hidden. The cursor
     /// read-out is never in it (the plot has its own).
     pub(super) fn studio_badges_visible(&self) -> bool {
-        self.m.layout == Layout::Studio && !self.studio.hide_badges
-            && !self.studio_pinned().is_empty() && !self.studio_panel_shown()
+        self.m.layout == Layout::Studio
+            && !self.studio.hide_badges
+            && !self.studio_pinned().is_empty()
+            && !self.studio_panel_shown()
     }
 
     /// With no row, the way to the panel: a slim chip at the bottom right of the plot (Waveform view, some measurements).
     pub(super) fn studio_meas_chip(&self) -> Option<Rect> {
-        if self.m.layout != Layout::Studio || self.studio.view != StudioView::Waveform || self.studio_badges_visible() || self.full_on()
-            || self.measurement_count() == 0 { return None; }
+        if self.m.layout != Layout::Studio
+            || self.studio.view != StudioView::Waveform
+            || self.studio_badges_visible()
+            || self.full_on()
+            || self.measurement_count() == 0
+        {
+            return None;
+        }
         let w = self.dock_wave_rect();
         let wide = 28 + (74.0 * self.studio_meas_slide()) as i32;
         Some(Rect::new(w.right() - 8 - wide, w.bottom() - 26 - 34, wide, 34))
@@ -1602,7 +2008,11 @@ impl Ui {
 
     /// Height the badge row takes from the lanes.
     pub(super) fn studio_row_h(&self) -> i32 {
-        if self.studio_badges_visible() { self.studio_row_px() } else { 0 }
+        if self.studio_badges_visible() {
+            self.studio_row_px()
+        } else {
+            0
+        }
     }
 
     /// The badge row: under the lanes, as wide as they are.
@@ -1616,10 +2026,16 @@ impl Ui {
     /// them goes behind "+N".
     pub(super) fn studio_row_px(&self) -> i32 {
         let base = if self.studio.compact { ROW_H_COMPACT } else { ROW_H };
-        if self.studio_classic() && !self.studio_pinned().is_empty() { base.max(self.classic_row_px()) } else { base + (self.studio_badge_lines() - 1) * (base - 2) }
+        if self.studio_classic() && !self.studio_pinned().is_empty() {
+            base.max(self.classic_row_px())
+        } else {
+            base + (self.studio_badge_lines() - 1) * (base - 2)
+        }
     }
     pub(super) fn studio_chip_h(&self) -> i32 {
-        if self.studio_classic() && !self.studio_pinned().is_empty() { return self.studio_row_px() - 6; }
+        if self.studio_classic() && !self.studio_pinned().is_empty() {
+            return self.studio_row_px() - 6;
+        }
         (if self.studio.compact { ROW_H_COMPACT } else { ROW_H }) - 6
     }
 
@@ -1632,33 +2048,53 @@ impl Ui {
     /// as wide as "0.000 MHz", so a value that grows by a digit moves no badge to the next line and the plot keeps its
     /// height. The classic strip: the lines its sources wrap onto (classicbadges.rs).
     fn studio_badge_wrap_now(&self) -> i32 {
-        if self.m.layout != Layout::Studio || !self.studio_badges_visible() { return 0; }
+        if self.m.layout != Layout::Studio || !self.studio_badges_visible() {
+            return 0;
+        }
         let f = self.fonts();
         let rows = self.meas_rows();
-        let names: Vec<(MeasKey, i32)> = self.studio_badge_keys().into_iter().filter_map(|key| {
-            let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
-            Some((key, f.s.width(&self.studio_badge_name(key, &r.name))))
-        }).collect();
+        let names: Vec<(MeasKey, i32)> = self
+            .studio_badge_keys()
+            .into_iter()
+            .filter_map(|key| {
+                let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
+                Some((key, f.s.width(&self.studio_badge_name(key, &r.name))))
+            })
+            .collect();
         let (span_x, span_w) = self.plot_span();
         // the row ends before the buttons at its right (`studio_row_limit`, without the row's own rectangle)
         let (x0, limit) = (span_x + 4, span_x + span_w - self.studio_row_tail());
         let value = f.sb.width("0.000 MHz");
-        if self.studio_classic() { return self.classic_wrap_now(span_w); }
+        if self.studio_classic() {
+            return self.classic_wrap_now(span_w);
+        }
         let mut x = x0;
         for (_, name) in &names {
             let w = 16 + name + 8 + value + 10;
-            if x + w > limit { return BADGE_LINES - 1; }
+            if x + w > limit {
+                return BADGE_LINES - 1;
+            }
             x += w + 5;
         }
         0
     }
     /// Width of the measurement panel and height of its rows: smaller in the compact view (not the SIM panel).
     pub(super) fn studio_panel_w(&self) -> i32 {
-        if self.studio.compact && self.studio.view != StudioView::Sim { 210 } else { MEAS_PANEL_W_FULL }
+        if self.studio.compact && self.studio.view != StudioView::Sim {
+            210
+        } else {
+            MEAS_PANEL_W_FULL
+        }
     }
     pub(super) fn studio_panel_row(&self) -> i32 {
-        if self.studio_detailed() { return self.detail_row_h(); }
-        if self.panel_is_cards() { super::measpanel::CARD_H + 4 } else { super::measpanel::CELL_H + 2 }
+        if self.studio_detailed() {
+            return self.detail_row_h();
+        }
+        if self.panel_is_cards() {
+            super::measpanel::CARD_H + 4
+        } else {
+            super::measpanel::CELL_H + 2
+        }
     }
     /// The one chip at the right end of the row: how many measurements there are, or "+N" when N pinned ones have no
     /// place on the row, and an arrow. It opens the table of the measurements. It is as small as a badge: the row had
@@ -1701,7 +2137,9 @@ impl Ui {
 
     /// The row of badges as (measurement, rectangle), as many as fit.
     pub(super) fn studio_badges(&self) -> Vec<(MeasKey, Rect)> {
-        if self.studio_classic() { return self.classic_layout().pairs; }
+        if self.studio_classic() {
+            return self.classic_layout().pairs;
+        }
         self.studio_badge_fit().0
     }
 
@@ -1714,10 +2152,21 @@ impl Ui {
         let limit = self.studio_row_limit();
         let (ch, lines) = (self.studio_chip_h(), self.studio_badge_lines());
         let first = self.studio.badge_first.min(self.studio_badge_keys().len().saturating_sub(1));
-        let keys: Vec<(MeasKey, i32)> = self.studio_badge_keys().into_iter().skip(first).filter_map(|key| {
-            let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
-            Some((key, 16 + f.s.width(&self.studio_badge_name(key, &r.name)) + 8 + f.sb.width(&r.text()).max(f.sb.width("0.000 MHz")) + 10))
-        }).collect();
+        let keys: Vec<(MeasKey, i32)> = self
+            .studio_badge_keys()
+            .into_iter()
+            .skip(first)
+            .filter_map(|key| {
+                let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
+                Some((
+                    key,
+                    16 + f.s.width(&self.studio_badge_name(key, &r.name))
+                        + 8
+                        + f.sb.width(&r.text()).max(f.sb.width("0.000 MHz"))
+                        + 10,
+                ))
+            })
+            .collect();
         let place = || {
             let (mut x, mut line, mut out) = (row.x + 4, 0, Vec::new());
             for &(key, w) in &keys {
@@ -1726,7 +2175,9 @@ impl Ui {
                 if x + w > end(line) {
                     line += 1;
                     x = row.x + 4;
-                    if line >= lines || x + w > end(line) { break; }
+                    if line >= lines || x + w > end(line) {
+                        break;
+                    }
                 }
                 // the last line is the one above the bottom bar: the row grows upwards
                 out.push((key, Rect::new(x, row.bottom() - 3 - ch - (lines - 1 - line) * (ch + 4), w, ch)));
@@ -1742,7 +2193,9 @@ impl Ui {
     /// The pinned measurements that have no place on the row, with the chip that says so (`studio_list_chip`, which
     /// then reads "+N"): it opens the list of all measurements.
     pub(super) fn studio_badges_more(&self) -> Option<(Rect, usize)> {
-        if !self.studio_badges_visible() { return None; }
+        if !self.studio_badges_visible() {
+            return None;
+        }
         let n = if self.studio_classic() { self.classic_layout().overflow } else { self.studio_badge_fit().1 };
         (n > 0).then(|| (self.studio_list_chip(), n))
     }
@@ -1757,33 +2210,54 @@ impl Ui {
     /// The same at a place: its top and its height.
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn studio_cursor_chip_at(&self, after: i32, y: i32, h: i32) -> Option<(Rect, String)> {
-        if self.m.cursor == CursorMode::Off { return None; }
+        if self.m.cursor == CursorMode::Off {
+            return None;
+        }
         let badge = self.studio.cur_badge;
-        let text = self.cursor_values().into_iter().filter(|(l, _)| badge || l.contains('\u{394}'))
-            .map(|(l, v)| format!("{l} {v}")).collect::<Vec<_>>().join("   ");
-        if text.is_empty() { return None; }
+        let text = self
+            .cursor_values()
+            .into_iter()
+            .filter(|(l, _)| badge || l.contains('\u{394}'))
+            .map(|(l, v)| format!("{l} {v}"))
+            .collect::<Vec<_>>()
+            .join("   ");
+        if text.is_empty() {
+            return None;
+        }
         let w = 30 + self.fonts().sb.width(&text) + 10;
         (after + w <= self.studio_row_limit()).then(|| (Rect::new(after, y, w, h), text))
     }
 
     /// The name a badge shows: the short one (Pk-pk, Ampl) for a measurement of one source, as the Default layout has.
     pub(super) fn studio_badge_name(&self, key: MeasKey, long: &str) -> String {
-        match key { MeasKey::One(k, _) => super::meascatalog::meas_short_name(k).to_string(), _ => long.to_string() }
+        match key {
+            MeasKey::One(k, _) => super::meascatalog::meas_short_name(k).to_string(),
+            _ => long.to_string(),
+        }
     }
 
     pub(super) fn draw_studio_badges(&self, cv: &mut Canvas) {
         self.draw_studio_meas_chip(cv);
-        if !self.studio_badges_visible() { return; }
+        if !self.studio_badges_visible() {
+            return;
+        }
         let f = self.fonts();
         let row = self.studio_row();
         cv.fill(row, BG);
         let rows = self.meas_rows();
-        if self.studio_classic() { self.draw_classic_badges(cv); }
+        if self.studio_classic() {
+            self.draw_classic_badges(cv);
+        }
         for (key, r) in self.studio_badges().into_iter().filter(|_| !self.studio_classic()) {
             let Some(m) = self.studio_index(key).and_then(|i| rows.get(i)) else { continue };
             let col = self.wave_color(m.src);
             let marked = self.studio.mark == Some(key);
-            chip(cv, r, if marked { mix(BTN, ACCENT, 40) } else { BTN }, if self.studio.popup == Some(key) || marked { ACCENT } else { BTN_BORDER });
+            chip(
+                cv,
+                r,
+                if marked { mix(BTN, ACCENT, 40) } else { BTN },
+                if self.studio.popup == Some(key) || marked { ACCENT } else { BTN_BORDER },
+            );
             let cy = r.y + r.h / 2;
             // the source is a bar of its colour at the edge of the badge; a badge in the bar is pinned by being there
             cv.round(Rect::new(r.x + 3, r.y + 4, 4, r.h - 8), 2, col, 255);
@@ -1796,7 +2270,10 @@ impl Ui {
         // the list of all measurements: their number, or "+N" for those that have no place here, and an arrow
         let c = self.studio_list_chip();
         let more = self.studio_badges_more().map(|(_, n)| n);
-        let (label, col) = match more { Some(n) => (format!("+{n}"), ACCENT), None => (self.measurement_count().to_string(), TEXT) };
+        let (label, col) = match more {
+            Some(n) => (format!("+{n}"), ACCENT),
+            None => (self.measurement_count().to_string(), TEXT),
+        };
         chip(cv, c, BTN, if more.is_some() { ACCENT } else { BTN_BORDER });
         cv.set_clip(c.inset(1));
         cv.text_in(&f.sb, Rect::new(c.x + 4, c.y, c.w - 20, c.h), 1, &label, col);
@@ -1843,15 +2320,34 @@ impl Ui {
         cv.line(cx - 5, cy - 5, cx + 5, cy + 5, TEXT);
         cv.line(cx - 5, cy + 5, cx + 5, cy - 5, TEXT);
         cv.hline(p.x + 8, p.right() - 9, p.y + 38, LINE);
-        for (i, (label, col)) in [("Configure...", TEXT), ("Unpin from waveform", TEXT), ("Move to floating panel", TEXT), ("Remove measurement", RED)].into_iter().enumerate() {
+        for (i, (label, col)) in [
+            ("Configure...", TEXT),
+            ("Unpin from waveform", TEXT),
+            ("Move to floating panel", TEXT),
+            ("Remove measurement", RED),
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let r = Self::studio_popup_row(p, i as i32);
-            if i == 3 { cv.hline(p.x + 8, p.right() - 9, r.y - 5, LINE); }
+            if i == 3 {
+                cv.hline(p.x + 8, p.right() - 9, r.y - 5, LINE);
+            }
             let (ix, iy) = (r.x + 18, r.y + r.h / 2);
             match i {
                 0 => icon_gear(cv, ix, iy, col, PANEL_BG),
-                1 => { icon_pin(cv, ix - 6, iy, false, col); cv.line(ix - 8, iy + 8, ix + 8, iy - 8, col); }
-                2 => { cv.round_outline(Rect::new(ix - 8, iy - 6, 14, 12), 2, col); cv.line(ix, iy, ix + 8, iy - 8, col); }
-                _ => { cv.round_outline(Rect::new(ix - 7, iy - 5, 13, 13), 2, col); cv.hline(ix - 9, ix + 8, iy - 7, col); }
+                1 => {
+                    icon_pin(cv, ix - 6, iy, false, col);
+                    cv.line(ix - 8, iy + 8, ix + 8, iy - 8, col);
+                }
+                2 => {
+                    cv.round_outline(Rect::new(ix - 8, iy - 6, 14, 12), 2, col);
+                    cv.line(ix, iy, ix + 8, iy - 8, col);
+                }
+                _ => {
+                    cv.round_outline(Rect::new(ix - 7, iy - 5, 13, 13), 2, col);
+                    cv.hline(ix - 9, ix + 8, iy - 7, col);
+                }
             }
             cv.text_in(&f.mb, Rect::new(r.x + 42, r.y, r.w - 44, r.h), 0, label, col);
         }
@@ -1860,9 +2356,14 @@ impl Ui {
     /// A tap while a badge popup is open: it either does one of its actions or closes it. Always taken.
     fn studio_popup_tap(&mut self, x: i32, y: i32) -> bool {
         let Some(key) = self.studio.popup else { return false };
-        let Some(p) = self.studio_popup_rect() else { self.studio.popup = None; return false };
+        let Some(p) = self.studio_popup_rect() else {
+            self.studio.popup = None;
+            return false;
+        };
         self.studio.popup = None;
-        if !p.contains(x, y) { return true; }
+        if !p.contains(x, y) {
+            return true;
+        }
         let hit = (0..4).find(|&i| Self::studio_popup_row(p, i).contains(x, y));
         let Some(index) = self.studio_index(key) else { return true };
         match hit {
@@ -1871,8 +2372,12 @@ impl Ui {
             Some(2) => {
                 // only this measurement moves: off the badges, into the floating panel; the view stays unless no panel shows
                 self.studio_set_pin(key, false);
-                if !self.studio.floated.contains(&key) { self.studio.floated.push(key); }
-                if self.studio.view == StudioView::Waveform { self.studio.view = StudioView::Floating; }
+                if !self.studio.floated.contains(&key) {
+                    self.studio.floated.push(key);
+                }
+                if self.studio.view == StudioView::Waveform {
+                    self.studio.view = StudioView::Floating;
+                }
                 self.relayout();
             }
             Some(3) => {
@@ -1889,7 +2394,9 @@ impl Ui {
         if self.studio_meas_chip_tap(x, y) {
             return true;
         }
-        if !self.studio_badges_visible() || !self.studio_row().contains(x, y) { return false; }
+        if !self.studio_badges_visible() || !self.studio_row().contains(x, y) {
+            return false;
+        }
         if self.studio_badges_more().is_some_and(|(r, _)| Self::hit40(r).contains(x, y)) {
             self.studio_set_view(StudioView::Docked);
             return true;
@@ -1903,9 +2410,13 @@ impl Ui {
             let total = self.studio_pinned().len();
             let shown = self.studio_badges().len();
             let first = self.studio.badge_first.min(total.saturating_sub(1));
-            if first + shown < total { self.studio.badge_first = first + shown.max(1); }
-            else if first > 0 { self.studio.badge_first = 0; }
-            else { self.studio_set_view(StudioView::Docked); }
+            if first + shown < total {
+                self.studio.badge_first = first + shown.max(1);
+            } else if first > 0 {
+                self.studio.badge_first = 0;
+            } else {
+                self.studio_set_view(StudioView::Docked);
+            }
             return true;
         }
         if let Some((key, _)) = self.studio_badges().into_iter().find(|(_, r)| r.contains(x, y)) {
@@ -1929,9 +2440,13 @@ impl Ui {
     pub(super) fn studio_set_view(&mut self, view: StudioView) {
         let was = self.studio.view;
         // a record view runs on a session of its own: leaving it returns to the live acquisition
-        if was.is_record() && was != view && self.record_mode() { self.return_to_live(); }
+        if was.is_record() && was != view && self.record_mode() {
+            self.return_to_live();
+        }
         self.studio.view = view;
-        if view != StudioView::Offline { self.studio.dock.float_on[super::dock::VKind::Measure.idx()] = false; }
+        if view != StudioView::Offline {
+            self.studio.dock.float_on[super::dock::VKind::Measure.idx()] = false;
+        }
         self.dock_view_changed();
         self.studio.panel.scroll_top();
         self.studio.filter = None;
@@ -2023,20 +2538,35 @@ impl Ui {
         let keys = self.studio_keys();
         let pinned = self.studio_pinned();
         let q = self.studio.panel.query.trim().to_lowercase();
-        let mut v: Vec<usize> = (0..rows.len()).filter(|&i| !self.meas_row_hidden(&rows[i]) && self.studio.filter.is_none_or(|id| rows[i].src == id)
-            && (!self.studio.panel.pinned_only || keys.get(i).is_some_and(|k| pinned.contains(k)))
-            && (q.is_empty() || rows[i].name.to_lowercase().contains(&q) || self.wave_name(rows[i].src).to_lowercase().contains(&q))).collect();
+        let mut v: Vec<usize> = (0..rows.len())
+            .filter(|&i| {
+                !self.meas_row_hidden(&rows[i])
+                    && self.studio.filter.is_none_or(|id| rows[i].src == id)
+                    && (!self.studio.panel.pinned_only || keys.get(i).is_some_and(|k| pinned.contains(k)))
+                    && (q.is_empty()
+                        || rows[i].name.to_lowercase().contains(&q)
+                        || self.wave_name(rows[i].src).to_lowercase().contains(&q))
+            })
+            .collect();
         // with several sources the rows are grouped by source, in the order the sources first appear
         let mut order: Vec<WaveId> = Vec::new();
-        for &i in &v { if !order.contains(&rows[i].src) { order.push(rows[i].src); } }
-        if order.len() > 1 { v.sort_by_key(|&i| order.iter().position(|s| *s == rows[i].src).unwrap_or(0)); }
+        for &i in &v {
+            if !order.contains(&rows[i].src) {
+                order.push(rows[i].src);
+            }
+        }
+        if order.len() > 1 {
+            v.sort_by_key(|&i| order.iter().position(|s| *s == rows[i].src).unwrap_or(0));
+        }
         v
     }
 
     /// The measurement panel (docked or floating) and the SIM panel: the room under their title strip, in the dock.
     pub(super) fn studio_panel_rect(&self) -> Option<Rect> {
         match self.studio.view {
-            StudioView::Docked | StudioView::Offline | StudioView::Floating => self.dock_content(super::dock::VKind::Measure),
+            StudioView::Docked | StudioView::Offline | StudioView::Floating => {
+                self.dock_content(super::dock::VKind::Measure)
+            }
             StudioView::Sim => self.dock_content(super::dock::VKind::Sim),
             _ => None,
         }
@@ -2044,13 +2574,23 @@ impl Ui {
 
     /// Plot width less the docked panel: `plot_span` calls this.
     pub(super) fn studio_dock_w(&self) -> i32 {
-        if self.dock_on() { return 0; }
-        if self.sheet_active() { return self.sheet_dock_w(); }
-        if self.m.layout == Layout::Studio && self.studio.view.is_docked() { self.studio_panel_w() + 4 } else { 0 }
+        if self.dock_on() {
+            return 0;
+        }
+        if self.sheet_active() {
+            return self.sheet_dock_w();
+        }
+        if self.m.layout == Layout::Studio && self.studio.view.is_docked() {
+            self.studio_panel_w() + 4
+        } else {
+            0
+        }
     }
 
     pub(super) fn studio_panel_geo(&self) -> Option<PanelGeo> {
-        let p = self.studio_panel_rect().filter(|_| matches!(self.studio.view, StudioView::Docked | StudioView::Offline | StudioView::Floating))?;
+        let p = self
+            .studio_panel_rect()
+            .filter(|_| matches!(self.studio.view, StudioView::Docked | StudioView::Offline | StudioView::Floating))?;
         Some(self.studio_panel_geo_in(p))
     }
 
@@ -2061,17 +2601,32 @@ impl Ui {
         let list_y = p.y + self.panel_tool_h(p) + if detailed { super::measview::COL_HEAD } else { 0 };
         let unit = self.studio_panel_row();
         let rows_h = (p.bottom() - 2 - list_y).max(unit);
-        let page = if self.panel_cells() { self.panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
+        let page =
+            if self.panel_cells() { self.panel_cards_page(p.w - 8, rows_h) } else { (rows_h / unit).max(1) as usize };
         let shown_h = if self.panel_cells() { (page as i32 / self.panel_cell_geo(p.w - 8).0) * unit } else { rows_h };
         let list = Rect::new(p.x + 4, list_y, p.w - 8, shown_h);
         let bar = self.panel_bar(p);
-        let at = |it: super::measpanel::BarItem| bar.slots.iter().find(|s| s.item == it).map_or(Rect::new(0, 0, 0, 0), |s| s.r);
+        let at = |it: super::measpanel::BarItem| {
+            bar.slots.iter().find(|s| s.item == it).map_or(Rect::new(0, 0, 0, 0), |s| s.r)
+        };
         let none = Rect::new(0, 0, 0, 0);
-        PanelGeo { p, collapse: none, list, page, up: none, down: none, add: at(super::measpanel::BarItem::Add), stats: at(super::measpanel::BarItem::Stats), short: false }
+        PanelGeo {
+            p,
+            collapse: none,
+            list,
+            page,
+            up: none,
+            down: none,
+            add: at(super::measpanel::BarItem::Add),
+            stats: at(super::measpanel::BarItem::Stats),
+            short: false,
+        }
     }
 
     pub(super) fn draw_scrollbar(cv: &mut Canvas, list: Rect, first: usize, page: usize, total: usize) {
-        if total <= page { return; }
+        if total <= page {
+            return;
+        }
         let x = list.right() - 4;
         cv.vline(x, list.y, list.bottom() - 1, mix(BG, LINE, 120));
         let h = (list.h as i64 * page as i64 / total as i64).max(16) as i32;
@@ -2097,11 +2652,17 @@ impl Ui {
     }
 
     pub(super) fn draw_studio_panel(&self, cv: &mut Canvas) {
-        if self.m.layout != Layout::Studio { return; }
+        if self.m.layout != Layout::Studio {
+            return;
+        }
         // an analysis view fills the plot area: the docked panel stays beside it, a floating panel does not
-        if self.view_on() && !self.studio.view.is_docked() { return; }
+        if self.view_on() && !self.studio.view.is_docked() {
+            return;
+        }
         self.draw_studio_offline(cv);
-        if self.studio.view == StudioView::Sim { return self.draw_studio_sim(cv); }
+        if self.studio.view == StudioView::Sim {
+            return self.draw_studio_sim(cv);
+        }
         let Some(p) = self.studio_panel_rect() else { return };
         let rows = self.meas_rows();
         let keys = self.studio_keys();
@@ -2112,14 +2673,27 @@ impl Ui {
             let detailed = self.studio_detailed();
             self.draw_panel_toolbar(cv, &g);
             let first = self.studio_first(listed.len(), g.page);
-            if detailed { self.draw_panel_detail(cv, &g, &rows, &keys, &listed, first); }
+            if detailed {
+                self.draw_panel_detail(cv, &g, &rows, &keys, &listed, first);
+            }
             cv.set_clip(g.list);
-            if self.panel_is_strip() { self.draw_panel_strip(cv, &g, &rows, &keys, &listed, first); cv.set_clip(g.list); }
-            else if !detailed { self.draw_panel_cards(cv, &g, &rows, &keys, &listed, first); }
-            if rows.is_empty() { self.draw_panel_empty(cv, g.list); }
+            if self.panel_is_strip() {
+                self.draw_panel_strip(cv, &g, &rows, &keys, &listed, first);
+                cv.set_clip(g.list);
+            } else if !detailed {
+                self.draw_panel_cards(cv, &g, &rows, &keys, &listed, first);
+            }
+            if rows.is_empty() {
+                self.draw_panel_empty(cv, g.list);
+            }
             cv.no_clip();
             // the thin mark that shows where the list is (there is no pager)
-            Self::draw_scroll_mark(cv, g.list, self.panel_scroll_px(), self.panel_scroll_max(listed.len(), &g) + g.list.h);
+            Self::draw_scroll_mark(
+                cv,
+                g.list,
+                self.panel_scroll_px(),
+                self.panel_scroll_max(listed.len(), &g) + g.list.h,
+            );
             self.draw_panel_drop(cv);
         }
     }
@@ -2134,7 +2708,13 @@ impl Ui {
         let Some(r) = self.studio_tab() else { return };
         let f = self.fonts();
         chip(cv, r, BTN, BTN_BORDER);
-        cv.text_in(&f.sb, Rect::new(r.x + 8, r.y, r.w - 22, r.h), 0, &format!("Meas \u{b7} {}", self.measurement_count()), TEXT);
+        cv.text_in(
+            &f.sb,
+            Rect::new(r.x + 8, r.y, r.w - 22, r.h),
+            0,
+            &format!("Meas \u{b7} {}", self.measurement_count()),
+            TEXT,
+        );
         chevron(cv, r.right() - 12, r.y + r.h / 2, 1, TEXT);
     }
 
@@ -2148,37 +2728,67 @@ impl Ui {
     /// Pages the list by one page.
     pub(super) fn studio_page(&mut self, total: usize, page: usize, down: bool) {
         let first = self.studio_first(total, page);
-        self.studio.panel.first = if down { (first + page).min(total.saturating_sub(page)) } else { first.saturating_sub(page) };
+        self.studio.panel.first =
+            if down { (first + page).min(total.saturating_sub(page)) } else { first.saturating_sub(page) };
     }
 
     /// A tap on the panel. False: it is not on it.
     pub(super) fn studio_panel_tap(&mut self, x: i32, y: i32) -> bool {
-        if self.studio_offline_tap(x, y) { return true; }
-        if self.studio.view == StudioView::Sim { return self.studio_sim_tap(x, y); }
+        if self.studio_offline_tap(x, y) {
+            return true;
+        }
+        if self.studio.view == StudioView::Sim {
+            return self.studio_sim_tap(x, y);
+        }
         let rows = self.meas_rows();
         let keys = self.studio_keys();
         let listed = self.studio_listed(&rows);
         if let Some(g) = self.studio_panel_geo() {
-            if !g.p.contains(x, y) { return false; }
-            if self.panel_drop_tap(x, y) { return true; }
-            if self.md_undo_tap(x, y) { return true; }
-            if self.panel_head_tap(&g, x, y) { return true; }
-            if g.collapse.contains(x, y) { self.studio_set_view(StudioView::Waveform); }
-            else if g.add.contains(x, y) { self.open_meas_list(); }
-            else if g.list.contains(x, y) {
+            if !g.p.contains(x, y) {
+                return false;
+            }
+            if self.panel_drop_tap(x, y) {
+                return true;
+            }
+            if self.md_undo_tap(x, y) {
+                return true;
+            }
+            if self.panel_head_tap(&g, x, y) {
+                return true;
+            }
+            if g.collapse.contains(x, y) {
+                self.studio_set_view(StudioView::Waveform);
+            } else if g.add.contains(x, y) {
+                self.open_meas_list();
+            } else if g.list.contains(x, y) {
                 let first = self.studio_first(listed.len(), g.page);
                 let hit = if self.studio_detailed() {
-                    self.detail_layout(&g, listed.len(), first).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
+                    self.detail_layout(&g, listed.len(), first)
+                        .into_iter()
+                        .find(|(_, r)| r.contains(x, y))
+                        .map(|(pos, r)| (listed[pos], r))
                 } else {
-                    self.panel_cards_layout(first, listed.len(), g.list).into_iter().find(|(_, r)| r.contains(x, y)).map(|(pos, r)| (listed[pos], r))
+                    self.panel_cards_layout(first, listed.len(), g.list)
+                        .into_iter()
+                        .find(|(_, r)| r.contains(x, y))
+                        .map(|(pos, r)| (listed[pos], r))
                 };
-                if rows.is_empty() && Self::panel_empty_button(g.list).contains(x, y) { self.open_meas_list(); return true; }
+                if rows.is_empty() && Self::panel_empty_button(g.list).contains(x, y) {
+                    self.open_meas_list();
+                    return true;
+                }
                 if let Some((i, cell)) = hit {
                     // a card and a cell have their pin; the rest, and a row of the table, open the settings (with Remove)
-                    let pin = if self.panel_is_strip() { Self::panel_cell_pin(cell) } else { Self::panel_card_pin(cell) };
+                    let pin =
+                        if self.panel_is_strip() { Self::panel_cell_pin(cell) } else { Self::panel_card_pin(cell) };
                     if self.panel_cells() && pin.contains(x, y) {
-                        if let Some(&key) = keys.get(i) { let on = self.studio_is_pinned(key); self.studio_set_pin(key, !on); }
-                    } else { self.studio_configure(i); }
+                        if let Some(&key) = keys.get(i) {
+                            let on = self.studio_is_pinned(key);
+                            self.studio_set_pin(key, !on);
+                        }
+                    } else {
+                        self.studio_configure(i);
+                    }
                 }
             }
             return true;
@@ -2194,56 +2804,119 @@ impl Ui {
 
     /// Touches that move the list or the floating panel. Everything else belongs to the plot (`touch_ev`).
     pub(super) fn studio_touch(&mut self, ph: Phase, x: i32, y: i32) -> bool {
-        if self.m.layout != Layout::Studio { return false; }
+        if self.m.layout != Layout::Studio {
+            return false;
+        }
         match ph {
             Phase::Down => {
                 self.studio.sz.press = Some((self.now, x, y));
                 self.studio.sz.fired = false;
                 self.studio.drag = None;
                 // the numeric pad is modal
-                if self.numpad.is_some() { return self.studio_eat(x, y); }
-                if self.trig_slider_down(x, y) { return true; }
+                if self.numpad.is_some() {
+                    return self.studio_eat(x, y);
+                }
+                if self.trig_slider_down(x, y) {
+                    return true;
+                }
                 // the info card is modal
-                if self.studio.md.info.is_some() { return self.studio_eat(x, y); }
+                if self.studio.md.info.is_some() {
+                    return self.studio_eat(x, y);
+                }
                 // full screen: its few buttons
-                if self.m.layout == Layout::Studio && self.full_on() && self.full_chrome_rects().is_some_and(|(a, b)| Self::hit40(a).contains(x, y) || Self::hit40(b).contains(x, y)) { return self.studio_eat(x, y); }
-                if self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() || self.m.touch_lock
-                    || self.studio.add_menu || self.studio.ctx.is_some() || self.studio.popup.is_some() || self.workspace.popup.is_some() || self.load_slot_ask { return false; }
+                if self.m.layout == Layout::Studio
+                    && self.full_on()
+                    && self
+                        .full_chrome_rects()
+                        .is_some_and(|(a, b)| Self::hit40(a).contains(x, y) || Self::hit40(b).contains(x, y))
+                {
+                    return self.studio_eat(x, y);
+                }
+                if self.dialog.is_some()
+                    || self.power.open
+                    || self.wlan.osk.is_some()
+                    || self.m.touch_lock
+                    || self.studio.add_menu
+                    || self.studio.ctx.is_some()
+                    || self.studio.popup.is_some()
+                    || self.workspace.popup.is_some()
+                    || self.load_slot_ask
+                {
+                    return false;
+                }
                 // the Add measurement panel is open: only its tiles can be dragged
-                if self.menu_open { return self.md_down(x, y); }
+                if self.menu_open {
+                    return self.md_down(x, y);
+                }
                 // the bars with an Undo are above the strips of the views
-                if [self.md_hide_bar(), self.md_undo_bar()].into_iter().flatten().any(|(bar, _)| bar.contains(x, y)) { return self.studio_eat(x, y); }
-                if self.ov_divider_down(x, y) { return true; }
-                if self.dock_down(x, y) { return true; }
-                if self.md_down(x, y) { return true; }
-                if self.axis_down(x, y) { return true; }
+                if [self.md_hide_bar(), self.md_undo_bar()].into_iter().flatten().any(|(bar, _)| bar.contains(x, y)) {
+                    return self.studio_eat(x, y);
+                }
+                if self.ov_divider_down(x, y) {
+                    return true;
+                }
+                if self.dock_down(x, y) {
+                    return true;
+                }
+                if self.md_down(x, y) {
+                    return true;
+                }
+                if self.axis_down(x, y) {
+                    return true;
+                }
                 let rows = self.meas_rows();
                 if self.studio.view == StudioView::Sim {
                     if let Some((_, _, page, _)) = self.studio_sim_list().filter(|(list, ..)| list.contains(x, y)) {
-                        self.studio.drag = Some(StudioDrag::Scroll { y0: y, first0: self.studio_first(self.studio_sim_list().map_or(0, |l| l.3), page), moved: false });
+                        self.studio.drag = Some(StudioDrag::Scroll {
+                            y0: y,
+                            first0: self.studio_first(self.studio_sim_list().map_or(0, |l| l.3), page),
+                            moved: false,
+                        });
                         return true;
                     }
                     return self.studio_panel_rect().is_some_and(|p| p.contains(x, y)) && self.studio_eat(x, y);
                 }
-                if self.panel_drop_rect().is_some_and(|r| r.contains(x, y)) { return self.studio_eat(x, y); }
+                if self.panel_drop_rect().is_some_and(|r| r.contains(x, y)) {
+                    return self.studio_eat(x, y);
+                }
                 if let Some(g) = self.studio_panel_geo() {
                     if g.list.contains(x, y) {
                         self.panel_scroll_begin();
-                        self.studio.drag = Some(StudioDrag::Scroll { y0: y, first0: self.studio_first(self.studio_listed(&rows).len(), g.page), moved: false });
+                        self.studio.drag = Some(StudioDrag::Scroll {
+                            y0: y,
+                            first0: self.studio_first(self.studio_listed(&rows).len(), g.page),
+                            moved: false,
+                        });
                         return true;
                     }
                     return self.dock_float_at(x, y).is_some() && self.studio_eat(x, y);
                 }
-                if self.dock_float_at(x, y).is_some() { return self.studio_eat(x, y); }
+                if self.dock_float_at(x, y).is_some() {
+                    return self.studio_eat(x, y);
+                }
                 false
             }
             Phase::Move => {
-                if let Some((_, x0, y0)) = self.studio.sz.press { if (x - x0).abs() > 12 || (y - y0).abs() > 12 { self.studio.sz.press = None; } }
-                if self.trig_slider_move(y) { return true; }
-                if self.ov_divider_move(y) { return true; }
-                if self.axis_move(x, y) { return true; }
-                if self.dock_move(x, y) { return true; }
-                if self.md_move(x, y) { return true; }
+                if let Some((_, x0, y0)) = self.studio.sz.press {
+                    if (x - x0).abs() > 12 || (y - y0).abs() > 12 {
+                        self.studio.sz.press = None;
+                    }
+                }
+                if self.trig_slider_move(y) {
+                    return true;
+                }
+                if self.ov_divider_move(y) {
+                    return true;
+                }
+                if self.axis_move(x, y) {
+                    return true;
+                }
+                if self.dock_move(x, y) {
+                    return true;
+                }
+                if self.md_move(x, y) {
+                    return true;
+                }
                 let Some(drag) = self.studio.drag else { return false };
                 match drag {
                     StudioDrag::Scroll { y0, first0, moved } => {
@@ -2251,7 +2924,8 @@ impl Ui {
                         let sim = self.studio_sim_list().filter(|_| self.studio.view == StudioView::Sim);
                         let moved = moved || (y - y0).abs() > 8;
                         if let (true, Some((_, h, page, total))) = (moved, sim) {
-                            self.studio.panel.first = (first0 as i32 + (y0 - y) / h).clamp(0, total.saturating_sub(page) as i32) as usize;
+                            self.studio.panel.first =
+                                (first0 as i32 + (y0 - y) / h).clamp(0, total.saturating_sub(page) as i32) as usize;
                         } else if moved {
                             self.panel_scroll_drag(y0, first0, y);
                         }
@@ -2259,11 +2933,16 @@ impl Ui {
                     }
                     StudioDrag::MenuScroll { y0, s0, moved } => {
                         let moved = moved || (y - y0).abs() > 8;
-                        if moved { self.sheet.scroll = (s0 + y0 - y).clamp(0, self.menu_geo().max_scroll()); }
+                        if moved {
+                            self.sheet.scroll = (s0 + y0 - y).clamp(0, self.menu_geo().max_scroll());
+                        }
                         self.studio.drag = Some(StudioDrag::MenuScroll { y0, s0, moved });
                     }
                     StudioDrag::Eat { .. } => {}
-                    StudioDrag::Swipe { .. } | StudioDrag::BadgeDrag { .. } | StudioDrag::Tile { .. } | StudioDrag::HScroll { .. } => {}
+                    StudioDrag::Swipe { .. }
+                    | StudioDrag::BadgeDrag { .. }
+                    | StudioDrag::Tile { .. }
+                    | StudioDrag::HScroll { .. } => {}
                 }
                 true
             }
@@ -2271,24 +2950,38 @@ impl Ui {
                 self.studio.sz.press = None;
                 // the lift of a hold (`studio_hold_tick`) is not a tap
                 if std::mem::take(&mut self.studio.sz.fired) {
-                    if self.touch.down { return false; }
+                    if self.touch.down {
+                        return false;
+                    }
                     self.studio.drag = None;
                     return true;
                 }
-                if self.trig_slider_up(x, y) { return true; }
+                if self.trig_slider_up(x, y) {
+                    return true;
+                }
                 self.axis_up();
-                if self.ov_divider_up() { return true; }
-                if self.dock_up(x, y) { return true; }
+                if self.ov_divider_up() {
+                    return true;
+                }
+                if self.dock_up(x, y) {
+                    return true;
+                }
                 let Some(drag) = self.studio.drag.take() else { return false };
-                if matches!(drag, StudioDrag::Scroll { moved: true, .. }) { self.panel_scroll_end(); }
-                if self.md_up(drag, x, y) { return true; }
+                if matches!(drag, StudioDrag::Scroll { moved: true, .. }) {
+                    self.panel_scroll_end();
+                }
+                if self.md_up(drag, x, y) {
+                    return true;
+                }
                 let moved = match drag {
                     StudioDrag::Swipe { .. } | StudioDrag::BadgeDrag { .. } | StudioDrag::HScroll { .. } => true,
                     StudioDrag::Tile { moved, .. } => moved,
                     StudioDrag::Scroll { moved, .. } | StudioDrag::MenuScroll { moved, .. } => moved,
                     StudioDrag::Eat { x0, y0 } => (x - x0).abs().max((y - y0).abs()) > 8,
                 };
-                if !moved { self.tap(x, y); }
+                if !moved {
+                    self.tap(x, y);
+                }
                 true
             }
         }
@@ -2339,7 +3032,11 @@ pub(super) struct ZoomBar {
 
 fn zoom_text(n: f32) -> String {
     let n = if n.is_finite() { n.max(1.0) } else { 1.0 };
-    if n >= 9.95 { format!("{:.0}\u{d7}", n) } else { format!("{:.1}\u{d7}", n).replace(".0\u{d7}", "\u{d7}") }
+    if n >= 9.95 {
+        format!("{:.0}\u{d7}", n)
+    } else {
+        format!("{:.1}\u{d7}", n).replace(".0\u{d7}", "\u{d7}")
+    }
 }
 
 impl Ui {
@@ -2357,13 +3054,24 @@ impl Ui {
     /// at the left, then H-, H+, V-, V+, Box, Reset and Close (`zoom_controls`, `draw_zoom_readout`). These are its
     /// buttons by name.
     pub(super) fn studio_zoom_bar(&self) -> Option<ZoomBar> {
-        if !self.studio_zoom_active() { return None; }
+        if !self.studio_zoom_active() {
+            return None;
+        }
         let row = self.zoom_readout();
         let c = self.zoom_controls();
         let of = |name: &str| c.iter().find(|(_, text)| *text == name).map_or(Rect::new(0, 0, 0, 0), |(r, _)| *r);
         let close = self.zoom_close();
         let label = Rect::new(row.x + 4, row.y, (of("H-").x - row.x - 10).max(1), row.h);
-        Some(ZoomBar { label, plus: of("H+"), minus: of("H-"), vplus: of("V+"), vminus: of("V-"), boxr: of("Box"), fit: Rect::new(close.x - 76, close.y, 70, close.h), close })
+        Some(ZoomBar {
+            label,
+            plus: of("H+"),
+            minus: of("H-"),
+            vplus: of("V+"),
+            vminus: of("V-"),
+            boxr: of("Box"),
+            fit: Rect::new(close.x - 76, close.y, 70, close.h),
+            close,
+        })
     }
 
     /// The display scale popup of a lane (a tap on its channel badge while zoomed).
@@ -2378,12 +3086,20 @@ impl Ui {
     /// Minus, plus and Reset Y of that popup.
     pub(super) fn studio_yzoom_parts(&self) -> Option<(Rect, Rect, Rect, Rect)> {
         let p = self.studio_yzoom_rect()?;
-        Some((Rect::new(p.right() - 38, p.y + 4, 32, 32), Rect::new(p.x + 10, p.y + 44, 48, 36),
-            Rect::new(p.right() - 58, p.y + 44, 48, 36), Rect::new(p.x + 10, p.y + 40 + 46, p.w - 20, 36)))
+        Some((
+            Rect::new(p.right() - 38, p.y + 4, 32, 32),
+            Rect::new(p.x + 10, p.y + 44, 48, 36),
+            Rect::new(p.right() - 58, p.y + 44, 48, 36),
+            Rect::new(p.x + 10, p.y + 40 + 46, p.w - 20, 36),
+        ))
     }
 
     pub(super) fn draw_studio_yzoom(&self, cv: &mut Canvas) {
-        let (Some(p), Some((close, minus, plus, reset)), Some(c)) = (self.studio_yzoom_rect(), self.studio_yzoom_parts(), self.studio.yzoom) else { return };
+        let (Some(p), Some((close, minus, plus, reset)), Some(c)) =
+            (self.studio_yzoom_rect(), self.studio_yzoom_parts(), self.studio.yzoom)
+        else {
+            return;
+        };
         let f = self.fonts();
         cv.round(p, 8, BTN_BORDER, 255);
         cv.round(p.inset(1), 7, PANEL_BG, 255);
@@ -2394,16 +3110,26 @@ impl Ui {
         for (r, plus_sign) in [(minus, false), (plus, true)] {
             chip(cv, r, BTN, BTN_BORDER);
             cv.hline(r.x + r.w / 2 - 6, r.x + r.w / 2 + 6, r.y + r.h / 2, TEXT);
-            if plus_sign { cv.vline(r.x + r.w / 2, r.y + r.h / 2 - 6, r.y + r.h / 2 + 6, TEXT); }
+            if plus_sign {
+                cv.vline(r.x + r.w / 2, r.y + r.h / 2 - 6, r.y + r.h / 2 + 6, TEXT);
+            }
         }
-        cv.text_in(&f.mb, Rect::new(minus.right(), minus.y, plus.x - minus.right(), minus.h), 1, &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor)), TEXT);
+        cv.text_in(
+            &f.mb,
+            Rect::new(minus.right(), minus.y, plus.x - minus.right(), minus.h),
+            1,
+            &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor)),
+            TEXT,
+        );
         chip(cv, reset, BTN, BTN_BORDER);
         cv.text_in(&f.m, reset, 1, "Reset Y", TEXT);
     }
 
     /// What the zoomed lanes say about their own state: the vertical zoom, and a hint while a gesture is on.
     pub(super) fn draw_studio_zoom_overlay(&self, cv: &mut Canvas) {
-        if !self.studio_zoom_active() { return; }
+        if !self.studio_zoom_active() {
+            return;
+        }
         let f = self.fonts();
         let lane_tag = |cv: &mut Canvas, lane: Rect, text: &str| {
             let w = f.sb.width(text) + 16;
@@ -2413,7 +3139,9 @@ impl Ui {
             cv.text_in(&f.sb, r, 1, text, TEXT);
         };
         if (self.zoom_view.vfactor - 1.0).abs() > 1e-3 {
-            for &lane in self.plot.wins.iter().filter(|l| self.studio_vzoom_covers(**l)) { lane_tag(cv, lane, &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor))); }
+            for &lane in self.plot.wins.iter().filter(|l| self.studio_vzoom_covers(**l)) {
+                lane_tag(cv, lane, &format!("Y zoom {}", zoom_text(self.zoom_view.vfactor)));
+            }
         }
         if let (Some(hint), Some(&lane)) = (self.studio_zoom_samples_hint(), self.plot.wins.last()) {
             let w = f.sb.width(&hint) + 16;
@@ -2425,8 +3153,13 @@ impl Ui {
         // the hint of the gesture under the finger
         let lane = self.wave_area();
         let (cx, cy) = (lane.x + lane.w / 2, lane.y + lane.h / 3);
-        let hint = if self.input.pinch.active { Some(format!("Time zoom \u{b7} {}", zoom_text(self.studio_time_zoom()))) }
-            else if self.touch.down && self.touch.drag == Drag::Delay { Some("Pan time".to_string()) } else { None };
+        let hint = if self.input.pinch.active {
+            Some(format!("Time zoom \u{b7} {}", zoom_text(self.studio_time_zoom())))
+        } else if self.touch.down && self.touch.drag == Drag::Delay {
+            Some("Pan time".to_string())
+        } else {
+            None
+        };
         if let Some(text) = hint {
             let r = Rect::new(cx - f.m.width(&text) / 2 - 12, cy - 14, f.m.width(&text) + 24, 28);
             cv.round(r, 6, BTN_BORDER, 255);
@@ -2444,7 +3177,11 @@ impl Ui {
             ZoomRow::VMinus => self.zoom_vertical_step(-1, area, 0.5),
             ZoomRow::Fit => self.reset_zoom(),
             ZoomRow::Center => self.studio_center_trigger(),
-            ZoomRow::ResetY => { self.zoom_view.vfactor = 1.0; self.zoom_view.vcenter = 0.0; self.dirty_map = true; }
+            ZoomRow::ResetY => {
+                self.zoom_view.vfactor = 1.0;
+                self.zoom_view.vcenter = 0.0;
+                self.dirty_map = true;
+            }
             ZoomRow::Close => self.set_zoom(false),
         }
     }
@@ -2466,7 +3203,12 @@ impl Ui {
     /// Seconds between the samples of the record the zoom shows (the held or captured record, or the ref of a SIM or file).
     pub(super) fn studio_zoom_sample_dt(&self) -> Option<f64> {
         if self.record_mode() {
-            return self.refs.get(self.active_reference()).and_then(Option::as_ref).map(|r| r.dt).filter(|dt| *dt > 0.0);
+            return self
+                .refs
+                .get(self.active_reference())
+                .and_then(Option::as_ref)
+                .map(|r| r.dt)
+                .filter(|dt| *dt > 0.0);
         }
         let rec = self.last[0].as_ref()?;
         let dt = rec.raw.as_ref().map_or(rec.dt, |raw| raw.frame.dt);
@@ -2475,11 +3217,18 @@ impl Ui {
 
     /// The hint when the zoom asks for more than the record has: how many samples there are in a division.
     pub(super) fn studio_zoom_samples_hint(&self) -> Option<String> {
-        if !self.studio_zoom_active() { return None; }
+        if !self.studio_zoom_active() {
+            return None;
+        }
         let per_div = tscales()[self.m.zscale] as f64 / self.studio_zoom_sample_dt()?;
         // below about one sample in three pixels of a division the picture is the samples themselves
-        (per_div < (self.plot.wins.first().map_or(self.plot.grid.w, |w| w.w) as f64 / HDIV as f64) / 3.0)
-            .then(|| if per_div < 10.0 { format!("{per_div:.1} samples/div") } else { format!("{per_div:.0} samples/div") })
+        (per_div < (self.plot.wins.first().map_or(self.plot.grid.w, |w| w.w) as f64 / HDIV as f64) / 3.0).then(|| {
+            if per_div < 10.0 {
+                format!("{per_div:.1} samples/div")
+            } else {
+                format!("{per_div:.0} samples/div")
+            }
+        })
     }
 
     /// Taps on the zoom bar, its menu, the display scale popup and the lane badges. False: none of them.
@@ -2489,10 +3238,15 @@ impl Ui {
             let inside = self.studio_yzoom_rect().is_some_and(|p| p.contains(x, y));
             if let (Some((close, minus, plus, reset)), true) = (parts, inside) {
                 let area = self.wave_area();
-                if close.contains(x, y) { self.studio.yzoom = None; }
-                else if minus.contains(x, y) { self.zoom_vertical_step(-1, area, 0.5); }
-                else if plus.contains(x, y) { self.zoom_vertical_step(1, area, 0.5); }
-                else if reset.contains(x, y) { self.studio_zoom_do(ZoomRow::ResetY); }
+                if close.contains(x, y) {
+                    self.studio.yzoom = None;
+                } else if minus.contains(x, y) {
+                    self.zoom_vertical_step(-1, area, 0.5);
+                } else if plus.contains(x, y) {
+                    self.zoom_vertical_step(1, area, 0.5);
+                } else if reset.contains(x, y) {
+                    self.studio_zoom_do(ZoomRow::ResetY);
+                }
                 return true;
             }
             self.studio.yzoom = None;
@@ -2501,29 +3255,45 @@ impl Ui {
         if let Some(bar) = self.studio_zoom_bar() {
             let y = self.zoom_row_y(x, y);
             if self.zoom_readout().contains(x, y) {
-                if bar.plus.contains(x, y) { self.studio_zoom_do(ZoomRow::Plus); }
-                else if bar.minus.contains(x, y) { self.studio_zoom_do(ZoomRow::Minus); }
-                else if bar.vplus.contains(x, y) { self.studio_zoom_do(ZoomRow::VPlus); }
-                else if bar.vminus.contains(x, y) { self.studio_zoom_do(ZoomRow::VMinus); }
-                else if bar.close.contains(x, y) { self.studio_zoom_do(ZoomRow::Close); }
-                else if bar.fit.contains(x, y) { self.reset_zoom(); }
-                else if bar.boxr.contains(x, y) { self.arm_zoom_area(); }
+                if bar.plus.contains(x, y) {
+                    self.studio_zoom_do(ZoomRow::Plus);
+                } else if bar.minus.contains(x, y) {
+                    self.studio_zoom_do(ZoomRow::Minus);
+                } else if bar.vplus.contains(x, y) {
+                    self.studio_zoom_do(ZoomRow::VPlus);
+                } else if bar.vminus.contains(x, y) {
+                    self.studio_zoom_do(ZoomRow::VMinus);
+                } else if bar.close.contains(x, y) {
+                    self.studio_zoom_do(ZoomRow::Close);
+                } else if bar.fit.contains(x, y) {
+                    self.reset_zoom();
+                } else if bar.boxr.contains(x, y) {
+                    self.arm_zoom_area();
+                }
                 return true;
             }
         }
         // the name of a decoder beside its band ("1 UART CH1"): the Decode menu of that decoder. It was a text and
         // nothing to tap; the way to the menu was Add > Bus or the Menu
-        let decoder = self.studio.dec_labels.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(k, _)| k);
+        let decoder =
+            self.studio.dec_labels.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(k, _)| k);
         if let Some(k) = decoder {
-            if self.m.dec_sel != k { self.select_option(Item::DecSel, &self.dec_tag(k)); }
+            if self.m.dec_sel != k {
+                self.select_option(Item::DecSel, &self.dec_tag(k));
+            }
             self.toggle_menu(MenuId::Decode);
             return true;
         }
         // a lane's channel badge: its display scale while zoomed, its menu otherwise
-        let hit = self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(c, _)| c);
+        let hit =
+            self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(c, _)| c);
         if let Some(c) = hit {
             self.select_workspace_source(WaveId::Ch(c));
-            if self.studio_zoom_active() { self.studio.yzoom = Some(c); } else { self.toggle_menu(MenuId::Channel(c)); }
+            if self.studio_zoom_active() {
+                self.studio.yzoom = Some(c);
+            } else {
+                self.toggle_menu(MenuId::Channel(c));
+            }
             return true;
         }
         // the handle of a reference or a math channel: its sheet
@@ -2549,6 +3319,8 @@ impl Ui {
 impl Ui {
     pub(super) fn studio_set_pin_all_for_test(&mut self) {
         let keys = self.studio_keys();
-        for k in keys.into_iter().take(3) { self.studio_set_pin(k, true); }
+        for k in keys.into_iter().take(3) {
+            self.studio_set_pin(k, true);
+        }
     }
 }

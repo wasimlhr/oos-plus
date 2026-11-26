@@ -40,10 +40,7 @@ const NET_BOX: Option<Anchor> = Some(|u, _| (u.net_box().x + u.net_box().w / 2, 
 
 /// Below the System button of the top bar, which opens the Utility page; centred when the bar has no such button.
 const SYS_BTN: Option<Anchor> = Some(|u, _| {
-    u.top_buttons()
-        .iter()
-        .find(|t| t.0 == TopBtn::System)
-        .map_or((u.scr.w / 2, false), |t| (t.2.x + t.2.w / 2, true))
+    u.top_buttons().iter().find(|t| t.0 == TopBtn::System).map_or((u.scr.w / 2, false), |t| (t.2.x + t.2.w / 2, true))
 });
 
 /// Under the top bar, centred: the cursor page, so that the readouts of the cursors in the strip above the cards stay
@@ -602,10 +599,10 @@ pub(super) fn every_kind() -> Vec<MenuId> {
     for m in &all {
         match m {
             Main | Channel(_) | ChMore(_) | Logger | Horizontal | Trigger | Acquire | Measure | MeasAdd | MeasPair
-            | Dvm | Cursor | Display | Utility | Math | Ref | Decode | Bus | Storage | Mask | Zone
-            | Spectrum | Eye | Power | Magnetic | Inverter | Dpt | Identify | SelfCal | Network | Features
-            | Decoders(_) | Remote | Ssh | Bluetooth | Time | Bode | Sim | SimAdvanced | Afg | BwTest | ViewMore
-            | La | LaLines | LaPat | Windows | MeasSelected => {}
+            | Dvm | Cursor | Display | Utility | Math | Ref | Decode | Bus | Storage | Mask | Zone | Spectrum | Eye
+            | Power | Magnetic | Inverter | Dpt | Identify | SelfCal | Network | Features | Decoders(_) | Remote
+            | Ssh | Bluetooth | Time | Bode | Sim | SimAdvanced | Afg | BwTest | ViewMore | La | LaLines | LaPat
+            | Windows | MeasSelected => {}
             // oos-plus pages
             MeasStat | MeasRow | MeasLevels | MeasFall | ExtGen | AddPanel | MeasLegacy | Search => {}
             Pick => unreachable!("Pick is no page"),

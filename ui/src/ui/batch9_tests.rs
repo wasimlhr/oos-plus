@@ -13,14 +13,18 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     u
 }
 
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
@@ -28,10 +32,14 @@ fn shot(u: &mut Ui, name: &str) {
     }
 }
 
-fn tap_in(u: &mut Ui, r: Rect) { u.tap(r.x + r.w / 2, r.y + r.h / 2); }
+fn tap_in(u: &mut Ui, r: Rect) {
+    u.tap(r.x + r.w / 2, r.y + r.h / 2);
+}
 
 fn open(u: &mut Ui, m: MenuId) {
-    if u.menu_open { u.close_menu(); }
+    if u.menu_open {
+        u.close_menu();
+    }
     u.open_menu(m);
     assert!(u.sheet_active(), "{m:?} is a sheet in Studio");
 }
@@ -47,7 +55,11 @@ fn all_reachable(u: &Ui, m: MenuId) {
     let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().chain(t.foot.iter()).copied()).collect();
     for it in u.items(m) {
         // a page whose rows are all rows of this sheet needs no link to it (SIM and its Advanced page)
-        if let Item::Open(sub) = it { if u.items(sub).iter().all(|s| on_sheet.contains(s)) { continue; } }
+        if let Item::Open(sub) = it {
+            if u.items(sub).iter().all(|s| on_sheet.contains(s)) {
+                continue;
+            }
+        }
         assert!(on_sheet.contains(&it), "{m:?}: {it:?} is reachable on the sheet");
     }
     for t in &spec.tabs {
@@ -56,16 +68,36 @@ fn all_reachable(u: &Ui, m: MenuId) {
     assert!(spec.tabs.len() <= 4);
 }
 
-const CONVERTED: [MenuId; 10] = [MenuId::Spectrum, MenuId::Eye, MenuId::Power, MenuId::Storage, MenuId::Mask, MenuId::Sim, MenuId::SimAdvanced, MenuId::La, MenuId::LaLines, MenuId::LaPat];
+const CONVERTED: [MenuId; 10] = [
+    MenuId::Spectrum,
+    MenuId::Eye,
+    MenuId::Power,
+    MenuId::Storage,
+    MenuId::Mask,
+    MenuId::Sim,
+    MenuId::SimAdvanced,
+    MenuId::La,
+    MenuId::LaLines,
+    MenuId::LaPat,
+];
 
 // ------------------------------------------------------------------------------------------------ item 1
 
 #[test]
 fn the_remaining_studio_menus_are_sheets_and_every_setting_stays_reachable() {
     let mut u = studio();
-    for m in CONVERTED { all_reachable(&u, m); }
+    for m in CONVERTED {
+        all_reachable(&u, m);
+    }
     // states that change the list: every power mode, switched-off sources, a user threshold, SIM from a record
-    for mode in [PowerMode::Quality, PowerMode::Harmonics, PowerMode::Switching, PowerMode::Ripple, PowerMode::Capacitance, PowerMode::Rail] {
+    for mode in [
+        PowerMode::Quality,
+        PowerMode::Harmonics,
+        PowerMode::Switching,
+        PowerMode::Ripple,
+        PowerMode::Capacitance,
+        PowerMode::Rail,
+    ] {
         u.m.pw_mode = mode;
         all_reachable(&u, MenuId::Power);
     }
@@ -92,7 +124,9 @@ fn default_and_minimal_keep_their_menus() {
     for l in [Layout::Default] {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = l;
-        for _ in 0..4 { u.step(0.05); }
+        for _ in 0..4 {
+            u.step(0.05);
+        }
         for m in CONVERTED {
             assert!(u.sheet_spec(m).is_none(), "{l:?} {m:?} stays a dialog");
             u.open_menu(m);
@@ -111,15 +145,27 @@ fn rows_are_48_px_and_every_control_is_a_target_of_44_px() {
         open(&mut u, m);
         let n = u.sheet_spec(m).unwrap().tabs.len();
         for i in 0..n {
-            if n > 1 { tab(&mut u, i); }
+            if n > 1 {
+                tab(&mut u, i);
+            }
             let g = u.sheet_geo().unwrap();
-            for t in &g.tabs { assert!(t.h >= 40 && t.w >= 40, "{m:?} tab"); }
+            for t in &g.tabs {
+                assert!(t.h >= 40 && t.w >= 40, "{m:?} tab");
+            }
             for r in &g.rows {
                 assert_eq!(r.row.h, 48, "{m:?} row");
-                assert!(r.ctrl.h >= 26 && r.row.bottom() <= g.r.bottom() - 56, "{m:?} {:?} fits above the footer", r.it);
-                if r.kind != RowKind::Toggle { assert!(r.ctrl.h >= 44, "{m:?} {:?} control", r.it); }
+                assert!(
+                    r.ctrl.h >= 26 && r.row.bottom() <= g.r.bottom() - 56,
+                    "{m:?} {:?} fits above the footer",
+                    r.it
+                );
+                if r.kind != RowKind::Toggle {
+                    assert!(r.ctrl.h >= 44, "{m:?} {:?} control", r.it);
+                }
             }
-            for (_, b) in &g.foot { assert!(b.h >= 44 && b.bottom() <= g.r.bottom(), "{m:?} footer"); }
+            for (_, b) in &g.foot {
+                assert!(b.h >= 44 && b.bottom() <= g.r.bottom(), "{m:?} footer");
+            }
         }
     }
 }
@@ -187,19 +233,31 @@ fn mask_sim_and_la_pages() {
     assert_eq!(*spec.tabs[1].foot.last().unwrap(), Item::MaskClear);
     open(&mut u, MenuId::Sim);
     shot(&mut u, "sim-1");
-    for i in 1..4 { tab(&mut u, i); shot(&mut u, &format!("sim-{}", i + 1)); }
+    for i in 1..4 {
+        tab(&mut u, i);
+        shot(&mut u, &format!("sim-{}", i + 1));
+    }
     // the knobs of the Advanced page are rows of the Jitter and Spread tabs: no link, no second page
     let spec = u.sheet_spec(MenuId::Sim).unwrap();
     assert!(spec.tabs.iter().all(|t| !t.rows.contains(&Item::Open(MenuId::SimAdvanced))), "no link to Advanced");
-    assert!(spec.tabs[2].rows.contains(&Item::SimDcd) && spec.tabs[2].rows.contains(&Item::SimCorrRj) && spec.tabs[2].rows.contains(&Item::SimCorrHz), "the other jitter is on Jitter");
-    assert_eq!(spec.tabs[3].rows, [Item::SimSsc, Item::SimSscCenter, Item::SimSscDeviation, Item::SimSscHz], "spread spectrum is a tab");
+    assert!(
+        spec.tabs[2].rows.contains(&Item::SimDcd)
+            && spec.tabs[2].rows.contains(&Item::SimCorrRj)
+            && spec.tabs[2].rows.contains(&Item::SimCorrHz),
+        "the other jitter is on Jitter"
+    );
+    assert_eq!(
+        spec.tabs[3].rows,
+        [Item::SimSsc, Item::SimSscCenter, Item::SimSscDeviation, Item::SimSscHz],
+        "spread spectrum is a tab"
+    );
     assert_eq!(u.menu, MenuId::Sim);
     // LA: lines are four to a tab, and the channel list never scrolls
     // (the thresholds are on the page of the lines: one page, no tabs)
     open(&mut u, MenuId::La);
     shot(&mut u, "la-1");
     let g = u.sheet_geo().unwrap();
-    assert!(g.tabs.len() <= 1 && g.rows.iter().any(|r| r.it == Item::LaThr(0)) , "one page with the thresholds");
+    assert!(g.tabs.len() <= 1 && g.rows.iter().any(|r| r.it == Item::LaThr(0)), "one page with the thresholds");
     let lines = g.rows.iter().find(|r| r.it == Item::Open(MenuId::LaLines)).expect("lines link");
     tap_in(&mut u, lines.ctrl);
     assert_eq!(u.menu, MenuId::LaLines);
@@ -219,15 +277,24 @@ fn mask_sim_and_la_pages() {
 // ------------------------------------------------------------------------------------------------ item 2
 
 fn open_plot(u: &mut Ui, i: usize) {
-    if !(u.menu_open && u.menu == MenuId::AddPanel) { u.studio.add_menu = false; u.open_menu(MenuId::AddPanel); u.sheet.add.kind = None; }
-    if u.sheet.add.kind.is_some() { let b = u.sheet_chrome().1.unwrap(); tap_in(u, b); }
+    if !(u.menu_open && u.menu == MenuId::AddPanel) {
+        u.studio.add_menu = false;
+        u.open_menu(MenuId::AddPanel);
+        u.sheet.add.kind = None;
+    }
+    if u.sheet.add.kind.is_some() {
+        let b = u.sheet_chrome().1.unwrap();
+        tap_in(u, b);
+    }
     let (_, r) = u.rail_geo().rows.into_iter().find(|(k, _)| *k == AddKind::Plot).unwrap();
     tap_in(u, r);
     let g = u.rail_geo();
     tap_in(u, g.types[i].1);
 }
 
-fn add_btn(u: &Ui) -> Rect { u.rail_geo().foot.into_iter().find(|(a, _)| *a == RailAct::Add).unwrap().1 }
+fn add_btn(u: &Ui) -> Rect {
+    u.rail_geo().foot.into_iter().find(|(a, _)| *a == RailAct::Add).unwrap().1
+}
 
 #[test]
 fn xy_picks_x_and_y_and_draws_them() {
@@ -236,13 +303,16 @@ fn xy_picks_x_and_y_and_draws_them() {
     open_plot(&mut u, 0);
     let g = u.rail_geo();
     assert_eq!((g.srcs.len(), g.srcs_b.len()), (3, 3), "X and Y each offer the channels that are on");
-    for (_, r) in g.srcs.iter().chain(g.srcs_b.iter()) { assert!(r.h >= 40 && r.w >= 40); }
+    for (_, r) in g.srcs.iter().chain(g.srcs_b.iter()) {
+        assert!(r.h >= 40 && r.w >= 40);
+    }
     assert_eq!(g.src_labels.len(), 2);
     // X = CH3, Y = CH2
     tap_in(&mut u, g.srcs[2].1);
     tap_in(&mut u, g.srcs_b[1].1);
     shot(&mut u, "xy-page");
-    let b = add_btn(&u); tap_in(&mut u, b);
+    let b = add_btn(&u);
+    tap_in(&mut u, b);
     assert!(u.xy);
     assert_eq!(u.xy_src, [2, 1]);
     shot(&mut u, "xy-drawn");
@@ -263,29 +333,35 @@ fn histogram_eye_spectrum_and_trend_pick_their_source() {
     assert_eq!(g.srcs.len(), 3);
     assert!(g.srcs_b.is_empty() && g.meas.is_empty());
     tap_in(&mut u, g.srcs[2].1);
-    let b = add_btn(&u); tap_in(&mut u, b);
+    let b = add_btn(&u);
+    tap_in(&mut u, b);
     assert!(u.panel_shown(super::sheet::PanelKind::Histogram));
     assert_eq!(u.hist_src(), Some(2));
     // eye and spectrum: the waves that are on
     open_plot(&mut u, 1);
     let g = u.rail_geo();
     tap_in(&mut u, g.srcs[1].1);
-    let b = add_btn(&u); tap_in(&mut u, b);
+    let b = add_btn(&u);
+    tap_in(&mut u, b);
     assert_eq!(u.m.eye_src, WaveId::Ch(1));
     open_plot(&mut u, 3);
     let g = u.rail_geo();
     tap_in(&mut u, g.srcs[2].1);
-    let b = add_btn(&u); tap_in(&mut u, b);
+    let b = add_btn(&u);
+    tap_in(&mut u, b);
     assert_eq!(u.m.spec_src, WaveId::Ch(2));
     // trend: a source and a measurement; the first chart follows the measurement that is made
     open_plot(&mut u, 4);
     let g = u.rail_geo();
     assert_eq!((g.srcs.len(), g.meas.len()), (3, 5));
-    for (_, r) in g.meas.iter() { assert!(r.h >= 40 && r.w >= 40); }
+    for (_, r) in g.meas.iter() {
+        assert!(r.h >= 40 && r.w >= 40);
+    }
     tap_in(&mut u, g.srcs[1].1);
     tap_in(&mut u, g.meas[1].1);
     shot(&mut u, "trend-page");
-    let b = add_btn(&u); tap_in(&mut u, b);
+    let b = add_btn(&u);
+    tap_in(&mut u, b);
     let k = Ui::TREND_MEAS[1];
     assert!(u.m.meas.contains(&(k, WaveId::Ch(1))));
     let p = u.m.meas.iter().position(|e| *e == (k, WaveId::Ch(1))).unwrap();
@@ -302,9 +378,21 @@ fn the_plot_pages_keep_their_picture_and_fit_the_sheet() {
         let g = u.rail_geo();
         let sheet = u.sheet_rect();
         assert!(g.preview.w > 200 && g.preview.h >= 60, "plot {i} picture {:?}", g.preview);
-        let mut all: Vec<Rect> = g.types.iter().map(|t| t.1).chain(g.srcs.iter().map(|t| t.1)).chain(g.srcs_b.iter().map(|t| t.1)).chain(g.meas.iter().map(|t| t.1)).collect();
+        let mut all: Vec<Rect> = g
+            .types
+            .iter()
+            .map(|t| t.1)
+            .chain(g.srcs.iter().map(|t| t.1))
+            .chain(g.srcs_b.iter().map(|t| t.1))
+            .chain(g.meas.iter().map(|t| t.1))
+            .collect();
         all.push(g.preview);
-        for r in all { assert!(r.x >= sheet.x && r.right() <= sheet.right() && r.bottom() <= sheet.bottom() - 56, "plot {i} inside above the footer: {r:?}"); }
+        for r in all {
+            assert!(
+                r.x >= sheet.x && r.right() <= sheet.right() && r.bottom() <= sheet.bottom() - 56,
+                "plot {i} inside above the footer: {r:?}"
+            );
+        }
         assert!(g.note.y + 20 <= g.foot[0].1.y, "plot {i} note clears the footer");
         shot(&mut u, &format!("plot-{i}"));
     }
@@ -331,7 +419,10 @@ fn measure_has_a_picture_a_line_and_a_choose_button() {
     let mut blank = Canvas::new(W, H);
     blank.clear(BG);
     u.draw_rail_preview(&mut blank, r, "none");
-    let drawn = (r.y..r.bottom()).flat_map(|y| (r.x..r.right()).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] != blank.px[(y * W + x) as usize]).count();
+    let drawn = (r.y..r.bottom())
+        .flat_map(|y| (r.x..r.right()).map(move |x| (x, y)))
+        .filter(|&(x, y)| cv.px[(y * W + x) as usize] != blank.px[(y * W + x) as usize])
+        .count();
     assert!(drawn > 150, "the picture draws a waveform and readouts ({drawn} pixels)");
     shot(&mut u, "measure-page");
     tap_in(&mut u, g.foot[0].1);
@@ -351,7 +442,9 @@ fn zoomed() -> Ui {
     u.m.zscale = u.m.tscale.saturating_sub(3);
     u.m.zdelay = 0.0;
     u.relayout();
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.render(&mut Canvas::new(W, H));
     u
 }
@@ -365,7 +458,12 @@ fn the_zoom_bar_has_vertical_zoom_with_targets_of_40_px() {
         assert!(r.w >= 40 && r.h >= 20 && r.x >= row.x && r.right() <= row.right(), "{r:?} in {row:?}");
     }
     // the order of the Default row: H-, H+, V-, V+, Box
-    assert!(bar.minus.right() <= bar.plus.x && bar.plus.right() <= bar.vminus.x && bar.vminus.right() <= bar.vplus.x && bar.vplus.right() <= bar.boxr.x);
+    assert!(
+        bar.minus.right() <= bar.plus.x
+            && bar.plus.right() <= bar.vminus.x
+            && bar.vminus.right() <= bar.vplus.x
+            && bar.vplus.right() <= bar.boxr.x
+    );
     shot(&mut u, "zoom-bar");
     assert_eq!(u.zoom_view.vfactor, 1.0);
     // a touch 19 px off the middle still counts, as with the time chips

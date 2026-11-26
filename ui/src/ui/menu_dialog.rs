@@ -45,7 +45,9 @@ impl Ui {
             self.close_menu();
         } else {
             self.open_menu(MenuId::MeasAdd);
-            if self.m.layout == Layout::Studio { self.sheet_add_open(); }
+            if self.m.layout == Layout::Studio {
+                self.sheet_add_open();
+            }
         }
     }
 
@@ -66,7 +68,9 @@ impl Ui {
             Item::StripDock => {
                 return self.strip_docks().into_iter().map(|d| self.strip_dock_label(d).to_string()).collect();
             }
-            Item::ChHide(_) | Item::MeasStats | Item::Zoom | Item::DecOn | Item::SearchOn | Item::StoreRecScpi => &["Off", "On"],
+            Item::ChHide(_) | Item::MeasStats | Item::Zoom | Item::DecOn | Item::SearchOn | Item::StoreRecScpi => {
+                &["Off", "On"]
+            }
             Item::MaskSrc => return ch_names(),
             Item::ChCoupling(_) => return board().couplings().iter().map(|c| c.name().to_string()).collect(),
 
@@ -163,7 +167,9 @@ impl Ui {
             }
             Item::DecCanRate => return crate::decode::CAN_RATES.iter().map(|&b| si(b, "bit/s")).collect(),
             // the value picker is a hex keypad
-            Item::TrigBusVal | Item::SrchBusVal | Item::SerMax | Item::SerMask => return KEYPAD.iter().map(|k| k.to_string()).collect(),
+            Item::TrigBusVal | Item::SrchBusVal | Item::SerMax | Item::SerMask => {
+                return KEYPAD.iter().map(|k| k.to_string()).collect()
+            }
             Item::SerRel
             | Item::UartPol
             | Item::UartStop
@@ -233,7 +239,9 @@ impl Ui {
 
     /// Opens the picker of a choice item of the current menu; picking an option returns to this menu.
     pub(super) fn open_picker(&mut self, it: Item) {
-        if self.item_blocked_toast(it) { return; }
+        if self.item_blocked_toast(it) {
+            return;
+        }
         let it = if it == Item::AfgFreq { Item::AfgFreqEntry } else { it };
         if Self::hex_item(it) {
             self.keypad = format!("{:X}", self.hex_value(it));
@@ -260,7 +268,9 @@ impl Ui {
     /// Sets a choice item to the option `want`: one adjust step by the distance in the option list (every item with
     /// options moves by index, cycling or clamped), else stepping until it shows `want`.
     pub(super) fn select_option(&mut self, it: Item, want: &str) {
-        if self.item_blocked_toast(it) { return; }
+        if self.item_blocked_toast(it) {
+            return;
+        }
         if it == Item::DecCphyRate {
             if let Some(rate) =
                 crate::decode::CPHY_RATES.into_iter().find(|&rate| crate::decode::cphy_rate_label(rate) == want)
@@ -316,7 +326,9 @@ impl Ui {
             self.settings_changed();
             return;
         }
-        if self.pick_source_direct(it, want) { return; }
+        if self.pick_source_direct(it, want) {
+            return;
+        }
         let opts = self.options(it);
         let cur = self.value(it);
         if let (Some(k), Some(i)) = (opts.iter().position(|o| o == want), opts.iter().position(|o| *o == cur)) {
@@ -399,9 +411,17 @@ impl Ui {
         let mut nrows = (n + cols - 1) / cols;
         while nrows > 0 {
             let fit = (avail - DLG_HEAD - 6) / nrows;
-            if DLG_HEAD + nrows * rh + 6 <= avail { break; }
-            if fit > DLG_CTRL { rh = fit; break; }
-            if grid || 24 + (cols + 1) * cw + cols * gap > self.scr.w - 2 * METRICS.edge || cols >= n { rh = fit.max(DLG_CTRL); break; }
+            if DLG_HEAD + nrows * rh + 6 <= avail {
+                break;
+            }
+            if fit > DLG_CTRL {
+                rh = fit;
+                break;
+            }
+            if grid || 24 + (cols + 1) * cw + cols * gap > self.scr.w - 2 * METRICS.edge || cols >= n {
+                rh = fit.max(DLG_CTRL);
+                break;
+            }
             cols += 1;
             nrows = (n + cols - 1) / cols;
         }
@@ -714,7 +734,11 @@ impl Ui {
                         btn(cv, c, BTN, if focus { ACCENT } else { BTN_BORDER });
                     }
                     // a label too long for its button goes on two lines (the last resort is "..."), never over the edge
-                    if fits && std::ptr::eq(tf, &f.mb) { cv.text_in(tf, tr, 1, &txt, ink); } else { fitted_text(cv, &[&f.mb], tr, &txt, ink); }
+                    if fits && std::ptr::eq(tf, &f.mb) {
+                        cv.text_in(tf, tr, 1, &txt, ink);
+                    } else {
+                        fitted_text(cv, &[&f.mb], tr, &txt, ink);
+                    }
                     if let Item::Open(_) = row.it {
                         chevron(cv, c.x + c.w - 14, c.y + c.h / 2, 1, DIM);
                     }
@@ -832,7 +856,9 @@ impl Ui {
     }
 
     pub(super) fn close_menu(&mut self) {
-        if self.menu == MenuId::MeasRow { self.meas_own.dialog = None; }
+        if self.menu == MenuId::MeasRow {
+            self.meas_own.dialog = None;
+        }
         // the next Measure opens as the quick Add panel again
         self.studio.meas_page = false;
         self.menu_open = false;

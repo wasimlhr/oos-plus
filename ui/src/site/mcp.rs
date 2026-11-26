@@ -82,24 +82,28 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<Body> {
         "ping" => J::obj(&[]),
         "tools/list" => J::obj(&[(
             "tools",
-            J::Arr(only_reads(read, vec![
-                if read {
-                    tool(("name", J::s("scpi")), SCPI_QUERIES, scpi_schema(), READS)
-                } else {
-                    tool(("name", J::s("scpi")), SCPI, scpi_schema(), WRITES)
-                },
-                tool(("name", J::s("screenshot")), SCREENSHOT, schema(&[], &[]), READS),
-                tool(("name", J::s("scope_state")), SCOPE_STATE, schema(&[], &[]), READS),
-                tool(("name", J::s("measure")), MEASURE, measure_schema(), READS),
-                tool(("name", J::s("measure_slot")), MEASURE_SLOT, measure_slot_schema(), WRITES),
-                tool(("name", J::s("waveform")), WAVEFORM, waveform_schema(), READS),
-                tool(("name", J::s("decode_results")), DECODE_RESULTS, decode_results_schema(), READS),
-                tool(("name", J::s("errors")), ERRORS, schema(&[], &[]), READS),
-                tool(("name", J::s("scpi_reference")), SCPI_REFERENCE, scpi_reference_schema(), READS),
-                tool(("name", J::s("configure")), CONFIGURE, configure_schema(), WRITES),
-                tool(("name", J::s("acquire")), ACQUIRE, acquire_schema(), WRITES),
-                tool(("name", J::s("setup_decoder")), SETUP_DECODER, setup_decoder_schema(), WRITES),
-            ])),
+            J::Arr(only_reads(
+                read,
+                vec![
+                    if read {
+                        tool(("name", J::s("scpi")), SCPI_QUERIES, scpi_schema(), READS)
+                    } else {
+                        tool(("name", J::s("scpi")), SCPI, scpi_schema(), WRITES)
+                    },
+                    tool(("name", J::s("screenshot")), SCREENSHOT, schema(&[], &[]), READS),
+                    tool(("name", J::s("scope_state")), SCOPE_STATE, schema(&[], &[]), READS),
+                    tool(("name", J::s("measure")), MEASURE, measure_schema(), READS),
+                    tool(("name", J::s("measure_slot")), MEASURE_SLOT, measure_slot_schema(), WRITES),
+                    tool(("name", J::s("waveform")), WAVEFORM, waveform_schema(), READS),
+                    tool(("name", J::s("decode_results")), DECODE_RESULTS, decode_results_schema(), READS),
+                    tool(("name", J::s("table")), TABLE, table_schema(), READS),
+                    tool(("name", J::s("errors")), ERRORS, schema(&[], &[]), READS),
+                    tool(("name", J::s("scpi_reference")), SCPI_REFERENCE, scpi_reference_schema(), READS),
+                    tool(("name", J::s("configure")), CONFIGURE, configure_schema(), WRITES),
+                    tool(("name", J::s("acquire")), ACQUIRE, acquire_schema(), WRITES),
+                    tool(("name", J::s("setup_decoder")), SETUP_DECODER, setup_decoder_schema(), WRITES),
+                ],
+            )),
         )]),
         "tools/call" => match params.get("name").and_then(J::str) {
             name if read && !reads_only(name, &args) => refuse(READ_ONLY),
@@ -127,6 +131,7 @@ pub fn mcp(body: &str, cx: &mut Ctx) -> Option<Body> {
             Some("measure_slot") => measure_slot(&mut run, &args),
             Some("waveform") => waveform(&mut run, &args),
             Some("decode_results") => decode_results(&mut run, &args),
+            Some("table") => table(&mut run, &args),
             Some("errors") => errors(&mut run),
             Some("scpi_reference") => scpi_reference(&mut run, &args),
             Some("configure") => configure(&mut run, &args),
@@ -176,7 +181,7 @@ const DECODE_PENDING: &str = "The decoders are still computing: ask again in a m
 const OFF: &str = "MCP is off on this scope (System > Network > Remote services > MCP)";
 const READ_ONLY: &str = "MCP is read only on this scope (System > Network > Remote services > MCP): this tool, or \
     a command that is not a query, is refused";
-const SCREENSHOT: &str ="The current oscilloscope screen as a PNG image.";
+const SCREENSHOT: &str = "The current oscilloscope screen as a PNG image.";
 const SCOPE_STATE: &str = "The whole set-up in one answer: every channel (display, scale V/div, offset V, coupling, \
     probe, bandwidth limit), the timebase (s/div, delay s), the acquisition (sample rate, memory depth, mode) and the \
     trigger (type, status STOP|TD|AUTO|WAIT, sweep, source, level, slope, coupling). Ask it after `acquire` to see \
@@ -195,6 +200,9 @@ const WAVEFORM: &str = "A record of a source: its statistics (min, max, mean, rm
     left as it was.";
 const DECODE_RESULTS: &str = "The events of the decoders that are on, as rows (time s, decoder, text, ok), \
     `max_rows` from `offset`. `pending` while the decoders are still computing: ask again.";
+const DECODE_TABLE_HINT: &str = "These are the rows of the Events pane (the decode table under the waveform), whose     view is `view`. To see it on the screen: :DISPlay:LOWer EVENTS. As a file: :TABLe:SAVE EVENTS. The rows of     every field: table `FIELDS`.";
+const TABLE_HINT: &str = "Read a table with `name` (Index is the first column of every table), `max_rows` from     `offset`. As a CSV file on the scope: :TABLe:SAVE <name>; the whole table over SCPI: :TABLe:DATA? <name>.";
+const TABLE: &str = "Every table the screen shows (decode table, fields, search events, segments, spectrum peaks,     measurements) by name, with its Index in the first column; without `name` the list of tables.";
 const ERRORS: &str = "Empty the SCPI error queue and answer its entries, oldest first.";
 const SCPI_REFERENCE: &str = "OOS's SCPI reference (the command chapter of its programming manual), to find a command \
     instead of guessing it: `search`, what it should do in your own words (\"volts per division\", \"trigger \
@@ -326,7 +334,10 @@ fn scpi_reference_schema() -> J {
     schema(
         &[
             ("search", string("What the command should do, in your own words; the commands that fit best come first.")),
-            ("header", string("A command as it is sent, short or long form, e.g. :CHAN1:SCAL or :TRIGger:EDGE:LEVel?.")),
+            (
+                "header",
+                string("A command as it is sent, short or long form, e.g. :CHAN1:SCAL or :TRIGger:EDGE:LEVel?."),
+            ),
             ("subsystem", string("Part of a subsystem's title, e.g. Channels, Trigger, Measure.")),
             ("appendix", string("Part of an appendix's title, e.g. Measurement Items, Eye Figures, Error Codes.")),
             ("max_results", integer("Commands or rows in the answer, 1 to 50; default 20.")),
@@ -400,6 +411,17 @@ fn waveform_schema() -> J {
 fn decode_results_schema() -> J {
     schema(
         &[
+            ("offset", integer("First row, from 0; default 0.")),
+            ("max_rows", integer("Rows in the answer, 1 to 2000; default 200.")),
+        ],
+        &[],
+    )
+}
+
+fn table_schema() -> J {
+    schema(
+        &[
+            ("name", string("EVENTS, FIELDS, SEARCH, SEGMENTS, PEAKS or MEASURE; without it the list of tables.")),
             ("offset", integer("First row, from 0; default 0.")),
             ("max_rows", integer("Rows in the answer, 1 to 2000; default 200.")),
         ],
@@ -630,7 +652,8 @@ fn scpi_tool(run: &mut Run, args: &J) -> J {
             ])
         }
         Ok((r, has_reply)) => {
-            let reply = if r.is_empty() && !has_reply { "ok" } else { std::str::from_utf8(&r).unwrap_or("(binary response)") };
+            let reply =
+                if r.is_empty() && !has_reply { "ok" } else { std::str::from_utf8(&r).unwrap_or("(binary response)") };
             let checks = read_back(run, c);
             if checks.is_empty() {
                 return text(reply);
@@ -768,7 +791,8 @@ fn measure_slot(run: &mut Run, args: &J) -> J {
     let known = crate::scpi::measurement_items();
     let mut command = None;
     if let Some(item) = args.get("item") {
-        let Some(&(token, pair)) = item.str().and_then(|i| known.iter().find(|(t, _)| t.eq_ignore_ascii_case(i))) else {
+        let Some(&(token, pair)) = item.str().and_then(|i| known.iter().find(|(t, _)| t.eq_ignore_ascii_case(i)))
+        else {
             return refuse(&format!("item: not a measurement item: {item}"));
         };
         let mut c = format!(":MEAS:SLOT{n} {token}");
@@ -1051,27 +1075,59 @@ fn scpi_reference(run: &mut Run, args: &J) -> J {
     answer(run, data)
 }
 
-fn decode_results(run: &mut Run, args: &J) -> J {
-    let offset = match count(args, "offset", 0, 0, usize::MAX) {
-        Ok(o) => o,
-        Err(e) => return refuse(&e),
-    };
-    let rows = match count(args, "max_rows", ROWS_DEFAULT, 1, ROWS_MAX) {
-        Ok(r) => r,
-        Err(e) => return refuse(&e),
-    };
-    let events = run.q(":DEC:EVEN?");
-    let mut out = Vec::new();
-    match events.as_deref() {
+/// One line of CSV as its cells (a cell in quotes may hold commas, and "" is a quote).
+fn csv_cells(line: &str) -> Vec<String> {
+    let (mut cells, mut cell, mut quoted) = (Vec::new(), String::new(), false);
+    let mut chars = line.chars().peekable();
+    while let Some(c) = chars.next() {
+        match (c, quoted) {
+            ('"', true) if chars.peek() == Some(&'"') => {
+                cell.push('"');
+                chars.next();
+            }
+            ('"', _) => quoted = !quoted,
+            (',', false) => cells.push(std::mem::take(&mut cell)),
+            (c, _) => cell.push(c),
+        }
+    }
+    cells.push(cell);
+    cells
+}
+
+/// The text of an IEEE definite-length block (`#<n><length><data>`), or the answer itself when it is none.
+fn block_text(answer: &str) -> &str {
+    let digits = answer.strip_prefix('#').and_then(|r| r.chars().next()).and_then(|c| c.to_digit(10));
+    match digits {
+        Some(n) if n > 0 => answer.get(2 + n as usize..).unwrap_or(""),
+        _ => answer,
+    }
+}
+
+/// The rows of the table `name` as the answer of a tool: Index first in every row, `max_rows` from `offset`.
+fn table_rows(run: &mut Run, name: &str, offset: usize, rows: usize, extra: Vec<(&'static str, J)>) -> J {
+    let text = run.q(&format!(":TABL:DATA? {name}"));
+    let mut out = vec![("table", J::s(name))];
+    match text.as_deref() {
         Some("BUSY") => {
             out.push(("pending", J::Bool(true)));
             out.push(("hint", J::s(DECODE_PENDING)));
         }
         Some(text) => {
-            let all: Vec<&str> = text.lines().filter(|l| !l.is_empty()).collect();
-            let shown: Vec<J> = all.iter().skip(offset).take(rows).map(|line| event_row(line)).collect();
+            let mut lines = block_text(text).lines().filter(|l| !l.is_empty());
+            let head = lines.next().map(csv_cells).unwrap_or_default();
+            let all: Vec<Vec<String>> = lines.map(csv_cells).collect();
+            let shown: Vec<J> = all
+                .iter()
+                .skip(offset)
+                .take(rows)
+                .map(|cells| {
+                    J::obj(&head.iter().zip(cells).map(|(h, c)| (h.as_str(), J::Str(c.clone()))).collect::<Vec<_>>())
+                })
+                .collect();
             let next = offset + shown.len();
             out.push(("pending", J::Bool(false)));
+            out.extend(extra);
+            out.push(("columns", J::Arr(head.iter().map(|h| J::s(h)).collect())));
             out.push(("total_rows", J::Num(all.len() as f64)));
             out.push(("offset", J::Num(offset as f64)));
             out.push(("rows", J::Arr(shown)));
@@ -1082,16 +1138,33 @@ fn decode_results(run: &mut Run, args: &J) -> J {
     answer(run, J::obj(&out))
 }
 
-/// A row of `:DECode:EVENts?`, `t,who,text,ok`: the text may hold commas of its own.
-fn event_row(line: &str) -> J {
-    let f: Vec<&str> = line.split(',').collect();
-    let text = if f.len() > 3 { f[2..f.len() - 1].join(",") } else { String::new() };
-    J::obj(&[
-        ("t", value(f.first().map(|s| s.to_string()))),
-        ("decoder", J::s(f.get(1).copied().unwrap_or(""))),
-        ("text", J::Str(text)),
-        ("ok", J::Bool(f.last() == Some(&"ok"))),
-    ])
+fn decode_results(run: &mut Run, args: &J) -> J {
+    let (offset, rows) =
+        match (count(args, "offset", 0, 0, usize::MAX), count(args, "max_rows", ROWS_DEFAULT, 1, ROWS_MAX)) {
+            (Ok(o), Ok(r)) => (o, r),
+            (Err(e), _) | (_, Err(e)) => return refuse(&e),
+        };
+    let view = run.q(":DEC:EVEN:VIEW?").unwrap_or_default().to_ascii_lowercase();
+    let extra = vec![("view", J::Str(view)), ("table_hint", J::s(DECODE_TABLE_HINT))];
+    table_rows(run, "EVENTS", offset, rows, extra)
+}
+
+fn table(run: &mut Run, args: &J) -> J {
+    let (offset, rows) =
+        match (count(args, "offset", 0, 0, usize::MAX), count(args, "max_rows", ROWS_DEFAULT, 1, ROWS_MAX)) {
+            (Ok(o), Ok(r)) => (o, r),
+            (Err(e), _) | (_, Err(e)) => return refuse(&e),
+        };
+    let Some(name) = args.get("name").and_then(J::str) else {
+        let list = run.q(":TABL:LIST?").unwrap_or_default();
+        let tables: Vec<J> = list
+            .lines()
+            .filter_map(|l| l.split_once(','))
+            .map(|(n, what)| J::obj(&[("name", J::s(n)), ("what", J::s(what))]))
+            .collect();
+        return answer(run, J::obj(&[("tables", J::Arr(tables)), ("hint", J::s(TABLE_HINT))]));
+    };
+    table_rows(run, name, offset, rows, Vec::new())
 }
 
 fn errors(run: &mut Run) -> J {
@@ -1273,5 +1346,6 @@ fn setup_decoder(run: &mut Run, args: &J) -> J {
         ("source2", q(":DEC:SOUR2?")),
         ("threshold", q(":DEC:THR?")),
     ]);
-    answer(run, J::obj(&[("applied", J::Arr(applied)), ("decoder", decoder)]))
+    let hint = J::s("The decode table is the Events pane: open it with :DISPlay:LOWer EVENTS (the scope: scpi tool); its rows with decode_results or table EVENTS.");
+    answer(run, J::obj(&[("applied", J::Arr(applied)), ("decoder", decoder), ("decode_table", hint)]))
 }

@@ -14,7 +14,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..4 { frame(u); }
+    for _ in 0..4 {
+        frame(u);
+    }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -34,7 +36,9 @@ fn tap_at(u: &mut Ui, x: i32, y: i32) {
     frame(u);
 }
 
-fn tap_rect(u: &mut Ui, r: Rect) { tap_at(u, r.x + r.w / 2, r.y + r.h / 2); }
+fn tap_rect(u: &mut Ui, r: Rect) {
+    tap_at(u, r.x + r.w / 2, r.y + r.h / 2);
+}
 
 /// A scope with CH1 and CH2 on, CH3 and CH4 off, and no reference.
 fn fresh(layout: Layout) -> Ui {
@@ -43,17 +47,35 @@ fn fresh(layout: Layout) -> Ui {
     u.m.ch[1].on = true;
     u.m.ch[2].on = false;
     u.m.ch[3].on = false;
-    for r in u.refs.iter_mut() { *r = None; }
-    for _ in 0..4 { u.step(0.05); }
+    for r in u.refs.iter_mut() {
+        *r = None;
+    }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u
 }
 
-fn toast(u: &Ui) -> String { u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default() }
+fn toast(u: &Ui) -> String {
+    u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default()
+}
 
-fn clear_toast(u: &mut Ui) { u.toast = None; }
+fn clear_toast(u: &mut Ui) {
+    u.toast = None;
+}
 
 fn a_reference() -> RefWave {
-    RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 128].into(), vpd: 0.5, offset: 0.0, on: true }
+    RefWave {
+        src: 0,
+        color: 0,
+        label: "R1".into(),
+        t0: 0.0,
+        dt: 1e-9,
+        v: vec![0.0f32; 128].into(),
+        vpd: 0.5,
+        offset: 0.0,
+        on: true,
+    }
 }
 
 /// The control of the row of `it` in the open menu: the classic dialog, or the Studio sheet (its tabs are tried).
@@ -62,13 +84,23 @@ fn ctrl_of(u: &mut Ui, it: Item) -> (Rect, bool) {
         let tabs = u.sheet_geo().expect("a sheet").tabs.len().max(1);
         for i in 0..tabs {
             let g = u.sheet_geo().expect("a sheet");
-            if let Some(t) = g.tabs.get(i) { tap_rect(u, *t); }
+            if let Some(t) = g.tabs.get(i) {
+                tap_rect(u, *t);
+            }
             let g = u.sheet_geo().expect("a sheet");
-            if let Some(row) = g.rows.iter().find(|r| r.it == it) { return (row.ctrl, true); }
+            if let Some(row) = g.rows.iter().find(|r| r.it == it) {
+                return (row.ctrl, true);
+            }
         }
         panic!("{it:?} is a row of the sheet");
     }
-    let row = u.dlg_layout().expect("a dialog").rows.into_iter().find(|r| r.it == it).unwrap_or_else(|| panic!("{it:?} is a row"));
+    let row = u
+        .dlg_layout()
+        .expect("a dialog")
+        .rows
+        .into_iter()
+        .find(|r| r.it == it)
+        .unwrap_or_else(|| panic!("{it:?} is a row"));
     (row.ctrl, false)
 }
 
@@ -79,7 +111,9 @@ fn tap_segment(u: &mut Ui, it: Item, k: usize, n: usize) {
     tap_at(u, x, c.y + c.h / 2);
 }
 
-fn views_row_options(u: &Ui) -> usize { u.options(Item::Views).len() }
+fn views_row_options(u: &Ui) -> usize {
+    u.options(Item::Views).len()
+}
 
 #[test]
 fn choosing_a_view_count_keeps_the_dialog_toasts_and_the_new_view_is_a_copy_in_minimal_and_studio() {
@@ -99,7 +133,11 @@ fn choosing_a_view_count_keeps_the_dialog_toasts_and_the_new_view_is_a_copy_in_m
         assert_eq!(u.m.meas.len(), 2, "{l:?}");
         u.view_go(1);
         assert_eq!(toast(&u), "View 2 of 3", "{l:?}: switching toasts");
-        assert_eq!(u.m.meas, vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(1))], "{l:?}: view 2 is a copy, not an empty plot");
+        assert_eq!(
+            u.m.meas,
+            vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(1))],
+            "{l:?}: view 2 is a copy, not an empty plot"
+        );
         assert!(u.m.zoom, "{l:?}");
         u.view_go(2);
         assert_eq!(u.m.meas.len(), 2, "{l:?}: view 3 too");
@@ -152,7 +190,10 @@ fn every_layout_has_numbered_view_buttons_that_switch_and_toast() {
         assert!(u.view_box().is_none(), "{l:?}: one view, no buttons");
         u.views_set(4);
         let r = u.view_box().unwrap_or_else(|| panic!("{l:?}: the view buttons are in the top bar"));
-        assert!(r.x >= 0 && r.right() <= u.scr.w && r.y >= 0 && r.bottom() <= u.frame().top.bottom(), "{l:?}: inside the top bar {r:?}");
+        assert!(
+            r.x >= 0 && r.right() <= u.scr.w && r.y >= 0 && r.bottom() <= u.frame().top.bottom(),
+            "{l:?}: inside the top bar {r:?}"
+        );
         for want in [2usize, 0, 3] {
             let r = u.view_box().unwrap();
             let w = r.w / 4;
@@ -174,7 +215,12 @@ fn the_studio_view_switcher_fits_the_top_bar_beside_the_other_buttons() {
         let t = u.studio_top();
         assert!(t.vbox.w > 0 && t.vbox.h == t.add.h && t.vbox.y == t.add.y, "{n} views: a chip of the bar height");
         // left of + Add, right of the status caption, nothing overlaps, everything stays on the bar
-        assert!(t.vbox.right() < t.add.x && t.acq.right() < t.vbox.x, "{n} views: {t_v:?} {t_a:?}", t_v = t.vbox, t_a = t.add);
+        assert!(
+            t.vbox.right() < t.add.x && t.acq.right() < t.vbox.x,
+            "{n} views: {t_v:?} {t_a:?}",
+            t_v = t.vbox,
+            t_a = t.add
+        );
         assert!(t.acq.w >= 40, "{n} views: the caption keeps a little room");
         assert!(t.vbox.x > t.force.right(), "{n} views: not over Autoset, Clear, Force");
         for r in [t.add, t.measure, t.cursors, t.display, t.storage, t.gear] {
@@ -271,7 +317,11 @@ fn the_controls_of_an_empty_reference_slot_are_greyed_and_say_what_to_do_in_ever
         for it in [Item::RefShow(0), Item::RefColor, Item::RefOffset, Item::RefVpd] {
             assert_eq!(u.item_blocked(it), None, "{l:?} {it:?}");
         }
-        assert_eq!(u.item_blocked(Item::RefShow(1)), Some("Store a reference first"), "{l:?}: the next slot is still empty");
+        assert_eq!(
+            u.item_blocked(Item::RefShow(1)),
+            Some("Store a reference first"),
+            "{l:?}: the next slot is still empty"
+        );
         clear_toast(&mut u);
         u.adjust(Item::RefOffset, 1);
         assert!(toast(&u).is_empty(), "{l:?}");
@@ -315,7 +365,9 @@ fn tapping_a_greyed_reference_row_in_the_dialog_or_the_sheet_shows_the_toast() {
 fn clearing_with_nothing_to_clear_says_so_and_clearing_something_says_what_was_cleared() {
     for l in LAYOUTS {
         let mut u = fresh(l);
-        for it in [Item::EyeClear, Item::CntClear, Item::MaskReset, Item::SpecLimitClear, Item::ZoneClear, Item::MaskClear] {
+        for it in
+            [Item::EyeClear, Item::CntClear, Item::MaskReset, Item::SpecLimitClear, Item::ZoneClear, Item::MaskClear]
+        {
             clear_toast(&mut u);
             u.activate(it);
             assert_eq!(toast(&u), "Nothing to clear", "{l:?} {it:?}");
@@ -355,7 +407,14 @@ fn information_is_not_drawn_as_a_warning() {
     for s in ["Nothing to clear", "View 2 of 4", "Views off", "CH3 turned on"] {
         assert!(Ui::toast_is_info(s) && !Ui::toast_is_success(s), "{s}");
     }
-    for s in ["Eye cleared", "Counter cleared", "Limit cleared", "Counts reset", "Zone 1 deleted", "Copied 2 measurements to CH2"] {
+    for s in [
+        "Eye cleared",
+        "Counter cleared",
+        "Limit cleared",
+        "Counts reset",
+        "Zone 1 deleted",
+        "Copied 2 measurements to CH2",
+    ] {
         assert!(Ui::toast_is_success(s) && !Ui::toast_is_info(s), "{s}");
     }
     // a real warning stays one

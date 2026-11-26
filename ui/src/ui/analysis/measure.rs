@@ -356,13 +356,8 @@ impl Ui {
         }
         let mut cache = self.azr.ref_measure[slot].borrow_mut();
         if cache.as_ref().is_none_or(|cached| cached.key != key) {
-            let analysis = analyze_samples(
-                &r.v[key.lo..key.hi],
-                r.dt,
-                0.4 * r.vpd as f64,
-                &self.m.shared_levels(),
-                key.pairs,
-            );
+            let analysis =
+                analyze_samples(&r.v[key.lo..key.hi], r.dt, 0.4 * r.vpd as f64, &self.m.shared_levels(), key.pairs);
             let readings = scalar_readings(&analysis, key);
             *cache = Some(RefMeasureCache { key, analysis: Arc::new(analysis), readings });
         }

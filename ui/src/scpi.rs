@@ -79,6 +79,7 @@ mod la;
 mod mask;
 mod math;
 mod measure;
+mod table;
 pub(crate) use measure::{meas_kind, pair_kind};
 mod recorder;
 mod reference;
@@ -182,7 +183,9 @@ const MAX_LINE: usize = 4 << 20;
 /// The `#<n><length><data>` definite-length block that starts at `i` (a `#` after a blank, a comma or the header):
 /// the index just after its data. `None`: not a block, or its data is not all there yet (`complete` tells which).
 fn block_span(b: &[u8], i: usize) -> Option<(usize, bool)> {
-    if b.get(i) != Some(&b'#') || i == 0 || !matches!(b[i - 1], b' ' | b'\t' | b',') { return None; }
+    if b.get(i) != Some(&b'#') || i == 0 || !matches!(b[i - 1], b' ' | b'\t' | b',') {
+        return None;
+    }
     let n = (*b.get(i + 1)? as char).to_digit(10).filter(|&n| n >= 1)? as usize;
     let digits = b.get(i + 2..i + 2 + n);
     let Some(digits) = digits else { return Some((b.len(), false)) };
@@ -199,7 +202,10 @@ pub(crate) fn message_end(buf: &[u8]) -> Option<usize> {
             b'\n' => return Some(i),
             b'#' => match block_span(buf, i) {
                 Some((_, false)) => return None,
-                Some((end, true)) => { i = end; continue; }
+                Some((end, true)) => {
+                    i = end;
+                    continue;
+                }
                 None => {}
             },
             _ => {}
@@ -218,23 +224,41 @@ fn split_message(text: &str) -> Vec<(String, bool)> {
     let mut line_start = 0;
     let mut flush = |from: usize, to: usize, first: &mut bool| {
         let c = text[from..to].trim();
-        if !c.is_empty() { out.push((c.to_string(), *first)); *first = false; }
+        if !c.is_empty() {
+            out.push((c.to_string(), *first));
+            *first = false;
+        }
     };
     while i < b.len() {
         match b[i] {
-            b';' => { flush(start, i, &mut first); start = i + 1; }
-            b'\n' | b'\r' => { flush(start, i, &mut first); start = i + 1; line_start = i + 1; first = true; }
+            b';' => {
+                flush(start, i, &mut first);
+                start = i + 1;
+            }
+            b'\n' | b'\r' => {
+                flush(start, i, &mut first);
+                start = i + 1;
+                line_start = i + 1;
+                first = true;
+            }
             // a comment line of a file of commands (a recording, scpi/recorder.rs), sent as it is: it is no command,
             // to the end of its line and with a `;` in it. Only at the start of a line: after a `;` a `#` is part of a
             // command. A block is an argument and never starts a command.
             b'#' if text[line_start..i].trim().is_empty() => {
-                while i < b.len() && b[i] != b'\n' && b[i] != b'\r' { i += 1; }
+                while i < b.len() && b[i] != b'\n' && b[i] != b'\r' {
+                    i += 1;
+                }
                 start = i;
                 continue;
             }
-            b'#' => if let Some((end, true)) = block_span(b, i) {
-                if text.is_char_boundary(end) { i = end; continue; }
-            },
+            b'#' => {
+                if let Some((end, true)) = block_span(b, i) {
+                    if text.is_char_boundary(end) {
+                        i = end;
+                        continue;
+                    }
+                }
+            }
             _ => {}
         }
         i += 1;
@@ -348,7 +372,9 @@ pub(crate) fn wave_tok(id: WaveId) -> String {
 /// A word that is written like a reference slot (`R12`, `REF0`) but names none: a value such as `RED` is not one.
 pub(crate) fn slot_like(s: &str) -> bool {
     let up = s.trim().to_ascii_uppercase();
-    up.strip_prefix("REF").or_else(|| up.strip_prefix('R')).is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
+    up.strip_prefix("REF")
+        .or_else(|| up.strip_prefix('R'))
+        .is_some_and(|rest| rest.starts_with(|c: char| c.is_ascii_digit()))
 }
 
 fn parse_slot(s: &str) -> Option<usize> {
@@ -673,7 +699,9 @@ impl Scpi {
         // a client's :AUToscale, :CLEar, :TFORce or :SAVE:IMAGe runs the code of the key and the row: it is not the
         // user's action
         ui.scpi_rec_actions.truncate(actions);
-        if let Some(before) = before { self.rec_after_remote(ui, cv, before); }
+        if let Some(before) = before {
+            self.rec_after_remote(ui, cv, before);
+        }
         self.normalize_errors();
         response
     }

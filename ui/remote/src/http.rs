@@ -466,8 +466,8 @@ impl<U: Send + 'static> Http<U> {
                 too_big = n > limit || req.len() > limit + e;
                 if !too_big && need.is_none() {
                     // what only `net.allow` may send is refused before its body is read, not after
-                    let guarded = net_allow_only(upload_path)
-                        || (first.starts_with("post ") && upload_path == "/update");
+                    let guarded =
+                        net_allow_only(upload_path) || (first.starts_with("post ") && upload_path == "/update");
                     if guarded && !self.acl.permits_peer(s.peer_addr()) {
                         early = Some("403 Forbidden");
                         return false;

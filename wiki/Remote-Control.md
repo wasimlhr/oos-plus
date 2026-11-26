@@ -65,8 +65,7 @@ page asks again by itself, a script of your own should too.
 An AI assistant that speaks the Model Context Protocol drives the scope through `http://<scope>:8080/mcp` (streamable
 HTTP). Tools that only read: `scope_state` (the whole set-up at once), `measure` (items of the measurement list as
 numbers), `waveform` (a record's statistics and a link to a CSV of it, up to 100000 rows, which the assistant
-downloads instead of reading it into the conversation; each call has its own file, kept for 2 minutes), `decode_results` (the decoders' events
-as rows), `errors`, `screenshot` and `scpi_reference`, which finds a command of the SCPI reference by what it
+downloads instead of reading it into the conversation; each call has its own file, kept for 2 minutes), `decode_results` (the decode table: the rows of the Events pane, Index first, with the columns of the protocol), `table` (every table of the screen by name, with its Index: decode table, search events, segments, peaks, measurements), `errors`, `screenshot` and `scpi_reference`, which finds a command of the SCPI reference by what it
 does, so that the assistant does not guess its name. The assistant asks in its own words ("volts per division",
 "record length", "peak to peak"): the commands that fit best come first, a measurement item, eye figure or error
 code that fits comes with them, and the same tool reads a subsystem's introduction and examples and the appendices

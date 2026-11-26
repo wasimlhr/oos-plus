@@ -16,7 +16,11 @@ impl Ui {
     pub(super) fn item_blocked(&self, it: Item) -> Option<&'static str> {
         match it {
             Item::RefShow(i) if self.refs.get(i).is_some_and(|r| r.is_none()) => Some(STORE_A_REFERENCE),
-            Item::RefColor | Item::RefOffset | Item::RefVpd if self.refs.get(self.ref_page.sel).is_some_and(|r| r.is_none()) => Some(STORE_A_REFERENCE),
+            Item::RefColor | Item::RefOffset | Item::RefVpd
+                if self.refs.get(self.ref_page.sel).is_some_and(|r| r.is_none()) =>
+            {
+                Some(STORE_A_REFERENCE)
+            }
             _ => None,
         }
     }
@@ -54,10 +58,18 @@ impl Ui {
         let spec = m.view == AView::Spectrum || m.pane == tables::PANE_SPECTRUM;
         let (eye, power, bus) = (m.view == AView::Eye, m.view == AView::Power, m.bus.on);
         let mut used = vec![m.trigger_wave()];
-        if spec { used.push(m.spec_src); }
-        if eye { used.extend([Some(m.eye_src), m.eye_b, m.eye_rail].into_iter().flatten()); }
-        if power { used.extend([Some(m.pw_v), Some(m.pw_i), m.pw_vin, m.pw_clk].into_iter().flatten()); }
-        if bus { used.extend([m.bus.clk, m.bus.data]); }
+        if spec {
+            used.push(m.spec_src);
+        }
+        if eye {
+            used.extend([Some(m.eye_src), m.eye_b, m.eye_rail].into_iter().flatten());
+        }
+        if power {
+            used.extend([Some(m.pw_v), Some(m.pw_i), m.pw_vin, m.pw_clk].into_iter().flatten());
+        }
+        if bus {
+            used.extend([m.bus.clk, m.bus.data]);
+        }
         used.contains(&id)
             || m.meas.iter().any(|&(_, s)| s == id)
             || m.meas2.iter().any(|&(_, a, b)| a == id || b == id)
@@ -91,8 +103,12 @@ impl Ui {
     /// A source row moves to `next` (None = Off): only `next` is turned on, and the channel the row left is given back.
     /// The caller has already stored `next`.
     pub(super) fn source_moved(&mut self, old: Option<WaveId>, next: Option<WaveId>) {
-        if old != next { self.source_release(old); }
-        if let Some(id) = next { self.source_turn_on(id); }
+        if old != next {
+            self.source_release(old);
+        }
+        if let Some(id) = next {
+            self.source_turn_on(id);
+        }
     }
 
     /// Gives a Spectrum / Eye / Power source row `next` straight away (never by stepping through the sources in
@@ -104,7 +120,9 @@ impl Ui {
             (Item::EyeSrc, Some(n)) => {
                 self.m.eye_src = n;
                 self.eye_src_chosen = true;
-                if self.m.eye_from_record { self.m.eye_rate = self.waveform_bit_rate(n).unwrap_or(0.0); }
+                if self.m.eye_from_record {
+                    self.m.eye_rate = self.waveform_bit_rate(n).unwrap_or(0.0);
+                }
                 self.azr.eye = None;
                 self.azr.eye_ref = None;
                 self.azr.eye_res = None;
@@ -121,7 +139,9 @@ impl Ui {
         self.source_moved(old, next);
         if matches!(it, Item::SpecSrc | Item::EyeSrc | Item::PowV | Item::PowI) {
             self.azr.spec_avg = None;
-            if let Some(w) = &mut self.azr.wf { w.clear(); }
+            if let Some(w) = &mut self.azr.wf {
+                w.clear();
+            }
         }
         self.analyzer_update();
     }
@@ -129,7 +149,11 @@ impl Ui {
     /// Gives the Bus clock or data row `next` straight away.
     pub(super) fn bus_set_source(&mut self, it: Item, next: WaveId) {
         let old = self.source_item_value(it);
-        if it == Item::BusClk { self.m.bus.clk = next; } else { self.m.bus.data = next; }
+        if it == Item::BusClk {
+            self.m.bus.clk = next;
+        } else {
+            self.m.bus.data = next;
+        }
         self.source_moved(old, Some(next));
     }
 
@@ -138,14 +162,23 @@ impl Ui {
     pub(super) fn pick_source_direct(&mut self, it: Item, want: &str) -> bool {
         let opt = matches!(it, Item::EyeB | Item::EyeRail | Item::PowVin | Item::PowClk);
         let analyser = opt || matches!(it, Item::SpecSrc | Item::EyeSrc | Item::PowV | Item::PowI);
-        if !analyser && !matches!(it, Item::BusClk | Item::BusData) { return false; }
+        if !analyser && !matches!(it, Item::BusClk | Item::BusData) {
+            return false;
+        }
         let ids = if analyser { self.wave_ids() } else { self.bus_ids() };
         let found = ids.into_iter().find(|&id| self.wave_name(id) == want);
-        let next = match (found, opt && want == "Off") { (Some(id), _) => Some(id), (None, true) => None, _ => return false };
-        if analyser { self.ana_set_source(it, next); } else if let Some(id) = next { self.bus_set_source(it, id); }
+        let next = match (found, opt && want == "Off") {
+            (Some(id), _) => Some(id),
+            (None, true) => None,
+            _ => return false,
+        };
+        if analyser {
+            self.ana_set_source(it, next);
+        } else if let Some(id) = next {
+            self.bus_set_source(it, id);
+        }
         true
     }
-
 
     /// Greys a drawn row: a veil over its label and its control.
     pub(super) fn draw_blocked_veil(cv: &mut Canvas, label: Rect, ctrl: Rect) {

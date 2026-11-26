@@ -73,8 +73,35 @@ const PHRASES: &[(&str, &str)] = &[
 ];
 /// Words of a search that say nothing about a command.
 const STOP: &[&str] = &[
-    "the", "a", "an", "of", "to", "per", "is", "are", "for", "in", "and", "or", "how", "do", "does", "i", "my", "it",
-    "its", "set", "sets", "get", "change", "what", "with", "scope", "oscilloscope", "turn", "command",
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "per",
+    "is",
+    "are",
+    "for",
+    "in",
+    "and",
+    "or",
+    "how",
+    "do",
+    "does",
+    "i",
+    "my",
+    "it",
+    "its",
+    "set",
+    "sets",
+    "get",
+    "change",
+    "what",
+    "with",
+    "scope",
+    "oscilloscope",
+    "turn",
+    "command",
 ];
 /// Words the reference uses where a search has another: a command fits the word of the search or one of these.
 const ALSO: &[(&str, &str)] = &[
@@ -168,6 +195,11 @@ pub struct Node {
 /// typed tools does not know the screen can be arranged, a signal simulated or a menu pressed; the answer of
 /// `scpi_reference` without arguments lists this, and the instructions of `initialize` point to it.
 pub const TASKS: &[(&str, &[&str], &str)] = &[
+    (
+        "Read or save a table of the screen as rows with an index: the decode table (Events pane), search events, segments, spectrum peaks, measurements",
+        &["Tables", "Decoders and bus"],
+        "table (name EVENTS, FIELDS, SEARCH, SEGMENTS, PEAKS, MEASURE), decode_results for the decode table; :TABLe:LIST?, :TABLe:DATA? EVENTS, :TABLe:SAVE EVENTS; :DECode:EVENts:COUNt? counts the rows; :DISPlay:LOWer EVENTS shows the decode table",
+    ),
     (
         "Arrange the screen: dock, float, move, resize, tab, maximise or close the views (waveform, measurements, eye,          simulator, events)",
         &["Docking", "Views"],
@@ -514,7 +546,8 @@ mod tests {
         for (_, c, n) in &r.commands {
             let header = c.get("header").and_then(J::str).unwrap();
             let form = |long: bool| -> Vec<String> {
-                let node = |p: &Node| format!("{}{}", if long { &p.long } else { &p.short }, if p.suffix { "2" } else { "" });
+                let node =
+                    |p: &Node| format!("{}{}", if long { &p.long } else { &p.short }, if p.suffix { "2" } else { "" });
                 n.iter().filter(|p| !p.optional).map(node).collect()
             };
             assert!(matches(n, &form(false)) && matches(n, &form(true)), "{header}");

@@ -257,7 +257,9 @@ pub(super) fn tss_parts(bytes: &[u8]) -> Result<Tss, String> {
         };
         let Ok(bytes) = inner.read(e, TSS_TEXT_BYTES) else { continue };
         let label = format!("filter M{n}");
-        if let Some(t) = std::str::from_utf8(&bytes).ok().and_then(|text| parse_filter_taps(text, &label).into_iter().next()) {
+        if let Some(t) =
+            std::str::from_utf8(&bytes).ok().and_then(|text| parse_filter_taps(text, &label).into_iter().next())
+        {
             taps.push((n, t));
         }
     }
@@ -505,7 +507,10 @@ fn filter_maths(c: &Commands, tap_slot: &std::collections::HashMap<usize, usize>
         let offset = view("VERTICAL:POSITION").unwrap_or(0.0) as f32;
         let shown = c.on(&[format!(":DISPLAY:WAVEVIEW1:MATH:MATH{n}:STATE").as_str()], 0) != Some(false);
         out.custom += custom as usize;
-        let b = tap_slot.get(&n).filter(|_| filt.resp == FiltResp::Custom).map_or(MathCh::default().b, |slot| MATH_REF_BASE + slot - 1);
+        let b = tap_slot
+            .get(&n)
+            .filter(|_| filt.resp == FiltResp::Custom)
+            .map_or(MathCh::default().b, |slot| MATH_REF_BASE + slot - 1);
         out.channels.push((n - 1, MathCh { op, a, b, scale, fc, bw, offset, filt, ..MathCh::default() }, shown));
     }
     out.selected = c

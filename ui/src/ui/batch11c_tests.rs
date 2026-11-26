@@ -8,7 +8,9 @@ fn studio() -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -37,7 +39,9 @@ fn touch(u: &mut Ui, id: i32, phase: Phase, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, 0, Phase::Down, a.0, a.1);
-    for k in 1..=8 { touch(u, 0, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
+    for k in 1..=8 {
+        touch(u, 0, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
+    }
     touch(u, 0, Phase::Up, b.0, b.1);
     frame(u);
 }
@@ -56,14 +60,20 @@ fn wheel(u: &mut Ui, x: i32, y: i32, steps: i32) {
 fn pinch(u: &mut Ui, at: (i32, i32)) {
     touch(u, 0, Phase::Down, at.0, at.1);
     touch(u, 1, Phase::Down, at.0 + 60, at.1);
-    for k in 1..=6 { touch(u, 1, Phase::Move, at.0 + 60 + k * 30, at.1); }
+    for k in 1..=6 {
+        touch(u, 1, Phase::Move, at.0 + 60 + k * 30, at.1);
+    }
     touch(u, 1, Phase::Up, at.0 + 240, at.1);
     touch(u, 0, Phase::Up, at.0, at.1);
     frame(u);
 }
 
-fn overview(u: &Ui) -> Rect { u.split_zoom(u.plot.grid).0 }
-fn main_view(u: &Ui) -> Rect { u.plot.wins[0] }
+fn overview(u: &Ui) -> Rect {
+    u.split_zoom(u.plot.grid).0
+}
+fn main_view(u: &Ui) -> Rect {
+    u.plot.wins[0]
+}
 
 // ------------------------------------------------------------------------------------------------ the gestures
 
@@ -168,7 +178,11 @@ fn the_overview_height_drags_clamps_and_is_saved() {
     assert_eq!(overview(&u).h, u.plot.grid.h * 6 / 10);
     // kept with the setup, next to the dock
     let text = crate::store::setup_text(&u.m);
-    assert!(text.contains("studio_ov = "), "{}", text.lines().filter(|l| l.starts_with("studio")).collect::<Vec<_>>().join(" | "));
+    assert!(
+        text.contains("studio_ov = "),
+        "{}",
+        text.lines().filter(|l| l.starts_with("studio")).collect::<Vec<_>>().join(" | ")
+    );
     let m = crate::store::parse_setup(&text).expect("reads back");
     assert_eq!(m.studio_ov, u.m.studio_ov);
     // other layouts keep 96
@@ -178,7 +192,9 @@ fn the_overview_height_drags_clamps_and_is_saved() {
     assert_eq!(overview_of(&v), 96);
 }
 
-fn overview_of(u: &Ui) -> i32 { u.split_zoom(u.plot.grid).0.h }
+fn overview_of(u: &Ui) -> i32 {
+    u.split_zoom(u.plot.grid).0.h
+}
 
 // ------------------------------------------------------------------------------------------------ cursors
 

@@ -240,7 +240,8 @@ fn compute(mut job: Job) -> Result<Computed, String> {
     let recovery_wave = clock_wave.as_deref().unwrap_or(&data);
     let (summary, clock) = infer(recovery_wave, dt, job.requested_rate, clock_wave.is_some(), job.pll_bw)?;
     // A strobe folds on its own edges and measures its jitter inside each burst (bursts start at any phase).
-    let (strobe_fold, clock) = if clock_wave.is_some() { (Some(eye::strobe_clock(&clock)), eye::strobe_ideal(&clock)) } else { (None, clock) };
+    let (strobe_fold, clock) =
+        if clock_wave.is_some() { (Some(eye::strobe_clock(&clock)), eye::strobe_ideal(&clock)) } else { (None, clock) };
     checkpoint!(format!("clock rate={} edges={}", summary.rate, clock.edges.len()));
     let st = stats(&data, dt);
     checkpoint!("data statistics");

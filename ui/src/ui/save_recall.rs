@@ -35,11 +35,16 @@ impl Ui {
             return if new {
                 Ok(crate::store::next_name(&self.save_dir(), "session", "oss"))
             } else {
-                crate::store::latest_name(&self.save_dir(), "session", "oss").ok_or_else(|| "missing session-NNN.oss in the save folder".to_string())
+                crate::store::latest_name(&self.save_dir(), "session", "oss")
+                    .ok_or_else(|| "missing session-NNN.oss in the save folder".to_string())
             };
         }
         let named = std::path::Path::new(raw);
-        Ok(if named.is_absolute() { named.to_path_buf() } else { self.setup_path().parent().map(|d| d.join(named)).unwrap_or_else(|| named.to_path_buf()) })
+        Ok(if named.is_absolute() {
+            named.to_path_buf()
+        } else {
+            self.setup_path().parent().map(|d| d.join(named)).unwrap_or_else(|| named.to_path_buf())
+        })
     }
 
     /// Save session: the setup, the record on the screen and every loaded reference slot with its samples, as one file
@@ -50,9 +55,11 @@ impl Ui {
     pub(super) fn session_memory(&self) -> Option<Vec<u8>> {
         let rec = self.last[0].as_ref()?;
         let on: Vec<usize> = (0..NCH).filter(|&c| self.m.ch[c].on && !rec.ch[c].is_empty()).collect();
-        let views: Vec<(usize, &[f32], f64, f64)> = on.iter().filter_map(|&c| self.channel_view(c, true).map(|(v, dt, t0)| (c, v, dt, t0))).collect();
+        let views: Vec<(usize, &[f32], f64, f64)> =
+            on.iter().filter_map(|&c| self.channel_view(c, true).map(|(v, dt, t0)| (c, v, dt, t0))).collect();
         let &(_, first, dt, t0) = views.first()?;
-        let one_axis = views.len() == on.len() && views.iter().all(|&(_, v, d, t)| v.len() == first.len() && d == dt && t == t0);
+        let one_axis =
+            views.len() == on.len() && views.iter().all(|&(_, v, d, t)| v.len() == first.len() && d == dt && t == t0);
         if !one_axis || first.len() <= SESSION_SCREEN_MAX {
             return None;
         }
@@ -70,9 +77,27 @@ impl Ui {
         let Record { t0, dt, ch, triggered, .. } = rec;
         let basic = std::array::from_fn(|c| crate::board::BasicStats::of(&ch[c]));
         let pre = (-t0 / dt).round().clamp(0.0, (n - 1) as f64) as usize;
-        let frame = std::sync::Arc::new(crate::board::Frame { seq: 1, dt, pre, ch, acq: (1.0 / dt, n), basic, ..Default::default() });
+        let frame = std::sync::Arc::new(crate::board::Frame {
+            seq: 1,
+            dt,
+            pre,
+            ch,
+            acq: (1.0 / dt, n),
+            basic,
+            ..Default::default()
+        });
         let raw = Raw { frame, i0: 0, i1: n, t0, conditioned: true };
-        let whole = Record { t0, dt, ch: Default::default(), triggered, partial: false, raw: Some(raw), la: None, pairs: false, peak: false };
+        let whole = Record {
+            t0,
+            dt,
+            ch: Default::default(),
+            triggered,
+            partial: false,
+            raw: Some(raw),
+            la: None,
+            pairs: false,
+            peak: false,
+        };
         let view = (self.m.time_per_div(), self.m.delay);
         self.captured_record_view(&whole, view).map(|r| r.as_ref().clone()).unwrap_or(whole)
     }
@@ -85,13 +110,22 @@ impl Ui {
     /// Save session to the file `p`.
     pub(super) fn session_write(&mut self, p: std::path::PathBuf) -> Result<std::path::PathBuf, String> {
         let setup = self.setup_text_full();
-        let refs: Vec<crate::store::SessionRef> = self.refs.iter().enumerate().filter_map(|(slot, r)| {
-            r.as_ref().map(|r| crate::store::SessionRef { slot, src: r.src, t0: r.t0, dt: r.dt, v: r.v.to_vec() })
-        }).collect();
+        let refs: Vec<crate::store::SessionRef> = self
+            .refs
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, r)| {
+                r.as_ref().map(|r| crate::store::SessionRef { slot, src: r.src, t0: r.t0, dt: r.dt, v: r.v.to_vec() })
+            })
+            .collect();
         let memory = self.session_memory();
         let mut bytes = crate::store::session_bin(&setup, self.last[0].as_ref(), memory.as_deref(), &self.m, &refs);
         // saved in the offline view, a loaded capture fills the screen: the session comes back that way
-        if self.offline.on && !self.session_is_sim && self.sim_refs.is_empty() && self.refs.get(self.offline.slot).is_some_and(Option::is_some) {
+        if self.offline.on
+            && !self.session_is_sim
+            && self.sim_refs.is_empty()
+            && self.refs.get(self.offline.slot).is_some_and(Option::is_some)
+        {
             bytes.extend_from_slice(&crate::store::session_view(self.offline.slot));
         }
         let r = crate::store::write(&p, &bytes);
@@ -120,7 +154,8 @@ impl Ui {
         let done = (|| {
             let data = crate::store::read_waveform_file(&p)?;
             let foreign = crate::store::looks_zip(&data);
-            let session = if foreign { crate::store::parse_tss(&data, NREF)? } else { crate::store::parse_session(&data, NREF)? };
+            let session =
+                if foreign { crate::store::parse_tss(&data, NREF)? } else { crate::store::parse_session(&data, NREF)? };
             drop(data);
             // checked before anything is changed: a file with a setup this build cannot read leaves the bench as it is
             crate::store::parse_setup(&session.setup)?;
@@ -132,7 +167,17 @@ impl Ui {
                 *r = None;
             }
             for r in session.refs {
-                self.refs[r.slot] = Some(RefWave { src: r.src, color: r.slot, label: String::new(), t0: r.t0, dt: r.dt, v: r.v.into(), vpd: 1.0, offset: 0.0, on: true });
+                self.refs[r.slot] = Some(RefWave {
+                    src: r.src,
+                    color: r.slot,
+                    label: String::new(),
+                    t0: r.t0,
+                    dt: r.dt,
+                    v: r.v.into(),
+                    vpd: 1.0,
+                    offset: 0.0,
+                    on: true,
+                });
             }
             // the look of the slots (scale, offset, colour, name, shown) is in the setup text and is applied with it
             self.apply_setup_text(&session.setup)?;

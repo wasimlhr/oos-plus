@@ -132,14 +132,41 @@ pub(super) enum PanelKind {
     Sim,
 }
 
-
 /// Items whose list is a keypad or a file list with its own handling: the classic picker keeps them.
 fn keypad_pick(it: Item) -> bool {
-    matches!(it, Item::TrigBusVal | Item::SrchBusVal | Item::AfgFreqEntry | Item::WlanNet | Item::WlanForgetNet | Item::NtpServer | Item::TimeZone | Item::RemName | Item::MeasCopyTo)
+    matches!(
+        it,
+        Item::TrigBusVal
+            | Item::SrchBusVal
+            | Item::AfgFreqEntry
+            | Item::WlanNet
+            | Item::WlanForgetNet
+            | Item::NtpServer
+            | Item::TimeZone
+            | Item::RemName
+            | Item::MeasCopyTo
+    )
 }
 
 fn destructive(it: Item) -> bool {
-    matches!(it, Item::SpecLimitClear | Item::EyeClear | Item::MaskClear | Item::SimDefaults | Item::CurRemove | Item::SrchRemove | Item::RefClear | Item::RefClearOne | Item::MeasClear | Item::UpdateRollback | Item::Stock | Item::PowerAct | Item::DefaultAct | Item::ZoneClear | Item::MeasRemove(_))
+    matches!(
+        it,
+        Item::SpecLimitClear
+            | Item::EyeClear
+            | Item::MaskClear
+            | Item::SimDefaults
+            | Item::CurRemove
+            | Item::SrchRemove
+            | Item::RefClear
+            | Item::RefClearOne
+            | Item::MeasClear
+            | Item::UpdateRollback
+            | Item::Stock
+            | Item::PowerAct
+            | Item::DefaultAct
+            | Item::ZoneClear
+            | Item::MeasRemove(_)
+    )
 }
 
 /// The colours of a channel among the choices of a decoder's line: fill, edge and text. The chosen one is filled with
@@ -162,8 +189,9 @@ impl Ui {
         use MenuId as M;
         Some(match menu {
             M::Trigger => (&["Type and source", "Settings"], |it| match it {
-                TrigType | TrigSrc | TrigSrc2 | TrigSlope | TrigSlope2 | TrigPol | DecProto | TrigBusWhat | TrigBusVal | Pat(_) | WinModeI
-                    | VidStd | VidSync | VidLine | TrigLevel | TrigLevel2 | Trig50 | PatLevel | Open(M::LaPat) => Slot::Tab(0),
+                TrigType | TrigSrc | TrigSrc2 | TrigSlope | TrigSlope2 | TrigPol | DecProto | TrigBusWhat
+                | TrigBusVal | Pat(_) | WinModeI | VidStd | VidSync | VidLine | TrigLevel | TrigLevel2 | Trig50
+                | PatLevel | Open(M::LaPat) => Slot::Tab(0),
                 SearchTable | SearchSave => Slot::Foot(1),
                 Open(M::Zone) => Slot::Skip,
                 _ => Slot::Tab(1),
@@ -177,7 +205,9 @@ impl Ui {
                 _ => Slot::Tab(1),
             }),
             M::Measure => (&["Settings", "Sources", "Parameters", "Levels"], |it| match it {
-                MeasGate | BadgeStyle | Open(M::MeasStat) | MeasLabels | Open(M::MeasPair) | Open(M::Dvm) => Slot::Tab(0),
+                MeasGate | BadgeStyle | Open(M::MeasStat) | MeasLabels | Open(M::MeasPair) | Open(M::Dvm) => {
+                    Slot::Tab(0)
+                }
                 MeasSrc | MeasSrcB | MeasCopyTo => Slot::Tab(1),
                 MeasLvType | MeasRefs | MeasLow | MeasMid | MeasHigh | MeasHyst | MeasBaseTop => Slot::Tab(3),
                 Open(M::MeasFall) => Slot::Foot(3),
@@ -187,7 +217,10 @@ impl Ui {
                 _ => Slot::Tab(2),
             }),
             M::MeasFall => (&["Fall levels"], |_| Slot::Tab(0)),
-            M::MeasStat => (&["Statistics"], |it| match it { MeasStatReset => Slot::Foot(0), _ => Slot::Tab(0) }),
+            M::MeasStat => (&["Statistics"], |it| match it {
+                MeasStatReset => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
             M::Display => (&["Traces", "Look", "Screen", "Lower"], |it| match it {
                 Layout | Traces | Views | XyMode | ZInput | Histogram => Slot::Tab(0),
                 // the pane under the plot and, while it is the trend, its two charts
@@ -214,7 +247,12 @@ impl Ui {
                 AutoDeskew | ClearDeskew => Slot::Foot(0),
                 _ => Slot::Tab(0),
             }),
-            M::Cursor => (&["Cursors", "Position"], |it| match it { CurMode | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0), CurSnap => Slot::Tab(0), CurRemove => Slot::Foot(0), _ => Slot::Tab(1) }),
+            M::Cursor => (&["Cursors", "Position"], |it| match it {
+                CurMode | CurSrc | CurSrcB | CurSecond | CurReadout | CurLink => Slot::Tab(0),
+                CurSnap => Slot::Tab(0),
+                CurRemove => Slot::Foot(0),
+                _ => Slot::Tab(1),
+            }),
             // which search and what it looks for; then what it shares with the trigger and the event it stands on
             M::Search => (&["Search", "Time, event"], |it| match it {
                 SearchTable | SrchRemove => Slot::Foot(0),
@@ -248,7 +286,9 @@ impl Ui {
                 _ => Slot::Tab(0),
             }),
             M::Math => (&["Function", "Scale"], |it| match it {
-                MathSel | MathFam | MathOpI | MathA | MathB | MathExprEdit | FftWin | MathFiltResp | MathFiltPreset => Slot::Tab(0),
+                MathSel | MathFam | MathOpI | MathA | MathB | MathExprEdit | FftWin | MathFiltResp | MathFiltPreset => {
+                    Slot::Tab(0)
+                }
                 // Turn off is pinned under the rows: as their first one it moved every row when a function was chosen
                 MathOff | MathAddFilter => Slot::Foot(0),
                 MathExprI => Slot::Skip,
@@ -257,7 +297,9 @@ impl Ui {
             }),
             // Connectivity says where the scope is reached and what time it has, above the pages that set it
             M::Utility => (&["Connectivity", "Device", "Service", "Advanced"], |it| match it {
-                NetEth | NetWlan | NetWeb | TimeNow | Open(M::Network) | Open(M::Remote) | Open(M::Time) => Slot::Tab(0),
+                NetEth | NetWlan | NetWeb | TimeNow | Open(M::Network) | Open(M::Remote) | Open(M::Time) => {
+                    Slot::Tab(0)
+                }
                 Offline | QuickAct | Graphics | Shot => Slot::Tab(1),
                 Open(M::SelfCal) | SysInfo | About | Update => Slot::Tab(2),
                 UpdateRollback => Slot::Foot(2),
@@ -363,17 +405,32 @@ impl Ui {
                 SrcOn => Slot::Foot(1),
                 _ => Slot::Tab(0),
             }),
-            M::Zone => (&["Zone"], |it| match it { ZoneClear => Slot::Foot(0), _ => Slot::Tab(0) }),
+            M::Zone => (&["Zone"], |it| match it {
+                ZoneClear => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
             // the two sources are pinned under every tab: "A: CH1" to "B: CH2"
             M::MeasPair => (&["Delay", "Phase", "Skew", "Setup / hold"], |it| match it {
                 MeasSrc => Slot::Foot(0),
                 MeasSrcB => Slot::Foot(1),
-                Item::MeasPair(i) => { let i = i as usize; Slot::Tab(if i < 12 { i / 4 } else { 3 }) }
+                Item::MeasPair(i) => {
+                    let i = i as usize;
+                    Slot::Tab(if i < 12 { i / 4 } else { 3 })
+                }
                 _ => Slot::Skip,
             }),
-            M::MeasLevels => (&["Levels"], |it| match it { Open(M::MeasFall) => Slot::Foot(0), _ => Slot::Tab(0) }),
-            M::SelfCal => (&["Self-calibration"], |it| match it { CalStart => Slot::Foot(0), _ => Slot::Tab(0) }),
-            M::Time => (&["Date and time"], |it| match it { NtpSync | TimeSet => Slot::Foot(0), _ => Slot::Tab(0) }),
+            M::MeasLevels => (&["Levels"], |it| match it {
+                Open(M::MeasFall) => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
+            M::SelfCal => (&["Self-calibration"], |it| match it {
+                CalStart => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
+            M::Time => (&["Date and time"], |it| match it {
+                NtpSync | TimeSet => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
             M::Network => (&["Ethernet", "WLAN"], |it| match it {
                 NetWlan | WlanScan | WlanForget | WlanInfo => Slot::Tab(1),
                 _ => Slot::Tab(0),
@@ -388,14 +445,30 @@ impl Ui {
                 RemUsb | RemUsbAddr => Slot::Tab(3),
                 _ => Slot::Tab(2),
             }),
-            M::Ssh => (&["SSH"], |it| match it { SshImport | SshRemove => Slot::Foot(0), _ => Slot::Tab(0) }),
+            M::Ssh => (&["SSH"], |it| match it {
+                SshImport | SshRemove => Slot::Foot(0),
+                _ => Slot::Tab(0),
+            }),
             _ => return None,
         })
     }
 
     /// The menus whose lines of status stay on the sheet as Info rows.
     fn sheet_keeps_text(menu: MenuId) -> bool {
-        matches!(menu, MenuId::Channel(_) | MenuId::ChMore(_) | MenuId::Acquire | MenuId::Logger | MenuId::SelfCal | MenuId::Time | MenuId::Network | MenuId::Remote | MenuId::Ssh | MenuId::Utility | MenuId::ExtGen)
+        matches!(
+            menu,
+            MenuId::Channel(_)
+                | MenuId::ChMore(_)
+                | MenuId::Acquire
+                | MenuId::Logger
+                | MenuId::SelfCal
+                | MenuId::Time
+                | MenuId::Network
+                | MenuId::Remote
+                | MenuId::Ssh
+                | MenuId::Utility
+                | MenuId::ExtGen
+        )
     }
 
     /// The pages of the Decode sheet from its three planned tabs (Decode, Settings, Levels).
@@ -405,7 +478,8 @@ impl Ui {
     fn decode_tabs(&self, menu: MenuId, tabs: &mut Vec<SheetTab>) {
         use Item::*;
         // a threshold stands in the row of its line (`sheet_line_thr`), so it is no row of its own
-        let in_line: Vec<Item> = [DecSrc, DecSrc2, DecCs, DecSrc4].into_iter().filter_map(|it| self.sheet_line_thr(it)).collect();
+        let in_line: Vec<Item> =
+            [DecSrc, DecSrc2, DecCs, DecSrc4].into_iter().filter_map(|it| self.sheet_line_thr(it)).collect();
         for t in tabs.iter_mut() {
             t.rows.retain(|it| !in_line.contains(it));
         }
@@ -419,13 +493,21 @@ impl Ui {
             }
         }
         while tabs[0].rows.len() < SHEET_MAX_ROWS {
-            let Some(i) = tabs[1].rows.iter().position(|it| matches!(it, DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt)) else { break };
+            let Some(i) = tabs[1].rows.iter().position(|it| {
+                matches!(
+                    it,
+                    DecBaud | DecBits | DecParity | DecMode | DecCanRate | DecCanH | DecUsbSpeed | DecCphyRate | DecFmt
+                )
+            }) else {
+                break;
+            };
             let row = tabs[1].rows.remove(i);
             tabs[0].rows.push(row);
         }
         // the name and the place of the band are settings; where the protocol fills that page they have their own
         if tabs[1].rows.len() > SHEET_MAX_ROWS {
-            let (band, rest) = std::mem::take(&mut tabs[1].rows).into_iter().partition(|it| matches!(it, DecLabel | DecPos));
+            let (band, rest) =
+                std::mem::take(&mut tabs[1].rows).into_iter().partition(|it| matches!(it, DecLabel | DecPos));
             tabs[1].rows = rest;
             tabs.push(SheetTab { name: "Band", rows: band, foot: Vec::new() });
         }
@@ -449,7 +531,8 @@ impl Ui {
         }
         // the name and the place of the band are settings; where the protocol fills that page they have their own
         if tabs[1].rows.len() > SHEET_MAX_ROWS {
-            let (band, rest) = std::mem::take(&mut tabs[1].rows).into_iter().partition(|it| matches!(it, DecLabel | DecPos));
+            let (band, rest) =
+                std::mem::take(&mut tabs[1].rows).into_iter().partition(|it| matches!(it, DecLabel | DecPos));
             tabs[1].rows = rest;
             tabs.push(SheetTab { name: "Band", rows: band, foot: Vec::new() });
         }
@@ -463,29 +546,47 @@ impl Ui {
 
     /// Rows a tab of `menu` may have: seven, and eight for the setup and hold pairs, which are one group.
     fn sheet_max_rows(menu: MenuId) -> usize {
-        if menu == MenuId::MeasPair { SHEET_MAX_ROWS + 1 } else { SHEET_MAX_ROWS }
+        if menu == MenuId::MeasPair {
+            SHEET_MAX_ROWS + 1
+        } else {
+            SHEET_MAX_ROWS
+        }
     }
 
     /// The items a sheet of `menu` draws from: the menus it merges.
     fn sheet_source_items(&self, menu: MenuId) -> Vec<Item> {
         match menu {
-            MenuId::Channel(c) | MenuId::ChMore(c) => self.items(MenuId::Channel(c)).into_iter().chain(self.items(MenuId::ChMore(c)))
-                .chain((0..super::chinfo::CH_INFO_LINES).map(|k| Item::ChInfo(c, k))).collect(),
-            MenuId::MeasPair => [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect(),
+            MenuId::Channel(c) | MenuId::ChMore(c) => self
+                .items(MenuId::Channel(c))
+                .into_iter()
+                .chain(self.items(MenuId::ChMore(c)))
+                .chain((0..super::chinfo::CH_INFO_LINES).map(|k| Item::ChInfo(c, k)))
+                .collect(),
+            MenuId::MeasPair => {
+                [Item::MeasSrc, Item::MeasSrcB].into_iter().chain(self.items(MenuId::MeasPair)).collect()
+            }
             // Measure: its footer leads to the list of measurements to add
             MenuId::Measure => [Item::Open(MenuId::MeasAdd)].into_iter().chain(self.items(MenuId::Measure)).collect(),
             // Reference: Clear for the one slot, which the menu has not
             MenuId::Ref => self.items(MenuId::Ref).into_iter().chain([Item::RefClearOne]).collect(),
             // SIM: the knobs of its Advanced page are rows of the sheet's own tabs, so the link to that page is left out
             MenuId::Sim => {
-                let mut v: Vec<Item> = self.items(MenuId::Sim).into_iter().filter(|it| *it != Item::Open(MenuId::SimAdvanced)).collect();
-                for it in self.items(MenuId::SimAdvanced) { if !v.contains(&it) { v.push(it); } }
+                let mut v: Vec<Item> =
+                    self.items(MenuId::Sim).into_iter().filter(|it| *it != Item::Open(MenuId::SimAdvanced)).collect();
+                for it in self.items(MenuId::SimAdvanced) {
+                    if !v.contains(&it) {
+                        v.push(it);
+                    }
+                }
                 v
             }
             // System: the state lines of the network and the clock, and the page of the remote services, which the
             // menu has one level down
-            MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow].into_iter()
-                .chain(self.items(MenuId::Utility)).chain([Item::Open(MenuId::Remote)]).collect(),
+            MenuId::Utility => [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow]
+                .into_iter()
+                .chain(self.items(MenuId::Utility))
+                .chain([Item::Open(MenuId::Remote)])
+                .collect(),
             // Display: the choice of the bottom bar is a row of the Default layout's menu. A sheet is up only in
             // Minimal and Studio, whose bars are the compact ones whatever Bottom bar says
             MenuId::Display => self.items(MenuId::Display).into_iter().filter(|it| *it != Item::BottomBar).collect(),
@@ -513,14 +614,19 @@ impl Ui {
             return Some(self.sheet_main_spec());
         } else if menu == MenuId::MeasRow {
             let tabs = self.measrow_sheet_tabs();
-            if tabs.is_empty() { return None; }
+            if tabs.is_empty() {
+                return None;
+            }
             SheetSpec { tabs, first: 0 }
         } else {
             let (names, place) = self.sheet_plan(menu)?;
-            let mut tabs: Vec<SheetTab> = names.iter().map(|n| SheetTab { name: n, rows: Vec::new(), foot: Vec::new() }).collect();
+            let mut tabs: Vec<SheetTab> =
+                names.iter().map(|n| SheetTab { name: n, rows: Vec::new(), foot: Vec::new() }).collect();
             let mut items = self.sheet_source_items(menu);
             // the add-source button belongs to the page it fixes
-            if !Self::sheet_keeps_text(menu) { items.retain(|it| !matches!(self.ctl(*it, 200), Ctl::Text)); }
+            if !Self::sheet_keeps_text(menu) {
+                items.retain(|it| !matches!(self.ctl(*it, 200), Ctl::Text));
+            }
             for it in items {
                 match place(it) {
                     Slot::Tab(i) => tabs[i].rows.push(it),
@@ -531,7 +637,9 @@ impl Ui {
             // Minimal keeps the stock strip and cursors: where the strip docks stays on the Measure page, and the
             // three cursor rows are one tab
             if self.m.layout != Layout::Studio {
-                if menu == MenuId::Measure && self.items(menu).contains(&Item::StripDock) { tabs[0].rows.push(Item::StripDock); }
+                if menu == MenuId::Measure && self.items(menu).contains(&Item::StripDock) {
+                    tabs[0].rows.push(Item::StripDock);
+                }
                 if menu == MenuId::Cursor && tabs.len() > 1 {
                     let rest: Vec<Item> = tabs.drain(1..).flat_map(|t| t.rows).collect();
                     tabs[0].rows.extend(rest);
@@ -544,15 +652,36 @@ impl Ui {
             // the finger. Run is under every tab: beside Add on the tab of the slot, beside Defaults on the knob tabs
             if menu == MenuId::Sim {
                 // (Play references is offered while live, Back to live while a record plays: one or the other, in the same place)
-                let order = [Item::SimPreset, Item::SimRate, Item::SimPat, Item::SimSlot, Item::SimShow, Item::SimLoad, Item::SimPlayRefs, Item::SimLive];
+                let order = [
+                    Item::SimPreset,
+                    Item::SimRate,
+                    Item::SimPat,
+                    Item::SimSlot,
+                    Item::SimShow,
+                    Item::SimLoad,
+                    Item::SimPlayRefs,
+                    Item::SimLive,
+                ];
                 tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
                 for (i, t) in tabs.iter_mut().enumerate() {
-                    t.foot = if i == 0 { vec![Item::SimAddRef, Item::SimPlay] } else { vec![Item::SimPlay, Item::SimDefaults] };
+                    t.foot = if i == 0 {
+                        vec![Item::SimAddRef, Item::SimPlay]
+                    } else {
+                        vec![Item::SimPlay, Item::SimDefaults]
+                    };
                 }
             }
             // System > Connectivity: the pages in the order of the lines above them
             if menu == MenuId::Utility {
-                let order = [Item::NetEth, Item::NetWlan, Item::NetWeb, Item::TimeNow, Item::Open(MenuId::Network), Item::Open(MenuId::Remote), Item::Open(MenuId::Time)];
+                let order = [
+                    Item::NetEth,
+                    Item::NetWlan,
+                    Item::NetWeb,
+                    Item::TimeNow,
+                    Item::Open(MenuId::Network),
+                    Item::Open(MenuId::Remote),
+                    Item::Open(MenuId::Time),
+                ];
                 tabs[0].rows.sort_by_key(|it| order.iter().position(|o| o == it).unwrap_or(order.len()));
             }
             // Remote services: the name and who is allowed, and the addresses in the order of their switches
@@ -575,7 +704,10 @@ impl Ui {
             // DVM and counter, the logic analyser and the double pulse had two tabs of two to five rows each: they are
             // one page while all of it fits one (seven rows, two actions in the footer)
             if matches!(menu, MenuId::Dvm | MenuId::La | MenuId::Dpt) && tabs.len() > 1 {
-                let (rows, feet) = (tabs.iter().map(|t| t.rows.len()).sum::<usize>(), tabs.iter().map(|t| t.foot.len()).sum::<usize>());
+                let (rows, feet) = (
+                    tabs.iter().map(|t| t.rows.len()).sum::<usize>(),
+                    tabs.iter().map(|t| t.foot.len()).sum::<usize>(),
+                );
                 if rows <= SHEET_MAX_ROWS && feet <= 2 {
                     let rest: Vec<SheetTab> = tabs.drain(1..).collect();
                     for t in rest {
@@ -598,11 +730,15 @@ impl Ui {
             // a link to another page comes after the rows of this one. The lines of the logic analyser keep their
             // link under the row it continues
             if menu != MenuId::La {
-                for t in &mut tabs { t.rows.sort_by_key(|it| matches!(it, Item::Open(_))); }
+                for t in &mut tabs {
+                    t.rows.sort_by_key(|it| matches!(it, Item::Open(_)));
+                }
             }
             // the next-free action is offered only when the selected slot is taken
             if matches!(menu, MenuId::Ref) && self.refs[self.ref_page.sel].is_none() {
-                for t in &mut tabs { t.rows.retain(|it| *it != Item::RefSaveNext); }
+                for t in &mut tabs {
+                    t.rows.retain(|it| *it != Item::RefSaveNext);
+                }
             }
             // Ref: the ten slots are one Pick, and the shown switch is the one of the selected slot
             if matches!(menu, MenuId::Ref) {
@@ -612,11 +748,15 @@ impl Ui {
             }
             // Acquire: the way on to Horizontal is under both tabs
             if menu == MenuId::Acquire {
-                for t in &mut tabs { t.foot = vec![Item::Open(MenuId::Horizontal)]; }
+                for t in &mut tabs {
+                    t.foot = vec![Item::Open(MenuId::Horizontal)];
+                }
             }
             // the two sources of a pair are under every tab ("A: CH1", "B: CH2"): a slot of the plan is the foot of one tab
             if menu == MenuId::MeasPair {
-                for t in &mut tabs { t.foot = vec![Item::MeasSrc, Item::MeasSrcB]; }
+                for t in &mut tabs {
+                    t.foot = vec![Item::MeasSrc, Item::MeasSrcB];
+                }
             }
             let first = match menu {
                 MenuId::ChMore(_) => 1,
@@ -632,7 +772,14 @@ impl Ui {
             return None;
         }
         Some(SheetSpec {
-            tabs: spec.tabs.into_iter().map(|mut t| { t.foot.sort_by_key(|it| destructive(*it)); t }).collect(),
+            tabs: spec
+                .tabs
+                .into_iter()
+                .map(|mut t| {
+                    t.foot.sort_by_key(|it| destructive(*it));
+                    t
+                })
+                .collect(),
             first: spec.first,
         })
     }
@@ -653,23 +800,35 @@ impl Ui {
             // Studio's quick Add panel; the Measure page of every layout once it is expanded (`studio.meas_page`)
             MenuId::MeasAdd => self.m.layout == Layout::Studio && !self.studio.meas_page,
             MenuId::AddPanel => self.m.layout == Layout::Studio,
-            MenuId::Pick => self.pick.is_some_and(|p| !keypad_pick(p.it) && !self.options(p.it).is_empty() && self.sheet_spec(p.menu).is_some()),
+            MenuId::Pick => self.pick.is_some_and(|p| {
+                !keypad_pick(p.it) && !self.options(p.it).is_empty() && self.sheet_spec(p.menu).is_some()
+            }),
             m => self.sheet_spec(m).is_some(),
         }
     }
 
     pub(super) fn sheet_dock_w(&self) -> i32 {
-        if self.sheet_active() && !self.menu_is_wide() { SHEET_W + 4 } else { 0 }
+        if self.sheet_active() && !self.menu_is_wide() {
+            SHEET_W + 4
+        } else {
+            0
+        }
     }
 
     /// The rectangle of the menu on screen, sheet or classic dialog.
     pub(super) fn menu_rect(&self) -> Option<Rect> {
-        if self.sheet_active() { Some(self.sheet_rect()) } else { self.dlg_layout().map(|d| d.r) }
+        if self.sheet_active() {
+            Some(self.sheet_rect())
+        } else {
+            self.dlg_layout().map(|d| d.r)
+        }
     }
 
     /// The sheet's place: the right edge of the body, from the top bar to the bottom bar. It is the same for every page.
     pub(super) fn sheet_rect(&self) -> Rect {
-        if self.menu_is_wide() { return self.menu_wide_rect(); }
+        if self.menu_is_wide() {
+            return self.menu_wide_rect();
+        }
         let f = self.frame();
         let y = f.top.bottom();
         Rect::new(self.scr.w - SHEET_W, y, SHEET_W, (f.bottom.y - y).max(SHEET_HEAD + SHEET_FOOT))
@@ -679,11 +838,19 @@ impl Ui {
         let n = spec.tabs.len().max(1);
         let want = if self.sheet.menu == Some(self.menu) { self.sheet.tab.min(n - 1) } else { spec.first.min(n - 1) };
         // the tab that was open may hold nothing by now: the first that does is shown
-        if spec.tabs.get(want).is_some_and(SheetTab::holds) { want } else { spec.tabs.iter().position(SheetTab::holds).unwrap_or(want) }
+        if spec.tabs.get(want).is_some_and(SheetTab::holds) {
+            want
+        } else {
+            spec.tabs.iter().position(SheetTab::holds).unwrap_or(want)
+        }
     }
 
     fn sheet_page(&self, key: Option<Item>) -> usize {
-        if self.sheet.page_key == Some((self.menu, key)) { self.sheet.page } else { 0 }
+        if self.sheet.page_key == Some((self.menu, key)) {
+            self.sheet.page
+        } else {
+            0
+        }
     }
 
     fn sheet_set_tab(&mut self, i: usize) {
@@ -706,7 +873,11 @@ impl Ui {
         if self.sheet_line_thr(it).is_some() {
             return LINE_LABEL_W;
         }
-        if it == Item::TrigType || it == Item::RefColor || Self::kind(it) != Kind::Choice || !matches!(self.ctl(it, row - LABEL_W), Ctl::Pick) {
+        if it == Item::TrigType
+            || it == Item::RefColor
+            || Self::kind(it) != Kind::Choice
+            || !matches!(self.ctl(it, row - LABEL_W), Ctl::Pick)
+        {
             return LABEL_W;
         }
         let need = self.fonts().m.width(&self.sheet_label(it)) + 14;
@@ -785,13 +956,20 @@ impl Ui {
             let cur = self.value(Item::TrigType);
             let mut v: Vec<String> = common.iter().map(|s| s.to_string()).collect();
             return match common.iter().position(|c| *c == cur) {
-                Some(i) => { v.push("More".into()); (v, Some(i)) }
-                None => { v.push(cur); (v, Some(3)) }
+                Some(i) => {
+                    v.push("More".into());
+                    (v, Some(i))
+                }
+                None => {
+                    v.push(cur);
+                    (v, Some(3))
+                }
             };
         }
         if it == Item::RefColor {
             // the five slot colours as one choice (drawn as swatches)
-            let sel = self.refs.get(self.ref_page.sel).and_then(Option::as_ref).map(|r| r.color.min(REF_COLORS.len() - 1));
+            let sel =
+                self.refs.get(self.ref_page.sel).and_then(Option::as_ref).map(|r| r.color.min(REF_COLORS.len() - 1));
             return (REF_COLORS.iter().map(|c| c.0.to_string()).collect(), sel);
         }
         match self.ctl(it, SHEET_W - 2 * PAD - self.sheet_label_w(it)) {
@@ -814,7 +992,11 @@ impl Ui {
     /// The label of the Store button: the slot the picker shows, and "Replace" when it is taken.
     pub(super) fn ref_store_label(&self) -> String {
         let (src, sel) = (self.wave_name(WaveId::Ch(self.ref_page.src)), self.ref_page.sel);
-        if self.refs[sel].is_some() { format!("Replace R{} with {}", sel + 1, src) } else { format!("Store {} as R{}", src, sel + 1) }
+        if self.refs[sel].is_some() {
+            format!("Replace R{} with {}", sel + 1, src)
+        } else {
+            format!("Store {} as R{}", src, sel + 1)
+        }
     }
 
     pub(super) fn ref_store_next_label(&self) -> String {
@@ -835,7 +1017,11 @@ impl Ui {
         match it {
             Item::SrcOn => {
                 let names: Vec<String> = self.off_sources(self.menu).iter().map(|c| format!("CH{}", c + 1)).collect();
-                if names.is_empty() { "Switch on source".into() } else { format!("Turn on {}", names.join(", ")) }
+                if names.is_empty() {
+                    "Switch on source".into()
+                } else {
+                    format!("Turn on {}", names.join(", "))
+                }
             }
             Item::SimAddRef => format!("Add to R{}", self.m.sim_slot + 1),
             Item::SimLoad => format!("Load file into R{}…", self.m.sim_slot + 1),
@@ -867,7 +1053,12 @@ impl Ui {
             Item::DecOn => format!("Decoder {}", self.dec_tag(self.m.dec_sel)),
             // a line is named by what it is in the protocol (Clock, Data, CS), where the protocol says so
             Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 => {
-                let role = match it { Item::DecSrc => 0, Item::DecSrc2 => 1, Item::DecCs => 2, _ => 3 };
+                let role = match it {
+                    Item::DecSrc => 0,
+                    Item::DecSrc2 => 1,
+                    Item::DecCs => 2,
+                    _ => 3,
+                };
                 self.m.dec_proto.roles()[role].map_or_else(|| self.item_label(it).to_string(), str::to_string)
             }
             // a line's own threshold is named after the line; the decoder's is the main line's where others have one
@@ -876,10 +1067,13 @@ impl Ui {
                 None => self.item_label(it).to_string(),
             },
             Item::DecThr if self.m.dec_proto != Proto::CPHY && (1..4).any(|r| self.m.dec_role_src(r).is_some()) => {
-                self.m.dec_proto.roles()[0].map_or_else(|| "Threshold".to_string(), |name| format!("{} threshold", name))
+                self.m.dec_proto.roles()[0]
+                    .map_or_else(|| "Threshold".to_string(), |name| format!("{} threshold", name))
             }
             Item::RefSaveNext => self.ref_store_next_label(),
-            Item::RowF(measrow::RF::Used | measrow::RF::StMean | measrow::RF::StRange | measrow::RF::StN) => self.measrow_text(it).unwrap_or_default(),
+            Item::RowF(measrow::RF::Used | measrow::RF::StMean | measrow::RF::StRange | measrow::RF::StN) => {
+                self.measrow_text(it).unwrap_or_default()
+            }
             _ => self.item_label(it).to_string(),
         }
     }
@@ -892,7 +1086,10 @@ impl Ui {
     }
 
     fn sheet_has_back(&self) -> bool {
-        (self.menu == MenuId::AddPanel && self.sheet.add.kind.is_some()) || self.parent.is_some() || self.menu == MenuId::Pick || !self.menu_history.is_empty()
+        (self.menu == MenuId::AddPanel && self.sheet.add.kind.is_some())
+            || self.parent.is_some()
+            || self.menu == MenuId::Pick
+            || !self.menu_history.is_empty()
     }
 
     /// Geometry of an items page.
@@ -903,7 +1100,9 @@ impl Ui {
         let tab = self.sheet_tab(&spec);
         let tw = (r.w - 2 * PAD) / spec.tabs.len().max(1) as i32;
         let tabs = if multi {
-            (0..spec.tabs.len()).map(|i| Rect::new(r.x + PAD + i as i32 * tw, r.y + SHEET_HEAD, tw, SHEET_TABS)).collect()
+            (0..spec.tabs.len())
+                .map(|i| Rect::new(r.x + PAD + i as i32 * tw, r.y + SHEET_HEAD, tw, SHEET_TABS))
+                .collect()
         } else {
             Vec::new()
         };
@@ -917,10 +1116,14 @@ impl Ui {
             let label = Rect::new(row.x, row.y, lw, row.h);
             let ctrl = match kind {
                 RowKind::Link => Rect::new(row.x, row.y + 2, row.w, SHEET_ROW - 4),
-                RowKind::Toggle if Self::sheet_is_switch(it) => Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26),
+                RowKind::Toggle if Self::sheet_is_switch(it) => {
+                    Rect::new(row.right() - 56, row.y + (SHEET_ROW - 26) / 2, 52, 26)
+                }
                 _ => Rect::new(row.x + lw, row.y + 2, self.sheet_ctrl_w(it), SHEET_ROW - 4),
             };
-            let aux = self.sheet_line_thr(it).map(|thr| (thr, Rect::new(row.right() - LINE_THR_W, row.y + 2, LINE_THR_W, SHEET_ROW - 4)));
+            let aux = self
+                .sheet_line_thr(it)
+                .map(|thr| (thr, Rect::new(row.right() - LINE_THR_W, row.y + 2, LINE_THR_W, SHEET_ROW - 4)));
             rows.push(SheetRowGeo { it, kind, row, label, ctrl, aux });
         }
         let foot = self.sheet_foot_rects(r, &t.foot);
@@ -949,14 +1152,20 @@ impl Ui {
         let (r, back, close) = self.sheet_chrome();
         // it floats over the docks: a shadow on its left and under it
         if self.dock_on() {
-            for d in 1..=8 { cv.blend(Rect::new(r.x - d * 2, r.y + d, 2, r.h), BG, (70 - d * 7) as u32); }
+            for d in 1..=8 {
+                cv.blend(Rect::new(r.x - d * 2, r.y + d, 2, r.h), BG, (70 - d * 7) as u32);
+            }
         }
         cv.round(r, 8, ACCENT, 255);
         cv.round(r.inset(2), 7, DLG_BG, 255);
         let left = back.map_or(r.x + 14, |b| b.right() + 8);
         let mut t = title.to_string();
         // a title that is too long for the bar loses its detail (the path after "Storage"), not its name
-        if f.mb.width(&t) > close.x - left - 6 { if let Some((name, _)) = t.split_once(" \u{b7} ") { t = name.to_string(); } }
+        if f.mb.width(&t) > close.x - left - 6 {
+            if let Some((name, _)) = t.split_once(" \u{b7} ") {
+                t = name.to_string();
+            }
+        }
         while f.mb.width(&t) > close.x - left - 6 && t.chars().count() > 2 {
             let mut c = t.chars();
             c.next();
@@ -975,18 +1184,47 @@ impl Ui {
 
     fn sheet_draw_footer(&self, cv: &mut Canvas, r: Rect, foot: &[(Item, Rect)]) {
         let f = self.fonts();
-        if !foot.is_empty() { cv.hline(r.x + 6, r.right() - 7, r.bottom() - SHEET_FOOT, LINE); }
+        if !foot.is_empty() {
+            cv.hline(r.x + 6, r.right() - 7, r.bottom() - SHEET_FOOT, LINE);
+        }
         for &(it, b) in foot {
             let red = destructive(it);
             let armed = self.studio.md.armed.is_some_and(|(a, t)| a == it && self.now - t < 3.0);
             // the main action is the accent one (Store); a danger button is red and says when it waits for its second tap
             let primary = it == Item::RefSave;
-            btn(cv, b, if armed { mix(DLG_BG, RED, 90) } else if red { mix(DLG_BG, RED, 30) } else if primary { mix(DLG_BG, ACCENT, 40) } else { BTN }, if red { RED } else if primary { ACCENT } else { BTN_BORDER });
-            let label = if armed { "Tap again to confirm".to_string() } else if it == Item::RefSave {
+            btn(
+                cv,
+                b,
+                if armed {
+                    mix(DLG_BG, RED, 90)
+                } else if red {
+                    mix(DLG_BG, RED, 30)
+                } else if primary {
+                    mix(DLG_BG, ACCENT, 40)
+                } else {
+                    BTN
+                },
+                if red {
+                    RED
+                } else if primary {
+                    ACCENT
+                } else {
+                    BTN_BORDER
+                },
+            );
+            let label = if armed {
+                "Tap again to confirm".to_string()
+            } else if it == Item::RefSave {
                 self.ref_store_label()
             } else if it == Item::MeasSrc || it == Item::MeasSrcB {
-                format!("{}: {}", if it == Item::MeasSrc { "A" } else { "B" }, self.pair_source_caption(if it == Item::MeasSrc { self.sources.a } else { self.sources.b }))
-            } else { self.sheet_label(it) };
+                format!(
+                    "{}: {}",
+                    if it == Item::MeasSrc { "A" } else { "B" },
+                    self.pair_source_caption(if it == Item::MeasSrc { self.sources.a } else { self.sources.b })
+                )
+            } else {
+                self.sheet_label(it)
+            };
             let font = if f.mb.width(&label) > b.w - 12 { &f.sb } else { &f.mb };
             cv.text_in(font, b, 1, &label, if red { RED } else { TEXT });
         }
@@ -1015,7 +1253,19 @@ impl Ui {
                 cv.round_outline(*r, 5, ACCENT);
             }
             let dimmed = mix(DLG_BG, DIM, 60);
-            cv.text_in(&f.sb, *r, 1, spec.tabs[i].name, if on { TEXT } else if spec.tabs[i].holds() { DIM } else { dimmed });
+            cv.text_in(
+                &f.sb,
+                *r,
+                1,
+                spec.tabs[i].name,
+                if on {
+                    TEXT
+                } else if spec.tabs[i].holds() {
+                    DIM
+                } else {
+                    dimmed
+                },
+            );
         }
         for row in &g.rows {
             self.sheet_draw_row(cv, row);
@@ -1028,7 +1278,9 @@ impl Ui {
     pub(super) fn draw_sign(cv: &mut Canvas, r: Rect, plus: bool) {
         let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
         cv.fill(Rect::new(cx - 7, cy - 1, 14, 2), TEXT);
-        if plus { cv.fill(Rect::new(cx - 1, cy - 7, 2, 14), TEXT); }
+        if plus {
+            cv.fill(Rect::new(cx - 1, cy - 7, 2, 14), TEXT);
+        }
     }
 
     fn sheet_draw_row(&self, cv: &mut Canvas, row: &SheetRowGeo) {
@@ -1052,11 +1304,21 @@ impl Ui {
                     if it == Item::RefColor {
                         // slot colour as swatches
                         cv.round(r, 5, REF_COLORS[k.min(REF_COLORS.len() - 1)].1, 255);
-                        if sel == Some(k) { cv.round_outline(r.inset(-1), 6, TEXT); cv.round_outline(r, 5, DARK_TEXT); }
+                        if sel == Some(k) {
+                            cv.round_outline(r.inset(-1), 6, TEXT);
+                            cv.round_outline(r, 5, DARK_TEXT);
+                        }
                         continue;
                     }
                     // the lines of a decoder: a channel in its colour, as its pill in the bottom bar
-                    let wave = matches!(it, Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 | Item::DecDiff).then(|| o.strip_prefix("CH").and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=NCH).contains(n)).map(|n| CH_COLORS[n - 1])).flatten();
+                    let wave = matches!(it, Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 | Item::DecDiff)
+                        .then(|| {
+                            o.strip_prefix("CH")
+                                .and_then(|n| n.parse::<usize>().ok())
+                                .filter(|n| (1..=NCH).contains(n))
+                                .map(|n| CH_COLORS[n - 1])
+                        })
+                        .flatten();
                     if let Some(col) = wave {
                         let (fill, edge, ink) = line_chip(col, sel == Some(k));
                         btn(cv, r, fill, edge);
@@ -1079,7 +1341,11 @@ impl Ui {
                 // - value +: the steps of the dialog of the Default layout, and the value opens the list. A row
                 // whose list is long and has no order (the protocol of a decoder) is the value alone
                 let plain = Self::sheet_pick_plain(it);
-                let (mi, mid, pl) = if plain { (Rect::new(c.x, c.y, 0, 0), c, Rect::new(c.right(), c.y, 0, 0)) } else { Self::value_parts(c) };
+                let (mi, mid, pl) = if plain {
+                    (Rect::new(c.x, c.y, 0, 0), c, Rect::new(c.right(), c.y, 0, 0))
+                } else {
+                    Self::value_parts(c)
+                };
                 if !plain {
                     btn(cv, mi, BTN, BTN_BORDER);
                     Self::draw_sign(cv, mi, false);
@@ -1124,7 +1390,12 @@ impl Ui {
             RowKind::Toggle => {
                 let on = self.sheet_on(it);
                 cv.round(c, c.h / 2, if on { ACCENT } else { BTN_BORDER }, 255);
-                cv.circle(if on { c.right() - c.h / 2 } else { c.x + c.h / 2 }, c.y + c.h / 2, c.h / 2 - 3, if on { DARK_TEXT } else { DIM });
+                cv.circle(
+                    if on { c.right() - c.h / 2 } else { c.x + c.h / 2 },
+                    c.y + c.h / 2,
+                    c.h / 2 - 3,
+                    if on { DARK_TEXT } else { DIM },
+                );
             }
             RowKind::Info => {
                 // what the line says, at the right; the small font when the normal one does not fit
@@ -1144,11 +1415,15 @@ impl Ui {
             RowKind::Link => {
                 let open = matches!(it, Item::Open(_));
                 // a pair that is measured between the two sources shown is marked: a tap takes it away again
-                let added = matches!(it, Item::MeasPair(k) if self.m.meas2.contains(&(k, self.sources.a, self.sources.b)));
+                let added =
+                    matches!(it, Item::MeasPair(k) if self.m.meas2.contains(&(k, self.sources.a, self.sources.b)));
                 btn(cv, c, if added { mix(BTN, ACCENT, 50) } else { BTN }, if added { ACCENT } else { BTN_BORDER });
                 if added {
                     let (kx, ky) = (c.right() - 30, c.y + c.h / 2);
-                    for d in 0..2 { cv.line(kx, ky + d, kx + 5, ky + 5 + d, ACCENT); cv.line(kx + 5, ky + 5 + d, kx + 14, ky - 5 + d, ACCENT); }
+                    for d in 0..2 {
+                        cv.line(kx, ky + d, kx + 5, ky + 5 + d, ACCENT);
+                        cv.line(kx + 5, ky + 5 + d, kx + 14, ky - 5 + d, ACCENT);
+                    }
                 }
                 let tail = if it == Item::MathExprEdit { self.value(Item::MathExprI) } else { String::new() };
                 let room = c.w - 40 - if tail.is_empty() { 0 } else { (f.s.width(&tail) + 12).min(c.w / 2) };
@@ -1224,7 +1499,9 @@ impl Ui {
         for (i, t) in g.tabs.iter().enumerate() {
             if t.contains(x, y) {
                 // a tab that holds nothing now is not opened
-                if self.sheet_spec(self.menu).is_some_and(|s| s.tabs.get(i).is_some_and(SheetTab::holds)) { self.sheet_set_tab(i); }
+                if self.sheet_spec(self.menu).is_some_and(|s| s.tabs.get(i).is_some_and(SheetTab::holds)) {
+                    self.sheet_set_tab(i);
+                }
                 return true;
             }
         }
@@ -1237,7 +1514,11 @@ impl Ui {
                 }
                 self.studio.md.armed = None;
                 // the pinned sources of the pair page open their list
-                if matches!(it, Item::MeasSrc | Item::MeasSrcB) { self.open_picker(it); } else { self.activate(it); }
+                if matches!(it, Item::MeasSrc | Item::MeasSrcB) {
+                    self.open_picker(it);
+                } else {
+                    self.activate(it);
+                }
                 return true;
             }
         }
@@ -1273,7 +1554,9 @@ impl Ui {
                 self.select_option(it, &opts[k]);
             }
             RowKind::Pick if Self::sheet_pick_plain(it) => {
-                if row.ctrl.contains(x, y) || row.label.contains(x, y) { self.open_picker(it); }
+                if row.ctrl.contains(x, y) || row.label.contains(x, y) {
+                    self.open_picker(it);
+                }
             }
             RowKind::Pick => {
                 let (mi, _, pl) = Self::value_parts(row.ctrl);
@@ -1299,8 +1582,11 @@ impl Ui {
             RowKind::Toggle => {
                 if let Item::RefShow(_) = it {
                     // Off | On like the others, but one activation is what flips it
-                    let want = if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !self.sheet_on(it) };
-                    if want != self.sheet_on(it) { self.activate(it); }
+                    let want =
+                        if row.ctrl.contains(x, y) { x >= row.ctrl.x + row.ctrl.w / 2 } else { !self.sheet_on(it) };
+                    if want != self.sheet_on(it) {
+                        self.activate(it);
+                    }
                 } else if it == Item::SimShow {
                     // one step is the switch: its value is the slot's name, never "On" or "Off", and selecting an
                     // option stepped it eight times, back to where it was
@@ -1330,10 +1616,13 @@ impl Ui {
         let pages = n.div_ceil(per).max(1);
         let page = self.sheet_page(self.pick.map(|p| p.it)).min(pages - 1);
         let w = (r.w - 2 * PAD - 8) / 2;
-        let cells = (page * per..n.min((page + 1) * per)).enumerate().map(|(i, k)| {
-            let (col, row) = ((i / SHEET_MAX_ROWS) as i32, (i % SHEET_MAX_ROWS) as i32);
-            (k, Rect::new(r.x + PAD + col * (w + 8), r.y + SHEET_HEAD + 6 + row * SHEET_ROW, w, SHEET_ROW - 4))
-        }).collect();
+        let cells = (page * per..n.min((page + 1) * per))
+            .enumerate()
+            .map(|(i, k)| {
+                let (col, row) = ((i / SHEET_MAX_ROWS) as i32, (i % SHEET_MAX_ROWS) as i32);
+                (k, Rect::new(r.x + PAD + col * (w + 8), r.y + SHEET_HEAD + 6 + row * SHEET_ROW, w, SHEET_ROW - 4))
+            })
+            .collect();
         (cells, page, pages)
     }
 
@@ -1352,7 +1641,11 @@ impl Ui {
         let f = self.fonts();
         let r = self.sheet_rect();
         cv.hline(r.x + 6, r.right() - 7, r.bottom() - SHEET_FOOT, LINE);
-        for (b, label) in self.sheet_pager(page, pages).into_iter().zip(["Previous".to_string(), format!("Next \u{b7} {}/{}", page + 1, pages)]) {
+        for (b, label) in self
+            .sheet_pager(page, pages)
+            .into_iter()
+            .zip(["Previous".to_string(), format!("Next \u{b7} {}/{}", page + 1, pages)])
+        {
             btn(cv, b, BTN, BTN_BORDER);
             cv.text_in(&f.m, b, 1, &label, TEXT);
         }
@@ -1405,10 +1698,13 @@ impl Ui {
 
     /// The sources on the screen: channels that are on and references that are shown.
     pub(super) fn sheet_shown_sources(&self) -> Vec<WaveId> {
-        self.wave_ids().into_iter().filter(|id| match *id {
-            WaveId::Ch(c) => c < n_ch() && self.m.ch[c].on,
-            WaveId::Ref(i) => self.refs.get(i).and_then(|r| r.as_ref()).is_some_and(|r| r.on),
-        }).collect()
+        self.wave_ids()
+            .into_iter()
+            .filter(|id| match *id {
+                WaveId::Ch(c) => c < n_ch() && self.m.ch[c].on,
+                WaveId::Ref(i) => self.refs.get(i).and_then(|r| r.as_ref()).is_some_and(|r| r.on),
+            })
+            .collect()
     }
 
     /// Opens the add flow with a source that is on the screen.
@@ -1439,11 +1735,19 @@ impl Ui {
     pub(super) fn sheet_add_entries(&self) -> Vec<AddEntry> {
         let q = self.sheet.search.trim().to_ascii_lowercase();
         let mut seen: Vec<u16> = Vec::new();
-        super::meascatalog::add_entries().into_iter().filter(|e| {
-            if q.is_empty() { return e.group == self.sheet.add_group; }
-            // a measurement that several categories list is found once
-            e.name.to_ascii_lowercase().contains(&q) && !seen.contains(&e.cat.id) && { seen.push(e.cat.id); true }
-        }).collect()
+        super::meascatalog::add_entries()
+            .into_iter()
+            .filter(|e| {
+                if q.is_empty() {
+                    return e.group == self.sheet.add_group;
+                }
+                // a measurement that several categories list is found once
+                e.name.to_ascii_lowercase().contains(&q) && !seen.contains(&e.cat.id) && {
+                    seen.push(e.cat.id);
+                    true
+                }
+            })
+            .collect()
     }
 
     /// Geometry of the add page: source chips, filter chips, the list rows and the pager.
@@ -1454,7 +1758,12 @@ impl Ui {
         let w = r.w - 2 * PAD;
         let n = shown.len().clamp(1, 8) as i32;
         let cw = (w - (n - 1) * 4) / n;
-        let chips = shown.iter().take(8).enumerate().map(|(i, &id)| (id, Rect::new(r.x + PAD + i as i32 * (cw + 4), y0 + 2, cw, 40))).collect();
+        let chips = shown
+            .iter()
+            .take(8)
+            .enumerate()
+            .map(|(i, &id)| (id, Rect::new(r.x + PAD + i as i32 * (cw + 4), y0 + 2, cw, 40)))
+            .collect();
         // the category as in a menu row: - name + (the name opens the list of them), and Find at its right
         let find = Rect::new(r.x + PAD + w - 76, y0 + 46, 76, 44);
         let (cat_minus, cat_value, cat_plus) = Self::value_parts(Rect::new(r.x + PAD, y0 + 46, w - 76 - 6, 44));
@@ -1476,8 +1785,24 @@ impl Ui {
             .filter(|(r, _)| r.bottom() > list.y && r.y < list.bottom())
             .collect();
         let none = Rect::new(0, 0, 0, 0);
-        let cat_rows = (0..super::meascatalog::add_categories().count()).map(|i| Rect::new(list.x, list.y + i as i32 * 48, list.w, 44)).collect();
-        AddGeo { chips, cat_minus, cat_value, cat_plus, cat_rows, find, rows, heads, page: 0, pages: 1, prev: none, next: none, list }
+        let cat_rows = (0..super::meascatalog::add_categories().count())
+            .map(|i| Rect::new(list.x, list.y + i as i32 * 48, list.w, 44))
+            .collect();
+        AddGeo {
+            chips,
+            cat_minus,
+            cat_value,
+            cat_plus,
+            cat_rows,
+            find,
+            rows,
+            heads,
+            page: 0,
+            pages: 1,
+            prev: none,
+            next: none,
+            list,
+        }
     }
 
     /// The button beside the close button of the quick Add panel: it opens the Measure page of every layout, with
@@ -1491,7 +1816,9 @@ impl Ui {
     pub(super) fn studio_meas_page(&mut self, page: bool) {
         self.studio.meas_page = page;
         self.studio.md.info = None;
-        if !page { self.sheet_add_open(); }
+        if !page {
+            self.sheet_add_open();
+        }
     }
 
     pub(super) fn draw_sheet_add(&self, cv: &mut Canvas) {
@@ -1503,7 +1830,13 @@ impl Ui {
         let g = self.sheet_add_geo();
         if g.chips.is_empty() {
             let (r, _, _) = self.sheet_chrome();
-            cv.text_in(&f.m, Rect::new(r.x + PAD, r.y + SHEET_HEAD + 2, r.w - 2 * PAD, 40), 0, "No source is on: turn on a channel", DIM);
+            cv.text_in(
+                &f.m,
+                Rect::new(r.x + PAD, r.y + SHEET_HEAD + 2, r.w - 2 * PAD, 40),
+                0,
+                "No source is on: turn on a channel",
+                DIM,
+            );
         }
         for &(id, c) in &g.chips {
             let on = id == self.sources.a;
@@ -1521,7 +1854,13 @@ impl Ui {
         btn(cv, g.cat_value, BTN, BTN_BORDER);
         let name = names[self.sheet.add_group.min(names.len() - 1)];
         cv.set_clip(Rect::new(g.cat_value.x + 6, g.cat_value.y, g.cat_value.w - 30, g.cat_value.h));
-        cv.text_in(if searching { &f.s } else { &f.m }, Rect::new(g.cat_value.x + 10, g.cat_value.y, g.cat_value.w - 34, g.cat_value.h), 0, if searching { "Results" } else { name }, if searching { DIM } else { TEXT });
+        cv.text_in(
+            if searching { &f.s } else { &f.m },
+            Rect::new(g.cat_value.x + 10, g.cat_value.y, g.cat_value.w - 34, g.cat_value.h),
+            0,
+            if searching { "Results" } else { name },
+            if searching { DIM } else { TEXT },
+        );
         cv.no_clip();
         chevron_down(cv, g.cat_value.x + g.cat_value.w - 18, g.cat_value.y + g.cat_value.h / 2 - 3, DIM);
         btn(cv, g.cat_plus, BTN, BTN_BORDER);
@@ -1529,7 +1868,13 @@ impl Ui {
         btn(cv, g.find, if searching { ACCENT } else { BTN }, if searching { ACCENT } else { BTN_BORDER });
         let label = if searching { format!("\u{d7} {}", self.sheet.search.trim()) } else { "Find".to_string() };
         cv.set_clip(g.find);
-        cv.text_in(&f.s, Rect::new(g.find.x + 3, g.find.y, g.find.w - 6, g.find.h), 1, &label, if searching { DARK_TEXT } else { TEXT });
+        cv.text_in(
+            &f.s,
+            Rect::new(g.find.x + 3, g.find.y, g.find.w - 6, g.find.h),
+            1,
+            &label,
+            if searching { DARK_TEXT } else { TEXT },
+        );
         cv.no_clip();
         let entries = self.sheet_add_entries();
         if entries.is_empty() {
@@ -1549,15 +1894,27 @@ impl Ui {
             cv.round(g.list.inset(-2), 6, PANEL_BG, 255);
             for (i, r) in g.cat_rows.iter().enumerate() {
                 let on = i == self.sheet.add_group;
-                if on { cv.round(*r, 5, ACCENT, 255); } else { btn(cv, *r, BTN, BTN_BORDER); }
-                cv.text_in(&f.m, Rect::new(r.x + 12, r.y, r.w - 12, r.h), 0, names[i], if on { DARK_TEXT } else { TEXT });
+                if on {
+                    cv.round(*r, 5, ACCENT, 255);
+                } else {
+                    btn(cv, *r, BTN, BTN_BORDER);
+                }
+                cv.text_in(
+                    &f.m,
+                    Rect::new(r.x + 12, r.y, r.w - 12, r.h),
+                    0,
+                    names[i],
+                    if on { DARK_TEXT } else { TEXT },
+                );
             }
         }
         // a scrollbar, since there is no pager
         let total = self.add_layout(g.list).2;
         if total > g.list.h {
             let (x, th) = (g.list.right() - 3, (g.list.h * g.list.h / total).max(20));
-            let ty = g.list.y + (g.list.h - th) * self.studio.md.tile_scroll.clamp(0, (total - g.list.h).max(1)) / (total - g.list.h).max(1);
+            let ty = g.list.y
+                + (g.list.h - th) * self.studio.md.tile_scroll.clamp(0, (total - g.list.h).max(1))
+                    / (total - g.list.h).max(1);
             cv.fill(Rect::new(x, ty, 2, th), DIM);
         }
     }
@@ -1578,12 +1935,23 @@ impl Ui {
         if self.sheet.add_cats {
             // the list is open: a row chooses, a tap elsewhere only closes it
             self.sheet.add_cats = false;
-            if let Some(i) = g.cat_rows.iter().position(|r| r.contains(x, y)) { self.sheet_add_category(i as i32); }
+            if let Some(i) = g.cat_rows.iter().position(|r| r.contains(x, y)) {
+                self.sheet_add_category(i as i32);
+            }
             return true;
         }
-        if g.cat_value.contains(x, y) { self.sheet.add_cats = true; return true; }
-        if g.cat_minus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 - 1).rem_euclid(n)); return true; }
-        if g.cat_plus.contains(x, y) { self.sheet_add_category((self.sheet.add_group as i32 + 1).rem_euclid(n)); return true; }
+        if g.cat_value.contains(x, y) {
+            self.sheet.add_cats = true;
+            return true;
+        }
+        if g.cat_minus.contains(x, y) {
+            self.sheet_add_category((self.sheet.add_group as i32 - 1).rem_euclid(n));
+            return true;
+        }
+        if g.cat_plus.contains(x, y) {
+            self.sheet_add_category((self.sheet.add_group as i32 + 1).rem_euclid(n));
+            return true;
+        }
         if g.find.contains(x, y) {
             if self.sheet.search.trim().is_empty() {
                 self.wlan.osk = Some(wlan::Osk::for_search(""));
@@ -1689,7 +2057,6 @@ impl Ui {
         }
         self.relayout();
     }
-
 }
 
 /// The parts of the add-measurement page.

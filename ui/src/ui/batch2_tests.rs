@@ -262,7 +262,11 @@ fn default_layout_has_a_ref_card_that_makes_a_ref_active() {
     u.refs[3] = Some(sine_ref(3, 2000, 1e-6));
     u.relayout();
     let r = u.card_layout().refs.expect("a shown ref gives a REF card");
-    for c in u.card_layout().ch { if c.w > 0 { assert!(c.right() <= r.x, "the card does not overlap the channels"); } }
+    for c in u.card_layout().ch {
+        if c.w > 0 {
+            assert!(c.right() <= r.x, "the card does not overlap the channels");
+        }
+    }
     u.tap(r.x + r.w / 2, r.y + r.h / 2);
     assert_eq!(u.selected_workspace_source(), Some(WaveId::Ref(1)));
     u.tap(r.x + r.w / 2, r.y + r.h / 2);
@@ -398,7 +402,10 @@ fn default_has_upstreams_trigger_side_effects_and_studio_and_minimal_do_not() {
     let mut u = fresh(Layout::Default);
     u.m.trig_type = TrigType::Pulse;
     u.set_dec_proto(Proto::SPI);
-    assert!(matches!(u.m.trig_type, TrigType::Edge | TrigType::NthEdge), "Default: a protocol moves the trigger onto its traffic");
+    assert!(
+        matches!(u.m.trig_type, TrigType::Edge | TrigType::NthEdge),
+        "Default: a protocol moves the trigger onto its traffic"
+    );
     for layout in [Layout::Minimal, Layout::Studio] {
         let mut u = fresh(layout);
         only_ch1(&mut u);
@@ -444,7 +451,15 @@ fn the_switching_page_is_a_table_with_statistics_and_a_trajectory() {
     let v: Vec<f32> = (0..n)
         .map(|k| {
             let t = at(k);
-            if t < 1e-6 || t >= 6.1e-6 { 10.0 } else if t < 1.15e-6 { -0.6 } else if t < 6.0e-6 { -0.6 } else { 10.0 }
+            if t < 1e-6 || t >= 6.1e-6 {
+                10.0
+            } else if t < 1.15e-6 {
+                -0.6
+            } else if t < 6.0e-6 {
+                -0.6
+            } else {
+                10.0
+            }
         })
         .collect();
     let i: Vec<f32> = (0..n).map(|k| if (1.05e-6..6.05e-6).contains(&at(k)) { 0.4 } else { 0.0 }).collect();
@@ -459,7 +474,9 @@ fn the_switching_page_is_a_table_with_statistics_and_a_trajectory() {
     u.analyzer_update();
     let rows = &u.azr.power_table;
     let names: Vec<&str> = rows.iter().map(|r| r[0].as_str()).collect();
-    for want in ["Turn-on energy", "Turn-off loss", "Conduction energy", "Total energy", "Total loss", "Switching frequency"] {
+    for want in
+        ["Turn-on energy", "Turn-off loss", "Conduction energy", "Total energy", "Total loss", "Switching frequency"]
+    {
         assert!(names.contains(&want), "{want} in {names:?}");
     }
     let cell = |name: &str, c: usize| rows.iter().find(|r| r[0] == name).map(|r| r[c].clone()).unwrap();

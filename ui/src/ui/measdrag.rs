@@ -92,7 +92,9 @@ impl Ui {
     /// The row of the table under a point: the measurement and the rectangle of the row.
     fn md_row_at(&self, x: i32, y: i32) -> Option<(MeasKey, Rect)> {
         let g = self.studio_panel_geo()?;
-        if !g.list.contains(x, y) || !self.studio_detailed() { return None; }
+        if !g.list.contains(x, y) || !self.studio_detailed() {
+            return None;
+        }
         let rows = self.meas_rows();
         let listed = self.studio_listed(&rows);
         let first = self.studio_first(listed.len(), g.page);
@@ -103,7 +105,9 @@ impl Ui {
 
     /// The Undo bar: the bottom of the list.
     pub(super) fn md_undo_bar(&self) -> Option<(Rect, Rect)> {
-        if self.studio.md.undo.is_none() && self.studio.md.src_undo.is_none() { return None; }
+        if self.studio.md.undo.is_none() && self.studio.md.src_undo.is_none() {
+            return None;
+        }
         // with the panel it is at the foot of the list; without it, under the top bar like the hide bar
         let bar = match self.studio_panel_geo() {
             Some(g) => Rect::new(g.list.x, g.list.bottom() - BAR_H, g.list.w, BAR_H),
@@ -118,11 +122,20 @@ impl Ui {
 
     /// The math or reference chip of the bottom bar under a point.
     pub(super) fn md_chip_at(&self, x: i32, y: i32) -> Option<HoldOn> {
-        if self.m.layout != Layout::Studio || self.full_on() { return None; }
+        if self.m.layout != Layout::Studio || self.full_on() {
+            return None;
+        }
         let b = self.studio_bottom();
-        if let Some(k) = (0..NMATH).find(|&k| b.math[k].w > 0 && Self::hit40(b.math[k]).contains(x, y)) { return Some(HoldOn::Math(k)); }
-        if let Some(c) = (0..n_ch()).find(|&c| b.ch[c].w > 0 && Self::hit40(b.ch[c]).contains(x, y)) { return Some(HoldOn::Chan(c)); }
-        self.shown_refs().into_iter().find(|&i| b.refs[i].w > 0 && Self::hit40(b.refs[i]).contains(x, y)).map(HoldOn::Ref)
+        if let Some(k) = (0..NMATH).find(|&k| b.math[k].w > 0 && Self::hit40(b.math[k]).contains(x, y)) {
+            return Some(HoldOn::Math(k));
+        }
+        if let Some(c) = (0..n_ch()).find(|&c| b.ch[c].w > 0 && Self::hit40(b.ch[c]).contains(x, y)) {
+            return Some(HoldOn::Chan(c));
+        }
+        self.shown_refs()
+            .into_iter()
+            .find(|&i| b.refs[i].w > 0 && Self::hit40(b.refs[i]).contains(x, y))
+            .map(HoldOn::Ref)
     }
 
     // ------------------------------------------------------------------------------------------------ remove, undo
@@ -131,7 +144,10 @@ impl Ui {
     pub(super) fn md_remove(&mut self, key: MeasKey) {
         let Some(index) = self.studio_index(key) else { return };
         let pinned = self.studio_is_pinned(key);
-        let own = match key { MeasKey::One(k, id) => self.meas_own.rows.get(&(k, id)).copied(), _ => None };
+        let own = match key {
+            MeasKey::One(k, id) => self.meas_own.rows.get(&(k, id)).copied(),
+            _ => None,
+        };
         self.studio.md.undo = Some(Undo { key, index, pinned, own, at: self.now });
         self.studio_set_pin(key, false);
         self.remove_measurement(index);
@@ -144,7 +160,9 @@ impl Ui {
             MeasKey::One(k, id) => {
                 let at = u.index.min(self.m.meas.len());
                 self.m.meas.insert(at, (k, id));
-                if let Some(o) = u.own { self.meas_own.rows.insert((k, id), o); }
+                if let Some(o) = u.own {
+                    self.meas_own.rows.insert((k, id), o);
+                }
             }
             MeasKey::Pair(k, a, b) => {
                 let at = u.index.saturating_sub(self.m.meas.len()).min(self.m.meas2.len());
@@ -155,7 +173,9 @@ impl Ui {
                 self.m.cat.insert(at, (i, a, b, c, d));
             }
         }
-        if u.pinned { self.studio_set_pin(u.key, true); }
+        if u.pinned {
+            self.studio_set_pin(u.key, true);
+        }
         self.clear_measurement_statistics();
         self.relayout();
     }
@@ -164,15 +184,23 @@ impl Ui {
 
     /// Every frame: the Undo bar times out, a short swipe springs back, a held finger picks the badge up.
     pub(super) fn md_tick(&mut self) {
-        if self.studio.md.undo.is_some_and(|u| self.now - u.at > UNDO_S) { self.studio.md.undo = None; }
-        if self.studio.md.src_undo.is_some_and(|u| self.now - u.at > UNDO_S) { self.studio.md.src_undo = None; }
-        if self.studio.md.hide_undo.is_some_and(|t| self.now - t > UNDO_S) { self.studio.md.hide_undo = None; }
+        if self.studio.md.undo.is_some_and(|u| self.now - u.at > UNDO_S) {
+            self.studio.md.undo = None;
+        }
+        if self.studio.md.src_undo.is_some_and(|u| self.now - u.at > UNDO_S) {
+            self.studio.md.src_undo = None;
+        }
+        if self.studio.md.hide_undo.is_some_and(|t| self.now - t > UNDO_S) {
+            self.studio.md.hide_undo = None;
+        }
         if let Some((key, off)) = self.studio.md.spring {
             let off = off * 0.6;
             self.studio.md.spring = if off.abs() < 2.0 { None } else { Some((key, off)) };
         }
         let Some(h) = self.studio.md.hold else { return };
-        if self.now - h.at < LONG_PRESS || (h.x - h.x0).abs().max((h.y - h.y0).abs()) > HOLD_SLOP { return; }
+        if self.now - h.at < LONG_PRESS || (h.x - h.x0).abs().max((h.y - h.y0).abs()) > HOLD_SLOP {
+            return;
+        }
         self.studio.md.hold = None;
         self.studio.md.cand = None;
         self.studio.drag = match h.on {
@@ -212,19 +240,27 @@ impl Ui {
         // a tile of the Add measurement panel: it follows the finger once it has moved
         if self.menu_open && self.menu == MenuId::MeasAdd && self.sheet_active() {
             let g = self.sheet_add_geo();
-            if let Some(&(k, _)) = g.rows.iter().find(|(_, r)| r.contains(x, y) && !Self::tile_info_rect(*r).contains(x, y)) {
+            if let Some(&(k, _)) =
+                g.rows.iter().find(|(_, r)| r.contains(x, y) && !Self::tile_info_rect(*r).contains(x, y))
+            {
                 self.studio.drag = Some(StudioDrag::Tile { k, x0: x, y0: y, x, y, moved: false });
                 return true;
             }
             return false;
         }
-        if self.menu_open || self.studio.view == StudioView::Sim { return false; }
+        if self.menu_open || self.studio.view == StudioView::Sim {
+            return false;
+        }
         // the Undo bars are buttons
         if let Some((bar, _)) = self.md_undo_bar() {
-            if bar.contains(x, y) { return self.studio_eat(x, y); }
+            if bar.contains(x, y) {
+                return self.studio_eat(x, y);
+            }
         }
         if let Some((bar, _)) = self.md_hide_bar() {
-            if bar.contains(x, y) { return self.studio_eat(x, y); }
+            if bar.contains(x, y) {
+                return self.studio_eat(x, y);
+            }
         }
         // a badge: a tap opens its popup, a hold picks it up
         if self.studio_badges_visible() && self.studio_row().contains(x, y) {
@@ -246,8 +282,11 @@ impl Ui {
             if let Some(g) = self.studio_panel_geo().filter(|g| g.list.contains(x, y)) {
                 // the columns fit, so there is no sideways scroll: a clear drag to the left swipes the row away instead
                 let hmax = self.detail_hmax(g.list.w);
-                if hmax > 0 { self.studio.md.hdown = Some((x, y, self.studio.panel.hx.clamp(0, hmax))); }
-                else if let Some((key, _)) = self.md_row_at(x, y) { self.studio.md.cand = Some((key, x, y)); }
+                if hmax > 0 {
+                    self.studio.md.hdown = Some((x, y, self.studio.panel.hx.clamp(0, hmax)));
+                } else if let Some((key, _)) = self.md_row_at(x, y) {
+                    self.studio.md.cand = Some((key, x, y));
+                }
             }
         }
         false
@@ -255,7 +294,10 @@ impl Ui {
 
     /// The finger moved. True when a gesture has it; the scroll of the list is left to the caller otherwise.
     pub(super) fn md_move(&mut self, x: i32, y: i32) -> bool {
-        if let Some(h) = &mut self.studio.md.hold { h.x = x; h.y = y; }
+        if let Some(h) = &mut self.studio.md.hold {
+            h.x = x;
+            h.y = y;
+        }
         match self.studio.drag {
             Some(StudioDrag::Scroll { .. }) if self.studio.md.hdown.is_some() => {
                 let (x0, y0, hx0) = self.studio.md.hdown.unwrap_or_default();
@@ -290,7 +332,10 @@ impl Ui {
                 self.studio.md.swipe = Some((key, (x - x0).min(0)));
                 true
             }
-            Some(StudioDrag::BadgeDrag { key, .. }) => { self.studio.drag = Some(StudioDrag::BadgeDrag { key, x, y }); true }
+            Some(StudioDrag::BadgeDrag { key, .. }) => {
+                self.studio.drag = Some(StudioDrag::BadgeDrag { key, x, y });
+                true
+            }
             Some(StudioDrag::Tile { k, x0, y0, moved, .. }) => {
                 // a mostly vertical drag scrolls the tiles; a sideways one carries the tile to a trace
                 if let Some((sy0, s0)) = self.studio.md.tile_drag {
@@ -309,7 +354,11 @@ impl Ui {
             }
             Some(StudioDrag::Eat { .. }) if self.studio.md.hold.is_some() => {
                 // a badge or the Undo bar: a finger that leaves the hold is no hold
-                if let Some(h) = self.studio.md.hold { if (x - h.x0).abs().max((y - h.y0).abs()) > HOLD_SLOP { self.studio.md.hold = None; } }
+                if let Some(h) = self.studio.md.hold {
+                    if (x - h.x0).abs().max((y - h.y0).abs()) > HOLD_SLOP {
+                        self.studio.md.hold = None;
+                    }
+                }
                 false
             }
             _ => false,
@@ -333,19 +382,29 @@ impl Ui {
                 let dx = (x - x0).min(0);
                 self.studio.md.swipe = None;
                 let w = self.studio_panel_geo().map_or(240, |g| g.list.w);
-                if -dx >= (w * 2 / 5).max(80) { self.md_remove(key); } else { self.studio.md.spring = Some((key, dx as f32)); }
+                if -dx >= (w * 2 / 5).max(80) {
+                    self.md_remove(key);
+                } else {
+                    self.studio.md.spring = Some((key, dx as f32));
+                }
                 true
             }
             StudioDrag::BadgeDrag { key, .. } => {
                 // off the strip: unpinned
-                if !self.studio_row().contains(x, y) { self.studio_set_pin(key, false); }
+                if !self.studio_row().contains(x, y) {
+                    self.studio_set_pin(key, false);
+                }
                 true
             }
             StudioDrag::Tile { k, moved, .. } => {
                 let scrolled = std::mem::take(&mut self.studio.md.tile_scrolled);
                 self.studio.md.tile_drag = None;
-                if scrolled { return true; }
-                if !moved { return false; }
+                if scrolled {
+                    return true;
+                }
+                if !moved {
+                    return false;
+                }
                 self.md_drop_tile(k, x, y);
                 true
             }
@@ -363,22 +422,35 @@ impl Ui {
     /// The swipe down: a badge is removed, a channel, ref or math channel is turned off; the Undo bar brings it back.
     fn md_swipe_down(&mut self, on: HoldOn) {
         match on {
-            HoldOn::Badge(key) => { self.md_remove(key); self.studio.md.src_undo = None; }
+            HoldOn::Badge(key) => {
+                self.md_remove(key);
+                self.studio.md.src_undo = None;
+            }
             HoldOn::Chan(c) => {
-                if !self.m.ch[c].on { return; }
+                if !self.m.ch[c].on {
+                    return;
+                }
                 self.workspace_action(Action::Source(WaveId::Ch(c)));
-                if self.m.ch[c].on { return; }
+                if self.m.ch[c].on {
+                    return;
+                }
                 self.md_src_undo(on, None);
             }
             HoldOn::Ref(i) => {
-                if !self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on) { return; }
+                if !self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on) {
+                    return;
+                }
                 self.workspace_action(Action::Source(WaveId::Ref(i)));
-                if self.refs[i].as_ref().is_some_and(|r| r.on) { return; }
+                if self.refs[i].as_ref().is_some_and(|r| r.on) {
+                    return;
+                }
                 self.md_src_undo(on, None);
             }
             HoldOn::Math(k) => {
                 let op = self.m.math_ch(k).op;
-                if op == MathOp::Off { return; }
+                if op == MathOp::Off {
+                    return;
+                }
                 self.math_turn_off(k);
                 self.md_src_undo(on, Some(op));
             }
@@ -393,14 +465,22 @@ impl Ui {
     /// Undo of a swipe down: the source is on again.
     pub(super) fn md_src_restore(&mut self, s: SrcUndo) {
         match s.on {
-            HoldOn::Chan(c) => { self.activate_live_channel(c); }
+            HoldOn::Chan(c) => {
+                self.activate_live_channel(c);
+            }
             HoldOn::Ref(i) => {
-                if let Some(r) = self.refs[i].as_mut() { r.on = true; }
+                if let Some(r) = self.refs[i].as_mut() {
+                    r.on = true;
+                }
                 self.select_workspace_source(WaveId::Ref(i));
             }
             HoldOn::Math(k) => {
                 if let Some(op) = s.op {
-                    if k == self.m.math_sel { self.m.math = op; } else { self.m.maths[k].op = op; }
+                    if k == self.m.math_sel {
+                        self.m.math = op;
+                    } else {
+                        self.m.maths[k].op = op;
+                    }
                     self.settings_changed();
                 }
             }
@@ -424,9 +504,13 @@ impl Ui {
     /// The channel a tile dropped at a point is for: its trace (the lane it is in), its badge in the lane, or its chip
     /// in the bottom bar.
     pub(super) fn md_tile_target(&self, x: i32, y: i32) -> Option<usize> {
-        if let Some(&(c, _)) = self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)) { return Some(c); }
+        if let Some(&(c, _)) = self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)) {
+            return Some(c);
+        }
         let b = self.studio_bottom();
-        if let Some(c) = (0..n_ch()).find(|&c| b.ch[c].w > 0 && b.ch[c].contains(x, y)) { return Some(c); }
+        if let Some(c) = (0..n_ch()).find(|&c| b.ch[c].w > 0 && b.ch[c].contains(x, y)) {
+            return Some(c);
+        }
         let lane = self.plot.wins.iter().position(|a| a.contains(x, y))?;
         match self.trace_sources().get(lane)? {
             workspace::Trace::Channel(c) => Some(*c),
@@ -437,9 +521,15 @@ impl Ui {
     /// The rectangle that shows the channel under the finger: its lane, or its chip.
     fn md_tile_target_rect(&self, x: i32, y: i32) -> Option<(usize, Rect)> {
         let c = self.md_tile_target(x, y)?;
-        if let Some(&(_, r)) = self.studio.lane_badges.borrow().iter().find(|(k, r)| *k == c && Self::hit40(*r).contains(x, y)) { return Some((c, r)); }
+        if let Some(&(_, r)) =
+            self.studio.lane_badges.borrow().iter().find(|(k, r)| *k == c && Self::hit40(*r).contains(x, y))
+        {
+            return Some((c, r));
+        }
         let b = self.studio_bottom();
-        if b.ch[c].w > 0 && b.ch[c].contains(x, y) { return Some((c, b.ch[c])); }
+        if b.ch[c].w > 0 && b.ch[c].contains(x, y) {
+            return Some((c, b.ch[c]));
+        }
         let lane = self.plot.wins.iter().position(|a| a.contains(x, y))?;
         Some((c, self.plot.wins[lane]))
     }
@@ -462,7 +552,9 @@ impl Ui {
         self.studio.md.hide_undo?;
         // not while the Display sheet is open: its switch, under the finger, is the undo. The bar shows when the sheet
         // has closed
-        if self.menu_open && self.menu == MenuId::Display { return None; }
+        if self.menu_open && self.menu == MenuId::Display {
+            return None;
+        }
         let w = 300;
         let top = self.frame().top.bottom() + 6;
         let bar = Rect::new((self.scr.w - w) / 2, top, w, BAR_H);
@@ -473,14 +565,24 @@ impl Ui {
     pub(super) fn md_undo_tap(&mut self, x: i32, y: i32) -> bool {
         if let Some((bar, button)) = self.md_hide_bar() {
             if bar.contains(x, y) {
-                if button.contains(x, y) { self.studio.hide_badges = false; self.studio.md.hide_undo = None; self.relayout(); }
+                if button.contains(x, y) {
+                    self.studio.hide_badges = false;
+                    self.studio.md.hide_undo = None;
+                    self.relayout();
+                }
                 return true;
             }
         }
         let Some((bar, button)) = self.md_undo_bar() else { return false };
-        if !bar.contains(x, y) { return false; }
+        if !bar.contains(x, y) {
+            return false;
+        }
         if button.contains(x, y) {
-            if let Some(s) = self.studio.md.src_undo.take() { self.md_src_restore(s); } else { self.md_undo(); }
+            if let Some(s) = self.studio.md.src_undo.take() {
+                self.md_src_restore(s);
+            } else {
+                self.md_undo();
+            }
         }
         true
     }
@@ -489,21 +591,40 @@ impl Ui {
 
     /// The Undo bars, and what follows a finger that drags a badge or a tile.
     pub(super) fn draw_md_overlays(&self, cv: &mut Canvas) {
-        if self.m.layout != Layout::Studio { return; }
+        if self.m.layout != Layout::Studio {
+            return;
+        }
         let f = self.fonts();
         if let Some((bar, button)) = self.md_hide_bar() {
             cv.round(bar, 6, BTN_BORDER, 255);
             cv.round(bar.inset(1), 5, PANEL_BG, 255);
-            cv.text_in(&f.s, Rect::new(bar.x + 10, bar.y, button.x - bar.x - 14, bar.h), 0, "Measurements hidden", TEXT);
+            cv.text_in(
+                &f.s,
+                Rect::new(bar.x + 10, bar.y, button.x - bar.x - 14, bar.h),
+                0,
+                "Measurements hidden",
+                TEXT,
+            );
             btn(cv, button.inset(4), BTN, ACCENT);
             cv.text_in(&f.mb, button, 1, "Undo", ACCENT);
         }
-        let undo_of = self.studio.md.undo.map(|u| (self.md_key_label(u.key), u.at)).or_else(|| self.studio.md.src_undo.map(|s| (self.md_src_label(s.on), s.at)));
+        let undo_of = self
+            .studio
+            .md
+            .undo
+            .map(|u| (self.md_key_label(u.key), u.at))
+            .or_else(|| self.studio.md.src_undo.map(|s| (self.md_src_label(s.on), s.at)));
         if let (Some((bar, button)), Some((name, at))) = (self.md_undo_bar(), undo_of) {
             cv.round(bar, 6, BTN_BORDER, 255);
             cv.round(bar.inset(1), 5, PANEL_BG, 255);
             cv.set_clip(Rect::new(bar.x, bar.y, (button.x - bar.x).max(1), bar.h));
-            cv.text_in(&f.s, Rect::new(bar.x + 10, bar.y, button.x - bar.x - 14, bar.h), 0, &format!("Removed {name}"), TEXT);
+            cv.text_in(
+                &f.s,
+                Rect::new(bar.x + 10, bar.y, button.x - bar.x - 14, bar.h),
+                0,
+                &format!("Removed {name}"),
+                TEXT,
+            );
             cv.no_clip();
             // the time left, as a line along the bottom
             let left = (1.0 - ((self.now - at) / UNDO_S) as f32).clamp(0.0, 1.0);
@@ -520,7 +641,9 @@ impl Ui {
                 cv.round(tag, 6, if off { RED } else { ACCENT }, 255);
                 cv.round(tag.inset(1), 5, PANEL_BG, 245);
                 cv.text_in(&f.mb, tag, 1, &label, TEXT);
-                if off { cv.text_in(&f.s, Rect::new(tag.x, tag.bottom() + 2, tag.w, 18), 1, "Unpin", RED); }
+                if off {
+                    cv.text_in(&f.s, Rect::new(tag.x, tag.bottom() + 2, tag.w, 18), 1, "Unpin", RED);
+                }
             }
             Some(StudioDrag::Tile { k, x, y, moved: true, .. }) => {
                 if let Some((c, r)) = self.md_tile_target_rect(x, y) {

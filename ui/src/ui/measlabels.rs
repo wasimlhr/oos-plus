@@ -139,12 +139,22 @@ impl Ui {
         let a = self.plot.area;
         let w = f.s.width(text) + 10;
         let h = label_h(self);
-        let at = |cx: i32, y: i32| Rect::new((cx - w / 2).clamp(a.x + 2, (a.x + a.w - w - 2).max(a.x + 2)), (y - h / 2).clamp(a.y + 2, (a.y + a.h - h - 2).max(a.y + 2)), w, h);
-        let free = |r: Rect| !taken.iter().any(|t| r.x < t.right() && t.x < r.right() && r.y < t.bottom() && t.y < r.bottom());
+        let at = |cx: i32, y: i32| {
+            Rect::new(
+                (cx - w / 2).clamp(a.x + 2, (a.x + a.w - w - 2).max(a.x + 2)),
+                (y - h / 2).clamp(a.y + 2, (a.y + a.h - h - 2).max(a.y + 2)),
+                w,
+                h,
+            )
+        };
+        let free =
+            |r: Rect| !taken.iter().any(|t| r.x < t.right() && t.x < r.right() && r.y < t.bottom() && t.y < r.bottom());
         for dx in [0, 1, -1, 2, -2, 3, -3] {
             for dy in [0, 1, -1, 2, -2, 3, -3, 4, -4] {
                 let r = at(cx + dx * (w + 4), y + dy * (h + 2));
-                if free(r) { return r; }
+                if free(r) {
+                    return r;
+                }
             }
         }
         at(cx, y)
@@ -184,7 +194,10 @@ impl Ui {
         let Some(key) = self.studio.mark else { return };
         let gone = !self.studio_keys().contains(&key);
         let closed = self.studio.mark_menu && self.studio.popup.is_none() && !self.menu_open;
-        if gone || closed { self.studio.mark = None; self.studio.mark_menu = false; }
+        if gone || closed {
+            self.studio.mark = None;
+            self.studio.mark_menu = false;
+        }
     }
 
     fn label_col(&self, id: WaveId) -> Rgb {
@@ -230,7 +243,10 @@ impl Ui {
 
     pub(super) fn draw_meas_labels(&self, cv: &mut Canvas) {
         // Labels on trace shows the first few; a tap on a badge shows that one measurement whatever the switch says
-        let chosen = match self.studio.mark { Some(super::studio::MeasKey::One(k, id)) if self.m.layout == super::Layout::Studio => Some((k, id)), _ => None };
+        let chosen = match self.studio.mark {
+            Some(super::studio::MeasKey::One(k, id)) if self.m.layout == super::Layout::Studio => Some((k, id)),
+            _ => None,
+        };
         if !self.m.meas_labels && chosen.is_none() {
             return;
         }
@@ -242,8 +258,15 @@ impl Ui {
         let (tdiv, delay) = self.view();
         let t_lo = delay as f64 - 5.0 * tdiv as f64;
         let t_hi = delay as f64 + 5.0 * tdiv as f64;
-        let listed: Vec<(Meas, WaveId)> = self.m.meas.iter().copied().enumerate()
-            .filter(|&(i, e)| (self.m.meas_labels && i < MAX_LABELS) || chosen == Some(e)).map(|(_, e)| e).collect();
+        let listed: Vec<(Meas, WaveId)> = self
+            .m
+            .meas
+            .iter()
+            .copied()
+            .enumerate()
+            .filter(|&(i, e)| (self.m.meas_labels && i < MAX_LABELS) || chosen == Some(e))
+            .map(|(_, e)| e)
+            .collect();
         for (k, id) in listed {
             if !self.label_shows_lane(id) {
                 continue;
@@ -264,7 +287,12 @@ impl Ui {
                 Some(Mark::Level(l)) => {
                     let y = self.y_of_id(id, l as f32);
                     cv.dashed_hline(a.x, a.x + a.w - 1, y, 6, 4, col);
-                    pending.push((a.x + a.w * (3 + 2 * (levels % 3)) / 10, y - label_h(self) / 2 - 3, text.clone(), col));
+                    pending.push((
+                        a.x + a.w * (3 + 2 * (levels % 3)) / 10,
+                        y - label_h(self) / 2 - 3,
+                        text.clone(),
+                        col,
+                    ));
                     levels += 1;
                 }
                 Some(Mark::Vertical(lo, hi)) => {
@@ -289,7 +317,10 @@ impl Ui {
                 Some(Mark::Area(span)) => {
                     // every column of the screen (or of the cycle): from the 0 V line to the trace, in the source's colour
                     let (xa, xb) = match span {
-                        Some((t0, t1)) => (self.x_of_time((analysis_t0 + t0) as f32).max(a.x), self.x_of_time((analysis_t0 + t1) as f32).min(a.x + a.w - 1)),
+                        Some((t0, t1)) => (
+                            self.x_of_time((analysis_t0 + t0) as f32).max(a.x),
+                            self.x_of_time((analysis_t0 + t1) as f32).min(a.x + a.w - 1),
+                        ),
                         None => (a.x, a.x + a.w - 1),
                     };
                     let y0 = self.y_of_id(id, 0.0);
@@ -299,15 +330,25 @@ impl Ui {
                     for x in xa..=xb {
                         let t = delay as f64 + ((x - a.x) as f64 - a.w as f64 / 2.0) / ppd * tdiv as f64;
                         let i = ((t - wave_t0) / dt).round();
-                        if i < 0.0 || i as usize >= samp.len() { continue; }
+                        if i < 0.0 || i as usize >= samp.len() {
+                            continue;
+                        }
                         let v = samp[i as usize];
-                        if !v.is_finite() { continue; }
+                        if !v.is_finite() {
+                            continue;
+                        }
                         let y = self.y_of_id(id, v);
                         let (top, h) = (y.min(y0), (y - y0).abs());
-                        if h > 0 { cv.blend(Rect::new(x, top, 1, h), col, 70); }
+                        if h > 0 {
+                            cv.blend(Rect::new(x, top, 1, h), col, 70);
+                        }
                     }
                     cv.dashed_hline(xa, xb, y0, 4, 4, col);
-                    if span.is_some() { for x in [xa, xb] { cv.vline(x, a.y, a.y + a.h - 1, super::mix(super::BG, col, 140)); } }
+                    if span.is_some() {
+                        for x in [xa, xb] {
+                            cv.vline(x, a.y, a.y + a.h - 1, super::mix(super::BG, col, 140));
+                        }
+                    }
                     cv.restore_clip(outer);
                     pending.push(((xa + xb) / 2, y0 - label_h(self) - 6, text.clone(), col));
                 }
@@ -335,7 +376,9 @@ impl Ui {
             self.draw_label(cv, r, &text, col);
             placed.push(r);
         }
-        if !placed.is_empty() { *self.studio.label_rects.borrow_mut() = placed; }
+        if !placed.is_empty() {
+            *self.studio.label_rects.borrow_mut() = placed;
+        }
     }
 }
 

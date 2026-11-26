@@ -78,7 +78,11 @@ mod reference_search_navigation_tests {
             let mut ui = crate::ui::testkit::demo_ui();
             ui.m.layout = layout;
             ui.set_offline(true);
-            ui.refs[0] = Some(RefWave::test((0..1600).map(|i| if i % 16 < 8 { -1.0 } else { 1.0 }).collect::<Vec<_>>(), 2e-9, -7e-6));
+            ui.refs[0] = Some(RefWave::test(
+                (0..1600).map(|i| if i % 16 < 8 { -1.0 } else { 1.0 }).collect::<Vec<_>>(),
+                2e-9,
+                -7e-6,
+            ));
             ui.m.set_trigger_wave(WaveId::Ref(0), false);
             ui.m.trig_level = 0.0;
             ui.m.slope = Slope::Rise;
@@ -89,7 +93,8 @@ mod reference_search_navigation_tests {
             cv.au_start();
             ui.render(&mut cv);
             let texts = cv.au.take().unwrap();
-            let said = texts.into_iter().any(|e| matches!(e, crate::gfx::Au::Text { s, .. } if s.starts_with("after ")));
+            let said =
+                texts.into_iter().any(|e| matches!(e, crate::gfx::Au::Text { s, .. } if s.starts_with("after ")));
             assert_eq!(said, layout != Layout::Default, "{layout:?}");
             // the names of the columns, the number of the event, and the row that was tapped
             let (rect, _) = ui.table_rect(ui.search_events().len());
@@ -97,7 +102,16 @@ mod reference_search_navigation_tests {
             let mut cv = Canvas::new(ui.scr.w, ui.scr.h);
             cv.au_start();
             ui.render(&mut cv);
-            let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { crate::gfx::Au::Text { s, .. } => Some(s), _ => None }).collect();
+            let texts: Vec<String> = cv
+                .au
+                .take()
+                .unwrap()
+                .into_iter()
+                .filter_map(|e| match e {
+                    crate::gfx::Au::Text { s, .. } => Some(s),
+                    _ => None,
+                })
+                .collect();
             let has = |t: &str| texts.iter().any(|s| s == t);
             assert_eq!(has("Time") && has("#") && has("2"), layout != Layout::Default, "{layout:?}: {texts:?}");
             ui.m.run = RunState::Stop;
@@ -235,13 +249,19 @@ impl Ui {
     /// What an event of a bus search is: the match, with its value where it has one ("ID/Addr 0x123").
     pub(super) fn bus_search_what(&self, spec: super::addrail::SearchSpec) -> String {
         let name = bus_what_name(spec.bus);
-        if matches!(spec.bus, BusWhat::Id | BusWhat::Data) { format!("{name} 0x{:X}", spec.val) } else { name.to_string() }
+        if matches!(spec.bus, BusWhat::Id | BusWhat::Data) {
+            format!("{name} 0x{:X}", spec.val)
+        } else {
+            name.to_string()
+        }
     }
 
     fn search_names(&self) -> (String, &'static str) {
         match self.studio.search() {
             // (a bus search is of the active decoder, which has its own name in the list of decoders)
-            Some(spec) if self.m.layout == Layout::Studio && spec.kind == TrigType::Bus => (self.dec_tag(self.m.dec_sel), spec.kind.name()),
+            Some(spec) if self.m.layout == Layout::Studio && spec.kind == TrigType::Bus => {
+                (self.dec_tag(self.m.dec_sel), spec.kind.name())
+            }
             Some(spec) if self.m.layout == Layout::Studio => (self.wave_name(spec.src), spec.kind.name()),
             _ => (self.trigger_source_label(), self.m.trig_type.name()),
         }
@@ -311,11 +331,12 @@ impl Ui {
             .collect()
     }
 
-    /// The decoder events as text, one per line: time, decoder, content (SCPI).
+    /// The decoder events as text, one per line: index (from 1), time, decoder, content (SCPI).
     pub fn events_text(&self) -> String {
         self.decode_events()
             .iter()
-            .map(|r| format!("{:e},{},{},{}", r.t, r.who, r.text, if r.ok { "ok" } else { "error" }))
+            .enumerate()
+            .map(|(i, r)| format!("{},{:e},{},{},{}", i + 1, r.t, r.who, r.text, if r.ok { "ok" } else { "error" }))
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -348,7 +369,9 @@ impl Ui {
 
     /// The close button of the table head. Docked, the title strip of the view closes it: no button of its own.
     pub(super) fn table_close(&self, r: Rect) -> Rect {
-        if self.dock_on() { return Rect::new(r.x, r.y, 0, 0); }
+        if self.dock_on() {
+            return Rect::new(r.x, r.y, 0, 0);
+        }
         Rect::new(r.x + r.w - 46, r.y + 2, 42, HEAD_H - 4)
     }
 
@@ -373,7 +396,9 @@ impl Ui {
 
     /// A docked table too narrow for the title and the controls on one row.
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
-    pub(super) fn table_narrow(&self, r: Rect) -> bool { self.dock_on() && r.w < TABLE_NARROW_W }
+    pub(super) fn table_narrow(&self, r: Rect) -> bool {
+        self.dock_on() && r.w < TABLE_NARROW_W
+    }
 
     /// Height of the head of the table: the title. The rows scroll by the scroll bar, so a narrow view needs no row of
     /// Up / Dn controls under it.
@@ -399,13 +424,20 @@ impl Ui {
         match k {
             TableKind::Decode if self.decode_busy() => "Decoder events - Computing".into(),
             TableKind::Decode => format!("Decoder events \u{b7} {}", total),
-            TableKind::Search => if self.m.trig_ref.is_some() && self.reference_search_busy() { "Search \u{b7} computing\u{2026}".into() }
-                else {
+            TableKind::Search => {
+                if self.m.trig_ref.is_some() && self.reference_search_busy() {
+                    "Search \u{b7} computing\u{2026}".into()
+                } else {
                     // the list of a search of Studio has the name the top bar and the sheet give it, then its source:
                     // "Search CH2" under a sheet called "Search 1" read as another search (owner, 2026-11-20)
-                    let which = if self.studio_search_marks().is_some() { format!("{} \u{b7} ", self.studio.search_sel + 1) } else { String::new() };
+                    let which = if self.studio_search_marks().is_some() {
+                        format!("{} \u{b7} ", self.studio.search_sel + 1)
+                    } else {
+                        String::new()
+                    };
                     format!("Search {which}{} \u{b7} {}", self.search_names().0, self.search_total_text(total))
-                },
+                }
+            }
             TableKind::Segments => format!("Segments \u{b7} {}", total),
         }
     }
@@ -436,7 +468,9 @@ impl Ui {
             let row = |(i, t): (usize, f64)| {
                 let mut row = self.search_row(i, t);
                 // (the list of Minimal and Studio has the number alone in that column)
-                if own { row.who = format!("{}", i + 1); }
+                if own {
+                    row.who = format!("{}", i + 1);
+                }
                 row
             };
             self.search_events().iter().copied().enumerate().skip(top).take(fit).map(row).collect()
@@ -449,7 +483,9 @@ impl Ui {
     /// A finger on a divider between two columns (within 12 pixels of it, on the rows): which one.
     pub(super) fn table_col_grip(&self, x: i32, y: i32) -> Option<usize> {
         let (r, rows) = self.table_shown()?;
-        if !r.contains(x, y) || y < r.y + self.head_h(r) || x >= r.right() - scroll::BAR_W - 6 { return None; }
+        if !r.contains(x, y) || y < r.y + self.head_h(r) || x >= r.right() - scroll::BAR_W - 6 {
+            return None;
+        }
         let cols = self.table_col_x(&rows, r.w);
         (1..3).find(|&k| (x - (r.x + cols[k] - 8)).abs() <= 12)
     }
@@ -506,13 +542,23 @@ impl Ui {
             btn(cv, close, BTN, BTN_BORDER);
             cv.text_in(&f.mb, close, 1, "\u{d7}", TEXT);
         }
-        scroll::Bar { track: Rect::new(r.x + r.w - scroll::BAR_W - 2, r.y + self.head_h(r), scroll::BAR_W, fit as i32 * ROW_H), total: total as i32, shown: fit as i32, pos: top as i32 }.draw(cv);
+        scroll::Bar {
+            track: Rect::new(r.x + r.w - scroll::BAR_W - 2, r.y + self.head_h(r), scroll::BAR_W, fit as i32 * ROW_H),
+            total: total as i32,
+            shown: fit as i32,
+            pos: top as i32,
+        }
+        .draw(cv);
         if rows.is_empty() {
             let empty = if k == TableKind::Search && self.m.trig_ref.is_some() && !self.reference_search_supported() {
                 "This condition needs physical hardware channels"
-            } else if k == TableKind::Decode && self.decode_busy() { "Decoding the full reference record..." }
-            else if k == TableKind::Search && self.reference_search_busy() { "Searching the full reference record…" }
-            else { "nothing found in this record" };
+            } else if k == TableKind::Decode && self.decode_busy() {
+                "Decoding the full reference record..."
+            } else if k == TableKind::Search && self.reference_search_busy() {
+                "Searching the full reference record…"
+            } else {
+                "nothing found in this record"
+            };
             cv.text(&f.s, r.x + 12, r.y + self.head_h(r) + 18, empty, DIM);
         }
         let cols = self.table_col_x(&rows, r.w);
@@ -543,7 +589,14 @@ impl Ui {
                 cv.round(Rect::new(r.x + 4, y + 1, r.w - scroll::BAR_W - 10, ROW_H - 2), 4, mix(BAR, ACCENT, 60), 255);
             }
             // each column is cut at the next one: a column made narrow hides the end of its text, not its neighbour
-            for (k, (font, text, color)) in [(&f.s, si_digits(e.t, "s", digits), LABEL), (&f.s, e.who.clone(), DIM), (&f.sb, e.text.clone(), if e.ok { TEXT } else { RED })].into_iter().enumerate() {
+            for (k, (font, text, color)) in [
+                (&f.s, si_digits(e.t, "s", digits), LABEL),
+                (&f.s, e.who.clone(), DIM),
+                (&f.sb, e.text.clone(), if e.ok { TEXT } else { RED }),
+            ]
+            .into_iter()
+            .enumerate()
+            {
                 let right = if k < 2 { r.x + cols[k + 1] - 10 } else { end };
                 cv.set_clip(Rect::new(r.x + cols[k], y, (right - r.x - cols[k]).max(1), ROW_H));
                 cv.text(font, r.x + cols[k], y + 18, &text, color);
@@ -559,7 +612,9 @@ impl Ui {
         // the dividers: where a column can be taken and moved
         if !rows.is_empty() {
             let (y0, y1) = (r.y + self.head_h(r) + 2, r.y + self.head_h(r) + rows.len() as i32 * ROW_H - 2);
-            for k in 1..3 { cv.vline(r.x + cols[k] - 8, y0, y1, LINE); }
+            for k in 1..3 {
+                cv.vline(r.x + cols[k] - 8, y0, y1, LINE);
+            }
         }
     }
 
@@ -605,7 +660,9 @@ impl Ui {
         // Studio stops the scope and jumps; the others ask for it
         let mut stopped = false;
         if self.m.run == RunState::Run {
-            if self.m.layout != Layout::Studio { return self.toast("Stop the scope to go to an event"); }
+            if self.m.layout != Layout::Studio {
+                return self.toast("Stop the scope to go to an event");
+            }
             self.key(key::RUNSTOP);
             stopped = true;
         }
@@ -625,8 +682,11 @@ impl Ui {
         } else {
             self.m.delay = t as f32;
         }
-        if self.m.trig_ref.is_some() { self.refresh_stopped_reference(); }
-        else { self.settings_changed(); }
+        if self.m.trig_ref.is_some() {
+            self.refresh_stopped_reference();
+        } else {
+            self.settings_changed();
+        }
         self.toast(&if stopped { "Stopped to jump".to_string() } else { format!("At {}", si(t, "s")) });
     }
 
@@ -636,8 +696,15 @@ impl Ui {
         if self.m.layout == Layout::Default {
             return self.events_export(TableKind::Decode);
         }
-        let rows = self.decode_rows().into_iter();
-        self.export_rows(rows.map(|e| EventRow { t: e.t, who: e.who, ok: e.errors == 0, text: e.text }).collect());
+        match self.table_data("EVENTS") {
+            Ok(t) if !t.rows.is_empty() => {
+                let p = self.new_file(&self.save_dir(), "events", "csv");
+                let r = crate::store::write(&p, t.csv().as_bytes());
+                self.toast_saved(&p, r);
+            }
+            Ok(_) => self.toast("No events in this record"),
+            Err(e) => self.toast(e),
+        }
     }
 
     /// The events of a table as CSV into the storage directory.
@@ -650,9 +717,16 @@ impl Ui {
         if rows.is_empty() {
             return self.toast("No events in this record");
         }
-        let mut t = String::from("Time (s),Source,Event,Ok\n");
-        for e in &rows {
-            t.push_str(&format!("{:.9e},{},{},{}\n", e.t, e.who, e.text.replace(',', ";"), if e.ok { 1 } else { 0 }));
+        let mut t = String::from("Index,Time (s),Source,Event,Ok\n");
+        for (i, e) in rows.iter().enumerate() {
+            t.push_str(&format!(
+                "{},{:.9e},{},{},{}\n",
+                i + 1,
+                e.t,
+                e.who,
+                e.text.replace(',', ";"),
+                if e.ok { 1 } else { 0 }
+            ));
         }
         let p = self.new_file(&self.save_dir(), "events", "csv");
         let r = crate::store::write(&p, t.as_bytes());
@@ -667,7 +741,9 @@ impl Ui {
 
     /// Height the second pane takes from the plot: what its content needs, the plot gets the rest.
     pub(super) fn pane_h(&self) -> i32 {
-        if self.dock_on() { return self.dock_content(super::dock::VKind::Pane).map_or(0, |r| r.h + 4); }
+        if self.dock_on() {
+            return self.dock_content(super::dock::VKind::Pane).map_or(0, |r| r.h + 4);
+        }
         if self.m.pane == 0 || self.m.view != AView::Scope || self.xy {
             return 0;
         }
@@ -683,7 +759,9 @@ impl Ui {
 
     /// The second pane: under the plot and the lanes.
     pub(super) fn pane_rect(&self) -> Rect {
-        if self.dock_on() { return self.dock_content(super::dock::VKind::Pane).unwrap_or(Rect::new(0, 0, 1, 1)); }
+        if self.dock_on() {
+            return self.dock_content(super::dock::VKind::Pane).unwrap_or(Rect::new(0, 0, 1, 1));
+        }
         let g = self.plot.grid;
         Rect::new(g.x, g.y + g.h + 2 + self.eye_below() + self.la_strip_h(), g.w, self.pane_h() - 4)
     }

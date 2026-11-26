@@ -42,10 +42,17 @@ impl Scpi {
         if std::mem::take(&mut ui.scpi_replay_cancel) {
             if let Some(replay) = self.replay.take() {
                 ui.scpi_replaying = false;
-                ui.toast(&format!("Stopped {} after {} command{}", replay.name, replay.commands, plural(replay.commands)));
+                ui.toast(&format!(
+                    "Stopped {} after {} command{}",
+                    replay.name,
+                    replay.commands,
+                    plural(replay.commands)
+                ));
             }
         }
-        if let Some(path) = ui.scpi_replay_file.take() { self.replay_start(ui, &path); }
+        if let Some(path) = ui.scpi_replay_file.take() {
+            self.replay_start(ui, &path);
+        }
         let Some(mut replay) = self.replay.take() else { return };
         let mut program = match replay.program.take() {
             Some(program) => program,
@@ -65,7 +72,8 @@ impl Scpi {
         // so are its enable registers, and the operations a client waits for with `*OPC`: polled with the file's
         // status they would be taken off the list and their bit lost with it
         let kept = (std::mem::take(&mut self.err), self.event_status, self.error_serial, self.last_error.take());
-        let client = (std::mem::take(&mut self.opc_events), self.event_enable, self.service_enable, self.power_on_clear);
+        let client =
+            (std::mem::take(&mut self.opc_events), self.event_enable, self.service_enable, self.power_on_clear);
         self.from_file = true;
         let done = self.poll_program(ui, cv, &mut program).is_some();
         self.from_file = false;
@@ -75,7 +83,10 @@ impl Scpi {
         if !done {
             if ui.now - replay.waiting_since >= WAIT_MAX {
                 ui.scpi_replaying = false;
-                return ui.toast(&format!("{}: command {} waited {WAIT_MAX:.0} s for its operation; stopped", replay.name, replay.commands));
+                return ui.toast(&format!(
+                    "{}: command {} waited {WAIT_MAX:.0} s for its operation; stopped",
+                    replay.name, replay.commands
+                ));
             }
             replay.program = Some(program);
         }
@@ -84,7 +95,9 @@ impl Scpi {
 
     fn replay_start(&mut self, ui: &mut Ui, path: &std::path::Path) {
         let name = crate::store::file_name(path);
-        if self.replay.is_some() { return ui.toast("A SCPI file is running; stop it first"); }
+        if self.replay.is_some() {
+            return ui.toast("A SCPI file is running; stop it first");
+        }
         // the file is foreign data: a link or a device node under its name is not followed (a read of one may never
         // end), and no more than the bound is read whatever the size says
         let text = match std::fs::symlink_metadata(path) {
@@ -93,7 +106,9 @@ impl Scpi {
             Ok(_) => read_bounded(path).and_then(|bytes| match bytes.len() as u64 > FILE_MAX {
                 true => Err("larger than 1 MiB".to_string()),
                 // a file an editor saved: a byte order mark before the first line, a letter that is not UTF-8 in a comment
-                false => Ok(String::from_utf8_lossy(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes)).into_owned()),
+                false => {
+                    Ok(String::from_utf8_lossy(bytes.strip_prefix(&[0xef, 0xbb, 0xbf]).unwrap_or(&bytes)).into_owned())
+                }
             }),
             Err(e) => Err(e.to_string()),
         };
@@ -101,7 +116,14 @@ impl Scpi {
             Ok(text) => {
                 // a line ends with LF, CR LF or CR alone: an empty line is no command
                 let lines = text.split(['\n', '\r']).map(str::to_string).collect();
-                self.replay = Some(Box::new(Replay { name: name.clone(), lines, program: None, waiting_since: ui.now, commands: 0, refused: Vec::new() }));
+                self.replay = Some(Box::new(Replay {
+                    name: name.clone(),
+                    lines,
+                    program: None,
+                    waiting_since: ui.now,
+                    commands: 0,
+                    refused: Vec::new(),
+                }));
                 ui.scpi_replaying = true;
                 ui.toast(&format!("Running {name}"));
             }
@@ -114,7 +136,9 @@ impl Scpi {
         let (n, refused) = (replay.commands, replay.refused.len());
         match replay.refused.first() {
             None => ui.toast(&format!("Ran {}: {n} command{}", replay.name, plural(n))),
-            Some(first) => ui.toast(&format!("{}: {refused} of {n} command{} refused, first {first}", replay.name, plural(n))),
+            Some(first) => {
+                ui.toast(&format!("{}: {refused} of {n} command{} refused, first {first}", replay.name, plural(n)))
+            }
         }
     }
 }
@@ -123,7 +147,9 @@ impl Scpi {
 fn read_bounded(path: &std::path::Path) -> Result<Vec<u8>, String> {
     use std::io::Read;
     let mut bytes = Vec::new();
-    std::fs::File::open(path).and_then(|file| file.take(FILE_MAX + 1).read_to_end(&mut bytes)).map_err(|e| e.to_string())?;
+    std::fs::File::open(path)
+        .and_then(|file| file.take(FILE_MAX + 1).read_to_end(&mut bytes))
+        .map_err(|e| e.to_string())?;
     Ok(bytes)
 }
 
@@ -133,34 +159,56 @@ pub(super) fn file_refuses(head: &str, arg: &str) -> Option<&'static str> {
     let nodes: Vec<&str> = head.trim_start_matches(':').split(':').collect();
     let (first, last) = (nodes[0], nodes[nodes.len() - 1]);
     // as the commands that need the word read it (`ui/scpiext_c.rs`): one argument, not in quotes
-    if arg.split(',').any(|part| part.trim().eq_ignore_ascii_case("CONFIRM")) { return Some("CONFIRM is not taken from a file"); }
-    if kw(first, "UI") { return Some("a file does not press the screen"); }
-    if kw(first, "MMEMory") { return Some("a file does not delete a file"); }
-    if kw(first, "CALibrate") && kw(last, "STARt") { return Some("a self-calibration is started at the scope"); }
-    if kw(first, "SYSTem") && !system_setting(&nodes) { return Some("a file sets the scope up, not its system"); }
-    let names_file = kw(first, "SAVE") || kw(first, "LOAD") || ["SAVE", "LOAD", "EXPort", "IMPort"].iter().any(|k| kw(last, k));
-    if names_file && leaves_folder(arg) { return Some("a file names files of the save folder only"); }
+    if arg.split(',').any(|part| part.trim().eq_ignore_ascii_case("CONFIRM")) {
+        return Some("CONFIRM is not taken from a file");
+    }
+    if kw(first, "UI") {
+        return Some("a file does not press the screen");
+    }
+    if kw(first, "MMEMory") {
+        return Some("a file does not delete a file");
+    }
+    if kw(first, "CALibrate") && kw(last, "STARt") {
+        return Some("a self-calibration is started at the scope");
+    }
+    if kw(first, "SYSTem") && !system_setting(&nodes) {
+        return Some("a file sets the scope up, not its system");
+    }
+    let names_file =
+        kw(first, "SAVE") || kw(first, "LOAD") || ["SAVE", "LOAD", "EXPort", "IMPort"].iter().any(|k| kw(last, k));
+    if names_file && leaves_folder(arg) {
+        return Some("a file names files of the save folder only");
+    }
     None
 }
 
 /// A command of `:SYSTem:` that sets a part of the set-up: the key = value command, the set-up as a whole, and the
 /// headers the set-up is written with (`setupscpi::ROWS`).
 fn system_setting(nodes: &[&str]) -> bool {
-    if nodes.len() == 2 && kw(nodes[1], "SETup") { return true; }
+    if nodes.len() == 2 && kw(nodes[1], "SETup") {
+        return true;
+    }
     setupscpi::ROWS.iter().flat_map(|(_, headers)| headers.iter()).any(|header| {
         let parts: Vec<&str> = header.trim_start_matches(':').split(':').collect();
-        parts.len() == nodes.len() && parts.iter().zip(nodes).all(|(part, node)| kw(suffix(node).0, part.trim_end_matches("<n>")))
+        parts.len() == nodes.len()
+            && parts.iter().zip(nodes).all(|(part, node)| kw(suffix(node).0, part.trim_end_matches("<n>")))
     })
 }
 
 /// A file name that is not one of the save folder: an absolute path, a drive, or a step up.
 fn leaves_folder(arg: &str) -> bool {
     let name = arg.split(',').next().unwrap_or("").trim().trim_matches(['"', '\'']);
-    name.starts_with(['/', '\\']) || name.contains(':') || arg.split(['/', '\\', ',', '"', '\'']).any(|part| part.trim() == "..")
+    name.starts_with(['/', '\\'])
+        || name.contains(':')
+        || arg.split(['/', '\\', ',', '"', '\'']).any(|part| part.trim() == "..")
 }
 
 fn plural(n: usize) -> &'static str {
-    if n == 1 { "" } else { "s" }
+    if n == 1 {
+        ""
+    } else {
+        "s"
+    }
 }
 
 #[cfg(test)]
@@ -189,7 +237,9 @@ mod tests {
         for _ in 0..frames {
             ui.step(0.05);
             s.poll(ui, cv);
-            if !ui.scpi_replaying && ui.scpi_replay_file.is_none() { return; }
+            if !ui.scpi_replaying && ui.scpi_replay_file.is_none() {
+                return;
+            }
         }
     }
 
@@ -201,7 +251,9 @@ mod tests {
         let dir = folder("recording");
         let (mut s, mut ui, cv) = session();
         ui.files.dir = dir.clone();
-        for _ in 0..20 { ui.step(0.05); }
+        for _ in 0..20 {
+            ui.step(0.05);
+        }
         ui.scpi_rec_want = true;
         s.poll(&mut ui, &cv);
         for (key, value) in [("tdiv", "0.001"), ("ch2.on", "true"), ("ch1.coupling", "Ac")] {
@@ -218,7 +270,12 @@ mod tests {
         ui.scpi_rec_want = false;
         s.poll(&mut ui, &cv);
         let want = text(&mut ui);
-        let file = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).find(|p| p.extension().is_some_and(|x| x == "scpi")).unwrap();
+        let file = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .find(|p| p.extension().is_some_and(|x| x == "scpi"))
+            .unwrap();
         let lines = std::fs::read_to_string(&file).unwrap();
         assert!(lines.contains(":SINGle\n*OPC?\n") && lines.contains("\n# "), "{lines}");
 
@@ -241,7 +298,11 @@ mod tests {
     fn a_refused_line_is_said_and_is_not_a_clients_error() {
         let dir = folder("refused");
         let file = dir.join("hand.scpi");
-        std::fs::write(&file, "# by hand\n\n:NO:SUCH:HEADer 1\n  # indented comment\n:CHANnel2:DISPlay ON\n:CHANnel3:DISPlay ON\n").unwrap();
+        std::fs::write(
+            &file,
+            "# by hand\n\n:NO:SUCH:HEADer 1\n  # indented comment\n:CHANnel2:DISPlay ON\n:CHANnel3:DISPlay ON\n",
+        )
+        .unwrap();
         let (mut s, mut ui, cv) = session();
         s.exec_line(&mut ui, &cv, ":ANOTHer:UNKNown 1");
         let queued = s.queued_errors().to_vec();
@@ -272,21 +333,35 @@ mod tests {
     fn a_files_errors_leave_a_clients_status_as_it_was() {
         let dir = folder("status");
         let file = dir.join("notepad.scpi");
-        std::fs::write(&file, b"\xef\xbb\xbf:CHANnel2:DISPlay ON\r\n# caf\xe9\r\n:NO:SUCH:HEADer 1\r\n:CHANnel3:DISPlay ON\r\n").unwrap();
+        std::fs::write(
+            &file,
+            b"\xef\xbb\xbf:CHANnel2:DISPlay ON\r\n# caf\xe9\r\n:NO:SUCH:HEADer 1\r\n:CHANnel3:DISPlay ON\r\n",
+        )
+        .unwrap();
         let (mut s, mut ui, cv) = session();
         let ask = |s: &mut Scpi, ui: &mut Ui, c: &str| String::from_utf8(s.exec_line(ui, &cv, c)).unwrap();
         ui.scpi_replay_file = Some(file.clone());
         run(&mut s, &mut ui, &cv, 20);
         assert!(ui.m.ch[1].on && ui.m.ch[2].on, "the first line, after the mark, and the last");
-        assert!(ui.toast_text().starts_with("notepad.scpi: 1 of 3 commands refused, first -113"), "{}", ui.toast_text());
+        assert!(
+            ui.toast_text().starts_with("notepad.scpi: 1 of 3 commands refused, first -113"),
+            "{}",
+            ui.toast_text()
+        );
         assert_eq!(ask(&mut s, &mut ui, "*ESR?"), "0", "no event of a client");
         assert_eq!(ask(&mut s, &mut ui, ":SYSTem:ERRor?"), "0,\"No error\"");
         // a client that never read its errors: its queue is full, and stays what it was
-        for i in 0..40 { ask(&mut s, &mut ui, &format!(":NO:CLIent:HEADer{i} 1")); }
+        for i in 0..40 {
+            ask(&mut s, &mut ui, &format!(":NO:CLIent:HEADer{i} 1"));
+        }
         let queued = s.queued_errors().to_vec();
         ui.scpi_replay_file = Some(file);
         run(&mut s, &mut ui, &cv, 20);
-        assert!(ui.toast_text().starts_with("notepad.scpi: 1 of 3 commands refused, first -113"), "{}", ui.toast_text());
+        assert!(
+            ui.toast_text().starts_with("notepad.scpi: 1 of 3 commands refused, first -113"),
+            "{}",
+            ui.toast_text()
+        );
         assert_eq!(s.queued_errors(), queued);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -297,13 +372,18 @@ mod tests {
     fn a_file_does_not_confirm_and_one_file_runs_at_a_time() {
         let dir = folder("confirm");
         let file = dir.join("guarded.scpi");
-        std::fs::write(&file, ":CHANnel2:DISPlay ON\n:CHANnel3:DISPlay ON,CONFIRM\n:CHANnel4:DISPlay on , confirm\n").unwrap();
+        std::fs::write(&file, ":CHANnel2:DISPlay ON\n:CHANnel3:DISPlay ON,CONFIRM\n:CHANnel4:DISPlay on , confirm\n")
+            .unwrap();
         let (mut s, mut ui, cv) = session();
         ui.scpi_replay_file = Some(file.clone());
         run(&mut s, &mut ui, &cv, 20);
         assert!(ui.m.ch[1].on && !ui.m.ch[2].on && !ui.m.ch[3].on);
         let message = ui.toast_text();
-        assert!(message.starts_with("guarded.scpi: 2 of 3 commands refused, first -203") && message.contains("not taken from a file"), "{message}");
+        assert!(
+            message.starts_with("guarded.scpi: 2 of 3 commands refused, first -203")
+                && message.contains("not taken from a file"),
+            "{message}"
+        );
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
         let empty = dir.join("empty.scpi");
         std::fs::write(&empty, "# nothing\n\n").unwrap();
@@ -314,7 +394,9 @@ mod tests {
         let wait = dir.join("wait.scpi");
         std::fs::write(&wait, ":SINGle\n*OPC?\n").unwrap();
         ui.scpi_replay_file = Some(wait);
-        for _ in 0..4 { s.poll(&mut ui, &cv); }
+        for _ in 0..4 {
+            s.poll(&mut ui, &cv);
+        }
         assert!(ui.scpi_replaying);
         ui.scpi_replay_file = Some(file);
         s.poll(&mut ui, &cv);
@@ -363,10 +445,24 @@ mod tests {
             assert!(refused(line).is_some_and(|said| said.contains(why)), "{line}: {:?}", refused(line));
         }
         for line in [
-            ":SYSTem:SET tdiv = 1e-3", ":SYST:SET tdiv = 1e-3", ":SYSTem:SETup #15hello", ":SYSTem:LOCK ON", ":SYST:LOG:INT 2",
-            ":SYSTem:AOUTput 1", ":CHANnel1:LABel \"/CS\"", ":CHANnel1:LABel \"Confirm\"",
-            ":BUS1:LABel \"a..b\"", ":SAVE:IMAGe \"shots/a.png\"", ":SAVE:SETup", ":SAVE:SLOT 3", ":REFerence:SAVE 2",
-            ":LOAD:SESSion \"bench.oss\"", ":CALibrate:DESKew 1,0", ":AUToscale", ":SINGle", ":TIMebase:SCALe 1e-3",
+            ":SYSTem:SET tdiv = 1e-3",
+            ":SYST:SET tdiv = 1e-3",
+            ":SYSTem:SETup #15hello",
+            ":SYSTem:LOCK ON",
+            ":SYST:LOG:INT 2",
+            ":SYSTem:AOUTput 1",
+            ":CHANnel1:LABel \"/CS\"",
+            ":CHANnel1:LABel \"Confirm\"",
+            ":BUS1:LABel \"a..b\"",
+            ":SAVE:IMAGe \"shots/a.png\"",
+            ":SAVE:SETup",
+            ":SAVE:SLOT 3",
+            ":REFerence:SAVE 2",
+            ":LOAD:SESSion \"bench.oss\"",
+            ":CALibrate:DESKew 1,0",
+            ":AUToscale",
+            ":SINGle",
+            ":TIMebase:SCALe 1e-3",
         ] {
             assert_eq!(refused(line), None, "{line}");
         }
@@ -381,9 +477,14 @@ mod tests {
         let saves = dir.join("saves");
         std::fs::create_dir_all(&saves).unwrap();
         let lines = [
-            "# a file from a stick".to_string(), ":CHANnel2:DISPlay ON".to_string(), ":UI:MENU:SELect \"Power off\"".to_string(),
-            ":SYSTem:RECorder:STATe ON".to_string(), ":CALibrate:STARt 0".to_string(),
-            format!(":SAVE:SETup \"{}\"", outside.display()), ":SAVE:SETup \"kept.txt\"".to_string(), ":CHANnel3:DISPlay ON".to_string(),
+            "# a file from a stick".to_string(),
+            ":CHANnel2:DISPlay ON".to_string(),
+            ":UI:MENU:SELect \"Power off\"".to_string(),
+            ":SYSTem:RECorder:STATe ON".to_string(),
+            ":CALibrate:STARt 0".to_string(),
+            format!(":SAVE:SETup \"{}\"", outside.display()),
+            ":SAVE:SETup \"kept.txt\"".to_string(),
+            ":CHANnel3:DISPlay ON".to_string(),
         ];
         std::fs::write(&file, lines.join("\r")).unwrap();
         let (mut s, mut ui, cv) = session();
@@ -450,18 +551,23 @@ mod tests {
     fn a_wait_can_be_stopped_and_ends_by_itself() {
         let dir = folder("wait");
         let file = dir.join("wait.scpi");
-        std::fs::write(&file, ":TRIGger:SWEep NORMal\n:TRIGger:EDGE:LEVel 4\n:SINGle\n*OPC?\n:CHANnel2:DISPlay ON\n").unwrap();
+        std::fs::write(&file, ":TRIGger:SWEep NORMal\n:TRIGger:EDGE:LEVel 4\n:SINGle\n*OPC?\n:CHANnel2:DISPlay ON\n")
+            .unwrap();
         let (mut s, mut ui, cv) = session();
         ui.scpi_replay_file = Some(file.clone());
         // no frames of the scope: the single sweep never finds its trigger
-        for _ in 0..8 { s.poll(&mut ui, &cv); }
+        for _ in 0..8 {
+            s.poll(&mut ui, &cv);
+        }
         assert!(ui.scpi_replaying && !ui.m.ch[1].on, "waiting at the fence");
         ui.scpi_replay_cancel = true;
         s.poll(&mut ui, &cv);
         assert!(!ui.scpi_replaying && ui.toast_text() == "Stopped wait.scpi after 4 commands", "{}", ui.toast_text());
         // again, and the scope's time goes past the longest wait
         ui.scpi_replay_file = Some(file);
-        for _ in 0..8 { s.poll(&mut ui, &cv); }
+        for _ in 0..8 {
+            s.poll(&mut ui, &cv);
+        }
         assert!(ui.scpi_replaying);
         ui.now += WAIT_MAX + 1.0;
         s.poll(&mut ui, &cv);
@@ -493,7 +599,9 @@ mod tests {
         ui.script_menu("Storage").unwrap();
         ui.script_do("Run SCPI file").unwrap();
         ask(&mut s, &mut ui, ":UI:MENU:SELect \"second.scpi\"");
-        for _ in 0..6 { s.poll(&mut ui, &cv); }
+        for _ in 0..6 {
+            s.poll(&mut ui, &cv);
+        }
         assert!(ui.scpi_replaying && ui.m.ch[2].on);
         ui.script_menu("Storage").unwrap();
         ui.script_do("Stop SCPI file").unwrap();

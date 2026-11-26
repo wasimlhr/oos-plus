@@ -331,7 +331,12 @@ impl Ui {
             Err(COMPUTING) if self.m.run == RunState::Run => {
                 let prefix = format!("{:?}|{}|", m.dec_cfg(), self.workflow_epoch);
                 let cache = self.azr.reference_decode.borrow();
-                cache.entries.iter().rev().find(|e| e.key.starts_with(&prefix)).map_or(Err(COMPUTING), |e| e.packets.clone())
+                cache
+                    .entries
+                    .iter()
+                    .rev()
+                    .find(|e| e.key.starts_with(&prefix))
+                    .map_or(Err(COMPUTING), |e| e.packets.clone())
             }
             other => other,
         }

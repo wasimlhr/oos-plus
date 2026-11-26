@@ -20,7 +20,9 @@ fn three() -> Ui {
 
 fn frame(u: &mut Ui) -> Canvas {
     let mut cv = Canvas::new(W, H);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     cv
 }
@@ -44,7 +46,10 @@ fn three_searches_keep_their_numbers_and_a_fourth_is_refused() {
     assert_eq!(u.studio.search_sel, 1);
     // the last one removed closes what was open for the search
     u.open_menu(MenuId::Search);
-    for _ in 0..3 { assert!(u.menu_open); u.studio_search_remove(); }
+    for _ in 0..3 {
+        assert!(u.menu_open);
+        u.studio_search_remove();
+    }
     assert!(u.studio.search().is_none() && !u.menu_open);
 }
 
@@ -66,12 +71,17 @@ fn each_search_has_its_line_of_marks_in_its_colour() {
     u.studio_search_select(1);
     let cv = frame(&mut u);
     shot(&cv, "three-searches-sparse");
-    let marks = |slot: usize| (a.x..a.right()).filter(|&x| px(&cv, x, a.y + slot as i32 * SEARCH_LANE_H + 1) == SEARCH_COLS[slot]).count();
+    let marks = |slot: usize| {
+        (a.x..a.right()).filter(|&x| px(&cv, x, a.y + slot as i32 * SEARCH_LANE_H + 1) == SEARCH_COLS[slot]).count()
+    };
     assert!(marks(0) > marks(1) && marks(1) > 0 && marks(2) > 0, "{} {} {}", marks(0), marks(1), marks(2));
     // only the selected search draws lines down the plot: none of the others' colours under the marks
     let under = |col: Rgb| {
         let dim = mix(BG, col, 90);
-        (a.y + 40..a.bottom()).flat_map(|y| (a.x..a.right()).map(move |x| (x, y))).filter(|&(x, y)| px(&cv, x, y) == dim).count()
+        (a.y + 40..a.bottom())
+            .flat_map(|y| (a.x..a.right()).map(move |x| (x, y)))
+            .filter(|&(x, y)| px(&cv, x, y) == dim)
+            .count()
     };
     assert!(under(SEARCH_COLS[1]) > 50, "the lines of Search 2");
     assert_eq!((under(SEARCH_COLS[0]), under(SEARCH_COLS[2])), (0, 0));
@@ -113,7 +123,10 @@ fn a_view_stores_every_search_and_search_1_under_the_key_it_had() {
     let words: Vec<&str> = text.split_whitespace().filter(|w| w.starts_with("search")).collect();
     assert_eq!(words.len(), 4, "{words:?}");
     assert!(words[0].starts_with("search=2/") && words[0].ends_with("/2"), "{words:?}");
-    assert!(words[1].starts_with("search2=") && words[2].starts_with("search3=") && words[3] == "searchsel=2", "{words:?}");
+    assert!(
+        words[1].starts_with("search2=") && words[2].starts_with("search3=") && words[3] == "searchsel=2",
+        "{words:?}"
+    );
     let mut v = dense();
     v.view_ui_apply(&text);
     assert_eq!(v.studio.searches, u.studio.searches);
@@ -149,12 +162,18 @@ fn a_frame_searches_nothing() {
     let searching = t0.elapsed();
     let mut cv = frame(&mut u);
     let t0 = std::time::Instant::now();
-    for _ in 0..20 { u.render(&mut cv); }
+    for _ in 0..20 {
+        u.render(&mut cv);
+    }
     let per_frame = t0.elapsed() / 20;
     let t0 = std::time::Instant::now();
-    for _ in 0..20 { u.draw_search(&mut cv); }
+    for _ in 0..20 {
+        u.draw_search(&mut cv);
+    }
     let marks = t0.elapsed() / 20;
-    println!("three searches of 1 Mpts: searched in {searching:?}; a frame {per_frame:?}, of which the marks {marks:?}");
+    println!(
+        "three searches of 1 Mpts: searched in {searching:?}; a frame {per_frame:?}, of which the marks {marks:?}"
+    );
     for (i, ev) in first.iter().enumerate() {
         assert!(std::sync::Arc::ptr_eq(ev, &u.studio_search_events_of(i)), "search {} was searched again", i + 1);
     }
@@ -175,13 +194,24 @@ fn every_search_has_its_badge_in_the_top_bar_and_a_tap_selects_it_and_opens_its_
     assert!(badges[1].2.starts_with("2 Pulse \u{b7} 3"), "{}", badges[1].2);
     assert_eq!((badges[1].1, badges[1].2.clone()), (label, text));
     assert_eq!(badges[2].2, "3 \u{b7} 32000");
-    assert_eq!(badges[0].1.w + badges[1].1.w + badges[2].1.w + 4, next.x - prev.right() - 4, "they fill the room between the arrows");
+    assert_eq!(
+        badges[0].1.w + badges[1].1.w + badges[2].1.w + 4,
+        next.x - prev.right() - 4,
+        "they fill the room between the arrows"
+    );
     let f = u.fonts();
     for (i, (slot, r, text)) in badges.iter().enumerate() {
         assert!(r.w >= 40 && r.h >= 40 && f.mb.width(text) + 8 <= r.w, "badge {}: {r:?} for {text:?}", slot + 1);
-        assert!(r.x >= if i == 0 { prev.right() } else { badges[i - 1].1.right() } && r.right() <= next.x, "badge {}: {r:?}", slot + 1);
+        assert!(
+            r.x >= if i == 0 { prev.right() } else { badges[i - 1].1.right() } && r.right() <= next.x,
+            "badge {}: {r:?}",
+            slot + 1
+        );
         // in its colour: the border, and the text
-        let n = (r.x..r.right()).flat_map(|x| (r.y..r.bottom()).map(move |y| (x, y))).filter(|&(x, y)| px(&cv, x, y) == SEARCH_COLS[*slot]).count();
+        let n = (r.x..r.right())
+            .flat_map(|x| (r.y..r.bottom()).map(move |y| (x, y)))
+            .filter(|&(x, y)| px(&cv, x, y) == SEARCH_COLS[*slot])
+            .count();
         assert!(n > 20, "badge {}: {n} pixels of its colour", slot + 1);
     }
     // the read-out of the acquisition keeps its room beside them
@@ -220,7 +250,9 @@ fn every_search_has_its_badge_in_the_top_bar_and_a_tap_selects_it_and_opens_its_
 #[test]
 fn a_badge_of_a_part_of_the_record_keeps_saying_so_beside_two_others() {
     let mut u = super::search_dense_tests::dense_of(375_000, (1.25e9, 1_000_000));
-    for _ in 0..3 { u.studio_search_add(Some(WaveId::Ch(1))); }
+    for _ in 0..3 {
+        u.studio_search_add(Some(WaveId::Ch(1)));
+    }
     let (_, label, _, text) = u.studio_search_chip().unwrap();
     assert!(text.ends_with("24000 in 300 \u{b5}s"), "{text}");
     assert!(u.fonts().mb.width(&text) + 8 <= label.w, "{text:?} in {label:?}");

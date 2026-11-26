@@ -34,7 +34,7 @@ fn decoder_scpi_configures_refs_reports_original_packet_times_and_rejects_empty_
     assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:PROTO UART;:DEC:SOUR R1;:DEC:THR 1.65;:DEC:STAT ON;:SYST:SET dec_baud = 7;:DEC:SOUR?;:DEC:PROTO?;:DEC:STAT?"), "R1;UART;1");
     let events = line(&mut s, &mut ui, &cv, ":DEC:EVEN?");
     assert!(events.contains("D1 UART R1") && events.contains("A5"), "{events}");
-    let first_time: f64 = events.split(',').next().unwrap().parse().unwrap();
+    let first_time: f64 = events.split(',').nth(1).unwrap().parse().unwrap();
     assert!(first_time > -0.008 && first_time < -0.007);
     assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:BUSY?"), "0");
     let state = crate::store::setup_text(&ui.m);
@@ -92,7 +92,7 @@ fn cphy_scpi_configures_three_refs_and_exports_the_published_16_bit_word() {
     assert!(events.contains("D1 C-PHY R1") && events.contains("SYNC") && events.contains("7290"), "{events}");
     let lines: Vec<_> = events.lines().filter(|line| line.contains("7290")).collect();
     assert_eq!(lines.len(), 1);
-    assert!(lines[0].split(',').next().unwrap().parse::<f64>().unwrap() < 0.0);
+    assert!(lines[0].split(',').nth(1).unwrap().parse::<f64>().unwrap() < 0.0);
     assert_eq!(line(&mut s, &mut ui, &cv, ":DEC:CS NONE;:DEC:CS?"), "R3");
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
     assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");

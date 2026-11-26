@@ -350,7 +350,13 @@ impl Ui {
                 Item::NetWeb => {
                     return self.lan_web_port.map_or_else(
                         || "Web port unavailable; choose another --web-port".into(),
-                        |port| format!("http://{}:{}", if self.net.addr.is_empty() { "localhost" } else { &self.net.addr }, port),
+                        |port| {
+                            format!(
+                                "http://{}:{}",
+                                if self.net.addr.is_empty() { "localhost" } else { &self.net.addr },
+                                port
+                            )
+                        },
                     );
                 }
                 Item::NetPorts => return self.lan_status.clone(),
@@ -848,7 +854,11 @@ impl Ui {
             }
             OskFor::Search => {
                 let t = o.text.trim().to_string();
-                if self.studio.panel.query_osk { self.panel_set_query(&t); } else { self.sheet_set_search(&t); }
+                if self.studio.panel.query_osk {
+                    self.panel_set_query(&t);
+                } else {
+                    self.sheet_set_search(&t);
+                }
                 self.wlan.osk = None;
             }
             OskFor::BusLabel => {
@@ -971,7 +981,9 @@ impl Ui {
             OskFor::BusLabel => "Name of the bus (empty: I2C)".to_string(),
             OskFor::DecLabel => format!("Name of decoder {} (empty: {})", self.m.dec_sel + 1, self.m.dec_proto.name()),
             OskFor::Search => "Find a measurement".to_string(),
-            OskFor::MathExpr(k) => format!("Formula of M{}: CH1-4, t, pi, sin cos tan sqrt abs ln log exp min max", k + 1),
+            OskFor::MathExpr(k) => {
+                format!("Formula of M{}: CH1-4, t, pi, sin cos tan sqrt abs ln log exp min max", k + 1)
+            }
             OskFor::NtpServer => "NTP server: a name or an address".to_string(),
             OskFor::Tz => "Time zone, POSIX: CET-1CEST,M3.5.0,M10.5.0/3 or <+04>-4 (4 hours east)".to_string(),
             OskFor::DateTime => "Local date and time: 2026-11-11 14:30".to_string(),
@@ -1114,7 +1126,15 @@ mod tests {
 
     #[test]
     fn every_password_character_has_a_key() {
-        let o = |l| Osk { what: OskFor::Name, text: String::new(), layer: l, show: true, focus: 0, cursor: 0, proposed: false };
+        let o = |l| Osk {
+            what: OskFor::Name,
+            text: String::new(),
+            layer: l,
+            show: true,
+            focus: 0,
+            cursor: 0,
+            proposed: false,
+        };
         let mut seen = std::collections::BTreeSet::new();
         for l in [Layer::Lower, Layer::Upper, Layer::Symbols] {
             for (r, k) in o(l).keys() {

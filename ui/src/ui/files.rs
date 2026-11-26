@@ -90,7 +90,11 @@ pub struct FileAsk {
 pub(super) fn typed_name(text: &str, ext: &str) -> Result<String, String> {
     let t = text.trim();
     let cut = t.len().saturating_sub(ext.len() + 1);
-    let stem = if t.is_char_boundary(cut) && t[cut..].eq_ignore_ascii_case(&format!(".{ext}")) { t[..cut].trim_end() } else { t };
+    let stem = if t.is_char_boundary(cut) && t[cut..].eq_ignore_ascii_case(&format!(".{ext}")) {
+        t[..cut].trim_end()
+    } else {
+        t
+    };
     if stem.is_empty() {
         return Err("Enter a name for the file".into());
     }
@@ -168,7 +172,8 @@ impl Ui {
         let next = self.file_next(kind);
         self.file_replace = None;
         if self.native_files() {
-            self.file_request = Some(FileAsk { kind, save: true, dir: self.file_dir(kind), name: crate::store::file_name(&next) });
+            self.file_request =
+                Some(FileAsk { kind, save: true, dir: self.file_dir(kind), name: crate::store::file_name(&next) });
         } else {
             let stem = next.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             self.wlan.osk = Some(wlan::Osk::proposing(wlan::OskFor::File(kind), &stem));
@@ -214,7 +219,10 @@ impl Ui {
                 if self.last[0].is_some() {
                     self.rec_action(if csv { ":SAVE:WAVeform" } else { ":SAVE:WAVeform ,BIN" });
                 }
-                let la = path.file_stem().filter(|_| csv).map(|s| path.with_file_name(format!("{}-la.csv", s.to_string_lossy())));
+                let la = path
+                    .file_stem()
+                    .filter(|_| csv)
+                    .map(|s| path.with_file_name(format!("{}-la.csv", s.to_string_lossy())));
                 self.store_wave_to(csv, path, la);
             }
             FileKind::Shot => {
@@ -245,17 +253,23 @@ impl Ui {
     /// The files of `kind` in its folder, the newest first.
     fn files_of(&self, kind: FileKind) -> Vec<PathBuf> {
         let Ok(rd) = std::fs::read_dir(self.file_dir(kind)) else { return Vec::new() };
-        let mut v: Vec<(std::time::SystemTime, PathBuf)> = rd.flatten().filter_map(|e| {
-            let p = e.path();
-            let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
-            // a setup of the stock naming (`:SAVE:SETup "name.stp"`) is a setup too
-            let fits = ext == kind.ext() || (kind == FileKind::Setup && ext == "stp");
-            let meta = e.metadata().ok().filter(|m| m.is_file())?;
-            (fits && starts_with(&p, kind.magic()) || foreign_session(kind, &p)).then(|| (meta.modified().unwrap_or(std::time::UNIX_EPOCH), p))
-        }).collect();
+        let mut v: Vec<(std::time::SystemTime, PathBuf)> = rd
+            .flatten()
+            .filter_map(|e| {
+                let p = e.path();
+                let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("").to_ascii_lowercase();
+                // a setup of the stock naming (`:SAVE:SETup "name.stp"`) is a setup too
+                let fits = ext == kind.ext() || (kind == FileKind::Setup && ext == "stp");
+                let meta = e.metadata().ok().filter(|m| m.is_file())?;
+                (fits && starts_with(&p, kind.magic()) || foreign_session(kind, &p))
+                    .then(|| (meta.modified().unwrap_or(std::time::UNIX_EPOCH), p))
+            })
+            .collect();
         // on a stick, the session archives of another instrument wherever they lie, as its waveform files are found
         // (`ref_wave_candidates`): they were copied there on a PC, not saved into the folder of OOS
-        if let (FileKind::Session, true, Some(stick)) = (kind, self.stick.mounted, Path::new(crate::store::USB_DIR).parent()) {
+        if let (FileKind::Session, true, Some(stick)) =
+            (kind, self.stick.mounted, Path::new(crate::store::USB_DIR).parent())
+        {
             for p in crate::store::files_under(stick, &[FOREIGN_SESSION], 3, crate::store::STICK_FILES) {
                 if foreign_session(kind, &p) && !v.iter().any(|(_, q)| *q == p) {
                     v.push((p.metadata().and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH), p));
@@ -339,7 +353,11 @@ impl Ui {
         }
         let (text, room) = (dir.display().to_string(), 30);
         let n = text.chars().count();
-        if n <= room { text } else { format!("\u{2026}{}", text.chars().skip(n + 1 - room).collect::<String>()) }
+        if n <= room {
+            text
+        } else {
+            format!("\u{2026}{}", text.chars().skip(n + 1 - room).collect::<String>())
+        }
     }
 
     /// Title of the keyboard that asks for a file name.
@@ -386,8 +404,13 @@ mod tests {
     #[test]
     fn a_save_asks_for_the_name_on_the_scope() {
         let (mut u, dir) = bench("ask");
-        for (it, kind) in [(Item::StoreSetupSave, FileKind::Setup), (Item::StoreSessSave, FileKind::Session), (Item::StoreCsv, FileKind::WaveCsv),
-            (Item::StoreBin, FileKind::WaveBin), (Item::StoreFfSave, FileKind::FastFrame)] {
+        for (it, kind) in [
+            (Item::StoreSetupSave, FileKind::Setup),
+            (Item::StoreSessSave, FileKind::Session),
+            (Item::StoreCsv, FileKind::WaveCsv),
+            (Item::StoreBin, FileKind::WaveBin),
+            (Item::StoreFfSave, FileKind::FastFrame),
+        ] {
             u.open_menu(MenuId::Storage);
             u.activate(it);
             assert!(u.take_file_request().is_none(), "no dialog of a system on the scope");
@@ -549,7 +572,10 @@ mod tests {
         u.activate(Item::StoreSessSave);
         assert!(u.wlan.osk.is_none());
         let ask = u.take_file_request().expect("a question for the dialog");
-        assert_eq!((ask.kind, ask.save, ask.dir.as_path(), ask.name.as_str()), (FileKind::Session, true, dir.as_path(), "session-001.oss"));
+        assert_eq!(
+            (ask.kind, ask.save, ask.dir.as_path(), ask.name.as_str()),
+            (FileKind::Session, true, dir.as_path(), "session-001.oss")
+        );
         u.file_chosen(&ask, None);
         assert!(std::fs::read_dir(&dir).unwrap().next().is_none(), "canceled: nothing written");
         let elsewhere = dir.join("elsewhere");
@@ -582,9 +608,13 @@ mod tests {
             assert!(u.wlan.osk.is_none() && u.take_file_request().is_none());
             assert!(u.asks.shot.take().is_some_and(|p| p.ends_with(".png")));
         }
-        let names: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
+        let names: Vec<String> =
+            std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect();
         assert_eq!(names.iter().filter(|n| n.starts_with("wave-") && n.ends_with(".csv")).count(), 2, "{names:?}");
-        assert!(names.contains(&"frame-001.bin".to_string()) && names.contains(&"frame-002.bin".to_string()), "{names:?}");
+        assert!(
+            names.contains(&"frame-001.bin".to_string()) && names.contains(&"frame-002.bin".to_string()),
+            "{names:?}"
+        );
         u.history.recs.clear();
         u.file_load_latest(FileKind::FastFrame);
         assert!(!u.history.recs.is_empty(), "{:?}", u.toast);
@@ -616,13 +646,24 @@ mod tests {
         let (mut u, dir) = bench("tss");
         let mut bits = ramp(100, 0.0, 1.0);
         bits[122] = 6;
-        let refs = [(2, "hall.wfm", ramp(4000, -2e-6, 3.0)), (5, "edge.wfm", ramp(300, 0.0, 1.0)), (6, "bits.wfm", bits)];
+        let refs =
+            [(2, "hall.wfm", ramp(4000, -2e-6, 3.0)), (5, "edge.wfm", ramp(300, 0.0, 1.0)), (6, "bits.wfm", bits)];
         let beside = [("ch1.wfm", ramp(10_000, -5e-6, 0.8)), ("ch3.wfm", ramp(10_000, -5e-6, 0.1))];
         let file = dir.join("faster scope.tss");
         std::fs::write(&file, tss(FOREIGN, &refs, &beside)).unwrap();
         std::fs::write(dir.join("notes.tss"), b"not an archive").unwrap();
         u.file_save(FileKind::Session, dir.join("own.oss"));
-        u.refs[8] = Some(RefWave { src: 0, color: 0, label: "old".into(), t0: 0.0, dt: 1e-9, v: vec![0.0; 16].into(), vpd: 1.0, offset: 0.0, on: true });
+        u.refs[8] = Some(RefWave {
+            src: 0,
+            color: 0,
+            label: "old".into(),
+            t0: 0.0,
+            dt: 1e-9,
+            v: vec![0.0; 16].into(),
+            vpd: 1.0,
+            offset: 0.0,
+            on: true,
+        });
 
         u.open_menu(MenuId::Storage);
         u.activate(Item::StoreSessLoad);
@@ -651,7 +692,10 @@ mod tests {
         // stopped on the loaded record, as after a session of OOS; the references beside it, not in its place
         assert!(u.m.run == RunState::Stop && u.loaded_record && !u.record_mode());
         let hall = u.refs[1].as_ref().unwrap();
-        assert_eq!((hall.label.as_str(), hall.v.len(), hall.dt, hall.t0, hall.vpd, hall.offset, hall.on), ("Hall A", 4000, 1e-9, -2e-6, 2.0, 3.0, true));
+        assert_eq!(
+            (hall.label.as_str(), hall.v.len(), hall.dt, hall.t0, hall.vpd, hall.offset, hall.on),
+            ("Hall A", 4000, 1e-9, -2e-6, 2.0, 3.0, true)
+        );
         let edge = u.refs[4].as_ref().unwrap();
         assert_eq!((edge.label.as_str(), edge.v.len(), edge.on), ("edge", 300, false));
         assert!(edge.vpd > 0.0 && u.refs[5].is_none() && u.refs[8].is_none(), "a session is the whole bench");
@@ -751,7 +795,10 @@ mod tests {
                     }
                 }
                 Err(e) => {
-                    assert!(!e.is_empty() && u.toast.as_ref().is_some_and(|t| t.0.starts_with("Load failed: ")), "file {k}");
+                    assert!(
+                        !e.is_empty() && u.toast.as_ref().is_some_and(|t| t.0.starts_with("Load failed: ")),
+                        "file {k}"
+                    );
                     *refused.entry(e).or_default() += 1;
                 }
             }
@@ -760,7 +807,10 @@ mod tests {
         println!("{} archives: {loaded} load as a session, {} are refused", files.len(), files.len() - loaded);
         println!("{with_record} with a record of channels, {references_only} with references only, {left_out} with waveforms left out");
         println!("the longest record has {longest} samples a channel");
-        println!("the slowest load took {:.2} s: {} bytes, a record of {} samples a channel", slowest.0, slowest.1, slowest.2);
+        println!(
+            "the slowest load took {:.2} s: {} bytes, a record of {} samples a channel",
+            slowest.0, slowest.1, slowest.2
+        );
         for (reason, n) in &refused {
             println!("  {n} x {reason}");
         }

@@ -6,9 +6,9 @@
 
 use minifb::{InputCallback, Key, Window};
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 
@@ -68,8 +68,15 @@ pub enum Event {
 }
 
 fn wheel_event(w: WPARAM, point: POINT, size: (usize, usize), alt: bool) -> Event {
-    Event::Wheel { x: point.x, y: point.y, size, delta: ((w >> 16) as u16) as i16 as i32,
-        ctrl: w & 0x0008 != 0, shift: w & 0x0004 != 0, alt }
+    Event::Wheel {
+        x: point.x,
+        y: point.y,
+        size,
+        delta: ((w >> 16) as u16) as i16 as i32,
+        ctrl: w & 0x0008 != 0,
+        shift: w & 0x0004 != 0,
+        alt,
+    }
 }
 
 struct Keys {
@@ -79,7 +86,9 @@ struct Keys {
 }
 
 impl Default for Keys {
-    fn default() -> Self { Self { left_ctrl: false, right_ctrl: false, down: [false; 512] } }
+    fn default() -> Self {
+        Self { left_ctrl: false, right_ctrl: false, down: [false; 512] }
+    }
 }
 
 impl Keys {
@@ -90,7 +99,9 @@ impl Keys {
             _ => {}
         }
         let repeat = self.down.get(key as usize).copied().unwrap_or(false);
-        if let Some(down) = self.down.get_mut(key as usize) { *down = state; }
+        if let Some(down) = self.down.get_mut(key as usize) {
+            *down = state;
+        }
         state.then_some(Event::Key { key, ctrl: self.left_ctrl || self.right_ctrl, repeat })
     }
 }
@@ -104,7 +115,9 @@ impl InputCallback for Keyboard {
     fn add_char(&mut self, _: u32) {}
     fn set_key_state(&mut self, key: Key, state: bool) {
         let event = self.keys.borrow_mut().update(key, state);
-        if let Some(event) = event { let _ = self.send.send(event); }
+        if let Some(event) = event {
+            let _ = self.send.send(event);
+        }
     }
 }
 
@@ -119,18 +132,27 @@ struct Capture {
 /// end mark; with a buffer it writes the name and returns the units written. A name that comes back empty is left out.
 fn dropped_names(mut query: impl FnMut(u32, &mut [u16]) -> u32) -> Vec<PathBuf> {
     let count = query(u32::MAX, &mut []);
-    (0..count).filter_map(|file| {
-        let mut name = vec![0u16; query(file, &mut []) as usize + 1];
-        let written = (query(file, &mut name) as usize).min(name.len());
-        (written > 0).then(|| std::ffi::OsString::from_wide(&name[..written]).into())
-    }).collect()
+    (0..count)
+        .filter_map(|file| {
+            let mut name = vec![0u16; query(file, &mut []) as usize + 1];
+            let written = (query(file, &mut name) as usize).min(name.len());
+            (written > 0).then(|| std::ffi::OsString::from_wide(&name[..written]).into())
+        })
+        .collect()
 }
 
 unsafe extern "system" fn procedure(hwnd: HWND, message: u32, w: WPARAM, l: LPARAM, _: usize, data: usize) -> LRESULT {
     let capture = &*(data as *const Capture);
     if message == WM_DROPFILES {
         let drop = w;
-        for path in dropped_names(|file, name| DragQueryFileW(drop, file, if name.is_empty() { std::ptr::null_mut() } else { name.as_mut_ptr() }, name.len() as u32)) {
+        for path in dropped_names(|file, name| {
+            DragQueryFileW(
+                drop,
+                file,
+                if name.is_empty() { std::ptr::null_mut() } else { name.as_mut_ptr() },
+                name.len() as u32,
+            )
+        }) {
             let _ = capture.dropped.send(path);
         }
         DragFinish(drop);
@@ -147,12 +169,17 @@ unsafe extern "system" fn procedure(hwnd: HWND, message: u32, w: WPARAM, l: LPAR
         }
     }
     let phase = match message {
-        WM_LBUTTONDOWN => { SetCapture(hwnd); Some(Pointer::Down) }
+        WM_LBUTTONDOWN => {
+            SetCapture(hwnd);
+            Some(Pointer::Down)
+        }
         WM_MOUSEMOVE if w & 1 != 0 => Some(Pointer::Move),
         WM_LBUTTONUP => Some(Pointer::Up),
         WM_RBUTTONDOWN => Some(Pointer::Context),
         WM_KILLFOCUS | WM_CANCELMODE | WM_CAPTURECHANGED => {
-            if message == WM_KILLFOCUS { *capture.keys.borrow_mut() = Keys::default(); }
+            if message == WM_KILLFOCUS {
+                *capture.keys.borrow_mut() = Keys::default();
+            }
             Some(Pointer::Cancel)
         }
         WM_NCDESTROY => {
@@ -171,7 +198,9 @@ unsafe extern "system" fn procedure(hwnd: HWND, message: u32, w: WPARAM, l: LPAR
     }
     // Releasing capture synchronously sends WM_CAPTURECHANGED. Queue Up first
     // so that cancellation cannot consume a quick click before its release.
-    if message == WM_LBUTTONUP { ReleaseCapture(); }
+    if message == WM_LBUTTONUP {
+        ReleaseCapture();
+    }
     DefSubclassProc(hwnd, message, w, l)
 }
 
@@ -193,17 +222,29 @@ impl Input {
         let hwnd = window.get_window_handle();
         // Same window thread for installation, callbacks, and removal. The Box
         // remains stable until Drop unregisters the callback before freeing it.
-        let mouse_captured = unsafe { SetWindowSubclass(hwnd, Some(procedure), SUBCLASS_ID, (&mut *capture as *mut Capture) as usize) != 0 };
+        let mouse_captured = unsafe {
+            SetWindowSubclass(hwnd, Some(procedure), SUBCLASS_ID, (&mut *capture as *mut Capture) as usize) != 0
+        };
         // The same procedure takes the drop: without it the window does not say it accepts files.
-        if mouse_captured { unsafe { DragAcceptFiles(hwnd, 1); } }
+        if mouse_captured {
+            unsafe {
+                DragAcceptFiles(hwnd, 1);
+            }
+        }
         Self { hwnd, capture, received, dropped, mouse_captured }
     }
 
     /// The files dropped on the window since the last call.
-    pub fn dropped(&self) -> Vec<PathBuf> { self.dropped.try_iter().collect() }
+    pub fn dropped(&self) -> Vec<PathBuf> {
+        self.dropped.try_iter().collect()
+    }
 
-    pub fn mouse_captured(&self) -> bool { self.mouse_captured }
-    pub fn events(&self) -> Vec<Event> { self.received.try_iter().collect() }
+    pub fn mouse_captured(&self) -> bool {
+        self.mouse_captured
+    }
+    pub fn events(&self) -> Vec<Event> {
+        self.received.try_iter().collect()
+    }
     pub fn discard(&self) {
         for _ in self.received.try_iter() {}
         *self.capture.keys.borrow_mut() = Keys::default();
@@ -212,7 +253,11 @@ impl Input {
 
 impl Drop for Input {
     fn drop(&mut self) {
-        if self.mouse_captured { unsafe { RemoveWindowSubclass(self.hwnd, Some(procedure), SUBCLASS_ID); } }
+        if self.mouse_captured {
+            unsafe {
+                RemoveWindowSubclass(self.hwnd, Some(procedure), SUBCLASS_ID);
+            }
+        }
     }
 }
 
@@ -223,9 +268,13 @@ mod tests {
     /// `DragQueryFileW` over these names, as the shell answers it.
     fn shell<'a>(names: &'a [&'a str]) -> impl FnMut(u32, &mut [u16]) -> u32 + 'a {
         move |file, buffer| {
-            if file == u32::MAX { return names.len() as u32; }
+            if file == u32::MAX {
+                return names.len() as u32;
+            }
             let name: Vec<u16> = names[file as usize].encode_utf16().collect();
-            if buffer.is_empty() { return name.len() as u32; }
+            if buffer.is_empty() {
+                return name.len() as u32;
+            }
             // the shell writes what fits and ends it with a zero
             let fits = name.len().min(buffer.len() - 1);
             buffer[..fits].copy_from_slice(&name[..fits]);
@@ -236,7 +285,11 @@ mod tests {
 
     #[test]
     fn the_names_of_a_drop_come_whole_and_in_order() {
-        let names = ["C:/captures/ch1 rail.pwwf".to_string(), "D:/long/".repeat(60) + "bench.oss", "C:/captures/ripple 50 µs.bin".to_string()];
+        let names = [
+            "C:/captures/ch1 rail.pwwf".to_string(),
+            "D:/long/".repeat(60) + "bench.oss",
+            "C:/captures/ripple 50 µs.bin".to_string(),
+        ];
         let names: Vec<&str> = names.iter().map(String::as_str).collect();
         let got = dropped_names(shell(&names));
         assert_eq!(got, names.iter().map(PathBuf::from).collect::<Vec<_>>());
@@ -252,9 +305,14 @@ mod tests {
         let event = wheel_event((120 << 16) | 0x0008, POINT { x: 341, y: 230 }, (1024, 600), false);
         keys.update(Key::LeftCtrl, false);
         assert!(!keys.left_ctrl);
-        assert_eq!(event, Event::Wheel { x: 341, y: 230, size: (1024, 600), delta: 120, ctrl: true, shift: false, alt: false });
-        assert_eq!(wheel_event(((-120i16 as u16 as usize) << 16) | 0x0004, POINT { x: -4, y: 50 }, (800, 600), true),
-            Event::Wheel { x: -4, y: 50, size: (800, 600), delta: -120, ctrl: false, shift: true, alt: true });
+        assert_eq!(
+            event,
+            Event::Wheel { x: 341, y: 230, size: (1024, 600), delta: 120, ctrl: true, shift: false, alt: false }
+        );
+        assert_eq!(
+            wheel_event(((-120i16 as u16 as usize) << 16) | 0x0004, POINT { x: -4, y: 50 }, (800, 600), true),
+            Event::Wheel { x: -4, y: 50, size: (800, 600), delta: -120, ctrl: false, shift: true, alt: true }
+        );
     }
 
     #[test]

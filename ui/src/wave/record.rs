@@ -595,7 +595,12 @@ mod tests {
     fn a_bus_match_at_the_start_of_a_long_frame_is_found() {
         use oos_dsp::sim::CanFrame;
         let (dt, len, pre) = (6.4e-9, 100_000usize, 50_000usize);
-        let frames = [CanFrame { id: 0x057, ext: false, rtr: false, data: vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88] }];
+        let frames = [CanFrame {
+            id: 0x057,
+            ext: false,
+            rtr: false,
+            data: vec![0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88],
+        }];
         let l = oos_dsp::sim::can_logic(&frames, 500e3, 0.0, 3.3);
         // 12 idle bits lead the wave, then the SOF, 11 identifier bits and one stuff bit: 50 us to the identifier's end
         let start = pre - ((20e-6 + 50e-6) / dt) as usize;

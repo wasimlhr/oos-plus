@@ -17,7 +17,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..4 { frame(u); }
+    for _ in 0..4 {
+        frame(u);
+    }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -33,19 +35,37 @@ fn fresh(layout: Layout) -> Ui {
     u.m.ch[1].on = true;
     u.m.ch[2].on = false;
     u.m.ch[3].on = false;
-    for r in u.refs.iter_mut() { *r = None; }
-    for _ in 0..4 { u.step(0.05); }
+    for r in u.refs.iter_mut() {
+        *r = None;
+    }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u
 }
 
 fn a_reference() -> RefWave {
-    RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 128].into(), vpd: 0.5, offset: 0.0, on: true }
+    RefWave {
+        src: 0,
+        color: 0,
+        label: "R1".into(),
+        t0: 0.0,
+        dt: 1e-9,
+        v: vec![0.0f32; 128].into(),
+        vpd: 0.5,
+        offset: 0.0,
+        on: true,
+    }
 }
 
-fn one(k: Meas, c: usize) -> (Meas, WaveId) { (k, WaveId::Ch(c)) }
+fn one(k: Meas, c: usize) -> (Meas, WaveId) {
+    (k, WaveId::Ch(c))
+}
 
 /// A catalogue measurement (not a `Meas` row) on CH1 and CH2.
-fn a_cat() -> (u16, WaveId, WaveId, WaveId, WaveId) { (90, WaveId::Ch(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)) }
+fn a_cat() -> (u16, WaveId, WaveId, WaveId, WaveId) {
+    (90, WaveId::Ch(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3))
+}
 
 #[test]
 fn removing_a_measurement_in_view_two_leaves_view_one_alone_in_every_layout() {
@@ -96,8 +116,15 @@ fn measurements_are_added_pinned_and_set_per_view() {
         assert_eq!(u.m.meas_show, [true; 3], "{l:?}: statistics switches are per view");
         assert!(!u.m.meas_pop_current, "{l:?}");
         assert_ne!(u.m.meas_full_record, gate, "{l:?}: the gate too");
-        assert!(u.studio.floated.is_empty() && u.studio.pinned.as_ref().is_none_or(|p| !p.contains(&MeasKey::One(Meas::Vrms, WaveId::Ch(1)))), "{l:?}: no pins of view 2 in view 1");
-        assert!(u.studio.panel.stats_mode == 0 && !u.studio.panel.pinned_only && u.studio.panel.query.is_empty(), "{l:?}");
+        assert!(
+            u.studio.floated.is_empty()
+                && u.studio.pinned.as_ref().is_none_or(|p| !p.contains(&MeasKey::One(Meas::Vrms, WaveId::Ch(1)))),
+            "{l:?}: no pins of view 2 in view 1"
+        );
+        assert!(
+            u.studio.panel.stats_mode == 0 && !u.studio.panel.pinned_only && u.studio.panel.query.is_empty(),
+            "{l:?}"
+        );
         // pin in view 1: view 2 does not follow
         u.studio_set_pin(MeasKey::One(Meas::Freq, WaveId::Ch(0)), true);
         u.view_go(1);
@@ -146,7 +173,14 @@ fn cursors_and_zoom_are_per_view() {
         assert_eq!(u.studio.sz.ref_h.get(&0), Some(&(1e-6, 0.0)), "{l:?}: the horizontal scale of a reference");
         assert_eq!(u.zoom_view.vfactor, 4.0, "{l:?}: Y zoom");
         u.view_go(1);
-        assert!(u.m.cursor == CursorMode::Volt && !u.m.zoom && u.studio.sz.lane.is_none() && u.studio.sz.ref_h.is_empty() && u.zoom_view.vfactor == 1.0, "{l:?}");
+        assert!(
+            u.m.cursor == CursorMode::Volt
+                && !u.m.zoom
+                && u.studio.sz.lane.is_none()
+                && u.studio.sz.ref_h.is_empty()
+                && u.zoom_view.vfactor == 1.0,
+            "{l:?}"
+        );
         assert_eq!(u.m.cur_b_source, Some(WaveId::Ch(1)), "{l:?}");
     }
 }
@@ -175,7 +209,14 @@ fn panels_are_per_view_and_closing_the_table_in_one_leaves_the_other() {
         u.view_go(0);
         assert_eq!(u.studio.view, StudioView::Docked, "{l:?}: the table is still there in view 1");
         assert_eq!((u.m.pane, u.m.hist), (1, Hist::Off), "{l:?}");
-        assert!(!u.studio.compact && !u.studio.panel.collapsed && u.m.studio_ov == 0 && !u.m.studio_detail && u.m.eye_pll_bw == 0.0, "{l:?}");
+        assert!(
+            !u.studio.compact
+                && !u.studio.panel.collapsed
+                && u.m.studio_ov == 0
+                && !u.m.studio_detail
+                && u.m.eye_pll_bw == 0.0,
+            "{l:?}"
+        );
         assert_eq!(u.m.studio_view, "docked", "{l:?}");
         u.view_go(1);
         assert_eq!(u.studio.view, StudioView::Waveform, "{l:?}");
@@ -199,7 +240,10 @@ fn the_docking_arrangement_and_floating_panels_are_per_view() {
     let text = u.dock_text();
     assert!(text.contains(';'), "{text}");
     u.view_go(0);
-    assert!(u.studio.dock.float_rect[super::dock::VKind::Hist.idx()].is_none() && !u.studio.dock.float_on[super::dock::VKind::Hist.idx()]);
+    assert!(
+        u.studio.dock.float_rect[super::dock::VKind::Hist.idx()].is_none()
+            && !u.studio.dock.float_on[super::dock::VKind::Hist.idx()]
+    );
     u.view_go(1);
     assert_eq!(u.studio.dock.float_rect[super::dock::VKind::Hist.idx()], Some(Rect::new(30, 40, 300, 220)));
     assert!(u.studio.dock.float_on[super::dock::VKind::Hist.idx()]);
@@ -307,7 +351,13 @@ fn a_setup_with_three_views_round_trips_through_save_recall_and_the_scpi_block()
         v.view_go(1);
         assert_eq!(v.m.meas, vec![one(Meas::Vpp, 1), one(Meas::Vrms, 1)], "{l:?}");
         assert_eq!(v.m.cat, vec![a_cat()], "{l:?}");
-        assert!(v.m.cursor == CursorMode::Time && v.m.zoom && v.studio.view == StudioView::Floating && v.studio.panel.stats_mode == 1, "{l:?}");
+        assert!(
+            v.m.cursor == CursorMode::Time
+                && v.m.zoom
+                && v.studio.view == StudioView::Floating
+                && v.studio.panel.stats_mode == 1,
+            "{l:?}"
+        );
         assert_eq!(v.studio.pinned, Some(vec![MeasKey::One(Meas::Vrms, WaveId::Ch(1))]), "{l:?}");
         assert!(v.studio.search().is_none(), "{l:?}");
         // the text written again is the one read
@@ -377,7 +427,6 @@ fn the_slot_escapes_what_it_separates_with() {
     assert!(crate::store::views::slot_checked("ch1.on=true").is_err(), "the scope is not part of a view");
 }
 
-
 #[test]
 fn views_follow_the_scpi_commands() {
     for l in LAYOUTS {
@@ -427,7 +476,9 @@ fn define_math(u: &mut Ui) {
     u.m.math_b = 1;
 }
 
-fn math_lane(u: &Ui) -> bool { u.trace_sources().contains(&super::workspace::Trace::Math(u.m.math_sel)) }
+fn math_lane(u: &Ui) -> bool {
+    u.trace_sources().contains(&super::workspace::Trace::Math(u.m.math_sel))
+}
 
 #[test]
 fn a_math_channel_is_shown_per_view_and_defined_for_all() {

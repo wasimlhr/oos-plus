@@ -15,7 +15,18 @@ fn mixed() -> Ui {
     let data: Vec<f32> = (0..20_000)
         .map(|i| {
             let t = i as f64;
-            let square: f64 = (0..20).filter(|k| !matches!(k, 16 | 17)).map(|k| trap(t, k as f64 * 1000.0 + 250.0, k as f64 * 1000.0 + 750.0, if k == 12 { 100.0 } else { 10.0 }, 3.0)).sum();
+            let square: f64 = (0..20)
+                .filter(|k| !matches!(k, 16 | 17))
+                .map(|k| {
+                    trap(
+                        t,
+                        k as f64 * 1000.0 + 250.0,
+                        k as f64 * 1000.0 + 750.0,
+                        if k == 12 { 100.0 } else { 10.0 },
+                        3.0,
+                    )
+                })
+                .sum();
             (square + trap(t, 5900.0, 5950.0, 10.0, 3.0) + trap(t, 8900.0, 9000.0, 10.0, 1.2)) as f32
         })
         .collect();
@@ -79,18 +90,44 @@ fn the_sheet_has_the_rows_of_the_type_and_they_fit() {
     use Item::*;
     let mut u = mixed();
     let rows = |u: &Ui| u.addrail_search_items();
-    assert_eq!(rows(&u), vec![SrchWhich, SrchType, SrchSrc, SrchSlope, SrchLevel, Srch50, SrchShow, SrchEvent, SrchFromTrig, SrchToTrig, SearchTable, SrchRemove]);
+    assert_eq!(
+        rows(&u),
+        vec![
+            SrchWhich,
+            SrchType,
+            SrchSrc,
+            SrchSlope,
+            SrchLevel,
+            Srch50,
+            SrchShow,
+            SrchEvent,
+            SrchFromTrig,
+            SrchToTrig,
+            SearchTable,
+            SrchRemove
+        ]
+    );
     assert_eq!((u.item_label(SrchSlope), u.item_label(SrchLevel)), ("Slope", "Level"));
     u.select_option(SrchType, "Pulse");
-    assert!(rows(&u).contains(&SrchWhen) && rows(&u).contains(&SrchTime) && !rows(&u).contains(&SrchTime2) && !rows(&u).contains(&SrchLevel2));
-    assert_eq!((u.item_label(SrchSlope), u.options(SrchSlope)), ("Polarity", vec!["Positive".to_string(), "Negative".to_string()]));
+    assert!(
+        rows(&u).contains(&SrchWhen)
+            && rows(&u).contains(&SrchTime)
+            && !rows(&u).contains(&SrchTime2)
+            && !rows(&u).contains(&SrchLevel2)
+    );
+    assert_eq!(
+        (u.item_label(SrchSlope), u.options(SrchSlope)),
+        ("Polarity", vec!["Positive".to_string(), "Negative".to_string()])
+    );
     assert_eq!(u.options(SrchWhen), vec![">", "<", "Equal", "Not equal", "Inside", "Outside"]);
     u.select_option(SrchWhen, "Inside");
     assert!(rows(&u).contains(&SrchTime2));
     assert_eq!((u.item_label(SrchTime), u.item_label(SrchTime2)), ("Lower limit", "Upper limit"));
     u.open_menu(MenuId::Search);
     let mut cv = Canvas::new(W, H);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     super::search_dense_tests::shot(&cv, "search-type-pulse");
     u.close_menu();
@@ -132,7 +169,10 @@ fn the_trigger_gives_and_takes_every_type_of_the_search() {
     u.studio.search_put(SearchSpec { slope: 1, when: WhenKind::In, t1: 1e-3, t2: 2e-3, ..sp });
     u.activate(Item::SrchToTrig);
     let m = &u.m;
-    assert_eq!((m.trig_type, m.trig_src, m.trig_pol, m.trig_when, m.trig_t1, m.trig_t2), (TrigType::Runt, 1, Pol::Neg, WhenKind::In, 1e-3, 2e-3));
+    assert_eq!(
+        (m.trig_type, m.trig_src, m.trig_pol, m.trig_when, m.trig_t1, m.trig_t2),
+        (TrigType::Runt, 1, Pol::Neg, WhenKind::In, 1e-3, 2e-3)
+    );
     assert_eq!((m.trig_level, m.trig_level2), (sp.level, sp.level2));
     let mut on_first = u.m.clone();
     on_first.trig_src = 0;
@@ -184,12 +224,22 @@ fn the_types_search_a_megapoint_once() {
         let n = u.studio_search_events().len();
         let first = t.elapsed();
         let t = std::time::Instant::now();
-        for _ in 0..100 { assert_eq!(u.studio_search_events().len(), n); }
+        for _ in 0..100 {
+            assert_eq!(u.studio_search_events().len(), n);
+        }
         let again = t.elapsed() / 100;
         eprintln!("{kind:?}: {n} events in {first:?}, asked again in {again:?}");
         assert!(again < first / 20 || again < std::time::Duration::from_micros(50), "{kind:?}: {again:?} of {first:?}");
         // (a clean square has no runt)
-        assert_eq!(n, match kind { TrigType::Edge | TrigType::Window => 64_000, TrigType::Runt => 0, _ => 32_000 }, "{kind:?}");
+        assert_eq!(
+            n,
+            match kind {
+                TrigType::Edge | TrigType::Window => 64_000,
+                TrigType::Runt => 0,
+                _ => 32_000,
+            },
+            "{kind:?}"
+        );
     }
 }
 
@@ -199,7 +249,10 @@ fn a_window_search_marks_where_the_signal_comes_between_the_levels_leaves_them_o
     u.select_option(Item::SrchType, "Window");
     let sp = u.studio.search().unwrap();
     assert!((sp.level - 2.25).abs() < 0.01 && (sp.level2 - 0.75).abs() < 0.01, "25 % and 75 %: {sp:?}");
-    assert_eq!((u.item_label(Item::SrchSlope), u.options(Item::SrchSlope)), ("Position", vec!["Enter".to_string(), "Exit".to_string(), "Inside".to_string()]));
+    assert_eq!(
+        (u.item_label(Item::SrchSlope), u.options(Item::SrchSlope)),
+        ("Position", vec!["Enter".to_string(), "Exit".to_string(), "Inside".to_string()])
+    );
     // every edge of the 19 pulses comes between the levels and leaves them; the runt comes in and goes back
     assert_eq!(u.value(Item::SrchSlope), "Enter");
     assert_eq!(u.studio_search_events().len(), 39);
@@ -249,7 +302,12 @@ fn equal_and_not_equal_are_within_a_twentieth_of_the_time_or_not() {
     count(&mut u, |s| s.t1 = 100e-6);
     u.activate(Item::SrchToTrig);
     assert_eq!(u.m.trig_when, WhenKind::In);
-    assert!((u.m.trig_t1 - 95e-6).abs() < 1e-9 && (u.m.trig_t2 - 105e-6).abs() < 1e-9, "{} {}", u.m.trig_t1, u.m.trig_t2);
+    assert!(
+        (u.m.trig_t1 - 95e-6).abs() < 1e-9 && (u.m.trig_t2 - 105e-6).abs() < 1e-9,
+        "{} {}",
+        u.m.trig_t1,
+        u.m.trig_t2
+    );
     // a view keeps it
     let text = u.view_ui_text();
     let mut v = mixed();
@@ -266,10 +324,15 @@ fn a_search_whose_marks_are_hidden_keeps_its_events_its_badge_and_its_place() {
     u.m.delay = 0.0;
     let mut cv = Canvas::new(W, H);
     let amber = |u: &mut Ui, cv: &mut Canvas| {
-        for _ in 0..4 { u.step(0.05); }
+        for _ in 0..4 {
+            u.step(0.05);
+        }
         u.render(cv);
         let a = u.plot.area;
-        (a.x..a.right()).flat_map(|x| (a.y..a.bottom()).map(move |y| (x, y))).filter(|&(x, y)| px(cv, x, y) == SEARCH_COLS[0]).count()
+        (a.x..a.right())
+            .flat_map(|x| (a.y..a.bottom()).map(move |y| (x, y)))
+            .filter(|&(x, y)| px(cv, x, y) == SEARCH_COLS[0])
+            .count()
     };
     // (the trigger's marker is amber too: the marks are what a search adds to it)
     let shown = amber(&mut u, &mut cv);

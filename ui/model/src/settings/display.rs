@@ -93,10 +93,7 @@ pub const DENSITY: [Setting; 1] = [Setting {
     key: "density",
     scpi: Scpi::none("a choice of the screen's layout, not of the measurement"),
     ty: Ty::Choice(
-        &[
-            Choice { store: "Scope", scpi: "", label: "Scope" },
-            Choice { store: "Full", scpi: "", label: "Full" },
-        ],
+        &[Choice { store: "Scope", scpi: "", label: "Scope" }, Choice { store: "Full", scpi: "", label: "Full" }],
         Unknown::Value,
         Arg::Keyword,
     ),

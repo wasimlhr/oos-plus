@@ -7,8 +7,8 @@
 //! Also here: the cursor and search settings pages (rows are `Item`s like every other sheet page), the cursor
 //! readouts (a box at each cursor and a delta box) and the search itself (its own source, type and settings).
 use super::meascatalog::wrap_lines;
-use super::sheet::{SHEET_FOOT, SHEET_HEAD, SHEET_ROW};
 use super::sheet::PanelKind;
+use super::sheet::{SHEET_FOOT, SHEET_HEAD, SHEET_ROW};
 use super::studio::chip;
 use super::*;
 use std::sync::Arc;
@@ -161,7 +161,15 @@ pub(super) struct RailGeo {
 const SLOPES: [&str; 3] = ["Rising", "Falling", "Either"];
 const POLS: [&str; 2] = ["Positive", "Negative"];
 /// What a search looks for: the trigger's types of one source that the software trigger finds in a record.
-pub(super) const SEARCH_TYPES: [TrigType; 7] = [TrigType::Edge, TrigType::Pulse, TrigType::Slope, TrigType::Timeout, TrigType::Runt, TrigType::Window, TrigType::Bus];
+pub(super) const SEARCH_TYPES: [TrigType; 7] = [
+    TrigType::Edge,
+    TrigType::Pulse,
+    TrigType::Slope,
+    TrigType::Timeout,
+    TrigType::Runt,
+    TrigType::Window,
+    TrigType::Bus,
+];
 /// Where a Window search marks: the signal comes between the two levels, leaves them, or was between them for a time.
 const WINS: [&str; 3] = ["Enter", "Exit", "Inside"];
 /// A time is equal to the limit within this part of it: no two pulses of a record are the same to the sample.
@@ -179,12 +187,31 @@ pub(super) fn polar(kind: TrigType) -> bool {
 impl SearchSpec {
     /// An edge search; the settings of the other types are the trigger's defaults.
     pub fn edge(src: WaveId, level: f32, slope: u8) -> Self {
-        SearchSpec { src, level, slope, kind: TrigType::Edge, level2: level, when: WhenKind::Lt, t1: 20e-6, t2: 40e-6, eq: false, hidden: false, bus: BusWhat::Frame, val: 0 }
+        SearchSpec {
+            src,
+            level,
+            slope,
+            kind: TrigType::Edge,
+            level2: level,
+            when: WhenKind::Lt,
+            t1: 20e-6,
+            t2: 40e-6,
+            eq: false,
+            hidden: false,
+            bus: BusWhat::Frame,
+            val: 0,
+        }
     }
 
     /// The names of the slope row: slopes, the two polarities of Pulse and Runt, or where a Window search marks.
     pub fn slopes(&self) -> &'static [&'static str] {
-        if self.kind == TrigType::Window { &WINS } else if polar(self.kind) { &POLS } else { &SLOPES }
+        if self.kind == TrigType::Window {
+            &WINS
+        } else if polar(self.kind) {
+            &POLS
+        } else {
+            &SLOPES
+        }
     }
 
     /// The time condition as one number, which a view stores and the row lists: `WhenKind as u8`, 5 for Equal and
@@ -215,7 +242,9 @@ impl SearchSpec {
     /// The conditions of the type in the order of the row: Equal and Not equal after the two of one limit.
     pub fn conds(&self) -> Vec<u8> {
         let mut v: Vec<u8> = self.whens().iter().map(|&w| w as u8).collect();
-        if let Some(at) = v.iter().position(|&c| c == WhenKind::Lt as u8) { v.splice(at + 1..at + 1, [5, 6]); }
+        if let Some(at) = v.iter().position(|&c| c == WhenKind::Lt as u8) {
+            v.splice(at + 1..at + 1, [5, 6]);
+        }
         v
     }
 
@@ -234,11 +263,19 @@ impl SearchSpec {
     /// lower level and the lower limit are not above the upper ones (a type of one level has no lower one).
     pub fn fit(mut self) -> Self {
         self.val = self.val.min(BUS_VAL_MAX);
-        if !SEARCH_TYPES.contains(&self.kind) { self.kind = TrigType::Edge; }
-        if self.slope as usize >= self.slopes().len() { self.slope = 0; }
-        if self.when == WhenKind::Off && self.kind != TrigType::Runt { self.when = WhenKind::Gt; }
+        if !SEARCH_TYPES.contains(&self.kind) {
+            self.kind = TrigType::Edge;
+        }
+        if self.slope as usize >= self.slopes().len() {
+            self.slope = 0;
+        }
+        if self.when == WhenKind::Off && self.kind != TrigType::Runt {
+            self.when = WhenKind::Gt;
+        }
         self.level2 = if self.kind.two_level() { self.level2.min(self.level) } else { self.level };
-        if !(self.t1 > 0.0) { self.t1 = 20e-6; }
+        if !(self.t1 > 0.0) {
+            self.t1 = 20e-6;
+        }
         self.eq &= matches!(self.when, WhenKind::In | WhenKind::Out);
         self.t2 = self.t2.max(self.t1);
         self
@@ -249,7 +286,11 @@ impl SearchSpec {
         use oos_dsp::trigger::{Slope as S, Trigger as T, When};
         let slope = [S::Rising, S::Falling, S::Either][self.slope.min(2) as usize];
         let pol = if self.slope == 1 { Pol::Neg } else { Pol::Pos };
-        let when = if self.eq { self.when.cond(self.t1 * (1.0 - EQ_TOL), self.t1 * (1.0 + EQ_TOL)) } else { self.when.cond(self.t1, self.t2) };
+        let when = if self.eq {
+            self.when.cond(self.t1 * (1.0 - EQ_TOL), self.t1 * (1.0 + EQ_TOL))
+        } else {
+            self.when.cond(self.t1, self.t2)
+        };
         let timed = when.unwrap_or(When::Gt(0.0));
         let (src, level, lo, hi) = (0, self.level, self.level.min(self.level2), self.level.max(self.level2));
         match self.kind {
@@ -259,7 +300,12 @@ impl SearchSpec {
             TrigType::Runt => T::Runt { src, pol, lo, hi, when },
             TrigType::Window => {
                 use oos_dsp::trigger::WinWhen;
-                T::Window { src, lo, hi, when: [WinWhen::Enter, WinWhen::Exit, WinWhen::Inside(timed)][self.slope.min(2) as usize] }
+                T::Window {
+                    src,
+                    lo,
+                    hi,
+                    when: [WinWhen::Enter, WinWhen::Exit, WinWhen::Inside(timed)][self.slope.min(2) as usize],
+                }
             }
             _ => T::Edge { src, slope, level },
         }
@@ -290,7 +336,10 @@ impl Ui {
     /// The source chosen on the Cursors and Search pages: the one tapped, else the selected waveform.
     pub(super) fn rail_source(&self) -> Option<WaveId> {
         let shown = self.sheet_shown_sources();
-        self.sheet.add.src.filter(|s| shown.contains(s))
+        self.sheet
+            .add
+            .src
+            .filter(|s| shown.contains(s))
             .or_else(|| Some(self.cursor_source()).filter(|s| shown.contains(s)))
             .or_else(|| shown.first().copied())
     }
@@ -325,13 +374,11 @@ impl Ui {
             (3, _) => Some(self.m.spec_src),
             _ => Some(self.cursor_source()),
         };
-        tapped.filter(|s| cands.contains(s))
-            .or(now.filter(|s| cands.contains(s)))
-            .or_else(|| {
-                // Y defaults to a channel other than X
-                let x = if row == 1 { self.rail_plot_choice(0) } else { None };
-                cands.iter().copied().find(|c| Some(*c) != x).or_else(|| cands.first().copied())
-            })
+        tapped.filter(|s| cands.contains(s)).or(now.filter(|s| cands.contains(s))).or_else(|| {
+            // Y defaults to a channel other than X
+            let x = if row == 1 { self.rail_plot_choice(0) } else { None };
+            cands.iter().copied().find(|c| Some(*c) != x).or_else(|| cands.first().copied())
+        })
     }
 
     /// The measurement chips of the Trend page.
@@ -341,21 +388,41 @@ impl Ui {
         kind == AddKind::Plot && self.sheet.add.plot.min(PLOTS.len() - 1) == 4
     }
 
-    fn rail_has_sources(&self, kind: AddKind) -> bool { !self.rail_src_rows(kind).is_empty() }
+    fn rail_has_sources(&self, kind: AddKind) -> bool {
+        !self.rail_src_rows(kind).is_empty()
+    }
 
     pub(super) fn rail_geo(&self) -> RailGeo {
         let (r, _, _) = self.sheet_chrome();
         let w = r.w - 2 * PAD;
         let x = r.x + PAD;
-        let mut g = RailGeo { rows: Vec::new(), preview: Rect::new(0, 0, 0, 0), desc: Rect::new(0, 0, 0, 0), types: Vec::new(), srcs: Vec::new(), srcs_b: Vec::new(), meas: Vec::new(), src_labels: Vec::new(), note: Rect::new(0, 0, 0, 0), foot: Vec::new() };
+        let mut g = RailGeo {
+            rows: Vec::new(),
+            preview: Rect::new(0, 0, 0, 0),
+            desc: Rect::new(0, 0, 0, 0),
+            types: Vec::new(),
+            srcs: Vec::new(),
+            srcs_b: Vec::new(),
+            meas: Vec::new(),
+            src_labels: Vec::new(),
+            note: Rect::new(0, 0, 0, 0),
+            foot: Vec::new(),
+        };
         let Some(kind) = self.sheet.add.kind else {
-            g.rows = ADD_KINDS.iter().enumerate().map(|(i, (k, _, _))| (*k, Rect::new(x, r.y + SHEET_HEAD + 6 + i as i32 * (RAIL_ROW + 2), w, RAIL_ROW))).collect();
+            g.rows = ADD_KINDS
+                .iter()
+                .enumerate()
+                .map(|(i, (k, _, _))| (*k, Rect::new(x, r.y + SHEET_HEAD + 6 + i as i32 * (RAIL_ROW + 2), w, RAIL_ROW)))
+                .collect();
             return g;
         };
         let (names, _) = self.rail_types(kind);
         // the picture gives way a little when the page has two rows of sources
         let rows = self.rail_src_rows(kind);
-        let below = (names.len() as i32 + 2) / 3 * 44 + rows.len() as i32 * 44 + if self.rail_has_meas_chips(kind) { 44 } else { 0 } + 46;
+        let below = (names.len() as i32 + 2) / 3 * 44
+            + rows.len() as i32 * 44
+            + if self.rail_has_meas_chips(kind) { 44 } else { 0 }
+            + 46;
         let avail = r.h - SHEET_HEAD - 6 - 6 - 40 - SHEET_FOOT - below;
         let ph = avail.clamp(60, 88);
         let mut y = r.y + SHEET_HEAD + 6;
@@ -378,9 +445,20 @@ impl Ui {
             for (k, (label, cands)) in src_rows.iter().enumerate() {
                 let n = cands.len().clamp(1, 8) as i32;
                 let cw = (w - lw - (n - 1) * 4) / n;
-                let row: Vec<(WaveId, Rect)> = cands.iter().take(8).enumerate().map(|(i, &id)| (id, Rect::new(x + lw + i as i32 * (cw + 4), y, cw, 40))).collect();
-                if labelled { g.src_labels.push((*label, Rect::new(x, y, lw, 40))); }
-                if k == 0 { g.srcs = row; } else { g.srcs_b = row; }
+                let row: Vec<(WaveId, Rect)> = cands
+                    .iter()
+                    .take(8)
+                    .enumerate()
+                    .map(|(i, &id)| (id, Rect::new(x + lw + i as i32 * (cw + 4), y, cw, 40)))
+                    .collect();
+                if labelled {
+                    g.src_labels.push((*label, Rect::new(x, y, lw, 40)));
+                }
+                if k == 0 {
+                    g.srcs = row;
+                } else {
+                    g.srcs_b = row;
+                }
                 y += 44;
             }
         }
@@ -409,12 +487,18 @@ impl Ui {
     fn rail_acts(&self, kind: AddKind) -> Vec<RailAct> {
         match kind {
             AddKind::Cursors if self.m.cursor != CursorMode::Off => vec![RailAct::Settings, RailAct::Remove],
-            AddKind::Search if self.studio.searches.iter().all(Option::is_some) => vec![RailAct::Settings, RailAct::Remove],
+            AddKind::Search if self.studio.searches.iter().all(Option::is_some) => {
+                vec![RailAct::Settings, RailAct::Remove]
+            }
             // another one while a place is free; a search is removed on its sheet
             AddKind::Search if self.studio.search().is_some() => vec![RailAct::Add, RailAct::Settings],
             AddKind::Table if self.rail_table_shown(self.sheet.add.table) => vec![RailAct::Remove],
             AddKind::Plot if self.rail_plot_shown(self.sheet.add.plot) => {
-                if self.rail_plot_menu(self.sheet.add.plot).is_some() { vec![RailAct::Settings, RailAct::Remove] } else { vec![RailAct::Remove] }
+                if self.rail_plot_menu(self.sheet.add.plot).is_some() {
+                    vec![RailAct::Settings, RailAct::Remove]
+                } else {
+                    vec![RailAct::Remove]
+                }
             }
             AddKind::Cursors | AddKind::Search | AddKind::Table | AddKind::Plot => vec![RailAct::Add],
             AddKind::Measure => vec![RailAct::Choose],
@@ -425,8 +509,16 @@ impl Ui {
     /// The table the page opens on: one that is on the screen, else the events of what is on (a decoder, then a
     /// search), else the measurements.
     pub(super) fn rail_table_default(&self) -> usize {
-        if let Some(i) = (0..TABLES.len()).rev().find(|&i| self.rail_table_shown(i)) { return i; }
-        if self.rail_kind_on(AddKind::Bus) { 2 } else if self.studio.search().is_some() { 1 } else { 0 }
+        if let Some(i) = (0..TABLES.len()).rev().find(|&i| self.rail_table_shown(i)) {
+            return i;
+        }
+        if self.rail_kind_on(AddKind::Bus) {
+            2
+        } else if self.studio.search().is_some() {
+            1
+        } else {
+            0
+        }
     }
 
     fn rail_table_shown(&self, i: usize) -> bool {
@@ -439,7 +531,11 @@ impl Ui {
 
     fn rail_plot_shown(&self, i: usize) -> bool {
         let (_, _, k) = PLOTS[i.min(PLOTS.len() - 1)];
-        if i == 0 { self.xy } else { self.panel_shown(k) }
+        if i == 0 {
+            self.xy
+        } else {
+            self.panel_shown(k)
+        }
     }
 
     fn rail_plot_menu(&self, i: usize) -> Option<MenuId> {
@@ -455,18 +551,43 @@ impl Ui {
         match kind {
             AddKind::Cursors => match self.m.cursor {
                 CursorMode::Off => "Cursors are off".to_string(),
-                _ => format!("{} cursors on {}", CURSORS[self.rail_cursor_kind()].0, self.wave_name(self.cursor_source())),
+                _ => format!(
+                    "{} cursors on {}",
+                    CURSORS[self.rail_cursor_kind()].0,
+                    self.wave_name(self.cursor_source())
+                ),
             },
             AddKind::Search => match self.studio.search() {
-                Some(sp) => format!("Search {} on {}: {}", self.studio.search_sel + 1, self.wave_name(sp.src), self.studio_search_count()),
+                Some(sp) => format!(
+                    "Search {} on {}: {}",
+                    self.studio.search_sel + 1,
+                    self.wave_name(sp.src),
+                    self.studio_search_count()
+                ),
                 None => "No search yet".to_string(),
             },
             AddKind::Table => {
                 let i = self.sheet.add.table.min(TABLES.len() - 1);
-                if self.rail_table_shown(i) { "On the screen".to_string() } else if i == 2 && !self.rail_kind_on(AddKind::Bus) { "Needs a decoder: Add > Bus".to_string() } else { String::new() }
+                if self.rail_table_shown(i) {
+                    "On the screen".to_string()
+                } else if i == 2 && !self.rail_kind_on(AddKind::Bus) {
+                    "Needs a decoder: Add > Bus".to_string()
+                } else {
+                    String::new()
+                }
             }
-            AddKind::Plot => if self.rail_plot_shown(self.sheet.add.plot) { "On the screen".to_string() } else { String::new() },
-            AddKind::Measure => match self.measurement_count() { 0 => "No measurements yet".to_string(), 1 => "1 measurement on the screen".to_string(), n => format!("{n} measurements on the screen") },
+            AddKind::Plot => {
+                if self.rail_plot_shown(self.sheet.add.plot) {
+                    "On the screen".to_string()
+                } else {
+                    String::new()
+                }
+            }
+            AddKind::Measure => match self.measurement_count() {
+                0 => "No measurements yet".to_string(),
+                1 => "1 measurement on the screen".to_string(),
+                n => format!("{n} measurements on the screen"),
+            },
             _ => String::new(),
         }
     }
@@ -476,7 +597,10 @@ impl Ui {
     pub(super) fn draw_sheet_add_panel(&self, cv: &mut Canvas) {
         let f = self.fonts();
         let kind = self.sheet.add.kind;
-        let title = match kind { Some(k) => ADD_KINDS.iter().find(|e| e.0 == k).map_or("Add", |e| e.1), None => "Add" };
+        let title = match kind {
+            Some(k) => ADD_KINDS.iter().find(|e| e.0 == k).map_or("Add", |e| e.1),
+            None => "Add",
+        };
         self.sheet_draw_chrome(cv, title);
         let g = self.rail_geo();
         let Some(kind) = kind else {
@@ -488,7 +612,9 @@ impl Ui {
                 cv.text(&f.mb, r.x + 12, r.y + 24, name, TEXT);
                 cv.text(&f.s, r.x + 12, r.y + 44, sub, DIM);
                 cv.no_clip();
-                if on { cv.text_in(&f.sb, Rect::new(r.right() - 64, r.y, 40, 30), 2, "On", ACCENT); }
+                if on {
+                    cv.text_in(&f.sb, Rect::new(r.right() - 64, r.y, 40, 30), 2, "On", ACCENT);
+                }
                 let (cx, cy) = (r.right() - 14, r.y + r.h / 2);
                 cv.line(cx - 3, cy - 6, cx + 3, cy, DIM);
                 cv.line(cx + 3, cy, cx - 3, cy + 6, DIM);
@@ -518,7 +644,11 @@ impl Ui {
         for (row, pick) in [(&g.srcs, chosen), (&g.srcs_b, chosen_b)] {
             for &(sid, r) in row {
                 let on = Some(sid) == pick;
-                if on { cv.round(r, 5, self.wave_color(sid), 255); } else { btn(cv, r, BTN, self.wave_color(sid)); }
+                if on {
+                    cv.round(r, 5, self.wave_color(sid), 255);
+                } else {
+                    btn(cv, r, BTN, self.wave_color(sid));
+                }
                 cv.text_in(&f.mb, r, 1, &self.wave_name(sid), if on { DARK_TEXT } else { TEXT });
             }
         }
@@ -528,7 +658,12 @@ impl Ui {
         let mchosen = self.sheet.add.meas.min(Self::TREND_MEAS.len() - 1);
         for &(i, r) in &g.meas {
             let on = i == mchosen && i < Self::TREND_MEAS.len();
-            if on { cv.round(r, 5, rgb(0x2e, 0x2e, 0x32), 255); cv.round_outline(r, 5, ACCENT); } else { btn(cv, r, BTN, BTN_BORDER); }
+            if on {
+                cv.round(r, 5, rgb(0x2e, 0x2e, 0x32), 255);
+                cv.round_outline(r, 5, ACCENT);
+            } else {
+                btn(cv, r, BTN, BTN_BORDER);
+            }
             if i == Self::TREND_MEAS.len() {
                 cv.text_in(&f.sb, r, 1, "More...", TEXT);
                 continue;
@@ -536,7 +671,13 @@ impl Ui {
             cv.text_in(&f.sb, r, 1, Self::TREND_MEAS[i].name(), if on { TEXT } else { DIM });
         }
         if self.rail_has_sources(kind) && g.srcs.is_empty() {
-            cv.text_in(&f.m, Rect::new(g.note.x, g.note.y - 44, g.note.w, 40), 0, "No source is on: turn on a channel", DIM);
+            cv.text_in(
+                &f.m,
+                Rect::new(g.note.x, g.note.y - 44, g.note.w, 40),
+                0,
+                "No source is on: turn on a channel",
+                DIM,
+            );
         }
         let note = self.rail_note(kind);
         if !note.is_empty() {
@@ -548,8 +689,30 @@ impl Ui {
         }
         for &(act, b) in &g.foot {
             let red = act == RailAct::Remove;
-            btn(cv, b, if red { mix(DLG_BG, RED, 30) } else if matches!(act, RailAct::Add | RailAct::Choose) { mix(BTN, ACCENT, 60) } else { BTN }, if red { RED } else if matches!(act, RailAct::Add | RailAct::Choose) { ACCENT } else { BTN_BORDER });
-            let label = match act { RailAct::Add => "Add", RailAct::Remove => "Remove", RailAct::Settings => "Settings", RailAct::Choose => "Choose a measurement" };
+            btn(
+                cv,
+                b,
+                if red {
+                    mix(DLG_BG, RED, 30)
+                } else if matches!(act, RailAct::Add | RailAct::Choose) {
+                    mix(BTN, ACCENT, 60)
+                } else {
+                    BTN
+                },
+                if red {
+                    RED
+                } else if matches!(act, RailAct::Add | RailAct::Choose) {
+                    ACCENT
+                } else {
+                    BTN_BORDER
+                },
+            );
+            let label = match act {
+                RailAct::Add => "Add",
+                RailAct::Remove => "Remove",
+                RailAct::Settings => "Settings",
+                RailAct::Choose => "Choose a measurement",
+            };
             cv.text_in(&f.mb, b, 1, label, if red { RED } else { TEXT });
         }
     }
@@ -584,10 +747,16 @@ impl Ui {
     fn rail_desc(&self, kind: AddKind) -> String {
         match kind {
             AddKind::Cursors => CURSORS[self.rail_cursor_kind()].1.into(),
-            AddKind::Search => "Marks every edge of the source on the waveform and counts them. Level and slope are set to the signal.".into(),
+            AddKind::Search => {
+                "Marks every edge of the source on the waveform and counts them. Level and slope are set to the signal."
+                    .into()
+            }
             AddKind::Table => TABLES[self.sheet.add.table.min(TABLES.len() - 1)].1.into(),
             AddKind::Plot => PLOTS[self.sheet.add.plot.min(PLOTS.len() - 1)].1.into(),
-            AddKind::Measure => "Amplitude, frequency, rise time and more, read from a waveform. Pick one and it joins the readout.".into(),
+            AddKind::Measure => {
+                "Amplitude, frequency, rise time and more, read from a waveform. Pick one and it joins the readout."
+                    .into()
+            }
             AddKind::Math => "A waveform calculated from others.".into(),
             AddKind::Ref => "A waveform kept to compare with.".into(),
             AddKind::Bus => "Decode I2C, SPI, UART and the other serial buses.".into(),
@@ -600,8 +769,12 @@ impl Ui {
         cv.round(r, 6, LINE, 255);
         let i = r.inset(1);
         cv.fill(i, rgb(0x08, 0x0a, 0x10));
-        for k in 1..8 { cv.vline(i.x + i.w * k / 8, i.y + 1, i.bottom() - 2, GRID_LINE); }
-        for k in 1..4 { cv.hline(i.x + 1, i.right() - 2, i.y + i.h * k / 4, GRID_LINE); }
+        for k in 1..8 {
+            cv.vline(i.x + i.w * k / 8, i.y + 1, i.bottom() - 2, GRID_LINE);
+        }
+        for k in 1..4 {
+            cv.hline(i.x + 1, i.right() - 2, i.y + i.h * k / 4, GRID_LINE);
+        }
         let mid = i.y + i.h / 2;
         let amp = (i.h / 2 - 12) as f32;
         let at = |t: f32| i.x + 4 + (t * (i.w - 8) as f32) as i32;
@@ -610,7 +783,9 @@ impl Ui {
             for px in 0..=(i.w - 8) {
                 let t = px as f32 / (i.w - 8) as f32;
                 let p = (i.x + 4 + px, mid - (f(t) * amp) as i32);
-                if let Some(q) = prev { cv.line(q.0, q.1, p.0, p.1, col); }
+                if let Some(q) = prev {
+                    cv.line(q.0, q.1, p.0, p.1, col);
+                }
                 prev = Some(p);
             }
         };
@@ -623,7 +798,10 @@ impl Ui {
                 for (v, name) in [(0.3f32, "A"), (0.7f32, "B")] {
                     let y = i.y + (i.h as f32 * v) as i32;
                     let mut x = i.x + 2;
-                    while x < i.right() - 3 { cv.hline(x, (x + 3).min(i.right() - 3), y, CURSOR); x += 7; }
+                    while x < i.right() - 3 {
+                        cv.hline(x, (x + 3).min(i.right() - 3), y, CURSOR);
+                        x += 7;
+                    }
                     let b = Rect::new(i.x + 6, y - 16, 40, 14);
                     cv.round(b, 2, CURSOR, 255);
                     cv.text_in(&f.s, b, 1, name, DARK_TEXT);
@@ -643,7 +821,13 @@ impl Ui {
                 }
                 let b = Rect::new(i.x + i.w / 2 - 42, i.bottom() - 22, 84, 16);
                 cv.round(b, 2, BAR, 255);
-                cv.text_in(&f.s, b, 1, if id == "cursors" { "\u{394}t  \u{394}v" } else { "\u{394}t  1/\u{394}t" }, TEXT);
+                cv.text_in(
+                    &f.s,
+                    b,
+                    1,
+                    if id == "cursors" { "\u{394}t  \u{394}v" } else { "\u{394}t  1/\u{394}t" },
+                    TEXT,
+                );
             }
             "search" => {
                 curve(cv, yellow, &square);
@@ -661,7 +845,13 @@ impl Ui {
                     let cols: [i32; 4] = if id == "table_decode" { [30, 70, 100, 60] } else { [60, 60, 60, 60] };
                     let mut x = i.x + 14;
                     for (c, wcol) in cols.iter().enumerate() {
-                        let col = if head { TEXT } else if id == "table_search" && c == 0 { AMBER } else { DIM };
+                        let col = if head {
+                            TEXT
+                        } else if id == "table_search" && c == 0 {
+                            AMBER
+                        } else {
+                            DIM
+                        };
                         cv.fill(Rect::new(x, y + 5, (*wcol * 2 / 3).max(8), 3), col);
                         x += *wcol + 10;
                     }
@@ -672,8 +862,13 @@ impl Ui {
                 let side = (i.h - 12) / 2;
                 for k in 0..=120 {
                     let t = k as f32 / 120.0 * std::f32::consts::TAU;
-                    let p = (i.x + i.w / 2 + (t.sin() * side as f32 * 1.4) as i32, mid - ((2.0 * t + 0.8).sin() * side as f32) as i32);
-                    if let Some(q) = prev { cv.line(q.0, q.1, p.0, p.1, rgb(0x9c, 0xf0, 0x9c)); }
+                    let p = (
+                        i.x + i.w / 2 + (t.sin() * side as f32 * 1.4) as i32,
+                        mid - ((2.0 * t + 0.8).sin() * side as f32) as i32,
+                    );
+                    if let Some(q) = prev {
+                        cv.line(q.0, q.1, p.0, p.1, rgb(0x9c, 0xf0, 0x9c));
+                    }
                     prev = Some(p);
                 }
             }
@@ -696,13 +891,27 @@ impl Ui {
                 }
             }
             "spectrum" => {
-                curve(cv, yellow, &|t: f32| -0.75 + 0.1 * (t * 53.0).sin().abs() + if (t - 0.2).abs() < 0.012 { 1.2 } else if (t - 0.4).abs() < 0.012 { 0.7 } else if (t - 0.6).abs() < 0.012 { 0.4 } else { 0.0 });
+                curve(cv, yellow, &|t: f32| {
+                    -0.75
+                        + 0.1 * (t * 53.0).sin().abs()
+                        + if (t - 0.2).abs() < 0.012 {
+                            1.2
+                        } else if (t - 0.4).abs() < 0.012 {
+                            0.7
+                        } else if (t - 0.6).abs() < 0.012 {
+                            0.4
+                        } else {
+                            0.0
+                        }
+                });
             }
             "measure" => {
                 curve(cv, yellow, &square);
                 // the levels a rise time is read between, and the readout that carries the value
                 let (lo, hi) = (mid + (amp * 0.8) as i32, mid - (amp * 0.8) as i32);
-                for y in [hi, lo] { cv.dashed_hline(i.x + 3, i.right() - 4, y, 3, 3, mix(BG, TEXT, 120)); }
+                for y in [hi, lo] {
+                    cv.dashed_hline(i.x + 3, i.right() - 4, y, 3, 3, mix(BG, TEXT, 120));
+                }
                 let b = Rect::new(i.right() - 98, i.y + 6, 92, 16);
                 cv.round(b, 3, BAR, 255);
                 cv.text_in(&f.s, b, 1, "Pk-Pk 1.6 V", TEXT);
@@ -722,16 +931,24 @@ impl Ui {
     pub(super) fn sheet_add_panel_tap(&mut self, x: i32, y: i32) -> bool {
         let g = self.rail_geo();
         let Some(kind) = self.sheet.add.kind else {
-            if let Some(&(k, _)) = g.rows.iter().find(|(_, r)| r.contains(x, y)) { self.rail_open(k); }
+            if let Some(&(k, _)) = g.rows.iter().find(|(_, r)| r.contains(x, y)) {
+                self.rail_open(k);
+            }
             return true;
         };
         if let Some(&(i, _)) = g.types.iter().find(|(_, r)| r.contains(x, y)) {
             if kind == AddKind::Cursors {
                 // cursors that are on change their kind at once; else it is the kind Add puts on
                 self.sheet.add.cursor = i;
-                if self.m.cursor != CursorMode::Off { self.select_option(Item::CurMode, CURSORS[i].0); }
-            } else if kind == AddKind::Table { self.sheet.add.table = i; } else {
-                if self.sheet.add.plot != i { (self.sheet.add.src, self.sheet.add.src_b) = (None, None); }
+                if self.m.cursor != CursorMode::Off {
+                    self.select_option(Item::CurMode, CURSORS[i].0);
+                }
+            } else if kind == AddKind::Table {
+                self.sheet.add.table = i;
+            } else {
+                if self.sheet.add.plot != i {
+                    (self.sheet.add.src, self.sheet.add.src_b) = (None, None);
+                }
                 self.sheet.add.plot = i;
             }
             return true;
@@ -758,17 +975,26 @@ impl Ui {
             self.rail_plot_live(kind);
             return true;
         }
-        if let Some(&(act, _)) = g.foot.iter().find(|(_, r)| r.contains(x, y)) { self.rail_do(kind, act); }
+        if let Some(&(act, _)) = g.foot.iter().find(|(_, r)| r.contains(x, y)) {
+            self.rail_do(kind, act);
+        }
         true
     }
 
     /// A row of the first page: Math and Ref open the page that already exists, the others get their own.
-    pub(super) fn rail_open_pub(&mut self, k: AddKind) { self.rail_open(k) }
-    pub(super) fn rail_kind_on_pub(&self, k: AddKind) -> bool { self.rail_kind_on(k) }
+    pub(super) fn rail_open_pub(&mut self, k: AddKind) {
+        self.rail_open(k)
+    }
+    pub(super) fn rail_kind_on_pub(&self, k: AddKind) -> bool {
+        self.rail_kind_on(k)
+    }
 
     fn rail_open(&mut self, k: AddKind) {
         match k {
-            AddKind::Math => { self.studio_math_start(); self.open_submenu(MenuId::Math); }
+            AddKind::Math => {
+                self.studio_math_start();
+                self.open_submenu(MenuId::Math);
+            }
             AddKind::Ref => self.open_submenu(MenuId::Ref),
             AddKind::Bus => self.open_submenu(MenuId::Decode),
             _ => {
@@ -799,17 +1025,41 @@ impl Ui {
         let (a, b) = (self.rail_plot_choice(0), self.rail_plot_choice(1));
         match i {
             0 => {
-                if let (Some(WaveId::Ch(x)), Some(WaveId::Ch(y))) = (a, b) { self.xy_src = [x, y]; }
-            }
-            1 => if let Some(id) = a { if id != self.m.eye_src { let n = self.wave_name(id); self.select_option(Item::EyeSrc, &n); } },
-            2 => if let Some(WaveId::Ch(c)) = a { self.m.hist_src = Some(c); },
-            3 => if let Some(id) = a { if id != self.m.spec_src { let n = self.wave_name(id); self.select_option(Item::SpecSrc, &n); } },
-            _ => if let Some(src) = a {
-                let k = Self::TREND_MEAS[self.sheet.add.meas.min(Self::TREND_MEAS.len() - 1)];
-                if self.meas_add(k, src).is_ok() {
-                    if let Some(p) = self.m.meas.iter().position(|e| *e == (k, src)) { self.m.trend_sel[0] = 2 + p; }
+                if let (Some(WaveId::Ch(x)), Some(WaveId::Ch(y))) = (a, b) {
+                    self.xy_src = [x, y];
                 }
-            },
+            }
+            1 => {
+                if let Some(id) = a {
+                    if id != self.m.eye_src {
+                        let n = self.wave_name(id);
+                        self.select_option(Item::EyeSrc, &n);
+                    }
+                }
+            }
+            2 => {
+                if let Some(WaveId::Ch(c)) = a {
+                    self.m.hist_src = Some(c);
+                }
+            }
+            3 => {
+                if let Some(id) = a {
+                    if id != self.m.spec_src {
+                        let n = self.wave_name(id);
+                        self.select_option(Item::SpecSrc, &n);
+                    }
+                }
+            }
+            _ => {
+                if let Some(src) = a {
+                    let k = Self::TREND_MEAS[self.sheet.add.meas.min(Self::TREND_MEAS.len() - 1)];
+                    if self.meas_add(k, src).is_ok() {
+                        if let Some(p) = self.m.meas.iter().position(|e| *e == (k, src)) {
+                            self.m.trend_sel[0] = 2 + p;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -819,19 +1069,31 @@ impl Ui {
                 let (s, kind) = (self.rail_source(), self.sheet.add.cursor.min(CURSORS.len() - 1));
                 self.studio_cursors_add(s);
                 // (the cursors come on the trace; the kind chosen on the page is set through the row of the menu)
-                if CURSORS[kind].2 != self.m.cursor { self.select_option(Item::CurMode, CURSORS[kind].0); }
+                if CURSORS[kind].2 != self.m.cursor {
+                    self.select_option(Item::CurMode, CURSORS[kind].0);
+                }
             }
             (AddKind::Cursors, RailAct::Settings) => self.open_submenu(MenuId::Cursor),
             (AddKind::Cursors, RailAct::Remove) => self.studio_cursors_remove(),
-            (AddKind::Search, RailAct::Add) => { let s = self.rail_source(); self.studio_search_add(s); }
+            (AddKind::Search, RailAct::Add) => {
+                let s = self.rail_source();
+                self.studio_search_add(s);
+            }
             (AddKind::Search, RailAct::Settings) => self.open_submenu(MenuId::Search),
             (AddKind::Search, RailAct::Remove) => self.studio_search_remove(),
             (AddKind::Table, RailAct::Add) => self.rail_table_add(self.sheet.add.table),
             (AddKind::Table, RailAct::Remove) => self.rail_table_remove(self.sheet.add.table),
-            (AddKind::Plot, RailAct::Add) => { self.rail_plot_apply_sources(self.sheet.add.plot); self.rail_plot_add(self.sheet.add.plot) }
+            (AddKind::Plot, RailAct::Add) => {
+                self.rail_plot_apply_sources(self.sheet.add.plot);
+                self.rail_plot_add(self.sheet.add.plot)
+            }
             (AddKind::Measure, RailAct::Choose) => self.rail_measure_choose(),
             (AddKind::Plot, RailAct::Remove) => self.rail_plot_remove(self.sheet.add.plot),
-            (AddKind::Plot, RailAct::Settings) => if let Some(m) = self.rail_plot_menu(self.sheet.add.plot) { self.open_submenu(m); },
+            (AddKind::Plot, RailAct::Settings) => {
+                if let Some(m) = self.rail_plot_menu(self.sheet.add.plot) {
+                    self.open_submenu(m);
+                }
+            }
             _ => {}
         }
         self.relayout();
@@ -849,7 +1111,9 @@ impl Ui {
                 self.table.top = 0;
             }
             _ => {
-                if !self.rail_kind_on(AddKind::Bus) { return self.toast("Turn a decoder on first: Add > Bus"); }
+                if !self.rail_kind_on(AddKind::Bus) {
+                    return self.toast("Turn a decoder on first: Add > Bus");
+                }
                 self.set_events_pane(true);
             }
         }
@@ -866,27 +1130,45 @@ impl Ui {
 
     /// A row of the Windows column of the Add menu: the plot (an index of `PLOTS`) is on the screen, or it is put on /
     /// taken off by one tap.
-    pub(super) fn rail_plot_on(&self, i: usize) -> bool { self.rail_plot_shown(i) }
+    pub(super) fn rail_plot_on(&self, i: usize) -> bool {
+        self.rail_plot_shown(i)
+    }
     pub(super) fn rail_plot_toggle(&mut self, i: usize) {
-        if self.rail_plot_shown(i) { self.rail_plot_remove(i) } else { self.rail_plot_add(i) }
+        if self.rail_plot_shown(i) {
+            self.rail_plot_remove(i)
+        } else {
+            self.rail_plot_add(i)
+        }
         self.relayout();
     }
     /// The same for the events of the decoders (an index of `TABLES`).
-    pub(super) fn rail_table_on(&self, i: usize) -> bool { self.rail_table_shown(i) }
+    pub(super) fn rail_table_on(&self, i: usize) -> bool {
+        self.rail_table_shown(i)
+    }
     pub(super) fn rail_table_toggle(&mut self, i: usize) {
-        if self.rail_table_shown(i) { self.rail_table_remove(i) } else { self.rail_table_add(i) }
+        if self.rail_table_shown(i) {
+            self.rail_table_remove(i)
+        } else {
+            self.rail_table_add(i)
+        }
         self.relayout();
     }
 
     fn rail_plot_add(&mut self, i: usize) {
-        if i == 0 { return self.select_option(Item::XyMode, "XY"); }
+        if i == 0 {
+            return self.select_option(Item::XyMode, "XY");
+        }
         self.studio_apply_panel(PLOTS[i.min(PLOTS.len() - 1)].2);
     }
 
     fn rail_plot_remove(&mut self, i: usize) {
         match PLOTS[i.min(PLOTS.len() - 1)].0 {
             "XY" => self.select_option(Item::XyMode, "YT"),
-            "Eye" => if self.m.view == AView::Eye { self.adjust(Item::EyeOn, 1) },
+            "Eye" => {
+                if self.m.view == AView::Eye {
+                    self.adjust(Item::EyeOn, 1)
+                }
+            }
             "Histogram" => self.select_option(Item::Histogram, "Off"),
             _ => self.select_option(Item::PaneSel, "Traces"),
         }
@@ -896,12 +1178,20 @@ impl Ui {
 
     /// 1/dt as a frequency; "----" when the cursors sit on the same time.
     pub(super) fn inv_dt(dt: f64) -> String {
-        if dt.is_finite() && dt.abs() >= 1e-15 { si(1.0 / dt.abs(), "Hz") } else { "----".into() }
+        if dt.is_finite() && dt.abs() >= 1e-15 {
+            si(1.0 / dt.abs(), "Hz")
+        } else {
+            "----".into()
+        }
     }
 
     /// One tap: two waveform cursors on the chosen trace (the selected one when none is given).
     pub(super) fn studio_cursors_add(&mut self, src: Option<WaveId>) {
-        if let Some(s) = src { if self.set_cursor_source(s) { self.select_workspace_source(s); } }
+        if let Some(s) = src {
+            if self.set_cursor_source(s) {
+                self.select_workspace_source(s);
+            }
+        }
         self.m.cur_b_source = None;
         self.m.cursor = CursorMode::Track;
         // apart: a third and two thirds of the visible span
@@ -914,7 +1204,9 @@ impl Ui {
     pub(super) fn studio_cursors_remove(&mut self) {
         self.m.cursor = CursorMode::Off;
         self.m.cur_b_source = None;
-        if self.menu_open && self.menu == MenuId::Cursor { self.close_menu(); }
+        if self.menu_open && self.menu == MenuId::Cursor {
+            self.close_menu();
+        }
         self.settings_changed();
         self.relayout();
     }
@@ -922,7 +1214,9 @@ impl Ui {
     /// The Cursors button: the first tap puts the cursors on, the next ones open their settings.
     pub(super) fn studio_cursors_tap(&mut self) {
         if self.m.cursor == CursorMode::Off {
-            if self.menu_open { self.close_menu(); }
+            if self.menu_open {
+                self.close_menu();
+            }
             self.studio_cursors_add(None);
         } else {
             self.toggle_menu(MenuId::Cursor);
@@ -933,27 +1227,42 @@ impl Ui {
         let was = self.m.cursor;
         self.m.cursor = mode;
         let off_view = |f: f32| !(0.0..=1.0).contains(&f);
-        if was == CursorMode::Off || (was == CursorMode::Volt) != (mode == CursorMode::Volt) || off_view(self.m.cur_a) || off_view(self.m.cur_b) {
+        if was == CursorMode::Off
+            || (was == CursorMode::Volt) != (mode == CursorMode::Volt)
+            || off_view(self.m.cur_a)
+            || off_view(self.m.cur_b)
+        {
             (self.m.cur_a, self.m.cur_b) = (0.3, 0.7);
         }
-        if mode == CursorMode::Xy && was != CursorMode::Xy { (self.m.cur_c, self.m.cur_d) = (0.3, 0.7); }
+        if mode == CursorMode::Xy && was != CursorMode::Xy {
+            (self.m.cur_c, self.m.cur_d) = (0.3, 0.7);
+        }
         self.settings_changed();
         self.relayout();
     }
 
     pub(super) fn addrail_cursor_items(&self) -> Vec<Item> {
         // the Mode row is the one of the Default menu (Off, Time, Volt, Track, XY); the rows after it are Studio's
-        if self.m.cursor == CursorMode::Off { return vec![Item::CurMode, Item::CurSrc]; }
-        let mut v = vec![Item::CurMode, Item::CurSrc, Item::CurSecond, Item::CurReadout, Item::CurLink, Item::CurA, Item::CurB];
-        if self.m.cursor == CursorMode::Xy { v.extend([Item::CurC, Item::CurD]); }
-        if self.m.cursor != CursorMode::Volt { v.extend([Item::CurSnap, Item::CurSnapNow]); }
+        if self.m.cursor == CursorMode::Off {
+            return vec![Item::CurMode, Item::CurSrc];
+        }
+        let mut v =
+            vec![Item::CurMode, Item::CurSrc, Item::CurSecond, Item::CurReadout, Item::CurLink, Item::CurA, Item::CurB];
+        if self.m.cursor == CursorMode::Xy {
+            v.extend([Item::CurC, Item::CurD]);
+        }
+        if self.m.cursor != CursorMode::Volt {
+            v.extend([Item::CurSnap, Item::CurSnapNow]);
+        }
         v.push(Item::CurRemove);
         v
     }
 
     /// The cursor readouts at each cursor and the delta box, drawn into the lane `a`.
     pub(super) fn draw_studio_cursor_readouts(&self, cv: &mut Canvas, a: Rect) {
-        if self.m.layout != Layout::Studio || self.studio.cur_badge { return; }
+        if self.m.layout != Layout::Studio || self.studio.cur_badge {
+            return;
+        }
         let f = self.fonts();
         let source = self.cursor_source();
         let second = self.cursor_b_source();
@@ -974,8 +1283,12 @@ impl Ui {
                 va = self.wave_at_source(source, ta);
                 vb = self.wave_at_source(second, tb);
             }
-            for (k, (frac, t, v, u)) in [(self.m.cur_a, ta, va, unit), (self.m.cur_b, tb, vb, unit_b)].into_iter().enumerate() {
-                if !(0.0..=1.0).contains(&frac) { continue; }
+            for (k, (frac, t, v, u)) in
+                [(self.m.cur_a, ta, va, unit), (self.m.cur_b, tb, vb, unit_b)].into_iter().enumerate()
+            {
+                if !(0.0..=1.0).contains(&frac) {
+                    continue;
+                }
                 let x = a.x + (frac * a.w as f32) as i32;
                 let text = match (mode, v) {
                     (CursorMode::Track, Some(v)) => format!("{}  {}", si(t, "s"), si(v as f64, u)),
@@ -992,7 +1305,8 @@ impl Ui {
         let (scale, offset) = self.cursor_source_context().map_or((1.0, 0.0), |c| (c.1, c.2));
         let mut dv: Option<f64> = None;
         if matches!(mode, CursorMode::Volt | CursorMode::Xy) {
-            let (fa, fb) = if mode == CursorMode::Volt { (self.m.cur_a, self.m.cur_b) } else { (self.m.cur_c, self.m.cur_d) };
+            let (fa, fb) =
+                if mode == CursorMode::Volt { (self.m.cur_a, self.m.cur_b) } else { (self.m.cur_c, self.m.cur_d) };
             let level = |fr: f32| (self.zoom_divs_at(area, fr) * scale - offset) as f64;
             let (la, lb) = (level(fa), level(fb));
             for (fr, l) in [(fa, la), (fb, lb)] {
@@ -1001,7 +1315,9 @@ impl Ui {
             }
             dv = Some(lb - la);
         } else if let (Some(x), Some(y)) = (va, vb) {
-            if unit == unit_b { dv = Some((y - x) as f64); }
+            if unit == unit_b {
+                dv = Some((y - x) as f64);
+            }
         }
         // the delta box
         let mut lines: Vec<String> = Vec::new();
@@ -1011,35 +1327,51 @@ impl Ui {
         }
         if let Some(dv) = dv {
             let mut line = format!("\u{394}v {}", si(dv, unit));
-            if vertical && (tb - ta).abs() > 0.0 { line.push_str(&format!("   \u{394}v/\u{394}t {}", si(dv / (tb - ta), &format!("{unit}/s")))); }
+            if vertical && (tb - ta).abs() > 0.0 {
+                line.push_str(&format!("   \u{394}v/\u{394}t {}", si(dv / (tb - ta), &format!("{unit}/s"))));
+            }
             lines.push(line);
         }
-        if lines.is_empty() { return; }
+        if lines.is_empty() {
+            return;
+        }
         let w = lines.iter().map(|l| f.s.width(l)).max().unwrap_or(0) + 16;
         let h = 8 + lines.len() as i32 * 16;
         // both time cursors outside the view: nothing to read here
         let off = |fr: f32| !(0.0..=1.0).contains(&fr);
-        if vertical && off(self.m.cur_a) && off(self.m.cur_b) { return; }
+        if vertical && off(self.m.cur_a) && off(self.m.cur_b) {
+            return;
+        }
         // at the top left of the lane (right of its volts labels), with the colour of its channel; with time cursors
         // under the tags and the two value boxes of the cursors (which stand in the first 44 px of the lane)
         let r = Rect::new(a.x + 50, a.y + if vertical { 48 } else { 6 }, w + 8, h);
         cv.round(r, 4, CURSOR, 255);
         cv.round(r.inset(1), 3, BAR, 255);
         cv.fill(Rect::new(r.x + 3, r.y + 4, 4, r.h - 8), self.wave_color(source));
-        for (i, l) in lines.iter().enumerate() { cv.text(&f.s, r.x + 14, r.y + 16 + i as i32 * 16, l, TEXT); }
+        for (i, l) in lines.iter().enumerate() {
+            cv.text(&f.s, r.x + 14, r.y + 16 + i as i32 * 16, l, TEXT);
+        }
     }
 
     /// The cursors in the overview of a zoomed view: a line at each cursor's time.
     pub(super) fn draw_studio_overview_cursors(&self, cv: &mut Canvas, o: Rect) {
-        if self.m.layout != Layout::Studio || !matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy) { return; }
+        if self.m.layout != Layout::Studio
+            || !matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy)
+        {
+            return;
+        }
         let f = self.fonts();
         let (ta, tb) = self.cursor_times();
         let tdiv = self.m.time_per_div();
-        if !(tdiv > 0.0) { return; }
+        if !(tdiv > 0.0) {
+            return;
+        }
         let ppx = o.w as f32 / HDIV;
         for (t, name) in [(ta, "X1"), (tb, "X2")] {
             let x = o.x + (o.w as f32 / 2.0 + (t as f32 - self.m.delay) / tdiv * ppx) as i32;
-            if x < o.x || x >= o.right() { continue; }
+            if x < o.x || x >= o.right() {
+                continue;
+            }
             cv.dashed_vline(x, o.y, o.bottom() - 1, 4, 3, CURSOR);
             let b = Rect::new(x + 2, o.y + 2, 24, 14);
             cv.round(b, 2, CURSOR, 255);
@@ -1054,24 +1386,46 @@ impl Ui {
         // a bus search has no source of its own: it marks what the active decoder decoded
         if let Some(s) = sp.filter(|s| s.kind == TrigType::Bus) {
             let mut v = vec![Item::SrchWhich, Item::SrchType, Item::SrchBusWhat];
-            if matches!(s.bus, BusWhat::Id | BusWhat::Data) { v.push(Item::SrchBusVal); }
-            v.extend([Item::SrchShow, Item::SrchEvent, Item::SrchFromTrig, Item::SrchToTrig, Item::SearchTable, Item::SrchRemove]);
+            if matches!(s.bus, BusWhat::Id | BusWhat::Data) {
+                v.push(Item::SrchBusVal);
+            }
+            v.extend([
+                Item::SrchShow,
+                Item::SrchEvent,
+                Item::SrchFromTrig,
+                Item::SrchToTrig,
+                Item::SearchTable,
+                Item::SrchRemove,
+            ]);
             return v;
         }
         let mut v = vec![Item::SrchWhich, Item::SrchType, Item::SrchSrc, Item::SrchSlope, Item::SrchLevel];
-        if sp.is_some_and(|s| s.kind.two_level()) { v.push(Item::SrchLevel2); }
+        if sp.is_some_and(|s| s.kind.two_level()) {
+            v.push(Item::SrchLevel2);
+        }
         v.push(Item::Srch50);
         // the time of the type, as the trigger menu has it: one limit, two for Inside and Outside, none for Runt's Off
         match sp {
             Some(s) if s.kind == TrigType::Timeout => v.push(Item::SrchTime),
             Some(s) if !s.whens().is_empty() => {
                 v.push(Item::SrchWhen);
-                if s.when != WhenKind::Off { v.push(Item::SrchTime); }
-                if matches!(s.when, WhenKind::In | WhenKind::Out) && !s.eq { v.push(Item::SrchTime2); }
+                if s.when != WhenKind::Off {
+                    v.push(Item::SrchTime);
+                }
+                if matches!(s.when, WhenKind::In | WhenKind::Out) && !s.eq {
+                    v.push(Item::SrchTime2);
+                }
             }
             _ => {}
         }
-        v.extend([Item::SrchShow, Item::SrchEvent, Item::SrchFromTrig, Item::SrchToTrig, Item::SearchTable, Item::SrchRemove]);
+        v.extend([
+            Item::SrchShow,
+            Item::SrchEvent,
+            Item::SrchFromTrig,
+            Item::SrchToTrig,
+            Item::SearchTable,
+            Item::SrchRemove,
+        ]);
         v
     }
 
@@ -1094,7 +1448,9 @@ impl Ui {
     pub(super) fn studio_search_select(&mut self, slot: usize) {
         let before = self.studio.search_sel;
         self.studio.search_select(slot);
-        if self.studio.search_sel != before { self.table.top = 0; }
+        if self.studio.search_sel != before {
+            self.table.top = 0;
+        }
     }
 
     /// Removes the selected search; the first of the others is the selected one then.
@@ -1104,16 +1460,24 @@ impl Ui {
         self.studio.search_at[slot] = 0;
         self.studio.search_select(0);
         self.table.top = 0;
-        if self.studio.search().is_some() { return; }
-        if self.table.kind == Some(tables::TableKind::Search) && !self.search_on { self.table.kind = None; }
-        if self.menu_open && self.menu == MenuId::Search { self.close_menu(); }
+        if self.studio.search().is_some() {
+            return;
+        }
+        if self.table.kind == Some(tables::TableKind::Search) && !self.search_on {
+            self.table.kind = None;
+        }
+        if self.menu_open && self.menu == MenuId::Search {
+            self.close_menu();
+        }
     }
 
     /// The selected search looks for `kind`. A type of two levels gets them from the signal when the search had one.
     pub(super) fn studio_search_set_kind(&mut self, kind: TrigType) {
         let Some(sp) = self.studio.search() else { return };
         self.studio.search_put(sp.of_kind(kind));
-        if kind.two_level() && !sp.kind.two_level() { self.studio_search_set_50(); }
+        if kind.two_level() && !sp.kind.two_level() {
+            self.studio_search_set_50();
+        }
         self.studio.search_at[self.studio.search_sel] = 0;
     }
 
@@ -1121,7 +1485,10 @@ impl Ui {
     fn studio_search_span(&self, src: WaveId) -> Option<(f32, f32)> {
         let (w, _, _) = self.deskew_samples(src)?;
         let (mut lo, mut hi) = (f32::MAX, f32::MIN);
-        for &v in w.iter().filter(|v| v.is_finite()) { lo = lo.min(v); hi = hi.max(v); }
+        for &v in w.iter().filter(|v| v.is_finite()) {
+            lo = lo.min(v);
+            hi = hi.max(v);
+        }
         (lo <= hi).then_some((lo, hi))
     }
 
@@ -1129,7 +1496,9 @@ impl Ui {
     /// measured between), those of Runt and Window to 25 % and 75 % (a pulse that ends between them is a runt).
     pub(super) fn studio_search_set_50(&mut self) {
         let Some(sp) = self.studio.search() else { return };
-        if sp.kind == TrigType::Bus { return; }
+        if sp.kind == TrigType::Bus {
+            return;
+        }
         let Some((lo, hi)) = self.studio_search_span(sp.src) else { return };
         let at = |f: f32| lo + f * (hi - lo);
         let (level, level2) = match sp.kind {
@@ -1158,20 +1527,35 @@ impl Ui {
     pub(super) fn studio_search_events_of(&self, slot: usize) -> Arc<Vec<f64>> {
         let none = || Arc::new(Vec::new());
         let Some(sp) = self.studio.searches.get(slot).copied().flatten() else { return none() };
-        if sp.kind == TrigType::Bus { return self.studio_bus_search_events(slot, sp); }
+        if sp.kind == TrigType::Bus {
+            return self.studio_bus_search_events(slot, sp);
+        }
         let Some((w, dt, t0)) = self.deskew_samples(sp.src) else { return none() };
-        if w.len() < 2 || !(dt > 0.0) { return none(); }
+        if w.len() < 2 || !(dt > 0.0) {
+            return none();
+        }
         use std::hash::{Hash, Hasher};
         let mut h = std::collections::hash_map::DefaultHasher::new();
         (w.as_ptr() as usize, w.len(), dt.to_bits(), t0.to_bits()).hash(&mut h);
         format!("{sp:?}").hash(&mut h);
-        for k in 0..16 { w[k * (w.len() - 1) / 15].to_bits().hash(&mut h); }
+        for k in 0..16 {
+            w[k * (w.len() - 1) / 15].to_bits().hash(&mut h);
+        }
         let key = h.finish();
-        if let Some((k, ev)) = &self.studio.search_cache.borrow()[slot] { if *k == key { return ev.clone(); } }
+        if let Some((k, ev)) = &self.studio.search_cache.borrow()[slot] {
+            if *k == key {
+                return ev.clone();
+            }
+        }
         // the conditions are the software trigger's (`oos_dsp::trigger`), with the hysteresis the trigger search has
         let hyst = (0.1 * self.studio_search_vpd(sp.src)).max(1e-9);
-        let inp = oos_dsp::trigger::Input { ch: std::array::from_fn(|c| if c == 0 { w } else { &[][..] }), dt, hyst: [hyst; NCH] };
-        let mut out: Vec<f64> = oos_dsp::trigger::find_all(&sp.trigger(), &inp).into_iter().map(|i| t0 + i * dt).collect();
+        let inp = oos_dsp::trigger::Input {
+            ch: std::array::from_fn(|c| if c == 0 { w } else { &[][..] }),
+            dt,
+            hyst: [hyst; NCH],
+        };
+        let mut out: Vec<f64> =
+            oos_dsp::trigger::find_all(&sp.trigger(), &inp).into_iter().map(|i| t0 + i * dt).collect();
         out.truncate(SEARCH_MAX);
         let ev = Arc::new(out);
         self.studio.search_cache.borrow_mut()[slot] = Some((key, ev.clone()));
@@ -1185,14 +1569,20 @@ impl Ui {
     /// search by itself.
     fn studio_bus_search_events(&self, slot: usize, sp: SearchSpec) -> Arc<Vec<f64>> {
         let none = || Arc::new(Vec::new());
-        if !self.m.dec_on { return none(); }
+        if !self.m.dec_on {
+            return none();
+        }
         let Ok(packets) = self.decode_packets_of(&self.m) else { return none() };
         use std::hash::{Hash, Hasher};
         let mut h = std::collections::hash_map::DefaultHasher::new();
         (packets.len(), packets.first().map(|p| p.t0.to_bits()), packets.last().map(|p| p.t1.to_bits())).hash(&mut h);
         format!("{:?}|{:?}|{:?}|{:?}", self.m.dec_cfg(), sp.bus, sp.val, self.m.ser).hash(&mut h);
         let key = h.finish();
-        if let Some((k, ev)) = &self.studio.search_cache.borrow()[slot] { if *k == key { return ev.clone(); } }
+        if let Some((k, ev)) = &self.studio.search_cache.borrow()[slot] {
+            if *k == key {
+                return ev.clone();
+            }
+        }
         let mut m = self.m.clone();
         (m.trig_bus, m.trig_bus_val) = (sp.bus, sp.val);
         let mut out = crate::trig::points(&m, &packets);
@@ -1209,7 +1599,9 @@ impl Ui {
     /// None for the whole record, and where the frame does not say how long its record is.
     pub(super) fn studio_search_part(&self) -> Option<(f64, f64)> {
         let sp = self.studio.search()?;
-        if sp.kind == TrigType::Bus { return None; }
+        if sp.kind == TrigType::Bus {
+            return None;
+        }
         let WaveId::Ch(_) = sp.src else { return None };
         let (w, dt, _) = self.deskew_samples(sp.src)?;
         let (rate, points) = self.last[0].as_ref()?.raw.as_ref()?.frame.acq;
@@ -1240,7 +1632,9 @@ impl Ui {
     /// Next (1) or previous (-1) event: the view goes there.
     pub(super) fn studio_search_go(&mut self, d: i32) {
         let ev = self.studio_search_events();
-        if ev.is_empty() { return self.toast("No events"); }
+        if ev.is_empty() {
+            return self.toast("No events");
+        }
         let n = ev.len() as i32;
         let at = (self.studio.search_at[self.studio.search_sel] as i32 + d).rem_euclid(n) as usize;
         self.studio.search_at[self.studio.search_sel] = at;
@@ -1251,17 +1645,46 @@ impl Ui {
     /// The trigger as a search: its type where the search has it (else its edge), its levels, times and slope.
     pub(super) fn search_of_trigger(&self) -> SearchSpec {
         let m = &self.m;
-        let src = match m.trigger_wave() { w @ WaveId::Ch(_) => w, _ => WaveId::Ch(m.trig_src.min(n_ch() - 1)) };
+        let src = match m.trigger_wave() {
+            w @ WaveId::Ch(_) => w,
+            _ => WaveId::Ch(m.trig_src.min(n_ch() - 1)),
+        };
         let kind = if SEARCH_TYPES.contains(&m.trig_type) { m.trig_type } else { TrigType::Edge };
-        let slope = match m.slope { Slope::Rise => 0, Slope::Fall => 1, _ => 2 };
-        let slope = if kind == TrigType::Window { m.win_mode as u8 } else if polar(kind) { (m.trig_pol == Pol::Neg) as u8 } else { slope };
+        let slope = match m.slope {
+            Slope::Rise => 0,
+            Slope::Fall => 1,
+            _ => 2,
+        };
+        let slope = if kind == TrigType::Window {
+            m.win_mode as u8
+        } else if polar(kind) {
+            (m.trig_pol == Pol::Neg) as u8
+        } else {
+            slope
+        };
         let hidden = self.studio.search().is_some_and(|s| s.hidden);
         let (bus, val) = if m.trig_type == TrigType::Bus { (m.trig_bus, m.trig_bus_val) } else { (BusWhat::Frame, 0) };
-        SearchSpec { src, level: m.trig_level, slope, kind, level2: m.trig_level2, when: m.trig_when, t1: m.trig_t1, t2: m.trig_t2, eq: false, hidden, bus, val }.fit()
+        SearchSpec {
+            src,
+            level: m.trig_level,
+            slope,
+            kind,
+            level2: m.trig_level2,
+            when: m.trig_when,
+            t1: m.trig_t1,
+            t2: m.trig_t2,
+            eq: false,
+            hidden,
+            bus,
+            val,
+        }
+        .fit()
     }
 
     fn studio_search_copy_from_trigger(&mut self) {
-        if self.studio.search().is_some() { self.studio.search_put(self.search_of_trigger()); }
+        if self.studio.search().is_some() {
+            self.studio.search_put(self.search_of_trigger());
+        }
     }
 
     fn studio_search_copy_to_trigger(&mut self) {
@@ -1276,16 +1699,26 @@ impl Ui {
         m.trig_ref = None;
         m.trig_src = c;
         m.trig_level = sp.level;
-        if sp.kind.two_level() { m.trig_level2 = sp.level2; }
-        if sp.kind != TrigType::Edge { (m.trig_when, m.trig_t1, m.trig_t2) = (sp.when, sp.t1, sp.t2); }
+        if sp.kind.two_level() {
+            m.trig_level2 = sp.level2;
+        }
+        if sp.kind != TrigType::Edge {
+            (m.trig_when, m.trig_t1, m.trig_t2) = (sp.when, sp.t1, sp.t2);
+        }
         // the trigger has no Equal: it gets the two limits Equal stands for
-        if sp.eq { (m.trig_t1, m.trig_t2) = (sp.t1 * (1.0 - EQ_TOL), sp.t1 * (1.0 + EQ_TOL)); }
+        if sp.eq {
+            (m.trig_t1, m.trig_t2) = (sp.t1 * (1.0 - EQ_TOL), sp.t1 * (1.0 + EQ_TOL));
+        }
         if sp.kind == TrigType::Window {
             m.win_mode = [WinMode::Enter, WinMode::Exit, WinMode::Inside][sp.slope.min(2) as usize];
         } else if polar(sp.kind) {
             m.trig_pol = if sp.slope == 1 { Pol::Neg } else { Pol::Pos };
         } else {
-            m.slope = match sp.slope { 0 => Slope::Rise, 1 => Slope::Fall, _ => Slope::Either };
+            m.slope = match sp.slope {
+                0 => Slope::Rise,
+                1 => Slope::Fall,
+                _ => Slope::Either,
+            };
         }
         self.settings_changed();
     }
@@ -1297,10 +1730,17 @@ impl Ui {
     fn studio_search_badge_text(&self, slot: usize, detail: usize) -> String {
         let n = self.studio_search_events_of(slot).len();
         let number = format!("{n}{}", if n >= SEARCH_MAX { "+" } else { "" });
-        if slot != self.studio.search_sel { return format!("{} \u{b7} {number}", slot + 1); }
+        if slot != self.studio.search_sel {
+            return format!("{} \u{b7} {number}", slot + 1);
+        }
         let kind = self.studio.searches[slot].map_or("", |s| s.kind.name());
-        let count = if detail == 0 || self.studio_search_part().is_some() { self.studio_search_count() } else { number };
-        if detail < 2 { format!("{} {kind} \u{b7} {count}", slot + 1) } else { format!("{} \u{b7} {count}", slot + 1) }
+        let count =
+            if detail == 0 || self.studio_search_part().is_some() { self.studio_search_count() } else { number };
+        if detail < 2 {
+            format!("{} {kind} \u{b7} {count}", slot + 1)
+        } else {
+            format!("{} \u{b7} {count}", slot + 1)
+        }
     }
 
     /// The width of a badge that says `text`: no narrower than a finger.
@@ -1321,7 +1761,9 @@ impl Ui {
     /// The width the search controls need for the selected badge to name its type (`studio_search_badges`); 0 without
     /// a search.
     pub(super) fn studio_search_typed_w(&self) -> i32 {
-        if self.studio.search().is_none() { return 0; }
+        if self.studio.search().is_none() {
+            return 0;
+        }
         let typed = self.fonts().mb.width(&self.studio_search_badge_text(self.studio.search_sel, 1)) + 16;
         2 * super::studio::SEARCH_ARROW_W + 4 + self.studio_search_others_w() + typed
     }
@@ -1329,7 +1771,11 @@ impl Ui {
     /// The width of the badges of the searches that are not selected, each with its gap.
     fn studio_search_others_w(&self) -> i32 {
         let sel = self.studio.search_sel;
-        self.studio.search_list().filter(|&(i, _)| i != sel).map(|(i, _)| self.studio_search_badge_w(&self.studio_search_badge_text(i, 2)) + 2).sum()
+        self.studio
+            .search_list()
+            .filter(|&(i, _)| i != sel)
+            .map(|(i, _)| self.studio_search_badge_w(&self.studio_search_badge_text(i, 2)) + 2)
+            .sum()
     }
 
     /// The badges of the searches in Studio's top bar, between previous and next: one for each search, in the order of
@@ -1340,14 +1786,18 @@ impl Ui {
         let sel = self.studio.search_sel;
         let short = |i: usize| self.studio_search_badge_text(i, 2);
         let own = room.w - 2 * super::studio::SEARCH_ARROW_W - 4 - self.studio_search_others_w();
-        let detail = (0..2).find(|&d| self.fonts().mb.width(&self.studio_search_badge_text(sel, d)) + 16 <= own).unwrap_or(2);
+        let detail =
+            (0..2).find(|&d| self.fonts().mb.width(&self.studio_search_badge_text(sel, d)) + 16 <= own).unwrap_or(2);
         let mut x = room.x + super::studio::SEARCH_ARROW_W + 2;
-        self.studio.search_list().map(|(i, _)| {
-            let text = if i == sel { self.studio_search_badge_text(i, detail) } else { short(i) };
-            let r = Rect::new(x, top.y, if i == sel { own } else { self.studio_search_badge_w(&text) }, top.h);
-            x = r.right() + 2;
-            (i, r, text)
-        }).collect()
+        self.studio
+            .search_list()
+            .map(|(i, _)| {
+                let text = if i == sel { self.studio_search_badge_text(i, detail) } else { short(i) };
+                let r = Rect::new(x, top.y, if i == sel { own } else { self.studio_search_badge_w(&text) }, top.h);
+                x = r.right() + 2;
+                (i, r, text)
+            })
+            .collect()
     }
 
     /// The search controls of Studio's top bar: previous, the badge of the selected search and next as their touch
@@ -1358,7 +1808,12 @@ impl Ui {
         let (top, room) = (self.frame().top, self.studio_top().search);
         let arrow = super::studio::SEARCH_ARROW_W;
         let (_, label, text) = self.studio_search_badges().into_iter().find(|b| b.0 == self.studio.search_sel)?;
-        Some((Rect::new(room.x, top.y, arrow, top.h), label, Rect::new(room.right() - arrow, top.y, arrow, top.h), text))
+        Some((
+            Rect::new(room.x, top.y, arrow, top.h),
+            label,
+            Rect::new(room.right() - arrow, top.y, arrow, top.h),
+            text,
+        ))
     }
 
     pub(super) fn draw_studio_search_chip(&self, cv: &mut Canvas) {
@@ -1390,13 +1845,18 @@ impl Ui {
     /// sheet; the badge of the selected search closes the sheet again.
     pub(super) fn studio_search_chip_tap(&mut self, x: i32, y: i32) -> bool {
         let Some((prev, _, next, _)) = self.studio_search_chip() else { return false };
-        if prev.contains(x, y) { self.studio_search_go(-1); }
-        else if next.contains(x, y) { self.studio_search_go(1); }
-        else if let Some((slot, _, _)) = self.studio_search_badges().into_iter().find(|b| b.1.contains(x, y)) {
-            if slot == self.studio.search_sel || !(self.menu_open && self.menu == MenuId::Search) { self.toggle_menu(MenuId::Search); }
+        if prev.contains(x, y) {
+            self.studio_search_go(-1);
+        } else if next.contains(x, y) {
+            self.studio_search_go(1);
+        } else if let Some((slot, _, _)) = self.studio_search_badges().into_iter().find(|b| b.1.contains(x, y)) {
+            if slot == self.studio.search_sel || !(self.menu_open && self.menu == MenuId::Search) {
+                self.toggle_menu(MenuId::Search);
+            }
             self.studio_search_select(slot);
+        } else {
+            return false;
         }
-        else { return false; }
         true
     }
 
@@ -1404,9 +1864,30 @@ impl Ui {
 
     pub(super) fn addrail_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::CurSrc | Item::CurSecond | Item::CurReadout | Item::CurLink | Item::CurSnap | Item::SrchWhich | Item::SrchType | Item::SrchSrc | Item::SrchSlope | Item::SrchWhen | Item::SrchShow | Item::SrchBusWhat => Kind::Choice,
-            Item::SrchLevel | Item::SrchLevel2 | Item::SrchTime | Item::SrchTime2 | Item::SrchEvent | Item::SrchBusVal => Kind::Value,
-            Item::CurRemove | Item::CurSnapNow | Item::Srch50 | Item::SrchFromTrig | Item::SrchToTrig | Item::SrchRemove => Kind::Action,
+            Item::CurSrc
+            | Item::CurSecond
+            | Item::CurReadout
+            | Item::CurLink
+            | Item::CurSnap
+            | Item::SrchWhich
+            | Item::SrchType
+            | Item::SrchSrc
+            | Item::SrchSlope
+            | Item::SrchWhen
+            | Item::SrchShow
+            | Item::SrchBusWhat => Kind::Choice,
+            Item::SrchLevel
+            | Item::SrchLevel2
+            | Item::SrchTime
+            | Item::SrchTime2
+            | Item::SrchEvent
+            | Item::SrchBusVal => Kind::Value,
+            Item::CurRemove
+            | Item::CurSnapNow
+            | Item::Srch50
+            | Item::SrchFromTrig
+            | Item::SrchToTrig
+            | Item::SrchRemove => Kind::Action,
             _ => return None,
         })
     }
@@ -1451,18 +1932,34 @@ impl Ui {
             Item::SrchWhich => (self.studio.search_sel + 1).to_string(),
             Item::SrchSrc => self.studio.search().map_or(String::new(), |s| self.wave_name(s.src)),
             Item::SrchType => self.studio.search().map_or(String::new(), |s| s.kind.name().into()),
-            Item::SrchSlope => self.studio.search().map_or(String::new(), |s| s.slopes()[(s.slope as usize).min(s.slopes().len() - 1)].into()),
+            Item::SrchSlope => self
+                .studio
+                .search()
+                .map_or(String::new(), |s| s.slopes()[(s.slope as usize).min(s.slopes().len() - 1)].into()),
             Item::SrchLevel | Item::SrchLevel2 => self.studio.search().map_or(String::new(), |s| {
-                si_short(if it == Item::SrchLevel { s.level } else { s.level2 } as f64, match s.src { WaveId::Ch(c) if c < n_ch() => self.m.unit(c), _ => "V" })
+                si_short(
+                    if it == Item::SrchLevel { s.level } else { s.level2 } as f64,
+                    match s.src {
+                        WaveId::Ch(c) if c < n_ch() => self.m.unit(c),
+                        _ => "V",
+                    },
+                )
             }),
             Item::SrchWhen => self.studio.search().map_or(String::new(), |s| COND_NAMES[s.cond() as usize].into()),
             Item::SrchShow => if self.studio.search().is_some_and(|s| s.hidden) { "Hidden" } else { "Shown" }.into(),
             Item::SrchBusWhat => self.studio.search().map_or(String::new(), |s| bus_what_name(s.bus).into()),
             Item::SrchBusVal => self.studio.search().map_or(String::new(), |s| format!("0x{:X}", s.val)),
-            Item::SrchTime | Item::SrchTime2 => self.studio.search().map_or(String::new(), |s| si_short(if it == Item::SrchTime { s.t1 } else { s.t2 } as f64, "s")),
+            Item::SrchTime | Item::SrchTime2 => self
+                .studio
+                .search()
+                .map_or(String::new(), |s| si_short(if it == Item::SrchTime { s.t1 } else { s.t2 } as f64, "s")),
             Item::SrchEvent => {
                 let n = self.studio_search_events().len();
-                if n == 0 { "0 / 0".into() } else { format!("{} / {}", self.studio.search_at[self.studio.search_sel].min(n - 1) + 1, n) }
+                if n == 0 {
+                    "0 / 0".into()
+                } else {
+                    format!("{} / {}", self.studio.search_at[self.studio.search_sel].min(n - 1) + 1, n)
+                }
             }
             _ => return None,
         })
@@ -1478,8 +1975,16 @@ impl Ui {
             Item::CurSnap => CursorSnap::ALL.iter().map(|s| format!("{s:?}")).collect(),
             Item::SrchWhich => self.studio.search_list().map(|(i, _)| (i + 1).to_string()).collect(),
             Item::SrchType => SEARCH_TYPES.iter().map(|t| t.name().to_string()).collect(),
-            Item::SrchSlope => self.studio.search().map_or(&SLOPES[..], |s| s.slopes()).iter().map(|s| s.to_string()).collect(),
-            Item::SrchWhen => self.studio.search().map_or(Vec::new(), |s| s.conds()).iter().map(|&c| COND_NAMES[c as usize].to_string()).collect(),
+            Item::SrchSlope => {
+                self.studio.search().map_or(&SLOPES[..], |s| s.slopes()).iter().map(|s| s.to_string()).collect()
+            }
+            Item::SrchWhen => self
+                .studio
+                .search()
+                .map_or(Vec::new(), |s| s.conds())
+                .iter()
+                .map(|&c| COND_NAMES[c as usize].to_string())
+                .collect(),
             Item::SrchShow => vec!["Shown".into(), "Hidden".into()],
             Item::SrchBusWhat => BUS_WHATS.iter().map(|&w| bus_what_name(w).to_string()).collect(),
             Item::SrchBusVal => KEYPAD.iter().map(|k| k.to_string()).collect(),
@@ -1496,13 +2001,21 @@ impl Ui {
                 let all = [CursorMode::Off, CursorMode::Time, CursorMode::Volt, CursorMode::Track, CursorMode::Xy];
                 let now = all.iter().position(|&m| m == self.m.cursor).unwrap_or(0);
                 let next = all[(now as i32 + d).rem_euclid(all.len() as i32) as usize];
-                if next == CursorMode::Off { self.m.cur_b_source = None; }
+                if next == CursorMode::Off {
+                    self.m.cur_b_source = None;
+                }
                 self.set_cursor_type(next);
             }
             Item::CurSrc | Item::SrchSrc => {
                 let shown = self.sheet_shown_sources();
-                if shown.is_empty() { return true; }
-                let cur = if it == Item::CurSrc { self.cursor_source() } else { self.studio.search().map_or(shown[0], |s| s.src) };
+                if shown.is_empty() {
+                    return true;
+                }
+                let cur = if it == Item::CurSrc {
+                    self.cursor_source()
+                } else {
+                    self.studio.search().map_or(shown[0], |s| s.src)
+                };
                 let i = shown.iter().position(|&s| s == cur).unwrap_or(0) as i32;
                 let to = shown[(i + d).rem_euclid(shown.len() as i32) as usize];
                 if it == Item::CurSrc {
@@ -1519,8 +2032,16 @@ impl Ui {
                 let i = opts.iter().position(|&s| s == self.m.cur_b_source).unwrap_or(0) as i32;
                 self.m.cur_b_source = opts[(i + d).rem_euclid(opts.len() as i32) as usize];
             }
-            Item::CurReadout => if d.rem_euclid(2) != 0 { self.studio.cur_badge = !self.studio.cur_badge; },
-            Item::CurLink => if d.rem_euclid(2) != 0 { self.studio.cur_linked = !self.studio.cur_linked; },
+            Item::CurReadout => {
+                if d.rem_euclid(2) != 0 {
+                    self.studio.cur_badge = !self.studio.cur_badge;
+                }
+            }
+            Item::CurLink => {
+                if d.rem_euclid(2) != 0 {
+                    self.studio.cur_linked = !self.studio.cur_linked;
+                }
+            }
             Item::CurSnap => {
                 let at = CursorSnap::ALL.iter().position(|&s| s == self.m.cur_snap).unwrap_or(0) as i32;
                 self.m.cur_snap = CursorSnap::ALL[(at + d).rem_euclid(CursorSnap::ALL.len() as i32) as usize];
@@ -1532,36 +2053,80 @@ impl Ui {
                     self.studio_search_select(there[(at as i32 + d).rem_euclid(there.len() as i32) as usize]);
                 }
             }
-            Item::SrchType => if let Some(sp) = self.studio.search() {
-                let at = SEARCH_TYPES.iter().position(|&t| t == sp.kind).unwrap_or(0) as i32;
-                self.studio_search_set_kind(SEARCH_TYPES[(at + d).rem_euclid(SEARCH_TYPES.len() as i32) as usize]);
-            },
-            Item::SrchSlope => if let Some(sp) = self.studio.search() { self.studio.search_put(SearchSpec { slope: (sp.slope as i32 + d).rem_euclid(sp.slopes().len() as i32) as u8, ..sp }); },
-            Item::SrchWhen => if let Some(sp) = self.studio.search() {
-                let all = sp.conds();
-                let at = all.iter().position(|&c| c == sp.cond()).unwrap_or(0) as i32;
-                if !all.is_empty() { self.studio.search_put(sp.with_cond(all[(at + d).rem_euclid(all.len() as i32) as usize])); }
-            },
-            Item::SrchBusWhat => if let Some(sp) = self.studio.search() {
-                let at = BUS_WHATS.iter().position(|&w| w == sp.bus).unwrap_or(0) as i32;
-                self.studio.search_put(SearchSpec { bus: BUS_WHATS[(at + d).rem_euclid(BUS_WHATS.len() as i32) as usize], ..sp });
-            },
-            Item::SrchBusVal => if let Some(sp) = self.studio.search() {
-                self.studio.search_put(SearchSpec { val: (sp.val as i64 + d as i64).clamp(0, BUS_VAL_MAX as i64) as u64, ..sp });
-            },
-            Item::SrchShow => if let Some(sp) = self.studio.search() { if d.rem_euclid(2) != 0 { self.studio.search_put(SearchSpec { hidden: !sp.hidden, ..sp }); } },
+            Item::SrchType => {
+                if let Some(sp) = self.studio.search() {
+                    let at = SEARCH_TYPES.iter().position(|&t| t == sp.kind).unwrap_or(0) as i32;
+                    self.studio_search_set_kind(SEARCH_TYPES[(at + d).rem_euclid(SEARCH_TYPES.len() as i32) as usize]);
+                }
+            }
+            Item::SrchSlope => {
+                if let Some(sp) = self.studio.search() {
+                    self.studio.search_put(SearchSpec {
+                        slope: (sp.slope as i32 + d).rem_euclid(sp.slopes().len() as i32) as u8,
+                        ..sp
+                    });
+                }
+            }
+            Item::SrchWhen => {
+                if let Some(sp) = self.studio.search() {
+                    let all = sp.conds();
+                    let at = all.iter().position(|&c| c == sp.cond()).unwrap_or(0) as i32;
+                    if !all.is_empty() {
+                        self.studio.search_put(sp.with_cond(all[(at + d).rem_euclid(all.len() as i32) as usize]));
+                    }
+                }
+            }
+            Item::SrchBusWhat => {
+                if let Some(sp) = self.studio.search() {
+                    let at = BUS_WHATS.iter().position(|&w| w == sp.bus).unwrap_or(0) as i32;
+                    self.studio.search_put(SearchSpec {
+                        bus: BUS_WHATS[(at + d).rem_euclid(BUS_WHATS.len() as i32) as usize],
+                        ..sp
+                    });
+                }
+            }
+            Item::SrchBusVal => {
+                if let Some(sp) = self.studio.search() {
+                    self.studio.search_put(SearchSpec {
+                        val: (sp.val as i64 + d as i64).clamp(0, BUS_VAL_MAX as i64) as u64,
+                        ..sp
+                    });
+                }
+            }
+            Item::SrchShow => {
+                if let Some(sp) = self.studio.search() {
+                    if d.rem_euclid(2) != 0 {
+                        self.studio.search_put(SearchSpec { hidden: !sp.hidden, ..sp });
+                    }
+                }
+            }
             // the upper level takes the lower one along, the lower one stops at the upper (as the trigger's two do)
-            Item::SrchLevel | Item::SrchLevel2 => if let Some(sp) = self.studio.search() {
-                let step = d as f32 * 0.1 * self.studio_search_vpd(sp.src);
-                let two = sp.kind.two_level();
-                self.studio.search_put(if it == Item::SrchLevel { SearchSpec { level: sp.level + step, ..sp } } else { SearchSpec { level2: if two { (sp.level2 + step).min(sp.level) } else { sp.level2 + step }, ..sp } });
-            },
+            Item::SrchLevel | Item::SrchLevel2 => {
+                if let Some(sp) = self.studio.search() {
+                    let step = d as f32 * 0.1 * self.studio_search_vpd(sp.src);
+                    let two = sp.kind.two_level();
+                    self.studio.search_put(if it == Item::SrchLevel {
+                        SearchSpec { level: sp.level + step, ..sp }
+                    } else {
+                        SearchSpec {
+                            level2: if two { (sp.level2 + step).min(sp.level) } else { sp.level2 + step },
+                            ..sp
+                        }
+                    });
+                }
+            }
             // on the trigger's ladder of times
-            Item::SrchTime | Item::SrchTime2 => if let Some(sp) = self.studio.search() {
-                let l: Vec<f64> = crate::model::time_ladder().iter().map(|&x| x as f64).collect();
-                let v = self.ladder_move(it, if it == Item::SrchTime { sp.t1 } else { sp.t2 } as f64, d, &l) as f32;
-                self.studio.search_put(if it == Item::SrchTime { SearchSpec { t1: v, t2: sp.t2.max(v), ..sp } } else { SearchSpec { t2: v, t1: sp.t1.min(v), ..sp } });
-            },
+            Item::SrchTime | Item::SrchTime2 => {
+                if let Some(sp) = self.studio.search() {
+                    let l: Vec<f64> = crate::model::time_ladder().iter().map(|&x| x as f64).collect();
+                    let v = self.ladder_move(it, if it == Item::SrchTime { sp.t1 } else { sp.t2 } as f64, d, &l) as f32;
+                    self.studio.search_put(if it == Item::SrchTime {
+                        SearchSpec { t1: v, t2: sp.t2.max(v), ..sp }
+                    } else {
+                        SearchSpec { t2: v, t1: sp.t1.min(v), ..sp }
+                    });
+                }
+            }
             Item::SrchEvent => self.studio_search_go(d.signum()),
             _ => return false,
         }

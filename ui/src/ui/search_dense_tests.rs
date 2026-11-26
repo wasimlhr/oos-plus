@@ -62,7 +62,9 @@ pub(super) fn of_samples(data: Vec<f32>, dt: f64, acq: (f64, usize)) -> Ui {
     u.m.meas.clear();
     u.m.meas2.clear();
     u.m.cat.clear();
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
     while u.measurement_busy() {
         assert!(std::time::Instant::now() < deadline, "the measurement worker did not answer");
@@ -72,7 +74,9 @@ pub(super) fn of_samples(data: Vec<f32>, dt: f64, acq: (f64, usize)) -> Ui {
     u
 }
 
-pub(super) fn px(cv: &Canvas, x: i32, y: i32) -> u32 { cv.px[(y * W + x) as usize] }
+pub(super) fn px(cv: &Canvas, x: i32, y: i32) -> u32 {
+    cv.px[(y * W + x) as usize]
+}
 
 pub(super) fn shot(cv: &Canvas, name: &str) {
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -87,7 +91,9 @@ fn with_search(u: &mut Ui) -> (Vec<u32>, Canvas) {
     u.render(&mut cv);
     let before = cv.px.clone();
     u.studio_search_add(Some(WaveId::Ch(1)));
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     (before, cv)
 }
@@ -110,7 +116,13 @@ fn events_too_close_to_tell_apart_are_a_strip_at_the_top_and_leave_the_plot_alon
         .flat_map(|y| (a.x..a.right()).map(move |x| (x, y)))
         .filter(|&(x, y)| px(&cv, x, y) != before[(y * W + x) as usize])
         .collect();
-    assert!(under.is_empty(), "{} pixels of the plot changed by the marks, from {:?} to {:?}", under.len(), under.first(), under.last());
+    assert!(
+        under.is_empty(),
+        "{} pixels of the plot changed by the marks, from {:?} to {:?}",
+        under.len(),
+        under.first(),
+        under.last()
+    );
 }
 
 #[test]
@@ -118,7 +130,9 @@ fn events_far_enough_apart_keep_their_mark_and_line() {
     let mut u = dense();
     u.m.tscale = tscales().iter().position(|&t| (t - 5e-9).abs() < 1e-15).unwrap();
     u.m.delay = 0.0;
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     let (before, cv) = with_search(&mut u);
     shot(&cv, "sparse-search");
     let a = u.plot.area;
@@ -141,7 +155,9 @@ fn the_search_sheet_opens_the_list_of_events_and_the_list_names_the_search() {
     u.activate(Item::SearchTable);
     assert_eq!(u.table.kind, Some(tables::TableKind::Search));
     assert!(!u.menu_open, "the sheet makes room for the list");
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     shot(&cv, "dense-search-list");

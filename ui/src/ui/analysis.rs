@@ -115,9 +115,39 @@ impl State {
         macro_rules! swap {
             ($($f:ident),*) => { $(std::mem::swap(&mut self.$f, &mut o.$f);)* };
         }
-        swap!(spec, spec_avg, wf, dist, peaks, spec_stop, spec_t, limit, limit_n, limit_over, limit_worst, eye,
-              eye_auto, eye_key, eye_ref, eye_sim_revision, eye_res, page, power, mag, mag_note, dq, mech, inv_note,
-              dpt, dpt_loss, dpt_note, dpt_t, dpt_v, dpt_i, dpt_g);
+        swap!(
+            spec,
+            spec_avg,
+            wf,
+            dist,
+            peaks,
+            spec_stop,
+            spec_t,
+            limit,
+            limit_n,
+            limit_over,
+            limit_worst,
+            eye,
+            eye_auto,
+            eye_key,
+            eye_ref,
+            eye_sim_revision,
+            eye_res,
+            page,
+            power,
+            mag,
+            mag_note,
+            dq,
+            mech,
+            inv_note,
+            dpt,
+            dpt_loss,
+            dpt_note,
+            dpt_t,
+            dpt_v,
+            dpt_i,
+            dpt_g
+        );
         self.monitor = Some(o);
     }
 }

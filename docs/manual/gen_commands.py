@@ -34,7 +34,7 @@ OUT = HERE / 'commands.json'
 # Group pages in reference order (the README's table).
 PAGES = ['common', 'system', 'acquire', 'channel', 'timebase', 'trigger', 'waveform', 'measure', 'cursor', 'math',
          'reference', 'search', 'decode', 'logic', 'mask', 'spectrum', 'eye', 'power', 'bode', 'generator', 'extgen',
-         'sim', 'display', 'layout', 'storage', 'logger', 'calibration']
+         'sim', 'display', 'layout', 'storage', 'logger', 'table', 'calibration']
 # The pages of docs/scpi that are not a command group: the index, and the setup keys (an appendix).
 OTHER = {'README', 'setup-keys'}
 

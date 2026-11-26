@@ -964,7 +964,8 @@ mod tests {
         let plan: Vec<Item> = u.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();
         assert!(plan.contains(&Item::RowF(measrow::RF::Idle)), "Burst keeps its own idle");
         u.adjust(Item::RowF(measrow::RF::Idle), 1);
-        let own = u.m.row_cfg(crate::model::RowKey::One(Meas::Burst, WaveId::Ch(0))).expect("the burst row has its own idle");
+        let own =
+            u.m.row_cfg(crate::model::RowKey::One(Meas::Burst, WaveId::Ch(0))).expect("the burst row has its own idle");
         assert!(own.idle.is_some());
         assert!(u.m.row_cfg(crate::model::RowKey::One(Meas::Vpp, WaveId::Ch(0))).is_none(), "Vpp keeps following");
     }
@@ -990,13 +991,19 @@ mod tests {
         assert!(fast < slow);
     }
     #[test]
-    fn rise_fall_settings_show_qualified_counts_and_missing_partial_transitions(){
-        let mut u=ui();u.m.meas_full_record=true;
-        let mut v=vec![0.0];v.extend((0..4000).map(|i|if i%2==0{0.4}else{0.6}));v.push(1.0);
-        put(&mut u,0,v,true);u.m.meas=vec![(Meas::Rise,WaveId::Ref(0)),(Meas::Fall,WaveId::Ref(0))];
-        for (index,kind)in[Meas::Rise,Meas::Fall].into_iter().enumerate(){
-            u.open_meas_cfg(index);let caption=u.meas_edge_coverage_caption(WaveId::Ref(0),kind);
-            assert!(caption.starts_with("0 /")&&caption.contains("unavailable"),"{caption}");assert!(u.meas_number(WaveId::Ref(0),kind).is_nan());
+    fn rise_fall_settings_show_qualified_counts_and_missing_partial_transitions() {
+        let mut u = ui();
+        u.m.meas_full_record = true;
+        let mut v = vec![0.0];
+        v.extend((0..4000).map(|i| if i % 2 == 0 { 0.4 } else { 0.6 }));
+        v.push(1.0);
+        put(&mut u, 0, v, true);
+        u.m.meas = vec![(Meas::Rise, WaveId::Ref(0)), (Meas::Fall, WaveId::Ref(0))];
+        for (index, kind) in [Meas::Rise, Meas::Fall].into_iter().enumerate() {
+            u.open_meas_cfg(index);
+            let caption = u.meas_edge_coverage_caption(WaveId::Ref(0), kind);
+            assert!(caption.starts_with("0 /") && caption.contains("unavailable"), "{caption}");
+            assert!(u.meas_number(WaveId::Ref(0), kind).is_nan());
             let plan: Vec<Item> = u.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();
             assert!(plan.contains(&Item::RowF(measrow::RF::Used)), "the card shows the edges used");
             assert!(u.fonts().s.width(&u.measrow_text(Item::RowF(measrow::RF::Used)).unwrap()) <= sheet::SHEET_W - 24);

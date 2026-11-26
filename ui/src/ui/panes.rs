@@ -126,7 +126,12 @@ impl Ui {
         if a.w < SPEC_NARROW_W {
             let title = Rect::new(a.x + AXIS_W, a.y, (a.w - AXIS_W - 8).max(1), TITLE_H);
             let plot = Rect::new(title.x, a.y + TITLE_H, title.w, a.h - self.spec_wf_h(a, pane) - TITLE_H - XLABEL_H);
-            return SpecBox { title, plot, sort: Rect::new(a.right(), a.y, 0, 0), list: Rect::new(a.right(), a.y, 0, 0) };
+            return SpecBox {
+                title,
+                plot,
+                sort: Rect::new(a.right(), a.y, 0, 0),
+                list: Rect::new(a.right(), a.y, 0, 0),
+            };
         }
         let col_x = a.x + a.w - PEAK_W;
         let title = Rect::new(a.x + AXIS_W, a.y, a.w - AXIS_W - PEAK_W - 8, TITLE_H);
@@ -214,7 +219,8 @@ impl Ui {
         for i in (0..=HDIV as i32).rev() {
             let s = si_short(f0 + (f1 - f0) * i as f64 / HDIV as f64, "Hz");
             let w = f.s.width(&s);
-            let x = (g.x + i * (g.w - 1) / HDIV as i32 - w / 2).clamp(g.x - AXIS_W + 2, (g.x + g.w - w).max(g.x - AXIS_W + 2));
+            let x = (g.x + i * (g.w - 1) / HDIV as i32 - w / 2)
+                .clamp(g.x - AXIS_W + 2, (g.x + g.w - w).max(g.x - AXIS_W + 2));
             let under = grips.iter().any(|h| overlaps(*h, Rect::new(x, g.y + g.h + 1, w, 14)));
             if (x + w + 10 <= free || i == HDIV as i32) && !under {
                 cv.text(&f.s, x, g.y + g.h + 13, &s, AXIS_TEXT);
@@ -287,7 +293,9 @@ impl Ui {
     /// share the whole height, so a short list is a large one, not a gap.
     pub(super) fn draw_peaks(&self, cv: &mut Canvas, b: &SpecBox, sp: &spectrum::Spectrum, pane: bool) {
         let f = self.fonts();
-        if b.sort.w == 0 { return; }
+        if b.sort.w == 0 {
+            return;
+        }
         // the button is drawn 26 px high in its touch area of 36, with the text of the list's size: at the height
         // of the touch area and in the menu font it was the largest text of the view (the owner, from the unit)
         let chip = Self::spec_sort_chip(b.sort);
@@ -358,11 +366,15 @@ impl Ui {
 
     /// A tap on the list of a spectrum that has more facts than room: the next ones.
     pub(super) fn spec_facts_page(&mut self, b: &SpecBox, x: i32, y: i32) -> bool {
-        if !b.list.contains(x, y) { return false; }
+        if !b.list.contains(x, y) {
+            return false;
+        }
         let Some(sp) = self.azr.spec.clone() else { return false };
         let total = self.spec_facts(&sp).len();
         let fit = self.spec_facts_fit(b).max(1);
-        if total <= fit { return false; }
+        if total <= fit {
+            return false;
+        }
         let next = self.studio.facts_first + fit;
         self.studio.facts_first = if next >= total { 0 } else { next };
         true
@@ -483,10 +495,26 @@ impl Ui {
                 let sd = (st.sumsq / n - mean * mean).max(0.0).sqrt();
                 let val = |v: f64| if st.n == 0 { "----".to_string() } else { r.fmt4(v) };
                 // a pair names both channels
-                let src = self.m.meas2.get(i.wrapping_sub(self.m.meas.len())).map_or(self.wave_name(r.src), |p| format!("{}-{}", self.wave_name(p.1), self.wave_name(p.2)));
+                let src = self
+                    .m
+                    .meas2
+                    .get(i.wrapping_sub(self.m.meas.len()))
+                    .map_or(self.wave_name(r.src), |p| format!("{}-{}", self.wave_name(p.1), self.wave_name(p.2)));
                 let show = self.m.meas_show;
                 let keep = |i: usize, s: String| if show[i] { s } else { String::new() };
-                ResultRow { ch: r.src, cells: [src, r.name.clone(), r.fmt4(r.v), val(mean), keep(1, val(st.min)), keep(2, val(st.max)), keep(0, val(sd)), fmt_count(st.n as f64)] }
+                ResultRow {
+                    ch: r.src,
+                    cells: [
+                        src,
+                        r.name.clone(),
+                        r.fmt4(r.v),
+                        val(mean),
+                        keep(1, val(st.min)),
+                        keep(2, val(st.max)),
+                        keep(0, val(sd)),
+                        fmt_count(st.n as f64),
+                    ],
+                }
             })
             .collect()
     }
@@ -564,7 +592,9 @@ impl Ui {
         let x0 = t.x + 12;
         let head_y = t.y + BAND_H - 6;
         for (k, c) in RESULT_COLS.iter().enumerate().take(x.len() - 1) {
-            if (4..=6).contains(&k) && !self.m.meas_show[[1, 2, 0][k - 4]] { continue; }
+            if (4..=6).contains(&k) && !self.m.meas_show[[1, 2, 0][k - 4]] {
+                continue;
+            }
             // words on the left, numbers on the right of their column
             let tx = if k < 2 { x0 + x[k] } else { x0 + x[k + 1] - 8 - f.s.width(c.0) };
             cv.text(&f.s, tx, head_y, c.0, DIM);
@@ -713,24 +743,36 @@ const CHART_MIN_H: i32 = 150;
 /// How long ago, as an axis label: whole seconds, minutes or hours where they are whole.
 fn trend_ago(s: f64) -> String {
     let n = |v: f64| if (v - v.round()).abs() < 1e-6 { format!("{v:.0}") } else { format!("{v:.1}") };
-    if s >= 3600.0 && (s / 3600.0).fract() == 0.0 { format!("-{} h", n(s / 3600.0)) }
-    else if s >= 120.0 { format!("-{} min", n(s / 60.0)) }
-    else { format!("-{} s", n(s)) }
+    if s >= 3600.0 && (s / 3600.0).fract() == 0.0 {
+        format!("-{} h", n(s / 3600.0))
+    } else if s >= 120.0 {
+        format!("-{} min", n(s / 60.0))
+    } else {
+        format!("-{} s", n(s))
+    }
 }
 
 /// The time labels under a trend plot `w` wide, as (x from the plot's left, text): as many divisions as fit with a gap
 /// between the labels, the last one "now".
 pub(super) fn trend_time_labels(window: f64, w: i32, width: impl Fn(&str) -> i32) -> Vec<(i32, String)> {
     for n in [5, 4, 2, 1] {
-        let texts: Vec<String> = (0..=n).map(|i| if i == n { "now".to_string() } else { trend_ago(window * (n - i) as f64 / n as f64) }).collect();
+        let texts: Vec<String> = (0..=n)
+            .map(|i| if i == n { "now".to_string() } else { trend_ago(window * (n - i) as f64 / n as f64) })
+            .collect();
         let widest = texts.iter().map(|s| width(s)).max().unwrap_or(0);
         // the end labels sit inside the plot, so a division holds one whole label and half of the next
-        if n > 1 && widest * 3 / 2 + 10 > (w - 1) / n { continue; }
-        return texts.into_iter().enumerate().map(|(i, s)| {
-            let tw = width(&s);
-            let x = (i as i32 * (w - 1) / n - tw / 2).clamp(0, (w - tw).max(0));
-            (x, s)
-        }).collect();
+        if n > 1 && widest * 3 / 2 + 10 > (w - 1) / n {
+            continue;
+        }
+        return texts
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let tw = width(&s);
+                let x = (i as i32 * (w - 1) / n - tw / 2).clamp(0, (w - tw).max(0));
+                (x, s)
+            })
+            .collect();
     }
     Vec::new()
 }
@@ -1022,9 +1064,13 @@ impl Ui {
         let now = row.fmt4(row.v);
         let mut x = cv.text(&f.s, r.x, y, "Now", DIM) + 6;
         x = cv.text(&f.sb, x, y, &now, self.wave_color(row.src)) + 14;
-        let (lo, hi) = t.and_then(|t| t.range).map_or(("----".to_string(), "----".to_string()), |(a, b)| (row.fmt4(a), row.fmt4(b)));
+        let (lo, hi) = t
+            .and_then(|t| t.range)
+            .map_or(("----".to_string(), "----".to_string()), |(a, b)| (row.fmt4(a), row.fmt4(b)));
         for (l, v) in [("Max", hi), ("Min", lo)] {
-            if x + f.s.width(l) + 6 + f.sb.width(&v) > r.x + r.w { break; }
+            if x + f.s.width(l) + 6 + f.sb.width(&v) > r.x + r.w {
+                break;
+            }
             x = cv.text(&f.s, x, y, l, DIM) + 6;
             x = cv.text(&f.sb, x, y, &v, LABEL) + 14;
         }

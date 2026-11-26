@@ -183,8 +183,8 @@ impl Ui {
             }
             None
         });
-        let (sr, depth) = self.src.hw_rate_depth().map(|(r, n)| (r, n as u64))
-            .or(captured).unwrap_or_else(|| self.m.srate_depth());
+        let (sr, depth) =
+            self.src.hw_rate_depth().map(|(r, n)| (r, n as u64)).or(captured).unwrap_or_else(|| self.m.srate_depth());
         (sr, depth)
     }
 
@@ -192,9 +192,18 @@ impl Ui {
     pub(super) fn acq_caption(&self) -> (String, bool) {
         if self.record_mode() {
             let kind = if self.sim_mode() { "SIM" } else { "REF" };
-            if let Some(r) = self.refs.get(self.active_reference()).and_then(|r| r.as_ref()).filter(|r| r.v.len() >= 2 && r.dt > 0.0) {
+            if let Some(r) =
+                self.refs.get(self.active_reference()).and_then(|r| r.as_ref()).filter(|r| r.v.len() >= 2 && r.dt > 0.0)
+            {
                 let sr = 1.0 / r.dt;
-                return (format!("{kind} \u{b7} {} \u{b7} {}", si_digits(sr, "Sa/s", 3), si_digits(r.v.len() as f64, "pts", 3)), false);
+                return (
+                    format!(
+                        "{kind} \u{b7} {} \u{b7} {}",
+                        si_digits(sr, "Sa/s", 3),
+                        si_digits(r.v.len() as f64, "pts", 3)
+                    ),
+                    false,
+                );
             }
             return (format!("{kind} \u{b7} -"), false);
         }
@@ -282,7 +291,7 @@ mod tests {
     fn ui() -> Ui {
         let mut u = crate::ui::testkit::demo_ui();
         u.m.layout = crate::model::Layout::Minimal; // the Minimal cards
-        // screen gating: these tests check the visible-window gate (the default is the whole record)
+                                                    // screen gating: these tests check the visible-window gate (the default is the whole record)
         u.m.meas_full_record = false;
         u
     }

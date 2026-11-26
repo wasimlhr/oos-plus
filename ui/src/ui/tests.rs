@@ -60,7 +60,8 @@ fn can_and_lin_decode_the_demo_bus() {
         ui.m.dec_on = true;
         ui.set_dec_proto(proto);
         // a trigger that holds the demo bus still: the first falling edge after the bus idle
-        (ui.m.trig_type, ui.m.trig_src, ui.m.slope, ui.m.nth_idle, ui.m.nth_n, ui.m.trig_level) = (TrigType::NthEdge, 2, Slope::Fall, 20e-6, 1, 1.65);
+        (ui.m.trig_type, ui.m.trig_src, ui.m.slope, ui.m.nth_idle, ui.m.nth_n, ui.m.trig_level) =
+            (TrigType::NthEdge, 2, Slope::Fall, 20e-6, 1, 1.65);
         ui.m.tscale = tscales().iter().position(|&t| (t - tdiv).abs() < tdiv * 1e-3).unwrap();
         for _ in 0..20 {
             ui.step(1.0 / 30.0);
@@ -676,8 +677,22 @@ fn a_decoder_reads_the_kept_samples_at_a_slow_time_base() {
             }
         }
     }
-    let frame = std::sync::Arc::new(crate::board::Frame { seq: 7, dt, pre: n / 2, ch: [v, Vec::new(), Vec::new(), Vec::new()],
-        roll: false, scan: false, partial: false, envelope: false, acq: (0.0, 0), stamp: 0, basic: Default::default(), la: None, fixed_ti: None, hw_avg: false });
+    let frame = std::sync::Arc::new(crate::board::Frame {
+        seq: 7,
+        dt,
+        pre: n / 2,
+        ch: [v, Vec::new(), Vec::new(), Vec::new()],
+        roll: false,
+        scan: false,
+        partial: false,
+        envelope: false,
+        acq: (0.0, 0),
+        stamp: 0,
+        basic: Default::default(),
+        la: None,
+        fixed_ti: None,
+        hw_avg: false,
+    });
     ui.last[0] = Some(crate::wave::to_record(&frame, &ui.m, 3600, 0.2, -0.1));
     let read = |ui: &Ui| -> (String, f64) {
         let p = ui.decode_packets().unwrap();
@@ -897,9 +912,18 @@ fn every_trigger_type_triggers_on_the_demo() {
     use super::*;
     for &t in TRIG_TYPES.iter() {
         let mut ui = crate::ui::testkit::demo_ui();
-        for c in 0..NCH { ui.m.ch[c].on = true; }
+        for c in 0..NCH {
+            ui.m.ch[c].on = true;
+        }
         // the starting values are for these sources of the demo signals
-        (ui.m.trig_src, ui.m.trig_src2) = match t { TrigType::Pulse => (3, 1), TrigType::Video | TrigType::Window => (1, 3), TrigType::Delay => (0, 3), TrigType::SetupHold => (2, 3), TrigType::NthEdge => (2, 3), _ => (0, 3) };
+        (ui.m.trig_src, ui.m.trig_src2) = match t {
+            TrigType::Pulse => (3, 1),
+            TrigType::Video | TrigType::Window => (1, 3),
+            TrigType::Delay => (0, 3),
+            TrigType::SetupHold => (2, 3),
+            TrigType::NthEdge => (2, 3),
+            _ => (0, 3),
+        };
         ui.set_trig_type(t);
         ui.m.trig_mode = TrigMode::Normal;
         let mut hits = 0;
@@ -1052,11 +1076,27 @@ fn a_mask_from_a_reference_longer_than_the_screen_passes_its_own_signal() {
     let rec = ui.last[0].clone().unwrap();
     // the same signal, four times finer and with half a screen more on either side
     let n = rec.ch[0].len();
-    let fine: Vec<f32> = (0..8 * n).map(|k| {
-        let x = k as f64 / 4.0 - n as f64 / 2.0;
-        if x < 0.0 || x >= n as f64 { 0.0 } else { rec.ch[0][x as usize] }
-    }).collect();
-    ui.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: rec.t0 - n as f64 / 2.0 * rec.dt, dt: rec.dt / 4.0, v: fine.into(), vpd: 1.0, offset: 0.0, on: true });
+    let fine: Vec<f32> = (0..8 * n)
+        .map(|k| {
+            let x = k as f64 / 4.0 - n as f64 / 2.0;
+            if x < 0.0 || x >= n as f64 {
+                0.0
+            } else {
+                rec.ch[0][x as usize]
+            }
+        })
+        .collect();
+    ui.refs[0] = Some(RefWave {
+        src: 0,
+        color: 0,
+        label: "R1".into(),
+        t0: rec.t0 - n as f64 / 2.0 * rec.dt,
+        dt: rec.dt / 4.0,
+        v: fine.into(),
+        vpd: 1.0,
+        offset: 0.0,
+        on: true,
+    });
     (ui.m.mask_x, ui.m.mask_y) = (0.1, 0.5);
     ui.activate(Item::MaskFromRef);
     assert_eq!(ui.mask_sw.reference.as_ref().unwrap().len(), n, "the reference at the points of the screen");

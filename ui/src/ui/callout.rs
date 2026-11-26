@@ -96,7 +96,9 @@ impl Ui {
 
     /// A tap on the text of a callout opens the keyboard on it. True when it took the tap.
     pub(super) fn callout_tap(&mut self, x: i32, y: i32) -> bool {
-        let hit = (0..self.callouts.len()).find(|&i| self.callout_place(i).is_some_and(|(_, r)| Rect::new(r.x - 4, r.y - 8, r.w + 8, r.h + 16).contains(x, y)));
+        let hit = (0..self.callouts.len()).find(|&i| {
+            self.callout_place(i).is_some_and(|(_, r)| Rect::new(r.x - 4, r.y - 8, r.w + 8, r.h + 16).contains(x, y))
+        });
         let Some(i) = hit else { return false };
         let now = self.callouts[i].text.clone();
         self.wlan.osk = Some(Osk::with_text(OskFor::Callout(i), &now));
@@ -105,10 +107,17 @@ impl Ui {
 
     /// The `callout<N>` lines of a setup: source, time and text.
     pub(super) fn callout_setup_text(&self) -> String {
-        self.callouts.iter().enumerate().map(|(i, c)| {
-            let src = match c.src { WaveId::Ch(k) => format!("CH{}", k + 1), WaveId::Ref(k) => format!("R{}", k + 1) };
-            format!("callout{} = {},{:e},{}\n", i + 1, src, c.t, c.text.replace('\n', " "))
-        }).collect()
+        self.callouts
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let src = match c.src {
+                    WaveId::Ch(k) => format!("CH{}", k + 1),
+                    WaveId::Ref(k) => format!("R{}", k + 1),
+                };
+                format!("callout{} = {},{:e},{}\n", i + 1, src, c.t, c.text.replace('\n', " "))
+            })
+            .collect()
     }
 
     /// The callouts of a setup text; lines that do not read are left out.
@@ -122,8 +131,12 @@ impl Ui {
             let mut parts = value.trim().splitn(3, ',');
             let (Some(src), Some(t), Some(text)) = (parts.next(), parts.next(), parts.next()) else { continue };
             let src = match src.trim() {
-                s if s.starts_with("CH") => s[2..].parse::<usize>().ok().filter(|k| (1..=NCH).contains(k)).map(|k| WaveId::Ch(k - 1)),
-                s if s.starts_with('R') => s[1..].parse::<usize>().ok().filter(|k| (1..=NREF).contains(k)).map(|k| WaveId::Ref(k - 1)),
+                s if s.starts_with("CH") => {
+                    s[2..].parse::<usize>().ok().filter(|k| (1..=NCH).contains(k)).map(|k| WaveId::Ch(k - 1))
+                }
+                s if s.starts_with('R') => {
+                    s[1..].parse::<usize>().ok().filter(|k| (1..=NREF).contains(k)).map(|k| WaveId::Ref(k - 1))
+                }
                 _ => None,
             };
             let (Some(src), Ok(t)) = (src, t.trim().parse::<f64>()) else { continue };

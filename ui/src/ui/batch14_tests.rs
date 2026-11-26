@@ -12,7 +12,9 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -27,7 +29,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 { frame(u); }
+    for _ in 0..6 {
+        frame(u);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -102,7 +106,9 @@ fn the_zoom_icon_in_the_waveform_corner_turns_zoom_on_and_off() {
     let (drawn, _) = u.zoom_btn();
     crate::cmd::run(&mut u, &format!("tap {} {}", drawn.x + drawn.w / 2, drawn.y + drawn.h / 2));
     assert!(u.m.zoom, "with an eye docked");
-    for _ in 0..20 { frame(&mut u); }
+    for _ in 0..20 {
+        frame(&mut u);
+    }
     assert!(u.m.zoom, "and it stays on");
     // a slow tap, as a web page sends it: the lift comes a moment after the press
     let mut v = studio();
@@ -125,13 +131,22 @@ fn the_zoom_icon_in_the_waveform_corner_turns_zoom_on_and_off() {
         match state {
             0 => u.studio_set_view(StudioView::Waveform),
             1 => u.studio_set_view(StudioView::Floating),
-            2 => { u.m.hist = Hist::Vertical; u.m.view = AView::Spectrum; }
-            _ => { u.xy = true; }
+            2 => {
+                u.m.hist = Hist::Vertical;
+                u.m.view = AView::Spectrum;
+            }
+            _ => {
+                u.xy = true;
+            }
         }
-        for _ in 0..4 { frame(&mut u); }
+        for _ in 0..4 {
+            frame(&mut u);
+        }
         let (drawn, _) = u.zoom_btn();
         crate::cmd::run(&mut u, &format!("tap {} {}", drawn.x + drawn.w / 2, drawn.y + drawn.h / 2));
-        for _ in 0..4 { frame(&mut u); }
+        for _ in 0..4 {
+            frame(&mut u);
+        }
         assert!(u.m.zoom, "state {state}: zoom on after a tap on the icon at {drawn:?}");
     }
 }
@@ -161,20 +176,34 @@ fn the_histogram_view_stays_when_a_ref_is_loaded() {
     frame(&mut u);
     assert!(u.dock_leaf(VKind::Hist).is_some());
     // a user's CSV, through the import the remote uses
-    let mut csv = String::from("Time (s),Voltage (V)
-");
-    for i in 0..2000 { csv.push_str(&format!("{:e},{}
-", i as f64 * 1e-6, (i as f64 * 0.05).sin() * (-(i as f64) / 800.0).exp())); }
+    let mut csv = String::from(
+        "Time (s),Voltage (V)
+",
+    );
+    for i in 0..2000 {
+        csv.push_str(&format!(
+            "{:e},{}
+",
+            i as f64 * 1e-6,
+            (i as f64 * 0.05).sin() * (-(i as f64) / 800.0).exp()
+        ));
+    }
     u.load_waveform_bytes(csv.as_bytes(), "damped.csv").expect("the CSV loads");
     assert!(u.refs[0].is_some());
-    for _ in 0..5 { frame(&mut u); }
+    for _ in 0..5 {
+        frame(&mut u);
+    }
     assert!(u.m.hist != Hist::Off && u.dock_leaf(VKind::Hist).is_some(), "still there: {:?}", u.m.hist);
     // loading the ref as an offline record keeps it too
     u.studio_set_view(StudioView::Offline);
-    for _ in 0..5 { frame(&mut u); }
+    for _ in 0..5 {
+        frame(&mut u);
+    }
     assert!(u.m.hist != Hist::Off, "{:?}", u.m.hist);
     u.studio_set_view(StudioView::Docked);
-    for _ in 0..5 { frame(&mut u); }
+    for _ in 0..5 {
+        frame(&mut u);
+    }
     assert!(u.m.hist != Hist::Off && u.dock_leaf(VKind::Hist).is_some());
 }
 
@@ -205,7 +234,9 @@ fn undo_restores_the_row_a_few_seconds_later() {
     frame(&mut u);
     assert_eq!(u.studio_keys().len(), before.len() - 1);
     // the remote taps about three seconds later
-    for _ in 0..30 { u.step(0.1); }
+    for _ in 0..30 {
+        u.step(0.1);
+    }
     let (bar, button) = u.md_undo_bar().expect("the bar is still there after 3 s");
     let _ = bar;
     tap(&mut u, button);
@@ -218,7 +249,9 @@ fn undo_restores_the_row_a_few_seconds_later() {
 #[test]
 fn add_math_ends_with_a_trace_on_screen() {
     let mut u = studio();
-    for c in 2..n_ch() { u.m.ch[c].on = false; }
+    for c in 2..n_ch() {
+        u.m.ch[c].on = false;
+    }
     frame(&mut u);
     assert_eq!(u.m.math, crate::math::MathOp::Off);
     let b = u.studio_bottom();
@@ -230,7 +263,9 @@ fn add_math_ends_with_a_trace_on_screen() {
     assert!(u.m.math != crate::math::MathOp::Off, "an operation: {:?}", u.m.math);
     let on = |src: usize| src < n_ch() && u.m.ch[src].on;
     assert!(on(u.m.math_a) && on(u.m.math_b), "sources on: A {} B {}", u.m.math_a, u.m.math_b);
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     assert!(u.studio_bottom().math[0].w > 0, "the M1 chip");
     assert!(!u.math_wave().is_empty(), "M1 has data");
 }
@@ -246,15 +281,29 @@ fn missing_glyphs() -> Vec<(char, String)> {
         for e in std::fs::read_dir(&dir).unwrap().flatten() {
             let p = e.path();
             // (the hostile inputs are tests: they are not drawn)
-            if p.is_dir() { if !p.ends_with("hostile") { stack.push(p); } continue; }
+            if p.is_dir() {
+                if !p.ends_with("hostile") {
+                    stack.push(p);
+                }
+                continue;
+            }
             let name = p.file_name().unwrap().to_string_lossy().to_string();
-            if !name.ends_with(".rs") || name.contains("test") || name == "font.rs" || name == "desktop.rs" || name == "json.rs" { continue; }
+            if !name.ends_with(".rs")
+                || name.contains("test")
+                || name == "font.rs"
+                || name == "desktop.rs"
+                || name == "json.rs"
+            {
+                continue;
+            }
             let text = std::fs::read_to_string(&p).unwrap_or_default();
             // stop at the tests of the file
             let text = text.split("#[cfg(test)]").next().unwrap_or("").to_string();
             for (n, line) in text.lines().enumerate() {
                 let t = line.trim_start();
-                if t.starts_with("//") { continue; }
+                if t.starts_with("//") {
+                    continue;
+                }
                 let code = line.split("//").next().unwrap_or(line);
                 let mut chars: Vec<char> = code.chars().filter(|c| !c.is_ascii()).collect();
                 let mut rest = code;
@@ -262,11 +311,15 @@ fn missing_glyphs() -> Vec<(char, String)> {
                 while let Some(i) = rest.find(&pat) {
                     rest = &rest[i + 3..];
                     if let Some(j) = rest.find('}') {
-                        if let Some(c) = u32::from_str_radix(&rest[..j], 16).ok().and_then(char::from_u32) { chars.push(c); }
+                        if let Some(c) = u32::from_str_radix(&rest[..j], 16).ok().and_then(char::from_u32) {
+                            chars.push(c);
+                        }
                     }
                 }
                 for c in chars {
-                    if font.glyph(c).cp != c as u32 && !out.iter().any(|(x, _)| *x == c) { out.push((c, format!("{}:{}", p.display(), n + 1))); }
+                    if font.glyph(c).cp != c as u32 && !out.iter().any(|(x, _)| *x == c) {
+                        out.push((c, format!("{}:{}", p.display(), n + 1)));
+                    }
                 }
             }
         }
@@ -277,7 +330,11 @@ fn missing_glyphs() -> Vec<(char, String)> {
 #[test]
 fn every_character_in_a_string_of_the_ui_has_a_glyph() {
     let missing = missing_glyphs();
-    assert!(missing.is_empty(), "the font lacks: {}", missing.iter().map(|(c, w)| format!("U+{:04X} {c} ({w})", *c as u32)).collect::<Vec<_>>().join("; "));
+    assert!(
+        missing.is_empty(),
+        "the font lacks: {}",
+        missing.iter().map(|(c, w)| format!("U+{:04X} {c} ({w})", *c as u32)).collect::<Vec<_>>().join("; ")
+    );
 }
 
 // 8 ------------------------------------------------------------------------------------------------ display names
@@ -331,12 +388,16 @@ fn a_loaded_ref_gets_round_volts_per_div_and_offset_like_a_channel() {
     }
     let mut u = studio();
     let mut csv = String::from("Time (s),Voltage (V)\n");
-    for i in 0..2000 { csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-6, 0.55662 + (i as f64 * 0.05).sin() * 1.6)); }
+    for i in 0..2000 {
+        csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-6, 0.55662 + (i as f64 * 0.05).sin() * 1.6));
+    }
     u.load_waveform_bytes(csv.as_bytes(), "ref.csv").unwrap();
     let r = u.refs[0].as_ref().unwrap();
     let steps = r.offset / r.vpd;
     assert!((steps - steps.round()).abs() < 1e-3, "the offset is whole divisions: {} / {}", r.offset, r.vpd);
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     shot(&mut u, "ref-lane");
 }
 
@@ -346,12 +407,19 @@ fn a_loaded_ref_gets_round_volts_per_div_and_offset_like_a_channel() {
 fn the_histogram_view_has_a_volts_axis_and_a_count_scale() {
     let mut u = studio();
     u.m.hist = Hist::Vertical;
-    for _ in 0..8 { frame(&mut u); }
+    for _ in 0..8 {
+        frame(&mut u);
+    }
     let r = u.dock_content(VKind::Hist).expect("the histogram view");
     let mut cv = Canvas::new(W, H);
     u.draw_view_tiles(&mut cv);
     let bg = cv.px[(r.y * W + r.x + 1) as usize];
-    let ink = |x0: i32, x1: i32| (r.y..r.bottom()).flat_map(|y| (x0..x1).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] != bg).count();
+    let ink = |x0: i32, x1: i32| {
+        (r.y..r.bottom())
+            .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+            .filter(|&(x, y)| cv.px[(y * W + x) as usize] != bg)
+            .count()
+    };
     assert!(ink(r.x, r.x + 44) > 30, "volts labels at the left: {}", ink(r.x, r.x + 44));
     assert!(ink(r.x + 50, r.right()) > 30, "the bars and the count scale");
     shot(&mut u, "histogram-axis");
@@ -363,13 +431,18 @@ fn the_histogram_view_is_drawn_for_a_source_in_the_second_lane() {
     u.m.ch[1].on = true;
     u.m.hist = Hist::Vertical;
     u.m.hist_src = Some(1);
-    for _ in 0..8 { frame(&mut u); }
+    for _ in 0..8 {
+        frame(&mut u);
+    }
     assert_eq!(u.hist_src(), Some(1));
     let r = u.dock_content(VKind::Hist).expect("the histogram view");
     let mut cv = Canvas::new(W, H);
     u.draw_view_tiles(&mut cv);
     let bg = cv.px[(r.y * W + r.x + 1) as usize];
-    let ink = (r.y..r.bottom()).flat_map(|y| (r.x..r.right()).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] != bg).count();
+    let ink = (r.y..r.bottom())
+        .flat_map(|y| (r.x..r.right()).map(move |x| (x, y)))
+        .filter(|&(x, y)| cv.px[(y * W + x) as usize] != bg)
+        .count();
     assert!(ink > 60, "the view of the second lane's histogram was empty: {ink}");
 }
 
@@ -389,7 +462,9 @@ fn the_spectrum_beside_an_eye_has_its_trace() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Eye);
     u.studio_apply_panel(super::sheet::PanelKind::Spectrum);
-    for _ in 0..10 { frame(&mut u); }
+    for _ in 0..10 {
+        frame(&mut u);
+    }
     assert!(u.azr.spec.is_some(), "the spectrum was computed while the eye is open");
 }
 
@@ -399,7 +474,9 @@ fn the_spectrum_beside_an_eye_has_its_trace() {
 fn the_studio_eye_has_no_close_or_side_of_its_own_and_its_axis_labels_do_not_overlap() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Eye);
-    for _ in 0..6 { frame(&mut u); }
+    for _ in 0..6 {
+        frame(&mut u);
+    }
     assert_eq!(u.eye_pane_close().w, 0, "the strip's X closes the view");
     assert_eq!(u.eye_place_control().w, 0, "no Side / Full / Under in a dock view");
     let strip = Ui::dock_close_rect(u.dock_leaf(VKind::Eye).unwrap());
@@ -413,8 +490,16 @@ fn the_studio_eye_has_no_close_or_side_of_its_own_and_its_axis_labels_do_not_ove
         let x = r.x + k * (r.w - 1) / 4;
         let s = ["-0.5", "0", "0.5", "1", "1.5 UI"][k as usize];
         let w = f.s.width(s);
-        let tx = if k == 4 { x - w } else if k == 0 { x } else { x - w / 2 };
-        if tx < free + 6 { continue; }
+        let tx = if k == 4 {
+            x - w
+        } else if k == 0 {
+            x
+        } else {
+            x - w / 2
+        };
+        if tx < free + 6 {
+            continue;
+        }
         free = tx + w;
     }
     assert!(free > 0);
@@ -426,17 +511,24 @@ fn the_studio_eye_has_no_close_or_side_of_its_own_and_its_axis_labels_do_not_ove
 fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_corner_icons() {
     let mut u = studio();
     u.set_zoom(true);
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     let bar = u.studio_zoom_bar().expect("the zoom bar");
     let (hit, handle) = u.ov_divider().unwrap();
     for r in [bar.plus, bar.minus, bar.vplus, bar.vminus, bar.boxr, bar.fit, bar.close] {
-        if r.w == 0 { continue; }
+        if r.w == 0 {
+            continue;
+        }
         let over = hit.x < r.right() && r.x < hit.right() && hit.y < r.bottom() && r.y < hit.bottom();
         assert!(!over, "the grip {hit:?} sits on {r:?}");
     }
     // the finger's area stays; the grip that is drawn is a slim bar inside it, on the edge it moves
     assert!(hit.w >= 40 && hit.h >= 40, "{hit:?}");
-    assert!(handle.h <= 6 && handle.w <= hit.w && handle.y >= hit.y && handle.bottom() <= hit.bottom() + 6, "{handle:?} in {hit:?}");
+    assert!(
+        handle.h <= 6 && handle.w <= hit.w && handle.y >= hit.y && handle.bottom() <= hit.bottom() + 6,
+        "{handle:?} in {hit:?}"
+    );
     // a trigger level as high as the corner buttons
     u.set_zoom(false);
     frame(&mut u);
@@ -449,7 +541,11 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
         let x1 = u.trigger_tag_x(u.plot.grid.right() - 26, wb.y + wb.h / 2);
         assert!(x1 + 26 <= wb.x, "the tag left of the Windows button: {x1} vs {wb:?}");
     }
-    assert_eq!(u.trigger_tag_x(u.plot.grid.right() - 26, u.plot.grid.bottom() - 40), u.plot.grid.right() - 26, "low levels stay put");
+    assert_eq!(
+        u.trigger_tag_x(u.plot.grid.right() - 26, u.plot.grid.bottom() - 40),
+        u.plot.grid.right() - 26,
+        "low levels stay put"
+    );
 }
 
 // labels on trace -------------------------------------------------------------------------------- Studio
@@ -458,9 +554,17 @@ fn the_overview_grip_clears_the_zoom_bar_buttons_and_the_trigger_tag_clears_the_
 fn labels_on_trace_draw_in_the_waveform_lane_of_their_channel() {
     let mut u = studio();
     u.m.run = RunState::Stop;
-    u.m.meas = vec![(Meas::Vtop, WaveId::Ch(0)), (Meas::Vbase, WaveId::Ch(0)), (Meas::PWidth, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0)), (Meas::Vavg, WaveId::Ch(0))];
+    u.m.meas = vec![
+        (Meas::Vtop, WaveId::Ch(0)),
+        (Meas::Vbase, WaveId::Ch(0)),
+        (Meas::PWidth, WaveId::Ch(0)),
+        (Meas::Vpp, WaveId::Ch(0)),
+        (Meas::Vavg, WaveId::Ch(0)),
+    ];
     u.ensure_meas_own();
-    for _ in 0..6 { frame(&mut u); }
+    for _ in 0..6 {
+        frame(&mut u);
+    }
     let mut off = Canvas::new(W, H);
     u.render(&mut off);
     // the switch is Measure > Labels on trace (the row menu of the list, which had it too, is gone)
@@ -474,17 +578,28 @@ fn labels_on_trace_draw_in_the_waveform_lane_of_their_channel() {
     for y in 0..H {
         for x in 0..W {
             if on.px[(y * W + x) as usize] != off.px[(y * W + x) as usize] {
-                if lane.contains(x, y) { inside += 1; } else { assert!(!wave.contains(x, y) || !u.plot.wins[1].contains(x, y), "a label on the other lane at {x},{y}"); }
+                if lane.contains(x, y) {
+                    inside += 1;
+                } else {
+                    assert!(
+                        !wave.contains(x, y) || !u.plot.wins[1].contains(x, y),
+                        "a label on the other lane at {x},{y}"
+                    );
+                }
             }
         }
     }
     assert!(inside > 300, "level lines, arrow and labels in the lane of CH1: {inside}");
     // zoomed too
     u.set_zoom(true);
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     shot(&mut u, "labels-zoom");
     u.set_zoom(false);
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     shot(&mut u, "labels-square");
 }
 
@@ -494,14 +609,28 @@ fn widen(u: &mut Ui, k: VKind, w: i32) {
     // the eye / pane gets the room: the other dock panels are made small by their dividers
     for _ in 0..4 {
         let have = u.dock_leaf(k).unwrap().w;
-        if have >= w { break; }
-        let d = u.dock_layout().dividers.iter().min_by_key(|d| (d.line.x - u.dock_leaf(k).unwrap().x).abs().min((d.line.x - u.dock_leaf(k).unwrap().right()).abs())).cloned().unwrap();
+        if have >= w {
+            break;
+        }
+        let d = u
+            .dock_layout()
+            .dividers
+            .iter()
+            .min_by_key(|d| {
+                (d.line.x - u.dock_leaf(k).unwrap().x).abs().min((d.line.x - u.dock_leaf(k).unwrap().right()).abs())
+            })
+            .cloned()
+            .unwrap();
         let (x, y) = (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2);
         let left = d.line.x < u.dock_leaf(k).unwrap().x + have / 2;
         touch(u, Phase::Down, x, y);
-        for s in 1..=6 { touch(u, Phase::Move, x + (if left { -1 } else { 1 }) * (w - have) * s / 6, y); }
+        for s in 1..=6 {
+            touch(u, Phase::Move, x + (if left { -1 } else { 1 }) * (w - have) * s / 6, y);
+        }
         touch(u, Phase::Up, x, y);
-        for _ in 0..3 { frame(u); }
+        for _ in 0..3 {
+            frame(u);
+        }
     }
 }
 
@@ -510,9 +639,13 @@ fn a_wide_eye_view_shows_the_full_page_and_a_narrow_one_keeps_the_eye() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Eye);
     u.studio_set_view(StudioView::Waveform);
-    for _ in 0..8 { frame(&mut u); }
+    for _ in 0..8 {
+        frame(&mut u);
+    }
     widen(&mut u, VKind::Eye, 720);
-    for _ in 0..8 { frame(&mut u); }
+    for _ in 0..8 {
+        frame(&mut u);
+    }
     let w = u.dock_leaf(VKind::Eye).unwrap().w;
     assert!(w >= 600, "a wide eye: {w}");
     shot(&mut u, "eye-wide");
@@ -523,9 +656,13 @@ fn a_wide_spectrum_view_has_the_peak_list_and_numbered_markers() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Spectrum);
     u.studio_set_view(StudioView::Waveform);
-    for _ in 0..10 { frame(&mut u); }
+    for _ in 0..10 {
+        frame(&mut u);
+    }
     widen(&mut u, VKind::Pane, 720);
-    for _ in 0..10 { frame(&mut u); }
+    for _ in 0..10 {
+        frame(&mut u);
+    }
     let r = u.dock_content(VKind::Pane).unwrap();
     assert!(r.w >= super::panes::SPEC_NARROW_W, "wide: {}", r.w);
     let b = u.spec_box(r, true);
@@ -582,9 +719,15 @@ fn the_horizontal_position_cannot_drift_far_away_and_a_double_tap_on_the_time_ax
     u.m.tscale = tscales().len() - 3;
     frame(&mut u);
     u.m.delay = -202.0;
-    for _ in 0..3 { frame(&mut u); }
-    for _ in 0..40 { u.axis_step(super::axis::Axis::Time, -1); }
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
+    for _ in 0..40 {
+        u.axis_step(super::axis::Axis::Time, -1);
+    }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let lim = 50.0 * HDIV * u.m.time_per_div();
     assert!(u.m.delay.abs() <= lim * 1.001, "the position is kept near the trigger: {} vs {}", u.m.delay, lim);
     // a double tap on the time axis: centre
@@ -592,7 +735,10 @@ fn the_horizontal_position_cannot_drift_far_away_and_a_double_tap_on_the_time_ax
     frame(&mut u);
     let s = u.axis_time_strip().unwrap();
     let (x, y) = (s.x + s.w / 2, s.y + s.h - 10);
-    for _ in 0..2 { touch(&mut u, Phase::Down, x, y); touch(&mut u, Phase::Up, x, y); }
+    for _ in 0..2 {
+        touch(&mut u, Phase::Down, x, y);
+        touch(&mut u, Phase::Up, x, y);
+    }
     frame(&mut u);
     assert_eq!(u.m.delay, 0.0, "centred by the double tap");
 }
@@ -617,13 +763,17 @@ fn the_strip_of_a_view_is_slim_and_its_buttons_are_still_forty_pixels() {
     // a drag from anywhere on the strip still moves the view; a tap on the X closes
     let (x, y) = (s.x + s.w / 2, s.y + s.h / 2);
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=8 { touch(&mut u, Phase::Move, x + k * 3, y + k * 20); }
+    for k in 1..=8 {
+        touch(&mut u, Phase::Move, x + k * 3, y + k * 20);
+    }
     assert!(matches!(u.studio.dock.drag, Some(super::dock::DockDrag::Move { .. })), "picked up");
     touch(&mut u, Phase::Up, x + 24, y + 160);
     frame(&mut u);
     // the cursor tags and the trigger tag are not under it
     u.m.cursor = CursorMode::Time;
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let lane = u.plot.wins[0];
     let strip = Ui::dock_strip(u.dock_rect(VKind::Wave).unwrap());
     assert!(lane.y >= strip.bottom(), "the lane starts under the strip: {lane:?} {strip:?}");
@@ -633,7 +783,9 @@ fn the_strip_of_a_view_is_slim_and_its_buttons_are_still_forty_pixels() {
 
 fn add_open(u: &mut Ui) {
     u.open_meas_list();
-    for _ in 0..3 { frame(u); }
+    for _ in 0..3 {
+        frame(u);
+    }
 }
 
 #[test]
@@ -641,22 +793,34 @@ fn browsing_the_add_list_computes_nothing_and_shows_no_values() {
     let mut u = studio();
     u.m.meas.clear();
     u.m.cat.clear();
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let before = u.catalog_jobs_submitted();
     add_open(&mut u);
     // every group, the Jitter one full of eye analyses
     for group in 0..crate::measures::CATEGORIES.len() {
         u.sheet.add_group = group;
-        for _ in 0..4 { frame(&mut u); }
+        for _ in 0..4 {
+            frame(&mut u);
+        }
         let g = u.sheet_add_geo();
         let entries = u.sheet_add_entries();
         for &(k, _) in &g.rows {
             // nothing but whether the sources are there
-            assert!(matches!(u.add_preview(entries[k].cat), super::meascatalog::Preview::Value(ref v) if v.is_empty()) || matches!(u.add_preview(entries[k].cat), super::meascatalog::Preview::Off(_) | super::meascatalog::Preview::Reason(_)));
+            assert!(
+                matches!(u.add_preview(entries[k].cat), super::meascatalog::Preview::Value(ref v) if v.is_empty())
+                    || matches!(
+                        u.add_preview(entries[k].cat),
+                        super::meascatalog::Preview::Off(_) | super::meascatalog::Preview::Reason(_)
+                    )
+            );
         }
     }
     std::thread::sleep(std::time::Duration::from_millis(100));
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     assert_eq!(u.catalog_jobs_submitted(), before, "no analysis was started while browsing");
     assert!(u.m.meas.is_empty() && u.m.cat.is_empty(), "nothing was added");
 }
@@ -719,7 +883,11 @@ fn the_info_card_text_is_large_and_ends_above_its_button() {
     for e in u.sheet_add_entries() {
         let (body, step, parts) = Ui::info_card_text(f, e.cat, card);
         let h: i32 = parts.iter().map(|(_, l)| 16 + step * (l.len() as i32 + 1)).sum();
-        assert!(card.y + 108 + h <= bottom, "{}: the text runs into the button", super::meascatalog::cat_info(e.cat).name);
+        assert!(
+            card.y + 108 + h <= bottom,
+            "{}: the text runs into the button",
+            super::meascatalog::cat_info(e.cat).name
+        );
         if body.size < f.m.size {
             small.push(super::meascatalog::cat_info(e.cat).name);
         }

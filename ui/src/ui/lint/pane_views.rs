@@ -232,7 +232,12 @@ fn the_peak_list_of_a_spectrum_view_stays_inside_the_view() {
     let zoom = u.zoom_btn().1;
     let a = crate::gfx::Rect::new(0, zoom.y - 300, PANEL_W, 250);
     let b = u.spec_box(a, false);
-    assert!(b.sort.y >= a.y && b.list.y > b.sort.bottom() && b.list.h >= 100 && b.list.bottom() <= a.bottom(), "{a:?}: {:?} {:?}", b.sort, b.list);
+    assert!(
+        b.sort.y >= a.y && b.list.y > b.sort.bottom() && b.list.h >= 100 && b.list.bottom() <= a.bottom(),
+        "{a:?}: {:?} {:?}",
+        b.sort,
+        b.list
+    );
     let own = crate::gfx::Rect::new(0, zoom.y - 10, PANEL_W, 400);
     assert!(u.spec_box(own, false).sort.y >= zoom.bottom(), "under the buttons of its own column");
 }
@@ -274,7 +279,10 @@ fn the_buttons_of_a_spectrum_view_are_drawn_smaller_than_their_touch_areas() {
     assert!(chip.x >= hit.x && chip.right() <= hit.right() && chip.y >= hit.y && chip.bottom() <= hit.bottom());
     let sort = u.spec_box(u.plot.area, false).sort;
     let drawn = Ui::spec_sort_chip(sort);
-    assert!(sort.h >= 36 && drawn.h <= 26 && drawn.y >= sort.y && drawn.bottom() <= sort.bottom(), "{sort:?} {drawn:?}");
+    assert!(
+        sort.h >= 36 && drawn.h <= 26 && drawn.y >= sort.y && drawn.bottom() <= sort.bottom(),
+        "{sort:?} {drawn:?}"
+    );
 }
 
 /// Everything the panes write stays inside its pane, and in the width it was given.

@@ -52,14 +52,19 @@ impl Scpi {
         let nodes: Vec<&str> = head.trim_start_matches(':').split(':').collect();
         // the set-up as commands (scpi/setupscpi.rs): it asks this interpreter for the value of every line. SETup is
         // spelled out, as for :SYSTem:SETup: the short form SET is the key = value command
-        if nodes.len() == 3 && kw(nodes[0], "SYSTem") && nodes[1].eq_ignore_ascii_case("SETup") && kw(nodes[2], "SCPI") {
-            if query { return Some(block(self.setup_scpi(ui, cv).as_bytes())); }
+        if nodes.len() == 3 && kw(nodes[0], "SYSTem") && nodes[1].eq_ignore_ascii_case("SETup") && kw(nodes[2], "SCPI")
+        {
+            if query {
+                return Some(block(self.setup_scpi(ui, cv).as_bytes()));
+            }
             self.push_err(format!("-113,\"Undefined header\" {}", cmd));
             return None;
         }
         // the SCPI recorder (scpi/recorder.rs): the switch is the one of Storage > SCPI recorder, taken at the next frame
         if nodes.len() == 3 && kw(nodes[0], "SYSTem") && kw(nodes[1], "RECorder") && kw(nodes[2], "STATe") {
-            if query { return t(if ui.scpi_rec_want { "1" } else { "0" }); }
+            if query {
+                return t(if ui.scpi_rec_want { "1" } else { "0" });
+            }
             match parse_bool(arg) {
                 Some(on) => ui.scpi_rec_want = on,
                 None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
@@ -75,7 +80,10 @@ impl Scpi {
         if let Some(r) = ui.scpi_ext_command(&nodes, query, arg) {
             return match r {
                 Ok(v) => v,
-                Err(msg) => { self.push_err(msg); None }
+                Err(msg) => {
+                    self.push_err(msg);
+                    None
+                }
             };
         }
         if let Some(r) = self.run_state_cmd(ui, &nodes, query, arg) {
@@ -97,7 +105,12 @@ impl Scpi {
         if nodes.first().is_some_and(|n| kw(n, "TIMebase")) {
             return self.timebase_cmd(ui, &nodes, query, arg);
         }
-        if !query && nodes.len() == 3 && kw(nodes[0], "TRIGger") && kw(nodes[1], "EDGE") && nodes.last().is_some_and(|l| kw(l, "LEVel")) {
+        if !query
+            && nodes.len() == 3
+            && kw(nodes[0], "TRIGger")
+            && kw(nodes[1], "EDGE")
+            && nodes.last().is_some_and(|l| kw(l, "LEVel"))
+        {
             if let Some(number) = num(arg) {
                 ui.scpi_set_trigger_level(false, number);
                 ui.mark_changed();
@@ -308,6 +321,16 @@ impl Scpi {
         if kw(n0, "DECode") && nodes.len() == 2 && kw(nodes[1], "EVENts") && query {
             return t(&ui.events_text());
         }
+        if kw(n0, "DECode") && nodes.len() == 3 && kw(nodes[1], "EVENts") && kw(nodes[2], "COUNt") && query {
+            return match ui.events_total() {
+                Ok(n) => t(&n.to_string()),
+                Err("Decode computing") => t("BUSY"),
+                Err(error) => {
+                    self.push_err(format!("-230,\"{}\"", error));
+                    None
+                }
+            };
+        }
         // what the Events pane lists (the query above always answers a row per field)
         if kw(n0, "DECode") && nodes.len() == 3 && kw(nodes[1], "EVENts") && kw(nodes[2], "VIEW") {
             if query {
@@ -355,6 +378,9 @@ impl Scpi {
         }
         if kw(n0, "COUNter") {
             return self.counter_cmd(ui, &nodes[1..], query, arg);
+        }
+        if kw(n0, "TABLe") {
+            return self.table_cmd(ui, &nodes[1..], query, arg);
         }
         self.push_err(format!("-113,\"Undefined header\" {}", cmd));
         None
@@ -849,7 +875,9 @@ impl Scpi {
                 return Some(t(&self.wave_preamble(ui)));
             }
             // the scaling fields of the preamble one by one, as the stock firmware has them
-            let field = ["XINCrement", "XORigin", "XREFerence", "YINCrement", "YORigin", "YREFerence"].iter().position(|f| kw(n1, f));
+            let field = ["XINCrement", "XORigin", "XREFerence", "YINCrement", "YORigin", "YREFerence"]
+                .iter()
+                .position(|f| kw(n1, f));
             if let Some(k) = field.filter(|_| query) {
                 return Some(t(self.wave_preamble(ui).split(',').nth(4 + k).unwrap_or("0")));
             }
@@ -895,7 +923,10 @@ impl Scpi {
                 return Some(t(if ui.m.gen_hidden { "0" } else { "1" }));
             }
             match parse_bool(arg) {
-                Some(on) => { ui.m.gen_hidden = !on; ui.mark_changed(); }
+                Some(on) => {
+                    ui.m.gen_hidden = !on;
+                    ui.mark_changed();
+                }
                 None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
             }
             return Some(None);
@@ -954,9 +985,15 @@ impl Scpi {
         if kw(n0, "VIEW") && nodes.len() == 1 {
             // the analysers' own keywords, and the fork's bandwidth test (BWTest), which the registry keeps off :VIEW
             let mut views = crate::ui::scpi_views();
-            if !views.iter().any(|(_, v)| *v == AView::Step) { views.push(("BWTest", AView::Step)); }
+            if !views.iter().any(|(_, v)| *v == AView::Step) {
+                views.push(("BWTest", AView::Step));
+            }
             if query {
-                return Some(t(&if ui.m.view == AView::Step { "BWTEST".to_string() } else { format!("{:?}", ui.m.view).to_ascii_uppercase() }));
+                return Some(t(&if ui.m.view == AView::Step {
+                    "BWTEST".to_string()
+                } else {
+                    format!("{:?}", ui.m.view).to_ascii_uppercase()
+                }));
             }
             match views.iter().find(|(k, _)| kw(arg, k)) {
                 Some((_, v)) => ui.set_analysis_view(*v),
@@ -1613,5 +1650,9 @@ mod vernier_tests {
 /// What `*OPT?` and `:SYSTem:OPTion:INSTalled?` answer: the options of this unit separated by commas, `0` for none.
 pub(crate) fn options_text() -> String {
     let o = oos_hal::model::platform().options();
-    if o.is_empty() { "0".to_string() } else { o.join(",") }
+    if o.is_empty() {
+        "0".to_string()
+    } else {
+        o.join(",")
+    }
 }

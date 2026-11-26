@@ -12,14 +12,18 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     u
 }
 
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
@@ -27,9 +31,13 @@ fn shot(u: &mut Ui, name: &str) {
     }
 }
 
-fn tap_in(u: &mut Ui, r: Rect) { u.tap(r.x + r.w / 2, r.y + r.h / 2); }
+fn tap_in(u: &mut Ui, r: Rect) {
+    u.tap(r.x + r.w / 2, r.y + r.h / 2);
+}
 
-fn px(cv: &Canvas, x: i32, y: i32) -> u32 { cv.px[(y * W + x) as usize] }
+fn px(cv: &Canvas, x: i32, y: i32) -> u32 {
+    cv.px[(y * W + x) as usize]
+}
 
 fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
     u.handle(Ev::Touch { id: 0, phase, x, y });
@@ -38,7 +46,9 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, (x0, y0): (i32, i32), (x1, y1): (i32, i32)) {
     touch(u, Phase::Down, x0, y0);
-    for k in 1..=6 { touch(u, Phase::Move, x0 + (x1 - x0) * k / 6, y0 + (y1 - y0) * k / 6); }
+    for k in 1..=6 {
+        touch(u, Phase::Move, x0 + (x1 - x0) * k / 6, y0 + (y1 - y0) * k / 6);
+    }
     touch(u, Phase::Up, x1, y1);
 }
 
@@ -46,7 +56,11 @@ fn open_add(u: &mut Ui) {
     let r = u.studio_top().add;
     assert!(r.w >= 40 && r.h >= 30, "the Add button is a target: {r:?}");
     // the top-bar Add button opens a menu now (addmenu.rs); the pages of the Add panel are reached from it
-    if !(u.menu_open && u.menu == MenuId::AddPanel) { u.studio.add_menu = false; u.open_menu(MenuId::AddPanel); u.sheet.add.kind = None; }
+    if !(u.menu_open && u.menu == MenuId::AddPanel) {
+        u.studio.add_menu = false;
+        u.open_menu(MenuId::AddPanel);
+        u.sheet.add.kind = None;
+    }
     assert!(u.menu_open && u.menu == MenuId::AddPanel);
 }
 
@@ -72,13 +86,18 @@ fn entering_studio_by_any_road_shows_its_bars() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Default;
     u.set_full(true, false);
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     assert!(u.full_on());
     u.m.layout = Layout::Studio;
     u.m.studio_detail = false;
     u.m.studio_zoom_tab = false;
     let mut cv = Canvas::new(W, H);
-    for _ in 0..3 { u.step(0.05); u.render(&mut cv); }
+    for _ in 0..3 {
+        u.step(0.05);
+        u.render(&mut cv);
+    }
     assert!(!u.full_on() && u.m.density == Density::Scope, "bars are back");
     // 2. a recalled set-up that is Studio with the screen full
     let mut v = Ui::new(Source::Demo { t: 0.0 });
@@ -86,7 +105,9 @@ fn entering_studio_by_any_road_shows_its_bars() {
     v.m.studio_detail = false;
     v.m.studio_zoom_tab = false;
     v.studio.enter = true;
-    for _ in 0..3 { v.step(0.05); }
+    for _ in 0..3 {
+        v.step(0.05);
+    }
     v.set_full(true, false);
     let text = crate::store::setup_text(&v.m);
     let dir = std::env::temp_dir().join("oos-b8-recall");
@@ -94,11 +115,16 @@ fn entering_studio_by_any_road_shows_its_bars() {
     std::fs::write(dir.join("setup0.txt"), text).unwrap();
     let mut w = Ui::new(Source::Demo { t: 0.0 });
     w.m.layout = Layout::Default;
-    for _ in 0..3 { w.step(0.05); }
+    for _ in 0..3 {
+        w.step(0.05);
+    }
     w.files.dir = dir.clone();
     w.files.slot = 0;
     w.recall_setup();
-    for _ in 0..3 { w.step(0.05); w.render(&mut cv); }
+    for _ in 0..3 {
+        w.step(0.05);
+        w.render(&mut cv);
+    }
     assert_eq!(w.m.layout, Layout::Studio);
     assert!(!w.full_on(), "a recalled Studio set-up shows its bars");
     // the full-screen button inside Studio still works: it is the user's choice
@@ -118,7 +144,9 @@ fn the_add_button_opens_a_panel_that_stays_open_for_several_adds() {
     assert!(u.sheet_active());
     let g = u.rail_geo();
     assert_eq!(g.rows.len(), 5);
-    for (i, (_, r)) in g.rows.iter().enumerate() { assert!(r.h >= 44 && r.w >= 40, "row {i}"); }
+    for (i, (_, r)) in g.rows.iter().enumerate() {
+        assert!(r.h >= 44 && r.w >= 40, "row {i}");
+    }
     u.step(0.05);
     // the panel floats over the docks: the waveform keeps its size
     assert_eq!(before.w, u.plot_rect().w);
@@ -183,19 +211,34 @@ fn every_page_has_a_picture_a_line_and_targets_of_40_px() {
         let sheet = u.sheet_rect();
         assert!(g.preview.w > 200 && g.preview.h >= 80, "{k:?} picture");
         assert!(g.desc.h >= 32);
-        for (_, r) in g.types.iter() { assert!(r.h >= 40 && r.w >= 40, "{k:?} type"); }
-        for (_, r) in g.srcs.iter() { assert!(r.h >= 40 && r.w >= 40, "{k:?} source"); }
-        for (_, r) in g.foot.iter() { assert!(r.h >= 44 && r.bottom() <= sheet.bottom(), "{k:?} footer"); }
+        for (_, r) in g.types.iter() {
+            assert!(r.h >= 40 && r.w >= 40, "{k:?} type");
+        }
+        for (_, r) in g.srcs.iter() {
+            assert!(r.h >= 40 && r.w >= 40, "{k:?} source");
+        }
+        for (_, r) in g.foot.iter() {
+            assert!(r.h >= 44 && r.bottom() <= sheet.bottom(), "{k:?} footer");
+        }
         for r in g.types.iter().map(|t| t.1).chain(g.srcs.iter().map(|t| t.1)).chain(std::iter::once(g.preview)) {
             assert!(r.x >= sheet.x && r.right() <= sheet.right() && r.bottom() <= sheet.bottom(), "{k:?} inside");
         }
-        let ids: Vec<&str> = if k == AddKind::Table { vec!["table_meas", "table_search", "table_decode"] } else if k == AddKind::Plot { vec!["xy", "eye", "hist", "spectrum", "trend"] } else { vec![if k == AddKind::Search { "search" } else { "cursors" }] };
+        let ids: Vec<&str> = if k == AddKind::Table {
+            vec!["table_meas", "table_search", "table_decode"]
+        } else if k == AddKind::Plot {
+            vec!["xy", "eye", "hist", "spectrum", "trend"]
+        } else {
+            vec![if k == AddKind::Search { "search" } else { "cursors" }]
+        };
         for id in ids {
             let mut cv = Canvas::new(W, H);
             cv.clear(BG);
             let r = Rect::new(10, 10, 356, 88);
             u.draw_rail_preview(&mut cv, r, id);
-            let lit = (r.y..r.bottom()).any(|y| (r.x + 4..r.right() - 4).any(|x| px(&cv, x, y) != px(&cv, r.x + 2, r.y + 2) && px(&cv, x, y) != px(&cv, r.x + 1, r.y + 1)));
+            let lit = (r.y..r.bottom()).any(|y| {
+                (r.x + 4..r.right() - 4)
+                    .any(|x| px(&cv, x, y) != px(&cv, r.x + 2, r.y + 2) && px(&cv, x, y) != px(&cv, r.x + 1, r.y + 1))
+            });
             assert!(lit, "{id} draws something");
         }
     }
@@ -292,14 +335,26 @@ fn cursor_readouts_have_a_box_at_each_cursor_and_a_delta_box() {
     let (ta, tb) = u.cursor_times();
     assert!(u.wave_at_source(u.cursor_source(), ta).is_some() && u.wave_at_source(u.cursor_source(), tb).is_some());
     let mut found = 0;
-    for y in a.y..a.bottom() { for x in a.x..a.right() { if px(&cv, x, y) == CURSOR { found += 1; } } }
+    for y in a.y..a.bottom() {
+        for x in a.x..a.right() {
+            if px(&cv, x, y) == CURSOR {
+                found += 1;
+            }
+        }
+    }
     assert!(found > 400, "cursor lines and boxes are drawn ({found} px)");
     // in badge mode the boxes leave the graticule and the chip carries the values
     let before = found;
     u.studio.cur_badge = true;
     u.render(&mut cv);
     let mut after = 0;
-    for y in a.y..a.bottom() { for x in a.x..a.right() { if px(&cv, x, y) == CURSOR { after += 1; } } }
+    for y in a.y..a.bottom() {
+        for x in a.x..a.right() {
+            if px(&cv, x, y) == CURSOR {
+                after += 1;
+            }
+        }
+    }
     assert!(after < before, "boxes gone from the graticule");
     let chip = u.studio_cursor_chip(0).expect("a badge chip").1;
     assert!(chip.contains('X') || chip.contains("t"), "{chip}");
@@ -312,7 +367,9 @@ fn cursors_show_in_the_overview_and_in_the_zoom_view() {
     let mut u = studio();
     u.m.run = RunState::Stop;
     u.set_zoom(true);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.studio_cursors_add(None);
     // put the cursors where the zoom window is, so the overview and the zoom view both hold them
     let mut cv = Canvas::new(W, H);
@@ -324,9 +381,13 @@ fn cursors_show_in_the_overview_and_in_the_zoom_view() {
     let mut seen = 0;
     for t in [ta, tb] {
         let x = x_of(t);
-        if x < o.x || x >= o.right() { continue; }
+        if x < o.x || x >= o.right() {
+            continue;
+        }
         let hits = (o.y..o.bottom()).filter(|&y| px(&cv, x, y) == CURSOR).count();
-        if hits > 8 { seen += 1; }
+        if hits > 8 {
+            seen += 1;
+        }
     }
     assert!(seen >= 1, "overview shows a cursor line ({ta} {tb} in {o:?})");
     // and the zoom view has its own lines at the fractions
@@ -345,10 +406,17 @@ fn cursor_settings_type_source_readout_linked_and_positions() {
     u.open_menu(MenuId::Cursor);
     assert!(u.sheet_active());
     let spec = u.sheet_spec(MenuId::Cursor).unwrap();
-    assert!(spec.tabs[0].rows.contains(&Item::CurMode) && spec.tabs[0].rows.contains(&Item::CurSrc) && spec.tabs[0].rows.contains(&Item::CurReadout) && spec.tabs[0].rows.contains(&Item::CurLink));
+    assert!(
+        spec.tabs[0].rows.contains(&Item::CurMode)
+            && spec.tabs[0].rows.contains(&Item::CurSrc)
+            && spec.tabs[0].rows.contains(&Item::CurReadout)
+            && spec.tabs[0].rows.contains(&Item::CurLink)
+    );
     assert!(spec.tabs[1].rows.contains(&Item::CurA) && spec.tabs[1].rows.contains(&Item::CurB));
     assert_eq!(u.value(Item::CurMode), "Track");
-    for (name, mode) in [("Time", CursorMode::Time), ("Volt", CursorMode::Volt), ("XY", CursorMode::Xy), ("Track", CursorMode::Track)] {
+    for (name, mode) in
+        [("Time", CursorMode::Time), ("Volt", CursorMode::Volt), ("XY", CursorMode::Xy), ("Track", CursorMode::Track)]
+    {
         u.select_option(Item::CurMode, name);
         assert_eq!(u.m.cursor, mode, "{name}");
         assert_eq!(u.value(Item::CurMode), name);
@@ -511,16 +579,25 @@ fn the_search_badge_does_not_push_the_measurement_badges_out_of_the_row() {
     u.m.run = RunState::Stop;
     let before = u.studio_badges();
     u.studio_search_add(Some(WaveId::Ch(0)));
-    for _ in 0..2 { u.step(0.05); }
+    for _ in 0..2 {
+        u.step(0.05);
+    }
     // the search controls are in the top bar: the badges are where they were, every one of them
     let (prev, label, next, _) = u.studio_search_chip().unwrap();
     let top = u.frame().top;
-    for r in [prev, label, next] { assert!(r.y >= top.y && r.bottom() <= top.bottom() && r.h >= 40, "{r:?} in the top bar {top:?}"); }
+    for r in [prev, label, next] {
+        assert!(r.y >= top.y && r.bottom() <= top.bottom() && r.h >= 40, "{r:?} in the top bar {top:?}");
+    }
     assert!(prev.w >= 44 && next.w >= 44 && prev.right() <= label.x && label.right() <= next.x);
     assert_eq!(u.studio_badges(), before, "the badge row is as it was");
     // between the read-out and the buttons at the right, over none of them
     let t = u.studio_top();
-    assert!(t.acq.right() <= prev.x && next.right() <= t.add.x && (t.vbox.w == 0 || next.right() <= t.vbox.x), "{:?} {:?}", t.acq, t.add);
+    assert!(
+        t.acq.right() <= prev.x && next.right() <= t.add.x && (t.vbox.w == 0 || next.right() <= t.vbox.x),
+        "{:?} {:?}",
+        t.acq,
+        t.add
+    );
     assert!(t.acq.w >= 120, "the read-out keeps its room: {}", t.acq.w);
 }
 
@@ -531,7 +608,9 @@ fn a_floating_panel_may_lie_over_the_zoom_bar_and_the_docked_panel_closes_with_a
     let mut u = studio();
     u.m.run = RunState::Stop;
     u.set_zoom(true);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.studio_set_view(super::studio::StudioView::Floating);
     for at in [(600, 0), (700, 60), (300, 100), (0, 0)] {
         u.studio.panel.at = Some(at);

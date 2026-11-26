@@ -25,7 +25,9 @@ impl Scpi {
     }
 
     pub(super) fn wav_source_text(&self) -> String {
-        if let Some(k) = self.wav_math { return format!("MATH{}", k + 1); }
+        if let Some(k) = self.wav_math {
+            return format!("MATH{}", k + 1);
+        }
         match self.wav_src {
             WaveId::Ch(c) => format!("CHAN{}", c + 1),
             WaveId::Ref(i) => format!("R{}", i + 1),
@@ -38,7 +40,9 @@ impl Scpi {
     }
 
     pub(super) fn wave_len(&self, ui: &Ui) -> u64 {
-        if let Some(k) = self.wav_math { return ui.math_view(k).map_or(0, |(v, _, _)| v.len() as u64); }
+        if let Some(k) = self.wav_math {
+            return ui.math_view(k).map_or(0, |(v, _, _)| v.len() as u64);
+        }
         match self.wav_src {
             WaveId::Ch(c) => ui.channel_points(c, self.wave_memory(ui)) as u64,
             WaveId::Ref(i) => ui.ref_info(i).map(|(n, _, _, _, _)| n as u64).unwrap_or(0),
@@ -101,7 +105,9 @@ impl Scpi {
     /// Sample interval and the time of the first point of the current page. Does not copy the samples.
     fn wave_origin(&self, ui: &Ui) -> (f64, f64) {
         let (dt, t0) = match self.wav_src {
-            _ if self.wav_math.is_some() => self.wav_math.and_then(|k| ui.math_view(k)).map_or((0.0, 0.0), |(_, dt, t0)| (dt, t0)),
+            _ if self.wav_math.is_some() => {
+                self.wav_math.and_then(|k| ui.math_view(k)).map_or((0.0, 0.0), |(_, dt, t0)| (dt, t0))
+            }
             WaveId::Ch(c) => ui.channel_origin(c, self.wave_memory(ui)).unwrap_or((0.0, 0.0)),
             WaveId::Ref(i) => ui.ref_info(i).map(|(_, dt, t0, _, _)| (dt, t0)).unwrap_or((0.0, 0.0)),
         };
@@ -119,7 +125,9 @@ impl Scpi {
         let (start, stop) = (self.wav_start.max(1), self.wav_stop);
         if let Some(k) = self.wav_math {
             let (vpd, offset) = self.wave_scale(ui);
-            let (v, dt, t0) = ui.math_view(k).map_or((Vec::new(), 0.0, 0.0), |(v, dt, t0)| crate::ui::copy_page(&v, dt, t0, start, stop));
+            let (v, dt, t0) = ui
+                .math_view(k)
+                .map_or((Vec::new(), 0.0, 0.0), |(v, dt, t0)| crate::ui::copy_page(&v, dt, t0, start, stop));
             return (v, dt, t0, vpd, offset);
         }
         match self.wav_src {

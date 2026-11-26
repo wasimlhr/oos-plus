@@ -310,7 +310,10 @@ mod tests {
             let g = u.plot.grid;
             for (i, a) in u.plot.wins.iter().enumerate() {
                 assert_eq!((a.w, a.h), (u.plot.wins[0].w, u.plot.wins[0].h), "{layout:?}");
-                assert!(a.x >= g.x && a.y >= g.y && a.x + a.w <= g.x + g.w && a.y + a.h <= g.y + g.h, "{layout:?} {a:?}");
+                assert!(
+                    a.x >= g.x && a.y >= g.y && a.x + a.w <= g.x + g.w && a.y + a.h <= g.y + g.h,
+                    "{layout:?} {a:?}"
+                );
                 for b in &u.plot.wins[i + 1..] {
                     assert!(!overlaps(*a, *b), "{layout:?}");
                 }
@@ -744,7 +747,12 @@ mod tests {
         u.relayout();
         assert_eq!((u.m.strip_dock, u.strip_rows(), u.strip_rect()), (StripDock::Hidden, 0, None));
         assert_eq!(u.value(Item::StripDock), "Hidden");
-        assert!(u.plot.grid.h > shown.h && u.plot.grid.x == 0 && u.plot.grid.w == W, "{:?} vs {:?}", u.plot.grid, shown);
+        assert!(
+            u.plot.grid.h > shown.h && u.plot.grid.x == 0 && u.plot.grid.w == W,
+            "{:?} vs {:?}",
+            u.plot.grid,
+            shown
+        );
         assert!(!u.paged_strip());
         let mut cv = Canvas::new(W, H);
         u.render(&mut cv);
@@ -795,7 +803,13 @@ mod tests {
         shot(&mut u, "windows-page-stacked.png");
         u.select_option(Item::Traces, "Overlay");
         u.close_menu();
-        for (p, name) in [(StripDock::Below, "strip-below"), (StripDock::Left, "strip-left"), (StripDock::Right, "strip-right"), (StripDock::Above, "strip-above"), (StripDock::Hidden, "strip-hidden")] {
+        for (p, name) in [
+            (StripDock::Below, "strip-below"),
+            (StripDock::Left, "strip-left"),
+            (StripDock::Right, "strip-right"),
+            (StripDock::Above, "strip-above"),
+            (StripDock::Hidden, "strip-hidden"),
+        ] {
             u.m.strip_dock = p;
             u.relayout();
             shot(&mut u, &format!("{name}.png"));

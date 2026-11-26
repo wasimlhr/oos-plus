@@ -80,7 +80,8 @@ impl Protocol for Ds2482 {
     /// asked for its status after each: I2C at 400 kHz, a round every 800 us.
     fn demo(&self) -> Option<Demo> {
         use oos_dsp::sim::{i2c_logic, I2cXfer};
-        let xfer = |read: bool, data: &[u8]| I2cXfer { addr: 0x18, read, data: data.to_vec(), repeated: false, stop: true };
+        let xfer =
+            |read: bool, data: &[u8]| I2cXfer { addr: 0x18, read, data: data.to_vec(), repeated: false, stop: true };
         // (the status: the 1-Wire line is not busy; after the reset a device answered, presence pulse detected)
         let (write, status) = (|data: &[u8]| xfer(false, data), |v: u8| xfer(true, &[v]));
         let reset = [write(&[0xb4]), status(0x0a)];

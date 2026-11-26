@@ -54,7 +54,13 @@ fn the_pulse_trigger_commands_set_and_read_back() {
     ok(&mut s, &mut ui, &cv, ":TRIGger:PULSe:WIDTh 5e-6");
     assert_eq!(ok(&mut s, &mut ui, &cv, ":TRIGger:PULSe:WIDTh?;:TRIGger:PULSe:LWIDth?"), "5.000000E-06;5.000000E-06");
     // a value that is no width, no polarity, no When and no level is refused and changes nothing
-    for bad in [":TRIGger:PULSe:POLarity UP", ":TRIGger:PULSe:WHEN SOON", ":TRIGger:PULSe:LWIDth -1", ":TRIGger:PULSe:UWIDth 0", ":TRIGger:PULSe:LEVel x"] {
+    for bad in [
+        ":TRIGger:PULSe:POLarity UP",
+        ":TRIGger:PULSe:WHEN SOON",
+        ":TRIGger:PULSe:LWIDth -1",
+        ":TRIGger:PULSe:UWIDth 0",
+        ":TRIGger:PULSe:LEVel x",
+    ] {
         let before = (ui.m.trig_pol, ui.m.trig_when, ui.m.trig_t1, ui.m.trig_level);
         line(&mut s, &mut ui, &cv, bad);
         assert!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?").starts_with("-224"), "{bad}");

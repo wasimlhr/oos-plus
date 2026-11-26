@@ -11,7 +11,9 @@ fn studio() -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -28,7 +30,9 @@ fn frame(u: &mut Ui) {
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
@@ -43,11 +47,15 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
+    for k in 1..=8 {
+        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
+    }
     touch(u, Phase::Up, b.0, b.1);
 }
 
-fn leaf(u: &Ui, k: VKind) -> Rect { u.dock_leaf(k).unwrap_or_else(|| panic!("{k:?} is docked")) }
+fn leaf(u: &Ui, k: VKind) -> Rect {
+    u.dock_leaf(k).unwrap_or_else(|| panic!("{k:?} is docked"))
+}
 
 fn grip(u: &Ui, k: VKind) -> (i32, i32) {
     let r = u.dock_rect(k).unwrap_or_else(|| panic!("{k:?} is on the screen"));
@@ -59,7 +67,9 @@ fn handle(u: &Ui, dir: Dir, nth: usize) -> (i32, i32) {
     (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2)
 }
 
-fn float_rect_of(u: &Ui, k: VKind) -> Rect { u.dock_float_rect(k).unwrap_or_else(|| panic!("{k:?} floats")) }
+fn float_rect_of(u: &Ui, k: VKind) -> Rect {
+    u.dock_float_rect(k).unwrap_or_else(|| panic!("{k:?} floats"))
+}
 
 // ------------------------------------------------------------------------------------------------ the new views
 
@@ -80,7 +90,9 @@ fn histogram_xy_and_the_analysers_tile_beside_the_waveform() {
     u.m.view = AView::Scope;
     u.xy = true;
     frame(&mut u);
-    assert!(u.dock_leaf(VKind::Xy).is_some() && u.dock_leaf(VKind::View).is_none() && u.dock_leaf(VKind::Wave).is_some());
+    assert!(
+        u.dock_leaf(VKind::Xy).is_some() && u.dock_leaf(VKind::View).is_none() && u.dock_leaf(VKind::Wave).is_some()
+    );
     shot(&mut u, "tiled-hist-xy");
     // the view's own strip has its name and an X
     let x = leaf(&u, VKind::Xy);
@@ -141,7 +153,11 @@ fn the_waveform_can_float_but_the_last_docked_view_cannot() {
     let f = float_rect_of(&u, VKind::Wave);
     assert!(f.w >= 300 && f.h >= 250, "{f:?}");
     // the plot is in the floating panel
-    assert!(u.plot.grid.x >= f.x && u.plot.grid.right() <= f.right() + 1 && u.plot.grid.y >= f.y, "{:?} in {f:?}", u.plot.grid);
+    assert!(
+        u.plot.grid.x >= f.x && u.plot.grid.right() <= f.right() + 1 && u.plot.grid.y >= f.y,
+        "{:?} in {f:?}",
+        u.plot.grid
+    );
     // the measurements are the last docked view: they stay
     assert!(!u.dock_can_float(VKind::Measure));
     let before = u.studio.view;
@@ -170,7 +186,9 @@ fn offline_measurements_can_float() {
     let mut u = studio();
     u.studio_set_view(StudioView::Offline);
     frame(&mut u);
-    if u.studio.view != StudioView::Offline { return; }
+    if u.studio.view != StudioView::Offline {
+        return;
+    }
     assert!(u.dock_can_float(VKind::Measure));
     u.dock_apply(VKind::Measure, Drop::Float(Rect::new(300, 150, 320, 280)));
     assert!(u.dock_floating(VKind::Measure));
@@ -303,7 +321,9 @@ fn default_and_minimal_layouts_keep_their_overlays() {
     for layout in [Layout::Default, Layout::Minimal] {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = layout;
-        for _ in 0..10 { u.step(0.05); }
+        for _ in 0..10 {
+            u.step(0.05);
+        }
         u.m.hist = Hist::Vertical;
         frame(&mut u);
         assert!(!u.dock_on() && !u.view_on(), "{layout:?}: the histogram is an overlay of the waveform");

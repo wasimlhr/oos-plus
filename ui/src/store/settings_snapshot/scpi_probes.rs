@@ -202,7 +202,10 @@ const SETTERS: &[(&str, &[&str])] = &[
     (":MATH1:FILTer:TYPE", &["LPASs", "HPASs", "BPASs", "BSTop"]),
     (":MATH1:FILTer:W1", &["1e3", "0", "1e12"]),
     (":MATH1:FILTer:W2", &["1e3", "0", "1e12"]),
-    (":MATH1:FILTer:RESPonse", &["SIMPle", "BUTTerworth", "CHEBychev", "BESSel", "GAUSsian", "RCOSine", "RRCosine", "DELay", "x"]),
+    (
+        ":MATH1:FILTer:RESPonse",
+        &["SIMPle", "BUTTerworth", "CHEBychev", "BESSel", "GAUSsian", "RCOSine", "RRCosine", "DELay", "x"],
+    ),
     (":MATH1:FILTer:ORDer", &["4", "1", "16", "0", "17"]),
     (":MATH1:FILTer:PRIPple", &["1", "0.01", "6", "0", "7"]),
     (":MATH1:FILTer:SDURation", &["1e-6", "1e-9", "1e-3"]),

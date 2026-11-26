@@ -77,15 +77,22 @@ fn a_stored_minimal_setup_keeps_its_own_traces_line() {
     let text = crate::store::setup_text(&u.m).replace("layout = studio", "layout = minimal");
     assert!(!text.contains("studio_traces"), "a Stacked set-up writes no traces line");
     assert!(crate::store::parse_setup(&text).unwrap().studio_overlay, "no line: Minimal's one graticule");
-    let text = format!("{text}studio_traces = stacked
-");
+    let text = format!(
+        "{text}studio_traces = stacked
+"
+    );
     assert!(!crate::store::parse_setup(&text).unwrap().studio_overlay, "an explicit line wins");
 }
 
 #[test]
 fn the_display_menu_steps_through_the_two_layouts() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
-    let seen: Vec<_> = (0..2).map(|_| { u.adjust(Item::Layout, 1); u.m.layout }).collect();
+    let seen: Vec<_> = (0..2)
+        .map(|_| {
+            u.adjust(Item::Layout, 1);
+            u.m.layout
+        })
+        .collect();
     assert_eq!(seen, [Layout::Studio, Layout::Default]);
     assert_eq!(u.options(Item::Layout), ["Default", "Studio"]);
     u.select_option(Item::Layout, "Studio");
@@ -115,10 +122,13 @@ fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     // the maps are filled for the lanes that the first frame lays out
     u.render(&mut cv);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
-        std::fs::write(std::path::Path::new(&dir).join(format!("studio-{name}.png")), crate::store::png_of(&cv)).unwrap();
+        std::fs::write(std::path::Path::new(&dir).join(format!("studio-{name}.png")), crate::store::png_of(&cv))
+            .unwrap();
     }
 }
 
@@ -141,7 +151,9 @@ fn studio_top_bar_has_a_lan_pill_and_a_usb_pill_while_a_stick_is_in() {
     let all = [t.run, t.acq, t.usb, t.lan, t.add, t.cursors, t.display, t.storage, t.gear];
     for (i, a) in all.iter().enumerate() {
         assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
-        for b in &all[i + 1..] { assert!(!overlaps(*a, *b), "chips {i} do not overlap: {a:?} {b:?}"); }
+        for b in &all[i + 1..] {
+            assert!(!overlaps(*a, *b), "chips {i} do not overlap: {a:?} {b:?}");
+        }
     }
     shot(&mut u, "01-top-links");
     tap_in(&mut u, t.usb);
@@ -161,7 +173,9 @@ fn studio_top_bar_has_run_single_state_acquisition_and_the_menu_chips() {
     assert_eq!(t.single.w, 0, "Single is the key of the front panel");
     for (i, a) in all.iter().enumerate() {
         assert!(a.x >= 0 && a.right() <= W && a.y >= 0 && a.bottom() <= TOP.h, "chip {i} inside the bar");
-        for b in &all[i + 1..] { assert!(!overlaps(*a, *b), "chips do not overlap"); }
+        for b in &all[i + 1..] {
+            assert!(!overlaps(*a, *b), "chips do not overlap");
+        }
     }
     assert_eq!(u.single_btn(), t.single);
     assert_eq!(u.run_pill(), t.run);
@@ -210,8 +224,13 @@ fn studio_bottom_bar_has_a_chip_per_channel_the_time_base_and_the_trigger() {
     assert_eq!(all.iter().filter(|r| r.w > 96).count(), 2);
     all.extend([b.add, b.time, b.trig]);
     for (i, a) in all.iter().enumerate() {
-        assert!(a.w > 0 && a.x >= 0 && a.right() <= W && a.y >= u.frame().bottom.y && a.bottom() <= H, "chip {i} inside the bar");
-        for o in &all[i + 1..] { assert!(!overlaps(*a, *o), "chips do not overlap"); }
+        assert!(
+            a.w > 0 && a.x >= 0 && a.right() <= W && a.y >= u.frame().bottom.y && a.bottom() <= H,
+            "chip {i} inside the bar"
+        );
+        for o in &all[i + 1..] {
+            assert!(!overlaps(*a, *o), "chips do not overlap");
+        }
     }
     assert!((60..=96).contains(&b.ch[2].w) && b.ch[3].w == b.ch[2].w, "smaller chips for the channels that are off");
     // an on channel opens its page
@@ -226,7 +245,9 @@ fn studio_bottom_bar_has_a_chip_per_channel_the_time_base_and_the_trigger() {
     assert_eq!(u.menu, MenuId::Trigger);
     u.close_menu();
     // all four channels on still fit
-    for c in 0..n_ch() { u.m.ch[c].on = true; }
+    for c in 0..n_ch() {
+        u.m.ch[c].on = true;
+    }
     let b = u.studio_bottom();
     assert!(b.ch[n_ch() - 1].right() < b.time.x && b.trig.right() <= W);
 }
@@ -242,7 +263,11 @@ fn studio_plot_has_lanes_with_channel_badges_the_t_marker_and_cursor_tags() {
     assert_eq!(u.plot.wins.len(), 2);
     assert!(u.plot.wins[0].bottom() <= u.plot.wins[1].y);
     assert!(u.studio_tags_on());
-    assert_eq!(u.plot.grid.y, u.frame().body.y + super::dock::STRIP_H, "the strip of the waveform, then the scale: no tag row");
+    assert_eq!(
+        u.plot.grid.y,
+        u.frame().body.y + super::dock::STRIP_H,
+        "the strip of the waveform, then the scale: no tag row"
+    );
     let t = u.studio_tag_rect(u.studio_x_of_time(0.0));
     assert!(t.y > u.plot.grid.y && t.bottom() < u.plot.grid.y + 26, "T sits inside the scale, on its top edge");
     // the tag row, the lanes and the bars do not overlap
@@ -267,9 +292,19 @@ fn badges() -> Ui {
     u.m.meas.clear();
     u.m.meas2.clear();
     u.m.cat.clear();
-    u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0)), (Meas::Vrms, WaveId::Ch(0)), (Meas::Rise, WaveId::Ch(0)),
-        (Meas::Freq, WaveId::Ch(1)), (Meas::Vpp, WaveId::Ch(1))];
-    u.studio.pinned = Some(vec![MeasKey::One(Meas::Freq, WaveId::Ch(0)), MeasKey::One(Meas::Vpp, WaveId::Ch(0)), MeasKey::One(Meas::Vpp, WaveId::Ch(1))]);
+    u.m.meas = vec![
+        (Meas::Freq, WaveId::Ch(0)),
+        (Meas::Vpp, WaveId::Ch(0)),
+        (Meas::Vrms, WaveId::Ch(0)),
+        (Meas::Rise, WaveId::Ch(0)),
+        (Meas::Freq, WaveId::Ch(1)),
+        (Meas::Vpp, WaveId::Ch(1)),
+    ];
+    u.studio.pinned = Some(vec![
+        MeasKey::One(Meas::Freq, WaveId::Ch(0)),
+        MeasKey::One(Meas::Vpp, WaveId::Ch(0)),
+        MeasKey::One(Meas::Vpp, WaveId::Ch(1)),
+    ]);
     u.relayout();
     u
 }
@@ -283,7 +318,9 @@ fn studio_pinned_badges_sit_under_the_lanes_and_the_eye_hides_them() {
     assert!(u.plot.grid.bottom() <= row.y, "the lanes end above the badges");
     let list = u.studio_badges();
     assert_eq!(list.len(), 3);
-    for (_, r) in &list { assert!(row.contains(r.x, r.y) && r.right() <= u.studio_list_chip().x, "badge inside the row"); }
+    for (_, r) in &list {
+        assert!(row.contains(r.x, r.y) && r.right() <= u.studio_list_chip().x, "badge inside the row");
+    }
     // the row is paid for by the lanes: hiding the badges gives the height back (mock 02)
     let with = u.plot.grid.h;
     u.studio_hide_badges();
@@ -303,7 +340,10 @@ fn studio_badge_popup_configures_unpins_floats_and_removes() {
         let r = u.studio_badges().into_iter().find(|(k, _)| *k == key).unwrap().1;
         // the first tap shows the measurement on the waveform, the next one on the same badge opens its menu
         tap_in(u, r);
-        if u.studio.popup.is_none() { assert_eq!(u.studio.mark, Some(key)); tap_in(u, r); }
+        if u.studio.popup.is_none() {
+            assert_eq!(u.studio.mark, Some(key));
+            tap_in(u, r);
+        }
         assert_eq!(u.studio.popup, Some(key));
         u.studio_popup_rect().unwrap()
     };
@@ -363,8 +403,15 @@ fn studio_pins_survive_other_measurements_coming_and_going() {
 /// Twelve measurements on CH1 and CH2, three of them pinned, as in the mocks.
 fn twelve() -> Ui {
     let mut u = studio();
-    u.m.meas = [Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::PDuty, Meas::Vavg].into_iter().map(|k| (k, WaveId::Ch(0)))
-        .chain([Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::Fall, Meas::Vavg].into_iter().map(|k| (k, WaveId::Ch(1)))).collect();
+    u.m.meas = [Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::PDuty, Meas::Vavg]
+        .into_iter()
+        .map(|k| (k, WaveId::Ch(0)))
+        .chain(
+            [Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::Fall, Meas::Vavg]
+                .into_iter()
+                .map(|k| (k, WaveId::Ch(1))),
+        )
+        .collect();
     u.m.meas2.clear();
     u.m.cat.clear();
     u.results.rows.clear();
@@ -378,7 +425,9 @@ fn studio_docked_panel_lists_and_hands_back_the_width() {
     let mut u = twelve();
     let full = u.plot.grid.w;
     u.studio_set_view(StudioView::Docked);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     shot(&mut u, "08-docked");
     let g = u.studio_panel_geo().expect("docked panel");
     assert_eq!(u.plot.grid.w, full - 274, "the lanes give their width to the panel");
@@ -401,7 +450,10 @@ fn studio_docked_panel_lists_and_hands_back_the_width() {
     assert_eq!(u.menu, MenuId::MeasAdd);
     u.close_menu();
     // the strip's X goes back to the lanes, its maximize button puts the panel in a tab in front of them
-    let strip = |u: &mut Ui, r: Rect| { u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + 20); u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + 20); };
+    let strip = |u: &mut Ui, r: Rect| {
+        u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + 20);
+        u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + 20);
+    };
     let leaf = u.dock_leaf(super::dock::VKind::Measure).unwrap();
     strip(&mut u, Ui::dock_close_rect(leaf));
     assert_eq!(u.studio.view, StudioView::Waveform);
@@ -409,15 +461,29 @@ fn studio_docked_panel_lists_and_hands_back_the_width() {
     u.studio_set_view(StudioView::Docked);
     let leaf = u.dock_leaf(super::dock::VKind::Measure).unwrap();
     strip(&mut u, Rect::new(leaf.right() - 96, leaf.y, 48, 40));
-    assert!(u.dock_tabs_root() && !u.dock_tabbed_out(super::dock::VKind::Measure) && u.studio.view == StudioView::Docked);
+    assert!(
+        u.dock_tabs_root() && !u.dock_tabbed_out(super::dock::VKind::Measure) && u.studio.view == StudioView::Docked
+    );
 }
 
 #[test]
 fn studio_list_scrolls_with_the_finger() {
     let mut u = twelve();
     // more cells than the strip has on a page
-    for k in [Meas::Vmax, Meas::Vmin, Meas::Vamp, Meas::Period, Meas::PWidth, Meas::NWidth, Meas::NDuty, Meas::Vtop, Meas::Vbase] {
-        for c in 0..2 { u.m.meas.push((k, WaveId::Ch(c))); }
+    for k in [
+        Meas::Vmax,
+        Meas::Vmin,
+        Meas::Vamp,
+        Meas::Period,
+        Meas::PWidth,
+        Meas::NWidth,
+        Meas::NDuty,
+        Meas::Vtop,
+        Meas::Vbase,
+    ] {
+        for c in 0..2 {
+            u.m.meas.push((k, WaveId::Ch(c)));
+        }
     }
     u.relayout();
     u.studio_set_view(StudioView::Docked);
@@ -491,16 +557,23 @@ fn expanding_the_measurements_puts_them_in_a_tab_in_front_of_the_waveform() {
     use super::dock::{Extra, VKind};
     use super::measpanel::{BarItem, PanelView};
     // a finger down and up on a button or a tab of a title strip
-    let press = |u: &mut Ui, r: Rect| { u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + r.h / 2); u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + r.h / 2); };
+    let press = |u: &mut Ui, r: Rect| {
+        u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + r.h / 2);
+        u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + r.h / 2);
+    };
     let mut u = twelve();
     u.studio_set_view(StudioView::Docked);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     let (wave0, meas0) = (u.dock_leaf(VKind::Wave).unwrap(), u.dock_leaf(VKind::Measure).unwrap());
     // the button left of the X is the one every view has
     assert_eq!(u.dock_extra_kind(VKind::Measure), Some(Extra::Maximise));
     let expand = u.dock_extra_rect(VKind::Measure, meas0).unwrap();
     press(&mut u, expand);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     // one group of tabs fills the area: the waveform and the measurements, the measurements in front
     let lay = u.dock_layout();
     assert_eq!(lay.tabs.len(), 1);
@@ -510,7 +583,11 @@ fn expanding_the_measurements_puts_them_in_a_tab_in_front_of_the_waveform() {
     let r = u.dock_leaf(VKind::Measure).unwrap();
     assert_eq!(r, u.dock_region());
     let tabs = u.dock_tab_rects(VKind::Measure, r);
-    assert_eq!(tabs.iter().map(|(k, _)| *k).collect::<Vec<_>>(), vec![VKind::Wave, VKind::Measure], "Waveform | Measurements");
+    assert_eq!(
+        tabs.iter().map(|(k, _)| *k).collect::<Vec<_>>(),
+        vec![VKind::Wave, VKind::Measure],
+        "Waveform | Measurements"
+    );
     assert_eq!(u.dock_extra_kind(VKind::Measure), Some(Extra::RestoreTabs));
     // it is the panel, with its bar on a line under the tabs: the strip of cells in six columns
     let g = u.studio_panel_geo().expect("the panel, not a view of its own");
@@ -536,9 +613,13 @@ fn expanding_the_measurements_puts_them_in_a_tab_in_front_of_the_waveform() {
     // a tap on the Waveform tab shows the waveform
     let tab = tabs.iter().find(|(k, _)| *k == VKind::Wave).unwrap().1;
     press(&mut u, tab);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     assert_eq!(u.dock_leaf(VKind::Wave), Some(u.dock_region()));
-    assert!(u.dock_tabbed_out(VKind::Measure) && !u.dock_tabbed_out(VKind::Wave) && u.dock_leaf(VKind::Measure).is_none());
+    assert!(
+        u.dock_tabbed_out(VKind::Measure) && !u.dock_tabbed_out(VKind::Wave) && u.dock_leaf(VKind::Measure).is_none()
+    );
     assert!(u.plot.grid.w > wave0.w, "the lanes have the whole width: {:?}", u.plot.grid);
     shot(&mut u, "12-expanded-waveform-tab");
     // the restore button (it is on the waveform's strip now) brings the docked arrangement back
@@ -546,7 +627,9 @@ fn expanding_the_measurements_puts_them_in_a_tab_in_front_of_the_waveform() {
     assert_eq!(u.dock_extra_kind(VKind::Wave), Some(Extra::RestoreTabs));
     let restore = u.dock_extra_rect(VKind::Wave, r).unwrap();
     press(&mut u, restore);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     assert!(!u.dock_full_state() && u.studio.view == StudioView::Docked);
     assert_eq!((u.dock_leaf(VKind::Wave), u.dock_leaf(VKind::Measure)), (Some(wave0), Some(meas0)));
     // the list button of the badge row (it carries the count; the Meas tab is gone) brings a closed panel back
@@ -567,16 +650,22 @@ fn the_tabs_keep_the_strip_and_the_controls_of_the_panel_have_a_line_under_it() 
     let press = |u: &mut Ui, r: Rect| {
         u.touch_ev(Phase::Down, r.x + r.w / 2, r.y + r.h / 2);
         u.touch_ev(Phase::Up, r.x + r.w / 2, r.y + r.h / 2);
-        for _ in 0..2 { u.step(0.05); }
+        for _ in 0..2 {
+            u.step(0.05);
+        }
     };
     let mut u = twelve();
     u.studio_set_view(StudioView::Docked);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     // the narrow panel beside the waveform, not in a group: its toolbar, as before
     let narrow = u.studio_panel_geo().unwrap();
     assert!(!u.panel_bar_wide(narrow.p) && u.dock_tab_group(VKind::Measure).is_none());
     u.dock_maximise(VKind::Measure);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     let r = u.dock_leaf(VKind::Measure).unwrap();
     assert_eq!((r, r.w), (u.dock_region(), W), "the group fills the screen's width");
     // both tabs by name, no arrow
@@ -584,7 +673,9 @@ fn the_tabs_keep_the_strip_and_the_controls_of_the_panel_have_a_line_under_it() 
     assert_eq!(tabs.iter().map(|(k, _)| *k).collect::<Vec<_>>(), vec![VKind::Wave, VKind::Measure]);
     assert!(u.dock_tab_more(VKind::Measure, r).is_none(), "no list of tabs behind an arrow");
     let f = u.fonts();
-    for (k, t) in &tabs { assert!(t.w >= f.mb.width(&u.dock_name(*k)) + 20, "{k:?} has its whole name: {t:?}"); }
+    for (k, t) in &tabs {
+        assert!(t.w >= f.mb.width(&u.dock_name(*k)) + 20, "{k:?} has its whole name: {t:?}");
+    }
     // the view switch, restore and X stay in the strip, right of the tabs
     let sw = u.dock_view_rect(VKind::Measure, r).unwrap();
     assert!(tabs.iter().all(|(_, t)| t.right() <= sw.x));
@@ -594,7 +685,13 @@ fn the_tabs_keep_the_strip_and_the_controls_of_the_panel_have_a_line_under_it() 
     let bar = u.panel_bar(g.p);
     assert!(!bar.wide && bar.more.is_none() && bar.hidden.is_empty() && bar.slots.len() == 6);
     for s in &bar.slots {
-        assert!(s.r.y >= strip.bottom() && s.r.bottom() <= g.list.y, "{:?} {:?} under the strip {strip:?}, over the list {:?}", s.item, s.r, g.list);
+        assert!(
+            s.r.y >= strip.bottom() && s.r.bottom() <= g.list.y,
+            "{:?} {:?} under the strip {strip:?}, over the list {:?}",
+            s.item,
+            s.r,
+            g.list
+        );
         assert!(s.r.h >= 36 && s.hit.h >= 40 && s.r.w >= 34, "{:?}: {:?} touch {:?}", s.item, s.r, s.hit);
         // the same rectangle is drawn and tapped
         assert_eq!(u.panel_bar_hit(g.p, s.r.x + s.r.w / 2, s.r.y + s.r.h / 2), Some(Some(s.item)));
@@ -637,20 +734,42 @@ fn the_tabs_keep_the_strip_and_the_controls_of_the_panel_have_a_line_under_it() 
 fn the_cards_of_a_wide_panel_scroll_by_the_columns_they_are_drawn_in() {
     use super::dock::VKind;
     let mut u = studio();
-    for c in 2..4 { u.m.ch[c].on = true; }
-    let kinds = [Meas::Freq, Meas::Vpp, Meas::Vrms, Meas::Rise, Meas::PDuty, Meas::Vavg, Meas::Fall, Meas::Vmax, Meas::Vmin, Meas::Period, Meas::NDuty, Meas::Vamp];
+    for c in 2..4 {
+        u.m.ch[c].on = true;
+    }
+    let kinds = [
+        Meas::Freq,
+        Meas::Vpp,
+        Meas::Vrms,
+        Meas::Rise,
+        Meas::PDuty,
+        Meas::Vavg,
+        Meas::Fall,
+        Meas::Vmax,
+        Meas::Vmin,
+        Meas::Period,
+        Meas::NDuty,
+        Meas::Vamp,
+    ];
     u.m.meas = (0..4).flat_map(|c| kinds.into_iter().map(move |k| (k, WaveId::Ch(c)))).collect();
     u.m.meas2.clear();
     u.m.cat.clear();
     u.results.rows.clear();
     u.studio_set_view(StudioView::Docked);
     u.panel_set_view(super::measpanel::PanelView::Cards);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     u.dock_maximise(VKind::Measure);
-    for _ in 0..6 { u.step(0.05); }
+    for _ in 0..6 {
+        u.step(0.05);
+    }
     let g = u.studio_panel_geo().unwrap();
     let cols = u.panel_cell_geo(g.list.w).0 as usize;
-    let total = { let rows = u.meas_rows(); u.studio_listed(&rows).len() };
+    let total = {
+        let rows = u.meas_rows();
+        u.studio_listed(&rows).len()
+    };
     assert!(cols > 2 && total > g.page, "{cols} columns, {total} cards, {} a page", g.page);
     // one step of the wheel: the list moves by whole lines of cards, so a card stays in its column
     assert!(u.panel_wheel(g.list.x + 40, g.list.y + 40, -1));
@@ -672,19 +791,29 @@ fn a_stored_measurements_only_view_loads_as_the_docked_panel() {
     assert_eq!(StudioView::from_token("only"), StudioView::Docked);
     let u = studio();
     let text = crate::store::setup_text(&u.m);
-    assert!(text.contains("studio_view = waveform
-"));
-    let old = text.replace("studio_view = waveform
-", "studio_view = only
-");
+    assert!(text.contains(
+        "studio_view = waveform
+"
+    ));
+    let old = text.replace(
+        "studio_view = waveform
+",
+        "studio_view = only
+",
+    );
     let m = crate::store::parse_setup(&old).expect("a set-up with the old word loads");
     assert_eq!(m.studio_view, "docked");
     let mut v = Ui::new(Source::Demo { t: 0.0 });
     v.m = m;
     v.restore_view_state();
-    for _ in 0..10 { v.step(0.05); }
+    for _ in 0..10 {
+        v.step(0.05);
+    }
     assert_eq!(v.studio.view, StudioView::Docked);
-    assert!(v.dock_leaf(VKind::Wave).is_some() && v.dock_leaf(VKind::Measure).is_some(), "the panel beside the waveform");
+    assert!(
+        v.dock_leaf(VKind::Wave).is_some() && v.dock_leaf(VKind::Measure).is_some(),
+        "the panel beside the waveform"
+    );
     assert!(!crate::store::setup_text(&v.m).contains("only\n"), "the old word is not written again");
 }
 
@@ -702,7 +831,9 @@ fn zoomed() -> Ui {
 #[test]
 fn studio_zoom_overview_window_drags_and_a_lane_badge_scales_vertically() {
     let mut u = zoomed();
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     shot(&mut u, "15-zoom-navigator");
     // the overview window moves with a finger on it (the existing gesture, restyled)
     let (overview, _) = u.split_zoom(u.plot.grid);

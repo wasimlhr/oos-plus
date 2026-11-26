@@ -16,23 +16,56 @@ use crate::scpi::{e as en, kw, num};
 
 /// The views by SCPI name; the query answers the short form.
 const VIEWS: [(VKind, &str); 9] = [
-    (VKind::Wave, "WAVEform"), (VKind::Measure, "MEASurements"), (VKind::Eye, "EYE"), (VKind::Pane, "PANE"), (VKind::Table, "TABLe"),
-    (VKind::Sim, "SIM"), (VKind::Hist, "HISTogram"), (VKind::Xy, "XY"), (VKind::View, "VIEW"),
+    (VKind::Wave, "WAVEform"),
+    (VKind::Measure, "MEASurements"),
+    (VKind::Eye, "EYE"),
+    (VKind::Pane, "PANE"),
+    (VKind::Table, "TABLe"),
+    (VKind::Sim, "SIM"),
+    (VKind::Hist, "HISTogram"),
+    (VKind::Xy, "XY"),
+    (VKind::View, "VIEW"),
 ];
 
 /// Headers of this file, for the documentation tests.
 #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
 pub(super) const LAYOUT_HEADERS: &[&str] = &[
-    "DOCK:LIST", "DOCK:MOVE", "DOCK:SIZE", "DOCK:FLOAT", "DOCK:SHOW", "DOCK:CLOSe", "DOCK:ACTivate", "DOCK:MAXimise", "DOCK:RESTore",
-    "DOCK:RESet", "DOCK:LAYout",
-    "VIEW:TRACes", "VIEW:FIT",
-    "ZOOM:HERE", "ZOOM:BOX", "ZOOM:RESet", "ZOOM:CLOSe",
-    "UI:SCReen", "UI:ELEMents", "UI:TAP", "UI:DRAG", "UI:CONText", "UI:MENU", "UI:MENU:SELect", "UI:MENU:CLOSe",
+    "DOCK:LIST",
+    "DOCK:MOVE",
+    "DOCK:SIZE",
+    "DOCK:FLOAT",
+    "DOCK:SHOW",
+    "DOCK:CLOSe",
+    "DOCK:ACTivate",
+    "DOCK:MAXimise",
+    "DOCK:RESTore",
+    "DOCK:RESet",
+    "DOCK:LAYout",
+    "VIEW:TRACes",
+    "VIEW:FIT",
+    "ZOOM:HERE",
+    "ZOOM:BOX",
+    "ZOOM:RESet",
+    "ZOOM:CLOSe",
+    "UI:SCReen",
+    "UI:ELEMents",
+    "UI:TAP",
+    "UI:DRAG",
+    "UI:CONText",
+    "UI:MENU",
+    "UI:MENU:SELect",
+    "UI:MENU:CLOSe",
 ];
 
 fn vname(k: VKind) -> &'static str {
     let long = VIEWS.iter().find(|(v, _)| *v == k).map(|(_, n)| *n).unwrap_or("WAVEform");
-    match k { VKind::Wave => "WAVE", VKind::Measure => "MEAS", VKind::Table => "TABL", VKind::Hist => "HIST", _ => long }
+    match k {
+        VKind::Wave => "WAVE",
+        VKind::Measure => "MEAS",
+        VKind::Table => "TABL",
+        VKind::Hist => "HIST",
+        _ => long,
+    }
 }
 
 fn view_of(s: &str) -> Option<VKind> {
@@ -46,13 +79,24 @@ fn args(arg: &str) -> Vec<String> {
     let (mut cur, mut quote) = (String::new(), None);
     for c in arg.chars() {
         match (c, quote) {
-            ('"' | '\'', None) => { quote = Some(c); cur.push(c); }
-            (c, Some(q)) if c == q => { quote = None; cur.push(c); }
-            (',', None) => { out.push(cur.trim().to_string()); cur.clear(); }
+            ('"' | '\'', None) => {
+                quote = Some(c);
+                cur.push(c);
+            }
+            (c, Some(q)) if c == q => {
+                quote = None;
+                cur.push(c);
+            }
+            (',', None) => {
+                out.push(cur.trim().to_string());
+                cur.clear();
+            }
             _ => cur.push(c),
         }
     }
-    if !cur.trim().is_empty() || !out.is_empty() { out.push(cur.trim().to_string()); }
+    if !cur.trim().is_empty() || !out.is_empty() {
+        out.push(cur.trim().to_string());
+    }
     out
 }
 
@@ -61,9 +105,13 @@ fn ints(a: &[String]) -> Option<Vec<i32>> {
 }
 
 /// A label as a quoted SCPI string.
-fn q(s: &str) -> String { format!("\"{}\"", s.replace('"', "\"\"")) }
+fn q(s: &str) -> String {
+    format!("\"{}\"", s.replace('"', "\"\""))
+}
 
-fn rect_txt(r: Rect) -> String { format!("{},{},{},{}", r.x, r.y, r.w, r.h) }
+fn rect_txt(r: Rect) -> String {
+    format!("{},{},{},{}", r.x, r.y, r.w, r.h)
+}
 
 /// Where a view is in the tree: false is the first child of a split. A view in a group of tabs: the group's place.
 fn path_of(n: &Node, k: VKind) -> Option<Vec<bool>> {
@@ -71,8 +119,14 @@ fn path_of(n: &Node, k: VKind) -> Option<Vec<bool>> {
         Node::Leaf(l) => (*l == k).then(Vec::new),
         Node::Tabs { kinds, .. } => kinds.contains(&k).then(Vec::new),
         Node::Split { a, b, .. } => {
-            if let Some(mut p) = path_of(a, k) { p.insert(0, false); return Some(p); }
-            if let Some(mut p) = path_of(b, k) { p.insert(0, true); return Some(p); }
+            if let Some(mut p) = path_of(a, k) {
+                p.insert(0, false);
+                return Some(p);
+            }
+            if let Some(mut p) = path_of(b, k) {
+                p.insert(0, true);
+                return Some(p);
+            }
             None
         }
     }
@@ -103,17 +157,31 @@ impl Ui {
             self.scpi_dock(rest[0], q, arg)?
         } else if kw(n0, "VIEW") && rest.len() == 1 && (is(0, "TRACes") || is(0, "FIT")) {
             if is(0, "FIT") {
-                if q { return Some(Err(bad("FIT is an action"))); }
+                if q {
+                    return Some(Err(bad("FIT is an action")));
+                }
                 self.workspace_action(Action::FitRecord);
                 DONE
             } else if q {
-                t(match self.arrangement() { windows::Arrangement::Windows => "WIND", windows::Arrangement::Stacked => "STAC", windows::Arrangement::Overlay => "OVER" })
+                t(match self.arrangement() {
+                    windows::Arrangement::Windows => "WIND",
+                    windows::Arrangement::Stacked => "STAC",
+                    windows::Arrangement::Overlay => "OVER",
+                })
             } else {
                 let a = text_arg(arg);
-                if kw(&a, "STACked") { self.workspace_action(Action::Stacked); DONE }
-                else if kw(&a, "OVERlay") { self.workspace_action(Action::Overlay); DONE }
-                else if kw(&a, "WINDows") { self.workspace_action(Action::Windows); DONE }
-                else { Err(bad(arg)) }
+                if kw(&a, "STACked") {
+                    self.workspace_action(Action::Stacked);
+                    DONE
+                } else if kw(&a, "OVERlay") {
+                    self.workspace_action(Action::Overlay);
+                    DONE
+                } else if kw(&a, "WINDows") {
+                    self.workspace_action(Action::Windows);
+                    DONE
+                } else {
+                    Err(bad(arg))
+                }
             }
         } else if kw(n0, "ZOOM") && rest.len() == 1 {
             self.scpi_zoom(rest[0], q, arg)?
@@ -129,16 +197,34 @@ impl Ui {
 
     fn scpi_dock(&mut self, node: &str, q: bool, arg: &str) -> Option<Reply> {
         let a = args(arg);
-        let key = ["LIST", "MOVE", "SIZE", "FLOAT", "SHOW", "CLOSe", "ACTivate", "MAXimise", "RESTore", "RESet", "LAYout"].into_iter().find(|k| kw(node, k))?;
-        if !self.dock_on() { return Some(Err(conflict("the views dock in the Studio layout only (:DISPlay:LAYout STUDio)"))); }
+        let key =
+            ["LIST", "MOVE", "SIZE", "FLOAT", "SHOW", "CLOSe", "ACTivate", "MAXimise", "RESTore", "RESet", "LAYout"]
+                .into_iter()
+                .find(|k| kw(node, k))?;
+        if !self.dock_on() {
+            return Some(Err(conflict("the views dock in the Studio layout only (:DISPlay:LAYout STUDio)")));
+        }
         let view = |i: usize| a.get(i).and_then(|s| view_of(s));
         Some(match key {
             "LIST" => t(self.dock_list()),
             // the setup text separates its parts with ';', which ends a SCPI command even inside quotes: '|' on the wire
             "LAYout" if q => t(q_text(&self.dock_text().replace(';', "|"))),
-            "LAYout" => { let s = text_arg(arg).replace('|', ";"); self.dock_restore(&s); self.dock_changed(); DONE }
-            "RESet" if !q => { self.dock_reset(); DONE }
-            "RESTore" if !q => { if !self.dock_exit_full() { self.dock_restore_layout(); } DONE }
+            "LAYout" => {
+                let s = text_arg(arg).replace('|', ";");
+                self.dock_restore(&s);
+                self.dock_changed();
+                DONE
+            }
+            "RESet" if !q => {
+                self.dock_reset();
+                DONE
+            }
+            "RESTore" if !q => {
+                if !self.dock_exit_full() {
+                    self.dock_restore_layout();
+                }
+                DONE
+            }
             "MOVE" if !q => match (view(0), a.get(1), a.get(2)) {
                 (Some(k), Some(tgt), side) => self.scpi_dock_move(k, tgt, side.map(String::as_str).unwrap_or("CENTer")),
                 _ => Err(bad(arg)),
@@ -154,11 +240,17 @@ impl Ui {
             "FLOAT" => match view(0) {
                 Some(k) if q => t(self.dock_float_rect(k).map_or("0".to_string(), rect_txt)),
                 Some(k) => {
-                    if !self.dock_shown(k) { return Some(Err(conflict(&format!("{} is not on the screen", vname(k))))); }
-                    if !self.dock_can_float(k) { return Some(Err(conflict(&format!("{} is the last docked view", vname(k))))); }
+                    if !self.dock_shown(k) {
+                        return Some(Err(conflict(&format!("{} is not on the screen", vname(k)))));
+                    }
+                    if !self.dock_can_float(k) {
+                        return Some(Err(conflict(&format!("{} is the last docked view", vname(k)))));
+                    }
                     let want = match ints(&a[1..]) {
                         Some(v) if v.len() == 4 => Rect::new(v[0], v[1], v[2], v[3]),
-                        Some(v) if v.is_empty() => self.dock_float_rect(k).unwrap_or_else(|| self.dock_default_float(k)),
+                        Some(v) if v.is_empty() => {
+                            self.dock_float_rect(k).unwrap_or_else(|| self.dock_default_float(k))
+                        }
                         _ => return Some(Err(bad(arg))),
                     };
                     let r = self.dock_fit_float(k, want, self.dock_float_region());
@@ -169,26 +261,49 @@ impl Ui {
             },
             "SHOW" => match view(0) {
                 Some(k) if q => t(if self.dock_shown(k) { "1" } else { "0" }),
-                Some(VKind::Measure) => { if !self.dock_shown(VKind::Measure) { self.studio_set_view(StudioView::Docked); self.dock_changed(); } DONE }
-                Some(VKind::Sim) => { self.studio_set_view(StudioView::Sim); self.dock_changed(); DONE }
+                Some(VKind::Measure) => {
+                    if !self.dock_shown(VKind::Measure) {
+                        self.studio_set_view(StudioView::Docked);
+                        self.dock_changed();
+                    }
+                    DONE
+                }
+                Some(VKind::Sim) => {
+                    self.studio_set_view(StudioView::Sim);
+                    self.dock_changed();
+                    DONE
+                }
                 Some(k) if self.dock_shown(k) => DONE,
-                Some(k) => Err(conflict(&format!("{} opens with its own command (its menu, :EYE, :VIEW, ...)", vname(k)))),
+                Some(k) => {
+                    Err(conflict(&format!("{} opens with its own command (its menu, :EYE, :VIEW, ...)", vname(k))))
+                }
                 None => Err(bad(arg)),
             },
             "CLOSe" if !q => match view(0) {
-                Some(k) if self.dock_shown(k) => { self.dock_close(k); DONE }
+                Some(k) if self.dock_shown(k) => {
+                    self.dock_close(k);
+                    DONE
+                }
                 Some(_) => DONE,
                 None => Err(bad(arg)),
             },
             "ACTivate" if !q => match view(0) {
-                Some(k) if self.dock_shown(k) => { self.dock_activate(k); DONE }
+                Some(k) if self.dock_shown(k) => {
+                    self.dock_activate(k);
+                    DONE
+                }
                 Some(k) => Err(conflict(&format!("{} is not on the screen", vname(k)))),
                 None => Err(bad(arg)),
             },
             "MAXimise" => {
-                if q { return Some(t(if self.dock_full_state() { "1" } else { "0" })); }
+                if q {
+                    return Some(t(if self.dock_full_state() { "1" } else { "0" }));
+                }
                 match view(0) {
-                    Some(k) if self.dock_shown(k) => { self.dock_maximise(k); DONE }
+                    Some(k) if self.dock_shown(k) => {
+                        self.dock_maximise(k);
+                        DONE
+                    }
                     Some(k) => Err(conflict(&format!("{} is not on the screen", vname(k)))),
                     None => Err(bad(arg)),
                 }
@@ -202,9 +317,18 @@ impl Ui {
         let lay = self.dock_layout();
         let mut out = Vec::new();
         for k in KINDS {
-            if !self.dock_shown(k) { out.push(format!("{},OFF,0,0,0,0", vname(k))); continue; }
-            if let Some(r) = self.dock_float_rect(k) { out.push(format!("{},FLOAT,{}", vname(k), rect_txt(r))); continue; }
-            if let Some((_, r)) = lay.leaves.iter().find(|(l, _)| *l == k) { out.push(format!("{},DOCK,{}", vname(k), rect_txt(*r))); continue; }
+            if !self.dock_shown(k) {
+                out.push(format!("{},OFF,0,0,0,0", vname(k)));
+                continue;
+            }
+            if let Some(r) = self.dock_float_rect(k) {
+                out.push(format!("{},FLOAT,{}", vname(k), rect_txt(r)));
+                continue;
+            }
+            if let Some((_, r)) = lay.leaves.iter().find(|(l, _)| *l == k) {
+                out.push(format!("{},DOCK,{}", vname(k), rect_txt(*r)));
+                continue;
+            }
             match lay.tabs.iter().find(|g| g.kinds.contains(&k)) {
                 Some(g) => out.push(format!("{},TAB,{}", vname(k), rect_txt(g.rect))),
                 None => out.push(format!("{},OFF,0,0,0,0", vname(k))),
@@ -214,20 +338,36 @@ impl Ui {
     }
 
     fn scpi_dock_move(&mut self, k: VKind, target: &str, side: &str) -> Reply {
-        if !self.dock_shown(k) { return Err(conflict(&format!("{} is not on the screen", vname(k)))); }
-        let side_of = |s: &str| [(Side::Left, "LEFT"), (Side::Right, "RIGHt"), (Side::Top, "TOP"), (Side::Bottom, "BOTTom")].into_iter().find(|(_, n)| kw(s, n)).map(|(v, _)| v);
+        if !self.dock_shown(k) {
+            return Err(conflict(&format!("{} is not on the screen", vname(k))));
+        }
+        let side_of = |s: &str| {
+            [(Side::Left, "LEFT"), (Side::Right, "RIGHt"), (Side::Top, "TOP"), (Side::Bottom, "BOTTom")]
+                .into_iter()
+                .find(|(_, n)| kw(s, n))
+                .map(|(v, _)| v)
+        };
         if kw(&text_arg(target), "EDGE") {
             let s = side_of(&text_arg(side)).ok_or_else(|| bad(side))?;
             return self.dock_edge(k, s);
         }
         let tk = view_of(target).ok_or_else(|| bad(target))?;
-        if tk == k { return Err(bad("a view cannot dock against itself")); }
-        if !self.dock_shown(tk) || self.dock_floating(tk) { return Err(conflict(&format!("{} is not docked on the screen", vname(tk)))); }
+        if tk == k {
+            return Err(bad("a view cannot dock against itself"));
+        }
+        if !self.dock_shown(tk) || self.dock_floating(tk) {
+            return Err(conflict(&format!("{} is not docked on the screen", vname(tk))));
+        }
         let s = text_arg(side);
-        let drop = if let Some(sd) = side_of(&s) { Drop::Split(tk, sd) }
-            else if kw(&s, "CENTer") { Drop::Swap(tk) }
-            else if kw(&s, "TABS") { Drop::Tab(tk) }
-            else { return Err(bad(side)); };
+        let drop = if let Some(sd) = side_of(&s) {
+            Drop::Split(tk, sd)
+        } else if kw(&s, "CENTer") {
+            Drop::Swap(tk)
+        } else if kw(&s, "TABS") {
+            Drop::Tab(tk)
+        } else {
+            return Err(bad(side));
+        };
         self.dock_apply(k, drop);
         DONE
     }
@@ -239,20 +379,29 @@ impl Ui {
         let tree = self.dock_effective(region);
         let rest = if floating { Some(tree) } else { tree.without(k) };
         let Some(rest) = rest else { return DONE };
-        let (dir, first) = match s { Side::Left => (Dir::H, true), Side::Right => (Dir::H, false), Side::Top => (Dir::V, true), Side::Bottom => (Dir::V, false) };
+        let (dir, first) = match s {
+            Side::Left => (Dir::H, true),
+            Side::Right => (Dir::H, false),
+            Side::Top => (Dir::V, true),
+            Side::Bottom => (Dir::V, false),
+        };
         // the view gets a third of the room (the waveform two thirds)
         let share = if k == VKind::Wave { 0.66 } else { 0.34 };
         let (a, b, ratio) = if first { (Node::Leaf(k), rest, share) } else { (rest, Node::Leaf(k), 1.0 - share) };
         self.studio.dock.restore = None;
         self.studio.dock.tree = Some(Node::Split { dir, ratio, a: Box::new(a), b: Box::new(b) });
-        if floating { self.dock_set_float(k, false); }
+        if floating {
+            self.dock_set_float(k, false);
+        }
         self.dock_changed();
         DONE
     }
 
     /// The share of its split a docked view (or its group of tabs) has, 0..1 along the split.
     fn dock_size_get(&self, k: VKind) -> Reply {
-        if self.dock_floating(k) || !self.dock_shown(k) { return t("0"); }
+        if self.dock_floating(k) || !self.dock_shown(k) {
+            return t("0");
+        }
         let tree = self.dock_effective(self.dock_region());
         let Some(p) = path_of(&tree, k) else { return t("0") };
         let Some((&second, parent)) = p.split_last() else { return t("1") };
@@ -265,13 +414,19 @@ impl Ui {
 
     /// Moves the divider beside a view: the view gets `f` of the room of its split, as far as the least sizes allow.
     fn dock_size_set(&mut self, k: VKind, f: f64) -> Reply {
-        if !self.dock_shown(k) || self.dock_floating(k) { return Err(conflict(&format!("{} is not docked (a floating view takes :DOCK:FLOAT)", vname(k)))); }
+        if !self.dock_shown(k) || self.dock_floating(k) {
+            return Err(conflict(&format!("{} is not docked (a floating view takes :DOCK:FLOAT)", vname(k))));
+        }
         let region = self.dock_region();
         let tree = self.dock_effective(region);
         let Some(p) = path_of(&tree, k) else { return Err(conflict("not in the arrangement")) };
-        let Some((&second, parent)) = p.split_last() else { return Err(conflict(&format!("{} fills the area: there is no divider", vname(k)))) };
+        let Some((&second, parent)) = p.split_last() else {
+            return Err(conflict(&format!("{} fills the area: there is no divider", vname(k))));
+        };
         let parent = parent.to_vec();
-        if !matches!(node_at(&tree, &parent), Some(Node::Split { .. })) { return Err(conflict("no divider")); }
+        if !matches!(node_at(&tree, &parent), Some(Node::Split { .. })) {
+            return Err(conflict("no divider"));
+        }
         let lay = self.dock_layout();
         let Some(d) = lay.dividers.iter().find(|d| d.path == parent) else { return Err(conflict("no divider")) };
         let want = if second { 1.0 - f } else { f };
@@ -292,8 +447,12 @@ impl Ui {
             "HERE" if q => t(en(self.m.zdelay as f64)),
             "HERE" => match num(arg).filter(|v| v.is_finite()) {
                 Some(v) => {
-                    if self.view_on() { return Some(Err(conflict("not on this view"))); }
-                    if !self.m.zoom { self.set_zoom(true); }
+                    if self.view_on() {
+                        return Some(Err(conflict("not on this view")));
+                    }
+                    if !self.m.zoom {
+                        self.set_zoom(true);
+                    }
                     self.m.zdelay = v;
                     self.clamp_zoom();
                     self.relayout();
@@ -302,7 +461,9 @@ impl Ui {
                 None => Err(bad(arg)),
             },
             "BOX" if q => {
-                if !self.m.zoom { return Some(t("0,0")); }
+                if !self.m.zoom {
+                    return Some(t("0,0"));
+                }
                 let half = scales[self.m.zscale] * HDIV / 2.0;
                 t(format!("{},{}", en((self.m.zdelay - half) as f64), en((self.m.zdelay + half) as f64)))
             }
@@ -311,15 +472,23 @@ impl Ui {
                 let v: Option<Vec<f32>> = a.iter().map(|s| num(s).filter(|v| v.is_finite())).collect();
                 match v.as_deref() {
                     Some([t0, t1]) if t1 != t0 => {
-                        if self.view_on() { return Some(Err(conflict("not on this view"))); }
+                        if self.view_on() {
+                            return Some(Err(conflict("not on this view")));
+                        }
                         self.zoom_time_box(t0.min(*t1), t0.max(*t1));
                         DONE
                     }
                     _ => Err(bad(arg)),
                 }
             }
-            "RESet" if !q => { self.workspace_action(Action::ZoomReset); DONE }
-            "CLOSe" if !q => { self.workspace_action(Action::ZoomClose); DONE }
+            "RESet" if !q => {
+                self.workspace_action(Action::ZoomReset);
+                DONE
+            }
+            "CLOSe" if !q => {
+                self.workspace_action(Action::ZoomClose);
+                DONE
+            }
             _ => Err(bad("this command has no query")),
         })
     }
@@ -329,9 +498,13 @@ impl Ui {
         let span = t1 - t0;
         let scales = tscales();
         let mut z = 0;
-        while z < self.m.tscale && scales[z] * HDIV < span * 0.999 { z += 1; }
+        while z < self.m.tscale && scales[z] * HDIV < span * 0.999 {
+            z += 1;
+        }
         let on = self.m.zoom;
-        if !on { self.zoom_view.saved = Some((self.m.tscale, self.m.tfine, self.m.delay)); }
+        if !on {
+            self.zoom_view.saved = Some((self.m.tscale, self.m.tfine, self.m.delay));
+        }
         self.zoom_view.user_closed = false;
         self.m.zscale = z;
         self.m.zdelay = (t0 + t1) * 0.5;
@@ -351,29 +524,57 @@ impl Ui {
             1 if is(0, "ELEMents") => {
                 let filter = text_arg(arg).to_ascii_uppercase();
                 let all = self.ui_elements();
-                t(all.iter().filter(|e| filter.is_empty() || e.kind == filter).map(|e| format!("{},{},{}", e.kind, q_str(&e.label), rect_txt(e.rect))).collect::<Vec<_>>().join(";"))
+                t(all
+                    .iter()
+                    .filter(|e| filter.is_empty() || e.kind == filter)
+                    .map(|e| format!("{},{},{}", e.kind, q_str(&e.label), rect_txt(e.rect)))
+                    .collect::<Vec<_>>()
+                    .join(";"))
             }
             1 if is(0, "TAP") && !q => match ints(&a).as_deref() {
-                Some([x, y]) => { self.ui_tap(*x, *y); DONE }
+                Some([x, y]) => {
+                    self.ui_tap(*x, *y);
+                    DONE
+                }
                 _ => Err(bad(arg)),
             },
             1 if is(0, "DRAG") && !q => match ints(&a).as_deref() {
-                Some([x0, y0, x1, y1]) => { self.ui_drag(*x0, *y0, *x1, *y1); DONE }
+                Some([x0, y0, x1, y1]) => {
+                    self.ui_drag(*x0, *y0, *x1, *y1);
+                    DONE
+                }
                 _ => Err(bad(arg)),
             },
             1 if is(0, "CONText") && !q => match ints(&a).as_deref() {
                 // a finger held on the Zoom button opens its popover, not the menu of the plot behind it
                 Some([x, y]) if self.studio_sz_hold(*x, *y) => DONE,
-                Some([x, y]) => { self.context_menu(*x, *y); DONE }
+                Some([x, y]) => {
+                    self.context_menu(*x, *y);
+                    DONE
+                }
                 _ => Err(bad(arg)),
             },
             1 if is(0, "MENU") && q => t(self.ui_menu_list()),
             2 if is(0, "MENU") && is(1, "SELect") && !q => self.ui_menu_select(&text_arg(arg)),
-            2 if is(0, "MENU") && is(1, "CLOSe") && !q => { self.ui_menu_close(); DONE }
+            2 if is(0, "MENU") && is(1, "CLOSe") && !q => {
+                self.ui_menu_close();
+                DONE
+            }
             // the notice that covers the screen (an update, a refused action): read what it says, then close it
-            1 if is(0, "DIALog") && q => t(self.dialog.as_ref().map(|d| d.join("
-")).unwrap_or_default()),
-            2 if is(0, "DIALog") && is(1, "CLOSe") && !q => { self.dialog = None; DONE }
+            1 if is(0, "DIALog") && q => t(self
+                .dialog
+                .as_ref()
+                .map(|d| {
+                    d.join(
+                        "
+",
+                    )
+                })
+                .unwrap_or_default()),
+            2 if is(0, "DIALog") && is(1, "CLOSe") && !q => {
+                self.dialog = None;
+                DONE
+            }
             _ => return None,
         })
     }
@@ -387,7 +588,12 @@ impl Ui {
     pub(super) fn ui_drag(&mut self, x0: i32, y0: i32, x1: i32, y1: i32) {
         self.handle(Ev::Touch { id: 0, phase: Phase::Down, x: x0, y: y0 });
         for s in 1..=12 {
-            self.handle(Ev::Touch { id: 0, phase: Phase::Move, x: x0 + (x1 - x0) * s / 12, y: y0 + (y1 - y0) * s / 12 });
+            self.handle(Ev::Touch {
+                id: 0,
+                phase: Phase::Move,
+                x: x0 + (x1 - x0) * s / 12,
+                y: y0 + (y1 - y0) * s / 12,
+            });
         }
         self.handle(Ev::Touch { id: 0, phase: Phase::Up, x: x1, y: y1 });
     }
@@ -396,94 +602,201 @@ impl Ui {
     /// dividers, then whatever menu is open (it is on top, so it comes last).
     pub(super) fn ui_elements(&self) -> Vec<Element> {
         let mut out = Vec::new();
-        let mut push = |kind: &'static str, label: String, rect: Rect| { if rect.w > 0 && rect.h > 0 { out.push(Element { kind, label, rect }); } };
+        let mut push = |kind: &'static str, label: String, rect: Rect| {
+            if rect.w > 0 && rect.h > 0 {
+                out.push(Element { kind, label, rect });
+            }
+        };
         if self.m.layout == Layout::Studio {
             let top = self.studio_top();
             let l = &TOP_LABELS[top.tier];
             let run = if self.m.run == RunState::Run { "Stop" } else { "Run" };
             for (label, r) in [
-                ("Views".to_string(), top.vbox), (l[3].to_string(), top.add), ("Live".to_string(), top.badge),
-                (run.to_string(), top.run), ("Single".to_string(), top.single), ("SIM control".to_string(), top.sim), ("Acquire".to_string(), top.acq),
-                ("Measure".to_string(), top.measure), (l[5].to_string(), top.cursors), (l[6].to_string(), top.display), (l[7].to_string(), top.storage),
-                ("Settings".to_string(), top.gear), (l[0].to_string(), top.autoset), (l[1].to_string(), top.clear), (l[2].to_string(), top.force),
-            ] { push("TOP", label, r); }
+                ("Views".to_string(), top.vbox),
+                (l[3].to_string(), top.add),
+                ("Live".to_string(), top.badge),
+                (run.to_string(), top.run),
+                ("Single".to_string(), top.single),
+                ("SIM control".to_string(), top.sim),
+                ("Acquire".to_string(), top.acq),
+                ("Measure".to_string(), top.measure),
+                (l[5].to_string(), top.cursors),
+                (l[6].to_string(), top.display),
+                (l[7].to_string(), top.storage),
+                ("Settings".to_string(), top.gear),
+                (l[0].to_string(), top.autoset),
+                (l[1].to_string(), top.clear),
+                (l[2].to_string(), top.force),
+            ] {
+                push("TOP", label, r);
+            }
             let b = self.studio_bottom();
-            for c in 0..n_ch() { push("BOTTOM", format!("CH{}", c + 1), b.ch[c]); }
-            for i in 0..NREF { push("BOTTOM", format!("R{}", i + 1), b.refs[i]); }
-            for i in 0..NMATH { push("BOTTOM", format!("M{}", i + 1), b.math[i]); }
-            for i in 0..DECODERS { push("BOTTOM", format!("D{}", i + 1), b.dec[i]); }
+            for c in 0..n_ch() {
+                push("BOTTOM", format!("CH{}", c + 1), b.ch[c]);
+            }
+            for i in 0..NREF {
+                push("BOTTOM", format!("R{}", i + 1), b.refs[i]);
+            }
+            for i in 0..NMATH {
+                push("BOTTOM", format!("M{}", i + 1), b.math[i]);
+            }
+            for i in 0..DECODERS {
+                push("BOTTOM", format!("D{}", i + 1), b.dec[i]);
+            }
             push("BOTTOM", "+ CH".into(), b.add);
-            if let Some(r) = b.show { push("BOTTOM", "Show badges".into(), r); }
-            if let Some(r) = b.la { push("BOTTOM", "LA".into(), r); }
-            if let Some(r) = b.gen { push("BOTTOM", "GEN".into(), r); }
+            if let Some(r) = b.show {
+                push("BOTTOM", "Show badges".into(), r);
+            }
+            if let Some(r) = b.la {
+                push("BOTTOM", "LA".into(), r);
+            }
+            if let Some(r) = b.gen {
+                push("BOTTOM", "GEN".into(), r);
+            }
             push("BOTTOM", "Time".into(), b.time);
             push("BOTTOM", "Trigger".into(), b.trig);
-            if let Some(r) = b.panel { push("BOTTOM", "Panel".into(), r); }
+            if let Some(r) = b.panel {
+                push("BOTTOM", "Panel".into(), r);
+            }
             // the views: docked, then floating; each with its strip's buttons and tabs
             let lay = self.dock_layout();
             let mut views: Vec<(VKind, Rect)> = lay.leaves.clone();
-            for k in KINDS { if let Some(r) = self.dock_float_rect(k) { views.push((k, r)); } }
+            for k in KINDS {
+                if let Some(r) = self.dock_float_rect(k) {
+                    views.push((k, r));
+                }
+            }
             for (k, r) in views {
                 let name = self.dock_name(k);
                 push("VIEW", format!("{} ({})", name, vname(k)), r);
                 push("CLOSE", format!("Close {name}"), Self::dock_close_rect(r));
-                if let Some(e) = self.dock_extra_rect(k, r) { push("EXPAND", format!("Expand {name}"), e); }
-                for (v, tr) in self.dock_tab_rects(k, r) { push("TAB", self.dock_name(v), tr); }
-                if self.dock_floating(k) { push("RESIZE", format!("Resize {name}"), Self::dock_grip_rect(r)); }
+                if let Some(e) = self.dock_extra_rect(k, r) {
+                    push("EXPAND", format!("Expand {name}"), e);
+                }
+                for (v, tr) in self.dock_tab_rects(k, r) {
+                    push("TAB", self.dock_name(v), tr);
+                }
+                if self.dock_floating(k) {
+                    push("RESIZE", format!("Resize {name}"), Self::dock_grip_rect(r));
+                }
             }
             for (i, d) in lay.dividers.iter().enumerate() {
-                push("DIVIDER", format!("{} {}", if d.dir == Dir::H { "Vertical divider" } else { "Horizontal divider" }, i + 1), d.hit);
+                push(
+                    "DIVIDER",
+                    format!("{} {}", if d.dir == Dir::H { "Vertical divider" } else { "Horizontal divider" }, i + 1),
+                    d.hit,
+                );
             }
             // (a row that is hidden has no badges on the screen)
             if self.studio_badges_visible() {
-                for (key, r) in self.studio_badges() { push("BADGE", format!("{key:?}"), r); }
+                for (key, r) in self.studio_badges() {
+                    push("BADGE", format!("{key:?}"), r);
+                }
                 // the one button at the end of the row ("Meas", a dot and the count): it opens the table
                 push("BADGE", "Meas".into(), self.studio_list_chip());
             }
             // the zoom row: the buttons of the Default layout's row, by their names
             if let Some(bar) = self.studio_zoom_bar() {
-                for (label, r) in [("H-", bar.minus), ("H+", bar.plus), ("V-", bar.vminus), ("V+", bar.vplus), ("Box", bar.boxr), ("Reset", bar.fit), ("Close", bar.close)] { push("ZOOM", label.into(), r); }
+                for (label, r) in [
+                    ("H-", bar.minus),
+                    ("H+", bar.plus),
+                    ("V-", bar.vminus),
+                    ("V+", bar.vplus),
+                    ("Box", bar.boxr),
+                    ("Reset", bar.fit),
+                    ("Close", bar.close),
+                ] {
+                    push("ZOOM", label.into(), r);
+                }
             }
             if !self.view_on() {
                 // the plot: its lanes (one graticule in Overlay) and the handle of each source on its zero level
                 use super::workspace::Trace;
-                let name = |s: &Trace| match s { Trace::Channel(c) => format!("CH{}", c + 1), Trace::Reference(i) => format!("R{}", i + 1), Trace::Math(k) => format!("M{}", k + 1) };
+                let name = |s: &Trace| match s {
+                    Trace::Channel(c) => format!("CH{}", c + 1),
+                    Trace::Reference(i) => format!("R{}", i + 1),
+                    Trace::Math(k) => format!("M{}", k + 1),
+                };
                 let sources = self.trace_sources();
                 for (i, w) in self.plot.wins.iter().enumerate() {
-                    let label = if self.stacked() { sources.get(i).map(name).unwrap_or_else(|| "Lane".into()) } else { "All sources".into() };
+                    let label = if self.stacked() {
+                        sources.get(i).map(name).unwrap_or_else(|| "Lane".into())
+                    } else {
+                        "All sources".into()
+                    };
                     push("LANE", label, *w);
                 }
-                for (c, r) in self.studio.lane_badges.borrow().iter() { push("HANDLE", format!("CH{}", c + 1), *r); }
-                for (s, r) in self.studio.handles.borrow().iter() { push("HANDLE", name(s), *r); }
+                for (c, r) in self.studio.lane_badges.borrow().iter() {
+                    push("HANDLE", format!("CH{}", c + 1), *r);
+                }
+                for (s, r) in self.studio.handles.borrow().iter() {
+                    push("HANDLE", name(s), *r);
+                }
             }
             if !self.view_on() {
                 push("PLOT", "Full screen".into(), self.full_btn().1);
                 push("PLOT", "Zoom".into(), self.zoom_btn().1);
             }
-            for (c, r) in self.cursor_tags() { push("CURSOR", ["A", "B", "C", "D"].get(c).copied().unwrap_or("?").to_string(), r); }
+            for (c, r) in self.cursor_tags() {
+                push("CURSOR", ["A", "B", "C", "D"].get(c).copied().unwrap_or("?").to_string(), r);
+            }
         }
-        for (label, r) in self.ui_menu_rows() { push("MENU", label, r); }
+        for (label, r) in self.ui_menu_rows() {
+            push("MENU", label, r);
+        }
         out
     }
 
     /// The rows of the menu or popup that is open (the one on top), with their rectangles.
     fn ui_menu_rows(&self) -> Vec<(String, Rect)> {
         if let Some((_, parts)) = self.studio_sz_parts() {
-            return parts.into_iter().map(|(part, r)| (match part {
-                ZPart::All => "All lanes".to_string(), ZPart::Lane(t) => trace_name(t),
-                ZPart::XMinus => "X zoom out".to_string(), ZPart::XPlus => "X zoom in".to_string(),
-                ZPart::YMinus => "Y zoom out".to_string(), ZPart::YPlus => "Y zoom in".to_string(), ZPart::Reset => "Reset zoom".to_string(),
-            }, r)).collect();
+            return parts
+                .into_iter()
+                .map(|(part, r)| {
+                    (
+                        match part {
+                            ZPart::All => "All lanes".to_string(),
+                            ZPart::Lane(t) => trace_name(t),
+                            ZPart::XMinus => "X zoom out".to_string(),
+                            ZPart::XPlus => "X zoom in".to_string(),
+                            ZPart::YMinus => "Y zoom out".to_string(),
+                            ZPart::YPlus => "Y zoom in".to_string(),
+                            ZPart::Reset => "Reset zoom".to_string(),
+                        },
+                        r,
+                    )
+                })
+                .collect();
         }
-        if self.studio.ctx.is_some() { return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect(); }
-        if let Some(p) = &self.workspace.popup { return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect(); }
-        if self.studio.add_menu { return self.studio_add_rows().into_iter().map(|(row, r)| (self.add_row_label(row).to_string(), r)).collect(); }
+        if self.studio.ctx.is_some() {
+            return self.studio_ctx_rows().into_iter().map(|(_, l, r)| (l, r)).collect();
+        }
+        if let Some(p) = &self.workspace.popup {
+            return p.rows.iter().enumerate().map(|(i, (l, _))| (l.clone(), p.row_rect(i))).collect();
+        }
+        if self.studio.add_menu {
+            return self
+                .studio_add_rows()
+                .into_iter()
+                .map(|(row, r)| (self.add_row_label(row).to_string(), r))
+                .collect();
+        }
         // the popup of Add source in the bottom bar
         if let Some((channels, extras)) = self.studio_picker_rows() {
-            return channels.into_iter().map(|(c, r)| (format!("CH{}", c + 1), r)).chain(extras.into_iter().map(|(k, r)| (k.label().to_string(), r))).collect();
+            return channels
+                .into_iter()
+                .map(|(c, r)| (format!("CH{}", c + 1), r))
+                .chain(extras.into_iter().map(|(k, r)| (k.label().to_string(), r)))
+                .collect();
         }
         if self.menu_open && self.menu_is_wide() {
-            return self.menu_geo().groups.iter().flat_map(|g| g.items.iter()).map(|(it, r)| (self.item_label(*it).to_string(), *r)).collect();
+            return self
+                .menu_geo()
+                .groups
+                .iter()
+                .flat_map(|g| g.items.iter())
+                .map(|(it, r)| (self.item_label(*it).to_string(), *r))
+                .collect();
         }
         Vec::new()
     }
@@ -491,13 +804,21 @@ impl Ui {
     /// The open menu: its title, then each row as "label" (with its value for a setting of a side menu).
     fn ui_menu_list(&self) -> String {
         let rows = self.ui_menu_rows();
-        let title = if self.studio.sz.pop { "Zoom source".to_string() }
-            else if self.studio.ctx.is_some() { "Context".to_string() }
-            else if let Some(p) = &self.workspace.popup { p.title.clone() }
-            else if self.studio.add_menu { "Add".to_string() }
-            else if self.studio.ch_picker { "Add source".to_string() }
-            else if self.menu_open { self.menu_title(self.menu).to_string() }
-            else { return "\"\"".to_string(); };
+        let title = if self.studio.sz.pop {
+            "Zoom source".to_string()
+        } else if self.studio.ctx.is_some() {
+            "Context".to_string()
+        } else if let Some(p) = &self.workspace.popup {
+            p.title.clone()
+        } else if self.studio.add_menu {
+            "Add".to_string()
+        } else if self.studio.ch_picker {
+            "Add source".to_string()
+        } else if self.menu_open {
+            self.menu_title(self.menu).to_string()
+        } else {
+            return "\"\"".to_string();
+        };
         let mut out = vec![q_str(&title)];
         if !rows.is_empty() {
             out.extend(rows.into_iter().map(|(l, _)| q_str(&l)));
@@ -513,19 +834,28 @@ impl Ui {
     /// Presses the row of the open menu with that label (exactly, else the one label that starts with it).
     fn ui_menu_select(&mut self, label: &str) -> Reply {
         let want = label.trim().to_ascii_lowercase();
-        if want.is_empty() { return Err(bad(label)); }
+        if want.is_empty() {
+            return Err(bad(label));
+        }
         let rows = self.ui_menu_rows();
         if !rows.is_empty() {
             let exact = rows.iter().find(|(l, _)| l.to_ascii_lowercase() == want);
-            let starts: Vec<&(String, Rect)> = rows.iter().filter(|(l, _)| l.to_ascii_lowercase().starts_with(&want)).collect();
+            let starts: Vec<&(String, Rect)> =
+                rows.iter().filter(|(l, _)| l.to_ascii_lowercase().starts_with(&want)).collect();
             let hit = exact.or(if starts.len() == 1 { Some(starts[0]) } else { None });
             return match hit {
-                Some((_, r)) => { let (x, y) = (r.x + r.w / 2, r.y + r.h / 2); self.ui_tap(x, y); DONE }
+                Some((_, r)) => {
+                    let (x, y) = (r.x + r.w / 2, r.y + r.h / 2);
+                    self.ui_tap(x, y);
+                    DONE
+                }
                 None if starts.len() > 1 => Err(bad(&format!("{label}: {} rows start so", starts.len()))),
                 None => Err(bad(&format!("no row {label:?} in the open menu"))),
             };
         }
-        if self.menu_open { return self.script_do(label).map(|_| None).map_err(|e| bad(&e)); }
+        if self.menu_open {
+            return self.script_do(label).map(|_| None).map_err(|e| bad(&e));
+        }
         Err(conflict("no menu is open"))
     }
 
@@ -535,15 +865,21 @@ impl Ui {
         self.workspace.popup = None;
         self.studio.add_menu = false;
         self.studio.ch_picker = false;
-        if self.menu_open { self.close_menu(); }
+        if self.menu_open {
+            self.close_menu();
+        }
         self.relayout();
     }
 }
 
 /// A label as a SCPI string.
-fn q_str(s: &str) -> String { q(s) }
+fn q_str(s: &str) -> String {
+    q(s)
+}
 /// The setup text of the arrangement, quoted.
-fn q_text(s: &str) -> String { q(s) }
+fn q_text(s: &str) -> String {
+    q(s)
+}
 
 #[cfg(test)]
 mod tests {
@@ -563,9 +899,13 @@ mod tests {
         u.scpi_ext_command(&nodes, q, arg).expect("a header of this file")
     }
 
-    fn text(r: Reply) -> String { String::from_utf8(r.unwrap().unwrap()).unwrap() }
+    fn text(r: Reply) -> String {
+        String::from_utf8(r.unwrap().unwrap()).unwrap()
+    }
 
-    fn rect_of(u: &Ui, k: VKind) -> Rect { u.dock_rect(k).expect("on the screen") }
+    fn rect_of(u: &Ui, k: VKind) -> Rect {
+        u.dock_rect(k).expect("on the screen")
+    }
 
     #[test]
     fn move_puts_the_measurements_on_each_side_of_the_waveform() {
@@ -676,10 +1016,22 @@ mod tests {
         // a hold on the Zoom button opens its popover, whose rows are pressed by name (seen on a unit: the hold opened
         // the menu of the plot behind the button, and the button was not among the elements)
         let plot = text(cmd(&mut u, ":UI:ELEMents?", "PLOT"));
-        let zoom: Vec<i32> = plot.split(';').find(|r| r.starts_with("PLOT,\"Zoom\",")).expect("the Zoom button").split(',').skip(2).map(|v| v.parse().unwrap()).collect();
+        let zoom: Vec<i32> = plot
+            .split(';')
+            .find(|r| r.starts_with("PLOT,\"Zoom\","))
+            .expect("the Zoom button")
+            .split(',')
+            .skip(2)
+            .map(|v| v.parse().unwrap())
+            .collect();
         cmd(&mut u, ":UI:CONText", &format!("{},{}", zoom[0] + zoom[2] / 2, zoom[1] + zoom[3] / 2)).unwrap();
         let m = text(cmd(&mut u, ":UI:MENU?", ""));
-        assert!(m.starts_with("\"Zoom source\",\"All lanes\"") && m.contains("\"X zoom in\"") && m.contains("\"Reset zoom\""), "{m}");
+        assert!(
+            m.starts_with("\"Zoom source\",\"All lanes\"")
+                && m.contains("\"X zoom in\"")
+                && m.contains("\"Reset zoom\""),
+            "{m}"
+        );
         cmd(&mut u, ":UI:MENU:SELect", "\"X zoom in\"").unwrap();
         let wide = u.m.zscale;
         assert!(u.m.zoom && wide < u.m.tscale);
@@ -732,7 +1084,11 @@ mod tests {
 
     #[test]
     fn every_header_has_a_row_in_the_layout_page() {
-        let page = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi/layout.md")).unwrap();
-        for h in LAYOUT_HEADERS { assert!(page.contains(&format!("| `:{h}` |")), "{h} has no row in docs/scpi/layout.md"); }
+        let page =
+            std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi/layout.md"))
+                .unwrap();
+        for h in LAYOUT_HEADERS {
+            assert!(page.contains(&format!("| `:{h}` |")), "{h} has no row in docs/scpi/layout.md");
+        }
     }
 }

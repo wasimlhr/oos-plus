@@ -53,7 +53,11 @@ impl Ui {
             return Err("no menu open".into());
         }
         let label = label.trim();
-        self.script_labels().into_iter().find(|(_, text)| text.eq_ignore_ascii_case(label)).map(|x| x.0).ok_or_else(|| format!("no item {:?} in {}", label, self.menu_title(self.menu)))
+        self.script_labels()
+            .into_iter()
+            .find(|(_, text)| text.eq_ignore_ascii_case(label))
+            .map(|x| x.0)
+            .ok_or_else(|| format!("no item {:?} in {}", label, self.menu_title(self.menu)))
     }
 
     /// The rows of the open menu with their labels as a script names them: an option of the open picker (the grid of
@@ -63,10 +67,14 @@ impl Ui {
         let options = self.pick.map(|p| self.options(p.it)).unwrap_or_default();
         // a menu that is a sheet lists the rows of the sheet (Display has no Bottom bar there)
         let sheet_display = self.menu == MenuId::Display && self.sheets_on();
-        self.items(self.menu).into_iter().filter(|it| !(sheet_display && *it == Item::BottomBar)).map(|it| match it {
-            Item::PickOpt(k) if k < options.len() => (it, options[k].clone()),
-            _ => (it, self.item_label(it).to_string()),
-        }).collect()
+        self.items(self.menu)
+            .into_iter()
+            .filter(|it| !(sheet_display && *it == Item::BottomBar))
+            .map(|it| match it {
+                Item::PickOpt(k) if k < options.len() => (it, options[k].clone()),
+                _ => (it, self.item_label(it).to_string()),
+            })
+            .collect()
     }
 
     /// Sets the item `label` of the open menu to the option `value` (as shown on its button).
@@ -109,7 +117,11 @@ impl Ui {
 
     /// Puts `text` into the open on-screen keyboard, in place of what it holds.
     pub fn script_type(&mut self, text: &str) -> Result<(), String> {
-        if self.osk_set(text.trim()) { Ok(()) } else { Err("no keyboard open".into()) }
+        if self.osk_set(text.trim()) {
+            Ok(())
+        } else {
+            Err("no keyboard open".into())
+        }
     }
 
     /// OK of the open on-screen keyboard.
@@ -123,9 +135,14 @@ impl Ui {
 
     /// Takes an option of the open picker: by its text, or by its place in the list (1 is the first).
     pub fn script_option(&mut self, want: &str) -> Result<(), String> {
-        let Some(p) = self.pick.filter(|_| self.menu_open && self.menu == MenuId::Pick) else { return Err("no picker open".into()) };
+        let Some(p) = self.pick.filter(|_| self.menu_open && self.menu == MenuId::Pick) else {
+            return Err("no picker open".into());
+        };
         let (want, opts) = (want.trim(), self.options(p.it));
-        let k = opts.iter().position(|o| o.eq_ignore_ascii_case(want)).or_else(|| want.parse::<usize>().ok().filter(|n| (1..=opts.len()).contains(n)).map(|n| n - 1))
+        let k = opts
+            .iter()
+            .position(|o| o.eq_ignore_ascii_case(want))
+            .or_else(|| want.parse::<usize>().ok().filter(|n| (1..=opts.len()).contains(n)).map(|n| n - 1))
             .ok_or_else(|| format!("no option {:?} in {}", want, self.menu_title(MenuId::Pick)))?;
         self.activate(Item::PickOpt(k));
         Ok(())

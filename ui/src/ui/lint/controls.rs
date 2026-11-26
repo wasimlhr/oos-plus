@@ -309,7 +309,11 @@ fn the_events_pane_opens_from_the_menu_and_goes_to_an_event() {
     u.activate(Item::DecExport);
     let f = std::fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
     let t = std::fs::read_to_string(&f).unwrap();
-    assert!(t.starts_with("Time (s),Source,Event,Ok") && t.lines().count() == n + 1, "{}", &t[..80.min(t.len())]);
+    assert!(
+        t.starts_with("Index,Time (s),End (s),Source,Len,Text,Hex,Error") && t.lines().count() == n + 1,
+        "{}",
+        &t[..80.min(t.len())]
+    );
     let _ = std::fs::remove_dir_all(&dir);
     // the row of the menu again
     u.activate(Item::DecTable);
@@ -352,7 +356,7 @@ fn event_table_scrolls_and_goes_to_an_event() {
     u.activate(Item::DecExport);
     let f = std::fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
     let t = std::fs::read_to_string(&f).unwrap();
-    assert!(t.starts_with("Time (s),Source,Event,Ok") && t.lines().count() == n + 1, "{}", &t[..80.min(t.len())]);
+    assert!(t.starts_with("Index,Time (s),Source,Event,Ok") && t.lines().count() == n + 1, "{}", &t[..80.min(t.len())]);
     let _ = std::fs::remove_dir_all(&dir);
     // the close button
     let close = u.plot.area.x + 30 + 420 - 46 + 10;

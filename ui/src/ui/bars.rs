@@ -22,7 +22,9 @@ impl Ui {
     /// Run state pill at the left of the top bar (wider for the larger text sizes); taller, with the waveform rate under
     /// the state, while the hardware runs (capture_rate.rs), and wide enough for that line.
     pub(super) fn run_pill(&self) -> Rect {
-        if self.m.layout == Layout::Studio { return self.studio_top().run; }
+        if self.m.layout == Layout::Studio {
+            return self.studio_top().run;
+        }
         let f = self.fonts();
         let w = 92.max(30 + f.mb.width("TRIG'D") + 12);
         match self.capture_caption() {
@@ -73,7 +75,9 @@ impl Ui {
 
     /// Single button right of the run state pill (moves over when the pill grows with the text size).
     pub(super) fn single_btn(&self) -> Rect {
-        if self.m.layout == Layout::Studio { return self.studio_top().single; }
+        if self.m.layout == Layout::Studio {
+            return self.studio_top().single;
+        }
         let p = self.run_pill();
         Rect::new(p.right() + 4, Self::SINGLE_BTN.y, Self::SINGLE_BTN.w, Self::SINGLE_BTN.h)
     }
@@ -82,7 +86,9 @@ impl Ui {
     /// (Display, Storage). Everything else is in the start menu: System first in its group, SIM under Analysis; Load file
     /// is a row of the Reference menu.
     pub(super) fn top_buttons(&self) -> Vec<(TopBtn, &'static str, Rect)> {
-        if self.m.layout == Layout::Studio { return self.studio_top_buttons(); }
+        if self.m.layout == Layout::Studio {
+            return self.studio_top_buttons();
+        }
         let f = self.fonts();
         // The bar holds what has no key of the front panel: Display and Storage (ADR 0076). Measure and Cursor are keys
         // and entries of the start menu; System and SIM are in the start menu, Load file a row of the Reference menu.
@@ -372,7 +378,21 @@ impl Ui {
     }
 
     pub(crate) fn toast_is_success(s: &str) -> bool {
-        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared") || s.starts_with("Copied ") || (s.starts_with("Zone ") && s.ends_with(" deleted")) || s.ends_with(" added") || s.contains(" added to R") || s.ends_with(" removed") || s.contains(" \u{b7} ") || s.starts_with("Loaded ") || s.starts_with("Saved ") || s.starts_with("Ran ") || s.contains(" loaded from ") || s.starts_with("Restored ") || s.contains(" saved to ") || s.starts_with("Returned to live") || s.starts_with("Fit ")
+        matches!(s, "Eye cleared" | "Counter cleared" | "Limit cleared" | "Counts reset" | "Mask cleared")
+            || s.starts_with("Copied ")
+            || (s.starts_with("Zone ") && s.ends_with(" deleted"))
+            || s.ends_with(" added")
+            || s.contains(" added to R")
+            || s.ends_with(" removed")
+            || s.contains(" \u{b7} ")
+            || s.starts_with("Loaded ")
+            || s.starts_with("Saved ")
+            || s.starts_with("Ran ")
+            || s.contains(" loaded from ")
+            || s.starts_with("Restored ")
+            || s.contains(" saved to ")
+            || s.starts_with("Returned to live")
+            || s.starts_with("Fit ")
     }
 
     pub(super) fn draw_toast(&self, cv: &mut Canvas) {
@@ -401,7 +421,9 @@ impl Ui {
             } else {
                 r.y = d.y + d.h + 6;
                 // never over the bottom bar: above the dialog when there is room, else where it was
-                if r.y + r.h > self.frame().bottom.y { r.y = if d.y - r.h - 6 >= body.y { d.y - r.h - 6 } else { body.y + 4 }; }
+                if r.y + r.h > self.frame().bottom.y {
+                    r.y = if d.y - r.h - 6 >= body.y { d.y - r.h - 6 } else { body.y + 4 };
+                }
             }
         }
         if Self::toast_is_info(s) {
@@ -422,7 +444,10 @@ impl Ui {
             // done, not a warning: a tick in green
             cv.round(r, 6, mix(BAR, GREEN, 110), 255);
             cv.round(r.inset(1), 5, mix(BAR, GREEN, 34), 255);
-            for d in [0, 1] { cv.line(r.x + 11, r.y + 15 + d, r.x + 16, r.y + 20 + d, GREEN); cv.line(r.x + 16, r.y + 20 + d, r.x + 25, r.y + 8 + d, GREEN); }
+            for d in [0, 1] {
+                cv.line(r.x + 11, r.y + 15 + d, r.x + 16, r.y + 20 + d, GREEN);
+                cv.line(r.x + 16, r.y + 20 + d, r.x + 25, r.y + 8 + d, GREEN);
+            }
             cv.text(&f.mb, r.x + 32, r.y + 19, s, GREEN);
             return;
         }
@@ -490,8 +515,9 @@ impl Ui {
         let ref_card = !self.record_mode() && !self.shown_refs().is_empty();
         let start = row.x;
         let room = |wide: bool| {
-            let a: i32 = aux.iter().filter(|a| a.0).map(|a| if a.1 && wide { AUX_WIDE } else { AUX_NARROW } + 7).sum::<i32>()
-                + if ref_card { AUX_NARROW + 7 } else { 0 };
+            let a: i32 =
+                aux.iter().filter(|a| a.0).map(|a| if a.1 && wide { AUX_WIDE } else { AUX_NARROW } + 7).sum::<i32>()
+                    + if ref_card { AUX_NARROW + 7 } else { 0 };
             row.right() - start - n_off * (56 + 7) - n_on * 7 - a - (130 + 7) - 222
         };
         let wide = n_on == 0 || room(true) / n_on.max(1) >= CH_MIN;
@@ -516,7 +542,11 @@ impl Ui {
             })
         };
         let (la, gen) = (next(aux[0]), next(aux[1]));
-        let refs = ref_card.then(|| { let r = Rect::new(x, y, AUX_NARROW, h); x += AUX_NARROW + 7; r });
+        let refs = ref_card.then(|| {
+            let r = Rect::new(x, y, AUX_NARROW, h);
+            x += AUX_NARROW + 7;
+            r
+        });
         let rest = row.right() - x - 7;
         let tw = ((rest as f32 * 0.42) as i32).min(rest - 222).max(130);
         let tw = tw.min(TIME_CARD_MAX);
@@ -626,7 +656,13 @@ impl Ui {
     }
 
     pub(super) fn draw_bottom(&self, cv: &mut Canvas) {
-        if self.m.layout == Layout::Studio { self.draw_studio_bottom(cv) } else if self.m.compact() { self.draw_workspace_footer(cv) } else { self.draw_classic_bottom(cv) }
+        if self.m.layout == Layout::Studio {
+            self.draw_studio_bottom(cv)
+        } else if self.m.compact() {
+            self.draw_workspace_footer(cv)
+        } else {
+            self.draw_classic_bottom(cv)
+        }
     }
 
     /// The stock OOS cards: Menu, channels, LA, generator, TIME and trigger (Display > Layout > Default).
@@ -688,7 +724,9 @@ impl Ui {
                 AuxCard { name: "GEN", col: GEN_COLOR, on: self.m.afg_on, sel, big: &big, sub: &sub },
             );
         }
-        if let Some(r) = self.card_layout().refs { self.draw_ref_card(cv, r); }
+        if let Some(r) = self.card_layout().refs {
+            self.draw_ref_card(cv, r);
+        }
         // time base (sample rate and depth are in the top bar)
         let r = tr;
         let sel = root == Some(MenuId::Horizontal);

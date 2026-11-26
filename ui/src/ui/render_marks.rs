@@ -72,10 +72,14 @@ impl Ui {
 
     /// Room a ref badge keeps clear under it: the time labels along the bottom of the lowest lane.
     pub(super) fn ref_badge_pad(&self, lane: Rect) -> i32 {
-        let base = if self.stacked() && self.plot.cur_win + 1 < self.plot.wins.len() { 2 } else { self.fonts().s.size + 10 };
+        let base =
+            if self.stacked() && self.plot.cur_win + 1 < self.plot.wins.len() { 2 } else { self.fonts().s.size + 10 };
         // the Fit row and the With live note sit above the time labels of the last lane: the badge stays clear of them
         // (only a lane that reaches the bottom of the plot is under them)
-        if !self.live_ref_note().is_empty() && !self.view_on() && !self.eye_open() && lane.bottom() >= self.plot.area.bottom() - 4
+        if !self.live_ref_note().is_empty()
+            && !self.view_on()
+            && !self.eye_open()
+            && lane.bottom() >= self.plot.area.bottom() - 4
         {
             base.max(52)
         } else {
@@ -158,7 +162,8 @@ impl Ui {
                 // badges of references that start at the same height are fanned out instead of printed over each other
                 // none in the overview of a zoom (it shows the whole record, the detail has the badges)
                 if !all_sources {
-                    let (lo, hi) = (area.y + 2, (area.y + area.h - REF_BADGE_H - self.ref_badge_pad(area)).max(area.y + 2));
+                    let (lo, hi) =
+                        (area.y + 2, (area.y + area.h - REF_BADGE_H - self.ref_badge_pad(area)).max(area.y + 2));
                     let spot = badge_spot(&badges, y, lo, hi);
                     badges.push(spot);
                     self.draw_ref_badge(cv, area, spot, col, i, r);
@@ -176,7 +181,12 @@ impl Ui {
         let f = self.fonts();
         // a square that fits the area both ways: a narrow docked pane keeps its title and its left edge
         let side = self.plot.area.h.min(self.plot.area.w);
-        let sq = Rect::new(self.plot.area.x + (self.plot.area.w - side) / 2, self.plot.area.y + (self.plot.area.h - side) / 2, side, side);
+        let sq = Rect::new(
+            self.plot.area.x + (self.plot.area.w - side) / 2,
+            self.plot.area.y + (self.plot.area.h - side) / 2,
+            side,
+            side,
+        );
         cv.fill(sq, rgb(0x04, 0x04, 0x08));
         cv.rect(sq, GRID_AXIS);
         cv.vline(sq.x + side / 2, sq.y, sq.y + side - 1, GRID_LINE);
@@ -217,7 +227,9 @@ impl Ui {
             }
             let y = self.y_of_volts(c, 0.0).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
             let col = CH_COLORS[c];
-            if self.m.layout == Layout::Studio { continue; }
+            if self.m.layout == Layout::Studio {
+                continue;
+            }
             let r = Rect::new(a.x + 2, y - 8, 16, 16);
             cv.round(r, 3, col, 255);
             cv.triangle([(a.x + 17, y - 6), (a.x + 24, y), (a.x + 17, y + 6)], col);
@@ -340,12 +352,15 @@ impl Ui {
         let f = self.fonts();
         let a = self.plot.area;
         cv.set_clip(a);
-        let picked = self.workspace.cursor_sel.and_then(|k| self.cursor_tags().into_iter().find(|t| t.0 == k).map(|t| t.1));
+        let picked =
+            self.workspace.cursor_sel.and_then(|k| self.cursor_tags().into_iter().find(|t| t.0 == k).map(|t| t.1));
         let tagbox = |cv: &mut Canvas, x: i32, y: i32, s: &str| {
             let r = Rect::new(x, y, f.s.width(s) + 8, 14);
             cv.round(r, 2, CURSOR, 255);
             cv.text_in(&f.s, r, 1, s, DARK_TEXT);
-            if picked == Some(r) { cv.round_outline(Rect::new(r.x - 2, r.y - 2, r.w + 4, r.h + 4), 3, ACCENT); }
+            if picked == Some(r) {
+                cv.round_outline(Rect::new(r.x - 2, r.y - 2, r.w + 4, r.h + 4), 3, ACCENT);
+            }
         };
         match self.m.cursor {
             CursorMode::Off => {}
@@ -496,10 +511,21 @@ impl Ui {
         let clip = self.clipping_channels();
         if !clip.is_empty() {
             let names: Vec<String> = clip.iter().map(|c| format!("CH{}", c + 1)).collect();
-            x = backed_text(cv, &f.sb, x, y, &format!("Clipping: {} \u{b7} raise V/div or move the trace", names.join(" ")), RED) + 16;
+            x = backed_text(
+                cv,
+                &f.sb,
+                x,
+                y,
+                &format!("Clipping: {} \u{b7} raise V/div or move the trace", names.join(" ")),
+                RED,
+            ) + 16;
         }
         if self.m.touch_lock {
-            let hint = if self.m.layout == Layout::Studio { "Touch locked \u{b7} tap the gear to unlock" } else { "Touch locked \u{b7} tap Unlock" };
+            let hint = if self.m.layout == Layout::Studio {
+                "Touch locked \u{b7} tap the gear to unlock"
+            } else {
+                "Touch locked \u{b7} tap Unlock"
+            };
             x = backed_text(cv, &f.sb, x, y, hint, AMBER) + 16;
         }
         let seg = self.seg.view.filter(|_| self.seg_hw_on()).and_then(|v| match (v.phase, self.seg.pos) {
@@ -575,11 +601,18 @@ impl Ui {
                 let top = self.plot.area.y + slot as i32 * SEARCH_LANE_H;
                 let events = self.studio_search_events_of(slot);
                 // under the lines of marks of every search
-                let lines = (slot == self.studio.search_sel).then_some(self.plot.area.y + super::addrail::SEARCH_SLOTS as i32 * SEARCH_LANE_H);
+                let lines = (slot == self.studio.search_sel)
+                    .then_some(self.plot.area.y + super::addrail::SEARCH_SLOTS as i32 * SEARCH_LANE_H);
                 self.draw_search_marks(cv, &events, top, super::addrail::SEARCH_COLS[slot], lines);
             }
         } else if self.search_on {
-            self.draw_search_marks(cv, &self.search_events(), self.plot.area.y, AMBER, Some(self.plot.area.y + SEARCH_LANE_H));
+            self.draw_search_marks(
+                cv,
+                &self.search_events(),
+                self.plot.area.y,
+                AMBER,
+                Some(self.plot.area.y + SEARCH_LANE_H),
+            );
         }
     }
 
@@ -590,10 +623,14 @@ impl Ui {
         let view = (self.m.time_per_div(), self.m.delay);
         let mut line = |slot: usize, events: &[f64], col: Rgb| {
             let top = o.y + 1 + slot as i32 * (SEARCH_STRIP_H + 1);
-            for column in Self::search_columns(events, o.w, view) { cv.vline(o.x + column, top, top + SEARCH_STRIP_H - 1, col); }
+            for column in Self::search_columns(events, o.w, view) {
+                cv.vline(o.x + column, top, top + SEARCH_STRIP_H - 1, col);
+            }
         };
         if self.studio_search_marks().is_some() {
-            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) { line(slot, &self.studio_search_events_of(slot), super::addrail::SEARCH_COLS[slot]); }
+            for (slot, _) in self.studio.search_list().filter(|(_, s)| !s.hidden) {
+                line(slot, &self.studio_search_events_of(slot), super::addrail::SEARCH_COLS[slot]);
+            }
         } else if self.search_on {
             line(0, &self.search_events(), AMBER);
         }
@@ -630,14 +667,18 @@ impl Ui {
                 cv.vline(x, top + 1, top + SEARCH_STRIP_H, mark_col);
             } else {
                 cv.triangle([(x - 4, top + 1), (x + 4, top + 1), (x, top + 8)], mark_col);
-                if let Some(from) = lines { cv.dashed_vline(x, from, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90)); }
+                if let Some(from) = lines {
+                    cv.dashed_vline(x, from, a.y + a.h - 1, 2, 6, mix(BG, mark_col, 90));
+                }
             }
         }
         // the event raised in the list (tapped there, or stepped to): a larger mark in the colour of the text and a
         // line down the plot, over the others
         let (scale, delay) = self.view();
         let Some(t) = lines.and(self.search_picked(events)) else { return };
-        let column = ((t - (delay as f64 - scale as f64 * HDIV as f64 * 0.5)) / (scale as f64 * HDIV as f64) * a.w as f64).floor();
+        let column = ((t - (delay as f64 - scale as f64 * HDIV as f64 * 0.5)) / (scale as f64 * HDIV as f64)
+            * a.w as f64)
+            .floor();
         if (0.0..a.w as f64).contains(&column) {
             let x = a.x + column as i32;
             cv.triangle([(x - 7, top), (x + 7, top), (x, top + 12)], TEXT);

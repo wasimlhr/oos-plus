@@ -876,7 +876,17 @@ fn cmd_takes_keys_knobs_and_touch_only() {
     let (r, cmds) = handed(get("key%20runstop&c=knob%20vscale%20%2B1"), &mut ui, &mut scpi);
     assert!(r.starts_with("HTTP/1.1 200"), "{}", r);
     assert_eq!(cmds, ["key runstop", "knob vscale +1"]);
-    for c in ["key runstop", "knob vscale +1", "tap 100 200", "drag 1 2 3 4", "down 1 2", "move 3 4", "up 3 4", "wheel 1 2 -1 c", "keysym down 61"] {
+    for c in [
+        "key runstop",
+        "knob vscale +1",
+        "tap 100 200",
+        "drag 1 2 3 4",
+        "down 1 2",
+        "move 3 4",
+        "up 3 4",
+        "wheel 1 2 -1 c",
+        "keysym down 61",
+    ] {
         assert!(crate::cmd::remote_ok(c), "{}", c);
     }
 }
@@ -946,7 +956,11 @@ fn mcp_session() {
     assert_eq!(result.get("isError"), Some(&J::Bool(true)), "{s}");
     assert!(s.contains("1.000000E-03") && s.contains("-113") && s.contains("Undefined header"), "{s}");
     let r = call(r#"{"jsonrpc":"2.0","id":32,"method":"tools/call","params":{"name":"scpi","arguments":{"command":":SYST:ERR?"}}}"#).unwrap();
-    assert!(r.to_string().contains("-113") && r.get("result").and_then(|x| x.get("isError")).is_none(), "{}", r.to_string());
+    assert!(
+        r.to_string().contains("-113") && r.get("result").and_then(|x| x.get("isError")).is_none(),
+        "{}",
+        r.to_string()
+    );
     let r = call(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"screenshot","arguments":{}}}"#)
         .unwrap();
     assert!(r.to_string().contains("iVBORw0KGgo")); // PNG signature in base64

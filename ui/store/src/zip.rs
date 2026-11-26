@@ -72,7 +72,8 @@ impl<'a> Zip<'a> {
         let end = (last.saturating_sub(0xFFFF)..=last)
             .rev()
             .find(|&at| {
-                bytes[at..].starts_with(b"PK\x05\x06") && le16(bytes, at + 20).is_some_and(|c| at + 22 + c <= bytes.len())
+                bytes[at..].starts_with(b"PK\x05\x06")
+                    && le16(bytes, at + 20).is_some_and(|c| at + 22 + c <= bytes.len())
             })
             .ok_or_else(cut)?;
         let field = |at: usize| le16(bytes, end + at).ok_or_else(cut);
@@ -97,7 +98,8 @@ impl<'a> Zip<'a> {
         let mut at = list;
         for _ in 0..count {
             // 46 bytes, then the name, an extra field and a comment
-            let head = bytes.get(at..at + 46).filter(|h| h.starts_with(b"PK\x01\x02") && at + 46 <= end).ok_or_else(cut)?;
+            let head =
+                bytes.get(at..at + 46).filter(|h| h.starts_with(b"PK\x01\x02") && at + 46 <= end).ok_or_else(cut)?;
             let lengths = le16(head, 28).zip(le16(head, 30)).zip(le16(head, 32));
             let ((n, extra), comment) = lengths.ok_or_else(cut)?;
             let name = bytes.get(at + 46..at + 46 + n).ok_or_else(cut)?;

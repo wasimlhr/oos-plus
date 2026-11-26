@@ -135,7 +135,9 @@ pub fn check_target(path: &Path) -> std::io::Result<()> {
     let mut plain = std::path::PathBuf::new();
     for part in path.components() {
         match part {
-            std::path::Component::ParentDir => { plain.pop(); }
+            std::path::Component::ParentDir => {
+                plain.pop();
+            }
             std::path::Component::CurDir => {}
             other => plain.push(other),
         }

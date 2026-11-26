@@ -14,7 +14,9 @@ const CARD_H: i32 = 460;
 
 impl Ui {
     /// The "i" of a tile: a 40 px target in its top right corner.
-    pub(super) fn tile_info_rect(tile: Rect) -> Rect { Rect::new(tile.right() - 40, tile.y, 40, 40) }
+    pub(super) fn tile_info_rect(tile: Rect) -> Rect {
+        Rect::new(tile.right() - 40, tile.y, 40, 40)
+    }
 
     /// How far the grid can scroll, for a grid of `total` px.
     pub(super) fn tile_scroll_max_of(&self, total: i32, list_h: i32) -> i32 {
@@ -35,16 +37,24 @@ impl Ui {
         let (mut y, mut col, mut last) = (0, 0, None);
         for e in &entries {
             if headed && last != Some(e.section) {
-                if col != 0 { y += TILE_H; col = 0; }
+                if col != 0 {
+                    y += TILE_H;
+                    col = 0;
+                }
                 heads.push((Rect::new(list.x, list.y + y, list.w, HEAD_H), e.section));
                 y += HEAD_H;
                 last = Some(e.section);
             }
             tiles.push(Rect::new(list.x + col * (w + 4), list.y + y, w, TILE_H - 4));
             col += 1;
-            if col == TILE_COLS { col = 0; y += TILE_H; }
+            if col == TILE_COLS {
+                col = 0;
+                y += TILE_H;
+            }
         }
-        if col != 0 { y += TILE_H; }
+        if col != 0 {
+            y += TILE_H;
+        }
         (tiles, heads, y)
     }
 
@@ -57,9 +67,19 @@ impl Ui {
         let off = matches!(need, super::meascatalog::Preview::Off(_) | super::meascatalog::Preview::Reason(_));
         cv.round(tile, 6, if added { ACCENT } else { BTN_BORDER }, 255);
         cv.round(tile.inset(1), 5, if added { mix(BTN, ACCENT, 28) } else { BTN }, 255);
-        let col = if off { DIM } else if added { ACCENT } else { TEXT };
+        let col = if off {
+            DIM
+        } else if added {
+            ACCENT
+        } else {
+            TEXT
+        };
         // an added tile has its value at the left: the figure moves over and the value ends before it
-        let pic = if added { Rect::new(tile.x + tile.w / 2 - 8, tile.y + 6, 60, 36) } else { Rect::new(tile.x + tile.w / 2 - 36, tile.y + 6, 72, 36) };
+        let pic = if added {
+            Rect::new(tile.x + tile.w / 2 - 8, tile.y + 6, 60, 36)
+        } else {
+            Rect::new(tile.x + tile.w / 2 - 36, tile.y + 6, 72, 36)
+        };
         super::caticons::draw_cat_icon(cv, f, pic, cat, col, if off { DIM } else { ACCENT });
         let lines = super::meascatalog::wrap_lines(&f.s, info.name, tile.w - 10);
         for (i, l) in lines.iter().take(2).enumerate() {
@@ -67,7 +87,10 @@ impl Ui {
         }
         if added {
             let (x, y) = (tile.x + 10, tile.y + 12);
-            for d in [0, 1] { cv.line(x, y + d, x + 4, y + 5 + d, ACCENT); cv.line(x + 4, y + 5 + d, x + 11, y - 5 + d, ACCENT); }
+            for d in [0, 1] {
+                cv.line(x, y + d, x + 4, y + 5 + d, ACCENT);
+                cv.line(x + 4, y + 5 + d, x + 11, y - 5 + d, ACCENT);
+            }
             // its value now, as the list has it
             let rows = self.meas_rows();
             if let Some(row) = self.studio_index(self.add_key(cat)).and_then(|i| rows.get(i)) {
@@ -97,19 +120,29 @@ impl Ui {
         Rect::new((self.scr.w - CARD_W) / 2, top, CARD_W, CARD_H)
     }
 
-    pub(super) fn info_card_close(card: Rect) -> Rect { Rect::new(card.right() - 48, card.y + 4, 44, 44) }
-    pub(super) fn info_card_action(card: Rect) -> Rect { Rect::new(card.right() - 150, card.bottom() - 54, 138, 44) }
+    pub(super) fn info_card_close(card: Rect) -> Rect {
+        Rect::new(card.right() - 48, card.y + 4, 44, 44)
+    }
+    pub(super) fn info_card_action(card: Rect) -> Rect {
+        Rect::new(card.right() - 150, card.bottom() - 54, 138, 44)
+    }
 
     /// The card's three parts, wrapped in the largest body font whose text ends above the action button (the owner:
     /// the text can be bigger), with the line step and where the last line ends.
-    pub(super) fn info_card_text(f: &crate::font::Fonts, cat: Cat, card: Rect) -> (&Font, i32, Vec<(&'static str, Vec<String>)>) {
+    pub(super) fn info_card_text(
+        f: &crate::font::Fonts,
+        cat: Cat,
+        card: Rect,
+    ) -> (&Font, i32, Vec<(&'static str, Vec<String>)>) {
         let info = cat_info(cat);
-        let texts = [("What it is", info.blurb.to_string()), ("How it is computed", info.how), ("Settings", info.settings)];
+        let texts =
+            [("What it is", info.blurb.to_string()), ("How it is computed", info.how), ("Settings", info.settings)];
         let bottom = Self::info_card_action(card).y - 6;
         let mut out = (&f.s, f.s.size + 4, Vec::new());
         for body in [&f.m, &f.s] {
             let step = body.size + 5;
-            let parts: Vec<_> = texts.iter().map(|(h, t)| (*h, super::meascatalog::wrap_lines(body, t, card.w - 32))).collect();
+            let parts: Vec<_> =
+                texts.iter().map(|(h, t)| (*h, super::meascatalog::wrap_lines(body, t, card.w - 32))).collect();
             let h: i32 = parts.iter().map(|(_, l)| 16 + step * (l.len() as i32 + 1)).sum();
             out = (body, step, parts);
             if card.y + 108 + h <= bottom {
@@ -132,7 +165,13 @@ impl Ui {
         cv.round(pic.inset(1), 5, BG, 255);
         super::caticons::draw_cat_icon(cv, f, pic.inset(6), cat, TEXT, ACCENT);
         cv.text(&f.lb, pic.right() + 16, card.y + 38, info.name, TEXT);
-        cv.text(&f.m, pic.right() + 16, card.y + 64, &format!("Unit: {}", if info.unit.is_empty() { "none" } else { info.unit }), DIM);
+        cv.text(
+            &f.m,
+            pic.right() + 16,
+            card.y + 64,
+            &format!("Unit: {}", if info.unit.is_empty() { "none" } else { info.unit }),
+            DIM,
+        );
         cv.text(&f.m, pic.right() + 16, card.y + 86, &info.sources, DIM);
         let close = Self::info_card_close(card);
         btn(cv, close.inset(4), BTN, BTN_BORDER);
@@ -160,10 +199,15 @@ impl Ui {
     pub(super) fn info_card_tap(&mut self, x: i32, y: i32) -> bool {
         let Some(cat) = self.studio.md.info else { return false };
         let card = self.info_card_rect();
-        if !card.contains(x, y) || Self::info_card_close(card).contains(x, y) { self.studio.md.info = None; return true; }
+        if !card.contains(x, y) || Self::info_card_close(card).contains(x, y) {
+            self.studio.md.info = None;
+            return true;
+        }
         if Self::info_card_action(card).contains(x, y) {
             self.sheet_add_toggle(cat);
-            if !self.add_is_on(cat) { self.studio.md.info = None; }
+            if !self.add_is_on(cat) {
+                self.studio.md.info = None;
+            }
         }
         true
     }

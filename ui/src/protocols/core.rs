@@ -382,7 +382,8 @@ mod tests {
     /// the text of their kind.
     #[test]
     fn the_i2c_address_has_the_read_write_bit_on_request() {
-        let addr = |read: bool| Packet { t0: 0.0, t1: 1.0, kind: Kind::Addr { read }, value: 0x50, value2: None, ok: true };
+        let addr =
+            |read: bool| Packet { t0: 0.0, t1: 1.0, kind: Kind::Addr { read }, value: 0x50, value2: None, ok: true };
         let (out, with) = ([0; OPTS], [1, 0, 0, 0]);
         assert_eq!(I2c.text(&addr(false), &out).as_deref(), Some("50 W"));
         assert_eq!(I2c.text(&addr(true), &out).as_deref(), Some("50 R"));
@@ -408,7 +409,11 @@ mod tests {
         let line = |i: usize, dt: f64| -> Vec<f32> {
             let v = |t: f64| {
                 let t = t.rem_euclid(burst);
-                if t < 2.0 * period { long[i].v(t) } else { short[i].v(t.rem_euclid(period)) }
+                if t < 2.0 * period {
+                    long[i].v(t)
+                } else {
+                    short[i].v(t.rem_euclid(period))
+                }
             };
             sample(v, 0.0, dt, (40e-3 / dt) as usize)
         };
@@ -416,7 +421,16 @@ mod tests {
             let [cs, clk, mosi] = [0, 1, 2].map(|i| line(i, dt));
             let sh = Shared { bits, spi_mode: 0, ..shared(&crate::model::Model::default()) };
             let lines = [Some(&mosi[..]), Some(&clk[..]), Some(&cs[..]), None];
-            m.info().decode(&Lines { lines, dt, thr: 1.65, hy: 0.2, opt: [0; OPTS], sh, chans: [None; 4], src: [None; 4] })
+            m.info().decode(&Lines {
+                lines,
+                dt,
+                thr: 1.65,
+                hy: 0.2,
+                opt: [0; OPTS],
+                sh,
+                chans: [None; 4],
+                src: [None; 4],
+            })
         };
         // 2.5 samples a bit, as on the unit: every word is read
         let p = decode(2e-6, 8).unwrap();

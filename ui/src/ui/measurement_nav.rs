@@ -191,7 +191,13 @@ impl Ui {
     fn measurement_page_size(&self) -> usize {
         match self.m.strip_dock {
             StripDock::Left | StripDock::Right => ((self.strip_column().h - 42) / 20).max(1) as usize,
-            _ => if self.band_nav() { BAND_NAV_PAGE } else { BAND_PAGE },
+            _ => {
+                if self.band_nav() {
+                    BAND_NAV_PAGE
+                } else {
+                    BAND_PAGE
+                }
+            }
         }
     }
 
@@ -215,7 +221,9 @@ impl Ui {
                 Some((Rect::new(W - 170, y, 74, 32), Rect::new(W - 88, y, 74, 32)))
             }
             _ => {
-                if !self.band_nav() { return None; }
+                if !self.band_nav() {
+                    return None;
+                }
                 // the last cell of rows two and three: Prev, the page, Next
                 let pitch = (W - 12) / tools::STRIP_PER_ROW as i32;
                 let (x, y) = (6 + 5 * pitch, self.strip_band_y() + STRIP_ROW);
@@ -263,7 +271,9 @@ impl Ui {
     /// The name of a measurement in `room` pixels of the strip's small font: the long one where it fits, else the short
     /// one (Positive Duty Cycle, +Duty). A pair or a catalog row has one name only.
     pub(super) fn strip_name(&self, key: Option<MeasKey>, long: &str, room: i32) -> String {
-        if self.stock_readouts() || self.fonts().s.width(long) <= room { return long.to_string(); }
+        if self.stock_readouts() || self.fonts().s.width(long) <= room {
+            return long.to_string();
+        }
         key.map_or_else(|| long.to_string(), |k| self.studio_badge_name(k, long))
     }
 
@@ -390,8 +400,13 @@ impl Ui {
                     if !line.align && line.pill.is_none() {
                         current_source.clear();
                     }
-                    let named =
-                        |n: &str| if current_source.is_empty() { n.to_string() } else { format!("{current_source} {n}") };
+                    let named = |n: &str| {
+                        if current_source.is_empty() {
+                            n.to_string()
+                        } else {
+                            format!("{current_source} {n}")
+                        }
+                    };
                     let right = r.x + r.w - 8;
                     let value_x = right - self.fonts().sb.width(&line.value);
                     let room = (value_x - r.x - 16).max(0);
@@ -406,7 +421,13 @@ impl Ui {
             }
             _ => {
                 let keys = self.studio_keys();
-                let rows: Vec<(Option<MeasKey>, tools::MeasRow)> = self.meas_rows().into_iter().enumerate().map(|(i, r)| (keys.get(i).copied(), r)).filter(|(_, r)| !self.meas_row_hidden(r)).collect();
+                let rows: Vec<(Option<MeasKey>, tools::MeasRow)> = self
+                    .meas_rows()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, r)| (keys.get(i).copied(), r))
+                    .filter(|(_, r)| !self.meas_row_hidden(r))
+                    .collect();
                 let (first, end, _) = self.page_bounds(rows.len(), size);
                 let y0 = self.strip_band_y();
                 {

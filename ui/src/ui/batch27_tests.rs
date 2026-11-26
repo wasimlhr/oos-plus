@@ -17,7 +17,9 @@ fn studio() -> Ui {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     u.files.dir = dir;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Waveform);
@@ -32,7 +34,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..4 { frame(u); }
+    for _ in 0..4 {
+        frame(u);
+    }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -52,7 +56,9 @@ fn tap_at(u: &mut Ui, x: i32, y: i32) {
     frame(u);
 }
 
-fn tap_rect(u: &mut Ui, r: Rect) { tap_at(u, r.x + r.w / 2, r.y + r.h / 2); }
+fn tap_rect(u: &mut Ui, r: Rect) {
+    tap_at(u, r.x + r.w / 2, r.y + r.h / 2);
+}
 
 /// Press, hold past the long-press time, lift.
 fn hold_rect(u: &mut Ui, r: Rect) {
@@ -72,20 +78,37 @@ fn set_tdiv(u: &mut Ui, tdiv: f32) {
 
 /// R1 "SATA I": a 12 GSa/s record of 65 536 points (about 5.5 us) of a 1.5 Gb/s pattern.
 fn sata_ref(u: &mut Ui) {
-    let v: Vec<f32> = (0..65_536usize).map(|i| if ((i / 8).wrapping_mul(2654435761usize) >> 7) & 1 == 1 { 0.4 } else { -0.4 }).collect();
-    u.refs[0] = Some(RefWave { src: 0, color: 0, label: "SATA I".into(), t0: 0.0, dt: 1.0 / 12e9, v: v.into(), vpd: 0.2, offset: 0.0, on: true });
+    let v: Vec<f32> = (0..65_536usize)
+        .map(|i| if ((i / 8).wrapping_mul(2654435761usize) >> 7) & 1 == 1 { 0.4 } else { -0.4 })
+        .collect();
+    u.refs[0] = Some(RefWave {
+        src: 0,
+        color: 0,
+        label: "SATA I".into(),
+        t0: 0.0,
+        dt: 1.0 / 12e9,
+        v: v.into(),
+        vpd: 0.2,
+        offset: 0.0,
+        on: true,
+    });
     u.select_workspace_source(WaveId::Ref(0));
     frame(u);
 }
 
 fn lane_views(u: &mut Ui) -> Vec<(f32, f32)> {
     let mut out = Vec::new();
-    for i in 0..u.plot.wins.len() { u.plot.cur_win = i; out.push(u.view()); }
+    for i in 0..u.plot.wins.len() {
+        u.plot.cur_win = i;
+        out.push(u.view());
+    }
     u.plot.cur_win = 0;
     out
 }
 
-fn main_view(u: &Ui) -> (f32, f32) { (u.m.time_per_div(), u.m.delay) }
+fn main_view(u: &Ui) -> (f32, f32) {
+    (u.m.time_per_div(), u.m.delay)
+}
 
 #[test]
 fn the_zoom_box_applies_to_every_lane_at_once() {
@@ -98,14 +121,18 @@ fn the_zoom_box_applies_to_every_lane_at_once() {
     let z = (tscales()[u.m.zscale], u.m.zdelay);
     assert!(z.0 < 5e-3, "the zoom is finer than the main time base");
     // a lane per source, one time window for all of them
-    for v in lane_views(&mut u) { assert_eq!(v, z); }
+    for v in lane_views(&mut u) {
+        assert_eq!(v, z);
+    }
     // narrowing the box moves every lane
     let area = u.wave_area();
     u.zoom_horizontal_step(-1, area, 0.5);
     frame(&mut u);
     let z2 = (tscales()[u.m.zscale], u.m.zdelay);
     assert!(z2.0 < z.0);
-    for v in lane_views(&mut u) { assert_eq!(v, z2); }
+    for v in lane_views(&mut u) {
+        assert_eq!(v, z2);
+    }
     // the overview keeps the main time base and carries every source
     assert_eq!(main_view(&u).0, 5e-3);
     shot(&mut u, "overview-all-lanes");
@@ -125,7 +152,9 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     shot(&mut u, "zoom-popover");
     let (_, parts) = u.studio_sz_parts().expect("parts");
     assert!(parts.iter().any(|(p, _)| *p == ZPart::All));
-    for t in [Trace::Channel(0), Trace::Channel(1), Trace::Reference(0)] { assert!(parts.iter().any(|(p, _)| *p == ZPart::Lane(t)), "{t:?}"); }
+    for t in [Trace::Channel(0), Trace::Channel(1), Trace::Reference(0)] {
+        assert!(parts.iter().any(|(p, _)| *p == ZPart::Lane(t)), "{t:?}");
+    }
     // pick CH1: zoom turns on, only that lane zooms
     let r = parts.iter().find(|(p, _)| *p == ZPart::Lane(Trace::Channel(0))).unwrap().1;
     tap_rect(&mut u, r);
@@ -152,9 +181,13 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     assert!((u.m.zdelay - centre).abs() < tscales()[u.m.zscale], "the centre of the window stays");
     tap_rect(&mut u, part(ZPart::XMinus));
     assert_eq!(u.m.zscale, before, "X minus is the step back");
-    for _ in 0..40 { tap_rect(&mut u, part(ZPart::XMinus)); }
+    for _ in 0..40 {
+        tap_rect(&mut u, part(ZPart::XMinus));
+    }
     assert_eq!(u.m.zscale, u.m.tscale, "X minus ends at the main time base");
-    for _ in 0..(u.m.tscale - before) { tap_rect(&mut u, part(ZPart::XPlus)); }
+    for _ in 0..(u.m.tscale - before) {
+        tap_rect(&mut u, part(ZPart::XPlus));
+    }
     assert_eq!(u.m.zscale, before);
     shot(&mut u, "zoom-single-lane");
     // all lanes again, and Reset zoom
@@ -162,7 +195,9 @@ fn holding_zoom_opens_the_source_popover_and_one_lane_can_zoom_alone() {
     tap_rect(&mut u, parts.iter().find(|(p, _)| *p == ZPart::All).unwrap().1);
     assert_eq!(u.studio.sz.lane, None);
     let z = (tscales()[u.m.zscale], u.m.zdelay);
-    for v in lane_views(&mut u) { assert_eq!(v, z); }
+    for v in lane_views(&mut u) {
+        assert_eq!(v, z);
+    }
     let (_, parts) = u.studio_sz_parts().unwrap();
     tap_rect(&mut u, parts.iter().find(|(p, _)| *p == ZPart::Reset).unwrap().1);
     assert_eq!(u.zoom_view.vfactor, 1.0);
@@ -199,7 +234,8 @@ fn a_reference_with_its_own_horizontal_fills_its_lane_next_to_channels_at_5_ms()
     u.render(&mut cv);
     let lane = u.plot.wins[2];
     let col = REF_COLORS[0].1;
-    let has = |x0: i32, x1: i32| (x0..x1).any(|x| (lane.y..lane.bottom()).any(|y| cv.px[(y * cv.w + x) as usize] == col));
+    let has =
+        |x0: i32, x1: i32| (x0..x1).any(|x| (lane.y..lane.bottom()).any(|y| cv.px[(y * cv.w + x) as usize] == col));
     assert!(has(lane.x, lane.x + lane.w / 10), "the record starts at the left edge");
     assert!(has(lane.right() - lane.w / 10, lane.right()), "and ends at the right edge");
     assert!(has(lane.x + lane.w * 4 / 10, lane.x + lane.w * 6 / 10), "and is in the middle too");
@@ -214,7 +250,9 @@ fn a_reference_with_its_own_horizontal_fills_its_lane_next_to_channels_at_5_ms()
     hold_rect(&mut u, pill);
     let popup = u.workspace.popup.as_ref().expect("the hold menu of the R chip");
     assert_eq!(popup.title, "R1");
-    let row = (0..popup.rows.len()).find(|&i| matches!(popup.rows[i].1, super::workspace::Action::RefHorizontal(0))).expect("a Horizontal row");
+    let row = (0..popup.rows.len())
+        .find(|&i| matches!(popup.rows[i].1, super::workspace::Action::RefHorizontal(0)))
+        .expect("a Horizontal row");
     assert!(popup.rows[row].0.starts_with("Horizontal: Follow main"));
     let r = popup.row_rect(row);
     tap_rect(&mut u, r);
@@ -248,7 +286,10 @@ fn default_and_minimal_are_unchanged() {
         u.studio.sz.ref_h.insert(0, (1e-7, 1e-6));
         u.set_zoom(true);
         let z = (tscales()[u.m.zscale], u.m.zdelay);
-        for i in 0..u.plot.wins.len().max(1) { u.plot.cur_win = i.min(u.plot.wins.len().saturating_sub(1)); assert_eq!(u.view(), z, "{layout:?}"); }
+        for i in 0..u.plot.wins.len().max(1) {
+            u.plot.cur_win = i.min(u.plot.wins.len().saturating_sub(1));
+            assert_eq!(u.view(), z, "{layout:?}");
+        }
         u.plot.cur_win = 0;
         assert!(u.studio_zoom_lane().is_none() && u.studio_ref_own(0).is_none());
         u.set_zoom(false);

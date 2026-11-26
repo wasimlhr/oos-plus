@@ -39,7 +39,11 @@ fn overlay_keeps_windows_and_the_arrangement_row_says_which_one_is_in_force() {
     assert_eq!((u.arrangement(), u.m.win_layout, u.workspace.stacked), (Arrangement::Windows, WinLayout::Quad, false));
     // the stored mode (a set-up, a view) applied while the windows stand keeps them
     u.trace_mode(false);
-    assert_eq!((u.arrangement(), u.m.win_layout), (Arrangement::Windows, WinLayout::Quad), "applying Overlay keeps them");
+    assert_eq!(
+        (u.arrangement(), u.m.win_layout),
+        (Arrangement::Windows, WinLayout::Quad),
+        "applying Overlay keeps them"
+    );
     // the user's choice leaves them
     u.set_arrangement(Arrangement::Stacked);
     assert_eq!((u.arrangement(), u.m.win_layout, u.workspace.stacked), (Arrangement::Stacked, WinLayout::One, true));
@@ -244,7 +248,13 @@ fn the_compact_bar_has_a_pill_for_each_source_and_decoder() {
     u.relayout();
     let pills = u.footer_pills();
     let kinds: Vec<FootPill> = pills.iter().map(|p| p.0).collect();
-    let want = [FootPill::Wave(WaveId::Ch(0)), FootPill::Wave(WaveId::Ch(1)), FootPill::Dec(0), FootPill::Off(2), FootPill::Off(3)];
+    let want = [
+        FootPill::Wave(WaveId::Ch(0)),
+        FootPill::Wave(WaveId::Ch(1)),
+        FootPill::Dec(0),
+        FootPill::Off(2),
+        FootPill::Off(3),
+    ];
     assert_eq!(kinds, want);
     let (overlay, stacked, time, trigger, ..) = u.footer_rects();
     assert_eq!((overlay.w, stacked.w), (0, 0), "no Overlay and Stacked on the bar");
@@ -256,7 +266,16 @@ fn the_compact_bar_has_a_pill_for_each_source_and_decoder() {
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     cv.au_start();
     u.render(&mut cv);
-    let texts: Vec<String> = cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect();
+    let texts: Vec<String> = cv
+        .au
+        .take()
+        .unwrap()
+        .into_iter()
+        .filter_map(|e| match e {
+            Au::Text { s, .. } => Some(s),
+            _ => None,
+        })
+        .collect();
     let scale = format!("{}/div", si_short(u.m.ch[0].volts_per_div() as f64, "V"));
     for t in ["CH1", scale.as_str(), "B1", "UART", "CH3", "+"] {
         assert!(texts.iter().any(|s| s == t), "{t:?} is on the bar: {texts:?}");

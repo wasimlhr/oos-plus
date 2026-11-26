@@ -52,7 +52,14 @@ fn a_cursor_tag_stands_on_the_line_in_every_arrangement() {
                 for (k, frac) in [(0usize, 0.25f32), (1, 0.75)] {
                     let want = line_x(&u, frac);
                     // Default puts the tag just right of its line, Studio centres it on the line
-                    let hits = tags.iter().filter(|(kk, r)| *kk == k && (want - 4..=want + 4).contains(&(if layout == Layout::Studio { r.x + r.w / 2 } else { r.x - 2 }))).count();
+                    let hits = tags
+                        .iter()
+                        .filter(|(kk, r)| {
+                            *kk == k
+                                && (want - 4..=want + 4)
+                                    .contains(&(if layout == Layout::Studio { r.x + r.w / 2 } else { r.x - 2 }))
+                        })
+                        .count();
                     assert!(hits >= 1, "{layout:?} {a:?} {mode:?}: no tag for cursor {k} at x {want}; tags {tags:?}");
                 }
             }
@@ -80,7 +87,11 @@ fn a_cursor_line_drags_by_the_pixels_over_its_window() {
             touch(&mut u, Phase::Up, x + 30, y);
             frame(&mut u);
             let want = 0.25 + 30.0 / w.w as f32;
-            assert!((u.m.cur_a - want).abs() < 0.01, "{layout:?} {a:?}: cursor A at {} want {want} (window {w:?})", u.m.cur_a);
+            assert!(
+                (u.m.cur_a - want).abs() < 0.01,
+                "{layout:?} {a:?}: cursor A at {} want {want} (window {w:?})",
+                u.m.cur_a
+            );
             assert!((u.m.cur_b - 0.75).abs() < 1e-6, "{layout:?} {a:?}: cursor B stays");
         }
     }

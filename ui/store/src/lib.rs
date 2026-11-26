@@ -24,15 +24,15 @@ use std::path::{Path, PathBuf};
 
 #[cfg(test)]
 mod header_import_tests;
-#[cfg(test)]
-mod tss_tests;
 mod import;
 mod paths;
 mod readers;
 mod setup_read;
-mod tss;
 #[cfg(any(test, feature = "testkit"))]
 pub mod testkit;
+mod tss;
+#[cfg(test)]
+mod tss_tests;
 pub mod views;
 mod waveform;
 mod zip;
@@ -247,8 +247,15 @@ fn meas_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     {
         // per-row settings of the rows that are still selected
         let keys = m.row_keys();
-        let rows: Vec<String> = m.row_cfg.iter().filter(|(k, c)| keys.contains(k) && !c.is_default()).map(|(k, c)| format!("{}|{}", k.text(), c.text())).collect();
-        if !rows.is_empty() { kv("row_cfg", rows.join(" ")); }
+        let rows: Vec<String> = m
+            .row_cfg
+            .iter()
+            .filter(|(k, c)| keys.contains(k) && !c.is_default())
+            .map(|(k, c)| format!("{}|{}", k.text(), c.text()))
+            .collect();
+        if !rows.is_empty() {
+            kv("row_cfg", rows.join(" "));
+        }
         // the numbered slots whose row is still selected, `n|row`
         let slots: Vec<String> =
             m.meas_slots.iter().filter(|(_, k)| keys.contains(k)).map(|(n, k)| format!("{}|{}", n, k.text())).collect();
@@ -359,15 +366,55 @@ fn view_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
     // Display > Views: the count and the one shown, then what each of the others keeps (ui/views.rs)
     kv("views", format!("{} {}", m.views, m.view_cur + 1));
     kv("studio_state", m.studio_state.clone());
-    if m.math_hidden.iter().any(|&h| h) { kv("math_hidden", m.math_hidden.iter().enumerate().filter(|(_, &h)| h).map(|(k, _)| (k + 1).to_string()).collect::<Vec<_>>().join(" ")); }
-    if m.gen_hidden { kv("gen_hidden", "true".to_string()); }
-    if m.ch_hidden.iter().any(|&h| h) { kv("ch_hidden", m.ch_hidden.iter().enumerate().filter(|(_, &h)| h).map(|(c, _)| (c + 1).to_string()).collect::<Vec<_>>().join(" ")); }
+    if m.math_hidden.iter().any(|&h| h) {
+        kv(
+            "math_hidden",
+            m.math_hidden
+                .iter()
+                .enumerate()
+                .filter(|(_, &h)| h)
+                .map(|(k, _)| (k + 1).to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+    }
+    if m.gen_hidden {
+        kv("gen_hidden", "true".to_string());
+    }
+    if m.ch_hidden.iter().any(|&h| h) {
+        kv(
+            "ch_hidden",
+            m.ch_hidden
+                .iter()
+                .enumerate()
+                .filter(|(_, &h)| h)
+                .map(|(c, _)| (c + 1).to_string())
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+    }
     // The generator's wave and modulation. Not whether its output is on: a recalled set-up or session never switches
     // an output on (it is off after a recall). An arbitrary wave has its samples elsewhere and is not written.
     if m.afg_wave < AFG_WAVES.len() - 1 {
-        kv("gen", format!("{} {} {} {} {} {}", AFG_WAVES[m.afg_wave], m.afg_freq, m.afg_ampl, m.afg_offset, m.afg_duty, m.afg_symmetry));
-        kv("gen_mod", format!("{} {} {} {} {} {}", AFG_MODS[m.afg_mod.min(AFG_MODS.len() - 1)], m.afg_mod_rate, m.afg_mod_depth, m.afg_fm_dev, m.afg_pm_dev,
-            AFG_MOD_SHAPES[m.afg_mod_shape.min(AFG_MOD_SHAPES.len() - 1)].replace(' ', "_")));
+        kv(
+            "gen",
+            format!(
+                "{} {} {} {} {} {}",
+                AFG_WAVES[m.afg_wave], m.afg_freq, m.afg_ampl, m.afg_offset, m.afg_duty, m.afg_symmetry
+            ),
+        );
+        kv(
+            "gen_mod",
+            format!(
+                "{} {} {} {} {} {}",
+                AFG_MODS[m.afg_mod.min(AFG_MODS.len() - 1)],
+                m.afg_mod_rate,
+                m.afg_mod_depth,
+                m.afg_fm_dev,
+                m.afg_pm_dev,
+                AFG_MOD_SHAPES[m.afg_mod_shape.min(AFG_MOD_SHAPES.len() - 1)].replace(' ', "_")
+            ),
+        );
     }
     for (i, v) in m.view_slots.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
         kv(&format!("view{}", i + 1), v.clone());
@@ -461,12 +508,38 @@ fn analysis_more_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
         ),
     );
     if m.meas_pop_current || m.meas_show != [true; 3] {
-        kv("meas_stat", format!("{} {} {} {}", m.meas_pop_current as u8, m.meas_show[0] as u8, m.meas_show[1] as u8, m.meas_show[2] as u8));
+        kv(
+            "meas_stat",
+            format!(
+                "{} {} {} {}",
+                m.meas_pop_current as u8, m.meas_show[0] as u8, m.meas_show[1] as u8, m.meas_show[2] as u8
+            ),
+        );
     }
     // the other shared reference levels: volts mode, custom, mid, hysteresis, volts, volts hysteresis, separate fall, fall, fall volts, top/base
     let l = &m.meas_lv;
-    kv("meas_levels", format!("{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {:?}", l.absolute as u8, l.custom as u8, l.mid, l.hyst, l.volts[0], l.volts[1], l.volts[2], l.vhyst,
-        l.sep_fall as u8, l.fall[0], l.fall[1], l.fall[2], l.fall_volts[0], l.fall_volts[1], l.fall_volts[2], l.base_top));
+    kv(
+        "meas_levels",
+        format!(
+            "{} {} {} {} {} {} {} {} {} {} {} {} {} {} {} {:?}",
+            l.absolute as u8,
+            l.custom as u8,
+            l.mid,
+            l.hyst,
+            l.volts[0],
+            l.volts[1],
+            l.volts[2],
+            l.vhyst,
+            l.sep_fall as u8,
+            l.fall[0],
+            l.fall[1],
+            l.fall[2],
+            l.fall_volts[0],
+            l.fall_volts[1],
+            l.fall_volts[2],
+            l.base_top
+        ),
+    );
     kv("meas_full_record", m.meas_full_record.to_string());
     kv("spec_acpr", format!("{} {}", m.spec_acpr_w, m.spec_acpr_s));
     crate::settings::write(&crate::settings::bode::MODE, m, 0, kv);

@@ -319,6 +319,13 @@ pub trait Protocol: Sync {
         None
     }
 
+    /// What is wrong with the message `pk` as a whole, in words, for the Error column of the Events pane where it
+    /// lists messages ("Incomplete packet; Unframed"). Empty: nothing the module can say beyond the failed checks of
+    /// the fields.
+    fn message_error(&self, _pk: &[Packet]) -> &'static str {
+        ""
+    }
+
     /// Whether `p` is a mark the module adds for the screen and not a field of the bus (the start of an SPI frame,
     /// where the chip select goes active). A mark begins a message and is no row of the Fields view.
     fn mark(&self, _p: &Packet) -> bool {

@@ -329,7 +329,7 @@ impl Scpi {
         let prefix = format!("D{} ", k + 1);
         let rows = events
             .lines()
-            .filter(|line| line.split_once(',').is_some_and(|(_, rest)| rest.starts_with(&prefix)))
+            .filter(|line| line.splitn(3, ',').nth(2).is_some_and(|rest| rest.starts_with(&prefix)))
             .collect::<Vec<_>>()
             .join("\n");
         Some(block(format!("{}\n{}", proto_token(cfg.proto), rows).as_bytes()))

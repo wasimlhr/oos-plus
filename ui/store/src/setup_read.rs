@@ -268,7 +268,9 @@ fn set_time_trigger(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
         "seg_interval" => m.seg_ivl = p_f32(v)?.clamp(0.0, crate::model::SEG_IVL_MAX),
         "mdepth" => m.mdepth = p_idx(v, mdepths().len())?,
         // two windows (`Cols`, `Rows`) were a layout before the four windows were the one split
-        "windows" => m.win_layout = if matches!(v, "Cols" | "Rows") { WinLayout::Quad } else { p_enum(v, &WinLayout::ALL)? },
+        "windows" => {
+            m.win_layout = if matches!(v, "Cols" | "Rows") { WinLayout::Quad } else { p_enum(v, &WinLayout::ALL)? }
+        }
         "split_pane" => m.split_pane = p_idx(v, crate::model::PANES_N)?,
         "ch_window" => {
             let w = p_list(v, NCH, |x| p_idx(x, 5)?.checked_sub(1).ok_or_else(|| "window 0".to_string()))?;
@@ -348,7 +350,11 @@ fn set_meas_math(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<
             let mut out: Vec<(u8, crate::model::RowKey)> = Vec::new();
             for e in v.split_whitespace() {
                 let (n, k) = e.split_once('|').ok_or_else(|| format!("not n|row: {}", e))?;
-                let n = n.parse::<u8>().ok().filter(|n| (1..=99).contains(n)).ok_or_else(|| format!("not a slot 1..99: {}", n))?;
+                let n = n
+                    .parse::<u8>()
+                    .ok()
+                    .filter(|n| (1..=99).contains(n))
+                    .ok_or_else(|| format!("not a slot 1..99: {}", n))?;
                 if out.iter().any(|(o, _)| *o == n) {
                     return Err(format!("slot {} twice", n));
                 }
@@ -566,9 +572,8 @@ fn set_zoom_views(m: &mut Model, k: &str, v: &str) -> Result<bool, String> {
             if w.len() != 6 {
                 return Err(format!("{k}: want 6 values"));
             }
-            let f = |s: &str| {
-                s.parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(|| format!("{k}: bad number {s}"))
-            };
+            let f =
+                |s: &str| s.parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(|| format!("{k}: bad number {s}"));
             let named = |all: &[&str], s: &str| {
                 let found = all.iter().position(|n| n.replace(' ', "_").eq_ignore_ascii_case(s));
                 found.ok_or_else(|| format!("{k}: unknown {s}"))
@@ -697,7 +702,15 @@ fn set_bode_spec_power(m: &mut Model, k: &str, v: &str) -> Result<bool, String> 
             // older files have no third field: the rate was entered, not measured
             m.eye_from_record = w.get(2).is_some_and(|s| *s != "0");
         }
-        "eye_pll" => m.eye_pll_bw = v.trim().parse::<f64>().ok().filter(|x| x.is_finite() && *x >= 0.0).ok_or("eye_pll: Hz")?.min(crate::model::EYE_PLL_MAX),
+        "eye_pll" => {
+            m.eye_pll_bw = v
+                .trim()
+                .parse::<f64>()
+                .ok()
+                .filter(|x| x.is_finite() && *x >= 0.0)
+                .ok_or("eye_pll: Hz")?
+                .min(crate::model::EYE_PLL_MAX)
+        }
         "power" => {
             let w: Vec<&str> = v.split_whitespace().collect();
             if w.len() != 3 {

@@ -46,12 +46,20 @@ impl SetupFile {
 
     /// Writes the setup when it changed, at most every two seconds (`force`: now). The file is replaced whole.
     pub fn save(&mut self, ui: &crate::ui::Ui, force: bool) {
-        if !force && self.t.elapsed().as_secs() < 2 { return; }
+        if !force && self.t.elapsed().as_secs() < 2 {
+            return;
+        }
         self.t = std::time::Instant::now();
         let text = setup_text(&ui.m);
-        if text == self.last { return; }
-        if let Some(dir) = self.path.parent() { let _ = std::fs::create_dir_all(dir); }
+        if text == self.last {
+            return;
+        }
+        if let Some(dir) = self.path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
         let tmp = self.path.with_extension("setup.new");
-        if std::fs::write(&tmp, &text).and_then(|_| std::fs::rename(&tmp, &self.path)).is_ok() { self.last = text; }
+        if std::fs::write(&tmp, &text).and_then(|_| std::fs::rename(&tmp, &self.path)).is_ok() {
+            self.last = text;
+        }
     }
 }

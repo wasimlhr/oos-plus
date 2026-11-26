@@ -15136,6 +15136,135 @@
    ]
   },
   {
+   "title": "Tables",
+   "intro": [
+    {
+     "p": "Every table the screen shows, by name, with its **Index** in the first column: the number of the row in the list of the record, from 1, the same in the pane, in the CSV file and in the answer. One mechanism for all of them: list the names, count the rows, read the table, save it as a CSV file. The measurement strip is the table `MEASURE`."
+    },
+    {
+     "p": "Menu location: the Save (CSV) buttons of the tables; Decode and bus > Export events (the decode table)."
+    },
+    {
+     "p": "Part of the SCPI reference."
+    }
+   ],
+   "commands": [
+    {
+     "header": ":TABLe:LIST",
+     "query": ":TABLe:LIST?",
+     "desc": "Lists the tables the screen shows, to read or save as a list of rows with an index.",
+     "related": [
+      ":TABLe:DATA",
+      ":TABLe:COUNt"
+     ],
+     "remarks": [
+      "- Menu equivalent: Tables > list.",
+      "- The names of the tables, a line each: `NAME,what it is`.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `EVENTS,decode table: ...`.",
+     "ext": true
+    },
+    {
+     "header": ":TABLe:COUNt",
+     "query": ":TABLe:COUNt? <name>",
+     "desc": "How many rows a table has, such as \"36 packets decoded\" in the decode table.",
+     "related": [
+      ":TABLe:DATA",
+      ":DECode:EVENts:COUNt"
+     ],
+     "params": [
+      [
+       "<name>",
+       "Text",
+       ": a table of the list. The number of its rows; `BUSY` while a decoder computes.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Tables > rows.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":TABLe:DATA",
+     "query": ":TABLe:DATA? <name>",
+     "desc": "Reads a whole table as CSV, with the row number (index) first: the decode table, the search events, the measurements, the peaks.",
+     "related": [
+      ":TABLe:SAVE",
+      ":TABLe:LIST"
+     ],
+     "params": [
+      [
+       "<name>",
+       "Text",
+       ": a table of the list. A definite-length block of CSV text: the titles, then a row per line, Index first; a cell with a comma is in quotes. `BUSY` while a decoder computes.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Tables > CSV.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":TABLe:DATA? EVENTS"
+    },
+    {
+     "header": ":TABLe:SAVE",
+     "set": ":TABLe:SAVE <name>[,\"path\"]",
+     "desc": "Saves a table of the screen as a CSV file with its index column.",
+     "related": [
+      ":TABLe:DATA",
+      ":DECode:SAVE"
+     ],
+     "params": [
+      [
+       "<name>[,\"path\"]",
+       "Text",
+       ": writes the table as CSV into the save folder, as `<name>-*.csv`, or to the path.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Tables > Save as CSV.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":TABLe:SAVE EVENTS\n:TABLe:SAVE MEASURE,\"/rigol/data/measure.csv\""
+    },
+    {
+     "header": ":DECode:EVENts:COUNt",
+     "query": ":DECode:EVENts:COUNt?",
+     "desc": "How many messages, words or fields the decode table holds (\"N packets decoded\").",
+     "related": [
+      ":DECode:EVENts",
+      ":DECode:EVENts:VIEW"
+     ],
+     "remarks": [
+      "- Menu equivalent: Events pane > count line.",
+      "- The rows the Events pane lists in its view (messages, fields or lines), without the \"Errors only\" filter; `BUSY` while pending.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true,
+     "example": ":DECode:EVENts:COUNt?"
+    }
+   ],
+   "after": [
+    {
+     "h": "Tables"
+    },
+    {
+     "h": "Examples"
+    },
+    {
+     "pre": ":DECode:EVENts:VIEW FIELds\n:DECode:EVENts:COUNt?\n:TABLe:DATA? EVENTS\n:TABLe:SAVE EVENTS\n:TABLe:SAVE MEASURE,\"/rigol/data/measure.csv\""
+    }
+   ]
+  },
+  {
    "title": "Calibration and deskew",
    "intro": [
     {

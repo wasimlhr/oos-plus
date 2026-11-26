@@ -83,7 +83,9 @@ impl Ui {
         use oos_dsp::measure::{EdgePol, NEdge, Outside, RowOpts};
         let c = self.row_cfg_one(kind, owner);
         let applies = match kind {
-            Meas::Period | Meas::Freq | Meas::PDuty | Meas::NDuty => c.pol.is_some() || c.off.is_some() || c.step.is_some(),
+            Meas::Period | Meas::Freq | Meas::PDuty | Meas::NDuty => {
+                c.pol.is_some() || c.off.is_some() || c.step.is_some()
+            }
             Meas::PWidth | Meas::NWidth => c.off.is_some() || c.step.is_some(),
             Meas::Overshoot | Meas::Preshoot => c.os_top.is_some() || c.os_base.is_some(),
             Meas::Burst => c.burst_fall.is_some() || c.idle.is_some(),

@@ -21,22 +21,47 @@ pub(super) struct Row {
 
 fn none(_: &mut Ui) {}
 
-fn r(header: &'static str, item: Item, group: &'static str) -> Row { Row { header, index: "", item, group, pre: none } }
-fn ri(header: &'static str, index: &'static str, item: Item, group: &'static str) -> Row { Row { header, index, item, group, pre: none } }
-fn p(header: &'static str, item: Item, group: &'static str, pre: fn(&mut Ui)) -> Row { Row { header, index: "", item, group, pre } }
+fn r(header: &'static str, item: Item, group: &'static str) -> Row {
+    Row { header, index: "", item, group, pre: none }
+}
+fn ri(header: &'static str, index: &'static str, item: Item, group: &'static str) -> Row {
+    Row { header, index, item, group, pre: none }
+}
+fn p(header: &'static str, item: Item, group: &'static str, pre: fn(&mut Ui)) -> Row {
+    Row { header, index: "", item, group, pre }
+}
 
-fn trig(t: TrigType, u: &mut Ui) { u.set_trig_type(t); }
-fn spectrum_on(u: &mut Ui) { u.m.view = AView::Spectrum; }
-fn eye_on(u: &mut Ui) { u.m.view = AView::Eye; }
-fn uart(u: &mut Ui) { u.m.dec_on = true; u.m.dec_proto = Proto::UART; }
-fn spi(u: &mut Ui) { u.m.dec_on = true; u.m.dec_proto = Proto::SPI; }
-fn can(u: &mut Ui) { u.m.dec_on = true; u.m.dec_proto = Proto::CAN; }
-fn ch2(u: &mut Ui) { u.m.ch[1].on = true; }
+fn trig(t: TrigType, u: &mut Ui) {
+    u.set_trig_type(t);
+}
+fn spectrum_on(u: &mut Ui) {
+    u.m.view = AView::Spectrum;
+}
+fn eye_on(u: &mut Ui) {
+    u.m.view = AView::Eye;
+}
+fn uart(u: &mut Ui) {
+    u.m.dec_on = true;
+    u.m.dec_proto = Proto::UART;
+}
+fn spi(u: &mut Ui) {
+    u.m.dec_on = true;
+    u.m.dec_proto = Proto::SPI;
+}
+fn can(u: &mut Ui) {
+    u.m.dec_on = true;
+    u.m.dec_proto = Proto::CAN;
+}
+fn ch2(u: &mut Ui) {
+    u.m.ch[1].on = true;
+}
 fn fast_timebase(u: &mut Ui) {
     for i in 0..tscales().len() {
         u.m.tscale = i;
         u.m.tfine = 1.0;
-        if u.m.time_per_div() <= 1e-6 { break; }
+        if u.m.time_per_div() <= 1e-6 {
+            break;
+        }
     }
 }
 
@@ -98,12 +123,18 @@ pub(super) fn map() -> Vec<Row> {
         p(":TRIGger:SLOPe:BLEVel", Item::TrigLevel2, "Trigger", |u| trig(TrigType::Slope, u)),
         p(":TRIGger:VIDeo:STANdard", Item::VidStd, "Trigger", |u| trig(TrigType::Video, u)),
         p(":TRIGger:VIDeo:MODE", Item::VidSync, "Trigger", |u| trig(TrigType::Video, u)),
-        p(":TRIGger:VIDeo:LINE", Item::VidLine, "Trigger", |u| { trig(TrigType::Video, u); u.m.video_sync = VSync::Line; }),
+        p(":TRIGger:VIDeo:LINE", Item::VidLine, "Trigger", |u| {
+            trig(TrigType::Video, u);
+            u.m.video_sync = VSync::Line;
+        }),
         p(":TRIGger:TIMeout:SLOPe", Item::TrigSlope, "Trigger", |u| trig(TrigType::Timeout, u)),
         p(":TRIGger:TIMeout:TIME", Item::TrigT1, "Trigger", |u| trig(TrigType::Timeout, u)),
         p(":TRIGger:RUNT:POLarity", Item::TrigPol, "Trigger", |u| trig(TrigType::Runt, u)),
         p(":TRIGger:RUNT:WHEN", Item::TrigWhen, "Trigger", |u| trig(TrigType::Runt, u)),
-        p(":TRIGger:RUNT:WLOWer", Item::TrigT1, "Trigger", |u| { trig(TrigType::Runt, u); u.m.trig_when = WhenKind::Gt; }),
+        p(":TRIGger:RUNT:WLOWer", Item::TrigT1, "Trigger", |u| {
+            trig(TrigType::Runt, u);
+            u.m.trig_when = WhenKind::Gt;
+        }),
         p(":TRIGger:WINDow:SLOPe", Item::TrigSlope, "Trigger", |u| trig(TrigType::Window, u)),
         p(":TRIGger:WINDow:WHEN", Item::TrigWhen, "Trigger", |u| trig(TrigType::Window, u)),
         p(":TRIGger:WINDow:TIME", Item::TrigT1, "Trigger", |u| trig(TrigType::Window, u)),
@@ -261,7 +292,10 @@ pub(super) fn map() -> Vec<Row> {
         r(":MAGnetic:AREA", Item::MagAe, "Magnetic"),
         r(":MAGnetic:LENGth", Item::MagLe, "Magnetic"),
         r(":MAGnetic:RCU", Item::MagRcu, "Magnetic"),
-        p(":MAGnetic:PLOT", Item::MagPlot, "Magnetic", |u| { u.m.mag_ae = 1e-4; u.m.mag_le = 0.05; }),
+        p(":MAGnetic:PLOT", Item::MagPlot, "Magnetic", |u| {
+            u.m.mag_ae = 1e-4;
+            u.m.mag_le = 0.05;
+        }),
         r(":INVerter:PAGE", Item::InvPage, "Inverter"),
         r(":INVerter:PHASe1:SOURce", Item::InvA, "Inverter"),
         r(":INVerter:PHASe2:SOURce", Item::InvB, "Inverter"),

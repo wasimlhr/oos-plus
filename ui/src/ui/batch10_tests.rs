@@ -13,7 +13,9 @@ fn studio() -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     // the first frame applies the entry rules of the layout
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -23,7 +25,9 @@ fn studio() -> Ui {
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..4 { u.step(0.05); }
+    for _ in 0..4 {
+        u.step(0.05);
+    }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
@@ -39,11 +43,15 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 /// A finger down at `a`, moved in steps to `b` and lifted there.
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
+    for k in 1..=8 {
+        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
+    }
     touch(u, Phase::Up, b.0, b.1);
 }
 
-fn leaf(u: &Ui, k: VKind) -> Rect { u.dock_leaf(k).unwrap_or_else(|| panic!("{k:?} is docked")) }
+fn leaf(u: &Ui, k: VKind) -> Rect {
+    u.dock_leaf(k).unwrap_or_else(|| panic!("{k:?} is docked"))
+}
 
 /// A point on a view's strip clear of its buttons.
 fn grip(u: &Ui, k: VKind) -> (i32, i32) {
@@ -70,7 +78,9 @@ fn docked(u: &mut Ui) {
     u.step(0.05);
 }
 
-fn overlaps(a: Rect, b: Rect) -> bool { a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom() }
+fn overlaps(a: Rect, b: Rect) -> bool {
+    a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom()
+}
 
 // ------------------------------------------------------------------------------------------------ item 1
 
@@ -122,7 +132,11 @@ fn the_decode_table_and_the_sim_panel_have_strips_too() {
     let mut u = studio();
     u.table.kind = Some(tables::TableKind::Search);
     u.step(0.05);
-    assert!(u.dock_content(VKind::Table).is_some() && u.dock_name(VKind::Table).starts_with("Search "), "the view is named by its table and count: {}", u.dock_name(VKind::Table));
+    assert!(
+        u.dock_content(VKind::Table).is_some() && u.dock_name(VKind::Table).starts_with("Search "),
+        "the view is named by its table and count: {}",
+        u.dock_name(VKind::Table)
+    );
     assert!(Ui::dock_strip(leaf(&u, VKind::Table)).h >= 24);
     u.table.kind = None;
     u.studio_set_view(StudioView::Sim);
@@ -148,16 +162,40 @@ fn dragging_a_strip_to_each_edge_of_another_view_splits_it_in_half() {
         let (m, w) = (leaf(&u, VKind::Measure), leaf(&u, VKind::Wave));
         let region = u.dock_region();
         match side {
-            Side::Left => assert!(m.right() <= w.x && m.y == w.y && m.h == w.h && (m.w - w.w).abs() <= 2, "{m:?} {w:?}"),
-            Side::Right => assert!(w.right() <= m.x && m.y == w.y && m.h == w.h && (m.w - w.w).abs() <= 2, "{m:?} {w:?}"),
-            Side::Top => assert!(m.bottom() <= w.y && m.x == w.x && m.w == w.w && (m.h - w.h).abs() <= 2, "{m:?} {w:?}"),
-            Side::Bottom => assert!(w.bottom() <= m.y && m.x == w.x && m.w == w.w && (m.h - w.h).abs() <= 2, "{m:?} {w:?}"),
+            Side::Left => {
+                assert!(m.right() <= w.x && m.y == w.y && m.h == w.h && (m.w - w.w).abs() <= 2, "{m:?} {w:?}")
+            }
+            Side::Right => {
+                assert!(w.right() <= m.x && m.y == w.y && m.h == w.h && (m.w - w.w).abs() <= 2, "{m:?} {w:?}")
+            }
+            Side::Top => {
+                assert!(m.bottom() <= w.y && m.x == w.x && m.w == w.w && (m.h - w.h).abs() <= 2, "{m:?} {w:?}")
+            }
+            Side::Bottom => {
+                assert!(w.bottom() <= m.y && m.x == w.x && m.w == w.w && (m.h - w.h).abs() <= 2, "{m:?} {w:?}")
+            }
         }
         // together they fill the body
-        assert_eq!((m.w * m.h + w.w * w.h) / 1000, (region.w * region.h) / 1000 - ((region.w * region.h) - (m.w * m.h + w.w * w.h)) / 1000, "no stray rooms");
-        assert!(m.x >= region.x && w.right() <= region.right() && m.bottom() <= region.bottom() && w.bottom() <= region.bottom());
+        assert_eq!(
+            (m.w * m.h + w.w * w.h) / 1000,
+            (region.w * region.h) / 1000 - ((region.w * region.h) - (m.w * m.h + w.w * w.h)) / 1000,
+            "no stray rooms"
+        );
+        assert!(
+            m.x >= region.x
+                && w.right() <= region.right()
+                && m.bottom() <= region.bottom()
+                && w.bottom() <= region.bottom()
+        );
         // the lanes still draw inside the waveform
-        assert!(u.plot.grid.y >= w.y + STRIP_H && u.plot.grid.bottom() <= w.bottom() && u.plot.grid.x >= w.x && u.plot.grid.right() <= w.right(), "{side:?}: {:?} in {w:?}", u.plot.grid);
+        assert!(
+            u.plot.grid.y >= w.y + STRIP_H
+                && u.plot.grid.bottom() <= w.bottom()
+                && u.plot.grid.x >= w.x
+                && u.plot.grid.right() <= w.right(),
+            "{side:?}: {:?} in {w:?}",
+            u.plot.grid
+        );
     }
 }
 
@@ -176,7 +214,14 @@ fn the_drop_preview_shows_the_half_it_would_take_and_the_centre_swaps() {
     // a long drag with the preview up, as a picture
     let m = grip(&u, VKind::Measure);
     touch(&mut u, Phase::Down, m.0, m.1);
-    for k in 1..=6 { touch(&mut u, Phase::Move, m.0 + (edge(w, Side::Left).0 - m.0) * k / 6, m.1 + (edge(w, Side::Left).1 - m.1) * k / 6); }
+    for k in 1..=6 {
+        touch(
+            &mut u,
+            Phase::Move,
+            m.0 + (edge(w, Side::Left).0 - m.0) * k / 6,
+            m.1 + (edge(w, Side::Left).1 - m.1) * k / 6,
+        );
+    }
     assert!(matches!(u.studio.dock.drag, Some(super::dock::DockDrag::Move { .. })), "the strip is picked up");
     shot(&mut u, "drop-preview");
     touch(&mut u, Phase::Up, edge(w, Side::Left).0, edge(w, Side::Left).1);
@@ -240,7 +285,10 @@ fn dropping_away_from_every_edge_floats_the_view_and_a_drag_to_an_edge_docks_it_
     let f = u.dock_float_rect(VKind::Measure).expect("a floating panel");
     assert!(f.w >= 220 && f.h >= 170);
     let region = u.dock_region();
-    assert!(f.x >= region.x && f.right() <= region.right() && f.y >= region.y && f.bottom() <= region.bottom(), "{f:?} in {region:?}");
+    assert!(
+        f.x >= region.x && f.right() <= region.right() && f.y >= region.y && f.bottom() <= region.bottom(),
+        "{f:?} in {region:?}"
+    );
     // the waveform has the whole body now
     assert_eq!(leaf(&u, VKind::Wave), region);
     shot(&mut u, "floating-panel");
@@ -338,7 +386,9 @@ fn a_tiled_two_by_two_layout() {
     u.studio_apply_panel(PanelKind::Spectrum);
     u.table.kind = Some(tables::TableKind::Search);
     u.step(0.05);
-    for k in [VKind::Wave, VKind::Measure, VKind::Pane, VKind::Table] { assert!(u.dock_leaf(k).is_some(), "{k:?} is docked"); }
+    for k in [VKind::Wave, VKind::Measure, VKind::Pane, VKind::Table] {
+        assert!(u.dock_leaf(k).is_some(), "{k:?} is docked");
+    }
     // the waveform and the search events side by side on top, the spectrum and the measurements under them
     let w = leaf(&u, VKind::Wave);
     drag_view(&mut u, VKind::Table, edge(w, Side::Right));
@@ -349,12 +399,15 @@ fn a_tiled_two_by_two_layout() {
     assert!(w.bottom() <= p.y && t.bottom() <= m.y, "two rows");
     let rects = [w, t, p, m];
     for (i, a) in rects.iter().enumerate() {
-        for b in &rects[i + 1..] { assert!(!overlaps(*a, *b), "{a:?} {b:?}"); }
+        for b in &rects[i + 1..] {
+            assert!(!overlaps(*a, *b), "{a:?} {b:?}");
+        }
     }
     let region = u.dock_region();
-    for r in &rects { assert!(r.x >= region.x && r.right() <= region.right() && r.y >= region.y && r.bottom() <= region.bottom()); }
+    for r in &rects {
+        assert!(r.x >= region.x && r.right() <= region.right() && r.y >= region.y && r.bottom() <= region.bottom());
+    }
     shot(&mut u, "tiled");
-
 }
 
 #[test]
@@ -370,18 +423,26 @@ fn the_arrangement_is_kept_in_the_setup_and_old_setups_load_the_default() {
     assert!(u.dock_floating(VKind::Eye));
     let d = u.dock_layout().dividers[0].clone();
     drag(&mut u, (d.hit.x + d.hit.w / 2, d.hit.y + d.hit.h / 2), (d.hit.x + d.hit.w / 2, d.hit.y + d.hit.h / 2 + 30));
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     let text = crate::store::setup_text(&u.m);
-    assert!(text.contains("studio_dock = "), "kept: {}", text.lines().filter(|l| l.starts_with("studio")).collect::<Vec<_>>().join(" | "));
+    assert!(
+        text.contains("studio_dock = "),
+        "kept: {}",
+        text.lines().filter(|l| l.starts_with("studio")).collect::<Vec<_>>().join(" | ")
+    );
     // a new session reads it back
     let m = crate::store::parse_setup(&text).expect("the setup reads back");
     assert_eq!(m.studio_dock, u.m.studio_dock);
     let mut v = Ui::new(Source::Demo { t: 0.0 });
     v.m = m;
     v.restore_view_state();
-    for _ in 0..10 { v.step(0.05); }
+    for _ in 0..10 {
+        v.step(0.05);
+    }
     assert_eq!(v.studio.dock.tree, u.studio.dock.tree, "the same tree");
     assert_eq!(v.studio.view, u.studio.view);
     assert_eq!(v.dock_leaf(VKind::Measure), u.dock_leaf(VKind::Measure));
@@ -397,16 +458,34 @@ fn the_arrangement_is_kept_in_the_setup_and_old_setups_load_the_default() {
     let mut v = Ui::new(Source::Demo { t: 0.0 });
     v.m = m;
     v.restore_view_state();
-    for _ in 0..10 { v.step(0.05); }
+    for _ in 0..10 {
+        v.step(0.05);
+    }
     assert!(v.studio.dock.tree.is_none() && v.studio.dock.float_rect.iter().all(Option::is_none));
-    assert_eq!(leaf(&v, VKind::Measure).w, v.studio_panel_w(), "the measurements have their default width, to the right");
-    assert!(leaf(&v, VKind::Wave).x < leaf(&v, VKind::Measure).x && !v.dock_floating(VKind::Eye), "the default arrangement");
+    assert_eq!(
+        leaf(&v, VKind::Measure).w,
+        v.studio_panel_w(),
+        "the measurements have their default width, to the right"
+    );
+    assert!(
+        leaf(&v, VKind::Wave).x < leaf(&v, VKind::Measure).x && !v.dock_floating(VKind::Eye),
+        "the default arrangement"
+    );
     // broken text is the default too
     for bad in ["H0.5(W", "H0.99(W,M)", "X", "H0.5(W,W)", "W;E@1:2:3", "H0.5(W,M);M@a:b:c:d"] {
         let mut v = studio();
         v.dock_restore(bad);
-        assert!(v.studio.dock.tree.as_ref().is_none_or(|t| { let mut l = Vec::new(); t.leaves(&mut l); !l.is_empty() }), "{bad}");
-        for _ in 0..3 { v.step(0.05); }
+        assert!(
+            v.studio.dock.tree.as_ref().is_none_or(|t| {
+                let mut l = Vec::new();
+                t.leaves(&mut l);
+                !l.is_empty()
+            }),
+            "{bad}"
+        );
+        for _ in 0..3 {
+            v.step(0.05);
+        }
         assert!(v.dock_leaf(VKind::Wave).is_some());
     }
 }
@@ -458,9 +537,15 @@ fn reset_layout_brings_the_default_back() {
     // Display, its Screen tab, then Reset layout under it, as the user taps them
     let button = u.tap_sheet_item(MenuId::Display, Item::StudioReset);
     assert!(button.h >= 40);
-    for _ in 0..3 { u.step(0.05); }
+    for _ in 0..3 {
+        u.step(0.05);
+    }
     assert!(!u.menu_open);
-    assert!(u.studio.dock.tree.is_none() && !u.dock_floating(VKind::Eye) && u.studio.dock.float_rect.iter().all(Option::is_none));
+    assert!(
+        u.studio.dock.tree.is_none()
+            && !u.dock_floating(VKind::Eye)
+            && u.studio.dock.float_rect.iter().all(Option::is_none)
+    );
     assert!(u.m.studio_dock.is_empty(), "the setup forgets it too: {:?}", u.m.studio_dock);
     assert_eq!(u.studio.view, StudioView::Waveform);
     // docked again after the reset: the default places

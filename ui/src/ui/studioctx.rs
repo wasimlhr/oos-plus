@@ -48,14 +48,22 @@ impl Ui {
     pub(super) fn ctx_lane(&self, x: i32, y: i32) -> Option<WaveId> {
         let n = n_ch();
         if self.plot.wins.len() > 1 {
-            if let Some(c) = (0..n).find(|&c| self.m.ch[c].on && self.ch_area(c).contains(x, y)) { return Some(WaveId::Ch(c)); }
+            if let Some(c) = (0..n).find(|&c| self.m.ch[c].on && self.ch_area(c).contains(x, y)) {
+                return Some(WaveId::Ch(c));
+            }
         }
         let sel = if self.record_mode() { WaveId::Ref(self.ref_page.sel) } else { WaveId::Ch(self.m.active) };
-        match sel { WaveId::Ch(c) if c < n && self.m.ch[c].on => Some(sel), WaveId::Ref(_) => Some(sel), _ => (0..n).find(|&c| self.m.ch[c].on).map(WaveId::Ch) }
+        match sel {
+            WaveId::Ch(c) if c < n && self.m.ch[c].on => Some(sel),
+            WaveId::Ref(_) => Some(sel),
+            _ => (0..n).find(|&c| self.m.ch[c].on).map(WaveId::Ch),
+        }
     }
 
     pub(super) fn studio_ctx_open(&mut self, x: i32, y: i32) {
-        if self.menu_open { self.close_menu(); }
+        if self.menu_open {
+            self.close_menu();
+        }
         self.studio.add_menu = false;
         self.studio.popup = None;
         let lane = self.ctx_lane(x, y);
@@ -65,9 +73,15 @@ impl Ui {
     /// The two columns of rows: the view, and what acts on the lane under the press (which the rows name).
     fn ctx_columns(&self, lane: Option<WaveId>) -> [Vec<(CtxRow, String)>; 2] {
         let name = |id: WaveId| self.wave_name(id);
-        let mut view = vec![(CtxRow::Overlay, "Overlay".to_string()), (CtxRow::Stacked, "Stacked".to_string()), (CtxRow::Windows, "Windows".to_string()),
-            (CtxRow::FitLanes, "Fit all lanes".to_string()), (CtxRow::Fit, "Fit record".to_string()),
-            (CtxRow::ZoomHere, "Zoom here".to_string()), (CtxRow::ZoomBox, "Zoom box".to_string())];
+        let mut view = vec![
+            (CtxRow::Overlay, "Overlay".to_string()),
+            (CtxRow::Stacked, "Stacked".to_string()),
+            (CtxRow::Windows, "Windows".to_string()),
+            (CtxRow::FitLanes, "Fit all lanes".to_string()),
+            (CtxRow::Fit, "Fit record".to_string()),
+            (CtxRow::ZoomHere, "Zoom here".to_string()),
+            (CtxRow::ZoomBox, "Zoom box".to_string()),
+        ];
         if self.m.zoom {
             view.push((CtxRow::ZoomReset, "Reset zoom".to_string()));
             view.push((CtxRow::ZoomClose, "Close zoom".to_string()));
@@ -79,10 +93,15 @@ impl Ui {
             here.push((CtxRow::MeasOn(id), format!("Measurement on {}", name(id))));
         }
         here.push((CtxRow::CursorHere, "Cursor here".to_string()));
-        if let Some(id) = lane { here.push((CtxRow::NoteHere(id), "Add note here".to_string())); }
+        if let Some(id) = lane {
+            here.push((CtxRow::NoteHere(id), "Add note here".to_string()));
+        }
         // Maximise is offered when another view shares the screen with the waveform: alone it would do nothing
         if self.dock_full_state() || self.dock_can_maximise() {
-            here.push((CtxRow::Layout, if self.dock_full_state() { "Restore layout" } else { "Maximise view" }.to_string()));
+            here.push((
+                CtxRow::Layout,
+                if self.dock_full_state() { "Restore layout" } else { "Maximise view" }.to_string(),
+            ));
         }
         [view, here]
     }
@@ -94,7 +113,8 @@ impl Ui {
         let rows = cols.iter().map(|x| x.len() as i32).max().unwrap_or(0);
         let w = 2 * CTX_COL + 12;
         let h = (CTX_HEAD + rows * CTX_ROW + 8).min(self.scr.h - 8);
-        let x = if c.x + 8 + w <= self.scr.w - 4 { c.x + 8 } else { (c.x - 8 - w).clamp(4, (self.scr.w - w - 4).max(4)) };
+        let x =
+            if c.x + 8 + w <= self.scr.w - 4 { c.x + 8 } else { (c.x - 8 - w).clamp(4, (self.scr.w - w - 4).max(4)) };
         let y = c.y.min(self.scr.h - h - 4).max(4);
         Some(Rect::new(x, y, w, h))
     }
@@ -117,20 +137,65 @@ impl Ui {
 
     fn ctx_icon(&self, cv: &mut Canvas, row: CtxRow, cx: i32, cy: i32, c: Rgb) {
         match row {
-            CtxRow::Overlay => { cv.line(cx - 7, cy + 3, cx, cy - 4, c); cv.line(cx, cy - 4, cx + 7, cy + 3, c); cv.line(cx - 7, cy - 1, cx, cy + 5, c); }
-            CtxRow::Windows => { for (dx, dy) in [(-7, -5), (1, -5), (-7, 1), (1, 1)] { cv.round_outline(Rect::new(cx + dx, cy + dy, 6, 4), 1, c); } }
-            CtxRow::Stacked => { cv.hline(cx - 7, cx + 7, cy - 4, c); cv.hline(cx - 7, cx + 7, cy, c); cv.hline(cx - 7, cx + 7, cy + 4, c); }
+            CtxRow::Overlay => {
+                cv.line(cx - 7, cy + 3, cx, cy - 4, c);
+                cv.line(cx, cy - 4, cx + 7, cy + 3, c);
+                cv.line(cx - 7, cy - 1, cx, cy + 5, c);
+            }
+            CtxRow::Windows => {
+                for (dx, dy) in [(-7, -5), (1, -5), (-7, 1), (1, 1)] {
+                    cv.round_outline(Rect::new(cx + dx, cy + dy, 6, 4), 1, c);
+                }
+            }
+            CtxRow::Stacked => {
+                cv.hline(cx - 7, cx + 7, cy - 4, c);
+                cv.hline(cx - 7, cx + 7, cy, c);
+                cv.hline(cx - 7, cx + 7, cy + 4, c);
+            }
             CtxRow::Fit => icon_expand(cv, cx, cy, c),
-            CtxRow::FitLanes => { cv.vline(cx, cy - 7, cy + 7, c); for d in [-1, 1] { cv.line(cx, cy + 7 * d, cx - 4, cy + 3 * d, c); cv.line(cx, cy + 7 * d, cx + 4, cy + 3 * d, c); } }
-            CtxRow::ZoomHere | CtxRow::ZoomReset => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, BAR); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); }
-            CtxRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
-            CtxRow::ZoomClose => { cv.line(cx - 5, cy - 5, cx + 5, cy + 5, c); cv.line(cx - 5, cy + 5, cx + 5, cy - 5, c); }
-            CtxRow::TrigOn(_) => { cv.hline(cx - 7, cx - 2, cy + 4, c); cv.vline(cx - 2, cy - 4, cy + 4, c); cv.hline(cx - 2, cx + 7, cy - 4, c); }
-            CtxRow::LevelHere(_) => { cv.hline(cx - 8, cx + 8, cy, c); cv.triangle([(cx - 4, cy - 5), (cx + 4, cy - 5), (cx, cy - 1)], c); }
-            CtxRow::MeasOn(_) => { for (i, h) in [6, 11, 8].into_iter().enumerate() { cv.fill(Rect::new(cx - 7 + i as i32 * 5, cy + 6 - h, 3, h), c); } }
+            CtxRow::FitLanes => {
+                cv.vline(cx, cy - 7, cy + 7, c);
+                for d in [-1, 1] {
+                    cv.line(cx, cy + 7 * d, cx - 4, cy + 3 * d, c);
+                    cv.line(cx, cy + 7 * d, cx + 4, cy + 3 * d, c);
+                }
+            }
+            CtxRow::ZoomHere | CtxRow::ZoomReset => {
+                cv.circle(cx - 2, cy - 2, 5, c);
+                cv.circle(cx - 2, cy - 2, 3, BAR);
+                cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c);
+            }
+            CtxRow::ZoomBox => {
+                cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c);
+                cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c);
+            }
+            CtxRow::ZoomClose => {
+                cv.line(cx - 5, cy - 5, cx + 5, cy + 5, c);
+                cv.line(cx - 5, cy + 5, cx + 5, cy - 5, c);
+            }
+            CtxRow::TrigOn(_) => {
+                cv.hline(cx - 7, cx - 2, cy + 4, c);
+                cv.vline(cx - 2, cy - 4, cy + 4, c);
+                cv.hline(cx - 2, cx + 7, cy - 4, c);
+            }
+            CtxRow::LevelHere(_) => {
+                cv.hline(cx - 8, cx + 8, cy, c);
+                cv.triangle([(cx - 4, cy - 5), (cx + 4, cy - 5), (cx, cy - 1)], c);
+            }
+            CtxRow::MeasOn(_) => {
+                for (i, h) in [6, 11, 8].into_iter().enumerate() {
+                    cv.fill(Rect::new(cx - 7 + i as i32 * 5, cy + 6 - h, 3, h), c);
+                }
+            }
             CtxRow::CursorHere => icon_cursors(cv, cx - 5, cy, c),
-            CtxRow::NoteHere(_) => { cv.round_outline(Rect::new(cx - 11, cy - 6, 14, 10), 2, c); cv.line(cx - 4, cy + 4, cx - 8, cy + 8, c); }
-            CtxRow::Layout => { cv.rect(Rect::new(cx - 6, cy - 6, 12, 12), c); cv.hline(cx - 6, cx + 5, cy - 3, c); }
+            CtxRow::NoteHere(_) => {
+                cv.round_outline(Rect::new(cx - 11, cy - 6, 14, 10), 2, c);
+                cv.line(cx - 4, cy + 4, cx - 8, cy + 8, c);
+            }
+            CtxRow::Layout => {
+                cv.rect(Rect::new(cx - 6, cy - 6, 12, 12), c);
+                cv.hline(cx - 6, cx + 5, cy - 3, c);
+            }
         }
     }
 
@@ -176,7 +241,11 @@ impl Ui {
             let mid = (lo + hi) / 2.0;
             // the line of `mid` is under the point: with volts growing upwards the point is at more volts
             let below = self.y_of_volts(c, mid) > y;
-            if below == up { lo = mid; } else { hi = mid; }
+            if below == up {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
         }
         (lo + hi) / 2.0
     }
@@ -193,7 +262,9 @@ impl Ui {
                 let a = self.plot.area;
                 let (tdiv, delay) = self.view();
                 let t = delay + (at.x - a.x - a.w / 2) as f32 / (a.w as f32 / HDIV) * tdiv;
-                if !self.m.zoom { self.set_zoom(true); }
+                if !self.m.zoom {
+                    self.set_zoom(true);
+                }
                 self.m.zdelay = t;
                 self.clamp_zoom();
                 self.relayout();
@@ -211,19 +282,31 @@ impl Ui {
                     self.relayout();
                 }
             }
-            CtxRow::MeasOn(id) => { self.sources.a = id; self.open_meas_list(); }
+            CtxRow::MeasOn(id) => {
+                self.sources.a = id;
+                self.open_meas_list();
+            }
             // two cursors on the lane that was pressed, the first at the press
             CtxRow::CursorHere => {
-                if let Some(id) = at.lane { if self.set_cursor_source(id) { self.select_workspace_source(id); } }
+                if let Some(id) = at.lane {
+                    if self.set_cursor_source(id) {
+                        self.select_workspace_source(id);
+                    }
+                }
                 let w = self.cursor_window();
                 let a = ((at.x - w.x) as f32 / w.w.max(1) as f32).clamp(0.02, 0.8);
-                (self.m.cur_b_source, self.m.cursor, self.m.cur_a, self.m.cur_b) = (None, CursorMode::Track, a, a + 0.2);
+                (self.m.cur_b_source, self.m.cursor, self.m.cur_a, self.m.cur_b) =
+                    (None, CursorMode::Track, a, a + 0.2);
                 self.cursor_view = None;
                 self.settings_changed();
                 self.relayout();
             }
             CtxRow::NoteHere(id) => self.callout_add(id, at.x),
-            CtxRow::Layout => { if !self.dock_exit_full() { self.dock_maximise(super::dock::VKind::Wave); } }
+            CtxRow::Layout => {
+                if !self.dock_exit_full() {
+                    self.dock_maximise(super::dock::VKind::Wave);
+                }
+            }
         }
     }
 
@@ -232,7 +315,9 @@ impl Ui {
         let Some(c) = self.studio.ctx else { return false };
         let hit = self.studio_ctx_rows().into_iter().find(|(_, _, r)| r.contains(x, y)).map(|(row, _, _)| row);
         self.studio.ctx = None;
-        if let Some(row) = hit { self.ctx_do(row, c); }
+        if let Some(row) = hit {
+            self.ctx_do(row, c);
+        }
         true
     }
 }

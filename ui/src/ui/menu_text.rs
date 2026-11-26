@@ -79,7 +79,9 @@ impl Ui {
                 // an entry pad: its title; the entry shows large above the keys
                 _ if self.pad_entry().is_some() => self.pad_entry().map(|e| e.0).unwrap_or_default(),
                 Some(p) if p.it == Item::StoreFile => self.file_list_title(),
-                Some(p) if p.it == Item::RefImport && self.sheets_on() => format!("Load file into R{}", self.ref_page.sel + 1),
+                Some(p) if p.it == Item::RefImport && self.sheets_on() => {
+                    format!("Load file into R{}", self.ref_page.sel + 1)
+                }
                 Some(p) => format!("{} \u{b7} {}", self.menu_title(p.menu), self.item_label(p.it)),
                 None => String::new(),
             },
@@ -114,7 +116,12 @@ impl Ui {
             | Item::DecThr
             | Item::DecPos
             | Item::DecThrLine(_) => Kind::Value,
-            Item::MathAuto | Item::MathAddFilter | Item::MathToRef | Item::ZoneBox | Item::ZoneShape | Item::ZoneClear => Kind::Action,
+            Item::MathAuto
+            | Item::MathAddFilter
+            | Item::MathToRef
+            | Item::ZoneBox
+            | Item::ZoneShape
+            | Item::ZoneClear => Kind::Action,
             Item::DecBits => Kind::Value,
             Item::TrigLevel2 | Item::PatLevel => Kind::Value,
             Item::ChScale(_)

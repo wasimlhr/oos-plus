@@ -21,7 +21,6 @@ pub(super) fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend_from_slice(&crc.to_be_bytes());
 }
 
-
 /// Bit writer of a deflate stream: values LSB first, Huffman codes MSB first.
 pub(super) struct BitOut {
     out: Vec<u8>,

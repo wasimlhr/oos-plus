@@ -143,10 +143,15 @@ mod waveform_record_tests {
     fn every_sample_type_and_the_older_magic_are_read() {
         let int8 = record(b"TKWF0001", r#"{"sampleType":"int8","nPoints":3,"xincr":1e-6,"ymult":0.5}"#, &[0xfe, 0, 4]);
         assert_eq!(parse_wave(&int8, "a.tkwf").unwrap()[0].v, [-1.0, 0.0, 2.0]);
-        let int16 = record(b"PWWF0001", r#"{"sampleType":"int16","nPoints":2,"xincr":1e-6,"ymult":2}"#, &words(&[0xffff, 3]));
+        let int16 =
+            record(b"PWWF0001", r#"{"sampleType":"int16","nPoints":2,"xincr":1e-6,"ymult":2}"#, &words(&[0xffff, 3]));
         assert_eq!(parse_wave(&int16, "a.pwwf").unwrap()[0].v, [-2.0, 6.0]);
         let floats: Vec<u8> = [0.25_f32, -1.5].iter().flat_map(|x| x.to_le_bytes()).collect();
-        let float32 = record(b"PWWF0001", r#"{ "sampleType" : "float32" , "nPoints" : 2 , "xincr" : 1e-3 , "ptOff" : null }"#, &floats);
+        let float32 = record(
+            b"PWWF0001",
+            r#"{ "sampleType" : "float32" , "nPoints" : 2 , "xincr" : 1e-3 , "ptOff" : null }"#,
+            &floats,
+        );
         let t = &parse_wave(&float32, "a.pwwf").unwrap()[0];
         assert_eq!(t.v, [0.25, -1.5]);
         assert_eq!((t.t0, t.label.as_str()), (0.0, "Record"));
@@ -160,28 +165,62 @@ mod waveform_record_tests {
         let mut cut = record(b"PWWF0001", good, &[]);
         cut.truncate(20);
         assert_eq!(refused(cut), "truncated waveform record");
-        assert_eq!(refused(record(b"PWWF0001", r#"{"sampleType":"uint16","nPoints":3"#, &words(&[1, 2, 3]))), "the waveform record header is not readable");
-        assert_eq!(refused(record(b"PWWF0001", r#"["sampleType","uint16"]"#, &words(&[1, 2, 3]))), "the waveform record header is not readable");
-        assert_eq!(refused(record(b"PWWF0001", r#"{"sampleType":"uint16","xincr":1e-6}"#, &words(&[1, 2, 3]))), "the waveform record header is not readable");
-        assert_eq!(refused(record(b"PWWF0001", r#"{"sampleType":"uint16","nPoints":3,"xincr":0}"#, &words(&[1, 2, 3]))), "that file holds no waveform");
-        assert_eq!(refused(record(b"PWWF0001", r#"{"sampleType":"uint16","nPoints":1,"xincr":1e-6}"#, &words(&[1]))), "that file holds no waveform");
-        assert_eq!(refused(record(b"PWWF0001", r#"{"sampleType":"float64","nPoints":3,"xincr":1e-6}"#, &[0; 24])), "waveform record sample type \"float64\" is not read");
+        assert_eq!(
+            refused(record(b"PWWF0001", r#"{"sampleType":"uint16","nPoints":3"#, &words(&[1, 2, 3]))),
+            "the waveform record header is not readable"
+        );
+        assert_eq!(
+            refused(record(b"PWWF0001", r#"["sampleType","uint16"]"#, &words(&[1, 2, 3]))),
+            "the waveform record header is not readable"
+        );
+        assert_eq!(
+            refused(record(b"PWWF0001", r#"{"sampleType":"uint16","xincr":1e-6}"#, &words(&[1, 2, 3]))),
+            "the waveform record header is not readable"
+        );
+        assert_eq!(
+            refused(record(b"PWWF0001", r#"{"sampleType":"uint16","nPoints":3,"xincr":0}"#, &words(&[1, 2, 3]))),
+            "that file holds no waveform"
+        );
+        assert_eq!(
+            refused(record(b"PWWF0001", r#"{"sampleType":"uint16","nPoints":1,"xincr":1e-6}"#, &words(&[1]))),
+            "that file holds no waveform"
+        );
+        assert_eq!(
+            refused(record(b"PWWF0001", r#"{"sampleType":"float64","nPoints":3,"xincr":1e-6}"#, &[0; 24])),
+            "waveform record sample type \"float64\" is not read"
+        );
         let big = format!(r#"{{"sampleType":"int8","nPoints":{},"xincr":1e-6}}"#, MAX_WAVEFORM_SAMPLES + 1);
         assert_eq!(refused(record(b"PWWF0001", &big, &[0; 8])), "waveform exceeds the 32-million-sample import limit");
         let nan: Vec<u8> = [f32::NAN, 0.0].iter().flat_map(|x| x.to_le_bytes()).collect();
-        assert_eq!(refused(record(b"PWWF0001", r#"{"sampleType":"float32","nPoints":2,"xincr":1e-6}"#, &nan)), "the waveform record holds samples that are not numbers");
+        assert_eq!(
+            refused(record(b"PWWF0001", r#"{"sampleType":"float32","nPoints":2,"xincr":1e-6}"#, &nan)),
+            "the waveform record holds samples that are not numbers"
+        );
     }
 
     #[test]
     fn json_members_keeps_nested_values_whole_and_unescapes_strings() {
-        let members = json_members(r#" { "a" : "x\n\"y\" é" , "b" : -1.5e3 , "c" : { "a" : [ 1 , "}" ] } , "d" : [ ] , "e" : true } "#).unwrap();
+        let members = json_members(
+            r#" { "a" : "x\n\"y\" é" , "b" : -1.5e3 , "c" : { "a" : [ 1 , "}" ] } , "d" : [ ] , "e" : true } "#,
+        )
+        .unwrap();
         let get = |key: &str| members.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str()).unwrap();
         assert_eq!(get("a"), "x\n\"y\" \u{e9}");
         assert_eq!(get("b"), "-1.5e3");
         assert_eq!(get("c"), r#"{ "a" : [ 1 , "}" ] }"#);
         assert_eq!((get("d"), get("e")), ("[ ]", "true"));
         assert_eq!(json_members("{}").unwrap().len(), 0);
-        for bad in ["", "[]", "{", r#"{"a"}"#, r#"{"a":}"#, r#"{,"a":1}"#, r#"{"a":1} x"#, r#"{"a":"unterminated}"#, r#"{"a":1]}"#] {
+        for bad in [
+            "",
+            "[]",
+            "{",
+            r#"{"a"}"#,
+            r#"{"a":}"#,
+            r#"{,"a":1}"#,
+            r#"{"a":1} x"#,
+            r#"{"a":"unterminated}"#,
+            r#"{"a":1]}"#,
+        ] {
             assert!(json_members(bad).is_none(), "{bad}");
         }
     }
@@ -192,7 +231,15 @@ mod rigol_bin_tests {
     use super::*;
 
     /// One waveform of an `RG` file: the 140-byte waveform header, the 16-byte buffer header and the buffer.
-    fn waveform(wave_type: u32, buffer_type: u16, bytes_per_point: u16, dt: f64, origin: f64, label: &str, data: &[u8]) -> Vec<u8> {
+    fn waveform(
+        wave_type: u32,
+        buffer_type: u16,
+        bytes_per_point: u16,
+        dt: f64,
+        origin: f64,
+        label: &str,
+        data: &[u8],
+    ) -> Vec<u8> {
         let mut h = vec![0u8; 140];
         h[..4].copy_from_slice(&140u32.to_le_bytes());
         h[4..8].copy_from_slice(&wave_type.to_le_bytes());
@@ -249,7 +296,10 @@ mod rigol_bin_tests {
     #[test]
     fn a_file_of_logic_channels_or_a_cut_file_is_refused_with_its_reason() {
         let logic = file(&[waveform(6, 5, 1, 1e-6, 0.0, "D0", &[0, 1, 1, 0])]);
-        assert_eq!(parse_wave(&logic, "la.bin").map(|_| ()).unwrap_err(), "that file holds logic channels only, and they are not read");
+        assert_eq!(
+            parse_wave(&logic, "la.bin").map(|_| ()).unwrap_err(),
+            "that file holds logic channels only, and they are not read"
+        );
         let mut cut = file(&[waveform(1, 1, 4, 1e-6, 0.0, "CH1", &floats(&[1.0, 2.0, 3.0]))]);
         cut.truncate(cut.len() - 5);
         assert_eq!(parse_wave(&cut, "cut.bin").map(|_| ()).unwrap_err(), "truncated waveform");
@@ -295,14 +345,21 @@ mod keysight_file_tests {
 
     #[test]
     fn a_y_values_file_takes_its_time_scale_from_the_header() {
-        let text = y_values("XOrg, -5.0000000000000004E-08\r\nXInc, 9.765625E-13\r\n", "0.248322\r\n0.25\r\n-0.125\r\n1.5E-01\r\n");
+        let text = y_values(
+            "XOrg, -5.0000000000000004E-08\r\nXInc, 9.765625E-13\r\n",
+            "0.248322\r\n0.25\r\n-0.125\r\n1.5E-01\r\n",
+        );
         let traces = parse_wave(text.as_bytes(), "ch1.txt").unwrap();
         assert_eq!(traces.len(), 1);
         let t = &traces[0];
         assert_eq!(t.v, [0.248322, 0.25, -0.125, 0.15]);
         assert_eq!((t.t0, t.dt, t.label.as_str()), (-5.0000000000000004E-08, 9.765625E-13, "Channel 1"));
         // version 1 has no number-type line; a byte-order mark before the first line is not part of it
-        let v1 = format!("{}{}", char::from_u32(0xfeff).unwrap(), text.replace("float\r\n", "").replace("Format Version, 2", "Format Version, 1"));
+        let v1 = format!(
+            "{}{}",
+            char::from_u32(0xfeff).unwrap(),
+            text.replace("float\r\n", "").replace("Format Version, 2", "Format Version, 1")
+        );
         assert_eq!(parse_wave(v1.as_bytes(), "ch1.txt").unwrap()[0].v, [0.248322, 0.25, -0.125, 0.15]);
     }
 
@@ -313,7 +370,10 @@ mod keysight_file_tests {
         assert_eq!(refused(y_values("XOrg, 0\r\nXInc, 0\r\n", "1\r\n2\r\n")), "that file holds no waveform");
         assert_eq!(refused(y_values("XOrg, 0\r\nXInc, 1E-9\r\n", "1\r\n")), "that file holds no waveform");
         // amplitudes alone, the file saved without its header: one column, no time
-        assert_eq!(parse_wave(b"0.1\r\n0.2\r\n0.3\r\n", "y.txt").map(|_| ()).unwrap_err(), "that file holds no waveform");
+        assert_eq!(
+            parse_wave(b"0.1\r\n0.2\r\n0.3\r\n", "y.txt").map(|_| ()).unwrap_err(),
+            "that file holds no waveform"
+        );
     }
 
     #[test]
@@ -331,9 +391,15 @@ mod keysight_file_tests {
     #[test]
     fn containers_that_are_not_read_say_so_and_how_to_get_round_it() {
         let hdf5 = [0x89, b'H', b'D', b'F', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0];
-        assert_eq!(parse_wave(&hdf5, "w.h5").map(|_| ()).unwrap_err(), "HDF5 (.h5) waveform files are not read; save the waveform as BIN (.bin) or CSV");
+        assert_eq!(
+            parse_wave(&hdf5, "w.h5").map(|_| ()).unwrap_err(),
+            "HDF5 (.h5) waveform files are not read; save the waveform as BIN (.bin) or CSV"
+        );
         let mat = b"MATLAB 5.0 MAT-file, Platform: PCWIN64";
-        assert_eq!(parse_wave(mat, "w.mat").map(|_| ()).unwrap_err(), "MATLAB (.mat) waveform files are not read; save the waveform as BIN (.bin) or CSV");
+        assert_eq!(
+            parse_wave(mat, "w.mat").map(|_| ()).unwrap_err(),
+            "MATLAB (.mat) waveform files are not read; save the waveform as BIN (.bin) or CSV"
+        );
     }
 
     /// An `AG` file of one waveform with one buffer of this type.
@@ -388,7 +454,9 @@ impl RsTags {
                 continue;
             }
             let attributes = rs_attributes(tag);
-            let Some(name) = attributes.iter().find(|(key, _)| key == "Name").map(|(_, value)| value.clone()) else { continue };
+            let Some(name) = attributes.iter().find(|(key, _)| key == "Name").map(|(_, value)| value.clone()) else {
+                continue;
+            };
             if !tags.iter().any(|(known, _)| *known == name) {
                 tags.push((name, attributes));
             }
@@ -406,7 +474,9 @@ impl RsTags {
     }
 
     fn number(&self, name: &str, key: &str) -> Result<f64, String> {
-        self.attribute(name, key).and_then(|v| v.trim().parse::<f64>().ok()).filter(|x| x.is_finite())
+        self.attribute(name, key)
+            .and_then(|v| v.trim().parse::<f64>().ok())
+            .filter(|x| x.is_finite())
             .ok_or_else(|| format!("the Rohde & Schwarz description has no usable {name}"))
     }
 
@@ -449,19 +519,25 @@ pub(super) fn bytes_hold(haystack: &[u8], needle: &[u8]) -> bool {
 pub(super) fn looks_rs_description(b: &[u8]) -> bool {
     let head = &b[..b.len().min(1 << 20)];
     let start = head.iter().position(|c| !c.is_ascii_whitespace() && ![0xEFu8, 0xBB, 0xBF].contains(c));
-    start.is_some_and(|at| head[at] == b'<') && bytes_hold(head, b"eRS_SIGNAL_FORMAT_") && bytes_hold(head, b"RecordLength")
+    start.is_some_and(|at| head[at] == b'<')
+        && bytes_hold(head, b"eRS_SIGNAL_FORMAT_")
+        && bytes_hold(head, b"RecordLength")
 }
 
 /// The data file of such a waveform, by its name and its first word: the format code.
 pub(super) fn looks_rs_data(b: &[u8], name: &str) -> bool {
-    name.to_ascii_lowercase().ends_with(".wfm.bin") && b.len() >= 8 && [0u32, 1, 4, 6].contains(&u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+    name.to_ascii_lowercase().ends_with(".wfm.bin")
+        && b.len() >= 8
+        && [0u32, 1, 4, 6].contains(&u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
 }
 
 /// The name a source of such a file is shown by: `eRS_SIGNAL_SOURCE_CH1_TR1` and `C1W1` are CH1; another source
 /// keeps its own name.
 pub(super) fn rs_source_label(source: &str) -> String {
     let plain = source.trim().trim_start_matches("eRS_SIGNAL_SOURCE_");
-    let digit_after = |mark: &str| plain.find(mark).and_then(|at| plain[at + mark.len()..].chars().next()).filter(|c| ('1'..='8').contains(c));
+    let digit_after = |mark: &str| {
+        plain.find(mark).and_then(|at| plain[at + mark.len()..].chars().next()).filter(|c| ('1'..='8').contains(c))
+    };
     match digit_after("CH").or_else(|| if plain.starts_with('C') { digit_after("C") } else { None }) {
         Some(n) => format!("CH{n}"),
         None if plain.is_empty() || plain == "NONE" => "CH1".into(),
@@ -492,15 +568,23 @@ pub(super) fn parse_rs(xml: &str, data: &[u8]) -> Result<Vec<WaveTrace>, String>
     };
     if let Some(trace) = tags.value("TraceType").map(|t| t.trim_start_matches("eRS_TRACE_TYPE_")) {
         if trace != "NORMAL" && trace != "AVERAGE" {
-            return Err(format!("a Rohde & Schwarz {} trace is not read; save a normal trace", trace.to_ascii_lowercase()));
+            return Err(format!(
+                "a Rohde & Schwarz {} trace is not read; save a normal trace",
+                trace.to_ascii_lowercase()
+            ));
         }
     }
     if tags.value("NumberOfAcquisitions").is_some() && tags.count("NumberOfAcquisitions")? != 1 {
         return Err("the Rohde & Schwarz file holds several acquisitions; save one acquisition".into());
     }
     let record = tags.count("RecordLength")?;
-    let leading = if tags.value("LeadingSettlingSamples").is_some() { tags.count("LeadingSettlingSamples")? } else { 0 };
-    let rows = if tags.value("SignalHardwareRecordLength").is_some() { tags.count("SignalHardwareRecordLength")? } else { leading + record };
+    let leading =
+        if tags.value("LeadingSettlingSamples").is_some() { tags.count("LeadingSettlingSamples")? } else { 0 };
+    let rows = if tags.value("SignalHardwareRecordLength").is_some() {
+        tags.count("SignalHardwareRecordLength")?
+    } else {
+        leading + record
+    };
     if record > MAX_WAVEFORM_SAMPLES {
         return Err("waveform exceeds the 32-million-sample import limit".into());
     }
@@ -512,9 +596,12 @@ pub(super) fn parse_rs(xml: &str, data: &[u8]) -> Result<Vec<WaveTrace>, String>
     // the columns of a row: one, or the channels of a multi-channel export that are on
     let multi = tags.value("MultiChannelExport").is_some_and(|v| v.ends_with("_ON"));
     let columns: Vec<(Option<&str>, String)> = if multi {
-        ["I_0", "I_1", "I_2", "I_3"].iter().copied()
+        ["I_0", "I_1", "I_2", "I_3"]
+            .iter()
+            .copied()
             .filter(|key| tags.attribute("MultiChannelExportState", key).is_some_and(|v| v.ends_with("_ON")))
-            .map(|key| (Some(key), rs_source_label(tags.attribute("MultiChannelSource", key).unwrap_or("")))).collect()
+            .map(|key| (Some(key), rs_source_label(tags.attribute("MultiChannelSource", key).unwrap_or(""))))
+            .collect()
     } else {
         vec![(None, rs_source_label(tags.value("Source").unwrap_or("")))]
     };
@@ -527,10 +614,18 @@ pub(super) fn parse_rs(xml: &str, data: &[u8]) -> Result<Vec<WaveTrace>, String>
         }
         let levels = tags.number("NofQuantisationLevels", "Value")?;
         let (scale, position, offset, step) = match column {
-            Some(key) => (tags.number("MultiChannelVerticalScale", key)?, tags.number("MultiChannelVerticalPosition", key)?,
-                tags.number("MultiChannelVerticalOffset", key)?, tags.number("MultiChannelVerticalScale", "StepFactor")?),
-            None => (tags.number("VerticalScale", "Value")?, tags.number("VerticalPosition", "Value")?,
-                tags.number("VerticalOffset", "Value")?, tags.number("VerticalScale", "StepFactor")?),
+            Some(key) => (
+                tags.number("MultiChannelVerticalScale", key)?,
+                tags.number("MultiChannelVerticalPosition", key)?,
+                tags.number("MultiChannelVerticalOffset", key)?,
+                tags.number("MultiChannelVerticalScale", "StepFactor")?,
+            ),
+            None => (
+                tags.number("VerticalScale", "Value")?,
+                tags.number("VerticalPosition", "Value")?,
+                tags.number("VerticalOffset", "Value")?,
+                tags.number("VerticalScale", "StepFactor")?,
+            ),
         };
         if levels <= 0.0 {
             return Err("the Rohde & Schwarz description has no usable NofQuantisationLevels".into());
@@ -595,8 +690,13 @@ pub fn parse_wave_at(bytes: &[u8], path: &Path) -> Result<(Vec<WaveTrace>, Strin
     let name = file_name(path);
     if looks_rs_description(bytes) {
         let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        let data = ["Wfm.bin", "wfm.bin", "WFM.BIN", "Wfm.BIN"].iter().map(|end| path.with_file_name(format!("{stem}.{end}"))).find(|p| p.is_file())
-            .ok_or_else(|| format!("{name} describes a Rohde & Schwarz waveform; its data file {stem}.Wfm.bin is not beside it"))?;
+        let data = ["Wfm.bin", "wfm.bin", "WFM.BIN", "Wfm.BIN"]
+            .iter()
+            .map(|end| path.with_file_name(format!("{stem}.{end}")))
+            .find(|p| p.is_file())
+            .ok_or_else(|| {
+                format!("{name} describes a Rohde & Schwarz waveform; its data file {stem}.Wfm.bin is not beside it")
+            })?;
         return parse_rs(&String::from_utf8_lossy(bytes), &read_waveform_file(&data)?).map(all_read);
     }
     if looks_rs_data(bytes, &name) {
@@ -605,7 +705,9 @@ pub fn parse_wave_at(bytes: &[u8], path: &Path) -> Result<(Vec<WaveTrace>, Strin
         let description = path.with_file_name(format!("{stem}.bin"));
         return match read_waveform_file(&description) {
             Ok(xml) if looks_rs_description(&xml) => parse_rs(&String::from_utf8_lossy(&xml), bytes).map(all_read),
-            _ => Err(format!("{name} is the data of a Rohde & Schwarz waveform; its description {stem}.bin is not beside it")),
+            _ => Err(format!(
+                "{name} is the data of a Rohde & Schwarz waveform; its description {stem}.bin is not beside it"
+            )),
         };
     }
     parse_wave_noted(bytes, &name)
@@ -636,8 +738,12 @@ mod rohde_schwarz_file_tests {
     /// One channel: 0.5 V/div with a step factor of 8 over 128 levels is 31.25 mV a step; position 1 div and
     /// offset 0.25 V put a raw 0 at -0.25 V.
     fn one_channel(source: &str) -> String {
-        format!("  <Prop Name=\"VerticalScale\" Value=\"0.5\" StepFactor=\"8\"/>\n{}{}{}", prop("VerticalPosition", "1"), prop("VerticalOffset", "0.25"),
-            prop("Source", source))
+        format!(
+            "  <Prop Name=\"VerticalScale\" Value=\"0.5\" StepFactor=\"8\"/>\n{}{}{}",
+            prop("VerticalPosition", "1"),
+            prop("VerticalOffset", "0.25"),
+            prop("Source", source)
+        )
     }
 
     fn data(code: u32, rows: usize, body: &[u8]) -> Vec<u8> {
@@ -658,7 +764,10 @@ mod rohde_schwarz_file_tests {
         let traces = parse_rs(&xml, &data(1, 8, &words(&[999, 999, 32, -32, 0, 64, 999, 999]))).unwrap();
         assert_eq!(traces.len(), 1);
         let t = &traces[0];
-        assert_eq!((t.v.as_slice(), t.t0, t.dt, t.label.as_str()), (&[0.75f32, -1.25, -0.25, 1.75][..], -2e-3, 1e-3, "CH2"));
+        assert_eq!(
+            (t.v.as_slice(), t.t0, t.dt, t.label.as_str()),
+            (&[0.75f32, -1.25, -0.25, 1.75][..], -2e-3, 1e-3, "CH2")
+        );
     }
 
     #[test]
@@ -690,15 +799,30 @@ mod rohde_schwarz_file_tests {
 
     /// Channels 1 and 3 of a multi-channel export, channel 2 off: two columns, each with its own scaling.
     fn two_of_three() -> String {
-        let per = |name: &str, a: &str, b: &str, c: &str, more: &str| format!("  <Prop Name=\"{name}\" I_0=\"{a}\" I_1=\"{b}\" I_2=\"{c}\"{more}/>\n");
-        description("INT16BIT", 2, 0, 2, &[
-            prop("MultiChannelExport", "eRS_ONOFF_ON"),
-            per("MultiChannelExportState", "eRS_ONOFF_ON", "eRS_ONOFF_OFF", "eRS_ONOFF_ON", ""),
-            per("MultiChannelSource", "eRS_SIGNAL_SOURCE_CH1_TR1", "eRS_SIGNAL_SOURCE_CH2_TR1", "eRS_SIGNAL_SOURCE_CH3_TR1", ""),
-            per("MultiChannelVerticalScale", "0.5", "1", "1", " StepFactor=\"8\""),
-            per("MultiChannelVerticalPosition", "0", "0", "0", ""),
-            per("MultiChannelVerticalOffset", "0", "0", "1", ""),
-        ].concat())
+        let per = |name: &str, a: &str, b: &str, c: &str, more: &str| {
+            format!("  <Prop Name=\"{name}\" I_0=\"{a}\" I_1=\"{b}\" I_2=\"{c}\"{more}/>\n")
+        };
+        description(
+            "INT16BIT",
+            2,
+            0,
+            2,
+            &[
+                prop("MultiChannelExport", "eRS_ONOFF_ON"),
+                per("MultiChannelExportState", "eRS_ONOFF_ON", "eRS_ONOFF_OFF", "eRS_ONOFF_ON", ""),
+                per(
+                    "MultiChannelSource",
+                    "eRS_SIGNAL_SOURCE_CH1_TR1",
+                    "eRS_SIGNAL_SOURCE_CH2_TR1",
+                    "eRS_SIGNAL_SOURCE_CH3_TR1",
+                    "",
+                ),
+                per("MultiChannelVerticalScale", "0.5", "1", "1", " StepFactor=\"8\""),
+                per("MultiChannelVerticalPosition", "0", "0", "0", ""),
+                per("MultiChannelVerticalOffset", "0", "0", "1", ""),
+            ]
+            .concat(),
+        )
     }
 
     #[test]
@@ -714,10 +838,13 @@ mod rohde_schwarz_file_tests {
     fn what_is_not_one_plain_record_is_refused_by_name() {
         let plain = one_channel("eRS_SIGNAL_SOURCE_CH1_TR1");
         let body = data(1, 3, &words(&[1, 2, 3]));
-        let refused = |more: &str| parse_rs(&description("INT16BIT", 3, 0, 3, &format!("{plain}{more}")), &body).unwrap_err();
+        let refused =
+            |more: &str| parse_rs(&description("INT16BIT", 3, 0, 3, &format!("{plain}{more}")), &body).unwrap_err();
         assert!(refused(&prop("TraceType", "eRS_TRACE_TYPE_ENVELOPE")).contains("envelope trace is not read"));
         assert!(refused(&prop("NumberOfAcquisitions", "5")).contains("several acquisitions"));
-        assert!(parse_rs(&description("INT16BIT", 3, 0, 3, ""), &body).unwrap_err().contains("no usable VerticalScale"));
+        assert!(parse_rs(&description("INT16BIT", 3, 0, 3, ""), &body)
+            .unwrap_err()
+            .contains("no usable VerticalScale"));
         assert!(parse_rs(&description("CUSTOM", 3, 0, 3, &plain), &body).unwrap_err().contains("CUSTOM is not read"));
         // a data file of another format, of another length, or cut short
         let good = description("INT16BIT", 3, 0, 3, &plain);
@@ -733,12 +860,19 @@ mod rohde_schwarz_file_tests {
     #[test]
     fn the_first_property_of_a_name_wins_and_either_quote_is_read() {
         let tags = RsTags::read("<a Name='X' Value='1'/><b Name=\"X\" Value=\"2\"/><c Value=\"3\"/><!-- Name=\"Y\" --><d Name = \"Z\" Value = \"a=b\">");
-        assert_eq!((tags.value("X"), tags.value("Y"), tags.value("Z"), tags.0.len()), (Some("1"), None, Some("a=b"), 2));
+        assert_eq!(
+            (tags.value("X"), tags.value("Y"), tags.value("Z"), tags.0.len()),
+            (Some("1"), None, Some("a=b"), 2)
+        );
     }
 
     #[test]
     fn a_source_is_shown_by_its_channel() {
-        let shown: Vec<String> = ["eRS_SIGNAL_SOURCE_CH3_TR2", "C2W1", "", "eRS_SIGNAL_SOURCE_NONE", "eRS_SIGNAL_SOURCE_MATH1"].iter().map(|s| rs_source_label(s)).collect();
+        let shown: Vec<String> =
+            ["eRS_SIGNAL_SOURCE_CH3_TR2", "C2W1", "", "eRS_SIGNAL_SOURCE_NONE", "eRS_SIGNAL_SOURCE_MATH1"]
+                .iter()
+                .map(|s| rs_source_label(s))
+                .collect();
         assert_eq!(shown, ["CH3", "CH2", "CH1", "CH1", "MATH1"]);
     }
 
@@ -760,7 +894,10 @@ mod rohde_schwarz_file_tests {
         std::fs::write(&second, &body).unwrap();
         for (bytes, path) in [(xml.as_bytes(), &first), (body.as_slice(), &second)] {
             let traces = parse_wave_at(bytes, path).unwrap().0;
-            assert_eq!((traces.len(), traces[0].v.as_slice(), traces[0].label.as_str()), (1, &[0.75f32, -1.25, -0.25, 1.75][..], "CH2"));
+            assert_eq!(
+                (traces.len(), traces[0].v.as_slice(), traces[0].label.as_str()),
+                (1, &[0.75f32, -1.25, -0.25, 1.75][..], "CH2")
+            );
         }
 
         // the data by itself
@@ -810,10 +947,27 @@ pub(super) fn siglent_version(b: &[u8]) -> Option<u32> {
     let flags = |at: usize| (0..4).all(|k| sg_u32(b, at + 4 * k).is_some_and(|f| f <= 1));
     let flag_byte = |at: usize| b.get(at).is_some_and(|x| *x <= 1);
     let known = match version {
-        2 | 3 => b.len() >= 0x800 && flags(0x04) && sg_value(b, 0x198).is_some() && sg_value(b, 0x1EC).is_some() && flag_byte(0x260),
-        4 => sg_u32(b, 4).is_some_and(|data| (0x1000..=b.len()).contains(&(data as usize))) && flags(0x08)
-            && sg_value(b, 0x19C).is_some() && sg_value(b, 0x1F0).is_some() && flag_byte(0x264) && flag_byte(0x265),
-        6 => b.len() >= 108 && u16::from_le_bytes([b[4], b[5]]) >= 108 && sg_u32(b, 0x68).is_some_and(|n| n > 0) && b[8].is_ascii_graphic(),
+        2 | 3 => {
+            b.len() >= 0x800
+                && flags(0x04)
+                && sg_value(b, 0x198).is_some()
+                && sg_value(b, 0x1EC).is_some()
+                && flag_byte(0x260)
+        }
+        4 => {
+            sg_u32(b, 4).is_some_and(|data| (0x1000..=b.len()).contains(&(data as usize)))
+                && flags(0x08)
+                && sg_value(b, 0x19C).is_some()
+                && sg_value(b, 0x1F0).is_some()
+                && flag_byte(0x264)
+                && flag_byte(0x265)
+        }
+        6 => {
+            b.len() >= 108
+                && u16::from_le_bytes([b[4], b[5]]) >= 108
+                && sg_u32(b, 0x68).is_some_and(|n| n > 0)
+                && b[8].is_ascii_graphic()
+        }
         _ => false,
     };
     known.then_some(version)
@@ -848,7 +1002,8 @@ pub(super) fn parse_siglent(b: &[u8], version: u32) -> Result<Vec<WaveTrace>, St
     let short = || "truncated Siglent waveform file".to_string();
     let shift = if version == 4 { 4 } else { 0 };
     let word = |at: usize| sg_u32(b, at + shift).ok_or_else(short);
-    let value = |at: usize, what: &str| sg_value(b, at + shift).ok_or_else(|| format!("the Siglent file has no usable {what}"));
+    let value =
+        |at: usize, what: &str| sg_value(b, at + shift).ok_or_else(|| format!("the Siglent file has no usable {what}"));
     let data = if version == 4 { sg_u32(b, 4).ok_or_else(short)? as usize } else { 0x800 };
 
     let points = word(0x1E8)? as usize;
@@ -898,7 +1053,8 @@ pub(super) fn parse_siglent(b: &[u8], version: u32) -> Result<Vec<WaveTrace>, St
         let block = at.checked_add(points * width).and_then(|end| b.get(at..end)).ok_or_else(short)?;
         at += points * width;
         let step = per / codes;
-        let v: Vec<f32> = sg_codes(block, width, big).map(|code| (((code - centre) * step - offset) * probe) as f32).collect();
+        let v: Vec<f32> =
+            sg_codes(block, width, big).map(|code| (((code - centre) * step - offset) * probe) as f32).collect();
         if v.iter().any(|x| !x.is_finite()) {
             return Err("the Siglent file has no usable vertical scale".into());
         }
@@ -912,8 +1068,16 @@ pub(super) fn parse_siglent(b: &[u8], version: u32) -> Result<Vec<WaveTrace>, St
         if version < 3 || sg_u32(b, 0x27C + shift + 4 * k) != Some(1) {
             continue;
         }
-        let (Some(per), Some(position)) = (sg_value(b, 0x28C + shift + 0x28 * k), sg_value(b, 0x32C + shift + 0x28 * k)) else { break };
-        let (Some(points), Some(dt), Some(codes)) = (sg_u32(b, 0x3CC + shift + 4 * k), sg_f64(b, 0x3DC + shift + 8 * k), sg_u32(b, 0x3FC + shift)) else { break };
+        let (Some(per), Some(position)) =
+            (sg_value(b, 0x28C + shift + 0x28 * k), sg_value(b, 0x32C + shift + 0x28 * k))
+        else {
+            break;
+        };
+        let (Some(points), Some(dt), Some(codes)) =
+            (sg_u32(b, 0x3CC + shift + 4 * k), sg_f64(b, 0x3DC + shift + 8 * k), sg_u32(b, 0x3FC + shift))
+        else {
+            break;
+        };
         let (points, codes) = (points as usize, codes as i32);
         if points > MAX_WAVEFORM_SAMPLES || codes <= 0 || !(dt > 0.0) || !dt.is_finite() {
             break;
@@ -969,13 +1133,27 @@ pub(super) fn parse_siglent_records(b: &[u8]) -> Result<Vec<WaveTrace>, String> 
         if bytes % number != 0 || ![1, 2, 4].contains(&width) {
             return Err("that Siglent sample size is not read".into());
         }
-        let field = |offset: usize| sg_f64(b, record + offset).filter(|x| x.is_finite()).ok_or_else(|| "the Siglent file has no usable scale".to_string());
+        let field = |offset: usize| {
+            sg_f64(b, record + offset)
+                .filter(|x| x.is_finite())
+                .ok_or_else(|| "the Siglent file has no usable scale".to_string())
+        };
         let (zero_at, dt, zero_code, step) = (field(0x60)?, field(0x68)?, field(0xB0)?, field(0xB8)?);
         if !(dt > 0.0) || step == 0.0 {
             return Err("the Siglent file has no usable scale".into());
         }
-        let named: String = b[record + 0x10..record + 0x20].iter().take_while(|c| **c != 0).filter(|c| c.is_ascii_graphic()).map(|c| *c as char).take(10).collect();
-        let label = if named.is_empty() { format!("CH{}", u16::from_le_bytes([b[record + 0x0E], b[record + 0x0F]]).max(1)) } else { named };
+        let named: String = b[record + 0x10..record + 0x20]
+            .iter()
+            .take_while(|c| **c != 0)
+            .filter(|c| c.is_ascii_graphic())
+            .map(|c| *c as char)
+            .take(10)
+            .collect();
+        let label = if named.is_empty() {
+            format!("CH{}", u16::from_le_bytes([b[record + 0x0E], b[record + 0x0F]]).max(1))
+        } else {
+            named
+        };
         let v: Vec<f32> = sg_codes(block, width, false).map(|code| ((code - zero_code) * step) as f32).collect();
         out.push(WaveTrace { t0: -zero_at * dt, dt, v, label });
     }
@@ -1032,7 +1210,11 @@ mod siglent_file_tests {
         for version in [2, 3, 4] {
             let traces = parse_wave(&file(version, [0, 1, 0, 1], 3, &[160, 128, 96, 128, 192, 64]), "s.bin").unwrap();
             let seen: Vec<(&str, &[f32])> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice())).collect();
-            assert_eq!(seen, [("CH2", &[0.25f32, -0.25, -0.75][..]), ("CH4", &[-0.25f32, 0.75, -1.25][..])], "version {version}");
+            assert_eq!(
+                seen,
+                [("CH2", &[0.25f32, -0.25, -0.75][..]), ("CH4", &[-0.25f32, 0.75, -1.25][..])],
+                "version {version}"
+            );
             assert!(traces.iter().all(|t| t.t0 == -10.5 && t.dt == 1e-3), "version {version}");
         }
     }
@@ -1041,11 +1223,16 @@ mod siglent_file_tests {
     fn sixteen_bit_samples_are_read_in_the_byte_order_the_header_names() {
         for (big, shift, version) in [(false, 4, 4), (true, 4, 4), (true, 0, 3)] {
             let codes = [32800u16, 32768, 32736];
-            let body: Vec<u8> = codes.iter().flat_map(|c| if big { c.to_be_bytes() } else { c.to_le_bytes() }).collect();
+            let body: Vec<u8> =
+                codes.iter().flat_map(|c| if big { c.to_be_bytes() } else { c.to_le_bytes() }).collect();
             let mut b = file(version, [1, 0, 0, 0], 3, &body);
             b[shift + 0x260] = 1;
             b[shift + 0x261] = big as u8;
-            assert_eq!(parse_wave(&b, "s.bin").unwrap()[0].v, [0.25, -0.25, -0.75], "version {version}, high byte first {big}");
+            assert_eq!(
+                parse_wave(&b, "s.bin").unwrap()[0].v,
+                [0.25, -0.25, -0.75],
+                "version {version}, high byte first {big}"
+            );
         }
     }
 
@@ -1079,8 +1266,12 @@ mod siglent_file_tests {
 
     #[test]
     fn a_file_without_its_samples_or_without_a_channel_is_refused() {
-        assert!(parse_wave(&file(4, [1, 1, 0, 0], 3, &[160, 128, 96, 1, 2]), "s.bin").unwrap_err().contains("truncated"));
-        assert!(parse_wave(&file(4, [0, 0, 0, 0], 3, &[160, 128, 96]), "s.bin").unwrap_err().contains("no channel and no math trace"));
+        assert!(parse_wave(&file(4, [1, 1, 0, 0], 3, &[160, 128, 96, 1, 2]), "s.bin")
+            .unwrap_err()
+            .contains("truncated"));
+        assert!(parse_wave(&file(4, [0, 0, 0, 0], 3, &[160, 128, 96]), "s.bin")
+            .unwrap_err()
+            .contains("no channel and no math trace"));
         assert!(parse_wave(&file(3, [1, 0, 0, 0], 1, &[160]), "s.bin").unwrap_err().contains("no waveform"));
         // a first word that is a version, over a header that is not one of that version
         let mut b = file(4, [1, 0, 0, 0], 3, &[160, 128, 96]);
@@ -1106,18 +1297,35 @@ mod siglent_file_tests {
     fn a_math_trace_follows_the_channels_and_is_read_alone_too() {
         // after one channel
         for (version, shift) in [(3, 0), (4, 4)] {
-            let traces = parse_wave(&with_math(file(version, [1, 0, 0, 0], 3, &[160, 128, 96]), shift, &[144, 128, 112, 96]), "s.bin").unwrap();
-            let seen: Vec<(&str, &[f32], f64)> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice(), t.dt)).collect();
-            assert_eq!(seen, [("CH1", &[0.25f32, -0.25, -0.75][..], 1e-3), ("F2", &[2.0f32, 1.0, 0.0, -1.0][..], 0.5)], "version {version}");
+            let traces = parse_wave(
+                &with_math(file(version, [1, 0, 0, 0], 3, &[160, 128, 96]), shift, &[144, 128, 112, 96]),
+                "s.bin",
+            )
+            .unwrap();
+            let seen: Vec<(&str, &[f32], f64)> =
+                traces.iter().map(|t| (t.label.as_str(), t.v.as_slice(), t.dt)).collect();
+            assert_eq!(
+                seen,
+                [("CH1", &[0.25f32, -0.25, -0.75][..], 1e-3), ("F2", &[2.0f32, 1.0, 0.0, -1.0][..], 0.5)],
+                "version {version}"
+            );
             assert!(traces.iter().all(|t| t.t0 == -10.5));
         }
         // saved by itself: no channel is on
         let alone = parse_wave(&with_math(file(4, [0, 0, 0, 0], 0, &[]), 4, &[144, 128, 112, 96]), "s.bin").unwrap();
-        assert_eq!((alone.len(), alone[0].label.as_str(), alone[0].v.as_slice()), (1, "F2", &[2.0f32, 1.0, 0.0, -1.0][..]));
+        assert_eq!(
+            (alone.len(), alone[0].label.as_str(), alone[0].v.as_slice()),
+            (1, "F2", &[2.0f32, 1.0, 0.0, -1.0][..])
+        );
         // cut short, the math trace is left out and the channel stands; a version 2 file has none
         let cut = parse_wave(&with_math(file(4, [1, 0, 0, 0], 3, &[160, 128, 96]), 4, &[144, 128]), "s.bin").unwrap();
         assert_eq!((cut.len(), cut[0].label.as_str()), (1, "CH1"));
-        assert_eq!(parse_wave(&with_math(file(2, [1, 0, 0, 0], 3, &[160, 128, 96]), 0, &[144, 128, 112, 96]), "s.bin").unwrap().len(), 1);
+        assert_eq!(
+            parse_wave(&with_math(file(2, [1, 0, 0, 0], 3, &[160, 128, 96]), 0, &[144, 128, 112, 96]), "s.bin")
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     /// One record of a version 6 file: 264 header bytes, four extra, then the samples.
@@ -1256,7 +1464,8 @@ impl Huffman {
 /// The two codes of a block with dynamic Huffman codes (RFC 1951 3.2.7): for literals and lengths, and for distances.
 pub(super) fn inflate_codes(bits: &mut BitIn) -> Option<(Huffman, Huffman)> {
     const ORDER: [usize; 19] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
-    let (literals, distances, coded) = (bits.bits(5)? as usize + 257, bits.bits(5)? as usize + 1, bits.bits(4)? as usize + 4);
+    let (literals, distances, coded) =
+        (bits.bits(5)? as usize + 257, bits.bits(5)? as usize + 1, bits.bits(4)? as usize + 4);
     if literals > 286 || distances > 30 {
         return None;
     }
@@ -1349,7 +1558,8 @@ pub(super) fn inflate(data: &[u8], limit: usize) -> Option<(Vec<u8>, usize)> {
 
 /// The bytes of a zlib stream (RFC 1950): two header bytes, a deflate stream and the Adler-32 of what it holds.
 pub(super) fn zlib_inflate(data: &[u8], limit: usize) -> Option<Vec<u8>> {
-    if data.len() < 6 || data[0] & 0x0F != 8 || u16::from_be_bytes([data[0], data[1]]) % 31 != 0 || data[1] & 0x20 != 0 {
+    if data.len() < 6 || data[0] & 0x0F != 8 || u16::from_be_bytes([data[0], data[1]]) % 31 != 0 || data[1] & 0x20 != 0
+    {
         return None;
     }
     let (out, taken) = inflate(&data[2..], limit)?;
@@ -1371,7 +1581,12 @@ pub(super) enum RigolWfm {
 
 pub(super) fn rigol_wfm_kind(b: &[u8]) -> Option<RigolWfm> {
     match b.get(..4)? {
-        [2, 0, 0, 0] if rigol_dho_blocks(b).is_some_and(|(blocks, _)| blocks.iter().any(|block| matches!(block.kind, 5 | 9))) => Some(RigolWfm::Dho),
+        [2, 0, 0, 0]
+            if rigol_dho_blocks(b)
+                .is_some_and(|(blocks, _)| blocks.iter().any(|block| matches!(block.kind, 5 | 9))) =>
+        {
+            Some(RigolWfm::Dho)
+        }
         [0xA5, 0xA5, 0, 0] if b.len() >= 276 => Some(RigolWfm::E),
         [1, 0xFF, 0xFF, 0xFF] if b.get(4) == Some(&0xA5) => Some(RigolWfm::Unread("DS1000Z and MSO1000Z")),
         [0xA5, 0xA5, 0x38, 0] => Some(RigolWfm::Unread("DS2000, DS4000 and DS6000")),
@@ -1534,11 +1749,20 @@ pub(super) fn parse_rigol_dho(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
     let dt = ticks as f64 * if dho800 { 8e-10 } else { 1e-8 };
     let t0 = -(points as f64 / 2.0) * dt;
     let samples = &b[at + 40..];
-    Ok((0..channels).map(|k| {
-        let (step, zero) = scales.iter().find(|(id, _, _)| *id as usize == k + 1).map_or((first_step, first_zero), |&(_, step, zero)| (step, zero));
-        let v = samples.chunks_exact(2 * channels).take(points).map(|row| (u16::from_le_bytes([row[2 * k], row[2 * k + 1]]) as f64 * step + zero) as f32).collect();
-        WaveTrace { t0, dt, v, label: format!("CH{}", k + 1) }
-    }).collect())
+    Ok((0..channels)
+        .map(|k| {
+            let (step, zero) = scales
+                .iter()
+                .find(|(id, _, _)| *id as usize == k + 1)
+                .map_or((first_step, first_zero), |&(_, step, zero)| (step, zero));
+            let v = samples
+                .chunks_exact(2 * channels)
+                .take(points)
+                .map(|row| (u16::from_le_bytes([row[2 * k], row[2 * k + 1]]) as f64 * step + zero) as f32)
+                .collect();
+            WaveTrace { t0, dt, v, label: format!("CH{}", k + 1) }
+        })
+        .collect())
 }
 
 /// A waveform file of a RIGOL DS1000E. One header of 276 bytes, little endian: 20 roll stop (u32); 28 the samples
@@ -1554,7 +1778,13 @@ pub(super) fn parse_rigol_e(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
     let short = || "truncated RIGOL waveform file".to_string();
     let word = |at: usize| sg_u32(b, at).ok_or_else(short);
     let float = |at: usize| word(at).map(|bits| f32::from_bits(bits) as f64);
-    let depth = [word(28)? as usize, match word(232)? { 0 => word(28)?, n => n } as usize];
+    let depth = [
+        word(28)? as usize,
+        match word(232)? {
+            0 => word(28)?,
+            n => n,
+        } as usize,
+    ];
     let on = [b[34 + 15] != 0, b[58 + 15] != 0];
     let held: usize = (0..2).filter(|k| on[*k]).map(|k| depth[k]).sum();
     // a DS1000C file has the same first bytes and a shorter header
@@ -1588,11 +1818,17 @@ pub(super) fn parse_rigol_e(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
         }
         let step = 1e-6 * (word(head + 18)? as i32 as f64) * float(head + 10)? / 25.0;
         let position = i16::from_le_bytes([b[head + 22], b[head + 23]]) as f64;
-        let v: Vec<f32> = block[..points].iter().map(|code| ((125.0 - *code as f64 - position) * step) as f32).collect();
+        let v: Vec<f32> =
+            block[..points].iter().map(|code| ((125.0 - *code as f64 - position) * step) as f32).collect();
         if step == 0.0 || v.iter().any(|x| !x.is_finite()) {
             return Err("the RIGOL file has no usable vertical scale".into());
         }
-        out.push(WaveTrace { t0: middle - depth[k] as f64 / rate / 2.0, dt: 1.0 / rate, v, label: format!("CH{}", k + 1) });
+        out.push(WaveTrace {
+            t0: middle - depth[k] as f64 / rate / 2.0,
+            dt: 1.0 / rate,
+            v,
+            label: format!("CH{}", k + 1),
+        });
     }
     if out.is_empty() {
         return Err("that file holds no waveform".into());
@@ -1626,12 +1862,13 @@ mod rigol_wfm_file_tests {
         assert_eq!(zlib_inflate(&fixed, 64).unwrap(), b"abcabcabcabc");
         // dynamic codes, as zlib level 9 writes the text
         let dynamic = [
-            120, 218, 117, 210, 77, 10, 2, 49, 12, 64, 225, 171, 244, 8, 105, 250, 143, 167, 25, 116, 102, 53, 232, 162, 222, 31, 65, 72, 201, 200,
-            115, 251, 8, 52, 31, 205, 188, 111, 231, 30, 36, 108, 207, 71, 120, 29, 199, 220, 223, 65, 110, 97, 126, 107, 243, 181, 88, 141, 190, 198,
-            53, 220, 125, 206, 86, 213, 215, 97, 117, 248, 154, 172, 38, 95, 251, 122, 238, 178, 155, 90, 206, 190, 182, 53, 124, 93, 206, 114, 241,
-            181, 174, 97, 69, 117, 69, 181, 176, 186, 161, 58, 162, 186, 163, 90, 81, 61, 16, 157, 24, 45, 136, 206, 140, 142, 136, 46, 252, 213, 202,
-            234, 138, 106, 65, 117, 67, 117, 68, 117, 71, 181, 162, 122, 32, 58, 49, 154, 239, 59, 51, 250, 207, 129, 23, 254, 106, 190, 240, 138, 106,
-            249, 81, 127, 0, 152, 61, 27, 73,
+            120, 218, 117, 210, 77, 10, 2, 49, 12, 64, 225, 171, 244, 8, 105, 250, 143, 167, 25, 116, 102, 53, 232,
+            162, 222, 31, 65, 72, 201, 200, 115, 251, 8, 52, 31, 205, 188, 111, 231, 30, 36, 108, 207, 71, 120, 29,
+            199, 220, 223, 65, 110, 97, 126, 107, 243, 181, 88, 141, 190, 198, 53, 220, 125, 206, 86, 213, 215, 97,
+            117, 248, 154, 172, 38, 95, 251, 122, 238, 178, 155, 90, 206, 190, 182, 53, 124, 93, 206, 114, 241, 181,
+            174, 97, 69, 117, 69, 181, 176, 186, 161, 58, 162, 186, 163, 90, 81, 61, 16, 157, 24, 45, 136, 206, 140,
+            142, 136, 46, 252, 213, 202, 234, 138, 106, 65, 117, 67, 117, 68, 117, 71, 181, 162, 122, 32, 58, 49, 154,
+            239, 59, 51, 250, 207, 129, 23, 254, 106, 190, 240, 138, 106, 249, 81, 127, 0, 152, 61, 27, 73,
         ];
         assert_eq!(zlib_inflate(&dynamic, 4096).unwrap(), text());
         // stored
@@ -1707,11 +1944,19 @@ mod rigol_wfm_file_tests {
     #[test]
     fn a_dho800_file_gives_its_channels_from_samples_that_take_turns() {
         // CH1 around 0.5 V and CH2 around -1 V, 500 ticks of 0.8 ns between samples, compressed settings
-        let blocks = [(1, 5, channel_settings(true, 0.5), true), (300, 6, vec![7; 40], true), (2, 5, channel_settings(true, -1.0), false)];
+        let blocks = [
+            (1, 5, channel_settings(true, 0.5), true),
+            (300, 6, vec![7; 40], true),
+            (2, 5, channel_settings(true, -1.0), false),
+        ];
         let b = dho(&blocks, 2, 500, &[32768, 32768, 42768, 22768, 22768, 42768, 32768, 32768]);
         let traces = parse_wave(&b, "dho.wfm").unwrap();
         assert_eq!(traces.len(), 2);
-        assert!(close(&traces[0].v, &[0.5, 1.5, -0.5, 0.5]) && close(&traces[1].v, &[-1.0, -2.0, 0.0, -1.0]), "{:?}", (&traces[0].v, &traces[1].v));
+        assert!(
+            close(&traces[0].v, &[0.5, 1.5, -0.5, 0.5]) && close(&traces[1].v, &[-1.0, -2.0, 0.0, -1.0]),
+            "{:?}",
+            (&traces[0].v, &traces[1].v)
+        );
         assert_eq!((traces[0].label.as_str(), traces[1].label.as_str()), ("CH1", "CH2"));
         assert!(traces.iter().all(|t| (t.dt - 4e-7).abs() < 1e-18 && (t.t0 + 8e-7).abs() < 1e-18));
     }
@@ -1816,7 +2061,11 @@ mod rigol_wfm_file_tests {
         // a higher code is a lower voltage; CH1 sits a division up, CH2 a division down
         let traces = parse_wave(&e([true, true], 4, 0, &[100, 75, 125, 150, 150, 125, 175, 200]), "e.wfm").unwrap();
         assert_eq!(traces.len(), 2);
-        assert!(close(&traces[0].v, &[0.0, 1.0, -1.0, -2.0]) && close(&traces[1].v, &[0.0, 1.0, -1.0, -2.0]), "{:?}", (&traces[0].v, &traces[1].v));
+        assert!(
+            close(&traces[0].v, &[0.0, 1.0, -1.0, -2.0]) && close(&traces[1].v, &[0.0, 1.0, -1.0, -2.0]),
+            "{:?}",
+            (&traces[0].v, &traces[1].v)
+        );
         assert!(traces.iter().all(|t| t.dt == 1e-3 && (t.t0 - 0.0).abs() < 1e-12));
         // CH2 alone, and the bytes after a roll stop left out
         let alone = parse_wave(&e([false, true], 6, 1, &[150, 125, 175, 0, 0, 0]), "e.wfm").unwrap();
@@ -1829,8 +2078,15 @@ mod rigol_wfm_file_tests {
         assert!(parse_wave(&e([true, false], 4, 0, &[1, 2, 3]), "e.wfm").unwrap_err().contains("truncated"));
         assert!(parse_wave(&e([false, false], 4, 0, &[]), "e.wfm").unwrap_err().contains("no waveform"));
         // the shorter header of a DS1000C: 256 bytes, then the 20 samples
-        assert!(parse_wave(&[&e([true, false], 20, 0, &[])[..256], &[0u8; 20][..]].concat(), "c.wfm").unwrap_err().contains("DS1000C"));
-        for (first, family) in [([1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5], "DS1000Z"), ([0xA5, 0xA5, 0x38, 0, 0, 0], "DS2000"), ([0xA5, 0xA5, 0xA4, 1, 0, 0], "DS1000B"), ([0xA1, 0xA5, 0, 0, 0, 0], "DS1000C")] {
+        assert!(parse_wave(&[&e([true, false], 20, 0, &[])[..256], &[0u8; 20][..]].concat(), "c.wfm")
+            .unwrap_err()
+            .contains("DS1000C"));
+        for (first, family) in [
+            ([1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5], "DS1000Z"),
+            ([0xA5, 0xA5, 0x38, 0, 0, 0], "DS2000"),
+            ([0xA5, 0xA5, 0xA4, 1, 0, 0], "DS1000B"),
+            ([0xA1, 0xA5, 0, 0, 0, 0], "DS1000C"),
+        ] {
             let refused = parse_wave(&[&first[..], &[0u8; 64][..]].concat(), "r.wfm").unwrap_err();
             assert!(refused.contains(family) && refused.contains("not read"), "{refused}");
         }
@@ -1854,12 +2110,32 @@ mod rigol_csv_file_tests {
     #[test]
     fn a_ds1000z_file_counts_samples_and_gives_their_time_in_its_header() {
         // CH1 and CH4 of a DS1104Z, lines ended by a line feed
-        let traces = read(&["X,CH1,CH4,Start,Increment,", "Sequence,Volt,Volt,-1.200000e-03,4.000000e-08", "0,2.86e+00,3.08e+00,", "1,2.86e+00,3.08e+00,", "2,2.84e+00,3.10e+00,"], "\n").unwrap();
+        let traces = read(
+            &[
+                "X,CH1,CH4,Start,Increment,",
+                "Sequence,Volt,Volt,-1.200000e-03,4.000000e-08",
+                "0,2.86e+00,3.08e+00,",
+                "1,2.86e+00,3.08e+00,",
+                "2,2.84e+00,3.10e+00,",
+            ],
+            "\n",
+        )
+        .unwrap();
         let seen: Vec<(&str, &[f32])> = traces.iter().map(|t| (t.label.as_str(), t.v.as_slice())).collect();
         assert_eq!(seen, [("CH1", &[2.86f32, 2.86, 2.84][..]), ("CH4", &[3.08f32, 3.08, 3.10][..])]);
         assert!(traces.iter().all(|t| close(t.t0, -1.2e-3) && close(t.dt, 4e-8)), "{:?}", (traces[0].t0, traces[0].dt));
         // four channels of a DS1054Z, lines ended by a carriage return and a line feed
-        let four = read(&["X,CH1,CH2,CH3,CH4,Start,Increment,", "Sequence,Volt,Volt,Volt,Volt,-3.000000e-07,5.000000e-10", "0,3.28e+00,9.60e-01,-1.60e-01,0.00e+00,", "1,3.28e+00,9.60e-01,-1.60e-01,0.00e+00,", "2,3.20e+00,9.60e-01,-8.00e-02,0.00e+00,"], "\r\n").unwrap();
+        let four = read(
+            &[
+                "X,CH1,CH2,CH3,CH4,Start,Increment,",
+                "Sequence,Volt,Volt,Volt,Volt,-3.000000e-07,5.000000e-10",
+                "0,3.28e+00,9.60e-01,-1.60e-01,0.00e+00,",
+                "1,3.28e+00,9.60e-01,-1.60e-01,0.00e+00,",
+                "2,3.20e+00,9.60e-01,-8.00e-02,0.00e+00,",
+            ],
+            "\r\n",
+        )
+        .unwrap();
         assert_eq!(four.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(), ["CH1", "CH2", "CH3", "CH4"]);
         assert_eq!(four[2].v, [-0.16, -0.16, -0.08]);
         assert!(four.iter().all(|t| close(t.t0, -3e-7) && close(t.dt, 5e-10)));
@@ -1868,11 +2144,31 @@ mod rigol_csv_file_tests {
     #[test]
     fn a_ds2000_and_a_ds4000_file_are_read_the_same_way() {
         // one channel of a DS2072A: its second line ends with a comma
-        let one = read(&["X,CH1,Start,Increment,", "Sequence,Volt,-3.500000e-03,5.000000e-06,", "0,2.400000e-02,", "1,8.000000e-03,", "2,2.400000e-02,"], "\r\n").unwrap();
+        let one = read(
+            &[
+                "X,CH1,Start,Increment,",
+                "Sequence,Volt,-3.500000e-03,5.000000e-06,",
+                "0,2.400000e-02,",
+                "1,8.000000e-03,",
+                "2,2.400000e-02,",
+            ],
+            "\r\n",
+        )
+        .unwrap();
         assert_eq!((one.len(), one[0].label.as_str(), one[0].v.as_slice()), (1, "CH1", &[0.024f32, 0.008, 0.024][..]));
         assert!(close(one[0].t0, -3.5e-3) && close(one[0].dt, 5e-6));
         // a DS4024 starts its count at 22: the first sample is 22 steps after the start
-        let late = read(&["X,CH1,CH2,Start,Increment,", "Sequence,Volt,Volt,-1.400000e-03,2.000000e-06,", "22,3.125000e-02,6.250000e-03,", "23,-6.250000e-02,-6.250000e-03,", "24,3.125000e-02,6.250000e-03,"], "\r\n").unwrap();
+        let late = read(
+            &[
+                "X,CH1,CH2,Start,Increment,",
+                "Sequence,Volt,Volt,-1.400000e-03,2.000000e-06,",
+                "22,3.125000e-02,6.250000e-03,",
+                "23,-6.250000e-02,-6.250000e-03,",
+                "24,3.125000e-02,6.250000e-03,",
+            ],
+            "\r\n",
+        )
+        .unwrap();
         assert!(close(late[0].t0, -1.4e-3 + 22.0 * 2e-6) && close(late[0].dt, 2e-6), "{:?}", (late[0].t0, late[0].dt));
         assert_eq!(late[1].v, [0.00625, -0.00625, 0.00625]);
     }
@@ -1880,21 +2176,46 @@ mod rigol_csv_file_tests {
     #[test]
     fn a_file_with_a_time_column_keeps_its_times_and_takes_the_channels_of_its_header() {
         // DS1102E: seconds in the first column
-        let e = read(&["X,CH1,", "Second,Volt,", "-5.9999998e-06,4.40000e+00,", "-5.9800000e-06,4.32000e+00,", "-5.9600002e-06,4.24000e+00,"], "\r\n").unwrap();
+        let e = read(
+            &[
+                "X,CH1,",
+                "Second,Volt,",
+                "-5.9999998e-06,4.40000e+00,",
+                "-5.9800000e-06,4.32000e+00,",
+                "-5.9600002e-06,4.24000e+00,",
+            ],
+            "\r\n",
+        )
+        .unwrap();
         assert_eq!((e.len(), e[0].label.as_str(), e[0].v.as_slice()), (1, "CH1", &[4.4f32, 4.32, 4.24][..]));
         assert!(close(e[0].t0, -5.9999998e-06) && (e[0].dt - 2e-8).abs() < 1e-12);
         // DS1204B: no name over the first column, CH2 and CH4 on, a comma and a space at the end of a row
-        let b = read(&[",CH2,CH4", "Second,Volt,Volt", "1.63720e-02,1.48e+01,1.36e+01, ", "1.63760e-02,1.48e+01,1.36e+01, ", "1.63800e-02,2.08e+01,1.36e+01, "], "\r\n").unwrap();
+        let b = read(
+            &[
+                ",CH2,CH4",
+                "Second,Volt,Volt",
+                "1.63720e-02,1.48e+01,1.36e+01, ",
+                "1.63760e-02,1.48e+01,1.36e+01, ",
+                "1.63800e-02,2.08e+01,1.36e+01, ",
+            ],
+            "\r\n",
+        )
+        .unwrap();
         assert_eq!(b.iter().map(|t| (t.label.as_str(), t.v.len())).collect::<Vec<_>>(), [("CH2", 3), ("CH4", 3)]);
         // DS1102D: the unit in the name of a column, no second header line
-        let d = read(&["X,CH 1 (V),CH 2 (V)", "-0.00468800,8.08,8.40", "-0.00467799,4.88,8.40", "-0.00466798,4.88,8.40"], "\n").unwrap();
+        let d = read(
+            &["X,CH 1 (V),CH 2 (V)", "-0.00468800,8.08,8.40", "-0.00467799,4.88,8.40", "-0.00466798,4.88,8.40"],
+            "\n",
+        )
+        .unwrap();
         assert_eq!(d.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(), ["CH1", "CH2"]);
         assert_eq!(d[0].v, [8.08, 4.88, 4.88]);
     }
 
     #[test]
     fn a_file_that_counts_samples_without_saying_their_time_is_refused() {
-        let refused = read(&["X,CH1,Start,Increment,", "Sequence,Volt,", "0,2.400000e-02,", "1,8.000000e-03,"], "\n").unwrap_err();
+        let refused = read(&["X,CH1,Start,Increment,", "Sequence,Volt,", "0,2.400000e-02,", "1,8.000000e-03,"], "\n")
+            .unwrap_err();
         assert!(refused.contains("Start and Increment"), "{refused}");
         assert!(read(&["X,CH1,Start,Increment,", "Sequence,Volt,-3.5e-03,0", "0,1,", "1,2,"], "\n").is_err());
         // another program's file with the same first cell is read as before
@@ -1939,8 +2260,14 @@ mod rigol_csv_file_tests {
 
     #[test]
     fn a_ds1000z_waveform_file_is_refused_with_the_way_round_it() {
-        let refused = parse_wave(&[&[1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5][..], &[0u8; 64][..]].concat(), "z.wfm").unwrap_err();
-        assert!(refused.contains("DS1000Z") && refused.contains("vertical offset") && refused.contains("save the waveform as CSV"), "{refused}");
+        let refused =
+            parse_wave(&[&[1u8, 0xFF, 0xFF, 0xFF, 0xA5, 0xA5][..], &[0u8; 64][..]].concat(), "z.wfm").unwrap_err();
+        assert!(
+            refused.contains("DS1000Z")
+                && refused.contains("vertical offset")
+                && refused.contains("save the waveform as CSV"),
+            "{refused}"
+        );
     }
 }
 

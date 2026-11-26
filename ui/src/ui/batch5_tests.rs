@@ -56,7 +56,9 @@ fn sim_eye(l: Layout, place: EyePlace) -> Ui {
     let mut u = fresh(l);
     u.files.dir = std::env::temp_dir().join("oos-batch5-eye");
     assert!(u.sim_preset_set("PCIe 3.0"));
-    if l == Layout::Studio { u.studio_set_view(super::studio::StudioView::Sim); }
+    if l == Layout::Studio {
+        u.studio_set_view(super::studio::StudioView::Sim);
+    }
     u.sim_activate(Item::SimPlay);
     u.wait_sim_generation();
     for _ in 0..10 {

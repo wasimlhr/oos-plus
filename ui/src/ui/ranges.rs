@@ -79,7 +79,9 @@ pub(super) const EYE_PLL: (f64, f64) = (1e3, crate::model::EYE_PLL_MAX);
 /// value is stored as a 32-bit float, and a step that a float cannot hold would leave a residue (0 V, up, down: 745 pV);
 /// on this lattice N presses up and N down return exactly, from wherever the value started.
 pub(super) fn add_step(v: f64, step: f64, d: i32) -> f64 {
-    if !(step.is_finite() && step > 0.0) { return v; }
+    if !(step.is_finite() && step > 0.0) {
+        return v;
+    }
     let q = step / 100.0;
     ((v + d as f64 * step) / q).round() * q
 }
@@ -89,9 +91,13 @@ impl Ui {
     pub(super) fn item_range(&self, it: Item) -> Option<Range> {
         let m = &self.m;
         let sym = |r: f64, step: f64, unit| Some(Range { lo: -r, hi: r, step: Step::Add(step), unit });
-        let ends = |t: (f64, f64, bool), unit| Some(Range { lo: if t.2 { 0.0 } else { t.0 }, hi: ladder_top(t), step: Step::Ladder, unit });
+        let ends = |t: (f64, f64, bool), unit| {
+            Some(Range { lo: if t.2 { 0.0 } else { t.0 }, hi: ladder_top(t), step: Step::Ladder, unit })
+        };
         let int = |t: (i32, i32), unit| Some(Range { lo: t.0 as f64, hi: t.1 as f64, step: Step::Index, unit });
-        let flt = |t: (f32, f32), step: f64, unit| Some(Range { lo: t.0 as f64, hi: t.1 as f64, step: Step::Add(step), unit });
+        let flt = |t: (f32, f32), step: f64, unit| {
+            Some(Range { lo: t.0 as f64, hi: t.1 as f64, step: Step::Add(step), unit })
+        };
         match it {
             Item::TrigLevel | Item::TrigLevel2 => {
                 let vpd = self.trigger_vpd(self.trigger_level_secondary(it)) as f64;
@@ -132,7 +138,9 @@ impl Ui {
             }
             Item::MathLinA | Item::MathLinB => flt(MATH_LIN, 0.1, ""),
             Item::SpecMargin => flt(SPEC_MARGIN, 1.0, "dB"),
-            Item::SimHigh | Item::SimLow => Some(Range { lo: SIM_LEVEL.0, hi: SIM_LEVEL.1, step: Step::Add(0.05), unit: "V" }),
+            Item::SimHigh | Item::SimLow => {
+                Some(Range { lo: SIM_LEVEL.0, hi: SIM_LEVEL.1, step: Step::Add(0.05), unit: "V" })
+            }
             Item::SimDeemph => Some(Range { lo: SIM_DEEMPH.0, hi: SIM_DEEMPH.1, step: Step::Add(0.5), unit: "dB" }),
             Item::BusPos => flt((BUS_POS_MIN, BUS_POS_MAX), 0.1, "div"),
             Item::DecPos => flt(crate::model::DEC_POS, 0.1, "div"),
@@ -145,7 +153,9 @@ impl Ui {
             Item::NthN => int(NTH_N, ""),
             Item::DecBits => int(dec_bits(m.dec_proto), ""),
             Item::VidLine => int(vid_line(m.video_std), ""),
-            Item::TrigBusVal => Some(Range { lo: TRIG_BUS_VAL.0 as f64, hi: TRIG_BUS_VAL.1 as f64, step: Step::Index, unit: "" }),
+            Item::TrigBusVal => {
+                Some(Range { lo: TRIG_BUS_VAL.0 as f64, hi: TRIG_BUS_VAL.1 as f64, step: Step::Index, unit: "" })
+            }
             // slots: a number among the references, not a loop
             Item::SimSlot | Item::RefSel => Some(Range { lo: 0.0, hi: (NREF - 1) as f64, step: Step::Index, unit: "" }),
             Item::SimRate => ends(SIM_RATE, "b/s"),
@@ -161,7 +171,9 @@ impl Ui {
             Item::SimPjHz => ends(SIM_PJ_HZ, "Hz"),
             Item::EyeRate => ends(EYE_RATE, "b/s"),
             Item::EyePll => Some(Range { lo: 0.0, hi: EYE_PLL.1, step: Step::Ladder, unit: "Hz" }),
-            Item::SpecCenter | Item::SpecSpan | Item::SpecRbw => Some(Range { lo: 0.0, hi: analysis::FREQ_TOP, step: Step::Ladder, unit: "Hz" }),
+            Item::SpecCenter | Item::SpecSpan | Item::SpecRbw => {
+                Some(Range { lo: 0.0, hi: analysis::FREQ_TOP, step: Step::Ladder, unit: "Hz" })
+            }
             _ => None,
         }
     }
@@ -175,14 +187,56 @@ impl Ui {
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
     pub(super) fn range_items(&self) -> Vec<Item> {
         let mut v = vec![
-            Item::TrigLevel, Item::TrigLevel2, Item::PatLevel, Item::HDelay, Item::MathOffset, Item::DecThr, Item::BusClkThr, Item::BusDataThr,
-            Item::SpecRef, Item::RefOffset, Item::MathLinA, Item::MathLinB, Item::SpecMargin, Item::SimHigh, Item::SimLow, Item::SimDeemph,
-            Item::BusPos, Item::DecPos, Item::Intensity, Item::GridBright,
-            Item::StoreSlot, Item::MagN, Item::CntDigits, Item::NthN, Item::DecBits, Item::VidLine, Item::TrigBusVal, Item::SimSlot,
-            Item::RefSel, Item::SimRate, Item::SimRise, Item::SimBw, Item::SimNoise, Item::SimSscHz, Item::SimDcd, Item::SimCorrRj,
-            Item::SimCorrHz, Item::SimRj, Item::SimPj, Item::SimPjHz, Item::SpecCenter, Item::SpecSpan, Item::SpecRbw, Item::EyePll, Item::EyeRate, Item::BodeAmp,
+            Item::TrigLevel,
+            Item::TrigLevel2,
+            Item::PatLevel,
+            Item::HDelay,
+            Item::MathOffset,
+            Item::DecThr,
+            Item::BusClkThr,
+            Item::BusDataThr,
+            Item::SpecRef,
+            Item::RefOffset,
+            Item::MathLinA,
+            Item::MathLinB,
+            Item::SpecMargin,
+            Item::SimHigh,
+            Item::SimLow,
+            Item::SimDeemph,
+            Item::BusPos,
+            Item::DecPos,
+            Item::Intensity,
+            Item::GridBright,
+            Item::StoreSlot,
+            Item::MagN,
+            Item::CntDigits,
+            Item::NthN,
+            Item::DecBits,
+            Item::VidLine,
+            Item::TrigBusVal,
+            Item::SimSlot,
+            Item::RefSel,
+            Item::SimRate,
+            Item::SimRise,
+            Item::SimBw,
+            Item::SimNoise,
+            Item::SimSscHz,
+            Item::SimDcd,
+            Item::SimCorrRj,
+            Item::SimCorrHz,
+            Item::SimRj,
+            Item::SimPj,
+            Item::SimPjHz,
+            Item::SpecCenter,
+            Item::SpecSpan,
+            Item::SpecRbw,
+            Item::EyePll,
+            Item::EyeRate,
+            Item::BodeAmp,
         ];
-        for c in 0..n_ch() { v.extend([Item::ChOffset(c), Item::ChBias(c), Item::ChSkew(c)]); }
+        for c in 0..n_ch() {
+            v.extend([Item::ChOffset(c), Item::ChBias(c), Item::ChSkew(c)]);
+        }
         v
     }
 
@@ -268,11 +322,17 @@ impl Ui {
             Item::BusDataThr => m.bus.data_thr = x,
             Item::SpecRef => m.spec_ref = x,
             Item::RefOffset => {
-                if let Some(Some(r)) = self.refs.get_mut(self.ref_page.sel) { r.offset = x; } else { return None; }
+                if let Some(Some(r)) = self.refs.get_mut(self.ref_page.sel) {
+                    r.offset = x;
+                } else {
+                    return None;
+                }
             }
             _ => return None,
         }
-        if matches!(it, Item::TrigLevel | Item::TrigLevel2) { self.replay.reset_search(); }
+        if matches!(it, Item::TrigLevel | Item::TrigLevel2) {
+            self.replay.reset_search();
+        }
         self.range_get(it)
     }
 
@@ -291,13 +351,19 @@ impl Ui {
         // a press back from a limit that the last press ran into returns to where that press came from (the limit is
         // not on the lattice of the value), so a press up into the limit and a press down leave the value where it was
         if let Some((hit, at, from)) = self.clamp_home {
-            if hit == it && near(v, at) && (from - at) * d as f64 > 0.0 { to = add_step(from, step, d - d.signum()); self.clamp_home = None; }
+            if hit == it && near(v, at) && (from - at) * d as f64 > 0.0 {
+                to = add_step(from, step, d - d.signum());
+                self.clamp_home = None;
+            }
         }
         let now = self.range_set(it, to);
         if let (Some(now), Some(r)) = (now, self.item_range(it)) {
             let out = to < r.lo - step * 1e-3 || to > r.hi + step * 1e-3;
-            if out && !near(v, now) { self.clamp_home = Some((it, now, v)); }
-            else if !out { self.clamp_home = None; }
+            if out && !near(v, now) {
+                self.clamp_home = Some((it, now, v));
+            } else if !out {
+                self.clamp_home = None;
+            }
         }
         true
     }
@@ -305,9 +371,13 @@ impl Ui {
     /// After any stepper: a value that is outside its range (a setting loaded, a path that did not clamp) comes back in.
     pub(super) fn range_enforce(&mut self, it: Item) {
         let Some(r) = self.item_range(it) else { return };
-        if !matches!(r.step, Step::Add(_)) || !self.range_limited(it) { return; }
+        if !matches!(r.step, Step::Add(_)) || !self.range_limited(it) {
+            return;
+        }
         if let Some(v) = self.range_get(it) {
-            if v < r.lo || v > r.hi { self.range_set(it, v); }
+            if v < r.lo || v > r.hi {
+                self.range_set(it, v);
+            }
         }
     }
 
@@ -318,11 +388,14 @@ impl Ui {
     }
 }
 
-
 impl Ui {
     /// The trigger level (the upper one, or the lower one when `secondary`) for the SCPI module.
     pub(crate) fn scpi_trigger_level(&self, secondary: bool) -> f32 {
-        if secondary { self.m.trig_level2 } else { self.m.trig_level }
+        if secondary {
+            self.m.trig_level2
+        } else {
+            self.m.trig_level
+        }
     }
 
     /// A trigger level by SCPI, taken as it is (`scpi_range_set`).
@@ -338,7 +411,11 @@ fn ladder_top(t: (f64, f64, bool)) -> f64 {
 
 /// Data bits of a serial decoder: UART 5 to 9, the others 4 to 32.
 pub(super) fn dec_bits(p: Proto) -> (i32, i32) {
-    if p == Proto::UART { (5, 9) } else { (4, 32) }
+    if p == Proto::UART {
+        (5, 9)
+    } else {
+        (4, 32)
+    }
 }
 
 /// The lines a video trigger can pick (the first half of the lines of a standard, less its blanking).
@@ -354,10 +431,15 @@ impl Ui {
     ///   as long as the presses go on (`ladder_home`): up goes to the rung above, down to the one below, and N presses
     ///   up and N down come back to it exactly. A value set by anything else (the pad, SCPI) starts over.
     pub(super) fn ladder_move(&mut self, it: Item, cur: f64, d: i32, l: &[f64]) -> f64 {
-        if l.is_empty() || d == 0 { return cur; }
+        if l.is_empty() || d == 0 {
+            return cur;
+        }
         let near = |a: f64, b: f64| (a - b).abs() <= 1e-6 * a.abs().max(b.abs()) + f64::MIN_POSITIVE;
         let last = l.len() - 1;
-        let kept = match self.ladder_home { Some((hit, hv, to)) if hit == it && near(cur, to) => Some(hv), _ => None };
+        let kept = match self.ladder_home {
+            Some((hit, hv, to)) if hit == it && near(cur, to) => Some(hv),
+            _ => None,
+        };
         let between = !l.iter().any(|&x| near(x, cur)) && cur > l[0] && cur < l[last];
         let home = kept.or(between.then_some(cur));
         let mut list = l.to_vec();

@@ -17,7 +17,9 @@ fn studio() -> Ui {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     u.files.dir = dir;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Waveform);
@@ -32,7 +34,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..4 { frame(u); }
+    for _ in 0..4 {
+        frame(u);
+    }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -54,14 +58,18 @@ fn tap_at(u: &mut Ui, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
+    for k in 1..=8 {
+        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
+    }
     touch(u, Phase::Up, b.0, b.1);
     frame(u);
 }
 
 fn csv_bytes() -> Vec<u8> {
     let mut csv = String::from("Time (s),Voltage (V)\n");
-    for i in 0..4_000 { csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-7, (i as f64 * 0.02).sin())); }
+    for i in 0..4_000 {
+        csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-7, (i as f64 * 0.02).sin()));
+    }
     csv.into_bytes()
 }
 
@@ -71,7 +79,9 @@ fn load_csv(u: &mut Ui, slot: usize, name: &str) {
 }
 
 fn open_slider(u: &mut Ui) {
-    for _ in 0..3 { frame(u); }
+    for _ in 0..3 {
+        frame(u);
+    }
     let tag = u.trigger_tag_hit().expect("the trigger level tag is on the plot");
     assert!(tag.h >= 40, "a large touch target: {tag:?}");
     tap_at(u, tag.x + tag.w / 2, tag.y + tag.h / 2);
@@ -116,7 +126,13 @@ fn a_tap_on_the_trigger_tag_opens_a_slider_that_sets_the_level_live() {
     let s = u.measured.stats[u.m.trig_src];
     assert!(s.valid, "the demo signal is measured");
     tap_at(&mut u, g.fifty.x + g.fifty.w / 2, g.fifty.y + g.fifty.h / 2);
-    assert!((u.m.trig_level - (s.vmax + s.vmin) / 2.0).abs() < 0.05 * (s.vmax - s.vmin).abs().max(1e-3), "level {} for {}..{}", u.m.trig_level, s.vmin, s.vmax);
+    assert!(
+        (u.m.trig_level - (s.vmax + s.vmin) / 2.0).abs() < 0.05 * (s.vmax - s.vmin).abs().max(1e-3),
+        "level {} for {}..{}",
+        u.m.trig_level,
+        s.vmin,
+        s.vmax
+    );
     assert!(u.studio.trig_slider);
     // the value opens the numeric pad; its entry moves the thumb
     tap_at(&mut u, g.value.x + g.value.w / 2, g.value.y + g.value.h / 2);
@@ -135,7 +151,9 @@ fn the_slider_works_for_a_ref_trigger_and_the_classic_layouts_keep_the_sheet() {
     let mut u = studio();
     load_csv(&mut u, 0, "ref1.csv");
     u.set_trigger_source(WaveId::Ref(0), false);
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     assert_eq!(u.m.trig_ref, Some(0));
     open_slider(&mut u);
     let g = u.trig_slider_geo();
@@ -146,7 +164,9 @@ fn the_slider_works_for_a_ref_trigger_and_the_classic_layouts_keep_the_sheet() {
     // Minimal keeps the Trigger sheet on the tag (Default opens nothing there, as upstream OOS)
     let mut d = Ui::new(Source::Demo { t: 0.0 });
     d.m.layout = Layout::Minimal;
-    for _ in 0..10 { d.step(0.05); }
+    for _ in 0..10 {
+        d.step(0.05);
+    }
     frame(&mut d);
     let r = d.trigger_marker_rects()[0];
     d.plot_tap(r.x + r.w / 2, r.y + r.h / 2);
@@ -161,9 +181,13 @@ fn a_loaded_ref_keeps_its_pill_and_trace_when_sim_gives_way_to_live() {
     u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0]);
     assert_eq!(u.m.trig_ref, Some(0), "SIM triggers on the ref");
-    for _ in 0..6 { frame(&mut u); }
+    for _ in 0..6 {
+        frame(&mut u);
+    }
     u.return_to_live();
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     assert!(!u.sim_mode());
     let b = u.studio_bottom();
     assert!(b.ch[0].w > 0 && b.ch[1].w > 0 && b.refs[0].w > 0, "CH1, CH2 and R1 pills in Live");
@@ -187,7 +211,9 @@ fn a_ref_stays_shown_when_live_returns_without_a_saved_session() {
     load_csv(&mut u, 1, "ref2.csv");
     u.workflow_hold = None;
     u.return_to_live();
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     assert!(!u.record_mode());
     assert_eq!(u.shown_refs(), vec![0, 1], "both refs are still shown");
     let b = u.studio_bottom();
@@ -197,7 +223,9 @@ fn a_ref_stays_shown_when_live_returns_without_a_saved_session() {
     assert!(u.m.ch[u.m.trig_src].on, "a channel that is on");
     // Default and Minimal keep their old behaviour: Live hides the refs of a record session
     let mut d = Ui::new(Source::Demo { t: 0.0 });
-    for _ in 0..10 { d.step(0.05); }
+    for _ in 0..10 {
+        d.step(0.05);
+    }
     d.load_waveform_bytes_at(&csv_bytes(), "r.csv", 0).unwrap();
     d.set_trigger_source(WaveId::Ref(0), false);
     d.workflow_hold = None;
@@ -217,13 +245,19 @@ fn the_trigger_source_returns_to_the_live_channel_it_had() {
 }
 
 /// A point on a floating view's title clear of its handle and buttons.
-fn title_point(r: Rect) -> (i32, i32) { (r.x + 90, r.y + STRIP_H / 2) }
+fn title_point(r: Rect) -> (i32, i32) {
+    (r.x + 90, r.y + STRIP_H / 2)
+}
 
-fn handle_point(r: Rect) -> (i32, i32) { (r.x + 14, r.y + STRIP_H / 2) }
+fn handle_point(r: Rect) -> (i32, i32) {
+    (r.x + 14, r.y + STRIP_H / 2)
+}
 
 fn float_measure(u: &mut Ui) -> Rect {
     u.studio_set_view(StudioView::Floating);
-    for _ in 0..3 { frame(u); }
+    for _ in 0..3 {
+        frame(u);
+    }
     u.dock_float_rect(VKind::Measure).expect("a floating panel")
 }
 
@@ -238,7 +272,10 @@ fn a_floating_view_dragged_by_its_title_moves_freely_into_a_corner_without_docki
     touch(&mut u, Phase::Down, from.0, from.1);
     touch(&mut u, Phase::Move, w.x + w.w / 2, w.y + w.h / 2);
     touch(&mut u, Phase::Move, w.x + w.w / 2 + 3, w.y + w.h / 2 + 3);
-    match &u.studio.dock.drag { Some(DockDrag::Move { free, .. }) => assert!(*free, "a free move"), d => panic!("not dragging: {d:?}") }
+    match &u.studio.dock.drag {
+        Some(DockDrag::Move { free, .. }) => assert!(*free, "a free move"),
+        d => panic!("not dragging: {d:?}"),
+    }
     frame(&mut u);
     // on to the top-right corner (past the screen edge: clamped)
     touch(&mut u, Phase::Move, reg.right() + 200, reg.y - 100);
@@ -247,7 +284,10 @@ fn a_floating_view_dragged_by_its_title_moves_freely_into_a_corner_without_docki
     assert_eq!(u.studio.view, StudioView::Floating, "it did not dock");
     let f = u.dock_float_rect(VKind::Measure).unwrap();
     assert_eq!(f.y, reg.y, "at the top: {f:?} of {reg:?}");
-    assert!(f.right() >= reg.right() - 60, "in the top-right corner (clear of the plot's corner buttons): {f:?} of {reg:?}");
+    assert!(
+        f.right() >= reg.right() - 60,
+        "in the top-right corner (clear of the plot's corner buttons): {f:?} of {reg:?}"
+    );
     assert_eq!(f.w, r.w);
     shot(&mut u, "float-top-right");
     // and the bottom-left, over the waveform
@@ -270,8 +310,13 @@ fn a_floating_view_dragged_by_its_handle_shows_the_dock_targets_and_docks() {
     let target = (w.right() - 20, w.y + w.h / 2);
     touch(&mut u, Phase::Down, g.0, g.1);
     touch(&mut u, Phase::Move, g.0 + 30, g.1 + 30);
-    for k in 1..=6 { touch(&mut u, Phase::Move, g.0 + (target.0 - g.0) * k / 6, g.1 + (target.1 - g.1) * k / 6); }
-    match &u.studio.dock.drag { Some(DockDrag::Move { free, .. }) => assert!(!*free), d => panic!("not dragging: {d:?}") }
+    for k in 1..=6 {
+        touch(&mut u, Phase::Move, g.0 + (target.0 - g.0) * k / 6, g.1 + (target.1 - g.1) * k / 6);
+    }
+    match &u.studio.dock.drag {
+        Some(DockDrag::Move { free, .. }) => assert!(!*free),
+        d => panic!("not dragging: {d:?}"),
+    }
     let DockDrag::Move { kind, x, y, grab, .. } = u.studio.dock.drag.clone().unwrap() else { unreachable!() };
     assert_ne!(u.dock_drop_at(kind, x, y, grab).0, super::dock::Drop::Stay, "a dock target is shown");
     shot(&mut u, "float-dock-target");
@@ -281,13 +326,22 @@ fn a_floating_view_dragged_by_its_handle_shows_the_dock_targets_and_docks() {
     assert!(u.dock_float_rect(VKind::Measure).is_none());
 }
 
-
 #[test]
 fn auto_eye_keeps_the_source_the_sheet_shows_a_ref_included() {
     let mut u = studio();
     // R1: a 1 Gb/s square wave at 50 ps
     let v: Vec<f32> = (0..20_000).map(|i| if i / 20 % 2 == 0 { -1.0 } else { 1.0 }).collect();
-    u.refs[0] = Some(RefWave { src: 0, color: 0, label: "Eye test".into(), t0: -1e-6, dt: 50e-12, v: v.into(), vpd: 0.5, offset: 0.0, on: true });
+    u.refs[0] = Some(RefWave {
+        src: 0,
+        color: 0,
+        label: "Eye test".into(),
+        t0: -1e-6,
+        dt: 50e-12,
+        v: v.into(),
+        vpd: 0.5,
+        offset: 0.0,
+        on: true,
+    });
     // CH2 is the selected lane, the sheet's source is R1
     u.select_workspace_source(WaveId::Ch(1));
     u.open_menu(MenuId::Eye);
@@ -295,7 +349,9 @@ fn auto_eye_keeps_the_source_the_sheet_shows_a_ref_included() {
     u.select_option(Item::EyeSrc, &name);
     assert_eq!(u.m.eye_src, WaveId::Ref(0));
     u.activate(Item::EyeAct);
-    for _ in 0..30 { frame(&mut u); }
+    for _ in 0..30 {
+        frame(&mut u);
+    }
     assert_eq!(u.m.eye_src, WaveId::Ref(0), "Auto keeps R1");
     assert!((u.m.eye_rate / 1e9 - 1.0).abs() < 0.02, "the rate comes from R1's record: {}", u.m.eye_rate);
     // a source that is gone falls back to the selected one

@@ -67,7 +67,9 @@ impl Ui {
             let f_ref = match spec.response {
                 Response::RaisedCosine | Response::RootRaisedCosine => 1.0 / spec.symbol.max(1e-12),
                 Response::Allpass => 0.5 / spec.delay.max(1e-12),
-                _ if spec.f2 > spec.f1 && matches!(self.m.math, MathOp::Bpf | MathOp::Bsf) => (spec.f1 * spec.f2).sqrt(),
+                _ if spec.f2 > spec.f1 && matches!(self.m.math, MathOp::Bpf | MathOp::Bsf) => {
+                    (spec.f1 * spec.f2).sqrt()
+                }
                 _ => spec.f1,
             };
             if !f_ref.is_finite() || f_ref <= 0.0 {
@@ -395,7 +397,9 @@ mod tests {
         let w = u.math_wave_of(k);
         let (mn, mx) = w.iter().fold((f32::MAX, f32::MIN), |(a, b), &x| (a.min(x), b.max(x)));
         let scale = crate::math::math_scales()[u.m.math_ch(k).scale];
-        assert!(mx > mn && scale >= ((mx - mn) as f64 / 6.0) * 0.99 && scale <= ((mx - mn) as f64 / 6.0) * 2.6, "{scale} for {mn}..{mx}");
+        assert!(
+            mx > mn && scale >= ((mx - mn) as f64 / 6.0) * 0.99 && scale <= ((mx - mn) as f64 / 6.0) * 2.6,
+            "{scale} for {mn}..{mx}"
+        );
     }
 }
-

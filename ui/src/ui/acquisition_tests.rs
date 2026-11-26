@@ -288,7 +288,14 @@ fn a_session_keeps_the_samples_of_the_acquisition() {
         (ui, shared)
     };
     let (mut ui, shared) = bench(10e-6);
-    let frame = crate::board::Frame { seq: 1, dt: 0.8e-9, pre, ch: [v.clone(), Vec::new(), Vec::new(), Vec::new()], acq: (1.25e9, n), ..Default::default() };
+    let frame = crate::board::Frame {
+        seq: 1,
+        dt: 0.8e-9,
+        pre,
+        ch: [v.clone(), Vec::new(), Vec::new(), Vec::new()],
+        acq: (1.25e9, n),
+        ..Default::default()
+    };
     shared.lock().unwrap().queue.push_back(frame);
     steps(&mut ui, 3);
     ui.m.run = RunState::Stop;
@@ -462,7 +469,13 @@ fn a_measurement_that_finishes_leaves_the_live_picture() {
         let window = ui.m.time_per_div() as f64 * HDIV as f64;
         let n = 100_000usize;
         let v: Vec<f32> = (0..n).map(|k| if (k / 4000) % 2 == 1 { 0.3 } else { 0.0 }).collect();
-        let frame = crate::board::Frame { seq: 1, dt: window * 1.2 / n as f64, pre: n / 2, ch: [v, Vec::new(), Vec::new(), Vec::new()], ..Default::default() };
+        let frame = crate::board::Frame {
+            seq: 1,
+            dt: window * 1.2 / n as f64,
+            pre: n / 2,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            ..Default::default()
+        };
         shared.lock().unwrap().queue.push_back(frame);
         ui.step(0.033);
         let picture = ui.ph.map[0].clone();
@@ -474,7 +487,11 @@ fn a_measurement_that_finishes_leaves_the_live_picture() {
         let end = Instant::now() + Duration::from_secs(30);
         loop {
             ui.step(0.033);
-            assert!(ui.ph.map[0] == picture, "persistence {}: the traces left the picture when the answer came in", PERSIST[persist].0);
+            assert!(
+                ui.ph.map[0] == picture,
+                "persistence {}: the traces left the picture when the answer came in",
+                PERSIST[persist].0
+            );
             if !ui.catalog_measurement_busy() {
                 break;
             }

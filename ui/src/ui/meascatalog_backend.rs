@@ -454,7 +454,12 @@ fn same_gate(old: &Key, new: &Key) -> bool {
         && old.sources.len() == new.sources.len()
         && old.roles.iter().all(|id| matches!(id, WaveId::Ch(_)))
         && old.sources.iter().zip(&new.sources).all(|(a, b)| {
-            a.id == b.id && a.lo == b.lo && a.hi == b.hi && a.len == b.len && a.dt == b.dt && a.conditioning == b.conditioning
+            a.id == b.id
+                && a.lo == b.lo
+                && a.hi == b.hi
+                && a.len == b.len
+                && a.dt == b.dt
+                && a.conditioning == b.conditioning
         })
 }
 fn snap(x: f64) -> f64 {
@@ -1029,11 +1034,13 @@ mod tests {
 pub(in crate::ui) fn card_group(id: u16) -> u8 {
     use super::meascatalog::cat;
     let Some(c) = super::meascatalog::cat_from(id) else { return 0 };
-    if matches!(id, cat::DcCommon | cat::AcCommon | cat::DiffCross) { return 3; }
+    if matches!(id, cat::DcCommon | cat::AcCommon | cat::DiffCross) {
+        return 3;
+    }
     match measures::get(module_of(c)).key() {
         "jitter_eye" => 1,
-        "power_quality" | "harmonics" | "inrush" | "input_capacitance" | "turn_on_off" | "switching" | "ripple" | "line_ripple"
-            | "switching_ripple" | "psrr_impedance" | "rails" => 2,
+        "power_quality" | "harmonics" | "inrush" | "input_capacitance" | "turn_on_off" | "switching" | "ripple"
+        | "line_ripple" | "switching_ripple" | "psrr_impedance" | "rails" => 2,
         _ => 0,
     }
 }

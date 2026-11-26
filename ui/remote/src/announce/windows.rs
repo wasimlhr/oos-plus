@@ -28,7 +28,8 @@ pub(super) fn addresses() -> Vec<[u8; 4]> {
         let first = buffer.as_mut_ptr().cast::<IP_ADAPTER_ADDRESSES_LH>();
         let flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
         let result = unsafe { GetAdaptersAddresses(ws::AF_INET as u32, flags, std::ptr::null(), first, &mut size) };
-        if result == 111 { // ERROR_BUFFER_OVERFLOW: the interface list changed or exceeded the initial buffer.
+        if result == 111 {
+            // ERROR_BUFFER_OVERFLOW: the interface list changed or exceeded the initial buffer.
             continue;
         }
         if result != 0 {
@@ -41,8 +42,12 @@ pub(super) fn addresses() -> Vec<[u8; 4]> {
                     let mut unicast = a.FirstUnicastAddress;
                     while let Some(u) = unicast.as_ref() {
                         let addr = u.Address.lpSockaddr;
-                        if !addr.is_null() && u.Address.iSockaddrLength as usize >= std::mem::size_of::<ws::SOCKADDR_IN>() && (*addr).sa_family == ws::AF_INET {
-                            let ip = Ipv4Addr::from((*addr.cast::<ws::SOCKADDR_IN>()).sin_addr.S_un.S_addr.to_ne_bytes());
+                        if !addr.is_null()
+                            && u.Address.iSockaddrLength as usize >= std::mem::size_of::<ws::SOCKADDR_IN>()
+                            && (*addr).sa_family == ws::AF_INET
+                        {
+                            let ip =
+                                Ipv4Addr::from((*addr.cast::<ws::SOCKADDR_IN>()).sin_addr.S_un.S_addr.to_ne_bytes());
                             if !ip.is_loopback() && !ip.is_unspecified() && !out.contains(&ip.octets()) {
                                 out.push(ip.octets());
                             }
@@ -91,7 +96,13 @@ pub(super) fn send_mcast(sock: &UdpSocket, packet: &[u8], iface: Option<[u8; 4]>
     if let Some(addr) = iface {
         let ip = u32::from_ne_bytes(addr);
         unsafe {
-            ws::setsockopt(sock.as_raw_socket() as _, ws::IPPROTO_IP, ws::IP_MULTICAST_IF, (&ip as *const u32).cast(), 4);
+            ws::setsockopt(
+                sock.as_raw_socket() as _,
+                ws::IPPROTO_IP,
+                ws::IP_MULTICAST_IF,
+                (&ip as *const u32).cast(),
+                4,
+            );
         }
     }
     let _ = sock.send_to(packet, SocketAddrV4::new(GROUP, MDNS_PORT));

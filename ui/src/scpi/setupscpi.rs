@@ -122,14 +122,38 @@ pub(crate) const ROWS: &[(&str, &[&str])] = &[
     ("mask_inv", &[":MASK:INVert"]),
     ("mask_on", &[":MASK:ENABle"]),
     // ---- the analyser pages
-    ("spec", &[":SPECtrum:SOURce", ":SPECtrum:CENTer", ":SPECtrum:SPAN", ":SPECtrum:RBW", ":SPECtrum:WINDow", ":SPECtrum:TRACe", ":SPECtrum:RLEVel", ":SPECtrum:WATerfall", ":SPECtrum:DISTortion"]),
+    (
+        "spec",
+        &[
+            ":SPECtrum:SOURce",
+            ":SPECtrum:CENTer",
+            ":SPECtrum:SPAN",
+            ":SPECtrum:RBW",
+            ":SPECtrum:WINDow",
+            ":SPECtrum:TRACe",
+            ":SPECtrum:RLEVel",
+            ":SPECtrum:WATerfall",
+            ":SPECtrum:DISTortion",
+        ],
+    ),
     ("spec_margin", &[":SPECtrum:LIMit:MARGin"]),
     ("spec_acpr", &[":SPECtrum:ACPR:WIDTh", ":SPECtrum:ACPR:SPACing"]),
     ("eye_place", &[":EYE:PLACe"]),
     ("eye_pll", &[":EYE:PLL:BWIDth"]),
     ("power", &[":POWer:VOLTage:SOURce", ":POWer:CURRent:SOURce", ":POWer:PAGE"]),
     ("power_more", &[":POWer:FLINe", ":POWer:FSWitch", ":POWer:VIN:SOURce", ":POWer:REFerence", ":POWer:CLOCk:SOURce"]),
-    ("dpt", &[":DPT:VDS:SOURce", ":DPT:ID:SOURce", ":DPT:VGS:SOURce", ":DPT:FOURth", ":DPT:FOURth:SOURce", ":DPT:GATE", ":DPT:ZOOM"]),
+    (
+        "dpt",
+        &[
+            ":DPT:VDS:SOURce",
+            ":DPT:ID:SOURce",
+            ":DPT:VGS:SOURce",
+            ":DPT:FOURth",
+            ":DPT:FOURth:SOURce",
+            ":DPT:GATE",
+            ":DPT:ZOOM",
+        ],
+    ),
     ("bode_mode", &[":BODE:MODE"]),
     // ---- system
     ("aux_out", &[":SYSTem:AOUTput"]),
@@ -138,7 +162,11 @@ pub(crate) const ROWS: &[(&str, &[&str])] = &[
 
 /// The `key = value` lines of a set-up text.
 fn pairs(text: &str) -> Vec<(&str, &str)> {
-    text.lines().filter(|l| !l.starts_with('#')).filter_map(|l| l.split_once('=')).map(|(k, v)| (k.trim(), v.trim())).collect()
+    text.lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.trim(), v.trim()))
+        .collect()
 }
 
 /// The keys whose value in `after` is not the one in `before`, in the order of `after`, each with its value there;
@@ -146,7 +174,8 @@ fn pairs(text: &str) -> Vec<(&str, &str)> {
 pub(crate) fn changed(before: &str, after: &str) -> Vec<(String, Option<String>)> {
     let old: std::collections::BTreeMap<&str, &str> = pairs(before).into_iter().collect();
     let new = pairs(after);
-    let mut out: Vec<(String, Option<String>)> = new.iter().filter(|(k, v)| old.get(k) != Some(v)).map(|(k, v)| (k.to_string(), Some(v.to_string()))).collect();
+    let mut out: Vec<(String, Option<String>)> =
+        new.iter().filter(|(k, v)| old.get(k) != Some(v)).map(|(k, v)| (k.to_string(), Some(v.to_string()))).collect();
     let now: std::collections::BTreeSet<&str> = new.iter().map(|x| x.0).collect();
     out.extend(pairs(before).into_iter().filter(|(k, _)| !now.contains(k)).map(|(k, _)| (k.to_string(), None)));
     out
@@ -157,7 +186,10 @@ pub(crate) fn row_of(key: &str) -> Option<(usize, Vec<String>)> {
     ROWS.iter().enumerate().find_map(|(i, (pattern, headers))| {
         let n = match pattern.split_once("<n>") {
             None => (*pattern == key).then_some("")?,
-            Some((a, b)) => key.strip_prefix(a)?.strip_suffix(b).filter(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))?,
+            Some((a, b)) => key
+                .strip_prefix(a)?
+                .strip_suffix(b)
+                .filter(|n| !n.is_empty() && n.bytes().all(|c| c.is_ascii_digit()))?,
         };
         Some((i, headers.iter().map(|h| h.replace("<n>", n)).collect()))
     })
@@ -170,9 +202,15 @@ const PASSES: usize = 4;
 /// nothing. An error holds 256 characters, a message a line of the screen.
 pub(crate) fn named(rest: &[String]) -> Option<String> {
     const SHOWN: usize = 4;
-    if rest.is_empty() { return None; }
+    if rest.is_empty() {
+        return None;
+    }
     let more = rest.len().saturating_sub(SHOWN);
-    Some(format!("{}{}", rest[..rest.len().min(SHOWN)].join(" "), if more > 0 { format!(" and {more} more") } else { String::new() }))
+    Some(format!(
+        "{}{}",
+        rest[..rest.len().min(SHOWN)].join(" "),
+        if more > 0 { format!(" and {more} more") } else { String::new() }
+    ))
 }
 
 /// The second scope: an interpreter no client reaches and a model with no hardware behind it, with the set-up
@@ -180,7 +218,9 @@ pub(crate) fn named(rest: &[String]) -> Option<String> {
 fn second_scope(base: &Model, lines: &[String], cv: &Canvas) -> (Scpi, Ui) {
     let (mut scpi, mut scope) = (Scpi::detached(), Ui::new(crate::wave::Source::Demo { t: 0.0 }));
     scope.m = base.clone();
-    for l in lines { scpi.exec_line(&mut scope, cv, l); }
+    for l in lines {
+        scpi.exec_line(&mut scope, cv, l);
+    }
     (scpi, scope)
 }
 
@@ -195,7 +235,9 @@ impl Scpi {
     /// keys differ (a value with a `;` in it, which no line can carry).
     pub(crate) fn setup_scpi(&mut self, ui: &mut Ui, cv: &Canvas) -> String {
         let (text, rest) = self.setup_scpi_proven(ui, cv);
-        if let Some(keys) = named(&rest) { self.push_err(format!("-221,\"Settings conflict\" the commands do not bring back: {keys}")); }
+        if let Some(keys) = named(&rest) {
+            self.push_err(format!("-221,\"Settings conflict\" the commands do not bring back: {keys}"));
+        }
         text
     }
 
@@ -216,7 +258,14 @@ impl Scpi {
     /// `want`, which is the one `ui` has now. First: `first` and the commands, in the order to send them. Second:
     /// what they do not bring, the keys and a line the proof refused. The SCPI recorder (scpi/recorder.rs) takes
     /// every step of a recording through here, from the set-up of the step before.
-    pub(crate) fn mend(&mut self, ui: &mut Ui, cv: &Canvas, base: &Model, first: Vec<String>, want: &str) -> (Vec<String>, Vec<String>) {
+    pub(crate) fn mend(
+        &mut self,
+        ui: &mut Ui,
+        cv: &Canvas,
+        base: &Model,
+        first: Vec<String>,
+        want: &str,
+    ) -> (Vec<String>, Vec<String>) {
         let mut lines = first;
         let (mut scpi, mut scope) = second_scope(base, &lines, cv);
         let mut refused = std::collections::BTreeSet::new();
@@ -224,10 +273,14 @@ impl Scpi {
         // lines, once before the next pass, so the work of a query stays bounded (PASSES + 2 scopes at most)
         let mut stale = false;
         for pass in 0..PASSES {
-            if std::mem::take(&mut stale) { (scpi, scope) = second_scope(base, &lines, cv); }
+            if std::mem::take(&mut stale) {
+                (scpi, scope) = second_scope(base, &lines, cv);
+            }
             let have = crate::store::setup_text(&scope.m);
             let commands = self.setup_commands(ui, cv, &have, want, &refused, pass + 1 == PASSES);
-            if commands.is_empty() { break; }
+            if commands.is_empty() {
+                break;
+            }
             for c in commands {
                 let before = crate::store::setup_text(&scope.m);
                 // not every handler counts its errors (`error_serial`): the queue itself says whether the line was taken
@@ -244,8 +297,11 @@ impl Scpi {
             }
         }
         let (scpi, scope) = second_scope(base, &lines, cv);
-        let mut rest: Vec<String> = changed(&crate::store::setup_text(&scope.m), want).into_iter().map(|x| x.0).collect();
-        if !scpi.err.is_empty() { rest.push(format!("(refused: {})", scpi.err.join(" "))); }
+        let mut rest: Vec<String> =
+            changed(&crate::store::setup_text(&scope.m), want).into_iter().map(|x| x.0).collect();
+        if !scpi.err.is_empty() {
+            rest.push(format!("(refused: {})", scpi.err.join(" ")));
+        }
         (lines, rest)
     }
 
@@ -254,14 +310,24 @@ impl Scpi {
     /// `refused` is not used, and none is with `plain`. A key no line can carry has none: a value with a `;` (the
     /// interpreter splits a message there), or a key without a usable header that is back at a default the text
     /// does not write.
-    pub(crate) fn setup_commands(&mut self, ui: &mut Ui, cv: &Canvas, before: &str, after: &str, refused: &std::collections::BTreeSet<String>, plain: bool) -> Vec<String> {
+    pub(crate) fn setup_commands(
+        &mut self,
+        ui: &mut Ui,
+        cv: &Canvas,
+        before: &str,
+        after: &str,
+        refused: &std::collections::BTreeSet<String>,
+        plain: bool,
+    ) -> Vec<String> {
         // a query that fails here is a row to mend, not an error of the client: the queue stays as it was
         let kept = (self.err.clone(), self.event_status, self.error_serial, self.last_error.clone());
         let mut by_header: Vec<(usize, String)> = Vec::new();
         let mut by_key = Vec::new();
         for (key, value) in changed(before, after) {
             let row = row_of(&key).filter(|(_, headers)| !plain && !headers.iter().any(|h| refused.contains(h)));
-            let echoed = row.and_then(|(i, headers)| headers.iter().map(|h| self.echo(ui, cv, h)).collect::<Option<Vec<String>>>().map(|lines| (i, lines)));
+            let echoed = row.and_then(|(i, headers)| {
+                headers.iter().map(|h| self.echo(ui, cv, h)).collect::<Option<Vec<String>>>().map(|lines| (i, lines))
+            });
             match (echoed, value) {
                 (Some((i, lines)), _) => by_header.extend(lines.into_iter().map(|l| (i, l))),
                 (None, Some(v)) if !v.contains(';') => by_key.push(format!(":SYSTem:SET {key} = {v}")),
@@ -273,7 +339,9 @@ impl Scpi {
         let mut lines: Vec<String> = Vec::new();
         for (_, l) in by_header {
             // two keys of one header (a scale and its fine factor) are one command
-            if !lines.contains(&l) { lines.push(l); }
+            if !lines.contains(&l) {
+                lines.push(l);
+            }
         }
         lines.extend(by_key);
         lines
@@ -308,22 +376,72 @@ mod tests {
     /// Sends the lines to a second scope: its set-up text, and the errors it queued.
     fn replay(lines: &str) -> (String, Vec<String>) {
         let (mut s, mut ui, cv) = session();
-        for l in lines.lines() { s.exec_line(&mut ui, &cv, l); }
+        for l in lines.lines() {
+            s.exec_line(&mut ui, &cv, l);
+        }
         (text(&mut ui), s.queued_errors().to_vec())
     }
 
     /// Values of the keys whose default is a name, which `variants` cannot change by itself.
     const SAMPLES: &[(&str, &str)] = &[
-        ("ch<n>.coupling", "Ac"), ("ch<n>.coupling", "Gnd"), ("h_expand", "Left"), ("h_expand", "Trigger"), ("acq", "Peak"), ("acq", "Average"), ("acq", "HiRes"),
-        ("trig_type", "Pulse"), ("slope", "Fall"), ("slope", "Either"), ("trig_slope2", "Fall"), ("trig_mode", "Normal"), ("trig_pol", "Neg"),
-        ("trig_when", "Gt"), ("trig_when", "In"), ("video_std", "Ntsc"), ("video_sync", "Line"), ("video_sync", "Odd"), ("pat", "L X X H"), ("pat", "H X R H"),
-        ("win_mode", "Exit"), ("win_mode", "Inside"), ("cursor", "Time"), ("aux_out", "Off"), ("aux_out", "PassFail"),
-        ("hdmi", "Mirror"), ("view", "Spectrum"), ("view", "Eye"), ("layout", "studio"), ("layout", "default"), ("ch<n>.unit", "A"), ("ch<n>.bias", "0.5"),
-        ("ch<n>.vfine", "0.8"), ("tfine", "0.8"), ("gen_hidden", "true"), ("eye_pll", "100000"), ("ch<n>.bw", "20 MHz"),
-        ("trig_coup", "Ac"), ("trig_coup", "LfReject"), ("hist", "Vertical"), ("hist", "Horizontal"), ("eye_place", "Side"), ("eye_place", "Under"),
-        ("bode_mode", "Psrr"), ("bode_mode", "Z"), ("avg_count", "32"), ("avg_count", "64"), ("segments", "100"), ("bus_label", "SPI"), ("dec_src4", "1"),
-        ("dec_diff", "1"), ("zdelay", "0.0001"), ("dec_proto", "Spi"), ("dec_proto", "Can"), ("bus_pos", "-2"), ("bus_pos", "1"),
-        ("ev_view", "fields"), ("ev_view", "lines"),
+        ("ch<n>.coupling", "Ac"),
+        ("ch<n>.coupling", "Gnd"),
+        ("h_expand", "Left"),
+        ("h_expand", "Trigger"),
+        ("acq", "Peak"),
+        ("acq", "Average"),
+        ("acq", "HiRes"),
+        ("trig_type", "Pulse"),
+        ("slope", "Fall"),
+        ("slope", "Either"),
+        ("trig_slope2", "Fall"),
+        ("trig_mode", "Normal"),
+        ("trig_pol", "Neg"),
+        ("trig_when", "Gt"),
+        ("trig_when", "In"),
+        ("video_std", "Ntsc"),
+        ("video_sync", "Line"),
+        ("video_sync", "Odd"),
+        ("pat", "L X X H"),
+        ("pat", "H X R H"),
+        ("win_mode", "Exit"),
+        ("win_mode", "Inside"),
+        ("cursor", "Time"),
+        ("aux_out", "Off"),
+        ("aux_out", "PassFail"),
+        ("hdmi", "Mirror"),
+        ("view", "Spectrum"),
+        ("view", "Eye"),
+        ("layout", "studio"),
+        ("layout", "default"),
+        ("ch<n>.unit", "A"),
+        ("ch<n>.bias", "0.5"),
+        ("ch<n>.vfine", "0.8"),
+        ("tfine", "0.8"),
+        ("gen_hidden", "true"),
+        ("eye_pll", "100000"),
+        ("ch<n>.bw", "20 MHz"),
+        ("trig_coup", "Ac"),
+        ("trig_coup", "LfReject"),
+        ("hist", "Vertical"),
+        ("hist", "Horizontal"),
+        ("eye_place", "Side"),
+        ("eye_place", "Under"),
+        ("bode_mode", "Psrr"),
+        ("bode_mode", "Z"),
+        ("avg_count", "32"),
+        ("avg_count", "64"),
+        ("segments", "100"),
+        ("bus_label", "SPI"),
+        ("dec_src4", "1"),
+        ("dec_diff", "1"),
+        ("zdelay", "0.0001"),
+        ("dec_proto", "Spi"),
+        ("dec_proto", "Can"),
+        ("bus_pos", "-2"),
+        ("bus_pos", "1"),
+        ("ev_view", "fields"),
+        ("ev_view", "lines"),
     ];
 
     /// Other values a key could have: every blank-separated part of its default changed by itself.
@@ -356,7 +474,11 @@ mod tests {
         let before = "# x\na = 1\nb = 2\nc = 3\nd = x = y\n";
         let after = "# x\nb = 5\na = 1\nd = x = z\ne = 9\n";
         let got = changed(before, after);
-        let want: Vec<(String, Option<String>)> = [("b", Some("5")), ("d", Some("x = z")), ("e", Some("9")), ("c", None)].into_iter().map(|(k, v)| (k.to_string(), v.map(str::to_string))).collect();
+        let want: Vec<(String, Option<String>)> =
+            [("b", Some("5")), ("d", Some("x = z")), ("e", Some("9")), ("c", None)]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.map(str::to_string)))
+                .collect();
         assert_eq!(got, want);
         assert!(changed(before, before).is_empty());
     }
@@ -398,7 +520,11 @@ mod tests {
         let reply = String::from_utf8(s.exec_line(&mut ui, &cv, ":SYSTem:SETup:SCPI?")).unwrap();
         let body = "*RST\n:CHANnel2:DISPlay 1\n";
         assert_eq!(reply, format!("#9{:09}{body}", body.len()));
-        assert_eq!(String::from_utf8(s.exec_line(&mut ui, &cv, ":SYST:SETup:SCPI?")).unwrap(), reply, "the short form of the first keyword");
+        assert_eq!(
+            String::from_utf8(s.exec_line(&mut ui, &cv, ":SYST:SETup:SCPI?")).unwrap(),
+            reply,
+            "the short form of the first keyword"
+        );
         assert_eq!(s.queued_errors(), queued);
         // :SYST:SET is the key = value command: SETup is spelled out here too
         s.exec_line(&mut ui, &cv, ":SYST:SET:SCPI?");
@@ -434,25 +560,42 @@ mod tests {
                 values.extend(SAMPLES.iter().filter(|(p, _)| p == pattern).map(|(_, v)| v.to_string()));
                 for value in values.into_iter().filter(|_| !BY_COMMAND.contains(pattern)) {
                     let (mut s, mut ui, cv) = session();
-                    if crate::store::set(&mut ui.m, &key, &value).is_err() { continue; }
+                    if crate::store::set(&mut ui.m, &key, &value).is_err() {
+                        continue;
+                    }
                     ui.mark_changed();
                     let want = text(&mut ui);
-                    if !changed(&default, &want).iter().any(|(k, _)| *k == key) { continue; }
+                    if !changed(&default, &want).iter().any(|(k, _)| *k == key) {
+                        continue;
+                    }
                     let lines = s.setup_scpi(&mut ui, &cv);
                     let own_errors = s.queued_errors().to_vec();
                     let (got, errors) = replay(&lines);
                     let differ = changed(&want, &got);
                     if !differ.is_empty() || !errors.is_empty() || !own_errors.is_empty() {
-                        bad.push(format!("{key} = {value}: differs {differ:?}, errors {errors:?} {own_errors:?}\n{lines}"));
-                    } else if !lines.contains(&format!(":SYSTem:SET {key} ")) && headers.iter().any(|h| lines.contains(&format!("{} ", h.replace("<n>", n)))) {
+                        bad.push(format!(
+                            "{key} = {value}: differs {differ:?}, errors {errors:?} {own_errors:?}\n{lines}"
+                        ));
+                    } else if !lines.contains(&format!(":SYSTem:SET {key} "))
+                        && headers.iter().any(|h| lines.contains(&format!("{} ", h.replace("<n>", n))))
+                    {
                         proven += 1;
                     }
                 }
-                if !pattern.contains("<n>") { break; }
+                if !pattern.contains("<n>") {
+                    break;
+                }
             }
-            if proven == 0 { unproven.push(*pattern); }
+            if proven == 0 {
+                unproven.push(*pattern);
+            }
         }
-        assert!(bad.is_empty() && unproven == UNPROVEN, "{} values fail:\n{}\nthe rows no value travelled by its own headers: {unproven:?}", bad.len(), bad.join("\n"));
+        assert!(
+            bad.is_empty() && unproven == UNPROVEN,
+            "{} values fail:\n{}\nthe rows no value travelled by its own headers: {unproven:?}",
+            bad.len(),
+            bad.join("\n")
+        );
     }
 
     /// Settings a command moves besides its own are put right by a later line: a source that is off again, a level
@@ -460,7 +603,14 @@ mod tests {
     #[test]
     fn what_a_command_moves_besides_its_own_setting_is_put_right() {
         let (mut s, mut ui, cv) = session();
-        for c in [":BUS:LANE:CLOCk:SOURce CHANnel2", ":CHANnel2:DISPlay OFF", ":TRIGger:MODE PULSe", ":TRIGger:EDGE:LEVel 1.5", ":DECode:SELect 2", ":DECode:STATe ON"] {
+        for c in [
+            ":BUS:LANE:CLOCk:SOURce CHANnel2",
+            ":CHANnel2:DISPlay OFF",
+            ":TRIGger:MODE PULSe",
+            ":TRIGger:EDGE:LEVel 1.5",
+            ":DECode:SELect 2",
+            ":DECode:STATe ON",
+        ] {
             s.exec_line(&mut ui, &cv, c);
             assert!(s.queued_errors().is_empty(), "{c}: {:?}", s.queued_errors());
         }
@@ -509,9 +659,25 @@ mod tests {
     #[test]
     fn a_setup_of_many_settings_comes_back_on_a_second_scope() {
         let (mut s, mut ui, cv) = session();
-        for c in [":CHANnel2:DISPlay ON", ":CHAN1:SCAL 0.5", ":CHANnel1:OFFSet 0.25", ":CHANnel2:COUPling AC", ":TIM:SCAL 1e-3", ":TIMebase:OFFSet 2e-3",
-            ":TRIGger:MODE PULSe", ":TRIG:PULS:POL NEG", ":TRIG:PULS:WHEN GREater", ":TRIG:PULS:WIDT 2e-6", ":TRIGger:SWEep NORMal", ":TRIGger:EDGE:SOURce CHANnel2",
-            ":ACQuire:TYPE AVERages", ":ACQuire:AVERages 64", ":CURSor:MODE MANual", ":MEASure:ITEM VPP,CHAN2", ":TRIG:VID:STAN NTSC"] {
+        for c in [
+            ":CHANnel2:DISPlay ON",
+            ":CHAN1:SCAL 0.5",
+            ":CHANnel1:OFFSet 0.25",
+            ":CHANnel2:COUPling AC",
+            ":TIM:SCAL 1e-3",
+            ":TIMebase:OFFSet 2e-3",
+            ":TRIGger:MODE PULSe",
+            ":TRIG:PULS:POL NEG",
+            ":TRIG:PULS:WHEN GREater",
+            ":TRIG:PULS:WIDT 2e-6",
+            ":TRIGger:SWEep NORMal",
+            ":TRIGger:EDGE:SOURce CHANnel2",
+            ":ACQuire:TYPE AVERages",
+            ":ACQuire:AVERages 64",
+            ":CURSor:MODE MANual",
+            ":MEASure:ITEM VPP,CHAN2",
+            ":TRIG:VID:STAN NTSC",
+        ] {
             s.exec_line(&mut ui, &cv, c);
             assert!(s.queued_errors().is_empty(), "{c}: {:?}", s.queued_errors());
         }
@@ -571,7 +737,9 @@ mod tests {
     #[test]
     fn the_view_of_the_events_pane_is_set_read_and_kept() {
         let (mut s, mut ui, cv) = session();
-        let ask = |s: &mut Scpi, ui: &mut Ui, line: &str| String::from_utf8(s.exec_cmd(ui, &cv, line).unwrap_or_default()).unwrap().trim().to_string();
+        let ask = |s: &mut Scpi, ui: &mut Ui, line: &str| {
+            String::from_utf8(s.exec_cmd(ui, &cv, line).unwrap_or_default()).unwrap().trim().to_string()
+        };
         assert_eq!(ask(&mut s, &mut ui, ":DECode:EVENts:VIEW?"), "MESSAGES");
         assert_eq!(ask(&mut s, &mut ui, ":DECode:EVENts:ERRors?"), "0");
         s.exec_cmd(&mut ui, &cv, ":DECode:EVENts:VIEW LINes");
@@ -605,7 +773,9 @@ mod tests {
         s.exec_cmd(&mut ui, &cv, ":DECode:THReshold AUTO");
         assert!((ui.m.dec_thr - 1.65).abs() < 0.3, "{}", ui.m.dec_thr);
         // a line's own threshold: set, read and given up
-        let ask = |s: &mut Scpi, ui: &mut Ui, line: &str| String::from_utf8(s.exec_cmd(ui, &cv, line).unwrap_or_default()).unwrap().trim().to_string();
+        let ask = |s: &mut Scpi, ui: &mut Ui, line: &str| {
+            String::from_utf8(s.exec_cmd(ui, &cv, line).unwrap_or_default()).unwrap().trim().to_string()
+        };
         s.exec_cmd(&mut ui, &cv, ":BUS1:THReshold 2,0.3");
         assert_eq!(ui.m.dec_thr_line, [Some(0.3), None, None]);
         assert_eq!(ask(&mut s, &mut ui, ":BUS1:THReshold? 2").parse::<f32>().ok(), Some(0.3));
@@ -636,15 +806,22 @@ mod tests {
 
     #[test]
     fn the_setup_keys_page_names_the_headers_of_the_rows() {
-        let page = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi/setup-keys.md")).unwrap();
+        let page = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi/setup-keys.md"),
+        )
+        .unwrap();
         let mut wrong = Vec::new();
         for (key, headers) in ROWS {
-            let Some(row) = page.lines().find(|l| l.starts_with('|') && l.split('|').nth(1).is_some_and(|cell| cell.contains(&format!("`{key}`")))) else {
+            let Some(row) = page.lines().find(|l| {
+                l.starts_with('|') && l.split('|').nth(1).is_some_and(|cell| cell.contains(&format!("`{key}`")))
+            }) else {
                 wrong.push(format!("{key}: no row"));
                 continue;
             };
             let cell = row.trim_end().trim_end_matches('|').rsplit('|').next().unwrap_or("");
-            for h in headers.iter().filter(|h| !cell.contains(&format!("`{h}`"))) { wrong.push(format!("{key}: {h} is not in {cell:?}")); }
+            for h in headers.iter().filter(|h| !cell.contains(&format!("`{h}`"))) {
+                wrong.push(format!("{key}: {h} is not in {cell:?}"));
+            }
         }
         assert!(wrong.is_empty(), "docs/scpi/setup-keys.md:\n{}", wrong.join("\n"));
     }

@@ -41,14 +41,22 @@ impl Ui {
         let loaded: Vec<usize> = (0..NREF).filter(|&i| self.refs[i].is_some()).collect();
         if let Some(&first) = loaded.iter().find(|&&i| i == self.offline.slot).or(loaded.first()) {
             self.present_record(first);
-            let shown: Vec<usize> = std::iter::once(first).chain(loaded.iter().copied().filter(|&i| i != first)).take(OFFLINE_LANES).collect();
+            let shown: Vec<usize> = std::iter::once(first)
+                .chain(loaded.iter().copied().filter(|&i| i != first))
+                .take(OFFLINE_LANES)
+                .collect();
             for &i in &loaded {
-                if let Some(r) = self.refs[i].as_mut() { r.on = shown.contains(&i); }
+                if let Some(r) = self.refs[i].as_mut() {
+                    r.on = shown.contains(&i);
+                }
             }
             // measurements of the channels would read nothing here
             self.m.meas.retain(|&(_, id)| matches!(id, WaveId::Ref(_)));
             if self.m.meas.is_empty() {
-                self.m.meas = [Meas::Vpp, Meas::Freq, Meas::Vrms, Meas::Rise].into_iter().map(|k| (k, WaveId::Ref(first))).collect();
+                self.m.meas = [Meas::Vpp, Meas::Freq, Meas::Vrms, Meas::Rise]
+                    .into_iter()
+                    .map(|k| (k, WaveId::Ref(first)))
+                    .collect();
                 self.m.meas2.clear();
                 self.m.cat.clear();
                 self.clear_measurement_statistics();
@@ -62,8 +70,12 @@ impl Ui {
 
     /// The card of an empty Offline view and its Load file button.
     pub(super) fn studio_offline_empty(&self) -> Option<(Rect, Rect)> {
-        if self.m.layout != Layout::Studio || self.studio.view != StudioView::Offline || self.view_on() { return None; }
-        if !self.record_mode() || self.refs.iter().any(Option::is_some) { return None; }
+        if self.m.layout != Layout::Studio || self.studio.view != StudioView::Offline || self.view_on() {
+            return None;
+        }
+        if !self.record_mode() || self.refs.iter().any(Option::is_some) {
+            return None;
+        }
         let g = self.plot.grid;
         let card = Rect::new(g.x + (g.w - 380) / 2, g.y + (g.h - 190) / 2, 380, 190);
         Some((card, Rect::new(card.x + (card.w - 180) / 2, card.bottom() - 64, 180, 42)))
@@ -72,18 +84,36 @@ impl Ui {
     /// The span and size of the record under the navigator, for its tag.
     fn studio_record_tag(&self) -> Option<String> {
         let r = self.refs.get(self.active_reference())?.as_ref().filter(|r| r.v.len() >= 2 && r.dt > 0.0)?;
-        Some(format!("Whole record \u{b7} {} \u{b7} {}", si_digits(r.v.len() as f64 * r.dt, "s", 3), si_digits(r.v.len() as f64, "pts", 3)))
+        Some(format!(
+            "Whole record \u{b7} {} \u{b7} {}",
+            si_digits(r.v.len() as f64 * r.dt, "s", 3),
+            si_digits(r.v.len() as f64, "pts", 3)
+        ))
     }
 
     pub(super) fn draw_studio_offline(&self, cv: &mut Canvas) {
-        if self.m.layout != Layout::Studio || self.studio.view != StudioView::Offline || self.view_on() { return; }
+        if self.m.layout != Layout::Studio || self.studio.view != StudioView::Offline || self.view_on() {
+            return;
+        }
         let f = self.fonts();
         if let Some((card, load)) = self.studio_offline_empty() {
             cv.round(card, 10, BTN_BORDER, 255);
             cv.round(card.inset(1), 9, PANEL_BG, 255);
             cv.text_in(&f.lb, Rect::new(card.x, card.y + 22, card.w, 30), 1, "No file loaded", TEXT);
-            cv.text_in(&f.m, Rect::new(card.x + 16, card.y + 58, card.w - 32, 24), 1, "Load a waveform file to analyse it here.", DIM);
-            cv.text_in(&f.s, Rect::new(card.x + 16, card.y + 84, card.w - 32, 20), 1, "Live acquisition comes back with Live.", DIM);
+            cv.text_in(
+                &f.m,
+                Rect::new(card.x + 16, card.y + 58, card.w - 32, 24),
+                1,
+                "Load a waveform file to analyse it here.",
+                DIM,
+            );
+            cv.text_in(
+                &f.s,
+                Rect::new(card.x + 16, card.y + 84, card.w - 32, 20),
+                1,
+                "Live acquisition comes back with Live.",
+                DIM,
+            );
             chip(cv, load, mix(BTN, ACCENT, 40), ACCENT);
             cv.text_in(&f.mb, load, 1, "Load file", TEXT);
             return;
@@ -105,7 +135,9 @@ impl Ui {
     /// A tap on the Load file button of the empty view: the load flow that the Load file button of the top bar starts.
     pub(super) fn studio_offline_tap(&mut self, x: i32, y: i32) -> bool {
         let Some((card, load)) = self.studio_offline_empty() else { return false };
-        if load.contains(x, y) { self.request_waveform(); }
+        if load.contains(x, y) {
+            self.request_waveform();
+        }
         card.contains(x, y)
     }
 
@@ -119,13 +151,21 @@ impl Ui {
     /// The knobs the panel lists: the values and choices of the SIM menu that are not the preset, the show switch
     /// or the advanced page.
     pub(super) fn studio_sim_knobs(&self) -> Vec<Item> {
-        self.sim_items().into_iter()
-            .filter(|&it| matches!(Self::sim_kind(it), Some(Kind::Value | Kind::Choice)) && !matches!(it, Item::SimPreset | Item::SimShow))
+        self.sim_items()
+            .into_iter()
+            .filter(|&it| {
+                matches!(Self::sim_kind(it), Some(Kind::Value | Kind::Choice))
+                    && !matches!(it, Item::SimPreset | Item::SimShow)
+            })
             .collect()
     }
 
     fn studio_sim_total(&self) -> usize {
-        if self.studio.sim_knobs { self.studio_sim_knobs().len() } else { serial::LANES.len() }
+        if self.studio.sim_knobs {
+            self.studio_sim_knobs().len()
+        } else {
+            serial::LANES.len()
+        }
     }
 
     /// The SIM is generating or playing: the button says Stop.
@@ -134,7 +174,9 @@ impl Ui {
     }
 
     pub(super) fn studio_sim_geo(&self) -> Option<SimGeo> {
-        let p = self.studio_panel_rect().filter(|_| self.m.layout == Layout::Studio && self.studio.view == StudioView::Sim)?;
+        let p = self
+            .studio_panel_rect()
+            .filter(|_| self.m.layout == Layout::Studio && self.studio.view == StudioView::Sim)?;
         let tab_w = (p.w - 16) / 2;
         let list_y = p.y + 74;
         // Add beside Play: the signal of the knobs as one more ref, so that Play runs several
@@ -169,11 +211,27 @@ impl Ui {
         cv.round(p, 8, CARD_BORDER, 255);
         cv.round(p.inset(1), 7, PANEL_BG, 255);
         let ready = self.sim_shown_refs().len();
-        let state = if self.sim_mode() { "on the lanes".to_string() } else if self.sim_generating() { "generating".to_string() } else if ready > 0 { format!("{ready} added, ready to play") } else { "not playing".to_string() };
+        let state = if self.sim_mode() {
+            "on the lanes".to_string()
+        } else if self.sim_generating() {
+            "generating".to_string()
+        } else if ready > 0 {
+            format!("{ready} added, ready to play")
+        } else {
+            "not playing".to_string()
+        };
         cv.set_clip(Rect::new(p.x + 14, p.y + 4, p.w - 28, 24));
-        cv.text(&f.s, p.x + 14, p.y + 21, &format!("{} \u{b7} {} \u{b7} {}", self.sim_preset_name(), si_short(self.m.sim_rate, "b/s"), state), DIM); // state is a String
+        cv.text(
+            &f.s,
+            p.x + 14,
+            p.y + 21,
+            &format!("{} \u{b7} {} \u{b7} {}", self.sim_preset_name(), si_short(self.m.sim_rate, "b/s"), state),
+            DIM,
+        ); // state is a String
         cv.no_clip();
-        for (r, label, on) in [(g.presets, "Presets", !self.studio.sim_knobs), (g.knobs, "Knobs", self.studio.sim_knobs)] {
+        for (r, label, on) in
+            [(g.presets, "Presets", !self.studio.sim_knobs), (g.knobs, "Knobs", self.studio.sim_knobs)]
+        {
             chip(cv, r, if on { mix(BTN, ACCENT, 40) } else { BTN }, if on { ACCENT } else { BTN_BORDER });
             cv.text_in(&f.m, r, 1, label, TEXT);
         }
@@ -182,9 +240,15 @@ impl Ui {
         cv.set_clip(g.list);
         for k in 0..g.page {
             let i = first + k;
-            if i >= total { break; }
+            if i >= total {
+                break;
+            }
             let r = Rect::new(g.list.x, g.list.y + k as i32 * SIM_ROW, g.list.w, SIM_ROW);
-            if self.studio.sim_knobs { self.draw_sim_knob(cv, r, self.studio_sim_knobs()[i]); } else { self.draw_sim_preset(cv, r, i); }
+            if self.studio.sim_knobs {
+                self.draw_sim_knob(cv, r, self.studio_sim_knobs()[i]);
+            } else {
+                self.draw_sim_preset(cv, r, i);
+            }
             cv.hline(r.x + 6, r.right() - 7, r.bottom() - 1, LINE);
         }
         cv.no_clip();
@@ -197,8 +261,18 @@ impl Ui {
         }
         let running = self.studio_sim_running();
         chip(cv, g.play, if running { mix(BTN, GREEN, 60) } else { BTN }, if running { GREEN } else { BTN_BORDER });
-        if running { icon_stop(cv, g.play.x + g.play.w / 2 - 38, g.play.y + g.play.h / 2, TEXT); } else { icon_play(cv, g.play.x + g.play.w / 2 - 38, g.play.y + g.play.h / 2, TEXT); }
-        let label = if running { "Stop".to_string() } else if ready > 1 && !self.sim_mode() { format!("Play {ready}") } else { "Play".to_string() };
+        if running {
+            icon_stop(cv, g.play.x + g.play.w / 2 - 38, g.play.y + g.play.h / 2, TEXT);
+        } else {
+            icon_play(cv, g.play.x + g.play.w / 2 - 38, g.play.y + g.play.h / 2, TEXT);
+        }
+        let label = if running {
+            "Stop".to_string()
+        } else if ready > 1 && !self.sim_mode() {
+            format!("Play {ready}")
+        } else {
+            "Play".to_string()
+        };
         cv.text_in(&f.mb, Rect::new(g.play.x + g.play.w / 2 - 18, g.play.y, 80, g.play.h), 0, &label, TEXT);
         // Add: a plus and the slot it goes to
         let free = (0..NREF).find(|&i| self.refs[i].is_none());
@@ -228,7 +302,10 @@ impl Ui {
 
     /// The minus and plus chips of a knob row.
     fn sim_steps(r: Rect) -> (Rect, Rect) {
-        (Rect::new(r.right() - 2 * STEP_W - 10, r.y + 7, STEP_W, 30), Rect::new(r.right() - STEP_W - 6, r.y + 7, STEP_W, 30))
+        (
+            Rect::new(r.right() - 2 * STEP_W - 10, r.y + 7, STEP_W, 30),
+            Rect::new(r.right() - STEP_W - 6, r.y + 7, STEP_W, 30),
+        )
     }
 
     fn draw_sim_knob(&self, cv: &mut Canvas, r: Rect, it: Item) {
@@ -242,14 +319,18 @@ impl Ui {
         for (b, is_plus) in [(minus, false), (plus, true)] {
             chip(cv, b, BTN, BTN_BORDER);
             cv.hline(b.x + b.w / 2 - 6, b.x + b.w / 2 + 6, b.y + b.h / 2, TEXT);
-            if is_plus { cv.vline(b.x + b.w / 2, b.y + b.h / 2 - 6, b.y + b.h / 2 + 6, TEXT); }
+            if is_plus {
+                cv.vline(b.x + b.w / 2, b.y + b.h / 2 - 6, b.y + b.h / 2 + 6, TEXT);
+            }
         }
     }
 
     /// A tap on the SIM panel. False: it is not on it.
     pub(super) fn studio_sim_tap(&mut self, x: i32, y: i32) -> bool {
         let Some(g) = self.studio_sim_geo() else { return false };
-        if !g.p.contains(x, y) { return false; }
+        if !g.p.contains(x, y) {
+            return false;
+        }
         let total = self.studio_sim_total();
         if g.close.contains(x, y) {
             self.studio_set_view(StudioView::Waveform);
@@ -266,10 +347,19 @@ impl Ui {
             let i = self.studio_first(total, g.page) + ((y - g.list.y) / SIM_ROW) as usize;
             if i < total {
                 if self.studio.sim_knobs {
-                    let r = Rect::new(g.list.x, g.list.y + (i - self.studio_first(total, g.page)) as i32 * SIM_ROW, g.list.w, SIM_ROW);
+                    let r = Rect::new(
+                        g.list.x,
+                        g.list.y + (i - self.studio_first(total, g.page)) as i32 * SIM_ROW,
+                        g.list.w,
+                        SIM_ROW,
+                    );
                     let (minus, plus) = Self::sim_steps(r);
                     let it = self.studio_sim_knobs()[i];
-                    if minus.contains(x, y) { self.adjust(it, -1); } else if plus.contains(x, y) { self.adjust(it, 1); }
+                    if minus.contains(x, y) {
+                        self.adjust(it, -1);
+                    } else if plus.contains(x, y) {
+                        self.adjust(it, 1);
+                    }
                 } else {
                     self.select_option(Item::SimPreset, serial::LANES[i].name);
                 }
@@ -288,19 +378,26 @@ mod tests {
         u.m.layout = Layout::Studio;
         u.m.ch[1].on = true;
         u.studio.enter = true;
-        for _ in 0..8 { u.step(0.05); }
+        for _ in 0..8 {
+            u.step(0.05);
+        }
         u
     }
 
-    fn tap_in(u: &mut Ui, r: Rect) { u.tap(r.x + r.w / 2, r.y + r.h / 2); }
+    fn tap_in(u: &mut Ui, r: Rect) {
+        u.tap(r.x + r.w / 2, r.y + r.h / 2);
+    }
 
     fn shot(u: &mut Ui, name: &str) {
         let mut cv = Canvas::new(W, H);
         u.render(&mut cv);
-        for _ in 0..6 { u.step(0.05); }
+        for _ in 0..6 {
+            u.step(0.05);
+        }
         u.render(&mut cv);
         if let Some(dir) = std::env::var_os("OOS_SHOTS") {
-            std::fs::write(std::path::Path::new(&dir).join(format!("studio-{name}.png")), crate::store::png_of(&cv)).unwrap();
+            std::fs::write(std::path::Path::new(&dir).join(format!("studio-{name}.png")), crate::store::png_of(&cv))
+                .unwrap();
         }
     }
 
@@ -309,7 +406,9 @@ mod tests {
     /// while a SIM plays (`batch3a_tests.rs` taps it); nothing plays here yet, so it is set.
     fn choose(u: &mut Ui, view: StudioView) {
         match view {
-            StudioView::Offline => { u.tap_sheet_item(MenuId::Storage, Item::StudioOffline); }
+            StudioView::Offline => {
+                u.tap_sheet_item(MenuId::Storage, Item::StudioOffline);
+            }
             StudioView::Sim => u.studio_set_view(StudioView::Sim),
             _ => u.studio_apply_panel(super::super::sheet::PanelKind::Measurements),
         }
@@ -322,7 +421,9 @@ mod tests {
         u.commit_waveform_traces_at(traces, name, slot).unwrap();
     }
 
-    fn overlaps(a: Rect, b: Rect) -> bool { a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom() }
+    fn overlaps(a: Rect, b: Rect) -> bool {
+        a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom()
+    }
 
     #[test]
     fn offline_without_a_file_offers_load_file_in_record_mode_and_live_returns() {
@@ -331,7 +432,9 @@ mod tests {
         choose(&mut u, StudioView::Offline);
         assert_eq!(u.studio.view, StudioView::Offline);
         assert!(u.record_mode() && u.offline.on, "the view switches to record mode");
-        for _ in 0..3 { u.step(0.05); }
+        for _ in 0..3 {
+            u.step(0.05);
+        }
         let (card, load) = u.studio_offline_empty().expect("the empty card");
         let g = u.plot.grid;
         assert!(g.contains(card.x, card.y) && g.contains(card.right() - 1, card.bottom() - 1));
@@ -360,7 +463,9 @@ mod tests {
         // loaded onto the live screen: the references are drawn with the channels until the view is chosen
         assert!(!u.record_mode());
         choose(&mut u, StudioView::Offline);
-        for _ in 0..4 { u.step(0.05); }
+        for _ in 0..4 {
+            u.step(0.05);
+        }
         assert!(u.record_mode() && u.m.ch.iter().all(|c| !c.on), "the channels are off in the record session");
         assert!(u.m.zoom, "the zoom overview is the navigator");
         assert!(u.studio_offline_empty().is_none());
@@ -410,8 +515,12 @@ mod tests {
         for layout in [Layout::Default, Layout::Minimal] {
             let mut d = Ui::new(Source::Demo { t: 0.0 });
             d.m.layout = layout;
-            for _ in 0..4 { d.step(0.05); }
-            assert!(d.studio_panel_rect().is_none() && d.studio_offline_empty().is_none() && d.studio_sim_geo().is_none());
+            for _ in 0..4 {
+                d.step(0.05);
+            }
+            assert!(
+                d.studio_panel_rect().is_none() && d.studio_offline_empty().is_none() && d.studio_sim_geo().is_none()
+            );
         }
     }
 
@@ -428,12 +537,20 @@ mod tests {
         assert_eq!(u.studio.view, StudioView::Sim);
         assert!(!u.record_mode(), "nothing plays until Play");
         let g = u.studio_sim_geo().expect("the SIM panel");
-        assert!(g.p.x >= u.plot.grid.right() && g.p.right() <= W && g.p.bottom() <= u.frame().bottom.y, "beside the plot, above the bar");
+        assert!(
+            g.p.x >= u.plot.grid.right() && g.p.right() <= W && g.p.bottom() <= u.frame().bottom.y,
+            "beside the plot, above the bar"
+        );
         assert_eq!(u.studio_panel_rect(), Some(g.p));
         for r in [g.presets, g.knobs, g.up, g.down, g.play, g.add, g.list] {
             assert!(g.p.contains(r.x, r.y) && g.p.contains(r.right() - 1, r.bottom() - 1), "{r:?} inside the panel");
         }
-        assert!(!overlaps(g.list, g.up) && !overlaps(g.list, g.play) && !overlaps(g.up, g.play) && !overlaps(g.presets, g.list));
+        assert!(
+            !overlaps(g.list, g.up)
+                && !overlaps(g.list, g.play)
+                && !overlaps(g.up, g.play)
+                && !overlaps(g.presets, g.list)
+        );
         shot(&mut u, "22-sim-presets");
         // a preset row chooses the preset the way the SIM menu does
         let want = 3.min(serial::LANES.len() - 1);
@@ -447,7 +564,9 @@ mod tests {
         assert!(u.studio.sim_knobs);
         let knobs = u.studio_sim_knobs();
         assert!(knobs.contains(&Item::SimRate) && knobs.contains(&Item::SimNoise));
-        assert!(!knobs.contains(&Item::SimPreset) && !knobs.contains(&Item::SimPlay) && !knobs.contains(&Item::SimDefaults));
+        assert!(
+            !knobs.contains(&Item::SimPreset) && !knobs.contains(&Item::SimPlay) && !knobs.contains(&Item::SimDefaults)
+        );
         let i = knobs.iter().position(|&k| k == Item::SimRate).unwrap();
         let r = Rect::new(g.list.x, g.list.y + i as i32 * SIM_ROW, g.list.w, SIM_ROW);
         let (minus, plus) = Ui::sim_steps(r);
@@ -475,7 +594,9 @@ mod tests {
         assert!(!u.studio_sim_running());
         tap_in(&mut u, g.play);
         u.wait_sim_generation();
-        for _ in 0..8 { u.step(0.05); }
+        for _ in 0..8 {
+            u.step(0.05);
+        }
         assert!(u.session_is_sim && u.record_mode(), "Play runs the same action as the SIM menu");
         assert_eq!(u.studio_badge_label(), "SIM");
         assert!(u.refs[u.m.sim_slot].as_ref().is_some_and(|r| r.on), "the simulated source is on");

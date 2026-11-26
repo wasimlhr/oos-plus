@@ -14,7 +14,9 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -29,7 +31,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 { frame(u); }
+    for _ in 0..6 {
+        frame(u);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -45,7 +49,9 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
+    for k in 1..=8 {
+        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
+    }
     touch(u, Phase::Up, b.0, b.1);
     frame(u);
 }
@@ -110,7 +116,9 @@ fn the_detailed_table_has_source_name_value_mean_min_max_sigma_and_count() {
     assert!(total <= 800);
     // statistics gather while the scope runs
     u.m.run = RunState::Run;
-    for _ in 0..30 { frame(&mut u); }
+    for _ in 0..30 {
+        frame(&mut u);
+    }
     let s = switch(&u);
     tap(&mut u, s);
     let n = u.meas_rows().len();
@@ -131,7 +139,7 @@ fn a_narrow_table_drops_sigma_and_count_and_scrolls_sideways() {
     assert_eq!(Ui::detail_cols(700).0.len(), 8);
     // short of room: sigma and count go first
     let (cols, total) = Ui::detail_cols(560);
-    assert_eq!(cols.iter().map(|c| c.0).collect::<Vec<_>>(), [0, 1, 2, 3, 4, 5]);  // by priority: name, value, mean, min, max, sigma, count
+    assert_eq!(cols.iter().map(|c| c.0).collect::<Vec<_>>(), [0, 1, 2, 3, 4, 5]); // by priority: name, value, mean, min, max, sigma, count
     assert!(total <= 560);
     // narrower than that: columns drop, none is half drawn
     let (_, total) = Ui::detail_cols(200);
@@ -156,10 +164,14 @@ fn a_narrow_table_drops_sigma_and_count_and_scrolls_sideways() {
 /// Steps the frames, with the worker thread time to answer, until the row has a result or a reason.
 fn settle(u: &mut Ui, name: &str) -> String {
     for _ in 0..120 {
-        for _ in 0..3 { frame(u); }
+        for _ in 0..3 {
+            frame(u);
+        }
         std::thread::sleep(std::time::Duration::from_millis(50));
         let t = u.meas_rows().iter().find(|r| r.name == name).map(|r| r.text()).unwrap_or_default();
-        if t != "Computing" && !t.is_empty() { return t; }
+        if t != "Computing" && !t.is_empty() {
+            return t;
+        }
     }
     "Computing".into()
 }
@@ -195,7 +207,11 @@ fn a_ref_slot_without_data_says_so() {
 
 fn chip_rect(u: &Ui, math: bool) -> Rect {
     let b = u.studio_bottom();
-    if math { b.math[0] } else { b.refs[0] }
+    if math {
+        b.math[0]
+    } else {
+        b.refs[0]
+    }
 }
 
 fn hold(u: &mut Ui, r: Rect) {
@@ -255,7 +271,17 @@ fn a_hold_or_a_right_click_on_a_math_chip_opens_turn_off_and_settings() {
 #[test]
 fn a_hold_on_a_ref_chip_opens_hide_clear_and_settings() {
     let mut u = studio();
-    u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-6, v: (0..1000).map(|i| (i as f32 * 0.05).sin()).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true });
+    u.refs[0] = Some(RefWave {
+        src: 0,
+        color: 0,
+        label: "R1".into(),
+        t0: 0.0,
+        dt: 1e-6,
+        v: (0..1000).map(|i| (i as f32 * 0.05).sin()).collect::<Vec<_>>().into(),
+        vpd: 1.0,
+        offset: 0.0,
+        on: true,
+    });
     frame(&mut u);
     let r = chip_rect(&u, false);
     assert!(r.w > 0, "the R1 chip");
@@ -286,7 +312,10 @@ fn pinch_at(u: &mut Ui, p: (i32, i32), horizontal: bool, gap: i32, to: i32) {
     let at = |d: i32| if horizontal { (p.0 + d, p.1) } else { (p.0, p.1 + d) };
     touch_id(u, 0, Phase::Down, p.0, p.1);
     touch_id(u, 1, Phase::Down, at(gap).0, at(gap).1);
-    for k in 1..=8 { let d = gap + (to - gap) * k / 8; touch_id(u, 1, Phase::Move, at(d).0, at(d).1); }
+    for k in 1..=8 {
+        let d = gap + (to - gap) * k / 8;
+        touch_id(u, 1, Phase::Move, at(d).0, at(d).1);
+    }
     touch_id(u, 1, Phase::Up, at(to).0, at(to).1);
     touch_id(u, 0, Phase::Up, p.0, p.1);
     frame(u);
@@ -352,11 +381,16 @@ fn the_wheel_and_a_drag_on_the_axes_work_and_the_strip_lights_up() {
     let mut plain = Canvas::new(W, H);
     u.render(&mut plain);
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=6 { touch(&mut u, Phase::Move, x + k * 25, y); }
+    for k in 1..=6 {
+        touch(&mut u, Phase::Move, x + k * 25, y);
+    }
     let mut lit = Canvas::new(W, H);
     u.render(&mut lit);
     assert!(u.studio.axis.touch.is_some());
-    assert!(lit.px[((t.y + 3) * W + t.x + 200) as usize] != plain.px[((t.y + 3) * W + t.x + 200) as usize], "the strip is lit");
+    assert!(
+        lit.px[((t.y + 3) * W + t.x + 200) as usize] != plain.px[((t.y + 3) * W + t.x + 200) as usize],
+        "the strip is lit"
+    );
     shot(&mut u, "axis-lit");
     touch(&mut u, Phase::Up, x + 150, y);
     frame(&mut u);

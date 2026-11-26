@@ -94,7 +94,8 @@ impl Ui {
                     _ => miss,
                 }
             }
-            "EON" | "EOFF" | "ECOND" | "ETOT" | "PLOSS" | "FSW" | "PAVG" | "DVDTR" | "DVDTF" | "DIDTR" | "DIDTF" | "RDSON" => {
+            "EON" | "EOFF" | "ECOND" | "ETOT" | "PLOSS" | "FSW" | "PAVG" | "DVDTR" | "DVDTF" | "DIDTR" | "DIDTF"
+            | "RDSON" => {
                 let (v, i) = Self::two_id(over, self.m.pw_v, self.m.pw_i)?;
                 let Some((_, dt, w, _)) = self.grid(&[v, i], &[]) else { return Ok(miss) };
                 let s = power::switching(&w[0], &w[1], dt, 10.0);

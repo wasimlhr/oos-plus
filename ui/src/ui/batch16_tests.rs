@@ -10,7 +10,9 @@ fn studio() -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -25,7 +27,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 { frame(u); }
+    for _ in 0..6 {
+        frame(u);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -34,7 +38,9 @@ fn shot(u: &mut Ui, name: &str) {
     }
 }
 
-fn all_cats() -> Vec<Cat> { (0..512u16).filter_map(cat_from).collect() }
+fn all_cats() -> Vec<Cat> {
+    (0..512u16).filter_map(cat_from).collect()
+}
 
 #[test]
 fn every_measurement_has_a_figure_of_its_own_that_stays_inside_its_rectangle() {
@@ -54,15 +60,21 @@ fn every_measurement_has_a_figure_of_its_own_that_stays_inside_its_rectangle() {
                 let p = cv.px[(y * 160 + x) as usize];
                 if p != 0x101010 {
                     assert!(r.contains(x, y), "{c:?} drew outside its rectangle at {x},{y}");
-                    if r.contains(x, y) { ink += 1; }
+                    if r.contains(x, y) {
+                        ink += 1;
+                    }
                     h = (h ^ (p as u64 + (x * 7 + y * 13) as u64)).wrapping_mul(1099511628211);
                 }
             }
         }
         assert!(ink > 25, "{c:?} has a figure: {ink} pixels");
         // the tiles upstream added from id 200 on (pair variants, levels) take the figure of their family
-        if c.id >= 200 { continue; }
-        if let Some((_, other)) = seen.iter().find(|(k, _)| *k == h) { panic!("{c:?} and {other:?} draw the same figure"); }
+        if c.id >= 200 {
+            continue;
+        }
+        if let Some((_, other)) = seen.iter().find(|(k, _)| *k == h) {
+            panic!("{c:?} and {other:?} draw the same figure");
+        }
         seen.push((h, c));
     }
 }
@@ -71,12 +83,16 @@ fn every_measurement_has_a_figure_of_its_own_that_stays_inside_its_rectangle() {
 fn the_tile_grid_shows_the_pictures_on_two_pages() {
     let mut u = studio();
     u.open_meas_list();
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     shot(&mut u, "tiles-page1");
     let g = u.sheet_add_geo();
     assert!(u.tile_scroll_max() > 0);
     u.studio.md.tile_scroll = g.list.h;
-    for _ in 0..2 { frame(&mut u); }
+    for _ in 0..2 {
+        frame(&mut u);
+    }
     shot(&mut u, "tiles-page2");
     u.sheet.add_group = 1;
     shot(&mut u, "tiles-jitter");
@@ -91,10 +107,18 @@ fn trace_labels_and_badges_use_short_names_and_the_labels_do_not_overlap() {
     assert_eq!(meas_short_name(Meas::Overshoot), "Ovshoot+");
     let mut u = studio();
     u.m.run = RunState::Stop;
-    u.m.meas = vec![(Meas::Vtop, WaveId::Ch(0)), (Meas::Vbase, WaveId::Ch(0)), (Meas::PWidth, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0)), (Meas::Vavg, WaveId::Ch(0))];
+    u.m.meas = vec![
+        (Meas::Vtop, WaveId::Ch(0)),
+        (Meas::Vbase, WaveId::Ch(0)),
+        (Meas::PWidth, WaveId::Ch(0)),
+        (Meas::Vpp, WaveId::Ch(0)),
+        (Meas::Vavg, WaveId::Ch(0)),
+    ];
     u.m.meas_labels = true;
     u.ensure_meas_own();
-    for _ in 0..8 { frame(&mut u); }
+    for _ in 0..8 {
+        frame(&mut u);
+    }
     let rects = u.studio.label_rects.borrow().clone();
     assert!(rects.len() >= 4, "labels were placed: {}", rects.len());
     for (i, a) in rects.iter().enumerate() {

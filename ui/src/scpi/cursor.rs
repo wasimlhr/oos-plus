@@ -173,7 +173,9 @@ impl Scpi {
             let source = if second && track { ui.cursor_b_source() } else { ui.cursor_source() };
             // a math trace is read from the reference slot that holds a copy of it: say so, not "R1"
             return t(&match source {
-                WaveId::Ref(slot) => ui.ref_math_index(slot).map_or_else(|| wave_tok(source), |k| format!("MATH{}", k + 1)),
+                WaveId::Ref(slot) => {
+                    ui.ref_math_index(slot).map_or_else(|| wave_tok(source), |k| format!("MATH{}", k + 1))
+                }
                 _ => wave_tok(source),
             });
         }

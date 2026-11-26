@@ -231,7 +231,9 @@ impl Ui {
     pub fn step(&mut self, dt_wall: f64) {
         self.cursor_follow_view();
         // a callout whose keyboard was closed without a text does not stay as an empty box
-        if self.wlan.osk.is_none() { self.callout_drop_empty(); }
+        if self.wlan.osk.is_none() {
+            self.callout_drop_empty();
+        }
         self.step_polls(dt_wall);
         self.sample_capture_rate();
         self.step_guards();
@@ -255,7 +257,11 @@ impl Ui {
         if self.seen.view != self.m.view {
             self.seen.view = self.m.view;
             // Studio opens the eye beside the plot: the waveform stays; Full is an explicit choice
-            if self.m.view == AView::Eye && self.m.layout == Layout::Studio && self.m.eye_place == EyePlace::Full && !self.studio.eye_full {
+            if self.m.view == AView::Eye
+                && self.m.layout == Layout::Studio
+                && self.m.eye_place == EyePlace::Full
+                && !self.studio.eye_full
+            {
                 self.eye_set_place(EyePlace::Side);
             }
             if self.m.view != AView::Scope {
@@ -680,11 +686,32 @@ impl Ui {
                     let _ = &mut rec;
                     self.zone_trig.drops += 1;
                     // what the filter saw of the record it refused last (`:SYSTem:DEBug:ZONE?`)
-                    self.zone_last = self.m.zones.iter().filter(|z| z.usable()).map(|z| {
-                        let v = &rec.ch[z.src.min(NCH - 1)];
-                        let (lo, hi) = v.iter().filter(|x| x.is_finite()).fold((f32::MAX, f32::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
-                        format!("src={} n={} t0={:e} dt={:e} v={:.3}..{:.3} hit={} want={} pts={:?}", z.src + 1, v.len(), rec.t0, rec.dt, lo, hi, crate::zone::hits(z, v, rec.t0, rec.dt) as u8, z.inside as u8, z.pts)
-                    }).collect::<Vec<_>>().join(" | ");
+                    self.zone_last = self
+                        .m
+                        .zones
+                        .iter()
+                        .filter(|z| z.usable())
+                        .map(|z| {
+                            let v = &rec.ch[z.src.min(NCH - 1)];
+                            let (lo, hi) = v
+                                .iter()
+                                .filter(|x| x.is_finite())
+                                .fold((f32::MAX, f32::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
+                            format!(
+                                "src={} n={} t0={:e} dt={:e} v={:.3}..{:.3} hit={} want={} pts={:?}",
+                                z.src + 1,
+                                v.len(),
+                                rec.t0,
+                                rec.dt,
+                                lo,
+                                hi,
+                                crate::zone::hits(z, v, rec.t0, rec.dt) as u8,
+                                z.inside as u8,
+                                z.pts
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(" | ");
                 }
                 // protocol trigger, Normal and Single: the hardware fires on every edge of the line, only the decoder
                 // decides; Single waits on for the record that holds the event
@@ -906,7 +933,8 @@ impl Ui {
         self.phz.clear();
         let zv = (tscales()[self.m.zscale], self.m.zdelay);
         let detail = self.captured_view(zv);
-        let sparse = self.zoom_sparse(detail.as_deref().map_or_else(|| self.last[0].as_ref().map_or(1.0, |r| r.dt), |d| d.dt));
+        let sparse =
+            self.zoom_sparse(detail.as_deref().map_or_else(|| self.last[0].as_ref().map_or(1.0, |r| r.dt), |d| d.dt));
         self.phz.fat = sparse;
         let shown = self.stop_picture().cloned().or_else(|| self.last[0].clone());
         if let Some(rec) = shown {
@@ -984,7 +1012,9 @@ impl Ui {
         } else {
             parts.push(match m.trig_line() {
                 Some(n) => format!("Trig D{}", n),
-                None => format!("Trig {} {}", self.trigger_source_label(), si_short(self.trig_level_shown() as f64, "V")),
+                None => {
+                    format!("Trig {} {}", self.trigger_source_label(), si_short(self.trig_level_shown() as f64, "V"))
+                }
             });
         }
         parts.push(self.run_caption().0.into());

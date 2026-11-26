@@ -297,8 +297,18 @@ pub struct MeasLevels {
 
 impl Default for MeasLevels {
     fn default() -> Self {
-        MeasLevels { absolute: false, custom: false, mid: 0.5, hyst: 0.05, volts: [-1.0, 0.0, 1.0], vhyst: 0.03, sep_fall: false,
-            fall: [0.1, 0.5, 0.9], fall_volts: [-1.0, 0.0, 1.0], base_top: oos_dsp::measure::BaseTop::Auto }
+        MeasLevels {
+            absolute: false,
+            custom: false,
+            mid: 0.5,
+            hyst: 0.05,
+            volts: [-1.0, 0.0, 1.0],
+            vhyst: 0.03,
+            sep_fall: false,
+            fall: [0.1, 0.5, 0.9],
+            fall_volts: [-1.0, 0.0, 1.0],
+            base_top: oos_dsp::measure::BaseTop::Auto,
+        }
     }
 }
 
@@ -312,7 +322,14 @@ impl Model {
             (true, true) => l.fall_volts,
             (true, false) => l.fall,
         };
-        oos_dsp::measure::Levels { absolute: l.absolute, rise, fall, hyst: if l.absolute { l.vhyst } else { l.hyst }, base_top: l.base_top, out_volts: f64::NAN }
+        oos_dsp::measure::Levels {
+            absolute: l.absolute,
+            rise,
+            fall,
+            hyst: if l.absolute { l.vhyst } else { l.hyst },
+            base_top: l.base_top,
+            out_volts: f64::NAN,
+        }
     }
 
     /// The shared levels with the percent low and high of `meas_lpct` / `meas_hpct`.
@@ -939,9 +956,20 @@ impl RowKey {
         let f: Vec<&str> = s.split(':').collect();
         let bad = || format!("not a measurement row: {}", s);
         match f[..] {
-            ["m", k, id] => Ok(RowKey::One(ALL_MEAS.iter().copied().find(|m| format!("{:?}", m) == k).ok_or_else(bad)?, WaveId::parse(id)?)),
-            ["p", k, a, b] => Ok(RowKey::Pair(k.parse::<usize>().map_err(|_| bad())?, WaveId::parse(a)?, WaveId::parse(b)?)),
-            ["c", k, a, b, c, d] => Ok(RowKey::Cat(k.parse::<u16>().map_err(|_| bad())?, WaveId::parse(a)?, WaveId::parse(b)?, WaveId::parse(c)?, WaveId::parse(d)?)),
+            ["m", k, id] => Ok(RowKey::One(
+                ALL_MEAS.iter().copied().find(|m| format!("{:?}", m) == k).ok_or_else(bad)?,
+                WaveId::parse(id)?,
+            )),
+            ["p", k, a, b] => {
+                Ok(RowKey::Pair(k.parse::<usize>().map_err(|_| bad())?, WaveId::parse(a)?, WaveId::parse(b)?))
+            }
+            ["c", k, a, b, c, d] => Ok(RowKey::Cat(
+                k.parse::<u16>().map_err(|_| bad())?,
+                WaveId::parse(a)?,
+                WaveId::parse(b)?,
+                WaveId::parse(c)?,
+                WaveId::parse(d)?,
+            )),
             _ => Err(bad()),
         }
     }
@@ -992,20 +1020,53 @@ impl RowCfg {
     /// A field that changes the analysis of the record (levels, top / base, outside level, gate), not just the
     /// reading taken from it.
     pub fn changes_analysis(&self) -> bool {
-        self.lo.is_some() || self.hi.is_some() || self.hyst.is_some() || self.base_top.is_some() || self.out_volts.is_some() || self.gate_full.is_some()
+        self.lo.is_some()
+            || self.hi.is_some()
+            || self.hyst.is_some()
+            || self.base_top.is_some()
+            || self.out_volts.is_some()
+            || self.gate_full.is_some()
     }
 
     /// Setup text: `name=value,name=value`.
     pub fn text(&self) -> String {
         let mut v: Vec<String> = Vec::new();
-        macro_rules! put { ($f:ident, $n:literal) => { if let Some(x) = self.$f { v.push(format!("{}={}", $n, x)); } }; }
-        put!(pol, "pol"); put!(off, "off"); put!(step, "step"); put!(os_top, "ostop"); put!(os_base, "osbase");
-        put!(lo, "lo"); put!(hi, "hi"); put!(hyst, "hyst");
-        if let Some(b) = self.base_top { v.push(format!("bt={:?}", b)); }
-        if let Some(g) = self.gate_full { v.push(format!("gate={}", g as u8)); }
-        if let Some(g) = self.burst_fall { v.push(format!("bfall={}", g as u8)); }
-        put!(idle, "idle"); put!(side, "side"); put!(out_volts, "ovolts"); put!(n, "n"); put!(n_off, "noff"); put!(n_step, "nstep");
-        put!(n_edge, "nedge"); put!(from, "from"); put!(to, "to"); put!(dir, "dir"); put!(wmin, "wmin"); put!(wmax, "wmax");
+        macro_rules! put {
+            ($f:ident, $n:literal) => {
+                if let Some(x) = self.$f {
+                    v.push(format!("{}={}", $n, x));
+                }
+            };
+        }
+        put!(pol, "pol");
+        put!(off, "off");
+        put!(step, "step");
+        put!(os_top, "ostop");
+        put!(os_base, "osbase");
+        put!(lo, "lo");
+        put!(hi, "hi");
+        put!(hyst, "hyst");
+        if let Some(b) = self.base_top {
+            v.push(format!("bt={:?}", b));
+        }
+        if let Some(g) = self.gate_full {
+            v.push(format!("gate={}", g as u8));
+        }
+        if let Some(g) = self.burst_fall {
+            v.push(format!("bfall={}", g as u8));
+        }
+        put!(idle, "idle");
+        put!(side, "side");
+        put!(out_volts, "ovolts");
+        put!(n, "n");
+        put!(n_off, "noff");
+        put!(n_step, "nstep");
+        put!(n_edge, "nedge");
+        put!(from, "from");
+        put!(to, "to");
+        put!(dir, "dir");
+        put!(wmin, "wmin");
+        put!(wmax, "wmax");
         v.join(",")
     }
 
@@ -1013,8 +1074,11 @@ impl RowCfg {
         let mut c = RowCfg::default();
         for e in s.split(',').filter(|e| !e.is_empty()) {
             let (k, v) = e.split_once('=').ok_or_else(|| format!("not name=value: {}", e))?;
-            let f = |v: &str| v.parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(|| format!("not a number: {}", e));
-            let u = |v: &str, max: u32| v.parse::<u32>().ok().filter(|x| *x <= max).ok_or_else(|| format!("out of range: {}", e));
+            let f =
+                |v: &str| v.parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(|| format!("not a number: {}", e));
+            let u = |v: &str, max: u32| {
+                v.parse::<u32>().ok().filter(|x| *x <= max).ok_or_else(|| format!("out of range: {}", e))
+            };
             match k {
                 "pol" => c.pol = Some(u(v, 2)? as u8),
                 "off" => c.off = Some(u(v, 1_000_000)?),
@@ -1024,7 +1088,15 @@ impl RowCfg {
                 "lo" => c.lo = Some(f(v)?),
                 "hi" => c.hi = Some(f(v)?),
                 "hyst" => c.hyst = Some(f(v)?),
-                "bt" => c.base_top = Some(oos_dsp::measure::BaseTop::ALL.iter().copied().find(|b| format!("{:?}", b) == v).ok_or_else(|| format!("unknown method: {}", v))?),
+                "bt" => {
+                    c.base_top = Some(
+                        oos_dsp::measure::BaseTop::ALL
+                            .iter()
+                            .copied()
+                            .find(|b| format!("{:?}", b) == v)
+                            .ok_or_else(|| format!("unknown method: {}", v))?,
+                    )
+                }
                 "gate" => c.gate_full = Some(v == "1"),
                 "bfall" => c.burst_fall = Some(v == "1"),
                 "idle" => c.idle = Some(f(v)?),
@@ -1054,12 +1126,16 @@ impl Model {
     /// Sets the settings of a row; an all-follow set removes the entry.
     pub fn set_row_cfg(&mut self, key: RowKey, cfg: RowCfg) {
         self.row_cfg.retain(|(k, _)| *k != key);
-        if !cfg.is_default() { self.row_cfg.push((key, cfg)); }
+        if !cfg.is_default() {
+            self.row_cfg.push((key, cfg));
+        }
     }
 
     /// The keys of every selected row.
     pub fn row_keys(&self) -> Vec<RowKey> {
-        self.meas.iter().map(|&(k, id)| RowKey::One(k, id))
+        self.meas
+            .iter()
+            .map(|&(k, id)| RowKey::One(k, id))
             .chain(self.meas2.iter().map(|&(k, a, b)| RowKey::Pair(k, a, b)))
             .chain(self.cat.iter().map(|&(k, a, b, c, d)| RowKey::Cat(k, a, b, c, d)))
             .collect()

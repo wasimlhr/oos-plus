@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 //! Batch 18: the UX review of Studio. One test per item that can be tested. OOS_SHOTS=<dir> writes pictures (b18-*).
 use super::dock::VKind;
-#[allow(unused_imports)] use super::meascatalog::Cat;
+#[allow(unused_imports)]
+use super::meascatalog::Cat;
 use super::studio::StudioView;
 use super::*;
 
@@ -12,7 +13,9 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 { u.step(0.05); }
+    for _ in 0..10 {
+        u.step(0.05);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -27,7 +30,9 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 { frame(u); }
+    for _ in 0..6 {
+        frame(u);
+    }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -53,12 +58,18 @@ fn the_side_sheet_floats_over_the_docks_and_the_waveform_keeps_its_size() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Eye);
     u.studio_apply_panel(super::sheet::PanelKind::Histogram);
-    for _ in 0..4 { frame(&mut u); }
-    let before: Vec<Rect> = [VKind::Wave, VKind::Eye, VKind::Hist, VKind::Measure].iter().filter_map(|k| u.dock_leaf(*k)).collect();
+    for _ in 0..4 {
+        frame(&mut u);
+    }
+    let before: Vec<Rect> =
+        [VKind::Wave, VKind::Eye, VKind::Hist, VKind::Measure].iter().filter_map(|k| u.dock_leaf(*k)).collect();
     u.open_meas_list();
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     assert!(u.sheet_active());
-    let after: Vec<Rect> = [VKind::Wave, VKind::Eye, VKind::Hist, VKind::Measure].iter().filter_map(|k| u.dock_leaf(*k)).collect();
+    let after: Vec<Rect> =
+        [VKind::Wave, VKind::Eye, VKind::Hist, VKind::Measure].iter().filter_map(|k| u.dock_leaf(*k)).collect();
     assert_eq!(before, after, "the docks did not move under the sheet");
     shot(&mut u, "sheet-over-docks");
 }
@@ -67,7 +78,9 @@ fn the_side_sheet_floats_over_the_docks_and_the_waveform_keeps_its_size() {
 fn the_overview_goes_first_when_the_waveform_is_short_and_the_zoom_bar_stays() {
     let mut u = studio();
     u.set_zoom(true);
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let tall = u.split_zoom(Rect::new(0, 0, 700, 400));
     assert!(tall.0.h >= 40);
     let short = u.split_zoom(Rect::new(0, 0, 700, 130));
@@ -92,7 +105,9 @@ fn adding_a_measurement_says_what_it_reads_and_the_tile_shows_its_value() {
     u.m.meas.clear();
     u.m.run = RunState::Stop;
     u.open_meas_list();
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     u.sheet_pick_source(WaveId::Ch(1));
     let g = u.sheet_add_geo();
     let &(k, tile) = &g.rows[1];
@@ -109,17 +124,29 @@ fn adding_a_measurement_says_what_it_reads_and_the_tile_shows_its_value() {
 fn pinned_badges_that_do_not_fit_leave_a_plus_n_chip_that_opens_the_list() {
     let mut u = studio();
     u.studio_set_view(StudioView::Waveform);
-    u.m.meas = [Meas::Vpp, Meas::Freq, Meas::Vavg, Meas::Vrms, Meas::Rise, Meas::Fall, Meas::Vmax, Meas::Vmin, Meas::Period].into_iter().map(|k| (k, WaveId::Ch(0))).collect();
+    u.m.meas =
+        [Meas::Vpp, Meas::Freq, Meas::Vavg, Meas::Vrms, Meas::Rise, Meas::Fall, Meas::Vmax, Meas::Vmin, Meas::Period]
+            .into_iter()
+            .map(|k| (k, WaveId::Ch(0)))
+            .collect();
     u.ensure_meas_own();
-    for k in u.studio_keys() { u.studio_set_pin(k, true); }
-    for _ in 0..4 { frame(&mut u); }
+    for k in u.studio_keys() {
+        u.studio_set_pin(k, true);
+    }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     // nine have a place: the row takes a second line before anything goes behind +N
     assert!(u.studio_badges_more().is_none() && u.studio_badges().len() == 9, "{} badges", u.studio_badges().len());
     // more than two lines hold
     u.m.meas = oos_dsp::measure::ALL.into_iter().take(30).map(|k| (k, WaveId::Ch(0))).collect();
     u.ensure_meas_own();
-    for k in u.studio_keys() { u.studio_set_pin(k, true); }
-    for _ in 0..4 { frame(&mut u); }
+    for k in u.studio_keys() {
+        u.studio_set_pin(k, true);
+    }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     let (chip, n) = u.studio_badges_more().expect("a +N chip");
     assert!(n >= 1 && Ui::hit40(chip).w >= 40);
     assert_eq!(u.studio_badges().len() + n, 30);
@@ -149,7 +176,15 @@ fn the_info_card_has_a_line_of_its_own_for_maximum() {
     let min = super::meascatalog::cat_info(super::meascatalog::cat_from(super::meascatalog::cat::Minimum).unwrap()).how;
     assert!(max.contains("highest sample") && !max.contains("Takes the top and base levels"), "{max}");
     assert_ne!(max, min);
-    for c in [super::meascatalog::cat_from(super::meascatalog::cat::Amplitude).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::Rise).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::Period).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::PosWidth).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::PosOvershoot).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::Delay).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::Phase).unwrap()] {
+    for c in [
+        super::meascatalog::cat_from(super::meascatalog::cat::Amplitude).unwrap(),
+        super::meascatalog::cat_from(super::meascatalog::cat::Rise).unwrap(),
+        super::meascatalog::cat_from(super::meascatalog::cat::Period).unwrap(),
+        super::meascatalog::cat_from(super::meascatalog::cat::PosWidth).unwrap(),
+        super::meascatalog::cat_from(super::meascatalog::cat::PosOvershoot).unwrap(),
+        super::meascatalog::cat_from(super::meascatalog::cat::Delay).unwrap(),
+        super::meascatalog::cat_from(super::meascatalog::cat::Phase).unwrap(),
+    ] {
         assert!(super::meascatalog::cat_info(c).how.len() > 40);
     }
 }
@@ -158,7 +193,9 @@ fn the_info_card_has_a_line_of_its_own_for_maximum() {
 fn the_gear_sheet_is_settings_with_tools_and_analysis_views_and_no_duplicates() {
     let mut u = studio();
     u.open_menu(MenuId::Main);
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     // Batch 21: the gear sheet is the grouped Menu (one page, no tabs); the reset is a button of its group and asks first
     assert_eq!(u.menu_title(MenuId::Main), "Menu");
     let spec = u.sheet_spec(MenuId::Main).unwrap();
@@ -171,7 +208,11 @@ fn touch_targets_are_forty_pixels_and_channels_show_an_on_state() {
     let u = studio();
     assert!(u.studio_row_px() >= 40 || u.studio.compact);
     let b = u.studio_bottom();
-    for c in 0..n_ch() { if b.ch[c].w > 0 { assert!(Ui::hit40(b.ch[c]).h >= 40); } }
+    for c in 0..n_ch() {
+        if b.ch[c].w > 0 {
+            assert!(Ui::hit40(b.ch[c]).h >= 40);
+        }
+    }
     let p = Rect::new(100, 100, 200, 300);
     assert!(Ui::studio_popup_row(p, 0).h >= 40);
 }
@@ -186,7 +227,8 @@ fn a_hold_on_a_channel_chip_starts_with_turn_off() {
     u.step(0.6);
     touch(&mut u, Phase::Up, x, y);
     frame(&mut u);
-    let rows: Vec<String> = u.workspace.popup.as_ref().map(|p| p.rows.iter().map(|r| r.0.clone()).collect()).unwrap_or_default();
+    let rows: Vec<String> =
+        u.workspace.popup.as_ref().map(|p| p.rows.iter().map(|r| r.0.clone()).collect()).unwrap_or_default();
     assert_eq!(rows.first().map(String::as_str), Some("Turn off"), "{rows:?}");
 }
 
@@ -194,7 +236,9 @@ fn a_hold_on_a_channel_chip_starts_with_turn_off() {
 fn the_zoom_bar_stays_with_a_search() {
     let mut u = studio();
     u.set_zoom(true);
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     shot(&mut u, "zoom-bar");
     assert!(u.studio_zoom_bar().is_some());
     u.studio_search_add(Some(WaveId::Ch(1)));
@@ -205,10 +249,14 @@ fn the_zoom_bar_stays_with_a_search() {
 fn the_spectrum_has_a_trace_when_the_scope_is_stopped() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Spectrum);
-    for _ in 0..6 { frame(&mut u); }
+    for _ in 0..6 {
+        frame(&mut u);
+    }
     u.key(key::RUNSTOP);
     u.azr.spec = None;
-    for _ in 0..6 { frame(&mut u); }
+    for _ in 0..6 {
+        frame(&mut u);
+    }
     assert!(u.azr.spec.is_some(), "the last record is drawn, not \"waiting for a record\"");
 }
 
@@ -219,11 +267,14 @@ fn the_status_pill_has_a_glyph_for_what_a_tap_does() {
     let mut run = Canvas::new(W, H);
     u.render(&mut run);
     u.key(key::RUNSTOP);
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let mut stop = Canvas::new(W, H);
     u.render(&mut stop);
     let g = Rect::new(t.run.x + 8, t.run.y + 6, 16, 16);
-    let differs = (g.y..g.bottom()).any(|y| (g.x..g.right()).any(|x| run.px[(y * W + x) as usize] != stop.px[(y * W + x) as usize]));
+    let differs = (g.y..g.bottom())
+        .any(|y| (g.x..g.right()).any(|x| run.px[(y * W + x) as usize] != stop.px[(y * W + x) as usize]));
     assert!(differs);
 }
 
@@ -234,7 +285,9 @@ fn full_screen_keeps_the_status_pill_and_an_exit_chip() {
     let mut u = studio();
     assert!(u.full_chrome_rects().is_none());
     u.toggle_expand();
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     assert!(u.full_on());
     let (pill, exit) = u.full_chrome_rects().expect("the pill and the exit chip");
     assert!(Ui::hit40(pill).h >= 40 && Ui::hit40(exit).h >= 40);
@@ -253,9 +306,18 @@ fn a_danger_button_in_a_footer_asks_before_it_acts_and_stands_apart() {
     let mut u = studio();
     // the factory reset
     u.open_menu(MenuId::Main);
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     // Batch 21: the factory reset is a button of the Menu's Acquisition group
-    let reset = u.menu_geo().groups.iter().flat_map(|g| g.items.iter()).find(|(it, _)| *it == Item::DefaultAct).expect("the factory reset is in the Menu").1;
+    let reset = u
+        .menu_geo()
+        .groups
+        .iter()
+        .flat_map(|g| g.items.iter())
+        .find(|(it, _)| *it == Item::DefaultAct)
+        .expect("the factory reset is in the Menu")
+        .1;
     u.m.tscale = 3;
     tap(&mut u, reset);
     assert_eq!(u.m.tscale, 3, "the first tap only asks");
@@ -265,9 +327,21 @@ fn a_danger_button_in_a_footer_asks_before_it_acts_and_stands_apart() {
     // the reference sheet: Store is the main button, Clear all is set apart and asks
     // (the factory reset changed the layout: a fresh Studio)
     let mut u = studio();
-    u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true });
+    u.refs[0] = Some(RefWave {
+        src: 0,
+        color: 0,
+        label: "R1".into(),
+        t0: 0.0,
+        dt: 1e-6,
+        v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(),
+        vpd: 1.0,
+        offset: 0.0,
+        on: true,
+    });
     u.open_menu(MenuId::Ref);
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let g = u.sheet_geo().unwrap();
     let save = g.foot.iter().find(|(it, _)| *it == Item::RefSave).expect("Store").1;
     // (Clear of the slot that is shown is beside Store; Clear all is under the second tab)
@@ -291,10 +365,17 @@ fn a_danger_button_in_a_footer_asks_before_it_acts_and_stands_apart() {
 
 #[test]
 fn the_add_hub_has_no_math_ref_or_bus_and_the_tiles_scroll_without_a_pager() {
-    for k in super::addrail::ADD_KINDS.iter() { assert!(!matches!(k.0, super::addrail::AddKind::Math | super::addrail::AddKind::Ref | super::addrail::AddKind::Bus)); }
+    for k in super::addrail::ADD_KINDS.iter() {
+        assert!(!matches!(
+            k.0,
+            super::addrail::AddKind::Math | super::addrail::AddKind::Ref | super::addrail::AddKind::Bus
+        ));
+    }
     let mut u = studio();
     u.open_meas_list();
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let g = u.sheet_add_geo();
     assert_eq!(g.pages, 1, "no pager");
     assert!(g.find.w >= 40, "Find stays");
@@ -304,7 +385,9 @@ fn the_add_hub_has_no_math_ref_or_bus_and_the_tiles_scroll_without_a_pager() {
     let n0 = u.measurement_count();
     let (x, y) = (g.list.x + 40, g.list.y + 100);
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=6 { touch(&mut u, Phase::Move, x, y - 14 * k); }
+    for k in 1..=6 {
+        touch(&mut u, Phase::Move, x, y - 14 * k);
+    }
     touch(&mut u, Phase::Up, x, y - 84);
     frame(&mut u);
     assert!(u.studio.md.tile_scroll > 0, "scrolled");
@@ -316,14 +399,20 @@ fn the_add_hub_has_no_math_ref_or_bus_and_the_tiles_scroll_without_a_pager() {
 fn a_view_is_not_docked_where_it_would_leave_the_waveform_too_short() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Eye);
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let w = u.dock_leaf(VKind::Wave).unwrap();
     u.dock_apply(VKind::Eye, super::dock::Drop::Split(VKind::Wave, super::dock::Side::Bottom));
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let w2 = u.dock_leaf(VKind::Wave).unwrap();
     assert!(w2.h < w.h, "the first split is fine: {} -> {}", w.h, w2.h);
     u.studio_apply_panel(super::sheet::PanelKind::Histogram);
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let w3 = u.dock_leaf(VKind::Wave).unwrap();
     let (drop, _) = u.dock_drop_at(VKind::Hist, w3.x + w3.w / 2, w3.bottom() - 10, (0, 0));
     assert_eq!(drop, super::dock::Drop::Stay, "another split would leave {} px", w3.h / 2);
@@ -336,18 +425,27 @@ fn cursors_read_at_the_top_left_of_the_lane_and_hide_when_both_are_off_screen() 
     u.m.cursor = CursorMode::Time;
     u.m.cur_a = 0.3;
     u.m.cur_b = 0.7;
-    for _ in 0..4 { frame(&mut u); }
+    for _ in 0..4 {
+        frame(&mut u);
+    }
     let lane = u.plot.wins[0];
     // (under the tags and the value boxes of the time cursors, which stand in the first 44 px of the lane)
     let box_top = Rect::new(lane.x + 52, lane.y + 48, 60, 3);
     let mut on = Canvas::new(W, H);
     u.render(&mut on);
-    let ink = |cv: &Canvas| (box_top.y..box_top.bottom()).flat_map(|y| (box_top.x..box_top.right()).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] == CURSOR).count();
+    let ink = |cv: &Canvas| {
+        (box_top.y..box_top.bottom())
+            .flat_map(|y| (box_top.x..box_top.right()).map(move |x| (x, y)))
+            .filter(|&(x, y)| cv.px[(y * W + x) as usize] == CURSOR)
+            .count()
+    };
     assert!(ink(&on) > 20, "the box at the top left of the lane");
     shot(&mut u, "cursors");
     u.m.cur_a = 1.4;
     u.m.cur_b = 1.8;
-    for _ in 0..3 { frame(&mut u); }
+    for _ in 0..3 {
+        frame(&mut u);
+    }
     let mut off = Canvas::new(W, H);
     u.render(&mut off);
     assert_eq!(ink(&off), 0, "hidden: both cursors are off the screen");
@@ -357,7 +455,9 @@ fn cursors_read_at_the_top_left_of_the_lane_and_hide_when_both_are_off_screen() 
 fn the_spectrum_facts_page_when_they_do_not_fit() {
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Spectrum);
-    for _ in 0..8 { frame(&mut u); }
+    for _ in 0..8 {
+        frame(&mut u);
+    }
     let b = u.spec_box(Rect::new(0, 0, 520, 150), true);
     let total = u.spec_facts(&u.azr.spec.clone().unwrap()).len();
     assert!(total > u.spec_facts_fit(&b), "more facts than room");

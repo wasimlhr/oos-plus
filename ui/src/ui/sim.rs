@@ -15,11 +15,11 @@ use std::sync::{mpsc, Arc};
 
 #[path = "sim_bus_candidate.rs"]
 mod sim_bus_candidate;
-#[path = "sim_protocol.rs"]
-mod sim_protocol;
 #[cfg(test)]
 #[path = "sim_bus_tests.rs"]
 mod sim_bus_tests;
+#[path = "sim_protocol.rs"]
+mod sim_protocol;
 
 mod menu;
 #[cfg(test)]
@@ -62,7 +62,10 @@ impl SimLimit {
 pub(super) fn sim_ref_budget(rate: f64, free: Option<u64>) -> (usize, SimLimit) {
     let by_time = (rate.max(1.0) * SIM_REF_SECONDS) as usize;
     let by_memory = free.map_or(usize::MAX, |b| (b / SIM_REF_MEMORY / 4) as usize);
-    [(by_time, SimLimit::Time), (by_memory, SimLimit::Memory), (oos_dsp::hss::MAX_SAMPLES, SimLimit::Generator)].into_iter().min_by_key(|x| x.0).unwrap()
+    [(by_time, SimLimit::Time), (by_memory, SimLimit::Memory), (oos_dsp::hss::MAX_SAMPLES, SimLimit::Generator)]
+        .into_iter()
+        .min_by_key(|x| x.0)
+        .unwrap()
 }
 
 fn sim_rate() -> f64 {
@@ -71,7 +74,11 @@ fn sim_rate() -> f64 {
         return 4e6 / SIM_REF_SECONDS;
     }
     let bits = SIM_RATE.load(std::sync::atomic::Ordering::Relaxed);
-    if bits == 0 { SIM_RATE_ASSUMED } else { f64::from_bits(bits) }
+    if bits == 0 {
+        SIM_RATE_ASSUMED
+    } else {
+        f64::from_bits(bits)
+    }
 }
 
 struct Request {
@@ -137,7 +144,10 @@ impl Generation {
     fn new() -> Result<Self, String> {
         let thread = Worker::spawn("oos-sim", |request: Request| {
             let started = std::time::Instant::now();
-            let made = match request.samples { Some(n) => serial::try_generate_len(&request.lane, n), None => serial::try_generate(&request.lane) };
+            let made = match request.samples {
+                Some(n) => serial::try_generate_len(&request.lane, n),
+                None => serial::try_generate(&request.lane),
+            };
             // the rate of this machine, from records long enough to time (`sim_ref_budget`)
             if let (Ok(v), secs) = (&made, started.elapsed().as_secs_f64()) {
                 if v.len() >= 500_000 && secs > 0.02 {
@@ -232,7 +242,13 @@ impl Ui {
         btn(cv, r, BTN, if on { ACCENT } else { BTN_BORDER });
         cv.set_clip(r.inset(2));
         cv.text_in(&f.sb, Rect::new(r.x + 8, r.y, 30, r.h), 0, "SIM", if on { ACCENT } else { DIM });
-        cv.text_in(&f.mb, Rect::new(r.x + 40, r.y, (r.w - 44).max(1), r.h), 0, self.sim_preset_name(), if on { ACCENT } else { TEXT });
+        cv.text_in(
+            &f.mb,
+            Rect::new(r.x + 40, r.y, (r.w - 44).max(1), r.h),
+            0,
+            self.sim_preset_name(),
+            if on { ACCENT } else { TEXT },
+        );
         cv.no_clip();
     }
 
@@ -255,7 +271,9 @@ impl Ui {
     }
 
     /// SIM mode is on: the sheet's generated signal or the offline refs are playing as a live acquisition.
-    pub(crate) fn sim_mode(&self) -> bool { self.session_is_sim || !self.sim_refs.is_empty() }
+    pub(crate) fn sim_mode(&self) -> bool {
+        self.session_is_sim || !self.sim_refs.is_empty()
+    }
 
     /// The refs that SIM mode plays: every shown ref with samples, from a file or from Add to R<n>.
     pub(crate) fn sim_shown_refs(&self) -> Vec<usize> {
@@ -264,9 +282,19 @@ impl Ui {
 
     /// "R1 file.csv, R2 SATA I": what SIM mode is playing.
     pub(super) fn sim_refs_caption(&self) -> String {
-        self.sim_refs.iter().filter_map(|&i| self.refs[i].as_ref().map(|r| {
-            if r.label.is_empty() { format!("R{}", i + 1) } else { format!("R{} {}", i + 1, r.label) }
-        })).collect::<Vec<_>>().join(", ")
+        self.sim_refs
+            .iter()
+            .filter_map(|&i| {
+                self.refs[i].as_ref().map(|r| {
+                    if r.label.is_empty() {
+                        format!("R{}", i + 1)
+                    } else {
+                        format!("R{} {}", i + 1, r.label)
+                    }
+                })
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     /// SIM mode over offline waveforms. The refs go through the same replay acquisition as a stored waveform (the record
@@ -274,7 +302,9 @@ impl Ui {
     /// channels stay as they are, nothing is written to a ref, and Live restores the session.
     fn sim_start_refs(&mut self) {
         let slots = self.sim_shown_refs();
-        if slots.is_empty() { return; }
+        if slots.is_empty() {
+            return;
+        }
         self.cancel_bus_candidate(true);
         self.workflow_epoch = self.workflow_epoch.wrapping_add(1);
         self.sim_cancel_generation();
@@ -296,7 +326,8 @@ impl Ui {
         self.m.trig_ref2 = None;
         self.fit_reference_trigger_levels();
         if initialize_measurements {
-            self.m.meas = [Meas::Vpp, Meas::Freq, Meas::Vrms, Meas::Rise].into_iter().map(|k| (k, WaveId::Ref(first))).collect();
+            self.m.meas =
+                [Meas::Vpp, Meas::Freq, Meas::Vrms, Meas::Rise].into_iter().map(|k| (k, WaveId::Ref(first))).collect();
         }
         self.select_workspace_source(WaveId::Ref(first));
         self.m.eye_src = WaveId::Ref(first);
@@ -500,7 +531,9 @@ impl Ui {
     /// signals. While the simulation mode plays, it goes back to Live first (the knobs stay as they are set now),
     /// and Play references (or Play of the Studio SIM panel) then runs every shown ref together.
     pub(super) fn sim_add_next(&mut self) {
-        if self.sim_generating() { return self.toast("SIM is busy generating"); }
+        if self.sim_generating() {
+            return self.toast("SIM is busy generating");
+        }
         let Some(free) = (0..NREF).find(|&i| self.refs[i].is_none()) else {
             return self.toast("All ten refs are in use: clear one to add a signal");
         };
@@ -514,10 +547,50 @@ impl Ui {
             let now = self.m.clone();
             self.return_to_live();
             let m = &mut self.m;
-            (m.sim_preset, m.sim_rate, m.sim_prbs, m.sim_vhigh, m.sim_vlow, m.sim_rise, m.sim_noise, m.sim_bw, m.sim_deemph) =
-                (now.sim_preset, now.sim_rate, now.sim_prbs, now.sim_vhigh, now.sim_vlow, now.sim_rise, now.sim_noise, now.sim_bw, now.sim_deemph);
-            (m.sim_ssc, m.sim_ssc_center, m.sim_ssc_deviation, m.sim_ssc_hz, m.sim_rj, m.sim_pj, m.sim_pjhz, m.sim_dcd_pp, m.sim_corr_rj, m.sim_corr_hz) =
-                (now.sim_ssc, now.sim_ssc_center, now.sim_ssc_deviation, now.sim_ssc_hz, now.sim_rj, now.sim_pj, now.sim_pjhz, now.sim_dcd_pp, now.sim_corr_rj, now.sim_corr_hz);
+            (
+                m.sim_preset,
+                m.sim_rate,
+                m.sim_prbs,
+                m.sim_vhigh,
+                m.sim_vlow,
+                m.sim_rise,
+                m.sim_noise,
+                m.sim_bw,
+                m.sim_deemph,
+            ) = (
+                now.sim_preset,
+                now.sim_rate,
+                now.sim_prbs,
+                now.sim_vhigh,
+                now.sim_vlow,
+                now.sim_rise,
+                now.sim_noise,
+                now.sim_bw,
+                now.sim_deemph,
+            );
+            (
+                m.sim_ssc,
+                m.sim_ssc_center,
+                m.sim_ssc_deviation,
+                m.sim_ssc_hz,
+                m.sim_rj,
+                m.sim_pj,
+                m.sim_pjhz,
+                m.sim_dcd_pp,
+                m.sim_corr_rj,
+                m.sim_corr_hz,
+            ) = (
+                now.sim_ssc,
+                now.sim_ssc_center,
+                now.sim_ssc_deviation,
+                now.sim_ssc_hz,
+                now.sim_rj,
+                now.sim_pj,
+                now.sim_pjhz,
+                now.sim_dcd_pp,
+                now.sim_corr_rj,
+                now.sim_corr_hz,
+            );
         }
         self.m.sim_slot = free;
         self.sim_add_to_ref();
@@ -536,8 +609,15 @@ impl Ui {
         // (`sim_ref_budget`); the usual record of a fast lane is a few microseconds, a blip on a millisecond screen
         let screen = self.m.time_per_div() as f64 * HDIV as f64;
         let (budget, limit) = sim_ref_budget(sim_rate(), super::sysinfo::memory().map(|m| m.0));
-        let counted = if self.record_mode() { serial::sample_count(&lane) } else { serial::sample_count_for(&lane, screen, budget) };
-        let count = match counted { Ok(c) => c, Err(e) => return self.toast(&format!("SIM: {e}")) };
+        let counted = if self.record_mode() {
+            serial::sample_count(&lane)
+        } else {
+            serial::sample_count_for(&lane, screen, budget)
+        };
+        let count = match counted {
+            Ok(c) => c,
+            Err(e) => return self.toast(&format!("SIM: {e}")),
+        };
         let longer = serial::sample_count(&lane).is_ok_and(|usual| count > usual);
         if count <= 65_536 {
             match serial::try_generate(&lane) {
@@ -546,18 +626,43 @@ impl Ui {
             }
             return;
         }
-        if self.sim_generating() { return self.toast("SIM is busy generating"); }
+        if self.sim_generating() {
+            return self.toast("SIM is busy generating");
+        }
         if self.sim_gen.worker.is_none() {
-            match Generation::new() { Ok(w) => self.sim_gen.worker = Some(w), Err(e) => return self.toast(&format!("SIM: {e}")) }
+            match Generation::new() {
+                Ok(w) => self.sim_gen.worker = Some(w),
+                Err(e) => return self.toast(&format!("SIM: {e}")),
+            }
         }
         let (name, dt) = (lane.name, serial::dt_of(&lane));
-        let request = Request { id: 0, lane, slot, continuing: false, fresh: false, run: false, guard: String::new(), trigger: None, bus_trigger: None, add_only: true, samples: longer.then_some(count) };
+        let request = Request {
+            id: 0,
+            lane,
+            slot,
+            continuing: false,
+            fresh: false,
+            run: false,
+            guard: String::new(),
+            trigger: None,
+            bus_trigger: None,
+            add_only: true,
+            samples: longer.then_some(count),
+        };
         match self.sim_gen.worker.as_mut().unwrap().submit(request) {
             Ok(()) => {
                 // how much of the screen the record covers, and what ended it where it is less
                 let seconds = count as f64 * dt;
-                let short = if seconds < 0.99 * screen { format!(" of {}, limited by {}", si(screen, "s"), limit.text()) } else { String::new() };
-                self.toast(&format!("Generating {name}: {:.1} M samples, {}{short}", count as f64 / 1e6, si(seconds, "s")))
+                let short = if seconds < 0.99 * screen {
+                    format!(" of {}, limited by {}", si(screen, "s"), limit.text())
+                } else {
+                    String::new()
+                };
+                self.toast(&format!(
+                    "Generating {name}: {:.1} M samples, {}{short}",
+                    count as f64 / 1e6,
+                    si(seconds, "s")
+                ))
             }
             Err(e) => self.toast(&format!("SIM: {e}")),
         }
@@ -589,7 +694,12 @@ impl Ui {
                 let long = len as f64 * dt;
                 let screen = self.m.time_per_div() as f64 * HDIV as f64;
                 if !self.record_mode() && long < screen / 20.0 {
-                    self.toast(&format!("{} added to R{} \u{b7} {} long, shorten the time base to see it", lane.name, slot + 1, si_short(long, "s")));
+                    self.toast(&format!(
+                        "{} added to R{} \u{b7} {} long, shorten the time base to see it",
+                        lane.name,
+                        slot + 1,
+                        si_short(long, "s")
+                    ));
                 } else {
                     self.toast(&format!("{} added to R{}", lane.name, slot + 1));
                 }
@@ -678,7 +788,9 @@ impl Ui {
     /// Commit one successful result. Overview is the stored record; zoom is ~eight UI.
     fn sim_finish(&mut self, request: Request, generated: Generated) {
         if request.add_only {
-            if self.session_is_sim { return; }
+            if self.session_is_sim {
+                return;
+            }
             return self.sim_store_ref(request.slot, &request.lane, generated.samples);
         }
         if request.guard != self.sim_trigger_guard(&request.lane, request.slot, request.continuing, request.run) {

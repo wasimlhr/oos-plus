@@ -513,14 +513,28 @@ fn the_taps_of_a_custom_filter_are_a_reference_and_its_source_b() {
 ";
     let t = parse_wave(flt.as_bytes(), "my taps.flt").unwrap();
     assert_eq!((t.len(), t[0].v.clone(), t[0].dt, t[0].label.as_str()), (1, vec![0.25; 4], 2e-7, "my taps"));
-    let two = parse_wave(b"// two sets
+    let two = parse_wave(
+        b"// two sets
 5000000.0;1,2,3
 625000.0;4,5,6
-", "bank.flt").unwrap();
-    assert_eq!(two.iter().map(|t| (t.dt, t.label.clone())).collect::<Vec<_>>(), [(2e-7, "bank 5M".to_string()), (1.6e-6, "bank 625k".to_string())]);
-    assert!(parse_wave(b"// only a comment
+",
+        "bank.flt",
+    )
+    .unwrap();
+    assert_eq!(
+        two.iter().map(|t| (t.dt, t.label.clone())).collect::<Vec<_>>(),
+        [(2e-7, "bank 5M".to_string()), (1.6e-6, "bank 625k".to_string())]
+    );
+    assert!(
+        parse_wave(
+            b"// only a comment
 @1000.0;1.0
-", "d.flt").is_err(), "one tap is no filter");
+",
+            "d.flt"
+        )
+        .is_err(),
+        "one tap is no filter"
+    );
     let setup = ":MATH:MATH1:TYPE FILTER
 :MATH:MATH1:FILTER:TYPE BPASS
 :MATH:MATH1:FILTER:RESPONSE CUSTOM
@@ -528,8 +542,15 @@ fn the_taps_of_a_custom_filter_are_a_reference_and_its_source_b() {
 :MATH:MATH1:FILTER:LCFREQ 1.0
 :MATH:MATH1:FILTER:HCFREQ 2.0
 ";
-    let inner = zip(&[ZipFile::deflated("bench.set", setup.as_bytes()), ZipFile::deflated("filterCoeff1_math1.flt", flt.as_bytes())]);
-    let outer = zip(&[ZipFile::stored("shot.png", b"a picture"), ZipFile::deflated("bench.set", &inner), ZipFile::stored("ch1.wfm", &wfm([0.0, 1.0, 0.0, -1.0]))]);
+    let inner = zip(&[
+        ZipFile::deflated("bench.set", setup.as_bytes()),
+        ZipFile::deflated("filterCoeff1_math1.flt", flt.as_bytes()),
+    ]);
+    let outer = zip(&[
+        ZipFile::stored("shot.png", b"a picture"),
+        ZipFile::deflated("bench.set", &inner),
+        ZipFile::stored("ch1.wfm", &wfm([0.0, 1.0, 0.0, -1.0])),
+    ]);
     let s: Session<Rec> = parse_tss(&outer, 10).unwrap();
     let lines: Vec<&str> = s.setup.lines().collect();
     assert!(lines.iter().any(|l| l.starts_with("filt_resp = Custom")), "{}", s.setup);
@@ -538,4 +559,3 @@ fn the_taps_of_a_custom_filter_are_a_reference_and_its_source_b() {
     assert!(lines.contains(&"math_b = 12"), "{}", s.setup);
     assert!(!s.note.contains("custom filter file"), "{}", s.note);
 }
-
