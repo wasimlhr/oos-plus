@@ -1,6 +1,6 @@
 # SCPI and VXI-11
 
-How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.1.15.
+How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.2.2.
 
 > **No authentication.** Anyone who can reach the scope can control it. Keep it on a trusted bench network, never on the internet. `net.allow` (below) limits who may connect.
 
@@ -38,7 +38,6 @@ All of them end in the same SCPI interpreter, so a command behaves the same whic
 | **VXI-11** | 111 (portmapper, TCP and UDP), core channel 9009 | `TCPIP::<scope>::INSTR` | VISA programs that expect an LXI instrument (NI-VISA, Keysight IO, pyvisa) |
 | **MCP** | 8080, `POST /mcp` | (none) | AI agents: JSON-RPC 2.0, tools `scpi` and `screenshot` |
 | **HiSLIP** | 4880 | `TCPIP::<host>::hislip0::INSTR` | only the desktop build on a computer, not on the scope |
-| **USBTMC** | rear USB-B port, no network | `USB::0x1209::0x0001::<serial>::INSTR` | a USB cable instead of a network; off by default, System > Network > Remote services > USB instrument ([[Remote Control]]) |
 
 `<scope>` is the scope's address or its name, e.g. `dho924s-123456.local` ([[Remote Control]] explains the name). Computers that browse for instruments find SCPI as `_scpi-raw._tcp` and VXI-11 as `_vxi-11._tcp`.
 
@@ -56,7 +55,7 @@ All of them end in the same SCPI interpreter, so a command behaves the same whic
 
 ```sh
 printf '*IDN?\n' | nc dho924s-123456.local 5555
-# OOS,DHO924S,<serial>,oos-ui 0.1.15
+# OOS,DHO924S,<serial>,oos-ui 0.2.2
 ```
 
 **Python with pyvisa, raw socket:**

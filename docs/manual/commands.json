@@ -1,9 +1,9 @@
 {
  "meta": {
-  "software": "oos-ui 0.1.15",
-  "version": "0.1.15",
+  "software": "oos-ui 0.2.2",
+  "version": "0.2.2",
   "edition": "November 2026",
-  "date": "25 November 2026",
+  "date": "26 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -65,8 +65,8 @@
       "- Menu equivalent: System > About.",
       "- Origin: Rigol-compatible. Not a Rigol identity string."
      ],
-     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.1.15`.",
-     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.1.15.*/"
+     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.2.2`.",
+     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.2.2.*/"
     },
     {
      "header": "*RST",

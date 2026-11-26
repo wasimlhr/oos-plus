@@ -94,7 +94,7 @@ UI_LAYERS = (
     ("store", "ui-store-up", "base model settings signal", "store"),
     ("screen", "ui-screen-up", "base model settings board signal store", "ui"),
     ("command", "ui-command-up", "base model settings board signal store screen", "cmd scpi site"),
-    ("transport", "ui-transport-skip", "base command", "announce hislip http usbtmc_device vxi11"),
+    ("transport", "ui-transport-skip", "base command", "announce hislip http vxi11"),
     # oos-plus: the window of the Windows desktop build and the external generators (extgen) are wired in main
     ("main", None, None, "gpu input desktop extgen"),
 )

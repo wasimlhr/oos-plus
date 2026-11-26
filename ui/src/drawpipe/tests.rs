@@ -604,6 +604,8 @@ fn stale_work_is_dropped_and_counted() {
 fn perf_guard_deposit_worker_per_frame() {
     let (w, h) = (970, 448);
     for (tdiv, memsel, meas) in [
+        (5e-9, 128u32, false),
+        (5e-8, 704, false),
         (1e-7, 1408u32, false),
         (1e-6, 12_512, false),
         (1e-6, 12_512, true),
@@ -1068,4 +1070,52 @@ fn a_frame_triggered_on_the_other_slope_is_not_drawn() {
     let mut ph = Phosphor::new(w, h);
     draw_frame(&mut ph, &m, &late, None);
     assert!(m.trig_mode == TrigMode::Auto && ph.map[0].iter().any(|&x| x > 0), "Auto: left out");
+}
+
+// Break it catches: an Average run folded on the workers whose average differs in any bit from folding each frame's
+// screen record (`wave::to_record`): another trigger point, other places or another interpolation of the points,
+// a channel left out, the sparse or the min/max branch of the record not taken.
+#[test]
+fn a_frame_folded_into_an_average_run_is_its_screen_record_folded() {
+    for (mask, n, tdiv) in [(0xf, 3520u32, 1e-6), (0x1, 12_512, 1e-6), (0x1, 128, 5e-9), (0x3, 62_500, 1e-5)] {
+        let (bytes, fb, s, p) = frames_of(mask, n, 6, &|k, c, i| {
+            let ph = (i as f64 - n as f64 / 2.0 + (k % 7) as f64 * 0.3) / 3125.0;
+            if c == 0 {
+                if ph.rem_euclid(1.0) < 0.5 {
+                    1.6
+                } else {
+                    -1.6
+                }
+            } else {
+                0.2 * (i as f64 * 0.01).sin()
+            }
+        });
+        let mut m = model(tdiv, false, true);
+        for c in 0..NCH {
+            m.ch[c].on = true;
+        }
+        (m.trig_level, m.acq, m.avg_count) = (0.0, AcqMode::Average, 16);
+        let window = m.time_per_div() as f64 * HDIV as f64;
+        let (mut fused, mut recs) = (super::average::Run::new(0, 16, 0), super::average::Run::new(0, 16, 0));
+        let mut f = Frame::default();
+        for chunk in bytes.chunks_exact(fb) {
+            crate::board::dho::hw::decode_into(chunk, &s, &p, 0, &mut f);
+            let rec = crate::wave::to_record(&Arc::new(f.clone()), &m, 3600, window, m.delay as f64 - window / 2.0);
+            recs.push(&rec.ch, rec.triggered);
+            super::average_frame(&mut fused, &mut f, &m);
+            assert!(f.ch.iter().any(|c| !c.is_empty()), "the frame comes back");
+        }
+        assert_eq!((fused.frames, fused.triggered), (recs.frames, recs.triggered));
+        let start: [Vec<f32>; NCH] = std::array::from_fn(|c| vec![0.1 * c as f32; 3600]);
+        let (mut a, mut b) = (start.clone(), start);
+        fused.apply(&mut a);
+        recs.apply(&mut b);
+        for c in 0..NCH {
+            assert!(
+                a[c].iter().zip(&b[c]).all(|(x, y)| x.to_bits() == y.to_bits()),
+                "mask {mask:#x} {tdiv} CH{}",
+                c + 1
+            );
+        }
+    }
 }

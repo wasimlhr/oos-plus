@@ -339,6 +339,8 @@ pub(crate) struct Batch {
     /// the board's view without decoding (`draw_frame_codes`), where it has one
     codes: Option<CodesInto>,
     stamp: u64,
+    /// the number (`Frame::seq`) of frame 0 of the batch: the order of the Average's runs (`average::Run`)
+    seq0: u64,
     /// the first frame nobody has claimed; written under `lease`
     next: AtomicUsize,
     counters: &'static Counters,
@@ -372,6 +374,10 @@ impl Drop for Batch {
 /// Frames a worker claims at a time.
 const CLAIM: usize = 4;
 
+/// Frames a worker claims at a time in the software Average: one run each (`average::Run`, the points of every
+/// channel in f64), which the frame loop applies to the average.
+const AVG_CLAIM: usize = 16;
+
 /// The screen mapping the workers draw with, and a generation that changes with anything the drawing depends on.
 /// `zoom`: the zoom picture's model (its time base and delay as the main ones, `Ui::zoom_draw_model`) and size, when
 /// the zoom is on: every frame is drawn into it too.
@@ -401,6 +407,8 @@ struct Key {
     delay: f32,
     trig: (usize, Option<u8>, TrigType, Slope, f32, TrigCoup, bool, bool),
     acq: AcqMode,
+    /// the software Average's count: the workers fold their runs with it (`average::Run`)
+    avg_count: Option<u32>,
     dots: bool,
     size: (usize, usize),
     /// the zoom picture's own key
@@ -424,6 +432,7 @@ impl Key {
                 m.trig_on_la(),
             ),
             acq: m.acq,
+            avg_count: (m.acq == AcqMode::Average).then_some(m.avg_count),
             dots: m.dots,
             size: (w, h),
             zoom: None,
@@ -499,6 +508,8 @@ struct Mail {
     spare: Vec<Acc>,
     /// merges so far
     epoch: u64,
+    /// the software Average's runs of frames, folded by the drawers (`average::Run`), for the UI
+    avg: Vec<average::Run>,
     /// sets folded into another (`publish`)
     #[cfg(test)]
     folds: u64,
@@ -671,6 +682,7 @@ impl Pipe {
     /// claim, decoded with `decode` or, without per-frame measurements, drawn from their words with `codes`
     /// (`draw_frame_codes`). The buffer comes back through `take_buffer` when the batch is done. Frames nobody claims
     /// are counted as dropped. Returns the batch (tests hold it to let the helper alone draw it).
+    #[cfg(test)]
     #[allow(clippy::too_many_arguments)] // the parts of one batch, each from a different place of the board loop
     pub fn feed_codes(
         &self,
@@ -679,6 +691,17 @@ impl Pipe {
         first: usize,
         frames: usize,
         stamp: u64,
+        decode: DecodeInto,
+        codes: Option<CodesInto>,
+    ) -> Arc<Batch> {
+        self.feed_batch(raw, (fb, first, frames, stamp, 0), decode, codes)
+    }
+
+    /// `feed_codes` with the number of frame 0 (`seq0`, `Frame::seq`): the order of the Average's runs.
+    fn feed_batch(
+        &self,
+        raw: Box<dyn RawBatch>,
+        (fb, first, frames, stamp, seq0): (usize, usize, usize, u64, u64),
         decode: DecodeInto,
         codes: Option<CodesInto>,
     ) -> Arc<Batch> {
@@ -693,6 +716,7 @@ impl Pipe {
             decode,
             codes,
             stamp,
+            seq0,
             next,
             counters: self.counters,
             live: self.live.clone(),
@@ -727,7 +751,8 @@ impl Pipe {
                 }
             }
         };
-        let Some(b) = b else {
+        // the software Average is folded by the workers in runs; frames one at a time would make a run each
+        let Some(b) = b.filter(|_| !self.view_now().0.is_some_and(|v| v.m.acq == AcqMode::Average)) else {
             self.help_done(h);
             return false;
         };
@@ -754,6 +779,18 @@ impl Pipe {
         if let Some(s) = hand(&self.mail, self.helper, &mut h.seen, h.acc.take(), self.counters) {
             h.spare = Some(s);
         }
+    }
+
+    /// The software Average's runs the drawers folded since the last call under the current view, oldest frames
+    /// first; those of an earlier view (another time base, channel, trigger or count) are dropped and counted.
+    pub fn take_average(&self) -> Vec<average::Run> {
+        let gen = lock(&self.view).view.as_ref().map(|v| v.gen);
+        let mut runs = std::mem::take(&mut Mail::lock(&self.mail).avg);
+        let old: u64 = runs.iter().filter(|r| Some(r.gen) != gen).map(|r| r.frames as u64).sum();
+        Counters::add(&self.counters.dropped, old);
+        runs.retain(|r| Some(r.gen) == gen);
+        runs.sort_by_key(|r| r.seq);
+        runs
     }
 
     fn view_now(&self) -> (Option<Arc<View>>, u64) {
@@ -914,6 +951,46 @@ fn draw_range(b: &Batch, lease: &Lease, r: Range<usize>, v: &View, a: &mut Acc, 
     }
 }
 
+/// Frames `r` of batch `b` (in `lease`) decoded into `f`, their screen records as `wave::hw_record` makes them folded
+/// into one run (`average::Run`) for the software Average of view `v`; None without frames. Where the record's points
+/// are the linear interpolation of the samples (fewer than two a point, more than half a point a sample), they are
+/// folded as they are worked out, with `wave::resample`'s expressions, without the record.
+fn average_range(b: &Batch, lease: &Lease, r: Range<usize>, v: &View, f: &mut Frame) -> Option<average::Run> {
+    let bytes = lease.raw.as_ref().map(|x| x.bytes())?;
+    let mut run = average::Run::new(b.seq0 + r.start as u64, v.m.avg_count, v.gen);
+    for i in r {
+        (b.decode)(&bytes[i * b.fb..(i + 1) * b.fb], f);
+        average_frame(&mut run, f, &v.m);
+    }
+    (run.frames > 0).then_some(run)
+}
+
+/// Frame `f`'s screen record (`wave::hw_record` under model `m`) folded into `run`; `f` comes back as it was.
+fn average_frame(run: &mut average::Run, f: &mut Frame, m: &Model) {
+    let n = 3600;
+    let window = m.time_per_div() as f64 * HDIV as f64;
+    let (t_first, dt) = (m.delay as f64 - window / 2.0, window / n as f64);
+    {
+        let linear = !f.roll && !f.scan && !f.envelope && dt / f.dt < 2.0 && f.dt <= 2.0 * dt;
+        if linear && m.acq != AcqMode::HiRes {
+            let found = crate::wave::trigger_point(f, m, n, window, t_first);
+            let ti = found.unwrap_or(f.pre as f64);
+            let len = std::array::from_fn(|c| if f.ch[c].len() < 2 { 0 } else { n });
+            crate::wave::places(t_first, dt, f.dt, n, |u| {
+                let x = |c: usize, k: usize| oos_dsp::interp::linear(&f.ch[c], ti + u[k]).unwrap_or(f32::NAN);
+                run.push_with(len, x, found.is_some());
+            });
+            return;
+        }
+        // the record holds the frame (its raw window): the frame's vectors come back once it is gone
+        let fr = Arc::new(std::mem::take(f));
+        let rec = crate::wave::to_record(&fr, m, n, window, t_first);
+        run.push(&rec.ch, rec.triggered);
+        drop(rec);
+        *f = Arc::try_unwrap(fr).unwrap_or_default();
+    }
+}
+
 /// Hands drawn maps to `mail`, folded into what the UI has not taken yet, and returns maps to draw the next ones into.
 /// The set there is taken out and added to outside the lock, on the drawer's core; meanwhile the UI finds the
 /// mailbox without it (those frames come with the next merge), and a set another drawer puts in is folded too. Of two
@@ -971,6 +1048,19 @@ fn work(id: usize, rx: Receiver<Arc<Batch>>, view: &Mutex<ViewState>, mail: &Mut
             }
             continue;
         };
+        // the software Average: the frames folded in runs, for the UI to apply in order (no maps)
+        if v.m.acq == AcqMode::Average {
+            let (t, mut drawn) = (std::time::Instant::now(), 0);
+            while let Some((r, lease)) = b.claim(AVG_CLAIM) {
+                drawn += r.len();
+                let run = average_range(&b, &lease, r, &v, &mut f);
+                Mail::lock(mail).avg.extend(run);
+            }
+            if drawn > 0 {
+                lock(cost).note(v.gen, drawn, t.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+            }
+            continue;
+        }
         // the maps only when there is something to draw: the others took every frame already
         let (mut a, t, mut drawn) = (None, std::time::Instant::now(), 0);
         while let Some((r, lease)) = b.claim(CLAIM) {
@@ -1100,7 +1190,7 @@ impl crate::board::pipe::Workers for Pipe {
         Pipe::take_buffer(self)
     }
     fn feed(&self, b: crate::board::pipe::Feed) {
-        self.feed_codes(b.raw, b.fb, b.first, b.frames, b.stamp, b.decode, b.codes);
+        self.feed_batch(b.raw, (b.fb, b.first, b.frames, b.stamp, b.seq0), b.decode, b.codes);
     }
     fn help(&self, h: &mut crate::board::pipe::Helper) -> bool {
         own_helper(h).is_some_and(|h| Pipe::help(self, h))
@@ -1132,6 +1222,8 @@ pub fn status() -> &'static str {
         "Off"
     }
 }
+
+pub mod average;
 
 #[cfg(test)]
 mod tests;

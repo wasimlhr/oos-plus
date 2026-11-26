@@ -190,6 +190,8 @@ impl BatchRun {
                         first: skip,
                         frames: avail - 1,
                         stamp,
+                        // the newest frame (avail - 1) has the number `seq_n`
+                        seq0: *seq_n + 1 - avail as u64,
                         decode: Arc::new(move |c: &[u8], f: &mut Frame| decode_into(c, &bs, &ps, 0, f)),
                         codes: Some(codes),
                     });

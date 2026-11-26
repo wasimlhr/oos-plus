@@ -43,7 +43,7 @@ also holds the parts listed here. Each keeps its own licence.
 | libnl | 3.11.0 (Alpine `libnl3-static` 3.11.0-r0) | LGPL-2.1-or-later | linked into `wpa_supplicant` and `wpa_cli` | `LGPL-2.1.txt` | `libnl-3.11.0.tar.gz`, `libnl3-musl.patch` (Alpine's one patch) |
 | BlueZ (`bluetoothd`, `btmon`) | 5.82 | GPL-2.0-or-later; its libraries LGPL-2.1-or-later | `/bin`, static | `bluez`, `GPL-2.0.txt`, `LGPL-2.1.txt` | `bluez-5.82.tar.xz` |
 | D-Bus (`dbus-daemon`) | 1.16.2 | AFL-2.1 OR GPL-2.0-or-later | `/bin/dbus-daemon`, static | `dbus` | `dbus-1.16.2.tar.xz` |
-| expat | 2.10.0 (Alpine `expat-static` 2.10.0-r0) | MIT | linked into `dbus-daemon` | `expat` | `expat-2.10.0.tar.xz` |
+| expat | 2.11.0 (Alpine `expat-static` 2.11.0-r0) | MIT | linked into `dbus-daemon` | `expat` | `expat-2.11.0.tar.xz` |
 | GLib | 2.84.4 (Alpine `glib-static` 2.84.4-r0) | LGPL-2.1-or-later | linked into `bluetoothd` | `LGPL-2.1.txt` | `glib-2.84.4.tar.xz`, `tests-machine-id.patch`, `flaky-tests.patch` (Alpine's patches) |
 | PCRE2 | 10.46 (Alpine `pcre2-static` 10.46-r1) | BSD-3-Clause WITH PCRE2-exception | linked into `bluetoothd` (through GLib) | `pcre2` | `pcre2-10.46.tar.bz2` |
 | GNU gettext (`libintl`) | 0.24.1 (Alpine `gettext-static` 0.24.1-r0) | LGPL-2.1-or-later | linked into `bluetoothd` (through GLib) | `LGPL-2.1.txt` | `gettext-0.24.1.tar.xz`, `cwd.patch`, `skip-tests-musl.patch`, `skip-meaningless-pthread-rwlock-test.patch` (Alpine's patches) |
@@ -58,7 +58,7 @@ also holds the parts listed here. Each keeps its own licence.
 | noVNC (`core/rfb.js` and what it imports, one minified module) | 1.7.0 | MPL-2.0; parts under BSD and MIT licences, as its notice says | inside `oos-ui`, sent to the browser as `/novnc.js` of the web remote, unchanged | [ui/web/novnc/LICENSE.txt](ui/web/novnc/LICENSE.txt) | `@novnc/novnc` 1.7.0 on npm; [ui/web/novnc/README.md](ui/web/novnc/README.md) makes the file again |
 | Roboto (roboto-classic) | as in `ui/tools/fonts/` | Apache-2.0 | its glyphs, drawn into `oos-ui` | `Apache-2.0.txt` ([ui/tools/fonts/LICENSE-Roboto.txt](ui/tools/fonts/LICENSE-Roboto.txt)) | not required |
 
-The versions are those of release 0.1.15. `rootfs/deps.lock` pins the archives the image builds from, with their
+The versions are those of release 0.2.2. `rootfs/deps.lock` pins the archives the image builds from, with their
 checksums; the Ubuntu and Alpine packages come from the container images the build scripts name (`ubuntu:26.04`,
 `alpine:3.22`), and a release carries the source packages of the versions that were in its image. Up to 0.1.15 the
 image's BusyBox was Ubuntu's `busybox-static` package, and a release carried its source package and that of the glibc

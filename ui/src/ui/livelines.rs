@@ -92,7 +92,7 @@ impl Ui {
         }
         let n = (b - a - 1) * up + 1;
         let mut out = Vec::with_capacity(n);
-        oos_dsp::interp::lanczos8_grid(&v[..], a as f64, 1.0 / up as f64, n, &mut out);
+        oos_dsp::interp::lanczos8_fixed(&v[..], a as f64, 1.0 / up as f64, n, &mut out);
         Some((out, ts + a as f64 * f.dt, f.dt / up as f64))
     }
 }

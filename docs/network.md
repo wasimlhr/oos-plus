@@ -162,12 +162,11 @@ address and the clock above the pages that set them.
 | VNC | 5900 | the screen, touch, keys and the wheel for a desktop VNC viewer (RFB 3.8, no password); the VNC page of the web remote needs no port of its own ([http.md](http.md)) |
 | SSH | 22 | a root shell with the scope's own password or a trusted key (section 7); **SSH settings** next to it |
 | USB network | the rear USB port | a network link to the computer on the cable: the services above at the scope's address on it ([usb-device.md](usb-device.md)); **USB address** next to it |
-| USB instrument | the rear USB port | SCPI as a USBTMC instrument for VISA ([usb-device.md](usb-device.md)); its state next to it |
 
 Every route of the web remote, with what it answers and its mark, is in [http.md](http.md).
 
 Web remote, SCPI and VXI-11 are on by default, VNC is off, SSH is off unless the image or the user switches it on, and
-the two USB rows are off until they have run on more units (ADR 0010). A service
+USB network is off until it has run on more units (ADR 0010). A service
 switched off closes its port at once, with the connections on it. Switching off the web remote also takes away the
 update page: an update then comes from a USB stick. SSH is the only shell on the network: `rcS` starts it at power-on
 (`/bin/oos-ssh`, which reads `remote.ssh` from `/oos/system.conf`), and oos-ui starts or stops it when its switch
@@ -281,7 +280,6 @@ remote.mcp = read             # MCP of the web remote: off, read or full (4); wr
 net.name = dho924s-123456     # the name on the network, written at the first start
 graphics = gpu                # System > Graphics: gpu or cpu (gpu/README.md)
 usb.net = off                 # the rear USB port as a network link (usb-device.md); off by default
-usb.tmc = off                 # the rear USB port as a USBTMC instrument (usb-device.md); off by default
 ```
 
 ## 6. Firewall, remote access and the MAC address

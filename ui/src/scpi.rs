@@ -503,12 +503,6 @@ impl Scpi {
         }
     }
 
-    /// Whether the error queue holds an error (`:SYSTem:ERRor?` has one to read): the status byte's EAV bit, which the
-    /// USBTMC transport answers READ_STATUS_BYTE with.
-    pub fn has_errors(&self) -> bool {
-        !self.err.is_empty()
-    }
-
     pub fn port(&self) -> Option<u16> {
         self.l.as_ref().and_then(|l| l.local_addr().ok()).map(|a| a.port())
     }

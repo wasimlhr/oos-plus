@@ -16,7 +16,9 @@ starts OOS once more at the next power-on. When OOS works for you, set **System 
 
 ![Main screen](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/channels.png)
 
-- **Top bar:** run state, sample rate and memory depth, the menus, network and USB.
+- **Top bar:** run state, sample rate and memory depth, the menus, network and USB. While the scope runs, the run
+  state box also shows the waveforms a second that reach the screen and the share of the time they capture (100 %:
+  no gap between the waveforms).
 - **Plot:** the waveforms. Drag offset, delay and trigger level, pinch to zoom. The button with four corners at its top right gives the plot the whole screen (below).
 - **Strip:** the measurements.
 - **Cards:** Menu, channels, logic analyser, generator, time base and trigger. Tap a card for its settings.

@@ -132,6 +132,17 @@ class HostKeys(unittest.TestCase):
         for c in calls:
             self.assertIn("-o BatchMode=yes -o StrictHostKeyChecking=yes", c)
             self.assertIn("-p 2222 -i local/test identity root@example.invalid ", c)
+        # --restore ends the installed oos-ui and its loop before it starts one: a --restore while it ran started a
+        # second loop beside it, two oos-ui on the unit
+        def first(text):
+            return next(i for i, c in enumerate(calls) if text in c)
+        stop_new = first("touch /tmp/oos-ui.off2; kill $(pidof oos-ui.new)")
+        stop_installed = first("touch /tmp/oos-ui.off; kill $(pidof oos-ui)")
+        allow = first("rm -f /tmp/oos-ui.off")
+        start = first("while [ ! -e /tmp/oos-ui.off ]; do /bin/oos-ui --hw --afe")
+        self.assertLess(stop_new, stop_installed)
+        self.assertLess(stop_installed, allow)
+        self.assertLess(allow, start)
 
 
 def posix(path):

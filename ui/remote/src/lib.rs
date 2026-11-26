@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 //! oos-remote: the remote transports of oos-ui (ADR 0064): VXI-11 on the scope, HiSLIP on a computer, the web server,
-//! and their announcement by mDNS / DNS-SD and LXI (ADR 0024), and USBTMC on the rear USB port (ADR 0080). A transport only frames messages (ADR 0022). VXI-11 and
+//! and their announcement by mDNS / DNS-SD and LXI (ADR 0024). A transport only frames messages (ADR 0022). VXI-11 and
 //! HiSLIP take a program message from their client, hand it to the one SCPI interpreter of oos-ui as a `Program`, and
 //! send back what the interpreter answered. The web server reads HTTP requests, keeps their limits and sends the
 //! answers; what a route answers from the screen (its state, files, pictures, MCP) it asks oos-ui through
@@ -11,7 +11,6 @@
 pub mod announce;
 pub mod hislip;
 pub mod http;
-pub mod usbtmc_device;
 pub mod vxi11;
 
 /// One program message of a client, as a transport hands it to the interpreter and keeps it while the interpreter is

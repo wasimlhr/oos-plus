@@ -5,7 +5,8 @@
 //! frame (`wave::to_record`: a copy of the frame, every channel, the raw window and the LA record) only to draw its
 //! points. `draw` computes the same points of the channels that are on, with the same expressions, into reused
 //! buffers and draws them. It answers only in the plain case (edge trigger found on a channel, interpolated points);
-//! everything else returns None and takes `to_record` as before.
+//! everything else returns None and takes `to_record` as before. The interpolated points come from the fixed-point
+//! kernel of the screen record (`oos_dsp::interp::lanczos8_fixed`), so both draw the same picture.
 //!
 //! `acq.interp = fast` (or OOS_INTERP=fast) draws the sinc curve from a grid of `GRID` points per sample where that is
 //! cheaper (short time bases), within half a pixel of the exact points and one pixel on the screen (guarded); `exact`
@@ -20,14 +21,8 @@ use std::cell::RefCell;
 /// Points of the screen record, as in `Source::acquire` and the fast path (`drawpipe::draw_frame`).
 pub const POINTS: usize = 3600;
 
-/// What the kept places of `PLACES` were worked out for: `t_first`, `dt` and `f.dt` as bits, and the number of points.
-type PlacesKey = (u64, u64, u64, usize);
-
 thread_local! {
     static BUF: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
-    /// `(t_first + k * dt) / f.dt` for k < n, and what it was worked out for (`t_first`, `dt`, `f.dt`, n as bits): the
-    /// points' places in samples before the trigger is added, the same for every frame of a view
-    static PLACES: RefCell<(PlacesKey, Vec<f64>)> = const { RefCell::new(((0, 0, 0, 0), Vec::new())) };
 }
 
 /// Draws a sparse frame into `ph` like `to_record` + `draw_ex` with weight `wgt`: Some(triggered), or None when the
@@ -43,28 +38,22 @@ pub fn draw_with(ph: &mut Phosphor, m: &Model, f: &Frame, wgt: u16, mode: Interp
     let t_first = m.delay as f64 - window / 2.0;
     let n = POINTS;
     let dt = window / n as f64;
-    // the interpolated branch of `to_record` only: peak detect, high res and min/max pairs go there, and look for
+    // the interpolated branch of `to_record` only: high res, a Peak frame below the full rate (its samples are minimum
+    // and maximum in turn, `wave::frame_peak`) and min/max pairs go there, and look for
     // their trigger there themselves (before the search here, each such frame was searched twice)
     let per = dt / f.dt;
-    if f.envelope || per >= 2.0 || m.acq == AcqMode::HiRes {
+    if f.envelope || per >= 2.0 || crate::wave::drawn_as_record(f, m) {
         return None;
     }
     let ti = trigger(f, m, n, window, t_first)?;
     let sparse = f.dt > 2.0 * dt;
-    PLACES.with(|pl| {
-        let mut pl = pl.borrow_mut();
-        let key = (t_first.to_bits(), dt.to_bits(), f.dt.to_bits(), n);
-        if pl.0 != key || pl.1.len() != n {
-            pl.1.clear();
-            pl.1.extend((0..n).map(|k| (t_first + k as f64 * dt) / f.dt));
-            pl.0 = key;
-        }
-        draw_points(ph, m, f, wgt, mode, (ti, t_first, dt, n, sparse), &pl.1);
+    crate::wave::places(t_first, dt, f.dt, n, |u| {
+        draw_points(ph, m, f, wgt, mode, (ti, t_first, dt, n, sparse), u);
     });
     Some(true)
 }
 
-/// The points of `draw_with` from their places `u` in samples (`PLACES`): the point k at `ti + u[k]`, the same value as
+/// The points of `draw_with` from their places `u` in samples (`wave::places`): the point k at `ti + u[k]`, the same value as
 /// `ti + (t_first + k * dt) / f.dt` worked out for each frame.
 fn draw_points(
     ph: &mut Phosphor,
@@ -87,7 +76,8 @@ fn draw_points(
             if sparse && mode == Interp::Fast {
                 fast_many(v, ti + t_first / f.dt, dt / f.dt, n, &mut out);
             } else if sparse {
-                lanczos8_many(v, xs, &mut out);
+                // the record path's points (`wave::to_record`), the same grid
+                oos_dsp::interp::lanczos8_fixed(v, ti + t_first / f.dt, dt / f.dt, n, &mut out);
             } else {
                 out.extend(xs.map(|x| oos_dsp::interp::linear(v, x).unwrap_or(f32::NAN)));
             }
@@ -254,6 +244,28 @@ mod tests {
             oos_dsp::sim::add_noise(v, 0.03, seed + c as u64);
         }
         Frame { seq: 1, dt, pre: len / 2, ch, ..Default::default() }
+    }
+
+    /// From the review of #598: a Peak detect frame below the full rate holds minimum and maximum in turn; drawn here
+    /// they would be interpolated as plain samples. It goes to the record path (None), a Peak frame at the full rate
+    /// (plain samples) stays here.
+    #[test]
+    fn a_peak_frame_below_the_full_rate_takes_the_record_path() {
+        let (w, h) = (970, 448);
+        let mut m = model(1e-6, 1);
+        m.acq = AcqMode::Peak;
+        // one channel at 625 MSa/s (below its full 1.25 GSa/s) at 1 us/div: under two samples a screen point
+        let f = frame(5000, 2, 3e6, 1);
+        assert!(crate::wave::drawn_as_record(&f, &m) && f.dt / (1e-5 / POINTS as f64) > 0.5);
+        assert_eq!(draw_with(&mut Phosphor::new(w, h), &m, &f, 24, Interp::Exact), None);
+        // at the full rate a Peak frame holds plain samples: drawn here as in Normal
+        let (mut normal, f1) = (model(1e-8, 1), frame(1408, 1, 1e7, 2));
+        let mut peak = normal.clone();
+        (normal.acq, peak.acq) = (AcqMode::Normal, AcqMode::Peak);
+        assert!(!crate::wave::drawn_as_record(&f1, &peak));
+        let (mut a, mut b) = (Phosphor::new(w, h), Phosphor::new(w, h));
+        let got = draw_with(&mut a, &peak, &f1, 24, Interp::Exact);
+        assert!(got == draw_with(&mut b, &normal, &f1, 24, Interp::Exact) && a.map[0] == b.map[0]);
     }
 
     fn model(tdiv: f64, chans: usize) -> Model {
@@ -504,6 +516,98 @@ mod tests {
     }
 
     /// Host cost of the fast interpolation against the exact one per sparse frame (run by tools/perf-guard.sh).
+    /// The points of `draw_with` at 1 channel, 5 ns/div (where they are most of a frame's cost) and the floating-point
+    /// `lanczos8` at the same points: as the sparse path drew them before the fixed-point kernel.
+    fn float_points(f: &Frame, m: &Model) -> Option<(f64, f64, Vec<f32>)> {
+        let window = m.time_per_div() as f64 * HDIV as f64;
+        let t_first = m.delay as f64 - window / 2.0;
+        let ti = trigger(f, m, POINTS, window, t_first)?;
+        let (x0, step) = (ti + t_first / f.dt, window / POINTS as f64 / f.dt);
+        let mut out = Vec::new();
+        lanczos8_many(&f.ch[0], (0..POINTS).map(|k| x0 + k as f64 * step), &mut out);
+        Some((t_first, window / POINTS as f64, out))
+    }
+
+    // Break it catches: a fixed-point kernel whose picture strays more than a pixel from the floating-point
+    // `lanczos8` anywhere on the screen (full scale sines up to 0.45 of the sample rate, a noisy square; every sparse
+    // time base, 1 and 4 channels), or one that answers where the floating-point path does not.
+    #[test]
+    fn the_fixed_point_kernel_draws_within_a_pixel_of_lanczos8() {
+        let (w, h) = (970, 448);
+        let (mut worst, mut cases, mut equal) = (0usize, 0, 0);
+        for tdiv in [5e-9, 1e-8, 2e-8, 5e-8, 1e-7, 2e-7] {
+            for chans in [1usize, 4] {
+                let dt = chans as f64 / 1.25e9;
+                let len = ((tdiv * HDIV as f64 / dt) * 1.15) as usize + 40;
+                for (k, cyc) in [0.05, 0.2, 0.4, 0.45, -1.0].into_iter().enumerate() {
+                    let sig = move |t: f64| {
+                        if cyc < 0.0 {
+                            if (t / dt / 37.0).rem_euclid(1.0) < 0.5 {
+                                -3.5
+                            } else {
+                                3.5
+                            }
+                        } else {
+                            3.8 * (t / dt * cyc * std::f64::consts::TAU + 0.3 * k as f64).sin()
+                        }
+                    };
+                    let mut v = oos_dsp::sim::sample(sig, -(len as f64 / 2.0) * dt + 0.37 * dt, dt, len);
+                    oos_dsp::sim::add_noise(&mut v, if cyc < 0.0 { 0.05 } else { 0.0 }, 3);
+                    let f = Frame { seq: 1, dt, pre: len / 2, ch: [v, vec![], vec![], vec![]], ..Default::default() };
+                    let mut m = model(tdiv, 1);
+                    m.trig_level = 0.0;
+                    if dt / tdiv * w as f64 / HDIV as f64 <= 0.5 || f.dt <= 2.0 * tdiv * HDIV as f64 / POINTS as f64 {
+                        continue;
+                    }
+                    let (mut a, mut b) = (Phosphor::new(w, h), Phosphor::new(w, h));
+                    let got = draw_with(&mut b, &m, &f, 24, Interp::Exact);
+                    let Some((t_first, pdt, pts)) = float_points(&f, &m) else {
+                        assert_eq!(got, None);
+                        continue;
+                    };
+                    assert_eq!(got, Some(true));
+                    a.draw_ex(0, &m, (m.time_per_div(), m.delay), t_first, pdt, &pts, 24, None, false);
+                    cases += 1;
+                    equal += (a.map[0] == b.map[0]) as usize;
+                    worst = worst.max(pixel_distance(&a.map[0], &b.map[0], w, h));
+                }
+            }
+        }
+        println!("fixed point vs lanczos8: {cases} cases, {equal} pictures equal, at most {worst} px apart");
+        assert!(cases > 30 && worst <= 1, "{worst} px");
+    }
+
+    /// Host timing (run with --ignored --nocapture): the fixed-point kernel against the floating-point `lanczos8` at
+    /// the 3600 points of a sparse frame. On one of the unit's A53 at 1 channel 5 ns/div: 347 -> 148 us.
+    #[test]
+    #[ignore]
+    fn perf_guard_fixed_point_kernel() {
+        for (tdiv, len) in [(5e-9, 128usize), (5e-8, 704)] {
+            let dt = 1.0 / 1.25e9;
+            let f = Frame { dt, ..frame(len, 1, 3e7, 3) };
+            let (x0, step) =
+                (f.pre as f64 + 0.37 - tdiv * HDIV as f64 / 2.0 / dt, tdiv * HDIV as f64 / POINTS as f64 / dt);
+            let (mut a, mut b) = (Vec::new(), Vec::new());
+            let (old, new) = crate::perfguard::best_pair(
+                crate::perfguard::ROUNDS,
+                300,
+                || {
+                    a.clear();
+                    lanczos8_many(&f.ch[0], (0..POINTS).map(|k| x0 + k as f64 * step), &mut a);
+                    std::hint::black_box(&a);
+                },
+                || {
+                    b.clear();
+                    oos_dsp::interp::lanczos8_fixed(&f.ch[0], x0, step, POINTS, &mut b);
+                    std::hint::black_box(&b);
+                },
+            );
+            let r = new.as_secs_f64() / old.as_secs_f64();
+            println!("{tdiv} s/div {len} pt: floating point {old:?}, fixed point {new:?} per frame, ratio {r:.2}");
+            assert!(r <= 0.8, "the fixed-point kernel must be cheaper: {r:.2}");
+        }
+    }
+
     #[test]
     #[ignore]
     fn perf_guard_fast_interpolation() {
