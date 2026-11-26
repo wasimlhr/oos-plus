@@ -53,6 +53,7 @@ takes the family as `--board`, by default the one whose models match the scope's
 | `unit-dtb-check.sh` | no; Docker | the DTB step of a unit profile (`eth.mac` as `local-mac-address`, [models.md 4.2](../docs/models.md)) |
 | `image-manifest.py IMAGE DTB INITRAMFS` | no | what an image build put into the image, one line per file, to compare two builds; the DTB is `boot/out/<OOS_IMAGE_NAME>.dtb` of the family |
 | `deps-check.sh` | no; network | the pinned sources of `rootfs/deps.lock` against their upstream release listings |
+| `upstream-sync.sh status \| start` | no; network | oos-plus: the commits of upstream OOS that the fork lacks (`status`: their list and `behind N`, exit 3 when there are some), and the start of their merge on the current branch (`start`: the last sync recorded as merged with the strategy `ours`, then the merge of upstream's main left open, exit 4 with conflicts). `tools/upstream-base.txt` holds the commit of upstream the last sync reached; `start` writes the new one ([docs/fork/upstream-sync.md](../docs/fork/upstream-sync.md)) |
 | `release-sources.sh list / check TAG` | no | the source files a release carries next to its image, from `rootfs/deps.lock` and `kernel/base.sha256`; `check` compares a release on GitHub with the list ([THIRD-PARTY-LICENSES.md](../THIRD-PARTY-LICENSES.md)) |
 
 ## Models of the hardware
