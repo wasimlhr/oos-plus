@@ -753,9 +753,11 @@ fn fast_path_draws_every_queued_frame() {
     let (w, h) = (ui.ph.w, ui.ph.h);
     let lit: Vec<usize> = (0..h).filter(|&r| ui.ph.map[0][r * w + w / 2] > 0).collect();
     assert!(lit.iter().any(|&r| (r as i32 - h as i32 / 2).abs() <= 2), "{:?}", lit);
-    // averaging needs every record: back to the record path
+    // the software average folds the frames on the fast path (#582); the FPGA's average needs the record path
     ui.m.acq = AcqMode::Average;
-    assert!(!ui.fast_ok());
+    assert!(ui.fast_ok());
+    (ui.m.avg_hw, ui.m.avg_count) = (true, 16);
+    assert!(board().avg_hw(&ui.m) && !ui.fast_ok(), "the FPGA's average");
 }
 
 /// The fast path on several cores draws the same maps as one frame after the other, dense and sparse, four
@@ -834,11 +836,201 @@ fn fast_path_on_several_cores_draws_as_one_by_one() {
         assert!(shared.lock().unwrap().queue.is_empty());
         // the thread is told how many of a batch to decode; the record path wants them all
         assert_eq!(shared.lock().unwrap().take, take);
-        ui.m.acq = AcqMode::Average;
+        ui.m.trig_type = TrigType::Pulse;
         ui.step(0.05);
         assert_eq!(shared.lock().unwrap().take, 0);
-        ui.m.acq = AcqMode::Normal;
+        ui.m.trig_type = TrigType::Edge;
     }
+}
+
+/// Peak detect and High res take the fast path (#582): their frames are drawn from their screen records, the same
+/// picture in the frame loop and on the deposit workers, and a step draws the queued frames there instead of one by one.
+#[test]
+fn peak_and_high_res_draw_their_records_on_the_fast_path() {
+    use super::*;
+    // 1 us/div; High res at the full rate (12.5 k points at 0.8 ns), Peak below it (min and max in turn at 4 ns, four channels)
+    for &(acq, n, dt) in &[(AcqMode::HiRes, 12_500usize, 0.8e-9), (AcqMode::Peak, 2_500, 4e-9)] {
+        let pre = n / 2;
+        let frame = |seq: u64| {
+            let ch: [Vec<f32>; NCH] = std::array::from_fn(|c| {
+                (0..n)
+                    .map(|k| {
+                        let t = (k as f64 - pre as f64 + 0.1 * seq as f64) * dt;
+                        let noise = if k % 2 == 0 { 0.05 } else { -0.05 };
+                        ((2.0 * std::f64::consts::PI * 2e6 * (c + 1) as f64 * t).sin() + noise) as f32
+                    })
+                    .collect()
+            });
+            crate::board::Frame {
+                seq,
+                dt,
+                pre,
+                ch,
+                roll: false,
+                envelope: false,
+                scan: false,
+                partial: false,
+                acq: (1.0 / dt, n),
+                stamp: 0,
+                la: None,
+                fixed_ti: None,
+                hw_avg: false,
+                basic: Default::default(),
+            }
+        };
+        let shared: crate::board::HwShared = Default::default();
+        let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+        ui.m.tscale = tscales().iter().position(|&x| (x - 1e-6).abs() < 1e-9).unwrap();
+        ui.m.trig_level = 0.0;
+        ui.m.acq = acq;
+        for c in 0..NCH {
+            ui.m.ch[c].on = true;
+            ui.m.ch[c].offset = 0.0;
+        }
+        assert!(ui.fast_ok(), "{acq:?}");
+        let (w, h) = (ui.ph.w, ui.ph.h);
+        let (mut on_loop, mut on_workers) = (crate::wave::Phosphor::new(w, h), crate::wave::Phosphor::new(w, h));
+        for seq in 1..=8 {
+            let f = std::sync::Arc::new(frame(seq));
+            assert!(crate::wave::drawn_as_record(&f, &ui.m), "{acq:?}");
+            let p = fast_plan(&ui.m, w, h, &f, [true; NCH]);
+            assert!(matches!(p.plan, crate::ui::acquire::FastPlan::Rec(_)), "{acq:?}: drawn from the samples");
+            // its measurements come from the record path, on neither fast path from the frame
+            assert!(p.fold.iter().all(Option::is_none), "{acq:?}: the frame loop folded the frame");
+            let mut folds: crate::framestats::Folds = vec![((Meas::Vpp, 0), Default::default())];
+            assert!(!crate::framestats::fold_frame(&f, &ui.m, &mut folds), "{acq:?}: the workers folded the frame");
+            for c in 0..NCH {
+                fast_deposit(&ui.m, w, h, c, &mut on_loop.map[c], &f, &p.plan);
+            }
+            crate::drawpipe::draw_frame(&mut on_workers, &ui.m, &f, None);
+        }
+        for c in 0..NCH {
+            assert!(on_loop.map[c].iter().any(|&x| x > 0), "{acq:?} CH{}: nothing drawn", c + 1);
+            assert!(on_loop.map[c] == on_workers.map[c], "{acq:?} CH{}: the frame loop and the workers differ", c + 1);
+        }
+        // a step: 9 queued frames, 8 by the fast path, the newest as the record
+        shared.lock().unwrap().queue.extend((1..=9).map(frame));
+        ui.step(0.05);
+        assert_eq!((ui.counts.wfm_total, ui.counts.records), (9, 1), "{acq:?}");
+        // a deskewed channel stays on the record path, which shifts its record
+        ui.m.deskew_ch[1] = 1e-9;
+        assert!(!ui.fast_ok(), "{acq:?} with deskew");
+    }
+}
+
+/// The zoom takes the fast path (#582): a step draws the queued frames into the zoom picture too, with the zoom's time
+/// base, each the way `draw_frame` draws it with the zoom's model; a deskewed channel keeps the record path.
+#[test]
+fn the_zoom_picture_is_drawn_on_the_fast_path() {
+    use super::*;
+    // 1 us/div, 12.5 k points at 0.8 ns, a 2 MHz sine through 0 V rising at the trigger point; zoom 100 ns/div
+    let (n, dt, pre) = (12_500usize, 0.8e-9, 6250usize);
+    let frame = |seq: u64| {
+        let v: Vec<f32> = (0..n)
+            .map(|k| (2.0 * std::f64::consts::PI * 2e6 * (k as f64 - pre as f64 + 0.1 * seq as f64) * dt).sin() as f32)
+            .collect();
+        crate::board::Frame {
+            seq,
+            dt,
+            pre,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            roll: false,
+            envelope: false,
+            scan: false,
+            partial: false,
+            acq: (1.25e9, n),
+            stamp: 0,
+            la: None,
+            fixed_ti: None,
+            hw_avg: false,
+            basic: Default::default(),
+        }
+    };
+    let shared: crate::board::HwShared = Default::default();
+    let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+    let at = |s: f32| tscales().iter().position(|&x| (x - s).abs() < s * 1e-3).unwrap();
+    (ui.m.tscale, ui.m.zscale, ui.m.zoom, ui.m.trig_level, ui.m.ch[0].offset) = (at(1e-6), at(1e-7), true, 0.0, 0.0);
+    // the first step lays the zoom picture out (`plot_layout`): its size from there
+    ui.step(0.05);
+    assert!(ui.fast_ok());
+    let zm = ui.zoom_draw_model();
+    assert_eq!((zm.time_per_div(), zm.delay, zm.zoom), (1e-7, ui.m.zdelay, false));
+    let mut want = crate::wave::Phosphor::new(ui.phz.w, ui.phz.h);
+    for seq in 1..=6 {
+        crate::drawpipe::draw_frame(&mut want, &zm, &frame(seq), None);
+    }
+    shared.lock().unwrap().queue.extend((1..=6).map(frame));
+    ui.step(0.05);
+    assert_eq!((ui.counts.wfm_total, ui.counts.records), (6, 1));
+    assert!(ui.phz.w > 1 && ui.phz.h > 1, "no zoom picture laid out");
+    assert!(ui.phz.map[0] == want.map[0], "the zoom picture is not the frames drawn with the zoom's model");
+    // the crossing at the centre of the zoom picture: its centre column is lit at the middle row
+    let (w, h) = (ui.phz.w, ui.phz.h);
+    let lit: Vec<usize> = (0..h).filter(|&r| ui.phz.map[0][r * w + w / 2] > 0).collect();
+    assert!(lit.iter().any(|&r| (r as i32 - h as i32 / 2).abs() <= 2), "{:?}", lit);
+    ui.m.deskew_ch[0] = 1e-9;
+    assert!(!ui.fast_ok(), "zoom with deskew");
+}
+
+/// The software Average on the fast path (#582): the queued frames are folded into the running average, oldest first,
+/// as the record path blends each record, and the picture is the one averaged trace of the newest record.
+#[test]
+fn average_folds_the_queued_frames_and_draws_one_trace() {
+    use super::*;
+    // 1 us/div, 12.5 k points at 0.8 ns, a 200 kHz sine through 0 V rising at the trigger point, each frame 0.1 V higher
+    let (n, dt, pre) = (12_500usize, 0.8e-9, 6250usize);
+    let frame = |seq: u64| {
+        let v: Vec<f32> = (0..n)
+            .map(|k| {
+                ((2.0 * std::f64::consts::PI * 200e3 * (k as f64 - pre as f64 + 0.3) * dt).sin() + 0.1 * seq as f64)
+                    as f32
+            })
+            .collect();
+        crate::board::Frame {
+            seq,
+            dt,
+            pre,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            roll: false,
+            envelope: false,
+            scan: false,
+            partial: false,
+            acq: (1.25e9, n),
+            stamp: 0,
+            la: None,
+            fixed_ti: None,
+            hw_avg: false,
+            basic: Default::default(),
+        }
+    };
+    let shared: crate::board::HwShared = Default::default();
+    let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+    ui.m.tscale = tscales().iter().position(|&x| (x - 1e-6).abs() < 1e-9).unwrap();
+    (ui.m.trig_level, ui.m.ch[0].offset, ui.m.acq, ui.m.avg_count) = (0.0, 0.0, AcqMode::Average, 4);
+    assert!(ui.fast_ok());
+    // the first record starts the average; then four frames for the fast path and the newest as the record
+    shared.lock().unwrap().queue.push_back(frame(1));
+    ui.step(0.05);
+    shared.lock().unwrap().queue.extend((2..=6).map(frame));
+    ui.step(0.05);
+    assert_eq!((ui.counts.wfm_total, ui.counts.records), (6, 2));
+    let a = 1.0 / 4.0f32;
+    let mut want = crate::wave::hw_record(&ui.m, frame(1)).ch[0].clone();
+    for seq in 2..=6 {
+        let x = crate::wave::hw_record(&ui.m, frame(seq)).ch[0].clone();
+        for (p, x) in want.iter_mut().zip(x) {
+            *p = if p.is_finite() { *p + (x - *p) * a } else { x };
+        }
+    }
+    let got = &ui.last[0].as_ref().unwrap().ch[0];
+    assert!(got.iter().zip(&want).all(|(g, w)| (g - w).abs() < 1e-5 || !w.is_finite()), "not the running average");
+    // one trace: the picture is the newest record drawn alone, the steps of the average are not in it
+    let rec = ui.last[0].clone().unwrap();
+    let mut one = crate::wave::Phosphor::new(ui.ph.w, ui.ph.h);
+    one.draw_ex(0, &ui.m, (ui.m.time_per_div(), ui.m.delay), rec.t0, rec.dt, &rec.ch[0], 24, None, rec.pairs);
+    assert!(ui.ph.map[0] == one.map[0], "the picture holds more than the averaged trace");
+    // and it is graded as one trace: the folded frames count as acquired, not in the grading (`picture_ref`)
+    assert_eq!(ui.grade.frames, 1);
 }
 
 /// One channel in bands of rows on several cores, lines and dots: the same map as the whole map at once.
@@ -1284,6 +1476,72 @@ fn a_new_time_base_while_waiting_draws_the_held_record_at_its_own_times() {
     assert!(ui.phz.map[0].iter().any(|&c| c != 0), "the zoom pane shows the held record");
 }
 
+// Break it catches (#578, 0.1.15 on a DHO924S): while the scope waited for a trigger, a new volts per division or offset
+// kept the picture of the old scale. A sine of ±1 V stayed two divisions high at 0.5 V/div, and an offset moved the grid
+// labels but not the trace, so the screen read wrong values until the next trigger. The held record is drawn again at
+// its own volts: the picture is the one the same record makes when it is taken at the new scale.
+#[test]
+fn a_new_vertical_scale_while_waiting_draws_the_held_record_at_its_own_volts() {
+    use super::*;
+    let record = |ui: &mut Ui, shared: &crate::board::HwShared| {
+        let n = 10_000usize;
+        let window = ui.m.time_per_div() as f64 * HDIV as f64;
+        let v: Vec<f32> = (0..n).map(|k| (k as f32 * 0.01).sin()).collect();
+        shared.lock().unwrap().queue.push_back(crate::board::Frame {
+            seq: 1,
+            stamp: ui.m.hw_stamp,
+            dt: window / n as f64,
+            pre: n / 2,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            ..Default::default()
+        });
+        ui.step(0.033);
+    };
+    let fresh = || {
+        let shared: crate::board::HwShared = Default::default();
+        let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+        ui.m.run = RunState::Run;
+        for c in 1..NCH {
+            ui.m.ch[c].on = false;
+        }
+        ui.m.meas.clear();
+        ui.m.meas2.clear();
+        ui.step(0.033);
+        (ui, shared)
+    };
+    let rows = |ui: &Ui| {
+        let (w, h) = (ui.ph.w, ui.ph.h);
+        (0..h).filter(|&y| (0..w).any(|x| ui.ph.map[0][y * w + x] != 0)).collect::<Vec<_>>()
+    };
+    let wide = |ui: &mut Ui| {
+        ui.m.ch[0].vscale = VSCALES.iter().position(|&x| x >= 0.999).unwrap();
+        ui.m.ch[0].offset = 0.0;
+    };
+    let narrow = |ui: &mut Ui| {
+        ui.m.ch[0].vscale = VSCALES.iter().position(|&x| x >= 0.4995).unwrap();
+        ui.m.ch[0].offset = 1.0;
+    };
+    let (mut held, shared) = fresh();
+    wide(&mut held);
+    held.settings_changed();
+    held.step(0.033);
+    record(&mut held, &shared);
+    let before = rows(&held);
+    narrow(&mut held);
+    held.settings_changed();
+    for _ in 0..3 {
+        held.step(0.033);
+    }
+    let (mut want, shared) = fresh();
+    narrow(&mut want);
+    want.settings_changed();
+    want.step(0.033);
+    record(&mut want, &shared);
+    let want_rows = rows(&want);
+    assert_ne!(before, want_rows, "the two scales draw the record at different rows");
+    assert_eq!(rows(&held), want_rows, "the held record at 0.5 V/div and 1 V offset, as a record taken there");
+}
+
 // Break it catches (#441, a DHO802 on 0.1.14, 100 ms persistence): the picture aged every screen step whether a record
 // had come or not. With records slower than the persistence time (slow time bases, deep memory) the newest record
 // faded out before the next one, and the trace pulsed. It ages when the next record comes, by the time since the last
@@ -1370,4 +1628,102 @@ fn timed_persistence_with(zoom: bool) {
         assert!(maps(&ui) == want, "zoom {zoom}, fast records: the picture is not the last one aged by one step");
         picture = want;
     }
+}
+
+// Break it catches (#581, from the review of #597): the frame loop drawing a frame the hardware triggered on the other
+// slope, or leaving it out of the edge statistics (`:SYSTem:STATe?` edges) where the workers count it.
+#[test]
+fn the_frame_loop_counts_a_frame_on_the_other_slope_and_does_not_draw_it() {
+    use crate::model::*;
+    use crate::ui::acquire::{fast_plan, FastPlan};
+    let m = Model {
+        tscale: tscales().iter().position(|&t| (t as f64 - 5e-4).abs() < 1e-7).unwrap(),
+        trig_level: 0.0,
+        dots: false,
+        trig_mode: TrigMode::Normal,
+        ..Default::default()
+    };
+    let f = std::sync::Arc::new(crate::board::Frame {
+        pre: 10_000,
+        dt: 1e-6,
+        ch: [
+            (0..20_000)
+                .map(|i| (-0.9 * ((i as f64 - 10_000.0) / 20_000.0 * std::f64::consts::TAU).sin()) as f32)
+                .collect(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ],
+        ..Default::default()
+    });
+    let p = fast_plan(&m, 970, 448, &f, [false; NCH]);
+    assert!(!p.triggered);
+    assert!(matches!(p.plan, FastPlan::Raw { drawn: false, class: Some(_), .. }), "counted, not drawn");
+}
+
+// Break it catches: the budget of the 30 Hz timer kept on the flip clock (a step over its 30.8 ms period waits for the
+// next vblank: 23 instead of 32.5 pictures a second at 10 us/div, unit 2026-11-25), or a budget past the period.
+#[test]
+fn the_fast_budget_follows_the_period_of_the_frame_clock() {
+    let b = |period: f32, other: f32, show: f32| crate::ui::Ui::fast_budget_of(period, other, show);
+    assert_eq!(b(33.333, 0.0, 0.0), 28.0, "the timer, nothing else in the step: as before");
+    assert_eq!(b(33.333, 2.0, 6.0), 23.0, "the timer: 31 ms less the rest, as before");
+    assert!((b(30.8, 2.0, 6.0) - 20.467).abs() < 1e-3, "flip clock: 2.53 ms less than on the timer");
+    assert!(b(30.8, 0.0, 0.0) <= 30.8 - 5.3 + 1e-3);
+    assert_eq!(b(30.8, 20.0, 10.0), 5.0, "never below 5 ms");
+    // the period: three vblanks of the panel on the flip clock, the timer's otherwise
+    assert_eq!(crate::pacing::period_us_of(Some(97.4)), 30_800);
+    assert_eq!(crate::pacing::period_us_of(None), 33_333);
+    assert_eq!(crate::pacing::period_us_of(Some(0.0)), 33_333, "no refresh: the timer");
+}
+
+// From the review of #602: after a Clear (no running average yet) the oldest queued frame starts the average and the
+// others are folded into it, not dropped; a frame the FPGA averaged already is not averaged a second time.
+#[test]
+fn average_starts_from_the_oldest_queued_frame_and_skips_fpga_averages() {
+    use super::*;
+    let (n, dt, pre) = (12_500usize, 0.8e-9, 6250usize);
+    let frame = |seq: u64| {
+        let v: Vec<f32> = (0..n)
+            .map(|k| {
+                ((2.0 * std::f64::consts::PI * 200e3 * (k as f64 - pre as f64 + 0.3) * dt).sin() + 0.1 * seq as f64)
+                    as f32
+            })
+            .collect();
+        crate::board::Frame {
+            seq,
+            dt,
+            pre,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            roll: false,
+            envelope: false,
+            scan: false,
+            partial: false,
+            acq: (1.25e9, n),
+            stamp: 0,
+            la: None,
+            fixed_ti: None,
+            hw_avg: seq == 3,
+            basic: Default::default(),
+        }
+    };
+    let shared: crate::board::HwShared = Default::default();
+    let mut ui = Ui::new(Source::Hw { shared: shared.clone(), seen: 0 });
+    ui.m.tscale = tscales().iter().position(|&x| (x - 1e-6).abs() < 1e-9).unwrap();
+    (ui.m.trig_level, ui.m.ch[0].offset, ui.m.acq, ui.m.avg_count) = (0.0, 0.0, AcqMode::Average, 4);
+    assert!(ui.fast_ok() && ui.last[0].is_none());
+    // frames 1 to 4 for the fast path (3 averaged by the FPGA), the newest, 5, as the record
+    shared.lock().unwrap().queue.extend((1..=5).map(frame));
+    ui.step(0.05);
+    let a = 1.0 / 4.0f32;
+    let mut want = crate::wave::hw_record(&ui.m, frame(1)).ch[0].clone();
+    for seq in [2, 4, 5] {
+        let x = crate::wave::hw_record(&ui.m, frame(seq)).ch[0].clone();
+        for (p, x) in want.iter_mut().zip(x) {
+            *p = if p.is_finite() { *p + (x - *p) * a } else { x };
+        }
+    }
+    let got = &ui.last[0].as_ref().expect("an average").ch[0];
+    let worst = got.iter().zip(&want).map(|(g, w)| (g - w).abs()).fold(0.0f32, f32::max);
+    assert!(worst < 1e-5, "the average differs by {worst}");
 }

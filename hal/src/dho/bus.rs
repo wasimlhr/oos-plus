@@ -11,6 +11,14 @@ pub const FPGA_VERSION: u32 = 0xe207_2115;
 pub trait Bus {
     fn wr(&mut self, off: u32, v: u32);
     fn rd(&mut self, off: u32) -> u32;
+    /// `wr` without the wait some buses make after every write (`Bar1::gap_us`); `settle` waits once after the last of
+    /// a group. Only `Grouped` writes this way.
+    fn wr_unsettled(&mut self, off: u32, v: u32) {
+        self.wr(off, v)
+    }
+    /// The wait after a group of `wr_unsettled` writes, before the bus or the C2H stream is read: nothing when no such
+    /// write is pending, nothing on a bus without a gap.
+    fn settle(&mut self) {}
     /// Applies a write sequence in order.
     fn apply(&mut self, seq: &[Write]) {
         for &(o, v) in seq {
@@ -139,12 +147,41 @@ impl Bus for Recorder {
     }
 }
 
-/// BAR1 mapped from `/dev/xdma0_bypass`. Writes are spaced by `gap_us` (the verified read-out used 10 us).
+/// The writes of one live sequence without the gap after each: every write goes to `wr_unsettled` of the bus beneath,
+/// which settles once before the next read, before the C2H read of a `Read` step, and when the group is dropped. The
+/// batch loop's arm, read-out, LA read, prearm and disarm run through it (`seq::acquire_batch_on`,
+/// docs/protocols/acquisition-start.md "Write spacing of the batch sequences"); everything else keeps the gap after
+/// every write.
+pub struct Grouped<'a, B: Bus>(pub &'a mut B);
+
+impl<B: Bus> Bus for Grouped<'_, B> {
+    fn wr(&mut self, off: u32, v: u32) {
+        self.0.wr_unsettled(off, v)
+    }
+    fn rd(&mut self, off: u32) -> u32 {
+        self.0.settle();
+        self.0.rd(off)
+    }
+    fn settle(&mut self) {
+        self.0.settle()
+    }
+}
+
+impl<B: Bus> Drop for Grouped<'_, B> {
+    fn drop(&mut self) {
+        self.0.settle()
+    }
+}
+
+/// BAR1 mapped from `/dev/xdma0_bypass`. Writes are spaced by `gap_us` (the verified read-out used 10 us), those of a
+/// `Grouped` sequence only after its last write.
 #[cfg(target_os = "linux")]
 pub struct Bar1 {
     regs: *mut u32,
     _file: std::fs::File,
     pub gap_us: u64,
+    /// a `wr_unsettled` write without its gap yet
+    unsettled: bool,
 }
 
 #[cfg(target_os = "linux")]
@@ -169,7 +206,7 @@ impl Bar1 {
         if p == libc::MAP_FAILED {
             return Err(std::io::Error::last_os_error());
         }
-        Ok(Bar1 { regs: p as *mut u32, _file: f, gap_us: 10 })
+        Ok(Bar1 { regs: p as *mut u32, _file: f, gap_us: 10, unsettled: false })
     }
 }
 
@@ -184,9 +221,16 @@ impl Drop for Bar1 {
 #[cfg(target_os = "linux")]
 impl Bus for Bar1 {
     fn wr(&mut self, off: u32, v: u32) {
+        self.wr_unsettled(off, v);
+        self.settle();
+    }
+    fn wr_unsettled(&mut self, off: u32, v: u32) {
         assert!(off < 0x8000 && off.is_multiple_of(4));
         unsafe { std::ptr::write_volatile(self.regs.add((off >> 2) as usize), v) };
-        if self.gap_us > 0 {
+        self.unsettled = true;
+    }
+    fn settle(&mut self) {
+        if std::mem::take(&mut self.unsettled) && self.gap_us > 0 {
             std::thread::sleep(std::time::Duration::from_micros(self.gap_us));
         }
     }

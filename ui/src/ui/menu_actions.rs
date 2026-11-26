@@ -643,12 +643,18 @@ impl Ui {
                 let i = all.iter().position(|&x| x == m.cursor).unwrap_or(0);
                 m.cursor = all[cycle(i, all.len(), d)];
             }
-            // a cursor on a voltage reads higher the further up the screen it is: + raises the reading (moves it up)
             Item::CurA | Item::CurB | Item::CurC | Item::CurD => {
-                let vertical = matches!(it, Item::CurC | Item::CurD) || m.cursor == CursorMode::Volt;
-                let delta = d as f32 * 0.005 * if vertical { -1.0 } else { 1.0 };
-                let field = match it { Item::CurA => &mut m.cur_a, Item::CurB => &mut m.cur_b, Item::CurC => &mut m.cur_c, _ => &mut m.cur_d };
-                *field = (*field + delta).clamp(0.0, 1.0);
+                // the place counts from the left and from the top: + moves a time cursor right and a voltage cursor
+                // (A and B in Volt, C and D in XY) up, both to a higher value
+                let up = matches!(it, Item::CurC | Item::CurD) || m.cursor == CursorMode::Volt;
+                let step = (if up { -d } else { d }) as f32 * 0.005;
+                let place = match it {
+                    Item::CurA => &mut m.cur_a,
+                    Item::CurB => &mut m.cur_b,
+                    Item::CurC => &mut m.cur_c,
+                    _ => &mut m.cur_d,
+                };
+                *place = (*place + step).clamp(0.0, 1.0);
             }
             Item::RefSel => {
                 let slot = (self.ref_page.sel as i32 + d).clamp(0, NREF as i32 - 1) as usize;

@@ -369,7 +369,8 @@ mod imp {
                 atlas_rows: 0,
                 times: Times::default(),
             };
-            clock_floor(true);
+            // the GPU's lowest clock while the helper runs (`clockfloor::GPU_HELPER_HZ`)
+            crate::clockfloor::gpu_helper(true);
             let h = Hello { magic: MAGIC, version: VERSION, kind: K_HELLO, pad: 0, arena_size: ARENA as u64 };
             send_fd(&g.sock, bytes(&h), Some(mem.as_raw_fd())).map_err(|e| format!("hello: {}", e))?;
             drop(mem);
@@ -702,6 +703,17 @@ mod imp {
             Ok(at)
         }
 
+        /// The helper's answer to the oldest frame in work is there: `collect` takes it without waiting.
+        pub fn answered(&self) -> bool {
+            let mut p = [libc::pollfd { fd: self.sock.as_raw_fd(), events: libc::POLLIN, revents: 0 }];
+            crate::input::wait(&mut p, 0) > 0
+        }
+
+        /// The helper's socket, readable once it answered (the frame loop's wait for the last frame).
+        pub fn fd(&self) -> i32 {
+            self.sock.as_raw_fd()
+        }
+
         /// Waits for a frame `submit` sent; with `back` its picture (asked for when it was sent) comes into it.
         pub fn collect(&mut self, t: Ticket, back: Option<&mut Canvas>) -> Result<(), String> {
             let w0 = std::time::Instant::now();
@@ -731,32 +743,9 @@ mod imp {
         }
     }
 
-    /// The Mali's devfreq: its load governor sees only the short work of each frame and stays at the lowest step
-    /// (200 MHz, an 8 ms frame); 400 MHz runs at the same voltage (rk3399-opp.dtsi) and takes 4 ms. While the
-    /// helper runs the lowest step is 400 MHz; after it, the table's lowest again.
-    fn clock_floor(on: bool) {
-        let Ok(d) = std::fs::read_dir("/sys/class/devfreq") else { return };
-        for e in d.flatten() {
-            let p = e.path();
-            if !e.file_name().to_string_lossy().ends_with(".gpu") {
-                continue;
-            }
-            let steps: Vec<u64> = std::fs::read_to_string(p.join("available_frequencies"))
-                .unwrap_or_default()
-                .split_whitespace()
-                .filter_map(|v| v.parse().ok())
-                .collect();
-            let low = steps.iter().copied().min().unwrap_or(0);
-            let want = if on { steps.iter().copied().filter(|&f| f >= 400_000_000).min().unwrap_or(low) } else { low };
-            if want > 0 {
-                let _ = std::fs::write(p.join("min_freq"), want.to_string());
-            }
-        }
-    }
-
     impl Drop for Gpu {
         fn drop(&mut self) {
-            clock_floor(false);
+            crate::clockfloor::gpu_helper(false);
             let _ = self.child.kill();
             let _ = self.child.wait();
             unsafe { libc::munmap(self.arena as *mut libc::c_void, ARENA) };

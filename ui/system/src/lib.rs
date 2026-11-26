@@ -3,15 +3,18 @@
 
 //! oos-system: what oos-ui needs of the Linux system, without the scope's state (ADR 0064): the network helpers and
 //! the services the screen only switches (mDNS, SNTP, SSH, USBTMC, `net.allow`), the clock, `system.conf`, thread
-//! placement, JSON and base64. It names no module of oos-ui; the compiler keeps it that way. oos-ui brings each
-//! module into its crate root (`main.rs`), so `crate::sysconf` and the other paths of oos-ui stay as they were.
+//! placement and clock floors, JSON and base64. It names no module of oos-ui; the compiler keeps it that way. oos-ui
+//! brings each module into its crate root (`main.rs`), so `crate::sysconf` and the other paths of oos-ui stay as they
+//! were.
 
 // the Windows desktop build of oos-plus leaves the Unix-only callers out
 #![cfg_attr(not(unix), allow(dead_code))]
 
 pub mod base64;
 pub mod clock;
+pub mod clockfloor;
 pub mod ethlink;
+pub mod gadget;
 pub mod hostname;
 pub mod ifaddrs;
 pub mod json;

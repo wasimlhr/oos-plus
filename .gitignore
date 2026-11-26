@@ -3,6 +3,8 @@ tools/.venv/
 __pycache__/
 # build output
 kernel/out/
+# tools/bench-builds.sh: its worktrees, builds and results
+/target/
 *.img
 .DS_Store
 # personal settings of coding agents (AGENTS.md is the shared one, docs/adr/process/0018)

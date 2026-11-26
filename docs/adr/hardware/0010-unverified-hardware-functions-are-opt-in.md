@@ -29,9 +29,13 @@ The keys on 2026-11-15, as read by the code (`crate::sysconf::flag` and `setting
 | `acq.compress = on` | min/max pairs from the FPGA instead of every sample, 1 us/div and slower | off by default |
 | `acq.interp = fast` | the fast interpolation of sparse frames | off by default |
 | `perf.place = on` | the threads and the DMA interrupts on fixed cores | off by default |
+| `perf.fifo = off` | the acquisition thread at normal priority instead of `SCHED_FIFO` 1 | on by default since it was verified on the unit 2026-11-25 (one thread at FIFO, the hw thread) |
+| `perf.clocks = off` | no A72 and GPU clock floors while the acquisition runs | on by default since it was verified on the unit 2026-11-25 (1416 MHz and 600 MHz in RUN, back at STOP, 39 °C) |
 | `trig.serial_hw = on` | the UART protocol trigger in the FPGA's receiver | off by default |
 | `autoset.levels = unit` | auto set-up levels from the FPGA's measurement unit | off by default; failed on the unit 2026-11-15 |
 | `adc.overclock = on` | System > Overclock: an ADC clock above 1.25 GHz from the next start | off by default; every step boots, but records at the full rate lose samples (unit 2026-11-16; added 2026-11-17) |
+| `usb.tmc = on` | System > Network > Remote services > USB instrument: the rear USB port as a USBTMC instrument (ADR 0080) | off by default; not yet verified on hardware (added 2026-11-24) |
+| `pacing.clock = timer` | the frame loop on its 30 Hz timer instead of every third vblank of the panel (`ui/src/pacing.rs`) | flip on by default since it was verified on the unit 2026-11-25 (panel 97.4 Hz, 32.5 pictures/s, no fallback); `timer` is the way back |
 | `trig.hw_status = off` | trigger status read from the FPGA | on by default since it was verified on the unit 2026-11-13 |
 | `meas.deep_raw = off` | mean-type measurements from raw deep reads | on by default since it was verified on the unit 2026-11-15 |
 

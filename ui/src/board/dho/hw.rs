@@ -108,6 +108,7 @@ pub fn spawn(app_mask: u32, program_afe: bool, cal_dir: String, start_up: Option
     let out = shared.clone();
     std::thread::spawn(move || {
         crate::placement::place(crate::placement::Role::Hw);
+        crate::placement::realtime();
         // every wait and every time of the loop on one clock (ADR 0053): the system's here, a host run's in a test
         let mut clock = oos_hal::dho::boot::SysClock::default();
         let status = |s: String| report(&out, s);
@@ -484,7 +485,7 @@ impl<P: port::Port> Loop<P> {
             // RUN or SINGLE: the frames of the batch before the STOP are not new
             lock(&self.out).queue.clear();
         }
-        let b = batch_plan(s, p);
+        let mut b = batch_plan(s, p);
         if !single_wants_more(&b, self.batch.single_done, stamp) {
             disarm(&mut self.armed, &mut self.state, &mut self.bar, &mut self.c2h, &mut self.clock);
             self.clock.sleep_us(2000);
@@ -506,6 +507,19 @@ impl<P: port::Port> Loop<P> {
             tr.reset();
             (*seen, *logged) = (avg_clear, 0);
         }
+        // the deposit workers' grant (ADR 0081): a long batch arms no more frames than they draw in about one
+        // picture; a batch armed ahead with these settings keeps the count it was armed with
+        let pipe = crate::board::pipe::workers();
+        let long = b.frames as usize > plan::FRAME0_CHECK_MAX_FRAMES;
+        let admit = pipe.filter(|x| long && self.config.avg.is_none() && x.accepting());
+        if let Some(x) = admit {
+            b.frames = plan::admitted(b.frames, x.grant(b.frames));
+        }
+        if let Some((a, _)) =
+            self.armed.as_ref().filter(|(a, st)| *st == stamp && Settings { frames: a.frames, ..b.clone() } == *a)
+        {
+            b.frames = a.frames;
+        }
         // one batch: arm, let the ring fill for up to 25 ms after the first frame, one play, one read
         // armed ahead with these settings and since the last SINGLE press: only the wait is left
         let ahead = self.armed.as_ref().is_some_and(|(a, st)| *a == b && *st == stamp);
@@ -522,9 +536,14 @@ impl<P: port::Port> Loop<P> {
             let g = lock(&self.out);
             (g.want.as_ref(), g.slow) != (asked.0.as_ref(), asked.1) || g.stop_view.is_some() || g.hold
         };
+        // the workers still hold the buffers the next batch needs (one to read into, one to swap in): wait for them
+        // and draw with them instead of reading a batch that would be dropped
+        if let Some(x) = admit {
+            let free = || x.lent() + 2 <= decode::POOL;
+            plan::wait_for_workers(&mut self.clock, free, || x.help(&mut self.batch.helper), changed);
+        }
         // while the FPGA's ring fills this thread draws frames of the last batch (drawpipe.rs), one per look at
         // the frame count, so the read waits at most one frame longer
-        let pipe = crate::board::pipe::workers();
         let idle = || pipe.is_some_and(|x| x.help(&mut self.batch.helper));
         let t_batch = self.clock.now_us();
         let got = seq::acquire_batch_on(

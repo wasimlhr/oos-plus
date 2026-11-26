@@ -11,6 +11,8 @@
 //! transfer size (u32 LE), attributes, then 3 bytes (TermChar for a request, else reserved). The data follow, padded
 //! with zeros to a multiple of 4. bTag runs 1..255 and wraps to 1 (never 0). A command is DEV_DEP_MSG_OUT with EOM on
 //! its last transfer; an answer is fetched with REQUEST_DEV_DEP_MSG_IN and read back as DEV_DEP_MSG_IN, until EOM.
+//! The headers are built and read here for both sides: the scope as a USBTMC device on its rear port
+//! (`oos_remote::usbtmc_device`, docs/usb-device.md) uses the same functions.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -21,9 +23,11 @@ pub const SUBCLASS: u8 = 0x03;
 /// Where the kernel lists the USB devices and their interfaces.
 pub const SYSFS: &str = "/sys/bus/usb/devices";
 
-const DEV_DEP_MSG_OUT: u8 = 1;
-const REQUEST_DEV_DEP_MSG_IN: u8 = 2;
-const DEV_DEP_MSG_IN: u8 = 2;
+/// MsgIDs of the bulk headers (USBTMC 1.0 table 2): a message to the device, the request for an answer, and the
+/// answer (the IN direction has its own numbering, so the answer is 2 as well).
+pub const DEV_DEP_MSG_OUT: u8 = 1;
+pub const REQUEST_DEV_DEP_MSG_IN: u8 = 2;
+pub const DEV_DEP_MSG_IN: u8 = 2;
 /// Size of the bulk header.
 pub const HEADER: usize = 12;
 /// Data bytes per bulk transfer, both ways.
@@ -33,38 +37,63 @@ const MAX_ANSWER: usize = 1 << 20;
 /// Transfers without data and without the end of the message that one answer may have before it is given up.
 const MAX_EMPTY: usize = 16;
 
+/// A bulk header as it travels, the same both ways: MsgID, bTag and its inverse, a reserved 0, the transfer size (u32
+/// LE), the attributes (bit 0 EOM, bit 1 TermChar enabled in a request), the TermChar of a request, two reserved.
+/// Both sides of USBTMC build their headers here: the host in this file, the scope as a device in oos-remote.
+pub fn header(msg: u8, tag: u8, size: u32, attr: u8, term: u8) -> [u8; HEADER] {
+    let s = size.to_le_bytes();
+    [msg, tag, !tag, 0, s[0], s[1], s[2], s[3], attr, term, 0, 0]
+}
+
+/// A bulk header read back (`parse_header`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Header {
+    pub msg: u8,
+    pub tag: u8,
+    pub size: u32,
+    pub attr: u8,
+    pub term: u8,
+}
+
+/// Reads a bulk header: long enough, and bTag with its inverse. What the MsgID and the tag have to be is the
+/// caller's.
+pub fn parse_header(b: &[u8]) -> Result<Header, String> {
+    if b.len() < HEADER {
+        return Err(format!("short header ({} bytes)", b.len()));
+    }
+    if b[2] != !b[1] {
+        return Err(format!("bTag {} with inverse {}", b[1], b[2]));
+    }
+    Ok(Header { msg: b[0], tag: b[1], size: u32::from_le_bytes([b[4], b[5], b[6], b[7]]), attr: b[8], term: b[9] })
+}
+
+/// One transfer: its header, the data, zeros up to a multiple of 4.
+pub fn transfer(header: &[u8; HEADER], data: &[u8]) -> Vec<u8> {
+    let mut v = Vec::with_capacity((HEADER + data.len()).next_multiple_of(4));
+    v.extend_from_slice(header);
+    v.extend_from_slice(data);
+    v.resize(v.len().next_multiple_of(4), 0);
+    v
+}
+
 /// Header of a DEV_DEP_MSG_OUT transfer with `size` data bytes; `eom` on the last transfer of a message.
 pub fn out_header(tag: u8, size: u32, eom: bool) -> [u8; HEADER] {
-    let s = size.to_le_bytes();
-    [DEV_DEP_MSG_OUT, tag, !tag, 0, s[0], s[1], s[2], s[3], eom as u8, 0, 0, 0]
+    header(DEV_DEP_MSG_OUT, tag, size, eom as u8, 0)
 }
 
 /// Header of a REQUEST_DEV_DEP_MSG_IN asking for at most `max` bytes, ending early at `term` if given.
 pub fn request_header(tag: u8, max: u32, term: Option<u8>) -> [u8; HEADER] {
-    let s = max.to_le_bytes();
-    [
-        REQUEST_DEV_DEP_MSG_IN,
-        tag,
-        !tag,
-        0,
-        s[0],
-        s[1],
-        s[2],
-        s[3],
-        if term.is_some() { 2 } else { 0 },
-        term.unwrap_or(0),
-        0,
-        0,
-    ]
+    header(REQUEST_DEV_DEP_MSG_IN, tag, max, if term.is_some() { 2 } else { 0 }, term.unwrap_or(0))
+}
+
+/// Header of a DEV_DEP_MSG_IN transfer (the device's answer) with `size` data bytes; `eom` on the last of a message.
+pub fn in_header(tag: u8, size: u32, eom: bool) -> [u8; HEADER] {
+    header(DEV_DEP_MSG_IN, tag, size, eom as u8, 0)
 }
 
 /// One DEV_DEP_MSG_OUT transfer: header, data, zeros up to a multiple of 4.
 pub fn out_transfer(tag: u8, data: &[u8], eom: bool) -> Vec<u8> {
-    let mut v = Vec::with_capacity(HEADER + data.len() + 3);
-    v.extend_from_slice(&out_header(tag, data.len() as u32, eom));
-    v.extend_from_slice(data);
-    v.resize(v.len().next_multiple_of(4), 0);
-    v
+    transfer(&out_header(tag, data.len() as u32, eom), data)
 }
 
 /// The header of a DEV_DEP_MSG_IN transfer: data size and end of message.
@@ -82,10 +111,11 @@ pub fn parse_in_header(b: &[u8], tag: u8) -> Result<InHeader, String> {
     if b[0] != DEV_DEP_MSG_IN {
         return Err(format!("answer with MsgID {}", b[0]));
     }
-    if b[1] != tag || b[2] != !tag {
-        return Err(format!("answer with bTag {} for {}", b[1], tag));
-    }
-    Ok(InHeader { size: u32::from_le_bytes([b[4], b[5], b[6], b[7]]), eom: b[8] & 1 != 0 })
+    let h = parse_header(b)
+        .ok()
+        .filter(|h| h.tag == tag)
+        .ok_or_else(|| format!("answer with bTag {} for {}", b[1], tag))?;
+    Ok(InHeader { size: h.size, eom: h.attr & 1 != 0 })
 }
 
 /// The two bulk endpoints of the interface (usbfs on the unit, a mock in the tests).
@@ -634,6 +664,11 @@ mod tests {
         assert_eq!(&t[HEADER..], b"*IDN?\n\0\0");
         assert_eq!(out_transfer(3, b"OUTP", true).len(), 16);
         assert_eq!(out_transfer(3, b"", true).len(), 12);
+        // the device's answer (table 9): MsgID 2, the request's tag, EOM; read back by either side
+        assert_eq!(in_header(7, 3, true), [2, 7, 0xf8, 0, 3, 0, 0, 0, 1, 0, 0, 0]);
+        let h = parse_header(&request_header(5, 64, Some(b'\n'))).unwrap();
+        assert_eq!(h, Header { msg: REQUEST_DEV_DEP_MSG_IN, tag: 5, size: 64, attr: 2, term: b'\n' });
+        assert!(parse_header(&[1, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap_err().contains("inverse"));
     }
 
     #[test]

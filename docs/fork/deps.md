@@ -4,10 +4,11 @@ Every source archive OOS builds from is listed once, in `rootfs/deps.lock`: name
 the URL's directory has no listing, a page that lists the releases). No build script carries a version or a checksum
 of its own.
 
-- Every build script that downloads a source reads its lines through `rootfs/deps.sh`: `rootfs/build-dropbear.sh`
-  (Dropbear), `rootfs/build-sftp-server.sh` (OpenSSH, `sftp-server` only), `rootfs/build-nft.sh` (libmnl, libnftnl,
-  nftables), `rootfs/build-kexec.sh` (kexec-tools), `rootfs/build-fsck.sh` (e2fsprogs), `rootfs/build-wlan-tools.sh`
-  (wpa_supplicant, libnl), `gpu/build.sh` (Mesa). `dep_fetch` downloads once into `rootfs/out/` and refuses a file
+- Every build script that downloads a source reads its lines through `rootfs/deps.sh`: `rootfs/build-busybox.sh`
+  (BusyBox, with `rootfs/busybox.config`), `rootfs/build-dropbear.sh` (Dropbear), `rootfs/build-sftp-server.sh`
+  (OpenSSH, `sftp-server` only), `rootfs/build-nft.sh` (libmnl, libnftnl, nftables), `rootfs/build-kexec.sh`
+  (kexec-tools), `rootfs/build-fsck.sh` (e2fsprogs), `rootfs/build-wlan-tools.sh` (wpa_supplicant, libnl),
+  `gpu/build.sh` (Mesa). `dep_fetch` downloads once into `rootfs/out/` and refuses a file
   whose SHA-256 differs; `dep_stamp` records what a binary was built from (`<binary>.stamp`: the deps.lock lines and
   the content of the build script and of the tree's sources it compiles).
 - `boot/build-dev-image.sh` and `boot/unit-hook.sh` build a binary again when it is missing or its stamp no longer
@@ -22,9 +23,8 @@ of its own.
   `kernel/base.sha256`; `tools/release-sources.sh check <tag>` compares a release on GitHub with it
   ([THIRD-PARTY-LICENSES.md](../../THIRD-PARTY-LICENSES.md)).
 - Not in the manifest: the Rust tool chain (`rust-toolchain.toml`) and the Docker base images (`alpine:3.22` and
-  `ubuntu:26.04`, named once in `tools/lib/docker.sh` with their digests), both pinned (below), busybox (Ubuntu's
-  `busybox-static`, its version and the glibc it was built with recorded in `busybox.version` of each build), the
-  kernel base archive (`kernel/base.sha256`) and Rust crates (`Cargo.lock`).
+  `ubuntu:26.04`, named once in `tools/lib/docker.sh` with their digests), both pinned (below), the kernel base
+  archive (`kernel/base.sha256`) and Rust crates (`Cargo.lock`).
 
 ## Rust crates
 
@@ -77,9 +77,10 @@ candidates); exit status 1 when one is newer. It only reads public listing pages
    SHA256), Alpine's aports or Debian's `.dsc` for the same tarball, or a signature check. Write it into the line.
 4. Build: `rootfs/build-<name>.sh` or `gpu/build.sh` (or the next image build, which sees the stale stamp). A wrong
    checksum stops the build and deletes the download.
-5. Run the sims that cover it: `tools/ssh-sim.sh` (Dropbear, sftp-server), `tools/fw-sim.sh` and `tools/ssh-sim.sh`
-   (nft), `tools/wlan-sim.sh` (wpa_supplicant), `gpu/test-host.sh` (Mesa), then an image build and the unit checks of
-   the feature (docs/network.md 6, 7).
+5. Run the sims that cover it: `tools/fw-sim.sh` and `tools/ssh-sim.sh` (BusyBox, whose new applets
+   `rootfs/build-busybox.sh` asks to be written into `rootfs/busybox.applets`), `tools/ssh-sim.sh` (Dropbear,
+   sftp-server), `tools/fw-sim.sh` and `tools/ssh-sim.sh` (nft), `tools/wlan-sim.sh` (wpa_supplicant),
+   `gpu/test-host.sh` (Mesa), then an image build and the unit checks of the feature (docs/network.md 6, 7).
 6. Commit the manifest line (and a build script change, if the new version needs one) with the sources' release in
    the message.
 

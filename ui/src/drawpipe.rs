@@ -15,7 +15,10 @@
 //!
 //! The picture is the one of `draw_frame` on every frame, one by one: the workers run it on the frames of a batch but
 //! the newest, which takes the UI's path. A batch whose workers are still busy, frames of older settings and maps of
-//! an older mapping are dropped and counted (`board::pipe::Counters`). Where the workers do not take a batch (no view: the fast
+//! an older mapping are dropped and counted (`board::pipe::Counters`). So that the first of these stays rare, the
+//! workers measure what a frame costs them and grant the acquisition thread as many frames as they draw in about one
+//! picture (`grant`); it arms no more and waits while they still hold the buffers it needs (`lent`, ADR 0081). Where
+//! the workers do not take a batch (no view: the fast
 //! path does not apply; batches of one frame; the hardware average) the acquisition thread queues its frames for the
 //! frame loop. The other sources (demo, replay, live, SIM) have no batches and no workers.
 //!
@@ -48,7 +51,7 @@ pub fn draw_frame(ph: &mut Phosphor, m: &Model, f: &Frame, stats: Option<Stats>)
     let x_per_sample = f.dt / tdiv * w as f64 / HDIV as f64;
     // min/max pairs of the live compression (compress.rs) take the dense path with a pair deposit
     let pairs = crate::compress::live(f) && x_per_sample <= 0.5;
-    if !pairs && (x_per_sample > 0.5 || f.envelope || f.roll || f.scan) {
+    if !pairs && (x_per_sample > 0.5 || f.envelope || f.roll || f.scan || crate::wave::drawn_as_record(f, m)) {
         if let Some(t) = crate::sparse::draw(ph, m, f, 24) {
             return t;
         }
@@ -112,6 +115,9 @@ fn dense(
         }
         s.edges[k] += 1;
     }
+    if t.wrong {
+        return false;
+    }
     for c in 0..NCH {
         if m.ch[c].on && !m.ch_hidden[c] && present[c] {
             deposit(c, &mut ph.map[c], &screen_map(m, w, h, c, x_per_sample, t.ti));
@@ -128,6 +134,10 @@ pub struct Trigger {
     /// the other slope, 2 one elsewhere (with its distance in samples), 3 none; None with an LA line as the source
     pub class: Option<(usize, f64)>,
     pub triggered: bool,
+    /// the hardware fired on the other slope: no edge of the set direction within half a screen, but one of the other
+    /// direction (in Auto: at the trigger point) — a slow, noisy signal, #581. The frame is not drawn: at its trigger point it
+    /// would show the mirrored slope.
+    pub wrong: bool,
 }
 
 /// The trigger of the dense frame `f`, smoothed to `col` samples. `refine` (level, hysteresis, rising, either, half a
@@ -147,21 +157,28 @@ pub fn refine_edge(
     let hyst = m.trig_hyst_div() * m.ch[m.trig_src].volts_per_div();
     let (rising, either) = (m.slope != Slope::Fall, m.slope == Slope::Either);
     let half = (tdiv * HDIV as f64 / 2.0 / f.dt) as usize;
-    let (edge, class) = if on_la {
-        (None, None)
+    let near = |t: f64| (t - f.pre as f64).abs() <= (col + 16) as f64;
+    let (edge, class, wrong) = if on_la {
+        (None, None, false)
     } else {
         let (e, any) = refine(EdgeSeek::new(crate::wave::sw_trig_level(m, f), hyst, rising, either, half, col));
         let class = match (e, any) {
             (None, _) => (3, 0.0),
-            (Some(t), _) if (t - f.pre as f64).abs() <= (col + 16) as f64 => (0, 0.0),
+            (Some(t), _) if near(t) => (0, 0.0),
             (Some(_), Some(n)) if !either && n.rising != rising => (1, 0.0),
             (Some(t), _) => (2, (t - f.pre as f64).abs()),
         };
-        (e, Some(class))
+        // Normal and Single: every frame was triggered, so with no edge of the set direction within half a screen an
+        // edge of the other direction there is the one it fired on (on a slow slope the comparator fires hundreds of
+        // samples from the level crossing, #580); Auto: only one at the trigger point, as a frame of the timeout has
+        // no edge of its own
+        let triggered_frame = m.trig_mode != TrigMode::Auto;
+        let wrong = e.is_none() && !either && any.is_some_and(|n| n.rising != rising && (triggered_frame || near(n.t)));
+        (e, Some(class), wrong)
     };
     // a filtered trigger path (coupling): the hardware point stands where the samples show no crossing
     let triggered = edge.is_some() || on_la || m.trig_coupling() != TrigCoup::Dc;
-    Trigger { ti: edge.unwrap_or(f.pre as f64), class, triggered }
+    Trigger { ti: edge.unwrap_or(f.pre as f64), class, triggered: triggered && !wrong, wrong }
 }
 
 /// Where channel `c` of a dense frame lands on a `w` x `h` map, `x_per_sample` columns a sample, the trigger at sample
@@ -218,8 +235,8 @@ thread_local! {
 /// `draw_frame` straight from the read-out `bytes` of a frame (`lay`, meta data in `f`, whose channel vectors stay
 /// empty): the same picture and statistics without the f32 copy of every channel. The trigger source is decoded only
 /// around the hardware trigger point (the near search, `trignear::edge_near_window`), all of it only when the wide
-/// search is needed. None where this path does not apply (sparse, pairs, roll or scan, dots, a coupling that needs the
-/// frame mean): then decode and call `draw_frame`.
+/// search is needed. None where this path does not apply (sparse, pairs, roll or scan, dots, a frame drawn as its
+/// record, a coupling that needs the frame mean): then decode and call `draw_frame`.
 pub fn draw_frame_codes(
     ph: &mut Phosphor,
     m: &Model,
@@ -236,6 +253,7 @@ pub fn draw_frame_codes(
         || f.roll
         || f.scan
         || m.dots
+        || crate::wave::drawn_as_record(f, m)
         || !matches!(m.trig_coupling(), TrigCoup::Dc | TrigCoup::HfReject)
     {
         return None;
@@ -266,6 +284,8 @@ pub fn draw_frame_codes(
 struct Lease {
     raw: Option<Box<dyn RawBatch>>,
     home: Sender<Box<dyn RawBatch>>,
+    /// buffers out (`Pipe::lent`), one less when this one goes home
+    lent: Arc<AtomicUsize>,
 }
 
 impl Drop for Lease {
@@ -274,6 +294,35 @@ impl Drop for Lease {
             // the pool is gone only when the pipe is: nothing to return to
             let _ = self.home.send(r);
         }
+        self.lent.fetch_sub(1, Ordering::Release);
+    }
+}
+
+/// The time a grant is for (`Pipe::grant`): about one picture at 30 screens a second.
+const GRANT_PERIOD_NS: u64 = 33_000_000;
+
+/// What a frame costs a worker under the current mapping: a moving average over its batches of the time from taking
+/// a batch to handing its maps on, per frame it drew (folds included), in nanoseconds; 0 while none is measured.
+#[derive(Default)]
+struct Cost {
+    gen: u64,
+    ns: u64,
+}
+
+impl Cost {
+    /// A worker's batch of view `gen`: `frames` drawn in `ns`. A new mapping starts the average over.
+    fn note(&mut self, gen: u64, frames: usize, ns: u64) {
+        let per = ns / frames.max(1) as u64;
+        self.ns = if gen == self.gen && self.ns > 0 { (3 * self.ns + per) / 4 } else { per.max(1) };
+        self.gen = gen;
+    }
+
+    /// Frames `workers` draw in `GRANT_PERIOD_NS` under view `gen`: from 1 to `cap`, `cap` while nothing is measured.
+    fn grant(&self, gen: u64, workers: usize, cap: u32) -> u32 {
+        if gen != self.gen || self.ns == 0 {
+            return cap;
+        }
+        (GRANT_PERIOD_NS * workers.max(1) as u64 / self.ns).clamp(1, cap.max(1) as u64) as u32
     }
 }
 
@@ -324,12 +373,25 @@ impl Drop for Batch {
 const CLAIM: usize = 4;
 
 /// The screen mapping the workers draw with, and a generation that changes with anything the drawing depends on.
+/// `zoom`: the zoom picture's model (its time base and delay as the main ones, `Ui::zoom_draw_model`) and size, when
+/// the zoom is on: every frame is drawn into it too.
 struct View {
     gen: u64,
     m: Model,
     w: usize,
     h: usize,
+    zoom: Option<(Model, usize, usize)>,
 }
+
+impl View {
+    /// The sizes of the main and the zoom maps drawn with this view ((1, 1) for the zoom when it is off).
+    fn dims(&self) -> Dims {
+        ((self.w, self.h), self.zoom.as_ref().map_or((1, 1), |z| (z.1, z.2)))
+    }
+}
+
+/// The sizes of the main and the zoom maps.
+type Dims = ((usize, usize), (usize, usize));
 
 /// The fields of the model `draw_frame` depends on (a change of any other field keeps the workers' maps).
 #[derive(Clone, PartialEq)]
@@ -341,6 +403,8 @@ struct Key {
     acq: AcqMode,
     dots: bool,
     size: (usize, usize),
+    /// the zoom picture's own key
+    zoom: Option<Box<Key>>,
 }
 
 impl Key {
@@ -362,6 +426,7 @@ impl Key {
             acq: m.acq,
             dots: m.dots,
             size: (w, h),
+            zoom: None,
         }
     }
 }
@@ -370,6 +435,8 @@ impl Key {
 struct Acc {
     gen: u64,
     ph: Phosphor,
+    /// the zoom picture's maps ((1, 1) while the zoom is off), the same channels as `ph`
+    phz: Phosphor,
     /// the maps that may hold counts: the channels on in the view drawn with (drawing writes no other map), all of
     /// them for maps that were the UI's picture (`Pipe::merge`); only these are cleared and added
     used: [bool; NCH],
@@ -382,15 +449,20 @@ struct Acc {
 }
 
 impl Acc {
-    fn new(gen: u64, w: usize, h: usize) -> Acc {
-        let ph = Phosphor::new(w, h);
-        Acc { gen, ph, used: [false; NCH], folds: Vec::new(), frames: 0, triggered: 0, edges: [0; 4], off: (0.0, 0.0) }
+    fn new(gen: u64, ((w, h), (zw, zh)): Dims) -> Acc {
+        let (ph, phz) = (Phosphor::new(w, h), Phosphor::new(zw, zh));
+        let (used, folds) = ([false; NCH], Vec::new());
+        Acc { gen, ph, phz, used, folds, frames: 0, triggered: 0, edges: [0; 4], off: (0.0, 0.0) }
+    }
+    fn dims(&self) -> Dims {
+        ((self.ph.w, self.ph.h), (self.phz.w, self.phz.h))
     }
     /// Empty again, keeping the maps' memory.
     fn reset(&mut self, gen: u64) {
-        for (m, u) in self.ph.map.iter_mut().zip(&mut self.used) {
-            if std::mem::take(u) {
-                clear_map(m);
+        for c in 0..NCH {
+            if std::mem::take(&mut self.used[c]) {
+                clear_map(&mut self.ph.map[c]);
+                clear_map(&mut self.phz.map[c]);
             }
         }
         self.folds.clear();
@@ -400,6 +472,7 @@ impl Acc {
     fn add(&mut self, o: &Acc) {
         for c in (0..NCH).filter(|&c| o.used[c]) {
             add_map(&mut self.ph.map[c], &o.ph.map[c]);
+            add_map(&mut self.phz.map[c], &o.phz.map[c]);
             self.used[c] = true;
         }
         crate::framestats::add_folds(&mut self.folds, &o.folds);
@@ -479,6 +552,10 @@ pub struct Pipe {
     open: Mutex<std::collections::VecDeque<std::sync::Weak<Batch>>>,
     /// batches fed and not done (drawn and handed on, or dropped)
     live: Arc<AtomicUsize>,
+    /// read-out buffers fed and not back yet
+    lent: Arc<AtomicUsize>,
+    /// what a frame costs the workers (`grant`)
+    cost: Arc<Mutex<Cost>>,
     home: Sender<Box<dyn RawBatch>>,
     pool: Mutex<Receiver<Box<dyn RawBatch>>>,
 }
@@ -501,16 +578,17 @@ impl Pipe {
         // a slot for each worker and, last, the helper's
         let mail = Arc::new(Mutex::new(Mail { parked: (0..=n).map(|_| None).collect(), ..Default::default() }));
         let mut workers = Vec::new();
+        let cost: Arc<Mutex<Cost>> = Default::default();
         for k in 0..n {
             // a few batches at most: their buffers (`hw::POOL`) come back with the last frame drawn, and a worker
             // behind finds nothing left to claim in the ones the others drew
             let (tx, rx) = sync_channel::<Arc<Batch>>(16);
-            let (v, m) = (view.clone(), mail.clone());
+            let (v, m, c) = (view.clone(), mail.clone(), cost.clone());
             match std::thread::Builder::new().name(format!("deposit{}", k)).spawn(move || {
                 if little {
                     crate::placement::to_little_cores();
                 }
-                work(k, rx, &v, &m)
+                work(k, rx, &v, &m, &c)
             }) {
                 Ok(_) => workers.push(tx),
                 Err(e) => eprintln!("oos-ui: deposit worker: {}", e),
@@ -525,6 +603,8 @@ impl Pipe {
             helper: n,
             open: Default::default(),
             live: Default::default(),
+            lent: Default::default(),
+            cost,
             home,
             pool: Mutex::new(pool),
         }
@@ -532,15 +612,22 @@ impl Pipe {
 
     /// The UI's mapping for the frames to come (None: the fast path does not apply).
     pub fn set_view(&self, m: Option<&Model>, w: usize, h: usize) {
+        self.set_view_zoom(m, w, h, None);
+    }
+
+    /// `set_view` with the zoom picture's model and size (`Ui::zoom_draw_model`) while the zoom is on.
+    pub fn set_view_zoom(&self, m: Option<&Model>, w: usize, h: usize, zoom: Option<(&Model, usize, usize)>) {
         let mut v = lock(&self.view);
         let Some(m) = m else {
             (v.view, v.key) = (None, None);
             return;
         };
-        let key = Key::of(m, w, h);
+        let mut key = Key::of(m, w, h);
+        key.zoom = zoom.map(|(z, zw, zh)| Box::new(Key::of(z, zw, zh)));
         if v.key.as_ref() != Some(&key) {
             v.gen += 1;
-            v.view = Some(Arc::new(View { gen: v.gen, m: m.clone(), w, h }));
+            let zoom = zoom.map(|(z, zw, zh)| (z.clone(), zw, zh));
+            v.view = Some(Arc::new(View { gen: v.gen, m: m.clone(), w, h, zoom }));
             v.key = Some(key);
         }
         v.stamp = m.hw_stamp;
@@ -554,6 +641,18 @@ impl Pipe {
     /// The fast path applies: the workers take frames.
     pub fn accepting(&self) -> bool {
         lock(&self.view).view.is_some()
+    }
+
+    /// Frames the workers draw in about one picture at what a frame cost them under the current mapping, from 1 to
+    /// `cap`; `cap` before a batch of this mapping is measured.
+    pub fn grant(&self, cap: u32) -> u32 {
+        let gen = lock(&self.view).gen;
+        lock(&self.cost).grant(gen, self.workers.len(), cap)
+    }
+
+    /// Read-out buffers fed and not given back yet.
+    pub fn lent(&self) -> usize {
+        self.lent.load(Ordering::Acquire)
     }
 
     /// A buffer back from the workers, to read the next batch into (None: all are still out).
@@ -585,8 +684,10 @@ impl Pipe {
     ) -> Arc<Batch> {
         let frames = raw.bytes().len().checked_div(fb).map_or(0, |n| frames.min(n));
         let next = AtomicUsize::new(first.min(frames));
+        self.lent.fetch_add(1, Ordering::AcqRel);
+        let lease = Lease { raw: Some(raw), home: self.home.clone(), lent: self.lent.clone() };
         let b = Arc::new(Batch {
-            lease: Mutex::new(Some(Arc::new(Lease { raw: Some(raw), home: self.home.clone() }))),
+            lease: Mutex::new(Some(Arc::new(lease))),
             fb,
             frames,
             decode,
@@ -666,7 +767,15 @@ impl Pipe {
     /// One set of maps a call, whatever the number of workers (they fold theirs into one, `publish`): the frame loop
     /// adds the maps of the channels on, or with `Clear` swaps them in and adds nothing (issue #186). Without a
     /// whole set it takes a parked one: the frames of a drawer that has no more batches come with a later screen.
-    pub fn merge(&self, ph: &mut Phosphor, renew: &mut Renew, edges: &mut [u64; 4], off: &mut (f64, f64)) -> Merged {
+    /// `phz`: the zoom picture while the zoom is on (the view of `set_view_zoom`), renewed as `ph`, with the zoom maps.
+    pub fn merge(
+        &self,
+        ph: &mut Phosphor,
+        phz: Option<&mut Phosphor>,
+        renew: &mut Renew,
+        edges: &mut [u64; 4],
+        off: &mut (f64, f64),
+    ) -> Merged {
         let gen = lock(&self.view).view.as_ref().map(|v| v.gen);
         let mut got = Merged::default();
         let full = {
@@ -678,15 +787,26 @@ impl Pipe {
             }
         };
         let Some(mut a) = full else { return got };
+        // the zoom maps go where they fit: drawn with the zoom on, the same size (a set without them has (1, 1))
+        let mut phz = phz.filter(|z| (a.phz.w, a.phz.h) == (z.w, z.h));
         if Some(a.gen) == gen && (a.ph.w, a.ph.h) == (ph.w, ph.h) && a.frames > 0 {
             if *renew == Renew::Clear {
                 // the picture cleared and the maps added is the maps: the old picture goes back to be cleared
                 std::mem::swap(&mut ph.map, &mut a.ph.map);
+                if let Some(z) = phz.as_deref_mut() {
+                    std::mem::swap(&mut z.map, &mut a.phz.map);
+                }
                 a.used = [true; NCH];
             } else {
                 ph.renew(*renew);
+                if let Some(z) = phz.as_deref_mut() {
+                    z.renew(*renew);
+                }
                 for c in (0..NCH).filter(|&c| a.used[c]) {
                     got.px += add_map(&mut ph.map[c], &a.ph.map[c]);
+                    if let Some(z) = phz.as_deref_mut() {
+                        add_map(&mut z.map[c], &a.phz.map[c]);
+                    }
                 }
             }
             *renew = Renew::Keep;
@@ -709,11 +829,11 @@ impl Pipe {
 /// Empty maps for view `v`, reusing `spare` when it has the size.
 fn fresh_acc(spare: Option<Acc>, v: &View) -> Acc {
     let mut a = match spare {
-        Some(mut a) if (a.ph.w, a.ph.h) == (v.w, v.h) => {
+        Some(mut a) if a.dims() == v.dims() => {
             a.reset(v.gen);
             a
         }
-        _ => Acc::new(v.gen, v.w, v.h),
+        _ => Acc::new(v.gen, v.dims()),
     };
     a.used = std::array::from_fn(|c| v.m.ch[c].on);
     a.folds = crate::framestats::folds_for(&v.m);
@@ -725,7 +845,7 @@ fn fresh_acc(spare: Option<Acc>, v: &View) -> Acc {
 fn take_set(mail: &Mutex<Mail>, id: usize, spare: &mut Option<Acc>, v: &View, counters: &Counters) -> Acc {
     let mut mb = Mail::lock(mail);
     match mb.parked[id].take() {
-        Some(a) if a.gen == v.gen && (a.ph.w, a.ph.h) == (v.w, v.h) => return a,
+        Some(a) if a.gen == v.gen && a.dims() == v.dims() => return a,
         Some(old) => {
             Counters::add(&counters.dropped, old.frames);
             mb.keep(old);
@@ -771,7 +891,8 @@ fn draw_range(b: &Batch, lease: &Lease, r: Range<usize>, v: &View, a: &mut Acc, 
     for i in r {
         let chunk = &bytes[i * b.fb..(i + 1) * b.fb];
         // without per-frame measurements a large frame is drawn from its read-out words where the board has a view of them
-        if a.folds.is_empty() && chunk.len() >= CODES_MIN_BYTES {
+        // (not with the zoom, which draws the decoded frame a second time)
+        if a.folds.is_empty() && v.zoom.is_none() && chunk.len() >= CODES_MIN_BYTES {
             let lay = b.codes.as_ref().and_then(|c| c(chunk, f)).filter(|l| l.stride <= CODES_MAX_STRIDE);
             let st = Stats { edges: &mut a.edges, off: &mut a.off };
             if let Some(t) = lay.and_then(|l| draw_frame_codes(&mut a.ph, &v.m, f, chunk, &l, Some(st))) {
@@ -783,6 +904,9 @@ fn draw_range(b: &Batch, lease: &Lease, r: Range<usize>, v: &View, a: &mut Acc, 
         (b.decode)(chunk, f);
         let st = Stats { edges: &mut a.edges, off: &mut a.off };
         a.triggered += draw_frame(&mut a.ph, &v.m, f, Some(st)) as u64;
+        if let Some((zm, ..)) = &v.zoom {
+            draw_frame(&mut a.phz, zm, f, None);
+        }
         if crate::framestats::fold_frame(f, &v.m, &mut a.folds) {
             Counters::add(&counters.measured, 1);
         }
@@ -804,7 +928,7 @@ fn publish(mail: &Mutex<Mail>, mut a: Acc, counters: &Counters) -> Option<Acc> {
                 mb.keep(x);
             }
             match mb.full.take() {
-                Some(o) if o.gen == a.gen && (o.ph.w, o.ph.h) == (a.ph.w, a.ph.h) => {
+                Some(o) if o.gen == a.gen && o.dims() == a.dims() => {
                     #[cfg(test)]
                     {
                         mb.folds += 1;
@@ -831,8 +955,8 @@ fn publish(mail: &Mutex<Mail>, mut a: Acc, counters: &Counters) -> Option<Acc> {
 }
 
 /// Worker `id`: claims frames of each batch until none are left, draws them into its own maps, then hands them on or
-/// parks them (`hand`).
-fn work(id: usize, rx: Receiver<Arc<Batch>>, view: &Mutex<ViewState>, mail: &Mutex<Mail>) {
+/// parks them (`hand`), and notes what its frames cost (`Cost`).
+fn work(id: usize, rx: Receiver<Arc<Batch>>, view: &Mutex<ViewState>, mail: &Mutex<Mail>, cost: &Mutex<Cost>) {
     let mut f = Frame::default();
     let (mut spare, mut seen): (Option<Acc>, Option<u64>) = (None, None);
     while let Ok(b) = rx.recv() {
@@ -848,14 +972,18 @@ fn work(id: usize, rx: Receiver<Arc<Batch>>, view: &Mutex<ViewState>, mail: &Mut
             continue;
         };
         // the maps only when there is something to draw: the others took every frame already
-        let mut a = None;
+        let (mut a, t, mut drawn) = (None, std::time::Instant::now(), 0);
         while let Some((r, lease)) = b.claim(CLAIM) {
             let a = a.get_or_insert_with(|| take_set(mail, id, &mut spare, &v, b.counters));
+            drawn += r.len();
             draw_range(&b, &lease, r, &v, a, &mut f, b.counters);
         }
         // handed on or parked before the batch goes: once it is gone, its frames are in the mailbox
         if let Some(s) = hand(mail, id, &mut seen, a, b.counters) {
             spare = Some(s);
+        }
+        if drawn > 0 {
+            lock(cost).note(v.gen, drawn, t.elapsed().as_nanos().min(u64::MAX as u128) as u64);
         }
     }
 }
@@ -961,6 +1089,12 @@ fn workers() -> Option<&'static dyn crate::board::pipe::Workers> {
 impl crate::board::pipe::Workers for Pipe {
     fn accepting(&self) -> bool {
         Pipe::accepting(self)
+    }
+    fn grant(&self, cap: u32) -> u32 {
+        Pipe::grant(self, cap)
+    }
+    fn lent(&self) -> usize {
+        Pipe::lent(self)
     }
     fn take_buffer(&self) -> Option<Box<dyn Any + Send>> {
         Pipe::take_buffer(self)

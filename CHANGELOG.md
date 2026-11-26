@@ -1231,6 +1231,48 @@ Fixed:
 - Tests no longer depend on the speed of the computer (wall-time limits replaced), and the SSH key tests run in a
   checkout without `local/`.
 
+### From upstream OOS 67fac1b2..4eac59e1 (upstream #560 to #602, merged 2026-11-25)
+
+Upstream's changes after the sync of #168, not yet in an upstream release; their files in `changelog.d/` came along.
+Host-tested in oos-plus; nothing of this merge ran on a unit in oos-plus. The figures and "(unit)" marks are
+upstream's, from its DHO924S.
+
+Added:
+
+- The rear USB port can be a network link to one computer: **Remote services > USB network** (off by default, not yet
+  verified on hardware). The scope is at 192.168.235.1 and every remote service and SSH work over the cable.
+- The rear USB port can make the scope a USB instrument: **Remote services > USB instrument** (off by default; upstream
+  tried it on one scope with a Mac). VISA finds it as `USB::0x1209::0x0001::<serial>::INSTR` (USBTMC with USB488),
+  with the same SCPI as port 5555. On Windows the USB network and the USB instrument do not go together.
+
+Changed:
+
+- The screen is drawn at every third refresh of the panel instead of on a 30 Hz timer of its own; `pacing.clock =
+  timer` in `/oos/system.conf` goes back to the timer.
+- Peak, High res, Average and the zoom draw on the four drawing cores, as Normal does: more waveforms a second and a
+  steadier picture rate. Average shows the one averaged trace.
+- Batch mode arms only as many frames as the screen's workers can draw in one picture, a batch's register writes wait
+  once after each group instead of after every write, and a trace's point columns are worked out once per time grid:
+  more waveforms a second reach the screen at the short time bases.
+- While the scope runs, the acquisition thread runs at real-time priority and the fast cores and the GPU keep a floor
+  under their clocks; `perf.fifo = off` and `perf.clocks = off` in system.conf turn them off.
+
+Removed:
+
+- The image's busybox is built from its source and no longer holds `telnetd`, the telnet client, `httpd` or `tc`, and
+  `nc` no longer listens (upstream ADR 0078). oos-plus started none of them.
+
+Fixed:
+
+- A remote command over SCPI (port 5555), VXI-11 or HiSLIP is answered as soon as it arrives, not at the next picture.
+- At 0.5 and 1 ms/div a slow edge (a sine of 50 to 250 Hz, mains hum) puts its records on the screen again, and a
+  record the hardware triggered on the other slope no longer shows as a mirrored trace.
+- A new volts per division, offset or channel while the scope waits for a trigger draws the held record at its own
+  volts.
+- At 10 us/div to 1 ms/div the screen keeps its full picture rate on the panel's clock.
+- Cursor: + raises a voltage cursor's value (upstream's version of a fix oos-plus had made first; it replaces the
+  fork's own).
+
 ### From upstream OOS 6cd8028f..67fac1b2 (upstream #542 to #522, merged 2026-11-23)
 
 Upstream's changes after the sync of #165, not yet in an upstream release; their files in `changelog.d/` came along.

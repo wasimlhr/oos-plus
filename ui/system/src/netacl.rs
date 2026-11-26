@@ -5,7 +5,8 @@
 //! `/etc/oos/system.conf` (docs/network.md 6). A list of address prefixes, `192.0.2.0/24 fd00::/8`. Empty or
 //! absent: everyone, as before. rcS builds the firewall from the same key (`oos-firewall`); this list is the second
 //! line behind it, for what can change the scope: `POST /update`, `/mcp`, SCPI, VXI-11 and HiSLIP. The scope itself
-//! (loopback) is always allowed. `onlink6` stands for the IPv6 prefixes on the link (from the router's advertisements,
+//! (loopback) is always allowed, and so is the computer on the rear USB port while the network over the cable is up
+//! (`gadget::on_usb_link`, ADR 0079). `onlink6` stands for the IPv6 prefixes on the link (from the router's advertisements,
 //! `net6::PREFIX_FILE`), which change with the provider.
 //!
 //! The servers hold one list (`Shared`) that Remote services > Allowed sets after it saved a change (ui/remote.rs):
@@ -76,7 +77,7 @@ impl Acl {
     }
 
     pub fn permits(&self, ip: IpAddr) -> bool {
-        self.permits_with(ip, crate::net6::onlink)
+        self.permits_with(ip, crate::net6::onlink) || crate::gadget::on_usb_link(ip)
     }
 
     /// `permits` with the prefixes on the link from `onlink` (asked only when `onlink6` is in the list and the address

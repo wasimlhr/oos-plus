@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # sim.sh - sourced by the simulations of tools/ (fw-sim.sh, ssh-sim.sh, usb-sim.sh, wlan-sim.sh): the image's busybox,
 # and a small virtual machine with Alpine's LTS kernel for the tests that need a kernel of their own. Sources
-# tools/lib/docker.sh; the caller sets root. The functions keep their variables to the sim_ prefix.
+# tools/lib/docker.sh and rootfs/deps.sh; the caller sets root. The functions keep their variables to the sim_ prefix.
 #
-#   sim_busybox DIR                       DIR/busybox: the busybox of the image (the initramfs image's)
+#   sim_busybox DIR                       DIR/busybox: the busybox of the image (rootfs/out/busybox, or OOS_OUT's;
+#                                         rootfs/build-busybox.sh builds it when it is missing or stale)
 #   sim_vm_initramfs DIR PACKAGES MODULES SCRIPT [docker run options]
 #                                         in an arm64 Alpine container with the LTS kernel and PACKAGES: the VM's root
 #                                         in $r with the busybox of DIR and DIR/init as /init, SCRIPT run (sh -eu, DIR
@@ -12,10 +13,19 @@
 #                                         the order to load; writes DIR/initramfs.gz and DIR/kernel
 #   sim_qemu DIR MEMORY [qemu options]    boots them (hvf on an arm64 Mac), the console in DIR/log
 . "$root/tools/lib/docker.sh"
+DEPS_LOCK="$root/rootfs/deps.lock"
+. "$root/rootfs/deps.sh"
 
 sim_busybox() {
-	docker run --rm --platform linux/arm64 "$(initramfs_image)" cat /bin/busybox > "$1/busybox"
-	chmod +x "$1/busybox"
+	sim_o="${OOS_OUT:-$root/rootfs/out}"
+	# built from the inputs of the tree, as boot/build-dev-image.sh checks them (deps.sh stamps): a busybox of an older
+	# configuration would test the old applets; one that is not, is built again into rootfs/out
+	if dep_stale "$sim_o/busybox" "$root/rootfs/build-busybox.sh" "$root/rootfs/busybox.config" \
+		"$root/rootfs/busybox.applets" busybox; then
+		"$root/rootfs/build-busybox.sh"
+		sim_o="$root/rootfs/out"
+	fi
+	cp "$sim_o/busybox" "$1/busybox"
 }
 
 sim_vm_initramfs() {

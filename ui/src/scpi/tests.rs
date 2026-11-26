@@ -1015,3 +1015,27 @@ fn a_reference_scale_changes_the_measurement_immediately() {
     let back: f64 = line(&mut s, &mut ui, &cv, ":MEAS:ITEM? FREQ,R1").parse().unwrap();
     assert!((back - 25e6).abs() / 25e6 < 0.02, "{back}");
 }
+
+/// The frame loop waits on these sockets besides its inputs (`input::Inputs::poll`): a command that comes ends the wait,
+/// so it is answered at once, not after the next frame.
+#[cfg(unix)]
+#[test]
+fn the_frame_loop_waits_on_the_listener_and_each_client() {
+    let (mut s, mut ui, cv) = session();
+    let _c = TcpStream::connect(("127.0.0.1", s.port().unwrap())).unwrap();
+    let mut fds = Vec::new();
+    // the limit only catches a hang: a loaded computer may take long to accept, and that is no fault (ADR 0020)
+    let start = std::time::Instant::now();
+    while fds.len() < 2 {
+        assert!(start.elapsed() < Duration::from_secs(300), "the client was never accepted");
+        s.poll(&mut ui, &cv);
+        fds.clear();
+        s.wake_fds(&mut fds);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(fds.len(), 2, "the listener and the client");
+    s.set_open(None);
+    fds.clear();
+    s.wake_fds(&mut fds);
+    assert!(fds.is_empty(), "SCPI off: nothing to wait on");
+}

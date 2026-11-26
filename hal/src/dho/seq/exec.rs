@@ -6,12 +6,15 @@
 //! for the frame ring, play and read). How a step kind is carried out goes into `plain_step` (or `execute_into_until`
 //! for the AFE steps); which steps a sequence has is decided in seq.rs, not here. The registers it polls and reads are
 //! described in docs/protocols/. Every wait and every sleep goes through a `boot::Clock` (ADR 0053): the functions
-//! ending in `_on` take one, so a host run waits in virtual time; the others are those with the system clock.
+//! ending in `_on` take one, so a host run waits in virtual time; the others are those with the system clock. The
+//! sequences of the batch loop (arm, read-out, LA read, prearm, disarm) write through `bus::Grouped`: one settle after
+//! each group of writes instead of the gap after every write ("Write spacing of the batch sequences" on the page of
+//! the acquisition start in docs/protocols).
 
 use super::{frames, read_len, unpad_in, wait_steps, Settings, State, Step};
 use crate::dho::afe::{self, AfeBus};
 use crate::dho::boot::{Clock, SysClock};
-use crate::dho::bus::Bus;
+use crate::dho::bus::{Bus, Grouped};
 use crate::dho::lines::Lines;
 use crate::dho::{hz, la};
 
@@ -87,6 +90,7 @@ pub fn acquire_batch_on<B: crate::dho::bus::Bus, R: std::io::Read, C: Clock>(
     stop: impl Fn() -> bool,
     mut idle: impl FnMut() -> bool,
 ) -> Result<u32, String> {
+    let bar = &mut Grouped(bar);
     let nf = frames(s, p);
     let arm = if armed { wait_steps(p) } else { st.arm_steps(s, p) };
     execute_bus_on(&arm, bar, c2h, dma, clock, &mut log, &stop)?;
@@ -117,7 +121,7 @@ pub fn read_raw_again<B: crate::dho::bus::Bus, R: std::io::Read>(
     index: u32,
     log: impl FnMut(String),
 ) -> Result<(), String> {
-    execute_bus(&st.read_steps_at(&raw_settings(s), p, index, 1), bar, c2h, dma, log)
+    execute_bus(&st.read_steps_at(&raw_settings(s), p, index, 1), &mut Grouped(bar), c2h, dma, log)
 }
 
 /// `s` without the FPGA compression: what `read_raw_again` reads with.
@@ -139,7 +143,7 @@ pub fn prearm<B: Bus, R: std::io::Read, C: Clock>(
     mut log: impl FnMut(String),
 ) -> Result<(), String> {
     let mut dma = crate::dho::bus::DmaBuf::new();
-    execute_bus_on(&st.arm_only_steps(s, p), bar, c2h, &mut dma, clock, &mut log, &|| false)
+    execute_bus_on(&st.arm_only_steps(s, p), &mut Grouped(bar), c2h, &mut dma, clock, &mut log, &|| false)
 }
 
 /// Stops an acquisition armed by `prearm` that will not be read (`State::disarm_steps`), its poll on `clock`.
@@ -150,6 +154,7 @@ pub fn disarm<B: Bus, R: std::io::Read, C: Clock>(
     clock: &mut C,
     mut log: impl FnMut(String),
 ) -> Result<(), String> {
+    let bar = &mut Grouped(bar);
     execute_bus_on(&st.disarm_steps(), bar, c2h, &mut crate::dho::bus::DmaBuf::new(), clock, &mut log, &|| false)
 }
 
@@ -165,6 +170,7 @@ pub fn acquire_la<B: Bus, R: std::io::Read>(
 ) -> Result<Vec<u16>, String> {
     let (n, _) = la::window(&la::timing(p, s.mask));
     let steps = st.la_read_steps(s, p);
+    let bar = &mut Grouped(bar);
     let mut dma = crate::dho::bus::DmaBuf::new();
     match execute_bus(&steps, bar, c2h, &mut dma, log) {
         Ok(()) => Ok(la::words(dma.data(), n as usize)),
@@ -266,6 +272,8 @@ fn plain_step<B: crate::dho::bus::Bus, R: std::io::Read, C: Clock>(
             }
         }
         Step::Read { frames, frame } => {
+            // the play starts with the last write: a group's settle before its stream is read
+            bar.settle();
             let bytes = read_len(*frames, *frame);
             let buf = dma
                 .read(c2h, bytes, |got, k| log(format!("c2h: short read of {} bytes (at {} of {})", k, got, bytes)))

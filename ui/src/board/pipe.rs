@@ -90,6 +90,16 @@ pub struct Helper(pub Option<Box<dyn Any + Send>>);
 pub trait Workers: Sync {
     /// They take batches: the UI published a view the fast path applies to.
     fn accepting(&self) -> bool;
+    /// Frames they draw in about one picture, from 1 to `cap` (the batch's planned frames): what the next batch arms
+    /// (ADR 0081). Without a measure of their own, `cap`.
+    fn grant(&self, cap: u32) -> u32 {
+        cap
+    }
+    /// Read-out buffers they hold (fed and not back in the pool of `take_buffer` yet): while the next batch would find
+    /// none to swap in, the thread waits before it arms. Without a count of their own, none.
+    fn lent(&self) -> usize {
+        0
+    }
     /// A buffer back from the workers, to read the next batch into (None: all are still out).
     fn take_buffer(&self) -> Option<Box<dyn Any + Send>>;
     /// A batch for the workers; its buffer comes back through `take_buffer` when it is drawn.

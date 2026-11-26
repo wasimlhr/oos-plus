@@ -13,6 +13,8 @@
 //! net.show_addr = off       # System > Network > Show address: the address in the LAN and WLAN boxes of the top bar
 //! remote.web = on           # System > Network > Remote services (also remote.scpi, remote.vxi11, remote.vnc, remote.ssh,
 //!                           # remote.mdns; remote.telnet of an older version is read and dropped: no telnet, ADR 0054)
+//! usb.net = off            # System > Network > Remote services > USB network (docs/usb-device.md)
+//! usb.tmc = off            # System > Network > Remote services > USB instrument (USBTMC, docs/usb-device.md)
 //! ssh.password = on         # System > Network > Remote services > SSH settings > Password login
 //! net.name = dho924s-123456 # the scope's name on the network (host name, <name>.local); written at the first start
 //! graphics = gpu            # System > Graphics (gpu or cpu)
@@ -69,6 +71,12 @@ pub struct SysConf {
     pub remote_ssh: bool,
     /// SSH login with the generated password as well as with a trusted key (`/bin/oos-ssh`)
     pub ssh_password: bool,
+    /// the rear USB port as a network link to one computer (`/bin/oos-gadget` reads it too; off by default; verified on
+    /// the unit with a Mac, not yet with Windows and Linux, docs/usb-device.md)
+    pub usb_net: bool,
+    /// the rear USB port as a USBTMC instrument for VISA (`oos_remote::usbtmc_device`, `/bin/oos-gadget` reads it too;
+    /// off by default; verified on the unit with pyvisa-py on a Mac, not yet with Linux and Windows, ADR 0080)
+    pub usb_tmc: bool,
     /// the mDNS responder (mdns.rs): `<net_name>.local` and the services for computers that browse
     pub remote_mdns: bool,
     /// what MCP of the web remote offers (`remote.mcp`); written only when it is not `full`
@@ -107,6 +115,8 @@ impl Default for SysConf {
             remote_vnc: false,
             remote_ssh: false,
             ssh_password: true,
+            usb_net: false,
+            usb_tmc: false,
             remote_mdns: true,
             remote_mcp: McpMode::Full,
             net_name: String::new(),
@@ -264,6 +274,8 @@ impl SysConf {
                 "ssh.password" => on_off(v).map(|b| c.ssh_password = b).is_some(),
                 "remote.mdns" => on_off(v).map(|b| c.remote_mdns = b).is_some(),
                 "remote.mcp" => McpMode::ALL.into_iter().find(|m| m.word() == v).map(|m| c.remote_mcp = m).is_some(),
+                "usb.net" => on_off(v).map(|b| c.usb_net = b).is_some(),
+                "usb.tmc" => on_off(v).map(|b| c.usb_tmc = b).is_some(),
                 "net.name" => {
                     let n = v.to_ascii_lowercase();
                     crate::mdns::name_ok(&n).then(|| c.net_name = n).is_some()
@@ -318,6 +330,8 @@ impl SysConf {
         if self.remote_mcp != McpMode::Full {
             s.push_str(&format!("remote.mcp = {}\n", self.remote_mcp.word()));
         }
+        s.push_str(&format!("usb.net = {}\n", word(self.usb_net)));
+        s.push_str(&format!("usb.tmc = {}\n", word(self.usb_tmc)));
         if !self.net_name.is_empty() {
             s.push_str(&format!("net.name = {}\n", self.net_name));
         }
@@ -562,6 +576,8 @@ mod tests {
         assert!(!c.show_addr);
         // no shell on the network unless an image or the user switches SSH on
         assert!(!c.remote_ssh && c.ssh_password);
+        // the rear USB port stays a plain port until it ran on a unit (ADR 0010)
+        assert!(!c.usb_net && !c.usb_tmc);
         assert_eq!(SysConf::parse("").0, c);
     }
 
@@ -575,7 +591,8 @@ mod tests {
             show_addr: true,
             ..Default::default()
         };
-        (c.remote_web, c.remote_ssh, c.ssh_password, c.remote_mdns) = (false, true, false, false);
+        (c.remote_web, c.remote_ssh, c.ssh_password, c.remote_mdns, c.usb_net) = (false, true, false, false, true);
+        c.usb_tmc = true;
         c.net_name = "lab-scope-3".into();
         let (back, bad) = SysConf::parse(&c.text());
         assert!(bad.is_empty(), "{:?}", bad);

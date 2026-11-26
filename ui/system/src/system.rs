@@ -1,12 +1,12 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! Safe wrappers for the OS calls of oos-ui that need `unsafe`: thread placement (`sched_setaffinity`, and
-//! `SCHED_IDLE` with a nice fallback for the threads of the web remote), file-system statistics (`statvfs`), setting
-//! the clock (`clock_settime`) and the socket options std has no method for (`setsockopt`). Each wrapper holds its
-//! `unsafe` once, so its callers stay safe; each makes the same call with the same arguments the callers made before
-//! and leaves the choice to ignore, log or pass on an error to them. A new OS call goes here as a function of its own,
-//! behind the `cfg` its callers need, with a test where the host can run it.
+//! Safe wrappers for the OS calls of oos-ui that need `unsafe`: thread placement (`sched_setaffinity`, `SCHED_IDLE`
+//! with a nice fallback for the threads of the web remote, `SCHED_FIFO` for the acquisition thread), file-system
+//! statistics (`statvfs`), setting the clock (`clock_settime`) and the socket options std has no method for
+//! (`setsockopt`). Each wrapper holds its `unsafe` once, so its callers stay safe; each makes the same call with the
+//! same arguments the callers made before and leaves the choice to ignore, log or pass on an error to them. A new OS
+//! call goes here as a function of its own, behind the `cfg` its callers need, with a test where the host can run it.
 
 use std::io;
 #[cfg(unix)]
@@ -40,16 +40,33 @@ pub fn pin_thread(tid: libc::pid_t, cores: &[usize]) -> io::Result<()> {
 /// id (for `pin_thread`).
 #[cfg(target_os = "linux")]
 pub fn idle_current_thread(nice: i32) -> libc::pid_t {
-    // SAFETY: gettid takes no pointer; zero fills every field of sched_param (musl's struct has more fields), and
-    // priority 0 is the only one SCHED_IDLE takes; the kernel reads the local parameter during the call.
+    sched_current_thread(libc::SCHED_IDLE, 0, Some(nice)).0
+}
+
+/// The calling thread to `SCHED_FIFO` at `priority` (1: the lowest real-time priority, above every normal thread).
+/// The threads it starts after this run at normal priority again (`SCHED_RESET_ON_FORK`).
+#[cfg(target_os = "linux")]
+pub fn fifo_current_thread(priority: i32) -> io::Result<()> {
+    sched_current_thread(libc::SCHED_FIFO | libc::SCHED_RESET_ON_FORK, priority, None).1
+}
+
+/// The calling thread to scheduling class `policy` at `priority`, else (with `nice`) to that nice value: its id and
+/// whether the class was taken.
+#[cfg(target_os = "linux")]
+fn sched_current_thread(policy: libc::c_int, priority: i32, nice: Option<i32>) -> (libc::pid_t, io::Result<()>) {
+    // SAFETY: gettid takes no pointer; zero fills every field of sched_param (musl's struct has more fields) before the
+    // priority is set; the kernel reads the local parameter during the call and checks policy and priority.
     unsafe {
         let tid = libc::syscall(libc::SYS_gettid) as libc::pid_t;
-        let p: libc::sched_param = std::mem::zeroed();
+        let mut p: libc::sched_param = std::mem::zeroed();
+        p.sched_priority = priority;
         // the system call itself: musl's sched_setscheduler() is a stub that always fails
-        if libc::syscall(libc::SYS_sched_setscheduler, tid, libc::SCHED_IDLE, &p as *const libc::sched_param) != 0 {
-            libc::setpriority(libc::PRIO_PROCESS, tid as libc::id_t, nice);
+        let rc = libc::syscall(libc::SYS_sched_setscheduler, tid, policy, &p as *const libc::sched_param);
+        let taken = status(rc as libc::c_int);
+        if let (Err(_), Some(n)) = (&taken, nice) {
+            libc::setpriority(libc::PRIO_PROCESS, tid as libc::id_t, n);
         }
-        tid
+        (tid, taken)
     }
 }
 
@@ -134,6 +151,34 @@ pub fn lower_priority() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The policy and real-time priority of the calling thread, from /proc (fields 41 and 40 of its stat).
+    #[cfg(target_os = "linux")]
+    fn policy_of_this_thread() -> (u32, u32) {
+        let stat = std::fs::read_to_string("/proc/thread-self/stat").unwrap();
+        let f: Vec<&str> = stat[stat.rfind(')').unwrap() + 2..].split_whitespace().collect();
+        (f[38].parse().unwrap(), f[37].parse().unwrap())
+    }
+
+    // Break it catches: the policy or priority not set as asked, the threads it starts left real-time, an error not
+    // passed on. An unprivileged host may refuse: then the thread stays as it was.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn fifo_takes_the_thread_and_not_the_ones_it_starts() {
+        std::thread::spawn(|| match fifo_current_thread(1) {
+            Ok(()) => {
+                assert_eq!(policy_of_this_thread(), (libc::SCHED_FIFO as u32, 1));
+                let child = std::thread::spawn(policy_of_this_thread).join().unwrap();
+                assert_eq!(child, (libc::SCHED_OTHER as u32, 0), "SCHED_RESET_ON_FORK: started threads are normal");
+            }
+            Err(e) => {
+                assert_eq!(e.kind(), io::ErrorKind::PermissionDenied, "{e}");
+                assert_eq!(policy_of_this_thread(), (libc::SCHED_OTHER as u32, 0));
+            }
+        })
+        .join()
+        .unwrap();
+    }
 
     #[test]
     fn realtime_seconds_and_fraction_keep_the_conversion() {

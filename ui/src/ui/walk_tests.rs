@@ -1684,7 +1684,7 @@ fn remote_services_are_sheets_and_connectivity_leads_to_them() {
         tap(&mut u, x, y);
         assert!(u.menu == MenuId::Remote && u.sheet_active() && u.sheet_chrome().1.is_some(), "{layout:?}: Remote services is a sheet with Back");
         let spec = u.sheet_spec(MenuId::Remote).unwrap();
-        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Services", "Access", "Addresses"]);
+        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Services", "Access", "Addresses", "USB"]);
         let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
         for it in u.items(MenuId::Remote) { assert!(on_sheet.contains(&it), "{layout:?}: {it:?} is on the sheet"); }
         // a switch acts on one tap

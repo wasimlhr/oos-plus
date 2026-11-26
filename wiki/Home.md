@@ -14,7 +14,8 @@ OOS is an open operating system for the Rigol DHO800/DHO900: its own Linux kerne
 - [[Measurements and Analysers]]: measurements, the frequency counter, panes, spectrum, eye, Bode
 - [[Generator]]: the built-in generator of S models
 - [[Logic Analyser]]: the PLA2216 probe
-- [[Remote Control]]: web remote, SCPI, WLAN
+- [[Remote Control]]: web remote, SCPI, WLAN, USB, and the desktop program
+  [oos-desktop](https://github.com/dekajoule/oos-desktop/wiki)
 - [[SCPI and VXI-11]]: control the scope from a computer: VISA, Python, every command family, waveform transfer
 - [[Updates and Going Back]]: new versions, returning to stock
 - [[Troubleshooting]]: what to do when something goes wrong
