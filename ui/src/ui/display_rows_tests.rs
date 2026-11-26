@@ -190,3 +190,12 @@ fn display_stays_a_sheet_with_the_trend_pane_and_monitor_view_has_its_conditions
         assert_eq!(u.items(MenuId::Display).contains(&Item::HdmiView), offered, "{hdmi:?} with {views} views");
     }
 }
+
+/// The Results table has the eight columns with numbers; the bar that showed the value between the smallest and the
+/// largest seen (no scale, no figures) is gone.
+#[test]
+fn the_results_table_has_no_range_bar() {
+    let x = super::panes::tests_result_cols(1400);
+    assert_eq!(x.len(), 9, "eight columns and the end: {x:?}");
+    assert!(x[8] >= 1390, "the columns use the whole width: {x:?}");
+}
