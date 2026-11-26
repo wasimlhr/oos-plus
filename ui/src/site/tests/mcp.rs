@@ -61,10 +61,10 @@ fn mcp_lists_every_tool_with_its_schema_and_annotation() {
     for name in ["screenshot", "scope_state", "measure", "waveform", "decode_results", "errors", "scpi_reference"] {
         assert!(read_only(name), "{name} only reads");
     }
-    for name in ["scpi", "configure", "acquire", "setup_decoder"] {
+    for name in ["scpi", "configure", "acquire", "setup_decoder", "measure_slot"] {
         assert!(!read_only(name), "{name} can change the scope");
     }
-    assert_eq!(tools.len(), 11);
+    assert_eq!(tools.len(), 12);
     let s = r.to_string();
     assert!(s.contains("\"VPP\"") && s.contains("\"RRDELAY\""), "the measurement items are an enum");
     let protocol = crate::protocols::PROTOS[0].name();
@@ -109,6 +109,44 @@ fn mcp_measure_answers_numbers_and_refuses_what_is_not_an_item() {
     }
     assert_eq!(ui.m.run, run, "nothing of a refused call ran");
     assert!(scpi.queued_errors().is_empty(), "{:?}", scpi.queued_errors());
+}
+
+// Break it catches: a value asked for the screen that is computed but not a row of the table (`measure` adds none), an
+// empty slot read as a number or as null without a reason, a source pasted into the command, a pair item given one
+// source, a slot outside 1..99 sent on
+#[test]
+fn mcp_measure_slot_adds_a_row_and_reads_it_back_by_number() {
+    let (mut scpi, mut ui, cv) = crate::ui::testkit::scpi_session();
+    square_in_r1(&mut ui);
+    ui.m.meas.clear();
+    ui.m.meas2.clear();
+    let r = call(&mut ui, &cv, &mut scpi, "measure_slot", r#"{"slot":3}"#);
+    assert!(failed(&r) && r.to_string().contains("MEAS3 is empty"), "{r}");
+    let r = call(&mut ui, &cv, &mut scpi, "measure_slot", r#"{"slot":3,"item":"vpp","source":"R1"}"#);
+    assert!(!failed(&r), "{r}");
+    assert_eq!(data(&r).get("item").and_then(J::str), Some("VPP,R1"));
+    assert!((num(data(&r).get("value")) - 1.0).abs() < 0.02, "{r}");
+    assert_eq!(ui.m.meas.len(), 1, "a row of the table");
+    let r = call(&mut ui, &cv, &mut scpi, "measure_slot", r#"{"slot":3}"#);
+    assert!(!failed(&r) && (num(data(&r).get("value")) - 1.0).abs() < 0.02, "{r}");
+    for args in [
+        r#"{"slot":0}"#,
+        r#"{"slot":100,"item":"VPP"}"#,
+        r#"{"slot":2,"item":"NOSUCH"}"#,
+        r#"{"slot":2,"item":"VPP","source":"R1;:STOP"}"#,
+        r#"{"slot":2,"item":"VPP","source":"R1","source2":"R2"}"#,
+        r#"{"slot":2,"item":"VPP","clear":true}"#,
+        r#"{"item":"VPP"}"#,
+    ] {
+        let r = call(&mut ui, &cv, &mut scpi, "measure_slot", args);
+        assert!(failed(&r), "{args}: {r}");
+    }
+    assert_eq!(ui.m.meas.len(), 1, "nothing of a refused call ran");
+    let r = call(&mut ui, &cv, &mut scpi, "measure_slot", r#"{"slot":3,"clear":true}"#);
+    assert!(!failed(&r) && ui.m.meas.is_empty(), "{r}");
+    ui.sys.remote_mcp = crate::sysconf::McpMode::Read;
+    let r = call(&mut ui, &cv, &mut scpi, "measure_slot", r#"{"slot":3,"item":"VPP"}"#);
+    assert!(failed(&r) && r.to_string().contains("read only") && ui.m.meas.is_empty(), "{r}");
 }
 
 // Break it catches: the waveform selection of another client changed by the tool, the WORD codes turned into volts

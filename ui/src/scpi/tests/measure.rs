@@ -769,3 +769,55 @@ fn cursor_snap_edge_is_set_and_queried_and_the_action_needs_time_cursors_and_an_
     line(&mut s, &mut ui, &cv, ":CURS:SNAP:EXEC?");
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-113"));
 }
+
+/// Numbered slots (ui/slots.rs): a measurement is added to a slot, which makes it a row of the table with the badge
+/// of its number, and is read back by the number; an empty slot is an error, not 9.9E37.
+#[test]
+fn measurement_slots_hold_a_row_each_and_keep_their_number() {
+    let (mut s, mut ui, cv) = session();
+    ui.m.meas.clear();
+    ui.m.meas2.clear();
+    ui.m.cat.clear();
+    // empty: an error with its reason (a query that fails answers with it), never 9.9E37
+    let empty = line(&mut s, &mut ui, &cv, ":MEAS:SLOT3?");
+    assert!(empty.starts_with("-221,") && empty.contains("MEAS3 is empty"), "{empty}");
+    let err = line(&mut s, &mut ui, &cv, ":SYST:ERR?");
+    assert!(err.starts_with("-221,") && err.contains("MEAS3 is empty"), "{err}");
+    assert!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT3:ITEM?").contains("MEAS3 is empty"));
+    line(&mut s, &mut ui, &cv, "*CLS");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT:LIST?"), "");
+    // add: the row is on the table and is the slot's
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT1 VPP,CHAN1;:MEAS:SLOT2 RRDELAY,CHAN1,CHAN2;:SYST:ERR?"), "0,\"No error\"");
+    assert_eq!(ui.m.meas, vec![(Meas::Vpp, WaveId::Ch(0))]);
+    assert_eq!(ui.m.meas2.len(), 1);
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT1:ITEM?"), "VPP,CHAN1");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT2:ITEM?"), "RRDELAY,CHAN1,CHAN2");
+    let one = line(&mut s, &mut ui, &cv, ":MEAS:SLOT1?");
+    assert_eq!(one, line(&mut s, &mut ui, &cv, ":MEAS:STRIP?").split(';').next().unwrap().rsplit(',').next().unwrap());
+    assert!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT:LIST?").starts_with("1,VPP,CHAN1,"));
+    // a row added another way has no number; removing a row keeps the numbers of the others
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:ITEM VMAX,CHAN1;:MEAS:ITEM:REMove VPP,CHAN1;:SYST:ERR?"), "0,\"No error\"");
+    assert!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT1:ITEM?").contains("MEAS1 is empty"));
+    line(&mut s, &mut ui, &cv, "*CLS");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT2:ITEM?"), "RRDELAY,CHAN1,CHAN2");
+    // a slot that is used again replaces its measurement; a row has one number
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT2 VRMS,CHAN3;:MEAS:SLOT4 VRMS,CHAN3;:SYST:ERR?"), "0,\"No error\"");
+    assert!(ui.m.meas2.is_empty());
+    assert!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT2:ITEM?").contains("MEAS2 is empty"));
+    line(&mut s, &mut ui, &cv, "*CLS");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT4:ITEM?"), "VRMS,CHAN3");
+    assert_eq!(ui.m.meas.len(), 2);
+    // clear takes the row off the table
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT4:CLEar;:MEAS:SLOT4:CLEar;:SYST:ERR?"), "0,\"No error\"");
+    assert_eq!(ui.m.meas, vec![(Meas::Vmax, WaveId::Ch(0))]);
+    // numbers outside 1..99 are refused; the old query keeps working and adds nothing
+    for bad in [":MEAS:SLOT0 VPP", ":MEAS:SLOT100 VPP"] {
+        line(&mut s, &mut ui, &cv, bad);
+        assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"), "{bad}");
+    }
+    assert!(line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,CHAN1").parse::<f64>().is_ok());
+    assert_eq!(ui.m.meas.len(), 1);
+    // the numbers go with the setup (store/tests.rs reads them back)
+    line(&mut s, &mut ui, &cv, ":MEAS:SLOT9 VMIN,CHAN2");
+    assert!(crate::store::setup_text(&ui.m).contains("meas_slots = 9|m:Vmin:2"));
+}

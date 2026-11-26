@@ -31,6 +31,7 @@ FORK_RECORDS = {
     "ui-ux/0031-every-source-has-one-handle-on-its-zero-level.md",
     "ui-ux/0032-studio-has-the-zoom-row-of-the-default-layout.md",
     "ui-ux/0034-a-decoder-is-a-bus-with-its-settings-in-one-place.md",
+    "code/0082-a-measurement-slot-is-a-number-for-a-row-of-the-table.md",
     "code/0074-mcp-tools-are-typed-wrappers-over-the-one-interpreter.md",
     "code/0075-a-foreign-session-archive-is-read-with-an-own-zip-reader.md",
     "ui-ux/0035-the-studio-bar-has-a-sim-button-while-a-sim-can-be-played.md",

@@ -344,6 +344,18 @@ fn set_meas_math(m: &mut Model, k: &str, v: &str, r: &dyn Registries) -> Result<
             }
             m.row_cfg = out;
         }
+        "meas_slots" => {
+            let mut out: Vec<(u8, crate::model::RowKey)> = Vec::new();
+            for e in v.split_whitespace() {
+                let (n, k) = e.split_once('|').ok_or_else(|| format!("not n|row: {}", e))?;
+                let n = n.parse::<u8>().ok().filter(|n| (1..=99).contains(n)).ok_or_else(|| format!("not a slot 1..99: {}", n))?;
+                if out.iter().any(|(o, _)| *o == n) {
+                    return Err(format!("slot {} twice", n));
+                }
+                out.push((n, crate::model::RowKey::parse(k)?));
+            }
+            m.meas_slots = out;
+        }
         "dvm" => {
             let f: Vec<&str> = v.split_whitespace().collect();
             let [on, c, mode] = f[..] else { return Err("dvm: on source mode".into()) };

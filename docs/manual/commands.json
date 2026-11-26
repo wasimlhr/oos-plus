@@ -4375,6 +4375,104 @@
      "example": ":MEASure:SOURce CHAN1"
     },
     {
+     "header": ":MEASure:SLOT<n>",
+     "set": ":MEASure:SLOT<n> <item>[,<A>[,<B>]]",
+     "query": ":MEASure:SLOT<n>?",
+     "desc": "Adds a measurement to the numbered slot MEAS<n>, so it is computed and is a row of the measurement table on the screen, and reads its value back by the number; an empty slot is an error with its reason.",
+     "related": [
+      ":MEASure:SLOT<n>:ITEM",
+      ":MEASure:SLOT<n>:CLEar",
+      ":MEASure:SLOT:LIST",
+      ":MEASure:ITEM",
+      ":MEASure:STRip"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MEASure:SLOT1` is `n` = 1",
+       "—"
+      ],
+      [
+       "<item>[,<A>[,<B>]]",
+       "Text",
+       ", n = 1 to 99. Set: add the measurement as `:MEASure:ITEM` does (same items and sources, `MATH<n>` too) and give the row the number `n`; the row shows the badge `M<n>` in the table. A slot that is in use gives its old row up (the row leaves the table); a row that has another number moves. An empty slot is the error `-221`, saying which slot, never `9.9E37`.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Measurements > Add (the badge M<n>).",
+      "- The items are listed in Appendices A and B.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "Query `:MEASure:SLOT<n>?` answers the value of the row as the table shows it (`9.9E37` while it is not computed yet).",
+     "ext": true,
+     "example": ":MEASure:SLOT1 VPP,CHAN1               (a row M1 in the measurement table)\n:MEASure:SLOT2 VRMS,CHAN3              (a row M2)\n:MEASure:SLOT1?    /*The query returns 2.564586E+00.*/\n:MEASure:SLOT5?    /*The query returns -221,\"Settings conflict; MEAS5 is empty: add a measurement with ...\".*/"
+    },
+    {
+     "header": ":MEASure:SLOT<n>:ITEM",
+     "query": ":MEASure:SLOT<n>:ITEM?",
+     "desc": "Says which item and which sources the numbered measurement slot holds.",
+     "related": [
+      ":MEASure:SLOT<n>",
+      ":MEASure:SLOT:LIST"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MEASure:SLOT1:ITEM` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- What the slot measures as `:MEASure:STRip?` writes it, without the value: `VPP,CHAN1`, `RRDELAY,CHAN1,CHAN2` (a math source reads `R<k>`, the reference slot that holds its copy).",
+      "- An empty slot is the error `-221`.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":MEASure:SLOT2:ITEM?    /*The query returns VRMS,CHAN3.*/"
+    },
+    {
+     "header": ":MEASure:SLOT<n>:CLEar",
+     "set": ":MEASure:SLOT<n>:CLEar",
+     "desc": "Empties a numbered measurement slot and removes its row from the measurement table.",
+     "related": [
+      ":MEASure:SLOT<n>",
+      ":MEASure:CLEar",
+      ":MEASure:ITEM:REMove"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MEASure:SLOT1:CLEar` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Measurements > Remove.",
+      "- Empty slot `n` and take its row off the table; an empty slot is left as it is.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":MEASure:SLOT1:CLEar"
+    },
+    {
+     "header": ":MEASure:SLOT:LIST",
+     "query": ":MEASure:SLOT:LIST?",
+     "desc": "Lists the numbered measurement slots that are in use, each with what it measures and its value.",
+     "related": [
+      ":MEASure:SLOT<n>",
+      ":MEASure:STRip"
+     ],
+     "remarks": [
+      "- The slots in use, by number: `<n>,<ITEM>,<source>[,<source>],<value>` separated by semicolons; empty when none is.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
      "header": ":MEASure:CLEar",
      "set": ":MEASure:CLEar",
      "desc": "Clear standard, pair and catalog selections through the shared statistics reset.",
@@ -5340,6 +5438,12 @@
     },
     {
      "pre": ":STOP\n:MEASure:ITEM? VPP,CHAN1               -> 2.564586E+00\n:MEASure:ITEM? FREQuency,CHAN1         -> 9.999857E+02\n:MEASure:ITEM? VRMS,CHAN1              -> 1.765733E+00"
+    },
+    {
+     "p": "Numbered slots: add first, read back by the number."
+    },
+    {
+     "pre": ":MEASure:CLEar\n:MEASure:SLOT1 VPP,CHAN1               (a row M1 in the measurement table)\n:MEASure:SLOT2 VRMS,CHAN3              (a row M2)\n:MEASure:SLOT1?                        -> 2.564586E+00\n:MEASure:SLOT2:ITEM?                   -> VRMS,CHAN3\n:MEASure:SLOT5?                        -> -221,\"Settings conflict; MEAS5 is empty: add a measurement with ...\"\n:MEASure:SLOT1:CLEar"
     },
     {
      "p": "Build a measurement strip and read it."

@@ -249,6 +249,12 @@ fn meas_lines(m: &Model, kv: &mut dyn FnMut(&str, String)) {
         let keys = m.row_keys();
         let rows: Vec<String> = m.row_cfg.iter().filter(|(k, c)| keys.contains(k) && !c.is_default()).map(|(k, c)| format!("{}|{}", k.text(), c.text())).collect();
         if !rows.is_empty() { kv("row_cfg", rows.join(" ")); }
+        // the numbered slots whose row is still selected, `n|row`
+        let slots: Vec<String> =
+            m.meas_slots.iter().filter(|(_, k)| keys.contains(k)).map(|(n, k)| format!("{}|{}", n, k.text())).collect();
+        if !slots.is_empty() {
+            kv("meas_slots", slots.join(" "));
+        }
     }
     kv("dvm", format!("{} {} {}", m.dvm_on, m.dvm_src, m.dvm_mode));
     kv("counter", format!("{} {} {} {}", m.cnt_on, m.cnt_src, m.cnt_mode, m.cnt_digits));

@@ -78,6 +78,7 @@ impl Default for Model {
             meas: Vec::new(),
             meas2: Vec::new(),
             row_cfg: Vec::new(),
+            meas_slots: Vec::new(),
             cat: Vec::new(),
             dvm_on: false,
             dvm_src: 0,

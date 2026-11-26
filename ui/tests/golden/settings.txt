@@ -5043,6 +5043,16 @@ setup meas_levels "1e9" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; e
 setup meas_levels "x 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: x
 setup meas_levels "x" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
 setup meas_levels default -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_slots "" -> (absent)
+setup meas_slots "-1" -> (absent); error: line 2: meas_slots: not n|row: -1
+setup meas_slots "0|m:Vpp:1" -> (absent); error: line 2: meas_slots: not a slot 1..99: 0
+setup meas_slots "100|m:Vpp:1" -> (absent); error: line 2: meas_slots: not a slot 1..99: 100
+setup meas_slots "1e9" -> (absent); error: line 2: meas_slots: not n|row: 1e9
+setup meas_slots "1|m:Vpp:1 1|m:Vmax:1" -> (absent); error: line 2: meas_slots: slot 1 twice
+setup meas_slots "1|m:Vpp:1" -> (absent)
+setup meas_slots "99|p:0:1:2" -> (absent)
+setup meas_slots "x" -> (absent); error: line 2: meas_slots: not n|row: x
+setup meas_slots default -> (absent)
 setup meas_stat "" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
 setup meas_stat "-1" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
 setup meas_stat "1e9" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
