@@ -77,6 +77,8 @@ pub struct Feed {
     pub first: usize,
     pub frames: usize,
     pub stamp: u64,
+    /// the number (`Frame::seq`) of frame 0 of the batch
+    pub seq0: u64,
     pub decode: DecodeInto,
     pub codes: Option<CodesInto>,
 }

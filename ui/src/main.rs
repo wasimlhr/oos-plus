@@ -802,10 +802,8 @@ struct Device {
     listen_t: Option<std::time::Instant>,
     mdns_now: Option<mdns::Config>,
     mdns: mdns::Mdns,
-    remote_now: Option<[bool; 7]>,
+    remote_now: Option<[bool; 6]>,
     hislip: hislip::Server<scpi::Program>,
-    /// the USBTMC instrument on the rear USB port (`usb.tmc`), its endpoints served by threads of its own
-    usbtmc: oos_remote::usbtmc_device::Server<scpi::Program>,
     vxi: vxi11::Server<scpi::Program>,
     scpi: scpi::Scpi,
     web: site::Web,
@@ -871,9 +869,7 @@ impl Device {
         let (web, scpi, vxi, hislip) = lan_servers(scope, args, &acl);
         // System > Network > Remote services, as applied: web, SCPI, VXI-11, SSH and its password login (None: not yet,
         // at the start)
-        let remote_now: Option<[bool; 7]> = None;
-        // the threads of the USBTMC function start with its switch; only the scope has the gadget
-        let usbtmc = oos_remote::usbtmc_device::Server::new(scope.then_some(gadget::bind as fn()));
+        let remote_now: Option<[bool; 6]> = None;
         // the name on the network and the mDNS responder (mdns.rs), as applied; looked at once a second
         let mdns = mdns::Mdns::new(None);
         let mdns_now: Option<mdns::Config> = None;
@@ -935,7 +931,6 @@ impl Device {
             mdns,
             remote_now,
             hislip,
-            usbtmc,
             vxi,
             scpi,
             web,
@@ -1105,13 +1100,13 @@ impl Device {
         });
     }
 
-    /// The services follow their switches: the ports were opened at the start, SSH (oos-ssh) and the USB gadget
-    /// (oos-gadget) are started by rcS; the USBTMC function's threads start here, with their switch.
+    /// The services follow their switches: the ports were opened at the start, SSH (oos-ssh) and the USB network
+    /// (oos-gadget) are started by rcS.
     fn remote_services(&mut self) {
         let s = &self.ui.sys;
-        let want = [s.remote_web, s.remote_scpi, s.remote_vxi11, s.remote_ssh, s.ssh_password, s.usb_net, s.usb_tmc];
+        let want = [s.remote_web, s.remote_scpi, s.remote_vxi11, s.remote_ssh, s.ssh_password, s.usb_net];
         if self.remote_now != Some(want) {
-            let was = self.remote_now.unwrap_or([true, true, true, want[3], want[4], want[5], false]);
+            let was = self.remote_now.unwrap_or([true, true, true, want[3], want[4], want[5]]);
             if want[0] != was[0] {
                 self.web.set_open(want[0].then_some(self.web_port));
                 if !want[0] {
@@ -1128,11 +1123,7 @@ impl Device {
             if want[3] != was[3] || want[4] != was[4] {
                 ssh::apply(want[3]);
             }
-            if want[6] != was[6] {
-                self.usbtmc.set_open(want[6]);
-            }
-            // the gadget is built again for a change of either USB switch; at the start rcS built it
-            if want[5] != was[5] || (want[6] != was[6] && self.remote_now.is_some()) {
+            if want[5] != was[5] {
                 gadget::apply();
             }
             self.offer_ports();
@@ -1171,12 +1162,9 @@ impl Device {
         }
     }
 
-    /// SCPI, VXI-11, HiSLIP, USBTMC and the web server.
+    /// SCPI, VXI-11, HiSLIP and the web server.
     fn serve_lan(&mut self) {
         self.scpi.poll(&mut self.ui, &self.cv);
-        let errors = self.scpi.has_errors();
-        self.usbtmc.poll_async(&mut |program| self.scpi.poll_program(&mut self.ui, &self.cv, program), errors);
-        self.ui.set_usbtmc_state(self.usbtmc.state().text());
         self.vxi.poll_async(&mut |program| self.scpi.poll_program(&mut self.ui, &self.cv, program));
         self.hislip.poll_async(&mut |program| self.scpi.poll_program(&mut self.ui, &self.cv, program));
         for c in self.web.poll(&mut site::Ctx::new(&mut self.ui, &self.cv, &mut self.scpi).with_live(&self.live)) {

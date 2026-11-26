@@ -80,6 +80,8 @@ pub struct Counts {
     pub wfm_rate: f32,
     /// every waveform acquired since the start (Clear resets it)
     pub wfm_total: u64,
+    /// the waveform rate under the run state in the top bar (capture_rate.rs)
+    pub capture: super::capture_rate::CaptureRate,
 }
 
 /// What the step saw last (ADR 0062).
@@ -231,6 +233,7 @@ impl Ui {
         // a callout whose keyboard was closed without a text does not stay as an empty box
         if self.wlan.osk.is_none() { self.callout_drop_empty(); }
         self.step_polls(dt_wall);
+        self.sample_capture_rate();
         self.step_guards();
         let (hw_seg, final_done) = self.step_run_state();
         let persist = PERSIST[self.m.persist].1;
@@ -586,11 +589,16 @@ impl Ui {
     /// screen, not each step of the average one over the other. The deposit workers take no batches: the average needs
     /// the frames in order.
     fn step_average_frames(&mut self, take: &mut StepTake, frames: Vec<crate::board::Frame>, t0: std::time::Instant) {
-        if let Some(p) = crate::drawpipe::pipe() {
-            p.set_view(None, 0, 0);
-        }
-        let n = frames.len();
-        if n > 0 && self.fold_average(frames, fast_helpers()) > 0 {
+        // the deposit workers fold the other frames of the batches in runs (`drawpipe::average`)
+        let runs = match crate::drawpipe::pipe() {
+            Some(p) => {
+                p.set_view(Some(&self.m), self.ph.w, self.ph.h);
+                p.take_average()
+            }
+            None => Vec::new(),
+        };
+        let n = frames.len() + runs.iter().map(|r| r.frames).sum::<usize>();
+        if n > 0 && self.fold_average(frames, runs, fast_helpers()) > 0 {
             self.m.status = TrigStatus::Triggered;
         }
         (take.got, take.folded) = (take.got + n, take.folded + n);
@@ -605,21 +613,47 @@ impl Ui {
     /// `frames` folded, oldest first, into the running average the newest record is blended with (`last`), as
     /// `condition_record` blends each record; their screen records (`wave::hw_record`) made on `helpers` threads
     /// besides this one. Nothing to fold into before the first record. Returns the frames that counted as triggered.
-    pub(super) fn fold_average(&mut self, frames: Vec<crate::board::Frame>, helpers: usize) -> usize {
+    pub(super) fn fold_average(
+        &mut self,
+        frames: Vec<crate::board::Frame>,
+        runs: Vec<crate::drawpipe::average::Run>,
+        helpers: usize,
+    ) -> usize {
         let m = &self.m;
         // a frame the FPGA averaged already (queued before a switch to the software average) is not averaged again,
         // as in `condition_record`
-        let frames: Vec<_> = frames.into_iter().filter(|f| !f.hw_avg).collect();
-        let recs = crate::fastdraw::par_map(helpers, &frames, |f| crate::wave::hw_record(m, f.clone()));
+        let frames: Vec<_> = frames.into_iter().filter(|f| !f.hw_avg).map(std::sync::Arc::new).collect();
+        let window = m.time_per_div() as f64 * HDIV as f64;
+        let t_first = m.delay as f64 - window / 2.0;
+        // each frame's screen record as `wave::hw_record` makes it, from the frame itself (no copy of it)
+        let recs = crate::fastdraw::par_map(helpers, &frames, |f| crate::wave::to_record(f, m, 3600, window, t_first));
         let a = 1.0 / m.avg_count.max(1) as f32;
+        let triggered = recs.iter().filter(|r| r.triggered).count() + runs.iter().map(|r| r.triggered).sum::<usize>();
         // after a Clear or before the first record the oldest queued record starts the average, and the others
-        // are blended into it, oldest first, as on the record path
-        let mut fold = recs.iter();
+        // and the workers' runs are blended into it in the frames' order, as on the record path
+        let mut fold = recs.iter().zip(&frames).map(|(r, f)| (f.seq, r)).peekable();
+        // a new average starts from the oldest queued record; the workers' runs of frames before it are older than
+        // the average (a Clear, a new view) and are left out
+        let mut from = 0;
         if self.last[0].is_none() {
-            self.last[0] = fold.next().cloned();
+            if let Some((s, r)) = fold.next() {
+                (self.last[0], from) = (Some(r.clone()), s + 1);
+            }
         }
         let Some(avg) = self.last[0].as_mut() else { return 0 };
-        for rec in fold {
+        let mut runs = runs.iter().filter(|r| r.seq >= from).peekable();
+        loop {
+            let run_first = match (runs.peek(), fold.peek()) {
+                (Some(r), Some((s, _))) => r.seq < *s,
+                (Some(_), None) => true,
+                (None, Some(_)) => false,
+                (None, None) => break,
+            };
+            if run_first {
+                runs.next().expect("a run").apply(&mut avg.ch);
+                continue;
+            }
+            let (_, rec) = fold.next().expect("a record");
             for c in 0..NCH {
                 if rec.ch[c].len() == avg.ch[c].len() {
                     for (p, &x) in avg.ch[c].iter_mut().zip(&rec.ch[c]) {
@@ -628,7 +662,7 @@ impl Ui {
                 }
             }
         }
-        recs.iter().filter(|r| r.triggered).count()
+        triggered
     }
 
     /// Up to `k` records from the source, each through the zone and protocol triggers before it is kept.
@@ -695,8 +729,8 @@ impl Ui {
         let t1 = std::time::Instant::now();
         let zw = self.z_weights(&rec);
         // the fast path draws the other frames of the picture from their samples (`draw_frame`): the
-        // newest one the same way, or it adds about 3.6 times their counts per pixel (3600 record points
-        // against one span per column) and the grading of the picture follows how many of each it holds:
+        // newest one the same way, or it adds other counts per pixel than they do (with dots 3600 record points
+        // against a frame's samples) and the grading of the picture follows how many of each it holds:
         // the trace flickered with the batch sizes (docs/fork/flicker.md)
         // (in Average the record is the blended average, drawn as the record path draws it)
         let from_frame = self.fast_ok() && self.m.acq != AcqMode::Average;

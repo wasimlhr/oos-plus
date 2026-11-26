@@ -82,6 +82,7 @@ impl Ui {
             loaded_record: false,
             wave_pass: false,
             start_up: Default::default(),
+            greeting: Default::default(),
             bode: Default::default(),
             ext: Default::default(),
             workspace: workspace::Workspace::default(),

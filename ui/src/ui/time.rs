@@ -290,7 +290,8 @@ impl Ui {
         (self.net.eth_link && self.addr_of("eth0").is_some()) || self.addr_of(oos_hal::wlan::IFACE).is_some()
     }
 
-    /// From `step`: requests when due, answers of the worker, the kernel's time zone once a minute (daylight saving).
+    /// From `step`: requests when due, answers of the worker, the kernel's time zone once a minute (daylight saving), and
+    /// what needs the date once the clock is known.
     pub(super) fn ntp_poll(&mut self) {
         if self.now - self.ntp.tz_checked >= 60.0 {
             self.ntp.tz_checked = self.now;
@@ -308,6 +309,8 @@ impl Ui {
         while let Some(r) = self.ntp.service.take() {
             self.ntp_report(r);
         }
+        // what needs the date once the clock is known
+        self.greeting_tick();
     }
 
     pub(super) fn ntp_report(&mut self, r: Result<Synced, String>) {

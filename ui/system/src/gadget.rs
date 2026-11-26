@@ -1,12 +1,10 @@
 // Copyright (C) 2026 dekajoule
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! The rear USB port as a USB device for one computer (docs/usb-device.md): `/bin/oos-gadget` builds the USB gadget,
-//! with the network over the cable (ADR 0079: RNDIS and ECM, the scope's fixed address, the computer's by DHCP) and
-//! the USBTMC instrument (ADR 0080: a FunctionFS function, served by `oos_remote::usbtmc_device`). oos-ui asks the
-//! script to build or take down the gadget when `usb.net` or `usb.tmc` changes, to bind it once the USBTMC
-//! descriptors are written (`bind`), shows its state, and lets the computer on the cable in like loopback
-//! (`on_usb_link`, used by `netacl`).
+//! The rear USB port as a network link to one computer (docs/usb-device.md, ADR 0079): `/bin/oos-gadget` builds the
+//! USB gadget (RNDIS and ECM), gives the scope its fixed address and the computer one by DHCP. oos-ui asks the script
+//! to build or take down the gadget when `usb.net` changes, shows its state, and lets the computer on the cable in
+//! like loopback (`on_usb_link`, used by `netacl`).
 
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
@@ -70,23 +68,6 @@ pub fn apply() {
 }
 
 static APPLY: Serial = Serial::new();
-
-/// Binds the gadget once the USBTMC function's descriptors are written (`oos-gadget bind`): a FunctionFS function can
-/// only be bound when its program is ready, so the script builds the gadget and leaves the bind to it. In a thread of
-/// its own, one at a time; the script itself waits while an apply runs (its lock).
-pub fn bind() {
-    if !std::path::Path::new(SCRIPT).exists() {
-        return;
-    }
-    BIND.request(|| {
-        let step = crate::remote::Step { prog: SCRIPT, arg: "bind", log: LOG };
-        if let Err(e) = crate::remote::script_runner()(&step) {
-            eprintln!("oos-ui: {}", e);
-        }
-    });
-}
-
-static BIND: Serial = Serial::new();
 
 /// Runs a job in a thread of its own, never two at once; requests while it runs are merged into one more run.
 struct Serial {

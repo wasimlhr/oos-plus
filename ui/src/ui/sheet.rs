@@ -381,11 +381,11 @@ impl Ui {
             M::Windows => (&["Windows"], |_| Slot::Tab(0)),
             // the switches of the services, then who may reach them and by which name, then where they are: with
             // VNC the switches and the addresses are more than seven rows each. The rear USB port (upstream's USB
-            // network and USB instrument) has its two switches and what each shows on a tab of its own
+            // network) has its switch and its address on a tab of its own
             M::Remote => (&["Services", "Access", "Addresses", "USB"], |it| match it {
                 RemWeb | RemMcp | RemScpi | RemVxi | RemVnc | RemSsh | Open(M::Ssh) => Slot::Tab(0),
                 RemMdns | RemName | RemAllow | RemFirewall => Slot::Tab(1),
-                RemUsb | RemUsbAddr | RemTmc | RemTmcState => Slot::Tab(3),
+                RemUsb | RemUsbAddr => Slot::Tab(3),
                 _ => Slot::Tab(2),
             }),
             M::Ssh => (&["SSH"], |it| match it { SshImport | SshRemove => Slot::Foot(0), _ => Slot::Tab(0) }),

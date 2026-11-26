@@ -19,7 +19,7 @@ bluez            5.82     0739fa608a837967ee6d5572b43fb89946a938d1c6c26127158aae
 # expat, glib, pcre2 and gettext (libintl) are not built here: dbus-daemon and bluetoothd link Alpine 3.22's static
 # packages of them. These are the files Alpine builds those packages from (aports 3.22-stable); rootfs/build-bluez.sh
 # fetches them for the release and stops when Alpine's versions differ.
-expat            2.10.0   c624ba2998fc65df1163a49641ff3f9ab73138b11641d92c86bee0fb01b1bc7f  https://github.com/libexpat/libexpat/releases/download/R_2_10_0/expat-2.10.0.tar.xz
+expat            2.11.0   61e7614b602201c28a189dafee78f5bceaee192bbde46a930752ff09cf5542fa  https://github.com/libexpat/libexpat/releases/download/R_2_11_0/expat-2.11.0.tar.xz
 glib             2.84.4   8a9ea10943c36fc117e253f80c91e477b673525ae45762942858aef57631bb90  https://download.gnome.org/sources/glib/2.84/glib-2.84.4.tar.xz
 glib-patch-1     2.84.4   6ac737106a5b502362962d1c1ebd93710b665d5058c5487ef0ce139780fa1b6e  https://raw.githubusercontent.com/alpinelinux/aports/3.22-stable/main/glib/tests-machine-id.patch
 glib-patch-2     2.84.4   ba04498c44a43f7370041ad9414824fb97f259f98f58cc6200220089c097ebbd  https://raw.githubusercontent.com/alpinelinux/aports/3.22-stable/main/glib/flaky-tests.patch

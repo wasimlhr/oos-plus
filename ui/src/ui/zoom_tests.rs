@@ -222,6 +222,22 @@ fn overview_pinch_changes_main_timebase_and_close_retains_that_explicit_change()
 }
 
 #[test]
+fn a_pinch_held_still_opens_no_context_menu() {
+    let mut ui = mixed();
+    let a = ui.plot.grid;
+    let (x, y) = (a.x + a.w / 3, a.y + a.h / 2);
+    ui.now = 0.0;
+    pointer(&mut ui, Phase::Down, x, y);
+    ui.handle(Ev::Touch { id: 1, phase: Phase::Down, x: x + 200, y });
+    ui.now = 2.0;
+    ui.workspace_hold_tick();
+    assert!(ui.workspace.popup.is_none(), "two fingers held still are a pinch, not a long press (#590)");
+    ui.handle(Ev::Touch { id: 1, phase: Phase::Up, x: x + 200, y });
+    pointer(&mut ui, Phase::Up, x, y);
+    assert!(ui.workspace.popup.is_none());
+}
+
+#[test]
 fn vertical_detail_phosphor_and_reference_pixels_follow_the_same_transform_as_markers() {
     let mut ui = mixed();
     ui.set_zoom(true);

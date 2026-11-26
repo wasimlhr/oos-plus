@@ -1507,6 +1507,11 @@ impl Ui {
         self.workspace.gesture = None;
         opened
     }
+    /// Something modal opens over the screen: no context menu stays over it, and no hold under it opens one.
+    pub(super) fn workspace_close_popup(&mut self) {
+        self.workspace.popup = None;
+        self.workspace.gesture = None;
+    }
     pub(super) fn workspace_hold_tick(&mut self) {
         let Some(mut gesture) = self.workspace.gesture else { return };
         if gesture.moved || gesture.held || self.now - gesture.at < HOLD { return; }

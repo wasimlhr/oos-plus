@@ -99,7 +99,7 @@ flowchart TB
         acq["Acquisition thread<br/>board/dho/hw.rs"]
     end
     subgraph remP["oos-remote (ui/remote/), a crate of the workspace ui/"]
-        transports["Transports<br/>VXI-11, HiSLIP, USBTMC on the rear USB port, the web server, LXI and DNS-SD announcement"]
+        transports["Transports<br/>VXI-11, HiSLIP, the web server, LXI and DNS-SD announcement"]
     end
     subgraph stoP["oos-store (ui/store/), a crate of the workspace ui/"]
         files["Setup and waveform files<br/>setups, OOS's waveform files, other instruments' files, file names"]
@@ -148,8 +148,7 @@ Rule for all crates: no vendor code is in the tree. Only dependency of the four 
 as a crate of its own below `ui/`, with one lock file and one target folder for all of them
 ([ADR 0064](adr/code/0064-a-layer-of-oos-ui-without-crossings-becomes-a-crate-of-its-own.md)). The first is
 `oos-system` (`ui/system/`): the system services, on `libc` and `oos-hal`; the second `oos-remote`
-(`ui/remote/`): VXI-11, HiSLIP, USBTMC on the rear USB port (`usbtmc_device`, ADR 0080), the web server and their
-announcement, generic over the program they hand to the
+(`ui/remote/`): VXI-11, HiSLIP, the web server and their announcement, generic over the program they hand to the
 interpreter (`oos_remote::Program`, which `scpi::Program` implements) and, for the web server, over what the screen
 answers (`oos_remote::http::Site`, which `site::Ctx` implements; the live picture stays in `oos-ui`, `shots.rs`); the
 third `oos-model` (`ui/model/`): the model and the settings table, on `oos-hal` and `oos-dsp`. What the layers above
@@ -222,7 +221,6 @@ Threads:
 | hw (`--hw`) | the board's acquisition thread (`Board::spawn`; on the DHO800/DHO900 `board/dho/hw.rs`: `hal::dho::seq` plan/execute in a loop); hands frames over through `board::HwShared`. It runs at `SCHED_FIFO` 1 (`placement::realtime`, `perf.fifo = off` turns it off; the threads it starts run at normal priority), and while it acquires the A72 and GPU clocks have a floor (`clockfloor`, `perf.clocks = off`); both verified on the unit (DHO924S, 2026-11-25) |
 | live (`--fpga-live`) | experimental, DHO800/DHO900: repeats the verified read-out (no arming) |
 | scpi, http, hislip, announce | SCPI on 5555, web remote on 8080 (polled by the main thread), HiSLIP on 4880 (a computer), mDNS announcement on 5353 |
-| usbtmc, usbtmc-out, usbtmc-in, usbtmc-intr | the USBTMC instrument on the rear USB port while `usb.tmc` is on (`oos_remote::usbtmc_device`, ADR 0080): `usbtmc` writes the FunctionFS descriptors, asks `oos-gadget bind` and answers the control requests of `ep0`; one thread per endpoint blocks on Bulk-OUT, Bulk-IN and Interrupt-IN. The main thread hands complete messages to the interpreter and the answers back (`Server::poll_async`), without waiting |
 | web-png, web-send | the web remote's PNG of the screen (`shots.rs`; made only of a changed screen, at most 20 a second and half a core) and the large answers (`net::send_in_background`); SCHED_IDLE on the slow cores (A53), so the frame loop and the acquisition never wait for them |
 | control FIFO | `/tmp/oos-ui.ctl` text commands (`cmd`), used by remote tests |
 | bt | System > Network > Bluetooth's client of bluetoothd (`ui/src/ui/bt.rs` over `hal::bluez`): the state every 2 s, scan, pair, connect, forget, and the pairing agent's answers; started with the first look at the page, so the frame loop never waits on the radio |
@@ -245,7 +243,7 @@ store does not name the board.
 flowchart TB
     subgraph uiL["oos-ui (ui/src/)"]
         main["main<br/>main.rs, input, gpu<br/>the wiring: frame loop, inputs, GPU helper"]
-        transport["transport<br/>in the crate oos-remote (ui/remote/): vxi11, hislip, usbtmc_device, http, announce<br/>frame the messages of a computer"]
+        transport["transport<br/>in the crate oos-remote (ui/remote/): vxi11, hislip, http, announce<br/>frame the messages of a computer"]
         command["command<br/>scpi, cmd, site<br/>the interpreters: SCPI, control commands, the web remote's answers"]
         screen["screen<br/>ui<br/>view and control: menus, pages, drawing, input"]
         store["store<br/>store; the files in the crate oos-store (ui/store/)<br/>setup and waveform files"]
@@ -300,7 +298,7 @@ flowchart TB
     end
     subgraph uiW["Workspace ui/"]
         ui["oos-ui (ui/src/)<br/>frame loop, screen, interpreters (SCPI, cmd, web site),<br/>signal and analysis, the board door and its acquisition"]
-        remote["oos-remote (ui/remote/)<br/>transports: VXI-11, HiSLIP, USBTMC, HTTP, announce"]
+        remote["oos-remote (ui/remote/)<br/>transports: VXI-11, HiSLIP, HTTP, announce"]
         store["oos-store (ui/store/)<br/>setup and waveform files"]
         model["oos-model (ui/model/)<br/>model and settings table"]
         system["oos-system (ui/system/)<br/>system services"]
@@ -384,7 +382,7 @@ declared, a recipe in [CONTRIBUTING.md](../CONTRIBUTING.md#adding-something) and
 | what a setup or a file stores | the crate `oos-store`, `ui/store/src/`; what it asks of `oos-ui`: `ui/src/store/modules.rs` | `ui/src/store/settings_snapshot.rs` with `ui/tests/golden/settings.txt` |
 | signal processing | `dsp/src/`, on slices of `f32`, no hardware | the tests in `dsp/tests/`, `tools/layers.py` |
 | what the UI asks of the hardware | the trait `Board` in `ui/src/board/mod.rs`, for this board `ui/src/board/dho/` | `tools/layers.py` |
-| a remote transport | its file in `ui/remote/src/`, the crate `oos-remote` (`vxi11.rs`, `hislip.rs`, `usbtmc_device.rs`, `http.rs`, `announce.rs`; ADR 0064); what the screen answers on the web: `ui/src/site.rs`; a transport only frames messages for the interpreter (ADR 0022) | the tests in its file; its switch under Remote services (ADR 0025) |
+| a remote transport | its file in `ui/remote/src/`, the crate `oos-remote` (`vxi11.rs`, `hislip.rs`, `http.rs`, `announce.rs`; ADR 0064); what the screen answers on the web: `ui/src/site.rs`; a transport only frames messages for the interpreter (ADR 0022) | the tests in its file; its switch under Remote services (ADR 0025) |
 | a network or system service (mDNS, SNTP, SSH, `net.allow`, the clock, `system.conf`) | its module in `ui/system/src/`, the crate `oos-system`, which names nothing of `oos-ui` (ADR 0064) | the tests in its file, `cargo test --workspace` in `ui/`; its switch under Remote services (ADR 0025) |
 | the start, the image, an update | `boot/`, `kernel/`, `rootfs/`, `hal/src/update/` | the simulations of `tools/check.sh` (`sim`), a run on a unit |
 | a host tool, a check | `tools/`, with its line in `tools/README.md` | `tools/tests/`, the layers of `tools/check.sh` |

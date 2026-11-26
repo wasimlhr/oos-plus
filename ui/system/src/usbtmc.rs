@@ -11,8 +11,7 @@
 //! transfer size (u32 LE), attributes, then 3 bytes (TermChar for a request, else reserved). The data follow, padded
 //! with zeros to a multiple of 4. bTag runs 1..255 and wraps to 1 (never 0). A command is DEV_DEP_MSG_OUT with EOM on
 //! its last transfer; an answer is fetched with REQUEST_DEV_DEP_MSG_IN and read back as DEV_DEP_MSG_IN, until EOM.
-//! The headers are built and read here for both sides: the scope as a USBTMC device on its rear port
-//! (`oos_remote::usbtmc_device`, docs/usb-device.md) uses the same functions.
+//! The headers are built and read in one place (`header`, `parse_header`).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -39,7 +38,6 @@ const MAX_EMPTY: usize = 16;
 
 /// A bulk header as it travels, the same both ways: MsgID, bTag and its inverse, a reserved 0, the transfer size (u32
 /// LE), the attributes (bit 0 EOM, bit 1 TermChar enabled in a request), the TermChar of a request, two reserved.
-/// Both sides of USBTMC build their headers here: the host in this file, the scope as a device in oos-remote.
 pub fn header(msg: u8, tag: u8, size: u32, attr: u8, term: u8) -> [u8; HEADER] {
     let s = size.to_le_bytes();
     [msg, tag, !tag, 0, s[0], s[1], s[2], s[3], attr, term, 0, 0]
