@@ -488,11 +488,15 @@ answers as `9.9E37` (none) is `null`.
 
 - Mark: **experimental**
 - Request: optional `slot` (from 1), `protocol` (a name of the list, any case), `input` (`WAVEFORM` or `LA`),
-  `source`, `source2`, `cs`, `source4`, `threshold`, `state`.
+  `source`, `source2`, `cs`, `source4`, `threshold`, `state`, `auto` (true: after the others, `:DECode:AUTO` sets the
+  decoder up for its signal: threshold between the levels, Polarity Auto, time base and depth for 10 samples a bit and
+  a whole frame, one acquisition).
 - Answer: `applied`, the commands that ran (`:DEC:SEL`, then `:DEC:PROT`, then the others), and `decoder`, the slot
   read back (`slot`, `protocol`, `state`, `input`, `source`, `source2`, `threshold`), and `decode_table`, a hint that
   the decode table is the Events pane, opened by `:DISPlay:LOWer EVENTS` and read by `decode_results`. Also
-  `diagnosis` and `signal` as in `decode_results`.
+  `diagnosis` and `signal` as in `decode_results`, and with `auto` the array `auto`: what it changed with the old values,
+  what it kept and could not do (the acquisition it arms has not finished in this answer: read `decode_results`
+  again when `scope_state` says the trigger is stopped).
 
 ### MCP tool `screenshot`
 

@@ -56,6 +56,9 @@ in the README. How to use it: the guides listed on [[Home]].
 - A decoder that decoded nothing, or mostly errors, says why: the sample rate against the bit rate, a threshold outside
   the signal, a flat line, a record shorter than a frame, an inverted bus; on the band, in the empty Events pane, over
   SCPI (`:DECode:DIAGnosis?`) and in the MCP answers of `decode_results` and `setup_decoder`
+- `:DECode:AUTO` (or `auto` of the MCP tool `setup_decoder`) sets a decoder up for its signal in one step: the
+  threshold between the levels, Polarity Auto, the time base and depth for 10 samples a bit and a whole frame, one
+  acquisition, and a report of every change
 - Polarity (Decode > Polarity) for MIL-STD-1553, ARINC 429, DMX512 and UART 9-bit: a bus connected the wrong way round
   is read inverted without inverting the channel on the screen; Auto decodes both ways and keeps the reading with
   fewer errors, and the decoder's name says "(inverted)". UART has its own idle-level row; the other decoders do not

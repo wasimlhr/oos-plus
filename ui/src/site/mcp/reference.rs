@@ -203,7 +203,7 @@ pub const TASKS: &[(&str, &[&str], &str)] = &[
         &["Measurements: Readouts"],
         "measure_slot (slot, item, source), or :MEASure:SLOT1 <item>,<source> then :MEASure:SLOT1?; :MEASure:SLOT:LIST? lists the slots",
     ),
-    ("Decode a bus (UART, I2C, SPI, CAN, 1553 ...) and read its events", &["Decoders and bus"], "setup_decoder, decode_results"),
+    ("Decode a bus (UART, I2C, SPI, CAN, 1553 ...) and read its events", &["Decoders and bus"], "setup_decoder (auto: true sets threshold, polarity, time base and depth for the signal, and names every change), decode_results (diagnosis says why nothing decoded or why words fail)"),
     ("Mark and find events in the record", &["Search"], ":SEARch:..."),
     ("Logic analyser lines", &["Logic analyser"], ":LA:STATe"),
     ("Generator: built-in and external", &["Built-in generator", "External generator"], ":SOURce<n>:..."),

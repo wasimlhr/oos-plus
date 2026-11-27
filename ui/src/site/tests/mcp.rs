@@ -303,6 +303,13 @@ fn mcp_decoder_set_up_and_its_rows() {
         assert!(signal.get(key).is_some(), "{key}: {r}");
     }
     assert!(data(&call(&mut ui, &cv, &mut scpi, "setup_decoder", r#"{"state":true}"#)).get("diagnosis").is_some());
+    // auto sets the decoder up and says what it did: sentences naming the threshold, the time base and the acquisition
+    let r = call(&mut ui, &cv, &mut scpi, "setup_decoder", r#"{"state":true,"auto":true}"#);
+    assert!(!failed(&r), "{r}");
+    let auto: Vec<String> = items(data(&r).get("auto")).iter().filter_map(|l| l.str().map(str::to_string)).collect();
+    assert!(auto.iter().any(|l| l.starts_with("decoder 1 ")), "{auto:?}");
+    assert!(auto.iter().any(|l| l.starts_with("threshold ") || l.contains("time base")), "{auto:?}");
+    assert!(failed(&call(&mut ui, &cv, &mut scpi, "setup_decoder", r#"{"auto":"yes"}"#)) || data(&r).get("auto").is_some());
 }
 
 // Break it catches: a table that cannot be listed or read by name through MCP, a row without its Index

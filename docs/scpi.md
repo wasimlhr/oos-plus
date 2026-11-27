@@ -498,6 +498,7 @@ the sources (above) are written by hand.
 | `:DECode:THReshold[?]` | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. |
 | `:DECode:CPHY:RATE[?]` | `AUTO` or known symbols/second; aliases CPHY:SRATe and DECode:SRATe. |
 | `:DECode:BUSY?` | Worker readiness, without changing acquisition. |
+| `:DECode:AUTO` / `:DECode:AUTO?` | Sets the selected decoder up for its signal: threshold between the levels, Polarity Auto where offered, the time base and depth for 10 samples a bit and a whole frame (kept, or said not to fit, never cut), one acquisition. The query is the report of what it changed, then the diagnosis. |
 | `:DECode:DIAGnosis?` / `:BUS<n>:DIAGnosis?` | Why the decoder decoded nothing or mostly errors: short sentences, one a line, each naming the setting to change; empty when the decode is fine, `BUSY` while decoding. `:DECode:DIAGnosis:FIGures?` (`:BUS<n>:DIAGnosis:FIGures?`): the bit rate the edges suggest (Hz), the lowest and highest sample (V) and the share of failed fields. |
 | `:DECode:POLarity[?]` / `:BUS<n>:POLarity[?]` | `NORMal`, `INVerted` or `AUTO`: how the decoder reads its line (1553, ARINC 429 without `AUTO`, DMX512, UART 9-bit; -224 for the others). `AUTO` keeps the reading with fewer failed fields. |
 | `:DECode:EVENts?` | Physical-time event rows, `index,time,source,text,ok` (the Index, from 1, first), `BUSY` while pending, or an error if unavailable. |

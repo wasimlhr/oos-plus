@@ -67,6 +67,7 @@ impl Ui {
             eye_src_chosen: false,
             auto_on: Vec::new(),
             decoded: Default::default(),
+            decode_auto_report: Vec::new(),
             table: Default::default(),
             band_hits: Default::default(),
             table_cols: None,
