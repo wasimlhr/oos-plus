@@ -211,6 +211,8 @@ pub enum Col {
     Second,
     /// a part of one field, which the module writes itself ([`Protocol::field_cells`])
     Own,
+    /// a cell of the whole message, which the module writes ([`Protocol::message_cells`], the place counted)
+    Msg(usize),
 }
 
 /// The trigger of [`Setup::trig`]: an edge of `slope` on the channel of role `role` at `level` (V). With an `idle` time
@@ -317,6 +319,12 @@ pub trait Protocol: Sync {
     /// the pane writes that one check failed.
     fn field_error(&self, _p: &Packet) -> Option<&'static str> {
         None
+    }
+
+    /// The cells of the message `pk` for the columns that are `Col::Msg(n)` (n-th of the list); empty where a module
+    /// has none.
+    fn message_cells(&self, _pk: &[Packet]) -> Vec<String> {
+        Vec::new()
     }
 
     /// What is wrong with the message `pk` as a whole, in words, for the Error column of the Events pane where it

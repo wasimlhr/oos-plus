@@ -209,7 +209,7 @@ mod tests {
         let ui = demo_1553();
         let messages = ui.table_data("EVENTS").unwrap();
         assert_eq!(&messages.head[..2], ["Index", "Time (s)"]);
-        for want in ["RT", "T/R", "SA", "WC/MC", "Data", "Status", "Error"] {
+        for want in ["Type", "RT", "T/R", "SA/mode", "Mode code", "Status", "WC", "Data", "C/S payload", "Error"] {
             assert!(messages.head.iter().any(|h| h == want), "{want}: {:?}", messages.head);
         }
         assert!(!messages.rows.is_empty());

@@ -1366,9 +1366,8 @@ impl Scpi {
             // is kept for the time bases that acquire normally (not a silent 31250 a few seconds later)
             if board().slow_mode(m) == crate::board::Slow::Roll {
                 self.push_err(format!(
-                    "-221,\"Settings conflict\" the depth {} is kept, but in roll mode the record is the stream's points of the screen (the query reads the stream, e.g. 31250 at 200 ms/div): turn Auto Roll off (:TIMebase:ROLL OFF) or use a timebase faster than {} ms/div",
-                    arg.trim(),
-                    crate::board::dho::hw::ROLL_TDIV * 1e3
+                    "-221,\"Settings conflict\" the depth {} is kept, but in roll mode the record is the stream's points of the screen (the query reads the stream, e.g. 31250 at 200 ms/div): turn Auto Roll off (:TIMebase:ROLL OFF) or use a timebase faster than 200 ms/div",
+                    arg.trim()
                 ));
             }
             return Some(None);

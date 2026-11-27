@@ -18,7 +18,7 @@ Part of the [SCPI reference](README.md).
 | `:TIMebase:VERNier` | Set / Query | Boolean fine horizontal control. | `0` | Horizontal > Fine time base | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:HREFerence:MODE` | Set / Query | Horizontal expansion reference. | `CENT` | Horizontal > Expand around | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:MODE` | Set / Query | Main/zoom/XY mode supported by the model. | `MAIN` | Horizontal > Timebase mode | Rigol-style (command family of the DHO guide) |
-| `:TIMebase:ROLL` | Set / Query | Model roll setting; acquisition source restrictions still apply. | `1` | Horizontal > Auto Roll | Rigol-style (command family of the DHO guide) |
+| `:TIMebase:ROLL` | Set / Query | Model roll setting; acquisition source restrictions still apply. On: roll from 200 ms/div (stock: 50 ms/div), the record is the stream's points of the screen and a set `:ACQuire:MDEPth` is answered with -221. Off: scan from 200 ms/div, which reads the depth (at least 1 M); below 200 ms/div the acquisition is normal either way. | `1` | Horizontal > Auto Roll | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:XY:ENABle` | Set / Query | Boolean XY display. | `0` | Horizontal > Timebase mode (XY) | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:XY:X` | Set / Query | The X axis of the XY picture is `CHAN1`; it is not selectable, and another channel is -224. | `CHAN1` | Horizontal > XY X / Y source | Rigol-style (command family of the DHO guide) |
 | `:TIMebase:XY:Y` | Set / Query | The Y axis of the XY picture is `CHAN2`; it is not selectable, and another channel is -224. | `CHAN2` | Horizontal > XY X / Y source | Rigol-style (command family of the DHO guide) |
