@@ -311,11 +311,12 @@ impl Ui {
             .collect()
     }
 
-    /// The decoder events as text, one per line: time, decoder, content (SCPI).
+    /// The decoder events as text, one per line: index (from 1), time, decoder, content (SCPI).
     pub fn events_text(&self) -> String {
         self.decode_events()
             .iter()
-            .map(|r| format!("{:e},{},{},{}", r.t, r.who, r.text, if r.ok { "ok" } else { "error" }))
+            .enumerate()
+            .map(|(i, r)| format!("{},{:e},{},{},{}", i + 1, r.t, r.who, r.text, if r.ok { "ok" } else { "error" }))
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -636,8 +637,15 @@ impl Ui {
         if self.m.layout == Layout::Default {
             return self.events_export(TableKind::Decode);
         }
-        let rows = self.decode_rows().into_iter();
-        self.export_rows(rows.map(|e| EventRow { t: e.t, who: e.who, ok: e.errors == 0, text: e.text }).collect());
+        match self.table_data("EVENTS") {
+            Ok(t) if !t.rows.is_empty() => {
+                let p = self.new_file(&self.save_dir(), "events", "csv");
+                let r = crate::store::write(&p, t.csv().as_bytes());
+                self.toast_saved(&p, r);
+            }
+            Ok(_) => self.toast("No events in this record"),
+            Err(e) => self.toast(e),
+        }
     }
 
     /// The events of a table as CSV into the storage directory.
@@ -650,9 +658,16 @@ impl Ui {
         if rows.is_empty() {
             return self.toast("No events in this record");
         }
-        let mut t = String::from("Time (s),Source,Event,Ok\n");
-        for e in &rows {
-            t.push_str(&format!("{:.9e},{},{},{}\n", e.t, e.who, e.text.replace(',', ";"), if e.ok { 1 } else { 0 }));
+        let mut t = String::from("Index,Time (s),Source,Event,Ok\n");
+        for (i, e) in rows.iter().enumerate() {
+            t.push_str(&format!(
+                "{},{:.9e},{},{},{}\n",
+                i + 1,
+                e.t,
+                e.who,
+                e.text.replace(',', ";"),
+                if e.ok { 1 } else { 0 }
+            ));
         }
         let p = self.new_file(&self.save_dir(), "events", "csv");
         let r = crate::store::write(&p, t.as_bytes());

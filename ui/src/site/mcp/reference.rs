@@ -169,6 +169,11 @@ pub struct Node {
 /// `scpi_reference` without arguments lists this, and the instructions of `initialize` point to it.
 pub const TASKS: &[(&str, &[&str], &str)] = &[
     (
+        "Read or save a table of the screen as rows with an index: the decode table (Events pane), search events, segments, spectrum peaks, measurements",
+        &["Tables", "Decoders and bus"],
+        "table (name EVENTS, FIELDS, SEARCH, SEGMENTS, PEAKS, MEASURE), decode_results for the decode table; :TABLe:LIST?, :TABLe:DATA? EVENTS, :TABLe:SAVE EVENTS; :DECode:EVENts:COUNt? counts the rows; :DISPlay:LOWer EVENTS shows the decode table",
+    ),
+    (
         "Arrange the screen: dock, float, move, resize, tab, maximise or close the views (waveform, measurements, eye,          simulator, events)",
         &["Docking", "Views"],
         ":DOCK:LIST shows every view and where it is; then :DOCK:MOVE, :DOCK:FLOAT, :DOCK:SIZE, :DOCK:SHOW, :DOCK:CLOSe",

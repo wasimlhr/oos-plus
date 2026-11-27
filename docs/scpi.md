@@ -498,7 +498,8 @@ the sources (above) are written by hand.
 | `:DECode:THReshold[?]` | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. |
 | `:DECode:CPHY:RATE[?]` | `AUTO` or known symbols/second; aliases CPHY:SRATe and DECode:SRATe. |
 | `:DECode:BUSY?` | Worker readiness, without changing acquisition. |
-| `:DECode:EVENts?` | Physical-time event rows, `BUSY` while pending, or an error if unavailable. |
+| `:DECode:EVENts?` | Physical-time event rows, `index,time,source,text,ok` (the Index, from 1, first), `BUSY` while pending, or an error if unavailable. |
+| `:DECode:EVENts:COUNt?` | The rows of the Events pane in its view ("N packets decoded"), `BUSY` while pending. |
 
 A file load is not an ADC acquisition. Multi-trace imports validate capacity before replacing slots; a CSV line with more data columns than there are reference slots (10) ends the import while the file is read. Protocol roles may mix references and acquired records; their native intervals/origins must overlap. Decoder events, Search and Bus qualification share the decoded timing.
 
@@ -694,7 +695,7 @@ Statistics count accepted observations. A stopped reference can have a valid cur
 | `:BUS<n>:POSition[?]` | The band's place: divisions from the middle of its window, or `BOTTom`. |
 | `:BUS<n>:EVENt[?]` | Shared decode event-table visibility: the Event table over the plot in the Default layout, the Events pane in Minimal and Studio. |
 | `:BUS<n>:THReshold[?]` | Decoder threshold in source units. |
-| `:BUS<n>:DATA?` | Ready event rows in an IEEE block. `BUSY` while required decoding is pending; unavailable sources return an error. |
+| `:BUS<n>:DATA?` | Ready event rows in an IEEE block, the Index first in each row. `BUSY` while required decoding is pending; unavailable sources return an error. |
 | `:BUS<n>:RS232:TX[?]`, `:RX[?]` | CH/ref role identities. UART decoding uses the configured primary input. |
 | `:BUS<n>:RS232:BAUD[?]`, `:PARity[?]`, `:DBITs[?]` | Supported baud ladder, parity and data-bit count. |
 | `:BUS<n>:IIC:SCLK:SOURce[?]`, `:SDA:SOURce[?]` | I2C clock/data CH/ref roles. |
@@ -757,3 +758,9 @@ command does not take is refused with `-224`. `:HISTogram:ENABle` and the source
 | `:HISTogram:TYPE[?]` | `HORizontal`, `VERTical`; the query answers `HOR` or `VERT` (`VERT` while it is off) | `hist` | Histogram | The waveform histogram of the Display menu: off, vertical or horizontal. |
 <!-- settings:histogram:end -->
 
+### Tables
+
+Every table the screen shows has an Index in its first column and can be read and saved the same way
+([Tables](scpi/table.md)): `:TABLe:LIST?` names them (`EVENTS`, `FIELDS`, `SEARCH`, `SEGMENTS`, `PEAKS`, `MEASURE`),
+`:TABLe:COUNt? <name>` counts the rows, `:TABLe:DATA? <name>` answers them as CSV in an IEEE block, and
+`:TABLe:SAVE <name>[,"path"]` writes the CSV file.

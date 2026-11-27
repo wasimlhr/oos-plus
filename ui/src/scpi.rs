@@ -69,6 +69,7 @@ pub use display::bmp;
 
 mod analysis;
 mod counter;
+mod table;
 mod cursor;
 mod decode;
 pub(crate) mod dispatch;

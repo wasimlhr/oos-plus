@@ -95,6 +95,18 @@ fn mil1553_mode_code(code: u32) -> Option<&'static str> {
     })
 }
 
+/// The 11 bits of a command or status word behind the terminal address, as the Tektronix table writes them.
+fn payload(v: u32) -> String {
+    format!("{:011b}", v & 0x7ff)
+}
+
+/// The same 11 bits of a status word in the groups of the standard: message error, instrumentation, service request
+/// | three reserved bits | broadcast received, busy, subsystem flag, bus control acceptance, terminal flag.
+fn status_bits(v: u32) -> String {
+    let b = format!("{:011b}", v & 0x7ff);
+    format!("{}-{}-{}", &b[..3], &b[3..6], &b[6..])
+}
+
 impl Protocol for Mil1553 {
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::MIL1553
@@ -148,15 +160,17 @@ impl Protocol for Mil1553 {
             ("Mode code / words", Col::Own),
             ("Data", Col::Own),
             ("Status", Col::Own),
+            ("Status bits", Col::Own),
+            ("C/S payload", Col::Own),
         ]
     }
     fn field_cells(&self, p: &Packet) -> Vec<String> {
         use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_COMMAND_2, MIL1553_STATUS};
         let v = p.value;
         let (rt, none) = (format!("{:02}", v >> 11), String::new);
-        let cells: [String; 7] = match (p.kind, p.value2) {
+        let cells: [String; 9] = match (p.kind, p.value2) {
             (Kind::Word { cmd: false }, _) => {
-                ["Data".into(), none(), none(), none(), none(), format!("{:04X}", v), none()]
+                ["Data".into(), none(), none(), none(), none(), format!("{:04X}", v), none(), none(), none()]
             }
             (Kind::Word { cmd: true }, Some(MIL1553_COMMAND | MIL1553_COMMAND_2)) => {
                 let (transmit, sa, n) = (v >> 10 & 1 == 1, v >> 5 & 31, v & 31);
@@ -167,19 +181,49 @@ impl Protocol for Mil1553 {
                     format!("{} word{}", words, if words == 1 { "" } else { "s" })
                 };
                 let dir = if transmit { "T" } else { "R" };
-                ["Command".into(), rt, dir.into(), format!("{:02}", sa), what, none(), none()]
+                ["Command".into(), rt, dir.into(), format!("{:02}", sa), what, none(), none(), none(), payload(v)]
             }
             (Kind::Word { cmd: true }, Some(MIL1553_STATUS)) => {
                 let set = MIL1553_FLAGS.iter().filter(|f| v & f.0 != 0).map(|f| f.1);
-                ["Status".into(), rt, none(), none(), none(), none(), set.collect::<Vec<_>>().join(" ")]
+                let flags = set.collect::<Vec<_>>().join(" ");
+                ["Status".into(), rt, none(), none(), none(), none(), flags, status_bits(v), payload(v)]
             }
-            _ => ["Unknown".into(), none(), none(), none(), none(), none(), none()],
+            _ => ["Unknown".into(), none(), none(), none(), none(), none(), none(), none(), none()],
         };
         cells.into()
     }
-    /// The one check of a word is its parity.
+    /// The checks of a word are its Manchester halves and its parity; the decoder keeps one verdict for both.
     fn field_error(&self, p: &Packet) -> Option<&'static str> {
-        (!p.ok).then_some("Parity")
+        (!p.ok).then_some("Manchester or parity error")
+    }
+    /// A message that is not whole, in words: it does not begin with a command ("Unframed"), a command with no
+    /// word after it ("Incomplete packet"), the data words fewer or more than the command says ("Word count
+    /// mismatch", a mode command and a transfer between two terminals excepted), a gap inside the data words
+    /// ("Data: Noncontiguous Data"), or a word that failed a check.
+    fn message_error(&self, pk: &[Packet]) -> &'static str {
+        use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_COMMAND_2};
+        let Some(first) = pk.first() else { return "" };
+        let is_command = first.kind == (Kind::Word { cmd: true }) && first.value2 == Some(MIL1553_COMMAND);
+        let data: Vec<&Packet> = pk.iter().filter(|p| p.kind == (Kind::Word { cmd: false })).collect();
+        if !is_command {
+            return if pk.len() == 1 { "Incomplete packet; Unframed" } else { "Unframed" };
+        }
+        if pk.len() == 1 {
+            return "Incomplete packet";
+        }
+        let (sa, n) = (first.value >> 5 & 31, first.value & 31);
+        let two_terminals = pk.iter().any(|p| p.value2 == Some(MIL1553_COMMAND_2));
+        if sa != 0 && sa != 31 && !two_terminals && data.len() != if n == 0 { 32 } else { n as usize } {
+            return "Word count mismatch";
+        }
+        // data words follow each other without a pause of their own (a word is 20 us, a pause 1 us or more)
+        if data.windows(2).any(|w| w[1].t0 - w[0].t1 > 1e-6) {
+            return "Data: Noncontiguous Data";
+        }
+        if pk.iter().any(|p| !p.ok) {
+            return "Manchester or parity error";
+        }
+        ""
     }
     /// A bipolar bus: threshold at 0 V; the trigger on the first rising edge after 3 us of quiet bus (the command sync).
     fn setup(&self) -> Setup {

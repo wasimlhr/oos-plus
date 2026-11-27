@@ -374,7 +374,8 @@ These are OOS functions, not stock Rigol commands. Their limits are in [referenc
 | `:DECode:SOURce[?]`, `:SOURce2[?]`, `:CS[?]`, `:SOURce4[?]`, `:DIFFerential[?]` | the protocol's lines, `CHANn\|Rn\|MATHn\|NONE` (a Math trace that is on decodes a differential pair) |
 | `:DECode:THReshold[?]` | threshold |
 | `:DECode:CPHY:RATE[?]` | `AUTO` or symbols/s |
-| `:DECode:BUSY?`, `:DECode:EVENts?` | still decoding? / the events with their times |
+| `:DECode:BUSY?`, `:DECode:EVENts?`, `:DECode:EVENts:COUNt?` | still decoding? / the events, numbered from 1, with their times / how many rows the decode table has |
+| `:TABLe:LIST?`, `:TABLe:COUNt? <name>`, `:TABLe:DATA? <name>`, `:TABLe:SAVE <name>` | every table of the screen (decode table, search events, segments, peaks, measurements) by name: its names, its row count, its rows as CSV with the Index first, a CSV file |
 
 **Protocol triggers** (stock names, plus OOS additions; values decimal or `0x` hex):
 

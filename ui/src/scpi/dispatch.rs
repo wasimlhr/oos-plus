@@ -308,6 +308,16 @@ impl Scpi {
         if kw(n0, "DECode") && nodes.len() == 2 && kw(nodes[1], "EVENts") && query {
             return t(&ui.events_text());
         }
+        if kw(n0, "DECode") && nodes.len() == 3 && kw(nodes[1], "EVENts") && kw(nodes[2], "COUNt") && query {
+            return match ui.events_total() {
+                Ok(n) => t(&n.to_string()),
+                Err("Decode computing") => t("BUSY"),
+                Err(error) => {
+                    self.push_err(format!("-230,\"{}\"", error));
+                    None
+                }
+            };
+        }
         // what the Events pane lists (the query above always answers a row per field)
         if kw(n0, "DECode") && nodes.len() == 3 && kw(nodes[1], "EVENts") && kw(nodes[2], "VIEW") {
             if query {
@@ -355,6 +365,9 @@ impl Scpi {
         }
         if kw(n0, "COUNter") {
             return self.counter_cmd(ui, &nodes[1..], query, arg);
+        }
+        if kw(n0, "TABLe") {
+            return self.table_cmd(ui, &nodes[1..], query, arg);
         }
         self.push_err(format!("-113,\"Undefined header\" {}", cmd));
         None

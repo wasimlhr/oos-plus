@@ -27,9 +27,24 @@ const NARROW_W: i32 = 560;
 /// Below this width it lists the time and the text alone.
 const SMALL_W: i32 = 360;
 
+impl MsgRow {
+    /// What is wrong with the row in words: what the module says of it, else how many fields failed a check; empty
+    /// for a row without a failed check.
+    pub fn error_text(&self) -> String {
+        if self.why.is_empty() {
+            errors_text(self.errors)
+        } else {
+            self.why.to_string()
+        }
+    }
+}
+
 /// One row of decoder results.
 #[derive(Clone, Debug, PartialEq)]
 pub struct MsgRow {
+    /// the number of the row in the list of the record, from 1: the same in the pane, the CSV file and the answer of
+    /// `:TABLe:DATA? EVENTS`
+    pub index: usize,
     /// its decoder (0 = D1)
     pub dec: usize,
     /// start of its first field and end of its last one (s from the trigger)
@@ -114,7 +129,20 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
                 let cols = module.map_or(&[][..], |module| module.field_columns());
                 let cells = module.filter(|_| !cols.is_empty()).map_or_else(Vec::new, |module| module.field_cells(x));
                 let why = module.and_then(|module| module.field_error(x)).unwrap_or("");
-                MsgRow { dec, t: x.t0, t1: x.t1, who: who.to_string(), len, text, hex, errors, why, cols, cells }
+                MsgRow {
+                    index: 0,
+                    dec,
+                    t: x.t0,
+                    t1: x.t1,
+                    who: who.to_string(),
+                    len,
+                    text,
+                    hex,
+                    errors,
+                    why,
+                    cols,
+                    cells,
+                }
             })
             .collect();
     }
@@ -125,7 +153,15 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
         .map(|g| {
             let pk = &p[g];
             let values = || pk.iter().filter(|x| packet_tag(m, x).is_none());
+            let why = if view == EvView::Lines && ascii {
+                ""
+            } else {
+                m.dec_proto.module().map_or("", |x| x.message_error(pk))
+            };
+            // (a message the module finds wrong counts as one that failed a check)
+            let errors = pk.iter().filter(|x| !x.ok).count().max(usize::from(!why.is_empty()));
             MsgRow {
+                index: 0,
                 dec,
                 t: pk[0].t0,
                 t1: pk.iter().map(|x| x.t1).fold(pk[0].t1, f64::max),
@@ -133,8 +169,8 @@ fn rows_of(m: &Model, dec: usize, who: &str, p: &[Packet], view: EvView) -> Vec<
                 len: values().count(),
                 text: decband::message_text(m, pk),
                 hex: if ascii { values().map(hex).collect::<Vec<_>>().join(" ") } else { String::new() },
-                errors: pk.iter().filter(|x| !x.ok).count(),
-                why: "",
+                errors,
+                why,
                 cols,
                 cells: cells_of(m, cols, pk),
             }
@@ -266,12 +302,15 @@ impl Ui {
                 Some(rows) => v.extend(rows.into_iter().map(|(t, text, ok)| {
                     let (hex, errors) = (String::new(), usize::from(!ok));
                     let (who, cells) = (who.clone(), Vec::new());
-                    MsgRow { dec: k, t, t1: t, who, len: 1, text, hex, errors, why: "", cols: &[], cells }
+                    MsgRow { index: 0, dec: k, t, t1: t, who, len: 1, text, hex, errors, why: "", cols: &[], cells }
                 })),
                 None => v.extend(rows_of(&m, k, &who, &p, self.m.ev_view)),
             }
         }
         v.sort_by(|a, b| a.t.total_cmp(&b.t));
+        for (i, row) in v.iter_mut().enumerate() {
+            row.index = i + 1;
+        }
         v
     }
 
@@ -572,7 +611,7 @@ impl Ui {
             None => r.right() - if self.dock_on() { 8 } else { 54 },
         };
         let x = head.right + 14;
-        let rows_txt = if total == 1 { "1 row".to_string() } else { format!("{} rows", total) };
+        let rows_txt = self.events_count_text(total);
         let failed_txt = if failed == 1 { "1 with an error".to_string() } else { format!("{} with errors", failed) };
         if x + f.s.width(&rows_txt) <= limit {
             cv.text_in(&f.s, Rect::new(x, text_y, f.s.width(&rows_txt), text_h), 0, &rows_txt, DIM);
@@ -616,12 +655,18 @@ impl Ui {
         let (wide, small) = (r.w >= NARROW_W, r.w < SMALL_W);
         let (who, hex) = self.events_widths(&f.s);
         let hex_on = wide && hex;
-        let w_number = if small { 0 } else { f.s.width("9999") + pad };
+        let w_number = if small { 0 } else { f.s.width("99999") + pad };
         // the widest a time of three digits gets, whatever the rows on the screen say
         let w_time = f.s.width("-888.8 \u{b5}s") + pad;
         let w_who = if wide { who + pad } else { 0 };
         let w_len = if wide { f.s.width("Len").max(f.s.width("9999")) + pad } else { 0 };
-        let w_status = if errors_column(r.w, failed) { f.s.width("999 errors") + pad } else { 0 };
+        // (an error in words takes what the longest one needs, a third of the pane at most)
+        let w_status = if errors_column(r.w, failed) {
+            let said = self.pn.rows.iter().map(|e| f.s.width(&e.error_text())).fold(f.s.width("999 errors"), i32::max);
+            (said + pad).min(r.w / 3)
+        } else {
+            0
+        };
         let left = r.x + if small { 8 } else { 12 };
         // the bar shows over the right edge of the rows for a moment after a scroll, and no room is kept for it
         let end = area.right() - if small { 12 } else { 20 };
@@ -659,9 +704,9 @@ impl Ui {
             } else if (top + i) % 2 == 1 {
                 cv.fill(line, ROW_ALT);
             }
-            let status = if e.why.is_empty() { errors_text(e.errors) } else { e.why.to_string() };
+            let status = e.error_text();
             let len = if e.len > 0 { e.len.to_string() } else { String::new() };
-            let number = (top + i + 1).to_string();
+            let number = e.index.to_string();
             let ink = if e.errors > 0 { RED } else { TEXT };
             let mut texts = vec![(number, DIM), (si(e.t, "s"), LABEL), (e.who.clone(), DIM), (len, LABEL)];
             match own {
@@ -1022,13 +1067,19 @@ mod tests {
             let bad = Packet { ok: false, ..word(10.0, false, 0x0157, None) };
             let q = [p[0].clone(), p[1].clone(), p[3].clone(), p[4].clone(), bad];
             let words = rows_of(&m, 0, "D1 1553", &q, EvView::Fields);
-            assert_eq!(titles(&words), ["Type", "RT", "T/R", "SA", "Mode code / words", "Data", "Status"]);
-            assert_eq!(words[0].cells, ["Command", "17", "R", "02", "2 words", "", ""]);
-            assert_eq!(words[1].cells, ["Data", "", "", "", "", "0005", ""]);
-            assert_eq!(words[2].cells, ["Status", "17", "", "", "", "", "TF"]);
-            assert_eq!(words[3].cells, ["Command", "17", "T", "00", "Transmit last command", "", ""]);
-            assert_eq!(words[4].cells, ["Data", "", "", "", "", "0157", ""]);
-            assert_eq!(words[4].why, "Parity");
+            assert_eq!(
+                titles(&words),
+                ["Type", "RT", "T/R", "SA", "Mode code / words", "Data", "Status", "Status bits", "C/S payload"]
+            );
+            assert_eq!(words[0].cells, ["Command", "17", "R", "02", "2 words", "", "", "", "00001000010"]);
+            assert_eq!(words[1].cells, ["Data", "", "", "", "", "0005", "", "", ""]);
+            assert_eq!(words[2].cells, ["Status", "17", "", "", "", "", "TF", "000-000-00001", "00000000001"]);
+            assert_eq!(
+                words[3].cells,
+                ["Command", "17", "T", "00", "Transmit last command", "", "", "", "10000010010"]
+            );
+            assert_eq!(words[4].cells, ["Data", "", "", "", "", "0157", "", "", ""]);
+            assert_eq!(words[4].why, "Manchester or parity error");
             assert_eq!(words[0].why, "");
             assert_eq!(rows[0].cells, ["17", "R", "02", "02", "0005 0006", "17 TF"]);
             assert_eq!(rows[1].cells, ["17", "T", "00", "18", "", ""]);

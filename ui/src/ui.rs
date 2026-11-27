@@ -203,6 +203,7 @@ pub mod startup;
 mod strip;
 mod extgen;
 mod sysinfo;
+pub mod tabledata;
 mod tables;
 mod tools;
 mod trigger_controls;

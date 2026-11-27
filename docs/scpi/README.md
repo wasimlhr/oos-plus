@@ -4,7 +4,7 @@ OOS Plus implements a **subset of Rigol DHO800/DHO900 SCPI**, including commands
 
 This reference describes the repository implementation. Primary Rigol syntax was checked against the [DHO800/DHO900 Programming Guide](https://download.rigol.com/en/Manual/Digital%20Oscilloscope/DHO800/DHO800900_ProgrammingGuide_EN.pdf), including trigger MODE and waveform preamble definitions. Local backend tests establish the implemented behavior; they do not establish physical instrument or VISA-driver certification. See [local validation](../local-validation.md). The canonical implementation is [scpi.rs](../../ui/src/scpi.rs) with the tables in [scpiext*.rs](../../ui/src/ui/scpiext.rs); transport details are in [hislip.rs](../../ui/remote/src/hislip.rs) and [vxi11.rs](../../ui/remote/src/vxi11.rs).
 
-Every command has exactly one row, in exactly one of the group pages below (571 headers in the tables). Menu equivalents use the UI labels, as Area > Option.
+Every command has exactly one row, in exactly one of the group pages below (576 headers in the tables). Menu equivalents use the UI labels, as Area > Option.
 
 ## Contents
 
@@ -162,6 +162,7 @@ See [waveform](waveform.md) for the preamble and the formats.
 | [Screen layout and controls](layout.md) | 25 | Docking, sizing and floating the Studio views; the right-click menu; screen controls by name and place |
 | [Save and load](storage.md) | 14 | Save and load setups, sessions, waveforms, the acquisition memory, images, fast frames; list, fetch and delete saved files |
 | [Data logger](logger.md) | 4 | Data logger |
+| [Tables](table.md) | 5 | Every table by name with its Index: list, count, read as CSV, save; the count of the decode table |
 | [Calibration and deskew](calibration.md) | 6 | Self-calibration and analysis deskew |
 | [Setup keys](setup-keys.md) | - | The `:SYSTem:SET` key list and the packed-key formats |
 

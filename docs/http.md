@@ -402,8 +402,19 @@ answers as `9.9E37` (none) is `null`.
 
 - Mark: **experimental**
 - Request: `offset` from 0 (0), `max_rows` 1 to 2000 (200).
-- Answer: from `:DECode:EVENts?`: `pending` true while the decoders compute (nothing else then), else `pending`
-  false, `total_rows`, `offset`, `rows` (`{t, decoder, text, ok}`) and `next_offset` (null after the last row).
+- Answer: the table `EVENTS` (the decode table, the Events pane): `pending` true while the decoders compute (nothing
+  else then), else `pending` false, `table`, `view` (messages, fields or lines), `columns`, `total_rows`, `offset`,
+  `rows` (an object per row, keyed by the column titles, `Index` first: for a MIL-STD-1553 word Type, RT, T/R, SA, Mode
+  code / words, Data, Status, Status bits, C/S payload, Error) and `next_offset` (null after the last row), and a hint
+  how to show the table on the screen (`:DISPlay:LOWer EVENTS`).
+
+### MCP tool `table`
+
+- Mark: **experimental**
+- Request: `name` (EVENTS, FIELDS, SEARCH, SEGMENTS, PEAKS, MEASURE; without it the list), `offset` from 0 (0),
+  `max_rows` 1 to 2000 (200).
+- Answer: without `name`, `tables` (`{name, what}`) and a hint. With it as `decode_results`: `columns`, `total_rows`,
+  `rows` with the `Index` first, `next_offset`. As a file on the scope: `:TABLe:SAVE <name>` through `scpi`.
 
 ### MCP tool `errors`
 
@@ -473,7 +484,8 @@ answers as `9.9E37` (none) is `null`.
 - Request: optional `slot` (from 1), `protocol` (a name of the list, any case), `input` (`WAVEFORM` or `LA`),
   `source`, `source2`, `cs`, `source4`, `threshold`, `state`.
 - Answer: `applied`, the commands that ran (`:DEC:SEL`, then `:DEC:PROT`, then the others), and `decoder`, the slot
-  read back (`slot`, `protocol`, `state`, `input`, `source`, `source2`, `threshold`).
+  read back (`slot`, `protocol`, `state`, `input`, `source`, `source2`, `threshold`), and `decode_table`, a hint that
+  the decode table is the Events pane, opened by `:DISPlay:LOWer EVENTS` and read by `decode_results`.
 
 ### MCP tool `screenshot`
 

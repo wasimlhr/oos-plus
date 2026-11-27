@@ -176,7 +176,7 @@ fn pair_token(k: usize) -> &'static str {
 }
 
 /// The measurement strip: each row, then the DVM and the counter when they are on.
-fn meas_strip(ui: &Ui) -> String {
+pub(super) fn meas_strip(ui: &Ui) -> String {
     let mut p = Vec::new();
     for &(k, id) in &ui.m.meas {
         p.push(format!("{},{},{}", meas_token(k), wave_tok(id), e(ui.fact_meas(k, id))));

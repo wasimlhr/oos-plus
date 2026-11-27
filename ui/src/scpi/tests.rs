@@ -19,6 +19,7 @@ mod decode;
 mod measure;
 mod reference;
 mod settings;
+mod table;
 mod transports;
 mod trigger_pulse;
 mod trigger_types;
