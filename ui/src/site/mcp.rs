@@ -1384,15 +1384,20 @@ fn setup_decoder(run: &mut Run, args: &J) -> J {
     };
     let applied: Vec<J> = cmds.iter().filter(|c| run.w(c)).map(|c| J::s(c)).collect();
     let mut q = |k: &str| value(run.q(k));
-    let decoder = J::obj(&[
+    let mut fields = vec![
         ("slot", q(":DEC:SEL?")),
         ("protocol", q(":DEC:PROT?")),
         ("state", q(":DEC:STAT?")),
         ("input", q(":DEC:INP?")),
         ("source", q(":DEC:SOUR?")),
-        ("source2", q(":DEC:SOUR2?")),
-        ("threshold", q(":DEC:THR?")),
-    ]);
+    ];
+    // the second role is read back only when it was asked for: a protocol without one (1553, UART) would show a
+    // source that means nothing
+    if args.get("source2").is_some() {
+        fields.push(("source2", q(":DEC:SOUR2?")));
+    }
+    fields.push(("threshold", q(":DEC:THR?")));
+    let decoder = J::obj(&fields);
     let hint = J::s("The decode table is the Events pane: open it with :DISPlay:LOWer EVENTS (the scope: scpi tool); its rows with decode_results or table EVENTS.");
     let mut out = vec![("applied", J::Arr(applied)), ("decoder", decoder), ("decode_table", hint)];
     // auto: what it set up, then what the decoder says of its line (the acquisition it arms has not finished here: ask

@@ -8530,7 +8530,7 @@
     {
      "header": ":DECode:EVENts",
      "query": ":DECode:EVENts?",
-     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. While the scope runs the rows are those of the record on the screen and change with the next acquisition; stop it first (`:STOP`, `:SINGle`) and ask again until the answer is not `BUSY` for a complete list. A row is `ok` or `error`; an error row ends with its reason, the text of the Error column of the Events pane (\"Word count mismatch\", \"Incomplete packet\"), so a word of a message the pane flags is an error here too. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
+     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. While the scope runs the rows are those of the record on the screen and change with the next acquisition; stop it first (`:STOP`, `:SINGle`) and ask again until the answer is not `BUSY` for a complete list. A row is `ok` or `error`; an error row ends with its reason, the text of the Error column of the Events pane (\"Word count mismatch\", \"Incomplete packet\"), so a word of a message the pane flags is an error here too. The rows come one per line without a count, so a client that reads line by line cannot tell where they end (these are always the word rows; `:DECode:EVENts:COUNt` counts the rows of the pane's view, messages, fields or lines, so the two can differ): `:BUS<n>:DATA?` gives the same rows as a block.",
      "remarks": [
       "- Menu equivalent: Decode and bus > Read decoded events.",
       "- Origin: OOS extension"
@@ -9555,10 +9555,11 @@
      ],
      "remarks": [
       "- The report of the last `:DECode:AUTO`, one sentence a line: each setting it changed with its old value, each it kept, what it could not do, and below it the diagnosis of the decoder now (lines that begin with `diagnosis:`).",
+      "- The automatic set-up chooses the smallest time base and depth that hold one frame: for a view of many packets set a longer time base and a deep memory yourself (`:TIMebase:SCALe`, `:ACQuire:MDEPth`), then `:SINGle`.",
       "- The diagnosis is of the record on the screen: ask again when the single acquisition has stopped (`:TRIGger:STATus?` is STOP).",
       "- Origin: OOS extension"
      ],
-     "returns": "On a freshly started default model the query returns `empty`.",
+     "returns": "The query only reads: it changes nothing and arms nothing; it shows what the last `:DECode:AUTO` (or `setup_decoder auto:true`) did. On a freshly started default model the query returns `empty`.",
      "ext": true
     }
    ],
@@ -14836,14 +14837,14 @@
       [
        "<t0>,<t1>",
        "Text",
-       "seconds: the finest zoom step that holds the span, centred on it.",
+       "seconds: the finest zoom step that holds the span, centred on it. In the Studio layout the zoom window is opened by this command; `:TIMebase:DELay:ENABle` does not draw it there.",
        "—"
       ]
      ],
      "remarks": [
       "- Origin: OOS extension"
      ],
-     "returns": "The query answers the zoom window as `<t0>,<t1>`, `0,0` when zoom is off.",
+     "returns": "The query answers the zoom window as `<t0>,<t1>`, `0,0` when zoom is off (`:ZOOM:BOX 0,0` is refused with -224: close the zoom with `:ZOOM:CLOSe`).",
      "ext": true,
      "example": ":ZOOM:BOX -5e-3,5e-3\n:ZOOM:BOX?"
     },
