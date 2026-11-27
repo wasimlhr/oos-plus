@@ -112,21 +112,45 @@ pub(super) fn match_len(raw: &[u8], i: usize, d: usize) -> usize {
 /// left match costs 10 bits less than the one above (no extra distance bits), so it is looked for first and the one
 /// above only when the left one is not the longest possible.
 pub(crate) fn deflate_rows(raw: &[u8], stride: usize) -> Vec<u8> {
+    deflate_block(raw, stride, true, false).finish()
+}
+
+/// `deflate_rows` as a part of a zlib stream that goes on after it (ZRLE's, `vnc.rs`): a block that is not the last
+/// one, then an empty stored block, which ends on a whole byte (zlib's sync flush): the reader has all of `raw`. Also
+/// matches against the byte before (runs: a flat area as a palette index, a solid tile). Nothing reaches back before
+/// `raw`, so a block depends on none before it besides the stream's header (`ZLIB_HEADER`).
+pub(crate) fn deflate_sync(raw: &[u8], stride: usize) -> Vec<u8> {
+    let mut o = deflate_block(raw, stride, false, true);
+    o.bits(0, 3); // not the last block, stored
+    let mut out = o.finish();
+    out.extend_from_slice(&[0, 0, 0xff, 0xff]); // its length, 0, and the complement
+    out
+}
+
+/// The two bytes that open a zlib stream: deflate, 32 K window, no dictionary.
+pub(crate) const ZLIB_HEADER: [u8; 2] = [0x78, 0x01];
+
+fn deflate_block(raw: &[u8], stride: usize, last: bool, runs: bool) -> BitOut {
     let (stride_code, stride_extra) = {
         let c = DIST_BASE.iter().rposition(|&(b, _)| b as usize <= stride).unwrap_or(0);
         (c, stride.saturating_sub(DIST_BASE[c].0 as usize) as u32)
     };
     let stride_ok = stride > 3 && stride <= 32768;
     let mut o = BitOut { out: Vec::with_capacity(raw.len() / 8 + 64), acc: 0, n: 0 };
-    o.bits(1, 1); // BFINAL
+    o.bits(last as u32, 1); // BFINAL
     o.bits(1, 2); // BTYPE 01 = fixed Huffman
     let mut i = 0;
     while i < raw.len() {
         let left = if i >= 3 { match_len(raw, i, 3) } else { 0 };
-        let above = if left < 258 && stride_ok && i >= stride { match_len(raw, i, stride) } else { 0 };
-        if above > left && above >= 3 {
+        let run = if runs && left < 258 && i >= 1 { match_len(raw, i, 1) } else { 0 };
+        let best = left.max(run);
+        let above = if best < 258 && stride_ok && i >= stride { match_len(raw, i, stride) } else { 0 };
+        if above > best && above >= 3 {
             o.matched(above, stride_code, stride_extra);
             i += above;
+        } else if run > left && run >= 3 {
+            o.matched(run, 0, 0);
+            i += run;
         } else if left >= 3 {
             o.matched(left, 2, 0);
             i += left;
@@ -136,7 +160,7 @@ pub(crate) fn deflate_rows(raw: &[u8], stride: usize) -> Vec<u8> {
         }
     }
     o.symbol(256);
-    o.finish()
+    o
 }
 
 /// PNG (8-bit RGB) of XRGB8888 pixels: filter 0 per row, zlib stream of one fixed-Huffman deflate block

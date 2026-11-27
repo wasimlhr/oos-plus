@@ -148,15 +148,18 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - Request: a WebSocket upgrade (`Upgrade: websocket`, `Sec-WebSocket-Key`), from the scope's own page: 403 for
   another site's (`foreign`). Without the upgrade: 404.
 - Answer: 101, then the connection stays and carries RFB 3.8 (VNC) in binary frames, security type None: the
-  screen as rectangles of what changed (TightPNG, or Raw for a viewer that does not take it), at most 20 updates a
-  second and only while the viewer asks. The left mouse button is a finger: `down`, `move` and `up` of `/cmd`.
+  screen as rectangles of what changed: TightPNG for a viewer that takes it (noVNC), else ZRLE (every desktop
+  viewer), else Raw. At most 50 updates a second, as many as the screen is drawn, and only while the viewer asks:
+  screens are made ahead of its next request, and a viewer that names ContinuousUpdates and Fence (noVNC,
+  TigerVNC) gets updates with no request each. A still screen is looked at only every 200 ms. The left mouse button
+  is a finger: `down`, `move` and `up` of `/cmd`.
   The wheel and the keys act as those of a mouse and a keyboard on the scope (`wheel`, `keysym`): the wheel pans,
   with Shift the V/div, with Ctrl the zoom, with Alt the trigger level; the keys stand for the front panel and
   type into the on-screen keyboard while it is open. The right button is the touch-hold context menu (`context`).
   503 while two viewers are connected. A desktop VNC viewer gets the same protocol without the WebSocket on a port
   of its own, 5900, while Remote services > VNC is on ([network.md](network.md) 4); it shares the two places.
-- Limits: two viewers, each on a thread of its own on the slow cores (`vnc.rs`); a viewer that sends nothing for
-  60 s is dropped. Remote services > Web off ends them.
+- Limits: two viewers, each on a thread of its own on the slow cores at nice 10 (`vnc.rs`); a viewer that sends
+  nothing for 60 s is dropped. Remote services > Web off ends them.
 - net.allow: no (the screen, keys and knobs, ADR 0025).
 
 ### `GET /monitor.png`
