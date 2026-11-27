@@ -63,6 +63,9 @@ loop() {
 
 if [ "${2:-}" = --restore ]; then
 	stop oos-ui.new /tmp/oos-ui.off2
+	# the installed one may run already (a second --restore, or none was deployed): ended with its loop first, or a
+	# second loop starts a second oos-ui beside it, which holds the display but not the DMA device or the ports
+	stop oos-ui /tmp/oos-ui.off
 	run "rm -f /tmp/oos-ui.off" >/dev/null
 	loop /bin/oos-ui /tmp/oos-ui.off
 	echo "installed oos-ui running again"

@@ -110,6 +110,10 @@ A decision that touches two categories goes where its consequences are largest a
 | [0076](ui-ux/0076-the-top-bar-holds-display-and-storage.md) | ui-ux | The top bar holds Display and Storage; Measure and Cursor are keys and start-menu entries | proposed |
 | [0077](ui-ux/0077-a-menu-opens-at-what-opened-it-an-entry-pad-in-the-centre.md) | ui-ux | a menu opens at what opened it; an entry pad opens in the centre, large | proposed |
 | [0077](ui-ux/0077-the-handles-of-the-studio-sources-stand-at-the-right-edge.md) | ui-ux | the handles of the Studio sources stand at the right edge | proposed |
+| [0078](system/0078-the-image-builds-its-own-busybox-without-network-servers.md) | system | The image builds its own busybox, without telnet and the network servers it does not run | proposed |
+| [0079](system/0079-the-rear-usb-port-is-a-network-link-to-one-computer.md) | system | The rear USB port is a network link to one computer, off by default | proposed |
+| [0081](code/0081-the-acquisition-arms-only-what-the-deposit-workers-can-draw.md) | code | The acquisition arms only what the deposit workers can draw | proposed |
+| [0082](code/0082-a-measurement-slot-is-a-number-for-a-row-of-the-table.md) | code | a measurement slot is a number for a row of the table; an empty slot is an error | proposed |
 <!-- end of the index -->
 
 ## Reading order for agents

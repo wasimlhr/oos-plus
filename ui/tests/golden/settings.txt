@@ -38,19 +38,19 @@ scpi :ACQuire:CORes "ON" -> query: MATC; errors: none
 scpi :ACQuire:CORes "RAW" -> query: RAW; errors: none
 scpi :ACQuire:CORes "x" -> query: MATC; errors: -224,"Illegal parameter value" x
 scpi :ACQuire:CORes default -> query: MATC; errors: none
-scpi :ACQuire:MDEPth "" -> query: 5.000000E+05; errors: -224,"Illegal parameter value"
-scpi :ACQuire:MDEPth "-1" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" -1
+scpi :ACQuire:MDEPth "" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" ; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
+scpi :ACQuire:MDEPth "-1" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" -1; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth "1000" -> query: 1.000000E+03; errors: none
 scpi :ACQuire:MDEPth "1000000" -> query: 1.000000E+06; errors: none
 scpi :ACQuire:MDEPth "10k" -> query: 1.000000E+04; errors: none
 scpi :ACQuire:MDEPth "125M" -> query: 1.250000E+08; errors: none
 scpi :ACQuire:MDEPth "1M" -> query: 1.000000E+06; errors: none
-scpi :ACQuire:MDEPth "1e9" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 1e9
+scpi :ACQuire:MDEPth "1e9" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 1e9; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth "1k" -> query: 1.000000E+03; errors: none
-scpi :ACQuire:MDEPth "200M" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 200M
-scpi :ACQuire:MDEPth "7" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 7
+scpi :ACQuire:MDEPth "200M" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 200M; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
+scpi :ACQuire:MDEPth "7" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" 7; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth "AUTO" -> query: 5.000000E+05; errors: none
-scpi :ACQuire:MDEPth "x" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" x
+scpi :ACQuire:MDEPth "x" -> query: 5.000000E+05; errors: -224,"Illegal parameter value" x; the depths are AUTO, 1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M
 scpi :ACQuire:MDEPth default -> query: 5.000000E+05; errors: none
 scpi :ACQuire:SEGMents "" -> query: 0; errors: -224,"Illegal parameter value"
 scpi :ACQuire:SEGMents "-1" -> query: 0; errors: -224,"Illegal parameter value" -1
@@ -863,13 +863,13 @@ scpi :DISPlay:RULers "ON" -> query: 1; errors: none
 scpi :DISPlay:RULers "on" -> query: 1; errors: none
 scpi :DISPlay:RULers "x" -> query: 1; errors: -224,"Illegal parameter value" x
 scpi :DISPlay:RULers default -> query: 1; errors: none
-scpi :DISPlay:TYPE "" -> query: DOTS; errors: -224,"Illegal parameter value"
-scpi :DISPlay:TYPE "-1" -> query: DOTS; errors: -224,"Illegal parameter value" -1
-scpi :DISPlay:TYPE "1e9" -> query: DOTS; errors: -224,"Illegal parameter value" 1e9
+scpi :DISPlay:TYPE "" -> query: VECT; errors: -224,"Illegal parameter value"
+scpi :DISPlay:TYPE "-1" -> query: VECT; errors: -224,"Illegal parameter value" -1
+scpi :DISPlay:TYPE "1e9" -> query: VECT; errors: -224,"Illegal parameter value" 1e9
 scpi :DISPlay:TYPE "DOTS" -> query: DOTS; errors: none
 scpi :DISPlay:TYPE "VECTors" -> query: VECT; errors: none
-scpi :DISPlay:TYPE "x" -> query: DOTS; errors: -224,"Illegal parameter value" x
-scpi :DISPlay:TYPE default -> query: DOTS; errors: none
+scpi :DISPlay:TYPE "x" -> query: VECT; errors: -224,"Illegal parameter value" x
+scpi :DISPlay:TYPE default -> query: VECT; errors: none
 scpi :DISPlay:VIEW "" -> query: 1; errors: -224,"Illegal parameter value"
 scpi :DISPlay:VIEW "-1" -> query: 1; errors: -224,"Illegal parameter value" -1
 scpi :DISPlay:VIEW "0" -> query: 1; errors: -224,"Illegal parameter value" 0
@@ -3716,19 +3716,19 @@ setup deskew_ref11 "1e-9" -> (absent); error: line 2: deskew_ref11: invalid desk
 setup deskew_ref11 "1e9" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 "x" -> (absent); error: line 2: deskew_ref11: invalid deskew source
 setup deskew_ref11 default -> (absent)
-setup dots "" -> true; error: "line 2: dots: not a boolean: "
-setup dots "-1" -> true; error: line 2: dots: not a boolean: -1
+setup dots "" -> false; error: "line 2: dots: not a boolean: "
+setup dots "-1" -> false; error: line 2: dots: not a boolean: -1
 setup dots "0" -> false
 setup dots "1" -> true
-setup dots "1e9" -> true; error: line 2: dots: not a boolean: 1e9
-setup dots "TRUE" -> true; error: line 2: dots: not a boolean: TRUE
+setup dots "1e9" -> false; error: line 2: dots: not a boolean: 1e9
+setup dots "TRUE" -> false; error: line 2: dots: not a boolean: TRUE
 setup dots "false" -> false
 setup dots "off" -> false
 setup dots "on" -> true
 setup dots "true" -> true
-setup dots "x" -> true; error: line 2: dots: not a boolean: x
-setup dots "yes" -> true; error: line 2: dots: not a boolean: yes
-setup dots default -> true
+setup dots "x" -> false; error: line 2: dots: not a boolean: x
+setup dots "yes" -> false; error: line 2: dots: not a boolean: yes
+setup dots default -> false
 setup dpt "" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values
 setup dpt "-1 2 3 Off 4 10 Both" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: not a source: -1
 setup dpt "-1" -> 1 2 3 Off 4 10 Both; error: line 2: dpt: dpt: want 7 values
@@ -4354,7 +4354,7 @@ setup layout "1e9" -> default; error: line 2: layout: bad layout 1e9
 setup layout "Studio" -> studio
 setup layout "classic" -> default; error: line 2: layout: bad layout classic
 setup layout "default" -> default
-setup layout "minimal" -> minimal
+setup layout "minimal" -> studio; also: studio_traces = overlay
 setup layout "studio" -> studio
 setup layout "x" -> default; error: line 2: layout: bad layout x
 setup layout default -> default
@@ -5043,6 +5043,16 @@ setup meas_levels "1e9" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; e
 setup meas_levels "x 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: not a boolean: x
 setup meas_levels "x" -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto; error: line 2: meas_levels: meas_levels: 16 values
 setup meas_levels default -> 0 0 0.5 0.05 -1 0 1 0.03 0 0.1 0.5 0.9 -1 0 1 Auto
+setup meas_slots "" -> (absent)
+setup meas_slots "-1" -> (absent); error: line 2: meas_slots: not n|row: -1
+setup meas_slots "0|m:Vpp:1" -> (absent); error: line 2: meas_slots: not a slot 1..99: 0
+setup meas_slots "100|m:Vpp:1" -> (absent); error: line 2: meas_slots: not a slot 1..99: 100
+setup meas_slots "1e9" -> (absent); error: line 2: meas_slots: not n|row: 1e9
+setup meas_slots "1|m:Vpp:1 1|m:Vmax:1" -> (absent); error: line 2: meas_slots: slot 1 twice
+setup meas_slots "1|m:Vpp:1" -> (absent)
+setup meas_slots "99|p:0:1:2" -> (absent)
+setup meas_slots "x" -> (absent); error: line 2: meas_slots: not n|row: x
+setup meas_slots default -> (absent)
 setup meas_stat "" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
 setup meas_stat "-1" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max
 setup meas_stat "1e9" -> (absent); error: line 2: meas_stat: meas_stat: population sd min max

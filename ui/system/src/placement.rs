@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! Thread placement on a big.LITTLE SoC (fork, docs/fork/perf-plan.md item 6). Without it the frame loop, the GPU
-//! helper and the acquisition thread share both A72 of the RK3399 (`pin_to_big_cores`). With `perf.place = on`:
+//! Thread placement on a big.LITTLE SoC (fork, docs/fork/perf-plan.md item 6). Without it the frame loop and the
+//! acquisition thread share both A72 of the RK3399 (`pin_to_big_cores`) and the GPU helper goes to every core
+//! (`to_all_cores`). With `perf.place = on`:
 //! the frame loop (and the GPU helper it starts) on the first big core, the acquisition thread on the second. Workers
 //! already go to the little cores (`to_little_cores`). Opt-in until measured on the unit; Linux only, a no-op elsewhere and on SoCs whose cores are
 //! all alike. The xdma interrupt goes to a little core from the rootfs (`/proc/irq/<n>/smp_affinity`), not from here.
@@ -99,6 +100,23 @@ pub fn place(r: Role) {
     let _ = r;
 }
 
+/// `perf.fifo = off` in system.conf, or OOS_FIFO=0: the acquisition thread at normal priority (`realtime`).
+#[cfg(any(target_os = "linux", test))]
+const FIFO_OFF: crate::sysconf::Flag = crate::sysconf::Flag { key: "perf.fifo", env: Some("OOS_FIFO"), on: "off" };
+
+/// The calling thread (the acquisition thread, `board::dho::hw`) at `SCHED_FIFO` priority 1, unless `perf.fifo = off`:
+/// no normal thread on its core delays a read-out any more; the threads it starts run at normal priority. Where the
+/// kernel refuses, it stays at normal priority, said once. On by default, verified on the unit (DHO924S, 2026-11-25;
+/// ADR 0010).
+pub fn realtime() {
+    #[cfg(target_os = "linux")]
+    if !FIFO_OFF.get() {
+        if let Err(e) = crate::system::fifo_current_thread(1) {
+            eprintln!("oos-ui: SCHED_FIFO for the acquisition thread: {}; normal priority", e);
+        }
+    }
+}
+
 /// The cores with less than the largest `cpu_capacity` (empty on a SoC whose cores are all alike, or without the
 /// file): where the background threads go.
 #[cfg(target_os = "linux")]
@@ -142,16 +160,33 @@ pub fn to_little_cores() {
     let _ = crate::system::pin_current_thread(&little_cores());
 }
 
-/// The calling thread onto the fastest cores (RK3399: the two A72), and the processes it starts after this with it.
-/// System > Graphics = GPU: the frame loop and the GPU helper compare and send the layers there (on an A53 a
-/// frame's compare took three times as long).
+/// Every core that says its `cpu_capacity` (RK3399: 0-5), empty without the files.
+#[cfg(target_os = "linux")]
+pub fn all_cores() -> Vec<usize> {
+    (0..64)
+        .filter(|c| std::path::Path::new(&format!("/sys/devices/system/cpu/cpu{}/cpu_capacity", c)).exists())
+        .collect()
+}
+
+/// Process `pid`, started by a thread on the fast cores, onto every core: the GPU helper (`gpu::Gpu::start`), unless
+/// `perf.place = on` keeps it with the frame loop. On the two A72 only it waited behind the frame loop and the
+/// acquisition thread (`realtime`) and the frame loop waited for it in turn; anywhere the kernel finds room it is done
+/// in time. Verified on the unit (DHO924S, 2026-11-26): Average at 4 channels 1 us/div, the screen's drawing and
+/// showing 8.2 -> 4.7 ms, waveforms a second +10 %; 4 channels Normal unchanged.
+#[cfg(target_os = "linux")]
+pub fn to_all_cores(pid: libc::pid_t) {
+    if !enabled() {
+        let _ = crate::system::pin_thread(pid, &all_cores());
+    }
+}
+
+/// The calling thread onto the fastest cores (RK3399: the two A72), and the processes it starts after this with it
+/// (the GPU helper then goes to every core, `to_all_cores`). System > Graphics = GPU: the frame loop compares and
+/// sends the layers there (on an A53 a frame's compare took three times as long).
 #[cfg(target_os = "linux")]
 pub fn pin_to_big_cores() {
     let little = little_cores();
-    let all: Vec<usize> = (0..64)
-        .filter(|c| std::path::Path::new(&format!("/sys/devices/system/cpu/cpu{}/cpu_capacity", c)).exists())
-        .collect();
-    let big: Vec<usize> = all.into_iter().filter(|c| !little.contains(c)).collect();
+    let big: Vec<usize> = all_cores().into_iter().filter(|c| !little.contains(c)).collect();
     if big.is_empty() || little.is_empty() {
         return;
     }
@@ -165,6 +200,7 @@ mod tests {
     #[test]
     fn the_switch_reads_both_files() {
         FLAG.check_both_files();
+        FIFO_OFF.check_both_files();
     }
 
     fn fake_sysfs(cap: &[(usize, u32)]) -> std::path::PathBuf {

@@ -12,9 +12,13 @@ Part of the [SCPI reference](README.md).
 
 ### Readouts and rows
 
-| Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |
-| --- | --- | --- | --- | --- | --- |
+| Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes | What it does | See also |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | `:MEASure:SOURce` | Set / Query | `<A>[,<B>]` Default Measure source(s); query returns A. Sources are `CHANn\|Rn`. | `CHAN1` | Measure > Source A | Rigol-compatible |
+| `:MEASure:SLOT<n>` | Set / Query | `<item>[,<A>[,<B>]]`, n = 1 to 99. Set: add the measurement as `:MEASure:ITEM` does (same items and sources, `MATH<n>` too) and give the row the number `n`; the row shows the badge `M<n>` in the table. A slot that is in use gives its old row up (the row leaves the table); a row that has another number moves. Query `:MEASure:SLOT<n>?` answers the value of the row as the table shows it (`9.9E37` while it is not computed yet). An empty slot is the error `-221`, saying which slot, never `9.9E37`. | - | Measurements > Add (the badge M<n>) | OOS extension | Adds a measurement to the numbered slot MEAS<n>, so it is computed and is a row of the measurement table on the screen, and reads its value back by the number; an empty slot is an error with its reason. | `:MEASure:SLOT<n>:ITEM`, `:MEASure:SLOT<n>:CLEar`, `:MEASure:SLOT:LIST`, `:MEASure:ITEM`, `:MEASure:STRip` |
+| `:MEASure:SLOT<n>:ITEM` | Query | What the slot measures as `:MEASure:STRip?` writes it, without the value: `VPP,CHAN1`, `RRDELAY,CHAN1,CHAN2` (a math source reads `R<k>`, the reference slot that holds its copy). An empty slot is the error `-221`. | - | - | OOS extension | Says which item and which sources the numbered measurement slot holds. | `:MEASure:SLOT<n>`, `:MEASure:SLOT:LIST` |
+| `:MEASure:SLOT<n>:CLEar` | Action | Empty slot `n` and take its row off the table; an empty slot is left as it is. | - | Measurements > Remove | OOS extension | Empties a numbered measurement slot and removes its row from the measurement table. | `:MEASure:SLOT<n>`, `:MEASure:CLEar`, `:MEASure:ITEM:REMove` |
+| `:MEASure:SLOT:LIST` | Query | The slots in use, by number: `<n>,<ITEM>,<source>[,<source>],<value>` separated by semicolons; empty when none is. | - | - | OOS extension | Lists the numbered measurement slots that are in use, each with what it measures and its value. | `:MEASure:SLOT<n>`, `:MEASure:STRip` |
 | `:MEASure:CLEar` | Action | Clear standard, pair and catalog selections through the shared statistics reset. | - | Measurements > Clear all | Rigol-compatible |
 | `:MEASure:STRip` | Query | Configured standard/pair/catalog rows, then enabled DVM/counter rows. | - | Measurements > Read all measurement values | OOS extension |
 | `:MEASure:PENDing` | Query | `1` while the measurements of the record shown are still computed (in the background, a catalogue row, or a queried item, ref or pair measurement), else `0`. A value read meanwhile answers `9.9E37` like one that does not exist. `0` can still be of the previous record: after `:SINGle`, wait until `:TRIGger:STATus?` answers `STOP`, then for `0`, then read. | - | Measurements > Computing | OOS extension |
@@ -24,7 +28,7 @@ Part of the [SCPI reference](README.md).
 | `:MEASure:CATalog:ITEM` | Set / Query | `<id>[,A[,B[,C[,D]]]]` Add the catalogue row `id` on the given sources (defaults: the current Source A, B, C, D); a row already there is left. The query `:MEASure:CATalog:ITEM? <id>[,A,...]` answers its value (`9.9E37` when none) | - | Measurements > Add (catalogue) | OOS extension |
 | `:MEASure:CATalog:SOURceC` | Set / Query | Source C or D of the Add page. | `CH3` | Measure > Source C | OOS extension |
 | `:MEASure:CATalog:SOURceD` | Set / Query | Source C or D of the Add page. | `CH4` | Measure > Source D | OOS extension |
-| `:MEASure:ITEM` | Set / Query | `<item>[,<A>[,<B>]]` Set: add a standard or pair readout (duplicates keep statistics and Single). Query `:MEASure:ITEM? <item>[,<source>]` answers a standard scalar (the source may be `MATH<n>`: the item over the whole record of that math channel), `:MEASure:ITEM? <pair>,<A>,<B>` a pair scalar with physical-time alignment; the default source is the Measure selection. Items: see [Measure](measure.md#items). | - | Measurements > Add standard measurement | Rigol-compatible. `9.9E37` when no value exists. |
+| `:MEASure:ITEM` | Set / Query | `<item>[,<A>[,<B>]]` Set: add a standard or pair readout (duplicates keep statistics and Single); a source may be `MATH<n>`, which the row reads from a copy of the math result in a reference slot (-221 when the result is not ready). Query `:MEASure:ITEM? <item>[,<source>]` answers a standard scalar (the source may be `MATH<n>`: the item over the whole record of that math channel), `:MEASure:ITEM? <pair>,<A>,<B>` a pair scalar with physical-time alignment; the default source is the Measure selection. Items: see [Measure](measure.md#items). | - | Measurements > Add standard measurement | Rigol-compatible. `9.9E37` when no value exists. |
 | `:MEASure:SETup:MID` | Set / Query | `50` only: edges are timed at half the amplitude | `50` | - | fork command; name not verified against the DHO guide |
 | `:MEASure:THReshold:TYPE` | Set / Query | `PERCent` only | `PERC` | - | fork command; name not verified against the DHO guide |
 | `:MEASure:THReshold:DEFault` | Action | Thresholds back to 10 % and 90 % | - | - | fork command; name not verified against the DHO guide |
@@ -116,6 +120,18 @@ One-shot measurements.
 :MEASure:ITEM? VPP,CHAN1               -> 2.564586E+00
 :MEASure:ITEM? FREQuency,CHAN1         -> 9.999857E+02
 :MEASure:ITEM? VRMS,CHAN1              -> 1.765733E+00
+```
+
+Numbered slots: add first, read back by the number.
+
+```text
+:MEASure:CLEar
+:MEASure:SLOT1 VPP,CHAN1               (a row M1 in the measurement table)
+:MEASure:SLOT2 VRMS,CHAN3              (a row M2)
+:MEASure:SLOT1?                        -> 2.564586E+00
+:MEASure:SLOT2:ITEM?                   -> VRMS,CHAN3
+:MEASure:SLOT5?                        -> -221,"Settings conflict; MEAS5 is empty: add a measurement with ..."
+:MEASure:SLOT1:CLEar
 ```
 
 Build a measurement strip and read it.

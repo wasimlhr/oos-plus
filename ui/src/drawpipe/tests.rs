@@ -137,7 +137,7 @@ fn batch_picture_from_the_codes_equals_each_frame_drawn() {
         settle(&pipe);
         let mut got = Phosphor::new(w, h);
         let (mut clear, mut edges, mut off) = (Renew::Keep, [0u64; 4], (0.0, 0.0));
-        let n_got = pipe.merge(&mut got, &mut clear, &mut edges, &mut off);
+        let n_got = pipe.merge(&mut got, None, &mut clear, &mut edges, &mut off);
         let (want, trig, wedges, woff, _) = reference(&bytes, fb, &s, &p, &m, w, h);
         assert_eq!((n_got.frames, n_got.triggered, edges), (9, trig, wedges), "mask {}", mask);
         assert!((off.0 - woff.0).abs() <= 1e-9 * woff.0.abs().max(1.0) && off.1 == woff.1);
@@ -310,7 +310,7 @@ fn merge_all(
 ) -> (Merged, Vec<u64>) {
     let (mut sum, mut px) = (Merged::default(), Vec::new());
     while pending(p) {
-        let d = p.merge(ph, clear, edges, off);
+        let d = p.merge(ph, None, clear, edges, off);
         (sum.frames, sum.triggered) = (sum.frames + d.frames, sum.triggered + d.triggered);
         crate::framestats::add_folds(&mut sum.folds, &d.folds);
         px.push(d.px);
@@ -403,7 +403,7 @@ fn batch_picture_equals_each_frame_drawn() {
         assert_eq!(c.read(), (0, 0, 0), "{}: nothing dropped", what);
         assert_eq!(c.measured.load(Ordering::Relaxed), folds.first().map_or(0, |x| x.1.n));
         // merged once; both buffers back in the pool
-        assert_eq!(pipe.merge(&mut got, &mut clear, &mut edges, &mut off), Merged::default());
+        assert_eq!(pipe.merge(&mut got, None, &mut clear, &mut edges, &mut off), Merged::default());
         let back: Vec<_> = std::iter::from_fn(|| pipe.take_buffer()).collect();
         assert_eq!(back.len(), 2);
         assert!(back.into_iter().all(|b| b.downcast::<Bytes>().is_ok()));
@@ -429,7 +429,7 @@ fn every_frame_is_merged_once_while_the_workers_fold() {
     let (mut frames, mut merges) = (0, 0);
     let done = std::sync::atomic::AtomicBool::new(false);
     let mut take = |ph: &mut Phosphor| {
-        let got = pipe.merge(ph, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
+        let got = pipe.merge(ph, None, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
         assert!(got.px <= (w * h) as u64, "{} pixels added", got.px);
         frames += got.frames;
         merges += (got.frames > 0) as u64;
@@ -477,7 +477,7 @@ fn the_helper_alone_draws_the_same_picture() {
         }
         drop(b);
         let mut got = Phosphor::new(w, h);
-        let n = pipe.merge(&mut got, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
+        let n = pipe.merge(&mut got, None, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
         let (want, trig, ..) = reference(&bytes, fb, &s, &p, &m, w, h);
         assert_eq!((k, n.frames, n.triggered), (20, 20, trig), "{} s/div", tdiv);
         assert!((0..NCH).all(|c| got.map[c] == want.map[c]), "{} s/div", tdiv);
@@ -502,7 +502,7 @@ fn frames_before_first_are_left_out() {
     }
     drop(b);
     let mut got = Phosphor::new(w, h);
-    let n = pipe.merge(&mut got, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
+    let n = pipe.merge(&mut got, None, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
     let (want, trig, ..) = reference(&bytes[fb..], fb, &s, &p, &m, w, h);
     assert_eq!((k, n.frames, n.triggered), (19, 19, trig));
     assert!((0..NCH).all(|c| got.map[c] == want.map[c]));
@@ -525,7 +525,7 @@ fn a_merge_ages_the_picture_once_before_adding() {
     let seed = got.map.clone();
     // nothing to merge: the picture is held, the decay still waits
     let mut renew = Renew::Decay(0.5);
-    assert_eq!(pipe.merge(&mut got, &mut renew, &mut [0; 4], &mut (0.0, 0.0)), Merged::default());
+    assert_eq!(pipe.merge(&mut got, None, &mut renew, &mut [0; 4], &mut (0.0, 0.0)), Merged::default());
     assert_eq!(renew, Renew::Decay(0.5));
     assert!(got.map == seed, "aged without a record");
     // a batch: aged by the factor, then its maps added
@@ -533,7 +533,7 @@ fn a_merge_ages_the_picture_once_before_adding() {
     let mut hp = Helper::default();
     while pipe.help(&mut hp) {}
     drop(b);
-    let n = pipe.merge(&mut got, &mut renew, &mut [0; 4], &mut (0.0, 0.0));
+    let n = pipe.merge(&mut got, None, &mut renew, &mut [0; 4], &mut (0.0, 0.0));
     assert_eq!((n.frames, renew), (20, Renew::Keep));
     let (frames, ..) = reference(&bytes, fb, &s, &p, &m, w, h);
     let mut want = Phosphor::new(w, h);
@@ -555,7 +555,7 @@ fn stale_work_is_dropped_and_counted() {
     let c = fresh();
     let pipe = Pipe::start(2, false, c);
     let mut ph = Phosphor::new(w, h);
-    let merge = |ph: &mut Phosphor| pipe.merge(ph, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
+    let merge = |ph: &mut Phosphor| pipe.merge(ph, None, &mut Renew::Keep, &mut [0; 4], &mut (0.0, 0.0));
     assert!(!pipe.accepting());
     // settings stamp older than the view's: dropped
     m.hw_stamp = 3;
@@ -604,6 +604,8 @@ fn stale_work_is_dropped_and_counted() {
 fn perf_guard_deposit_worker_per_frame() {
     let (w, h) = (970, 448);
     for (tdiv, memsel, meas) in [
+        (5e-9, 128u32, false),
+        (5e-8, 704, false),
         (1e-7, 1408u32, false),
         (1e-6, 12_512, false),
         (1e-6, 12_512, true),
@@ -756,7 +758,7 @@ fn perf_guard_batch_step_at_10_us_per_div() {
                 feed_batch(pipe, &bytes, fb, &s, &p, m.hw_stamp, &mut hp);
                 let t0 = std::time::Instant::now();
                 let mut renew = clear;
-                let got = pipe.merge(&mut ph, &mut renew, &mut [0; 4], &mut (0.0, 0.0));
+                let got = pipe.merge(&mut ph, None, &mut renew, &mut [0; 4], &mut (0.0, 0.0));
                 times.push(t0.elapsed().as_secs_f64() * 1e3);
                 assert_eq!(got.frames, frames as u64 - 2);
                 px = got.px;
@@ -808,7 +810,7 @@ fn the_drawers_fold_once_a_screen() {
             settle(&pipe);
             pipe.help_done(&mut hp);
         }
-        frames += pipe.merge(&mut ph, &mut Renew::Clear, &mut [0; 4], &mut (0.0, 0.0)).frames;
+        frames += pipe.merge(&mut ph, None, &mut Renew::Clear, &mut [0; 4], &mut (0.0, 0.0)).frames;
     }
     let folds = pipe.mail.lock().unwrap().folds;
     frames += merge_all(&pipe, &mut ph, &mut Renew::Clear, &mut [0; 4], &mut (0.0, 0.0)).0.frames;
@@ -917,7 +919,7 @@ fn perf_guard_batch_at_a_fixed_rate() {
                 let mut ph = Phosphor::new(w, h);
                 while !done.load(Ordering::Acquire) {
                     std::thread::sleep(Duration::from_micros(34_000));
-                    let got = pipe.merge(&mut ph, &mut Renew::Clear, &mut [0; 4], &mut (0.0, 0.0)).frames;
+                    let got = pipe.merge(&mut ph, None, &mut Renew::Clear, &mut [0; 4], &mut (0.0, 0.0)).frames;
                     merged += got;
                     per.push(got);
                 }
@@ -966,4 +968,154 @@ fn keep_out_holds_while_its_guard_lives() {
         panic!("a failing case");
     });
     assert!(r.is_err() && !out(), "back after a panic");
+}
+
+// Break it catches: the workers drawing the zoom picture other than `draw_frame` with the zoom's model on every frame,
+// or the merge leaving its maps out (#582)
+#[test]
+fn the_workers_draw_the_zoom_picture_of_every_frame() {
+    let ((w, h), (zw, zh)) = ((970, 448), (970, 200));
+    let m = model(1e-7, false, false);
+    let mut zm = m.clone();
+    zm.tscale = tscales().iter().position(|&t| (t as f64 - 2e-8).abs() < 2e-11).unwrap();
+    let (bytes, fb, s, p) = batch(9, 5000, false);
+    let pipe = Pipe::start(2, false, fresh());
+    pipe.set_view_zoom(Some(&m), w, h, Some((&zm, zw, zh)));
+    pipe.feed_codes(Box::new(Bytes(bytes.clone())), fb, 0, 9, 0, dec(&s, &p), None);
+    settle(&pipe);
+    let (mut got, mut gotz) = (Phosphor::new(w, h), Phosphor::new(zw, zh));
+    let (mut frames, mut renew) = (0, Renew::Keep);
+    while pending(&pipe) {
+        frames += pipe.merge(&mut got, Some(&mut gotz), &mut renew, &mut [0; 4], &mut (0.0, 0.0)).frames;
+    }
+    assert_eq!(frames, 9);
+    let want = reference(&bytes, fb, &s, &p, &m, w, h).0;
+    let wantz = reference(&bytes, fb, &s, &p, &zm, zw, zh).0;
+    assert!(wantz.map[0].iter().any(|&x| x > 0), "nothing in the zoom window");
+    assert!(got.map[0] == want.map[0], "the main picture differs");
+    assert!(gotz.map[0] == wantz.map[0], "the zoom picture differs");
+    // the zoom off: its maps are not drawn and not merged
+    pipe.set_view(Some(&m), w, h);
+    pipe.feed_codes(Box::new(Bytes(bytes)), fb, 0, 9, 0, dec(&s, &p), None);
+    settle(&pipe);
+    let (mut z2, mut frames) = (Phosphor::new(zw, zh), 0);
+    while pending(&pipe) {
+        frames += pipe.merge(&mut got, Some(&mut z2), &mut renew, &mut [0; 4], &mut (0.0, 0.0)).frames;
+    }
+    assert_eq!(frames, 9, "the main picture is merged");
+    assert!(z2.map[0].iter().all(|&x| x == 0), "zoom maps merged with the zoom off");
+}
+
+// Break it catches (ADR 0081): a grant that is not what the workers draw in one picture (frames of 0.625 ms a worker:
+// 4 workers draw 211 in 33 ms), one beyond the plan or below one frame, a cost of another mapping kept, or a grant
+// before anything was measured that shortens the batch.
+#[test]
+fn the_grant_is_what_the_workers_draw_in_a_picture() {
+    let mut c = Cost::default();
+    assert_eq!(c.grant(1, 4, 1000), 1000, "nothing measured: the plan");
+    c.note(1, 8, 8 * 625_000);
+    assert_eq!([c.grant(1, 4, 1000), c.grant(1, 1, 1000), c.grant(1, 4, 100)], [211, 52, 100]);
+    assert_eq!(c.grant(2, 4, 1000), 1000, "another mapping: the plan");
+    // the average follows a frame that costs twice as much, by a quarter a batch
+    c.note(1, 4, 4 * 1_250_000);
+    assert_eq!(c.grant(1, 4, 1000), 168);
+    // a frame of a second: one frame, not none
+    c.note(1, 1, 4_000_000_000);
+    assert_eq!(c.grant(1, 4, 1000), 1);
+    // a new mapping starts over from its first batch
+    c.note(3, 2, 2 * 33_000_000);
+    assert_eq!(c.grant(3, 4, 1000), 4);
+}
+
+// Break it catches (#581): a frame the hardware triggered on the other slope of a slow, noisy sine (no edge of the set
+// direction within half a screen) drawn at its trigger point, mirrored; or a frame of the set slope, or one without
+// any edge (Auto, no signal), left out.
+#[test]
+fn a_frame_triggered_on_the_other_slope_is_not_drawn() {
+    let (w, h) = (970, 448);
+    let m = model(5e-4, false, false);
+    // a 50 Hz sine at 1 MSa/s: 20,000 samples a period, half a screen is 2,500; the trigger point at sample 10,000
+    let frame = |s: f64| Frame {
+        pre: 10_000,
+        dt: 1e-6,
+        ch: [
+            (0..20_000)
+                .map(|i| (s * 0.9 * ((i as f64 - 10_000.0) / 20_000.0 * std::f64::consts::TAU).sin()) as f32)
+                .collect(),
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+        ],
+        ..Frame::default()
+    };
+    let lit = |f: &Frame| {
+        let mut ph = Phosphor::new(w, h);
+        let t = draw_frame(&mut ph, &m, f, None);
+        (t, ph.map[0].iter().filter(|&&x| x > 0).count())
+    };
+    let (t, n) = lit(&frame(-1.0));
+    assert!(!t && n == 0, "the falling slope at the trigger point was drawn ({n} pixels)");
+    let (t, n) = lit(&frame(1.0));
+    assert!(t && n > 0, "the rising slope at the trigger point was left out");
+    let (_, n) = lit(&frame(0.0));
+    assert!(n > 0, "a frame without an edge (Auto) was left out");
+    // on a slow slope the comparator fires hundreds of samples from the crossing (#580): the falling crossing 500
+    // samples after the trigger point. Normal: every frame was triggered, so it fired on that slope; Auto: a frame of
+    // the timeout may look the same and stays
+    let late = Frame { pre: 9_500, ..frame(-1.0) };
+    let mut normal = m.clone();
+    normal.trig_mode = TrigMode::Normal;
+    let mut ph = Phosphor::new(w, h);
+    assert!(!draw_frame(&mut ph, &normal, &late, None) && ph.map[0].iter().all(|&x| x == 0), "Normal: drawn");
+    let mut ph = Phosphor::new(w, h);
+    draw_frame(&mut ph, &m, &late, None);
+    assert!(m.trig_mode == TrigMode::Auto && ph.map[0].iter().any(|&x| x > 0), "Auto: left out");
+}
+
+// Break it catches: an Average run folded on the workers whose average differs in any bit from folding each frame's
+// screen record (`wave::to_record`): another trigger point, other places or another interpolation of the points,
+// a channel left out, the sparse or the min/max branch of the record not taken.
+#[test]
+fn a_frame_folded_into_an_average_run_is_its_screen_record_folded() {
+    for (mask, n, tdiv) in [(0xf, 3520u32, 1e-6), (0x1, 12_512, 1e-6), (0x1, 128, 5e-9), (0x3, 62_500, 1e-5)] {
+        let (bytes, fb, s, p) = frames_of(mask, n, 6, &|k, c, i| {
+            let ph = (i as f64 - n as f64 / 2.0 + (k % 7) as f64 * 0.3) / 3125.0;
+            if c == 0 {
+                if ph.rem_euclid(1.0) < 0.5 {
+                    1.6
+                } else {
+                    -1.6
+                }
+            } else {
+                0.2 * (i as f64 * 0.01).sin()
+            }
+        });
+        let mut m = model(tdiv, false, true);
+        for c in 0..NCH {
+            m.ch[c].on = true;
+        }
+        (m.trig_level, m.acq, m.avg_count) = (0.0, AcqMode::Average, 16);
+        let window = m.time_per_div() as f64 * HDIV as f64;
+        let (mut fused, mut recs) = (super::average::Run::new(0, 16, 0), super::average::Run::new(0, 16, 0));
+        let mut f = Frame::default();
+        for chunk in bytes.chunks_exact(fb) {
+            crate::board::dho::hw::decode_into(chunk, &s, &p, 0, &mut f);
+            let rec = crate::wave::to_record(&Arc::new(f.clone()), &m, 3600, window, m.delay as f64 - window / 2.0);
+            recs.push(&rec.ch, rec.triggered);
+            super::average_frame(&mut fused, &mut f, &m);
+            assert!(f.ch.iter().any(|c| !c.is_empty()), "the frame comes back");
+        }
+        assert_eq!((fused.frames, fused.triggered), (recs.frames, recs.triggered));
+        let start: [Vec<f32>; NCH] = std::array::from_fn(|c| vec![0.1 * c as f32; 3600]);
+        let (mut a, mut b) = (start.clone(), start);
+        fused.apply(&mut a);
+        recs.apply(&mut b);
+        for c in 0..NCH {
+            assert!(
+                a[c].iter().zip(&b[c]).all(|(x, y)| x.to_bits() == y.to_bits()),
+                "mask {mask:#x} {tdiv} CH{}",
+                c + 1
+            );
+        }
+    }
 }

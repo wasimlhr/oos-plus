@@ -37,6 +37,7 @@ mod hid;
 mod input;
 mod layout;
 mod measures;
+mod pacing;
 #[cfg(test)]
 mod perfguard;
 mod platform;
@@ -64,7 +65,8 @@ use oos_remote::{announce, hislip, http, vxi11};
 // the model and the settings table (ADR 0064): their paths in this crate stay `crate::model` and the like
 use oos_model::{decode, logic, math, model, settings, words, zone};
 use oos_system::{
-    base64, clock, ethlink, json, mdns, net, net6, netacl, placement, remote, sntp, ssh, sysconf, system, usbtmc,
+    base64, clock, clockfloor, ethlink, gadget, json, mdns, net, net6, netacl, placement, remote, sntp, ssh, sysconf,
+    system, usbtmc,
 };
 
 use gfx::Canvas;
@@ -800,7 +802,7 @@ struct Device {
     listen_t: Option<std::time::Instant>,
     mdns_now: Option<mdns::Config>,
     mdns: mdns::Mdns,
-    remote_now: Option<[bool; 5]>,
+    remote_now: Option<[bool; 6]>,
     hislip: hislip::Server<scpi::Program>,
     vxi: vxi11::Server<scpi::Program>,
     scpi: scpi::Scpi,
@@ -819,6 +821,9 @@ struct Device {
     fps_n: i32,
     fps_t: std::time::Instant,
     last: std::time::Instant,
+    /// `pacing.clock` in system.conf, and the flip clock's state (`pacing`)
+    clock: pacing::Clock,
+    pacer: pacing::Pacer,
     cv: Canvas,
     setup_t: std::time::Instant,
     setup_last: String,
@@ -864,7 +869,7 @@ impl Device {
         let (web, scpi, vxi, hislip) = lan_servers(scope, args, &acl);
         // System > Network > Remote services, as applied: web, SCPI, VXI-11, SSH and its password login (None: not yet,
         // at the start)
-        let remote_now: Option<[bool; 5]> = None;
+        let remote_now: Option<[bool; 6]> = None;
         // the name on the network and the mDNS responder (mdns.rs), as applied; looked at once a second
         let mdns = mdns::Mdns::new(None);
         let mdns_now: Option<mdns::Config> = None;
@@ -895,6 +900,14 @@ impl Device {
         let gpu_pending: Option<GpuPending> = None;
         // the first read at once (a complete start-up shows no screen at all)
         let start_up_t = Instant::now().checked_sub(std::time::Duration::from_millis(300)).unwrap_or_else(Instant::now);
+        let clock = pacing::Clock::of(sysconf::value(&sysconf::fork_text(), "pacing.clock"));
+        let pacer = pacing::Pacer::new(pacing::DIVISOR);
+        eprintln!(
+            "oos-ui: frame clock {:?} (panel {:.1} Hz, a step every {} vblanks)",
+            clock,
+            disp.refresh_hz(),
+            pacing::DIVISOR
+        );
         Device {
             start_up_t,
             gpu_pending,
@@ -934,6 +947,8 @@ impl Device {
             fps_n,
             fps_t,
             last,
+            clock,
+            pacer,
             cv,
             setup_t,
             setup_last,
@@ -951,10 +966,75 @@ impl Device {
         self.remote_services();
         self.mdns_names();
         self.serve_lan();
-        if self.last.elapsed().as_secs_f64() < 1.0 / 30.0 {
-            return;
+        if self.flip_clock() {
+            self.show_finished_frame();
         }
-        self.frame();
+        if self.frame_due() {
+            self.frame();
+        }
+    }
+
+    /// On the flip clock: the GPU helper's last frame, once it is done, collected and flipped from the loop, not at the
+    /// start of the next frame: the loop waits for it with the remote services' sockets (`inputs`), so a command is
+    /// answered meanwhile, and the next step finds nothing to wait for. Waited for inside the step, a frame of 10 to
+    /// 16 ms on the GPU held every remote command at 100 us/div to 1 ms/div (*OPC? 13 instead of 1.3 ms, unit
+    /// 2026-11-26).
+    fn show_finished_frame(&mut self) {
+        let Some(g) = self.gpu.as_mut().filter(|g| self.gpu_pending.is_some() && g.answered()) else { return };
+        let Some((tp, bp, th)) = self.gpu_pending.take() else { return };
+        let back = tp.reads();
+        let r = (|| -> Result<(), String> {
+            g.collect(tp, Some(&mut self.cv))?;
+            if back {
+                self.live.picture_read_back(&self.cv);
+            }
+            self.disp.flip(bp);
+            if let Some((t2, b2)) = th {
+                g.collect(t2, None)?;
+                if let Some(h) = self.hdmi.as_mut() {
+                    h.flip_scaled(b2);
+                }
+            }
+            Ok(())
+        })();
+        if let Err(e) = r {
+            (self.gpu, self.gpu_failed, self.hdmi_gpu, self.gpu_pending) = (None, true, None, None);
+            eprintln!("oos-ui: GPU frame: {}", e);
+            self.ui.toast("GPU failed: drawing on the CPU");
+        }
+    }
+
+    /// The frame clock on the panel's vblank: `pacing.clock = flip` and no monitor on HDMI (a refresh of its own).
+    fn flip_clock(&self) -> bool {
+        self.clock == pacing::Clock::Flip && self.hdmi.is_none()
+    }
+
+    /// Whether the next frame starts now (`pacing`); on the flip clock the vblank events are read and the next one is
+    /// asked for first.
+    fn frame_due(&mut self) -> bool {
+        let now = std::time::Instant::now();
+        if !self.flip_clock() {
+            pacing::set_period(None);
+            return pacing::timer_due(now, self.last);
+        }
+        self.disp.read_events(0);
+        if let Some(seq) = self.disp.take_vblank() {
+            self.pacer.vblank(seq, now);
+        }
+        // the panel's period while its vblanks come, the timer's while the pacer has fallen back to it
+        pacing::set_period((!self.pacer.on_timer(now)).then(|| self.disp.refresh_hz()));
+        self.disp.ask_vblank(self.pacer.next(), now);
+        let fallbacks = self.pacer.fallbacks;
+        // only the panel's flip holds a step: the GPU helper's last frame is waited for inside the step, after this
+        // frame's layers are drawn (`frame`), so the two overlap as on the timer; held for the helper too, a step at
+        // 10 us/div (19 ms) and its frame on the GPU (10 to 16 ms) no longer fitted into three vblanks (30.8 ms) and
+        // the screen fell to 23 pictures a second (unit 2026-11-25)
+        let busy = self.disp.flip_pending();
+        let due = self.pacer.due(now, self.last, busy);
+        if self.pacer.fallbacks != fallbacks && self.pacer.fallbacks.is_power_of_two() {
+            eprintln!("oos-ui: no vblank event for 50 ms: the frames on the timer ({} times)", self.pacer.fallbacks);
+        }
+        due
     }
 
     /// The start-up file, every 250 ms while the screen is up.
@@ -974,11 +1054,26 @@ impl Device {
         }
     }
 
-    /// The inputs (waits up to the next frame).
+    /// The inputs (waits up to the next frame, or until a remote command comes: `serve_lan` then answers it in this
+    /// pass, not after the frame).
     fn inputs(&mut self) {
-        let elapsed = self.last.elapsed().as_secs_f64();
-        let wait_ms = ((1.0 / 30.0 - elapsed) * 1000.0).max(0.0) as i32;
-        for line_or_ev in self.inp.poll(wait_ms) {
+        let now = std::time::Instant::now();
+        let mut wake = Vec::new();
+        let wait = if self.flip_clock() {
+            // the vblank's and the flip's events end the wait too, and the helper's answer to the last frame
+            wake.push(self.disp.fd());
+            if self.gpu_pending.is_some() {
+                wake.extend(self.gpu.as_ref().map(|g| g.fd()));
+            }
+            self.pacer.wait(now, self.last)
+        } else {
+            pacing::timer_wait(now, self.last)
+        };
+        let wait_ms = wait.as_millis() as i32;
+        self.scpi.wake_fds(&mut wake);
+        self.vxi.wake_fds(&mut wake);
+        self.hislip.wake_fds(&mut wake);
+        for line_or_ev in self.inp.poll(wait_ms, &wake) {
             match line_or_ev {
                 input::In::Ev(ev) => self.ui.handle(ev),
                 input::In::Hid(e) => {
@@ -1005,12 +1100,13 @@ impl Device {
         });
     }
 
-    /// The services follow their switches: the ports were opened at the start, SSH (oos-ssh) is started by rcS.
+    /// The services follow their switches: the ports were opened at the start, SSH (oos-ssh) and the USB network
+    /// (oos-gadget) are started by rcS.
     fn remote_services(&mut self) {
-        let ui = &self.ui;
-        let want = [ui.sys.remote_web, ui.sys.remote_scpi, ui.sys.remote_vxi11, ui.sys.remote_ssh, ui.sys.ssh_password];
+        let s = &self.ui.sys;
+        let want = [s.remote_web, s.remote_scpi, s.remote_vxi11, s.remote_ssh, s.ssh_password, s.usb_net];
         if self.remote_now != Some(want) {
-            let was = self.remote_now.unwrap_or([true, true, true, want[3], want[4]]);
+            let was = self.remote_now.unwrap_or([true, true, true, want[3], want[4], want[5]]);
             if want[0] != was[0] {
                 self.web.set_open(want[0].then_some(self.web_port));
                 if !want[0] {
@@ -1026,6 +1122,9 @@ impl Device {
             }
             if want[3] != was[3] || want[4] != was[4] {
                 ssh::apply(want[3]);
+            }
+            if want[5] != was[5] {
+                gadget::apply();
             }
             self.offer_ports();
             self.remote_now = Some(want);
@@ -1382,6 +1481,8 @@ impl Device {
         // goodbyes on the network (SIGTERM, quit)
         self.mdns.stop();
         self.inp.set_leds(0);
+        // the clocks' minimums as they were before RUN
+        clockfloor::running(false);
         if let Some(h) = self.hdmi.take() {
             h.close();
         }

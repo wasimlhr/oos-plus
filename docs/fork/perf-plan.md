@@ -20,8 +20,9 @@ Consequence: displayed wfm/s is capped at about 95 x UI frame rate (about 3k to 
 deliver. `fpga.md` puts the PCIe ceiling near 80k frames/s at 1 ch for 0x11f0-point frames; stock reaches about 190k
 at its fastest setting. The host software is the bottleneck, as `fpga.md` already concludes.
 
-All threads of oos-ui inherit the A72 affinity (`pin_to_big_cores` in `main.rs` before the source starts): UI loop,
-hw thread and GPU helper share cpu4/cpu5. Web encoder and `MeasWorker` sit on the A53s. The xdma completion thread
+All threads of oos-ui inherit the A72 affinity (`pin_to_big_cores` in `main.rs` before the source starts): UI loop
+and hw thread share cpu4/cpu5. The GPU helper is moved to every core when it starts (`placement::to_all_cores`,
+since 2026-11-26, unless `perf.place = on`: on the A72 only it waited behind both). Web encoder and `MeasWorker` sit on the A53s. The xdma completion thread
 (`poll_mode=1`) is unpinned and busy-polls for the whole DMA time.
 
 ## Host measurements
@@ -85,7 +86,7 @@ register writes (posted writes, microseconds per configure; do it only as cleanu
    screenshots match `to_record` at 5, 20, 100, 200 ns/div.
 5. Code exists (B10). Unit checks: `/proc/interrupts` counts on IRQ 241 with `poll_mode=0`; ten minutes without
    time-outs; prearm with a settings change mid-wait; long read with data check at MPS 256.
-6. cpu4: UI loop + GPU helper. cpu5: hw thread. Deposit workers, `MeasWorker`, web: A53. `oos-fpga-up` writes the
+6. With `perf.place = on`: cpu4: UI loop + GPU helper. cpu5: hw thread (without it the helper goes to every core). Deposit workers, `MeasWorker`, web: A53. `oos-fpga-up` writes the
    xdma IRQ to an A53 (`/proc/irq/241/smp_affinity`). No SCHED_FIFO until the hw thread is shown never to spin.
 7. 0x1170 compression to 2-4 points per screen column when frames exceed the screen width. Needs envelope support in
    the fast path (today `f.envelope` falls back to `to_record`) and a raw newest frame for measurements. Open
@@ -189,7 +190,7 @@ is no longer written and read back, so the A53 (512 kB L2) should gain more; not
 channels (each channel's deposit reads every group: 0.95 on the host) keep the decode.
 
 Not changed, for the next step:
-- Dots (`deposit_dots`, the default display), branch perf/dots: one add per sample is a chain of read-modify-writes on
+- Dots (`deposit_dots`, the display with Dots on), branch perf/dots: one add per sample is a chain of read-modify-writes on
   one pixel wherever samples repeat the row before (flat tops, slow edges), each waiting for the last (230 us at 100 k
   points flat on the host, 80 us for noise). Now a column whose predecessor had more than half its first 32 samples
   repeating adds each run at once (`run x wgt`, saturating like the single adds); other columns stay one add per
@@ -230,13 +231,34 @@ frames per batch, decode + draw 117 -> 12.9 us per frame. Unit procedure in comp
   there is no xdma interrupt: the completions run in xdma's own per-CPU kernel threads, which the script cannot move
   (they are bound per CPU); the IRQ step matters with `xdma.params = poll_mode=0` (item 5). Unit check: `top -H -d 1`
   per core, `/proc/interrupts`, UI frame time with and without the setting.
+- Acquisition priority and clock floors (idea from fumingcaps' fork, release v0.2.1), default on, verified on the unit
+  (DHO924S, 2026-11-25: 62 device tests pass, one thread at FIFO, 1416 MHz and 600 MHz in RUN, back at STOP, 39 °C;
+  shown waveforms a second +2 to +7 % at 5 to 200 ns/div):
+  the hw thread runs at `SCHED_FIFO` 1 with `SCHED_RESET_ON_FORK` (`placement::realtime`; `perf.fifo = off` or
+  OOS_FIFO=0 turns it off; a refusal is logged once and the thread stays at normal priority). While the hardware
+  acquisition runs, `clockfloor` raises the first big core's cpufreq `scaling_min_freq` to the step at or above
+  1416000 kHz and the `*.gpu` devfreq `min_freq` to the step at or above 600 MHz, never lowering a higher minimum; STOP
+  and the end of oos-ui write back the values from before (`perf.clocks = off` or OOS_CLOCKS=0 turns it off); a
+  minimum found at one of the floors that this run did not set (oos-ui ended while running) goes to the lowest step.
+  The GPU helper's 400 MHz floor goes through the same module. Thermal limits still win (the kernel caps a minimum at
+  the cooling's maximum). Guard: plan and apply against a fake sysfs tree. Unit check: `chrt -p` of the hw thread (or
+  `policy` in `/proc/<pid>/task/<tid>/sched`), `scaling_min_freq` of `cpu4` and `min_freq` of the GPU in RUN and after
+  STOP, wfm/s and UI frame time with and without the switches.
 - 4 done, default on, bit-identical: `sparse::draw` replaces `Frame::clone` + `to_record` + `draw_ex` for sparse
   frames with an edge trigger found on a channel (else `to_record` as before). Most of the cost is `lanczos8`
   (30 of 40 us per channel at 3600 points), not the clone (5 %). `sparse::lanczos8_many` sums eight points at a time,
   each in `lanczos8`'s order, so the points are the same bits. Host ratio 0.60-0.62 (40 -> 24 us per channel). The
-  plan's 4x needs a polyphase kernel over the screen window only, which changes pixels: not done, it needs a
-  screenshot comparison on the unit. Guards: pixel equality over 612 set-ups (450 answered by the new path), bitwise
-  kernel equality incl. record ends and NaN samples, ignored timing ratio <= 0.8.
+  plan's 4x needs a polyphase kernel over the screen window only, which changes pixels. Guards: pixel equality over
+  612 set-ups (450 answered by the new path), ignored timing ratio <= 0.8.
+  Since 2026-11-26 the points of sparse frames (the sparse path's and the screen record's alike) come from a
+  fixed-point kernel, as fumingcaps' fork computes them since its release v0.2.1 (`interp::lanczos8_fixed`): the
+  positions in steps of 2^-36 samples, the samples a frame's points read as 16-bit steps of their range, the 1024
+  phases of `lanczos8`'s kernel in steps of 2^-14 (each phase summing to exactly one), 16-bit products in 32-bit
+  sums, two points at a time and the points between the same two samples on the same 16 neighbours. Within about
+  1e-4 of the samples' range of `lanczos8` (the phase rounding of 1/1024 sample is the larger error of both), at
+  most one pixel from its picture over 53 set-ups (sines to 0.45 of the sample rate at full scale, a noisy square;
+  most pictures differ in a pixel somewhere). One A53 of the unit, 1 channel at 5 ns/div: 347 -> 148 us for the
+  3600 points of a frame. Record ends and frames with a sample that is not finite keep `lanczos8`.
 - 1, batch pipeline (`drawpipe.rs`), the only draw path of the hardware since 2026-11-18 (ADR 0059; the default since
   2026-11-16, ADR 0029). Until then `acq.pipeline` in system.conf, `OOS_PIPELINE`, Acquire > Draw path and
   `:SYSTem:PIPeline` chose between it and the frames path (every frame through the UI queue, the workers off), which the
@@ -285,6 +307,13 @@ frames per batch, decode + draw 117 -> 12.9 us per frame. Unit procedure in comp
   dropped` only, and acquired - used - dropped grew with them. Drops for want of a buffer (the workers behind the
   acquisition) are counted in the pipeline's counters only; at short time bases they are the limit of batch mode: 4
   A53 draw about 3 k frames/s at 10 us/div (estimate above), fewer than the acquisition delivers.
+  Admission (ADR 0081, verified on the unit 2026-11-25; from fumingcaps' fork, release v0.2.1): the workers measure their time per frame (a moving average per
+  batch and mapping, folds included) and grant the frames they draw in 33 ms; a batch planned with more than 4 frames
+  arms at most that many (at least 5), and before it arms the thread waits, drawing with the workers, while they hold
+  the buffers it needs (at most 200 ms, then as before). Unit 2026-11-25 before it, 1 channel at 5 ns/div: about
+  53,000 frames/s delivered, 6,400 in the picture, the four workers 96 % busy. With it `dropped` loses the batches
+  without a buffer (expected near 0) and `acquired` (frames read) falls towards `used`; to measure on the unit:
+  acquired / used / dropped a second and screens a second at 5 ns, 100 ns, 10 us and 1 ms/div, 1 and 4 channels.
   Unit (verified on the unit, 2026-11-18) with the parking: 28.7-29.4 screens a second at 10 us/div; frames a second
   in the picture against the build before the shared mailbox: 1 channel +4-8 %, 2 channels equal, 4 channels -9 to
   -14 % at 1 and 10 us/div. There the batches are fewer than the screens, so every drawer of a batch hands its maps on

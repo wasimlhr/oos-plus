@@ -1,9 +1,9 @@
 {
  "meta": {
-  "software": "oos-ui 0.1.15",
-  "version": "0.1.15",
+  "software": "oos-ui 0.2.2",
+  "version": "0.2.2",
   "edition": "November 2026",
-  "date": "25 November 2026",
+  "date": "26 November 2026",
   "dialect": "Rigol DHO800/DHO900 subset with OOS extensions",
   "commands_chapter": 3
  },
@@ -65,8 +65,8 @@
       "- Menu equivalent: System > About.",
       "- Origin: Rigol-compatible. Not a Rigol identity string."
      ],
-     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.1.15`.",
-     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.1.15.*/"
+     "returns": "On a freshly started default model the query returns `OOS,DHO924S,0,oos-ui 0.2.2`.",
+     "example": "*IDN?    /*The query returns OOS,DHO924S,0,oos-ui 0.2.2.*/"
     },
     {
      "header": "*RST",
@@ -1253,7 +1253,7 @@
       [
        "<value>",
        "Text",
-       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M`.",
+       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M` (1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M; what the unit has is cut to its memory). A value that is none of them is -224, and the error names the depths this unit takes (`5M` is none of them).",
        "5.000000E+05"
       ]
      ],
@@ -1301,6 +1301,148 @@
      ],
      "returns": "On a freshly started default model the query returns `16`.",
      "example": ":ACQuire:AVERages 16\n:ACQuire:AVERages?    /*The query returns 16.*/"
+    },
+    {
+     "header": ":ACQuire:CORes",
+     "set": ":ACQuire:CORes <value>",
+     "query": ":ACQuire:CORes?",
+     "desc": "Choose whether the offsets of the interleaved ADC cores are removed in software (matched) or the raw words are kept.",
+     "related": [
+      ":ACQuire:SRATe"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{MATCh|RAW}",
+       "MATC"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > ADC cores.",
+      "- (also `ON`, `OFF`, `1`, `0`); the query answers `MATC` or `RAW`.",
+      "- Matched takes the offsets of the interleaved ADC cores off in software; Raw leaves the words as they come.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `MATC`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:AVERages:HARDware",
+     "set": ":ACQuire:AVERages:HARDware <value>",
+     "query": ":ACQuire:AVERages:HARDware?",
+     "desc": "Let the FPGA do the averaging in Average mode where the board can.",
+     "related": [
+      ":ACQuire:TYPE",
+      ":ACQuire:AVERages"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > HW average.",
+      "- (`1`, `0`); the query answers `1` or `0`.",
+      "- In Average mode the FPGA averages where the board can, else the software does.",
+      "- Experimental, not verified on a unit.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents",
+     "set": ":ACQuire:SEGMents <n>|OFF",
+     "query": ":ACQuire:SEGMents?",
+     "desc": "Record a number of segments (frames) one after the other, or switch segmented recording off.",
+     "related": [
+      ":ACQuire:SEGMents:HARDware",
+      ":ACQuire:SEGMents:INTerval",
+      ":ACQuire:SEGMents:TIMes",
+      ":ACQuire:ULTRa:MAXFrame"
+     ],
+     "params": [
+      [
+       "<n>|OFF",
+       "Text",
+       "segmented recording: the segment count without the menu's steps. More than 100000 is set to 100000, `OFF` or `0` switches it off, another value is -224. Where the segments are recorded is `:ACQuire:SEGMents:HARDware`. `:ACQuire:ULTRa:MAXFrame` sets the same count to the nearest menu step.",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > Segments.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "The query answers the count, `0` when off. On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents:HARDware",
+     "set": ":ACQuire:SEGMents:HARDware <value>",
+     "query": ":ACQuire:SEGMents:HARDware?",
+     "desc": "Record the segments in the FPGA instead of the software history.",
+     "related": [
+      ":ACQuire:SEGMents"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > HW segments.",
+      "- (`1`, `0`); the query answers `1` or `0`.",
+      "- Segments are recorded by the FPGA instead of the software history.",
+      "- Experimental, not verified on a unit.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents:INTerval",
+     "set": ":ACQuire:SEGMents:INTerval <value>",
+     "query": ":ACQuire:SEGMents:INTerval?",
+     "desc": "Set the pause after each hardware segment, in seconds.",
+     "related": [
+      ":ACQuire:SEGMents"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, 0 to 10: the pause after each hardware segment. Not verified on a unit.",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > Segment interval.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents:TIMes",
+     "query": ":ACQuire:SEGMents:TIMes?",
+     "desc": "Read the trigger time of each recorded hardware segment.",
+     "related": [
+      ":ACQuire:SEGMents",
+      ":ACQuire:SEGMents:HARDware"
+     ],
+     "remarks": [
+      "- Comma-separated seconds: the trigger time of each recorded hardware segment since the first one, `9.9E37` for a segment without a time stamp; empty before segments are recorded.",
+      "- Not verified on a unit.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true
     },
     {
      "header": ":ACQuire:ULTRa:MAXFrame",
@@ -4375,6 +4517,104 @@
      "example": ":MEASure:SOURce CHAN1"
     },
     {
+     "header": ":MEASure:SLOT<n>",
+     "set": ":MEASure:SLOT<n> <item>[,<A>[,<B>]]",
+     "query": ":MEASure:SLOT<n>?",
+     "desc": "Adds a measurement to the numbered slot MEAS<n>, so it is computed and is a row of the measurement table on the screen, and reads its value back by the number; an empty slot is an error with its reason.",
+     "related": [
+      ":MEASure:SLOT<n>:ITEM",
+      ":MEASure:SLOT<n>:CLEar",
+      ":MEASure:SLOT:LIST",
+      ":MEASure:ITEM",
+      ":MEASure:STRip"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MEASure:SLOT1` is `n` = 1",
+       "—"
+      ],
+      [
+       "<item>[,<A>[,<B>]]",
+       "Text",
+       ", n = 1 to 99. Set: add the measurement as `:MEASure:ITEM` does (same items and sources, `MATH<n>` too) and give the row the number `n`; the row shows the badge `M<n>` in the table. A slot that is in use gives its old row up (the row leaves the table); a row that has another number moves. An empty slot is the error `-221`, saying which slot, never `9.9E37`.",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Measurements > Add (the badge M<n>).",
+      "- The items are listed in Appendices A and B.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "Query `:MEASure:SLOT<n>?` answers the value of the row as the table shows it (`9.9E37` while it is not computed yet).",
+     "ext": true,
+     "example": ":MEASure:SLOT1 VPP,CHAN1               (a row M1 in the measurement table)\n:MEASure:SLOT2 VRMS,CHAN3              (a row M2)\n:MEASure:SLOT1?    /*The query returns 2.564586E+00.*/\n:MEASure:SLOT5?    /*The query returns -221,\"Settings conflict; MEAS5 is empty: add a measurement with ...\".*/"
+    },
+    {
+     "header": ":MEASure:SLOT<n>:ITEM",
+     "query": ":MEASure:SLOT<n>:ITEM?",
+     "desc": "Says which item and which sources the numbered measurement slot holds.",
+     "related": [
+      ":MEASure:SLOT<n>",
+      ":MEASure:SLOT:LIST"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MEASure:SLOT1:ITEM` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- What the slot measures as `:MEASure:STRip?` writes it, without the value: `VPP,CHAN1`, `RRDELAY,CHAN1,CHAN2` (a math source reads `R<k>`, the reference slot that holds its copy).",
+      "- An empty slot is the error `-221`.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":MEASure:SLOT2:ITEM?    /*The query returns VRMS,CHAN3.*/"
+    },
+    {
+     "header": ":MEASure:SLOT<n>:CLEar",
+     "set": ":MEASure:SLOT<n>:CLEar",
+     "desc": "Empties a numbered measurement slot and removes its row from the measurement table.",
+     "related": [
+      ":MEASure:SLOT<n>",
+      ":MEASure:CLEar",
+      ":MEASure:ITEM:REMove"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:MEASure:SLOT1:CLEar` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Measurements > Remove.",
+      "- Empty slot `n` and take its row off the table; an empty slot is left as it is.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true,
+     "example": ":MEASure:SLOT1:CLEar"
+    },
+    {
+     "header": ":MEASure:SLOT:LIST",
+     "query": ":MEASure:SLOT:LIST?",
+     "desc": "Lists the numbered measurement slots that are in use, each with what it measures and its value.",
+     "related": [
+      ":MEASure:SLOT<n>",
+      ":MEASure:STRip"
+     ],
+     "remarks": [
+      "- The slots in use, by number: `<n>,<ITEM>,<source>[,<source>],<value>` separated by semicolons; empty when none is.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
      "header": ":MEASure:CLEar",
      "set": ":MEASure:CLEar",
      "desc": "Clear standard, pair and catalog selections through the shared statistics reset.",
@@ -4515,7 +4755,7 @@
       [
        "<item>[,<A>[,<B>]]",
        "Text",
-       "Set: add a standard or pair readout (duplicates keep statistics and Single). Items: see Measure.",
+       "Set: add a standard or pair readout (duplicates keep statistics and Single); a source may be `MATH<n>`, which the row reads from a copy of the math result in a reference slot (-221 when the result is not ready). Items: see Measure.",
        "—"
       ]
      ],
@@ -5342,6 +5582,12 @@
      "pre": ":STOP\n:MEASure:ITEM? VPP,CHAN1               -> 2.564586E+00\n:MEASure:ITEM? FREQuency,CHAN1         -> 9.999857E+02\n:MEASure:ITEM? VRMS,CHAN1              -> 1.765733E+00"
     },
     {
+     "p": "Numbered slots: add first, read back by the number."
+    },
+    {
+     "pre": ":MEASure:CLEar\n:MEASure:SLOT1 VPP,CHAN1               (a row M1 in the measurement table)\n:MEASure:SLOT2 VRMS,CHAN3              (a row M2)\n:MEASure:SLOT1?                        -> 2.564586E+00\n:MEASure:SLOT2:ITEM?                   -> VRMS,CHAN3\n:MEASure:SLOT5?                        -> -221,\"Settings conflict; MEAS5 is empty: add a measurement with ...\"\n:MEASure:SLOT1:CLEar"
+    },
+    {
      "p": "Build a measurement strip and read it."
     },
     {
@@ -5452,7 +5698,7 @@
       [
        "<wave>",
        "Discrete",
-       "Selected `CHANn|Rn|MATHn`, without changing acquisition. `MATHn` puts the cursors on a copy of the math result in a reference slot (the one that holds a copy already, else the first free one), so the query answers `Rn`; -221 when the result is not ready or every slot is used. SOURce1 aliases it; a different SOURce2 is unsupported.",
+       "Selected `CHANn|Rn|MATHn`, without changing acquisition. `MATHn` puts the cursors on a copy of the math result in a reference slot (the one that holds a copy already, else the first free one), so the query answers `MATHn` (a copy: save again after a new acquisition); -221 when the result is not ready or every slot is used. SOURce1 aliases it; a different SOURce2 is unsupported.",
        "CHAN1"
       ]
      ],
@@ -8182,7 +8428,7 @@
       [
        "<value>",
        "Text",
-       "Chip-select role; optional roles accept `NONE`. Roles depend on the protocol.",
+       "The third role (chip select for SPI); optional roles accept `NONE`. Roles depend on the protocol; for USB (low and full speed) it is **D-**: D+ is `:DECode:SOURce`, USB has no clock role (`:DECode:SOURce2` is not used), and D- is optional (`NONE` reads D+ alone).",
        "CHAN2"
       ]
      ],
@@ -8284,7 +8530,7 @@
     {
      "header": ":DECode:EVENts",
      "query": ":DECode:EVENts?",
-     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
+     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. While the scope runs the rows are those of the record on the screen and change with the next acquisition; stop it first (`:STOP`, `:SINGle`) and ask again until the answer is not `BUSY` for a complete list. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
      "remarks": [
       "- Menu equivalent: Decode and bus > Read decoded events.",
       "- Origin: OOS extension"
@@ -11872,7 +12118,7 @@
       [
        "<value>",
        "Text",
-       "Source; the input is `OFF`-able on the free sweep.",
+       "Source `CHANn` or `CHn` (`CHAN1` and `CH1` are the same; the query answers `CH1`); the input is `OFF`-able on the free sweep.",
        "CH1"
       ]
      ],
@@ -11891,7 +12137,7 @@
       [
        "<value>",
        "Text",
-       "Source; the input is `OFF`-able on the free sweep.",
+       "Source `CHANn` or `CHn` (the query answers `CHn`); the input is `OFF`-able on the free sweep.",
        "CH2"
       ]
      ],
@@ -11948,7 +12194,7 @@
       [
        "<value>",
        "Text",
-       "Channel `CH1`..",
+       "Channel `CHANn` or `CHn` (the query answers `CHn`)",
        "CH4"
       ]
      ],
@@ -13766,7 +14012,7 @@
       [
        "<value>",
        "Text",
-       "`1`: the live channels on the monitor of the HDMI Layout are lines at its resolution; `0`: the stretched phosphor of the panel.",
+       "`1`: the live channels on the monitor (HDMI Waveform or Layout) are lines at its resolution; `0`: the stretched phosphor of the panel.",
        "1"
       ]
      ],
@@ -13804,14 +14050,14 @@
       [
        "<value>",
        "Text",
-       "Option text of the menu row.",
-       "MINIMAL"
+       "Option text of the menu row: `DEFAULT` or `STUDIO`. `MINIMAL` (a layout that is gone) is accepted and means Studio.",
+       "DEFAULT"
       ]
      ],
      "remarks": [
       "- Origin: OOS extension"
      ],
-     "returns": "On a freshly started default model the query returns `MINIMAL`.",
+     "returns": "On a freshly started default model the query returns `DEFAULT`.",
      "ext": true
     },
     {
@@ -14564,7 +14810,7 @@
       "- Origin: OOS extension"
      ],
      "ext": true,
-     "example": ":UI:MENU:SELect \"Stacked traces\""
+     "example": ":UI:MENU:SELect \"Stacked\""
     },
     {
      "header": ":UI:MENU:CLOSe",
@@ -14654,7 +14900,7 @@
      "p": "Right-click the plot and pick a row by its label, as a person would:"
     },
     {
-     "pre": ":UI:CONText 600,300\n:UI:MENU?\n\"Context\",\"Overlay traces\",\"Stacked traces\",\"Fit record\",\"Zoom here\",\"Zoom box\",\"Stop\",\"Single\",\"Autoset\",\"Trigger on CH2\",\"Set level here\",\"Trigger settings\",\"Measurement on CH2\",\"Cursor here\",\"Sources\",\"Maximise view\"\n:UI:MENU:SELect \"Stacked traces\""
+     "pre": ":UI:CONText 600,300\n:UI:MENU?\n\"Context\",\"Overlay\",\"Stacked\",\"Windows\",\"Fit all lanes\",\"Fit record\",\"Zoom here\",\"Zoom box\",\"Trigger on CH2\",\"Set level here\",\"Measurement on CH2\",\"Cursor here\",\"Add note here\",\"Maximise view\"\n:UI:MENU:SELect \"Stacked\""
     },
     {
      "p": "Check that every source sits on its own zero level in Overlay. CH1 at 1 V/div with an offset of 1 V is one division (55 px here) above the middle of the graticule, CH2 with -1 V one below, and R1 with -2 V two below:"
@@ -16707,13 +16953,13 @@
       ],
       [
        "`layout`",
-       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
-       "`minimal`",
+       "`default` or `studio`; a stored `minimal` (a layout that is gone) opens as Studio, with every source on one graticule unless `studio_traces` says otherwise; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
+       "`default`",
        "`:DISPlay:LAYout`"
       ],
       [
        "`studio_view`",
-       "as above",
+       "layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional)",
        "`waveform`",
        "-"
       ],

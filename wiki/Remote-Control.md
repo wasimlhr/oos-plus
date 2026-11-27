@@ -15,8 +15,15 @@
 | SSH | 22 | root shell with the scope's own password or a trusted key, off by default ([below](#ssh)) |
 | mDNS, DNS-SD | 5353 (UDP) | the scope by name, `http://dho924s-123456.local:8080`, and its services for browsing ([below](#ethernet)): the web remote (`_http._tcp`, path `/`), LXI discovery (`_lxi._tcp`, path `/lxi/identification`), the SCPI socket and VXI-11; on a computer (`--serve`) HiSLIP instead of VXI-11 |
 
+**A program for the desktop:** [oos-desktop](https://github.com/dekajoule/oos-desktop) shows and controls the scope
+from Windows, macOS or Linux: the live waveforms, Run/Stop, the settings, cursors, measurements, screenshots and
+records as files. It reaches the scope over the network, or over the USB cable (so far tried from a Mac only). It talks SCPI like any other program, so nothing on the scope needs
+more than the switches below. How to install and use it: [the oos-desktop
+wiki](https://github.com/dekajoule/oos-desktop/wiki).
+
 None of them slows the scope down: they are read without waiting, and the live picture of the web remote is made on
-the slow cores with spare time only. All of them run over Ethernet and over [WLAN](#wlan).
+the slow cores with spare time only. All of them run over Ethernet, over [WLAN](#wlan) and over a
+[USB cable](#usb-cable).
 
 ## Web remote
 
@@ -65,7 +72,9 @@ does, so that the assistant does not guess its name. The assistant asks in its o
 code that fits comes with them, and the same tool reads a subsystem's introduction and examples and the appendices
 of the manual. Tools that change the scope: `configure` (channels, timebase, trigger and
 acquisition from one object, read back after), `acquire` (run, stop, single, force, autoset, clear),
-`setup_decoder`, and `scpi` for any command of [[SCPI and VXI-11]]. Each answers JSON and names the errors of its
+`setup_decoder`, `measure_slot` (puts a measurement in a numbered slot, MEAS1 to MEAS99, so that it is a row of the
+measurement table on the screen with the badge M<n>, and reads it back by the number; `measure` alone shows nothing on
+the screen), and `scpi` for any command of [[SCPI and VXI-11]]. Each answers JSON and names the errors of its
 commands. When **Allowed** is set (System > Network > Remote services), MCP answers only the addresses it lists.
 **MCP** on the same page says what it offers: **Full** (every tool, the default), **Read only** (the tools that only
 read, and `scpi` for queries alone: an assistant can look at the scope but change nothing) or **Off**. Its address,
@@ -87,6 +96,25 @@ the password on the on-screen keyboard ([[First Steps]] has how to correct insid
 open, WPA and WPA2 personal networks. Everything open on Ethernet is then open on that network too. Details:
 [docs/wlan.md](https://github.com/dekajoule/oos/blob/main/docs/wlan.md). On the DHO924S of the author the scope has
 joined a home network with a password and worked over it for days.
+
+## USB cable
+
+No Ethernet at the bench? A USB cable from your computer to the USB-B port on the back of the scope does the same job.
+Switch on **System > Network > Remote services > USB network** (off by default: **tried on one scope with a Mac and Windows 11 so far**,
+please tell us in [#235](https://github.com/dekajoule/oos/issues/235) how it went). The computer then sees a new
+network adapter and gets an address by itself:
+
+- **Windows** 10 and 11: a "Remote NDIS" network adapter, with Windows' own driver (nothing to install). If it shows as
+  an unknown device, remove it once in the Device Manager and plug the cable in again.
+- **macOS**: a new USB Ethernet interface in System Settings > Network (CDC ECM, no driver needed).
+- **Linux**: a `usb0` or `enx...` interface (cdc_ether or rndis_host).
+
+The scope is at **192.168.235.1**: `http://192.168.235.1:8080`, VISA `TCPIP::192.168.235.1::INSTR`, SCPI on port 5555,
+and its `.local` name works too. **USB address** on the same page shows it. The scope gives your computer no gateway
+and no DNS server, so your computer's internet connection stays as it is, and the scope gets no internet through it.
+The computer on the cable is always let in, whatever Allowed says. For a shell, use [SSH](#ssh) over the cable:
+`ssh root@192.168.235.1`. If 192.168.235.x is already used on your network, another range can be set in the system
+settings file ([docs/usb-device.md](https://github.com/dekajoule/oos/blob/main/docs/usb-device.md)).
 
 ## SSH
 

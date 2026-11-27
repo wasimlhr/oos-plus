@@ -23,14 +23,26 @@ impl Ui {
         out
     }
 
+    /// The area the tags and T stand over: the scale of the plot, or in Windows the window of the cursor's source
+    /// (each window has its own scale there).
+    pub(super) fn studio_tag_area(&self) -> Rect {
+        if self.plot.wins.len() > 1 && !self.stacked() { self.cursor_window() } else { self.plot.grid }
+    }
+
+    /// The shaded band between two time cursors (screen columns of the area `g`) in one lane.
+    pub(super) fn studio_band(&self, cv: &mut Canvas, lane: Rect, g: Rect, (x0, x1): (i32, i32)) {
+        let (l0, l1) = (into_lane(lane, g, x0), into_lane(lane, g, x1));
+        cv.blend(Rect::new(l0, lane.y, (l1 - l0).max(1), lane.h), super::studio::BAND, 46);
+    }
+
     /// The tags of the cursors that are on the plot, each with the cursor it stands for.
     pub(super) fn cursor_tags(&self) -> Vec<(CursorK, Rect)> {
         let mut out = Vec::new();
         if self.m.cursor == CursorMode::Off || self.view_on() || self.eye_open() { return out; }
         let source = self.cursor_source();
-        if !self.workspace_source_visible_here(source)
-            && !(self.m.cursor == CursorMode::Track && self.workspace_source_visible_here(self.cursor_b_source())) { return out; }
-        let a = self.plot.area;
+        if !self.workspace_source_drawn(source)
+            && !(self.m.cursor == CursorMode::Track && self.workspace_source_drawn(self.cursor_b_source())) { return out; }
+        let a = self.cursor_window();
         let f = self.fonts();
         let w = |s: &str| f.s.width(s) + 8;
         let side = |y: i32, w: i32| Rect::new(self.right_tag_x(a, y - 16, w), y - 16, w, 14);
@@ -56,7 +68,7 @@ impl Ui {
         }
         // Studio: C1 / C2 in the row over the lanes
         if self.studio_tags_on() && matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy) {
-            let g = self.plot.grid;
+            let g = self.studio_tag_area();
             for (k, frac) in [(0, self.m.cur_a), (1, self.m.cur_b)] {
                 if !(0.0..=1.0).contains(&frac) { continue; }
                 let x = g.x + (frac.clamp(0.0, 1.0) * g.w as f32) as i32;
@@ -136,4 +148,10 @@ impl Ui {
         self.workspace_source_visible_here(self.cursor_source())
             || (self.m.cursor == CursorMode::Track && self.workspace_source_visible_here(self.cursor_b_source()))
     }
+}
+
+/// The same time as screen column `x` of the area `g`, in the lane `lane` (stacked lanes span the same columns, the
+/// windows of Windows each have their own).
+pub(super) fn into_lane(lane: Rect, g: Rect, x: i32) -> i32 {
+    lane.x + ((x - g.x) as i64 * lane.w as i64 / g.w.max(1) as i64) as i32
 }

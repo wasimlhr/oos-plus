@@ -1,6 +1,6 @@
 # SCPI and VXI-11
 
-How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.1.15.
+How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.2.2.
 
 > **No authentication.** Anyone who can reach the scope can control it. Keep it on a trusted bench network, never on the internet. `net.allow` (below) limits who may connect.
 
@@ -55,7 +55,7 @@ All of them end in the same SCPI interpreter, so a command behaves the same whic
 
 ```sh
 printf '*IDN?\n' | nc dho924s-123456.local 5555
-# OOS,DHO924S,<serial>,oos-ui 0.1.15
+# OOS,DHO924S,<serial>,oos-ui 0.2.2
 ```
 
 **Python with pyvisa, raw socket:**
@@ -284,6 +284,9 @@ Without SCPI: `http://<scope>:8080/screen.png` (or `.bmp`) gives the same pictur
 | `:MEASure:ITEM? <item>[,<source>]` | one value; without a source the one selected in Measure |
 | `:MEASure:ITEM? <pair>,<A>,<B>` | a value between two sources (delay, phase, skew, setup/hold) |
 | `:MEASure:ITEM <item>[,<A>[,<B>]]` | adds the measurement to the strip on screen |
+| `:MEASure:SLOT<n> <item>[,<A>[,<B>]]` | puts a measurement in the numbered slot MEAS<n> (1 to 99): it is a row of the table on screen with the badge M<n>. OOS |
+| `:MEASure:SLOT<n>?`, `:MEASure:SLOT<n>:ITEM?` | reads that slot back by its number: the value, or what it measures. An empty slot is an error, not 9.9E37 |
+| `:MEASure:SLOT<n>:CLEar`, `:MEASure:SLOT:LIST?` | empties a slot and removes its row; lists the slots in use |
 | `:MEASure:SOURce[?] <A>[,<B>]` | default sources |
 | `:MEASure:CLEar` | removes all measurements and resets statistics |
 | `:MEASure:GATing[?]` | `SCREEN` (what is shown) or `NONE` (the whole record). OOS |

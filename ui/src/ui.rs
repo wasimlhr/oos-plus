@@ -162,6 +162,7 @@ mod layout_tests;
 mod fix_tests;
 mod feedback;
 mod files;
+mod greeting;
 mod hwmask;
 mod hwzone;
 mod init;
@@ -211,18 +212,21 @@ mod windows;
 mod wlan;
 mod worker;
 mod measrow;
+pub(crate) mod slots;
 mod workflow;
 mod workspace;
 pub(crate) use scpi_operations::{OperationState, OperationToken, Operations};
 mod backlight;
 mod bus_candidate;
 mod capture_memory;
+mod capture_rate;
 mod features;
 mod graphics;
 #[cfg(test)]
 mod interplay_tests;
 mod filterplot;
 mod livelines;
+mod nodata;
 mod mathwave;
 mod handles;
 mod measchip;
@@ -1071,6 +1075,7 @@ pub struct Ui {
     wave_pass: bool,
     /// the start-up screen and the last start-up's result for About (startup.rs)
     start_up: startup::StartUp,
+    greeting: greeting::Greeting,
     /// signed updates (update.rs): running oos-update job, watcher notice
     upd: update::UpdateUi,
     wlan: wlan::WlanUi,
@@ -1677,3 +1682,9 @@ mod aux_out_tests {
 mod zoom_tests;
 #[cfg(test)]
 mod funccheck_tests;
+#[cfg(test)]
+mod monitor_rows_tests;
+#[cfg(test)]
+mod display_rows_tests;
+#[cfg(test)]
+mod cursor_arrangement_tests;

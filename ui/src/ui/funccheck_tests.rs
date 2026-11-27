@@ -8,7 +8,10 @@ use super::sheet::RowKind;
 use std::collections::BTreeMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-const OUT_DIR: &str = "/mnt/c/Projects/oss-plus/local/audit/func";
+/// Where the audits write: `$OOS_AUDIT_DIR`, else the owner's private folder (never in the tree).
+fn out_dir() -> String {
+    std::env::var("OOS_AUDIT_DIR").unwrap_or_else(|_| "/mnt/c/Projects/oss-plus/local/audit/func".to_string())
+}
 
 fn frame(u: &mut Ui) {
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
@@ -31,8 +34,8 @@ fn shot(u: &mut Ui, name: &str) {
     u.toast = None;
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
-    let dir = std::path::Path::new(OUT_DIR);
-    let _ = std::fs::create_dir_all(dir);
+    let dir = std::path::PathBuf::from(out_dir());
+    let _ = std::fs::create_dir_all(&dir);
     std::fs::write(dir.join(format!("{name}.png")), crate::store::png_of(&cv)).unwrap();
 }
 
@@ -552,7 +555,7 @@ impl Walker {
             self.push(b, "STATIC", "-", None, format!("value '{}'", cut(&u.value(c.it))));
             return;
         }
-        if std::env::var("FUNC_TRACE").is_ok() { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::path::Path::new(OUT_DIR).join("trace.txt")) { let _ = writeln!(f, "{:?} {:?} {:?} {}", self.ctx.menu, self.ctx.variant, c.it, label); } }
+        if std::env::var("FUNC_TRACE").is_ok() { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::path::Path::new(&out_dir()).join("trace.txt")) { let _ = writeln!(f, "{:?} {:?} {:?} {}", self.ctx.menu, self.ctx.variant, c.it, label); } }
         let drift = self.drift(u, c);
         let scpi_cmds = scpi_for(&self.ctx, &u.menu_title(self.ctx.menu), &label, c.it);
         let mk = |me: &Walker, u: &Ui| me.base(u, c, tabname);
@@ -731,7 +734,7 @@ impl Walker {
             let t = std::time::Instant::now();
             let r = catch_unwind(AssertUnwindSafe(|| {
                 for i in 0..(if self.ctx.menu == MenuId::Eye { 12 } else { std::env::var("FUNC_CAP").ok().and_then(|s| s.parse().ok()).unwrap_or(200) }) {
-                    if std::env::var("FUNC_TRACE").is_ok() { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::path::Path::new(OUT_DIR).join("trace.txt")) { let _ = writeln!(f, "  limit step {i} dir {dir} value {}", u.value(c.it)); } }
+                    if std::env::var("FUNC_TRACE").is_ok() { use std::io::Write; if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(std::path::Path::new(&out_dir()).join("trace.txt")) { let _ = writeln!(f, "  limit step {i} dir {dir} value {}", u.value(c.it)); } }
                     let before = u.value(c.it);
                     u.adjust(c.it, dir);
                     let after = u.value(c.it);
@@ -953,11 +956,11 @@ fn walk_layout(l: Layout) {
     let scpi_map = load_scpi_map();
     let mut w = Walker { ctx: Ctx { layout: l, menu: MenuId::Main, variant: String::new(), pre: vec![], scpi_map, ui_n: 0 }, rows: Vec::new(), skipped: Vec::new() };
     let mut notes: Vec<String> = Vec::new();
-    let _ = std::fs::create_dir_all(OUT_DIR);
+    let _ = std::fs::create_dir_all(out_dir());
     let flush = |w: &Walker, notes: &Vec<String>| {
         let body = w.rows.iter().map(|r| r.tsv()).collect::<Vec<_>>().join("\n");
-        let _ = std::fs::write(std::path::Path::new(OUT_DIR).join(format!("results-{}{}.tsv", lname(l), std::env::var("FUNC_ONLY").map(|o| format!("-{o}")).unwrap_or_default())), body);
-        let _ = std::fs::write(std::path::Path::new(OUT_DIR).join(format!("notes-{}{}.txt", lname(l), std::env::var("FUNC_ONLY").map(|o| format!("-{o}")).unwrap_or_default())), format!("{}\n--- skipped\n{}", notes.join("\n"), w.skipped.join("\n")));
+        let _ = std::fs::write(std::path::Path::new(&out_dir()).join(format!("results-{}{}.tsv", lname(l), std::env::var("FUNC_ONLY").map(|o| format!("-{o}")).unwrap_or_default())), body);
+        let _ = std::fs::write(std::path::Path::new(&out_dir()).join(format!("notes-{}{}.txt", lname(l), std::env::var("FUNC_ONLY").map(|o| format!("-{o}")).unwrap_or_default())), format!("{}\n--- skipped\n{}", notes.join("\n"), w.skipped.join("\n")));
     };
     let only = std::env::var("FUNC_ONLY").ok();
     if only.as_deref().map_or(true, |o| o == "bars") { walk_bars(&mut w); flush(&w, &notes); }
@@ -1056,7 +1059,7 @@ fn display_effects() {
                 rel(base.0, after.0), rel(base.0, base2.0).abs(), rel(base.3, after.3), rel(base.3, base2.3).abs(), base.1, after.1, relu(base.1, after.1), base.2, after.2));
         }
     }
-    let _ = std::fs::write(std::path::Path::new(OUT_DIR).join("results-effects.tsv"), out.join("\n"));
+    let _ = std::fs::write(std::path::Path::new(&out_dir()).join("results-effects.tsv"), out.join("\n"));
     for o in &out { println!("FC {o}"); }
 }
 
@@ -1133,4 +1136,141 @@ fn studio_row_probe() {
         }
         if !done { println!("FC {:?} {:?}: not on any tab; items {:?}", menu, it, u.items(menu)); }
     }
+}
+
+// ------------------------------------------------------------------------------------------------ the plot menus
+
+/// Every row of the plot's menu (the Default popup, Studio's popover) pressed with a finger in each arrangement and each
+/// HDMI mode, with zoom off and on: what changed on the panel, whether the picture of the monitor followed. Results
+/// go to `$OOS_AUDIT_DIR/plot-menus.tsv` (default: the owner's private folder). A row that changes nothing is DEAD, one whose label
+/// promises something else is WRONG.
+fn plot_menu_rows(u: &Ui) -> Vec<(String, Rect)> {
+    if let Some(p) = &u.workspace.popup {
+        return (0..p.rows.len()).map(|i| (p.rows[i].0.clone(), p.row_rect(i))).collect();
+    }
+    u.studio_ctx_rows().into_iter().map(|(_, label, r)| (label, r)).collect()
+}
+
+fn plot_audit_ui(l: Layout, a: windows::Arrangement, hdmi: HdmiMode, zoom: bool, n: usize) -> Ui {
+    let mut u = build(l, n);
+    u.set_arrangement(a);
+    u.m.hdmi = hdmi;
+    u.m.zoom = zoom;
+    for _ in 0..3 { frame(&mut u); }
+    u
+}
+
+fn monitor_px(u: &mut Ui) -> Vec<u32> {
+    let mut cv = Canvas::new(1920, 1080);
+    if u.m.hdmi == HdmiMode::Layout { u.render_view(&mut cv); } else { u.render_waveform(&mut cv); }
+    cv.px
+}
+
+/// What the label of a plot-menu row promises, checked against the state after the tap; None when it kept it.
+fn plot_promise(label: &str, u: &Ui, a: &Snap, b: &Snap) -> Option<String> {
+    let l = label.to_lowercase();
+    let arr = |want: windows::Arrangement| (u.arrangement() != want).then(|| format!("arrangement is {:?}", u.arrangement()));
+    let changed = |key: &str| a.model.get(key) != b.model.get(key);
+    if l.starts_with("overlay") { return arr(windows::Arrangement::Overlay); }
+    if l.starts_with("stacked") { return arr(windows::Arrangement::Stacked); }
+    if l.contains("windows") && !l.contains("sources") { return arr(windows::Arrangement::Windows); }
+    if l == "zoom here" && !u.m.zoom { return Some("zoom is off".into()); }
+    if l == "close zoom" && u.m.zoom { return Some("zoom is still on".into()); }
+    if l == "set level here" && !changed("trig_level") { return Some("trigger level did not move".into()); }
+    if let Some(n) = l.strip_prefix("trigger on ch").and_then(|s| s.trim().parse::<usize>().ok()) {
+        if u.m.trig_src != n - 1 { return Some(format!("trigger source is CH{}", u.m.trig_src + 1)); }
+    }
+    if l == "cursor here" && !changed("cursor") { return Some("no cursor mode set".into()); }
+    None
+}
+
+/// The states the plot's menu is pressed in: layouts, arrangements, HDMI modes, zoom off and on.
+pub(super) struct PlotStates<'a> {
+    pub layouts: &'a [Layout],
+    pub arrangements: &'a [windows::Arrangement],
+    pub hdmi: &'a [HdmiMode],
+    pub zoom: &'a [bool],
+}
+
+/// Every row of the plot's menu pressed in every state: the lines of the table (tab separated, the verdict is the
+/// sixth field).
+pub(super) fn plot_menu_lines(st: &PlotStates) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut n = 0;
+    for &l in st.layouts {
+        for &a in st.arrangements {
+            for &hdmi in st.hdmi {
+                for &zoom in st.zoom {
+                    let mut u = plot_audit_ui(l, a, hdmi, zoom, n);
+                    let area = u.plot.area;
+                    u.context_menu(area.x + area.w / 2, area.y + area.h / 2);
+                    frame(&mut u);
+                    let rows = plot_menu_rows(&u);
+                    for (i, (label, _)) in rows.iter().enumerate() {
+                        n += 1;
+                        let r = catch_unwind(AssertUnwindSafe(|| {
+                            let mut u = plot_audit_ui(l, a, hdmi, zoom, n);
+                            u.context_menu(area.x + area.w / 2, area.y + area.h / 2);
+                            frame(&mut u);
+                            let Some((_, rect)) = plot_menu_rows(&u).into_iter().nth(i) else { return None };
+                            let menu = u.workspace.popup.as_ref().map(|p| p.rect).or_else(|| u.studio_ctx_rect());
+                            let (before, mon0) = (snap(&mut u, None), monitor_px(&mut u));
+                            let was = (u.arrangement(), u.m.trig_src, u.m.zoom, u.m.zdelay);
+                            let (x, y) = cen(rect);
+                            tap_at(&mut u, x, y);
+                            let (after, mon1) = (snap(&mut u, None), monitor_px(&mut u));
+                            let keys: Vec<String> = after.model.iter().filter(|(k, v)| before.model.get(*k) != Some(v)).map(|(k, _)| k.clone()).collect();
+                            let ukeys: Vec<String> = after.ui.iter().filter(|(k, v)| before.ui.get(*k) != Some(v)).map(|(k, _)| k.to_string()).collect();
+                            let (ppx, mpx) = (pdiff_out(&before.px, &after.px, u.scr.w, menu), pdiff(&mon0, &mon1));
+                            let ukeys: Vec<String> = ukeys.into_iter().filter(|k| k != "menu").collect();
+                            let alive = !keys.is_empty() || !ukeys.is_empty() || !after.toast.is_empty() || ppx > 0 || after.ui.get("menu") != before.ui.get("menu");
+                            let promise = plot_promise(label, &u, &before, &after);
+                            // a row that asks for what is in force already changes nothing, and that is right
+                            let low = label.to_lowercase();
+                            let already = (low.starts_with("overlay") && was.0 == windows::Arrangement::Overlay)
+                                || (low.starts_with("stacked") && was.0 == windows::Arrangement::Stacked)
+                                || (low == "windows" && was.0 == windows::Arrangement::Windows)
+                                || (low.starts_with("trigger on ch") && low.ends_with(&format!("ch{}", was.1 + 1)))
+                                || (low == "zoom here" && was.2)
+                                || (low == "center trigger" && was.3 == 0.0); // (the row is gone from the menu)
+                            let verdict = if promise.is_some() { "WRONG" } else if !alive && already { "OK" } else if !alive { "DEAD" } else { "OK" };
+                            let monitor = if hdmi == HdmiMode::Mirror { "mirror".to_string() } else if ppx > 0 && mpx == 0 { "monitor did not follow".to_string() } else { format!("{mpx}") };
+                            let changed = keys.iter().chain(ukeys.iter()).take(6).cloned().collect::<Vec<_>>().join(",");
+                            Some((verdict.to_string(), changed, ppx, monitor, promise.unwrap_or_else(|| after.toast.clone())))
+                        }));
+                        let (verdict, changed, ppx, monitor, note) = match r {
+                            Ok(Some(x)) => x,
+                            Ok(None) => continue,
+                            Err(_) => ("ERROR".to_string(), String::new(), 0, String::new(), "panic".to_string()),
+                        };
+                        let line = format!("{}\t{:?}\t{:?}\t{}\t{}\t{}\t{}\t{}\t{}\t{}", lname(l), a, hdmi, zoom, label, verdict, changed, ppx, monitor, note);
+                        lines.push(line.replace('\r', " "));
+                    }
+                }
+            }
+        }
+    }
+    lines
+}
+
+#[test]
+#[ignore = "an audit run by hand: OOS_AUDIT_DIR=<dir> cargo test -j 2 plot_menu_audit -- --ignored --nocapture"]
+fn plot_menu_audit() {
+    let dir = out_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let st = PlotStates {
+        layouts: &[Layout::Default, Layout::Studio],
+        arrangements: &[windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows],
+        hdmi: &[HdmiMode::Mirror, HdmiMode::Waveform, HdmiMode::Layout],
+        zoom: &[false, true],
+    };
+    let mut tsv = String::from("layout\ttraces\thdmi\tzoom\tlabel\tverdict\tchanged\tpanel px\tmonitor px\tnote\n");
+    for line in plot_menu_lines(&st) {
+        if line.split('\t').nth(5) != Some("OK") {
+            println!("FC plot {line}");
+        }
+        tsv.push_str(&line);
+        tsv.push('\n');
+    }
+    std::fs::write(std::path::Path::new(&dir).join("plot-menus.tsv"), tsv).unwrap();
 }

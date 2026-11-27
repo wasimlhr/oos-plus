@@ -154,7 +154,7 @@ Commands: [display.md](display.md).
 | `trend_sel` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `0 0` | - |
 | `strip` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `Below` | - |
 | `meas_labels` | window layout; `ch_window`, `math_window`, `ref_window` hold one window number per slot (1-based) | `false` | `:MEASure:INDicator` |
-| `layout` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | `minimal` | `:DISPlay:LAYout` |
+| `layout` | `default` or `studio`; a stored `minimal` (a layout that is gone) opens as Studio, with every source on one graticule unless `studio_traces` says otherwise; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | `default` | `:DISPlay:LAYout` |
 | `studio_view` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | `waveform` | - |
 | `studio_dock` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | - | - |
 | `studio_ov` | layout name; the Studio keys (`studio_dock`, `studio_ov`, `studio_meas_view` = `detailed`, `studio_badges` = `studio` are optional) | - | - |

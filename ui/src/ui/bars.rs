@@ -19,10 +19,16 @@ struct AuxCard<'a> {
 }
 
 impl Ui {
-    /// Run state pill at the left of the top bar (wider for the larger text sizes).
+    /// Run state pill at the left of the top bar (wider for the larger text sizes); taller, with the waveform rate under
+    /// the state, while the hardware runs (capture_rate.rs), and wide enough for that line.
     pub(super) fn run_pill(&self) -> Rect {
         if self.m.layout == Layout::Studio { return self.studio_top().run; }
-        Rect::new(8, 6, 92.max(30 + self.fonts().mb.width("TRIG'D") + 12), 28)
+        let f = self.fonts();
+        let w = 92.max(30 + f.mb.width("TRIG'D") + 12);
+        match self.capture_caption() {
+            Some(c) => Rect::new(8, 3, w.max(f.s.width(c) + 12), 34),
+            None => Rect::new(8, 6, w, 28),
+        }
     }
 
     /// Network box at the right of the top bar: room for an address, two lines of text (taller at the larger text
@@ -305,8 +311,14 @@ impl Ui {
         let r = self.run_pill();
         cv.round(r, 6, mix(BAR, col, 80), 255);
         cv.round(r.inset(1), 5, mix(BAR, col, 36), 255);
-        cv.circle(r.x + 16, r.y + 14, 4, col);
-        cv.text_in(&f.mb, Rect::new(r.x + 30, r.y, r.w - 30, r.h), 0, txt, col);
+        // with the waveform rate the state takes the upper part and the rate the line under it
+        let capture = self.capture_caption();
+        let h = if capture.is_some() { 18 } else { r.h };
+        cv.circle(r.x + 16, r.y + h / 2, 4, col);
+        cv.text_in(&f.mb, Rect::new(r.x + 30, r.y, r.w - 30, h), 0, txt, col);
+        if let Some(c) = capture {
+            cv.text_in(&f.s, Rect::new(r.x, r.y + h, r.w, r.h - h), 1, c, TEXT);
+        }
         let single = self.single_btn();
         if single.w > 0 {
             btn(cv, single, BTN, BTN_BORDER);

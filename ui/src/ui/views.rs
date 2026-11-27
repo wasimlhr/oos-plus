@@ -374,6 +374,7 @@ impl Ui {
         self.m.meas2.clear();
         self.m.cat.clear();
         self.m.row_cfg.clear();
+        self.m.meas_slots.clear();
         if new {
             // keys the setup writes only when they differ from the default
             self.m.studio_ov = 0;

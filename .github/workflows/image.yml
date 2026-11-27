@@ -103,7 +103,7 @@ jobs:
           python3 -I tools/image-manifest.py kernel/out/base/Image "boot/out/$OOS_IMAGE_NAME.dtb" boot/out/initramfs.cpio.gz > manifest.txt
           {
             echo '```'
-            cat kernel/out/base/kernel.release boot/out/busybox.version boot/out/oos-dev.img.sha256
+            cat kernel/out/base/kernel.release boot/out/oos-dev.img.sha256
             grep '  kernel/' manifest.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -119,7 +119,6 @@ jobs:
             boot/out/oos-dev.img.sha256
             boot/out/oos-dev.oosupd
             boot/out/*.GEL
-            boot/out/busybox.version
             kernel/out/base/SHA256SUMS
             kernel/out/base/config
           if-no-files-found: error

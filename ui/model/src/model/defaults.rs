@@ -78,6 +78,7 @@ impl Default for Model {
             meas: Vec::new(),
             meas2: Vec::new(),
             row_cfg: Vec::new(),
+            meas_slots: Vec::new(),
             cat: Vec::new(),
             dvm_on: false,
             dvm_src: 0,
@@ -162,8 +163,8 @@ impl Default for Model {
             zdelay: 0.0,
             color_grade: false,
             hdmi_lines: true,
-            // samples as dots by default, as upstream OOS
-            dots: true,
+            // samples joined as lines by default
+            dots: false,
             layout: Layout::Default,
             studio_view: "waveform".into(),
             studio_dock: String::new(),

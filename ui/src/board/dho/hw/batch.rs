@@ -190,6 +190,8 @@ impl BatchRun {
                         first: skip,
                         frames: avail - 1,
                         stamp,
+                        // the newest frame (avail - 1) has the number `seq_n`
+                        seq0: *seq_n + 1 - avail as u64,
                         decode: Arc::new(move |c: &[u8], f: &mut Frame| decode_into(c, &bs, &ps, 0, f)),
                         codes: Some(codes),
                     });
@@ -382,8 +384,10 @@ impl BatchRun {
         avail: usize,
         averaged: bool,
     ) -> usize {
-        let first = self.read_with.as_ref() != Some(b);
-        self.read_with = Some(b.clone());
+        // the frame count follows the workers' grant (ADR 0081): not a change of settings
+        let key = Settings { frames: 0, ..b.clone() };
+        let first = self.read_with.as_ref() != Some(&key);
+        self.read_with = Some(key);
         // not in roll and scan: their pieces come in batches of one with settings of their own
         let short =
             (p.memsel as f64) < FIRST_LEFT_MAX_S * p.rate as f64 && frames.first().is_some_and(|f| !f.roll && !f.scan);

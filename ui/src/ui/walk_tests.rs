@@ -1684,7 +1684,7 @@ fn remote_services_are_sheets_and_connectivity_leads_to_them() {
         tap(&mut u, x, y);
         assert!(u.menu == MenuId::Remote && u.sheet_active() && u.sheet_chrome().1.is_some(), "{layout:?}: Remote services is a sheet with Back");
         let spec = u.sheet_spec(MenuId::Remote).unwrap();
-        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Services", "Access", "Addresses"]);
+        assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Services", "Access", "Addresses", "USB"]);
         let on_sheet: Vec<Item> = spec.tabs.iter().flat_map(|t| t.rows.iter().copied()).collect();
         for it in u.items(MenuId::Remote) { assert!(on_sheet.contains(&it), "{layout:?}: {it:?} is on the sheet"); }
         // a switch acts on one tap
@@ -1938,7 +1938,7 @@ fn the_display_sheet_has_no_bottom_bar() {
         let screen = spec.tabs.iter().find(|t| t.name == "Screen").expect("the Screen tab");
         // (Studio has the two switches of its own arrangement after them, `studiolayout.rs`)
         let own: &[Item] = if layout == Layout::Studio { &[Item::StudioBadges, Item::StudioCompact] } else { &[] };
-        assert_eq!(screen.rows, [&[Item::Hdmi, Item::HdmiView, Item::Backlight, Item::TextSize], own].concat(), "{layout:?}");
+        assert_eq!(screen.rows, [&[Item::Hdmi, Item::HdmiLines, Item::Backlight, Item::TextSize], own].concat(), "{layout:?}");
         // what Bottom bar chooses is the same either way: the bars are the compact ones, and nothing moves
         u.close_menu();
         let places = |u: &Ui| (u.m.compact(), u.plot_rect(), u.frame().bottom, u.studio_bottom().ch, u.source_pills());
@@ -2187,7 +2187,7 @@ fn clear_sweep_and_the_footers_are_where_they_are_used() {
             let spec = u.sheet_spec(menu).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has a sheet"));
             spec.tabs.into_iter().find(|t| t.name == name).unwrap_or_else(|| panic!("{layout:?}: {menu:?} has the tab {name}"))
         };
-        let t = tab(MenuId::Display, "Waveform");
+        let t = tab(MenuId::Display, "Look");
         assert!(t.rows.contains(&Item::Persist) && t.foot == [Item::ClearDisp], "{layout:?}: {:?}", t.foot);
         // (Reset layout is Studio's, under the switches of its arrangement)
         assert_eq!(tab(MenuId::Display, "Screen").foot, if layout == Layout::Studio { vec![Item::StudioReset] } else { Vec::new() }, "{layout:?}");
@@ -2209,6 +2209,8 @@ fn clear_sweep_and_the_footers_are_where_they_are_used() {
         let mut u = fresh(layout);
         u.open_menu(MenuId::Display);
         u.step(0.04);
+        let (tx, ty) = mid(u.sheet_geo().unwrap().tabs[1]);
+        tap(&mut u, tx, ty);
         let (x, y) = mid(foot(&u, Item::ClearDisp));
         tap(&mut u, x, y);
         assert!(u.studio.md.armed.is_none(), "{layout:?}: Clear does not ask twice");
@@ -2260,8 +2262,6 @@ fn traces_cursors_and_the_pill_switch_are_in_reach() {
         u.m.ch[1].on = true;
         u.open_menu(MenuId::Display);
         u.step(0.04);
-        let (x, y) = mid(u.sheet_geo().unwrap().tabs[1]);
-        tap(&mut u, x, y);
         let row = u.sheet_geo().unwrap().rows.iter().find(|r| r.it == Item::Traces).map(|r| r.ctrl).unwrap_or_else(|| panic!("{layout:?}: no Traces row"));
         let was = u.trace_stacked();
         assert_eq!(u.value(Item::Traces), if was { "Stacked" } else { "Overlay" }, "{layout:?}");
@@ -2326,7 +2326,7 @@ fn the_hold_menu_of_the_plot_has_rows_a_finger_high() {
         }
         let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
         for gone in ["Run", "Stop", "Single", "Trigger settings", "Sources"] { assert!(!labels.contains(&gone), "{gone} is on the bars: {labels:?}"); }
-        for kept in ["Overlay traces", "Stacked traces", "Fit all lanes", "Fit record", "Zoom here", "Zoom box", "Reset zoom", "Close zoom", "Cursor here", "Autoset"] {
+        for kept in ["Overlay", "Stacked", "Fit all lanes", "Fit record", "Zoom here", "Zoom box", "Reset zoom", "Close zoom", "Cursor here"] {
             assert!(labels.contains(&kept), "{kept}: {labels:?}");
         }
         u.studio.ctx = None;

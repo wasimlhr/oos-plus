@@ -798,3 +798,25 @@ fn a_dropped_rate_takes_its_eye_along_when_no_clock_follows() {
     assert_eq!(ui.m.eye_rate, 0.0);
     assert!(ui.azr.eye.is_none() && ui.azr.eye_res.is_none(), "{:?}", ui.azr.page.status);
 }
+
+/// A bus that talks in bursts (one MIL-STD-1553 word, plus and minus levels, in a long idle record): the rate is read
+/// from where the signal is, not from windows at the start, middle and end of the record (9.7 Mb/s for 2 Mb/s).
+#[test]
+fn the_rate_of_a_burst_in_a_long_idle_record_is_read_from_the_burst() {
+    let (rate, spu) = (2e6, 312usize);
+    let dt = 1.0 / (rate * spu as f64);
+    let mut n = Noise(11);
+    let mut v = vec![0.0f32; 700_000];
+    for _ in 0..120 {
+        // Manchester: a bit is a level for half a bit, then the other level
+        let bit = if n.uniform() < 0.5 { 2.5f32 } else { -2.5 };
+        v.extend(std::iter::repeat_n(bit, spu));
+        v.extend(std::iter::repeat_n(-bit, spu));
+    }
+    v.resize(1_000_000, 0.0);
+    for x in v.iter_mut() {
+        *x += n.gauss(0.02) as f32;
+    }
+    let found = super::automatic::probe_rate(&v, dt).expect("a rate");
+    assert!((found / rate - 1.0).abs() < 0.05, "{found}");
+}

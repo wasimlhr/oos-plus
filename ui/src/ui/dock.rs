@@ -834,13 +834,22 @@ impl Ui {
 
     /// The views of a group as they are, put in tabs with `k` in front: floating views too, so no window floats over
     /// the one that fills the area. Where they were is kept for the way back.
-    pub(super) fn dock_maximise(&mut self, k: VKind) {
-        if !self.dock_shown(k) { return; }
+    /// The views on the screen, docked or floating, in the order of the dock.
+    fn dock_kinds_shown(&self) -> Vec<VKind> {
         let region = self.dock_region();
         let tree = self.dock_effective(region);
         let mut kinds = Vec::new();
         tree.leaves(&mut kinds);
         for v in KINDS { if self.dock_shown(v) && !kinds.contains(&v) { kinds.push(v); } }
+        kinds
+    }
+
+    /// Whether Maximise has anything to do: with the waveform alone on the screen it does not.
+    pub(super) fn dock_can_maximise(&self) -> bool { self.dock_kinds_shown().len() >= 2 }
+
+    pub(super) fn dock_maximise(&mut self, k: VKind) {
+        if !self.dock_shown(k) { return; }
+        let kinds = self.dock_kinds_shown();
         if kinds.len() < 2 { return; }
         if self.dock_tabs_root() { self.dock_activate(k); return; }
         let saved = Saved { tree: self.studio.dock.tree.clone(), floats: self.studio.dock.float_on, meas_floating: self.studio.view == StudioView::Floating };
@@ -1503,7 +1512,7 @@ impl Ui {
                 cv.text_in(&f.mb, Rect::new(box_.x + 8, box_.y, box_.w - 8, box_.h), 0, &label, if on { TEXT } else { DIM });
                 cv.no_clip();
             }
-            if let Some(m) = self.dock_tab_more(k, r) {
+            if let Some(m) = self.dock_tab_more(k, r).filter(|_| !self.wave_pass) {
                 let box_ = Rect::new(m.x, m.y + 2, m.w, m.h - 4);
                 chip(cv, box_, BTN, BTN_BORDER);
                 let (cx, cy) = (box_.x + box_.w / 2, box_.y + box_.h / 2);
@@ -1537,13 +1546,14 @@ impl Ui {
             }
             cv.no_clip();
         }
-        if let Some(b) = &bar { self.draw_panel_bar(cv, b); }
-        if let Some(v) = view { self.draw_view_switch(cv, v); }
+        // (the buttons of a strip are for a finger: the monitor's Waveform picture has none)
+        if let Some(b) = bar.as_ref().filter(|_| !self.wave_pass) { self.draw_panel_bar(cv, b); }
+        if let Some(v) = view.filter(|_| !self.wave_pass) { self.draw_view_switch(cv, v); }
         // the views of the Events panel and Errors only, in the strip: the pane under it is all rows
         if k == VKind::Pane {
             self.draw_events_strip(cv, Rect::new(r.x, r.y + STRIP_H, r.w, (r.h - STRIP_H).max(1)));
         }
-        if let Some(e) = extra {
+        if let Some(e) = extra.filter(|_| !self.wave_pass) {
             chip(cv, Rect::new(e.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);
             let (cx, cy) = (e.x + e.w / 2, s.y + s.h / 2);
             match self.dock_extra_kind(k) {
@@ -1555,7 +1565,7 @@ impl Ui {
                 _ => super::studio::icon_expand(cv, cx, cy, TEXT),
             }
         }
-        if let Some(g) = self.dock_gear_rect(k, r) {
+        if let Some(g) = self.dock_gear_rect(k, r).filter(|_| !self.wave_pass) {
             chip(cv, Rect::new(g.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);
             let (cx, cy) = (g.x + g.w / 2, s.y + s.h / 2);
             // a gear: a ring with its hole and eight teeth
@@ -1569,12 +1579,14 @@ impl Ui {
             }
         }
         let dim = k == VKind::Wave && !self.view_on() && !(self.eye_open() && self.m.eye_place == EyePlace::Full);
-        chip(cv, Rect::new(close.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);
-        let (cx, cy) = (close.x + close.w / 2, s.y + s.h / 2);
-        let c = if dim { DIM } else { TEXT };
-        cv.line(cx - 4, cy - 4, cx + 4, cy + 4, c);
-        cv.line(cx - 4, cy + 4, cx + 4, cy - 4, c);
-        if floating {
+        if !self.wave_pass {
+            chip(cv, Rect::new(close.x + 12, s.y + 1, 26, 24), BTN, BTN_BORDER);
+            let (cx, cy) = (close.x + close.w / 2, s.y + s.h / 2);
+            let c = if dim { DIM } else { TEXT };
+            cv.line(cx - 4, cy - 4, cx + 4, cy + 4, c);
+            cv.line(cx - 4, cy + 4, cx + 4, cy - 4, c);
+        }
+        if floating && !self.wave_pass {
             // the resize corner, and the edges beside it
             cv.fill(Rect::new(r.right() - 3, r.y + STRIP_H + 24, 2, (r.h - STRIP_H - 60).max(0)), DIM);
             cv.fill(Rect::new(r.x + 1, r.y + STRIP_H + 24, 2, (r.h - STRIP_H - 60).max(0)), DIM);

@@ -48,6 +48,28 @@ const PHRASES: &[(&str, &str)] = &[
     ("factory reset", "rst default"),
     ("triggered", "trigger status"),
     ("screen shot", "screenshot"),
+    ("move a window", "dock move"),
+    ("move the window", "dock move"),
+    ("move a view", "dock move"),
+    ("move a panel", "dock move"),
+    ("next to", "dock move"),
+    ("resize a window", "dock size"),
+    ("resize a panel", "dock size"),
+    ("resize a view", "dock size"),
+    ("list the windows", "dock list"),
+    ("list the views", "dock list"),
+    ("float a window", "dock float"),
+    ("close a window", "dock close"),
+    ("maximise", "dock maximise"),
+    ("maximize", "dock maximise"),
+    ("show the simulator", "dock show simulator"),
+    ("open the simulator", "dock show simulator"),
+    ("simulate a signal", "sim play"),
+    ("simulate", "sim"),
+    ("zoom into", "zoom here"),
+    ("tap the screen", "ui tap"),
+    ("buttons on the screen", "ui elements"),
+    ("press a menu", "ui menu select"),
 ];
 /// Words of a search that say nothing about a command.
 const STOP: &[&str] = &[
@@ -140,6 +162,54 @@ pub struct Node {
     suffix: bool,
     optional: bool,
 }
+
+/// What the scope can do, by what an assistant wants done: the task in its words, the subsystems of the manual that
+/// hold it (a part of each title, as `subsystem` takes it), and where to start. An assistant that is only told the
+/// typed tools does not know the screen can be arranged, a signal simulated or a menu pressed; the answer of
+/// `scpi_reference` without arguments lists this, and the instructions of `initialize` point to it.
+pub const TASKS: &[(&str, &[&str], &str)] = &[
+    (
+        "Arrange the screen: dock, float, move, resize, tab, maximise or close the views (waveform, measurements, eye,          simulator, events)",
+        &["Docking", "Views"],
+        ":DOCK:LIST shows every view and where it is; then :DOCK:MOVE, :DOCK:FLOAT, :DOCK:SIZE, :DOCK:SHOW, :DOCK:CLOSe",
+    ),
+    (
+        "Zoom, fit the record, one plot or one lane per trace",
+        &["Studio zoom", "Display and layout"],
+        ":ZOOM:HERE, :ZOOM:BOX, :VIEW:FIT, :VIEW:TRACes",
+    ),
+    (
+        "Simulate a signal (a lane such as PCIe 4.0, a pattern, jitter, spread) and add it as a reference",
+        &["Signal simulator"],
+        ":SIM:PRESet, :SIM:PLAY ON, then :SIM:ADDRef",
+    ),
+    (
+        "Add or show a plot or analyser: eye, spectrum, histogram, XY, measurement table, bode, power, mask",
+        &["Eye and jitter", "Spectrum", "Measurements: Readouts", "Mask", "Bode", "Power, magnetic"],
+        ":DOCK:SHOW for the measurement table and the simulator; the others open with their own commands (:EYE,          :SPECtrum, :BODE ...)",
+    ),
+    (
+        "Reference waveforms and math traces: save a trace, load a file, add a math trace",
+        &["Reference waveforms", "Math"],
+        ":REFerence<n>..., :MATH<n>:...",
+    ),
+    (
+        "Measure a value and keep it on the screen as a row of the measurement table, read back by a slot number MEAS1..MEAS99",
+        &["Measurements: Readouts"],
+        "measure_slot (slot, item, source), or :MEASure:SLOT1 <item>,<source> then :MEASure:SLOT1?; :MEASure:SLOT:LIST? lists the slots",
+    ),
+    ("Decode a bus (UART, I2C, SPI, CAN, 1553 ...) and read its events", &["Decoders and bus"], "setup_decoder, decode_results"),
+    ("Mark and find events in the record", &["Search"], ":SEARch:..."),
+    ("Logic analyser lines", &["Logic analyser"], ":LA:STATe"),
+    ("Generator: built-in and external", &["Built-in generator", "External generator"], ":SOURce<n>:..."),
+    ("Cursors, DVM, frequency counter", &["Cursors", "DVM", "Counter"], ":CURSor:..., :DVM:..., :COUNter:..."),
+    ("Save and load setups, waveforms and screens", &["Save and load"], ":SAVE:..., :LOAD:..."),
+    (
+        "Anything a person does with a finger that no command above covers: read the controls on the screen, tap, drag,          open and press a menu row",
+        &["Screen controls", "Right-click menu"],
+        ":UI:ELEMents, :UI:TAP, :UI:DRAG, :UI:CONText, :UI:MENU?, :UI:MENU:SELect; check the result with the screenshot tool",
+    ),
+];
 
 /// The reference, read from the manual the first time it is asked.
 pub fn reference() -> &'static Reference {
@@ -511,6 +581,53 @@ mod tests {
         assert!(search("trigger level", None).len() < 40, "{}", search("trigger level", None).len());
         let full = full(lookup(":CHAN1:SCAL")[0]);
         assert!(full.get("params").is_some() && full.get("query").is_some(), "{full}");
+    }
+
+    // Break it catches: a task of `TASKS` that names a subsystem the manual no longer has (an assistant is sent to an
+    // empty list), a task with no commands behind it, a start command that is no command of the reference
+    #[test]
+    fn every_task_points_to_subsystems_and_commands_of_the_manual() {
+        let r = reference();
+        for (task, parts, start) in TASKS {
+            for part in *parts {
+                assert!(!search("", Some(part)).is_empty(), "{task}: no subsystem {part}");
+            }
+            for word in start.split([' ', ',', ';']).filter(|w| w.starts_with(':')) {
+                let head = word.trim_end_matches(['.', '?', ':']);
+                if head.matches(':').count() < 2 || word.contains("...") {
+                    continue;
+                }
+                assert!(!lookup(head).is_empty() || !lookup(&format!("{head}?")).is_empty(), "{task}: {word}");
+            }
+        }
+        assert!(r.titles.len() > TASKS.len());
+    }
+
+    // Break it catches: what an assistant asks of the screen, the simulator or the views not finding the command that
+    // does it in the first five (the words the manual uses are not the ones said)
+    #[test]
+    fn a_search_finds_the_command_that_arranges_the_screen() {
+        for (said, header) in [
+            ("move a window", ":DOCK:MOVE"),
+            ("dock the eye next to the waveform", ":DOCK:MOVE"),
+            ("float a view", ":DOCK:FLOAT"),
+            ("resize a panel", ":DOCK:SIZE"),
+            ("close a view", ":DOCK:CLOSe"),
+            ("list the windows", ":DOCK:LIST"),
+            ("maximise a view", ":DOCK:MAXimise"),
+            ("show the simulator", ":DOCK:SHOW"),
+            ("simulate a signal", ":SIM:PLAY"),
+            ("add the simulated signal to a reference", ":SIM:ADDRef"),
+            ("simulator preset", ":SIM:PRESet"),
+            ("tap the screen", ":UI:TAP"),
+            ("list the buttons on the screen", ":UI:ELEMents"),
+            ("press a menu row", ":UI:MENU:SELect"),
+            ("fit the record", ":VIEW:FIT"),
+            ("zoom into a time", ":ZOOM:HERE"),
+        ] {
+            let found = headers(search(said, None));
+            assert!(found.iter().take(5).any(|h| h == header), "{said}: {:?}", &found[..found.len().min(5)]);
+        }
     }
 
     // Break it catches: a related command that is no command (a header renamed, a typing error in a See also cell: an

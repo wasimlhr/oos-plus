@@ -390,6 +390,17 @@ fn a_ref_in_a_setup_stays_a_ref_and_a_channel_number_stays_a_channel() {
         (back.spec_src, back.eye_src, back.pw_v, back.pw_i, back.bode_in, back.bode_out),
         (m.spec_src, m.eye_src, m.pw_v, m.pw_i, m.bode_in, m.bode_out)
     );
+    // numbered measurement slots: kept for rows that are selected, refused out of range or twice
+    let mut slotted = m.clone();
+    slotted.meas_slots = vec![(1, RowKey::One(Meas::Vpp, WaveId::Ref(0))), (99, RowKey::Pair(0, WaveId::Ref(0), WaveId::Ch(1))), (5, RowKey::One(Meas::Vmax, WaveId::Ch(0)))];
+    let text = setup_text(&slotted);
+    assert!(text.contains("meas_slots = 1|m:Vpp:R1 99|p:0:R1:2
+"), "{text}");
+    assert_eq!(parse_setup(&text).unwrap().meas_slots, slotted.meas_slots[..2]);
+    for bad in ["0|m:Vpp:1", "100|m:Vpp:1", "1|m:Vpp:1 1|m:Vmax:1", "x|m:Vpp:1", "1"] {
+        assert!(parse_setup(&format!("meas_slots = {bad}
+")).is_err(), "{bad}");
+    }
     assert_eq!((back.meas, back.meas2), (m.meas, m.meas2));
     // a setup written before refs were sources
     let old = parse_setup("magnetic = 1 2 1 0 0 0 IPsi 0\ninverter = Dq0 1 2 3 Off 1 4 true off off off 1 1 0 false 0 1 off 1024 false 0 1 2\ndpt = 1 2 3 Off 4 10 Both\n").unwrap();

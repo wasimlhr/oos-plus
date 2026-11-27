@@ -21,6 +21,7 @@ and in our own words. The code of OOS is written to them
 - [wlan.md](wlan.md): WLAN through a USB stick.
 - [network.md](network.md): Ethernet and a link at 10 Mbit/s, date and time from NTP, time zones, `/oos/system.conf`.
 - [ssh.md](ssh.md): SSH access, trusted keys and how to provision them.
+- [usb-device.md](usb-device.md): the rear USB port as a network link to one computer (RNDIS and ECM, DHCP).
 - [device-testing.md](device-testing.md): testing on a unit: only the tests a change reaches, retries, known failures.
 - [board-on-a-host.md](board-on-a-host.md): the board code on a host against a simulated unit (ADR 0053): what it
   touches outside the program, the model, the seam, the stages and how far they are.
@@ -37,6 +38,8 @@ and in our own words. The code of OOS is written to them
 - [fork/deps.md](fork/deps.md): the sources the image builds from (`rootfs/deps.lock`), when a part is built again,
   how to update one.
   how to update one; the platform crates of the desktop builds.
+- [fork/upstream-sync.md](fork/upstream-sync.md): oos-plus: how upstream's commits are taken in
+  (`tools/upstream-sync.sh`), the rules for its conflicts, its checks, and when a sync stops.
 - [../wiki/](../wiki/README.md): the guide for people who use a scope; published as the wiki of the repository.
 - [porting.md](porting.md): other models (MHO900, DHO1000/4000): what carries over, and how to describe one.
 - [bandwidth-test.md](bandwidth-test.md): procedure to measure the analog bandwidth.

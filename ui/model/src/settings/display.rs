@@ -147,7 +147,7 @@ pub const DRAW: [Setting; 5] = [
         ty: Ty::Bool,
         label: "HDMI lines",
         #[cfg(test)]
-        doc: "The live channels on the monitor of the HDMI Layout are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges).",
+        doc: "The live channels on the monitor (HDMI Waveform or Layout) are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges).",
         accept: None,
         step: None,
         get: |m, _| Val::Bool(m.hdmi_lines),

@@ -25,8 +25,10 @@ draws the maps it is given (the same LUT from `vmax`), so CPU and GPU show the s
 ## Fix (branch fix/flicker-weight)
 
 When the fast path applies and the record has its frame, the newest frame is drawn with `draw_frame` too. Every
-frame of a picture then has the same weight, and `picture_ref` grades them alike. Other cases (zoom, Z input,
-averaging, sparse records without a frame) keep `draw_ex`; there no frame goes through the fast path.
+frame of a picture then has the same weight, and `picture_ref` grades them alike; with the zoom on, the zoom picture
+is drawn the same way (`Ui::zoom_draw_model`, #582). Other cases (Z input, sparse records without a frame) keep
+`draw_ex`; there no frame goes through the fast path. The software Average draws its newest record with `draw_ex` too:
+the fast path folds the other frames into the average and draws none of them (`Ui::step_average_frames`).
 
 Host test `hardware_pictures_look_the_same_whatever_the_frames_per_picture`: a hardware source fed 1 to 5 equal
 frames per picture; every picture's brightness within 3 of 255 of the first. Without the fix: off by 255.

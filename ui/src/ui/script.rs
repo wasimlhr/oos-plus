@@ -61,7 +61,9 @@ impl Ui {
     pub(super) fn script_labels(&self) -> Vec<(Item, String)> {
         // the options of the picker are made once, not for every row
         let options = self.pick.map(|p| self.options(p.it)).unwrap_or_default();
-        self.items(self.menu).into_iter().map(|it| match it {
+        // a menu that is a sheet lists the rows of the sheet (Display has no Bottom bar there)
+        let sheet_display = self.menu == MenuId::Display && self.sheets_on();
+        self.items(self.menu).into_iter().filter(|it| !(sheet_display && *it == Item::BottomBar)).map(|it| match it {
             Item::PickOpt(k) if k < options.len() => (it, options[k].clone()),
             _ => (it, self.item_label(it).to_string()),
         }).collect()

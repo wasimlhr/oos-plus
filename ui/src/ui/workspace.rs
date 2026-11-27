@@ -717,6 +717,17 @@ impl Ui {
             }
         }
     }
+    /// A source that has a window or a lane on the screen, whichever window is being drawn.
+    pub(super) fn workspace_source_drawn(&self, id: WaveId) -> bool {
+        match id {
+            WaveId::Ch(c) => self.m.ch[c].on && !self.m.ch_hidden[c],
+            WaveId::Ref(i) => self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on),
+        }
+    }
+    /// The window the time cursors are drawn in: the one of their source.
+    pub(super) fn cursor_window(&self) -> Rect {
+        self.source_area(self.cursor_source()).unwrap_or(self.plot.area)
+    }
     pub(super) fn cursor_badge(&self) -> Option<(String, Rgb)> {
         self.cursor_wave().map(|id| (self.wave_name(id), self.wave_color(id)))
     }
@@ -788,6 +799,12 @@ impl Ui {
             if let WaveId::Ref(i) = id {
                 if self.plot.wins.len() > 1 {
                     return self.plot.wins.get(self.ref_win_of(i)).copied();
+                }
+            }
+            // a channel in one of several windows is drawn in its own
+            if let WaveId::Ch(c) = id {
+                if self.plot.wins.len() > 1 {
+                    return Some(self.ch_area(c));
                 }
             }
             return Some(self.wave_area());
@@ -1216,35 +1233,22 @@ impl Ui {
                  ("Dock below".into(), Action::MeasureDock(StripDock::Below)), ("Dock left".into(), Action::MeasureDock(StripDock::Left)),
                  ("Add measurements".into(), Action::Menu(MenuId::MeasAdd))]
         } else {
+            // the plot's menu has the same rows in every layout (Studio's popover has them in two columns)
             let mut rows = vec![
-                ("Overlay traces".into(), Action::Overlay),
-                ("Stacked traces".into(), Action::Stacked),
-                ("Four windows".into(), Action::Windows),
+                ("Overlay".into(), Action::Overlay),
+                ("Stacked".into(), Action::Stacked),
+                ("Windows".into(), Action::Windows),
                 ("Fit record".into(), Action::FitRecord),
-                ("Reset zoom".into(), Action::ZoomReset), ("Close zoom".into(), Action::ZoomClose),
-                ("Single acquisition".into(), Action::Single), ("Run / Stop".into(), Action::Run), ("Autoset".into(), Action::Autoset),
-                ("Float measurements".into(), Action::MeasureFloat)];
-            for source in self.trace_sources().into_iter().take(5) {
-                let id = match source {
-                    Trace::Channel(c) => WaveId::Ch(c),
-                    Trace::Reference(i) => WaveId::Ref(i),
-                    Trace::Math(_) => continue,
-                };
-                rows.push((
-                    format!(
-                        "Trigger on {}",
-                        match id {
-                            WaveId::Ch(c) => format!("CH{}", c + 1),
-                            WaveId::Ref(i) => format!("R{}", i + 1),
-                        }
-                    ),
-                    Action::Trigger(id),
-                ));
+            ];
+            if self.m.zoom {
+                rows.push(("Reset zoom".into(), Action::ZoomReset));
+                rows.push(("Close zoom".into(), Action::ZoomClose));
             }
-            rows.push(("Trigger settings".into(), Action::Menu(MenuId::Trigger)));
-            // a note at the time under the finger: on the lane under it, or on the selected source
-            if let Some(id) = self.ctx_lane(x, y) { rows.push(("Add note here".into(), Action::Note(id, x))); }
-            rows.push(("Sources".into(), Action::Sources));
+            // on the lane under the press (a note at the time under the finger, the trigger on that source)
+            if let Some(id) = self.ctx_lane(x, y) {
+                rows.push((format!("Trigger on {}", self.wave_name(id)), Action::Trigger(id)));
+                rows.push(("Add note here".into(), Action::Note(id, x)));
+            }
             rows
         };
         let mut rows = rows;
@@ -1502,6 +1506,11 @@ impl Ui {
         if opened { self.workspace.popup = None; }
         self.workspace.gesture = None;
         opened
+    }
+    /// Something modal opens over the screen: no context menu stays over it, and no hold under it opens one.
+    pub(super) fn workspace_close_popup(&mut self) {
+        self.workspace.popup = None;
+        self.workspace.gesture = None;
     }
     pub(super) fn workspace_hold_tick(&mut self) {
         let Some(mut gesture) = self.workspace.gesture else { return };

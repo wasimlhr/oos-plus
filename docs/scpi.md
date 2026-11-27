@@ -304,6 +304,9 @@ The example deliberately stops acquisition and retains that state. It reads one 
 | `:MEASure:ITEM? <item>[,<source>]` | Standard scalar; default source is the current Measure selection. Valid items are listed below. |
 | `:MEASure:ITEM? <pair>,<A>,<B>` | Pair scalar, with native physical-time alignment; omitted roles use the Measure selections. |
 | `:MEASure:ITEM <item>[,<A>[,<B>]]` | Add a standard/pair readout. Duplicates preserve statistics and Single. |
+| `:MEASure:SLOT<n> <item>[,<A>[,<B>]]` | Add the measurement to the numbered slot `MEAS<n>` (n = 1 to 99): it is a row of the measurement table (badge `M<n>`) and is read back by the number with `:MEASure:SLOT<n>?`. An empty slot is an error, not `9.9E37`. |
+| `:MEASure:SLOT<n>?` / `:MEASure:SLOT<n>:ITEM?` | The value of the slot, and what it measures (`VPP,CHAN1`). |
+| `:MEASure:SLOT<n>:CLEar` / `:MEASure:SLOT:LIST?` | Empty the slot and remove its row; list the slots in use (`n,ITEM,source,value;...`). |
 | `:MEASure:SOURce[?] <A>[,<B>]` | Default Measure source(s); query returns A. Sources are `CHANn|Rn`. |
 | `:MEASure:CLEar` | Clear standard, pair and catalog selections through the shared statistics reset. |
 | `:MEASure:GATing[?]` | `SCREEN` follows the viewport; `NONE` means Full record. This gate is an OOS extension. |
@@ -623,7 +626,7 @@ in `ui/model/src/settings/display.rs`; this table is written from there
 | none | a choice of the screen's layout, not of the measurement | `density` | Density | On the Windows page (Full screen): what the screen shows around the plot, the bars and cards, or the plot alone. A setup that says Split or Four reads as Scope: the windows and the lower pane are their own settings now. |
 | none | a choice of the screen's layout, not of the measurement | `pane` | Lower | On the Windows page: what shows under the plot, a pane of the spectrum, the results, the events, the trend or the bus view, or nothing. It does not depend on the arrangement of the traces or on Full screen (which takes it away and gives it back). |
 | `:DISPlay:COLor[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `color_grade` | Colour grade | Colours the persistence by how often a point was hit. |
-| `:DISPlay:HDMI:LINes[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `hdmi_lines` | HDMI lines | The live channels on the monitor of the HDMI Layout are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges). |
+| `:DISPlay:HDMI:LINes[?]` | `ON`, `OFF`, `1`, `0`; the query answers `1` or `0` | `hdmi_lines` | HDMI lines | The live channels on the monitor (HDMI Waveform or Layout) are thin lines at the monitor's resolution (on), or               the phosphor of the panel stretched to it (off: persistence and colour grade, with blocky edges). |
 | `:DISPlay:TYPE[?]` | `DOTS`, `VECTors`; the query answers `DOTS` or `VECT` | `dots` | Dots | Draws every sample as a dot instead of joining them with lines. |
 | none | a choice of the screen's layout, not of the measurement | `bar` | Bottom bar | The bottom bar as cards or as one compact line. |
 | none | a choice of the screen's layout, not of the measurement | `hdmi` | HDMI | What a monitor on the HDMI port shows: the panel, the waveform alone, or a layout of its own; the menu steps to the end of the list and stops. |

@@ -39,3 +39,9 @@ address 192.168.177.75
 address 192.168.177.164
 # the vendor's prefix with a made-up device part, in the tests of the model and the update
 mac 00:19:AF:00:00:01
+
+# the network of the rear USB port (oos-gadget, docs/usb-device.md, ADR 0079): the scope's fixed address on the cable
+# and the two addresses its DHCP server gives the computer; the same on every scope
+address 192.168.235.1
+address 192.168.235.2
+address 192.168.235.3

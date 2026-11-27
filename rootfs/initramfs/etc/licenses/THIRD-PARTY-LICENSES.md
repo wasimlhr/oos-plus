@@ -31,9 +31,8 @@ also holds the parts listed here. Each keeps its own licence.
 
 | Part | Version | Licence | In the image | Licence text | Source with a release |
 |---|---|---|---|---|---|
-| BusyBox | 1.37.0 (Ubuntu `busybox-static` 1:1.37.0-7ubuntu1) | GPL-2.0-only | `/bin/busybox`, static | `GPL-2.0.txt` | `busybox_1.37.0.orig.tar.bz2`, `busybox_1.37.0-7ubuntu1.debian.tar.xz`, `.dsc` |
-| GNU C library (glibc), in BusyBox | 2.42 (Ubuntu 2.42-2ubuntu4: the one Ubuntu built `busybox-static` with, its `Built-Using`) | LGPL-2.1-or-later; parts under other licences, see `glibc` | linked into `busybox` | `glibc`, `LGPL-2.1.txt` | `glibc_2.42.orig.tar.xz`, `glibc_2.42-2ubuntu4.debian.tar.xz`, `.dsc` |
-| GNU C library (glibc), elsewhere | 2.43 (Ubuntu 2.43-2ubuntu2.4) | LGPL-2.1-or-later; parts under other licences, see `glibc` | linked into `oos-hw`; shared libraries of the GPU helper | `glibc`, `LGPL-2.1.txt` | `glibc_2.43.orig.tar.xz`, `glibc_2.43-2ubuntu2.4.debian.tar.xz`, `.dsc` |
+| BusyBox | 1.37.0 | GPL-2.0-only | `/bin/busybox`, static | `busybox`, `GPL-2.0.txt` | `busybox-1.37.0.tar.bz2`; configuration and build script in `rootfs/` (`busybox.config`, `build-busybox.sh`) |
+| GNU C library (glibc) | 2.43 (Ubuntu 2.43-2ubuntu2.4) | LGPL-2.1-or-later; parts under other licences, see `glibc` | linked into `oos-hw`; shared libraries of the GPU helper | `glibc`, `LGPL-2.1.txt` | `glibc_2.43.orig.tar.xz`, `glibc_2.43-2ubuntu2.4.debian.tar.xz`, `.dsc` |
 | GCC runtime (libgcc, libstdc++) | GCC 16 (Ubuntu 16-20260322-1ubuntu1) | GPL-3.0-or-later WITH GCC-exception-3.1 | shared libraries of the GPU helper; libgcc parts in the C programs | `libstdc++`, `GPL-3.0.txt`, `GCC-exception-3.1.txt` | `gcc-16_16-20260322.orig.tar.gz`, `gcc-16_16-20260322-1ubuntu1.debian.tar.xz`, `.dsc` |
 | Mesa | 26.0.8 | MIT, and the licences its file lists | `libEGL`, `libGLESv2`, `libgbm`, `libgallium` of the GPU helper | `mesa` | `mesa_26.0.8.orig.tar.xz` |
 | libdrm | 2.4.131 (Ubuntu 2.4.131-1) | MIT | shared library of the GPU helper | `libdrm` | `libdrm_2.4.131.orig.tar.xz`, `libdrm_2.4.131-1.debian.tar.xz`, `.dsc` |
@@ -44,7 +43,7 @@ also holds the parts listed here. Each keeps its own licence.
 | libnl | 3.11.0 (Alpine `libnl3-static` 3.11.0-r0) | LGPL-2.1-or-later | linked into `wpa_supplicant` and `wpa_cli` | `LGPL-2.1.txt` | `libnl-3.11.0.tar.gz`, `libnl3-musl.patch` (Alpine's one patch) |
 | BlueZ (`bluetoothd`, `btmon`) | 5.82 | GPL-2.0-or-later; its libraries LGPL-2.1-or-later | `/bin`, static | `bluez`, `GPL-2.0.txt`, `LGPL-2.1.txt` | `bluez-5.82.tar.xz` |
 | D-Bus (`dbus-daemon`) | 1.16.2 | AFL-2.1 OR GPL-2.0-or-later | `/bin/dbus-daemon`, static | `dbus` | `dbus-1.16.2.tar.xz` |
-| expat | 2.10.0 (Alpine `expat-static` 2.10.0-r0) | MIT | linked into `dbus-daemon` | `expat` | `expat-2.10.0.tar.xz` |
+| expat | 2.11.0 (Alpine `expat-static` 2.11.0-r0) | MIT | linked into `dbus-daemon` | `expat` | `expat-2.11.0.tar.xz` |
 | GLib | 2.84.4 (Alpine `glib-static` 2.84.4-r0) | LGPL-2.1-or-later | linked into `bluetoothd` | `LGPL-2.1.txt` | `glib-2.84.4.tar.xz`, `tests-machine-id.patch`, `flaky-tests.patch` (Alpine's patches) |
 | PCRE2 | 10.46 (Alpine `pcre2-static` 10.46-r1) | BSD-3-Clause WITH PCRE2-exception | linked into `bluetoothd` (through GLib) | `pcre2` | `pcre2-10.46.tar.bz2` |
 | GNU gettext (`libintl`) | 0.24.1 (Alpine `gettext-static` 0.24.1-r0) | LGPL-2.1-or-later | linked into `bluetoothd` (through GLib) | `LGPL-2.1.txt` | `gettext-0.24.1.tar.xz`, `cwd.patch`, `skip-tests-musl.patch`, `skip-meaningless-pthread-rwlock-test.patch` (Alpine's patches) |
@@ -53,18 +52,17 @@ also holds the parts listed here. Each keeps its own licence.
 | libnftnl | 1.2.9 | GPL-2.0-or-later | linked into `nft` | `GPL-2.0.txt` | `libnftnl-1.2.9.tar.xz` |
 | Dropbear (`dropbear`, `dropbearkey`, `scp`) | 2026.94 | MIT, and the licences of its parts its file lists | `/bin/dropbearmulti`, static | `dropbear` | `dropbear-2026.94.tar.bz2` |
 | OpenSSH (`sftp-server` only) | 10.6p2 | BSD licences, as its file lists | `/bin/sftp-server`, static | `openssh-sftp-server` | `openssh-10.6p2.tar.gz` |
-| musl | the one of Alpine 3.22 (C programs) and of Rust's musl target (Rust programs) | MIT | linked into `e2fsck`, `kexec`, `wpa_supplicant`, `wpa_cli`, `nft`, `dropbearmulti`, `sftp-server`, `dbus-daemon`, `bluetoothd`, `btmon`, `oos-ui`, `oos-fpgad`, `oos-update` | `musl.txt` | not required |
+| musl | the one of Alpine 3.22 (C programs) and of Rust's musl target (Rust programs) | MIT | linked into `busybox`, `e2fsck`, `kexec`, `wpa_supplicant`, `wpa_cli`, `nft`, `dropbearmulti`, `sftp-server`, `dbus-daemon`, `bluetoothd`, `btmon`, `oos-ui`, `oos-fpgad`, `oos-update` | `musl.txt` | not required |
 | Rust standard library | the toolchain of the build | MIT OR Apache-2.0; parts under other permissive licences | linked into `oos-ui`, `oos-fpgad`, `oos-update` | `rust.txt`, `Apache-2.0.txt` | not required |
 | `libc` crate | as in `ui/Cargo.lock` | MIT OR Apache-2.0 | linked into `oos-ui`, `oos-fpgad`, `oos-update` | `rust.txt`, `Apache-2.0.txt` | not required |
 | noVNC (`core/rfb.js` and what it imports, one minified module) | 1.7.0 | MPL-2.0; parts under BSD and MIT licences, as its notice says | inside `oos-ui`, sent to the browser as `/novnc.js` of the web remote, unchanged | [ui/web/novnc/LICENSE.txt](ui/web/novnc/LICENSE.txt) | `@novnc/novnc` 1.7.0 on npm; [ui/web/novnc/README.md](ui/web/novnc/README.md) makes the file again |
 | Roboto (roboto-classic) | as in `ui/tools/fonts/` | Apache-2.0 | its glyphs, drawn into `oos-ui` | `Apache-2.0.txt` ([ui/tools/fonts/LICENSE-Roboto.txt](ui/tools/fonts/LICENSE-Roboto.txt)) | not required |
 
-The versions are those of release 0.1.15. `rootfs/deps.lock` pins the archives the image builds from, with their
+The versions are those of release 0.2.2. `rootfs/deps.lock` pins the archives the image builds from, with their
 checksums; the Ubuntu and Alpine packages come from the container images the build scripts name (`ubuntu:26.04`,
-`alpine:3.22`), and a release carries the source packages of the versions that were in its image. A package that
-links a library in keeps the library's version of the day it was built: `busybox.version` of a build names the one
-of BusyBox. The releases up to 0.1.6 were built before the Ubuntu revision of glibc was recorded; they carry the
-source of 2.43-2ubuntu2.4, the revision of the next build.
+`alpine:3.22`), and a release carries the source packages of the versions that were in its image. Up to 0.1.15 the
+image's BusyBox was Ubuntu's `busybox-static` package, and a release carried its source package and that of the glibc
+it was built with; this file at the tag of such a release lists them.
 
 ## Not in the image
 

@@ -114,8 +114,8 @@ Right-click the plot and pick a row by its label, as a person would:
 ```
 :UI:CONText 600,300
 :UI:MENU?
-"Context","Overlay traces","Stacked traces","Fit record","Zoom here","Zoom box","Stop","Single","Autoset","Trigger on CH2","Set level here","Trigger settings","Measurement on CH2","Cursor here","Sources","Maximise view"
-:UI:MENU:SELect "Stacked traces"
+"Context","Overlay","Stacked","Windows","Fit all lanes","Fit record","Zoom here","Zoom box","Trigger on CH2","Set level here","Measurement on CH2","Cursor here","Add note here","Maximise view"
+:UI:MENU:SELect "Stacked"
 ```
 
 Check that every source sits on its own zero level in Overlay. CH1 at 1 V/div with an offset of 1 V is one division

@@ -16,7 +16,9 @@ starts OOS once more at the next power-on. When OOS works for you, set **System 
 
 ![Main screen](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/channels.png)
 
-- **Top bar:** run state, sample rate and memory depth, the menus, network and USB.
+- **Top bar:** run state, sample rate and memory depth, the menus, network and USB. While the scope runs, the run
+  state box also shows the waveforms a second that reach the screen and the share of the time they capture (100 %:
+  no gap between the waveforms).
 - **Plot:** the waveforms. Drag offset, delay and trigger level, pinch to zoom. The button with four corners at its top right gives the plot the whole screen (below).
 - **Strip:** the measurements.
 - **Cards:** Menu, channels, logic analyser, generator, time base and trigger. Tap a card for its settings.
@@ -58,7 +60,7 @@ The x or a tap anywhere else closes the bar; otherwise it goes after 30 seconds.
 
 ## Windows and full screen
 
-**Display > Traces** (also the first row of **Display > Windows**, in every layout) chooses how the traces share the
+**Display > Traces** (on the first tab of Display, in every layout) chooses how the traces share the
 plot:
 
 | Traces | Plot |
@@ -74,14 +76,14 @@ volt labels and time axis. A drag in a window moves a channel of that window. Th
 bottom of their window; with no channel in that window they fill it. Zoom, XY and the analysers use the whole plot.
 Overlay or Stacked puts everything on one plot again. The arrangement is saved with the setup.
 
-The rest of the Windows page: **Full screen** (Off, On), **Strip** (where the measurement strip stands, or Hidden)
-and **Lower**, the pane under the plot (Results, Trend, Events, Spectrum, ...). The pane belongs to no arrangement:
+The Windows page, under Traces while the arrangement is Windows, holds the window of every source. **Lower** (on the
+same tab) is the pane under the plot (Results, Trend, Events, Spectrum, ...). The pane belongs to no arrangement:
 Overlay, Stacked and Windows all keep it, and adding a plot or a table from the Add menu changes neither.
 
 ![Full screen](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/full-screen.png)
 
 **Full screen:** the button with four corners at the top right of the plot hides the top bar and the cards. The same
-button, now with the corners pointing inwards, brings them back. Also Display > Windows > Full screen. Full screen puts the lower pane away and gives it back. While the touch lock is on there is no full screen, because the Menu button is the way out of
+button, now with the corners pointing inwards, brings them back. Full screen puts the lower pane away and gives it back. While the touch lock is on there is no full screen, because the Menu button is the way out of
 the lock. The button stays where it is: a drag that starts on it moves neither the button nor the trace.
 
 **Zoom:** the magnifier under it opens and closes the zoom view. **Box** in the zoom bar arms one drag: the next drag
@@ -121,6 +123,12 @@ the next smaller size, and the dense figure tables of the eye / jitter view keep
 with the other preferences and across restarts; Default set-up and Recall keep it.
 
 ## Display settings
+
+The Display menu has the same rows in the same order in every layout. In Studio they are four tabs: **Traces** (Layout,
+Traces, Views, Format, Z input, Histogram, and the Windows page under them), **Look** (Persistence, Intensity, Colour
+grade, Dots, Grid, Grid bright., Grid frame, and Clear), **Screen** (HDMI, HDMI lines, Monitor view, Backlight, Text
+size, and Studio's switches) and **Lower** (the pane under the plot and, while it is Trend, its two charts). Monitor
+view is there only with HDMI = Layout and two or more views.
 
 - **Display > Backlight** (from 0.1.9): the panel's brightness, 10 to 100 %, in steps that look even. It is a
   setting of the scope (`/oos/system.conf`).

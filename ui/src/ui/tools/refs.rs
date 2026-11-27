@@ -366,6 +366,13 @@ impl Ui {
         Ok(())
     }
 
+    /// The math channel whose result reference slot `slot` holds a copy of (`ref_math_slot`), if it does.
+    pub(crate) fn ref_math_index(&self, slot: usize) -> Option<usize> {
+        let w = self.refs.get(slot)?.as_ref()?;
+        let k: usize = w.label.strip_prefix('M')?.parse().ok()?;
+        (w.src == 0 && (1..=crate::math::NMATH).contains(&k)).then(|| k - 1)
+    }
+
     /// Math channel `k`'s result as a reference a cursor can read: the slot that already holds a copy of it, else the
     /// first free one, filled the way Save does (`ref_save_math`). Err when the result is not ready or every slot is
     /// taken by something else.

@@ -80,6 +80,8 @@ pub struct Counts {
     pub wfm_rate: f32,
     /// every waveform acquired since the start (Clear resets it)
     pub wfm_total: u64,
+    /// the waveform rate under the run state in the top bar (capture_rate.rs)
+    pub capture: super::capture_rate::CaptureRate,
 }
 
 /// What the step saw last (ADR 0062).
@@ -100,9 +102,35 @@ pub(super) struct Seen {
     /// the analyser view the last frame had: a change of view analyses what is already there (a stopped record gets
     /// no new one)
     pub view: AView,
-    /// the horizontal view the running picture was drawn at: time per division, delay, zoom on, zoom scale and zoom
-    /// delay (`redraw_held`, #548)
-    pub drawn: (f32, f32, bool, usize, f32),
+    /// the view the running picture was drawn at (`redraw_held`, #548, #578)
+    pub drawn: HeldView,
+}
+
+/// The view a running picture was drawn at: time per division, delay, zoom on, zoom scale and zoom delay, and for each
+/// channel whether it is on, its volts per division and offset. A change of any of them while the scope waits for a
+/// trigger draws the held record again (`redraw_held`). Inversion and zero correction are not here: they are applied
+/// when a record is taken, so drawing the held record again would show it as it was.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct HeldView {
+    h: (f32, f32, bool, usize, f32),
+    v: [(bool, f32, f32); NCH],
+}
+
+impl HeldView {
+    fn of(m: &Model) -> Self {
+        HeldView {
+            h: (m.time_per_div(), m.delay, m.zoom, m.zscale, m.zdelay),
+            v: std::array::from_fn(|c| {
+                let ch = &m.ch[c];
+                (ch.on, ch.volts_per_div(), ch.offset)
+            }),
+        }
+    }
+
+    /// Before the first picture: the first look is no change.
+    fn none() -> Self {
+        HeldView { h: (f32::NAN, 0.0, false, 0, 0.0), v: [(false, 0.0, 0.0); NCH] }
+    }
 }
 
 impl Default for Seen {
@@ -116,7 +144,7 @@ impl Default for Seen {
             unaged: 0.0,
             running: false,
             view: AView::Scope,
-            drawn: (f32::NAN, 0.0, false, 0, 0.0),
+            drawn: HeldView::none(),
         }
     }
 }
@@ -188,6 +216,9 @@ const POLLED_ELSEWHERE: [(&str, &str); 7] = [
 /// once done) and the newest raw deep record.
 struct StepTake {
     got: usize,
+    /// of `got`, the frames folded into the Average and not drawn (`step_average_frames`): they count as acquired, not
+    /// in the picture's grading
+    folded: usize,
     ta: f32,
     td: f32,
     renew: Renew,
@@ -202,6 +233,7 @@ impl Ui {
         // a callout whose keyboard was closed without a text does not stay as an empty box
         if self.wlan.osk.is_none() { self.callout_drop_empty(); }
         self.step_polls(dt_wall);
+        self.sample_capture_rate();
         self.step_guards();
         let (hw_seg, final_done) = self.step_run_state();
         let persist = PERSIST[self.m.persist].1;
@@ -362,6 +394,10 @@ impl Ui {
         // the protocol watch and XY read every record: no live compression for them (compress.rs)
         self.src.hw_needs_raw(self.needs_raw());
         self.seen.running = running;
+        // the clock floors while the hardware runs (`clockfloor`, `perf.clocks`)
+        if self.src.is_hw() {
+            crate::clockfloor::running(running);
+        }
         if hw_seg {
             self.seg_poll(running);
         }
@@ -436,6 +472,7 @@ impl Ui {
         // the record, and the measurement stayed at the last one for good (unit 2026-11-13)
         let mut take = StepTake {
             got: 0,
+            folded: 0,
             ta: 0.0,
             td: 0.0,
             renew,
@@ -457,22 +494,23 @@ impl Ui {
             self.seen.unaged = 0.0;
         }
         if deferred && take.renew == Renew::Keep {
-            // the first record after the change was drawn on a cleared picture (`step_commit` clears the zoom picture
-            // too; the fast path does not run with zoom)
+            // the first record after the change was drawn on a cleared picture (`step_commit` and the fast path renew
+            // the zoom picture with the main one)
             self.dirty_map = false;
         }
         self.step_rates(&take, dt_wall, persist);
         self.step_measure(&mut take);
     }
 
-    /// A new time base, delay or zoom while running and no record came: the held record is drawn again at its own
-    /// times, as after a STOP. The picture of the old view stayed, and a 2 ms record taken at 0.2 ms/div filled the
-    /// whole screen at 10 ms/div while the scope waited for a trigger (#548). Any horizontal change counts, also a
-    /// zoom switched without `dirty_map`; a changed trigger level keeps the picture as it is (#280).
+    /// A new time base, delay, zoom, vertical scale, offset or channel while running and no record came: the held
+    /// record is drawn again at its own times and volts, as after a STOP. The picture of the old view stayed, and a
+    /// 2 ms record taken at 0.2 ms/div filled the whole screen at 10 ms/div while the scope waited for a trigger
+    /// (#548); a sine of ±1 V kept its height of two divisions at 0.5 V/div, and an offset moved the grid but not the
+    /// trace (#578). A zoom switched without `dirty_map` counts too; a changed trigger level keeps the picture as it
+    /// is (#280).
     fn redraw_held(&mut self, got: usize) {
-        let m = &self.m;
-        let view = (m.time_per_div(), m.delay, m.zoom, m.zscale, m.zdelay);
-        if got > 0 || self.seen.drawn.0.is_nan() {
+        let view = HeldView::of(&self.m);
+        if got > 0 || self.seen.drawn.h.0.is_nan() {
             self.seen.drawn = view;
             return;
         }
@@ -494,8 +532,22 @@ impl Ui {
     fn step_fast_frames(&mut self, take: &mut StepTake) {
         let t0 = std::time::Instant::now();
         let frames = self.src.drain_newest(self.fast_max());
+        if self.m.acq == AcqMode::Average {
+            self.step_average_frames(take, frames, t0);
+            return;
+        }
+        let zoom = self.m.zoom.then(|| self.zoom_draw_model());
         if !frames.is_empty() {
-            self.ph.renew(std::mem::replace(&mut take.renew, Renew::Keep));
+            let renew = std::mem::replace(&mut take.renew, Renew::Keep);
+            self.ph.renew(renew);
+            self.phz.renew(renew);
+        }
+        // the zoom picture from the same frames, on this thread: with the workers drawing the batches only the newest
+        // frame of each comes here
+        if let Some(zm) = &zoom {
+            for f in &frames {
+                crate::drawpipe::draw_frame(&mut self.phz, zm, f, None);
+            }
         }
         let n = frames.len();
         if let Some(f) = frames.iter().rev().find(|f| take.deep_raw && crate::deepmeas::deep_raw_frame(f)) {
@@ -518,8 +570,10 @@ impl Ui {
         // batch mode: the other frames of the batches, drawn by the deposit workers (drawpipe.rs)
         if let Some(p) = crate::drawpipe::pipe() {
             let t1 = std::time::Instant::now();
-            p.set_view(Some(&self.m), self.ph.w, self.ph.h);
-            let d = p.merge(&mut self.ph, &mut take.renew, &mut self.fast.edges, &mut self.fast.off);
+            let (w, h, zw, zh) = (self.ph.w, self.ph.h, self.phz.w, self.phz.h);
+            p.set_view_zoom(Some(&self.m), w, h, zoom.as_ref().map(|z| (z, zw, zh)));
+            let phz = zoom.is_some().then_some(&mut self.phz);
+            let d = p.merge(&mut self.ph, phz, &mut take.renew, &mut self.fast.edges, &mut self.fast.off);
             if d.triggered > 0 {
                 self.m.status = TrigStatus::Triggered;
             }
@@ -527,6 +581,88 @@ impl Ui {
             self.mstat_fold(&d.folds);
             take.td += t1.elapsed().as_secs_f32() * 1000.0;
         }
+    }
+
+    /// The software Average on the fast path (#582): the queued frames are not drawn but folded into the running
+    /// average (`fold_average`), their screen records made on several cores; the newest frame comes as the record and
+    /// is blended and drawn as before (`condition_record`, `draw_channels`). The picture then shows one averaged trace a
+    /// screen, not each step of the average one over the other. The deposit workers take no batches: the average needs
+    /// the frames in order.
+    fn step_average_frames(&mut self, take: &mut StepTake, frames: Vec<crate::board::Frame>, t0: std::time::Instant) {
+        // the deposit workers fold the other frames of the batches in runs (`drawpipe::average`)
+        let runs = match crate::drawpipe::pipe() {
+            Some(p) => {
+                p.set_view(Some(&self.m), self.ph.w, self.ph.h);
+                p.take_average()
+            }
+            None => Vec::new(),
+        };
+        let n = frames.len() + runs.iter().map(|r| r.frames).sum::<usize>();
+        if n > 0 && self.fold_average(frames, runs, fast_helpers()) > 0 {
+            self.m.status = TrigStatus::Triggered;
+        }
+        (take.got, take.folded) = (take.got + n, take.folded + n);
+        let ms = t0.elapsed().as_secs_f32() * 1000.0;
+        take.td += ms;
+        self.fast.t += 0.05 * (ms - self.fast.t);
+        if n > 0 && ms > 0.0 {
+            self.fast.take = fast_take_next(self.fast.take, n, ms, self.fast_budget());
+        }
+    }
+
+    /// `frames` folded, oldest first, into the running average the newest record is blended with (`last`), as
+    /// `condition_record` blends each record; their screen records (`wave::hw_record`) made on `helpers` threads
+    /// besides this one. Nothing to fold into before the first record. Returns the frames that counted as triggered.
+    pub(super) fn fold_average(
+        &mut self,
+        frames: Vec<crate::board::Frame>,
+        runs: Vec<crate::drawpipe::average::Run>,
+        helpers: usize,
+    ) -> usize {
+        let m = &self.m;
+        // a frame the FPGA averaged already (queued before a switch to the software average) is not averaged again,
+        // as in `condition_record`
+        let frames: Vec<_> = frames.into_iter().filter(|f| !f.hw_avg).map(std::sync::Arc::new).collect();
+        let window = m.time_per_div() as f64 * HDIV as f64;
+        let t_first = m.delay as f64 - window / 2.0;
+        // each frame's screen record as `wave::hw_record` makes it, from the frame itself (no copy of it)
+        let recs = crate::fastdraw::par_map(helpers, &frames, |f| crate::wave::to_record(f, m, 3600, window, t_first));
+        let a = 1.0 / m.avg_count.max(1) as f32;
+        let triggered = recs.iter().filter(|r| r.triggered).count() + runs.iter().map(|r| r.triggered).sum::<usize>();
+        // after a Clear or before the first record the oldest queued record starts the average, and the others
+        // and the workers' runs are blended into it in the frames' order, as on the record path
+        let mut fold = recs.iter().zip(&frames).map(|(r, f)| (f.seq, r)).peekable();
+        // a new average starts from the oldest queued record; the workers' runs of frames before it are older than
+        // the average (a Clear, a new view) and are left out
+        let mut from = 0;
+        if self.last[0].is_none() {
+            if let Some((s, r)) = fold.next() {
+                (self.last[0], from) = (Some(r.clone()), s + 1);
+            }
+        }
+        let Some(avg) = self.last[0].as_mut() else { return 0 };
+        let mut runs = runs.iter().filter(|r| r.seq >= from).peekable();
+        loop {
+            let run_first = match (runs.peek(), fold.peek()) {
+                (Some(r), Some((s, _))) => r.seq < *s,
+                (Some(_), None) => true,
+                (None, Some(_)) => false,
+                (None, None) => break,
+            };
+            if run_first {
+                runs.next().expect("a run").apply(&mut avg.ch);
+                continue;
+            }
+            let (_, rec) = fold.next().expect("a record");
+            for c in 0..NCH {
+                if rec.ch[c].len() == avg.ch[c].len() {
+                    for (p, &x) in avg.ch[c].iter_mut().zip(&rec.ch[c]) {
+                        *p = if p.is_finite() { *p + (x - *p) * a } else { x };
+                    }
+                }
+            }
+        }
+        triggered
     }
 
     /// Up to `k` records from the source, each through the zone and protocol triggers before it is kept.
@@ -593,13 +729,19 @@ impl Ui {
         let t1 = std::time::Instant::now();
         let zw = self.z_weights(&rec);
         // the fast path draws the other frames of the picture from their samples (`draw_frame`): the
-        // newest one the same way, or it adds about 3.6 times their counts per pixel (3600 record points
-        // against one span per column) and the grading of the picture follows how many of each it holds:
+        // newest one the same way, or it adds other counts per pixel than they do (with dots 3600 record points
+        // against a frame's samples) and the grading of the picture follows how many of each it holds:
         // the trace flickered with the batch sizes (docs/fork/flicker.md)
-        let frame = rec.raw.as_ref().filter(|_| self.fast_ok()).map(|r| r.frame.clone());
+        // (in Average the record is the blended average, drawn as the record path draws it)
+        let from_frame = self.fast_ok() && self.m.acq != AcqMode::Average;
+        let frame = rec.raw.as_ref().filter(|_| from_frame).map(|r| r.frame.clone());
         if let Some(f) = frame {
             let stats = crate::drawpipe::Stats { edges: &mut self.fast.edges, off: &mut self.fast.off };
             crate::drawpipe::draw_frame(&mut self.ph, &self.m, &f, Some(stats));
+            if self.m.zoom {
+                let zm = self.zoom_draw_model();
+                crate::drawpipe::draw_frame(&mut self.phz, &zm, &f, None);
+            }
         } else {
             self.draw_channels(&rec, detail.as_deref(), zw.as_deref(), 24);
         }
@@ -686,8 +828,8 @@ impl Ui {
         // minimum persistence shows the frames of this step alone: their number grades the picture (`picture_ref`)
         if persist != 0.0 {
             self.grade.frames = 0;
-        } else if take.got > 0 {
-            self.grade.frames = take.got as u32;
+        } else if take.got > take.folded {
+            self.grade.frames = (take.got - take.folded) as u32;
         }
         if take.got > 0 {
             let iv = (self.now - self.seen.rec_t).min(2.0);
@@ -856,11 +998,24 @@ impl Ui {
         (self.fast.take as usize).clamp(4, crate::board::QUEUE_MAX)
     }
 
-    /// Time of a screen the fast path may spend (ms): what a frame of the 30 a second (33 ms) leaves after the rest of
-    /// the step, drawing and showing the screen, less 2 ms of slack; 5 to 28 ms.
+    /// Time of a screen the fast path may spend (ms): what a step of the frame clock leaves (`pacing::period_ms`: 33.3 ms
+    /// on the timer, 30.8 ms on the flip clock of a 97.4 Hz panel) after the rest of the step, drawing and showing the
+    /// screen, less about 2.3 ms of slack; from 5 ms to the period less about 5.3 ms. A step that ran over its period waited for
+    /// the next vblank on the flip clock, a whole step lost (unit 2026-11-25: 23 instead of 32.5 pictures a second at
+    /// 1 channel 10 us/div with the budget of the timer).
     pub(super) fn fast_budget(&self) -> f32 {
-        let rest = (self.times.step - self.fast.t).max(0.0) + self.times.render + self.times.present;
-        (31.0 - rest).clamp(5.0, 28.0)
+        Self::fast_budget_of(
+            crate::pacing::period_ms(),
+            self.times.step - self.fast.t,
+            self.times.render + self.times.present,
+        )
+    }
+
+    /// `fast_budget` for a period of `period` ms, the rest of the step `other` and drawing and showing `show` (ms).
+    pub(super) fn fast_budget_of(period: f32, other: f32, show: f32) -> f32 {
+        // the timer's numbers (31 ms, at most 28), less what the period is shorter
+        let short = (crate::pacing::period_ms_of(None) - period).max(0.0);
+        (31.0 - short - other.max(0.0) - show).clamp(5.0, (28.0 - short).max(5.0))
     }
 
     /// The channels of `rec` into the main picture and, with zoom, into the zoom picture; every point adds `w`.
@@ -974,17 +1129,33 @@ impl Ui {
         self.stop.pic.as_ref().filter(|_| same)
     }
 
+    /// The model the fast path draws a frame into the zoom picture with: the zoom's time base and delay as the main
+    /// ones, and the zoom picture's vertical view (`zoom_display_model`), as the record path draws it (`draw_channels`).
+    pub(super) fn zoom_draw_model(&self) -> Model {
+        let mut z = self.zoom_display_model();
+        (z.tscale, z.tfine, z.delay, z.zoom) = (self.m.zscale, 1.0, self.m.zdelay, false);
+        z
+    }
+
     /// The fast display path applies: hardware frames with a plain edge trigger and nothing that needs every record
     /// as a full record (averaging, a software mask test, zones, segments, zoom, XY, Z input, software coupling or filter).
+    /// Peak detect and High res frames are drawn from their screen records there (`wave::drawn_as_record`), on the
+    /// deposit workers, instead of one by one in the frame loop (#582). With the zoom on, every frame is drawn into the
+    /// zoom picture too (`zoom_draw_model`). Neither with a deskewed channel, whose record the record path shifts
+    /// (`deskew_channel_view`). The software Average folds the frames into its average there and draws the newest
+    /// (`step_average_frames`); the FPGA's average stays on the record path.
     pub(super) fn fast_ok(&self) -> bool {
         let m = &self.m;
+        let deskewed = (0..NCH).any(|c| m.ch[c].on && m.deskew_ch[c] != 0.0);
         matches!(self.src, Source::Hw { .. })
             && m.trig_type == TrigType::Edge
-            && m.acq == AcqMode::Normal
+            && (m.acq == AcqMode::Normal
+                || (matches!(m.acq, AcqMode::Peak | AcqMode::HiRes) && !deskewed)
+                || (m.acq == AcqMode::Average && !board().avg_hw(m)))
+            && (!m.zoom || !deskewed)
             && m.trig_mode != TrigMode::Single
             && m.segments == 0
             && (!m.mask_on || self.mask_hw_active())
-            && !m.zoom
             && !self.xy_over()
             && m.z_src.is_none()
             && (!m.zones.iter().any(|z| z.usable()) || self.zone_hw_active())
@@ -1061,6 +1232,7 @@ impl Ui {
         let rows: [(usize, usize); NCH] = std::array::from_fn(|c| {
             placed.iter().fold((usize::MAX, 0), |(a, b), p| {
                 let (x, y) = match &p.plan {
+                    FastPlan::Raw { drawn: false, .. } => (usize::MAX, 0),
                     FastPlan::Raw { spans, .. } => spans[c].as_ref().map_or((0, h), crate::fastdraw::span_rows),
                     // a screen record: its points' rows (a segment between two points stays between them)
                     FastPlan::Rec(rec) => rec_rows(m, h, c, &rec.ch[c]),
@@ -1108,8 +1280,8 @@ pub enum FastPlan {
     Rec(crate::wave::Record),
     /// dense views: the raw samples with the trigger at sample `ti`; `class`: the `FastPath::edges` index (None: the
     /// source is an LA line), `off`: how far the edge was from the hardware point (class 2); per channel the columns'
-    /// spans (None: dots, drawn sample by sample)
-    Raw { ti: f64, class: Option<usize>, off: f64, spans: [Option<crate::fastdraw::Spans>; NCH] },
+    /// spans (None: dots, drawn sample by sample); `drawn` false: triggered on the other slope (#581), counted, not drawn
+    Raw { ti: f64, class: Option<usize>, off: f64, spans: [Option<crate::fastdraw::Spans>; NCH], drawn: bool },
 }
 
 /// One frame placed by `fast_plan`: how to draw it, whether it counts as triggered (false if its trigger edge was not
@@ -1153,12 +1325,15 @@ pub fn fast_plan(
     let window = tdiv * HDIV as f64;
     let t_first = m.delay as f64 - window / 2.0;
     let x_per_sample = f.dt / tdiv * w as f64 / HDIV as f64;
-    if x_per_sample > 0.5 || f.envelope || f.roll || f.scan {
+    if x_per_sample > 0.5 || f.envelope || f.roll || f.scan || crate::wave::drawn_as_record(f, m) {
         // the record's 3600 points: fewer thin out the picture of a fast signal (at 8 samples a period, two points a
         // column lit a fifth fewer pixels than 3600, and those a sixth fewer than a nearly continuous curve)
         let rec = crate::wave::to_record(f, m, 3600, window, t_first);
-        // the statistics on the screen record, as the measurements of a sparse record
-        let fold = std::array::from_fn(|c| (fold[c] && m.ch[c].on).then(|| crate::fastdraw::Fold::of(&rec.ch[c])));
+        // the statistics on the screen record, as the measurements of a sparse record; none of a frame drawn as its
+        // record, as on the workers (`framestats::fold_frame`): its measurements come from the record path
+        let counts = !crate::wave::drawn_as_record(f, m);
+        let fold =
+            std::array::from_fn(|c| (counts && fold[c] && m.ch[c].on).then(|| crate::fastdraw::Fold::of(&rec.ch[c])));
         let triggered = rec.triggered;
         return FastFrame { plan: FastPlan::Rec(rec), triggered, fold };
     }
@@ -1167,6 +1342,13 @@ pub fn fast_plan(
     // the full search of `fastdraw::edge_smooth` (the workers take `trignear::edge_smooth_near`)
     let t = crate::drawpipe::refine_edge(m, f, col, |s| crate::fastdraw::edge_smooth(src, f.pre, s, |_| true));
     let (class, off) = t.class.map_or((None, 0.0), |(k, d)| (Some(k), d));
+    // triggered on the other slope (#581): nothing drawn, as on the workers (`drawpipe::dense`); its edge class is
+    // counted all the same
+    if t.wrong {
+        let spans = std::array::from_fn(|_| None);
+        let plan = FastPlan::Raw { ti: t.ti, class, off, spans, drawn: false };
+        return FastFrame { plan, triggered: false, fold: [None; NCH] };
+    }
     let ti = t.ti;
     let used = |c: usize| m.ch[c].on && !f.ch[c].is_empty();
     let spans = std::array::from_fn(|c| {
@@ -1181,7 +1363,7 @@ pub fn fast_plan(
             crate::fastdraw::Fold::of(&v[i0..i1.max(i0)])
         })
     });
-    FastFrame { plan: FastPlan::Raw { ti, class, off, spans }, triggered: t.triggered, fold }
+    FastFrame { plan: FastPlan::Raw { ti, class, off, spans, drawn: true }, triggered: t.triggered, fold }
 }
 
 /// The rows (first, last + 1) the points `v` of channel `c` of a screen record fall on, within a map `h` high.
@@ -1224,6 +1406,7 @@ pub fn fast_deposit_t(
                 });
             }
         }
+        FastPlan::Raw { drawn: false, .. } => {}
         FastPlan::Raw { ti, spans, .. } => match &spans[c] {
             Some(s) => crate::fastdraw::add_spans_t(band, h, c_lo, s, 24),
             None if !f.ch[c].is_empty() => {
@@ -1247,6 +1430,7 @@ pub fn fast_deposit(m: &Model, w: usize, h: usize, c: usize, map: &mut [u16], f:
                 crate::wave::draw_trace(map, w, h, 0, &crate::wave::Trace::record(c, m, rec));
             }
         }
+        FastPlan::Raw { drawn: false, .. } => {}
         FastPlan::Raw { ti, spans, .. } => match &spans[c] {
             Some(s) => crate::fastdraw::add_spans(map, w, 0, s, 24),
             None if !f.ch[c].is_empty() => {

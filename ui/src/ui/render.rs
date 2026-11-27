@@ -96,6 +96,7 @@ impl Ui {
                     self.traces(l, self.plot.area, true, false);
                 }
                 let cv = l.over();
+                self.draw_no_data(cv);
                 if !self.dock_on() { self.draw_hist(cv); }
                 self.draw_zones(cv);
                 if self.plot.wins.len() > 1 || i == 0 || self.stacked() {
@@ -144,10 +145,13 @@ impl Ui {
         self.draw_studio_overlay(cv);
         self.draw_studio_zoom_overlay(cv);
         self.draw_zoom_box(cv);
-        self.draw_full_btn(cv);
-        if self.plot_btns_shown() {
-            self.draw_zoom_btn(cv);
-            self.draw_win_btn(cv);
+        // the buttons of the plot are for a finger: the monitor's picture has none
+        if !self.wave_pass {
+            self.draw_full_btn(cv);
+            if self.plot_btns_shown() {
+                self.draw_zoom_btn(cv);
+                self.draw_win_btn(cv);
+            }
         }
         self.draw_auto_bar(cv);
         self.draw_strip(cv);
@@ -186,6 +190,7 @@ impl Ui {
         self.draw_meas_cfg(cv);
         self.draw_info_card(cv);
         self.draw_toast(cv);
+        self.draw_greeting(cv);
         self.draw_overlay(cv);
         self.workspace_draw(cv);
         self.draw_studio_floating(cv);
@@ -264,6 +269,8 @@ impl Ui {
             std::mem::take(self.studio.lane_badges.get_mut()),
             std::mem::take(self.studio.dec_labels.get_mut()),
         );
+        // the touch targets of the panel's last frame: the pass draws its own at the monitor's places
+        let hits = (self.studio.label_rects.take(), self.band_hits.take(), self.studio.handles.take());
         self.scr = Screen { w: l.under.w, h: l.under.h };
         self.plot.view_pass = true;
         self.render_layers(l);
@@ -271,6 +278,9 @@ impl Ui {
         (self.scr, self.plot.grid, self.plot.wins, self.plot.area, self.plot.cur_win, self.counts.frames) = keep;
         self.studio.badge_wrap = studio.0;
         (*self.studio.lane_badges.get_mut(), *self.studio.dec_labels.get_mut()) = (studio.1, studio.2);
+        self.studio.label_rects.replace(hits.0);
+        self.band_hits.replace(hits.1);
+        self.studio.handles.replace(hits.2);
     }
 
     /// The monitor's picture in Display > HDMI = Waveform at the size of `cv`: the waveform area of the panel's view

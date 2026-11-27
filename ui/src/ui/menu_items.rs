@@ -172,34 +172,50 @@ impl Ui {
     /// The display menu; the trend selectors while the trend pane is shown, and in Studio the rows about its own
     /// arrangement.
     pub(super) fn display_items(&self) -> Vec<Item> {
+        // Traces (Layout, Traces, Views, Format ...), Look (the picture), Screen (the monitor, the panel)
         let mut v = vec![
-            Item::Open(MenuId::Windows),
             Item::Layout,
+            Item::Traces,
             Item::Views,
+            Item::XyMode,
+            Item::ZInput,
+            Item::Histogram,
+            Item::PaneSel,
             Item::Persist,
-            Item::ColorGrade,
             Item::Intensity,
+            Item::ColorGrade,
+            Item::Dots,
             Item::GridStyle,
             Item::GridBright,
             Item::GridFrame,
-            Item::Dots,
+            Item::ClearDisp,
             Item::BottomBar,
-            Item::ZInput,
-            Item::Histogram,
-            Item::XyMode,
             Item::Hdmi,
-            Item::HdmiView,
             Item::Backlight,
             Item::TextSize,
-            Item::ClearDisp,
         ];
         if self.m.pane == tables::PANE_TREND {
-            v.splice(1..1, [Item::TrendSel(0), Item::TrendSel(1)]);
+            v.splice(7..7, [Item::TrendSel(0), Item::TrendSel(1)]);
         }
-        // the lines are a choice of the monitor's own layout
-        if self.m.hdmi == HdmiMode::Layout {
-            v.insert(v.iter().position(|i| *i == Item::HdmiView).map_or(v.len(), |p| p + 1), Item::HdmiLines);
+        // which source stands in which window: only while the traces are in four windows
+        if self.arrangement() == windows::Arrangement::Windows {
+            v.insert(v.iter().position(|i| *i == Item::Histogram).map_or(v.len(), |p| p + 1), Item::Open(MenuId::Windows));
         }
+        // the Default layout has a strip of its own (Studio has none, its measurements are a panel)
+        if self.m.layout == Layout::Default {
+            v.push(Item::StripPos);
+        }
+        // the lines are a choice of both pictures that are drawn for the monitor (Waveform and Layout); another view
+        // on the monitor needs the Layout picture and a second view to show
+        let after_hdmi = v.iter().position(|i| *i == Item::Hdmi).map_or(v.len(), |p| p + 1);
+        let mut monitor = Vec::new();
+        if self.m.hdmi == HdmiMode::Layout && self.m.views >= 2 {
+            monitor.push(Item::HdmiView);
+        }
+        if self.m.hdmi != HdmiMode::Mirror {
+            monitor.push(Item::HdmiLines);
+        }
+        v.splice(after_hdmi..after_hdmi, monitor);
         v.extend(self.studio_display_rows());
         v
     }

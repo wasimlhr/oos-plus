@@ -83,7 +83,7 @@ struct PressHits {
 
 impl Ui {
     pub fn handle(&mut self, ev: Ev) {
-        if self.start_up_input(&ev) {
+        if self.start_up_input(&ev) || self.greeting_input(&ev) {
             return;
         }
         match ev {
@@ -695,10 +695,12 @@ impl Ui {
                         p.p1 = (x, y);
                         p.ref_dx = (p.p1.0 - p.p0.0).abs();
                         p.ref_dy = (p.p1.1 - p.p0.1).abs();
-                        // cancel the one-finger drag
+                        // cancel the one-finger drag, and the hold of the first finger: a pinch is no long press
+                        // that opens the context menu (#590)
                         self.touch.drag = Drag::None;
                         self.zoom_box.path.clear();
                         self.zoom_box.map = None;
+                        self.workspace_cancel_hold();
                     }
                 }
                 Phase::Move => p.p1 = (x, y),

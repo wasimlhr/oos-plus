@@ -43,6 +43,7 @@ scpi $S/scpi-answers.txt :MEASure:TSETup?
 scpi $S/scpi-answers.txt :MEASure:STRip?
 scpi $S/scpi-answers.txt :MEASure:PENDing?
 scpi $S/scpi-answers.txt :MEASure:READout?
+scpi $S/scpi-answers.txt :MEASure:SLOT:LIST?
 scpi $S/scpi-answers.txt :EYE:ITEM? HEIGHT
 scpi $S/scpi-answers.txt :EYE:STATe?
 scpi $S/scpi-answers.txt :VIEW?
@@ -188,6 +189,7 @@ scpi $S/scpi-answers.txt :MEASure:ITEM? VMAX,CHANnel1
 scpi $S/scpi-answers.txt :MEASure:ITEM? VMIN,CHANnel1
 scpi $S/scpi-answers.txt :MEASure:ITEM? FREQuency,CHANnel1
 scpi $S/scpi-answers.txt :MEASure:ITEM? PERiod,CHANnel1
+scpi $S/scpi-answers.txt :MEASure:SLOT7 VPP,CHANnel1;:MEASure:SLOT7?;:MEASure:SLOT7:ITEM?;:MEASure:SLOT:LIST?;:MEASure:SLOT8?;:SYSTem:ERRor?;:MEASure:SLOT7:CLEar;:MEASure:SLOT7?;:SYSTem:ERRor?
 # one acquisition, and a page of its record
 scpi $S/scpi-answers.txt :SINGle;*OPC?
 scpi $S/scpi-answers.txt :WAVeform:SOURce CHANnel1;:WAVeform:MODE NORMal;:WAVeform:FORMat ASCii

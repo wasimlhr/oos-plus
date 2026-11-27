@@ -6,7 +6,7 @@
 //! `x(t) = I(t) cos(2 pi fc t) - Q(t) sin(2 pi fc t)`, so the spectrum, the eye and the measurements read it like any
 //! other record and a line at `fc + f` in the complex signal is a line at `fc + f` in the spectrum.
 
-use crate::interp::lanczos8_grid;
+use crate::interp::lanczos8;
 
 /// The samples of the real signal, at most, that `iq_to_real` makes.
 pub const IQ_MAX_SAMPLES: usize = 32_000_000;
@@ -39,9 +39,11 @@ pub fn iq_to_real(iq: &[f32], dt_pair: f64, fc: f64, max_len: usize) -> Result<(
         i.push(pair[0]);
         q.push(pair[1]);
     }
-    let (mut ii, mut qq) = (Vec::new(), Vec::new());
-    lanczos8_grid(&i, 0.0, 1.0 / up as f64, n_out, &mut ii);
-    lanczos8_grid(&q, 0.0, 1.0 / up as f64, n_out, &mut qq);
+    // the exact kernel a point: upstream's grid is in fixed point now (`lanczos8_fixed`, for the screen), whose 16-bit
+    // steps would be a floor under the spectrum of this signal
+    let at = |v: &[f32], k: usize| lanczos8(v, k as f64 / up as f64).unwrap_or(f32::NAN);
+    let grid = |v: &[f32]| (0..n_out).map(|k| at(v, k)).collect::<Vec<_>>();
+    let (ii, qq) = (grid(&i), grid(&q));
     let dt_out = dt_pair / up as f64;
     let w = std::f64::consts::TAU * fc * dt_out;
     let v = (0..n_out)

@@ -328,6 +328,20 @@ impl Ui {
         if self.stock_readouts() {
             v.iter_mut().for_each(|row| row.reason.clear());
         }
+        // the badge of a numbered slot (`MEAS<n>`, ui/slots.rs) leads the name of its row
+        let singles = self.m.meas.len();
+        for (i, row) in v.iter_mut().enumerate().take(singles + self.m.meas2.len()) {
+            let key = match self.m.meas.get(i) {
+                Some(&(k, id)) => RowKey::One(k, id),
+                None => {
+                    let (k, a, b) = self.m.meas2[i - singles];
+                    RowKey::Pair(k, a, b)
+                }
+            };
+            if let Some(n) = self.slot_of(key) {
+                row.name = format!("M{n} {}", row.name);
+            }
+        }
         v
     }
 

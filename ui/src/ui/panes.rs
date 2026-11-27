@@ -372,8 +372,8 @@ impl Ui {
 // ---------------------------------------------------------------------------------------------------------------
 // results
 
-/// Columns of the results table: heading, relative width. The last one is a bar and goes first when room is short.
-const RESULT_COLS: [(&str, i32); 9] = [
+/// Columns of the results table: heading, relative width.
+const RESULT_COLS: [(&str, i32); 8] = [
     ("Source", 54),
     ("Measurement", 136),
     ("Now", 88),
@@ -382,18 +382,15 @@ const RESULT_COLS: [(&str, i32); 9] = [
     ("Max", 88),
     ("\u{3c3}", 80),
     ("Count", 60),
-    ("Range", 90),
 ];
 
 /// Left edges of the columns in a table `w` wide, and the end.
 fn result_cols(w: i32) -> Vec<i32> {
     let sum: i32 = RESULT_COLS.iter().map(|c| c.1).sum();
-    let bar = w >= sum;
-    let used = sum - if bar { 0 } else { RESULT_COLS[8].1 };
     let mut x = 0;
     let mut v = vec![0];
-    for c in &RESULT_COLS[..if bar { 9 } else { 8 }] {
-        x += c.1 * w / used;
+    for c in &RESULT_COLS {
+        x += c.1 * w / sum;
         v.push(x);
     }
     v
@@ -408,9 +405,6 @@ pub(super) fn tests_result_cols(w: i32) -> Vec<i32> {
 pub(super) struct ResultRow {
     ch: WaveId,
     pub(super) cells: [String; 8],
-    now: f64,
-    lo: f64,
-    hi: f64,
 }
 
 impl Ui {
@@ -492,7 +486,7 @@ impl Ui {
                 let src = self.m.meas2.get(i.wrapping_sub(self.m.meas.len())).map_or(self.wave_name(r.src), |p| format!("{}-{}", self.wave_name(p.1), self.wave_name(p.2)));
                 let show = self.m.meas_show;
                 let keep = |i: usize, s: String| if show[i] { s } else { String::new() };
-                ResultRow { ch: r.src, cells: [src, r.name.clone(), r.fmt4(r.v), val(mean), keep(1, val(st.min)), keep(2, val(st.max)), keep(0, val(sd)), fmt_count(st.n as f64)], now: r.v, lo: st.min, hi: st.max }
+                ResultRow { ch: r.src, cells: [src, r.name.clone(), r.fmt4(r.v), val(mean), keep(1, val(st.min)), keep(2, val(st.max)), keep(0, val(sd)), fmt_count(st.n as f64)] }
             })
             .collect()
     }
@@ -572,7 +566,7 @@ impl Ui {
         for (k, c) in RESULT_COLS.iter().enumerate().take(x.len() - 1) {
             if (4..=6).contains(&k) && !self.m.meas_show[[1, 2, 0][k - 4]] { continue; }
             // words on the left, numbers on the right of their column
-            let tx = if k < 2 || k == 8 { x0 + x[k] } else { x0 + x[k + 1] - 8 - f.s.width(c.0) };
+            let tx = if k < 2 { x0 + x[k] } else { x0 + x[k + 1] - 8 - f.s.width(c.0) };
             cv.text(&f.s, tx, head_y, c.0, DIM);
         }
         cv.hline(t.x + 6, t.x + t.w - 6, t.y + BAND_H - 1, LINE);
@@ -617,23 +611,9 @@ impl Ui {
                 };
                 cv.text(font, x0 + x[k + 1] - 8 - font.width(&w.cells[k]), ty, &w.cells[k], c);
             }
-            if x.len() > 9 {
-                Self::range_bar(cv, Rect::new(x0 + x[8], y + pitch / 2 - 3, x[9] - x[8] - 6, 6), w, col);
-            }
         }
         if let Some(b) = bar {
             b.draw(cv);
-        }
-    }
-
-    /// Where the value stands between the smallest and the largest seen.
-    fn range_bar(cv: &mut Canvas, b: Rect, w: &ResultRow, col: Rgb) {
-        cv.fill(Rect::new(b.x, b.y + b.h / 2, b.w, 1), LINE);
-        cv.vline(b.x, b.y, b.y + b.h, LINE);
-        cv.vline(b.x + b.w - 1, b.y, b.y + b.h, LINE);
-        if w.hi > w.lo && w.now.is_finite() {
-            let x = b.x + (((w.now - w.lo) / (w.hi - w.lo)).clamp(0.0, 1.0) * (b.w - 3) as f64) as i32;
-            cv.fill(Rect::new(x, b.y - 1, 3, b.h + 2), col);
         }
     }
 
@@ -643,13 +623,18 @@ impl Ui {
         let cur = self.cursor_values();
         let peaks = self.azr.spec.as_ref().map(|_| &self.azr.peaks);
         let cur_rows = if cur.is_empty() { 0 } else { 1 + cur.len().div_ceil(2) as i32 };
-        let peak_rows = peaks.map_or(0, |p| 1 + (p.len().div_ceil(2) as i32).max(1));
+        // one column of peaks when every row has 24 px (a monitor), else two columns of half the rows
+        let single = peaks.is_some_and(|p| s.h >= (cur_rows + 1 + p.len().max(1) as i32) * 24);
+        let peak_rows = peaks.map_or(0, |p| 1 + (if single { p.len() } else { p.len().div_ceil(2) } as i32).max(1));
         let rows = cur_rows + peak_rows;
         if rows == 0 {
             return;
         }
-        let pitch = s.h / rows;
-        let half = s.w / 2;
+        // the rows stand close together from the top, not spread over the whole height; the figures are larger when
+        // each has the room for it
+        let pitch = (s.h / rows).min(34);
+        let (fs, fb) = if pitch >= 28 { (&f.m, &f.mb) } else { (&f.s, &f.sb) };
+        let half = if single { s.w } else { s.w / 2 };
         let line = |k: i32| s.y + k * pitch + (pitch + 9) / 2;
         if !cur.is_empty() {
             let mode = match self.m.cursor {
@@ -671,8 +656,8 @@ impl Ui {
             );
             for (i, (l, v)) in cur.iter().enumerate() {
                 let (x, y) = (s.x + (i as i32 % 2) * half, line(1 + i as i32 / 2));
-                cv.text(&f.s, x, y, l, DIM);
-                cv.text(&f.sb, x + half - 8 - f.sb.width(v), y, v, TEXT);
+                cv.text(fs, x, y, l, DIM);
+                cv.text(fb, x + s.w / 2 - 8 - fb.width(v), y, v, TEXT);
             }
         }
         let Some(p) = peaks else { return };
@@ -681,19 +666,20 @@ impl Ui {
             WaveId::Ch(c) => self.ch_name(c),
             WaveId::Ref(i) => format!("R{}", i + 1),
         };
-        cv.text(&f.sb, s.x, line(y0), &format!("Peaks  \u{b7}  {}  \u{b7}  dBV", spec), TEXT);
+        cv.text(fb, s.x, line(y0), &format!("Peaks  \u{b7}  {}  \u{b7}  dBV", spec), TEXT);
         if p.is_empty() {
-            cv.text(&f.s, s.x, line(y0 + 1), "No lines above the noise", DIM);
+            cv.text(fs, s.x, line(y0 + 1), "No lines above the noise", DIM);
         }
-        let per = p.len().div_ceil(2).max(1);
+        let per = if single { p.len().max(1) } else { p.len().div_ceil(2).max(1) };
+        let th = fb.size.max(14);
         for (i, m) in p.iter().enumerate() {
             let (x, y) = (s.x + (i / per) as i32 * half, line(y0 + 1 + (i % per) as i32));
-            let tag = Rect::new(x, y - 11, 15, 14);
+            let tag = Rect::new(x, y - th + 3, th + 1, th);
             cv.round(tag, 3, ACCENT, 255);
-            cv.text_in(&f.sb, tag, 1, &format!("{}", i + 1), DARK_TEXT);
-            cv.text(&f.s, x + 19, y, &si_digits(m.f, "Hz", 4), LABEL);
+            cv.text_in(fb, tag, 1, &format!("{}", i + 1), DARK_TEXT);
+            cv.text(fs, x + th + 5, y, &si_digits(m.f, "Hz", 4), LABEL);
             let v = format!("{:.1}", m.dbv);
-            cv.text(&f.sb, x + half - 8 - f.sb.width(&v), y, &v, TEXT);
+            cv.text(fb, x + half - 8 - fb.width(&v), y, &v, TEXT);
         }
     }
 }

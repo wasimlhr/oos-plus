@@ -1,5 +1,206 @@
 # Changes
 
+## 0.2.2
+
+Released on 2026-11-26. Mostly waveforms a second: the screen follows the panel's refresh, the drawing of Normal,
+Peak, High res, Average and zoom runs on the four drawing cores, the short time bases interpolate in fixed point, and
+the run state box shows the waveforms a second. Several of these ideas come from fumingcaps' fork (0.2.1), named at
+each entry; its timing shortcuts that change the picture or the measured values were not taken. On a DHO924S, measured
+the same day with `tools/device-bench.py`, this build reaches the screen with more waveforms a second than that fork
+at 14 of 18 views, and fewer at 4 channels at 5 ns/div and in Peak detect. Further: the Bode page (number pad, Lin /
+Log sweep, CSV, Vrms), the rear USB port as a network link (off by default), fixes from the forum (the trigger on the
+other slope of a slow, noisy signal, #578 and #581; persistence, the picture while the scope waits) and from W4R's OOS
+Plus fork. All of it is tested on the host; marked "(unit)" where it also ran on a DHO924S. A build of main from the
+same day ran `tools/device-test.py` on a DHO924S.
+
+Known: after a STOP with a deep memory (10 M to 125 M points), `:WAVeform:MODE RAW` sometimes answers the 3600 points
+of the screen instead of the raw record around it; the screen and the other modes are not affected. Seen on a DHO924S
+in `tools/device-test.py` (`raw_window_is_one_unbroken_signal`), not every time; the cause is still open.
+
+Added:
+
+- Bode: a tap on the Amplitude opens the number pad, so the generator takes any amplitude from 10 mVpp to 20 Vpp
+  (350 mVpp, 1.25 Vpp), not only the 1-2-5 steps of - and +; from such a value - and + go to the next step
+  (#52, [Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- The Bode plot shows the values of its gain and phase axes at round steps (#387,
+  [Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- Bode: with the menu closed, the Multipurpose 2 knob moves the cursor over the plot; before, only the menu's Cursor
+  row did, and the menu covered half of the plot
+  (#50, [Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- Bode: **Sweep** Lin / Log now spaces the frequencies of every sweep and sets the frequency axis to match. **Gain
+  unit** shows the gain in dB or in V/V
+  ([Measurements and Analysers](wiki/Measurements-and-Analysers.md#analysers)).
+- Bode: **Save CSV** writes the points of the last sweep to the storage: frequency, gain and phase, one line a point
+  (#53, [Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- The Manchester decoder shows the frame check of an Ethernet frame (10BASE-T): the last four bytes of the frame as a
+  check, marked where the CRC-32 over the frame is another. As bytes alone a good frame and one with a byte changed
+  looked alike. A frame the record cuts off, or one shorter than a frame can be, has no check.
+- A tap on a value in the measurement strip opens the list of selected measurements with that one in focus, to remove
+  it or change its settings ([Measurements](wiki/Measurements-and-Analysers.md#the-strip)).
+- The rear USB port can be a network link to one computer: **System > Network > Remote services > USB network** (off
+  by default; tried on one scope with a Mac and Windows 11, not yet with Linux). The computer sees a network adapter,
+  the scope is at 192.168.235.1 and every remote service and SSH work over the cable
+  ([Remote control](wiki/Remote-Control.md#usb-cable), #235) (unit).
+- While the scope runs, the run state box at the top left shows the waveforms a second that reach the screen and the
+  share of the time they capture, for example `14.8k wfm/s 0.7%` ([First Steps](wiki/First-Steps.md)). The idea
+  comes from fumingcaps' fork.
+
+Removed:
+
+- The image's busybox no longer holds `telnetd`, the telnet client, `httpd` or `tc`, and `nc` no longer listens
+  (`nc -l`); nothing in OOS started them. busybox is now built from its source with a configuration of OOS
+  ([network.md](docs/network.md), ADR 0078, #331).
+- System > Opt. memory and Probe optional memory: hardware segments above 256 MiB read back the samples of the
+  segment 256 MiB below them, so the upper half is not usable. Hardware segments use the lower 256 MiB again, as
+  before 0.1.15
+  ([horizontal-config.md 1.8](docs/protocols/horizontal-config.md#18-frame-memory-above-256-mib-not-usable)).
+  A `mem.upper` line left in `/oos/system.conf` is kept and does nothing (unit).
+
+Changed:
+
+- oos-ui is built for the scope's small cores (Cortex-A53), where nearly every frame is drawn: 5 to 10 % more
+  waveforms a second (DHO924S, 1 channel at 50 ns/div 7,550 -> 8,280), 32 instead of 28 pictures a second with 4
+  channels at 5 ns/div. The idea comes from fumingcaps' fork.
+- While the scope runs, the acquisition thread runs at real-time priority and the fast cores and the GPU do not drop
+  to their lowest clocks; STOP gives the clocks back. 2 to 7 % more waveforms a second at the short time bases
+  (DHO924S, 1 channel at 5 ns/div 7,230 -> 7,710). `perf.fifo = off` and `perf.clocks = off` in system.conf turn
+  them off ([performance plan](docs/fork/perf-plan.md)).
+- Average folds many more waveforms a second into its average, made on the four drawing cores, and the picture shows
+  the one averaged trace instead of each step of the average one over the other; the picture rate holds with several
+  channels on ([Features](wiki/Features.md)).
+- Average folds its frames on the four drawing cores in runs, applied to the average in order: 2,240 -> 3,320
+  waveforms a second with 4 channels at 1 us/div on a DHO924S, the same average up to rounding. The idea comes from
+  fumingcaps' fork.
+- Batch mode: at short time bases the scope arms only as many frames as the screen's workers can draw in one picture
+  and waits for them, instead of reading batches it then drops; `acquired` and `dropped` of `:SYSTem:STATe?` fall
+  towards `used` ([SCPI](docs/scpi.md)). 11 to 20 % more waveforms a second reach the screen (DHO924S, 1 channel at
+  5 ns/div 7,230 -> 8,030; 4 channels at 200 ns/div 1,390 -> 1,670).
+- Acquisition: a batch's register writes wait once after each group instead of after every write (75 waits of at
+  least 10 us a batch became 2); 8 to 13 % more waveforms a second reach the screen at the short time bases
+  (DHO924S, 1 channel at 5 ns/div 6,060 -> 6,830).
+- Bode: - and + step the generator amplitude by 10 mV up to 100 mV and by 50 mV above, and **Amp unit** shows and takes
+  it in Vpp or Vrms; `:BODE:AMPLitude` sets it in Vpp
+  ([Measurements and Analysers](wiki/Measurements-and-Analysers.md#bode-with-an-external-generator)).
+- The short time bases (fewer samples than screen columns) interpolate their points in fixed point, as fumingcaps'
+  fork does: about half the cost of a frame's points on the scope's small cores, more waveforms a second at 5 to
+  200 ns/div. The trace stays within a pixel of the one before.
+- The screen is drawn at every third refresh of the panel (32.5 pictures a second on a DHO924S, whose panel runs at 97.4
+  Hz) instead of on a 30 Hz timer of its own, so its pictures no longer beat against the panel; `pacing.clock = timer`
+  in `/oos/system.conf` goes back to the timer, and a monitor on HDMI keeps it ([ADR
+  0010](docs/adr/hardware/0010-unverified-hardware-functions-are-opt-in.md)).
+- The GPU helper may run on every core instead of only the two fast ones it shared with the screen loop and the
+  acquisition: in Average with 4 channels the screen loop no longer waits for it, about 10 % more waveforms a second.
+- In the menus a setting that is only off or on is one switch instead of the two buttons Off and On: a tap anywhere on
+  it switches it (#55, [First Steps](wiki/First-Steps.md)).
+- Display (lines, not dots): a trace drawn from a record (short time bases, Average, Peak, High res, zoom) is as bright
+  on its vertical edges as on its flat parts; it was up to four times dimmer on the edges. The pixels lit are the same.
+- The number pad, the generator's frequency pad and the hex pad of a bus trigger open large in the middle of the
+  screen, with the value in a field above the keys; the cursor menu opens at the top, so its readouts stay in sight
+  ([First Steps](wiki/First-Steps.md)).
+- Peak and High res draw their records on the four drawing cores, as Normal does, instead of one by one in the
+  picture loop: more waveforms a second and a steadier picture rate with several channels on
+  ([Features](wiki/Features.md)) (unit).
+- An on/off switch that is on fills its whole field white with dark text, like a chosen option, and its slide switch
+  turns dark with a white knob, so the state shows at a glance ([First Steps](wiki/First-Steps.md)).
+- The LAN and WLAN boxes of the top bar no longer show the scope's address by default: they show their name and a
+  green dot while connected, or a dash without a link, and are only as wide as that, which leaves the top bar more
+  room. A picture or photo of the screen no longer passes the address on. **System > Network > Show address** shows
+  it again ([Features](wiki/Features.md)).
+- The top bar holds Display and Storage; Measure and Cursor are their front-panel keys and entries of the start menu.
+  The Measure key held adds the next usual measurement, as the press-and-hold on the Measure button did; that short
+  menu is gone ([Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- Display: at the short time bases, where a frame is drawn from its 3600 interpolated points, 11 to 16 % more
+  waveforms a second reach the screen (DHO924S, 1 channel at 5 ns/div 6,060 -> 6,900; 4 channels at 200 ns/div
+  1,150 -> 1,340); the picture is the same.
+- A trigger type keeps its own values (width, pattern, times, lower level) and gets them back when chosen again; each
+  channel keeps its own trigger level as the source ([First Steps](wiki/First-Steps.md)).
+- With the zoom on, the main and the zoom picture are drawn on the four drawing cores, as without it, instead of one
+  record at a time in the picture loop: more waveforms a second and a steadier picture rate
+  ([Features](wiki/Features.md)) (unit).
+
+Fixed:
+
+- A channel switched off with its menu's On, not with its key, gives the vertical knobs to a channel still on, as the
+  key does; before, V/div and the offset turned the channel that was off (#523,
+  [First Steps](wiki/First-Steps.md)).
+- `:CHANnel<n>:OFFSet` and `:SCALe` keep the offset within what the scale can reach at once: a query in the same line
+  answers the offset in force, and a line of commands gives the same offset whether or not a frame ran between them.
+  Found by W4R's OOS Plus fork ([SCPI and VXI-11](wiki/SCPI-and-VXI-11.md)).
+- Cursor: - and + on a voltage cursor (A and B in Volt, Y1 and Y2 in XY) move it up and down the right way round:
+  + raises its value, as it moves a time cursor to the right (#248,
+  [First Steps](wiki/First-Steps.md)).
+- The Cycle measurements (Cycle mean, RMS and area, Cyc top, base, amplitude, pk-pk, max and min) have a value when
+  the one whole cycle on screen lies between two falling edges, as the period and the duty cycle already had; found
+  by W4R's OOS Plus fork ([Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- The decoders and the protocol trigger read a record taken in Peak detect. Its points are minimum and maximum in
+  turn, so every edge passed the threshold three times: a LIN frame at 2.5 MSa/s came out with no sync measured and
+  every byte wrong, while the same line decoded in Normal. They now read the mean of every point and its neighbour
+  ([Features](wiki/Features.md)).
+- The eye page no longer takes all the memory of the scope when a bit rate from a faster time base is kept at a slow
+  one: a rate the record has under two samples a bit for is found again from the record when it was found from one,
+  and a rate that was set stays and the page says that it needs a faster time base. The clock recovery takes no
+  bit shorter than half a sample, which bounds the eye, the jitter figures and the TIE trend for every caller. Seen
+  on a unit: the program was stopped by the kernel at 3.7 GB
+  ([Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- Display: at 10 us/div to 1 ms/div the screen again keeps its full picture rate on the panel's clock (it had dropped
+  to 23 to 29 pictures a second since the frame loop follows every third vblank).
+- The history keys of the front panel step the right way: `<` goes back to older records, `>` forward to newer ones
+  ([front panel](docs/protocols/frontpanel.md)) (unit).
+- The Manchester decoder reads a long packet whose sender's clock is a little off the rate set. Its bit clock now
+  follows the edge in the middle of every bit, not the first edge of the packet: a packet of 1500 bytes at 200 ppm from
+  the rate went wrong from its byte 234 before, as a frame of 10BASE-T (880 bits) did on a unit with a wrong byte and
+  a wrong frame check. A rate set 8 % off still reads the line.
+- While the scope ran with a record of more than 262144 points that came faster than it was measured, Frequency,
+  Period, the widths, rise and fall time, Top and Base stayed on `Computing`; they now show the value of the last
+  record that was measured ([Measurements and Analysers](wiki/Measurements-and-Analysers.md)).
+- The MIL-STD-1553 decoder reads a bus a few percent off its rate: it follows the edge in the middle of every bit
+  from bit to bit. It sampled the 17 bits of a word on a 1 us grid from the sync, and on a bus 4 % slow the later
+  bits fell into the wrong half: on a capture of a real bus 37 of 71 words were misread or had a parity error, now 2
+  (the capture's own faults) ([Features](wiki/Features.md)).
+- After a STOP of a deep record, `:WAVeform:MODE NORMal` returns what the screen shows also when a measurement needs
+  samples, not only the window read at the STOP ([SCPI](docs/scpi.md)) (unit).
+- With a display persistence time (100 ms, 500 ms and longer) the trace no longer flickers or pulses at slow time
+  bases and deep memory. The picture faded on every screen refresh, also while it waited for the next record, so the
+  newest trace faded out before the next one came. It now fades when a new record arrives, by the time since the last
+  one: the newest trace stays at full brightness until the next record replaces it
+  ([First Steps](wiki/First-Steps.md)).
+- Touch: two fingers held still on the plot are a pinch and no longer open the context menu of a long press (#590).
+- A remote command over SCPI (port 5555), VXI-11 or HiSLIP is answered as soon as it arrives, not at the next picture:
+  `*OPC?` in Run takes a few milliseconds instead of 12 to 30 ([SCPI and VXI-11](wiki/SCPI-and-VXI-11.md)) (unit).
+- In roll mode the state box at the top left says ROLL instead of TRIG'D, as does the line of the HDMI workspace
+  ([Features](wiki/Features.md)).
+- SCPI: `*RST` also sets the waveform transfer back (`:WAV:SOURce`, `:MODE`, `:FORMat`, `:STARt`, `:STOP`), so a
+  page left by an earlier read no longer cuts the next one ([docs/scpi.md](docs/scpi.md)).
+- A remote command that exists but gets a value it does not take (`:TRIGger:HOLDoff 11`, `:CHANnel1:PROBe 0`,
+  `:ACQuire:MDEPth 7`, `:TIMebase:SCALe x`, ...) leaves `-224,"Illegal parameter value"` with the value in
+  `:SYSTem:ERRor?`, no longer `-113,"Undefined header"`, which now only means the command is not known
+  ([SCPI and VXI-11](wiki/SCPI-and-VXI-11.md)).
+- A line of a setup file that is reported as bad leaves the setup as it was: before, the Bode plot, spectrum, eye,
+  magnetics, inverter, mask zone, logic decoder and signal simulator lines kept the values read before the bad one
+  ([First Steps](wiki/First-Steps.md#saving)).
+- At 0.5 and 1 ms/div a slow edge, such as a sine of 50 to 250 Hz or mains hum picked up by a probe, put only one
+  record every few seconds on the screen; the others were left out as if they had not been taken at the trigger point.
+  They reach the picture again, some 30 a second.
+- Display: a Peak detect picture below the full sample rate at the short time bases (for example 1 channel at 625 MSa/s)
+  is drawn from its minimum and maximum pairs, not interpolated as if they were plain samples.
+- With only noise on the source, the spectrum's THD, SNR, SINAD, SFDR and ENOB were figures of a "fundamental" found
+  in the noise; they now show no value, and `:SPECtrum:ITEM?` answers `9.9E37`
+  ([SCPI and VXI-11](wiki/SCPI-and-VXI-11.md)).
+- An SPI decoder on a record with too few samples for its clock no longer lists words that are none. At 200 kbit/s in a
+  record of 125 kSa/s a frame of 16 words read "05 05 05 05" and the frames of one word around it gave nothing. Where
+  more chip-select frames have clock edges and no whole word than frames with a word, the band now says "Frames shorter
+  than a word: too few samples for the clock, or Data bits", and so it does for Data bits above the frame's length.
+- `:TIMebase:SCALe` from a script or the MCP tool keeps the point of Horizontal > Expand around in place and the zoom
+  inside the new time base, as the knob and the number pad do; before, the delay stayed as it was. Found by W4R's OOS
+  Plus fork ([SCPI and VXI-11](wiki/SCPI-and-VXI-11.md)).
+- Trigger: on a slow, noisy signal (mains hum picked up by a probe, a 50 Hz sine at 0.5 ms/div) a record the hardware
+  triggered on the other slope no longer shows as a mirrored trace among the others (#581, #578).
+- A new volts per division, offset or channel while the scope waits for a trigger draws the last record again at its
+  own volts. The picture kept its old height and place before, so the trace read wrong values against the grid until
+  the next trigger ([First Steps](wiki/First-Steps.md)).
+- A new time base while the scope waits for a trigger draws the last record at its own times, in the middle of the
+  wider screen, instead of stretching it over the whole screen ([First Steps](wiki/First-Steps.md)).
+
 ## 0.1.15
 
 Released on 2026-11-21. Fixes from the forum's reports on 0.1.14 (the picture while the trigger level turns, level
@@ -1230,6 +1431,91 @@ Fixed:
   than the rail no longer crashes.
 - Tests no longer depend on the speed of the computer (wall-time limits replaced), and the SSH key tests run in a
   checkout without `local/`.
+
+### From upstream OOS 4eac59e1..090f5670 (upstream #599 to #617, merged 2026-11-26)
+
+Upstream's changes after the sync of #209. Upstream released them, with everything since 0.1.15, as 0.2.2: its section
+is at the top of this file, the four crates say 0.2.2, and its files in `changelog.d/` are gone into that section.
+Host-tested in oos-plus; nothing of this merge ran on a unit in oos-plus. The figures are upstream's, from its
+DHO924S.
+
+Added:
+
+- While the scope runs, the run state box at the top left of the Default layout shows the waveforms a second that
+  reach the screen and the share of the time they capture, for example `14.8k wfm/s 0.7%`. The run box of Studio is
+  as before.
+- A greeting card over the screen on 24 to 26 December 2026 and on 1 January 2027, once, when the clock was set in
+  this start; a tap or a key closes it.
+
+Changed:
+
+- oos-ui is built for the scope's small cores (Cortex-A53): 5 to 10 % more waveforms a second.
+- Average folds its frames on the four drawing cores in runs, applied to the average in order (2,240 -> 3,320
+  waveforms a second with 4 channels at 1 us/div), and makes its screen records without a division a point.
+- The short time bases (fewer samples than screen columns) interpolate their points in fixed point, and a trace's
+  points go on the screen with a multiply instead of a division each. The trace stays within a pixel of the one
+  before.
+- The GPU helper may run on every core, and compares only the rows a phosphor map can have changed.
+- Display (lines, not dots): a trace drawn from a record (short time bases, Average, Peak, High res, zoom) is as bright
+  on its vertical edges as on its flat parts; it was up to four times dimmer on the edges.
+- The image's expat is 2.11.0, the version Alpine 3.22 builds its `expat-static` from.
+
+Removed:
+
+- **Remote services > USB instrument** (the USBTMC function on the rear USB port, in oos-plus since the sync of
+  #209): upstream took it out again until it has a USB product ID of its own. USB network stays. A `usb.tmc` line left
+  in `/oos/system.conf` does nothing. In the sheet of Studio and Minimal the USB tab of Remote services holds the
+  USB network and its address.
+
+Fixed:
+
+- Touch: two fingers held still on the plot are a pinch and no longer open the context menu of a long press (upstream
+  #590; oos-plus already stopped every hold at a second finger, and keeps that).
+- Display: a Peak detect picture below the full sample rate at the short time bases (for example 1 channel at
+  625 MSa/s) is drawn from its minimum and maximum pairs, not interpolated as if they were plain samples.
+- `tools/device-deploy.sh --restore` ends an installed oos-ui that runs already.
+
+### From upstream OOS 67fac1b2..4eac59e1 (upstream #560 to #602, merged 2026-11-25)
+
+Upstream's changes after the sync of #168, not yet in an upstream release; their files in `changelog.d/` came along.
+Host-tested in oos-plus; nothing of this merge ran on a unit in oos-plus. The figures and "(unit)" marks are
+upstream's, from its DHO924S.
+
+Added:
+
+- The rear USB port can be a network link to one computer: **Remote services > USB network** (off by default, not yet
+  verified on hardware). The scope is at 192.168.235.1 and every remote service and SSH work over the cable.
+- The rear USB port can make the scope a USB instrument: **Remote services > USB instrument** (off by default; upstream
+  tried it on one scope with a Mac). VISA finds it as `USB::0x1209::0x0001::<serial>::INSTR` (USBTMC with USB488),
+  with the same SCPI as port 5555. On Windows the USB network and the USB instrument do not go together.
+
+Changed:
+
+- The screen is drawn at every third refresh of the panel instead of on a 30 Hz timer of its own; `pacing.clock =
+  timer` in `/oos/system.conf` goes back to the timer.
+- Peak, High res, Average and the zoom draw on the four drawing cores, as Normal does: more waveforms a second and a
+  steadier picture rate. Average shows the one averaged trace.
+- Batch mode arms only as many frames as the screen's workers can draw in one picture, a batch's register writes wait
+  once after each group instead of after every write, and a trace's point columns are worked out once per time grid:
+  more waveforms a second reach the screen at the short time bases.
+- While the scope runs, the acquisition thread runs at real-time priority and the fast cores and the GPU keep a floor
+  under their clocks; `perf.fifo = off` and `perf.clocks = off` in system.conf turn them off.
+
+Removed:
+
+- The image's busybox is built from its source and no longer holds `telnetd`, the telnet client, `httpd` or `tc`, and
+  `nc` no longer listens (upstream ADR 0078). oos-plus started none of them.
+
+Fixed:
+
+- A remote command over SCPI (port 5555), VXI-11 or HiSLIP is answered as soon as it arrives, not at the next picture.
+- At 0.5 and 1 ms/div a slow edge (a sine of 50 to 250 Hz, mains hum) puts its records on the screen again, and a
+  record the hardware triggered on the other slope no longer shows as a mirrored trace.
+- A new volts per division, offset or channel while the scope waits for a trigger draws the held record at its own
+  volts.
+- At 10 us/div to 1 ms/div the screen keeps its full picture rate on the panel's clock.
+- Cursor: + raises a voltage cursor's value (upstream's version of a fix oos-plus had made first; it replaces the
+  fork's own).
 
 ### From upstream OOS 6cd8028f..67fac1b2 (upstream #542 to #522, merged 2026-11-23)
 

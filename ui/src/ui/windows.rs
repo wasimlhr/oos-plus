@@ -58,10 +58,10 @@ const REF_NAMES: [&str; NREF] = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8",
 const MATH_NAMES: [&str; 8] = ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"];
 
 impl Ui {
-    /// The Windows page, the same in every layout: Traces, Full screen, Strip and the lower pane; then, while the
-    /// arrangement is Windows, the window number of every channel, math channel, reference and the LA that is on.
+    /// The Windows page, the same in every layout: while the arrangement is Windows, the window number of every
+    /// channel, math channel, reference and the LA that is on. (Traces, Lower and Strip are rows of Display.)
     pub(super) fn win_items(&self) -> Vec<Item> {
-        let mut v = vec![Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel];
+        let mut v = Vec::new();
         if self.arrangement() == Arrangement::Windows {
             v.extend((0..n_ch()).filter(|&c| self.m.ch[c].on).map(Item::WinCh));
             v.extend((0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on)).map(Item::WinRef));
@@ -165,7 +165,7 @@ impl Ui {
 
     pub(super) fn win_kind(it: Item) -> Option<Kind> {
         match it {
-            Item::FullScreen | Item::StripPos | Item::WinCh(_) | Item::WinRef(_) | Item::WinMath(_) | Item::WinLa => Some(Kind::Choice),
+            Item::StripPos | Item::WinCh(_) | Item::WinRef(_) | Item::WinMath(_) | Item::WinLa => Some(Kind::Choice),
             _ => None,
         }
     }
@@ -173,7 +173,6 @@ impl Ui {
     pub(super) fn win_label(it: Item) -> Option<&'static str> {
         Some(match it {
             Item::Open(MenuId::Windows) => "Windows",
-            Item::FullScreen => "Full screen",
             Item::StripPos => "Strip",
             Item::WinCh(c) => CH_NAMES.get(c).copied().unwrap_or("CH"),
             Item::WinRef(i) => REF_NAMES.get(i).copied().unwrap_or("R"),
@@ -186,7 +185,6 @@ impl Ui {
     pub(super) fn win_value(&self, it: Item) -> Option<String> {
         let n = WinLayout::Quad.count();
         Some(match it {
-            Item::FullScreen => if self.m.density == Density::Full { "On" } else { "Off" }.to_string(),
             Item::StripPos => self.m.strip_dock.label().to_string(),
             Item::WinCh(c) => (self.m.ch_win[c].min(n - 1) + 1).to_string(),
             Item::WinRef(i) => (self.m.ref_win[i].min(n - 1) + 1).to_string(),
@@ -198,7 +196,6 @@ impl Ui {
 
     pub(super) fn win_options(&self, it: Item) -> Option<Vec<String>> {
         Some(match it {
-            Item::FullScreen => vec!["Off".into(), "On".into()],
             Item::StripPos => StripDock::ALL.iter().map(|p| p.label().to_string()).collect(),
             Item::WinCh(_) | Item::WinRef(_) | Item::WinMath(_) | Item::WinLa => {
                 (1..=WinLayout::Quad.count()).map(|i| i.to_string()).collect()
@@ -210,9 +207,6 @@ impl Ui {
     pub(super) fn win_adjust(&mut self, it: Item, d: i32) -> bool {
         let n = WinLayout::Quad.count();
         match it {
-            // the menu row asks for the panel itself as the expand button does (`full.asked`): with an external display
-            // it hid nothing on the panel, the row said On and the bars stayed
-            Item::FullScreen => self.set_full(self.m.density != Density::Full, true),
             Item::StripPos => {
                 let all = StripDock::ALL;
                 let i = all.iter().position(|&p| p == self.m.strip_dock).unwrap_or(0);
@@ -263,18 +257,17 @@ mod tests {
             let mut u = in_layout(layout);
             u.open_menu(MenuId::Windows);
             let rows = u.items(MenuId::Windows);
-            assert_eq!(rows, [Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel], "{layout:?}");
+            assert!(rows.is_empty(), "{layout:?}: the window numbers come with Windows only: {rows:?}");
             assert_eq!(u.options(Item::Traces), ["Overlay", "Stacked", "Windows"], "{layout:?}");
-            assert_eq!(u.options(Item::FullScreen), ["Off", "On"]);
             assert_eq!(u.options(Item::StripPos), ["Below plot", "Left", "Right", "Above plot", "Hidden"]);
-            assert_eq!((Ui::label(Item::FullScreen), Ui::label(Item::StripPos)), ("Full screen", "Strip"));
+            assert_eq!(Ui::label(Item::StripPos), "Strip");
             // the number rows come with Windows and go with it
             u.select_option(Item::Traces, "Windows");
             let v = u.win_items();
             assert!(v.contains(&Item::WinCh(0)) && v.contains(&Item::WinCh(3)), "{layout:?} {v:?}");
             assert_eq!(u.options(Item::WinCh(0)), ["1", "2", "3", "4"]);
             u.select_option(Item::Traces, "Stacked");
-            assert_eq!(u.win_items(), [Item::Traces, Item::FullScreen, Item::StripPos, Item::PaneSel], "{layout:?}");
+            assert!(u.win_items().is_empty(), "{layout:?}");
             // every row of the page takes every one of its options and reads it back
             u.select_option(Item::Traces, "Windows");
             for it in u.win_items() {
@@ -292,7 +285,7 @@ mod tests {
     fn traces_is_a_row_of_the_page_and_of_the_display_sheet() {
         for layout in [Layout::Default, Layout::Minimal, Layout::Studio] {
             let mut u = in_layout(layout);
-            assert!(u.items(MenuId::Windows).contains(&Item::Traces), "{layout:?}");
+            assert!(u.items(MenuId::Display).contains(&Item::Traces), "{layout:?}");
             if layout != Layout::Default {
                 let spec = u.sheet_spec(MenuId::Display).expect("the Display sheet");
                 assert!(spec.tabs.iter().any(|t| t.rows.contains(&Item::Traces)), "{layout:?}");
@@ -424,18 +417,18 @@ mod tests {
         let mut u = ui();
         u.select_option(Item::PaneSel, "Trend");
         let pane = u.m.pane;
-        u.select_option(Item::FullScreen, "On");
+        u.set_full(true, true);
         assert_eq!((u.m.density, u.m.pane, u.m.split_pane), (Density::Full, 0, pane));
-        u.select_option(Item::FullScreen, "Off");
+        u.set_full(false, true);
         assert_eq!((u.m.density, u.m.pane, u.m.split_pane), (Density::Scope, pane, 0));
         // a pane chosen while Full is kept
-        u.select_option(Item::FullScreen, "On");
+        u.set_full(true, true);
         u.select_option(Item::PaneSel, "Results");
         assert_eq!((u.m.density, u.m.pane), (Density::Scope, tables::PANE_RESULTS));
         // the pane's own close button forgets it
         u.m.pane = 0;
-        u.select_option(Item::FullScreen, "On");
-        u.select_option(Item::FullScreen, "Off");
+        u.set_full(true, true);
+        u.set_full(false, true);
         assert_eq!(u.m.pane, 0);
     }
 
@@ -524,11 +517,11 @@ mod tests {
             tap(&mut u);
             assert_eq!((u.m.density, u.full.on, u.plot.grid), (Density::Scope, false, normal), "{mode}");
             // Full screen chosen on the page hides the panel's bars too, as the button does
-            u.select_option(Item::FullScreen, "On");
+            u.set_full(true, true);
             render(&mut u);
             assert!(u.m.density == Density::Full && u.full.on && u.plot.grid.h > normal.h, "{mode}");
             // and a display plugged in after a tap takes the waveform back
-            u.select_option(Item::FullScreen, "Off");
+            u.set_full(false, true);
             tap(&mut u);
             assert!(u.full.on, "{mode}");
             u.set_hdmi_present(false);
@@ -605,7 +598,7 @@ mod tests {
         render(&mut u);
         let normal = u.plot.grid;
         u.set_hdmi_present(true);
-        u.select_option(Item::FullScreen, "On");
+        u.set_full(true, true);
         let mut cv = Canvas::new(W, H);
         u.render(&mut cv);
         assert_eq!(u.m.density, Density::Full);
@@ -620,7 +613,7 @@ mod tests {
         let (mw, mh) = (1920, 1080);
         let mut full_pic = Canvas::new(mw, mh);
         u.render_waveform(&mut full_pic);
-        u.select_option(Item::FullScreen, "Off");
+        u.set_full(false, true);
         u.render(&mut cv);
         let mut scope_pic = Canvas::new(mw, mh);
         u.render_waveform(&mut scope_pic);

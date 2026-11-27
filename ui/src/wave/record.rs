@@ -180,6 +180,39 @@ pub fn frame_peak(f: &Frame, m: &Model) -> bool {
     m.acq == AcqMode::Peak && 1.0 / f.dt < m.max_srate() * 0.999
 }
 
+/// Whether the fast display path draws frame `f` from its screen record (`to_record`) rather than from its samples:
+/// in High res each point is the mean of the samples behind it, and a Peak detect frame below the full rate holds
+/// minimum and maximum in turn (`frame_peak`), which are drawn as the record's pairs. Peak at the full rate holds plain
+/// samples.
+pub fn drawn_as_record(f: &Frame, m: &Model) -> bool {
+    m.acq == AcqMode::HiRes || frame_peak(f, m)
+}
+
+/// What the kept places of `places` were worked out for: `t_first`, `dt` and the sample interval as bits, and the
+/// number of points.
+type PlacesKey = (u64, u64, u64, usize);
+
+thread_local! {
+    /// `(t_first + k * dt) / sample_dt` for k < n, and what it was worked out for
+    static PLACES: std::cell::RefCell<(PlacesKey, Vec<f64>)> = const { std::cell::RefCell::new(((0, 0, 0, 0), Vec::new())) };
+}
+
+/// `f(u)` with `u[k] = (t_first + k * dt) / sample_dt` for k < n: the places in samples of the points of a screen
+/// record before the trigger point is added, the same for every frame of a view, so worked out once a view and kept
+/// per thread. `ti + u[k]` is the same value, bit for bit, as `ti + (t_first + k * dt) / sample_dt`.
+pub fn places<R>(t_first: f64, dt: f64, sample_dt: f64, n: usize, f: impl FnOnce(&[f64]) -> R) -> R {
+    PLACES.with(|pl| {
+        let mut pl = pl.borrow_mut();
+        let key = (t_first.to_bits(), dt.to_bits(), sample_dt.to_bits(), n);
+        if pl.0 != key || pl.1.len() != n {
+            pl.1.clear();
+            pl.1.extend((0..n).map(|k| (t_first + k as f64 * dt) / sample_dt));
+            pl.0 = key;
+        }
+        f(&pl.1)
+    })
+}
+
 /// Turns the latest frame into a screen record: software trigger (oos-dsp) closest to the hardware trigger point,
 /// then the screen window (`n` points over `window` s from `t_first` relative to the trigger) by linear interpolation.
 pub fn to_record(f: &Arc<Frame>, m: &Model, n: usize, window: f64, t_first: f64) -> crate::wave::Record {
@@ -211,7 +244,11 @@ pub fn resample(
     let len = f.ch.iter().map(|v| v.len()).max().unwrap_or(0);
     let dt = window / n.max(1) as f64;
     // several samples per point and no averaging: the points become min/max pairs (the peak-detect branch below)
-    let pairs = dt / f.dt >= 2.0 && m.acq != AcqMode::HiRes;
+    // a Peak detect frame below the full rate holds minimum and maximum in turn (`frame_peak`): pairs at any number of
+    // samples a point, or the points would interpolate between a minimum and a maximum (and miss a spike between
+    // two points)
+    let peak = frame_peak(f, m);
+    let pairs = (dt / f.dt >= 2.0 || peak) && m.acq != AcqMode::HiRes;
     let mut ch: [Vec<f32>; NCH] = Default::default();
     for c in 0..NCH {
         let v = &f.ch[c];
@@ -244,6 +281,8 @@ pub fn resample(
             // output points wide); 2j gets its minimum, 2j+1 its maximum, so noise and one-sample spikes stay
             // visible like on the stock display. One pass per pair.
             let mut out = vec![f32::NAN; n];
+            // a Peak frame's span holds at least one minimum and one maximum, also with fewer samples than points
+            let per = if peak { per.max(1.0) } else { per };
             for j in 0..n.div_ceil(2) {
                 let xm = ti + (t_first + (2 * j) as f64 * dt + 0.5 * dt) / f.dt;
                 if xm < -per || xm >= v.len() as f64 + per {
@@ -270,17 +309,14 @@ pub fn resample(
         // "Auto" interpolation; otherwise linear
         if sparse {
             let mut out = Vec::with_capacity(n);
-            oos_dsp::interp::lanczos8_grid(v, ti + t_first / f.dt, dt / f.dt, n, &mut out);
+            oos_dsp::interp::lanczos8_fixed(v, ti + t_first / f.dt, dt / f.dt, n, &mut out);
             ch[c] = out;
             continue;
         }
-        ch[c] = (0..n)
-            .map(|k| {
-                let x = ti + (t_first + k as f64 * dt) / f.dt;
-                let y = if sparse { oos_dsp::interp::lanczos8(v, x) } else { oos_dsp::interp::linear(v, x) };
-                y.unwrap_or(f32::NAN)
-            })
-            .collect();
+        // the point k at `ti + (t_first + k * dt) / f.dt` samples, the places kept per view (a division a point less)
+        ch[c] = places(t_first, dt, f.dt, n, |u| {
+            u.iter().map(|&u| oos_dsp::interp::linear(v, ti + u).unwrap_or(f32::NAN)).collect()
+        });
     }
     // the frame's samples inside the screen window
     let i0 = ((ti + t_first / f.dt).floor().max(0.0) as usize).min(len);
@@ -295,7 +331,7 @@ pub fn resample(
     });
     // LA: the same shift as the analog record (software trigger at `ti` instead of the hardware point `pre`)
     let la = f.la.as_ref().map(|l| crate::logic::LaRec { t0: l.t0 - (ti - f.pre as f64) * f.dt, ..l.clone() });
-    crate::wave::Record { t0: t_first, dt, ch, triggered, partial: f.partial, raw, la, pairs, peak: frame_peak(f, m) }
+    crate::wave::Record { t0: t_first, dt, ch, triggered, partial: f.partial, raw, la, pairs, peak }
 }
 
 #[cfg(test)]
@@ -617,6 +653,38 @@ mod peak_detect {
         assert_eq!((raw.i0, raw.i1), (0, 100_000));
         let mx = r.ch[0].iter().copied().filter(|x| x.is_finite() && *x < 2.5).fold(0.0f32, f32::max);
         assert!((mx - 2.0).abs() < 1e-6, "glitch lost: max of the low part {}", mx);
+    }
+}
+
+#[cfg(test)]
+mod peak_below_the_full_rate {
+    use super::*;
+
+    // Break it catches: a Peak detect frame below the full rate with fewer than two samples a point (#599: 1 us/div at
+    // 625 MSa/s, 1.7) whose record interpolates between its minima and maxima: a one-sample spike between two points
+    // came out lower, and a point between a minimum and a maximum showed neither.
+    #[test]
+    fn a_peak_frame_keeps_its_pairs_at_fewer_than_two_samples_a_point() {
+        let mut m = Model { acq: AcqMode::Peak, trig_level: 0.0, ..Model::default() };
+        m.tscale = tscales().iter().position(|&x| (x as f64 - 1e-6).abs() < 1e-9).unwrap();
+        m.ch[0].on = true;
+        let (n, dt) = (8000usize, 1.6e-9);
+        assert!(frame_peak(&Frame { dt, ..Frame::default() }, &m), "625 MSa/s is below the full rate of one channel");
+        // minimum and maximum in turn around a slow sine, the maxima half a division above the minima
+        let mut v: Vec<f32> = (0..n).map(|k| (k as f32 / 900.0).sin() + if k % 2 == 1 { 0.5 } else { 0.0 }).collect();
+        let spike = 4001; // a maximum
+        v[spike] = 3.0;
+        let f = Arc::new(Frame { seq: 1, dt, pre: n / 2, ch: [v.clone(), vec![], vec![], vec![]], ..Frame::default() });
+        let window = m.time_per_div() as f64 * HDIV as f64;
+        let r = to_record(&f, &m, 3600, window, -window / 2.0);
+        assert!(window / 3600.0 / dt < 2.0 && r.pairs, "pairs at {:.2} samples a point", window / 3600.0 / dt);
+        let pts = &r.ch[0];
+        let mx = pts.iter().copied().filter(|x| x.is_finite()).fold(f32::MIN, f32::max);
+        assert_eq!(mx, 3.0, "the spike is a pair's maximum");
+        // each pair: its minimum one of the minima, its maximum one of the maxima, minimum below maximum
+        for p in pts.chunks(2).filter(|p| p.iter().all(|x| x.is_finite())) {
+            assert!(p[0] < p[1], "{p:?}");
+        }
     }
 }
 

@@ -36,7 +36,7 @@ else
 	echo "no rustup: a cargo from the distribution usually lacks aarch64-unknown-linux-musl and rust-lld; Rust from https://rustup.rs has them" >&2
 fi
 # the initramfs is built in Docker: fail now, not after the Rust builds (a failed late step kept the OLD image). The
-# image's busybox, wpa_supplicant and e2fsck come from arm64 containers.
+# image's busybox, wpa_supplicant and e2fsck are built in arm64 containers.
 . "$root/tools/lib/docker.sh"
 need_docker_arm64
 # the sources the image builds from: rootfs/deps.lock, and the stamps that say when a part is built again
@@ -63,12 +63,17 @@ if [ ! -x "$usbmode" ] || [ "$root/tools/hw/oos-usbmode.c" -nt "$usbmode" ] || [
 	docker run --rm -e OUT_OWNER="$owner" -v "$root/tools/hw:/src" "$kimage" sh -euc 'cd /src && aarch64-linux-gnu-gcc -static -O2 -Wall -o oos-usbmode oos-usbmode.c && aarch64-linux-gnu-strip oos-usbmode && chown "$OUT_OWNER" oos-usbmode'
 fi
 mkdir -p "$out"
-# arm64 whatever the host is: its busybox goes into the image (tools/lib/docker.sh)
+# arm64 whatever the host is: the image is put together in it (tools/lib/docker.sh)
 image=$(initramfs_image)
 
 # The programs built from rootfs/deps.lock are built again when missing, or when their deps.lock lines or their build
 # script changed since (deps.sh stamps). WLAN: wpa_supplicant and wpa_cli (docs/wlan.md)
 o="$root/rootfs/out"
+# the userland: busybox with a configuration of its own, without network servers (ADR 0078)
+if dep_stale "$o/busybox" "$root/rootfs/build-busybox.sh" "$root/rootfs/busybox.config" "$root/rootfs/busybox.applets" \
+	busybox; then
+	"$root/rootfs/build-busybox.sh"
+fi
 if [ ! -x "$o/wpa_cli" ] || dep_stale "$o/wpa_supplicant" "$root/rootfs/build-wlan-tools.sh" wpa_supplicant libnl \
 	libnl-musl-patch; then
 	"$root/rootfs/build-wlan-tools.sh"
@@ -106,7 +111,7 @@ docker run --rm --platform linux/arm64 -e OUT_OWNER="$owner" -e OOS_NO_AUTOACQ="
 	# what belongs to the board: etc/oos-board and bin/oos-board, which rcS asks
 	cp -a /board/. $r/
 	mkdir -p $r/bin $r/sbin $r/etc $r/proc $r/sys $r/dev $r/tmp $r/run $r/mnt $r/root $r/lib/modules
-	cp /bin/busybox $r/bin/busybox
+	cp /wlan/busybox $r/bin/busybox
 	cp /hw/oos-hw $r/bin/oos-hw
 	cp /hw/oos-usbmode $r/bin/oos-usbmode
 	cp /ui/oos-ui $r/bin/oos-ui
@@ -118,7 +123,7 @@ docker run --rm --platform linux/arm64 -e OUT_OWNER="$owner" -e OOS_NO_AUTOACQ="
 		mkdir -p $r/etc/oos-ssh; cp /wlan/ssh-seed/authorized_keys $r/etc/oos-ssh/authorized_keys
 		chmod 700 $r/etc/oos-ssh; chmod 600 $r/etc/oos-ssh/authorized_keys
 	fi
-	mkdir -p $r/etc/licenses; cp /wlan/wpa_supplicant.COPYING $r/etc/licenses/wpa_supplicant; cp /wlan/e2fsck.COPYING $r/etc/licenses/e2fsck; cp /wlan/kexec.COPYING $r/etc/licenses/kexec-tools
+	mkdir -p $r/etc/licenses; cp /wlan/busybox.COPYING $r/etc/licenses/busybox; cp /wlan/wpa_supplicant.COPYING $r/etc/licenses/wpa_supplicant; cp /wlan/e2fsck.COPYING $r/etc/licenses/e2fsck; cp /wlan/kexec.COPYING $r/etc/licenses/kexec-tools
 	for l in bluez dbus expat pcre2; do cp /wlan/$l.COPYING $r/etc/licenses/$l; done
 	# the GPU helper with Mesa and glibc (their own loader; oos-ui and the rest stay static)
 	cp -a /wlan/gpu/. $r/
@@ -147,9 +152,6 @@ docker run --rm --platform linux/arm64 -e OUT_OWNER="$owner" -e OOS_NO_AUTOACQ="
 	fdtput -t s /out/$OOS_IMAGE_NAME.dtb /chosen bootargs "$OOS_BOOTARGS"
 	fdtget /out/$OOS_IMAGE_NAME.dtb /chosen bootargs
 	. /wlan/unit-hook/dtb.sh
-	# the busybox package in the image, and the glibc it was built with and holds: their sources go with a release
-	# (tools/release-sources.sh names that glibc; it follows when this line changes)
-	dpkg-query -W -f "\${Package} \${Version}\nBuilt-Using: \${Built-Using}\n" busybox-static > /out/busybox.version
 	chown -R "$OUT_OWNER" /out
 	ls -la /out
 '

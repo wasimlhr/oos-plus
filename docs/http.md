@@ -311,7 +311,7 @@ the body is why it failed (`Site::answer`), 202 for an MCP notification, else 20
 - net.allow: yes, as soon as the head is in, for every method.
 - Mode (oos-plus, Remote services > MCP, `remote.mcp`, [network.md](network.md) 4), read at each request: **Full**
   (the default) as above. **Read only**: `tools/list` names only the tools whose `readOnlyHint` is true, and `scpi`
-  with that hint; `tools/call` of `configure`, `acquire` or `setup_decoder`, and of `scpi` with a message that holds a
+  with that hint; `tools/call` of `configure`, `acquire`, `setup_decoder` or `measure_slot`, and of `scpi` with a message that holds a
   command whose header does not end in `?` (or a line break), answers `isError: true` with a text that says MCP is
   read only, and runs nothing. **Off**: every message with an `id` gets the JSON-RPC error -32001.
 
@@ -362,7 +362,19 @@ answers as `9.9E37` (none) is `null`.
 - Request: `items`, 1 to 20 items of `:MEASure:ITEM?` ([scpi.md](scpi.md), Scalar identifiers; any case);
   `source` and `source2`, optional (a pair item takes both, a single one `source`; without, the Measure menu's).
 - Answer: `source`, and `results`, a list of `{item, value}` in the order asked, each from `:MEAS:ITEM? <item>[,<A>[,<B>]]`
-  (`item` in the spelling `:MEASure:STRip?` prints). Asks only: no row is added to the measurement strip.
+  (`item` in the spelling `:MEASure:STRip?` prints). Asks only: no row is added to the measurement strip (for a value
+  that is to be on the screen, `measure_slot`).
+
+### MCP tool `measure_slot`
+
+- Mark: **experimental**
+- Request: `slot` (1 to 99, required); `item` (an item of `measure`), with `source` and, for a pair item, `source2`
+  (`CHANn`, `Rn` or `MATHn`; without, the Measure menu's); or `clear` true. Not `item` with `clear`.
+- Answer: `slot`, `item` (what the slot holds as `:MEASure:SLOT<n>:ITEM?` answers it, `VPP,CHAN1`) and `value`
+  (null while it is not computed yet), after `:MEASure:SLOT<n> <item>[,<A>[,<B>]]` when `item` is given: the
+  measurement is then a row of the measurement table with the badge `M<n>`. Without `item` the slot is only read; an
+  empty slot is `isError` with the reason (`-221`, MEAS<n> is empty). With `clear`: `slot` and `cleared` true, the row
+  is off the table. It can change the scope, so read-only MCP does not offer it.
 
 ### MCP tool `waveform`
 

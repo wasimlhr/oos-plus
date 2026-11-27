@@ -157,7 +157,7 @@ Minimum, maximum and count stand in the **Results** pane, a table with one row p
 
 ![Results pane](https://raw.githubusercontent.com/dekajoule/oos/main/docs/images/pane-results.png)
 
-Open it with **Display > Windows**: **Lower** Results. **Lower** Trend draws two measurements over
+Open it with **Display > Traces**: **Lower** Results. **Lower** Trend draws two measurements over
 time instead (more under [Panes](#panes)). Over SCPI, `:MEASure:STATistic:ITEM? AVERages,VPP,CHAN1` reads the mean
 (also `MAXimum`, `MINimum`, `CURRent`, `DEViation`, `CNT`), `:MEASure:STATistic:RESet` starts the statistics again;
 see [[SCPI and VXI-11]].
@@ -170,11 +170,11 @@ see [[SCPI and VXI-11]].
 
 ## Frequency counter
 
-**Measure > DVM / counter** (also Menu > Instruments): **Counter** on, **Count source** a channel that is on, **Count mode** Frequency, Period or Totalize, **Digits** 3 to 6. From 0.1.9 the scope counts in hardware: a reciprocal counter in the FPGA, so 6 digits hold at any frequency, from below 1 Hz to tens of MHz. More digits take longer: 0.25 s for 3, 0.5 s for 4, 1 s for 5 and 6. Over SCPI: `:COUNter:CURRent?`.
+**Measure > DVM / counter** (also Menu > Instruments): **Counter** on, **Count source** a channel that is on, **Count mode** Frequency, Period or Totalize, **Digits** 3 to 7. From 0.1.9 the scope counts in hardware: a reciprocal counter in the FPGA, so 6 digits hold at any frequency, from below 1 Hz to tens of MHz. More digits take longer: 0.25 s for 3, 0.5 s for 4, 1 s for 5, 6 and 7. Over SCPI: `:COUNter:CURRent?`.
 
 ## Panes
 
-**Display > Windows** with **Lower** puts a second view under the waveform, in any arrangement of the traces; **Lower** chooses which. Tap the pane's title for its settings. The x closes it.
+**Display > Traces** with **Lower** puts a second view under the waveform, in any arrangement of the traces; **Lower** chooses which. Tap the pane's title for its settings. The x closes it.
 
 **Spectrum:** the spectrum with numbered peaks and a peak list. The span follows the signal. Tap the title for its settings, the button above the list to sort by frequency or level.
 

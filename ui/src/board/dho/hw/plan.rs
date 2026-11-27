@@ -78,6 +78,41 @@ pub fn batch_plan(s: &Settings, p: &hz::Params) -> Settings {
     b
 }
 
+/// Frames a batch arms with the deposit workers' grant (`pipe::Workers::grant`, ADR 0081): a batch planned with up to
+/// `FRAME0_CHECK_MAX_FRAMES` (slow time bases, SINGLE) as planned, a longer one at most `grant` but not that short, so
+/// the rules for frames 0 and 1 of a short batch stay with the slow time bases.
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn admitted(planned: u32, grant: u32) -> u32 {
+    planned.min(grant.max(FRAME0_CHECK_MAX_FRAMES as u32 + 1))
+}
+
+/// Longest wait for the deposit workers before a batch is armed (`wait_for_workers`): a stuck worker must not stop
+/// the acquisition.
+#[cfg(any(target_os = "linux", test))]
+pub(super) const ADMIT_WAIT_US: u64 = 200_000;
+
+/// Waits before a batch is armed until the deposit workers can take it without its being dropped (`free`), drawing
+/// frames for them meanwhile (`help`, as while the ring fills) and looking at `changed` (new settings, STOP) between.
+/// False when the wait ended without `free` (changed, or after `ADMIT_WAIT_US`): the batch then goes on as before.
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn wait_for_workers<C: oos_hal::dho::boot::Clock>(
+    clock: &mut C,
+    free: impl Fn() -> bool,
+    mut help: impl FnMut() -> bool,
+    changed: impl Fn() -> bool,
+) -> bool {
+    let t0 = clock.now_us();
+    while !free() {
+        if changed() || clock.now_us().saturating_sub(t0) >= ADMIT_WAIT_US {
+            return false;
+        }
+        if !help() {
+            clock.sleep_us(250);
+        }
+    }
+    true
+}
+
 /// Longest record whose first batch after a change of settings is left out (`read_with` in `spawn`), in seconds.
 pub(super) const FIRST_LEFT_MAX_S: f64 = 0.05;
 
@@ -194,17 +229,41 @@ pub(super) fn edge_check(f: &Frame, s: &Settings) -> Edge {
     }
     // a fifth of a division: an edge the trigger took crosses it, noise on a flat level near the level does not
     let hyst = (0.2 * s.ch[tc].scale) as f32;
-    oos_dsp::edges::edge_near(
-        v,
-        f.pre,
-        s.level as f32,
-        hyst,
-        s.slope != Slope::Falling,
-        s.slope == Slope::Either,
-        FRAME1_SPAN,
-    )
-    .map_or(Edge::Off, |_| Edge::At)
+    let level = s.level as f32;
+    let near = |span| {
+        oos_dsp::edges::edge_near(v, f.pre, level, hyst, s.slope != Slope::Falling, s.slope == Slope::Either, span)
+    };
+    if near(FRAME1_SPAN).is_some() {
+        return Edge::At;
+    }
+    // a slow edge: the comparator does not fire exactly at the level, and a slow slope takes many samples between the
+    // two (unit 2026-11-25: a 50 Hz sine 2 Vpp at 0.5 V/div and 1 ms/div fired some 50 mV below the level, which it
+    // crossed 100 to 800 samples after the trigger point; every two-frame batch was left out, a fifth of a record a
+    // second reached the picture). The crossing counts when the signal stays in the band of the level from the
+    // trigger point to it, with room for noise; a frame joined with older memory (issue #5) has a full step there.
+    match near(SLOW_EDGE_SPAN) {
+        Some(t) => {
+            let (a, b) = ((t as usize).min(f.pre), (t as usize + 1).max(f.pre));
+            let inside = v[a..=b.min(v.len() - 1)].iter().all(|&x| (x - level).abs() <= SLOW_EDGE_BAND * hyst);
+            if inside {
+                Edge::At
+            } else {
+                Edge::Off
+            }
+        }
+        None => Edge::Off,
+    }
 }
+
+#[cfg(any(target_os = "linux", test))]
+/// Samples around the trigger point in which the level crossing of a slow edge may lie (`edge_check`), when the signal
+/// stays within the band of the level up to the trigger point.
+const SLOW_EDGE_SPAN: usize = 16_384;
+
+#[cfg(any(target_os = "linux", test))]
+/// The band of a slow edge (`edge_check`), in multiples of the check's hysteresis (a fifth of a division): the offset
+/// of the comparator (a tenth of a division on the unit) and the noise on it.
+const SLOW_EDGE_BAND: f32 = 1.5;
 
 /// Frames per batch while the zone trigger runs: `zone.batch = <n>` in system.conf, default 1.
 pub(super) fn zone_batch() -> u32 {

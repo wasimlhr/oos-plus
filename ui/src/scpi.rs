@@ -521,6 +521,16 @@ impl Scpi {
         }
     }
 
+    /// The sockets whose input `poll` waits for (`input::Inputs::poll`): the listener and every client that still
+    /// reads. A client at the end of its input is left out: its socket stays readable and would end every wait.
+    // oos-plus: file descriptors are a Unix's; the Windows desktop build has no frame loop that waits on them
+    #[cfg(unix)]
+    pub fn wake_fds(&self, out: &mut Vec<std::os::fd::RawFd>) {
+        use std::os::fd::AsRawFd;
+        out.extend(self.l.iter().map(|l| l.as_raw_fd()));
+        out.extend(self.clients.iter().filter(|c| !c.closing).map(|c| c.s.as_raw_fd()));
+    }
+
     pub fn poll(&mut self, ui: &mut Ui, cv: &Canvas) {
         // Storage > Save setup as SCPI: the row asks, this interpreter has the queries the lines are made of
         if let Some(path) = ui.setup_scpi_request.take() {

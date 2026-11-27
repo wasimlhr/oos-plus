@@ -10,8 +10,7 @@
 #   oos_image NAME [PLATFORM]    the image whose Dockerfile comes on stdin (@ALPINE@ and @UBUNTU@ stand for the base
 #                                images), built unless it is there, as NAME:<hash of the Dockerfile and PLATFORM>;
 #                                prints that tag. An edit of the Dockerfile is a new tag, so it is built again
-#   initramfs_image              oos_image of the arm64 image the initramfs is put together in (its busybox goes into
-#                                the image; the sims run the same busybox)
+#   initramfs_image              oos_image of the arm64 image the initramfs is put together in
 OOS_ALPINE=alpine:3.22@sha256:49340b346798875b5592e5d420241f2f9cfba5f47e62ebb1446a1b34734e898f
 OOS_UBUNTU=ubuntu:26.04@sha256:d66b366dac61b575bee2aef07e9c26e8070096fbe84a3d4d3eb0da069b5d76db
 
@@ -77,6 +76,6 @@ initramfs_image() {
 	oos_image oos-initramfs linux/arm64 <<'DOCKERFILE'
 FROM @UBUNTU@
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      busybox-static cpio gzip device-tree-compiler && rm -rf /var/lib/apt/lists/*
+      cpio gzip device-tree-compiler && rm -rf /var/lib/apt/lists/*
 DOCKERFILE
 }

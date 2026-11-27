@@ -95,7 +95,7 @@ the build on the unit, the kernel log, and where the generator reaches.
 | `boot/`, `kernel/`, `rootfs/`, `hal/src/update/`, the cold boot, `Cargo.toml`/`Cargo.lock`, the test tools themselves, a file no rule knows | everything |
 
 `--list` prints the files with their areas and the tests that would run, and stops. The changes of the last pull
-requests chose between 6 tests (documents, CI) and 13 to 23 (one part of the hardware); all 89 run only when the
+requests chose between 6 tests (documents, CI) and 13 to 23 (one part of the hardware); all 90 run only when the
 image, the update path, the build or the tests themselves change.
 
 ## Noise and failures that were there before
@@ -129,3 +129,35 @@ Compare with main on the same unit, the test alone (`--only NAME`), more than on
 run the test, deploy the change, run it again. A test that passes with main every time and fails with the change
 every time points at the change, even when the host checks see no difference: the timing on the unit is part of what
 is tested.
+
+## Waveform performance
+
+`tools/device-bench.py` measures how fast a running OOS draws, view by view, over SCPI only: pictures a second, records
+shown, acquired and dropped a second, the step and render time from `:SYSTem:STATe?`, and the time `*OPC?` and a query
+take, seen from this computer. The generator's output is wired to CH1 (`--gen-ch`), the other inputs stay open; each
+view starts from `*RST` with the generator's 100 kHz square of 0 to 3.3 V, settles for 6 s and is measured for 12 s.
+The set `fork` holds the 18 views of the comparison with the fork yottabytesolutions/oos (#432), the set `extra` Peak
+below the full rate, Average with a count of 64 and a zoom at 1 ms/div (`--list`). One run of both takes about 9
+minutes; `--runs 3` shows the spread.
+
+It is not part of the run for a pull request. It runs when a release is prepared, before its pull request
+(`tools/changelog.py --release`), with the build of main against the baseline of the board, and whenever the
+maintainer asks for it, for instance to compare two builds.
+
+```sh
+tools/device-bench.py --host IP --out run.json                        # the build running now
+tools/device-bench.py --check run.json --baseline tools/bench/dho924s.json   # exit 1 on a step back
+tools/device-bench.py --compare a.json b.json                          # two runs side by side
+tools/bench-builds.sh IP installed HEAD --runs 3                       # two builds, deployed one after the other
+```
+
+A step back against the baseline is fewer than 95 % of its pictures a second or 85 % of its records shown, a step over
+1.3 times its own plus 1 ms, or `*OPC?` over 1.5 times plus 2 ms. A step back found before a release is fixed or named
+in the release before it goes out. `--check` also counts a view or value of the baseline that the run lacks (unless
+`--subset`), and refuses a run of another model (exit 2). When the release run has none, its numbers become the new
+baseline in the release's pull request (`--runs 3`, the medians): the baseline only gets better. The first release run
+with the tool writes it: until then there is no baseline, and `--check` has nothing to compare with.
+
+`tools/bench-builds.sh` builds each ref (a commit, branch or tag, or `installed`) in a worktree of its own, deploys it
+to RAM, measures it, restores the installed oos-ui and prints the table of the two: the comparison of two builds on
+one unit, as #432 has it for 0.1.15, main and the fork.

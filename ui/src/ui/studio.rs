@@ -1364,13 +1364,13 @@ impl Ui {
 
     /// Where a T or cursor tag centred on `x` sits: inside the scale, on its top edge.
     pub(super) fn studio_tag_rect(&self, x: i32) -> Rect {
-        let g = self.plot.grid;
+        let g = self.studio_tag_area();
         Rect::new(x.clamp(g.x + 12, g.right() - 12) - 12, g.y + 1, 24, TAG_H)
     }
 
     /// Screen x of a time (relative to the trigger) in the main view of the plot.
     pub(super) fn studio_x_of_time(&self, t: f64) -> i32 {
-        let g = self.plot.grid;
+        let g = self.studio_tag_area();
         let (tpd, delay) = self.view();
         g.x + ((0.5 + (t - delay as f64) / (HDIV as f64 * tpd as f64)) * g.w as f64).round() as i32
     }
@@ -1421,20 +1421,20 @@ impl Ui {
     pub(super) fn draw_studio_overlay(&self, cv: &mut Canvas) {
         if !self.studio_tags_on() || self.view_on() || self.eye_open() { return; }
         let f = self.fonts();
-        let g = self.plot.grid;
-        cv.set_clip(Rect::new(g.x - 12, g.y, g.w + 24, g.h));
+        let (g, grid) = (self.studio_tag_area(), self.plot.grid);
+        cv.set_clip(Rect::new(grid.x - 12, grid.y, grid.w + 24, grid.h));
         // the shaded band between two time cursors
         if matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy) {
             // a cursor keeps its time while zoomed: its fraction may lie outside the view, then it is not drawn
             let fr = [self.m.cur_a, self.m.cur_b];
             let xs = fr.map(|frac| g.x + (frac.clamp(0.0, 1.0) * g.w as f32) as i32);
             let (x0, x1) = (xs[0].min(xs[1]), xs[0].max(xs[1]));
-            cv.set_clip(Rect::new(g.x, g.y, g.w, g.h));
+            cv.set_clip(grid);
             let off_same_side = (fr[0] < 0.0 && fr[1] < 0.0) || (fr[0] > 1.0 && fr[1] > 1.0);
             for &lane in &self.plot.wins {
-                if !off_same_side { cv.blend(Rect::new(x0, lane.y, (x1 - x0).max(1), lane.h), BAND, 46); }
+                if !off_same_side && (self.stacked() || self.plot.wins.len() < 2 || lane == g) { self.studio_band(cv, lane, g, (x0, x1)); }
             }
-            cv.set_clip(Rect::new(g.x - 12, g.y, g.w + 24, g.h));
+            cv.set_clip(Rect::new(grid.x - 12, grid.y, grid.w + 24, grid.h));
             for (k, (x, name)) in [(xs[0], "X1"), (xs[1], "X2")].into_iter().enumerate() {
                 if !(0.0..=1.0).contains(&fr[k]) { continue; }
                 let r = self.studio_tag_rect(x);
@@ -1454,7 +1454,7 @@ impl Ui {
             cv.triangle([(tx - 3, r.bottom()), (tx + 3, r.bottom()), (tx, r.bottom() + 3)], AMBER);
             for &lane in &self.plot.wins {
                 let y0 = if lane.y <= r.bottom() { r.bottom() + 4 } else { lane.y };
-                cv.dashed_vline(tx, y0, lane.y + lane.h - 1, 4, 4, AMBER);
+                cv.dashed_vline(super::hotspots::into_lane(lane, g, tx), y0, lane.y + lane.h - 1, 4, 4, AMBER);
             }
         } else if tx < g.x {
             cv.triangle([(r.x - 1, r.y + r.h / 2), (r.x + 4, r.y + 2), (r.x + 4, r.bottom() - 2)], AMBER);
